@@ -13,7 +13,7 @@ use super::market::{Asset, VenueId};
 
 /// Данные площадки о монете в одной сети: можно ли ввести и вывести, сколько стоит вывод.
 /// Источник — только API площадки.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CoinNetworkInfo {
     pub venue: VenueId,
     pub asset: Asset,
@@ -21,8 +21,15 @@ pub struct CoinNetworkInfo {
     pub network: String,
     pub deposit_enabled: bool,
     pub withdraw_enabled: bool,
-    /// Комиссия вывода в монетах; None — площадка не сообщила.
+    /// Комиссия вывода в монетах (фиксированная часть); None — площадка не сообщила.
     pub withdraw_fee: Option<Decimal>,
+    /// Решение 199: процентная часть комиссии вывода — ДОЛЯ суммы вывода (0.022 = 2.2%), если площадка её сообщила
+    /// (Bybit withdrawPercentageFee, Bitget extraWithdrawFee, Gate withdraw_percent_on_chains «…%»). None — нет.
+    /// Полная комиссия — fee_for. ДОПУЩЕНИЕ (документация бирж не говорит): процент считается от суммы вывода и
+    /// вычитается из неё, как фиксированная часть; расхождение ловит сверка зачисления (credit_expect.rs,
+    /// transfer.credit_amount_tolerance_pct).
+    #[serde(default)]
+    pub withdraw_fee_pct: Option<Decimal>,
     pub withdraw_min: Option<Decimal>,
     pub withdraw_max: Option<Decimal>,
     /// Минимальный депозит (решение 35: меньше — сделки нет); None — площадка не сообщила.
@@ -33,7 +40,20 @@ pub struct CoinNetworkInfo {
     /// живом ответе config/getall 2026-10-24 — вопрос Тиграну, решение 66). Сумма вывода округляется вниз. None — нет.
     #[serde(default)]
     pub withdraw_precision: Option<u32>,
+    /// Шаг суммы вывода (у MEXC — withdrawIntegerMultiple, решение 118, А-🟠7): сумма вывода — вниз до кратного.
+    /// None — площадка шага не сообщает (или его смысл не подтверждён).
+    #[serde(default)]
+    pub withdraw_step: Option<Decimal>,
     pub updated_at: DateTime<Utc>,
+}
+
+impl CoinNetworkInfo {
+    /// Решение 199: полная комиссия вывода суммы `amount` в монетах — фиксированная + доля × сумма.
+    /// Принимает: сумму вывода. Возвращает: комиссию; None — фиксированная часть не сообщена. Ошибок нет.
+    pub fn fee_for(&self, amount: Decimal) -> Option<Decimal> {
+        let fixed = self.withdraw_fee?;
+        Some(fixed + self.withdraw_fee_pct.unwrap_or_default() * amount.max(Decimal::ZERO))
+    }
 }
 
 /// Статус перевода (вывода или депозита).
@@ -87,4 +107,58 @@ pub struct Balance {
     pub asset: String,
     pub free: Decimal,
     pub locked: Decimal,
+}
+
+/// Решение 144: балансы одного счёта площадки (спот, фьючерсы, фонд/funding, earn…) для панели «Балансы» — только чтение.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountBalances {
+    /// Название счёта для человека, как у площадки: «Спот», «Фьючерсы USDT-M», «Фонд (Funding)», «Earn»…
+    pub account: String,
+    /// Ненулевые строки счёта (free — доступно, locked — заморожено / в ордерах / в марже).
+    pub balances: Vec<Balance>,
+    /// Счёт не прочитан — точная причина (нет прав ключа, ошибка площадки); строки тогда пусты.
+    pub error: Option<String>,
+    /// Доп. сведения счёта по ответу площадки (например, «эквити 12.3 USDT, нереализованный PnL −0.4»); None — нет.
+    pub note: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn info(fixed: Option<&str>, pct: Option<&str>) -> CoinNetworkInfo {
+        let d = |s: &str| s.parse::<Decimal>().unwrap();
+        CoinNetworkInfo {
+            venue: VenueId("v".into()),
+            asset: Asset {
+                chain: None,
+                ticker: "T".into(),
+                contract: None,
+            },
+            network: "BSC".into(),
+            deposit_enabled: true,
+            withdraw_enabled: true,
+            withdraw_fee: fixed.map(d),
+            withdraw_fee_pct: pct.map(d),
+            withdraw_min: None,
+            withdraw_max: None,
+            deposit_min: None,
+            deposit_confirmations: None,
+            withdraw_precision: None,
+            withdraw_step: None,
+            updated_at: Utc::now(),
+        }
+    }
+
+    /// Решение 199: фикс + доля × сумма; без доли — только фикс; без фикса — неизвестна.
+    #[test]
+    fn fee_for_fixed_plus_share() {
+        let a = "1000".parse::<Decimal>().unwrap();
+        assert_eq!(
+            info(Some("1"), Some("0.022")).fee_for(a),
+            Some("23".parse().unwrap())
+        );
+        assert_eq!(info(Some("1"), None).fee_for(a), Some(Decimal::ONE));
+        assert_eq!(info(None, Some("0.1")).fee_for(a), None);
+    }
 }

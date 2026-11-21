@@ -113,6 +113,10 @@ pub fn pool_id(p: &PoolRef) -> String {
     match p {
         PoolRef::Contract(a) => format!("{a:#x}"),
         PoolRef::Singleton { id, .. } => format!("{id:#x}"),
+        // Пара общего контракта (PMM от оракула): ссылка — на общий контракт.
+        PoolRef::Member { contract, .. } => format!("{contract:#x}"),
+        // Решение 295: ссылка на обозреватель — контракт многомонетного пула.
+        PoolRef::Multi { contract, .. } => format!("{contract:#x}"),
     }
 }
 

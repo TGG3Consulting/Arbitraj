@@ -51,8 +51,9 @@ pub async fn check(
         None if token_transfer => return Ok(None),
         None => match native::wrapped(ctx) {
             Some((ticker, w)) => Asset {
+                chain: None,
                 ticker,
-                bsc_contract: Some(w),
+                contract: Some(w),
             },
             None => return Ok(None),
         },

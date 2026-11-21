@@ -19,7 +19,7 @@ use alloy_primitives::{I256, U256};
 
 use arb::venues::bsc_dex::math::swap_elastic::{
     self, ElasticState, Swapped, calc_reach_amount, calc_returned_amount, compute_swap_step,
-    estimate_incremental_liquidity,
+    compute_swap_step_rule, estimate_incremental_liquidity,
 };
 use arb::venues::bsc_dex::math::tick_math::sqrt_ratio_at_tick;
 use arb::venues::bsc_dex::pools::ticks::{TickData, TickMap};
@@ -88,6 +88,20 @@ fn compute_step_clamp_official() {
     assert!(s2.next_sqrt >= p_down(), "finalPrice ≥ priceEnd (спека)");
 }
 
+/// Решение 451: specified = reach — правило шага v1 (`usedAmount >= specifiedAmount`: сумма — остаток, цена по
+/// calcFinalPrice, цель не берётся) против v2 (`>`: доходит до цели, next_sqrt = target).
+#[test]
+fn compute_step_rule_v1_v2_at_reach() {
+    let reach = i(4_995_092_120_267_736);
+    let (l0, p0, p1) = (l(), p_start(), p_down());
+    let v1 = compute_swap_step_rule(l0, p0, p1, FEE, reach, true, true, true).unwrap();
+    assert_eq!(v1.used, reach);
+    assert_ne!(v1.next_sqrt, p1);
+    let v2 = compute_swap_step_rule(l0, p0, p1, FEE, reach, true, true, false).unwrap();
+    assert_eq!(v2.used, reach);
+    assert_eq!(v2.next_sqrt, p1);
+}
+
 /// exactOutput согласован с exactInput: token1, нужный чтобы ДОЙТИ до p_down (calcReachAmount exactOutput !isToken0),
 /// равен token1, который ВЫХОДИТ при exactInput token0 до того же p_down (calcReturnedAmount). Отрицателен (выход/нужно
 /// отдать меньше). Этим проверяем exactOutput-ветку без опоры на устаревший комментарий спеки.
@@ -119,7 +133,7 @@ fn ticks(tick: i32, net: i128, words: (i16, i16)) -> TickMap {
     );
     TickMap {
         spacing: 1,
-        ticks: m,
+        ticks: m.into(),
         words,
     }
 }
@@ -137,6 +151,7 @@ fn swap_loop_crosses_tick() {
         reinvest_l: 0,
         fee_units: FEE,
         ticks: &t,
+        v1: false,
     };
     assert_eq!(
         swap_elastic::swap(&s, false, true, U256::from(50_000_000_000_000_000u64)).unwrap(),
@@ -155,6 +170,7 @@ fn swap_loop_crosses_tick() {
         reinvest_l: 0,
         fee_units: FEE,
         ticks: &t2,
+        v1: false,
     };
     assert_eq!(
         swap_elastic::swap(&s2, false, true, U256::from(2_000_000_000_000_000_000u64)).unwrap(),
@@ -178,6 +194,7 @@ fn swap_loop_incomplete_outside_window() {
         reinvest_l: 0,
         fee_units: FEE,
         ticks: &t,
+        v1: false,
     };
     let out =
         swap_elastic::swap(&s, false, true, U256::from(2_000_000_000_000_000_000u64)).unwrap();

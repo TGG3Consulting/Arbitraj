@@ -91,6 +91,20 @@ method = "Не задавать (GeckoTerminal без ключа). С ключо
 rationale = "Первый запуск — без ключа индексатора."
 
 # --- Нативная монета BNB ---
+# --- Свежесть налогов (решение 234) ---
+[[section]]
+title = "Свежесть налогов (решение 234)"
+intro = "Замер налогов монеты на DEX-стороне не старше заданного — иначе сделки нет. Не задано — проверки нет."
+
+[[section.rec]]
+name = "tax.max_age_s"
+area = "вся система"
+unit = "секунды"
+value = "7200"
+source = "Решение 234"
+rationale = "При tax.recheck_interval_s = 3600 — два полных прохода перепроверки: один пропущенный проход (сбой узла) торговлю не останавливает, два подряд — останавливают до перепроверки. Должно быть больше tax.recheck_interval_s, иначе между проходами сделок нет."
+prefill = { kind = "Global" }
+
 # --- Параллельный расчёт кандидатов (решение 88) ---
 [[section]]
 title = "Расчёт кандидатов — параллельность и срок (решение 88)"
@@ -113,6 +127,228 @@ value = "0"
 source = "Ориентир (docs/SETTINGS.md, решение 88)"
 rationale = "0 — без предела: свой расчёт на каждый кандидат, ни один не ждёт. Если расчёты заметно грузят процессор сервера — поставить по числу ядер."
 prefill = { kind = "Global" }
+
+# --- Запас на движение цены (решение 240) ---
+[[section]]
+title = "Запас на движение цены (решение 240)"
+intro = "Запас r = min(выручка, max(выручка · (1 − e^(−k · σ · √T)), доля · (продажа − покупка) · проданное количество)) (решение 390); σ плана = max(σ ряда, граница); мало изменений цены — σ не измерена. Не заданы — как раньше. Значения доли (0,39, 0,16) откалиброваны 09.11 под прежнюю форму доля · спред · выручка: на малых спредах совпадают с новой, на больших новая даёт меньший запас (не больше разницы цен); данных о больших спредах нет. Значения — Тигран."
+
+[[section.rec]]
+name = "profit.closure_share"
+area = "площадка BingX (получатель)"
+unit = "доля 0–1"
+value = "0.39"
+source = "Разбор docs/notes/price-move-vs-reserve-2026-11-09.md (983 сделки 01–08.11)"
+rationale = "DEX → биржа: цена продажи за перевод закрывает долю спреда — 0,39 на первой половине истории (0,44 на всей). Проверка на второй половине: отсекло бы 24 сделки (20 убыточных), +1,4 USDT к итогу. На бирже-получателе доля действует и для биржа → биржа (там доля 0,57 на 34 сделках, медиана спреда 0,01 % — эффект не считался)."
+prefill = { kind = "Venue", id = "bingx" }
+
+[[section.rec]]
+name = "profit.closure_share"
+area = "площадка MEXC (получатель)"
+unit = "доля 0–1"
+value = "0.39"
+source = "Разбор docs/notes/price-move-vs-reserve-2026-11-09.md (983 сделки 01–08.11)"
+rationale = "DEX → биржа: цена продажи за перевод закрывает долю спреда — 0,39 на первой половине истории (0,44 на всей). Проверка на второй половине: отсекло бы 24 сделки (20 убыточных), +1,4 USDT к итогу. На бирже-получателе доля действует и для биржа → биржа (там доля 0,57 на 34 сделках, медиана спреда 0,01 % — эффект не считался)."
+prefill = { kind = "Venue", id = "mexc" }
+
+[[section.rec]]
+name = "profit.closure_share"
+area = "площадка Gate (получатель)"
+unit = "доля 0–1"
+value = "0.39"
+source = "Разбор docs/notes/price-move-vs-reserve-2026-11-09.md (983 сделки 01–08.11)"
+rationale = "DEX → биржа: цена продажи за перевод закрывает долю спреда — 0,39 на первой половине истории (0,44 на всей). Проверка на второй половине: отсекло бы 24 сделки (20 убыточных), +1,4 USDT к итогу. На бирже-получателе доля действует и для биржа → биржа (там доля 0,57 на 34 сделках, медиана спреда 0,01 % — эффект не считался)."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "profit.closure_share"
+area = "площадка KuCoin (получатель)"
+unit = "доля 0–1"
+value = "0.39"
+source = "Разбор docs/notes/price-move-vs-reserve-2026-11-09.md (983 сделки 01–08.11)"
+rationale = "DEX → биржа: цена продажи за перевод закрывает долю спреда — 0,39 на первой половине истории (0,44 на всей). Проверка на второй половине: отсекло бы 24 сделки (20 убыточных), +1,4 USDT к итогу. На бирже-получателе доля действует и для биржа → биржа (там доля 0,57 на 34 сделках, медиана спреда 0,01 % — эффект не считался)."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "profit.closure_share"
+area = "площадка Bitget (получатель)"
+unit = "доля 0–1"
+value = "0.39"
+source = "Разбор docs/notes/price-move-vs-reserve-2026-11-09.md (983 сделки 01–08.11)"
+rationale = "DEX → биржа: цена продажи за перевод закрывает долю спреда — 0,39 на первой половине истории (0,44 на всей). Проверка на второй половине: отсекло бы 24 сделки (20 убыточных), +1,4 USDT к итогу. На бирже-получателе доля действует и для биржа → биржа (там доля 0,57 на 34 сделках, медиана спреда 0,01 % — эффект не считался)."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "profit.closure_share"
+area = "площадка DEX (получатель)"
+unit = "доля 0–1"
+method = "Не задавать."
+source = "Разбор docs/notes/price-move-vs-reserve-2026-11-09.md (983 сделки 01–08.11)"
+rationale = "Биржа → DEX: доля 0,16 (0,13 на первой половине); проверка на второй половине — минус 0,4 USDT. Запас k·σ·√T у биржа → DEX уже в 2,6 раза больше реального движения (224,5 против 85,6 USDT)."
+
+[[section.rec]]
+name = "profit.sigma_floor_per_s"
+area = "площадка BingX (получатель)"
+unit = "доля за секунду"
+method = "Не задавать до пересчёта эффекта по сделкам; кандидат — 0.000155."
+source = "Разбор docs/notes/price-move-vs-reserve-2026-11-09.md (983 сделки 01–08.11)"
+rationale = "Медиана σ плана у DEX → биржа — 0,0155 %/с (0,000155 доли/с): граница поднимает σ нижней половины этих сделок до медианы. По окнам реальная σ продажи у DEX → биржа в 2,1 раза выше σ плана (медиана, 122 сделки). Эффект границы на истории в разборе НЕ посчитан (нужен пересчёт по σ, T и выручке каждой сделки); любое общее ужесточение запаса на истории уменьшало итог — ставить после пересчёта."
+
+[[section.rec]]
+name = "profit.sigma_floor_per_s"
+area = "площадка MEXC (получатель)"
+unit = "доля за секунду"
+method = "Не задавать до пересчёта эффекта по сделкам; кандидат — 0.000155."
+source = "Разбор docs/notes/price-move-vs-reserve-2026-11-09.md (983 сделки 01–08.11)"
+rationale = "Медиана σ плана у DEX → биржа — 0,0155 %/с (0,000155 доли/с): граница поднимает σ нижней половины этих сделок до медианы. По окнам реальная σ продажи у DEX → биржа в 2,1 раза выше σ плана (медиана, 122 сделки). Эффект границы на истории в разборе НЕ посчитан (нужен пересчёт по σ, T и выручке каждой сделки); любое общее ужесточение запаса на истории уменьшало итог — ставить после пересчёта."
+
+[[section.rec]]
+name = "profit.sigma_floor_per_s"
+area = "площадка Gate (получатель)"
+unit = "доля за секунду"
+method = "Не задавать до пересчёта эффекта по сделкам; кандидат — 0.000155."
+source = "Разбор docs/notes/price-move-vs-reserve-2026-11-09.md (983 сделки 01–08.11)"
+rationale = "Медиана σ плана у DEX → биржа — 0,0155 %/с (0,000155 доли/с): граница поднимает σ нижней половины этих сделок до медианы. По окнам реальная σ продажи у DEX → биржа в 2,1 раза выше σ плана (медиана, 122 сделки). Эффект границы на истории в разборе НЕ посчитан (нужен пересчёт по σ, T и выручке каждой сделки); любое общее ужесточение запаса на истории уменьшало итог — ставить после пересчёта."
+
+[[section.rec]]
+name = "profit.sigma_floor_per_s"
+area = "площадка KuCoin (получатель)"
+unit = "доля за секунду"
+method = "Не задавать до пересчёта эффекта по сделкам; кандидат — 0.000155."
+source = "Разбор docs/notes/price-move-vs-reserve-2026-11-09.md (983 сделки 01–08.11)"
+rationale = "Медиана σ плана у DEX → биржа — 0,0155 %/с (0,000155 доли/с): граница поднимает σ нижней половины этих сделок до медианы. По окнам реальная σ продажи у DEX → биржа в 2,1 раза выше σ плана (медиана, 122 сделки). Эффект границы на истории в разборе НЕ посчитан (нужен пересчёт по σ, T и выручке каждой сделки); любое общее ужесточение запаса на истории уменьшало итог — ставить после пересчёта."
+
+[[section.rec]]
+name = "profit.sigma_floor_per_s"
+area = "площадка Bitget (получатель)"
+unit = "доля за секунду"
+method = "Не задавать до пересчёта эффекта по сделкам; кандидат — 0.000155."
+source = "Разбор docs/notes/price-move-vs-reserve-2026-11-09.md (983 сделки 01–08.11)"
+rationale = "Медиана σ плана у DEX → биржа — 0,0155 %/с (0,000155 доли/с): граница поднимает σ нижней половины этих сделок до медианы. По окнам реальная σ продажи у DEX → биржа в 2,1 раза выше σ плана (медиана, 122 сделки). Эффект границы на истории в разборе НЕ посчитан (нужен пересчёт по σ, T и выручке каждой сделки); любое общее ужесточение запаса на истории уменьшало итог — ставить после пересчёта."
+
+[[section.rec]]
+name = "profit.sigma_floor_per_s"
+area = "площадка DEX (получатель)"
+unit = "доля за секунду"
+method = "Не задавать."
+source = "Разбор docs/notes/price-move-vs-reserve-2026-11-09.md (983 сделки 01–08.11)"
+rationale = "Биржа → DEX: медиана σ плана 0,0056 %/с, но запас там уже больше реального движения в 2,6 раза — граница только отсечёт прибыльные сделки."
+
+[[section.rec]]
+name = "profit.sigma_min_changes"
+area = "вся система"
+unit = "изменений"
+value = "1"
+source = "Разбор docs/notes/price-move-vs-reserve-2026-11-09.md (983 сделки 01–08.11)"
+rationale = "24 сделки шли с σ = 0 (цена ряда продажи в окне не менялась, запас 0): 16 из них в минус на 0,8 USDT, остальные +1,5; итог правила на истории −0,7 USDT. Это правило «не торгуем вслепую», а не прибыли."
+prefill = { kind = "Global" }
+
+# --- По бирже и направлению (решение 242) ---
+[[section]]
+title = "Деньги и прибыль по бирже и направлению (решение 242)"
+intro = "Значение пары «биржа · направление» (у биржи — биржа → DEX, DEX → биржа, биржа → биржа; отдельно — DEX ↔ DEX) сильнее общего. Не задано — действует общее значение, как раньше. Значения — Тигран."
+
+[[section.rec]]
+name = "money.min_profit_usd"
+area = "площадка + тип направления"
+unit = "USDT"
+method = "не задавать — действуют общие значения (вся система, площадка, монета), как раньше"
+source = "Решение 242"
+rationale = "Пара нужна, только если у биржи или направления должен быть свой порог или лимит; задаётся в «Настройки» → «Деньги и риск › по биржам и направлениям»."
+
+[[section.rec]]
+name = "money.min_profit_pct"
+area = "площадка + тип направления"
+unit = "%"
+method = "не задавать — действуют общие значения (вся система, площадка, монета), как раньше"
+source = "Решение 242"
+rationale = "Пара нужна, только если у биржи или направления должен быть свой порог или лимит; задаётся в «Настройки» → «Деньги и риск › по биржам и направлениям»."
+
+[[section.rec]]
+name = "money.max_per_trade_usd"
+area = "площадка + тип направления"
+unit = "USDT"
+method = "не задавать — действуют общие значения (вся система, площадка, монета), как раньше"
+source = "Решение 242"
+rationale = "Пара нужна, только если у биржи или направления должен быть свой порог или лимит; задаётся в «Настройки» → «Деньги и риск › по биржам и направлениям»."
+
+[[section.rec]]
+name = "profit.price_move_k"
+area = "площадка + тип направления"
+unit = "число"
+method = "не задавать — действуют общие значения (вся система, площадка, монета), как раньше"
+source = "Решение 242"
+rationale = "Пара нужна, только если у биржи или направления должен быть свой порог или лимит; задаётся в «Настройки» → «Деньги и риск › по биржам и направлениям»."
+
+[[section.rec]]
+name = "profit.closure_share"
+area = "площадка + тип направления"
+unit = "доля 0–1"
+method = "не задавать — действуют общие значения (вся система, площадка, монета), как раньше"
+source = "Решение 242"
+rationale = "Пара нужна, только если у биржи или направления должен быть свой порог или лимит; задаётся в «Настройки» → «Деньги и риск › по биржам и направлениям»."
+
+[[section.rec]]
+name = "signal.probe_usd"
+area = "вся система, площадка покупки A, площадка + тип направления"
+unit = "USDT"
+method = "решает Тигран: взять суммы вложения прибыльных сделок направления (отчёт «Итоги сделок», лист «Сделки») — объём проверки не больше наименьших из них (решение 87: прибыльный хвост — сделки $18–50); ниже минимумов площадок ядро его не опустит. Не задавать — сигнал на потолке, как раньше"
+source = "Решение 260"
+rationale = "Чем меньше объём проверки, тем больше направлений проходят сигнал и тем больше расчётов кандидатов (profit.calc_concurrency, замеры этапов — решение 129) и «аномальных спредов» (перечитывание справочников сетей бирж); после установки смотреть число расчётов и отказов в журнале."
+
+# --- Журнал отказов кандидатов (решение 155) ---
+[[section]]
+title = "Журнал отказов кандидатов (решение 155)"
+intro = "Отказ кандидата с той же причиной по направлению — одна строка журнала со счётчиком повторов («×N, с … по …»), а не новая строка на каждый расчёт."
+
+[[section.rec]]
+name = "journal.repeat_flush_ms"
+area = "вся система"
+unit = "мс"
+value = "5000"
+source = "Решение 155"
+rationale = "Строка повторов в базе обновляется не чаще раза в 5 с: при ~11 отказах в секунду это одна запись в базу на направление раз в 5 с вместо ~55; итог не теряется (отложенное обновление и закрытие при смене причины). Не задана — каждый отказ отдельной строкой, как раньше."
+prefill = { kind = "Global" }
+
+[[section]]
+title = "Сеть площадки DEX (решение 416)"
+intro = "Сеть, которую обслуживает площадка DEX: id сети в боте и номер цепи EVM. Без них площадка DEX не подписывается на рынок, не котирует и не подписывает транзакции."
+
+[[section.rec]]
+name = "dex.chain"
+area = "по площадке DEX"
+unit = "id сети"
+value = "bsc"
+source = "Решение 416 (Тигран 19.11.2026: две сети в одном боте)"
+rationale = "Монета на DEX — (сеть, адрес): по этому id ядро отличает одинаковый адрес в BSC и в Arbitrum; старые записи без сети читаются как сеть этой площадки."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
+[[section.rec]]
+name = "dex.evm_chain_id"
+area = "по площадке DEX"
+unit = "chainId"
+value = "56"
+source = "docs.bnbchain.org, JSON-RPC endpoint: «HTTP mainnet (ChainID 56)» (research/flow/bsc_node.md, раздел 1)"
+rationale = "Номер цепи BSC mainnet: им подписываются транзакции (EIP-155) и сверяется узел. Раньше было зашито в коде."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
+[[section.rec]]
+name = "dex.gas_ticker"
+area = "по площадке DEX"
+unit = "тикер"
+value = "BNB"
+source = "Газ сети BSC платится в BNB (решение 416, ревью шага 1)"
+rationale = "Тикер монеты газа: газ и чаевые в затратах, баланс газа кошелька, стакан газа бирж (цена газа в USDT). Раньше было зашито «BNB» в коде."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
+[[section.rec]]
+name = "dex.gas_mode"
+area = "по площадке DEX"
+unit = "модель газа"
+value = "legacy"
+source = "Решение 433; BSC — research/flow/bsc_dex.md, раздел 5 (база газа BSC всегда 0)"
+rationale = "Модель газа сети: у BSC одна цена gasPrice и legacy-транзакция, как было. У площадки Arbitrum (arb_dex) — eip1559_l1."
+prefill = { kind = "Venue", id = "bsc_dex" }
 
 [[section]]
 title = "Нативная монета BNB"
@@ -172,8 +408,15 @@ area = "по площадке DEX"
 unit = "циклов"
 value = "20"
 source = "Ориентир (docs/SETTINGS.md)"
-rationale = "Предел числа циклов на одну базовую монету — держит скорость перебора."
+rationale = "Решение 404: сколько ЛУЧШИХ по курсу круга циклов на одну базовую монету считать полностью (до 404 — первые найденные). Держит скорость расчёта прохода."
 prefill = { kind = "Venue", id = "bsc_dex" }
+
+[[section.rec]]
+name = "dex_dex.rank_max_cycles"
+area = "по площадке DEX"
+unit = "циклов"
+method = "Не задавать при dex_dex.max_cycle_len ≤ 3 (просматриваются все циклы). При 4 и больше — задать: подобрать по числу «просмотрено циклов» в журнале core.cycle_scan и загрузке процессора."
+rationale = "Решение 404: предел дешёвого просмотра циклов при отборе лучших; без него при длинных циклах перебор растёт как (пулов на ребро)^длина."
 
 [[section.rec]]
 name = "dex_dex.probe_input_base"
@@ -195,6 +438,252 @@ area = "по площадке DEX"
 unit = "да/нет"
 method = "Оставить выключенным. Включает Тигран после того, как сигнал подтверждён на сухом режиме."
 rationale = "Авто-исполнение отдельно от сигнала — под контролем человека."
+
+# --- Окна (решение 125) ---
+[[section]]
+title = "Окна (решение 125)"
+intro = "Сырые кадры стакана и каждая сделка биржи по монете, пока её направление проходит расчёт прибыльности и до конца нашей сделки. Ориентиры, не потолки площадок."
+
+[[section.rec]]
+name = "window.enabled"
+area = "вся система"
+unit = "да/нет"
+method = "Включить («да»), когда заданы остальные window.*: окна — запись наблюдения, на торговлю не влияют. Переключатель задаёт Тигран сам (кнопки «да/нет» не предзаполняются)."
+rationale = "Сырые данные окон копятся с первого прошедшего сигнала."
+
+[[section.rec]]
+name = "window.min_hold_ms"
+area = "вся система"
+unit = "мс"
+value = "2000"
+source = "Ориентир (решение 125)"
+rationale = "Направление мигает между «кандидатом» и отказом от тика к тику; 2 с держат одно окно через короткие провалы, не растягивая его надолго."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "window.queue_max"
+area = "вся система"
+unit = "кадров"
+value = "10000"
+source = "Ориентир (решение 125)"
+rationale = "Запас на всплеск кадров (стакан + лента) при медленном диске: кадр стакана BingX depth20 — ~2 КБ текста, 10000 кадров — ~20 МБ памяти на окно в худшем случае; потери видны в списке."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "window.max_mb"
+area = "вся система"
+unit = "МБ"
+value = "2048"
+source = "Ориентир (решение 125)"
+rationale = "Окно с минутой записи — сотни КБ, с долгой сделкой — единицы МБ (оценка в решении 125); 2 ГБ — тысячи окон, сервер Rise-3 — 2×1.92 ТБ."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "window.keep_days"
+area = "вся система"
+unit = "дней"
+value = "14"
+source = "Ориентир (решение 125)"
+rationale = "Две недели окон на разбор и подбор порогов; старше — уборка."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "window.zstd_level"
+area = "вся система"
+unit = "уровень"
+value = "3"
+source = "Документация zstd: уровень по умолчанию библиотеки — 3"
+rationale = "Быстрое сжатие в потоке без нагрузки на процессор; поднять, если места мало."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "window.cleanup_s"
+area = "вся система"
+unit = "секунды"
+value = "3600"
+source = "Ориентир (как episode.cleanup_s)"
+rationale = "Уборка раз в час; при нехватке места уборка идёт сразу."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "window.dex_price"
+area = "вся система"
+unit = "да/нет"
+method = "Включить («да»), когда задана window.dex_price_min_ms: цена DEX в окне — наблюдение, на торговлю не влияет. Переключатель задаёт Тигран сам (кнопки «да/нет» не предзаполняются)."
+source = "Решение 241"
+rationale = "Новых запросов к узлу нет: точка — уже посчитанная котировка тика."
+
+[[section.rec]]
+name = "window.dex_price_min_ms"
+area = "вся система"
+unit = "мс"
+value = "0"
+source = "Ориентир (решение 241)"
+rationale = "Точка пишется только при изменении пулов монеты (не на каждом тике биржи); 0 — без пропусков, чтобы видеть каждое движение DEX между решением и продажей. Поднять, если файлы окон растут слишком быстро."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "window.dex_pool_state"
+area = "вся система"
+unit = "да/нет"
+method = "Включить («да»), если нужен лист «Ликвидность пула» отчёта «Сигналы и сделки» за всё окно (состояние пулов маршрута в точке цены DEX). Переключатель задаёт Тигран сам (кнопки «да/нет» не предзаполняются)."
+source = "Решение 255"
+rationale = "Наблюдение, на торговлю не влияет; новых запросов к узлу нет; файлы окон растут — в каждой точке состояние каждого пула маршрута."
+
+[[section.rec]]
+name = "venue.trades_interval"
+area = "площадка MEXC"
+unit = "интервал"
+value = "10ms"
+source = "Официальная документация MEXC, Trade Streams: (100ms|10ms)"
+rationale = "Ближе к сырому потоку: кадр за 10 мс, в нём каждая сделка отдельно с tradeId."
+prefill = { kind = "Venue", id = "mexc" }
+
+[[section.rec]]
+name = "venue.window_depth_interval"
+area = "площадка MEXC"
+unit = "интервал"
+value = "10ms"
+source = "Официальная документация MEXC, Diff.Depth Stream: (100ms|10ms)"
+rationale = "Ближе к сырому потоку изменений стакана (ответ Тиграна по решению 125)."
+prefill = { kind = "Venue", id = "mexc" }
+
+[[section.rec]]
+name = "venue.window_depth_limit"
+area = "площадка MEXC"
+unit = "уровней"
+value = "1000"
+source = "Документация MEXC: Order Book «max 5000»; процедура локального стакана — limit=1000"
+rationale = "Глубина снимка, которую берёт сама процедура MEXC; предел — 5000."
+prefill = { kind = "Venue", id = "mexc" }
+
+[[section.rec]]
+name = "venue.fast_book_interval"
+area = "площадка MEXC"
+unit = "интервал"
+value = "10ms"
+source = "Решение 420; Diff.Depth Stream: (100ms|10ms)"
+rationale = "Быстрый стакан из самого частого потока изменений; поток снимков (~500 мс) — страховка, торговля из-за пропусков не останавливается."
+prefill = { kind = "Venue", id = "mexc" }
+
+[[section.rec]]
+name = "venue.fast_book_snapshot_per_sec"
+area = "площадка MEXC"
+unit = "в секунду"
+value = "2"
+source = "Order Book «Weight(IP): 3»; «IP-weighted endpoints share 300 weight per 10 seconds»"
+rationale = "6 веса/с из 30 корзины IP; 300 пар синхронизируются за 150 с, всё это время — по снимкам."
+prefill = { kind = "Venue", id = "mexc" }
+
+[[section.rec]]
+name = "venue.fast_book_snapshot_limit"
+area = "площадка MEXC"
+unit = "уровней"
+value = "5000"
+source = "How to Properly Maintain a Local Copy of the Order Book, шаг 3: limit=5000; Order Book «max 5000»"
+rationale = "Глубина, которую берёт сама процедура MEXC; уровни вне снимка без изменений в быстром стакане не видны."
+prefill = { kind = "Venue", id = "mexc" }
+
+# --- Упущено из-за потолка (решение 141) ---
+[[section]]
+title = "Упущено из-за потолка (решение 141)"
+intro = "Фоновый расчёт «без потолка»: сколько дала бы сделка без лимитов money.*, свободного остатка и виртуального бюджета — только ликвидность и предел card.max_search_usdt. На торговлю не влияет; стоимость — процессор (замер — docs/notes/uncapped-2026-11-04.md)."
+
+[[section.rec]]
+name = "uncapped.enabled"
+area = "вся система"
+unit = "да/нет"
+method = "Включить («да»), когда заданы остальные uncapped.* и card.max_search_usdt. Переключатель задаёт Тигран сам."
+rationale = "Расчёт — наблюдение, на торговлю не влияет; включается отдельно, чтобы видеть его цену по процессору."
+
+[[section.rec]]
+name = "uncapped.max_concurrent"
+area = "вся система"
+unit = "расчётов"
+value = "1"
+source = "Ориентир (решение 141; процессор — больное место, решения 129–131)"
+rationale = "Один фоновый поток: не больше одного ядра на расчёты без потолка и не больше одного места dex.quote_cpu_max."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "uncapped.min_interval_ms"
+area = "вся система"
+unit = "мс"
+value = "30000"
+source = "Ориентир (решение 141)"
+rationale = "Кандидат держится секунды–минуты: раз в 30 с по направлению хватает, чтобы поймать пик упущенного эпизода; сделки — без интервала."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "uncapped.queue_max"
+area = "вся система"
+unit = "работ"
+value = "64"
+source = "Ориентир (решение 141)"
+rationale = "Повторы направления сливаются — в очереди не больше одной работы на направление; 64 — запас на всплеск сигналов, пропуски видны счётчиком."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "uncapped.max_evals"
+area = "вся система"
+unit = "расчётов"
+value = "160"
+source = "Замер на записи CAKE (tests/core_uncapped.rs, docs/notes/uncapped-2026-11-04.md)"
+rationale = "Оптимум без потолка на записи — тот же, что при 300 (полный поиск — 213–238 расчётов); на 80 уже отходит. Живой расчёт ≈ 160 × 1–2 котировки DEX по ~2 мс."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "uncapped.ladder_usdt"
+area = "вся система"
+unit = "USDT, список"
+value = "100, 200, 500, 1000, 2000, 5000, 10000"
+source = "Ориентир (задача Тиграна 04.11.2026: «потолок 100/200/500/1000/…»)"
+rationale = "Шкала от нынешнего потолка до размеров, где обычно кончается ликвидность пулов BSC."
+
+[[section.rec]]
+name = "uncapped.episode_gap_ms"
+area = "вся система"
+unit = "мс"
+value = "120000"
+source = "Ориентир (решение 141)"
+rationale = "Четыре интервала uncapped.min_interval_ms: короткий провал кандидата не дробит эпизод."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "uncapped.maxwin_gap_ms"
+area = "вся система"
+unit = "мс"
+value = "60000"
+source = "Ориентир (решение 245)"
+rationale = "Два интервала uncapped.min_interval_ms (совет 30000): один пропущенный или задержанный очередью расчёт не обрывает окно максимального объёма; больше — окно склеивалось бы через паузы, когда кандидат не считался."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "uncapped.maxwin_watch_ms"
+area = "вся система"
+unit = "мс"
+value = "120000"
+source = "Тигран 09.11.2026 (решение 245, дополнение)"
+rationale = "Тигран 09.11: «постоянно записывать 2 мин: держится 38 с — пишем 38; больше 2 мин — пишем „2 м+“». При uncapped.min_interval_ms 30000 — до 4–5 расчётов наблюдения на окно."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "uncapped.deal_time_min_n"
+area = "вся система"
+unit = "сделок"
+value = "5"
+source = "Ориентир (решение 245)"
+rationale = "Как profit.transit_auto_after на боте (5 — docs/notes/transit-times-2026-11-09.md): медиана по меньшему числу сделок случайна; у пары с меньшим числом — по бирже-источнику."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "uncapped.keep_days"
+area = "вся система"
+unit = "дней"
+value = "30"
+source = "Ориентир (решение 141)"
+rationale = "Месяц для анализа потолка; строка — несколько КБ JSON."
+prefill = { kind = "Global" }
 
 # --- Лимиты биржи BingX ---
 [[section]]
@@ -227,6 +716,2113 @@ value = "2"
 source = "Документация BingX: не больше 2"
 rationale = "Предел запросов ставок комиссии у BingX."
 prefill = { kind = "Venue", id = "bingx" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка BingX"
+unit = "мс"
+value = "10000"
+source = "error-codes.md (api-ai-skills): «418 — Continued access after receiving 429, IP has been banned»; окна лимитов: api-ai-skills spot-market — «1/s per IP», docs-v3 — «500 requests per 10 seconds» (расходятся)"
+rationale = "Решение 244: пауза после 429 — только эндпоинта, после 418 — всей биржи; Retry-After BingX не описан. Самое длинное окно документации (10 с): за ним любое окно сброшено, повтор раньше грозит баном IP (418). Ордера не ждут фоновый 429 — пауза у одного эндпоинта."
+prefill = { kind = "Venue", id = "bingx" }
+
+# --- Биржа Gate (решение 135) ---
+[[section]]
+title = "Биржа Gate (решение 135)"
+intro = "Адреса и значения из официальной документации Gate API v4 и живой записи 04.11.2026. Советы, не значения по умолчанию: без заданных настроек Gate не работает и говорит, какой не хватает. Включать — после замера нагрузки при «Стоп» (решение 109)."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка Gate"
+unit = "URL"
+value = "https://api.gateio.ws/api/v4"
+source = "Документация Gate API v4, Access URL: Live trading"
+rationale = "Адрес вместе с префиксом /api/v4: путь входит в подпись запроса."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка Gate"
+unit = "URL"
+value = "wss://api.gateio.ws/ws/v4/"
+source = "Документация Spot WebSocket v4: адрес реальной торговли; живая запись 04.11"
+rationale = "Один адрес для стаканов, окон и потока балансов."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка Gate"
+unit = "название"
+value = "BSC"
+source = "Живая запись 04.11: /spot/currencies и /wallet/currency_chains?currency=CAKE — chain «BSC»"
+rationale = "Так Gate называет сеть BNB Smart Chain (BEP20) в справочнике и при выводе."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка Gate"
+unit = "уровней"
+value = "20"
+source = "Документация spot.order_book: уровни 5, 10, 20, 50, 100"
+rationale = "Как у других бирж; живая запись — 20 уровней."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.book_interval"
+area = "площадка Gate"
+unit = "интервал"
+value = "100ms"
+source = "Документация spot.order_book: 100ms или 1000ms"
+rationale = "Самый частый снимок стакана; одинаковые снимки ядру не отдаются (решение 109)."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка Gate"
+unit = "тип"
+value = "ioc"
+source = "Документация POST /spot/orders: «ioc: immediate execution or cancellation, taker-only», «fok: FillOrKill, fill in full or cancel in full»"
+rationale = "Стартовое правило Тиграна «не исполнился — отменяем»: остаток снимает биржа. fok тоже допустим — выбор настройкой (Тигран, 04.11)."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.fee_deduction"
+area = "площадка Gate"
+unit = "вариант"
+method = "coin — если в кабинете Gate скидка GT выключена (комиссия в монете сделки); gt — если включена и на счёте есть GT. Должно совпадать с кабинетом: иначе котировок Gate нет (бот пишет причину)."
+source = "GET /wallet/fee: taker_fee, gt_discount, gt_taker_fee; решение Тиграна 04.11"
+rationale = "Расчёт берёт ставку и монету комиссии по выбранному варианту; факт — из ордера."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка Gate"
+unit = "да/нет"
+method = "Поставить «нет»"
+source = "Спот API v4 Gate: пробного ордера нет"
+rationale = "«Да» у Gate — ошибка настройки: проверка ордера идёт только правилами пары."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка Gate"
+unit = "мс"
+value = "10000"
+source = "Официальный пример Spot WebSocket v4: spot.ping раз в 10 с"
+rationale = "spot.ping сбрасывает таймер простоя сервера; срок простоя в документации не назван."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.fee_requests_per_sec"
+area = "площадка Gate"
+unit = "в секунду"
+value = "5"
+source = "Документация «Frequency limit rule»: приватные — 200 запросов за 10 с на конечную точку"
+rationale = "Четверть предела /wallet/fee — остаётся место на ручные проверки."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка Gate"
+unit = "мс"
+value = "10000"
+source = "Документация «Frequency limit rule»: окно лимита — 10 с"
+rationale = "После 429 ждать целое окно лимита: Retry-After Gate не присылает."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.order_history_limit"
+area = "площадка Gate"
+unit = "ордеров"
+value = "100"
+source = "Документация GET /spot/orders: limit «default 100»"
+rationale = "Хватает, чтобы найти свой ордер по text за минуты после постановки."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.obu_level"
+area = "площадка Gate"
+unit = "уровней"
+value = "50"
+source = "Документация spot.obu (Order Book V2): «400-level updates every 100 ms; 50-level updates every 20 ms»"
+rationale = "Решение 421: стакан в 5 раз чаще снимков 100 мс; снимки spot.order_book остаются страховкой. 400 — если нужна глубина больше 50."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.window_diff_interval"
+area = "площадка Gate"
+unit = "интервал"
+value = "100ms"
+source = "Документация spot.order_book_update: 20ms (глубина 20) или 100ms (глубина 100)"
+rationale = "Глубина 100 — шире снимка стакана; живая запись 04.11 — 100ms."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.window_depth_limit"
+area = "площадка Gate"
+unit = "уровней"
+value = "100"
+source = "Глубина канала spot.order_book_update при 100ms — 100"
+rationale = "Снимок REST той же глубины, что изменения."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка Gate"
+unit = "штук"
+method = "Предела в документации нет — начать с 20 пар на соединение, замерить нагрузку при «Стоп» (решение 109), при обрывах уменьшить"
+source = "Документация Spot WebSocket v4: предела подписок на соединение нет (вопрос Тиграну)"
+rationale = "Без предела в документации число — только замером на живом сервере."
+prefill = { kind = "Venue", id = "gate" }
+# --- Биржа Bybit (решение 136) ---
+[[section]]
+title = "Биржа Bybit (решение 136)"
+intro = "Адреса и потолки — из официальной документации Bybit V5. Имя сети BSC (venue.bsc_network) и счёт вывода задаёт Тигран по живым ответам. Депозит: в кабинете Bybit назначить зачисление на UNIFIED (Set Deposit Account) — venue.deposit_to_spot не задавать (решение Тиграна 04.11)."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка Bybit"
+unit = "URL"
+value = "https://api.bybit.com"
+source = "Integration Guidance: «both endpoints are available»"
+rationale = "Основной адрес REST mainnet."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.rest_fallback_url"
+area = "площадка Bybit"
+unit = "URL"
+value = "https://api.bytick.com"
+source = "Integration Guidance"
+rationale = "Второй адрес mainnet — только при сбое сети."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка Bybit"
+unit = "URL"
+value = "wss://stream.bybit.com/v5/public/spot"
+source = "Connect"
+rationale = "Публичный поток спота."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.ws_private_url"
+area = "площадка Bybit"
+unit = "URL"
+value = "wss://stream.bybit.com/v5/private"
+source = "Connect"
+rationale = "Приватный поток (order, execution, wallet)."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "площадка Bybit"
+unit = "монета"
+value = "USDT"
+source = "instruments-info: quoteCoin"
+rationale = "Котируемая монета пар."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка Bybit"
+unit = "тип"
+value = "IOC"
+source = "enum timeInForce"
+rationale = "Остаток снимает биржа (правило «не исполнился — отменяем»)."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка Bybit"
+unit = "уровней"
+value = "50"
+source = "Orderbook → Depths → Spot: 1, 50, 200, 1000"
+rationale = "50 уровней, кадры раз в 20 мс."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка Bybit"
+unit = "штук"
+value = "100"
+source = "Connect: «up to 100 args for a single connection»"
+rationale = "Предел подписок спота на соединение."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка Bybit"
+unit = "мс"
+value = "20000"
+source = "Connect: «every 20 seconds»"
+rationale = "Совет Bybit по heartbeat."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.my_trades_limit"
+area = "площадка Bybit"
+unit = "штук"
+value = "100"
+source = "Get Trade History: limit [1, 100]"
+rationale = "Наибольший limit исполнений ордера."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.fee_requests_per_sec"
+area = "площадка Bybit"
+unit = "в секунду"
+value = "5"
+source = "Rate Limit: /v5/account/fee-rate 5/s"
+rationale = "Потолок запросов ставок комиссии."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.recv_window_ms"
+area = "площадка Bybit"
+unit = "мс"
+value = "5000"
+source = "Integration Guidance: «default value is 5,000»"
+rationale = "Окно подписи по умолчанию Bybit."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка Bybit"
+unit = "название"
+method = "Значение поля chain сети BSC из живого coin/query-info — в документации имени сети BSC нет."
+rationale = "Только факты из ответа API."
+
+[[section.rec]]
+name = "venue.deposit_to_spot"
+area = "площадка Bybit"
+unit = "да/нет"
+method = "Не задавать: в кабинете Bybit депозит назначен на UNIFIED (Set Deposit Account). «да» — только запасной вариант, если депозит остаётся на FUND (нужно право Wallet: AccountTransfer)."
+source = "Set Deposit Account: «Your funds will be deposited into FUND wallet by default»; решение Тиграна 04.11"
+rationale = "Бот перевод FUND → UNIFIED не делает; счёт зачисления API прочитать не даёт — проверяет Тигран в кабинете."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.book_seq_strict"
+area = "площадка Bybit"
+unit = "да/нет"
+method = "да — если на живом потоке u изменений шёл строго +1 (запись 04.11 — так); частые пересинхронизации стаканов в журнале — поставить нет (только рост u)."
+source = "Orderbook: snapshot/delta (строгое +1 не обещано); живая запись 04.11; решение Тиграна 04.11"
+rationale = "Строгая проверка ловит потерянный кадр сразу; без неё — только откат номера."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.book_backup_levels"
+area = "площадка Bybit"
+unit = "уровней"
+method = "200 при venue.depth_levels = 50; 1 — если на время разрыва основного хватит лучшего уровня; решает Тигран."
+source = "Orderbook → Depths → Spot (1 — 10 мс, 50 — 20 мс, 200 — 100 мс, 1000 — 200 мс); seq «compare different levels orderbook data»; решение 428"
+rationale = "На время пересинхронизации основного ядро считает по полной глубине (не меньше 50 уровней), сверка — по первым 50; соединений вдвое больше."
+prefill = { kind = "Venue", id = "bybit" }
+# --- Биржа KuCoin (решение 137) ---
+[[section]]
+title = "Биржа KuCoin (решение 137)"
+intro = "Значения из официальной документации KuCoin (Classic) и живых ответов 04.11.2026. Перед торговлей — замер нагрузки при «Стопе» (решение 109). Счёт — Classic, спот HF; адрес депозита BSC создаётся в кабинете с зачислением на TRADE (решение Тиграна 04.11)."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка KuCoin"
+unit = "URL"
+value = "https://api.kucoin.com"
+source = "Документация KuCoin, Get Public Token: «POST /api/v1/bullet-public on https://api.kucoin.com»; примеры SDK"
+rationale = "Основной адрес REST Classic API."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка KuCoin"
+unit = "название"
+value = "bsc"
+source = "Живой ответ GET /api/v3/currencies/CAKE 04.11: chainId «bsc», chainName «BEP20»"
+rationale = "chainId сети BSC — его принимают вывод и адрес депозита."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.api_key_version"
+area = "площадка KuCoin"
+unit = "версия"
+value = "3"
+source = "Документация KuCoin, Authentication: KC-API-KEY-VERSION — версия со страницы API Management (в примерах 3)"
+rationale = "Сверить со страницей ключа: «Проверить подключение» сравнит с apiVersion."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка KuCoin"
+unit = "тип"
+value = "IOC"
+source = "Документация KuCoin, Add Order: timeInForce GTC, GTT, IOC, FOK"
+rationale = "Правило Тиграна: неисполненный остаток снимает биржа."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка KuCoin"
+unit = "уровней"
+value = "50"
+source = "Документация KuCoin: темы /spotMarket/level2Depth5 и level2Depth50, раз в 100 мс при изменении"
+rationale = "Глубина для котировки на объём; 5 — меньше нагрузки."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.ws_subs_per_sec"
+area = "площадка KuCoin"
+unit = "в секунду"
+value = "10"
+source = "Документация KuCoin, rate limit: 100 сообщений клиента за 10 с на соединение"
+rationale = "Потолок темпа подписок."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.window_depth_limit"
+area = "площадка KuCoin"
+unit = "уровней"
+value = "100"
+source = "Документация KuCoin, Get Part OrderBook: size «optional value: 20, 100»"
+rationale = "Снимок для изменений стакана в окнах; больше 100 у этого эндпоинта нет."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.full_book_per_sec"
+area = "площадка KuCoin"
+unit = "в секунду"
+value = "5"
+source = "Документация KuCoin: Get Full OrderBook — пул Spot, вес 3; Rate limit — VIP0 Spot 4000 за 30 с"
+rationale = "Быстрый стакан (решение 423): 3 × 5 × 30 = 450 веса за 30 с, ~11 % пула Spot — запас ордерам; старт 400 пар — 80 с. Нужны ключи и venue.api_key_version."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.withdraw_from_trade"
+area = "площадка KuCoin"
+unit = "да/нет"
+value = "да"
+source = "Код 115007 «withdrawals only come from the funds account»; Flex Transfer; решение Тиграна 04.11"
+rationale = "Торговля — на trade, вывод — только с main: перед выводом бот переводит сумму trade → main (право ключа FlexTransfers)."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.deposit_to_spot"
+area = "площадка KuCoin"
+unit = "да/нет"
+method = "Не задавать: адрес депозита BSC создан в кабинете с зачислением на TRADE — перевод main → trade не нужен. «да» — только если адрес зачисляет на MAIN."
+source = "Get Deposit Address V3: to — MAIN или TRADE; решение Тиграна 04.11"
+rationale = "Адрес MAIN при выключенном переводе бот не отдаёт (монету не продать) — отказ с причиной."
+prefill = { kind = "Venue", id = "kucoin" }
+
+# --- Биржа Bitget (решение 162) ---
+[[section]]
+title = "Биржа Bitget (решение 162)"
+intro = "Значения из официальной документации Bitget Classic v2 (www.bitget.com/docs). Живых ответов ещё нет — имя сети BSC, счета депозита и вывода задаёт Тигран по живым ответам. Счёт — Classic (не UTA). Адреса вывода (кошелёк бота, адреса других бирж) — заранее в адресную книгу кабинета Bitget (код 11000); ключ с выводом — только с привязкой IP сервера. Перед торговлей — замер нагрузки при «Стопе» (решение 109)."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка Bitget"
+unit = "URL"
+value = "https://api.bitget.com"
+source = "Classic → REST API: «https://api.bitget.com»; SDK consts.py API_URL"
+rationale = "Основной адрес REST Classic v2."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка Bitget"
+unit = "URL"
+value = "wss://ws.bitget.com/v2/ws/public"
+source = "Classic → WebSocket intro: публичный «wss://ws.bitget.com/v2/ws/public»"
+rationale = "Стаканы books5/books15."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "площадка Bitget"
+unit = "монета"
+value = "USDT"
+source = "Get Symbol Info: quoteCoin; minTradeUSDT — минимум суммы в USDT"
+rationale = "Котируемая монета пар."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка Bitget"
+unit = "уровней"
+value = "15"
+source = "Depth Channel: books1 (10 мс), books5 и books15 (200 мс) — снимками"
+rationale = "Глубина для котировки на объём; 5 — меньше нагрузки."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка Bitget"
+unit = "штук"
+value = "49"
+source = "WebSocket intro: «less than 50 channels in one connection», «Max 1000 channel subscription/connection»"
+rationale = "Рекомендация документации — меньше 50 каналов на соединение."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.ws_subs_per_sec"
+area = "площадка Bitget"
+unit = "в секунду"
+value = "10"
+source = "WebSocket intro: до 10 сообщений клиента в секунду (ping, login, subscribe)"
+rationale = "Потолок темпа сообщений; подписка идёт пачками ≤ 4096 байт."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка Bitget"
+unit = "мс"
+value = "30000"
+source = "WebSocket intro: строка «ping» каждые 30 с, без ping 2 минуты — разрыв"
+rationale = "Совет документации — раз в 30 с."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.ws_silence_ms"
+area = "площадка Bitget"
+unit = "мс"
+method = "больше venue.ws_ping_ms с запасом на ответ «pong» (например, два интервала ping) — решает Тигран"
+source = "WebSocket intro: ответ «pong» на каждый «ping»"
+rationale = "Без кадров дольше — соединение оборвано."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка Bitget"
+unit = "тип"
+value = "ioc"
+source = "Place Order: force gtc / post_only / fok / ioc"
+rationale = "Правило Тиграна: неисполненный остаток снимает биржа."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка Bitget"
+unit = "да/нет"
+method = "не задавать (или «нет»): пробного ордера у Bitget Classic нет — «да» даёт отказ ордера"
+source = "Spot → Trade: среди эндпоинтов нет test order"
+rationale = "Правила ордера проверяет order_rules::ready."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка Bitget"
+unit = "название"
+method = "значение поля chain сети BSC из живого ответа GET /api/v2/spot/public/coins?coin=CAKE"
+source = "Get Coin Info: chain «Chain name» (в примере только BTC)"
+rationale = "В документации имени сети BSC нет."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.deposit_min_absent_ok"
+area = "площадка Bitget"
+unit = "да/нет"
+method = "решает Тигран (решение 371): minDepositAmount «0» — минимум 0 (решение Тиграна 17.11, читается сам); настройка — только для сетей без поля / null: да — минимум 0, не задано — перевода на Bitget по таким монетам нет"
+source = "Get Coin Info: minDepositAmount; смысл «0» не описан"
+rationale = "Урок 21: «0» и пусто у биржи могут значить разное."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.history_window_s"
+area = "площадка Bitget"
+unit = "с"
+method = "с запасом больше самого долгого ожидания вывода и зачисления (например, сутки — 86400); решает Тигран"
+source = "Get Deposit/Withdrawal Records: startTime и endTime обязательны, предел промежутка не указан"
+rationale = "Окно поиска статусов депозита и вывода."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка Bitget"
+unit = "мс"
+method = "пауза после 429 — Retry-After в документации нет, окно лимитов — секунда (например, 1000–2000); решает Тигран"
+source = "Classic → REST API: «429»; лимиты «N times/1s»"
+rationale = "Не слать дальше после «слишком часто» (урок 15)."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.deposit_to_spot"
+area = "площадка Bitget"
+unit = "да/нет"
+method = "не задавать, если в кабинете (или Modify Deposit Account) зачисление монеты назначено на spot; «да» — если депозит приходит на фонд (право ключа «Transfer»); проверить первым депозитом"
+source = "Modify Deposit Account (accountType spot / funding …); Transfer p2p → spot"
+rationale = "На какой счёт зачисляется депозит, в документации Classic не сказано."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.withdraw_from_trade"
+area = "площадка Bitget"
+unit = "да/нет"
+method = "«да» — если малый вывод со спота отклонён (вывод с фонда); иначе не задавать"
+source = "Withdraw: с какого счёта списывается — не описано"
+rationale = "Проверить малым выводом."
+prefill = { kind = "Venue", id = "bitget" }
+# --- Биржа OKX (решение 161) ---
+[[section]]
+title = "Биржа OKX (решение 161)"
+intro = "Из официальной документации OKX API v5 (живых ответов ещё нет — из среды разработки OKX закрыт; сверить на сервере бота, tests/README.md, раздел OKX). Перед торговлей — замер нагрузки при «Стопе» (решение 109). Режим счёта Spot (acctLv 1), ключ основного счёта с правами Read, Trade, Withdraw, привязан к IP; адреса вывода — заранее в кабинете OKX."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка OKX"
+unit = "URL"
+method = "Домен — по сущности счёта, не выбирается ботом: основной https://openapi.okx.com, EEA — https://eea.okx.com, US — https://us.okx.com. Какой у счёта — видно по сайту входа (my.okx.com — EEA, app.okx.com — US/AU)."
+source = "Документация OKX v5, Overview → Production Trading Services: «Using openapi.okx.com will not work for the regions below»"
+rationale = "Запросы на чужой домен сущности не проходят."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка OKX"
+unit = "URL"
+method = "Публичный WebSocket той же сущности: основной wss://ws.okx.com/ws/v5/public (у EEA / US — свой домен из того же раздела документации)."
+source = "Документация OKX v5, Overview → Production Trading Services; порт 8443 закрыт с 31.10.2026 (журнал изменений)"
+rationale = "Стаканы books5 / books."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.ws_business_url"
+area = "площадка OKX"
+unit = "URL"
+method = "WebSocket business той же сущности: основной wss://ws.okx.com/ws/v5/business."
+source = "Документация OKX v5, Deposit info channel: «URL Path /ws/v5/business (required login)»"
+rationale = "Зачисление депозитов событием с хешем (venue.balance_events)."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.balance_events"
+area = "площадка OKX"
+unit = "да/нет"
+value = "да"
+source = "Документация OKX v5, Deposit info channel"
+rationale = "Депозит закрывается событием, а не опросом статуса."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка OKX"
+unit = "название"
+method = "Часть chain после «<монета>-» сети BSC в живом ответе GET /api/v5/asset/currencies?ccy=CAKE (ожидается BSC — в документации только пример USDT-ERC20)."
+source = "Документация OKX v5, Get currencies: chain «e.g. USDT-ERC20»"
+rationale = "Название сети одно на все монеты у ядра; chain OKX бот берёт из справочника."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.deposit_min_absent_ok"
+area = "площадка OKX"
+unit = "да/нет"
+method = "По живому ответу currencies: minDep у монет BSC приходит — не задавать; пустой у многих — решение Тиграна (что значит пустой minDep, документация не говорит)."
+source = "Документация OKX v5, Get currencies: minDep"
+rationale = "Решение 143: «0» и пустое у биржи могут значить разное."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка OKX"
+unit = "уровней"
+value = "400"
+source = "Документация OKX v5, Order book channel: books — 400 уровней + изменения каждые 100 мс; books5 — 5 уровней"
+rationale = "Глубина для котировки на объём; при нагрузке процессора — 5 (снимки books5)."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка OKX"
+unit = "мс"
+value = "20000"
+source = "Документация OKX v5, Overview → WebSocket → Connect: «Set a timer of N seconds … N is less than 30»"
+rationale = "Сервер рвёт молчащее соединение через 30 с."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.ws_silence_ms"
+area = "площадка OKX"
+unit = "мс"
+value = "40000"
+source = "Документация OKX v5, Connect: «If the response message is not received within N seconds, please raise an error or reconnect»"
+rationale = "Пинг через 20 с тишины + 20 с на pong."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.ws_connects_per_sec"
+area = "площадка OKX"
+unit = "в секунду"
+value = "3"
+source = "Документация OKX v5, Connect: «Connection limit: 3 requests per second (based on IP)»"
+rationale = "Потолок темпа подключений."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.order_type"
+area = "площадка OKX"
+unit = "тип"
+value = "ioc"
+source = "Документация OKX v5, Place order: ordType ioc / fok"
+rationale = "Правило Тиграна: неисполненный остаток снимает биржа."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.fee_requests_per_sec"
+area = "площадка OKX"
+unit = "запросов/с"
+value = "2"
+source = "Документация OKX v5, Get fee rates: «5 requests per 2 seconds»"
+rationale = "Потолок лимита эндпоинта (целое вниз)."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка OKX"
+unit = "мс"
+value = "2000"
+source = "Документация OKX v5, Rate Limits: лимиты почти всех эндпоинтов — за 2 с; Retry-After не описан"
+rationale = "Пауза на окно лимита после 50011 / HTTP 429."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.withdraw_from_trade"
+area = "площадка OKX"
+unit = "да/нет"
+value = "да"
+source = "Документация OKX v5, Withdrawal: «Only supported withdrawal of assets from funding account»"
+rationale = "Торговля — на Trading, вывод — с Funding: перед выводом перевод 18 → 6."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.deposit_to_spot"
+area = "площадка OKX"
+unit = "да/нет"
+method = "Не задавать, если в кабинете у адреса BSC зачисление на Trading account (to = 18). «да» — только если адрес зачисляет на Funding (6): тогда после зачисления перевод 6 → 18."
+source = "Документация OKX v5, Get deposit address: to «6: Funding account 18: Trading account»"
+rationale = "Адрес Funding при выключенном переводе бот не отдаёт — отказ с причиной."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.transfer_poll_ms"
+area = "площадка OKX"
+unit = "мс"
+value = "1000"
+source = "Документация OKX v5, Funds transfer: «2 requests per second»; Get funds transfer state"
+rationale = "Опрос итога перевода без упора в лимит."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.transfer_wait_ms"
+area = "площадка OKX"
+unit = "мс"
+value = "30000"
+source = "Документация OKX v5, Funds transfer: «does not necessarily reflect the actual transfer result»"
+rationale = "Не дождались — итог неизвестен, ручная проверка."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.book_backup_log_s"
+area = "площадка OKX"
+unit = "секунды"
+value = "60"
+source = "Решение 429; совет, не документация (как log.pool_events_lost_interval_s = 60)"
+rationale = "Видно, как часто быстрый стакан books теряет синхронизацию и ядро считает по снимкам books5; журнал не засоряется (не чаще раза в минуту)."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка OKX"
+unit = "да/нет"
+method = "Не задавать: пробного ордера для спота у OKX нет (order-precheck — только Multi-currency и Portfolio margin); «да» — ошибка настройки."
+source = "Документация OKX v5, Order precheck"
+rationale = "check_order — только правила пары."
+prefill = { kind = "Venue", id = "okx" }
+# --- Биржа Binance (решение 160) ---
+[[section]]
+title = "Биржа Binance (решение 160)"
+intro = "Значения из официальной документации Binance (спот API, WebSocket Streams, WebSocket API, Wallet SAPI). Живых ответов ещё нет — каждую цифру сверить на первой записи (tests/README.md, раздел Binance). Перед торговлей — замер нагрузки при «Стопе» (решение 109). Ключ — HMAC; вывод Binance разрешает только ключу с ограничением по IP."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка Binance"
+unit = "URL"
+value = "https://api.binance.com"
+source = "Документация Binance, rest-api «General API Information»"
+rationale = "Основной адрес REST спота и Wallet SAPI."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.rest_fallback_url"
+area = "площадка Binance"
+unit = "URL"
+value = "https://api-gcp.binance.com"
+source = "rest-api «General API Information»: api-gcp, api1…api4 — «better performance but less stability»"
+rationale = "Резерв только при сбое сети основного адреса."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка Binance"
+unit = "URL"
+value = "wss://stream.binance.com:9443"
+source = "web-socket-streams «General WSS information»"
+rationale = "Без пути: бот сам добавляет /stream (стаканы) и /ws/<поток> (окна)."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.ws_private_url"
+area = "площадка Binance"
+unit = "URL"
+value = "wss://ws-api.binance.com:443/ws-api/v3"
+source = "websocket-api «General API Information»; userDataStream.subscribe.signature"
+rationale = "Поток аккаунта: listenKey устарел (CHANGELOG 2025-04-07)."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка Binance"
+unit = "название"
+value = "BSC"
+source = "Wallet «All Coins' Information»: пример network «BSC», name «BNB Smart Chain (BEP20)»"
+rationale = "Код сети, который принимают вывод и адрес депозита; сверить на живом config/getall."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.recv_window_ms"
+area = "площадка Binance"
+unit = "мс"
+value = "5000"
+source = "rest-api «Request Security»: по умолчанию 5000, максимум 60000, советуют 5000 или меньше"
+rationale = "Как советует документация."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка Binance"
+unit = "тип"
+value = "IOC"
+source = "enums.md «Time in force»: IOC — остаток снимает биржа (EXPIRED)"
+rationale = "Правило Тиграна «не исполнился — отменяем»."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка Binance"
+unit = "да/нет"
+value = "да"
+source = "rest-api «Test new order»: POST /api/v3/order/test, вес 1"
+rationale = "Ловит PERCENT_PRICE_BY_SIDE и PRICE_RANGE, которые правила адаптера не проверяют."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка Binance"
+unit = "уровней"
+value = "20"
+source = "web-socket-streams «Partial Book Depth Streams»: 5, 10, 20"
+rationale = "Наибольшая глубина частичного стакана."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.book_interval"
+area = "площадка Binance"
+unit = "интервал"
+value = "100ms"
+source = "web-socket-streams: «Update Speed: 1000ms or 100ms»"
+rationale = "Самый частый снимок; одинаковые снимки ядру не отдаются (решение 109)."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.ws_subs_per_sec"
+area = "площадка Binance"
+unit = "в секунду"
+value = "2"
+source = "web-socket-streams «WebSocket Limits»: 5 входящих сообщений/с, включая PING/PONG и SUBSCRIBE"
+rationale = "С запасом под pong; бот не пустит 5 и больше."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.ws_streams_per_msg"
+area = "площадка Binance"
+unit = "потоков"
+method = "Начать с 50; предела в документации нет — при отказе SUBSCRIBE (журнал venue.ws) уменьшить."
+source = "web-socket-streams: SUBSCRIBE с массивом params; предел не указан"
+rationale = "Меньше сообщений при лимите 5/с."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка Binance"
+unit = "штук"
+value = "200"
+source = "web-socket-streams «WebSocket Limits»: до 1024 потоков на соединение, 300 подключений за 5 минут с IP"
+rationale = "Мало соединений и быстрая подписка (200 потоков при 2 × 50 в секунду — 2 с)."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.my_trades_limit"
+area = "площадка Binance"
+unit = "штук"
+value = "1000"
+source = "rest-api «Account trade list»: limit «Default 500; max 1000»"
+rationale = "Все сделки ордера одним запросом."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.fee_requests_per_sec"
+area = "площадка Binance"
+unit = "в секунду"
+value = "1"
+source = "rest-api «Query Commission Rates»: вес 20; REQUEST_WEIGHT — из rateLimits exchangeInfo (в примере 6000/мин)"
+rationale = "1200 веса в минуту из общего лимита IP — сверить с живым rateLimits."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.fee_deduction"
+area = "площадка Binance"
+unit = "вариант"
+method = "coin — скидка BNB в кабинете выключена или BNB на споте нет; bnb — включена (POST /sapi/v1/bnbBurn) и BNB держится не меньше venue.discount_min_balance."
+source = "faqs/commission_faq; GET /api/v3/account/commission (discount); решение 158"
+rationale = "Расчёт по выбранной ставке, факт — из fills ордера."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка Binance"
+unit = "мс"
+value = "60000"
+source = "rest-api «LIMITS»: Retry-After у 418/429; у SAPI — не сказано"
+rationale = "Минута тишины, если Retry-After не пришёл (лимиты считаются за минуту)."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.withdraw_wallet"
+area = "площадка Binance"
+unit = "счёт"
+value = "spot"
+source = "Wallet «Withdraw»: walletType 0 — спот, 1 — фонд"
+rationale = "Бот торгует на споте — выводит оттуда же."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.withdraw_history_min_ms"
+area = "площадка Binance"
+unit = "мс"
+value = "6000"
+source = "Wallet «Withdraw History»: вес UID 18000; Wallet «General Info»: UID 180000 в минуту"
+rationale = "Не больше 10 запросов в минуту."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.window_depth_limit"
+area = "площадка Binance"
+unit = "уровней"
+value = "1000"
+source = "rest-api «Order book»: limit до 5000, вес 5/25/50/250 по limit"
+rationale = "Глубокий снимок для окна умеренным весом."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.sbe_ws_url"
+area = "площадка Binance"
+unit = "URL"
+value = "wss://stream-sbe.binance.com:9443"
+source = "sbe-market-data-streams.md «General Information»: stream-sbe.binance.com или :9443; нужен ключ Ed25519"
+rationale = "Решение 425: быстрый стакан SBE (20 мс), JSON остаётся страховкой. Нужен секрет binance.sbe_api_key; venue.ws_silence_ms у Binance — больше 20000 (ping раз в 20 с), например 60000."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.sbe_snapshot_per_sec"
+area = "площадка Binance"
+unit = "в секунду"
+method = "Темп × вес снимка × 60 — малая доля REQUEST_WEIGHT по IP (rateLimits живого exchangeInfo), например 2 при limit 1000 (6000 веса в минуту) — решает Тигран."
+source = "rest-api «Order book»: вес по limit; REQUEST_WEIGHT — rateLimits живого exchangeInfo"
+rationale = "Снимки всех пар — одной очередью; решает Тигран."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.sbe_snapshot_limit"
+area = "площадка Binance"
+unit = "уровней"
+value = "1000"
+source = "rest-api «Order book»: limit до 5000, вес 5/25/50/250 по limit"
+rationale = "Снимок глубже стакана ядра (20 уровней) с умеренным весом 50."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.deposit_dust_as_min"
+area = "площадка Binance"
+unit = "да/нет"
+method = "Решение Тиграна: depositDust — минимум депозита? Смысл поля в документации не описан. До решения — не задавать (минимум по venue.deposit_min_absent_ok)."
+source = "Wallet «All Coins' Information»: depositDust без описания"
+rationale = "Урок 21: «0» и «нет данных» не путать."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.deposit_to_spot"
+area = "площадка Binance"
+unit = "да/нет"
+method = "да — если в кабинете депозит зачисляется на Фонд (Funding); нужно право ключа Permits Universal Transfer. Проще — выставить зачисление на Спот и не задавать."
+source = "Wallet «Withdraw»: walletType по умолчанию — счёт, выбранный в кабинете; User Universal Transfer FUNDING_MAIN"
+rationale = "Торговля только на споте."
+prefill = { kind = "Venue", id = "binance" }
+
+# --- Биржа XT.com (решение 167) ---
+[[section]]
+title = "Биржа XT.com (решение 167)"
+intro = "Значения из официальной документации XT (doc.xt.com, исходник github.com/xt-com/xt4-api). Живых ответов ещё нет — сверить на первой записи (tests/README.md, раздел XT). Перед торговлей — замер нагрузки при «Стопе» (решение 109). Права ключа: QUERY, TRADE, WITHDRAW; привязка к IP сервера."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка XT"
+unit = "URL"
+value = "https://sapi.xt.com"
+source = "Документация XT: restApi.md"
+rationale = "Спот REST API v4"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка XT"
+unit = "URL"
+value = "wss://stream.xt.com/public"
+source = "Документация XT: _websocket_public/base.md"
+rationale = "Публичный WebSocket"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.futures_rest_url"
+area = "площадка XT"
+unit = "URL"
+value = "https://fapi.xt.com"
+source = "Документация XT: _futures_documentation/restApi.md"
+rationale = "Панель «Балансы»: фьючерсы USDT-M"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.futures_coin_rest_url"
+area = "площадка XT"
+unit = "URL"
+value = "https://dapi.xt.com"
+source = "Документация XT: _futures_documentation/restApi.md"
+rationale = "Панель «Балансы»: фьючерсы Coin-M"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.user_center_url"
+area = "площадка XT"
+unit = "URL"
+value = "https://api.xt.com"
+source = "Документация XT: _user_center_documentation/restApi.md"
+rationale = "«Проверить подключение»: своя запись ключа"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "площадка XT"
+unit = "монета"
+value = "USDT"
+source = "Документация XT: _market/2symbol.md"
+rationale = "Пары *_usdt"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.local_ip"
+area = "площадка XT"
+unit = "IP"
+value = "37.59.21.151"
+source = "Живая проверка 05.11: ключ XT привязывается только к IPv4; по умолчанию сервер идёт к sapi.xt.com по IPv6 — AUTH_104 «Unbound IP request»"
+rationale = "IPv4 сервера OVH, привязанный к ключу XT (решение 178)."
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.recv_window_ms"
+area = "площадка XT"
+unit = "мс"
+method = "начать с 5000 («longer than 5 seconds is not recommended»); AUTH_105 — проверить часы сервера"
+source = "Документация XT: signStatement.md, FAQ.md"
+rationale = "Документация противоречива (5000 и пример 60000) — решение Тиграна"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка XT"
+unit = "название"
+method = "из живого справочника support/currency (поле chain у CAKE); в документации не названо"
+source = "Документация XT: supportedCurrenciesGet.md"
+rationale = "Название сети вывода и депозита"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка XT"
+unit = "тип"
+value = "IOC"
+source = "Документация XT: publicModule.md «Time in force»"
+rationale = "Остаток снимает биржа"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка XT"
+unit = "да/нет"
+value = "нет"
+source = "Документация XT: orderPost.md; SDK pyxt"
+rationale = "Пробного ордера у XT нет"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.book_stream"
+area = "площадка XT"
+unit = "канал"
+value = "depth_update"
+source = "Документация XT: increDepth.md, limitDepth.md"
+rationale = "Изменения раз в 100 мс; depth — раз в 1000 мс"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка XT"
+unit = "уровней"
+value = "20"
+source = "Документация XT: limitDepth.md"
+rationale = "Верхние уровни локального стакана (у depth — 5, 10, 20, 50); при depth_update — и уровни снимков-страховки depth@ (решение 419, дополнение: только 5, 10, 20, 50, иначе страховки нет)"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.depth_snapshot_per_sec"
+area = "площадка XT"
+unit = "в секунду"
+value = "5"
+source = "Документация XT: _market/3depth.md"
+rationale = "Половина лимита 10/с на IP — запас для остальных публичных запросов"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.depth_snapshot_limit"
+area = "площадка XT"
+unit = "уровней"
+value = "500"
+source = "Документация XT: orderBook.md"
+rationale = "Совет «Orderbook manage»"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка XT"
+unit = "мс"
+value = "20000"
+source = "Документация XT: heartBeat.md"
+rationale = "Сервер рвёт без ping дольше минуты"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.ws_silence_ms"
+area = "площадка XT"
+unit = "мс"
+value = "30000"
+source = "Документация XT: heartBeat.md"
+rationale = "Больше ping: ждём pong и кадры"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.ws_streams_per_msg"
+area = "площадка XT"
+unit = "тем"
+method = "начать с 20; отказ subscribe (code 1) — уменьшить"
+source = "Документация XT: requestFormat.md"
+rationale = "Предела в документации нет"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.ws_subs_per_sec"
+area = "площадка XT"
+unit = "в секунду"
+method = "начать с 2; живой замер (решение 109)"
+source = "Документация XT: —"
+rationale = "Предела в документации нет"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка XT"
+unit = "монет"
+method = "начать с 50; живой замер нагрузки (решение 109)"
+source = "Документация XT: —"
+rationale = "Предела в документации нет"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка XT"
+unit = "мс"
+value = "60000"
+source = "Документация XT: limitRules.md"
+rationale = "После 429 XT блокирует IP/ключ; Retry-After нет"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.history_window_s"
+area = "площадка XT"
+unit = "с"
+value = "86400"
+source = "Документация XT: historyDepositGet.md"
+rationale = "Окно поиска депозита по хешу (до 200 записей)"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.deposit_min_absent_ok"
+area = "площадка XT"
+unit = "да/нет"
+method = "не задавать (решения 366, 370): минимум депозита XT — depositMinAmount справочника сетей, читается сам; «0» — минимум 0 (решение Тиграна 17.11: депозит любой суммы); настройка нужна только для сетей без поля или null (на живом ответе 16.11 таких нет); нечитаемое значение — минимум неизвестен при любой настройке"
+source = "https://doc.xt.com/docs/spot/Deposit&Withdrawal/GetSupportedCurrencies: depositMinAmount «Minimum deposit amount»; смысл «0» документация не определяет"
+rationale = "Решение 370: «0» — минимум 0 по решению владельца 17.11"
+prefill = { kind = "Venue", id = "xt" }
+# --- Биржа Poloniex (решение 169) ---
+[[section]]
+title = "Биржа Poloniex (решение 169)"
+intro = "Значения из официальной документации Poloniex Spot API (api-docs.poloniex.com/spot) и SDK polo-sdk-python. Живых ответов ещё нет (из среды разработки api.poloniex.com закрыт) — имя сети BSC, статусы депозита и вывода, длину clientOrderId сверить на первой записи (tests/README.md, раздел Poloniex). Счёт один — спот, переводов между счетами нет. Права ключа (торговля, вывод) через API не проверяются — включить в кабинете; белый список IP и адресов вывода — в кабинете. Перед торговлей — замер нагрузки при «Стопе» (решение 109)."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка Poloniex"
+unit = "URL"
+value = "https://api.poloniex.com"
+source = "Spot → API: «https://api.poloniex.com»; SDK request.py _default_url"
+rationale = "Основной адрес REST Spot API."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка Poloniex"
+unit = "URL"
+value = "wss://ws.poloniex.com/ws/public"
+source = "Spot → WebSocket: публичный «wss://ws.poloniex.com/ws/public»"
+rationale = "Стаканы — канал book."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.ws_private_url"
+area = "площадка Poloniex"
+unit = "URL"
+value = "wss://ws.poloniex.com/ws/private"
+source = "Spot → WebSocket: приватный «wss://ws.poloniex.com/ws/private»"
+rationale = "Поток аккаунта: вход auth, канал balances."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "площадка Poloniex"
+unit = "монета"
+value = "USDT"
+source = "Symbol Information: quoteCurrencyName; 21350 «Amount must be greater than 1 USDT»"
+rationale = "Котируемая монета пар (символы BASE_USDT)."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка Poloniex"
+unit = "уровней"
+value = "20"
+source = "Market Data → Book: depth 5, 10 или 20, «updates every 100ms»"
+rationale = "Наибольшая глубина канала book для котировки на объём."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка Poloniex"
+unit = "штук"
+method = "предела символов на соединение в документации нет — начать с небольшого числа (например, 50) и замерить на живом соединении; решает Тигран"
+source = "Spot → WebSocket: только «2000 connections» с IP и «500 requests per second» на соединение"
+rationale = "Урок 12: число подписок — из документации, а её нет."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.ws_subs_per_sec"
+area = "площадка Poloniex"
+unit = "в секунду"
+value = "10"
+source = "Spot → WebSocket: «500 requests per second» на соединение"
+rationale = "Подписка — по одному символу в сообщении; с большим запасом до предела 500."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка Poloniex"
+unit = "мс"
+value = "20000"
+source = "Spot → WebSocket: «expects a message or a ping every 30 seconds»"
+rationale = "Меньше 30 с с запасом — иначе сервер закрывает сессию без уведомления."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.ws_silence_ms"
+area = "площадка Poloniex"
+unit = "мс"
+method = "больше venue.ws_ping_ms с запасом на ответ pong (например, два интервала ping) — решает Тигран"
+source = "Spot → WebSocket: {\"event\": \"pong\"} на каждый ping"
+rationale = "Без кадров дольше — соединение оборвано."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка Poloniex"
+unit = "тип"
+value = "IOC"
+source = "Create Order: timeInForce GTC, IOC, FOK"
+rationale = "Правило Тиграна: неисполненный остаток снимает биржа."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка Poloniex"
+unit = "да/нет"
+method = "не задавать (или «нет»): пробного ордера у Poloniex нет — «да» даёт отказ ордера"
+source = "Spot → API → Orders: test order нет"
+rationale = "Правила ордера проверяет order_rules::ready."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка Poloniex"
+unit = "название"
+method = "значение blockchain сети BSC у CAKE из живого ответа GET /v2/currencies/CAKE"
+source = "Currency Information V2: networkList.blockchain (примеры BTC, ETH, TRX)"
+rationale = "В документации и SDK имени сети BSC нет."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.deposit_min_absent_ok"
+area = "площадка Poloniex"
+unit = "да/нет"
+method = "решает Тигран: минимума депозита в API Poloniex нет — считать 0 (да) или не торговать с переводом на Poloniex"
+source = "Currency Information V2, Deposit Addresses: поля минимума депозита нет"
+rationale = "Урок 21: отсутствие минимума — решение человека."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.history_window_s"
+area = "площадка Poloniex"
+unit = "с"
+method = "с запасом больше самого долгого ожидания вывода и зачисления (например, сутки — 86400); решает Тигран"
+source = "Wallets Activity Records: start и end обязательны, предел промежутка не указан"
+rationale = "Окно поиска статусов депозита и вывода."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка Poloniex"
+unit = "мс"
+method = "пауза после HTTP 429: ответ при превышении и Retry-After в документации не описаны, лимиты — «в секунду» (например, 1000–2000); решает Тигран"
+source = "Spot → API → Rate Limits: по UID и IP, ответ не описан"
+rationale = "Не слать дальше после «слишком часто» (урок 15)."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.balance_events"
+area = "площадка Poloniex"
+unit = "да/нет"
+method = "«да» — поток аккаунта (канал balances); transfer.credit_by_event у Poloniex не включать до живой записи (хеша в уведомлении нет)"
+source = "Websocket → Balance: available, hold, eventType, version"
+rationale = "Изменения баланса без опроса (решение 76)."
+prefill = { kind = "Venue", id = "poloniex" }
+
+# --- Биржа Phemex (решение 168) ---
+[[section]]
+title = "Биржа Phemex (решение 168)"
+intro = "Значения из официальной документации Phemex (phemex-docs.github.io). Живых ответов ещё нет — имя сети BSC, статус пары, счёт зачисления депозита задаёт Тигран по живым ответам. Ключ «Read & Trade & Withdraw» — с привязкой IP сервера; адреса вывода (кошелёк бота, адреса других бирж) — заранее в «withdrawal address list» кабинета Phemex. Перед торговлей — замер нагрузки при «Стопе» (решение 109)."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка Phemex"
+unit = "URL"
+value = "https://api.phemex.com"
+source = "General API information: public user endpoints — Rest API «https://api.phemex.com»"
+rationale = "Основной адрес REST (vapi.phemex.com — только для IP из белого списка Phemex)."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка Phemex"
+unit = "URL"
+value = "wss://ws.phemex.com"
+source = "General API information: Websocket «wss://ws.phemex.com (further URI or querystring not allowed)»"
+rationale = "Стаканы и поток аккаунта — один адрес."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "площадка Phemex"
+unit = "монета"
+value = "USDT"
+source = "Query product information: спот-пары sXXXUSDT; fee-rate по quoteCurrency"
+rationale = "Котируемая монета пар."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.pair_status_listed"
+area = "площадка Phemex"
+unit = "значение"
+method = "значение поля status пары CAKE из живого ответа GET /public/products (в примерах CCXT — «Listed»; в официальной документации поле не описано)"
+source = "Query product information: перечня полей нет"
+rationale = "Без него справочник пар не загружается (торгуемость не угадываем)."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка Phemex"
+unit = "уровней"
+value = "30"
+source = "Subscribe orderBook: «depth = 30 and interval = 20ms»"
+rationale = "Вся глубина канала для котировки на объём."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка Phemex"
+unit = "штук"
+value = "20"
+source = "API Rate Limits: «Each connection has subscription limit to 20 in maximum»"
+rationale = "Предел документации."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.ws_max_conns"
+area = "площадка Phemex"
+unit = "соединений"
+value = "5"
+source = "API Rate Limits: «Each Client has concurrent connection limit to 5 in maximum»"
+rationale = "Потолок документации; при venue.balance_events = да одно соединение — поток аккаунта."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.book_reserve"
+area = "площадка Phemex"
+unit = "поток"
+method = "depth30, если пар Phemex в работе не больше (venue.ws_max_conns − поток аккаунта) / 2 × venue.ws_symbols_per_conn (при 5 и потоке аккаунта — 40); пар больше — не задавать (часть пар не подпишется); full — только если нужен поток другой глубины (кадры тяжелее, 100 мс)"
+source = "Subscribe orderBook «depth = 30 and interval = 20ms», Subscribe full orderBook «full depth and interval = 100ms»; API Rate Limits «concurrent connection limit to 5», «subscription limit to 20»"
+rationale = "Запасной поток той же скорости держит стакан, пока основной ждёт снимок (≤ 60 с)."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.ws_subs_per_sec"
+area = "площадка Phemex"
+unit = "в секунду"
+value = "10"
+source = "API Rate Limits: «Each connection has throttle limit to 20 request/s»"
+rationale = "Половина предела — запас на server.ping."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка Phemex"
+unit = "мс"
+value = "5000"
+source = "Heartbeat: «interval less than 30 seconds», «recommended to be set as 5 seconds»"
+rationale = "Совет документации."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.ws_silence_ms"
+area = "площадка Phemex"
+unit = "мс"
+value = "15000"
+source = "Heartbeat: «reconnect … if don't receive messages in 3 heartbeat intervals»"
+rationale = "Три интервала ping."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.recv_window_ms"
+area = "площадка Phemex"
+unit = "мс"
+value = "60000"
+source = "REST request header: expiry «normally it should be (Now() + 1 minute)»; user.auth — не больше 2 минут"
+rationale = "Совет документации; тот же срок у входа WebSocket."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка Phemex"
+unit = "тип"
+value = "ImmediateOrCancel"
+source = "Place order: timeInForce GoodTillCancel, PostOnly, ImmediateOrCancel, FillOrKill"
+rationale = "Правило Тиграна: неисполненный остаток снимает биржа."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка Phemex"
+unit = "да/нет"
+method = "не задавать (или «нет»): пробного ордера у Phemex нет — «да» даёт отказ ордера"
+source = "Spot REST API: среди эндпоинтов нет test order"
+rationale = "Правила ордера проверяет order_rules::ready."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка Phemex"
+unit = "название"
+method = "значение chainName сети BSC из живого ответа chainCfg?currency=CAKE (в документации примеры только BTC, ETH, TRX, EOS)"
+source = "Query deposit chain settings: chainName"
+rationale = "В документации имени сети BSC нет."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.deposit_min_absent_ok"
+area = "площадка Phemex"
+unit = "да/нет"
+method = "решает Тигран (решение 371): minAmountRv «0» — минимум 0 (решение Тиграна 17.11, читается сам); настройка — только для сетей без поля / null: да — минимум 0, не задано — перевода на Phemex по таким монетам нет"
+source = "Query deposit chain settings: minAmountRv необязателен, в примере «0»"
+rationale = "Урок 21: «0» и пусто у биржи могут значить разное."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.networks_requests_per_min"
+area = "площадка Phemex"
+unit = "запросов/мин"
+method = "с запасом от предела группы Others 100/мин (её делят балансы, вывод, история, ставки) — например 30; решает Тигран"
+source = "Rate limits: Others «100/minute»; сети — по одной монете (chainCfg + asset/info)"
+rationale = "Круг ~300 монет × 2 запроса при 30/мин — около 20 минут."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.history_rows"
+area = "площадка Phemex"
+unit = "записей"
+method = "больше числа депозитов и выводов монеты за время ожидания перевода (например 50); решает Тигран"
+source = "Query deposit/withdraw history records: limit «default 20», максимум не указан"
+rationale = "Поиска по хешу и id нет — ищем в последних записях."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка Phemex"
+unit = "мс"
+method = "окно лимита пользователя — минута, IP-блок — 5 минут; например 60000; решает Тигран"
+source = "Rate limits: 429 + x-ratelimit-retry-after-<group> (транспорт не читает); IP 5000/5 мин — блок 5 мин"
+rationale = "Не слать дальше после «слишком часто» (урок 15)."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.book_seq_strict"
+area = "площадка Phemex"
+unit = "да/нет"
+method = "не задавать до записи кадров: «да» — только если в записи sequence изменений пары идёт ровно +1"
+source = "OrderBook message: sequence «Latest message sequence» — правило номеров не описано"
+rationale = "Без записи строгая проверка могла бы рвать стакан на каждом кадре."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.book_stale_ms"
+area = "площадка Phemex"
+unit = "мс"
+method = "больше 60000 (контрольный снимок раз в 60 с) — например 90000; решает Тигран"
+source = "OrderBook message: «Snapshot messages are published with 60-second interval»"
+rationale = "Тихая пара не должна считаться устаревшей."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.deposit_to_spot"
+area = "площадка Phemex"
+unit = "да/нет"
+method = "не задавать; «да» — только если первый живой депозит пришёл на Contract (поле depositTo / accountType записи)"
+source = "Query deposit history records: depositTo SPOT или Contract; у адреса депозита параметра счёта нет"
+rationale = "На какой счёт зачисляется депозит, в документации не сказано."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.balance_events"
+area = "площадка Phemex"
+unit = "да/нет"
+method = "не включать до записи кадров wallet-order при сделке и депозите: в сообщении нет причины изменения"
+source = "Wallet-Order message: wallets (весь баланс), orders; причины и хеша нет"
+rationale = "Вид изменения выводится из событий ордеров в том же сообщении — проверить."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.futures_balance_currencies"
+area = "площадка Phemex"
+unit = "монеты, список"
+value = "USDT"
+source = "Query Account Positions (USDT-M) и Query asset (UTA): currency обязателен"
+rationale = "Панель «Балансы»: фьючерсы USDT-M и UTA по USDT."
+prefill = { kind = "Venue", id = "phemex" }
+# --- Биржа Kraken (решение 172) ---
+[[section]]
+title = "Биржа Kraken (решение 172)"
+intro = "Из официальной документации Kraken (спот REST, Funding (Beta), WebSocket v2); живых ответов ещё нет — из среды разработки Kraken закрыт: сверить на сервере бота (tests/README.md, раздел Kraken). Сначала — одна живая запись методов Funding: есть ли сеть BSC и contract_address (вердикт анализа). Перед торговлей — замер нагрузки при «Стопе» (решение 109). Ключ без 2FA (OTP) с правами Query Funds, Withdraw Funds, Query Open/Closed Orders, Create & Modify Orders, Cancel/Close Orders, WebSocket interface; без «Add withdrawal addresses». Адреса вывода (кошельки DEX, депозиты других бирж) — заранее в адресной книге Kraken. Ключ бота не использовать в других программах (nonce)."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка Kraken"
+unit = "URL"
+value = "https://api.kraken.com"
+source = "OpenAPI spot-rest.yaml: servers https://api.kraken.com/0 и у операций Funding — https://api.kraken.com"
+rationale = "Без /0: пути /0/… (спот) и /funding/… (Funding Beta) бот добавляет сам."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка Kraken"
+unit = "URL"
+value = "wss://ws.kraken.com/v2"
+source = "Spot WebSocket API: wss://ws.kraken.com/v2"
+rationale = "Публичный WebSocket v2 — стаканы book."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.ws_private_url"
+area = "площадка Kraken"
+unit = "URL"
+value = "wss://ws-auth.kraken.com/v2"
+source = "spot-websocket-v2/balances: «ws-auth.kraken.com/v2»"
+rationale = "Канал balances с токеном (venue.balance_events)."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.balance_events"
+area = "площадка Kraken"
+unit = "да/нет"
+value = "да"
+source = "spot-websocket-v2/balances"
+rationale = "Депозиты и выводы событием, а не только опросом статуса."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "площадка Kraken"
+unit = "монета"
+method = "Имя котируемого актива в AssetPairs (поле quote) пар к USDT — ожидается USDT; сверить на живом AssetPairs."
+source = "OpenAPI: AssetPairs base / quote — имена активов Kraken"
+rationale = "Котировка и торговля — к USDT."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка Kraken"
+unit = "название"
+method = "network_name метода сети BSC в живом ответе GET /funding/v1/methods/withdraw?asset[class]=currency&asset[name]=CAKE (в документации примера BSC нет)."
+source = "list-funding-methods: network.network_name"
+rationale = "Без него ни одна монета Kraken не сопоставится с DEX."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.deposit_min_absent_ok"
+area = "площадка Kraken"
+unit = "да/нет"
+method = "По живому ответу методов deposit: minimum_amount у монет BSC приходит — не задавать; пустой — решение Тиграна."
+source = "list-funding-methods: minimum_amount (необязательное поле)"
+rationale = "Решение 143: «0» и пустое у биржи могут значить разное."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка Kraken"
+unit = "уровней"
+value = "25"
+source = "spot-websocket-v2/book: depth 10, 25, 100, 500, 1000"
+rationale = "Глубина для котировки на объём; чек-сумма — по верхним 10 при любой глубине."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.book_standby_depth"
+area = "площадка Kraken"
+unit = "уровней"
+value = "25"
+source = "spot-websocket-v2/book: depth 10, 25, 100, 500, 1000; guides/websockets/introduction: ~150 подключений за 10 минут на IP"
+rationale = "Решение 426: равна venue.depth_levels — на страховке ядро видит ту же глубину; трафик и подключения удваиваются. Меньше (10) — легче, но котировка на объём на время страховки по 10 уровням."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка Kraken"
+unit = "мс"
+value = "30000"
+source = "Spot WebSocket: ping «at least every 60 seconds»"
+rationale = "Сервер закрывает молчащее соединение примерно через минуту."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.ws_silence_ms"
+area = "площадка Kraken"
+unit = "мс"
+value = "45000"
+source = "Spot WebSocket: «within approximately one minute of inactivity»"
+rationale = "Пинг через 30 с тишины + 15 с на pong (heartbeat приходит раз в секунду)."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.ws_streams_per_msg"
+area = "площадка Kraken"
+unit = "символов"
+method = "Начать с 50; отказы подписки (success false) — уменьшить."
+source = "spot-websocket-v2/book: «multiple symbols in one request»"
+rationale = "Предела символов в запросе в документации нет."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.ws_subs_per_sec"
+area = "площадка Kraken"
+unit = "в секунду"
+value = "1"
+source = "spot-websocket-v2/book"
+rationale = "Темп запросов подписки (предел в документации не описан)."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка Kraken"
+unit = "штук"
+method = "Начать со 100 пар на соединение и проверить замером (решение 109)."
+source = "guides/websockets/introduction: Cloudflare"
+rationale = "Предела на соединение в документации нет; подключения ~150 за 10 минут на IP."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка Kraken"
+unit = "тип"
+value = "IOC"
+source = "OpenAPI add: timeinforce GTC, IOC, GTD, FOK"
+rationale = "Правило Тиграна: неисполненный остаток снимает биржа."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка Kraken"
+unit = "да/нет"
+value = "да"
+source = "OpenAPI add: validate — «will not trade in the matching engine»"
+rationale = "Проверка ордера продажи до покупки пробным ордером без исполнения."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.fee_pairs_per_request"
+area = "площадка Kraken"
+unit = "пар"
+method = "Все пары подписки одной-двумя пачками (например 100): каждый запрос +1 к счётчику ключа."
+source = "OpenAPI TradeVolume: pair — список через запятую"
+rationale = "Предела пар в TradeVolume в документации нет."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.fee_requests_per_sec"
+area = "площадка Kraken"
+unit = "в секунду"
+value = "1"
+source = "guides/rest/ratelimits: +1 за вызов"
+rationale = "Пачки ставок не чаще одной в секунду."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка Kraken"
+unit = "мс"
+value = "10000"
+source = "guides/rest/ratelimits"
+rationale = "После «Rate limit exceeded» — не слать: ограничение «a few seconds», дольше при продолжении."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.funding_list_limit"
+area = "площадка Kraken"
+unit = "записей"
+value = "100"
+source = "OpenAPI Funding: limit ≤ 500"
+rationale = "Бот выводит и вводит единицы в день — 100 последних хватает для поиска статуса."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.api_ip_bound"
+area = "площадка Kraken"
+unit = "да/нет"
+value = "да"
+source = "GetApiKeyInfo: ip_allowlist"
+rationale = "Ключ с правом вывода — только с IP сервера бота."
+prefill = { kind = "Venue", id = "kraken" }
+# --- Биржа CoinEx (решение 170) ---
+[[section]]
+title = "Биржа CoinEx (решение 170)"
+intro = "Из официальной документации CoinEx API v2 (docs.coinex.com/api/v2); живых ответов ещё нет (из среды разработки api.coinex.com закрыт) — имена сети BSC в двух справочниках, единицы ставки комиссии и вид сжатия кадров WS задаёт Тигран по живым ответам (tests/README.md, раздел CoinEx). Счёт — спот (funding-счёта нет). Адреса вывода (кошелёк DEX, адреса других бирж) — заранее в белый список API-ключа; ключ — с привязкой IP. Права ключа основного аккаунта API не отдаёт — проверить в кабинете. Перед торговлей — замер нагрузки при «Стопе» (решение 109)."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка CoinEx"
+unit = "URL"
+value = "https://api.coinex.com"
+source = "Integration Guide: «https://api.coinex.com/v2»; Authentication: подписывается путь «/v2/spot/…»"
+rationale = "Основной адрес REST; «/v2» — в пути запроса (входит в подпись)."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка CoinEx"
+unit = "URL"
+value = "wss://socket.coinex.com/v2/spot"
+source = "Integration Guide: спот «wss://socket.coinex.com/v2/spot»"
+rationale = "Стаканы depth.update."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "площадка CoinEx"
+unit = "монета"
+value = "USDT"
+source = "Get Market Status: quote_ccy"
+rationale = "Котируемая монета пар."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка CoinEx"
+unit = "уровней"
+value = "20"
+source = "WS Market Depth: limit 5, 10, 20, 50; if_full — полный снимок"
+rationale = "Глубина для котировки на объём; 50 — больше нагрузки (каждый кадр сжат)."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка CoinEx"
+unit = "штук"
+method = "предела рынков на соединение в документации нет — начать с небольшого числа (например 20) и смотреть ошибки 23002 и нагрузку; решает Тигран"
+source = "WS Market Depth; Error Handling: 23002 «Requests submitted too frequently»"
+rationale = "Один запрос depth.subscribe на соединение."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка CoinEx"
+unit = "мс"
+method = "интервал server.ping в документации не указан — по живому подключению (например 20000–30000); решает Тигран"
+source = "Ping: server.ping → «pong», интервал и таймаут не описаны"
+rationale = "Свой ping держит соединение и даёт кадр-ответ."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.ws_silence_ms"
+area = "площадка CoinEx"
+unit = "мс"
+method = "больше venue.ws_ping_ms с запасом на ответ (например два интервала ping); решает Тигран"
+source = "Ping: ответ на каждый server.ping"
+rationale = "Без кадров дольше — соединение оборвано."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.book_stale_ms"
+area = "площадка CoinEx"
+unit = "мс"
+method = "не меньше 60000 с запасом (пуш только при изменении, полный — раз в минуту) или не задавать; решает Тигран"
+source = "WS Market Depth: «No push occurs without an update», «full … every 1 minute»"
+rationale = "Иначе тихая пара ложно «устарела»."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка CoinEx"
+unit = "тип"
+value = "ioc"
+source = "Place Order: type; enum order_type — ioc, fok"
+rationale = "Правило Тиграна: неисполненный остаток снимает биржа."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка CoinEx"
+unit = "да/нет"
+method = "не задавать (или «нет»): пробного ордера у CoinEx нет — «да» даёт отказ ордера"
+source = "Spot → Order: среди эндпоинтов нет test order"
+rationale = "Правила ордера проверяет order_rules::ready."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка CoinEx"
+unit = "название"
+method = "значение поля chain сети BSC из живого ответа GET /v2/assets/deposit-withdraw-config?ccy=CAKE"
+source = "Get Deposit and Withdrawal Configuration: chains[n].chain"
+rationale = "В документации имени сети BSC нет."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.bsc_contract_chain"
+area = "площадка CoinEx"
+unit = "название"
+method = "значение chain_info.chain_name той же сети из живого ответа GET /v2/assets/info?ccy=CAKE (где identity = 0x0E09…cE82)"
+source = "Get Coin/Token Information: chain_info.chain_name, identity"
+rationale = "Адрес контракта — только в /assets/info; имена цепей в двух справочниках разные."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.fee_rate_percent"
+area = "площадка CoinEx"
+unit = "да/нет"
+method = "по живому ответу trade-fee-rate («Проверить подключение» показывает ставку как пришла): сравнить с taker_fee_rate пары и комиссией первого ордера; решает Тигран"
+source = "Get Account Trading Fee Rate: пример taker_rate «0.03»; Get Market Status: «0.002»"
+rationale = "Единицы ставки не описаны."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.fee_requests_per_sec"
+area = "площадка CoinEx"
+unit = "в секунду"
+method = "ставка — по одной паре на запрос, группа «Query spot accounts» 10 запросов/с делится с балансами и справочниками — держать низким (например 2); решает Тигран"
+source = "Rate Limit: Query spot accounts (10r/1s) — /account/trade-fee-rate"
+rationale = "Не задевать лимит группы."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.my_trades_limit"
+area = "площадка CoinEx"
+unit = "штук"
+method = "сделок на страницу user-deals: по умолчанию 10, максимум не указан — например 100, по живому ответу; решает Тигран"
+source = "List User Deals: limit, pagination.has_next"
+rationale = "Сделки ордера, если ордер IOC без исполнения не сохранён."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.history_page_limit"
+area = "площадка CoinEx"
+unit = "штук"
+method = "сколько последних выводов монеты читать при поиске по remark (по умолчанию 10, максимум не указан) — например 50; решает Тигран"
+source = "Get Withdrawal History: limit"
+rationale = "Найти свой вывод при неизвестном итоге."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка CoinEx"
+unit = "мс"
+method = "пауза после 4213 / 3008 / 4001 — Retry-After не описан, окно лимитов — секунда (например 1000–2000); решает Тигран"
+source = "Rate Limit: коды 3008, 4001, 4213; HTTP-статус не описан"
+rationale = "Не слать дальше после «слишком часто» (урок 15)."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.recv_window_ms"
+area = "площадка CoinEx"
+unit = "мс"
+method = "не задавать — действует окно CoinEx 5000 мс; задавать, только если часы сервера расходятся"
+source = "Integration Guide: X-COINEX-WINDOWTIME, по умолчанию 5000 мс"
+rationale = "Окно действия подписанного запроса."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.deposit_min_absent_ok"
+area = "площадка CoinEx"
+unit = "да/нет"
+method = "решает Тигран (решение 371): min_deposit_amount «0» — минимум 0 (решение Тиграна 17.11, читается сам); настройка — только для сетей без поля / null: да — минимум 0, не задано — перевода на CoinEx по таким монетам нет"
+source = "Deposit and Withdrawal Configuration: min_deposit_amount; ниже минимума — too_small"
+rationale = "Урок 21: «0» и пусто могут значить разное."
+prefill = { kind = "Venue", id = "coinex" }
+
+# --- Биржа HTX (решение 171) ---
+[[section]]
+title = "Биржа HTX (решение 171)"
+intro = "Значения из официальной документации HTX Spot API (huobiapi.github.io/docs/spot/v1/en) и SDK huobi_Golang. Живых ответов ещё нет (из среды разработки api.huobi.pro закрыт): имя сети BSC и поле адреса контракта задаёт Тигран по живым ответам; без venue.contract_field монеты HTX не сопоставляются. Ключ — права Read, Trade, Withdraw, привязан к IP сервера. Адреса вывода (кошелёк бота, адреса депозита других бирж) — заранее в список адресов вывода в веб-интерфейсе HTX. Перед торговлей — замер нагрузки при «Стопе» (решение 109)."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка HTX"
+unit = "URL"
+value = "https://api.huobi.pro"
+source = "Quick Start → Access URLs: «https://api.huobi.pro», «https://api-aws.huobi.pro»"
+rationale = "Основной адрес REST спота."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.rest_fallback_url"
+area = "площадка HTX"
+unit = "URL"
+value = "https://api-aws.huobi.pro"
+source = "Quick Start → Access URLs (api-aws — рекомендован для серверов AWS Japan)"
+rationale = "Резерв только при сбое сети основного адреса."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка HTX"
+unit = "URL"
+value = "wss://api.huobi.pro/ws"
+source = "Websocket Market Data: «wss://api.huobi.pro/ws» (MBP-изменения — /feed, venue.ws_feed_url, решение 422)"
+rationale = "Снимки стакана mbp.refresh."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.ws_private_url"
+area = "площадка HTX"
+unit = "URL"
+value = "wss://api.huobi.pro/ws/v2"
+source = "Websocket Account and Order: «wss://api.huobi.pro/ws/v2»"
+rationale = "Поток аккаунта (accounts.update#2)."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "площадка HTX"
+unit = "монета"
+value = "USDT"
+source = "Get Market Symbols Setting: qc"
+rationale = "Котируемая монета пар."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка HTX"
+unit = "уровней"
+value = "20"
+source = "market.$symbol.mbp.refresh.$levels: 5, 10, 20, «around 100ms»"
+rationale = "Глубина для котировки на объём."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка HTX"
+unit = "тип"
+value = "ioc"
+source = "Place a New Order: type buy-ioc / sell-ioc (или buy-limit-fok / sell-limit-fok)"
+rationale = "Правило Тиграна: неисполненный остаток снимает биржа."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.balance_events"
+area = "площадка HTX"
+unit = "да/нет"
+value = "да"
+source = "Websocket Account and Order: accounts.update#2"
+rationale = "Зачисление депозита без опроса."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.ws_silence_ms"
+area = "площадка HTX"
+unit = "мс"
+method = "Больше 20000 (ping потока аккаунта ~20 с; рыночный ping ~5 с), например 30000 — решает Тигран"
+source = "Market WS: ping ~5 с; Account WS: ping ~20 с"
+rationale = "Без кадров дольше — соединение оборвано."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка HTX"
+unit = "пар"
+method = "Предела тем на соединение документация не называет — начать с небольшого (например, 50) и замерить нагрузку (решение 109); решает Тигран"
+source = "Websocket Market Data: предел не указан"
+rationale = "Урок 12: подписки на соединение — по замеру."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.ws_subs_per_sec"
+area = "площадка HTX"
+unit = "в секунду"
+method = "Темп подписок не описан (у req — 1 на 100 мс на соединение): например 10 — решает Тигран"
+source = "Websocket Market Data: «The limitation of single connection is 100 ms» (req)"
+rationale = "Не перегружать соединение подписками."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка HTX"
+unit = "да/нет"
+method = "Не задавать (или «нет»): пробного ордера у HTX нет — «да» даёт отказ ордера"
+source = "Раздел Trading: test order нет"
+rationale = "Правила ордера проверяет order_rules::ready."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка HTX"
+unit = "название"
+method = "Значение baseChainProtocol сети BSC из живого ответа GET /v2/reference/currencies?currency=cake (ожидается BEP20 — не угадывать)"
+source = "APIv2 Currency & Chains: baseChainProtocol (в примерах ERC20, TRC20)"
+rationale = "В документации имени сети BSC нет; chain у HTX своё у каждой монеты."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.contract_field"
+area = "площадка HTX"
+unit = "поле"
+method = "Поле (ac или ca) ответа GET /v1/settings/common/chains?currency=cake, равное адресу CAKE 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82; ни одно не равно — не задавать (HTX не подключать)"
+source = "Get Chains Information: ac «address of chain»; SDK getchainsresponse.go: ca"
+rationale = "Без адреса контракта монеты не сопоставляются (CLAUDE.md)."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.deposit_min_absent_ok"
+area = "площадка HTX"
+unit = "да/нет"
+method = "решает Тигран (решение 371): minDepositAmt «0» — минимум 0 (решение Тиграна 17.11, читается сам); настройка — только для сетей без поля / null: да — минимум 0, не задано — перевода на HTX по таким монетам нет"
+source = "APIv2 Currency & Chains: minDepositAmt; Get Chains: dma — меньше минимума может не зачислиться никогда"
+rationale = "Урок 21."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.fee_symbols_per_req"
+area = "площадка HTX"
+unit = "символов"
+method = "Предел не указан — начать с 10 и проверить ответ на живом; решает Тигран"
+source = "Get Current Fee Rate Applied to The User: symbols через запятую, предел не указан"
+rationale = "Ставки комиссии пачками."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.ws_feed_url"
+area = "площадка HTX"
+unit = "URL"
+method = "wss://api.huobi.pro/feed — после записи живых кадров /feed (docs/TASKS.md, решение 422); до того — не задавать (только снимки mbp.refresh)"
+source = "Websocket Market Data → Introduction: «wss://api.huobi.pro/feed» для MBP incremental и REQ"
+rationale = "Быстрый стакан + снимки mbp.refresh как страховка (решение 422)."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.fast_book_levels"
+area = "площадка HTX"
+unit = "уровней"
+method = "решает Тигран: 20 — «tick by tick», но только ~30 пар списка документации (остальные на снимках); 150 — все пары, но раз в 100 мс, как и снимки mbp.refresh"
+source = "Market By Price (incremental update): 5/20 — «tick by tick», 150/400 — «100ms interval»; REQ — 5, 20, 150"
+rationale = "Быстрее снимков только 5/20 и только для пар списка."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.fast_book_req_per_sec"
+area = "площадка HTX"
+unit = "в секунду"
+value = "5"
+source = "Websocket Market Data → Rate Limit: «The limitation of single connection is 100 ms»"
+rationale = "Половина лимита на соединение — запас на повторы."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.fee_requests_per_sec"
+area = "площадка HTX"
+unit = "в секунду"
+method = "Лимит не указан: 1–2 запроса в секунду — решает Тигран"
+source = "Get Current Fee Rate: лимит не указан; правило лимитов — «N times/2s» по UID на эндпоинт"
+rationale = "Не упереться в лимит UID."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка HTX"
+unit = "мс"
+method = "Окно лимитов HTX — 2 с («N times/2s»): пауза 2000–4000 мс — решает Тигран"
+source = "API Access → New Version Rate limit Rule; ответ на превышение не описан"
+rationale = "Урок 15: после «слишком часто» не слать дальше."
+prefill = { kind = "Venue", id = "htx" }
+# --- Зачисление по блокчейну (решение 151) ---
+[[section]]
+title = "Зачисление по блокчейну (решение 151)"
+intro = "Перевод сделки на кошелёк DEX засчитывается по приходу монеты в блокчейне, не дожидаясь API биржи-отправителя. Работает при заданных venue.balance_events и transfer.credit_amount_tolerance_pct у площадки DEX."
+
+[[section.rec]]
+name = "transfer.credit_by_chain"
+area = "по площадке DEX"
+unit = "да/нет"
+value = "да"
+source = "Сделки 04.11.2026: от покупки до «Перевод зачислен» BingX → DEX 11–27 с, KuCoin → DEX 22–49 с, MEXC → DEX 58–89 с; решение 151"
+rationale = "Монета уже в кошельке, а бот ждёт хеш вывода в API биржи. Засчитывается только приход токена монеты сделки на кошелёк сделки в ожидаемом количестве, когда других ожидаемых поступлений этого токена нет; хеш биржи сверяется фоном."
+prefill = { kind = "Venue", id = "bsc_dex" }
 
 # --- Безопасность (вывод ключа из пароля) ---
 [[section]]
@@ -265,7 +2861,516 @@ unit = "символов"
 method = "Минимальная длина пароля секретов: старт не меньше 12 символов (общая практика). Задаёт Тигран."
 rationale = "Документированного минимума в проекте нет — даём метод, не число."
 
+# --- Защита по факту продажи (решение 148) ---
+[[section]]
+title = "Защита по факту продажи (решение 148)"
+intro = "Продажи монеты подряд хуже плана — монета уходит в ручной чёрный список (как вручную), журнал и уведомление coin.sell_slip. Не задана любая из двух — защита выключена."
+
+[[section.rec]]
+name = "guard.sell_slip_pct"
+area = "вся система"
+unit = "%"
+method = "Выше допуска проскальзывания продажи (exec.dex_slippage_pct площадки DEX): в пределах допуска факт хуже плана законно. Старт — допуск плюс полпроцента; точное значение — по сделкам на экране «Сделки». Задаёт Тигран."
+rationale = "Записанных живых продаж для замера пока мало — даём метод, не число."
+
+[[section.rec]]
+name = "guard.sell_slip_count"
+area = "вся система"
+unit = "продаж"
+value = "3"
+source = "Ориентир (решение 148)"
+rationale = "Одна-две плохие продажи бывают от движения цены за перевод; три подряд — уже похоже на свойство монеты (скрытый налог, ловушка ликвидности)."
+prefill = { kind = "Global" }
+
+# --- Повтор продажи, не ушедшей в сеть (решения 110 и 154) ---
+[[section]]
+title = "Повтор продажи, не ушедшей в сеть (решения 110 и 154)"
+intro = "Продажа не стоила ни денег, ни газа (отказ до отправки; или ни один канал не принял, и свой узел подтвердил, что транзакции нет) — бот сам продаёт заново через режим застрявшей монеты. Не задано — повтора нет, сразу алерт."
+
+[[section.rec]]
+name = "stuck.unsent_retries_max"
+area = "вся система"
+unit = "раз"
+value = "3"
+source = "Ориентир (решения 110, 154; сделки ATOM 02.11, ASTER 04.11)"
+rationale = "Отказы бывают разовыми (очередь агрегатора, цена сборки, отказ канала); три подряд — уже не случайность, нужен человек."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "stuck.reject_retry_pause_ms"
+area = "вся система"
+unit = "мс"
+method = "Старт 1500 (ориентир без замера: живой случай один); дальше — по журналу send.channel_rejected, чем отвечают каналы. Задаёт Тигран."
+rationale = "Сразу в тот же блок каналы, скорее всего, ответят так же (цена газа, лимит канала); долгая пауза — цена уходит."
+
+# --- Продажа здесь в режиме «Перегон» (решение 220) ---
+[[section]]
+title = "Продажа здесь в режиме «Перегон» (решение 220)"
+intro = "Перегон не выгоднее, перегоны исчерпаны, площадка монеты на паузе или перевод не состоялся (монеты на месте) — продажа здесь только с убытком не выше порога; выше — алерт с кнопками. Не задано — всегда алерт."
+
+[[section.rec]]
+name = "stuck.relay_max_loss_pct"
+area = "вся система"
+unit = "%"
+value = "20"
+source = "Тигран, 08.11.2026 (решение 220)"
+rationale = "Значение Тиграна: убыток до 20 % — продать и освободить деньги; больше (живой случай BRIC −30 %) — решает человек."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "stuck.no_quote_wait_ms"
+area = "вся система"
+unit = "мс"
+value = "30000"
+source = "Тигран, 08.11.2026 (решение 220)"
+rationale = "По живым данным «нет котировки» у застрявших — Gate QAIT: кадра стакана нет 13.3 с; наибольший venue.book_stale_ms у площадок — 30000. Ожидание кончается на первом тике монеты, поэтому большой предел не задерживает продажу, когда цена есть."
+prefill = { kind = "Global" }
+
+# --- Ручной ввод «Продано вручную» (решение 236, дополнение п. 3) ---
+[[section]]
+title = "Проверка ввода «Продано вручную»"
+intro = "Человек вводит, сколько USDT он сам получил за остаток сделки. Слишком большой ввод относительно котировки остатка — бот отказывает и просит проверить."
+
+[[section.rec]]
+name = "manual.sold_max_over_pct"
+area = "вся система"
+unit = "%"
+value = "20"
+source = "Техлид 09.11.2026 по поручению Тиграна (решение 236, дополнение п. 3)"
+rationale = "*метод:* старт 20 — ориентир без замера. Живой случай один — PIT: за остаток стоимостью около 0 введено 44.88 (выручка всей сделки); его ловит любое N. Законное превышение — рост цены между продажей человека и вводом (или продажа на другой площадке дороже котировки); таких замеров в данных бота нет. 20 % — та же граница движения цены, что Тигран задал для продажи здесь (stuck.relay_max_loss_pct = 20): больше — решает человек. Ложный отказ безопасен — бот только просит проверить сумму; верную сумму можно ввести, временно очистив настройку. Подстройка — по журналу отказов «больше чем на … %»."
+prefill = { kind = "Global" }
+
+# --- Ручное управление в Telegram (решение 156) ---
+[[section]]
+title = "Ручное управление в Telegram (решение 156)"
+intro = "Каждая запись экрана «Ручное управление» приходит в Telegram с теми же кнопками (событие manual.record — включить на экране «Уведомления»). Пока по записям нет действия — напоминание одним сообщением со списком и кнопками. Не задано — без повторов."
+
+[[section.rec]]
+name = "notify.manual_repeat_s"
+area = "вся система"
+unit = "секунды"
+value = "10"
+source = "Тигран, 04.11.2026 (решение 156)"
+rationale = "Тигран: «каждые 10 секунд долбить в телегу одним и тем же, пока это всё не зачистится». Напоминание — одно сообщение на все записи и снятие кнопок у прежнего: 6 сообщений в минуту в чат при любом числе записей — в пределах ориентира Telegram для групп (20 сообщений в минуту, FAQ Bot API «My bot is hitting limits»)."
+prefill = { kind = "Global" }
+
+# --- Telegram: четыре чата (решение 176) ---
+[[section]]
+title = "Telegram: четыре чата (решение 176)"
+intro = "Чат «Управление» — меню кнопками; экраны «Состояние» и балансы обновляются сами, пока на них нажимают. ID чатов и токены ботов ролей — экран «Уведомления» (их даёт Тигран). Не задано — без автообновления (кнопка «Обновить»), денежные кнопки Telegram не работают без notify.dialog_ttl_s."
+
+[[section.rec]]
+name = "notify.live_refresh_s"
+area = "вся система"
+unit = "секунды"
+value = "5"
+source = "Тигран, 05.11.2026 (решение 176)"
+rationale = "Один живой экран на чат правится не чаще раза в 5 с — 12 правок в минуту, в пределах ориентира Telegram для групп (20 сообщений в минуту, FAQ Bot API «My bot is hitting limits»); балансы берутся из памяти панели, биржа спрашивается не чаще ui.balances_refresh_ms."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "notify.live_idle_s"
+area = "вся система"
+unit = "секунды"
+value = "120"
+source = "Тигран, 05.11.2026 (решение 176)"
+rationale = "Две минуты без нажатий — экран замораживается: забытый открытым экран не тратит лимиты Telegram и запросы к биржам."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "notify.dialog_ttl_s"
+area = "вся система"
+unit = "секунды"
+value = "600"
+source = "Ориентир агента (решение 176), подтвердить Тиграну"
+rationale = "Десять минут — хватает пройти четыре шага перевода и подтвердить; старше — экран с денежными кнопками устаревает, сумма и балансы пересчитываются заново из меню."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "notify.transfer_pct"
+area = "вся система"
+unit = "% (список)"
+value = "25, 50"
+source = "Тигран, 05.11.2026 (решение 176: кнопки «Всё», 25%, 50%)"
+rationale = "Кнопки долей на шаге «Сколько» перевода USDT; «Всё» и «Ввести сумму» есть всегда."
+prefill = { kind = "Global" }
+
+# --- Повтор возврата USDT (решение 163) ---
+[[section]]
+title = "Повтор возврата USDT (решение 163)"
+intro = "Возврат выручки USDT закрытой сделки на площадку покупки не состоялся (например, удержание вывода MEXC 16021), а прежний вывод точно не ушёл — бот повторяет сам. Все повторы неудачны — запись «USDT не вернулись» на экране «Ручное управление» и в Telegram с кнопками «Перегнать» и «Перегнано вручную». Не задано — без повторов, сразу запись."
+
+[[section.rec]]
+name = "usdt.return_retry_s"
+area = "вся система, можно по площадке"
+unit = "секунды"
+value = "10"
+source = "Тигран, 05.11.2026 (решение 163)"
+rationale = "Тигран: «через каждые 10 секунд пытаемся перевести обратно, 5 попыток». Удержание MEXC 16021 снимается, когда депозит набирает подтверждения сети, — повтор через короткую паузу успевает за ним."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "usdt.return_retries_max"
+area = "вся система, можно по площадке"
+unit = "раз"
+value = "5"
+source = "Тигран, 05.11.2026 (решение 163)"
+rationale = "Тигран: «5 попыток; если все 5 неудачные — алерт в Telegram с кнопками „Перегнать“ и „Перегнано вручную“». 5 повторов по 10 с — меньше минуты до решения человека."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "usdt.return_tolerance_usd"
+area = "вся система, можно по площадке"
+unit = "USDT"
+value = "1"
+source = "Тигран, 08.11.2026 (решение 227, допуск)"
+rationale = "Тигран: «по копейкам — если это меньше одного USDT, то ок». Биржа может зачислить выручку на копейки меньше расчёта (округление комиссии) — без допуска такая часть зря уходит в «USDT не вернулись»."
+prefill = { kind = "Global" }
+
+# --- Лимит выводов по бирже (решение 180) ---
+[[section]]
+title = "Лимит выводов по бирже (решение 180)"
+intro = "Бот считает свои выводы с каждой биржи скользящим окном в памяти: окно занято — сигнал на сделку пропускается, возврат USDT ждёт. Значения — только из официальной документации или живого ответа биржи. Не задано у биржи — для неё всё как раньше. BingX, MEXC, KuCoin, Binance, Kraken, Phemex, Poloniex: лимита частоты выводов в документации нет (есть только вес запроса или он не описан) — не задавать."
+
+[[section.rec]]
+name = "transfer.withdraw_window_ms"
+area = "площадка Gate"
+unit = "мс"
+value = "10000"
+source = "Живой ответ Gate 05.11: «TOO_FAST: Withdrawal frequency is limited to 10s». Документация API v4 (Frequency limit rule, Wallet): «Withdrawal(POST /withdrawals) : 1r/3s», «counted against each sub-account or main account» — противоречие; берётся живой ответ (строже)"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "transfer.withdraw_max_in_window"
+area = "площадка Gate"
+unit = "выводов"
+value = "1"
+source = "Живой ответ Gate 05.11: «TOO_FAST: Withdrawal frequency is limited to 10s». Документация API v4 (Frequency limit rule, Wallet): «Withdrawal(POST /withdrawals) : 1r/3s», «counted against each sub-account or main account» — противоречие; берётся живой ответ (строже)"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "transfer.withdraw_limit_scope"
+area = "площадка Gate"
+unit = "вариант"
+value = "venue"
+source = "Живой ответ Gate 05.11: «TOO_FAST: Withdrawal frequency is limited to 10s». Документация API v4 (Frequency limit rule, Wallet): «Withdrawal(POST /withdrawals) : 1r/3s», «counted against each sub-account or main account» — противоречие; берётся живой ответ (строже)"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "transfer.withdraw_window_ms"
+area = "площадка Bybit"
+unit = "мс"
+value = "10000"
+source = "Документация Bybit v5 Withdraw: «you can only withdraw once every 10 seconds per chain/coin combination»; запрос — «5 req/s»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "transfer.withdraw_max_in_window"
+area = "площадка Bybit"
+unit = "выводов"
+value = "1"
+source = "Документация Bybit v5 Withdraw: «you can only withdraw once every 10 seconds per chain/coin combination»; запрос — «5 req/s»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "transfer.withdraw_limit_scope"
+area = "площадка Bybit"
+unit = "вариант"
+value = "coin"
+source = "Документация Bybit v5 Withdraw: «you can only withdraw once every 10 seconds per chain/coin combination»; запрос — «5 req/s»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "transfer.withdraw_window_ms"
+area = "площадка Bitget"
+unit = "мс"
+value = "1000"
+source = "Документация Bitget Withdraw: «5 req/sec/UID»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "transfer.withdraw_max_in_window"
+area = "площадка Bitget"
+unit = "выводов"
+value = "5"
+source = "Документация Bitget Withdraw: «5 req/sec/UID»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "transfer.withdraw_limit_scope"
+area = "площадка Bitget"
+unit = "вариант"
+value = "venue"
+source = "Документация Bitget Withdraw: «5 req/sec/UID»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "transfer.withdraw_window_ms"
+area = "площадка OKX"
+unit = "мс"
+value = "1000"
+source = "Документация OKX Withdrawal: 6 запросов/с (User ID)"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "transfer.withdraw_max_in_window"
+area = "площадка OKX"
+unit = "выводов"
+value = "6"
+source = "Документация OKX Withdrawal: 6 запросов/с (User ID)"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "transfer.withdraw_limit_scope"
+area = "площадка OKX"
+unit = "вариант"
+value = "venue"
+source = "Документация OKX Withdrawal: 6 запросов/с (User ID)"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "transfer.withdraw_window_ms"
+area = "площадка HTX"
+unit = "мс"
+value = "2000"
+source = "Документация HTX Create a Withdraw Request: «20times/2s»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "transfer.withdraw_max_in_window"
+area = "площадка HTX"
+unit = "выводов"
+value = "20"
+source = "Документация HTX Create a Withdraw Request: «20times/2s»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "transfer.withdraw_limit_scope"
+area = "площадка HTX"
+unit = "вариант"
+value = "venue"
+source = "Документация HTX Create a Withdraw Request: «20times/2s»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "transfer.withdraw_window_ms"
+area = "площадка XT"
+unit = "мс"
+value = "1000"
+source = "Документация XT POST /v4/withdraw: «1/s/apikey»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "transfer.withdraw_max_in_window"
+area = "площадка XT"
+unit = "выводов"
+value = "1"
+source = "Документация XT POST /v4/withdraw: «1/s/apikey»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "transfer.withdraw_limit_scope"
+area = "площадка XT"
+unit = "вариант"
+value = "venue"
+source = "Документация XT POST /v4/withdraw: «1/s/apikey»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "transfer.withdraw_window_ms"
+area = "площадка CoinEx"
+unit = "мс"
+value = "1000"
+source = "Документация CoinEx Rate Limit: вывод — группа «现货账户改动» 10r/1s"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "transfer.withdraw_max_in_window"
+area = "площадка CoinEx"
+unit = "выводов"
+value = "10"
+source = "Документация CoinEx Rate Limit: вывод — группа «现货账户改动» 10r/1s"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "transfer.withdraw_limit_scope"
+area = "площадка CoinEx"
+unit = "вариант"
+value = "venue"
+source = "Документация CoinEx Rate Limit: вывод — группа «现货账户改动» 10r/1s"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.price_assets"
+area = "площадка Gate"
+unit = "тикеры"
+value = "GT"
+source = "Решение 181: комиссия со скидкой GT (venue.fee_deduction = gt) приходит в GT (ордер, gt_fee)"
+rationale = "Цена GT для пересчёта комиссии в USDT — иначе комиссия не входит в итог сделки."
+prefill = { kind = "Venue", id = "gate" }
+
+# --- Повтор вывода после «заблокировано для вывода» (решение 166) ---
+[[section]]
+title = "Повтор вывода после «заблокировано для вывода» (решение 166)"
+intro = "Покупка прошла, а вывод монеты с биржи отклонён ответом «средства временно заблокированы для вывода» (MEXC 16021, KuCoin 115008, Binance −4060, Bybit 131085 — удержание недавнего депозита), и прежний вывод точно не ушёл — бот повторяет тот же вывод. Успех — сделка идёт дальше; все повторы неудачны — как раньше (остановка / перегон) с понятной причиной. Не задано — без повторов."
+
+[[section.rec]]
+name = "transfer.locked_retry_ms"
+area = "вся система, можно по площадке"
+unit = "мс"
+value = "1000"
+source = "Тигран, 05.11.2026 (решение 166)"
+rationale = "Тигран: «каждые 1000 мс». Удержание снимается, когда депозит набирает подтверждения сети BSC (блок ≈ 1–3 с), — секундный шаг ловит снятие без лишней задержки; запрос вывода — один в секунду. Исключение — Bybit: в документации вывода «you can only withdraw once every 10 seconds per chain/coin combination», поэтому у площадки bybit задать 10000 (считается ли отказ попыткой — в документации не сказано)."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "transfer.locked_retries_max"
+area = "вся система, можно по площадке"
+unit = "раз"
+value = "10"
+source = "Тигран, 05.11.2026 (решение 166)"
+rationale = "Тигран: «не больше 10 раз». 10 повторов по 1 с — около 10 с ожидания: за это время монета на бирже почти не дешевеет, а если удержание держится дольше — человек решает сам."
+prefill = { kind = "Global" }
+
+# --- Делистинги (решение 175) ---
+[[section]]
+title = "Делистинги (решение 175)"
+intro = "Монета в делистинге на любой стороне сделки и до прекращения торгов меньше порога — сделки нет (живой случай 05.11: KuCoin снял ION/USDT с торгов, «разница цены» была из-за делистинга). Решение 226 (08.11): одно правило для всех источников — справочник пар и анонсы делистинга (время берётся из анонса; не определено — монета не торгуется). Метка ST — по delist.st_block. Биржа без источника делистингов в официальном API — «неизвестно», не блокирует. Не задано — проверка выключена."
+
+[[section.rec]]
+name = "delist.block_hours"
+area = "вся система, можно по площадке"
+unit = "часы"
+value = "12"
+source = "Тигран, 08.11.2026 (решения 175, 226)"
+rationale = "Тигран 08.11: «любая монета, делистинг которой на бирже X наступит меньше чем через N часов, на этой бирже больше не торгуется», N = 12 — единое правило для всех источников, включая анонсы (время делистинга берётся из анонса). Раньше (05.11) советовалось 72."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "delist.refresh_s"
+area = "вся система, можно по площадке"
+unit = "секунды"
+value = "3600"
+source = "Тигран, 05.11.2026 (решение 175)"
+rationale = "Совет Тиграна: раз в час — новый делистинг виден задолго до порога 72 ч. Binance: вес запроса 100 (IP) — раз в час это ничтожная доля лимита."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "delist.ann_max_age_h"
+area = "вся система, можно по площадке"
+unit = "часы"
+value = "720"
+source = "Совет Claude (решение 226, уточнение 08.11), подтверждает Тигран"
+rationale = "Анонс публикуется заранее, блок начинается за delist.block_hours до делистинга — держать нужно анонсы не старше «максимальное опережение + delist.block_hours». Живые анонсы 08.11.2026: опережение KuCoin 3 суток (02.11 → 05.11), Bybit 7 (21.10 → 28.10), Bitget 7 (06.11 → 13.11), OKX 10 (23.09 → 03.10); обычно 3–14 суток. 14 + 0.5 = 14.5 суток минимум; 720 ч (30 суток) — с двойным запасом и совпадает с глубиной API (KuCoin и Bitget отдают анонсы за месяц). Пара после делистинга исчезает из справочника — старый анонс её больше не блокирует."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "delist.ann_max_pages"
+area = "вся система, можно по площадке"
+unit = "страниц"
+value = "2"
+source = "Совет Claude (решение 226, уточнение 08.11), подтверждает Тигран"
+rationale = "Страниц — чтобы покрыть 30 суток (delist.ann_max_age_h) у каждой биржи. Живые ленты 08.11.2026: Bybit (type delistings, все теги) — 11 анонсов за 30 суток при 20 на странице; OKX — 20 на странице ≈ 2–3 месяца (последний спотовый делистинг 23.09); KuCoin — 15 на странице, 4 анонса за 30 суток; Bitget — 10 на странице, 4 за месяц. Одной страницы хватает всем, 2 — запас на всплеск делистингов у Bybit. Чтение останавливается раньше, если страница старше 30 суток."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "delist.ann_html_per_refresh"
+area = "вся система, можно по площадке"
+unit = "страниц"
+value = "5"
+source = "Совет Claude (решение 226, уточнение 08.11), подтверждает Тигран"
+rationale = "Страница анонса читается один раз (кеш), только если API не отдаёт монеты или время. За 30 суток таких анонсов (живые ленты 08.11.2026): Bybit 3, Bitget 2, KuCoin 1, OKX 0–2 — 5 страниц за обновление прочитывают всё уже при первом запуске, дальше — 0–1 новая страница в час. Нагрузка ничтожна."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "delist.st_block"
+area = "площадка (MEXC, KuCoin, Bybit)"
+unit = "да/нет"
+value = "нет"
+source = "Тигран, 08.11.2026 (решение 226, уточнение)"
+rationale = "Тигран: метку ST торгуем — «на супер волатильных монетах и появляются нормальные спреды». Делистинг ST-монеты всё равно блокируется по анонсу (время из анонса) и по паузе / снятию в справочнике. Не задано — то же, что «нет»."
+
+# --- Автоснятие пауз, поставленных ботом (решение 225) ---
+[[section]]
+title = "Автоснятие пауз, поставленных ботом (решение 225)"
+intro = "Паузу, поставленную ботом (ошибки подряд, правило шлюза «стоп площадка» / «стоп всё»), бот снимает сам, когда проверка подключения (как кнопка «Проверить подключение») отвечает «Подключено». Паузу человека и «исход неизвестен» снимает только человек. Обе настройки необязательны: не заданы — паузы снимает человек, как раньше."
+
+[[section.rec]]
+name = "risk.auto_resume_check_s"
+area = "вся система"
+unit = "секунды"
+value = "60"
+source = "Совет Claude (решение 225), подтверждает Тигран"
+rationale = "Проверка подключения — несколько подписанных запросов чтения (ключ, права, баланс/аккаунт) на площадку на паузе: раз в минуту — ничтожная доля любого лимита запросов биржи. Сбои связи, обслуживание и перегрузка биржи обычно длятся минуты — снятие с точностью до минуты не теряет заметных сделок, а чаще проверять незачем."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "risk.errors_resume_after_s"
+area = "вся система, можно по площадке"
+unit = "секунды"
+value = "300"
+source = "Совет Claude (решение 225), подтверждает Тигран"
+rationale = "N ошибок подряд — обычно нестабильность площадки (обслуживание, «шторм нагрузки» — решение 112). 5 минут дают сбою пройти и человеку — увидеть уведомление в Telegram и вмешаться, если причина не в связи; дальше проверка каждые risk.auto_resume_check_s."
+prefill = { kind = "Global" }
+
+# --- Бот сам выясняет «исход неизвестен» (решение 231) ---
+[[section]]
+title = "Бот сам выясняет «исход неизвестен» (решение 231)"
+intro = "Ордер или вывод с исходом «неизвестен» бот ищет сам на площадке по своему ID (у DEX — квитанция по хешу): найден — итог в сделке как обычный результат, сделка идёт дальше, пауза площадки снимается, когда выяснены все её такие операции. Обе настройки необязательны: не заданы — исход выясняет человек, как раньше."
+
+[[section.rec]]
+name = "risk.outcome_poll_s"
+area = "вся система, можно по площадке"
+unit = "секунды"
+value = "30"
+source = "Тигран, 08.11 (совет Claude, решение 231 — подтверждён)"
+rationale = "Один вопрос — поиск по своему ID (у бирж с отменой по нему и коротким опросом до venue.order_final_wait_ms) — несколько подписанных запросов чтения; раз в 30 с — ничтожная доля лимитов (BingX 10/с, Bitget 20/с, XT вывод 1/с). Сделка всё это время стоит — чаще 30 с выигрыш мал, а адаптер уже искал операцию сразу после сбоя."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "risk.outcome_max_s"
+area = "вся система, можно по площадке"
+unit = "секунды"
+value = "900"
+source = "Тигран, 08.11 (совет Claude, решение 231 — подтверждён)"
+rationale = "«Исход неизвестен» — обычно короткий сбой связи или перегрузка биржи: ордер и вывод видны в её истории через секунды–минуты. 15 минут покрывают обслуживание и задержку истории; дольше сделка и пауза площадки висели бы без человека — лучше сказать ему."
+prefill = { kind = "Global" }
+
 # --- Деньги и риск (вводит Тигран под капитал) ---
+[[section]]
+title = "Сверка с квотером: память против сети (решение 261)"
+intro = "Периодическая сверка читает пул заново на голове H и сравнивает с памятью бота. Настройка необязательна: не задана — сравнения нет."
+
+[[section.rec]]
+name = "dex.quoter_memory_lag_blocks"
+area = "площадка DEX (bsc_dex)"
+unit = "блоков"
+method = "Необязательна. Больше обычного отставания применения событий (1–2 блока) или не задавать; число решает Тигран."
+source = "Решение 261 (ответ Тиграна на вопрос 11)"
+rationale = "«Память отстаёт от сети» пишется, только если состояние различается и последнее применённое событие пула старше H минус столько блоков: меньше — больше ложных записей у активных пулов."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
 [[section]]
 title = "Деньги и риск — вводит Тигран под капитал"
 intro = "Торговля не включается, пока не заданы ВСЕ money.* и risk.* (docs/SETTINGS.md). Готовых чисел здесь нет (правило «только факты»): даётся метод — точное значение зависит от капитала и подбирает Тигран."
@@ -299,6 +3404,13 @@ method = "Потолок вложения в одну монету одновр�
 rationale = "Капитал-зависимо."
 
 [[section.rec]]
+name = "exec.top_up"
+area = "вся система"
+unit = "да/нет"
+method = "Решение 394 (t179) — докупка (записка 269), необязательна. Не задана — как раньше. Включать после ответов на вопросы docs/TASKS.md и поднять money.max_per_coin_usd выше money.max_per_trade_usd. Известные ограничения (продажа вложенной раньше первой, зачисление по блокчейну на одном кошельке, remain_fact, дневной лимит, отложенный возврат в памяти) — docs/FIRST_RUN.md. Решает Тигран."
+rationale = "Риск-зависимо: деньги одной монеты одновременно в нескольких переводах."
+
+[[section.rec]]
 name = "money.max_in_transit_usd"
 area = "вся система"
 unit = "USDT"
@@ -307,10 +3419,42 @@ rationale = "Капитал-зависимо."
 
 [[section.rec]]
 name = "risk.max_daily_loss_usd"
+area = "вся система (можно по площадке)"
+unit = "USDT"
+value = "15"
+source = "Решение 173 (Тигран, 05.11.2026)"
+method = "Дневной лимит убытка КАЖДОЙ биржи: превышен — пауза только этой площадки, остальные торгуют. Значение «вся система» — лимит каждой площадки без своего; своё значение площадки сильнее. Подбирает Тигран."
+rationale = "Совет — 15 USDT по каждой бирже: один застрявший токен на одной бирже не останавливает всю торговлю (живой случай 05.11: CREPE1 на MEXC, ION на KuCoin, LUCIC на Gate)."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "risk.drawdown_pct"
+area = "вся система (можно по площадке и по направлению площадки)"
+unit = "%"
+value = "5"
+source = "Решение 414 (Тигран, 19.11.2026)"
+method = "Предел просадки направления в % от пика теоретического баланса (слепок USDT на площадке покупки + итог сделок направления после слепка). Предел = меньшее из (этот % × пик) и risk.drawdown_max_usd. Задана эта или risk.drawdown_max_usd — старый risk.max_daily_loss_usd для направления не действует. Подбирает Тигран."
+rationale = "Пример Тиграна 19.11: пик 1000, 5 % но не более 30 USDT; отдали 35 — пауза направления."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "risk.drawdown_max_usd"
+area = "вся система (можно по площадке и по направлению площадки)"
+unit = "USDT"
+value = "30"
+source = "Решение 414 (Тигран, 19.11.2026)"
+method = "Предел просадки направления от пика в USDT: предел = меньшее из (risk.drawdown_pct × пик) и этого значения. Подбирает Тигран."
+rationale = "Пример Тиграна 19.11: 5 % но не более 30 USDT."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "risk.max_daily_loss_total_usd"
 area = "вся система"
 unit = "USDT"
-method = "Дневной стоп: суммарный убыток за день, после которого система останавливается. Старт — небольшая доля капитала. Подбирает Тигран."
-rationale = "Капитал-зависимо."
+value = "60"
+source = "Решение 173 (Тигран, 05.11.2026)"
+method = "Необязательна. Полный «Стоп» всей системы по убытку дня (сумма сделок). Не задана — общего стопа по убытку нет, действуют лимиты площадок. Совет: не задавать или 60. Подбирает Тигран."
+rationale = "Страховка на случай, когда минусуют сразу несколько площадок: 60 ≈ четыре лимита площадки по 15."
 
 [[section.rec]]
 name = "risk.min_bnb_balance"
@@ -318,3 +3462,106 @@ area = "кошелёк"
 unit = "BNB"
 method = "Запас BNB на газ: хватить на несколько сделок и отмен. Старт — исходя из типичного газа BSC. Подбирает Тигран."
 rationale = "Капитал/газ-зависимо."
+
+# --- Граф маршрутов DEX: лучший исполнимый маршрут (решение 300) ---
+[[section]]
+title = "Граф маршрутов DEX: лучший исполнимый маршрут (решение 300)"
+intro = "Необязательно. Режим dex.router_mode = graph: если лучший маршрут графа неисполним, бот может искать лучший исполнимый маршрут графа вместо отката к классике."
+
+[[section.rec]]
+name = "dex.graph_exec_fallback"
+area = "bsc_dex"
+unit = "да/нет"
+source = "Решение 300"
+method = "Необязательна. При первом запуске не задавать; «да» — после приёмки решения 300 и при dex.router_mode = graph. Решает Тигран."
+rationale = "Без настройки поведение прежнее (неисполнимый лучший маршрут графа — только сигнал, на сделку классика); «да» — на котировках решения/исполнения до 3 дополнительных сплитов по исполнимым путям (при dex.route_search_max_paths — и отбор путей перед каждым). Предупреждение: S2 (исполнитель) и S3 (бандл) на записанных данных не проверены — первая проверка на живом боте; газ approve и чаевые в сравнении не учитываются — маршрут с новым approve может выиграть и не пройти порог (упущенная сделка, не убыток)."
+
+# --- Лесенка цен пула у пар не с USDT (решение 306) ---
+[[section]]
+title = "Лесенка цен пула у пар не с USDT (решение 306)"
+intro = "Необязательно. Пары WooFi / Metric OMM / iZiSwap / Biswap V3 со встречным токеном не USDT (WBNB, USDC, FDUSD …) получают лесенку dex.pmm_ladder_usd, переведённую во встречный токен по курсу к USDT со своего узла."
+
+[[section.rec]]
+name = "dex.pmm_ladder_counter"
+area = "по id DEX (области «DEX», например metric-bsc, iziswap-bsc, biswap-v3, biswap-v3-1 — DEX видов woofi_v2, metric_omm, iziswap, biswap_v3)"
+unit = "да/нет"
+source = "Решение 306"
+method = "Необязательна. При первом запуске не задавать; «да» у DEX, где задана dex.pmm_ladder_usd, — после приёмки решения 306 и проверки нагрузки на узел. Решает Тигран."
+rationale = "Без настройки пары не с USDT без лесенки (как решение 297). «Да» — на блок до P_mw × 2N + P_izi × (3 + 2N) eth_call (N — сумм dex.pmm_ladder_usd; при N = 9 — 18 на пару Metric / WooFi, 21 на пару iZiSwap / Biswap V3). Нет пула «X — USDT» в реестре — лесенки нет, пара без котировки."
+
+[[section]]
+title = "Счёт процессора: подбор объёма и котировки DEX (решения 336–338, задача t157)"
+intro = "Необязательно. Советы для сервера AMD EPYC 9455 (48 ядер / 96 потоков) — проверить замером (log.quote_timing, «Время по шагам», число отказов по сроку). Не заданы — бот считает как до t157."
+
+[[section.rec]]
+name = "size.early_exit_margin_usd"
+area = "вся система"
+unit = "USDT"
+method = "Начать с 0.5 (порядок порогов money.min_profit_usd бота — 0.075–3). Смотреть отказы «ранний выход подбора» и сделки: если ранний выход срезает кандидатов, которые раньше проходили, — увеличить."
+rationale = "48 из 61 отказа «ниже порога» — с отрицательной прибылью (живой замер 16.11): им не нужно уточнение и финальная котировка."
+
+[[section.rec]]
+name = "cpu.threads_max"
+area = "вся система"
+unit = "потоков"
+method = "80 (96 потоков минус ~16 под рабочие потоки tokio, приём WebSocket и узел); cpu.reserve_deal 8, cpu.reserve_calc 24. При заданной dex.quote_cpu_max не действует; без неё size.parallel_points не включается. Проверить загрузку процессора и отказы по сроку."
+rationale = "Фон и параллельные точки не вытесняют путь сделки."
+
+[[section.rec]]
+name = "size.parallel_points"
+area = "вся система"
+unit = "точек"
+method = "4, и profit.calc_concurrency снизить с 32 до 16 (16 × 4 = 64 одновременных котировки ≤ cpu.threads_max). size.bisect_probes — 3. Проверить «Время по шагам» и отказы по сроку."
+rationale = "Время кандидата по часам падает почти в число точек; работы процессора столько же — поэтому вместе с ранним выходом и повторным использованием допуска (в логике, решение 363)."
+
+[[section.rec]]
+name = "dex.graph_threads"
+area = "bsc_dex"
+unit = "потоков"
+method = "4 при dex.graph_background = да или включённом DEX ↔ DEX; иначе не задавать."
+rationale = "Полная сборка графа и поиск циклов — независимые пулы и циклы, итог тот же."
+
+[[section.rec]]
+name = "dex.quote_threads"
+area = "bsc_dex"
+unit = "потоков"
+method = "Не задавать, пока size.parallel_points > 1 (ядра уже заняты точками). 2–4 — только в режиме graph при dex.route_search_max_paths ≥ 40 и свободном процессоре."
+rationale = "Помощники создаются на каждый шаг сплита — накладные десятки микросекунд."
+
+[[section]]
+title = "Подбор объёма без потери прибыльных объёмов (решения 342–345, задача t159, по ревью t159)"
+intro = "Порог % как ограничение подбора (342) и участки допустимости по стакану B (343) — в логике, настраивать нечего. Ниже — параметры-числа; не заданы — этой части нет. Совета включать не даётся: польза на записях не доказана (см. метод у каждой)."
+
+[[section.rec]]
+name = "size.scan_above_pct"
+area = "вся система"
+unit = "% от наибольшего объёма"
+method = "Не задавать. Только для направлений со стороной DEX (исполнимость сплита, бюджет умного маршрута): тестом на записях польза не доказана — ждёт записи кандидата с допустимым объёмом выше бисекции. Цена — до size.grid_points расчётов на кандидата."
+rationale = "Немонотонная допустимость без формулы — бисекция видит один отрезок; концы участков по стакану B считаются всегда."
+
+[[section.rec]]
+name = "size.pool_breaks_max"
+area = "вся система"
+unit = "изломов на кандидата"
+method = "Не задавать. Тесты доказывают только «не вытесняет обычный подбор» и «точка излома не перескакивает свой бин»; что изломы находят больший объём, на записях не показано. Если включать — малое число и смотреть «посчитано объёмов» и время подбора."
+rationale = "Пик прибыли между точками сетки у DEX-стороны — на тиках, бинах, точках лесенки пулов маршрута."
+
+[[section.rec]]
+name = "size.soft_deadline_pct"
+area = "вся система"
+unit = "% срока"
+method = "Не задавать до замера времени финальной котировки (log.step_timing): доля срока без замера не советуется. Действует только при profit.calc_timeout_ms, после границ и когда проходящий оба порога объём уже найден."
+rationale = "Найденный проходящий объём не теряется отказом по общему сроку расчёта кандидата; без проходящего — подбор как без настройки."
+
+[[section]]
+title = "Баланс монеты в симуляции продажи подменой состояния (решение 407)"
+intro = "Симуляция продажи до покупки подставляет кошельку баланс монеты (eth_simulateV1 stateDiff) и проверяет продажу полного объёма, а не урезает объём по чужим балансам в сети (решение 380). Не задано — как раньше."
+
+[[section.rec]]
+name = "presell.balance_slot_scan"
+area = "по площадке DEX"
+unit = "слотов"
+value = "64"
+source = "Решение 407; запись своего узла tests/data/executor_v3_live_2026-11-17/slots.json"
+rationale = "Перебор слотов маппинга balances 0..N−1 (Solidity и Vyper). У 15 монет BSC записи слоты allowance — 1, 2, 4, 6 и 52 (слот баланса по факту — только у USDT, 1); 64 — с запасом. Один вызов на монету за запуск. Не нашёлся (рефлексия, ребейз, ERC-7201) — источники и урезание 380, как раньше."
+prefill = { kind = "Venue", id = "bsc_dex" }

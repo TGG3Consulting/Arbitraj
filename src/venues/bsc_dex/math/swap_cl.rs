@@ -3,7 +3,8 @@
 //! следующий инициализированный тик в пределах слова битмапа → шаг → пересечение тика (liquidityNet).
 //! Две версии шага: V3 (PancakeSwap/Uniswap V3) и V4 (Infinity CL, Uniswap V4). Точный вход и точный выход.
 //! Если цена уходит в слово битмапа, которое не прочитано, — остановка: результат частичный (complete = false).
-//! Кто вызывает: quote/direct.rs (через quote/pool_quote.rs).
+//! swap_final — то же с состоянием пула после обмена (решение 223: следующая доля через тот же пул).
+//! Кто вызывает: quote/direct.rs (через quote/pool_quote.rs), quote/pool_after.rs (swap_final).
 //! От чего зависит: math/swap_step.rs, math/tick_math.rs, pools/ticks.rs.
 //! Настройки: нет.
 //!
@@ -17,7 +18,9 @@ use alloy_primitives::{I256, U256};
 
 use super::super::pools::ticks::TickMap;
 use super::swap_step::{step_v3, step_v4};
-use super::tick_math::{MAX_TICK, MIN_TICK, max_sqrt_ratio, min_sqrt_ratio, sqrt_ratio_at_tick};
+use super::tick_math::{
+    MAX_TICK, MIN_TICK, max_sqrt_ratio, min_sqrt_ratio, sqrt_ratio_at_tick, tick_at_sqrt_ratio,
+};
 
 /// Версия математики шага.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,11 +79,60 @@ pub fn swap_to(
     amount: U256,
     limit: U256,
 ) -> Result<(Swapped, bool), &'static str> {
+    walk(s, zero_for_one, exact_in, amount, limit).map(|(r, at_limit, _)| (r, at_limit))
+}
+
+/// Состояние пула после обмена (решение 223): цена, тик, активная ликвидность — как slot0/liquidity контракта после swap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct After {
+    pub sqrt_price: U256,
+    pub tick: i32,
+    pub liquidity: u128,
+}
+
+/// Обмен без предела цены (как swap) с состоянием пула ПОСЛЕ него — для следующей доли через тот же пул (решение 223,
+/// quote/pool_after.rs). Тик — как в цикле контракта (PancakeV3Pool.sol#L752-L756 того же коммита, что в шапке; v4
+/// Pool.sol — та же ветка): дошли до тика — tickNext − 1 / tickNext (это делает walk); последний шаг остановился внутри
+/// диапазона и цена сдвинулась — getTickAtSqrtRatio(цена); slot0 и liquidity пишутся из state — #L760-L781. Принимает и ошибки: как swap; Err ещё — цена вне диапазона TickMath.
+pub fn swap_final(
+    s: &ClState,
+    zero_for_one: bool,
+    exact_in: bool,
+    amount: U256,
+) -> Result<(Swapped, After), &'static str> {
+    let limit = if zero_for_one {
+        min_sqrt_ratio() + U256::from(1u8)
+    } else {
+        max_sqrt_ratio() - U256::from(1u8)
+    };
+    let (r, _, mut after) = walk(s, zero_for_one, exact_in, amount, limit)?;
+    if after.tick == i32::MIN {
+        after.tick = tick_at_sqrt_ratio(after.sqrt_price)
+            .ok_or("цена после обмена вне диапазона TickMath")?;
+    }
+    Ok((r, after))
+}
+
+/// Цикл обмена (общий для swap_to и swap_final). Возвращает: итог, дошла ли цена до предела, состояние после; у
+/// состояния tick = i32::MIN — последний шаг остановился внутри диапазона со сдвигом цены и тик надо пересчитать по цене
+/// (getTickAtSqrtRatio — только в swap_final, горячий расчёт котировки его не платит). Ошибки: как swap.
+fn walk(
+    s: &ClState,
+    zero_for_one: bool,
+    exact_in: bool,
+    amount: U256,
+    limit: U256,
+) -> Result<(Swapped, bool, After), &'static str> {
     let (mut sqrt, mut tick, mut liq) = (s.sqrt_price, s.tick, s.liquidity);
     let (mut remaining, mut total_in, mut total_out) = (amount, U256::ZERO, U256::ZERO);
     const OVERFLOW: &str = "переполнение суммы";
     while !remaining.is_zero() && sqrt != limit {
         let Some((mut next, initialized)) = next_tick(s.ticks, tick, zero_for_one) else {
+            let after = After {
+                sqrt_price: sqrt,
+                tick,
+                liquidity: liq,
+            };
             return Ok((
                 Swapped {
                     amount_in: total_in,
@@ -88,6 +140,7 @@ pub fn swap_to(
                     complete: false,
                 },
                 false,
+                after,
             ));
         };
         next = next.clamp(MIN_TICK, MAX_TICK);
@@ -142,8 +195,16 @@ pub fn swap_to(
         } else if sqrt != start && !remaining.is_zero() && sqrt != limit {
             // Шаг не дошёл до тика, но сумма не исчерпана — так в контракте не бывает; не гадаем.
             return Err("шаг остановился до тика при остатке суммы");
+        } else if sqrt != start {
+            // Контракт: state.tick = getTickAtSqrtRatio(цена); цикл на этом кончается — пересчёт в swap_final.
+            tick = i32::MIN;
         }
     }
+    let after = After {
+        sqrt_price: sqrt,
+        tick,
+        liquidity: liq,
+    };
     Ok((
         Swapped {
             amount_in: total_in,
@@ -151,6 +212,7 @@ pub fn swap_to(
             complete: remaining.is_zero(),
         },
         sqrt == limit,
+        after,
     ))
 }
 

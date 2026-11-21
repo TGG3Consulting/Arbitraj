@@ -64,7 +64,7 @@ where
         )));
     }
     // Одни расчёты на поиск оптимума и бисекцию наибольшего объёма — точки не считаются дважды.
-    let mut m = Memo::new(curve, p.step, p.budget, p.max_evals);
+    let mut m = Memo::new(curve, p.step, p.budget, p.max_evals).with_share(p.par_points, p.reuse);
     let f = search_in(&mut m, p).await?;
     let upper = f.choice.max_qty;
     let hi = m
@@ -143,7 +143,12 @@ where
 
 /// Чем ограничен поиск сверху: точка на шаг выше наибольшего объёма. Принимает: расчёты, параметры, наибольший объём
 /// в шагах, найден ли он точно. Возвращает: (упёрлись в предел поиска, текст). Ошибок нет.
-async fn edge<C: Curve>(m: &mut Memo<'_, C>, p: &Params, hi: u64, exact: bool) -> (bool, String) {
+pub async fn edge<C: Curve>(
+    m: &mut Memo<'_, C>,
+    p: &Params,
+    hi: u64,
+    exact: bool,
+) -> (bool, String) {
     let next = m.qty(hi + 1);
     match m.beyond(hi + 1).await {
         Ok(pt) if pt.invested > p.budget => (

@@ -1,7 +1,11 @@
 //! Файл: venues/bsc_dex/errors.rs
 //! Что делает: перевод ответов узла BSC (JSON-RPC ошибка, HTTP-статус, сеть) в единые коды шлюза.
 //! Кто вызывает: node/rpc.rs, node/ws.rs, позже send/* (каналы отправки — свои уточнения поверх этого).
-//! От чего зависит: gateway/errors.rs, ctx.rs (ID).
+//! От чего зависит: gateway/errors.rs, ctx_place.rs (BSC_ID).
+//! Решение 435 (433-г): здесь нет окружения Ctx — площадка ошибки ставится первой площадкой DEX (bsc_dex). Площадкой
+//! своего окружения (Ctx::tag) ошибку перепомечает только node/rpc.rs; node/rpc_capped.rs, node/ws.rs (request,
+//! subscribe), node/multicall.rs, node/call.rs, node/receipts_handle.rs, node/rpc_race.rs — нет (у arb_dex такие ошибки
+//! с площадкой bsc_dex; техдолг — docs/ROADMAP.md). У bsc_dex — то же самое.
 //! Настройки: нет.
 //!
 //! Источники:
@@ -18,12 +22,23 @@
 //!   2026-10-25 с bsc-dataseed.bnbchain.org: все eth_call на одном блоке, ответ {"code":-32000,"message":"missing trie
 //!   node"} начиная примерно через минуту после блока) — своя причина StaleData «чтение на закреплённом блоке опоздало»,
 //!   а не общая ошибка узла.
+//! - «… state … is not available» (-32000) — то же у узла PBSS (свой geth-bsc v1.8.1, решение 121, часть A4): состояния
+//!   блока нет (у full-узла — только последние ~128 блоков). Исходники bnb-chain/bsc v1.8.1: чтение состояния
+//!   eth_call/eth_getBalance — eth/api_backend.go:243-248 (StateAt, при ошибке — HistoricState, её ошибка и уходит в
+//!   ответ); core/state/database_history.go:254-255 «historical state %x is not available»;
+//!   triedb/pathdb/reader.go:175, 190, 223 «state %#x is not available»; core/blockchain_reader.go:524
+//!   «state is not available» — https://github.com/bnb-chain/bsc/tree/v1.8.1 . Совпадение — по двум частям текста:
+//!   «state» и «is not available».
+//! - «exceed max topics» (-32602, «invalid argument 1: exceed max topics») — фильтр logs больше предела узла: больше 4
+//!   позиций topics или больше 1000 вариантов в одной позиции (geth-bsc v1.8.1 eth/filters/api.go:46, 64-66, 836-838,
+//!   860-861; обёртка «invalid argument N» — rpc/json.go:346, код -32602 — rpc/handler.go:608-610, rpc/errors.go:142-146).
+//!   У нас варианты в одной позиции — PoolId пачки (dex.pools_per_sub) — в причину дописывается, что делать (часть A5).
 //!
 //! Текст причины всегда берётся из ответа узла как есть — его видит Тигран.
 
 use crate::gateway::errors::{ErrorCode, GatewayError};
 
-use super::ctx::ID;
+use super::ctx_place::BSC_ID;
 use crate::gateway::http::{Fail, Limits};
 
 /// Какой запрос вернул ошибку: от этого зависит единый код у текстов, которые не распознаны.
@@ -54,6 +69,26 @@ pub fn from_rpc(code: i64, message: &str, source: &str, op: Op, raw: &str) -> Ga
             format!(
                 "{source}, код {code}: {message} — состояние блока у узла уже удалено (узел не архивный): чтение на \
                  закреплённом блоке опоздало, нужен более свежий блок"
+            ),
+        )
+        .with_raw(raw);
+    } else if m.contains("state") && m.contains("is not available") {
+        return GatewayError::new(
+            ErrorCode::StaleData,
+            Some(venue()),
+            format!(
+                "{source}, код {code}: {message} — состояния этого блока у узла нет (узел не архивный, хранит \
+                 только последние блоки): чтение на закреплённом блоке опоздало, нужен более свежий блок"
+            ),
+        )
+        .with_raw(raw);
+    } else if m.contains("exceed max topics") {
+        return GatewayError::new(
+            ErrorCode::BadResponse,
+            Some(venue()),
+            format!(
+                "{source}, код {code}: {message} — узел не принимает в одной подписке больше 1000 PoolId \
+                 (предел geth-bsc): уменьшите dex.pools_per_sub до 1000 или меньше"
             ),
         )
         .with_raw(raw);
@@ -117,13 +152,13 @@ pub fn bad(what: &str, source: &str, raw: &str) -> GatewayError {
     .with_raw(raw)
 }
 
-/// Ошибка с площадкой bsc_dex там, где нет окружения Ctx.
+/// Ошибка с площадкой bsc_dex там, где нет окружения Ctx (запросы к узлу перепомечают её площадкой окружения).
 /// Принимает: код, текст. Возвращает: GatewayError.
 pub fn err(code: ErrorCode, message: impl Into<String>) -> GatewayError {
     GatewayError::new(code, Some(venue()), message)
 }
 
-/// Идентификатор площадки для ошибок.
+/// Идентификатор площадки для ошибок без окружения (первая площадка DEX; запросы к узлу перепомечают — Ctx::tag).
 fn venue() -> crate::core::types::VenueId {
-    crate::core::types::VenueId(ID.to_string())
+    crate::core::types::VenueId(BSC_ID.to_string())
 }

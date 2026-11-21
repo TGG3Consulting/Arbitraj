@@ -2,6 +2,8 @@
 //! Что делает: очередь транзакций кошелька DEX для интерфейса (решение 45) — состояние (свободна / ждёт итога /
 //! остановлена до ручной проверки с причиной) и кнопка «Снять очередь после ручной проверки». Данные — только из
 //! реестра шлюза (контракт адаптера wallet_queue, release_wallet_queue); к адаптерам напрямую api не ходит.
+//! Решение 408 (t193): снятие — команда ядра ManualAction::ReleaseWalletQueue (Core::command, журнал «кто нажал»), тот
+//! же путь, что у кнопки Telegram; коды ошибок — шлюза (409 NonceConflict, 404, 400, 502; ревью t193 Н3).
 //! Кто вызывает: интерфейс (экран «Каналы отправки», components/WalletQueue.svelte).
 //! От чего зависит: api/state.rs, gateway/registry.rs, gateway/contract.rs, core/types (WalletQueue).
 //! Настройки: нет.
@@ -12,10 +14,12 @@
 //!   nonce ещё не занят и pending_ok = false — 400 (NonceConflict), интерфейс просит второе подтверждение
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use serde::Deserialize;
 
-use crate::core::types::{VenueId, WalletQueue};
+use crate::core::types::{CommandSource, ManualAction, ManualCommand, WalletQueue};
+
+use super::dex_executor::WalletQuery;
 
 use super::state::{ApiError, AppState};
 
@@ -23,10 +27,10 @@ use super::state::{ApiError, AppState};
 pub async fn get(
     State(st): State<AppState>,
     Path(venue): Path<String>,
+    Query(w): Query<WalletQuery>,
 ) -> Result<Json<WalletQueue>, ApiError> {
-    let v = st
-        .registry
-        .get(&VenueId(venue))
+    // Решение 132: очередь — своя у кошелька (?wallet=id).
+    let v = super::wallets_dex::venue_as(&st, &venue, w.wallet.as_deref())
         .await
         .map_err(ApiError::gateway)?;
     v.wallet_queue().await.map(Json).map_err(ApiError::gateway)
@@ -46,15 +50,44 @@ pub struct Release {
 pub async fn release(
     State(st): State<AppState>,
     Path(venue): Path<String>,
+    Query(w): Query<WalletQuery>,
     Json(body): Json<Release>,
 ) -> Result<Json<WalletQueue>, ApiError> {
-    let v = st
-        .registry
-        .get(&VenueId(venue))
-        .await
-        .map_err(ApiError::gateway)?;
-    v.release_wallet_queue("интерфейс", body.pending_ok)
-        .await
-        .map(Json)
-        .map_err(ApiError::gateway)
+    // Решение 408 (t193): та же команда ядра, что у кнопки Telegram (ReleaseWalletQueue, core/commands_ext.rs), с
+    // журналом core.command (источник — интерфейс). Ревью t193 (Н3): ошибка — шлюза с кодом (409 NonceConflict — окно
+    // просит второе подтверждение; 404 — площадки нет; 400 — не остановлена; 502 — узел), ответ — очередь после снятия
+    // из ответа адаптера (повторного чтения нет).
+    let cmd = ManualCommand {
+        action: ManualAction::ReleaseWalletQueue {
+            venue: venue.clone(),
+            wallet: w.wallet.clone(),
+            pending_ok: body.pending_ok,
+            nonce: None,
+            hash: None,
+        },
+        source: CommandSource::Ui,
+        by: None,
+        at: chrono::Utc::now(),
+    };
+    let who = crate::core::commands::who(&cmd);
+    let res = crate::core::commands_ext::release_queue(
+        &st.core,
+        &venue,
+        w.wallet.as_deref(),
+        body.pending_ok,
+        None,
+        &who,
+    )
+    .await;
+    let text = res
+        .as_ref()
+        .map(|_| {
+            format!(
+                "очередь кошелька {} снята (вручную, {who})",
+                w.wallet.as_deref().unwrap_or(&venue)
+            )
+        })
+        .map_err(|e| e.message.clone());
+    st.core.record_command(&cmd, &text, None).await;
+    res.map(Json).map_err(ApiError::gateway)
 }

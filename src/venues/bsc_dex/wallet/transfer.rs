@@ -4,8 +4,10 @@
 //! квитанции — wallet/transfer_status.rs.
 //! Нативная монета BNB (решение 62, exec/native.rs): перевод — нативный (value на адрес депозита, без данных), только
 //! сверх резерва на газ risk.min_bnb_balance.
+//! «Вытеснена» (nonce занят, своей квитанции нет) — OutcomeUnknown с «чем найти» и хешами отправленных отмен
+//! (exec/swap_ctx.rs with_cancels): исход выясняет ядро своим узлом (resolve_withdraw.rs; ветка t49/withdraw-cancel).
 //! Кто вызывает: mod.rs (контракт withdraw), wallet/transfer_status.rs, wallet/transfer_cost.rs (стоимость перевода).
-//! От чего зависит: exec/txs.rs, exec/native.rs, exec/fill.rs, send/track.rs, tokens.rs, num.rs, wallet/nonce.rs.
+//! От чего зависит: exec/txs.rs, exec/native.rs, exec/swap_ctx.rs, exec/fill.rs, send/track.rs, tokens.rs, num.rs, wallet/nonce.rs.
 //! Настройки: venue.bsc_network [bsc_dex] (какую сеть принимаем в запросе); через вызываемые — send.*, channel.*.
 //!
 //! transfer(to, value), событие Transfer — https://eips.ethereum.org/EIPS/eip-20 ; квитанция —
@@ -23,11 +25,11 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::exec::native;
+use super::super::exec::swap_ctx;
 use super::super::exec::txs::{self, Env};
 use super::super::node::abi::IERC20;
 use super::super::num;
 use super::super::tokens::Tokens;
-use super::balances::BNB;
 use super::nonce::Nonces;
 /// Стоимость перевода — в wallet/transfer_cost.rs (контракт withdraw_cost зовёт её отсюда, mod.rs).
 pub use super::transfer_cost::cost;
@@ -82,27 +84,38 @@ pub async fn withdraw(
                 .with_tx(d.chain));
         }
         TxOutcome::Replaced => {
-            // Nonce занят, своей квитанции нет: перевод мог уйти — повтор вывода опасен, только ручная проверка.
+            // Nonce занят, своей квитанции нет: перевод мог уйти — повтор вывода опасен. «Чем найти» с хешами отмен
+            // (ветка t49/withdraw-cancel): позднее выяснение (resolve_withdraw.rs) — чья квитанция заняла nonce.
+            let seed = swap_ctx::with_cancels(swap_ctx::seed(&d.chain, d.tip_bnb), &d.cancels);
             return Err(ctx
                 .err(
                     ErrorCode::OutcomeUnknown,
                     format!("Исход перевода tx {} неизвестен (nonce занят, квитанции нет) — нужна ручная проверка", d.chain.hash),
                 )
-                .with_tx(d.chain));
+                .with_tx(d.chain)
+                .pending(seed));
         }
         _ => {
+            // Решение 236, дополнение п. 4: одиночная транзакция «не попала» — только когда nonce занят нашей отменой в
+            // блоке (send/track_util.rs landed): вывода нет, исход известен — тот же код и факт, что у позднего
+            // выяснения (exec/single_rebuild.rs withdraw_cancelled).
+            let by = d.cancel.as_ref().map_or(String::new(), |(h, _)| {
+                format!(" — nonce занят отменой {h}: вывода нет")
+            });
             return Err(ctx
                 .err(
                     ErrorCode::TxNotIncluded,
-                    format!("Перевод не попал в блок, tx {}", d.chain.hash),
+                    format!("Перевод не попал в блок, tx {}{by}", d.chain.hash),
                 )
                 .with_tx(d.chain));
         }
     }
+    // Решение 416: тикер газа — прочитанный перед отправкой (gas_ticker.rs sent, решение 398).
+    let gas_t = super::super::gas_ticker::sent(ctx)?;
     let fee = d
         .chain
         .gas_bnb
-        .map(|g| Cost::new(CostKind::TransferGas, g, BNB, false));
+        .map(|g| Cost::new(CostKind::TransferGas, g, &gas_t, false));
     Ok(transfer(
         ctx,
         req.asset,
@@ -116,7 +129,7 @@ pub async fn withdraw(
 
 /// Адрес токена монеты. Ошибки: NotConfigured — у монеты нет адреса в BSC.
 pub fn token(ctx: &Ctx, a: &Asset) -> GatewayResult<Address> {
-    a.bsc_contract.ok_or_else(|| {
+    a.contract.ok_or_else(|| {
         ctx.err(
             ErrorCode::NotConfigured,
             format!("{}: нет адреса контракта в BSC", a.ticker),

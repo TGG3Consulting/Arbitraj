@@ -1,0 +1,458 @@
+{
+ "factory": "0xCFD8A067e1fa03474e79Be646c5f6b6A27847399",
+ "fee2pointDelta": {
+  "100": {
+   "ok": "0x0000000000000000000000000000000000000000000000000000000000000001"
+  },
+  "400": {
+   "ok": "0x0000000000000000000000000000000000000000000000000000000000000008"
+  },
+  "2000": {
+   "ok": "0x0000000000000000000000000000000000000000000000000000000000000028"
+  },
+  "10000": {
+   "ok": "0x00000000000000000000000000000000000000000000000000000000000000c8"
+  }
+ },
+ "tokens": [
+  "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+  "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+  "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+  "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f",
+  "0x912ce59144191c1204e64559fe8253a0e49e6548",
+  "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8",
+  "0x0000000000000000000000000000000000000000",
+  "0x0c1c1c109fe34733fca54b82d7b46b75cfb71f6e"
+ ],
+ "asked": 92,
+ "geckoterminal": [
+  {
+   "page": 1,
+   "status": 200,
+   "body": "{\"data\":[{\"id\":\"arbitrum_0xc6962004f452be9203591991d15f6b388e09e8d0\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"1.00497511320422\",\"base_token_price_native_currency\":\"0.000619413958440345\",\"quote_token_price_usd\":\"1624.02\",\"quote_token_price_native_currency\":\"1.0\",\"base_token_price_quote_token\":\"0.0006194139584\",\"quote_token_price_base_token\":\"1614.429230039\",\"address\":\"0xc6962004f452be9203591991d15f6b388e09e8d0\",\"name\":\"USDC / WETH 0.05%\",\"pool_created_at\":\"2023-06-08T21:28:24Z\",\"fdv_usd\":\"2778439226.14076\",\"market_cap_usd\":\"68482130090.2904\",\"price_change_percentage\":{\"m5\":\"0.388\",\"m15\":\"0.196\",\"m30\":\"0.274\",\"h1\":\"0.393\",\"h6\":\"0.222\",\"h24\":\"0.479\"},\"transactions\":{\"m5\":{\"buys\":176,\"sells\":114,\"buyers\":109,\"sellers\":75,\"unique_traders\":139},\"m15\":{\"buys\":580,\"sells\":805,\"buyers\":179,\"sellers\":221,\"unique_traders\":284},\"m30\":{\"buys\":812,\"sells\":984,\"buyers\":189,\"sellers\":246,\"unique_traders\":312},\"h1\":{\"buys\":1289,\"sells\":1483,\"buyers\":238,\"sellers\":315,\"unique_traders\":404},\"h6\":{\"buys\":10438,\"sells\":12130,\"buyers\":613,\"sellers\":890,\"unique_traders\":1218},\"h24\":{\"buys\":21647,\"sells\":24203,\"buyers\":1100,\"sellers\":1225,\"unique_traders\":1882}},\"volume_usd\":{\"m5\":\"275785.013708233\",\"m15\":\"1233718.92518785\",\"m30\":\"1562899.92108157\",\"h1\":\"2612379.99009968\",\"h6\":\"20858892.6566193\",\"h24\":\"61466475.7247842\"},\"reserve_in_usd\":\"23814394.2658\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"uniswap_v3_arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0x641c00a822e8b671738d32a431a4fb6074e5c79d\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"1624.02\",\"base_token_price_native_currency\":\"1.0\",\"quote_token_price_usd\":\"1.00478084244645\",\"quote_token_price_native_currency\":\"0.000618487617977929\",\"base_token_price_quote_token\":\"1616.847243069\",\"quote_token_price_base_token\":\"0.000618487618\",\"address\":\"0x641c00a822e8b671738d32a431a4fb6074e5c79d\",\"name\":\"WETH / USDT 0.05%\",\"pool_created_at\":\"2022-02-07T15:10:40Z\",\"fdv_usd\":\"205759080.266495\",\"market_cap_usd\":\"206356847.474763\",\"price_change_percentage\":{\"m5\":\"0.142\",\"m15\":\"-0.217\",\"m30\":\"-0.526\",\"h1\":\"-0.262\",\"h6\":\"-6.661\",\"h24\":\"-8.544\"},\"transactions\":{\"m5\":{\"buys\":92,\"sells\":83,\"buyers\":46,\"sellers\":40,\"unique_traders\":69},\"m15\":{\"buys\":402,\"sells\":317,\"buyers\":126,\"sellers\":107,\"unique_traders\":173},\"m30\":{\"buys\":508,\"sells\":428,\"buyers\":151,\"sellers\":123,\"unique_traders\":207},\"h1\":{\"buys\":733,\"sells\":656,\"buyers\":211,\"sellers\":154,\"unique_traders\":275},\"h6\":{\"buys\":5964,\"sells\":5446,\"buyers\":578,\"sellers\":389,\"unique_traders\":736},\"h24\":{\"buys\":11565,\"sells\":10650,\"buyers\":831,\"sellers\":687,\"unique_traders\":1172}},\"volume_usd\":{\"m5\":\"30785.8954575137\",\"m15\":\"157408.332801602\",\"m30\":\"194884.808682008\",\"h1\":\"302782.562793854\",\"h6\":\"2517262.38080138\",\"h24\":\"7746116.8337341\"},\"reserve_in_usd\":\"3928364.0663\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"uniswap_v3_arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0x0e4831319a50228b9e450861297ab92dee15b44f\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"1.00594065678629\",\"base_token_price_native_currency\":\"0.000619413958440345\",\"quote_token_price_usd\":\"58761.9123124251\",\"quote_token_price_native_currency\":\"36.1829979387108\",\"base_token_price_quote_token\":\"0.00001711892308\",\"quote_token_price_base_token\":\"58414.8895026807\",\"address\":\"0x0e4831319a50228b9e450861297ab92dee15b44f\",\"name\":\"USDC / WBTC 0.05%\",\"pool_created_at\":\"2023-06-28T12:07:23Z\",\"fdv_usd\":\"2778271497.78863\",\"market_cap_usd\":\"68477995972.5734\",\"price_change_percentage\":{\"m5\":\"0.463\",\"m15\":\"0.274\",\"m30\":\"0.28\",\"h1\":\"0.347\",\"h6\":\"0.222\",\"h24\":\"0.334\"},\"transactions\":{\"m5\":{\"buys\":45,\"sells\":33,\"buyers\":32,\"sellers\":32,\"unique_traders\":61},\"m15\":{\"buys\":158,\"sells\":239,\"buyers\":102,\"sellers\":151,\"unique_traders\":198},\"m30\":{\"buys\":284,\"sells\":319,\"buyers\":142,\"sellers\":183,\"unique_traders\":247},\"h1\":{\"buys\":476,\"sells\":509,\"buyers\":196,\"sellers\":259,\"unique_traders\":329},\"h6\":{\"buys\":3540,\"sells\":3862,\"buyers\":423,\"sellers\":605,\"unique_traders\":792},\"h24\":{\"buys\":8835,\"sells\":9173,\"buyers\":670,\"sellers\":848,\"unique_traders\":1210}},\"volume_usd\":{\"m5\":\"47701.9114504687\",\"m15\":\"333479.099969128\",\"m30\":\"513669.697393758\",\"h1\":\"890455.781274916\",\"h6\":\"5482349.70626328\",\"h24\":\"22030312.2018633\"},\"reserve_in_usd\":\"4736980.1055\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"uniswap_v3_arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0x4bfc22a4da7f31f8a912a79a7e44a822398b4390\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"58755.7933835267\",\"base_token_price_native_currency\":\"36.1789341711587\",\"quote_token_price_usd\":\"1624.02\",\"quote_token_price_native_currency\":\"1.0\",\"base_token_price_quote_token\":\"36.1789341712\",\"quote_token_price_base_token\":\"0.02764039414\",\"address\":\"0x4bfc22a4da7f31f8a912a79a7e44a822398b4390\",\"name\":\"WBTC / WETH 0.01%\",\"pool_created_at\":\"2024-04-24T07:30:34Z\",\"fdv_usd\":\"447616377.766492\",\"market_cap_usd\":\"447604173.812981\",\"price_change_percentage\":{\"m5\":\"0.268\",\"m15\":\"-0.182\",\"m30\":\"-0.649\",\"h1\":\"-0.655\",\"h6\":\"-4.773\",\"h24\":\"-6.663\"},\"transactions\":{\"m5\":{\"buys\":41,\"sells\":43,\"buyers\":31,\"sellers\":31,\"unique_traders\":58},\"m15\":{\"buys\":181,\"sells\":190,\"buyers\":104,\"sellers\":98,\"unique_traders\":161},\"m30\":{\"buys\":243,\"sells\":254,\"buyers\":122,\"sellers\":117,\"unique_traders\":184},\"h1\":{\"buys\":404,\"sells\":388,\"buyers\":172,\"sellers\":154,\"unique_traders\":253},\"h6\":{\"buys\":2938,\"sells\":2713,\"buyers\":551,\"sellers\":471,\"unique_traders\":740},\"h24\":{\"buys\":6063,\"sells\":5880,\"buyers\":764,\"sellers\":699,\"unique_traders\":1105}},\"volume_usd\":{\"m5\":\"19553.1503499371\",\"m15\":\"96252.077377777\",\"m30\":\"126242.921152905\",\"h1\":\"198299.349717505\",\"h6\":\"1571363.05837666\",\"h24\":\"4563407.74799218\"},\"reserve_in_usd\":\"671667.3787\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"pancakeswap-v3-arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0x2f5e87c9312fa29aed5c179e456625d79015299c\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"58761.9123124252\",\"base_token_price_native_currency\":\"36.1823748456063\",\"quote_token_price_usd\":\"1624.02\",\"quote_token_price_native_currency\":\"1.0\",\"base_token_price_quote_token\":\"36.1823748456\",\"quote_token_price_base_token\":\"0.02763776574\",\"address\":\"0x2f5e87c9312fa29aed5c179e456625d79015299c\",\"name\":\"WBTC / WETH 0.05%\",\"pool_created_at\":\"2022-02-07T15:13:14Z\",\"fdv_usd\":\"447601409.676818\",\"market_cap_usd\":\"447589206.131403\",\"price_change_percentage\":{\"m5\":\"0.254\",\"m15\":\"-0.024\",\"m30\":\"-0.632\",\"h1\":\"-0.718\",\"h6\":\"-4.606\",\"h24\":\"-6.69\"},\"transactions\":{\"m5\":{\"buys\":80,\"sells\":65,\"buyers\":71,\"sellers\":35,\"unique_traders\":95},\"m15\":{\"buys\":187,\"sells\":232,\"buyers\":120,\"sellers\":126,\"unique_traders\":195},\"m30\":{\"buys\":282,\"sells\":323,\"buyers\":151,\"sellers\":160,\"unique_traders\":235},\"h1\":{\"buys\":549,\"sells\":521,\"buyers\":216,\"sellers\":218,\"unique_traders\":319},\"h6\":{\"buys\":3440,\"sells\":2681,\"buyers\":533,\"sellers\":416,\"unique_traders\":700},\"h24\":{\"buys\":6131,\"sells\":5519,\"buyers\":744,\"sellers\":573,\"unique_traders\":996}},\"volume_usd\":{\"m5\":\"193776.795199811\",\"m15\":\"891195.480833537\",\"m30\":\"1108661.69199932\",\"h1\":\"1999529.62920779\",\"h6\":\"17897155.4035282\",\"h24\":\"46323223.496962\"},\"reserve_in_usd\":\"20899088.6692\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"uniswap_v3_arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0xc6f780497a95e246eb9449f5e4770916dcd6396a\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"0.113381088813167\",\"base_token_price_native_currency\":\"0.0000697853547028226\",\"quote_token_price_usd\":\"1624.02\",\"quote_token_price_native_currency\":\"1.0\",\"base_token_price_quote_token\":\"0.0000697853547\",\"quote_token_price_base_token\":\"14329.6541840111\",\"address\":\"0xc6f780497a95e246eb9449f5e4770916dcd6396a\",\"name\":\"ARB / WETH 0.05%\",\"pool_created_at\":\"2023-03-17T01:49:14Z\",\"fdv_usd\":\"1133531141.55833\",\"market_cap_usd\":\"793207933.557364\",\"price_change_percentage\":{\"m5\":\"0.235\",\"m15\":\"0.45\",\"m30\":\"-0.034\",\"h1\":\"0.004\",\"h6\":\"-3.563\",\"h24\":\"-9.106\"},\"transactions\":{\"m5\":{\"buys\":29,\"sells\":17,\"buyers\":23,\"sellers\":14,\"unique_traders\":35},\"m15\":{\"buys\":110,\"sells\":80,\"buyers\":49,\"sellers\":44,\"unique_traders\":82},\"m30\":{\"buys\":181,\"sells\":137,\"buyers\":73,\"sellers\":69,\"unique_traders\":108},\"h1\":{\"buys\":370,\"sells\":296,\"buyers\":109,\"sellers\":94,\"unique_traders\":131},\"h6\":{\"buys\":2514,\"sells\":2336,\"buyers\":201,\"sellers\":258,\"unique_traders\":319},\"h24\":{\"buys\":5666,\"sells\":5816,\"buyers\":392,\"sellers\":478,\"unique_traders\":658}},\"volume_usd\":{\"m5\":\"11473.1866611138\",\"m15\":\"59481.5290658422\",\"m30\":\"92885.0077817782\",\"h1\":\"231446.405888806\",\"h6\":\"1734528.72206142\",\"h24\":\"4931710.34959828\"},\"reserve_in_usd\":\"1118779.6321\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0x912ce59144191c1204e64559fe8253a0e49e6548\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"uniswap_v3_arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0x5969efdde3cf5c0d9a88ae51e47d721096a97203\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"58760.9003967615\",\"base_token_price_native_currency\":\"36.1823748456063\",\"quote_token_price_usd\":\"1.00478084244645\",\"quote_token_price_native_currency\":\"0.000618699795843925\",\"base_token_price_quote_token\":\"58481.3104653646\",\"quote_token_price_base_token\":\"0.00001709948002\",\"address\":\"0x5969efdde3cf5c0d9a88ae51e47d721096a97203\",\"name\":\"WBTC / USDT 0.05%\",\"pool_created_at\":\"2022-09-17T07:00:12Z\",\"fdv_usd\":\"447598167.720881\",\"market_cap_usd\":\"447585964.263855\",\"price_change_percentage\":{\"m5\":\"0.577\",\"m15\":\"-0.29\",\"m30\":\"-0.533\",\"h1\":\"-0.618\",\"h6\":\"-4.717\",\"h24\":\"-6.684\"},\"transactions\":{\"m5\":{\"buys\":25,\"sells\":31,\"buyers\":22,\"sellers\":27,\"unique_traders\":43},\"m15\":{\"buys\":160,\"sells\":120,\"buyers\":111,\"sellers\":89,\"unique_traders\":166},\"m30\":{\"buys\":184,\"sells\":182,\"buyers\":125,\"sellers\":123,\"unique_traders\":202},\"h1\":{\"buys\":270,\"sells\":278,\"buyers\":166,\"sellers\":149,\"unique_traders\":243},\"h6\":{\"buys\":1955,\"sells\":1968,\"buyers\":464,\"sellers\":340,\"unique_traders\":607},\"h24\":{\"buys\":5259,\"sells\":5473,\"buyers\":654,\"sellers\":514,\"unique_traders\":907}},\"volume_usd\":{\"m5\":\"22390.3856929539\",\"m15\":\"114782.332594555\",\"m30\":\"156810.45974353\",\"h1\":\"239817.341835545\",\"h6\":\"1824773.23484728\",\"h24\":\"9661945.35895178\"},\"reserve_in_usd\":\"2701937.0785\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"uniswap_v3_arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0xbdf6749254c8760b42f38b9985baaf1cecf17617\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"0.113318823279108\",\"base_token_price_native_currency\":\"0.0000698045530046148\",\"quote_token_price_usd\":\"1624.02\",\"quote_token_price_native_currency\":\"1.0\",\"base_token_price_quote_token\":\"0.000069804553\",\"quote_token_price_base_token\":\"14325.7131083396\",\"address\":\"0xbdf6749254c8760b42f38b9985baaf1cecf17617\",\"name\":\"ARB / WETH 0.066%\",\"pool_created_at\":\"2026-10-22T03:12:13Z\",\"fdv_usd\":\"1132859563.73041\",\"market_cap_usd\":\"792737985.40898\",\"price_change_percentage\":{\"m5\":\"0.196\",\"m15\":\"0.445\",\"m30\":\"0.004\",\"h1\":\"-0.124\",\"h6\":\"-3.627\",\"h24\":\"-9.193\"},\"transactions\":{\"m5\":{\"buys\":15,\"sells\":16,\"buyers\":10,\"sellers\":6,\"unique_traders\":14},\"m15\":{\"buys\":60,\"sells\":47,\"buyers\":27,\"sellers\":18,\"unique_traders\":41},\"m30\":{\"buys\":97,\"sells\":88,\"buyers\":34,\"sellers\":34,\"unique_traders\":56},\"h1\":{\"buys\":195,\"sells\":186,\"buyers\":53,\"sellers\":54,\"unique_traders\":77},\"h6\":{\"buys\":1535,\"sells\":1505,\"buyers\":128,\"sellers\":140,\"unique_traders\":183},\"h24\":{\"buys\":4751,\"sells\":5029,\"buyers\":237,\"sellers\":302,\"unique_traders\":404}},\"volume_usd\":{\"m5\":\"6069.4401509341\",\"m15\":\"22846.0034798641\",\"m30\":\"36930.5720363731\",\"h1\":\"77358.1346294767\",\"h6\":\"604555.797252546\",\"h24\":\"2463020.62485621\"},\"reserve_in_usd\":\"80027.9165\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0x912ce59144191c1204e64559fe8253a0e49e6548\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"aero-slipstream-arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0xc31e54c7a869b9fcbecc14363cf510d1c41fa443\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"1624.02\",\"base_token_price_native_currency\":\"1.0\",\"quote_token_price_usd\":\"1.00576575215396\",\"quote_token_price_native_currency\":\"0.000618999853070038\",\"base_token_price_quote_token\":\"1615.509268767\",\"quote_token_price_base_token\":\"0.0006189998531\",\"address\":\"0xc31e54c7a869b9fcbecc14363cf510d1c41fa443\",\"name\":\"WETH / USDC 0.05%\",\"pool_created_at\":\"2022-02-07T15:10:59Z\",\"fdv_usd\":\"205759080.266495\",\"market_cap_usd\":\"206356847.474763\",\"price_change_percentage\":{\"m5\":\"0.142\",\"m15\":\"-0.217\",\"m30\":\"-0.526\",\"h1\":\"-0.262\",\"h6\":\"-6.661\",\"h24\":\"-8.559\"},\"transactions\":{\"m5\":{\"buys\":21,\"sells\":35,\"buyers\":6,\"sellers\":12,\"unique_traders\":15},\"m15\":{\"buys\":151,\"sells\":94,\"buyers\":50,\"sellers\":37,\"unique_traders\":77},\"m30\":{\"buys\":201,\"sells\":138,\"buyers\":61,\"sellers\":46,\"unique_traders\":93},\"h1\":{\"buys\":291,\"sells\":238,\"buyers\":80,\"sellers\":67,\"unique_traders\":125},\"h6\":{\"buys\":2460,\"sells\":1951,\"buyers\":330,\"sellers\":252,\"unique_traders\":428},\"h24\":{\"buys\":4785,\"sells\":4055,\"buyers\":499,\"sellers\":405,\"unique_traders\":662}},\"volume_usd\":{\"m5\":\"4888.622395712\",\"m15\":\"18846.3680360445\",\"m30\":\"26171.8561948764\",\"h1\":\"44693.6641453082\",\"h6\":\"472300.784404351\",\"h24\":\"1298664.06475935\"},\"reserve_in_usd\":\"684052.8816\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0xff970a61a04b1ca14834a43f5de4533ebddb5cc8\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"uniswap_v3_arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0x864abca0a6202dba5b8868772308da953ff125b0f95015adbf89aaf579e903a8\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"1624.02\",\"base_token_price_native_currency\":\"1.0\",\"quote_token_price_usd\":\"1.00576641599435\",\"quote_token_price_native_currency\":\"0.000618188600986859\",\"base_token_price_quote_token\":\"1617.629309896\",\"quote_token_price_base_token\":\"0.000618188601\",\"address\":\"0x864abca0a6202dba5b8868772308da953ff125b0f95015adbf89aaf579e903a8\",\"name\":\"ETH / USDC 0.05%\",\"pool_created_at\":\"2025-01-30T00:55:56Z\",\"fdv_usd\":\"0.0\",\"market_cap_usd\":null,\"price_change_percentage\":{\"m5\":\"0.142\",\"m15\":\"-0.217\",\"m30\":\"-0.526\",\"h1\":\"-0.262\",\"h6\":\"-6.661\",\"h24\":\"-8.544\"},\"transactions\":{\"m5\":{\"buys\":26,\"sells\":36,\"buyers\":16,\"sellers\":11,\"unique_traders\":22},\"m15\":{\"buys\":141,\"sells\":123,\"buyers\":43,\"sellers\":39,\"unique_traders\":71},\"m30\":{\"buys\":189,\"sells\":180,\"buyers\":53,\"sellers\":52,\"unique_traders\":93},\"h1\":{\"buys\":291,\"sells\":278,\"buyers\":83,\"sellers\":75,\"unique_traders\":137},\"h6\":{\"buys\":2061,\"sells\":2067,\"buyers\":303,\"sellers\":238,\"unique_traders\":418},\"h24\":{\"buys\":4341,\"sells\":4437,\"buyers\":502,\"sellers\":497,\"unique_traders\":813}},\"volume_usd\":{\"m5\":\"6529.8153162827\",\"m15\":\"27839.1180805127\",\"m30\":\"37961.9281324919\",\"h1\":\"63460.3312853743\",\"h6\":\"430257.273899888\",\"h24\":\"1616308.16955083\"},\"reserve_in_usd\":\"3087908.7348\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0x0000000000000000000000000000000000000000\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"uniswap-v4-arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0xd9e2a1a61b6e61b275cec326465d417e52c1b95c\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"1.00575908638844\",\"base_token_price_native_currency\":\"0.000618670001112248\",\"quote_token_price_usd\":\"1624.02\",\"quote_token_price_native_currency\":\"1.0\",\"base_token_price_quote_token\":\"0.0006186700011\",\"quote_token_price_base_token\":\"1616.370598546\",\"address\":\"0xd9e2a1a61b6e61b275cec326465d417e52c1b95c\",\"name\":\"USDC / WETH 0.05%\",\"pool_created_at\":\"2023-08-09T07:58:56Z\",\"fdv_usd\":\"2777969871.71423\",\"market_cap_usd\":\"68470561584.2769\",\"price_change_percentage\":{\"m5\":\"0.342\",\"m15\":\"0.198\",\"m30\":\"0.295\",\"h1\":\"0.318\",\"h6\":\"0.211\",\"h24\":\"0.297\"},\"transactions\":{\"m5\":{\"buys\":36,\"sells\":24,\"buyers\":2,\"sellers\":8,\"unique_traders\":8},\"m15\":{\"buys\":118,\"sells\":139,\"buyers\":30,\"sellers\":29,\"unique_traders\":54},\"m30\":{\"buys\":176,\"sells\":182,\"buyers\":42,\"sellers\":35,\"unique_traders\":70},\"h1\":{\"buys\":290,\"sells\":283,\"buyers\":62,\"sellers\":56,\"unique_traders\":106},\"h6\":{\"buys\":2114,\"sells\":2073,\"buyers\":256,\"sellers\":264,\"unique_traders\":381},\"h24\":{\"buys\":4319,\"sells\":4177,\"buyers\":458,\"sellers\":407,\"unique_traders\":646}},\"volume_usd\":{\"m5\":\"6690.5371266299\",\"m15\":\"30713.6330275474\",\"m30\":\"41320.4463761353\",\"h1\":\"69811.4014921429\",\"h6\":\"528059.084305658\",\"h24\":\"1620631.09857346\"},\"reserve_in_usd\":\"524266.5565\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"pancakeswap-v3-arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0x7fcdc35463e3770c2fb992716cd070b63540b947\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"1.00529062109103\",\"base_token_price_native_currency\":\"0.000618670001112248\",\"quote_token_price_usd\":\"1624.02\",\"quote_token_price_native_currency\":\"1.0\",\"base_token_price_quote_token\":\"0.0006186700011\",\"quote_token_price_base_token\":\"1616.370598546\",\"address\":\"0x7fcdc35463e3770c2fb992716cd070b63540b947\",\"name\":\"USDC / WETH 0.01%\",\"pool_created_at\":\"2023-08-11T20:55:44Z\",\"fdv_usd\":\"2777156224.23936\",\"market_cap_usd\":\"68450507047.2917\",\"price_change_percentage\":{\"m5\":\"0.387\",\"m15\":\"0.187\",\"m30\":\"0.222\",\"h1\":\"0.302\",\"h6\":\"0.185\",\"h24\":\"0.286\"},\"transactions\":{\"m5\":{\"buys\":23,\"sells\":14,\"buyers\":6,\"sellers\":5,\"unique_traders\":10},\"m15\":{\"buys\":74,\"sells\":73,\"buyers\":25,\"sellers\":17,\"unique_traders\":36},\"m30\":{\"buys\":101,\"sells\":98,\"buyers\":31,\"sellers\":21,\"unique_traders\":45},\"h1\":{\"buys\":164,\"sells\":158,\"buyers\":46,\"sellers\":38,\"unique_traders\":73},\"h6\":{\"buys\":1646,\"sells\":1593,\"buyers\":209,\"sellers\":218,\"unique_traders\":348},\"h24\":{\"buys\":4009,\"sells\":3946,\"buyers\":458,\"sellers\":435,\"unique_traders\":727}},\"volume_usd\":{\"m5\":\"876.132158882\",\"m15\":\"3662.1289892872\",\"m30\":\"4946.5551223085\",\"h1\":\"7962.9495272311\",\"h6\":\"98390.6591176761\",\"h24\":\"324388.284240967\"},\"reserve_in_usd\":\"213765.2259\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"pancakeswap-v3-arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0xf3eb87c1f6020982173c908e7eb31aa66c1f0296\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"1.00578004825575\",\"base_token_price_native_currency\":\"0.000619420453812928\",\"quote_token_price_usd\":\"1624.02\",\"quote_token_price_native_currency\":\"1.0\",\"base_token_price_quote_token\":\"0.0006194204538\",\"quote_token_price_base_token\":\"1614.412300796\",\"address\":\"0xf3eb87c1f6020982173c908e7eb31aa66c1f0296\",\"name\":\"USDC / WETH 0.05%\",\"pool_created_at\":\"2023-07-06T21:11:05Z\",\"fdv_usd\":\"2777230820.72977\",\"market_cap_usd\":\"68452345679.0359\",\"price_change_percentage\":{\"m5\":\"0.271\",\"m15\":\"0.166\",\"m30\":\"0.235\",\"h1\":\"0.284\",\"h6\":\"0.193\",\"h24\":\"0.281\"},\"transactions\":{\"m5\":{\"buys\":20,\"sells\":14,\"buyers\":5,\"sellers\":7,\"unique_traders\":11},\"m15\":{\"buys\":83,\"sells\":92,\"buyers\":25,\"sellers\":22,\"unique_traders\":46},\"m30\":{\"buys\":120,\"sells\":119,\"buyers\":31,\"sellers\":26,\"unique_traders\":52},\"h1\":{\"buys\":199,\"sells\":195,\"buyers\":45,\"sellers\":45,\"unique_traders\":77},\"h6\":{\"buys\":1787,\"sells\":1660,\"buyers\":165,\"sellers\":203,\"unique_traders\":261},\"h24\":{\"buys\":3640,\"sells\":3416,\"buyers\":319,\"sellers\":309,\"unique_traders\":453}},\"volume_usd\":{\"m5\":\"2011.0275594012\",\"m15\":\"9544.4857659736\",\"m30\":\"12807.4468937748\",\"h1\":\"23878.7710066469\",\"h6\":\"299428.321045875\",\"h24\":\"1067359.26922702\"},\"reserve_in_usd\":\"255667.2825\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"sushiswap-v3-arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0x49340dbb8fb5ece2f9b594e77ab774e65725e9d8\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"0.0256544303054087\",\"base_token_price_native_currency\":\"0.0000157950720556438356873886832881\",\"quote_token_price_usd\":\"1.00334808067767\",\"quote_token_price_native_currency\":\"0.000617627410359782\",\"base_token_price_quote_token\":\"0.02557378735\",\"quote_token_price_base_token\":\"39.1025383223\",\"address\":\"0x49340dbb8fb5ece2f9b594e77ab774e65725e9d8\",\"name\":\"CHIP / USDC 0.01%\",\"pool_created_at\":\"2026-04-21T10:29:55Z\",\"fdv_usd\":\"256544303.089803\",\"market_cap_usd\":\"51308860.62\",\"price_change_percentage\":{\"m5\":\"-0.074\",\"m15\":\"-0.198\",\"m30\":\"-0.732\",\"h1\":\"-0.258\",\"h6\":\"-6.633\",\"h24\":\"-14.216\"},\"transactions\":{\"m5\":{\"buys\":16,\"sells\":35,\"buyers\":10,\"sellers\":2,\"unique_traders\":11},\"m15\":{\"buys\":70,\"sells\":61,\"buyers\":18,\"sellers\":14,\"unique_traders\":28},\"m30\":{\"buys\":107,\"sells\":105,\"buyers\":23,\"sellers\":24,\"unique_traders\":41},\"h1\":{\"buys\":214,\"sells\":201,\"buyers\":38,\"sellers\":26,\"unique_traders\":56},\"h6\":{\"buys\":1774,\"sells\":1698,\"buyers\":138,\"sellers\":133,\"unique_traders\":191},\"h24\":{\"buys\":3492,\"sells\":3381,\"buyers\":172,\"sellers\":178,\"unique_traders\":235}},\"volume_usd\":{\"m5\":\"3025.2142786887\",\"m15\":\"7884.713433689\",\"m30\":\"12945.6870451815\",\"h1\":\"26116.1607094239\",\"h6\":\"245343.285572916\",\"h24\":\"399065.482401402\"},\"reserve_in_usd\":\"1283276.9027\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0x0c1c1c109fe34733fca54b82d7b46b75cfb71f6e\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"uniswap_v3_arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0xb1026b8e7276e7ac75410f1fcbbe21796e8f7526\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"1.00421511919825\",\"base_token_price_native_currency\":\"0.000618640486526145\",\"quote_token_price_usd\":\"1624.02\",\"quote_token_price_native_currency\":\"1.0\",\"base_token_price_quote_token\":\"0.0006186404865\",\"quote_token_price_base_token\":\"1616.447713623\",\"address\":\"0xb1026b8e7276e7ac75410f1fcbbe21796e8f7526\",\"name\":\"USDC / WETH 0.01%\",\"pool_created_at\":\"2023-06-23T02:23:53Z\",\"fdv_usd\":\"2775567257.10854\",\"market_cap_usd\":\"68411342665.8151\",\"price_change_percentage\":{\"m5\":\"0.372\",\"m15\":\"0.119\",\"m30\":\"0.223\",\"h1\":\"0.164\",\"h6\":\"0.124\",\"h24\":\"0.245\"},\"transactions\":{\"m5\":{\"buys\":3,\"sells\":2,\"buyers\":2,\"sellers\":1,\"unique_traders\":2},\"m15\":{\"buys\":14,\"sells\":12,\"buyers\":3,\"sellers\":1,\"unique_traders\":3},\"m30\":{\"buys\":20,\"sells\":15,\"buyers\":4,\"sellers\":1,\"unique_traders\":4},\"h1\":{\"buys\":29,\"sells\":26,\"buyers\":7,\"sellers\":2,\"unique_traders\":8},\"h6\":{\"buys\":756,\"sells\":747,\"buyers\":96,\"sellers\":82,\"unique_traders\":144},\"h24\":{\"buys\":3124,\"sells\":3118,\"buyers\":293,\"sellers\":250,\"unique_traders\":417}},\"volume_usd\":{\"m5\":\"37.8041535939\",\"m15\":\"187.8680402405\",\"m30\":\"246.457479013\",\"h1\":\"395.5849046681\",\"h6\":\"47113.9742682739\",\"h24\":\"274473.527961334\"},\"reserve_in_usd\":\"188549.5889\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"camelot-v3\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0x80c735c5a0222241f211b3edb8df2ccefad94553ec18f1c29143f0399c78f500\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"58738.7798971497\",\"base_token_price_native_currency\":\"36.1576218804014\",\"quote_token_price_usd\":\"1.00389061686851\",\"quote_token_price_native_currency\":\"0.00061796137743365\",\"base_token_price_quote_token\":\"58511.1354864303\",\"quote_token_price_base_token\":\"0.00001709076386\",\"address\":\"0x80c735c5a0222241f211b3edb8df2ccefad94553ec18f1c29143f0399c78f500\",\"name\":\"WBTC / USDC 0.05%\",\"pool_created_at\":\"2025-01-29T18:33:39Z\",\"fdv_usd\":\"447476386.215275\",\"market_cap_usd\":\"447464186.078538\",\"price_change_percentage\":{\"m5\":\"0.549\",\"m15\":\"-0.208\",\"m30\":\"-0.561\",\"h1\":\"-0.645\",\"h6\":\"-4.743\",\"h24\":\"-6.709\"},\"transactions\":{\"m5\":{\"buys\":13,\"sells\":16,\"buyers\":12,\"sellers\":13,\"unique_traders\":23},\"m15\":{\"buys\":65,\"sells\":62,\"buyers\":48,\"sellers\":47,\"unique_traders\":86},\"m30\":{\"buys\":83,\"sells\":105,\"buyers\":64,\"sellers\":73,\"unique_traders\":123},\"h1\":{\"buys\":132,\"sells\":172,\"buyers\":95,\"sellers\":106,\"unique_traders\":181},\"h6\":{\"buys\":1191,\"sells\":1156,\"buyers\":354,\"sellers\":302,\"unique_traders\":477},\"h24\":{\"buys\":2935,\"sells\":3096,\"buyers\":496,\"sellers\":421,\"unique_traders\":680}},\"volume_usd\":{\"m5\":\"7707.2757371047\",\"m15\":\"39360.2239815584\",\"m30\":\"67060.8175003198\",\"h1\":\"123632.442364682\",\"h6\":\"820488.016779632\",\"h24\":\"4682452.95049244\"},\"reserve_in_usd\":\"1267833.0785\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"uniswap-v4-arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0x0bacc7a9717e70ea0da5ac075889bd87d4c81197\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"1624.02\",\"base_token_price_native_currency\":\"1.0\",\"quote_token_price_usd\":\"1.00446252287877\",\"quote_token_price_native_currency\":\"0.000618487617977929\",\"base_token_price_quote_token\":\"1616.847243069\",\"quote_token_price_base_token\":\"0.000618487618\",\"address\":\"0x0bacc7a9717e70ea0da5ac075889bd87d4c81197\",\"name\":\"WETH / USDT 0.05%\",\"pool_created_at\":\"2023-08-14T12:29:48Z\",\"fdv_usd\":\"205759080.266495\",\"market_cap_usd\":\"206356847.474763\",\"price_change_percentage\":{\"m5\":\"0.142\",\"m15\":\"-0.217\",\"m30\":\"-0.526\",\"h1\":\"-0.262\",\"h6\":\"-6.661\",\"h24\":\"-8.559\"},\"transactions\":{\"m5\":{\"buys\":16,\"sells\":21,\"buyers\":5,\"sellers\":5,\"unique_traders\":9},\"m15\":{\"buys\":85,\"sells\":74,\"buyers\":18,\"sellers\":19,\"unique_traders\":36},\"m30\":{\"buys\":110,\"sells\":110,\"buyers\":20,\"sellers\":25,\"unique_traders\":44},\"h1\":{\"buys\":184,\"sells\":178,\"buyers\":35,\"sellers\":35,\"unique_traders\":67},\"h6\":{\"buys\":1251,\"sells\":1296,\"buyers\":149,\"sellers\":139,\"unique_traders\":227},\"h24\":{\"buys\":2903,\"sells\":2914,\"buyers\":291,\"sellers\":298,\"unique_traders\":459}},\"volume_usd\":{\"m5\":\"1977.3455248524\",\"m15\":\"8018.0774190912\",\"m30\":\"11182.8900465431\",\"h1\":\"20895.2114570632\",\"h6\":\"162808.712838309\",\"h24\":\"744381.291556408\"},\"reserve_in_usd\":\"170046.7935\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"pancakeswap-v3-arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0x30c83aaecc7ceabea96b881a62729a1df366efd5\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"1624.02\",\"base_token_price_native_currency\":\"1.0\",\"quote_token_price_usd\":\"1.0055436292169\",\"quote_token_price_native_currency\":\"0.000618670001112248\",\"base_token_price_quote_token\":\"1616.370598546\",\"quote_token_price_base_token\":\"0.0006186700011\",\"address\":\"0x30c83aaecc7ceabea96b881a62729a1df366efd5\",\"name\":\"WETH / USDC 0.05%\",\"pool_created_at\":\"2026-10-22T03:12:23Z\",\"fdv_usd\":\"205759080.266495\",\"market_cap_usd\":\"206356847.474763\",\"price_change_percentage\":{\"m5\":\"0.142\",\"m15\":\"-0.217\",\"m30\":\"-0.526\",\"h1\":\"-0.262\",\"h6\":\"-6.661\",\"h24\":\"-8.559\"},\"transactions\":{\"m5\":{\"buys\":12,\"sells\":19,\"buyers\":5,\"sellers\":3,\"unique_traders\":6},\"m15\":{\"buys\":47,\"sells\":49,\"buyers\":5,\"sellers\":12,\"unique_traders\":15},\"m30\":{\"buys\":72,\"sells\":88,\"buyers\":8,\"sellers\":19,\"unique_traders\":24},\"h1\":{\"buys\":137,\"sells\":157,\"buyers\":16,\"sellers\":22,\"unique_traders\":34},\"h6\":{\"buys\":1076,\"sells\":1143,\"buyers\":76,\"sellers\":97,\"unique_traders\":129},\"h24\":{\"buys\":2823,\"sells\":2952,\"buyers\":174,\"sellers\":202,\"unique_traders\":291}},\"volume_usd\":{\"m5\":\"3180.2810103173\",\"m15\":\"7489.8959516047\",\"m30\":\"14091.033922323\",\"h1\":\"24082.4240160111\",\"h6\":\"194313.91178348\",\"h24\":\"759425.728514276\"},\"reserve_in_usd\":\"37279.6474\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"aero-slipstream-arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0xab05003a63d2f34ac7eec4670bca3319f0e3d2f62af5c2b9cbd69d03fd804fd2\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"1.00595120540127\",\"base_token_price_native_currency\":\"0.000618640486526145\",\"quote_token_price_usd\":\"1.00478084244645\",\"quote_token_price_native_currency\":\"0.000617929241695133\",\"base_token_price_quote_token\":\"1.0011510134\",\"quote_token_price_base_token\":\"0.9988503099\",\"address\":\"0xab05003a63d2f34ac7eec4670bca3319f0e3d2f62af5c2b9cbd69d03fd804fd2\",\"name\":\"USDC / USDT\",\"pool_created_at\":\"2025-04-28T19:33:04Z\",\"fdv_usd\":\"2776117658.08339\",\"market_cap_usd\":\"68424908782.6503\",\"price_change_percentage\":{\"m5\":\"0.385\",\"m15\":\"0.213\",\"m30\":\"0.291\",\"h1\":\"0.27\",\"h6\":\"0.207\",\"h24\":\"0.146\"},\"transactions\":{\"m5\":{\"buys\":23,\"sells\":8,\"buyers\":20,\"sellers\":7,\"unique_traders\":26},\"m15\":{\"buys\":76,\"sells\":58,\"buyers\":61,\"sellers\":36,\"unique_traders\":91},\"m30\":{\"buys\":127,\"sells\":93,\"buyers\":100,\"sellers\":65,\"unique_traders\":152},\"h1\":{\"buys\":249,\"sells\":161,\"buyers\":177,\"sellers\":110,\"unique_traders\":260},\"h6\":{\"buys\":1290,\"sells\":1197,\"buyers\":638,\"sellers\":520,\"unique_traders\":1023},\"h24\":{\"buys\":3061,\"sells\":2679,\"buyers\":1217,\"sellers\":942,\"unique_traders\":1926}},\"volume_usd\":{\"m5\":\"40573.9418638216\",\"m15\":\"138716.997940667\",\"m30\":\"371098.344901469\",\"h1\":\"707492.783685408\",\"h6\":\"4664570.6651574\",\"h24\":\"14283071.2394615\"},\"reserve_in_usd\":\"634663.5748\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"uniswap-v4-arbitrum\",\"type\":\"dex\"}}}},{\"id\":\"arbitrum_0x8e7dfd89de71e4a206295ca68760b2fc58ce053c\",\"type\":\"pool\",\"attributes\":{\"base_token_price_usd\":\"58750.3574192666\",\"base_token_price_native_currency\":\"36.1758829443397\",\"quote_token_price_usd\":\"1.00473245520631\",\"quote_token_price_native_currency\":\"0.000618670001112248\",\"base_token_price_quote_token\":\"58473.6335676573\",\"quote_token_price_base_token\":\"0.00001710172498\",\"address\":\"0x8e7dfd89de71e4a206295ca68760b2fc58ce053c\",\"name\":\"WBTC / USDC 0.033%\",\"pool_created_at\":\"2026-10-22T03:13:18Z\",\"fdv_usd\":\"447566569.87239\",\"market_cap_usd\":\"447554367.276857\",\"price_change_percentage\":{\"m5\":\"0.57\",\"m15\":\"-0.188\",\"m30\":\"-0.541\",\"h1\":\"-0.625\",\"h6\":\"-4.724\",\"h24\":\"-6.691\"},\"transactions\":{\"m5\":{\"buys\":11,\"sells\":16,\"buyers\":10,\"sellers\":13,\"unique_traders\":21},\"m15\":{\"buys\":35,\"sells\":43,\"buyers\":23,\"sellers\":33,\"unique_traders\":51},\"m30\":{\"buys\":49,\"sells\":83,\"buyers\":30,\"sellers\":54,\"unique_traders\":78},\"h1\":{\"buys\":103,\"sells\":150,\"buyers\":57,\"sellers\":82,\"unique_traders\":119},\"h6\":{\"buys\":863,\"sells\":963,\"buyers\":225,\"sellers\":221,\"unique_traders\":313},\"h24\":{\"buys\":2661,\"sells\":2890,\"buyers\":303,\"sellers\":295,\"unique_traders\":432}},\"volume_usd\":{\"m5\":\"10725.0922241807\",\"m15\":\"32077.7875197694\",\"m30\":\"60918.1965061979\",\"h1\":\"117557.751749373\",\"h6\":\"706571.302028373\",\"h24\":\"2794758.51074857\"},\"reserve_in_usd\":\"61563.4597\"},\"relationships\":{\"base_token\":{\"data\":{\"id\":\"arbitrum_0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f\",\"type\":\"token\"}},\"quote_token\":{\"data\":{\"id\":\"arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831\",\"type\":\"token\"}},\"dex\":{\"data\":{\"id\":\"aero-slipstream-arbitrum\",\"type\":\"dex\"}}}}]}"
+  }
+ ],
+ "stopped": null,
+ "pools": [
+  {
+   "pool": "0x8e95096b3795a9d4d1d83033ecf05bb78af39fc6",
+   "tokenX()": {
+    "ok": "0x00000000000000000000000082af49447d8a07e3bd95bd0d56f35241523fbab1"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831"
+   },
+   "fee()": {
+    "ok": "0x0000000000000000000000000000000000000000000000000000000000000190"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x0000000000000000000000008e95096b3795a9d4d1d83033ecf05bb78af39fc6"
+   },
+   "pool_yx": {
+    "ok": "0x0000000000000000000000008e95096b3795a9d4d1d83033ecf05bb78af39fc6"
+   }
+  },
+  {
+   "pool": "0x66bae64e87aba601ade8e120bf69caf4e491d751",
+   "tokenX()": {
+    "ok": "0x000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000fd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+   },
+   "fee()": {
+    "ok": "0x0000000000000000000000000000000000000000000000000000000000000190"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x00000000000000000000000066bae64e87aba601ade8e120bf69caf4e491d751"
+   },
+   "pool_yx": {
+    "ok": "0x00000000000000000000000066bae64e87aba601ade8e120bf69caf4e491d751"
+   }
+  },
+  {
+   "pool": "0xec7542b8ca4365fbd1f032117dea60c3b8598fe4",
+   "tokenX()": {
+    "ok": "0x000000000000000000000000912ce59144191c1204e64559fe8253a0e49e6548"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831"
+   },
+   "fee()": {
+    "ok": "0x0000000000000000000000000000000000000000000000000000000000002710"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x000000000000000000000000ec7542b8ca4365fbd1f032117dea60c3b8598fe4"
+   },
+   "pool_yx": {
+    "ok": "0x000000000000000000000000ec7542b8ca4365fbd1f032117dea60c3b8598fe4"
+   }
+  },
+  {
+   "pool": "0xa5df37d6e15caf1dd74a532e17d05c7aed2c82b7",
+   "tokenX()": {
+    "ok": "0x00000000000000000000000082af49447d8a07e3bd95bd0d56f35241523fbab1"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000fd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+   },
+   "fee()": {
+    "ok": "0x0000000000000000000000000000000000000000000000000000000000000190"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x000000000000000000000000a5df37d6e15caf1dd74a532e17d05c7aed2c82b7"
+   },
+   "pool_yx": {
+    "ok": "0x000000000000000000000000a5df37d6e15caf1dd74a532e17d05c7aed2c82b7"
+   }
+  },
+  {
+   "pool": "0x7d1b77c8b78630d9a90a17fbda67798119dd2e49",
+   "tokenX()": {
+    "ok": "0x00000000000000000000000082af49447d8a07e3bd95bd0d56f35241523fbab1"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000fd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+   },
+   "fee()": {
+    "ok": "0x00000000000000000000000000000000000000000000000000000000000007d0"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x0000000000000000000000007d1b77c8b78630d9a90a17fbda67798119dd2e49"
+   },
+   "pool_yx": {
+    "ok": "0x0000000000000000000000007d1b77c8b78630d9a90a17fbda67798119dd2e49"
+   }
+  },
+  {
+   "pool": "0xbd1c355bca1d97bca6df83271659a31f73f24b50",
+   "tokenX()": {
+    "ok": "0x0000000000000000000000002f2a2543b76a4166549f7aab2e75bef0aefc5b0f"
+   },
+   "tokenY()": {
+    "ok": "0x00000000000000000000000082af49447d8a07e3bd95bd0d56f35241523fbab1"
+   },
+   "fee()": {
+    "ok": "0x00000000000000000000000000000000000000000000000000000000000007d0"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x000000000000000000000000bd1c355bca1d97bca6df83271659a31f73f24b50"
+   },
+   "pool_yx": {
+    "ok": "0x000000000000000000000000bd1c355bca1d97bca6df83271659a31f73f24b50"
+   }
+  },
+  {
+   "pool": "0xc0d1e316121f16db5b5b1f94702bbb58e0097711",
+   "tokenX()": {
+    "ok": "0x00000000000000000000000082af49447d8a07e3bd95bd0d56f35241523fbab1"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000912ce59144191c1204e64559fe8253a0e49e6548"
+   },
+   "fee()": {
+    "ok": "0x0000000000000000000000000000000000000000000000000000000000000190"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x000000000000000000000000c0d1e316121f16db5b5b1f94702bbb58e0097711"
+   },
+   "pool_yx": {
+    "ok": "0x000000000000000000000000c0d1e316121f16db5b5b1f94702bbb58e0097711"
+   }
+  },
+  {
+   "pool": "0xa45387701ce66d8d0793b3558a9d5e1092fef8dd",
+   "tokenX()": {
+    "ok": "0x00000000000000000000000082af49447d8a07e3bd95bd0d56f35241523fbab1"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000912ce59144191c1204e64559fe8253a0e49e6548"
+   },
+   "fee()": {
+    "ok": "0x00000000000000000000000000000000000000000000000000000000000007d0"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x000000000000000000000000a45387701ce66d8d0793b3558a9d5e1092fef8dd"
+   },
+   "pool_yx": {
+    "ok": "0x000000000000000000000000a45387701ce66d8d0793b3558a9d5e1092fef8dd"
+   }
+  },
+  {
+   "pool": "0x4bc7a79430aa8351bf98c5db03ee82e7f208e568",
+   "tokenX()": {
+    "ok": "0x00000000000000000000000082af49447d8a07e3bd95bd0d56f35241523fbab1"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000912ce59144191c1204e64559fe8253a0e49e6548"
+   },
+   "fee()": {
+    "ok": "0x0000000000000000000000000000000000000000000000000000000000002710"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x0000000000000000000000004bc7a79430aa8351bf98c5db03ee82e7f208e568"
+   },
+   "pool_yx": {
+    "ok": "0x0000000000000000000000004bc7a79430aa8351bf98c5db03ee82e7f208e568"
+   }
+  },
+  {
+   "pool": "0x15273129e5cc018a6de7b575f448da833bd7a92b",
+   "tokenX()": {
+    "ok": "0x00000000000000000000000082af49447d8a07e3bd95bd0d56f35241523fbab1"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000ff970a61a04b1ca14834a43f5de4533ebddb5cc8"
+   },
+   "fee()": {
+    "ok": "0x0000000000000000000000000000000000000000000000000000000000000190"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x00000000000000000000000015273129e5cc018a6de7b575f448da833bd7a92b"
+   },
+   "pool_yx": {
+    "ok": "0x00000000000000000000000015273129e5cc018a6de7b575f448da833bd7a92b"
+   }
+  },
+  {
+   "pool": "0xfc8f5934521df4801c8671ed54e13e3e74aa399f",
+   "tokenX()": {
+    "ok": "0x00000000000000000000000082af49447d8a07e3bd95bd0d56f35241523fbab1"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000ff970a61a04b1ca14834a43f5de4533ebddb5cc8"
+   },
+   "fee()": {
+    "ok": "0x00000000000000000000000000000000000000000000000000000000000007d0"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x000000000000000000000000fc8f5934521df4801c8671ed54e13e3e74aa399f"
+   },
+   "pool_yx": {
+    "ok": "0x000000000000000000000000fc8f5934521df4801c8671ed54e13e3e74aa399f"
+   }
+  },
+  {
+   "pool": "0x98f1396db74898e98d90108cfe1b0d9f28ea49d8",
+   "tokenX()": {
+    "ok": "0x00000000000000000000000082af49447d8a07e3bd95bd0d56f35241523fbab1"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000ff970a61a04b1ca14834a43f5de4533ebddb5cc8"
+   },
+   "fee()": {
+    "ok": "0x0000000000000000000000000000000000000000000000000000000000002710"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x00000000000000000000000098f1396db74898e98d90108cfe1b0d9f28ea49d8"
+   },
+   "pool_yx": {
+    "ok": "0x00000000000000000000000098f1396db74898e98d90108cfe1b0d9f28ea49d8"
+   }
+  },
+  {
+   "pool": "0x1a509b1f6b0edb886bd6830d8c1031de173d52e9",
+   "tokenX()": {
+    "ok": "0x000000000000000000000000912ce59144191c1204e64559fe8253a0e49e6548"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000fd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+   },
+   "fee()": {
+    "ok": "0x0000000000000000000000000000000000000000000000000000000000000190"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x0000000000000000000000001a509b1f6b0edb886bd6830d8c1031de173d52e9"
+   },
+   "pool_yx": {
+    "ok": "0x0000000000000000000000001a509b1f6b0edb886bd6830d8c1031de173d52e9"
+   }
+  },
+  {
+   "pool": "0xaec6902b23ec6988924c21ec501d328e7050039a",
+   "tokenX()": {
+    "ok": "0x000000000000000000000000912ce59144191c1204e64559fe8253a0e49e6548"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000fd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+   },
+   "fee()": {
+    "ok": "0x0000000000000000000000000000000000000000000000000000000000002710"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x000000000000000000000000aec6902b23ec6988924c21ec501d328e7050039a"
+   },
+   "pool_yx": {
+    "ok": "0x000000000000000000000000aec6902b23ec6988924c21ec501d328e7050039a"
+   }
+  },
+  {
+   "pool": "0xdc26dce70f2019aba1da3b35bf36f2dfd03e771e",
+   "tokenX()": {
+    "ok": "0x000000000000000000000000fd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000ff970a61a04b1ca14834a43f5de4533ebddb5cc8"
+   },
+   "fee()": {
+    "ok": "0x0000000000000000000000000000000000000000000000000000000000000190"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x000000000000000000000000dc26dce70f2019aba1da3b35bf36f2dfd03e771e"
+   },
+   "pool_yx": {
+    "ok": "0x000000000000000000000000dc26dce70f2019aba1da3b35bf36f2dfd03e771e"
+   }
+  },
+  {
+   "pool": "0x553cc0e684405d3a522e3294fdc7041f2e19cbea",
+   "tokenX()": {
+    "ok": "0x000000000000000000000000fd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000ff970a61a04b1ca14834a43f5de4533ebddb5cc8"
+   },
+   "fee()": {
+    "ok": "0x00000000000000000000000000000000000000000000000000000000000007d0"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x000000000000000000000000553cc0e684405d3a522e3294fdc7041f2e19cbea"
+   },
+   "pool_yx": {
+    "ok": "0x000000000000000000000000553cc0e684405d3a522e3294fdc7041f2e19cbea"
+   }
+  },
+  {
+   "pool": "0xe7e39fb81e3f11ac3ff29d13bfe18b0af57a013b",
+   "tokenX()": {
+    "ok": "0x000000000000000000000000fd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000ff970a61a04b1ca14834a43f5de4533ebddb5cc8"
+   },
+   "fee()": {
+    "ok": "0x0000000000000000000000000000000000000000000000000000000000002710"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x000000000000000000000000e7e39fb81e3f11ac3ff29d13bfe18b0af57a013b"
+   },
+   "pool_yx": {
+    "ok": "0x000000000000000000000000e7e39fb81e3f11ac3ff29d13bfe18b0af57a013b"
+   }
+  },
+  {
+   "pool": "0x3807a821b39f688d6f798aff9b2840d697f81815",
+   "tokenX()": {
+    "ok": "0x000000000000000000000000912ce59144191c1204e64559fe8253a0e49e6548"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000ff970a61a04b1ca14834a43f5de4533ebddb5cc8"
+   },
+   "fee()": {
+    "ok": "0x0000000000000000000000000000000000000000000000000000000000000190"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x0000000000000000000000003807a821b39f688d6f798aff9b2840d697f81815"
+   },
+   "pool_yx": {
+    "ok": "0x0000000000000000000000003807a821b39f688d6f798aff9b2840d697f81815"
+   }
+  },
+  {
+   "pool": "0xb98635658130739108098d945faa4c9803d6f9ac",
+   "tokenX()": {
+    "ok": "0x000000000000000000000000912ce59144191c1204e64559fe8253a0e49e6548"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000ff970a61a04b1ca14834a43f5de4533ebddb5cc8"
+   },
+   "fee()": {
+    "ok": "0x00000000000000000000000000000000000000000000000000000000000007d0"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x000000000000000000000000b98635658130739108098d945faa4c9803d6f9ac"
+   },
+   "pool_yx": {
+    "ok": "0x000000000000000000000000b98635658130739108098d945faa4c9803d6f9ac"
+   }
+  },
+  {
+   "pool": "0x857e5aca8dfa883fc2f9d375add06e8cc499ba41",
+   "tokenX()": {
+    "ok": "0x000000000000000000000000912ce59144191c1204e64559fe8253a0e49e6548"
+   },
+   "tokenY()": {
+    "ok": "0x000000000000000000000000ff970a61a04b1ca14834a43f5de4533ebddb5cc8"
+   },
+   "fee()": {
+    "ok": "0x0000000000000000000000000000000000000000000000000000000000002710"
+   },
+   "factory()": {
+    "ok": "0x000000000000000000000000cfd8a067e1fa03474e79be646c5f6b6a27847399"
+   },
+   "pool_xy": {
+    "ok": "0x000000000000000000000000857e5aca8dfa883fc2f9d375add06e8cc499ba41"
+   },
+   "pool_yx": {
+    "ok": "0x000000000000000000000000857e5aca8dfa883fc2f9d375add06e8cc499ba41"
+   }
+  }
+ ]
+}

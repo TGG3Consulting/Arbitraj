@@ -1,0 +1,191 @@
+//! Файл: notify/menu.rs
+//! Что делает: экраны меню управления в Telegram (решение 157, команды /menu и /dev) — текст и inline-кнопки из
+//! тех же данных, что плашка режима сверху интерфейса (ControlBar.svelte, GET /api/control → Risk) и экран
+//! «Ручное управление» (записи с кнопками, core/manual_feed.rs). Доступность кнопок — как на плашке:
+//! «Старт» — если не «В работе», «Пауза» — только из «В работе», «Стоп» — если не «Стоп». Настроек из Telegram нет.
+//! Кто вызывает: notify/menu_press.rs, notify/tg_commands.rs, notify/ctl/screens.rs (решение 176: «Состояние» чата
+//! «Управление» — те же кнопки).
+//! От чего зависит: core/risk.rs (Risk, Mode), core/commands_control.rs (label), notify/mirror_view.rs,
+//! notify/menu_day.rs (лимит дня — общий и по площадкам, решение 173), notify/menu_venues.rs («Площадки и карантин»),
+//! notify/human.rs (имя площадки).
+//! Настройки: нет.
+//!
+//! callback_data: «m:<экран>» — переход (root, st, man, mode, ven, day); «c:<что>» — кнопка плашки
+//! (mode.Running|Paused|Stopped, vr.<площадка>, wr.<id кошелька> — решение 230, qr.<id монеты>, dr.x — общий сброс лимита дня, dv.<площадка> — сброс
+//! лимита дня площадки, решение 173) — подтверждение в menu_press.rs.
+
+use serde_json::{Value, json};
+
+use crate::core::commands_control::label;
+use crate::core::manual_wait::ManualWait;
+use crate::core::risk::{Mode, Risk};
+use crate::core::types::ManualRecord;
+
+/// Экран «Площадки и карантин» — notify/menu_venues.rs (вынесен; прежние пути menu::venues / menu::venue_buttons).
+pub use super::menu_venues::{venue_buttons, venues};
+use super::mirror_view::batch_message;
+
+/// Кнопка. Принимает: надпись, callback_data. Решение 408: callback_data — 1–64 байта (InlineKeyboardButton,
+/// https://core.telegram.org/bots/api#inlinekeyboardbutton); длиннее (длинный id площадки, монеты, кошелька) — кнопка
+/// без действия: надпись «… — только в интерфейсе», callback_data «c:x» (ответ «только в интерфейсе», menu_press.rs
+/// control_action); Telegram не отказывает всему сообщению. Ошибок нет.
+pub(super) fn b(text: &str, data: &str) -> Value {
+    if data.is_empty() || data.len() > super::callback::CALLBACK_DATA_MAX_BYTES {
+        return json!({ "text": format!("{text} — только в интерфейсе"), "callback_data": "c:x" });
+    }
+    json!({ "text": text, "callback_data": data })
+}
+
+/// Клавиатура: по кнопке в ряду, внизу «Назад» в главное меню. Принимает: кнопки.
+pub(super) fn with_back(rows: Vec<Value>) -> Value {
+    let mut rows: Vec<Value> = rows.into_iter().map(|x| json!([x])).collect();
+    rows.push(json!([b("« Назад", "m:root")]));
+    json!({ "inline_keyboard": rows })
+}
+
+/// Главное меню. Возвращает: (текст, клавиатура).
+pub fn root() -> (String, Value) {
+    let rows = json!({ "inline_keyboard": [
+        [b("Состояние", "m:st")], [b("Ручное управление", "m:man")], [b("Режим системы", "m:mode")],
+        [b("Площадки и карантин", "m:ven")], [b("Лимит дня", "m:day")],
+    ] });
+    (
+        "Меню управления ARB. Изменение настроек — только в интерфейсе.".into(),
+        rows,
+    )
+}
+
+/// «Состояние» — всё, что показывает плашка режима. Принимает: Risk, сколько записей ждут на «Ручном управлении».
+pub fn state(r: &Risk, manual: usize) -> (String, Value) {
+    let mut t = format!("Режим: {}", label(r.mode));
+    if let Some(why) = &r.reason {
+        t.push_str(&format!(" — {why}"));
+    }
+    let d = &r.day;
+    t.push_str(&format!(
+        "\nИтог дня {}: {} USDT (факт {}, оценка позиций {})\n{}",
+        d.date,
+        d.result_usd,
+        d.final_usd,
+        d.provisional_usd,
+        super::menu_day::limit_line(r)
+    ));
+    // Решение 258: итог дня и лимит по парам «площадка × тип направления».
+    for line in super::menu_day::venue_lines(r) {
+        t.push_str(&format!("\n{line}"));
+    }
+    if r.daily_stop && d.limit.as_ref().is_some_and(|l| !l.exceeded) {
+        t.push_str("\nЛимит сейчас не превышен — остановка по лимиту снимется сама с новым днём (UTC), можно нажать «Старт».");
+    }
+    for (v, why) in &r.venue_paused {
+        t.push_str(&format!(
+            "\nПлощадка {} на паузе: {why}",
+            super::human::venue(&v.0)
+        ));
+    }
+    // Решение 258: паузы направлений по убытку дня (пары «площадка × тип направления»; «DEX ↔ DEX» — циклы).
+    for (p, why) in &r.pair_paused {
+        if crate::core::day_pair::venue_of(p).is_none() {
+            t.push_str(&format!("\nЦиклы DEX ↔ DEX на паузе: {why}"));
+        } else {
+            t.push_str(&format!(
+                "\nНаправление {} на паузе: {why}",
+                crate::core::day_pair::label(p)
+            ));
+        }
+    }
+    for p in r.wallet_paused.values() {
+        t.push_str(&format!("\n{}", super::menu_press::wallet_line(p)));
+    }
+    for (deal, (usd, day)) in &d.provisional {
+        let unpriced = if d.unpriced.contains(deal) {
+            " — цены нет, взят худший случай (вся сумма)"
+        } else {
+            ""
+        };
+        t.push_str(&format!(
+            "\nОценка позиции сделки {deal}: {usd} USDT (учтена {day}){unpriced} — ждёт разбора"
+        ));
+    }
+    for q in super::menu_press::quarantine(r) {
+        t.push_str(&format!("\nМонета {} в карантине: {}", q.label, q.reason));
+    }
+    t.push_str(&format!(
+        "\nРучное управление: ждут действия записей — {manual}"
+    ));
+    (t, with_back(vec![b("Обновить", "m:st")]))
+}
+
+/// Кнопки режима, доступные сейчас — как на плашке (решение 176: и экран «Состояние» чата «Управление»).
+/// Принимает: Risk. Возвращает: кнопки «c:mode.<режим>». Ошибок нет.
+pub fn mode_buttons(r: &Risk) -> Vec<Value> {
+    let mut rows = Vec::new();
+    for (m, title) in [
+        (Mode::Running, "Старт"),
+        (Mode::Paused, "Пауза"),
+        (Mode::Stopped, "Стоп"),
+    ] {
+        if mode_disabled(r.mode, m).is_none() {
+            rows.push(b(title, &format!("c:mode.{m:?}")));
+        }
+    }
+    rows
+}
+
+/// «Режим системы»: доступные кнопки — как на плашке. Принимает: Risk.
+pub fn mode(r: &Risk) -> (String, Value) {
+    let rows = mode_buttons(r);
+    (
+        format!(
+            "Режим системы: {}{}",
+            label(r.mode),
+            r.reason
+                .as_ref()
+                .map(|x| format!(" — {x}"))
+                .unwrap_or_default()
+        ),
+        with_back(rows),
+    )
+}
+
+/// Недоступна ли смена режима — как disabled у кнопок плашки. Принимает: текущий и желаемый режим.
+/// Возвращает: причину или None — можно.
+pub fn mode_disabled(now: Mode, want: Mode) -> Option<String> {
+    let off = match want {
+        Mode::Running => now == Mode::Running,
+        Mode::Paused => now != Mode::Running,
+        Mode::Stopped => now == Mode::Stopped,
+    };
+    off.then(|| format!("сейчас режим «{}»", label(now)))
+}
+
+/// «Лимит дня»: итог дня, общий лимит и лимиты площадок, кнопки «Сбросить лимит дня» — общий и по площадке
+/// (решения 153, 173; notify/menu_day.rs). Принимает: Risk.
+pub fn day(r: &Risk) -> (String, Value) {
+    let (t, rows) = super::menu_day::day(r);
+    (t, with_back(rows))
+}
+
+/// «Ручное управление»: ждущие записи с их кнопками (как напоминание), решение 408 — ожидания ручных действий
+/// (решение 405) с «Отменить ожидание», и «Назад». Принимает: записи, ожидания.
+pub fn manual(recs: &[&ManualRecord], waits: &[ManualWait]) -> (String, Value) {
+    let (wt, wb) = super::menu_waits::block(waits);
+    let mut rows: Vec<Value> = Vec::new();
+    let mut t = if recs.is_empty() {
+        "Ручное управление: записей, ждущих действия, нет.".to_string()
+    } else {
+        let (t, kb) = batch_message(
+            recs,
+            &format!("Ручное управление: ждут действия записей — {}", recs.len()),
+        );
+        rows = kb
+            .and_then(|k| k["inline_keyboard"].as_array().cloned())
+            .unwrap_or_default();
+        t
+    };
+    t.push_str(&wt);
+    rows.extend(wb);
+    rows.push(json!([b("Обновить", "m:man")]));
+    rows.push(json!([b("« Назад", "m:root")]));
+    (t, json!({ "inline_keyboard": rows }))
+}

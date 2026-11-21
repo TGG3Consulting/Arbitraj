@@ -1,14 +1,17 @@
 //! Файл: api/check.rs
-//! Что делает: кнопки «Проверить подключение» — Telegram, площадки и каналы отправки DEX.
+//! Что делает: кнопки «Проверить подключение» — Telegram, площадки, каналы отправки DEX и исполнитель ArbExecutor.
 //! Ответ всегда {ok, details}: «Подключено …» или точная причина сбоя.
 //! Каждая проверка пишется в журнал.
 //! Кто вызывает: интерфейс (экраны «Уведомления», «Площадки», «Каналы отправки»).
-//! От чего зависит: api/state.rs, notify/check.rs, gateway/registry.rs.
+//! От чего зависит: api/state.rs, notify/check.rs, gateway/registry.rs, core/feed_live.rs (revive_feed).
 //! Настройки: те, что нужны проверяемому подключению.
 //!
 //! POST /api/check/telegram
-//! POST /api/check/venue/{id}
+//! POST /api/check/telegram/{роль}  — чат роли (решение 176: control, general, deals, failures), с тестовым сообщением
+//! POST /api/check/venue/{id}       — плюс проверка потока рынка и подъём подписки, если молчит (решение 196); биржа без
+//!                                    venue.bsc_network — имена сетей котируемой монеты из её справочника (решение 200)
 //! POST /api/check/channel/{venue}/{id}
+//! POST /api/check/executor/{venue}  — свой исполнитель ArbExecutor DEX (ревью 122)
 
 use axum::Json;
 use axum::extract::{Path, State};
@@ -27,10 +30,27 @@ pub async fn telegram(State(st): State<AppState>) -> Json<ConnectionCheck> {
     Json(res)
 }
 
+/// Решение 176: проверка чата роли (control, general, deals, failures): getMe, getChat и тестовое сообщение в чат роли.
+/// Ошибок нет: неизвестная роль и причина сбоя — в details.
+pub async fn telegram_role(
+    State(st): State<AppState>,
+    Path(role): Path<String>,
+) -> Json<ConnectionCheck> {
+    let res = match notify::roles::Role::from_code(&role) {
+        Some(r) => notify::check::role(&st.http, &st.settings, &st.vault, r, true).await,
+        None => ConnectionCheck {
+            ok: false,
+            details: format!("Неизвестная роль чата «{role}»"),
+        },
+    };
+    log(&st, None, "Telegram", &res).await;
+    Json(res)
+}
+
 /// Проверка площадки. Пока адаптеров нет — ответ «площадка не подключена».
 /// Ошибок нет: причина сбоя — в details.
 pub async fn venue(State(st): State<AppState>, Path(id): Path<String>) -> Json<ConnectionCheck> {
-    let res = match st.registry.get(&VenueId(id.clone())).await {
+    let mut res = match st.registry.get(&VenueId(id.clone())).await {
         Ok(v) => v
             .check_connection()
             .await
@@ -43,8 +63,34 @@ pub async fn venue(State(st): State<AppState>, Path(id): Path<String>) -> Json<C
             details: e.message,
         },
     };
+    if let Some(hint) = network_hint(&st, &id).await {
+        res.details = format!("{} · {hint}", res.details);
+    }
     log(&st, Some(&id), &id, &res).await;
+    // Решение 196: поток рынка молчит или подписки нет — поднять подписку без перезапуска (core/feed_live.rs).
+    let feed = st
+        .core
+        .revive_feed(&VenueId(id), "Проверка подключения")
+        .await;
+    res.details = format!("{} · {feed}", res.details);
     Json(res)
+}
+
+/// Решение 200: у биржи не задана venue.bsc_network — имена сетей котируемой монеты (venue.quote_asset, у неё есть
+/// сеть BSC на каждой бирже) из живого справочника биржи, чтобы выбрать имя BSC. None — задана, площадка не биржа или
+/// не подключена. Ошибок нет: сбой — текстом подсказки.
+async fn network_hint(st: &AppState, id: &str) -> Option<String> {
+    use crate::gateway::contract::VenueKind;
+    use crate::settings::read::At;
+    let at = At {
+        venue: Some(id),
+        coin: None,
+    };
+    let v = st.registry.get(&VenueId(id.to_string())).await.ok()?;
+    if v.kind() != VenueKind::Cex || st.settings.text("venue.bsc_network", at).is_ok() {
+        return None;
+    }
+    Some(crate::gateway::network_hint::text(v.as_ref(), &st.settings).await)
 }
 
 /// Проверка одного канала отправки площадки DEX (шлюз `check_send_channel`).
@@ -68,6 +114,31 @@ pub async fn channel(
         },
     };
     log(&st, Some(&venue), &format!("канала {id} ({venue})"), &res).await;
+    Json(res)
+}
+
+/// Проверка своего исполнителя ArbExecutor площадки DEX (шлюз `check_executor`): код и владелец по
+/// exec.executor_address. Ошибок нет: причина сбоя (в т.ч. «не применимо» для биржи) — в details.
+pub async fn executor(
+    State(st): State<AppState>,
+    Path(venue): Path<String>,
+    axum::extract::Query(w): axum::extract::Query<super::dex_executor::WalletQuery>,
+) -> Json<ConnectionCheck> {
+    // Решение 132: исполнитель — кошелька ?wallet=id (без него — кошелёк строки «пробы»).
+    let res = match super::wallets_dex::venue_as(&st, &venue, w.wallet.as_deref()).await {
+        Ok(v) => v
+            .check_executor()
+            .await
+            .unwrap_or_else(|e| ConnectionCheck {
+                ok: false,
+                details: e.message,
+            }),
+        Err(e) => ConnectionCheck {
+            ok: false,
+            details: e.message,
+        },
+    };
+    log(&st, Some(&venue), &format!("исполнителя ({venue})"), &res).await;
     Json(res)
 }
 

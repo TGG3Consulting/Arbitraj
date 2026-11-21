@@ -11,7 +11,20 @@
 //! PancakeSwap script/deployParameters/mainnet/DeployBsc.s.sol#L24, Uniswap script/deployParameters/DeployBSC.s.sol#L11.
 //! Кто вызывает: exec/build.rs, check/probe.rs.
 //! От чего зависит: exec/swap_v2v3.rs, exec/swap_v4.rs, pools/registry.rs, ctx.rs.
-//! Настройки: dex.universal_router_version [DEX]: «pancakeswap_infinity», «2.0», «2.1.1», «2.1.2».
+//! Настройки: dex.universal_router_version [DEX]: «pancakeswap_infinity», «pancakeswap_v3», «2.0», «2.1.1», «2.1.2».
+//! Решение 450 (T448-01): «pancakeswap_v3» — Universal Router PancakeSwap v3 (без Infinity; Arbitrum
+//! 0xFE6508f0015C778Bdcc1fB5465bA5ebE224C9912 — pancake-developer e4778927 docs/pages/contracts/universal-router/
+//! addresses.md, раздел «PancakeSwap v3 Universal Router»). Исходник — Sourcify 42161 exact_match (solc 0.8.17;
+//! https://sourcify.dev/server/v2/contract/42161/0xFE6508f0015C778Bdcc1fB5465bA5ebE224C9912 , репозитория на GitHub у
+//! PancakeSwap нет): contracts/libraries/Commands.sol — V3_SWAP_EXACT_IN 0x00, V2_SWAP_EXACT_IN 0x08, WRAP_ETH 0x0b,
+//! UNWRAP_WETH 0x0c, BALANCE_CHECK_ERC20 0x0e, 0x10 = OWNER_CHECK_721 (команды Infinity нет); contracts/base/
+//! Dispatcher.sol — входы V2/V3 abi.decode(address, uint256, uint256, path, bool), BALANCE_CHECK_ERC20 (address owner,
+//! address token, uint256 minBalance), WRAP_ETH / UNWRAP_WETH (address, uint256) — те же байты, что у Infinity UR;
+//! contracts/libraries/Constants.sol — CONTRACT_BALANCE = 1 << 255, ADDRESS_THIS = address(2); Payments.pay — сумма
+//! CONTRACT_BALANCE = весь баланс роутера; UniversalRouter.sol — execute(bytes, bytes[], uint256) с
+//! TransactionDeadlinePassed. Параметры конструктора (RouterParameters, RouterImmutables.sol): v2Factory 0x02a84c1b…,
+//! v3Factory 0x0BFbCF9f…, v3Deployer 0x41ff9AA7…, v2InitCodeHash 0x57224589…4d2d, v3InitCodeHash 0x6ce8eb47…f7e2 —
+//! фабрики PancakeSwap V2 / V3 Arbitrum (docs/notes/arbitrum/dex-settings-arbitrum.md §4.1).
 //!
 //! Источники: PancakeSwap — https://github.com/pancakeswap/pancake-v4-universal-router/blob/1b6d479e1f76361f5950d1168d9392361e73a1e8/src/libraries/Commands.sol#L15-L35 ,
 //! src/base/Dispatcher.sol#L61-L76, #L167-L182, #L247-L259; execute — src/UniversalRouter.sol#L33.
@@ -57,6 +70,9 @@ alloy::sol! {
 pub enum Format {
     /// PancakeSwap Infinity Universal Router.
     Pancake,
+    /// Решение 450: Universal Router PancakeSwap v3 — входы V2/V3, WRAP/UNWRAP и BALANCE_CHECK как у Pancake, но команды
+    /// Infinity (0x10 INFI_SWAP) нет: пулы V4/Infinity этим роутером не исполняются (exec/swap_v4.rs — отказ).
+    PancakeV3,
     /// Uniswap Universal Router 2.0 (без minHopPriceX36).
     Uniswap20,
     /// Uniswap Universal Router 2.1.1 и 2.1.2 (с minHopPriceX36).
@@ -67,11 +83,12 @@ pub enum Format {
 pub fn format(ctx: &Ctx, e: &Entry) -> GatewayResult<Format> {
     match ctx.dex_text("dex.universal_router_version", e.family.id)?.trim() {
         "pancakeswap_infinity" => Ok(Format::Pancake),
+        "pancakeswap_v3" => Ok(Format::PancakeV3),
         "2.0" => Ok(Format::Uniswap20),
         "2.1.1" | "2.1.2" => Ok(Format::Uniswap211),
         v => Err(ctx.not_set(
             "dex.universal_router_version",
-            format!("dex.universal_router_version [{}] = «{v}»: известны pancakeswap_infinity, 2.0, 2.1.1, 2.1.2", e.family.id),
+            format!("dex.universal_router_version [{}] = «{v}»: известны pancakeswap_infinity, pancakeswap_v3, 2.0, 2.1.1, 2.1.2", e.family.id),
         )),
     }
 }

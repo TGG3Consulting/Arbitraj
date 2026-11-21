@@ -3,22 +3,27 @@
 //! JSON-RPC. Проверка без настоящей транзакции: канал получает заведомо пустую транзакцию («0x») своим методом
 //! отправки и должен ответить ошибкой JSON-RPC (так у JetBuilder в документации: -39403 «Invalid raw transaction»).
 //! Ответ-ошибка канала = «Подключено»; нет связи, HTTP 401/403/429, не JSON-RPC — точная причина сбоя.
+//! Решение 436: у секвенсора Arbitrum с окном channel.cond_time_window_s проверка идёт условным методом
+//! (eth_sendRawTransactionConditional, пустые условия); метод не принимается (−32601) — не «Подключено», причина.
+//! К ответу дописан минимум цены газа канала с узла (ArbGasInfo, node/arb_min_gas.rs) и окно условия.
+//! Решение 437 (1): при channel.submit_method = sync проверка идёт eth_sendRawTransactionSync (пустая транзакция);
+//! метод не принимается (−32601) — не «Подключено», причина; к ответу — метод, срок sync и таймаут HTTP.
 //! Кто вызывает: mod.rs (контракт check_send_channel).
-//! От чего зависит: send/ready.rs, send/channels.rs, ctx.rs.
+//! От чего зависит: send/ready.rs, send/channels.rs, node/arb_min_gas.rs, ctx.rs.
 //! Настройки: channel.* [канал]; секрет channel.<id>.key.
 //!
 //! Методы отправки — шапки файлов каналов; формат ошибки — https://www.jsonrpc.org/specification#error_object ;
 //! research/flow/bsc_builders.md, раздел 3.3 (проверка JetBuilder неверной транзакцией).
-
-use alloy_primitives::Bytes;
 
 use crate::core::types::ChannelState;
 use crate::gateway::contract::ConnectionCheck;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
+use super::super::node::arb_min_gas;
 use super::channels;
 use super::ready;
+use super::seq_opts::{self, Submit};
 
 /// Проверка канала. Возвращает: ConnectionCheck. Ошибки: NotConfigured — такого канала нет.
 pub async fn check(ctx: &Ctx, id: &str) -> GatewayResult<ConnectionCheck> {
@@ -37,15 +42,16 @@ pub async fn check(ctx: &Ctx, id: &str) -> GatewayResult<ConnectionCheck> {
             });
         }
     };
-    let out = match r.send(ctx, &[Bytes::new()], 0).await {
+    let extra = node_part(ctx, &r);
+    let out = match r.probe(ctx).await {
         Ok(()) => ConnectionCheck {
             ok: true,
-            details: format!("Подключено: {} принял запрос", ch.title),
+            details: format!("Подключено: {} принял запрос{extra}", ch.title),
         },
         Err(e) if answered(e.code) => ConnectionCheck {
             ok: true,
             details: format!(
-                "Подключено: {} ответил на пустую транзакцию ошибкой, как и должен — «{}»",
+                "Подключено: {} ответил на пустую транзакцию ошибкой, как и должен — «{}»{extra}",
                 ch.title, e.message
             ),
         },
@@ -55,6 +61,30 @@ pub async fn check(ctx: &Ctx, id: &str) -> GatewayResult<ConnectionCheck> {
         },
     };
     Ok(out)
+}
+
+/// Решение 436: у канала с минимумом с узла — значение и блок (ArbGasInfo.getMinimumGasPrice), у канала с окном — окно
+/// условия. Принимает: окружение, готовый канал. Возвращает: дописку к ответу (пусто у остальных каналов). Ошибок нет.
+fn node_part(ctx: &Ctx, r: &ready::Ready) -> String {
+    let mut out = String::new();
+    if let (true, Some((block, wei))) = (r.ch.min_from_node(), arb_min_gas::last(ctx)) {
+        out.push_str(&format!(
+            "; минимум цены газа сети с узла (ArbGasInfo.getMinimumGasPrice): {wei} wei, блок {block}"
+        ));
+    }
+    if let Some(w) = r.cond {
+        out.push_str(&format!(
+            "; условная отправка eth_sendRawTransactionConditional, окно {w} с (timestampMax)"
+        ));
+    }
+    if let Submit::Sync(t) = r.submit {
+        let m = seq_opts::SYNC_METHOD;
+        out.push_str(&format!("; отправка {m} (timeoutMs {t} мс)"));
+    }
+    if let Some(ms) = r.http_ms {
+        out.push_str(&format!("; таймаут HTTP отправки {ms} мс"));
+    }
+    out
 }
 
 /// Ошибка пришла от самого канала по JSON-RPC (а не от сети или HTTP).

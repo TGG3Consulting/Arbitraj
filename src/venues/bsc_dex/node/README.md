@@ -2,17 +2,28 @@
 
 | Файл | Что делает |
 | --- | --- |
-| `mod.rs` | Модуль и chainId BSC mainnet (56, значение протокола со ссылкой) |
+| `mod.rs` | Модуль (chainId больше не константа — решение 416, chain_id.rs) |
+| `chain_id.rs` | Решение 416: номер цепи EVM площадки из настройки dex.evm_chain_id (подпись EIP-155), сверка eth_chainId узла (`same_chain` — «Проверить подключение»; `check_start` — перед подпиской на рынок: dex.chain и dex.evm_chain_id заданы, узел той же сети) |
+| `arb_gas.rs` | Решение 433: газ Arbitrum с частью L1 — NodeInterface gasEstimateComponents (адрес dex.node_interface) через eth_call: весь газ (= eth_estimateGas), часть L1, baseFee L2, оценка цены L1; тесты — на записи своего узла (tests/data/arbitrum_node_2026-11-19/04, 05) |
+| `arb_min_gas.rs` | Решение 436 (Б): нижний предел цены газа сети Arbitrum с узла — ArbGasInfo.getMinimumGasPrice (адрес dex.arb_gas_info) через eth_call, читается вместе с baseFee головы (quote/gas.rs), хранится по площадке; минимум канала «Секвенсор Arbitrum» (send/ready.rs) вместо channel.min_gas_price_gwei |
+| `chain_seen.rs` | Решение 416 (ревью М-1): подтверждённая сеть узлов HTTP (основной, резервный) в Ctx.chains и сверка перед подписью (ensure — рядом с SendCfg до nonce): узел другой сети — отказ с причиной; сменили адрес узла или dex.evm_chain_id — сверка заново; тикер газа, прочитанный перед отправкой |
 | `jsonrpc.rs` | Запрос JSON-RPC 2.0 и разбор ответа/ошибки в единые коды |
 | `rpc.rs` | HTTP: одиночный запрос, пачка (batch), общий POST JSON (для каналов отправки) |
 | `ws.rs` | Соединение WebSocket: открыть, запрос с ответом, eth_subscribe (источник событий пулов при bsc.pool_events_source=ws, решения 68, 79) |
 | `ws_task.rs` | Задача соединения: раздача ответов и уведомлений, тишина = обрыв, сырые сообщения на диск, отписка ушедших |
-| `heads.rs` | Опрос eth_blockNumber по HTTP раз в `bsc.blocks_poll_ms` (решение 57): последний блок, свежесть (`feed.stale_after_ms`), блок и его время по запросу (eth_getBlockByNumber, раз на блок на всех) |
+| `heads.rs` | Опрос eth_blockNumber по HTTP раз в `bsc.blocks_poll_ms` (решение 57): последний блок, свежесть (`feed.stale_after_ms`), блок и его время по запросу (eth_getBlockByNumber, раз на блок на всех); при `feed.max_block_age_ms` — и возраст блока (head_age.rs) |
+| `block_ms.rs` | Решение 259: время блока в миллисекундах — timestamp·1000 + доля секунды из mixHash (BEP-520; значение ≥ 1000 — доля 0) |
+| `head_age.rs` | Возраст головы по времени блока (решение 121, A2; решение 259 — в миллисекундах): часы сервера − время блока против `feed.max_block_age_ms` → StaleData; время новой головы в опросе; журнал venue.head_age на переходах «свежо ↔ устарело» |
+| `head_stall.rs` | Решение 282: уведомление «узел BSC: блок не растёт» (dex.node_stalled) — номер из опроса heads.rs не менялся дольше `bsc.node_stall_alert_s`, одно сообщение на простой; «блоки снова идут» (dex.node_resumed) с длительностью простоя; журнал venue.head_stall. Не задана — ничего |
+| `head_stall_send.rs` | Решение 282 (вынесено ревью t122): отправка события dex.node_stalled / dex.node_resumed ядру без молчаливой потери; «не ушло» — в журнал по просьбе head_stall.rs (один раз на переход) |
+| `head_stall_text.rs` | Решение 282: текст уведомлений dex.node_stalled / dex.node_resumed (блок, время блока UTC, когда бот его увидел, секунды простоя) |
 | `call.rs` | eth_call к контракту с ABI-кодированием (alloy sol!); пачки — через Multicall3 или пачкой JSON-RPC |
 | `multicall.rs` | Multicall3.aggregate3 (dex.multicall3): пачка чтений одним eth_call, ответ каждого вызова отдельно |
 | `failover.rs` | Резервный провайдер узла: сбой основного (связь, таймаут, 5xx, 429) — запрос на резервный, удержание bsc.node_backup_hold_s |
 | `abi.rs` | Описания ERC-20 для ABI |
 | `pace.rs` | Темп запросов к узлу HTTP (bsc.node_http_rps; пачка из N — N мест) через очередь queue.rs и правило шлюза на «превышен лимит» (429) |
+| `prefetch.rs` | Решение 325: книга ответов, прочитанных заранее одним eth_call Multicall3 (перечитывание пула по событию, pools/prefetch_read.rs): task_local; call::view, multicall::aggregate и чтения комиссии Solidly сначала смотрят в неё (тот же контракт, данные, блок — без узла; нет — к узлу как раньше); помнит вызовы кода чтения для следующего раза |
+| `req_trail.rs` | Решение 313: список запросов к узлу одной работы по отдельности (вызовов, ожидание очереди темпа, сам запрос) — для замера перечитывания пула по событию; не задан — ничего |
 | `queue.rs` | Очередь мест к узлу со срочностью (gateway/urgency.rs): строгий порядок классов и гарантированная доля фона bsc.node_background_share_pct; отменённый уходит из очереди |
 | `source.rs` | Источник событий пулов по bsc.pool_events_source (решение 68): WebSocket или квитанции блоков — одно лицо для слушателей |
 | `receipts.rs` | Лента квитанций блоков: раздача логов вместе с номером блока, обрыв, запуск задачи |

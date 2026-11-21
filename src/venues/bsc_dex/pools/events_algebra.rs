@@ -3,6 +3,8 @@
 //! несёт цену, ликвидность и тик после обмена — их и применяем (решение 83: мгновенное зрение графа). Mint/Burn меняют
 //! карту тиков (а событие несёт только изменение в своём диапазоне) — по ним пул перечитывается целиком (Refresh):
 //! достоверную карту тиков в окне вокруг цены даёт только перечитывание (load_algebra.rs), как у Elastic.
+//! Решение 320: Swap увёл полосу глубины за окно карты — перечитывание по pools/depth.rs off_map (pools/listen_log.rs),
+//! при dex.algebra_off_map_reread = да (pools/off_map_algebra.rs); здесь Swap по-прежнему Updated.
 //! Кто вызывает: pools/events.rs.
 //! От чего зависит: pools/abi_algebra.rs, registry.rs.
 //! Настройки: нет.
@@ -11,8 +13,15 @@
 //! Swap(sender, recipient, amount0, amount1, price=sqrtPrice после обмена, liquidity после обмена, tick после обмена);
 //! Mint(sender, owner, bottomTick, topTick, liquidityAmount, amount0, amount1);
 //! Burn(owner, bottomTick, topTick, liquidityAmount, amount0, amount1). Комиссия пула динамическая: её текущее значение
-//! в Swap не приходит — между перечитываниями держится прежним (globalState.fee из load_algebra.rs); для сверки с
-//! квотером фаза B делает отдельный вызов (решение 73), точечный пересчёт комиссии по событию — кандидат на 81c.
+//! в Swap не приходит; решение 463: её новое значение несёт событие Fee(uint16) (AlgebraPool.sol _getNewFee — первый
+//! своп в блоке, лог до Swap) — применяем; Initialize — перечитать пул. Collect / Flash / CommunityFee / Incentive /
+//! LiquidityCooldown расчёт обмена не меняют (исходник THENA Fusion, Sourcify 56, abi_algebra.rs).
+//! Решение 463 (T463-02): у THENA Fusion (Proto::Algebra; Integral зовёт этот apply для Swap / Mint / Burn — у него
+//! прежнее Updated) Swap после применения — Applied::Fee: комиссия следующего блока перечитывается на блоке события
+//! (pools/integral_fee.rs apply → pools/fusion_fee.rs read_fee). Fee — комиссия текущего блока (до Swap той же tx).
+//! Повторное ревью t236 (блокер): после Swap и после Fee пул THENA Fusion «в обновлении» до записи комиссии следующего
+//! блока (settle_fusion.rs, Need::NextFee): ни новая цена с прежней комиссией, ни комиссия текущего блока из Fee ядру
+//! и котировке не видны.
 
 use alloy::rpc::types::Log;
 use alloy::sol_types::SolEvent;
@@ -22,10 +31,23 @@ use crate::core::types::PoolState;
 
 use super::abi_algebra::IAlgebraPool;
 use super::events::Applied;
+use super::families::Proto;
 use super::registry::Entry;
 
-/// topic0 всех событий пула Algebra. Ошибок нет.
+/// topic0 всех событий пула THENA Fusion (вид thena_fusion): Swap / Mint / Burn и (решение 463) Fee / Initialize.
+/// Ошибок нет.
 pub fn topics() -> Vec<B256> {
+    let mut t = base_topics();
+    t.extend([
+        IAlgebraPool::Fee::SIGNATURE_HASH,
+        IAlgebraPool::Initialize::SIGNATURE_HASH,
+    ]);
+    t
+}
+
+/// topic0 Swap / Mint / Burn — общие с Algebra Integral (events_algebra_integral.rs берёт их отсюда; ревью t236: набор
+/// подписок Integral — прежний, без Fee / Initialize этого файла). Ошибок нет.
+pub fn base_topics() -> Vec<B256> {
     vec![
         IAlgebraPool::Swap::SIGNATURE_HASH,
         IAlgebraPool::Mint::SIGNATURE_HASH,
@@ -49,7 +71,14 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
     };
     if t0 == IAlgebraPool::Swap::SIGNATURE_HASH {
         return match IAlgebraPool::Swap::decode_log_data(d) {
-            Ok(s) => swap(e, U256::from(s.price), s.liquidity, s.tick.as_i32()),
+            Ok(s) => match swap(e, U256::from(s.price), s.liquidity, s.tick.as_i32()) {
+                // Решение 463 (T463-02): у THENA Fusion Swap меняет точку оракула и volumePerLiquidityInBlock —
+                // комиссию следующего блока перечитать на блоке события (integral_fee.rs apply → fusion_fee.rs).
+                Applied::Updated if e.family.proto == Proto::Algebra => {
+                    Applied::Fee("THENA Fusion Swap: комиссия следующего блока".into())
+                }
+                x => x,
+            },
             Err(err) => bad("Swap", err),
         };
     }
@@ -60,7 +89,30 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
     if t0 == IAlgebraPool::Burn::SIGNATURE_HASH {
         return Applied::Refresh("Algebra Burn: перечитать ликвидность и карту тиков".into());
     }
+    // Решение 463: новая динамическая комиссия первого свопа блока (AlgebraPool.sol _getNewFee → emit Fee) — та, что
+    // записана в globalState.fee и действует до следующего пересчёта.
+    if t0 == IAlgebraPool::Fee::SIGNATURE_HASH {
+        return match IAlgebraPool::Fee::decode_log_data(d) {
+            Ok(f) => fee(e, u32::from(f.fee)),
+            Err(err) => bad("Fee", err),
+        };
+    }
+    // Initialize — начальная цена пула: перечитываем целиком (решение 463).
+    if t0 == IAlgebraPool::Initialize::SIGNATURE_HASH {
+        return Applied::Refresh("Algebra Initialize: перечитать пул".into());
+    }
     Applied::Ignored
+}
+
+/// Новая комиссия пула (событие Fee, решение 463). Ошибок нет.
+fn fee(e: &mut Entry, f: u32) -> Applied {
+    match &mut e.pool.state {
+        PoolState::Algebra { fee, .. } => {
+            *fee = f;
+            Applied::Updated
+        }
+        _ => Applied::Refresh("состояние пула не Algebra".into()),
+    }
 }
 
 /// Состояние после обмена: цена, ликвидность и тик (комиссию Swap не несёт — держится прежней, см. шапку). Ошибок нет.

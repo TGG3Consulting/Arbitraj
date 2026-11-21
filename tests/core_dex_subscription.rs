@@ -56,18 +56,21 @@ fn bsc_net(ticker: &str, token: Address) -> CoinNetworkInfo {
     CoinNetworkInfo {
         venue: bingx(),
         asset: Asset {
+            chain: None,
             ticker: ticker.into(),
-            bsc_contract: Some(token),
+            contract: Some(token),
         },
         network: "BEP20".into(),
         deposit_enabled: true,
         withdraw_enabled: true,
         withdraw_fee: None,
+        withdraw_fee_pct: None,
         withdraw_min: None,
         withdraw_max: None,
         deposit_min: None,
         deposit_confirmations: None,
         withdraw_precision: None,
+        withdraw_step: None,
         updated_at: Utc::now(),
     }
 }
@@ -80,7 +83,7 @@ fn coins(fx: &Value, market: &MarketState, kinds: &[(VenueId, VenueKind)]) -> Ve
         .iter()
         .map(|p| bsc_net(p["ticker"].as_str().unwrap(), addr(&p["token"])))
         .collect();
-    let networks = HashMap::from([(bingx(), nets)]);
+    let networks = HashMap::from([(bingx(), std::sync::Arc::new(nets))]);
     let quote = HashMap::from([(bingx(), "USDT".to_string())]);
     let bsc_network = HashMap::from([(bingx(), "BEP20".to_string())]);
     // Свежесть справочника пар (pairs_fresh.rs) на подписку DEX не влияет — не проверяется.
@@ -97,6 +100,7 @@ fn coins(fx: &Value, market: &MarketState, kinds: &[(VenueId, VenueKind)]) -> Ve
         market,
         pool_ok: &pool_ok,
         intermediate: &intermediate,
+        native: None,
     })
 }
 
@@ -124,8 +128,9 @@ fn spot_pairs(fx: &Value) -> MarketEvent {
         .unwrap()
         .iter()
         .map(|p| Asset {
+            chain: None,
             ticker: p["ticker"].as_str().unwrap().to_string(),
-            bsc_contract: Some(addr(&p["token"])),
+            contract: Some(addr(&p["token"])),
         })
         .collect();
     Snapshot::build(&syms, &assets).event(bingx(), at)
@@ -167,6 +172,7 @@ fn coin_without_bingx_pair_is_not_in_dex_subscription() {
     m.apply(MarketEvent::Invalidated {
         venue: bingx(),
         ticker: "CAKE".into(),
+        address: None,
     });
     assert_eq!(dex_list(&fx, &m, &kinds), vec!["CAKE", "TWT"]);
     // Биржа выключена — её подписка пустая, пар нет: DEX слушать незачем.

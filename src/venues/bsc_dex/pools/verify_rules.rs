@@ -11,6 +11,7 @@ use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
 
 use super::abi_check::IPoolImmutables as P;
+use super::abi_dmm::IDmmFactory;
 use super::abi_elastic::IElasticPool;
 use super::abi_v2v3::IV2Factory;
 use super::discover::sorted;
@@ -50,6 +51,16 @@ pub fn fill(f: &Family, r: &mut Read, got: &[Result<Bytes, String>]) -> Result<(
             r.v2_fee = Some(U256::from_be_slice(&b[..32]));
         }
         Proto::V2 => {}
+        // Nomiswap Stable (решение 284): полей сверх factory/token0/token1 нет (verify_calls.rs).
+        Proto::NomiStable => {}
+        // KyberSwap Classic DMM (решение 287): полей сверх factory/token0/token1 нет (verify_calls.rs).
+        Proto::KyberDmm => {}
+        // SmarDex (решение 288): полей сверх factory/token0/token1 нет (verify_calls.rs).
+        Proto::Smardex => {}
+        // Camelot V2 (решение 443): полей сверх factory/token0/token1 нет (verify_calls.rs).
+        Proto::CamelotV2 => {}
+        // Решение 470: Aero Basic — полей сверх factory/token0/token1 нет (verify_calls.rs).
+        Proto::AeroBasic => {}
         // KyberSwap Elastic (решение 81): swapFeeUnits → fee (feeUnits), tickDistance → spacing. Нет lmPool (не V3).
         Proto::KyberElastic => {
             r.fee = Some(
@@ -122,6 +133,24 @@ pub fn registered(pool: Address, answer: &[u8]) -> Result<(), String> {
     } else {
         Err(format!(
             "фабрика DEX не знает этот пул: её реестр по этим токенам даёт {got}"
+        ))
+    }
+}
+
+/// Реестр фабрики знает пул — по виду (решение 287): KyberSwap Classic DMM — пул в списке getPools(token0, token1);
+/// остальные — как registered (один адрес). Принимает: вид, адрес пула, ответ реестра. Ошибка — причина отказа.
+pub fn registered_for(f: &Family, pool: Address, answer: &[u8]) -> Result<(), String> {
+    if f.proto != Proto::KyberDmm {
+        return registered(pool, answer);
+    }
+    let list = IDmmFactory::getPoolsCall::abi_decode_returns(answer)
+        .map_err(|e| format!("ответ getPools фабрики не по ABI: {e}"))?;
+    if list.contains(&pool) {
+        Ok(())
+    } else {
+        Err(format!(
+            "фабрика DEX не знает этот пул: её getPools по этим токенам — {} пул(ов), этого среди них нет",
+            list.len()
         ))
     }
 }

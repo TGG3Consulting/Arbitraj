@@ -1,41 +1,49 @@
 <!--
   Файл: ui/src/components/SettingHistory.svelte
   Что делает: история изменений одной настройки (GET /api/settings/history?limit=N&name=…):
-    когда, область, было → стало, кто. Сколько записей — поле PageSize (без значения по умолчанию).
+    когда, область, было → стало, кто. Решение 242: scope — только одна область (&scope=ключ, как в SQLite). Сколько записей — поле PageSize (без значения по умолчанию).
     Обновляется, когда по живому потоку приходит изменение этой настройки.
-  Кто вызывает: components/SettingCard.svelte.
+  Кто вызывает: components/SettingCard.svelte, VenueDirMoney.svelte.
   От чего зависит: lib/api.js, lib/live.svelte.js, lib/labels.js, components/PageSize.svelte, ErrorText.svelte.
   Настройки: нет.
 -->
 <script>
   import { get } from '../lib/api.js';
-  import { onLive } from '../lib/live.svelte.js';
+  import { onLive, lagFor } from '../lib/live.svelte.js';
+  import { flight } from '../lib/flight.js';
   import { showValue, showTime } from '../lib/labels.js';
   import PageSize from './PageSize.svelte';
   import ErrorText from './ErrorText.svelte';
 
-  /** name — имя настройки. */
-  let { name } = $props();
+  /** name — имя настройки; scope — ключ области («venue_dir:bingx:cex_dex»; '' — все области). */
+  let { name, scope = '' } = $props();
   let limit = $state(null);
   let rows = $state([]);
   let error = $state('');
 
-  /** Читает историю; без размера страницы не читает. */
-  async function load() {
+  /** Читает историю; без размера страницы не читает (signal — отмена). Ошибка — в error; отмена — ничего. */
+  async function read(signal) {
     if (limit === null) return;
     try {
-      rows = await get(`/api/settings/history?limit=${limit}&name=${encodeURIComponent(name)}`);
+      const sc = scope ? `&scope=${encodeURIComponent(scope)}` : '';
+      rows = await get(`/api/settings/history?limit=${limit}&name=${encodeURIComponent(name)}${sc}`, signal);
       error = '';
     } catch (e) {
-      error = e.message;
+      if (!e.aborted) error = e.message;
     }
   }
+  /** Один запрос в полёте (lib/flight.js); смена объёма или уход — отмена. */
+  const load = flight(read);
 
   $effect(() => {
     load();
-    return onLive((m) => {
-      if (m.type === 'lagged' || (m.type === 'settings' && m.data.name === name)) load();
+    const off = onLive((m) => {
+      if (lagFor(m, 'settings') || (m.type === 'settings' && m.data.name === name)) load();
     });
+    return () => {
+      off();
+      load.cancel();
+    };
   });
 </script>
 

@@ -117,6 +117,7 @@ fn base_entry(
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     }
 }
 
@@ -174,7 +175,7 @@ fn v3(
     };
     e.ticks = Some(TickMap {
         spacing,
-        ticks,
+        ticks: ticks.into(),
         words,
     });
     e
@@ -214,15 +215,32 @@ async fn ctx() -> Ctx {
     let (jtx, _) = broadcast::channel(64);
     let journal = Journal::new(db.clone(), jtx);
     let settings = Store::load(db, changes, journal.clone()).await.unwrap();
-    let c = Ctx {
-        raw: RawLog::start(d.join("raw"), settings.clone()),
-        pace: Default::default(),
-        failover: Default::default(),
-        index: Default::default(),
-        settings,
-        vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
-        http: reqwest::Client::new(),
-        journal,
+    let c = {
+        let c = Ctx {
+            raw: RawLog::start(d.join("raw"), settings.clone()),
+            pace: Default::default(),
+            failover: Default::default(),
+            evm_chain: Default::default(),
+            place: arb::venues::bsc_dex::ctx::Place::BSC,
+            chains: Default::default(),
+            account: None,
+            index: Default::default(),
+            settings,
+            vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
+            http: reqwest::Client::new(),
+            journal,
+        };
+        // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+        c.settings
+            .set(
+                "dex.gas_ticker",
+                arb::settings::scope::Scope::Venue("bsc_dex".into()),
+                Some(serde_json::json!("BNB")),
+                "тест",
+            )
+            .await
+            .unwrap();
+        c
     };
     let v = Scope::Venue("bsc_dex".into());
     for (n, val) in [
@@ -247,8 +265,9 @@ async fn graph_and_ctx() -> (graph::Graph, Parts) {
     let got = load();
     let p = Parts::new(ctx().await);
     p.tokens.set(&[Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(USDT),
+        contract: Some(USDT),
     }]);
     for e in [
         v3(
@@ -335,6 +354,8 @@ fn leg_of(step: &route_paths::Step, gas: u64) -> Leg {
         usable: Usable {
             gas,
             hook_pct: Decimal::ZERO,
+            tax_pct: Decimal::ZERO,
+            hook: Default::default(),
         },
         token_in: step.token_in,
         token_out: step.token_out,
@@ -413,6 +434,22 @@ async fn finds_cycles_from_base() {
     assert!(route_paths::enumerate_cycles(&g, USDT, 1, 100).is_empty());
 }
 
+/// Решение 124: исполнимость сигнала = есть форма исполнения (exec/cycle_gate.rs). Задаёт адрес исполнителя ArbExecutor —
+/// хопы V3 (pancakeswap_v3 / uniswap_v3) — его вид, цикл исполним через исполнитель. Ошибок нет.
+async fn with_executor(p: &Parts) {
+    // Решение 132: исполнитель — у кошелька строки «пробы» (сигнал цикла без счёта).
+    let a = p.ctx.settings.accounts();
+    let id = a.reserve_id().await.unwrap();
+    a.add(&id, "тест", "wallet.test.key", "bsc_dex", "тест")
+        .await
+        .unwrap();
+    let x = "0x00000000000000000000000000000000000000ee".to_string();
+    a.set_executor(&id, Some(x), "тест").await.unwrap();
+    a.map_set(arb::settings::accounts::ROW_PROBE, Some(&id), "тест")
+        .await
+        .unwrap();
+}
+
 #[tokio::test]
 async fn evaluates_cycle_profit_model_85() {
     let (g, p) = graph_and_ctx().await;
@@ -444,6 +481,7 @@ async fn evaluates_cycle_profit_model_85() {
     let gas_wei = U256::from(1_000_000_000u64); // 1 gwei
     let tip = Decimal::ZERO;
     let rate = Decimal::new(600, 0); // 600 USDT за 1 BNB (базовая = USDT)
+    with_executor(&p).await;
     let sig = cycle::build_signal(&p.ctx, USDT, "USDT", &path, &legs, gas_wei, tip, Some(rate))
         .expect("сигнал собирается");
 
@@ -463,7 +501,7 @@ async fn evaluates_cycle_profit_model_85() {
         "с учётом газа прибыль тем более отрицательна"
     );
 
-    // Оба хопа через tradable-семейства (pancakeswap_v3 / uniswap_v3) → цикл исполним как есть.
+    // Оба хопа V3 — вид шага исполнителя, исполнитель задан → цикл исполним как есть (решение 124).
     assert!(sig.executable, "все хопы tradable → исполним");
     assert!(sig.exec_note.is_none());
     assert_eq!(sig.hops.len(), 2);
@@ -537,6 +575,7 @@ async fn maps_cycle_signal_to_core_dex_cycle_74() {
     let path = cycle::eval(&p.ctx, &legs, input).unwrap();
     let gas_wei = U256::from(1_000_000_000u64);
     let rate = Decimal::new(600, 0);
+    with_executor(&p).await;
     let sig = cycle::build_signal(
         &p.ctx,
         USDT,

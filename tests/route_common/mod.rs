@@ -8,9 +8,12 @@
 //! захвачены, поэтому узлы графа — условные адреса в том же порядке сортировки, что реальные
 //! (CAKE < USDT < BTCB < WBNB), чтобы ориентация token0/token1 у V3 совпадала с записанным sqrtPriceX96.
 //! Пары пулов — по тегам записи (авторитетная топология).
-//! Кто вызывает: tests/bsc_dex_split.rs, tests/bsc_dex_verify.rs.
+//! Кто вызывает: tests/bsc_dex_split.rs, tests/bsc_dex_verify.rs, tests/core_fit_volume_294.rs (load, v3, v2, ctx — запись
+//! fit_volume_2026-11-15). Сцена решения 271 (пул только на форке) — fork.rs.
 //! От чего зависит: arb::venues::bsc_dex::{pools, parts, ctx}, abi_v2v3; arb::settings; arb::storage.
 #![allow(dead_code)]
+
+pub mod fork;
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -51,7 +54,9 @@ pub const WBNB_USDT_V2: Address = address!("0x16b9a82891338f9ba80e2d6970fdda79d1
 pub const CAKE_BTCB_UNI: Address = address!("0x8e8410f4878079fc03a287a7ded4a65afb87cc06");
 pub const BTCB_WBNB_PCS: Address = address!("0x6bbc40579ad1bbd243895ca0acb086bb6300d636");
 
-fn load(dir: &str) -> HashMap<String, Vec<u8>> {
+/// Ответы записи `dir/responses.json` по имени вызова (решение 294: и запись fit_volume_2026-11-15). Ошибок нет (паника
+/// теста на битой записи).
+pub fn load(dir: &str) -> HashMap<String, Vec<u8>> {
     let v: Value =
         serde_json::from_str(&std::fs::read_to_string(format!("{dir}/responses.json")).unwrap())
             .unwrap();
@@ -104,11 +109,13 @@ fn base(kind: &str, fee: Option<u32>, addr: Address, coin: Address, counter: Add
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-fn v3(
+/// Пул V3 записи: slot0, liquidity, слова TickLens `words` (решение 294: и запись fit_volume_2026-11-15).
+pub fn v3(
     got: &HashMap<String, Vec<u8>>,
     tag: &str,
     pancake: bool,
@@ -160,13 +167,14 @@ fn v3(
     };
     e.ticks = Some(TickMap {
         spacing,
-        ticks,
+        ticks: ticks.into(),
         words,
     });
     e
 }
 
-fn v2(
+/// Пара V2 записи (getReserves). Узлы — в порядке сортировки адресов.
+pub fn v2(
     got: &HashMap<String, Vec<u8>>,
     tag: &str,
     addr: Address,
@@ -210,7 +218,8 @@ fn dex_row(id: &str, version: &str, v3: bool) -> Vec<(String, Scope, Value)> {
         .collect()
 }
 
-async fn ctx() -> Ctx {
+/// Окружение на настоящей SQLite со строками DEX и настройками котировки (решение 294: и запись fit_volume_2026-11-15).
+pub async fn ctx() -> Ctx {
     use std::sync::atomic::{AtomicU64, Ordering};
     static N: AtomicU64 = AtomicU64::new(0);
     let uniq = format!(
@@ -226,19 +235,38 @@ async fn ctx() -> Ctx {
     let (jtx, _) = broadcast::channel(64);
     let journal = Journal::new(db.clone(), jtx);
     let settings = Store::load(db, changes, journal.clone()).await.unwrap();
-    let c = Ctx {
-        raw: RawLog::start(d.join("raw"), settings.clone()),
-        pace: Default::default(),
-        failover: Default::default(),
-        index: Default::default(),
-        settings,
-        vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
-        http: reqwest::Client::new(),
-        journal,
+    let c = {
+        let c = Ctx {
+            raw: RawLog::start(d.join("raw"), settings.clone()),
+            pace: Default::default(),
+            failover: Default::default(),
+            evm_chain: Default::default(),
+            place: arb::venues::bsc_dex::ctx::Place::BSC,
+            chains: Default::default(),
+            account: None,
+            index: Default::default(),
+            settings,
+            vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
+            http: reqwest::Client::new(),
+            journal,
+        };
+        // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+        c.settings
+            .set(
+                "dex.gas_ticker",
+                arb::settings::scope::Scope::Venue("bsc_dex".into()),
+                Some(serde_json::json!("BNB")),
+                "тест",
+            )
+            .await
+            .unwrap();
+        c
     };
     let v = Scope::Venue("bsc_dex".into());
     let venue: Vec<(String, Scope, Value)> = [
         ("venue.quote_asset", json!("USDT")),
+        // Решение 416: chainId сети площадки — настройка (BSC mainnet 56 — значение протокола); подпись бандла.
+        ("dex.evm_chain_id", json!(56)),
         ("dex.min_pool_liquidity_usd", json!(1)),
         ("dex.depth_band_pct", json!(5)),
         ("dex.depth_hysteresis_pct", json!(0)),
@@ -263,7 +291,51 @@ async fn ctx() -> Ctx {
             .await
             .unwrap();
     }
+    tax_limits(&c, "5").await;
     c
+}
+
+/// Готовый канал отправки `id` способом `method` («bundle» / «single») — без ключа, без чаевых (решение 121 B3:
+/// бандл-маршрут исполним, только если все включённые каналы бандловые). Адрес канала к сети не используется: тест
+/// только читает готовность канала (send::ready::prepare). Принимает: окружение, id канала, способ. Ошибок нет.
+pub async fn channel(p: &Parts, id: &str, method: &str) {
+    let s = Scope::Channel(id.into());
+    for (n, v) in [
+        ("channel.enabled", json!(true)),
+        ("channel.url", json!("https://example.invalid")),
+        ("channel.method", json!(method)),
+        ("channel.min_gas_price_gwei", json!("0.05")),
+        ("channel.tip_enabled", json!(false)),
+    ] {
+        p.ctx
+            .settings
+            .set(n, s.clone(), Some(v), "тест")
+            .await
+            .unwrap();
+    }
+}
+
+/// Решение 132: исполнитель ArbExecutor — у кошелька. Кошелёк «тест» (создаётся один раз) с адресом исполнителя `x`,
+/// строка «пробы» → он (котировки и сигналы без счёта берут исполнитель кошелька проб). Ошибок нет.
+#[allow(dead_code)]
+pub async fn executor(p: &Parts, x: &str) {
+    let a = p.ctx.settings.accounts();
+    let id = match a.wallets().into_iter().find(|w| w.name == "тест") {
+        Some(w) => w.id,
+        None => {
+            let id = a.reserve_id().await.unwrap();
+            a.add(&id, "тест", "wallet.test.key", "bsc_dex", "тест")
+                .await
+                .unwrap();
+            id
+        }
+    };
+    a.set_executor(&id, Some(x.to_string()), "тест")
+        .await
+        .unwrap();
+    a.map_set(arb::settings::accounts::ROW_PROBE, Some(&id), "тест")
+        .await
+        .unwrap();
 }
 
 /// Окружение по записи маршрута routes_2026-10-29 (блок 130521896) — удобный частный случай parts_from.
@@ -279,12 +351,14 @@ pub async fn parts_from(dir: &str) -> Parts {
     let p = Parts::new(ctx().await);
     p.tokens.set(&[
         Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: Some(USDT),
+            contract: Some(USDT),
         },
         Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: Some(CAKE),
+            contract: Some(CAKE),
         },
     ]);
     for t in [CAKE, USDT, BTCB, WBNB] {
@@ -294,8 +368,9 @@ pub async fn parts_from(dir: &str) -> Parts {
     p.checks.set_coin(CoinCheck {
         venue: VenueId("bsc_dex".into()),
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: Some(CAKE),
+            contract: Some(CAKE),
         },
         taxes: CheckState::Known(TokenTaxes {
             buy_pct: Decimal::ZERO,
@@ -382,7 +457,31 @@ pub async fn parts_from(dir: &str) -> Parts {
             f.gas_sell = Some(120_000);
             f.quoter.buy = Some(Ok(()));
             f.quoter.sell = Some(Ok(()));
+            f.taxes = Some(clean_taxes());
         });
     }
     p
+}
+
+/// Решение 146: налоги монеты пула, измеренные пробой в этом пуле, — нулевые (как налоги монет записи выше).
+/// Ошибок нет.
+#[allow(dead_code)]
+pub fn clean_taxes() -> arb::venues::bsc_dex::check::state::PoolTaxes {
+    arb::venues::bsc_dex::check::state::PoolTaxes {
+        buy_pct: Decimal::ZERO,
+        sell_pct: Some(Decimal::ZERO),
+        transfer_pct: Decimal::ZERO,
+    }
+}
+
+/// Решение 146: пороги налога пула в котировке (quote/pool_tax.rs) — глобальные tax.max_buy_pct / tax.max_sell_pct.
+/// Принимает: окружение, порог, %. Ошибок нет.
+#[allow(dead_code)]
+pub async fn tax_limits(c: &Ctx, pct: &str) {
+    for n in ["tax.max_buy_pct", "tax.max_sell_pct"] {
+        c.settings
+            .set(n, Scope::Global, Some(json!(pct)), "тест")
+            .await
+            .unwrap();
+    }
 }

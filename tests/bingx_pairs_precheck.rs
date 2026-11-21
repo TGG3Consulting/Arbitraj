@@ -41,8 +41,9 @@ fn market(at: DateTime<Utc>) -> MarketState {
     let assets: Vec<Asset> = ["TAG", "CAKE", "SEA"]
         .iter()
         .map(|t| Asset {
+            chain: None,
             ticker: t.to_string(),
-            bsc_contract: None,
+            contract: None,
         })
         .collect();
     let mut m = MarketState::default();

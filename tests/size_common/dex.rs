@@ -63,12 +63,22 @@ pub fn pool() -> Entry {
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     }
 }
 
 /// Окружение адаптера DEX на настоящей SQLite: комиссия пары V2 — настройка dex.v2_fee_pct.
+/// Каталог базы уникален на каждый вызов (pid + счётчик, как tests/route_common): тесты одного набора идут потоками
+/// одного процесса, и два теста с одним `name` (Rec::load("uncapped-maxwin") в двух тестах tests/uncapped_maxwin.rs)
+/// раньше делили один файл — remove_dir_all второго удалял базу, открытую первым (SQLite «disk I/O error», t138).
 pub async fn ctx(name: &str) -> Ctx {
-    let dir = std::env::temp_dir().join(format!("arb-size-{name}-{}", std::process::id()));
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "arb-size-{name}-{}-{}",
+        std::process::id(),
+        N.fetch_add(1, Ordering::Relaxed)
+    ));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let db = Db::open(&dir.join("t.sqlite")).unwrap();
@@ -76,15 +86,32 @@ pub async fn ctx(name: &str) -> Ctx {
     let (jtx, _) = broadcast::channel(64);
     let journal = Journal::new(db.clone(), jtx);
     let settings = Store::load(db, changes, journal.clone()).await.unwrap();
-    let c = Ctx {
-        raw: RawLog::start(dir.join("raw"), settings.clone()),
-        pace: Default::default(),
-        failover: Default::default(),
-        index: Default::default(),
-        settings,
-        vault: arb::secrets::Vault::locked(dir.join("secrets.enc")),
-        http: reqwest::Client::new(),
-        journal,
+    let c = {
+        let c = Ctx {
+            raw: RawLog::start(dir.join("raw"), settings.clone()),
+            pace: Default::default(),
+            failover: Default::default(),
+            evm_chain: Default::default(),
+            place: arb::venues::bsc_dex::ctx::Place::BSC,
+            chains: Default::default(),
+            account: None,
+            index: Default::default(),
+            settings,
+            vault: arb::secrets::Vault::locked(dir.join("secrets.enc")),
+            http: reqwest::Client::new(),
+            journal,
+        };
+        // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+        c.settings
+            .set(
+                "dex.gas_ticker",
+                arb::settings::scope::Scope::Venue("bsc_dex".into()),
+                Some(serde_json::json!("BNB")),
+                "тест",
+            )
+            .await
+            .unwrap();
+        c
     };
     let scope = Scope::Dex("pancakeswap_v2".into());
     c.settings

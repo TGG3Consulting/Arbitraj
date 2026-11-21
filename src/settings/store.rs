@@ -6,10 +6,15 @@
 //! Настройки: хранит их все. Значений по умолчанию нет: не задано — значит не задано.
 //!
 //! Изменения выполняются строго по одному (writer): база, кэш и рассылка всегда в одном порядке.
-//! История — settings/history.rs.
+//! Решение 352: поколение значений (generation) растёт на каждое изменение после записи в кэш.
+//! Решение 239: копия значений на момент входа в сделку — settings/pinned.rs (тот же Arc значений, без копирования).
+//! Решение 409 (t194): значения в памяти — неизменяемый снимок за ArcSwap (settings/snapshot.rs): чтение без замка,
+//! изменение — копия значений и новый снимок под замком писателя.
+//! Решение 242, дополнение: пара «площадка · тип направления» при записи проверяется по видам площадок шлюза
+//! (settings/venue_kinds.rs).
+//! История — settings/history.rs. Кошельки DEX и маппинг (решение 132) — settings/accounts/, доступ — accounts(). Решение 128: новый id области «DEX» не длиннее dex.id_max_len (если задана).
 
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use chrono::Utc;
 use rusqlite::params;
@@ -21,6 +26,8 @@ use crate::storage::journal::{Journal, Level};
 
 use super::catalog;
 use super::live::Change;
+use super::scope::check_new_dex_id_len;
+use super::snapshot::{Snapshot, Values};
 use super::value::{Scope, validate};
 
 /// Ошибка записи настройки.
@@ -34,17 +41,30 @@ pub enum SetError {
     Db(#[from] DbError),
 }
 
-type Key = (String, Scope);
-
 /// Хранилище настроек. Дешёво клонируется.
 #[derive(Clone)]
 pub struct Store {
     pub(super) db: Db,
-    cache: Arc<RwLock<HashMap<Key, Value>>>,
-    changes: broadcast::Sender<Change>,
-    journal: Journal,
+    /// Значения в памяти. Решение 409 (t194): неизменяемый снимок за ArcSwap — чтение без замка, запись — новый
+    /// снимок (settings/snapshot.rs). Решение 239: копия на момент входа — тот же Arc значений (settings/pinned.rs).
+    pub(super) cache: Arc<Snapshot>,
+    /// Решение 239: копия на момент входа — только чтение (set отказывает).
+    pub(super) pinned: bool,
+    pub(super) changes: broadcast::Sender<Change>,
+    pub(super) journal: Journal,
     /// Изменения — строго по одному.
-    writer: Arc<Mutex<()>>,
+    pub(super) writer: Arc<Mutex<()>>,
+    /// Кошельки DEX и маппинг «биржа → кошелёк» (решение 132, settings/accounts/) — свои таблицы и история.
+    accounts: super::accounts::Accounts,
+    /// Решение 211 (ревью В9): тикеры монет по адресу — запасное чтение области «монета» (coin_alias.rs).
+    aliases: super::coin_alias::CoinAliases,
+    /// Решение 352: поколение значений — растёт на каждое изменение (set), после записи в кэш; снимки (pinned.rs)
+    /// делят счётчик с живым хранилищем. Ядро сравнивает поколение, чтобы знать «настройки не менялись». Растёт и на
+    /// отметку ядра (store_mark.rs mark_now, решение 355) — она тоже меняет значение.
+    pub(super) generation: Arc<std::sync::atomic::AtomicU64>,
+    /// Решение 242, дополнение: виды площадок шлюза — проверка пары «площадка · тип направления» при записи
+    /// (venue_kinds.rs; сообщает ядро при запуске).
+    venue_kinds: super::venue_kinds::VenueKinds,
 }
 
 impl Store {
@@ -68,37 +88,85 @@ impl Store {
                 it.collect()
             })
             .await?;
-        let mut map = HashMap::new();
+        let accounts = super::accounts::Accounts::load(db.clone(), journal.clone()).await?;
+        let mut map = Values::default();
         for (name, scope, value) in rows {
             match (
                 Scope::from_key(&scope),
                 serde_json::from_str::<Value>(&value),
             ) {
-                (Some(s), Ok(v)) => {
-                    map.insert((name, s), v);
-                }
+                (Some(s), Ok(v)) => map.put(&name, &s, Some(v)),
                 _ => tracing::error!(%name, %scope, "пропущена повреждённая строка настроек"),
             }
         }
         Ok(Self {
             db,
-            cache: Arc::new(RwLock::new(map)),
+            cache: Arc::new(Snapshot::new(Arc::new(map))),
+            pinned: false,
             changes,
             journal,
             writer: Arc::new(Mutex::new(())),
+            accounts,
+            aliases: Default::default(),
+            venue_kinds: Default::default(),
+            generation: Default::default(),
         })
     }
 
-    /// Значение ровно в этой области (без подстановки из общей).
-    /// Возвращает: значение или None — не задано.
-    pub fn get_exact(&self, name: &str, scope: &Scope) -> Option<Value> {
-        let cache = self.cache.read().unwrap_or_else(|p| p.into_inner());
-        cache.get(&(name.to_string(), scope.clone())).cloned()
+    /// Решение 352: поколение значений настроек (растёт на каждое изменение). Ошибок нет.
+    pub fn generation(&self) -> u64 {
+        self.generation.load(std::sync::atomic::Ordering::Acquire)
     }
 
-    /// Действующее значение: монета сильнее площадки, площадка сильнее всей системы.
+    /// Кошельки DEX и маппинг (решение 132). Ошибок нет.
+    pub fn accounts(&self) -> &super::accounts::Accounts {
+        &self.accounts
+    }
+
+    /// Ревью 325: то же ли это хранилище (общая копия значений в памяти; снимок решения 239 — другое). Нужно ячейкам
+    /// настроек, привязанным к хранилищу (venues/bsc_dex/pools/event_flags.rs). Ошибок нет.
+    pub fn same(&self, other: &Store) -> bool {
+        Arc::ptr_eq(&self.cache, &other.cache)
+    }
+
+    /// Значение ровно в этой области (без подстановки из общей).
+    /// Возвращает: значение или None — не задано. Решение 409: снимок без замка (settings/snapshot.rs).
+    pub fn get_exact(&self, name: &str, scope: &Scope) -> Option<Value> {
+        self.cache.load().get(name, scope).cloned()
+    }
+
+    /// Тикеры монет по адресу для запасного чтения области «монета» (решение 211, ревью В9; coin_alias.rs).
+    pub fn coin_aliases(&self) -> &super::coin_alias::CoinAliases {
+        &self.aliases
+    }
+
+    /// Виды площадок шлюза для проверки области «площадка + тип направления» при записи (решение 242, дополнение;
+    /// venue_kinds.rs). Ошибок нет.
+    pub fn venue_kinds(&self) -> &super::venue_kinds::VenueKinds {
+        &self.venue_kinds
+    }
+
+    /// Действующее значение: монета сильнее площадки, площадка сильнее всей системы. Решение 211 (второе ревью, п.3):
+    /// монета — адрес; значения по адресу нет — из старых значений по тикеру монеты (показной и тикеры площадок,
+    /// coin_alias.rs) применяется ТОЛЬКО coin.blocked = да (безопасно: монета не торгуется); любое другое значение по
+    /// тикеру неоднозначно и НЕ применяется — дальше площадка и вся система, одна запись в журнал на настройку и тикер.
     /// Принимает: имя, площадку и монету (если применимо). Возвращает: значение или None.
     pub fn resolve(&self, name: &str, venue: Option<&str>, coin: Option<&str>) -> Option<Value> {
+        if let Some(c) = coin {
+            if let Some(v) = self.get_exact(name, &Scope::Coin(c.to_string())) {
+                return Some(v);
+            }
+            for t in self.aliases.tickers(c) {
+                let Some(v) = self.get_exact(name, &Scope::Coin(t.clone())) else {
+                    continue;
+                };
+                if name == "coin.blocked" && v.as_bool() == Some(true) {
+                    self.aliases.report(&self.journal, name, c, &t, true);
+                    return Some(v);
+                }
+                self.aliases.report(&self.journal, name, c, &t, false);
+            }
+        }
         let order = [
             coin.map(|c| Scope::Coin(c.to_string())),
             venue.map(|v| Scope::Venue(v.to_string())),
@@ -112,10 +180,10 @@ impl Store {
 
     /// Все заданные значения — для экрана «Настройки».
     pub fn all(&self) -> Vec<(String, Scope, Value)> {
-        let cache = self.cache.read().unwrap_or_else(|p| p.into_inner());
+        let cache = self.cache.load();
         cache
             .iter()
-            .map(|((n, s), v)| (n.clone(), s.clone(), v.clone()))
+            .map(|(n, s, v)| (n.to_string(), s.clone(), v.clone()))
             .collect()
     }
 
@@ -133,6 +201,12 @@ impl Store {
     ) -> Result<Option<Change>, SetError> {
         // Имени нет в каталоге (настройку удалили из кода, например dex.enabled) — разрешено только очистить
         // оставшееся значение: задать его нельзя (решение 59: устаревшие настройки удаляет человек из интерфейса).
+        // Решение 239: копия настроек на момент входа — только для чтения.
+        if self.pinned {
+            return Err(SetError::Invalid(format!(
+                "«{name}»: это копия настроек на момент входа в сделку — изменить нельзя"
+            )));
+        }
         let new = match (catalog::find(name), value) {
             (Some(def), Some(v)) => Some(validate(def, &scope, &v).map_err(SetError::Invalid)?),
             (_, None)
@@ -142,7 +216,20 @@ impl Store {
             }
             _ => return Err(SetError::Unknown(name.to_string())),
         };
+        // Решение 242, дополнение: пара «площадка · тип направления» должна подходить виду площадки шлюза (очистка —
+        // без проверки: старую неверную пару можно удалить).
+        if let (Scope::VenueDir(id), Some(_)) = (&scope, &new) {
+            self.venue_kinds.check(id).map_err(SetError::Invalid)?;
+        }
         let _turn = self.writer.lock().await;
+        // Решение 128: предел длины нового id DEX (dex.id_max_len, необязательная; очистка не проверяется).
+        if let (Scope::Dex(id), Some(_)) = (&scope, &new) {
+            let max = self
+                .get_exact("dex.id_max_len", &Scope::Global)
+                .and_then(|v| v.as_u64());
+            let known = self.cache.load().has_scope(&scope);
+            check_new_dex_id_len(id, max, known).map_err(SetError::Invalid)?;
+        }
         let old = self.get_exact(name, &scope);
         if old == new {
             return Ok(None);
@@ -177,13 +264,36 @@ impl Store {
                 tx.commit()
             })
             .await?;
-        {
-            let mut cache = self.cache.write().unwrap_or_else(|p| p.into_inner());
-            let key = (name.to_string(), scope.clone());
-            match &new {
-                Some(v) => cache.insert(key, v.clone()),
-                None => cache.remove(&key),
-            };
+        // Решение 409: новый снимок значений под замком писателя кэша (settings/snapshot.rs); читатели видят старый
+        // или новый снимок целиком.
+        let applied = self.cache.update(
+            |cur| {
+                // Решение 355: пока шла запись в базу, отметка ядра (store_mark.rs) могла поменять значение в памяти —
+                // она сильнее: значение в памяти не трогаем, отметка сама запишется в базу поверх этого изменения.
+                if cur.get(name, &scope) != old.as_ref() {
+                    tracing::warn!(
+                        name,
+                        "настройка изменена в базе, но в памяти осталась отметка ядра (решение 355)"
+                    );
+                    return (false, None);
+                }
+                let mut next = cur.clone();
+                next.put(name, &scope, new.clone());
+                (true, Some(next))
+            },
+            // Решение 352 (ревью t160 Н4): поколение растёт под замком записи кэша — вместе со значением.
+            || {
+                self.generation
+                    .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            },
+        );
+        // Ревью слияния (Н7): значение перебито отметкой ядра — в памяти его нет: журнал «изменено» и рассылку не
+        // делаем (интерфейс не увидит «изменено» на недействующее значение), вызывающему — понятная причина.
+        if !applied {
+            return Err(SetError::Invalid(format!(
+                "«{name}»: пока изменение записывалось, ядро поставило свою отметку этой настройки (решение 355) — \
+                 действует значение отметки, изменение не применено; повторите при необходимости"
+            )));
         }
         let change = Change {
             name: name.to_string(),

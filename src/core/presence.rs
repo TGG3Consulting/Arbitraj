@@ -1,11 +1,12 @@
 //! Файл: core/presence.rs
 //! Что делает: есть ли монета на одной площадке и в какой роли (часть справочника, шаг 1 ТЗ):
 //! у биржи — сеть BSC с адресом контракта, ввод и вывод, пара торгуется (статус, покупка и продажа через API),
-//! пришедший стакан; у DEX — допущенный пул с USDT
+//! биржа примет наш тип ордера на паре (решение 254), пришедший стакан; у DEX — допущенный пул с USDT
 //! для того же адреса контракта или — если включено (решение 52) — пул с промежуточной монетой из списка.
 //! Кто вызывает: core/registry.rs (build).
 //! От чего зависит: core/types, market_state.rs, registry.rs (Presence, Exclusion, Inputs).
-//! Настройки: нет своих (название сети BSC — venue.bsc_network — читает rebuild.rs).
+//! Настройки: нет своих (имя сети группы — venue.bsc_network или, решение 431, venue.<сеть>_network — читают rebuild.rs и
+//! rebuild_build.rs).
 
 use alloy_primitives::Address;
 
@@ -19,9 +20,12 @@ use super::registry::{Exclusion, Inputs, Presence};
 /// названию bsc — venue.bsc_network), статусы ввода и вывода, состояние спот-пары (MarketEvent::SpotPairs) и стакан.
 /// Причины по порядку: нет сети BSC → сеть есть, адреса нет → пары нет (или справочник пар ещё не пришёл) →
 /// справочнику пар верить нельзя (fresh: устарел, порог не задан — pairs_fresh.rs) → пара не торгуется по статусу →
-/// через API нельзя ни купить, ни продать → стакан не пришёл.
+/// через API нельзя ни купить, ни продать → биржа не примет наш ордер на паре (решение 254, order_block) → стакан не
+/// пришёл.
 /// Покупка и продажа через API по отдельности закрывают свою сторону (can_buy / can_sell), а не всю монету.
-/// Принимает: биржу, тикер, сети монеты, название сети BSC (None — не задано), свежесть справочника пар, рынок.
+/// Решение 431: `nets` — записи сети группы справочника (core/net_chain.rs, registry_chains.rs), `bsc` — имя этой сети у
+/// биржи (сеть по умолчанию — venue.bsc_network; другая — venue.<сеть>_network).
+/// Принимает: биржу, тикер, сети монеты, имя сети группы (None — не задано), свежесть справочника пар, рынок.
 /// Ошибок нет.
 pub fn cex(
     venue: &VenueId,
@@ -31,7 +35,7 @@ pub fn cex(
     fresh: &Result<(), String>,
     market: &MarketState,
 ) -> Presence {
-    let with_contract = nets.iter().find(|i| i.asset.bsc_contract.is_some());
+    let with_contract = nets.iter().find(|i| i.asset.contract.is_some());
     let net = with_contract.or_else(|| nets.iter().find(|i| Some(i.network.as_str()) == bsc));
     let pair = market.pair(venue, ticker);
     let excluded = match (net, with_contract, pair) {
@@ -43,11 +47,15 @@ pub fn cex(
         )],
         (_, _, Some(p)) if !p.online => vec![Exclusion::PairNotTrading(p.status)],
         (_, _, Some(p)) if !p.api_buy && !p.api_sell => vec![Exclusion::NoApiTrading],
+        (_, _, Some(p)) if p.order_block.is_some() => vec![Exclusion::OrderTypeNotAccepted(
+            p.order_block.clone().unwrap_or_default(),
+        )],
         _ if market.book(venue, ticker).is_none() => vec![Exclusion::NoSpotBook],
         _ => vec![],
     };
     Presence {
         venue: venue.clone(),
+        ticker: ticker.to_string(),
         network: net.map(|i| i.network.clone()),
         can_receive: net.is_some_and(|i| i.deposit_enabled),
         can_send: net.is_some_and(|i| i.withdraw_enabled),
@@ -62,7 +70,8 @@ pub fn cex(
 /// Монета на DEX: допущенный пул с USDT для этого адреса контракта; если его нет и промежуточные монеты
 /// включены (решение 52) — допущенный пул с промежуточной монетой, у которой самой есть допущенный пул
 /// с USDT (иначе маршрут «USDT → промежуточная → монета» не собрать). Ошибок нет.
-pub fn dex(venue: &VenueId, token: Address, inp: &Inputs) -> Presence {
+/// Принимает: DEX, адрес монеты, показное имя монеты (решение 211 — у DEX своего тикера нет), входные данные.
+pub fn dex(venue: &VenueId, token: Address, ticker: &str, inp: &Inputs) -> Presence {
     let mut via = None;
     let excluded = match inp.usdt {
         None => vec![Exclusion::NoUsdtAddress],
@@ -91,6 +100,7 @@ pub fn dex(venue: &VenueId, token: Address, inp: &Inputs) -> Presence {
     };
     Presence {
         venue: venue.clone(),
+        ticker: ticker.to_string(),
         network: None,
         can_receive: true,
         can_send: true,

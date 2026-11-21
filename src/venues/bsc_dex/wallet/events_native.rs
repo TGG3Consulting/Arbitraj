@@ -101,8 +101,9 @@ impl Native {
         Ok(Some(BalanceChange {
             venue: ctx.venue(),
             asset: Asset {
+                chain: None,
                 ticker,
-                bsc_contract: Some(w),
+                contract: Some(w),
             },
             delta,
             kind,
@@ -110,6 +111,7 @@ impl Native {
             tx_hash: None,
             at: Utc::now(),
             source: format!("баланс BNB кошелька, блоки {}–{block}", from + 1),
+            account: ctx.account.clone().map(crate::core::types::DexAccountId),
         }))
     }
 }

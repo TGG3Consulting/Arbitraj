@@ -2,7 +2,8 @@
 //! Что делает: выбор лучшей из двух котировок одной стороны — сначала больше исполнимое количество, затем лучше итог
 //! в USDT после газа (продажа — больше получим, покупка — меньше отдадим). Газ в USDT — продажей суммы газа в BNB
 //! в пул «BNB — USDT» реестра (монета или промежуточная с тикером BNB); нет такого пула — сравнение без газа.
-//! Кто вызывает: quote/mod.rs (прямой пул против пути через промежуточную), quote/smart_quote.rs (умный против Uniswap).
+//! Кто вызывает: quote/mod.rs (прямой пул против пути через промежуточную), quote/smart_quote.rs (умный против Uniswap);
+//! gas_usdt — ещё best_of/extra.rs (решение 123).
 //! От чего зависит: quote/pool_quote.rs, pools/registry.rs, tokens.rs, num.rs.
 //! Настройки: нет своих.
 //!
@@ -13,7 +14,6 @@ use rust_decimal::Decimal;
 use crate::core::types::{Quote, Side};
 
 use super::super::num;
-use super::super::wallet::balances::BNB;
 use super::{Quoting, pool_quote};
 
 /// Больший итог из двух котировок. Ошибок нет.
@@ -41,18 +41,23 @@ pub async fn pick(q: &Quoting, a: Quote, b: Quote, side: Side, usdt_dec: u8) -> 
 }
 
 /// Затраты котировки в BNB (не в цене), переведённые в USDT по пулу «BNB — USDT» реестра. None — нет пула.
-async fn gas_usdt(q: &Quoting, x: &Quote, usdt_dec: u8) -> Option<Decimal> {
+/// Решение 123: открыта для best_of/extra.rs (газ обеих котировок «лучшего из двух»).
+pub async fn gas_usdt(q: &Quoting, x: &Quote, usdt_dec: u8) -> Option<Decimal> {
     let ctx = &q.ctx;
     let usdt = q.tokens.usdt(ctx).ok()?;
+    // Решение 416: тикер газа — dex.gas_ticker площадки (gas_ticker.rs); не задана — газа не перевести (None).
+    let gas_t = super::super::gas_ticker::read(ctx).ok()?;
     let bnb: Decimal = x
         .costs
         .iter()
-        .filter(|c| c.asset == BNB && !c.in_price)
+        .filter(|c| c.asset == gas_t && !c.in_price)
         .map(|c| c.amount)
         .sum();
+    // Решение 211: пулы BNB — по адресу обёртки нативной монеты (dex.native_wrapped, решение 62), не по тикеру.
+    let wbnb = super::super::exec::native::wrapped(ctx)?.1;
     for e in q
         .reg
-        .by_ticker(BNB)
+        .by_coin(&wbnb)
         .into_iter()
         .filter(|e| e.valid && e.usdt == usdt)
     {

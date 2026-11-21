@@ -1,17 +1,25 @@
 //! Файл: core/ledger.rs
 //! Что делает: учёт сделок (шаг 6 ТЗ): хранение каждой сделки (план и факт по шагам) в SQLite и в памяти,
 //! публикация в интерфейс (экран «Сделки»), деньги в открытых сделках (limits.rs), закрытие сделки —
-//! итог, план против факта, итог дня (daily.rs: факт или предварительный убыток, решение 53), статистика монеты (gas_stats.rs), уведомление deal.closed,
-//! пауза направления (signal.route_cooldown_s). После перезапуска незакрытые сделки помечаются
+//! итог, план против факта, итог дня (daily.rs: факт или оценка позиции, решения 53, 152), статистика монеты (gas_stats.rs), уведомление deal.closed,
+//! пауза направления (signal.route_cooldown_s). Уведомление deal.closed — только если покупка была (решение 105). После перезапуска незакрытые сделки помечаются
 //! «прервана перезапуском» и ждут проверки человека: состояние ордеров и переводов в памяти потеряно.
-//! Кто вызывает: executor.rs, transfers.rs, stuck.rs, manual.rs; engine.rs (load при запуске).
-//! От чего зависит: deal.rs, persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs.
+//! Закрытие (Closed) — общий шаг возврата USDT на площадку покупки (решение 138, usdt_return_deal.rs).
+//! Решение 236: итог закрытой сделки включает затраты возврата USDT (deal_return_cost.rs); пока возврат идёт,
+//! deal.closed ждёт (deal_closed.rs) — уходит из usdt_return_state::set с фактом после возврата.
+//! Кто вызывает: executor.rs, transfers.rs, stuck.rs, manual.rs; engine.rs (load при запуске — ledger_load.rs).
+//! Пауза направления — route_pause.rs (решение 293: та же у отклонённой продажи на бирже).
+//! От чего зависит: window_deal.rs (решение 245), net_hold.rs (решение 489), deal.rs, deal_closed.rs (текст и отправка deal.closed, решения 216, 236, 237), deal_return_cost.rs, persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs, usdt_return_deal.rs.
+//! Решение 266 (ответ Тиграна 13.11): пауза направления не ставится, когда сделка закрыта отказом биржи по ордеру
+//! покупки из-за нехватки средств (finish_paused, решает executor.rs buy_refusal_pauses); прочие закрытия — как раньше.
+//! Решение 394 (t179, докупка): удачная сделка группы докупки (Closed, продана на площадке плана без перегонов, итог ≥ 0)
+//! паузу направления не ставит (route_pause::won), в хронологии — строка об этом; без группы — как раньше. save у сделки
+//! группы — след продажи (ride_trail.rs) и общий возврат при уходе с пути (coin_group.rs).
 //! Настройки: signal.route_cooldown_s.
 
 use chrono::Utc;
 use rust_decimal::Decimal;
 
-use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::deal::{Deal, Step};
@@ -20,10 +28,10 @@ use super::limits::Exposure;
 use super::view::CoreEvent;
 
 /// Вид записи в учёте ядра.
-const KIND: &str = "deal";
+pub(super) const KIND: &str = "deal";
 
 /// Пересчитывает деньги в открытых сделках по всем сделкам в памяти.
-fn recompute_exposure(core: &Core) {
+pub(super) fn recompute_exposure(core: &Core) {
     let deals = lk(&core.inner.deals);
     let mut ex = Exposure::default();
     for d in deals.values().filter(|d| d.is_open()) {
@@ -37,43 +45,136 @@ fn recompute_exposure(core: &Core) {
 }
 
 /// Сохраняет сделку (память, SQLite, интерфейс). Ошибка базы — в журнал, сделка продолжается.
+/// Решение 394 (ревью 3, п. 13): у сделки группы докупки, ушедшей с пути, — пометка «была частью группы»
+/// (coin_group_left.rs; сохраняется помеченная копия); без группы — как раньше.
 pub async fn save(core: &Core, deal: &Deal) {
-    lk(&core.inner.deals).insert(deal.id.clone(), deal.clone());
+    let marked = if deal.group.is_some() {
+        super::coin_group_left::mark(core, deal)
+    } else {
+        None
+    };
+    let rec: &Deal = marked.as_deref().unwrap_or(deal);
+    // Решение 125: сделка изменилась — задача окон проверяет, не пора ли закрыть окно монеты.
+    core.inner.window_kick.notify_one();
+    super::window_deal::saved(core, rec); // Решение 245: цена DEX на объём сделки в окне — кто под наблюдением.
+    // Решение 413 (третье ревью, Б-1): в учёт памяти — без отметки «факт свежий» (её видит только задача сделки; кнопки
+    // и другие входы берут сделку из учёта — читают факт заново).
+    // Четвёртое ревью (М-5): и без отметки «баланс не прочитан» — следующий вход из учёта (кнопка, «Вернуть боту»)
+    // получает свою попытку режима застрявшей монеты.
+    let mut stored = rec.clone();
+    stored.fact_fresh = None;
+    stored.fact_unread = false;
+    lk(&core.inner.deals).insert(rec.id.clone(), stored);
+    // Решение 405 (М2): набор сделок, которые ещё что-то держат (unsettled.rs) — после записи учёта.
+    super::unsettled::track(core, rec);
+    // Решение 464 (t238, ревью): набор «исход продажи неизвестен» по (площадка, монета) — sale_marks.rs.
+    super::sale_marks::track(core, rec);
+    // Решение 405 (ревью Н3): сделка сохранена (могла уйти с пути) — ожидания ручных действий проверяют монету.
+    core.inner.coin_wake.notify_waiters();
     recompute_exposure(core);
-    if let Err(e) = super::persist::save(&core.inner.deps.db, KIND, &deal.id, deal).await {
+    if let Err(e) = super::persist::save(&core.inner.deps.db, KIND, &rec.id, rec).await {
         core.inner
             .deps
             .log(
                 Level::Error,
                 "core.ledger",
                 None,
-                format!("Сделка {} не сохранена: {e}", deal.id),
+                format!("Сделка {} не сохранена: {e}", rec.id),
                 None,
             )
             .await;
     }
-    if let Ok(v) = serde_json::to_value(deal) {
+    if let Ok(v) = serde_json::to_value(rec) {
         core.inner.live.send(CoreEvent::Deal(v));
+    }
+    super::feed_hold::on_saved(core, rec); // Решение 196: сделка закрылась — снять поток выключенной площадки.
+    // Решение 489: сеть выключенной площадки DEX захвачена этой сделкой или отпущена — один толчок (net_hold.rs).
+    super::net_hold::on_saved(core, rec);
+    // Решение 394: сделка группы докупки — след её продажи (ride_trail.rs) и общий возврат, если она ушла с пути
+    // последней из идущих (coin_group.rs); без группы — ничего.
+    if rec.group.is_some() {
+        super::ride_trail::note(core, rec);
+        super::coin_group::on_saved(core, rec);
     }
 }
 
 /// Закрывает сделку: итог, план против факта, итог дня, статистика монеты, уведомление, пауза направления.
 /// Принимает: ядро, сделку, конечный шаг (Closed, Halted, TakenOver), причину.
 pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
+    finish_paused(core, deal, step, why, true).await
+}
+
+/// Что делает: finish с выбором, ставить ли паузу направления (signal.route_cooldown_s). Решение 266 (ответ Тиграна
+/// 13.11: «паузить направление из-за денег не нужно»): сделка закрыта потому, что биржа отклонила ордер покупки из-за
+/// нехватки средств, — паузы нет (executor.rs buy_refusal_pauses); всё остальное в закрытии — как у finish.
+/// Принимает: как finish и `pause` (true — как finish). Ошибок нет.
+pub async fn finish_paused(core: &Core, deal: &mut Deal, step: Step, why: &str, pause: bool) {
+    // Решение 413 (пятое ревью t198): закрытие с остатком зачисления «не присвоено» — остаток не теряется: сделка
+    // остаётся отдельной позицией (остановлена, количество = остаток, алерт) — credit_rest::park.
+    if step == Step::Closed && super::credit_fact::rest(deal).is_some() {
+        let why = format!("закрытие ({why}) при нерешённом остатке зачисления");
+        return Box::pin(super::credit_rest_park::park(core, deal, &why)).await;
+    }
+    // Шестое ревью (М-7): закрыта или взята человеком — её «исход продажи неизвестен» счёт больше не путает.
+    if matches!(step, Step::Closed | Step::TakenOver) {
+        deal.sale_unsure = false;
+    }
+    // Решение 476 (ревью t238): итог разрешений заранее, если ещё не внесён, — в затраты до итога сделки.
+    Box::pin(super::sell_approve::collect(core, deal)).await;
+    // Решение 180: место в окне выводов, не дошедшее до вывода, освобождается.
+    super::withdraw_limit::release(core, &deal.id);
     deal.step = step;
-    let result = deal.proceeds - deal.invested - deal.spent;
+    let mut result = deal.proceeds - deal.invested - deal.spent;
     if step == Step::Closed {
         deal.result_usd = Some(result);
+        // Решение 236: затраты возврата USDT, если части уже «вернулись», — в итоге сразу (обычно возврат после).
+        deal.return_cost_usd = None;
+        super::deal_return_cost::apply(deal);
+        result = deal.result_usd.unwrap_or(result);
     }
-    deal.note(format!("{step:?}: {why}"));
-    // Итог дня (решение 53): закрыта — факт (снимает предварительный); остановлена или «Беру на себя» —
-    // предварительный убыток по худшему варианту.
-    let stop = match step {
-        Step::Closed => super::daily::settle(core, deal, result).await,
+    // Решение 394 (t179): удачная сделка ГРУППЫ ДОКУПКИ (exec.top_up = да; продана на площадке плана, итог ≥ 0) паузу
+    // направления не ставит — спред держится, следующая докупка не ждёт signal.route_cooldown_s (свежесть данных после
+    // нашей продажи — ride_trail.rs); без группы (докупка выключена), срыв и убыток — пауза как раньше.
+    let won = pause && deal.group.is_some() && super::route_pause::won(deal);
+    if won {
+        deal.note(super::route_pause::WON_NOTE.to_string());
+    }
+    deal.note(format!("{}{why}", super::deal_book::end_prefix(step)));
+    // Итог дня (решения 53, 152): закрыта — факт (снимает оценку этой сделки); остановлена или «Беру на себя» —
+    // оценка позиции: стоимость монет по рынку площадки, где они лежат, − вложено (цены нет — худший случай).
+    // Решение 173: итог идёт и площадкам сделки — лимит площадки ставит паузу только ей.
+    // Решение 414 (финальное ревью t199): охрана отметки закрываемой сделки (Inner.draw_closing) — снимается в Drop.
+    let closing =
+        (step == Step::Closed).then(|| super::drawdown_pending::Closing::new(core, &deal.id));
+    let trip = match step {
+        // Решение 414 (повторное ревью t199): само закрытие — плановые затраты возврата до сохранения (settle_close).
+        Step::Closed => super::daily::settle_close(core, deal, result).await,
         Step::Halted | Step::TakenOver => super::daily::provisional(core, deal).await,
-        _ => None,
+        _ => Default::default(),
     };
+    // Решение 138: общий шаг после закрытия — возврат выручки USDT на площадку покупки (для всех путей закрытия).
+    // Решение 227: по части на каждую площадку выручки — свой перегон.
+    let ret = match step {
+        Step::Closed => super::usdt_return_deal::prepare(core, deal).await,
+        _ => vec![],
+    };
+    // Решение 105: в Telegram — только сделки, где деньги пошли в дело (покупка была). Попытка, закрытая до ордера
+    // (пересчёт невыгоден, свободного не хватило, цена сборки хуже допустимой), — только в журнал и на «Сделки».
+    let wants = deal.buy.is_some() || !deal.invested.is_zero();
+    // Решение 236: возврат USDT идёт — deal.closed ждёт его конца (факт с затратами возврата; usdt_return_state::set).
+    let held = wants && super::deal_closed::hold(deal, step, why);
     save(core, deal).await;
+    // Решение 414: сделка сохранена с частями возврата — её затраты дальше по учёту ядра (отметку снимает Drop охраны,
+    // и при панике выше — финальное ревью t199).
+    drop(closing);
+    for job in ret {
+        job.start(core);
+    }
+    // Решение 394 (докупка): сделка группы закрыта и сохранена — её отложенная часть в пул группы; последняя — общий
+    // возврат USDT (coin_group.rs). Без группы — вызова нет; будущее — в куче (путь продажи чувствителен к стеку).
+    if deal.group.is_some() {
+        Box::pin(super::coin_group::after_close(core, deal)).await;
+    }
     let deps = &core.inner.deps;
     let d = &deal.direction;
     let text = format!(
@@ -97,68 +198,65 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
         serde_json::to_value(&*deal).ok(),
     )
     .await;
-    deps.notify("deal.closed", Some(&d.buy_on.0), &text).await;
+    if wants && !held {
+        super::deal_closed::send(core, deal, why).await;
+    }
     if let Some(r) = deal.result_usd {
         super::gas_stats::record_result(core, &d.asset, r).await;
     }
-    if let Some(stop) = stop {
-        deps.log(Level::Warn, "core.daily_loss", None, &stop, None)
-            .await;
-        deps.notify("risk.daily_loss", None, &stop).await;
+    super::daily_commit::announce(core, &trip).await;
+    if !pause || won {
+        return;
     }
-    let cooldown = deps
-        .settings
-        .integer("signal.route_cooldown_s", At::default());
-    match cooldown {
-        Ok(s) => lk(&core.inner.signals).cooldown(d, s, Utc::now()),
-        Err(e) => {
-            deps.log(Level::Warn, "core.ledger", None, e.message, None)
-                .await
-        }
-    }
-    lk(&core.inner.active).remove(d);
+    // Пауза направления — route_pause.rs (та же функция у отклонённой продажи на бирже, решение 293).
+    super::route_pause::pause(core, d).await;
+    // Замок монеты (решение 118, Я-2) снимает тот, кто его взял (executor.rs, manual_halted.rs): закрытие другой
+    // сделки той же монеты (например «Продано вручную» у остановленной) не должно снимать замок идущей.
 }
 
-/// Загружает сделки при запуске. Незакрытые — «прервана перезапуском», шаг Halted, уведомление.
-pub async fn load(core: &Core) {
-    let deps = &core.inner.deps;
-    let deals = match super::persist::load::<Deal>(&deps.db, KIND).await {
-        Ok(d) => d,
-        Err(e) => {
-            deps.log(
-                Level::Error,
-                "core.ledger",
-                None,
-                format!("Сделки не загружены: {e}"),
-                None,
-            )
-            .await;
-            return;
-        }
-    };
-    for mut d in deals {
-        // Ждущие решения человека остаются ждать (алерты загружает manual.rs).
-        if d.is_open() && d.step != Step::WaitingHuman {
-            let text = format!(
-                "Сделка {} ({}, шаг {:?}, {} монет на {}) прервана перезапуском — проверьте вручную",
-                d.id, d.direction.asset.ticker, d.step, d.qty, d.at.0
-            );
-            d.step = Step::Halted;
-            d.note(text.clone());
-            // Решение 53: остановленная сделка — предварительный убыток в итог дня.
-            if let Some(stop) = super::daily::provisional(core, &mut d).await {
-                deps.notify("risk.daily_loss", None, &stop).await;
-            }
-            deps.log(Level::Warn, "core.ledger", Some(&d.at.0), &text, None)
-                .await;
-            deps.notify("risk.stop", Some(&d.at.0), &text).await;
-            save(core, &d).await;
-        } else {
-            lk(&core.inner.deals).insert(d.id.clone(), d);
-        }
+/// Новая сделка с уникальным ID (решение 118, Я-17): ID = время до мс + тикер (только буквы и цифры — так его примут
+/// ID ордера и вывода); занят в учёте — к нему добавляется счётчик. Выдача и запись в память — под одним замком учёта,
+/// поэтому два параллельных расчёта не получат один ID. Принимает: направление, план, прибыль плана, счёт DEX
+/// (решение 132; None — без DEX).
+/// Возвращает: сделку (уже в памяти учёта; в базу и интерфейс — ledger::save). Ошибок нет.
+pub fn open(
+    core: &Core,
+    d: &crate::core::types::Direction,
+    plan: serde_json::Value,
+    plan_profit: Decimal,
+    account: Option<crate::core::types::DexAccountId>,
+) -> Deal {
+    let t: String = d
+        .asset
+        .ticker
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .collect();
+    let base = format!("{}{t}", Utc::now().format("%Y%m%d%H%M%S%3f"));
+    let mut deals = lk(&core.inner.deals);
+    let mut id = base.clone();
+    let mut n = 1u32;
+    while deals.contains_key(&id) {
+        id = format!("{base}{n}");
+        n += 1;
     }
-    recompute_exposure(core);
+    let mut deal = Deal::new(id.clone(), d.clone(), plan, plan_profit);
+    // Решение 132: счёт DEX сделки — сразу в учёте (до первого шага сделки).
+    deal.dex_account = account;
+    deals.insert(id, deal.clone());
+    drop(deals);
+    super::unsettled::track(core, &deal);
+    deal
 }
+
+/// Убирает из памяти учёта сделку, которой не было (решение 124: цикл DEX ↔ DEX отказал ДО отправки — ни денег, ни
+/// транзакции; в базу и на «Сделки» она не попадала). Принимает: id. Ошибок нет.
+pub fn discard(core: &Core, id: &str) {
+    lk(&core.inner.deals).remove(id);
+}
+
+/// Загрузка сделок при запуске — ledger_load.rs.
+pub use super::ledger_load::load;
 
 impl Core {
     /// Все сделки (экран «Сделки»): идущие и история, план против факта.

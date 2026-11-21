@@ -1,0 +1,93 @@
+//! Файл: venues/bingx/deposit_addr.rs
+//! Что делает: адрес депозита BingX по монете и сети. Кэш в памяти по (монета, сеть) на время работы процесса
+//! (решение 118, Я-5: адрес нужен в предпроверке каждой сделки — повторно запросов нет). Адрес с непустым tag (memo)
+//! — ошибка «требует memo — не поддерживается» (Я-15: вывод на такой адрес без memo не зачислится); такой не кэшируется.
+//! Кто вызывает: mod.rs (deposit_address из контракта).
+//! От чего зависит: rest.rs, num.rs, ctx.rs.
+//! Настройки: нет.
+//!
+//! Официальная документация (docs-v3 и api-ai-skills/spot-wallet): GET /openApi/wallets/v1/capital/deposit/address —
+//! data.data[]: coin, network, address, tag, status (0 — адрес активирован, 1 — запрошен, 2 — не запрошен).
+//! Решение 379 (задача t165, 17.11.2026): метода создания адреса депозита основного аккаунта в документации нет —
+//! «Create Deposit Address for Sub-account» POST /openApi/wallets/v1/capital/deposit/createSubAddress только для
+//! субаккаунта (api-ai-skills, sub-account/api-reference.md, 5.2); создаёт ли GET адрес, документация не говорит.
+//! Поведение прежнее: нет адреса — отказ (вопрос Тиграну — docs/TASKS.md, t165).
+
+use reqwest::Method;
+
+use crate::core::types::Asset;
+use crate::gateway::addr_book::{AddrBook, Mark};
+use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+
+use super::ctx::Ctx;
+use super::errors::Op;
+use super::{num, rest};
+
+/// Полученные адреса депозита: (монета, сеть) → адрес. Дешёво клонируется.
+/// Решение 411: ключ памяти — ещё и отпечаток ключа API биржи (смена ключа — старый адрес не берётся).
+#[derive(Clone, Default)]
+pub struct DepositAddrs {
+    book: AddrBook<String>,
+}
+
+/// Что делает: адрес депозита монеты в сети — из памяти или запросом.
+/// Принимает: окружение, кэш адресов, монету, сеть (как в справочнике BingX).
+/// Возвращает: адрес.
+/// Ошибки: InvalidAddress — адреса в сети нет или адрес требует tag (memo); связь, коды BingX.
+pub async fn deposit_address(
+    ctx: &Ctx,
+    addrs: &DepositAddrs,
+    asset: &Asset,
+    network: &str,
+) -> GatewayResult<String> {
+    // Решение 411: память — под отпечатком ключа API биржи и по режиму задачи (gateway/addr_book.rs).
+    let mark = Mark::read(&ctx.vault, super::ctx::SECRET_API_KEY);
+    if let Some(a) = addrs.book.lookup(&mark, &asset.ticker, network)? {
+        return Ok(a);
+    }
+    let data = rest::signed(
+        ctx,
+        Method::GET,
+        "/openApi/wallets/v1/capital/deposit/address",
+        vec![("coin", asset.ticker.clone())],
+        Op::Other,
+    )
+    .await?;
+    let list = num::arr(&data, "data")?;
+    let found = list
+        .iter()
+        // status по docs-v3: 0 — адрес активирован, 1 — запрошен, 2 — не запрошен. Нет поля — как в примере docs-v3.
+        .find(|a| {
+            num::text_opt(a, "network").as_deref() == Some(network)
+                && num::text_opt(a, "status").is_none_or(|s| s == "0")
+        });
+    let found = found.ok_or_else(|| {
+        invalid(
+            ctx,
+            format!("У {} нет адреса депозита в сети {network}", asset.ticker),
+        )
+    })?;
+    if let Some(tag) = num::text_opt(found, "tag").filter(|t| !t.trim().is_empty()) {
+        return Err(invalid(
+            ctx,
+            format!(
+                "Адрес депозита BingX {} в сети {network} требует memo (tag {tag}) — не поддерживается",
+                asset.ticker
+            ),
+        )
+        .with_raw(found.to_string()));
+    }
+    let address = num::text(found, "address")?;
+    addrs.book.keep(
+        &mark,
+        asset.ticker.clone(),
+        network.to_string(),
+        address.clone(),
+    );
+    Ok(address)
+}
+
+/// Ошибка InvalidAddress с площадкой BingX.
+fn invalid(ctx: &Ctx, msg: String) -> GatewayError {
+    ctx.tag(GatewayError::new(ErrorCode::InvalidAddress, None, msg))
+}

@@ -4,14 +4,17 @@
 //   причина чёрного списка (BlockReason), группа крючка (HookGroup). Формат — как их serde (enum: строка
 //   или {вариант: данные}); числа Decimal приходят строками и показываются без пересчёта.
 // Кто вызывает: components/CoinRow.svelte, pages/Manual.svelte, pages/GasStats.svelte.
-// От чего зависит: ничего.
+// От чего зависит: lib/coinNames.svelte.js (имя монеты «NMT / NETMIND», решение 211).
 // Настройки: нет.
 
-/** Монета: «CAKE» и сокращённый адрес. Принимает: Asset. Возвращает: строку. */
+import { coinName } from './coinNames.svelte.js';
+
+/** Монета: имя (решение 211: тикеры площадок «NMT / NETMIND») и сокращённый адрес. Принимает: Asset. Возвращает: строку. */
 export function assetLabel(a) {
   if (!a) return '';
   const c = a.bsc_contract;
-  return c ? `${a.ticker} · ${c.slice(0, 6)}…${c.slice(-4)}` : `${a.ticker} · адрес не сообщён`;
+  const n = coinName(a);
+  return c ? `${n} · ${c.slice(0, 6)}…${c.slice(-4)}` : `${n} · адрес не сообщён`;
 }
 
 /**
@@ -28,8 +31,39 @@ export function checkState(s, show) {
 /** Налоги: «покупка 1% · продажа 2% · перевод 0%». Принимает: TokenTaxes. Возвращает: строку. */
 export const taxesText = (t) => `покупка ${t.buy_pct}% · продажа ${t.sell_pct}% · перевод ${t.transfer_pct}%`;
 
-/** Влияние крючка: «покупка 0,1% · продажа 0,2%». Принимает: HookImpact. Возвращает: строку. */
-export const impactText = (i) => `влияние: покупка ${i.buy_pct}% · продажа ${i.sell_pct}%`;
+/**
+ * Лесенка стороны (решение «335 (лесенка влияния)»): «1 → 0%, 20 → 0,099%, 100 → 0,67% USDT». Ревью 4 (Н3): точка пробы
+ * перед сделкой (сумма в USDT не считалась, usd = 0) — «сделка 45,23 USDT → X%»: вход в токене входа стороны (coins —
+ * адаптер переводит минимальные единицы по decimals токена; токен — `token`), без hex; decimals не было в памяти —
+ * «сделка (сумма не переведена) → X%». Принимает: точки HookStep, имя токена входа. Возвращает: строку или ''.
+ */
+const stepsText = (steps, token) =>
+  (steps ?? [])
+    .map((s) => {
+      if (Number(s.usd) > 0) return `${s.usd} USDT → ${s.pct}%`;
+      return s.coins != null ? `сделка ${s.coins} ${token} → ${s.pct}%` : `сделка (сумма не переведена) → ${s.pct}%`;
+    })
+    .join(', ');
+
+/**
+ * Влияние крючка: без лесенки — «покупка 0,1% · продажа 0,2%» (одно число на все суммы); с лесенкой — наибольшее по
+ * стороне и точки «сумма → влияние» (котировка берёт значение ближайшей большей точки). Ревью 4 (Н3): сторона «не
+ * прошла» (buy_fail / sell_fail: квотер отказал на наименьшей сумме стороны, пул работает другой стороной) —
+ * «покупка: не прошла — причина». Принимает: HookImpact, имена токенов входа {buy: встречный токен пула, sell: монета}.
+ * Возвращает: строку.
+ */
+export function impactText(i, names = { buy: 'встречного токена', sell: 'монеты' }) {
+  const side = (name, pct, steps, fail, token) => {
+    if (fail) return `${name}: не прошла — ${fail}`;
+    const t = stepsText(steps, token);
+    return t ? `${name}: до ${pct}% (${t})` : `${name} ${pct}%`;
+  };
+  const ladder = (i.buy?.length ?? 0) + (i.sell?.length ?? 0) > 0;
+  const head = ladder ? 'влияние по суммам' : 'влияние (одно на все суммы)';
+  const buy = side('покупка', i.buy_pct, i.buy, i.buy_fail, names.buy);
+  const sell = side('продажа', i.sell_pct, i.sell, i.sell_fail, names.sell);
+  return `${head}: ${buy} · ${sell}`;
+}
 
 const TAX = { Buy: 'покупку', Sell: 'продажу', Transfer: 'перевод' };
 
@@ -54,10 +88,14 @@ const GROUP = {
 /** Группа крючка (решение 32). Принимает: HookGroup. Возвращает: строку. */
 export const hookGroupLabel = (g) => GROUP[g] ?? g;
 
-/** Ссылка на пул: адрес контракта или PoolId в менеджере. Принимает: PoolRef. Возвращает: строку. */
+/** Ссылка на пул: адрес контракта, PoolId в менеджере, пара общего контракта или пара многомонетного пула. Принимает: PoolRef. Возвращает: строку. */
 export function poolRefText(p) {
   if (p?.Contract) return p.Contract;
   if (p?.Singleton) return `${p.Singleton.id} в ${p.Singleton.manager}`;
+  // Пара общего контракта (WooFi, решение 122 F, 3): контракт и базовая монета.
+  if (p?.Member) return `${p.Member.coin} в ${p.Member.contract}`;
+  // Пара многомонетного пула (решение 295): контракт и пара — у разных пар одного пула разные строки.
+  if (p?.Multi) return `${p.Multi.contract} (${p.Multi.token0}/${p.Multi.token1})`;
   return JSON.stringify(p);
 }
 
@@ -78,8 +116,12 @@ const EXCLUSION = {
 export function exclusionText(e) {
   if (typeof e === 'string') return EXCLUSION[e] ?? e;
   if (e?.PairsStale !== undefined) return `справочнику пар не верим: ${e.PairsStale}`;
+  // Решение 254: биржа не примет наш ордер на паре (LIMIT / timeInForce по справочнику пар биржи).
+  if (e?.OrderTypeNotAccepted !== undefined) return `биржа не примет наш ордер на паре: ${e.OrderTypeNotAccepted}`;
   if (e?.PairNotTrading !== undefined) return `пара не торгуется (status ${e.PairNotTrading})`;
   if (e?.PoolsExcluded) return `все пулы исключены: ${e.PoolsExcluded.join('; ')}`;
+  if (e?.NativeVsToken) return `нативная монета и токен обёртки — разные активы: ${e.NativeVsToken}`;
+  if (e?.TickerConflict) return `у адреса на бирже несколько тикеров, выбрать нельзя: ${e.TickerConflict}`;
   if (e?.IntermediateNotConfigured) return `промежуточные монеты (решение 52) не заданы: ${e.IntermediateNotConfigured}`;
   return JSON.stringify(e);
 }

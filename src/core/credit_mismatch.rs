@@ -49,9 +49,10 @@ pub fn owned(leg: &Leg<'_>) -> Owned {
 
 /// Предел сверки transfer.credit_mismatch_s. None — не задана: сверки нет (журнал один раз на перевод).
 async fn limit(core: &Core, o: &Owned) -> Option<Duration> {
+    let coin = super::coin_key::scope_id(&o.asset);
     let at = At {
         venue: Some(&o.to.0),
-        coin: Some(&o.asset.ticker),
+        coin: Some(&coin),
     };
     match core
         .inner
@@ -84,9 +85,10 @@ async fn limit(core: &Core, o: &Owned) -> Option<Duration> {
 pub async fn confirm(core: Core, o: Owned, gw: Arc<dyn Venue>, ticket: Option<Ticket>) {
     drop(ticket);
     let max = limit(&core, &o).await;
+    let coin = super::coin_key::scope_id(&o.asset);
     let at = At {
         venue: Some(&o.to.0),
-        coin: Some(&o.asset.ticker),
+        coin: Some(&coin),
     };
     let total = core
         .inner
@@ -109,12 +111,15 @@ pub async fn confirm(core: Core, o: Owned, gw: Arc<dyn Venue>, ticket: Option<Ti
     let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(o.to.0.clone()));
     let mut told = false;
     while tokio::time::Instant::now() < end {
-        let status = match gw.deposit_status(&o.asset, &o.tx).await {
+        // Решение 211: площадке — её тикер монеты.
+        let on = super::venue_ticker::on_venue(&core, &o.asset, &o.to);
+        let status = match gw.deposit_status(&on, &o.tx).await {
             Ok(t) if t.status == TransferStatus::Credited => return,
             Ok(t) if t.status == TransferStatus::Rejected => {
                 let text = format!(
-                    "{}: зачислено по событию, а статус депозита {} — «отклонён»",
-                    o.deal, o.tx
+                    "{}: монеты пришли, а биржа показывает депозит {} «отклонён»",
+                    o.deal,
+                    crate::notify::human::addr(&o.tx)
                 );
                 report(&core, &o.to, text).await;
                 return;
@@ -125,10 +130,10 @@ pub async fn confirm(core: Core, o: Owned, gw: Arc<dyn Venue>, ticket: Option<Ti
         if let Some(max) = max.filter(|m| !told && begun.elapsed() >= *m) {
             told = true;
             let text = format!(
-                "{}: зачислено по событию, а статус депозита {} — не «зачислен» за transfer.credit_mismatch_s ({} с): {status}",
+                "{}: монеты пришли, а биржа {} с не подтверждает депозит {} (статус: {status})",
                 o.deal,
-                o.tx,
-                max.as_secs()
+                max.as_secs(),
+                crate::notify::human::addr(&o.tx)
             );
             report(&core, &o.to, text).await;
         }
@@ -162,9 +167,9 @@ pub async fn no_event(core: Core, o: Owned, ticket: Ticket) {
         return;
     }
     let text = format!(
-        "{}: статус депозита {} «зачислен», а события зачисления {} нет за transfer.credit_mismatch_s ({} с)",
+        "{}: биржа показывает депозит {} «зачислен», а поступления {} на балансе нет {} с",
         o.deal,
-        o.tx,
+        crate::notify::human::addr(&o.tx),
         o.asset.ticker,
         max.as_secs()
     );
@@ -182,6 +187,6 @@ pub async fn report(core: &Core, to: &VenueId, text: String) {
         None,
     )
     .await;
-    deps.notify("exec.credit_mismatch", Some(&to.0), &text)
-        .await;
+    let tg = crate::notify::human::from_core("exec.credit_mismatch", Some(&to.0), &text);
+    deps.notify("exec.credit_mismatch", Some(&to.0), &tg).await;
 }

@@ -2,9 +2,16 @@
 //! Что делает: газ разрешений для котировки (решение 35: «газ approve, первый раз на монету»): есть ли у кошелька
 //! разрешения ERC-20 → Permit2 и Permit2 → Universal Router маршрута на сумму сделки; нет — газ, измеренный пробным
 //! обменом в первом пуле маршрута (разрешения одни на токен входа первого шага, от пула не зависят).
+//! Маршрут через исполнитель ArbExecutor (решение 122, часть X): ERC-20 allowance кошелька исполнителю (память).
+//! Решение 271 (ревью): графовый маршрут, первый хоп которого — форк, без исполнителя идёт бандлом, и нога форка
+//! берёт ERC-20 approve РОУТЕРУ ФОРКА (dex.router, без Permit2 — exec/bundle.rs, wallet/approve.rs::fork_missing):
+//! ERC-20 allowance кошелька роутеру форка (память); dex.universal_router у форка не нужен и не читается.
+//! Решение 271 (дополнение): ИСПОЛНИМЫЙ граф формы «бандл» без исполнителя — газ разрешений по ВСЕМ группам бандла
+//! (группы Universal Router и пары «токен — роутер форка», как exec/bundle.rs) — quote/approve_bundle.rs; ветка
+//! «первый хоп — форк» ниже остаётся только у неисполнимого графа (сигнал).
 //! Кто вызывает: quote/mod.rs.
-//! От чего зависит: wallet/approve.rs, wallet/allow_cache.rs, wallet/signer.rs, check/state.rs, pools/registry.rs, num.rs.
-//! Настройки: dex.universal_router, dex.permit2 [вид пула] (прямой маршрут), smart.universal_router, smart.permit2
+//! От чего зависит: quote/approve_bundle.rs, quote/graph_exec.rs (graph_form), exec/executor/mod.rs (takes), wallet/approve.rs, wallet/allow_cache.rs, wallet/signer.rs, check/state.rs, pools/registry.rs, num.rs.
+//! Настройки: dex.universal_router, dex.permit2 [вид пула] (прямой маршрут), dex.router [форк первого хопа], smart.universal_router, smart.permit2
 //! [bsc_dex] (умный); через approve.rs — dex.approve_unlimited, dex.permit2_expiration_s.
 
 use crate::core::types::{Quote, RouteMode, Side};
@@ -56,6 +63,39 @@ pub async fn units(
         Side::Sell => (e.coin, num::to_units(quote.fillable_qty, coin_dec)),
     };
     let amount = amount.ok_or_else(bad)?;
+    // Решение 122 (часть X): маршрут через исполнитель ArbExecutor — одно разрешение ERC-20 исполнителю, без Permit2
+    // (память — wallet/allow_cache.rs::erc20). Газ — тот же измеренный пробным обменом (верхняя оценка).
+    let native = super::super::exec::native::is_native(ctx, &quote.asset);
+    if let Some(x) = super::super::exec::executor::takes(ctx, &q.reg, route, native)? {
+        let wallet = signer::address(ctx)?;
+        if q.allow.erc20(ctx, token, wallet, x).await? >= amount {
+            return Ok(None);
+        }
+        return measured(q, &e.pool.reference, quote.side);
+    }
+    // Решение 271 (дополнение): исполнимый граф формы «бандл» без исполнителя (exec/trade.rs → exec/bundle_trade.rs) —
+    // разрешения по всем группам бандла, а не только по первому хопу первой доли (quote/approve_bundle.rs).
+    if route.mode == RouteMode::Graph
+        && route.executable
+        && super::graph_exec::graph_form(ctx, route) == super::graph_exec::GraphForm::Bundle
+    {
+        return super::approve_bundle::units(q, quote, route, (coin_dec, usdt_dec)).await;
+    }
+    // Решение 271 (ревью): первый хоп — форк (граф, без исполнителя) — нога форка в бандле: одно ERC-20 approve роутеру
+    // форка на токен входа (exec/bundle.rs, wallet/approve.rs::fork_missing — тот же allowance(кошелёк, роутер)).
+    // Решение 280: первый хоп — V2-форк без роутера (без исполнителя маршрут — сигнал): роутера нет, разрешение пошло
+    // бы исполнителю — газ, измеренный пробой (dex.router не читается).
+    if super::v2_pair_quote::on(&e) {
+        return measured(q, &e.pool.reference, quote.side);
+    }
+    if route.mode == RouteMode::Graph && e.family.fork {
+        let router = ctx.dex_addr("dex.router", e.family.id)?;
+        let wallet = signer::address(ctx)?;
+        if q.allow.erc20(ctx, token, wallet, router).await? >= amount {
+            return Ok(None);
+        }
+        return measured(q, &e.pool.reference, quote.side);
+    }
     let (ur, permit2) = if route.mode == RouteMode::Smart {
         (
             ctx.addr("smart.universal_router")?,
@@ -74,14 +114,25 @@ pub async fn units(
     if approve::lacking(ctx, &r, (token, permit2, ur), amount, now)?.is_empty() {
         return Ok(None);
     }
-    let f = q.checks.pool(&e.pool.reference);
-    let g = if quote.side == Side::Buy {
+    measured(q, &e.pool.reference, quote.side)
+}
+
+/// Газ разрешений, измеренный пробным обменом в пуле (сторона покупки или продажи). Ошибки: CoinNotChecked — не измерен.
+/// Зовёт также quote/approve_bundle.rs.
+pub(super) fn measured(
+    q: &Quoting,
+    pool: &crate::core::types::PoolRef,
+    side: Side,
+) -> GatewayResult<Option<u64>> {
+    // Решение 409: факты пула без копии.
+    let f = q.checks.pool_arc(pool);
+    let g = if side == Side::Buy {
         f.gas_approve_buy
     } else {
         f.gas_approve_sell
     };
     g.map(Some).ok_or_else(|| {
-        ctx.err(
+        q.ctx.err(
             ErrorCode::CoinNotChecked,
             "газ разрешений не измерен пробным обменом",
         )

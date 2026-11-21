@@ -188,6 +188,7 @@ pub async fn import(State(st): State<AppState>, body: String) -> Result<Json<Rep
                     report.secrets_installed = true;
                     // Приём кнопок Telegram начинает заново с актуальным токеном (notify/updates.rs, wake).
                     st.secrets_wake.notify_one();
+                    st.core.secrets_changed();
                 }
                 Err(err) => report.secrets_error = Some(err),
             },

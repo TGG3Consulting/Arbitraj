@@ -3,8 +3,9 @@
 //! разрешены ли покупка и продажа через API) — справочник в памяти с обновлением по запросу.
 //! Кто вызывает: trade.rs (округление и проверки перед ордером), pairs.rs (состояние пар подписки для ядра),
 //! pairs_watch.rs (обновление раз в venue.symbols_refresh_s).
-//! От чего зависит: rest.rs, num.rs, ctx.rs.
-//! Настройки: venue.quote_asset, venue.symbols_refresh_s (как часто перечитывать правила пар).
+//! От чего зависит: rest.rs, num.rs, ctx.rs, symbols_qty.rs.
+//! Настройки: venue.quote_asset, venue.symbols_refresh_s (как часто перечитывать правила пар),
+//! venue.ignore_deprecated_qty (решение 293: не соблюдать устаревшие minQty / maxQty по паре — symbols_qty.rs).
 //!
 //! Официальная документация: «Spot trading symbols» GET /openApi/spot/v1/common/symbols
 //! https://bingx-api.github.io/docs-v3/#/en/Spot/Market%20Data/Spot%20trading%20symbols
@@ -43,6 +44,8 @@ pub struct SymbolRules {
     /// minQty / maxQty (решение 66): docs-v3 «Spot trading symbols» — «Deprecated; can be calculated using
     /// minQty=minNotional/price»; api-ai-skills skills/spot-market/api-reference.md — обычные поля «Minimum / Maximum
     /// order quantity». Живой ответ 2026-10-24: CAKE-USDT minQty 2.672 ≠ minNotional / price. Соблюдаются оба предела.
+    /// Решение 293: здесь — как ответил BingX; venue.ignore_deprecated_qty = да у пары (монета или площадка) — оба поля
+    /// None при чтении (symbols_qty.rs get_for / state_for). Живой ответ 15.11: SHOPINX-USDT minQty 57505 (≈500 USDT).
     pub min_qty: Option<Decimal>,
     pub max_qty: Option<Decimal>,
     /// Статус по документации.
@@ -65,17 +68,21 @@ pub struct Symbols {
     loaded: Arc<RwLock<Option<Instant>>>,
     /// Время успешного получения по часам (для ядра: свежесть справочника, core/pairs_fresh.rs).
     loaded_at: Arc<RwLock<Option<DateTime<Utc>>>>,
+    /// Решение 293: хранилище настроек для state_for (ставит symbols_qty::take; None — пределы как ответил BingX).
+    pub(super) qty_store: Arc<RwLock<Option<crate::settings::store::Store>>>,
 }
 
 impl Symbols {
-    /// Загружает все пары с котируемой монетой venue.quote_asset.
-    /// Возвращает: число пар. Ошибки: связь, ответ BingX, настройки.
+    /// Загружает все пары с котируемой монетой venue.quote_asset (решение 293: разбор и загрузка — symbols_qty::take;
+    /// неверные значения venue.ignore_deprecated_qty — Warn, symbols_qty::warn_bad). Возвращает: число пар.
+    /// Ошибки: связь, ответ BingX, настройки.
     pub async fn refresh(&self, ctx: &Ctx) -> GatewayResult<usize> {
+        // Настройка до сети: не задана venue.quote_asset — без запроса, как раньше; читается один раз.
         let quote = ctx.text("venue.quote_asset")?;
         let data = rest::public(ctx, "/openApi/spot/v1/common/symbols", vec![]).await?;
-        let map = parse_list(&data, &quote)?;
-        let n = map.len();
-        self.load(map, Utc::now());
+        // Решение 293: разбор и загрузка — symbols_qty.rs (пределы по настройке снимаются при чтении).
+        let n = super::symbols_qty::take_quoted(ctx, self, &data, &quote, Utc::now())?;
+        super::symbols_qty::warn_bad(ctx).await;
         Ok(n)
     }
 
@@ -129,6 +136,8 @@ impl Symbols {
             max_notional: r.max_notional,
             min_qty: r.min_qty,
             max_qty: r.max_qty,
+            order_block: None,
+            price_band: None,
         })
     }
 
@@ -136,6 +145,12 @@ impl Symbols {
     pub fn symbol_of(&self, ticker: &str) -> Option<String> {
         let map = self.map.read().unwrap_or_else(|p| p.into_inner());
         map.get(ticker).map(|r| r.symbol.clone())
+    }
+
+    /// Тикер и символ пар с этим статусом (решение 175: статус 29 «pre-delisted» — делистинги, delist.rs). Ошибок нет.
+    pub fn with_status(&self, status: i64) -> Vec<(String, String)> {
+        let map = self.map.read().unwrap_or_else(|p| p.into_inner());
+        with_status(&map, status)
     }
 
     /// Все тикеры, которые сейчас торгуются (статус online).
@@ -160,6 +175,17 @@ pub fn parse_list(data: &Value, quote: &str) -> GatewayResult<HashMap<String, Sy
         }
     }
     Ok(map)
+}
+
+/// Тикер и символ пар разобранного справочника с этим статусом, по тикеру. Ошибок нет.
+pub fn with_status(map: &HashMap<String, SymbolRules>, status: i64) -> Vec<(String, String)> {
+    let mut v: Vec<_> = map
+        .iter()
+        .filter(|(_, r)| r.status == status)
+        .map(|(t, r)| (t.clone(), r.symbol.clone()))
+        .collect();
+    v.sort();
+    v
 }
 
 /// Разбор одной пары. Ошибка BadResponse — нет обязательных полей.

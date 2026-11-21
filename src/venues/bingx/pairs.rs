@@ -42,7 +42,8 @@ impl Snapshot {
             pairs: vec![],
         };
         for a in assets {
-            let Some(p) = symbols.state(&a.ticker) else {
+            // Решение 293: без minQty / maxQty по venue.ignore_deprecated_qty (Symbols::state_for).
+            let Some(p) = symbols.state_for(a) else {
                 s.missing.push(a.ticker.clone());
                 continue;
             };
@@ -81,6 +82,32 @@ impl Snapshot {
             .collect()
     }
 
+    /// Решение 293 (ревью): у каких пар сменились пределы количества (minQty / maxQty) — например после смены
+    /// venue.ignore_deprecated_qty. Принимает: прежний снимок. Возвращает: да — хотя бы у одной пары. Ошибок нет.
+    pub fn qty_changed(&self, old: &Snapshot) -> bool {
+        let q = |s: &Snapshot| -> Vec<_> {
+            s.pairs
+                .iter()
+                .map(|p| (p.ticker.clone(), p.min_qty, p.max_qty))
+                .collect()
+        };
+        q(self) != q(old)
+    }
+
+    /// Решение 293 (ревью): снимки отличаются только пределами количества пар. Принимает: прежний снимок.
+    /// Возвращает: да — всё прочее совпадает. Ошибок нет.
+    pub fn only_qty_changed(&self, old: &Snapshot) -> bool {
+        let strip = |s: &Snapshot| {
+            let mut x = s.clone();
+            for p in &mut x.pairs {
+                p.min_qty = None;
+                p.max_qty = None;
+            }
+            x
+        };
+        self != old && strip(self) == strip(old)
+    }
+
     /// Чем этот снимок отличается от прежнего — строки «ТИКЕР: было → стало» (для журнала). Ошибок нет.
     pub fn changes(&self, old: &Snapshot) -> Vec<String> {
         let find = |s: &Snapshot, t: &str| s.pairs.iter().find(|p| p.ticker == t).cloned();
@@ -103,12 +130,26 @@ impl Snapshot {
     }
 }
 
-/// Состояние пары коротко: «нет пары», «status N», «API: покупка да/нет, продажа да/нет». Ошибок нет.
+/// Состояние пары коротко: «нет пары», «status N», «API: покупка да/нет, продажа да/нет» (решение 293: у пары без
+/// minQty и maxQty — пометка «пределов количества нет»: так видна смена venue.ignore_deprecated_qty; нейтрально — и у
+/// пары, где биржа сама не прислала оба поля). Ошибок нет.
 fn describe(p: Option<&SpotPairState>) -> String {
     let yn = |b: bool| if b { "да" } else { "нет" };
     match p {
         None => "нет пары".into(),
         Some(p) if !p.online => format!("status {}", p.status),
-        Some(p) => format!("API: покупка {}, продажа {}", yn(p.api_buy), yn(p.api_sell)),
+        Some(p) => {
+            let no_qty = p.min_qty.is_none() && p.max_qty.is_none();
+            format!(
+                "API: покупка {}, продажа {}{}",
+                yn(p.api_buy),
+                yn(p.api_sell),
+                if no_qty {
+                    ", пределов количества нет"
+                } else {
+                    ""
+                }
+            )
+        }
     }
 }

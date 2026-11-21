@@ -13,9 +13,11 @@
 //! перебора: исходный `enumerate` (пути USDT ↔ монета, без возврата в старт) не трогается. Цикл — ≥ 2 хопов, один пул
 //! в цикле не используется дважды, внутренние токены не повторяются. Оба обхода цикла (base→A→B→base и
 //! base→B→A→base) получаются отдельными путями (разные первые рёбра) и считаются независимо (решение 85).
+//! Решение 295: один многомонетный пул (PoolRef::site) — не больше одного шага пути и цикла.
 //! Кто вызывает: граф-маршрутизатор (решение 80, шаг 80.4) — quote/graph_route.rs; поиск циклов DEX ↔ DEX
 //! (решение 85) — quote/cycle_scan.rs.
-//! От чего зависит: pools/graph.rs; настройки читает вызывающий (limits / cycle_scan::limits).
+//! Решение 410 (t195): стек перебора — ссылки на рёбра (quote/route_hops.rs), ребро копируется только в выданный путь.
+//! От чего зависит: pools/graph.rs, quote/route_hops.rs, fast_hash.rs (решение 410); настройки читает вызывающий (limits / cycle_scan::limits).
 //! Настройки: dex.route_max_hops, dex.route_max_paths [bsc_dex] (через limits); пределы циклов — dex_dex.max_cycle_len,
 //! dex_dex.max_cycles [bsc_dex] (через quote/cycle_scan.rs).
 
@@ -27,7 +29,9 @@ use crate::core::types::PoolRef;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
+use super::super::fast_hash::FastSet;
 use super::super::pools::graph::{Edge, Graph};
+use super::route_hops::{self, Hop};
 
 /// Один шаг пути: пул (снимок ребра графа) и токены входа/выхода в порядке исполнения.
 #[derive(Clone)]
@@ -84,8 +88,12 @@ pub fn enumerate(
     if max_hops == 0 || max_paths == 0 || from == to {
         return out;
     }
-    let mut visited: HashSet<Address> = HashSet::from([from]);
-    let mut steps: Vec<Step> = Vec::new();
+    // Решение 410 (t195): посещённые токены и пулы — хеш foldhash (fast_hash.rs), только «есть ли».
+    let mut visited: FastSet<Address> = FastSet::default();
+    visited.insert(from);
+    // Решение 410 (t195): стек — ссылки на рёбра (route_hops.rs), ребро копируется только в выданный путь.
+    let mut steps: Vec<Hop<'_>> = Vec::new();
+    let mut sites: FastSet<PoolRef> = FastSet::default();
     dfs(
         graph,
         from,
@@ -94,6 +102,7 @@ pub fn enumerate(
         max_hops,
         max_paths,
         &mut visited,
+        &mut sites,
         &mut steps,
         &mut out,
     );
@@ -101,45 +110,51 @@ pub fn enumerate(
 }
 
 /// Обход в глубину: из `node` (пройдено `steps.len()` рёбер) тянем рёбра к цели или к разрешённой промежуточной.
-/// Ошибок нет.
+/// Решение 295: `sites` — многомонетные пулы (PoolRef::Multi), уже пройденные путём: другая пара того же пула в
+/// этот путь не идёт (одна площадка — один шаг). Пулы с иной ссылкой в `sites` не попадают (у парного пула повтор
+/// невозможен — нет повтора токена). Ошибок нет.
 #[allow(clippy::too_many_arguments)]
-fn dfs(
-    graph: &Graph,
+fn dfs<'g>(
+    graph: &'g Graph,
     node: Address,
     to: Address,
     allowed: &HashSet<Address>,
     max_hops: usize,
     max_paths: usize,
-    visited: &mut HashSet<Address>,
-    steps: &mut Vec<Step>,
+    visited: &mut FastSet<Address>,
+    sites: &mut FastSet<PoolRef>,
+    steps: &mut Vec<Hop<'g>>,
     out: &mut Vec<RoutePath>,
 ) {
     for edge in graph.edges_from(node) {
         if out.len() >= max_paths {
             return;
         }
+        let multi = multi_site(&edge.entry.pool.reference);
+        if multi.as_ref().is_some_and(|s| sites.contains(s)) {
+            continue;
+        }
         let next = edge.other(node);
-        let step = Step {
-            edge: edge.clone(),
-            token_in: node,
-            token_out: next,
-        };
+        // Решение 410 (t195): шаг — ссылка на ребро; копия ребра — только в выданный путь (route_hops::path).
+        let step: Hop<'g> = (edge, node, next);
         if next == to {
             // Путь замкнулся на цель: длиной steps.len() + 1 хопов (в пределах max_hops — цикл идёт только пока есть запас).
-            steps.push(step);
-            out.push(RoutePath {
-                steps: steps.clone(),
-            });
-            steps.pop();
+            out.push(route_hops::path(steps, step));
         } else if steps.len() + 1 < max_hops && allowed.contains(&next) && !visited.contains(&next)
         {
             // Внутренний узел — только разрешённая промежуточная, без повторного захода (нет циклов, нет возврата в старт).
             visited.insert(next);
+            if let Some(s) = &multi {
+                sites.insert(s.clone());
+            }
             steps.push(step);
             dfs(
-                graph, next, to, allowed, max_hops, max_paths, visited, steps, out,
+                graph, next, to, allowed, max_hops, max_paths, visited, sites, steps, out,
             );
             steps.pop();
+            if let Some(s) = &multi {
+                sites.remove(s);
+            }
             visited.remove(&next);
         }
     }
@@ -163,9 +178,12 @@ pub fn enumerate_cycles(
     if max_cycle_len < 2 || max_cycles == 0 {
         return out;
     }
-    let mut visited: HashSet<Address> = HashSet::from([base]);
-    let mut used: HashSet<PoolRef> = HashSet::new();
-    let mut steps: Vec<Step> = Vec::new();
+    // Решение 410 (t195): хеш foldhash (fast_hash.rs), только «есть ли».
+    let mut visited: FastSet<Address> = FastSet::default();
+    visited.insert(base);
+    let mut used: FastSet<PoolRef> = FastSet::default();
+    // Решение 410 (t195): стек — ссылки на рёбра (route_hops.rs).
+    let mut steps: Vec<Hop<'_>> = Vec::new();
     dfs_cycle(
         graph,
         base,
@@ -183,15 +201,15 @@ pub fn enumerate_cycles(
 /// Обход в глубину для циклов: из `node` тянем рёбра обратно к `base` (замыкание) или к ещё не посещённому токену.
 /// Один пул (ребро по PoolRef) в одном цикле — не дважды. Ошибок нет.
 #[allow(clippy::too_many_arguments)]
-fn dfs_cycle(
-    graph: &Graph,
+fn dfs_cycle<'g>(
+    graph: &'g Graph,
     node: Address,
     base: Address,
     max_cycle_len: usize,
     max_cycles: usize,
-    visited: &mut HashSet<Address>,
-    used: &mut HashSet<PoolRef>,
-    steps: &mut Vec<Step>,
+    visited: &mut FastSet<Address>,
+    used: &mut FastSet<PoolRef>,
+    steps: &mut Vec<Hop<'g>>,
     out: &mut Vec<RoutePath>,
 ) {
     for edge in graph.edges_from(node) {
@@ -199,28 +217,24 @@ fn dfs_cycle(
             return;
         }
         // Один и тот же пул в цикле не используем дважды (атомарный бандл свопа по пулу — один раз, решение 85/84).
-        if used.contains(&edge.entry.pool.reference) {
+        // Решение 295: по физическому пулу (site) — разные пары одного многомонетного пула тоже «тот же пул»; у прочих
+        // ссылок site() = сама ссылка.
+        let site = edge.entry.pool.reference.site();
+        if used.contains(&site) {
             continue;
         }
         let next = edge.other(node);
-        let step = Step {
-            edge: edge.clone(),
-            token_in: node,
-            token_out: next,
-        };
+        // Решение 410 (t195): шаг — ссылка на ребро; копия — только в выданный цикл.
+        let step: Hop<'g> = (edge, node, next);
         if next == base {
             // Цикл замкнулся на базовую монету: длиной steps.len() + 1 хопов (≥ 2 и в пределах max_cycle_len).
             if steps.len() + 1 >= 2 {
-                steps.push(step);
-                out.push(RoutePath {
-                    steps: steps.clone(),
-                });
-                steps.pop();
+                out.push(route_hops::path(steps, step));
             }
         } else if steps.len() + 1 < max_cycle_len && !visited.contains(&next) {
             // Внутренний токен — любой, без повторного захода; остаётся запас хотя бы на одно замыкающее ребро.
             visited.insert(next);
-            used.insert(edge.entry.pool.reference.clone());
+            used.insert(site.clone());
             steps.push(step);
             dfs_cycle(
                 graph,
@@ -234,8 +248,14 @@ fn dfs_cycle(
                 out,
             );
             steps.pop();
-            used.remove(&edge.entry.pool.reference);
+            used.remove(&site);
             visited.remove(&next);
         }
     }
+}
+
+/// Физический пул ребра, если это пара многомонетного пула (решение 295, PoolRef::Multi); иначе None — ребро в запрет
+/// «одна площадка — один шаг» путей не входит (route_best.rs — тот же запрет). Ошибок нет.
+pub fn multi_site(r: &PoolRef) -> Option<PoolRef> {
+    matches!(r, PoolRef::Multi { .. }).then(|| r.site())
 }

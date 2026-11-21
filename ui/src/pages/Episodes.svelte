@@ -12,8 +12,10 @@
   Настройки: нет (episode.* — экран «Настройки», категория «Сигналы и эпизоды»). Сколько строк — задаёт зритель.
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { get, seg } from '../lib/api.js';
-  import { onLive } from '../lib/live.svelte.js';
+  import { onLive, lagFor } from '../lib/live.svelte.js';
+  import { flight } from '../lib/flight.js';
   import { dirText } from '../lib/coreLabels.js';
   import { showTime } from '../lib/labels.js';
   import PageSize from '../components/PageSize.svelte';
@@ -30,19 +32,21 @@
   let replay = $state(null);
   let now = $state(Date.now());
 
-  /** Перечитывает список. Ошибка — в error. */
-  async function reload() {
+  /** Перечитывает список (signal — отмена). Ошибка — в error; отмена — ничего. */
+  async function load(signal) {
     if (!limit) return;
     try {
-      const r = await get(`/api/episodes?limit=${limit}`);
+      const r = await get(`/api/episodes?limit=${limit}`, signal);
       rows = r.episodes;
       off = r.off;
       used = r.used_bytes;
       error = '';
     } catch (e) {
-      error = e.message;
+      if (!e.aborted) error = e.message;
     }
   }
+  /** Один запрос в полёте (lib/flight.js); смена объёма или уход со страницы — отмена. */
+  const reload = flight(load);
 
   $effect(() => {
     reload();
@@ -53,11 +57,12 @@
         const i = rows.findIndex((r) => r.id === msg.data.id);
         if (i >= 0) rows[i] = msg.data;
         else rows = [msg.data, ...rows];
-      } else if (msg.type === 'lagged') reload();
+      } else if (lagFor(msg, 'core')) reload();
     });
     return () => {
       clearInterval(t);
       stop();
+      reload.cancel();
     };
   });
 
@@ -82,7 +87,7 @@
         <th class="num">Макс. прибыль</th><th class="num">Без бюджета</th><th class="num">Записей</th><th>Итог</th><th></th></tr>
     </thead>
     <tbody>
-      {#each rows as e (e.id)}
+      {#each uniqBy(rows, (e) => e.id) as e (e.id)}
         <tr>
           <td>{dirText(e.direction)}</td>
           <td>{#if e.dry}<span class="tag">сухой</span>{:else}обычный{/if}</td>

@@ -1,0 +1,55 @@
+{
+  "source": "Журнал живого бота 18.11.2026 UTC (сборка релиза t196+t197), выписка координатора задачи t198 — числа как в записях бота. Адрес токена в журнале сокращён: 0x6Ec9…8Edb (полный в выписке не приведён — тесты его не используют). Хеши переводов в выписке сокращены.",
+  "coin": "WKC",
+  "token_transfer_tax_pct": "2",
+  "venue": "mexc",
+  "dex_wallet": "w2",
+  "plan": {
+    "profit_usd": "18.22",
+    "buy_tax_usdt": "5.26",
+    "transfer_tax_usdt": "5.26"
+  },
+  "deals": [
+    {
+      "id": "20261118213557076WKC",
+      "bought_at": "2026-11-18T21:35:57Z",
+      "bought": "6130667082",
+      "bought_usdt": "262.99",
+      "withdraw_at": "2026-11-18T21:35:58Z",
+      "withdraw_tx": "0x4de69fbf…",
+      "deposit_status": "SUCCESS",
+      "deposit_at": "2026-11-18T21:36:32Z",
+      "deposit_record": "6008053740.36"
+    },
+    {
+      "id": "20261118213605442WKC",
+      "bought_at": "2026-11-18T21:36:06Z",
+      "bought": "28519901",
+      "withdraw_at": "2026-11-18T21:36:07Z",
+      "withdraw_tx": "0x15712f80…",
+      "deposit_status": "SUCCESS",
+      "deposit_at": "2026-11-18T21:36:41Z",
+      "deposit_record": "27949502.98"
+    }
+  ],
+  "sell_refused": {
+    "at": "2026-11-18T21:36:33Z",
+    "deal": "20261118213557076WKC",
+    "qty": "6008053740.36",
+    "code": 30005,
+    "msg": "Oversold",
+    "gateway_code": "InsufficientBalance"
+  },
+  "reconcile": {
+    "at": "2026-11-18T21:38:19Z",
+    "ledger": "6036003243.34",
+    "on_venue": "5915283179.1468"
+  },
+  "manual": {
+    "at": "2026-11-18T21:40:37Z",
+    "button": "Продать и перегнать",
+    "on_venue": "5915283179",
+    "of_ledger": "6008053740"
+  },
+  "result_usd": "-20.93"
+}

@@ -9,6 +9,8 @@
 //! Часть 2 — цикл свопа (swap/swap_to): поиск следующего тика по карте, пересечение инициализированного тика
 //! (liquidity ± liquidityDelta), остановка на пределе цены и частичный итог на краю прочитанного окна — сверяются
 //! СТЫКОВКОЙ тех же step_v3, что доказаны в части 1 (эталон — не мок, а те же проверенные формулы).
+//! Режим Row (Algebra V1.9 Camelot V3, сырой битмап) — на карте шага 1; режим Linked (Algebra Integral) — на карте шага
+//! 60 (тесты *_linked ветки BSC, решение 487, ревью t256).
 //! Кросс-чек против живого Algebra QuoterV2 на записи реального пула THENA — фаза B (как у Elastic 81b).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::math::{swap_algebra, swap_step, tick_math}, pools::ticks (TickMap/TickData).
@@ -17,7 +19,7 @@ use std::collections::BTreeMap;
 
 use alloy_primitives::{I256, U256};
 
-use arb::venues::bsc_dex::math::swap_algebra::{self, AlgebraState};
+use arb::venues::bsc_dex::math::swap_algebra::{self, AlgebraState, NextTick};
 use arb::venues::bsc_dex::math::swap_step::step_v3;
 use arb::venues::bsc_dex::math::tick_math::{MAX_TICK, max_sqrt_ratio, sqrt_ratio_at_tick};
 use arb::venues::bsc_dex::pools::ticks::{TickData, TickMap};
@@ -164,14 +166,16 @@ fn one_tick(tick: i32, net: i128) -> TickMap {
         },
     );
     TickMap {
-        spacing: 60,
-        ticks,
+        spacing: 1, // сырой битмап Algebra V1.9 (Camelot V3, решение 461)
+        ticks: ticks.into(),
         words: (i16::MIN, i16::MAX),
     }
 }
 
 /// Часть 2: цикл свопа пересекает один инициализированный тик — итог равен стыковке двух step_v3
-/// (до тика с L0, после тика с L0+net). Направление oneForZero (цена вверх, exactIn).
+/// (до тика с L0, после тика с L0+net). Направление oneForZero (цена вверх, exactIn). Решение 461: цель шага V1.9 —
+/// тик в строке битмапа или край строки (TickTable.nextTickInTheSameRow), поэтому сумма такая, что остаток
+/// исполняется внутри строки 0 (тики 0…255): цель второго шага — край строки, тик 255.
 #[test]
 fn swap_crosses_one_tick() {
     let l0 = 2_000_000_000_000_000_000u128;
@@ -183,6 +187,115 @@ fn swap_crosses_one_tick() {
         liquidity: l0,
         fee: 600,
         ticks: &tm,
+        next: NextTick::Row,
+    };
+    let amount = u("10000000000000000"); // пересекает тик 60 и исполняется до края строки (тик 255)
+    let got = swap_algebra::swap(&s, false, true, amount).unwrap();
+
+    // Эталон: шаг 1 до цены тика 60 (капает), пересечение (+net), шаг 2 остатком к краю строки (не доходит).
+    let sqrt60 = sqrt_ratio_at_tick(60).unwrap();
+    let a1 = I256::try_from(amount).unwrap();
+    let (q1, in1, out1, fe1) = step_v3(p11(), sqrt60, l0, a1, 600).unwrap();
+    assert_eq!(
+        q1, sqrt60,
+        "шаг 1 должен дойти до тика 60 (иначе тест не пересекает тик)"
+    );
+    let spent1 = in1 + fe1;
+    let rem = amount - spent1;
+    let l1 = l0 + net.unsigned_abs(); // oneForZero прибавляет liquidityDelta
+    let target2 = sqrt_ratio_at_tick(255).unwrap(); // край строки 0 — цель шага V1.9 после тика 60
+    let (q2, in2, out2, fe2) =
+        step_v3(sqrt60, target2, l1, I256::try_from(rem).unwrap(), 600).unwrap();
+    assert!(
+        q2 < target2,
+        "остаток должен исполниться внутри строки 0 (до тика 255)"
+    );
+
+    assert!(got.complete);
+    assert_eq!(got.amount_in, spent1 + in2 + fe2);
+    assert_eq!(got.amount_out, out1 + out2);
+}
+
+/// Цикл свопа останавливается на пределе цены (swap_to), не пересекая тик за пределом.
+#[test]
+fn swap_stops_at_price_limit() {
+    let l0 = 2_000_000_000_000_000_000u128;
+    let tm = one_tick(60, 1_000_000_000_000_000_000i128);
+    let s = AlgebraState {
+        sqrt_price: p11(),
+        tick: 0,
+        liquidity: l0,
+        fee: 600,
+        ticks: &tm,
+        next: NextTick::Row,
+    };
+    let limit = sqrt_ratio_at_tick(30).unwrap(); // предел до тика 60 — тик не пересекается
+    let amount = u("1000000000000000000");
+    let (got, reached) = swap_algebra::swap_to(&s, false, true, amount, limit).unwrap();
+    assert!(reached, "цена должна дойти ровно до предела");
+
+    let a1 = I256::try_from(amount).unwrap();
+    let (q, inp, out, fe) = step_v3(p11(), limit, l0, a1, 600).unwrap();
+    assert_eq!(q, limit);
+    assert_eq!(got.amount_in, inp + fe);
+    assert_eq!(got.amount_out, out);
+    assert!(!got.complete, "сумма не исчерпана — упёрлись в предел");
+}
+
+/// На краю прочитанного окна (за ним тики неизвестны) итог частичный (complete = false).
+#[test]
+fn swap_partial_at_window_edge() {
+    let tm = TickMap {
+        spacing: 1,
+        ticks: BTreeMap::new().into(),
+        words: (0, 0), // окно сырых тиков [0, 255]
+    };
+    let s = AlgebraState {
+        sqrt_price: p11(),
+        tick: 0,
+        liquidity: 2_000_000_000_000_000_000u128,
+        fee: 600,
+        ticks: &tm,
+        next: NextTick::Row,
+    };
+    // Большая сумма вверх: цена дойдёт до края окна (тик 255), дальше тики неизвестны.
+    let got = swap_algebra::swap(&s, false, true, u("1000000000000000000")).unwrap();
+    assert!(!got.complete, "за краем окна тиков итог частичный");
+    assert!(got.amount_out > U256::ZERO);
+}
+
+/// Решение 487 (ревью t256): режим Linked (Algebra Integral) при шаге карты 60 — тесты ветки BSC, возвращены после
+/// слияния рядом с тестами Row шага 1. Карта тиков с одним инициализированным тиком (net) и широким окном.
+fn one_tick_60(tick: i32, net: i128) -> TickMap {
+    let mut ticks = BTreeMap::new();
+    ticks.insert(
+        tick,
+        TickData {
+            gross: net.unsigned_abs(),
+            net,
+        },
+    );
+    TickMap {
+        spacing: 60,
+        ticks: ticks.into(),
+        words: (i16::MIN, i16::MAX),
+    }
+}
+
+/// Часть 2: цикл свопа пересекает один инициализированный тик — итог равен стыковке двух step_v3
+/// (до тика с L0, после тика с L0+net). Направление oneForZero (цена вверх, exactIn).
+#[test]
+fn swap_crosses_one_tick_linked() {
+    let l0 = 2_000_000_000_000_000_000u128;
+    let net = 1_000_000_000_000_000_000i128;
+    let tm = one_tick_60(60, net);
+    let s = AlgebraState {
+        sqrt_price: p11(),
+        tick: 0,
+        liquidity: l0,
+        fee: 600,
+        ticks: &tm,
+        next: NextTick::Linked,
     };
     let amount = u("1000000000000000000"); // достаточно, чтобы пересечь тик 60 и продолжить
     let got = swap_algebra::swap(&s, false, true, amount).unwrap();
@@ -214,15 +327,16 @@ fn swap_crosses_one_tick() {
 
 /// Цикл свопа останавливается на пределе цены (swap_to), не пересекая тик за пределом.
 #[test]
-fn swap_stops_at_price_limit() {
+fn swap_stops_at_price_limit_linked() {
     let l0 = 2_000_000_000_000_000_000u128;
-    let tm = one_tick(60, 1_000_000_000_000_000_000i128);
+    let tm = one_tick_60(60, 1_000_000_000_000_000_000i128);
     let s = AlgebraState {
         sqrt_price: p11(),
         tick: 0,
         liquidity: l0,
         fee: 600,
         ticks: &tm,
+        next: NextTick::Linked,
     };
     let limit = sqrt_ratio_at_tick(30).unwrap(); // предел до тика 60 — тик не пересекается
     let amount = u("1000000000000000000");
@@ -239,10 +353,10 @@ fn swap_stops_at_price_limit() {
 
 /// На краю прочитанного окна (за ним тики неизвестны) итог частичный (complete = false).
 #[test]
-fn swap_partial_at_window_edge() {
+fn swap_partial_at_window_edge_linked() {
     let tm = TickMap {
         spacing: 60,
-        ticks: BTreeMap::new(),
+        ticks: BTreeMap::new().into(),
         words: (0, 0), // окно сырых тиков [0, 255]
     };
     let s = AlgebraState {
@@ -251,6 +365,7 @@ fn swap_partial_at_window_edge() {
         liquidity: 2_000_000_000_000_000_000u128,
         fee: 600,
         ticks: &tm,
+        next: NextTick::Linked,
     };
     // Большая сумма вверх: цена дойдёт до края окна (тик 255), дальше тики неизвестны.
     let got = swap_algebra::swap(&s, false, true, u("1000000000000000000")).unwrap();

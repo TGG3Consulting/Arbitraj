@@ -1,0 +1,77 @@
+# venues/xt — адаптер XT.com (спот, API v4, решение 167)
+
+Реализует контракт `gateway/contract.rs`. Всё — только по официальной документации XT; разбор перед подключением —
+`docs/notes/xt-analysis-2026-11-05.md`. Живых ответов на момент написания нет (из среды разработки `sapi.xt.com` закрыт
+прокси): всё, что помечено «проверить на живом», сверяется по записям (tests/README.md, раздел «XT»).
+
+## Официальные источники
+
+| Источник | Что там |
+| --- | --- |
+| https://doc.xt.com/docs/spot/ | Документация API v4 — постраничная (решение 263, сверено 13.11.2026: старые адреса `https://doc.xt.com/#<раздел><файл>` ведут на пустую переадресацию; в комментариях кода — адреса `https://doc.xt.com/docs/spot/<раздел>/<страница>`, фьючерсы — `docs/futures/…`, ключ — `docs/user-center/…`) |
+| https://github.com/xt-com/xt4-api (ветка main, коммит `8edf738` от 22.01.2025) | Исходник doc.xt.com: `_documentation/` (подпись, лимиты, коды, publicModule), `_market/` (symbol, depth), `_order/`, `_trade/`, `_balance/`, `_deposit_withdrawal/`, `_transfer/`, `_websocket_public/`, `_websocket_private/`, `_user_center_apikey/`, `_futures_user/`, `_futures_documentation/` |
+| https://github.com/kelvinxue/pyxt (коммит `db336a1`) | SDK, на который ссылается документация: эндпоинты совпадают; заголовки подписи `xt-validate-*` — расхождение с документацией |
+
+## Файлы
+
+| Файл | Что делает |
+| --- | --- |
+| `mod.rs` | Реализация контракта `Venue` |
+| `ctx.rs` | Окружение: настройки, секреты `xt.api_key` / `xt.api_secret`, HTTP, журнал; тикер ядра заглавными ↔ имя монеты XT строчными |
+| `sign.rs` | Подпись: X (заголовки `validate-*` по алфавиту) + Y (`#METHOD#path#query#body`), HmacSHA256 hex; фьючерсы — X без алгоритма и окна, Y без метода |
+| `rest.rs`, `reply.rs`, `errors.rs` | REST: ответ `{rc, mc, ma, result}`, recvWindow ≤ 60000, 429 и `GATEWAY_*` — пауза `venue.rate_limit_pause_ms` (отдельно спот и прочие адреса); ответ с секретом ключа (user-center) не пишется в сырой журнал; коды mc → единые («XT, код <mc>: …» — решение 164). Отказы вывода (решение 253, дополнение t82): WITHDRAW_002/004/014 → InvalidAddress; WITHDRAW_003 → AccountRestricted; дополнение t85: WITHDRAW_012/013/020/021 (за сегодня) → WithdrawLimit |
+| `resolve.rs` | Решение 231: исход операции «неизвестен» по «чем найти» из ошибки — ордер по своему ID / ID ордера (те же запрос, отмена и доведение, что у постановки); вывод — по своему ID в истории выводов |
+| `num.rs` | Числа без потери точности (строки и числа JSON) |
+| `symbols.rs`, `symbols_parse.rs` | `/v4/public/symbol` (вне рабочих потоков, с `version` — без изменений список не приходит): state, tradingEnabled, openapiEnabled, PRICE / QUANTITY (шаг от min, null — без предела), QUOTE_QTY, точности, takerFeeRate, orderTypes, timeInForces |
+| `pairs.rs`, `pairs_watch.rs`, `subs.rs`, `market.rs` | Снимок пар (SpotPairs), фоновое обновление, подписка (как Binance); пара, где XT не примет наш ордер (LIMIT нет в orderTypes или venue.order_time_in_force нет в timeInForces), — признак `order_block` с причиной, ядро её не считает (решение 254) |
+| `order_rules.rs` | ОДНА функция правил ордера (решение 134): у ордера и у `check_order`; LIMIT + IOC/FOK, округление от min, пределы, QUOTE_QTY; пробного ордера у XT нет; `order_block` — признак пары «не примет наш ордер» для справочника ядра (решение 254), та же проверка у ордера |
+| `trade.rs`, `order_state.rs` | `POST /v4/order` (тело JSON, свой clientOrderId — 18 знаков `b|s` + мс + номер попытки, шаблон `^[a-zA-Z0-9_]{4,22}`, решение 263), итог `GET /v4/order?orderId=` (Query single, 50/s), отмена `DELETE`; поиск по clientOrderId при неизвестном итоге; комиссия — `fee`/`feeCurrency` (`deductServices` в документации нет — решение 263) |
+| `market_sell.rs` | Решение 268: рыночная продажа (контракт `trade_market_sell`) — ордер типа «market» на количество базовой монеты после отказа лимитного ордера «цена вне диапазона»; правила пары и разбор итога — те же, что у лимитного (`order_rules.rs`, `trade.rs`); код PriceOutOfRange рыночный ордер не отдаёт |
+| `book_version.rs` | Решения 202/213: версия стакана пары по REST `GET /v4/public/depth` для сторожа ядра — при `depth_update` номер (`lastUpdateId` ↔ номер локального стакана, «Orderbook manage»), при `depth` — первые `venue.depth_levels` уровней (по содержимому); Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
+| `backup.rs`, `backup_conn.rs` | Решение 419 (дополнение и ревью): страховка быстрого стакана — при `depth_update` параллельно снимки `depth@{symbol},{venue.depth_levels}` (если 5/10/20/50); ядру — локальный стакан, пока он синхронизирован и отдан последним, иначе снимки; «не старее отданного» — по порядку получения (у depth_update нет времени биржи). Разрыв — ядру снимок depth@, принятый после последнего изменения быстрого, а если такого нет — стакан пары снимается до следующего снимка. Сверка (ревью 419): два снимка depth@ подряд не равны верху быстрого (общие уровни), быстрый между ними не менялся — расхождение: ядру снимок, быстрый заново со снимка REST (не раньше `venue.ws_reconnect_pause_ms`). Счёт разрывов и расхождений — журнал `venue.fast_book` (склейка решения 334) |
+| `ws_dial.rs` | Решение 419: подключение к публичному WebSocket со сжатием permessage-deflate (RFC 7692) — клиент yawc (tokio-tungstenite сжатие не умеет); с 2026-12-10 08:00 UTC XT отвергает публичные соединения без сжатия. Включено всегда, настройки нет; Ping сервера yawc отвечает сам |
+| `book.rs`, `depth.rs`, `ws.rs`, `ws_conn.rs`, `ws_book.rs`, `local_book.rs`, `snapshots.rs` | Сторож пар (решение 202): учёт свежести на каждом кадре, переподписка пары `unsubscribe` + `subscribe`, переподключение соединения; подтверждённая тихая пара свежа до срока (`book.rs`). Стаканы: `depth@{symbol},{levels}` (снимки 1000 мс; тот же updateId — без отдачи ядру) или `depth_update@{symbol}` (100 мс) + снимок REST `/v4/public/depth` из общей очереди (≤ 10/с); текст `ping` раз в `venue.ws_ping_ms`; котировка по ставке тейкера пары. Дополнение 10.11 к 202/213: при переподписке пары сторожем — сразу снимок REST из той же очереди (`ws_book.rs` resub): `depth_update` — стакан пары заново со снимка (номер = `lastUpdateId`), `depth` — верхние `venue.depth_levels` уровней ядру, если кадр `depth@` ещё не пришёл (`ws_diff.rs`) |
+| `wallet.rs`, `networks_parse.rs` | `/v4/public/wallet/support/currency` + `/v4/public/currencies` (кэш): сеть BSC (`chain`), `contract`, ввод/вывод по сети и по монете, комиссия и минимум вывода; ненулевой `depositFeeRate` — ввод по сети закрыт; минимум депозита — `depositMinAmount` («0» — минимум 0, решение 370; нет поля — `venue.deposit_min_absent_ok`; gateway/deposit_min.rs) |
+| `deposit_addr.rs` | Адрес депозита, кэш (монета, сеть); memo — отказ; DEPOSIT_006/007 — «адрес создаётся»; решение 411 — память под отпечатком ключа API (gateway/addr_book.rs), режимы «только память» / «только биржа» |
+| `transfers.rs` | Вывод `POST /v4/withdraw` (сумма включает комиссию, свой clientOrderId), статус `GET /v4/withdraw?recordId=`, поиск по clientOrderId; 1 запрос/с |
+| `deposits.rs` | Депозит по хешу: история монеты в сети BSC за `venue.history_window_s` (фильтра по хешу у XT нет) |
+| `account.rs`, `all_balances.rs`, `key_check.rs` | Баланс спота (все и одна монета); панель «Балансы» (Спот, Фьючерсы USDT-M и Coin-M, Маржа — примечание); «Проверить подключение» (GET /v4/balances, запись ключа в user-center) |
+| `price_band.rs` | Решение 392 (t180): коридор лимитного ордера — PROTECTION_LIMIT (symbols_parse.rs price_band) × последняя цена GET /v4/public/ticker/price. НЕ ПОДКЛЮЧЕНО (ревью Б3): что p ответа — «latest transaction price» фильтра, документация прямо не говорит; контракт price_band не реализован, ядру коридор не отдаётся до живой записи |
+
+## Что важно знать
+
+- Подпись — заголовки `validate-algorithms`, `validate-appkey`, `validate-recvwindow`, `validate-timestamp`,
+  `validate-signature`. Passphrase нет. recvWindow в документации противоречив (5000 «не больше», пример 60000).
+- Лимиты: 429 — «IP или apiKey будет заблокирован», Retry-After нет. Рынок 10/с на IP, `/v4/balances` 10/с на ключ,
+  `POST /v4/order` 20/с, `/v4/withdraw` (вывод и статус) 1/с. Лимитов WebSocket (тем на соединение, сообщений в
+  секунду, соединений с IP) в документации нет — подбор живым замером (решение 109).
+- WebSocket (решение 419): «Starting December 10, 2026, 08:00 (UTC) (16:00 UTC+8), the public WebSocket market data
+  endpoint will only accept connections that negotiate permessage-deflate compression (RFC 7692). Connections without
+  compression will be rejected.»; «Private streams and REST APIs are not affected.»; «Message content and format are
+  unchanged.» (https://doc.xt.com/docs/spot/WebSocket%20Public/wss-general, IncrementalDepth). Параметров расширения
+  документация не задаёт. Публичное соединение открывается через yawc со сжатием всегда (`ws_dial.rs`); приватного
+  потока у адаптера нет. Разбор кадров (`depth.rs`) не менялся.
+- Ставки комиссии по ключу в API нет — расчёт по `takerFeeRate` пары; факт комиссии — по ордеру (урок 23).
+- Решение 232: покупка — комиссия в монете (факт бота 08.11: WIN, 0.002 от количества). Решение 263: факт комиссии —
+  только `fee`/`feeCurrency` ответа ордера; `deductServices` (скидка оплатой в XT) в действующей документации нет — не
+  читается. В какой монете комиссия при скидке XT — проверить на живом ордере.
+- Поток аккаунта не подключён (урок 16): тема `balance` присылает итоговый баланс (`b`, `f`) без причины изменения —
+  депозит нельзя отличить от сделки (как OKX `account`); зачисление — опросом `deposit_status`.
+- Удержание вывода T+1 (`WITHDRAW_009`) заранее через API не узнать — `withdraw_hold` пустой (урок 22).
+- Счёт зачисления депозита не описан; внутренний перевод `POST /v4/balance/transfer` есть, но не подключён до живого
+  депозита (если депозит придёт не на SPOT — `deposit_to_trading`, вопрос Тиграну).
+- Права ключа: QUERY + TRADE (спот и маржа одним правом) + WITHDRAW; без FUTURE и LEVER_LOAN. Адрес кошелька DEX,
+  вероятно, нужно заранее добавить в адресную книгу (WITHDRAW_004).
+
+## Проверить на живых ответах (вопросы — в отчёте решения 167)
+
+1. Заголовки `validate-*` (документация) или `xt-validate-*` (SDK pyxt); hex строчными или заглавными (AUTH_103).
+2. ~~Принимает ли `wss://stream.xt.com/public` клиента без permessage-deflate~~ — с 2026-12-10 нет (документация);
+   решение 419: подключение со сжатием. Проверить на живом: в журнале нет обрывов XT, кадры стаканов идут.
+3. Название сети BSC в `chain` (`venue.bsc_network`), поле `contract` у CAKE и USDT (регистр), у BNB.
+4. `depositFeeRate` у сети BSC: 0 или число (смысл — вопрос Тиграну); регистр `currency` в справочнике и балансах.
+5. Типы чисел (строка/число) в `/v4/public/symbol`, `null` в фильтрах, `version` без изменений (поле `symbols`?).
+6. Итог IOC с остатком — CANCELED или EXPIRED; монета комиссии покупки; `deductServices` при оплате в XT.
+7. `fi`/`i` в `depth_update` и `lastUpdateId` снимка — согласованы ли; одинаковый `i` у снимков `depth`.
+8. Ответ `/v4/withdraw?recordId=` (объект или null), `clientOrderId` строкой; ответ «фьючерсный счёт не открыт».
+9. Доступен ли `/v4/user/account/api-key` обычному ключу; значения `roleScopes`.

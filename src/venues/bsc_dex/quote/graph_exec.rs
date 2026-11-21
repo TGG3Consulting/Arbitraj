@@ -1,0 +1,237 @@
+//! Файл: venues/bsc_dex/quote/graph_exec.rs
+//! Что делает: исполнимость графового маршрута как есть (решение 84; вынесено из quote/graph_route.rs) и его форма для
+//! боевого пути: прямая (одна доля, один хоп), всё через один Universal Router PancakeSwap (умный путь) или
+//! мульти-роутерный бандл свопов (exec/bundle.rs). Неисполнимый маршрут — сигнал с причиной (exec_note).
+//! Решение 122, часть R2: нога из N шагов внутри ОДНОГО Universal Router (PancakeSwap: V2/V3/Infinity; Uniswap:
+//! V2/V3/V4) исполнима одной транзакцией — цепочка команд UR, промежуточный токен остаётся на роутере (ADDRESS_THIS,
+//! вход следующей команды — CONTRACT_BALANCE; exec/chain.rs); предел длины ноги — dex.route_max_hops. Нога через
+//! разные роутеры бандлом не собирается — только исполнителем (часть X).
+//! Решение 122, часть R3: нативная монета BNB в бандле — обёртка/развёртка WBNB командой WRAP_ETH / UNWRAP_WETH в
+//! execute КАЖДОГО Universal Router бандла (exec/bundle_native.rs). Нога форка (свой classic V2 Router) обёртку не
+//! делает — маршрут с BNB через ногу форка неисполним с причиной.
+//! Решение 39 (проверка и в котировке графа — Тигран, 03.11) по налогу ПУЛА (решение 146, Тигран 04.11): в пути через
+//! промежуточную (нога из 2+ хопов) шаг, у пула которого налог монеты на стороне шага > 0, — только пул V2
+//! (quote/pool_tax.rs v2_only, как exec/live.rs, exec/live_hops.rs); иначе маршрут неисполним (сигнал).
+//! Решение 122, часть X: маршрут через свой исполнитель — правила в quote/graph_executor.rs (без адреса — как раньше).
+//! Кто вызывает: quote/graph_route.rs (executable), quote/graph_fit.rs (executable, exec_router — решение 300), exec/trade.rs (graph_form),
+//! exec/executor/mod.rs (bundle_first — ревью t181 Н3).
+//! От чего зависит: quote/graph_executor.rs, quote/pool_tax.rs (v2_only), pools/families.rs (Family, smart_ok, classify), send/mod.rs (planned_bundle_ok), quote/path.rs.
+//! Настройки: exec.executor_address, dex.route_max_hops, dex.bundle_max_routers [bsc_dex], dex.router, dex.universal_router [DEX], channel.*.
+
+use alloy_primitives::Address;
+
+use crate::core::types::DexRoute;
+use crate::gateway::errors::GatewayResult;
+
+use super::super::ctx::Ctx;
+use super::super::pools::families::{self, Family, smart_ok};
+use super::graph_executor;
+use super::path::Path;
+use super::pool_tax;
+
+/// Исполним ли маршрут одной транзакцией или бандлом как есть (решение 84). Принимает: доли (налог пула каждого шага —
+/// в Hop.usable.tax_pct, решение 146), нативная ли монета (BNB).
+/// Возвращает: Ok — исполним; Err — причина (сигнал). Ошибок иных нет.
+pub fn executable(ctx: &Ctx, legs: &[Path], native: bool) -> Result<(), String> {
+    if legs.is_empty() {
+        return Err("пустой маршрут".to_string());
+    }
+    // R2: длина ноги — не больше dex.route_max_hops (перебор путей и так не строит длиннее; проверка явная).
+    let max_hops = ctx.int("dex.route_max_hops").map_err(|e| e.message)?;
+    if let Some(p) = legs.iter().find(|p| p.hops.len() as u64 > max_hops) {
+        return Err(format!(
+            "нога маршрута из {} хопов длиннее dex.route_max_hops ({max_hops}) — сигнал",
+            p.hops.len()
+        ));
+    }
+    // Решение 39 по налогу пула (решение 146): в пути через промежуточную пул с налогом стороны > 0 — только V2.
+    if let Some((h, why)) = legs
+        .iter()
+        .filter(|p| p.hops.len() > 1)
+        .flat_map(|p| p.hops.iter())
+        .find_map(|h| pool_tax::v2_only(&h.entry, &h.usable).err().map(|w| (h, w)))
+    {
+        return Err(format!(
+            "путь через промежуточную: шаг {} {:?} — {why} — сигнал",
+            h.entry.family.title, h.entry.pool.kind
+        ));
+    }
+    // Решение 122 (часть X): задан exec.executor_address и каждый шаг — вид исполнителя (pools/exec_kind.rs) — маршрут
+    // не формы Universal Router (graph_form = бандл) идёт одной транзакцией через исполнитель: бандловые каналы не
+    // нужны, нога может пересекать роутеры и семейства. Нативная монета через исполнитель не идёт — как раньше.
+    // Решение 272: исполнитель v2 (executeNative) — и нативная монета; v1 или не сверен — как раньше.
+    let native_via = !native || super::super::exec::executor::native_capable(ctx);
+    // Ревью t181 (Н3): маршрут с шагом пула менеджера (V4 / Infinity), который собирается прежним путём (бандл свопов),
+    // идёт прежним путём — как у кошелька v2; исполнитель v3 — только там, где прежнего пути нет (bundle_first).
+    if native_via
+        && graph_executor::all_via(ctx, legs)
+        && !graph_executor::ur_form(ctx, legs)
+        && !bundle_first(ctx, &families_of(legs), native)
+    {
+        return graph_executor::tax(legs);
+    }
+    // Защитно: хоп без своего пути исполнения (tradable=false) — сигнал, авто-сделкой не исполняется.
+    if let Some(h) = legs
+        .iter()
+        .flat_map(|p| p.hops.iter())
+        .find(|h| !h.entry.family.tradable)
+    {
+        return Err(format!(
+            "маршрут проходит через {} без своего пути исполнения — это сигнал, авто-сделкой не исполняется",
+            h.entry.family.id
+        ));
+    }
+    // Форк исполняется ТОЛЬКО своим роутером бандлом (решения 59, 82) — не прямым/умным путём Universal Router.
+    let has_fork = legs
+        .iter()
+        .flat_map(|p| p.hops.iter())
+        .any(|h| h.entry.family.fork);
+    if !has_fork {
+        if legs.len() == 1 && legs[0].hops.len() == 1 {
+            return Ok(());
+        }
+        if legs
+            .iter()
+            .all(|p| p.hops.iter().all(|h| smart_ok(ctx, h.entry.family)))
+        {
+            return Ok(());
+        }
+    }
+    // R3: BNB обёртывается/развёртывается командой Universal Router; у роутера форка такой команды в бандле нет.
+    if native && has_fork {
+        return Err(
+            "нативная монета BNB через ногу форка (свой classic V2 Router): обёртка WBNB в бандле делается только \
+             командой Universal Router — маршрут неисполним (сигнал)"
+                .to_string(),
+        );
+    }
+    // Мульти-роутер или форк: исполним, если собирается в атомарный бандл свопов (решение 84, exec/bundle.rs).
+    collectable(ctx, legs)
+}
+
+/// Исполняющий роутер хопа: у форка — его собственный classic V2 Router (dex.router), иначе — Universal Router своей
+/// фабрики (dex.universal_router). Так collectable и exec/bundle.rs считают роутеры одинаково (решение 300 — и
+/// подмножество S3 quote/graph_fit.rs). Ошибки: NotConfigured.
+pub(super) fn exec_router(ctx: &Ctx, f: &Family) -> GatewayResult<Address> {
+    if f.fork {
+        ctx.dex_addr("dex.router", f.id)
+    } else {
+        ctx.dex_addr("dex.universal_router", f.id)
+    }
+}
+
+/// Виды пулов маршрута по долям (для правил, общих с боевым путём, exec/executor/mod.rs takes). Ошибок нет.
+fn families_of(legs: &[Path]) -> Vec<Vec<&'static Family>> {
+    legs.iter()
+        .map(|p| p.hops.iter().map(|h| h.entry.family).collect())
+        .collect()
+}
+
+/// Ревью t181 (Н3), решение 395 — правило выбора пути у кошелька с исполнителем v3. Маршрут, где есть шаг пула внутри
+/// менеджера (Uniswap V4 / PancakeSwap Infinity — ExecKind::singleton), который собирается ПРЕЖНИМ путём — бандлом свопов
+/// (все пулы со своим путём исполнения, нет нативной монеты через ногу форка, каждая доля внутри одного роутера, роутеров
+/// не больше dex.bundle_max_routers, каналы умеют бандл), идёт прежним путём, как у кошелька v2: монета с налогом на
+/// входе (через исполнитель с первым шагом V4/Infinity её менеджер откатит) и крючки, не пускающие исполнитель, не
+/// превращают прежнюю сделку в сигнал. Исполнитель v3 берёт такой маршрут только там, где прежнего пути нет (например
+/// DODO + Uniswap V4). Без шага менеджера — false: прежнее правило (исполнитель раньше бандла, решение 122). Принимает:
+/// окружение, виды пулов по долям, нативная ли монета. Ошибок нет. Одно правило — котировка (executable) и сделка (takes).
+pub fn bundle_first(ctx: &Ctx, legs: &[Vec<&'static Family>], native: bool) -> bool {
+    let all = || legs.iter().flatten();
+    if !all().any(|f| f.executor_kind.is_some_and(|k| k.singleton())) {
+        return false;
+    }
+    if !all().all(|f| f.tradable) || (native && all().any(|f| f.fork)) {
+        return false;
+    }
+    collectable_families(ctx, legs).is_ok()
+}
+
+/// Собирается ли маршрут в бандл (решение 84): все включённые каналы отправки умеют бандл (решение 121 B3; решение 299:
+/// при send.bundle_skip_single = да — хотя бы один, send::planned_bundle_ok), ни одна
+/// нога не пересекает роутеры (как exec/bundle::single_router/fork_router) и всего роутеров ≤ dex.bundle_max_routers.
+/// Ошибка — причина несобираемости.
+fn collectable(ctx: &Ctx, legs: &[Path]) -> Result<(), String> {
+    collectable_families(ctx, &families_of(legs))
+}
+
+/// То же по видам пулов долей (ревью t181: общее с bundle_first). Ошибка — причина несобираемости.
+fn collectable_families(ctx: &Ctx, legs: &[Vec<&'static Family>]) -> Result<(), String> {
+    super::super::send::planned_bundle_ok(ctx)?;
+    // Не задано → ctx.int вернёт ошибку (настройка L::Positive, значение всегда ≥ 1, если задано).
+    let max = ctx.int("dex.bundle_max_routers").map_err(|e| e.message)?;
+    let mut routers: Vec<Address> = Vec::new();
+    for p in legs {
+        let mut leg_router: Option<Address> = None;
+        for f in p {
+            let r = exec_router(ctx, f).map_err(|e| e.message)?;
+            match leg_router {
+                None => leg_router = Some(r),
+                Some(x) if x != r => {
+                    return Err("нога маршрута пересекает роутеры (UR/форк) — бандл такую ногу не собирает (сигнал)".into());
+                }
+                _ => {}
+            }
+        }
+        if let Some(r) = leg_router
+            && !routers.contains(&r)
+        {
+            routers.push(r);
+        }
+    }
+    if routers.len() as u64 > max {
+        return Err(format!(
+            "маршрут задействует {} роутеров — больше dex.bundle_max_routers ({max}): бандлом не исполняется (сигнал)",
+            routers.len()
+        ));
+    }
+    Ok(())
+}
+
+/// Форма исполнимого графового маршрута для боевого пути (exec/trade.rs). Классификация по тем же правилам, что
+/// executable: прямая (одна доля, один хоп), один Universal Router PancakeSwap (умный путь), иначе — бандл.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GraphForm {
+    /// Прямая форма: один пул, один хоп — идёт прямым путём (exec/trade.rs).
+    Direct,
+    /// Всё через один Universal Router PancakeSwap — идёт умным путём (exec/trade_smart.rs).
+    OneUr,
+    /// Мульти-роутер — идёт бандлом свопов (exec/bundle_trade.rs).
+    Bundle,
+}
+
+/// Форма исполнимого графового маршрута. Принимает: маршрут из котировки. Возвращает: форму. Ошибок нет
+/// (вызывается только для уже исполнимого маршрута, DexRoute.executable = true).
+pub fn graph_form(ctx: &Ctx, route: &DexRoute) -> GraphForm {
+    // Форк исполняется только своим роутером бандлом (решения 59, 82): проверяем до прямой формы.
+    let has_fork = route
+        .legs
+        .iter()
+        .flat_map(|l| l.hops.iter())
+        .any(|h| families::classify(ctx, &h.family).is_ok_and(|f| f.fork));
+    if has_fork {
+        return GraphForm::Bundle;
+    }
+    // Прямая форма — только у семейства со своим Universal Router (tradable, не форк); шаг другого семейства в
+    // исполнимом маршруте возможен только через исполнитель (решение 122) — форма «бандл».
+    let own_ur = |h: &crate::core::types::RouteHop| {
+        families::classify(ctx, &h.family).is_ok_and(|f| f.tradable && !f.fork)
+    };
+    if route.legs.len() == 1
+        && route
+            .legs
+            .first()
+            .is_some_and(|l| l.hops.len() == 1 && l.hops.iter().all(own_ur))
+    {
+        return GraphForm::Direct;
+    }
+    let one_ur = route.legs.iter().all(|l| {
+        l.hops
+            .iter()
+            .all(|h| families::classify(ctx, &h.family).is_ok_and(|f| smart_ok(ctx, f)))
+    });
+    if one_ur {
+        GraphForm::OneUr
+    } else {
+        GraphForm::Bundle
+    }
+}

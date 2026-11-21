@@ -5,7 +5,7 @@
 //   core/types/check.rs), taxes (CheckState), problem, presence[].can_send / can_receive (вывод / ввод),
 //   presence[].can_buy / can_sell (покупка / продажа через API — у BingX apiStateBuy / apiStateSell). «Крючок» — только
 //   по PoolsExcluded (исключены все пулы монеты); исключённые пулы при допущенных — в окне монеты, не в итоге.
-// Кто вызывает: pages/Coins.svelte, components/CoinTable.svelte, components/CoinFilters.svelte.
+// Кто вызывает: pages/Coins.svelte, components/CoinTable.svelte, components/CoinFilters.svelte (coinRowKey — ключ строки).
 // От чего зависит: ничего (чистые функции над данными ядра).
 // Настройки: нет.
 
@@ -19,6 +19,7 @@ export const RESULTS = [
   ['no_contract', 'сеть BSC есть, адреса контракта нет'],
   ['pair_off', 'пара не торгуется (status)'],
   ['no_api', 'пара не торгуется через API (apiStateBuy/Sell)'],
+  ['order_type', 'биржа не примет наш тип ордера'],
   ['pairs_stale', 'справочник пар устарел'],
   ['no_book', 'нет стакана'],
   ['no_usdt_pool', 'нет пула с USDT'],
@@ -43,6 +44,7 @@ function exclusionCode(e) {
   if (e === 'NoContract') return 'no_contract';
   if (e === 'NoSpotBook') return 'no_book';
   if (e === 'NoApiTrading') return 'no_api';
+  if (e?.OrderTypeNotAccepted !== undefined) return 'order_type';
   if (e?.PairNotTrading !== undefined) return 'pair_off';
   if (e?.PairsStale !== undefined) return 'pairs_stale';
   if (e === 'NoUsdtPool' || e === 'NoUsdtAddress' || e?.IntermediateNotConfigured !== undefined) return 'no_usdt_pool';
@@ -110,7 +112,8 @@ export function options(coins) {
  */
 export function matches(c, f) {
   const q = f.text.trim().toLowerCase();
-  if (q && !c.asset.ticker.toLowerCase().includes(q) && !(c.asset.bsc_contract ?? '').toLowerCase().includes(q)) return false;
+  if (q && !coinTickers(c).some((t) => t.toLowerCase().includes(q)) && !(c.asset.bsc_contract ?? '').toLowerCase().includes(q))
+    return false;
   if (f.result && !reasons(c).includes(f.result)) return false;
   if (f.venue && !(c.presence ?? []).some((p) => p.venue === f.venue)) return false;
   if (f.pools === 'yes' && !c.pools.length) return false;
@@ -120,3 +123,24 @@ export function matches(c, f) {
   if (f.onlyBlocked && !c.block) return false;
   return true;
 }
+
+/**
+ * Ключ строки экрана «Монеты» — как группирует ядро (core/registry_build.rs): монета с адресом в BSC — тикер + адрес;
+ * без адреса — тикер + биржа (одинаковый тикер без адреса на разных биржах — разные строки: не известно, тот же ли
+ * это токен). Решение 115: с двумя биржами ключ «тикер|null» повторялся (1067 строк, BingX и MEXC) — Svelte падал
+ * с each_key_duplicate, экран «Монеты» не открывался.
+ * Принимает: монету из GET /api/coins. Возвращает: строку.
+ */
+export const coinRowKey = (c) =>
+  c.asset.bsc_contract
+    ? c.asset.bsc_contract.toLowerCase()
+    : `${c.asset.ticker}@${(c.presence ?? []).map((p) => p.venue).join(',')}`;
+
+/**
+ * Решение 211: тикеры монеты — показной первым, затем уникальные тикеры площадок (Presence.ticker).
+ * Принимает: монету из GET /api/coins. Возвращает: список строк.
+ */
+export const coinTickers = (c) => [...new Set([c.asset.ticker, ...(c.presence ?? []).map((p) => p.ticker).filter(Boolean)])];
+
+/** Имя монеты «NMT / NETMIND» (решение 211). Принимает: монету из GET /api/coins. Возвращает: строку. */
+export const coinTitle = (c) => coinTickers(c).join(' / ');

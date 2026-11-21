@@ -1,0 +1,14 @@
+{
+  "about": "решение 261: пределы своего узла BSC (geth-bsc, http://127.0.0.1:8545), 12.11.2026, только чтение; записал координатор на сервере",
+  "node_flags": "--syncmode=full --cache 8000 --history.logs=600000; gcmode не задан; config: RPCGasCap=100000000, RPCEVMTimeout=30s",
+  "getLogs": [
+    { "range_blocks": 100, "ok": true, "ms": 21 },
+    { "range_blocks": 1000, "ok": true, "ms": 277 },
+    { "range_blocks": 5001, "ok": true, "ms": 1379, "note": "toBlock - fromBlock = 5000; пул CAKE-WBNB V2, 197 логов" },
+    { "range_blocks": 5002, "ok": false, "error": { "code": -32602, "message": "exceed maximum block range 5000" }, "note": "отказ сразу, и у адреса без событий (0x…dEaD)" }
+  ],
+  "state": [
+    { "block": "H .. H-127", "ok": true, "methods": ["eth_getBalance", "eth_call"] },
+    { "block": "H-128", "ok": false, "error": { "code": -32000, "message": "historical state <hash> is not available" }, "note": "хеш блока в записи координатора заменён на <hash>" }
+  ]
+}

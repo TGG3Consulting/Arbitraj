@@ -1,15 +1,22 @@
 //! Файл: core/registry_sync.rs
 //! Что делает: держит справочник сетей биржи свежим (шаг 1 ТЗ): coin_networks через шлюз с частотой
-//! venue.status_poll_ms (у BingX нет WebSocket для статусов ввода и вывода, решение 24), сразу —
+//! venue.networks_poll_ms (решение 109; не задана — venue.status_poll_ms, как раньше; у BingX нет WebSocket для
+//! статусов ввода и вывода, решение 24), сразу —
 //! по «толчку» (аномальный спред, ошибка вывода или депозита). Замечает, что у монеты открылся
 //! или закрылся ввод или вывод, и уведомляет (событие venue.transfer_status): по монете или одной сводкой
 //! при массовой смене (transfer_status.rs).
 //! Кто вызывает: core/engine.rs — одна задача на каждую биржу.
 //! От чего зависит: engine.rs, wait.rs, gateway (coin_networks), settings.
-//! Настройки: venue.enabled, venue.status_poll_ms, venue.status_bulk_min (по площадке); сопоставление нативной
-//! монеты с обёрткой (решение 62) — native.rs.
+//! Настройки: venue.enabled, venue.networks_poll_ms, venue.status_poll_ms, venue.status_bulk_min,
+//! venue.status_confirm_polls (по площадке; сглаживание мигания статусов — status_debounce.rs, решение 112);
+//! сопоставление нативной монеты с обёрткой (решение 62) — native.rs; venue.networks_fresh_ms — толчок внутри окна
+//! свежести ждёт его конца (решение 129). Решение 489: толчок во время запроса не теряется — поколение толчков
+//! (net_kick.rs): пришёл за проход — следующий проход без паузы.
+//! Решение 129: справочник без изменений (кроме времени получения) пересборку справочника монет не толкает.
 
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use crate::core::types::{CoinNetworkInfo, VenueId};
 use crate::settings::read::At;
@@ -38,29 +45,64 @@ pub fn enabled(core: &Core, venue: &VenueId) -> bool {
 /// сбой пишется в журнал (повтор той же ошибки — один раз), старый справочник остаётся.
 pub async fn run(core: Core, venue: VenueId) {
     let deps = core.inner.deps.clone();
-    let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(venue.0.clone()));
+    // Решение 109: справочник сетей MEXC (config/getall) — ~5.6 МБ на ответ; опрос с частотой опроса статусов переводов
+    // (2 с) качал и разбирал его 30 раз в минуту и каждый раз пересобирал справочник монет. Своя частота — отдельно.
+    let mut own = Pacer::new(NETWORKS_POLL, Unit::Ms, Some(venue.0.clone()));
+    let mut pacer = Pacer::new(STATUS_POLL, Unit::Ms, Some(venue.0.clone()));
     let mut last_err: Option<String> = None;
+    // Решение 129: когда справочник получен последний раз — толчок (аномальный спред, ошибка вывода) внутри
+    // venue.networks_fresh_ms ждёт конца окна, а не качает справочник заново (у MEXC ~5.6 МБ на ответ).
+    let mut fetched: Option<Instant> = None;
+    // Решение 112: смена статуса ввода/вывода принимается после venue.status_confirm_polls опросов подряд.
+    let mut debounce = super::status_debounce::Debounce::default();
     loop {
+        let seen = super::net_kick::generation(&core);
         if enabled(&core, &venue) {
+            if let Some(wait) = fresh_left(&core, &venue, fetched) {
+                tokio::time::sleep(wait).await;
+            }
+            // Решение 183: окно свежести — только от удачного получения; сбой (например, секреты ещё закрыты) не
+            // задерживает толчок после разблокировки.
+            let started = Instant::now();
             let res = match deps.gw.get(&venue).await {
                 Ok(v) => v.coin_networks().await,
                 Err(e) => Err(e),
             };
             match res {
                 Ok(list) => {
+                    fetched = Some(started);
                     last_err = None;
                     // Нативная монета (BNB без адреса) ↔ обёртка WBNB по настройке DEX — решение 62 (native.rs).
-                    let list = super::native::map(&core, &venue, list);
+                    // Решение 431: записи — к сети ядра (net_chain.rs), затем нативная монета.
+                    let list = super::net_chain::prepare(&core, &venue, list);
+                    let list = debounce.apply(&core, &venue, list);
                     report_changes(&core, &venue, &list).await;
-                    wr(&core.inner.networks).insert(venue.clone(), list);
-                    core.request_rebuild();
+                    // Решение 129: тот же справочник (кроме времени получения) — без пересборки справочника монет.
+                    let same = rd(&core.inner.networks)
+                        .get(&venue)
+                        .is_some_and(|old| same_lists(old, &list));
+                    wr(&core.inner.networks).insert(venue.clone(), Arc::new(list));
+                    // Решение 266 (ревью): ключи принятых смен статуса снимаются только после записи справочника.
+                    debounce.publish(&core, &venue);
+                    if !same {
+                        core.request_rebuild();
+                    }
                 }
                 Err(e) if last_err.as_deref() != Some(e.message.as_str()) => {
+                    // Решение 200 Б (перенесено из убранной обёртки, решение 211): «не задана venue.bsc_network» —
+                    // с именами сетей из живого справочника биржи (gateway/network_hint.rs), раз на смену ошибки.
+                    let hint = match deps.gw.get(&venue).await {
+                        Ok(v) if crate::gateway::network_hint::bsc_unset(&e) => format!(
+                            " — {}",
+                            crate::gateway::network_hint::text(v.as_ref(), &deps.settings).await
+                        ),
+                        _ => String::new(),
+                    };
                     deps.log(
                         Level::Warn,
                         "core.registry",
                         Some(&venue.0),
-                        format!("Справочник сетей не обновлён: {}", e.message),
+                        format!("Справочник сетей не обновлён: {}{hint}", e.message),
                         None,
                     )
                     .await;
@@ -69,8 +111,43 @@ pub async fn run(core: Core, venue: VenueId) {
                 Err(_) => {}
             }
         }
-        pacer.pause(&deps, &core.inner.kick_networks).await;
+        // Решение 489: толчок за время прохода не теряется — пауза пропускается (net_kick.rs).
+        if poll_name(&deps.settings, &venue) == NETWORKS_POLL {
+            super::net_kick::pause(&core, &mut own, seen).await;
+        } else {
+            super::net_kick::pause(&core, &mut pacer, seen).await;
+        }
     }
+}
+
+/// Своя частота опроса справочника сетей (решение 109).
+const NETWORKS_POLL: &str = "venue.networks_poll_ms";
+/// Частота опроса статусов переводов — действует для справочника сетей, если своя не задана.
+const STATUS_POLL: &str = "venue.status_poll_ms";
+
+/// Какая настройка задаёт интервал фонового опроса справочника сетей площадки: venue.networks_poll_ms, если задана,
+/// иначе venue.status_poll_ms (решение 109). Принимает: настройки, площадку. Ошибок нет.
+fn poll_name(s: &crate::settings::store::Store, venue: &VenueId) -> &'static str {
+    let at = At {
+        venue: Some(&venue.0),
+        coin: None,
+    };
+    if s.integer(NETWORKS_POLL, at).is_ok() {
+        NETWORKS_POLL
+    } else {
+        STATUS_POLL
+    }
+}
+
+/// Интервал фонового опроса справочника сетей площадки, мс — по тому же правилу, что у задачи опроса (poll_name).
+/// Решение 266 (precheck.networks_memory): предпроверка сделки берёт справочник из памяти, если запись моложе этого
+/// интервала (precheck_nets.rs). Принимает: настройки, площадку. Возвращает: None — интервал не задан. Ошибок нет.
+pub fn poll_ms(s: &crate::settings::store::Store, venue: &VenueId) -> Option<u64> {
+    let at = At {
+        venue: Some(&venue.0),
+        coin: None,
+    };
+    s.integer(poll_name(s, venue), at).ok()
 }
 
 /// Сравнивает статусы ввода и вывода по сети BSC (у записи есть адрес контракта) со старыми и уведомляет:
@@ -126,4 +203,44 @@ async fn report_changes(core: &Core, venue: &VenueId, new: &[CoinNetworkInfo]) {
         deps.notify("venue.transfer_status", Some(&venue.0), &text)
             .await;
     }
+}
+
+/// Сколько ещё ждать до следующего получения справочника: venue.networks_fresh_ms задана и справочник получен моложе
+/// неё (так бывает только по толчку — плановый опрос venue.networks_poll_ms реже). Не задана — None: толчок качает
+/// справочник сразу, как до решения 129. Ошибок нет.
+fn fresh_left(core: &Core, venue: &VenueId, fetched: Option<Instant>) -> Option<Duration> {
+    let at = At {
+        venue: Some(&venue.0),
+        coin: None,
+    };
+    let fresh = core
+        .inner
+        .deps
+        .settings
+        .integer("venue.networks_fresh_ms", at)
+        .ok()
+        .map(Duration::from_millis)?;
+    fresh
+        .checked_sub(fetched?.elapsed())
+        .filter(|d| !d.is_zero())
+}
+
+/// Одинаковы ли справочники по содержанию: все поля, кроме времени получения (updated_at). Ошибок нет.
+pub fn same_lists(a: &[CoinNetworkInfo], b: &[CoinNetworkInfo]) -> bool {
+    a.len() == b.len()
+        && a.iter().zip(b).all(|(x, y)| {
+            x.venue == y.venue
+                && x.asset == y.asset
+                && x.network == y.network
+                && x.deposit_enabled == y.deposit_enabled
+                && x.withdraw_enabled == y.withdraw_enabled
+                && x.withdraw_fee == y.withdraw_fee
+                && x.withdraw_fee_pct == y.withdraw_fee_pct
+                && x.withdraw_min == y.withdraw_min
+                && x.withdraw_max == y.withdraw_max
+                && x.deposit_min == y.deposit_min
+                && x.deposit_confirmations == y.deposit_confirmations
+                && x.withdraw_precision == y.withdraw_precision
+                && x.withdraw_step == y.withdraw_step
+        })
 }

@@ -1,9 +1,12 @@
 //! Файл: api/rules_codes.rs
 //! Что делает: коды ошибок шлюза для формы правил (событие правила) — каждый код и его смысл по-русски, порядок как
-//! в gateway/errors.rs; полнота перечня проверяется при сборке (сторож с исчерпывающим match).
+//! в gateway/errors.rs; полнота перечня проверяется при сборке (сторож с исчерпывающим match). Решение 230: у кода —
+//! действия, которые для него не действуют, с причиной (inactive; gateway/rules.rs inactive_reason).
 //! Кто вызывает: api/rules_meta.rs.
 //! От чего зависит: gateway/errors.rs (ErrorCode).
 //! Настройки: нет.
+
+use std::collections::BTreeMap;
 
 use serde::Serialize;
 
@@ -14,17 +17,28 @@ use crate::gateway::errors::ErrorCode as C;
 pub struct CodeMeta {
     pub code: C,
     pub title: &'static str,
-    /// «Повторить» для этого кода выбрать нельзя (gateway/rules.rs retry_allowed, решение 64).
+    /// «Повторить» для этого кода выбрать нельзя (gateway/rules.rs inactive_reason: решение 64 — «результат
+    /// неизвестен»; решение 230 — отказ вывода; решение 268 — цена ордера вне диапазона биржи).
     pub no_retry: bool,
+    /// Решение 230: действия, которые для этого кода не действуют, — вид действия → причина (форма их не предлагает,
+    /// сохранённое раньше правило помечается «не действует: причина»).
+    pub inactive: BTreeMap<&'static str, &'static str>,
 }
+
+/// Виды действий, которые могут не действовать для кода (gateway/rules.rs inactive_reason).
+const MAYBE_INACTIVE: [&str; 3] = ["Retry", "StopVenue", "StopAll"];
 
 /// Короткая запись кода. Принимает: код и смысл. Возвращает: CodeMeta.
 fn c(code: C, title: &'static str) -> CodeMeta {
-    let no_retry = !crate::gateway::rules::retry_allowed(code);
+    let inactive: BTreeMap<&'static str, &'static str> = MAYBE_INACTIVE
+        .iter()
+        .filter_map(|k| crate::gateway::rules::inactive_reason(code, k).map(|w| (*k, w)))
+        .collect();
     CodeMeta {
         code,
         title,
-        no_retry,
+        no_retry: inactive.contains_key("Retry"),
+        inactive,
     }
 }
 
@@ -46,14 +60,33 @@ pub fn codes() -> Vec<CodeMeta> {
             C::InvalidAddress,
             "Адрес отклонён (не в белом списке, неверный формат)",
         ),
+        c(
+            C::AccountRestricted,
+            "Вывод отклонён из-за аккаунта (вход, 2FA, пароль, верификация, блокировка или лимит вывода) — монета не закрывается, алерт «проблема в аккаунте»",
+        ),
+        c(
+            C::WithdrawLimit,
+            "Вывод отклонён: исчерпан лимит вывода аккаунта, который сбрасывается сам (суточный, месячный) — площадка на паузе до ручного снятия, монета не закрывается, алерт «лимит вывода»",
+        ),
         c(C::RateLimited, "Превышен лимит запросов площадки"),
         c(C::NotConfigured, "Нужная настройка не задана в интерфейсе"),
         c(C::SecretsLocked, "Секреты не разблокированы паролем"),
         c(C::InsufficientBalance, "Не хватает средств"),
         c(C::OrderRejected, "Ордер отклонён площадкой"),
+        c(
+            C::PriceOutOfRange,
+            "Лимитный ордер отклонён: цена вне диапазона, разрешённого биржей (коридор от последней цены) — не повторяется; правило — только своё, общее и площадки: правило «Ордер отклонён площадкой» на него не действует (решение 392); у покупки на бирже паузы направления нет (решение 392); у продажи сделки при sell.market_on_price_range = да — рыночный ордер, если продажа выгодна (решение 268)",
+        ),
         c(C::OrderNotFilled, "Ордер отправлен, но не исполнился"),
         c(C::PartialFill, "Ордер исполнился частично"),
-        c(C::WithdrawRejected, "Вывод отклонён площадкой"),
+        c(
+            C::WithdrawRejected,
+            "Вывод отклонён площадкой — ядро не повторяет при любом правиле (решение 220): продажа на месте или «USDT не вернулись»",
+        ),
+        c(
+            C::WithdrawLocked,
+            "Вывод отклонён: средства временно заблокированы для вывода (удержание депозита)",
+        ),
         c(
             C::DepositNotCredited,
             "Депозит не зачислен за отведённое время",
@@ -81,6 +114,10 @@ pub fn codes() -> Vec<CodeMeta> {
             C::OutcomeUnknown,
             "Результат неизвестен: ордер, вывод или транзакция отправлены, итог не получен — не повторяется никогда, сверка и ручная проверка",
         ),
+        c(
+            C::QueueHalted,
+            "Не отправлено: очередь кошелька DEX остановлена до ручной проверки — транзакция не подписывалась",
+        ),
         c(C::Internal, "Внутренняя ошибка нашего кода"),
     ]
 }
@@ -94,6 +131,6 @@ const _: fn(C) = |code| match code {
     C::StaleData | C::VenueNotConnected | C::BadResponse | C::Internal => {}
     C::NotApplicable | C::CoinNotChecked | C::CoinCheckFailed | C::NoRoute => {}
     C::QuoteMismatch | C::ChannelRejected | C::GasBelowChannelMin | C::TxNotIncluded => {}
-    C::NonceConflict => {}
-    C::OutcomeUnknown => {}
+    C::NonceConflict | C::WithdrawLocked | C::QueueHalted | C::AccountRestricted => {}
+    C::OutcomeUnknown | C::WithdrawLimit | C::PriceOutOfRange => {}
 };

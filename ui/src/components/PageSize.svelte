@@ -2,7 +2,8 @@
   Файл: ui/src/components/PageSize.svelte
   Что делает: поле «сколько записей показывать за раз». Значения по умолчанию нет: пусто — экран
     просит его задать. Выбор запоминается в браузере этого зрителя (lib/prefs.js).
-  Кто вызывает: pages/Journal.svelte, components/SettingHistory.svelte.
+  Кто вызывает: pages/Journal.svelte, pages/Coins.svelte, components/SettingHistory.svelte, EpisodeView.svelte,
+    EpisodeReplay.svelte.
   От чего зависит: lib/prefs.js.
   Настройки: нет (это удобство просмотра, не настройка системы).
 -->

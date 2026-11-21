@@ -3,7 +3,9 @@
   Что делает: ячейка «Глубина» пула в окне монеты (решение 73): глубина покупки и продажи в полосе цены (USDT) и
     вердикт по каждому направлению (глубокий / мелкий, с гистерезисом), порог dex.min_pool_liquidity_usd, прочитана
     ли полоса целиком, почему глубина не посчитана; спит ли пул (слушается только добавление ликвидности),
-    сверка расчёта с квотером по каждой стороне (cross_check_buy / cross_check_sell), подробности площадки (details: tickSpacing). Данные — pools[].depth ответа
+    сверка расчёта с квотером по каждой стороне (cross_check_buy / cross_check_sell; решение 261 — «ПАУЗА», если сторона
+    на паузе по расхождению на одном блоке: причина с цифрами и блоком), подробности площадки (details: tickSpacing,
+    «не сверено (блок)» по сторонам, «память отстаёт от сети»). Данные — pools[].depth ответа
     GET /api/coins (шлюз pool_depths).
   Кто вызывает: components/CoinRow.svelte.
   От чего зависит: ничего.
@@ -17,8 +19,12 @@
   /** Строка направления: «покупка 812.40 USDT — мелкий». */
   const side = (name, usd, deep) => `${name} ${usd ?? '—'} USDT — ${deep ? 'глубокий' : 'мелкий'}`;
   const checkText = { not_checked: 'не сверена', ok: 'сверена', failed: 'расхождение' };
+  /** Решение 261: сторона на паузе — причина начинается с «пауза:» (адаптер DEX: check/quoter_compare.rs PAUSED; пауза
+   *  держится и при иной причине последней сверки — pools/depth_facts.rs side_check). */
+  const paused = (c) => c?.state === 'failed' && (c?.reason ?? '').startsWith('пауза:');
   /** Сверка стороны с квотером (решение 73: стороны независимо): «покупка: сверена (квотер)». */
-  const sideCheck = (name, c) => `${name}: ${checkText[c?.state] ?? c?.state ?? '—'} (квотер)${c?.reason ? ` — ${c.reason}` : ''}`;
+  const sideCheck = (name, c) =>
+    `${name}: ${paused(c) ? 'ПАУЗА' : (checkText[c?.state] ?? c?.state ?? '—')} (квотер)${c?.reason ? ` — ${c.reason}` : ''}`;
 </script>
 
 {#if p.depth_unavailable}

@@ -1,24 +1,40 @@
 <!--
   Файл: ui/src/pages/Live.svelte
-  Что делает: «Живой экран» во всю ширину окна — компактная строка на монету (решение 55, Issue #33): спред в %
-    в обе стороны рядом («купить на A → продать на B» и обратно) по каждой паре площадок из данных — спред,
-    порог комиссий, короткое состояние, время; щелчок по строке — окно с адресом, ценами и полными причинами;
+  Что делает: «Живой экран» во всю ширину окна — компактная строка на монету (решение 55, вид «Б» — решение 106):
+    лучшее направление монеты (спред, порог комиссий, состояние), сколько направлений и сколько выше порога, время;
+    щелчок по строке раскрывает все направления, «подробно» — окно с адресом, ценами и полными причинами;
     сортировка по наибольшему спреду; и последние расчёты кандидатов:
-    прошёл (прибыль, объём) или отказ с причиной; по кандидату раскрывается полный список затрат.
+    прошёл (прибыль, объём) или отказ с причиной; прошёл, а сделки нет — причина отказа исполнителя (поле start,
+    решение 147); по кандидату раскрывается полный список затрат.
     Данные — GET /api/spreads, /api/candidates; живые сообщения spread и candidate обновляют строки на месте.
   Кто вызывает: App.svelte.
-  От чего зависит: lib/api.js, lib/live.svelte.js, lib/coreLabels.js, lib/labels.js, components/ErrorText.svelte,
+  От чего зависит: lib/api.js, lib/live.svelte.js, lib/coreLabels.js, lib/coinNames.svelte.js, lib/labels.js, components/ErrorText.svelte,
     components/LiveCoins.svelte, components/CostLines.svelte, components/DryBanner.svelte, components/SignalCard.svelte,
-    components/DexCycles.svelte (сигнал циклов DEX ↔ DEX, решение 85).
+    components/DexCycles.svelte (сигнал циклов DEX ↔ DEX, решение 85), components/CalcTiming.svelte (время расчёта по
+    этапам, решение 129).
   Настройки: нет (пороги signal.*, money.*, profit.*, подбор объёма size.* — экран «Настройки»).
-  Кандидат показывает, как подобран объём (calc.size.why, решение 66): оптимум, прибыль, прибыль на бюджете.
+  Кандидат показывает, как подобран объём (calc.size.why, решение 66): оптимум, прибыль, прибыль на бюджете;
+    в режиме «лучший из двух» (решение 123) — кто дал финальную котировку DEX и на сколько USDT (Quote.pick).
   Решение 74: вверху — плашка режима (сухой / обычный / не задан, DryBanner); у прошедшего — метка «сухой» и
     раскрываемая карточка сигнала (SignalCard: стакан и пул в полосе, максимальный объём и прибыль, ссылки).
+  Решение 175: у кандидата — отметка «делистинг на X: дата» по сторонам направления (lib/delist.svelte.js).
+  Решение 141: у кандидата — строка «без потолка: вложить X → прибыль Y; плюс от Z» (UncappedLine, поле uncapped).
+  Решение 198 (06.11.2026: таблица застывала, время «Обновлено» отставало на минуты, таймер страницы опаздывал на 8 с):
+    живые сообщения spread / candidate копятся в буфере (последнее по направлению) и применяются одной пачкой в кадре
+    браузера (requestAnimationFrame), не чаще live.spread_min_interval_ms (то же значение, с которым сервер шлёт
+    строку направления; не задана — каждый кадр). Раньше каждое из тысяч сообщений в секунду пересчитывало всю
+    таблицу монет (~3700 направлений) — страница не успевала, данные на экране старели при свежих на сервере.
+  Шторм запросов 10.11.2026: перечитывание по coins / «lagged» — один запрос в полёте (lib/flight.js), уход со
+    страницы — отмена запросов.
 -->
 <script>
+  import { uniq } from '../lib/uniq.js';
   import { get } from '../lib/api.js';
-  import { onLive } from '../lib/live.svelte.js';
-  import { dirText, dirKey } from '../lib/coreLabels.js';
+  import { flight } from '../lib/flight.js';
+  import { onLive, lagFor } from '../lib/live.svelte.js';
+  import { store, valueKey } from '../lib/settings.svelte.js';
+  import { dirText, dirKey, pickLines } from '../lib/coreLabels.js';
+  import { assetMatches } from '../lib/coinNames.svelte.js';
   import { showTime } from '../lib/labels.js';
   import ErrorText from '../components/ErrorText.svelte';
   import CostLines from '../components/CostLines.svelte';
@@ -26,36 +42,84 @@
   import DryBanner from '../components/DryBanner.svelte';
   import SignalCard from '../components/SignalCard.svelte';
   import DexCycles from '../components/DexCycles.svelte';
+  import UncappedLine from '../components/UncappedLine.svelte';
+  import CalcTiming from '../components/CalcTiming.svelte';
+  import { startDelist, delistMarks } from '../lib/delist.svelte.js';
 
-  let spreads = $state({});
-  let cands = $state({});
+  startDelist();
+
+  // $state.raw: объект заменяется целиком пачкой (решение 198), без глубокого отслеживания тысяч строк.
+  let spreads = $state.raw({});
+  let cands = $state.raw({});
+  /** Буфер живых сообщений до следующей пачки: направление → последнее сообщение. */
+  let pendS = new Map();
+  let pendC = new Map();
+  let frame = 0;
+  let lastFlush = 0;
   let error = $state('');
   let filter = $state('');
   let onlyActive = $state(false);
 
-  /** Перечитывает оба списка. Ошибка — в error. */
-  async function reload() {
+  /** Перечитывает оба списка (signal — отмена). Ошибка — в error; отмена — ничего. */
+  async function load(signal) {
     try {
-      const [s, c] = await Promise.all([get('/api/spreads'), get('/api/candidates')]);
+      const [s, c] = await Promise.all([get('/api/spreads', signal), get('/api/candidates', signal)]);
       spreads = Object.fromEntries(s.map((v) => [dirKey(v.direction), v]));
       cands = Object.fromEntries(c.map((v) => [dirKey(v.direction), v]));
       error = '';
     } catch (e) {
-      error = e.message;
+      if (!e.aborted) error = e.message;
+    }
+  }
+  const reload = flight(load);
+
+  /** Наименьший промежуток между пачками, мс: live.spread_min_interval_ms (глобальная); не задана — 0. */
+  const minGap = () => Number(store.values[valueKey('live.spread_min_interval_ms', { kind: 'Global' })] ?? 0);
+
+  /** Применяет накопленные сообщения одной заменой объектов (решение 198). Ошибок нет. */
+  function flush(now) {
+    frame = 0;
+    if (now - lastFlush < minGap()) {
+      frame = requestAnimationFrame(flush);
+      return;
+    }
+    lastFlush = now;
+    if (pendS.size) {
+      spreads = Object.assign({ ...spreads }, Object.fromEntries(pendS));
+      pendS = new Map();
+    }
+    if (pendC.size) {
+      cands = Object.assign({ ...cands }, Object.fromEntries(pendC));
+      pendC = new Map();
     }
   }
 
+  /** Ставит пачку в ближайший кадр, если ещё не стоит. Ошибок нет. */
+  const schedule = () => {
+    if (!frame) frame = requestAnimationFrame(flush);
+  };
+
   $effect(() => {
     reload();
-    return onLive((msg) => {
-      if (msg.type === 'spread') spreads[dirKey(msg.data.direction)] = msg.data;
-      else if (msg.type === 'candidate') cands[dirKey(msg.data.direction)] = msg.data;
-      else if (msg.type === 'lagged' || msg.type === 'coins') reload();
+    const off = onLive((msg) => {
+      if (msg.type === 'spread') {
+        pendS.set(dirKey(msg.data.direction), msg.data);
+        schedule();
+      } else if (msg.type === 'candidate') {
+        pendC.set(dirKey(msg.data.direction), msg.data);
+        schedule();
+      } else if (lagFor(msg, 'core') || msg.type === 'coins') reload();
     });
+    return () => {
+      off();
+      reload.cancel();
+      if (frame) cancelAnimationFrame(frame);
+    };
   });
 
   /** Фильтр по тикеру монеты (Asset). */
-  const matchAsset = (a) => a.ticker.toLowerCase().includes(filter.trim().toLowerCase());
+  // Решение 211: фильтр — по любому тикеру площадок монеты и по адресу контракта.
+  const matchAsset = (a) => assetMatches(a, filter);
   const match = (d) => matchAsset(d.asset);
   const views = $derived(Object.values(spreads));
   const candRows = $derived(Object.values(cands).filter((c) => match(c.direction)).sort((a, b) => (b.at > a.at ? 1 : -1)));
@@ -69,7 +133,7 @@
   <label class="inline"><input type="checkbox" bind:checked={onlyActive} /> только выше порога</label>
 </div>
 
-<h2>Спреды по монетам: обе стороны</h2>
+<h2>Спреды по монетам: лучшее направление (щелчок — все направления)</h2>
 <LiveCoins {views} match={matchAsset} {onlyActive} />
 
 <h2>Кандидаты: расчёт и причины отказа</h2>
@@ -84,7 +148,26 @@
       {#if acc}<span class="ok">прошёл: прибыль {acc.profit_usd} USDT ({acc.profit_pct}%), объём {acc.qty}</span>
       {:else}<span class="err">отказ: {rej.reason}</span>{/if}
       <span class="muted">{showTime(c.at)}</span>
+      {#each uniq(delistMarks(c.direction)) as m (m)}<span class="err">{m}</span>{/each}
     </header>
+    {#if c.sieve}
+      <!-- Решения 372, 374: отсев по доказанной границе прибыли — расчёта не было; граница, порог и из чего сложилась. -->
+      <details>
+        <summary>Отсев по границе: прибыль не больше {c.sieve.best?.max_u} USDT (на {c.sieve.best?.q_u}), порог {c.sieve.min_usd} USDT / {c.sieve.min_pct}%{#if c.sieve.best?.max_v != null}, запас до порога % {c.sieve.best.max_v} USDT{/if}</summary>
+        <p class="muted">κ (доля выручки после запаса и комиссии продажи) = {c.sieve.kappa}; вывод: фикс {c.sieve.arrive?.fix}, доля {c.sieve.arrive?.pct}, keep {c.sieve.arrive?.keep}; постоянные {c.sieve.fixed} USDT; проверено изломов {c.sieve.best?.points}, объём до {c.sieve.best?.q_hi}</p>
+        <p class="muted">A: {c.sieve.a}; B: {c.sieve.b}</p>
+      </details>
+    {/if}
+    {#if c.start}
+      <!-- Решение 147: расчёт прошёл, а исполнитель отказал на входе — точная причина. -->
+      <p class="err">{c.start}</p>
+    {/if}
+    {#if c.timing}
+      <CalcTiming timing={c.timing} />
+    {/if}
+    {#if c.uncapped}
+      <UncappedLine u={c.uncapped} />
+    {/if}
     {#if c.card}
       <details open>
         <summary>Карточка сигнала</summary>
@@ -94,6 +177,9 @@
     {#if calc?.size}
       <p class="muted">Объём (решение 66): {calc.size.why}</p>
     {/if}
+    {#each pickLines(calc) as line, i (i)}
+      <p>Исполнитель DEX, {line}</p>
+    {/each}
     {#if calc}
       <details>
         <summary>Полный расчёт: вложено {calc.invested}, выручка {calc.proceeds}, затраты {calc.costs_usdt} USDT, T = {calc.transit_s} с, σ = {calc.sigma}</summary>

@@ -1,0 +1,187 @@
+{
+  "fluid": {
+    "note": "EVM ethereumjs Cancun, contracts/out v4, официальный Fluid DEX T1 (fluid-contracts-public@404d73f deployments/arbitrum) — contracts/evmtest/fluid_cases.mjs",
+    "cases": [
+      {
+        "kind": 22,
+        "pool": "0x7c2ed9f428467ef9416197111e26844acd04c9e1",
+        "token_in": "0x3806fc578c5452986a08380399e0004e236254eb",
+        "token_out": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "data": "0x0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000065711051d1ae94a65edaad26933b14b6ab7eaedc",
+        "amount_in": "100000000000000000000",
+        "got": "99938719847462000000",
+        "gas": "159010"
+      },
+      {
+        "kind": 22,
+        "pool": "0x7c2ed9f428467ef9416197111e26844acd04c9e1",
+        "token_in": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "token_out": "0x3806fc578c5452986a08380399e0004e236254eb",
+        "data": "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000065711051d1ae94a65edaad26933b14b6ab7eaedc",
+        "amount_in": "100000000000000000000",
+        "got": "100041285245897000000",
+        "gas": "155028"
+      },
+      {
+        "kind": 22,
+        "pool": "0xfbc0c9d34bc27099bcf14b6ad44dd2cc4a6078cb",
+        "native_in": true,
+        "token_in": "0x0e44fe1cf5e0485d4f22f6c9bebad85b679af201",
+        "token_out": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "amount_in": "1000000000000000000",
+        "got": "999848696454000000"
+      },
+      {
+        "kind": 22,
+        "pool": "0xfbc0c9d34bc27099bcf14b6ad44dd2cc4a6078cb",
+        "native_out": true,
+        "token_in": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "token_out": "0x0e44fe1cf5e0485d4f22f6c9bebad85b679af201",
+        "amount_in": "100000000000000000000",
+        "got": "99499922554380000000"
+      }
+    ]
+  },
+  "balancer_v3": {
+    "note": "EVM ethereumjs Cancun, contracts/out v4, официальный Vault V3 (balancer-deployments@b55dc2b8) — contracts/evmtest/balancerv3.mjs",
+    "cases": [
+      {
+        "kind": 23,
+        "vault": "0xD6CB56601c8CE30d32a0C068E6D145aC056DAA98",
+        "pool": "0xF312Fa903e272DE87b58bAC3348ae7d1Dd0d32a8",
+        "token_in": "0x3806fc578c5452986a08380399e0004e236254eb",
+        "token_out": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "data": "0x000000000000000000000000f312fa903e272de87b58bac3348ae7d1dd0d32a8",
+        "amount_in": "100000000000000000000",
+        "got": "98029507872066540000",
+        "gas": "123022"
+      },
+      {
+        "kind": 23,
+        "vault": "0xD6CB56601c8CE30d32a0C068E6D145aC056DAA98",
+        "pool": "0xF312Fa903e272DE87b58bAC3348ae7d1Dd0d32a8",
+        "token_in": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "token_out": "0x3806fc578c5452986a08380399e0004e236254eb",
+        "data": "0x000000000000000000000000f312fa903e272de87b58bac3348ae7d1dd0d32a8",
+        "amount_in": "100000000000000000000",
+        "got": "99980296990882183900",
+        "gas": "119022"
+      }
+    ]
+  },
+  "ekubo": {
+    "note": "EVM ethereumjs Cancun + CLZ (EIP-7939), contracts/out v4, официальный код Ekubo (broadcast 42161) — contracts/evmtest/ekubo_cases.mjs",
+    "cases": [
+      {
+        "kind": 25,
+        "core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+        "token_in": "0x3806fc578c5452986a08380399e0004e236254eb",
+        "token_out": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "data": "0x000000000000000000000000000000000000000000c49ba5e353f7ce8000271000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "amount_in": "100000000000000000000",
+        "got": "99310416378096135376",
+        "gas": "93461"
+      },
+      {
+        "kind": 25,
+        "core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+        "token_in": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "token_out": "0x3806fc578c5452986a08380399e0004e236254eb",
+        "data": "0x000000000000000000000000000000000000000000c49ba5e353f7ce8000271000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "amount_in": "100000000000000000000",
+        "got": "100089577650101111923",
+        "gas": "89683"
+      },
+      {
+        "kind": 25,
+        "core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+        "native": true,
+        "token_in": "0x0e44fe1cf5e0485d4f22f6c9bebad85b679af201",
+        "token_out": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "amount_in": "1000000000000000000",
+        "got": "996609041453905950"
+      },
+      {
+        "kind": 25,
+        "core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+        "forward": "0x5555ff9ff2757500bf4ee020dcfd0210cffa41be",
+        "token_in": "0x3806fc578c5452986a08380399e0004e236254eb",
+        "token_out": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "amount_in": "100000000000000000000",
+        "got": "99077106416899074133"
+      }
+    ]
+  },
+  "ekubo_twamm": {
+    "note": "EVM ethereumjs Cancun + CLZ, contracts/out v4, официальные TWAMM / Orders (broadcast 42161) — contracts/evmtest/ekubo_twamm.mjs",
+    "cases": [
+      {
+        "kind": 25,
+        "core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+        "extension": "0xd4f1060cb9c1a13e1d2d20379b8aa2cf7541ed9b",
+        "token_in": "0x3806fc578c5452986a08380399e0004e236254eb",
+        "token_out": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "data": "0xd4f1060cb9c1a13e1d2d20379b8aa2cf7541ed9b00c49ba5e353f7ce0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "amount_in": "100000000000000000000",
+        "got": "97438227026589401463",
+        "gas": "134756"
+      },
+      {
+        "kind": 25,
+        "core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+        "extension": "0xd4f1060cb9c1a13e1d2d20379b8aa2cf7541ed9b",
+        "token_in": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "token_out": "0x3806fc578c5452986a08380399e0004e236254eb",
+        "data": "0xd4f1060cb9c1a13e1d2d20379b8aa2cf7541ed9b00c49ba5e353f7ce0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "amount_in": "100000000000000000000",
+        "got": "104211997528899548844",
+        "gas": "114562"
+      },
+      {
+        "kind": 25,
+        "core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+        "extension": "0xd47f1b1edcfeabb08f6ebd8fc337c27e636c75ba",
+        "token_in": "0x3806fc578c5452986a08380399e0004e236254eb",
+        "token_out": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "data": "0xd47f1b1edcfeabb08f6ebd8fc337c27e636c75ba00c49ba5e353f7ce0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "amount_in": "100000000000000000000",
+        "got": "97438227026589401463",
+        "gas": "134756"
+      },
+      {
+        "kind": 25,
+        "core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+        "extension": "0xd47f1b1edcfeabb08f6ebd8fc337c27e636c75ba",
+        "token_in": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "token_out": "0x3806fc578c5452986a08380399e0004e236254eb",
+        "data": "0xd47f1b1edcfeabb08f6ebd8fc337c27e636c75ba00c49ba5e353f7ce0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "amount_in": "100000000000000000000",
+        "got": "104211997528899548844",
+        "gas": "114562"
+      }
+    ]
+  },
+  "lb20": {
+    "note": "EVM ethereumjs Cancun, contracts/out v4, официальный LBPair LFJ v2.0.0 (solc 0.8.10, runs 800) — contracts/evmtest/lb20.mjs",
+    "cases": [
+      {
+        "kind": 24,
+        "pair": "0xe4f18B8b47E53DCe5cF5D2B15a4463F707748c82",
+        "token_in": "0x3806fc578c5452986a08380399e0004e236254eb",
+        "token_out": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "amount_in": "100000000000000000000",
+        "got": "99900000000000000000",
+        "gas": "120348"
+      },
+      {
+        "kind": 24,
+        "pair": "0xe4f18B8b47E53DCe5cF5D2B15a4463F707748c82",
+        "token_in": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "token_out": "0x3806fc578c5452986a08380399e0004e236254eb",
+        "amount_in": "100000000000000000000",
+        "got": "99900000000000000000",
+        "gas": "113465"
+      }
+    ]
+  }
+}

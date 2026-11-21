@@ -1,7 +1,7 @@
 //! Файл: tests/bsc_dex_elastic_family.rs
 //! Что делает: подключение семейства KyberSwap Elastic (решение 81) без сети — таблица сопоставления (dex.kind =
-//! kyber_elastic), набор обязательных настроек (фабрика/роутер/квотер/читатель тиков, БЕЗ Universal Router и Permit2 —
-//! форк), и заглушка сверки котировки с квотером на реальной записи (пока записи нет — #[ignore]).
+//! kyber_elastic; решение 121 B2 — только сигнал, не исполним), набор обязательных настроек (фабрика/роутер/квотер/
+//! читатель тиков, длина части тиков — решение 475, БЕЗ Universal Router и Permit2 — форк), и заглушка сверки котировки с квотером на реальной записи (пока записи нет — #[ignore]).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::pools::families, arb::settings (настоящая SQLite во временной папке).
 //! Математика Elastic на официальных значениях — tests/bsc_dex_elastic_math.rs (81a).
@@ -27,15 +27,32 @@ async fn ctx(tag: &str) -> Ctx {
     let (jtx, _) = broadcast::channel(64);
     let journal = Journal::new(db.clone(), jtx);
     let settings = Store::load(db, changes, journal.clone()).await.unwrap();
-    Ctx {
-        raw: RawLog::start(d.join("raw"), settings.clone()),
-        pace: Default::default(),
-        failover: Default::default(),
-        index: Default::default(),
-        settings,
-        vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
-        http: reqwest::Client::new(),
-        journal,
+    {
+        let c = Ctx {
+            raw: RawLog::start(d.join("raw"), settings.clone()),
+            pace: Default::default(),
+            failover: Default::default(),
+            evm_chain: Default::default(),
+            place: arb::venues::bsc_dex::ctx::Place::BSC,
+            chains: Default::default(),
+            account: None,
+            index: Default::default(),
+            settings,
+            vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
+            http: reqwest::Client::new(),
+            journal,
+        };
+        // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+        c.settings
+            .set(
+                "dex.gas_ticker",
+                arb::settings::scope::Scope::Venue("bsc_dex".into()),
+                Some(serde_json::json!("BNB")),
+                "тест",
+            )
+            .await
+            .unwrap();
+        c
     }
 }
 
@@ -48,8 +65,8 @@ async fn set(c: &Ctx, list: &[(&str, Scope, Value)]) {
     }
 }
 
-/// kyber_elastic: в графе, исполним своим роутером (graphable+tradable+fork), требует фабрику/роутер/квотер/читатель
-/// тиков и НЕ требует Universal Router/Permit2 (форк, решения 59, 81, 82).
+/// kyber_elastic: в графе, но НЕ исполним (решение 121 B2: graphable, tradable=false, fork — своего пути через роутер
+/// Elastic нет, только сигнал), требует фабрику/роутер/квотер/читатель тиков и НЕ требует Universal Router/Permit2.
 #[tokio::test]
 async fn elastic_family_requirements() {
     let c = ctx("req").await;
@@ -69,11 +86,17 @@ async fn elastic_family_requirements() {
 
     let f = families::make(id, "kyber_elastic").unwrap();
     assert_eq!(f.proto, Proto::KyberElastic);
-    assert_eq!((f.graphable, f.tradable, f.fork), (true, true, true));
+    assert_eq!((f.graphable, f.tradable, f.fork), (true, false, true));
 
     // Обязательные настройки: фабрика, роутер, квотер, читатель тиков — и ни UR, ни Permit2.
     let req = families::required(&c, f);
-    for name in ["dex.factory", "dex.router", "dex.quoter", "dex.tick_reader"] {
+    for name in [
+        "dex.factory",
+        "dex.router",
+        "dex.quoter",
+        "dex.tick_reader",
+        "dex.elastic_ticks_chunk",
+    ] {
         assert!(req.contains(&name), "нет {name} в required(): {req:?}");
     }
     for name in [
@@ -99,8 +122,17 @@ async fn elastic_family_requirements() {
         ],
     )
     .await;
+    // Решение 475: без длины части чтения тиков (dex.elastic_ticks_chunk) DEX не подключается.
+    assert!(
+        families::classify(&c, id)
+            .unwrap_err()
+            .contains("не задана dex.elastic_ticks_chunk"),
+        "{}",
+        families::classify(&c, id).unwrap_err()
+    );
+    set(&c, &[("dex.elastic_ticks_chunk", s.clone(), json!(1000))]).await;
     let f = families::classify(&c, id).unwrap();
-    assert_eq!((f.graphable, f.tradable, f.fork), (true, true, true));
+    assert_eq!((f.graphable, f.tradable, f.fork), (true, false, true));
 }
 
 /// Сверка локальной котировки Elastic (math/swap_elastic, 81a) с ответом QuoterV2 на РЕАЛЬНОЙ записи пула

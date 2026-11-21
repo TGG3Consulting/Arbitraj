@@ -60,6 +60,44 @@ impl Deps {
         self.notifier.send(code, venue, text).await;
     }
 
+    /// То же, что notify, и ещё в чаты ролей по таблице notify/routes.rs (решение 176: закрытие сделки — «Сделки» или
+    /// «Неудачные» по знаку итога). Принимает: код, площадку, текст, признак. Ошибок нет.
+    pub async fn notify_tagged(
+        &self,
+        code: &str,
+        venue: Option<&str>,
+        text: &str,
+        tag: crate::notify::routes::Tag,
+    ) {
+        self.notifier.send_tagged(code, venue, text, tag).await;
+    }
+
+    /// Решение 408 (t193): как notify, с кнопками самого события (notify/acts.rs: «Снять паузу», «Снять карантин» …).
+    /// Принимает: код, площадку, текст, кнопки (пусто — как notify). Ошибок нет.
+    pub async fn notify_acts(
+        &self,
+        code: &str,
+        venue: Option<&str>,
+        text: &str,
+        acts: Vec<crate::notify::acts::Act>,
+    ) {
+        self.notifier.send_acts(code, venue, text, acts).await;
+    }
+
+    /// Решение 408: как notify_tagged (и в чаты ролей), с кнопками события. Ошибок нет.
+    pub async fn notify_tagged_acts(
+        &self,
+        code: &str,
+        venue: Option<&str>,
+        text: &str,
+        tag: crate::notify::routes::Tag,
+        acts: Vec<crate::notify::acts::Act>,
+    ) {
+        self.notifier
+            .send_tagged_acts(code, venue, text, tag, acts)
+            .await;
+    }
+
     /// Подписка на изменения настроек с нужными префиксами имён. Пустой список — все изменения.
     pub fn watch(&self, prefixes: &[&str]) -> Watch {
         Watch::new(

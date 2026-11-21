@@ -1,0 +1,570 @@
+{
+ "block": 133694132,
+ "block_timestamp": 1794727010,
+ "rpc": "https://bsc-rpc.publicnode.com (только чтение и eth_call с подменой кода)",
+ "virtual_quoter": "contracts/out/VirtualQuoter.bin-runtime решения 288 (quoteSmardex 0x02a1308b, sha256 байтов ffe23c64703c8646…), подмена кода по 0x…00a1",
+ "time_override": "для пар с записанной средней ценой — eth_call с переопределением блока (4-й параметр geth: blockOverrides.time = time): time = priceAverageLastTimestamp (dt = 0) и + 120 с (0 < dt < 300); состояние — настоящее, на блоке 133694132; пары с priceAverageLastTimestamp = 0 (ни одного обмена) — без переопределения, время блока",
+ "branch": "ветка getAmountOut по нашему порту (для справки): dt0 / dtwin / last0 — средняя цена; single / two_step — деление на два шага (computeFirstTradeQtyIn); recompute — пересчёт фиктивных резервов перед первым шагом",
+ "pairs": [
+  {
+   "pool": "0xe7b89cbd4e833510f393ccfbe7d433edbb137ab2",
+   "token0": "0x55d398326f99059ff775485246999027b3197955",
+   "token1": "0xfdc66a08b0d0dc44c17bbd471b88f49f50cdd20f",
+   "quotes": [
+    {
+     "time": 1794711433,
+     "dir": 0,
+     "amount_in": "43878043885571347177",
+     "vq_used": "43878043885571347177",
+     "vq_out": "66127034970690845865088",
+     "branch": "dt0+single"
+    },
+    {
+     "time": 1794711433,
+     "dir": 0,
+     "amount_in": "1462601462852378239239",
+     "vq_used": "1462601462852378239239",
+     "vq_out": "1367240450043965850815560",
+     "branch": "dt0+single"
+    },
+    {
+     "time": 1794711433,
+     "dir": 1,
+     "amount_in": "72208027998725648095640",
+     "vq_used": "72208027998725648095640",
+     "vq_out": "45833747379610899474",
+     "branch": "dt0+two_step"
+    },
+    {
+     "time": 1794711433,
+     "dir": 1,
+     "amount_in": "2406934266624188269854672",
+     "vq_used": "2406934266624188269854672",
+     "vq_out": "906594085171147201671",
+     "branch": "dt0+two_step"
+    },
+    {
+     "time": 1794711553,
+     "dir": 0,
+     "amount_in": "43878043885571347177",
+     "vq_used": "43878043885571347177",
+     "vq_out": "66127034970690845865088",
+     "branch": "dtwin+single"
+    },
+    {
+     "time": 1794711553,
+     "dir": 0,
+     "amount_in": "1462601462852378239239",
+     "vq_used": "1462601462852378239239",
+     "vq_out": "1367240450043965850815560",
+     "branch": "dtwin+single"
+    },
+    {
+     "time": 1794711553,
+     "dir": 1,
+     "amount_in": "72208027998725648095640",
+     "vq_used": "72208027998725648095640",
+     "vq_out": "45821413539710775798",
+     "branch": "dtwin+two_step"
+    },
+    {
+     "time": 1794711553,
+     "dir": 1,
+     "amount_in": "2406934266624188269854672",
+     "vq_used": "2406934266624188269854672",
+     "vq_out": "903659128913088309773",
+     "branch": "dtwin+two_step"
+    }
+   ],
+   "getReserves": [
+    "4387804388557134717719",
+    "7220802799872564809564017"
+   ],
+   "getFictiveReserves": [
+    "2268168049243060365347",
+    "3492625801771271196116436"
+   ],
+   "getPriceAverage": [
+    "2189266523390882786621",
+    "3488392619881323720882812",
+    "1794711433"
+   ],
+   "getPairFees": [
+    "1500",
+    "900"
+   ]
+  },
+  {
+   "pool": "0x4357b88061db22dfec01346c06347b93bf1c2985",
+   "token0": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+   "token1": "0x81b9a47bb9820e96a0ae98f0dded0070e0933904",
+   "quotes": [
+    {
+     "time": 1794704660,
+     "dir": 0,
+     "amount_in": "667600319187771",
+     "vq_used": "667600319187771",
+     "vq_out": "5881738040530557553566",
+     "branch": "dt0+single"
+    },
+    {
+     "time": 1794704660,
+     "dir": 0,
+     "amount_in": "22253343972925711",
+     "vq_used": "22253343972925711",
+     "vq_out": "123008465151035400903112",
+     "branch": "dt0+single"
+    },
+    {
+     "time": 1794704660,
+     "dir": 1,
+     "amount_in": "6757836368528704460753",
+     "vq_used": "6757836368528704460753",
+     "vq_out": "721296883384625",
+     "branch": "dt0+two_step"
+    },
+    {
+     "time": 1794704660,
+     "dir": 1,
+     "amount_in": "225261212284290148691798",
+     "vq_used": "225261212284290148691798",
+     "vq_out": "13846004609014916",
+     "branch": "dt0+two_step"
+    },
+    {
+     "time": 1794704780,
+     "dir": 0,
+     "amount_in": "667600319187771",
+     "vq_used": "667600319187771",
+     "vq_out": "5881738040530557553566",
+     "branch": "dtwin+single"
+    },
+    {
+     "time": 1794704780,
+     "dir": 0,
+     "amount_in": "22253343972925711",
+     "vq_used": "22253343972925711",
+     "vq_out": "123008465151035400903112",
+     "branch": "dtwin+single"
+    },
+    {
+     "time": 1794704780,
+     "dir": 1,
+     "amount_in": "6757836368528704460753",
+     "vq_used": "6757836368528704460753",
+     "vq_out": "721238171002686",
+     "branch": "dtwin+two_step"
+    },
+    {
+     "time": 1794704780,
+     "dir": 1,
+     "amount_in": "225261212284290148691798",
+     "vq_used": "225261212284290148691798",
+     "vq_out": "13843163219493487",
+     "branch": "dtwin+two_step"
+    }
+   ],
+   "getReserves": [
+    "66760031918777135",
+    "675783636852870446075395"
+   ],
+   "getFictiveReserves": [
+    "35323962649284561",
+    "320238903949174265790603"
+   ],
+   "getPriceAverage": [
+    "30600588263666896",
+    "277904864134458619199510",
+    "1794704660"
+   ],
+   "getPairFees": [
+    "9000",
+    "1000"
+   ]
+  },
+  {
+   "pool": "0xc5dc2b1b41e21772a620101910a08aee55e83872",
+   "token0": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+   "token1": "0xfdc66a08b0d0dc44c17bbd471b88f49f50cdd20f",
+   "quotes": [
+    {
+     "time": 1794711433,
+     "dir": 0,
+     "amount_in": "66990050534104",
+     "vq_used": "66990050534104",
+     "vq_out": "6582937126872162813584",
+     "branch": "dt0+single"
+    },
+    {
+     "time": 1794711433,
+     "dir": 0,
+     "amount_in": "2233001684470164",
+     "vq_used": "2233001684470164",
+     "vq_out": "137021582516688771769131",
+     "branch": "dt0+single"
+    },
+    {
+     "time": 1794711433,
+     "dir": 1,
+     "amount_in": "7438953769179461050484",
+     "vq_used": "7438953769179461050484",
+     "vq_out": "72380071040317",
+     "branch": "dt0+two_step"
+    },
+    {
+     "time": 1794711433,
+     "dir": 1,
+     "amount_in": "247965125639315368349482",
+     "vq_used": "247965125639315368349482",
+     "vq_out": "1397937749786573",
+     "branch": "dt0+two_step"
+    },
+    {
+     "time": 1794711553,
+     "dir": 0,
+     "amount_in": "66990050534104",
+     "vq_used": "66990050534104",
+     "vq_out": "6582937126872162813584",
+     "branch": "dtwin+single"
+    },
+    {
+     "time": 1794711553,
+     "dir": 0,
+     "amount_in": "2233001684470164",
+     "vq_used": "2233001684470164",
+     "vq_out": "137021582516688771769131",
+     "branch": "dtwin+single"
+    },
+    {
+     "time": 1794711553,
+     "dir": 1,
+     "amount_in": "7438953769179461050484",
+     "vq_used": "7438953769179461050484",
+     "vq_out": "72343183766222",
+     "branch": "dtwin+two_step"
+    },
+    {
+     "time": 1794711553,
+     "dir": 1,
+     "amount_in": "247965125639315368349482",
+     "vq_used": "247965125639315368349482",
+     "vq_out": "1394834030055514",
+     "branch": "dtwin+two_step"
+    }
+   ],
+   "getReserves": [
+    "6699005053410494",
+    "743895376917946105048448"
+   ],
+   "getFictiveReserves": [
+    "3525929909530019",
+    "353900413070336211673613"
+   ],
+   "getPriceAverage": [
+    "3152175753342787",
+    "322816537795548206285453",
+    "1794711433"
+   ],
+   "getPairFees": [
+    "1500",
+    "900"
+   ]
+  },
+  {
+   "pool": "0x07df47f536a3bb6051703612aec8ad9f101e66d1",
+   "token0": "0x81b9a47bb9820e96a0ae98f0dded0070e0933904",
+   "token1": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+   "quotes": [
+    {
+     "time": 1794672771,
+     "dir": 0,
+     "amount_in": "549152272712563841295",
+     "vq_used": "549152272712563841295",
+     "vq_out": "6435974191557807",
+     "branch": "dt0+two_step"
+    },
+    {
+     "time": 1794672771,
+     "dir": 0,
+     "amount_in": "18305075757085461376502",
+     "vq_used": "18305075757085461376502",
+     "vq_out": "132636225850191411",
+     "branch": "dt0+two_step"
+    },
+    {
+     "time": 1794672771,
+     "dir": 1,
+     "amount_in": "6853247502358180",
+     "vq_used": "6853247502358180",
+     "vq_out": "550565355312653940456",
+     "branch": "dt0+single"
+    },
+    {
+     "time": 1794672771,
+     "dir": 1,
+     "amount_in": "228441583411939336",
+     "vq_used": "228441583411939336",
+     "vq_out": "11048557209091411294040",
+     "branch": "dt0+single"
+    },
+    {
+     "time": 1794672891,
+     "dir": 0,
+     "amount_in": "549152272712563841295",
+     "vq_used": "549152272712563841295",
+     "vq_out": "6436484688626007",
+     "branch": "dtwin+two_step"
+    },
+    {
+     "time": 1794672891,
+     "dir": 0,
+     "amount_in": "18305075757085461376502",
+     "vq_used": "18305075757085461376502",
+     "vq_out": "132644802393041654",
+     "branch": "dtwin+two_step"
+    },
+    {
+     "time": 1794672891,
+     "dir": 1,
+     "amount_in": "6853247502358180",
+     "vq_used": "6853247502358180",
+     "vq_out": "550565355312653940456",
+     "branch": "dtwin+single"
+    },
+    {
+     "time": 1794672891,
+     "dir": 1,
+     "amount_in": "228441583411939336",
+     "vq_used": "228441583411939336",
+     "vq_out": "11048557209091411294040",
+     "branch": "dtwin+single"
+    }
+   ],
+   "getReserves": [
+    "54915227271256384129508",
+    "685324750235818009"
+   ],
+   "getFictiveReserves": [
+    "26929400258267919268691",
+    "325071085281100196"
+   ],
+   "getPriceAverage": [
+    "27997087445508996954407",
+    "336018489448899410",
+    "1794672771"
+   ],
+   "getPairFees": [
+    "9000",
+    "1000"
+   ]
+  },
+  {
+   "pool": "0x446034f7f05c690b7b4f68bd7c9acbb280b25071",
+   "token0": "0x51e72dd1f2628295cc2ef931cb64fdbdc3a0c599",
+   "token1": "0x55d398326f99059ff775485246999027b3197955",
+   "quotes": [
+    {
+     "time": 1794727010,
+     "dir": 1,
+     "amount_in": "324367",
+     "vq_used": "324367",
+     "vq_out": "0",
+     "branch": "last0+recompute"
+    },
+    {
+     "time": 1794727010,
+     "dir": 1,
+     "amount_in": "10812253",
+     "vq_used": "10812253",
+     "vq_out": "0",
+     "branch": "last0+recompute"
+    }
+   ],
+   "getReserves": [
+    "1",
+    "32436760"
+   ],
+   "getFictiveReserves": [
+    "1",
+    "16218380"
+   ],
+   "getPriceAverage": [
+    "0",
+    "0",
+    "0"
+   ],
+   "getPairFees": [
+    "9000",
+    "1000"
+   ]
+  },
+  {
+   "pool": "0xe568922590c24b2c7c0304cd596cde537db8f3b7",
+   "token0": "0x04756126f044634c9a0f0e985e60c88a51acc206",
+   "token1": "0xfdc66a08b0d0dc44c17bbd471b88f49f50cdd20f",
+   "quotes": [
+    {
+     "time": 1794727010,
+     "dir": 0,
+     "amount_in": "5",
+     "vq_used": "5",
+     "vq_out": "14",
+     "branch": "last0+single"
+    },
+    {
+     "time": 1794727010,
+     "dir": 0,
+     "amount_in": "172",
+     "vq_used": "172",
+     "vq_out": "384",
+     "branch": "last0+single"
+    },
+    {
+     "time": 1794727010,
+     "dir": 1,
+     "amount_in": "19",
+     "vq_used": "19",
+     "vq_out": "4",
+     "branch": "last0+single"
+    },
+    {
+     "time": 1794727010,
+     "dir": 1,
+     "amount_in": "647",
+     "vq_used": "647",
+     "vq_out": "102",
+     "branch": "last0+single"
+    }
+   ],
+   "getReserves": [
+    "516",
+    "1941"
+   ],
+   "getFictiveReserves": [
+    "258",
+    "971"
+   ],
+   "getPriceAverage": [
+    "0",
+    "0",
+    "0"
+   ],
+   "getPairFees": [
+    "9000",
+    "1000"
+   ]
+  },
+  {
+   "pool": "0x6698b538e8fb4a1cc3d593d02f646122209365d8",
+   "token0": "0x25d887ce7a35172c62febfd67a1856f20faebb00",
+   "token1": "0xa11b53c5eca5afcb9eb8e7e60260721c4f398279",
+   "quotes": [
+    {
+     "time": 1794727010,
+     "dir": 0,
+     "amount_in": "84",
+     "vq_used": "84",
+     "vq_out": "1",
+     "branch": "last0+single"
+    },
+    {
+     "time": 1794727010,
+     "dir": 0,
+     "amount_in": "2813",
+     "vq_used": "2813",
+     "vq_out": "23",
+     "branch": "last0+single"
+    },
+    {
+     "time": 1794727010,
+     "dir": 1,
+     "amount_in": "1",
+     "vq_used": "1",
+     "vq_out": "0",
+     "branch": "last0+single"
+    },
+    {
+     "time": 1794727010,
+     "dir": 1,
+     "amount_in": "39",
+     "vq_used": "39",
+     "vq_out": "1626",
+     "branch": "last0+single"
+    }
+   ],
+   "getReserves": [
+    "8439",
+    "119"
+   ],
+   "getFictiveReserves": [
+    "4220",
+    "60"
+   ],
+   "getPriceAverage": [
+    "0",
+    "0",
+    "0"
+   ],
+   "getPairFees": [
+    "9000",
+    "1000"
+   ]
+  },
+  {
+   "pool": "0xc96a846dc651f5b3b6f6d002fb1cfa1bb0e954c6",
+   "token0": "0x1c3ba6cf2676cc795db02a3b2093e5076f5f330e",
+   "token1": "0xfdc66a08b0d0dc44c17bbd471b88f49f50cdd20f",
+   "quotes": [
+    {
+     "time": 1794727010,
+     "dir": 0,
+     "amount_in": "16",
+     "vq_used": "16",
+     "vq_out": "5",
+     "branch": "last0+single"
+    },
+    {
+     "time": 1794727010,
+     "dir": 0,
+     "amount_in": "544",
+     "vq_used": "544",
+     "vq_out": "121",
+     "branch": "last0+single"
+    },
+    {
+     "time": 1794727010,
+     "dir": 1,
+     "amount_in": "6",
+     "vq_used": "6",
+     "vq_out": "12",
+     "branch": "last0+single"
+    },
+    {
+     "time": 1794727010,
+     "dir": 1,
+     "amount_in": "204",
+     "vq_used": "204",
+     "vq_out": "322",
+     "branch": "last0+single"
+    }
+   ],
+   "getReserves": [
+    "1632",
+    "613"
+   ],
+   "getFictiveReserves": [
+    "816",
+    "307"
+   ],
+   "getPriceAverage": [
+    "0",
+    "0",
+    "0"
+   ],
+   "getPairFees": [
+    "9000",
+    "1000"
+   ]
+  }
+ ]
+}

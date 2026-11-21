@@ -83,6 +83,25 @@ impl Plan {
         self
     }
 
+    /// Решение 248: план с другой суммой минимумов (проверка баланса BALANCE_CHECK_ERC20 — база + она) — пере-замер
+    /// Universal Router (exec/ur_remeasure.rs): минимумы шагов 1 ед., защита выхода — проверка баланса. Принимает:
+    /// сумму (не 0). Ошибки: Internal — сумма 0 (обмен без минимума не отправляется).
+    pub fn with_min_total(mut self, ctx: &Ctx, m: U256) -> GatewayResult<Self> {
+        if m.is_zero() {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "минимум выхода 0 — обмен без минимума не отправляется",
+            ));
+        }
+        self.min_total = m;
+        Ok(self)
+    }
+
+    /// Сумма минимумов выхода (единицы токена выхода). Ошибок нет.
+    pub fn min_total(&self) -> U256 {
+        self.min_total
+    }
+
     /// Сколько BNB (wei) уходит с транзакцией обмена: сумма WRAP_ETH или 0. Ошибок нет.
     pub fn value(&self) -> U256 {
         match self.native {

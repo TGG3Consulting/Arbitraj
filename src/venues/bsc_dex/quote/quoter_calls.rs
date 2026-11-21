@@ -3,10 +3,12 @@
 //! (quote/quoter.rs) и для пробного обмена в симуляции (check/probe.rs).
 //! V2 — Router.getAmountsOut; V3 — QuoterV2.quoteExactInputSingle; Infinity CL/Bin — CLQuoter/BinQuoter;
 //! Uniswap V4 — V4Quoter (ключ пула, направление, сумма, hookData пустые); KyberSwap Elastic — свой QuoterV2
-//! (tokenIn, tokenOut, amountIn, feeUnits, limitSqrtP; решение 81).
-//! Кто вызывает: quote/quoter.rs, check/probe.rs.
-//! От чего зависит: node/abi_dex.rs, pools/key.rs, pools/registry.rs, ctx.rs.
-//! Настройки: dex.router (V2), dex.quoter (V3, V4) [вид пула].
+//! (tokenIn, tokenOut, amountIn, feeUnits, limitSqrtP; решение 81); Maverick V2 — MaverickV2Quoter.calculateSwap
+//! (quote/quoter_maverick.rs, решение 122 F). V3 с dex.v3_registry_fee_method (решение 281) — fee квотера = ключ реестра.
+//! Кто вызывает: quote/quoter.rs, quote/v2_pair_probe.rs (проба check/probe.rs через quote/probe_quote.rs), check/hooks_probe.rs.
+//! От чего зависит: node/abi_dex.rs, pools/key.rs, pools/registry.rs, pools/registry_key.rs, ctx.rs, quote/virtual_quoter.rs (on —
+//! текст ошибки видов «только виртуальный квотер», решение 388).
+//! Настройки: dex.router (V2), dex.quoter (V3, V4), dex.v3_registry_fee_method (V3) [вид пула], dex.quoter_virtual [DEX].
 //!
 //! Сигнатуры — шапка node/abi_dex.rs (официальные интерфейсы Uniswap v2/v3, pancake-v3, infinity-periphery, v4-periphery).
 
@@ -15,19 +17,25 @@ use alloy_primitives::aliases::{I24, U24, U160};
 use alloy_primitives::{Address, Bytes, U256};
 
 use crate::core::types::{PoolKind, PoolRef, PoolState};
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::abi_dex::{
     IAlgebraQuoterV2, IElasticQuoterV2, IInfinityQuoter, IQuoterV2, ISlipstreamQuoterV2, IV2Router,
     IV4Quoter,
 };
+use super::super::pools::abi_curve::IStableSwapV1;
 use super::super::pools::abi_dodo::IDodoPool;
+use super::super::pools::abi_nomi::INomiStablePair;
+use super::super::pools::abi_saddle::ISaddleSwap;
 use super::super::pools::abi_solidly::ISolidlyPool;
+use super::super::pools::abi_stable_u::IPancakeStable;
+use super::super::pools::abi_woo::IWooPP;
 use super::super::pools::families::Proto;
 use super::super::pools::key::PoolKey;
 use super::super::pools::load_dodo::FEE_TRADER;
 use super::super::pools::registry::Entry;
+use super::super::pools::registry_key;
 
 /// Адрес и данные вызова квотера. Ошибки: NotConfigured (адрес), NoRoute (сумма больше uint128 у V4), Internal (нет ключа).
 pub fn request(
@@ -42,6 +50,62 @@ pub fn request(
         e.pool.token0
     };
     let zero_for_one = token_in == e.pool.token0;
+    // Maverick V2 (решение 122 F): MaverickV2Quoter.calculateSwap (quote/quoter_maverick.rs).
+    if e.family.proto == Proto::Maverick {
+        return super::quoter_maverick::request(ctx, e, token_in, amount);
+    }
+    // Только виртуальный квотер (решения 188, 285, 286, 288): Algebra Integral (официальный квотер Integral в код не
+    // подключён), Metric OMM (квотера в SDK для BSC нет — quoteMetric), iZiSwap / Biswap V3 (официальный квотер не
+    // подключён — quoteIzi), SmarDex (квотера пары нет — quoteSmardex). Вызывающие при dex.quoter_virtual = да идут в
+    // quote/virtual_quoter.rs (quoter.rs out_at) или quote/probe_quote.rs (проба налогов, решение 388) — сюда не доходят.
+    if let Some(what) = virtual_only(e.family.proto) {
+        return Err(virtual_missing(ctx, e, what));
+    }
+    // Решение 484: Wombat — сам пул quotePotentialSwap (quoter_wombat.rs).
+    if e.family.proto == Proto::Wombat {
+        return super::quoter_wombat::request(ctx, e, token_in, amount);
+    }
+    // KyberSwap Classic DMM (решение 287): квотер — DMMRouter02.getAmountsOut по пути из одного пула (quoter_dmm.rs).
+    if e.family.proto == Proto::KyberDmm {
+        return super::quoter_dmm::request(ctx, e, token_in, amount);
+    }
+    // Balancer V2 (решение 289): квотер — само хранилище, Vault.queryBatchSwap через eth_call (quoter_balancer.rs).
+    if e.family.proto == Proto::BalancerV2 {
+        return super::quoter_balancer::request(ctx, e, token_in, amount);
+    }
+    // Balancer V3 (решение 441): квотер — Router V3 querySwapSingleTokenExactIn (quoter_balancer_v3.rs).
+    if e.family.proto == Proto::BalancerV3 {
+        return super::quoter_balancer_v3::request(ctx, e, token_in, amount);
+    }
+    // Liquidity Book V2.1 (решение 290): квотер — сам пул, getSwapOut через eth_call (quoter_lb.rs).
+    if matches!(e.family.proto, Proto::LbV21 | Proto::LbV22) {
+        return super::quoter_lb::request(ctx, e, token_in, amount);
+    }
+    // Fluid DEX T1 (решение 440): квотер — резолвер FluidDexReservesResolver.estimateSwapIn (quoter_fluid.rs).
+    if e.family.proto == Proto::FluidT1 {
+        return super::quoter_fluid::request(ctx, e, token_in, amount);
+    }
+    // Скважина Basin (решение 485): квотер — сама скважина, getSwapOut (quoter_basin.rs).
+    if e.family.proto == Proto::BasinWell {
+        return super::quoter_basin::request(ctx, e, token_in, amount);
+    }
+    // Shell Protocol Proteus (решение 486): квотер — реализация пула swapGivenInputAmount + decimals выхода пачкой
+    // Multicall3 (quoter_shell.rs).
+    if e.family.proto == Proto::ShellProteus {
+        return super::quoter_shell::request(ctx, e, token_in, amount);
+    }
+    // Crypto-пулы Curve (решения 442, 453; NG и v1): квотер — сам пул, get_dy(uint256, …) (quoter_crypto.rs).
+    if e.family.proto.is_curve_crypto() {
+        return super::quoter_crypto::request(ctx, e, token_in, amount);
+    }
+    // Liquidity Book v2.0 (решение 445): квотер — LBRouter v2.0 getSwapOut(пара, вход, swapForY) (quoter_lb20.rs).
+    if e.family.proto == Proto::LbV20 {
+        return super::quoter_lb20::request(ctx, e, token_in, amount);
+    }
+    // Ekubo (решение 447): квотер — Router.quote MEVCaptureRouter (dex.quoter), quoter_ekubo.rs.
+    if e.family.proto == Proto::Ekubo {
+        return super::quoter_ekubo::request(ctx, e, token_in, amount);
+    }
     let big = || ctx.err(ErrorCode::NoRoute, "сумма больше uint128");
     // DODO PMM (решение 86b): квотер — сам пул (querySellBase/querySellQuote; отдельного квотера нет). Сверка
     // идёт тем же трейдером FEE_TRADER, что и чтение комиссии getUserFeeRate (load_dodo.rs) — выход включает
@@ -73,6 +137,107 @@ pub fn request(
             .abi_encode()
         };
         return Ok((pool, Bytes::from(data)));
+    }
+    // StableSwap (Ellipsis; решение 122 F): квотер — сам пул get_dy(i, j, dx) (StableSwap.vy L405-L416; индексы
+    // монет пары — из состояния). При rates ≠ 1e18 get_dy округляет комиссию иначе, чем exchange (math/stableswap_v1).
+    // Infinity Stable (решение «122 (Infinity Stable, ответы)»): ОСНОВНОЙ квотер — CLQuoter Infinity (dex.quoter) с ключом
+    // пула (ветка PoolKey::Infinity ниже: настоящий swap с крючком); get_dy крючка — дополнительный (quote/quoter_extra.rs).
+    // Curve StableSwap-NG (решение 275): тоже сам пул get_dy(int128, int128, dx) (CurveStableSwapNG.vy L1702).
+    if matches!(e.family.proto, Proto::CurveStable | Proto::CurveNg) {
+        // Решение 295: и пара многомонетного пула (PoolRef::Multi) — квотер тот же контракт, индексы — из состояния пары.
+        let Some(pool) = e.pool.reference.own_contract() else {
+            return Err(ctx.err(ErrorCode::Internal, "ссылка на пул StableSwap не того вида"));
+        };
+        let PoolState::StableSwap(d) = &e.pool.state else {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "состояние пула StableSwap не того вида",
+            ));
+        };
+        let (i, j) = if zero_for_one {
+            (d.i0, d.i1)
+        } else {
+            (d.i1, d.i0)
+        };
+        let data = IStableSwapV1::get_dyCall {
+            i: i as i128,
+            j: j as i128,
+            dx: amount,
+        }
+        .abi_encode();
+        return Ok((pool, Bytes::from(data)));
+    }
+    // Nomiswap Stable (решение 284): квотер — сама пара getAmountOut(address tokenIn, uint256 amountIn)
+    // (NomiswapStablePair.sol L251, Sourcify 56/0x1e40…60f1; ответ — одно слово, разбор decode — как у StableSwap).
+    if e.family.proto == Proto::NomiStable {
+        let PoolRef::Contract(pool) = e.pool.reference else {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "ссылка на пару Nomiswap Stable не того вида",
+            ));
+        };
+        let data = INomiStablePair::getAmountOutCall {
+            tokenIn: token_in,
+            amountIn: amount,
+        }
+        .abi_encode();
+        return Ok((pool, Bytes::from(data)));
+    }
+    // Решение 122 F, 3: PancakeSwap / Lista StableSwap — сам пул get_dy(uint256 i, uint256 j, dx) (Lista — с комиссией,
+    // без проверки цены: её делает exchange); Saddle — сам пул calculateSwap(uint8, uint8, dx); WooFi — общий
+    // контракт query(fromToken, toToken, amount) (IWooPPV2.sol L91). Ссылки — abi_stable_u.rs, abi_saddle.rs, abi_woo.rs.
+    if matches!(
+        e.family.proto,
+        Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable
+    ) {
+        // Решение 295: и пара многомонетного пула (PoolRef::Multi; у Lista её не бывает — вид не многомонетный).
+        let Some(pool) = e.pool.reference.own_contract() else {
+            return Err(ctx.err(ErrorCode::Internal, "ссылка на пул StableSwap не того вида"));
+        };
+        let PoolState::StableSwap(d) = &e.pool.state else {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "состояние пула StableSwap не того вида",
+            ));
+        };
+        let (i, j) = if zero_for_one {
+            (d.i0, d.i1)
+        } else {
+            (d.i1, d.i0)
+        };
+        let data = if e.family.proto == Proto::SaddleStable {
+            ISaddleSwap::calculateSwapCall {
+                tokenIndexFrom: i,
+                tokenIndexTo: j,
+                dx: amount,
+            }
+            .abi_encode()
+        } else {
+            IPancakeStable::get_dyCall {
+                i: U256::from(i),
+                j: U256::from(j),
+                dx: amount,
+            }
+            .abi_encode()
+        };
+        return Ok((pool, Bytes::from(data)));
+    }
+    if e.family.proto == Proto::WooPP {
+        let PoolRef::Member { contract, .. } = e.pool.reference else {
+            return Err(ctx.err(ErrorCode::Internal, "ссылка на пару WooFi не того вида"));
+        };
+        let (from, to) = if zero_for_one {
+            (e.pool.token0, e.pool.token1)
+        } else {
+            (e.pool.token1, e.pool.token0)
+        };
+        let data = IWooPP::queryCall {
+            fromToken: from,
+            toToken: to,
+            fromAmount: amount,
+        }
+        .abi_encode();
+        return Ok((contract, Bytes::from(data)));
     }
     // KyberSwap Elastic (решение 81): свой QuoterV2.quoteExactInputSingle(tokenIn, tokenOut, amountIn, feeUnits,
     // limitSqrtP) — вид ядра Cl без ключа, отдельная ветка по протоколу.
@@ -111,8 +276,10 @@ pub fn request(
     }
     // Solidly (Topaz v2, THENA V1; решения 80, 85): квотер — сам пул (getAmountOut(amountIn, tokenIn); отдельного
     // квотера нет). Пул применяет комиссию getFee(pool, stable) внутри — тот же fee, что наш локальный расчёт берёт из
-    // состояния. Pool.getAmountOut (velodrome-finance Pool.sol, решение 23).
-    if e.family.proto == Proto::Solidly {
+    // состояния. Pool.getAmountOut (velodrome-finance Pool.sol, решение 23). Решение 443: пара Camelot V2 — тот же
+    // getAmountOut(uint256, address) (CamelotPair Pair.sol L372, abi_camelot.rs), комиссия — входа этого направления.
+    if e.family.proto.is_solidly() || matches!(e.family.proto, Proto::CamelotV2 | Proto::AeroBasic)
+    {
         let PoolRef::Contract(pool) = e.pool.reference else {
             return Err(ctx.err(ErrorCode::Internal, "ссылка на пул Solidly не того вида"));
         };
@@ -156,10 +323,16 @@ pub fn request(
             ));
         }
         (PoolKind::V3, _) => {
+            // QuoterV2 ищет пул через фабрику по параметру fee: обычно это fee_pips пула; у DEX с
+            // dex.v3_registry_fee_method (решение 281, SquadSwap V3) — ключ реестра (defaultFee), иначе квотер откатится.
+            let set = registry_key::method(ctx, e.family).is_some();
+            let key = match e.pool.reference {
+                PoolRef::Contract(a) => registry_key::get(ctx.place.id, a),
+                _ => None,
+            };
             let fee = U24::from(
-                e.pool
-                    .fee_pips
-                    .ok_or_else(|| ctx.err(ErrorCode::Internal, "у пула V3 нет fee"))?,
+                registry_key::quoter_fee(set, key, e.pool.fee_pips)
+                    .map_err(|w| ctx.err(ErrorCode::Internal, w))?,
             );
             let p = IQuoterV2::QuoteExactInputSingleParams {
                 tokenIn: token_in,
@@ -232,9 +405,53 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
             .ok()
             .map(|r| r.amountOut);
     }
-    // Solidly (Topaz v2, THENA V1): getAmountOut возвращает один uint256 — выход после комиссии пула.
-    if e.family.proto == Proto::Solidly {
+    // Solidly (Topaz v2, THENA V1) и Camelot V2 (решение 443): getAmountOut — один uint256, выход после комиссии пары.
+    if e.family.proto.is_solidly() || matches!(e.family.proto, Proto::CamelotV2 | Proto::AeroBasic)
+    {
         return ISolidlyPool::getAmountOutCall::abi_decode_returns(out).ok();
+    }
+    if e.family.proto == Proto::Maverick {
+        return super::quoter_maverick::decode(out);
+    }
+    if e.family.proto == Proto::KyberDmm {
+        return super::quoter_dmm::decode(out);
+    }
+    if e.family.proto == Proto::Wombat {
+        return super::quoter_wombat::decode(out);
+    }
+    if e.family.proto == Proto::BalancerV2 {
+        return super::quoter_balancer::decode(out);
+    }
+    if e.family.proto == Proto::BalancerV3 {
+        return super::quoter_balancer_v3::decode(e, out);
+    }
+    if matches!(e.family.proto, Proto::LbV21 | Proto::LbV22) {
+        return super::quoter_lb::decode(out);
+    }
+    if e.family.proto == Proto::FluidT1 {
+        return super::quoter_fluid::decode(out);
+    }
+    if e.family.proto == Proto::BasinWell {
+        return super::quoter_basin::decode(out);
+    }
+    if e.family.proto == Proto::ShellProteus {
+        return super::quoter_shell::decode(e, out);
+    }
+    if e.family.proto.is_curve_crypto() {
+        return super::quoter_crypto::decode(out);
+    }
+    if e.family.proto == Proto::LbV20 {
+        return super::quoter_lb20::decode(out);
+    }
+    if e.family.proto == Proto::Ekubo {
+        return super::quoter_ekubo::decode(out);
+    }
+    // Infinity Stable: основной квотер — CLQuoter (amountOut, gasEstimate), как у Infinity CL (ветка PoolKey ниже).
+    // StableSwap (остальные шаблоны) и WooFi query: один uint256 — выход после комиссии (одно слово — разбор одинаков).
+    if (e.family.proto.is_stable() && e.family.proto != Proto::InfinityStable)
+        || e.family.proto == Proto::WooPP
+    {
+        return IStableSwapV1::get_dyCall::abi_decode_returns(out).ok();
     }
     // Slipstream (Topaz v3): первое возвращаемое значение — amountOut (как Uni V3 QuoterV2).
     if e.family.proto == Proto::Slipstream {
@@ -262,4 +479,40 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
         }
         _ => None,
     }
+}
+
+/// Вид «только виртуальный квотер» (своего квотера в коде нет): название для текста ошибки. None — у вида свой
+/// квотер. Ошибок нет.
+fn virtual_only(p: Proto) -> Option<&'static str> {
+    match p {
+        Proto::AlgebraIntegral => Some("Algebra Integral"),
+        Proto::AlgebraDirFee => Some("Algebra V1.9 с направленными комиссиями"),
+        Proto::MetricOmm => Some("Metric"),
+        // Proto::is_izi (pools/families.rs) — ровно IziSwap и BiswapV3.
+        p if p.is_izi() => Some("iZiSwap / Biswap V3"),
+        Proto::Smardex => Some("SmarDex"),
+        _ => None,
+    }
+}
+
+/// Ошибка «квотера вида нет»: dex.quoter_virtual у DEX не «да» — «не задана настройка» с её именем (как раньше);
+/// уже «да» — Internal без совета задать заданное (решение 388: вызывающий прошёл мимо виртуального квотера — ошибка
+/// кода, её место — в тексте). Принимает: окружение, пул, название вида. Возвращает: ошибку. Ошибок иных нет.
+fn virtual_missing(ctx: &Ctx, e: &Entry, what: &str) -> GatewayError {
+    let t = e.family.title;
+    if super::virtual_quoter::on(ctx, e.family.id, e.family.proto) {
+        return ctx.err(
+            ErrorCode::Internal,
+            format!(
+                "{t}: {what} сверяется только виртуальным квотером; dex.quoter_virtual = да уже задан, но этот вызов \
+                 прошёл мимо него (ошибка кода: нужен quote/virtual_quoter.rs или quote/probe_quote.rs)"
+            ),
+        );
+    }
+    ctx.not_set(
+        "dex.quoter_virtual",
+        format!(
+            "{t}: {what} сверяется только виртуальным квотером — задайте dex.quoter_virtual = да"
+        ),
+    )
 }

@@ -1,16 +1,21 @@
 //! Файл: core/commands.rs
 //! Что делает: команды человека ядру — из интерфейса и кнопок Telegram (ManualCommand, core/types/control.rs):
-//! «Продать сейчас», «Беру на себя», «Вернуть боту». Кнопка Telegram принимается только из настроенного
-//! чата notify.telegram_chat (решение 37). Каждая команда — в журнал с источником. Плюс команды экрана
-//! «Управление»: старт, стоп, пауза системы, снятие паузы площадки и карантина монеты.
+//! «Продать сейчас», «Беру на себя», «Вернуть боту»; для остановленной сделки — «Продать сейчас» и «Продано вручную»
+//! (manual_halted.rs, решение 100); «Продать и перегнать» — у алерта и остановленной сделки (решение 101); «Перегнать» и
+//! «Перегнано вручную» у записи «USDT не вернулись» (manual_usdt.rs, решение 163). Кнопка Telegram принимается только из чатов ролей
+//! (решения 37, 176). Каждая команда — в журнал с источником. Плюс команды экрана
+//! «Управление»: старт, стоп, пауза системы, снятие паузы площадки и карантина монеты (решение 157: те же команды
+//! из Telegram — ManualAction::SetMode и др., commands_control.rs). Итог каждой команды — событие CoreEvent::Command.
+//! Решение 177: команда выполняется с признаком «ручная» (risk_count.rs) — не считается ошибкой площадки подряд.
+//! Решение 405: и с признаком команды на задачу (manual_wait::scope) — монета занята идущими сделками: команда ждёт их
+//! окончания; «Отменить ожидание» — manual_wait::command.
 //! Кто вызывает: api (POST /api/manual/command, экран «Управление») и notify (кнопки Telegram) — через методы Core.
-//! От чего зависит: manual.rs, risk.rs, settings, deps.rs.
-//! Настройки: notify.telegram_chat.
+//! От чего зависит: manual.rs, commands_control.rs, risk.rs, risk_count.rs, settings, deps.rs, view.rs.
+//! Настройки: ID чатов ролей Telegram (notify.telegram_chat, notify.control_chat, notify.failures_chat …, решение 176).
 
 use serde_json::json;
 
-use crate::core::types::{Asset, CommandSource, ManualAction, ManualCommand, VenueId};
-use crate::settings::read::At;
+use crate::core::types::{CommandSource, ManualAction, ManualCommand, VenueId};
 use crate::storage::journal::Level;
 
 use super::engine::{Core, lk};
@@ -20,8 +25,84 @@ impl Core {
     /// Выполняет команду человека. Возвращает: Ok(текст) — выполнено; Err(причина) — отклонено.
     /// Обе ветки пишутся в журнал с источником команды.
     pub async fn command(&self, cmd: ManualCommand) -> Result<String, String> {
-        let res = self.run_command(&cmd).await;
-        let (level, text) = match &res {
+        // Решение 110: команда выполняется отдельной задачей и доходит до конца, даже если интерфейс отключился.
+        // Живой случай 02.11: «Продать и перегнать» у остановленной сделки ATOM — сделка уже помечена «идёт продажа»,
+        // ответа баланса нет, связь с интерфейсом рвётся, веб-сервер бросает запрос — и сделка навсегда остаётся
+        // в шаге Selling: пропадает с экрана, а предварительный убыток и сверка балансов её держат.
+        // Ревью CI t191 (переполнение стека — tests/core_usdt_return_manual.rs, core_cex_rules_usdt.rs; как t157 в
+        // size_search.rs): будущее команды целиком — в куче, не по значению в будущем вызывающего.
+        Box::pin(self.command_with(cmd, None)).await
+    }
+
+    /// Решение 405 (ревью 5, М3): повтор команды, ждавшей окончания сделок монеты (manual_wait_run.rs), — с ID ожидания:
+    /// паузу монеты проходит только этот повтор (manual_wait_pause.rs is_retry), не посторонняя такая же команда.
+    /// Принимает: команду, ID ожидания. Возвращает: как command.
+    pub(crate) async fn command_retry(
+        &self,
+        cmd: ManualCommand,
+        wait: String,
+    ) -> Result<String, String> {
+        Box::pin(self.command_with(cmd, Some(wait))).await
+    }
+
+    /// Команда отдельной задачей (решение 110) с признаком повтора ожидания (None — обычная). Возвращает: как command.
+    async fn command_with(
+        &self,
+        cmd: ManualCommand,
+        retry: Option<String>,
+    ) -> Result<String, String> {
+        let core = self.clone();
+        let c = cmd.clone();
+        tokio::spawn(async move { Box::pin(core.command_inner(c, retry)).await })
+            .await
+            .unwrap_or_else(|e| Err(format!("команда прервана: {e}")))
+    }
+
+    /// Выполнение команды и запись в журнал (см. command). retry — ID ожидания, если это его повтор (решение 405).
+    async fn command_inner(
+        &self,
+        cmd: ManualCommand,
+        retry: Option<String>,
+    ) -> Result<String, String> {
+        // Решение 177: команда человека — ручная: её сбои не «ошибки площадки подряд», паузу ставит только автоматика
+        // (risk_count.rs). Продажи и перегон отдельной задачей ставят тот же признак сами (manual.rs, manual_halted.rs,
+        // manual_usdt.rs).
+        // Решение 201: команда ждёт конец паузы площадки после 429 (exec.rate_limit_wait_max_ms), а не отказывает сразу.
+        // Решение 405 (ответ Тиграна на ревью Н3): признак команды на задачу — монета занята идущими сделками, команда
+        // ждёт их окончания и выполняется заново (manual_wait.rs defer).
+        let retry_id = retry.clone();
+        let res = Box::pin(super::manual_wait::scope(
+            cmd.clone(),
+            retry,
+            super::risk_count::manual(super::patience_scope::with(
+                self,
+                Box::pin(self.run_command(&cmd)),
+            )),
+        ))
+        .await;
+        self.record_command(&cmd, &res, retry_id).await;
+        res
+    }
+
+    /// Итог команды: событие Command (Telegram правит сообщения записи, решение 156) и журнал core.command (источник,
+    /// кто нажал). Решение 408: команда ушла в ожидание (manual_wait.rs) — «wait»: ID ожидания (Telegram пишет «Ждёт…»,
+    /// а не «Выполнено»); повтор ожидания — «retry»: его ID. Вызывают command_inner и интерфейс, которому нужен код
+    /// ошибки шлюза (api/wallet_queue.rs — «Снять очередь кошелька»). Принимает: команду, итог, ID повтора. Ошибок нет.
+    pub async fn record_command(
+        &self,
+        cmd: &ManualCommand,
+        res: &Result<String, String>,
+        retry_id: Option<String>,
+    ) {
+        let wait = match (&retry_id, res) {
+            (None, Ok(_)) => super::manual_wait::deferred(self, &cmd.action),
+            _ => None,
+        };
+        self.inner.live.send(super::view::CoreEvent::Command(json!({
+            "action": cmd.action, "who": who(cmd), "ok": res.is_ok(),
+            "text": res.clone().unwrap_or_else(|e| e), "wait": wait, "retry": retry_id,
+        })));
+        let (level, text) = match res {
             Ok(t) => (
                 Level::Info,
                 format!("Команда {:?} ({:?}): {t}", cmd.action, cmd.source),
@@ -35,59 +116,101 @@ impl Core {
             .deps
             .log(level, "core.command", None, text, Some(json!(cmd)))
             .await;
-        res
     }
 
     /// Проверка источника и выполнение.
     async fn run_command(&self, cmd: &ManualCommand) -> Result<String, String> {
         if let CommandSource::Telegram { chat } = &cmd.source {
-            let ours = self
-                .inner
-                .deps
-                .settings
-                .text("notify.telegram_chat", At::default())
-                .map_err(|e| e.message)?;
-            // Настройка может быть @username чата — тогда совпадение уже проверил notify (press::chat_matches),
+            // Решение 176: чат — один из чатов ролей (notify/roles.rs); какая кнопка из какой роли — проверил notify.
+            // Настройка может быть @username чата — тогда совпадение уже проверил notify (roles::chat_matches),
             // у ядра есть только числовой id.
-            if chat != &ours && !ours.starts_with('@') {
+            if !crate::notify::roles::is_role_chat(&self.inner.deps.settings, chat) {
                 return Err(format!("чат {chat} — не настроенный чат уведомлений"));
             }
         }
+        // Решение 176: «Перевести USDT» (Telegram «Управление» и интерфейс) — usdt_transfer.rs.
+        if let Some(r) = super::usdt_transfer::command(self, &cmd.action, &who(cmd)).await {
+            return r;
+        }
+        // Решение 174: «Продать» панели «Балансы» — balance_sell.rs.
+        if let Some(r) = super::balance_sell::command(self, &cmd.action, &who(cmd)).await {
+            return r;
+        }
+        // Решение 405: «Отменить ожидание» ручного действия, ждущего окончания сделок монеты — manual_wait.rs.
+        if let Some(r) = super::manual_wait::command(self, &cmd.action) {
+            return r;
+        }
+        // Решение 163: «Перегнать» / «Перегнано вручную» записи «USDT не вернулись» — manual_usdt.rs.
+        if let Some(r) = super::manual_usdt::command(self, &cmd.action, &who(cmd)).await {
+            return r;
+        }
+        // Решение 408 (t193): «Снять очередь кошелька», «Открыть вход монеты», «Убрать из чёрного списка», «Развернуть
+        // исполнитель» — commands_ext.rs.
+        if let Some(r) = super::commands_ext::command(self, &cmd.action, &who(cmd)).await {
+            return r;
+        }
         // Команда по уже закрытому алерту (или вернувшимся монетам) — спокойно игнорируется (Issue #10).
         let gone = match &cmd.action {
-            ManualAction::SellNow { alert_id } | ManualAction::TakeOver { alert_id } => {
-                (!lk(&self.inner.alerts).contains_key(alert_id))
-                    .then(|| format!("алерт {alert_id}"))
-            }
+            ManualAction::SellNow { alert_id }
+            | ManualAction::SellNowReturn { alert_id }
+            | ManualAction::TakeOver { alert_id } => (!lk(&self.inner.alerts)
+                .contains_key(alert_id))
+            .then(|| format!("алерт {alert_id}")),
             ManualAction::ReturnToBot { holding_id } => (!lk(&self.inner.holdings)
                 .contains_key(holding_id))
             .then(|| format!("запись {holding_id}")),
+            // Шаг сделки проверяют сами команды (manual_halted.rs) — отказ с причиной.
+            ManualAction::SellHalted { .. }
+            | ManualAction::SellHaltedReturn { .. }
+            | ManualAction::SoldManually { .. } => None,
+            // Решение 157: команды плашки режима — commands_control.rs.
+            _ => return super::commands_control::run(self, &cmd.action, &who(cmd)).await,
         };
         if let Some(what) = gone {
             return Ok(format!(
                 "{what} уже закрыт(а) или не существует — команда проигнорирована"
             ));
         }
-        let who = match (&cmd.source, &cmd.by) {
-            (CommandSource::Ui, _) => "интерфейс".to_string(),
-            (CommandSource::Telegram { chat }, Some(by)) => format!("Telegram {chat}, {by}"),
-            (CommandSource::Telegram { chat }, None) => format!("Telegram {chat}"),
-        };
+        let who = who(cmd);
         match &cmd.action {
-            ManualAction::SellNow { alert_id } => super::manual::sell_now(self, alert_id).await,
+            ManualAction::SellNow { alert_id } => {
+                super::manual::sell_now(self, alert_id, false).await
+            }
+            ManualAction::SellNowReturn { alert_id } => {
+                super::manual::sell_now(self, alert_id, true).await
+            }
             ManualAction::TakeOver { alert_id } => {
                 super::manual::take_over(self, alert_id, &who).await
             }
             ManualAction::ReturnToBot { holding_id } => {
                 super::manual_return::return_to_bot(self, holding_id).await
             }
+            ManualAction::SellHalted { deal_id } => {
+                super::manual_halted::sell_halted(self, deal_id, false).await
+            }
+            ManualAction::SellHaltedReturn { deal_id } => {
+                super::manual_halted::sell_halted(self, deal_id, true).await
+            }
+            ManualAction::SoldManually { deal_id, usdt } => {
+                super::manual_halted::sold_manually(self, deal_id, usdt, &who).await
+            }
+            _ => super::commands_control::run(self, &cmd.action, &who).await,
         }
     }
 
     /// Экран «Управление»: режим системы (Running — «Старт», Stopped — «Стоп», Paused — «Пауза»).
     /// Возвращает: текст для журнала. Ошибок нет.
     pub async fn set_mode(&self, mode: Mode) -> String {
-        let t = risk::set_mode(self, mode, Some("команда из интерфейса".into()));
+        self.set_mode_by(mode, "команда из интерфейса").await
+    }
+
+    /// То же, что set_mode, с причиной «кто» (решение 157: Telegram — «команда из Telegram, @имя»). Ошибок нет.
+    pub async fn set_mode_by(&self, mode: Mode, reason: &str) -> String {
+        // Решение 432: общий «Старт» человека — все сети (остановленные по сети запускаются); одна сеть — пусто, как раньше.
+        if mode == Mode::Running {
+            lk(&self.inner.risk).chain_off.clear();
+        }
+        let t = risk::set_mode(self, mode, Some(reason.into()));
         self.inner
             .deps
             .log(Level::Info, "core.control", None, &t, None)
@@ -101,8 +224,40 @@ impl Core {
         t
     }
 
-    /// Снять паузу площадки (после ошибок подряд или правила шлюза).
+    /// Решение 432: «Старт <сеть>» / «Стоп <сеть>» (core/chain_run.rs) — журнал core.control, уведомление
+    /// system.started / system.stopped. Принимает: id сети, запуск ли, кто. Возвращает: текст для журнала.
+    /// Ошибки: текст — сетей меньше двух или такой сети нет у площадок DEX.
+    pub async fn set_chain_by(&self, chain: &str, run: bool, who: &str) -> Result<String, String> {
+        let t = super::chain_run::set(self, chain, run, who)?;
+        self.inner
+            .deps
+            .log(Level::Info, "core.control", None, &t, None)
+            .await;
+        let code = if run {
+            "system.started"
+        } else {
+            "system.stopped"
+        };
+        self.inner.deps.notify(code, None, &t).await;
+        Ok(t)
+    }
+
+    /// Снять паузу площадки (после ошибок подряд или правила шлюза). Решение 258: id пары «площадка × тип направления»
+    /// («bingx:dex_cex», «dex_dex», core/day_pair.rs) — снимается только пауза этой пары по убытку дня.
     pub async fn resume_venue(&self, venue: &VenueId) {
+        if super::day_pair::is_pair(&venue.0) {
+            risk::resume_pair(self, &venue.0);
+            let t = format!(
+                "Пауза направления {} по убытку дня снята",
+                super::day_pair::label(&venue.0)
+            );
+            let v = super::day_pair::venue_or_dex(self, &venue.0);
+            self.inner
+                .deps
+                .log(Level::Info, "core.control", v.as_deref(), &t, None)
+                .await;
+            return;
+        }
         risk::resume_venue(self, venue);
         self.inner
             .deps
@@ -116,10 +271,13 @@ impl Core {
             .await;
     }
 
-    /// Снять карантин монеты (ручная проверка после «депозит не зачислен» или медленного перевода).
-    pub async fn release_quarantine(&self, asset: &Asset) {
-        risk::quarantine(self, asset, None);
-        let t = format!("{}: карантин снят вручную", asset.ticker);
+    /// Снять карантин монеты (ручная проверка после «депозит не зачислен» или медленного перевода). Принимает: id из
+    /// интерфейса — адрес контракта (0x…) или тикер монеты без адреса (решение 118, quarantine.rs). Ошибок нет.
+    pub async fn release_quarantine(&self, id: &str) {
+        let label = super::quarantine::release_id(self, id)
+            .map(|q| q.label)
+            .unwrap_or_else(|| id.to_string());
+        let t = format!("{label}: карантин снят вручную");
         self.inner
             .deps
             .log(Level::Info, "core.control", None, &t, None)
@@ -136,17 +294,11 @@ impl Core {
     }
 }
 
-impl Core {
-    /// Канал команд для кнопок Telegram (core/types/control.rs, CommandTx): каждая команда выполняется
-    /// по очереди через Core::command. Размер очереди — --live-buffer. Ошибок нет.
-    pub fn command_channel(&self) -> crate::core::types::CommandTx {
-        let (tx, mut rx) = tokio::sync::mpsc::channel(self.inner.deps.buffer);
-        let core = self.clone();
-        tokio::spawn(async move {
-            while let Some(cmd) = rx.recv().await {
-                let _ = core.command(cmd).await;
-            }
-        });
-        tx
+/// Кто дал команду — для журнала и итога: «интерфейс» или «Telegram <чат>, <пользователь>».
+pub fn who(cmd: &ManualCommand) -> String {
+    match (&cmd.source, &cmd.by) {
+        (CommandSource::Ui, _) => "интерфейс".to_string(),
+        (CommandSource::Telegram { chat }, Some(by)) => format!("Telegram {chat}, {by}"),
+        (CommandSource::Telegram { chat }, None) => format!("Telegram {chat}"),
     }
 }

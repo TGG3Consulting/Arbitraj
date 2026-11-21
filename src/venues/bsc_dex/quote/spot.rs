@@ -16,6 +16,7 @@ use alloy_primitives::U256;
 use crate::core::types::PoolState;
 
 use super::super::math::bin_price::{self, SCALE_OFFSET};
+use super::super::math::crypto_swap;
 use super::super::math::full_math::mul_div;
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::pools::load_dodo::rstate;
@@ -53,6 +54,89 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
             };
             (!ru.is_zero()).then(|| mul_div(amount, rc, ru)).flatten()
         }
+        // StableSwap (решение 122 F): цена для СИЗИНГА пробы (решение 73.19) — 1 : 1 в нормализованных 18 знаках
+        // (rates пула): монет = сумма · rate(встречного) / rate(монеты). Это оценка размера пробы, а не сверяемая
+        // величина — её считают локальная математика и квотер пула на одной и той же сумме.
+        PoolState::StableSwap(d) => {
+            let (ic, iu) = if coin0 { (d.i0, d.i1) } else { (d.i1, d.i0) };
+            let rc = *d.rates.get(ic as usize)?;
+            let ru = *d.rates.get(iu as usize)?;
+            (!rc.is_zero()).then(|| mul_div(amount, ru, rc)).flatten()
+        }
+        // PMM от оракула (WooFi, решение 122 F, 3): своей математики нет (развёрнутый код закрыт). Лесенка цен пула: монет за `amount` встречного — по средней цене первой точки «котируемая → базовая».
+        PoolState::OraclePmm(d) => {
+            let p = d.ladder_quote_in.first()?;
+            (!p.amount_in.is_zero())
+                .then(|| mul_div(amount, p.amount_out, p.amount_in))
+                .flatten()
+        }
+        // TickBin (Maverick V2, решение 122 F): цена активного тика по его резервам (официальный TickMath
+        // getTickSqrtPriceAndL, math/maverick_tick_math.rs) в D18-масштабе пула: цена tokenA в tokenB = sqrtPrice²/1e18
+        // (D18 → единицы токенов — множители масштаба). Оценка размера пробы (решение 73.19), не сверяемая величина.
+        PoolState::TickBin(d) => super::tick_bin_spot::coins_for(d, coin0, amount),
+        // Пара с фиктивными резервами (SmarDex, решение 288): цена для сизинга пробы — отношение фиктивных резервов (по ним
+        // формула x·y=k первого шага; оценка размера пробы, решение 73.19, не сверяемая величина).
+        PoolState::Fictive(d) => {
+            let (fc, fu) = if coin0 { (d.fictive0, d.fictive1) } else { (d.fictive1, d.fictive0) };
+            (!fu.is_zero()).then(|| mul_div(amount, fc, fu)).flatten()
+        }
+        // Пул в общем хранилище (Balancer V2, решение 289): цена малой пробы (vault_depth::PROBE_DIV — доля баланса встречного) по формуле
+        // пула без комиссии (math/balancer_math.rs) — оценка размера пробы (решение 73.19), не сверяемая величина.
+        PoolState::VaultPool(d) => {
+            let (ic, iu) = if coin0 { (d.i0, d.i1) } else { (d.i1, d.i0) };
+            let mut nf = (**d).clone();
+            nf.fee = U256::ZERO;
+            let probe = *d.balances.get(iu as usize)? / U256::from(super::vault_depth::PROBE_DIV);
+            let out = super::super::math::balancer_math::amount_out(&nf, iu.into(), ic.into(), probe)?;
+            (!probe.is_zero()).then(|| mul_div(amount, out, probe)).flatten()
+        }
+        // Бины с изменчивой комиссией (Liquidity Book V2.1, решение 290): цена активного бина — сколько Y за 1 X, ·2^128
+        // (PriceHelper.getPriceFromId); X — token0 записи, если x_is_token0. Оценка размера пробы (решение 73.19).
+        PoolState::LbBin(d) => {
+            let price = bin_price::price_from_id(d.active_id, d.bin_step)?;
+            let one = U256::from(1u8) << SCALE_OFFSET;
+            // Монета — X: монет = сумма(Y) / цена; монета — Y: сумма(X) · цена.
+            if coin0 == d.x_is_token0 {
+                (!price.is_zero()).then(|| mul_div(amount, one, price)).flatten()
+            } else {
+                mul_div(amount, price, one)
+            }
+        }
+        // Crypto-пул Curve (решение 442): по внутренней цене пула price_scale и множителям точности
+        // (math/crypto_swap.rs spot) — оценка размера пробы (решение 73.19), не сверяемая величина.
+        PoolState::Crypto(d) => {
+            let (ic, iu) = if coin0 { (d.i0, d.i1) } else { (d.i1, d.i0) };
+            crypto_swap::spot(d, ic.into(), iu.into(), amount)
+        }
+        // Ekubo (решение 447): цена token0 в token1 = (sqrtRatio 64.128 / 2^128)² (math/ekubo_sqrt.rs to_fixed) — оценка
+        // размера пробы (решение 73.19), не сверяемая величина.
+        // Решение 454: монета — token0 КЛЮЧА (нативный ETH — token0 ключа, pools/ekubo_native.rs).
+        PoolState::Ekubo(d) => {
+            let r = super::super::math::ekubo_sqrt::to_fixed(d.sqrt_ratio);
+            let one = U256::from(1u8) << 128usize;
+            if !super::super::pools::ekubo_native::is_token1(d, e.pool.token0, e.coin) {
+                mul_div(mul_div(amount, one, r)?, one, r)
+            } else {
+                mul_div(mul_div(amount, r, one)?, r, one)
+            }
+        }
+        // V2 с усилением (KyberSwap Classic DMM, решение 287): спот-цена — отношение ВИРТУАЛЬНЫХ резервов (по ним формула).
+        PoolState::AmpV2(d) => {
+            let (vc, vu) = if coin0 {
+                (d.v_reserve0, d.v_reserve1)
+            } else {
+                (d.v_reserve1, d.v_reserve0)
+            };
+            (!vu.is_zero()).then(|| mul_div(amount, vc, vu)).flatten()
+        }
+        // Пул Fluid DEX T1 (решение 440): отношение мнимых резервов основной части (quote/fluid_depth.rs) — оценка размера
+        // пробы (решение 73.19), не сверяемая величина.
+        PoolState::SmartColDebt(d) => super::fluid_depth::spot(d, e.coin, amount),
+        // Скважина Basin (решение 485): оценка размера пробы (quote/basin_depth.rs), не сверяемая величина.
+        PoolState::BasinWell(d) => super::basin_depth::spot(d, e.coin, amount),
+        // Пул Shell Protocol Proteus (решение 486): спот малой пробы формулой пула (quote/shell_depth.rs) — оценка
+        // размера пробы, не сверяемая величина.
+        PoolState::Proteus(d) => super::shell_depth::spot(d, e.coin, amount),
         PoolState::V3 { sqrt_price_x96, .. }
         | PoolState::Cl { sqrt_price_x96, .. }
         | PoolState::Elastic { sqrt_price_x96, .. }

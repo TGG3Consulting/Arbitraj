@@ -130,6 +130,12 @@ pub fn params(rec: &Rec, dir: Dir, budget: Decimal) -> Params {
         refine_steps: 30,
         tolerance_pct: d("0.01"),
         max_evals: 300,
+        par_points: 1,
+        bisect_probes: 1,
+        early_floor: None,
+        reuse: false,
+        par_blocked: false,
+        ext: Default::default(),
     }
 }
 

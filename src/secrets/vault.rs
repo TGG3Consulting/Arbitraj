@@ -3,7 +3,9 @@
 //! заблокировать, добавить или заменить секрет, удалить, сменить пароль.
 //! Пароль нигде не хранится: каждое изменение требует ввести пароль заново (docs/SECURITY.md).
 //! Тяжёлый Argon2id выполняется в отдельном потоке, чтобы не тормозить рыночные задачи.
-//! Кто вызывает: api/secrets.rs (операции), notify и позже адаптеры (чтение через get).
+//! Кто вызывает: api/secrets.rs (операции), notify и позже адаптеры (чтение через get); адаптеры бирж — mark (решение 411:
+//! отпечаток ключа API для памяти адресов депозита, gateway/addr_book.rs); фоновые задачи — changes (решение 449:
+//! толчок при разблокировке и изменении секретов, directory/refresh.rs адаптера DEX).
 //! От чего зависит: secrets/file.rs, secrets/crypto.rs, gateway/errors.rs.
 //! Настройки: параметры Argon2id передаёт вызывающий (security.kdf_*).
 
@@ -27,6 +29,38 @@ pub struct Status {
     /// Имена введённых секретов (только при разблокировке).
     pub names: Vec<String>,
 }
+
+/// Решение 411 (повторное ревью): номер изменения секретов в памяти процесса — растёт при каждой замене набора ключей
+/// (разблокировка, изменение, блокировка). Читает ядро через gateway/addr_book.rs key_epoch: сверка адреса депозита
+/// с памятью — только если секреты между чтением памяти и ответом биржи не менялись.
+static GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Что делает: номер изменения секретов (см. GENERATION). Ошибок нет.
+pub fn generation() -> u64 {
+    GENERATION.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+/// Решение 449: рассылка «секреты изменились» (номер GENERATION) для фоновых задач, которые ждут своего срока и без
+/// толчка узнали бы о разблокировке только по нему (справочник пулов DEX, directory/refresh.rs). Отправитель живёт
+/// весь процесс.
+static CHANGES: std::sync::LazyLock<tokio::sync::watch::Sender<u64>> =
+    std::sync::LazyLock::new(|| tokio::sync::watch::channel(0).0);
+
+/// Что делает: подписка на изменения секретов (разблокировка, изменение, блокировка). Возвращает: приёмник —
+/// `changed()` срабатывает на каждое следующее изменение. Ошибок нет.
+pub fn changes() -> tokio::sync::watch::Receiver<u64> {
+    CHANGES.subscribe()
+}
+
+/// Что делает: номер изменения секретов + 1 и рассылка подписчикам changes(). Ошибок нет.
+fn bump() {
+    let n = GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+    CHANGES.send_replace(n);
+}
+
+/// Решение 411: зерно отпечатков секретов (Vault::mark) — случайное на процесс.
+static SEED: std::sync::LazyLock<std::collections::hash_map::RandomState> =
+    std::sync::LazyLock::new(std::collections::hash_map::RandomState::new);
 
 /// Секреты в памяти. None — заблокировано. Дешёво клонируется.
 #[derive(Clone)]
@@ -80,6 +114,18 @@ impl Vault {
         })
     }
 
+    /// Решение 411 (t196): отпечаток секрета — хеш его значения с зерном процесса (SipHash std RandomState, зерно
+    /// случайное на процесс, на диск не пишется), чтобы память адресов депозита бирж (gateway/addr_book.rs) была
+    /// привязана к ключу API: сменили ключ — другой отпечаток. Значение секрета не хранится и не пишется в журнал;
+    /// по отпечатку его не восстановить вне процесса. Принимает: имя секрета. Возвращает: отпечаток; None — секреты
+    /// заблокированы или такого секрета нет. Ошибок нет.
+    pub fn mark(&self, name: &str) -> Option<u64> {
+        use std::hash::BuildHasher;
+        let guard = self.keys.read().unwrap_or_else(|p| p.into_inner());
+        let v = guard.as_ref()?.get(name)?;
+        Some(SEED.hash_one(v.as_str()))
+    }
+
     /// Создаёт пустой файл секретов и разблокирует хранилище.
     /// Ошибки: файл уже есть; параметры Argon2id; запись.
     pub async fn create(&self, password: Zeroizing<String>, p: KdfParams) -> Result<(), String> {
@@ -96,12 +142,14 @@ impl Vault {
         let path = self.path.clone();
         let plain = blocking(move || file::load(&path, password.as_bytes())).await?;
         *self.keys.write().unwrap_or_else(|p| p.into_inner()) = Some(plain);
+        bump();
         Ok(())
     }
 
     /// Блокирует: секреты удаляются из памяти (с затиранием). Ошибок нет.
     pub fn lock(&self) {
         *self.keys.write().unwrap_or_else(|p| p.into_inner()) = None;
+        bump();
     }
 
     /// Добавляет или заменяет секрет (value = Some) либо удаляет (None).
@@ -186,6 +234,7 @@ impl Vault {
             blocking(move || file::save(&path, password.as_bytes(), &plain, p).map(|_| plain))
                 .await?;
         *self.keys.write().unwrap_or_else(|p| p.into_inner()) = Some(plain);
+        bump();
         Ok(())
     }
 }

@@ -11,7 +11,7 @@
 
 use alloy_primitives::U256;
 
-use super::full_math::{div_up, mul_div, mul_div_up};
+use super::full_math::{div_up, mul_div, mul_div_up, mul_shift};
 
 /// FixedPoint96.RESOLUTION.
 const RESOLUTION: usize = 96;
@@ -120,10 +120,8 @@ pub fn amount0_delta(a: U256, b: U256, liquidity: u128, round_up: bool) -> Optio
 /// getAmount1Delta (беззнаковый). None — переполнение.
 pub fn amount1_delta(a: U256, b: U256, liquidity: u128, round_up: bool) -> Option<U256> {
     let (a, b) = if a > b { (b, a) } else { (a, b) };
-    let q96 = U256::from(1u8) << RESOLUTION;
-    if round_up {
-        mul_div_up(U256::from(liquidity), b - a, q96)
-    } else {
-        mul_div(U256::from(liquidity), b - a, q96)
-    }
+    // Решение 410 (t195): деление на Q96 = 2^96 — сдвиг (full_math::mul_shift): floor(L·Δ / 2^96) = (L·Δ) >> 96, ceil —
+    // плюс 1 при ненулевых младших 96 битах (остаток от деления на 2^96), переполнение > 2^256 − 1 — None, как mul_div /
+    // mul_div_up с делителем 2^96. Раньше — 512-битное деление на каждый шаг обмена.
+    mul_shift(U256::from(liquidity), b - a, RESOLUTION, round_up)
 }

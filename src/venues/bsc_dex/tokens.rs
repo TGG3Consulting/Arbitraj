@@ -7,6 +7,8 @@
 //!
 //! decimals — из контракта токена: https://eips.ethereum.org/EIPS/eip-20 (decimals). Адрес токена — только из
 //! справочника ядра (API биржи, CLAUDE.md: «адрес контракта у биржи совпадает с адресом токена в пуле»).
+//! Решение 239: pinned — копия списка и decimals из памяти на момент снимка котировки (venues/bsc_dex/frozen.rs):
+//! котировка по снимку узел не спрашивает; decimals, которых в памяти не было, — ошибка StaleData, живые не читаются.
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -14,7 +16,7 @@ use std::sync::{Arc, RwLock};
 use alloy_primitives::Address;
 
 use crate::core::types::Asset;
-use crate::gateway::errors::GatewayResult;
+use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::ctx::Ctx;
 use super::node::abi::IERC20;
@@ -32,20 +34,25 @@ pub struct Token {
 pub struct Tokens {
     list: Arc<RwLock<Vec<Token>>>,
     decimals: Arc<RwLock<HashMap<Address, u8>>>,
+    /// Решение 239: копия на момент снимка — decimals только из памяти, без узла.
+    pinned: bool,
 }
 
 impl Tokens {
-    /// Заменяет список токенов монетами из подписки ядра; монеты без адреса в BSC пропускаются.
+    /// Заменяет список токенов монетами из подписки ядра; монеты без адреса в BSC пропускаются. Решение 211: монета —
+    /// адрес контракта, тикер — её показное имя; один адрес — одна запись (первая), даже если ядро прислало его дважды.
     /// Принимает: монеты. Ошибок нет.
     pub fn set(&self, assets: &[Asset]) {
+        let mut seen = std::collections::HashSet::new();
         let list = assets
             .iter()
             .filter_map(|a| {
-                a.bsc_contract.map(|address| Token {
+                a.contract.map(|address| Token {
                     ticker: a.ticker.clone(),
                     address,
                 })
             })
+            .filter(|t| seen.insert(t.address))
             .collect();
         *self.list.write().unwrap_or_else(|p| p.into_inner()) = list;
     }
@@ -56,11 +63,14 @@ impl Tokens {
     }
 
     /// Тикер токена по адресу. None — такой монеты в подписке нет.
+    /// Решение 403: поиск под замком чтения, копируется только найденное (без копии всего списка).
     pub fn ticker_of(&self, address: Address) -> Option<String> {
-        self.all()
-            .into_iter()
+        self.list
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .iter()
             .find(|t| t.address == address)
-            .map(|t| t.ticker)
+            .map(|t| t.ticker.clone())
     }
 
     /// Адрес USDT — монеты с тикером venue.quote_asset [bsc_dex] из подписки ядра (адрес — из API биржи).
@@ -76,8 +86,15 @@ impl Tokens {
     }
 
     /// Токен по тикеру. None — такой монеты в подписке нет.
+    /// Решение 403: поиск под замком чтения, копируется только найденный токен (раньше — весь список на каждый вызов,
+    /// а usdt() зовётся на каждой котировке).
     pub fn by_ticker(&self, ticker: &str) -> Option<Token> {
-        self.all().into_iter().find(|t| t.ticker == ticker)
+        self.list
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .iter()
+            .find(|t| t.ticker == ticker)
+            .cloned()
     }
 
     /// Запоминает decimals токена, уже прочитанные из контракта другим путём (ответ decimals() из записи узла —
@@ -98,8 +115,24 @@ impl Tokens {
             .copied()
     }
 
-    /// decimals токена: из кэша или из контракта (decimals()).
-    /// Принимает: адрес. Возвращает: число знаков. Ошибки: узел, контракт не ERC-20.
+    /// Решение 239: копия списка токенов и decimals из памяти на этот момент (снимок котировки, frozen.rs) — своя
+    /// память, узел не спрашивается. Возвращает: Tokens. Ошибок нет.
+    pub fn pinned(&self) -> Tokens {
+        Tokens {
+            list: Arc::new(RwLock::new(self.all())),
+            decimals: Arc::new(RwLock::new(
+                self.decimals
+                    .read()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .clone(),
+            )),
+            pinned: true,
+        }
+    }
+
+    /// decimals токена: из кэша или из контракта (decimals()); у копии на момент снимка (решение 239) — только из
+    /// памяти. Принимает: адрес. Возвращает: число знаков. Ошибки: узел, контракт не ERC-20; у копии — StaleData
+    /// (decimals на момент снимка в памяти не было).
     pub async fn decimals(&self, ctx: &Ctx, token: Address) -> GatewayResult<u8> {
         if let Some(d) = self
             .decimals
@@ -108,6 +141,12 @@ impl Tokens {
             .get(&token)
         {
             return Ok(*d);
+        }
+        if self.pinned {
+            return Err(ctx.err(
+                ErrorCode::StaleData,
+                format!("decimals токена {token} на момент снимка в памяти не было — по снимку не посчитать"),
+            ));
         }
         let d = call::view(ctx, token, &IERC20::decimalsCall {}, "latest").await?;
         self.decimals

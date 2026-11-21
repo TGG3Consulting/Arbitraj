@@ -1,0 +1,19 @@
+[
+  {
+    "id": "68561226",
+    "symbol": "LINK_USDT",
+    "accountType": "SPOT",
+    "orderId": "30249408733945856",
+    "side": "BUY",
+    "type": "LIMIT",
+    "matchRole": "MAKER",
+    "createTime": 1648200366864,
+    "price": "3.1",
+    "quantity": "1",
+    "amount": "3.1",
+    "feeCurrency": "LINK",
+    "feeAmount": "0.00145",
+    "pageId": "30341456333942784",
+    "clientOrderId": ""
+  }
+]

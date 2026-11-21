@@ -1,7 +1,9 @@
 //! Файл: venues/bsc_dex/exec/order.rs
 //! Что делает: обмен одной доли перед отправкой — худшая цена больше нуля, цена по живому состоянию не хуже
 //! допустимой, токены, вход и минимум выхода. Минимум выхода = наибольшее из «по худшей цене» (TradeRequest.worst_price)
-//! и «ожидаемое × (1 − exec.dex_slippage_pct)»; худшая цена ≤ 0 или минимум 0 — ошибка до отправки.
+//! и «ожидаемое × (1 − exec.dex_slippage_pct)»; худшая цена ≤ 0 или минимум 0 — ошибка до отправки. Этот минимум —
+//! предварительный: окончательный минимум последнего шага каждой доли ставит exec/leg_min.rs по всей сделке (решение
+//! 228: E_k × max(1 − допуск, B / E); у одной доли — то же число, что здесь).
 //! Кто вызывает: exec/trade.rs, exec/trade_smart.rs.
 //! От чего зависит: exec/plan.rs (Order), pools/registry.rs, num.rs.
 //! Настройки: exec.dex_slippage_pct [bsc_dex].
@@ -33,7 +35,8 @@ pub fn worst_positive(ctx: &Ctx, req: &TradeRequest) -> GatewayResult<()> {
 }
 
 /// Цена по живому состоянию не хуже допустимой. Принимает: запрос, монет и USDT по расчёту.
-/// Ошибки: NoRoute (ни одной монеты), QuoteMismatch (цена хуже TradeRequest.worst_price).
+/// Ошибки: NoRoute (ни одной монеты), QuoteMismatch с пометкой price_moved (цена хуже TradeRequest.worst_price,
+/// решение 381).
 pub fn check_price(
     ctx: &Ctx,
     req: &TradeRequest,
@@ -49,13 +52,16 @@ pub fn check_price(
         Side::Sell => price < req.worst_price,
     };
     if worse {
-        return Err(ctx.err(
-            ErrorCode::QuoteMismatch,
-            format!(
-                "Цена в пуле сейчас {price} хуже допустимой {}",
-                req.worst_price
-            ),
-        ));
+        // Решение 381 (ревью t167, Н2): «цена ушла» до отправки — ядро может посчитать план покупки заново.
+        return Err(ctx
+            .err(
+                ErrorCode::QuoteMismatch,
+                format!(
+                    "Цена в пуле сейчас {price} хуже допустимой {}",
+                    req.worst_price
+                ),
+            )
+            .price_moved());
     }
     Ok(())
 }

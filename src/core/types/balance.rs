@@ -44,4 +44,7 @@ pub struct BalanceChange {
     pub at: DateTime<Utc>,
     /// Откуда известно — для журнала (например «Transfer в блоке N» или «ACCOUNT_UPDATE m=DEPOSIT»).
     pub source: String,
+    /// Решение 132: кошелёк DEX, у которого изменился баланс (id счёта). У биржи — None.
+    #[serde(default)]
+    pub account: Option<super::account::DexAccountId>,
 }

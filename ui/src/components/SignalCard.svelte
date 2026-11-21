@@ -36,11 +36,12 @@
     <p>
       Стакан <code>{b.venue}</code> ({b.side === 'Buy' ? 'asks' : 'bids'}):
       {#if b.error}<span class="err">{b.error}</span>
+      {:else if b.band_pct == null}лучшая {b.best}; полосы нет — у направления нет DEX (уровней загружено {b.levels})
       {:else}лучшая {b.best}; в полосе ±{b.band_pct}% — <strong>{b.usd_in_band} USDT</strong> ({b.qty_in_band} монет,
         уровней загружено {b.levels}){#if b.beyond}<span class="warn-text"> — полоса шире загруженных уровней (venue.depth_levels)</span>{/if}{/if}
     </p>
   {/each}
-  {#each card.pools as p (p.pool)}
+  {#each card.pools as p, pi (`${p.pool}|${pi}`)}
     <p>
       Пул <code>{p.venue}</code> {poolKindLabel(p.kind)} <code>{p.pool}</code>, {sideText(p.side)}:
       {#if p.depth_usd != null}глубина <strong>{p.depth_usd} USDT</strong> в полосе ±{p.band_pct}%

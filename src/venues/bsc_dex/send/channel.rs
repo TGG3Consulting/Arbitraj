@@ -2,6 +2,7 @@
 //! Что делает: общий вид канала отправки (решения 33, 41): что канал умеет по своей официальной документации —
 //! одиночная отправка (каким методом), бандл (в каком формате), закрытый ли канал, есть ли чаевые, нужен ли ключ
 //! и куда он ставится (в адрес или в заголовок Authorization). Сами каналы — по файлу на канал в этой папке.
+//! Решение 436: вид Single::Sequencer — условная отправка и минимум цены газа с узла (секвенсор Arbitrum).
 //! Кто вызывает: send/*.
 //! От чего зависит: core/types (SendChannelInfo, SendMethod).
 //! Настройки: нет (настройки канала — channel.* с областью «канал»).
@@ -17,6 +18,10 @@ pub enum Single {
     Private,
     /// bloXroute Cloud API: bsc_private_tx {transaction: raw без 0x}.
     Bloxroute,
+    /// Решение 436: секвенсор Arbitrum — eth_sendRawTransaction, а при окне channel.cond_time_window_s —
+    /// eth_sendRawTransactionConditional с timestampMax (send/sequencer_cond.rs); минимум цены газа канала — с узла
+    /// (ArbGasInfo.getMinimumGasPrice, node/arb_min_gas.rs), channel.min_gas_price_gwei не читается.
+    Sequencer,
 }
 
 /// Бандл. Только с пределом блока (maxBlockNumber): бандл без предела не истекает сам (см. send/blink.rs).
@@ -63,6 +68,12 @@ impl Channel {
         matches!(self.auth, Auth::UrlKey | Auth::Header).then(|| format!("channel.{}.key", self.id))
     }
 
+    /// Решение 436 (Б): минимум цены газа канала — с узла (секвенсор Arbitrum), а не channel.min_gas_price_gwei.
+    /// Ошибок нет.
+    pub fn min_from_node(&self) -> bool {
+        self.single == Some(Single::Sequencer)
+    }
+
     /// Описание для ядра и интерфейса. Ошибок нет.
     pub fn info(&self) -> SendChannelInfo {
         let mut methods = Vec::new();
@@ -80,6 +91,7 @@ impl Channel {
             tips: self.tips,
             secret: self.secret(),
             docs: self.docs.iter().map(|s| s.to_string()).collect(),
+            sequencer: self.single == Some(Single::Sequencer),
         }
     }
 }

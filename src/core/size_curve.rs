@@ -2,92 +2,151 @@
 //! Что делает: кривая «прибыль от объёма» ядра для подбора объёма (решение 66) — каждый объём считает полный
 //! расчёт costs.rs (все затраты); параметры поиска: шаг количества пары биржи (stepSize; A, если A — биржа, иначе
 //! B), изломы — накопленные объёмы уровней стакана A (asks) и B (bids), настройки size.*.
-//! Кто вызывает: core/profit.rs.
-//! От чего зависит: costs.rs, dirctx.rs, deps.rs, engine.rs (рынок), size.rs, settings.
-//! Бюджет каждой точки — по наибольшему списанию Calc.spend_max (количество × худшая цена покупки).
+//! Решение 217: src — снимок рынка момента решения (расчёт «без потолка» по сделке, core/frozen.rs); решение 239 —
+//! настройки size.* тогда из копии на момент решения (Frozen.decided.settings).
+//! Решение 218: SourceCurve — та же кривая над любым источником данных (costs_source.rs; пересчёт старых записей «без
+//! потолка» по окнам), search_params — параметры поиска из настроек size.* при известных шаге и изломах.
+//! Параметры поиска (params, search_params, cumulative) — core/size_params.rs (ревью t159: вынесено), пути прежние.
+//! Кто вызывает: core/profit.rs, card_max.rs, uncapped.rs, uncapped_recompute.rs (SourceCurve, search_params).
+//! От чего зависит: costs.rs, costs_source.rs, dirctx.rs, deps.rs, engine.rs (рынок), size.rs, settings.
+//! Бюджет каждой точки — по наибольшему списанию Calc.spend_max (количество × худшая цена покупки); решение 246 —
+//! у кривой боя (profit.rs) бюджет проверяется уже после стороны A (CoreCurve.budget), без котировок B.
+//! Решение 336: batch — пачка точек одновременно (join_all на одной задаче: котировки DEX каждой точки уходят в свои
+//! потоки счёта адаптера, ожидание — общее); size.parallel_points и size.bisect_probes — в Params (size_par.rs).
+//! Задача t159 (ревью t159): Curve::pct и pct_base — процент прибыли расчёта и его база Calc.invested (решение 342);
+//! CoreCurve::breaks — изломы пулов DEX-сторон маршрута точки (решение 344, size_breaks.rs); search_params читает
+//! size.scan_above_pct (size_extra.rs); params — участки допустимости продажи по стакану B (решение 343, size_scan.rs
+//! regions, в логике), признаки «бюджет монотонен» (A — биржа) и «есть сторона DEX» (Б3).
 //! Настройки: size.bisect_steps, size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals (общие; значений нет —
-//! не задана хоть одна — подбора нет, сделки нет).
+//! не задана хоть одна — подбора нет, сделки нет); size.parallel_points, size.bisect_probes (необязательные, решение 336);
+//! короб с повторным использованием (решение 336) — у направления с DEX всегда (решение 363, в логику: была dex.quote_reuse).
 
 use async_trait::async_trait;
+use futures_util::future::join_all;
 use rust_decimal::Decimal;
 
-use crate::core::types::{OrderBook, PriceLevel};
-use crate::settings::read::At;
-
-use super::costs::{self, Calc};
+use super::costs::{self, Calc, Source};
 use super::dirctx::DirCtx;
-use super::engine::{Core, rd};
-use super::size::{Curve, Fail, Params, Point};
+use super::engine::Core;
+use super::frozen::Frozen;
+use super::size::{Curve, Fail, Point};
+
+/// Параметры поиска вынесены в size_params.rs (ревью t159: файл перерос 200 строк) — пути прежние.
+pub use super::size_params::{cumulative, params, search_params};
 
 /// Кривая по полному расчёту направления.
 pub struct CoreCurve<'a> {
     pub core: &'a Core,
     pub cx: &'a DirCtx,
+    /// Решение 217: снимок рынка момента решения (расчёт «без потолка» по сделке); None — живые котировки.
+    pub src: Option<&'a Frozen>,
+    /// Решение 246: бюджет подбора объёма (тот же, что Params.budget) — объём сверх него отбрасывается после стороны
+    /// A, без котировок B (costs.rs evaluate_capped). None — полный расчёт каждого объёма: поиск без бюджета (size_max,
+    /// size_uncapped — Memo::beyond) должен видеть точки сверх бюджета.
+    pub budget: Option<Decimal>,
 }
 
 #[async_trait]
 impl Curve for CoreCurve<'_> {
     type Data = Calc;
 
-    /// Полный расчёт на объём. Ошибки: Fail из costs::evaluate.
+    /// Полный расчёт на объём (решение 246: с бюджетом — до стороны B, если списание больше бюджета).
+    /// Ошибки: Fail из costs::evaluate_capped.
     async fn at(&mut self, qty: Decimal) -> Result<Point<Calc>, Fail> {
-        let c = costs::evaluate(self.core, self.cx, qty).await?;
-        Ok(Point {
-            qty,
-            // Бюджет — по наибольшему списанию (худшая цена покупки), не по средней (решение 66).
-            invested: c.spend_max,
-            arrive: c.arrive,
-            profit: c.profit_usd,
-            data: c,
-        })
+        self.eval(qty).await
+    }
+
+    /// Решение 336: пачка точек одновременно (точки независимы). Ошибки: у каждой — как at.
+    async fn batch(&mut self, qtys: Vec<Decimal>) -> Vec<Result<Point<Calc>, Fail>> {
+        let me = &*self;
+        join_all(qtys.into_iter().map(|q| me.eval(q))).await
+    }
+
+    /// Решение 342: процент прибыли расчёта от вложенного (Calc.profit_pct, costs.rs). Ошибок нет.
+    fn pct(data: &Calc) -> Option<Decimal> {
+        Some(data.profit_pct)
+    }
+
+    /// Ревью t159 Б1: база процента — Calc.invested (объём × средняя цена покупки, costs.rs). Ошибок нет.
+    fn pct_base(data: &Calc) -> Option<Decimal> {
+        Some(data.invested)
+    }
+
+    /// Решение 344: изломы пулов DEX-сторон маршрута точки (size_breaks.rs core_breaks); у снимка рынка — нет (живые
+    /// пулы другого момента). Ошибок нет.
+    async fn breaks(
+        &mut self,
+        data: &Calc,
+        max_qty: Decimal,
+        limit: u32,
+    ) -> (Vec<Decimal>, Vec<Decimal>) {
+        if self.src.is_some() {
+            return (Vec::new(), Vec::new());
+        }
+        super::size_breaks::core_breaks(self.core, self.cx, data, max_qty, limit).await
     }
 }
 
-/// Параметры поиска. Принимает: ядро, контекст направления, бюджет, оценку цены покупки (> 0).
-/// Ошибки: текст — не задана настройка size.*, шаг количества неизвестен (ни одна сторона не биржа).
-pub fn params(core: &Core, cx: &DirCtx, budget: Decimal, price: Decimal) -> Result<Params, String> {
-    let s = &core.inner.deps.settings;
-    let int = |name: &str| -> Result<u32, String> {
-        let v = s.integer(name, At::default()).map_err(|e| e.message)?;
-        u32::try_from(v).map_err(|_| format!("{name} = {v}: вне пределов"))
-    };
-    let tolerance_pct = s
-        .decimal("size.tolerance_pct", At::default())
-        .map_err(|e| e.message)?;
-    let step = cx
-        .pair_a
-        .as_ref()
-        .or(cx.pair_b.as_ref())
-        .map(|p| p.step_size)
-        .ok_or("шаг количества неизвестен: ни одна сторона сделки не биржа")?;
-    let d = &cx.dir;
-    let market = rd(&core.inner.market);
-    let cum = |b: Option<&OrderBook>, buy: bool| -> Vec<Decimal> {
-        b.map(|b| cumulative(if buy { &b.asks } else { &b.bids }))
-            .unwrap_or_default()
-    };
-    Ok(Params {
-        step,
-        budget,
-        guess: budget / price,
-        buy_breaks: cum(market.book(&d.buy_on, &d.asset.ticker), true),
-        sell_breaks: cum(market.book(&d.sell_on, &d.asset.ticker), false),
-        bisect_steps: int("size.bisect_steps")?,
-        grid_points: int("size.grid_points")?,
-        refine_steps: int("size.refine_steps")?,
-        max_evals: int("size.max_evals")?,
-        tolerance_pct,
-    })
+impl CoreCurve<'_> {
+    /// Расчёт одной точки без изменения кривой (общий для at и batch). Ошибки: Fail из costs::evaluate_capped.
+    async fn eval(&self, qty: Decimal) -> Result<Point<Calc>, Fail> {
+        let src = costs::Live {
+            core: self.core,
+            src: self.src,
+        };
+        let c = costs::evaluate_capped(self.cx, qty, &src, self.budget).await?;
+        Ok(point(qty, c))
+    }
 }
 
-/// Накопленные объёмы уровней от лучшего (изломы средней цены). Ошибок нет.
-pub fn cumulative(levels: &[PriceLevel]) -> Vec<Decimal> {
-    let mut cum = Decimal::ZERO;
-    levels
-        .iter()
-        .map(|l| {
-            cum += l.qty;
-            cum
-        })
-        .collect()
+/// Кривая по полному расчёту над источником данных (решение 218, costs_source.rs) — та же модель, что CoreCurve.
+pub struct SourceCurve<'a, S> {
+    pub cx: &'a DirCtx,
+    pub src: &'a S,
+}
+
+#[async_trait]
+impl<S: Source> Curve for SourceCurve<'_, S> {
+    type Data = Calc;
+
+    /// Полный расчёт на объём. Ошибки: Fail из costs::evaluate_with.
+    async fn at(&mut self, qty: Decimal) -> Result<Point<Calc>, Fail> {
+        self.eval(qty).await
+    }
+
+    /// Решение 336: пачка точек одновременно (точки независимы). Ошибки: у каждой — как at.
+    async fn batch(&mut self, qtys: Vec<Decimal>) -> Vec<Result<Point<Calc>, Fail>> {
+        let me = &*self;
+        join_all(qtys.into_iter().map(|q| me.eval(q))).await
+    }
+
+    /// Решение 342: процент прибыли расчёта от вложенного (Calc.profit_pct, costs.rs). Ошибок нет.
+    fn pct(data: &Calc) -> Option<Decimal> {
+        Some(data.profit_pct)
+    }
+
+    /// Ревью t159 Б1: база процента — Calc.invested. Ошибок нет.
+    fn pct_base(data: &Calc) -> Option<Decimal> {
+        Some(data.invested)
+    }
+}
+
+impl<S: Source> SourceCurve<'_, S> {
+    /// Расчёт одной точки (общий для at и batch). Ошибки: Fail из costs::evaluate_with.
+    async fn eval(&self, qty: Decimal) -> Result<Point<Calc>, Fail> {
+        let c = costs::evaluate_with(self.cx, qty, self.src).await?;
+        Ok(point(qty, c))
+    }
+}
+
+/// Точка кривой из расчёта. Бюджет — по наибольшему списанию (худшая цена покупки), не по средней (решение 66).
+/// Ошибок нет.
+fn point(qty: Decimal, c: Calc) -> Point<Calc> {
+    Point {
+        qty,
+        invested: c.spend_max,
+        arrive: c.arrive,
+        profit: c.profit_usd,
+        data: c,
+    }
 }

@@ -48,13 +48,14 @@ async fn config_wait_rechecks_on_settings_change() {
     let p = Parts::new(ctx.clone());
     let usdt = alloy_primitives::address!("0x55d398326f99059ff775485246999027b3197955");
     p.tokens.set(&[Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(usdt),
+        contract: Some(usdt),
     }]);
     let (e, _, _) = aave_v3(&rec());
     p.registry.put(e.clone());
     // Как у бота: полоса не задана — «не задана настройка», монета ждёт её (Why::Config).
-    let err = probe_pools(&ctx, &p.registry, &p.tokens, "AAVE", 18).unwrap_err();
+    let err = probe_pools(&ctx, &p.registry, &p.tokens, &e.coin, 18).unwrap_err();
     assert!(
         err.message.contains("dex.depth_band_pct"),
         "{}",
@@ -106,7 +107,7 @@ async fn config_wait_rechecks_on_settings_change() {
         "нужная — одна перепроверка, только ждущей её монеты"
     );
     // Повтор: отбор пулов пробы проходит.
-    let (pools, _, _) = probe_pools(&ctx, &p.registry, &p.tokens, "AAVE", 18).unwrap();
+    let (pools, _, _) = probe_pools(&ctx, &p.registry, &p.tokens, &e.coin, 18).unwrap();
     assert_eq!(pools.len(), 1);
 }
 

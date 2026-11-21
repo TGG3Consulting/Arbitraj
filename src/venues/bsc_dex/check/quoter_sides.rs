@@ -3,6 +3,9 @@
 //! и продажа (монета → USDT) сверяются независимо; сторона пула годна для котировки и сделки, только если прошла её
 //! собственная сверка. Сторона сверяется, когда она глубокая; мелкая сторона — без итога (None), другая сторона от
 //! этого не меняется.
+//! Решение 261: сторона на ПАУЗЕ (расхождение с квотером на одном блоке) — отметка `*_paused` держится до сверки,
+//! прошедшей на одном блоке (тогда — алерт «пауза снята», check/quoter_pause.rs); «не сверено (блок)» — итог стороны
+//! прежний, причина — в `*_note` (видна на экране «Монеты», pools/depth_facts.rs).
 //! Кто вызывает: check/state.rs (PoolFacts.quoter), check/quoter_cycle.rs (пишет), quote/select.rs, pools/depth_facts.rs,
 //! check/cycle.rs, pools/listen_log.rs (читают).
 //! От чего зависит: core/types (Side).
@@ -22,6 +25,15 @@ pub struct QuoterSides {
     /// сторона перепроверяется при задании именно её (решение 75).
     pub buy_wait: Option<String>,
     pub sell_wait: Option<String>,
+    /// Решение 261: сторона на паузе по сверке на одном блоке (снимает только прошедшая сверка).
+    pub buy_paused: bool,
+    pub sell_paused: bool,
+    /// Решение 261: последняя сверка стороны — «не сверено (блок)» с причиной (итог стороны прежний); None — нет.
+    pub buy_note: Option<String>,
+    pub sell_note: Option<String>,
+    /// Решение 261: «память отстаёт от сети» — свежее состояние пула на голове H не равно памяти дольше
+    /// dex.quoter_memory_lag_blocks (check/quoter_block.rs); без паузы, только журнал и экран. None — нет/не сравнивали.
+    pub memory: Option<String>,
 }
 
 impl QuoterSides {
@@ -46,6 +58,38 @@ impl QuoterSides {
         match s {
             Side::Buy => self.buy_wait = v,
             Side::Sell => self.sell_wait = v,
+        }
+    }
+
+    /// На паузе ли сторона (решение 261). Ошибок нет.
+    pub fn paused(&self, s: Side) -> bool {
+        match s {
+            Side::Buy => self.buy_paused,
+            Side::Sell => self.sell_paused,
+        }
+    }
+
+    /// Ставит или снимает паузу стороны (решение 261). Ошибок нет.
+    pub fn set_paused(&mut self, s: Side, v: bool) {
+        match s {
+            Side::Buy => self.buy_paused = v,
+            Side::Sell => self.sell_paused = v,
+        }
+    }
+
+    /// Причина «не сверено (блок)» стороны (решение 261). Ошибок нет.
+    pub fn note(&self, s: Side) -> &Option<String> {
+        match s {
+            Side::Buy => &self.buy_note,
+            Side::Sell => &self.sell_note,
+        }
+    }
+
+    /// Записывает причину «не сверено (блок)» стороны (None — снять). Ошибок нет.
+    pub fn set_note(&mut self, s: Side, v: Option<String>) {
+        match s {
+            Side::Buy => self.buy_note = v,
+            Side::Sell => self.sell_note = v,
         }
     }
 

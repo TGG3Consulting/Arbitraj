@@ -1,0 +1,5391 @@
+{
+ "часть_3_1_прибыль_процент_ниже_порога": [
+  {
+   "rowid": 2212101,
+   "время": "2026-11-14T14:39:17.745085299+00:00",
+   "сообщение": "币安人生 binance → bsc_dex: отказ — прибыль 0.2491% ниже порога 2% (оптимум 89.3 币安人生: прибыль 0.0998; это и есть наибольший объём в пределах бюджета 40; допустимо 2.3–89.3 币安人生, посчитано объёмов 63, пиков 2)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0x924fa68a0fc644485b8df8abfa0a41c2e7744444",
+     "ticker": "币安人生"
+    },
+    "buy_on": "binance",
+    "sell_on": "bsc_dex"
+   },
+   "qty": "89.3",
+   "size": {
+    "at_budget_profit": "0.0998449836809974994035608097",
+    "budget": "40",
+    "capped": false,
+    "evals": 63,
+    "max_exact": true,
+    "max_qty": "89.3",
+    "min_qty": "2.3",
+    "peaks": 2,
+    "profit": "0.0998449836809974994035608097",
+    "qty": "89.3",
+    "why": "оптимум 89.3 币安人生: прибыль 0.0998; это и есть наибольший объём в пределах бюджета 40; допустимо 2.3–89.3 币安人生, посчитано объёмов 63, пиков 2"
+   },
+   "invested": "39.979610000",
+   "proceeds": "40.279807943194144095000000003",
+   "profit_usd": "0.0996050177480323093463305783",
+   "profit_pct": "0.2491395432522536096433421400",
+   "buy_avg": "0.44770000",
+   "sell_avg": "0.4515131922874066013942273741",
+   "costs_usdt": "0.2005929254461117856536694247",
+   "строки_затрат": [
+    {
+     "вид": "TradeFee",
+     "этап": "A",
+     "сумма": "0.0893",
+     "актив": "币安人生",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "WithdrawFee",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "币安人生",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "币安人生",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000012360600000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "币安人生",
+      "from_token": "0x924fa68a0fc644485b8df8abfa0a41c2e7744444",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "0.22302675000000000000",
+     "актив": "币安人生",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "币安人生",
+      "from_token": "0x924fa68a0fc644485b8df8abfa0a41c2e7744444",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "SellTax",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "币安人生",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "币安人生",
+      "from_token": "0x924fa68a0fc644485b8df8abfa0a41c2e7744444",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "BNB",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "币安人生",
+      "from_token": "0x924fa68a0fc644485b8df8abfa0a41c2e7744444",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000017289900000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BNB",
+      "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+      "index": 2,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "0.0000067266606853169785",
+     "актив": "BNB",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BNB",
+      "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+      "index": 2,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BNB",
+      "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+      "index": 2,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "ApproveGas",
+     "этап": "B",
+     "сумма": "0.000009446000000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "币安人生",
+      "from_token": "0x924fa68a0fc644485b8df8abfa0a41c2e7744444",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "возврат USDT",
+     "сумма": "0.000002838165000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.1754820286974617856536694247",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "binance",
+    "side": "Buy",
+    "at": "2026-11-14T14:39:17.586913740Z",
+    "avg_price": "0.44770000",
+    "qty": "89.3",
+    "fillable_qty": "89.3",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.0893",
+      "asset": "币安人生",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "bsc_dex",
+    "side": "Sell",
+    "at": "2026-11-14T14:39:17.726053095Z",
+    "avg_price": "0.4515131922874066013942273741",
+    "qty": "89.2107",
+    "fillable_qty": "89.2107",
+    "route": {
+     "block": 133561163,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 296505,
+     "legs": [
+      {
+       "expected_out": "40.279807943194144095",
+       "hops": [
+        {
+         "family": "pancakeswap_v2",
+         "kind": "V2",
+         "pool": {
+          "Contract": "0x66f289de31eef70d52186729d2637ac978cfc56b"
+         }
+        },
+        {
+         "family": "pancakeswap-v3-bsc",
+         "kind": "V3",
+         "pool": {
+          "Contract": "0x172fcd41e0913e95784454622d1c3724f546f849"
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000012360600000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "币安人生",
+       "from_token": "0x924fa68a0fc644485b8df8abfa0a41c2e7744444",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     },
+     {
+      "amount": "0.22302675000000000000",
+      "asset": "币安人生",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "币安人生",
+       "from_token": "0x924fa68a0fc644485b8df8abfa0a41c2e7744444",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "币安人生",
+      "in_price": true,
+      "kind": "SellTax",
+      "step": {
+       "from": "币安人生",
+       "from_token": "0x924fa68a0fc644485b8df8abfa0a41c2e7744444",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "BNB",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "币安人生",
+       "from_token": "0x924fa68a0fc644485b8df8abfa0a41c2e7744444",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     },
+     {
+      "amount": "0.000017289900000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "BNB",
+       "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "index": 2,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.0000067266606853169785",
+      "asset": "BNB",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "BNB",
+       "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "index": 2,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "BNB",
+       "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "index": 2,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.000009446000000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "ApproveGas",
+      "step": {
+       "from": "币安人生",
+       "from_token": "0x924fa68a0fc644485b8df8abfa0a41c2e7744444",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     }
+    ]
+   },
+   "sigma": "0.0002064055644544026840468753",
+   "transit_s": "22",
+   "spend_fee": "0",
+   "spend_max": "39.979610000",
+   "calc_at": "2026-11-14T14:39:17.744514868Z"
+  },
+  {
+   "rowid": 2212086,
+   "время": "2026-11-14T14:39:14.138917238+00:00",
+   "сообщение": "EWYB binance → bsc_dex: отказ — прибыль 0.0268% ниже порога 2% (оптимум 0.285 EWYB: прибыль 0.0107; это и есть наибольший объём в пределах бюджета 40; допустимо 0.036–0.285 EWYB, посчитано объёмов 41, пиков 1)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0xbe82f76637dba2c114c41df856c2c51e522e2cb8",
+     "ticker": "EWYB"
+    },
+    "buy_on": "binance",
+    "sell_on": "bsc_dex"
+   },
+   "qty": "0.285",
+   "size": {
+    "at_budget_profit": "0.0107172459160952199788946847",
+    "budget": "40",
+    "capped": false,
+    "evals": 41,
+    "max_exact": true,
+    "max_qty": "0.285",
+    "min_qty": "0.036",
+    "peaks": 1,
+    "profit": "0.0107172459160952199788946847",
+    "qty": "0.285",
+    "why": "оптимум 0.285 EWYB: прибыль 0.0107; это и есть наибольший объём в пределах бюджета 40; допустимо 0.036–0.285 EWYB, посчитано объёмов 41, пиков 1"
+   },
+   "invested": "39.98835000000",
+   "proceeds": "40.031201093512619637000000001",
+   "profit_usd": "0.0107172459160952199788946847",
+   "profit_pct": "0.0268009205583506695797518100",
+   "buy_avg": "140.31000000",
+   "sell_avg": "140.60095566974911626363205311",
+   "costs_usdt": "0.0321338475965244170211053163",
+   "строки_затрат": [
+    {
+     "вид": "TradeFee",
+     "этап": "A",
+     "сумма": "0.000285",
+     "актив": "EWYB",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "WithdrawFee",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "EWYB",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "EWYB",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000021827900000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "EWYB",
+      "from_token": "0xbe82f76637dba2c114c41df856c2c51e522e2cb8",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "0.0002365981650000000000",
+     "актив": "EWYB",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "EWYB",
+      "from_token": "0xbe82f76637dba2c114c41df856c2c51e522e2cb8",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "SellTax",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "EWYB",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "EWYB",
+      "from_token": "0xbe82f76637dba2c114c41df856c2c51e522e2cb8",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "EWYB",
+      "from_token": "0xbe82f76637dba2c114c41df856c2c51e522e2cb8",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "ApproveGas",
+     "этап": "B",
+     "сумма": "0.000010260100000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "EWYB",
+      "from_token": "0xbe82f76637dba2c114c41df856c2c51e522e2cb8",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "возврат USDT",
+     "сумма": "0.000002838165000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.0112211077794744170211053163",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "binance",
+    "side": "Buy",
+    "at": "2026-11-14T14:39:56.483480552Z",
+    "avg_price": "140.31000000",
+    "qty": "0.285",
+    "fillable_qty": "0.285",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000285",
+      "asset": "EWYB",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "bsc_dex",
+    "side": "Sell",
+    "at": "2026-11-14T14:39:56.689885144Z",
+    "avg_price": "140.60095566974911626363205311",
+    "qty": "0.284715",
+    "fillable_qty": "0.284715",
+    "route": {
+     "block": 133561154,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 218279,
+     "legs": [
+      {
+       "expected_out": "40.031201093512619637",
+       "hops": [
+        {
+         "family": "pancakeswap-infinity-clmm",
+         "kind": "Cl",
+         "pool": {
+          "Singleton": {
+           "id": "0x31b4143369c0764b87933d5090912cd58d57a133c2c0e3f343cb018a7a18671d",
+           "manager": "0xa0ffb9c1ce1fe56963b0321b32e7a0302114058b"
+          }
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000021827900000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "EWYB",
+       "from_token": "0xbe82f76637dba2c114c41df856c2c51e522e2cb8",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.0002365981650000000000",
+      "asset": "EWYB",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "EWYB",
+       "from_token": "0xbe82f76637dba2c114c41df856c2c51e522e2cb8",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "EWYB",
+      "in_price": true,
+      "kind": "SellTax",
+      "step": {
+       "from": "EWYB",
+       "from_token": "0xbe82f76637dba2c114c41df856c2c51e522e2cb8",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "EWYB",
+       "from_token": "0xbe82f76637dba2c114c41df856c2c51e522e2cb8",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.000010260100000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "ApproveGas",
+      "step": {
+       "from": "EWYB",
+       "from_token": "0xbe82f76637dba2c114c41df856c2c51e522e2cb8",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     }
+    ]
+   },
+   "sigma": "0.0000132804643019381545378742",
+   "transit_s": "22",
+   "spend_fee": "0",
+   "spend_max": "39.98835000000",
+   "calc_at": "2026-11-14T14:39:56.694321365Z"
+  },
+  {
+   "rowid": 2211783,
+   "время": "2026-11-14T14:37:35.377262214+00:00",
+   "сообщение": "SQQQB binance → bsc_dex: отказ — прибыль 0.2409% ниже порога 2% (оптимум 0.91 SQQQB: прибыль 0.0961; это и есть наибольший объём в пределах бюджета 40; допустимо 0.21–0.91 SQQQB, посчитано объёмов 35, пиков 1)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0x25e572b466d152604d9e6c3e53b432b978825342",
+     "ticker": "SQQQB"
+    },
+    "buy_on": "binance",
+    "sell_on": "bsc_dex"
+   },
+   "qty": "0.91",
+   "size": {
+    "at_budget_profit": "0.0961443755204946213560532379",
+    "budget": "40",
+    "capped": false,
+    "evals": 35,
+    "max_exact": true,
+    "max_qty": "0.91",
+    "min_qty": "0.21",
+    "peaks": 1,
+    "profit": "0.0961443755204946213560532379",
+    "qty": "0.91",
+    "why": "оптимум 0.91 SQQQB: прибыль 0.0961; это и есть наибольший объём в пределах бюджета 40; допустимо 0.21–0.91 SQQQB, посчитано объёмов 35, пиков 1"
+   },
+   "invested": "39.906200000000000000000000000",
+   "proceeds": "40.073027197371149641000000000",
+   "profit_usd": "0.0961443755204946213560532379",
+   "profit_pct": "0.2409259100603280226031374500",
+   "buy_avg": "43.852967032967032967032967033",
+   "sell_avg": "44.080373997482262087362087362",
+   "costs_usdt": "0.0706828218506550196439467621",
+   "строки_затрат": [
+    {
+     "вид": "TradeFee",
+     "этап": "A",
+     "сумма": "0.00091000000",
+     "актив": "SQQQB",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "WithdrawFee",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "SQQQB",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "SQQQB",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000018009100000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "SQQQB",
+      "from_token": "0x25e572b466d152604d9e6c3e53b432b978825342",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "0.00227272500000000000",
+     "актив": "SQQQB",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "SQQQB",
+      "from_token": "0x25e572b466d152604d9e6c3e53b432b978825342",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "SellTax",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "SQQQB",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "SQQQB",
+      "from_token": "0x25e572b466d152604d9e6c3e53b432b978825342",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "SQQQB",
+      "from_token": "0x25e572b466d152604d9e6c3e53b432b978825342",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "возврат USDT",
+     "сумма": "0.000002838165000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.0581821763387050196439467621",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "binance",
+    "side": "Buy",
+    "at": "2026-11-14T14:37:35.227886940Z",
+    "avg_price": "43.852967032967032967032967033",
+    "qty": "0.91",
+    "fillable_qty": "0.91000000",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.00091000000",
+      "asset": "SQQQB",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "bsc_dex",
+    "side": "Sell",
+    "at": "2026-11-14T14:37:35.372037409Z",
+    "avg_price": "44.080373997482262087362087362",
+    "qty": "0.90909",
+    "fillable_qty": "0.90909",
+    "route": {
+     "block": 133560570,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 180091,
+     "legs": [
+      {
+       "expected_out": "40.073027197371149641",
+       "hops": [
+        {
+         "family": "pancakeswap-v3-bsc",
+         "kind": "V3",
+         "pool": {
+          "Contract": "0x0fb2f4765a9c718e30a1b419279bac4bd4e27cc0"
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000018009100000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "SQQQB",
+       "from_token": "0x25e572b466d152604d9e6c3e53b432b978825342",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.00227272500000000000",
+      "asset": "SQQQB",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "SQQQB",
+       "from_token": "0x25e572b466d152604d9e6c3e53b432b978825342",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "SQQQB",
+      "in_price": true,
+      "kind": "SellTax",
+      "step": {
+       "from": "SQQQB",
+       "from_token": "0x25e572b466d152604d9e6c3e53b432b978825342",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "SQQQB",
+       "from_token": "0x25e572b466d152604d9e6c3e53b432b978825342",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     }
+    ]
+   },
+   "sigma": "0.0000687882018409636017831039",
+   "transit_s": "22",
+   "spend_fee": "0",
+   "spend_max": "39.9126000000",
+   "calc_at": "2026-11-14T14:37:35.376756865Z"
+  },
+  {
+   "rowid": 2211703,
+   "время": "2026-11-14T14:37:06.239084917+00:00",
+   "сообщение": "SPYB binance → bsc_dex: отказ — прибыль 0.0143% ниже порога 2% (оптимум 0.053 SPYB: прибыль 0.0057; это и есть наибольший объём в пределах бюджета 40; допустимо 0.011–0.053 SPYB, посчитано объёмов 32, пиков 1)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0x7138b48df7d98d7e3cc221bfe7192d0a178182d8",
+     "ticker": "SPYB"
+    },
+    "buy_on": "binance",
+    "sell_on": "bsc_dex"
+   },
+   "qty": "0.053",
+   "size": {
+    "at_budget_profit": "0.0056866963406379476419426415",
+    "budget": "40",
+    "capped": false,
+    "evals": 32,
+    "max_exact": true,
+    "max_qty": "0.053",
+    "min_qty": "0.011",
+    "peaks": 1,
+    "profit": "0.0056866963406379476419426415",
+    "qty": "0.053",
+    "why": "оптимум 0.053 SPYB: прибыль 0.0057; это и есть наибольший объём в пределах бюджета 40; допустимо 0.011–0.053 SPYB, посчитано объёмов 32, пиков 1"
+   },
+   "invested": "39.737250000000000000000000000",
+   "proceeds": "39.770712623329586883000000000",
+   "profit_usd": "0.0056866963406379476419426415",
+   "profit_pct": "0.0143107445548898014883834200",
+   "buy_avg": "749.75943396226415094339622642",
+   "sell_avg": "751.14194615992571596124426313",
+   "costs_usdt": "0.0277759269889489353580573585",
+   "строки_затрат": [
+    {
+     "вид": "TradeFee",
+     "этап": "A",
+     "сумма": "0.00005300000",
+     "актив": "SPYB",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "WithdrawFee",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "SPYB",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "SPYB",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000017640600000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "SPYB",
+      "from_token": "0x7138b48df7d98d7e3cc221bfe7192d0a178182d8",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "0.00000529470000000000",
+     "актив": "SPYB",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "SPYB",
+      "from_token": "0x7138b48df7d98d7e3cc221bfe7192d0a178182d8",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "SellTax",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "SPYB",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "SPYB",
+      "from_token": "0x7138b48df7d98d7e3cc221bfe7192d0a178182d8",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "SPYB",
+      "from_token": "0x7138b48df7d98d7e3cc221bfe7192d0a178182d8",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "ApproveGas",
+     "этап": "B",
+     "сумма": "0.000010260100000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "SPYB",
+      "from_token": "0x7138b48df7d98d7e3cc221bfe7192d0a178182d8",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "возврат USDT",
+     "сумма": "0.000002838165000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.0093326079889489353580573585",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "binance",
+    "side": "Buy",
+    "at": "2026-11-14T14:37:08.618211828Z",
+    "avg_price": "749.75943396226415094339622642",
+    "qty": "0.053",
+    "fillable_qty": "0.05300000",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.00005300000",
+      "asset": "SPYB",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "bsc_dex",
+    "side": "Sell",
+    "at": "2026-11-14T14:37:09.197473772Z",
+    "avg_price": "751.14194615992571596124426313",
+    "qty": "0.052947",
+    "fillable_qty": "0.052947",
+    "route": {
+     "block": 133560866,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 176406,
+     "legs": [
+      {
+       "expected_out": "39.770712623329586883",
+       "hops": [
+        {
+         "family": "pancakeswap-v3-bsc",
+         "kind": "V3",
+         "pool": {
+          "Contract": "0x7aa6d92fc369a8c1edc631a3aac44efb0808ddbf"
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000017640600000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "SPYB",
+       "from_token": "0x7138b48df7d98d7e3cc221bfe7192d0a178182d8",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.00000529470000000000",
+      "asset": "SPYB",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "SPYB",
+       "from_token": "0x7138b48df7d98d7e3cc221bfe7192d0a178182d8",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "SPYB",
+      "in_price": true,
+      "kind": "SellTax",
+      "step": {
+       "from": "SPYB",
+       "from_token": "0x7138b48df7d98d7e3cc221bfe7192d0a178182d8",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "SPYB",
+       "from_token": "0x7138b48df7d98d7e3cc221bfe7192d0a178182d8",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.000010260100000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "ApproveGas",
+      "step": {
+       "from": "SPYB",
+       "from_token": "0x7138b48df7d98d7e3cc221bfe7192d0a178182d8",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     }
+    ]
+   },
+   "sigma": "0.000011117721656998826852758",
+   "transit_s": "22",
+   "spend_fee": "0",
+   "spend_max": "39.73887000000",
+   "calc_at": "2026-11-14T14:37:09.215577973Z"
+  },
+  {
+   "rowid": 2211623,
+   "время": "2026-11-14T14:36:23.605836822+00:00",
+   "сообщение": "TQQQ binance → bsc_dex: отказ — прибыль 0.0648% ниже порога 2% (оптимум 0.71 TQQQ: прибыль 0.0256; это и есть наибольший объём в пределах бюджета 40; допустимо 0.09–0.71 TQQQ, посчитано объёмов 32, пиков 1)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0x462b5f13b7c7748279358962925c5de83bb9e598",
+     "ticker": "TQQQ"
+    },
+    "buy_on": "binance",
+    "sell_on": "bsc_dex"
+   },
+   "qty": "0.71",
+   "size": {
+    "at_budget_profit": "0.0256419101026635931809554780",
+    "budget": "40",
+    "capped": false,
+    "evals": 32,
+    "max_exact": true,
+    "max_qty": "0.71",
+    "min_qty": "0.09",
+    "peaks": 1,
+    "profit": "0.0256419101026635931809554780",
+    "qty": "0.71",
+    "why": "оптимум 0.71 TQQQ: прибыль 0.0256; это и есть наибольший объём в пределах бюджета 40; допустимо 0.09–0.71 TQQQ, посчитано объёмов 32, пиков 1"
+   },
+   "invested": "39.5541000000",
+   "proceeds": "39.649607537217378659000000000",
+   "profit_usd": "0.0256419101026635931809554780",
+   "profit_pct": "0.0648274391344098163804902100",
+   "buy_avg": "55.71000000",
+   "sell_avg": "55.90041807612877477336491421",
+   "costs_usdt": "0.0698656271147150658190445220",
+   "строки_затрат": [
+    {
+     "вид": "TradeFee",
+     "этап": "A",
+     "сумма": "0.00071",
+     "актив": "TQQQ",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "WithdrawFee",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "TQQQ",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "TQQQ",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000017719700000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "TQQQ",
+      "from_token": "0x462b5f13b7c7748279358962925c5de83bb9e598",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "0.0020562317100000000000",
+     "актив": "TQQQ",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "TQQQ",
+      "from_token": "0x462b5f13b7c7748279358962925c5de83bb9e598",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "SellTax",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "TQQQ",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "TQQQ",
+      "from_token": "0x462b5f13b7c7748279358962925c5de83bb9e598",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "TQQQ",
+      "from_token": "0x462b5f13b7c7748279358962925c5de83bb9e598",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "ApproveGas",
+     "этап": "B",
+     "сумма": "0.000010246600000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "TQQQ",
+      "from_token": "0x462b5f13b7c7748279358962925c5de83bb9e598",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "возврат USDT",
+     "сумма": "0.000002838165000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.0514316191694150658190445220",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "binance",
+    "side": "Buy",
+    "at": "2026-11-14T14:36:33.007594113Z",
+    "avg_price": "55.71000000",
+    "qty": "0.71",
+    "fillable_qty": "0.71",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.00071",
+      "asset": "TQQQ",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "bsc_dex",
+    "side": "Sell",
+    "at": "2026-11-14T14:36:33.192457686Z",
+    "avg_price": "55.90041807612877477336491421",
+    "qty": "0.70929",
+    "fillable_qty": "0.70929",
+    "route": {
+     "block": 133560563,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 177197,
+     "legs": [
+      {
+       "expected_out": "39.649607537217378659",
+       "hops": [
+        {
+         "family": "uniswap-v4-bsc",
+         "kind": "Cl",
+         "pool": {
+          "Singleton": {
+           "id": "0xfacdb7916fac990c835d8e1f9e0a353f0fecca1a55be67ebb9deb56a85cba732",
+           "manager": "0x28e2ea090877bf75740558f6bfb36a5ffee9e9df"
+          }
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000017719700000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "TQQQ",
+       "from_token": "0x462b5f13b7c7748279358962925c5de83bb9e598",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.0020562317100000000000",
+      "asset": "TQQQ",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "TQQQ",
+       "from_token": "0x462b5f13b7c7748279358962925c5de83bb9e598",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "TQQQ",
+      "in_price": true,
+      "kind": "SellTax",
+      "step": {
+       "from": "TQQQ",
+       "from_token": "0x462b5f13b7c7748279358962925c5de83bb9e598",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "TQQQ",
+       "from_token": "0x462b5f13b7c7748279358962925c5de83bb9e598",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.000010246600000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "ApproveGas",
+      "step": {
+       "from": "TQQQ",
+       "from_token": "0x462b5f13b7c7748279358962925c5de83bb9e598",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     }
+    ]
+   },
+   "sigma": "0.0000614564471761549516706476",
+   "transit_s": "22",
+   "spend_fee": "0",
+   "spend_max": "39.5541000000",
+   "calc_at": "2026-11-14T14:36:33.197120836Z"
+  }
+ ],
+ "часть_3_2_DEOD_PARTI_BREW": [
+  {
+   "rowid": 2377738,
+   "время": "2026-11-16T14:36:30.409506557+00:00",
+   "сообщение": "DEOD bingx → bsc_dex: отказ — прибыль -0.4292 USDT ниже порога 0.001 (оптимум 310.18 DEOD: прибыль -0.4292; на бюджете 750 (45218.85 DEOD) — -29.203; допустимо 310.18–45218.85 DEOD, посчитано объёмов 118, пиков 1)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0x3510fbbc13090f991ffa523527113a166161683e",
+     "ticker": "DEOD"
+    },
+    "buy_on": "bingx",
+    "sell_on": "bsc_dex"
+   },
+   "qty": "310.18",
+   "size": {
+    "at_budget_profit": "-29.203042164446597031947361736",
+    "budget": "750",
+    "capped": false,
+    "evals": 118,
+    "max_exact": true,
+    "max_qty": "45218.85",
+    "min_qty": "310.18",
+    "peaks": 1,
+    "profit": "-0.4292478291876286493748692387",
+    "qty": "310.18",
+    "why": "оптимум 310.18 DEOD: прибыль -0.4292; на бюджете 750 (45218.85 DEOD) — -29.203; допустимо 310.18–45218.85 DEOD, посчитано объёмов 118, пиков 1"
+   },
+   "invested": "5.01530042",
+   "proceeds": "4.6035831688282620869999999865",
+   "profit_usd": "-0.4292480974169286493748692387",
+   "profit_pct": "-8.558771388951584467094978900",
+   "buy_avg": "0.016169",
+   "sell_avg": "0.0162172335503233915003715435",
+   "costs_usdt": "0.0175308462451907363748692252",
+   "строки_затрат": [
+    {
+     "вид": "TradeFee",
+     "этап": "A",
+     "сумма": "0.31018",
+     "актив": "DEOD",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "WithdrawFee",
+     "этап": "перевод",
+     "сумма": "26",
+     "актив": "DEOD",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "DEOD",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000010573300000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "DEOD",
+      "from_token": "0x3510fbbc13090f991ffa523527113a166161683e",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "0.70967455000000000000",
+     "актив": "DEOD",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "DEOD",
+      "from_token": "0x3510fbbc13090f991ffa523527113a166161683e",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "SellTax",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "DEOD",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "DEOD",
+      "from_token": "0x3510fbbc13090f991ffa523527113a166161683e",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "DEOD",
+      "from_token": "0x3510fbbc13090f991ffa523527113a166161683e",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "возврат USDT",
+     "сумма": "0.000002838165000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.0096601938952907363748692252",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "bingx",
+    "side": "Buy",
+    "at": "2026-11-16T15:14:07.956297442Z",
+    "avg_price": "0.016169",
+    "qty": "310.18",
+    "fillable_qty": "310.18",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.31018",
+      "asset": "DEOD",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "bsc_dex",
+    "side": "Sell",
+    "at": "2026-11-16T15:14:08.944445872Z",
+    "avg_price": "0.0162172335503233915003715435",
+    "qty": "283.86982000",
+    "fillable_qty": "283.86982000",
+    "route": {
+     "block": 133943721,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 105733,
+     "legs": [
+      {
+       "expected_out": "4.603583168828262087",
+       "hops": [
+        {
+         "family": "pancakeswap_v2",
+         "kind": "V2",
+         "pool": {
+          "Contract": "0xd693c42610bd30e63b0a68a25918445a5f9a1d20"
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000010573300000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "DEOD",
+       "from_token": "0x3510fbbc13090f991ffa523527113a166161683e",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.70967455000000000000",
+      "asset": "DEOD",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "DEOD",
+       "from_token": "0x3510fbbc13090f991ffa523527113a166161683e",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "DEOD",
+      "in_price": true,
+      "kind": "SellTax",
+      "step": {
+       "from": "DEOD",
+       "from_token": "0x3510fbbc13090f991ffa523527113a166161683e",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "DEOD",
+       "from_token": "0x3510fbbc13090f991ffa523527113a166161683e",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     }
+    ]
+   },
+   "sigma": "0.0002490329725817288949713685",
+   "transit_s": "11.36020",
+   "spend_fee": "0",
+   "spend_max": "5.01530042",
+   "calc_at": "2026-11-16T15:14:08.959998623Z"
+  },
+  {
+   "rowid": 2169636,
+   "время": "2026-11-14T07:34:58.807895214+00:00",
+   "сообщение": "PARTI bsc_dex → bitget: отказ — прибыль -0.0775 USDT ниже порога 0.005 (оптимум 138.23 PARTI: прибыль -0.0774; на бюджете 40 (1100.37 PARTI) — -0.3976; допустимо 138.23–1100.37 PARTI, посчитано объёмов 111, пиков 2)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0x59264f02d301281f3393e1385c0aefd446eb0f00",
+     "ticker": "PARTI"
+    },
+    "buy_on": "bsc_dex",
+    "sell_on": "bitget"
+   },
+   "qty": "138.23",
+   "size": {
+    "at_budget_profit": "-0.3975835737801333260770057271",
+    "budget": "40",
+    "capped": false,
+    "evals": 111,
+    "max_exact": true,
+    "max_qty": "1100.37",
+    "min_qty": "138.23",
+    "peaks": 2,
+    "profit": "-0.0774450009269125030307210344",
+    "qty": "138.23",
+    "why": "оптимум 138.23 PARTI: прибыль -0.0774; на бюджете 40 (1100.37 PARTI) — -0.3976; допустимо 138.23–1100.37 PARTI, посчитано объёмов 111, пиков 2"
+   },
+   "invested": "4.9987333565207608600000000057",
+   "proceeds": "5.0053083",
+   "profit_usd": "-0.0774783866617038900307210344",
+   "profit_pct": "-1.5499603826764370228239861700",
+   "buy_avg": "0.036162434757438767705997251",
+   "sell_avg": "0.03621",
+   "costs_usdt": "0.0840533301409430300307210287",
+   "строки_затрат": [
+    {
+     "вид": "Gas",
+     "этап": "A",
+     "сумма": "0.000017251200000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "USDT",
+      "from_token": "0x55d398326f99059ff775485246999027b3197955",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "A",
+     "сумма": "0.000499873335652076086",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "USDT",
+      "from_token": "0x55d398326f99059ff775485246999027b3197955",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "A",
+     "сумма": "0",
+     "актив": "BNB",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "USDT",
+      "from_token": "0x55d398326f99059ff775485246999027b3197955",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "Gas",
+     "этап": "A",
+     "сумма": "0.000016835600000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BNB",
+      "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+      "index": 2,
+      "to": "PARTI",
+      "to_token": "0x59264f02d301281f3393e1385c0aefd446eb0f00"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "A",
+     "сумма": "0.00008111295751918225",
+     "актив": "BNB",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BNB",
+      "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+      "index": 2,
+      "to": "PARTI",
+      "to_token": "0x59264f02d301281f3393e1385c0aefd446eb0f00"
+     }
+    },
+    {
+     "вид": "BuyTax",
+     "этап": "A",
+     "сумма": "0",
+     "актив": "PARTI",
+     "в_цене": true,
+     "в_объёме": true,
+     "шаг": {
+      "from": "BNB",
+      "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+      "index": 2,
+      "to": "PARTI",
+      "to_token": "0x59264f02d301281f3393e1385c0aefd446eb0f00"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "A",
+     "сумма": "0",
+     "актив": "PARTI",
+     "в_цене": true,
+     "в_объёме": true,
+     "шаг": {
+      "from": "BNB",
+      "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+      "index": 2,
+      "to": "PARTI",
+      "to_token": "0x59264f02d301281f3393e1385c0aefd446eb0f00"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "перевод",
+     "сумма": "0.000002853950000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "PARTI",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TradeFee",
+     "этап": "B",
+     "сумма": "0.0050053083",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0.01",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.0462829152459430300307210287",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "bsc_dex",
+    "side": "Buy",
+    "at": "2026-11-14T08:09:11.408407687Z",
+    "avg_price": "0.036162434757438767705997251",
+    "qty": "138.23",
+    "fillable_qty": "138.230000000000000000",
+    "route": {
+     "block": 133509084,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 340868,
+     "legs": [
+      {
+       "expected_out": "138.230000000000000000",
+       "hops": [
+        {
+         "family": "pancakeswap-v3-bsc",
+         "kind": "V3",
+         "pool": {
+          "Contract": "0x172fcd41e0913e95784454622d1c3724f546f849"
+         }
+        },
+        {
+         "family": "pancakeswap-v3-bsc",
+         "kind": "V3",
+         "pool": {
+          "Contract": "0xc0fb39f705ee65ef098dd5452997a7846d156aa9"
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000017251200000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "USDT",
+       "from_token": "0x55d398326f99059ff775485246999027b3197955",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     },
+     {
+      "amount": "0.000499873335652076086",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "USDT",
+       "from_token": "0x55d398326f99059ff775485246999027b3197955",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "BNB",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "USDT",
+       "from_token": "0x55d398326f99059ff775485246999027b3197955",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     },
+     {
+      "amount": "0.000016835600000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "BNB",
+       "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "index": 2,
+       "to": "PARTI",
+       "to_token": "0x59264f02d301281f3393e1385c0aefd446eb0f00"
+      }
+     },
+     {
+      "amount": "0.00008111295751918225",
+      "asset": "BNB",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "BNB",
+       "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "index": 2,
+       "to": "PARTI",
+       "to_token": "0x59264f02d301281f3393e1385c0aefd446eb0f00"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "PARTI",
+      "in_price": true,
+      "kind": "BuyTax",
+      "step": {
+       "from": "BNB",
+       "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "index": 2,
+       "to": "PARTI",
+       "to_token": "0x59264f02d301281f3393e1385c0aefd446eb0f00"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "PARTI",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "BNB",
+       "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "index": 2,
+       "to": "PARTI",
+       "to_token": "0x59264f02d301281f3393e1385c0aefd446eb0f00"
+      }
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "bitget",
+    "side": "Sell",
+    "at": "2026-11-14T08:09:10.869401102Z",
+    "avg_price": "0.03621",
+    "qty": "138.23",
+    "fillable_qty": "138.23",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.0050053083",
+      "asset": "USDT",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "sigma": "0.0002421648530657132366303416",
+   "transit_s": "72",
+   "spend_fee": "0",
+   "spend_max": "5.0237270233033646643000000120",
+   "calc_at": "2026-11-14T08:09:11.429425451Z"
+  },
+  {
+   "rowid": 2292264,
+   "время": "2026-11-15T02:11:55.445099037+00:00",
+   "сообщение": "BREW mexc → bsc_dex: отказ — прибыль -0.0900 USDT ниже порога 0.005 (оптимум 823.05 BREW: прибыль -0.0628; на бюджете 500 (385196.85 BREW) — -22.3939; допустимо 823.05–385196.85 BREW, посчитано объёмов 146, пиков 2)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0xfa6d9b504848606eb9aec04ccc161d169b3f2159",
+     "ticker": "BREW"
+    },
+    "buy_on": "mexc",
+    "sell_on": "bsc_dex"
+   },
+   "qty": "823.05",
+   "size": {
+    "at_budget_profit": "-22.393915658915639068361513733",
+    "budget": "500",
+    "capped": false,
+    "evals": 146,
+    "max_exact": true,
+    "max_qty": "385196.85",
+    "min_qty": "823.05",
+    "peaks": 2,
+    "profit": "-0.0627685638718769030380031103",
+    "qty": "823.05",
+    "why": "оптимум 823.05 BREW: прибыль -0.0628; на бюджете 500 (385196.85 BREW) — -22.3939; допустимо 823.05–385196.85 BREW, посчитано объёмов 146, пиков 2"
+   },
+   "invested": "1.02716640",
+   "proceeds": "0.9563121798230467939999999846",
+   "profit_usd": "-0.0899530897077269030380031103",
+   "profit_pct": "-8.757401888119286518523494370",
+   "buy_avg": "0.001248",
+   "sell_avg": "0.0012181544867499481485255716",
+   "costs_usdt": "0.0190988695307736970380030949",
+   "строки_затрат": [
+    {
+     "вид": "TradeFee",
+     "этап": "A",
+     "сумма": "0.000821733120",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "WithdrawFee",
+     "этап": "перевод",
+     "сумма": "38",
+     "актив": "BREW",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "BREW",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000011616200000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BREW",
+      "from_token": "0xfa6d9b504848606eb9aec04ccc161d169b3f2159",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "7.850500000000000000",
+     "актив": "BREW",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BREW",
+      "from_token": "0xfa6d9b504848606eb9aec04ccc161d169b3f2159",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "SellTax",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "BREW",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BREW",
+      "from_token": "0xfa6d9b504848606eb9aec04ccc161d169b3f2159",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BREW",
+      "from_token": "0xfa6d9b504848606eb9aec04ccc161d169b3f2159",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "ApproveGas",
+     "этап": "B",
+     "сумма": "0.000009404700000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BREW",
+      "from_token": "0xfa6d9b504848606eb9aec04ccc161d169b3f2159",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "возврат USDT",
+     "сумма": "0.000002838165000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.0040082225875236970380030949",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "mexc",
+    "side": "Buy",
+    "at": "2026-11-15T12:24:48.228132695Z",
+    "avg_price": "0.001248",
+    "qty": "823.05",
+    "fillable_qty": "823.05",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000821733120",
+      "asset": "USDT",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "bsc_dex",
+    "side": "Sell",
+    "at": "2026-11-15T12:24:48.557439143Z",
+    "avg_price": "0.0012181544867499481485255716",
+    "qty": "785.05",
+    "fillable_qty": "785.05",
+    "route": {
+     "block": 133734499,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 116162,
+     "legs": [
+      {
+       "expected_out": "0.956312179823046794",
+       "hops": [
+        {
+         "family": "uniswap-bsc",
+         "kind": "V3",
+         "pool": {
+          "Contract": "0xe855345e5c435e81244425e97d3ecaa143a4595c"
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000011616200000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "BREW",
+       "from_token": "0xfa6d9b504848606eb9aec04ccc161d169b3f2159",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "7.850500000000000000",
+      "asset": "BREW",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "BREW",
+       "from_token": "0xfa6d9b504848606eb9aec04ccc161d169b3f2159",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "BREW",
+      "in_price": true,
+      "kind": "SellTax",
+      "step": {
+       "from": "BREW",
+       "from_token": "0xfa6d9b504848606eb9aec04ccc161d169b3f2159",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "BREW",
+       "from_token": "0xfa6d9b504848606eb9aec04ccc161d169b3f2159",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.000009404700000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "ApproveGas",
+      "step": {
+       "from": "BREW",
+       "from_token": "0xfa6d9b504848606eb9aec04ccc161d169b3f2159",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     }
+    ]
+   },
+   "sigma": "0.0002851840737226582723281412",
+   "transit_s": "54",
+   "spend_fee": "0.000821733120",
+   "spend_max": "1.027988133120",
+   "calc_at": "2026-11-15T12:24:48.569838476Z"
+  }
+ ],
+ "часть_3_2_отрицательный_оптимум_10": [
+  {
+   "rowid": 2392541,
+   "время": "2026-11-16T16:32:54.657868361+00:00",
+   "сообщение": "IDOL mexc → bsc_dex: отказ — прибыль -0.4071 USDT ниже порога 0.005 (оптимум 52.48 IDOL: прибыль -0.4072; на бюджете 600 (31226.64 IDOL) — -6.8122; допустимо 52.48–31226.64 IDOL, посчитано объёмов 120, пиков 1)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0x3b4de3c7855c03bb9f50ea252cd2c9fa1125ab07",
+     "ticker": "IDOL"
+    },
+    "buy_on": "mexc",
+    "sell_on": "bsc_dex"
+   },
+   "qty": "52.48",
+   "size": {
+    "at_budget_profit": "-6.8122483352380606391385537634",
+    "budget": "600",
+    "capped": false,
+    "evals": 120,
+    "max_exact": true,
+    "max_qty": "31226.64",
+    "min_qty": "52.48",
+    "peaks": 1,
+    "profit": "-0.4072336781751272180569248064",
+    "qty": "52.48",
+    "why": "оптимум 52.48 IDOL: прибыль -0.4072; на бюджете 600 (31226.64 IDOL) — -6.8122; допустимо 52.48–31226.64 IDOL, посчитано объёмов 120, пиков 1"
+   },
+   "invested": "1.00000640",
+   "proceeds": "0.6194746127327838399999999988",
+   "profit_usd": "-0.4071282620658888420086018078",
+   "profit_pct": "-40.712565646168748720868367220",
+   "buy_avg": "0.019055",
+   "sell_avg": "0.0190724942343837389162561576",
+   "costs_usdt": "0.0265964747986726820086018066",
+   "строки_затрат": [
+    {
+     "вид": "TradeFee",
+     "этап": "A",
+     "сумма": "0.000800005120",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "WithdrawFee",
+     "этап": "перевод",
+     "сумма": "20",
+     "актив": "IDOL",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "IDOL",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000013829300000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "IDOL",
+      "from_token": "0x3b4de3c7855c03bb9f50ea252cd2c9fa1125ab07",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "0.00324800000000000000",
+     "актив": "IDOL",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "IDOL",
+      "from_token": "0x3b4de3c7855c03bb9f50ea252cd2c9fa1125ab07",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "SellTax",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "IDOL",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "IDOL",
+      "from_token": "0x3b4de3c7855c03bb9f50ea252cd2c9fa1125ab07",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "BNB",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "IDOL",
+      "from_token": "0x3b4de3c7855c03bb9f50ea252cd2c9fa1125ab07",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000012605600000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BNB",
+      "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+      "index": 2,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "0.0000001050352527239031",
+     "актив": "BNB",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BNB",
+      "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+      "index": 2,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BNB",
+      "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+      "index": 2,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "ApproveGas",
+     "этап": "B",
+     "сумма": "0.000009513300000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "IDOL",
+      "from_token": "0x3b4de3c7855c03bb9f50ea252cd2c9fa1125ab07",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "возврат USDT",
+     "сумма": "0.000002838165000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.0029179444197726820086018066",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "mexc",
+    "side": "Buy",
+    "at": "2026-11-16T16:32:54.577267373Z",
+    "avg_price": "0.019055",
+    "qty": "52.48",
+    "fillable_qty": "52.48",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000800005120",
+      "asset": "USDT",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "bsc_dex",
+    "side": "Sell",
+    "at": "2026-11-16T16:32:54.640301473Z",
+    "avg_price": "0.0190724942343837389162561576",
+    "qty": "32.48",
+    "fillable_qty": "32.48",
+    "route": {
+     "block": 133960169,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 264349,
+     "legs": [
+      {
+       "expected_out": "0.619474612732783840",
+       "hops": [
+        {
+         "family": "pancakeswap-v3-bsc",
+         "kind": "V3",
+         "pool": {
+          "Contract": "0xfff4857a955b2b460c27fd431aa5a85fabca5559"
+         }
+        },
+        {
+         "family": "pancakeswap-v3-bsc",
+         "kind": "V3",
+         "pool": {
+          "Contract": "0x172fcd41e0913e95784454622d1c3724f546f849"
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000013829300000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "IDOL",
+       "from_token": "0x3b4de3c7855c03bb9f50ea252cd2c9fa1125ab07",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     },
+     {
+      "amount": "0.00324800000000000000",
+      "asset": "IDOL",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "IDOL",
+       "from_token": "0x3b4de3c7855c03bb9f50ea252cd2c9fa1125ab07",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "IDOL",
+      "in_price": true,
+      "kind": "SellTax",
+      "step": {
+       "from": "IDOL",
+       "from_token": "0x3b4de3c7855c03bb9f50ea252cd2c9fa1125ab07",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "BNB",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "IDOL",
+       "from_token": "0x3b4de3c7855c03bb9f50ea252cd2c9fa1125ab07",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     },
+     {
+      "amount": "0.000012605600000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "BNB",
+       "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "index": 2,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.0000001050352527239031",
+      "asset": "BNB",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "BNB",
+       "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "index": 2,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "BNB",
+       "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "index": 2,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.000009513300000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "ApproveGas",
+      "step": {
+       "from": "IDOL",
+       "from_token": "0x3b4de3c7855c03bb9f50ea252cd2c9fa1125ab07",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     }
+    ]
+   },
+   "sigma": "0.0003204989616888521655013769",
+   "transit_s": "54",
+   "spend_fee": "0.000800005120",
+   "spend_max": "1.000806405120",
+   "calc_at": "2026-11-16T16:32:54.657368462Z"
+  },
+  {
+   "rowid": 2392517,
+   "время": "2026-11-16T16:32:44.081046751+00:00",
+   "сообщение": "STAR mexc → bsc_dex: отказ — прибыль -0.0897 USDT ниже порога 0.005 (оптимум 28.58 STAR: прибыль -0.0852; на бюджете 600 (17031.82 STAR) — -3.184; допустимо 28.58–17031.82 STAR, посчитано объёмов 128, пиков 2)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0x8fce7206e3043dd360f115afa956ee31b90b787c",
+     "ticker": "STAR"
+    },
+    "buy_on": "mexc",
+    "sell_on": "bsc_dex"
+   },
+   "qty": "28.58",
+   "size": {
+    "at_budget_profit": "-3.1840120219894424783740879568",
+    "budget": "600",
+    "capped": false,
+    "evals": 128,
+    "max_exact": true,
+    "max_qty": "17031.82",
+    "min_qty": "28.58",
+    "peaks": 2,
+    "profit": "-0.0851512332019056192341662814",
+    "qty": "28.58",
+    "why": "оптимум 28.58 STAR: прибыль -0.0852; на бюджете 600 (17031.82 STAR) — -3.184; допустимо 28.58–17031.82 STAR, посчитано объёмов 128, пиков 2"
+   },
+   "invested": "1.000300",
+   "proceeds": "0.9290611449451981429999999994",
+   "profit_usd": "-0.0897190493221260557604564878",
+   "profit_pct": "-8.969214167962216910972357070",
+   "buy_avg": "0.0350",
+   "sell_avg": "0.0349533914576823981565086531",
+   "costs_usdt": "0.0184801942673241987604564872",
+   "строки_затрат": [
+    {
+     "вид": "TradeFee",
+     "этап": "A",
+     "сумма": "0.0008002400",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "WithdrawFee",
+     "этап": "перевод",
+     "сумма": "2",
+     "актив": "STAR",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "STAR",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000012927000000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "STAR",
+      "from_token": "0x8fce7206e3043dd360f115afa956ee31b90b787c",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "0.00265800000000000000",
+     "актив": "STAR",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "STAR",
+      "from_token": "0x8fce7206e3043dd360f115afa956ee31b90b787c",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "SellTax",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "STAR",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "STAR",
+      "from_token": "0x8fce7206e3043dd360f115afa956ee31b90b787c",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "STAR",
+      "from_token": "0x8fce7206e3043dd360f115afa956ee31b90b787c",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "ApproveGas",
+     "этап": "B",
+     "сумма": "0.000009517700000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "STAR",
+      "from_token": "0x8fce7206e3043dd360f115afa956ee31b90b787c",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "возврат USDT",
+     "сумма": "0.000002838165000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.0027633167459741987604564872",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "mexc",
+    "side": "Buy",
+    "at": "2026-11-16T16:32:43.811665506Z",
+    "avg_price": "0.0350",
+    "qty": "28.58",
+    "fillable_qty": "28.58",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.0008002400",
+      "asset": "USDT",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "bsc_dex",
+    "side": "Sell",
+    "at": "2026-11-16T16:32:44.072651166Z",
+    "avg_price": "0.0349533914576823981565086531",
+    "qty": "26.58",
+    "fillable_qty": "26.58",
+    "route": {
+     "block": 133960162,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 129270,
+     "legs": [
+      {
+       "expected_out": "0.929061144945198143",
+       "hops": [
+        {
+         "family": "pancakeswap-v3-bsc",
+         "kind": "V3",
+         "pool": {
+          "Contract": "0xb4db9fcda97fd7b02eaf1e8317e6ddb04bacc1af"
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000012927000000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "STAR",
+       "from_token": "0x8fce7206e3043dd360f115afa956ee31b90b787c",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.00265800000000000000",
+      "asset": "STAR",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "STAR",
+       "from_token": "0x8fce7206e3043dd360f115afa956ee31b90b787c",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "STAR",
+      "in_price": true,
+      "kind": "SellTax",
+      "step": {
+       "from": "STAR",
+       "from_token": "0x8fce7206e3043dd360f115afa956ee31b90b787c",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "STAR",
+       "from_token": "0x8fce7206e3043dd360f115afa956ee31b90b787c",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.000009517700000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "ApproveGas",
+      "step": {
+       "from": "STAR",
+       "from_token": "0x8fce7206e3043dd360f115afa956ee31b90b787c",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     }
+    ]
+   },
+   "sigma": "0.0001994050710514594470800894",
+   "transit_s": "55.62120",
+   "spend_fee": "0.0008002400",
+   "spend_max": "1.0011002400",
+   "calc_at": "2026-11-16T16:32:44.080482741Z"
+  },
+  {
+   "rowid": 2392487,
+   "время": "2026-11-16T16:32:30.496504806+00:00",
+   "сообщение": "JCT bsc_dex → mexc: отказ — прибыль -0.0588 USDT ниже порога 0.005 (оптимум 416.32 JCT: прибыль -0.0588; на бюджете 550 (228049.94 JCT) — -21.3239; допустимо 416.32–228049.94 JCT, посчитано объёмов 103, пиков 1)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0xea37a8de1de2d9d10772eeb569e28bfa5cb17707",
+     "ticker": "JCT"
+    },
+    "buy_on": "bsc_dex",
+    "sell_on": "mexc"
+   },
+   "qty": "416.32",
+   "size": {
+    "at_budget_profit": "-21.323896528169045183646263543",
+    "budget": "550",
+    "capped": false,
+    "evals": 103,
+    "max_exact": true,
+    "max_qty": "228049.94",
+    "min_qty": "416.32",
+    "peaks": 1,
+    "profit": "-0.0587806522517132110636174647",
+    "qty": "416.32",
+    "why": "оптимум 416.32 JCT: прибыль -0.0588; на бюджете 550 (228049.94 JCT) — -21.3239; допустимо 416.32–228049.94 JCT, посчитано объёмов 103, пиков 1"
+   },
+   "invested": "0.9972893368688455769999999837",
+   "proceeds": "1.00000064",
+   "profit_usd": "-0.0587806522517132110636174647",
+   "profit_pct": "-5.8940419874802599863428533700",
+   "buy_avg": "0.002395487454046996485876249",
+   "sell_avg": "0.002402",
+   "costs_usdt": "0.0614919553828676340636174810",
+   "строки_затрат": [
+    {
+     "вид": "Gas",
+     "этап": "A",
+     "сумма": "0.000017964500000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "USDT",
+      "from_token": "0x55d398326f99059ff775485246999027b3197955",
+      "index": 1,
+      "to": "JCT",
+      "to_token": "0xea37a8de1de2d9d10772eeb569e28bfa5cb17707"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "A",
+     "сумма": "0.000098731644350015712123",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "USDT",
+      "from_token": "0x55d398326f99059ff775485246999027b3197955",
+      "index": 1,
+      "to": "JCT",
+      "to_token": "0xea37a8de1de2d9d10772eeb569e28bfa5cb17707"
+     }
+    },
+    {
+     "вид": "BuyTax",
+     "этап": "A",
+     "сумма": "0",
+     "актив": "JCT",
+     "в_цене": true,
+     "в_объёме": true,
+     "шаг": {
+      "from": "USDT",
+      "from_token": "0x55d398326f99059ff775485246999027b3197955",
+      "index": 1,
+      "to": "JCT",
+      "to_token": "0xea37a8de1de2d9d10772eeb569e28bfa5cb17707"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "A",
+     "сумма": "0",
+     "актив": "JCT",
+     "в_цене": true,
+     "в_объёме": true,
+     "шаг": {
+      "from": "USDT",
+      "from_token": "0x55d398326f99059ff775485246999027b3197955",
+      "index": 1,
+      "to": "JCT",
+      "to_token": "0xea37a8de1de2d9d10772eeb569e28bfa5cb17707"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "перевод",
+     "сумма": "0.000003110965000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "JCT",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TradeFee",
+     "этап": "B",
+     "сумма": "0.000800000512",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0.01",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.0382603810859676340636174810",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "bsc_dex",
+    "side": "Buy",
+    "at": "2026-11-16T16:32:54.594575164Z",
+    "avg_price": "0.002395487454046996485876249",
+    "qty": "416.32",
+    "fillable_qty": "416.320000000000000000",
+    "route": {
+     "block": 133960167,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 179645,
+     "legs": [
+      {
+       "expected_out": "416.320000000000000000",
+       "hops": [
+        {
+         "family": "pancakeswap-infinity-clmm",
+         "kind": "Cl",
+         "pool": {
+          "Singleton": {
+           "id": "0x7bb2f6dab157e444ad8717b0178035c1b1cf24958b37c2a205e61a3582283249",
+           "manager": "0xa0ffb9c1ce1fe56963b0321b32e7a0302114058b"
+          }
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000017964500000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "USDT",
+       "from_token": "0x55d398326f99059ff775485246999027b3197955",
+       "index": 1,
+       "to": "JCT",
+       "to_token": "0xea37a8de1de2d9d10772eeb569e28bfa5cb17707"
+      }
+     },
+     {
+      "amount": "0.000098731644350015712123",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "USDT",
+       "from_token": "0x55d398326f99059ff775485246999027b3197955",
+       "index": 1,
+       "to": "JCT",
+       "to_token": "0xea37a8de1de2d9d10772eeb569e28bfa5cb17707"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "JCT",
+      "in_price": true,
+      "kind": "BuyTax",
+      "step": {
+       "from": "USDT",
+       "from_token": "0x55d398326f99059ff775485246999027b3197955",
+       "index": 1,
+       "to": "JCT",
+       "to_token": "0xea37a8de1de2d9d10772eeb569e28bfa5cb17707"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "JCT",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "USDT",
+       "from_token": "0x55d398326f99059ff775485246999027b3197955",
+       "index": 1,
+       "to": "JCT",
+       "to_token": "0xea37a8de1de2d9d10772eeb569e28bfa5cb17707"
+      }
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "mexc",
+    "side": "Sell",
+    "at": "2026-11-16T16:32:54.346291132Z",
+    "avg_price": "0.002402",
+    "qty": "416.32",
+    "fillable_qty": "416.32",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000800000512",
+      "asset": "USDT",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "sigma": "0.0014507272627482931155188278",
+   "transit_s": "34.348",
+   "spend_fee": "0",
+   "spend_max": "1.0022757835531898048849999649",
+   "calc_at": "2026-11-16T16:32:54.605341484Z"
+  },
+  {
+   "rowid": 2392484,
+   "время": "2026-11-16T16:32:28.369992656+00:00",
+   "сообщение": "ZIG bsc_dex → mexc: отказ — прибыль -0.0435 USDT ниже порога 0.005 (оптимум 29.87 ZIG: прибыль -0.0435; на бюджете 550 (15974.87 ZIG) — -15.7159; допустимо 29.17–15974.87 ZIG, посчитано объёмов 109, пиков 1)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0x8c907e0a72c3d55627e853f4ec6a96b0c8771145",
+     "ticker": "ZIG"
+    },
+    "buy_on": "bsc_dex",
+    "sell_on": "mexc"
+   },
+   "qty": "29.87",
+   "size": {
+    "at_budget_profit": "-15.715883515215801235089657400",
+    "budget": "550",
+    "capped": false,
+    "evals": 109,
+    "max_exact": true,
+    "max_qty": "15974.87",
+    "min_qty": "29.17",
+    "peaks": 1,
+    "profit": "-0.0435009768597500074391239749",
+    "qty": "29.87",
+    "why": "оптимум 29.87 ZIG: прибыль -0.0435; на бюджете 550 (15974.87 ZIG) — -15.7159; допустимо 29.17–15974.87 ZIG, посчитано объёмов 109, пиков 1"
+   },
+   "invested": "1.0231329797442014780000000001",
+   "proceeds": "1.02555658",
+   "profit_usd": "-0.0435002842619500074391239749",
+   "profit_pct": "-4.2516745255172722548390210400",
+   "buy_avg": "0.0342528617256177260796786073",
+   "sell_avg": "0.034334",
+   "costs_usdt": "0.0459238845177485294391239748",
+   "строки_затрат": [
+    {
+     "вид": "Gas",
+     "этап": "A",
+     "сумма": "0.000014424200000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "USDT",
+      "from_token": "0x55d398326f99059ff775485246999027b3197955",
+      "index": 1,
+      "to": "ZIG",
+      "to_token": "0x8c907e0a72c3d55627e853f4ec6a96b0c8771145"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "A",
+     "сумма": "0.0001023132979744201478",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "USDT",
+      "from_token": "0x55d398326f99059ff775485246999027b3197955",
+      "index": 1,
+      "to": "ZIG",
+      "to_token": "0x8c907e0a72c3d55627e853f4ec6a96b0c8771145"
+     }
+    },
+    {
+     "вид": "BuyTax",
+     "этап": "A",
+     "сумма": "0",
+     "актив": "ZIG",
+     "в_цене": true,
+     "в_объёме": true,
+     "шаг": {
+      "from": "USDT",
+      "from_token": "0x55d398326f99059ff775485246999027b3197955",
+      "index": 1,
+      "to": "ZIG",
+      "to_token": "0x8c907e0a72c3d55627e853f4ec6a96b0c8771145"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "A",
+     "сумма": "0",
+     "актив": "ZIG",
+     "в_цене": true,
+     "в_объёме": true,
+     "шаг": {
+      "from": "USDT",
+      "from_token": "0x55d398326f99059ff775485246999027b3197955",
+      "index": 1,
+      "to": "ZIG",
+      "to_token": "0x8c907e0a72c3d55627e853f4ec6a96b0c8771145"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "перевод",
+     "сумма": "0.000002890745000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "ZIG",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TradeFee",
+     "этап": "B",
+     "сумма": "0.000820445264",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0.01",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.0248896994971485294391239748",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "bsc_dex",
+    "side": "Buy",
+    "at": "2026-11-16T16:32:45.594112446Z",
+    "avg_price": "0.0342528617256177260796786073",
+    "qty": "29.87",
+    "fillable_qty": "29.870000000000000000",
+    "route": {
+     "block": 133960139,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 144242,
+     "legs": [
+      {
+       "expected_out": "29.870000000000000000",
+       "hops": [
+        {
+         "family": "pancakeswap-v3-bsc",
+         "kind": "V3",
+         "pool": {
+          "Contract": "0x9fac151b7f1dbbb9d14ccd1ca5b990bc4da5cd1f"
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000014424200000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "USDT",
+       "from_token": "0x55d398326f99059ff775485246999027b3197955",
+       "index": 1,
+       "to": "ZIG",
+       "to_token": "0x8c907e0a72c3d55627e853f4ec6a96b0c8771145"
+      }
+     },
+     {
+      "amount": "0.0001023132979744201478",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "USDT",
+       "from_token": "0x55d398326f99059ff775485246999027b3197955",
+       "index": 1,
+       "to": "ZIG",
+       "to_token": "0x8c907e0a72c3d55627e853f4ec6a96b0c8771145"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "ZIG",
+      "in_price": true,
+      "kind": "BuyTax",
+      "step": {
+       "from": "USDT",
+       "from_token": "0x55d398326f99059ff775485246999027b3197955",
+       "index": 1,
+       "to": "ZIG",
+       "to_token": "0x8c907e0a72c3d55627e853f4ec6a96b0c8771145"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "ZIG",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "USDT",
+       "from_token": "0x55d398326f99059ff775485246999027b3197955",
+       "index": 1,
+       "to": "ZIG",
+       "to_token": "0x8c907e0a72c3d55627e853f4ec6a96b0c8771145"
+      }
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "mexc",
+    "side": "Sell",
+    "at": "2026-11-16T16:32:45.145293530Z",
+    "avg_price": "0.034334",
+    "qty": "29.87",
+    "fillable_qty": "29.87",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000820445264",
+      "asset": "USDT",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "sigma": "0.0008662076568078715469970076",
+   "transit_s": "38.766",
+   "spend_fee": "0",
+   "spend_max": "1.0282486446429224853899999990",
+   "calc_at": "2026-11-16T16:32:45.609090390Z"
+  },
+  {
+   "rowid": 2392472,
+   "время": "2026-11-16T16:32:22.058435987+00:00",
+   "сообщение": "FHE mexc → bsc_dex: отказ — прибыль -0.0857 USDT ниже порога 0.005 (оптимум 74.45 FHE: прибыль -0.0846; на бюджете 600 (43569.79 FHE) — -4.5143; допустимо 73.32–43569.79 FHE, посчитано объёмов 113, пиков 2)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0xd55c9fb62e176a8eb6968f32958fefdd0962727e",
+     "ticker": "FHE"
+    },
+    "buy_on": "mexc",
+    "sell_on": "bsc_dex"
+   },
+   "qty": "74.45",
+   "size": {
+    "at_budget_profit": "-4.5143387200638935488074755177",
+    "budget": "600",
+    "capped": false,
+    "evals": 113,
+    "max_exact": true,
+    "max_qty": "43569.79",
+    "min_qty": "73.32",
+    "peaks": 2,
+    "profit": "-0.0846249247031691589296754020",
+    "qty": "74.45",
+    "why": "оптимум 74.45 FHE: прибыль -0.0846; на бюджете 600 (43569.79 FHE) — -4.5143; допустимо 73.32–43569.79 FHE, посчитано объёмов 113, пиков 2"
+   },
+   "invested": "1.0154980",
+   "proceeds": "0.9587041836857110189999999972",
+   "profit_usd": "-0.0856876656784554560664772606",
+   "profit_pct": "-8.437994528640672464788434900",
+   "buy_avg": "0.01364",
+   "sell_avg": "0.0136082921743890847267565649",
+   "costs_usdt": "0.0288938493641664750664772578",
+   "строки_затрат": [
+    {
+     "вид": "TradeFee",
+     "этап": "A",
+     "сумма": "0.00081239840",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "WithdrawFee",
+     "этап": "перевод",
+     "сумма": "4",
+     "актив": "FHE",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "FHE",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000014816800000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "FHE",
+      "from_token": "0xd55c9fb62e176a8eb6968f32958fefdd0962727e",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "0.704500000000000000",
+     "актив": "FHE",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "FHE",
+      "from_token": "0xd55c9fb62e176a8eb6968f32958fefdd0962727e",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "SellTax",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "FHE",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "FHE",
+      "from_token": "0xd55c9fb62e176a8eb6968f32958fefdd0962727e",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "BNB",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "FHE",
+      "from_token": "0xd55c9fb62e176a8eb6968f32958fefdd0962727e",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000012605600000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BNB",
+      "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+      "index": 2,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "0.0000001625510217914552",
+     "актив": "BNB",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BNB",
+      "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+      "index": 2,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BNB",
+      "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+      "index": 2,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "ApproveGas",
+     "этап": "B",
+     "сумма": "0.000009517800000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "FHE",
+      "from_token": "0xd55c9fb62e176a8eb6968f32958fefdd0962727e",
+      "index": 1,
+      "to": "BNB",
+      "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "возврат USDT",
+     "сумма": "0.000002838165000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.0046169890179664750664772578",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "mexc",
+    "side": "Buy",
+    "at": "2026-11-16T16:32:21.847488807Z",
+    "avg_price": "0.01364",
+    "qty": "74.45",
+    "fillable_qty": "74.45",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.00081239840",
+      "asset": "USDT",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "bsc_dex",
+    "side": "Sell",
+    "at": "2026-11-16T16:32:22.042853036Z",
+    "avg_price": "0.0136082921743890847267565649",
+    "qty": "70.45",
+    "fillable_qty": "70.45",
+    "route": {
+     "block": 133960107,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 274224,
+     "legs": [
+      {
+       "expected_out": "0.958704183685711019",
+       "hops": [
+        {
+         "family": "pancakeswap-v3-bsc",
+         "kind": "V3",
+         "pool": {
+          "Contract": "0xe4af4797afbf733591b6e0c4ea3566ad3979ca94"
+         }
+        },
+        {
+         "family": "pancakeswap-v3-bsc",
+         "kind": "V3",
+         "pool": {
+          "Contract": "0x172fcd41e0913e95784454622d1c3724f546f849"
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000014816800000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "FHE",
+       "from_token": "0xd55c9fb62e176a8eb6968f32958fefdd0962727e",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     },
+     {
+      "amount": "0.704500000000000000",
+      "asset": "FHE",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "FHE",
+       "from_token": "0xd55c9fb62e176a8eb6968f32958fefdd0962727e",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "FHE",
+      "in_price": true,
+      "kind": "SellTax",
+      "step": {
+       "from": "FHE",
+       "from_token": "0xd55c9fb62e176a8eb6968f32958fefdd0962727e",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "BNB",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "FHE",
+       "from_token": "0xd55c9fb62e176a8eb6968f32958fefdd0962727e",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     },
+     {
+      "amount": "0.000012605600000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "BNB",
+       "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "index": 2,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.0000001625510217914552",
+      "asset": "BNB",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "BNB",
+       "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "index": 2,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "BNB",
+       "from_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "index": 2,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.000009517800000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "ApproveGas",
+      "step": {
+       "from": "FHE",
+       "from_token": "0xd55c9fb62e176a8eb6968f32958fefdd0962727e",
+       "index": 1,
+       "to": "BNB",
+       "to_token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      }
+     }
+    ]
+   },
+   "sigma": "0.0002863215661136135064211195",
+   "transit_s": "70.72620",
+   "spend_fee": "0.00081239840",
+   "spend_max": "1.01631039840",
+   "calc_at": "2026-11-16T16:32:22.055441480Z"
+  },
+  {
+   "rowid": 2392465,
+   "время": "2026-11-16T16:32:17.079219730+00:00",
+   "сообщение": "KOMA mexc → bsc_dex: отказ — прибыль -0.1027 USDT ниже порога 0.005 (оптимум 79.69 KOMA: прибыль -0.1027; на бюджете 600 (31283.54 KOMA) — -3.8777; допустимо 79.69–31283.54 KOMA, посчитано объёмов 113, пиков 1)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0xd5eaaac47bd1993d661bc087e15dfb079a7f3c19",
+     "ticker": "KOMA"
+    },
+    "buy_on": "mexc",
+    "sell_on": "bsc_dex"
+   },
+   "qty": "79.69",
+   "size": {
+    "at_budget_profit": "-3.8776535199547891941419425736",
+    "budget": "600",
+    "capped": false,
+    "evals": 113,
+    "max_exact": true,
+    "max_qty": "31283.54",
+    "min_qty": "79.69",
+    "peaks": 1,
+    "profit": "-0.1026857594900923985216116429",
+    "qty": "79.69",
+    "why": "оптимум 79.69 KOMA: прибыль -0.1027; на бюджете 600 (31283.54 KOMA) — -3.8777; допустимо 79.69–31283.54 KOMA, посчитано объёмов 113, пиков 1"
+   },
+   "invested": "1.0001095",
+   "proceeds": "0.9102589330347025739999999997",
+   "profit_usd": "-0.1026857594900923985216116429",
+   "profit_pct": "-10.267451663052135643308222040",
+   "buy_avg": "0.01255",
+   "sell_avg": "0.0125224780992530275691291787",
+   "costs_usdt": "0.0128351925247949725216116426",
+   "строки_затрат": [
+    {
+     "вид": "TradeFee",
+     "этап": "A",
+     "сумма": "0.0020002190",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "WithdrawFee",
+     "этап": "перевод",
+     "сумма": "7",
+     "актив": "KOMA",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "KOMA",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000012881200000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "KOMA",
+      "from_token": "0xd5eaaac47bd1993d661bc087e15dfb079a7f3c19",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "0.18172500000000000000",
+     "актив": "KOMA",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "KOMA",
+      "from_token": "0xd5eaaac47bd1993d661bc087e15dfb079a7f3c19",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "SellTax",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "KOMA",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "KOMA",
+      "from_token": "0xd5eaaac47bd1993d661bc087e15dfb079a7f3c19",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "KOMA",
+      "from_token": "0xd5eaaac47bd1993d661bc087e15dfb079a7f3c19",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "возврат USDT",
+     "сумма": "0.000002838165000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.0015627488858949725216116426",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "mexc",
+    "side": "Buy",
+    "at": "2026-11-16T16:32:53.888306265Z",
+    "avg_price": "0.01255",
+    "qty": "79.69",
+    "fillable_qty": "79.69",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.0020002190",
+      "asset": "USDT",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "bsc_dex",
+    "side": "Sell",
+    "at": "2026-11-16T16:32:54.976681296Z",
+    "avg_price": "0.0125224780992530275691291787",
+    "qty": "72.69",
+    "fillable_qty": "72.69",
+    "route": {
+     "block": 133958270,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 128812,
+     "legs": [
+      {
+       "expected_out": "0.910258933034702574",
+       "hops": [
+        {
+         "family": "pancakeswap_v2",
+         "kind": "V2",
+         "pool": {
+          "Contract": "0x0471414a53aa076623d8ff2581bcfee76129aae6"
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000012881200000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "KOMA",
+       "from_token": "0xd5eaaac47bd1993d661bc087e15dfb079a7f3c19",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.18172500000000000000",
+      "asset": "KOMA",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "KOMA",
+       "from_token": "0xd5eaaac47bd1993d661bc087e15dfb079a7f3c19",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "KOMA",
+      "in_price": true,
+      "kind": "SellTax",
+      "step": {
+       "from": "KOMA",
+       "from_token": "0xd5eaaac47bd1993d661bc087e15dfb079a7f3c19",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "KOMA",
+       "from_token": "0xd5eaaac47bd1993d661bc087e15dfb079a7f3c19",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     }
+    ]
+   },
+   "sigma": "0.0001168146663067145909877710",
+   "transit_s": "54",
+   "spend_fee": "0.0020002190",
+   "spend_max": "1.0021097190",
+   "calc_at": "2026-11-16T16:32:54.997041322Z"
+  },
+  {
+   "rowid": 2392376,
+   "время": "2026-11-16T16:31:45.702682670+00:00",
+   "сообщение": "AKE mexc → bsc_dex: отказ — прибыль -0.0718 USDT ниже порога 0.005 (оптимум 93.34 AKE: прибыль -0.0668; на бюджете 600 (55193.78 AKE) — -8.7821; допустимо 93.34–55193.78 AKE, посчитано объёмов 149, пиков 2)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db",
+     "ticker": "AKE"
+    },
+    "buy_on": "mexc",
+    "sell_on": "bsc_dex"
+   },
+   "qty": "93.34",
+   "size": {
+    "at_budget_profit": "-8.782131626171024430519735430",
+    "budget": "600",
+    "capped": false,
+    "evals": 149,
+    "max_exact": true,
+    "max_qty": "55193.78",
+    "min_qty": "93.34",
+    "peaks": 2,
+    "profit": "-0.0668020362935049137936978908",
+    "qty": "93.34",
+    "why": "оптимум 93.34 AKE: прибыль -0.0668; на бюджете 600 (55193.78 AKE) — -8.7821; допустимо 93.34–55193.78 AKE, посчитано объёмов 149, пиков 2"
+   },
+   "invested": "1.005094454",
+   "proceeds": "0.9569423788601346700000000002",
+   "profit_usd": "-0.0718350607466049137936978908",
+   "profit_pct": "-7.1470955252733803059764859500",
+   "buy_avg": "0.0107681",
+   "sell_avg": "0.0107112422079710618983657936",
+   "costs_usdt": "0.0236829856067395837936978910",
+   "строки_затрат": [
+    {
+     "вид": "TradeFee",
+     "этап": "A",
+     "сумма": "0.0008040755632",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "WithdrawFee",
+     "этап": "перевод",
+     "сумма": "4",
+     "актив": "AKE",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "AKE",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000012043400000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "AKE",
+      "from_token": "0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "0.893400000000000000",
+     "актив": "AKE",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "AKE",
+      "from_token": "0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "SellTax",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "AKE",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "AKE",
+      "from_token": "0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "AKE",
+      "from_token": "0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "ApproveGas",
+     "этап": "B",
+     "сумма": "0.000009502100000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "AKE",
+      "from_token": "0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "возврат USDT",
+     "сумма": "0.000002838165000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.0084923038568895837936978910",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "mexc",
+    "side": "Buy",
+    "at": "2026-11-16T16:32:06.569690166Z",
+    "avg_price": "0.0107681",
+    "qty": "93.34",
+    "fillable_qty": "93.34",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.0008040755632",
+      "asset": "USDT",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "bsc_dex",
+    "side": "Sell",
+    "at": "2026-11-16T16:32:06.806623135Z",
+    "avg_price": "0.0107112422079710618983657936",
+    "qty": "89.34",
+    "fillable_qty": "89.34",
+    "route": {
+     "block": 133959952,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 120434,
+     "legs": [
+      {
+       "expected_out": "0.956942378860134670",
+       "hops": [
+        {
+         "family": "uniswap-bsc",
+         "kind": "V3",
+         "pool": {
+          "Contract": "0x83fcd80d7973cca1aa821590bbec66d27a2d4ad4"
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000012043400000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "AKE",
+       "from_token": "0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.893400000000000000",
+      "asset": "AKE",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "AKE",
+       "from_token": "0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "AKE",
+      "in_price": true,
+      "kind": "SellTax",
+      "step": {
+       "from": "AKE",
+       "from_token": "0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "AKE",
+       "from_token": "0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.000009502100000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "ApproveGas",
+      "step": {
+       "from": "AKE",
+       "from_token": "0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     }
+    ]
+   },
+   "sigma": "0.0006038274627368429654036358",
+   "transit_s": "54",
+   "spend_fee": "0.0008040755632",
+   "spend_max": "1.0058985295632",
+   "calc_at": "2026-11-16T16:32:06.823058838Z"
+  },
+  {
+   "rowid": 2392309,
+   "время": "2026-11-16T16:31:24.094104689+00:00",
+   "сообщение": "NXT mexc → bsc_dex: отказ — прибыль -0.0041 USDT ниже порога 0.005 (оптимум 1030.9 NXT: прибыль -0.0041; на бюджете 600 (2294.26 NXT) — -0.0668; допустимо 13.05–2294.26 NXT, посчитано объёмов 120, пиков 1)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0xae7484d162ba80b340eba7769a7a67838b1c16c1",
+     "ticker": "NXT"
+    },
+    "buy_on": "mexc",
+    "sell_on": "bsc_dex"
+   },
+   "qty": "1030.90",
+   "size": {
+    "at_budget_profit": "-0.0667812953432581850549213815",
+    "budget": "600",
+    "capped": false,
+    "evals": 120,
+    "max_exact": true,
+    "max_qty": "2294.26",
+    "min_qty": "13.05",
+    "peaks": 1,
+    "profit": "-0.0041299615201767556757642470",
+    "qty": "1030.90",
+    "why": "оптимум 1030.9 NXT: прибыль -0.0041; на бюджете 600 (2294.26 NXT) — -0.0668; допустимо 13.05–2294.26 NXT, посчитано объёмов 120, пиков 1"
+   },
+   "invested": "79.083355300000000000000000051",
+   "proceeds": "79.189597861814723209999999996",
+   "profit_usd": "-0.0041299615201767556757642470",
+   "profit_pct": "-0.0052222891966456001845488800",
+   "buy_avg": "0.0767129258899990299738092929",
+   "sell_avg": "0.0769653006723828585965594324",
+   "costs_usdt": "0.1103725233348999656757641920",
+   "строки_затрат": [
+    {
+     "вид": "TradeFee",
+     "этап": "A",
+     "сумма": "0.06326668424",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "WithdrawFee",
+     "этап": "перевод",
+     "сумма": "2",
+     "актив": "NXT",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "NXT",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000012800900000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "NXT",
+      "from_token": "0xae7484d162ba80b340eba7769a7a67838b1c16c1",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "2.57225000000000000000",
+     "актив": "NXT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "NXT",
+      "from_token": "0xae7484d162ba80b340eba7769a7a67838b1c16c1",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "SellTax",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "NXT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "NXT",
+      "from_token": "0xae7484d162ba80b340eba7769a7a67838b1c16c1",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "NXT",
+      "from_token": "0xae7484d162ba80b340eba7769a7a67838b1c16c1",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "ApproveGas",
+     "этап": "B",
+     "сумма": "0.000009460000000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "NXT",
+      "from_token": "0xae7484d162ba80b340eba7769a7a67838b1c16c1",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "возврат USDT",
+     "сумма": "0.000002838165000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.0323081833428499656757641920",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "mexc",
+    "side": "Buy",
+    "at": "2026-11-16T16:31:24.942236053Z",
+    "avg_price": "0.0767129258899990299738092929",
+    "qty": "1030.90",
+    "fillable_qty": "1030.90",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.06326668424",
+      "asset": "USDT",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "bsc_dex",
+    "side": "Sell",
+    "at": "2026-11-16T16:31:25.139442640Z",
+    "avg_price": "0.0769653006723828585965594324",
+    "qty": "1028.90",
+    "fillable_qty": "1028.90",
+    "route": {
+     "block": 133958348,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 128009,
+     "legs": [
+      {
+       "expected_out": "79.189597861814723210",
+       "hops": [
+        {
+         "family": "pancakeswap-v3-bsc",
+         "kind": "V3",
+         "pool": {
+          "Contract": "0xb09634eda7489531964851b57527b2ef043af563"
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000012800900000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "NXT",
+       "from_token": "0xae7484d162ba80b340eba7769a7a67838b1c16c1",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "2.57225000000000000000",
+      "asset": "NXT",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "NXT",
+       "from_token": "0xae7484d162ba80b340eba7769a7a67838b1c16c1",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "NXT",
+      "in_price": true,
+      "kind": "SellTax",
+      "step": {
+       "from": "NXT",
+       "from_token": "0xae7484d162ba80b340eba7769a7a67838b1c16c1",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "NXT",
+       "from_token": "0xae7484d162ba80b340eba7769a7a67838b1c16c1",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.000009460000000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "ApproveGas",
+      "step": {
+       "from": "NXT",
+       "from_token": "0xae7484d162ba80b340eba7769a7a67838b1c16c1",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     }
+    ]
+   },
+   "sigma": "0.0000277598762418425853633526",
+   "transit_s": "54",
+   "spend_fee": "0.063322001600000000000",
+   "spend_max": "79.215824001600000000000",
+   "calc_at": "2026-11-16T16:31:25.145234793Z"
+  },
+  {
+   "rowid": 2392265,
+   "время": "2026-11-16T16:31:06.809105336+00:00",
+   "сообщение": "BILL mexc → bsc_dex: отказ — прибыль -0.0788 USDT ниже порога 0.005 (оптимум 248.02 BILL: прибыль -0.0788; на бюджете 600 (128929.11 BILL) — -15.0333; допустимо 248.02–128929.11 BILL, посчитано объёмов 131, пиков 1)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0xdf24f8c21cb404b3031a450d8e049d6e39fc1fa5",
+     "ticker": "BILL"
+    },
+    "buy_on": "mexc",
+    "sell_on": "bsc_dex"
+   },
+   "qty": "248.02",
+   "size": {
+    "at_budget_profit": "-15.033271505740400986419036862",
+    "budget": "600",
+    "capped": false,
+    "evals": 131,
+    "max_exact": true,
+    "max_qty": "128929.11",
+    "min_qty": "248.02",
+    "peaks": 1,
+    "profit": "-0.0788060304416375747853625838",
+    "qty": "248.02",
+    "why": "оптимум 248.02 BILL: прибыль -0.0788; на бюджете 600 (128929.11 BILL) — -15.0333; допустимо 248.02–128929.11 BILL, посчитано объёмов 131, пиков 1"
+   },
+   "invested": "1.00001664",
+   "proceeds": "0.9427738460116077930000000110",
+   "profit_usd": "-0.0788060304416375747853625838",
+   "profit_pct": "-7.8804719131111233094443892300",
+   "buy_avg": "0.004032",
+   "sell_avg": "0.0040458923955523465496523904",
+   "costs_usdt": "0.0215632364532453677853625948",
+   "строки_затрат": [
+    {
+     "вид": "TradeFee",
+     "этап": "A",
+     "сумма": "0.000800013312",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "WithdrawFee",
+     "этап": "перевод",
+     "сумма": "15",
+     "актив": "BILL",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "BILL",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000016868100000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BILL",
+      "from_token": "0xdf24f8c21cb404b3031a450d8e049d6e39fc1fa5",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "0.0230689800000000000000",
+     "актив": "BILL",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BILL",
+      "from_token": "0xdf24f8c21cb404b3031a450d8e049d6e39fc1fa5",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "SellTax",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "BILL",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BILL",
+      "from_token": "0xdf24f8c21cb404b3031a450d8e049d6e39fc1fa5",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BILL",
+      "from_token": "0xdf24f8c21cb404b3031a450d8e049d6e39fc1fa5",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "ApproveGas",
+     "этап": "B",
+     "сумма": "0.000010188900000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "BILL",
+      "from_token": "0xdf24f8c21cb404b3031a450d8e049d6e39fc1fa5",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "возврат USDT",
+     "сумма": "0.000002838165000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.0031292611143453677853625948",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "mexc",
+    "side": "Buy",
+    "at": "2026-11-16T16:32:52.389958380Z",
+    "avg_price": "0.004032",
+    "qty": "248.02",
+    "fillable_qty": "248.02",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000800013312",
+      "asset": "USDT",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "bsc_dex",
+    "side": "Sell",
+    "at": "2026-11-16T16:32:53.655278770Z",
+    "avg_price": "0.0040458923955523465496523904",
+    "qty": "233.02",
+    "fillable_qty": "233.02",
+    "route": {
+     "block": 133960080,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 168681,
+     "legs": [
+      {
+       "expected_out": "0.942773846011607793",
+       "hops": [
+        {
+         "family": "pancakeswap-infinity-clmm",
+         "kind": "Cl",
+         "pool": {
+          "Singleton": {
+           "id": "0x673dbd89b4de73f139ccca01f515536d386bc993c35efb3abf0a4d4b02b6dd20",
+           "manager": "0xa0ffb9c1ce1fe56963b0321b32e7a0302114058b"
+          }
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000016868100000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "BILL",
+       "from_token": "0xdf24f8c21cb404b3031a450d8e049d6e39fc1fa5",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.0230689800000000000000",
+      "asset": "BILL",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "BILL",
+       "from_token": "0xdf24f8c21cb404b3031a450d8e049d6e39fc1fa5",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "BILL",
+      "in_price": true,
+      "kind": "SellTax",
+      "step": {
+       "from": "BILL",
+       "from_token": "0xdf24f8c21cb404b3031a450d8e049d6e39fc1fa5",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "BILL",
+       "from_token": "0xdf24f8c21cb404b3031a450d8e049d6e39fc1fa5",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.000010188900000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "ApproveGas",
+      "step": {
+       "from": "BILL",
+       "from_token": "0xdf24f8c21cb404b3031a450d8e049d6e39fc1fa5",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     }
+    ]
+   },
+   "sigma": "0.0002175523026074563597853742",
+   "transit_s": "58.19440",
+   "spend_fee": "0.000800013312",
+   "spend_max": "1.000816653312",
+   "calc_at": "2026-11-16T16:32:53.672045925Z"
+  },
+  {
+   "rowid": 2392156,
+   "время": "2026-11-16T16:30:18.482248924+00:00",
+   "сообщение": "FOREST mexc → bsc_dex: отказ — прибыль -0.2231 USDT ниже порога 0.005 (оптимум 26.4 FOREST: прибыль -0.2176; на бюджете 600 (14565.39 FOREST) — -25.0037; допустимо 26.4–14565.39 FOREST, посчитано объёмов 149, пиков 2)",
+   "направление": {
+    "asset": {
+     "bsc_contract": "0x11cf6bf6d87cb0eb9c294fd6cbfec91ee3a1a7d0",
+     "ticker": "FOREST"
+    },
+    "buy_on": "mexc",
+    "sell_on": "bsc_dex"
+   },
+   "qty": "26.40",
+   "size": {
+    "at_budget_profit": "-25.003734414101918382145478052",
+    "budget": "600",
+    "capped": false,
+    "evals": 149,
+    "max_exact": true,
+    "max_qty": "14565.39",
+    "min_qty": "26.40",
+    "peaks": 2,
+    "profit": "-0.2175576846731235408954981568",
+    "qty": "26.40",
+    "why": "оптимум 26.4 FOREST: прибыль -0.2176; на бюджете 600 (14565.39 FOREST) — -25.0037; допустимо 26.4–14565.39 FOREST, посчитано объёмов 149, пиков 2"
+   },
+   "invested": "1.0058400",
+   "proceeds": "0.8093959633883683640000000001",
+   "profit_usd": "-0.2231127726731235408954981568",
+   "profit_pct": "-22.181735929484166556857766320",
+   "buy_avg": "0.03810",
+   "sell_avg": "0.0378222412798302973831775701",
+   "costs_usdt": "0.0266687360614919048954981569",
+   "строки_затрат": [
+    {
+     "вид": "TradeFee",
+     "этап": "A",
+     "сумма": "0.0020116800",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "WithdrawFee",
+     "этап": "перевод",
+     "сумма": "5",
+     "актив": "FOREST",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "TransferTax",
+     "этап": "перевод",
+     "сумма": "0",
+     "актив": "FOREST",
+     "в_цене": false,
+     "в_объёме": true,
+     "шаг": null
+    },
+    {
+     "вид": "Gas",
+     "этап": "B",
+     "сумма": "0.000014089600000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "FOREST",
+      "from_token": "0x11cf6bf6d87cb0eb9c294fd6cbfec91ee3a1a7d0",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "PoolFee",
+     "этап": "B",
+     "сумма": "0.06420000000000000000",
+     "актив": "FOREST",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "FOREST",
+      "from_token": "0x11cf6bf6d87cb0eb9c294fd6cbfec91ee3a1a7d0",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "SellTax",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "FOREST",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "FOREST",
+      "from_token": "0x11cf6bf6d87cb0eb9c294fd6cbfec91ee3a1a7d0",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "HookImpact",
+     "этап": "B",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": true,
+     "в_объёме": false,
+     "шаг": {
+      "from": "FOREST",
+      "from_token": "0x11cf6bf6d87cb0eb9c294fd6cbfec91ee3a1a7d0",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "ApproveGas",
+     "этап": "B",
+     "сумма": "0.000010958500000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": {
+      "from": "FOREST",
+      "from_token": "0x11cf6bf6d87cb0eb9c294fd6cbfec91ee3a1a7d0",
+      "index": 1,
+      "to": "USDT",
+      "to_token": "0x55d398326f99059ff775485246999027b3197955"
+     }
+    },
+    {
+     "вид": "TransferGas",
+     "этап": "возврат USDT",
+     "сумма": "0.000002838165000000",
+     "актив": "BNB",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "UsdtReturn",
+     "этап": "возврат USDT",
+     "сумма": "0",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    },
+    {
+     "вид": "PriceMoveReserve",
+     "этап": "ядро",
+     "сумма": "0.0082130833162919048954981569",
+     "актив": "USDT",
+     "в_цене": false,
+     "в_объёме": false,
+     "шаг": null
+    }
+   ],
+   "покупка": {
+    "venue": "mexc",
+    "side": "Buy",
+    "at": "2026-11-16T16:30:22.130137900Z",
+    "avg_price": "0.03810",
+    "qty": "26.40",
+    "fillable_qty": "26.40",
+    "route": null,
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.0020116800",
+      "asset": "USDT",
+      "in_price": false,
+      "kind": "TradeFee",
+      "step": null
+     }
+    ]
+   },
+   "продажа": {
+    "venue": "bsc_dex",
+    "side": "Sell",
+    "at": "2026-11-16T16:30:22.855875498Z",
+    "avg_price": "0.0378222412798302973831775701",
+    "qty": "21.40",
+    "fillable_qty": "21.40",
+    "route": {
+     "block": 133959713,
+     "exec_note": null,
+     "executable": true,
+     "gas_units": 140896,
+     "legs": [
+      {
+       "expected_out": "0.809395963388368364",
+       "hops": [
+        {
+         "family": "uniswap-bsc",
+         "kind": "V3",
+         "pool": {
+          "Contract": "0x02f8edea4f88a61f90a98cbd43eb28304e793788"
+         }
+        }
+       ],
+       "share": "1"
+      }
+     ],
+     "mode": "Direct"
+    },
+    "pick": null,
+    "signal_route": null,
+    "costs": [
+     {
+      "amount": "0.000014089600000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "Gas",
+      "step": {
+       "from": "FOREST",
+       "from_token": "0x11cf6bf6d87cb0eb9c294fd6cbfec91ee3a1a7d0",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.06420000000000000000",
+      "asset": "FOREST",
+      "in_price": true,
+      "kind": "PoolFee",
+      "step": {
+       "from": "FOREST",
+       "from_token": "0x11cf6bf6d87cb0eb9c294fd6cbfec91ee3a1a7d0",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "FOREST",
+      "in_price": true,
+      "kind": "SellTax",
+      "step": {
+       "from": "FOREST",
+       "from_token": "0x11cf6bf6d87cb0eb9c294fd6cbfec91ee3a1a7d0",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0",
+      "asset": "USDT",
+      "in_price": true,
+      "kind": "HookImpact",
+      "step": {
+       "from": "FOREST",
+       "from_token": "0x11cf6bf6d87cb0eb9c294fd6cbfec91ee3a1a7d0",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     },
+     {
+      "amount": "0.000010958500000000",
+      "asset": "BNB",
+      "in_price": false,
+      "kind": "ApproveGas",
+      "step": {
+       "from": "FOREST",
+       "from_token": "0x11cf6bf6d87cb0eb9c294fd6cbfec91ee3a1a7d0",
+       "index": 1,
+       "to": "USDT",
+       "to_token": "0x55d398326f99059ff775485246999027b3197955"
+      }
+     }
+    ]
+   },
+   "sigma": "0.0006904278776971947172215784",
+   "transit_s": "54",
+   "spend_fee": "0.0020116800",
+   "spend_max": "1.0078516800",
+   "calc_at": "2026-11-16T16:30:22.862190154Z"
+  }
+ ]
+}

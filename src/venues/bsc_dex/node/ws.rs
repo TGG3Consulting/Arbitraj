@@ -7,7 +7,7 @@
 //! Кто вызывает: node/heads.rs, pools/events_* (1b), connection.rs (проверка подключения).
 //! От чего зависит: ctx.rs, node/ws_task.rs (цикл чтения и записи), tokio-tungstenite.
 //! Настройки: bsc.node_ws_url (+ секрет bsc.node_ws_key при {key}), http.timeout_ms (ожидание ответа узла
-//! и подключения), venue.ws_silence_ms [bsc_dex] (тишина = обрыв).
+//! и подключения), venue.ws_silence_ms [bsc_dex] (тишина = обрыв), venue.ws_ping_ms [bsc_dex] (свой Ping, решение 98).
 //!
 //! Методы: eth_subscribe / eth_unsubscribe, уведомления eth_subscription {subscription, result} —
 //! https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/subscribe.yaml#L1-L60
@@ -81,6 +81,8 @@ impl Conn {
     pub async fn connect(ctx: &Ctx, name: &str, url: &str) -> GatewayResult<Conn> {
         let timeout = ctx.timeout()?;
         let silence = Duration::from_millis(ctx.int("venue.ws_silence_ms")?);
+        // Решение 98: свой Ping раз в venue.ws_ping_ms — живость тихого соединения (не задано — без Ping, как раньше).
+        let ping = ctx.int("venue.ws_ping_ms").ok().map(Duration::from_millis);
         let connect = tokio::time::timeout(timeout, tokio_tungstenite::connect_async(url)).await;
         let ws = match connect {
             Err(_) => {
@@ -106,6 +108,7 @@ impl Conn {
             ws,
             rx,
             silence,
+            ping,
             end.clone(),
         ));
         Ok(Conn {

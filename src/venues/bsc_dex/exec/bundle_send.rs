@@ -1,8 +1,9 @@
 //! Файл: venues/bsc_dex/exec/bundle_send.rs
 //! Что делает: отправка собранного бандла свопов (exec/bundle.rs, решение 84). Вызывается боевым путём графа
 //! (exec/bundle_trade.rs) с местом в очереди кошелька Slot. Шаги: (1) симуляция всего упорядоченного бандла
-//! eth_simulateV1 на своём узле (check/simulate.rs) — видит эффект ноги N на ногу N+1 (межтранзакционная передача) и
+//! eth_simulateV1 на своём узле (check/simulate.rs; время блока — голова + 1 с, решение 127) — видит эффект ноги N на ногу N+1 (межтранзакционная передача) и
 //! валидирует порядок; откат любого шага → не отправляем; попутно газ и кумулятивные базы BALANCE_CHECK (exec/bundle_sim.rs);
+//! (1б) продажа BNB (решение 122 R3) — резерв на газ не тратится (exec/bundle_native.rs::reserve_ok);
 //! (2) проверка «кто меняет» (решение 59) по событиям симуляции — чужой пул исключается; (3) цена газа — как у одиночной;
 //! (4) подпись по очереди (exec/bundle_sim.rs); (5) отправка одним бандлом через бандл-каналы (send/mod.rs dispatch_slice →
 //! eth_sendBundle, revertingTxHashes пуст = всё-или-ничего, maxBlockNumber = голова + send.bundle_max_blocks);
@@ -13,12 +14,20 @@
 //! тот же первый nonce; очередь НЕ останавливается по таймауту (ревью #82). Отмен у бандла нет.
 //! Этапы шлют уведомления жизненного цикла (exec/bundle_notify.rs, 80.8c-iii, только отображение): симуляция прошла/
 //! откатилась, отправлен (каналы + maxBlockNumber), включён (блок + хеши) / не попал в блок (истёк — очередь свободна).
-//! Классику/одиночную отправку не трогает.
+//! Решение 299: send.bundle_skip_single = да — одиночные каналы исключаются из этой отправки (send/bundle_pick.rs),
+//! граница газа — по бандловым каналам; исключённые — в журнале (send.bundle_skip_single) и в bundle.sent.
+//! Классику/одиночную отправку не трогает. Решение 271 (дополнение): после отправки и после итога — очистка памяти
+//! разрешений котировки (env.allow, wallet/allow_cache.rs), как exec/txs.rs.
+//! Решение 233: итог не установлен за send.queue_max_wait_s (Pending: узел молчал, квитанции не читались — бандл мог
+//! попасть позже) — очередь остановлена, а вызывающий получает «исход неизвестен» с «чем найти» (exec/bundle_ref.rs:
+//! хеши всех транзакций, первый nonce, maxBlockNumber — Sent.max_block), не «не попал в блок». Так же — если задача
+//! трекера упала (паника) или отменена: очередь остановлена (send/settle.rs guarded / joined), итог — Pending с причиной.
 //! Кто вызывает: exec/bundle_trade.rs; тесты.
 //! От чего зависит: exec/bundle.rs, exec/bundle_sim.rs, exec/bundle_notify.rs, exec/txs.rs (Env), check/{simulate,emitter}.rs,
 //! send/{mod,receipt,settle,track_util}.rs, wallet/nonce.rs, wallet/signer.rs, node/heads.rs, gateway/urgency.rs.
 //! Настройки: send.gas_limit_margin_pct, send.bundle_max_blocks, send.queue_max_wait_s, feed.stale_after_ms [bsc_dex]
-//! (через SendCfg); цена газа — через quote/gas.rs; каналы — channel.* (bundle).
+//! (через SendCfg), send.bundle_skip_single [bsc_dex] (через send/bundle_pick.rs); цена газа — через quote/gas.rs;
+//! каналы — channel.* (bundle).
 
 use std::time::Instant;
 
@@ -27,9 +36,10 @@ use alloy_primitives::{B256, Bytes};
 use crate::core::types::TxOutcome;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::urgency as priority;
+use crate::storage::journal::Level;
 
-use super::super::check::emitter;
 use super::super::check::simulate::{self, SimLog};
+use super::super::check::{emitter, sim_base};
 use super::super::ctx::Ctx;
 use super::super::node::heads::Heads;
 use super::super::pools::registry::Entry;
@@ -37,6 +47,7 @@ use super::super::send::receipt::{self, Receipt};
 use super::super::send::settle::{self, After};
 use super::super::send::track_util::{self, Quiet, Tracked};
 use super::super::send::tx::SendCfg;
+use super::super::send::tx_price::TxPrice;
 use super::super::send::{self};
 use super::super::wallet::nonce::Slot;
 use super::super::wallet::signer;
@@ -55,14 +66,17 @@ pub struct Sent {
     pub tracked: Tracked,
     /// Квитанции всех транзакций бандла (только если попал в блок) — для факта сделки (exec/bundle_trade.rs).
     pub receipts: Vec<Receipt>,
+    /// maxBlockNumber бандла — для «чем найти» при неизвестном исходе (exec/bundle_ref.rs, решение 233).
+    pub max_block: u64,
 }
 
 /// Отправляет собранный бандл, занимая очередь кошелька местом `slot` (nonce в бандле уже проставлены от slot.nonce).
 /// Шаги: симуляция всего бандла (газ + кумулятивные базы BALANCE_CHECK + проверка «кто меняет», решение 59) → подпись
 /// по очереди → очередь «ждёт итога» (settle::busy) → отправка одним eth_sendBundle через бандл-каналы → ожидание блока
 /// и settle очереди в отдельной задаче-трекере (держит Hold). Принимает: окружение, место в очереди, бандл, пулы
-/// маршрута (для решения 59). Возвращает: итог с квитанциями. Ошибки: NotConfigured (настройки/каналы), NoRoute/StaleData
-/// (симуляция откатилась / чужой пул), ChannelRejected, узел, Internal (подпись / задача трекера упала).
+/// маршрута (для решения 59). Возвращает: итог с квитанциями; слежение прервано (паника / отмена задачи трекера) —
+/// итог Pending с причиной, очередь остановлена (send/settle.rs guarded / joined). Ошибки: NotConfigured
+/// (настройки/каналы), NoRoute/StaleData (симуляция откатилась / чужой пул), ChannelRejected, узел, Internal (подпись).
 pub async fn send(
     env: &Env,
     slot: &Slot,
@@ -71,14 +85,25 @@ pub async fn send(
 ) -> GatewayResult<Sent> {
     let ctx = &env.ctx;
     let cfg = SendCfg::read(ctx)?;
-    let ready = send::select(ctx, &env.stats)?;
+    // Решение 416 (ревью М-1, М-3): сеть узлов сверена с dex.evm_chain_id до подписи (node/chain_seen.rs); подпись —
+    // sign_txs тем же dex.evm_chain_id.
+    super::super::node::chain_seen::ensure(ctx).await?;
+    // Решение 299: при send.bundle_skip_single = да — только бандловые каналы (одиночные исключены), иначе все как есть.
+    let picked = send::bundle_pick::pick(ctx, send::select(ctx, &env.stats)?)?;
+    let ready = picked.ready;
     let wallet = slot.from;
-    let price = env
-        .gas
-        .wei(ctx, &env.heads)
-        .await?
-        .max(send::gas_floor(&ready));
-    let (at, _now) = env.heads.at(ctx).await?;
+    // Решение 435 (433-д): бандл подписывается legacy-ценой (как было); у сети типа 2 (dex.gas_mode = eip1559_l1)
+    // бандлов нет — отказ до симуляции и подписи.
+    let price = match super::tx_fee::price(env, &ready, None).await? {
+        TxPrice::Legacy(p) => p,
+        TxPrice::Eip1559(..) => {
+            let why = "бандл не отправляется: у сети площадки модель газа eip1559_l1 (тип 2) — бандлов нет, \
+                       исполнение только одной транзакцией через исполнитель";
+            return Err(ctx.err(ErrorCode::NotApplicable, why));
+        }
+    };
+    // Решение 127: симулированный блок — время головы + 1 с (check/sim_base.rs), срок бандла dex.deadline_s не раздувается.
+    let (at, _now) = sim_base::head(ctx, &env.heads).await?;
     let margin = ctx.dec("send.gas_limit_margin_pct")?;
     // Одна симуляция всего упорядоченного бандла: газ, кумулятивные базы BALANCE_CHECK и события обмена.
     // Уведомления (bundle.simulated / bundle.sim_reverted) — только отображение, тот же исход/ошибка пробрасывается.
@@ -97,6 +122,8 @@ pub async fn send(
             return Err(e);
         }
     };
+    // Решение 122 R3: продажа BNB — value свопов + газ всех транзакций только сверх резерва risk.min_bnb_balance.
+    super::bundle_native::reserve_ok(ctx, wallet, bundle, &limits, price).await?;
     // Решение 59 («кто меняет»): событие обмена — только от пулов маршрута; чужой пул исключается, сделки нет.
     let logs: Vec<SimLog> = res.iter().flat_map(|r| r.logs.clone()).collect();
     if let Err(w) = emitter::check(ctx, entries, &logs).await {
@@ -110,7 +137,22 @@ pub async fn send(
     let max_block = head.number + cfg.bundle_max;
     let raw: Vec<Bytes> = signed.iter().map(|t| t.raw.clone()).collect();
     let dispatched = send::dispatch_slice(ctx, &env.stats, &ready, &raw, max_block).await?;
-    bundle_notify::sent(&env.stats, ctx, &dispatched.all(), max_block);
+    if !picked.skipped.is_empty() {
+        let text = format!(
+            "бандл отправлен только в бандловые каналы ({}); одиночные исключены (send.bundle_skip_single): {}",
+            dispatched.all().join(", "),
+            picked.skipped.join(", ")
+        );
+        ctx.log(Level::Info, "send.bundle_skip_single", text, None)
+            .await;
+    }
+    bundle_notify::sent(
+        &env.stats,
+        ctx,
+        &dispatched.all(),
+        &picked.skipped,
+        max_block,
+    );
     let hashes: Vec<B256> = signed.iter().map(|t| t.hash).collect();
     // Очередь кошелька: ждёт итога по последнему nonce бандла (решение 45). Отмен нет — приватный бандл истекает.
     let last_nonce = bundle.first_nonce + (signed.len() as u64) - 1;
@@ -126,29 +168,17 @@ pub async fn send(
         hash: repr,
     };
     settle::busy(&after, &hold).await;
+    // Решение 271 (дополнение): бандл ушёл — разрешения кошелька могли измениться (approve в бандле, обмен списывает
+    // разрешение) — память котировки очищается, как у одиночной (exec/txs.rs).
+    env.allow.clear();
     // Ожидание итога и settle — в отдельной задаче, держащей Hold (как у одиночной, exec/txs.rs, решение 45): место в
     // очереди не освобождается, пока итог не установлен, даже если вызывающий прерван.
     let (task_ctx, task_heads, task_stats) = (ctx.clone(), env.heads.clone(), env.stats.clone());
     let task_hashes = hashes.clone();
+    // Удержание вызывающего: задача упала мимо своей защиты или отменена — очередь останавливает он (settle::joined).
+    let hold_out = hold.clone();
     let class = priority::current();
     let job = tokio::spawn(priority::scope(class, async move {
-        let tracked = confirm(&task_ctx, &task_heads, &cfg, &task_hashes, max_block).await;
-        // Уведомления жизненного цикла (только отображение, итог/очередь не меняем): включён / не попал в блок.
-        match tracked.outcome {
-            TxOutcome::Included => {
-                let block = tracked.receipt.as_ref().map(|r| r.block_number.to::<u64>());
-                bundle_notify::included(&task_stats, &task_ctx, &task_hashes, block);
-            }
-            TxOutcome::NotIncluded => {
-                bundle_notify::not_included(&task_stats, &task_ctx, max_block);
-            }
-            _ => {}
-        }
-        let receipts = if tracked.outcome == TxOutcome::Included {
-            all_receipts(&task_ctx, &task_hashes).await
-        } else {
-            Vec::new()
-        };
         let a = After {
             ctx: &task_ctx,
             heads: &task_heads,
@@ -158,20 +188,43 @@ pub async fn send(
             nonce: last_nonce,
             hash: repr,
         };
-        settle::settle_bundle(&a, &hold, &tracked).await;
-        (tracked, receipts)
+        // Паника внутри слежения — очередь остановлена здесь же, удержанием задачи (send/settle.rs guarded).
+        settle::guarded(&a, &hold, async {
+            let tracked = confirm(&task_ctx, &task_heads, &cfg, &task_hashes, max_block).await;
+            // Уведомления жизненного цикла (только отображение, итог/очередь не меняем): включён / не попал в блок.
+            match tracked.outcome {
+                TxOutcome::Included => {
+                    let block = tracked.receipt.as_ref().map(|r| r.block_number.to::<u64>());
+                    bundle_notify::included(&task_stats, &task_ctx, &task_hashes, block);
+                }
+                TxOutcome::NotIncluded => {
+                    bundle_notify::not_included(&task_stats, &task_ctx, max_block);
+                }
+                _ => {}
+            }
+            let receipts = if tracked.outcome == TxOutcome::Included {
+                all_receipts(&task_ctx, &task_hashes).await
+            } else {
+                Vec::new()
+            };
+            settle::settle_bundle(&a, &hold, &tracked).await;
+            (tracked, receipts)
+        })
+        .await
     }));
-    let (tracked, receipts) = job.await.map_err(|e| {
-        ctx.err(
-            ErrorCode::Internal,
-            format!("задача трекера бандла {repr} упала: {e}"),
-        )
-    })?;
+    // Слежение прервано (паника, отмена) — исход не установлен, очередь уже остановлена последней транзакцией бандла:
+    // дальше как при Pending — «исход неизвестен» с «чем найти» бандла (exec/bundle_ref.rs, решение 233).
+    let (tracked, receipts) = settle::joined(&after, &hold_out, job)
+        .await
+        .unwrap_or_else(|why| (Tracked::bare(TxOutcome::Pending, Some(why)), Vec::new()));
+    // Итог бандла (в блоке / не попал / неизвестен) — память разрешений снова очищается, как у одиночной (exec/txs.rs).
+    env.allow.clear();
     Ok(Sent {
         hashes,
         channels: dispatched.all(),
         tracked,
         receipts,
+        max_block,
     })
 }
 
@@ -189,7 +242,9 @@ async fn all_receipts(ctx: &Ctx, hashes: &[B256]) -> Vec<Receipt> {
 
 /// Ждёт попадания бандла в блок своим узлом (решение 42) без отмен: приватный бандл с maxBlockNumber истекает сам —
 /// прошёл предел блока, квитанции нет → NotIncluded (газ не потрачен, решение 40). Принимает: хеши бандла, предел блока.
-/// Возвращает: итог. Ошибок нет — сбои узла повторяются; итог не установлен за send.queue_max_wait_s → Pending.
+/// Возвращает: итог. Ошибок нет — сбои узла повторяются; итог не установлен за send.queue_max_wait_s → Pending
+/// (у вызывающего — «исход неизвестен», решение 233). Сбой чтения квитанции на блоке — проверка предела пропускается:
+/// отсутствие квитанции не подтверждено.
 async fn confirm(
     ctx: &Ctx,
     heads: &Heads,

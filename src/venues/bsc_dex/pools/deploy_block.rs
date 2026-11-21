@@ -20,7 +20,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::storage::journal::Level;
 use crate::storage::venue_state;
 
-use super::super::ctx::{Ctx, ID};
+use super::super::ctx::Ctx;
 use super::super::node::call::block_tag;
 use super::super::node::rpc;
 use super::families::Family;
@@ -35,7 +35,7 @@ fn key(f: &Family, manager: Address) -> String {
 
 /// Сохранённый блок развёртывания. None — ещё не искали (или запись не прочитана — тогда ищем заново). Ошибок нет.
 pub async fn stored(ctx: &Ctx, f: &Family, manager: Address) -> Option<u64> {
-    let body = venue_state::load(ctx.journal.db(), ID, KIND, &key(f, manager)).await;
+    let body = venue_state::load(ctx.journal.db(), ctx.place.id, KIND, &key(f, manager)).await;
     body.ok().flatten().and_then(|b| b.parse().ok())
 }
 
@@ -56,7 +56,7 @@ pub async fn get(ctx: &Ctx, f: &Family, manager: Address) -> GatewayResult<u64> 
     let block = search(ctx, manager, head.to()).await?;
     let saved = venue_state::save(
         ctx.journal.db(),
-        ID,
+        ctx.place.id,
         KIND,
         &key(f, manager),
         block.to_string(),

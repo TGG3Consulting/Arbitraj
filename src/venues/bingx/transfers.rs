@@ -1,7 +1,7 @@
 //! Файл: venues/bingx/transfers.rs
 //! Что делает: вывод с BingX, статус вывода и статус депозита.
 //! Кто вызывает: mod.rs (функции контракта).
-//! От чего зависит: rest.rs, num.rs, ctx.rs, core/types.
+//! От чего зависит: rest.rs, num.rs, ctx.rs, core/types, gateway/tx_hash.rs.
 //! Настройки: venue.withdraw_wallet_type.
 //!
 //! Официальная документация (docs-v3 и api-ai-skills/spot-wallet):
@@ -17,6 +17,8 @@ use serde_json::Value;
 
 use crate::core::types::{Asset, Cost, CostKind, Transfer, TransferStatus, WithdrawRequest};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::gateway::pending::PendingRef;
+use crate::gateway::tx_hash::same;
 
 use super::ctx::Ctx;
 use super::errors::{self, Op};
@@ -25,17 +27,21 @@ use super::{num, rest};
 /// Длина withdrawOrderId — «less than 100 characters» (официальная документация Withdraw).
 const MAX_WITHDRAW_ORDER_ID: usize = 99;
 
-/// Вывод. withdrawOrderId — идентификатор сделки ядра (только буквы и цифры, по документации).
-/// Возвращает: перевод в статусе Pending с ID BingX. Ошибки: настройки, ключи, отказ BingX.
+/// Вывод. withdrawOrderId — свой у каждой попытки (решение 231, как решение 114 у ордеров и вывод MEXC): метка попытки
+/// (миллисекунды, 9 цифр) и идентификатор сделки ядра, только буквы и цифры («a combination of numbers and letters, with
+/// a length of less than 100 characters»). Раньше это был номер сделки — одинаковый у всех выводов сделки (перегон,
+/// возврат USDT), и поиск по нему мог найти чужой вывод.
+/// Возвращает: перевод в статусе Pending с ID BingX. Ошибки: настройки, ключи, отказ BingX; OutcomeUnknown — с «чем
+/// найти» (свой withdrawOrderId, решение 231).
 pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer> {
     let wallet_type = ctx.int("venue.withdraw_wallet_type")?;
-    let order_id: String = req
-        .deal_id
+    let attempt = Utc::now().timestamp_millis().rem_euclid(1_000_000_000);
+    let order_id: String = format!("w{attempt:09}{}", req.deal_id)
         .chars()
         .filter(char::is_ascii_alphanumeric)
         .take(MAX_WITHDRAW_ORDER_ID)
         .collect();
-    if order_id.is_empty() || req.amount <= rust_decimal::Decimal::ZERO {
+    if req.deal_id.is_empty() || req.amount <= rust_decimal::Decimal::ZERO {
         return Err(ctx.tag(GatewayError::new(
             ErrorCode::WithdrawRejected,
             None,
@@ -51,7 +57,7 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         ("address", req.address.clone()),
         ("amount", req.amount.normalize().to_string()),
         ("walletType", wallet_type.to_string()),
-        ("withdrawOrderId", order_id),
+        ("withdrawOrderId", order_id.clone()),
     ];
     let data = rest::signed(
         ctx,
@@ -60,7 +66,8 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         params,
         Op::Withdraw,
     )
-    .await?;
+    .await
+    .map_err(|e| e.pending(PendingRef::withdraw(&order_id)))?;
     Ok(Transfer {
         venue: ctx.venue(),
         asset: req.asset,
@@ -120,7 +127,8 @@ pub async fn withdrawal_status(ctx: &Ctx, id: &str) -> GatewayResult<Transfer> {
     transfer(ctx, rec, id, status)
 }
 
-/// Статус депозита по хешу транзакции. По docs-v3: 0 → Sent, 6 → Sent (в сети), 1 → Credited.
+/// Статус депозита по хешу транзакции (сравнение — gateway::tx_hash::same: регистр, «0x», «:индекс» не важны;
+/// решение 118, Я-16). По docs-v3: 0 → Sent, 6 → Sent (в сети), 1 → Credited.
 /// Ошибки: депозит не найден (ещё не виден бирже), неизвестный статус, связь.
 pub async fn deposit_status(ctx: &Ctx, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer> {
     let data = rest::signed(
@@ -133,7 +141,7 @@ pub async fn deposit_status(ctx: &Ctx, asset: &Asset, tx_hash: &str) -> GatewayR
     .await?;
     let rec = data.as_array().and_then(|a| {
         a.iter()
-            .find(|r| num::text_opt(r, "txId").is_some_and(|t| t.eq_ignore_ascii_case(tx_hash)))
+            .find(|r| num::text_opt(r, "txId").is_some_and(|t| same(&t, tx_hash)))
     });
     let rec = rec.ok_or_else(|| {
         ctx.tag(GatewayError::new(
@@ -173,8 +181,9 @@ fn transfer(
     Ok(Transfer {
         venue: ctx.venue(),
         asset: Asset {
+            chain: None,
             ticker,
-            bsc_contract: None,
+            contract: None,
         },
         network: num::text_opt(rec, "network").unwrap_or_default(),
         amount: num::dec(rec, "amount")?,

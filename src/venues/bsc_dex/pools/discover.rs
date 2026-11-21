@@ -76,11 +76,12 @@ pub fn find_all(ctx: &Ctx, coins: &HashMap<Address, String>, quote: Address) -> 
     super::index::taken_against(ctx, coins, quote)
 }
 
-/// Вид пула V4 (менеджер-синглтон, ключ PoolKey). Ошибок нет.
+/// Вид пула V4 (менеджер-синглтон, ключ PoolKey; Infinity Stable — пул в крючке пула CL, список — из Initialize того
+/// же менеджера). Ошибок нет.
 pub fn is_v4(f: &Family) -> bool {
     matches!(
         f.proto,
-        Proto::InfinityCl | Proto::InfinityBin | Proto::UniswapV4
+        Proto::InfinityCl | Proto::InfinityBin | Proto::UniswapV4 | Proto::InfinityStable
     )
 }
 

@@ -16,7 +16,7 @@ use crate::settings::live::Change;
 use crate::settings::live::Watch;
 use crate::settings::wait::Note;
 
-use super::ctx::{Ctx, ID};
+use super::ctx::Ctx;
 
 /// Имена изменённых настроек: первое изменение `first` и всё, что уже накопилось в рассылке (пачка из интерфейса —
 /// один проход, а не по проходу на изменение). Ошибок нет.
@@ -45,7 +45,7 @@ pub async fn until_ok<T>(
     let note = Note {
         journal: &ctx.journal,
         kind,
-        venue: Some(ID),
+        venue: Some(ctx.place.id),
     };
     crate::settings::wait::until_ok(&ctx.settings, note, what, read).await
 }

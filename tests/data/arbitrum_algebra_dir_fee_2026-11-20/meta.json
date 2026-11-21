@@ -1,0 +1,41 @@
+{
+ "chainId": "0xa4b1",
+ "client": {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": "nitro/v3.12.4+960ca0a-20261110T061047Z/linux-amd64/go1.25.12"
+ },
+ "block": {
+  "number": "0x1f59ec75",
+  "hash": "0x1898cdd348abd7fd408bed67242a8a393c073d4945ff91448eff6386352c030b",
+  "timestamp": "0x6b007a87"
+ },
+ "args": {
+  "factory": "0x1a3c9B1d2F0529D97f2afC5136Cc23e58f1FD35B",
+  "quoter": "0x0Fc73040b26E9bC8514fA028D998E73A254Fa76E",
+  "pool": [],
+  "gecko_dex": "camelot-v3",
+  "gecko_pools": 5,
+  "init_hash": [
+   "0x77066034e31fe5172b86f4cf68f7e01dd6954f2e8292e6796c9bf7e99dbae477",
+   "0xb785aaed76f65b185ee1fe081ef2233b7473b6c47bc008865f64dac83f4982f4",
+   "0xb994c319655d0a2474f63ef4c8c5c9ee051c08ddd25e75c6a36c89e8a2a229e7",
+   "0x4e92c1fd81a5c8ce82f5a90742e3376c5b258017e149fd0629068ecc9aab43c6",
+   "0xac97ff1b66ef7517262cbf16db0195b400714e8ecb499fc86f349e77f50ae89b",
+   "0xdcb95b809dca000f4ce04aa004b723fef2dbb3704db3c0389699bc70f0e42c79",
+   "0x0ca66607e4d0ece7798fce9ae13cad1a28be1eee443451573f92ba6e3bcd92b9",
+   "0x5d100e2dbf4b80b9451c29380def0d6c4abeb3db0d166c81fda155a89e106dbd",
+   "0xab9acbcae566bd662fb801895320dc3dd170e64394f78600b969ab128a3a40fd",
+   "0x6c1bebd370ba84753516bc1393c0d0a6c645856da55f5393ac8ab3d6dbc861d3"
+  ],
+  "words": 8,
+  "bps": [
+   1,
+   10,
+   100
+  ],
+  "log_blocks": 20000,
+  "vq_runtime": "contracts/out/VirtualQuoter.bin-runtime",
+  "out": "tests/data"
+ }
+}

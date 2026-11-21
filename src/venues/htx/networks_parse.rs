@@ -1,0 +1,213 @@
+//! Файл: venues/htx/networks_parse.rs
+//! Что делает: разбор справочника монет и сетей HTX (GET /v2/reference/currencies — весь или одна монета) в сети
+//! формата ядра (CoinNetworkInfo): название сети ядра, ввод/вывод, комиссия, пределы, точность, подтверждения, минимум
+//! депозита — и соответствие «сеть ядра → chain HTX» для вывода и адреса депозита; адрес контракта — из отдельного
+//! справочника сетей (GET /v1/settings/common/chains), если Тигран указал его поле (venue.contract_field).
+//! Кто вызывает: wallet.rs, tests/htx_real_data.rs.
+//! От чего зависит: num.rs, ctx.rs (тикер), core/types.
+//! Настройки: нет (сеть BSC, поле адреса контракта и «минимум депозита неизвестен — 0» передаёт wallet.rs).
+//!
+//! Официально — APIv2 Currency & Chains https://huobiapi.github.io/docs/spot/v1/en/#apiv2-currency-amp-chains:
+//! currency, instStatus (normal, delisted), chains[]: chain «chain name» (своё у монеты: «trc20usdt»), displayName,
+//! baseChain, baseChainProtocol (примеры ERC20, TRC20, OMNI), numOfConfirmations, numOfFastConfirmations («trading
+//! allowed, withdrawal disallowed» — см. deposits.rs, withdraw_hold), minDepositAmt, depositStatus / withdrawStatus
+//! (allowed, prohibited), minWithdrawAmt, maxWithdrawAmt, withdrawPrecision, withdrawFeeType (fixed, circulated, ratio),
+//! transactFeeWithdraw («only for fixed»), min/maxTransactFeeWithdraw («only for circulated or ratio»),
+//! transactFeeRateWithdraw («only for ratio»). Имя chain своё у каждой монеты, поэтому сеть ядра — baseChainProtocol
+//! (одна на все монеты: venue.bsc_network, например «BEP20» — проверить на живом ответе CAKE), без него — chain.
+//! Комиссия вывода — только fixed (transactFeeWithdraw); circulated / ratio — как HTX считает, не описано → комиссия
+//! неизвестна (None: ядро не выводит), такие сети BSC — в журнал (вопрос Тиграну).
+//! Адреса контракта токена в этом ответе НЕТ. В Get Chains Information есть ac «address of chain» (смысл не ясен), в
+//! официальном SDK (pkg/model/common/getchainsresponse.go) — ещё ca без описания. Без venue.contract_field адрес не
+//! берётся: монеты HTX с DEX и другими биржами не сопоставляются (правило CLAUDE.md, урок 8) — не угадываем.
+
+use std::collections::HashMap;
+
+use chrono::Utc;
+use serde_json::Value;
+
+use crate::core::types::{Asset, CoinNetworkInfo, VenueId};
+use crate::gateway::deposit_min as dmin;
+use crate::gateway::errors::GatewayResult;
+
+use super::ctx::ticker;
+use super::num;
+
+/// Адреса контракта: (тикер ядра, chain HTX) → адрес (строкой, как в ответе).
+pub type Contracts = HashMap<(String, String), String>;
+
+/// Результат разбора.
+#[derive(Default)]
+pub struct Parsed {
+    pub list: Vec<CoinNetworkInfo>,
+    /// (тикер, сеть ядра, chain HTX) — для вывода и адреса депозита.
+    pub chains: Vec<(String, String, String)>,
+    /// Пропущенные сети: «монета/сеть: причина».
+    pub skipped: Vec<String>,
+    /// Сети BSC с комиссией вывода не fixed: «монета=тип» (комиссия неизвестна).
+    pub fee_unknown: Vec<String>,
+    /// Монеты, у которых сеть BSC встречается больше одного раза (неоднозначно — сеть BSC не берётся).
+    pub ambiguous: Vec<String>,
+}
+
+/// Сеть ядра из сети HTX: baseChainProtocol, если есть, иначе chain. Ошибок нет.
+pub fn core_network(n: &Value) -> Option<String> {
+    num::text_opt(n, "baseChainProtocol").or_else(|| num::text_opt(n, "chain"))
+}
+
+/// Что делает: разбор data /v2/reference/currencies.
+/// Принимает: data, свои сети (решение 431: BSC и другие — gateway/own_nets.rs; «BEP20» — только BSC), адреса контракта (пусто — поле не задано), площадку, «минимум депозита неизвестен
+/// — 0». Возвращает: Parsed. Ошибка BadResponse — data не массив или у монеты нет currency.
+pub fn parse(
+    data: &Value,
+    own: impl Into<crate::gateway::own_nets::OwnNets>,
+    contracts: &Contracts,
+    venue: &VenueId,
+    min_ok: bool,
+) -> GatewayResult<Parsed> {
+    let own = own.into();
+    let coins = match data {
+        Value::Null => return Ok(Parsed::default()),
+        Value::Array(a) => a,
+        _ => return Err(super::errors::bad("currencies: data не массив", "")),
+    };
+    let mut p = Parsed::default();
+    for c in coins {
+        let cur = num::text(c, "currency")?;
+        let t = ticker(&cur);
+        let delisted = num::text_opt(c, "instStatus").as_deref() == Some("delisted");
+        let Some(chains) = c.get("chains").and_then(Value::as_array) else {
+            continue;
+        };
+        // Своя сеть, у которой несколько chain с тем же baseChainProtocol, — неоднозначна и пропускается (у BSC — как
+        // раньше; решение 431 — то же у каждой своей сети). В журнал — тикер (у не-BSC — «тикер/сеть»).
+        let many = |name: &str| {
+            chains
+                .iter()
+                .filter(|n| core_network(n).as_deref() == Some(name))
+                .count()
+                > 1
+        };
+        let ambiguous: Vec<&String> = own.names().iter().filter(|x| many(x.as_str())).collect();
+        for x in &ambiguous {
+            p.ambiguous.push(if own.is_bsc(x.as_str()) {
+                t.clone()
+            } else {
+                format!("{t}/{x}")
+            });
+        }
+        for n in chains {
+            let (Some(chain), Some(net)) = (num::text_opt(n, "chain"), core_network(n)) else {
+                p.skipped.push(format!("{t}: сеть без chain"));
+                continue;
+            };
+            let is_bsc = own.is_bsc(&net);
+            if ambiguous.contains(&&net) {
+                continue;
+            }
+            let contract = own
+                .has(&net)
+                .then(|| contracts.get(&(t.clone(), chain.clone())))
+                .flatten()
+                .and_then(|a| a.parse().ok());
+            match network(n, &t, &net, contract, delisted, venue, min_ok) {
+                Ok(info) => {
+                    if let Some(x) = dmin::note(MIN_FIELD, &min_raw(n)) {
+                        p.skipped.push(format!("{t}/{chain}: {x}"));
+                    }
+                    if is_bsc && info.withdraw_fee.is_none() {
+                        // Решение 199: сырые поля комиссии как пришли — формула circulated / ratio не описана.
+                        let kind = num::text_opt(n, "withdrawFeeType").unwrap_or_default();
+                        let raw = |f: &str| n.get(f).map(|v| v.to_string()).unwrap_or_default();
+                        p.fee_unknown.push(format!(
+                            "{t}={kind} (rate {}, min {}, max {})",
+                            raw("transactFeeRateWithdraw"),
+                            raw("minTransactFeeWithdraw"),
+                            raw("maxTransactFeeWithdraw")
+                        ));
+                    }
+                    p.chains.push((t.clone(), net, chain));
+                    p.list.push(info);
+                }
+                Err(e) => p.skipped.push(format!("{t}/{chain}: {}", e.message)),
+            }
+        }
+    }
+    Ok(p)
+}
+
+/// Одна сеть. Возвращает: сеть ядра. Ошибка BadResponse — поле не того вида.
+fn network(
+    n: &Value,
+    t: &str,
+    net: &str,
+    contract: Option<alloy_primitives::Address>,
+    delisted: bool,
+    venue: &VenueId,
+    min_ok: bool,
+) -> GatewayResult<CoinNetworkInfo> {
+    let fixed = num::text_opt(n, "withdrawFeeType").as_deref() == Some("fixed");
+    let fee = if fixed {
+        num::dec_opt(n, "transactFeeWithdraw")?
+    } else {
+        None
+    };
+    let allowed = |f: &str| !delisted && num::text_opt(n, f).as_deref() == Some("allowed");
+    // Решение 371 (Тигран 17.11; документация смысл «0» не определяет): «0» — минимум 0; нет поля — по
+    // venue.deposit_min_absent_ok; нечитаемое — неизвестен (gateway/deposit_min.rs).
+    // APIv2 Currency & Chains (https://huobiapi.github.io/docs/spot/v1/en/#apiv2-currency-amp-chains): minDepositAmt «Minimal deposit amount in each request», строка.
+    let deposit_min = dmin::resolve(&min_raw(n), min_ok);
+    Ok(CoinNetworkInfo {
+        venue: venue.clone(),
+        asset: Asset {
+            chain: None,
+            ticker: t.to_string(),
+            contract,
+        },
+        network: net.to_string(),
+        deposit_enabled: allowed("depositStatus"),
+        withdraw_enabled: allowed("withdrawStatus"),
+        withdraw_fee: fee,
+        withdraw_fee_pct: None,
+        withdraw_min: num::dec_opt(n, "minWithdrawAmt")?,
+        withdraw_max: num::dec_opt(n, "maxWithdrawAmt")?,
+        deposit_min,
+        deposit_confirmations: num::text_opt(n, "numOfConfirmations").and_then(|s| s.parse().ok()),
+        withdraw_precision: num::text_opt(n, "withdrawPrecision")
+            .and_then(|s| s.parse::<u32>().ok())
+            .map(|p| p.min(28)),
+        withdraw_step: None,
+        updated_at: Utc::now(),
+    })
+}
+
+/// Что делает: разбор data /v1/settings/common/chains в адреса контракта по полю field («ac» или «ca»).
+/// Принимает: data, имя поля. Возвращает: (тикер, chain) → значение поля (пустое — пропускается). Ошибка BadResponse —
+/// data не массив.
+pub fn contracts(data: &Value, field: &str) -> GatewayResult<Contracts> {
+    let list = match data {
+        Value::Null => return Ok(Contracts::new()),
+        Value::Array(a) => a,
+        _ => return Err(super::errors::bad("chains: data не массив", "")),
+    };
+    let mut out = Contracts::new();
+    for c in list {
+        let (Some(cur), Some(chain), Some(addr)) = (
+            num::text_opt(c, "currency"),
+            num::text_opt(c, "chain"),
+            num::text_opt(c, field),
+        ) else {
+            continue;
+        };
+        out.insert((ticker(&cur), chain), addr);
+    }
+    Ok(out)
+}
+
+/// Решение 371: имя поля минимума депозита сети (APIv2 Currency & Chains, chains[]).
+const MIN_FIELD: &str = "minDepositAmt";
+
+/// Решение 371: вид значения минимума депозита сети (gateway/deposit_min.rs). Ошибок нет.
+fn min_raw(n: &Value) -> dmin::Raw {
+    dmin::classify(num::dec_opt(n, MIN_FIELD).map_err(|e| e.message))
+}

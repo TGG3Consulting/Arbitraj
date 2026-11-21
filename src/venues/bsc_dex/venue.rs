@@ -4,22 +4,28 @@
 //! вывода — Trade; котировка — класс ядра или Quote; остальное — фон.
 //! Кто вызывает: main.rs (через mod.rs: создаёт и регистрирует в реестре шлюза).
 //! От чего зависит: файлы этой папки, gateway, settings.
-//! Настройки: docs/SETTINGS.md — «Узел BSC», «DEX», «Отправка транзакций», venue.* и feed.* с областью bsc_dex.
+//! Настройки: docs/SETTINGS.md — «Узел BSC», «DEX», «Отправка транзакций», venue.* и feed.* с областью bsc_dex;
+//! exec.via_kyber, exec.dex_best_of (решение 123, «лучший из двух» — best_of/).
+//! Решение 132: деньги и адрес кошелька — только у вида на счёт (venue_account.rs); без привязки — отказ (Ctx::bound).
+//! t78: продажа выхода сделки целиком или вывод её монеты — налоги кошелька сделки сняты (check/deal_taxes.rs).
 
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 use tokio::sync::mpsc;
 
 use crate::core::types::{
-    Asset, Balance, CoinNetworkInfo, Cost, PoolDirectory, Quote, SendChannelInfo, Side,
-    TradeRequest, TradeResult, Transfer, VenueId, WalletQueue, WithdrawRequest,
+    Asset, Balance, CoinNetworkInfo, Cost, DexAccountId, DexRoute, PoolDirectory, Quote,
+    SendChannelInfo, Side, TradeRequest, TradeResult, Transfer, VenueId, WalletQueue,
+    WithdrawRequest,
 };
 use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
-use crate::gateway::errors::GatewayResult;
+use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::events::MarketEvent;
 
 use super::BscDex;
-use super::{coins, connection, directory, exec, pools, quote, send, wallet};
+use super::{
+    coins, connection, directory, exec, pools, quote, resolve, resolve_withdraw, send, wallet,
+};
 use crate::gateway::urgency::{self, Urgency as Class, scope};
 
 #[async_trait]
@@ -34,7 +40,22 @@ impl Venue for BscDex {
         VenueKind::Dex
     }
 
-    /// «Проверить подключение»: узел HTTP (eth_chainId = 56, eth_blockNumber), узел WebSocket (newHeads), кошелёк,
+    /// Решение 352: эпоха котировки DEX (signal_epoch.rs). Ошибок нет.
+    fn signal_epoch(&self, asset: &Asset) -> Option<String> {
+        super::signal_epoch::of(&self.p, asset)
+    }
+
+    /// Решение 372: строгий верх курса стороны DEX без котировок (quote/bound.rs). Ошибок нет.
+    fn rate_bound(&self, asset: &Asset, side: Side) -> crate::gateway::rate_bound::RateBound {
+        super::quote::bound::rate_bound(&self.p, asset, side)
+    }
+
+    /// Решение 132: вид адаптера на кошелёк счёта — venue_account.rs. Ошибки: NotConfigured — нет кошелька.
+    fn for_account(&self, account: &DexAccountId) -> GatewayResult<std::sync::Arc<dyn Venue>> {
+        self.on_account(account)
+    }
+
+    /// «Проверить подключение»: узел HTTP (eth_chainId = dex.evm_chain_id, решение 416; eth_blockNumber), узел WebSocket (newHeads), кошелёк,
     /// eth_simulateV1 — connection.rs (execution-apis src/eth, коммит 16caee27). Ошибок нет: причина — в ответе.
     async fn check_connection(&self) -> GatewayResult<ConnectionCheck> {
         Ok(connection::check(&self.p.ctx).await)
@@ -47,58 +68,176 @@ impl Venue for BscDex {
 
     /// Подписка на рынок: опрос блоков (решение 57), пулы монет (eth_subscribe logs, execution-apis subscribe.yaml), новые пулы,
     /// циклы проверок; события — в `out` (pools/market.rs). Прежние задачи подписки останавливаются.
-    /// Ошибки: NotConfigured (venue.quote_asset, dex.*), узел.
+    /// Решение 416: перед подпиской — сеть площадки (node/chain_id.rs check_start).
+    /// Ошибки: NotConfigured (venue.quote_asset, dex.*, dex.chain, dex.evm_chain_id), BadResponse (узел другой сети), узел.
     async fn subscribe_market(
         &self,
         assets: Vec<Asset>,
         out: mpsc::Sender<MarketEvent>,
     ) -> GatewayResult<()> {
+        // Решение 132: подписка — только у основного адаптера; вид на счёт рынок не слушает.
+        if self.is_bound() {
+            return Err(self.p.ctx.err(
+                ErrorCode::NotApplicable,
+                "подписка на рынок — у адаптера DEX без привязки к кошельку",
+            ));
+        }
+        // Решение 416: сеть площадки задана (dex.chain, dex.evm_chain_id) и узел — той же сети; иначе подписки нет.
+        super::node::chain_id::check_start(&self.p.ctx).await?;
+        // Исполнению через KyberSwap (exec.via_kyber) нужен тот же набор монет (адрес USDT и монет) — отдаём его
+        // контексту KS. KyberSwap как площадку-цены не подписываем: цены и сигналы идут с bsc_dex.
+        self.kyber.set_assets(assets.clone());
         self.subs.subscribe(&self.p, assets, out).await
     }
 
     /// Котировка на объём по пулам (локальная математика по официальным библиотекам — quote/, math/).
     /// Ошибки: StaleData, CoinNotChecked / CoinCheckFailed, NoRoute, NotConfigured, узел.
     async fn quote(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {
+        // Решение 95: финальная котировка расчёта кандидата (ядро пересчитывает найденный оптимум) при exec.via_kyber —
+        // цена KyberSwap, того, кто исполнит обмен; по ней ядро решает «торговать или нет». У KyberSwap нет маршрута
+        // (пул, которого он не знает) — наша котировка: исполнит наш собственный сборщик (откат в trade()).
+        if crate::gateway::quote_stage::is_final()
+            && self.p.ctx.flag("exec.via_kyber").unwrap_or(false)
+        {
+            // Решение 123: «лучший из двух» — KyberSwap и своя параллельно, берётся лучшая (best_of/quote.rs).
+            if super::best_of::enabled(&self.p.ctx) {
+                return super::best_of::quote::quote(&self.p, &self.kyber, asset, side, qty).await;
+            }
+            match crate::venues::kyberswap::quote::quote(&self.kyber, asset, side, qty).await {
+                Err(e) if e.code == ErrorCode::NoRoute => {}
+                Err(e) => return Err(e),
+                Ok(mut q) => {
+                    // Котировка от имени площадки bsc_dex: ядро сверяет площадку стороны.
+                    q.venue = self.p.ctx.venue();
+                    return Ok(q);
+                }
+            }
+        }
         // Котировка: ядро на пути сделки ставит Trade (расчёт кандидата, предпроверка); иначе — Quote (живой экран,
         // ниже проб налогов, выше фона).
         let class = urgency::is_set().unwrap_or(Class::Quote);
         scope(class, self.p.quoting().quote(asset, side, qty)).await
     }
 
+    /// Решение 250: исполнимость объёма (проверка доли глубины h) — quote/fills.rs: прямой путь одного пула исполняет
+    /// объём целиком — ответ без полной котировки; иначе — полная котировка, как quote. Финальная котировка через
+    /// KyberSwap (решение 95) — как quote. Ошибки: как у quote.
+    async fn quote_fills(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Decimal> {
+        if crate::gateway::quote_stage::is_final()
+            && self.p.ctx.flag("exec.via_kyber").unwrap_or(false)
+        {
+            return self.quote(asset, side, qty).await.map(|q| q.fillable_qty);
+        }
+        let class = urgency::is_set().unwrap_or(Class::Quote);
+        scope(class, self.p.quoting().fills(asset, side, qty)).await
+    }
+
+    /// Решение 344 (задача t159, ревью t159 Б4): изломы кривых пулов маршрута котировки по объёму монеты стороны —
+    /// quote/breaks.rs (только память реестра). Ошибки: NoRoute (нет адреса монеты), NotConfigured (тикер USDT), узел
+    /// (decimals).
+    async fn quote_breaks(
+        &self,
+        asset: &Asset,
+        side: Side,
+        route: &DexRoute,
+        max_qty: Decimal,
+        limit: u32,
+    ) -> GatewayResult<Vec<Decimal>> {
+        let q = self.p.quoting();
+        super::quote::breaks::breaks(&q, asset, side, route, max_qty, limit).await
+    }
+
+    /// Решение 217: снимок котировки на момент решения — `Arc` записей пулов, разрешения, блок (frozen.rs). Только
+    /// память. Ошибки: StaleData (блок, лента событий), NotConfigured (тикер USDT), NoRoute (нет адреса монеты).
+    async fn quote_snapshot(
+        &self,
+        asset: &Asset,
+        side: Side,
+    ) -> GatewayResult<crate::gateway::frozen::QuoteSnapshot> {
+        Ok(std::sync::Arc::new(super::frozen::take(
+            self.p.quoting(),
+            asset,
+            side,
+        )?))
+    }
+
     /// Обмен через Universal Router своей DEX (прямой) или PancakeSwap Infinity (умный) — exec/trade.rs; источники —
     /// research/flow/bsc_dex.md, раздел 5, bsc_smart_router.md. Ошибки: см. exec/trade.rs (с фактом транзакции).
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
-        let (q, env) = (self.p.quoting(), self.p.env());
-        scope(
-            Class::Trade,
-            exec::trade::trade(&q, &env, &self.p.nonces, req),
-        )
-        .await
+        let asked = req.clone();
+        // Решение 222: монета сделки — по изменению баланса кошелька на блоке свопа (все пути исполнения ниже).
+        let r = self.trade_logs(req).await;
+        let fact = exec::balance_fact::apply(&self.p.ctx, &self.p.tokens, r);
+        // Решение 231: «исход неизвестен» с фактом транзакции — «чем найти» (хеш, nonce) для ядра (resolve.rs).
+        let r = scope(Class::Trade, fact).await.map_err(resolve::attach);
+        // t78: продажа выхода сделки исполнилась целиком — её налоги кошелька сделки больше не нужны (deal_taxes.rs).
+        self.p.checks.forget_after_sale(&asked, &r);
+        r
     }
 
     /// Перевод монеты из кошелька на адрес (ERC-20 transfer, EIP-20) — wallet/transfer.rs.
     /// Ошибки: InvalidAddress, NotConfigured, каналы, TxNotIncluded / WithdrawRejected (с фактом транзакции).
     async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer> {
+        self.p.ctx.bound()?;
         let env = self.p.env();
-        scope(
+        let asked = req.clone();
+        let r = scope(
             Class::Trade,
             wallet::transfer::withdraw(&env, &self.p.tokens, &self.p.nonces, req),
         )
         .await
+        .map_err(resolve::attach);
+        // t78: монета сделки ушла с кошелька — её налоги кошелька сделки больше не нужны (deal_taxes.rs).
+        self.p.checks.forget_after_withdraw(&asked, &r);
+        r
     }
 
     /// Статус перевода из кошелька по квитанции (execution-apis transaction.yaml#L127-L165) — wallet/transfer_status.rs.
     /// Ошибки: узел, хеш не 32 байта, BadResponse.
     async fn withdrawal_status(&self, venue_ref: &str) -> GatewayResult<Transfer> {
+        self.p.ctx.bound()?;
         let w = wallet::signer::address(&self.p.ctx)?;
         let work =
             wallet::transfer_status::withdrawal_status(&self.p.ctx, &self.p.tokens, venue_ref, w);
         scope(Class::Trade, work).await
     }
 
+    /// Решение 231: своп с неизвестным исходом — квитанция по хешу; очередь кошелька снимается, итог свопа — по
+    /// контексту разбора из «чем найти» (resolve.rs, exec/swap_rebuild.rs; нет контекста — человек); монета сделки — по
+    /// балансу кошелька на блоке свопа (решение 222, как у trade).
+    async fn resolve_trade(
+        &self,
+        req: TradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<TradeResult>> {
+        self.p.ctx.bound()?;
+        let work = async {
+            match resolve::trade(&self.p, req, p).await? {
+                Some(t) => exec::balance_fact::apply(&self.p.ctx, &self.p.tokens, Ok(t))
+                    .await
+                    .map(Some),
+                None => Ok(None),
+            }
+        };
+        scope(Class::Trade, work).await
+    }
+
+    /// Решение 231: перевод из кошелька с неизвестным исходом — квитанция по хешу; хеши отмен известны — и их квитанции
+    /// и nonce кошелька (resolve_withdraw.rs).
+    async fn resolve_withdraw(
+        &self,
+        req: WithdrawRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<Transfer>> {
+        self.p.ctx.bound()?;
+        scope(Class::Trade, resolve_withdraw::withdraw(&self.p, req, p)).await
+    }
+
     /// Адрес кошелька; заодно регистрирует ожидаемое поступление монеты (после конца идущего обмена с ней на выходе) —
     /// wallet/inflows.rs. Ошибки: ключ кошелька, NotConfigured (у монеты нет адреса в BSC).
     async fn deposit_address(&self, asset: &Asset, _network: &str) -> GatewayResult<String> {
+        // Решение 132: адрес депозита — кошелька счёта сделки; без счёта не отдаётся (монеты не уйдут не туда).
+        self.p.ctx.bound()?;
         let w = wallet::signer::address(&self.p.ctx)?;
         let token = wallet::transfer::token(&self.p.ctx, asset)?;
         self.p.inflows.expect(token).await;
@@ -107,6 +246,7 @@ impl Venue for BscDex {
 
     /// Статус зачисления; любое завершение снимает ожидаемое поступление — wallet/deposit.rs.
     async fn deposit_status(&self, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer> {
+        self.p.ctx.bound()?;
         scope(
             Class::Trade,
             wallet::deposit::status(&self.p, asset, tx_hash),
@@ -116,17 +256,26 @@ impl Venue for BscDex {
 
     /// Вывод на кошелёк не состоялся — ожидание поступления снято (wallet/deposit.rs). Ошибок нет.
     async fn deposit_abandoned(&self, asset: &Asset) -> GatewayResult<()> {
+        self.p.ctx.bound()?;
         wallet::deposit::abandoned(&self.p, asset).await;
         Ok(())
     }
 
+    /// Адрес кошелька счёта (решение 132) — wallet/signer.rs; только у вида на счёт. Ошибки: счёт не выбран, ключ.
+    async fn wallet_address(&self) -> GatewayResult<String> {
+        self.p.ctx.bound()?;
+        Ok(wallet::signer::address(&self.p.ctx)?.to_string())
+    }
+
     /// Очередь транзакций кошелька (wallet/nonce.rs). Ошибок нет.
     async fn wallet_queue(&self) -> GatewayResult<WalletQueue> {
+        self.p.ctx.bound()?;
         Ok(wallet::deposit::queue(&self.p).await)
     }
 
     /// «Снять очередь после ручной проверки» — wallet/deposit.rs. Ошибки: NotApplicable — очередь не остановлена.
     async fn release_wallet_queue(&self, by: &str, pending_ok: bool) -> GatewayResult<WalletQueue> {
+        self.p.ctx.bound()?;
         scope(
             Class::Trade,
             wallet::deposit::release(&self.p, by, pending_ok),
@@ -134,9 +283,41 @@ impl Venue for BscDex {
         .await
     }
 
+    /// Решение 437 (3): доля прибыли на чаевые сделок DEX ↔ DEX площадки — exec/tip_state.rs. Ошибки: NotApplicable
+    /// — площадка не dex.gas_mode = eip1559_l1 (ревью 437, п. 6).
+    async fn tip_share(&self) -> GatewayResult<crate::core::types::TipShare> {
+        exec::tip_state::view(&self.p.ctx).await
+    }
+
+    /// Решение 437 (3): «Сбросить долю чаевых» к минимуму — exec/tip_state.rs. Ошибки: NotApplicable (не eip1559_l1).
+    async fn reset_tip_share(&self, by: &str) -> GatewayResult<crate::core::types::TipShare> {
+        exec::tip_state::reset(&self.p.ctx, by).await
+    }
+
+    /// Решение 439: статистика условия пулов площадки — exec/pool_cond_stat.rs. Ошибки: NotApplicable (не eip1559_l1).
+    async fn pool_cond_stat(&self) -> GatewayResult<crate::core::types::PoolCondStat> {
+        exec::pool_cond_stat::view(&self.p.ctx).await
+    }
+
+    /// Решение 439: «Сбросить статистику» условия пулов — exec/pool_cond_stat.rs. Ошибки: NotApplicable.
+    async fn reset_pool_cond_stat(
+        &self,
+        by: &str,
+    ) -> GatewayResult<crate::core::types::PoolCondStat> {
+        exec::pool_cond_stat::reset(&self.p.ctx, by).await
+    }
+
     /// Балансы кошелька: BNB (eth_getBalance) и известные токены (balanceOf, EIP-20) — wallet/balances.rs. Ошибки: узел, ключ.
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
+        self.p.ctx.bound()?;
         wallet::balances::all(&self.p.ctx, &self.p.tokens).await
+    }
+
+    /// Баланс одного актива: 1–2 запроса к узлу вместо запроса по каждому токену (решение 113) — wallet/balances.rs.
+    /// Ошибки: ключ кошелька, узел.
+    async fn balance(&self, asset: &str) -> GatewayResult<Option<Balance>> {
+        self.p.ctx.bound()?;
+        wallet::balances::single(&self.p.ctx, &self.p.tokens, asset).await
     }
 
     /// Стоимость перевода: газ (пробный перевод × цена газа) и налог на перевод — wallet/transfer.rs.
@@ -158,14 +339,49 @@ impl Venue for BscDex {
     /// Кнопка «Перепроверить»: налоги, крючки и сверка с квотером — только этих монет (check/recheck.rs; итоги —
     /// события CoinCheck / PoolCheck). Ошибок нет.
     async fn recheck_coins(&self, assets: Vec<Asset>) -> GatewayResult<()> {
-        let tickers: Vec<String> = assets.into_iter().map(|a| a.ticker).collect();
-        self.p.wake.coins(&tickers);
+        // Решение 211: монета — адрес контракта (у монеты без адреса пулов на DEX нет — проверять нечего).
+        let coins: Vec<alloy_primitives::Address> =
+            assets.into_iter().filter_map(|a| a.contract).collect();
+        self.p.wake.coins(&coins);
         Ok(())
     }
 
-    /// DEX с видом пулов из таблицы сопоставления (id области «DEX» = id DEX индексатора) — pools/families.rs. Ошибок нет.
+    /// DEX с видом пулов из таблицы сопоставления (id области «DEX» = id DEX индексатора) — pools/families.rs; решение
+    /// 128 — плюс DEX из справочника пулов и id с уже заданными настройками (вид None) — pools/dex_ids.rs. Ошибок нет.
     async fn dex_families(&self) -> GatewayResult<Vec<DexFamily>> {
         Ok(pools::families::for_ui(&self.p.ctx))
+    }
+
+    /// Решение 308: состояние фонового владельца графа маршрутов для экрана «Площадки» — pools/graph_stats.rs. Ошибок нет.
+    async fn dex_graph_state(&self) -> GatewayResult<crate::core::types::DexGraphState> {
+        Ok(pools::graph_stats::view(&self.p.ctx, &self.p.registry))
+    }
+
+    /// Решение 308: полная пересборка графа маршрутов со сверкой по команде (кнопка «Пересобрать граф», REST) — действующий
+    /// снимок работает до замены. Ошибки: NotConfigured — dex.graph_background не «да»; VenueNotConnected — DEX не
+    /// подписан на рынок (фонового владельца нет).
+    async fn dex_graph_rebuild(&self, by: &str) -> GatewayResult<()> {
+        let p = &self.p;
+        if !pools::graph_read::background(&p.ctx) {
+            return Err(p.ctx.not_set(
+                "dex.graph_background",
+                "Пересборка графа: dex.graph_background не включена — граф строит расчёт, как раньше",
+            ));
+        }
+        let bg = p.registry.graph_cache().bg();
+        if !bg.started() {
+            return Err(p.ctx.err(
+                ErrorCode::VenueNotConnected,
+                "Пересборка графа: DEX не подписан на рынок — фоновой задачи графа нет",
+            ));
+        }
+        bg.request_full(format!("команда «Пересобрать граф» ({by})"));
+        pools::graph_alarm::info(
+            &p.ctx,
+            bg,
+            format!("Запрошена полная пересборка графа маршрутов со сверкой ({by})"),
+        );
+        Ok(())
     }
 
     /// Справочник пулов от индексатора (решение 58) — directory/. Ошибок нет: нет данных — пустые списки и причина.
@@ -191,7 +407,7 @@ impl Venue for BscDex {
 
     /// Сигналы циклов DEX ↔ DEX (решение 85, фаза сигнала): поиск циклов (quote/cycle_scan.rs) и перевод в read-тип ядра
     /// (quote/cycle_view.rs). Направление за dex_dex.enabled; выключено — пусто (газ не трогаем). Только read-поверхность:
-    /// авто-сделки НЕ запускает. Ошибки: StaleData (нет свежего блока), NotConfigured (настройки цикла), узел.
+    /// сделок не запускает (их ведёт ядро, решение 124). Ошибки: StaleData (нет свежего блока), NotConfigured (настройки цикла), узел.
     async fn dex_cycles(&self) -> GatewayResult<Vec<crate::core::types::DexCycle>> {
         let q = self.p.quoting();
         if !quote::cycle_scan::enabled(&q.ctx) {
@@ -203,12 +419,254 @@ impl Venue for BscDex {
             .wei(&q.ctx, &q.heads)
             .await?
             .max(send::planned_floor(&q.ctx)?);
-        let signals = quote::cycle_scan::scan(&q, gas).await?;
+        // Решение 131: поиск циклов — счёт CPU, вне рабочих потоков tokio (quote/cpu.rs).
+        // Ревью 273: пулы Solidly с пределом цены газа фабрики ниже этой цены — не в циклы (quote/select.rs plan_gas).
+        let mut qc = q.clone();
+        qc.plan_gas = Some(gas);
+        // Решение 301 (дополнение — стек): работа — в кучу (quote/cpu.rs run принимает только Pin<Box<F>>).
+        let found = quote::cpu::run(
+            &q.ctx,
+            Box::pin(async move { quote::cycle_scan::scan(&qc, gas).await }),
+        )
+        .await;
+        // Решение 385: нарушения контроля отсева циклов — в журнал и Telegram (quote/cycle_audit.rs), и при сбое поиска.
+        quote::cycle_audit::flush(&q.ctx, &self.p.stats).await;
+        let signals = found?;
         let venue = self.id();
         Ok(signals
             .iter()
             .map(|s| quote::cycle_view::to_dex_cycle(&venue, s))
             .collect())
+    }
+
+    /// Решение 404: итог последнего прохода поиска циклов по базовым монетам (quote/cycle_tally.rs). Ошибок нет.
+    fn dex_cycle_tally(&self) -> Vec<(String, serde_json::Value)> {
+        quote::cycle_tally::last(&self.id().0)
+    }
+
+    /// «Сухая сделка DEX» (решение 121, C4): сборка своим сборщиком как для сделки и eth_simulateV1 от кошелька —
+    /// exec/dry_swap.rs. Ничего не отправляет, nonce не занимает. Ошибок нет: отказ — причиной в итоге.
+    async fn dex_dry_swap(
+        &self,
+        asset: Asset,
+        side: Side,
+        usdt: Decimal,
+    ) -> GatewayResult<crate::core::types::DexDrySwap> {
+        let q = self.p.quoting();
+        // Класс Check (решение 61): ниже пути сделки, выше котировок живого экрана и фона.
+        let mode = exec::executor::dry::DryMode::AsTrade;
+        Ok(scope(
+            Class::Check,
+            exec::dry_swap::run(&q, asset, side, usdt, mode),
+        )
+        .await)
+    }
+
+    /// Решение 234: симуляция продажи до покупки — тем путём, кошельком счёта и минимумом, что у настоящей продажи
+    /// (exec/presell.rs). Класс — как у котировки ядра (предпроверка сделки), иначе Check. Ничего не отправляет.
+    /// Ошибки: см. exec/presell.rs.
+    async fn dex_presell(
+        &self,
+        req: &TradeRequest,
+    ) -> GatewayResult<crate::core::types::PresellOutcome> {
+        let q = self.p.quoting();
+        let class = urgency::is_set().unwrap_or(Class::Check);
+        scope(class, exec::presell::run(&q, req.clone())).await
+    }
+
+    /// Решение 476: разрешения (approve) продажи заранее, пока монета идёт на кошелёк сделки — exec/preapprove.rs (сборка
+    /// плана как у исполнения, wallet/approve.rs lacking, отправка exec/swap_send.rs send_approvals). Ошибки: как у run.
+    /// Ревью t238: путь исполнения продажи не свой сборщик (exec.via_kyber: KyberSwap / «лучший из двух»,
+    /// trade_path.rs — как в trade_logs) — разрешение получит другой: NotApplicable с причиной.
+    async fn dex_preapprove(
+        &self,
+        req: &TradeRequest,
+        horizon_s: u64,
+    ) -> GatewayResult<Option<Decimal>> {
+        let via_kyber = self.p.ctx.flag("exec.via_kyber").unwrap_or(false);
+        let path = super::trade_path::of(req, via_kyber, super::best_of::enabled(&self.p.ctx));
+        if path != super::trade_path::Path::Own {
+            let why = "продажа не своим сборщиком (exec.via_kyber) — разрешение получит другой";
+            return Err(self.p.ctx.err(ErrorCode::NotApplicable, why));
+        }
+        let (q, env) = (self.p.quoting(), self.p.env());
+        let run = exec::preapprove::run(&q, &env, &self.p.nonces, req.clone(), horizon_s);
+        scope(Class::Trade, run).await
+    }
+
+    /// «Сухая сделка DEX» через исполнитель ArbExecutor с подставленным в симуляцию кодом (решение 122, часть X) —
+    /// проверка исполнителя на живой сети до развёртывания. Ничего не отправляет. Ошибок нет: отказ — причиной в итоге.
+    async fn dex_dry_swap_executor(
+        &self,
+        asset: Asset,
+        side: Side,
+        usdt: Decimal,
+    ) -> GatewayResult<crate::core::types::DexDrySwap> {
+        let q = self.p.quoting();
+        let mode = exec::executor::dry::DryMode::Executor;
+        Ok(scope(
+            Class::Check,
+            exec::dry_swap::run(&q, asset, side, usdt, mode),
+        )
+        .await)
+    }
+
+    /// Расчёт цикла DEX ↔ DEX на вход (решение 124): ноги по памяти реестра (quote/cycle_legs.rs), курсы и затраты —
+    /// quote/cycle_cost.rs; with_wallet — ещё баланс базовой у кошелька. Ошибки: NoRoute, NotConfigured, узел.
+    async fn dex_cycle_quote(
+        &self,
+        cycle: &crate::core::types::DexCycle,
+        input: Decimal,
+        with_wallet: bool,
+    ) -> GatewayResult<crate::core::types::CycleQuote> {
+        // Баланс базовой — кошелька счёта циклов (решение 132).
+        if with_wallet {
+            self.p.ctx.bound()?;
+        }
+        let q = self.p.quoting();
+        // Решение 336: точки подбора объёма ядра считаются параллельно (gateway/calc_share.rs par) — расчёт цикла
+        // уходит в поток счёта (quote/cpu.rs), иначе одновременные точки шли бы одним рабочим потоком. Иначе — как раньше.
+        if crate::gateway::calc_share::current().is_some_and(|s| s.par()) {
+            let ctx = q.ctx.clone();
+            let cycle = cycle.clone();
+            let run = async move {
+                let legs = quote::cycle_legs::now(&q, &cycle).await?;
+                let r = quote::cycle_cost::rates(&q, cycle.base).await?;
+                quote::cycle_cost::quote(&q, &legs, cycle.base, input, (r, with_wallet)).await
+            };
+            return scope(Class::Quote, async {
+                quote::cpu::run(&ctx, Box::pin(run)).await
+            })
+            .await;
+        }
+        let run = async {
+            let legs = quote::cycle_legs::now(&q, cycle).await?;
+            let r = quote::cycle_cost::rates(&q, cycle.base).await?;
+            quote::cycle_cost::quote(&q, &legs, cycle.base, input, (r, with_wallet)).await
+        };
+        scope(Class::Quote, run).await
+    }
+
+    /// Сделка цикла DEX ↔ DEX (решение 124) — exec/cycle_trade.rs: свежее перечтение, исполнитель или бандл, проба,
+    /// одна отправка без повторов. Ошибки: как у сделки DEX.
+    async fn dex_cycle_trade(
+        &self,
+        req: crate::core::types::CycleTradeRequest,
+    ) -> GatewayResult<crate::core::types::CycleTradeResult> {
+        self.p.ctx.bound()?;
+        let (q, env) = (self.p.quoting(), self.p.env());
+        scope(
+            Class::Trade,
+            exec::cycle_trade::trade(&q, &env, &self.p.nonces, req),
+        )
+        .await
+    }
+
+    /// Решение 233 (дополнение, п. 4): цикл DEX ↔ DEX с неизвестным исходом — тем же механизмом, что своп (resolve.rs:
+    /// квитанция / бандл — resolve_bundle.rs; очередь кошелька снимается при выясненном исходе), итог цикла — с курсами
+    /// сделки из «чем найти» (resolve_cycle.rs). Решение 222 не применяется — как у dex_cycle_trade.
+    async fn resolve_cycle(
+        &self,
+        req: crate::core::types::CycleTradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<crate::core::types::CycleTradeResult>> {
+        self.p.ctx.bound()?;
+        scope(Class::Trade, super::resolve_cycle::cycle(&self.p, req, p)).await
+    }
+
+    /// Сухая сделка цикла (решение 124) — exec/cycle_dry.rs: сборка как у сделки и eth_simulateV1, ничего не уходит.
+    /// Ошибок нет: отказ — причиной в итоге.
+    async fn dex_dry_cycle(
+        &self,
+        req: crate::core::types::CycleTradeRequest,
+        executor: bool,
+    ) -> GatewayResult<crate::core::types::DexDrySwap> {
+        let q = self.p.quoting();
+        let mode = if executor {
+            exec::executor::dry::DryMode::Executor
+        } else {
+            exec::executor::dry::DryMode::AsTrade
+        };
+        Ok(scope(Class::Check, exec::cycle_dry::run(&q, req, mode)).await)
+    }
+
+    /// Оценка развёртывания исполнителя ArbExecutor (решение 122, часть X): газ, цена, стоимость, будущий адрес — ничего не
+    /// отправляет. Ошибки: ключ кошелька, каналы, узел.
+    async fn dex_executor_quote(&self) -> GatewayResult<crate::core::types::ExecutorDeployQuote> {
+        // Решение 132: исполнитель разворачивается кошельком, у которого нажата кнопка.
+        self.p.ctx.bound()?;
+        let (q, env) = (self.p.quoting(), self.p.env());
+        scope(Class::Check, exec::executor::deploy::quote(&q, &env)).await
+    }
+
+    /// Решение 399: причина запрета развёртывания исполнителя (запись приёмки версии текущей сборки в сети площадки —
+    /// решение 461 — не приняла ни одного класса или её нет; exec/executor/deploy_gate.rs). None — разрешено. Ошибок нет.
+    fn dex_executor_refusal(&self) -> Option<String> {
+        let chain = exec::executor::live_proof::chain_of(&self.p.ctx);
+        exec::executor::deploy_gate::refusal_at(chain)
+    }
+
+    /// Решение 400: классы шага исполнителя v3 и их приёмка по записи симуляции на живых пулах
+    /// (exec/executor/live_proof.rs); решение 401 — сводка пробы пулов через исполнитель кошелька окружения
+    /// (exec/executor/pass_view.rs). Ошибок нет.
+    fn dex_executor_classes(&self) -> Vec<crate::core::types::ExecutorClassProof> {
+        exec::executor::pass_view::proofs(&self.p.ctx, &self.p.registry)
+    }
+
+    /// Развёртывание исполнителя ArbExecutor с кошелька бота (решение 122, часть X) — только по подтверждению человека:
+    /// SHA-256 байткода и адрес обёртки (задача t114, 3в), которые он видел в оценке. Ошибки: QuoteMismatch (байткод или
+    /// обёртка не те), ключ, каналы, узел.
+    async fn dex_executor_deploy(
+        &self,
+        sha256: String,
+        wnative: alloy_primitives::Address,
+    ) -> GatewayResult<crate::core::types::ExecutorDeployed> {
+        self.p.ctx.bound()?;
+        let (q, env) = (self.p.quoting(), self.p.env());
+        let run = exec::executor::deploy::deploy(&q, &env, &self.p.nonces, (&sha256, wnative));
+        scope(Class::Trade, run).await
+    }
+
+    /// «Проверить подключение» исполнителя ArbExecutor (ревью 122) — exec/executor/onchain.rs. Её же зовут после
+    /// развёртывания и «Записать после проверки». Ревью 272: v1 — уведомление один раз (Б5, v1_notice.rs); кошелёк
+    /// строки «Пробы и сигналы» теперь годен для BNB через исполнитель — внеочередная перепроверка монеты BNB (та же,
+    /// что «Перепроверить», POST /api/coins/recheck): проба её пулов перемеряет газ обёртки через исполнитель (Б3), не
+    /// дожидаясь планового прохода tax.recheck_interval_s. Ошибок нет.
+    async fn check_executor(&self) -> GatewayResult<ConnectionCheck> {
+        let ctx = &self.p.ctx;
+        let c = exec::executor::onchain::probe(ctx).await;
+        let Ok(w) = ctx.wallet() else { return Ok(c) };
+        if let Some(v) = w
+            .executor_version
+            .as_deref()
+            .and_then(exec::executor::code::Version::parse)
+        {
+            exec::executor::v1_notice::once(ctx, &self.p.stats, v).await;
+        }
+        let probe_row = ctx
+            .settings
+            .accounts()
+            .row(crate::settings::accounts::ROW_PROBE);
+        if c.ok
+            && probe_row.as_deref() == Some(w.id.as_str())
+            && exec::executor::native_capable(ctx)
+            && let Some((ticker, wbnb)) = exec::native::wrapped(ctx)
+        {
+            self.p.wake.coins(&[wbnb]);
+            let text = format!(
+                "исполнитель кошелька проб «{}» сверен (v2 / v3, обёртка = dex.native_wrapped) — внеочередная перепроверка {ticker}: \
+                 газ обёртки через исполнитель перемеряется пробой пулов",
+                w.name
+            );
+            ctx.log(
+                crate::storage::journal::Level::Info,
+                "dex.native_probe",
+                text,
+                None,
+            )
+            .await;
+        }
+        Ok(c)
     }
 
     /// Каналы отправки (id области «канал») — send/channels.rs. Ошибок нет.
@@ -220,5 +678,44 @@ impl Venue for BscDex {
     /// канала — в шапке его файла). Ошибки: неизвестный id.
     async fn check_send_channel(&self, id: &str) -> GatewayResult<ConnectionCheck> {
         send::check::check(&self.p.ctx, id).await
+    }
+}
+
+impl BscDex {
+    /// Сделка по пути исполнения (свой сборщик, KyberSwap, «лучший из двух»); факт — по событиям Transfer квитанции.
+    /// Ошибки: см. exec/trade.rs (с фактом транзакции).
+    async fn trade_logs(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
+        // Решение 132: сделка — только кошельком счёта (Ctx::bound).
+        self.p.ctx.bound()?;
+        // Исполнение через агрегатор KyberSwap (exec.via_kyber, решение 91): маршрут и своп строит KyberSwap по
+        // объёму из расчёта (req.qty, req.worst_price); сигналы, цены и подбор размера — на bsc_dex. Нет маршрута у
+        // KyberSwap (пул, которого он не знает) — откат на собственный исполнитель bsc_dex по маршруту котировки.
+        // Решение 247, п. Г: продажа выхода с условиями пере-замера (повтор режима застрявшей монеты, кнопка человека —
+        // TradeRequest.remeasure) — своим сборщиком, не KyberSwap: у своего пути проба перед отправкой и пере-замер
+        // выхода при откате по minOut (exec/executor/remeasure.rs). t81 (Тигран 10.11: согласовано): пути t78 (признак
+        // Remeasure.any_executor) — как до t78; у своего сборщика при этом пере-замер остаётся (trade_path.rs).
+        let via_kyber = self.p.ctx.flag("exec.via_kyber").unwrap_or(false);
+        let path = super::trade_path::of(&req, via_kyber, super::best_of::enabled(&self.p.ctx));
+        // Решение 123: «лучший из двух» — маршрут KyberSwap и свой в один момент, исполняет лучший (best_of/trade.rs).
+        if path == super::trade_path::Path::BestOf {
+            return super::best_of::trade::trade(&self.p, &self.kyber, req).await;
+        }
+        if path == super::trade_path::Path::Kyber {
+            match crate::venues::kyberswap::trade::trade(&self.kyber, req.clone()).await {
+                Err(e) if e.code == ErrorCode::NoRoute => {}
+                // Решение 121 (B7): исполнитель — в тексте ошибки, как у своего сборщика.
+                Err(mut e) => {
+                    e.message = format!("[KyberSwap] {}", e.message);
+                    return Err(e);
+                }
+                other => return other,
+            }
+        }
+        let (q, env) = (self.p.quoting(), self.p.env());
+        scope(
+            Class::Trade,
+            exec::trade::trade(&q, &env, &self.p.nonces, req),
+        )
+        .await
     }
 }

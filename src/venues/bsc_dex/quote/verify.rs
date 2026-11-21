@@ -3,14 +3,21 @@
 //! отправкой перечитывает ТОЛЬКО пулы маршрута одним батчем на свежем блоке (pools/load_batch.rs states), применяет
 //! свежее состояние к клонам записей реестра (pools/load.rs renewed — реестр не трогаем) и пересчитывает маршрут нашей
 //! математикой (quote/verify_decide.rs: route_calc + costs). Вердикт: Ok{свежая котировка, amountOutMin по ногам,
-//! блок} — данные свежие и цена не уехала; Reject{причина, дрейф} — узел отдал устаревшее состояние (блок отстал от
-//! головы больше verify.max_staleness_blocks), чтение/таймаут (verify.timeout_ms), или цена уехала больше
-//! verify.max_price_drift_pct. Verify проверяет ТОЛЬКО валидность данных; порог прибыли — ядро (precheck/profit).
+//! блок} — данные свежие и цена не хуже границы сделки; Reject{причина, дрейф} — узел отдал устаревшее состояние (блок
+//! отстал от головы больше verify.max_staleness_blocks), чтение/таймаут (verify.timeout_ms), свежая средняя цена хуже
+//! границы сделки ядра (req.worst_price, решение 121 B4) или скачок цены больше грубого предохранителя
+//! verify.max_price_drift_pct (в любую сторону). Порог прибыли — ядро (precheck/profit).
 //! Reject → ордер не формируем (стартовое правило Тиграна) — врезку за правилом шлюза делает exec/verify_gate.rs (80.6b).
+//! Решение 331: «одним батчем» верно только для V2/V3/CL/V4 (ступени Multicall3); пулы видов «по одному» (Algebra,
+//! Slipstream, Bin, LB, DODO, стейблсвапы, WooFi и др., load_batch::one_by_one) читались друг за другом, и ступени
+//! ждали их. При verify.read_parallel_max они читаются одновременно (не больше столько сразу) и одновременно со
+//! ступенями — тот же блок, тот же итог (pools/load_batch_par.rs); не задана — как раньше.
 //! Кто вызывает: exec/verify_gate.rs (предторговый путь DEX, графовый маршрут); тесты.
-//! От чего зависит: pools/load_batch.rs, pools/load.rs, pools/registry.rs, quote/verify_decide.rs, quote/via.rs,
-//! quote/steps.rs, node/heads.rs, tokens.rs.
-//! Настройки: verify.max_staleness_blocks, verify.max_price_drift_pct, verify.timeout_ms, exec.dex_slippage_pct [bsc_dex].
+//! От чего зависит: pools/load_batch.rs, pools/load_batch_par.rs, pools/load.rs, pools/registry.rs,
+//! quote/verify_decide.rs, quote/via.rs,
+//! quote/steps.rs, node/heads.rs, tokens.rs, pools/fusion_book.rs (isolated — решение 463).
+//! Настройки: verify.max_staleness_blocks, verify.max_price_drift_pct, verify.timeout_ms, exec.dex_slippage_pct,
+//! verify.read_parallel_max (решение 331, необязательная) [bsc_dex].
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -21,22 +28,29 @@ use rust_decimal::Decimal;
 use crate::core::types::{PoolRef, Quote};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
-use super::super::pools::load;
-use super::super::pools::load_batch::{self, Want};
+use super::super::pools::load_batch::Want;
+use super::super::pools::load_batch_par;
 use super::super::pools::registry::Entry;
+use super::super::pools::{fusion_book, load};
 use super::steps::Names;
 use super::via::Via;
 
+/// Настройка предела одновременных чтений пулов маршрута (решение 331); её же читает quote/cycle_legs.rs.
+pub const PAR: &str = "verify.read_parallel_max";
+
 // Пересчёт и вердикт по дрейфу (чистая часть) — отдельный файл, та же фича verify (решение 83).
-pub use super::verify_decide::decide;
+pub use super::verify_decide::{Bounds, decide};
 
 /// Итог верификации маршрута перед сделкой.
 pub enum Verdict {
-    /// Данные свежие и цена в допуске: свежая котировка, amountOutMin по каждой ноге (решение 84), блок перечтения.
+    /// Данные свежие и цена в допуске: свежая котировка, amountOutMin по каждой ноге (решение 84), блок перечтения,
+    /// свежие записи пулов маршрута на этом блоке (решение «335 (В1, пакет)»: проба крючков перед сделкой берёт их, а
+    /// не читает пулы второй раз — check/hook_batch.rs).
     Ok {
         fresh_quote: Box<Quote>,
         amount_out_min: Vec<Decimal>,
         block: u64,
+        pools: std::sync::Arc<HashMap<PoolRef, Entry>>,
     },
     /// Не исполняем: устаревшее состояние, сбой/таймаут чтения или цена уехала. drift — дрейф (None, если до него не дошло).
     Reject {
@@ -60,13 +74,14 @@ pub fn limits(ctx: &super::super::ctx::Ctx) -> GatewayResult<(u64, Decimal, u64)
 }
 
 /// Верификация маршрута котировки `plan`. Принимает: расчёт путей (сторона, монета, налоги, decimals), тикеры, план,
-/// цену газа. Возвращает: вердикт. Ошибки: NotConfigured (verify.*, exec.dex_slippage_pct), NoRoute (нет маршрута),
+/// цену газа, границу сделки ядра (req.worst_price — решение 121 B4). Возвращает: вердикт. Ошибки: NotConfigured (verify.*, exec.dex_slippage_pct), NoRoute (нет маршрута),
 /// узел/настройки чтения.
 pub async fn run(
     v: &Via<'_>,
     names: &Names<'_>,
     plan: &Quote,
     gas: U256,
+    worst: Decimal,
 ) -> GatewayResult<Verdict> {
     let ctx = &v.q.ctx;
     let (max_stale, max_drift, timeout_ms) = limits(ctx)?;
@@ -107,11 +122,16 @@ pub async fn run(
             spacing: e.pool.tick_spacing,
             step: e.pool.bin_step,
             usdt: e.usdt,
+            token0: e.pool.token0,
             token1: e.pool.token1,
         })
         .collect();
-    // Один целевой Multicall3-батч по пулам маршрута на свежем блоке (решение 83), с таймаутом.
-    let fetch = load_batch::states(ctx, &v.q.tokens, &wants, block);
+    // Пулы маршрута на свежем блоке (решение 83), с таймаутом: V2/V3/CL/V4 — ступенями Multicall3; виды «по одному» —
+    // по очереди (не задана verify.read_parallel_max) или одновременно с пределом (решение 331, load_batch_par.rs).
+    let par = load_batch_par::limit(ctx, PAR);
+    // Решение 463 (повторное ревью t236): оракул THENA Fusion этого чтения — не в книгу (fusion_book.rs isolated).
+    let fetch = load_batch_par::states_with(ctx, &v.q.tokens, &v.q.reg, &wants, block, par);
+    let fetch = fusion_book::isolated(fetch);
     let loaded = match tokio::time::timeout(Duration::from_millis(timeout_ms), fetch).await {
         Ok(v) => v,
         Err(_) => {
@@ -148,7 +168,10 @@ pub async fn run(
             drift: None,
         });
     }
-    Ok(decide(
-        v, names, plan, &fresh, gas, block, max_drift, slip_pct,
-    ))
+    let bounds = Bounds {
+        max_drift,
+        slip_pct,
+        worst,
+    };
+    Ok(decide(v, names, plan, &fresh, gas, block, bounds))
 }

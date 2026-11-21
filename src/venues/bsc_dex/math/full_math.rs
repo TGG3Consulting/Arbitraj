@@ -29,9 +29,9 @@ pub fn mul_div_up(a: U256, b: U256, d: U256) -> Option<U256> {
         return None;
     }
     let p = U512::from(a) * U512::from(b);
-    let d = U512::from(d);
-    let mut r = p / d;
-    if !(p % d).is_zero() {
+    // Решение 410 (t195): частное и остаток одним делением (div_rem) — раньше `/` и `%` делили дважды.
+    let (mut r, rem) = p.div_rem(U512::from(d));
+    if !rem.is_zero() {
         r += U512::from(1u8);
     }
     narrow(r)
@@ -42,8 +42,9 @@ pub fn div_up(a: U256, d: U256) -> Option<U256> {
     if d.is_zero() {
         return None;
     }
-    let r = a / d;
-    Some(if (a % d).is_zero() {
+    // Решение 410 (t195): одно деление (div_rem) вместо `/` и `%`.
+    let (r, rem) = a.div_rem(d);
+    Some(if rem.is_zero() {
         r
     } else {
         r + U256::from(1u8)
@@ -66,18 +67,20 @@ pub fn shift_div(x: U256, offset: usize, d: U256, up: bool) -> Option<U256> {
         return None;
     }
     let p = U512::from(x) << offset;
-    let dd = U512::from(d);
-    let mut r = p / dd;
-    if up && !(p % dd).is_zero() {
+    // Решение 410 (t195): одно деление (div_rem) вместо `/` и `%`.
+    let (mut r, rem) = p.div_rem(U512::from(d));
+    if up && !rem.is_zero() {
         r += U512::from(1u8);
     }
     narrow(r)
 }
 
-/// U512 → U256, если помещается.
+/// U512 → U256, если помещается. Решение 410 (t195): «больше 2^256 − 1» — старшие 4 слова не все нули (то же
+/// сравнение без построения U512 из U256::MAX на каждый вызов).
 fn narrow(r: U512) -> Option<U256> {
-    if r > U512::from(U256::MAX) {
+    let limbs = r.as_limbs();
+    if limbs[4..].iter().any(|w| *w != 0) {
         return None;
     }
-    Some(U256::from_limbs_slice(&r.as_limbs()[..4]))
+    Some(U256::from_limbs_slice(&limbs[..4]))
 }

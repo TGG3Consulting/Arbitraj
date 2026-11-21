@@ -3,40 +3,74 @@
   Что делает: экран «Сделки» — идущие и закрытые сделки: направление, шаг (покупка, перевод, продажа,
     застрявшая монета, ждёт человека…), где сейчас монеты и сколько, вложено, выручка, затраты, итог против
     плана; раскрывается хронология шагов и план (полный расчёт затрат). Данные — GET /api/deals,
-    живое сообщение deal обновляет строку на месте.
+    живое сообщение deal обновляет строку на месте. Решение 123 («лучший из двух»): под строкой — кто дал финальную
+    котировку DEX в плане (Quote.pick); кто исполнил своп и почему — в хронологии («исполнил: свой сборщик: … /
+    KyberSwap; лучший из двух: …»). Решение 141: «зашли на X → потенциал без потолка Y и прибыль Z, упущено» (DealUncapped).
+    Решения 138, 163: строка возврата выручки USDT — идёт / ждёт повтора / вернулись / перегнаны вручную / не вернулись.
+    Решение 394 (t179, докупка — записка 269, п. 12): сделка группы — метка группы; у первой сделки группы — итог группы
+    (сумма итогов её сделок, кроме вышедших: возврат USDT один — у сделки с общим возвратом, у остальных 0 с пометкой).
   Кто вызывает: App.svelte.
-  От чего зависит: lib/api.js, lib/live.svelte.js, lib/coreLabels.js, lib/labels.js, components/CostLines.svelte, ErrorText.svelte.
+  От чего зависит: lib/api.js, lib/live.svelte.js, lib/coreLabels.js, lib/labels.js, components/CostLines.svelte, ErrorText.svelte,
+    components/DealUncapped.svelte.
   Настройки: нет.
 -->
 <script>
   import { get } from '../lib/api.js';
-  import { onLive } from '../lib/live.svelte.js';
-  import { stepLabel, dirText } from '../lib/coreLabels.js';
+  import { onLive, lagFor } from '../lib/live.svelte.js';
+  import { flight } from '../lib/flight.js';
+  import { stepLabel, dirText, pickLines } from '../lib/coreLabels.js';
   import { showTime } from '../lib/labels.js';
   import ErrorText from '../components/ErrorText.svelte';
   import CostLines from '../components/CostLines.svelte';
+  import DealUncapped from '../components/DealUncapped.svelte';
 
   let deals = $state({});
+  /** Записи «без потолка» всех сделок одним запросом: {id сделки: {id, body}}; null — ещё не получены. */
+  let uncapped = $state(null);
   let error = $state('');
   let onlyOpen = $state(false);
   const OPEN = ['Buying', 'Transfer', 'Selling', 'Stuck', 'WaitingHuman'];
 
-  /** Перечитывает сделки. Ошибка — в error. */
-  async function reload() {
+  /** Перечитывает сделки (signal — отмена). Ошибка — в error; отмена — ничего. */
+  async function load(signal) {
     try {
-      deals = Object.fromEntries((await get('/api/deals')).map((d) => [d.id, d]));
+      deals = Object.fromEntries((await get('/api/deals', signal)).map((d) => [d.id, d]));
       error = '';
+      uncapped = await get('/api/uncapped/deals', signal);
     } catch (e) {
-      error = e.message;
+      if (!e.aborted) error = e.message;
     }
   }
+  /** Один запрос в полёте (lib/flight.js); уход со страницы — отмена. */
+  const reload = flight(load);
 
   $effect(() => {
     reload();
-    return onLive((msg) => {
+    const off = onLive((msg) => {
       if (msg.type === 'deal') deals[msg.data.id] = msg.data;
-      else if (msg.type === 'lagged') reload();
+      else if (lagFor(msg, 'core')) reload();
     });
+    return () => {
+      off();
+      reload.cancel();
+    };
+  });
+
+  /** Решение 394: группы докупки — {id группы: {n, total, open, members}} по сделкам в памяти экрана; в итог группы
+   *  вышедшие не входят, в списке сделок группы — с пометкой. */
+  const groups = $derived.by(() => {
+    const g = {};
+    for (const d of Object.values(deals)) {
+      if (!d.group) continue;
+      const x = (g[d.group.id] ??= { n: 0, total: 0, open: 0, members: [] });
+      if (d.id !== d.group.id) x.members.push(d);
+      if (d.group.left) continue;
+      x.n += 1;
+      if (d.result_usd != null) x.total += Number(d.result_usd);
+      else x.open += 1;
+    }
+    for (const x of Object.values(g)) x.members.sort((a, b) => (a.started_at > b.started_at ? 1 : -1));
+    return g;
   });
 
   const rows = $derived(
@@ -48,6 +82,8 @@
 
 <h1>Сделки</h1>
 <ErrorText text={error} />
+<!-- Решение 193: отчёт «Итоги сделок» (xlsx) 1 в 1 как отчёт 05.11.2026, на сделках на момент скачивания. -->
+<p><a href="/api/report/results.xlsx" download>Скачать отчёт «Итоги сделок» (xlsx)</a></p>
 <label class="inline"><input type="checkbox" bind:checked={onlyOpen} /> только идущие</label>
 {#each rows as d (d.id)}
   <article class="card">
@@ -56,21 +92,67 @@
       <span class="tag">{stepLabel(d.step)}</span>
       <code>{d.id}</code>
       <span class="muted">с {showTime(d.started_at)}</span>
+      {#if d.group}<span class="tag">{d.group.left ? `была в группе ${d.group.id}` : d.group.id === d.id ? 'группа докупки' : `докупка группы ${d.group.id}`}</span>{/if}
     </header>
+    {#if d.group && !d.group.left && d.group.id === d.id && groups[d.id]?.n > 1}
+      <p><strong>Группа:</strong> сделок {groups[d.id].n}, итог группы {groups[d.id].total.toFixed(4)} USDT{#if groups[d.id].open} <span class="muted">(ещё идут: {groups[d.id].open})</span>{/if}</p>
+    {/if}
+    {#if d.group && d.group.id === d.id && groups[d.id]?.members.length}
+      <!-- Решение 394, п. 12 записки 269: вложенные сделки группы — у каждой свои покупка, перевод, продажа и итог. -->
+      <ul class="muted">
+        {#each groups[d.id].members as m (m.id)}
+          <li><code>{m.id}</code> · {stepLabel(m.step)} · вложено {m.invested} · выручка {m.proceeds} · итог {m.result_usd ?? '—'} USDT{#if m.group.left} · вышла из группы (свой возврат USDT){/if}</li>
+        {/each}
+      </ul>
+    {/if}
+    {#if d.group?.shared_in}<p class="muted">Возврат USDT: 0 — общий возврат группы в сделке <code>{d.group.shared_in}</code></p>
+    {:else if d.group?.wait}<p class="muted">Возврат USDT: 0 сейчас — {d.group.wait[1]} USDT ждут общего возврата группы после последней её сделки</p>{/if}
+    {#if d.group?.sum}<p class="muted">Общий возврат USDT группы — в этой сделке: и выручка сделок {d.group.sum.deals.join(', ')} ({d.group.sum.usdt} USDT)</p>{/if}
+    <!-- Решение 394 (ревью 3, Б1): общий возврат выше максимума вывода — куски по очереди; дошедшие и их итог. -->
+    {#if d.group?.pieces}<p class="muted">Общий возврат кусками: дошло {d.group.pieces.n} — {d.group.pieces.amount} USDT, зачислено {d.group.pieces.credited} USDT (затраты — в итоге сделки)</p>{/if}
     <p>
       Монеты: {d.qty} на <code>{d.at}</code> · вложено {d.invested} · выручка {d.proceeds} · затраты {d.spent} USDT ·
       план {d.plan_profit_usd} USDT ·
       {#if d.result_usd != null}<span class={String(d.result_usd).startsWith('-') ? 'err' : 'ok'}>итог {d.result_usd} USDT</span>
+        <!-- Решение 236: затраты возврата USDT (комиссия вывода, газ) уже вычтены из итога. -->
+        {#if d.return_cost_usd != null && Number(d.return_cost_usd) !== 0}<span class="muted"> (в т.ч. возврат USDT −{d.return_cost_usd})</span>{/if}
       {:else}<span class="muted">итога ещё нет</span>{/if}
       {#if d.relays}<span class="muted"> · перегонов {d.relays}</span>{/if}
       {#if d.dust && Number(d.dust) > 0}<span class="muted"> · пыль {d.dust} на <code>{d.at}</code> (меньше шага или минимума ордера, решение 66)</span>{/if}
+      <!-- Решение 413 (t198, шестое ревью): остаток зачисления «не присвоено» — не подтверждён фактом, отдельно от монет. -->
+      {#if d.credit?.rest && Number(d.credit.rest) > 0}<span class="err"> · не присвоено {d.credit.rest} на <code>{d.credit.venue}</code> (решится в тихий момент счёта или кнопкой «Ручного управления»)</span>{/if}
     </p>
+    <!-- Решение 138: возврат выручки USDT на площадку покупки после закрытия (поле сделки usdt_return).
+         Решение 227: по частям — usdt_return (первая) и usdt_return_parts (остальные площадки выручки). -->
+    {#each [d.usdt_return, ...(d.usdt_return_parts ?? [])].filter(Boolean) as r, i (i)}
+      {#if r.state === 'pending'}
+        <p class="muted">Возврат USDT: идёт — {r.amount} USDT <code>{r.from}</code> → <code>{r.to}</code></p>
+      {:else if r.state === 'done'}
+        <p class="ok">USDT вернулись: {r.amount} USDT <code>{r.from}</code> → <code>{r.to}</code>{#if r.sent != null && r.sent !== r.amount}, ушло {r.sent} (остаток округления вывода — на <code>{r.from}</code>){/if}, зачислено {r.credited}{#if r.fee_usd != null}, газ {r.fee_usd} USDT{/if}{#if r.sent == null}<span class="muted"> (запись до решения 236: в затратах возврата — запрошено − зачислено, вместе с остатком округления вывода, который остался на <code>{r.from}</code>; газа в записи нет)</span>{/if}</p>
+      {:else if r.state === 'retrying'}
+        <!-- Решение 163: ждёт повтора (usdt.return_retry_s, usdt.return_retries_max). -->
+        <p class="muted">Возврат USDT: ждёт повтора — {r.amount} USDT <code>{r.from}</code> → <code>{r.to}</code>, повторов сделано {r.tries}; последняя причина: {r.why}</p>
+      {:else if r.state === 'manual'}
+        <!-- Решение 236, дополнение п. 2: зачислено — ответ человека; затраты возврата = сумма − зачислено (в итоге). -->
+        <p class="ok">USDT перегнаны вручную: {r.amount} USDT <code>{r.at}</code> → <code>{r.to}</code> ({r.by}){#if r.credited != null}, зачислено {r.credited} — затраты возврата в итоге{:else}<span class="muted"> — зачисление не указано, затраты возврата неизвестны и в итог не вошли</span>{/if}</p>
+      {:else if r.state === 'not_returned'}
+        <p class="err">USDT не вернулись: {r.amount} USDT лежат на <code>{r.at}</code> — {r.why}. Перегоните на площадку покупки — кнопки «Перегнать» и «Перегнано вручную» на экране «Ручное управление»</p>
+      {/if}
+    {/each}
+    {#if d.withdraw_refused?.length}
+      <!-- Решение 227: площадки, отказавшие в выводе в этой сделке, — «Перегон» с них не выбирается. -->
+      <p class="muted">Вывод отклонён: {#each d.withdraw_refused as v, i (i)}<code>{v}</code> {/each}— перегон с этих площадок не выбирается</p>
+    {/if}
+    {#if d.buy}<DealUncapped id={d.id} fact={d.result_usd} initial={uncapped?.[d.id]?.body ?? null} loaded={uncapped != null} />{/if}
     <details>
       <summary>Хронология ({d.timeline.length})</summary>
       <table><tbody>
         {#each d.timeline as [at, text], i (i)}<tr><td>{showTime(at)}</td><td>{text}</td></tr>{/each}
       </tbody></table>
     </details>
+    {#each pickLines(d.plan) as line, i (i)}
+      <p class="muted">План, исполнитель DEX (решение 123), {line}</p>
+    {/each}
     {#if d.plan?.costs}
       <details>
         <summary>План: объём {d.plan.qty}, прибыль {d.plan.profit_usd} USDT</summary>

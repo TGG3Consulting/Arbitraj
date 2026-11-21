@@ -12,7 +12,8 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use crate::core::types::{
-    BalanceChange, CoinCheck, OrderBook, Pool, PoolCheck, SendChannelStats, VenueId, WalletQueue,
+    BalanceChange, CoinCheck, ExitGap, OrderBook, Pool, PoolCheck, SendChannelStats, VenueId,
+    WalletQueue,
 };
 
 use super::errors::GatewayError;
@@ -28,7 +29,13 @@ pub enum MarketEvent {
     Pool(Pool),
     /// Площадка сообщила, что данные по монете больше недостоверны
     /// (разрыв последовательности, переподключение). Ядро считает данные устаревшими.
-    Invalidated { venue: VenueId, ticker: String },
+    /// address — адрес контракта монеты BSC (решение 211, ревью В2): DEX знает монету по адресу и заполняет его —
+    /// ядро ищет монету по адресу; биржа адреса в событии не знает (None) — ядро ищет по (площадка, тикер площадки).
+    Invalidated {
+        venue: VenueId,
+        ticker: String,
+        address: Option<alloy_primitives::Address>,
+    },
     /// DEX: проверка налогов монеты закончилась или изменилась (решение 30).
     /// NotChecked — проверка началась, торговать нельзя.
     CoinCheck(CoinCheck),
@@ -77,6 +84,9 @@ pub enum MarketEvent {
     /// каждое изменение, которое видит, — только окончательное по правилам площадки (у кошелька — после
     /// send.deposit_confirmations блоков); снимок балансов (не изменение) не шлёт.
     Balance(BalanceChange),
+    /// Решение 248: продажа выхода DEX откатилась «мало на выходе», реальный выход замерен (адаптер DEX) — ядро
+    /// закрывает монету для новых входов, если замер ниже модели больше guard.exit_gap_pct (core/exit_gap.rs).
+    ExitGap(ExitGap),
 }
 
 /// Состояние спот-пары монеты на бирже (из справочника пар биржи) — для справочника ядра (core/presence.rs).
@@ -101,6 +111,17 @@ pub struct SpotPairState {
     /// в docs-v3 поля помечены устаревшими, в api-ai-skills — обычные поля, в живом ответе minQty ≠ minNotional / price.
     pub min_qty: Option<Decimal>,
     pub max_qty: Option<Decimal>,
+    /// Решение 254: биржа не примет на этой паре наш ордер (LIMIT с нужным timeInForce / типом из настройки) — по полям
+    /// справочника пар (у XT — orderTypes и timeInForces, у Binance и MEXC — orderTypes). Текст — причина, та же, что
+    /// у проверки перед ордером (order_rules адаптера). None — примет или справочник биржи таких полей не отдаёт.
+    /// Ядро такую пару не берёт в расчёт ни для покупки, ни для продажи (core/presence.rs, core/pairs_fresh.rs).
+    #[serde(default)]
+    pub order_block: Option<String>,
+    /// Решение 392 (t180): ценовой коридор лимитного ордера пары (gateway/price_band.rs) — только если биржа его
+    /// документирует и отдаёт через API (иначе None, поведение прежнее). Границы сейчас ядро спрашивает у адаптера
+    /// контрактом price_band перед покупкой (core/price_band.rs). Box — не растит SpotPairState (стек расчёта).
+    #[serde(default)]
+    pub price_band: Option<Box<super::price_band::PriceBandRule>>,
 }
 
 /// Состояние подключения площадки.

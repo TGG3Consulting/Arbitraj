@@ -1,15 +1,19 @@
 //! Файл: venues/bsc_dex/check/taxes.rs
-//! Что делает: проверка налогов одной монеты (решение 30): пробный обмен в каждом её пуле (налоги — по первому
-//! удачному; V2 впереди: только они поддерживают монеты с налогом), газ обмена и разрешений — по каждому пулу.
+//! Что делает: проверка налогов одной монеты (решение 30): пробный обмен в каждом её пуле, где проба проходит — глубоком
+//! в оба направления или мелком, где пробный круг проходит по расчёту пула (решение 393, check/taxes_util.rs probe_pools;
+//! V2 впереди: только они поддерживают монеты с налогом); газ обмена, разрешений и налоги монеты В ЭТОМ пуле (решение 146: налог зависит от
+//! пула) — по каждому пулу в PoolFacts; налоги монеты для ядра — наименьшие по пулам (check/pool_taxes.rs).
 //! Источник встречного токена для пробы — другой пул V2/V3 реестра с наибольшим его балансом (проверяемый пул не
 //! трогается). Пул с промежуточной монетой (решение 52): сумма пробы check.probe_usdt пересчитывается в неё
 //! (quote/rate.rs) — так налог монеты меряется и на этом шаге.
 //! Итог — CoinCheck: налоги известны, или «проверка не прошла» с причиной (чёрный список у ядра) — только если пробный
-//! обмен действительно выполнен и откатился. Нет достоверного пула, нет источника пробы, сбой узла, не задана
+//! обмен действительно выполнен и откатился (покупка — в каждом пуле; или покупка где-то прошла, но продажа откатилась
+//! в каждом пуле без помех — решение 146). Нет достоверного пула, нет источника пробы, сбой узла, не задана
 //! настройка — «не проверено» (NotChecked): это не свойство монеты, чёрного списка нет (Outcome::Wait / Config).
 //! Кто вызывает: check/cycle.rs.
-//! От чего зависит: check/probe.rs, check/native_probe.rs (нативная BNB, решение 62), quote/rate.rs, check/state.rs, pools/registry.rs, tokens.rs, num.rs, wallet/signer.rs, node/call.rs.
-//! Настройки: check.probe_usdt [bsc_dex] (сумма пробы); через probe.rs — адреса Universal Router, Permit2, квотера.
+//! От чего зависит: check/probe.rs, check/pool_taxes.rs, check/native_probe.rs (нативная BNB, решение 62), quote/rate.rs, check/state.rs, pools/registry.rs, tokens.rs, num.rs, wallet/signer.rs, node/call.rs.
+//! Настройки: check.probe_usdt [bsc_dex] (сумма пробы); через probe.rs — адреса Universal Router, Permit2, квотера,
+//! exec.executor_address (пул вида без своего пути — проба через исполнитель, check/probe_exec.rs).
 //!
 //! Налог, % = (ожидалось − пришло) / ожидалось · 100 — research/flow/bsc_dex.md, раздел 6 (модель налога у
 //! Uniswap SDK: buyFeeBps/sellFeeBps — доля, удерживаемая при переводе).
@@ -24,11 +28,12 @@ use super::super::ctx::Ctx;
 use super::super::node::heads::Heads;
 use super::super::num;
 use super::super::pools::registry::{Entry, Registry};
-use super::super::quote::{rate, select};
+use super::super::quote::{rate, select, v2_pair_quote};
 use super::super::tokens::Tokens;
 use super::super::wallet::signer;
+use super::pool_taxes;
 use super::state::Checks;
-use super::taxes_util::{Sources, percent, quote_source};
+use super::taxes_util::{Sources, quote_source};
 use super::{native_probe, probe};
 
 /// Имя источника проверки в CoinCheck.source (решение 30: источники подключаемые).
@@ -44,6 +49,11 @@ pub enum Outcome {
     /// Проверить пока нельзя: нет достоверного пула, нет источника пробы, узел не ответил — «не проверено»,
     /// повтор, как только у монеты появится достоверный пул (pools/progress.rs).
     Wait(String),
+    /// Ревью t178 (Б1): хоть один пул дал ВЕРДИКТ (пробная покупка или продажа откатилась при обычном ответе квотера), а
+    /// итога монеты нет из-за помех на других пулах — «не проверено», и прежний итог «прошла» НЕ держится (ловушку,
+    /// включённую у известной монеты, помеха на другом пуле не прячет): NotChecked до чистого прохода; прежний «не
+    /// прошла» остаётся. Повтор — как у Wait.
+    Doubt(String),
     /// Не задана настройка (dex.quoter, ключ кошелька…) — «не проверено»; второе — имена этих настроек (GatewayError.setting):
     /// перепроверка при задании именно их (решение 75).
     Config(String, Vec<String>),
@@ -64,7 +74,7 @@ pub async fn check_coin(
     usdt: Address,
     heads: &Heads,
 ) -> (CoinCheck, Outcome) {
-    let out = match run(ctx, reg, checks, tokens, sources, ticker, usdt, heads).await {
+    let out = match run(ctx, reg, checks, tokens, sources, coin, usdt, heads).await {
         Ok(o) => o,
         Err(e) if matches!(e.code, ErrorCode::NotConfigured | ErrorCode::SecretsLocked) => {
             Outcome::Config(e.message, e.setting.into_iter().collect())
@@ -79,19 +89,25 @@ pub async fn check_coin(
             },
             Some(Utc::now()),
         ),
-        Outcome::Wait(_) | Outcome::Config(..) => (CheckState::NotChecked, None),
+        Outcome::Wait(_) | Outcome::Doubt(_) | Outcome::Config(..) => {
+            (CheckState::NotChecked, None)
+        }
     };
     let check = CoinCheck {
         venue: ctx.venue(),
         asset: Asset {
+            chain: None,
             ticker: ticker.to_string(),
-            bsc_contract: Some(coin),
+            contract: Some(coin),
         },
         taxes,
         source: SOURCE.to_string(),
         checked_at,
         wait: match &out {
             Outcome::Wait(w) => Some(w.clone()),
+            Outcome::Doubt(w) => Some(format!(
+                "проба дала вердикт по пулу, итога нет из-за помех на других пулах: {w}"
+            )),
             Outcome::Config(w, _) => Some(format!("не задана настройка: {w}")),
             _ => None,
         },
@@ -108,7 +124,7 @@ async fn run(
     checks: &Checks,
     tokens: &Tokens,
     sources: &Sources,
-    ticker: &str,
+    coin: Address,
     usdt: Address,
     heads: &Heads,
 ) -> GatewayResult<Outcome> {
@@ -121,7 +137,7 @@ async fn run(
         )
     })?;
     let (pools, mut env, shallow) =
-        super::taxes_util::probe_pools(ctx, reg, tokens, ticker, usdt_dec)?;
+        super::taxes_util::probe_pools(ctx, reg, tokens, &coin, usdt_dec)?;
     if pools.is_empty() {
         // Пробовать нечем: причины по каждому пулу — глубина не считается, мелкий (с цифрами), спит (решение 73).
         let mut why = env;
@@ -131,20 +147,32 @@ async fn run(
         why.extend(shallow);
         return Ok(Outcome::Wait(why.join("; ")));
     }
-    let mut taxes = None;
+    // Решение 146: налоги каждого пула с удачной пробой; zero — у какого-то пула делить не на что (выход 0);
+    // misses — почему не измерен налог продажи (откатилась ли продажа, причина).
+    let (mut measured, mut zero, mut misses) = (Vec::new(), false, Vec::new());
     let (mut failed, mut config) = (Vec::new(), Vec::new());
-    for e in &pools {
+    // Решение 280 (ревью): пулы вида без роутера, где пара отклонила пробную покупку, — «налоги пула не измерены»: это
+    // свойство пула, не помеха окружения (pool_taxes::outcome их помехой не считает).
+    let mut unmeasured = Vec::new();
+    for (e, fit) in &pools {
         let exclude = match e.pool.reference {
             PoolRef::Contract(a) => Some(a),
+            PoolRef::Member { contract, .. } => Some(contract),
+            // Решение 295: пара многомонетного пула — исключается контракт пула.
+            PoolRef::Multi { contract, .. } => Some(contract),
             PoolRef::Singleton { .. } => None,
         };
         // Пул с промежуточной монетой (решение 52): сумма пробы — в ней, по живому пулу «промежуточная — USDT».
-        let amount = match rate::from_usdt(ctx, reg, usdt, e.usdt, probe) {
-            Ok(a) => a,
-            Err(err) => {
-                env.push(format!("{}: {}", e.family.title, err.message));
-                continue;
-            }
+        // Решение 393: мелкий пул — сумма, на которой пробный круг проходит (taxes_util.rs probe_pools).
+        let amount = match fit {
+            Some(a) => *a,
+            None => match rate::from_usdt(ctx, reg, usdt, e.usdt, probe) {
+                Ok(a) => a,
+                Err(err) => {
+                    env.push(format!("{}: {}", e.family.title, err.message));
+                    continue;
+                }
+            },
         };
         let deep = |x: &Entry| {
             let any = select::Need::Any;
@@ -167,42 +195,63 @@ async fn run(
                 continue;
             }
         };
-        match probe::run(ctx, e, source, wallet, amount, heads).await {
+        // Решение 393 (ревью t178, Н3): порог крошечного выхода — только у мелкого пула; у глубокого — как раньше.
+        let min = match fit {
+            Some(_) => match super::super::quote::side_fit::min_units(ctx) {
+                Ok(m) => Some(m),
+                Err(err) => {
+                    config.push((err.message, err.setting));
+                    continue;
+                }
+            },
+            None => None,
+        };
+        match probe::run(ctx, e, source, wallet, amount, heads, min).await {
             Ok(Ok(m)) => {
+                let dec = (tokens.decimals(ctx, e.coin), tokens.decimals(ctx, e.usdt));
+                let pt = pool_taxes::percent(&m, dec.0.await?, dec.1.await?);
                 checks.update_pool(&e.pool.reference, |f| {
                     f.gas_buy = Some(m.gas_buy);
                     f.gas_approve_buy = Some(m.gas_approve_buy);
                     f.gas_sell = m.gas_sell.map(|g| g.0);
                     f.gas_approve_sell = m.gas_sell.map(|g| g.1);
+                    f.taxes = pt.clone();
                 });
-                checks.set_transfer_gas(ticker, m.gas_transfer);
+                checks.set_transfer_gas(coin, m.gas_transfer);
                 // Нативная монета BNB (решение 62): газ WRAP/UNWRAP и нативного перевода.
                 native_probe::after(ctx, checks, e, (source, wallet), amount, heads, &m).await;
-                if taxes.is_none() {
-                    taxes = Some(percent(&m, tokens.decimals(ctx, e.coin).await?));
+                match pt {
+                    Some(t) => {
+                        if t.sell_pct.is_none() {
+                            misses.push(pool_taxes::miss(&m, e.family.title));
+                        }
+                        measured.push(t);
+                    }
+                    None => zero = true,
                 }
             }
-            Ok(Err(why)) => failed.push(format!("{}: {why}", e.family.title)),
+            // Пробный обмен в пуле откатился — прежние налоги пула больше не действуют (пул в котировку не идёт).
+            Ok(Err(why)) => {
+                checks.update_pool(&e.pool.reference, |f| f.taxes = None);
+                failed.push(format!("{}: {why}", e.family.title))
+            }
             Err(err) if err.code == ErrorCode::NotConfigured => {
                 config.push((err.message, err.setting))
+            }
+            // Решение 280: V2-форк без роутера — пара отклонила покупку через исполнитель: налоги ПУЛА не измерены (пул
+            // в маршрут не идёт, решение 146); монета ни «не прошла», ни помеха — вердикт по остальным пулам.
+            Err(err) if err.code == ErrorCode::SwapReverted && v2_pair_quote::on(e) => {
+                checks.update_pool(&e.pool.reference, |f| f.taxes = None);
+                unmeasured.push(err.message)
             }
             Err(err) => env.push(format!("{}: {}", e.family.title, err.message)),
         }
     }
-    Ok(match taxes {
-        Some(Some(t)) => Outcome::Known(t),
-        Some(None) => {
-            Outcome::Failed("пробный обмен: расчётный выход 0 — налог не определить".into())
-        }
-        // Вердикт — только если каждый пул дал вердикт: помеха на любом пуле (узел, 429) — проверка не выполнена.
-        None if !config.is_empty() => {
-            let why: Vec<String> = config.iter().map(|c| c.0.clone()).collect();
-            Outcome::Config(
-                why.join("; "),
-                config.into_iter().filter_map(|c| c.1).collect(),
-            )
-        }
-        None if !env.is_empty() => Outcome::Wait(env.join("; ")),
-        None => Outcome::Failed(failed.join("; ")),
-    })
+    Ok(pool_taxes::outcome(
+        &measured,
+        zero,
+        &misses,
+        (failed, env, config),
+        &unmeasured,
+    ))
 }

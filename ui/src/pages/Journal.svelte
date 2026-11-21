@@ -3,6 +3,8 @@
   Что делает: экран «Журнал» — записи GET /api/journal?limit=N[&before=ID], новые первыми, с листанием
     («Ещё» — следующая страница старше последней); живые записи из WebSocket (/api/ws, тип «journal»)
     добавляются сверху; при «lagged» журнал перечитывается с начала.
+    Решение 155: повторяющаяся запись (repeats, last_at — одна строка на смену причины) показывает «×N, с … по …»;
+    её обновление приходит по живому потоку с тем же id и заменяет строку на месте.
     Фильтры по уровню, виду и площадке — по загруженным записям; варианты фильтров берутся из самих записей.
     Размер страницы задаёт зритель (PageSize), значения по умолчанию нет.
   Кто вызывает: App.svelte.
@@ -10,8 +12,10 @@
   Настройки: нет.
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { get } from '../lib/api.js';
-  import { onLive } from '../lib/live.svelte.js';
+  import { onLive, lagFor } from '../lib/live.svelte.js';
+  import { flight } from '../lib/flight.js';
   import { levelLabel, showTime } from '../lib/labels.js';
   import PageSize from '../components/PageSize.svelte';
   import ErrorText from '../components/ErrorText.svelte';
@@ -26,28 +30,44 @@
   let venue = $state('');
   let open = $state({});
 
-  /** Читает страницу. Принимает: before — id, старше которого читать (или null — с начала). */
-  async function load(before) {
+  /** Читает страницу. Принимает: before — id, старше которого читать (или null — с начала); signal — отмена. */
+  async function load(before, signal) {
     if (limit === null) return;
     busy = true;
     try {
-      const page = await get(`/api/journal?limit=${limit}${before ? `&before=${before}` : ''}`);
-      entries = before ? [...entries, ...page] : page;
+      const page = await get(`/api/journal?limit=${limit}${before ? `&before=${before}` : ''}`, signal);
+      entries = uniqBy(before ? [...entries, ...page] : page, (e) => e.id);
       more = page.length === limit;
       error = '';
     } catch (e) {
+      if (e.aborted) return;
       error = e.message;
     }
     busy = false;
   }
+  /** Первая страница заново: один запрос в полёте (lib/flight.js); смена объёма или уход со страницы — отмена. */
+  const reload = flight((signal) => load(null, signal));
 
   $effect(() => {
-    load(null);
-    return onLive((m) => {
-      if (m.type === 'lagged') load(null);
-      if (m.type === 'journal' && !entries.some((e) => e.id === m.data.id)) entries = [m.data, ...entries];
+    reload();
+    const off = onLive((m) => {
+      if (lagFor(m, 'journal')) reload();
+      if (m.type !== 'journal') return;
+      // Решение 155: обновление повторяющейся записи (тот же id) — замена на месте, новая — сверху.
+      const i = entries.findIndex((e) => e.id === m.data.id);
+      if (i >= 0) entries[i] = m.data;
+      else entries = [m.data, ...entries];
     });
+    return () => {
+      off();
+      reload.cancel();
+    };
   });
+
+  /** Время без даты (ЧЧ:ММ:СС) — для «с … по …». */
+  const clock = (t) => new Date(t).toLocaleTimeString('ru-RU');
+  /** Решение 155: «×N, с … по …» у повторяющейся записи; у обычной — пусто. */
+  const repeat = (e) => (e.repeats > 1 ? `×${e.repeats}, с ${clock(e.at)} по ${clock(e.last_at)}` : '');
 
   /** Разные значения поля среди загруженных записей — варианты фильтра. */
   const distinct = (field) => [...new Set(entries.map((e) => e[field]).filter(Boolean))].sort();
@@ -82,12 +102,13 @@
   <table>
     <thead><tr><th>№</th><th>Когда</th><th>Уровень</th><th>Вид</th><th>Площадка</th><th>Что</th></tr></thead>
     <tbody>
-      {#each shown as e (e.id)}
+      {#each uniqBy(shown, (e) => e.id) as e (e.id)}
         <tr class={`lvl-${e.level}`}>
           <td>{e.id}</td><td>{showTime(e.at)}</td><td>{levelLabel(e.level)}</td>
           <td><code>{e.kind}</code></td><td>{e.venue ?? '—'}</td>
           <td>
             {e.message}
+            {#if repeat(e)}<span class="muted">({repeat(e)})</span>{/if}
             {#if e.data}
               <button class="quiet" onclick={() => (open[e.id] = !open[e.id])}>{open[e.id] ? 'скрыть' : 'данные'}</button>
               {#if open[e.id]}<pre>{JSON.stringify(e.data, null, 2)}</pre>{/if}

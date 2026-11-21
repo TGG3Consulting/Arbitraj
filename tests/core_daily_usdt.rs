@@ -64,8 +64,9 @@ async fn start(d: &std::path::Path) -> (Core, Store) {
 fn deal(id: &str) -> Deal {
     let d = Direction {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("bingx".into()),
         sell_on: VenueId("bsc_dex".into()),
@@ -97,8 +98,16 @@ async fn halted_provisional_then_fact_and_restart() {
         assert_eq!(day.result_usd, Decimal::from(-101));
         assert_eq!(day.provisional_usd, Decimal::from(-101));
         assert_eq!(x.provisional_usd, Some(Decimal::from(-101)));
-        // Предварительный убыток 101 ≥ лимита 50 — стоп.
-        assert_eq!(core.control().mode, Mode::Stopped);
+        // Предварительный убыток 101 ≥ лимита 50 — пауза только направления сделки (решение 258; было — площадки
+        // BingX, решение 173), не всей системы. Реестр шлюза в этом тесте пуст — вид bsc_dex неизвестен и считается
+        // биржей (core/day_pair.rs, как раньше в учёте дня), поэтому пара — «BingX → биржа».
+        let r = core.control();
+        assert_eq!(r.mode, Mode::Running);
+        assert_eq!(
+            r.pair_paused.keys().collect::<Vec<_>>(),
+            vec!["bingx:cex_cex"]
+        );
+        assert!(!r.venue_paused.contains_key(&VenueId("bingx".into())));
     }
     // После перезапуска итог дня восстановлен; закрытие сделки заменяет предварительное фактом.
     let (core, _) = start(&d).await;
@@ -120,15 +129,16 @@ async fn earlier_day_correction_goes_to_settle_day() {
         let db = Db::open(&d.join("t.sqlite")).unwrap();
         let y = (chrono::Utc::now().date_naive() - chrono::Duration::days(1)).to_string();
         let body = json!({"final_usd": "-101", "provisional": {"d2": ["-101", y]}}).to_string();
-        db.call(move |c| {
-            c.execute(
-                "INSERT INTO daily_result (day, body, updated_at) VALUES (?1, ?2, ?3)",
-                rusqlite::params![y, body, "t"],
-            )
-            .map(|_| ())
-        })
-        .await
-        .unwrap();
+        db.ledger()
+            .write(move |c| {
+                c.execute(
+                    "INSERT INTO daily_result (day, body, updated_at) VALUES (?1, ?2, ?3)",
+                    rusqlite::params![y, body, "t"],
+                )
+                .map(|_| ())
+            })
+            .await
+            .unwrap();
     }
     let (core, _) = start(&d).await;
     let day = core.control().day;
@@ -149,7 +159,7 @@ async fn low_usdt_once_per_crossing_and_survives_restart() {
     {
         let (core, settings) = start(&d).await;
         // Не задано — алерта нет, состояние не меняется.
-        arb::core::low_usdt::check(&core, &bx, Decimal::from(10), "USDT").await;
+        arb::core::low_usdt::check(&core, &bx, None, "bingx", Decimal::from(10), "USDT").await;
         assert!(core.inner.usdt_below.lock().unwrap().get(&bx).is_none());
         settings
             .set(
@@ -160,12 +170,12 @@ async fn low_usdt_once_per_crossing_and_survives_restart() {
             )
             .await
             .unwrap();
-        arb::core::low_usdt::check(&core, &bx, Decimal::from(50), "USDT").await;
+        arb::core::low_usdt::check(&core, &bx, None, "bingx", Decimal::from(50), "USDT").await;
         assert_eq!(core.inner.usdt_below.lock().unwrap().get(&bx), Some(&true));
     }
     let (core, _) = start(&d).await;
     // Состояние «ниже порога» восстановлено — повторного алерта после перезапуска нет.
     assert_eq!(core.inner.usdt_below.lock().unwrap().get(&bx), Some(&true));
-    arb::core::low_usdt::check(&core, &bx, Decimal::from(51), "USDT").await;
+    arb::core::low_usdt::check(&core, &bx, None, "bingx", Decimal::from(51), "USDT").await;
     assert_eq!(core.inner.usdt_below.lock().unwrap().get(&bx), Some(&false));
 }

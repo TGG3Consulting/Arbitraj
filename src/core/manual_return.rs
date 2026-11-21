@@ -3,7 +3,8 @@
 //! балансу площадки (не больше взятого), вложенное — пропорционально; дальше — продажа по общим правилам
 //! (sell.rs). Плюс данные экрана «Ручное управление» для api.
 //! Кто вызывает: core/commands.rs; api (Core::manual).
-//! От чего зависит: manual.rs, deal.rs, ledger.rs, sell.rs, deps.rs (шлюз — балансы).
+//! От чего зависит: manual.rs, manual_halted.rs (on_hand — реальный баланс), manual_wait.rs (решение 405: ожидание окончания
+//! сделок монеты и список ожиданий экрана), deal.rs, ledger.rs, sell.rs.
 //! Настройки: risk.min_bnb_balance — через native.rs (BNB на DEX — сверх резерва на газ, решение 62).
 
 use rust_decimal::Decimal;
@@ -20,30 +21,34 @@ pub async fn return_to_bot(core: &Core, holding_id: &str) -> Result<String, Stri
         .get(holding_id)
         .cloned()
         .ok_or(format!("записи {holding_id} нет"))?;
-    let gw = core
-        .inner
-        .deps
-        .gw
-        .get(&h.venue)
-        .await
-        .map_err(|e| e.message)?;
-    let b = gw
-        .balances()
-        .await
-        .map_err(|e| format!("{}: балансы: {}", h.venue.0, e.message))?;
-    let free: Decimal = b
-        .iter()
-        .filter(|x| x.asset == h.asset.ticker)
-        .map(|x| x.free)
-        .sum();
-    // BNB на DEX — только сверх резерва на газ и газа самой продажи (решение 62, native.rs): резерв боту не
-    // «возвращается», а газ продажи платится из резерва — иначе продажа упрётся в резерв (exec/native.rs::reserve_ok).
-    let free = super::native::spendable(core, &h.venue, &h.asset.ticker, free)?;
-    let (free, gas_note) = super::native::minus_sell_gas(core, &gw, &h.venue, &h.asset, free).await;
-    if free <= Decimal::ZERO {
-        return Err(format!("на {} нет свободных {}", h.venue.0, h.asset.ticker));
+    // Решение 118 (Я-2): по монете одна сделка — идёт другая, возврат подождёт (монеты остаются у человека).
+    let key = super::coin_key::CoinKey::of(&h.asset);
+    if !super::coin_ride::take(core, &key) {
+        // Решение 405 (ответ Тиграна на ревью Н3): не отказ — ждём окончания идущих сделок монеты (manual_wait.rs).
+        let old = format!(
+            "по {} сейчас идёт другая сделка — «Вернуть боту» после её окончания",
+            h.asset.ticker
+        );
+        return super::manual_wait::defer(core, &key, &h.asset.ticker, old);
     }
-    let qty = free.min(h.qty);
+    let r = return_locked(core, holding_id, h, old).await;
+    if r.is_err() {
+        super::coin_ride::free_active(core, &key);
+    }
+    r
+}
+
+/// «Вернуть боту» под замком монеты: замок снимается, когда продажа закончится (или при ошибке — вызывающим).
+async fn return_locked(
+    core: &Core,
+    holding_id: &str,
+    h: ManualHolding,
+    old: Deal,
+) -> Result<String, String> {
+    let key = super::coin_key::CoinKey::of(&h.asset);
+    // Реальный свободный баланс (BNB на DEX — сверх резерва и газа продажи, решение 62) — manual_halted::on_hand.
+    let (qty, gas_note) =
+        super::manual_halted::on_hand(core, &old, &h.venue, &h.asset, h.qty).await?;
     let share = if h.qty.is_zero() {
         Decimal::ZERO
     } else {
@@ -56,9 +61,13 @@ pub async fn return_to_bot(core: &Core, holding_id: &str) -> Result<String, Stri
         old.plan_profit_usd,
     );
     deal.at = h.venue.clone();
+    // Решение 132: «Вернуть боту» — тем же кошельком DEX, что и исходная сделка.
+    deal.dex_account = super::dex_account::of(core, &old)?;
     deal.qty = qty;
     deal.invested = old.invested * share;
     deal.spent = old.spent * share;
+    // Решение 257: статьи затрат — той же долей.
+    deal.cost_items = super::deal_book::share(&old.cost_items, share);
     deal.step = Step::Selling;
     deal.note(format!(
         "«Вернуть боту»: {qty} по реальному балансу (было взято {})",
@@ -74,18 +83,35 @@ pub async fn return_to_bot(core: &Core, holding_id: &str) -> Result<String, Stri
     lk(&core.inner.holdings).remove(holding_id);
     super::manual::persist(core).await;
     super::ledger::save(core, &deal).await;
-    let text = format!("{qty} {} на {} возвращены боту", h.asset.ticker, h.venue.0);
+    let text = crate::notify::human::Msg::new(crate::notify::human::OK, "Монеты возвращены боту")
+        .kv(
+            "Монеты",
+            format!(
+                "{} {} на {}",
+                crate::notify::human::qty(qty),
+                h.asset.ticker,
+                crate::notify::human::venue(&h.venue.0)
+            ),
+        )
+        .line("Бот продаст их по общим правилам")
+        .id(&deal.id)
+        .render();
     core.inner
         .deps
         .notify("manual.returned", Some(&h.venue.0), &text)
         .await;
     let c = core.clone();
-    tokio::spawn(async move { super::sell::sell_or_stuck(&c, deal).await });
+    tokio::spawn(async move {
+        super::sell::sell_or_stuck(&c, deal).await;
+        super::coin_ride::free_active(&c, &key);
+    });
     Ok(text)
 }
 
 impl Core {
-    /// Экран «Ручное управление» (GET /api/manual): алерты и монеты человека.
+    /// Экран «Ручное управление» (GET /api/manual): алерты, монеты человека, остановленные сделки, «USDT не вернулись»
+    /// (usdt, решение 163) и записи с кнопками
+    /// (records, решение 156: core/manual_feed.rs).
     pub fn manual(&self) -> serde_json::Value {
         let alerts: Vec<StuckAlert> = lk(&self.inner.alerts)
             .values()
@@ -95,6 +121,19 @@ impl Core {
             .values()
             .map(|(h, _)| h.clone())
             .collect();
-        serde_json::json!({ "alerts": alerts, "holdings": holdings })
+        // Решение 100: остановленные сделки, ждущие разбора («Продать сейчас», «Продано вручную»).
+        let halted = self.halted();
+        // Решение 156: записи с кнопками — экран рисует кнопки из них (те же, что уходят в Telegram).
+        let records = self.manual_records();
+        // Решение 163: закрытые сделки, чьи USDT не вернулись (manual_usdt.rs).
+        let usdt = self.usdt_not_returned();
+        // Решение 405 (ответ Тиграна на ревью Н3): ручные действия, ждущие окончания сделок монеты (manual_wait.rs).
+        let waits = super::manual_wait::list(self);
+        // Решение 405 (ревью 4, Н2): резерв возвратов USDT по площадкам и кошелькам (usdt_hold_view.rs).
+        let reserves = super::usdt_hold_view::rows(self);
+        serde_json::json!({
+            "alerts": alerts, "holdings": holdings, "halted": halted, "usdt": usdt, "records": records,
+            "waits": waits, "reserves": reserves
+        })
     }
 }

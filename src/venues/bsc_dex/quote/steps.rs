@@ -1,11 +1,11 @@
 //! Файл: venues/bsc_dex/quote/steps.rs
 //! Что делает: затраты одного шага пути (решения 35, 52) — у каждого обмена своя строка с шагом маршрута (Cost::with_step):
 //! газ обмена в этом пуле (BNB), комиссия пула (в токене входа шага), налог монеты на её шаге (покупка — шаг, где
-//! монета на выходе; продажа — где на входе), влияние крючка (в токене выхода шага). Комиссия, налог и крючок уже
+//! монета на выходе; продажа — где на входе) — налог ИМЕННО пула этого шага (решение 146, quote/pool_tax.rs), влияние крючка (в токене выхода шага). Комиссия, налог и крючок уже
 //! в цене (in_price = true — для прозрачности), газ — отдельно. Валюта каждой затраты — тикер, который ядро может
 //! пересчитать: USDT (venue.quote_asset), тикер монеты, тикер промежуточной (биржи или «BNB» для WBNB).
 //! Кто вызывает: quote/costs.rs.
-//! От чего зависит: quote/path.rs, quote/pool_quote.rs (комиссия V4), pools/mids.rs, num.rs, core/types (Cost, RouteStep).
+//! От чего зависит: quote/path.rs, quote/pool_quote.rs (комиссия V4), quote/pool_tax.rs (налог пула шага), pools/mids.rs, num.rs, core/types (Cost, RouteStep).
 //! Настройки: dex.v2_fee_pct [вид пула V2].
 //!
 //! Проскальзывания отдельным видом затраты нет (ответ техлида, Issue #7): цена каждого шага уже посчитана по реальной
@@ -20,18 +20,21 @@ use crate::core::types::{Cost, CostKind, PoolKind, PoolState, RouteStep, Side, T
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
+use super::super::math::{algebra_fee, crypto_swap, solidly_fee};
 use super::super::num;
 use super::super::pools::mids::Mids;
 use super::super::pools::registry::Entry;
-use super::super::wallet::balances::BNB;
 use super::path::{Hop, Path};
 use super::pool_quote::swap_fee;
+use super::pool_tax::step_pct;
 
 /// Тикеры токенов пути для затрат.
 pub struct Names<'a> {
     pub usdt: (Address, &'a str),
     pub coin: (Address, &'a str),
     pub mids: &'a Mids,
+    /// Решение 416: тикер газа сети (dex.gas_ticker) — им пишется газ шага.
+    pub gas: &'a str,
 }
 
 impl Names<'_> {
@@ -69,7 +72,8 @@ impl Names<'_> {
     }
 }
 
-/// Затраты всех шагов пути. Принимает: путь, сторону, налоги монеты, цену газа (wei), тикеры.
+/// Затраты всех шагов пути. Принимает: путь, сторону, налоги монеты из проверки (запасные — когда монета сделки не
+/// монета пула шага, quote/pool_tax.rs step_pct), цену газа (wei), тикеры.
 /// Ошибки: BadResponse (числа, тикер), NotConfigured (dex.v2_fee_pct).
 pub fn path_costs(
     ctx: &Ctx,
@@ -92,7 +96,7 @@ pub fn path_costs(
             &mut out,
             CostKind::Gas,
             gas_bnb(ctx, gas_wei, h)?,
-            BNB,
+            names.gas,
             false,
         );
         add(
@@ -106,7 +110,7 @@ pub fn path_costs(
             add(
                 &mut out,
                 CostKind::BuyTax,
-                pct(p.coins, t.buy_pct),
+                pct(p.coins, step_pct(&h.entry, &h.usable, coin, side, t)),
                 &from_coin(names),
                 true,
             );
@@ -115,7 +119,7 @@ pub fn path_costs(
             add(
                 &mut out,
                 CostKind::SellTax,
-                pct(p.coins, t.sell_pct),
+                pct(p.coins, step_pct(&h.entry, &h.usable, coin, side, t)),
                 &from_coin(names),
                 true,
             );
@@ -186,8 +190,122 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
             Ok(rate * Decimal::ONE_HUNDRED)
         }
         // Solidly (Topaz v2, THENA V1; решения 80, 85): комиссия пула — числитель над 10000 (getFee) → проценты = fee/100
-        // (одна комиссия на обе ветви stable/volatile; направление цены комиссию не меняет).
-        (PoolState::Solidly { fee, .. }, _) => Ok(Decimal::from(*fee) / Decimal::from(100u32)),
+        // (одна комиссия на обе ветви stable/volatile; направление цены комиссию не меняет). Решение 273: по правилу
+        // пула (math/solidly_fee.rs) — числитель над делителем; делитель (usdfi) → 100 / fee.
+        // Решение 443: направленная комиссия (Camelot V2) — комиссия входа этого направления (fee1 — вход token1).
+        (PoolState::Solidly { fee, fee1, .. }, _) => {
+            let fee = solidly_fee::side(fee, fee1.as_ref(), zero_for_one);
+            solidly_fee::pct(fee)
+                .ok_or_else(|| ctx.err(ErrorCode::BadResponse, solidly_fee::no_pct(fee)))
+        }
+        // StableSwap (решение 122 F): комиссия — числитель над 10^10 (fee() пула) → проценты = fee / 10^8.
+        // Решение 484: пул Wombat — haircutRate над 10^18 → проценты = haircut / 10^16 (комиссия за высокое покрытие —
+        // только в расчёте обмена, math/wombat.rs: зависит от суммы).
+        (PoolState::StableSwap(d), _) if d.wombat.is_some() => {
+            let h = d.wombat.as_ref().map_or(U256::ZERO, |w| w.haircut);
+            num::to_decimal(h, 16).ok_or_else(|| {
+                ctx.err(
+                    ErrorCode::BadResponse,
+                    "haircut Wombat не помещается в Decimal",
+                )
+            })
+        }
+        (PoolState::StableSwap(d), _) => num::to_decimal(d.fee, 8).ok_or_else(|| {
+            ctx.err(
+                ErrorCode::BadResponse,
+                "комиссия StableSwap не помещается в Decimal",
+            )
+        }),
+        // Crypto-пул Curve (решение 442): комиссия при текущих балансах — `_fee(xp)` пула над 10^10 → проценты = fee /
+        // 10^8 (math/crypto_swap.rs fee; при обмене котировка считает её на балансах после обмена).
+        (PoolState::Crypto(d), _) => crypto_swap::scaled(d, &d.balances)
+            .and_then(|xp| crypto_swap::fee(d, &xp))
+            .and_then(|f| num::to_decimal(f, 8))
+            .ok_or_else(|| {
+                ctx.err(
+                    ErrorCode::BadResponse,
+                    "комиссия crypto-пула Curve не считается",
+                )
+            }),
+        // TickBin (Maverick V2, решение 122 F): комиссия по направлению fee(tokenAIn), D18 (1e18 = 100%) → проценты =
+        // fee / 1e16; tokenA = token0.
+        (PoolState::TickBin(d), _) => {
+            let fee = if zero_for_one { d.fee0_in } else { d.fee1_in };
+            num::to_decimal(fee, 16).ok_or_else(|| {
+                ctx.err(
+                    ErrorCode::BadResponse,
+                    "комиссия Maverick V2 не помещается в Decimal",
+                )
+            })
+        }
+        // V2 с усилением (KyberSwap Classic DMM, решение 287): комиссия блока над 10^18 → проценты = fee / 10^16.
+        (PoolState::AmpV2(d), _) => num::to_decimal(d.fee, 16).ok_or_else(|| {
+            ctx.err(
+                ErrorCode::BadResponse,
+                "комиссия KyberSwap DMM не помещается в Decimal",
+            )
+        }),
+        // Пул в общем хранилище (Balancer V2, решение 289): комиссия обмена пула над 10^18 → проценты = fee / 10^16.
+        (PoolState::VaultPool(d), _) => num::to_decimal(d.fee, 16).ok_or_else(|| {
+            ctx.err(
+                ErrorCode::BadResponse,
+                "комиссия Balancer не помещается в Decimal",
+            )
+        }),
+        // Пара с фиктивными резервами (SmarDex, решение 288): комиссии feesLP + feesPool над 10^6 → проценты = сумма / 10^4.
+        (PoolState::Fictive(d), _) => num::to_decimal(d.fees_lp.saturating_add(d.fees_pool), 4)
+            .ok_or_else(|| {
+                ctx.err(
+                    ErrorCode::BadResponse,
+                    "комиссия SmarDex не помещается в Decimal",
+                )
+            }),
+        // Бины с изменчивой комиссией (Liquidity Book V2.1, решение 290): полная комиссия активного бина на времени блока
+        // чтения над 10^18 → проценты = fee / 10^16 (дальше по бинам изменчивая часть растёт — её считает котировка).
+        (PoolState::LbBin(d), _) => super::super::math::lb_fee::active_fee(d)
+            .and_then(|f| num::to_decimal(U256::from(f), 16))
+            .ok_or_else(|| {
+                ctx.err(
+                    ErrorCode::BadResponse,
+                    "комиссия Liquidity Book не считается",
+                )
+            }),
+        // Ревью t189 (Н4, дефект до решения 404): Algebra (THENA Fusion, Algebra Integral; вид ядра Cl, состояние Algebra)
+        // раньше падала в «состояние пула не того вида» — затраты маршрута и сигнал цикла с таким шагом не собирались.
+        // Комиссия — та же, что берёт котировка (pool_quote.rs → math/swap_algebra.rs): globalState.fee в пипсах (1e-6);
+        // решение 444: у направленных комиссий (Camelot V3) — комиссия стороны обмена (math/algebra_fee.rs).
+        (PoolState::Algebra { fee, fee_otz, .. }, _) => {
+            Ok(pips(algebra_fee::swap_fee(*fee, *fee_otz, zero_for_one)))
+        }
+        // PMM от оракула (WooFi, Metric, iZiSwap, Biswap V3): котировка — лесенка ответов квотера пула (pool_quote.rs,
+        // quote/pmm_ladder.rs), квотер возвращает выход обмена — комиссия пула уже в нём; отдельной строки нет — 0
+        // (строка затрат «в цене», in_price, — для прозрачности, в прибыль не вычитается).
+        (PoolState::OraclePmm(_), _) => Ok(Decimal::ZERO),
+        // Скважина Basin (решение 485): своей комиссии у скважины нет (Well.sol: выход задаёт только функция скважины).
+        (PoolState::BasinWell(_), _) => Ok(Decimal::ZERO),
+        // Пул Fluid DEX T1 (решение 440): комиссия обмена над 1e6 → проценты = fee / 1e4 (quote/fluid_depth.rs).
+        (PoolState::SmartColDebt(d), _) => super::fluid_depth::fee_pct(d).ok_or_else(|| {
+            ctx.err(
+                ErrorCode::BadResponse,
+                "комиссия Fluid не помещается в Decimal",
+            )
+        }),
+        // Пул Shell Protocol Proteus (решение 486): вход и выход округляются на сумму / BASE_FEE — ≈ 2 · 100 / BASE_FEE %
+        // (quote/shell_depth.rs); точная комиссия — в выходе котировки (math/proteus_swap.rs).
+        (PoolState::Proteus(d), _) => super::shell_depth::fee_pct(d).ok_or_else(|| {
+            ctx.err(
+                ErrorCode::BadResponse,
+                "BASE_FEE пула Shell не считается в проценты",
+            )
+        }),
+        // Ekubo (решение 447): комиссия пула 0.64 (config, math/ekubo_config.rs) → проценты = fee · 100 / 2^64 (в 18
+        // знаках); доплата MEVCapture — в выходе котировки (pool_quote.rs), отдельной строкой не идёт.
+        (PoolState::Ekubo(d), _) => {
+            let fee = U256::from(super::super::math::ekubo_config::fee(&d.config));
+            let scaled = (fee * U256::from(10u8).pow(U256::from(20u8))) >> 64usize;
+            num::to_decimal(scaled, 18)
+                .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "комиссия Ekubo не считается"))
+        }
         _ => Err(ctx.err(ErrorCode::BadResponse, "состояние пула не того вида")),
     }
 }

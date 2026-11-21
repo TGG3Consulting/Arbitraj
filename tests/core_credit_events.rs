@@ -101,8 +101,9 @@ fn foreign() -> String {
 
 fn usdt() -> Asset {
     Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(USDT.parse().unwrap()),
+        contract: Some(USDT.parse().unwrap()),
     }
 }
 
@@ -117,6 +118,7 @@ fn deposit(hash: &str) -> BalanceChange {
         tx_hash: Some(hash.to_string()),
         at: Utc::now(),
         source: "Transfer в блоке 129702236".into(),
+        account: None,
     }
 }
 

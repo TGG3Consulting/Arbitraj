@@ -23,7 +23,7 @@
 {#if list.length}
   <table class="dir">
     <tbody>
-      {#each list as { venue, pool } (venue + pool.pool)}
+      {#each list as { venue, pool }, i (`${venue}|${pool.pool}|${i}`)}
         {@const st = dirStatus(pool.status)}
         <tr>
           <td><code>{pool.dex_id}</code></td>

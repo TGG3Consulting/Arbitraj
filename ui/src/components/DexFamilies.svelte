@@ -13,6 +13,7 @@
     с областью Dex.
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { store, setValue, defOf } from '../lib/settings.svelte.js';
   import { dirStatus } from '../lib/directory.js';
   import SettingEditor from './SettingEditor.svelte';
@@ -92,7 +93,7 @@
     try {
       for (const [key, value] of Object.entries(store.values)) {
         const [name, kind, id] = key.split('|');
-        // Только настройки из каталога: устаревшие (dex.enabled, dex.v3_fee_tiers) не переносятся.
+        // Только настройки из каталога: устаревшие (dex.enabled) не переносятся.
         if (kind !== 'Dex' || id !== from || !name.startsWith('dex.') || !defOf(name)) continue;
         if (store.values[`${name}|Dex|${to}`] !== undefined) continue;
         await setValue(name, { kind: 'Dex', id: to }, value);
@@ -112,7 +113,7 @@
 <ErrorText text={copyError} />
 <table class="map">
   <tbody>
-    {#each rows as r (r.id)}
+    {#each uniqBy(rows, (r) => r.id) as r (r.id)}
       <tr>
         <td>
           <strong>{r.name || r.id}</strong><br /><code>{r.id}</code>
@@ -154,7 +155,7 @@
 
 {#if orphans.length}
   <h4>Устаревшие настройки DEX (нет в каталоге — код их больше не читает)</h4>
-  {#each orphans as o (o.name + o.id)}
+  {#each orphans as o, oi (`${o.name}|${o.id}|${oi}`)}
     <div class="setting-line">
       <code>{o.name}</code> [<code>{o.id}</code>] = <code>{JSON.stringify(o.value)}</code>
       <span class="tag">устарела</span>

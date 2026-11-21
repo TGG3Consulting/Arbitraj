@@ -4,7 +4,7 @@
     из схемы (поле group) с числом настроек и числом не заданных нигде, плюс «Все категории и поиск»;
     редкие экраны (флаг more у экрана в App.svelte) — в выпадающем «Ещё», чтобы меню умещалось в одну строку.
   Кто вызывает: App.svelte.
-  От чего зависит: lib/router.svelte.js, lib/settings.svelte.js, lib/settingsGroups.js, components/NavDropdown.svelte.
+  От чего зависит: lib/router.svelte.js, lib/settings.svelte.js, lib/settingsGroups.js, components/NavDropdown.svelte, components/BalancesPanel.svelte (кнопка «Балансы» справа, решение 144).
   Настройки: нет.
 -->
 <script>
@@ -12,6 +12,7 @@
   import { store } from '../lib/settings.svelte.js';
   import { groupStats } from '../lib/settingsGroups.js';
   import NavDropdown from './NavDropdown.svelte';
+  import BalancesPanel from './BalancesPanel.svelte';
 
   /** pages — экраны [{id, title, more?, menu?}]; current — открытый экран. */
   let { pages, current } = $props();
@@ -43,4 +44,5 @@
   {#if more.length}
     <NavDropdown title="Ещё" active={more.includes(current)} items={moreItems} />
   {/if}
+  <BalancesPanel />
 </nav>

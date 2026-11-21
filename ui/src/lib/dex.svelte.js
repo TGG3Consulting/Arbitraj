@@ -2,17 +2,25 @@
 // Что делает: общее хранилище списков адаптера DEX по каждой площадке из GET /api/venues:
 //   DEX и виды пулов (GET /api/venues/{id}/dex-families), каналы отправки (GET /api/channels/{id}) и справочник
 //   пулов от индексатора (GET /api/venues/{id}/pool-directory, решение 58).
-//   Это id областей настроек «DEX» и «канал» — интерфейс не выдумывает их, а берёт у адаптера.
+//   Это id областей настроек «DEX» и «канал» — интерфейс берёт их у адаптера. Решение 128: адаптер сообщает DEX с
+//   видом, DEX из справочника пулов и id с уже заданными настройками; DEX, которой нет нигде (её пулы находит только
+//   поиск по фабрике, оракул или события Initialize), человек вводит сам — правило id: checkDexId.
 //   Ответ 400 — «не применимо» (биржа): площадка просто не DEX. Иначе ошибка показывается как есть.
-//   Перечитывается при старте, при «lagged» (переподключение), по живому сообщению «send_channel» и по записи
-//   журнала вида dex.index (справочник обновился) — без таймеров и опроса.
-// Кто вызывает: App.svelte (start), экраны «Площадки», «Настройки», «Каналы отправки», components/SettingCard.svelte.
-// От чего зависит: lib/api.js, lib/live.svelte.js, lib/settings.svelte.js (список площадок).
+//   Перечитывается при старте, при смене списка или вида площадок, по живому сообщению «send_channel» и по записи
+//   журнала вида dex.index (справочник обновился) — без таймеров и опроса. Шторм запросов 10.11.2026: перечитывание —
+//   один запрос в полёте (lib/flight.js); send_channel меняет только статистику каналов (api/dex.rs channels берёт
+//   её из ядра) — по нему перечитываются только каналы, а не виды пулов и справочник пулов (тысячи записей).
+//   «lagged» (t80; сообщения потеряны — api/ws.rs, или переподключение): журнал/переподключение — всё (мог пропасть
+//   dex.index), только ядро — каналы (мог пропасть send_channel).
+// Кто вызывает: App.svelte (start), экраны «Площадки», «Настройки», «Каналы отправки», components/SettingCard.svelte,
+//   components/DexAdder.svelte (checkDexId, решение 490).
+// От чего зависит: lib/api.js, lib/live.svelte.js, lib/flight.js, lib/settings.svelte.js (список площадок).
 // Настройки: нет.
 
 import { get, seg } from './api.js';
-import { onLive } from './live.svelte.js';
-import { store } from './settings.svelte.js';
+import { onLive, lagFor } from './live.svelte.js';
+import { store, valueKey } from './settings.svelte.js';
+import { flight } from './flight.js';
 
 /**
  * byVenue: id → {families, familiesError, channels, channelsError, directory, directoryError};
@@ -34,11 +42,17 @@ async function fetchList(path) {
 }
 
 /** Что делает: перечитывает списки по всем площадкам. Ошибки — в byVenue[id].*Error. */
-export async function reloadDex() {
+async function loadDex() {
   const ids = [...store.venues];
   const out = {};
   await Promise.all(
     ids.map(async (id) => {
+      // Решение 109: биржу (вид Cex из GET /api/venues/kinds) не спрашиваем — у неё этих списков нет (ответ 400 в
+      // консоли). Вид ещё не известен — спрашиваем, как раньше.
+      if (store.venueKinds.find((x) => x.id === id)?.kind === 'Cex') {
+        out[id] = emptyNotDex();
+        return;
+      }
       const [f, c, d] = await Promise.all([
         fetchList(`/api/venues/${seg(id)}/dex-families`),
         fetchList(`/api/channels/${seg(id)}`),
@@ -59,18 +73,58 @@ export async function reloadDex() {
   dex.loaded = true;
 }
 
+/** Перечитывание списков DEX: один запрос в полёте, вызов во время него — один повтор после (lib/flight.js). */
+export const reloadDex = flight(loadDex);
+
+/** Что делает: перечитывает только каналы отправки площадок-DEX (статистика send_channel). Ошибки — в channelsError. */
+async function loadChannels() {
+  const ids = Object.entries(dex.byVenue)
+    .filter(([, v]) => !v.notDex)
+    .map(([id]) => id);
+  const got = await Promise.all(ids.map((id) => fetchList(`/api/channels/${seg(id)}`)));
+  ids.forEach((id, i) => {
+    const v = dex.byVenue[id];
+    if (!v) return;
+    v.channels = got[i].list;
+    v.channelsError = got[i].error;
+  });
+}
+
+/** Перечитывание каналов по send_channel: один запрос в полёте. */
+const reloadChannels = flight(loadChannels);
+
+/** Запись «не DEX» без запросов. */
+function emptyNotDex() {
+  return {
+    families: null,
+    familiesError: '',
+    channels: null,
+    channelsError: '',
+    directory: null,
+    directoryError: '',
+    notDex: true,
+  };
+}
+
 /** Что делает: первая загрузка и подписка на живой поток. Вызывается один раз из App.svelte. */
 export function start() {
-  // Список площадок приходит из settings.svelte.js; как только он изменился — перечитать.
+  // Список площадок и их вид приходят из settings.svelte.js. Решение 109: перечитывать, только когда список или вид
+  // площадок действительно изменился — settings.svelte.js переприсваивает их на каждом перечитывании настроек, и
+  // справочник пулов (тысячи записей) грузился заново каждый раз.
+  let seen = '';
   $effect.root(() => {
     $effect(() => {
-      store.venues.length;
+      const key = JSON.stringify([store.venues, store.venueKinds]);
+      if (key === seen) return;
+      seen = key;
       reloadDex();
     });
   });
   onLive((msg) => {
-    if (msg.type === 'send_channel') reloadDex();
+    if (msg.type === 'send_channel') reloadChannels();
     if (msg.type === 'journal' && msg.data?.kind === 'dex.index') reloadDex();
+    if (lagFor(msg, 'journal')) reloadDex();
+    else if (lagFor(msg, 'core')) reloadChannels();
   });
 }
 
@@ -133,3 +187,23 @@ export function dexIdsFor(def) {
 
 /** Является ли настройка настройкой уровня DEX (а не вида пула). Принимает: описание. Возвращает: bool. */
 export const isDexLevel = (def) => def?.dex_id === 'Dex';
+
+/**
+ * Что делает: проверка id DEX, который вводят руками (решение 128). Правило то же, что у сервера
+ * (settings/scope.rs check_dex_id и check_new_dex_id_len): непустой, только строчная латиница, цифры, «-» и «_»;
+ * не длиннее dex.id_max_len (вся система; не задана — без предела). Сервер проверяет то же при сохранении.
+ * Решение 490: человек вводит только сырой id (без «@»); суффикс сети площадки («@arbitrum») даёт сервер
+ * (GET /api/venues/{id}/dex-key-suffix, components/DexAdder.svelte) — предел длины считается по ключу id + суффикс,
+ * как его сохранит сервер. Составной ключ «id@сеть» (есть ли площадка DEX этой сети) проверяет сервер при сохранении.
+ * Принимает: id (уже без пробелов по краям), суффикс сети ('' — нет или ещё не известен).
+ * Возвращает: '' — подходит, иначе причину текстом.
+ */
+export function checkDexId(id, suffix = '') {
+  if (!id) return 'Не указан id DEX';
+  const bad = [...id].find((c) => !/[a-z0-9_-]/.test(c));
+  if (bad !== undefined) return `Недопустимый символ «${bad}» — только строчная латиница, цифры, «-» и «_»`;
+  const max = store.values[valueKey('dex.id_max_len', { kind: 'Global' })];
+  const key = id + suffix;
+  if (typeof max === 'number' && [...key].length > max) return `Ключ «${key}» длиннее ${max} символов (dex.id_max_len)`;
+  return '';
+}

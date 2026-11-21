@@ -4,6 +4,7 @@
     «шаг 1: USDT → BNB», «шаг 2: BNB → монета» — комиссия пула, проскальзывание, газ, налоги каждого шага;
     затраты вне обмена (комиссия биржи, вывод, возврат USDT, запас r) — отдельной группой.
     По строке: вид, где возникла, сумма и валюта, в USDT, учтена ли в цене или в количестве.
+    Решение 276: затрата «в цене» без курса (промежуточная без биржи — подпись с цепи) — «уже в цене — курс не нужен».
   Кто вызывает: pages/Live.svelte, pages/Deals.svelte.
   От чего зависит: ничего.
   Настройки: нет.
@@ -29,7 +30,7 @@
 
 <table>
   <thead><tr><th>Затрата</th><th>Где</th><th class="num">Сумма</th><th class="num">USDT</th><th>Учёт</th></tr></thead>
-  {#each groups as g (g.key)}
+  {#each groups as g, gi (`${g.key}|${gi}`)}
     <tbody>
       <tr><th colspan="5">{g.title}</th></tr>
       {#each g.rows as l, i (i)}
@@ -37,7 +38,7 @@
           <td><code>{l.kind}</code></td>
           <td>{l.stage}</td>
           <td class="num">{l.amount} {l.asset}</td>
-          <td class="num">{l.usdt ?? 'нет живой цены'}</td>
+          <td class="num">{l.usdt ?? (l.in_price ? 'уже в цене — курс не нужен' : 'нет живой цены')}</td>
           <td>{l.in_price ? 'в цене' : l.in_qty ? 'в количестве' : 'вычитается'}</td>
         </tr>
       {/each}

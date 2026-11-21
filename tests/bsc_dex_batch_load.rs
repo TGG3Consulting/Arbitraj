@@ -16,6 +16,8 @@
 //! (настоящая SQLite во временной папке). Настройки теста — значения записи (dex.tick_words = 2, адреса TickLens
 //! и StateView — официальные страницы адресов, research/flow/bsc_dex.md и bsc_v4.md).
 
+mod golden_common;
+
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -32,6 +34,7 @@ use arb::storage::raw_log::RawLog;
 use arb::venues::bsc_dex::ctx::Ctx;
 use arb::venues::bsc_dex::node::multicall;
 use arb::venues::bsc_dex::pools::families;
+use arb::venues::bsc_dex::pools::fee_fresh::Extras;
 use arb::venues::bsc_dex::pools::load_batch::{Stage, Want};
 use arb::venues::bsc_dex::pools::load_batch_v2v3::{self as v23, PoolStateTick};
 use arb::venues::bsc_dex::pools::load_v2v3::word_range;
@@ -73,15 +76,32 @@ async fn ctx() -> Ctx {
     let (jtx, _) = broadcast::channel(64);
     let journal = Journal::new(db.clone(), jtx);
     let settings = Store::load(db, changes, journal.clone()).await.unwrap();
-    let c = Ctx {
-        raw: RawLog::start(d.join("raw"), settings.clone()),
-        pace: Default::default(),
-        failover: Default::default(),
-        index: Default::default(),
-        settings,
-        vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
-        http: reqwest::Client::new(),
-        journal,
+    let c = {
+        let c = Ctx {
+            raw: RawLog::start(d.join("raw"), settings.clone()),
+            pace: Default::default(),
+            failover: Default::default(),
+            evm_chain: Default::default(),
+            place: arb::venues::bsc_dex::ctx::Place::BSC,
+            chains: Default::default(),
+            account: None,
+            index: Default::default(),
+            settings,
+            vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
+            http: reqwest::Client::new(),
+            journal,
+        };
+        // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+        c.settings
+            .set(
+                "dex.gas_ticker",
+                arb::settings::scope::Scope::Venue("bsc_dex".into()),
+                Some(serde_json::json!("BNB")),
+                "тест",
+            )
+            .await
+            .unwrap();
+        c
     };
     let v = Scope::Venue("bsc_dex".into());
     let list = [
@@ -153,6 +173,7 @@ fn want<'a>(p: &'a (String, &'static families::Family, PoolRef, Option<i32>)) ->
         spacing: p.3,
         step: None,
         usdt: Address::ZERO,
+        token0: Address::ZERO,
         token1: Address::ZERO,
     }
 }
@@ -238,7 +259,10 @@ async fn batch_stages_match_recorded_calls_and_single_answers() {
     let pools = pools();
     let wants: Vec<Want> = pools.iter().map(want).collect();
     // Ступень 1.
-    let s1: Stage = wants.iter().map(|w| v23::head(&c, w).unwrap()).collect();
+    let s1: Stage = wants
+        .iter()
+        .map(|w| v23::head(&c, w, Extras::of(&c, w.family)).unwrap())
+        .collect();
     let a1 = check_stage(&s1, &singles(&list, 1));
     let heads: Vec<PoolStateTick> = wants
         .iter()
@@ -293,6 +317,26 @@ async fn batch_stages_match_recorded_calls_and_single_answers() {
         n += check_aggregates(&list, k, &calls, &single, 200);
     }
     assert_eq!(n, 58 + 115 + 879);
+    // Решение 295, шаг 0: эталонный снимок разобранных состояний и карт тиков парных пулов (до правки многомонетных).
+    let mut snap = Vec::new();
+    for (i, w) in wants.iter().enumerate() {
+        let head = match &heads[i] {
+            PoolStateTick::V2(s) => format!("V2 {s:?}"),
+            PoolStateTick::Ticked(s, t) => format!("Ticked {t} {s:?}"),
+        };
+        let map = match w.family.kind {
+            arb::core::types::PoolKind::V3 => format!("{:?}", v23::v3_ticks(&a2[i]).unwrap()),
+            arb::core::types::PoolKind::Cl => {
+                format!("{:?}", t3::tick_data(w, &set[i], &a3[i]).unwrap())
+            }
+            _ => "-".into(),
+        };
+        snap.push(format!(
+            "{:?} {} {head} ticks={map}",
+            w.reference, w.family.id
+        ));
+    }
+    golden_common::check("batch_load_2026-10-25", &golden_common::sorted(snap));
 }
 
 #[test]

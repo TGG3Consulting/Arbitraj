@@ -7,12 +7,20 @@
 //! с ним → блок B' → чтение на B' (события после B' придут, до — учтены в чтении) → пул снова котируется.
 //! Новые пулы читаются пачками на одном блоке (reload::load_many → load_batch.rs, решение 61).
 //! Пул, не прочитанный при приёме, слушается полностью и перечитывается на новых блоках (reload.rs).
+//! Решение 339 (ревью t153): пул на паузе после неудач при приёме (переподключение пачки) не читается — сразу в
+//! очередь повтора с числом неудач из отметки; новый пул и пул без отметки читаются как раньше. В записях журнала —
+//! адрес пула (depth_book::label, как у dex.pool_refresh). При изоляции неудача чтения при приёме — отметка 339
+//! (pool_fail::note: журнал на первую неудачу эпизода и смену кода причины), число повторов — из отметки.
+//! Решение 473: набор topic0 вида изменился за чтение (Balancer V2 с dex.balancer_pool) — постоянная подписка
+//! собирается заново (g.set), временная не остаётся постоянной.
 //! Кто вызывает: pools/session.rs.
-//! От чего зависит: group.rs, depth.rs, reload.rs, http_wait.rs, listen.rs (Pools, End).
+//! От чего зависит: group.rs, depth.rs, depth_book.rs (label), reload.rs, pool_fail.rs (paused, отметки), http_wait.rs,
+//! listen.rs (Pools, End).
 //! Настройки: через вызываемые (feed.stale_after_ms, dex.min_pool_liquidity_usd, dex.pool_load_retries).
 
 use crate::storage::journal::Level;
 
+use super::depth_book::label;
 use super::discover::Found;
 use super::group::{Group, Topics};
 use super::listen::{End, Pools};
@@ -37,6 +45,23 @@ fn broken(e: crate::gateway::errors::GatewayError) -> End {
     End::Broken(e.message)
 }
 
+/// Что делает: сколько ПОВТОРОВ уже было у пула для очереди повтора (reload.rs Missing.tries — без первого чтения):
+/// неудач подряд по отметке 339 минус одна (отметки нет — 0, как раньше). Принимает: окружение, ссылку. Ошибок нет.
+fn done_tries(p: &Pools, r: &crate::core::types::PoolRef) -> u64 {
+    p.reg
+        .fails()
+        .get(r)
+        .map_or(0, |f| u64::from(f.tries.saturating_sub(1)))
+}
+
+/// Что делает: пул без записи в реестре (ни разу не прочитан) не прочитался — отметка для экрана «Монеты»
+/// (pool_unread.rs; все виды пулов, без настройки). Принимает: окружение, пул, причину. Ошибок нет.
+pub fn unread(p: &Pools, found: &Found, why: &crate::gateway::errors::GatewayError) {
+    if p.reg.entry(&found.reference).is_none() {
+        p.reg.unread().note(found, &why.message);
+    }
+}
+
 /// Принимает в пачку пулы с индексами `new` (см. шапку). Ошибки: End — обрыв, сбой узла или ядро закрыло канал.
 pub async fn admit(p: &Pools, g: &mut Group, m: &mut Members, new: Vec<usize>) -> Result<(), End> {
     if new.is_empty() {
@@ -44,28 +69,68 @@ pub async fn admit(p: &Pools, g: &mut Group, m: &mut Members, new: Vec<usize>) -
     }
     m.deep.resize(m.pools.len(), true);
     let list: Vec<&Found> = new.iter().map(|i| &m.pools[*i].0).collect();
+    // Решение 473: события вида Balancer V2 (dex.balancer_pool) известны только после чтения пула — набор topic0 до и
+    // после чтения; изменился — временная подписка не становится постоянной (ниже). У прочих видов набор не меняется.
+    let topics_of = |l: &[&Found]| l.first().map(|f| super::events::topics(f.family));
+    let before = topics_of(&list);
     let tmp = g.subscribe(&list, Topics::Full).await.map_err(broken)?;
     let block = g.block().await.map_err(broken)?;
     http_wait::http_reached(p, block).await.map_err(broken)?;
     m.loaded = true;
+    // Решение 339 (ревью t153): пул на паузе после неудач (отметка pool_fail.rs) при приёме не читается и записи
+    // журнала не даёт — сразу в очередь повтора, читается не раньше паузы (reload.rs retry); число попыток — из
+    // отметки (предел dex.pool_load_retries не начинается заново, запись «не прочитано за N попыток» не повторяется).
+    // Новый пул и пул без отметки (или 339 выключено) — как раньше.
+    let (later, read): (Vec<usize>, Vec<usize>) = new
+        .iter()
+        .copied()
+        .partition(|&i| super::pool_fail::paused(p, &m.pools[i].0.reference));
+    for &i in &later {
+        let r = &m.pools[i].0.reference;
+        p.reg.update(r, |e| e.valid = false);
+        m.missing.push(Missing {
+            i,
+            tries: done_tries(p, r),
+        });
+        m.deep[i] = true;
+        depth::mark(p, r, false);
+    }
     // Состояние всех новых пулов — пачками на одном блоке (решение 61), а не по одному.
-    let items: Vec<(&super::discover::Found, &str)> = new
+    let items: Vec<(&super::discover::Found, &str)> = read
         .iter()
         .map(|&i| (&m.pools[i].0, m.pools[i].1.as_str()))
         .collect();
-    let results = reload::load_many(p, &items, block).await?;
-    for (&i, res) in new.iter().zip(results) {
+    let results = if items.is_empty() {
+        Vec::new()
+    } else {
+        reload::load_many(p, &items, block).await?
+    };
+    for (&i, res) in read.iter().zip(results) {
         let (found, ticker) = &m.pools[i];
         if let Err(why) = res {
             p.reg.update(&found.reference, |e| e.valid = false);
-            let msg = format!(
-                "{} {ticker}: состояние пула не прочитано: {} — повтор на новых блоках",
-                found.family.title, why.message
-            );
-            p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
+            let r = &found.reference;
+            unread(p, found, &why);
+            // Решение 339 (журнал и приём): при изоляции неудача — отметка с паузой (pool_fail::note: журнал только на
+            // первую неудачу эпизода и смену кода причины, а не на каждое переподключение), попытки — из отметки;
+            // StaleData — как раньше (без паузы). Не задана dex.pool_fail_pause_ms — запись на каждую неудачу.
+            let noted = !super::stale_read::is_stale(&why)
+                && super::pool_fail::note(p, r, found.family.title, ticker, &why).await;
+            if !noted {
+                let msg = format!(
+                    "{} {ticker} ({}): состояние пула не прочитано: {} — повтор на новых блоках",
+                    found.family.title,
+                    label(r),
+                    why.message
+                );
+                p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
+            }
             // Ждёт незаданную настройку — «застрял»: сводку первого прохода не держит (loading.rs).
-            p.loading.stuck(p, &found.reference, why.setting.is_some());
-            m.missing.push(Missing { i, tries: 0 });
+            p.loading.stuck(p, r, why.setting.is_some());
+            m.missing.push(Missing {
+                i,
+                tries: done_tries(p, r),
+            });
             m.deep[i] = true;
             depth::mark(p, &found.reference, false);
             continue;
@@ -77,7 +142,8 @@ pub async fn admit(p: &Pools, g: &mut Group, m: &mut Members, new: Vec<usize>) -
     let full: Vec<usize> = (0..m.pools.len()).filter(|i| m.deep[*i]).collect();
     let thin: Vec<usize> = (0..m.pools.len()).filter(|i| !m.deep[*i]).collect();
     // Начало сессии без мелких пулов: временная подписка и есть постоянная — без второй подписки.
-    if g.full.is_none() && full == new {
+    let same = topics_of(&list) == before;
+    if g.full.is_none() && full == new && same {
         g.full = Some((tmp, new));
     } else {
         g.set(&m.pools, full, Topics::Full).await.map_err(broken)?;
@@ -103,7 +169,8 @@ pub async fn wake(
     let title = found.family.title;
     if let Err(why) = reload::load_one(p, &found, &ticker, block).await? {
         let msg = format!(
-            "{title} {ticker}: добавление ликвидности, пул не прочитан: {}",
+            "{title} {ticker} ({}): добавление ликвидности, пул не прочитан: {}",
+            label(&found.reference),
             why.message
         );
         p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
@@ -122,7 +189,8 @@ pub async fn wake(
         p.reg.update(&found.reference, |e| e.valid = false);
         m.missing.push(Missing { i, tries: 0 });
         let msg = format!(
-            "{title} {ticker}: состояние пула не прочитано: {} — повтор на новых блоках",
+            "{title} {ticker} ({}): состояние пула не прочитано: {} — повтор на новых блоках",
+            label(&found.reference),
             why.message
         );
         p.ctx.log(Level::Warn, "dex.pool", msg, None).await;

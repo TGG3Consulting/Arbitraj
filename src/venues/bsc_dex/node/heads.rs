@@ -7,11 +7,17 @@
 //! Свежесть: голова «получена» в момент, когда номер блока вырос; номер стоит дольше feed.stale_after_ms (узел
 //! встал или опрос не проходит) — данные устарели, сделок нет. Слушатели получают только новые номера.
 //! Время блока (deadline, проба) — eth_getBlockByNumber (15 CU) по запросу, раз на блок на всех (кэш по номеру,
-//! одновременные промахи ждут один запрос). Реорги — по removed: true в логах пулов и по квитанциям (send/track.rs).
+//! одновременные промахи ждут один запрос). Решение 121 (A2): задан feed.max_block_age_ms — время каждой новой головы
+//! берётся сразу в опросе, и fresh() отказывает (StaleData), если блок старше порога (node/head_age.rs). Реорги — по removed: true в логах пулов и по квитанциям (send/track.rs).
 //! Кто вызывает: pools/market.rs (запуск при подписке на рынок), quote/*, exec/*, check/tax_pass.rs, send/*,
-//! pools/http_wait.rs, pools/session.rs.
-//! От чего зависит: ctx.rs, node/rpc.rs, errors.rs.
-//! Настройки: bsc.blocks_poll_ms (вся система), feed.stale_after_ms [bsc_dex]; узел — bsc.node_http_url.
+//! pools/http_wait.rs, pools/session.rs, pools/fusion_head.rs (time_since — решение 463).
+//! Решение 282: каждый круг опроса — уведомление «блок не растёт» / «блоки снова идут» (node/head_stall.rs).
+//! Решение 368 (t163): ритм опроса — раз в bsc.blocks_poll_ms от НАЧАЛА круга (сон — остаток периода после работы
+//! круга); раньше сон шёл после работы, и при узле на другом сервере период рос на RTT eth_blockNumber и
+//! eth_getBlockByNumber новой головы — на столько же старели «получен … назад» и «создан … назад».
+//! От чего зависит: ctx.rs, node/rpc.rs, node/head_age.rs, node/head_stall.rs, errors.rs.
+//! Настройки: bsc.blocks_poll_ms (вся система + площадка DEX, решение 435), feed.stale_after_ms, feed.max_block_age_ms [bsc_dex]; узел —
+//! bsc.node_http_url; bsc.node_stall_alert_s (node/head_stall.rs).
 //!
 //! Источники: eth_blockNumber, eth_getBlockByNumber (поле timestamp — hex-число) — execution-apis
 //! https://github.com/ethereum/execution-apis/tree/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth (block.yaml,
@@ -22,7 +28,6 @@ use std::time::Duration;
 
 use alloy_primitives::U64;
 use chrono::{DateTime, Utc};
-use serde::Deserialize;
 use serde_json::json;
 use tokio::sync::watch;
 
@@ -30,7 +35,6 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
-use super::call::block_tag;
 use super::rpc;
 
 /// Голова сети: номер блока и когда мы увидели, что он вырос.
@@ -41,20 +45,16 @@ pub struct Head {
     pub received_at: DateTime<Utc>,
 }
 
-/// Поле timestamp блока из eth_getBlockByNumber.
-#[derive(Deserialize)]
-struct RawBlock {
-    timestamp: U64,
-}
-
 /// Последняя голова; дешёво клонируется, слушателей сколько угодно.
 #[derive(Clone)]
 pub struct Heads {
     tx: watch::Sender<Option<Head>>,
-    /// Время последнего запрошенного блока: (номер, секунды Unix).
-    time: Arc<Mutex<Option<(u64, u64)>>>,
+    /// Время последнего запрошенного блока: номер и время (секунды — deadline; миллисекунды — возраст, решение 259).
+    time: Arc<Mutex<Option<(u64, super::head_age::BlockTime)>>>,
     /// Один eth_getBlockByNumber на блок на всех: одновременные промахи ждут первого (решение 61).
     flight: Arc<tokio::sync::Mutex<()>>,
+    /// Уведомление «блок не растёт» / «блоки снова идут» (решение 282, node/head_stall.rs); канал — parts.rs.
+    pub stall: super::head_stall::Stall,
 }
 
 impl Default for Heads {
@@ -63,6 +63,7 @@ impl Default for Heads {
             tx: watch::channel(None).0,
             time: Arc::default(),
             flight: Arc::default(),
+            stall: Default::default(),
         }
     }
 }
@@ -78,8 +79,9 @@ impl Heads {
         self.tx.borrow().clone()
     }
 
-    /// Свежая голова: номер вырос не раньше feed.stale_after_ms назад.
-    /// Ошибки: StaleData (нет головы или устарела), NotConfigured (порог не задан).
+    /// Свежая голова: номер вырос не раньше feed.stale_after_ms назад и (если задан feed.max_block_age_ms) время
+    /// последнего известного блока не старше порога (node/head_age.rs).
+    /// Ошибки: StaleData (нет головы, номер не растёт или блок старый), NotConfigured (порог не задан).
     pub fn fresh(&self, ctx: &Ctx) -> GatewayResult<Head> {
         let limit = ctx.int("feed.stale_after_ms")? as i64;
         let head = self.latest().ok_or_else(|| {
@@ -95,6 +97,7 @@ impl Heads {
                 format!("Последний блок {} получен {age} мс назад — больше feed.stale_after_ms ({limit})", head.number),
             ));
         }
+        super::head_age::check(ctx, self.block_time_ms())?;
         Ok(head)
     }
 
@@ -103,15 +106,16 @@ impl Heads {
     /// Ошибки: как у fresh; узел; BadResponse (узел не знает блок или нет timestamp).
     pub async fn at(&self, ctx: &Ctx) -> GatewayResult<(u64, u64)> {
         let head = self.fresh(ctx)?;
-        let hit = || match *self.time.lock().unwrap_or_else(|p| p.into_inner()) {
-            Some((n, t)) if n == head.number => Some(t),
-            _ => None,
+        let hit = || {
+            self.block_time()
+                .filter(|(n, _)| *n == head.number)
+                .map(|(_, t)| t)
         };
         if let Some(t) = hit() {
             return Ok((head.number, t));
         }
         // Последнее известное (номер, время) любого блока — чтобы расчёт не ждал узел (решение 89).
-        let last = || *self.time.lock().unwrap_or_else(|p| p.into_inner());
+        let last = || self.block_time();
         match self.flight.try_lock() {
             // Ведущий: на этом блоке кэша нет и никто не тянет — обновляем с узла.
             Ok(_one) => match hit() {
@@ -133,26 +137,54 @@ impl Heads {
         }
     }
 
+    /// Решение 463 (ревью t236, п. 4): время блока `number` или более нового — никогда не более старого (at при занятом
+    /// запросе отдаёт последнее известное, оно может быть раньше головы). В кэше нет — ждёт идущий запрос, затем свой
+    /// eth_getBlockByNumber на `number` (один на всех, под flight). Принимает: окружение, номер блока.
+    /// Возвращает: (номер ≥ `number`, время Unix). Ошибки: узел; BadResponse (нет блока/timestamp).
+    pub async fn time_since(&self, ctx: &Ctx, number: u64) -> GatewayResult<(u64, u64)> {
+        let hit = || self.block_time().filter(|(n, _)| *n >= number);
+        if let Some(x) = hit() {
+            return Ok(x);
+        }
+        let _one = self.flight.lock().await;
+        match hit() {
+            Some(x) => Ok(x),
+            None => self.fetch_time(ctx, number).await,
+        }
+    }
+
     /// Обновляет кэш времени блока с узла (eth_getBlockByNumber). Держится под flight — один запрос на всех.
     /// Принимает: окружение, номер блока. Возвращает: (номер, время Unix). Ошибки: узел; BadResponse (нет блока/timestamp).
     async fn fetch_time(&self, ctx: &Ctx, number: u64) -> GatewayResult<(u64, u64)> {
-        let b: Option<RawBlock> = rpc::call(
-            ctx,
-            "eth_getBlockByNumber",
-            json!([block_tag(number), false]),
-        )
-        .await?;
-        let t = b
-            .ok_or_else(|| {
-                ctx.err(
-                    ErrorCode::BadResponse,
-                    format!("узел BSC (HTTP) не знает блок {number}"),
-                )
-            })?
-            .timestamp
-            .to::<u64>();
-        *self.time.lock().unwrap_or_else(|p| p.into_inner()) = Some((number, t));
-        Ok((number, t))
+        let t = super::head_age::fetch(ctx, number, true).await?;
+        self.remember_time(number, t);
+        Ok((number, t.secs))
+    }
+
+    /// Последнее известное время блока: (номер, секунды Unix) — для deadline и симуляции. None — ещё не было.
+    /// Ошибок нет.
+    pub fn block_time(&self) -> Option<(u64, u64)> {
+        self.time_raw().map(|(n, t)| (n, t.secs))
+    }
+
+    /// Последнее известное время блока: (номер, миллисекунды Unix) — для возраста головы (решение 259). None — ещё
+    /// не было. Ошибок нет.
+    pub fn block_time_ms(&self) -> Option<(u64, u64)> {
+        self.time_raw().map(|(n, t)| (n, t.millis))
+    }
+
+    /// Кэш времени блока как есть. Ошибок нет.
+    fn time_raw(&self) -> Option<(u64, super::head_age::BlockTime)> {
+        *self.time.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// Запоминает время блока, если он не старше уже известного (запросы могут вернуться не по порядку).
+    /// Принимает: номер блока, время (секунды и миллисекунды). Ошибок нет.
+    pub fn remember_time(&self, number: u64, t: super::head_age::BlockTime) {
+        let mut cur = self.time.lock().unwrap_or_else(|p| p.into_inner());
+        if cur.is_none_or(|(n, _)| number >= n) {
+            *cur = Some((number, t));
+        }
     }
 
     /// Принимает номер блока из опроса: вырос — новая голова слушателям; не вырос — ничего (свежесть не
@@ -173,6 +205,7 @@ impl Heads {
     /// задания (settings_wait.rs). Принимает: окружение. Ошибок не возвращает.
     pub async fn run(self, ctx: Ctx) {
         let mut last_err: Option<String> = None;
+        let mut age_log = super::head_age::AgeLog::default();
         loop {
             // Не задана (или неверна) — опрос ждёт настройку и продолжает сам (settings_wait.rs), без перезапуска.
             let read = || poll_every(&ctx);
@@ -182,9 +215,13 @@ impl Heads {
             else {
                 return;
             };
+            // Решение 368: период считается от начала круга (работа круга входит в него).
+            let started = std::time::Instant::now();
             match rpc::call_unpaced::<U64>(&ctx, "eth_blockNumber", json!([])).await {
                 Ok(n) => {
-                    self.observe(n.to());
+                    if self.observe(n.to()) {
+                        super::head_age::time_of_new_head(&self, &ctx, n.to()).await;
+                    }
                     if last_err.take().is_some() {
                         let msg = "Опрос блоков снова работает".to_string();
                         ctx.log(Level::Info, "venue.heads", msg, None).await;
@@ -197,9 +234,37 @@ impl Heads {
                 }
                 Err(_) => {}
             }
-            tokio::time::sleep(every).await;
+            // Возраст головы — каждый круг опроса, и при сбое опроса тоже: голова стареет — запись о переходе.
+            let age = super::head_age::active(&ctx)
+                .then(|| super::head_age::check(&ctx, self.block_time_ms()));
+            age_log.step(&ctx, age.as_ref()).await;
+            // Решение 282: номер стоит дольше bsc.node_stall_alert_s — одно событие; вырос — одно (node/head_stall.rs).
+            // Задача t122 (п. 5): порог читается ДО fresh(); не задан — fresh() для уведомления не зовётся.
+            let limit = super::head_stall::Stall::limit(&ctx);
+            let fresh = limit
+                .and_then(|_| self.fresh(&ctx).err())
+                .map(|e| e.message);
+            let (latest, bt) = (self.latest(), self.block_time_ms());
+            self.stall
+                .step_with(
+                    &ctx,
+                    limit,
+                    latest,
+                    bt,
+                    last_err.as_deref(),
+                    fresh.as_deref(),
+                )
+                .await;
+            tokio::time::sleep(rest_of(every, started.elapsed())).await;
         }
     }
+}
+
+/// Решение 368 (t163): сколько спать до следующего круга опроса, чтобы круги шли раз в период от начала круга.
+/// Принимает: период (bsc.blocks_poll_ms), сколько занял круг. Возвращает: период минус работа; работа не короче
+/// периода — 0 (следующий круг сразу). Ошибок нет.
+pub fn rest_of(every: Duration, spent: Duration) -> Duration {
+    every.saturating_sub(spent)
 }
 
 /// Интервал опроса блоков: bsc.blocks_poll_ms (вся система), строго меньше feed.stale_after_ms — иначе голова
@@ -207,7 +272,7 @@ impl Heads {
 pub fn poll_every(ctx: &Ctx) -> GatewayResult<Duration> {
     let ms = ctx
         .settings
-        .integer("bsc.blocks_poll_ms", crate::settings::read::At::default())
+        .integer("bsc.blocks_poll_ms", ctx.at())
         .map_err(|e| ctx.tag(e))?;
     let stale = ctx.int("feed.stale_after_ms")?;
     if ms >= stale {

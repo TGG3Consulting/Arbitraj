@@ -9,7 +9,8 @@
 //! Кто вызывает: exec/bundle_send.rs; тесты.
 //! От чего зависит: exec/bundle.rs (Bundle/BundleTx), exec/ur.rs, check/simulate.rs (Call/CallResult), node/abi.rs
 //! (IERC20), send/tx.rs (legacy), wallet/signer.rs (sign_with/SignedTx).
-//! Настройки: своих нет (надбавка газа send.gas_limit_margin_pct читается вызывающим).
+//! Настройки: своих нет (надбавка газа send.gas_limit_margin_pct читается вызывающим); sign_txs — dex.evm_chain_id
+//! (решение 416, node/chain_id.rs).
 
 use std::collections::HashMap;
 
@@ -162,7 +163,8 @@ pub fn collect(
 }
 
 /// Подписывает транзакции бандла по очереди (nonce из бандла, цена и лимит газа — на транзакцию, база BALANCE_CHECK —
-/// на своп по индексу). Чистая: без узла, подписант передан. Ошибки: Internal (число лимитов ≠ транзакциям, нет базы
+/// на своп по индексу; chainId — dex.evm_chain_id, решение 416). Без узла, подписант передан. Ошибки: NotConfigured
+/// (dex.evm_chain_id не задана), Internal (число лимитов ≠ транзакциям, нет базы
 /// свопа, подпись), BadResponse (цена газа).
 pub fn sign_txs(
     ctx: &Ctx,
@@ -178,6 +180,8 @@ pub fn sign_txs(
             "число лимитов газа не равно числу транзакций бандла",
         ));
     }
+    // Решение 416: chainId сети — настройка dex.evm_chain_id (подпись идёт до отправки бандла, решение 398).
+    let chain = super::super::node::chain_id::chain_id(ctx)?;
     let mut out = Vec::with_capacity(bundle.txs.len());
     for (i, (t, &gas)) in bundle.txs.iter().zip(limits).enumerate() {
         let (to, input, value) = match t {
@@ -203,7 +207,7 @@ pub fn sign_txs(
                 U256::ZERO,
             ),
         };
-        let legacy = tx::legacy(ctx, t.nonce(), price, gas, to, value, input)?;
+        let legacy = tx::legacy(ctx, chain, t.nonce(), price, gas, to, value, input)?;
         let signed = signer::sign_with(signer, legacy).map_err(|e| {
             ctx.err(
                 ErrorCode::Internal,

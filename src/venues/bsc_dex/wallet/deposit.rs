@@ -32,7 +32,7 @@ pub async fn status(p: &Parts, asset: &Asset, tx_hash: &str) -> GatewayResult<Tr
         ),
         Err(e) => e.code == ErrorCode::BadResponse,
     };
-    if finished && let Some(token) = asset.bsc_contract {
+    if finished && let Some(token) = asset.contract {
         p.inflows.done(token, tx_hash);
     }
     res
@@ -40,7 +40,7 @@ pub async fn status(p: &Parts, asset: &Asset, tx_hash: &str) -> GatewayResult<Tr
 
 /// Вывод на кошелёк не состоялся: снимает ожидание поступления, запись в журнал. Ошибок нет.
 pub async fn abandoned(p: &Parts, asset: &Asset) {
-    if let Some(token) = asset.bsc_contract {
+    if let Some(token) = asset.contract {
         p.inflows.abandoned(token);
         let msg = format!(
             "{}: вывод на кошелёк не состоялся — ожидание поступления снято",
@@ -57,8 +57,10 @@ pub async fn queue(p: &Parts) -> WalletQueue {
     let nonce_taken = taken(p, &state).await.ok().flatten();
     WalletQueue {
         venue: p.ctx.venue(),
+        account: p.ctx.account.clone().map(crate::core::types::DexAccountId),
         state,
         nonce_taken,
+        note: None,
     }
 }
 
@@ -101,13 +103,15 @@ pub async fn release(p: &Parts, by: &str, pending_ok: bool) -> GatewayResult<Wal
     } else {
         ""
     };
-    let msg = format!("Очередь кошелька снята вручную после проверки ({by}{note})");
+    let msg = format!("Очередь кошелька снята после проверки ({by}{note})");
     ctx.log(Level::Warn, "send.queue_released", msg, None).await;
     super::queue_store::save(ctx, &state).await;
     let q = WalletQueue {
         venue: ctx.venue(),
+        account: ctx.account.clone().map(crate::core::types::DexAccountId),
         state,
         nonce_taken: None,
+        note: None,
     };
     p.stats.emit(MarketEvent::WalletQueue(q.clone()));
     Ok(q)

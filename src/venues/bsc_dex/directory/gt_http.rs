@@ -2,7 +2,8 @@
 //! Что делает: запросы к индексатору GeckoTerminal / CoinGecko on-chain по REST: адрес из index.api_url, ключ —
 //! в заголовке index.key_header (секрет index.api_key), очередь — directory/limit.rs. Ответы — в сырой журнал
 //! (data/raw/bsc_dex, соединение «index»). Страница за пределами списка (HTTP 400 на странице > 1) — «страниц больше
-//! нет», а не ошибка.
+//! нет», а не ошибка. HTTP 404 — отдельный исход NotFound (решение 121, C2): по монете это «индексатор не знает пулов
+//! монеты» (сведение, не ошибка), по списку DEX и проверке подключения — ошибка с понятным текстом.
 //! Кто вызывает: directory/refresh.rs, directory/check.rs.
 //! От чего зависит: ctx.rs, errors.rs, directory/limit.rs, directory/gt_parse.rs (текст ошибки).
 //! Настройки: index.api_url, index.network, index.key_header [bsc_dex], http.timeout_ms; секрет index.api_key.
@@ -15,7 +16,7 @@
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
-use super::super::ctx::{Ctx, ID};
+use super::super::ctx::Ctx;
 use super::super::errors;
 use super::{gt_parse, limit};
 
@@ -31,6 +32,9 @@ pub enum Got {
     Body(String),
     /// 400 на странице больше первой — страниц больше нет; текст ошибки индексатора.
     PageEnd(String),
+    /// 404 — индексатор не знает запрошенного (по монете — «не знает пулов монеты», решение 121, C2); текст
+    /// ошибки индексатора (errors[].title) или пусто. Что это значит, решает вызывающий по пути запроса.
+    NotFound(String),
 }
 
 /// Базовый адрес без «/» в конце и id сети. Ошибки: NotConfigured.
@@ -62,8 +66,11 @@ pub async fn get(ctx: &Ctx, path: &str, page: u32) -> GatewayResult<Got> {
         let (status, text) = crate::gateway::http::exchange(req, lim)
             .await
             .map_err(|f| errors::from_fail(&f, &lim, SOURCE))?;
-        ctx.raw
-            .write(ID, "index", &format!("GET {url} → {status} {text}"));
+        ctx.raw.write(
+            ctx.place.id,
+            "index",
+            &format!("GET {url} → {status} {text}"),
+        );
         answer(status.as_u16(), page, &text, path)
     })
     .await
@@ -76,6 +83,9 @@ pub fn answer(status: u16, page: u32, text: &str, path: &str) -> GatewayResult<G
     match status {
         200 => Ok(Got::Body(text.to_string())),
         400 if page > 1 => Ok(Got::PageEnd(title.unwrap_or_default())),
+        // HTTP 404 Not Found — RFC 9110 §15.5.5 (https://www.rfc-editor.org/rfc/rfc9110#name-404-not-found):
+        // у сервера нет запрошенного ресурса. Тело — в сыром журнале (соединение index).
+        404 => Ok(Got::NotFound(title.unwrap_or_default())),
         _ => {
             let mut e = errors::from_http(status, SOURCE, text);
             if matches!(status, 401 | 403) {

@@ -1,38 +1,37 @@
 //! Файл: notify/updates.rs
-//! Что делает: принимает нажатия кнопок Telegram длинным опросом getUpdates (у системы нет
-//! публичного HTTPS-адреса для webhook) и передаёт каждое нажатие в notify/press.rs.
-//! offset: после каждого ответа — наибольший update_id + 1 (замечание 2 к getUpdates:
-//! «recalculate offset after each server response»); обновление подтверждается следующим вызовом.
+//! Что делает: приём нажатий кнопок и сообщений Telegram длинным опросом getUpdates (у системы нет публичного
+//! HTTPS-адреса для webhook). Решение 176: чатов-ролей несколько (notify/roles.rs), у каждой роли свой токен — опрос
+//! ведётся ОДИН на каждый разный токен (роли с одним ботом делят опрос: два getUpdates на один токен Telegram не
+//! допускает — второй получает 409 Conflict), входящее обновление по чату относится к своей роли (updates_poll.rs).
+//! «Сделки» кнопок нет — эта роль не опрашивается.
+//! Набор опросов пересобирается при изменении настроек notify.* / http.timeout_ms и по сигналу wake (разблокировка или
+//! смена секретов: сменился токен — у другого бота свои update_id, offset этого токена забывается). offset — по токену,
+//! переживает пересборку: подтверждённые обновления не приходят второй раз.
 //! Кто вызывает: main.rs (запускает задачу run).
-//! От чего зависит: notify/client.rs, notify/tg_buttons.rs, notify/press.rs, settings, secrets, storage/journal.
-//! Настройки: notify.updates_timeout_s (параметр timeout getUpdates), notify.updates_retry_ms, notify.telegram_chat,
-//! notify.telegram_api_url, http.timeout_ms; секрет telegram.bot_token.
-//!
-//! Нет настройки, токена или связи — приём не работает, причина пишется в журнал, задача ждёт
-//! изменения настроек notify.* / http.timeout_ms или сигнала wake (разблокировка или смена секретов).
-//! После ошибки сети или Telegram — пауза notify.updates_retry_ms и повтор (не задана — ждём изменения
-//! настроек или wake); retry_after из ответа Telegram (ResponseParameters,
-//! https://core.telegram.org/bots/api#responseparameters) сильнее: ждём столько, сколько сказал Telegram.
+//! От чего зависит: notify/updates_poll.rs (один опрос), notify/roles.rs, notify/client.rs (token_mark),
+//! notify/mirror_state.rs, notify/ctl/sessions.rs, core, settings, secrets, storage/journal.
+//! Настройки: notify.updates_timeout_s, notify.updates_retry_ms, ID чатов ролей, notify.telegram_api_url,
+//! http.timeout_ms; секреты токенов ролей.
 //!
 //! getUpdates: https://core.telegram.org/bots/api#getupdates
 
-use std::collections::HashSet;
-use std::sync::Arc;
-use std::time::Duration;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 
 use tokio::sync::Notify;
 
+use crate::core::Core;
 use crate::secrets::Vault;
 use crate::settings::live::Watch;
-use crate::settings::read::At;
 use crate::settings::store::Store;
 use crate::storage::journal::{Journal, Level};
 
-use super::client;
-use super::press::{CommandTx, Press};
-use super::telegram::TgError;
+use super::client::token_mark;
+use super::ctl::sessions::Shared as CtlShared;
+use super::mirror_state::Shared;
+use super::roles::{self, Role};
 
-/// Префиксы настроек, при изменении которых приём пробует снова.
+/// Префиксы настроек, при изменении которых приём пересобирается.
 pub const WATCH_PREFIXES: &[&str] = &["notify.", "http.timeout_ms"];
 
 /// Приём нажатий кнопок Telegram.
@@ -41,141 +40,79 @@ pub struct Updates {
     pub settings: Store,
     pub vault: Vault,
     pub journal: Journal,
-    /// Канал команд человека ядру.
-    pub commands: CommandTx,
-    /// Сигнал «секреты изменились» (разблокировка, смена токена): прервать опрос, сбросить offset
-    /// (у другого бота свои update_id), начать заново. Подаёт тот, кто меняет секреты (api/secrets.rs).
+    /// Ядро — команды человека (Core::command) и данные экранов.
+    pub core: Core,
+    /// Память дубля «Ручного управления» (общая с notify/mirror.rs).
+    pub state: Shared,
+    /// Память экранов чата «Управление» (общая с notify/ctl/live.rs).
+    pub ctl: CtlShared,
+    /// Сигнал «секреты изменились» — подаёт api/secrets.rs.
     pub wake: Arc<Notify>,
 }
 
-/// Чем закончилось ожидание.
-enum Woke {
-    /// Изменились настройки — пробуем снова.
-    Settings,
-    /// Сигнал wake — сбросить offset и пробовать снова.
-    Secrets,
-    /// Рассылка настроек закрыта — система останавливается.
-    Stop,
+/// offset по отпечатку токена (общий у опросов, переживает пересборку).
+pub type Offsets = Mutex<HashMap<u64, i64>>;
+
+/// Роли с кнопками, сгруппированные по токену бота: отпечаток → роли. Роль без чата или без токена не входит.
+/// Принимает: настройки, секреты. Возвращает: группы (порядок — по отпечатку) и роли без токена. Ошибок нет.
+pub fn groups(settings: &Store, vault: &Vault) -> (BTreeMap<u64, Vec<Role>>, Vec<Role>) {
+    let mut g: BTreeMap<u64, Vec<Role>> = BTreeMap::new();
+    let mut no_token = Vec::new();
+    for r in roles::configured(settings) {
+        if r.users_key().is_none() {
+            continue;
+        }
+        match token_mark(vault, r) {
+            Some(m) => g.entry(m).or_default().push(r),
+            None => no_token.push(r),
+        }
+    }
+    (g, no_token)
 }
 
 /// Работает, пока система запущена. Принимает: приём и подписку на настройки (префиксы WATCH_PREFIXES).
 /// Ошибок не возвращает: всё пишется в журнал.
 pub async fn run(u: Updates, mut watch: Watch) {
-    let mut offset: Option<i64> = None;
-    let mut handled = HashSet::new();
+    let offsets: Offsets = Mutex::default();
     loop {
-        let ready = match client::build(&u.http, &u.settings, &u.vault) {
-            Ok(r) => r,
-            Err(e) => {
-                u.log(
-                    Level::Warn,
-                    format!("Кнопки Telegram не принимаются: {}", e.message),
-                )
-                .await;
-                if !u.idle(&mut watch, &mut offset, None).await {
-                    return;
-                }
-                continue;
-            }
+        let (g, no_token) = groups(&u.settings, &u.vault);
+        for r in &no_token {
+            u.log(Level::Warn, format!("Кнопки чата «{}» не принимаются: нет токена бота (секрет {}) или секреты закрыты", r.title(), r.token_secret())).await;
+        }
+        if g.is_empty() {
+            u.log(
+                Level::Warn,
+                "Кнопки Telegram не принимаются: ни у одной роли чата нет ID чата и токена".into(),
+            )
+            .await;
+        }
+        // Опрос, остановленный ошибкой без паузы (notify.updates_retry_ms не задана), ждёт пересборки — как раньше
+        // приём ждал изменения настроек; поэтому общий опрос сам не заканчивается.
+        let polls = async {
+            futures_util::future::join_all(
+                g.iter()
+                    .map(|(m, rs)| super::updates_poll::run(&u, *m, rs, &offsets)),
+            )
+            .await;
+            std::future::pending::<()>().await
         };
-        let timeout_s = match u
-            .settings
-            .integer("notify.updates_timeout_s", At::default())
-        {
-            Ok(t) => t,
-            Err(e) => {
-                u.log(
-                    Level::Warn,
-                    format!("Кнопки Telegram не принимаются: {}", e.message),
-                )
-                .await;
-                if !u.idle(&mut watch, &mut offset, None).await {
-                    return;
-                }
-                continue;
-            }
-        };
-        let polled = tokio::select! {
-            r = ready.tg.get_updates(offset, timeout_s) => r,
+        tokio::select! {
+            _ = polls => {}
             _ = u.wake.notified() => {
-                offset = None;
-                continue;
+                // Сменились секреты: offset старых токенов больше не нужен (у нового бота свои update_id).
+                offsets.lock().unwrap_or_else(|p| p.into_inner()).clear();
             }
-        };
-        match polled {
-            Ok(list) => {
-                let mut press = Press {
-                    tg: &ready.tg,
-                    chat: &ready.chat,
-                    commands: &u.commands,
-                    journal: &u.journal,
-                    handled: &mut handled,
-                };
-                for upd in list {
-                    offset = Some(offset.map_or(upd.update_id + 1, |o| o.max(upd.update_id + 1)));
-                    if let Some(q) = upd.callback_query {
-                        press.handle(q).await;
-                    }
-                }
-            }
-            Err(e) => {
-                let retry = match &e {
-                    TgError::Api {
-                        retry_after: Some(s),
-                        ..
-                    } if *s > 0 => Some(Duration::from_secs(s.unsigned_abs())),
-                    _ => u
-                        .settings
-                        .integer("notify.updates_retry_ms", At::default())
-                        .ok()
-                        .map(Duration::from_millis),
-                };
-                u.log(Level::Error, format!("getUpdates: {e}")).await;
-                if !u.idle(&mut watch, &mut offset, retry).await {
-                    return;
-                }
-            }
+            c = watch.next() => if c.is_none() { return },
         }
     }
 }
 
 impl Updates {
-    /// Ждёт: изменения настроек, сигнала wake или (если задано) паузы retry_after от Telegram.
-    /// Принимает: подписку, offset (сбрасывается по wake), паузу. Возвращает: false — система останавливается.
-    async fn idle(
-        &self,
-        watch: &mut Watch,
-        offset: &mut Option<i64>,
-        retry: Option<Duration>,
-    ) -> bool {
-        let woke = tokio::select! {
-            c = watch.next() => if c.is_some() { Woke::Settings } else { Woke::Stop },
-            _ = self.wake.notified() => Woke::Secrets,
-            _ = sleep_or_never(retry) => Woke::Settings,
-        };
-        match woke {
-            Woke::Settings => true,
-            Woke::Secrets => {
-                *offset = None;
-                true
-            }
-            Woke::Stop => false,
-        }
-    }
-
     /// Запись в журнал от имени уведомлений. Ошибка журнала уже выведена в лог процесса.
-    async fn log(&self, level: Level, message: String) {
+    pub(super) async fn log(&self, level: Level, message: String) {
         let _ = self
             .journal
             .write(level, "notify", None, message, None)
             .await;
-    }
-}
-
-/// Пауза, если она задана; иначе — никогда не заканчивается (ждём другие сигналы).
-async fn sleep_or_never(d: Option<Duration>) {
-    match d {
-        Some(d) => tokio::time::sleep(d).await,
-        None => std::future::pending().await,
     }
 }

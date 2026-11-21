@@ -42,15 +42,32 @@ async fn ctx() -> Ctx {
     let settings = arb::settings::store::Store::load(db, changes, journal.clone())
         .await
         .unwrap();
-    Ctx {
-        raw: RawLog::start(d.join("raw"), settings.clone()),
-        pace: Default::default(),
-        failover: Default::default(),
-        index: Default::default(),
-        settings,
-        vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
-        http: reqwest::Client::new(),
-        journal,
+    {
+        let c = Ctx {
+            raw: RawLog::start(d.join("raw"), settings.clone()),
+            pace: Default::default(),
+            failover: Default::default(),
+            evm_chain: Default::default(),
+            place: arb::venues::bsc_dex::ctx::Place::BSC,
+            chains: Default::default(),
+            account: None,
+            index: Default::default(),
+            settings,
+            vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
+            http: reqwest::Client::new(),
+            journal,
+        };
+        // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+        c.settings
+            .set(
+                "dex.gas_ticker",
+                arb::settings::scope::Scope::Venue("bsc_dex".into()),
+                Some(serde_json::json!("BNB")),
+                "тест",
+            )
+            .await
+            .unwrap();
+        c
     }
 }
 
@@ -92,6 +109,7 @@ fn pair(addr: Address, x: Address, y: Address, rx: u128, ry: u128) -> Entry {
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     }
 }
 
@@ -102,6 +120,8 @@ fn leg(e: &Entry, token_in: Address, token_out: Address) -> Leg {
         usable: Usable {
             gas: 100_000,
             hook_pct: Decimal::ZERO,
+            tax_pct: Decimal::ZERO,
+            hook: Default::default(),
         },
         token_in,
         token_out,

@@ -20,6 +20,9 @@ pub enum Op {
     Trade,
     /// Вывод.
     Withdraw,
+    /// Перевод между своими счетами BingX (фондовый → спот, решение 102): деньги двигаются — как вывод, итог
+    /// без ответа неизвестен, повтора и резервного адреса нет.
+    Move,
     /// Всё остальное (справочники, балансы, проверки).
     Other,
 }
@@ -33,6 +36,17 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         100419 => ErrorCode::IpNotAllowed,
         100410 => ErrorCode::RateLimited,
         100202 => ErrorCode::InsufficientBalance,
+        // Решение 253, дополнение t82 (Тигран 10.11), error-codes.md (github.com/BingX-API/api-ai-skills,
+        // skills/references/error-codes.md, сверено 11.11.2026): 100403 «The current account is not the main account»
+        // (Account / Wallet), 100441 «Account is abnormal or advanced identity verification is required» (Spot) — у
+        // вывода аккаунт (AccountRestricted). Кодов «адрес / белый список» у вывода в таблице нет.
+        100403 | 100441 if op == Op::Withdraw => ErrorCode::AccountRestricted,
+        // Решение 268 (Тигран 14.11), Spot Error Codes (https://github.com/BingX-API/api-ai-skills/blob/main/skills/
+        // references/error-codes.md): 100440 «Order price deviates too much from market price, triggering price
+        // protection. Adjust the price.» — цена лимитного ордера вне диапазона биржи (PriceOutOfRange). Только у операции
+        // ордера; рыночная продажа код снимает (market_sell.rs).
+        // Дополнение 268 (ревью 2): только у операции ордера (Op::Trade); у прочих операций — как до решения 268.
+        100440 if op == Op::Trade => ErrorCode::PriceOutOfRange,
         // «Система занята / запрос не выполнен»: для ордера и вывода итог неизвестен — Timeout
         // (нужна проверка), для остального — площадка недоступна.
         100500 if op != Op::Other => ErrorCode::Timeout,
@@ -40,7 +54,7 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         _ => match op {
             Op::Trade => ErrorCode::OrderRejected,
             Op::Withdraw => ErrorCode::WithdrawRejected,
-            Op::Other => ErrorCode::BadResponse,
+            Op::Move | Op::Other => ErrorCode::BadResponse,
         },
     };
     let text = format!("BingX, код {code}: {msg}");
@@ -60,10 +74,10 @@ pub fn unsure(e: GatewayError, op: Op) -> GatewayError {
 
 /// Ордер или вывод → «результат неизвестен» с пояснением в тексте. Принимает: ошибку, операцию. Ошибок нет.
 fn unknown(e: GatewayError, op: Op) -> GatewayError {
-    let what = if op == Op::Trade {
-        "ордер"
-    } else {
-        "вывод"
+    let what = match op {
+        Op::Trade => "ордер",
+        Op::Move => "перевод между счетами",
+        _ => "вывод",
     };
     GatewayError {
         code: ErrorCode::OutcomeUnknown,

@@ -123,6 +123,10 @@ async fn book_liquidity_in_band() {
         Err("не задана dex.depth_band_pct".into()),
     );
     assert!(s.usd_in_band.is_none() && s.error.is_some());
+    // Решение 118 (Я-20): у направления нет DEX — полосы нет, и это не ошибка: стакан показывается без полосы.
+    let s = side("bingx", Side::Buy, Some(&rec.asks), Ok(None));
+    assert!(s.error.is_none() && s.band_pct.is_none() && s.usd_in_band.is_none());
+    assert_eq!(s.best, Some(d("2.189")));
 }
 
 #[test]

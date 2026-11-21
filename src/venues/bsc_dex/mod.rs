@@ -10,26 +10,47 @@
 //! 1b (пулы), 1c (математика, котировка, проверки), 1d (исполнение, каналы отправки), 1e (умный режим).
 //! Здесь — сам адаптер (BscDex); общее состояние — parts.rs; функции контракта — venue.rs.
 
+pub mod best_of;
 pub mod check;
 pub mod coins;
 pub mod connection;
+pub mod connection_events;
 pub mod connection_extra;
+pub mod connection_gas;
+pub mod connection_sync;
 pub mod ctx;
+pub mod ctx_chain;
+pub mod ctx_place;
 pub mod ctx_url;
+pub mod ctx_wallet;
+pub mod dex_venues;
 pub mod directory;
 pub mod errors;
 pub mod exec;
+pub mod fast_hash;
+pub mod frozen;
+pub mod gas_ticker;
 pub mod math;
 pub mod node;
 pub mod num;
 pub mod parts;
+pub mod parts_wallet;
 pub mod pools;
 pub mod quote;
+pub mod resolve;
+pub mod resolve_bundle;
+pub mod resolve_cycle;
+pub mod resolve_single;
+pub mod resolve_withdraw;
 pub mod resubscribe;
+pub mod resubscribe_wallets;
 pub mod send;
 pub mod settings_wait;
+pub mod signal_epoch;
 pub mod tokens;
+pub mod trade_path;
 pub mod venue;
+pub mod venue_account;
 pub mod wallet;
 
 use parts::Parts;
@@ -39,14 +60,34 @@ pub struct BscDex {
     p: Parts,
     /// Подписка на рынок: задачи, последний список, пересборка при изменении настроек промежуточных монет.
     subs: resubscribe::Subs,
+    /// Исполнение свопа через агрегатор KyberSwap (решение 91, настройка exec.via_kyber): свой контекст из тех же
+    /// зависимостей. Сигналы, цены и подбор размера остаются на bsc_dex; KyberSwap — только маршрут и своп на сделке.
+    kyber: crate::venues::kyberswap::state::Parts,
 }
 
 impl BscDex {
     /// Создаёт адаптер. Ничего не подключает: соединения открываются по запросу ядра.
     pub fn new(ctx: ctx::Ctx) -> Self {
+        // Контекст KyberSwap-исполнения из общих зависимостей (настройки, секреты, HTTP, журнал, сырые логи).
+        let kctx = crate::venues::kyberswap::ctx::Ctx {
+            settings: ctx.settings.clone(),
+            vault: ctx.vault.clone(),
+            http: ctx.http.clone(),
+            journal: ctx.journal.clone(),
+            raw: ctx.raw.clone(),
+            pace: Default::default(),
+            // Решение 132: кошелёк — у вида адаптера на счёт (venue_account.rs); здесь — без кошелька.
+            wallet: None,
+        };
+        let p = Parts::new(ctx);
+        // Решение 112: свопы KyberSwap идут тем же кошельком — одна очередь и один запомненный nonce с переводами
+        // и свопами bsc_dex (раньше у KyberSwap был свой замок и nonce только от узла).
+        let (lock, next) = p.nonces.shared();
+        let kyber = crate::venues::kyberswap::state::Parts::with_wallet(kctx, lock, next);
         Self {
-            p: Parts::new(ctx),
+            p,
             subs: resubscribe::Subs::default(),
+            kyber,
         }
     }
 

@@ -3,16 +3,24 @@
   Что делает: экран «Площадки» — площадки из реестра шлюза (GET /api/venues); по каждой:
     «Проверить подключение» (POST /api/check/venue/{id}; у DEX — узел BSC и кошелёк), её секреты
     (GET /api/secrets/known, где scope = id; ключи каналов — в блоке каналов), её настройки области «площадка»
-    по группам; у DEX — блоки «Справочник пулов (индексатор)», «DEX и виды пулов» и «Каналы отправки» (lib/dex.svelte.js).
+    по группам; у DEX — блоки «Справочник пулов (индексатор)», «DEX и виды пулов», «Каналы отправки» (lib/dex.svelte.js)
+    и ссылка на «Маппинг кошельков» (исполнители ArbExecutor — у кошельков, решение 132).
     Секреты площадок, которых ещё нет в шлюзе (например адаптер DEX не зарегистрирован), тоже видны —
-    ключ можно ввести заранее. Статусы соединений, задержки и разрывы появятся, когда бэкенд начнёт их отдавать.
+    ключ можно ввести заранее. Решение 173: итог дня площадки, её лимит дня, пауза по убытку и «Сбросить лимит дня»
+    площадки (components/DayVenues.svelte). Решение 175: блок «Делистинги» биржи — пары в делистинге или «неизвестно»
+    (components/Delistings.svelte, lib/delist.svelte.js). Статусы соединений, задержки и разрывы появятся, когда бэкенд начнёт их отдавать.
   Кто вызывает: App.svelte.
   От чего зависит: lib/settings.svelte.js, lib/secrets.svelte.js, lib/dex.svelte.js, components/CheckConnection.svelte,
-    SecretRow.svelte, SettingEditor.svelte, PoolDirectory.svelte, DexFamilies.svelte, VenueChannels.svelte, ErrorText.svelte.
-  Настройки: все с областью Venue; у DEX — с областями Dex (через DexFamilies).
+    SecretRow.svelte, SettingEditor.svelte, PoolDirectory.svelte, DexFamilies.svelte, VenueChannels.svelte,
+    ErrorText.svelte, DayVenues.svelte (lib/control.svelte.js), Delistings.svelte (lib/delist.svelte.js),
+    CexCexDeny.svelte (решение 249: у venue.cex_cex биржи — список «не взаимодействовать», окно «Настроить список»),
+    DexGraph.svelte (решение 308: у DEX — блок «Граф маршрутов (фон)» и кнопка «Пересобрать граф»).
+  Настройки: все с областью Venue; у DEX — с областями Dex (через DexFamilies). Решение 283: у биржи не показываются
+    настройки с venue_for «Dex» в схеме (их значение читает только площадка DEX); у DEX — всё, как раньше.
 -->
 <script>
-  import { store } from '../lib/settings.svelte.js';
+  import { uniq, uniqBy } from '../lib/uniq.js';
+  import { store, shownAtVenue } from '../lib/settings.svelte.js';
   import { secrets, TELEGRAM_TOKEN } from '../lib/secrets.svelte.js';
   import { dex } from '../lib/dex.svelte.js';
   import CheckConnection from '../components/CheckConnection.svelte';
@@ -21,17 +29,33 @@
   import DexFamilies from '../components/DexFamilies.svelte';
   import VenueChannels from '../components/VenueChannels.svelte';
   import PoolDirectory from '../components/PoolDirectory.svelte';
+  import DexGraph from '../components/DexGraph.svelte';
   import ErrorText from '../components/ErrorText.svelte';
+  import DayVenues from '../components/DayVenues.svelte';
+  import Delistings from '../components/Delistings.svelte';
+  import CexCexDeny from '../components/CexCexDeny.svelte';
+  import { startDelist } from '../lib/delist.svelte.js';
+
+  startDelist();
 
   const groups = $derived.by(() => {
     const out = new Map();
     for (const d of store.schema?.settings ?? []) {
-      if (!d.scopes.includes('Venue')) continue;
+      // Решение 249: venue.cex_cex_deny — окном «Настроить список» у venue.cex_cex, отдельной строкой не показывается.
+      if (!d.scopes.includes('Venue') || d.name === 'venue.cex_cex_deny') continue;
       if (!out.has(d.group)) out.set(d.group, []);
       out.get(d.group).push(d);
     }
     return [...out];
   });
+
+  /**
+   * Решение 283: группы настроек одной площадки — без настроек, которые у неё никто не читает (venue_for «Dex» у биржи;
+   * lib/settings.svelte.js shownAtVenue). Только показ: сохранённые значения не меняются. Пустая группа не показывается.
+   * Принимает: id площадки. Возвращает: [[группа, [описания]]].
+   */
+  const groupsFor = (id) =>
+    groups.map(([g, defs]) => [g, defs.filter((d) => shownAtVenue(d, id))]).filter(([, defs]) => defs.length);
 
   /** Имена секретов, которые показаны в блоке каналов площадки. */
   const channelSecrets = (id) => new Set((dex.byVenue[id]?.channels ?? []).map((c) => c.info.secret).filter(Boolean));
@@ -54,14 +78,20 @@
 <h1>Площадки</h1>
 <ErrorText text={store.error} />
 <ErrorText text={secrets.error} />
-{#each store.venues as id (id)}
+{#each uniq(store.venues) as id (id)}
   {@const d = dex.byVenue[id]}
   <section class="card venue">
     <h2>{id}</h2>
     <CheckConnection url={`/api/check/venue/${encodeURIComponent(id)}`} />
 
+    <h3>Итог дня и лимит дня</h3>
+    <DayVenues only={id} />
+
+    <h3>Делистинги (решение 175)</h3>
+    <Delistings venue={id} />
+
     <h3>Ключи</h3>
-    {#each venueKeys(id) as item (item.name)}
+    {#each uniqBy(venueKeys(id), (item) => item.name) as item (item.name)}
       <SecretRow {item} />
     {:else}
       <p class="muted">У площадки нет секретов в списке бэкенда.</p>
@@ -71,16 +101,23 @@
     <ErrorText text={d?.directoryError} />
     {#if d?.families}<DexFamilies families={d.families} dir={d.directory} />{/if}
     <ErrorText text={d?.familiesError} />
+    {#if d?.families}<DexGraph venue={id} />{/if}
     {#if d?.channels}<VenueChannels venue={id} channels={d.channels} />{/if}
     <ErrorText text={d?.channelsError} />
+    {#if d?.families}
+      <p class="muted">Кошельки DEX, их исполнители ArbExecutor и маппинг «биржа → кошелёк» — экран <a href="#/wallets">«Маппинг кошельков»</a> (решение 132).</p>
+    {/if}
 
     <h3>Настройки площадки</h3>
-    {#each groups as [group, defs] (group)}
+    {#each groupsFor(id) as [group, defs] (group)}
       <h4>{group}</h4>
       {#each defs as def (def.name)}
         <div class="setting-line">
           <code>{def.name}</code> <span class="muted">{def.description}{def.unit ? ` (${def.unit})` : ''}</span>
           <SettingEditor {def} scope={{ kind: 'Venue', id }} />
+          {#if def.name === 'venue.cex_cex' && store.venueKinds.find((x) => x.id === id)?.kind === 'Cex'}
+            <CexCexDeny venue={id} />
+          {/if}
         </div>
       {/each}
     {/each}
@@ -98,6 +135,6 @@
     </p>
     <CheckConnection url={`/api/check/venue/${encodeURIComponent(scope)}`} />
     <h3>Ключи</h3>
-    {#each items as item (item.name)}<SecretRow {item} />{/each}
+    {#each uniqBy(items, (item) => item.name) as item (item.name)}<SecretRow {item} />{/each}
   </section>
 {/each}

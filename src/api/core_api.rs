@@ -1,8 +1,8 @@
 //! Файл: api/core_api.rs
 //! Что делает: экраны «Живой экран», «Сделки», «Управление» — данные и команды ядра.
 //! Кто вызывает: интерфейс.
-//! От чего зависит: api/state.rs, core (Core::spreads, deals, control, set_mode, resume_venue,
-//! release_quarantine, transits), core/risk.rs (Mode), storage/journal (через ядро).
+//! От чего зависит: api/state.rs, core (Core::spreads, deals, control, set_mode, set_chain_by (решение 432), resume_venue, resume_wallet,
+//! release_quarantine, reset_daily_limit, reset_venue_daily_limit, transits), core/risk.rs (Mode), storage/journal (через ядро).
 //! Настройки: нет.
 //!
 //! GET  /api/spreads                               — [SpreadView]: спред направления, состояние, причина
@@ -12,8 +12,12 @@
 //! GET  /api/dry                                   — сухой режим: {state: on|nobudget|broken|off|unset, budget, reason}
 //! GET  /api/control                               — Risk: режим системы, паузы площадок, карантины, итог дня
 //! POST /api/control                               — {mode: "Running" | "Stopped" | "Paused"} → Risk
+//! POST /api/control/chain/{id}                    — решение 432: {run: true|false} — «Старт <сеть>» / «Стоп <сеть>» → Risk;
+//!                                                   сетей меньше двух или сети нет — 400 с причиной
 //! POST /api/control/venue/{id}/resume             — снять паузу площадки → Risk
-//! POST /api/control/quarantine/{ticker}/release   — снять карантин монеты → Risk
+//! POST /api/control/wallet/{id}/resume            — снять паузу кошелька DEX от сверки (решение 230) → Risk
+//! POST /api/control/quarantine/{id}/release   — снять карантин монеты (id — адрес контракта или тикер) → Risk
+//! POST /api/control/daily-limit/reset            — «Сбросить лимит дня» (решение 153) → Risk; режим не меняется
 
 use axum::Json;
 use axum::extract::{Path, State};
@@ -22,9 +26,9 @@ use serde::Deserialize;
 use crate::core::deal::Deal;
 use crate::core::risk::{Mode, Risk};
 use crate::core::signal::SpreadView;
-use crate::core::types::{Asset, VenueId};
+use crate::core::types::VenueId;
 
-use super::state::AppState;
+use super::state::{ApiError, AppState};
 
 /// Строки «Живого экрана». Ошибок нет.
 pub async fn spreads(State(st): State<AppState>) -> Json<Vec<SpreadView>> {
@@ -69,18 +73,62 @@ pub async fn set_mode(State(st): State<AppState>, Json(b): Json<ModeBody>) -> Js
     Json(st.core.control())
 }
 
-/// Снять паузу площадки. Ошибок нет.
+/// Решение 432: тело команды сети.
+#[derive(Deserialize)]
+pub struct ChainBody {
+    run: bool,
+}
+
+/// Решение 432: «Старт <сеть>» / «Стоп <сеть>» (Core::set_chain_by, core/chain_run.rs). Ошибки: 400 — сетей площадок DEX
+/// меньше двух или такой сети нет (причина); 422 — неверное тело.
+pub async fn set_chain(
+    State(st): State<AppState>,
+    Path(id): Path<String>,
+    Json(b): Json<ChainBody>,
+) -> Result<Json<Risk>, ApiError> {
+    st.core
+        .set_chain_by(&id, b.run, "команда из интерфейса")
+        .await
+        .map_err(ApiError::bad)?;
+    Ok(Json(st.core.control()))
+}
+
+/// Снять паузу площадки (все её паузы) или, по id пары «площадка × тип направления» (решение 258), — только паузу
+/// этого направления по убытку дня (Core::resume_venue). Ошибок нет.
 pub async fn resume_venue(State(st): State<AppState>, Path(id): Path<String>) -> Json<Risk> {
     st.core.resume_venue(&VenueId(id)).await;
     Json(st.core.control())
 }
 
-/// Снять карантин монеты (карантин ведётся по тикеру). Ошибок нет.
-pub async fn release(State(st): State<AppState>, Path(ticker): Path<String>) -> Json<Risk> {
-    let asset = Asset {
-        ticker,
-        bsc_contract: None,
-    };
-    st.core.release_quarantine(&asset).await;
+/// Решение 230: снять паузу кошелька DEX от сверки (id кошелька: w1…). Ошибок нет (паузы нет — ничего не меняется).
+pub async fn resume_wallet(State(st): State<AppState>, Path(id): Path<String>) -> Json<Risk> {
+    st.core.resume_wallet(&id).await;
+    Json(st.core.control())
+}
+
+/// Снять карантин монеты: id — адрес контракта (0x…) или тикер монеты без адреса (решение 118: карантин по адресу).
+/// Ошибок нет.
+pub async fn release(State(st): State<AppState>, Path(id): Path<String>) -> Json<Risk> {
+    st.core.release_quarantine(&id).await;
+    Json(st.core.control())
+}
+
+/// «Сбросить лимит дня» (решение 153): лимит дальше считает только изменения итога дня после отметки; режим системы не
+/// меняется (остановлена по лимиту — запуск кнопкой «Старт»). Ядро пишет core.loss_limit_reset и шлёт
+/// risk.daily_limit_reset. Ошибок нет.
+pub async fn reset_daily_limit(State(st): State<AppState>) -> Json<Risk> {
+    st.core.reset_daily_limit("интерфейс").await;
+    Json(st.core.control())
+}
+
+/// «Сбросить лимит дня» одной площадки (решение 173: все её направления) или одной пары «площадка × тип направления»
+/// (решение 258: id пары — «bingx:dex_cex», «dex_dex», core/day_pair.rs): отметка итога дня; пауза по убытку дня
+/// снимается; остальные пары и общий лимит не меняются. Журнал core.loss_limit_reset, уведомление
+/// risk.daily_limit_reset. Ошибок нет.
+pub async fn reset_venue_daily_limit(
+    State(st): State<AppState>,
+    Path(id): Path<String>,
+) -> Json<Risk> {
+    st.core.reset_venue_daily_limit(&id, "интерфейс").await;
     Json(st.core.control())
 }

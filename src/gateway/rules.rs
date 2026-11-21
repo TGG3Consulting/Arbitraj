@@ -88,3 +88,62 @@ pub fn pick_rule<'a>(
 pub fn retry_allowed(code: ErrorCode) -> bool {
     code != ErrorCode::OutcomeUnknown
 }
+
+/// Отказ вывода (решения 220, 225, 230): «вывод отклонён» (WithdrawRejected), «адрес отклонён» (InvalidAddress),
+/// «вывод заблокирован» (WithdrawLocked), «проблема аккаунта» (AccountRestricted, решение 253, дополнение t82), «лимит
+/// вывода аккаунта» (WithdrawLimit, дополнение t85). По правилу шлюза не повторяется (продажа на месте —
+/// core/relay_here.rs; у WithdrawLocked — только свой повтор по transfer.locked_retry_ms, решение 166), пауза площадки
+/// по правилу и по ошибкам подряд не ставится (core/auto_pause.rs no_pause; у WithdrawLimit пауза своя —
+/// core/withdraw_limit_pause.rs). Принимает: код. Ошибок нет.
+pub fn withdraw_refusal(code: ErrorCode) -> bool {
+    matches!(
+        code,
+        ErrorCode::WithdrawRejected
+            | ErrorCode::InvalidAddress
+            | ErrorCode::WithdrawLocked
+            | ErrorCode::AccountRestricted
+            | ErrorCode::WithdrawLimit
+    )
+}
+
+/// Решение 268: «цена ордера вне разрешённого биржей диапазона» (PriceOutOfRange) по правилу шлюза не повторяется — тот же
+/// лимитный ордер биржа отклонит снова; вместо повтора ядро у продажи сделки один раз ставит рыночный ордер
+/// (core/sell_range.rs) или ведёт монету как раньше. Принимает: код. Ошибок нет.
+pub fn price_range(code: ErrorCode) -> bool {
+    code == ErrorCode::PriceOutOfRange
+}
+
+/// Решение 230: почему действие правила для этого кода не действует — форма его не предлагает, API не сохраняет
+/// включённым, сохранённое раньше интерфейс помечает «не действует: …». Принимает: код, вид действия («Retry»,
+/// «StopVenue», «StopAll», … — action_kind). Возвращает: None — действует. Ошибок нет.
+pub fn inactive_reason(code: ErrorCode, kind: &str) -> Option<&'static str> {
+    match kind {
+        "Retry" if !retry_allowed(code) => Some(
+            "повтор запрещён: операция могла исполниться — только сверка и ручная проверка (решение 64)",
+        ),
+        "Retry" if withdraw_refusal(code) => Some(
+            "вывод по этому коду не повторяется — продажа на месте или «USDT не вернулись» (решения 220, 230)",
+        ),
+        "Retry" if price_range(code) => Some(
+            "ордер с ценой вне диапазона биржи не повторяется — у продажи один раз рыночный ордер или режим застрявшей монеты (решение 268)",
+        ),
+        "StopVenue" | "StopAll" if code == ErrorCode::WithdrawLimit => Some(
+            "пауза площадки ставится сама, без правила; снимает человек после сброса лимита (решение 253, дополнение t85)",
+        ),
+        "StopVenue" | "StopAll" if withdraw_refusal(code) => {
+            Some("паузы по этому коду нет — только предупреждение (решения 225, 230)")
+        }
+        _ => None,
+    }
+}
+
+/// Вид действия — как в JSON правила («Retry», «StopVenue», …). Принимает: действие. Ошибок нет.
+pub fn action_kind(a: &RuleAction) -> &'static str {
+    match a {
+        RuleAction::CancelNoRetry => "CancelNoRetry",
+        RuleAction::Retry { .. } => "Retry",
+        RuleAction::StopVenue => "StopVenue",
+        RuleAction::StopAll => "StopAll",
+        RuleAction::NotifyOnly => "NotifyOnly",
+    }
+}

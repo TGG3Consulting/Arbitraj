@@ -1,0 +1,28 @@
+{
+ "chainId": "0xa4b1",
+ "block": 526003986,
+ "block_hex": "0x1f5a2f12",
+ "timestamp": 1795197996,
+ "woopp": "0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4",
+ "oracle": "0xf9b0c8ee13ae2fc0665764ecbdb417685dea8081",
+ "oracle_source": "WooPP.wooracle() на блоке B",
+ "oracle_docs": "0xCf4EA1688bc23DD93D933edA535F8B72FC8934Ec",
+ "quote_token": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+ "bases": [
+  "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+  "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f",
+  "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+  "0x912ce59144191c1204e64559fe8253a0e49e6548"
+ ],
+ "sizes": "0.001,0.1,10,1000",
+ "bases_from": {
+  "--base": [],
+  "WooSwap": [
+   "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+   "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+   "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f",
+   "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+   "0x912ce59144191c1204e64559fe8253a0e49e6548"
+  ]
+ }
+}

@@ -27,26 +27,30 @@ pub fn networks(ctx: &Ctx, reg: &Registry) -> GatewayResult<Vec<CoinNetworkInfo>
         if let Some(e) = reg.get(&r)
             && e.valid
         {
-            coins.insert(e.ticker.clone(), e.coin);
+            // Решение 211: ключ — адрес; два токена с одним тикером — две монеты, не одна.
+            coins.entry(e.coin).or_insert_with(|| e.ticker.clone());
         }
     }
     Ok(coins
         .into_iter()
-        .map(|(ticker, addr)| CoinNetworkInfo {
+        .map(|(addr, ticker)| CoinNetworkInfo {
             venue: ctx.venue(),
             asset: Asset {
+                chain: None,
                 ticker,
-                bsc_contract: Some(addr),
+                contract: Some(addr),
             },
             network: network.clone(),
             deposit_enabled: true,
             withdraw_enabled: true,
             withdraw_fee: None,
+            withdraw_fee_pct: None,
             withdraw_min: None,
             withdraw_max: None,
             deposit_min: None,
             deposit_confirmations: None,
             withdraw_precision: None,
+            withdraw_step: None,
             updated_at: Utc::now(),
         })
         .collect())

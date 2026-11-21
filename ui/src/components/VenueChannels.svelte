@@ -10,6 +10,7 @@
   Настройки: нет (channel.* — экран «Каналы отправки»); секреты channel.<id>.key.
 -->
 <script>
+  import { uniq } from '../lib/uniq.js';
   import { secrets } from '../lib/secrets.svelte.js';
   import { href } from '../lib/router.svelte.js';
   import { methodLabel } from '../lib/labels.js';
@@ -31,7 +32,7 @@
       <strong>{info.title}</strong> <code>{info.id}</code>
       <span class="tag">{info.private ? 'закрытый' : 'открытая отправка'}</span>
       <span class="muted">способы: {info.methods.map(methodLabel).join(', ') || '—'}</span>
-      {#each info.docs as url (url)}<a href={url} target="_blank" rel="noreferrer noopener">документация</a>{/each}
+      {#each uniq(info.docs) as url (url)}<a href={url} target="_blank" rel="noreferrer noopener">документация</a>{/each}
     </header>
     {#if info.secret}
       {#if known(info.secret)}

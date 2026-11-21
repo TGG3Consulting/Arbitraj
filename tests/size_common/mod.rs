@@ -104,6 +104,8 @@ impl Rec {
             max_notional: num(&s["maxNotional"]),
             min_qty: num(&s["minQty"]),
             max_qty: num(&s["maxQty"]),
+            order_block: None,
+            price_band: None,
         };
         let cfg = json_file("tests/data/bingx_2026-10-24/config_getall.json");
         let coin = cfg["data"]
@@ -121,18 +123,21 @@ impl Rec {
         let net = CoinNetworkInfo {
             venue: VenueId("bingx".into()),
             asset: Asset {
+                chain: None,
                 ticker: "CAKE".into(),
-                bsc_contract: Some(CAKE),
+                contract: Some(CAKE),
             },
             network: "BEP20".into(),
             deposit_enabled: true,
             withdraw_enabled: true,
             withdraw_fee: num(&n["withdrawFee"]),
+            withdraw_fee_pct: None,
             withdraw_min: num(&n["withdrawMin"]),
             withdraw_max: num(&n["withdrawMax"]),
             deposit_min: num(&n["depositMin"]),
             deposit_confirmations: None,
             withdraw_precision: n["withdrawPrecision"].as_u64().map(|p| p as u32),
+            withdraw_step: None,
             updated_at: Utc::now(),
         };
         Rec {

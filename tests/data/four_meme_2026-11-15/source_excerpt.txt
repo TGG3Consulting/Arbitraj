@@ -1,0 +1,382 @@
+# four.meme — дословные выдержки с номерами строк (записано 15.11.2026)
+
+## Официальная документация: github.com/four-meme-community/fourmeme-docs@5f7f589b042e4e3b41c2c214d0fe3a81b36725a9
+## (ссылка на репозиторий — с официальной страницы four-meme.gitbook.io/four.meme/developer/fourmeme-integration;
+##  страница доступна с four.meme → protocol-integration)
+
+### README.md
+7: These docs are for third-party integrators: wallets, trading UIs, DEX aggregators, indexers, data backends, and launch platforms. They cover deployed protocol usage only. They do not cover protocol internals, bonding-curve algorithms, admin operations, or custom module development.
+
+### docs/integration-guide.md
+15: ## 1. Integration Targets
+16: 
+17: Classic Four.Meme integrations usually work with these contracts:
+18: 
+19: | Contract | Role |
+20: |----------|------|
+21: | `TokenManager` (V1) | Trade tokens created **before** 2024-09-05. Creation is no longer used for new launches. |
+22: | `TokenManager2` (V2) | Create and trade tokens created **on/after** 2024-09-05. Supports BNB and BEP20 quote pairs. |
+23: | `TokenManagerHelper3` (Helper V3) | Unified token info, buy/sell estimates, V1/V2 routing helper, and BNB↔ERC20 quote helpers. |
+24: 
+33: ### 2.1 BNB Smart Chain (mainnet)
+34: 
+35: | Contract | Address |
+36: |----------|---------|
+37: | TokenManager (V1) | `0xEC4549caDcE5DA21Df6E6422d448034B5233bFbC` |
+38: | TokenManager2 (V2) | `0x5c952063c7fc8610FFDB798152D69F0B9550762b` |
+39: | TokenManagerHelper3 | `0xF251F83e40a78868FcfA3FA4599Dad6494E46034` |
+40: 
+85: ## 4. Quote Asset Rules
+86: 
+87: From `getTokenInfo` / events:
+88: 
+89: - `quote == address(0)` → the token trades against native BNB on the bonding curve.
+90: - `quote != address(0)` → the token trades against a BEP20 quote (for example USDT).
+91: 
+92: Implications:
+93: 
+94: - BNB pairs: send `msg.value` on buys; sells return BNB.
+95: - ERC20 quote pairs: approve quote to TokenManager2 before buy; approve the meme token before sell.
+96: - Helper3 `buyWithEth` / `sellForEth` only apply to **ERC20/ERC20** pairs (quote ≠ 0). They are not for native BNB pairs.
+116: ## 6. Migration and External Market Routing
+117: 
+118: While the bonding curve is active:
+119: 
+120: - Route buys/sells through TokenManager V1/V2 (or Helper3 wrappers where applicable).
+121: 
+122: After migration:
+123: 
+124: - `getTokenInfo(...).liquidityAdded == true`
+125: - V2 emits `TradeStop(token)` and `LiquidityAdded(base, tokenAmountToLp, quote, funds)`
+126: - Internal curve trading stops; route via the external DEX pool for that token/quote
+127: 
+128: Note: `LiquidityAdded`’s second parameter is the **token amount added to LP**, not remaining bonding-curve offers. See [Trade guide events](./trade-guide.md#43-events).
+138: ## 8. Scope Boundaries
+139: 
+140: Included:
+141: 
+142: - Public trade, create, estimate, and tax claim surfaces documented for third parties.
+143: - Lite ABIs under `abi/` and interfaces under `contracts/interfaces/`.
+144: 
+145: Not included:
+146: 
+147: - Bonding-curve math internals and proprietary libraries.
+148: - Admin / operator / upgrade / fee-collector privileged APIs.
+149: - OpenFour modular protocol (separate docs).
+
+### docs/trade-guide.md
+16: ## 1. Recommended Trade Flow
+17: 
+18: ```text
+19: token address
+20:     -> Helper3.getTokenInfo(token)
+21:     -> read version / tokenManager / quote / liquidityAdded
+22:     -> if liquidityAdded: route externally (Pancake / DEX)
+23:     -> else Helper3.tryBuy / trySell
+24:     -> approve if needed
+25:     -> call V1 or V2 trade method on tokenManager
+26:     -> index TokenPurchase / TokenSale (and TradeStop / LiquidityAdded)
+27: ```
+39: ### 2.1 `getTokenInfo`
+40: 
+41: ```solidity
+42: function getTokenInfo(address token) returns (
+43:     uint256 version,
+44:     address tokenManager,
+45:     address quote,
+46:     uint256 lastPrice,
+47:     uint256 tradingFeeRate,
+48:     uint256 minTradingFee,
+49:     uint256 launchTime,
+50:     uint256 offers,
+51:     uint256 maxOffers,
+52:     uint256 funds,
+53:     uint256 maxFunds,
+54:     bool liquidityAdded
+55: );
+56: ```
+57: 
+58: | Field | Meaning |
+59: |-------|---------|
+60: | `version` | `1` → trade via V1 methods; `2` → trade via V2 methods |
+61: | `tokenManager` | Canonical manager for that version (`TOKEN_MANAGER` or `TOKEN_MANAGER_2`) |
+62: | `quote` | `address(0)` = BNB pair; otherwise BEP20 quote |
+63: | `tradingFeeRate` | Protocol trading-fee numerator; actual rate is `tradingFeeRate / 10000` |
+64: | `minTradingFee` | Minimum protocol trading fee amount |
+65: | `offers` / `maxOffers` | Remaining / max tokens for sale on the curve. For V1, Helper returns fixed `maxOffers` / `maxFunds` constants rather than per-token storage |
+66: | `funds` / `maxFunds` | Raised / max raise in quote units |
+67: | `liquidityAdded` | V2: `true` when token `status == COMPLETED (3)`. V1: from V1 liquidity flag |
+68: 
+69: ### 2.2 `tryBuy`
+70: 
+71: ```solidity
+72: function tryBuy(address token, uint256 amount, uint256 funds) view returns (
+73:     address tokenManager,
+74:     address quote,
+75:     uint256 estimatedAmount,
+76:     uint256 estimatedCost,
+77:     uint256 estimatedFee,
+78:     uint256 amountMsgValue,
+79:     uint256 amountApproval,
+80:     uint256 amountFunds
+81: );
+82: ```
+83: 
+84: Examples:
+85: 
+86: - Buy a fixed token amount: `tryBuy(token, 10000e18, 0)`
+87: - Spend a fixed quote budget: `tryBuy(token, 0, 10e18)`
+88: 
+89: Return usage:
+90: 
+91: | Field | Meaning |
+92: |-------|---------|
+93: | `estimatedCost` | Curve quote cost (before protocol fee) |
+94: | `estimatedFee` | Estimated protocol trading fee. Under AntiSniperFeeMode this can include base+extra; the buy event `fee` field only records base fee |
+95: | `amountMsgValue` | Suggested `msg.value` for the trade call (may include pending `launchFee`) |
+96: | `amountApproval` | Suggested ERC20 quote approval when `quote != 0` |
+97: | `amountFunds` | Suggested `funds` argument for AMAP buys |
+98: 
+99: For TaxToken8 and TaxToken9, Helper also folds estimated buy tax into `amountMsgValue` / `amountApproval` where applicable.
+100: 
+101: ### 2.3 `trySell`
+102: 
+103: ```solidity
+104: function trySell(address token, uint256 amount) returns (
+105:     address tokenManager,
+106:     address quote,
+107:     uint256 funds,
+108:     uint256 fee
+109: );
+110: ```
+111: 
+112: | Field | Meaning |
+113: |-------|---------|
+114: | `tokenManager` | Manager to call for the real trade |
+115: | `quote` | Quote asset (`address(0)` = native BNB) |
+116: | `funds` | Estimated **net** quote to the seller: `curveGross - protocolFee - taxTokenSellTax`. Does **not** subtract any third-party router `feeRate` cut. Token8/TaxToken9 tax is deducted here but **not** included in `fee` |
+117: | `fee` | Protocol trading fee only (not TaxToken8/TaxToken9 tax, not router cut) |
+195: ## 4. TokenManager2 (V2)
+196: 
+197: **BSC address:** `0x5c952063c7fc8610FFDB798152D69F0B9550762b`
+198: 
+199: Supports tokens created on/after 2024-09-05. Quote may be BNB (`quote == 0`) or BEP20.
+200: 
+201: ### 4.1 Buy
+202: 
+203: | Method | Use |
+204: |--------|-----|
+205: | `buyTokenAMAP(token, funds, minAmount)` | Spend fixed quote for tokens |
+206: | `buyTokenAMAP(token, to, funds, minAmount)` | AMAP buy to `to` |
+207: | `buyToken(token, amount, maxFunds)` | Buy fixed token amount |
+208: | `buyToken(token, to, amount, maxFunds)` | Fixed-amount buy to `to` |
+209: 
+210: For BNB pairs, send `msg.value`. For ERC20 quote pairs, approve quote to TokenManager2 first. Prefer filling `msg.value` / approvals from Helper3 `tryBuy`.
+211: 
+212: ### 4.2 Sell
+213: 
+214: | Method | Use |
+215: |--------|-----|
+216: | `sellToken(token, amount)` | Simple sell |
+217: | `sellToken(origin, token, amount, minFunds, feeRate, feeRecipient)` | Sell with router fee |
+218: | `sellToken(origin, token, from, amount, minFunds, feeRate, feeRecipient)` | Router path; `tx.origin == from` |
+219: 
+220: - `origin`: set `0`
+221: - `feeRate`: max 5%; `100` = 1%, `10` = 0.1% (`cut = funds * feeRate / 10000`)
+222: - `minFunds`: compared against the **gross curve quote** (`calcSellCost`) **before** protocol fee and router cut. Net proceeds to the seller are lower.
+223: - Before sell: `ERC20(token).approve(tokenManager, amount)`
+224: 
+279: ## 5. Error Codes
+280: 
+281: ### buyToken
+282: 
+283: | Code | Meaning |
+284: |------|---------|
+285: | `GW` | Amount precision not aligned to GWEI |
+286: | `ZA` | `to` must not be `address(0)` |
+287: | `TO` | `to` must not be the Pancake pair |
+288: | `Slippage` | Fixed-amount buy: curve cost exceeds `maxFunds`. AMAP buy: purchased amount below `minAmount` |
+289: | `More BNB` | Insufficient `msg.value` |
+290: 
+291: ### sellToken
+292: 
+293: | Code | Meaning |
+294: |------|---------|
+295: | `GW` | Amount precision not aligned to GWEI |
+296: | `FR` | Fee rate exceeds 5% (`feeRate > 500`) |
+297: | `SO` | Order amount too small (`funds <= protocol fee`) |
+298: | `Slippage` | Gross curve quote is below `minFunds` (not net proceeds) |
+299: 
+300: ## 6. AntiSniperFeeMode Tokens
+301: 
+302: AntiSniperFeeMode applies a dynamic fee that decreases block-by-block after creation. Indicated by `feeSetting > 0` in `TokenInfoEx1`.
+303: 
+304: ### On-chain
+305: 
+306: ```solidity
+307: TokenInfoEx1 memory tix1 = TokenManager2._tokenInfoEx1s(token);
+308: bool antiSniper = tix1.feeSetting > 0;
+309: ```
+310: 
+311: ### Off-chain
+312: 
+313: In token info API response, `feePlan == true` means AntiSniperFeeMode is enabled.
+314: 
+315: Block-by-block fee schedule may change for future launches. Product reference: [Product Update 25-10-30](https://four-meme.gitbook.io/four.meme/product-update/6-product-update-25-10-30).
+
+### contracts/interfaces/ITokenManager2.sol
+100: 
+101:     /// @notice Buy by spending a fixed quote budget to `msg.sender`.
+102:     /// @param token Token to buy
+103:     /// @param funds Quote amount to spend
+104:     /// @param minAmount Minimum tokens to receive
+105:     function buyTokenAMAP(address token, uint256 funds, uint256 minAmount) external payable;
+106: 
+107:     /// @notice Buy by spending a fixed quote budget to `to`.
+108:     function buyTokenAMAP(address token, address to, uint256 funds, uint256 minAmount) external payable;
+109: 
+110:     /// @notice Buy a fixed token amount for `msg.sender`.
+111:     /// @param amount Exact token amount
+112:     /// @param maxFunds Maximum quote to spend (compared to gross curve cost)
+113:     function buyToken(address token, uint256 amount, uint256 maxFunds) external payable;
+114: 
+115:     /// @notice Buy a fixed token amount for `to`.
+116:     function buyToken(address token, address to, uint256 amount, uint256 maxFunds) external payable;
+117: 
+118:     /// @notice Sell tokens. Caller must `approve` this manager first.
+119:     function sellToken(address token, uint256 amount) external;
+120: 
+121:     /// @notice Sell with an optional third-party router fee.
+122:     /// @param origin Pass `0`
+123:     /// @param minFunds Minimum **gross** curve quote (`calcSellCost`); not net proceeds after fees
+124:     /// @param feeRate Router fee rate; `100` = 1%, `10` = 0.1%, max 5% (`cut = funds * feeRate / 10000`)
+125:     /// @param feeRecipient Address receiving the router fee
+126:     function sellToken(
+127:         uint256 origin,
+128:         address token,
+129:         uint256 amount,
+130:         uint256 minFunds,
+131:         uint256 feeRate,
+132:         address feeRecipient
+133:     ) external;
+134: 
+135:     /// @notice Router sell path where `tx.origin` must equal `from`.
+136:     /// @param from Token owner / original sender
+137:     function sellToken(
+138:         uint256 origin,
+139:         address token,
+140:         address from,
+141:         uint256 amount,
+142:         uint256 minFunds,
+143:         uint256 feeRate,
+144:         address feeRecipient
+145:     ) external;
+146: 
+147:     /// @notice Create a token using backend-signed `createArg` / `signature` from the create API.
+148:     /// @param args `createArg` bytes from Four.Meme create API
+149:     /// @param signature Backend signature from Four.Meme create API
+150:     function createToken(bytes calldata args, bytes calldata signature) external payable;
+151: }
+
+## Исходник токена (клон EIP-1167) — Sourcify chainId 56, реализация 0x46862924e2a229170ebd065e24a0da72af58a986
+## (match, project/contracts/Token3.sol:Token, solc — по Sourcify; токен 0x719f2bcb…4444 — клон этой реализации, probe.json)
+
+### project/contracts/FourToken.sol
+16: /// @notice Normal transfer mode; transfers and DEX trading are unrestricted.
+17: uint public constant MODE_NORMAL = 0;
+18: /// @notice Restricted mode; all transfers are blocked.
+19: uint public constant MODE_TRANSFER_RESTRICTED = 1;
+20: /// @notice Controlled mode; one transfer side must be the owner.
+21: uint public constant MODE_TRANSFER_CONTROLLED = 2;
+22:
+23: /// @notice Current transfer mode.
+24: uint public _mode;
+...
+31: /// @notice Addresses treated as external liquidity pools for transfer guards and post-migration logic.
+32: mapping(address => bool) public migratedPools;
+...
+43: function _init(InitParams memory a) internal {
+44: require(!_initialized, "Token: initialized");
+45: _initialized = true;
+46: _transferOwnership(msg.sender);
+47: _name = a.name;
+48: _symbol = a.symbol;
+49: _mint(owner(), a.totalSupply);
+50: requestId = a.requestId;
+51: _mode = MODE_TRANSFER_RESTRICTED;
+52: }
+53:
+54: function normalizeAmount(uint256 amount) internal view returns (uint256) {
+55: if (_mode != MODE_NORMAL) {
+56: return amount / GWEI * GWEI;
+57: }
+58: return amount;
+59: }
+...
+78: function _beforeTokenTransfer(
+79: address from,
+80: address to,
+81: uint256 amount
+82: ) internal virtual override {
+83: if (_blocksBeforeMigration(from, to)) {
+84: revert("Token: pool transfer blocked before migration");
+85: }
+86: super._beforeTokenTransfer(from, to, amount);
+87: }
+...
+99: function _blocksBeforeMigration(address from, address to) internal view returns (bool) {
+100: if (from == address(0) || to == address(0)) {
+101: return false;
+102: }
+103: if (_mode == MODE_NORMAL) {
+104: return false;
+105: }
+106: return migratedPools[from] || migratedPools[to];
+107: }
+
+### project/contracts/Token3.sol
+6: contract Token is FourToken {
+7: function init(InitParams memory params) public {
+8: _init(params);
+9: }
+10:
+11: function _transfer(
+12: address from,
+13: address to,
+14: uint256 amount
+15: ) internal override {
+16: amount = normalizeAmount(amount);
+17: super._transfer(from, to, amount);
+18: }
+19: }
+
+## Реализация 0x7330d8865f4b6800b72bdd73e2007833a5d45c94 (match, project/contracts/bscMainnet/Token9.sol:Token;
+## токен 0xa7bc4b8a…ffff — клон этой реализации, probe.json)
+
+### project/contracts/bscMainnet/Token9.sol
+290: function _transfer(
+291: address from,
+292: address to,
+293: uint256 amount
+294: ) internal override {
+295: require(to != address(this), "Token: invalid recipient");
+296: amount = normalizeAmount(amount);
+...
+302: if (!_swapping) {
+303: if (_mode == MODE_NORMAL) {
+304: if (to == pair_) {
+305: _dispatchFee();
+306: }
+307: uint256 fee;
+308: if (from == pair_ && to != TOKEN_MANAGER_2) {
+309: fee = amount * feeRateBuy / 100;
+310: } else if (to == pair_ && from != TOKEN_MANAGER_2) {
+311: fee = amount * feeRateSell / 100;
+312: }
+...
+321: super._transfer(from, to, amount);
+
+## Вывод по строкам (факт исходника + ответ цепи): комментарий L18 («all transfers are blocked») не совпадает с кодом —
+## до выпуска (mode = 1) блокируются только переводы с участием адресов migratedPools (L99-L107); перевод кошелёк →
+## кошелёк и кошелёк → контракт проходит (probe.json: transfer_full_balance и transfer_to_contract_wbnb = true у обоих
+## токенов); сумма перевода округляется вниз до кратной 1e9 (L54-L59).

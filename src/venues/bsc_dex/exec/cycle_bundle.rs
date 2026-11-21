@@ -24,12 +24,12 @@
 //! Симуляция (eth_simulateV1), подпись и отправка (eth_sendBundle), settle очереди — существующими exec/bundle_sim.rs
 //! и exec/bundle_send.rs (не меняются): кумулятивная база BALANCE_CHECK каждого участка читается ПОСЛЕ предыдущих
 //! транзакций. Повтор при неудаче НЕ делаем (стартовое правило Тиграна).
-//! Гейт исполнения dex_dex.execute по умолчанию ВЫКЛ (ценность «всё под контролем человека»): выключено — цикл только
-//! сигнал (require_execute). Сам сборщик гейт НЕ проверяет (его зовёт слой исполнения); сборка чистая и тестируется.
+//! Гейт исполнения dex_dex.execute по умолчанию ВЫКЛ — exec/cycle_gate.rs (здесь реэкспорт); сам сборщик гейт НЕ
+//! проверяет (его зовёт exec/cycle_trade.rs). Шаги участка — exec/cycle_segment.rs; последнему хопу последнего участка
+//! — граница ядра floor (решение 124: вход + затраты + порог прибыли).
 //! Форк-хоп (classic V2 Router) и не-tradable семейство в цикле v1 не собираются — отказ (следующая фаза).
-//! Кто вызывает: слой исполнения DEX ↔ DEX (следующий стык); тесты.
-//! От чего зависит: exec/bundle.rs, exec/plan.rs, exec/chain.rs, exec/ur.rs, quote/route_calc.rs, num.rs,
-//! pools/families.rs (Family.tradable/fork), ctx.rs.
+//! Кто вызывает: exec/{cycle_bundle_trade, cycle_dry}.rs (решение 124); тесты.
+//! От чего зависит: exec/{bundle, plan, cycle_segment, cycle_gate}.rs, quote/route_calc.rs, num.rs, ctx.rs.
 //! Настройки: dex_dex.execute [bsc_dex] (гейт); exec.dex_slippage_pct [bsc_dex] (per-hop minOut); через plan/ur —
 //! dex.universal_router, dex.permit2, dex.universal_router_version [DEX], dex.deadline_s, dex.approve_unlimited,
 //! dex.permit2_expiration_s [bsc_dex].
@@ -37,16 +37,16 @@
 use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
 
-use crate::core::types::Side;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::num;
-use super::super::quote::route_calc::{self, Leg};
+use super::super::quote::route_calc::Leg;
 use super::bundle::{Bundle, BundleTx};
-use super::chain::Step;
-use super::plan::{self, Order};
-use super::ur::{self, CONTRACT_BALANCE};
+use super::cycle_gate::guard_ur;
+use super::{cycle_segment, plan};
+
+pub use super::cycle_gate::{execute_enabled, require_execute};
 
 /// Один участок цикла (подряд идущие хопы одного Universal Router) — для учёта и проверки.
 #[derive(Debug, Clone)]
@@ -86,121 +86,7 @@ impl CycleAssembly {
     }
 }
 
-/// Включено ли АВТО-ИСПОЛНЕНИЕ циклов DEX ↔ DEX (решение 86). Не задано — выключено (как dex_dex.enabled): цикл
-/// только сигнал, «всё под контролем человека». Ошибок нет.
-pub fn execute_enabled(ctx: &Ctx) -> bool {
-    ctx.flag("dex_dex.execute").unwrap_or(false)
-}
-
-/// Гейт исполнения цикла: выключено (по умолчанию) — сделки нет (сигнал). Ошибки: NoRoute — гейт закрыт.
-pub fn require_execute(ctx: &Ctx) -> GatewayResult<()> {
-    if execute_enabled(ctx) {
-        Ok(())
-    } else {
-        Err(ctx.err(
-            ErrorCode::NoRoute,
-            "авто-исполнение циклов DEX ↔ DEX выключено (dex_dex.execute) — цикл только сигнал",
-        ))
-    }
-}
-
-/// Хоп цикла исполним бандлом v1 (через Universal Router). Ошибки: NoRoute — не-tradable семейство или форк (classic
-/// V2 Router — следующая фаза); NotConfigured — у DEX не задан dex.universal_router.
-fn guard_ur(ctx: &Ctx, leg: &Leg) -> GatewayResult<()> {
-    let f = leg.entry.family;
-    if !f.tradable {
-        return Err(ctx.err(
-            ErrorCode::NoRoute,
-            format!(
-                "цикл проходит через {} без своего пути исполнения — это сигнал, бандлом не исполняется",
-                f.id
-            ),
-        ));
-    }
-    if f.fork {
-        return Err(ctx.err(
-            ErrorCode::NoRoute,
-            format!(
-                "хоп цикла через форк {} (свой classic V2 Router) в бандле цикла v1 не собирается — следующая фаза",
-                f.id
-            ),
-        ));
-    }
-    ctx.dex_addr("dex.universal_router", f.id)?;
-    Ok(())
-}
-
-/// Шаги одного участка (подряд идущие хопы одного Universal Router) и их minOut. Участок считается route_calc по
-/// своему фиксированному входу `input_units` (та же математика, что у продажи цикла — каждый пул принимает точный
-/// вход). Первый хоп платит кошелёк суммой input_units, следующие — весь баланс роутера (CONTRACT_BALANCE), последний
-/// отдаёт кошельку. Возвращает: шаги, minOut по хопам. Ошибки: NoRoute (пусто/шаг не исполним целиком), BadResponse
-/// (числа), QuoteMismatch (минимум хопа 0), NotConfigured (exec.dex_slippage_pct), Internal (разные форматы UR).
-fn segment_steps(
-    ctx: &Ctx,
-    legs: &[Leg],
-    input_units: U256,
-) -> GatewayResult<(Vec<Step>, Vec<U256>)> {
-    let input = num::to_decimal(input_units, legs[0].dec_in).ok_or_else(|| {
-        ctx.err(
-            ErrorCode::BadResponse,
-            "вход участка цикла не переводится в число",
-        )
-    })?;
-    // Один формат входов UR на участок (как L3 exec/bundle.rs): plan::build кодирует все хопы форматом первого.
-    let fmt = ur::format(ctx, &legs[0].entry)?;
-    for l in &legs[1..] {
-        if ur::format(ctx, &l.entry)? != fmt {
-            return Err(ctx.err(
-                ErrorCode::Internal,
-                "хопы участка цикла из разных экосистем (формат Universal Router не совпал)",
-            ));
-        }
-    }
-    let path = route_calc::eval(ctx, legs, Side::Sell, input, Decimal::ONE)?;
-    let slip = Decimal::ONE - ctx.dec("exec.dex_slippage_pct")? / Decimal::ONE_HUNDRED;
-    let n = path.hops.len();
-    let mut steps = Vec::with_capacity(n);
-    let mut mins = Vec::with_capacity(n);
-    for (j, h) in path.hops.iter().enumerate() {
-        let keep = Decimal::ONE - h.usable.hook_pct / Decimal::ONE_HUNDRED;
-        let min_out = num::to_units(h.pool_out * keep * slip, h.dec_out)
-            .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "минимум хопа цикла не считается"))?;
-        if min_out.is_zero() {
-            return Err(ctx.err(
-                ErrorCode::QuoteMismatch,
-                format!(
-                    "{}: минимум хопа цикла 0 — обмен без минимума не отправляется",
-                    h.entry.family.title
-                ),
-            ));
-        }
-        let from_wallet = j == 0;
-        let amount_in = if from_wallet {
-            input_units
-        } else {
-            CONTRACT_BALANCE
-        };
-        steps.push(Step {
-            entry: h.entry.clone(),
-            order: Order {
-                token_in: h.token_in,
-                token_out: h.token_out,
-                amount_in,
-                min_out,
-            },
-            from_wallet,
-            to_wallet: j + 1 == n,
-        });
-        mins.push(min_out);
-    }
-    Ok((steps, mins))
-}
-
-/// Собирает бандл цикла. Принимает: ноги цикла в порядке исполнения (base → … → base, из quote/cycle::legs_for_cycle),
-/// пробный/рабочий вход в базовой монете, кошелёк, первый nonce, время блока (секунды), нужны ли все разрешения
-/// (true — не ходить на узел: сборка/тесты; false — только недостающие, узел). Возвращает: бандл и учёт пыли.
-/// Ошибки: NoRoute (пусто, хоп не исполним бандлом v1), QuoteMismatch (минимум 0), NotConfigured (адреса/срок),
-/// BadResponse (числа), Internal (план, форматы), узел (all_approvals=false).
+/// Собирает бандл цикла без границы ядра (минимумы — только по допуску). Принимает и ошибки: как build_floor.
 pub async fn build(
     ctx: &Ctx,
     legs: &[Leg],
@@ -209,6 +95,22 @@ pub async fn build(
     first_nonce: u64,
     now: u64,
     all_approvals: bool,
+) -> GatewayResult<CycleAssembly> {
+    let at = (wallet, first_nonce, now, all_approvals);
+    build_floor(ctx, legs, (input, U256::ZERO), at).await
+}
+
+/// Собирает бандл цикла. Принимает: ноги цикла в порядке исполнения (base → … → base, из quote/cycle::legs_for_cycle
+/// или quote/cycle_legs.rs), (вход в базовой монете, граница выхода последнего хопа в единицах базовой — U256::ZERO без
+/// границы), (кошелёк, первый nonce, время блока в секундах, нужны ли все разрешения: true — не ходить на узел, сборка и
+/// тесты; false — только недостающие, узел). Возвращает: бандл и учёт пыли.
+/// Ошибки: NoRoute (пусто, хоп не исполним бандлом v1), QuoteMismatch (минимум 0), NotConfigured (адреса/срок),
+/// BadResponse (числа), Internal (план, форматы), узел (all_approvals=false).
+pub async fn build_floor(
+    ctx: &Ctx,
+    legs: &[Leg],
+    (input, floor): (Decimal, U256),
+    (wallet, first_nonce, now, all_approvals): (Address, u64, u64, bool),
 ) -> GatewayResult<CycleAssembly> {
     if legs.is_empty() {
         return Err(ctx.err(ErrorCode::NoRoute, "пустой цикл — бандл не собирается"));
@@ -235,8 +137,10 @@ pub async fn build(
             "вход цикла не переводится в единицы базовой монеты",
         )
     })?;
-    for (router, seg) in &segments {
-        let (steps, mins) = segment_steps(ctx, seg, input_units)?;
+    let last = segments.len().saturating_sub(1);
+    for (i, (router, seg)) in segments.iter().enumerate() {
+        let f = if i == last { floor } else { U256::ZERO };
+        let (steps, mins) = cycle_segment::steps(ctx, seg, input_units, f)?;
         // План участка: Permit2 на вход участка (фиксированная сумма) + команды + BALANCE_CHECK на выход участка
         // (последний участок — базовая монета). Разрешения вынимаем в отдельные транзакции бандла.
         let mut p = plan::build(ctx, &steps, wallet, now, all_approvals).await?;

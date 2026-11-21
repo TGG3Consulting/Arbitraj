@@ -5,16 +5,35 @@
     «Проверить подключение», состояние и статистика (отправлено, в блоке, откатов, газ впустую).
     Общие настройки отправки (send.*) — на «Площадках». Нет адаптера DEX — «нет данных» с причиной.
     Живое сообщение send_channel — список перечитывается (lib/dex.svelte.js). Над каналами — очередь кошелька
-    (components/WalletQueue.svelte): состояние и «Снять очередь после ручной проверки».
+    (components/WalletQueue.svelte) — по каждому кошельку DEX (решение 132): состояние и «Снять очередь после ручной
+    проверки». Решение 437 (3): у каждой площадки DEX — блок «Доля чаевых (PGA)» (components/TipShare.svelte).
+    Решение 439: рядом — блок «Условие пулов: статистика» (components/PoolCondStat.svelte).
   Кто вызывает: App.svelte.
-  От чего зависит: lib/dex.svelte.js, components/ChannelCard.svelte, WalletQueue.svelte, NoData.svelte.
+  От чего зависит: lib/dex.svelte.js, components/ChannelCard.svelte, WalletQueue.svelte, TipShare.svelte, PoolCondStat.svelte, NoData.svelte.
   Настройки: channel.* (через ChannelCard).
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { dex, whyNoDex } from '../lib/dex.svelte.js';
   import ChannelCard from '../components/ChannelCard.svelte';
   import WalletQueue from '../components/WalletQueue.svelte';
+  import TipShare from '../components/TipShare.svelte';
+  import PoolCondStat from '../components/PoolCondStat.svelte';
   import NoData from '../components/NoData.svelte';
+  import { get } from '../lib/api.js';
+
+  /** Кошельки DEX (решение 132): у каждого своя очередь. */
+  let wallets = $state([]);
+  $effect(() => {
+    // Уход со страницы — запрос отменяется (AbortController, шторм запросов 10.11.2026).
+    const ac = new AbortController();
+    get('/api/wallets', ac.signal)
+      .then((v) => (wallets = v.wallets))
+      .catch((e) => {
+        if (!e.aborted) wallets = [];
+      });
+    return () => ac.abort();
+  });
 
   /** Площадки, давшие список каналов: [[id, channels]]. */
   const withChannels = $derived(
@@ -34,8 +53,14 @@
 {:else}
   {#each withChannels as [venue, channels] (venue)}
     <h2>{venue}</h2>
-    <WalletQueue {venue} />
-    {#each channels as channel (channel.info.id)}
+    {#each uniqBy(wallets, (w) => w.id) as w (w.id)}
+      <WalletQueue {venue} wallet={w.id} name={w.name} />
+    {:else}
+      <p class="muted">Кошельков DEX нет — очереди появятся на экране «Маппинг кошельков» (#/wallets).</p>
+    {/each}
+    <TipShare {venue} />
+    <PoolCondStat {venue} />
+    {#each uniqBy(channels, (c) => c.info.id) as channel (channel.info.id)}
       <ChannelCard {venue} {channel} />
     {:else}
       <p class="muted">Адаптер сообщил пустой список каналов.</p>

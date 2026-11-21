@@ -18,8 +18,10 @@ use tokio::net::TcpListener;
 use super::guard::{self, Guard};
 use super::state::AppState;
 use super::{
-    check, coins, control, core_api, dex, episodes, first_run, journal, rules, rules_meta, secrets,
-    settings, settings_io, static_ui, venues, wallet_queue, ws,
+    balances, check, coins, control, core_api, delist, deposit_hold, dex, dex_dry, dex_executor,
+    dex_graph, dex_key, episodes, first_run, journal, pool_cond_stat, report, rules, rules_meta,
+    secrets, settings, settings_io, static_ui, tip_share, uncapped, usdt_transfer, venues,
+    wallet_queue, wallets, wallets_dex, windows, ws,
 };
 
 /// Собирает все маршруты API и, если задана папка, раздачу интерфейса — всё под защитой
@@ -37,10 +39,35 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route("/api/rules/meta", get(rules_meta::meta))
         .route("/api/rules/{id}", put(rules::update))
         .route("/api/venues", get(venues::list))
+        .route("/api/balances", get(balances::list))
+        .route("/api/balances/{id}", get(balances::venue))
         .route("/api/venues/kinds", get(venues::kinds))
         .route("/api/venues/{id}/dex-families", get(dex::families))
         .route("/api/venues/{id}/pool-directory", get(dex::directory))
         .route("/api/venues/{id}/dex-cycles", get(dex::cycles))
+        .route("/api/venues/{id}/dex-key-suffix", get(dex_key::suffix))
+        .route("/api/venues/{id}/dex-graph", get(dex_graph::state))
+        .route(
+            "/api/venues/{id}/dex-graph/rebuild",
+            post(dex_graph::rebuild),
+        )
+        .route("/api/venues/{id}/tip-share", get(tip_share::state))
+        .route("/api/venues/{id}/tip-share/reset", post(tip_share::reset))
+        .route(
+            "/api/venues/{id}/pool-cond-stat",
+            get(pool_cond_stat::state),
+        )
+        .route(
+            "/api/venues/{id}/pool-cond-stat/reset",
+            post(pool_cond_stat::reset),
+        )
+        .route("/api/dex/dry-swap", post(dex_dry::dry_swap))
+        .route("/api/dex/dry-cycle", post(dex_dry::dry_cycle))
+        .route("/api/venues/{id}/executor/quote", get(dex_executor::quote))
+        .route(
+            "/api/venues/{id}/executor/deploy",
+            post(dex_executor::deploy),
+        )
         .route("/api/channels/{venue}", get(dex::channels))
         .route("/api/wallet-queue/{venue}", get(wallet_queue::get))
         .route(
@@ -49,11 +76,18 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         )
         .route("/api/coins", get(coins::list))
         .route("/api/coins/recheck", post(coins::recheck))
+        .route("/api/coins/deposit-hold/reset", post(deposit_hold::reset))
+        .route("/api/coins/ticker-splits", get(coins::ticker_splits))
+        .route("/api/coins/names", get(coins::names))
+        .route("/api/coins/{address}", get(coins::one))
         .route("/api/manual", get(control::manual))
         .route("/api/manual/command", post(control::command))
         .route("/api/gas-stats", get(control::gas_stats))
         .route("/api/spreads", get(core_api::spreads))
         .route("/api/candidates", get(core_api::candidates))
+        .route("/api/report/results.xlsx", get(report::results))
+        .route("/api/report/missed.xlsx", get(report::missed))
+        .route("/api/delistings", get(delist::list))
         .route("/api/deals", get(core_api::deals))
         .route("/api/dry", get(core_api::dry))
         .route("/api/transits", get(core_api::transits))
@@ -61,21 +95,56 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
             "/api/control",
             get(core_api::control).post(core_api::set_mode),
         )
+        .route("/api/control/chain/{id}", post(core_api::set_chain))
         .route(
             "/api/control/venue/{id}/resume",
             post(core_api::resume_venue),
         )
         .route(
-            "/api/control/quarantine/{ticker}/release",
+            "/api/control/wallet/{id}/resume",
+            post(core_api::resume_wallet),
+        )
+        .route(
+            "/api/control/quarantine/{id}/release",
             post(core_api::release),
+        )
+        .route(
+            "/api/control/daily-limit/reset",
+            post(core_api::reset_daily_limit),
+        )
+        .route(
+            "/api/control/venue/{id}/daily-limit/reset",
+            post(core_api::reset_venue_daily_limit),
         )
         .route("/api/episodes", get(episodes::list))
         .route("/api/episodes/{id}", get(episodes::get))
         .route("/api/episodes/{id}/file", get(episodes::file))
+        .route("/api/windows", get(windows::list))
+        .route("/api/windows/{id}", get(windows::get))
+        .route("/api/windows/{id}/file", get(windows::file))
+        .route("/api/uncapped", get(uncapped::list))
+        .route("/api/uncapped/summary", get(uncapped::summary))
+        .route("/api/uncapped/deals", get(uncapped::deals))
+        .route("/api/uncapped/deal/{id}", get(uncapped::deal))
+        .route("/api/uncapped/{id}", get(uncapped::get))
         .route("/api/journal", get(journal::list))
+        .route("/api/wallets", get(wallets::list).post(wallets::add))
+        .route("/api/wallets/map", put(wallets::map))
+        .route("/api/wallets/history", get(wallets::history))
+        .route(
+            "/api/wallets/{id}",
+            axum::routing::patch(wallets::rename).delete(wallets::remove),
+        )
+        .route("/api/wallets/{id}/balances", get(wallets_dex::balances))
+        .route("/api/wallets/{id}/executor", put(wallets_dex::set_executor))
+        .route("/api/check/wallet/{id}", post(wallets_dex::check))
         .route("/api/check/telegram", post(check::telegram))
+        .route("/api/check/telegram/{role}", post(check::telegram_role))
+        .route("/api/usdt-transfer/sources", get(usdt_transfer::sources))
+        .route("/api/usdt-transfer/quote", post(usdt_transfer::quote))
         .route("/api/check/venue/{id}", post(check::venue))
         .route("/api/check/channel/{venue}/{id}", post(check::channel))
+        .route("/api/check/executor/{venue}", post(check::executor))
         .route("/api/secrets/known", get(secrets::known))
         .route("/api/secrets/status", get(secrets::status))
         .route("/api/secrets/create", post(secrets::create))
@@ -94,7 +163,11 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         Some(dir) => api.fallback_service(static_ui::service(&dir)),
         None => api,
     };
+    // Решение 145: сжатие ответов (gzip) — интерфейс ходит через SSH-туннель, а ответы большие (/api/coins ~14 МБ,
+    // справочник пулов ~3,4 МБ): без сжатия они занимали туннель десятки секунд, и все остальные запросы ждали за ними.
+    // Сжимается только то, что браузер просит (Accept-Encoding); поток /api/ws не затрагивается.
     app.layer(axum::middleware::from_fn_with_state(guard, guard::check))
+        .layer(tower_http::compression::CompressionLayer::new())
 }
 
 /// Запускает сервер и работает до остановки процесса.

@@ -3,6 +3,8 @@
 //! через Multicall3 (dex.multicall3) или пачкой JSON-RPC.
 //! Кто вызывает: wallet/*, pools/*, check/*, quote/*, exec/*.
 //! От чего зависит: node/rpc.rs, errors.rs, alloy::sol_types.
+//! Решение 325: view и (через node/multicall.rs aggregate) view_many / try_many сначала смотрят в книгу заранее
+//! прочитанных ответов задачи (node/prefetch.rs); книги нет — как раньше.
 //! Настройки: узел — bsc.node_http_url.
 //!
 //! eth_call(transaction, block) → bytes — https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/execute.yaml
@@ -29,6 +31,10 @@ pub async fn view<C: SolCall>(
     block: &str,
 ) -> GatewayResult<C::Return> {
     let data = Bytes::from(call.abi_encode());
+    // Решение 325: ответ, прочитанный заранее на этом блоке (node/prefetch.rs), — без обращения к узлу; нет — как раньше.
+    if let Some(out) = super::prefetch::hit(to, &data, block) {
+        return decode::<C>(&out);
+    }
     let out: Bytes =
         rpc::call(ctx, "eth_call", json!([{ "to": to, "input": data }, block])).await?;
     decode::<C>(&out)

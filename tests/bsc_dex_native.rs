@@ -184,8 +184,9 @@ async fn via_skips_infinity_on_native_side() {
     let cake = alloy_primitives::address!("0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82");
     let p = Parts::new(ctx("via").await);
     let asset = |t: &str, a| Asset {
+        chain: None,
         ticker: t.into(),
-        bsc_contract: Some(a),
+        contract: Some(a),
     };
     p.tokens
         .set(&[asset("BNB", WBNB), asset("USDT", USDT), asset("CAKE", cake)]);

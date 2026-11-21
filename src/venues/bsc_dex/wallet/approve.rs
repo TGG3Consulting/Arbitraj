@@ -4,7 +4,8 @@
 //! вызовы, которых не хватает. Сумма — на сделку или «без ограничения» (dex.approve_unlimited).
 //! Форк (решения 59, 82, фаза 80.9b): classic V2 Router списывает по ОБЫЧНОМУ ERC-20 allowance — fork_all/fork_missing
 //! дают прямой approve(router, сумма) БЕЗ Permit2.
-//! Кто вызывает: exec/plan.rs; котировка — через wallet/allow_cache.rs (read, lacking).
+//! Разрешения исполнителя ArbExecutor (решение 122, часть X) — wallet/approve_executor.rs (тот же прямой approve).
+//! Кто вызывает: exec/plan.rs, exec/executor/{trade, dry}.rs; котировка — через wallet/allow_cache.rs (read, lacking, erc20).
 //! От чего зависит: node/call.rs, node/abi.rs, ctx.rs.
 //! Настройки: dex.approve_unlimited, dex.permit2_expiration_s [bsc_dex].
 //!

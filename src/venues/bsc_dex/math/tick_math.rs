@@ -1,5 +1,6 @@
 //! Файл: venues/bsc_dex/math/tick_math.rs
-//! Что делает: sqrt(1.0001^tick)·2^96 по тику (TickMath.getSqrtRatioAtTick) — точный порт с константами контракта.
+//! Что делает: sqrt(1.0001^tick)·2^96 по тику (TickMath.getSqrtRatioAtTick) — точный порт с константами контракта;
+//! обратное — тик по цене (getTickAtSqrtRatio, решение 223: тик пула после обмена для следующей доли).
 //! Кто вызывает: math/swap_cl.rs.
 //! От чего зависит: alloy-primitives.
 //! Настройки: нет.
@@ -20,10 +21,16 @@ pub fn min_sqrt_ratio() -> U256 {
     U256::from(4_295_128_739u64)
 }
 
-/// MAX_SQRT_RATIO = getSqrtRatioAtTick(MAX_TICK).
+/// MAX_SQRT_RATIO = getSqrtRatioAtTick(MAX_TICK) = 1461446703485210103287273052203988822378723970342 (TickMath.sol).
+/// Решение 410 (t195): число — константой по 64-битным словам (младшее первым), а не разбором десятичной строки на каждый
+/// вызов (49 умножений U256 на каждый обмен swap_cl / swap_elastic / swap_algebra); равенство строке и
+/// getSqrtRatioAtTick(MAX_TICK) — тесты ниже.
+const MAX_SQRT_RATIO: U256 =
+    U256::from_limbs([0x5d95_1d52_6398_8d26, 0xefd1_fc6a_5064_8849, 0xfffd_8963, 0]);
+
+/// MAX_SQRT_RATIO (см. константу). Ошибок нет.
 pub fn max_sqrt_ratio() -> U256 {
-    U256::from_str_radix("1461446703485210103287273052203988822378723970342", 10)
-        .unwrap_or(U256::MAX)
+    MAX_SQRT_RATIO
 }
 
 /// Множители по битам |tick| (128.128), начиная с бита 0x2 (TickMath.sol, строки 26–45).
@@ -79,6 +86,30 @@ pub fn sqrt_ratio_at_tick(tick: i32) -> Option<U256> {
     )
 }
 
+/// getTickAtSqrtRatio: наибольший тик t, у которого getSqrtRatioAtTick(t) ≤ sqrtPriceX96 — так эту функцию определяет
+/// сам контракт (TickMath.sol#L56-L63 того же коммита, что в шапке: «the greatest tick value such that
+/// getRatioAtTick(tick) <= ratio», require MIN_SQRT_RATIO ≤ цена < MAX_SQRT_RATIO); контракт
+/// приближает логарифм и выбирает tickLow/tickHi сверкой через getSqrtRatioAtTick, итог — ровно по определению).
+/// Здесь — двоичный поиск по строго возрастающей getSqrtRatioAtTick (тот же итог по определению, ~20 вызовов).
+/// Решение 223: нужен только для состояния пула после обмена доли (math/swap_cl.rs swap_final), не в горячем расчёте.
+/// Принимает: sqrtPriceX96. Возвращает: тик; None — цена вне [MIN_SQRT_RATIO; MAX_SQRT_RATIO) (контракт: revert 'R').
+pub fn tick_at_sqrt_ratio(sqrt_price: U256) -> Option<i32> {
+    if sqrt_price < min_sqrt_ratio() || sqrt_price >= max_sqrt_ratio() {
+        return None;
+    }
+    // Инвариант: ratio(lo) ≤ sqrt_price < ratio(hi).
+    let (mut lo, mut hi) = (MIN_TICK, MAX_TICK);
+    while hi - lo > 1 {
+        let mid = lo + (hi - lo) / 2;
+        if sqrt_ratio_at_tick(mid)? <= sqrt_price {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    Some(lo)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -96,6 +127,11 @@ mod tests {
             "1461373636630004318706518188784493106690254656249"
         );
         assert_eq!(sqrt_ratio_at_tick(MAX_TICK).unwrap(), max_sqrt_ratio());
+        // Решение 410 (t195): константа по словам — то же число, что строка исходника TickMath.sol.
+        assert_eq!(
+            max_sqrt_ratio(),
+            U256::from_str_radix("1461446703485210103287273052203988822378723970342", 10).unwrap()
+        );
         assert!(sqrt_ratio_at_tick(MIN_TICK - 1).is_none());
         assert!(sqrt_ratio_at_tick(MAX_TICK + 1).is_none());
         // tick 0 → 2^96 (Constants.SQRT_PRICE_1_1 в v4-core test/utils/Constants.sol).
@@ -103,5 +139,30 @@ mod tests {
             sqrt_ratio_at_tick(0).unwrap().to_string(),
             "79228162514264337593543950336"
         );
+    }
+
+    /// getTickAtSqrtRatio — значения из официальных тестов Uniswap v3-core (test/TickMath.spec.ts, #getTickAtSqrtRatio,
+    /// коммит 5ea68a77): края, MIN+1, MAX−1, «ближайшая к MAX» (MAX_SQRT_RATIO − 1 → MAX_TICK − 1); плюс точки тика.
+    #[test]
+    fn tick_at_ratio_official_values() {
+        assert!(tick_at_sqrt_ratio(min_sqrt_ratio() - U256::from(1u8)).is_none());
+        assert!(tick_at_sqrt_ratio(max_sqrt_ratio()).is_none());
+        assert_eq!(tick_at_sqrt_ratio(min_sqrt_ratio()), Some(MIN_TICK));
+        assert_eq!(
+            tick_at_sqrt_ratio(U256::from(4_295_343_490u64)),
+            Some(MIN_TICK + 1)
+        );
+        let max_minus_one = sqrt_ratio_at_tick(MAX_TICK - 1).unwrap();
+        assert_eq!(tick_at_sqrt_ratio(max_minus_one), Some(MAX_TICK - 1));
+        assert_eq!(
+            tick_at_sqrt_ratio(max_sqrt_ratio() - U256::from(1u8)),
+            Some(MAX_TICK - 1)
+        );
+        for t in [-200_000, -60, -1, 0, 1, 59, 123_456] {
+            let r = sqrt_ratio_at_tick(t).unwrap();
+            assert_eq!(tick_at_sqrt_ratio(r), Some(t));
+            assert_eq!(tick_at_sqrt_ratio(r - U256::from(1u8)), Some(t - 1));
+            assert_eq!(tick_at_sqrt_ratio(r + U256::from(1u8)), Some(t));
+        }
     }
 }

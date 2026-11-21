@@ -1,0 +1,1812 @@
+Дословные выдержки официального исходника Balancer V2 (решение 289) с номерами строк файла.
+Источник: github.com/balancer/balancer-deployments@b55dc2b8a46bce8f27aed5a3b03f719f662f860a — build-info (input.sources):
+  vault    — v2/tasks/20210418-vault/build-info/Vault.json (solc 0.7.1, optimizer 1500): = Sourcify exact_match ACSI Vault 56/0xa82f327bbbf0667356d2935c6532d164b06ceced, 45 из 45 файлов совпали;
+  weighted — v2/deprecated/20210418-weighted-pool/build-info/WeightedPoolFactory.json (solc 0.7.1, runs 800): = Sourcify exact_match пулов 0x7ea9f435…, 0x6e5dbc9a… и фабрики 0xb7238020…, 36 из 36;
+  stable   — v2/deprecated/20210624-stable-pool/build-info/StablePoolFactory.json (solc 0.7.1, runs 9999): = Sourcify exact_match пулов 0xa22f3e51…, 0xe901c4e9… и фабрики 0xd2eada8b…, 40 из 40.
+Сравнение — строки исходников Sourcify v2 (fields=sources) против input.sources build-info, в браузере, 15.11.2026.
+
+=== [vault] contracts/vault/interfaces/IVault.sol L235-L240
+235:     event PoolRegistered(bytes32 indexed poolId, address indexed poolAddress, PoolSpecialization specialization);
+236: 
+237:     /**
+238:      * @dev Returns a Pool's contract address and specialization setting.
+239:      */
+240:     function getPool(bytes32 poolId) external view returns (address, PoolSpecialization);
+
+=== [vault] contracts/vault/interfaces/IVault.sol L273-L273
+273:     event TokensRegistered(bytes32 indexed poolId, IERC20[] tokens, address[] assetManagers);
+
+=== [vault] contracts/vault/interfaces/IVault.sol L291-L291
+291:     event TokensDeregistered(bytes32 indexed poolId, IERC20[] tokens);
+
+=== [vault] contracts/vault/interfaces/IVault.sol L334-L341
+334:     function getPoolTokens(bytes32 poolId)
+335:         external
+336:         view
+337:         returns (
+338:             IERC20[] memory tokens,
+339:             uint256[] memory balances,
+340:             uint256 lastChangeBlock
+341:         );
+
+=== [vault] contracts/vault/interfaces/IVault.sol L441-L447
+441:     event PoolBalanceChanged(
+442:         bytes32 indexed poolId,
+443:         address indexed liquidityProvider,
+444:         IERC20[] tokens,
+445:         int256[] deltas,
+446:         uint256[] protocolFeeAmounts
+447:     );
+
+=== [vault] contracts/vault/interfaces/IVault.sol L498-L498
+498:     enum SwapKind { GIVEN_IN, GIVEN_OUT }
+
+=== [vault] contracts/vault/interfaces/IVault.sol L513-L537
+513:     function swap(
+514:         SingleSwap memory singleSwap,
+515:         FundManagement memory funds,
+516:         uint256 limit,
+517:         uint256 deadline
+518:     ) external payable returns (uint256);
+519: 
+520:     /**
+521:      * @dev Data for a single swap executed by `swap`. `amount` is either `amountIn` or `amountOut` depending on
+522:      * the `kind` value.
+523:      *
+524:      * `assetIn` and `assetOut` are either token addresses, or the IAsset sentinel value for ETH (the zero address).
+525:      * Note that Pools never interact with ETH directly: it will be wrapped to or unwrapped from WETH by the Vault.
+526:      *
+527:      * The `userData` field is ignored by the Vault, but forwarded to the Pool in the `onSwap` hook, and may be
+528:      * used to extend swap behavior.
+529:      */
+530:     struct SingleSwap {
+531:         bytes32 poolId;
+532:         SwapKind kind;
+533:         IAsset assetIn;
+534:         IAsset assetOut;
+535:         uint256 amount;
+536:         bytes userData;
+537:     }
+
+=== [vault] contracts/vault/interfaces/IVault.sol L587-L604
+587:     struct BatchSwapStep {
+588:         bytes32 poolId;
+589:         uint256 assetInIndex;
+590:         uint256 assetOutIndex;
+591:         uint256 amount;
+592:         bytes userData;
+593:     }
+594: 
+595:     /**
+596:      * @dev Emitted for each individual swap performed by `swap` or `batchSwap`.
+597:      */
+598:     event Swap(
+599:         bytes32 indexed poolId,
+600:         IERC20 indexed tokenIn,
+601:         IERC20 indexed tokenOut,
+602:         uint256 amountIn,
+603:         uint256 amountOut
+604:     );
+
+=== [vault] contracts/vault/interfaces/IVault.sol L623-L628
+623:     struct FundManagement {
+624:         address sender;
+625:         bool fromInternalBalance;
+626:         address payable recipient;
+627:         bool toInternalBalance;
+628:     }
+
+=== [vault] contracts/vault/interfaces/IVault.sol L645-L650
+645:     function queryBatchSwap(
+646:         SwapKind kind,
+647:         BatchSwapStep[] memory swaps,
+648:         IAsset[] memory assets,
+649:         FundManagement memory funds
+650:     ) external returns (int256[] memory assetDeltas);
+
+=== [vault] contracts/vault/interfaces/IVault.sol L722-L728
+722:     event PoolBalanceManaged(
+723:         bytes32 indexed poolId,
+724:         address indexed assetManager,
+725:         IERC20 indexed token,
+726:         int256 cashDelta,
+727:         int256 managedDelta
+728:     );
+
+=== [vault] contracts/vault/PoolRegistry.sol L67-L97
+67:     function registerPool(PoolSpecialization specialization)
+68:         external
+69:         override
+70:         nonReentrant
+71:         whenNotPaused
+72:         returns (bytes32)
+73:     {
+74:         // Each Pool is assigned a unique ID based on an incrementing nonce. This assumes there will never be more than
+75:         // 2**80 Pools, and the nonce will not overflow.
+76: 
+77:         bytes32 poolId = _toPoolId(msg.sender, specialization, uint80(_nextPoolNonce));
+78: 
+79:         _require(!_isPoolRegistered[poolId], Errors.INVALID_POOL_ID); // Should never happen as Pool IDs are unique.
+80:         _isPoolRegistered[poolId] = true;
+81: 
+82:         _nextPoolNonce += 1;
+83: 
+84:         // Note that msg.sender is the pool's contract
+85:         emit PoolRegistered(poolId, msg.sender, specialization);
+86:         return poolId;
+87:     }
+88: 
+89:     function getPool(bytes32 poolId)
+90:         external
+91:         view
+92:         override
+93:         withRegisteredPool(poolId)
+94:         returns (address, PoolSpecialization)
+95:     {
+96:         return (_getPoolAddress(poolId), _getPoolSpecialization(poolId));
+97:     }
+
+=== [vault] contracts/vault/PoolRegistry.sol L115-L138
+115:     function _toPoolId(
+116:         address pool,
+117:         PoolSpecialization specialization,
+118:         uint80 nonce
+119:     ) internal pure returns (bytes32) {
+120:         bytes32 serialized;
+121: 
+122:         serialized |= bytes32(uint256(nonce));
+123:         serialized |= bytes32(uint256(specialization)) << (10 * 8);
+124:         serialized |= bytes32(uint256(pool)) << (12 * 8);
+125: 
+126:         return serialized;
+127:     }
+128: 
+129:     /**
+130:      * @dev Returns the address of a Pool's contract.
+131:      *
+132:      * Due to how Pool IDs are created, this is done with no storage accesses and costs little gas.
+133:      */
+134:     function _getPoolAddress(bytes32 poolId) internal pure returns (address) {
+135:         // 12 byte logical shift left to remove the nonce and specialization setting. We don't need to mask,
+136:         // since the logical shift already sets the upper bits to zero.
+137:         return address(uint256(poolId) >> (12 * 8));
+138:     }
+
+=== [vault] contracts/vault/Swaps.sol L56-L104
+56:     function swap(
+57:         SingleSwap memory singleSwap,
+58:         FundManagement memory funds,
+59:         uint256 limit,
+60:         uint256 deadline
+61:     )
+62:         external
+63:         payable
+64:         override
+65:         nonReentrant
+66:         whenNotPaused
+67:         authenticateFor(funds.sender)
+68:         returns (uint256 amountCalculated)
+69:     {
+70:         // The deadline is timestamp-based: it should not be relied upon for sub-minute accuracy.
+71:         // solhint-disable-next-line not-rely-on-time
+72:         _require(block.timestamp <= deadline, Errors.SWAP_DEADLINE);
+73: 
+74:         // This revert reason is for consistency with `batchSwap`: an equivalent `swap` performed using that function
+75:         // would result in this error.
+76:         _require(singleSwap.amount > 0, Errors.UNKNOWN_AMOUNT_IN_FIRST_SWAP);
+77: 
+78:         IERC20 tokenIn = _translateToIERC20(singleSwap.assetIn);
+79:         IERC20 tokenOut = _translateToIERC20(singleSwap.assetOut);
+80:         _require(tokenIn != tokenOut, Errors.CANNOT_SWAP_SAME_TOKEN);
+81: 
+82:         // Initializing each struct field one-by-one uses less gas than setting all at once.
+83:         IPoolSwapStructs.SwapRequest memory poolRequest;
+84:         poolRequest.poolId = singleSwap.poolId;
+85:         poolRequest.kind = singleSwap.kind;
+86:         poolRequest.tokenIn = tokenIn;
+87:         poolRequest.tokenOut = tokenOut;
+88:         poolRequest.amount = singleSwap.amount;
+89:         poolRequest.userData = singleSwap.userData;
+90:         poolRequest.from = funds.sender;
+91:         poolRequest.to = funds.recipient;
+92:         // The lastChangeBlock field is left uninitialized.
+93: 
+94:         uint256 amountIn;
+95:         uint256 amountOut;
+96: 
+97:         (amountCalculated, amountIn, amountOut) = _swapWithPool(poolRequest);
+98:         _require(singleSwap.kind == SwapKind.GIVEN_IN ? amountOut >= limit : amountIn <= limit, Errors.SWAP_LIMIT);
+99: 
+100:         _receiveAsset(singleSwap.assetIn, amountIn, funds.sender, funds.fromInternalBalance);
+101:         _sendAsset(singleSwap.assetOut, amountOut, funds.recipient, funds.toInternalBalance);
+102: 
+103:         // If the asset in is ETH, then `amountIn` ETH was wrapped into WETH.
+104:         _handleRemainingEth(_isETH(singleSwap.assetIn) ? amountIn : 0);
+
+=== [vault] contracts/vault/Swaps.sol L275-L298
+275:     function _swapWithPool(IPoolSwapStructs.SwapRequest memory request)
+276:         private
+277:         returns (
+278:             uint256 amountCalculated,
+279:             uint256 amountIn,
+280:             uint256 amountOut
+281:         )
+282:     {
+283:         // Get the calculated amount from the Pool and update its balances
+284:         address pool = _getPoolAddress(request.poolId);
+285:         PoolSpecialization specialization = _getPoolSpecialization(request.poolId);
+286: 
+287:         if (specialization == PoolSpecialization.TWO_TOKEN) {
+288:             amountCalculated = _processTwoTokenPoolSwapRequest(request, IMinimalSwapInfoPool(pool));
+289:         } else if (specialization == PoolSpecialization.MINIMAL_SWAP_INFO) {
+290:             amountCalculated = _processMinimalSwapInfoPoolSwapRequest(request, IMinimalSwapInfoPool(pool));
+291:         } else {
+292:             // PoolSpecialization.GENERAL
+293:             amountCalculated = _processGeneralPoolSwapRequest(request, IGeneralPool(pool));
+294:         }
+295: 
+296:         (amountIn, amountOut) = _getAmounts(request.kind, request.amount, amountCalculated);
+297:         emit Swap(request.poolId, request.tokenIn, request.tokenOut, amountIn, amountOut);
+298:     }
+
+=== [vault] contracts/vault/Swaps.sol L365-L388
+365:     function _callMinimalSwapInfoPoolOnSwapHook(
+366:         IPoolSwapStructs.SwapRequest memory request,
+367:         IMinimalSwapInfoPool pool,
+368:         bytes32 tokenInBalance,
+369:         bytes32 tokenOutBalance
+370:     )
+371:         internal
+372:         returns (
+373:             bytes32 newTokenInBalance,
+374:             bytes32 newTokenOutBalance,
+375:             uint256 amountCalculated
+376:         )
+377:     {
+378:         uint256 tokenInTotal = tokenInBalance.total();
+379:         uint256 tokenOutTotal = tokenOutBalance.total();
+380:         request.lastChangeBlock = Math.max(tokenInBalance.lastChangeBlock(), tokenOutBalance.lastChangeBlock());
+381: 
+382:         // Perform the swap request callback, and compute the new balances for 'token in' and 'token out' after the swap
+383:         amountCalculated = pool.onSwap(request, tokenInTotal, tokenOutTotal);
+384:         (uint256 amountIn, uint256 amountOut) = _getAmounts(request.kind, request.amount, amountCalculated);
+385: 
+386:         newTokenInBalance = tokenInBalance.increaseCash(amountIn);
+387:         newTokenOutBalance = tokenOutBalance.decreaseCash(amountOut);
+388:     }
+
+=== [vault] contracts/vault/Swaps.sol L390-L430
+390:     function _processGeneralPoolSwapRequest(IPoolSwapStructs.SwapRequest memory request, IGeneralPool pool)
+391:         private
+392:         returns (uint256 amountCalculated)
+393:     {
+394:         bytes32 tokenInBalance;
+395:         bytes32 tokenOutBalance;
+396: 
+397:         // We access both token indexes without checking existence, because we will do it manually immediately after.
+398:         EnumerableMap.IERC20ToBytes32Map storage poolBalances = _generalPoolsBalances[request.poolId];
+399:         uint256 indexIn = poolBalances.unchecked_indexOf(request.tokenIn);
+400:         uint256 indexOut = poolBalances.unchecked_indexOf(request.tokenOut);
+401: 
+402:         if (indexIn == 0 || indexOut == 0) {
+403:             // The tokens might not be registered because the Pool itself is not registered. We check this to provide a
+404:             // more accurate revert reason.
+405:             _ensureRegisteredPool(request.poolId);
+406:             _revert(Errors.TOKEN_NOT_REGISTERED);
+407:         }
+408: 
+409:         // EnumerableMap stores indices *plus one* to use the zero index as a sentinel value - because these are valid,
+410:         // we can undo this.
+411:         indexIn -= 1;
+412:         indexOut -= 1;
+413: 
+414:         uint256 tokenAmount = poolBalances.length();
+415:         uint256[] memory currentBalances = new uint256[](tokenAmount);
+416: 
+417:         request.lastChangeBlock = 0;
+418:         for (uint256 i = 0; i < tokenAmount; i++) {
+419:             // Because the iteration is bounded by `tokenAmount`, and no tokens are registered or deregistered here, we
+420:             // know `i` is a valid token index and can use `unchecked_valueAt` to save storage reads.
+421:             bytes32 balance = poolBalances.unchecked_valueAt(i);
+422: 
+423:             currentBalances[i] = balance.total();
+424:             request.lastChangeBlock = Math.max(request.lastChangeBlock, balance.lastChangeBlock());
+425: 
+426:             if (i == indexIn) {
+427:                 tokenInBalance = balance;
+428:             } else if (i == indexOut) {
+429:                 tokenOutBalance = balance;
+430:             }
+
+=== [vault] contracts/vault/Swaps.sol L446-L535
+446:     function queryBatchSwap(
+447:         SwapKind kind,
+448:         BatchSwapStep[] memory swaps,
+449:         IAsset[] memory assets,
+450:         FundManagement memory funds
+451:     ) external override returns (int256[] memory) {
+452:         // In order to accurately 'simulate' swaps, this function actually does perform the swaps, including calling the
+453:         // Pool hooks and updating balances in storage. However, once it computes the final Vault Deltas, it
+454:         // reverts unconditionally, returning this array as the revert data.
+455:         //
+456:         // By wrapping this reverting call, we can decode the deltas 'returned' and return them as a normal Solidity
+457:         // function would. The only caveat is the function becomes non-view, but off-chain clients can still call it
+458:         // via eth_call to get the expected result.
+459:         //
+460:         // This technique was inspired by the work from the Gnosis team in the Gnosis Safe contract:
+461:         // https://github.com/gnosis/safe-contracts/blob/v1.2.0/contracts/GnosisSafe.sol#L265
+462:         //
+463:         // Most of this function is implemented using inline assembly, as the actual work it needs to do is not
+464:         // significant, and Solidity is not particularly well-suited to generate this behavior, resulting in a large
+465:         // amount of generated bytecode.
+466: 
+467:         if (msg.sender != address(this)) {
+468:             // We perform an external call to ourselves, forwarding the same calldata. In this call, the else clause of
+469:             // the preceding if statement will be executed instead.
+470: 
+471:             // solhint-disable-next-line avoid-low-level-calls
+472:             (bool success, ) = address(this).call(msg.data);
+473: 
+474:             // solhint-disable-next-line no-inline-assembly
+475:             assembly {
+476:                 // This call should always revert to decode the actual asset deltas from the revert reason
+477:                 switch success
+478:                     case 0 {
+479:                         // Note we are manually writing the memory slot 0. We can safely overwrite whatever is
+480:                         // stored there as we take full control of the execution and then immediately return.
+481: 
+482:                         // We copy the first 4 bytes to check if it matches with the expected signature, otherwise
+483:                         // there was another revert reason and we should forward it.
+484:                         returndatacopy(0, 0, 0x04)
+485:                         let error := and(mload(0), 0xffffffff00000000000000000000000000000000000000000000000000000000)
+486: 
+487:                         // If the first 4 bytes don't match with the expected signature, we forward the revert reason.
+488:                         if eq(eq(error, 0xfa61cc1200000000000000000000000000000000000000000000000000000000), 0) {
+489:                             returndatacopy(0, 0, returndatasize())
+490:                             revert(0, returndatasize())
+491:                         }
+492: 
+493:                         // The returndata contains the signature, followed by the raw memory representation of an array:
+494:                         // length + data. We need to return an ABI-encoded representation of this array.
+495:                         // An ABI-encoded array contains an additional field when compared to its raw memory
+496:                         // representation: an offset to the location of the length. The offset itself is 32 bytes long,
+497:                         // so the smallest value we  can use is 32 for the data to be located immediately after it.
+498:                         mstore(0, 32)
+499: 
+500:                         // We now copy the raw memory array from returndata into memory. Since the offset takes up 32
+501:                         // bytes, we start copying at address 0x20. We also get rid of the error signature, which takes
+502:                         // the first four bytes of returndata.
+503:                         let size := sub(returndatasize(), 0x04)
+504:                         returndatacopy(0x20, 0x04, size)
+505: 
+506:                         // We finally return the ABI-encoded array, which has a total length equal to that of the array
+507:                         // (returndata), plus the 32 bytes for the offset.
+508:                         return(0, add(size, 32))
+509:                     }
+510:                     default {
+511:                         // This call should always revert, but we fail nonetheless if that didn't happen
+512:                         invalid()
+513:                     }
+514:             }
+515:         } else {
+516:             int256[] memory deltas = _swapWithPools(swaps, assets, funds, kind);
+517: 
+518:             // solhint-disable-next-line no-inline-assembly
+519:             assembly {
+520:                 // We will return a raw representation of the array in memory, which is composed of a 32 byte length,
+521:                 // followed by the 32 byte int256 values. Because revert expects a size in bytes, we multiply the array
+522:                 // length (stored at `deltas`) by 32.
+523:                 let size := mul(mload(deltas), 32)
+524: 
+525:                 // We send one extra value for the error signature "QueryError(int256[])" which is 0xfa61cc12.
+526:                 // We store it in the previous slot to the `deltas` array. We know there will be at least one available
+527:                 // slot due to how the memory scratch space works.
+528:                 // We can safely overwrite whatever is stored in this slot as we will revert immediately after that.
+529:                 mstore(sub(deltas, 0x20), 0x00000000000000000000000000000000000000000000000000000000fa61cc12)
+530:                 let start := sub(deltas, 0x04)
+531: 
+532:                 // When copying from `deltas` into returndata, we copy an additional 36 bytes to also return the array's
+533:                 // length and the error signature.
+534:                 revert(start, add(size, 36))
+535:             }
+
+=== [vault] contracts/vault/AssetTransfersHandler.sol L44-L79
+44:     function _receiveAsset(
+45:         IAsset asset,
+46:         uint256 amount,
+47:         address sender,
+48:         bool fromInternalBalance
+49:     ) internal {
+50:         if (amount == 0) {
+51:             return;
+52:         }
+53: 
+54:         if (_isETH(asset)) {
+55:             _require(!fromInternalBalance, Errors.INVALID_ETH_INTERNAL_BALANCE);
+56: 
+57:             // The ETH amount to receive is deposited into the WETH contract, which will in turn mint WETH for
+58:             // the Vault at a 1:1 ratio.
+59: 
+60:             // A check for this condition is also introduced by the compiler, but this one provides a revert reason.
+61:             // Note we're checking for the Vault's total balance, *not* ETH sent in this transaction.
+62:             _require(address(this).balance >= amount, Errors.INSUFFICIENT_ETH);
+63:             _WETH().deposit{ value: amount }();
+64:         } else {
+65:             IERC20 token = _asIERC20(asset);
+66: 
+67:             if (fromInternalBalance) {
+68:                 // We take as many tokens from Internal Balance as possible: any remaining amounts will be transferred.
+69:                 uint256 deductedBalance = _decreaseInternalBalance(sender, token, amount, true);
+70:                 // Because `deductedBalance` will be always the lesser of the current internal balance
+71:                 // and the amount to decrease, it is safe to perform unchecked arithmetic.
+72:                 amount -= deductedBalance;
+73:             }
+74: 
+75:             if (amount > 0) {
+76:                 token.safeTransferFrom(sender, address(this), amount);
+77:             }
+78:         }
+79:     }
+
+=== [weighted] contracts/lib/math/FixedPoint.sol L22-L136
+22: library FixedPoint {
+23:     uint256 internal constant ONE = 1e18; // 18 decimal places
+24:     uint256 internal constant MAX_POW_RELATIVE_ERROR = 10000; // 10^(-14)
+25: 
+26:     // Minimum base for the power function when the exponent is 'free' (larger than ONE).
+27:     uint256 internal constant MIN_POW_BASE_FREE_EXPONENT = 0.7e18;
+28: 
+29:     function add(uint256 a, uint256 b) internal pure returns (uint256) {
+30:         // Fixed Point addition is the same as regular checked addition
+31: 
+32:         uint256 c = a + b;
+33:         _require(c >= a, Errors.ADD_OVERFLOW);
+34:         return c;
+35:     }
+36: 
+37:     function sub(uint256 a, uint256 b) internal pure returns (uint256) {
+38:         // Fixed Point addition is the same as regular checked addition
+39: 
+40:         _require(b <= a, Errors.SUB_OVERFLOW);
+41:         uint256 c = a - b;
+42:         return c;
+43:     }
+44: 
+45:     function mulDown(uint256 a, uint256 b) internal pure returns (uint256) {
+46:         uint256 product = a * b;
+47:         _require(a == 0 || product / a == b, Errors.MUL_OVERFLOW);
+48: 
+49:         return product / ONE;
+50:     }
+51: 
+52:     function mulUp(uint256 a, uint256 b) internal pure returns (uint256) {
+53:         uint256 product = a * b;
+54:         _require(a == 0 || product / a == b, Errors.MUL_OVERFLOW);
+55: 
+56:         if (product == 0) {
+57:             return 0;
+58:         } else {
+59:             // The traditional divUp formula is:
+60:             // divUp(x, y) := (x + y - 1) / y
+61:             // To avoid intermediate overflow in the addition, we distribute the division and get:
+62:             // divUp(x, y) := (x - 1) / y + 1
+63:             // Note that this requires x != 0, which we already tested for.
+64: 
+65:             return ((product - 1) / ONE) + 1;
+66:         }
+67:     }
+68: 
+69:     function divDown(uint256 a, uint256 b) internal pure returns (uint256) {
+70:         _require(b != 0, Errors.ZERO_DIVISION);
+71: 
+72:         if (a == 0) {
+73:             return 0;
+74:         } else {
+75:             uint256 aInflated = a * ONE;
+76:             _require(aInflated / a == ONE, Errors.DIV_INTERNAL); // mul overflow
+77: 
+78:             return aInflated / b;
+79:         }
+80:     }
+81: 
+82:     function divUp(uint256 a, uint256 b) internal pure returns (uint256) {
+83:         _require(b != 0, Errors.ZERO_DIVISION);
+84: 
+85:         if (a == 0) {
+86:             return 0;
+87:         } else {
+88:             uint256 aInflated = a * ONE;
+89:             _require(aInflated / a == ONE, Errors.DIV_INTERNAL); // mul overflow
+90: 
+91:             // The traditional divUp formula is:
+92:             // divUp(x, y) := (x + y - 1) / y
+93:             // To avoid intermediate overflow in the addition, we distribute the division and get:
+94:             // divUp(x, y) := (x - 1) / y + 1
+95:             // Note that this requires x != 0, which we already tested for.
+96: 
+97:             return ((aInflated - 1) / b) + 1;
+98:         }
+99:     }
+100: 
+101:     /**
+102:      * @dev Returns x^y, assuming both are fixed point numbers, rounding down. The result is guaranteed to not be above
+103:      * the true value (that is, the error function expected - actual is always positive).
+104:      */
+105:     function powDown(uint256 x, uint256 y) internal pure returns (uint256) {
+106:         uint256 raw = LogExpMath.pow(x, y);
+107:         uint256 maxError = add(mulUp(raw, MAX_POW_RELATIVE_ERROR), 1);
+108: 
+109:         if (raw < maxError) {
+110:             return 0;
+111:         } else {
+112:             return sub(raw, maxError);
+113:         }
+114:     }
+115: 
+116:     /**
+117:      * @dev Returns x^y, assuming both are fixed point numbers, rounding up. The result is guaranteed to not be below
+118:      * the true value (that is, the error function expected - actual is always negative).
+119:      */
+120:     function powUp(uint256 x, uint256 y) internal pure returns (uint256) {
+121:         uint256 raw = LogExpMath.pow(x, y);
+122:         uint256 maxError = add(mulUp(raw, MAX_POW_RELATIVE_ERROR), 1);
+123: 
+124:         return add(raw, maxError);
+125:     }
+126: 
+127:     /**
+128:      * @dev Returns the complement of a value (1 - x), capped to 0 if x is larger than 1.
+129:      *
+130:      * Useful when computing the complement for values with some level of relative error, as it strips this error and
+131:      * prevents intermediate negative values.
+132:      */
+133:     function complement(uint256 x) internal pure returns (uint256) {
+134:         return (x < ONE) ? (ONE - x) : 0;
+135:     }
+136: }
+
+=== [weighted] contracts/lib/math/LogExpMath.sol L31-L139
+31: library LogExpMath {
+32:     // All fixed point multiplications and divisions are inlined. This means we need to divide by ONE when multiplying
+33:     // two numbers, and multiply by ONE when dividing them.
+34: 
+35:     // All arguments and return values are 18 decimal fixed point numbers.
+36:     int256 constant ONE_18 = 1e18;
+37: 
+38:     // Internally, intermediate values are computed with higher precision as 20 decimal fixed point numbers, and in the
+39:     // case of ln36, 36 decimals.
+40:     int256 constant ONE_20 = 1e20;
+41:     int256 constant ONE_36 = 1e36;
+42: 
+43:     // The domain of natural exponentiation is bound by the word size and number of decimals used.
+44:     //
+45:     // Because internally the result will be stored using 20 decimals, the largest possible result is
+46:     // (2^255 - 1) / 10^20, which makes the largest exponent ln((2^255 - 1) / 10^20) = 130.700829182905140221.
+47:     // The smallest possible result is 10^(-18), which makes largest negative argument
+48:     // ln(10^(-18)) = -41.446531673892822312.
+49:     // We use 130.0 and -41.0 to have some safety margin.
+50:     int256 constant MAX_NATURAL_EXPONENT = 130e18;
+51:     int256 constant MIN_NATURAL_EXPONENT = -41e18;
+52: 
+53:     // Bounds for ln_36's argument. Both ln(0.9) and ln(1.1) can be represented with 36 decimal places in a fixed point
+54:     // 256 bit integer.
+55:     int256 constant LN_36_LOWER_BOUND = ONE_18 - 1e17;
+56:     int256 constant LN_36_UPPER_BOUND = ONE_18 + 1e17;
+57: 
+58:     uint256 constant MILD_EXPONENT_BOUND = 2**254 / uint256(ONE_20);
+59: 
+60:     // 18 decimal constants
+61:     int256 constant x0 = 128000000000000000000; // 2ˆ7
+62:     int256 constant a0 = 38877084059945950922200000000000000000000000000000000000; // eˆ(x0) (no decimals)
+63:     int256 constant x1 = 64000000000000000000; // 2ˆ6
+64:     int256 constant a1 = 6235149080811616882910000000; // eˆ(x1) (no decimals)
+65: 
+66:     // 20 decimal constants
+67:     int256 constant x2 = 3200000000000000000000; // 2ˆ5
+68:     int256 constant a2 = 7896296018268069516100000000000000; // eˆ(x2)
+69:     int256 constant x3 = 1600000000000000000000; // 2ˆ4
+70:     int256 constant a3 = 888611052050787263676000000; // eˆ(x3)
+71:     int256 constant x4 = 800000000000000000000; // 2ˆ3
+72:     int256 constant a4 = 298095798704172827474000; // eˆ(x4)
+73:     int256 constant x5 = 400000000000000000000; // 2ˆ2
+74:     int256 constant a5 = 5459815003314423907810; // eˆ(x5)
+75:     int256 constant x6 = 200000000000000000000; // 2ˆ1
+76:     int256 constant a6 = 738905609893065022723; // eˆ(x6)
+77:     int256 constant x7 = 100000000000000000000; // 2ˆ0
+78:     int256 constant a7 = 271828182845904523536; // eˆ(x7)
+79:     int256 constant x8 = 50000000000000000000; // 2ˆ-1
+80:     int256 constant a8 = 164872127070012814685; // eˆ(x8)
+81:     int256 constant x9 = 25000000000000000000; // 2ˆ-2
+82:     int256 constant a9 = 128402541668774148407; // eˆ(x9)
+83:     int256 constant x10 = 12500000000000000000; // 2ˆ-3
+84:     int256 constant a10 = 113314845306682631683; // eˆ(x10)
+85:     int256 constant x11 = 6250000000000000000; // 2ˆ-4
+86:     int256 constant a11 = 106449445891785942956; // eˆ(x11)
+87: 
+88:     /**
+89:      * @dev Exponentiation (x^y) with unsigned 18 decimal fixed point base and exponent.
+90:      *
+91:      * Reverts if ln(x) * y is smaller than `MIN_NATURAL_EXPONENT`, or larger than `MAX_NATURAL_EXPONENT`.
+92:      */
+93:     function pow(uint256 x, uint256 y) internal pure returns (uint256) {
+94:         if (y == 0) {
+95:             // We solve the 0^0 indetermination by making it equal one.
+96:             return uint256(ONE_18);
+97:         }
+98: 
+99:         if (x == 0) {
+100:             return 0;
+101:         }
+102: 
+103:         // Instead of computing x^y directly, we instead rely on the properties of logarithms and exponentiation to
+104:         // arrive at that result. In particular, exp(ln(x)) = x, and ln(x^y) = y * ln(x). This means
+105:         // x^y = exp(y * ln(x)).
+106: 
+107:         // The ln function takes a signed value, so we need to make sure x fits in the signed 256 bit range.
+108:         _require(x < 2**255, Errors.X_OUT_OF_BOUNDS);
+109:         int256 x_int256 = int256(x);
+110: 
+111:         // We will compute y * ln(x) in a single step. Depending on the value of x, we can either use ln or ln_36. In
+112:         // both cases, we leave the division by ONE_18 (due to fixed point multiplication) to the end.
+113: 
+114:         // This prevents y * ln(x) from overflowing, and at the same time guarantees y fits in the signed 256 bit range.
+115:         _require(y < MILD_EXPONENT_BOUND, Errors.Y_OUT_OF_BOUNDS);
+116:         int256 y_int256 = int256(y);
+117: 
+118:         int256 logx_times_y;
+119:         if (LN_36_LOWER_BOUND < x_int256 && x_int256 < LN_36_UPPER_BOUND) {
+120:             int256 ln_36_x = ln_36(x_int256);
+121: 
+122:             // ln_36_x has 36 decimal places, so multiplying by y_int256 isn't as straightforward, since we can't just
+123:             // bring y_int256 to 36 decimal places, as it might overflow. Instead, we perform two 18 decimal
+124:             // multiplications and add the results: one with the first 18 decimals of ln_36_x, and one with the
+125:             // (downscaled) last 18 decimals.
+126:             logx_times_y = ((ln_36_x / ONE_18) * y_int256 + ((ln_36_x % ONE_18) * y_int256) / ONE_18);
+127:         } else {
+128:             logx_times_y = ln(x_int256) * y_int256;
+129:         }
+130:         logx_times_y /= ONE_18;
+131: 
+132:         // Finally, we compute exp(y * ln(x)) to arrive at x^y
+133:         _require(
+134:             MIN_NATURAL_EXPONENT <= logx_times_y && logx_times_y <= MAX_NATURAL_EXPONENT,
+135:             Errors.PRODUCT_OUT_OF_BOUNDS
+136:         );
+137: 
+138:         return uint256(exp(logx_times_y));
+139:     }
+
+=== [weighted] contracts/lib/math/LogExpMath.sol L146-L281
+146:     function exp(int256 x) internal pure returns (int256) {
+147:         _require(x >= MIN_NATURAL_EXPONENT && x <= MAX_NATURAL_EXPONENT, Errors.INVALID_EXPONENT);
+148: 
+149:         if (x < 0) {
+150:             // We only handle positive exponents: e^(-x) is computed as 1 / e^x. We can safely make x positive since it
+151:             // fits in the signed 256 bit range (as it is larger than MIN_NATURAL_EXPONENT).
+152:             // Fixed point division requires multiplying by ONE_18.
+153:             return ((ONE_18 * ONE_18) / exp(-x));
+154:         }
+155: 
+156:         // First, we use the fact that e^(x+y) = e^x * e^y to decompose x into a sum of powers of two, which we call x_n,
+157:         // where x_n == 2^(7 - n), and e^x_n = a_n has been precomputed. We choose the first x_n, x0, to equal 2^7
+158:         // because all larger powers are larger than MAX_NATURAL_EXPONENT, and therefore not present in the
+159:         // decomposition.
+160:         // At the end of this process we will have the product of all e^x_n = a_n that apply, and the remainder of this
+161:         // decomposition, which will be lower than the smallest x_n.
+162:         // exp(x) = k_0 * a_0 * k_1 * a_1 * ... + k_n * a_n * exp(remainder), where each k_n equals either 0 or 1.
+163:         // We mutate x by subtracting x_n, making it the remainder of the decomposition.
+164: 
+165:         // The first two a_n (e^(2^7) and e^(2^6)) are too large if stored as 18 decimal numbers, and could cause
+166:         // intermediate overflows. Instead we store them as plain integers, with 0 decimals.
+167:         // Additionally, x0 + x1 is larger than MAX_NATURAL_EXPONENT, which means they will not both be present in the
+168:         // decomposition.
+169: 
+170:         // For each x_n, we test if that term is present in the decomposition (if x is larger than it), and if so deduct
+171:         // it and compute the accumulated product.
+172: 
+173:         int256 firstAN;
+174:         if (x >= x0) {
+175:             x -= x0;
+176:             firstAN = a0;
+177:         } else if (x >= x1) {
+178:             x -= x1;
+179:             firstAN = a1;
+180:         } else {
+181:             firstAN = 1; // One with no decimal places
+182:         }
+183: 
+184:         // We now transform x into a 20 decimal fixed point number, to have enhanced precision when computing the
+185:         // smaller terms.
+186:         x *= 100;
+187: 
+188:         // `product` is the accumulated product of all a_n (except a0 and a1), which starts at 20 decimal fixed point
+189:         // one. Recall that fixed point multiplication requires dividing by ONE_20.
+190:         int256 product = ONE_20;
+191: 
+192:         if (x >= x2) {
+193:             x -= x2;
+194:             product = (product * a2) / ONE_20;
+195:         }
+196:         if (x >= x3) {
+197:             x -= x3;
+198:             product = (product * a3) / ONE_20;
+199:         }
+200:         if (x >= x4) {
+201:             x -= x4;
+202:             product = (product * a4) / ONE_20;
+203:         }
+204:         if (x >= x5) {
+205:             x -= x5;
+206:             product = (product * a5) / ONE_20;
+207:         }
+208:         if (x >= x6) {
+209:             x -= x6;
+210:             product = (product * a6) / ONE_20;
+211:         }
+212:         if (x >= x7) {
+213:             x -= x7;
+214:             product = (product * a7) / ONE_20;
+215:         }
+216:         if (x >= x8) {
+217:             x -= x8;
+218:             product = (product * a8) / ONE_20;
+219:         }
+220:         if (x >= x9) {
+221:             x -= x9;
+222:             product = (product * a9) / ONE_20;
+223:         }
+224: 
+225:         // x10 and x11 are unnecessary here since we have high enough precision already.
+226: 
+227:         // Now we need to compute e^x, where x is small (in particular, it is smaller than x9). We use the Taylor series
+228:         // expansion for e^x: 1 + x + (x^2 / 2!) + (x^3 / 3!) + ... + (x^n / n!).
+229: 
+230:         int256 seriesSum = ONE_20; // The initial one in the sum, with 20 decimal places.
+231:         int256 term; // Each term in the sum, where the nth term is (x^n / n!).
+232: 
+233:         // The first term is simply x.
+234:         term = x;
+235:         seriesSum += term;
+236: 
+237:         // Each term (x^n / n!) equals the previous one times x, divided by n. Since x is a fixed point number,
+238:         // multiplying by it requires dividing by ONE_20, but dividing by the non-fixed point n values does not.
+239: 
+240:         term = ((term * x) / ONE_20) / 2;
+241:         seriesSum += term;
+242: 
+243:         term = ((term * x) / ONE_20) / 3;
+244:         seriesSum += term;
+245: 
+246:         term = ((term * x) / ONE_20) / 4;
+247:         seriesSum += term;
+248: 
+249:         term = ((term * x) / ONE_20) / 5;
+250:         seriesSum += term;
+251: 
+252:         term = ((term * x) / ONE_20) / 6;
+253:         seriesSum += term;
+254: 
+255:         term = ((term * x) / ONE_20) / 7;
+256:         seriesSum += term;
+257: 
+258:         term = ((term * x) / ONE_20) / 8;
+259:         seriesSum += term;
+260: 
+261:         term = ((term * x) / ONE_20) / 9;
+262:         seriesSum += term;
+263: 
+264:         term = ((term * x) / ONE_20) / 10;
+265:         seriesSum += term;
+266: 
+267:         term = ((term * x) / ONE_20) / 11;
+268:         seriesSum += term;
+269: 
+270:         term = ((term * x) / ONE_20) / 12;
+271:         seriesSum += term;
+272: 
+273:         // 12 Taylor terms are sufficient for 18 decimal precision.
+274: 
+275:         // We now have the first a_n (with no decimals), and the product of all other a_n present, and the Taylor
+276:         // approximation of the exponentiation of the remainder (both with 20 decimals). All that remains is to multiply
+277:         // all three (one 20 decimal fixed point multiplication, dividing by ONE_20, and one integer multiplication),
+278:         // and then drop two digits to return an 18 decimal value.
+279: 
+280:         return (((product * seriesSum) / ONE_20) * firstAN) / 100;
+281:     }
+
+=== [weighted] contracts/lib/math/LogExpMath.sol L286-L421
+286:     function ln(int256 a) internal pure returns (int256) {
+287:         // The real natural logarithm is not defined for negative numbers or zero.
+288:         _require(a > 0, Errors.OUT_OF_BOUNDS);
+289: 
+290:         if (a < ONE_18) {
+291:             // Since ln(a^k) = k * ln(a), we can compute ln(a) as ln(a) = ln((1/a)^(-1)) = - ln((1/a)). If a is less
+292:             // than one, 1/a will be greater than one, and this if statement will not be entered in the recursive call.
+293:             // Fixed point division requires multiplying by ONE_18.
+294:             return (-ln((ONE_18 * ONE_18) / a));
+295:         }
+296: 
+297:         // First, we use the fact that ln^(a * b) = ln(a) + ln(b) to decompose ln(a) into a sum of powers of two, which
+298:         // we call x_n, where x_n == 2^(7 - n), which are the natural logarithm of precomputed quantities a_n (that is,
+299:         // ln(a_n) = x_n). We choose the first x_n, x0, to equal 2^7 because the exponential of all larger powers cannot
+300:         // be represented as 18 fixed point decimal numbers in 256 bits, and are therefore larger than a.
+301:         // At the end of this process we will have the sum of all x_n = ln(a_n) that apply, and the remainder of this
+302:         // decomposition, which will be lower than the smallest a_n.
+303:         // ln(a) = k_0 * x_0 + k_1 * x_1 + ... + k_n * x_n + ln(remainder), where each k_n equals either 0 or 1.
+304:         // We mutate a by subtracting a_n, making it the remainder of the decomposition.
+305: 
+306:         // For reasons related to how `exp` works, the first two a_n (e^(2^7) and e^(2^6)) are not stored as fixed point
+307:         // numbers with 18 decimals, but instead as plain integers with 0 decimals, so we need to multiply them by
+308:         // ONE_18 to convert them to fixed point.
+309:         // For each a_n, we test if that term is present in the decomposition (if a is larger than it), and if so divide
+310:         // by it and compute the accumulated sum.
+311: 
+312:         int256 sum = 0;
+313:         if (a >= a0 * ONE_18) {
+314:             a /= a0; // Integer, not fixed point division
+315:             sum += x0;
+316:         }
+317: 
+318:         if (a >= a1 * ONE_18) {
+319:             a /= a1; // Integer, not fixed point division
+320:             sum += x1;
+321:         }
+322: 
+323:         // All other a_n and x_n are stored as 20 digit fixed point numbers, so we convert the sum and a to this format.
+324:         sum *= 100;
+325:         a *= 100;
+326: 
+327:         // Because further a_n are  20 digit fixed point numbers, we multiply by ONE_20 when dividing by them.
+328: 
+329:         if (a >= a2) {
+330:             a = (a * ONE_20) / a2;
+331:             sum += x2;
+332:         }
+333: 
+334:         if (a >= a3) {
+335:             a = (a * ONE_20) / a3;
+336:             sum += x3;
+337:         }
+338: 
+339:         if (a >= a4) {
+340:             a = (a * ONE_20) / a4;
+341:             sum += x4;
+342:         }
+343: 
+344:         if (a >= a5) {
+345:             a = (a * ONE_20) / a5;
+346:             sum += x5;
+347:         }
+348: 
+349:         if (a >= a6) {
+350:             a = (a * ONE_20) / a6;
+351:             sum += x6;
+352:         }
+353: 
+354:         if (a >= a7) {
+355:             a = (a * ONE_20) / a7;
+356:             sum += x7;
+357:         }
+358: 
+359:         if (a >= a8) {
+360:             a = (a * ONE_20) / a8;
+361:             sum += x8;
+362:         }
+363: 
+364:         if (a >= a9) {
+365:             a = (a * ONE_20) / a9;
+366:             sum += x9;
+367:         }
+368: 
+369:         if (a >= a10) {
+370:             a = (a * ONE_20) / a10;
+371:             sum += x10;
+372:         }
+373: 
+374:         if (a >= a11) {
+375:             a = (a * ONE_20) / a11;
+376:             sum += x11;
+377:         }
+378: 
+379:         // a is now a small number (smaller than a_11, which roughly equals 1.06). This means we can use a Taylor series
+380:         // that converges rapidly for values of `a` close to one - the same one used in ln_36.
+381:         // Let z = (a - 1) / (a + 1).
+382:         // ln(a) = 2 * (z + z^3 / 3 + z^5 / 5 + z^7 / 7 + ... + z^(2 * n + 1) / (2 * n + 1))
+383: 
+384:         // Recall that 20 digit fixed point division requires multiplying by ONE_20, and multiplication requires
+385:         // division by ONE_20.
+386:         int256 z = ((a - ONE_20) * ONE_20) / (a + ONE_20);
+387:         int256 z_squared = (z * z) / ONE_20;
+388: 
+389:         // num is the numerator of the series: the z^(2 * n + 1) term
+390:         int256 num = z;
+391: 
+392:         // seriesSum holds the accumulated sum of each term in the series, starting with the initial z
+393:         int256 seriesSum = num;
+394: 
+395:         // In each step, the numerator is multiplied by z^2
+396:         num = (num * z_squared) / ONE_20;
+397:         seriesSum += num / 3;
+398: 
+399:         num = (num * z_squared) / ONE_20;
+400:         seriesSum += num / 5;
+401: 
+402:         num = (num * z_squared) / ONE_20;
+403:         seriesSum += num / 7;
+404: 
+405:         num = (num * z_squared) / ONE_20;
+406:         seriesSum += num / 9;
+407: 
+408:         num = (num * z_squared) / ONE_20;
+409:         seriesSum += num / 11;
+410: 
+411:         // 6 Taylor terms are sufficient for 36 decimal precision.
+412: 
+413:         // Finally, we multiply by 2 (non fixed point) to compute ln(remainder)
+414:         seriesSum *= 2;
+415: 
+416:         // We now have the sum of all x_n present, and the Taylor approximation of the logarithm of the remainder (both
+417:         // with 20 decimals). All that remains is to sum these two, and then drop two digits to return a 18 decimal
+418:         // value.
+419: 
+420:         return (sum + seriesSum) / 100;
+421:     }
+
+=== [weighted] contracts/lib/math/LogExpMath.sol L456-L504
+456:     function ln_36(int256 x) private pure returns (int256) {
+457:         // Since ln(1) = 0, a value of x close to one will yield a very small result, which makes using 36 digits
+458:         // worthwhile.
+459: 
+460:         // First, we transform x to a 36 digit fixed point value.
+461:         x *= ONE_18;
+462: 
+463:         // We will use the following Taylor expansion, which converges very rapidly. Let z = (x - 1) / (x + 1).
+464:         // ln(x) = 2 * (z + z^3 / 3 + z^5 / 5 + z^7 / 7 + ... + z^(2 * n + 1) / (2 * n + 1))
+465: 
+466:         // Recall that 36 digit fixed point division requires multiplying by ONE_36, and multiplication requires
+467:         // division by ONE_36.
+468:         int256 z = ((x - ONE_36) * ONE_36) / (x + ONE_36);
+469:         int256 z_squared = (z * z) / ONE_36;
+470: 
+471:         // num is the numerator of the series: the z^(2 * n + 1) term
+472:         int256 num = z;
+473: 
+474:         // seriesSum holds the accumulated sum of each term in the series, starting with the initial z
+475:         int256 seriesSum = num;
+476: 
+477:         // In each step, the numerator is multiplied by z^2
+478:         num = (num * z_squared) / ONE_36;
+479:         seriesSum += num / 3;
+480: 
+481:         num = (num * z_squared) / ONE_36;
+482:         seriesSum += num / 5;
+483: 
+484:         num = (num * z_squared) / ONE_36;
+485:         seriesSum += num / 7;
+486: 
+487:         num = (num * z_squared) / ONE_36;
+488:         seriesSum += num / 9;
+489: 
+490:         num = (num * z_squared) / ONE_36;
+491:         seriesSum += num / 11;
+492: 
+493:         num = (num * z_squared) / ONE_36;
+494:         seriesSum += num / 13;
+495: 
+496:         num = (num * z_squared) / ONE_36;
+497:         seriesSum += num / 15;
+498: 
+499:         // 8 Taylor terms are sufficient for 36 decimal precision.
+500: 
+501:         // All that remains is multiplying by 2 (non fixed point).
+502:         return seriesSum * 2;
+503:     }
+504: }
+
+=== [weighted] contracts/pools/weighted/WeightedMath.sol L23-L42
+23: contract WeightedMath {
+24:     using FixedPoint for uint256;
+25:     // A minimum normalized weight imposes a maximum weight ratio. We need this due to limitations in the
+26:     // implementation of the power function, as these ratios are often exponents.
+27:     uint256 internal constant _MIN_WEIGHT = 0.01e18;
+28:     // Having a minimum normalized weight imposes a limit on the maximum number of tokens;
+29:     // i.e., the largest possible pool is one where all tokens have exactly the minimum weight.
+30:     uint256 internal constant _MAX_WEIGHTED_TOKENS = 100;
+31: 
+32:     // Pool limits that arise from limitations in the fixed point power function (and the imposed 1:100 maximum weight
+33:     // ratio).
+34: 
+35:     // Swap limits: amounts swapped may not be larger than this percentage of total balance.
+36:     uint256 internal constant _MAX_IN_RATIO = 0.3e18;
+37:     uint256 internal constant _MAX_OUT_RATIO = 0.3e18;
+38: 
+39:     // Invariant growth limit: non-proportional joins cannot cause the invariant to increase by more than this ratio.
+40:     uint256 internal constant _MAX_INVARIANT_RATIO = 3e18;
+41:     // Invariant shrink limit: non-proportional exits cannot cause the invariant to decrease by less than this ratio.
+42:     uint256 internal constant _MIN_INVARIANT_RATIO = 0.7e18;
+
+=== [weighted] contracts/pools/weighted/WeightedMath.sol L67-L138
+67:     // Computes how many tokens can be taken out of a pool if `amountIn` are sent, given the
+68:     // current balances and weights.
+69:     function _calcOutGivenIn(
+70:         uint256 balanceIn,
+71:         uint256 weightIn,
+72:         uint256 balanceOut,
+73:         uint256 weightOut,
+74:         uint256 amountIn
+75:     ) internal pure returns (uint256) {
+76:         /**********************************************************************************************
+77:         // outGivenIn                                                                                //
+78:         // aO = amountOut                                                                            //
+79:         // bO = balanceOut                                                                           //
+80:         // bI = balanceIn              /      /            bI             \    (wI / wO) \           //
+81:         // aI = amountIn    aO = bO * |  1 - | --------------------------  | ^            |          //
+82:         // wI = weightIn               \      \       ( bI + aI )         /              /           //
+83:         // wO = weightOut                                                                            //
+84:         **********************************************************************************************/
+85: 
+86:         // Amount out, so we round down overall.
+87: 
+88:         // The multiplication rounds down, and the subtrahend (power) rounds up (so the base rounds up too).
+89:         // Because bI / (bI + aI) <= 1, the exponent rounds down.
+90: 
+91:         // Cannot exceed maximum in ratio
+92:         _require(amountIn <= balanceIn.mulDown(_MAX_IN_RATIO), Errors.MAX_IN_RATIO);
+93: 
+94:         uint256 denominator = balanceIn.add(amountIn);
+95:         uint256 base = balanceIn.divUp(denominator);
+96:         uint256 exponent = weightIn.divDown(weightOut);
+97:         uint256 power = base.powUp(exponent);
+98: 
+99:         return balanceOut.mulDown(power.complement());
+100:     }
+101: 
+102:     // Computes how many tokens must be sent to a pool in order to take `amountOut`, given the
+103:     // current balances and weights.
+104:     function _calcInGivenOut(
+105:         uint256 balanceIn,
+106:         uint256 weightIn,
+107:         uint256 balanceOut,
+108:         uint256 weightOut,
+109:         uint256 amountOut
+110:     ) internal pure returns (uint256) {
+111:         /**********************************************************************************************
+112:         // inGivenOut                                                                                //
+113:         // aO = amountOut                                                                            //
+114:         // bO = balanceOut                                                                           //
+115:         // bI = balanceIn              /  /            bO             \    (wO / wI)      \          //
+116:         // aI = amountIn    aI = bI * |  | --------------------------  | ^            - 1  |         //
+117:         // wI = weightIn               \  \       ( bO - aO )         /                   /          //
+118:         // wO = weightOut                                                                            //
+119:         **********************************************************************************************/
+120: 
+121:         // Amount in, so we round up overall.
+122: 
+123:         // The multiplication rounds up, and the power rounds up (so the base rounds up too).
+124:         // Because b0 / (b0 - a0) >= 1, the exponent rounds up.
+125: 
+126:         // Cannot exceed maximum out ratio
+127:         _require(amountOut <= balanceOut.mulDown(_MAX_OUT_RATIO), Errors.MAX_OUT_RATIO);
+128: 
+129:         uint256 base = balanceOut.divUp(balanceOut.sub(amountOut));
+130:         uint256 exponent = weightOut.divUp(weightIn);
+131:         uint256 power = base.powUp(exponent);
+132: 
+133:         // Because the base is larger than one (and the power rounds up), the power should always be larger than one, so
+134:         // the following subtraction should never revert.
+135:         uint256 ratio = power.sub(FixedPoint.ONE);
+136: 
+137:         return balanceIn.mulUp(ratio);
+138:     }
+
+=== [weighted] contracts/pools/BaseMinimalSwapInfoPool.sol L26-L89
+26: abstract contract BaseMinimalSwapInfoPool is IMinimalSwapInfoPool, BasePool {
+27:     constructor(
+28:         IVault vault,
+29:         string memory name,
+30:         string memory symbol,
+31:         IERC20[] memory tokens,
+32:         uint256 swapFeePercentage,
+33:         uint256 pauseWindowDuration,
+34:         uint256 bufferPeriodDuration,
+35:         address owner
+36:     )
+37:         BasePool(
+38:             vault,
+39:             tokens.length == 2 ? IVault.PoolSpecialization.TWO_TOKEN : IVault.PoolSpecialization.MINIMAL_SWAP_INFO,
+40:             name,
+41:             symbol,
+42:             tokens,
+43:             swapFeePercentage,
+44:             pauseWindowDuration,
+45:             bufferPeriodDuration,
+46:             owner
+47:         )
+48:     {
+49:         // solhint-disable-previous-line no-empty-blocks
+50:     }
+51: 
+52:     // Swap Hooks
+53: 
+54:     function onSwap(
+55:         SwapRequest memory request,
+56:         uint256 balanceTokenIn,
+57:         uint256 balanceTokenOut
+58:     ) external view virtual override returns (uint256) {
+59:         uint256 scalingFactorTokenIn = _scalingFactor(request.tokenIn);
+60:         uint256 scalingFactorTokenOut = _scalingFactor(request.tokenOut);
+61: 
+62:         if (request.kind == IVault.SwapKind.GIVEN_IN) {
+63:             // Fees are subtracted before scaling, to reduce the complexity of the rounding direction analysis.
+64:             request.amount = _subtractSwapFeeAmount(request.amount);
+65: 
+66:             // All token amounts are upscaled.
+67:             balanceTokenIn = _upscale(balanceTokenIn, scalingFactorTokenIn);
+68:             balanceTokenOut = _upscale(balanceTokenOut, scalingFactorTokenOut);
+69:             request.amount = _upscale(request.amount, scalingFactorTokenIn);
+70: 
+71:             uint256 amountOut = _onSwapGivenIn(request, balanceTokenIn, balanceTokenOut);
+72: 
+73:             // amountOut tokens are exiting the Pool, so we round down.
+74:             return _downscaleDown(amountOut, scalingFactorTokenOut);
+75:         } else {
+76:             // All token amounts are upscaled.
+77:             balanceTokenIn = _upscale(balanceTokenIn, scalingFactorTokenIn);
+78:             balanceTokenOut = _upscale(balanceTokenOut, scalingFactorTokenOut);
+79:             request.amount = _upscale(request.amount, scalingFactorTokenOut);
+80: 
+81:             uint256 amountIn = _onSwapGivenOut(request, balanceTokenIn, balanceTokenOut);
+82: 
+83:             // amountIn tokens are entering the Pool, so we round up.
+84:             amountIn = _downscaleUp(amountIn, scalingFactorTokenIn);
+85: 
+86:             // Fees are added after scaling happens, to reduce the complexity of the rounding direction analysis.
+87:             return _addSwapFeeAmount(amountIn);
+88:         }
+89:     }
+
+=== [weighted] contracts/pools/BasePool.sol L88-L88
+88:     event SwapFeePercentageChanged(uint256 swapFeePercentage);
+
+=== [weighted] contracts/pools/BasePool.sol L155-L169
+155:     function getVault() public view returns (IVault) {
+156:         return _vault;
+157:     }
+158: 
+159:     function getPoolId() public view returns (bytes32) {
+160:         return _poolId;
+161:     }
+162: 
+163:     function _getTotalTokens() internal view returns (uint256) {
+164:         return _totalTokens;
+165:     }
+166: 
+167:     function getSwapFeePercentage() external view returns (uint256) {
+168:         return _swapFeePercentage;
+169:     }
+
+=== [weighted] contracts/pools/BasePool.sol L454-L481
+454:     function _addSwapFeeAmount(uint256 amount) internal view returns (uint256) {
+455:         // This returns amount + fee amount, so we round up (favoring a higher fee amount).
+456:         return amount.divUp(_swapFeePercentage.complement());
+457:     }
+458: 
+459:     /**
+460:      * @dev Subtracts swap fee amount from `amount`, returning a lower value.
+461:      */
+462:     function _subtractSwapFeeAmount(uint256 amount) internal view returns (uint256) {
+463:         // This returns amount - fee amount, so we round up (favoring a higher fee amount).
+464:         uint256 feeAmount = amount.mulUp(_swapFeePercentage);
+465:         return amount.sub(feeAmount);
+466:     }
+467: 
+468:     // Scaling
+469: 
+470:     /**
+471:      * @dev Returns a scaling factor that, when multiplied to a token amount for `token`, normalizes its balance as if
+472:      * it had 18 decimals.
+473:      */
+474:     function _computeScalingFactor(IERC20 token) private view returns (uint256) {
+475:         // Tokens that don't implement the `decimals` method are not supported.
+476:         uint256 tokenDecimals = ERC20(address(token)).decimals();
+477: 
+478:         // Tokens with more than 18 decimals are not supported.
+479:         uint256 decimalsDifference = Math.sub(18, tokenDecimals);
+480:         return 10**decimalsDifference;
+481:     }
+
+=== [weighted] contracts/pools/BasePool.sol L529-L555
+529:     function _upscale(uint256 amount, uint256 scalingFactor) internal pure returns (uint256) {
+530:         return Math.mul(amount, scalingFactor);
+531:     }
+532: 
+533:     /**
+534:      * @dev Same as `_upscale`, but for an entire array. This function does not return anything, but instead *mutates*
+535:      * the `amounts` array.
+536:      */
+537:     function _upscaleArray(uint256[] memory amounts, uint256[] memory scalingFactors) internal view {
+538:         for (uint256 i = 0; i < _getTotalTokens(); ++i) {
+539:             amounts[i] = Math.mul(amounts[i], scalingFactors[i]);
+540:         }
+541:     }
+542: 
+543:     /**
+544:      * @dev Reverses the `scalingFactor` applied to `amount`, resulting in a smaller or equal value depending on
+545:      * whether it needed scaling or not. The result is rounded down.
+546:      */
+547:     function _downscaleDown(uint256 amount, uint256 scalingFactor) internal pure returns (uint256) {
+548:         return Math.divDown(amount, scalingFactor);
+549:     }
+550: 
+551:     /**
+552:      * @dev Same as `_downscaleDown`, but for an entire array. This function does not return anything, but instead
+553:      * *mutates* the `amounts` array.
+554:      */
+555:     function _downscaleDownArray(uint256[] memory amounts, uint256[] memory scalingFactors) internal view {
+
+=== [weighted] contracts/pools/weighted/WeightedPool.sol L157-L197
+157:     function getNormalizedWeights() external view returns (uint256[] memory) {
+158:         return _normalizedWeights();
+159:     }
+160: 
+161:     // Base Pool handlers
+162: 
+163:     // Swap
+164: 
+165:     function _onSwapGivenIn(
+166:         SwapRequest memory swapRequest,
+167:         uint256 currentBalanceTokenIn,
+168:         uint256 currentBalanceTokenOut
+169:     ) internal view virtual override whenNotPaused returns (uint256) {
+170:         // Swaps are disabled while the contract is paused.
+171: 
+172:         return
+173:             WeightedMath._calcOutGivenIn(
+174:                 currentBalanceTokenIn,
+175:                 _normalizedWeight(swapRequest.tokenIn),
+176:                 currentBalanceTokenOut,
+177:                 _normalizedWeight(swapRequest.tokenOut),
+178:                 swapRequest.amount
+179:             );
+180:     }
+181: 
+182:     function _onSwapGivenOut(
+183:         SwapRequest memory swapRequest,
+184:         uint256 currentBalanceTokenIn,
+185:         uint256 currentBalanceTokenOut
+186:     ) internal view virtual override whenNotPaused returns (uint256) {
+187:         // Swaps are disabled while the contract is paused.
+188: 
+189:         return
+190:             WeightedMath._calcInGivenOut(
+191:                 currentBalanceTokenIn,
+192:                 _normalizedWeight(swapRequest.tokenIn),
+193:                 currentBalanceTokenOut,
+194:                 _normalizedWeight(swapRequest.tokenOut),
+195:                 swapRequest.amount
+196:             );
+197:     }
+
+=== [weighted] contracts/lib/helpers/TemporarilyPausable.sol L61-L118
+61:     modifier whenNotPaused() {
+62:         _ensureNotPaused();
+63:         _;
+64:     }
+65: 
+66:     /**
+67:      * @dev Returns the current contract pause status, as well as the end times of the Pause Window and Buffer
+68:      * Period.
+69:      */
+70:     function getPausedState()
+71:         external
+72:         view
+73:         override
+74:         returns (
+75:             bool paused,
+76:             uint256 pauseWindowEndTime,
+77:             uint256 bufferPeriodEndTime
+78:         )
+79:     {
+80:         paused = !_isNotPaused();
+81:         pauseWindowEndTime = _getPauseWindowEndTime();
+82:         bufferPeriodEndTime = _getBufferPeriodEndTime();
+83:     }
+84: 
+85:     /**
+86:      * @dev Sets the pause state to `paused`. The contract can only be paused until the end of the Pause Window, and
+87:      * unpaused until the end of the Buffer Period.
+88:      *
+89:      * Once the Buffer Period expires, this function reverts unconditionally.
+90:      */
+91:     function _setPaused(bool paused) internal {
+92:         if (paused) {
+93:             _require(block.timestamp < _getPauseWindowEndTime(), Errors.PAUSE_WINDOW_EXPIRED);
+94:         } else {
+95:             _require(block.timestamp < _getBufferPeriodEndTime(), Errors.BUFFER_PERIOD_EXPIRED);
+96:         }
+97: 
+98:         _paused = paused;
+99:         emit PausedStateChanged(paused);
+100:     }
+101: 
+102:     /**
+103:      * @dev Reverts if the contract is paused.
+104:      */
+105:     function _ensureNotPaused() internal view {
+106:         _require(_isNotPaused(), Errors.PAUSED);
+107:     }
+108: 
+109:     /**
+110:      * @dev Returns true if the contract is unpaused.
+111:      *
+112:      * Once the Buffer Period expires, the gas cost of calling this function is reduced dramatically, as storage is no
+113:      * longer accessed.
+114:      */
+115:     function _isNotPaused() internal view returns (bool) {
+116:         // After the Buffer Period, the (inexpensive) timestamp check short-circuits the storage access.
+117:         return block.timestamp > _getBufferPeriodEndTime() || !_paused;
+118:     }
+
+=== [weighted] contracts/lib/helpers/ITemporarilyPausable.sol L24-L24
+24:     event PausedStateChanged(bool paused);
+
+=== [weighted] contracts/pools/factories/BasePoolFactory.sol L48-L60
+48:     function isPoolFromFactory(address pool) external view returns (bool) {
+49:         return _isPoolFromFactory[pool];
+50:     }
+51: 
+52:     /**
+53:      * @dev Registers a new created pool.
+54:      *
+55:      * Emits a `PoolCreated` event.
+56:      */
+57:     function _register(address pool) internal {
+58:         _isPoolFromFactory[pool] = true;
+59:         emit PoolCreated(pool);
+60:     }
+
+=== [stable] contracts/StableMath.sol L26-L33
+26: contract StableMath {
+27:     using FixedPoint for uint256;
+28: 
+29:     uint256 internal constant _MIN_AMP = 1;
+30:     uint256 internal constant _MAX_AMP = 5000;
+31:     uint256 internal constant _AMP_PRECISION = 1e3;
+32: 
+33:     uint256 internal constant _MAX_STABLE_TOKENS = 5;
+
+=== [stable] contracts/StableMath.sol L49-L190
+49:     function _calculateInvariant(
+50:         uint256 amplificationParameter,
+51:         uint256[] memory balances,
+52:         bool roundUp
+53:     ) internal pure returns (uint256) {
+54:         /**********************************************************************************************
+55:         // invariant                                                                                 //
+56:         // D = invariant                                                  D^(n+1)                    //
+57:         // A = amplification coefficient      A  n^n S + D = A D n^n + -----------                   //
+58:         // S = sum of balances                                             n^n P                     //
+59:         // P = product of balances                                                                   //
+60:         // n = number of tokens                                                                      //
+61:         *********x************************************************************************************/
+62: 
+63:         // We support rounding up or down.
+64: 
+65:         uint256 sum = 0;
+66:         uint256 numTokens = balances.length;
+67:         for (uint256 i = 0; i < numTokens; i++) {
+68:             sum = sum.add(balances[i]);
+69:         }
+70:         if (sum == 0) {
+71:             return 0;
+72:         }
+73: 
+74:         uint256 prevInvariant = 0;
+75:         uint256 invariant = sum;
+76:         uint256 ampTimesTotal = amplificationParameter * numTokens;
+77: 
+78:         for (uint256 i = 0; i < 255; i++) {
+79:             uint256 P_D = balances[0] * numTokens;
+80:             for (uint256 j = 1; j < numTokens; j++) {
+81:                 P_D = Math.div(Math.mul(Math.mul(P_D, balances[j]), numTokens), invariant, roundUp);
+82:             }
+83:             prevInvariant = invariant;
+84:             invariant = Math.div(
+85:                 Math.mul(Math.mul(numTokens, invariant), invariant).add(
+86:                     Math.div(Math.mul(Math.mul(ampTimesTotal, sum), P_D), _AMP_PRECISION, roundUp)
+87:                 ),
+88:                 Math.mul(numTokens + 1, invariant).add(
+89:                     // No need to use checked arithmetic for the amp precision, the amp is guaranteed to be at least 1
+90:                     Math.div(Math.mul(ampTimesTotal - _AMP_PRECISION, P_D), _AMP_PRECISION, !roundUp)
+91:                 ),
+92:                 roundUp
+93:             );
+94: 
+95:             if (invariant > prevInvariant) {
+96:                 if (invariant - prevInvariant <= 1) {
+97:                     return invariant;
+98:                 }
+99:             } else if (prevInvariant - invariant <= 1) {
+100:                 return invariant;
+101:             }
+102:         }
+103: 
+104:         _revert(Errors.STABLE_GET_BALANCE_DIDNT_CONVERGE);
+105:     }
+106: 
+107:     // Computes how many tokens can be taken out of a pool if `tokenAmountIn` are sent, given the current balances.
+108:     // The amplification parameter equals: A n^(n-1)
+109:     function _calcOutGivenIn(
+110:         uint256 amplificationParameter,
+111:         uint256[] memory balances,
+112:         uint256 tokenIndexIn,
+113:         uint256 tokenIndexOut,
+114:         uint256 tokenAmountIn
+115:     ) internal pure returns (uint256) {
+116:         /**************************************************************************************************************
+117:         // outGivenIn token x for y - polynomial equation to solve                                                   //
+118:         // ay = amount out to calculate                                                                              //
+119:         // by = balance token out                                                                                    //
+120:         // y = by - ay (finalBalanceOut)                                                                             //
+121:         // D = invariant                                               D                     D^(n+1)                 //
+122:         // A = amplification coefficient               y^2 + ( S - ----------  - D) * y -  ------------- = 0         //
+123:         // n = number of tokens                                    (A * n^n)               A * n^2n * P              //
+124:         // S = sum of final balances but y                                                                           //
+125:         // P = product of final balances but y                                                                       //
+126:         **************************************************************************************************************/
+127: 
+128:         // Amount out, so we round down overall.
+129: 
+130:         // Given that we need to have a greater final balance out, the invariant needs to be rounded up
+131:         uint256 invariant = _calculateInvariant(amplificationParameter, balances, true);
+132: 
+133:         balances[tokenIndexIn] = balances[tokenIndexIn].add(tokenAmountIn);
+134: 
+135:         uint256 finalBalanceOut = _getTokenBalanceGivenInvariantAndAllOtherBalances(
+136:             amplificationParameter,
+137:             balances,
+138:             invariant,
+139:             tokenIndexOut
+140:         );
+141: 
+142:         // No need to use checked arithmetic since `tokenAmountIn` was actually added to the same balance right before
+143:         // calling `_getTokenBalanceGivenInvariantAndAllOtherBalances` which doesn't alter the balances array.
+144:         balances[tokenIndexIn] = balances[tokenIndexIn] - tokenAmountIn;
+145: 
+146:         return balances[tokenIndexOut].sub(finalBalanceOut).sub(1);
+147:     }
+148: 
+149:     // Computes how many tokens must be sent to a pool if `tokenAmountOut` are sent given the
+150:     // current balances, using the Newton-Raphson approximation.
+151:     // The amplification parameter equals: A n^(n-1)
+152:     function _calcInGivenOut(
+153:         uint256 amplificationParameter,
+154:         uint256[] memory balances,
+155:         uint256 tokenIndexIn,
+156:         uint256 tokenIndexOut,
+157:         uint256 tokenAmountOut
+158:     ) internal pure returns (uint256) {
+159:         /**************************************************************************************************************
+160:         // inGivenOut token x for y - polynomial equation to solve                                                   //
+161:         // ax = amount in to calculate                                                                               //
+162:         // bx = balance token in                                                                                     //
+163:         // x = bx + ax (finalBalanceIn)                                                                              //
+164:         // D = invariant                                                D                     D^(n+1)                //
+165:         // A = amplification coefficient               x^2 + ( S - ----------  - D) * x -  ------------- = 0         //
+166:         // n = number of tokens                                     (A * n^n)               A * n^2n * P             //
+167:         // S = sum of final balances but x                                                                           //
+168:         // P = product of final balances but x                                                                       //
+169:         **************************************************************************************************************/
+170: 
+171:         // Amount in, so we round up overall.
+172: 
+173:         // Given that we need to have a greater final balance in, the invariant needs to be rounded up
+174:         uint256 invariant = _calculateInvariant(amplificationParameter, balances, true);
+175: 
+176:         balances[tokenIndexOut] = balances[tokenIndexOut].sub(tokenAmountOut);
+177: 
+178:         uint256 finalBalanceIn = _getTokenBalanceGivenInvariantAndAllOtherBalances(
+179:             amplificationParameter,
+180:             balances,
+181:             invariant,
+182:             tokenIndexIn
+183:         );
+184: 
+185:         // No need to use checked arithmetic since `tokenAmountOut` was actually subtracted from the same balance right
+186:         // before calling `_getTokenBalanceGivenInvariantAndAllOtherBalances` which doesn't alter the balances array.
+187:         balances[tokenIndexOut] = balances[tokenIndexOut] + tokenAmountOut;
+188: 
+189:         return finalBalanceIn.sub(balances[tokenIndexIn]).add(1);
+190:     }
+
+=== [stable] contracts/StableMath.sol L465-L516
+465:     function _getTokenBalanceGivenInvariantAndAllOtherBalances(
+466:         uint256 amplificationParameter,
+467:         uint256[] memory balances,
+468:         uint256 invariant,
+469:         uint256 tokenIndex
+470:     ) internal pure returns (uint256) {
+471:         // Rounds result up overall
+472: 
+473:         uint256 ampTimesTotal = amplificationParameter * balances.length;
+474:         uint256 sum = balances[0];
+475:         uint256 P_D = balances[0] * balances.length;
+476:         for (uint256 j = 1; j < balances.length; j++) {
+477:             P_D = Math.divDown(Math.mul(Math.mul(P_D, balances[j]), balances.length), invariant);
+478:             sum = sum.add(balances[j]);
+479:         }
+480:         // No need to use safe math, based on the loop above `sum` is greater than or equal to `balances[tokenIndex]`
+481:         sum = sum - balances[tokenIndex];
+482: 
+483:         uint256 inv2 = Math.mul(invariant, invariant);
+484:         // We remove the balance fromm c by multiplying it
+485:         uint256 c = Math.mul(
+486:             Math.mul(Math.divUp(inv2, Math.mul(ampTimesTotal, P_D)), _AMP_PRECISION),
+487:             balances[tokenIndex]
+488:         );
+489:         uint256 b = sum.add(Math.mul(Math.divDown(invariant, ampTimesTotal), _AMP_PRECISION));
+490: 
+491:         // We iterate to find the balance
+492:         uint256 prevTokenBalance = 0;
+493:         // We multiply the first iteration outside the loop with the invariant to set the value of the
+494:         // initial approximation.
+495:         uint256 tokenBalance = Math.divUp(inv2.add(c), invariant.add(b));
+496: 
+497:         for (uint256 i = 0; i < 255; i++) {
+498:             prevTokenBalance = tokenBalance;
+499: 
+500:             tokenBalance = Math.divUp(
+501:                 Math.mul(tokenBalance, tokenBalance).add(c),
+502:                 Math.mul(tokenBalance, 2).add(b).sub(invariant)
+503:             );
+504: 
+505:             if (tokenBalance > prevTokenBalance) {
+506:                 if (tokenBalance - prevTokenBalance <= 1) {
+507:                     return tokenBalance;
+508:                 }
+509:             } else if (prevTokenBalance - tokenBalance <= 1) {
+510:                 return tokenBalance;
+511:             }
+512:         }
+513: 
+514:         _revert(Errors.STABLE_GET_BALANCE_DIDNT_CONVERGE);
+515:     }
+516: }
+
+=== [stable] @balancer-labs/v2-pool-utils/contracts/BaseGeneralPool.sol L31-L82
+31:     function onSwap(
+32:         SwapRequest memory swapRequest,
+33:         uint256[] memory balances,
+34:         uint256 indexIn,
+35:         uint256 indexOut
+36:     ) external view virtual override returns (uint256) {
+37:         _validateIndexes(indexIn, indexOut, _getTotalTokens());
+38:         uint256[] memory scalingFactors = _scalingFactors();
+39: 
+40:         return
+41:             swapRequest.kind == IVault.SwapKind.GIVEN_IN
+42:                 ? _swapGivenIn(swapRequest, balances, indexIn, indexOut, scalingFactors)
+43:                 : _swapGivenOut(swapRequest, balances, indexIn, indexOut, scalingFactors);
+44:     }
+45: 
+46:     function _swapGivenIn(
+47:         SwapRequest memory swapRequest,
+48:         uint256[] memory balances,
+49:         uint256 indexIn,
+50:         uint256 indexOut,
+51:         uint256[] memory scalingFactors
+52:     ) internal view returns (uint256) {
+53:         // Fees are subtracted before scaling, to reduce the complexity of the rounding direction analysis.
+54:         swapRequest.amount = _subtractSwapFeeAmount(swapRequest.amount);
+55: 
+56:         _upscaleArray(balances, scalingFactors);
+57:         swapRequest.amount = _upscale(swapRequest.amount, scalingFactors[indexIn]);
+58: 
+59:         uint256 amountOut = _onSwapGivenIn(swapRequest, balances, indexIn, indexOut);
+60: 
+61:         // amountOut tokens are exiting the Pool, so we round down.
+62:         return _downscaleDown(amountOut, scalingFactors[indexOut]);
+63:     }
+64: 
+65:     function _swapGivenOut(
+66:         SwapRequest memory swapRequest,
+67:         uint256[] memory balances,
+68:         uint256 indexIn,
+69:         uint256 indexOut,
+70:         uint256[] memory scalingFactors
+71:     ) internal view returns (uint256) {
+72:         _upscaleArray(balances, scalingFactors);
+73:         swapRequest.amount = _upscale(swapRequest.amount, scalingFactors[indexOut]);
+74: 
+75:         uint256 amountIn = _onSwapGivenOut(swapRequest, balances, indexIn, indexOut);
+76: 
+77:         // amountIn tokens are entering the Pool, so we round up.
+78:         amountIn = _downscaleUp(amountIn, scalingFactors[indexIn]);
+79: 
+80:         // Fees are added after scaling happens, to reduce the complexity of the rounding direction analysis.
+81:         return _addSwapFeeAmount(amountIn);
+82:     }
+
+=== [stable] contracts/StablePool.sol L47-L48
+47:     event AmpUpdateStarted(uint256 startValue, uint256 endValue, uint256 startTime, uint256 endTime);
+48:     event AmpUpdateStopped(uint256 currentValue);
+
+=== [stable] contracts/StablePool.sol L101-L121
+101:     function _onSwapGivenIn(
+102:         SwapRequest memory swapRequest,
+103:         uint256[] memory balances,
+104:         uint256 indexIn,
+105:         uint256 indexOut
+106:     ) internal view virtual override whenNotPaused returns (uint256) {
+107:         (uint256 currentAmp, ) = _getAmplificationParameter();
+108:         uint256 amountOut = StableMath._calcOutGivenIn(currentAmp, balances, indexIn, indexOut, swapRequest.amount);
+109:         return amountOut;
+110:     }
+111: 
+112:     function _onSwapGivenOut(
+113:         SwapRequest memory swapRequest,
+114:         uint256[] memory balances,
+115:         uint256 indexIn,
+116:         uint256 indexOut
+117:     ) internal view virtual override whenNotPaused returns (uint256) {
+118:         (uint256 currentAmp, ) = _getAmplificationParameter();
+119:         uint256 amountIn = StableMath._calcInGivenOut(currentAmp, balances, indexIn, indexOut, swapRequest.amount);
+120:         return amountIn;
+121:     }
+
+=== [stable] contracts/StablePool.sol L615-L651
+615:     function getAmplificationParameter()
+616:         external
+617:         view
+618:         returns (
+619:             uint256 value,
+620:             bool isUpdating,
+621:             uint256 precision
+622:         )
+623:     {
+624:         (value, isUpdating) = _getAmplificationParameter();
+625:         precision = _AMP_PRECISION;
+626:     }
+627: 
+628:     function _getAmplificationParameter() internal view returns (uint256 value, bool isUpdating) {
+629:         (uint256 startValue, uint256 endValue, uint256 startTime, uint256 endTime) = _getAmplificationData();
+630: 
+631:         // Note that block.timestamp >= startTime, since startTime is set to the current time when an update starts
+632: 
+633:         if (block.timestamp < endTime) {
+634:             isUpdating = true;
+635: 
+636:             // We can skip checked arithmetic as:
+637:             //  - block.timestamp is always larger or equal to startTime
+638:             //  - endTime is alawys larger than startTime
+639:             //  - the value delta is bounded by the largest amplification paramater, which never causes the
+640:             //    multiplication to overflow.
+641:             // This also means that the following computation will never revert nor yield invalid results.
+642:             if (endValue > startValue) {
+643:                 value = startValue + ((endValue - startValue) * (block.timestamp - startTime)) / (endTime - startTime);
+644:             } else {
+645:                 value = startValue - ((startValue - endValue) * (block.timestamp - startTime)) / (endTime - startTime);
+646:             }
+647:         } else {
+648:             isUpdating = false;
+649:             value = endValue;
+650:         }
+651:     }
+
+=== [stable] @balancer-labs/v2-pool-utils/contracts/BasePool.sol L490-L517
+490:     function _addSwapFeeAmount(uint256 amount) internal view returns (uint256) {
+491:         // This returns amount + fee amount, so we round up (favoring a higher fee amount).
+492:         return amount.divUp(FixedPoint.ONE.sub(_swapFeePercentage));
+493:     }
+494: 
+495:     /**
+496:      * @dev Subtracts swap fee amount from `amount`, returning a lower value.
+497:      */
+498:     function _subtractSwapFeeAmount(uint256 amount) internal view returns (uint256) {
+499:         // This returns amount - fee amount, so we round up (favoring a higher fee amount).
+500:         uint256 feeAmount = amount.mulUp(_swapFeePercentage);
+501:         return amount.sub(feeAmount);
+502:     }
+503: 
+504:     // Scaling
+505: 
+506:     /**
+507:      * @dev Returns a scaling factor that, when multiplied to a token amount for `token`, normalizes its balance as if
+508:      * it had 18 decimals.
+509:      */
+510:     function _computeScalingFactor(IERC20 token) private view returns (uint256) {
+511:         // Tokens that don't implement the `decimals` method are not supported.
+512:         uint256 tokenDecimals = ERC20(address(token)).decimals();
+513: 
+514:         // Tokens with more than 18 decimals are not supported.
+515:         uint256 decimalsDifference = Math.sub(18, tokenDecimals);
+516:         return FixedPoint.ONE * 10**decimalsDifference;
+517:     }
+
+=== [stable] @balancer-labs/v2-pool-utils/contracts/BasePool.sol L574-L626
+574:     function _upscale(uint256 amount, uint256 scalingFactor) internal pure returns (uint256) {
+575:         // Upscale rounding wouldn't necessarily always go in the same direction: in a swap for example the balance of
+576:         // token in should be rounded up, and that of token out rounded down. This is the only place where we round in
+577:         // the same direction for all amounts, as the impact of this rounding is expected to be minimal (and there's no
+578:         // rounding error unless `_scalingFactor()` is overriden).
+579:         return FixedPoint.mulDown(amount, scalingFactor);
+580:     }
+581: 
+582:     /**
+583:      * @dev Same as `_upscale`, but for an entire array. This function does not return anything, but instead *mutates*
+584:      * the `amounts` array.
+585:      */
+586:     function _upscaleArray(uint256[] memory amounts, uint256[] memory scalingFactors) internal view {
+587:         for (uint256 i = 0; i < _getTotalTokens(); ++i) {
+588:             amounts[i] = FixedPoint.mulDown(amounts[i], scalingFactors[i]);
+589:         }
+590:     }
+591: 
+592:     /**
+593:      * @dev Reverses the `scalingFactor` applied to `amount`, resulting in a smaller or equal value depending on
+594:      * whether it needed scaling or not. The result is rounded down.
+595:      */
+596:     function _downscaleDown(uint256 amount, uint256 scalingFactor) internal pure returns (uint256) {
+597:         return FixedPoint.divDown(amount, scalingFactor);
+598:     }
+599: 
+600:     /**
+601:      * @dev Same as `_downscaleDown`, but for an entire array. This function does not return anything, but instead
+602:      * *mutates* the `amounts` array.
+603:      */
+604:     function _downscaleDownArray(uint256[] memory amounts, uint256[] memory scalingFactors) internal view {
+605:         for (uint256 i = 0; i < _getTotalTokens(); ++i) {
+606:             amounts[i] = FixedPoint.divDown(amounts[i], scalingFactors[i]);
+607:         }
+608:     }
+609: 
+610:     /**
+611:      * @dev Reverses the `scalingFactor` applied to `amount`, resulting in a smaller or equal value depending on
+612:      * whether it needed scaling or not. The result is rounded up.
+613:      */
+614:     function _downscaleUp(uint256 amount, uint256 scalingFactor) internal pure returns (uint256) {
+615:         return FixedPoint.divUp(amount, scalingFactor);
+616:     }
+617: 
+618:     /**
+619:      * @dev Same as `_downscaleUp`, but for an entire array. This function does not return anything, but instead
+620:      * *mutates* the `amounts` array.
+621:      */
+622:     function _downscaleUpArray(uint256[] memory amounts, uint256[] memory scalingFactors) internal view {
+623:         for (uint256 i = 0; i < _getTotalTokens(); ++i) {
+624:             amounts[i] = FixedPoint.divUp(amounts[i], scalingFactors[i]);
+625:         }
+626:     }
+
+=== [stable] @balancer-labs/v2-solidity-utils/contracts/math/Math.sol L60-L90
+60:     }
+61: 
+62:     function mul(uint256 a, uint256 b) internal pure returns (uint256) {
+63:         uint256 c = a * b;
+64:         _require(a == 0 || c / a == b, Errors.MUL_OVERFLOW);
+65:         return c;
+66:     }
+67: 
+68:     function div(
+69:         uint256 a,
+70:         uint256 b,
+71:         bool roundUp
+72:     ) internal pure returns (uint256) {
+73:         return roundUp ? divUp(a, b) : divDown(a, b);
+74:     }
+75: 
+76:     function divDown(uint256 a, uint256 b) internal pure returns (uint256) {
+77:         _require(b != 0, Errors.ZERO_DIVISION);
+78:         return a / b;
+79:     }
+80: 
+81:     function divUp(uint256 a, uint256 b) internal pure returns (uint256) {
+82:         _require(b != 0, Errors.ZERO_DIVISION);
+83: 
+84:         if (a == 0) {
+85:             return 0;
+86:         } else {
+87:             return 1 + (a - 1) / b;
+88:         }
+89:     }
+90: }

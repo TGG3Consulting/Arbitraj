@@ -3,7 +3,10 @@
 //! резервах записи routes_2026-10-29 (единственный V2-пул записи — WBNB-USDT v2): меняется только МЕТКА семейства пула
 //! (v2_fork вместо pancakeswap_v2), резервы реальные, к сети тест не ходит. Утверждает: (1) форк-пул входит в граф
 //! (family.graphable); (2) после флипа 80.9b форк-маршрут ИСПОЛНИМ (DexRoute.executable) и ведётся бандлом
-//! (GraphForm::Bundle), а без dex.bundle_max_routers — несобираем (сигнал); (3) не-форк исполним прямой формой (Direct);
+//! (GraphForm::Bundle), а без dex.bundle_max_routers или при включённом не-бандловом канале (решение 121 B3) —
+//! несобираем (сигнал); (3) не-форк исполним прямой формой (Direct);
+//! (4) решение 121: неисполнимый пул (Solidly, tradable = нет) не выигрывает классическую котировку как Direct, а
+//! виден как signal_route; только неисполнимый — NoRoute «только сигнал» (quote/classic_direct.rs);
 //! плюс флаги make()/classify() форка (graphable+tradable+fork; фабрика/роутер/комиссия нужны, UR/Permit2 — нет).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{pools::{families,graph,registry}, quote::{graph_route,steps,via}, parts},
@@ -81,6 +84,7 @@ fn coin_usdt(id: &str, kind: &str, r0: U256, r1: U256) -> Entry {
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     }
 }
 
@@ -118,6 +122,8 @@ async fn scene(id: &str, kind: &str) -> Parts {
             .await
             .unwrap();
     }
+    // Решение 121 B3: бандл-маршрут исполним, только если все включённые каналы бандловые — один такой канал.
+    route_common::channel(&p, "club48", "bundle").await;
     // Лимит роутеров бандла — чтобы форк-маршрут собирался (collectable): 1 роутер форка ≤ 3.
     p.ctx
         .settings
@@ -131,12 +137,14 @@ async fn scene(id: &str, kind: &str) -> Parts {
         .unwrap();
     p.tokens.set(&[
         Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: Some(USDT),
+            contract: Some(USDT),
         },
         Asset {
+            chain: None,
             ticker: "COIN".into(),
-            bsc_contract: Some(COIN),
+            contract: Some(COIN),
         },
     ]);
     p.tokens.remember_decimals(USDT, 18);
@@ -144,8 +152,9 @@ async fn scene(id: &str, kind: &str) -> Parts {
     p.checks.set_coin(CoinCheck {
         venue: VenueId("bsc_dex".into()),
         asset: Asset {
+            chain: None,
             ticker: "COIN".into(),
-            bsc_contract: Some(COIN),
+            contract: Some(COIN),
         },
         taxes: CheckState::Known(zero()),
         source: "тест".into(),
@@ -158,6 +167,7 @@ async fn scene(id: &str, kind: &str) -> Parts {
         f.gas_sell = Some(120_000);
         f.quoter.buy = Some(Ok(()));
         f.quoter.sell = Some(Ok(()));
+        f.taxes = Some(route_common::clean_taxes());
     });
     p
 }
@@ -179,10 +189,12 @@ async fn quote_route(p: &Parts) -> DexRoute {
         usdt: (USDT, "USDT"),
         coin: (COIN, "COIN"),
         mids: &p.mids,
+        gas: "BNB",
     };
     let asset = Asset {
+        chain: None,
         ticker: "COIN".into(),
-        bsc_contract: Some(COIN),
+        contract: Some(COIN),
     };
     let quote = graph_route::quote(
         &v,
@@ -197,7 +209,8 @@ async fn quote_route(p: &Parts) -> DexRoute {
 }
 
 /// make(): v2_fork — graphable, tradable и fork (исполним своим роутером, 80.9b); поддержанный V2 — graphable+tradable,
-/// НЕ форк; v3_fork — пока только справочник (ни graphable, ни tradable).
+/// НЕ форк; v3_fork (решение 122 F) — в графе и сигналах, но без своего пути исполнения (graphable, НЕ tradable; шаг V3
+/// контракта-исполнителя).
 #[test]
 fn family_flags_split() {
     let fork = families::make("biswap", "v2_fork").unwrap();
@@ -212,13 +225,13 @@ fn family_flags_split() {
     );
     let v3f = families::make("some-v3-fork", "v3_fork").unwrap();
     assert!(
-        !v3f.graphable && !v3f.tradable,
-        "v3_fork пока только справочник"
+        v3f.graphable && !v3f.tradable && v3f.fork,
+        "v3_fork — в графе, сигнал, исполнение через исполнитель"
     );
 }
 
 /// classify(): V2-форк подключается в граф с фабрикой/роутером/комиссией БЕЗ Universal Router и Permit2; без роутера —
-/// не подключается; v3_fork (не graphable) — только справочник, в граф не берётся.
+/// не подключается; v3_fork без dex.pool_enabled и адресов — не подключается.
 #[tokio::test]
 async fn classify_fork_router_not_ur() {
     let p = route_common::parts().await;
@@ -260,7 +273,7 @@ async fn classify_fork_router_not_ur() {
         families::classify(&p.ctx, "biswap2").is_err(),
         "без dex.router форк не должен подключаться"
     );
-    // v3_fork — не graphable: только справочник, в граф не берётся.
+    // v3_fork (решение 122 F — graphable) без dex.pool_enabled/фабрики/TickLens/квотера не подключается.
     p.ctx
         .settings
         .set(
@@ -273,7 +286,7 @@ async fn classify_fork_router_not_ur() {
         .unwrap();
     assert!(
         families::classify(&p.ctx, "v3f").is_err(),
-        "v3_fork (не graphable) в граф не берётся"
+        "v3_fork без настроек не подключается"
     );
 }
 
@@ -309,6 +322,35 @@ async fn fork_route_executable_as_bundle() {
         graph_route::graph_form(&p.ctx, &r),
         GraphForm::Bundle,
         "форк-маршрут идёт бандлом (свой роутер), не прямым/умным путём UR"
+    );
+}
+
+/// Решение 121 B3: включён ещё и не-бандловый канал — форк-маршрут (только бандлом) неисполним уже на котировке, с
+/// понятной причиной (сигнал есть, сделки нет); выключили его — снова исполним.
+#[tokio::test]
+async fn fork_route_not_executable_with_single_channel() {
+    let p = scene("biswap", "v2_fork").await;
+    route_common::channel(&p, "jetbuilder", "single").await;
+    let r = quote_route(&p).await;
+    assert!(!r.executable, "не-бандловый канал — бандл не отправить");
+    let note = r.exec_note.unwrap_or_default();
+    assert!(
+        note.contains("не в режиме бандла") && note.contains("JetBuilder"),
+        "причина называет канал: {note}"
+    );
+    p.ctx
+        .settings
+        .set(
+            "channel.enabled",
+            Scope::Channel("jetbuilder".into()),
+            Some(json!(false)),
+            "тест",
+        )
+        .await
+        .unwrap();
+    assert!(
+        quote_route(&p).await.executable,
+        "только бандловые каналы — исполним"
     );
 }
 
@@ -360,10 +402,12 @@ async fn fork_excluded_from_classic_direct() {
         usdt: (USDT, "USDT"),
         coin: (COIN, "COIN"),
         mids: &p.mids,
+        gas: "BNB",
     };
     let asset = Asset {
+        chain: None,
         ticker: "COIN".into(),
-        bsc_contract: Some(COIN),
+        contract: Some(COIN),
     };
     let fork = q
         .reg
@@ -446,4 +490,144 @@ async fn classic_route_executable_direct() {
         GraphForm::Direct,
         "классический одно-пуловый маршрут — прямая форма (UR)"
     );
+}
+
+/// Второй пул теста — неисполнимое семейство (Solidly, tradable = нет) рядом с исполнимым.
+const POOL2: Address = address!("0x00000000000000000000000000000000000000c3");
+
+/// Решение 121: окружение с исполнимым пулом PancakeSwap V2 (POOL) и неисполнимым Solidly-волатильным (POOL2) на тех
+/// же реальных резервах записи; у Solidly комиссия ниже (1/10000 против 0.25%) — его цена лучше. Ошибок нет.
+async fn scene_with_signal_only() -> Parts {
+    let p = scene("pancakeswap_v2", "pancakeswap_v2").await;
+    let (r0, r1) = real_v2_reserves(&p);
+    let s = Scope::Dex("topaz_v2".into());
+    for (n, v) in [
+        ("dex.kind", json!("solidly_v2")),
+        ("dex.pool_enabled", json!(true)),
+        (
+            "dex.factory",
+            json!("0x0000000000000000000000000000000000000098"),
+        ),
+    ] {
+        p.ctx
+            .settings
+            .set(n, s.clone(), Some(v), "тест")
+            .await
+            .unwrap();
+    }
+    let mut e = coin_usdt("topaz_v2", "solidly_v2", r0, r1);
+    e.pool.reference = PoolRef::Contract(POOL2);
+    let unit = U256::from(10u64).pow(U256::from(18u64));
+    e.pool.state = PoolState::Solidly {
+        reserve0: r0,
+        reserve1: r1,
+        stable: false,
+        decimals0: unit,
+        decimals1: unit,
+        // Решение 273: комиссия с правилом (числитель над 10000 — как прежнее fee: 1), ограничений обмена нет.
+        fee: arb::core::types::SolidlyFee {
+            value: 1,
+            rule: arb::core::types::FeeRule::Numerator {
+                denominator: 10_000,
+            },
+        },
+        gate: Default::default(),
+        fee1: None,
+    };
+    p.registry.put(e);
+    p.checks.update_pool(&PoolRef::Contract(POOL2), |f| {
+        f.gas_buy = Some(120_000);
+        f.gas_sell = Some(120_000);
+        f.quoter.buy = Some(Ok(()));
+        f.quoter.sell = Some(Ok(()));
+        f.taxes = Some(route_common::clean_taxes());
+    });
+    p
+}
+
+/// Классическая прямая котировка покупки COIN по пулам `entries` (quote/classic_direct.rs). Ошибок нет — итог как есть.
+async fn classic(
+    p: &Parts,
+    entries: Vec<Entry>,
+) -> arb::gateway::errors::GatewayResult<arb::core::types::Quote> {
+    let q = p.quoting();
+    let taxes = zero();
+    let v = Via {
+        q: &q,
+        coin: COIN,
+        usdt: USDT,
+        side: Side::Buy,
+        taxes: &taxes,
+        coin_dec: 18,
+        usdt_dec: 18,
+    };
+    let names = Names {
+        usdt: (USDT, "USDT"),
+        coin: (COIN, "COIN"),
+        mids: &p.mids,
+        gas: "BNB",
+    };
+    let asset = Asset {
+        chain: None,
+        ticker: "COIN".into(),
+        contract: Some(COIN),
+    };
+    let gas = U256::from(2_000_000u64);
+    arb::venues::bsc_dex::quote::classic_direct::quote(
+        &v,
+        &names,
+        &asset,
+        Decimal::from(1000u32),
+        entries,
+        &[],
+        &|_| true,
+        gas,
+    )
+    .await
+}
+
+/// Решение 121: неисполнимый пул (tradable = нет) не выигрывает классическую котировку как Direct, даже если его цена
+/// лучше: маршрут сделки — исполнимый Pancake, а неисполнимый виден сигналу как signal_route (executable = нет).
+#[tokio::test]
+async fn signal_only_pool_not_direct_but_signal() {
+    let p = scene_with_signal_only().await;
+    let all = p.registry.by_pair(COIN, USDT);
+    assert_eq!(all.len(), 2, "оба пула в реестре");
+    let q = classic(&p, all).await.expect("исполнимая котировка есть");
+    let r = q.route.as_ref().expect("маршрут");
+    assert!(r.executable);
+    assert!(
+        r.legs[0]
+            .hops
+            .iter()
+            .all(|h| h.pool == PoolRef::Contract(POOL)),
+        "сделка — только по исполнимому пулу"
+    );
+    let sig = q
+        .signal_route
+        .as_ref()
+        .expect("неисполнимый лучший пул — сигнал");
+    assert!(!sig.executable);
+    assert!(
+        sig.legs[0]
+            .hops
+            .iter()
+            .any(|h| h.pool == PoolRef::Contract(POOL2))
+    );
+    assert!(sig.exec_note.as_deref().unwrap_or("").contains("topaz_v2"));
+}
+
+/// Решение 121: у монеты только неисполнимый пул — котировки на сделку нет (NoRoute), причина «только сигнал».
+#[tokio::test]
+async fn only_signal_pool_is_no_route() {
+    let p = scene_with_signal_only().await;
+    let only: Vec<Entry> = p
+        .registry
+        .by_pair(COIN, USDT)
+        .into_iter()
+        .filter(|e| e.pool.reference == PoolRef::Contract(POOL2))
+        .collect();
+    let err = classic(&p, only).await.expect_err("исполнимого пула нет");
+    assert_eq!(err.code, arb::gateway::errors::ErrorCode::NoRoute);
+    assert!(err.message.contains("только сигнал"), "{}", err.message);
 }

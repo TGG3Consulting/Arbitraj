@@ -1,8 +1,12 @@
 //! Файл: venues/bsc_dex/check/simulate.rs
 //! Что делает: eth_simulateV1 — последовательность вызовов в одном блоке поверх состояния заданного блока, без
 //! транзакций в сети и без подписи (validation = false): так меряются налоги и газ пробным обменом (решение 30).
-//! Кто вызывает: check/probe.rs, exec/precheck_sim.rs.
-//! От чего зависит: node/rpc.rs, ctx.rs.
+//! Подмена состояния (stateOverrides, run_with) — сухая сделка через неразвёрнутый исполнитель (решение 122, часть X).
+//! Время симулированного блока (решение 127): у всех проб перед отправкой и проб налогов — голова + 1 с
+//! (check/sim_base.rs head → blockOverrides.time), а не +12 с узла BSC; без времени — только проверка поддержки метода.
+//! Кто вызывает: check/{probe, native_probe, service_tax}.rs, exec/{precheck_sim, bundle_send, cycle_bundle_trade,
+//! cycle_exec, dry_sim, presell_slot}.rs, exec/executor/sim.rs.
+//! От чего зависит: node/rpc.rs, ctx.rs, check/sim_base.rs (Base — номер и время базового блока).
 //! Настройки: узел — bsc.node_http_url (метод должен поддерживаться провайдером; не поддерживается — ошибка узла
 //! как есть, проверка монеты не проходит).
 //!
@@ -10,7 +14,7 @@
 //! схемы — src/schemas/execute.yaml (EthSimulatePayload, BlockStateCalls, CallResult: status, returnData, gasUsed, error).
 //! В узле BSC — BlockChainAPI.SimulateV1: https://github.com/bnb-chain/bsc/blob/947ba1cb1ef05d4a5f71b738113a3d8b4c16f6b7/internal/ethapi/api.go#L1142 .
 
-use alloy_primitives::{Address, Bytes, U64, U256};
+use alloy_primitives::{Address, B256, Bytes, U64, U256};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -19,6 +23,8 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::ctx::Ctx;
 use super::super::node::call::block_tag;
 use super::super::node::rpc;
+
+pub use super::sim_base::Base;
 
 /// Один вызов последовательности.
 #[derive(Debug, Clone)]
@@ -78,13 +84,14 @@ impl CallResult {
     }
 }
 
-/// Выполняет вызовы по порядку в одном симулированном блоке поверх блока `base` (номер, а не «latest»: срок
-/// транзакции считан по времени этого же блока, решение 61). Время симулированного блока узел ставит сам: у BSC —
-/// время базового + timestampIncrement = 12 с (bsc 947ba1cb internal/ethapi/simulate.go#L56-L57, #L577-L583), поэтому
-/// dex.deadline_s должен быть больше 12 с — иначе откат TransactionDeadlinePassed («не проверено», повтор).
-/// Принимает: вызовы, номер базового блока. Возвращает: итог каждого вызова в том же порядке.
+/// Выполняет вызовы по порядку в одном симулированном блоке поверх базового блока (Base или номер).
+/// Принимает: вызовы, базовый блок. Возвращает: итог каждого вызова в том же порядке.
 /// Ошибки: узел (метод не поддерживается — его текст), BadResponse (число итогов не совпало).
-pub async fn run(ctx: &Ctx, calls: &[Call], base: u64) -> GatewayResult<Vec<CallResult>> {
+pub async fn run(
+    ctx: &Ctx,
+    calls: &[Call],
+    base: impl Into<Base>,
+) -> GatewayResult<Vec<CallResult>> {
     run_valued(ctx, calls, &[], base).await
 }
 
@@ -95,19 +102,59 @@ pub async fn run_valued(
     ctx: &Ctx,
     calls: &[Call],
     values: &[(usize, U256)],
-    base: u64,
+    base: impl Into<Base>,
 ) -> GatewayResult<Vec<CallResult>> {
-    let list: Vec<_> = calls
+    run_with(ctx, calls, values, &[], base).await
+}
+
+/// Подмена состояния счёта в симуляции (execute.yaml AccountOverride: code и state — полная замена хранилища):
+/// так «Сухая сделка DEX» проверяет ещё не развёрнутый исполнитель ArbExecutor на живой сети (решение 122, часть X).
+/// Решение 407 (t192): diff = true — точечная подмена слотов (AccountOverride.stateDiff, execution-apis 16caee27
+/// src/schemas/execute.yaml#L89-L92: «override individual slots»), БЕЗ code: код и прочие слоты счёта — как в сети
+/// (баланс токена кошелька в симуляции продажи до покупки — exec/presell_slot.rs). В узле BSC — override.go
+/// (bnb-chain/bsc 947ba1cb internal/ethapi/override/override.go#L115-L127: state и stateDiff вместе — ошибка;
+/// stateDiff — SetState по слоту).
+#[derive(Debug, Clone)]
+pub struct Override {
+    pub address: Address,
+    /// Код счёта; при diff = true не отправляется.
+    pub code: Bytes,
+    /// Слоты хранилища (ключ → значение); при diff = false остальные слоты — нули, при diff = true — как в сети.
+    pub state: Vec<(B256, B256)>,
+    /// true — stateDiff без code (решение 407); false — code + state (как до решения).
+    pub diff: bool,
+}
+
+/// То же с подменой состояния (blockStateCalls[].stateOverrides — execution-apis 16caee27 src/schemas/execute.yaml
+/// L40-L99). Принимает: вызовы, суммы BNB, подмены, номер базового блока. Ошибки: как у run; Internal — два счёта
+/// подмены с одним адресом (ревью t192 М1: в stateOverrides адрес — ключ словаря, второй молча заменил бы первый).
+pub async fn run_with(
+    ctx: &Ctx,
+    calls: &[Call],
+    values: &[(usize, U256)],
+    overrides: &[Override],
+    base: impl Into<Base>,
+) -> GatewayResult<Vec<CallResult>> {
+    let base = base.into();
+    if let Some(d) = overrides
         .iter()
         .enumerate()
-        .map(|(i, c)| match values.iter().find(|(n, _)| *n == i) {
-            Some((_, v)) => json!({ "from": c.from, "to": c.to, "input": c.input, "value": v }),
-            None => json!({ "from": c.from, "to": c.to, "input": c.input }),
-        })
-        .collect();
-    let payload = json!({ "blockStateCalls": [{ "calls": list }], "validation": false });
-    let blocks: Vec<BlockResult> =
-        rpc::call(ctx, "eth_simulateV1", json!([payload, block_tag(base)])).await?;
+        .find(|(i, o)| overrides[..*i].iter().any(|p| p.address == o.address))
+    {
+        return Err(ctx.err(
+            ErrorCode::Internal,
+            format!(
+                "eth_simulateV1: две подмены состояния одного адреса {:#x}",
+                d.1.address
+            ),
+        ));
+    }
+    let blocks: Vec<BlockResult> = rpc::call(
+        ctx,
+        "eth_simulateV1",
+        params(calls, values, overrides, base),
+    )
+    .await?;
     let out = blocks
         .into_iter()
         .next()
@@ -124,4 +171,49 @@ pub async fn run_valued(
         ));
     }
     Ok(out)
+}
+
+/// Параметры запроса eth_simulateV1: [EthSimulatePayload, номер базового блока] (execution-apis 16caee27
+/// src/eth/execute.yaml#L137-L160). Время задано (Base::timed, решение 127) — blockStateCalls[0].blockOverrides.time
+/// (hex-секунды, src/schemas/execute.yaml#L100-L117). Принимает: вызовы, суммы BNB, подмены, базовый блок.
+/// Возвращает: массив параметров. Ошибок нет (чистая функция — проверяется тестом tests/bsc_dex_sim_time.rs).
+pub fn params(
+    calls: &[Call],
+    values: &[(usize, U256)],
+    overrides: &[Override],
+    base: Base,
+) -> serde_json::Value {
+    let list: Vec<_> = calls
+        .iter()
+        .enumerate()
+        .map(|(i, c)| match values.iter().find(|(n, _)| *n == i) {
+            Some((_, v)) => json!({ "from": c.from, "to": c.to, "input": c.input, "value": v }),
+            None => json!({ "from": c.from, "to": c.to, "input": c.input }),
+        })
+        .collect();
+    let mut block = json!({ "calls": list });
+    if !overrides.is_empty() {
+        let map: serde_json::Map<String, serde_json::Value> = overrides
+            .iter()
+            .map(|o| {
+                let state: serde_json::Map<String, serde_json::Value> = o
+                    .state
+                    .iter()
+                    .map(|(k, v)| (format!("{k:#x}"), json!(v)))
+                    .collect();
+                let acc = if o.diff {
+                    json!({ "stateDiff": state })
+                } else {
+                    json!({ "code": o.code, "state": state })
+                };
+                (format!("{:#x}", o.address), acc)
+            })
+            .collect();
+        block["stateOverrides"] = serde_json::Value::Object(map);
+    }
+    if let Some(t) = base.time {
+        block["blockOverrides"] = json!({ "time": U64::from(t) });
+    }
+    let payload = json!({ "blockStateCalls": [block], "validation": false });
+    json!([payload, block_tag(base.number)])
 }

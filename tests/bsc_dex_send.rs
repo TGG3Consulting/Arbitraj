@@ -1,6 +1,7 @@
 //! Файл: tests/bsc_dex_send.rs
 //! Что делает: проверяет правила отправки DEX без сети: send.max_wait_blocks < send.bundle_max_blocks — отправка
-//! не работает с понятной причиной; цена газа отмены выше прошлой на надбавку; обмен без минимума (худшая цена ≤ 0,
+//! не работает с понятной причиной; без send.gas_limit_margin_pct SendCfg не читается (решение 398: запас газа отмены —
+//! до отправки исходной); цена газа отмены выше прошлой на надбавку; обмен без минимума (худшая цена ≤ 0,
 //! допуск 100%) не собирается; ожидаемое поступление токена и обмен с этим токеном на выходе не идут одновременно.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{send, exec, wallet, ctx}, arb::settings (настоящая SQLite во временной
@@ -40,15 +41,32 @@ async fn ctx(name: &str) -> Ctx {
     let (jtx, _) = broadcast::channel(64);
     let journal = Journal::new(db.clone(), jtx);
     let settings = Store::load(db, changes, journal.clone()).await.unwrap();
-    Ctx {
-        raw: RawLog::start(d.join("raw"), settings.clone()),
-        pace: Default::default(),
-        failover: Default::default(),
-        index: Default::default(),
-        settings,
-        vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
-        http: reqwest::Client::new(),
-        journal,
+    {
+        let c = Ctx {
+            raw: RawLog::start(d.join("raw"), settings.clone()),
+            pace: Default::default(),
+            failover: Default::default(),
+            evm_chain: Default::default(),
+            place: arb::venues::bsc_dex::ctx::Place::BSC,
+            chains: Default::default(),
+            account: None,
+            index: Default::default(),
+            settings,
+            vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
+            http: reqwest::Client::new(),
+            journal,
+        };
+        // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+        c.settings
+            .set(
+                "dex.gas_ticker",
+                arb::settings::scope::Scope::Venue("bsc_dex".into()),
+                Some(serde_json::json!("BNB")),
+                "тест",
+            )
+            .await
+            .unwrap();
+        c
     }
 }
 
@@ -75,15 +93,26 @@ async fn max_wait_must_cover_bundle_blocks() {
     set(&c, "send.cancel_max_gas_gwei", json!("5")).await;
     set(&c, "send.cancel_max_attempts", json!(3)).await;
     set(&c, "send.queue_max_wait_s", json!(600)).await;
+    // Решение 398: запас газа отмены — в SendCfg (отмена уходит после исходной): не задан — отправки нет.
+    let e = SendCfg::read(&c).unwrap_err();
+    assert_eq!(e.code, ErrorCode::NotConfigured);
+    assert!(
+        e.message.contains("send.gas_limit_margin_pct"),
+        "{}",
+        e.message
+    );
+    set(&c, "send.gas_limit_margin_pct", json!("20")).await;
     let e = SendCfg::read(&c).unwrap_err();
     assert_eq!(e.code, ErrorCode::NotConfigured);
     assert!(e.message.contains("send.max_wait_blocks"));
     set(&c, "send.max_wait_blocks", json!(5)).await;
     let cfg = SendCfg::read(&c).unwrap();
     // Отмена: 100 wei × 1,125 = 112,5 → вверх 113; каналов нет — нижней границы нет.
+    // Решение 435: legacy-цена (dex.gas_mode = legacy) — та же арифметика, что до модели газа.
+    use arb::venues::bsc_dex::send::tx_price::TxPrice;
     assert_eq!(
-        cancel::price(&c, U256::from(100u8), &cfg, &[]).unwrap(),
-        U256::from(113u8)
+        cancel::price(&c, TxPrice::Legacy(U256::from(100u8)), &cfg, &[]).unwrap(),
+        TxPrice::Legacy(U256::from(113u8))
     );
 }
 
@@ -120,6 +149,7 @@ fn entry() -> Entry {
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     }
 }
 
@@ -127,14 +157,17 @@ fn req(worst: Decimal) -> TradeRequest {
     TradeRequest {
         venue: VenueId("bsc_dex".into()),
         asset: Asset {
+            chain: None,
             ticker: "X".into(),
-            bsc_contract: Some(COIN),
+            contract: Some(COIN),
         },
         side: Side::Sell,
         qty: Decimal::ONE,
         worst_price: worst,
         deal_id: "т".into(),
         route: None,
+        exit_position: false,
+        remeasure: None,
     }
 }
 

@@ -9,17 +9,25 @@
     Причины отсева по площадкам и по пулам — каждая с новой строки; что закрыто у площадки, где монета есть (ввод,
     вывод, покупка или продажа через API — limitsText); проблема оценки (problem).
     Показывается во всплывающем окне монеты (CoinModal.svelte, Issue #33).
+    Решение 175: отметка «делистинг на X: дата» по каждой площадке монеты (lib/delist.svelte.js); решение 211 — по
+    тикеру монеты НА ЭТОЙ площадке (presence[].ticker).
+    Решение 413: удержание бирж при зачислении — DepositHolds.svelte.
     Кнопка «Перепроверить» — по каждой площадке, где у монеты есть пулы (POST /api/coins/recheck).
   Кто вызывает: components/CoinModal.svelte.
-  От чего зависит: lib/api.js, lib/coinLabels.js, lib/labels.js, components/ErrorText.svelte,
-    components/PoolDepthCell.svelte.
+  От чего зависит: lib/api.js, lib/coinLabels.js, lib/labels.js, lib/delist.svelte.js, components/ErrorText.svelte,
+    components/PoolDepthCell.svelte, components/DepositHolds.svelte.
   Настройки: нет (пороги tax.*, hooks.* — экран «Настройки»).
 -->
 <script>
+  import { uniq } from '../lib/uniq.js';
   import { post } from '../lib/api.js';
   import { assetLabel, checkState, taxesText, impactText, blockReason, hookGroupLabel, poolRefText, exclusionText, limitsText } from '../lib/coinLabels.js';
   import { poolKindLabel, showTime } from '../lib/labels.js';
   import PoolDepthCell from './PoolDepthCell.svelte';
+  import DepositHolds from './DepositHolds.svelte';
+  import { startDelist, delistItem, delistLabel } from '../lib/delist.svelte.js';
+
+  startDelist();
 
   /** coin — элемент ответа GET /api/coins. */
   let { coin } = $props();
@@ -47,14 +55,19 @@
   <header>
     <strong>{assetLabel(coin.asset)}</strong>
     <span class="muted">площадки: {coin.venues.join(', ')}</span>
-    {#each coin.via ?? [] as v (v.venue)}
+    {#each coin.via ?? [] as v, i (`${v.venue}|${i}`)}
       <span class="tag">{v.venue}: маршрут через {v.via} — пула с USDT нет, допущена по решению 52</span>
+    {/each}
+    {#each uniq(coin.venues) as v (v)}
+      {@const dl = delistItem(v, (coin.presence ?? []).find((p) => p.venue === v)?.ticker ?? coin.asset.ticker)}
+      {#if dl}<span class="err">{delistLabel(v, dl)}</span>{/if}
     {/each}
     {#if coin.block}<span class="err">в чёрном списке: {blockReason(coin.block.reason)} (с {showTime(coin.block.since)})</span>
     {:else}<span class="ok">торгуется</span>{/if}
   </header>
   {#if coin.problem}<p class="err">Не оценить: {coin.problem}</p>{/if}
-  {#each (coin.presence ?? []).filter((p) => p.excluded.length) as p (p.venue)}
+  {#if coin.cex_cex}<p class="warn-text">Биржа ↔ биржа: {coin.cex_cex}</p>{/if}
+  {#each (coin.presence ?? []).filter((p) => p.excluded.length) as p, i (`${p.venue}|${p.info?.network ?? ""}|${i}`)}
     <div class="muted">Не участвует на {p.venue}:</div>
     <ul class="why">
       {#each p.excluded as e, i (i)}
@@ -64,7 +77,7 @@
       {/each}
     </ul>
   {/each}
-  {#each (coin.presence ?? []).filter((p) => !p.excluded.length && limitsText(p).length) as p (p.venue)}
+  {#each (coin.presence ?? []).filter((p) => !p.excluded.length && limitsText(p).length) as p, i (`${p.venue}|${p.info?.network ?? ""}|${i}`)}
     <div class="muted">На {p.venue} закрыто (направления через эту сторону не считаются): {limitsText(p).join(', ')}</div>
   {/each}
   <p>
@@ -73,15 +86,17 @@
     <!-- Решение 61: почему проверка ещё не выполнена (ждёт пула, узла, настройки) — от адаптера. -->
     {#if coin.taxes === 'NotChecked' && coin.tax_wait}<br /><span class="warn-text">Ждёт: {coin.tax_wait}</span>{/if}
   </p>
+  <DepositHolds {coin} />
   {#if coin.pools.length}
     <table>
       <thead><tr><th>Площадка</th><th>Пара</th><th>Вид пула</th><th>Пул</th><th>Комиссия</th><th>Крючок</th><th>Проверка</th><th>Глубина</th><th>Получено</th></tr></thead>
       <tbody>
         {#each coin.pools as p, i (i)}
-          {@const chk = p.check ? checkState(p.check.impact, impactText) : null}
+          {@const coinTicker = (coin.presence ?? []).find((x) => x.venue === p.venue)?.ticker ?? coin.asset.ticker}
+          {@const chk = p.check ? checkState(p.check.impact, (i) => impactText(i, { buy: p.pair ?? 'USDT', sell: coinTicker })) : null}
           <tr class:off={p.admission}>
             <td>{p.venue}</td>
-            <td>{coin.asset.ticker} / {p.pair ?? 'USDT'}</td>
+            <td>{coinTicker} / {p.pair ?? 'USDT'}</td>
             <td><code>{p.family}</code> {poolKindLabel(p.kind)}</td>
             <td><code>{poolRefText(p.pool)}</code></td>
             <td>{p.fee_pips == null ? 'не из пула (V2 — настройка, V4 — динамическая)' : `${p.fee_pips / 10000}%`}</td>
@@ -89,6 +104,8 @@
             <td>
               {#if chk}<span class={chk.cls}>{chk.text}</span>{:else}<span class="muted">не требуется / нет данных</span>{/if}
               {#if p.admission}<div class="err">пул исключён: {p.admission}</div>{/if}
+              <!-- Ревью 4 лесенки (Н3): сторона «не прошла» — пул работает другой стороной (core/pool_hook.rs pool_sides_off). -->
+              {#each p.side_off ?? [] as off, k (k)}<div class="warn-text">сторона закрыта: {off}</div>{/each}
             </td>
             <td><PoolDepthCell {p} /></td>
             <td>{p.received_at ? showTime(p.received_at) : '—'}{#if p.block != null} <span class="muted">· блок {p.block}</span>{/if}</td>
@@ -100,7 +117,7 @@
     <p class="muted">Пулов у монеты нет.</p>
   {/if}
   <div class="row">
-    {#each dexVenues as v (v)}
+    {#each uniq(dexVenues) as v (v)}
       <button class="quiet" disabled={busy} onclick={() => recheck(v)}>Перепроверить на {v}</button>
     {/each}
     {#if result}<span class={result.ok ? 'ok' : 'err'} role="status">{result.details}</span>{/if}

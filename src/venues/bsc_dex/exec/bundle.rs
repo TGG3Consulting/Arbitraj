@@ -15,6 +15,9 @@
 //! Нога ФОРКА (решения 59, 82, фаза 80.9b) исполняется своим classic V2 Router, а не Universal Router: отдельной
 //! транзакцией BundleTx::ForkSwap (exec/fork_swap.rs) с ERC-20 approve роутеру (wallet/approve::fork_*). В одном
 //! атомарном бандле можно смешивать ноги UR (Pancake) и форка (Biswap) — цель решения 80.
+//! Решение 271 (дополнение): у ног форка одно ERC-20 approve на пару (токен входа, роутер форка) — на сумму входов её ног.
+//! Решение 122 R3: нативная монета BNB — у каждой роутер-группы своя WRAP_ETH (value) / UNWRAP_WETH по флагам шагов
+//! (exec/bundle_native.rs::group_wrap); нога форка с BNB не собирается.
 //! Кто вызывает: exec/trade.rs (80.8b, для исполнимого бандлом графа); тесты.
 //! От чего зависит: exec/chain.rs (Step, command), exec/plan.rs (Plan), exec/ur.rs (Format), wallet/approve.rs,
 //! pools/families.rs (Family), pools/registry.rs.
@@ -29,9 +32,9 @@ use super::super::ctx::Ctx;
 use super::super::pools::families::Family;
 use super::super::wallet::approve;
 use super::chain::{self, Step};
-use super::fork_swap;
 use super::plan::Plan;
 use super::ur;
+use super::{bundle_native, fork_swap};
 
 /// Одна транзакция бандла с присвоенным nonce.
 #[derive(Debug, Clone)]
@@ -157,16 +160,42 @@ pub async fn build(
     // (роутер FeeOnTransfer меряет дельту поверх прошлых групп); выход форка попадает в базу последующих UR-групп, т.к.
     // их balanceOf в симуляции читается после этой транзакции (exec/bundle_sim.rs).
     let deadline = U256::from(now + ctx.int("dex.deadline_s")?);
+    // Данные ног форка — проверки по ногам в прежнем порядке (обёртка, роутер, путь, вход, минимум).
+    let mut forks = Vec::with_capacity(fork_legs.len());
     for &leg in &fork_legs {
+        // R3 (решение 122): у роутера форка обёртки WBNB нет — нога форка с BNB не собирается (защитно).
+        if bundle_native::group_wrap(ctx, &[leg])? != super::native::Wrap::None {
+            return Err(ctx.err(
+                ErrorCode::NoRoute,
+                "нога форка с нативной монетой BNB — обёртки WBNB у роутера форка нет, бандл не собирается",
+            ));
+        }
         let (router, _family) = fork_router(ctx, leg)?;
         let path = fork_swap::token_path(ctx, leg)?;
         let amount = fork_swap::amount_in(ctx, leg)?;
         let min = fork_swap::min_out(ctx, leg)?;
-        let token_in = path[0];
-        let approvals = if all_approvals {
-            approve::fork_all(ctx, token_in, router, amount)?
+        forks.push((router, path, amount, min));
+    }
+    for (i, (router, path, amount, min)) in forks.iter().enumerate() {
+        let (router, token_in) = (*router, path[0]);
+        // Решение 271 (дополнение): одно разрешение на пару (токен входа, роутер форка) в бандле — перед ПЕРВОЙ ногой
+        // пары, на СУММУ входов всех её ног (ERC-20 approve задаёт allowance, а не прибавляет; каждая нога списывает свой
+        // вход). Раньше вторая нога пары слала свой approve по allowance до бандла — лишняя транзакция. Одна нога на
+        // пару — как раньше (сумма = её вход). Котировка считает так же (quote/approve_bundle.rs).
+        let pair =
+            |(r, p, ..): &(Address, Vec<Address>, U256, U256)| (*r, p[0]) == (router, token_in);
+        let approvals = if forks[..i].iter().any(pair) {
+            Vec::new()
         } else {
-            approve::fork_missing(ctx, token_in, wallet, router, amount).await?
+            let total = forks[i..]
+                .iter()
+                .filter(|f| pair(f))
+                .fold(U256::ZERO, |a, f| a.saturating_add(f.2));
+            if all_approvals {
+                approve::fork_all(ctx, token_in, router, total)?
+            } else {
+                approve::fork_missing(ctx, token_in, wallet, router, total).await?
+            }
         };
         for (to, data) in approvals {
             txs.push(BundleTx::Approve { to, data, nonce });
@@ -174,9 +203,9 @@ pub async fn build(
         }
         txs.push(BundleTx::ForkSwap {
             router,
-            path,
-            amount_in: amount,
-            min_out: min,
+            path: path.clone(),
+            amount_in: *amount,
+            min_out: *min,
             to: wallet,
             deadline,
             nonce,
@@ -191,13 +220,25 @@ pub async fn build(
 }
 
 /// Адрес роутера форка ноги и её семейство. Все шаги — один форк и один его роутер (dex.router): межроутерную ногу
-/// (форк + не-форк или два форка) один вызов не исполнит. Ошибки: NoRoute (нет шагов, смешанная/межроутерная нога),
-/// NotConfigured (dex.router форка не задан).
+/// (форк + не-форк или два форка) один вызов не исполнит. Ошибки: NoRoute (нет шагов, у шага нет своего пути
+/// исполнения — tradable = нет, смешанная/межроутерная нога), NotConfigured (dex.router форка не задан).
 fn fork_router(ctx: &Ctx, leg: &[Step]) -> GatewayResult<(Address, &'static Family)> {
     let first = leg
         .first()
         .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "нога форка без шагов"))?;
     let family = first.entry.family;
+    // Ревью 280: нога без своего пути исполнения (tradable = нет: v2_fork_executor, v3_fork — исполняются только шагом
+    // исполнителя) в бандл попасть не должна; попала (исполнитель исчез между котировкой и сделкой) — отказ ДО чтения
+    // dex.router: оставшийся от прежнего вида или ошибочный роутер мог бы исполнить своп чужой фабрикой.
+    if let Some(s) = leg.iter().find(|s| !s.entry.family.tradable) {
+        return Err(ctx.err(
+            ErrorCode::NoRoute,
+            format!(
+                "у DEX {} нет своего пути исполнения — нужен исполнитель у кошелька (exec.executor_address)",
+                s.entry.family.title
+            ),
+        ));
+    }
     let router = ctx.dex_addr("dex.router", family.id)?;
     for s in leg {
         if !s.entry.family.fork {
@@ -225,11 +266,18 @@ fn single_router(ctx: &Ctx, leg: &[Step]) -> GatewayResult<(Address, &'static Fa
     let family = first.entry.family;
     let router = ctx.dex_addr("dex.universal_router", family.id)?;
     for s in leg {
-        if ctx.dex_addr("dex.universal_router", s.entry.family.id)? != router {
+        let other = ctx.dex_addr("dex.universal_router", s.entry.family.id)?;
+        if other != router {
+            // Решение 220: для разбора — какие роутеры пересеклись (семейство и адрес) и кошелёк, которым шла сделка.
             return Err(ctx.err(
                 ErrorCode::NoRoute,
-                "нога маршрута пересекает Universal Router'ы — в v1 бандл такую ногу не собирает \
-                 (нужна межроутерная передача промежуточного токена, отдельная фаза)",
+                format!(
+                    "нога маршрута пересекает Universal Router'ы ({} {router} → {} {other}; кошелёк «{}») — в v1 \
+                     бандл такую ногу не собирает (нужна межроутерная передача промежуточного токена, отдельная фаза)",
+                    family.id,
+                    s.entry.family.id,
+                    ctx.wallet_name()
+                ),
             ));
         }
     }
@@ -299,6 +347,8 @@ async fn router_execute(
     } else {
         approve::missing(ctx, tin, wallet, permit2, router, total_in, now).await?
     };
+    // R3 (решение 122): BNB — WRAP_ETH на сумму входов ног группы (value транзакции) или UNWRAP_WETH на кошелёк.
+    let wrap = bundle_native::group_wrap(ctx, &g.legs)?;
     let plan = Plan::new(
         ctx,
         (approvals, router, wallet),
@@ -306,6 +356,7 @@ async fn router_execute(
         commands,
         total_min,
         deadline,
-    )?;
+    )?
+    .with_native(wrap);
     Ok((plan, legs_min))
 }

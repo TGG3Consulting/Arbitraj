@@ -1,40 +1,93 @@
 //! Файл: core/types/mod.rs
 //! Что делает: общие типы ядра — единый язык данных между ядром, шлюзом, адаптерами и интерфейсом.
 //! Кто вызывает: весь проект.
-//! От чего зависит: balance.rs, market.rs, pool.rs, trade.rs, cost.rs, transfer.rs, check.rs, send.rs, control.rs, directory.rs, dex_cycle.rs.
+//! От чего зависит: account.rs (id счёта DEX, решение 132), chain.rs (id сети, решение 416), balance.rs, market.rs, pool.rs, trade.rs, fee.rs (часть комиссии ордера), cost.rs, transfer.rs, check.rs, send.rs, control.rs, directory.rs, dex_cycle.rs, dex_graph.rs (фоновый граф маршрутов DEX, решение 308), cycle_trade.rs, dry_swap.rs, executor.rs, hold.rs (удержания вывода, решение 150), presell.rs (симуляция продажи DEX до покупки, решение 234), delist.rs (делистинги, решение 175), manual_feed.rs (записи экрана «Ручное управление» с кнопками, решение 156), window.rs, pool_cond_stat.rs (статистика условия пулов, решение 439), pool_ekubo.rs (пул Ekubo, решение 447).
 //! Настройки: нет.
 //!
 //! Это стык: менять только через запрос на изменение стыка (docs/AGENTS.md).
 
+pub mod account;
 pub mod balance;
+pub mod chain;
 pub mod check;
 pub mod control;
 pub mod cost;
+pub mod cycle_trade;
+pub mod delist;
 pub mod dex_cycle;
+pub mod dex_graph;
 pub mod directory;
+pub mod dry_swap;
+pub mod executor;
+pub mod fee;
+pub mod hold;
+pub mod manual_feed;
 pub mod market;
 pub mod pool;
+pub mod pool_amp;
+pub mod pool_basin;
+pub mod pool_cond_stat;
+pub mod pool_crypto;
 pub mod pool_depth;
+pub mod pool_ekubo;
+pub mod pool_fictive;
+pub mod pool_lb;
+pub mod pool_proteus;
+pub mod pool_smart;
+pub mod pool_solidly;
+pub mod pool_stable_debug;
+pub mod pool_tick_bin;
+pub mod pool_vault;
+pub mod pool_vault_v2;
+pub mod pool_vault_v3;
+pub mod pool_wombat;
+pub mod presell;
 pub mod send;
+pub mod tip_share;
 pub mod trade;
 pub mod transfer;
+pub mod window;
 
+pub use account::DexAccountId;
 pub use balance::{BalanceChange, BalanceKind};
+pub use chain::ChainId;
 pub use check::{
-    BlockReason, CheckState, CoinBlock, CoinCheck, HookImpact, PoolCheck, TaxKind, TokenTaxes,
+    BlockReason, CheckState, CoinBlock, CoinCheck, ExitGap, HookImpact, HookLadder, HookStep,
+    PoolCheck, TaxKind, TokenTaxes,
 };
 pub use control::{
-    CoinGasStats, CommandSource, CommandTx, ManualAction, ManualCommand, ManualHolding, StuckAlert,
+    CoinGasStats, CommandSource, ManualAction, ManualCommand, ManualHolding, StuckAlert,
 };
 pub use cost::{Cost, CostKind, DexRoute, RouteHop, RouteLeg, RouteMode, RouteStep};
+pub use cycle_trade::{CycleQuote, CycleTradeRequest, CycleTradeResult};
+pub use delist::{DelistItem, Delistings};
 pub use dex_cycle::{DexCycle, DexCycleHop};
-pub use directory::{DirectoryPool, DirectoryStatus, DirectoryToken, IndexerDex, PoolDirectory};
+pub use dex_graph::{DexGraphFull, DexGraphRound, DexGraphState};
+pub use directory::{
+    DirectoryPool, DirectoryStatus, DirectoryToken, FactoryScan, IndexerDex, PoolDirectory,
+};
+pub use dry_swap::{DexDrySwap, DrySwapPool};
+pub use executor::{ExecutorClassProof, ExecutorDeployQuote, ExecutorDeployed};
+pub use hold::{HoldItem, WithdrawHold, WithdrawReady};
+pub use manual_feed::{ManualButton, ManualRecord, RecordKind};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
-pub use pool::{HookGroup, HookInfo, PmmData, Pool, PoolKind, PoolRef, PoolState};
-pub use pool_depth::{CrossCheck, PoolDepth, SideCheck};
+pub use pool::{
+    AmpV2Data, BasinFunction, BasinWellData, ColReserves, CryptoData, CryptoMath, CryptoTweak,
+    DebtReserves, EkuboData, EkuboMev, EkuboTick, EkuboTwamm, FeeRule, FictiveData, HookGroup,
+    HookInfo, LadderPoint, LbBinData, OraclePmmData, PmmData, Pool, PoolKind, PoolRef, PoolState,
+    ProteusData, ProteusUtility, SmartColDebtData, SolidlyFee, SolidlyGate, StableData,
+    StableGuard, StableNg, TickBinData, TickReserves, VaultCurve, VaultPoolData, WombatData,
+};
+pub use pool_cond_stat::{PoolCondCounts, PoolCondStat};
+pub use pool_depth::{CrossCheck, PoolDepth, SideCheck, UnreadPool};
+pub use presell::{DexPresell, PresellOutcome, PresellShort};
 pub use send::{
     ChainTx, ChannelState, SendChannelInfo, SendChannelStats, SendMethod, TxOutcome, WalletQueue,
     WalletQueueState,
 };
-pub use trade::{Quote, Side, TradeRequest, TradeResult, TradeStatus};
-pub use transfer::{Balance, CoinNetworkInfo, Transfer, TransferStatus, WithdrawRequest};
+pub use tip_share::{TipLoss, TipOutcome, TipShare};
+pub use trade::{Fee, Quote, Remeasure, Side, TradeRequest, TradeResult, TradeStatus};
+pub use transfer::{
+    AccountBalances, Balance, CoinNetworkInfo, Transfer, TransferStatus, WithdrawRequest,
+};
+pub use window::{TapDecoded, TapView, TradeTick};

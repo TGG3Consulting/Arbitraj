@@ -82,16 +82,24 @@ fn order_or_withdraw_without_result_is_outcome_unknown() {
 }
 
 #[test]
-fn retry_is_forbidden_only_for_outcome_unknown() {
+fn retry_is_forbidden_for_outcome_unknown_and_withdraw_refusals() {
     let codes = arb::api::rules_codes::codes();
     for c in &codes {
+        // Решение 230: «Повторить» нельзя и для отказов вывода (WithdrawRejected, InvalidAddress, WithdrawLocked).
+        let refusal = arb::gateway::rules::withdraw_refusal(c.code);
         assert_eq!(
             c.no_retry,
-            c.code == ErrorCode::OutcomeUnknown,
+            // Решение 268: и для отказа «цена вне диапазона биржи» (PriceOutOfRange) — повтор тем же ордером бесполезен.
+            c.code == ErrorCode::OutcomeUnknown
+                || refusal
+                || arb::gateway::rules::price_range(c.code),
             "{:?}",
             c.code
         );
-        assert_eq!(retry_allowed(c.code), !c.no_retry);
+        // У отказов вывода и у PriceOutOfRange повтор глушит не retry_allowed, а своя проверка кода (rules.rs).
+        if !refusal && !arb::gateway::rules::price_range(c.code) {
+            assert_eq!(retry_allowed(c.code), !c.no_retry);
+        }
     }
     assert!(codes.iter().any(|c| c.no_retry));
 }

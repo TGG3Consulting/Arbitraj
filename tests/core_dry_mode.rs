@@ -4,7 +4,8 @@
 //! записанные CAKE: asks BingX, пул V2); тот же расчёт без сухого режима проходит этот замок и останавливается дальше
 //! («направление не торгуемо» — площадок в реестре нет), то есть отказ в сухом режиме дал именно он; режим читается на
 //! лету; dry.enabled не задана — обычный режим; включён без dry.budget_usdt — бюджета нет, причина названа; ссылки
-//! карточки по шаблонам из настроек (пара — по площадке, пул — по DEX).
+//! карточки по шаблонам из настроек (пара — по площадке, пул — по DEX); решение 265 — у пересчёта и предпроверки есть
+//! строка «Время по шагам» с названиями шагов; log.step_timing не задана — выключено, отказ предпроверки как до 265.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::settings, arb::storage, arb::notify, tests/size_common. Моков нет: площадок в
 //! реестре нет, проверяется решение ядра.
@@ -98,7 +99,11 @@ async fn dry_mode_never_calls_executor() {
     // Включение снято на лету — замок пропускает, дальше отказ ядра (площадок в реестре нет).
     set(&s, "dry.enabled", Some(json!(false))).await;
     assert_eq!(dry::mode(&s), Mode::Live);
-    assert_eq!(executor::accepted(&core, calc).await, Start::NotTradable);
+    // Решение 147: отказ с причиной — монеты нет в справочнике (площадок в реестре нет).
+    match executor::accepted(&core, calc).await {
+        Start::NotTradable(why) => assert!(why.contains("нет в рабочем справочнике"), "{why}"),
+        r => panic!("ожидался отказ «не торгуемо»: {r:?}"),
+    }
     assert!(core.deals().is_empty());
 }
 
@@ -158,8 +163,8 @@ async fn link_templates_from_settings() {
 }
 
 /// Гонка (ревью #64): режим зафиксирован при входе в сделку (обычный), сухой включили во время предпроверки — бюджет
-/// живой сделки виртуальным не становится (limits::available в зафиксированном режиме настройку не читает), а замок
-/// перед покупкой (executor::buy_gate) покупку не пускает.
+/// живой сделки виртуальным не становится (решение 94: деньги живой сделки — только limits::free_now / buy_cap через
+/// шлюз прямо перед ордером, настройку dry.* не читают), а замок перед покупкой (executor::buy_gate) покупку не пускает.
 #[tokio::test]
 async fn live_deal_never_gets_virtual_budget() {
     let (core, s) = start("race").await;
@@ -170,14 +175,13 @@ async fn live_deal_never_gets_virtual_budget() {
     set(&s, "dry.enabled", Some(json!(true))).await;
     set(&s, "dry.budget_usdt", Some(json!("1000"))).await;
     // Живая сделка: баланс — только через шлюз (площадки в реестре нет — ошибка, а не 1000 виртуальных).
-    let live = limits::available(&core, &bingx, "USDT", &fixed).await;
+    let live = limits::free_now(&core, &bingx, None, "USDT").await;
     assert!(live.is_err(), "{live:?}");
-    // Сухой расчёт кандидата — виртуальный бюджет, к площадке не ходит.
-    let (v, from) = limits::available(&core, &bingx, "USDT", &dry::mode(&s))
-        .await
-        .unwrap();
-    assert_eq!(v, d("1000"));
-    assert!(from.contains("dry.budget_usdt"));
+    // Сухой расчёт кандидата — виртуальный бюджет из настроек, к площадке не ходит.
+    match dry::mode(&s) {
+        Mode::Dry(Ok(v)) => assert_eq!(v, d("1000")),
+        other => panic!("ожидался сухой режим с бюджетом: {other:?}"),
+    }
     assert!(
         executor::buy_gate(&core)
             .unwrap_err()
@@ -227,9 +231,55 @@ async fn precheck_replans_live() {
     };
     let dry_reason = reason(profit::decide(&core, &dir, &dry::mode(&s)).await);
     assert!(dry_reason.contains("dry.budget_usdt"), "{dry_reason}");
-    let live_reason = reason(precheck::replan(&core, &dir).await);
+    // Будущее большое (отладочная сборка) — в кучу, иначе стек потока теста переполняется.
+    let (v, m) = Box::pin(arb::core::step_timing::measure(precheck::replan(
+        &core, &dir,
+    )))
+    .await;
+    let live_reason = reason(v);
     assert!(
         !live_reason.contains("dry"),
         "пересчёт сделки — режим Live: {live_reason}"
     );
+    // Решение 265: этапы пересчёта — в строке «Время по шагам» (числа не проверяются).
+    let text = m.calc_text("пересчёт с финальной котировкой");
+    for name in [
+        "Время по шагам (пересчёт с финальной котировкой",
+        "делистинг",
+        "вне этапов",
+    ] {
+        assert!(text.contains(name), "нет «{name}»: {text}");
+    }
+    // Решение 265 (включаемое): log.step_timing не задана — выключено, отказ предпроверки — как до 265 («время: …»),
+    // строк «Время по шагам» нет; «да» — есть стоп-условия.
+    use arb::core::step_timing::enabled;
+    assert!(!enabled(&s), "не задана — выключено");
+    // Будущее предпроверки большое — в кучу (тело теста лежит на стеке потока теста; у сделки — задача tokio в куче).
+    let e = Box::pin(precheck::run(
+        &core,
+        &dir,
+        enabled(&s),
+        Default::default(),
+        None,
+    ))
+    .await
+    .unwrap_err();
+    assert!(
+        e.contains("(время: ") && !e.contains("Время по шагам"),
+        "{e}"
+    );
+    set(&s, "log.step_timing", Some(json!(true))).await;
+    assert!(enabled(&s), "на лету, без перезапуска");
+    let e = Box::pin(precheck::run(
+        &core,
+        &dir,
+        enabled(&s),
+        Default::default(),
+        None,
+    ))
+    .await
+    .unwrap_err();
+    assert!(e.contains("(время: "), "прежняя строка — всегда: {e}");
+    set(&s, "log.step_timing", Some(json!(false))).await;
+    assert!(!enabled(&s));
 }

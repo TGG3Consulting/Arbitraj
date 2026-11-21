@@ -40,18 +40,21 @@ fn net(ticker: &str, open: bool) -> CoinNetworkInfo {
     CoinNetworkInfo {
         venue: VenueId("bingx".into()),
         asset: Asset {
+            chain: None,
             ticker: ticker.into(),
-            bsc_contract: Some(Address::ZERO),
+            contract: Some(Address::ZERO),
         },
         network: "BEP20".into(),
         deposit_enabled: open,
         withdraw_enabled: open,
         withdraw_fee: None,
+        withdraw_fee_pct: None,
         withdraw_min: None,
         withdraw_max: None,
         deposit_min: None,
         deposit_confirmations: None,
         withdraw_precision: None,
+        withdraw_step: None,
         updated_at: Utc::now(),
     }
 }
@@ -98,7 +101,7 @@ fn mass_change_is_one_summary() {
     };
     assert_eq!(
         transfer_status::one("bingx", &c),
-        format!("bingx {} (BEP20): ввод закрыт, вывод открыт", hundred[0])
+        format!("BingX {} (BEP20): ввод закрыт, вывод открыт", hundred[0])
     );
     // Монеты, которой не было в прошлом справочнике, — не смена.
     assert!(transfer_status::diff(&HashMap::new(), &new).is_empty());

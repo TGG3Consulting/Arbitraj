@@ -7,7 +7,8 @@
 use alloy_primitives::Address;
 
 use crate::core::types::{
-    CoinCheck, PoolCheck, SendChannelStats, VenueId, WalletQueue, WalletQueueState,
+    CoinCheck, ExitGap, PoolCheck, PoolRef, SendChannelStats, VenueId, WalletQueue,
+    WalletQueueState,
 };
 
 /// Что изменилось после события — по этому ядро решает, что пересчитать.
@@ -19,16 +20,21 @@ pub enum Touched {
         ticker: String,
         first: bool,
     },
-    /// Новое состояние пула. `first` — пул встречен впервые.
+    /// Новое состояние пула. `first` — пул встречен впервые. `pool` — какой пул (решение 245: пулы маршрута сделки).
+    /// `block` — номер блока состояния (Pool.block; решение 322 — в запись core.signal_hold).
     Pool {
         venue: VenueId,
         tokens: (Address, Address),
+        pool: PoolRef,
         first: bool,
+        block: u64,
     },
     /// Площадка объявила данные монеты недостоверными — стакан удалён.
     Invalidated {
         venue: VenueId,
         ticker: String,
+        /// Адрес монеты от DEX (решение 211, ревью В2); биржа — None.
+        address: Option<Address>,
     },
     CoinCheck(CoinCheck),
     PoolCheck(PoolCheck),
@@ -58,4 +64,6 @@ pub enum Touched {
         code: String,
         text: String,
     },
+    /// Решение 248: замер реального выхода продажи ниже модели — закрыть монету для входа (core/exit_gap.rs).
+    ExitGap(ExitGap),
 }

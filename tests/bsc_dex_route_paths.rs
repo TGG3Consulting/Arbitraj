@@ -5,6 +5,7 @@
 //! WBNB-USDT (V2), CAKE-BTCB (Uniswap V3), BTCB-WBNB (Pancake V3). Проверяется: из USDT в CAKE находятся прямой путь
 //! (оба пула пары), путь глубины 2 (через WBNB) и глубины 3 (через BTCB и WBNB); пути не заходят в токен дважды
 //! (нет циклов, нет возврата в старт, решение 80 §6); ограничение ширины и набор разрешённых промежуточных работают.
+//! Решение 349: событие каждого пула каждого пути (кроме пулов монеты) будит монету (core/mid_wake.rs woken_tokens).
 //! Адреса токенов записью не захвачены (рекордер снимает только состояние пулов), поэтому узлы графа — условные
 //! адреса в том же порядке сортировки, что реальные (CAKE < USDT < BTCB < WBNB), чтобы ориентация token0/token1 у V3
 //! совпадала с записанным sqrtPriceX96; пары пулов — по тегам записи (авторитетная топология от техлида).
@@ -98,6 +99,7 @@ fn base(kind: &str, fee: Option<u32>, addr: Address, coin: Address, counter: Add
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     }
 }
 
@@ -155,7 +157,7 @@ fn v3(
     };
     e.ticks = Some(TickMap {
         spacing,
-        ticks,
+        ticks: ticks.into(),
         words,
     });
     e
@@ -197,15 +199,32 @@ async fn ctx() -> Ctx {
     let (jtx, _) = broadcast::channel(64);
     let journal = Journal::new(db.clone(), jtx);
     let settings = Store::load(db, changes, journal.clone()).await.unwrap();
-    let c = Ctx {
-        raw: RawLog::start(d.join("raw"), settings.clone()),
-        pace: Default::default(),
-        failover: Default::default(),
-        index: Default::default(),
-        settings,
-        vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
-        http: reqwest::Client::new(),
-        journal,
+    let c = {
+        let c = Ctx {
+            raw: RawLog::start(d.join("raw"), settings.clone()),
+            pace: Default::default(),
+            failover: Default::default(),
+            evm_chain: Default::default(),
+            place: arb::venues::bsc_dex::ctx::Place::BSC,
+            chains: Default::default(),
+            account: None,
+            index: Default::default(),
+            settings,
+            vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
+            http: reqwest::Client::new(),
+            journal,
+        };
+        // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+        c.settings
+            .set(
+                "dex.gas_ticker",
+                arb::settings::scope::Scope::Venue("bsc_dex".into()),
+                Some(serde_json::json!("BNB")),
+                "тест",
+            )
+            .await
+            .unwrap();
+        c
     };
     let v = Scope::Venue("bsc_dex".into());
     for (n, val) in [
@@ -231,8 +250,9 @@ async fn graph_and_ctx() -> (graph::Graph, Parts) {
     let got = load();
     let p = Parts::new(ctx().await);
     p.tokens.set(&[Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(USDT),
+        contract: Some(USDT),
     }]);
     for e in [
         v3(
@@ -363,4 +383,45 @@ async fn width_and_allowed_limits() {
 async fn limits_read_from_settings() {
     let (_g, p) = graph_and_ctx().await;
     assert_eq!(route_paths::limits(&p.ctx).unwrap(), (3, 50));
+}
+
+/// Решение 349: событие любого пула пути, кроме пулов самой монеты, будит монету (core/mid_wake.rs woken_tokens):
+/// сверка с перечнем путей адаптера на записанном графе — пути глубины 2 и 3 через промежуточные WBNB и BTCB; соседи —
+/// по пулам реестра записи; шаги «промежуточная — промежуточная» — max_hops − 2, как у ядра.
+#[tokio::test]
+async fn mid_wake_covers_every_path() {
+    let (g, p) = graph_and_ctx().await;
+    let mids = [WBNB, BTCB];
+    let allowed = HashSet::from(mids);
+    let mut nb: HashMap<Address, Vec<Address>> = HashMap::new();
+    for e in p.registry.all() {
+        nb.entry(e.pool.token0).or_default().push(e.pool.token1);
+        nb.entry(e.pool.token1).or_default().push(e.pool.token0);
+    }
+    let peers = |t: Address| nb.get(&t).cloned().unwrap_or_default();
+    for hops in [2usize, 3] {
+        let paths = route_paths::enumerate(&g, USDT, CAKE, &allowed, hops, 50);
+        let mut checked = 0;
+        for path in &paths {
+            for st in &path.steps {
+                if st.token_in == CAKE || st.token_out == CAKE {
+                    continue;
+                }
+                let pool = (st.token_in, st.token_out);
+                let woken = arb::core::mid_wake::woken_tokens(&peers, pool, &mids, hops - 2, USDT);
+                assert!(
+                    woken.contains(&CAKE),
+                    "max_hops {hops}: пул {pool:?} пути {:?} не будит CAKE",
+                    seq(path)
+                );
+                checked += 1;
+            }
+        }
+        assert!(
+            checked > 0,
+            "max_hops {hops}: на записи есть пути через пулы промежуточных"
+        );
+    }
+    // Пул без промежуточной (CAKE-USDT) — mid_wake не будит никого (монету пула будит событие по токенам).
+    assert!(arb::core::mid_wake::woken_tokens(&peers, (CAKE, USDT), &mids, 1, USDT).is_empty());
 }

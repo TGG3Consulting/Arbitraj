@@ -88,20 +88,20 @@ fn recorded_bnb_maps_only_bep20() {
         // Как пришло от BingX: три сети BNB, ни у одной нет адреса контракта (contractAddress = "").
         let nets: Vec<&str> = list.iter().map(|i| i.network.as_str()).collect();
         assert_eq!(nets, ["BEP20", "XTERIOB", "Opbnb"]);
-        assert!(list.iter().all(|i| i.asset.bsc_contract.is_none()));
+        assert!(list.iter().all(|i| i.asset.contract.is_none()));
         let out = native::apply(list.clone(), Some("BEP20"), &n);
         let bep20 = &out[0];
-        assert_eq!(bep20.asset.bsc_contract, Some(WBNB));
+        assert_eq!(bep20.asset.contract, Some(WBNB));
         assert!(bep20.deposit_enabled && bep20.withdraw_enabled);
         // Другие сети BNB (закрыты у BingX) сопоставление не трогает.
         for other in &out[1..] {
-            assert_eq!(other.asset.bsc_contract, None, "{}", other.network);
+            assert_eq!(other.asset.contract, None, "{}", other.network);
             assert!(!other.deposit_enabled && !other.withdraw_enabled);
         }
         // Сеть BSC биржи не задана или названа иначе — ни одна сеть не сопоставляется.
         for bsc in [None, Some("BSC")] {
             let out = native::apply(list.clone(), bsc, &n);
-            assert!(out.iter().all(|i| i.asset.bsc_contract.is_none()));
+            assert!(out.iter().all(|i| i.asset.contract.is_none()));
         }
         // Другой тикер нативной монеты — BNB не трогается.
         let other = Native {
@@ -111,7 +111,7 @@ fn recorded_bnb_maps_only_bep20() {
         assert!(
             native::apply(list, Some("BEP20"), &other)
                 .iter()
-                .all(|i| i.asset.bsc_contract.is_none())
+                .all(|i| i.asset.contract.is_none())
         );
     }
 }
@@ -204,6 +204,6 @@ fn usdt_return_gas_stays_gas() {
         line(Cost::new(CostKind::Gas, bnb, "BNB", false), "B"),
         line(Cost::new(CostKind::Gas, bnb, "BNB", false), "A"),
     ];
-    assert_eq!(gas_need(&lines, &["B", "возврат USDT"]), bnb + bnb);
-    assert_eq!(gas_need(&lines, &["A", "перевод"]), bnb);
+    assert_eq!(gas_need(&lines, &["B", "возврат USDT"], "BNB"), bnb + bnb);
+    assert_eq!(gas_need(&lines, &["A", "перевод"], "BNB"), bnb);
 }

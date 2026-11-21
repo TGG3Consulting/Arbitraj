@@ -21,12 +21,12 @@ use alloy_primitives::U256;
 
 /// DecimalMath.ONE = 10^18 (единица фикс-точки на 18 знаков). Ошибок нет.
 pub fn one() -> U256 {
-    U256::from(10u8).pow(U256::from(18u8))
+    super::ten::E18
 }
 
 /// DecimalMath.ONE2 = 10^36. Ошибок нет.
 pub fn one2() -> U256 {
-    U256::from(10u8).pow(U256::from(36u8))
+    super::ten::E36
 }
 
 /// SafeMath.sqrt: целочисленный квадратный корень вниз (вавилонский метод, ровно как в контракте). Ошибок нет.

@@ -9,7 +9,8 @@
   Настройки: нет.
 -->
 <script>
-  import { reasons, resultLabel } from '../lib/coinFilter.js';
+  import { uniq } from '../lib/uniq.js';
+  import { coinTitle, reasons, resultLabel } from '../lib/coinFilter.js';
   import Modal from './Modal.svelte';
   import CopyAddr from './CopyAddr.svelte';
   import CoinRow from './CoinRow.svelte';
@@ -20,12 +21,12 @@
   const rs = $derived(reasons(coin));
 </script>
 
-<Modal title={coin.asset.ticker} {onclose}>
+<Modal title={coinTitle(coin)} {onclose}>
   <h4>Адрес контракта в BSC</h4>
   <CopyAddr addr={coin.asset.bsc_contract} />
   <h4>Итог отбора</h4>
   <ul class="res">
-    {#each rs as k (k)}<li class={k === 'passed' ? 'ok' : 'err'}>{resultLabel(k)}</li>{/each}
+    {#each uniq(rs) as k (k)}<li class={k === 'passed' ? 'ok' : 'err'}>{resultLabel(k)}</li>{/each}
   </ul>
   {#if rs[0] === 'passed'}
     <p class="muted">Направлений: {coin.directions.length} — {coin.directions.map((d) => `${d.buy_on} → ${d.sell_on}`).join(', ')}</p>

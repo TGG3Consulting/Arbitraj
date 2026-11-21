@@ -76,7 +76,7 @@ pub fn aave_v3(r: &Rec) -> (Entry, Value, U256) {
     e.usdt = usdt;
     e.ticks = Some(TickMap {
         spacing,
-        ticks,
+        ticks: ticks.into(),
         words,
     });
     let bal = U256::from_be_slice(&r.got[&format!("{tag} USDT balanceOf")]);

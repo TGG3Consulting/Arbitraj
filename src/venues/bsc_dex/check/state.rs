@@ -1,15 +1,59 @@
 //! Файл: venues/bsc_dex/check/state.rs
 //! Что делает: итоги проверок в памяти — налоги монет (CoinCheck), влияние крючков пулов (PoolCheck), газ обмена
-//! по пулу из пробного обмена (покупка, продажа), итог сверки пула с квотером. По ним котировка решает, какие
-//! пулы можно использовать: пока проверка не закончена — торговли нет (решения 30, 32).
-//! Кто вызывает: check/cycle.rs, check/taxes.rs, check/hooks_probe.rs, quote/quoter.rs (пишут), quote/direct.rs (читает).
-//! От чего зависит: core/types (CoinCheck, PoolCheck, PoolRef).
+//! по пулу из пробного обмена (покупка, продажа), налоги монеты В КАЖДОМ пуле (решение 146), итог сверки пула с
+//! квотером. По ним котировка решает, какие пулы можно использовать: пока проверка не закончена — торговли нет
+//! (решения 30, 32).
+//! Кто вызывает: check/cycle.rs, check/taxes.rs, check/hooks_probe.rs, quote/quoter.rs (пишут), quote/direct.rs,
+//! quote/select.rs (читают).
+//! От чего зависит: core/types (CoinCheck, PoolCheck, PoolRef, Side), check/deal_taxes.rs (DealTax, Overlay).
 //! Настройки: нет.
+//! Решение 352: поколение итогов (generation) — растёт на каждую запись налогов монеты и фактов пула (эпоха котировки,
+//! signal_epoch.rs).
+//! Решение 211 (фаза 2b): монета — адрес контракта BSC. Налоги монеты и газ перевода хранятся по АДРЕСУ, а не по
+//! тикеру: показное имя монеты ядра может меняться (тикер большинства площадок), а у одного адреса под разными
+//! тикерами — одна проверка. Нативная монета (решение 62) — по адресу своей обёртки (dex.native_wrapped).
+//! Решение 409 (t194): факты пулов — check/pool_facts_store.rs (без замка на чтение, за Arc; pool_arc — без копии).
+//! Решение 239: pinned — копия итогов проверок нужных токенов и пулов на момент снимка котировки
+//! (venues/bsc_dex/frozen.rs): налоги монет и пулов, газ обменов и разрешений, крючки, сверка с квотером — котировка
+//! по снимку читает их такими, какими они были в момент решения, а не после нового замера.
+//! Дополнение 10.11 к 247/252 (t78, Тигран: согласовано): налоги, перепроверенные кошельком сделки, — отдельно, по id
+//! сделки (deals; check/deal_taxes.rs); общие (coins, pools.taxes) — только от кошелька строки «Пробы». Котировка и
+//! исполнение продажи ЭТОЙ сделки получают копию с наложением (over): coin() и pool() отдают налоги сделки поверх общих.
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use crate::core::types::{CoinCheck, PoolCheck, PoolRef};
+use alloy_primitives::Address;
+
+use rust_decimal::Decimal;
+
+use crate::core::types::{CoinCheck, PoolCheck, PoolRef, Side};
+
+use super::deal_taxes::{DealTax, Overlay};
+
+/// Налоги монеты пула (Entry.coin), измеренные пробным обменом ИМЕННО в этом пуле (решение 146, check/probe.rs): у
+/// токенов с налогом «только при обмене через зарегистрированные пулы» (живой случай FLOKI 04.11: продажи на 0,30 %
+/// хуже плана при налоге монеты 0) налог зависит от пула.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PoolTaxes {
+    /// Налог покупки, %: (ответ квотера − пришло монет) / ответ квотера.
+    pub buy_pct: Decimal,
+    /// Налог продажи, %: (ответ квотера на продажу − пришло встречного токена) / ответ квотера. None — НЕ ИЗМЕРЕН
+    /// (продажа пробы откатилась или квотер не ответил) — это не 0: пул по продаже не используется.
+    pub sell_pct: Option<Decimal>,
+    /// Налог простого перевода на пустой адрес, % (от пула не зависит).
+    pub transfer_pct: Decimal,
+}
+
+impl PoolTaxes {
+    /// Налог нужной стороны (покупка / продажа монеты пула). None — не измерен. Ошибок нет.
+    pub fn side(&self, side: Side) -> Option<Decimal> {
+        match side {
+            Side::Buy => Some(self.buy_pct),
+            Side::Sell => self.sell_pct,
+        }
+    }
+}
 
 /// Факты о пуле из проверок.
 #[derive(Debug, Clone, Default)]
@@ -27,90 +71,215 @@ pub struct PoolFacts {
     /// Проверка крючка не прошла из-за незаданной настройки — её имя (из ошибки хранилища): проверка повторяется при
     /// задании именно её (решение 75).
     pub hook_wait: Option<String>,
+    /// Решение 335 (ревью, Н2/Н3): последнее влияние крючка, измеренное НА БЛОКЕ (номер H и итог) — проба на одном
+    /// блоке (цикл крючков и проба перед сделкой, решение «335 (В1)») и перемер перед паузой (hooks.reprobe_before_pause); check/hook_store.rs.
+    pub hook_head: Option<(u64, PoolCheck)>,
     /// Сверка с квотером по сторонам (решение 73, quoter_sides.rs): у каждой — None (ещё не было или сторона мелкая)
     /// или Some(Err) — расхождение больше допуска (причина).
     pub quoter: super::quoter_sides::QuoterSides,
     /// Нативная монета (решение 62, check/native_probe.rs): газ обёртки сверх обмена токеном — (покупка с
     /// UNWRAP_WETH, продажа с WRAP_ETH); None — не мерился; Some(Err) — проба не прошла (причина).
     pub wrap_gas: Option<Result<(u64, u64), String>>,
+    /// Налоги монеты в этом пуле (решение 146, check/taxes.rs): пишутся по каждой удачной пробе пула; None — проба
+    /// пула ещё не прошла (или пробный обмен в пуле откатился) — пул в котировку не идёт (quote/select.rs).
+    pub taxes: Option<PoolTaxes>,
 }
+
+/// Пустые факты пула (проверок не было) — общий Arc для pool_arc.
+static EMPTY: std::sync::LazyLock<Arc<PoolFacts>> =
+    std::sync::LazyLock::new(|| Arc::new(PoolFacts::default()));
 
 /// Хранилище итогов проверок. Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct Checks {
-    coins: Arc<RwLock<HashMap<String, CoinCheck>>>,
-    pools: Arc<RwLock<HashMap<PoolRef, PoolFacts>>>,
+    coins: Arc<RwLock<HashMap<Address, CoinCheck>>>,
+    /// Решение 409 (t194, п. а): факты пулов без замка на чтение, за Arc (check/pool_facts_store.rs).
+    pools: Arc<super::pool_facts_store::PoolFactsStore>,
     /// Газ перевода монеты из кошелька (gasUsed пробного перевода) — для стоимости вывода.
-    transfer_gas: Arc<RwLock<HashMap<String, u64>>>,
+    transfer_gas: Arc<RwLock<HashMap<Address, u64>>>,
     /// Газ нативного перевода BNB из кошелька (решение 62) — пробный перевод с value, check/native_probe.rs.
-    native_transfer_gas: Arc<RwLock<HashMap<String, u64>>>,
+    native_transfer_gas: Arc<RwLock<HashMap<Address, u64>>>,
+    /// t78: итоги перепроверки налогов кошельком сделки — по (id сделки, адрес монеты) (check/deal_taxes.rs).
+    pub(super) deals: Arc<RwLock<HashMap<(String, Address), DealTax>>>,
+    /// t78: налоги продажи одной сделки поверх общих (Checks::for_exit); None — общие.
+    pub(super) over: Option<Arc<Overlay>>,
+    /// Решение 352: поколение итогов, от которых зависит котировка (налоги монет, факты пулов) — растёт на каждую
+    /// запись set_coin / update_pool; часть эпохи котировки (signal_epoch.rs). У снимка (pinned) — свой счётчик.
+    generation: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl Checks {
-    /// Записывает проверку монеты (по тикеру). Ошибок нет.
+    /// Записывает проверку монеты — по адресу контракта (решение 211). Монета без адреса не записывается: налоги
+    /// меряются пробным обменом в пуле, а пул всегда знает адрес токена. Ошибок нет.
     pub fn set_coin(&self, c: CoinCheck) {
-        self.coins
-            .write()
-            .unwrap_or_else(|p| p.into_inner())
-            .insert(c.asset.ticker.clone(), c);
+        let Some(a) = c.asset.contract else {
+            return;
+        };
+        let mut m = self.coins.write().unwrap_or_else(|p| p.into_inner());
+        m.insert(a, c);
+        // Ревью t160 Н4: поколение — под замком записи, вместе с итогом.
+        self.bump();
+        drop(m);
     }
 
-    /// Проверка монеты. None — не было.
-    pub fn coin(&self, ticker: &str) -> Option<CoinCheck> {
+    /// Решение 352: поколение итогов (налоги монет, факты пулов). Ошибок нет.
+    pub fn generation(&self) -> u64 {
+        self.generation.load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    /// Решение 352: итог записан — поколение растёт (после записи: читающий новое поколение видит новый итог).
+    fn bump(&self) {
+        self.generation
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    }
+
+    /// Проверка монеты по адресу контракта (t78: у копии продажи сделки — итог перепроверки кошельком сделки, если есть).
+    /// None — не было.
+    pub fn coin(&self, token: &Address) -> Option<CoinCheck> {
+        if let Some(c) = self.over.as_ref().and_then(|o| o.coins.get(token)) {
+            return Some(c.clone());
+        }
         self.coins
             .read()
             .unwrap_or_else(|p| p.into_inner())
-            .get(ticker)
+            .get(token)
             .cloned()
     }
 
-    /// Записывает газ перевода монеты. Ошибок нет.
-    pub fn set_transfer_gas(&self, ticker: &str, gas: u64) {
+    /// Проверка монеты ядра (по её адресу; монета без адреса — None). Ошибок нет.
+    pub fn coin_of(&self, asset: &crate::core::types::Asset) -> Option<CoinCheck> {
+        asset.contract.and_then(|a| self.coin(&a))
+    }
+
+    /// Записывает газ перевода монеты (по адресу контракта). Ошибок нет.
+    pub fn set_transfer_gas(&self, token: Address, gas: u64) {
         self.transfer_gas
             .write()
             .unwrap_or_else(|p| p.into_inner())
-            .insert(ticker.to_string(), gas);
+            .insert(token, gas);
     }
 
-    /// Газ перевода монеты. None — не измерен.
-    pub fn transfer_gas(&self, ticker: &str) -> Option<u64> {
+    /// Газ перевода монеты (по адресу контракта). None — не измерен.
+    pub fn transfer_gas(&self, token: &Address) -> Option<u64> {
         self.transfer_gas
             .read()
             .unwrap_or_else(|p| p.into_inner())
-            .get(ticker)
+            .get(token)
             .copied()
     }
 
-    /// Записывает газ нативного перевода монеты (решение 62). Ошибок нет.
-    pub fn set_native_transfer_gas(&self, ticker: &str, gas: u64) {
+    /// Записывает газ нативного перевода монеты (решение 62; ключ — адрес обёртки). Ошибок нет.
+    pub fn set_native_transfer_gas(&self, token: Address, gas: u64) {
         self.native_transfer_gas
             .write()
             .unwrap_or_else(|p| p.into_inner())
-            .insert(ticker.to_string(), gas);
+            .insert(token, gas);
     }
 
-    /// Газ нативного перевода монеты. None — не измерен.
-    pub fn native_transfer_gas(&self, ticker: &str) -> Option<u64> {
+    /// Газ нативного перевода монеты (по адресу обёртки). None — не измерен.
+    pub fn native_transfer_gas(&self, token: &Address) -> Option<u64> {
         self.native_transfer_gas
             .read()
             .unwrap_or_else(|p| p.into_inner())
-            .get(ticker)
+            .get(token)
             .copied()
     }
 
-    /// Факты о пуле (пустые, если проверок не было). Ошибок нет.
+    /// Решение 239: копия итогов проверок на этот момент (снимок котировки, frozen.rs) — только переданные токены
+    /// (проверка монеты, газ перевода) и пулы; своя память, новые замеры в неё не попадают. Чего не передали — в копии
+    /// нет (котировка по снимку такой пул или монету не использует: «не проверено»). Принимает: адреса токенов, ссылки
+    /// пулов. Возвращает: Checks. Ошибок нет.
+    pub fn pinned<'a>(
+        &self,
+        tokens: &[Address],
+        pools: impl IntoIterator<Item = &'a PoolRef>,
+    ) -> Checks {
+        let pick = |m: &RwLock<HashMap<Address, u64>>| -> HashMap<Address, u64> {
+            let m = m.read().unwrap_or_else(|p| p.into_inner());
+            tokens
+                .iter()
+                .filter_map(|t| m.get(t).map(|v| (*t, *v)))
+                .collect()
+        };
+        let coins = {
+            let m = self.coins.read().unwrap_or_else(|p| p.into_inner());
+            tokens
+                .iter()
+                .filter_map(|t| m.get(t).map(|c| (*t, c.clone())))
+                .collect()
+        };
+        // Решение 409: факты пулов — тот же Arc (без копии), ячейки свои.
+        let pools = pools
+            .into_iter()
+            .filter_map(|r| self.pools.get(r).map(|f| (r.clone(), f)))
+            .collect();
+        Checks {
+            coins: Arc::new(RwLock::new(coins)),
+            pools: Arc::new(super::pool_facts_store::PoolFactsStore::from_map(pools)),
+            transfer_gas: Arc::new(RwLock::new(pick(&self.transfer_gas))),
+            native_transfer_gas: Arc::new(RwLock::new(pick(&self.native_transfer_gas))),
+            deals: Default::default(),
+            over: self.over.clone(),
+            generation: Default::default(),
+        }
+    }
+
+    /// Решение «335 (лесенка влияния)» × 363, ревью 3: отметка итога крючка пула — блок замера на блоке и время итога
+    /// (меняется при каждой записи влияния: цикл, проба перед сделкой, перемер) — без копии всех фактов пула. Для
+    /// свежести допуска в коробе подбора (quote/usable_reuse.rs). Ошибок нет.
+    pub fn hook_mark(&self, r: &PoolRef) -> (Option<u64>, Option<chrono::DateTime<chrono::Utc>>) {
+        let f = self.pools.get(r);
+        let f = f.as_deref();
+        (
+            f.and_then(|f| f.hook_head.as_ref().map(|h| h.0)),
+            f.and_then(|f| f.hook.as_ref().and_then(|c| c.checked_at)),
+        )
+    }
+
+    /// Факты о пуле (пустые, если проверок не было); t78: у копии продажи сделки налоги пула — из перепроверки кошельком
+    /// сделки, если пул в ней пробовался. Ошибок нет.
     pub fn pool(&self, r: &PoolRef) -> PoolFacts {
-        self.pools
-            .read()
-            .unwrap_or_else(|p| p.into_inner())
-            .get(r)
-            .cloned()
-            .unwrap_or_default()
+        PoolFacts::clone(&self.pool_arc(r))
+    }
+
+    /// Решение 409 (t194, п. а): то же, что pool, без копии фактов и без замка — для горячего пути котировки
+    /// (quote/select.rs, на каждый пул). Копия только у копии продажи сделки с налогами пула поверх общих (t78).
+    /// Ошибок нет.
+    pub fn pool_arc(&self, r: &PoolRef) -> Arc<PoolFacts> {
+        let f = self.pools.get(r).unwrap_or_else(|| EMPTY.clone());
+        match self.over.as_ref().and_then(|o| o.pools.get(r)) {
+            Some(t) => {
+                let mut f = PoolFacts::clone(&f);
+                f.taxes = t.clone();
+                Arc::new(f)
+            }
+            None => f,
+        }
+    }
+
+    /// Налоги всех пулов этого хранилища (t78: пустое хранилище перепроверки кошельком сделки — что она измерила;
+    /// check/deal_taxes.rs). Ошибок нет.
+    pub fn pool_taxes(&self) -> HashMap<PoolRef, Option<PoolTaxes>> {
+        let mut out = HashMap::new();
+        self.pools.for_each(|r, f| {
+            out.insert(r.clone(), f.taxes.clone());
+        });
+        out
     }
 
     /// Изменяет факты о пуле. Принимает: ссылку и функцию. Ошибок нет.
     pub fn update_pool(&self, r: &PoolRef, f: impl FnOnce(&mut PoolFacts)) {
-        let mut m = self.pools.write().unwrap_or_else(|p| p.into_inner());
-        f(m.entry(r.clone()).or_default());
+        self.update_pool_if(r, |facts| {
+            f(facts);
+            true
+        });
+    }
+
+    /// Решение 352 × «335 (лесенка влияния)», ревью 3: как update_pool, но поколение итогов (эпоха котировки) растёт,
+    /// только если `f` что-то записал (вернул true) — проба, которая ничего не пишет, эпоху не сбрасывает.
+    /// Принимает: пул, правку. Возвращает: записано ли. Ошибок нет.
+    pub fn update_pool_if(&self, r: &PoolRef, f: impl FnOnce(&mut PoolFacts) -> bool) -> bool {
+        // Ревью t160 Н4: поколение — под замком записи, вместе с фактами (решение 409: замок писателя фактов пулов).
+        self.pools.update(r, f, || self.bump())
     }
 }

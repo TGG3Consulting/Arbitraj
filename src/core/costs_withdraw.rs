@@ -3,7 +3,8 @@
 //! вывода из справочника сетей ядра (core.inner.networks — его держит свежим registry_sync.rs; Presence.info у A,
 //! DirCtx.usdt_b у B): в расчёте нет ни одного запроса к бирже (решение 66 — подбор объёма считает десятки объёмов,
 //! а config/getall BingX подписанный и с лимитом). У DEX — через шлюз (газ перевода из кошелька, налог перевода).
-//! Сумма вывода биржи — вниз до точности вывода (withdrawPrecision).
+//! Сумма вывода биржи — вниз до точности вывода (withdrawPrecision) и до кратного шагу вывода (withdraw_step, решение
+//! 119). Решение 199: комиссия вывода биржи — фиксированная + доля суммы (CoinNetworkInfo::fee_for). Вывод биржи — ещё и налог перевода токена (решение 118, Я-3: DirCtx.transfer_tax, transfer_tax.rs).
 //! Кто вызывает: core/costs.rs.
 //! От чего зависит: dirctx.rs, deps.rs (шлюз), size.rs (Fail), core/types.
 //! Настройки: нет.
@@ -16,17 +17,23 @@ use super::deps::Deps;
 use super::dirctx::DirCtx;
 use super::size::Fail;
 
-/// Сумма вывода с A вниз до точности вывода биржи (у DEX и без точности — без изменений). Ошибок нет.
+/// Сумма вывода с A вниз до точности вывода биржи и до кратного шагу вывода (withdraw_step, решение 118, А-🟠7;
+/// у DEX и без точности и шага — без изменений). Ошибок нет.
 pub fn floor_precision(qty: Decimal, info: Option<&CoinNetworkInfo>) -> Decimal {
-    match info.and_then(|i| i.withdraw_precision) {
+    let qty = match info.and_then(|i| i.withdraw_precision) {
         Some(p) => qty.trunc_with_scale(p),
         None => qty,
+    };
+    match info.and_then(|i| i.withdraw_step) {
+        Some(step) if step > Decimal::ZERO => ((qty / step).trunc() * step).normalize(),
+        _ => qty,
     }
 }
 
-/// Комиссия вывода биржи из справочника. Принимает: сеть монеты, тикер (для текста). Ошибки: Stop — не сообщена.
-fn fee_line(info: &CoinNetworkInfo) -> Result<Cost, Fail> {
-    let fee = info.withdraw_fee.ok_or_else(|| {
+/// Комиссия вывода биржи из справочника: фиксированная + доля суммы (решение 199, CoinNetworkInfo::fee_for —
+/// от реальной суммы этой точки подбора объёма). Принимает: сеть монеты, сумму вывода. Ошибки: Stop — не сообщена.
+fn fee_line(info: &CoinNetworkInfo, amount: Decimal) -> Result<Cost, Fail> {
+    let fee = info.fee_for(amount).ok_or_else(|| {
         Fail::Stop(format!(
             "{}: комиссия вывода {} в сети {} неизвестна",
             info.venue.0, info.asset.ticker, info.network
@@ -40,21 +47,77 @@ fn fee_line(info: &CoinNetworkInfo) -> Result<Cost, Fail> {
     ))
 }
 
-/// Стоимость вывода монеты с A. Принимает: шлюз, контекст, сумму вывода. Возвращает: затраты.
+/// Стоимость вывода монеты с A. Принимает: шлюз, контекст, сумму вывода. Возвращает: затраты (у биржи — комиссия
+/// вывода и налог перевода DirCtx.transfer_tax, решение 118).
 /// Ошибки: Stop — комиссия неизвестна, сбой шлюза DEX.
 pub async fn withdraw_a(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec<Cost>, Fail> {
     if let Some(info) = &cx.a.info {
-        return Ok(vec![fee_line(info)?]);
+        let fee = fee_line(info, amount)?;
+        // Решение 118 (Я-3): вывод биржи — перевод токена в сети, налог перевода снимается с того, что ушло в сеть
+        // (вывод минус комиссия) — так же считает ожидание зачисления (credit_expect.rs).
+        let pct = cx.transfer_tax.unwrap_or_default();
+        let tax = Cost::new(
+            CostKind::TransferTax,
+            (amount - fee.amount).max(Decimal::ZERO) * pct / Decimal::ONE_HUNDRED,
+            info.asset.ticker.clone(),
+            false,
+        );
+        // Решение 211: затраты справочника A — в тикере A; ядро сравнивает затраты с именем монеты ядра.
+        let (from, to) = (&cx.a.ticker, &cx.dir.asset.ticker);
+        return Ok(super::venue_ticker::rename_costs(vec![fee, tax], from, to));
     }
     let d = &cx.dir;
-    let a = deps.gw.get(&d.buy_on).await.map_err(|e| e.message)?;
-    a.withdraw_cost(&d.asset, &cx.net_a, amount)
+    // Решение 132: DEX — кошелёк строки маппинга направления (нет строки — отказ NO_WALLET).
+    let a = super::dex_account::venue_dir(deps, d, &d.buy_on).await?;
+    // Решение 211: площадке — монета с её тикером; затраты — обратно в имя ядра.
+    let on = crate::core::types::Asset {
+        chain: d.asset.chain.clone(),
+        ticker: cx.a.ticker.clone(),
+        contract: d.asset.contract,
+    };
+    a.withdraw_cost(&on, &cx.net_a, amount)
         .await
+        .map(|c| super::venue_ticker::rename_costs(c, &cx.a.ticker, &d.asset.ticker))
         .map_err(|e| Fail::Stop(format!("{}: стоимость вывода: {}", d.buy_on.0, e.message)))
 }
 
-/// Стоимость возврата USDT с B. Принимает: шлюз, контекст, сумму. Возвращает: затраты (как их отдаёт площадка).
-/// Ошибки: Stop — у биржи B нет сети котируемой монеты в справочнике, комиссия неизвестна, сбой шлюза DEX.
+/// Что делает: решение 394 (t179; записка 269, п. 5) — стоимость возврата USDT у ДОКУПКИ: фиксированная часть одна на
+/// группу (учтена в плане первой сделки группы), в докупку закладывается только процентная часть комиссии вывода
+/// USDT у биржи B (CoinNetworkInfo.withdraw_fee_pct из API биржи; нет — 0). У DEX на B (газ перевода — фиксированная
+/// часть) — затрат нет. Минимум и максимум вывода проверяются на общем возврате группы, не здесь. Принимает: контекст,
+/// сумму. Возвращает: затраты. Ошибки: Stop — у биржи B нет сети котируемой монеты в справочнике или площадка не
+/// сообщила фиксированную часть комиссии вывода (как у return_b).
+pub fn return_b_top_up(cx: &DirCtx, amount: Decimal) -> Result<Vec<Cost>, Fail> {
+    if cx.b.info.is_none() {
+        return Ok(vec![]);
+    }
+    let info = cx.usdt_b.as_ref().ok_or_else(|| {
+        Fail::Stop(format!(
+            "{}: сети {} у {} нет в справочнике — стоимость возврата неизвестна",
+            cx.dir.sell_on.0, cx.net_b, cx.usdt.ticker
+        ))
+    })?;
+    // Ревью 3 t179: фиксированная часть не сообщена площадкой — стоимость возврата группы неизвестна, сделки нет (не
+    // торгуем вслепую; как return_b — fee_for без фиксированной части).
+    if info.withdraw_fee.is_none() {
+        return Err(Fail::Stop(format!(
+            "{}: комиссия вывода {} в сети {} неизвестна",
+            info.venue.0, info.asset.ticker, info.network
+        )));
+    }
+    let pct = info.withdraw_fee_pct.unwrap_or_default() * amount.max(Decimal::ZERO);
+    Ok(vec![Cost::new(
+        CostKind::WithdrawFee,
+        pct,
+        info.asset.ticker.clone(),
+        false,
+    )])
+}
+
+/// Стоимость возврата USDT с B. Принимает: шлюз, контекст, сумму (выручка минус комиссия продажи в котируемой монете —
+/// столько уйдёт, решение 118). Возвращает: затраты (как их отдаёт площадка).
+/// Ошибки: Stop — у биржи B нет сети котируемой монеты в справочнике, комиссия неизвестна, сбой шлюза DEX;
+/// TooSmall / TooLarge — сумма вне минимума / максимума вывода USDT у биржи B (решение 118, Я-12).
 pub async fn return_b(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec<Cost>, Fail> {
     let d = &cx.dir;
     if cx.b.info.is_some() {
@@ -64,9 +127,27 @@ pub async fn return_b(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec<C
                 d.sell_on.0, cx.net_b, cx.usdt.ticker
             ))
         })?;
-        return Ok(vec![fee_line(info)?]);
+        // Решение 118 (Я-12): минимум и максимум вывода USDT у B — иначе перегон отклоняется биржей уже после сделки.
+        if let Some(min) = info.withdraw_min
+            && amount < min
+        {
+            return Err(Fail::TooSmall(format!(
+                "возврат {amount} {} с {} меньше минимума вывода {min}",
+                cx.usdt.ticker, d.sell_on.0
+            )));
+        }
+        if let Some(max) = info.withdraw_max
+            && !max.is_zero()
+            && amount > max
+        {
+            return Err(Fail::TooLarge(format!(
+                "возврат {amount} {} с {} больше максимума вывода {max}",
+                cx.usdt.ticker, d.sell_on.0
+            )));
+        }
+        return Ok(vec![fee_line(info, amount)?]);
     }
-    let b = deps.gw.get(&d.sell_on).await.map_err(|e| e.message)?;
+    let b = super::dex_account::venue_dir(deps, d, &d.sell_on).await?;
     b.withdraw_cost(&cx.usdt, &cx.net_b, amount)
         .await
         .map_err(|e| {

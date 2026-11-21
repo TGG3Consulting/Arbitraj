@@ -1,0 +1,48 @@
+{
+ "block": 526015961,
+ "hash": "0x9126c8095bb51d0f0ab519411444fe7689501ce920ad02bfca34218909a263d7",
+ "timestamp": 1795201210,
+ "search_head": 526015688,
+ "stopped": [],
+ "args": {
+  "node": "http://127.0.0.1:8547",
+  "max_pools": 20,
+  "time_limit": 600,
+  "gt_pages": 3,
+  "created_margin": [
+   3600,
+   86400
+  ],
+  "ladder": [
+   10000,
+   1000,
+   100
+  ],
+  "kyber": [
+   "DMM:0xD9bfE9979e9CA4b2fe84bA5d4Cf963bBcB376974:0xEaE47c5D99f7B31165a7f0c5f7E0D6afA25CFd55",
+   "KS:0x1c758aF0688502e49140230F6b0EBd376d429be5:0x5649B4DD00780e99Bab7Abb4A3d581Ea1aEB23D0",
+   "KS_LEGACY:0x51E8D106C646cA58Caf32A47812e95887C071a62:0xC3E2aED41ECdFB1ad41ED20D45377Da98D5489dD"
+  ],
+  "vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+  "balancer_factory": [
+   "w1:v1:0x7dFdEF5f355096603419239CE743BfaF1120312B",
+   "w2t:v1:0xCF0a32Bbef8F064969F21f7e02328FB577382018",
+   "s1:v1:0x2433477A10FC5d31B9513C638F19eE85CaED53Fd",
+   "wv2:v2:0x8df6EfEc5547e31B0eb7d1291B511FF8a2bf987c",
+   "sv2:v2:0xEF44D6786b2b4d544b7850Fe67CE6381626Bf2D6",
+   "wv3:v2:0xf1665E19bc105BE4EDD3739F88315cC699cc5b65",
+   "wv4:v2:0xc7E5ED1054A24Ef31D827E6F86caA58B3Bc168d7"
+  ],
+  "izi_factory": "0xCFD8A067e1fa03474e79Be646c5f6b6A27847399",
+  "izi_fee": [
+   100,
+   400,
+   2000,
+   10000
+  ],
+  "izi_token": [],
+  "izi_tokens": 12,
+  "izi_gt_pages": 1,
+  "pancake_ur": "0xFE6508f0015C778Bdcc1fB5465bA5ebE224C9912"
+ }
+}

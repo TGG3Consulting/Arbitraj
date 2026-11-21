@@ -1,0 +1,14 @@
+{
+ "chainId": "0xa4b1",
+ "block": 526010867,
+ "block_hex": "0x1f5a49f3",
+ "timestamp": 1795199869,
+ "core": "0x00000000000014aA86C5d3c41765bb24e11bd701",
+ "key_index": "0x898956fc2aed01d5f81f556ff5dcb10534285718",
+ "mev_capture": "0x5555fF9Ff2757500BF4EE020DcfD0210CFfa41Be",
+ "router": "0xd26f20001a72a18C002b00e6710000d68700ce00",
+ "words": 4,
+ "sizes": "0.001,0.01,0.1,1,10,100,1000",
+ "log_blocks": 2000,
+ "gt_skipped": []
+}

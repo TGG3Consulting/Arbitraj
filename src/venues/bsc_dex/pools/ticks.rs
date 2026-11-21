@@ -14,6 +14,7 @@
 //! Тик снимается, когда liquidityGross = 0 (Tick.update: flipped).
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 /// Данные одного инициализированного тика.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,7 +27,9 @@ pub struct TickData {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TickMap {
     pub spacing: i32,
-    pub ticks: BTreeMap<i32, TickData>,
+    /// Тики за `Arc` (решение 129): копия записи реестра (котировка, граф) не копирует карту; изменение — копия при
+    /// записи (`Arc::make_mut`), только если карту ещё держит снимок.
+    pub ticks: Arc<BTreeMap<i32, TickData>>,
     /// Прочитанные слова битмапа (включительно): (первое, последнее).
     pub words: (i16, i16),
 }
@@ -73,10 +76,11 @@ impl TickMap {
             cur.net.checked_add(delta)
         };
         let Some(net) = net else { return false };
+        let ticks = Arc::make_mut(&mut self.ticks);
         if gross == 0 {
-            self.ticks.remove(&tick);
+            ticks.remove(&tick);
         } else {
-            self.ticks.insert(tick, TickData { gross, net });
+            ticks.insert(tick, TickData { gross, net });
         }
         true
     }

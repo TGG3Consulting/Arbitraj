@@ -1,6 +1,6 @@
 //! Файл: core/types/control.rs
 //! Что делает: статистика газа по монете (решение 36), застрявшие монеты и ручное управление
-//! (решение 37), команды человека из интерфейса и Telegram.
+//! (решение 37), команды человека из интерфейса и Telegram (решение 157: и команды плашки режима).
 //! Кто вызывает: ядро (ведёт), интерфейс (экраны «Статистика газа», «Ручное управление»),
 //! уведомления (кнопки Telegram превращаются в команды).
 //! От чего зависит: core/types/market.rs, rust_decimal.
@@ -41,9 +41,23 @@ pub struct StuckAlert {
     pub venue: VenueId,
     pub asset: Asset,
     pub qty: Decimal,
-    /// Убыток при продаже по рынку сейчас, %.
-    pub loss_pct: Decimal,
+    /// Убыток при продаже по рынку сейчас, %; None — котировки продажи нет (решение 100: продажа не прошла).
+    pub loss_pct: Option<Decimal>,
+    /// Почему ждём человека: «убыток выше порога» или «продажа не прошла: …» (решение 100).
+    #[serde(default)]
+    pub reason: Option<String>,
     pub at: DateTime<Utc>,
+    /// Решение 177: отказ продажи, из-за которого алерт (текст ошибки площадки); None — алерт по убытку. По нему
+    /// повторный ОДИНАКОВЫЙ отказ (числа не в счёт) обновляет эту запись, а не ставит новый алерт (core/manual_repeat.rs).
+    #[serde(default)]
+    pub error: Option<String>,
+    /// Решение 177: сколько раз подряд продажа по этой записи не прошла с тем же отказом (0 — запись до решения 177).
+    #[serde(default)]
+    pub attempts: u32,
+    /// Решение 408 (t193): сделки, которым по учёту принадлежат монеты на счёте этой сделки («своих монет не видно»,
+    /// core/remain_fact.rs all_foreign) — кнопки «Открыть сделку <ID>» у записи в Telegram. Пусто — у прочих алертов.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub holders: Vec<String>,
 }
 
 /// Монеты, которые человек забрал себе («Беру на себя»): списаны из учёта бота, бот работает дальше.
@@ -78,6 +92,129 @@ pub enum ManualAction {
     TakeOver { alert_id: String },
     /// «Вернуть боту» — возврат по реальному балансу площадки.
     ReturnToBot { holding_id: String },
+    /// «Продать сейчас» для остановленной сделки (Halted) — по реальному балансу площадки (решение 100).
+    SellHalted { deal_id: String },
+    /// «Продать и перегнать» по алерту: продажа по рынку, затем выручка USDT — на площадку покупки (решение 101).
+    SellNowReturn { alert_id: String },
+    /// «Продать и перегнать» для остановленной сделки (решение 101).
+    SellHaltedReturn { deal_id: String },
+    /// «Продано вручную»: человек продал сам; usdt — полученная выручка (строка-число) — сделка закрывается фактом.
+    SoldManually { deal_id: String, usdt: String },
+    /// Решение 163: «Перегнать» — ещё одна попытка возврата выручки USDT закрытой сделки («USDT не вернулись»).
+    UsdtRetry { deal_id: String },
+    /// Решение 163: «Перегнано вручную» — человек перевёл USDT сам; запись закрывается, возврат — «вручную».
+    /// Решение 236, дополнение п. 2 (техлид 09.11): usdt — сколько USDT зачислено на площадке покупки (ответ человека
+    /// числом, как в «Продано вручную»); None или «-» — человек не знает: затраты возврата в итог не входят, пометка.
+    UsdtReturnedManually {
+        deal_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        usdt: Option<String>,
+    },
+    /// Решение 157: плашка режима (ControlBar) из Telegram — «Старт» / «Пауза» / «Стоп» (Core::set_mode_by).
+    SetMode { mode: crate::core::risk::Mode },
+    /// Решение 157: «Снять паузу» площадки (как POST /api/control/venue/{id}/resume).
+    ResumeVenue { venue: String },
+    /// Решение 230: «Снять паузу» кошелька DEX (как POST /api/control/wallet/{id}/resume); wallet — id (w1…w7).
+    ResumeWallet { wallet: String },
+    /// Решение 157: «Снять карантин» монеты (как POST /api/control/quarantine/{id}/release); id — адрес или тикер.
+    ReleaseQuarantine { id: String },
+    /// Решение 157: «Сбросить лимит дня» (решение 153, как POST /api/control/daily-limit/reset) — общий: вся система
+    /// и все площадки (решение 173).
+    ResetDailyLimit,
+    /// Решение 173: «Сбросить лимит дня» одной площадки (как POST /api/control/venue/{id}/daily-limit/reset).
+    ResetVenueLimit { venue: String },
+    /// Решение 174: «Продать» в панели «Балансы» — всё свободное количество монеты `asset` со счёта `account` биржи
+    /// `venue` по рынку в котируемую монету (venue.quote_asset); не на торговом счёте — сначала перевод на него.
+    SellBalance {
+        venue: String,
+        account: String,
+        asset: String,
+    },
+    /// Решение 405 (ответ Тиграна на ревью Н3): «Отменить ожидание» ручного действия, ждущего окончания идущих сделок
+    /// монеты (core/manual_wait.rs); id — ID ожидания (GET /api/manual — waits).
+    CancelManualWait { id: String },
+    /// Решение 176: «Перевести USDT» — с площадки `from` (у DEX — кошелёк `from_wallet`) на `to` (`to_wallet`) сумму
+    /// `amount` (строка-число) тем же перегоном USDT ядра, что возврат выручки (core/usdt_transfer.rs).
+    TransferUsdt {
+        from: String,
+        from_wallet: Option<String>,
+        to: String,
+        to_wallet: Option<String>,
+        amount: String,
+    },
+    /// Решение 408 (t193): «Снять очередь кошелька» DEX после ручной проверки (как кнопка экрана «Каналы отправки»,
+    /// контракт release_wallet_queue); wallet — id кошелька (решение 132); pending_ok — второе подтверждение: nonce
+    /// удержанной транзакции ещё не занят. Интерфейс (POST /api/wallet-queue/…/release) — та же команда.
+    ///
+    /// Ревью t193 (Н2, М2): nonce и hash — удержанная транзакция, которую человек видел в вопросе; перед снятием всегда
+    /// сверяются с текущей остановкой (другая, в том числе с nonce и hash при вопросе без них, — отказ). Интерфейс
+    /// (POST /api/wallet-queue/…/release) снимает текущую — идёт мимо команды (core/commands_ext.rs release_queue).
+    ReleaseWalletQueue {
+        venue: String,
+        #[serde(default)]
+        wallet: Option<String>,
+        #[serde(default)]
+        pending_ok: bool,
+        #[serde(default)]
+        nonce: Option<u64>,
+        #[serde(default)]
+        hash: Option<String>,
+    },
+    /// Решение 408 (исключение из решения 157, Тигран 18.11): «Открыть вход монеты» с биржи — биржа убирается из
+    /// coin.entry_blocked_venues (последняя — очищаются и список, и coin.entry_blocked_note), как «Открыть» экрана
+    /// «Монеты» (WithdrawBlocked.svelte); coin — id области «монета» (адрес 0x… или тикер).
+    OpenCoinEntry { coin: String, venue: String },
+    /// Решение 408 (исключение из решения 157): «Убрать из чёрного списка» — coin.blocked и coin.blocked_note
+    /// очищаются, как «Убрать» экрана «Монеты» (ManualBlacklist.svelte); coin — id области «монета».
+    Unblacklist { coin: String },
+    /// Решение 408: «Развернуть исполнитель» кошелька — после оценки газа, которую человек видел (sha256 и wnative —
+    /// из неё, как POST /api/venues/{id}/executor/deploy). Только по нажатию человека; бот сам не разворачивает.
+    ///
+    /// Ревью t193 (Н1): executor — адрес исполнителя кошелька v1, который человек видел в вопросе (0x…); перед
+    /// отправкой сверяется с текущим (адрес сменился или версия уже не v1 — отказ, повторного развёртывания нет).
+    DeployExecutor {
+        venue: String,
+        wallet: String,
+        sha256: String,
+        wnative: String,
+        #[serde(default)]
+        executor: Option<String>,
+    },
+}
+
+impl ManualAction {
+    /// Надпись кнопки действия — как на экранах «Ручное управление» и плашке режима (для журнала и Telegram).
+    /// Принимает: действие. Возвращает: надпись. Ошибок нет.
+    pub fn title(&self) -> &'static str {
+        use crate::core::risk::Mode;
+        match self {
+            Self::SellNow { .. } | Self::SellHalted { .. } => "Продать сейчас",
+            Self::SellNowReturn { .. } | Self::SellHaltedReturn { .. } => "Продать и перегнать",
+            Self::TakeOver { .. } => "Беру на себя",
+            Self::ReturnToBot { .. } => "Вернуть боту",
+            Self::SoldManually { .. } => "Продано вручную",
+            Self::UsdtRetry { .. } => "Перегнать",
+            Self::UsdtReturnedManually { .. } => "Перегнано вручную",
+            Self::SetMode {
+                mode: Mode::Running,
+            } => "Старт",
+            Self::SetMode { mode: Mode::Paused } => "Пауза",
+            Self::SetMode {
+                mode: Mode::Stopped,
+            } => "Стоп",
+            Self::ResumeVenue { .. } | Self::ResumeWallet { .. } => "Снять паузу",
+            Self::ReleaseQuarantine { .. } => "Снять карантин",
+            Self::ResetDailyLimit => "Сбросить лимит дня",
+            Self::ResetVenueLimit { .. } => "Сбросить лимит дня площадки",
+            Self::SellBalance { .. } => "Продать",
+            Self::TransferUsdt { .. } => "Перевести USDT",
+            Self::CancelManualWait { .. } => "Отменить ожидание",
+            Self::ReleaseWalletQueue { .. } => "Снять очередь кошелька",
+            Self::OpenCoinEntry { .. } => "Открыть вход монеты",
+            Self::Unblacklist { .. } => "Убрать из чёрного списка",
+            Self::DeployExecutor { .. } => "Развернуть исполнитель",
+        }
+    }
 }
 
 /// Команда с источником — для журнала.
@@ -91,7 +228,3 @@ pub struct ManualCommand {
     pub by: Option<String>,
     pub at: DateTime<Utc>,
 }
-
-/// Канал команд человека ядру: notify (кнопки Telegram) кладёт команду, ядро выполняет (core/commands.rs).
-/// Отправка — try_send: очередь полна — нажавший видит «команда не передана, нажмите ещё раз».
-pub type CommandTx = tokio::sync::mpsc::Sender<ManualCommand>;

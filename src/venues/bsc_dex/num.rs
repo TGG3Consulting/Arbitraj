@@ -47,10 +47,11 @@ pub fn to_units(v: Decimal, decimals: u8) -> Option<U256> {
     let scale = v.scale();
     let mantissa = U256::from(u128::try_from(v.mantissa()).ok()?);
     let d = u32::from(decimals);
+    // Решение 410 (t195): 10^k — из таблицы, посчитанной при сборке (math/ten.rs checked: то же, что checked_pow).
     if d >= scale {
-        mantissa.checked_mul(U256::from(10u8).checked_pow(U256::from(d - scale))?)
+        mantissa.checked_mul(super::math::ten::checked(d - scale)?)
     } else {
-        Some(mantissa / U256::from(10u8).checked_pow(U256::from(scale - d))?)
+        Some(mantissa / super::math::ten::checked(scale - d)?)
     }
 }
 

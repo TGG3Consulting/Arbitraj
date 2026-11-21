@@ -6,14 +6,19 @@
 //! (прошла ↔ не прошла, сменилась причина без учёта цифр) и не в первом проходе (там — одна сводка, tax_cycle.rs).
 //! Ошибка настройки — одна запись в журнал и одно событие dex.check_not_configured на каждую разную причину.
 //! Кто вызывает: check/tax_cycle.rs.
-//! От чего зависит: check/taxes.rs, check/state.rs, pools/listen.rs (Pools), pools/progress.rs, node/heads.rs.
-//! Настройки: через вызываемые.
+//! От чего зависит: check/taxes.rs, check/tax_wallet.rs (кошелёк сделки у перепроверки после отката продажи выхода), check/state.rs, pools/listen.rs (Pools), pools/progress.rs, node/heads.rs.
+//! t78 (дополнение 10.11 к 247/252, Тигран: согласовано): монета с кошельком сделки проверяется им отдельно (итог — только
+//! для продажи этой сделки, tax_wallet::deal_check; вид итога — Pass::deal_done), и, как до t77, кошельком строки
+//! «Пробы» — общие налоги, событие ядру, журнал и счётчики прохода.
+//! Решение 333: уведомление «не задана настройка» — gateway/core_out_must.rs (не теряется молча).
+//! Настройки: через вызываемые; venue.info_events_max (core_out_must.rs).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use alloy_primitives::Address;
 
 use crate::core::types::CheckState;
+use crate::gateway::core_out_must::MustOut;
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
@@ -60,6 +65,8 @@ pub struct Pass {
     /// Монеты, по которым проверка была (итог или причина ожидания — не «пулы загружаются»): адрес и вид итога —
     /// для сводки первого прохода (tax_cycle.rs).
     pub done: Vec<(Address, Res)>,
+    /// t78: итоги проверок кошельком сделки (tax_wallet::deal_check) — снятие кошелька и повтор (tax_cycle.rs).
+    pub deal_done: Vec<(Address, Res)>,
 }
 
 /// Вид итога монеты для сводки первого прохода.
@@ -73,13 +80,15 @@ pub enum Res {
 
 /// Проверяет монеты списка (см. шапку). Монета, чьи пулы ещё загружаются (pools/loading.rs), не проверяется — ждёт
 /// своих пулов, а не пулов всех монет (решение 61). Принимает: окружение, монеты, USDT, уже записанные ошибки
-/// настроек, монеты, у которых ещё не было первой проверки (журнал по ним — только сводкой). Ошибок нет.
+/// настроек, монеты, у которых ещё не было первой проверки (журнал по ним — только сводкой), кошельки сделок у монет на
+/// перепроверке ещё и кошельком сделки (check/tax_wallet.rs; пусто — только кошельком строки «Пробы»). Ошибок нет.
 pub async fn check(
     p: &Pools,
     list: &[(Address, String)],
     usdt: Address,
     seen: &mut HashSet<String>,
     firsts: &HashSet<Address>,
+    accounts: &HashMap<Address, super::recheck::By>,
 ) -> Pass {
     let mut pass = Pass::default();
     // Балансы источников пробы — один раз на проход (check/taxes_util.rs).
@@ -92,7 +101,7 @@ pub async fn check(
             let why = format!("пулы монеты ещё загружаются ({left})");
             super::taxes_util::note_wait(
                 p,
-                &p.checks.coin(ticker).map(|c| c.taxes),
+                &p.checks.coin(addr).map(|c| c.taxes),
                 super::taxes_util::loading_check(p, ticker, *addr, why),
             )
             .await;
@@ -109,7 +118,7 @@ pub async fn check(
             };
             super::taxes_util::note_wait(
                 p,
-                &p.checks.coin(ticker).map(|c| c.taxes),
+                &p.checks.coin(addr).map(|c| c.taxes),
                 super::taxes_util::loading_check(p, ticker, *addr, why),
             )
             .await;
@@ -130,11 +139,17 @@ pub async fn check(
                 return pass;
             }
         }
+        // Дополнение 10.11 к 247/252: перепроверка после отката продажи выхода — и кошельком сделки; t78: его итог —
+        // только для продажи этой сделки (tax_wallet.rs, deal_taxes.rs), общие — ниже, кошельком строки «Пробы».
+        if let Some(by) = accounts.get(addr) {
+            let r = super::tax_wallet::deal_check(p, &sources, by, ticker, *addr, usdt).await;
+            pass.deal_done.push((*addr, r));
+        }
         let (c, out) = taxes::check_coin(
             &p.ctx, &p.reg, &p.checks, &p.tokens, &sources, ticker, *addr, usdt, &p.heads,
         )
         .await;
-        let prev = p.checks.coin(ticker).map(|c| c.taxes);
+        let prev = p.checks.coin(addr).map(|c| c.taxes);
         match out {
             Outcome::Known(_) => {
                 pass.ok += 1;
@@ -153,16 +168,25 @@ pub async fn check(
                     p.ctx.log(Level::Warn, "dex.check", msg, None).await;
                 }
             }
-            Outcome::Wait(_) => {
+            Outcome::Wait(_) | Outcome::Doubt(_) => {
                 pass.no_pool += 1;
                 pass.done.push((*addr, Res::Wait));
                 // Причину ожидания видно на «Монетах» и «Живом экране»: монета без итога получает NotChecked с причиной;
-                // уже известный итог (прошла / не прошла) из-за помехи не меняется.
-                super::taxes_util::note_wait(p, &prev, c).await;
+                // уже известный итог (прошла / не прошла) из-за помехи не меняется — кроме Doubt (ревью t178, Б1): был
+                // вердикт по пулу — прежний «прошла» снимается (taxes_util.rs keeps).
+                let doubt = matches!(out, Outcome::Doubt(_));
+                if doubt && !first && matches!(prev, Some(CheckState::Known(_))) {
+                    let msg = format!(
+                        "{ticker}: проба дала вердикт по пулу, итога нет из-за помех — прежний итог «прошла» снят, монета «не проверено» до чистого прохода: {}",
+                        c.wait.clone().unwrap_or_default()
+                    );
+                    p.ctx.log(Level::Warn, "dex.check", msg, None).await;
+                }
+                super::taxes_util::note_wait_doubt(p, &prev, c, doubt).await;
                 // Нет глубокого пула — своя причина (не сбой узла): повтор по «пул готов», не каждые tax.retry_s.
-                let why = if !has_valid(p, ticker) {
+                let why = if !has_valid(p, addr) {
                     Why::NoPool
-                } else if deep(p, ticker) == Deep::No {
+                } else if deep(p, addr) == Deep::No {
                     // Глубина не считается (Deep::Unknown) — помеха, а не «мелкий»: повтор через tax.retry_s (Node).
                     Why::Shallow
                 } else {
@@ -184,7 +208,9 @@ pub async fn check(
                         .await;
                     let code = "dex.check_not_configured".to_string();
                     let venue = p.ctx.venue();
-                    let _ = p.out.try_send(MarketEvent::Notice { venue, code, text });
+                    // Решения 333, 362: полный канал ядра — ждёт места (сверх venue.info_events_max — потеря со счётом).
+                    let must = MustOut::new(p.out.clone(), &p.ctx.settings, &p.ctx.journal);
+                    must.send(MarketEvent::Notice { venue, code, text });
                 }
                 continue;
             }

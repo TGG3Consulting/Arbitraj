@@ -40,15 +40,32 @@ async fn ctx(max_per_edge: i64) -> Ctx {
     let (jtx, _) = broadcast::channel(64);
     let journal = Journal::new(db.clone(), jtx);
     let settings = Store::load(db, changes, journal.clone()).await.unwrap();
-    let c = Ctx {
-        raw: RawLog::start(d.join("raw"), settings.clone()),
-        pace: Default::default(),
-        failover: Default::default(),
-        index: Default::default(),
-        settings,
-        vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
-        http: reqwest::Client::new(),
-        journal,
+    let c = {
+        let c = Ctx {
+            raw: RawLog::start(d.join("raw"), settings.clone()),
+            pace: Default::default(),
+            failover: Default::default(),
+            evm_chain: Default::default(),
+            place: arb::venues::bsc_dex::ctx::Place::BSC,
+            chains: Default::default(),
+            account: None,
+            index: Default::default(),
+            settings,
+            vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
+            http: reqwest::Client::new(),
+            journal,
+        };
+        // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+        c.settings
+            .set(
+                "dex.gas_ticker",
+                arb::settings::scope::Scope::Venue("bsc_dex".into()),
+                Some(serde_json::json!("BNB")),
+                "тест",
+            )
+            .await
+            .unwrap();
+        c
     };
     let v = Scope::Venue("bsc_dex".into());
     for (name, val) in [
@@ -104,6 +121,7 @@ fn pair(addr: Address, x: Address, y: Address, rx: u128, ry: u128) -> Entry {
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     }
 }
 
@@ -113,18 +131,20 @@ const SHALLOW: Address = address!("0x00000000000000000000000000000000000000a3");
 const CW: Address = address!("0x00000000000000000000000000000000000000a4");
 const WU: Address = address!("0x00000000000000000000000000000000000000a5");
 
-/// Граф из набора пулов: два глубоких COIN–USDT (разной глубины), мелкий COIN–USDT, цепочка COIN–WBNB–USDT.
-async fn graph_with(max_per_edge: i64) -> graph::Graph {
+/// Реестр из набора пулов: два глубоких COIN–USDT (разной глубины), мелкий COIN–USDT, цепочка COIN–WBNB–USDT.
+async fn parts_with(max_per_edge: i64) -> Parts {
     let p = Parts::new(ctx(max_per_edge).await);
     let e18 = 10u128.pow(18);
     p.tokens.set(&[
         Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: Some(USDT),
+            contract: Some(USDT),
         },
         Asset {
+            chain: None,
             ticker: "X".into(),
-            bsc_contract: Some(COIN),
+            contract: Some(COIN),
         },
     ]);
     for e in [
@@ -136,6 +156,12 @@ async fn graph_with(max_per_edge: i64) -> graph::Graph {
     ] {
         p.registry.put(e);
     }
+    p
+}
+
+/// Граф из набора пулов parts_with.
+async fn graph_with(max_per_edge: i64) -> graph::Graph {
+    let p = parts_with(max_per_edge).await;
     graph::build(&p.ctx, &p.registry, &p.tokens, 18).expect("граф строится")
 }
 
@@ -176,4 +202,33 @@ async fn cap_keeps_deepest() {
     assert_eq!(coin_usdt.len(), 1);
     assert_eq!(pool_of(coin_usdt[0]), BIG);
     assert_eq!(g.len(), 3, "по одному ребру на пару");
+}
+
+#[tokio::test]
+async fn cached_graph_rebuilds_only_on_change() {
+    // Решение 129: тот же реестр — тот же снимок графа (без перестроения); запись в реестр — новый граф, равный
+    // построенному заново. Решение 301 (е): новый блок без записи в реестр граф не перестраивает (блока в ключе нет).
+    // Предел 3 на пару (своя временная папка — другие тесты берут 1 и 2).
+    let p = parts_with(3).await;
+    let a = graph::cached(&p.ctx, &p.registry, &p.tokens, 18).unwrap();
+    let b = graph::cached(&p.ctx, &p.registry, &p.tokens, 18).unwrap();
+    assert!(
+        std::sync::Arc::ptr_eq(&a, &b),
+        "реестр не менялся — граф из кэша"
+    );
+    assert_eq!(a.len(), 4);
+    assert_eq!(p.registry.graph_cache().builds(), 1);
+    // Запись в реестр: пул SHALLOW заменён глубоким пулом COIN–WBNB — версия реестра выросла, у пары COIN–WBNB
+    // теперь два ребра.
+    let e18 = 10u128.pow(18);
+    p.registry
+        .put(pair(SHALLOW, COIN, WBNB, 50_000 * e18, 250 * e18));
+    let d = graph::cached(&p.ctx, &p.registry, &p.tokens, 18).unwrap();
+    assert!(
+        !std::sync::Arc::ptr_eq(&a, &d),
+        "реестр изменился — граф строится заново"
+    );
+    let fresh = graph::build(&p.ctx, &p.registry, &p.tokens, 18).unwrap();
+    assert_eq!(d.len(), fresh.len(), "кэш равен построенному заново");
+    assert_eq!(d.between(COIN, WBNB).len(), 2);
 }

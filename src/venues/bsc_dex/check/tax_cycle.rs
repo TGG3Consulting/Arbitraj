@@ -5,14 +5,19 @@
 //! незаданную настройку), была первая проверка (tax_wait.rs; «пулы не читаются: N» — отдельным числом): одна
 //! запись в журнал и событие CheckPass ядру (одно сводное уведомление, core/first_pass.rs).
 //! Дальше — полный проход раз в tax.recheck_interval_s. Между проходами:
-//! - «Перепроверить» — только переданные монеты (check/recheck.rs);
+//! - «Перепроверить» — только переданные монеты (check/recheck.rs), кошельком строки «Пробы»; монета из отката продажи
+//!   выхода (решения 247/248) — ещё и кошельком сделки (дополнение 10.11, check/tax_wallet.rs; t78 — его итог только
+//!   для продажи этой сделки, check/deal_taxes.rs);
 //! - «пул готов» — ждущие монеты, у которых появился достоверный пул или дочитались свои пулы;
 //! - ждущие из-за сбоя узла (429, нет связи — не вердикт) — повтор через tax.retry_s;
 //! - ждущие «не задана настройка» — сразу при изменении настроек (settings_wait.rs), без перезапуска и без часа ожидания.
 //!
 //! Все запросы к узлу — в общем темпе node/pace.rs (bsc.node_http_rps): проход идёт ровно, а не залпом.
 //! Кто вызывает: pools/market.rs (запуск при подписке).
-//! От чего зависит: check/tax_pass.rs, check/taxes.rs, check/recheck.rs, pools/listen.rs (Pools), pools/progress.rs.
+//! Решение 401 (ревью t186, Н5): после каждой проверки монеты — в очередь pass (проба её пулов через исполнитель).
+//! От чего зависит: check/tax_pass.rs, check/taxes.rs, check/recheck.rs, check/tax_wallet.rs, pools/listen.rs (Pools), pools/progress.rs.
+//! Решение 333 (ревью Б2): «не проверена» в начале цикла — gateway/core_out_must.rs send_in_task (ждёт места, решение 362):
+//! тем же путём этой же задачи, что и итоги проверки монеты, — итог не приходит ядру раньше «не проверена».
 //! Настройки: tax.recheck_interval_s, tax.retry_s (вся система), check.probe_usdt [bsc_dex].
 
 use std::collections::{HashMap, HashSet};
@@ -21,26 +26,45 @@ use std::time::Duration;
 use alloy_primitives::Address;
 
 use crate::core::types::{Asset, CheckState, CoinCheck};
+use crate::gateway::core_out_must::MustOut;
 use crate::gateway::events::MarketEvent;
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::super::pools::listen::Pools;
 use super::super::settings_wait;
-use super::recheck::Queue;
+use super::recheck::{By, Queue};
 use super::tax_deep::has_deep;
 use super::tax_pass::{self, Pass, Why};
 use super::tax_wait::{self, First};
+use super::tax_wallet;
 use super::taxes;
 
 /// Цикл налогов. Принимает: окружение, монеты (адрес → тикер), USDT, очередь «Перепроверить». Работает постоянно.
-pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, queue: Queue) {
+pub async fn taxes(
+    p: Pools,
+    coins: HashMap<Address, String>,
+    usdt: Address,
+    (queue, pass_queue): (Queue, Queue),
+) {
     for (addr, ticker) in &coins {
+        // Решение 159 (Тигран 05.11): цикл перезапускается при каждой пересподписке (смена списка монет — например,
+        // площадку выключили и включили). Прежде он сбрасывал ВСЕ монеты в «не проверено» — у монеты в середине сделки
+        // продажа падала «налоги ещё не проверены» (RWA 04.11 21:59, сделка в ручное управление). Известный итог (прошла
+        // / не прошла) той же монеты по тому же адресу остаётся в памяти и действует, пока новая проверка его не заменит.
+        let kept = p.checks.coin(addr).is_some_and(|c| {
+            c.asset.contract == Some(*addr)
+                && matches!(c.taxes, CheckState::Known(_) | CheckState::Failed { .. })
+        });
+        if kept {
+            continue;
+        }
         let c = CoinCheck {
             venue: p.ctx.venue(),
             asset: Asset {
+                chain: None,
                 ticker: ticker.clone(),
-                bsc_contract: Some(*addr),
+                contract: Some(*addr),
             },
             taxes: CheckState::NotChecked,
             source: taxes::SOURCE.into(),
@@ -48,7 +72,11 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
             wait: Some("проверка ещё не начиналась: ждёт своих пулов".into()),
         };
         p.checks.set_coin(c.clone());
-        let _ = p.out.try_send(MarketEvent::CoinCheck(c));
+        // Решение 333, ревью Б2: «не проверена» — тем же путём, что итоги этой монеты (tax_pass.rs, taxes_util.rs —
+        // `send().await` этой же задачи): ждёт места здесь же (итог не обгонит её; решение 362 — всегда, не теряется).
+        MustOut::new(p.out.clone(), &p.ctx.settings, &p.ctx.journal)
+            .send_in_task(MarketEvent::CoinCheck(c))
+            .await;
     }
     let all: Vec<(Address, String)> = coins.into_iter().collect();
     let mut seen = HashSet::new();
@@ -58,9 +86,15 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
     let mut changes = settings_wait::watch(&p.ctx);
     // Имена незаданных настроек ждущих монет (из ошибки хранилища) — по ним due_config.
     let mut cfg: HashMap<Address, Vec<String>> = HashMap::new();
+    // Дополнение 10.11 к 247/252: монеты на перепроверке кошельком сделки → его счёт и id сделки (до итога проверки).
+    let mut acc: HashMap<Address, By> = HashMap::new();
     loop {
         let was_sent = sum.sent;
-        let pass = tax_pass::check(&p, &all, usdt, &mut seen, &sum.left).await;
+        let pass = tax_pass::check(&p, &all, usdt, &mut seen, &sum.left, &acc).await;
+        // Решение 401 (ревью t186, Н5): налоги проверены — проба пулов этих монет через исполнитель (только неустоявшиеся
+        // итоги, check/pass_cycle.rs woken).
+        pass_queue.add(&all.iter().map(|(a, _)| *a).collect::<Vec<_>>());
+        tax_wallet::settle(&mut acc, &pass.deal_done);
         settle(&p, &pass, &mut sum).await;
         cfg.extend(pass.config_names.iter().cloned());
         // Полный проход после первого — своя строка журнала (первый — сводкой в settle).
@@ -86,6 +120,8 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
         };
         let next = tokio::time::Instant::now() + interval;
         let mut waiting = pass.waiting;
+        // t78: проверка кошельком сделки ждёт (сбой узла) — повтор, даже если общая дала итог.
+        tax_wallet::wait_more(&mut waiting, &pass.deal_done, &all);
         loop {
             let node_wait = waiting.iter().any(|(_, _, w)| *w == Why::Node);
             let retry = if node_wait {
@@ -95,7 +131,7 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
             };
             // Свои пулы дочитались, пока шла прошлая проверка (сигнал мог прийти без ждущего) — сразу.
             let pending = |a: Address| p.loading.pending(&p, a);
-            let mut now = tax_wait::due(&waiting, false, pending, |t| has_deep(&p, t));
+            let mut now = tax_wait::due(&waiting, false, pending, |a| has_deep(&p, &a));
             // Отметка «отстают» уже снята — ждавшие её сразу (сигнал мог прийти до постановки в ожидание).
             now.extend(tax_wait::due_lag(&waiting, p.lag.busy()));
             let list: Vec<(Address, String)> = if !now.is_empty() {
@@ -104,12 +140,14 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
                 tokio::select! {
                     _ = tokio::time::sleep_until(next) => break,
                     _ = queue.notified() => {
-                        let (tickers, _) = queue.take();
-                        all.iter().filter(|(_, t)| tickers.contains(t)).cloned().collect()
+                        // Счёт сделки у монет после отката продажи выхода — проверка его кошельком (tax_wallet.rs).
+                        let (coins, _, by) = queue.take_all();
+                        acc.extend(by);
+                        all.iter().filter(|(a, _)| coins.contains(a)).cloned().collect()
                     }
                     // «Пул готов»: свои пулы прочитаны или появился достоверный пул — проверка сразу (решение 63).
                     _ = p.signals.ready.notified() => {
-                        let mut list = tax_wait::due(&waiting, true, pending, |t| has_deep(&p, t));
+                        let mut list = tax_wait::due(&waiting, true, pending, |a| has_deep(&p, &a));
                         list.extend(tax_wait::due_lag(&waiting, p.lag.busy()));
                         list
                     }
@@ -129,11 +167,14 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
             if list.is_empty() {
                 continue;
             }
-            let again = tax_pass::check(&p, &list, usdt, &mut seen, &sum.left).await;
+            let again = tax_pass::check(&p, &list, usdt, &mut seen, &sum.left, &acc).await;
+            pass_queue.add(&list.iter().map(|(a, _)| *a).collect::<Vec<_>>());
+            tax_wallet::settle(&mut acc, &again.deal_done);
             settle(&p, &again, &mut sum).await;
             cfg.extend(again.config_names.iter().cloned());
             waiting.retain(|(a, _, _)| !list.iter().any(|(r, _)| r == a));
             waiting.extend(again.waiting);
+            tax_wallet::wait_more(&mut waiting, &again.deal_done, &list);
         }
     }
 }

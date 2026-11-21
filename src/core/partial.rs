@@ -3,8 +3,15 @@
 //! два итога сделки: «довезти и продать, как задумано» (costs.rs на фактический объём, с фактической
 //! ценой покупки вместо котировки) и «продать обратно на площадке покупки» (trade_ops::sell_value).
 //! Выбирается больший итог (оба в минусе — меньший убыток). Режим застрявшей монеты здесь не включается.
+//! Решение 240: контекст — DirCtx::build_held (сделка уже идёт): как до решения 240, без доли закрытия разницы, границы
+//! σ и проверки profit.sigma_min_changes.
+//! Решение 464 (t238, ревью): «довезти» не проигрывает «продать на A» из-за нашей же продажи монеты на B (ордер в
+//! полёте — ждём его итога; исход продажи другой сделки неизвестен — ждём её разбора, строка в хронологии) —
+//! только при этой причине отказа (sale_marks::MARK); прочие отказы — прежний выбор. Ожидание разбора — уведомление
+//! deal.partial_waits_review (своих кнопок у сделки в этот момент нет: алерта нет, шаг не «остановлена» — ожидание
+//! кончает ручная команда по той, неясной сделке).
 //! Кто вызывает: core/executor.rs.
-//! От чего зависит: dirctx.rs, costs.rs, trade_ops.rs, deal.rs.
+//! От чего зависит: dirctx.rs, costs.rs, trade_ops.rs, deal.rs, sale_marks.rs.
 //! Настройки: через costs.rs и dirctx.rs.
 //!
 //! Осторожность расчёта: затраты покупки в монете из котировки уже вычтены из факта (deal.qty),
@@ -39,23 +46,84 @@ fn deliver_result(c: &Calc, deal: &Deal) -> Decimal {
     c.proceeds - (c.costs_usdt - buy_costs) - deal.invested - deal.spent
 }
 
+/// Итог «довезти» (расчёт на фактический объём). Решение 464 (t238, ревью): отказ ИЗ-ЗА НАШЕЙ продажи этой монеты на
+/// площадке продажи (по причине — метка sale_marks::MARK в тексте отказа ride_settled.rs / sale_marks.rs) — не повод
+/// продавать на A: ордер в полёте или кончился за время расчёта — ждём его конца и считаем снова; исход продажи другой
+/// сделки неизвестен — ждём разбора той сделки (строка «ждём разбора сделки Z» — в хронологию). Другой отказ — прежний
+/// выбор. Принимает: ядро, сделку. Ошибки: текст причины.
+async fn deliver_value(core: &Core, deal: &mut Deal) -> Result<Decimal, String> {
+    let (v, a) = (deal.direction.sell_on.clone(), deal.direction.asset.clone());
+    let mut noted: Option<String> = None;
+    loop {
+        // Будильник — до расчёта: конец ордера или снятие блокировки во время расчёта не теряются.
+        let wake = core.inner.sales.done.notified();
+        let r = match super::dirctx::DirCtx::build_held(core, &deal.direction) {
+            Ok(cx) => super::costs::evaluate(core, &cx, deal.qty)
+                .await
+                .map(|c| deliver_result(&c, deal))
+                .map_err(|e| e.to_string()),
+            Err(e) => Err(e),
+        };
+        let e = match r {
+            Ok(x) => return Ok(x),
+            Err(e) => e,
+        };
+        if !e.contains(super::sale_marks::MARK) {
+            return Err(e);
+        }
+        if let Some(id) = super::sale_marks::unsure_of(core, &v, &a) {
+            if noted.as_deref() != Some(id.as_str()) {
+                deal.note(format!(
+                    "Частичная покупка: «довезти» ждёт разбора сделки {id} — исход её продажи {} на {} неизвестен \
+                     (решение 464)",
+                    a.ticker, v.0
+                ));
+                super::ledger::save(core, deal).await;
+                // Ревью t238: монета частичной покупки лежит без хеджа — человеку сразу (уведомления не держат сделку).
+                let text = waits_text(deal, &id);
+                let at = deal.direction.buy_on.0.clone();
+                core.inner.deps.notify(WAITS, Some(&at), &text).await;
+                noted = Some(id);
+            }
+            wake.await;
+        } else if super::sale_marks::busy(core, &v, &a) {
+            wake.await;
+        }
+        // Иначе наш ордер кончился за время расчёта — сразу считаем снова (по пулу после него).
+    }
+}
+
+/// Событие уведомления: «довезти» частичной покупки ждёт разбора сделки с неизвестным исходом продажи.
+pub const WAITS: &str = "deal.partial_waits_review";
+
+/// Текст уведомления WAITS для человека. Принимает: сделку, ID сделки, которую ждём. Ошибок нет.
+pub fn waits_text(deal: &Deal, z: &str) -> String {
+    let (id, q, d) = (&deal.id, deal.qty, &deal.direction);
+    let (t, a, b) = (&d.asset.ticker, &d.buy_on.0, &d.sell_on.0);
+    format!(
+        "Сделка {id} (частичная покупка: {q} {t} на {a}) ждёт разбора сделки {z}: исход её продажи {t} на {b} \
+         неизвестен. Пока {z} не разобрана, монеты {id} не везутся и не продаются. Разберите {z} — «Ручное \
+         управление»: «Продать сейчас», «Продано вручную» или «Беру на себя»; ожидание {id} закончится само"
+    )
+}
+
 /// Выбор пути. Принимает: ядро, сделку после частичной покупки. Возвращает: Choice. Ошибок нет.
-pub async fn choose(core: &Core, deal: &Deal) -> Choice {
-    let deliver = match super::dirctx::DirCtx::build(core, &deal.direction) {
-        Ok(cx) => super::costs::evaluate(core, &cx, deal.qty)
-            .await
-            .map(|c| deliver_result(&c, deal))
-            .map_err(|e| e.to_string()),
+pub async fn choose(core: &Core, deal: &mut Deal) -> Choice {
+    let deliver = Box::pin(deliver_value(core, deal)).await;
+    let deal = &*deal;
+    // Решение 220: котировка продажи на A — кошельком сделки (им пойдёт продажа).
+    let back = match super::dex_account::of(core, deal) {
+        Ok(acc) => super::trade_ops::sell_value(
+            core,
+            acc.as_ref(),
+            &deal.direction.buy_on,
+            &deal.direction.asset,
+            deal.qty,
+        )
+        .await
+        .map(|(v, _)| deal.result_if(v)),
         Err(e) => Err(e),
     };
-    let back = super::trade_ops::sell_value(
-        core,
-        &deal.direction.buy_on,
-        &deal.direction.asset,
-        deal.qty,
-    )
-    .await
-    .map(|(v, _)| deal.result_if(v));
     match (deliver, back) {
         (Ok(d), Ok(b)) if d >= b => Choice::Deliver(d),
         (Ok(_), Ok(b)) => Choice::SellBack(b),

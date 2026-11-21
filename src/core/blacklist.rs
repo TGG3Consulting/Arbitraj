@@ -2,9 +2,10 @@
 //! Что делает: чёрный список монет с причиной (решения 30, 36) и допуск пулов с крючками V4 (решение 32).
 //! Монета в списке, если: отмечена вручную (coin.blocked); проверка налогов на DEX не закончена или
 //! не прошла; налог выше порога tax.max_*_pct. Прошла перепроверку — выходит из списка сама.
+//! Допуск пулов с крючками — core/pool_hook.rs (вынесен ревью 4 лесенки, файл был больше 200 строк; здесь реэкспорт).
 //! Кто вызывает: core/engine.rs (после событий проверки и изменений настроек), registry.rs (допуск пулов).
 //! От чего зависит: core/types, settings.
-//! Настройки: coin.blocked, coin.blocked_note (по монете), tax.max_buy_pct, tax.max_sell_pct,
+//! Настройки: coin.blocked, coin.blocked_note (по монете — по адресу, решение 211), tax.max_buy_pct, tax.max_sell_pct,
 //! tax.max_transfer_pct, hooks.allowed_groups, hooks.max_impact_b_pct, hooks.max_impact_c_pct.
 
 use std::collections::HashMap;
@@ -12,12 +13,12 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
-use crate::core::types::{
-    Asset, BlockReason, CheckState, CoinBlock, CoinCheck, HookGroup, Pool, PoolCheck, TaxKind,
-};
+use crate::core::types::{Asset, BlockReason, CheckState, CoinBlock, CoinCheck, TaxKind};
 use crate::settings::read::At;
 use crate::settings::scope::Scope;
 use crate::settings::store::Store;
+
+pub use super::pool_hook::{pool_admission, pool_sides_off};
 
 /// Пороги налогов (решение 30). Все три обязательны.
 pub struct TaxLimits {
@@ -38,17 +39,44 @@ impl TaxLimits {
     }
 }
 
-/// Ручной чёрный список: Some(заметка) — монета исключена вручную. Принимает: хранилище, тикер.
-pub fn manual(s: &Store, ticker: &str) -> Option<Option<String>> {
-    let scope = Scope::Coin(ticker.to_string());
-    let on = s.get_exact("coin.blocked", &scope)?.as_bool()?;
-    if !on {
+/// Ручной чёрный список: Some(заметка) — монета исключена вручную. Решение 211: отметка — по адресу монеты
+/// (область «coin:0x…»). Ревью В8: значение по адресу, заданное явно (да ИЛИ нет), главнее записи по тикеру — человек
+/// снял блок по адресу, и старая отметка по тикеру его больше не держит. Значения по адресу нет — старая отметка по
+/// тикеру, которую миграция не перенесла (тикер неоднозначен — несколько адресов, core/coin_scope_migrate.rs),
+/// продолжает действовать на монеты с этим тикером: снять блок молча нельзя. Монета без адреса — область по тикеру,
+/// общая для её записей на разных биржах (ревью М3: только показ — такие монеты не торгуются). Принимает: хранилище,
+/// монету, тикеры площадок монеты. Ошибок нет.
+pub fn manual(s: &Store, asset: &Asset, tickers: &[&str]) -> Option<Option<String>> {
+    let own = Scope::Coin(super::coin_key::scope_id(asset));
+    if s.get_exact("coin.blocked", &own)
+        .and_then(|v| v.as_bool())
+        .is_some()
+    {
+        return marked(s, &own);
+    }
+    // Монета без адреса: её область и есть тикер — уже проверена выше.
+    asset.contract?;
+    let mut ids = vec![asset.ticker.clone()];
+    ids.extend(tickers.iter().map(|t| t.to_string()));
+    let mut seen = std::collections::HashSet::new();
+    ids.retain(|t| seen.insert(t.clone()));
+    ids.into_iter().find_map(|id| marked(s, &Scope::Coin(id)))
+}
+
+/// Отметка ручного чёрного списка в одной области. None — не отмечена. Ошибок нет.
+fn marked(s: &Store, scope: &Scope) -> Option<Option<String>> {
+    if !s.get_exact("coin.blocked", scope)?.as_bool()? {
         return None;
     }
-    let note = s
-        .get_exact("coin.blocked_note", &scope)
-        .and_then(|v| v.as_str().map(str::to_string));
-    Some(note)
+    Some(
+        s.get_exact("coin.blocked_note", scope)
+            .and_then(|v| v.as_str().map(str::to_string)),
+    )
+}
+
+/// Область «монета» для записи блокировки (решение 211: по адресу). Ошибок нет.
+pub fn coin_scope(asset: &Asset) -> Scope {
+    Scope::Coin(super::coin_key::scope_id(asset))
 }
 
 /// Причина блокировки монеты или её отсутствие.
@@ -96,7 +124,7 @@ pub enum BlockChange {
     Same,
 }
 
-/// Чёрный список. Ключ — тикер справочника (у монеты без адреса контракта тоже есть тикер).
+/// Чёрный список. Ключ — монета (решение 211: равенство Asset — по адресу; без адреса — по тикеру).
 #[derive(Default)]
 pub struct Blacklist {
     map: HashMap<Asset, CoinBlock>,
@@ -133,40 +161,5 @@ impl Blacklist {
     /// Запись чёрного списка монеты. None — монета не в списке.
     pub fn get(&self, asset: &Asset) -> Option<&CoinBlock> {
         self.map.get(asset)
-    }
-}
-
-/// Допуск пула по крючку V4 (решение 32). Принимает: пул, его проверку влияния, хранилище.
-/// Возвращает: Ok — пул можно использовать; Err(причина) — пул исключён (видно в интерфейсе).
-pub fn pool_admission(pool: &Pool, check: Option<&PoolCheck>, s: &Store) -> Result<(), String> {
-    let group = match &pool.hooks {
-        None => return Ok(()),
-        Some(h) if h.group == HookGroup::A => return Ok(()),
-        Some(h) => h.group,
-    };
-    let allowed = s
-        .text("hooks.allowed_groups", At::default())
-        .map_err(|e| e.message)?;
-    // Варианты настройки — «A», «A+B», «A+B+C» (settings/catalog/trade.rs).
-    let letter = if group == HookGroup::B { "B" } else { "C" };
-    if !allowed.split('+').any(|g| g == letter) {
-        return Err(format!(
-            "крючок группы {letter} не допущен (hooks.allowed_groups = {allowed})"
-        ));
-    }
-    let name = if group == HookGroup::B {
-        "hooks.max_impact_b_pct"
-    } else {
-        "hooks.max_impact_c_pct"
-    };
-    let max = s.decimal(name, At::default()).map_err(|e| e.message)?;
-    match check.map(|c| &c.impact) {
-        None | Some(CheckState::NotChecked) => Err("влияние крючка ещё не проверено".into()),
-        Some(CheckState::Failed { reason }) => Err(format!("проверка крючка не прошла: {reason}")),
-        Some(CheckState::Known(i)) if i.buy_pct > max || i.sell_pct > max => Err(format!(
-            "влияние крючка (покупка {}%, продажа {}%) выше допуска {max}%",
-            i.buy_pct, i.sell_pct
-        )),
-        Some(CheckState::Known(_)) => Ok(()),
     }
 }

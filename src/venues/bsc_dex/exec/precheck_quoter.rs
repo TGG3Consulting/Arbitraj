@@ -1,0 +1,85 @@
+//! Файл: venues/bsc_dex/exec/precheck_quoter.rs
+//! Что делает: сверка с квотером своей DEX каждого хопа маршрута, посчитанного портом чужой математики, прямо перед
+//! сделкой через исполнитель (решение 73; решение 122 F — Maverick V2: расчёт — порт команды Maverick, Solidity-исходник
+//! закрыт, поэтому каждый обмен через такой пул сверяется с MaverickV2Quoter.calculateSwap на своём узле на сумме
+//! хопа). Расхождение больше dex.quoter_max_diff_pct, неполный расчёт или откат квотера — сделки нет (exec/precheck.rs
+//! quoter_now); пул из котировок исключает цикл сверки (check/quoter_cycle.rs).
+//! Решение 177: у продажи выхода (TradeRequest.exit_position) расхождение такого хопа — продажа по квотеру (hops_exit,
+//! exec/exit_quote.rs). Решение 261: у остальных сверка односторонняя — квотер меньше расчёта больше допуска — отказ;
+//! больше — сделка идёт, строка «в нашу сторону» в хронологию (exec/quoter_favour.rs; сухая сделка — без строки).
+//! Решение 382: `block` — пулы перечитаны на нём после расхождения (exec/quoter_refetch.rs), квотер — на том же блоке.
+//! Кто вызывает: exec/executor/trade.rs (prepare — доли перед отправкой, hops_exit), exec/dry_checks.rs (hops).
+//! От чего зависит: exec/precheck.rs (quoter_now), exec/exit_quote.rs, exec/quoter_favour.rs, quote/path.rs,
+//! pools/families.rs.
+//! Настройки: через quoter_now — dex.quoter [DEX], dex.quoter_max_diff_pct [bsc_dex].
+
+use rust_decimal::Decimal;
+
+use crate::core::types::TradeRequest;
+use crate::gateway::errors::GatewayResult;
+
+use super::super::ctx::Ctx;
+use super::super::pools::families::Proto;
+use super::super::quote::path::{Hop, Path};
+use super::{exit_quote, quoter_favour, quoter_refetch_check};
+
+/// Виды пулов, у которых расчёт — порт без официального исходника: их хоп сверяется квотером перед каждой сделкой.
+/// Ошибок нет.
+pub fn must_quote(p: Proto) -> bool {
+    p == Proto::Maverick
+}
+
+/// Сверка хопов таких пулов во всех долях. Принимает: окружение, доли (путь, количество). Ошибки: как у quoter_now
+/// (NoRoute, QuoteMismatch, NotConfigured, узел).
+/// Решение 382: `block` — блок перечитанных пулов (exec/quoter_refetch.rs; квотер на нём), None — «latest».
+pub async fn hops(ctx: &Ctx, paths: &[(Path, Decimal)], block: Option<u64>) -> GatewayResult<()> {
+    for (p, _) in paths {
+        on(ctx, p, false, block).await?;
+    }
+    Ok(())
+}
+
+/// Сверка хопов Maverick одного пути: на блоке перечитанных пулов или на «latest». Принимает: окружение, путь, продажа
+/// ли выхода, блок. Возвращает: расхождения (решение 177 / 261). Ошибки: как exit_quote::check.
+async fn on(
+    ctx: &Ctx,
+    p: &Path,
+    exit: bool,
+    block: Option<u64>,
+) -> GatewayResult<Vec<(usize, exit_quote::ExitFix)>> {
+    let pick = |h: &Hop| must_quote(h.entry.family.proto);
+    match block {
+        Some(b) => quoter_refetch_check::check_on(ctx, p, (exit, pick), b).await,
+        None => exit_quote::check(ctx, p, exit, pick).await,
+    }
+}
+
+/// Как hops, но по запросу сделки (решение 177): продажа выхода с расхождением — доля пересчитана по квотеру
+/// (exec/exit_quote.rs rescale). Принимает: окружение, запрос, доли. Возвращает: множитель каждой доли (1 — без
+/// поправки; им же умножается свежий минимум верификации доли), строку «— продажа по квотеру» / «в нашу сторону»
+/// (None — поправок нет) и отдельно строку «в нашу сторону» (решение 261; журнал — у вызывающего, один раз перед
+/// отправкой). Ошибки: как у hops; BadResponse (множитель).
+pub async fn hops_exit(
+    ctx: &Ctx,
+    req: &TradeRequest,
+    paths: &mut [(Path, Decimal)],
+    block: Option<u64>,
+) -> GatewayResult<(Vec<Decimal>, Option<String>, Option<String>)> {
+    let exit = exit_quote::exit_of(req);
+    let (mut ratios, mut all, mut favour) =
+        (Vec::with_capacity(paths.len()), Vec::new(), Vec::new());
+    for (p, _) in paths.iter_mut() {
+        let got = on(ctx, p, exit, block).await?;
+        let (fixes, fav) = quoter_favour::split(got);
+        favour.extend(fav);
+        ratios.push(if fixes.is_empty() {
+            Decimal::ONE
+        } else {
+            exit_quote::rescale(ctx, p, req.side, &fixes)?
+        });
+        all.extend(fixes);
+    }
+    let fav = quoter_favour::line(&favour);
+    let note = quoter_favour::join(exit_quote::report(ctx, req, &all).await, fav.clone());
+    Ok((ratios, note, fav))
+}

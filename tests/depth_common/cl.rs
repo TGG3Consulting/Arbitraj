@@ -111,7 +111,7 @@ pub fn cl_entry(r: &Rec, p: &Value) -> Option<Entry> {
     e.usdt = usdt;
     e.ticks = Some(TickMap {
         spacing,
-        ticks,
+        ticks: ticks.into(),
         words,
     });
     Some(e)

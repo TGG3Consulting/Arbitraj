@@ -4,20 +4,24 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-alloy = { version = "2.5.0", default-features = false, features = ["std", "sol-types", "consensus", "eips", "network", "signer-local", "rpc-types", "serde", "json-rpc", "k256"] }
+alloy = { version = "2.5.0", default-features = false, features = ["std", "sol-types", "json", "json-abi", "consensus", "eips", "network", "signer-local", "rpc-types", "serde", "json-rpc", "k256"] }
 alloy-primitives = { version = "1.7.3", features = ["serde"] }
+arc-swap = "1.7.1"
 argon2 = "0.6.0"
+mimalloc = "0.1.52"
 async-trait = "0.1.92"
 axum = { version = "0.8.9", features = ["ws"] }
 base64 = "0.23.1"
 chacha20poly1305 = "0.11.0"
 chrono = { version = "0.4.45", features = ["serde"] }
 flate2 = "1.1.10"
+foldhash = "0.2.0"
 futures-util = "0.3.34"
 getrandom = "0.4.3"
 hex = "0.4.3"
 hmac = "0.13.0"
-reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "json", "system-proxy"] }
+prost = "0.13.5"
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "json", "system-proxy", "gzip", "multipart"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 rust_decimal = { version = "1.43.0", features = ["maths", "serde-with-str"] }
 serde = { version = "1.0.229", features = ["derive"] }
@@ -28,8 +32,14 @@ tokio = { version = "1.54.1", features = ["full"] }
 toml = "0.8.19"
 tokio-stream = { version = "0.1.19", features = ["sync"] }
 tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-native-roots"] }
-tower-http = { version = "0.7.1", features = ["fs"] }
+# Решение 419: публичный WebSocket XT.com — только с permessage-deflate (RFC 7692); tokio-tungstenite его не умеет.
+# Без default (rustls-ring): только aws-lc-rs — тот же поставщик криптографии rustls, что у reqwest и tokio-tungstenite.
+yawc = { version = "0.5.0", default-features = false, features = ["rustls-aws-lc-rs"] }
+url = "2.5.8"
+tower-http = { version = "0.7.1", features = ["fs", "compression-gzip"] }
 tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
 zeroize = { version = "1.9.1", features = ["serde"] }
 zstd = "0.14.3"
+percent-encoding = "2.3.2"
+rust_xlsxwriter = { version = "0.102.0", default-features = false }

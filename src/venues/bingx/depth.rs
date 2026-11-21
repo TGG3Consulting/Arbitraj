@@ -126,8 +126,8 @@ pub fn to_book(
     }
 }
 
-/// Уровни [цена, количество]. Ошибка — неверный формат.
-fn levels(data: &Value, side: &str) -> Result<Vec<PriceLevel>, String> {
+/// Уровни [цена, количество]. Ошибка — неверный формат. Тот же разбор — у ответа REST стакана (book_print.rs).
+pub fn levels(data: &Value, side: &str) -> Result<Vec<PriceLevel>, String> {
     let arr = data
         .get(side)
         .and_then(Value::as_array)

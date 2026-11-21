@@ -3,6 +3,13 @@
 //! правила (открытый канал — только один и не вместе с закрытыми; несколько закрытых — параллельно и без чаевых),
 //! нижняя граница цены газа по выбранным каналам, параллельная отправка одной и той же транзакции, счётчики.
 //! Каждый канал — свой файл по своей официальной документации; общий вид — channel.rs, отправка — ready.rs.
+//! Решение 154: ни один канал не принял — свой узел проверяет, что транзакции нет ни в блоке, ни в пуле (absent.rs);
+//! только тогда ChannelRejected, иначе транзакция считается отправленной «без ясного ответа» и идёт к трекеру.
+//! Решение 299: send.bundle_skip_single = да — одиночные каналы исключаются из отправки бандла (send/bundle_pick.rs).
+//! Решение 303, дополнение (журнал): строка send.channel_rejected по каналу — с данными ошибки канала, расшифровкой
+//! Permit2, хешем транзакции и пределом блока бандла (reject_log.rs).
+//! Решение 436: dispatch передаёт каналу время головы — секвенсор Arbitrum с окном шлёт условную отправку
+//! (send/sequencer_cond.rs); бандл (dispatch_slice) — без условия.
 //! Кто вызывает: exec/*, wallet/transfer.rs, mod.rs (send_channels, check_send_channel).
 //! От чего зависит: файлы этой папки, ctx.rs.
 //! Настройки: channel.* [канал], send.* [bsc_dex].
@@ -12,29 +19,43 @@
 //! на адрес своего билдера, поэтому только при отправке в один канал (48 Club: бандл с переводом другому билдеру —
 //! ошибка 4851).
 
+pub mod absent;
 pub mod blink;
 pub mod blockrazor;
 pub mod blockrazor_builder;
 pub mod bloxroute_cloud;
 pub mod bloxroute_protect;
+pub mod bundle_pick;
 pub mod cancel;
 pub mod channel;
 pub mod channels;
 pub mod check;
 pub mod club48;
+pub mod drop_wait;
 pub mod flashblock;
+pub mod gas_mode;
 pub mod jetbuilder;
 pub mod mev_guard;
 pub mod nodereal;
 pub mod nodereal_api;
+pub mod pool_cond_mode;
 pub mod public;
 pub mod ready;
 pub mod receipt;
+pub mod reject_log;
+pub mod seq_opts;
+pub mod sequencer;
+pub mod sequencer_cond;
 pub mod settle;
 pub mod stats;
+pub mod tip_gas;
+pub mod tip_mode;
 pub mod track;
+pub mod track_l1;
 pub mod track_util;
 pub mod tx;
+pub mod tx_1559;
+pub mod tx_price;
 
 use alloy_primitives::{Bytes, U256};
 use futures_util::future::join_all;
@@ -45,13 +66,15 @@ use crate::storage::journal::Level;
 
 use super::ctx::Ctx;
 use ready::Ready;
+use sequencer_cond::Terms;
 use stats::Stats;
 
 /// Готовые каналы с проверкой правил решения 33. Ошибки: NotConfigured — нет ни одного готового канала или
 /// открытый канал включён вместе с закрытыми / не один.
 pub fn select(ctx: &Ctx, stats: &Stats) -> GatewayResult<Vec<Ready>> {
     let mut ready = Vec::new();
-    for ch in channels::ALL {
+    // Решение 435 (433-е): только каналы сети этой площадки DEX (send/channels.rs serves).
+    for ch in channels::of(ctx) {
         match ready::prepare(ctx, ch) {
             Ok(r) => ready.push(r),
             Err(state) => {
@@ -113,8 +136,11 @@ impl Dispatched {
 }
 
 /// Отправляет во все выбранные каналы параллельно. Принимает: каналы, подписанную транзакцию, перевод чаевых
-/// (только при одном канале), предел блока бандла. Возвращает: кто принял и кто не ответил ясно.
-/// Ошибки: ChannelRejected — все каналы ответили отказом (транзакции точно нигде нет; причины всех каналов в тексте).
+/// (только при одном канале), предел блока бандла, условия секвенсора (решение 436: время головы,
+/// send/sequencer_cond.rs head_time; решение 438: knownAccounts пулов маршрута; Terms::default() — без условия: отмена,
+/// каналы без окна). Возвращает: кто принял и кто не ответил ясно.
+/// Ошибки: ChannelRejected — все каналы ответили отказом и свой узел не знает ни транзакцию, ни перевод чаевых
+/// (решение 154, send/absent.rs: транзакции точно нигде нет; причины всех каналов в тексте).
 pub async fn dispatch(
     ctx: &Ctx,
     stats: &Stats,
@@ -122,15 +148,23 @@ pub async fn dispatch(
     tx: &Bytes,
     tip_tx: Option<&Bytes>,
     max_block: u64,
+    terms: Terms<'_>,
 ) -> GatewayResult<Dispatched> {
+    // Ревью 438 (E): условие пулов при нескольких каналах — журнал с причиной.
+    sequencer_cond::warn_multi(ctx, ready, terms);
     let jobs = ready.iter().map(|r| {
         let mut txs = vec![tx.clone()];
         if let (SendMethod::Bundle, Some(t)) = (r.method, tip_tx) {
             txs.push(t.clone());
         }
-        async move { (r.ch.id, r.send(ctx, &txs, max_block).await) }
+        async move {
+            let res = r.send(ctx, &txs, max_block, terms).await;
+            (r.ch.id, r.method, res)
+        }
     });
-    classify(ctx, stats, join_all(jobs).await).await
+    let mut all = vec![tx.clone()];
+    all.extend(tip_tx.cloned());
+    classify(ctx, stats, join_all(jobs).await, &all, max_block).await
 }
 
 /// Отправляет весь бандл из нескольких транзакций (решение 84) во все выбранные каналы параллельно. Все каналы должны
@@ -138,6 +172,9 @@ pub async fn dispatch(
 /// остальные. Транзакции идут как есть, по порядку (nonce уже проставлен), revertingTxHashes пуст (всё-или-ничего —
 /// eth_sendBundle без разрешения на откат). Принимает: каналы, подписанные транзакции бандла по порядку, предел блока.
 /// Возвращает: кто принял и кто не ответил ясно. Ошибки: NotConfigured (есть не-бандл канал), ChannelRejected (никто).
+/// Решение 299: при send.bundle_skip_single = да одиночные каналы исключает заранее вызывающий (send/bundle_pick.rs
+/// pick) — сюда они не доходят; проверка ниже остаётся защитой. Решение 436: без условия секвенсора (у секвенсора
+/// бандла нет).
 pub async fn dispatch_slice(
     ctx: &Ctx,
     stats: &Stats,
@@ -154,22 +191,28 @@ pub async fn dispatch_slice(
             ),
         ));
     }
-    let jobs = ready
-        .iter()
-        .map(|r| async move { (r.ch.id, r.send(ctx, txs, max_block).await) });
-    classify(ctx, stats, join_all(jobs).await).await
+    let jobs = ready.iter().map(|r| async move {
+        let res = r.send(ctx, txs, max_block, Terms::default()).await;
+        (r.ch.id, r.method, res)
+    });
+    classify(ctx, stats, join_all(jobs).await, txs, max_block).await
 }
 
-/// Разбор итогов отправки по каналам: счётчики, журнал, кто принял и кто не ответил ясно. Ошибки: ChannelRejected —
-/// ни один канал не принял (транзакции точно нигде нет; причины всех каналов в тексте).
+/// Разбор итогов отправки по каналам: счётчики, журнал, кто принял и кто не ответил ясно. Принимает: итоги каналов
+/// (id, способ, итог), отправленные транзакции (для проверки решения 154 и хеша в журнале), предел блока бандла (для
+/// журнала). Ошибки: ChannelRejected — ни один канал не принял и свой узел не знает ни одной из транзакций
+/// (транзакции точно нигде нет; причины всех каналов в тексте).
 async fn classify(
     ctx: &Ctx,
     stats: &Stats,
-    results: Vec<(&'static str, GatewayResult<()>)>,
+    results: Vec<(&'static str, SendMethod, GatewayResult<()>)>,
+    txs: &[Bytes],
+    max_block: u64,
 ) -> GatewayResult<Dispatched> {
     let mut out = Dispatched::default();
     let mut why = Vec::new();
-    for (id, res) in results {
+    let ids: Vec<String> = results.iter().map(|(id, _, _)| id.to_string()).collect();
+    for (id, method, res) in results {
         match res {
             Ok(()) => {
                 stats.update(id, |s| s.sent += 1);
@@ -182,10 +225,11 @@ async fn classify(
                         reason: e.message.clone(),
                     };
                 });
+                // Решение 303, дополнение: данные ошибки канала, Permit2, хеш и предел блока — для разбора (reject_log.rs).
                 ctx.log(
                     Level::Warn,
                     "send.channel_rejected",
-                    format!("{id}: {}", e.message),
+                    reject_log::line(ctx, id, &e, txs, method, max_block),
                     None,
                 )
                 .await;
@@ -201,10 +245,7 @@ async fn classify(
         }
     }
     if out.accepted.is_empty() && out.uncertain.is_empty() {
-        return Err(ctx.err(
-            ErrorCode::ChannelRejected,
-            format!("Ни один канал не принял транзакцию: {}", why.join("; ")),
-        ));
+        return absent::rejected_all(ctx, ids, why, txs).await;
     }
     Ok(out)
 }
@@ -212,18 +253,47 @@ async fn classify(
 /// Чаевые, которые будут заплачены при текущих настройках каналов (для расчёта затрат, решение 35):
 /// только если готов ровно один канал, бандлом и с включёнными чаевыми. Возвращает: сумму в wei. Ошибок нет.
 pub fn planned_tip(ctx: &Ctx) -> Option<U256> {
-    let ready: Vec<Ready> = channels::ALL
-        .iter()
+    let ready: Vec<Ready> = channels::of(ctx)
         .filter_map(|c| ready::prepare(ctx, c).ok())
         .collect();
     tip(&ready).map(|(_, amount)| amount)
 }
 
+/// Умеют ли бандл ВСЕ каналы, готовые сейчас (решение 121 B3) — так же, как потребует отправка бандла
+/// (dispatch_slice: любой не-бандловый канал → NotConfigured). Нужна на котировке: маршрут бандлом при таких каналах
+/// неисполним (сигнал есть, сделки нет). Решение 299: send.bundle_skip_single = да — достаточно хотя бы одного
+/// бандлового канала (одиночные исключаются из отправки бандла, send/bundle_pick.rs). Возвращает: Ok или понятную
+/// причину. Ошибок нет.
+pub fn planned_bundle_ok(ctx: &Ctx) -> Result<(), String> {
+    let ready: Vec<Ready> = channels::of(ctx)
+        .filter_map(|c| ready::prepare(ctx, c).ok())
+        .collect();
+    if ready.is_empty() {
+        return Err("нет ни одного готового канала отправки — бандл некуда отправить".into());
+    }
+    if bundle_pick::enabled(ctx) {
+        return bundle_pick::planned(&ready);
+    }
+    let single: Vec<&str> = ready
+        .iter()
+        .filter(|r| r.method != SendMethod::Bundle)
+        .map(|r| r.ch.title)
+        .collect();
+    if single.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "маршрут исполняется только бандлом, а включённые каналы отправки {} не в режиме бандла (channel.method) — \
+         сигнал, авто-сделкой не исполняется; оставьте включёнными только бандловые каналы или включите \
+         send.bundle_skip_single (одиночные исключаются из отправки бандла, решение 299)",
+        single.join(", ")
+    ))
+}
+
 /// Нижняя граница цены газа по каналам, готовым сейчас (для расчёта затрат: газ в котировке не ниже того, с которым
 /// транзакция реально уйдёт). Ошибки: NotConfigured — нет ни одного готового канала.
 pub fn planned_floor(ctx: &Ctx) -> GatewayResult<U256> {
-    let ready: Vec<Ready> = channels::ALL
-        .iter()
+    let ready: Vec<Ready> = channels::of(ctx)
         .filter_map(|c| ready::prepare(ctx, c).ok())
         .collect();
     if ready.is_empty() {

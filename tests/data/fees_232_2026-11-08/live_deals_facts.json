@@ -1,0 +1,8 @@
+[
+  {"deal": "20261108112439383TMX", "venue": "kucoin", "side": "Buy", "ticker": "TMX", "status": "Filled", "filled_qty": "14274.9", "avg_price": "0.00306", "fee": "0.131043582", "fee_asset": "USDT", "venue_ref": "6af05bf8b511a30007a0104e"},
+  {"deal": "20261107165523433STAY", "venue": "kucoin", "side": "Buy", "ticker": "STAY", "status": "Filled", "filled_qty": "6414879", "avg_price": "0.00000557", "fee": "0.10719262809", "fee_asset": "USDT", "venue_ref": "6aef57fc3305170007834f15"},
+  {"deal": "20261107101732404UMXM", "venue": "kucoin", "side": "Buy", "ticker": "UMXM", "status": "Filled", "filled_qty": "4901.28", "avg_price": "0.0064", "fee": "0.094104576", "fee_asset": "USDT", "venue_ref": "6aeefabd3b75130007b401f6"},
+  {"deal": "20261107083933889STAY", "venue": "kucoin", "side": "Buy", "ticker": "STAY", "status": "Filled", "filled_qty": "4999129", "avg_price": "0.00000546", "fee": "0.08188573302", "fee_asset": "USDT", "venue_ref": "6aeee3c68f58b6000787a0bd"},
+  {"deal": "20261106211702434SWARM", "venue": "kucoin", "side": "Buy", "ticker": "SWARM", "status": "Filled", "filled_qty": "960", "avg_price": "0.0385411375", "fee": "0.110998476", "fee_asset": "USDT", "venue_ref": "6aee43cfc6e32c00071d70e0"},
+  {"deal": "20261107100719350WIN", "venue": "xt", "side": "Buy", "ticker": "WIN", "status": "Filled", "filled_qty": "706966", "avg_price": "0.00006364", "fee": "1413.932", "fee_asset": "WIN", "venue_ref": "689308863151210048"}
+]

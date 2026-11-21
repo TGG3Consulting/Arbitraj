@@ -41,7 +41,7 @@ pub struct Watch {
 }
 
 /// Работает постоянно: подписка на события создания, слушатели новых пулов. Изменение dex.* или источника событий
-/// (bsc.pool_events_source, решение 68) — фильтры пересобираются (сессия закрывается и открывается заново без паузы); нет подключённых DEX — подписки нет, ждём
+/// (bsc.pool_events_source, решение 68) — фильтры пересобираются (сессия закрывается и открывается заново без паузы; пачка изменений — одно переоткрытие, решение 279); нет подключённых DEX — подписки нет, ждём
 /// изменения dex.* (без переподключений впустую). Ошибок не возвращает: всё — в журнал.
 pub async fn run(p: Pools, w: Watch) {
     let mut changes = Changes::new(
@@ -58,7 +58,7 @@ pub async fn run(p: Pools, w: Watch) {
                 p.ctx.log(Level::Info, "dex.pool", msg, None).await;
                 told_empty = true;
             }
-            if changes.next().await.is_none() {
+            if changes.next_batch().await.is_none() {
                 return;
             }
             continue;
@@ -66,7 +66,7 @@ pub async fn run(p: Pools, w: Watch) {
         told_empty = false;
         let why = tokio::select! {
             why = session(&p, &w, list) => why,
-            c = changes.next() => match c {
+            c = changes.next_batch() => match c {
                 None => return,
                 Some(_) => continue, // настройки DEX изменились — новые фильтры сразу
             },
@@ -138,7 +138,13 @@ pub fn relevant(raw: &str, mine: &HashSet<B256>) -> bool {
 async fn filters(p: &Pools, usdt: Address) -> Vec<Value> {
     let u = B256::left_padding_from(usdt.as_slice());
     let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     for (addr, t0, v4, _) in created_log::sources(&p.ctx) {
+        // Один источник у двух видов (CLPoolManager: Infinity CL и Infinity Stable) — одна подписка, вид разбирает
+        // created_log::on_log.
+        if !seen.insert((addr, t0)) {
+            continue;
+        }
         // V2/V3: токены — topics[1], topics[2]; V4: PoolId — topics[1], валюты — topics[2], topics[3].
         let (a, b) = if v4 {
             (

@@ -6,16 +6,29 @@
 //! пулов точечным Multicall3 (решение 83, exec/precheck.rs): граф даёт достижимость и ликвидность на момент снимка,
 //! а не гарантию актуальности к исполнению. Отсекает заведомо непригодные рёбра: недостоверные, спящие, не входящие
 //! в граф (family.graphable=false — например V3-форк) и мелкие по обеим сторонам (не глубокие ни по одной — решение
-//! 73, стороны независимы). V2-форк (graphable, но не tradable, решение 82) в граф входит. На пару токенов
+//! 73, стороны независимы), если ни одну сторону не пропускает сумма пробы (решение 393, quote/side_fit.rs). V2-форк (graphable, но не tradable, решение 82) в граф входит. На пару токенов
 //! оставляет не больше dex.route_max_pools_per_edge самых глубоких рёбер, чтобы держать ширину перебора путей.
 //! Допуск ребра к КОТИРОВКЕ/СДЕЛКЕ (сверка с квотером, крючок, газ) проверяет quote/select.rs при оценке пути —
 //! граф даёт только достижимость и ликвидность.
-//! Кто вызывает: перечисление путей графа (решение 80, следующий шаг) — quote/*.
-//! От чего зависит: pools/registry.rs, pools/depth_book.rs, tokens.rs, ctx.rs.
+//! Решение 129: `cached` — граф строится один раз на состояние реестра (версия реестра) и настройки графа (решение
+//! 301 (е): блок головы в ключ больше не входит — build его не читает);
+//! все котировки этого состояния (подбор объёма считает десятки объёмов на кандидата, кандидаты идут параллельно)
+//! берут готовый снимок. Раньше каждая котировка DEX копировала весь реестр с картами тиков и считала ключ глубины
+//! каждого пула — счёт в задаче tokio без отдачи управления. Результат тот же: граф зависит только от реестра,
+//! настроек и токенов — всё это в ключе кэша.
+//! Кэш графа (cached, один на состояние реестра) — pools/graph_cache.rs.
+//! Решение 301 (в), уточнение t137 (В1 ревью t132): начатое построение брошенный расчёт НЕ прерывает — получивший замок
+//! достраивает граф и кладёт его в кэш (работа не пропадает, следующий ждущий берёт готовый); проверка признака — до
+//! ожидания замка и после построения (pools/graph_cache.rs).
+//! Решение 308: при dex.graph_background = да граф строит фоновый владелец (graph_owner.rs, накопительно — graph_work.rs,
+//! с нуля — graph_full.rs); build остаётся путём при выключенной настройке и для реестра без владельца.
+//! Кто вызывает: quote/graph_route.rs, quote/cycle_scan.rs (cached), graph_cache.rs (build), graph_work.rs (from_edges).
+//! От чего зависит: pools/registry.rs, pools/depth_book.rs, quote/side_fit.rs (решение 393), tokens.rs, ctx.rs, fast_hash.rs (решение 410).
 //! Настройки: dex.route_max_pools_per_edge [bsc_dex]; через depth_book — dex.min_pool_liquidity_usd,
 //! dex.depth_band_pct, dex.depth_hysteresis_pct [bsc_dex].
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use alloy_primitives::Address;
 use rust_decimal::Decimal;
@@ -23,9 +36,13 @@ use rust_decimal::Decimal;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
+use super::super::fast_hash::FastMap;
+use super::super::quote::shallow_pick;
 use super::super::tokens::Tokens;
 use super::depth_book;
 use super::registry::{Entry, Registry};
+
+pub use super::graph_cache::{Cache, PathsKey, Skeleton, cached, cached_as_of};
 
 /// Ребро графа: пул между токенами `a` и `b`. `entry` — КОПИЯ записи реестра на момент build (снимок, не живая
 /// ссылка); перед сделкой состояние перечитывается точечным Multicall3 (решение 83).
@@ -44,11 +61,14 @@ impl Edge {
 }
 
 /// Граф токенов — снимок реестра пулов. Узлы индексируются по токену, рёбра — по индексу в `edges`.
+/// Решение 308: рёбра за Arc — снимок фоновой сборки (graph_work.rs) собирается из готовых рёбер без копирования записей;
+/// внешний API (edges_from, between, len) тот же.
 #[derive(Default)]
 pub struct Graph {
-    edges: Vec<Edge>,
-    /// Токен → индексы рёбер, у которых он один из концов.
-    adj: HashMap<Address, Vec<usize>>,
+    pub(super) edges: Vec<Arc<Edge>>,
+    /// Токен → индексы рёбер, у которых он один из концов. Решение 410 (t195): хеш foldhash (fast_hash.rs) — только
+    /// поиск по токену, порядок рёбер внутри токена — порядок вставки.
+    adj: FastMap<Address, Vec<usize>>,
 }
 
 impl Graph {
@@ -68,12 +88,35 @@ impl Graph {
             .get(&token)
             .into_iter()
             .flatten()
-            .map(move |&i| &self.edges[i])
+            .map(move |&i| self.edges[i].as_ref())
+    }
+
+    /// Решение 404: индексы рёбер, выходящих из токена (в любую сторону), — для перебора циклов без копии рёбер
+    /// (quote/cycle_rank.rs). Нет токена — пусто. Ошибок нет.
+    pub fn edge_ids(&self, token: Address) -> &[usize] {
+        self.adj.get(&token).map(Vec::as_slice).unwrap_or_default()
+    }
+
+    /// Решение 404: ребро по индексу (индекс — из edge_ids этого же графа). Ошибок нет: чужой индекс — паника
+    /// выхода за границу, как у среза.
+    pub fn edge(&self, i: usize) -> &Edge {
+        self.edges[i].as_ref()
     }
 
     /// Рёбра между парой токенов (концы в любом порядке). Ошибок нет.
     pub fn between(&self, x: Address, y: Address) -> Vec<&Edge> {
         self.edges_from(x).filter(|e| e.other(x) == y).collect()
+    }
+
+    /// Решение 308: граф из готовых рёбер (снимок фоновой сборки, graph_work.rs publish) — индекс «токен → рёбра» по
+    /// концам a, b. Принимает: рёбра. Возвращает: граф. Ошибок нет.
+    pub(super) fn from_edges(edges: Vec<Arc<Edge>>) -> Graph {
+        let mut adj: FastMap<Address, Vec<usize>> = FastMap::default();
+        for (i, e) in edges.iter().enumerate() {
+            adj.entry(e.a).or_default().push(i);
+            adj.entry(e.b).or_default().push(i);
+        }
+        Graph { edges, adj }
     }
 }
 
@@ -82,6 +125,24 @@ impl Graph {
 /// Принимает: окружение, реестр, токены, знаки USDT. Возвращает: граф (может быть пустым — путей нет).
 /// Ошибки: NotConfigured (не задана настройка глубины или dex.route_max_pools_per_edge).
 pub fn build(ctx: &Ctx, reg: &Registry, tokens: &Tokens, usdt_dec: u8) -> GatewayResult<Graph> {
+    build_measured(ctx, reg, tokens, usdt_dec).map(|(g, _)| g)
+}
+
+/// Что посчитало построение (решение 301 д — замер dex.graph_build): пулов в реестре, глубин пересчитано (не из памяти).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct BuildStats {
+    pub pools: usize,
+    pub recomputed: usize,
+}
+
+/// То же, что build, и счётчики построения (BuildStats). Ошибки: как у build.
+pub fn build_measured(
+    ctx: &Ctx,
+    reg: &Registry,
+    tokens: &Tokens,
+    usdt_dec: u8,
+) -> GatewayResult<(Graph, BuildStats)> {
+    let mut stats = BuildStats::default();
     if let Some(name) = depth_book::missing_setting(ctx) {
         return Err(ctx.not_set(&name, format!("граф маршрутов: не задана {name}")));
     }
@@ -94,18 +155,34 @@ pub fn build(ctx: &Ctx, reg: &Registry, tokens: &Tokens, usdt_dec: u8) -> Gatewa
         ));
     }
     // Кандидаты по неориентированной паре токенов: (глубина для ранжирования, запись пула).
-    let mut by_pair: HashMap<(Address, Address), Vec<(Decimal, Entry)>> = HashMap::new();
-    for e in reg.all() {
+    // Решение 129: снимок записей без копирования (Arc); запись копируется только в оставленное ребро.
+    let mut by_pair: HashMap<(Address, Address), Vec<Ranked>> = HashMap::new();
+    // Решение 131: настройки глубины, USDT и отметки пулов «встречный — USDT» — один раз на построение, а не на пул.
+    let Ok(prep) = depth_book::Book::prep(ctx, tokens) else {
+        return Ok((Graph::default(), stats));
+    };
+    let snap = reg.snapshot();
+    stats.pools = snap.len();
+    for e in snap {
         // graphable, не tradable (решение 82): V2-форк входит в граф для поиска/сигналов, хотя авто-сделкой не
         // исполняется (допуск к сделке — quote/graph_route::executable). Исключены недостоверные, спящие и не-graphable.
         if !e.valid || e.asleep || !e.family.graphable {
             continue;
         }
-        // Глубина на живом состоянии; не посчиталась (устаревший блок, нет курса промежуточной) — ребро пропускаем.
-        let Ok(d) = reg.depth().depth(ctx, reg, tokens, &e, usdt_dec) else {
+        // Глубина на живом состоянии; не посчиталась (расчёт по состоянию пула невозможен, нет курса встречного
+        // токена к USDT — depth_book.rs depth_prep_r, quote/depth_band.rs) — ребро пропускаем.
+        let mut fresh = false;
+        let d = reg
+            .depth()
+            .depth_prep_r(ctx, reg, tokens, &e, usdt_dec, &prep, &mut fresh);
+        stats.recomputed += usize::from(fresh);
+        let Ok(d) = d else {
             continue;
         };
-        if !(d.deep_buy || d.deep_sell) {
+        // Решение 393 (t178): мелкий по обеим сторонам пул — в граф, если хотя бы одну сторону пропускает сумма пробы
+        // (quote/side_fit.rs): котировка берёт и мелкую сторону (quote/select.rs). Ранг — глубина: мелкие — после
+        // глубоких на той же паре. Решение 403: допуск — из опубликованного снимка отбора (без замка и настроек).
+        if !(d.deep_buy || d.deep_sell) && !shallow_pick::admitted_snap(reg, &e) {
             continue;
         }
         let rank = d.band.buy.max(d.band.sell);
@@ -121,15 +198,22 @@ pub fn build(ctx: &Ctx, reg: &Registry, tokens: &Tokens, usdt_dec: u8) -> Gatewa
         for (_, e) in list {
             let (a, b) = (e.coin, e.usdt);
             let i = g.edges.len();
-            g.edges.push(Edge { entry: e, a, b });
+            g.edges.push(Arc::new(Edge {
+                entry: (*e).clone(),
+                a,
+                b,
+            }));
             g.adj.entry(a).or_default().push(i);
             g.adj.entry(b).or_default().push(i);
         }
     }
-    Ok(g)
+    Ok((g, stats))
 }
 
+/// Пул-кандидат ребра: глубина для ранжирования и запись.
+type Ranked = (Decimal, Arc<Entry>);
+
 /// Ключ неориентированной пары: концы по возрастанию адреса. Ошибок нет.
-fn pair_key(x: Address, y: Address) -> (Address, Address) {
+pub(super) fn pair_key(x: Address, y: Address) -> (Address, Address) {
     if x <= y { (x, y) } else { (y, x) }
 }

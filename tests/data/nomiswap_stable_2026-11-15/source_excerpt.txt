@@ -1,0 +1,80 @@
+Выдержка из verified-исходника Sourcify (full match, chain 56, пара 0x1e40450f8e21bb68490d7d91ab422888fb3d60f1;
+тот же файл у 0x3a667100753cfb7538208af98cb472f65f10da87 и 0xca25f030a103bcd0a6360ffe0f98d95f3cc6a7ec, solc 0.8.15).
+Скопировано Claude 15.11.2026 из ответа https://sourcify.dev/server/v2/contract/56/0x1e40450f8e21bb68490d7d91ab422888fb3d60f1?fields=sources
+построчно; номера — строки файла; ведущие пробелы сжаты при чтении, текст строк — как в исходнике. Нужна для сверки
+порта math/stableswap_nomi.rs (решение 284, ревью t117).
+
+contracts/NomiswapStablePair.sol
+20: uint256 internal constant MAX_FEE = 100000; // @dev 100%.
+21: uint256 internal constant A_PRECISION = 100;
+28: uint256 private constant MAX_LOOP_LIMIT = 256;
+251: function getAmountOut(address tokenIn, uint256 amountIn) external view override returns (uint256 finalAmountOut) {
+252: (uint256 _reserve0, uint256 _reserve1, ) = getReserves();
+254: unchecked {
+255: uint256 _token0PrecisionMultiplier = token0PrecisionMultiplier;
+256: uint256 _token1PrecisionMultiplier = token1PrecisionMultiplier;
+257: uint256 feeDeductedAmountIn = (amountIn * MAX_FEE - amountIn * swapFee) / MAX_FEE;
+258: uint256 adjustedReserve0 = _reserve0 * _token0PrecisionMultiplier;
+259: uint256 adjustedReserve1 = _reserve1 * _token1PrecisionMultiplier;
+260: uint256 A = getA();
+261: uint256 d = _computeLiquidityFromAdjustedBalances(adjustedReserve0, adjustedReserve1, A);
+263: if (tokenIn == token0) {
+264: uint256 x = adjustedReserve0 + feeDeductedAmountIn * _token0PrecisionMultiplier;
+265: uint256 y = _getY(x, d, A);
+266: finalAmountOut = (adjustedReserve1 - y) / _token1PrecisionMultiplier;
+267: } else {
+268: require(tokenIn == token1, "INVALID_INPUT_TOKEN");
+269: uint256 x = adjustedReserve1 + feeDeductedAmountIn * _token1PrecisionMultiplier;
+270: uint256 y = _getY(x, d, A);
+271: finalAmountOut = (adjustedReserve0 - y) / _token0PrecisionMultiplier;
+272: }
+273: }
+274: }
+337: function _computeLiquidityFromAdjustedBalances(uint256 xp0, uint256 xp1, uint256 A) private pure returns (uint256 computed) {
+338: uint256 s = xp0 + xp1;
+340: uint256 N_A = A * 4;
+341: if (s == 0) {
+342: return 0;
+343: }
+344: uint256 prevD;
+345: uint256 D = s;
+346: for (uint256 i = 0; i < MAX_LOOP_LIMIT; i++) {
+347: uint256 dP = (((D * D) / xp0) * D) / xp1 / 4;
+348: prevD = D;
+349: D = (((N_A * s) / A_PRECISION + 2 * dP) * D) / ((N_A / A_PRECISION - 1) * D + 3 * dP);
+350: if (D.within1(prevD)) {
+351: break;
+352: }
+353: }
+354: computed = D;
+355: }
+357: function _getY(uint256 x, uint256 D, uint256 A) private pure returns (uint256 y) {
+358: uint256 N_A = A * 4;
+359: uint256 c = (D * D) / (x * 2);
+360: c = (c * D) / ((N_A * 2) / A_PRECISION);
+361: uint256 b = x + ((D * A_PRECISION) / N_A);
+362: uint256 yPrev;
+363: y = D;
+365: for (uint256 i = 0; i < MAX_LOOP_LIMIT; i++) {
+366: yPrev = y;
+367: uint numerator = y * y + c;
+368: uint denominator = y * 2 + b - D;
+369: y = numerator.divRoundUp(denominator);
+370: if (y.within1(yPrev)) {
+371: break;
+372: }
+373: }
+374: }
+
+contracts/libraries/MathUtils.sol
+12: function within1(uint256 a, uint256 b) internal pure returns (bool) {
+13: unchecked {
+14: if (a > b) {
+15: return a - b <= 1;
+16: }
+17: return b - a <= 1;
+18: }
+19: }
+21: function divRoundUp(uint numerator, uint denumerator) internal pure returns (uint) {
+22: return (numerator + denumerator - 1) / denumerator;
+23: }

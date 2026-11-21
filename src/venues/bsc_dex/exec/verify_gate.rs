@@ -2,15 +2,20 @@
 //! Что делает: предторговая верификация графового маршрута точечным Multicall3 (решение 83, фаза 80.6b) за правилом
 //! шлюза. Перед формированием сделки по маршруту RouteMode::Graph восстанавливает план-котировку из запроса (среднюю
 //! цену — обратной формулой core/worst.rs: worst = avg × (1 ± exec.dex_slippage_pct)), перечитывает пулы маршрута на
-//! свежем блоке (quote/verify.rs run) и переводит вердикт в решение шлюза: Reject → ошибка (QuoteMismatch — цена
+//! свежем блоке (quote/verify.rs run; граница сделки req.worst_price передаётся туда же — решение 121 B4: отказ, только
+//! если свежая средняя цена хуже неё) и переводит вердикт в решение шлюза: Reject → ошибка (QuoteMismatch — цена
 //! уехала; StaleData — свежесть/чтение/таймаут), ордер НЕ формируется (стартовое правило Тиграна «не исполнился —
 //! отменяем, больше не пробуем»: здесь не отправляем вовсе); Ok → свежие amountOutMin по ногам (решение 84), которые
-//! ставятся последнему шагу каждой доли (apply_leg_min). Результат уходит в уведомления (exec.verified /
-//! exec.verify_rejected) — видно из интерфейса и в Telegram, если событие включено.
+//! ставятся последнему шагу каждой доли нижней границей (exec/leg_min.rs set_leg_mins, решение 228: минимум доли =
+//! E_k × max(1 − допуск, B / E); минимум верификации выше ожидаемого доли — отказ). Итог — в уведомления
+//! (exec.verified / exec.verify_rejected): видно из интерфейса и в Telegram, если событие включено.
+//! Решение 381 (ревью t167, Н2): отказ по границе сделки (не грубый предохранитель) помечается «цена ушла»
+//! (GatewayError::price_moved, price_moved ниже) — ядро может посчитать план покупки заново (core/buy_replan.rs).
 //! Классику (прямой/умный путь без графа) не трогает — вызывается только из exec/trade.rs для RouteMode::Graph.
-//! Кто вызывает: exec/trade.rs (графовый маршрут), exec/trade_smart.rs (apply_leg_min по долям).
-//! От чего зависит: quote/verify.rs, quote/via.rs, quote/steps.rs, quote/direct.rs, exec/trade.rs (sides), exec/chain.rs
-//! (Step), exec/txs.rs (Env), send/mod.rs (planned_floor), num.rs, core/types.
+//! Кто вызывает: exec/trade.rs (графовый маршрут); повтор после approve — exec/{trade_direct, trade_smart}.rs,
+//! exec/executor/trade.rs; plan_quote / outcome — exec/dry_paths.rs.
+//! От чего зависит: quote/verify.rs, quote/via.rs, quote/steps.rs, quote/direct.rs, exec/trade.rs (sides),
+//! exec/txs.rs (Env), send/mod.rs (planned_floor), core/types.
 //! Настройки: exec.dex_slippage_pct [bsc_dex] (для восстановления цены плана); verify.* — через quote/verify.rs.
 
 use chrono::Utc;
@@ -20,21 +25,22 @@ use crate::core::types::{DexRoute, Quote, Side, TradeRequest};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::events::MarketEvent;
 
+use super::super::check::hook_batch::RouteFresh;
 use super::super::ctx::Ctx;
-use super::super::num;
 use super::super::quote::steps::Names;
 use super::super::quote::verify::{self, Verdict};
 use super::super::quote::via::Via;
 use super::super::quote::{Quoting, direct};
 use super::super::send;
-use super::chain::Step;
 use super::txs::Env;
 
-/// Итог успешной верификации графового маршрута: свежие минимумы выхода по ногам (решение 84) и блок перечтения.
+/// Итог успешной верификации графового маршрута: свежие минимумы выхода по ногам (решение 84), блок перечтения и
+/// свежие записи пулов маршрута на нём (решение «335 (В1, пакет)»: проба крючков перед сделкой — по ним, exec/trade.rs).
 #[derive(Debug, Clone)]
 pub struct Verified {
     pub amount_out_min: Vec<Decimal>,
     pub block: u64,
+    pub fresh: RouteFresh,
 }
 
 /// Верификация графового маршрута перед сделкой. Принимает: окружение котировки, окружение отправки (для уведомления),
@@ -67,14 +73,30 @@ pub async fn gate(
         coin_dec: decs.0,
         usdt_dec: decs.1,
     };
+    // Решение 416: тикер газа — dex.gas_ticker площадки (gas_ticker.rs).
+    let gas_ticker = super::super::gas_ticker::read(ctx)?;
     let names = Names {
         usdt: (usdt, &usdt_ticker),
         coin: (coin, &req.asset.ticker),
         mids: &q.mids,
+        gas: &gas_ticker,
     };
-    let verdict = verify::run(&v, &names, &plan, gas).await?;
+    // Граница сделки ядра (req.worst_price) — прямо в вердикт (решение 121 B4): отказ, только если свежая цена хуже её.
+    let verdict = verify::run(&v, &names, &plan, gas, req.worst_price).await?;
     announce(env, ctx, req, &verdict);
-    outcome(ctx, verdict)
+    // Решение 381 (ревью t167, Н2): отказ «свежая цена хуже границы сделки» — пометка «цена ушла» для ядра; грубый
+    // предохранитель дрейфа и отказы свежести/чтения — без пометки. Предел дрейфа уже прочитан run (не задан — run
+    // вернул NotConfigured раньше).
+    let moved = verify::limits(ctx).is_ok_and(|(_, max_drift, _)| price_moved(&verdict, max_drift));
+    outcome(ctx, verdict).map_err(|e| if moved { e.price_moved() } else { e })
+}
+
+/// Решение 381 (ревью t167, Н2): отказ верификации — «цена ушла» (свежая средняя цена хуже границы сделки), а не грубый
+/// предохранитель. По коду quote/verify_decide.rs decide: дрейф есть у двух отказов — предохранителя (только при дрейфе
+/// больше verify.max_price_drift_pct) и границы сделки (дрейф не больше него); у отказов свежести, чтения и таймаута
+/// дрейфа нет. Чистая, тестируется. Принимает: вердикт, verify.max_price_drift_pct. Возвращает: да/нет. Ошибок нет.
+pub fn price_moved(verdict: &Verdict, max_drift: Decimal) -> bool {
+    matches!(verdict, Verdict::Reject { drift: Some(d), .. } if *d <= max_drift)
 }
 
 /// План-котировка из запроса: средняя цена восстановлена из худшей допустимой и exec.dex_slippage_pct — обратная
@@ -107,6 +129,7 @@ pub fn plan_quote(
         costs: Vec::new(),
         route: Some(route.clone()),
         signal_route: None,
+        pick: None,
         at: Utc::now(),
     })
 }
@@ -118,10 +141,12 @@ pub fn outcome(ctx: &Ctx, verdict: Verdict) -> GatewayResult<Verified> {
         Verdict::Ok {
             amount_out_min,
             block,
+            pools,
             ..
         } => Ok(Verified {
             amount_out_min,
             block,
+            fresh: RouteFresh { block, pools },
         }),
         Verdict::Reject { reason, drift } => {
             let code = if drift.is_some() {
@@ -139,11 +164,7 @@ pub fn outcome(ctx: &Ctx, verdict: Verdict) -> GatewayResult<Verified> {
 
 /// Уведомление о результате верификации (видно из интерфейса и в Telegram, если событие включено). Ошибок нет.
 fn announce(env: &Env, ctx: &Ctx, req: &TradeRequest, verdict: &Verdict) {
-    let op = if req.side == Side::Buy {
-        "Покупка"
-    } else {
-        "Продажа"
-    };
+    let op = ["Продажа", "Покупка"][usize::from(req.side == Side::Buy)];
     let (code, text) = match verdict {
         Verdict::Ok {
             amount_out_min,
@@ -176,32 +197,4 @@ fn announce(env: &Env, ctx: &Ctx, req: &TradeRequest, verdict: &Verdict) {
         code: code.to_string(),
         text,
     });
-}
-
-/// Ставит свежий минимум выхода доли (решение 84) последнему шагу — именно он отдаёт выход доли кошельку. Принимает:
-/// шаги доли, минимум в выходном активе, decimals выхода. Ошибки: NoRoute (доля без шагов), BadResponse (число),
-/// QuoteMismatch (минимум 0 — обмен без минимума не отправляется, как в exec/order.rs).
-pub fn apply_leg_min(
-    ctx: &Ctx,
-    steps: &mut [Step],
-    min: Decimal,
-    out_dec: u8,
-) -> GatewayResult<()> {
-    let last = steps
-        .last_mut()
-        .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "доля маршрута без шагов"))?;
-    let units = num::to_units(min, out_dec).ok_or_else(|| {
-        ctx.err(
-            ErrorCode::BadResponse,
-            "свежий минимум выхода не переводится в единицы токена",
-        )
-    })?;
-    if units.is_zero() {
-        return Err(ctx.err(
-            ErrorCode::QuoteMismatch,
-            "свежий минимум выхода 0 — обмен без минимума не отправляется",
-        ));
-    }
-    last.order.min_out = units;
-    Ok(())
 }

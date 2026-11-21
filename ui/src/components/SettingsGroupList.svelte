@@ -3,6 +3,7 @@
   Что делает: боковой список категорий экрана «Настройки» — переключение категорий без возврата в меню:
     «Все категории» и каждая категория схемы с числом настроек и числом не заданных нигде.
     Ссылки — адреса #/settings/<категория>, поэтому работает кнопка «Назад» браузера.
+    Решение 242: под категорией «Деньги и риск» — подпункт «по биржам и направлениям» (sub).
     На узком экране список становится строкой-переносом над настройками.
   Кто вызывает: pages/Settings.svelte.
   От чего зависит: lib/router.svelte.js (href), lib/settingsGroups.js (элементы groupStats).
@@ -11,8 +12,9 @@
 <script>
   import { href } from '../lib/router.svelte.js';
 
-  /** stats — [{group, total, unset}]; current — открытая категория ('' — все категории). */
-  let { stats, current } = $props();
+  /** stats — [{group, total, unset}]; current — открытая категория ('' — все категории);
+   *  sub — решение 242: {parent, route, title} подпункта категории или null. */
+  let { stats, current, sub = null } = $props();
 </script>
 
 <aside>
@@ -22,6 +24,9 @@
       <span>{g.group}</span>
       <span class="cnt">{g.total}{#if g.unset}{' · '}<span class="unset-n">не задано {g.unset}</span>{/if}</span>
     </a>
+    {#if sub && sub.parent === g.group}
+      <a href={href('settings', sub.route)} class="sub" class:active={current === sub.route}><span>› {sub.title}</span></a>
+    {/if}
   {/each}
 </aside>
 
@@ -37,6 +42,7 @@
   }
   a:hover { background: var(--bg); }
   a.active { border-left-color: var(--accent); background: var(--bg); font-weight: 600; }
+  .sub { padding-left: 24px; font-size: 14px; }
   .cnt { font-size: 12px; color: var(--muted); font-weight: 400; }
   .unset-n { color: var(--unset); }
   @media (max-width: 760px) {

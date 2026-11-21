@@ -6,14 +6,21 @@
 //! Настройки: нет; ручной чёрный список — обычный PUT /api/settings (coin.blocked, coin.blocked_note).
 //!
 //! GET  /api/coins          — список монет (контракт — src/api/README.md, «Экран Монеты»)
+//! GET  /api/coins/{address} — t84: строка одной монеты по адресу контракта, ровно как в списке (обновление одной
+//!      строки экрана по живому сообщению coin_check / pool_check / coin_block); 400 — адрес не разобран, 404 — нет монеты
 //! POST /api/coins/recheck  — {venue, assets: [Asset]} → {ok, details}
+//! GET  /api/coins/ticker-splits — решение 211: [{address, venues: [[биржа, тикер]]}] — конфликт: один адрес под двумя
+//!      тикерами на ОДНОЙ бирже (монета там не торгуется, TickerConflict), только для показа
+//! GET  /api/coins/names    — решение 211: [{address, ticker, venues: {биржа: тикер}}] — лёгкий справочник имён монет
+//!      по адресу для «Живого экрана» и других экранов (имя «NMT / NETMIND», делистинг по тикеру своей площадки, фильтр)
 //!
 //! Справочник, налоги, проверки пулов и чёрный список держит ядро (core/coins_view.rs → Core::coins_json).
 //! Монета для перепроверки — Asset целиком (тикер + адрес контракта): одинаковый тикер может быть
 //! разными токенами (Issue #9).
 
 use axum::Json;
-use axum::extract::State;
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
 use serde::Deserialize;
 
 use crate::core::types::{Asset, VenueId};
@@ -27,6 +34,36 @@ use super::state::{ApiError, AppState};
 /// `pool_depths`), или `depth_unavailable` — почему адаптер не ответил. Ошибок нет.
 pub async fn list(State(st): State<AppState>) -> Json<serde_json::Value> {
     let mut coins = st.core.coins_json();
+    let rows = coins.as_array_mut().into_iter().flatten();
+    with_depths(&st, rows).await;
+    Json(coins)
+}
+
+/// t84: строка одной монеты по адресу контракта — ровно как в GET /api/coins (та же строка ядра Core::coin_json и те
+/// же `depth` / `depth_unavailable`, что кладёт `list`). Экран «Монеты» обновляет ею одну строку по живому сообщению.
+/// Принимает: адрес (0x…, 20 байт). Возвращает: строку монеты.
+/// Ошибки: 400 — адрес не разобран; 404 — монеты с таким адресом в справочнике нет.
+pub async fn one(
+    State(st): State<AppState>,
+    Path(address): Path<String>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let a: alloy_primitives::Address = address
+        .parse()
+        .map_err(|e| ApiError::bad(format!("Адрес монеты «{address}» не разобран: {e}")))?;
+    let mut row = st.core.coin_json(a).ok_or_else(|| {
+        ApiError(
+            StatusCode::NOT_FOUND,
+            format!("Монеты с адресом {a} нет в справочнике"),
+        )
+    })?;
+    with_depths(&st, std::iter::once(&mut row)).await;
+    Ok(Json(row))
+}
+
+/// Кладёт в каждый пул строк `depth` и `depth_unavailable` (решение 73, шлюз `pool_depths` всех площадок реестра);
+/// решение 339 — добавляет в строку монеты её пулы, ни разу не прочитанные площадкой (`depth.unread`, `unread: true`).
+/// Принимает: состояние, строки монет. Возвращает: ничего. Ошибок нет: сбой адаптера — в `depth_unavailable`.
+async fn with_depths<'a>(st: &AppState, rows: impl Iterator<Item = &'a mut serde_json::Value>) {
     let mut depths = std::collections::HashMap::new();
     let mut failed = std::collections::HashMap::new();
     for id in st.registry.ids().await {
@@ -46,14 +83,63 @@ pub async fn list(State(st): State<AppState>) -> Json<serde_json::Value> {
             }
         }
     }
-    let pools = coins.as_array_mut().into_iter().flatten();
-    for p in pools.filter_map(|c| c["pools"].as_array_mut()).flatten() {
-        let venue = p["venue"].to_string();
-        let key = (venue.clone(), p["pool"].to_string());
-        p["depth"] = serde_json::to_value(depths.get(&key)).unwrap_or_default();
-        p["depth_unavailable"] = serde_json::to_value(failed.get(&venue)).unwrap_or_default();
+    // Решение 339 (экран «Монеты»): пулы, ни разу не прочитанные площадкой (depth.unread), — ядро их не знает; они
+    // добавляются в строку своей монеты (по адресу контракта) отдельными пулами с «admission» (в котировки не идут).
+    let mut unread: std::collections::HashMap<String, Vec<serde_json::Value>> = Default::default();
+    for d in depths.values() {
+        if let Some(u) = &d.unread {
+            unread
+                .entry(json_key(&u.coin))
+                .or_default()
+                .push(unread_pool(d, u));
+        }
     }
-    Json(coins)
+    for c in rows {
+        let coin = json_key(&c["asset"]["bsc_contract"]);
+        let Some(pools) = c["pools"].as_array_mut() else {
+            continue;
+        };
+        for p in pools.iter_mut() {
+            let venue = p["venue"].to_string();
+            let key = (venue.clone(), p["pool"].to_string());
+            p["depth"] = serde_json::to_value(depths.get(&key)).unwrap_or_default();
+            p["depth_unavailable"] = serde_json::to_value(failed.get(&venue)).unwrap_or_default();
+        }
+        // Пул ядра с той же ссылкой (прочитан раньше) — уже показан своей строкой.
+        let shown: std::collections::HashSet<String> =
+            pools.iter().map(|p| p["pool"].to_string()).collect();
+        let extra = unread.get(&coin).into_iter().flatten();
+        pools.extend(
+            extra
+                .filter(|p| !shown.contains(&p["pool"].to_string()))
+                .cloned(),
+        );
+    }
+}
+
+/// Пул, ни разу не прочитанный (решение 339), — строка `pools[]` экрана в формате пулов ядра: пара, вид и комиссия —
+/// из справочника площадки (`depth.unread`), состояния, блока и проверки нет, `admission` — почему в котировки не
+/// идёт, `unread: true`. Принимает: что знает адаптер, его поле unread. Ошибок нет.
+fn unread_pool(
+    d: &crate::core::types::PoolDepth,
+    u: &crate::core::types::UnreadPool,
+) -> serde_json::Value {
+    serde_json::json!({
+        "venue": d.venue,
+        "pair": u.pair,
+        "family": u.family,
+        "kind": u.kind,
+        "pool": d.pool,
+        "fee_pips": u.fee_pips,
+        "hooks": null,
+        "check": null,
+        "admission": d.depth_error,
+        "block": null,
+        "received_at": null,
+        "unread": true,
+        "depth": d,
+        "depth_unavailable": null,
+    })
 }
 
 /// Ключ сопоставления «пул ядра ↔ пул адаптера»: JSON значения (тот же вид, что в ответе ядра). Ошибок нет.
@@ -115,4 +201,28 @@ pub async fn recheck(
         .write(level, "coins.recheck", Some(&b.venue.0), msg, None)
         .await;
     Ok(Json(res))
+}
+
+/// Решение 211: имена монет с адресом — показной тикер и тикер каждой площадки (Presence.ticker). Монеты без адреса
+/// не входят (не торгуются). Принимает: состояние. Возвращает: JSON-массив. Ошибок нет: справочника нет — пустой массив.
+pub async fn names(State(st): State<AppState>) -> Json<serde_json::Value> {
+    let coins = crate::core::engine::rd(&st.core.inner.coins);
+    let list: Vec<serde_json::Value> = coins
+        .all()
+        .filter_map(|c| {
+            let a = c.asset.contract?;
+            let venues: serde_json::Map<String, serde_json::Value> = c
+                .presence
+                .iter()
+                .map(|p| (p.venue.0.clone(), serde_json::Value::from(p.ticker.clone())))
+                .collect();
+            Some(serde_json::json!({"address": a, "ticker": c.asset.ticker, "venues": venues}))
+        })
+        .collect();
+    Json(serde_json::Value::Array(list))
+}
+
+/// Решение 211: конфликты «один адрес — два тикера на одной бирже» (core/ticker_index.rs), для показа. Ошибок нет.
+pub async fn ticker_splits(State(st): State<AppState>) -> Json<serde_json::Value> {
+    Json(serde_json::to_value(st.core.ticker_splits()).unwrap_or_default())
 }

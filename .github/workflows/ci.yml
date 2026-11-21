@@ -7,8 +7,19 @@ on:
 jobs:
   rust:
     runs-on: ubuntu-latest
+    # 559 тестовых целей в tests/ линкуются каждая в свой бинарник; с полной отладочной инфой это
+    # переполняет диск раннера («No space left on device» при линковке). Отладочная инфа в тестовых
+    # бинарниках на прогон тестов не влияет — убираем её, и чистим диск от предустановленных SDK,
+    # не нужных сборке. На то, что собирается и тестируется, это не влияет.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
     steps:
       - uses: actions/checkout@v4
+      - name: Освободить диск раннера
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /usr/local/.ghcup "${AGENT_TOOLSDIRECTORY:-/opt/hostedtoolcache}" || true
+          df -h /
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy

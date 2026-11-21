@@ -19,12 +19,12 @@ use super::full_math as fm;
 
 /// Constants.ONE = 10^18 (единица фикс-точки D18). Ошибок нет.
 pub fn one() -> U256 {
-    U256::from(10u8).pow(U256::from(18u8))
+    super::ten::E18
 }
 
 /// Constants.ONE_SQUARED = 10^36. Ошибок нет.
 pub fn one_squared() -> U256 {
-    U256::from(10u8).pow(U256::from(36u8))
+    super::ten::E36
 }
 
 /// Math.min (uint256). Ошибок нет.
@@ -180,7 +180,7 @@ pub fn scale(decimals: u8) -> U256 {
     if decimals == 18 {
         U256::from(1u8)
     } else {
-        U256::from(10u8).pow(U256::from(18 - decimals))
+        super::ten::pow(u64::from(18 - decimals))
     }
 }
 /// Math.tokenScaleToAmmScale: amount·scaleFactor (scaleFactor=1 → amount). Ошибок нет в домене D18.

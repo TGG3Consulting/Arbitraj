@@ -76,6 +76,36 @@ impl Watch {
         }
     }
 
+    /// Решение 251: следующее подходящее изменение, которое УЖЕ пришло, без ожидания (склейка пачки изменений в одно
+    /// уведомление, notify/settings_watch.rs). Возвращает: Some(изменение) или None — сейчас ничего нет (или рассылка
+    /// закрыта: это покажет следующий next). Отставание — как у next: пропуск с предупреждением.
+    pub fn try_next(&mut self) -> Option<Change> {
+        loop {
+            match self.rx.try_recv() {
+                Ok(c) if self.matches(&c.name) => return Some(c),
+                Ok(_) => continue,
+                Err(broadcast::error::TryRecvError::Lagged(n)) => {
+                    tracing::warn!(skipped = n, "подписчик настроек отстал");
+                }
+                Err(_) => return None,
+            }
+        }
+    }
+
+    /// Решение 279: ждёт подходящее изменение и вычитывает все, что УЖЕ пришли (try_next), — пачка изменений даёт ОДНО
+    /// пробуждение тяжёлой работы (полный проход, пересборка подписки), а не по одному на изменение. Работа читает
+    /// значения из хранилища сама, поэтому видит итоговое состояние пачки; изменение, пришедшее во время работы,
+    /// остаётся в рассылке и даст следующее пробуждение. После первого изменения ожидания нет — отмена в select!
+    /// безопасна так же, как у next. Возвращает: Some(сколько изменений склеено, ≥ 1) или None — рассылка закрыта.
+    pub async fn next_batch(&mut self) -> Option<usize> {
+        self.next().await?;
+        let mut n = 1;
+        while self.try_next().is_some() {
+            n += 1;
+        }
+        Some(n)
+    }
+
     /// Подходит ли имя под префиксы подписки.
     fn matches(&self, name: &str) -> bool {
         self.prefixes.is_empty() || self.prefixes.iter().any(|p| name.starts_with(p.as_str()))

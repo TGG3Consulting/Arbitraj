@@ -59,8 +59,9 @@ async fn sides_are_independent() {
     let p = Parts::new(ctx.clone());
     let usdt = alloy_primitives::address!("0x55d398326f99059ff775485246999027b3197955");
     p.tokens.set(&[Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(usdt),
+        contract: Some(usdt),
     }]);
     // decimals() USDT в BSC — 18 (в записи глубины балансы и глубины USDT сходятся с замером только при 18).
     p.tokens.remember_decimals(usdt, 18);
@@ -72,7 +73,16 @@ async fn sides_are_independent() {
         f.gas_buy = Some(150_000);
         f.gas_sell = Some(150_000);
         f.quoter.set(Side::Sell, Some(Ok(())));
+        // Решение 146: налоги монеты в этом пуле измерены пробой (нулевые) — допуск по налогу не мешает глубине.
+        f.taxes = Some(arb::venues::bsc_dex::check::state::PoolTaxes {
+            buy_pct: rust_decimal::Decimal::ZERO,
+            sell_pct: Some(rust_decimal::Decimal::ZERO),
+            transfer_pct: rust_decimal::Decimal::ZERO,
+        });
     });
+    for n in ["tax.max_buy_pct", "tax.max_sell_pct"] {
+        set(&ctx, n, Scope::Global, json!("5")).await;
+    }
     let q = p.quoting();
     let s = usable(&q, &e, Side::Sell, 18);
     assert!(s.is_ok(), "продажа котируется: {:?}", s.err());

@@ -3,16 +3,19 @@
 //! состоянию лучшего достоверного пула «промежуточная — USDT» реестра — локальной математикой пула (та же, что
 //! у котировки). Нужен там, где сумма задана в USDT, а пул — с промежуточной монетой: сумма пробы
 //! (check.probe_usdt) и ликвидность пула против dex.min_pool_liquidity_usd.
-//! Кто вызывает: check/taxes.rs, check/hooks_probe.rs, check/quoter_cycle.rs, quote/select.rs.
+//! Кто вызывает: check/taxes.rs, check/hooks_probe.rs, check/quoter_cycle.rs, quote/select.rs; best_in — quote/route_gas.rs,
+//! pools/ladder_counter.rs (решение 306: суммы лесенки цен пула во встречном токене).
 //! От чего зависит: pools/registry.rs, quote/pool_quote.rs, ctx.rs.
 //! Настройки: через pool_quote — dex.v2_fee_pct [вид пула V2].
+
+use std::borrow::Borrow;
 
 use alloy_primitives::{Address, U256};
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
-use super::super::pools::registry::Registry;
+use super::super::pools::registry::{Entry, Registry};
 use super::pool_quote;
 
 /// Сколько единиц встречного токена `quote` дают `amount` единиц USDT (точный вход, лучший пул quote–USDT).
@@ -51,8 +54,24 @@ fn best(
     if quote == usdt {
         return Ok(amount);
     }
-    reg.by_pair(quote, usdt)
+    // Решение 410 (t195): пулы пары без копии записей (Arc) — раньше by_pair копировал каждую запись (Pool, строки,
+    // состояние) на каждый пересчёт суммы; читается только состояние.
+    best_in(ctx, &reg.pair_arcs(quote, usdt), quote, token_in, amount)
+}
+
+/// То же по уже взятым пулам «quote — USDT» (решение 129: учёт газа в графе берёт их один раз на котировку, а не на
+/// каждый путь). Принимает: пулы пары (копии записей или `Arc` записей реестра — решение 410, t195), встречный токен (для
+/// текста), токен входа, сумму. Ошибки: NoRoute.
+pub fn best_in<E: Borrow<Entry>>(
+    ctx: &Ctx,
+    pools: &[E],
+    quote: Address,
+    token_in: Address,
+    amount: U256,
+) -> GatewayResult<U256> {
+    pools
         .iter()
+        .map(<E as Borrow<Entry>>::borrow)
         .filter(|e| e.valid)
         .filter_map(|e| pool_quote::swap(ctx, e, token_in, true, amount).ok())
         .filter(|s| s.complete)

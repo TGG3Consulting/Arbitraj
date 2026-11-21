@@ -1,0 +1,475 @@
+[
+ {
+  "burst_start": "2026-11-16T10:25:39.850294575+00:00",
+  "rows": 4905,
+  "kinds": {
+   "dex.pool": 4851,
+   "dex.presell_approve": 15,
+   "core.candidate_rejected": 12,
+   "core.usdt_return": 3,
+   "core.window": 2,
+   "core.episode": 2,
+   "core.precheck": 2,
+   "core.transfer_credited": 2,
+   "core.transfer": 2,
+   "notify": 2,
+   "core.precheck_withdraw": 1,
+   "deal.buy_filled": 1,
+   "core.candidate": 1,
+   "episode.opened": 1,
+   "core.credit_event": 1,
+   "deal.sell_filled": 1,
+   "core.deal_closed": 1,
+   "episode.closed": 1,
+   "core.transfer_sent": 1,
+   "dex.index": 1,
+   "core.transfer_chain": 1,
+   "core.transfer_to_trading": 1
+  },
+  "new_pool_records": 4847,
+  "oracle_records": [],
+  "notable": []
+ },
+ {
+  "burst_start": "2026-11-16T11:22:00.202753449+00:00",
+  "rows": 47,
+  "kinds": {
+   "dex.graph_build": 19,
+   "core.feed_watch": 9,
+   "dex.quoter_memory": 7,
+   "core.candidate_rejected": 6,
+   "dex.pool": 4,
+   "core.balance_external": 1,
+   "dex.check_not_configured": 1
+  },
+  "new_pool_records": 0,
+  "oracle_records": [],
+  "notable": []
+ },
+ {
+  "burst_start": "2026-11-16T15:22:35.781306641+00:00",
+  "rows": 4017,
+  "kinds": {
+   "dex.pool": 4003,
+   "core.candidate_rejected": 7,
+   "dex.quoter": 6,
+   "dex.index": 1
+  },
+  "new_pool_records": 3983,
+  "oracle_records": [],
+  "notable": []
+ },
+ {
+  "burst_start": "2026-11-16T17:02:24.816108450+00:00",
+  "rows": 4912,
+  "kinds": {
+   "dex.pool": 4867,
+   "core.signal_hold": 22,
+   "core.candidate_rejected": 9,
+   "dex.quoter": 8,
+   "dex.pool_refresh": 5,
+   "dex.quoter_memory": 1
+  },
+  "new_pool_records": 4857,
+  "oracle_records": [],
+  "notable": []
+ },
+ {
+  "burst_start": "2026-11-16T17:17:40.079876817+00:00",
+  "rows": 74,
+  "kinds": {
+   "core.signal_hold": 39,
+   "core.candidate_rejected": 15,
+   "dex.pool": 8,
+   "dex.pool_refresh": 8,
+   "dex.quoter_memory": 3,
+   "core.window": 1
+  },
+  "new_pool_records": 0,
+  "oracle_records": [],
+  "notable": []
+ },
+ {
+  "burst_start": "2026-11-16T17:18:47.968143353+00:00",
+  "rows": 62,
+  "kinds": {
+   "core.signal_hold": 38,
+   "core.candidate_rejected": 12,
+   "dex.pool": 8,
+   "dex.quoter_memory": 2,
+   "dex.pool_refresh": 2
+  },
+  "new_pool_records": 0,
+  "oracle_records": [],
+  "notable": []
+ },
+ {
+  "burst_start": "2026-11-16T17:21:05.707930197+00:00",
+  "rows": 69,
+  "kinds": {
+   "core.signal_hold": 37,
+   "core.candidate_rejected": 12,
+   "core.feed_watch": 9,
+   "dex.pool": 3,
+   "dex.pool_refresh": 3,
+   "dex.quoter_memory": 2,
+   "dex.check_not_configured": 1,
+   "dex.quoter_pause": 1,
+   "notify": 1
+  },
+  "new_pool_records": 0,
+  "oracle_records": [],
+  "notable": []
+ },
+ {
+  "burst_start": "2026-11-16T17:27:07.479483107+00:00",
+  "rows": 207,
+  "kinds": {
+   "core.feed_watch": 95,
+   "core.signal_hold": 61,
+   "core.candidate_rejected": 27,
+   "core.episode": 4,
+   "core.window": 4,
+   "dex.presell_approve": 3,
+   "core.precheck": 2,
+   "episode.closed": 2,
+   "core.candidate": 2,
+   "episode.opened": 2,
+   "dex.quoter_memory": 2,
+   "venue.fees": 1,
+   "dex.pool": 1,
+   "dex.pool_refresh": 1
+  },
+  "new_pool_records": 0,
+  "oracle_records": [],
+  "notable": []
+ },
+ {
+  "burst_start": "2026-11-16T17:28:18.070507184+00:00",
+  "rows": 173,
+  "kinds": {
+   "core.signal_hold": 66,
+   "core.feed_watch": 31,
+   "core.candidate_rejected": 30,
+   "notify": 7,
+   "core.window": 7,
+   "core.episode": 5,
+   "dex.pool": 5,
+   "core.candidate": 3,
+   "episode.opened": 3,
+   "core.precheck": 3,
+   "core.control": 2,
+   "core.reconcile": 2,
+   "dex.pool_refresh": 2,
+   "episode.closed": 2,
+   "dex.check_not_configured": 1,
+   "dex.presell_approve": 1,
+   "dex.quoter_memory": 1,
+   "dex.quoter_pause": 1,
+   "venue.fees": 1
+  },
+  "new_pool_records": 0,
+  "oracle_records": [],
+  "notable": []
+ },
+ {
+  "burst_start": "2026-11-16T17:29:49.047989587+00:00",
+  "rows": 223,
+  "kinds": {
+   "core.signal_hold": 146,
+   "core.candidate_rejected": 33,
+   "dex.intermediate": 9,
+   "dex.pool_refresh": 6,
+   "dex.pool": 5,
+   "core.feed_watch": 4,
+   "dex.quoter_memory": 4,
+   "core.window": 2,
+   "core.episode": 2,
+   "notify": 2,
+   "dex.presell_approve": 1,
+   "settings.changed": 1,
+   "core.feed": 1,
+   "core.subscribe": 1,
+   "venue.fees": 1,
+   "core.candidate": 1,
+   "episode.opened": 1,
+   "dex.quoter_pause": 1,
+   "episode.closed": 1,
+   "core.cycle": 1
+  },
+  "new_pool_records": 0,
+  "oracle_records": [],
+  "notable": [
+   {
+    "at": "2026-11-16T17:29:21.880604535+00:00",
+    "level": "Info",
+    "kind": "settings.changed",
+    "message": "venue.enabled [venue:poloniex]: true → false (кто: интерфейс)"
+   }
+  ]
+ },
+ {
+  "burst_start": "2026-11-16T17:31:06.263418846+00:00",
+  "rows": 165,
+  "kinds": {
+   "core.signal_hold": 90,
+   "core.feed_watch": 25,
+   "core.candidate_rejected": 22,
+   "dex.presell_approve": 7,
+   "dex.pool": 4,
+   "dex.pool_refresh": 4,
+   "core.candidate": 2,
+   "episode.opened": 2,
+   "core.episode": 2,
+   "core.window": 2,
+   "episode.closed": 1,
+   "venue.ws": 1,
+   "venue.fees": 1,
+   "core.busy_calc": 1,
+   "dex.quoter_memory": 1
+  },
+  "new_pool_records": 0,
+  "oracle_records": [],
+  "notable": [
+   {
+    "at": "2026-11-16T17:30:48.659675692+00:00",
+    "level": "Warn",
+    "kind": "venue.ws",
+    "message": "WebSocket market-3: ошибка чтения: WebSocket protocol error: Connection reset without closing handshake; переподключение"
+   }
+  ]
+ },
+ {
+  "burst_start": "2026-11-16T17:32:40.894583201+00:00",
+  "rows": 187,
+  "kinds": {
+   "core.signal_hold": 103,
+   "core.feed_watch": 40,
+   "core.candidate_rejected": 27,
+   "dex.presell_approve": 3,
+   "dex.pool": 3,
+   "dex.quoter_pause": 3,
+   "notify": 3,
+   "dex.pool_refresh": 2,
+   "dex.quoter_memory": 2,
+   "venue.fees": 1
+  },
+  "new_pool_records": 0,
+  "oracle_records": [],
+  "notable": []
+ },
+ {
+  "burst_start": "2026-11-16T17:33:50.462512902+00:00",
+  "rows": 152,
+  "kinds": {
+   "core.signal_hold": 99,
+   "core.candidate_rejected": 26,
+   "dex.pool": 5,
+   "core.feed_watch": 5,
+   "dex.presell_approve": 4,
+   "core.episode": 2,
+   "dex.pool_refresh": 2,
+   "core.window": 1,
+   "core.candidate": 1,
+   "episode.opened": 1,
+   "venue.fees": 1,
+   "dex.quoter_pause": 1,
+   "notify": 1,
+   "dex.quoter_memory": 1,
+   "dex.check_not_configured": 1,
+   "episode.closed": 1
+  },
+  "new_pool_records": 0,
+  "oracle_records": [],
+  "notable": []
+ },
+ {
+  "burst_start": "2026-11-16T17:49:39.191182275+00:00",
+  "rows": 823,
+  "kinds": {
+   "dex.pool": 688,
+   "core.signal_hold": 86,
+   "core.candidate_rejected": 22,
+   "core.feed_watch": 17,
+   "dex.pool_refresh": 3,
+   "dex.quoter_memory": 2,
+   "dex.graph": 2,
+   "dex.index": 1,
+   "dex.graph_build": 1,
+   "venue.fees": 1
+  },
+  "new_pool_records": 684,
+  "oracle_records": [],
+  "notable": []
+ },
+ {
+  "burst_start": "2026-11-16T17:55:54.741615161+00:00",
+  "rows": 210,
+  "kinds": {
+   "core.signal_hold": 94,
+   "core.feed_watch": 58,
+   "core.candidate_rejected": 40,
+   "dex.quoter_memory": 5,
+   "dex.presell_approve": 3,
+   "notify": 3,
+   "dex.quoter_pause": 2,
+   "dex.pool": 1,
+   "dex.pool_refresh": 1,
+   "core.candidate": 1,
+   "episode.opened": 1,
+   "core.control": 1
+  },
+  "new_pool_records": 0,
+  "oracle_records": [],
+  "notable": []
+ },
+ {
+  "burst_start": "2026-11-16T17:57:39.180460291+00:00",
+  "rows": 126,
+  "kinds": {
+   "core.signal_hold": 81,
+   "core.candidate_rejected": 19,
+   "core.feed_watch": 10,
+   "dex.quoter_memory": 5,
+   "dex.pool": 5,
+   "dex.pool_refresh": 4,
+   "dex.quoter_pause": 1,
+   "notify": 1
+  },
+  "new_pool_records": 0,
+  "oracle_records": [
+   {
+    "at": "2026-11-16T17:57:39.180042888+00:00",
+    "level": "Warn",
+    "message": "dodo-dpp ETH: состояние пула не прочитано: узел BSC (HTTP), код 3: execution reverted: ORACLE_NOT_FEASIBLE: 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000134f5241434c455f4e4f545f4645415349424c4500000000000000000000000000 — повтор на новых блоках"
+   }
+  ],
+  "notable": []
+ },
+ {
+  "burst_start": "2026-11-16T18:00:31.078284649+00:00",
+  "rows": 152,
+  "kinds": {
+   "core.signal_hold": 100,
+   "core.candidate_rejected": 32,
+   "dex.pool": 5,
+   "core.feed_watch": 5,
+   "dex.pool_refresh": 4,
+   "dex.quoter_memory": 3,
+   "dex.check_not_configured": 1,
+   "dex.quoter_pause": 1,
+   "notify": 1
+  },
+  "new_pool_records": 0,
+  "oracle_records": [
+   {
+    "at": "2026-11-16T18:00:31.077015277+00:00",
+    "level": "Warn",
+    "message": "dodo-dpp ETH: состояние пула не прочитано: узел BSC (HTTP), код 3: execution reverted: ORACLE_NOT_FEASIBLE: 0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000134f5241434c455f4e4f545f4645415349424c4500000000000000000000000000 — повтор на новых блоках"
+   }
+  ],
+  "notable": []
+ },
+ {
+  "burst_start": "2026-11-16T20:26:02.645320983+00:00",
+  "rows": 238,
+  "kinds": {
+   "core.signal_hold": 149,
+   "core.candidate_rejected": 43,
+   "core.feed_watch": 23,
+   "dex.pool": 10,
+   "dex.pool_refresh": 10,
+   "core.cycle": 2,
+   "venue.head_age": 1
+  },
+  "new_pool_records": 0,
+  "oracle_records": [],
+  "notable": [
+   {
+    "at": "2026-11-16T20:25:41.517591551+00:00",
+    "level": "Info",
+    "kind": "venue.head_age",
+    "message": "Голова сети снова свежая (возраст блока не больше feed.max_block_age_ms)"
+   }
+  ]
+ },
+ {
+  "burst_start": "2026-11-16T20:41:39.366043201+00:00",
+  "rows": 272,
+  "kinds": {
+   "core.signal_hold": 156,
+   "core.candidate_rejected": 50,
+   "core.feed_watch": 35,
+   "dex.pool": 12,
+   "dex.pool_refresh": 11,
+   "core.cycle": 5,
+   "venue.head_age": 3
+  },
+  "new_pool_records": 0,
+  "oracle_records": [],
+  "notable": [
+   {
+    "at": "2026-11-16T20:41:21.010440275+00:00",
+    "level": "Info",
+    "kind": "venue.head_age",
+    "message": "Голова сети снова свежая (возраст блока не больше feed.max_block_age_ms)"
+   },
+   {
+    "at": "2026-11-16T20:41:23.030375139+00:00",
+    "level": "Warn",
+    "kind": "venue.head_age",
+    "message": "Голова сети устарела: Блок 133993302 создан 4030 мс назад — больше feed.max_block_age_ms (4000): узел отстаёт от сети или догоняет её"
+   },
+   {
+    "at": "2026-11-16T20:41:32.052844765+00:00",
+    "level": "Info",
+    "kind": "venue.head_age",
+    "message": "Голова сети снова свежая (возраст блока не больше feed.max_block_age_ms)"
+   }
+  ]
+ },
+ {
+  "burst_start": "2026-11-16T20:52:12.318677608+00:00",
+  "rows": 233,
+  "kinds": {
+   "core.signal_hold": 135,
+   "core.candidate_rejected": 46,
+   "core.feed_watch": 24,
+   "dex.pool": 8,
+   "dex.pool_refresh": 8,
+   "core.cycle": 5,
+   "venue.head_age": 3,
+   "venue.subscribe": 2,
+   "venue.symbols": 1,
+   "dex.quoter_memory": 1
+  },
+  "new_pool_records": 0,
+  "oracle_records": [],
+  "notable": [
+   {
+    "at": "2026-11-16T20:51:45.401415381+00:00",
+    "level": "Warn",
+    "kind": "venue.symbols",
+    "message": "Справочник пар BingX изменился у 1 монет — пересподписка стаканов"
+   },
+   {
+    "at": "2026-11-16T20:51:54.003047698+00:00",
+    "level": "Info",
+    "kind": "venue.head_age",
+    "message": "Голова сети снова свежая (возраст блока не больше feed.max_block_age_ms)"
+   },
+   {
+    "at": "2026-11-16T20:51:56.512390131+00:00",
+    "level": "Warn",
+    "kind": "venue.head_age",
+    "message": "Голова сети устарела: Блок 133994709 создан 4362 мс назад — больше feed.max_block_age_ms (4000): узел отстаёт от сети или догоняет её"
+   },
+   {
+    "at": "2026-11-16T20:52:05.537902914+00:00",
+    "level": "Info",
+    "kind": "venue.head_age",
+    "message": "Голова сети снова свежая (возраст блока не больше feed.max_block_age_ms)"
+   }
+  ]
+ }
+]

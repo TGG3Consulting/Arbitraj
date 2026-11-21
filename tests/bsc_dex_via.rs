@@ -48,15 +48,32 @@ async fn ctx() -> Ctx {
     let (jtx, _) = broadcast::channel(64);
     let journal = Journal::new(db.clone(), jtx);
     let settings = Store::load(db, changes, journal.clone()).await.unwrap();
-    let c = Ctx {
-        raw: RawLog::start(d.join("raw"), settings.clone()),
-        pace: Default::default(),
-        failover: Default::default(),
-        index: Default::default(),
-        settings,
-        vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
-        http: reqwest::Client::new(),
-        journal,
+    let c = {
+        let c = Ctx {
+            raw: RawLog::start(d.join("raw"), settings.clone()),
+            pace: Default::default(),
+            failover: Default::default(),
+            evm_chain: Default::default(),
+            place: arb::venues::bsc_dex::ctx::Place::BSC,
+            chains: Default::default(),
+            account: None,
+            index: Default::default(),
+            settings,
+            vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
+            http: reqwest::Client::new(),
+            journal,
+        };
+        // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+        c.settings
+            .set(
+                "dex.gas_ticker",
+                arb::settings::scope::Scope::Venue("bsc_dex".into()),
+                Some(serde_json::json!("BNB")),
+                "тест",
+            )
+            .await
+            .unwrap();
+        c
     };
     let v = Scope::Venue("bsc_dex".into());
     for (name, scope, val) in [
@@ -66,6 +83,9 @@ async fn ctx() -> Ctx {
         ("dex.depth_band_pct", v.clone(), json!(10)),
         ("dex.depth_hysteresis_pct", v.clone(), json!(0)),
         ("exec.dex_slippage_pct", v.clone(), json!(1)),
+        // Решение 146: пороги налога пула в котировке (quote/pool_tax.rs), значения теста.
+        ("tax.max_buy_pct", Scope::Global, json!("5")),
+        ("tax.max_sell_pct", Scope::Global, json!("5")),
         (
             "dex.kind",
             Scope::Dex("pancakeswap_v2".into()),
@@ -157,6 +177,7 @@ fn pair(
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     }
 }
 
@@ -170,8 +191,9 @@ fn clean(ticker: &str, a: Address) -> CoinCheck {
     CoinCheck {
         venue: VenueId("bsc_dex".into()),
         asset: Asset {
+            chain: None,
             ticker: ticker.into(),
-            bsc_contract: Some(a),
+            contract: Some(a),
         },
         taxes: CheckState::Known(zero),
         source: "тест".into(),
@@ -187,12 +209,14 @@ async fn buy_and_sell_through_wbnb() {
     let e18 = 10u128.pow(18);
     p.tokens.set(&[
         Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: Some(USDT),
+            contract: Some(USDT),
         },
         Asset {
+            chain: None,
             ticker: "X".into(),
-            bsc_contract: Some(COIN),
+            contract: Some(COIN),
         },
     ]);
     p.mids.set(vec![Mid {
@@ -222,6 +246,11 @@ async fn buy_and_sell_through_wbnb() {
             f.gas_sell = Some(110_000);
             f.quoter.buy = Some(Ok(()));
             f.quoter.sell = Some(Ok(()));
+            f.taxes = Some(arb::venues::bsc_dex::check::state::PoolTaxes {
+                buy_pct: Decimal::ZERO,
+                sell_pct: Some(Decimal::ZERO),
+                transfer_pct: Decimal::ZERO,
+            });
         });
     }
     p.checks.set_coin(clean("BNB", WBNB));
@@ -239,6 +268,7 @@ async fn buy_and_sell_through_wbnb() {
         usdt: (USDT, "USDT"),
         coin: (COIN, "X"),
         mids: &p.mids,
+        gas: "BNB",
     };
     let qty = Decimal::from(10u8);
     for side in [Side::Buy, Side::Sell] {
@@ -312,14 +342,17 @@ async fn buy_and_sell_through_wbnb() {
         let req = TradeRequest {
             venue: VenueId("bsc_dex".into()),
             asset: Asset {
+                chain: None,
                 ticker: "X".into(),
-                bsc_contract: Some(COIN),
+                contract: Some(COIN),
             },
             side,
             qty,
             worst_price: worst,
             deal_id: "т".into(),
             route: None,
+            exit_position: false,
+            remeasure: None,
         };
         let st = chain::steps(&q.ctx, &req, &path, qty, (18, 18)).unwrap();
         assert_eq!(st.len(), 2);

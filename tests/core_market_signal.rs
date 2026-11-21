@@ -42,8 +42,9 @@ fn books() -> Vec<OrderBook> {
                 } => Some(OrderBook {
                     venue: VenueId("bingx".into()),
                     asset: Asset {
+                        chain: None,
                         ticker: symbol.trim_end_matches("-USDT").to_string(),
-                        bsc_contract: None,
+                        contract: None,
                     },
                     bids,
                     asks,
@@ -86,6 +87,7 @@ fn market_state_books() {
     m.apply(MarketEvent::Invalidated {
         venue: bx.clone(),
         ticker: "CAKE".into(),
+        address: None,
     });
     assert!(m.book(&bx, "CAKE").is_none());
     assert!(m.book(&bx, "TWT").is_some());
@@ -107,6 +109,8 @@ fn signal_on_real_prices() {
         sell: b.bids[0].price,
         fees_pct: Decimal::ZERO,
         qty: b.asks[0].qty,
+        buy_at: Utc::now(),
+        sell_at: Utc::now(),
     };
     let params: Result<Params, String> = Err("пороги не нужны: спред ниже комиссий".into());
     let mut s = Signals::default();

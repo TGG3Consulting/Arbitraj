@@ -6,7 +6,10 @@
 //! занят — ещё send.replaced_confirm_blocks блоков ищем свою квитанцию и eth_getTransactionByHash (узел мог ещё не
 //! проиндексировать, балансировщик RPC), только потом «вытеснена». Сбой узла, нет блоков — не ошибка: повтор.
 //! Исход не установлен: лимит отмен (send.cancel_max_attempts), потолок цены газа отмены (send.cancel_max_gas_gwei),
-//! время ожидания (send.queue_max_wait_s) — итог «исход неизвестен» (exec/txs.rs останавливает очередь).
+//! время ожидания (send.queue_max_wait_s) — итог «исход неизвестен» (exec/txs.rs останавливает очередь). Хеш каждой
+//! отправленной отмены — в журнал отмен Watch.cancels (для «чем найти», exec/txs.rs).
+//! Решение 437 (1): у сети dex.gas_mode = eip1559_l1 (SendCfg.drop_wait задан) отмен нет — итог по времени и nonce
+//! (send/track_l1.rs).
 //! Кто вызывает: exec/txs.rs (задача трекера держит место в очереди кошелька).
 //! От чего зависит: node/rpc.rs, send/track_util.rs, send/receipt.rs, send/cancel.rs, send/tx.rs (SendCfg), ctx.rs.
 //! Настройки: send.max_wait_blocks, send.replaced_confirm_blocks, send.cancel_*, send.queue_max_wait_s,
@@ -34,6 +37,9 @@ pub use super::track_util::{Tracked, Watch};
 /// Ждёт, пока nonce не занят в блоке или исход не признан неизвестным (см. шапку). Возвращает: итог.
 /// Ошибок нет — сбои узла повторяются.
 pub async fn resolve(w: Watch) -> Tracked {
+    if let Some(wait) = w.cfg.drop_wait {
+        return super::track_l1::resolve(w, wait).await;
+    }
     let ctx = &w.ctx;
     let started = Instant::now();
     let mut rx = heads_rx(&w.heads);
@@ -110,7 +116,7 @@ pub async fn resolve(w: Watch) -> Tracked {
             return Tracked::bare(TxOutcome::Pending, Some(why));
         }
         price = match cancel::price(ctx, price, &w.cfg, &w.ready) {
-            Ok(p) if p <= w.cfg.cancel_max_wei => p,
+            Ok(p) if p.cap() <= w.cfg.cancel_max_wei => p,
             Ok(p) => {
                 let why =
                     format!("цена газа следующей отмены {p} wei выше send.cancel_max_gas_gwei");
@@ -119,13 +125,14 @@ pub async fn resolve(w: Watch) -> Tracked {
             Err(e) => return Tracked::bare(TxOutcome::Pending, Some(e.message)),
         };
         cancels += 1;
-        match cancel::send(
-            ctx, &w.stats, &w.ready, w.from, w.nonce, price, head, &w.cfg,
-        )
-        .await
-        {
+        match cancel::send(&w, price, head).await {
             Ok(h) => {
                 ours.push(h);
+                // «Чем найти» (exec/txs.rs): отмена могла занять nonce — её хеш нужен позднему выяснению.
+                match w.cancels.lock() {
+                    Ok(mut v) => v.push(h),
+                    Err(p) => p.into_inner().push(h),
+                }
                 quiet.ok("cancel").await;
                 let msg = format!(
                     "{} не попала за send.max_wait_blocks — отмена {h} (nonce {}, {price} wei)",

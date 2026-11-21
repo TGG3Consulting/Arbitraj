@@ -1,9 +1,12 @@
 //! Файл: venues/bsc_dex/check/taxes_util.rs
-//! Что делает: части проверки налогов: пулы монеты для пробы (фильтр ликвидности, порядок V2 → V3 → V4), налоги в
-//! процентах по замеру пробы и выбор источника встречного токена для пробы.
-//! Кто вызывает: check/taxes.rs.
-//! От чего зависит: check/probe.rs (Measured), pools/registry.rs, node/call.rs, num.rs.
-//! Настройки: через quote/select.rs — dex.min_pool_liquidity_usd.
+//! Что делает: части проверки налогов: пулы монеты для пробы (глубокие в оба направления или мелкие, где пробный
+//! круг проходит, — решение 393; порядок V2 → V3 → V4), налог в
+//! процентах по паре «отправлено / дошло» и выбор источника встречного токена для пробы. Налоги пула по замеру пробы и
+//! налоги монеты по пулам — check/pool_taxes.rs (решение 146).
+//! Кто вызывает: check/taxes.rs, check/pool_taxes.rs, check/service_tax_calls.rs.
+//! От чего зависит: pools/registry.rs, node/call.rs, num.rs, quote/select.rs, quote/side_fit.rs.
+//! Настройки: через quote/select.rs — dex.min_pool_liquidity_usd; через quote/side_fit.rs — check.probe_usdt,
+//! dex.quoter_max_diff_pct.
 //!
 //! Налог, % = (ожидалось − пришло) / ожидалось · 100 — research/flow/bsc_dex.md, раздел 6.
 //! balanceOf — EIP-20: https://eips.ethereum.org/EIPS/eip-20#balanceof
@@ -14,7 +17,7 @@ use std::sync::Mutex;
 use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
 
-use crate::core::types::{PoolKind, PoolRef, TokenTaxes};
+use crate::core::types::{PoolKind, PoolRef};
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
@@ -22,19 +25,8 @@ use super::super::node::abi::IERC20;
 use super::super::node::call;
 use super::super::num;
 use super::super::pools::registry::{Entry, Registry};
-use super::super::quote::select;
+use super::super::quote::{select, shallow_pick, side_fit};
 use super::super::tokens::Tokens;
-use super::probe::Measured;
-
-/// Налоги в процентах. None — делить не на что (ожидалось 0).
-pub fn percent(m: &Measured, decimals: u8) -> Option<TokenTaxes> {
-    let pct = |sent: U256, got: U256| pct(sent, got, decimals);
-    Some(TokenTaxes {
-        buy_pct: pct(m.buy_expected, m.buy_got)?,
-        sell_pct: pct(m.sell_sent, m.sell_got)?,
-        transfer_pct: pct(m.transfer_sent, m.transfer_got)?,
-    })
-}
 
 /// Налог, %: (отправлено − дошло) / отправлено · 100 (дошло больше — 0). Принимает: суммы в минимальных единицах,
 /// знаки токена. Возвращает: None — отправлено 0 или не переводится. Ошибок нет.
@@ -82,6 +74,8 @@ pub async fn quote_source(
             let pools: Vec<Address> = reg
                 .refs()
                 .into_iter()
+                // Решение 295: пары многомонетного пула (PoolRef::Multi) источником USDT не берутся — как пары
+                // общего контракта (Member): только пул со своим контрактом и ссылкой Contract.
                 .filter_map(|r| match (&r, reg.get(&r)) {
                     (PoolRef::Contract(a), Some(e)) if e.valid && e.usdt == usdt && deep(&e) => {
                         Some(*a)
@@ -110,26 +104,52 @@ pub async fn quote_source(
         .map(|(a, _)| a))
 }
 
-/// Пулы монеты для пробы: достоверные и глубокие в ОБА направления (проба покупает и продаёт тем же пулом; фильтр —
-/// первым, quote/select.rs deep_side), V2 впереди (решение 39), затем V3, затем V4. Возвращает: (пулы, причины
-/// ожидания по пулам, где глубина не считается, причины по мелким и спящим пулам — с цифрами глубины: «V4 ZKP 0x…:
-/// глубина покупки 812 USDT …»; они — в текст ожидания, только когда пробовать нечем).
+/// Пул для пробы и сумма пробы в нём: None — пул глубокий в оба направления, сумма — полная check.probe_usdt (как до
+/// решения 393); Some(x) — мелкий пул, где пробный круг проходит на сумме x встречного токена (quote/side_fit.rs).
+pub type ProbePool = (Entry, Option<U256>);
+
+/// Пулы монеты для пробы (решение 393, t178): достоверные и либо глубокие в ОБА направления (решение 73, quote/select.rs
+/// deep_side — сумма пробы полная), либо мелкие, но пробный круг — покупка на сумму пробы и продажа остатка назад —
+/// проходит по расчёту пула целиком с выходом не меньше наименьшего (quote/side_fit.rs round_trip; не проходит полная
+/// сумма — наибольшая из ряда сумма/2, сумма/4, …). Налог — свойство токена в этом пуле, меряется отношением «квотер /
+/// пришло» на одной сумме (кривая пула сокращается), поэтому порог глубины для торговли к пробе не относится.
+/// Порядок: V2 впереди (решение 39), затем V3, затем V4. Возвращает: (пулы с суммой, причины ожидания по пулам, где
+/// глубина не считается, причины по мелким и спящим пулам, где и круг не проходит — с цифрами глубины; они — в текст
+/// ожидания, только когда пробовать нечем). Сумму мелкого пула не посчитать (не задана check.probe_usdt или
+/// dex.quoter_max_diff_pct, нет USDT или курса) — пул как мелкий (прежнее поведение).
+/// Ревью t178 (Б2): мелкий пул — только если он в пределе dex.shallow_pools_per_pair пары (quote/shallow_pick.rs); не
+/// задана или 0 — мелкие пулы в пробу не идут (как до решения 393).
 /// Ошибки: NotConfigured (не задана настройка глубины).
 pub fn probe_pools(
     ctx: &Ctx,
     reg: &Registry,
     tokens: &Tokens,
-    ticker: &str,
+    coin: &Address,
     usdt_dec: u8,
-) -> GatewayResult<(Vec<Entry>, Vec<String>, Vec<String>)> {
+) -> GatewayResult<(Vec<ProbePool>, Vec<String>, Vec<String>)> {
     let (mut pools, mut env, mut shallow) = (Vec::new(), Vec::new(), Vec::new());
-    for e in reg.by_ticker(ticker).into_iter().filter(|e| e.valid) {
+    // Решение 211: пулы монеты — по адресу контракта.
+    for e in reg.by_coin(coin).into_iter().filter(|e| e.valid) {
         let label = super::super::pools::depth_book::label(&e.pool.reference);
         match select::deep_side(ctx, reg, tokens, &e, usdt_dec, select::Need::Both) {
-            Ok(None) => pools.push(e),
-            Ok(Some(why)) => {
-                shallow.push(format!("{} {} {label}: {why}", e.family.title, e.ticker))
+            Ok(None) => pools.push((e, None)),
+            // Ревью t178 (Б2): мелкий пул — только в пределе dex.shallow_pools_per_pair на пару (quote/shallow_pick.rs).
+            Ok(Some(why)) if !shallow_pick::admitted(ctx, reg, tokens, usdt_dec, &e) => {
+                shallow.push(format!(
+                    "{} {} {label}: {why}; мелкий пул вне предела {} = {} (или ни одна его сторона не пропускает сумму пробы)",
+                    e.family.title,
+                    e.ticker,
+                    shallow_pick::NAME,
+                    shallow_pick::limit(ctx)
+                ))
             }
+            Ok(Some(why)) => match trip(ctx, reg, tokens, &e, usdt_dec) {
+                Ok(t) => pools.push((e, Some(t.amount))),
+                Err(no) => shallow.push(format!(
+                    "{} {} {label}: {why}; {no}",
+                    e.family.title, e.ticker
+                )),
+            },
             // Не задана настройка глубины — ошибка с её именем (по нему ждущие перепроверяются при её задании).
             Err(why) => match super::super::pools::depth_book::missing_setting(ctx) {
                 Some(name) => return Err(ctx.not_set(&name, why)),
@@ -138,12 +158,32 @@ pub fn probe_pools(
         }
     }
     // V2 впереди: только они поддерживают монеты с налогом (решение 39), затем V3, затем V4.
-    pools.sort_by_key(|e| match e.pool.kind {
+    pools.sort_by_key(|(e, _)| match e.pool.kind {
         PoolKind::V2 => 0,
         PoolKind::V3 => 1,
         _ => 2,
     });
     Ok((pools, env, shallow))
+}
+
+/// Пробный круг мелкого пула (quote/side_fit.rs round_trip) на сумме check.probe_usdt во встречном токене. Спящий пул
+/// (при ws слушается только добавление ликвидности) — по его последнему состоянию: проба идёт на узле, а откат на
+/// крошечном выходе не вердикт (check/probe_tiny.rs). Возвращает: круг; Err — почему не проходит (текст). Ошибок иных нет.
+fn trip(
+    ctx: &Ctx,
+    reg: &Registry,
+    tokens: &Tokens,
+    e: &Entry,
+    usdt_dec: u8,
+) -> Result<side_fit::Trip, String> {
+    let usdt = tokens.usdt(ctx).map_err(|x| x.message)?;
+    let cap = side_fit::cap(ctx, reg, usdt, usdt_dec, e).map_err(|x| x.message)?;
+    let min = side_fit::min_units(ctx).map_err(|x| x.message)?;
+    side_fit::round_trip(ctx, e, cap, min).ok_or_else(|| {
+        format!(
+            "пробный круг на check.probe_usdt и меньших суммах (до выхода {min} единиц) по расчёту пула не проходит"
+        )
+    })
 }
 
 /// «Не проверено: пулы монеты ещё загружаются» для экранов. Принимает: окружение, тикер, адрес, причину. Ошибок нет.
@@ -156,8 +196,9 @@ pub fn loading_check(
     crate::core::types::CoinCheck {
         venue: p.ctx.venue(),
         asset: crate::core::types::Asset {
+            chain: None,
             ticker: ticker.to_string(),
-            bsc_contract: Some(addr),
+            contract: Some(addr),
         },
         taxes: crate::core::types::CheckState::NotChecked,
         source: super::taxes::SOURCE.into(),
@@ -173,12 +214,37 @@ pub async fn note_wait(
     prev: &Option<crate::core::types::CheckState<crate::core::types::TokenTaxes>>,
     c: crate::core::types::CoinCheck,
 ) {
+    note_wait_doubt(p, prev, c, false).await
+}
+
+/// Держится ли прежний итог при «не проверено» (чистая логика): «не прошла» — всегда; «прошла» — только без вердикта по
+/// пулу (ревью t178, Б1: `doubt` — Outcome::Doubt). Ошибок нет.
+pub fn keeps(
+    prev: &Option<crate::core::types::CheckState<crate::core::types::TokenTaxes>>,
+    doubt: bool,
+) -> bool {
     use crate::core::types::CheckState;
-    if matches!(prev, Some(CheckState::Known(_) | CheckState::Failed { .. })) {
+    match prev {
+        Some(CheckState::Failed { .. }) => true,
+        Some(CheckState::Known(_)) => !doubt,
+        _ => false,
+    }
+}
+
+/// Как note_wait, а при `doubt` (Outcome::Doubt) прежний итог «прошла» заменяется на «не проверено» (keeps). Ошибок нет.
+pub async fn note_wait_doubt(
+    p: &super::super::pools::listen::Pools,
+    prev: &Option<crate::core::types::CheckState<crate::core::types::TokenTaxes>>,
+    c: crate::core::types::CoinCheck,
+    doubt: bool,
+) {
+    if keeps(prev, doubt) {
         return;
     }
-    let old = p.checks.coin(&c.asset.ticker).and_then(|x| x.wait);
-    if old == c.wait {
+    // Был итог «прошла», снимается — причина могла совпасть с прошлой «не проверено» (её не было: был итог).
+    let replacing = matches!(prev, Some(crate::core::types::CheckState::Known(_)));
+    let old = p.checks.coin_of(&c.asset).and_then(|x| x.wait);
+    if old == c.wait && !replacing {
         return;
     }
     p.checks.set_coin(c.clone());

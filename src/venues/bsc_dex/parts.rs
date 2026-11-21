@@ -1,8 +1,11 @@
 //! Файл: venues/bsc_dex/parts.rs
 //! Что делает: общее состояние адаптера DEX в памяти (блоки, токены, пулы, проверки, цена газа, очередь кошелька,
-//! ожидаемые поступления, счётчики каналов, сигнал «перепроверить») и сборка окружений для котировки, сделки и слушателей пулов.
+//! ожидаемые поступления, счётчики каналов, сигнал «перепроверить»; кошельковое — по счетам, parts_wallet.rs) и сборка окружений для котировки, сделки и слушателей пулов.
+//! Решение 308: pools() запускает фонового владельца графа маршрутов (pools/graph_owner.rs ensure).
+//! Решение 321: события пулов, ждущие места в канале ядра. Решение 324: набор — общий на канал ядра (gateway/core_out.rs,
+//! находится по каналу в pools(); pools/emit_pool.rs Kept), а не поле адаптера.
 //! Кто вызывает: mod.rs.
-//! От чего зависит: ctx.rs, node/heads.rs, tokens.rs, pools/*, check/state.rs, quote/*, exec/txs.rs, send/stats.rs, wallet/nonce.rs,
+//! От чего зависит: ctx.rs, node/heads.rs, tokens.rs, pools/*, check/state.rs, check/deal_taxes.rs, quote/*, exec/txs.rs, send/stats.rs, wallet/nonce.rs,
 //! wallet/inflows.rs.
 //! Настройки: нет.
 
@@ -46,6 +49,9 @@ pub struct Parts {
     pub wake: super::check::recheck::Recheck,
     /// «Данные пулов отстают на N блоков» — лента квитанций догоняет без сброса (решение 72).
     pub lag: super::node::events_lag::EventsLag,
+    /// Своё состояние каждого кошелька (решение 132, parts_wallet.rs). Поля nonces, inflows, allow выше — кошелька
+    /// окружения: у привязанного к счёту (Parts::bound) — этого счёта; у непривязанного — только чтение и пробы.
+    pub wallets: super::parts_wallet::Wallets,
 }
 
 impl Parts {
@@ -66,21 +72,29 @@ impl Parts {
             allow: Default::default(),
             wake: Default::default(),
             lag: Default::default(),
+            wallets: Default::default(),
         }
     }
 
-    /// Окружение котировки. Ошибок нет.
+    /// Окружение котировки. t78 (дополнение 10.11 к 247/252): идёт продажа выхода сделки (gateway/exit_scope.rs) —
+    /// итоги проверок с налогами, перепроверенными кошельком этой сделки, поверх общих (check/deal_taxes.rs for_exit).
+    /// Ошибок нет.
     pub fn quoting(&self) -> Quoting {
         Quoting {
             ctx: self.ctx.clone(),
             reg: self.registry.clone(),
-            checks: self.checks.clone(),
+            checks: self.checks.for_exit(self.ctx.account.as_deref()),
             tokens: self.tokens.clone(),
             heads: self.heads.clone(),
             gas: self.gas.clone(),
             mids: self.mids.clone(),
             allow: self.allow.clone(),
             lag: self.lag.clone(),
+            frozen_head: None,
+            plan_gas: None,
+            exec_quote: false,
+            route_fresh: None,
+            pinned: None,
         }
     }
 
@@ -93,17 +107,35 @@ impl Parts {
             gas: self.gas.clone(),
             inflows: self.inflows.clone(),
             allow: self.allow.clone(),
+            wake: self.wake.clone(),
         }
     }
 
     /// Окружение слушателей пулов и проверок; канал событий ядра — и для счётчиков каналов. Ошибок нет.
     pub fn pools(&self, out: mpsc::Sender<MarketEvent>) -> Pools {
-        self.stats.set_out(out.clone());
+        // Решение 333: события ядру из исполнения и очереди кошелька — через очередь «ждут места» шлюза.
+        self.stats
+            .set_out(crate::gateway::core_out_must::MustOut::new(
+                out.clone(),
+                &self.ctx.settings,
+                &self.ctx.journal,
+            ));
+        // Решение 282: уведомление «блок узла не растёт» шлёт ядру опрос блоков (node/head_stall.rs).
+        self.heads.stall.set_out(out.clone());
         let signals = super::pools::progress::Signals::default();
         // Отметка «данные пулов отстают» снята — циклы проверок перепроверяют (решение 72).
         self.lag.on_clear(signals.ready.clone());
         // Направление пула стало глубоким — «пул готов» (решение 73, pools/depth_book.rs).
         self.registry.depth().on_rise(signals.ready.clone());
+        // Решение 308: фоновый владелец графа маршрутов — запуск при первой подписке, при пересборке подписки (ленты пулов
+        // переподключены) — полная пересборка графа (pools/graph_owner.rs). Работает только при dex.graph_background = да.
+        super::pools::graph_owner::ensure(&self.ctx, &self.registry, &self.tokens, out.clone());
+        // Решение 403: построитель снимка отбора мелких пулов пар (вне пути котировки, quote/shallow_build.rs).
+        super::quote::shallow_build::ensure(&self.ctx, &self.registry, &self.tokens);
+        // Решения 321/324: общий набор канала ядра (один на канал — все подписки и пачки и биржи) и запись журнала,
+        // когда он опустел.
+        let kept = super::pools::emit_pool::Kept::new(&out, &self.registry, &self.ctx);
+        kept.watch(&self.ctx, &signals.lost);
         Pools {
             ctx: self.ctx.clone(),
             reg: self.registry.clone(),
@@ -117,6 +149,9 @@ impl Parts {
             feed: super::node::receipts::Feed::with_lag(self.lag.clone()),
             lag: self.lag.clone(),
             gas: self.gas.clone(),
+            kept,
+            holds: self.registry.holds().clone(),
+            transfers: Default::default(),
         }
     }
 }

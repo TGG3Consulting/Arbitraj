@@ -3,12 +3,11 @@
 //! не пишется) — часть окружения адаптера (ctx.rs).
 //! Кто вызывает: node/rpc.rs, node/ws.rs, node/failover.rs, connection.rs, send/*.
 //! От чего зависит: ctx.rs (Ctx, KEY_MARK), secrets (Vault), settings.
-//! Настройки: адреса узла (bsc.node_http_url, bsc.node_ws_url и резервные) — имя передаёт вызывающий.
+//! Настройки: адреса узла (bsc.node_http_url, bsc.node_ws_url и резервные) — имя передаёт вызывающий; читаются с областью площадки (решение 435, 433-ж: значение площадки DEX сильнее общего).
 
 use zeroize::Zeroizing;
 
 use crate::gateway::errors::GatewayError;
-use crate::settings::read::At;
 
 use super::ctx::{Ctx, KEY_MARK};
 
@@ -19,7 +18,7 @@ impl Ctx {
     pub fn node_url(&self, setting: &str, secret: &str) -> Result<Zeroizing<String>, GatewayError> {
         let url = self
             .settings
-            .text(setting, At::default())
+            .text(setting, self.at())
             .map_err(|e| self.tag(e))?;
         self.with_key(&url, secret)
     }

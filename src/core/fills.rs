@@ -1,9 +1,14 @@
 //! Файл: core/fills.rs
 //! Что делает: перенос факта исполнения в учёт сделки: сколько монет у бота, сколько вложено и получено,
 //! сколько потрачено на комиссии. Комиссия в монете уменьшает количество; в USDT или BNB — идёт в затраты
-//! (BNB — по живой цене, convert.rs). Также затраты перевода (Transfer.fee).
-//! Кто вызывает: executor.rs, stuck.rs, manual.rs.
-//! От чего зависит: deal.rs, convert.rs, settings.
+//! (BNB — по живой цене, convert.rs). Решение 219: комиссия ордера — список по монетам, каждая часть — отдельно; часть
+//! со стоимостью в USDT из документации площадки (Fee.usd — баллы HTX, рынка нет) — в затраты как есть. Также затраты перевода (Transfer.fee). В хронологию сделки — кто исполнил своп
+//! DEX (TradeResult.executor, решение 121 B7).
+//! Решение 236, дополнение п. 8: газ обмена DEX (TradeResult.chain есть) — вид Gas, всегда в затраты, и у сделки с BNB
+//! (решение 62, как в плане costs.rs); комиссия биржи в монете сделки — в количество, как раньше.
+//! Решение 413 (t198): зачисление перевода на биржу — запись зачисления сделки (credit_fact.rs on_credit).
+//! Кто вызывает: executor.rs, stuck.rs, manual.rs, relay.rs, manual_relay.rs.
+//! От чего зависит: deal.rs, convert.rs, settings, deal_book.rs (статьи затрат, решение 257), credit_fact.rs.
 //! Настройки: venue.quote_asset.
 
 use rust_decimal::Decimal;
@@ -18,8 +23,8 @@ use super::deal::Deal;
 use super::engine::{Core, rd};
 
 /// Затрата в USDT по живым ценам. Ошибка — текст (нет курса): затрата остаётся неучтённой в итоге,
-/// и это пишется в журнал (итог сделки помечается).
-async fn usdt(
+/// и это пишется в журнал (итог сделки помечается). Решение 236: им же — газ возврата USDT (deal_return_cost.rs).
+pub(super) async fn usdt(
     core: &Core,
     venue: &VenueId,
     coin: &str,
@@ -67,18 +72,40 @@ async fn charge(core: &Core, deal: &mut Deal, venue: &VenueId, price: Decimal, c
         return;
     }
     match usdt(core, venue, &coin, price, &c).await {
-        Ok(u) => deal.spent += u,
+        // Решение 257: статья затрат — с видом затраты.
+        Ok(u) => super::deal_book::spend(deal, c.kind, u),
         Err(e) => {
             let t = format!(
                 "{}: затрата {} {} не переведена в USDT ({e}) — итог сделки без неё",
                 deal.id, c.amount, c.asset
             );
-            deal.note(t.clone());
+            // Решение 164: в хронологии — коротко; подробности (все площадки и причины) — в журнале.
+            deal.note(format!(
+                "Комиссия {} {} не пересчитана в USDT — нет живой цены {}; итог сделки без неё",
+                crate::notify::human::qty(c.amount),
+                c.asset,
+                c.asset
+            ));
             core.inner
                 .deps
                 .log(Level::Warn, "core.ledger", Some(&venue.0), t, None)
                 .await;
         }
+    }
+}
+
+/// Что делает: вид затраты комиссии исполнения. Обмен в сети (TradeResult.chain есть — DEX) — газ: адаптеры DEX кладут
+/// в fees только газ транзакции обмена (venues/bsc_dex/exec/result.rs, venues/kyberswap/trade_fact.rs — Fee::single(газ,
+/// BNB)), он платится из BNB кошелька, а не из монет сделки — у сделки с BNB тоже (решение 62; так считает план —
+/// CostKind::Gas, costs.rs). Биржа (chain нет) — торговая комиссия: в монете сделки уменьшает количество.
+/// Решение 236, дополнение п. 8 (техлид 09.11 по поручению Тиграна): раньше газ шёл видом TradeFee — у сделки с BNB
+/// convert::in_coin принимал его за комиссию в монете: количество уменьшалось, в spent газа не было (продажа BNB на DEX —
+/// количество уходило в −газ, газ пропадал из итога). Принимает: итог. Возвращает: вид. Ошибок нет.
+fn fee_kind(r: &TradeResult) -> CostKind {
+    if r.chain.is_some() {
+        CostKind::Gas
+    } else {
+        CostKind::TradeFee
     }
 }
 
@@ -93,13 +120,34 @@ pub async fn trade(core: &Core, deal: &mut Deal, r: &TradeResult) {
         Side::Sell => {
             deal.qty -= r.filled_qty;
             deal.proceeds += r.filled_qty * r.avg_price;
+            // Решение 413: продажа прошла — отметка отказа «мало средств» снята (sell_fact.rs).
+            super::credit_fact::clear_reread(deal);
         }
     }
-    let fee = Cost::new(CostKind::TradeFee, r.fee, r.fee_asset.clone(), false);
-    charge(core, deal, &v, r.avg_price, fee).await;
+    // Решение 219: комиссия — по каждой монете отдельно (монета сделки уменьшает количество, остальное — в spent).
+    // Газ обмена DEX — всегда в spent, и у сделки с BNB (fee_kind, решение 236, дополнение п. 8).
+    for f in &r.fees {
+        // Стоимость в USDT задана документацией площадки (Fee.usd: баллы HTX, рынка нет) — в затраты как есть.
+        if let Some(u) = f.usd {
+            super::deal_book::spend(deal, fee_kind(r), u);
+            continue;
+        }
+        let fee = Cost::new(fee_kind(r), f.amount, f.asset.clone(), false);
+        charge(core, deal, &v, r.avg_price, fee).await;
+    }
+    // Решение 121 B7: кто исполнил своп DEX (свой сборщик: прямой / умный / бандл или KyberSwap) — в хронологию сделки.
+    let by = r
+        .executor
+        .as_ref()
+        .map(|e| format!("; исполнил: {e}"))
+        .unwrap_or_default();
     deal.note(format!(
-        "{:?} на {}: {} по {} (комиссия {} {})",
-        r.request.side, v.0, r.filled_qty, r.avg_price, r.fee, r.fee_asset
+        "{:?} на {}: {} по {} (комиссия {}){by}",
+        r.request.side,
+        v.0,
+        r.filled_qty,
+        r.avg_price,
+        crate::core::types::Fee::text(&r.fees)
     ));
 }
 
@@ -116,6 +164,12 @@ pub async fn transfer(
 ) {
     deal.qty = t.amount;
     deal.at = to.clone();
+    // Решение 413 (повторное ревью, С-1): перевод зачислен — сделка больше не в пути.
+    deal.transit_to = None;
+    // Решение 413 (t198): на биржу — запись зачисления: запись депозита — верхняя граница, доля по факту баланса —
+    // перед продажей и выводом (credit_fact.rs, sell_fact.rs); снимок посторонних — по хешу вывода. На DEX — по
+    // событию Transfer, как раньше.
+    super::credit_fact::on_credit(core, deal, to, sent.tx_hash.as_deref());
     if let Some(c) = sent.fee.clone()
         && !convert::in_coin(&c, &deal.direction.asset.ticker)
     {

@@ -1,0 +1,399 @@
+//! Файл: venues/binance/mod.rs
+//! Что делает: адаптер биржи Binance (спот API + Wallet SAPI) — реализация контракта gateway/contract.rs (решение 160).
+//! Всё общение с Binance — внутри этой папки; наружу — только типы ядра и единые ошибки шлюза.
+//! Кто вызывает: main.rs (создаёт и регистрирует в реестре шлюза).
+//! От чего зависит: файлы этой папки, gateway, settings, secrets, storage.
+//! Настройки: venue.* с областью «binance», feed.stale_after_ms; секреты binance.api_key, binance.api_secret,
+//! binance.sbe_api_key (решение 425: быстрый стакан SBE — sbe_*.rs, fast.rs).
+//!
+//! Только по официальной документации Binance (https://developers.binance.com/legacy-docs/binance-spot-api-docs/ и
+//! Wallet SAPI https://developers.binance.com/docs/wallet/). Ссылки — в шапке каждого файла и в README.md папки.
+//! Разбор перед подключением — docs/notes/binance-analysis-2026-11-05.md.
+
+pub mod account;
+pub mod account_update;
+pub mod all_balances;
+pub mod book;
+pub mod book_print;
+pub mod ctx;
+pub mod delist;
+pub mod deposit_addr;
+pub mod deposits;
+pub mod depth;
+pub mod discount_balance;
+pub mod errors;
+pub mod fast;
+pub mod fast_check;
+pub mod fast_sbe;
+pub mod fee_rates;
+pub mod feed;
+pub mod fees;
+pub mod fills;
+pub mod fund_move;
+pub mod key_check;
+pub mod market;
+pub mod market_sell;
+pub mod networks_parse;
+pub mod num;
+pub mod order_rules;
+pub mod order_state;
+pub mod pairs;
+pub mod pairs_watch;
+pub mod price_band;
+pub mod reply;
+pub mod rest;
+pub mod sbe;
+pub mod sbe_book;
+pub mod sbe_check;
+pub mod sbe_conn;
+pub mod sbe_pair;
+pub mod sbe_run;
+pub mod sbe_snap;
+pub mod sign;
+pub mod subs;
+pub mod symbols;
+pub mod symbols_parse;
+pub mod tap;
+pub mod tap_decode;
+pub mod trade;
+pub mod transfers;
+pub mod user_stream;
+pub mod user_stream_conn;
+pub mod wallet;
+pub mod withdraw_ready;
+pub mod ws;
+pub mod ws_conn;
+
+use async_trait::async_trait;
+use rust_decimal::Decimal;
+use tokio::sync::mpsc;
+
+use crate::core::types::{
+    AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side,
+    TradeRequest, TradeResult, Transfer, VenueId, WithdrawHold, WithdrawRequest,
+};
+use crate::gateway::contract::{AccountRole, ConnectionCheck, DexFamily, Venue, VenueKind};
+use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::gateway::events::MarketEvent;
+use crate::gateway::frozen::QuoteSnapshot;
+use crate::gateway::tap::{TapData, TapInfo, TapSink, TapStream};
+
+use book::Books;
+use ctx::Ctx;
+use deposit_addr::DepositAddrs;
+use fees::Fees;
+use subs::{Parts, Subs};
+use symbols::Symbols;
+use wallet::Networks;
+
+/// Адаптер Binance.
+pub struct Binance {
+    ctx: Ctx,
+    /// Текущая подписка: задачи соединений, обновление справочника пар и комиссий (subs.rs).
+    subs: Subs,
+    symbols: Symbols,
+    books: Books,
+    fees: Fees,
+    /// Справочник монет и сетей (wallet.rs).
+    nets: Networks,
+    /// Адреса депозита в памяти (deposit_addr.rs).
+    addrs: DepositAddrs,
+}
+
+impl Binance {
+    /// Создаёт адаптер. Ничего не подключает: соединения открываются по запросу ядра.
+    pub fn new(ctx: Ctx) -> Self {
+        Self {
+            ctx,
+            subs: Subs::default(),
+            symbols: Symbols::default(),
+            books: Books::default(),
+            fees: Fees::default(),
+            nets: Networks::default(),
+            addrs: DepositAddrs::default(),
+        }
+    }
+
+    /// Ответ «не применимо» для функций только DEX. Ошибок нет.
+    fn not_applicable(&self, what: &str) -> GatewayError {
+        self.ctx.tag(GatewayError::new(
+            ErrorCode::NotApplicable,
+            None,
+            format!("Binance — биржа: {what} к ней не применимо"),
+        ))
+    }
+}
+
+#[async_trait]
+impl Venue for Binance {
+    fn id(&self) -> VenueId {
+        self.ctx.venue()
+    }
+
+    fn kind(&self) -> VenueKind {
+        VenueKind::Cex
+    }
+
+    async fn check_connection(&self) -> GatewayResult<ConnectionCheck> {
+        // Решение 425: ключ HMAC (торговля) и ключ Ed25519 потоков SBE (быстрый стакан) — каждый со своим итогом.
+        let mut c = key_check::check(&self.ctx).await;
+        let (ok, sbe) = sbe_check::check(&self.ctx).await;
+        c.ok &= ok;
+        c.details = format!("{} · {sbe}", c.details);
+        Ok(c)
+    }
+
+    async fn coin_networks(&self) -> GatewayResult<Vec<CoinNetworkInfo>> {
+        wallet::coin_networks(&self.ctx, &self.nets).await
+    }
+
+    async fn coin_networks_of(&self, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
+        wallet::coin_networks_of(&self.ctx, &self.nets, ticker).await
+    }
+
+    async fn subscribe_market(
+        &self,
+        assets: Vec<Asset>,
+        out: mpsc::Sender<MarketEvent>,
+    ) -> GatewayResult<()> {
+        let parts = Parts {
+            ctx: self.ctx.clone(),
+            symbols: self.symbols.clone(),
+            books: self.books.clone(),
+            fees: self.fees.clone(),
+        };
+        self.subs.subscribe(&parts, assets, out).await
+    }
+
+    async fn quote(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {
+        self.books
+            .quote(&self.ctx, &self.fees, asset, side, qty)
+            .await
+    }
+
+    /// Решение 217: снимок стакана монеты на момент решения (book.rs freeze — копия стакана из памяти, без запросов).
+    /// Ошибки: как у котировки до прохода по уровням (стакана нет, устарел, комиссия, настройка).
+    async fn quote_snapshot(&self, asset: &Asset, side: Side) -> GatewayResult<QuoteSnapshot> {
+        let f = self.books.freeze(&self.ctx, &self.fees, asset, side)?;
+        Ok(std::sync::Arc::new(f))
+    }
+
+    /// Решение 238: снимок стакана по REST для ордера (стакан потока устарел) — book_print.rs snapshot (GET
+    /// /api/v3/depth, вес 5), комиссия — тот же план, что у стакана потока (book.rs frozen).
+    async fn quote_rest(&self, asset: &Asset, side: Side) -> GatewayResult<QuoteSnapshot> {
+        let book = book_print::snapshot(&self.ctx, asset).await?;
+        let f = book::frozen(&self.ctx, &self.fees, asset, side, book)?;
+        Ok(std::sync::Arc::new(f))
+    }
+
+    async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
+        self.symbols.ensure_fresh(&self.ctx).await?;
+        let ticker = req.asset.ticker.clone();
+        // t89: время отправки ордера — событие остатков после него считается свежим (withdraw_ready.rs wait).
+        let sent = tokio::time::Instant::now();
+        let r = trade::trade(&self.ctx, &self.symbols, req, None).await;
+        // Решение 253, дополнение t89: своя сделка (покупка ИЛИ продажа) — начало окна «ещё не доступна для вывода»
+        // (transfers.rs) и паузы ядра venue.withdraw_min_delay_ms — по монете сделки и котируемой монете (выручка USDT).
+        if r.as_ref().is_ok_and(|t| t.filled_qty > Decimal::ZERO) {
+            withdraw_ready::traded(&ticker, sent);
+            if let Ok(q) = self.ctx.text("venue.quote_asset") {
+                withdraw_ready::traded(&q, sent);
+            }
+        }
+        r
+    }
+
+    /// Решение 268: рыночная продажа — market_sell.rs (POST /api/v3/order, type MARKET). Отметка своей сделки для
+    /// вывода (t89) — как у trade.
+    async fn trade_market_sell(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
+        self.symbols.ensure_fresh(&self.ctx).await?;
+        let ticker = req.asset.ticker.clone();
+        let sent = tokio::time::Instant::now();
+        let r = market_sell::sell(&self.ctx, &self.symbols, req).await;
+        if r.as_ref().is_ok_and(|t| t.filled_qty > Decimal::ZERO) {
+            withdraw_ready::traded(&ticker, sent);
+            if let Ok(q) = self.ctx.text("venue.quote_asset") {
+                withdraw_ready::traded(&q, sent);
+            }
+        }
+        r
+    }
+
+    /// Решение 134: те же правила, что у настоящего ордера (order_rules::ready), и пробный ордер, если включён
+    /// (order_rules::check). Решение 412: пробный — только здесь, перед настоящим ордером его нет.
+    async fn check_order(&self, req: &TradeRequest) -> GatewayResult<()> {
+        self.symbols.ensure_fresh(&self.ctx).await?;
+        order_rules::check(&self.ctx, &self.symbols, req).await
+    }
+
+    /// Решение 392 (t180): ценовой коридор лимитного ордера — price_band.rs (PERCENT_PRICE_BY_SIDE / PERCENT_PRICE × опорная цена фильтра).
+    async fn price_band(
+        &self,
+        asset: &Asset,
+    ) -> GatewayResult<Option<crate::gateway::price_band::PriceBand>> {
+        self.symbols.ensure_fresh(&self.ctx).await?;
+        price_band::read(&self.ctx, &self.symbols, &asset.ticker).await
+    }
+
+    async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer> {
+        transfers::withdraw(&self.ctx, req).await
+    }
+
+    /// Решение 253: купленная монета доступна для вывода — событие outboundAccountPosition, по сроку — REST баланса
+    /// (withdraw_ready.rs).
+    async fn withdraw_ready(
+        &self,
+        asset: &Asset,
+        amount: Decimal,
+        wait: std::time::Duration,
+    ) -> GatewayResult<crate::core::types::WithdrawReady> {
+        withdraw_ready::wait(&self.ctx, asset, amount, wait).await
+    }
+
+    /// Решение 253, дополнение t89: сколько прошло с последней своей сделки по монете (withdraw_ready.rs since_trade).
+    fn since_own_trade(&self, asset: &Asset) -> Option<std::time::Duration> {
+        withdraw_ready::since_trade(&asset.ticker)
+    }
+
+    async fn withdrawal_status(&self, venue_ref: &str) -> GatewayResult<Transfer> {
+        transfers::withdrawal_status(&self.ctx, venue_ref).await
+    }
+
+    async fn deposit_address(&self, asset: &Asset, network: &str) -> GatewayResult<String> {
+        deposit_addr::deposit_address(&self.ctx, &self.addrs, asset, network).await
+    }
+
+    async fn deposit_status(&self, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer> {
+        deposits::deposit_status(&self.ctx, asset, tx_hash).await
+    }
+
+    async fn balances(&self) -> GatewayResult<Vec<Balance>> {
+        account::balances(&self.ctx).await
+    }
+
+    /// Решение 144: «Спот», «Фонд», «Все кошельки» параллельно (all_balances.rs), только чтение.
+    async fn account_balances(&self) -> GatewayResult<Vec<AccountBalances>> {
+        Ok(all_balances::all(&self.ctx).await)
+    }
+
+    /// Решение 150: депозиты со статусом 6 «credited but cannot withdraw» (deposits.rs).
+    async fn withdraw_hold(&self, _quote: &str) -> GatewayResult<WithdrawHold> {
+        deposits::withdraw_hold(&self.ctx).await
+    }
+
+    /// Решение 175: делистинги — график делистинга спота GET /sapi/v1/spot/delist-schedule (delist.rs).
+    async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
+        delist::delistings(&self.ctx, &self.symbols).await
+    }
+
+    /// Решение 102: депозит, зачисленный на Funding, — на спот (fund_move.rs, venue.deposit_to_spot).
+    /// Решение 174: роль счёта панели «Балансы» для кнопки «Продать» — названия те же, что в all_balances.rs: «Спот» и «Фонд» (Funding); deposit_to_trading — Funding → Spot (fund_move.rs).
+    fn account_role(&self, account: &str) -> AccountRole {
+        match account {
+            "Спот" => AccountRole::Trading,
+            "Фонд" => AccountRole::ToTrading,
+            _ => AccountRole::Other,
+        }
+    }
+
+    /// Решение 174: перевод со счёта ToTrading на торговый без условий deposit_to_trading (fund_move.rs).
+    async fn move_to_trading(&self, asset: &Asset, amount: Decimal) -> GatewayResult<String> {
+        fund_move::transfer(&self.ctx, asset, amount).await
+    }
+
+    async fn deposit_to_trading(
+        &self,
+        asset: &Asset,
+        amount: Decimal,
+    ) -> GatewayResult<Option<String>> {
+        fund_move::to_spot(&self.ctx, asset, amount).await
+    }
+
+    async fn withdraw_cost(
+        &self,
+        asset: &Asset,
+        network: &str,
+        _amount: Decimal,
+    ) -> GatewayResult<Vec<Cost>> {
+        wallet::withdraw_cost(&self.ctx, &self.nets, asset, network).await
+    }
+
+    async fn recheck_coins(&self, _assets: Vec<Asset>) -> GatewayResult<()> {
+        Err(self.not_applicable("проверка налогов токена и крючков пулов"))
+    }
+
+    async fn dex_families(&self) -> GatewayResult<Vec<DexFamily>> {
+        Err(self.not_applicable("список видов пулов DEX"))
+    }
+
+    async fn send_channels(&self) -> GatewayResult<Vec<SendChannelInfo>> {
+        Err(self.not_applicable("список каналов отправки транзакций"))
+    }
+
+    async fn check_send_channel(&self, _id: &str) -> GatewayResult<ConnectionCheck> {
+        Err(self.not_applicable("проверка канала отправки транзакций"))
+    }
+
+    // Решение 125: запись окна — tap.rs (стакан — ws_conn.rs, сделки и изменения — feed.rs).
+    async fn window_tap(&self, asset: &Asset, sink: TapSink) -> GatewayResult<TapInfo> {
+        tap::start(&self.ctx, &self.symbols, asset, sink)
+    }
+
+    async fn window_untap(&self, asset: &Asset) -> GatewayResult<()> {
+        tap::stop(&self.ctx, asset);
+        Ok(())
+    }
+
+    fn decode_tap(
+        &self,
+        stream: TapStream,
+        data: &TapData,
+    ) -> GatewayResult<crate::core::types::TapDecoded> {
+        tap::decode(stream, data)
+    }
+
+    /// Решение 202 (для всех бирж, Тигран 08.11): свежесть соединений и пар стаканов (ws_conn.rs, gateway/feed_reg.rs).
+    /// - scheduled = false: Partial Book Depth Streams — «Top <levels> bids and asks, pushed every second», «Update
+    ///   Speed: 1000ms or 100ms»; что кадр идёт и без изменений книги, прямо не сказано
+    ///   (https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams#partial-book-depth-streams);
+    /// - per_pair = true: отписка одного потока — {"method":"UNSUBSCRIBE"} (Live Subscribing/Unsubscribing to
+    ///   streams), см. ws_conn.rs;
+    /// - confirm = true (решение 213, по содержимому): lastUpdateId кадра частичного стакана описан только как «Last
+    ///   update ID», связь с lastUpdateId GET /api/v3/depth документация даёт лишь для потока изменений (U, u — «How to
+    ///   manage a local order book correctly»); сравниваются первые venue.depth_levels уровней (book_print.rs).
+    fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
+        Some(self.books.feed.health(false, true, true))
+    }
+
+    /// Решение 213: отпечатки стакана пары для подтверждения тихой пары по содержимому (book_print.rs).
+    async fn book_version(
+        &self,
+        ticker: &str,
+    ) -> GatewayResult<crate::gateway::feed_health::BookVersion> {
+        book_print::book_version(&self.ctx, &self.books, ticker).await
+    }
+
+    /// Решение 213: тихая пара подтверждена — стакан свежий в котировке до until_ms (book.rs, confirm).
+    fn book_confirmed(&self, ticker: &str, until_ms: i64) {
+        self.books.confirm(ticker, until_ms);
+    }
+
+    /// Решение 367 (повторное ревью t163, Б1): снять подтверждение тихой пары (book.rs unconfirm).
+    fn book_unconfirmed(&self, ticker: &str) {
+        self.books.unconfirm(ticker);
+    }
+
+    /// Решение 202: переподписать одну пару в её соединении (UNSUBSCRIBE + SUBSCRIBE в очереди отправки, ws_conn.rs).
+    async fn resubscribe_pair(&self, conn: &str, ticker: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books
+            .feed
+            .command(self.id(), conn, Cmd::Resub(ticker.to_string()))
+    }
+
+    /// Решение 202: переподключить одно соединение с теми же парами (ws.rs подключается заново).
+    async fn reconnect_conn(&self, conn: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books.feed.command(self.id(), conn, Cmd::Reconnect)
+    }
+}

@@ -1,7 +1,8 @@
 //! Файл: venues/bsc_dex/pools/depth.rs
 //! Что делает: делит пулы пачки на «глубокие» (все события в подписке) и «мелкие» — мельче
-//! dex.min_pool_liquidity_usd в ОБА направления в полосе цены (решение 73, pools/depth_book.rs) или пустые: у них в
-//! подписке только добавление ликвидности (pools/group.rs). Каждое уведомление узла по WebSocket платное, а мелкий пул
+//! dex.min_pool_liquidity_usd в ОБА направления в полосе цены (решение 73, pools/depth_book.rs) и ни одну сторону не
+//! пропускает сумма пробы (решение 393, quote/side_fit.rs), или пустые: у них в подписке только добавление
+//! ликвидности (pools/group.rs). Каждое уведомление узла по WebSocket платное, а мелкий пул
 //! не котируется, не сверяется и не участвует в пробе (quote/select.rs, deep_side) — его обмены слушать незачем.
 //! Ликвидность растёт только событием добавления: оно будит пул — перечитывание, и если пул стал глубоким, он
 //! возвращается в полную подписку (pools/admit.rs wake); обратный переход — при следующем переподключении пачки.
@@ -11,17 +12,20 @@
 //! правилам.
 //! Глубину не посчитать (не задана настройка, нет курса промежуточной монеты, пул не прочитан) — пул глубокий:
 //! слушаем всё, как раньше, причина — одной записью в журнал.
-//! Полоса цены вышла за прочитанные слова битмапа (off_map) — карта перечитывается вокруг нового тика сразу.
+//! Полоса цены вышла за прочитанные слова битмапа (off_map) — карта перечитывается вокруг нового тика сразу; у Algebra —
+//! при dex.algebra_off_map_reread = да (решение 320, pools/off_map_algebra.rs).
 //! Кто вызывает: pools/admit.rs (deep, mark), pools/listen_log.rs (touch — на каждой отправке пула ядру; off_map —
 //! после события).
-//! От чего зависит: quote/select.rs (deep_side), quote/emptiness.rs, registry.rs, depth_book.rs, progress.rs, tokens.rs.
-//! Настройки: bsc.pool_events_source [вся система]; через depth_book.rs — dex.min_pool_liquidity_usd,
+//! От чего зависит: quote/select.rs (deep_side), quote/emptiness.rs, registry.rs, depth_book.rs, progress.rs, tokens.rs,
+//! off_map_algebra.rs (решение 320).
+//! Настройки: bsc.pool_events_source [вся система]; dex.algebra_off_map_reread [bsc_dex] (через off_map_algebra.rs);
+//! через depth_book.rs — dex.min_pool_liquidity_usd,
 //! dex.depth_band_pct, dex.depth_hysteresis_pct, dex.depth_log_min_s [bsc_dex].
 
 use crate::core::types::PoolRef;
 use crate::storage::journal::Level;
 
-use super::super::quote::{emptiness, select};
+use super::super::quote::{emptiness, select, shallow_pick};
 use super::listen::Pools;
 
 /// Глубокий ли пул (см. шапку). Принимает: окружение, ссылку на прочитанный пул. Возвращает: true — слушать всё;
@@ -45,10 +49,18 @@ pub async fn deep(p: &Pools, r: &PoolRef) -> bool {
     let mut probe = e.clone();
     probe.asleep = false;
     let any = select::Need::Any;
-    let res = dec.and_then(|d| select::deep_side(&p.ctx, &p.reg, &p.tokens, &probe, d, any));
+    let res = dec
+        .clone()
+        .and_then(|d| select::deep_side(&p.ctx, &p.reg, &p.tokens, &probe, d, any));
     match res {
         Ok(None) => true,
-        Ok(Some(_)) => false,
+        // Решение 393 (t178): мелкий пул, у которого хоть одну сторону пропускает сумма пробы, — в котировке и сверке
+        // (quote/select.rs), его обмены слушаются: иначе состояние старело бы, и пул, ставший глубоким после обмена
+        // (кит купил монету — резерв USDT вырос), не был бы замечен до переподключения пачки.
+        // Ревью t178 (Б2): только в пределе dex.shallow_pools_per_pair пары (quote/shallow_pick.rs).
+        Ok(Some(_)) => {
+            dec.is_ok_and(|d| shallow_pick::admitted(&p.ctx, &p.reg, &p.tokens, d, &probe))
+        }
         Err(why) => {
             let msg = format!(
                 "Глубина пула не считается ({why}) — такие пулы слушаются полностью (все события)"
@@ -69,7 +81,8 @@ pub fn mark(p: &Pools, r: &PoolRef, asleep: bool) {
 /// сверка, ждущие глубокого пула, проверяются сразу). Знаки USDT ещё не известны или глубина не считается — без
 /// пересчёта (причину покажет отбор пула). Ошибок нет.
 pub fn touch(p: &Pools, r: &PoolRef) {
-    let Some(e) = p.reg.get(r).filter(|e| e.valid && !e.asleep) else {
+    // Решение 409 (t194, п.4): запись без копирования (Arc) — на каждую смену состояния пула.
+    let Some(e) = p.reg.entry(r).filter(|e| e.valid && !e.asleep) else {
         return;
     };
     let Some(dec) = p
@@ -86,7 +99,11 @@ pub fn touch(p: &Pools, r: &PoolRef) {
 
 /// Полоса цены вышла за прочитанные слова битмапа (решение 73): цена ушла от тика, вокруг которого карта читалась, и
 /// глубина считалась бы не целиком — карту пора перечитать вокруг нового тика, не дожидаясь переподключения
-/// (pools/listen_log.rs). Края полосы — в пределах TickMath. Не V3/CL, нет карты, полоса не задана — false. Ошибок нет.
+/// (pools/listen_log.rs). Края полосы — в пределах TickMath. Не V3/CL, нет карты, полоса не задана — false. Решение 296:
+/// проверяется только полоса глубины dex.depth_band_pct; полоса чтения dex.tick_read_band_pct сюда не входит (карта
+/// перечитывается вокруг нового тика тем же word_range — уже с полосой чтения). Решение 320: Algebra (V1/V1.9 и
+/// Integral) — та же проверка при dex.algebra_off_map_reread = да и только если перечитывание даст другое окно
+/// (pools/off_map_algebra.rs); не задана — false, как раньше. Ошибок нет.
 pub fn off_map(ctx: &super::super::ctx::Ctx, e: &super::registry::Entry) -> bool {
     use super::super::math::tick_math::{MAX_TICK, MIN_TICK};
     use super::super::quote::depth_band::band_ticks;
@@ -97,6 +114,7 @@ pub fn off_map(ctx: &super::super::ctx::Ctx, e: &super::registry::Entry) -> bool
     };
     let tick = match e.pool.state {
         PoolState::V3 { tick, .. } | PoolState::Cl { tick, .. } => tick,
+        PoolState::Algebra { tick, .. } if super::off_map_algebra::enabled(ctx) => tick,
         _ => return false,
     };
     let Some(b) = ctx
@@ -112,5 +130,9 @@ pub fn off_map(ctx: &super::super::ctx::Ctx, e: &super::registry::Entry) -> bool
     let d = up.max(down);
     let lo = tick.saturating_sub(d).clamp(MIN_TICK, MAX_TICK);
     let hi = tick.saturating_add(d).clamp(MIN_TICK, MAX_TICK);
-    !(map.covers(lo) && map.covers(hi))
+    let out = !(map.covers(lo) && map.covers(hi));
+    match e.pool.state {
+        PoolState::Algebra { .. } => out && super::off_map_algebra::helps(ctx, e, map, tick),
+        _ => out,
+    }
 }

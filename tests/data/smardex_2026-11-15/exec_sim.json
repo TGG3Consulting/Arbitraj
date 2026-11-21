@@ -1,0 +1,61 @@
+{
+ "block": 133685263,
+ "executor": "eth_call с подменой кода ArbExecutor v2 решения 288 (15 128 байт, sha256 байтов 5ea19113dd5362fa…) по адресу 0x…e0e0e0 от владельца 0x…0b0b (слот 0), слот 1 = WBNB; вход — баланс исполнителя (amountIn = 0; подмена баланса токена: USDT, BTCB — слот 1 mapping, WBNB — 3, SDEX 0xfdc6…d20f — 5, LXIUM 0x81b9…3904 — 0; слоты подобраны проверкой balanceOf под подменой)",
+ "execute": [
+  {
+   "pool": "0xe7b89cbd4e833510f393ccfbe7d433edbb137ab2",
+   "token_in": "0x55d398326f99059ff775485246999027b3197955",
+   "token_out": "0xfdc66a08b0d0dc44c17bbd471b88f49f50cdd20f",
+   "step": "(16, пара, tokenIn → tokenOut, 10000, «»)",
+   "balance_in": "100000000000000000000",
+   "received": "147146163863768820632032",
+   "quoteSmardex_out": "147146163863768820632032"
+  },
+  {
+   "pool": "0xe7b89cbd4e833510f393ccfbe7d433edbb137ab2",
+   "token_in": "0xfdc66a08b0d0dc44c17bbd471b88f49f50cdd20f",
+   "token_out": "0x55d398326f99059ff775485246999027b3197955",
+   "step": "(16, пара, tokenIn → tokenOut, 10000, «»)",
+   "balance_in": "100000000000000000000000",
+   "received": "62867627430937789884",
+   "quoteSmardex_out": "62867627430937789884"
+  },
+  {
+   "pool": "0x4357b88061db22dfec01346c06347b93bf1c2985",
+   "token_in": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+   "token_out": "0x81b9a47bb9820e96a0ae98f0dded0070e0933904",
+   "step": "(16, пара, tokenIn → tokenOut, 10000, «»)",
+   "balance_in": "100000000000000",
+   "received": "895002936133846402372",
+   "quoteSmardex_out": "895002936133846402372"
+  },
+  {
+   "pool": "0x4357b88061db22dfec01346c06347b93bf1c2985",
+   "token_in": "0x81b9a47bb9820e96a0ae98f0dded0070e0933904",
+   "token_out": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+   "step": "(16, пара, tokenIn → tokenOut, 10000, «»)",
+   "balance_in": "10000000000000000000000",
+   "received": "1055584666080008",
+   "quoteSmardex_out": "1055584666080008"
+  },
+  {
+   "pool": "0x07df47f536a3bb6051703612aec8ad9f101e66d1",
+   "token_in": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+   "token_out": "0x81b9a47bb9820e96a0ae98f0dded0070e0933904",
+   "step": "(16, пара, tokenIn → tokenOut, 10000, «»)",
+   "balance_in": "10000000000000000",
+   "received": "795961467295503098990",
+   "quoteSmardex_out": "795961467295503098990"
+  },
+  {
+   "pool": "0xc5dc2b1b41e21772a620101910a08aee55e83872",
+   "token_in": "0xfdc66a08b0d0dc44c17bbd471b88f49f50cdd20f",
+   "token_out": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+   "step": "(16, пара, tokenIn → tokenOut, 10000, «»)",
+   "balance_in": "100000000000000000000000",
+   "received": "757719837278844",
+   "quoteSmardex_out": "757719837278844"
+  }
+ ],
+ "v3_kind_1": "тот же маршрут видом V3 (1) — откат во всех 6 случаях (у пары другая подпись swap)"
+}

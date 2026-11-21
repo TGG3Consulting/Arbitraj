@@ -6,11 +6,13 @@
     обновлений подряд выше порога, с какого времени и время обновления. Рядом с точной ценой — коротко
     (6 значащих). Данные — те же SpreadView из GET /api/spreads и сообщений spread (без новых полей бэкенда); окно обновляется вживую.
   Кто вызывает: components/LiveCoins.svelte.
-  От чего зависит: lib/coreLabels.js, lib/fmt.js, lib/labels.js, components/Modal.svelte, CopyAddr.svelte.
+  От чего зависит: lib/coreLabels.js, lib/coinNames.svelte.js, lib/fmt.js, lib/labels.js, components/Modal.svelte, CopyAddr.svelte.
   Настройки: нет.
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { spreadState, spreadShort, spreadReason } from '../lib/coreLabels.js';
+  import { coinName } from '../lib/coinNames.svelte.js';
   import { reasonLines, fmtPrice } from '../lib/fmt.js';
   import { showTime } from '../lib/labels.js';
   import Modal from './Modal.svelte';
@@ -23,11 +25,11 @@
   let { row, legs, missing, onclose } = $props();
 </script>
 
-<Modal title={row.asset.ticker} {onclose}>
+<Modal title={coinName(row.asset)} {onclose}>
   <h4>Адрес контракта в BSC</h4>
   <CopyAddr addr={row.asset.bsc_contract} />
 
-  {#each legs as leg (leg.key)}
+  {#each uniqBy(legs, (leg) => leg.key) as leg (leg.key)}
     {@const v = row.legs[leg.key]}
     <section class="card">
       <h3>Купить на {leg.buy} → продать на {leg.sell}</h3>
@@ -57,6 +59,25 @@
           <dd>
             {#if v.above_since}с {showTime(v.above_since)}, обновлений подряд: {v.updates}{:else}нет{/if}
           </dd>
+          <!-- Решения 317, 318: что запустило пересчёт и сколько не менялись уровни стакана биржи на объёме сравнения. -->
+          <dt>Пересчёт запустил</dt>
+          <dd>
+            {v.trigger === 'Pool' ? 'событие пула' : v.trigger === 'Timer' ? 'таймер дозревания (signal.hold_timer)' : v.trigger === 'MidPool' ? 'событие промежуточного пула маршрута (signal.mid_pool_wake)' : 'тик биржи'}
+            {#if v.skipped_hold}<span class="ok"> — кандидат без удержания (signal.dex_event_skip_hold)</span>{/if}
+          </dd>
+          {#if v.pool_at}
+            <!-- Решение 322: замер «событие пула пришло в ядро → пересчёт начат». -->
+            <dt>Событие пула</dt>
+            <dd>блок <code>{v.pool_block ?? '—'}</code>, пришло в {showTime(v.pool_at)}{#if v.eval_started}, пересчёт начат в {showTime(v.eval_started)}{/if}</dd>
+          {/if}
+          {#if v.ripen_at}
+            <dt>Таймер дозревания</dt>
+            <dd>пересчёт в {showTime(v.ripen_at)} (signal.hold_timer)</dd>
+          {/if}
+          {#if v.cex_still_ms != null}
+            <dt>Стакан биржи стоит</dt>
+            <dd><code>{v.cex_still_ms}</code> мс <span class="muted">(уровни на объёме сравнения не менялись)</span></dd>
+          {/if}
           <dt>Обновлено</dt>
           <dd>{showTime(v.at)}</dd>
         </dl>

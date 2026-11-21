@@ -20,8 +20,9 @@ use super::{CAKE, Rec};
 pub fn direction() -> Direction {
     Direction {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: Some(CAKE),
+            contract: Some(CAKE),
         },
         buy_on: VenueId("bingx".into()),
         sell_on: VenueId("bsc_dex".into()),
@@ -40,8 +41,22 @@ fn quote(venue: &str, side: Side, qty: Decimal, avg: Decimal) -> Quote {
         costs: vec![],
         route: None,
         signal_route: None,
+        pick: None,
         at: Utc::now(),
     }
+}
+
+/// Самый глубокий уровень записанных asks, нужный на qty (та же функция, что у ядра: gateway/frozen.rs deepest).
+fn deepest_ask(rec: &Rec, qty: Decimal) -> Decimal {
+    let book = arb::core::types::OrderBook {
+        venue: VenueId("bingx".into()),
+        asset: direction().asset,
+        bids: vec![],
+        asks: rec.asks.clone(),
+        exchange_time: None,
+        received_at: Utc::now(),
+    };
+    arb::gateway::frozen::deepest(&book, Side::Buy, qty).expect("глубины записи хватает")
 }
 
 /// Расчёт на qty монет по записям. Принимает: записи, объём (хватает глубины asks).
@@ -67,10 +82,15 @@ pub fn calc(rec: &Rec, qty: Decimal) -> Calc {
         profit_pct: profit / spent * Decimal::ONE_HUNDRED,
         transit_s: Decimal::ZERO,
         sigma: Decimal::ZERO,
+        sigma_check: None,
         buy_quote: quote("bingx", Side::Buy, qty, buy_avg),
         sell_quote: quote("bsc_dex", Side::Sell, qty, sell_avg),
         at: Utc::now(),
         spend_max: spent,
+        // Решение 262: худший уровень покупки — самый глубокий нужный уровень записанных asks.
+        buy_worst: deepest_ask(rec, qty),
+        buy_band: false,
+        spend_fee: Decimal::ZERO,
         size: None,
     }
 }

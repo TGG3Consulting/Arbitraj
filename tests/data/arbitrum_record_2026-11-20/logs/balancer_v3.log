@@ -1,0 +1,13 @@
+/home/ubuntu/arb-record/tools/arbitrum_record/balancer_v3.py:186: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).
+  date = datetime.datetime.utcfromtimestamp(int(blk["timestamp"], 16)).strftime("%Y-%m-%d")
+Traceback (most recent call last):
+  File "/home/ubuntu/arb-record/tools/arbitrum_record/balancer_v3.py", line 285, in <module>
+    main()
+  File "/home/ubuntu/arb-record/tools/arbitrum_record/balancer_v3.py", line 198, in main
+    gt = gt_pools(a.gt_pages)
+         ^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/arb-record/tools/arbitrum_record/balancer_v3.py", line 147, in gt_pools
+    r.raise_for_status()
+  File "/home/ubuntu/arb-record/tools/arbitrum_record/stdhttp.py", line 42, in raise_for_status
+    raise HTTPError(f"HTTP {self.status_code} {self.url}: {self.text[:300]}")
+stdhttp.HTTPError: HTTP 429 https://api.geckoterminal.com/api/v2/networks/arbitrum/dexes/balancer-v3-arbitrum/pools?page=4: {"status":{"error_code":429,"error_message":"You've exceeded the Rate Limit. Please visit https://www.coingecko.com/en/api/pricing to subscribe to our API plans for higher rate limits and use the onchain endpoints: https://docs.coingecko.com/reference/endpoint-overview"}}

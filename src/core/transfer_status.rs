@@ -26,7 +26,7 @@ pub struct Change {
 /// не смена. Принимает: старые статусы (тикер, сеть) → (ввод, вывод), новый справочник. Ошибок нет.
 pub fn diff(old: &HashMap<(String, String), (bool, bool)>, new: &[CoinNetworkInfo]) -> Vec<Change> {
     new.iter()
-        .filter(|i| i.asset.bsc_contract.is_some())
+        .filter(|i| i.asset.contract.is_some())
         .filter_map(|i| {
             let &(dep, wd) = old.get(&(i.asset.ticker.clone(), i.network.clone()))?;
             (dep != i.deposit_enabled || wd != i.withdraw_enabled).then(|| Change {
@@ -46,6 +46,8 @@ fn word(b: bool) -> &'static str {
 
 /// Текст по одной монете. Ошибок нет.
 pub fn one(venue: &str, c: &Change) -> String {
+    // Решение 164: площадка — по имени (BingX, MEXC…).
+    let venue = crate::notify::human::venue(venue);
     format!(
         "{venue} {} ({}): ввод {}, вывод {}",
         c.ticker,
@@ -58,6 +60,7 @@ pub fn one(venue: &str, c: &Change) -> String {
 /// Сводка массовой смены: текст (сколько монет в каждом новом состоянии и тикеры) и полный список для data.
 /// Ошибок нет.
 pub fn summary(venue: &str, changes: &[Change]) -> (String, Value) {
+    let venue = crate::notify::human::venue(venue);
     let mut groups: std::collections::BTreeMap<(bool, bool), Vec<&str>> = Default::default();
     for c in changes {
         groups

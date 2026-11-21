@@ -1,9 +1,10 @@
 //! Файл: venues/bsc_dex/pools/verify_calls.rs
 //! Что делает: данные вызовов проверки пула V2/V3 (решение 58): поля пула по виду (factory, token0, token1; V3 — fee,
-//! tickSpacing, lmPool; V2 со своей комиссией — метод dex.v2_fee_method) и реестр фабрики (getPair / getPool).
+//! tickSpacing, lmPool; V2 со своей комиссией — метод dex.v2_fee_method; V3 с ключом реестра — метод
+//! dex.v3_registry_fee_method, решение 281) и реестр фабрики (getPair / getPool; V3 с ключом — getPool по его значению).
 //! Кто вызывает: pools/verify.rs, pools/index_watch.rs (fee_method).
-//! От чего зависит: ctx.rs, abi_check.rs, abi_v2v3.rs, families.rs, verify_rules.rs (Read).
-//! Настройки: dex.v2_fee_source, dex.v2_fee_method [DEX].
+//! От чего зависит: ctx.rs, abi_check.rs, abi_v2v3.rs, families.rs, verify_rules.rs (Read), registry_key.rs.
+//! Настройки: dex.v2_fee_source, dex.v2_fee_method, dex.v3_registry_fee_method [DEX].
 //!
 //! ABI и ссылки на официальные исходники — abi_check.rs, abi_v2v3.rs.
 
@@ -12,11 +13,14 @@ use alloy_primitives::aliases::{I24, U24};
 use alloy_primitives::{Bytes, keccak256};
 
 use super::super::ctx::Ctx;
+use super::abi_aero_basic::IAeroBasicFactory;
 use super::abi_check::IPoolImmutables as P;
+use super::abi_dmm::IDmmFactory;
 use super::abi_elastic::{IElasticFactory, IElasticPool};
 use super::abi_slipstream::ICLFactory;
 use super::abi_v2v3::{IV2Factory, IV3Factory};
 use super::families::{Family, Proto};
+use super::registry_key;
 use super::verify_rules::Read;
 
 /// Вызовы полей пула по виду. Ошибка — текст (не задан метод комиссии).
@@ -32,6 +36,21 @@ pub fn field_calls(ctx: &Ctx, f: &Family) -> Result<Vec<Bytes>, String> {
                 l.push(Bytes::copy_from_slice(&keccak256(sig.as_bytes())[..4]));
             }
         }
+        // Nomiswap Stable (решение 284): только factory/token0/token1 (как пара V2); комиссия и A читаются с состоянием
+        // (load_nomi.rs), реестр — getPair (registry_call_with).
+        Proto::NomiStable => {}
+        // KyberSwap Classic DMM (решение 287): только factory/token0/token1 (DMMPool.sol L35-L37); усиление и комиссия —
+        // в getTradeInfo с состоянием (load_dmm.rs), реестр — getPools (registry_call_with).
+        Proto::KyberDmm => {}
+        // SmarDex (решение 288): factory/token0/token1 (SmardexPair.sol L31-L33: factory immutable, token0/token1), реестр —
+        // getPair (как V2); фиктивные резервы и комиссии — с состоянием (load_smardex.rs).
+        Proto::Smardex => {}
+        // Camelot V2 (решение 443): factory/token0/token1 (CamelotPair: public factory, token0, token1 — Pair.sol L16-L18);
+        // комиссии, stableSwap и множители — с состоянием (load_camelot.rs), реестр — getPair (registry_call_with).
+        Proto::CamelotV2 => {}
+        // Решение 470: Aero Basic — factory/token0/token1 public (metadex-public 1.1.0 Pool.sol L49-L55); комиссия и кривая
+        // — с состоянием (load_aero_basic.rs), реестр — getPool(a, b) (registry_call_with).
+        Proto::AeroBasic => {}
         // KyberSwap Elastic (решение 81): swapFeeUnits (uint24) и tickDistance (int24) вместо fee/tickSpacing/lmPool.
         Proto::KyberElastic => {
             l.push(Bytes::from(IElasticPool::swapFeeUnitsCall {}.abi_encode()));
@@ -43,6 +62,11 @@ pub fn field_calls(ctx: &Ctx, f: &Family) -> Result<Vec<Bytes>, String> {
             l.push(Bytes::from(P::feeCall {}.abi_encode()));
             l.push(Bytes::from(P::tickSpacingCall {}.abi_encode()));
             l.push(Bytes::from(P::lmPoolCall {}.abi_encode()));
+            // Решение 281 (SquadSwap V3): ключ реестра фабрики — метод пула из dex.v3_registry_fee_method (седьмой
+            // вызов). Не задана — вызова нет (то же число обращений, что раньше).
+            if let Some(sig) = registry_key::method(ctx, f) {
+                l.push(registry_key::selector(&sig));
+            }
         }
     }
     Ok(l)
@@ -67,11 +91,38 @@ pub fn fee_method(ctx: &Ctx, f: &Family) -> Result<Option<String>, String> {
 /// Вызов реестра фабрики: V2 getPair(token0, token1), V3 getPool(token0, token1, fee),
 /// Slipstream getPool(token0, token1, int24 tickSpacing). Ошибок нет.
 pub fn registry_call(f: &Family, r: &Read) -> Bytes {
+    registry_call_with(f, r, None)
+}
+
+/// То же с ключом реестра V3 (решение 281, registry_key.rs): Some — getPool(token0, token1, ключ) вместо fee; None —
+/// как registry_call. Ошибок нет.
+pub fn registry_call_with(f: &Family, r: &Read, key: Option<u32>) -> Bytes {
     match f.proto {
-        Proto::V2 => Bytes::from(
+        // Nomiswap Stable (решение 284): фабрика getPair(a, b) — как UniswapV2Factory (NomiswapStableFactory L1189).
+        // SmarDex (решение 288): getPair(a, b) — mapping фабрики (SmardexFactory.sol L20, L44-L45).
+        // Camelot V2 (решение 443): getPair(a, b) — mapping фабрики (CamelotFactory.sol L19, L66-L67).
+        Proto::V2 | Proto::NomiStable | Proto::Smardex | Proto::CamelotV2 => Bytes::from(
             IV2Factory::getPairCall {
                 tokenA: r.token0,
                 tokenB: r.token1,
+            }
+            .abi_encode(),
+        ),
+        // Решение 470: Aero Basic — getPool(a, b) фабрики своей кривой (PoolFactory.sol L159-L161, реестр в обе стороны
+        // L334-L335).
+        Proto::AeroBasic => Bytes::from(
+            IAeroBasicFactory::getPoolCall {
+                tokenA: r.token0,
+                tokenB: r.token1,
+            }
+            .abi_encode(),
+        ),
+        // KyberSwap Classic DMM (решение 287): у пары может быть несколько пулов — getPools(token0, token1) (DMMFactory.sol
+        // L94-L105); пул подтверждён, если он в списке (verify_rules::registered_for).
+        Proto::KyberDmm => Bytes::from(
+            IDmmFactory::getPoolsCall {
+                token0: r.token0,
+                token1: r.token1,
             }
             .abi_encode(),
         ),
@@ -94,11 +145,12 @@ pub fn registry_call(f: &Family, r: &Read) -> Bytes {
             }
             .abi_encode(),
         ),
+        // V3: ключ getPool — fee(); у DEX с dex.v3_registry_fee_method — значение её метода (решение 281).
         _ => Bytes::from(
             IV3Factory::getPoolCall {
                 tokenA: r.token0,
                 tokenB: r.token1,
-                fee: U24::from(r.fee.unwrap_or_default()),
+                fee: U24::from(key.or(r.fee).unwrap_or_default()),
             }
             .abi_encode(),
         ),

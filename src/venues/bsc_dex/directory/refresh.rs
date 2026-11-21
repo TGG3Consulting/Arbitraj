@@ -6,6 +6,12 @@
 //! получает слушатель (канал `tx`) — проверка на своём узле и подключение пулов. Ошибка запроса монеты не стирает
 //! прежний ответ (пол-списка — не факт): видна в интерфейсе, монета спрашивается снова через index.error_retry_s
 //! (решение 61; не задана — через index.refresh_s). Сырой ответ любого кода (и 404) — в сыром журнале (gt_http.rs).
+//! 404 по монете — не ошибка, а сведение «индексатор не знает пулов монеты» (решение 121, C2): пулов у индексатора
+//! нет, монета спрашивается снова через index.refresh_s, в журнал — Info один раз на переход.
+//! Пачка изменений index.* — один проход (решение 279: Watch::next_batch).
+//! Решение 449: разблокировка или изменение секретов (secrets::vault::changes) — тоже проход сразу (раньше после ошибки
+//! «Секреты не разблокированы» следующий проход был только через index.refresh_s, у Тиграна — 30 ч, или по изменению
+//! index.*); проход, остановленный этой ошибкой, не считает список DEX и монету спрошенными — запроса не было.
 //! Кто вызывает: pools/market.rs (задача подписки; при новой подписке прерывается).
 //! От чего зависит: ctx.rs, directory/{fetch,gt_http,store,mod}.rs, settings/live.rs.
 //! Настройки: index.refresh_s, index.error_retry_s, index.pages_per_token, index.page_size [bsc_dex]; через вызываемые — index.*.
@@ -41,6 +47,7 @@ pub async fn run(
 ) {
     prepare(&ctx, &coins, quotes);
     let mut watch = Watch::new(ctx.settings.subscribe(), vec!["index.".into()]);
+    let mut secrets = crate::secrets::vault::changes();
     let mut loaded: Option<String> = None;
     loop {
         let wait = match pass(&ctx, &coins, &tx, &mut loaded).await {
@@ -57,11 +64,13 @@ pub async fn run(
                     let msg = format!("Справочник пулов не обновляется: {}", e.message);
                     ctx.log(Level::Warn, "dex.index", msg, None).await;
                 }
-                // Секреты разблокируют не настройкой — повтор через index.refresh_s, если он задан.
+                // Повтор через index.refresh_s (если задан); раньше — по изменению index.* или
+                // секретов (решение 449).
                 ctx.int("index.refresh_s").ok().map(Duration::from_secs)
             }
         };
-        // Ждём срока следующей монеты (или повтора после ошибки) или изменения index.* (без срока — только изменения).
+        // Ждём срока следующей монеты (или повтора после ошибки), изменения index.* или
+        // секретов (без срока — только изменения).
         let sleep = async {
             match wait {
                 Some(w) => tokio::time::sleep(w).await,
@@ -70,7 +79,9 @@ pub async fn run(
         };
         tokio::select! {
             _ = sleep => {}
-            c = watch.next() => if c.is_none() { return },
+            c = watch.next_batch() => if c.is_none() { return },
+            // Отправитель рассылки живёт весь процесс: Err не бывает (и тогда — просто проход).
+            _ = secrets.changed() => {}
         }
     }
 }
@@ -104,8 +115,12 @@ async fn pass(
             .or(s.dexes_at)
             .is_none_or(|at| at + every <= now)
     }) {
-        ctx.index.with(|s| s.dexes_tried = Some(now));
-        fetch::dexes(ctx, &net).await?;
+        let was = ctx.index.with(|s| s.dexes_tried.replace(now));
+        if let Err(e) = fetch::dexes(ctx, &net).await {
+            // Решение 449: остановка (секреты, настройка) — запроса не было, срок DEX прежний.
+            ctx.index.with(|s| s.dexes_tried = was);
+            return Err(e);
+        }
     }
     let mut due: Vec<(Option<chrono::DateTime<Utc>>, Address)> = ctx.index.with(|s| {
         s.tokens
@@ -121,16 +136,26 @@ async fn pass(
     due.sort();
     let (mut ok, mut failed, mut first_err) = (0, 0, None);
     for (_, token) in due {
-        ctx.index
-            .with(|s| s.tokens.entry(token).or_default().tried_at = Some(Utc::now()));
+        let at = Utc::now();
+        let was = ctx
+            .index
+            .with(|s| s.tokens.entry(token).or_default().tried_at.replace(at));
         match fetch::token_pools(ctx, &net, token, pages, size).await {
-            Ok((pools, n)) => {
+            Ok((pools, n, note)) => {
                 ok += 1;
-                let entry = ctx.index.with(|s| {
+                let (entry, fresh_note) = ctx.index.with(|s| {
                     let t = s.tokens.entry(token).or_default();
+                    let fresh = note.is_some() && t.note.is_none();
                     (t.fetched_at, t.pages, t.pools, t.error) = (Some(Utc::now()), n, pools, None);
-                    t.clone()
+                    t.note = note;
+                    (t.clone(), fresh)
                 });
+                // Решение 121 (C2): «индексатор не знает пулов монеты» — сведение Info, один раз на переход.
+                if fresh_note {
+                    let why = entry.note.clone().unwrap_or_default();
+                    let msg = format!("Справочник пулов: {} ({token:#x}): {why}", entry.ticker);
+                    ctx.log(Level::Info, "dex.index", msg, None).await;
+                }
                 if let Err(e) = store::save_token(ctx, &net, token, &entry).await {
                     ctx.log(Level::Error, "dex.index", e.message, None).await;
                 }
@@ -138,7 +163,12 @@ async fn pass(
                     let _ = tx.send(token);
                 }
             }
-            Err(e) if due::stops(&e) => return Err(e),
+            Err(e) if due::stops(&e) => {
+                // Решение 449: остановка (секреты, настройка) — запроса не было, срок прежний.
+                ctx.index
+                    .with(|s| s.tokens.entry(token).or_default().tried_at = was);
+                return Err(e);
+            }
             Err(e) => {
                 failed += 1;
                 first_err.get_or_insert_with(|| e.message.clone());

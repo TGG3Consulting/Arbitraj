@@ -75,7 +75,7 @@
         <table>
           <thead><tr><th>Настройка</th><th>Область</th><th>Причина</th></tr></thead>
           <tbody>
-            {#each io.report.failed as f (f.name + '|' + f.scope)}
+            {#each io.report.failed as f, fi (`${f.name}|${JSON.stringify(f.scope)}|${fi}`)}
               <tr><td><code>{f.name}</code></td><td>{f.scope}</td><td>{f.reason}</td></tr>
             {/each}
           </tbody>
@@ -88,7 +88,7 @@
           <table>
             <thead><tr><th>Настройка</th><th>Область</th></tr></thead>
             <tbody>
-              {#each io.report.applied as a (a.name + '|' + a.scope)}
+              {#each io.report.applied as a, ai (`${a.name}|${JSON.stringify(a.scope)}|${ai}`)}
                 <tr><td><code>{a.name}</code></td><td>{a.scope}</td></tr>
               {/each}
             </tbody>

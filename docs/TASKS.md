@@ -1,0 +1,6398 @@
+# Задачи и открытые вопросы
+
+Живой список: что предложено, что ждёт решения Тиграна, что сделано. Обновляется с каждым коммитом (CLAUDE.md).
+Техдолг — `docs/ROADMAP.md` (раздел «Техдолг»); разборы — `docs/notes/`.
+
+## Следующая задача
+
+- **После выкладки решения 401 и развёртывания v3 владельцем — проверить пробу через исполнитель на живых пулах (чтение):**
+  журнал dex.check — строки «… исполнитель v3 кошелька «…»: проходит обе стороны / отвергнут / не проверено»; карточка пула
+  на «Монетах»; таблица «Классы шага v3» (колонка «Пулы кошелька»). Записать: сколько пулов с крючком / Bin / Stable прошли,
+  сколько отвергнуты и какими текстами, сколько «не проверено» и почему; длительность прохода цикла крючков. Блок «Решение
+  401» ниже.
+
+## Ждут решения Тиграна
+
+- **Решение 489 (21.11.2026, ветка t259/net-chain-enabled от feat/arbitrum a3f8f568) — площадка DEX в сетях ядра только
+  «в игре» (venue.enabled = да или её сеть держат сделки); cargo не запускался (формат — вручную, проверка — CI).**
+  Сделано: core/chain.rs — dexes («DEX реестра»: сеть площадки, сеть по умолчанию, учёт); core/chain_play.rs — in_play /
+  active_dexes («DEX в игре»); core/net_hold.rs — сеть держит сделка с потоком по решению 196 или закрытая с идущим
+  возвратом USDT (части «идёт» / «ждёт повтора», ожидание общего возврата группы), Inner.net_held и один толчок
+  перечитывания справочника сетей на переходе «держалась → отпущена» (ledger.rs save → on_saved); net_chain::others —
+  сети только площадок в игре; registry_chains::groups — только площадки в игре; rebuild_build.rs — в группе только
+  включённые, сеть, которую держат только сделки, — problem «… только идущие сделки (решение 196)» (направлений нет),
+  записи с сетью без своей группы не идут в сеть по умолчанию; rebuild.rs — usdt_other по группам в игре;
+  rebuild_blacklist.rs — problem не затирается; cycle_watch.rs — выключенная DEX циклов не исполняет (подтверждено
+  Тиграном 21.11.2026); net_chain::affects. **T489-01 закрыт:** сеть держится, пока сделка не завершена, включая
+  возврат USDT. Ревью: шторм перечитываний (повторные сохранения закрытой сделки) закрыт — толчок только на переходе.
+  Ревью 3: ожидание общего возврата группы держит сеть у любой сделки группы; flush правит только копии (держатель не
+  пропадает); захват сети сохранением сделки («Перегнать», «Вернуть боту») — толчок; net_ready.rs — «сеть
+  перечитывается — повторите» вместо денег без адреса / точности; net_kick.rs — толчок перечитывания без потери
+  (поколение толчков); держатели — по незавершённым сделкам (unsettled.rs). Тесты — настоящим ledger::save
+  (core_net_chain_489_held.rs, core_net_chain_489_recap.rs).
+  Ревью 4: толкает тот, кто первым сменил отметку сети (chain_play.rs live или net_hold::on_saved) — гонка «отметка без
+  толчка» закрыта (её и поймал CI 5cbbe3e0: «Вернуть боту» без толчка); общий возврат группы — носитель и копии в учёт
+  памяти одним захватом замка (без задвоения суммы); тесты переходов и толчков — на ядре без настроек по возвращаемому
+  значению on_saved и поколению толчков, общий возврат — поведенческий (core_net_chain_489_flush.rs).
+  Тесты (записи tests/data/bingx_2026-11-21, mexc_2026-11-21; справочник собирается напрямую — rebuild_build::build,
+  без гонки с фоновой пересборкой): core_net_chain_489.rs, core_net_chain_489_held.rs, core_net_chain_489_bsc.rs,
+  core_net_chain_489_mexc.rs; фикстуры core_cex_nets_431.rs, core_registry_chains_430.rs.
+  Осталось:
+  - T489-02 **Сеть по умолчанию при зарегистрированной площадке без dex.chain.** dex_chain считается по реестру: если
+    зарегистрированная (даже выключенная) площадка DEX без dex.chain, а площадок DEX две и больше — tag_of_dex любой
+    площадки — ошибка, группа BSC остаётся без DEX (так и до решения 489). Решить с Тиграном: требовать dex.chain у всех
+    площадок реестра (сейчас) или не считать выключенную площадку без dex.chain.
+  - T489-03 **Стакан газа сети выключенной площадки без сделок.** gas_ticker::all (подписка бирж, convert_at.rs) — по
+    реестру: стакан ETH у бирж держится и при выключенной arb_dex без сделок. Если не нужен — решение Тиграна.
+  - T489-04 **venue.arbitrum_network[mexc] = «ARB».** Код сети MEXC Arbitrum One — netWork «ARB» (запись
+    mexc_2026-11-21; разбор сравнивает с netWork — venues/mexc/networks_parse.rs:73,80). Задать при включении
+    Arbitrum у MEXC (настройка Тиграна; тест core_net_chain_489_mexc.rs).
+  - T489-05 **Тест промежуточного состояния общего возврата группы.** core_net_chain_489_flush.rs проверяет порядок
+    сохранений и итог (держатель — часть «идёт», сумма не задвоена), но не учёт памяти МЕЖДУ сохранениями носителя и
+    копий (coin_group_flush.rs: одно внесение под замком deals до первого ledger::save) — точки перехвата в коде нет;
+    ревью 5: тест прошёл бы и до этой правки. Нужен подписчик, читающий учёт в момент события сохранения носителя.
+  - Ревью 5 (сделано без отдельной задачи): chain_play::live при смене отметки сети — и толчок перечитывания, и
+    request_rebuild (группа сети обновляется сразу, а не только при изменении перечитанного справочника). Перегон с
+    выключенной площадки DEX после «Вернуть боту» до перечитывания — перевода нет: цели перегона только через
+    relay::targets_why (relay.rs:65-72: монета в справочнике и присутствие с выводом на площадке монеты), у выключенной
+    площадки присутствия нет (как у выключенной биржи по решению 196 и до 489).
+- **Решение 490 (21.11.2026, ветка t260/add-dex-network от feat/arbitrum a3f8f568) — «Добавить DEX» для площадки DEX любой
+  сети (Тигран: «ДА!» — в этом же релизе).** Выбор площадки DEX + сырой id; суффикс сети — с сервера
+  (`GET /api/venues/{id}/dex-key-suffix`, правило одно — `settings/dex_key.rs`, им же пользуется `ctx_place.rs`); новый ключ
+  «id@сеть» без площадки DEX этой сети или с сетью по умолчанию сервер отклоняет в PUT /api/settings (импорт не проверяет).
+  cargo / npm не запускались — сборка, clippy, svelte-check и тест `tests/settings_dex_key_490.rs` — в CI. Задачи:
+  - T490-01 **Живая проверка после выкладки.** «Настройки» → карточка dex.kind → площадка arb_dex → id `dodo-amm-dvm` →
+    «Добавить DEX» → строка `dodo-amm-dvm@arbitrum (добавлена руками …)` → задать dex.kind → после сохранения ключ — в
+    `GET /api/venues/arb_dex/dex-families` (pools/dex_ids.rs extra, Source::Settings) и во всех карточках области «DEX».
+    Затем — остальные DEX Arbitrum без индексатора по docs/notes/arbitrum/dex-settings-arbitrum.md и docs/FIRST_RUN.md.
+    Отказы: id на bsc_dex с «@» нельзя ввести (checkDexId); PUT «x@arbitrun» → «нет площадки DEX сети «arbitrun»».
+  - T490-02 **Тестов интерфейса в проекте нет** (ни vitest, ни *.test.* в ui/) — checkDexId(id, suffix) и сборка ключа в
+    components/DexAdder.svelte автотестом не покрыты; инфраструктуру не заводили (постановка). Нужна — отдельной задачей.
+
+- **Решение 488 (20.11.2026, ветка t258/exec-v5-build) — исполнитель v5 собран (T488-01); привязка версии v5 в коде бота.**
+  `contracts/out/` = v5 (v4 + шаги AERO_BASIC = 26, BALANCER_V3_BUF = 27, CURVE_ETH = 28, BASIN = 29, WOMBAT = 30, SHELL = 31;
+  via-IR + runs 1 + strip revert; код в сети 24 542 байта, запас EIP-170 — 34 байта; bin-runtime SHA-256
+  36643fab…17cd). Прежний v4 заморожен в `contracts/out/v4/`. Привязано (образец v1…v4): `exec/executor/code.rs` —
+  RUNTIME_V4 / SHA_V4 / runtime_v4(), version_of (out/v1…v4/ → V1…V4, out/ → V5), current_version → V5, runtime_of /
+  runtime_sha256_of; onchain.rs — текст «код не совпал» называет v4; abi.rs подхватывает ABI v5 (alloy::sol!) без правок.
+  Задачи:
+  - T488-01 **Разбивка исполнителя при следующем DEX.** Запас EIP-170 — 34 байта: любой новый шаг не поместится. Нужно
+    разнести исполнение по нескольким контрактам (делегат-вызов или маршрутизатор шагов) — конструктивно, до следующего DEX.
+  - T488-02 **Запись приёмки v5 на живых пулах (exec_v5_live) и развёртывание.** Live-доказательство — по ключу
+    (версия, chainId): записи для v5 пока нет (`exec/executor/live_record.rs`), поэтому шаги v5 в коде есть, но ни один
+    класс не принят — «Развернуть исполнитель» для v5 закрыт правилом решения 400. Сделать запись своим узлом (как
+    executor_v4_live), добавить Source v5 в live_record.rs, развернуть исполнитель v5 в сети. Вне агентов (узел, сеть).
+  - T488-03 **EVM-сценарии шагов 26–31.** В `contracts/evmtest` нет сценариев для AERO_BASIC = 26, BALANCER_V3_BUF = 27,
+    CURVE_ETH = 28, BASIN = 29, WOMBAT = 30, SHELL = 31 (есть только v4: fluid, balancer_v3, ekubo, ekubo_twamm, lb20).
+    Написать по образцу решения 458 с официальным кодом протоколов (vendor), добавить в run.mjs. Требует solc/node — вне агентов.
+
+- **Решение 487 (20.11.2026, ветка t256/arb-merge-bsc от feat/arbitrum 2ca8dba2) — слияние BSC (e49efd67: 419–429, 449,
+  463, 464, 476) в Arbitrum и Zyberswap V3 видом thena_fusion; cargo не запускался (формат — вручную).** Задачи:
+  - T487-01 Zyberswap V3 (Arbitrum): **адрес фабрики** `0x9c2abd632771b433e5e7507bcaa41ca3b25d8544` — источник
+    — адрес из адаптера DefiLlama, код подтверждён Sourcify; принято координатором по правилу Тиграна 20.11 (взрослые
+    продовые решения без вопросов); включает DEX Тигран после записи. Помечено в dex-settings-arbitrum.md §4.7 и
+    FIRST_RUN. Осталось: запись своим узлом — `python3 tools/arbitrum_record/zyberswap_v3.py
+    --rpc http://УЗЕЛ:8547` (или record_all.py, шаг zyberswap_v3; пулы — poolByPair WETH/USDC, другие пары —
+    `--pair-token`, пулы — `--pool`), коммит tests/data/arbitrum_zyberswap_v3_<дата>/, снять #[ignore] в
+    tests/arbitrum_zyberswap_v3_live.rs; dex.pool_enabled — Тигран после записи.
+  - T487-02 (проверяет запись T487-01: heads.json, тест next_block_same_or_next_second) Комиссия следующего блока (fee_algebra_v1.rs next_block_fee) берёт время следующего блока = время блока
+    чтения или + 1 с (запись BSC t237: 2 блока в секунду). Для Arbitrum это не проверено: какие интервалы времени между
+    соседними блоками своего узла Arbitrum — по записи T487-01 (времена подряд идущих голов); если бывает больше 1 с,
+    комиссия до следующей головы может отличаться (fusion_head.rs пересчитывает её на каждой голове).
+  - T487-04 Кнопка тревоги «Открыть вход монеты» (notify/acts_e.rs open_entry, e:oe.<биржа>.<id монеты>) у монеты
+    другой сети: id «0x…@arbitrum» (51 знак) + длинный id биржи (poloniex — 8) = 65 байт > 64 (предел callback_data,
+    acts::keyboard): по коду notify/acts.rs (шапка, keyboard) такой кнопки нет — в тексте «только в интерфейсе»; кнопка
+    теряется только у бирж с id длиннее 7 знаков. Короткий вид данных кнопки — отдельной задачей. Решение 487 (сети в id).
+  - T487-05 Не монета в id, но без сети: пара venue_dir («bingx:cex_dex») — лимиты, просадка, closure_share
+    направлений BingX → DEX BSC и BingX → DEX Arbitrum сольются (TASKS блок 430, п. а). Решение 487 (сети в id): не
+    делалось.
+    Разбор 2026-11-21 (ветка feat/arb-launch-blockers, docs/notes/arbitrum/venue-dir-network-deferred.md): НЕ блокер
+    запуска (Arbitrum-сделки DEX закрыты deploy_gate до записи v5 × 42161 — v5-record-integration.md), а отсутствие
+    разделения — поведение в запас (общий ключ учёта = строже, останавливает раньше). Ключ пары — персистентный ключ
+    дневной книги и просадки; менять его под не-блокер рискованно для живого учёта BSC. Открытый вопрос Тиграну до
+    реализации: как помечать сетью пару cex_cex (сети DEX в сделке нет) — брать ли сеть перевода направления, как
+    T487-03. Реализацию не начинать, пока факт не задан.
+  - T487-03 **Сделано (решение 487 (T487-03), координатор: ключ пары — с сетью перевода, tests/core_transit_chain_487.rs).** Было: Время в пути по статистике пары площадок (решение 464, core/transit_source.rs) — сумма пары (откуда → куда)
+    по всем монетам без сети: при двух сетях переводы BSC и Arbitrum одной пары площадок смешиваются (история монеты —
+    по Asset с сетью, решение 416, пара — нет). Вопрос Тиграну: разделять ли статистику пары по сети.
+
+- **Слияние t247 (20.11.2026, ветка t247/arb-merge-3): исполнитель v5 — одна сборка на три шага.** В исходнике
+  contracts/ArbExecutor.sol v5 = v4 + AERO_BASIC = 26 (решение 470, T470-09), BALANCER_V3_BUF = 27 (решение 474) и
+  CURVE_ETH = 28 (решение 472, T472-08); Version::V5 одна, причина «нужен v5» — одно имя `exec_callback::need_v5()`
+  (в ветке t242 было `NEED_V5`). Сборки v5 нет (runtime_of(V5) — причина, runtime_sha256_of(V5) — None): пересборка
+  contracts/build.sh → out/ как v5 с заморозкой v4 в out/v4/ (тест v4_kept_after_rebuild), RUNTIME / SHA v5 в code.rs и
+  EVM-сценарии трёх шагов — вне агентов. Счётчик bnbFrom итогового исходника — 9 установок и 9 сбросов.
+- **Решение 416 (19.11.2026, ветка feat/arbitrum) — две сети, шаг 1: сеть в типах ядра; ждёт сборки и тестов в GitHub
+  (cargo локально не запускался).** Порядок выкладки (docs/notes/arbitrum/deploy-step1.md): «Стоп» → дождаться
+  закрытия всех сделок и возвратов USDT → выкладка → задать у bsc_dex `dex.chain` = `bsc`, `dex.evm_chain_id` = `56`,
+  `dex.gas_ticker` = `BNB` → «Проверить подключение» DEX → «Старт». Без трёх настроек площадка DEX не подписывается
+  на рынок, не котирует и не подписывает транзакции (совет — docs/FIRST_RUN.md).
+  Тикер газа решён техлидом (ревью шага 1): отдельная обязательная настройка dex.gas_ticker, dex.native_ticker не
+  тронута (решения 62/270/276).
+- **Решение 430 (19.11.2026, ветка feat/arbitrum) — две сети, шаг 2: ядро «много DEX»; ждёт сборки и тестов в GitHub
+  (cargo локально не запускался).** Инвентарь и план — docs/notes/arbitrum/step2-plan.md. Сделано: 2.1 сети ядра
+  (сеть по умолчанию, площадка DEX сети вместо «первой DEX»), 2.2 газ по сети, 2.3 справочник/USDT/нативная/подписки/
+  налог перевода по сети, 2.4 сеть перевода по направлению. Выкладка BSC: новых обязательных настроек нет
+  (dex.default_chain — только когда появится вторая площадка DEX; задать `bsc`).
+  Вопросы Тиграну:
+  1) Сеть по умолчанию: монеты BSC хранятся без сети навсегда (вся база BSC — без переноса), монеты Arbitrum — с сетью
+     «arbitrum». Альтернатива — переписать базу (все записи с «chain»: «bsc»), но тогда меняются все ключи и тесты. Ок?
+  2) «Перегон USDT»: при двух площадках DEX кошелёк показывается дважды — «Кошелёк DEX «w1» (…), сеть bsc» и «…, сеть
+     arbitrum» (USDT по сетям разные). Ок, или нужна другая подпись?
+  Осталось (не сделано в шаге 2, нужно до шага 5 — адаптера Arbitrum; на BSC не влияет):
+  а) ключи второй сети: пара venue_dir («bingx:cex_dex» — без сети: лимиты, просадка, closure_share BingX→DEX BSC и
+     BingX→DEX Arbitrum сольются; предложение — суффикс «@arbitrum» у сети не по умолчанию, у BSC id прежний; VenueDir
+     нужен с сетью — затрагивает settings/venue_dir.rs, core/day_pair.rs, drawdown_*, экран пар) и id области «монета»
+     (settings/scope.rs coin_id — «0x…» без сети; предложение — «arbitrum:0x…»);
+  б) переименование *_bnb → *_native (57 мест в ядре/API/отчётах, risk.min_bnb_balance — 16) с прежними именами в JSON;
+  в) отображение по сетям: core/deal_card.rs `const DEX = "bsc_dex"` (кошелёк в пути сделки; площадка arb_dex — без
+     кошелька в карточке), notify/human.rs имена площадок, экран «Монеты» (coins_view.rs — USDT сети по умолчанию),
+     слепок кошельков (report/snap_dex.rs — только DEX сети по умолчанию), API кошельков (api/wallets_dex.rs — DEX сети
+     по умолчанию) — шаг 4;
+  г) карты по адресу без сети: core/ticker_index.rs (by_token, venue_ticker (площадка, адрес)), convert_at.rs, карты
+     адаптера DEX (~20 статиков) — один адрес в двух сетях (CREATE2) склеится;
+  д) core/coin_account.rs DEFAULT — сеть по умолчанию берётся один раз при запуске (dex_chain): при двух сетях и не
+     заданной dex.default_chain — карта монет бирж без сети по умолчанию (как в шаге 1);
+  е) core/quarantine.rs key_of_id, core/deposit_hold.rs — ключи без сети (вопрос шага 1, п. 4). **Сделано — решение
+     487 (сети в id); id области «монета» (п. а, вторая часть) — тоже.**
+  Ревью 430 (19.11.2026; регрессий BSC по коду не найдено, одна правка — «430 (ревью)» в DECISIONS). Спорное, для двух сетей:
+  ж) сравнения по адресу без сети в ядре сверх (г): core/precheck.rs:85 и precheck_nets.rs:77 (флаг ввода/вывода —
+     первая запись справочника биржи с этим адресом, сеть записи не сверяется), core/intermediate.rs:55 и
+     subscribe.rs:241 (тикер промежуточной по адресу), coins_view.rs:56 (монета экрана по адресу), tick.rs
+     assets_by_tokens (событие пула DEX одной сети будит монету с тем же адресом другой сети — лишний пересчёт);
+  з) пересборка справочника при смене dex.chain / dex.default_chain не толкается (core/rebuild.rs REGISTRY их нет);
+     InertKey и проверка «справочник тот же» (rebuild.rs same) не учитывают сети площадок DEX и Inner.usdt_other —
+     до следующего толчка группы сетей и USDT других сетей прежние;
+  и) подписка биржи: монета с одним тикером в двух сетях — две записи Asset (разная сеть) на один стакан биржи
+     (subscribe.rs wanted, дедуп по Asset) — проверить, что адаптер не подписывается дважды;
+  к) presence.rs cex выбирает запись сети по venue.bsc_network — у группы не по умолчанию монеты без адреса, пока
+     нет имени сети биржи по сети (шаг 3);
+  л) файлы выросли сверх ~200 строк: subscribe.rs 272, native.rs 224, deal_gas.rs 223, balances_cache.rs 211,
+     rebuild.rs 203 (transfers.rs, dirctx.rs были больше и до 430) — разнести при шаге 3.
+- **Решение 431 (19.11.2026, ветка t215/arb-step3-cex-nets от feat/arbitrum) — две сети, шаг 3: биржи по сетям; ждёт
+  сборки и тестов в GitHub (cargo локально не запускался).** План и инвентарь — docs/notes/arbitrum/step3-plan.md.
+  Сделано: имя сети биржи по сети ядра (gateway/own_nets.rs: venue.bsc_network; venue.<сеть>_network — новая
+  venue.arbitrum_network; CoinEx — venue.arbitrum_contract_chain); 14 бирж отдают адрес контракта у каждой своей сети;
+  привязка записей к сети ядра — core/net_chain.rs; presence, USDT, precheck, перевод, промежуточные, подписка биржи,
+  tick — по (сеть, адрес) (блок 430: пп. ж, и, к — сделаны; coins_view — монета без сети); KuCoin/OKX fund_move и XT
+  deposits — сеть по Asset.chain. Выкладка BSC: новых обязательных настроек нет; venue.arbitrum_network задавать при
+  подключении площадки DEX Arbitrum (до неё адрес Arbitrum ядро снимает — справочник BSC прежний).
+  Вопросы Тиграну:
+  1) Правило имени настройки сети у биржи — `venue.<id сети>_network` (id — dex.chain площадки DEX): для Arbitrum id сети
+     должен быть именно `arbitrum` (иначе имя сети биржи не найдётся). Ок? Альтернатива — одна настройка-список
+     «сеть=имя» на биржу.
+  2) Ключи второй сети — «bingx:cex_dex@arbitrum» (пара venue_dir) и «arbitrum:0x…» (область «монета», API
+     GET /api/coins/{address} — сейчас монета без сети) — не решено (блок 430, п. а).
+  3) Остаток монеты биржи один на все сети (решение 416, core/coin_account.rs): карту remember_saved шаг 3 НЕ пополняет —
+     запись для монеты BSC сменила бы ключ счёта (CoinKey::of → CoinKey::Venue) у живых сделок BSC. Как делить: ключ
+     монеты другой сети = ключ монеты BSC с тем же тикером биржи (BSC-ключи не меняются)?
+  4) KuCoin withdraw_hold (квота вывода USDT, kucoin/withdraw_quota.rs:38) — по сети venue.bsc_network: в контракте
+     withdraw_hold(quote) нет сети; квоты по сетям — изменение стыка (docs/AGENTS.md). Нужно ли до Arbitrum?
+  Осталось (до шага 5; на BSC не влияет):
+  а) core/ticker_index.rs map (биржа, тикер) → одна монета: монета Arbitrum с тем же тикером биржи не будится стаканом
+     биржи (блок 430 г); by_token/venue_ticker — по адресу без сети;
+  б) Gate: круг минимумов депозита (deposit_plan.rs:44-61, deposit_min.rs:156) — только монеты с открытым вводом в BSC;
+     Extra.deposit_min — на монету (min_deposit_amount адреса депозита BSC) ставится всем сетям монеты — для Arbitrum
+     проверить по документации Gate, на монету минимум или на сеть;
+  в) Kraken «Проверить подключение» (account.rs:150) — вывод USDT только по сети BSC; network_hint — подсказка имён только
+     для venue.bsc_network;
+  г) InertKey (rebuild.rs) — имена сети BSC; имена других сетей входят в ключ только через справочник сетей (смена
+     venue.arbitrum_network толкает справочник — записи меняются).
+  Ревью 431 (19.11.2026, регрессий BSC не найдено; спорное — на BSC не влияет, только при двух площадках DEX):
+  д) Вопрос Тиграну: dex.default_chain ≠ bsc (например arbitrum, а BSC — вторая сеть). Факт кода: own_nets::setting_of(None)
+     = venue.bsc_network и setting_of(Some(bsc)) = venue.bsc_network — одна настройка на две сети; net_chain::others
+     смотрит только own_nets::OTHER (venue.arbitrum_network), а у площадки Arbitrum tag = None → её имя не находит
+     сеть (адрес Arbitrum снимается), записи сети venue.bsc_network ядро считает монетами сети по умолчанию (Arbitrum).
+     Предложение: при двух сетях требовать dex.default_chain = сеть, чьё имя у биржи — venue.bsc_network (ошибка с
+     причиной в rebuild), либо правило имени по dex.default_chain.
+  е) core/subscribe_assets.rs intermediate_assets: бирже промежуточная монета DEX другой сети идёт без сети
+     (chain None, адрес Arbitrum) — one_book её не сводит; одинаковый тикер промежуточной в двух сетях даст бирже две
+     записи на один стакан (как до 431 — шаг 2).
+  ж) HTX wallet.rs: неоднозначные сети не-BSC («тикер/сеть») пишутся в журнал под заголовком «…с именем сети BSC…» —
+     текст поправить при подключении Arbitrum (текст BSC не менялся намеренно).
+  з) rebuild.rs REGISTRY — «venue.arbitrum_network» строкой рядом с own_nets::OTHER: новая сеть = правка в двух местах
+     (тест own_nets проверяет только каталог); свести к own_nets::affects.
+- **Решение 432 (19.11.2026, ветка t216/arb-step4-launch) — две сети, шаг 4: управление; ждёт сборки и тестов в GitHub
+  (cargo/npm локально не запускались).** План и сделанное — docs/notes/arbitrum/step4-plan.md. Выкладка BSC: новых
+  настроек нет; таблица dex_wallet_exec создаётся сама; при одной площадке DEX интерфейс и поведение прежние.
+  Закрыто из блока 430 п. (в): deal_card «bsc_dex», имена площадок DEX в notify/human.rs, USDT на «Монетах», слепок
+  кошельков по сетям, API кошельков по сети.
+  Вопросы Тиграну:
+  1) «Старт <сеть>» из «Стоп» или «Пауза» запускает ТОЛЬКО эту сеть (вторая остаётся стоять, пока не нажать её «Старт»
+     или «Старт (все сети)»). Ок?
+  2) Telegram: кнопки «Старт/Стоп» по сети в меню /menu не сделаны (общие /start /stop — как раньше, /start = все сети).
+     Нужны ли кнопки по сети в Telegram?
+  3) (из 430, п. 2) «Перегон USDT» — подпись «Кошелёк DEX «w1» (…), сеть bsc / arbitrum» — не менялась, ждёт ответа.
+  Осталось (не в этом шаге; на BSC не влияет):
+  а) имена площадок DEX («DEX <сеть>») ставятся при запуске ядра — смена dex.chain на лету их не обновляет до перезапуска;
+  б) статики адаптера DEX без площадки: exec/executor/onchain.rs CHECKED (последняя сверка исполнителя), v1_notice SENT,
+     pool_pass по адресу исполнителя — при втором экземпляре адаптера (шаг 5) нужны ключи с площадкой; там же — ID
+     адаптера константой (venues/bsc_dex/ctx.rs) у второго экземпляра должен стать своим;
+  в) «Развернуть исполнитель» во второй сети: запрет и классы v3 (executor_deploy_refused, executor_v3_classes) на экране
+     — пока от DEX сети по умолчанию; у WalletChain нужны свои — с адаптером Arbitrum (шаг 5);
+  г) Telegram: баланс кошелька (notify/ctl/view.rs) — DEX сети по умолчанию;
+  д) файлы сверх ~200 строк: core/risk.rs 352 (было 333), core/commands.rs 300 (282), settings/accounts/chain_exec.rs 209,
+     api/wallets_dex.rs 206 (190).
+  Ревью 432 (19.11.2026, регрессий BSC не найдено) — спорное, на решение Тиграну:
+  е) при режиме «Пауза»/«Стоп» плашка показывает все сети «стоит» (chain_run::view) — кнопка «Стоп <сеть>» недоступна,
+     заранее остановить одну сеть до «Старт (все сети)» из интерфейса нельзя (API POST /api/control/chain/{id} — можно);
+  ж) «Старт <сеть>» из «Пауза» при обеих запущенных сетях ставит вторую сеть в «не запускалась» (то же правило, что из
+     «Стоп», вопрос 1) — сказать Тиграну явно;
+  з) докупка (core/executor.rs, через risk::can_open) в остановленной сети отказывает — как и при общем «Стоп»;
+  и) chain_off проверяется на отдельном коротком замке до основного (gate_input): сделка, прошедшая проверку за мгновение
+     до «Стоп <сеть>», начнётся — то же окно, что у общего «Стоп».
+- **Решение 439 (ревью, правки) (20.11.2026, ветка t222/arb-known-accounts)** — повторное независимое ревью; cargo не
+  запускался. СДЕЛАНО: 1) send/track_l1.rs caught_up — блок свежей головы H не старше feed.max_block_age_ms; начало
+  окна — блок головы при начале слежения, проверенный на возраст (старше порога — начало на первой свежей голове);
+  send/drop_wait.rs (SendCfg::read): у eip1559_l1 feed.max_block_age_ms задана и < send.drop_wait_ms, иначе
+  NotConfigured с причиной; FIRST_RUN, SETTINGS, SETTINGS_CASES, каталог send.drop_wait_ms; 2) первая голова — в шаге
+  ожидания (окно не удваивается); 3) exec/pool_cond_topics.rs — LB: + FlashLoan, CollectedProtocolFees, ForcedDecay,
+  StaticFeeParametersSet, OracleLengthIncreased (joe-v2 v2.1.0 8eeb42d7, все записи _parameters/_reserves — в шапке);
+  4) фильтр перехватчика по итоговому условию (by_cond); без условия — по виду DEX (шапки pool_cond_topics, tip_cycle);
+  5) статистика: пустое условие — off; 6) core/types TipShare, PoolCondStat, PoolCondCounts — serde(default); сбой
+  загрузки из SQLite не кэшируется и не затирает сохранённое (журнал), итог не учитывается, сброс — Internal;
+  7) PoolCondStat.svelte — подпись «Прочие итоги»; 8) SETTINGS_CASES — строки pool_cond_mode.rs. BSC — без изменений.
+  На подтверждение Тиграну:
+  1) у arb_dex feed.max_block_age_ms теперь обязательна для отправки и меньше send.drop_wait_ms — без неё отправки нет;
+  2) при сбое загрузки доли чаевых/статистики итог сделки в них не учитывается (только журнал) — так оставить?
+  3) OracleLengthIncreased (в ABI abi_lb.rs его нет) — topic0 = keccak256 сигнатуры из ILBPair.sol:76 в коде.
+  Нужны записи: отставший узел Arbitrum (головы с временем блока старше порога) — тест track_l1; логи LB с FlashLoan /
+  CollectedProtocolFees — тест фильтра tip_judge.
+- **Решение 475 (20.11.2026, ветка t245/arb-kyber-elastic) — KyberSwap Elastic: тики частями (T451-03) и Elastic
+  Legacy на Arbitrum (T462-01); cargo не запускался (формат — вручную), сборка и тесты — в CI.** Сделано: тики пула
+  Elastic читаются частями getTicksInRange(pool, start, dex.elastic_ticks_chunk) (pools/elastic_ticks.rs; load_elastic.rs,
+  prefetch_plan.rs — первая часть заранее); новая настройка dex.elastic_ticks_chunk (каталог dex_elastic.rs, SETTINGS,
+  SETTINGS_CASES, FIRST_RUN — совет 1000), обязательна у вида Elastic (families.rs required); поиск пулов Elastic по
+  фабрике — getPool(a, b, swapFeeUnits) по dex.v3_fee_tiers (factory_calls.rs, как V3); запись своего узла —
+  tools/arbitrum_record/kyber_elastic_legacy.py (в record_steps.py), тест tests/arbitrum_kyber_elastic_legacy_live.rs
+  (#[ignore] до записи); настройки — docs/notes/arbitrum/dex-settings-arbitrum.md §6. Исполнитель не менялся
+  (переразвёртывание не нужно; вид исполнения не имеет — только сигнал, как kyber_elastic). Задачи:
+  - T475-01 Запись своим узлом: `python3 tools/arbitrum_record/record_all.py --rpc http://127.0.0.1:8547 --only
+    kyber_elastic_legacy` (или сам скрипт, шапка), коммит tests/data/arbitrum_kyber_elastic_legacy_<дата>/, снять
+    #[ignore] в tests/arbitrum_kyber_elastic_legacy_live.rs. Скрипту нужны модули ветки t234/arb-merge-2 (gt.py,
+    recnode.py, kyber_elastic_ticks.py, stdhttp.py — в этой ветке байт в байт те же).
+  - T475-02 **Выкладка: dex.elastic_ticks_chunk задать у КАЖДОЙ DEX вида kyber_elastic / kyber_elastic_v1 — и на BSC
+    (bsc_dex), и на arb_dex** (FIRST_RUN — 1000). Без неё DEX «не подключена: не задана dex.elastic_ticks_chunk» — на BSC
+    пулы Elastic выпадут из графа (правило «нет параметра — функция не работает»; раньше тики читались одним вызовом
+    length = 0 без настройки). На живом BSC DEX `kyberswap_elastic_bsc` (вид kyber_elastic) включена (dex.pool_enabled = да, проверено через интерфейс бота 20.11.2026) — при выкладке ОБЯЗАТЕЛЬНО задать ей dex.elastic_ticks_chunk.
+  - T475-03 Вопрос Тиграну: id DEX для Elastic Legacy на arb_dex (предложение `kyberswap_elastic_legacy_arbitrum@arbitrum`)
+    и включение (dex.pool_enabled); у arb_dex — index.factory_scan = да (иначе пулы v1 не найдутся: у GeckoTerminal их
+    нет). Уровни dex.v3_fee_tiers = 8, 10, 40, 300, 1000 — конструктор фабрики v1 (Sourcify 42161); уровни, включённые
+    позже enableSwapFee, видны только событием SwapFeeEnabled — скрипт пишет события фабрики окном --log-blocks
+    (2 000 000 блоков), всей истории нет (решение 460); новый уровень — дописать в dex.v3_fee_tiers.
+  - T475-04 Поиск по фабрике теперь и у kyber_elastic (v2, BSC и Arbitrum): при index.factory_scan = да и заданной
+    dex.v3_fee_tiers у такой DEX — getPool её фабрики по парам; dex.v3_fee_tiers не задана — «не ищется» в заметках
+    прохода, как раньше (задана ли она у Elastic на BSC — проверить при выкладке).
+  Статусы: T451-03 — сделано (решение 475; длина части — настройка, совет 1000 по газу); T462-01 — код и запись
+  готовы, id и включение — Тигран (T475-03). Оговорка: стоимость газа на тик — оценка по EIP-2929 и исходнику, не замер;
+  факт узла — вызов ≈ 10 млн газа выполнен, ≈ 62 млн — «out of gas».
+- **Решение 456 (20.11.2026, ветка t231/arb-merge) — слияние семейств Arbitrum и перенумерация шагов исполнителя v4;
+  cargo / npm / solc локально не запускались, push нет — сборка и тесты в CI (запускает координатор).**
+  СЛИТО (`git merge --no-ff`, по порядку): t224/arb-dex-settings (448), t226/arb-dex-code-a (450), t227/arb-dex-code-b
+  (451), t223-f1/arb-family-f1 (440 Fluid), t228/arb-balancer-v3-more (441 + 452, с t223-f2), t229/arb-curve-crypto-more
+  (442 + 453 + 455, с t223-f3), t223-f4/arb-family-f4 (443 Camelot V2), t223-f5/arb-family-f5 (444 Camelot V3),
+  t223-f6/arb-family-f6 (445 LFJ V2.0), t223-f7/arb-family-f7 (446 LFJ V2.2), t230/arb-ekubo-more (447 + 454, с t223-f8).
+  Номера шагов v4: FLUID = 22, BALANCER_V3 = 23, LB20 = 24 (было 22), EKUBO = 25 (было 22); BSC 0–21 — без изменений
+  (DECISIONS 456, ARCHITECTURE). Все четыре — с Version::V4 (exec_callback.rs since; Ekubo в ветке был с V3 + метка
+  кода completePayments — метка оставлена второй проверкой).
+  ОСТАЛОСЬ:
+  - T456-01 **СДЕЛАНО (CI зелёный: dc28e8fd, e136cbd8; ревью слияния — блокеров нет)** CI ветки t231/arb-merge (fmt, clippy -D warnings, тесты). Слияние проверено только глазами: исчерпывающие
+    match по Proto / PoolKind / PoolState / ExecKind / Params / VaultCurve, дубли mod / вариантов / ключей каталога,
+    поля LbBinData (v20 + hooks_parameters + swap_blocked) во всех литералах, SETTINGS_CASES по каждому ключу каталога.
+  - T456-02 **СДЕЛАНО (решение 457, 20.11.2026)** — исполнитель v4 собран одним разом: `contracts/build.sh`, ArbExecutor —
+    конвейером via-IR (обычным — 26 330 байт > EIP-170), out/ = v4: 21 775 байт (запас 2 801), SHA-256 bin-runtime
+    2bf86e58…0762; VirtualQuoter и out/v3/ побайтно прежние; evmtest против v4 — 205 проверок, все прошли; code.rs
+    out/ = V4, out/v3/ = V3; тесты под факт сборки (bsc_dex_executor_abi / _v2 / _v3 / _v3_live, exec_callback
+    lb20_only_v4 + via_ir_selector_form). cargo не запускался — проверка тестов в CI (T456-01).
+    ОСТАЛОСЬ после сборки (решение 457):
+    - T457-01 **СДЕЛАНО (решение 458, 20.11.2026; ветка t232/arb-v4-evmtest)** — EVM-сценарии шагов 22–25 в
+      contracts/evmtest с ОФИЦИАЛЬНЫМ кодом (FLUID / BALANCER_V3 / EKUBO — байткод развёртывания из официальных
+      репозиториев; LB20 — исходник тега, T458-01): FLUID —
+      fluid.mjs + fluid_cases.mjs (Instadapp/fluid-contracts-public@404d73f deployments/arbitrum: Liquidity, Admin/User
+      модули, Dex_USDC_ETH и его операции; ERC-20, нативный вход и выход, два шага, защита) — 21 проверка; BALANCER_V3 —
+      balancerv3.mjs (balancer/balancer-deployments@b55dc2b8 20241204-v3-vault + 20241205 weighted) — 25; EKUBO —
+      ekubo.mjs + ekubo_cases.mjs (EkuboProtocol/evm-contracts broadcast 42161: Core / MEVCapture @61d09da, Positions
+      @8a99714; ERC-20, нативный вход / выход, MEVCapture forward, защита) — 53; EKUBO с TWAMM (оба TWAMM) — 32 (T458-02);
+      LB20 — 17 (T458-01). Итог `node run.mjs`: 353 проверки (205 прежних + 148), ВСЕ ПРОВЕРКИ ПРОШЛИ. Подзадачи:
+      - T458-01 **СДЕЛАНО (решение 458; solc 0.8.10 — «да» Тиграна 20.11.2026, коммит 5d8ce4cc)** — LB20 (24):
+        contracts/evmtest/lb20.mjs, официальные LBFactory / LBPair / LBRouter lfj-gg/joe-v2@v2.0.0 (07f10212) + OpenZeppelin
+        @109778c1 (vendor/joe-v2), solc 0.8.10, optimizer runs 800 (foundry.toml тега), развёртывание как
+        script/deploy-core.s.sol, пресет binStep 10 (bips-config.sol); котировка — LBRouter.getSwapOut; обе стороны, через
+        несколько бинов, две доли, чужая пара / пара V2 / шаг LB по паре v2.0 — откат, v3 — «kind»; 17 проверок;
+        `node run.mjs` — 337, все прошли.
+      - T458-02 **СДЕЛАНО (решение 458)** — EKUBO с расширением TWAMM: contracts/evmtest/ekubo_twamm.mjs, оба TWAMM сети из
+        официальных broadcast 42161: 0xd4f1 (DeployAll run-1767194711580, сборка 61d09da) + Orders 0xff6c (DeployManagers
+        run-1767205373297, сборка 8a99714) и 0xd47f (DeployAll run-1777073880286, сборка 8c1b721) + Orders 0x3325 (DeployManagers
+        run-1777130801606, сборка 34bbea9), ядро общее; обмен через пул с
+        активным ордером: получено = котировка ядра с исполнением виртуальных ордеров до block.timestamp, на исполнителе
+        пусто, второй обмен в блоке — без исполнения (получено = котировка), forward к TWAMM — откат вызова расширения без
+        данных; по 16 проверок на каждый TWAMM (32).
+    - T457-02 Запись симуляции v4 на живых пулах (как tests/data/executor_v3_live_2026-11-17, решение 400): правило
+      deploy_gate сверяет запись с кодом текущей сборки — для v4 записи нет, поэтому «Развернуть исполнитель» для текущей
+      сборки ЗАКРЫТО (факт кода: deploy_gate::refusal → verdicts_of(V4) → «запись о другом коде»; тест
+      bsc_dex_executor_v3_live приведён к этому факту). Вопрос Тиграну: снимать запрет для v4 записью симуляции (как v3)
+      или иным правилом. Тексты запрета и подсказки need_v3 (deploy_gate.rs, WalletRow.svelte) говорят «v3 не принят» —
+      при текущей сборке v4 это неточно (у v3 запись принята; закрыт v4); правка — после ответа.
+      **Решение 459 (20.11.2026, ветка t233/arb-record-all) — запись подготовлена, ждёт прогона Тиграном:**
+      `tools/arbitrum_record/exec_v4_live.py` (входит в record_all.py) — eth_simulateV1 своего узла поверх блока H, код
+      contracts/out/ArbExecutor.bin-runtime (SHA-256 сверяется с ArbExecutor.sha256 до прогона) на пустом адресе X, (а)
+      покупка и (б) продажа (квотер в той же симуляции после (а)) по видам 19 Uniswap V4 без крючка и 23 Balancer V3 (их
+      судит правило 400, live_class.rs CLASSES), плюс 22 Fluid, 24 LB v2.0, 1 Uniswap V3, 0 Uniswap V2 (правило не судит —
+      свидетельство); 25 Ekubo в запись НЕ вошёл (шаг требует config / native / forward ключа и квотер MEVCaptureRouter —
+      не сделано, проверка шага — T457-01). Папка tests/data/executor_v4_live_<дата>/ — формат записи 17.11 (README со
+      строкой «sha256 симулированного bin-runtime: <sha>», summary.json, hooks_reject.json, calls.json, slots.json,
+      pools.json, raw_rpc.json). ФАКТ кода: запись сама по себе бот НЕ откроет — live_proof.rs вшивает одну запись
+      (include_str tests/data/executor_v3_live_2026-11-17) и судит её для V4 по SHA v4 → «запись о другом коде». После
+      записи (один коммит): live_proof.rs — для Version::V4 свои README / SUMMARY / REJECT из новой папки (RECORD по
+      версии в текстах), tests/bsc_dex_executor_v3_live.rs:255 (assert refusal().is_some()) — под факт новой записи, тест
+      записи v4 по образцу bsc_dex_executor_v3_live.rs.
+      Решения координатора (20.11.2026, вместо вопросов): (1) запись приёмки привязана к паре (версия кода, сеть) — ПЛАН
+      правки live_proof.rs после прихода записи: записи по ключу (Version, chainId), chainId — из README («- chainId:
+      42161») и поля chain_id строк summary.json записи (exec_v4_live.py пишет оба уже сейчас); кошелёк судится только
+      записью своей сети (verdicts_of(версия, сеть) — chainId площадки кошелька); записи для пары нет — все классы «не
+      проверен», шаги менеджеров не идут (осторожно, сделок нет). BSC-кошелёк с v4 при одной записи Arbitrum — «не
+      проверен»; запись v4 на BSC — только когда v4 будут ставить на BSC (тот же скрипт с адресами BSC). Запись v3
+      17.11 — пара (v3, 56): у неё chainId в README нет — при правке ключ этой записи задать в коде из её README
+      («свой узел BSC», адреса BSC) или дописать строку chainId в README_repo.md. (2) Пулы Balancer V3 с крючком, которые
+      бот берёт, ВКЛЮЧЕНЫ в запись по умолчанию (класс 23 у бота один): вид крючка — как pools/balancer_v3_hooks.rs kind
+      (static — крючок без динамической комиссии; surge — StableSurge из dex.bv3_stable_surge_hooks у «открытого»
+      выпуска Release::open; mev — MEV Capture из dex.bv3_mev_capture_hooks; списки — meta.json записи balancer_v3.py),
+      по --bv3-per-hook (2) пула на вид; вида нет — строка «нет пулов» с bv3_hook_kind в summary.json и «нет пула» в
+      README записи. Пулы, которые бот не берёт (крючок до / после обмена, чужой крючок динамической комиссии, StableSurge
+      у закрытого выпуска, пул не из фабрик списков), — pools.json skipped.
+      Ревью t233 (исправлено, DECISIONS 459): у вида 23 квотер «после (а)» и продажа — две симуляции (квотер Balancer V3
+      пишет балансы пула, Vault.quote не откатывает); x_left = null при неответе balanceOf(X) (пул не доказан, причина —
+      x_left_error); пул Balancer V3 с фабриками разных выпусков — skipped; SHA кода — по тексту с LF + .gitattributes.
+      **СДЕЛАНО (решение 461, 20.11.2026, ветка t235/arb-records) — по факту прогона Тиграна 20.11:** запись
+      tests/data/executor_v4_live_2026-11-20 (H = 525988838, chainId 42161, SHA bin-runtime v4 2bf86e58…0762) вшита;
+      записи приёмки — по ключу (Version, chainId), exec/executor/live_record.rs (v3 2026-11-17 — chainId 56 в коде);
+      кошелёк судится записью своей версии и сети площадки (dex.evm_chain_id), записи для пары нет — «не проверен»;
+      deploy_gate::refusal_at(chain), тексты «запись приёмки для версии X в сети chainId Y …» (и WalletRow.svelte);
+      тесты — tests/bsc_dex_executor_v4_live.rs (новый), bsc_dex_executor_v3_live.rs, bsc_dex_executor_v3.rs, deploy.rs,
+      pool_pass_hot_guard.rs. ВЕРДИКТ v4 в Arbitrum (правило live_rule.rs): принят только Uniswap V4 (19) без крючка (3
+      из 3); 19 с крючком — не принимается; 20 / 21 — пулов нет; 23 Balancer V3 — «нет пулов» (не проверен). Виды 22 /
+      24 / 1 / 0 правило не судит: в (б) получено = quoter_out_after_a (второе число лога — quoter_out «на H», до (а),
+      не сравнивается; у 24 он null — откат TreeMath__ErrorDepthSearch). Развёртывание v4 кошельком площадки Arbitrum
+      разрешено, BSC — закрыто (записи v4 в BSC нет). cargo не запускался — проверка в CI.
+      ОСТАЛОСЬ:
+      - T461-01 Класс 23 (Balancer V3) не проверен: запись balancer_v3.py упала (HTTP 429 GeckoTerminal), exec_v4_live
+        брал пулы bv3 из неё. После повтора balancer_v3.py (T461-02) — ПОВТОР exec_v4_live.py и новая папка
+        executor_v4_live_<дата> (строка SOURCES в live_record.rs заменяется в том же коммите).
+      - T461-04 СДЕЛАНО (ревью t235): pool_gate::decide читает сеть из ячейки окружения Ctx.evm_chain
+        (venues/bsc_dex/ctx_chain.rs, Ctx::chain_id — OnceLock + атомарная загрузка, без Store::resolve и строк;
+        перечитывание по рассылке изменений настроек — gateway/setting_cell.rs watch; main.rs создаёт ячейку при
+        старте каждой площадки DEX); live_proof::chain_of — то же. Сторож tests/pool_pass_hot_guard.rs: chain_id /
+        chain_from в списке, комментарий — Store::cache после решения 409 за ArcSwap. Запись v3 17.11: сеть — строка
+        «- chainId: 56» README_repo.md (сырой README не правится), live_record.rs читает её chain_in, константы нет.
+    - T457-03 Развёртывание v4 в Arbitrum — Тигран (после T457-02; запись разрешает развёртывание только в Arbitrum).
+  - T456-03 Записи своего узла Arbitrum (tools/arbitrum_record/README.md): sub_dex.py, kyber_elastic_v1.py, saddle.py,
+    woofi.py, fluid_t1.py, balancer_v3.py, curve_crypto.py, camelot_v2.py, algebra_dir_fee.py, lb_v20.py, lb_v22.py,
+    ekubo.py + ekubo_more.py → коммит tests/data/arbitrum_*_<дата>/ и снятие #[ignore] в тестах семейств.
+    **Решение 459 (20.11.2026, ветка t233/arb-record-all):** одна команда — `py tools\arbitrum_record\record_all.py
+    --rpc http://УЗЕЛ:8547` (Windows) / `python3 tools/arbitrum_record/record_all.py --rpc http://УЗЕЛ:8547` (Linux):
+    все скрипты выше + exec_v4_live.py (T457-02), только стандартная библиотека Python 3 (stdhttp.py вместо requests),
+    без вопросов, сводка и один zip. Ждёт прогона Тиграном. После записи снять #[ignore] (папка — последняя по имени
+    tests/data/<префикс><дата>):
+    - tests/arbitrum_sub_dex_live.rs — kyber_classic_created_and_math, balancer_v2_versions_match_vault,
+      iziswap_factory_registry (arbitrum_sub_dex_);
+    - tests/arbitrum_kyber_elastic_v1_live.rs — v1_math_matches_quoter, v1_factory_confirms_pool (arbitrum_kyber_elastic_v1_);
+    - tests/arbitrum_saddle_live.rs — swap_storage_is_seven_words, math_matches_calculate_swap (arbitrum_saddle_);
+    - tests/arbitrum_woofi_live.rs — implementation_has_selectors, oracle_state_decodes (arbitrum_woofi_);
+    - tests/arbitrum_fluid_t1.rs — math_matches_pool_and_resolver_on_record (arbitrum_fluid_t1_);
+    - tests/arbitrum_balancer_v3.rs — quote_matches_router_v3 (arbitrum_balancer_v3_);
+    - tests/arb_curve_crypto_live.rs — twocrypto_matches_get_dy, tricrypto_matches_get_dy, twocrypto_code_matches_source;
+      tests/arb_curve_crypto_v1_live.rs — crypto_v1_matches_get_dy, tricrypto_v1_matches_get_dy (arbitrum_curve_crypto_);
+    - tests/arb_dex_camelot_v2.rs — math_equals_pair_get_amount_out, pair_verified_by_v2_path, real_logs_parsed,
+      one_code_for_all_pairs (arbitrum_camelot_v2_);
+    - tests/arb_dex_algebra_dir.rs — pools_are_directional_raw_bitmap_code, math_equals_pool_swap;
+      tests/arb_dex_algebra_dir_events.rs — fee_and_swap_logs_rebuild_recorded_state (arbitrum_algebra_dir_fee_);
+    - tests/bsc_dex_lb_v20_arbitrum.rs — formula_equals_router_get_swap_out, calls_match_encoders_and_head_decodes,
+      verify_takes_recorded_pools, events_give_touched_bins, condition_slots_match_state (arbitrum_lb_v20_);
+    - tests/arb_dex_lb_v22_live.rs — formula_equals_get_swap_out, verify_and_recorded_calldata, pool_cond_slots_3_4_65545,
+      recorded_logs_decode (arbitrum_lb_v22_);
+    - tests/arbitrum_ekubo_live.rs — key_gives_pool_id, math_equals_router_quote, core_logs_route; tests/arbitrum_ekubo_more_live.rs
+      — initialized_key_gives_pool_id, native_math_equals_router_quote, twamm_math_equals_router_quote, core_load_logs_route
+      (arbitrum_ekubo_; ekubo_more пишет в ту же папку).
+    Записи приёмки v4 (executor_v4_live_) тест с #[ignore] не ждёт — нужна правка live_proof.rs (T457-02).
+    **Прогон 20.11.2026 (решение 460, ветка t234/arb-merge-2):** узел Тиграна — Nitro, state-scheme=path (состояние
+    только последних ~128 блоков). Прошло 10 из 14: sub_dex, kyber_elastic_v1, saddle, woofi, fluid_t1, curve_crypto,
+    algebra_dir_fee, lb_v20, ekubo, exec_v4_live. Упали: balancer_v3 — HTTP 429 GeckoTerminal на ?page=4 (страницы
+    подряд без паузы); camelot_v2 — eth_getLogs {-32002 «request timed out»} на топик-фильтре без address окном
+    2 000 000 блоков (18 окон от 525985036 назад — fee/stable 0, 491 с); lb_v22 — eth_getCode на блоке, взятом до
+    500 с поиска HooksParametersSet: «historical state … is not available»; ekubo_more — не запущен: поиск блока ядра
+    делением по eth_getCode старых блоков (блок 262992493 — нет состояния). Исправлено (решение 460): GeckoTerminal —
+    пауза и повтор при 429 (gt.py); долгие поиски логов / GeckoTerminal — до выбора блока B во всех скриптах, где были
+    после (camelot_v2, lb_v22, ekubo_more, sub_dex, balancer_v3, kyber_elastic_v1, ekubo, algebra_dir_fee,
+    exec_v4_live); таймаут eth_getLogs — окно пополам; блок ядра Ekubo — broadcast-файлы (416469411); нижняя граница
+    camelot_v2 — PairCreated первой пары фабрики; ответ «historical state …» — исключение (в запись не попадает).
+    Пустоты в прошедших записях: ekubo — 0 пулов (адрес пула GeckoTerminal «<ядро>-<PoolId>», исправлено); sub_dex —
+    0 пулов у всех 11 фабрик (за 2 000 000 блоков событий нет; был поиск назад до --max-pools — заменён, п. 9 ниже); exec_v4_live — вид 23
+    «нет пулов» (нет записи balancer_v3). Без правки — вопросы / факты Тиграну: woofi — --base не задан (bases пуст,
+    query нет), WooPP.wooracle() = 0xf9b0c8ee13ae2fc0665764ecbdb417685dea8081 ≠ --oracle 0xCf4E…34Ec (woonetwork/docs);
+    kyber_elastic_v1 — у 14 из 20 пулов GeckoTerminal все 14 котировок QuoterV2 откатились, у 2 — часть,
+    getTicksInRange «out of gas» у 4 пулов (тиков нет); algebra_dir_fee — quoteExactInputSingle с кортежем (quoter_v2)
+    откатился во всех 12 вызовах у всех 5 пулов (виртуальный квотер и quoter_v1 ответили); curve_crypto — у 2 пулов
+    Twocrypto (0xb79bbc5c…2b7f, 0x5f0985a8…b18c) все get_dy откатились (data 0x); логи за 2000 блоков: ekubo core_logs
+    и kyber_elastic_v1 logs — 0. Повтор: `python3 tools/arbitrum_record/record_all.py --rpc http://127.0.0.1:8547
+    --date 2026-11-20 --only sub_dex,balancer_v3,camelot_v2,lb_v22,ekubo,ekubo_more,exec_v4_live`.
+    **Разбор пустот (решение 462, ветка t234/arb-merge-2):**
+    1) woofi — оракул: wooracle() пула 0xf9b0…8081 (факт цепи) ≠ 0xCf4E…34Ec документации; бот сверяет wooracle() = dex.oracle
+       (verify_woo.rs) — **dex.oracle Arbitrum = 0xf9b0c8ee13ae2fc0665764ecbdb417685dea8081** (dex-settings-arbitrum.md §4.6
+       исправлен); на Sourcify адрес не найден — state() по ABI вида покажет повтор. woofi.py: оракул — с цепи, базы — токены
+       событий WooSwap пула за --log-blocks (кроме quoteToken() = USDC 0xaf88…5831), без ручных параметров.
+    2) kyber_elastic_v1 — все 20 пулов GeckoTerminal: factory() = 0xC7a5…8C4A (Elastic v2, docs.kyberswap.com «Elastic
+       Contract Addresses»), квотер был v1 (0x0D12…8C1f): он считает адрес пула от своей фабрики (QuoterV2.sol L40-L45) —
+       у 14 пар пула v1 нет (getPool v1 = 0) → откат «0x»; у 6 пар пул v1 есть — котировался пул v1 (у 2 на крупных суммах
+       «ERC20: transfer amount exceeds balance»). **Настройки бота для kyberswap_elastic_arbitrum были неверны** (v1) — теперь
+       kyber_elastic + адреса v2 (§4.3). «out of gas» getTicksInRange(pool, MIN_TICK, 0) — 4 пула с tickDistance 8 и 10
+       (массив 221 820 / 177 457 слов; газ памяти 3a + a²/512 ≈ 96 / 62 млн) — T451-03. Скрипт: версия по factory(), квотер
+       и читатель своей версии, пулы v1 — getPool v1 для пар GeckoTerminal; тики ещё частями (--tick-chunk); pools.json — v1,
+       pools_v2.json — v2.
+    3) algebra_dir_fee — quoter_v2: у 0x0Fc7…a76E (Sourcify 42161 contracts/lens/Quoter.sol:Quoter) в ABI только
+       quoteExactInputSingle(address,address,uint256,uint160); кортежного варианта нет → откат «0x» во всех 60 вызовах.
+       Бот для вида — только виртуальный квотер (quoter_calls.rs virtual_only) — не задет. Скрипт: вариант без селектора в
+       коде квотера не вызывается (skipped).
+    4) curve_crypto — 0xb79b…2b7f (v2.1.0) и 0x5f09…b18c (v2.0.0): D() = 99 875 751 290 812 287 и 97 308 451 761 717 643
+       < 10^17; get_y математики: `assert _D > 10**17 - 1` (twocrypto-ng 89c8dfb prod-v2.1.0 L240, d612fde v2.0.0 L236,
+       CurveCryptoMathOptimized2.vy) — факт протокола (пул почти пуст); наш crypto_y2.rs (lim2::d_ok) — тоже None.
+       crypto v1: pool_count фабрики 0xE5De…3A69 = 0, Curve API getPools/arbitrum/factory-crypto — 0 пулов; тест
+       crypto_v1_matches_get_dy — #[ignore] с этой причиной; скрипт пишет сырой ответ pool_count (раньше откат = 0).
+    5) логи kyber за 2000 блоков — 0: окно (GeckoTerminal в момент записи — 0 обменов за m30 у всех 20 пулов). Окно
+       --log-blocks 2 000 000, таймаут — пополам, логи — после фазы состояния, время границ окна — в logs.json.
+    Повтор решения 462: обязательно kyber_elastic_v1 и woofi (записи 20.11 неполные), curve_crypto — по желанию (сырой
+    pool_count v1), algebra_dir_fee — не нужен (запись полная; quoter_v2 у Camelot нет): `python3
+    tools/arbitrum_record/record_all.py --rpc http://127.0.0.1:8547 --date 2026-11-20 --only kyber_elastic_v1,woofi,curve_crypto`
+    (+ скрипты повтора решения 460 выше, если ещё не повторялись).
+    **sub_dex без скана истории, потолок времени (решение 460, п. 9–10, ветка t234/arb-merge-2):** факт узла Тиграна —
+    sub_dex.py с поиском событий создания назад окнами eth_getLogs за 37 мин прошёл ~144 млн блоков из ~526 млн (на
+    каждом окне таймаут и деление). Теперь (sub_dex_find.py): KyberSwap Classic — хвост allPools(i) трёх фабрик + пулы
+    GeckoTerminal kyberswap_classic_arbitrum со своей factory(); Balancer V2 — пулы GeckoTerminal balancer_arbitrum,
+    фабрика по isPoolFromFactory; iZiSwap — реестр pool(x, y, fee) по парам токенов (токены пулов сети GeckoTerminal,
+    --izi-token). Событие создания — только для теста kyber_classic_created_and_math (p["log"]): узким окном eth_getLogs
+    вокруг блока pool_created_at GeckoTerminal (блок — бинпоиск по времени заголовков eth_getBlockByNumber; заголовки
+    старых блоков у Nitro есть — docs.arbitrum.io run-classic-node). Пул без события — kyber.json pools_no_log (тест его
+    не читает). Потолок времени --time-limit 600 с: sub_dex — пишет найденное, код 3 с причиной; camelot_v2 — «искали с
+    блока X по Y, событий N», запись дальше. Повтор: `python3 tools/arbitrum_record/record_all.py --rpc
+    http://127.0.0.1:8547 --date 2026-11-20 --only sub_dex` (+ camelot_v2, если ещё не повторялся). Открыто: у
+    KyberSwap Classic событие есть только у пулов, которые есть в GeckoTerminal; если pool_created_at GeckoTerminal не
+    совпадёт с блоком создания (окно ±1 сут) — pools пуст, причина в log_search, тест так и скажет «нет ответов роутеров».
+  - T462-01 KyberSwap Elastic v1 (Legacy) на Arbitrum: пулы есть (getPool фабрики v1 для 6 пар пулов GeckoTerminal), в
+    GeckoTerminal их нет — отдельный DEX (вид kyber_elastic_v1, поиск по фабрике 0x5F1d…D50a) в таблицу покрытия; id и
+    включение — Тигран.
+    **Прогон Тиграна 20.11 (решение 461, ветка t235/arb-records):** 10 из 14 — tests/data/arbitrum_record_2026-11-20
+    (summary.json, logs/). Подключены *_2026-11-20: sub_dex, kyber_elastic_v1, saddle, woofi, fluid_t1, curve_crypto,
+    algebra_dir_fee, lb_v20, ekubo (только ekubo.py), executor_v4_live. #[ignore] СНЯТ: saddle (2), fluid_t1 (1),
+    arb_curve_crypto_live (3), arb_curve_crypto_v1_live tricrypto_v1, arb_dex_algebra_dir (2), arb_dex_algebra_dir_events
+    (1), bsc_dex_lb_v20_arbitrum (5). ОСТАВЛЕН с причиной (тест ↔ запись):
+    - T461-02 Повторить упавшие: balancer_v3.py (HTTP 429 GeckoTerminal на page=4 — повтор позже / меньше --gt-pages),
+      camelot_v2.py (eth_getLogs: request timed out — окно событий меньше), lb_v22.py (eth_getCode: historical state …
+      is not available — узел без нужного состояния), ekubo_more.py (блок ядра Ekubo — historical state not available;
+      задать --ekubo-from-block). Тесты balancer_v3 / camelot_v2 / lb_v22 / ekubo_more — под #[ignore] до записи.
+    - T461-03 Записи прошли, но не годятся для тестов (оставлены как есть, сырые не правились):
+      sub_dex — logs_total 0 у всех фабрик (событий создания за окно --blocks 2 000 000 нет) → 3 теста под #[ignore];
+      повтор с большим --blocks. kyber_elastic_v1 — у всех 20 пулов GeckoTerminal factory() = 0xc7a590291e07…, не
+      фабрика v1 0x5F1dddbf… (getPool v1 = 0 у 14, другой адрес у 6) → 2 теста под #[ignore]; правка скрипта (брать
+      пулы фабрики v1) — вопрос Тиграну: что за фабрика 0xc7a5… и нужна ли она боту. woofi — wooracle() WooPP =
+      0xf9b0c8ee…, оракул записи 0xCf4EA168… (умолчание скрипта), bases пуст (record_all без --base) → 2 теста под
+      #[ignore]; повтор с --oracle 0xf9b0c8ee… и --base. arb_curve_crypto_v1_live crypto_v1 — pool_count фабрики
+      0xE5De15A9… = 0 → под #[ignore]; вопрос Тиграну (фабрика v1 на Arbitrum без пулов). ekubo — пулов 0 (id
+      GeckoTerminal «ядро-PoolId», ekubo.py берёт только 66-значные) и логов ядра 0 за 2000 блоков → 3 теста под
+      #[ignore]; правка ekubo.py (id после «-»), больший --log-blocks.
+    - T461-05 СДЕЛАНО (CI 20.11, DECISIONS 461 «Дополнение»): math_equals_pool_swap падал на 0x7cccba… zfo=false
+      34138539 (наш 20685556826089520 > пула 20685556221166268). Причина — цикл обмена Algebra V1/V1.9 шагает по строкам
+      битмапа (TickTable.nextTickInTheSameRow), мы прыгали к следующему инициализированному тику. Исправлено
+      (math/swap_algebra.rs NextTick::Row / Linked; quote/pool_quote.rs algebra_next) — затрагивает и BSC THENA Fusion.
+      Ручной расчёт по записи — 29 из 29 полных случаев = swap пула. Проверить зелёный CI: arb_dex_algebra_dir,
+      bsc_dex_algebra_math, bsc_dex_algebra_out_of_window, bsc_dex_algebra_integral_live.
+      Ревью t235 (исправление факта): «исполнения THENA Fusion нет» — НЕВЕРНО. Пулы thena_fusion исполняются через
+      ArbExecutor (exec_kind.rs:158 → ExecKind::Algebra, since V1; quote/graph_exec.rs:65-71 — раньше проверки
+      !tradable; циклы — exec/cycle_gate.rs form). Смена на Row меняет котировку и глубину живых сделок BSC через THENA
+      Fusion (выход был завышен, теперь не больше swap пула). Комментарии «V1/V1.9» → «V1.9» (swap_algebra.rs,
+      families.rs:54, pool_quote.rs algebra_next). Доказательство на BSC — T461-06.
+    - T461-06 **ВАЖНО, вопрос Тиграну + запись.** Факт Sourcify (сеть 56, полное совпадение runtime и creation,
+      проверено 20.11 WebFetch): официальный AlgebraPool Deployer THENA 0xc89F69Baa3ff17a842AB2DE89E5Fc8a8e2cc7358
+      (таблица контрактов THENA — docs.thena.fi/thena/official-links, «List of smart contracts»; там же AlgebraFactory
+      0x306F06C147f064A010530292A1EB6737c3e378e4 — Sourcify match, Quoter 0xeA68020D6A9532EeC42D4dB0f92B83580c39b2cA)
+      собран solc 0.7.6 из исходника, где contracts/libraries/Constants.sol `TICK_SPACING = 60`, а TickTable.toggleTick и
+      nextTickInTheSameRow СЖИМАЮТ тик на Constants.TICK_SPACING (`tick /= Constants.TICK_SPACING`; `sdiv(tick,
+      tickSpacing)`), PoolImmutables.tickSpacing() = Constants.TICK_SPACING — это код AlgebraV1 (cryptoalgebra/AlgebraV1
+      master libraries/TickTable.sol, тот же текст), не AlgebraV1.9 main 779b5681 (TickTable без сжатия — rowNumber =
+      tick >> 8). Бот читает thena_fusion СЫРЫМ битмапом (pools/load_algebra.rs: слово = tick >> 8, тик бита = w·256 + b,
+      spacing 1) и шагает режимом Row по сырым строкам. Если пулы фабрики созданы этим деплоером — карта тиков бота у
+      THENA Fusion неверна (читаются не те слова; при сжатом битмапе окно сырых слов вокруг tick >> 8 — другие слова),
+      котировка и глубина THENA Fusion неверны, а пулы исполняются через ArbExecutor. Вывод о пулах — только после записи:
+      `python3 tools/bsc_record/thena_fusion.py --rpc http://127.0.0.1:8545` (свой узел BSC; Windows — `py
+      tools\bsc_record\thena_fusion.py --rpc http://127.0.0.1:8545`) → tests/data/bsc_thena_fusion_<дата>/ и zip (путь —
+      последняя строка). Запись пишет оба толкования слов битмапа (сырое и сжатое), код пулов и keccak, poolDeployer
+      фабрики, CREATE2 по хешам AlgebraV1.9 main (0xbce37a54…97e7) и AlgebraV1 master (0x6ec6c9c8…94a4), котировки
+      виртуального квотера и Quoter THENA. Тест tests/bsc_thena_fusion_row_live.rs (3 теста под #[ignore]) —
+      bitmap_is_raw_as_bot_reads решает толкование; math_equals_pool_swap — режим Row. Вопрос Тиграну: до записи —
+      выключить исполнение THENA Fusion (снять вид thena_fusion из dex.kind площадки BSC) или ждать записи?
+      **Закрыто (решение 487, слияние BSC t256):** запись tests/data/bsc_thena_fusion_2026-11-20 (этот скрипт) — у 7 из 8
+      пулов сырые слова пусты, сжатые дают тики; решение 463 перевело thena_fusion на сжатый битмап (проверка —
+      tests/bsc_thena_fusion_record.rs). tests/bsc_thena_fusion_row_live.rs удалён; сырой режим Row остался у Camelot V3.
+    **Второй прогон 20.11 (решение 477, ветка t246/arb-records-2):** прогоны 180614 (kyber_elastic_v1, woofi, balancer_v3,
+    curve_crypto, lb_v22, ekubo, ekubo_more, exec_v4_live прошли; camelot_v2 упал — таймаут eth_getLogs) и 185857
+    (sub_dex, camelot_v2 прошли) — tests/data/arbitrum_record_2026-11-20_r2/. Записи с тем же именем заменены.
+    #[ignore] СНЯТ: woofi (2), kyber_elastic_v1 (2), sub_dex (3), balancer_v3 (1), camelot_v2 (4), lb_v22 (4),
+    ekubo_more initialized_key_gives_pool_id и native_math_equals_router_quote. Python-пересчёт кода бота по записям —
+    расхождений 0 (elastic v1 66/66, dmm 18/18, Balancer V2 531/531, Balancer V3 20/20, Camelot V2 282/282, LB V2.2
+    336/336, Ekubo native 9/9). Тест lb_v22 pool_cond_slots_3_4_65545 исправлен: getReserves = слот 4 − слот 5
+    (_protocolFees), LBPair.sol v2.2.0. T461-02, T461-03 по sub_dex / kyber / woofi / balancer_v3 / camelot_v2 / lb_v22 /
+    ekubo_more — ЗАКРЫТЫ записью. Крупный файл: arbitrum_kyber_elastic_v1_2026-11-20/pools_v2.json — 20 423 737 байт
+    (тесты не читают).
+    ОСТАЛОСЬ:
+    - T477-01 Класс 23 (Balancer V3) у v4 НЕ принят: в записи один пул (GeckoTerminal balancer_v3.py отдал 1 пул на
+      странице 1, страницы 2–5 пусты), нужно ≥ 2; (а) получено ≠ quoter_out — квотер (а) пишется eth_call на H, обмен —
+      в блоке симуляции H + 1 (время +12 с), у пула курсы токенов. Правка exec_v4_live.py (квотер (а) — в симуляции того же
+      блока, как у (б)) и источник пулов Balancer V3 (кроме GeckoTerminal) — СДЕЛАНО (решение 478): квотер (а) — своя
+      симуляция на том же блоке H + 1 (quoter_out; на H — quoter_out_h), пулы — ещё getPools() фабрик списков. Нужна
+      запись заново: `python3 tools/arbitrum_record/record_all.py --rpc http://127.0.0.1:8547 --date 2026-11-20 --only
+      exec_v4_live` (папка executor_v4_live_<дата H> — если дата другая, строку SOURCES в live_record.rs сменить).
+    - T477-02 Ekubo — РАЗОБРАНО (решение 479): PoolKeyIndex 0x8989…5718 официальный (тот же Core), но реестр
+      добровольный («Optional registry», register() — по желанию) — пулы не зарегистрированы; бот берёт ключ из истории
+      PoolInitialized ядра. ekubo.py — ключ из pool_initialized.json, окно логов ядра 100 000 блоков; ekubo_more идёт
+      первым. Нужна перезапись: `python3 tools/arbitrum_record/record_all.py --rpc http://127.0.0.1:8547 --date
+      2026-11-20 --only ekubo_more,ekubo`; потом снять #[ignore] в tests/arbitrum_ekubo_live.rs (3) и, если в окне есть
+      логи, ekubo_more core_load_logs_route.
+      Запись 21.11 (решение 479): ключи у 4 пулов из PoolInitialized, 15 + 9 расчётов = Router.quote, логов ядра 12 —
+      #[ignore] снят у tests/arbitrum_ekubo_live.rs (3) и ekubo_more core_load_logs_route. T477-02 ЗАКРЫТ.
+    - T477-01 Запись 21.11 (решение 478): (а) и (б) = квотер у всех 14 пулов; класс 23 — 1 пул, доказан, но нужно ≥ 2 —
+      НЕ принят. Из 56 пропущенных пулов Balancer V3 35 — на паузе (PoolPaused), они заняли лимит --bv3-max-pools;
+      скрипт теперь отсекает Vault.isPoolPaused. Нужна перезапись: `python3 tools/arbitrum_record/record_all.py --rpc
+      http://127.0.0.1:8547 --date 2026-11-20 --only exec_v4_live` (папка executor_v4_live_<дата H>; другая дата —
+      сменить путь в live_record.rs и tests/bsc_dex_executor_v4_live.rs). Если пулов без паузы с ненулевым балансом
+      меньше 2 — класс 23 на Arbitrum не доказать этой записью (факт сети), это вопрос Тиграну.
+    - T477-01 ЗАКРЫТ (запись 21.11, четвёртый прогон, H = 526043647, решение 478): класс 23 Balancer V3 ПРИНЯТ — 2 пула
+      из 2 (0x5418…2161 без крючка, 0x412d…6fc6 StableSurge), у каждого (а) и (б) статус 1, x_left 0, получено = кредит
+      Swap = квотер в том же состоянии; класс 19 без крючка — принят (3 из 3). Исполнитель v4 в Arbitrum: шаги Uniswap V4
+      без крючка и Balancer V3 допущены.
+    - T477-03 Ekubo TWAMM: 3 пула TWAMM — ликвидность 0, ордеров нет: twamm_math_equals_router_quote под #[ignore].
+    - T477-04 camelot_v2: FeePercentUpdated / SetStableSwap / PairCreated — 0 (потолок 600 с вышел на поиске нижней
+      границы, окна событий не прочитаны); real_logs_parsed проверяет только Sync (49).
+    - T477-05 tricrypto_v1 (arb_curve_crypto_v1_live) — новое состояние того же пула, Python-пересчёта не было: смотреть CI.
+    - T477-06 Приёмка v4: (v4, 42161) — принят только Uniswap V4 без крючка (3 из 3); развёртывание v4 в Arbitrum разрешено.
+  - T456-04 Выкладка: настройки области «DEX» площадки arb_dex по docs/notes/arbitrum/dex-settings-arbitrum.md и
+    FIRST_RUN (dex.kind, адреса, списки фабрик) — задаёт Тигран; dex.pool_enabled — Тигран; развернуть v4 — T457-03.
+  - T456-05 Вопрос Тиграну: шаг EKUBO — с исполнителя v4 (единая схема версий решения 456), в ветке t230 был «с v3 по
+    метке кода». Подтвердить.
+- **Решение 473 (20.11.2026, ветка t243/arb-balancer-v2-more) — T450-03…07: Balancer V2 других фабрик на Arbitrum;
+  cargo не запускался (формат — вручную).** Сделано: dex.balancer_pool (вид фабрики ключа), composable stable v1–v6,
+  stable phantom, meta-stable, LBP (20210721, 20211202), investment, managed v1/v2, linear (linear_v1 / linear) —
+  чтение, математика, события, проверка, квотер (queryBatchSwap), исполнение (шаг BALANCER без изменений —
+  переразвёртывать исполнитель не нужно). Ключи и адреса — docs/notes/arbitrum/dex-settings-arbitrum.md §2.11. Задачи:
+  - T473-01 Запись своим узлом: `python3 tools/arbitrum_record/balancer_v2_more.py --rpc http://<узел>:8547` (входит в
+    record_all.py; recnode.py / gt.py / stdhttp.py решения 460 скопированы из origin/t234/arb-merge-2 байт в байт), коммит
+    tests/data/arbitrum_balancer_v2_more_<дата>/, снять #[ignore] в tests/arbitrum_balancer_v2_more_live.rs. Запись же
+    даёт порядок ликвидности видов по GeckoTerminal (gt.json, тест liquidity_by_type): из песочницы api.geckoterminal.com
+    закрыт (HTTP 403 прокси) — порядок работ взят по номерам задач T450-03…07, не по ликвидности.
+  - T473-02 Обмен с BPT самого пула (composable stable, stable phantom, managed): вход / выход ликвидности одним токеном
+    (_swapWithBpt: _payProtocolFeesBeforeJoinExit, фактический выпуск, StableMath join/exit; managed — _onJoinSwap /
+    _onExitSwap с AUM-комиссией). Сейчас такие пары не берутся (verify_balancer.rs, load_balancer_more_curve.rs).
+  - T473-03 Кеш курса, истекающий к блоку исполнения: **ревью 473 — сделано**. У токена с expires < время чтения + 1
+    второй набор множителей с курсом поставщика (VaultCurve::V2 StableRated.alt), обмен — по худшему из двух; откат
+    getRate поставщика у токена с действующим и не истекающим кешем пул не отключает.
+  - T473-04 managed после TokenAdded / TokenRemoved: **ревью 473 — сделано** (сброс неизменяемого по событию и по
+    несовпадению токенов, load_balancer_fixed.rs forget).
+  - T473-05 Подписка до первого чтения пула: **ревью 473 — сделано** (admit.rs: набор topic0 вида изменился за чтение —
+    постоянная подписка собирается заново).
+- **Решение 472 (20.11.2026, ветка t242/arb-curve-plain) — T450-02 (Curve StableSwap 2021: 2pool и plain-пулы старой
+  фабрики) и вопрос 3 решения 453 (откаты tweak_price); cargo не запускался — проверка в CI.** Подробно — DECISIONS 472.
+  Исполнитель переразвёртывать не нужно (шаги CURVE и STABLE_U256 есть, контракт не менялся); доделка 2 — шаг
+  CURVE_ETH = 28 только для пулов с нативным ETH: нужна сборка исполнителя v5 (T472-08). Задачи:
+  - T472-01 Запись своим узлом: `python3 tools/arbitrum_record/curve_plain.py --node <HTTP узла Arbitrum>` (или
+    record_all.py — скрипт подключён в record_steps.py) → tests/data/arbitrum_curve_plain_<дата>/; снять #[ignore] у
+    tests/arbitrum_curve_plain_live.rs (наш выход = get_dy побайтно, A_precise = формула рампы, селектор exchange из 4
+    аргументов в коде 2pool и реализаций — факт для шага CURVE; у 2pool наличие 4-аргументной перегрузки до записи —
+    по официальному ABI curve-js).
+  - T472-02 Повторить запись curve_crypto.py (в неё добавлены вызовы состояния tweak_price и — доделка 472 —
+    симуляция exchange: exchange_sim) → снять #[ignore] у tests/arb_curve_crypto_tweak_live.rs. **Запись-симуляция
+    сделана** (tools/arbitrum_record/curve_sim.py): eth_call exchange(i, j, dx, 0) на суммах лесенки от пустого адреса
+    с подменой баланса и разрешения (слоты — поиском по кандидатам mapping Solidity / Vyper / ERC-7201 одним eth_call,
+    как exec_v4_live.py решения 459), одним пакетом на блоке состояния; тест сверяет «модель: откат ↔ пул откатил».
+    Та же симуляция — в curve_plain.py (tests/arbitrum_curve_plain_live.rs model_revert_equals_pool_revert).
+  - T472-03 **Доделка 2 (решение координатора «делать»): модель для crypto v1 фабрики (CurveCryptoSwap2ETH) сделана** —
+    math/crypto_tweak_v1.rs (tweak_price L531-L640 целиком: цена сделки / newton_y, newton_D, raise «Loss»,
+    проверяемое `virtual_price * 2 - 10**18` при not_adjusted = False — `and` Vyper 0.3.1 укорачивается
+    (old_codegen/expr.py v0.3.1 L960-L969), подстройка, `_claim_admin_fees` L475-L513 с gulp фактических балансов после
+    обмена, mint_relative CurveTokenV5.vy L212-L225, newton_D, get_xcp); чтение — pools/load_crypto_tweak_v1.rs:
+    not_adjusted — eth_getStorageAt слота 33 (раскладка Vyper 0.3.1 по порядку объявлений, номера строк — шапка
+    файла), ETH пула — eth_getBalance (монета WETH20 = dex.native_wrapped; не задана — модели нет), totalSupply LP,
+    fee_receiver фабрики, balanceOf монет — в пачке чтения; token / factory / coins — память по (площадка, пул).
+    Запись: curve_crypto.py пишет tweak_v1 (слоты 28, 31–34 и сверку с геттерами D / xcp_profit_a / virtual_price /
+    admin_actions_deadline, get_eth_index фабрики) → снять #[ignore] у tests/arb_curve_crypto_tweak_v1_live.rs (на
+    20.11 pool_count фабрики v1 = 0 — сверять нечего, T456-03). Оговорка T472-04 (оракул — на блоке чтения).
+    **Не сделано (факты для следующего шага):** tricrypto 2021 (0x960e…5590, «2021-09-13. Arbitrum/CryptoSwap.vy»,
+    Vyper 0.2.15) — свой tweak_price L433-L560 (упакованные цены с assert p < PRICE_MASK, внешняя математика
+    CurveCryptoMath3 — newton_D / newton_y / geometric_mean / sqrt_int, норма по сумме квадратов, admin_fee_receiver
+    L165, token / coins — константы L109-L117, gulp — только balanceOf L402-L405); слот not_adjusted = 37: в Vyper
+    0.2.15 каждая функция с @nonreentrant получает СВОЙ слот (vyper v0.2.15 semantics/validation/data_positions.py
+    set_storage_slots — 6 функций L592…L1082 → слоты 0–5), затем переменные L119-L165 по порядку (balances — 3 слота):
+    D 31, xcp_profit_a 35, virtual_price 36, not_adjusted 37, is_killed 38 — сверка соседних слотов на записи нужна.
+    EURS/2CRV (curve_crypto2_v1, Vyper 0.3.0) — свой `_claim_admin_fees` (admin_fee_receiver, token — константа),
+    раскладка 0.3.0 не считалась. До их моделей котировка этих пулов откаты tweak_price не учитывает (как было).
+    **Доделка 3:** tricrypto 2021 — math/crypto_tweak_v1_3.rs (tweak_price L433-L577: цена сделки и ix, last_prices
+    через newton_y, упаковка `assert p < PRICE_MASK`, Loss, норма Σ ratio², sqrt_int, подстройка; `_claim_admin_fees`
+    tweak_price tricrypto НЕ зовёт — вызовы только claim_admin_fees L962 и apply_new_parameters L1092); EURS/2CRV —
+    та же модель, что 2ETH, с отличиями текста (CryptoTweakV1.factory = false: условие подстройки без norm / old,
+    без подстройки — без `_claim_admin_fees`; admin_fee_receiver, gulp balanceOf); оракул обоих — сохранённый
+    (геттер — переменная), пересчёт на время блока чтения — math/crypto_math3.rs (halfpow, sqrt_int — CurveCryptoMath3
+    d7d04cd L253-L310). Чтение — pools/load_crypto_tweak_list.rs: слоты not_adjusted по исходнику компилятора —
+    tricrypto (Vyper 0.2.15) 37, EURS (Vyper 0.3.0) 36: в 0.2.15 и 0.3.0 каждая функция с @nonreentrant получает свой
+    слот (data_positions.py set_storage_slots обеих версий), шесть функций у обоих — слоты 0–5; номера строк — шапка
+    файла. **Пока номер слота не подтверждён записью (CONFIRMED = false — и у фабрики, слот 33), модель не применяется:
+    вызовы tweak не читаются, котировка как раньше, причина — один раз в журнал (Warn, dex.pool).** Запись:
+    curve_crypto.py — tweak_v1 у tricrypto_v1.json и crypto2_v1.json (слоты 9, 31, 35–38, 41 / 6, 9, 30, 34–37, 40 и
+    slot_check); тест tests/arb_curve_crypto_tweak_list_live.rs (#[ignore]); после записи и зелёного slot_check —
+    CONFIRMED = true (load_crypto_tweak_list.rs, load_crypto_tweak_v1.rs).
+    **Ревью доделки 3:** (а) EURS — шаг и норма как в исходнике: только внутри `if needs_adjustment`, шаг =
+    self.adjustment_step без max(…, norm / 5) («2021-10-30. EURS/CryptoSwap.vy» L639-L645); все отличия текста EURS
+    от фабрики (diff) — в шапке math/crypto_tweak_v1.rs и у CryptoTweakV1.factory. (б) Факт кода: пока CONFIRMED =
+    false, обмен, который откатился бы в tweak_price (Loss / PRICE_MASK / claim), котируется как рабочий, но до
+    отправки его ловит проба: путь исполнителя — exec/executor/trade.rs L149 → remeasure.rs L107 sim::run
+    (eth_simulateV1 execute поверх блока сборки; откат — сделки нет, sim.rs шапка), цикл DEX ↔ DEX —
+    exec/cycle_exec.rs L207 simulate::run (откат — сделки нет), бандл — exec/bundle_send.rs L111 simulate::run_valued.
+    Газа на откат нет; цена — упущенный сигнал и время пробы. Не ловится только откат, возникший между блоком
+    сборки и блоком включения (оракул по времени блока — T472-04). (в) Токен LP EURS 0x3dFe…B9CA:
+    curve-crypto-contract scripts/deploy_arbi_eurs_metapool.py L30 — `CurveTokenV4.deploy("Curve EURS-2Crv",
+    "crvEURSUSD")`; contracts/tricrypto/CurveTokenV4.vy mint_relative L175-L188 — та же формула (d_supply =
+    supply·frac/10^18, прибавка при d_supply > 0), что у CurveTokenV5 фабрики; ABI деплоя «2021-10-30.
+    EURS/token.json» содержит mint_relative. Код в сети с исходником побайтно не сверен (файл в репозитории позже
+    поднят до `# @version 0.3.1`, коммит 0a3a5a1) — сверка формулы на записи (симуляция exchange).
+    Прежний разбор (доделка 472) — ниже.
+    CurveCryptoSwap2ETH.vy (curve-factory-crypto 7ed1011, Vyper 0.3.1): tweak_price L531-L640, вызов из _exchange
+    L643-L740 с xp[j] = баланс ПОСЛЕ выхода с комиссией (не y из newton_y, как у NG) и p_i (цена сделки при dx, dy >
+    10^5; иначе last_prices через newton_y — свои assert'ы); откаты: newton_D (D_unadjusted), newton_y (p_i = 0),
+    geometric_mean(xp, True) (сортировка — иная начальная точка, чем у geometric_mean(x, False) math/crypto_v1_2.rs),
+    `raise "Loss"` при virtual_price < old и future_A_gamma_time == 0 (L579; у NG — `>`), проверяемое
+    `virtual_price * 2 - 10**18` (при not_adjusted = False). Блокеры: (1) `not_adjusted: bool` (L153) — без геттера:
+    ветка подстройки зависит от него; читать — eth_getStorageAt по номеру слота раскладки Vyper 0.3.1 (считается по
+    порядку объявлений; сверить на записи соседними публичными слотами) — не сделано; (2) ветка без подстройки при
+    not_adjusted зовёт _claim_admin_fees (L475-L513): внешние Factory.fee_receiver() и token.mint_relative (L494,
+    L497), «gulp» балансов по balanceOf / self.balance, newton_D по ним, деление на (vprice − fees) — модель требует
+    ещё чтений (xcp_profit_a, admin_fee, fee_receiver, токен LP); (3) totalSupply — у отдельного токена LP (token()).
+    Tricrypto 2021 CryptoSwap.vy (curve-crypto-contract d7d04cd, Vyper 0.3.1) — то же (not_adjusted L158 без геттера,
+    tweak_price L434, raise «Loss» L522, mint_relative L416). Без модели котировка v1 откаты tweak_price не учитывает
+    (как было); симуляция exchange в записи curve_crypto.py (exchange_sim, T472-02) покажет факт откатов v1 —
+    по ней решать (вопрос Тиграну: делать ли модель с чтением слота not_adjusted и ветки _claim_admin_fees).
+  - T472-04 Вопрос Тиграну (время блока, как вопрос 1 решения 453): оракул модели — price_oracle() на блоке чтения;
+    tweak_price считает его на блоке обмена (то же скользящее среднее с бо́льшим временем). Влияет только на ветку
+    подстройки price_scale (её assert'ы — newton_D и доли x/D).
+  - T472-05 **Сделано:** `and` Vyper укорачивается, как в Python — документация Vyper той же версии (vyperlang/vyper
+    v0.3.10 docs/types.rst L48-L49; та же фраза — в v0.2.12…v0.3.9) и кодогенерация (vyper/codegen/expr.py
+    L588-L603: `x and y` → `if x { y } { 0 }`); пулы NG — `# pragma version 0.3.10`. Модели crypto_tweak2.rs /
+    crypto_tweak3.rs считают правую часть условия только при virtual_price > 10^18 (ложного отката нет).
+  - T472-06 Настройки (выкладка): дочерний ключ dex.sub_dex у `curve_arbitrum@arbitrum` вида `curve_stableswap_plain`:
+    dex.stable_pools = [2pool], dex.factory = 0xb17b…d031, dex.curve_plain_implementations = Plain2/3/4Basic
+    (docs/FIRST_RUN.md, docs/notes/arbitrum/dex-settings-arbitrum.md §2.12); dex.pool_enabled — Тигран, после T472-01.
+  - T472-07 **Сделано (доделка 472):** реализации фабрики Curve Sidechain/L2 Plain*Optimized (rates = 10^18 —
+    initialize `assert _rate_multipliers[i] == PRECISION`, тот же расчёт), Plain*Balances (balances(i) = balanceOf −
+    admin_balances, обмен по тем же; каждым блоком), Plain*ETH (метка 0xEeee… = dex.native_wrapped,
+    StableData.native), Plain2BasicEMA / Plain2ETHEMA (save_p после обмена — math/stable_ema.rs, StableData.ema,
+    признак — ответ ma_exp_time()) — вид curve_stableswap_plain (сверка текста get_D / get_y / get_dy с Plain*Basic —
+    curve-factory f389123 / 5272fd2); fraxbp 0xC9B8…40d5 — пул фабрики на Plain2Basic (Curve API
+    getPools/arbitrum/factory, implementationAddress 0x54e8…7A62) — берётся фабрикой; метапулы фабрики (MetaUSD,
+    MetaUSDBalances над 2pool; MetaFraxUSD, MetaFraxUSDBalances над fraxbp; Curve API getPools/arbitrum/factory 20.11, крупнейшие —
+    Lumi LUAUSD/2CRV ≈ 3,3 млн USD, Overnight xUSD/FRAXBP ≈ 21 тыс., MIM/2CRV ≈ 6 тыс.) — новый вид
+    curve_stableswap_meta (вариант CurveMeta: курс LP = get_virtual_price базового пула, D_P циклом;
+    load_curve_meta.rs, проверка — get_base_pool фабрики = coins(1)). Настройки — dex-settings-arbitrum.md §2.12.
+  - T472-08 **Доделка 2: шаг сделан в исходнике** — CURVE_ETH = 28 (contracts/ArbExecutor.sol _curveEth,
+    ICurveEthPool в IPools.sol; data = abi.encode(int128 i, int128 j, bool ethIn); bnbFrom: 2 установки + 2 сброса,
+    счётчик теста 9), Version::V5 (как в ветке t240, решение 470; сборки v5 нет — version_of её не узнаёт,
+    runtime_of — причина), Rust: Params::CurveEth (kind.rs), ExecKind::CurveEth (since = V5), entry.rs — у пула Curve
+    с нативной монетой пары шаг CURVE_ETH при кошельке v5, у v1–v4 / несверенного — отказ с причиной «нужен
+    исполнитель v5». **Нужна сборка v5** (contracts/build.sh — вне агентов; артефакты не собирались) и
+    переразвёртывание исполнителя; EVM-сценарий не писался. Прежняя постановка:
+    exchange{value}(int128, int128, dx, 0) с WETH.withdraw перед входом и WETH.deposit пришедшего ETH (как
+    STABLE_U256_BNB, но селектор exchange(int128,int128,uint256,uint256)). До него пулы Plain*ETH / Plain2ETHEMA —
+    граф и котировка; шаг не строится (exec/executor/entry.rs: «у вида curve шага с BNB нет»). Пулы Arbitrum на ETH-
+    реализациях на 20.11 почти пусты (Curve API: ETHMAXY/ETH ≈ 0,18 USD). Нужна пересборка исполнителя v5.
+  - T472-09 Текст развёрнутого кода реализаций Balances / ETH / Optimized / EMA и метапулов на Arbitrum не сверен с
+    исходником побайтно (Sourcify и обозреватели блоков недоступны из среды — прокси 403): модель — по официальному
+    репозиторию curvefi/curve-factory, сверка формулы — запись (get_dy и симуляция exchange, T472-01).
+  - T472-10 **Закрыто решением 481 (20.11.2026): исходники ren и wstETH найдены в Sourcify и сохранены (docs/sources/curve_arbitrum/); ren — вид curve_stableswap_plain (список), wstETH — вид curve_stableswap_oracle; запись — T481-01.** **Доделка 2:** EURS/2CRV 0xA827…c27e — исходник найден: curvefi/curve-crypto-contract 41e6289
+    «deployment-logs/2021-10-30. EURS/CryptoSwap.vy» (адрес — deployment.log там же), Vyper 0.3.0; geometric_mean /
+    newton_D / newton_y / halfpow / get_xcp / _A_gamma — тот же текст, что CurveCryptoSwap2ETH (сверка функций
+    скриптом), exchange — те же действия + `assert not is_killed`. Подключён видом `curve_crypto2_v1` (вариант
+    CryptoPair протокола tricrypto 2021: dex.stable_pools, coins(k), is_killed(), математика TwoV1; шаг STABLE_U256);
+    настройки — dex-settings-arbitrum.md §2.12, FIRST_RUN; запись — curve_crypto.py --crypto2-v1-pool →
+    crypto2_v1.json, снять #[ignore] у crypto2_v1_matches_get_dy (tests/arb_curve_crypto_v1_live.rs).
+    WBTC/renBTC и ETH/wstETH — исходник НЕ найден: в curvefi/curve-contract, curve-contract-polygon,
+    curve-crypto-contract, curve-factory, curve-factory-crypto, curve-js (только адреса и ABI, pools/arbitrum.ts
+    L98, L152) их нет; поиск кода GitHub по адресам — только сторонние списки адресов; Sourcify и Arbiscan из среды
+    недоступны (прокси 403 / client_error). Запись curve_crypto.py --code-pools пишет eth_getCode обоих и 2pool
+    (code_pools.json) — для разбора; нужен верифицированный исходник (Тигран: Arbiscan / Sourcify). Доделка 3: повторно —
+    repo.sourcify.dev и sourcify.dev (WebFetch: SITE_BLOCKED / client_error); поиск кода GitHub в curvefi: ren —
+    адреса в curve-api, curve-js, metaregistry, brownie-tutorial; wstETH — curvefi/curve-zaps
+    contracts/arbitrum/wsteth/pooldata.json: pool_types «oracleRate», LP — отдельный CurveTokenV3, монета 1 с курсом
+    оракула (use_rate) — исходника пула нет ни в одном репозитории curvefi. Прежняя запись:
+    0x3E01dD8a5E1fb3481F0F589056b428Fc308AF0Fb (≈ 37 тыс. USD), ETH/wstETH 0x6eB2dc694eB516B16Dc9FBc678C60052BbdD7d80
+    (≈ 69 тыс. USD; нативный ETH), crypto-метапул EURS/2CRV 0xA827a652Ead76c6B0b3D19dba05452E06e25c27e (≈ 3 тыс. USD) —
+    Curve API getPools/arbitrum/main и crypto. Метапулы MetaBTCRen (база — renBTC, LP не сам пул) — не берутся.
+    Нужен верифицированный исходник (Тигран: Arbiscan / Sourcify) — потом вид.
+  - T472-11 **Сделано (доделка 2):** тест tests/bsc_dex_depth_book.rs hysteresis_journal_and_rise_signal — без пауз
+    угаданной длины: ожидание записи журнала опросом (20 мс, предел 10 с), конец окна второй проверки — от момента,
+    когда отложенная запись видна; окно 2 с. Управляемое время tokio невозможно без правки кода: окно пула — от
+    std::time::Instant (depth_log.rs), tokio::time::pause его не двигает. Поведение кода не менялось.
+- **Решение 482 (20.11.2026, ветка t251/arb-dex-forks-config от origin/feat/arbitrum 2ca8dba2) — форки поддержанных
+  видов настройками и статус всех 49 DEX таблицы 3 покрытия Arbitrum; код бота не менялся, cargo не запускался.**
+  Сделано: настройки Joe DEX / LFJ V1, Rubicon CLMM и Aquila, Swapsicle V1, ZyberSwap Stableswap, Arbitrum Exchange V2 /
+  V3 (docs/notes/arbitrum/dex-settings-arbitrum.md §7, docs/FIRST_RUN.md), запись tools/arbitrum_record/forks_482.py
+  (+ forks_482_v2.py, forks_482_v3.py; шаги forks_482 и zyber_stable в record_steps.py), тест
+  tests/arbitrum_forks_482_live.rs (#[ignore]). Таблица покрытия — docs/notes/arbitrum/dex-coverage-arbitrum.md (итог
+  в шапке). Задачи (железное правило — у каждого незакрытого DEX):
+  - T482-01 Запись своим узлом: `python3 tools/arbitrum_record/record_all.py --rpc http://УЗЕЛ:8547 --only
+    forks_482,zyber_stable`; коммит tests/data/arbitrum_forks_482_<дата>/ и arbitrum_zyber_stable_<дата>/, снять
+    #[ignore] у трёх тестов tests/arbitrum_forks_482_live.rs. Тест проверяет: getAmountsOut Joe / Aquila и симуляцию
+    обмена в паре (наш выход принят, выход + 1 откатан) у всех четырёх V2; тики TickLens (Rubicon — свой, Arbidex V3 —
+    Uniswap) = ticks(t) пула; математика V3 = виртуальный квотер (и QuoterV2 Rubicon). Затем ключи из §7 и
+    dex.pool_enabled — Тигран. Расхождение в любом пункте — DEX не включать, разбор. Правило координатора: TickLens
+    Rubicon не сошёлся с TickLens Uniswap / ticks(t) — dex.tick_lens Rubicon CLMM = TickLens Uniswap 0xbfd8…F573. Тест
+    по правилу не падает: печатает, какой TickLens совпал с ticks(t) пула («TickLens «dex» / «uniswap» = ticks(t)»), —
+    этот факт записать в README записи и в dex-settings-arbitrum.md §7.6.
+  - T482-02 **Сделано (доделка 482; ревью t251 — только у DEX без справочника индексатора, indexer_gap.rs; пары с
+    ignoredForRouting не берутся):** Swapline V1 — поиск по фабрике getAllLBPairs (factory_ask.rs Q::Lb) и подписка
+    LBPairCreated (created_log.rs) у lb_v21; запись — reg.json forks_482.py, тест tests/arbitrum_forks_482_reg_live.rs
+    (T482-01). У lb_v22 подписки и поиска нет (фабрика V2.2 не сверялась) — если появится lb_v22 вне GeckoTerminal,
+    отдельная задача.
+  - T482-03 **Сделано (доделка 482; ревью t251):** Metric V1 — перечисление фабрики (pools/metric_list.rs: nextPoolIdx,
+    idxToPool, getImmutables; прочитанные номера не повторяются) и подписка PoolCreated (created_log.rs) — только у DEX
+    без справочника индексатора (indexer_gap.rs), подписка — только при dex.evm_chain_id = 42161 (подпись подтверждена
+    исходником Arbitrum); на BSC (metric-bsc в списке индексатора) — как раньше. Запись и тест — T482-01; тест проверяет и topic0 событий пула
+    abi_metric::topics() (записаны на BSC) в коде пула Arbitrum — если их там нет, пул на Arbitrum не слушается событиями,
+    нужен разбор (событие пула Swap в исходнике Arbitrum опубликовано).
+  - T482-04 Omni Exchange Flux (код = PancakeSwap Infinity CL): у вида нужны Universal Router, Permit2, CLQuoter — у Omni
+    не найдены (сайт мёртв, адреса Vault / CLPoolManager — только адаптер DefiLlama). Проверено по поручению
+    координатора: шаг исполнителя INF_CL есть (exec_kind.rs, исполнитель v3) — исполнять без Universal Router можно, но
+    нужен (1) вариант вида Infinity CL «только исполнитель» (tradable = нет, без UR / Permit2 в required) и (2) квотер:
+    contracts/VirtualQuoter.sol умеет только обмен самого пула (quoteExactIn / quoteMetric / quoteSmardex / quoteIzi),
+    для пула внутри менеджера — новая функция Vault.lock / lockAcquired → правка контракта и пересборка (solc запрещён в
+    ветке — «нужна пересборка VirtualQuoter»). CLQuoter PancakeSwap привязан к своему Vault. TVL $5.85 (DefiLlama 20.11.2026).
+  - T482-05 Integral SIZE — оракульный Relayer (не AMM): новое семейство; функции квоты Relayer в docs не названы —
+    читать исходник Relayer (адрес docs.integral.link 0x3c69…5f42) в Sourcify, затем вид.
+  - T482-06 Clipper — RFQ: адаптер по API Clipper (документация API и адрес пула Arbitrum не найдены; api.clipper.exchange
+    20.11 не ответил) — найти официальную документацию.
+  - T482-07 Rubicon Classic — ончейн-книга заявок RubiconMarket (0xc715…2db8, RubiconRouter 0x7b24…7f03 — docs Rubicon):
+    новое семейство «книга заявок».
+  - T482-08 ZipSwap — семейство не установлено: фабрика 0x9e34…F05E (DefiLlama) и пары в Sourcify не верифицированы,
+    официального источника нет; нужен исходник пары (Тигран: Arbiscan) или запись обмена.
+  - T482-09 Clober V1 — книга заявок (MarketFactory 0x24aC…111D, clober-dex/core README): новое семейство.
+  - T482-10 Zyberswap V3 — Algebra v1.0.0 (сжатый битмап на шаг 60): вариант вида после слияния ветки BSC с решением 463
+    (сжатый битмап Algebra V1); фабрика 0x9c2a…8544 (DefiLlama, Sourcify match), квотер — виртуальный.
+  - T482-11 Lighter V1 — книга заявок (Factory 0x3564…8af4, DefiLlama, Sourcify match): новое семейство; события книги
+    сверить по OrderBook.sol.
+  - T482-12 E3 — фабрика LB V2.1 с изменениями; исходник реализации пары 0xd9751ad0767ecd82c815628b0c3402aa788c11f3 в
+    Sourcify нет — нужен verified-исходник (Тигран: Arbiscan), затем сверка с lb_v21.
+  - T482-13 Swaap Maker V2 — RFQ (/v1/rfq/quote, ключ x-api-key от Swaap Labs): адаптер RFQ.
+  - T482-14 Nabla Finance — оракульный AMM (обмен с данными обновления Pyth): новое семейство; исходник пулов в Sourcify
+    не найден — NablaFinance/integration-guide.
+  - T482-15 BrownFi V2 — оракульный AMM с интерфейсом пары V2 (BrownFiV2Factory 0xD053…592E, Sourcify exact_match):
+    новое семейство.
+  - T482-16 BrownFi V3 — оракульный AMM (BrownFiV3Factory 0xe498…F1F0, Sourcify exact_match; OracleGateway не прочитан):
+    новое семейство.
+  - T482-17 Raindex — книга заявок Rainlang (OrderBook v5 0x8dF8…94ab): новое семейство (quote2 / takeOrders3).
+  - T482-18 Mangrove — ончейн-книга (Mangrove 0x109d…3f61, MgvReader 0x7E10…1875): новое семейство.
+  - T482-19 Skate AMM — кросс-сетевой, обмен не атомарный (executeTask отдельным вызовом): решение Тиграна, как брать
+    (координатор 20.11: способ — позже, задача остаётся).
+  - T482-20 Kaliber — PropAMM, официальных docs / адресов / исходника нет (контракты 0x1545…7312, 0xf639…FC63 — DefiLlama,
+    Sourcify 404): найти официальный источник.
+  - T482-21 1inch Aqua — SwapVM-стратегии, тейкеры — KYB-резолверы 1inch (tx.origin держит токен): решение Тиграна (KYB) и
+    новое семейство (координатор 20.11: способ — позже, задача остаётся).
+  - T482-22 PancakeSwap X — интенты UniswapX (ExclusiveDutchOrderReactor, адрес — DefiLlama): роль филлера — решение
+    Тиграна (координатор 20.11: способ — позже, задача остаётся).
+  - T482-23 Renegade — dark pool / RFQ (ключ EXTERNAL_MATCH_KEY от команды): адаптер RFQ.
+  - T482-24 Tristero — dark pool / маршрутизатор по API (getQuote, Permit2): адаптер по API.
+  - T482-25 Cables Finance — RFQ / perp, адресов в docs нет, TVL 0: найти официальный источник спота.
+  - T482-26 Alphix — пул Uniswap V4 с крючком JIT (beforeSwap добавляет ликвидность): своя математика по StateView
+    исказит выход — котировать квотером V4 или не допускать крючок (hooks.allowed_groups) — решение Тиграна
+    (координатор 20.11: способ — позже, задача остаётся).
+  - T482-27 Chronos V2 — движок и адреса не найдены (docs недоступны; DefiLlama deadUrl, TVL $252): найти.
+  - T482-28 Horiza — форк Uniswap V3 (пост Horiza), фабрика не найдена (deadUrl, TVL $660): найти и сверить.
+  - T482-29 Thick — код и адреса не опубликованы (TVL $413): найти официальный источник.
+  - T482-30 Tegro — CLOB, TVL Arbitrum нет, объём 0 с 29.07.2025: подтвердить, жив ли на Arbitrum; если жив — семейство
+    «книга».
+  - T482-31 Level AMM — оракульный своп общего LP-пула perp-биржи (адреса docs.level.finance; объём 0 с 23.01.2026):
+    решение Тиграна — брать ли оракульный своп (не пул).
+  - T482-32 Vertex — закрытие на Arbitrum только по новости The Block 08.07.2025: подтвердить официальным источником.
+  - T482-33 Bunni V2 — закрытие только по DefiLlama (deprecated, «hacked») и новости The Block: подтвердить официальным
+    заявлением; пулы — крючок в PoolManager uniswap-v4-arbitrum.
+- **Решение 484 (20.11.2026, ветка t253/arb-wombat от origin/feat/arbitrum 2ca8dba2) — Wombat Exchange на Arbitrum (строка
+  96 исследования dex49/0.md, TVL ≈ $138,7 тыс.); cargo / solc не запускались (формат — вручную).** Сделано: вид `wombat`
+  (Proto::Wombat, вид ядра StableSwap с частью StableData.wombat): математика CoreV2 / PoolV2 / HighCovRatioFeePoolV2 /
+  DynamicPoolV2 один-в-один (math/wombat_core.rs, math/wombat.rs; v1-core 2ac067b8 = развёрнутые реализации по пути
+  обмена — docs/sources/wombat_arbitrum/README.md), чтение (load_wombat*.rs, каждым блоком), события, проверка,
+  квотер quotePotentialSwap, глубина, шаг WOMBAT = 30 исполнителя (только сборка v5 — номер выдан координатором), запись
+  tools/arbitrum_record/wombat.py, тест tests/arbitrum_wombat_live.rs (#[ignore]). Задачи:
+  - T484-01 Запись своим узлом: `python3 tools/arbitrum_record/wombat.py --node http://УЗЕЛ:8547` (или record_all.py —
+    шаг wombat), коммит tests/data/arbitrum_wombat_<дата>/, снять #[ignore] в tests/arbitrum_wombat_live.rs; затем
+    ключ области «DEX» (предложение `wombat-exchange-arbitrum@arbitrum`) и настройки — docs/FIRST_RUN.md, раздел
+    «Wombat Exchange в сети Arbitrum (решение 484)»; dex.pool_enabled — Тигран.
+  - T484-02 Нужна пересборка исполнителя v5 (шаг WOMBAT = 30 — только в исходнике contracts/ArbExecutor.sol, `out/` —
+    v4) и EVM-сценарий шага (официального байткода пула в репозитории развёртываний Wombat нет — v1-core без
+    deployments; сценарий не написан). До сборки пулы Wombat — граф, котировки и сигналы; шаг не строится с причиной
+    «нужен исполнитель v5». Номер 30: 29 — шаг ветки Basin, 31 — Shell (сверить при слиянии).
+  - T484-03 Cross Chain Pool 0xe788…1145 — реализация CrossChainPool (0xe1C8…F454, Sourcify match, solc 0.8.18) на
+    CoreV3 / PoolV3 / HighCovRatioFeePoolV3: этих файлов в wombat-exchange/v1-core нет (только Sourcify); CoreV3.sol против
+    CoreV2 — 551 строка отличий, PoolV3 против PoolV2 — 381 (сравнение в браузере). Математика не портирована — пул в
+    dex.stable_pools не вписывать (без реализации в списках чтение откажет). Нужно: перенести исходник Sourcify в
+    docs/sources/ и порт CoreV3 (отдельная задача). TVL пула — не проверялся.
+  - T484-04 Пауза актива: у реализаций без геттера isPaused (PausableAssets c39623 — Main…qWOM, FRAX-MAI-USD+, frxETH)
+    бот читает слот 201 (storageLayout Sourcify всех 12 реализаций — факт); сверка слота с isPaused — записью T484-01
+    (у реализаций с геттером).
+  - T484-05 Глубина (quote/wombat_depth.rs): опорная цена — средняя цена пробы 1/PROBE_DIV баланса входа (формулы
+    маржинальной цены в контракте нет) — оценка размера, не сверяемая величина.
+  - T484-07 **Сделано (ревью t253):** монеты, активы и decimals пула — в памяти (pools/load_wombat_memo.rs) до
+    AssetAdded / AssetRemoved или проверки пула; каждым блоком — одна пачка меняющихся величин (vary_calls) и слоты;
+    шаг WOMBAT: minimumToAmount = 1 (нулевой выход откатывает _checkAmount пула; swap_out и симуляция записи — тот же
+    минимум) и отказ «native» для метки 0xEeee…; вход 0 в quote_from — ветка else PoolV2 (выход = ideal, haircut 0, без
+    проверки cash); ошибка dex_list, кроме «не задана», — причина отказа; в описаниях настроек реализаций — новую
+    реализацию добавлять только после сверки storageLayout (слот _pausedAssets = 201).
+  - T484-06 Динамические пулы: getRelativePrice() активов (PriceFeedAsset, WstETHAsset, AnkrStakingAsset, jUsdcAsset)
+    читается вызовом на блоке, формула цены не повторяется; DynamicAsset.sol развёрнутых активов ≠ v1-core (052671 против
+    a55783) — бот её не использует.
+- **Решение 485 (20.11.2026, ветка t254/arb-basin от origin/feat/arbitrum 2ca8dba2) — Basin (скважины Beanstalk) на
+  Arbitrum, вид basin_well; cargo не запускался (формат — вручную).** Сделано: математика ConstantProduct2 / Stable2
+  (math/basin_well.rs, тест на официальных векторах — tests/basin_well_math.rs), чтение, события Swap / Shift, проверка
+  (реестр Aquifer / прокси по слоту ERC-1967, сверка calcReserve на сдвинутых резервах — ревью t254), квотер getSwapOut, глубина, шаг BASIN = 29 (v5, только
+  исходник), настройки dex.basin_*, запись tools/arbitrum_record/basin.py, тест tests/arbitrum_basin_live.rs (#[ignore]).
+  Итог по DEX (таблицу покрытия правит t251): Basin — код есть, ждёт записи узла и сборки исполнителя v5. Задачи:
+  - T485-01 Запись своим узлом: `python3 tools/arbitrum_record/basin.py --node http://УЗЕЛ:8547` (или record_all.py — шаг
+    basin), коммит tests/data/arbitrum_basin_<дата>/, снять #[ignore] в tests/arbitrum_basin_live.rs; затем завести ключи
+    (docs/FIRST_RUN.md, раздел Basin) и включить dex.pool_enabled — Тигран.
+  - T485-02 Адрес ConstantProduct2 скважин: docs.basin.exchange — 0xBA15000450Bf6d48ec50BD6327A9403E401b72b4, а
+    ReseedBean.sol Beanstalk (6db8c07c L68-L69), которым развёрнуты скважины, — 0xbA1500c28C8965521f47F17Fc21A7829D6E1343e
+    (оба — ConstantProduct2, Sourcify exact_match; расчёт обмена одинаковый, отличия — calcRate / calcReserveAtRatio и
+    version). То же у MultiFlowPump: docs — 0xBA150002…5b13, ReseedBean.sol — 0xBA150000D1E90C3a1FC4CC385bB43C403b4a006c
+    (на обмен не влияет). Какая функция у каждой скважины — покажет запись T485-01 (wells.json, поле function); её
+    адрес — в dex.basin_cp2 (вопрос Тиграну: ставить оба адреса или только фактический).
+  - T485-03 id Basin у GeckoTerminal (ключ области «DEX» arb_dex) не сверен: api.geckoterminal.com из среды агента закрыт
+    (403 прокси). Решает Тигран; до этого скважины — из dex.stable_pools (index.factory_scan = да) и BoreWell.
+  - T485-04 Нужна сборка исполнителя v5 (шаг BASIN = 29; вместе с T472-08) и EVM-сценарий шага с официальным кодом
+    скважины (байткод Well — в репозитории Basin нет развёртываний Arbitrum; сценарий не написан). Номер 29 координатором
+    не выдан — взят следующий свободный (на 20.11 ни в одной ветке origin не занят): при слиянии сверить.
+  - T485-05 **Частично сделано (ревью t254, решение координатора по правилу Тиграна 20.11):** прокси признаётся по
+    слоту ERC-1967 (eth_getStorageAt — прямое чтение хранилища, не ответ контракта getImplementation), реализация из
+    слота — по wellImplementation Aquifer'а из dex.basin_well_impls; проверяется при каждом полном чтении (в том числе
+    после Upgraded) и в проверке кандидата — не прошло, пул недостоверен с причиной. Осталось: хеш кода самого прокси.
+    Правило координатора: если код прокси у всех шести официальных скважин одинаков — сравнивать keccak кода скважины
+    с keccak кода прокси из dex.stable_pools первого чтения; иначе — только слот. Факт «одинаков ли код» покажет запись
+    T485-01 (code.json, sha256 по адресу скважины) — до неё сделано «только слот».
+- **Решение 481 (20.11.2026, ветка t248/arb-curve-ren-wsteth от origin/feat/arbitrum 3d852b93) — T472-10: пулы Curve
+  WBTC/renBTC и ETH/wstETH (Arbitrum) по исходникам Sourcify; cargo не запускался (формат — вручную).** Сделано:
+  исходники как есть — docs/sources/curve_arbitrum/ (SHA-256 совпал с посчитанным в браузере); ren — та же математика,
+  что у 2pool (вид curve_stableswap_plain, вторым адресом dex.stable_pools); wstETH — вид curve_stableswap_oracle
+  (pools/load_curve_oracle.rs, курс оракула пачкой на блоке, каждым блоком; шаг CURVE_ETH = 28 без правки контракта).
+  Задачи:
+  - T481-01 Запись своим узлом: `python3 tools/arbitrum_record/curve_ren_wsteth.py --node http://УЗЕЛ:8547` (или
+    record_all.py — шаг curve_ren_wsteth), коммит tests/data/arbitrum_curve_ren_wsteth_<дата>/, снять #[ignore] в
+    tests/arbitrum_curve_ren_wsteth_live.rs; затем завести ключи (docs/notes/arbitrum/dex-settings-arbitrum.md §2.12:
+    ren — в dex.stable_pools ключа curve_stableswap_plain; дочерний ключ curve_stableswap_oracle) и включить
+    dex.pool_enabled — Тигран.
+  - T481-02 is_killed обоих пулов без геттера (`is_killed: bool` — не public). ren: kill_deadline в __init__ не задаётся
+    (= 0), kill_me требует `kill_deadline > block.timestamp` — остановить пул нельзя (факт исходника L114-L115, L918-L921).
+    wstETH: kill_deadline = время развёртывания + 60 суток (L153), до этого срока пул могли остановить — факт текущего
+    состояния покажет симуляция exchange записи T481-01 (пул остановлен — все симуляции откатятся).
+  - T481-03 Исполнение wstETH — только исполнитель v5 (шаг CURVE_ETH, сборки v5 нет — T472-08); до неё пул — граф и
+    котировка, шаг не строится с причиной.
+- **Решение 483 (20.11.2026, ветка t252/arb-ramses от origin/feat/arbitrum 2ca8dba2) — три DEX Ramses на Arbitrum
+  вариантами существующих видов; cargo не запускался (формат — вручную).** Сделано: `v3_fork_ramses` (Ramses CL,
+  DefiLlama ramses-cl / GeckoTerminal ramses-v2 — T433-043, T433-112), `slipstream_ramses` (Ramses CL V2, DefiLlama
+  ramses-cl-v2 / GeckoTerminal ramses-v3-arbitrum — T433-081, T433-141), `solidly_v1_ramses` (Ramses Legacy V2,
+  DefiLlama ramses-legacy-v2 / GeckoTerminal ramses-legacy-arbitrum — T433-080, T433-140): код, тест под #[ignore],
+  запись tools/arbitrum_record/ramses.py; итог по каждому DEX: код есть, ждёт записи (T483-01) и, у Ramses CL, пересборки
+  контрактов (T483-02). Расхождения с исследованием dex49 (факт исходников, DECISIONS 483): у Ramses CL обмен берёт
+  currentFee(), а fee() — начальная; обратный вызов — ramsesV2SwapCallback; у линии V3 FeeAdjustment(address, uint24)
+  шлёт ещё и фабрика (бот слушает событие пула). Задачи:
+  - T483-01 Запись своим узлом: `python3 tools/arbitrum_record/record_all.py --rpc http://УЗЕЛ:8547 --only ramses`
+    (или `python3 tools/arbitrum_record/ramses.py --rpc http://УЗЕЛ:8547`), коммит tests/data/arbitrum_ramses_<дата>/,
+    снять #[ignore] в tests/arbitrum_ramses_live.rs. Проба обмена — eth_call с переопределением кода вызывающего
+    (ramses_calls.py): если узел откажет в вызове от адреса с кодом — причина в записи, сверка CL-линий только по
+    QuoterV2 (линия V3); тогда — вопрос, чем сверять старую линию (официального квотера у неё нет).
+  - T483-02 Ramses CL V2 (`slipstream_ramses`) исполним сейчас исполнителем любой версии (uniswapV3SwapCallback,
+    RamsesV3Pool.sol L662, L671; шаг V3 — с v1), сверка — официальный QuoterV2. Ramses CL исполним и сверяем только после пересборки: исполнитель v5 (ramsesV2SwapCallback добавлен в
+    contracts/ArbExecutor.sol; сборка v5 — T472-08) и виртуальный квотер (ramsesV2SwapCallback в
+    contracts/VirtualQuoter.sol, out/VirtualQuoter.* не пересобран). До этого: dex.v3_swap_callback задана — пулы без
+    пути исполнения с причиной (exec_callback.rs), виртуальный квотер откатывается (сверка не проходит — сделки нет).
+  - T483-03 Ключи (Тигран, после T483-01): docs/FIRST_RUN.md раздел «Ramses на Arbitrum (решение 483)»; dex.pool_enabled.
+  - T483-04 Комиссия пары легаси меняется setPairFee фабрики (событие фабрики SetPairFee(address indexed, uint256
+    indexed), IPairFactory.sol L11) — подписки нет, перечитывание — путём решения 273 (перед сверкой с квотером) и при
+    каждом чтении пула. Подписка на SetPairFee — ускорение, не сделано (TVL легаси по DefiLlama — 0).
+  - T483-06 GeckoTerminal id `ramses` (T433-029): к какой линии Ramses относятся его пулы — не установлено (в исследовании
+    dex49 строки нет); после T483-01 — сверить factory() пулов этого id и задать dex.kind.
+  - T483-05 Фабрика старой CL-линии 0xAA2cd7477c451E703f3B9Ba5663334914763edF8 — нет на официальной странице адресов
+    Ramses и в найденных официальных репозиториях; основание — DefiLlama «ramses-cl» и Sourcify exact_match прокси →
+    RamsesV2Factory. Нужен официальный источник (Тигран) или принять факт цепи (factory() пулов — запись T483-01).
+- **Решение 486 (20.11.2026, ветка t255/arb-shell от origin/feat/arbitrum 2ca8dba2) — Shell Protocol на Arbitrum (вид
+  shell_proteus, Proteus за учётом Ocean); cargo / solc не запускались.** Адреса — docs.shellprotocol.io
+  contract-addresses; исходники — Sourcify 42161 и Shell-Protocol/Shell-Protocol (aaa0ccf, bfbba01); факты — DECISIONS 486.
+  Задачи:
+  - T486-01 Запись своим узлом: `python3 tools/arbitrum_record/shell.py --node http://УЗЕЛ:8547 --pools … --tokens …`
+    (или record_all.py — шаг shell, адреса — record_steps.py), коммит tests/data/arbitrum_shell_<дата>/, снять #[ignore]
+    в tests/arbitrum_shell.rs. Затем завести две DEX (Ocean v3 и Shell v2; id области — Тигран: у GeckoTerminal id Shell
+    не сверен) с dex.kind = shell_proteus, dex.vault, dex.stable_pools, dex.proteus_utility_v1 / _v2 (docs/FIRST_RUN.md)
+    и включить dex.pool_enabled — Тигран. Пулы списка становятся кандидатами только при index.factory_scan = да
+    (источник stable_list.rs, решение 292).
+  - T486-02 Шаг SHELL = 31 — только исходник (нужна сборка исполнителя v5 и EVM-сценарий с официальным кодом Ocean —
+    байткод Ocean есть только в сети/Sourcify, в официальном репозитории развёртываний нет; сценарий не написан).
+  - T486-03 Не покрыто: EvolvingProteus (ETH+USD 0xa2dB…7Ea, реализация 0x618b21dd… — Sourcify exact_match, параметры
+    меняются по времени блока; сторона USD — LP-токен Stablepool), адаптеры Ocean v3 (2CRV Adapter 0x02b4…42e4,
+    wstETH-WETH-BPT Adapter 0xA8Cb…5B4A — Curve2PoolAdapter / BalancerAdapter, Sourcify) — обмен через них — те же пулы
+    Curve 2pool / Balancer, которые бот уже видит напрямую; отдельная ценность — вопрос Тиграну.
+  - T486-04 Пулы, у которых сторона — LP-токен другого пула учёта (Stablepool: LP DAI+USDC / LP USDT+USDC; ETH+USD,
+    WBTC+USD — LP Stablepool): маршрут через deposit/withdraw учёта — отдельная модель; сейчас такие пулы не берутся.
+  - T486-05 Пул wstETH+ETH 0x2EaB95A9… — реализация 0x9019dc9e… на Sourcify не верифицирована (BASE_FEE() = 8000 по
+    чтению 20.11.2026); исходника нет — не считается. В docs у этой строки ссылка эксплорера ведёт на адрес WBTC+USD
+    (0x3402D87D…) — расхождение документации, сообщить Тиграну.
+  - T486-06 Токены сторон TOUCOIN+ETH, REUNI+ETH и Smolpool не опознаны (адресов токенов в docs нет; id стороны — только
+    хеш): пул возьмётся, когда монета подписки / встречный совпадут по keccak256(токен, 0) — без записи адреса.
+  - T486-07 Номер шага 31 выдан координатором (29 — Basin, 30 — Wombat); при слиянии счётчик bnbFrom теста
+    tests/bsc_dex_executor_abi.rs (+2 от SHELL) сложить с другими ветками.
+  - T486-08 exec/dry_fund_holder.rs: держатель токенов Shell — Ocean (dex.vault), ветка не добавлена (честность изъятия
+    у Ocean для пополнения в симуляции не разобрана) — сейчас для Shell держатель = адрес пула (токенов у него нет).
+- **Решение 450 (20.11.2026, ветка t226/arb-dex-code-a) — код T448-01…05; cargo не запускался (формат — вручную).**
+  Сделано: dex.sub_dex (несколько семейств под одним id), pancakeswap_v3 (Universal Router PancakeSwap v3), KyberSwap
+  Static Fee / Legacy (события создания), dex.balancer_math (библиотеки Balancer v2), поиск iZiSwap по фабрике. Запись
+  узла — tools/arbitrum_record/sub_dex.py → tests/arbitrum_sub_dex_live.rs (снять #[ignore]). Переразвёртывать
+  исполнитель не нужно (контракт не менялся). Задачи:
+  - T450-01 Запись своим узлом: `python3 tools/arbitrum_record/sub_dex.py …` (команда — шапка скрипта), коммит
+    tests/data/arbitrum_sub_dex_<дата>/, снять #[ignore] в tests/arbitrum_sub_dex_live.rs.
+    Ревью 450 (п. 2): unit-тестов invariant_v2 и быстрых степеней pow_up на числах официальных тестов Balancer нет —
+    тестов монорепо balancer-v2-monorepo в рабочей копии нет (диск, клонировать нельзя); проверка v2 — только на этой
+    записи (queryBatchSwap пулов v2-фабрик). Дописать unit-тесты по тестам монорепо, когда будет место.
+  - T450-02 Curve (curve_arbitrum): 2pool 0x7f90…F353 и старые фабричные plain-пулы — Vyper 0.2.12 (Sourcify 42161
+    match), A_PRECISION = 100, A_precise(), RATE_MULTIPLIER, двухмонетная get_D (D_P = D·D/x0·D/x1/4 — округление не как у
+    шаблона stableswap_v1), обмен как у Curve 2020 (комиссия с dy до перевода). Нужен новый шаблон (load: A_precise,
+    math: формула D/y шаблона), реестр старой фабрики Curve Arbitrum — по официальному источнику. Вопрос Тиграну: старые
+    фабричные plain-пулы брать списком dex.stable_pools или реестром фабрики. **Решение 472: код есть** — вид
+    `curve_stableswap_plain` (список И реестр фабрики — оба пути, реестр по dex.curve_plain_implementations); запись —
+    T472-01.
+  - T450-03 Balancer composable stable v1–v6 — новое семейство (BPT в токенах пула, курсы rate providers с кешем,
+    протокольная комиссия, обмен через BPT — join/exit). **Решение 473: код есть (обмен без BPT; и stable phantom
+    20211208), сверка — T473-01; обмен с BPT пула — T473-02.**
+  - T450-04 Balancer meta-stable (20210727) — курсы rate providers (priceRateCache) — новое семейство или вариант stable.
+    **Решение 473: код есть (dex.balancer_pool = meta_stable), сверка — T473-01.**
+  - T450-05 Balancer LBP (20210721) — весовой v1 с меняющимися весами и swapEnabled — сверить исходник, вариант вида.
+    **Решение 473: код есть (lbp; и 20211202 no-protocol-fee — тот же текст пула), сверка — T473-01.**
+  - T450-06 Balancer linear (aave/erc4626/yearn/unbutton) — новое семейство (главный и обёрнутый токен, цели).
+    **Решение 473: код есть (linear_v1 / linear по виртуальному выпуску BPT), сверка — T473-01.**
+  - T450-07 Balancer investment / managed pools — сверить исходники (managed v1/v2) — вариант вида или новое семейство.
+    **Решение 473: код есть (investment, managed; обмен с BPT managed — T473-02), сверка — T473-01.**
+  - T450-08 KyberSwap Classic Legacy: роутер 0xC3E2…89dD — на странице docs.kyberswap.com ссылка обозревателя ведёт на
+    0xEaE4…Fd55 (DMMRouter); фактом будет ответ getAmountsOut в записи T450-01 (откат по пулам Legacy — адрес неверен).
+  - T450-09 iZiSwap: уровни dex.v3_fee_tiers — конструктор (100, 400, 2000, 10000); включённые позже enableFeeAmount —
+    fee2pointDelta своим узлом (запись T450-01).
+- **Решение 470 (20.11.2026, ветка t240/arb-aero) — T451-01, T451-02: Aero Basic (`aero_basic`) и Aero Slipstream V3
+  (`slipstream_aero`).** Код — DECISIONS 470; исполнитель не менялся (шаги SOLIDLY и V3), переразвёртывание не нужно.
+  Новая настройка dex.cl_swap_hook. Настройки DEX — docs/FIRST_RUN.md «Aero Basic и Aero Slipstream V3». Запись:
+  `python3 tools/arbitrum_record/aero.py --rpc <узел>` (или record_all.py) → снять #[ignore] в tests/arbitrum_aero_live.rs.
+  - T470-01 **СДЕЛАНО (координатор: порт).** Котировка — max(fee() пула, первая комиссия нового блока на время блока + δ,
+    δ = 0…dex.cl_hook_ahead_s) + налог (pools/aero_first_fee.rs, aero_cl_head.rs). Новая настройка dex.cl_hook_ahead_s —
+    значение решает Тигран по записи (fee_at +1/+3 с). Сверка — tests/arbitrum_aero_first_fee_live.rs после записи aero.py.
+    Вопросы по записи: (а) принимает ли Nitro blockOverrides в eth_call и меняет ли number ArbSys.arbBlockNumber (ключ
+    blockFee у ArbDynamicSwapFeeHook); (б) скидка DiscountRegistry для caller = 0 и MEV-налог при eth_call — 0 (тест
+    сравнивает fee() с портом без скидки и налога).
+  - T470-02 **Координатор: налог по формуле. СДЕЛАНО** (8ac32c60: aero_mev.rs tax — формула модуля, сбор чаевых — ArbSys/ArbOwnerPublic, факт nitro ccc5c828 tx_processor.go L995-L1035). Было: вопрос Тиграну: tx.gasprice в Nitro при чаевых — правило MEV-налога взято по верхней оценке (gasprice ≤
+    baseFee + чаевые). При profit_share верхний предел send.tip_cap_gwei выше minThreshold модуля (volatile 1 gwei,
+    stable 2 gwei по аргументам конструкторов) — пулы Basic не читаются. Нужен ли учёт налога в котировке вместо отказа?
+  - T470-03 Запись aero.py: проверить своим узлом feeModule() фабрик = volatile/stableCustomFeeModule
+    (0x7949…7a7A, 0x0195…3Da6), mevTaxModule() = 0xd724…c50a / 0x8173…8130, параметры модулей; tickSpacingToFee CL.
+  - T470-04 **Координатор: ключи приняты.** Ключи DEX Aero Basic (`aero-basic-volatile@arbitrum`, `aero-basic-stable@arbitrum`) — предложение: у
+    GeckoTerminal Aero Basic нет (DefiLlama `aero-basic`); пулы — поиск по фабрике (index.factory_scan) или dex.sub_dex
+    (решение 450) под одним ключом — решение Тиграна.
+  - T470-06 **СДЕЛАНО в коде, НУЖНА СБОРКА ИСПОЛНИТЕЛЯ v5.** Шаг AERO_BASIC = 26 (contracts/ArbExecutor.sol _aeroOut +
+    IPools.sol IAeroBasicPool): вход переводом в пул, выход — getAmountOutWithTotalFee пула (Pool.sol L548-L555: getFee с
+    msg.sender = исполнитель и tx.gasprice этой транзакции — та же комиссия, что у swap L172), swap подписи V2. Rust:
+    Params::AeroBasic (kind.rs), ExecKind::AeroBasic + for_version/for_wallet (exec_kind.rs: вид семейства aero_basic
+    остаётся SOLIDLY, у кошелька v5 — AERO_BASIC), since = Version::V5 (exec_callback.rs; code.rs — Version::V5 без
+    артефактов, runtime_of — причина «сборки v5 нет»); отказ «налог > 0» перед отправкой снят для кошелька v5
+    (aero_mev.rs fresh taxed_ok, exec/solidly_gate.rs). **Нужна сборка исполнителя v5** (contracts/build.sh → out/ как v5,
+    out/ v4 заморозить в out/v4/, code.rs: RUNTIME_V4, version_of V5) и EVM-сценарий шага 26 — вне агентов (solc/npm
+    запрещены). До сборки у всех кошельков — SOLIDLY и прежний отказ при налоге > 0.
+  - T470-07 **СДЕЛАНО.** Порт первой комиссии (T470-01); лёгкое чтение каждым блоком — pools/per_block_aero.rs (только
+    комиссия пачкой: fee(), slot0, dynamicFeeConfig, tickSpacingToFee + наблюдения и observe; налог — раз на DEX), полное
+    — по событиям пула; запись наблюдений и параметров крючка — tools/arbitrum_record/aero_more.py.
+  - T470-05 **Запись сделана:** Metaquoter quoteExactInputSingleV3 / V2 в aero_more.py рядом с виртуальным квотером бота и
+    getAmountOutWithTotalFee (тест metaquoter_equals_virtual_and_total_fee, #[ignore] до записи). В боте сверка — по-прежнему
+    виртуальный квотер (dex.quoter_virtual); подключать ли Metaquoter квотером DEX — по итогам записи (решение Тиграна).
+  - T470-10 **Ревью t240 — СДЕЛАНО:** модули закреплены (dex.aero_fee_module, dex.aero_mev_module — задать по
+    docs/FIRST_RUN.md; адрес модуля крючка Slipstream V3 сверить записью aero.py: hook.mevTaxModule = clMevTaxModule
+    0xce01…45aB); свежая комиссия Slipstream V3 перед отправкой против котировки; чтение старого блока не перетирает
+    комиссию; доказательство памяти для Aero Slipstream включено; ArbOS 9 — сбор чаевых.
+  - T470-08 Запись: `python3 tools/arbitrum_record/aero.py --rpc <узел>` (или record_all.py) → снять #[ignore] в
+    tests/arbitrum_aero_live.rs и tests/arbitrum_aero_first_fee_live.rs; задать dex.cl_hook_ahead_s.
+  - T470-09 **Нужна сборка исполнителя v5** (T470-06): contracts/build.sh → out/ как v5, out/ v4 заморозить в out/v4/,
+    code.rs (RUNTIME_V4, version_of → V5, current_version), EVM-сценарий шага AERO_BASIC с официальным байткодом пула Aero
+    (если он есть в официальном репозитории развёртываний) — вне агентов (solc/npm запрещены).
+- **Решение 451 (20.11.2026, ветка t227/arb-dex-code-b) — T448-06…T448-10: Kyber Elastic v1, Saddle, WOOFi, Aero
+  Slipstream, PancakeSwap StableSwap на Arbitrum; ждёт сборки и тестов в GitHub (cargo локально не запускался).** Подробно —
+  docs/notes/arbitrum/dex-settings-arbitrum.md §4.2–§4.6. СДЕЛАНО: вид `kyber_elastic_v1` (pools/family_variant.rs —
+  Variant по dex.kind, Family.variant; math compute_swap_step_rule); Saddle — abi_saddle::swap_fee (swapStorage 7/10 слов)
+  и FlashLoan в событиях вида saddle_stableswap; WOOFi — код не менялся (оракул сверен). Скрипты записи
+  tools/arbitrum_record/{kyber_elastic_v1,saddle,woofi}.py и тесты tests/arbitrum_{kyber_elastic_v1,saddle,woofi}_live.rs
+  (#[ignore] до записи). Исполнитель не менялся (переразвёртывать не нужно). Новых настроек нет (новое значение dex.kind).
+  Ревью 451: v1 — код фабрики 0x5F1d…D50a в любой сети (README ks-elastic-sc «v1» — в т.ч. BSC); на живом боте BSC
+  kyberswap_elastic_bsc — фабрика 0xC7a590291e07B9fe9E64b86c58fD8fC764308C4A (Sourcify 56: SwapMath `usedAmount >
+  specifiedAmount` — v2), вид kyber_elastic там верен. Вид выбирается по коду фабрики, а не по сети.
+  BSC: kyber_elastic — без изменений; saddle_stableswap — подписка получила topic0 FlashLoan (у Nerve его нет — исходник
+  bda7578 без flashLoan) и разбор swapFee по длине ответа (у Nerve 10 слов — прежний путь).
+  Сделано однозначно, на подтверждение Тиграну:
+  1) Saddle исправлен в том же виде saddle_stableswap, а не отдельным значением dex.kind (математика одна, отличия ABI
+     различаются по ответу). Так оставить?
+  2) Family Debug: поле variant выводится только у не-Base (золотые снимки прежних видов не меняются).
+  Задачи:
+  - T451-01 **Решение 470: СДЕЛАНО** (вариант slipstream_aero; вопросы T470-01/02, запись T470-03). Новое семейство «Slipstream V3 (Aero)» на Arbitrum: CLPool + крючок DynamicSwapFeeHook (комиссия блока по
+    TWAP-тику, скидка DiscountRegistry по вызывающему, MEV-налог модуля, afterSwap-комиссия), квотер Metaquoter; исходники —
+    Dromos-Labs/metadex-slipstream-public cf1ae46f, metadex-public 79c8d5b6 (лицензия Dromos Restricted Use 1.0).
+  - T451-02 **Решение 470: СДЕЛАНО** (вид aero_basic, шаг SOLIDLY; запись T470-03, ключи T470-04). Aero «Basic»-пулы Arbitrum (pools-arbitrum.json: volatilePoolFactory 0x8E6a…76D2, stablePoolFactory 0x7858…EF2D;
+    модули комиссии и MEV-налога) — в таблицу покрытия (GeckoTerminal/DefiLlama id сверить) и сверить с видами solidly_*.
+  - T451-03 TicksFeesReader.getTicksInRange(pool, MIN_TICK, 0) (load_elastic.rs) выделяет массив на все возможные тики
+    (у tickDistance 1 ≈1,77 млн слов) — уложится ли в предел газа eth_call узла, покажет запись (kyber_elastic_v1.py пишет
+    ответ или ошибку); при ошибке — чтение частями (length > 0), вопрос Тиграну. Касается и BSC (вид не менялся).
+    Факт записи 20.11.2026 (решение 462): узел Тиграна — «out of gas» у 4 из 20 пулов Arbitrum (tickDistance 8 и 10:
+    221 820 / 177 457 слов); tickDistance 25…200 — ответ есть. Бот у таких пулов тиков не прочтёт — нужно чтение частями
+    (getTicksInRange(pool, start, length) по связному списку, как ticks_by_chunks в tools/arbitrum_record/
+    kyber_elastic_ticks.py); длина части — новая настройка, решает Тигран.
+  - T451-04 (к T448-01) по Sourcify constructorArguments v3 UR PancakeSwap Arbitrum: permit2 0x31c2…c768, v2Factory
+    0x02a8…749e, v3Factory 0x0bfb…1865, v3Deployer 0x41ff…71c9, v2InitCodeHash 0x5722…4d2d, v3InitCodeHash 0x6ce8…f7e2,
+    stableFactory/stableInfo = 0 (выдача WebFetch, одно слово адреса-заглушки потеряно — сверить своим узлом).
+- **Решение 448 (20.11.2026, ветка t224/arb-dex-settings) — настройки области «DEX» площадки arb_dex для DEX Arbitrum с
+  видом пула в коде; код не менялся.** Документ — docs/notes/arbitrum/dex-settings-arbitrum.md (по каждому DEX: ключ
+  `<id>@arbitrum`, вид, все настройки со значениями, источник каждого значения, статус), статусы — в
+  dex-coverage-arbitrum.md и строках T433-*. Итог: из 20 DEX с видом в коде готово 12 (Uniswap V2/V3/V4, Sushi V2, Kyber
+  Classic DMM, SmarDex, Maverick V2, Camelot V4, LFJ V2.1, Balancer V2 — часть, Curve — часть NG, DODO), нужен код 1
+  (iZiSwap), не подтверждено 7 (PancakeSwap V2, V3, StableSwap, Kyber Elastic, Aero Slipstream, Saddle, WOOFi); плюс Sushi V3
+  (T433-044) — семейство установлено (v3_fork), готово. Источники: официальные репозитории GitHub (коммиты в документе),
+  страницы документации, верифицированный код — Sourcify (arbiscan и узлы Arbitrum из песочницы закрыты, on-chain не читалось).
+  Перед включением: задать у arb_dex настройки площадки (dex.chain = arbitrum и т.д.) и index.factory_scan = да для DODO /
+  WOOFi; dex.pool_enabled ставит Тигран. Задачи:
+  - T448-01 PancakeSwap V2/V3 на Arbitrum исполняет v3 Universal Router `0xFE6508f0015C778Bdcc1fB5465bA5ebE224C9912`
+    (Infinity UR в сети нет). Входы V2/V3 и номера команд сверены (Sourcify, те же байты, что у `pancakeswap_infinity` и
+    `2.0`), не прочитаны вход BALANCE_CHECK_ERC20 и параметры конструктора (permit2, v2Factory, v3Deployer, init code hash).
+    Код: вариант dex.universal_router_version для v3 UR PancakeSwap (UR_FORMATS, exec/ur.rs format, dex_rules.rs smart_ok),
+    или решение Тиграна ставить `2.0`. Вопрос Тиграну. **Решение 450: код есть, сверка — T450-01 (запись)** — вариант `pancakeswap_v3` (вход
+    BALANCE_CHECK_ERC20 и параметры конструктора прочитаны — Sourcify; см. DECISIONS 450).
+  - T448-02 Несколько семейств пулов под одним id индексатора (одна dex.kind на ключ, families.rs:455): curve_arbitrum (NG +
+    2pool + Twocrypto/Tricrypto), kyberswap_classic_arbitrum (DMM + Static Fee), balancer_arbitrum (несколько фабрик).
+    Код: вид/фабрика на пул, а не на id DEX (или несколько фабрик у ключа) — проект и решение Тиграна. **Решение 450:
+    код есть, сверка — T450-01 (запись)** — dex.sub_dex (дочерние ключи; вид пула — по реестру фабрики, подтвердившей пул).
+  - T448-03 Balancer V2 на Arbitrum: пулы фабрик WeightedPool2Tokens 20210418, weighted-pool v2/v3/v4, stable-pool-v2,
+    composable-stable v1–v6 (адреса — dex-settings-arbitrum.md §2.11): сверить исходники с WeightedMath/StableMath вида,
+    ComposableStable (BPT в токенах пула, курсы) — новое семейство. **Решение 450: частично** — 2Tokens = v1; weighted
+    v2/v3/v4 и stable-pool-v2 — dex.balancer_math = v2; остальные фабрики — T450-03…07.
+  - T448-04 KyberSwap Classic Static Fee (KSFactory `0x1c758aF0688502e49140230F6b0EBd376d429be5`, legacy
+    `0x51E8D106C646cA58Caf32A47812e95887C071a62`; docs.kyberswap.com) — сверить KSPool с kyber_dmm; разное — новое семейство.
+    **Решение 450: код есть, сверка — T450-01 (запись)** — KSPool = DMMPool с постоянной комиссией, вид kyber_dmm, события создания — все три подписи.
+  - T448-05 iZiSwap: пулов нет в GeckoTerminal arbitrum, поиск по фабрике вид iziswap не умеет (factory_calls.rs:72-103).
+    Код: вопрос pool(x, y, fee) к фабрике и список уровней fee (настройка) — или другой источник справочника; сверить код
+    пула Arbitrum (модули ядра — другие адреса, izumi-docs mainnet.rst L53-L110). **Решение 450: код есть, сверка — T450-01 (запись)** — Q::Izi по
+    dex.v3_fee_tiers; фабрика Arbitrum = iZiSwap-core@3fe21eba (Sourcify 42161, solc 0.8.4: тот же fee2pointDelta и pool).
+  - T448-06 KyberSwap Elastic: на Arbitrum развёрнут v1 (README ks-elastic-sc 4ab08c0a, Sourcify full match), вид сделан по
+    HEAD (Elastic v2). Сравнить Pool.sol/SwapMath v1 (Sourcify) с 4ab08c0; адресов v2 в официальных источниках нет (страница
+    docs.kyberswap.com удалена). Вопрос Тиграну: включать ли Elastic.
+    **Решение 451: СДЕЛАНО** — сравнено, отличие одно (computeSwapStep `>=` у v1), вид `kyber_elastic_v1`. Осталось: запись
+    `python3 tools/arbitrum_record/kyber_elastic_v1.py --rpc <узел> --gt` → снять #[ignore] в
+    tests/arbitrum_kyber_elastic_v1_live.rs; вопрос Тиграну — включать ли (dex.pool_enabled).
+  - T448-07 Saddle (Arbitrum): сверить SwapUtils + AmplificationUtils saddle-contract 2cfdd055 с математикой вида
+    (Nerve, math/stableswap_v1); пулы — dex-settings-arbitrum.md §4.5.
+    **Решение 451: СДЕЛАНО** — математика та же; swapStorage 7 полей и FlashLoan исправлены в виде. Осталось: запись
+    `python3 tools/arbitrum_record/saddle.py --rpc <узел>` → снять #[ignore] в tests/arbitrum_saddle_live.rs.
+  - T448-08 WOOFi (Arbitrum): интерфейс WooracleV2_2_1 (state()) — исходник (Sourcify / официальный репозиторий); реализация
+    прокси WooPPV2.2 `0x5520…9FA4` — слот EIP-1967 своим узлом, затем исходник → dex.pool_implementation.
+    **Решение 451: СДЕЛАНО** — оракул = WooracleV2_2 (Sourcify exact match), state() как в виде, код не менялся; реализация
+    по Sourcify proxyResolution — `0x7b5fDb8C89A616d319202704B0eA18b168654281` (как на BSC), исходника на Sourcify нет. Осталось:
+    `python3 tools/arbitrum_record/woofi.py --rpc <узел> --base <монета>…` → снять #[ignore] в tests/arbitrum_woofi_live.rs.
+  - T448-09 Aero Slipstream (Arbitrum): официальные адреса и исходник (в репозиториях Slipstream развёртываний Arbitrum нет);
+    ABI сверить с видом slipstream.
+    **Решение 451: найдено** — Dromos-Labs/metadex-slipstream-public f99f209 (VERSIONS 1.1.0 = cf1ae46f,
+    deployment-addresses/cl-arbitrum.json) и metadex-public 2ce1816 (DynamicSwapFeeHook). Геттеры, фабрика, Swap — как у
+    вида; комиссия — от крючка обмена (блок, вызывающий, MEV-налог, комиссия после цикла) → **нужен код: новое семейство
+    «Slipstream V3 (Aero)»** (новая задача T451-01). Заодно — те же «Basic»-пулы Aero (pools-arbitrum.json:
+    volatile/stable PoolFactory) в таблице покрытия не учтены — T451-02.
+  - T448-10 PancakeSwap StableSwap (Arbitrum): официального адреса фабрики нет (pancake-developer stableswap — только BSC).
+    Вопрос Тиграну / источник.
+    **Решение 451: не подтверждено** — StableSwap на Arbitrum есть (stable-swap-sdk 2.0.16, pancakeswap-ai), пулы SDK берёт с
+    API configs.pancakeswap.com (из песочницы закрыт); у SmartRouter 0x3222…AC77 и v3 UR 0xFE65…9912 Arbitrum
+    stableFactory = 0 (Sourcify constructorArguments). Вопрос Тиграну: ответ
+    `https://configs.pancakeswap.com/api/data/cached/stableswaps?chainId=42161` со своей машины (адреса пулов/фабрики).
+    **Решение 471 (20.11.2026, ветка t241/arb-pcs-stable): подтверждено, вид `pancake_stableswap` без изменений кода,
+    шаг STABLE_U256 (9) исполнителя.** Фабрика `0x5D5fBB19572c4A89846198c3DBEdB2B6eF58a77a` — официальный
+    pancakeswap/infinity-universal-router 1b6d479 script/deployParameters/mainnet/DeployArbitrum.s.sol L30 (stableFactory,
+    добавлена 8b18bad «update stable swap impl (#46)»; stableInfo 0x58B2…b1b0 L31), тест test/stableSwap/StableSwapArb.t.sol
+    L27-L28, L56 (getPairInfo(PENDLE, mPENDLE), ссылка на пул 0x73ed…6CE0). Пулы — API конфигов (ответ получен 20.11):
+    mBTC-WBTC 0xE80b…FA57, DLP-mDLP 0xd0f0…22bD, PENDLE-mPENDLE 0x73ed…6CE0. Sourcify 42161: фабрика exact_match
+    PancakeStableSwapFactory (getPairInfo, getThreePoolPairInfo, pairLength, swapPairContract, NewStableSwapPair), info
+    exact_match PancakeStableSwapTwoPoolInfo, все три пула exact_match PancakeStableSwapTwoPool (solc 0.8.10, runs 100) с
+    CBOR метаданных 1220 1e3d34d8…c6b595 — то же CBOR в коде пулов фабрики BSC (0x25d0…67e2, 0x7c76…ae1e; Sourcify 56
+    onchainBytecode) и во вложенном коде пула официального pancakeswap/infinity-periphery 56a7a4f
+    test/bin/pancakeStableSwapTwoPoolDeployer.bytecode → исходник и настройки компиляции те же, что у BSC.
+    exchange(uint256,uint256,uint256,uint256) — тот же вызов, что шаг STABLE_U256 (ArbExecutor.sol L432-L434).
+    - T471-01 Запись своего узла: `python3 tools/arbitrum_record/pancake_stable.py --rpc http://УЗЕЛ:8547` (или
+      record_all.py — шаг pancake_stable); после записи — снять #[ignore] с tests/arbitrum_pancake_stable_live.rs.
+    - T471-02 Включение DEX `pancakeswap-stableswap-arbitrum@arbitrum` (dex.kind, dex.factory, dex.pool_enabled) —
+      решает Тигран после T471-01 (docs/notes/arbitrum/dex-settings-arbitrum.md §4.2, docs/FIRST_RUN.md).
+    - T471-03 Исходник PancakeStableSwapTwoPool.sol из официального GitHub не прочитан: pancakeswap/pancake-smart-contracts
+      из песочницы недоступен (git clone — нет доступа, add_repo — not found); формулы get_dy / exchange взяты из
+      исходника Sourcify 42161 через WebFetch (пересказ, без номеров строк) — проверка записью T471-01.
+  - T448-11 LFJ V2.1: getLBPairImplementation() фабрики `0x8e42…fd4e` своим узлом Arbitrum, Sourcify реализации = v2.1.0.
+  - T448-12 Уровни комиссии V3 (только для index.factory_scan): feeAmountTickSpacing(100) у Uniswap V3, уровни Sushi V3 —
+    своим узлом.
+  - T448-13 DODO: шаблоны клонов DVM/DPP/DSP фабрик Arbitrum своим узлом и Sourcify (= DODOEX/contractV2 2f1bcda).
+  - T448-14 Curve NG: version() реализации plain_amm `0xf6841C27fe35ED7069189aFD5b81513578AFD7FF` своим узлом (бот
+    не возьмёт пул версии вне dex.curve_ng_versions = v7.0.0).
+- **Решение 440 (ревью, правки) (20.11.2026, ветка t223-f1/arb-family-f1)** — по независимому ревью (порт _swapIn верен,
+  шаг FLUID безопасен, регрессий BSC нет); cargo не запускался. СДЕЛАНО: 1) из git убран
+  tools/arbitrum_record/__pycache__, `__pycache__/` — в .gitignore; 2) pools/load_fluid.rs state: у включённой части нулевые
+  мнимые резервы — ошибка (резолвер при откате getCollateralReserves / getDebtReserves отдаёт нули — ложная цена в граф
+  не идёт); 3) токен входа — только token0 / token1 пула (SmartColDebtData.token1, has): exec/executor/entry.rs,
+  quote/pool_quote.rs, quote/quoter_fluid.rs; kind.rs encode — у шага FLUID метка 0xEeee… отвергается; 4)
+  math/fluid_check.rs oracle_ok — консервативно: ветка «новая секунда» всегда, при последнем обмене в секунду блока
+  чтения — и ветка «та же секунда»; 5) tests/arbitrum_fluid_t1.rs — пулы без состояния печатаются с причиной и валят
+  тест; 0 у резолвера ↔ «нет выхода» или нулевой выход у нас; 6) quote/fluid_depth.rs — пометка «оценка» (без предела 50 %
+  и проверки резервов).
+- **Решение 440 (20.11.2026, ветка t223-f1/arb-family-f1) — семейство T433-F1 Fluid DEX T1 (вид `fluid_t1`, DEX
+  T433-078 `fluid-arbitrum`); cargo не запускался — сборка и тесты в GitHub CI.** СДЕЛАНО (по исходникам
+  Instadapp/fluid-contracts-public@404d73f91e6806f881f8dabeb30494f93f9e99b7 — единственный коммит официального репо):
+  вид ядра PoolKind/PoolState::SmartColDebt (core/types/pool_smart.rs); математика — построчный порт `_swapIn`
+  (math/fluid_swap.rs: приведение входа, пределы суммы, комиссия и доля протокола, _swapRoutingIn, _getAmountOut по
+  мнимым резервам, проверка реальных резервов, новая цена) и проверки (math/fluid_check.rs: пределы снятия/займа как
+  estimateSwapIn резолвера; скачок цены — порт _updateOracle у пула с VERSION(), проверка резолвера у пула без него);
+  чтение — pools/load_fluid.rs (getPoolReservesAdjusted официального резолвера + constantsView/constantsView2,
+  dexVariables/dexVariables2, VERSION, время блока; каждым блоком, per_block.rs); события — pools/events_fluid.rs
+  (22 topic0 → перечитать); проверка — pools/verify_fluid.rs (isDex фабрики + constantsView); сверка — quote/quoter_fluid.rs
+  (estimateSwapIn резолвера, dex.quoter); глубина/спот/пустота/комиссия — quote/fluid_depth.rs; нативная монета пула
+  0xEeee… → dex.native_wrapped; шаг FLUID = 22 в contracts/ArbExecutor.sol (approve пулу + swapIn; нативная монета —
+  withdraw → swapIn{value} / receive только от слоя ликвидности → deposit) + Params::Fluid (exec/executor/kind.rs) +
+  ExecKind::Fluid (since = v4); Version::V4 (exec/executor/code.rs) — пока ни у одного кошелька (артефакты out/ — v3).
+  Скрипт записи tools/arbitrum_record/fluid_t1.py; тест tests/arbitrum_fluid_t1.rs (на записи — #[ignore]).
+  Новых настроек нет (dex.kind = `fluid_t1`, dex.factory, dex.quoter, dex.pool_enabled — существующие; значения —
+  docs/FIRST_RUN.md, раздел решения 440). Интерфейс: вариант `fluid_t1` в «Таблице сопоставления DEX» и подписи вида
+  (ui/src/lib/labels.js).
+  НУЖНО ОТ ТИГРАНА:
+  1) Записать данные своего узла: `python3 tools/arbitrum_record/fluid_t1.py --node <узел> --factory
+     0x91716C4EDA1Fb55e84Bf8b4c7085f84285c19085 --resolver 0x05Bd8269A20C472b148246De20E6852091BF16Ff --wrapped
+     <dex.native_wrapped arb_dex> --gt`, закоммитить tests/data/arbitrum_fluid_t1_<дата>/ — затем снять #[ignore] с
+     tests/arbitrum_fluid_t1.rs и только после зелёного теста ставить dex.pool_enabled = да.
+  2) Исполнитель v4: `contracts/build.sh` (агенту сборка запрещена) → копия прежних out/ArbExecutor.* в out/v3/ →
+     code.rs version_of: out/ = V4, out/v3/ = V3 → сценарий FLUID в contracts/evmtest (не написан: официальный код пула
+     Fluid в evmtest не подключён) → «Развернуть исполнитель». До этого Fluid — только граф и сигналы (причина «нужна
+     сборка исполнителя v4»).
+  ВОПРОСЫ (не подтверждено фактом):
+  а) Пулы Fluid в Arbitrum развёрнуты кодом до 1.1.0 (в deployedBytecode Dex_USDC_ETH.json нет PUSH4 VERSION 0xffa1ad74),
+     а в официальном репозитории — только код 1.1.0 (история сквошена в один коммит); исходник развёрнутой версии
+     (Arbiscan / Sourcify) из среды недоступен (прокси 403). Порт — по 1.1.0; совпадение с кодом пула проверит запись
+     (п. 1: swapIn → 0x…dEaD даёт точный выход развёрнутого кода). Расхождение — нужен verified-исходник с Arbiscan.
+  б) Скачок цены у пулов без VERSION() — по проверке резолвера (_priceMoveExceedsLimit, текущая цена пула), как её
+     моделирует сам Fluid; точное правило старого пула не известно (см. а).
+  в) Предел загрузки слоя ликвидности после обмена (_utilizationVerify) не портирован — берутся пределы резолвера
+     (TokenLimit.available «учитывает max utilization», structs.sol L25-L32); остаток — откат в симуляции перед отправкой.
+  г) Какие адреса токенов отдаёт GeckoTerminal у пулов Fluid с ETH (метка 0xEeee… или WETH) — не проверено; при метке
+     справочник не сопоставит пару с обёрткой (запись --gt покажет).
+  д) **ЗАКРЫТО (решение 456: FLUID 22, BALANCER_V3 23, LB20 24, EKUBO 25)** Номер шага FLUID = 22 и Version::V4 — параллельные семейства (T433-F2…F8) могут взять те же номера: при слиянии
+     перенумеровать (contracts/ArbExecutor.sol, kind.rs, tests/bsc_dex_executor_abi.rs).
+  е) Точный выход (swapOut) не портирован — котировка только с точным входом (как SmarDex).
+- **Решение 474 (20.11.2026, ветка t244/arb-bv3-buffer) — T433-F2: обмен Balancer V3 через буфер ERC4626 хранилища
+  (boosted-пулы: токен пула — обёртка, монета биржи — базовый токен).** Закрывает вопросы «Решение 452» п. 2 и
+  «Решение 441» п. 5 (решение Тиграна по железному правилу — делать). cargo, rustfmt, clippy, solc, npm локально не
+  запускались — сборка и тесты только в CI. Источники и что сделано — DECISIONS 474.
+  СДЕЛАНО: состояние буфера (core/types V3Buffer, VaultV3.via; pools/load_balancer_v3_buffer.rs — в той же пачке
+  каждым блоком), сторона пары через буфер (load_balancer_v3_state.rs), проверка и развёртка пар с базовыми токенами
+  (verify_balancer_v3_buffer.rs), расчёт WRAP → пул → UNWRAP (math/balancer_v3_buffer.rs, balancer_v3.rs), квотер
+  BatchRouter querySwapExactIn с шагами isBuffer (quote/quoter_balancer_v3_buffer.rs), шаг исполнителя BALANCER_V3_BUF
+  = 27 (contracts/ArbExecutor.sol — общий balancerV3Callback с шагом 23, IPools.sol erc4626BufferWrapOrUnwrap;
+  exec/executor/kind.rs, kind_buffer.rs, entry.rs), настройки dex.bv3_buffer_preview_raw, dex.bv3_batch_router
+  (каталог dex_bv3_buffer.rs, SETTINGS, SETTINGS_CASES, FIRST_RUN), скрипт записи
+  tools/arbitrum_record/balancer_v3_buffer.py (в record_steps.py), тест tests/arbitrum_balancer_v3_buffer.rs (#[ignore]),
+  tests/bsc_dex_executor_abi.rs (номер 27, data, метки нет в v1–v4).
+  НЕ СДЕЛАНО / ВОПРОСЫ:
+  1) **Нужна пересборка исполнителя v5** (шаг 27 есть только в исходнике): contracts/build.sh → out/ = v5, прежний out/
+     (v4) — в out/v4/; exec/executor/code.rs — Version::V5, сверка v4 по out/v4/; хеш и размер кода (EIP-170; сейчас v4
+     21 775 байт); EVM-тест шага 27 с официальным кодом Vault V3 (contracts/evmtest/balancerv3.mjs — сценарий с буфером
+     не написан: в balancer/balancer-deployments@b55dc2b8 задач с кодом обёрток ERC4626 нет (v3/tasks, v3/deprecated:
+     только buffer-router, wrapped-bpt, erc4626-cow-swap-fee-burner); путь — eth_simulateV1 на своём узле поверх живого
+     Vault и живой обёртки); запись приёмки на живых пулах (решение 400: класс шага 27 в live_class.rs ещё
+     не заведён: сейчас пара через буфер допускается приёмкой класса 23 Balancer V3 плюс меткой кода — класс 27 завести
+     до развёртывания v5); развёртывание. До этого пары через буфер — без пути исполнения с причиной (kind_buffer::refusal:
+     вызова erc4626BufferWrapOrUnwrap, селектор 0x43583be5, нет в коде исполнителя кошелька).
+  2) Запись своего узла: `python3 tools/arbitrum_record/record_all.py --rpc <узел> --only balancer_v3_buffer` (или
+     скрипт напрямую — шапка), затем `cargo test --test arbitrum_balancer_v3_buffer -- --ignored`; зелёный — снять
+     #[ignore], задать dex.bv3_buffer_preview_raw и dex.bv3_batch_router.
+  3) ВОПРОС Тиграну: превью обёртки — своя функция у каждой обёртки (Aave StataToken, Morpho, …), бот считает его по
+     одной точке (⌊x · превью(R) / R⌋, только x ≤ R; больше — котировки нет) — не побитово. Ревью t244: при линейном
+     превью (⌊y·a/b⌋ — OZ ERC4626 с виртуальным смещением, Aave stata) расчёт меньше точного на 0–1 единицу (не
+     завышает); у произвольной обёртки EIP-4626 (нелинейные комиссии) граница не гарантирована, возможно завышение;
+     курс обёртки к блоку исполнения меняется в любую сторону (рост курса уменьшает выход WRAP). Защита перед
+     отправкой — точный querySwapExactIn BatchRouter и minOut исполнителя. Достаточно ли так, или нужен порт превью каждой обёртки по её исходнику?
+  4) ВОПРОС Тиграну: сумма, для которой буфера не хватает (выход WRAP > обёртки в буфере / UNWRAP > базового в
+     буфере), котировки не получает — тогда хранилище само зовёт deposit / redeem обёртки (успех — её лимиты, пауза;
+     бот их не читает). Брать такие суммы?
+  5) Точный выход (EXACT_OUT) через буфер не считается (нужны previewMint / previewWithdraw) — amount_in None.
+  6) Как GeckoTerminal показывает boosted-пулы (обёртки или базовые токены) — не проверено (API GeckoTerminal из
+     среды агента недоступен). Если индексатор не находит пул по базовому токену, пары появятся только развёрткой
+     (multi_pair) пула, найденного по другому токену, или по PoolRegistered — событие с базовым токеном не
+     сопоставляется (базовый токен в событии не виден; events_balancer_v3::registered — техдолг).
+  7) Глубина и граница поиска объёма (quote/vault_depth.rs, spot.rs) считают пределы по сырым балансам обёрток — в
+     единицах обёртки, а сторона через буфер — в базовом токене (разница — курс обёртки). Расчёт выхода точный по
+     буферу; потолок поиска — приблизительный (техдолг, docs/ROADMAP.md).
+  8) Выбор буфера при нескольких обёртках пула с одним базовым токеном (например waUSDC и fUSDC одного USDC): сторона
+     пары — первая обёртка по порядку токенов хранилища (getPoolTokenInfo; load_balancer_v3_state.rs). Вторая обёртка
+     для этой монеты не используется — маршрут через неё не рассматривается (вопрос Тиграну: нужен ли выбор лучшей).
+  9) Ревью t244: пара «обёртка — её базовый токен» одного пула (обмен сам в себя через буфер) не строится: кандидат
+     справочника — отказ при проверке, развёртка — пропуск (Snap.pool_twins, запоминается при проверке пула). После
+     перезапуска до повторной проверки пула память пуста — такая пара из сохранённого справочника даст отказ чтения
+     «обе монеты пары — один токен пула» (state(), без торговли).
+  10) Ревью t244: сумма превью больше опорной (x > dex.bv3_buffer_preview_raw) котировки не получает (оценка по одной
+     точке там не ограничена); исполнитель v5 собирается через via-IR (contracts/build.mjs L35) — «stack too deep» в
+     balancerV3Callback проверится только сборкой; tests/bsc_dex_executor_abi.rs v4_kept_after_rebuild требует
+     out/v4/ = v4 после пересборки out/.
+
+- **Решение 452 (20.11.2026, ветка t228/arb-balancer-v3-more) — T433-F2: доделка Balancer V3 на Arbitrum (все пулы DEX
+  `balancer-v3-arbitrum`).** cargo, rustfmt, clippy локально не запускались — сборка и тесты только в CI. Источники и
+  что сделано — DECISIONS 452. Закрывает вопросы «Решение 441» п. 3 (крючки), п. 4 (виды Gyro / ReClamm / LBP / QuantAMM),
+  п. 7 (PoolRegistered); п. 5 (буфер ERC4626) — вопрос ниже.
+  СДЕЛАНО: крючки StableSurge и MEV Capture (math/balancer_v3_hook.rs, pools/balancer_v3_hooks.rs,
+  load_balancer_v3_hook_read.rs); Gyro 2-CLP (math/gyro_2clp.rs, gyro_sqrt.rs), Gyro E-CLP (gyro_signed.rs,
+  gyro_eclp_inv.rs, gyro_eclp.rs), ReClamm (reclamm.rs), LBP v1–v4 и с фиксированной ценой (balancer_v3_lbp.rs), QuantAMM
+  (balancer_v3_pool.rs); выпуски и чтение (balancer_v3_factories.rs — 15 выпусков, load_balancer_v3_extra.rs,
+  load_balancer_v3_kinds.rs); PoolRegistered хранилища (events_balancer_v3.rs, created_log.rs); настройки
+  dex.bv3_stable_open_factories, dex.bv3_gyro_2clp_factories, dex.bv3_gyro_eclp_factories, dex.bv3_reclamm_factories,
+  dex.bv3_reclamm_v3_factories, dex.bv3_lbp_v1…v4_factories, dex.bv3_fixed_lbp_factories, dex.bv3_quantamm_factories,
+  dex.bv3_stable_surge_hooks, dex.bv3_mev_capture_hooks, dex.arb_sys, dex.arb_owner_public (каталог, SETTINGS,
+  SETTINGS_CASES, FIRST_RUN); смысл dex.bv3_stable_factories изменён (только 20241205; 20250324 — в open). Скрипт записи
+  tools/arbitrum_record/balancer_v3.py (все вызовы бота к пулу + Router V3 точный вход и выход), тест
+  tests/arbitrum_balancer_v3.rs (#[ignore]). Исполнитель не меняется (шаг BALANCER_V3 общий для всех видов).
+  НЕ СДЕЛАНО / ВОПРОСЫ:
+  1) Запись своего узла: `python3 tools/arbitrum_record/balancer_v3.py --rpc <узел> --vault … --router … --list …
+     --gt-pages 5` (полная команда — шапка скрипта), затем `cargo test --test arbitrum_balancer_v3 -- --ignored`; зелёный —
+     снять #[ignore]. До этого dex.pool_enabled у `balancer-v3-arbitrum@arbitrum` не включать. Тестов математики Gyro /
+     ReClamm / LBP / QuantAMM без записи нет (официальных записанных векторов для развёрнутого кода в build-info нет) —
+     сверка только через запись узла.
+  2) ЗАКРЫТО решением 474 (Тигран: делать; «Решение 474» выше). Было — ВОПРОС Тиграну: обмен через буфер ERC4626 (boosted-пулы: токен пула — обёртка, например waArbUSDC; монета биржи —
+     базовый токен). Сумма буфера — `wrappedToken.previewDeposit(сумма − 1) − 1` / previewRedeem (Vault.sol 20241204
+     L1206-L1344) — функция самой обёртки, у каждой обёртки своя (Aave StataToken, Morpho, …), общего исходника нет;
+     исполнение — новый шаг исполнителя (Vault.erc4626BufferWrapOrUnwrap внутри unlock) и пересборка. Нужен ли он? Пока
+     пулы с обёртками торгуются как пара обёрток (курс токена — getPoolTokenRates).
+  3) ВОПРОС Тиграну: MEV Capture при сборе чаевых сетью (ArbOS ≥ 60 и ArbOwnerPublic.getCollectTips = true) — комиссия
+     крючка = статическая + (чаевые − порог)·множитель, чаевые известны только при отправке (send.tip_mode profit_share —
+     от прибыли). Сейчас такие пулы без котировки (причина в журнале). Считать по send.priority_fee_gwei / потолку?
+  4) Время блока исполнения: LBP (веса и окно), QuantAMM (веса), ReClamm (виртуальные балансы), рампа A — на блоке чтения;
+     пул перечитывается каждым блоком, сделка — в следующем блоке (как рампа A в решении 441, п. 6).
+  5) ReClamm выпусков 2025: если курсы токенов изменились с последней операции пула и виртуальные балансы сдвигаются —
+     котировки нет (вид считает по прежним балансам). Порт ReClammMath.computeCurrentVirtualBalances (три выпуска разные)
+     — отдельная задача, если таких пулов будет заметно.
+  6) Комиссия в разбивке шага (quote/steps.rs) — статическая; комиссия крючка уже учтена в выходе котировки.
+  7) `wc -l`: pools/load_balancer_v3_kinds.rs 220, math/gyro_eclp.rs 188, pools/balancer_v3_factories.rs 157 — kinds сверх
+     200 (техдолг, docs/ROADMAP.md). ЗАКРЫТО ревью (ниже): kinds 180, load_balancer_v3.rs 138.
+  Ревью решения 452 (независимое, 20.11.2026) — СДЕЛАНО:
+  - Глубина по решению 73 п. 17 (без комиссии пула в обе стороны): у пула V3 с крючком StableSurge (onSwap открыт) для
+    глубины крючок снимается — надбавка всплеска не остаётся при статической 0 (quote/vault_depth.rs); пул StableSurge с
+    onlyVault — откат, как был; MEV Capture не тронут (при нулевых чаевых комиссия статическая).
+  - Разбиение: pools/load_balancer_v3_kinds.rs 220 → 180 + load_balancer_v3_reclamm.rs 77 (виртуальные балансы
+    ReClamm); pools/load_balancer_v3.rs 201 → 138 + load_balancer_v3_state.rs 77 (Parts, state; реэкспорт).
+  - Шапки: math/gyro_sqrt.rs (вызывающие — gyro_2clp.rs, gyro_eclp.rs, gyro_eclp_inv.rs), quote/vault_depth.rs (Balancer
+    V3); SETTINGS_CASES сводная: 0x44d33798… — у dex.bv3_stable_open_factories, не у dex.bv3_stable_factories.
+  - QuantAMM onSwap сверен с QuantAMMProtocol/QuantAMM-V1@4dca4932 pkg/pool-quantamm/contracts/QuantAMMWeightedPool.sol
+    (побайтно = deployment@e7867165 build-info): L271-L340 onSwap, L353-L448 веса пары / одного токена, L451-L552
+    getNormalizedWeights, L558-L572 calculateBlockNormalisedWeight; WeightedMath / FixedPoint / LogExpMath побайтно =
+    20241205-v3-weighted-pool. Формула и округления совпадают. Расхождение одно: onSwap откатывается при
+    lastInteropTime < lastUpdateTime (L284, проверяемое вычитание uint40), getNormalizedWeights — нет (unchecked,
+    L463-L466). Исправлено: чтение каждым блоком getQuantAMMWeightedPoolDynamicData (L595-L612; ABI L29-L40, L137) и
+    отказ в котировке с причиной (pools/load_balancer_v3_kinds.rs); вызов добавлен в tools/arbitrum_record/balancer_v3.py.
+    Запись узла, сделанная до этого коммита, вызова не содержит — записать заново.
+- **Решение 441 (20.11.2026, ветка t223-f2/arb-family-f2) — T433-F2: семейство Balancer V3 (хранилище Vault V3) на
+  Arbitrum One (DEX T433-077 `balancer-v3-arbitrum` — единственная DEX этого семейства в таблице покрытия).** cargo,
+  rustfmt, clippy, solc локально не запускались — сборка и тесты только в CI. Источники — balancer/balancer-deployments@
+  b55dc2b8 (build-info развёрнутого кода: 20241204-v3-vault, 20241205-v3-weighted-pool, 20260115-v3-weighted-pool-v2,
+  20241205-v3-stable-pool, 20250324-v3-stable-pool-v2, 20260116-v3-stable-pool-v3, 20250307-v3-router-v2; адреса —
+  output/arbitrum.json задач).
+  СДЕЛАНО: вид dex.kind `balancer_v3` (Proto::BalancerV3, вид ядра VaultPool с частью V3 `VaultPoolData.v3`);
+  математика — math/balancer_v3.rs (расчёт хранилища: курс токена, комиссия, наименьшая сумма, обратный пересчёт),
+  balancer_v3_weighted.rs (powUp V3, WeightedMath), balancer_v3_stable.rs (StableMath V3); правило onSwap по выпуску
+  фабрики (весовой 20260115 — вход + 1 и нижние балансы; стейблсвап 20260116 — проверка дисбаланса); чтение —
+  pools/load_balancer_v3*.rs (каждым блоком); события — events_balancer_v3.rs (рампа A); проверка —
+  verify_balancer_v3.rs (хранилище знает пул, фабрика DEX, нет крючка обмена, монета среди токенов); квотер сверки —
+  quote/quoter_balancer_v3.rs (Router V3 querySwapSingleTokenExactIn); шаг исполнителя BALANCER_V3 = 23
+  (contracts/ArbExecutor.sol: unlock → balancerV3Callback → swap / settle / sendTo; IPools.sol IBalancerV3Vault) и
+  кодирование (exec/executor/kind.rs, entry.rs); версия исполнителя v4 (code.rs, out/v3/ — замороженная копия v3);
+  настройки dex.bv3_weighted_factories, dex.bv3_weighted_min_factories, dex.bv3_stable_factories,
+  dex.bv3_stable_guard_factories (каталог, SETTINGS.md, SETTINGS_CASES.md, FIRST_RUN.md); скрипт записи
+  tools/arbitrum_record/balancer_v3.py и тест tests/arbitrum_balancer_v3.rs (#[ignore] до записи). BSC — без изменений
+  (вид balancer_v2 и его расчёт прежние: часть V3 у них None).
+  НЕ СДЕЛАНО / ОСТАЛОСЬ:
+  1) Запись своего узла: `python3 tools/arbitrum_record/balancer_v3.py --rpc <узел> …` (пример команды — шапка скрипта),
+     затем `cargo test --test arbitrum_balancer_v3 -- --ignored`; зелёный — снять #[ignore]. До этого dex.pool_enabled
+     у `balancer-v3-arbitrum@arbitrum` не включать.
+  2) Пересборка исполнителя v4: `contracts/build.sh` (в out/ — v4; out/v3/ не трогать), поправить
+     tests/bsc_dex_executor_v3.rs (version_of текущей сборки — V4) и размер кода в contracts/README.md; EVM-тест шага
+     BALANCER_V3 с официальным кодом Vault V3 (contracts/evmtest — сценария нет); развёртывание исполнителя v4 на
+     Arbitrum. Номер шага 23 выбран как 21 + номер семейства (F1 — 22, F3 — 24 …), чтобы шаги параллельных семейств не
+     совпали; версия v4 и out/v3/ — общие для всех семейств: при слиянии — одна пересборка.
+  3) ВОПРОС Тиграну: пулы с крючком обмена (StableSurge — динамическая комиссия; MEV Capture; прочие крючки) не берутся
+     (pools/load_balancer_v3_fixed.rs swap_hook) — расчёт крючка не сверен. Нужны ли они? Если да — по каждому крючку
+     отдельная задача: исходник крючка (balancer-deployments 20250403-v3-stable-surge-hook-v2,
+     20250212-v3-mev-capture-hook), порт onComputeDynamicSwapFeePercentage, сверка с роутером.
+  4) ВОПРОС Тиграну: виды пулов Balancer V3 других фабрик (Gyro 2-CLP и E-CLP, ReClamm, LBP, QuantAMM, пулы со своей
+     фабрикой) в этой задаче не подключены — пул не из dex.bv3_*_factories отвергается с причиной. Каждый вид — своя
+     математика и своя задача (T433-F2a…: Gyro 2-CLP, Gyro E-CLP, ReClamm, LBP).
+  5) ЗАКРЫТО решением 474. Было: пулы ERC4626 (boosted: токен пула — обёртка, буферы хранилища) считаются как обычные токены с курсом (курс —
+     getPoolTokenRates); обмен через буфер (обёртка ↔ базовый токен) не строится — вопрос: нужен ли.
+  6) Рампа A стейблсвапа: A читается на блоке чтения (getAmplificationParameter); пересчёта по времени блока между
+     чтениями нет — расхождение только во время рампы (вид перечитывается каждым блоком).
+  7) Событие PoolRegistered хранилища (новые пулы без индексатора) не слушается — новые пулы приходят из справочника
+     (техдолг, docs/ROADMAP.md).
+  Ревью 441 (20.11.2026, ветка t228/arb-balancer-v3-more; математика хранилища и пулов побитово верна, callback
+  безопасен, регрессий BSC нет). ПРАВЛЕНО (коммит «Решение 441 (ревью, правки)»):
+  а) запись решения 400 (tests/data/executor_v3_live_2026-11-17) сверяется с SHA-256 кода ТОЙ версии, что стоит у
+     кошелька (exec/executor/code.rs runtime_sha256_of: v3 — contracts/out/v3/ArbExecutor.sha256, v4 —
+     contracts/out/ArbExecutor.sha256; live_proof::verdicts_of / accepted_for / listing_for; pool_gate.rs и
+     check/pass_cycle.rs — по версии исполнителя кошелька); запрет развёртывания (deploy_gate::refusal) — по коду
+     текущей сборки (live_proof::verdicts_current: до пересборки v3, после — v4). После пересборки v4 кошельки с v3
+     работают как до неё; у кошелька с v4 классы 19 / 20 / 21 не приняты, развёртывание v4 запрещено, пока нет записи
+     симуляции о коде v4 (новый каталог tests/data/executor_v4_live_<дата> и путь в live_proof.rs).
+  б) шаг BALANCER_V3 (23) — класс решения 400 (live_class.rs CLASSES, live_proof::number; entry.rs fits / fits_ok через
+     pool_gate): до записи о приёмке на живых пулах шаг исполнителем не идёт.
+  в) tools/arbitrum_record/balancer_v3.py пишет и querySwapSingleTokenExactOut (quotes_out), тест сверяет
+     balancer_math::amount_in.
+  г) тест tests/bsc_dex_executor_v3.rs frozen_v3_is_v3: version_of(runtime_v3()) == V3, запись — по SHA v3.
+  д) формулировка недоплаты (ArbExecutor.sol, contracts/README.md): settle = min(подсказка, прирост резерва).
+  е) quote/vault_depth.rs: потолок поиска весового пула V3 — 30 % живого баланса / курс / множитель.
+  ж) комментарии полей Parts (load_balancer_v3.rs), текст сверки кода (onchain.rs: текущая сборка, v3, v2, v1),
+     deploy.rs — «текущая сборка (v3, после пересборки — v4)».
+  ПЛАН ПЕРЕСБОРКИ v4 (не сделана, только в GitHub CI / у Тиграна): 1) contracts/build.sh → contracts/out/ = v4, out/v3/
+  не трогать; 2) тесты, что упадут и как править: tests/bsc_dex_executor_v2.rs version_by_code_in_chain (L55-L60:
+  runtime() — уже не V3: ждать V4 и добавить v3 = runtime_v3()), tests/bsc_dex_executor_v3.rs versions_and_steps (то
+  же), tests/bsc_dex_executor_v3_live.rs accepted_classes_from_record (deploy_gate::refusal() — по коду v4: без записи
+  о v4 — Some), размер кода в contracts/README.md; 3) EVM-тест шага BALANCER_V3 с официальным кодом Vault V3
+  (contracts/evmtest: развернуть Vault / VaultExtension / VaultAdmin из build-info 20241204-v3-vault или eth_simulateV1
+  на своём узле Arbitrum поверх живого Vault 0xbA13…9bA9: unlock → balancerV3Callback → swap / settle / sendTo, сверка
+  выхода с querySwapSingleTokenExactIn того же блока, остаток исполнителя 0); 4) запись симуляции на живых пулах о коде
+  v4 (классы 19 / 20 / 21 и 23) — только после неё у кошельков с v4 шаги идут и разрешено развёртывание.
+- **Решение 453 (20.11.2026, ветка t229/arb-curve-crypto-more) — T433-F3a, T433-F3b и остаток решения 442: Curve
+  Twocrypto-NG v2.0.0, crypto-пулы v1, рампа A/gamma, события создания пулов; ждёт сборки и тестов в GitHub (cargo
+  локально не запускался) и записи узла.** СДЕЛАНО:
+  1) T433-F3a — Twocrypto-NG v2.0.0: исходник — twocrypto-ng d612fde (ФАКТ: официальный scripts/deploy_infra.py этого
+     коммита разворачивает через CREATE2 0x13b0D85C… с солью keccak(42069) и проверяет calculated_address; наша сборка
+     исходника d612fde Vyper 0.3.10 даёт ровно math 0x2005995a…, amm 0x04Fd6beC…, views 0x07CdEBF8…; так же 99b5192 →
+     math 0x1Fd8Af16…, amm 0x934791f7… — v2.1.0 решения 442 подтверждена тем же способом). Отличия v2.0.0 для обмена —
+     только пределы assert'ов get_y / _newton_y / newton_D (math/crypto_lim2.rs); формула выбирается по MATH() пула
+     (pools/crypto_variant.rs: dex.curve_crypto_math_v2_0_0 — v2.0.0), а не по version(): math — immutable пула.
+  2) T433-F3b — виды `curve_crypto_v1` (фабрика crypto v1, CurveCryptoSwap2ETH Vyper 0.3.1; проверка — get_coins
+     фабрики + код пула = прокси EIP-1167 на шаблон из dex.curve_crypto_v1_templates) и `curve_tricrypto_v1` (tricrypto
+     2021, CryptoSwap.vy + CurveCryptoMath3.vy Vyper 0.2.15; пул из dex.stable_pools, монеты coins(k), источник пулов —
+     список, как Curve 2020). Математика — math/crypto_v1_2.rs, crypto_v1_3.rs (все операции проверяемые); чтение —
+     pools/load_crypto_v1.rs (точность 10^(18 − decimals)); события v1 — abi_crypto_v1.rs; квотер — get_dy пула;
+     исполнение — STABLE_U256 (exchange(uint256,uint256,uint256,uint256) у обоих — умолчания use_eth/receiver).
+  3) Рампа A/gamma (вопрос 4 решения 442): порт newton_D (K0_prev = 0) — Twocrypto-NG обеих версий (crypto_d2.rs),
+     Tricrypto-NG (crypto_d3.rs, _geometric_mean), v1 (crypto_v1_2.rs, crypto_v1_3.rs); обмен в рампе считает D по
+     балансам до обмена, как `_exchange`; A() и gamma() пул отдаёт на время блока чтения; пул в рампе (moving)
+     перечитывается каждым блоком (per_block.rs ramping), первое чтение после конца рампы снимает отметку.
+  4) События создания (вопрос 6): TwocryptoPoolDeployed / TricryptoPoolDeployed (адрес пула — в данных лога) и
+     CryptoPoolDeployed фабрики v1 (адреса нет — find_pool_for_coins на блоке события) — pools/created_crypto.rs.
+  5) Ревью 442: п. 1, 5, 8 — tests/arb_curve_crypto_live.rs и tools/arbitrum_record/curve_crypto.py переписаны (ответы
+     по calldata вызовов бота, фильтр по математике и ≥ 1 сверенный пул каждой, пулы с конца pool_list по MATH(),
+     eth_getCode и хеши кода Twocrypto-NG из сборки исходника); п. 9 — ROADMAP.
+  Настройки: dex.curve_crypto_math_v2_0_0, dex.curve_crypto_v1_templates [DEX] (каталог, SETTINGS, SETTINGS_CASES,
+  FIRST_RUN); интерфейс — выбор видов `curve_crypto_v1` / `curve_tricrypto_v1` (labels.js), настройки — экран DEX.
+  Исполнитель переразвёртывать не нужно (шаг STABLE_U256 есть).
+  Нужна запись (Тигран): `python3 tools/arbitrum_record/curve_crypto.py --node <HTTP своего узла Arbitrum>` с адресами из
+  шапки скрипта (все — официальные журналы развёртывания curvefi) → tests/data/arbitrum_curve_crypto_<дата>/
+  (twocrypto.json, tricrypto.json, crypto_v1.json, tricrypto_v1.json, README); затем снять #[ignore] у
+  tests/arb_curve_crypto_live.rs и tests/arb_curve_crypto_v1_live.rs (разбиты — решение 455). До записи dex.pool_enabled
+  этих DEX не включать.
+  Вопросы Тиграну / не сделано:
+  1) Время рампы: котировка — на A/gamma блока чтения (пул в рампе перечитывается каждым блоком), а сделка идёт в
+     следующем блоке с бо́льшим временем; A/gamma меняются линейно за ≥ MIN_RAMP_TIME = 86400 с (CurveTwocryptoOptimized.vy
+     ramp_A_gamma) — разница за секунды мала, но не ноль. Считать A/gamma на ожидаемое время блока исполнения (нужны
+     initial_A_gamma / future_A_gamma и время) или оставить так? — ваше решение.
+  2) Код математики Tricrypto-NG (0x604388Bb…) и реализаций (amm_native_transfers_enabled 0xd7E72f36…, disabled
+     0x1f7C86Af…): развёрнуты не через CREATE2 — хеш сборки сверить нельзя без версии компилятора развёртывания
+     (2d03e6f — `@version 0.3.9`, ecaa816 — 0.3.10); скрипт пишет их eth_getCode, тест хеш Tricrypto не проверяет —
+     сверка только get_dy. Шаблон фабрики v1 (0x5bcA7dDF…, Vyper 0.3.1) и математика tricrypto 2021 (0x2F0AF8eC…, Vyper
+     0.2.15) — так же.
+  3) Откаты tweak_price (ревью 442, п. 6) НЕ смоделированы: после dy обмен зовёт tweak_price, который может откатиться —
+     Twocrypto-NG 89c8dfb CurveTwocryptoOptimized.vy tweak_price L813: MATH.wad_exp (assert переполнения, CurveCryptoMathOptimized2.vy
+     L536), newton_D(…, K0_prev) L887 (assert'ы newton_D), get_p L892 (assert D), `assert virtual_price >
+     old_virtual_price` L921 (вне рампы), newton_D(…, 0) при подстройке price_scale L966; Tricrypto-NG — L1013, L1044,
+     L1048, L1079 («Loss»), L1132; v1 фабрики — halfpow L541, newton_D L549, L607. Для модели нужно ещё состояние
+     (last_timestamp, cached_price_oracle, last_prices, packed_rebalancing_params, xcp_profit, xcp_profit_a,
+     virtual_price, totalSupply / admin_lp_virtual_balance) и порт get_p, wad_exp / halfpow, get_xcp. get_dy пула
+     (квотер сверки) их тоже не проверяет. Следствие: такой обмен откатит бандл целиком (потеря — газ). Делать полный
+     порт tweak_price? — ваше решение (оценка: отдельная задача, ~5–7 новых файлов на версию). **Решение 472: модель сделана для
+     Twocrypto-NG (обе версии) и Tricrypto-NG** (math/crypto_tweak2.rs, crypto_tweak3.rs); crypto v1 — T472-03; сверка на
+     записи — T472-02.
+  4) Вопрос 5 решения 442 (Tricrypto с нативным ETH — держатель для проб налога): по коду ответ есть — источник
+     встречного токена пробы выбирается по фактическому balanceOf(токен) пула ≥ суммы (check/taxes_util.rs quote_source);
+     пул, держащий ETH вместо WETH, такого баланса WETH не имеет и источником не берётся; exec/dry_fund_holder.rs —
+     только синглтоны V4 / Vault. Запись пишет balanceOf монет и eth_getBalance пулов (holdings) — подтвердить на записи.
+  5) Вопрос 1 решения 442 (один id индексатора — несколько видов) решает задача T448-02 (ветка t226, другой агент);
+     новые виды (`curve_crypto_v1`, `curve_tricrypto_v1`) до неё — тоже под отдельными id DEX, заданными вручную.
+  6) Шаблон фабрики v1: в официальном журнале один (0x5bcA7dDF…). Пул на другом шаблоне (если фабрика его меняла) —
+     отказ «формула не сверена» с адресом шаблона в журнале проверки; подтвердить на записи (code пулов v1).
+- **Решение 455 (20.11.2026, ветка t229/arb-curve-crypto-more) — ревью решения 453; ждёт сборки и тестов в GitHub
+  (cargo локально не запускался) и записи узла.** СДЕЛАНО:
+  1) Перевод токена на crypto-пул Curve без события пула (crypto v1, tricrypto 2021, Tricrypto-NG — gulp в
+     `_claim_admin_fees`): подписка Transfer с to = адрес пула (pools/transfer_in.rs, group.rs), отметка и полное
+     чтение пула на голове, если чтение перевод не учло (per_block.rs, session.rs, session_lanes.rs).
+  2) Tricrypto 2021 с is_killed — каждым блоком, пока остановлен (pools/per_block_crypto.rs killed).
+  3) Шапка exec/executor/entry.rs (рампа исполняется — решение 453); строки исходника math/crypto_y2.rs.
+  4) MATH() в обоих списках — отказ пула; ошибка разбора dex.curve_crypto_math_v2_0_0 — отказ с причиной
+     (crypto_variant.rs lists / variant; verify_crypto.rs, load_crypto.rs).
+  5) Разбиты: tests/arb_curve_crypto_live.rs (+ arb_curve_crypto_v1_live.rs, curve_crypto_common),
+     tools/arbitrum_record/curve_crypto.py (+ curve_crypto_rpc.py, curve_crypto_pools.py); group.rs → group_filter.rs,
+     per_block.rs → per_block_crypto.rs. Запись узла — та же команда, что у решения 453 (модули рядом со скриптом).
+  6) Сборка CI коммита 656a0704 (ошибки компиляции): не объявлен модуль pools/per_block_crypto.rs в pools/mod.rs
+     (E0432) — объявлен; transfer_in.rs filter — типы замыканий filter_map / map (E0631, E0599) — исправлены.
+  Вопросы 1–2 — ЗАКРЫТЫ решением координатора (дополнение решения 455, продовое, в логике, без выключателя):
+  1) ~~Нативный ETH на пул с монетой WETH20~~ — СДЕЛАНО: такие пулы читаются каждым блоком (pools/per_block_crypto.rs
+     native / unevented; отметка CryptoData.native_in при чтении — load_crypto.rs, load_crypto_v1.rs, takes_native).
+     ФАКТ исходников: `__default__` payable + gulp self.balance монеты WETH20 — ровно crypto v1 фабрики
+     (CurveCryptoSwap2ETH.vy 7ed1011 L171-L174, L484-L485) и Tricrypto-NG WETH (CurveTricryptoOptimizedWETH.vy ecaa816
+     L305-L309, L1194-L1195); реализацию NG чтение не различает — все Tricrypto-NG с монетой dex.native_wrapped.
+     Tricrypto 2021 (CryptoSwap.vy a0f8401: `__default__` L249-L252 есть, self.balance не читается — gulp L403-L405
+     balanceOf), Twocrypto-NG и Tricrypto-NG без WETH (`__default__` нет) — не входят. dex.native_wrapped не задана —
+     каждым блоком. WETH20 пула v1 — immutable без геттера; подтвердить при записи / выкладке: фабрика v1
+     get_eth_index(пул) (Factory.vy 7ed1011 L420-L430) — индекс монеты, равной dex.native_wrapped (не MAX_UINT256).
+  2) ~~Проверка «память неверна» для видов с переводом без события~~ — СДЕЛАНО: check/memory_proof_rules.rs each_block —
+     per_block::unevented (в т. ч. native) и виды transfer_in::watched — «каждым блоком» (per_block_gate, own).
+  Остаётся (проверка при выкладке, не код):
+  3) Подписка logs без address (только topics) — по спецификации execution-apis filter.yaml address необязателен;
+     на узле Arbitrum (Nitro) подтвердить на живом узле (журнал dex.pool / приход Transfer) после выкладки.
+- **Решение 442 (20.11.2026, ветка t223-f3/arb-family-f3) — T433-F3: crypto-пулы Curve Arbitrum (Twocrypto-NG,
+  Tricrypto-NG); ждёт сборки и тестов в GitHub (cargo локально не запускался) и записи узла.** СДЕЛАНО: виды dex.kind
+  `curve_twocrypto_ng` / `curve_tricrypto_ng` (PoolKind::Crypto, PoolState::Crypto); точная математика — порт Vyper
+  (math/crypto_ops.rs, crypto_y2.rs, crypto_y3.rs, crypto_newton3.rs, crypto_swap.rs; источники — twocrypto-ng 89c8dfb,
+  tricrypto-ng ecaa816, построчно в шапках); чтение (pools/load_crypto.rs), события (events_crypto.rs), проверка
+  (verify_crypto.rs: get_coins фабрики, version(), MATH()), поиск по фабрике (find_pool_for_coins, dex.pair_lookup_max),
+  квотер сверки — get_dy пула (quote/quoter_crypto.rs), глубина (quote/crypto_depth.rs); исполнение — существующий шаг
+  STABLE_U256 (exchange(uint256, uint256, dx, 0)) — **исполнитель переразвёртывать не нужно**; настройки
+  dex.curve_crypto_versions, dex.curve_crypto_math (каталог, SETTINGS, SETTINGS_CASES, FIRST_RUN — совет с адресами из
+  deployments.yaml); интерфейс — выбор вида на экране DEX.
+  Нужна запись (Тигран): `python3 tools/arbitrum_record/curve_crypto.py --node <HTTP своего узла Arbitrum>
+  --twocrypto-factory 0x98EE851a00abeE0d95D08cF4CA2BdCE32aeaAF7F --tricrypto-factory 0xbC0797015fcFc47d9C1856639CaE50D0e69FbEE8`
+  → tests/data/arbitrum_curve_crypto_<дата>/ (twocrypto.json, tricrypto.json, README с блоком и хешами); затем снять
+  #[ignore] у tests/arb_curve_crypto_live.rs (наша формула = get_dy пула на каждой сумме). До записи — dex.pool_enabled
+  этих DEX не включать.
+  Ревью 442 (правки — DECISIONS «442 (ревью, правки)», ветка t229): откат find_pool_for_coins пропускается только при
+  i > 0; у Tricrypto-NG L2 за последним пулом — нулевой адрес (не откат); тексты dex.pair_lookup_max обновлены.
+  Вопросы Тиграну / не сделано (обязательно, приоритетов нет):
+  1) Один id GeckoTerminal — один вид: у Curve Arbitrum все пулы (StableSwap и crypto) под id `curve_arbitrum`. Сейчас
+     crypto-пулы берутся под отдельными id DEX, заданными вручную (`…@arbitrum`), — их пулы приходят только из поиска по
+     фабрике (index.factory_scan, dex.pair_lookup_max) и не из индексатора; crypto-пул, пришедший от индексатора под
+     `curve_arbitrum`, видом StableSwap отклоняется. Нужен ли общий механизм «один id индексатора — несколько видов»
+     (затрагивает справочник и проверку всех DEX — T433-005 и другие)? — ваше решение.
+  2) Twocrypto-NG v2.0.0 (вторая реализация фабрики Arbitrum, `amm_v2_0_0` 0x04Fd6beC…, math 0x2005995a…): коммит
+     исходника, совпадающий с развёрнутым кодом, не установлен (до «up version» d21b270 в истории много правок
+     математики) — пулы этой версии не берутся (нет в совете dex.curve_crypto_versions / dex.curve_crypto_math). Задача
+     T433-F3a: сверить с верифицированным кодом Arbiscan / записью get_dy этих пулов и включить.
+  3) Старые crypto-пулы Curve в Arbitrum (официальные журналы развёртывания curvefi): tricrypto v1 0x960ea3e3C7FB317332d990873d354E18d7645590
+     (curve-crypto-contract d7d04cd, deployment-logs/2021-09-13. Arbitrum, CryptoSwap.vy Vyper 0.2.15, математика
+     0x2F0AF8eC…) и фабрика crypto v1 0xE5De15A9C9bBedb4F5EC13B131E61245f2983A69 (curve-factory-crypto 7ed1011,
+     deployment-logs/others.log; пулы CurveCryptoSwap2ETH). Математика иная (итерационный newton_y Vyper 0.2.x, свой
+     exchange и интерфейс use_eth) — задача T433-F3b: порт, чтение, проверка, шаг исполнителя (exchange(uint256,uint256,
+     uint256,uint256) у них есть — сверить приём монеты и выплату).
+  4) Рампа A/gamma: пул в рампе не котируется (обмен пересчитывает D через newton_D — порта нет), а конец рампы событием
+     не отмечается — пул стоит до следующего своего события. Порт newton_D (Twocrypto CurveCryptoMathOptimized2.vy L376-L462, Tricrypto CurveCryptoMathOptimized3.vy L337-L536)
+     или перечитывание по времени конца рампы — ваше решение (техдолг, docs/ROADMAP.md).
+  5) Tricrypto-NG с нативным ETH (CurveTricryptoOptimizedWETH.vy): пул держит ETH, а не WETH (`_transfer_in` L374-L375
+     — WETH.withdraw; `_transfer_out` L396-L400 — deposit и перевод WETH). Держатель для проб налога монеты WETH
+     (exec/dry_fund_holder.rs holder — адрес пула) у такого пула WETH не имеет — проверить на записи / пробе.
+  6) События создания пулов фабрик (TwocryptoPoolDeployed, TricryptoPoolDeployed — адрес пула не индексирован) не
+     подключены (created_log.rs: continue) — новые пулы приходят из поиска по фабрике (техдолг).
+- **Решение 438 (ревью t222, правки) (20.11.2026, ветка t222/arb-known-accounts)** — cargo не запускался. СДЕЛАНО: A)
+  send/track_l1.rs — caught_up → голова H, затем квитанция и eth_getTransactionCount(from, H); B) начало окна — время
+  блока головы при отправке (не часы сервера); C) exec/pool_cond_check.rs + pool_cond_decode.rs — самопроверка слотов
+  по перечитанному состоянию на блоке плана, расхождение → корень (свой контракт) или без условия (V4); D)
+  exec/pool_cond_topics.rs — перехватчик в tip_judge только по событиям, пишущим слоты условия; E) журнал send.pool_cond
+  и пометка на экране статистики при условии пулов и нескольких каналах; F) wanted → send/pool_cond_mode.rs, + проверка
+  dex.gas_mode = eip1559_l1; G) точная строка пула «корень не ставится — у адреса слоты другого шага»; H) ROADMAP.
+  Сделано однозначно, на подтверждение:
+  1) B: окно по времени сети считается от блока головы на момент начала слежения — он старше отправки на возраст
+     своего блока (ревью 439 (1): ≤ feed.max_block_age_ms — проверяется, старше — начало переносится на первую свежую
+     голову; прежняя формулировка «≤ feed.stale_after_ms» была неверна: тот ограничивает только момент получения
+     номера, не время блока) и время блока — целые секунды вниз; «выброшена» может наступить раньше окна от самой
+     отправки на эту величину (кроме того требуется и окно по монотонным часам бота, и блок головы H не старше
+     feed.max_block_age_ms < send.drop_wait_ms — тогда H новее отправки). send.drop_wait_ms ставить с этим запасом
+     (SETTINGS_CASES, «Смысл изменён»). Прибавлять к началу возраст головы / +1 с?
+  2) C: Kyber — сверяются sqrtP, currentTick, baseL; reinvestL (старшие 128 бит слота 4) не сверяется (как в постановке).
+     Расхождение у пула своим контрактом — дополнительный запрос eth_getProof перед отправкой (только при расхождении,
+     срок verify.timeout_ms) — это лишний круг до узла; вместо него «без условия»?
+  3) D: записи slot0 без событий Swap/Mint/Burn (V3 setFeeProtocol, increaseObservationCardinalityNext) перехватчиком не
+     считаются — доля не меняется, только журнал.
+  4) E: пометка на экране — по числу включённых каналов площадки (channel.enabled), а не по фактическому выбору каналов
+     при отправке (тот — в журнале send.pool_cond на каждой отправке).
+  Нужны записи: слова слотов и геттеры на одном блоке (см. «Решение 438») — тест exec/pool_cond_decode.rs; логи блока с
+  Swap/Sync/ModifyLiquidity — тест фильтра tip_judge; квитанция и nonce на голове H — тест track_l1.
+- **Решение 439 (20.11.2026, ветка t222/arb-known-accounts) — Arbitrum: режим условия пулов send.pool_cond_mode (off /
+  pools) и статистика для решения; ждёт сборки и тестов в GitHub (cargo локально не запускался; формат — вручную по
+  правилам rustfmt).** Решение Тиграна 20.11.2026: стартовать без условия пулов, собрать статистику, по ней решить.
+  СДЕЛАНО: send/pool_cond_mode.rs (off / pools, не задана — off, не из списка — NotConfigured: условия пулов нет,
+  причина на экране); wanted (с ревью 438 — send/pool_cond_mode.rs) — только pools (иначе значения пулов не читаются); статистика
+  exec/pool_cond_stat.rs + pool_cond_stat_store.rs (только eip1559_l1, SQLite venue_state «pool_cond_stat»), журнал
+  send.pool_cond_stat на каждый итог (без Telegram), подсчёт в фоне; шлюз pool_cond_stat / reset_pool_cond_stat,
+  api/pool_cond_stat.rs, ui components/PoolCondStat.svelte (экран «Каналы отправки»: таблица по режимам, «Сбросить
+  статистику»); настройка — каталог, SETTINGS, SETTINGS_CASES (старт off), FIRST_RUN. BSC — без изменений.
+  Сделано однозначно, на подтверждение Тиграну:
+  1) «Режим на момент отправки» — режим в действии: pools только когда условие пулов прочитано для сделки
+     (send.pool_cond_mode = pools И включённый канал sequencer с окном channel.cond_time_window_s); pools без окна —
+     считается off (условия не было). Сделка pools, у которой ни один пул не попал в условие (все «без условия» или
+     сбой чтения), — ревью 439 (5): считается off (knownAccounts не ставится — отправка как off; было — pools). Так
+     оставить?
+  2) «Отправки» — каждый вызов отправки транзакции цикла с любым итогом, в том числе сбой до попадания к секвенсору
+     (ошибка канала, предел газа Solidly) и «исход неизвестен»; на экране «прочие итоги» = отправки − победы − откаты −
+     отказы. Отдельно считать «не дошла до секвенсора»?
+  3) Отказ −32003 не по хранилищу в режиме pools считается «по окну времени» (других условий, кроме timestampMax и
+     knownAccounts, не ставится — send/sequencer_cond.rs params).
+  4) Газ откатов — effectiveGasPrice × gasUsed квитанции (send/receipt.rs gas_bnb), как в постановке; откат без
+     квитанции — отдельный счётчик «газ не учтён».
+  Нужны записи (тестов нет — записей нет): квитанция отката цикла Arbitrum и ответы −32003 (по пулам и по окну) — тест
+  разбора exec/pool_cond_stat.rs classify.
+- **Решение 438 (20.11.2026, ветка t222/arb-known-accounts) — Arbitrum: условие пулов маршрута (knownAccounts) в
+  eth_sendRawTransactionConditional; ждёт сборки и тестов в GitHub (cargo локально не запускался; формат — вручную по
+  правилам rustfmt).** Решение Тиграна 20.11.2026: до отключения метода (17.01.2027) проигрыш «конкурент изменил пул
+  раньше нас» — бесплатный отказ −32003 вместо отката с газом. Факт Тиграна (свой сервер, 20.11.2026): публичный
+  секвенсор принял условие на слот 0 пула V3, изменённого в последнем блоке, транзакция включена через 2 блока —
+  проверки «старого состояния» (TxPreChecker required-state-age) на секвенсоре нет. BSC — без изменений (условие
+  только при канале sequencer с окном).
+  СДЕЛАНО: exec/pool_cond.rs — вид → слоты / корень / без условия (таблица с источниками в шапке): V2 (uniswap_v2,
+  pancakeswap_v2) — слот 8; Uniswap V3 — 0 и 4; PancakeSwap V3 — 0 и 5; Slipstream — 6 и 16; Kyber Elastic — 3 и 4;
+  LB 2.1 — 4 и 5; Uniswap V4 — S = keccak256(PoolId . 6), S и S+3 у PoolManager; V2/V3-форки и прочие пулы со своим
+  контрактом — корень хранилища (eth_getProof storageHash; nitro-geth internal/ethapi/api.go:385 — та же
+  GetStorageRoot, что в проверке txoptions.go:93); Balancer V2, пары общего контракта (WooFi), Infinity — без условия
+  с причиной. exec/pool_cond_read.rs — значения одной пачкой eth_getStorageAt / eth_getProof на блоке перечтения пулов
+  цикла ОДНОВРЕМЕННО с ним (quote/cycle_legs.rs fresh_at; после разрешения — заново); только при включённом канале
+  sequencer с channel.cond_time_window_s (отдельного выключателя нет: снять окно = снять и условие пулов). Отправка —
+  txs::send_tipped (Terms: время головы + knownAccounts; send/ready.rs, send/sequencer_cond.rs params). Пояснение
+  отказа «Storage slot value / root hash condition not met» — REJECTED_POOLS (send/sequencer_cond.rs explain).
+  Интерфейс: журнал send.pool_cond на каждую отправку (блок плана, время чтения, пулы в условии и без него с причиной),
+  та же строка — в карточке сделки (TradeResult.executor после подписи «свой сборщик: цикл …») и в тексте ошибки после
+  отправки; «Проверить подключение» канала — без изменений (пустые условия). Новых настроек нет.
+  Что ловится и что нет (шапка exec/pool_cond.rs): V3-подобные — каждый обмен (slot0) и mint/burn в текущем диапазоне
+  (liquidity); НЕ ловятся mint/burn вне диапазона (только ticks/tickBitmap — v3-core UniswapV3Pool.sol:328-335),
+  состояние крючка V4, время (LB — затухание комиссии; Curve/Balancer — рампа A), внешние оракулы, налог/пауза токена.
+  Вопросы Тиграну:
+  1) Тики и битмап пути V3/V4/Slipstream в условие не ставятся (только slot0 + liquidity): mint/burn вне диапазона на
+     нашем пути меняет итог без отказа (минимум исполнителя откатит платно). Добавить слова тиков пути (eth_getStorageAt
+     ticks[t] слово 0, tickBitmap[w]; номера тиков — по плану обмена)? Цена — больше слотов и ложные отказы при
+     любом добавлении ликвидности на пути.
+  2) Корень хранилища (форки V2/V3, Algebra Integral, Curve, DODO, Maverick и др.) меняется и от записей, не влияющих на
+     цену (переводы LP-токена, collect, наблюдения) — такой отказ бесплатный, но выгодная сделка теряется. Оставить
+     корень или для этих видов условие не ставить, пока раскладка не сверена?
+  3) Отказ −32003 по условию пулов: перехватчик ищется в окне (блок плана, голова своего узла на момент ответа] (ревью
+     437, п. 2). Если изменивший пул стоит в том же блоке, который собирал секвенсор (голова + 1), в окно он не попадает —
+     доля чаевых не меняется, только журнал send.tip_loss. Так оставить?
+  Нужны записи (тестов нет — записей нет):
+  - сверка раскладок развёртываний Arbitrum: на одном блоке N для 2–3 пулов каждого вида — eth_getStorageAt(слоты
+    выше) и геттеры (getReserves, slot0, liquidity, StateView getSlot0/getLiquidity, LB getActiveId/getReserves,
+    Kyber getPoolState/getLiquidityState, Slipstream slot0/liquidity) — Uniswap V2, PancakeSwap V2/V3, Sushi V2/V3,
+    Slipstream, Kyber Elastic, LB 2.1, Uniswap V4 PoolManager; Balancer V2 Vault — слоты по AST
+    (/home/claude/src-ext/reports/arb-known-accounts.md, 3.1) против getPoolTokens (до сверки — без условия);
+  - eth_getProof(пул, [], N) своего узла Nitro (поле storageHash) — тест разбора exec/pool_cond_row.rs root;
+  - ответ секвенсора на условную отправку с неверным значением слота (−32003 «Storage slot value condition not met») —
+    тест send/sequencer_cond.rs explain (REJECTED_POOLS); запись Тиграна 20.11.2026 (принятая транзакция) — тоже в
+    tests/data;
+  - время пачки eth_getStorageAt / eth_getProof от сервера бота до узла Arbitrum (в журнале send.pool_cond — read_ms).
+  Не подтверждено: лимит числа адресов/слотов условия на публичном эндпоинте (в коде nitro лимита нет — только 5 МБ
+  тела HTTP, nitro-geth rpc/http.go:36).
+- **Решение 437 (ревью, правки) (20.11.2026, ветка t222/arb-known-accounts)** — по независимому ревью t221; cargo не
+  запускался. СДЕЛАНО: 1) send/track_l1.rs — «выброшена» только при свежей голове своего узла (не старше
+  feed.stale_after_ms, SendCfg.stale) и времени её блока ≥ начало слежения + send.drop_wait_ms (caught_up); иначе
+  ждём, по send.queue_max_wait_s — Pending; 2) exec/tip_cycle.rs + tip_judge.rs — отказ −32003 по условию пулов: окно
+  (блок плана, голова на момент ответа], перехватчик — первый по (блок, transactionIndex); окно не определено или в
+  нём никого — доля не меняется, только журнал; отказ по окну времени — только журнал; 3) exec/tip_state_store.rs —
+  изменение доли синхронно под замком памяти, запись в SQLite по одной и всегда последнего состояния; журнал — после;
+  4) tip_cycle choose — чаевые не ниже (минимум каналов − база), как подпишет tx_price::floored; 6) exec/tip_state.rs
+  applies — состояние и сброс доли только у dex.gas_mode = eip1559_l1 (иначе NotApplicable, 400), блок «Доля чаевых»
+  у BSC не показывается (components/TipShare.svelte); 7) send/tx.rs SendCfg::read — send.drop_wait_ms ≥
+  send.queue_max_wait_s → NotConfigured с причиной (SETTINGS, SETTINGS_CASES, FIRST_RUN); 8) победа — строка журнала
+  send.tip_share (без Telegram), экран «Доля чаевых» перечитывается.
+  5) Запись (не сделано, по постановке): P0 (exec/tip_cycle.rs choose) не вычитает чаевые канала (перевод билдеру,
+  send::tip) — у канала sequencer чаевых канала нет (send/sequencer.rs:34 tips: false), на Arbitrum P0 от этого не
+  меняется; появится канал с чаевыми у eip1559_l1 — вычесть их из P0.
+- **Решение 437 (20.11.2026, ветка t221/arb-send-tips) — Arbitrum (только dex.gas_mode = eip1559_l1): итог отправки
+  без отмен, газ L1 без чаевых, динамические чаевые; ждёт сборки и тестов в GitHub (cargo локально не запускался;
+  формат — вручную по правилам rustfmt).** BSC (legacy) — поведение без изменений.
+  Часть 1 (отмена) — СДЕЛАНО: send/track_l1.rs — у eip1559_l1 отмен нет; квитанция на каждый блок; без квитанции
+  дольше send.drop_wait_ms (по времени) — nonce «latest»: не занят → выброшена (NotIncluded без отмены, очередь
+  свободна сразу — send/settle.rs, сделка без повтора), занят → поиск своей квитанции, потом «вытеснена». Ошибки
+  ответа отправки — прежний разбор (send/mod.rs classify + решение 154: «nonce too low» и прочие отказы проверяются
+  своим узлом по хешу; −32003 условной отправки — отказ). Канал sequencer: channel.http_timeout_ms (таймаут HTTP
+  отправки, rpc::post_within), channel.submit_method (raw / sync — eth_sendRawTransactionSync, формат подтверждён
+  исходником nitro-geth internal/ethapi/api.go:1934, ошибка срока — код 4, errors.go:125), channel.sync_timeout_ms —
+  send/seq_opts.rs; «Проверить подключение» канала — методом отправки, с таймаутами в ответе.
+  Нужны записи (тестов нет — записей нет):
+  - ответы секвенсора Arbitrum One на eth_sendRawTransaction с временем: успех, «nonce too low», «context deadline
+    exceeded», «max fee per gas less than block base fee» — тест разбора send/mod.rs classify у сети eip1559_l1;
+  - ответ своего узла Nitro v3.12.4 на eth_sendRawTransactionSync пустой транзакции (есть ли метод в v3.12.4 —
+    не проверено: клон nitro-geth 260bc5dc новее/другой ветки) и на настоящую транзакцию (квитанция; код 4 при сроке);
+  - сценарий «выброшена» (nonce не вырос за send.drop_wait_ms) — запись квитанции null + eth_getTransactionCount.
+  Часть 2 (газ) — СДЕЛАНО для проверки цикла перед отправкой: exec/cycle_gas.rs Bill — у eip1559_l1 затраты =
+  газ_L2 × (база + чаевые) + газ_L1 × база (nitro arbos/tx_processor.go:627-645: при сборе чаевых часть L1
+  пересчитывается по полной цене — её плата в wei от чаевых не растёт); газ L1 — gasEstimateForL1
+  NodeInterface.gasEstimateComponents самой транзакции (запрос одновременно с пробой, exec/cycle_exec.rs); газ L2 — газ
+  симуляции; исполнитель (cycle_exec), сухая сделка (cycle_dry); бандл — только legacy (без разбиения).
+  Предпроверка средств кошелька (exec/gas_fund.rs) — по maxFeePerGas × весь лимит: nitro-geth
+  core/state_transition.go:474-480 (buyGas). Котировка (quote/gas.rs, gas_base.rs planned): «база + чаевые» на газ
+  плана — части L1 у транзакции до сборки нет.
+  Осталось по части 2 (у eip1559_l1 цена «база + чаевые» на весь газ — чаевые завышены на газ_L1 × чаевые, разбиения
+  нет, нужен gasEstimateComponents каждой такой транзакции): exec/executor/trade.rs (ноги CEX ↔ DEX через
+  исполнитель), exec/verify_gate.rs, exec/dry_paths.rs, exec/native.rs, venue.rs:395, quote/mod.rs:268,
+  quote/cycle_cost.rs (план цикла), wallet/transfer_cost.rs, exec/executor/deploy.rs.
+  Нужна запись: на своём узле Arbitrum — eth_simulateV1 (validation = false) обмена и gasEstimateComponents той же
+  транзакции, потом квитанция после включения (gasUsed, effectiveGasPrice, gasUsedForL1) — проверка формулы и
+  вопроса 3.
+  Часть 3 (динамические чаевые) — СДЕЛАНО: send.tip_mode (fixed / profit_share) и send.tip_floor_gwei,
+  send.tip_cap_gwei, send.tip_share_min_pct, send.tip_share_max_pct, send.tip_share_step_up_pct,
+  send.tip_share_step_down_pct, send.tip_wins_to_step_down (каталог, SETTINGS, SETTINGS_CASES, FIRST_RUN; без значений;
+  не заданы — котировок нет, «Проверить подключение» (Газ сети) — причина). send/tip_mode.rs — режим; quote/gas_base.rs
+  tip_wei — fixed: send.priority_fee_gwei, profit_share: нижний предел (план котировки и транзакции без своей прибыли);
+  exec/tip_cycle.rs choose — у цикла через исполнитель P0 (прибыль без чаевых, газ L2 и L1 по базе), Pmin
+  (dex_dex.min_profit_usd), доля s → чаевые (exec/tip_pick.rs), до проверки порога; отправка — txs::send_tipped;
+  after — в фоне: в блоке — победа; откат — разбор по блоку включения (exec/tip_judge.rs: eth_getLogs по пулам
+  маршрута, транзакции с transactionIndex меньше нашего, их чаевые = effectiveGasPrice − baseFee); отказ −32003 — по
+  следующему блоку после отправки. exec/tip_state.rs — доля, счётчики, последний проигрыш (SQLite venue_state, вид
+  tip_share), подстройка, событие Telegram send.tip_share_max; строка журнала send.tip_loss на каждый проигрыш.
+  Интерфейс: «Каналы отправки» → блок «Доля чаевых (PGA)» (components/TipShare.svelte; GET/POST
+  /api/venues/{id}/tip-share[/reset]). Квитанция — поле transactionIndex (send/receipt.rs).
+  Сделано однозначно, на подтверждение Тиграну:
+  4) Причину отката квитанция не даёт (minOut / deadline — debug_* у узла закрыт): разбирается любой откат транзакции
+     цикла; при откате по deadline перехватчика обычно нет → «по скорости» (доля не меняется).
+  5) В режиме profit_share чаевые транзакций без своей прибыли (разрешения, переводы, ноги CEX ↔ DEX на Arbitrum) и
+     план котировки — нижний предел send.tip_floor_gwei. Так оставить?
+  6) Признак отказа условием −32003 — текст пояснения канала (send/sequencer_cond.rs REJECTED) в ошибке отправки; хеша
+     нашей транзакции в этой ошибке нет — в разборе «нет в сети».
+  7) Каждый проигрыш — строка журнала send.tip_loss; в состоянии (экран) — только последний проигрыш (список всех — в
+     журнале). Нужен ли на экране список?
+  Нужны записи (тестов tip_judge / tip_pick нет): блок Arbitrum с откатом нашей транзакции цикла и перехватчиком на пуле
+  маршрута — eth_getLogs по пулам, квитанции перехватчиков и наша, eth_getBlockByNumber (baseFee).
+  Вопросы Тиграну:
+  3) Газ плана и газ симуляции (eth_simulateV1, validation = false — check/simulate.rs) у Arbitrum: входит ли в
+     gasUsed часть L1, по исходникам не установлено: nitro arbos/tx_processor.go:613-641 начисляет газ L1 при baseFee > 0
+     и SkipL1Charging = false; симуляция идёт в режиме commit (nitro-geth internal/ethapi/simulate.go:292,
+     core.NewMessageCommitContext → IsExecutedOnChain, poster = Coinbase симулированного блока — tx_processor.go:619-623),
+     а плата L1 для такого poster — по l1pricing PosterDataCost (nitro arbos/l1pricing/l1pricing.go:603-616) — без
+     записи не доказать. Сейчас в проверке цикла газ симуляции = газ L2, часть L1 добавляется отдельно (если она уже
+     входит — посчитана дважды по базе, затраты не занижены). Нужна запись (выше).
+  1) send.max_wait_blocks, send.cancel_* и send.bundle_max_blocks у arb_dex по-прежнему обязательны (SendCfg::read
+     читает их у любой сети), хотя при eip1559_l1 трекер их не использует (кроме replaced_confirm_blocks,
+     queue_max_wait_s). Снять обязательность для eip1559_l1? Пока — задать любые допустимые (техдолг ROADMAP).
+  2) eth_sendRawTransactionSync: эндпоинт секвенсора Arbitrum One его не принимает (docs transaction-lifecycle.mdx:
+     79-82) — sync возможен только через свой узел Nitro (лишний шаг пересылки). Переключать на sync — после выхода
+     Nitro 3.14.x и смены поведения eth_sendRawTransaction на Arbitrum One (сроки не объявлены)?
+- **Решение 436 (20.11.2026, ветка t220/arb-conditional-mingas) — Arbitrum: eth_sendRawTransactionConditional и
+  минимум цены газа канала с узла; ждёт сборки и тестов в GitHub (cargo локально не запускался; формат — вручную по
+  правилам rustfmt).** Ответ Тиграна на вопросы 1 и 3 решения 435 — сделать оба; источник формата — исходники Nitro.
+  Сделано: А) send/sequencer_cond.rs — канал sequencer (Single::Sequencer) при channel.cond_time_window_s шлёт
+  eth_sendRawTransactionConditional с timestampMax = время головы на момент отправки + окно; не задана — обычная
+  eth_sendRawTransaction; отмена — без условия; разбор −32003 / −32005 / −32601. Б) node/arb_min_gas.rs —
+  ArbGasInfo.getMinimumGasPrice по адресу dex.arb_gas_info читается вместе с baseFee блока (quote/gas.rs) и стал
+  минимумом канала sequencer вместо channel.min_gas_price_gwei. Интерфейс — «Проверить подключение» (часть «Газ сети»
+  площадки, проверка канала sequencer: минимум, блок, окно). Новые настройки: dex.arb_gas_info, channel.cond_time_window_s
+  (каталог, SETTINGS, SETTINGS_CASES, FIRST_RUN).
+  **ВАЖНЫЙ ФАКТ (arbitrum-docs 5ce1a9e1, notices/eth-send-raw-transaction-conditional-deprecation-notice.mdx):
+  Offchain Labs отключает eth_sendRawTransactionConditional на секвенсоре Arbitrum One 17.01.2027 (уведомление
+  18.11.2026, комментарии на форуме до 18.12.2026; после — ответ −32601). После этой даты channel.cond_time_window_s у
+  sequencer снять (канал покажет причину «секвенсор не принимает…», отправка без окна — обычная).**
+  Выкладка BSC: новых обязательных настроек нет; каналы BSC и legacy — без изменений. Канал sequencer при dex.gas_mode =
+  legacy теперь не готов (минимум с узла не читается) — условие (3) решения 435 по факту кода снято для legacy-площадки,
+  но channel.chain каналу sequencer задать всё равно (вторая площадка eip1559_l1).
+  Осталось / нужны записи (тесты только на записанных данных — записей нет, тесты не написаны):
+  - запись со своего узла Arbitrum: eth_call getMinimumGasPrice() на 0x…6C (запрос и ответ) — тест селектора и разбора
+    node/arb_min_gas.rs;
+  - запись ответов секвенсора (https://arb1-sequencer.arbitrum.io/rpc) на eth_sendRawTransactionConditional: пустая
+    транзакция с пустыми условиями (как «Проверить подключение») — тест разбора; ответ −32003 на настоящую транзакцию с
+    уже прошедшим timestampMax — только с вашего разрешения (это отправка подписанной транзакции в сеть; по исходникам
+    при невыполненном условии в блок она не попадает — txoptions.go:89-91, sequencer.go:799-802).
+  Ревью 436 (20.11.2026) — СДЕЛАНО коммитом «Решение 436 (ревью, правки)» (cargo не запускался): 1) node/arb_min_gas.rs —
+  floor сначала проверяет dex.gas_mode = eip1559_l1 и dex.arb_gas_info, значение берёт только прочитанное не раньше
+  feed.stale_after_ms назад; refresh при снятой dex.arb_gas_info удаляет запись площадки; 2) шапка arb_min_gas.rs —
+  при строгости 20 maxFee сравнивается с header.BaseFee (tx_pre_checker.go:153-161), с MinBaseFeeWei — только при
+  строгости < 20; 3) send/sequencer_cond.rs head_time — время ровно блока головы (Heads::at мог отдать прошлый блок,
+  решение 89) — иначе чтение времени головы с узла (node/head_age.rs fetch); 4) ChannelCard.svelte — настройки по виду
+  канала (SendChannelInfo.sequencer): channel.cond_time_window_s только у секвенсора, channel.min_gas_price_gwei — не у
+  него.
+  Вопросы Тиграну:
+  1) Окно channel.cond_time_window_s — сколько секунд? Время блока L2 — целые секунды (txoptions.go сравнивает
+     секунды), голова узла может отставать на доли секунды; окно 1 с может отвергать нормальные транзакции на границе
+     секунды. Значение — ваше.
+  2) knownAccounts (условие на корень хранилища / слоты контракта, txoptions.go:92-106) не ставится: защитило бы от
+     изменения пула между планом и исполнением, но нужен корень хранилища или слоты каждого пула маршрута на блоке плана
+     (eth_getProof — отдельный запрос на каждую сделку), а свой minOut исполнителя уже откатывает сделку хуже плана.
+     Нужно ли?
+     Факты исходников (nitro ccc5c828, nitro-geth 260bc5dc): при приёме в очередь секвенсора условие НЕ проверяется
+     (execution/gethexec/sequencer.go:732-787 — только кладёт options в очередь); проверяется (а) перед исполнением в
+     блоке — PreTxFilter на состоянии строящегося блока, включая транзакции перед нашей в этом же блоке
+     (arbos/block_processor.go:496 → sequencer.go:798-803), до ApplyTransaction (block_processor.go:566); отказ —
+     continue без квитанции (:614-652, квитанции добавляются только на :749) — в блок не попадает, газ не платится;
+     (б) на узле с TxPreChecker перед пересылкой (node.go:475, tx_pre_checker.go:239-255, 183-189) — по умолчанию
+     strictness 20 и RequiredStateAge 2 с / RequiredStateMaxBlocks 4 (tx_pre_checker.go:56-60): условия должны
+     выполняться и на состоянии до 4 блоков назад (:190-215). Какая настройка у публичного секвенсора Arbitrum One —
+     в исходниках нет. Слоты: сравнение слова 32 байта целиком (txoptions.go:98-104), корень хранилища — :93-97.
+     Лимитов на число аккаунтов/слотов в коде нет; есть только предел тела HTTP-запроса 5 МБ (nitro-geth
+     rpc/http.go:36). Номера слотов пулов в nitro нет — только из исходников контрактов пулов и записей
+     eth_getStorageAt своего узла.
+  3) blockNumberMin/Max — окно номера блока L1 (txoptions.go:80-85; номер — L1BlockNumber из заголовка, sequencer.go:799)
+     не ставится: шаг L1 ≈ 12 с, грубее окна времени L2. Нужно ли?
+  4) Неоднозначность в источниках: уведомление docs «Transaction submission changes» (notices/
+     transaction-submission-changes-notice.mdx) — eth_sendRawTransaction будет отвечать при приёме в очередь, без ошибок
+     постановки в блок; про eth_sendRawTransactionConditional уведомление молчит, а проверка условия — при постановке
+     (sequencer.go:799). Как будет отвечать условный метод после этого изменения — в источниках нет; сейчас ответ ждёт
+     постановки (sequencer.go:614-651). При изменении — проверить на записи.
+  5) Код −32003 в go-ethereum также ErrcodeResponseTooLarge (nitro-geth rpc/errors.go:63); для ответа-хеша условного
+     метода «ответ слишком большой» не бывает, поэтому −32003 разбирается как отказ условия (текст секвенсора — как есть).
+- **Решение 435 (20.11.2026, ветка t219/arb-step5b) — две сети, шаг 5б: пункты 433-г…к, 433-м и ревью README сделаны;
+  ждёт сборки и тестов в GitHub (cargo локально не запускался; формат — rustfmt по изменённым файлам).** Что по каждому
+  пункту — блок «Решение 433», «Осталось». Не сделано: 433-л (голова по WS newHeads — ждёт вопроса 2 решения 433),
+  eth_sendRawTransactionConditional (вопрос 1 ниже).
+  **ПЕРЕД ВЫКЛАДКОЙ на живой бот:** (1) задать dex.gas_mode = `legacy` у bsc_dex — без неё BSC не котирует и не
+  отправляет, «Проверить подключение» — ошибка «Газ сети» (автоснятие пауз не снимет паузу); (2) dex.default_chain =
+  `bsc` — до того, как задавать dex.venues (две сети без неё — ошибка ядра, решение 430). dex.venues на BSC не задавать,
+  пока Arbitrum не нужен; (3) канал sequencer на BSC не включать (channel.enabled) без channel.chain — при одной
+  площадке DEX он канал BSC (send/channels.rs serves → default_chain → alone), открытый (sequencer.rs private: false), и
+  вместе с каналами билдеров select (send/mod.rs) откажет «Открытый канал включён вместе с другими» — отправка BSC встанет.
+  Что у BSC нового (поведение торговли прежнее): обязательная dex.gas_mode; на «Каналах отправки» карточка канала
+  sequencer (состояние «не задана channel.enabled» — одно событие SendChannel при первой отправке/котировке) и поле
+  channel.chain у каждого канала; в «Проверить подключение» часть «События по WebSocket» (подписка logs на своём узле —
+  её отказ делает проверку неуспешной).
+  Вопросы Тиграну:
+  1) ОТВЕЧЕН (Тигран 20.11.2026: сделать по исходникам Nitro) — СДЕЛАНО решением 436.
+     eth_sendRawTransactionConditional: docs.arbitrum.io («RPC methods») описывает только смысл (knownAccounts,
+     blockNumberMin/Max — окно блока L1, timestampMin/Max — окно L2, ошибка −32003), без формата запроса и примера.
+     Нужен ли он (защита от исполнения «не на том состоянии»), и можно ли брать формат из исходников Nitro как
+     официального источника? Пока отправка — обычная eth_sendRawTransaction.
+  2) Канал секвенсора помечен «открытая отправка» (решение 33: только один, не вместе с закрытыми): эндпоинт
+     публичный, документация приватности не обещает. Так оставить?
+  3) ОТВЕЧЕН (Тигран 20.11.2026: минимум с узла) — СДЕЛАНО решением 436 (ArbGasInfo.getMinimumGasPrice, dex.arb_gas_info).
+     channel.min_gas_price_gwei обязана быть > 0 (каталог) — у секвенсора минимума канала в документации нет. Какое
+     значение ставить (оно поднимает чаевые до «минимум − baseFee», если минимум выше baseFee + чаевые)?
+  4) Отмена у Arbitrum: мемпула нет, замена транзакции тем же nonce у секвенсора в документации не описана; отмена
+     шлётся по правилу geth (обе цены выше на send.cancel_gas_bump_pct). Оставить так или у Arbitrum отмен не слать?
+  5) dex.venues читается при запуске (площадка регистрируется в шлюзе до ядра). Подходит, или нужна регистрация
+     на лету без перезапуска?
+  6) Значения send.priority_fee_gwei и send.max_fee_margin_pct у arb_dex (вопрос 1 решения 433 о чаевых — тот же).
+  Ревью 435 (20.11.2026, dc68bbe6..bac765de, только чтение кода, cargo не запускался) — регрессий BSC при одной площадке
+  и dex.gas_mode = legacy не найдено; пункты а)–г) СДЕЛАНЫ (решение «435 (ревью, правки)», cargo не запускался):
+  а) main.rs — занятый id отсеивается до Place.all (журнал venue.dex_venues); б) шапка errors.rs по факту, техдолг —
+  ROADMAP; в) три строки документов исправлены; г) connection_events.rs — NotConfigured → «не проверены», иначе
+  причина ошибки; условие выкладки про sequencer — в «ПЕРЕД ВЫКЛАДКОЙ» (3). Исходный текст ревью:
+  а) src/main.rs:301 — Place.all = все id dex.venues, а id, занятый площадкой шлюза (main.rs:339), пропускается, но
+     остаётся в all: у bsc_dex alone() = false → families::all (pools/families.rs:436), channels::serves
+     (send/channels.rs:54), directory/fetch.rs читают dex.default_chain; не задана → у BSC пусто видов DEX и ни одного
+     канала. Сценарий: dex.venues = ["bingx"] (грамматику dex_venues.rs проходит). Строить all из реально
+     зарегистрированных площадок.
+  б) src/venues/bsc_dex/errors.rs:6 — в шапке «node/rpc_capped.rs перепомечают», файл в ветке не менялся; у arb_dex
+     ошибки rpc_capped.rs, ws.rs (request/subscribe), multicall.rs, call.rs, receipts_handle.rs, rpc_race.rs — с площадкой
+     bsc_dex (ядро правила берёт по своей площадке, core/rules_apply.rs:152 — торговли не меняет; текст ошибки — да).
+  в) устаревшие строки: src/venues/bsc_dex/README.md:50 (connection_gas — «не задана — пометка, не ошибка»),
+     src/venues/bsc_dex/send/README.md:27 (gas_mode.rs — «отправка по режиму — задача 433-д»),
+     docs/notes/arbitrum/step5-plan.md:145 («живой BSC от неё не зависит») — после 433-д неверно.
+  г) connection_events.rs: dex.native_wrapped задана, но не адрес — текст «не задана» (ctx.addr любая ошибка).
+  Условия выкладки (факт кода): dex.gas_mode = legacy у bsc_dex до выкладки (quote/gas.rs base, exec/tx_fee.rs,
+  connection_gas.rs); канал sequencer на BSC не включать без channel.chain — при одной площадке он канал BSC
+  (channels.rs serves → default_chain → alone), открытый (sequencer.rs private: false), и вместе с каналами билдеров
+  select (send/mod.rs) откажет «Открытый канал включён вместе с другими» — отправка BSC встанет.
+- **Решение 443 (20.11.2026, ветка t223-f4/arb-family-f4) — Arbitrum, семейство T433-F4 Camelot V2 (вид `camelot_v2`);
+  ждёт сборки и тестов в GitHub CI (cargo локально не запускался).** Сделано: математика пары (math/camelot_v2.rs, порт
+  getAmountOut с арифметикой Solidity 0.5.16), чтение (pools/load_camelot.rs), события Sync / FeePercentUpdated /
+  SetStableSwap (pools/events_camelot.rs), проверка и поиск пар путём V2, квотер сверки — сама пара getAmountOut,
+  шаг SOLIDLY исполнителя (переразвёртывание не нужно), поле fee1 у PoolState::Solidly (направленная комиссия),
+  каталог dex.kind и подпись в интерфейсе; новых настроек нет. Источник — verified-исходник Arbiscan официальной
+  фабрики 0x6EcCab42…A652 (её код создаёт пары, CamelotFactory.sol L59), копия — tintinweb/smart-contract-sanctuary-arbitrum@465b149.
+  Осталось:
+  - Запись своего узла: `python3 tools/arbitrum_record/camelot_v2.py http://УЗЕЛ:8547 --factory 0x6EcCab422D763aC031210895C81787E87B43A652`
+    (из корня репозитория) → tests/data/arbitrum_camelot_v2_<дата>/; затем снять #[ignore] в tests/arb_dex_camelot_v2.rs
+    (сверка нашей математики с getAmountOut пары, проверка путём V2, разбор реальных логов, один код у всех пар).
+  - Завести DEX в области «DEX» `camelot@arbitrum` (docs/FIRST_RUN.md) и включить после зелёных тестов на записи.
+  - Сухая сделка шага SOLIDLY через пару Camelot на исполнителе кошелька Arbitrum (бот делает её перед первой сделкой —
+    exec/executor/dry.rs): записанной пробы исполнителя на паре Camelot нет.
+  Ревью t223-f4 — правки сделаны (DECISIONS «443 (ревью, правки)»): проверка K в swap_out, комиссия 0 — отказ, тест
+  на записи требует стабильные пары и сверяет значения логов, скрипт отделяет откат от ошибок узла и добирает
+  стабильные пары полным просмотром allPairs.
+  Вопросы Тиграну:
+  1) Официального репозитория Camelot V2 на GitHub нет (у github.com/CamelotLabs — только SDK, списки токенов и
+     расширения Frontier); исходник взят из verified-кода Arbiscan через зеркало tintinweb (прямой доступ к Arbiscan
+     и Sourcify из среды агента закрыт). Принимаете это как источник, или сверить текст на arbiscan.io вручную
+     (фабрика 0x6EcCab42…A652, вкладка Contract)?
+  2) Другие DEX Arbitrum семейства Camelot V2 (форки) в таблице покрытия не установлены: у строк «семейство не
+     установлено» (Zyberswap, SwapFish, Arbidex и др.) — свои задачи T433-NNN; форк включается видом camelot_v2 только
+     после сверки исходника пары (FEE_DENOMINATOR, формулы, события).
+- **Решение 444 (20.11.2026, ветка t223-f5/arb-family-f5) — вид пула algebra_dir_fee (Algebra V1.9 с направленными
+  комиссиями, Camelot V3; T433-F5, T433-033); ждёт сборки и тестов в GitHub (cargo локально не запускался).** Исходник —
+  cryptoalgebra/AlgebraV1.9, ветка direction-based-fee, a45417ed. Математика, чтение, события (Fee — обе комиссии),
+  проверка, предзагрузка, квотер (виртуальный), шаг исполнителя ALGEBRA (исполнитель не переразвёртывается); настройки —
+  вариант dex.kind algebra_dir_fee и (ревью 444) dex.pool_code_hashes [DEX] — сверка версии кода пула по CREATE2; интерфейс — экран «Настройки», область DEX (вариант из
+  каталога). Подробно — DECISIONS 444.
+  Осталось:
+  - Записать со своего узла: `python3 tools/arbitrum_record/algebra_dir_fee.py …` (команда целиком —
+    tools/arbitrum_record/README.md), закоммитить tests/data/arbitrum_algebra_dir_fee_<дата>/, снять `#[ignore]` с
+    tests/arb_dex_algebra_dir.rs и tests/arb_dex_algebra_dir_events.rs, прогнать CI.
+  - После записи — задать настройки DEX `camelot-v3@arbitrum` (docs/FIRST_RUN.md) у площадки arb_dex.
+  Вопросы Тиграну:
+  1) Квотер Camelot V3 (0x0Fc73040…6E по docs.camelot.exchange) — это Quoter (quoteExactInputSingle(address, address,
+     uint256, uint160) → (amountOut, fee)) или QuoterV2 ветки (параметры структурой)? В документации Camelot — только
+     «Quoter», без исходника. Пока — только виртуальный квотер (обмен самого пула). Запись отвечает фактом (оба вызова
+     записываются); подключить официальный — после ответа записи.
+  2) Версия кода пулов: в ветке два вида битмапа — сжатый на 60 (коммиты 0d5612b … a3dc950, январь 2023) и сырой;
+     первая версия с направленными комиссиями и сырым битмапом — 4ada8b0 (06.06.2023; аудит Paladin «Tick Spacing
+     Upgrade» 14.06.2023 — в списке аудитов Camelot AMM V3). Бот читает сырой. Ревью 444: проверка пула сверяет адрес
+     по CREATE2 с хешами dex.pool_code_hashes (5 версий «направленные + сырой») — пул другой версии отклоняется с
+     причиной; тест записи — то же. Если пулы Camelot окажутся со сжатым битмапом — нужен отдельный разбор (не гадать).
+  3) Другие DEX Arbitrum на Algebra V1.9 с направленными комиссиями: в таблице покрытия у кандидатов (Zyberswap V3
+     T433-104, dexSWAP T433-045, Arbidex V3 T433-041 и др. с «семейство не установлено») официального подтверждения
+     версии нет. Метод — тот же скрипт с фабрикой DEX: совпадение CREATE2 с хешем ветки и globalState из 8 слов =
+     этот вид. Фабрики берутся из их официальной документации — задача внутри каждой T433-NNN.
+  4) Пересчёт комиссий первым обменом новой секунды (AlgebraPool.sol:777-795) бот не моделирует (как у THENA Fusion):
+     котировка берёт globalState блока; расхождение ловит сверка с квотером (решение 73). Моделировать (порт
+     DataStorageOperator.getFees / AdaptiveFee) — отдельная задача, если записи покажут расхождения.
+- **Решение 445 (20.11.2026, ветка t223-f6/arb-family-f6) — семейство T433-F6: Liquidity Book v2.0 (LFJ V2 / Trader
+  Joe V2) на Arbitrum One, вид lb_v20; ждёт сборки и тестов в GitHub (cargo, rustfmt, solc локально не запускались).**
+  Сделано: математика (точный порт lfj-gg/joe-v2@v2.0.0 07f10212: math/lb20_fee.rs, lb20_swap.rs, ветки v20 в lb_fee.rs и
+  lb_swap.rs; признак LbBinData.v20), чтение (load_lb20.rs, load_lb20_bins.rs, lb20_head.rs; каждым блоком — per_block_lb.rs
+  с разным числом вызовов на пул), события (events_lb20.rs), проверка пула (verify_lb20.rs), квотер сверки LBRouter v2.0
+  getSwapOut (quote/quoter_lb20.rs, dex.quoter), «в обновлении» (settle.rs, settle_read.rs), условие пулов секвенсора
+  (слоты 6, 7, 10 — exec/pool_cond*.rs), шаг исполнителя LB20 = 24 (решение 456; в ветке — 22; contracts/ArbExecutor.sol, IPools.sol; Rust —
+  kind.rs, exec_kind.rs, entry.rs), вариант dex.kind lb_v20 (каталог, ярлык интерфейса), скрипт записи
+  tools/arbitrum_record/lb_v20.py, тесты tests/bsc_dex_lb_v20_arbitrum.rs (на записи — #[ignore]). DEX семейства в таблице
+  покрытия Arbitrum — один: T433-015 `traderjoe-v2-arbitrum` (DefiLlama `joe-v2` — та же строка). BSC — без изменений
+  (bsc_dex и вид lb_v21 ведут себя как раньше: v20 = false). Осталось:
+  1) Записать свой узел: `python3 tools/arbitrum_record/lb_v20.py http://<узел Arbitrum> --factory
+     0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982 --router 0x7BFd7192E76D950832c77BB412aaE841049D8D9B` →
+     tests/data/arbitrum_lb_v20_<дата>/
+     (коммит записи), снять #[ignore] с тестов tests/bsc_dex_lb_v20_arbitrum.rs, прогон CI. Там же — сверка нашей
+     формулы с getSwapOut роутера v2.0 на всех бинах.
+  2) Исполнитель: артефакты contracts/out/ НЕ пересобраны (solc агентам запрещён) — шаг LB20 есть только в исходнике;
+     since(LB20) = Version::V4 (ревью 445), сборки v4 нет — бот шаг не строит ни у одного кошелька. Нужно (техлид /
+     Тигран): только сборка v4 (не на месте v3 — кошелёк со старым v3 прошёл бы проверку по артефакту, контракт откатил
+     бы «kind»): скопировать out/ → out/v3/, runtime_v3 и version_of → V4 в exec/executor/code.rs, onchain.rs,
+     пересобрать contracts/build.sh, тест
+     bsc_dex_executor_abi, evmtest (фикстуры пары v2.0 нет — нужен LbV20Fixture.sol по образцу LbFixture.sol), развернуть
+     исполнитель в Arbitrum. Номер вида 22 могут занять и другие семейства T433-F* в параллельных ветках — при слиянии
+     развести номера (контракт и kind.rs).
+  3) Включение в arb_dex (после записи и CI): область DEX `traderjoe-v2-arbitrum@arbitrum` — dex.kind = lb_v20,
+     dex.factory = 0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982, dex.quoter = 0x7BFd7192E76D950832c77BB412aaE841049D8D9B
+     (LBRouter v2.0), dex.pool_enabled = да (docs/FIRST_RUN.md, раздел «DEX Arbitrum: LFJ V2»).
+  Вопросы Тиграну:
+  1) Байткод реализации пары v2.0 на Arbitrum с исходником v2.0.0 не сверен (Sourcify / Arbiscan недоступны из среды
+     агента, узла нет): тег v2.0.0 — 04.01.2023 («fix protocol fees», правка _setFees — только займ), развёртывание
+     Arbitrum могло быть сделано раньше тега. Обмен и комиссия между коммитами до тега не менялись (LBPair.sol, FeeHelper.sol,
+     SwapHelper.sol — git log v2.0.0); факт совпадения — тест на записи (наша формула = getSwapOut роутера). Скрипт
+     пишет код реализации и его SHA-256 — сверку с Arbiscan («Contract Source Code Verified») сделать вам?
+  2) Конец стороны бинов у v2.0: findFirstNonEmptyBinId при отсутствии бина ОТКАТЫВАЕТСЯ (TreeMath.sol L60), а не
+     возвращает 0 / 0xFFFFFF, как v2.1. Ревью 445: краем стороны считается только откат с данными
+     TreeMath__ErrorDepthSearch() или Panic(0x11); иной откат и откат без данных — ошибка чтения пула. Проверка —
+     тест на записи (данные отката записанных краёв).
+  3) Слоты условия пулов LB v2.0 (6, 7, 10) выведены из раскладки исходника v2.0.0 и сверены с ассемблером пары (L1032-
+     L1084); живого факта нет — тест condition_slots_match_state на записи.
+- **Решение 446 (20.11.2026, T433-F7 / T433-067, ветка t223-f7/arb-family-f7) — Liquidity Book V2.2 (LFJ V2.2 на Arbitrum
+  One): вид `lb_v22`; ждёт сборки и тестов в GitHub (cargo локально не запускался).** Сделано: математика (порт getSwapOut
+  + откат по MAX_LIQUIDITY_PER_BIN), чтение и события (как lb_v21 + HooksParametersSet), проверка (V2.1 + implementation()
+  + крючки), квотер (getSwapOut пула), шаг LB исполнителя (без изменений исполнителя — переразвёртывать не нужно), слоты
+  условия пулов 3/4, настройки dex.lb_implementations / dex.lb_hooks_allowed, скрипт записи tools/arbitrum_record/lb_v22.py,
+  тесты tests/arb_dex_lb_v22_live.rs (ignore до записи). Других DEX этого семейства в таблице покрытия Arbitrum нет
+  (DefiLlama `joe-v2.2` — та же DEX). Осталось:
+  1) Записать узел: `python3 tools/arbitrum_record/lb_v22.py http://УЗЕЛ:8547 --factory
+     0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c`, закоммитить tests/data/arbitrum_lb_v22_<дата>, снять #[ignore] в
+     tests/arb_dex_lb_v22_live.rs.
+  2) По записи: адреса implementation() пулов и getLBPairImplementation() фабрики — сверить их код (Sourcify / Arbiscan)
+     с lfj-gg/joe-v2@v2.2.0 и внести в dex.lb_implementations. Отсюда (Sourcify и Arbiscan закрыты прокси, узла нет) код
+     реализаций не сверен — сверена только фабрика (Sourcify exact_match, solc 0.8.20).
+  3) Слоты условия пулов 3, 4 и 65545 (_hooksParameters, ревью 446) выведены из исходника (раскладка Solidity), на узле
+     не сверены — тест pool_cond_slots_3_4_65545 по записи; до этого самопроверка exec/pool_cond_check.rs при расхождении
+     ставит корень хранилища.
+  4) Ревью 446 сделано (коммит «Решение 446 (ревью, правки)»): С1–С4, Н1–Н5 — docs/DECISIONS.md «446 (ревью, правки)».
+     Новая настройка dex.lb_hooks_code_hashes.
+  Вопросы Тиграну:
+  1) Пулы V2.2 с крючком обмена (beforeSwap / afterSwap): брать ли их и с какими крючками? Сейчас обмен через них
+     исключён (состояние пула читается, котировки и сделки нет), пока адрес крючка не в dex.lb_hooks_allowed И keccak256
+     его кода не в dex.lb_hooks_code_hashes. Факты кода (ревью 446): выход ИМЕННО ЭТОГО обмена крючок не меняет; но
+     afterSwap зовётся после снятия защиты от повторного входа (LBPair.sol L576 → L578) — пул открыт; крючок исполняет
+     произвольный код: может откатить сделку, тратит газ, может менять другие пулы маршрута до наших следующих шагов
+     (итог хуже плана откатит minOut исполнителя — платно) и этот же пул после обмена. Хеш кода закрепляет код по адресу
+     крючка; если крючок — прокси (код реализации меняется без смены кода прокси), хеш его не закрепляет — брать ли
+     крючки-прокси? Код крючков LFJ (LBHooksManager 0x3A8E1Be95467690F7C592B596e42d11b3710c633 по документации,
+     rewarder-крючки) в этой задаче не читался — отдельный репозиторий; запись lb_v22.py покажет адреса и хеши кода.
+  2) Если на Arbitrum есть пулы V2.2 реализации старше тега v2.2.0 (без проверки MAX_LIQUIDITY_PER_BIN) — наш расчёт для
+     них осторожнее (может сказать «откат», где пул обменял бы; убытка нет). Брать ли такие реализации — решение по
+     записи п. 2.
+- **Решение 433 (19.11.2026, ветка t217/arb-step5-adapter) — две сети, шаг 5: площадка DEX сети Arbitrum (arb_dex);
+  ждёт сборки и тестов в GitHub (cargo локально не запускался).** ЖЕЛЕЗОБЕТОННОЕ ПРАВИЛО ТИГРАНА (20.11.2026): «Не
+  пропустить ни единого DEX. Все DEX, которые есть, — без разделения на мелкие/крупные, без «можно потом». Ты ничего не
+  решаешь в плане приоритетов.» План — docs/notes/arbitrum/step5-plan.md, покрытие DEX —
+  docs/notes/arbitrum/dex-coverage-arbitrum.md (84 DEX GeckoTerminal + 62 DEX DefiLlama сверх него, у каждого статус).
+  Сделано: план (один код адаптера на все EVM-сети, второй экземпляр arb_dex — без копирования папки); таблица покрытия;
+  код 433-б/в (часть): настройки dex.gas_mode (legacy / eip1559_l1) и dex.node_interface, NodeInterface
+  gasEstimateComponents (node/arb_gas.rs), транзакция EIP-1559 тип 2 и цены maxFee/чаевые (send/tx_1559.rs), часть «Газ
+  сети» в «Проверить подключение» (connection_gas.rs); тесты — на записи своего узла Arbitrum (01, 04, 05).
+  Выкладка BSC: задать у bsc_dex `dex.gas_mode` = `legacy` до выкладки. После решения 435 (433-д) не задана — BSC не
+  котирует и не отправляет, часть «Газ сети» в «Проверить подключение» — ошибка, автоснятие пауз не снимет паузу.
+  Вопросы Тиграну:
+  1) Чаевые Arbitrum (ставка PGA): документация не говорит, сколько нужно, чтобы выигрывать очередь секвенсора, и
+     берутся ли чаевые с части газа L1. В плане сделки взят худший случай (чаевые со всего газа). Сколько ставить —
+     настройка площадки (задача 433-д); стартовое значение — ваше решение.
+  2) Голова сети Arbitrum (блок 250 мс): опрос eth_blockNumber (как BSC, решение 57) — 4 запроса/с, или подписка
+     newHeads по WS (на своём узле работает — запись 06)? Решение 57 — исключение для BSC; для Arbitrum нужно ваше слово.
+  3) DEX ↔ DEX на Arbitrum: бандлов нет — атомарность только одной транзакцией через исполнитель (развёртывание
+     исполнителя в Arbitrum — шаг 4). Ок?
+  Осталось (обязательно, порядок — step5-plan.md, раздел 2; приоритетов нет):
+  - 433-г — СДЕЛАНО (решение 435): поле Ctx.place (ctx_place.rs: свой id и все площадки DEX процесса, из main.rs);
+    ctx.rs, ws_task.rs, settings_wait.rs, directory/store.rs, gt_http.rs, history_store.rs, deploy_block.rs, ctx_wallet.rs,
+    pass_view.rs, pass_cycle.rs, onchain.rs, exec_callback.rs — ctx.place.id; errors.rs без Ctx — bsc_dex, запросы к узлу
+    (node/rpc.rs call/call_raw/call_unpaced/batch/post) перепомечают ошибку площадкой окружения; core/deal_card.rs и
+    notify/human.rs — уже решением 432 (имена DEX от ядра). Остаток — см. «Решение 435».
+  - 433-д — СДЕЛАНО (решение 435): цена газа по dex.gas_mode — quote/gas.rs (legacy — eth_gasPrice + надбавка, как было;
+    eip1559_l1 — baseFeePerGas головы + чаевые, quote/gas_base.rs), exec/tx_fee.rs (цена транзакции), send/tx_price.rs
+    (подпись legacy/тип 2, потолок цены, отмена — обе цены выше прошлых), exec/txs.rs (своп, чаевые, перевод
+    wallet/transfer.rs через txs::send), send/cancel.rs и send/track.rs, exec/gas_fund.rs (потолок цены), бандл —
+    только legacy (exec/bundle_send.rs: при eip1559_l1 — отказ до симуляции). Новые настройки send.max_fee_margin_pct,
+    send.priority_fee_gwei (каталог, SETTINGS, SETTINGS_CASES, FIRST_RUN; экран «Настройки» и карточка площадки — из
+    каталога). connection_gas.rs: «dex.gas_mode не задана» — снова ошибка части «Газ сети».
+    **ПЕРЕД ВЫКЛАДКОЙ: задать dex.gas_mode = legacy у bsc_dex на живом боте** — без неё BSC не котирует, не отправляет,
+    «Проверить подключение» — ошибка «Газ сети», автоснятие пауз не снимет паузу.
+  - 433 (ревью) — СДЕЛАНО (решение 435): строка с хешем самого README.md из tests/data/arbitrum_node_2026-11-19/README.md
+    убрана; хеши 9 файлов сверены (sha256sum -c — все совпадают).
+  - 433-е — СДЕЛАНО (решение 435): канал send/sequencer.rs (id `sequencer`, одиночная eth_sendRawTransaction, адрес —
+    channel.url; docs.arbitrum.io «RPC endpoints and providers»); сеть канала — новая настройка channel.chain
+    (send/channels.rs serves/of: задана — канал только площадки DEX той же dex.chain; не задана — сеть по умолчанию; одна
+    площадка DEX — все каналы без сети, как раньше). Бандл на площадке без бандловых каналов — отказ до отправки уже есть:
+    котировка — send::planned_bundle_ok (сигнал без сделки, причина), отправка — dispatch_slice (до первой отправки) и
+    bundle_pick; у сети типа 2 — отказ в exec/bundle_send.rs до симуляции (433-д).
+    НЕ сделано: eth_sendRawTransactionConditional — страница docs.arbitrum.io «RPC methods» описывает только смысл
+    (knownAccounts, blockNumberMin/Max — окно блока L1, timestampMin/Max — окно времени L2, ошибка −32003), без формата
+    запроса и примера; гадать нельзя — вопрос Тиграну (ниже, «Решение 435»).
+  - 433-ж — СДЕЛАНО (решение 435): все 21 настройка bsc.* в каталоге — области «вся система + площадка DEX» (GV,
+    .dex_venue()); чтение узла с областью площадки (ctx.at()) — node/heads.rs, receipts_nodes.rs, chain_seen.rs,
+    head_stall.rs, failover.rs, pace.rs, ctx_url.rs (node_url), connection_extra.rs; остальные bsc.* уже читались через
+    ctx.int/ctx.text (область площадки). У bsc_dex своего значения нет — действует прежнее общее (порядок поиска
+    площадка → вся система, settings/store.rs resolve). Остальные At::default() адаптера (risk.min_bnb_balance,
+    sieve.audit_share, hooks.*, tax.*, notify.summary_reasons, лимиты квотера) — не узел, общие намеренно. Секреты
+    ключей узла bsc.node_*_key — общие (свой узел Arbitrum без ключа; имя секрета по площадке — когда понадобится).
+  - 433-з — СДЕЛАНО (решение 435): ключ области «DEX» — ctx_place.rs (dex_suffix, dex_key, own_dex): у площадки сети по
+    умолчанию — id индексатора как есть (живые настройки DEX bsc_dex — без изменений; площадка одна — без чтения
+    настроек), у другой — «id@сеть». Перевод на входе — directory/fetch.rs (список DEX и пулы монеты); Family.id — уже
+    ключ, поэтому ctx.rs dex_*, event_flags.rs, family_intern.rs не меняются; свои ключи — pools/families.rs all и
+    pools/dex_ids.rs extra (у bsc_dex — ключи без «@»). Тест — ctx_place.rs (id camelot из записи GeckoTerminal Arbitrum).
+  - 433-и — СДЕЛАНО (решение 435): с площадкой DEX (ctx.place.id) в ключе — exec/executor/onchain.rs CHECKED,
+    v1_notice.rs SENT, pool_pass.rs FACTS/KINDS (kind/get/put/on_sim — с площадкой), exec/presell_slot_find.rs CACHE,
+    pools/registry_key.rs KEYS, load_curve_ng.rs N_COINS, load_balancer_fixed.rs FIXED, load_smardex.rs BLOCK_TIME,
+    off_map_bins_log.rs LAST, quote/bound.rs MEMO, quote/cycle_audit.rs WRONG/QUEUE (разбор очереди — только своей
+    площадки), send/tip_gas.rs UNITS, node/chain_id.rs LAST_WARN, check/hooks_head.rs FLAT_SAID. По факту кода без правок:
+    exec/executor/callback_at.rs SEEN и pools/exec_callback.rs SEEN — ключ (версия исполнителя, сигнатура): свойства
+    артефактов contracts/out, от сети не зависят; pools/prefetch_memo.rs — ключ уже (VenueId, пул); quote/cycle_tally.rs
+    — уже по площадке; pools/fee_probe.rs, ladder_counter.rs, solidly_gate_read.rs — ключ с id DEX, а он с 433-з у другой
+    сети «id@сеть» (уникален между площадками). Общие намеренно — как в плане (cpu, par_pool, quote_timing, abandon,
+    prefetch, req_trail, auto_release, константы).
+  - 433-к — СДЕЛАНО (решение 435): настройка «вся система» dex.venues (venues/bsc_dex/dex_venues.rs) — площадки DEX
+    сверх bsc_dex; main.rs регистрирует каждую тем же адаптером (Ctx::for_place: свои площадка, очередь узла, резерв,
+    справочник). Не задана — только bsc_dex. Читается при запуске (смена — после перезапуска).
+    **ПЕРЕД ВЫКЛАДКОЙ / перед заданием dex.venues: dex.default_chain = bsc на живом боте** (решение 430: две сети без неё
+    — ошибка ядра). Ключ области «DEX» с «@» разрешён правилом записи (settings/scope.rs check_dex_id, решение 435).
+  - 433-л голова по WS newHeads при блоке 250 мс (после ответа на вопрос 2).
+  - 433-м — СДЕЛАНО (решение 435): «Проверить подключение» площадки — тот же код для arb_dex, все адреса и сеть — её
+    настройки (433-ж): «Сеть площадки», «Узел HTTP» (eth_chainId = dex.evm_chain_id), «Газ сети» (eip1559_l1 —
+    NodeInterface и цены типа 2), «Узел WebSocket» (eth_chainId и блок по newHeads), новая часть «События по WebSocket»
+    (connection_events.rs: узел принимает eth_subscribe logs с фильтром dex.native_wrapped; запись 07 своего узла),
+    резервные узлы, Multicall3, обёртка, индексатор, eth_simulateV1. Сверка chainId перед подпиской — node/chain_id.rs
+    check_start (решение 416, общий). Адрес своего узла Arbitrum — bsc.node_ws_url / bsc.node_http_url в области arb_dex.
+    У bsc_dex «Проверить подключение» получает ту же новую часть (подписка logs на своём узле BSC).
+  Задачи по каждому DEX (таблицы — docs/notes/arbitrum/dex-coverage-arbitrum.md):
+  - T433-001 `sushiswap_arbitrum` (SushiSwap (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-002 `uniswap_v3_arbitrum` (Uniswap V3 (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-003 `swapr_arbitrum` (Swapr (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-004 `fraxswap_arbitrum` (Fraxswap (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-005 `curve_arbitrum` (Curve (Arbitrum)) — частично: StableSwap — сверить и включить; crypto-пулы Twocrypto-NG v2.1.0 / Tricrypto-NG — код сделан (решение 442, T433-F3; ждёт CI и записи узла; под отдельными id DEX — вопрос 1 решения 442); официальные адреса crypto-фабрик — deployments.yaml curvefi (решение 442); T433-F3a (Twocrypto v2.0.0) и T433-F3b (crypto v1) — код сделан (решение 453), ждёт CI и записи узла. **Решение 448: готово для NG; 2pool и crypto — T448-02, T433-F3; решение 450: механизм dex.sub_dex сделан, 2pool / старые plain — T450-02, crypto — T433-F3 дочерним ключом** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md). **Решение 472: 2pool и plain-пулы старой фабрики — вид curve_stableswap_plain (код есть, запись T472-01); откаты tweak_price NG — модель есть (T472-02). Доделка 472: все реализации plain (Balances / ETH / Optimized / EMA), fraxbp, метапулы фабрики — вид curve_stableswap_meta; ETH-пулы без исполнения (T472-08); ren / wstETH / EURS-2Crv — T472-10. Доделка 2: EURS/2CRV — вид curve_crypto2_v1; шаг CURVE_ETH = 28 (v5); модель tweak_price crypto v1 фабрики; ren / wstETH — исходника нет.**
+  - T433-006 `kyberswap_elastic_arbitrum` (Kyberswap Elastic (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-06. Решение 451: готово — вид `kyber_elastic_v1`; ждёт записи узла и решения о включении (T448-06)** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-007 `kyberswap_classic_arbitrum` (Kyberswap Classic (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово для пулов DMM; Static Fee — T448-04; решение 450: Static Fee и Legacy — код есть, сверка — T450-01 (запись) (дочерние ключи dex.sub_dex)** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-008 `elk_finance_arbitrum` (Elk Finance (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-009 `camelot` (Camelot) — **код сделан (решение 443)**: вид `camelot_v2`, адрес фабрики — официальный (docs.camelot.exchange); осталось: запись своего узла (tools/arbitrum_record/camelot_v2.py), снять #[ignore] в tests/arb_dex_camelot_v2.rs, завести в области «DEX» `camelot@arbitrum` (docs/FIRST_RUN.md, «Camelot V2 в сети Arbitrum») и включить.
+  - T433-010 `3xcalibur` (3xcalibur) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-011 `swapfish` (SwapFish) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-012 `arbswap_arbitrum_one` (Arbswap (Arbitrum One)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-013 `oreoswap` (OreoSwap) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-014 `balancer_arbitrum` (Balancer V2 (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово для фабрик 20210418/20210624; остальные — T448-03; решение 450: WeightedPool2Tokens, weighted v2/v3/v4, stable v2 (dex.balancer_math) — код есть, сверка — T450-01 (запись); composable stable, meta-stable, LBP, linear, managed — T450-03…07; решение 473: код есть, сверка — T473-01 (запись balancer_v2_more.py)** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-015 `traderjoe-v2-arbitrum` (LFJ V2 (Arbitrum)) — **код сделан (решение 445)**: вид lb_v20 (семейство
+    T433-F6); адреса — официальная документация LFJ (LBFactory v2.0 0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982,
+    LBRouter v2.0 0x7BFd7192E76D950832c77BB412aaE841049D8D9B). Осталось: запись своего узла
+    (tools/arbitrum_record/lb_v20.py) и снятие #[ignore]; задать в области DEX площадки arb_dex
+    (`traderjoe-v2-arbitrum@arbitrum`) dex.kind = lb_v20, dex.factory, dex.quoter, dex.pool_enabled; шаг LB20 —
+    после пересборки исполнителя (блок «Решение 445»).
+  - T433-016 `magicswap` (Magicswap) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-017 `zyberswap` (Zyberswap) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-018 `solidlizard` (SolidLizard) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-019 `sharkyswap` (SharkySwap) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-020 `alienfi` (AlienFi) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-021 `arbiswap` (ArbiSwap) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-022 `sterling` (Sterling) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-023 `oasisswap` (OasisSwap) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-024 `mindgames-arbitrum` (Mindgames (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-025 `archly-arbitrum` (Archly (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-026 `arbidex` (Arbidex) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-027 `apeswap-arbitrum` (Apeswap (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-028 `mm-finance-arbitrum` (MM Finance (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-029 `ramses` (Ramses) — **решение 483: не закрыто — у id `ramses` GeckoTerminal не установлено, к какой линии Ramses (CL / CL V2 / легаси) его пулы относятся; варианты вида есть (T483-01), нужна сверка factory() пулов этого id** — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-030 `auragi` (Auragi) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-031 `aegis` (Aegis) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-032 `mm-finance-v3-arbitrum` (MM Finance V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-033 `camelot-v3` (Camelot V3) — КОД ЕСТЬ (решение 444): вид `algebra_dir_fee`; ключ области «DEX» `camelot-v3@arbitrum`, значения — docs/FIRST_RUN.md («DEX Camelot V3 на Arbitrum»: dex.kind, dex.factory 0x1a3c9B1d2F0529D97f2afC5136Cc23e58f1FD35B, dex.pool_code_hashes — 5 хешей, dex.quoter_virtual = да, dex.pool_enabled). Осталось: запись своего узла и снятие ignore (блок «Решение 444»), затем включить в arb_dex.
+  - T433-034 `traderjoe-v2-1-arbitrum` (LFJ V2.1 (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово, реализация пары — T448-11** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-035 `arbswap-stableswap-arbitrum` (Arbswap StableSwap (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-036 `whitehole-arbitrum` (Whitehole (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-037 `chronos` (Chronos) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-038 `lfgswap-arbitrum` (LFGswap (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-039 `swaprum` (Swaprum) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-040 `solunea-arbitrum` (Solunea (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-041 `arbidex-v3` (Arbidex V3) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-042 `crescentswap` (CrescentSwap) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-043 `ramses-v2` (Ramses V2) — **решение 483: код есть, ждёт записи (T483-01), у Ramses CL — пересборки контрактов (T483-02)** — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-044 `sushiswap-v3-arbitrum` (Sushiswap V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей. **Решение 448: семейство установлено (v3_fork, код пула = Uniswap V3), готово** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-045 `dexswap` (dexSWAP) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-046 `forge-sx` (Forge Sx) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-047 `degenbrains` (Degenbrains) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-048 `spartadex` (SpartaDEX) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-049 `pancakeswap-v2-arbitrum` (Pancakeswap V2 (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-01; решение 450: код есть, сверка — T450-01 (запись) (dex.universal_router_version = pancakeswap_v3)** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-050 `pancakeswap-v3-arbitrum` (Pancakeswap V3 (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-01; решение 450: код есть, сверка — T450-01 (запись) (dex.universal_router_version = pancakeswap_v3)** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-051 `smardex-arbitrum` (SmarDex (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-052 `darwinswap` (DarwinSwap) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-053 `pixelswap-arbitrum` (PixelSwap (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-054 `antfarm-arbitrum` (Antfarm (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-055 `dex-on-crypto-arbitrum` (Dex on Crypto (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-056 `shekelswap` (ShekelSwap) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-057 `spinaqdex` (SpinaqDex) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-058 `woken-exchange-arbitrum` (Woken Exchange (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-059 `kaleidoswap-arbitrum` (KaleidoSwap (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-060 `gasx` (GasX) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-061 `uniswap-v2-arbitrum` (Uniswap V2 (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-062 `dackieswap-v2-arbitrum` (DackieSwap V2 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-063 `dackieswap-v3-arbitrum` (DackieSwap V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-064 `pancakeswap-stableswap-arbitrum` (Pancakeswap Stableswap (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-10. Решение 451: не подтверждено — адреса фабрики нет, вопрос Тиграну (T448-10). Решение 471: подтверждено — фабрика 0x5D5f…a77a, вид без изменений, ждёт записи T471-01** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-065 `solidly-v3-arbitrum` (Solidly V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-066 `kewlswap-arbitrum` (KEWLSwap (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-067 `traderjoe-v2-2-arbitrum` (LFJ V2.2 (Arbitrum)) — **вид есть в коде (решение 446): `lb_v22`**; адрес фабрики официальный (LBFactory V2.2 0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c — документация LFJ, Sourcify exact_match). Осталось: запись tools/arbitrum_record/lb_v22.py, снять ignore тестов, задать dex.lb_implementations (после сверки кода реализаций) и включить ключ `traderjoe-v2-2-arbitrum@arbitrum` (dex.kind = lb_v22, dex.factory, dex.pool_enabled) — блок «Решение 446».
+  - T433-068 `moonbase-alpha` (Moonbase Alpha) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-069 `deltaswap` (Deltaswap (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-070 `ethervista-arbitrum` (EtherVista (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-071 `squadswap-v2-arbitrum` (SquadSwap V2 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-072 `squadswap-v3-arbitrum` (SquadSwap V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-073 `uniswap-v4-arbitrum` (Uniswap V4 (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-074 `maverick-v2-arbitrum` (Maverick V2 (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-075 `omni-exchange-v2-arbitrum` (Omni Exchange V2 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-076 `omni-exchange-v3-arbitrum` (Omni Exchange V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-077 `balancer-v3-arbitrum` (Balancer V3 (Arbitrum)) — решения 441, 452: вид `balancer_v3` в коде — все пулы официальных фабрик Arbitrum (весовые, стейблсвап, StableSurge, Gyro 2-CLP / E-CLP, ReClamm, LBP v1–v4, LBP с фиксированной ценой, QuantAMM) и крючки StableSurge / MEV Capture; адреса — docs/FIRST_RUN.md; включение в arb_dex — после записи узла (tools/arbitrum_record/balancer_v3.py) и зелёного теста; MEV Capture при сборе чаевых — вопрос «Решение 452», п. 3; буфер ERC4626 — решение 474 (в коде; шаг 27 ждёт сборки исполнителя v5, запись tools/arbitrum_record/balancer_v3_buffer.py).
+  - T433-078 `fluid-arbitrum` (Fluid (Arbitrum)) — вид `fluid_t1` в коде (решение 440, T433-F1); официальные адреса сверены (deployments/arbitrum: DexFactory 0x9171…9085, DexReservesResolver 0x05Bd…16Ff — docs/FIRST_RUN.md); включить в arb_dex — после записи узла и зелёного tests/arbitrum_fluid_t1.rs (решение 440, «НУЖНО ОТ ТИГРАНА»).
+  - T433-079 `ekubo-v3-arbitrum` (Ekubo V3 (Arbitrum)) — **код семейства есть (решения 447, 454: все пулы — нативный ETH, TWAMM / Oracle / BoostedFees, история PoolInitialized ядра, одна подписка на ядро), ждёт CI, записи узла и сборки исполнителя**: адреса официальные — docs/FIRST_RUN.md, раздел «DEX Ekubo сети Arbitrum»; включить в arb_dex (dex.kind = ekubo по ключу DEX площадки) после записей tools/arbitrum_record/ekubo.py и ekubo_more.py и снятия #[ignore] с tests/arbitrum_ekubo_live.rs и tests/arbitrum_ekubo_more_live.rs; вопросы — блоки «Решение 447», «Решение 454».
+  - T433-080 `ramses-legacy-arbitrum` (Ramses Legacy (Arbitrum)) — **решение 483: код есть, ждёт записи (T483-01)** — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-081 `ramses-v3-arbitrum` (Ramses V3 (Arbitrum)) — **решение 483: код есть, ждёт записи (T483-01)** — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-082 `rubicon-clmm-arbitrum` (Rubicon CLMM (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
+  - T433-083 `aero-slipstream-arbitrum` (Aero Slipstream (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-09. Решение 451: нужен код — новое семейство «Slipstream V3 (Aero)», T448-09. Решение 470: код есть — вид `slipstream_aero`, сверка — запись aero.py (T470-03)** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-084 `camelot-v4` (Camelot V4) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-085 Shell Protocol (DefiLlama `shell-protocol`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-086 DODO AMM (DefiLlama `dodo-amm`, нет в GeckoTerminal) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи. **Решение 448: готово (пулы — поиском по фабрике), шаблоны — T448-13** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-087 Saddle Finance (DefiLlama `saddle-finance`, нет в GeckoTerminal) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи. **Решение 448: не подтверждено — T448-07. Решение 451: готово (вид saddle_stableswap исправлен), ждёт записи узла** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-088 Integral (DefiLlama `integral`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-089 WardenSwap (DefiLlama `wardenswap`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-090 Joe DEX (DefiLlama `joe-dex`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-091 Clipper (DefiLlama `clipper`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-092 Rubicon (DefiLlama `rubicon`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-093 ZipSwap (DefiLlama `zipswap`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-094 Hashflow (DefiLlama `hashflow`, нет в GeckoTerminal) — не пул: источник котировок не-пула: официальный API / контракт, как считать полную стоимость и исполнять; способ — решение Тиграна; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-095 WOOFi Swap (DefiLlama `woofi-swap`, нет в GeckoTerminal) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи. **Решение 448: не подтверждено — T448-08. Решение 451: готово, проверка слота реализации и селекторов своим узлом** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-096 Wombat Exchange (DefiLlama `wombat-exchange`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-097 Swapsicle V1 (DefiLlama `swapsicle-v1`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-098 iZiSwap (DefiLlama `iziswap`, нет в GeckoTerminal) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи. **Решение 448: нужен код — T448-05** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md). **Решение 450: код есть, сверка — T450-01 (запись) (Q::Izi, dex.v3_fee_tiers) — включение настройками (dex-settings-arbitrum.md §3.1).**
+  - T433-099 0x (DefiLlama `0x`, нет в GeckoTerminal) — не пул: источник котировок не-пула: официальный API / контракт, как считать полную стоимость и исполнять; способ — решение Тиграна; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-100 Sushi Trident (DefiLlama `sushi-trident`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-101 ZyberSwap Stableswap (DefiLlama `zyberswap-stableswap`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-102 Clober V1 (DefiLlama `clober-v1`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-103 Dexalot DEX (DefiLlama `dexalot-dex`, нет в GeckoTerminal) — не пул: источник котировок не-пула: официальный API / контракт, как считать полную стоимость и исполнять; способ — решение Тиграна; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-104 Zyberswap V3 (DefiLlama `zyberswap-v3`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-105 Lighter V1 (DefiLlama `lighter-v1`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-106 Arbitrum Exchange V2 (DefiLlama `arbitrum-exchange-v2`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-107 Swapline V1 (DefiLlama `swapline-v1`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-108 Native Swap (DefiLlama `native-swap`, нет в GeckoTerminal) — не пул: источник котировок не-пула: официальный API / контракт, как считать полную стоимость и исполнять; способ — решение Тиграна; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-109 E3 (DefiLlama `e3`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-110 AirSwap (DefiLlama `airswap`, нет в GeckoTerminal) — не пул: источник котировок не-пула: официальный API / контракт, как считать полную стоимость и исполнять; способ — решение Тиграна; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-111 Arbitrum Exchange V3 (DefiLlama `arbitrum-exchange-v3`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-112 Ramses CL (DefiLlama `ramses-cl`, нет в GeckoTerminal) — **решение 483: код есть, ждёт записи (T483-01), у Ramses CL — пересборки контрактов (T483-02)** — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-113 Swaap Maker V2 (DefiLlama `swaap-maker-v2`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-114 Chronos V2 (DefiLlama `chronos-v2`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-115 Tegro (DefiLlama `tegro`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-116 Thick (DefiLlama `thick`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-117 Archly V2 (DefiLlama `archly-v2`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-118 Horiza (DefiLlama `horiza`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-119 Mangrove (DefiLlama `mangrove`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-120 Basin Exchange (DefiLlama `basin-exchange`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-121 GMX V1 AMM (DefiLlama `gmx-v1-amm`, нет в GeckoTerminal) — не пул: источник котировок не-пула: официальный API / контракт, как считать полную стоимость и исполнять; способ — решение Тиграна; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-122 GMX AMM (DefiLlama `gmx-amm`, нет в GeckoTerminal) — не пул: источник котировок не-пула: официальный API / контракт, как считать полную стоимость и исполнять; способ — решение Тиграна; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-123 Level AMM (DefiLlama `level-amm`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-124 Renegade (DefiLlama `renegade`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-125 Vertex AMM (DefiLlama `vertex-amm`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-126 KTX spot (DefiLlama `ktx-spot`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-127 Raindex (DefiLlama `raindex`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-128 Cables Finance (DefiLlama `cables-finance`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-129 Nabla Finance (DefiLlama `nabla-finance`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-130 Mach (DefiLlama `mach`, нет в GeckoTerminal) — не пул: источник котировок не-пула: официальный API / контракт, как считать полную стоимость и исполнять; способ — решение Тиграна; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-131 Bunni V2 (DefiLlama `bunni-v2`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-132 Skate AMM (DefiLlama `skate-amm`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-133 Omni Exchange Flux (DefiLlama `omni-exchange-flux`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-134 BrownFi V2 (DefiLlama `brownfi-v2`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-135 Tristero Darkpool (DefiLlama `tristero-darkpool`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-136 Alphix (DefiLlama `alphix`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-137 Kaliber (DefiLlama `kaliber`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-138 Metric V0 (DefiLlama `metric-v0`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-139 BrownFi V3 (DefiLlama `brownfi-v3`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-140 Ramses Legacy V2 (DefiLlama `ramses-legacy-v2`, нет в GeckoTerminal) — **решение 483: код есть, ждёт записи (T483-01)** — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-141 Ramses CL V2 (DefiLlama `ramses-cl-v2`, нет в GeckoTerminal) — **решение 483: код есть, ждёт записи (T483-01)** — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-142 1inch Aqua (DefiLlama `1inch-aqua`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-143 AutoRange (DefiLlama `autorange`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-144 Metric V1 (DefiLlama `metric-v1`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-145 PancakeSwap X (DefiLlama `pancakeswap-x`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-146 Aero Basic (DefiLlama `aero-basic`, нет в GeckoTerminal) — **Решение 470: вид `aero_basic` (код есть, запись T470-03, ключи T470-04).** Было: семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  Семейства кода:
+  - T433-F1 Fluid DEX (T1) — СДЕЛАНО в коде (решение 440): математика, чтение, события, проверка, квотер, шаг исполнителя FLUID (v4 — только исходник); осталось: запись узла (tools/arbitrum_record/fluid_t1.py) и снятие #[ignore], сборка и развёртывание исполнителя v4, вопросы а)–е) решения 440.
+  - T433-F2 Balancer V3 — решения 441, 452: СДЕЛАНО в коде (все виды пулов и официальные крючки комиссии Arbitrum, PoolRegistered, шаг BALANCER_V3 исполнителя v4); ОСТАЛОСЬ — запись узла и снятие #[ignore], пересборка и развёртывание исполнителя v4 (план — «Решение 441», ревью), буфер ERC4626 — решение 474 (в коде; нужна сборка исполнителя v5 и запись balancer_v3_buffer.py).
+  - T433-F3 Curve Twocrypto / Tricrypto (crypto-пулы) — КОД СДЕЛАН (решение 442, ветка t223-f3/arb-family-f3): виды curve_twocrypto_ng / curve_tricrypto_ng, математика, чтение, события, проверка, поиск по фабрике, квотер get_dy, шаг STABLE_U256 (без переразвёртывания исполнителя); ждёт CI и записи узла (tools/arbitrum_record/curve_crypto.py), тесты tests/arb_curve_crypto_live.rs — #[ignore] до записи.
+  - T433-F3a Curve Twocrypto-NG v2.0.0 (реализация amm_v2_0_0, math 0x2005995a… Arbitrum) — **код сделан (решение 453)**: исходник d612fde (сверен CREATE2-адресом), формула по MATH() пула; ждёт CI и записи узла.
+  - T433-F3b Старые crypto-пулы Curve Arbitrum v1 — tricrypto 0x960ea3e3… (curve-crypto-contract) и фабрика crypto v1 0xE5De15A9… (curve-factory-crypto): **код сделан (решение 453)** — виды `curve_tricrypto_v1`, `curve_crypto_v1`; правки ревью — решение 455 (перевод токена на пул без события, остановленный tricrypto 2021); ждёт CI и записи узла.
+  - T433-F4 Camelot V2 — **код сделан (решение 443, ветка t223-f4/arb-family-f4; ждёт сборки и тестов в GitHub CI)**; тесты на записи — после записи узла (блок «Решение 443»).
+  - T433-F5 Camelot V3 — Algebra 1.9 с направленными комиссиями (feeZtO/feeOtZ) — КОД СДЕЛАН (решение 444, ветка t223-f5/arb-family-f5): вид `algebra_dir_fee`; ждёт сборки в CI, записи своего узла (tools/arbitrum_record/algebra_dir_fee.py) и снятия ignore — блок «Решение 444».
+  - T433-F6 Liquidity Book v2.0 (LFJ V2) — **код сделан (решение 445)**: вид lb_v20 (математика, чтение, события,
+    проверка, квотер LBRouter v2.0, условие пулов, шаг LB20 в исходнике исполнителя); тесты на записи — #[ignore] до
+    записи tools/arbitrum_record/lb_v20.py. Осталось — блок «Решение 445».
+  - T433-F7 Liquidity Book v2.2 (LFJ V2.2) — **сделано кодом (решение 446): расширение lb_v21 видом `lb_v22`; ждёт записи узла и сборки в GitHub** — новое семейство или расширение lb_v21; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
+  - T433-F8 Ekubo — **сделано кодом (решения 447, 454; ветки t223-f8/arb-family-f8, t230/arb-ekubo-more), ждёт CI**: математика (порт ядра, TWAMM, векторы официальных тестов), чтение (ядро, MEVCapture, TWAMM), события (ядро и TWAMM, перечитывание пула с TWAMM), проверка (PoolKeyIndex или история PoolInitialized), котировка, сверка Router.quote, нативный ETH (обёртка), шаг EKUBO = 25 (решение 456; в ветке — 22; native, forward; артефакты не собраны), хаб подписки; тесты на записи — #[ignore] до записей tools/arbitrum_record/ekubo.py, ekubo_more.py. Осталось — блоки «Решение 447», «Решение 454».
+  - T433-R1 Записать ответ DefiLlama overview/dexs/arbitrum со своего сервера в tests/data (сейчас — чтение WebFetch 19.11).
+- **Решение 447 (20.11.2026, ветка t223-f8/arb-family-f8) — семейство пулов Ekubo (T433-F8, T433-079); ждёт сборки и
+  тестов в GitHub (cargo локально не запускался).** Сделано: вид `ekubo` целиком кодом (DECISIONS 447). Осталось:
+  1) Запись своего узла: `python3 tools/arbitrum_record/ekubo.py --rpc <узел> --gt` → tests/data/arbitrum_ekubo_<дата>/,
+     снять #[ignore] с tests/arbitrum_ekubo_live.rs (расчёт = Router.quote, ключ → PoolId, логи ядра).
+  2) Исполнитель: собрать contracts (out/ → out/v3/, новая сборка в out/, распознавание версии в exec/executor/code.rs),
+     EVM-тест шага EKUBO с официальным кодом ядра, переразвернуть исполнитель кошелька Arbitrum (contracts/README.md).
+  3) Замер нагрузки при «Стоп» (docs/ADAPTER_TEMPLATE.md п. 8): каждая пачка пулов Ekubo подписана на ВСЕ логи ядра
+     (PoolId не в topics) — число пачек = пулы / dex.pools_per_sub.
+  Вопросы Тиграну:
+  1) Пулы с нативным ETH (token0 = адрес 0 — так устроен NATIVE_TOKEN_ADDRESS ядра) не берутся: граф и исполнитель —
+     ERC-20 (WETH). Делать ли шаг с разворотом WETH ↔ ETH (оплата ядру value, receive у исполнителя)? Без этого пулы
+     ETH/… Ekubo на Arbitrum пропущены (сколько их — покажет запись GeckoTerminal).
+  2) Ключ пула берётся только у PoolKeyIndex (реестр необязательный — PoolKeyIndex.sol L11). Пул без регистрации не
+     берётся. Нужна ли история PoolInitialized ядра (как история V4, dex.history_scan) — после записи (доля пулов
+     GeckoTerminal без ключа в реестре).
+  3) Формат адреса пула Ekubo у GeckoTerminal не проверен фактом (код ждёт PoolId, 32 байта) — запись gt_pools.json.
+  4) Расширения TWAMM, Oracle (только пары с нативным ETH), BoostedFees — не поддержаны (TWAMM исполняет ордера до обмена —
+     своей математики нет; BoostedFees в развёрнутом ядре 61d09da отсутствует, разворачивался позже — 69b642d). Нужны ли?
+  5) MEVCapture: состояние расширения после события берётся из blockTimestamp лога; если узел Nitro его в логах не
+     отдаёт — пул с MEVCapture перечитывается на каждое событие (запись core_logs.json покажет).
+- **Решение 447 — техдолг (закрыт: tip_judge — решение 454, memory_proof — «Решение 447 (ревью, правки)»):** exec/tip_judge.rs (решение 437) ищет перехватчика по topics[1] = PoolId — логи ядра Ekubo
+  (PoolId в данных) не распознаются; check/memory_proof_rules.rs подписка доказательства памяти — по PoolId в topics.
+- **Решение 447 — ответы решения 454:** вопрос 1 (нативный ETH) — сделано: обёртка dex.native_wrapped, разворот в шаге
+  EKUBO; вопрос 2 (пулы вне PoolKeyIndex) — сделано: история и событие PoolInitialized ядра; вопрос 4 (TWAMM, Oracle,
+  BoostedFees) — сделано (разбор — DECISIONS 454); п. 3 «Осталось» (нагрузка подписки) — одна подписка на ядро (хаб),
+  замер — core_load.json записи ekubo_more.py. Открыты: вопросы 3 и 5, п. 1–2 «Осталось» (записи, сборка исполнителя).
+- **Решение 454 (20.11.2026, ветка t230/arb-ekubo-more) — Ekubo: все пулы; ждёт сборки и тестов в GitHub (cargo локально
+  не запускался).** Сделано — DECISIONS 454. Осталось:
+  1) Запись своего узла: `python3 tools/arbitrum_record/ekubo_more.py --rpc <узел> --from-block <блок ядра>` (блок ядра —
+     блок транзакции CREATE2 Core в broadcast DeployAll.s.sol/42161 run-1767194711580.json или deploy_block бота) →
+     pool_initialized.json, native_pools.json, twamm_pools.json, core_load.json; снять #[ignore] с
+     tests/arbitrum_ekubo_more_live.rs (ключ события → PoolId, нативный ETH = Router.quote, TWAMM = Router.quote).
+  2) Исполнитель: шаг EKUBO изменён (data = config, native, forward; _ekuboPay / _ekuboTake) — собрать contracts, EVM-тест
+     шага EKUBO с официальным ядром (ERC-20, нативный вход, нативный выход, MEVCapture forward, TWAMM без forward),
+     переразвернуть исполнитель кошелька Arbitrum (contracts/README.md). wnative исполнителя Arbitrum = WETH Arbitrum
+     (dex.native_wrapped arb_dex). **Сверено фактом (ревью 454, 20.11.2026):** WETH Arbitrum One —
+     `0x82aF49447D8a07e3bd95BD0d56f35241523fBab1` (официальный список адресов Arbitrum: OffchainLabs/arbitrum-docs@5ce1a9e1
+     content/partials/_reference-arbitrum-contract-addresses-partial.mdx L73, «L2 Weth»; https://docs.arbitrum.io/partials/_reference-arbitrum-contract-addresses-partial);
+     на arbiscan — TransparentUpgradeableProxy, реализация `0x8b194bEae1d3e0788A1a35173978001ACDFba668` — aeWETH,
+     solc v0.6.11, «Source Code Verified (Exact Match)» (https://arbiscan.io/token/0x82af49447d8a07e3bd95bd0d56f35241523fbab1#code,
+     https://arbiscan.io/token/0x8b194bEae1d3e0788A1a35173978001ACDFba668#code), Sourcify — полное совпадение
+     (https://sourcify.dev/server/v2/contract/42161/0x8b194bEae1d3e0788A1a35173978001ACDFba668?fields=sources).
+     Исходник — OffchainLabs/token-bridge-contracts contracts/tokenbridge/libraries/aeWETH.sol (версия 0.6.11 —
+     f7cae4224 L50-L70; текущая 0.8 a4bb3f53 — то же тело): `deposit()` payable → `_mint(msg.sender, msg.value)`,
+     `withdraw(uint256)` → `withdrawTo(msg.sender, amount)` → `_burn` и `account.call{ value: amount }("")` +
+     `require(success, "FAIL_TRANSFER")` — **call со всем газом, не transfer 2300** (transfer заменён на call коммитом
+     6171a34ad от 24.06.2021 «forward gas in aeWETH for bridgeBurn and withdrawTo»; текст реализации на Sourcify — call).
+     Значит receive() ArbExecutor (`require(msg.sender == bnbFrom)`, transient) получает весь газ — ограничения 2300 нет;
+     ядро Ekubo тоже шлёт ETH `call(gas(), …)` (FlashAccountant.sol L350). Сигнатуры IWBNB исполнителя (deposit(),
+     withdraw(uint256)) совпадают с ABI реализации. Проблем нет; остаётся сборка, EVM-тест и переразвёртывание.
+  3) Новые настройки задать: dex.ekubo_twamm, dex.ekubo_twamm_horizon_s, dex.ekubo_oracle, dex.ekubo_boosted_fees (DEX
+     ekubo-v3-arbitrum), dex.ekubo_hub_buffer и dex.native_wrapped (arb_dex) — docs/FIRST_RUN.md.
+  Вопросы Тиграну:
+  1) Время блока сделки для TWAMM: котировка берёт t = max(время блока чтения, часы сервера) и t + 1 и считает по худшему
+     (как MEVCapture решения 447, сравнение времени блока с часами сервера — как node/head_age.rs решения 259). Годится ли
+     часы сервера как оценка времени следующего блока Arbitrum (секвенсор ставит своё время — по документации Arbitrum не
+     сверено в этой задаче)?
+  2) Тихий пул с TWAMM дольше dex.ekubo_twamm_horizon_s не котируется до перечитывания (событие пула, переподключение).
+     Нужно ли плановое перечитывание таких пулов (например, раз в горизонт)?
+  3) Как GeckoTerminal отдаёт нативный ETH в парах Ekubo (0x0 / 0xEeee / WETH) — по записи gt_pools.json; справочник
+     сейчас показывает пулы с валютой 0x0 «не поддержан» (directory/mod.rs is_native). Пулы с ETH всё равно находятся
+     историей PoolInitialized.
+  4) Хаб: при обрыве общей подписки переподключаются ВСЕ пачки Ekubo площадки (перечитывание всех пулов) — допустимо?
+- **Ревью 447/454 (20.11.2026, ветка t230/arb-ekubo-more) — исправлено:**
+  1) math/ekubo_mev.rs — номера строк MEVCapture.sol@61d09daa сверены: tickLast L183-L184, обновление в новой секунде
+     L191-L207, CORE.swap L209, доплата L212-L215, точный выход L218-L236, точный вход L237-L251.
+  2) pools/exec_kind.rs (Ekubo) — data шага = abi.encode(bytes32 config, bool native, bool forward), как
+     contracts/ArbExecutor.sol _ekubo.
+  3) math/ekubo_swap.rs exact_in_to — порядок как в ядре (Core.sol L544-L558): сначала «сумма 0 / цена = предел» —
+     без обмена, направление предела — только при обмене (раньше нулевая сумма с пределом не в ту сторону давала None).
+  4) math/ekubo_time.rs search — первое допустимое время за пределом поиска: контракт читает его слово
+     (timeBitmap.sol L76), но результат от слова не зависит (findNextInitializedTime даёт время ≥ fromTime, L77-L80
+     сводят к (until, false)) — возвращается (until, false) без слова. Пул TWAMM котируется до конца
+     dex.ekubo_twamm_horizon_s включительно (раньше мог перестать раньше, если это слово не прочитано). Чтение слов
+     (load_ekubo_twamm.rs words_until) не менялось — его хватает.
+  5) Файлы > 200 строк разбиты: math/ekubo_swap.rs 206 → 179 (+ ekubo_step.rs 45), pools/events_ekubo.rs 230 → 174
+     (+ events_ekubo_ticks.rs 74), pools/group.rs 270 → 198 (+ group_filter.rs 92, реэкспорт group::Topics / filter /
+     index / multi_sites — вызовы не менялись), tests/arbitrum_ekubo_more_live.rs 214 → 95 (+ tests/ekubo_more_common/mod.rs
+     135). contracts/IPools.sol 308 и contracts/ArbExecutor.sol 799 — в техдолг (ROADMAP).
+  6) WETH Arbitrum — сверено (п. 2 выше «Решение 454»): deposit()/withdraw(uint256) есть, ETH — call со всем газом.
+  Ждёт CI (cargo локально не запускался).
+- **Решение 416 — перенесено в следующие шаги плана (docs/notes/arbitrum/multichain-plan-2026-11-19.md):**
+  1) ДО того, как адаптер DEX начнёт ставить сеть в монету (шаг 2): перенос `chain = None` → сеть (записи учёта
+     core_state, учёт сделок, окна; карты в памяти) или «действующая сеть» в равенстве — иначе старая монета (None) ≠
+     новой (Some(bsc)). Сейчас правило «None = сеть единственной сети площадок DEX» есть только как функция
+     (core/chain.rs of), в равенство не встроено.
+  2) Сравнения адресов полем без сети (`a.contract == b.contract`): core/venue_ticker.rs asset_back, credit_watch.rs
+     same_asset, native.rs apply/is_native, registry_build.rs, ticker_index.rs (карты (площадка, адрес)), core/subscribe.rs;
+     ~20 статиков адаптера DEX с ключом Address (pools/, exec/executor/, quote/ — список в плане).
+  3) Ключ монеты на счёте биржи (core/coin_account.rs): вызывать `remember_saved` из справочника (ticker_index /
+     registry_build) для бирж ДО публикации справочника, когда биржи отдадут адрес контракта по каждой сети (шаг 3).
+     Карта только пополняется и хранится в учёте ядра — ключ сделки не меняется посреди её жизни (ревью С-3). Пока
+     карта пуста — монеты разных сетей на бирже не склеиваются (только по факту тикера биржи).
+  4) core/quarantine.rs key_of_id — ключ из интерфейса без сети; core/deposit_hold.rs — замер удержания по
+     (биржа, CoinKey с сетью): решить, мерить по сети перевода или по монете биржи.
+  5) Тип адреса: свой тип с 20-байтовым EVM-вариантом и местом под адрес Solana — не сделан (Address во всём адаптере
+     DEX, пулах, справочнике); нужен до сети не-EVM.
+  6) Переименование газа `*_bnb` → `*_native` в типах и базе (ChainTx.gas_bnb и др., risk.min_bnb_balance) — шаг 2.
+  7) KyberSwap — свой chainId 56 в коде (venues/kyberswap/node.rs:29, signer.rs:71, connection.rs:83): выключен,
+     не тронут.
+  8) Вторая площадка DEX (arb_dex): свои dex.chain / dex.evm_chain_id (область — площадка, уже по площадке); core/chain.rs
+     при двух сетях отвечает «сеть не выбрать» — до шага 2 монеты без сети при двух DEX недопустимы.
+
+- **Решение 463 (20.11.2026, задача t236, ветка t236/bsc-thena-fusion-v1) — THENA Fusion: сжатый битмап и цикл AlgebraV1;
+  ждёт сборки и тестов в GitHub (cargo локально не запускался).** Факт: бот читал битмап THENA Fusion сырым — у 7 из 8
+  пулов записи карта пустая, котировка завышалась до +0,96 %. Исправлено (DECISIONS 463): чтение по сжатым словам,
+  шаг по сжатым строкам, события Fee / Initialize; тест tests/bsc_thena_fusion_record.rs (63 из 64 случаев = Quoter до wei,
+  64-й — честный неполный итог). Живой бот: THENA Fusion выключена (dex.pool_enabled = нет, 20.11) — после выкладки
+  включает Тигран. Ревью t236 (сделано): номер 462 → 463 (462 занят веткой Arbitrum t234/arb-merge-2); dex.kind —
+  thena_fusion исполняется через ArbExecutor; подписка Integral — прежняя; tickSpacing — в Pool.tick_spacing записи (не
+  перечитывается), слова — в первом заходе заранее читаемых вызовов; тест tests/bsc_thena_fusion_window_t236.rs (off_map,
+  глубина на записи). Задачи:
+  - T463-01 **Окно чтения.** Число слов THENA Fusion теперь считается при tickSpacing пула (60): та же полоса % даёт в 60
+    раз меньше слов; dex.tick_words — сжатых слов (±n строк по 256·60 тиков). Значения менять не нужно (docs/SETTINGS_CASES.md).
+  - T463-02 **Комиссия следующего блока — СДЕЛАНО в коде (t236) и подтверждено записью со слотом 3 (тест ждёт CI).** Порт
+    math/adaptive_fee.rs + math/fee_algebra_v1.rs, чтение pools/fusion_fee.rs; PoolState::Algebra.fee thena_fusion —
+    комиссия следующего блока (большая из «тот же секундный блок» / «+ 1 с»). Факт записи t237: формула = getFee 180/180,
+    порт без объёма блока = getFee 180/180; Quoter выше getFee у 27 пулов — объём блока (слот 3), в записи его нет.
+    (а) СДЕЛАНО: повтор записи tests/data/bsc_thena_fusion_2026-11-20_slot3 (60 пулов, блоки 134760116–134760122; скрипт
+    45da3813 + 06a2c160), тест tests/bsc_thena_fusion_fee_slot3.rs: комиссия бота fee_at = комиссия официального Quoter
+    на времени блока, последней точки, + 1 и + 3 с — 1920 из 1920, volumePerLiquidityInBlock ≠ 0 у 51 пула из 60;
+    next_block_fee = большая из Quoter на блоке и + 1 с — 60 из 60; без объёма блока = getFee — 180 из 180; обмен бота с
+    этой комиссией = виртуальный квотер / Quoter до wei — 1880 полных и 40 неполных у самого пула. Расхождений нет, код
+    не менялся (числа комиссии — прогон порта на записи вне cargo, 20.11; cargo локально не запускался); (б) СДЕЛАНО (решение координатора): пересчёт на каждой голове локально
+    (pools/fusion_head.rs), горизонт начала окна — dex.fusion_fee_horizon_s (после выкладки задать; за горизонтом —
+    перечитывание оракула на голове); (в) СДЕЛАНО: сверка с квотером на блоке берёт комиссию того же блока
+    (fusion_head::same_block). **Ревью t236 — исправлено (DECISIONS 463, «Ревью t236»):** комиссия не считается → пул
+    недостоверен до полного чтения (settle.rs Need::Fee); dex.fusion_fee_horizon_s обязательна, больше 0; getTimepoints
+    частями по dex.fusion_oracle_chunk точек (pools/fusion_oracle.rs), откат части — причина в журнал; чтение у края
+    горизонта — пулы одновременно (pools/fusion_head_read.rs), одновременно с остальными видами; время головы — heads.rs
+    time_since; книга — forget / orphan; сверка — данные оракула этого же чтения (own_read). **Ветка volumePerLiquidityInBlock ≠ 0 проверена (пункт (а):
+    51 пул, 1920 из 1920) — после зелёного CI и выкладки THENA Fusion включает Тигран (dex.pool_enabled; задать
+    dex.fusion_fee_horizon_s и dex.fusion_oracle_chunk).** Открыто: «память отстаёт» сверки (dex.quoter_memory_lag_blocks) сравнивает и комиссию —
+    у THENA Fusion в памяти комиссия следующего блока, в свежем состоянии — того же блока: при заданной настройке
+    возможна лишняя запись журнала (без паузы); пересчёт на голове (fusion_head.rs) отдельным тестом не покрыт — он
+    зовёт те же fee_at / next_block_fee, что проверены на записи. Было (до t236, для истории): Первый своп блока пересчитывает комиссию (AlgebraPool.sol
+    _getNewFee → DataStorageOperator.getFee: AdaptiveFee по средним волатильности и volumePerLiquidity за 24 ч ПОСЛЕ
+    записи новой точки оракула с volumePerLiquidityInBlock пула — DataStorage.write / getAverages). Факт записи: у
+    0x1b93…2210 Quoter на времени блока 1539 при globalState.fee 1537. Бот берёт globalState.fee (событие Fee держит её
+    текущей) — при росте комиссии к следующему блоку котировка завышена на разницу. Порт DataStorage + AdaptiveFee —
+    после повторной записи (оракул: feeConfig, точки, getFee / getAverages на время блока + 0/1/3 с; скрипт —
+    ветка t237/bsc-thena-record, T237-01). volumePerLiquidityInBlock у AlgebraV1 — internal (геттера нет), слот
+    хранилища — по раскладке исходника THENA (сверить).
+  - T463-03 **Исполнение.** Шаг ALGEBRA ArbExecutor: swap(recipient, zeroToOne, int256, limitSqrtPrice, data) +
+    algebraSwapCallback — подпись совпадает с IAlgebraPoolActions / IAlgebraSwapCallback исходника THENA (Sourcify);
+    тот же вызов делает VirtualQuoter, и на записи 20.11 он исполнился на всех 8 пулах (ответы = Quoter THENA). EVM-сценария
+    исполнителя с кодом пула THENA (evmtest) нет — задача: развернуть код пула из записи (eth_getCode) и прогнать шаг.
+  - T463-04 **Поиск пулов.** Уже есть: poolByPair фабрики по парам монет (factory_calls.rs) и событие Pool(token0, token1,
+    pool) фабрики (created_log.rs). Полного списка пулов фабрики (история событий Pool с блока создания) нет — задача.
+- **Решение 464 (20.11.2026, задача t238, ветка t238/bsc-own-pool-order) — свои идущие сделки через один пул; ждёт
+  сборки и тестов в GitHub (cargo локально не запускался).** Сделано: котировка продажи новой сделки = пул как есть +
+  остаток своих идущих сделок монеты на той же площадке продажи (любая биржа покупки); исполненные в блоке котировки —
+  не добавляются; наша продажа в полёте / с неизвестным исходом / исполнившаяся за время котировки — котировки нет до её
+  итога (core/ride_settled.rs). **Вопросы Тиграну (не сделано, факт кода):**
+  (1) сделки ДРУГИХ монет через общий промежуточный пул (X → WBNB → USDT и Y → WBNB → USDT) друг друга в сдвиге не
+  видят — для этого нужен новый вызов адаптера DEX «котировка после заданных обменов» (контракт шлюза); делать?
+  (2) транзит монеты без своей истории — сделано, Тигран 20.11: да: статистика пары площадок по всем монетам, если у
+  пары переводов не меньше profit.transit_auto_after (core/transit_source.rs); иначе — настройки.
+  (4) после выкладки: событие deal.sale_unknown_block («Сделки») — включить в настройках уведомлений, если нужно в
+  Telegram (исход продажи неизвестен — монета на площадке заблокирована до разбора сделки).
+  (3) первая продажа монеты с кошелька — approve в момент продажи (ожидание его блока, решение 303: «заранее не
+  отправляется»), у Gate NUM 20.11 это и было «котировке 2525 мс» перед откатом. Отправлять approve, пока монета в пути
+  (симуляция продажи до покупки уже знает, что разрешения не хватает — exec/presell.rs)? — Тигран 20.11: да, СДЕЛАНО
+  (решение 476: core/sell_approve.rs, контракт dex_preapprove). После выкладки: в хронологии сделок биржа → DEX строка
+  «approve заранее отправлен и в блоке …» (или причина, почему нет), журнал dex.approve_seen.
+  (5) частичная покупка, «довезти» ждёт разбора сделки Z с неизвестным исходом продажи (решение 476, ревью): у
+  ждущей сделки своих кнопок нет, ожидание кончается ручной командой по Z (Telegram deal.partial_waits_review
+  говорит, что нажать). Нужна ли кнопка на самой ждущей сделке («продать на A сейчас» / «Беру на себя»)?
+  После выкладки: при log.step_timing = да смотреть строки «Время по шагам (ордер продажи …)» у продаж DEX; в
+  хронологии новых сделок — строка «Время в пути …» (источник T: настройки / монета / пара площадок).
+
+- **Решение 449 (20.11.2026, задача t225, ветка t225/bsc-pool-directory) — справочник пулов DEX не обновлялся с 14.11;
+  скан фабрик назвал orangedx неподключённой; ждёт сборки и тестов в GitHub (cargo локально не запускался).**
+  Исправлено: (1) разблокировка/изменение секретов будит обновление справочника сразу (раньше после «Секреты не
+  разблокированы» — только через index.refresh_s = 30 ч или по изменению index.*); остановка прохода не сдвигает срок;
+  (2) у поиска по фабрикам видно начало прохода («Идёт проход с …»): DEX и их настройки берутся в начале прохода, итог и
+  заметки пишутся в конце. **Сделать в интерфейсе:** задать `index.error_retry_s` [bsc_dex] (не задана → монета с
+  ошибкой 429 ждёт index.refresh_s = 30 ч; решение 61). **Проверить на сервере:** тело ответа 429 в сыром журнале
+  (data/raw/bsc_dex, соединение index) — почему индексатор отказывает при темпе 30/мин (офдока errors-and-rate-limits:
+  Demo — 100 calls/min; о месячном лимите на этой странице ничего нет; README справочника пишет «Demo: 10 000 в
+  месяц» — по тарифу в кабинете CoinGecko сверить расход); журнал dex.index — «Поиск пулов по фабрикам: проход начат»
+  и строка итога: сколько длится проход (вызовов 1 370 175). **Вопрос Тиграну (не исправлено, факт кода):** при каждой
+  новой подписке DEX `pools/index.rs begin` и первый проход `refresh::run` зовут `restore` — запись монеты из SQLite
+  заменяет память: ошибка и `tried_at` стираются, все монеты старше index.refresh_s спрашиваются заново сразу (сроки
+  index.error_retry_s / refresh_s после ошибки не держатся между пересборками подписки, лишний расход лимита). Оставить
+  или хранить в памяти срок и ошибку при пересборке?
+
+- **Решение 424 (20.11.2026, задача t208, ветка t208/poloniex-fast-book) — быстрый стакан Poloniex book_lv2 со
+  страховкой снимками book; ждёт сборки и тестов в GitHub (cargo локально не запускался).** Живых кадров book_lv2 нет
+  (docs/FIRST_RUN.md, раздел Poloniex) — тесты на примерах офдоки. **На сервере бота:** при raw.book_frames = да
+  записать кадры обоих каналов нескольких пар (час-другой) → tests/data/cex_samples_2026_11_05/poloniex_ws_book_lv2.jsonl
+  (снять #[ignore] у recorded_lv2_frames_chain) и **замерить частоту book_lv2 против book** (офдока: book — «every
+  100ms», у book_lv2 частота не указана); по записи проверить: (1) одна ли последовательность id у book и book_lv2 —
+  если да, сверку снимка book с быстрым стаканом сделать по версии (сейчас — только по содержимому верха); (2) приходит
+  ли изменение для уровня, вошедшего в первые 20 после удаления верхнего (локальный стакан срезает глубже 20-го); (3)
+  ответ на отписку/подписку book_lv2 при пересинхронизации. После выкладки смотреть журнал venue.book_fast (нужен
+  log.pool_events_lost_interval_s): «разрывов» и «на снимки» ≈ 0; частые разрывы — причина в строке. Вопросы Тиграну:
+  (а) подписок на соединение вдвое больше (2 канала на пару), предела в документации нет — пересмотреть
+  venue.ws_symbols_per_conn Poloniex; (б) venue.ws_reconnect_pause_ms теперь ещё и пауза переподписки book_lv2 пары (0 —
+  без паузы, темп задаёт только очередь venue.ws_subs_per_sec) — нужна ли своя настройка.
+  **Ревью 424 (20.11.2026):** добавлен разрыв по сверке содержимого — два снимка book подряд не совпали с быстрым,
+  оба созданы не раньше его последнего изменения, быстрый между ними не менялся (DECISIONS «424 (ревью)»). Положительный
+  случай тестом не покрыт: в примерах офдоки createTime book раньше book_lv2 — проверить по живой записи (сколько
+  таких разрывов в venue.book_fast; если быстрый отстаёт от book дольше 100 мс — разрывы будут частыми). Вопросы
+  Тиграну: (в) порог «два снимка подряд» — оставить или сделать настройкой; (г) при разрыве страховочный снимок почти
+  всегда старше уже отданного быстрого (createTime) → ядру не уходит, пара недостоверна до следующего снимка book
+  (≤ 100 мс) — так по правилу «не старше отданного»; устраивает ли.
+- **Решение 427 (19.11.2026, задача t211, ветка t211/phemex-book-fallback) — Phemex: запасной поток стакана; ждёт
+  сборки и тестов в GitHub (cargo локально не запускался).** Вопросы и что проверить на живом:
+  1) Задать venue.book_reserve (`depth30` / `full`) — решает Тигран: цена — вдвое меньше пар Phemex (при 5 соединениях
+     и потоке аккаунта 40 вместо 80). Не задана — как до 427.
+  2) Записать живые кадры ДВУХ соединений одной пары (market-N и market-N-reserve, tests/README.md, раздел Phemex) и
+     снять вопросы: принимает ли Phemex одну пару на двух соединениях (запрета в документации нет), общие ли sequence и
+     timestamp у двух соединений (если да — можно сверять потоки между собой; сейчас порядок только по timestamp, сверки
+     двух потоков нет), даёт ли контрольный снимок тот же sequence, что последнее изменение (от этого зависит, как часто
+     срабатывает сверка снимка local_book.rs). Тест tests/phemex_book_pick_427.rs — на «Message sample» документации.
+  3) «Что такое Client» в «concurrent connection limit to 5» (IP, ключ, UID) — по-прежнему не сказано (решение 168).
+  4) Ревью 427 — решает Тигран: (а) при venue.book_reserve и нехватке соединений (меньше 2 на стаканы) подписка стаканов
+     Phemex отклоняется целиком (ошибка в журнале), а не идёт без запасного потока — так оставлено; (б) запасное
+     соединение не под сторожем пар (решения 202/213): тихо умершая подписка запасного потока не переподписывается,
+     её стакан защищён только venue.book_stale_ms; (в) соединений вдвое больше — вдвое больше переподключений против
+     лимита «wss://ws.phemex.com 200/5m per IP address» (Overview → IP ratelimits).
+- **Решение 426 (19.11.2026, задача t210, ветка t210/kraken-book-fallback) — Kraken: страховка стакана в памяти; ждёт сборки и тестов в GitHub (cargo локально не запускался).** Разбор документации — docs/notes/kraken-book-standby-2026-11-19.md.
+  1) Задать venue.book_standby_depth (совет — равна venue.depth_levels, 25). Цена: вдвое больше соединений Kraken (слот подключения раз в 4 с на IP — старт дольше) и трафика на этой глубине.
+  2) Записать живые кадры двух соединений одной пары (основное + страховка, tests/data): проверить, что timestamp снимка после переподписки — время книги, а у одинаковых состояний на разных соединениях совпадают timestamp и checksum. Сейчас тест — на примерах документации (MATIC/USD).
+  3) Повтор одной пары с другой глубиной на ТОМ ЖЕ соединении в документации не описан — не используется (страховка — отдельное соединение). Если Kraken подтвердит, что так можно, — можно сэкономить соединения.
+  4) Журнал venue.book_standby пишется с интервалом log.pool_events_lost_interval_s (общая с решениями 313/324); не задана — записей нет, счёт копится.
+  5) Ревью 426 (вопрос Тиграну): правило «не старше» по timestamp при страховке МЕНЬШЕЙ глубины, чем основной. Факт кода (standby.rs not_older) и документации (book.md: depth — «the number of price levels … to be received»): основной глубже получает изменения дальних уровней со своим timestamp, страховка их не получает — её последний кадр по времени раньше отданного, и при потере основного переключения нет, ядру «недостоверен». Сейчас живая venue.depth_levels [kraken] = 1000, совет FIRST_RUN для страховки 25 рассчитан на depth_levels 25. Выбор: страховка = venue.depth_levels (1000 — двойной трафик глубины 1000) или правило «тот же или больший timestamp, либо та же чек-сумма верхних 10» для меньшей глубины. Как часто это бывает — проверить на живых кадрах (п. 2).
+  6) Ревью 426 (вопрос Тиграну): venue.book_standby_depth задана неверно (не из 10/25/100/500/1000 или больше venue.depth_levels) — подписка Kraken отказывает целиком, без основного стакана тоже (market.rs). Оставить так (ошибка видна сразу) или запускать только основные соединения с записью в журнал?
+  7) Ревью 426 (вопрос Тиграну): после «недостоверен» (обе стороны потеряны) новый снимок основного уходит ядру только если он «не старше» последнего отданного; без страховки снимок после пересинхронизации уходит всегда. Если timestamp снимка у Kraken — не время последнего изменения книги (в документации: «The timestamp of the order book snapshot», подробнее нет), тихая пара может ждать следующего изменения. Проверить на живых кадрах (п. 2); при подтверждении — в состоянии «недостоверен» отдавать сверенный снимок основного без сравнения.
+- **Решение 429 (20.11.2026, задача t213, ветка t213/okx-book-fallback от 65e879c1) — страховка стакана OKX (books + books5 на отдельных соединениях); ждёт сборки и тестов в GitHub (cargo локально не запускался). OKX сейчас выключена.** Вопросы и что сделать:
+  1) Быстрые books-l2-tbt / books50-l2-tbt (10 мс) не сделаны: документация — «Only API users who are VIP4 and above in trading fee tier are allowed to subscribe» (иначе 64003) и строка «Identity verification refers to Login» при URL Path /ws/v5/public без названия канала; нужен ли вход на public-соединении и как (раздел Login — без адреса), не сказано; кроме того «Users can not simultaneously subscribe to books-l2-tbt and books50-l2-tbt/books channels for the same trading symbol». Есть ли у аккаунта VIP4? Если да — записать живой ответ на вход и подписку на wss://ws.okx.com/ws/v5/public, тогда делать режимом настройки.
+  2) Снимок books5 со временем ts меньше уже отданного ядру не отдаётся (правило «не старее отданного»), хотя books5 по документации шлёт снимок при каждом изменении 5 уровней: если менялись только глубокие уровни, последний снимок старше и при потере синхронизации пара будет недостоверна до следующего снимка books5 или пересинхронизации books. Оставить строгим или считать последний снимок живого соединения books5 актуальным для верхних 5 уровней?
+  3) Записать живые кадры books и books5 одной пары ОДНОВРЕМЕННО (две websocat параллельно, tests/README.md, раздел OKX): совпадают ли seqId и ts кадров двух каналов — если да, можно сверять быстрый стакан со снимком (п. 4 общей постановки), сейчас сверки нет.
+  4) Страховочные соединения удваивают число соединений OKX (market-N + backup-N); проверить на живом, что OKX не рвёт их по пределам (коды 4008/4009, 30 соединений на канал).
+  5) Ревью 429: после обрыва каждое соединение (market-N и backup-N) переподключается само через venue.ws_reconnect_pause_ms, без общей очереди темпа venue.ws_connects_per_sec — при массовом обрыве (сеть) подключений в секунду может быть больше «3 requests per second (based on IP)»; так было и раньше, теперь соединений вдвое больше. Вести переподключения через общую очередь темпа?
+  6) Ревью 429 (мелкое): при venue.depth_levels = 5 (страховки нет) потери пары тоже считаются в журнале venue.book_backup как «books терял синхронизацию / без годного снимка» (если venue.book_backup_log_s задана). Поправить подпись или не считать без страховки?
+  7) Ревью 429 (мелкое): кадр синхронизированного books с ts меньше отданного снимка books5 не отдаётся ядру, но пара уже помечена «быстрый» — до следующего кадра books (≤100 мс по документации) в памяти остаётся снимок books5, и Repeat-кадр books (touch) продлевает его свежесть. Устраивает?
+- **Решение 419, дополнение (20.11.2026, t203) — XT: страховка быстрого стакана снимками depth@; ждёт сборки и тестов в GitHub.**
+  1) «Не старее отданного» при смене потока держится порядком получения кадров в одном соединении: у depth_update нет времени биржи, связь updateId depth@ с номерами depth_update / lastUpdateId REST документация не описывает. Ревью 419: при разрыве ядру уходит снимок depth@, принятый после последнего изменения быстрого; такого нет — стакан пары снимается до следующего снимка depth@ (≤ 1 с). Подтвердить или дать правило.
+  2) Записать живые кадры обоих потоков одной пары одновременно (tests/README.md, раздел XT: depth_update@ и depth@…,20 в одном соединении) — проверить, совпадает ли шкала i у depth@ и depth_update; если да — сверка верхних уровней и немедленная отдача снимка по номеру.
+  3) После выкладки: подписок XT на соединение вдвое больше — следить за отказами subscribe (code 1) и обрывами; при отказах уменьшить venue.ws_symbols_per_conn или venue.ws_streams_per_msg. Частота разрывов — журнал venue.fast_book.
+  4) Ревью 419: сверка «два снимка depth@ подряд не равны верху быстрого, быстрый между ними не менялся → на снимки и снимок REST». Держится на том, что depth@ и depth_update — один источник стакана XT (документация этого не говорит). На живом проверить журнал venue.fast_book: расхождения «верх двух снимков depth@ подряд не равен быстрому» у тихих пар раз за разом — значит источники разные (уровни depth@ сведены иначе); тогда правило снять или сравнивать иначе — решение Тиграна. Темп таких пересинхронизаций ограничен venue.ws_reconnect_pause_ms на пару и очередью venue.depth_snapshot_per_sec.
+  5) Ревью 419: пример кадра на doc.xt.com LimitedDepth (19.11.2026) — data {s, i: 1657699200000, a, b}, без t; в исходнике xt4-api limitDepth.md — i 12345678 «updateId» и t «time». Что такое i у depth@ (номер или время) — проверить на живых кадрах (п. 2); код от этого не зависит (тот же i — только продление, t необязательно).
+
+- **Решение 419 (19.11.2026, задача t203, ветка t203/xt-deflate) — XT: публичный WebSocket со сжатием permessage-deflate (yawc); ждёт сборки и тестов в GitHub (cargo локально не запускался, Cargo.lock правлен вручную — CI `--locked` проверит).** Срок XT — 2026-12-10 08:00 UTC: выложить до него.
+  1) После выкладки проверить на живом: соединения XT подключаются, кадры стаканов идут, обрывов «подключение: …» в журнале venue.ws нет. Принял ли сервер сжатие — yawc наружу не отдаёт; проверка ручная — `websocat` без сжатия после 10.12 должен получить отказ (tests/README.md, раздел XT).
+  2) Корни TLS у XT теперь встроенные (webpki-roots, набор Mozilla), у остальных бирж — системные (rustls-native-certs). Если нужен системный набор и для XT — свой TLS-коннектор (yawc with_connector), отдельная задача.
+  3) yawc — молодая библиотека (0.x, лицензия MPL-2.0). Подтвердить выбор; альтернатива — soketto 0.8 (deflate через zlib на C) со своим TLS и рукопожатием (больше кода).
+  4) Ревью 419: yawc принимает кадр не больше 1 МиБ (MAX_PAYLOAD_READ; у tokio-tungstenite было 64 МиБ) — больше рвёт соединение; кадры стаканов XT (до 50 уровней снимка, изменения раз в 100 мс) много меньше. Включение yawc добавило функцию `logging` к tokio-rustls/rustls (крейт `log`) у всего процесса, то есть и у reqwest / tokio-tungstenite других бирж: записи rustls через мост log → tracing (tracing-subscriber fmt::init, функция tracing-log) попадут в вывод процесса на уровне фильтра; у rustls это в основном debug/trace, на info и выше — редкие строки (предупреждения TLS). Поведение соединений не меняется.
+- **Решение 421 (19.11.2026, задача t205, ветка t205/gate-fast-book) — быстрый стакан Gate spot.obu со страховкой; ждёт
+  сборки и тестов в GitHub (cargo локально не запускался).** После выкладки задать venue.obu_level [gate] = 50 (совет
+  FIRST_RUN; 400 — если нужна глубина больше 50). Открытые вопросы (нет в документации Gate):
+  1) Записать живые кадры spot.obu вместе со spot.order_book и GET /spot/order_book?with_id=true по одной паре: совпадает
+     ли u spot.obu с lastUpdateId snapshot-канала и id REST, и t — с t снимков. Если да — сверка верха снимка с быстрым
+     стаканом по номеру и номера spot.obu в сторож пар (решение 213); сейчас смена потока — только по t строго больше,
+     сверки нет (fast_pick.rs).
+  2) Уровни, выпавшие из окна 50 / 400: шлёт ли сервер им количество 0 — не сказано. Ядру отдаётся не больше уровней
+     потока; проверить на записи, нет ли «застрявших» уровней внутри окна.
+  3) Предел подписок на соединение Gate не описан; при venue.obu_level подписок вдвое больше — замерить при «Стоп»
+     (venue.ws_symbols_per_conn), при обрывах уменьшить.
+  4) Шлёт ли spot.obu кадры у пары без изменений (heartbeat) — не сказано; свежесть пары по-прежнему по кадрам снимков
+     и подтверждению сторожа (решение 213).
+  5) Изменение с u ≤ номера стакана (повтор) по документации — тоже «U ≠ номер + 1», т.е. разрыв и пересинхронизация;
+     если на живых кадрах повторы бывают — решить, пропускать ли их.
+  6) (ревью) Кадр изменений spot.obu без поля b или a считается неразборчивым (разрыв и пересинхронизация): в
+     документации «If a (asks) and b (bids) in the update are not empty…», в примере оба поля есть. Если на живых кадрах
+     пустая сторона приходит без поля — счёт venue.fast_book будет расти на каждом кадре; тогда решить: отсутствие = нет
+     изменений.
+  7) (ревью) Сверка двух снимков подряд (fast_rule.rs diverged) при venue.obu_level = venue.depth_levels (окно = уровни
+     ядру): если сервер не присылает уровни, входящие в окно, расхождения будут повторяться — смотреть счёт
+     venue.fast_book; тогда ставить venue.depth_levels меньше venue.obu_level.
+  8) (ревью) Шаг пересинхронизации шлёт два запроса (unsubscribe + subscribe) за один тик venue.ws_subs_per_sec;
+     предела частоты подписок Gate в документации нет.
+
+- **Решение 428 (19.11.2026, задача t212, ветка t212/bybit-book-fallback) — страховка стакана Bybit; ждёт сборки и тестов
+  в GitHub (cargo локально не запускался).** Bybit сейчас не торгуется — включать при подключении. Открыто:
+  1) Записать живые кадры двух глубин одной пары одновременно (orderbook.50 и orderbook.200 / orderbook.1, два соединения,
+     5–10 минут): бывает ли равный seq у разных глубин и совпадают ли тогда первые уровни (документация пишет только
+     «smaller seq — generated earlier»); как часто сверка вообще случается (журнал venue.book_backup: «сверок при равном
+     seq»). Если равный seq не значит одно состояние — убрать сверку (расхождения будут ложными).
+  2) Допускает ли Bybit одну и ту же тему (та же глубина) на двух соединениях — в документации не описано; сейчас
+     запрещено (venue.book_backup_levels ≠ venue.depth_levels).
+  3) Какую глубину страховки ставить: 200 (полная глубина на время разрыва, 100 мс) или 1 (лучший уровень, 10 мс, без
+     разрывов) — решает Тигран (совет FIRST_RUN — 200).
+  4) Известный остаток (было и до 428): после разрыва u изменения старой подписки, уже отправленные до unsubscribe, ложатся
+     на сброшенный локальный стакан — второй «разрыв» раньше venue.ws_reconnect_pause_ms переподключает соединение.
+     Со страховкой стакан ядра на это время — из неё; частоту видно в журнале venue.ws.
+  5) Ревью 428: повторное расхождение при равном seq пересподписывает основной каждый раз (предела нет; круг — снимок →
+     сверка → расхождение → пересподписка). Если на живых кадрах расхождения частые — убрать сверку (п. 1) или задать
+     предел; решает Тигран. Частота — журнал venue.book_backup «расхождений со страховкой».
+  6) Ревью 428: выбор источника — один замок на все пары подписки (backup.rs Hub, std Mutex; отдача ядру под ним,
+     без await). При сотнях пар и двух соединениях на пачку — общая точка ожидания; если на сервере видно — замок по паре.
+  7) Ревью 428: возврат на основной — первым кадром основного с seq новее последнего отданного кадра страховки. При
+     страховке глубины 1 (10 мс) и основном 1000 (200 мс) возврат может запаздывать (ядро это время — на лучшем уровне).
+- **Решение 420 (19.11.2026, задача t204, ветка t204/mexc-fast-book) — быстрый стакан MEXC со страховкой снимками; ждёт сборки и тестов в GitHub (cargo локально не запускался).** После выкладки задать venue.fast_book_interval, venue.fast_book_snapshot_per_sec, venue.fast_book_snapshot_limit (советы — FIRST_RUN, раздел «Биржа MEXC: быстрый стакан»); монет на соединение станет ≤ 15 — соединений MEXC вдвое больше. Открыто:
+  1) **Записать живые кадры** канала spot@public.aggre.depth.v3.api.pb@10ms@<SYM> подряд и снимок того же окна (tests/README.md, пункт (4): `tests/data/mexc_ws/depth_diff.hex`, `depth_snapshot.json`) — снять #[ignore] с tests/mexc_fast_book_420.rs recorded_diff_sequence; проверить на живом: строго ли fromVersion = прежний toVersion + 1 подряд (если MEXC шлёт перекрывающиеся кадры — строгая сверка даст разрывы; журнал venue.fast_book покажет частоту), шлёт ли канал кадры без изменений (в документации не сказано).
+  2) **Сверка с потоком снимков по номеру** не сделана: version частичного стакана spot@public.limit.depth.v3.api.pb в документации — «Version number», связи с fromVersion/toVersion канала изменений и с lastUpdateId не описано. На записи обоих каналов одной пары проверить, одна ли это шкала; если да — сверку можно делать по номеру (точно), а не только по содержимому. Решает Тигран.
+  3) Порог «быстрый отстал» — venue.book_stale_ms (существующая мера свежести): быстрый стакан, у которого ни кадров изменений, ни совпадения с кадром снимков дольше этого срока, а снимки показывают другую книгу, — на снимки и снимок заново. Подходит ли эта мера или нужен свой порог — решает Тигран.
+  4) При разрыве, если последний кадр снимков старше уже отданного быстрого стакана (по sendTime) или старше venue.book_stale_ms, ядро держит последний быстрый стакан (верный на свой момент) до следующего кадра снимков (~500 мс): так соблюдается «не отдавать ядру стакан старее отданного». Устраивает ли — решает Тигран.
+  5) Подписка и сторож пар на соединение общие для обоих каналов: обрыв соединения рвёт оба (страховка снимками защищает от пропусков канала изменений, не от обрыва соединения — как и раньше).
+  6) **Ревью 420 (решение «420 (ревью)»):** добавлено второе правило «быстрый отстал» — два кадра снимков подряд новее быстрого стакана по sendTime и не равны ему, кадров изменений пары между ними нет → на снимки и снимок REST заново (раньше только по venue.book_stale_ms: при тихо умершем канале изменений и живом канале снимков ядро до venue.book_stale_ms считало свежим стакан, который снимки уже показывали другим). Проверить на живом журнале venue.fast_book: нет ли ложных переходов у тихих пар (если кадр снимков систематически отстаёт по содержимому от своего sendTime больше чем на ~500 мс — будут ложные пересинхронизации); нужен ли свой порог — решает Тигран.
+  7) **Ревью 420, решает Тигран:** venue.fast_book_snapshot_per_sec допускает 10 (= вся корзина IP 300 / 10 с при весе 3); при не заданной venue.public_ip_weight_10s остальные публичные запросы MEXC (подтверждения тихих пар, справочник, снимки окон) уже сверх корзины → 429 и бан IP. Предел каталога оставить 10 или снизить / требовать venue.public_ip_weight_10s при быстром стакане. Совет FIRST_RUN — 2.
+  8) **Ревью 420:** шаг 4 выполнен буквально («lastUpdateId < fromVersion первого кадра» — снимок заново, в т. ч. при fromVersion = lastUpdateId + 1, хотя такой кадр продолжал бы снимок): лишний снимок, а не неверный стакан. Частоту покажет счётчик пересинхронизаций venue.fast_book.
+- **Решение 422 (20.11.2026, задача t206, ветка t206/htx-fast-book) — HTX: быстрый стакан /feed со страховкой снимками; ждёт сборки и тестов в GitHub (cargo локально не запускался).** Пока venue.ws_feed_url не задан — всё как раньше. Вопросы и что проверить:
+  1) Факт документации: «tick by tick» только у 5/20 уровней и только для ~30 пар её списка (btcusdt, ethusdt, xrpusdt …); 150 — все пары, но раз в 100 мс, как и снимки mbp.refresh. Для наших пар BSC выигрыша в скорости, скорее всего, нет — включать ли вообще и с каким venue.fast_book_levels?
+  2) Записать живые кадры /feed (raw.book_frames = да на время записи) для пар 20 и 150: подписка, изменения, ответ на req, ошибка подписки пары не из списка — проверить: (а) seqNum ответа req лежит в той же цепочке, что prevSeqNum изменений (выравнивание принято строгим: первое изменение после снимка — prevSeqNum = seqNum снимка); (б) присылает ли канал удаление уровня, вытесненного за N (сейчас стакан обрезается до N); (в) вид ответа на ошибку подписки (id — символ); (г) совпадают ли шкалы ts кадров /feed и /ws (правило «не старее отданного» сравнивает ts биржи). Тест на записи — в tests/htx_fast_book_422.rs.
+  3) ~~Ответ на req не пришёл совсем — пара ждёт до переподключения~~ — ревью 422: срок ответа = http.timeout_ms (своей настройки нет), потом новый запрос (fast_reqs.rs late). Ок или нужна своя настройка?
+  4) ~~Сверка: «быстрый не подтверждён дольше venue.book_stale_ms»~~ — ревью 422: у активной пары не срабатывала никогда; заменена общим правилом ревью 420/421/424 (два снимка mbp.refresh подряд новее быстрого по ts, не совпали с его верхом, быстрый между ними не менялся → на снимки и пересинхронизация; возврат на быстрый — только после нового снимка req). Зависит от п. 2(г) — одна ли шкала ts у /feed и /ws.
+  5) Ревью 422: документация пишет «blank object» для пустой стороны у 150/400, а в примере — `"bids":[ ]`. Разбор принимает только массив; если живые кадры покажут `{}` — каждый пустой кадр будет «не разобран» → пересинхронизация. Проверить на записи п. 2 до включения 150.
+- **Решение 425 (19.11.2026, задача t209, ветка t209/binance-sbe-book) — Binance: быстрый стакан SBE.** Нужно от Тиграна:
+  1) Создать на Binance ключ API типа **Ed25519** по официальной инструкции «How to Generate an Ed25519 Key Pair to Send
+     API Requests on Binance» (https://www.binance.com/en/support/faq/6b9a63f1e3384cf48a2eedb82767a69a): пара ключей —
+     официальным Asymmetric Key Generator (https://developers.binance.com/en/docs/sdks-tools/tools/asymmetric-key-generator,
+     Ed25519 по умолчанию), затем Profile → API Management → Create API → Self-generated → вставить публичный ключ →
+     2FA. Прав не нужно (sbe-market-data-streams.md: «No extra API key permissions are necessary»); белый список IP — IP
+     сервера бота. В бот вводится только API Key созданного ключа → секрет `binance.sbe_api_key` (экран «Площадки» →
+     Binance); приватный ключ Ed25519 боту не нужен (подписи у потоков SBE нет) — его хранить у себя.
+  2) Задать venue.sbe_ws_url, venue.sbe_snapshot_per_sec, venue.sbe_snapshot_limit (советы — docs/FIRST_RUN.md);
+     проверить, что venue.ws_silence_ms у Binance больше 20000; нажать «Проверить подключение» (строка «SBE …»).
+  3) Применяется при следующей подписке на рынок (смена справочника пар или перезапуск) — так задумано?
+  Открытые вопросы документации (записать живые кадры и сверить, docs/notes/binance-sbe-book-2026-11-19.md):
+  (а) двоичный кадр /stream — ровно messageHeader + сообщение (без обёртки)? (б) подключение к /stream без streams= у
+  SBE принимается? (в) идут ли кадры изменений у пары без изменений книги? (г) записать живые кадры SBE (raw.book_frames
+  [binance] = да — пишутся hex) и написать тесты декодера sbe.rs и локального стакана на них.
+  Ревью 425 (решение «425 (ревью)») — на выбор Тиграна: (д) venue.ws_silence_ms общая у JSON и SBE: теперь SBE
+  требует > 20000, это же замедляет обнаружение тихого обрыва JSON (кадры раз в 100 мс) — нужна ли своя тишина SBE?
+  (е) lastUpdateId частичного стакана JSON и U/u SBE — один ряд номеров? В документации не сказано; если подтвердится
+  на живых кадрах — сверка по номеру (точная) вместо «два несовпадения подряд» и «не старее отданного» по номеру, а не
+  по часам бота. (ж) неизвестный templateId или неразборчивый кадр рвёт всё соединение SBE (переподключение, снимки
+  всех пар) — оставить так или пропускать кадр (пропуск номеров всё равно поймает U/u)?
+
+- **Решение 423 (20.11.2026, задача t207, ветка t207/kucoin-fast-book) — KuCoin: быстрый стакан /market/level2 со страховкой
+  снимками level2Depth5/50; ждёт сборки и тестов в GitHub (cargo локально не запускался).** После выкладки задать
+  venue.full_book_per_sec [kucoin] (совет `5`) и проверить журнал venue.book_fast (счётчики переходов, пересинхронизаций,
+  расхождений). Открытые вопросы (в документации нет — сделано по факту записи или осторожно):
+  1) Связь поля timestamp кадра level2Depth5/50 с time кадров /market/level2 в документации не описана. Сверка «снимок ↔ быстрый
+     стакан» (fast_check.rs) опирается на факт записи 04.11: 11 из 11 кадров — timestamp = time последнего кадра изменений, 10 из 10
+     сверок верхних 5 уровней совпали. Если вживую сверка даёт ложные расхождения (счётчик в venue.book_fast растёт, а разрывов
+     номеров нет) — сверку выключить или поменять правило; решает Тигран.
+  2) «If the price is 0, ignore the messages and update the sequence» — понято как «запись с ценой 0 пропускается, номер стакана —
+     sequenceEnd кадра»; пропускать ли весь кадр, документация однозначно не говорит.
+  3) Живой записи ответа Get Full OrderBook (подписанный) нет — разбор проверен на ответе Get Part OrderBook level2_20 (те же поля).
+     Записать живой ответ (tests/data/) и одновременную запись /market/level2 + level2Depth50 + Full OrderBook для теста синхронизации
+     целиком; заодно — размер ответа Full у ликвидных пар против http.max_body_bytes.
+  4) Считает ли KuCoin тему «/market/level2:A,B,…» за одну тему или за N в пределе 400 тем на соединение — как и у level2Depth,
+     не уточнено (код считает так же, как раньше для снимков: при быстром стакане venue.ws_symbols_per_conn ≤ 200 тем × 100).
+  5) Пул Spot общий с ордерами: 429000 по снимкам закрыл бы его и для ордеров (reply.rs). Темп — venue.full_book_per_sec; после
+     выкладки сверить расход квоты (gw-ratelimit-remaining) при старте и после переподключений.
+  6) Ревью 423: верхнего предела у venue.full_book_per_sec нет (квота пула Spot зависит от VIP-уровня): 45 в секунду = 3 × 45 × 30 =
+     4050 веса за 30 с — больше квоты VIP0, 429000 поставит на паузу пул Spot и для ордеров на 30 с. Ставить не больше ~10.
+  7) Ревью 423: переподписка сторожем пар (решение 213) одной пары переподписывает тему изменений всей пачки (до 100 пар) — все
+     они на снимки и пересинхронизируются (до 100 снимков Full в очереди). Оставить или переподписывать только тему снимков и
+     пересинхронизировать только эту пару — решает Тигран.
+  8) Ревью 423 (буфер) — сделано: кадры изменений до снимка копятся только с ухода запроса Full из очереди (буфер — время ответа
+     REST, не ожидание очереди). Риск проверить на живом: если ответ Full отстаёт от потока (sequence снимка меньше начала первого
+     кадра после ухода запроса) — пересинхронизация не удаётся (счётчик сбоев в venue.book_fast). Ответ Full OrderBook пишется в
+     сырой журнал (reply.rs) на каждой пересинхронизации — объём проверить на живом.
+  9) Ревью 423: правило «два снимка подряд новее застывшего быстрого» ложно сработает, если вживую кадры level2Depth приходят
+     раньше кадров /market/level2 того же времени больше чем на два кадра снимков (> ~100–200 мс) — смотреть счётчик расхождений
+     venue.book_fast.
+- **Решение 417 (19.11.2026, задача t201, ветка t201/relay-reserve от 274801a0) — «Перегон»: продажа здесь при итоге ≥ 0 без поиска целей, оценка цели с запасом на движение цены за перевод; ждёт сборки и тестов в GitHub (cargo локально не запускался).** Вопросы Тиграну:
+  1) «Цена здесь» для доли закрытия разницы (profit.closure_share) у перегона — средняя котировки продажи здесь (у плана входа это средняя покупки на A). Подтвердить или назвать другую цену (например, цену покупки сделки).
+  2) «Продать и перегнать» (кнопка, manual_relay.rs) оценивает цели без запаса, как раньше (relay_value::value_at). Нужен ли запас и там?
+  3) Цель без ряда σ направления «отсюда → цель» (или без profit.price_move_k, profit.transit_* у площадки «отсюда») теперь не оценивается — перегона туда нет (как план входа без σ). Ряды σ копятся только для направлений, которые считает сигнал (evaluate.rs).
+  4) «417 (ожидание)»: продажа после частичной покупки «продать на A выгоднее» (executor.rs → market_guarded PROFITABLE_OPEN) решается сравнением «довезти» и «продать на A» (partial::choose) по котировкам до ордера; под ходом не перепроверяется (условие — не порог). Перепроверять (пересчёт partial::choose под ходом) или оставить?
+- **Решение 415 (19.11.2026, задача t200, ветка t200/sale-turn от e1c687cd) — очередь продажи счёта; ждёт сборки и тестов в GitHub (cargo локально не запускался).** Разбор живого LQR — docs/notes/t200-lqr-sale-race-2026-11-19.md. Вопросы Тиграну:
+  1) Предел ожидания котировки «после прошлой продажи» — существующая feed.stale_after_ms площадки (данные, не отражающие нашу же продажу дольше этого, — устаревшие); новой настройки нет. Оставить так?
+  2) Срок вышел (событие пула потеряно, продажа прошла агрегатором по другим пулам, блок неизвестен) — продажа идёт по последней котировке, как до 415 (адаптер DEX всё равно сверяет цену перед отправкой), строка Warn core.sell_turn. Или в этом случае не продавать (режим застрявшей монеты / алерт)?
+  3) Ход держится всё время ордера (как credit_lock::selling): повторы по правилу шлюза, пауза площадки после 429, ожидание поступления USDT в кошелёк, поиск исхода «неизвестен» — другие продажи этой монеты на этой площадке (у DEX — всех кошельков) ждут. Ок?
+  4) Ревью 2 (С-3б), известный остаток: при внешнем исполнителе шлюза (маршрут следа «неизвестен») свежесть — маршрут котировки по блоку ≥ блока продажи; DexRoute.block — наименьший блок пулов маршрута, а блок пула в памяти растёт только по событию или полному чтению (venues/bsc_dex/pools/events.rs:139, load.rs:492, integral_fee.rs:116) — через тихий пул ожидание до feed.stale_after_ms на каждой такой продаже. Номера обработанного площадкой блока (головы) в событиях шлюза и ядре нет; добавить его в шлюз (новое событие) — решение Тиграна.
+- **Ревью слияния 413×414 (19.11.2026, релиз 19.11, ветка rel/2026-11-19b) — ждёт сборки и тестов в GitHub (cargo локально не запускался).** Н-1: после решения остатка «не присвоено» на круге сверки или совместно оценка остановленной сделки (и соучастников) в итоге дня пересчитывается (core/credit_rest_value.rs). Н-2: у кошелька DEX нет строки USDT — слепок просадки не снимается («нет данных», повтор через 2 минуты), а не 0. Проверить на живом: остановленная с остатком после круга сверки — в хронологии вторая строка «В итог дня …» с новым количеством; на экране риска итог пары совпадает. Тесты: tests/core_merge_413x414.rs.
+- **Известное окно ревью слияния 413×414 (ревью dd29ef5a):** пересчёт оценки соучастника (core/credit_rest_value.rs) — после снятия замка счёта; сделка, прочитавшая память в ветке «уже решён совместно» (credit_rest_lock::locked) раньше записи пересчёта, может сохранить прежнюю оценку в свою запись (книга дня — с новой). Закрыть, если понадобится: пересчёт под замком или повторное чтение памяти перед сохранением вызывающего.
+- **Решение 414 (19.11.2026, задача t199, ветка t199/drawdown-peak от f4da7719) — лимит потерь направления как
+  просадка от пика; ждёт сборки и тестов в GitHub (cargo локально не запускался).** После выкладки задать
+  risk.drawdown_pct / risk.drawdown_max_usd (совет из примера Тиграна — 5 и 30, «Деньги и риск» или «… › по биржам и
+  направлениям»): пока они не заданы, направления работают по старому risk.max_daily_loss_usd. Первые 2 минуты после
+  задания — снятие слепков, торговля направлением ждёт слепка. Вопросы Тиграну:
+  1) Чистый слепок (п. 2 постановки: «слепок = USDT по факту») — агент вычитает и в нём USDT сделок ДРУГИХ направлений
+     на этом счёте (выручка «DEX → BingX», ждущая перегона в кошелёк, лежит на счёте BingX и иначе вошла бы в слепок
+     «BingX → DEX»). Оставить так? (Код: core/drawdown_snap.rs apply, drawdown_ledger.rs count.)
+  2) Направления с общим счётом покупки (BingX → DEX и BingX → биржа делят USDT BingX) — у каждого свой слепок из
+     одного и того же баланса (котёл общий, слепки пересекаются). Так и задумано?
+  3) Остановленная сделка (Halted) держит направление «активным» — пока она не разобрана, каждый слепок ждёт 2 минуты
+     и снимается «по учёту» (вложено + оценка). Ок?
+  4) Баланс не прочитался (биржа не ответила, нет кошелька в маппинге) — повтор через те же 2 минуты (константа). Ок?
+  5) Отчёт «Сделки, лимиты и капитал» (report/cap_limits.rs) показывает только risk.max_daily_loss_usd — добавить
+     risk.drawdown_* и просадку по направлениям?
+- **Решение 413 (19.11.2026, задача t198, ветка t198/credit-fact от f4da7719) — фактическое количество монет сделки на бирже (живой случай WKC → MEXC 18.11); ждёт сборки и тестов в GitHub (cargo локально не запускался).** Проект и таблица кейсов — docs/notes/t198-credit-fact.md (раздел 9 — правки ревью: факт перед любой продажей и выводом, снимок посторонних, замер по N выборкам). После выкладки — задать transfer.deposit_hold_samples (совет 5) на биржах; проверить кнопку «Сбросить замер» в окне монеты. Вопросов Тиграну нет (решения приняты агентом по его слову 19.11). После выкладки проверить на живом: (1) первая сделка монеты с налогом токена на бирже — строка хронологии «зачисление на … — запись депозита …, на счёте сейчас …, доля …, удержано …», журнал core.credit_fact, Telegram deal.credit_hold (включить событие на экране «Уведомления», если нужно в Telegram); (2) окно монеты на «Монетах» — «Удержание биржи при зачислении» по биржам (замер или «не измерено — в расчёте как налог перевода N %»); (3) в расчёте кандидата строка DepositHold на шаге «перевод» у монет с налогом при продаже на биржу; (4) сверка — нет паузы площадки из-за удержания, учтённого в долях; (5) третье ревью: при недоступном балансе биржи — пауза «баланс биржи не читается» на экране риска (Telegram risk.stop), снимается сама при первом успешном чтении; кнопка «Продать» при нечитаемом балансе — итог «Не продано: баланс биржи не прочитан …». Открыто: окно ожидания «биржа ещё не дозачислила» (если баланс отстаёт от статуса SUCCESS) — не делалось (нужна новая настройка времени; факта отставания нет).
+
+- **Решение 411 (19.11.2026, задача t196, ветка t196/precheck-fast от 7fefaeba) — адрес депозита из памяти с привязкой
+  к ключу API, запрос к бирже только по триггеру (переделка по слову Тиграна 19.11); адрес B в предпроверке —
+  одновременно с пересчётом; ждёт сборки и тестов в GitHub (cargo локально не запускался).** Таблица лимитов эндпоинтов
+  адреса, советы `venue.deposit_warm_gap_ms` / `venue.deposit_warm_create` и приватные потоки об адресе по биржам —
+  docs/notes/t196-deposit-warm.md. Вопросы Тиграну:
+  1. **Лимиты, которых нет в документации:** BingX (страница — приложение без текста; api-ai-skills лимитов не пишет),
+     Poloniex (таблица «Deposit Addresses» 50 / 75 / … по VIP — единица не указана), XT (у /v4/deposit/* лимита нет),
+     Kraken (счётчик приватных REST — /funding/ на странице не назван). Чем подтвердить: ответы и заголовки живых
+     запросов в сыром журнале.
+  2. **Gate — прогрев создаёт адреса сам** (GET «Generate currency deposit address», решение 379): запрет создания
+     прогрева (`venue.deposit_warm_create` не «да») его не останавливает. Включать `venue.deposit_warm` у Gate — только
+     если создание адресов по всем монетам, где Gate — B, приемлемо.
+  3. **Приватный поток об адресе депозита (триггер д)** — не найден у прочитанных бирж (Binance, Bybit, OKX, Gate, MEXC);
+     не установлено у Kraken, HTX, CoinEx, Bitget, BingX, KuCoin, Phemex, Poloniex, XT (страницы не прочитаны или
+     доступ не дан) — дочитать документацию.
+  4. **«Свободный баланс gate 1239 мс» (MITO 18.11) — не ускорено.** Факт кода: один запрос GET /spot/accounts?currency=
+     (venues/gate/account.rs balances ← mod.rs balance ← core/limits.rs free_now); rest.rs send — без своих пауз, кроме
+     паузы после 429; запрос уже идёт одновременно с удержаниями вывода (403 мс) и шагами сторон (precheck_par.rs).
+     Документация Gate API v4 (Frequency limit rule) отдельной строки у /spot/accounts не даёт. Быстрее без догадок
+     нельзя: (а) один запрос — уже один; (б) приватный поток spot.balances (user_stream.rs, только при
+     venue.balance_events) шлёт изменения (`change`, `total`, `available`) только при изменении баланса — начального
+     снимка нет, а как `change` делится на доступное и замороженное, документация не разводит (шапка
+     account_update.rs — проверить на живой записи). Чтобы понять, сеть это или Gate, — время ответа /spot/accounts в
+     сыром журнале сервера (`<data-dir>/raw/gate/*.jsonl.zst`). Пересчёт ждёт баланс (предел min(бюджет, свободно)) и
+     проверка продажи — план: это зависимость данных, а не очередь.
+  5. **Ошибка запроса адреса в выводе** (адреса нет в памяти — перегон или возврат USDT после перезапуска; пометка
+     «спросить заново»): повтор — только если правило шлюза для её кода — «повторить» (число и пауза правила), без
+     уведомлений, ошибок подряд и пауз площадки; иначе — ошибка без кода, как до решения 411. Если временным ошибкам
+     (Timeout, RateLimited, Unreachable) нужен повтор — правило «повторить» для их кодов. Повтор пишется в журнал
+     core.deposit_address.
+  6. **После выкладки проверить** по «Время по шагам» сделок с биржей B: «адрес депозита X» — ~0 мс при адресе в памяти
+     и «одновременно с пересчётом» в пометке; журнал core.deposit_address (пометки «запросить заново» и изменения) и
+     событие venue.deposit_address_changed; что переводы на биржи идут.
+- **Решение 412 (19.11.2026, задача t197, ветка t197/no-test-before-buy от 7fefaeba) — пробный ордер
+  (venue.order_test_first) только в проверке ордера без исполнения; перед настоящей покупкой и продажей его нет; ждёт
+  сборки и тестов в GitHub (cargo локально не запускался).** MEXC, Binance, KuCoin: order_rules::ready без пробного,
+  order_rules::check (ready + probe) — в check_order; Kraken — как было. Тест — tests/order_probe_412.rs. Открытый
+  вопрос Тиграну: кнопка «Продать» панели «Балансы» (core/balance_sell_check.rs — состояние кнопки при показе панели,
+  core/balance_sell.rs — нажатие) зовёт тот же check_order и при «да» делает пробный ордер у MEXC / Binance / KuCoin /
+  Kraken — оставить или убрать (нужна смена контракта check_order или отдельная проверка без пробного). После выкладки
+  проверить на живом: у покупки и продажи MEXC в хронологии сделки нет запроса /api/v3/order/test; в предпроверке
+  продажи на MEXC — есть.
+
+- **Решение 410 (18.11.2026, задача t195, ветка t195/hot-math от 3b342bcd) — горячий путь расчёта DEX без лишних копий
+  и повторной 256-битной математики; ждёт сборки и тестов в GitHub (cargo build/test/clippy локально не запускались;
+  `cargo metadata --locked` — Cargo.lock согласован).** Три части: (1) копии записей пулов — перебор путей и циклов по
+  ссылкам на рёбра (quote/route_hops.rs), пулы пары — Arc (pair_arcs) в depth_key Prep::rate, rate, route_gas,
+  via_pools, signal_epoch; перенос вместо копии в direct::best, Path::one; одна копия на круг в side_fit round_trip;
+  (2) math/ten.rs — степени десяти при сборке вместо U256::pow на каждый вызов; MAX_SQRT_RATIO константой; full_math —
+  одно div_rem; amount1_delta — сдвиг на 96; (3) foldhash для карт без зависимости от порядка (graph adj, depth_book,
+  посещённые перебора, gateway/shard_map.rs). После выкладки — perf тем же способом (60 с, те же настройки): доли
+  memcpy, Entry::clone, String::clone, wrapping_pow, div_rem, overflowing_mul, SipHash. Не сделано — docs/ROADMAP.md
+  «Техдолг» (решение 410).
+
+- **Решение 409 (18.11.2026, задача t194, ветка t194/hot-locks от d672411b) — горячий путь без конкурентных замков;
+  ждёт сборки и тестов в GitHub (cargo локально не запускался).** Разбор — docs/notes/t194-hot-locks-2026-11-18.md.
+  Сделано: настройки в памяти и таблица видов DEX — снимки за ArcSwap (чтение без замка), так же exec_callback SEEN и
+  registry_key KEYS; копии Entry ради чтения → Registry::entry (listen_site, depth, routing, breaks, classic_direct).
+  После выкладки — perf тем же способом (60 с, dex.depth_band_pct = 10, dex.shallow_pools_per_pair = 3): доля
+  native_queued_spin_lock_slowpath, потоки в futex_wait. **Второй и третий коммиты t194 (просьба координатора, ревью
+  a9c3a17d):** (а) факты пулов проверок — check/pool_facts_store.rs (карта по частям gateway/shard_map.rs, факты за
+  Arc), Checks::pool_arc без копии (select, approve_gas, cycle_cost, pool_tax max_buy); (в) короб допусков usable_reuse
+  — карта по частям (без копии карты на промах, ревью Н1), места короба gateway/calc_share.rs — за ArcSwap; (г)
+  Directory::banned — directory/banned_now.rs, Arc<str>; (д) настройки — имя → (Arc) область → значение, get_exact без
+  выделения ключа, запись копирует только значения своего имени (ревью М1); registry_key — карта по частям (ревью М3).
+  **(б) Edge.entry: Arc<Entry> — отменено** (прогон 44358787664, tests/bsc_dex_router_snapshot.rs:146): граф держал
+  Arc записей всех своих пулов, и каждое Registry::update (Arc::make_mut) копировало запись на каждое событие пула под
+  замком записи реестра; Edge.entry снова Entry (копия при построении графа, как до t194). Правки прогонов
+  44357387694 и 44358787664 — типы и clippy в tests/settings_snapshot_409.rs, family_intern.rs.
+  **Осталось (не сделано, крупнее точечной правки):** граф без копии записей (ребро — ссылка на пул и поколение
+  состояния, запись из реестра при расчёте — переделка графа, путей и снимка; не держать Arc записей реестра долго —
+  иначе копия на каждое событие); копии Entry в `by_pair` (quote/mod.rs:247, via_pools.rs:52/59, rate.rs:55,
+  bound_set.rs:83, fills.rs:107, route_gas.rs:61) и `pools/depth_key.rs Rate.pools: Arc<Vec<Entry>>`; копия Entry в
+  ногах пути (Hop / Leg .entry: Entry); остальные Checks::pool (check/*, native_gas) — копия как раньше; ревью М2 —
+  копия Entry в Registry::update (Arc::make_mut) под замком записи реестра, пока жив снимок или Arc записи у
+  читателя — так было и до t194 (снимки решения 239, граф строит по snapshot()); ревью М4 — тесты конкурентности
+  t194 на данных, построенных в тесте (не записи площадок): проверяют только порядок и целостность памяти.
+  Повторное ревью 4de64786 (четвёртый коммит): число частей ShardMap — один раз за процесс (OnceLock); ячейка нового
+  пула фактов — сразу с итогом правки.
+
+- **Решение 408 (18.11.2026, задача t193, ветка t193/tg-buttons от 5f7a0e2a) — тревоги из Telegram; ждёт сборки и
+  тестов в GitHub (cargo локально не запускался).** Разбор — docs/notes/t193-tg-buttons-2026-11-18.md. Сделано: кнопки
+  на тревогах («Снять паузу», «Старт», «Снять карантин», «Сбросить лимит дня», «Снять очередь кошелька», перегон USDT,
+  «Продать», «Развернуть исполнитель», «Открыть вход монеты», «Убрать из чёрного списка», «Открыть сделку»); «Ждёт…» и
+  «Не выполнено» у ожиданий ручных кнопок, список ожиданий с «Отменить ожидание»; кнопки в «Неудачных» и «Аккаунтах»
+  (новая настройка notify.accounts_users). Правки ревью t193 (Н1–Н5, М1–М8) и ответы Тиграна 18.11 сделаны: (9а)
+  отметка «ожидание было» без команды → manual.wait_lost после запуска с той же кнопкой; (9б) самоснятие остановленной
+  очереди по квитанции на каждом блоке; срок notify.dialog_ttl_s у денежных кнопок тревог.
+  **После выкладки — Тиграну:** включить событие manual.wait_lost в «Уведомлениях» (без него сообщения о потерянном
+  ожидании не будет — только журнал core.manual_wait); задать notify.accounts_users, если кнопки в «Аккаунтах» — не
+  всем. **Вопрос:** (9б) проверка квитанции сделана внутри адаптера DEX (venues/bsc_dex/wallet/auto_release.rs): головы
+  сети есть только у него, ядру вызывать нечего — отдельный метод контракта шлюза не добавлен. Нужен ли он всё же
+  (например, для кнопки «Проверить сейчас» в интерфейсе)?
+  **Повторное ревью t193 (8533bda2):** Н1 (срок «Да» денежных команд, чистка вопросов без ответа), М1 (срок цепочки
+  перевода — от тревоги), М2, М3, М4, М5, М6, М9 — сделаны (DECISIONS 408, последняя строка). **Отложены по решению
+  координатора: М7, М10, М11 повторного ревью** — текст замечаний в ревью t193; в эту задачу не входили.
+- **Решение 401 (17.11.2026, задача t186, ветка t186/hook-probe-executor от rel/dex-all 4656c113) — проба шага пула
+  менеджера через исполнитель кошелька; ждёт сборки и тестов в GitHub (cargo локально не запускался).** Разбор и проект —
+  docs/notes/t186-hook-probe-executor-2026-11-17.md. Пул V4 / Infinity (с крючком и без, Bin, Stable) пробуется в цикле
+  крючков (с ревью t186 — отдельной фоновой задачей) через НАСТОЯЩИЙ исполнитель v3 каждого кошелька (обе стороны, сверка с квотером в dex.quoter_max_diff_pct, остаток
+  0); «проходит» — шаг исполним исполнителем этого кошелька и в непринятом записью классе; «отвергнут» (пробой или откатом
+  пробы сделки) — не исполним и в принятом; иначе — решение 400. Новых настроек нет.
+  **Сразу после выкладки:** у кошельков v2 ничего не меняется; у Gate w3 и DEXDEX w10 (v3, развёрнут владельцем 17.11) —
+  пробы пулов начнутся с первого прохода.
+  **После развёртывания v3 владельцем на кошельке:** первый проход цикла крючков пробует пулы непринятых классов; прошедшие —
+  исполнимы через v3 там, где бандл / UR не собирается (смешанные ноги с DODO / Algebra / Solidly и т. п., роутеров больше
+  предела, каналы без бандла). Где собирается бандл / UR — как раньше (bundle_first).
+  **Не проверено (честно):** (1) сборка пробы через узел (check/pass_probe.rs: перевод из пула-источника, approve, execute на
+  настоящем адресе) — запись t185 шла на виртуальном X с подменой кода и балансов; проверяется первым проходом после
+  развёртывания v3 (журнал dex.check); (2) правило «откат по minOut пул не помечает» — в записи такого отката нет, только
+  код (remeasure::is_min_out); (3) пулы V4 с крючком, Bin с ликвидностью, Stable — в записи нет, проба 401 — первая их
+  проверка; (4) гипотеза, не проверено: крючки 0xddc53a1a… («UA») и 0x70201397… («Not allowed») отвергают именно sender
+  (их кода в репозитории нет) — если они смотрят tx.origin или иное, итог пробы на настоящем исполнителе может отличаться
+  от записи, это и проверит проба; (5) монеты с налогом в пуле менеджера через исполнитель не пробуются («не проверено») —
+  решение владельца, нужно ли это (вход с налогом через исполнитель платит налог дважды, quote/graph_executor.rs tax).
+  **Ревью t186 (17.11, правки — решение «401 (ревью t186)»):** Н1 горячий путь без замков (снимки за ArcSwap, сторож
+  tests/pool_pass_hot_guard.rs); Н2 пробы — отдельной фоновой задачей check/pass_cycle.rs; Н3 метка отката — только пулу
+  крючка из WrappedError; Н4 утверждение про эпоху 352 снято; Н5 «налоги проверены» будит пробу (очередь recheck `pass`).
+  **Владелец уже развернул v3 на двух кошельках (Gate w3, DEXDEX w10, ~21:10 UTC 17.11)** — после выкладки этой сборки
+  пробы пойдут сразу для двух исполнителей.
+  **Ожидаемая длительность полного прохода (оценка, не замер):** симуляций = 2 × N × W (N — пулов-кандидатов, W —
+  кошельков с v3); N не больше 1 653 (V4 + CL из ревью t186, доля пулов с крючком не установлена), задержка
+  eth_simulateV1 с обменом V4 / Infinity — 50–150 мс (гипотеза). W = 2: до 6 612 симуляций ≈ 5,5–16,5 мин; W = 10: до
+  33 060 ≈ 28–83 мин; плюс не меньше 2·N·W / (доля фона в bsc.node_http_rps). Пробы идут классом Background — уступают
+  сделкам, проверкам и котировкам, поэтому под нагрузкой проход длиннее. Следующий полный проход — через
+  hooks.recheck_interval_s после конца предыдущего (таймер ставится после прохода), проходы не накладываются. Замерить по журналу dex.check
+  после выкладки (Gate w3, DEXDEX w10).
+  **Не сделано (вне задачи, факт кода):** (1) чтения настроек каталога на пути котировки (Store::cache под std RwLock,
+  settings/store.rs:137, 186) — общие для всей котировки; в пути исполнителя это ctx.dex_text в exec_callback::usable
+  (dex.v3_swap_callback); (2) память SEEN под Mutex (exec_callback.rs) — только у DEX с заданной dex.v3_swap_callback;
+  (3) «Перепроверить» монету будит пробу только неустоявшихся итогов (нет итога, «не проверено», метка отката) — пул с
+  итогом «проходит» / «отвергнут» перепроверяется полным проходом; (4) порядок «сначала пулы с сигналами» — по признаку
+  «пул котируется (не спит)»: списка пулов последних сигналов в адаптере нет.
+  **Вопрос владельцу (не блокер):** факты пробы только в памяти — после перезапуска до первого прохода цикла крючков пулы
+  непринятых классов исполнителем не идут (несколько минут при старте); хранить ли их в базе.
+
+- **Решение 402 (t187) (17.11.2026, ветка t187/min-notional-ceiling от 4656c113) — текст отказа «даже наибольший объём меньше минимума» называет настоящую причину; ждёт сборки и тестов в GitHub (локально не собиралось).** Отказ сам по себе верный (на минимуме биржи A мелкий пул B объём не берёт), менялся только текст.
+  **Открыто — не пересчитывать заведомо невозможное направление (предложение, не сделано).** Факт кода: механизма «не считать направление, пока не изменились глубина пула B и минимум A» нет. Сито 372 (sieve.rs) отсекает только по верху прибыли (rate_bound DEX — курс без глубины), size_memo живёт один расчёт, reject_log (155) только сворачивает строки журнала (без journal.repeat_flush_ms — строка на каждый новый текст, а числа меняются каждый тик). Каждый тик монеты (evaluate.rs → candidates::enqueue) снова гонит подбор. Простого и безопасного пути существующим механизмом не нашёл: нужен ключ «невозможности» = направление + поколение пулов токена монеты у DEX (quote_cache bump в tick.rs) + правила пары A (minQty/minNotional) + цена A на минимуме (минимум в монетах зависит от стакана A) + настройки (h, бюджет); сброс по любому из них. Оценка: 1 новый файл ядра (~150 строк) + вызов в sieve_gate.rs + тест на записи + запись в журнал отсева — ~1 день; риск — пропустить сделку при неполном ключе. Нужен ответ Тиграна: делать ли и сбрасывать ли ещё по сроку.
+  **Проверить на живом после выкладки (только чтение):** у DIN/MAV/BNT/RWS/CREPE отказ теперь с дописью «объём … уже больше возможного: …» (ожидается bsc_dex — глубина или доля h).
+- **Решение 403 (t188, 17.11.2026, ветка t188/shallow-lock от 4656c113) — отбор мелких пулов снимком вне пути котировки; ждёт сборки и тестов в GitHub (локально cargo не запускался).**
+  Проверить на сервере после выкладки (dex.shallow_pools_per_pair до выкладки не включать):
+  1) без настройки — system CPU как на 4656c113 без неё (≈ 0,4–7 %), прогрев ~7 мин;
+  2) dex.shallow_pools_per_pair = 5 — system CPU должен остаться < ~7–10 %, futex (perf trace -s / strace -c -f) — не миллионы в секунду, в perf нет native_queued_spin_lock_slowpath в верхних строках; в perf top видны shallow_build::pass (один поток блокирующих задач), а не shallow_memo / Mutex::lock_contended;
+  3) затем шаги 5 → 10 → 15 → 20 по нагрузке: на каждом — system CPU, загрузка потоков tokio-rt-worker, время прохода налогов и сверки с квотером, число монет «не проверено»;
+  4) допуск тот же, что на 4656c113: экран «Монеты» / pools[].depth — мелкие пулы в отборе пары, сверка с квотером их сторон, граф с мелкими рёбрами.
+  5) ревью t188 (то же решение 403): на шагах 5 → 10 → 15 → 20 — в perf top нет shallow_build::all_pairs / Registry::snapshot подряд (полный проход только при смене настроек), нет sigma_plan / Volatility под Mutex::lock_contended, нет coin_ride::blocks_new; один поток блокирующих задач построителя — не 100 % постоянно (если 100 % — записать число пар и пересчётов за проход).
+- **Решение 406 (18.11.2026, задача t190, ветка t190/impact-interp от 45a9efd9; номер 405 занят t191) — лесенка
+  влияния крючка: значение точки — накопленный максимум у любой лесенки; между соседними точками — max(хорда,
+  продолжение наклона прошлого участка), не выше ближайшей большей точки (первый участок — хорда). Без настройки
+  (hooks.impact_interp_margin_pct удалена до релиза). Ждёт сборки и тестов в GitHub (cargo локально не запускался).**
+  Разбор — docs/notes/t190-impact-interp-2026-11-18.md; таблица правил против факта и ассерт «не занижает в блоке A» —
+  tests/bsc_dex_hook_curve_t190.rs (hook_curve_rules_against_record), шаг tests.yml «Таблица кривых крючков (t190)».
+  **Открыто:** (1) ниже наименьшей точки лесенки все правила берут её значение — у CAKE 0xc6104625 (влияние падает с
+  суммой) на 1 и 5 USDT занижение до 0,0007 п.п. (сумма ниже signal.probe_usd); менять ли? (2) вытеснение точек сделки
+  (check/hook_trim.rs) и covered (check/hook_fold.rs) не менялись — см. заметку.
+- **Решение 404 (18.11.2026, задача t189, ветка t189/dexdex-top-cycles от 4656c113) — DEX ↔ DEX: N лучших циклов по
+  курсу круга, итог прохода в журнал core.cycle_scan, USDT в налоговом фильтре цикла; ждёт сборки и тестов в GitHub
+  (локально не собиралось).** Разбор — docs/notes/t189-dexdex-top-cycles-2026-11-18.md. **Проверить на живом после
+  выкладки (только чтение):** журнал core.cycle_scan по USDT и WBNB — «просмотрено циклов», «курс круга > 1 у N»,
+  «лучший курс круга», «Отпало: …», «чистая > 0 у …»; загрузка процессора (перебор всех циклов на проход; при росте —
+  dex_dex.scan_min_interval_ms или dex_dex.rank_max_cycles). Если «курс круга > 1» = 0 на всех проходах — у рынка в
+  графе бота нет разницы цен сверх комиссий (дальше — не код, а покрытие пулов / промежуточных). **Вопросы владельцу:**
+  (1) dex_dex.probe_input_base одна на обе базы и в единицах базовой: 40 = 40 USDT и 40 WBNB — так задумано? (2) у
+  кошелька DEXDEX есть WBNB (не BNB)? Без него циклы базы WBNB не исполняются («у кошелька нет WBNB»). (3) задать ли
+  journal.repeat_flush_ms (иначе строка core.cycle_scan не обновляет числа, новая — только при смене вида текста).
+  **Факт по коду (уточнение координатора, 18.11): где используется dex_dex.probe_input_base.** Только как верхняя
+  граница подбора входа СИГНАЛА: quote/cycle_scan.rs:99 читает её → quote/cycle_opt.rs best ищет вход на
+  (0, probe_input_base] (40 = 40 USDT у базы USDT и 40 WBNB ≈ 24 тыс. $ у базы WBNB — это только диапазон счёта сигнала).
+  При исполнении она не используется: core/cycle_plan.rs — вход сигнала идёт лишь в пробный расчёт с кошельком
+  (dex_cycle_quote(c, c.input, true): баланс базовой, курсы); потолок входа cap = min(бюджет по money.max_per_trade_usd
+  (DEX · «DEX ↔ DEX»), money.max_per_coin_usd − занято, в сухом режиме dry.budget_usdt; баланс базовой кошелька ×
+  курс в USDT) (cycle_plan.rs:71-86); подбор размера — в пределах cap; перед отправкой exec/cycle_trade.rs:59-67
+  сверяет баланс кошелька с входом (меньше — InsufficientBalance, сделки нет). Превысить баланс кошелька или лимиты
+  money.* вход сделки не может. Побочный эффект большой границы: у цикла с разницей цен сигнал покажет вход до 40 WBNB
+  (больше баланса) — сделка всё равно пересчитает его по бюджету и балансу.
+  **Ревью t189 (решение «404 (ревью t189)»):** (а) после выкладки смотреть в core.cycle_scan «просмотрено циклов N за
+  M мс» по базам и «проход поиска N мс» — по ним Тигран задаёт dex_dex.scan_min_interval_ms (совет в SETTINGS_CASES);
+  (б) **journal.repeat_flush_ms** — без неё строки core.cycle_scan не обновляют числа (core/reject_log.rs: прежний режим
+  пишет новую строку только при смене вида текста); решает Тигран; (в) теперь считаются маршруты биржа ↔ DEX и циклы
+  через THENA Fusion / Algebra Integral / WooFi / Metric / iZiSwap / Biswap V3 (раньше котировка с ними падала) —
+  первые сделки через них проверить по журналу (план = факт); (г) тест «курс ≈ котировка» не покрывает DODO и
+  Infinity Bin — нужна запись состояния пула без узла.
+- **Решение 407 (18.11.2026, задача t192, ветка t192/presell-balance-override от 45a9efd9) — баланс монеты в симуляции
+  продажи до покупки подменой состояния (presell.balance_slot_scan); честный ограничитель урезания 380; ждёт сборки и
+  тестов в GitHub (локально cargo не запускался).** Разбор — docs/notes/t192-presell-balance-override-2026-11-18.md.
+  **После выкладки:** задать presell.balance_slot_scan = 64 у площадки DEX (bsc_dex) — без неё поведение прежнее.
+  **Проверить на живом (только чтение):** журнал core.precheck по направлениям «биржа → bsc_dex» — «монеты в симуляции:
+  подмена баланса кошелька в симуляции: 0 → N единиц …» и продажа полного объёма; у монет, где подмена не применена, —
+  причина («balanceOf не вернул подставленное ни в одном из слотов …» / «подмена баланса недостоверна …») и прежний
+  путь (источники, урезание 380 с текстом «объём ограничен симуляцией продажи до покупки … почему: …»); экран «Упущено»
+  — у урезанных сделок «что ограничило» = «симуляция продажи до покупки», а не лимит на сделку.
+  **Запись узла по NXT есть (сервер, 18.11):** блок 134309418, кошелёк 0xa9C3CACff416e644Dec51986DFD0E17Cc2132817,
+  0xae7484d162ba80b340eba7769a7a67838b1c16c1 — найден слот 0 (Solidity) из 128 меток, контрольная подмена вернула N.
+  Архив записи ждём от координатора → положить в tests/data/ и написать тест ответа узла (сейчас покрыты ключи, тело
+  запроса, выбор слота и проверка упаковки на записи 17.11).
+  **Известное ограничение (Тигран 18.11: оставить):** подмена не повторяет логику токена при зачислении монеты на кошелёк
+  (maxWallet, отметки держателя и т. п.) — подменяется только баланс.
+  **Потом, отдельными задачами (Тигран 18.11):** подмена баланса в сухой сделке, сухом цикле (решение 121 C4) и в пробе
+  налогов; поиск слота в хранилище ERC-7201 — если журнал core.precheck покажет много монет с «подмена баланса не
+  применена: balanceOf не вернул метку …».
+  **Решено (Тигран 18.11):** подмена — основной путь и когда источников хватает (как сделано).
+- **Решение 398 (17.11.2026, ветка t183/settings-before-send от 6ea7de02) — настройки до необратимого действия; ждёт сборки и тестов в GitHub (локально не собиралось).** Исправлено (читается до отправки, передаётся значением): KyberSwap kyber.receipt_poll_ms / kyber.receipt_timeout_ms (tx.rs); BingX venue.order_poll_ms / venue.order_final_wait_ms (trade.rs — единственная биржа без предпроверки); Kraken venue.quote_asset (итог ордера), venue.funding_list_limit (поиск вывода); DEX send.gas_limit_margin_pct и ключ кошелька для отмены (SendCfg, Watch::key), эталон кода исполнителя до развёртывания; ядро — venue.status_poll_ms отправителя и получателя до покупки (executor.rs) и до вывода (transfers.rs poll_set). **Оставлено (с причиной):** (1) статусы после вывода — отдельные вызовы шлюза, которые ядро опрашивает в цикле (ошибка — в журнал, опрос повторяется, итог не теряется): send.deposit_confirmations (bsc_dex wallet/transfer_status.rs:143), kyber.deposit_confirmations (kyberswap/transfer.rs:177), venue.history_window_s (xt/deposits.rs:33), venue.funding_list_limit (kraken transfers.rs:163, deposits.rs:54); ядро не знает настроек площадок (архитектура), проверить их до вывода можно только новым методом контракта адаптера («готов ли перевод») — **вопрос Тиграну: добавлять ли метод в контракт**. (2) Вложенные перечитывания (ключ проверен до отправки; после неё откажет, только если его очистят в эти секунды): 13 бирж (кроме BingX) проверяют сроки ордера до постановки (order_state::times в order_rules / market_sell — сторож tests/settings_before_send_guard.rs), а после постановки перечитывают их в settle (например binance order_state.rs:59) и в fills::commission (binance / bybit / mexc); gate recover — venue.order_history_limit (order_state.rs:94; проверен в order_rules.rs:115, market_sell.rs:57); rest::signed на каждом опросе статуса после постановки — venue.recv_window_ms и ключи API (например bingx rest.rs:52–53); поиск вывода Binance с неизвестным итогом → history перечитывает venue.withdraw_history_min_ms (binance transfers.rs:156; проверен в :62); отмена DEX → dispatch → r.send каналов (send/mod.rs:141) читает настройки и секреты канала (сбой отмены — журнал и повтор на следующем круге). Ошибка у большинства бирж несёт «чем найти»; перевод на передачу значением — механическая правка без смены поведения, не делалась (риск сборки вслепую). (3) approve DEX: после итога approve и до свопа перечитывается feed.stale_after_ms (exec/approve_seen.rs:82) — значение уже прочитано SendCfg до approve; отказ здесь — своп не отправлен, газ approve в ошибке (не нарушение). (5) Ключ отмены DEX и блокировка секретов: Vault::lock (secrets/vault.rs:103–105) удаляет секреты из хранилища; кнопка (api/secrets.rs:110–116) пишет журнал, будит Telegram и зовёт core.secrets_changed (core/engine.rs:155–161: справочники сетей, прогрев депозитов, пересборка) — задачи слежения за транзакциями DEX (exec/txs.rs, tokio::spawn) об этом не узнают и держат Watch::key до итога nonce: отмена подпишется и после блокировки. Оставлено (решение техлида: отмена своей зависшей транзакции — защита денег); **решено Тиграном 17.11.2026: оставить как есть — отмена своей зависшей транзакции подписывается и после блокировки секретов.**. docs/SECURITY.md дописан. (4) Факт кода, к сведению: KyberSwap tx.rs — квитанция не прочитана к сроку (в том числе сбой узла) → исход «не попала» (NotIncluded), без проверки nonce, как у bsc_dex (send/track.rs); вопрос Тиграну — нужно ли «исход неизвестен».
+- **Решение 396 (17.11.2026) — журнал настроек docs/SETTINGS_CASES.md и сторож tests/settings_cases_guard.rs; ждёт сборки и тестов в GitHub (локально не собиралось).**
+  **Кейс не записан полностью (нужен живой пример — монета, цифры):** hooks.trade_probe_rounds_max — настройка из ревью 4 t173 (Н4), живого случая «не покрыто фактом пробы за 2 кругов» в документах нет; exec.top_up — кейс записан словами (решение 394, записка 269 вне репозитория), примера на цифрах нет. **Долг:** 192 старых ключа (tests/data/settings_cases_legacy.txt; ключи каталога до 01.11.2026 вне групп, описанных целиком). **Описано пачкой (второй коммит 396):** 355 сжатых записей — 15 ключей, чей смысл изменили t165–t181, и profit.sigma_floor_per_s (поле «Смысл изменён»), все ключи с 01.11.2026, группы cpu/size/sieve/profit/dex.graph_/dex_dex/exec/dry/hooks/venue.quiet_confirm_, venue.public_ip_weight_10s, signal.anomaly_spread_pct. «Кейс» — выдержка строки решения DECISIONS (номер из описания каталога; у dex.per_block_skip_same, venue.feed_watch_log_ms, venue.public_ip_weight_10s номера в описании нет — строка решения найдена по тексту DECISIONS). **Третий коммит 396 (сделано):** 68 ключей, где каталог молчит о поведении без значения, сверены по месту чтения («По коду: …», файл:строка); «Влияет на торговлю» заполнено у всех 355 сжатых записей; кейсы сверены (в строке решения назван ключ или описание каталога ссылается на это решение) — 14 исправлено; раздел «Что сейчас НЕ задано в FIRST_RUN и влияет на торговлю» (96 ключей) — значения решает Тигран. **Кейс не записан (вопрос Тиграну — откуда и зачем):** exec.dex_slippage_pct, profit.liquidity_share_h, profit.price_move_k, signal.anomaly_spread_pct — с первого коммита каталога cf5073e7, строки решения о них в DECISIONS нет. **При слиянии t179:** у записи exec.top_up поменять статус на «в релизе <sha>».
+- **Решение 390 (t176) (17.11.2026, ветка t176/reserve-cap от 982e0503) — запас на движение цены не больше выручки, доля
+  закрытия не больше разницы цен; ждёт сборки и тестов в GitHub (локально не собиралось).** Разбор —
+  docs/notes/t176-reserve-cap-2026-11-17.md. **Нужна запись:** полный JSON core.candidate_rejected BREW bsc_dex →
+  poloniex, BANK bitget → poloniex, FAR DEX → gate (Calc: proceeds, sell_qty, buy_avg, sell_avg, sigma, transit_s,
+  строки затрат, sigma_check) — в tests/data для теста «было → стало» на записи (сейчас — чистая логика и записи CAKE).
+  **Проверить на живом после выкладки (только чтение):** в отказах кандидатов строка PriceMoveReserve ≤ proceeds; у
+  BREW-подобных (k·σ·√T > 1) запас ≈ выручки, а не кратно больше; sieve_audit — нет нарушений границы.
+  **Вопрос владельцу (ревью t176, Н1):** значения profit.closure_share (советы 0,39 / 0,16) откалиброваны 09.11 под
+  прежнюю форму доля · спред · выручка; новая форма совпадает с ней на малых спредах (< 1 % разницы при медиане
+  выборки < 1 %) и даёт меньший запас на больших (спред 25 % — на 20 %, 160 % — на 62 %), где калибровочных данных нет.
+  Пересчитать ли значения доли по новой форме на данных (сделки со спредом > 3 %)? До ответа значения не меняются.
+- **Решение 391 (t177) (17.11.2026, ветка t177/sigma-series) — σ запаса; ждёт сборки и тестов в GitHub (локально не
+  собиралось).** Сделано: неподвижная цена при заданной границе — σ = граница (core/sigma_plan.rs). **Не сделано —
+  проект:** σ_T / другой ряд в торговом расчёте (решение 360) и обработка скачка в окне — на записях не доказаны
+  (docs/notes/t177-sigma-series-2026-11-17.md, «Проект»). **Решения владельца:** (1) задать ли profit.sigma_floor_per_s
+  у бирж-получателей вместе с profit.sigma_min_changes; (2) запись книги площадки продажи после отказа, решённого
+  запасом. **Нужно с сервера (только чтение):** ≥ 2 суток sigma_check у сделок и отказов, решённых запасом, по всем типам
+  направлений; ряд «Живого экрана» BREW bsc_dex → poloniex (qty, sell) и стакан Poloniex BREW_USDT за то же время.
+  **При слиянии с t176:** шапка reserve.rs — sigma_now вызывает core/sigma_plan.rs; сигнатуры sigma_now / opt / at_b.
+- **Решение 392 (17.11.2026, задача t180, ветка t180/price-bands от 982e0503) — ценовой коридор бирж учитывается
+  заранее; ждёт сборки и тестов в GitHub (локально не собиралось).** Разбор и таблица по биржам —
+  docs/notes/t180-price-bands-2026-11-17.md.
+  **Вопросы владельцу (по документации не решить — поведение для этих бирж не менялось):**
+  1) Gate: что такое up_rate / down_rate пары («Maximum Quote Rise / Decline Percentage») — от какой цены и для каких
+     ордеров? Защита Gate снимает уже принятый ордер (finish_as = price_protect_cancelled) — у покупки это сейчас
+     «не исполнился» с паузой направления, как раньше. Нужен ответ поддержки Gate или живая запись отказа.
+  2) Bitget: buyLimitPriceRatio («Percentage spread between bid and ask») / sellLimitPriceRatio («… between sell and
+     current price») — описание противоречиво, опорная цена не названа.
+  3) KuCoin: priceLimitRate («Threshold for price protection») — формула и опорная цена не описаны.
+  4) HTX: blmlt / slmgt («Buy limit must less than» / «Sell limit must greater than») — опорная цена не описана.
+  5) BingX (100440 «price protection»), CoinEx (3606 и др.: от последней / индексной цены) — коридор есть, в API нет
+     ни границ, ни процентов. Kraken, Phemex — в документации спота коридора нет.
+  6) MEXC: действует ли PERCENT_PRICE_BY_SIDE на РЫНОЧНУЮ продажу (для покупки сказано «only for LIMIT, IOC, FOK», для
+     продажи тип не назван) — от этого зависит, спасает ли рыночная продажа решения 268.
+  7) XT: p ответа GET /v4/public/ticker/price («Get latest prices ticker») — та же «latest transaction price», от
+     которой считается PROTECTION_LIMIT? Прямо не сказано — поэтому коридор XT НЕ подключён (ревью Б3; правило
+     разбирается, ядру не отдаётся). Подключить после ответа владельца или записи: ticker/price рядом с
+     /v4/public/trade/recent той же пары. PROTECTION_ONLINE (первые durationSeconds после открытия: цена ≤ openPrice ×
+     maxPriceMultiple) не учитывается — цены открытия в API нет.
+  8) OKX: коридор не подключён (ревью Н5) до записи GET /api/v5/public/price-limit для SPOT-пары (в документации
+     раздела пример только SWAP; спот — по ссылке из «Get instruments»).
+  10) Ревью 2 t180, Б1 — нет теста на порядок «план предпроверки — на справочнике сетей, обновлённом шагом стороны»:
+     шаг стороны с запросом к бирже требует подключённой площадки (заглушки запрещены). Порядок держит код precheck.rs
+     (price_band::context — после try_join шагов сторон). Нужен стенд с записанным ответом справочника сетей биржи.
+  9) Н4 ревью t180 (подтверждено по коду, не исправлено): финальный расчёт (profit.rs final_calc) на TooLarge идёт в
+     ветку «исполнитель не на весь объём» (final_fillable): у биржи исполнимо всё → `q >= qty` → сделка отвергается
+     целиком, если финальная котировка сдвинула худшую цену за коридор (подбор урезал по прежнему стакану). Это
+     недобор, не убыток. Урезать по коридору там — нужен поиск объёма по стакану финальной котировки (новый путь
+     final_calc) — отдельной задачей.
+  **Нужна запись (тесты сейчас — на примерах документации, помечены):** ответы MEXC GET /api/v3/ticker/price, XT GET
+  /v4/public/ticker/price (вместе с /v4/public/trade/recent), Binance exchangeInfo с PERCENT_PRICE_BY_SIDE и GET /api/v3/referencePrice /
+  /api/v3/avgPrice, Bybit GET /v5/market/price-limit?category=spot, OKX GET /api/v5/public/price-limit для SPOT,
+  Poloniex GET /markets с ненулевыми highestBid / lowestAsk (смысл «0» в документации не описан).
+  **Проверить на живом после выкладки (только чтение):** в журнале core.precheck и хронологии сделок с mexc /
+  binance / poloniex строки «коридор цены …» и шаг «коридор цены (одновременно с шагами сторон)»; у BingX / Bitget /
+  KuCoin / Gate отказ покупки по коридору — по-прежнему с паузой направления (ревью Б2); у сделок, где раньше покупка отклонялась 30087 / ORDER_F05xx / −1013
+  PERCENT_PRICE, — меньший объём и ордер принят; отказ покупки PriceOutOfRange — с пометкой «пауза направления не
+  поставлена … решение 392»; правило шлюза PriceOutOfRange задано (совет FIRST_RUN — «Отменить, не повторять»),
+  иначе Warn core.rules «Правила для PriceOutOfRange нет».
+- **Решение 393 (17.11.2026, задача t178, ветка t178/tax-probe-shallow от 982e0503) — мелкий пул не закрывает монету; ждёт сборки и тестов в GitHub (локально не собиралось).** Разбор — docs/notes/t178-tax-probe-shallow-2026-11-17.md.
+  **Нужна запись (тест на записи не сделан):** eth_simulateV1 пробы налогов (обе симуляции) на мелком пуле V2 и V3 (например пулы NFP, BRIC, VEREM) — сейчас доказан только отбор пулов и расчёт круга на записи depth_2026-10-25; ответ квотера (QuoterV2 / CLQuoter) на пуле V3/CL с ликвидностью 0 на тике и позициями рядом (OPN Infinity CL 0x3ce99c11…) — сейчас «дыра» доказана только нашей математикой.
+  **Не сделано (техдолг):** пробный круг у CL/V4/Algebra/Elastic и прочих видов без расчёта состояния после обмена (quote/pool_after.rs) считается на текущем состоянии — пул с ликвидностью только с одной стороны цены пробу не проходит, его сторона в котировку не идёт; пул «только продажа» (покупка в нём невозможна) пробой не меряется вовсе — нужна проба продажей монет из другого источника (как решение 380). Кэш графа не сбрасывается при смене check.probe_usdt / dex.quoter_max_diff_pct (только при смене реестра — она частая). Монета, у которой все пулы пустые или крошечные, по-прежнему NotChecked и закрывает биржа ↔ биржа (зона ядра — core/blacklist.rs).
+  **Проверить на живом после выкладки (только чтение):** GET /api/coins — число монет NotChecked с причиной «нет достоверного пула для пробного обмена…» (было 212), NFP/BRIC/VEREM — Known/Failed и пулы с налогами; журнал dex.check — нет всплеска «проверка налогов не прошла» по монетам, бывшим NotChecked (ложные вердикты); dex.quoter — сверки мелких сторон; нагрузка: CPU процесса, время котировки (log.quote_timing), число рёбер графа, CU/eth_simulateV1 узла за проход налогов, при ws — число уведомлений.
+  **Ревью t178 (сделано):** итог Doubt (Б1); предел dex.shallow_pools_per_pair — не задан = как до 393, совет 1 (Б2); пересборка на лету (Н2); порог крошечного выхода только у мелкого пула (Н3).
+  **Н4 / Н-B2 (сделано, повторное ревью):** отбор пары считается один раз на версию реестра и настройки (quote/shallow_memo.rs). **Техдолг:** версия реестра растёт с каждым событием — при частых событиях отбор пары пересчитывается (k расчётов side_fit) на новой версии; кэш по поколению состояния пула (как depth_units, решение 307) — если замер покажет нагрузку.
+  **Перед включением dex.shallow_pools_per_pair (только чтение):** число пулов deep_buy = нет и deep_sell = нет и не пустых (pools[].depth); длительность первого прохода налогов и прохода сверки с квотером до/после; алерты pool.quoter_paused по мелким пулам в первый час.
+  **Вопрос владельцу:** наименьший выход пробы взят от dex.quoter_max_diff_pct (одна единица — не больше допуска) — оставить так или завести отдельный порог?
+- **Решение 400 (17.11.2026, задача t185, ветка t185/v3-proof-by-kind от rel/dex-all 76a5fdc8) — приёмка исполнителя
+  v3 по классам шага из записи симуляции на живых пулах (tests/data/executor_v3_live_2026-11-17); ждёт сборки и тестов
+  в GitHub (cargo локально не запускался).** Приняты Uniswap V4 без крючка и Infinity CL без крючка — развёртывание v3
+  разрешено, шаги других классов исполнителем не идут (entry.rs fits / singleton → live_proof::admits). Разбор и
+  таблица классов — docs/notes/t181-executor-all-kinds-2026-11-17.md, п. 5 «Итог симуляции 17.11».
+  **Не проверено и что нужно для проверки (новая запись симуляции по процедуре п. 5 + новый каталог tests/data и путь в
+  live_proof.rs):** (1) Uniswap V4 с крючком — за окно логов узла (~595 тыс. блоков, ~3 суток) 7 пулов с USDT, у всех
+  ликвидность 0 на H: нужны пулы V4 с крючком и ликвидностью (с USDT или через промежуточную монету — тогда процедуру
+  дополнить), либо узел с более длинной историей логов; (2) Infinity Bin — один пул с USDT, активный бин 1/1 (пыль),
+  откат 0x96aa65ad и у квотера: нужны пулы Bin с ликвидностью; (3) Infinity Stable — на боте не задана dex.stable_hooks:
+  задать (адрес крючка Stable — из официальной документации PancakeSwap, решение «122 (Infinity Stable)»), тогда в
+  summary.json строки Stable — с полем `"stable": true`; (4) сравнение с Universal Router (ur_out) в записи не делалось —
+  для приёмки правилом не нужно, но в процедуре было.
+  **Открыто — классы «с крючком» (решение 400, п. 5 правила):** даже при записи с ≥ 2 доказанных пулов класс с крючком не
+  принимается, пока бот сам не отсекает пул, чей крючок отвергает исполнитель (запись 17.11: крючки 0xddc53a1a… «UA» и
+  0x70201397… «Not allowed» отвергли 6 вызовов; у 0x25c3a0dd покупка прошла, продажа отвергнута). Факт кода: проба
+  налога пулов V4 / Infinity идёт Universal Router (check/probe.rs part: family.tradable = да), пробы крючков — квотером
+  (check/hooks_head.rs, exec/trade_probe.rs); через исполнитель проба только у видов без своего пути
+  (check/probe_exec.rs). Проект (не сделан): при проверке пула с крючком у кошелька с исполнителем v3 — eth_simulateV1
+  от кошелька: перевод USDT из пула-источника (как check/probe.rs), approve исполнителю, `execute` одним шагом пула на
+  покупку и на продажу купленного (check/probe_exec.rs part, тот же call::build); откат — факт пула «крючок не пускает
+  исполнитель» (новое поле PoolFacts, причина — текст отката) → entry.rs fits = нет для этого пула (нужен доступ к
+  фактам проверок в fits — сейчас fits видит только запись реестра), прежний путь UR / бандл остаётся. Новых настроек
+  не требует (сумма — check.probe_usdt, как проба налога). После неё правило можно ослабить для «с крючком» — решением.
+  **Сделано решением 401 (t186):** проба через НАСТОЯЩИЙ исполнитель кошелька (не «кошелёк с v3» вообще — по каждому
+  кошельку), факт — exec/executor/pool_pass.rs (не поле PoolFacts: факт зависит от адреса исполнителя), fits видит его
+  через окружение кошелька (fits(ctx, e) → pool_gate.rs). Класс с крючком записью по-прежнему не принимается; исполним
+  конкретный пул, прошедший пробу (блок «Решение 401» выше).
+  **Ревью t185 (усиление правила, сделано):** hooks_reject объясняет откат только у пула с крючком и только тем же
+  крючком; x_left — явно 0 по usdt и coin (пусто / нет поля — не доказано); получено и квотер > 0; SHA — только из строки
+  README «sha256 симулированного bin-runtime: <sha>». Набор принятых классов на записи 17.11 не изменился.
+  **MIN_POOLS (закрыто, Тигран 17.11.2026):** порог приёмки «не меньше 2 доказанных пулов на класс» остаётся константой
+  правила (exec/executor/live_rule.rs MIN_POOLS) — исключение из «никаких хардкодов» подтверждено владельцем (порог
+  приёмки собранного кода, не торговли; в интерфейс не выносится).
+  **Что запись НЕ доказывает и что проверить первой сделкой после развёртывания v3** — docs/notes/release-2026-11-17.md,
+  раздел «Решение 400». Коротко: нет сравнения с Universal Router; мало пулов и они мелкие; только USDT, 20 USDT, один
+  блок; нет продажи BNB, налоговых токенов, частичного исполнения, отката по минимуму; старые виды шагов в байткоде v3
+  вживую почти не гонялись. **После развёртывания v3 на кошельке через него пойдут ВСЕ маршруты кошелька через
+  исполнитель, включая старые виды шагов.** Первой сделкой (малой суммой): (1) код совпал, версия v3, владелец, обёртка;
+  (2) сделка с шагом V4 / CL без крючка — получено = пробе и ≥ минимума, Swap менеджера = вход / выход, на исполнителе 0,
+  газ ≈ оценке; (3) обычный маршрут V2 / V3 через v3; (4) в хронологии «исполнитель» только там, где бандла нет.
+- **Решение 399 (17.11.2026, задача t184, ветка t184/final-review-fixes от rel/dex-all 5203fdff) — правки финального
+  ревью релиза; ждёт сборки и тестов в GitHub (cargo локально не запускался).** Развёртывание исполнителя — только
+  если текущая сборка (v3) принята на живых пулах, без обходной настройки; кнопка «Развернуть исполнитель» без приёмки
+  недоступна с причиной; подсказки V4 / Infinity у кошельков v1 / v2 без приёмки — без «переразверните»; сторож стека
+  «закрытие → возврат USDT» (tests/core_close_return_stack_399.rs). **Решение 400 (t185) заменило условие приёмки:**
+  вместо code::LIVE_PROOF (SHA-256 bin-runtime) — приёмка по классам шага из записи tests/data/executor_v3_live_2026-11-17;
+  приняты Uniswap V4 без крючка и Infinity CL без крючка, поэтому в этой сборке развёртывание РАЗРЕШЕНО, кнопка доступна,
+  подсказка need_v3 — «переразверните исполнитель кошелька». Описание выпуска — docs/notes/release-2026-11-17.md.
+  **Открыто:** (1) сторож стека взят на 2 МиБ (стек рабочего потока tokio по умолчанию) в ОТЛАДОЧНОЙ сборке CI; если
+  он упадёт переполнением — это ещё не доказательство переполнения в release (будущие отладочной сборки больше), нужен
+  замер; release-сборка в CI тесты не гоняет.
+  **Закрыто решением 400:** вопрос «менять ли прочие подсказки „переразверните исполнитель“ у кошелька v1 и при
+  обёртке ≠ dex.native_wrapped, пока v3 не принят» — предмет снят: кнопка доступна и разворачивает v3, подсказки ведут
+  к работающей кнопке (факт кода deploy_gate.rs refusal → None при принятом классе).
+  **Техдолг (неблокеры ревью rel/dex-all 5203fdff..76a5fdc8, 17.11.2026; docs/ROADMAP.md «Техдолг»):**
+  (а) снят решением 400 (подсказки «переразверните» у v1 — onchain.rs:168, executor/mod.rs:70, v1_notice.rs:42,
+  native_probe_exec.rs:55; обёртка ≠ dex.native_wrapped — onchain.rs:178, executor/mod.rs:90, WalletRow.svelte:109;
+  exec_callback.rs:68 — теперь ведут к доступной кнопке; живых v1 нет — все 10 кошельков v2, проверено чтением 17.11).
+  (б) Хрупкость трёх сторожей (падают ложно от безобидных правок, денег не касается):
+  tests/settings_before_send_guard.rs — подстроки и белый список: переименование функции из AFTER, смена строки метки
+  отправки, точная подстрока `order_state::times(ctx)?` (любая из 14 бирж), широкие `ctx.dex_` / `times(ctx`,
+  строковые литералы не вырезаются; tests/core_status_poll_398.rs тест 2 — точные подстроки вызовов poll_missing и
+  poll_set (перенос rustfmt уронит); tests/core_close_return_stack_399.rs — привязан к текстам «кусок 1 из 2» /
+  «выводами по очереди», сумме 83.10 / mexc и записи config_getall 24.10; реестр площадок пуст — `go` падает на
+  `gw.get_as` (transfers.rs:239) до poll_set и вывода, `withdraw` и ожидание сторожем стека не покрыты.
+  (в) deploy.rs:163 `on_chain_ok(...).await?` после отправки: при сбое узла на `eth_getCode` адрес и tx
+  развёртывания в ответе теряются (было и до t183). **После решения 400 достижимо — развёртывание разрешено;** до
+  исправления — при такой ошибке не нажимать повторно, смотреть транзакцию кошелька в сети (заметка выпуска).
+  **Сделано (тот же ревью):** лишние пробелы посреди причины poll_missing (core/transfers.rs:186) — перенос строки
+  литерала через `\`, текст без изменений по смыслу.
+  **К сведению (факт кода):** `PUT /api/wallets/{id}/executor` (server.rs:125 → wallets_dex.rs:128 → onchain
+  version_of, onchain.rs:116/140) принимает адрес v3, развёрнутого вне бота.
+- **Решение 397 (17.11.2026, задача t182, ветка t182/ledger-writer-close, слита в rel/dex-all 5203fdff) — закрытие базы
+  ждёт поток писателя учёта ledger.sqlite** (плавающее падение CI tests/ledger_db_353.rs DatabaseBusy). Открытых
+  вопросов нет. На живом боте остановка по сигналу — std::process::exit (core/shutdown.rs:53), Drop писателя не идёт — поведение
+  сервера не меняется.
+- **Решение 395 (17.11.2026, задача t181, ветка t181/executor-all-kinds от 982e0503) — исполнитель ArbExecutor v3: шаги
+  Uniswap V4 и PancakeSwap Infinity (CL, Bin, Stable) — смешанные маршруты одной транзакцией; ждёт сборки и тестов в
+  GitHub (cargo локально не запускался; EVM-тест contracts/evmtest — пройден локально, 204 проверки).** Разбор и таблица
+  видов «до → после» — docs/notes/t181-executor-all-kinds-2026-11-17.md.
+  **Ревью t181 (17.11): блокеров нет; сливать можно; РАЗВОРАЧИВАТЬ v3 и пускать деньги — только после записи симуляции
+  на живых пулах** (правки ревью Н1–Н8 — DECISIONS «395 (ревью t181)»). **Запись сделана — решение 400 (t185):**
+  tests/data/executor_v3_live_2026-11-17, приняты Uniswap V4 без крючка и Infinity CL без крючка; не приняты (нет пулов
+  или не доказано) — V4 с крючком, Infinity CL с крючком, Infinity Bin, Infinity Stable (блок «Решение 400» выше).
+  **Действие владельца (решением, после выкладки):** «Маппинг кошельков» → у одного кошелька «Развернуть исполнитель»
+  (v3; газ ≈ 4,45 млн по EVM) → «Проверить подключение» — «версия v3 …»; малой суммой и с проверками первой сделки —
+  docs/notes/release-2026-11-17.md, «Если владелец развернёт v3». Без этого — всё как раньше (смешанный с V4/Infinity
+  маршрут — сигнал).
+  **Вопросы владельцу:** (1) включить ли dex.graph_exec_fallback = да (рекомендация — включить: п. 7 заметки);
+  (2) KyberSwap Elastic и WooFi остаются «никак» — в контракте виды ELASTIC / WOO есть, бот их не сопоставляет
+  (Elastic — решение 121 B2, WooFi — «шаг только после сухой сделки на живом пуле»): делать ли их отдельной задачей
+  (нужны запись пула и EVM / симуляция с их официальным кодом); (3) BNB монетой сделки через шаг пула менеджера на стороне BNB (хоп, касающийся BNB)
+  (V4 / Infinity) не идёт (как раньше) — нужна ли отдельная задача (проба газа обёртки через эти шаги).
+- **Решение 405 (18.11.2026, задача t191, ветка t191/topup-other-dirs от 45a9efd9) — при exec.top_up = да сделки той же
+  монеты в ДРУГИХ направлениях при идущей группе разрешены (ответ Тиграна 1 на вопросы решения 394); встречные на
+  одном счёте не входят; USDT общего возврата зарезервированы; ждёт сборки и тестов в GitHub (локально не собиралось).**
+  Разбор — docs/notes/t191-topup-other-dirs-2026-11-18.md.
+  **Ответы Тиграна 18.11 (закрыто):** (1) сделка вне пути держит монету во всех направлениях — оставить; (2) USDT, ждущие
+  общего возврата группы, — резервировать (сделано: core/usdt_hold.rs, limits.rs buy_free); ревью Н1 — встречное
+  направление на тот же счёт не пускать (сделано: core/coin_counter.rs; биржа — один счёт площадки, DEX — кошелёк).
+  **Н1 (ревью t191) — закрыт правилом встречных.** Сценарий: A BingX → DEX продаёт на кошельке W (фантомный остаток
+  токена-рефлексии: учёт 1000, на W своих меньше), B DEX → BingX купила 5000 на том же W и ещё не вывела; продажа A
+  откатилась → remain_fact min(1000, 5000) = 1000 → A продаёт монеты B. Теперь B не входит, пока идёт A (и наоборот).
+  Н7 для сделок с общей только площадкой продажи (одна группа на кошельке W; MEXC → BingX и DEX → BingX) — закрыт
+  вторым кругом (remain_others.rs, ниже).
+  **Ответы Тиграна 18.11 (второй круг, сделано):** резерв — и уже начатые возвраты (общие и одиночные: «идёт»,
+  «ждёт повтора», остаток кусков) — core/usdt_hold.rs, limits.rs buy_free / cap_of, usdt_transfer_plan.rs (ручной
+  перевод); «каждая сделка знает своё количество» — remain_fact.rs + core/remain_others.rs: остаток = min(учёт,
+  факт − учёт других сделок на счёте), факт есть, а всё по учёту чужое — алерт человеку. **Н7 (t179) и Н1′ —
+  закрыты этим** (правило встречных оставлено). Окно маппинга (ревью М4) — DECISIONS «405 (дополнение …)», п. 3.
+  **Ответы Тиграна 18.11 (третий круг):** «не вернулись» — резервировать (сделано: usdt_hold.rs; снимается кнопкой
+  человека — «Перегнать» → «идёт» своей сделки, «Перегнано вручную» → снят); ручные кнопки при идущих сделках
+  (ревью Н3) — вариант (в) автоматически: пауза новых сделок монеты, ждать окончания идущих, выполнить, снять паузу;
+  застрявшая держит — сразу причина человеку; отмена кнопкой — сделано (core/manual_wait.rs, manual_wait_run.rs, экран
+  «Ручное управление» — «Ждут окончания сделок монеты», команда CancelManualWait; DECISIONS «405 (ручные кнопки …)»).
+  Ожидание не переживает перезапуск (команды человека в памяти) — кнопку нажать снова.
+  **Telegram при ожидании (ревью 4, М4; факт кода notify/press_confirm.rs, mirror_track.rs, mirror_send.rs):**
+  нажатие — запись помечается «выполнена» (state.done) ДО команды; ответ «ждёт …» — Ok: пометка остаётся, ответ на
+  нажатие — «Выполнено: кто, «Продать сейчас» — «…»: ждёт окончания сделок по X: D1 …»; запись (остановленная H) остаётся
+  на экране, но в напоминаниях её нет и повторное нажатие — «уже выполнено». Сделки кончились — повтор той же команды
+  (Core::command): запись ушла с экрана — сообщения записи правятся ещё раз «Выполнено: …» (mirror_send::outcome),
+  у продажи — ещё итог продажи (manual_outcome). Итого: одно сообщение записи, две правки (ответ на нажатие и итог).
+  **Открыто (техдолг):** ожидание кончилось без выполнения («Отменить ожидание», держащая застряла) — событие Command
+  {final, ok: false} без deal Telegram не правит, пометка «выполнена» остаётся, пока текст записи не изменится:
+  кнопка этой записи в Telegram — «уже выполнено» (на экране интерфейса — доступна). Нужна правка mirror (снять
+  пометку по итогу ожидания) — отдельной задачей, если подтвердите.
+  **Ответы Тиграна 18.11 (последние, закрыто):** (1) своих монет не видно при сделке в пути — алерт, ничего не
+  продаём; (2) правка Telegram «выполнено» при ожидании без действия — отдельной задачей потом (техдолг ниже);
+  (3) фантом остановленной закрывает человек; (4) «Продать сейчас» пока без вычета других. Тексты t191 переписаны по
+  требованию Тиграна (что произошло, какая сделка, что хотели, сколько по учёту / на счёте / у других, что делать) —
+  DECISIONS «405 (ответы Тиграна 18.11 и тексты)».
+  **CI 425e98bd (прогон 44300152268) — переполнение стека** в tests/core_usdt_return_manual.rs
+  (retry_button_makes_one_attempt) и tests/core_cex_rules_usdt.rs (manual_retry_rechecks_rule): будущее ручной
+  команды выросло (command_with / command_retry, признаки manual_wait::scope, запись «вывод принят» с await в
+  transfers.rs, ожидание баланса с резервом). Исправлено как t157 (size_search.rs): Box::pin — run_command и
+  command_inner в commands.rs, повтор и задача ожидания в manual_wait_run.rs, mark / unmark / on_error в transfers.rs,
+  wait_balance в usdt_relay_retry.rs. Стек теста не увеличивался; проверка — прогон в GitHub.
+  **Ревью 6 (сделано):** запись «вывод принят» заменяется, новая попытка части её снимает; Phemex «Cancelled» и DEX
+  «откатилась» в опросе вывода — отказ (раньше — опрос без конца / «отправлен»).
+  **Окно записи учёта (ревью 6, М1; техдолг):** правки сделки «под замком учёта → копия → ledger::save»
+  (usdt_return_state::set, coin_group_flush, manual_usdt и др.) — ledger::save вставляет копию и в память: если между
+  снятием копии и вставкой сделку поправил другой путь, его правка затирается и в памяти, и в базе. usdt_accepted.rs
+  (mark / unmark) уже пишет текущую запись без вставки копии; для остальных нужен общий путь «правка + запись под одним
+  замком» или версия записи — отдельной задачей. Окно в порядке записей в базу (две записи почти одновременно —
+  в базе предпоследняя, память верна) остаётся у всех.
+  **Ревью 5 (сделано):** признак «вывод принят» — в учёте сделки (переживает перезапуск); «ждёт решения человека» —
+  конец задачи, ожидание кнопки ждёт снятия записи; повтор ждавшей команды — по ID ожидания.
+  **Известные окна (ревью 5, М1 / М6; по коду, не исправлены):** (1) сделка в пути (шаг «перевод»): монеты уже на
+  счёте получателя, а учёт (Deal.at, qty) обновится только после подтверждённого зачисления — до этого они «неясные»
+  и не вычитаются: застрявшая сделка того же счёта с фантомным учётом может их задеть (как до решения 405); (2) шаг
+  «перевод» ставится ДО запроса вывода (executor.rs:612, relay.rs:215, manual_relay.rs:137) — в этом окне монеты ещё
+  на площадке покупки, а сделка «неясная» и там; (3) перезапуск: ожидания ручных кнопок и паузы монет не сохраняются
+  (в памяти) — кнопку нажать снова; признак «вывод принят» сохраняется; «идёт» после перезапуска — «не вернулись»
+  (решение 138), без принятого вывода — в резерве до кнопки человека; (4) вывод принят, а запись в учёт не успела
+  (падение процесса между ответом площадки и ledger::save) — после перезапуска часть «не вернулись» в резерве целиком
+  (деньги могли уйти) — решает человек кнопкой.
+  **Ревью 4 (сделано):** Б1 — закрытая / остановленная держащая сделка — конец, ждём снятия записи (не «застряла»);
+  Б2 — вывод принят площадкой (usdt_accepted.rs) снимает резерв части сразу; Н1 — «неясные» не отключают вычет
+  доказуемых; Н2 — экран «Резерв USDT возвратов»; Н3 — пауза держится до take повтора.
+  **Ревью 3 (сделано):** Б1 — сделка в пути через счёт «неясно» (сверка как в решении 222, без вычета и без алерта);
+  Н1 — «Беру на себя» не другие; Н2 — ушедший вывод «идёт» (хеш в ожидании зачисления) вычитается из резерва;
+  Н3 — перегоны видят свободное минус резерв других; М2 — набор unsettled.rs вместо прохода по истории.
+  **Вопросы Тиграну:** (1) **фантом остановленной сделки держит кошелёк.** Остановленная (Halted) с монетами — «другая»
+  при сверке остатка (монеты бота). Пример PIT 08.11: 20261108094918374PIT остановлена с учётом 12162067866.1632 PIT,
+  на кошельке 19259.884524163. Новая сделка PIT того же кошелька застряла: факт 19259.88 − учёт других 12162067866 < 0
+  → она не продаёт и уходит в алерт «своих монет на счёте не видно» — пока человек не закроет фантомную остановленную
+  сделку («Продано вручную» / закрыть). Так и оставить (человек закрывает фантом) или иначе? (2) **«Продать сейчас»
+  после алерта «всё чужое» (ревью 3, М4).** manual_halted.rs on_hand продаёт min(учёт, свободно на площадке) без
+  вычета других сделок. Пример: B учёт 5, на кошельке 19259 PIT (из них по учёту 12 млрд у остановленной H) — человек
+  нажимает «Продать сейчас» по B: продаётся 5 (монеты могут быть H). Вычитать ли других и в ручной продаже (тогда при
+  фантоме H кнопка по B откажет)?
+  **Перегон при нехватке USDT (факт кода, проверено в t191):** одним выводом — usdt_relay_retry::send: заданы
+  usdt_return.balance_wait_ms / balance_poll_ms — ждёт, пока свободно (за вычетом резерва ДРУГИХ сделок, ревью 3 Н3)
+  ≥ суммы, иначе ошибка «за N мс на балансе не появилось …» (вывод не ушёл); не заданы — при резерве других одна такая
+  проверка, без резерва — вывод уходит как есть, итог — по ответу площадки (откат перевода с DEX —
+  повтор usdt_return.retry_attempts). Вывод точно не ушёл (op_error.rs withdraw_unsent: в том числе
+  InsufficientBalance) и заданы usdt.return_retry_s / usdt.return_retries_max — повторы; каждый повтор
+  (usdt_return_attempt.rs) шлёт только при свободно − резерв других ≥ части (допуск usdt.return_tolerance_usd), иначе «свободно X,
+  меньше суммы части Y — чужие USDT не трогаем, ждём»; повторы кончились или не заданы — «не вернулись» со страховкой
+  (core.usdt_not_returned, usdt.not_returned, «Ручное управление»). WithdrawRejected — сразу «не вернулись»
+  (решение 220). Кусками (выше максимума) — повторов нет: отказ куска — «не вернулись» на точный остаток.
+  **Не доказано:** путь executor целиком для двух направлений и резерв в живом buy_cap (нужны площадки); живые записи
+  двух групп разных направлений одной монеты. **Проверить на живом боте (чтением):** у монеты одновременно сделки
+  разных направлений с разными группами (экран «Сделки»); журнал core.start_refused «встречная сделка …»; хронология
+  «на X свободно 0 USDT — ещё N USDT в резерве возвратов USDT: …» / меньший объём под свободный остаток; алерт
+  «… за другими сделками там … — своих монет на счёте не видно» (remain_fact.rs).
+
+- **Решение 394 (17.11.2026, задача t179, ветка t179/coin-reentry) — докупка по записке 269, включатель exec.top_up;
+  ждёт сборки и тестов в GitHub (локально не собиралось).** Разбор — docs/notes/t179-coin-reentry-2026-11-17.md.
+  **Ответы Тиграна 18.11.2026 (exec.top_up включена им 18.11 10:26 UTC; решение 405):** (1) разрешать — сделано t191;
+  (2) предел не нужен; (3) оставить; (4) оставить; (5) текущая логика (k частей в план не закладывать); (6) автоповтор
+  не нужен. Вопросы (1)–(6) ниже закрыты; (7) и остальное — открыты.
+  **Вопросы Тиграну (сведены из постановки и ревью 1–4, без повторов):** (1) сделки той же монеты в ДРУГИХ
+  направлениях при идущей группе договорённостью не покрыты — сейчас монета для них «занята» (как раньше); разрешать
+  ли и как; (2) общий возврат USDT и уведомление сделки 1 ждут последнюю идущую сделку группы — при непрерывных
+  докупках ожидание не ограничено: нужен ли предел (время в минутах или сумма USDT, после которых общий возврат уходит,
+  а новые докупки открывают новую группу) — и какой; (3) сделка 1 выбыла (застряла): общий возврат записывается на
+  первую отложенную сделку (итог группы верный), второй фиксированной части комиссии нет в планах вложенных — так и
+  оставить?; (4) пауза направления снимается после ЛЮБОЙ удачной сделки группы (route_pause::won) — в записке 269
+  этого нет, подтвердить; (5) сумма группы выше максимума вывода — сделано (б) «куски по очереди»; каждый кусок платит
+  фиксированную часть комиссии вывода, а в плане группы она одна (план сделки 1) — закладывать ли k фиксированных
+  частей в план (факт в учёте — все k); (6) у кусков нет автоматических повторов (usdt.return_retry_s): отказ куска —
+  «не вернулись» на остаток; «Перегнать» остатка выше максимума идёт кусками (ревью 4, Н8) — нужен ли автоматический
+  повтор. **Нужна проверка по документации (не вопрос владельцу):** (7) ID вывода куска «<сделка>up<номер>»: по коду адаптеров — MEXC и Binance: предел
+  длины и правила уникальности своего ID вывода в документации не заданы (комментарии mexc/transfers.rs,
+  binance/transfers.rs; ID режется до 32 знаков — при длинном ID сделки суффикс куска срезается, различает только метка
+  попытки в мс в начале ID); KuCoin — своего ID вывода нет (метка remark); Phemex — свой ID в запрос вывода не идёт.
+  Нужна проверка по официальной документации этих бирж (длина, уникальность, поиск вывода по своему ID) — не гадали.
+  **Остаток узкого окна (Н1):** вход вложенной в группу теперь в самом admit под замком монеты; остаётся окно расчёт →
+  admit: план докупки посчитан без фиксированной части (группа шла), а к admit общий возврат ушёл — сделка станет
+  первой новой группы (Seat::Lead) с планом без фиксированной части; пересчитывает ли предпроверка возврат — не
+  проверено (техдолг docs/ROADMAP.md).
+  **Известные ограничения при «да» (ревью t179):** Н2 — вложенная может продать раньше первой и забрать лучшие уровни
+  (итог первой хуже плана, сумма группы сходится; пример: первая везёт по медленной сети, вторая по быстрой); Н3 — две
+  сделки на один кошелёк DEX: зачисление по блокчейну (решение 151) не срабатывает, ждут хеш; Н7 — remain_fact берёт
+  меньшее из «учёт» и «факт на площадке», факт включает монеты другой сделки группы: «фантомный» остаток одной (как PIT
+  08.11) прикроется монетами другой, и она продаст чужие; Н8 — нереализованный убыток идущих сделок группы не входит в
+  дневной лимит (с двумя сделками риск одного направления удваивается); отложенные части общего возврата — в записях
+  сделок (перезапуск — «USDT не вернулись», решает человек); свежесть стакана по времени получения — предположение (кадр после
+  ответа на ордер отражает исполнение), сверху — лимит IOC (решение 262) и minOut. **Нужны записи:** две сделки одной
+  группы на живом боте (журнал core.deal_closed, core.usdt_return, хронологии, кадры стакана / пула между ними) — тест
+  пути executor целиком; dex_presell при монетах группы впереди. **Проверить вживую после включения:** «Докупка: сделка
+  группы …» в хронологии, отказы «данные … не доказуемо свежее …», «Возврат USDT: 0 — общий возврат …», один перегон
+  USDT на группу, строка «Итог группы» в Telegram, метка группы на экране «Сделки».
+
+- **Решение 389 (17.11.2026, задача t175, ветка t175/sell-stuck-no-recursion от f9634504) — продолжения продажи
+  сделки циклом, без async-рекурсии; ждёт сборки и тестов в GitHub (локально не собиралось).** Авария f9634504:
+  переполнение стека сразу после core.sell_unsent_here сделки 20261117143812842GENIUS (4 ордера binance EXPIRED →
+  повторы 3/3 → продажа здесь). Разбор — docs/notes/t175-sell-stuck-no-recursion-2026-11-17.md.
+  **Не доказано:** что причина аварии — эта рекурсия (трассы нет, core dump не сохранился); что тест с 200 повторами
+  уронил бы старый код (не запускался). **Решение владельца:** включить сохранение core dump на сервере (ulimit -c /
+  systemd LimitCORE), чтобы следующее падение (если будет) дало трассу. **Техдолг:** прямой замер стека пути аварии в
+  release до и после решения 389 (перебор размера стека потока tests/core_sell_stuck_chain_t175.rs, как замеры
+  docs/ROADMAP.md «Техдолг»; по имеющимся release-замерам 268 одной рекурсии для 2 МиБ могло не хватать — не доказано); нужна запись ответа binance
+  на ордер IOC без исполнения (EXPIRED) в tests/data — сейчас тест t175 на стенде XT по документации.
+  **Проверить на живом после выкладки (только чтение):** при следующей цепочке core.sell_unsent_retry ×N →
+  core.sell_unsent_here процесс не падает, после here есть ордер продажи и алерт или «Продано».
+
+- **Решение 388 (17.11.2026, задача t174, ветка t174/tax-probe-virtual от a6ad7802) — проба налогов у DEX с
+  виртуальным квотером; ждёт сборки и тестов в GitHub (локально не собиралось).** Живой бот: Error
+  dex.check_not_configured «… metric-bsc: Metric сверяется только виртуальным квотером — задайте dex.quoter_virtual =
+  да» при заданной настройке. Причина и правка — docs/notes/t174-tax-probe-virtual-2026-11-17.md: налоги пулов Metric,
+  Algebra Integral, iZiSwap / Biswap V3, SmarDex пробой не мерились никогда (проба шла мимо виртуального квотера), пулы
+  не котировались. Теперь проба берёт «ожидалось без налога» виртуальным квотером в тех же eth_simulateV1.
+  **Нужна запись (тест на записи не сделан):** сырой запрос и ответ eth_simulateV1 пробы налогов с подменой кода
+  VirtualQuoter (обе симуляции) хотя бы по одному пулу Metric, SmarDex, iZiSwap / Biswap V3, Algebra Integral — в
+  tests/data для теста check/probe.rs целиком; сейчас тест — запись metric_2026-11-15 (адрес, данные вызова, разбор
+  записанного ответа) + чистая логика.
+  **Проверить на живом после выкладки (только чтение):** журнал dex.check_not_configured — строк «сверяется только
+  виртуальным квотером» по metric-bsc и другим DEX с dex.quoter_virtual = да больше нет; у пулов этих DEX в фактах
+  пулов (PoolFacts.taxes) появились налоги покупки/продажи; в выдаче котировки нет причины «налог … не измерен пробным
+  обменом» по этим пулам; нет новых Internal «вызов прошёл мимо виртуального квотера».
+  **Ревью (Н3):** торговля откроется шире пяти видов — у DEX вида V3-форк / Algebra / Slipstream с
+  dex.quoter_virtual = да без dex.quoter налоги тоже раньше не мерились. Запросить с сервера список таких DEX; после
+  выкладки — строки «виртуальный квотер пробной покупки откатился … покупка прошла» (Н1, помеха) по пулам.
+- **t170 (17.11.2026, ветка t170/bitget-plan-fact) — план против факта Bitget → DEX, DEX → MEXC / Binance.** По коду
+  недоучёта статьи не найдено: у каждой статьи факта в плане есть строка с той же формулой. Ставка комиссии Bitget,
+  пока не получена, не подставляется нулём: котировки нет. Код не менялся. Разложение расхождения на «пришло меньше
+  монет» / «цена продажи ниже» / «затраты» — по записям сделок с сервера (список —
+  docs/notes/t170-bitget-plan-fact-2026-11-17.md, п. 6). Вопросы: (1) входит ли комиссия вывода Bitget в size
+  (в документации этого нет — проверить по withdrawal-records этих сделок); (2) если подтвердится уход исполнения DEX
+  к границе exec.dex_slippage_pct (решение 148 считает это законным), нужно ли в плане учитывать ожидаемое исполнение
+  хуже котировки — решение Тиграна. Риск цены за перевод — настройки запаса (k, closure_share, sigma_floor, T) Тиграна.
+- **Решение 380 (17.11.2026, задача t166, ветка t166/presell-sim от b23c7a09) — симуляция продажи до покупки без
+  источника монет на весь объём; ждёт сборки и тестов в GitHub (локально не собиралось).** Живой бот 17.11
+  (06:20–09:52 UTC): 350 отказов «симуляция продажи до покупки не прошла: у кошелька 0 единиц входа … пула-источника …
+  нет … у держателя M единиц, нужно N» (AVA bitget 242, FLOKI mexc 71, NXT mexc 32, YCT gate 3, MIRA bingx 2) —
+  симуляция не запускалась вовсе. Теперь: несколько источников вместе (exec/dry_fund_gather.rs); и вместе мало —
+  пересчёт сделки на объём продажи не больше проверяемого и новая симуляция на точном объёме (core/precheck_dex_cut.rs).
+  Экстраполяции с меньшей суммы нет (лимит max tx / anti-whale, налог от суммы не доказываются). Разбор —
+  docs/notes/t166-presell-sim-2026-11-17.md.
+  **Записать с сервера (для тестов и доказательства, только чтение):** (1) полные строки отказов предпроверки
+  core.precheck / журнала отказов кандидатов по AVA, FLOKI, YCT, MIRA за 17.11 06:20–09:52 UTC (нужно, держатели и их
+  балансы, форма, кошелёк, блок); (2) для AVA, FLOKI, NXT — адрес токена, пулы маршрута продажи из той же строки и
+  balanceOf токена у каждого пула V2/V3 реестра этой монеты вне маршрута и у держателей (PoolManager 0x28e2…e9df,
+  dex.vault Infinity) на блоке отказа — хватило бы суммы источников (решение 380, п. 1) или только урезание (п. 2);
+  (3) после выкладки — первые строки «объём урезан до проверенного симуляцией (решение 380)» и «перевод N единиц из K
+  источников» с сырыми eth_simulateV1 (запрос и ответ) из сырого журнала узла — в tests/data для теста набора
+  переводов на записи; (4) исходы сделок после урезания (план против факта продажи).
+  **Не сделано (проект):** запоминать «на сумме X источника нет, проверяемо F» по (монета, направление, кошелёк) и
+  сразу считать кандидата с пределом DirCtx.sell_max = F — экономит полный пересчёт до симуляции на каждом повторе.
+  Нужен срок жизни памяти (балансы источников меняются каждый блок) — это настройка-число (мс), её значение решает
+  Тигран; без неё память не включается. После решения 380 повтор стоит один лишний подбор объёма и одну симуляцию, а
+  сделка не теряется, — поэтому отложено до записей п. 3 (сколько таких повторов останется).
+  **Ревью t166 (исправлено):** refit по свободному балансу A — с пределом продажи = проверенной (Н2); держатели —
+  только если одного пула мало (Б1); балансы источников — на блоке симуляции (Н1); несколько источников — через узел
+  одним переводом полной суммы на кошелёк (Н4); запас на округления (Н5); своя строка хронологии (Н6).
+  **Н3 (было до 380, открыто):** продаётся фактический приход монет (core/fills.rs: deal.qty = сумма зачисления), а
+  не plan.sell_qty: если реальные налог или комиссия вывода меньше модели, продажа на DEX чуть больше проверенного
+  объёма. Варианты — продавать min(приход, проверенное) и остаток как «пыль», или проверять с запасом — решение
+  Тиграна.
+  **Н7 (замерить на сервере):** путь Short добавляет полный подбор объёма и вторую сборку с симуляцией — сколько мс,
+  видно по «Время по шагам (предпроверка)» при log.step_timing = да на первых урезанных сделках.
+
+- **Решение 381 (17.11.2026, задача t167, ветка t167/buy-price-moved от b23c7a09) — ждёт решения Тиграна по двум вопросам.** Сделано: после срыва покупки DEX до отправки по цене («цена ушла», пометка адаптера price_moved) план считается заново на свежих данных (exec.dex_buy_replan_max, не задана — как раньше). **Вопрос 1 (граница по порогу прибыли):** граница сделки (TradeRequest.worst_price) у покупки DEX сейчас = средняя цена плана × (1 + exec.dex_slippage_pct) (решение 121 B4); вариант «граница = цена, при которой прибыль на том же объёме равна порогу money.min_profit_usd / pct, но не выше бюджета» выполняет решение Тиграна 01.11 (ROADMAP: «решать по свежей прибыли») без пересчёта, но меняет смысл exec.dex_slippage_pct как предела цены относительно плана и при плане, упёртом в бюджет, ничего не даёт (решение 66: вложение ≤ бюджета). Нужна ли такая граница вдобавок к пересчёту 381? Какое значение verify.max_price_drift_pct на живом боте (ROADMAP — «временно 0.5»; совет B4 — 10–20 %; при 0.5 % верификация снимает и прибыльные сделки)? **Вопрос 2 (ревью t167, Б2):** разрешить ли повтор ПОКУПКИ (новый план тем же расчётом) после «не попала в блок за send.max_wait_blocks, nonce занят нашей отменой в блоке» — по аналогии с решением 229 для продажи. По деньгам безопасно: у кошелька один nonce, исход известен по квитанции нашей отмены (send/track_util.rs landed — квитанция отмены с тем же nonce), исходный обмен уже не исполнится, USDT на месте; потрачен только газ отмены. Но обмен был отправлен — это стартовое правило CLAUDE.md «ордер отправлен и не исполнился — отменяем, больше не пробуем»; без «да» Тиграна (и строки-исключения в CLAUDE.md) этот случай закрывает сделку, как раньше. Каждый такой круг длится ~send.max_wait_blocks блоков (живой случай — 10.5 с), монета занята. Разбор и список данных с сервера — docs/notes/t167-buy-price-moved-2026-11-17.md.
+- **Решение 387 (17.11.2026, задача t172, ветка t172/gate-deposit-info) — минимум депозита Gate после перезапуска.**
+  Сделано в логике: расчёт с неизвестным минимумом депозита B запрашивает сведения монеты у B сразу (core/deposit_min_ask.rs
+  → coin_networks_of; у Gate — с адресом депозита); фоновый круг Gate не спрашивает монеты с закрытым вводом в BSC,
+  повторяет сбои временной причины после удачного получения справочника; пауза прерывается сменой настроек.
+  **Вопрос владельцу (не сделано без решения):** помнить минимум депозита Gate между перезапусками на диске? Вариант:
+  сохранять последний полученный min_deposit_amount монеты с меткой времени и после перезапуска считать его
+  действительным не дольше venue.networks_stale_s (дальше — как сейчас: неизвестен, пока не получен из API). Сейчас
+  механизма хранения справочных данных площадок на диске нет (правило: данные площадок — только из API, стартовых
+  значений нет), поэтому не вводилось. С решением 387 «→ gate» по монете с сигналом открывается за время одного запроса
+  сведений монеты, кэш на диске выиграл бы только эти секунды.
+  **Проверить на живом после выкладки:** в журнале core.deposit_min — «Минимум депозита … получен запросом по монете»
+  в первые секунды после старта; отказов «gate: минимальный депозит неизвестен» — единицы на монету, а не минуты;
+  venue.deposit_info — «не спрашивались: ввод в сети BSC закрыт — N» и сбоев «deposit disabled» почти нет.
+  Если «deposit disabled» остаётся у монет с открытым по справочнику вводом в BSC — прислать список (ввод по
+  справочнику и ответ адреса расходятся — разобрать).
+
+- **Решение 382 (17.11.2026, задача t168, ветка t168/quoter-mismatch от b23c7a09) — расхождение с квотером перед сделкой: перечитать пулы на голове и решать по факту узла; память пула исправляется полным чтением сессии; симуляция продажи до покупки выровнена с продажей выхода; все пути со сверкой. Ждёт сборки и тестов в GitHub (локально не собиралось).** Три вопроса решены владельцем 17.11 (делать). Без теста на записи: само перечитывание на узле и повторная подготовка (pinned) на путях прямой / умный / исполнитель / сухая сборка; закрытие отметки Need::Reread сессией (settle_close.rs) — нужны записи узла (список — docs/notes/t168-quoter-mismatch-2026-11-17.md). Изменён стык DexPresell (поле by_quoter, serde default) — по docs/AGENTS.md это запрос на изменение стыка. Не доказана причина роста dex.quoter_memory в 15 раз (данные сервера). (Устарело после ревью: Stuck убран.) на живом боте настройка задана. **Ревью (17.11):** Б1/Б2/Н1/Н2 сделаны (отметка — только по ошибке, доказанной на блоке памяти; plan_gap; пулы одновременно / из верификации). Н3 не сделан: второй проход повторяет пробу крючков (hook_trade::paths) и в сухой сборке графа — предторговую верификацию (dry_build_once.rs verified) — можно передать факты первого прохода; без теста на записи: prove() (eth_getLogs + чтение на блоке памяти) и фоновая отметка. **Ревью 3 (17.11):** Б1, Б2, Н1–Н6 сделаны (виды «каждым блоком» — сравнение только на блоке памяти; узкое окно при отказе узла по диапазону; позиция пропуска; Multi; охранник учёта; фон для сверки). Без записи: eth_getLogs узкого окна и широкого диапазона на живом узле. **Ревью 2 (17.11):** Б1 (доказательство логами за [S, H] и сравнением на H — для всех видов пулов), Н1, Н2, Н4 сделаны. **Вопрос Тиграну (Н3 ревью 2):** допуск plan_gap — dex.quoter_max_diff_pct (≈0,1 %): после перечитывания он отсекает и законное движение цены между планом и исполнением, которое обычный путь пропускает до exec.dex_slippage_pct (пример: память отстала на блок, цена честно ушла на 0,2 % — без расхождения с квотером сделка прошла бы, с ним — QuoteMismatch; в предпроверке — отказ «продажа не пройдёт»). Оставить, взять exec.dex_slippage_pct или отдельную настройку? Без записи: eth_getLogs за [S, H] у пулов V4 / Infinity (фильтр по topic1) — проверить на живом узле. Строка «Stuck» из дополнения убрана — пул, у которого события не доходят до памяти, теперь остаётся только заметкой «память отстаёт».
+- **Решение 379 (17.11.2026, задача t165, ветка t165/deposit-addr-create от c2d6aba2) — адрес депозита биржи
+  создаётся ботом там, где была явная ошибка или так решил Тигран; ждёт сборки и тестов в GitHub (локально не
+  собиралось).** Poloniex (POST /wallets/address; живые отказы 17.11) и Kraken (claim PUT /funding/v1/deposit/address,
+  решение Тиграна 17.11; настройка venue.deposit_address_claim удалена) — создают при отсутствии адреса (прогрев без
+  venue.deposit_warm_create — нет); KuCoin — как раньше; Gate — текст без «создайте в кабинете». Общий путь
+  gateway/addr_create.rs, addr_create_memo.rs: адрес только из повторного списка; создание — Op::Create (резерв REST
+  только если не отправлено); отказ биржи помнится на venue.networks_fresh_ms, отправленное без подтверждения —
+  до перезапуска (Warn один раз); одно создание за раз на (монета, сеть). Poloniex — отказ при неоднозначном имени
+  монеты сети (coin_clash). Попутно: «Итог старта: …» в core.candidate, core.start_refused — механизмом повторов.
+  Таблица 14 бирж — docs/notes/t165-deposit-address-create-2026-11-17.md.
+  MEXC: метод создания адреса в документации есть, но не внедрён — на живом боте отказов нет (344 сделки, 90 монет);
+  внедрять только при появлении отказа.
+  **П1 (до первой сделки на созданном адресе):** первое живое создание адреса Poloniex и Kraken сверить в кабинете
+  биржи (страница депозита монеты, сеть BSC); сырые ответы создания и списка из сырого журнала сервера
+  (<data-dir>/raw/poloniex|kraken/*.jsonl.zst) записать в tests/data (адрес заменить примером документации). До этого
+  связь «адрес ↔ сеть BSC» у Poloniex держится на модели «монета сети» (coin из /v2/currencies) — документация POST про
+  сеть молчит. Kraken: «If the method shares addresses, Kraken returns the shared address» — если общий адрес хранится
+  под другим методом и не виден в списке scope[method_id], claim даст «адреса нет в списке» (до перезапуска) — проверить.
+  **Н5 (из ревью):** тест разбора POST Poloniex — на примере документации, coin_clash — на чистой функции (записи
+  /v2/currencies в tests/data нет); не доказаны формат живого ответа и то, что адаптер под forbid не вызывает POST
+  (проверена чистая функция). Тест create_only_outside_warm_scope дублирует юнит-тест addr_claim.
+  **Н6 (из ревью):** создание адреса — только журнал venue.deposit_address, в Telegram не уходит (как у KuCoin); нужно
+  ли событие уведомлений — вопрос Тиграну.
+  **Вопросы Тиграну:** (а) BingX (для основного аккаунта метода нет — только createSubAddress субаккаунта), Binance,
+  Bitget, Bybit, CoinEx (Update Deposit Address /assets/renewal-deposit-address — создаёт ли адрес, если его не было,
+  документация не говорит), HTX, Phemex, XT (DEPOSIT_006/007 — только коды) — по решению 17.11 не трогаем.
+  (б) OKX — страница docs-v5 в задаче не прочитана (доступ к сайту не дан). (в) core.start_refused и core.precheck без
+  journal.repeat_flush_ms не пишут повтор с тем же текстом — счётчик растёт только при заданной journal.repeat_flush_ms;
+  причина видна и в строке «Итог старта» записи core.candidate. (г) Срок повтора после отказа биржи —
+  venue.networks_fresh_ms (у Poloniex на живом боте 5000 мс): нужна ли отдельная настройка — вопрос.
+
+- **Решения 342–345 (16.11.2026, задача t159, ветка t159/sizing-proven-bound от t157/cpu-parallel) — подбор объёма
+  без потери прибыльных объёмов; исправлено по ревью t159 (Б1–Б4, Н1–Н11; DECISIONS «342–345 (ревью)»); ждёт сборки и
+  тестов в GitHub (локально не собиралось) и повторного ревью.** В логике (без выключателей): порог % — ограничение
+  подбора (342, core/size_pct.rs; один пересчёт финальной на меньшем проходящем — size_retry.rs), участки допустимости
+  по стакану B (343, core/size_scan.rs). Параметры-числа (необязательные, совета включать нет): size.scan_above_pct,
+  size.pool_breaks_max (на кандидата, после обычного подбора, пулы маршрута), size.soft_deadline_pct (только при общем
+  сроке, после границ, при найденном проходящем). Тесты: tests/core_size_t159.rs (контрпример ревью; записи CAKE —
+  DEX → биржа: порог %, maxNotional и объём выше бисекции, изломы не вытесняют подбор, мягкий срок),
+  tests/bsc_dex_breaks_t159.rs (изломы LB на записях узла).
+  **Открыто:** (а) доказанный потолок прибыли (этапы 0–1, отрезок I_T, новый поиск, общая кривая DEX, кэш, режим
+  записи) — проект docs/notes/t159-sizing-proven-bound-2026-11-16.md, ждёт сведения с проектом математика и решения
+  Тиграна (номера 346–347 зарезервированы); (б) изломы Algebra, Elastic, DODO, SmarDex, Maverick — не выведены; у цикла
+  DEX ↔ DEX — только первый пул (следующие — обратным пересчётом точным выходом, не сделано); (в) без теста: изломы
+  V3 / Infinity CL / Infinity Bin / OraclePmm, адаптер quote_breaks целиком (доли сплита, налог, крючок), путь
+  profit.rs (decide_within, пересчёт на меньшем проходящем), биржа ↔ биржа, graph, сплит, size.scan_above_pct; (г) у
+  цикла причины NoRoute, кроме нехватки ёмкости шага, тоже идут в «слишком большой» — их монотонность не доказана;
+  (д) запись кандидата, принятого / отклонённого по % на живом боте, — для теста №20 на настоящем расчёте (проект п. 6).
+
+- **Решения 361–365 (16.11.2026, правило «базовое поведение — в логике»): проход по новым выключателям релиза
+  rel/dex-all.** В логике без настройки: stuck.tick_lag_wake (361), venue.info_events_keep (362), dex.quote_reuse (363 —
+  с доработкой: смена настроек внутри подбора видна сразу), log.sigma_horizon (364 — сравнение σ пишется всегда).
+  Остаются выключателями (причина и что нужно — DECISIONS 365): dex.event_refresh_batch / dex.event_refresh_fee_only
+  (запись aggregate3 с узла), dex.per_block_skip_same (разбор видов «каждым блоком» по времени блока + запись),
+  hooks.reprobe_before_pause (сквозной тест с узлом, вопрос 3), signal.mid_pool_wake (замер N_w и ярус «пробуждение»
+  только на свободные места), signal.book_same_skip (запись головы и газа). Локально не собиралось — прогон в GitHub.
+- **Ревью слияния «357 × 339» (17.11.2026, задача t164, ветка t164/merge-fix от rel/dex-all 906ba0d9) — сделано, ждёт
+  прогона в GitHub и повторного ревью.** Б1 (деньги): голова LB достоверность не поднимает никогда; неудачная голова —
+  «нужно полное чтение» (settle_head.rs), пул читается целиком; полное чтение (registry.rs put) снимает все отметки
+  пула. Б2: «в обновлении» снимает только лог того же действия (settle_lost.rs lost; Follow — та же tx), обрыв —
+  forget_all. Н1–Н5, Н7 исправлены (заметка docs/notes/t164-settle-merge-2026-11-17.md — таблица состояний и разбор).
+  Пункт 6 решения 332 ниже: механизм head_ok заменён (голова больше не возвращает и «свою» достоверность). Открыто: Н8
+  (дубли строк SETTINGS — были до слияния); тест Follow на настоящем SwapFee 1.2.10 и вывода из неактивного бина —
+  ждут записи.
+- **Решение 371 (17.11.2026, задача t163, ветка t163/trade-blockers) — «0» в минимуме депозита у Bitget, HTX, Phemex, CoinEx — минимум 0 (решение Тиграна 17.11), общий разбор gateway/deposit_min.rs; ждёт сборки и тестов в GitHub. БЕЗ ТЕСТА НА ЗАПИСИ:** записанных ответов справочника сетей этих четырёх бирж в репозитории нет (тест — на примерах документации, tests/deposit_min_zero_t163.rs). Записать на сервере (только чтение, публичные/подписанные запросы бота): Bitget GET /api/v2/spot/public/coins, HTX GET /v2/reference/currencies, Phemex GET /phemex-deposit/wallets/api/chainCfg, CoinEx GET /v2/assets/all-deposit-withdraw-config — и проверить, встречаются ли у одной биржи и «0», и отсутствие поля / null. Документация смысл «0» не определяет — таблица фактов в заметке t163.
+- **Вопрос Тиграну (повторное ревью Н5, ручной перевод USDT):** после правки ручной перевод USDT на биржу без известного минимума депозита USDT откажет: Gate — пока адрес депозита USDT не запрошен (venue.deposit_min_absent_ok [gate] = нет на живом боте), BingX и Bybit — если поля нет (настройки у них нет), прочие — если поле пустое и настройка не = да (подробно — заметка t163, «Повторное ревью и решение 371»). Оставить отказ или считать неизвестный минимум нулём для ручного перевода, как раньше?
+- **Решения 366, 370 (17.11.2026, задача t163, ветка t163/trade-blockers) — минимум депозита XT из depositMinAmount; «0» — минимум 0 (решение Тиграна 17.11); ждёт сборки и тестов в GitHub. Вопрос «что значит „0“» закрыт решением владельца: «→ XT» открыто по всем 272 монетам «BNB Smart Chain». Инструкция «держать „→ XT“ закрытым до ручного депозита» снята (слово Тиграна 17.11: «будет падать на торговый счёт» — не факт документации). После выкладки: первая живая сделка «→ XT» — проверить по факту зачисления (журнал сделки: депозит найден в /v4/deposit/history, баланс спота XT вырос, продажа прошла).** По ревью: нечитаемый depositMinAmount — как нет поля (Н1), depositConfirmations читается (Н3), ручной перевод USDT при неизвестном минимуме депозита получателя — отказ (Н5). **Найдено, не сделано:** XT документирует depositFeeRate как «percentage» (бот при ненулевом закрывает ввод сети), withdrawPrecision (не читается; смысл — знаки или шаг — проверить на живом ответе и малом выводе). **Вопрос Тиграну (Н5, возврат выручки):** возврат USDT сделки (core/usdt_return.rs relay_try) минимум депозита получателя-биржи не проверяет; варианты: (а) проверять в возврате (возвраты на биржу без известного минимума USDT встанут до решения по настройке); (б) проверять в расчёте сделки (сделки с такой биржей-покупателем не начнутся); (в) оставить как есть (минимумы USDT — доли USDT, суммы возврата — сотни).
+- **Решение 383 (17.11.2026, задача t169, ветка t169/gate-quiet-queue) — ёмкость подтверждений тихих пар (проход раз в секунду, запас хода по замеру, ранние из остатка ведра, сводка по действующему сроку); ждёт сборки и тестов в GitHub, ревью.** Формула ёмкости в FIRST_RUN исправлена по коду: до 383 — max_per_s × min_ms / (pair_resub_interval_ms + время прохода), после — max_per_s × min_ms / 1000. **После выкладки** смотреть сводку core.feed_watch по gate: «подтверждение истекло (ждут проверки)» ≈ 0, «отложено ведром» ≈ 0, отказы «кадра стакана пары нет … подтверждение биржи истекло» — 0; без «подтверждение … истекло» (пара не была подтверждена) — смотреть «ранних проверок из остатка ведра». **Запросить с сервера:** длительность GET /spot/order_book Gate (мс) — по сырым записям REST или журналу; значения venue.quiet_confirm_* и число тихих пар всех бирж (для проверки ёмкости). **Не сделано:** у бирж, где лимит эндпоинта общий с другими запросами (XT — 10/с вместе со снимками; Bitget — 20/с на IP вместе с котировками исполнения), ведро подтверждений теперь реально расходует настройку (раньше ~1/3) — проверить отсутствие 429 после выкладки; ведро строгое (не больше max_per_s в любом окне 1 с, правка по ревью). **Вопрос Тиграну (ревью t169, Н2):** ранние проверки из остатка ведра (пары, не нужные торговле, чей стакан устареет раньше ответа следующего прохода) могут расходовать ведро до настройки постоянно — пары с кадрами раз в 4–5 с попадают в окно после каждого кадра; если нужен запас лимита для снимков ордеров, ограничить их долей ведра (новая настройка — по решению Тиграна). Запросить с сервера: venue.rate_limit_pause_ms по gate, bitget, poloniex, mexc, kucoin, xt, bingx, binance; число 429 по биржам за сутки.
+- **Решение 367 (17.11.2026, задача t163, та же ветка) — сторож пар спрашивает биржу о тихой паре раньше отказа котировки (все 14 бирж); ждёт сборки и тестов в GitHub, ревью.** Без настроек-выключателей. **Проверить после выкладки:** у Gate и прочих отказы «кадра стакана пары нет» без хвоста «подтверждение биржи истекло» должны почти исчезнуть; в журнале core.feed_watch — больше «тихие подтверждены»; ёмкость ведра — quiet_confirm_max_per_s × quiet_confirm_min_ms / pair_resub_interval_ms тихих пар (FIRST_RUN); в сводке core.feed_watch — «отложено ведром», проверки нужных торговле пар (подтверждены, «книга новее» впервые — повторная сверка без переподписки, кадры потеряны). Доработка по ревью Н2: ранние проверки — только у пар, нужных торговле (feed_need.rs), ведро — по сроку ожидания (feed_confirm_queue.rs). **Факты для проверки (П2 в docs/notes/t163-trade-blockers-2026-11-17.md):** настройки сторожа на живом боте, журнал core.feed_watch по Gate за 16.11 20:03–22:04 UTC.
+- **Решение 368 (17.11.2026, задача t163, та же ветка) — ритм опроса блоков от начала круга; ждёт сборки и тестов в GitHub.** Данные 16.11: все 363 отказа узла — в трёх всплесках ≈ 1 мин (20:25, 20:41–20:42, 20:51–20:52), совпадают со сменой и перезапусками узла; вне их — ни одного; часы −1,65 / −1,91 мс; правка кода для них не нужна. Отказы узла «Блок N создан N мс назад» (475) и «Последний блок N получен N мс назад» (302) за 2 ч 16.11: формула возраста проверена — ошибки нет; что именно их даёт (порог, рассинхрон часов двух серверов, сеть, отставание узла) — **не доказано**, нужны факты: промпт П3 в docs/notes/t163-trade-blockers-2026-11-17.md (настройки feed.max_block_age_ms, feed.stale_after_ms, bsc.blocks_poll_ms; chronyc tracking на обоих серверах; ping до узла; распределение N в отказах).
+- **Решение 369 (17.11.2026, задача t163) — по данным 16.11 НЕ нужен сейчас (DECISIONS «369 (данные 16.11)»): у всех 432 отказов прибыль оптимума отрицательна; лишний счёт снимает size.early_exit_margin_usd (решение 337) — вопрос Тиграну, задать ли.** Прежний проект: «второй шанс» финальной котировки на следующем допустимом объёме при «меньше минимума». Место — core/profit.rs final_calc и size_search.rs (зона t159): делать в t159 или после её слияния — решает техлид. Суть и основание — DECISIONS 369, разбор — docs/notes/t163-trade-blockers-2026-11-17.md раздел 4. Факты для проверки — П4 (сколько отказов с «оптимум X» = «допустимо MIN»).
+- **Решения 372–375 (17.11.2026, задача t162, ветка t162/proven-sieve) — отсев по доказанной границе прибыли; ждёт сборки и
+  тестов в GitHub, ревью, выкладки.** Отсев — базовое поведение (без выключателя). **После выкладки:** sieve.audit_share =
+  0.05 на сутки (FIRST_RUN), смотреть core.sieve_violation (должно быть 0) и сводку dex.quote_count поле sieve: доля
+  cut_* против pass и na_<класс>. **Открыто:** (1) записи для видов пулов без теста-эталона r_e (LbBin, Bin, CL без
+  крючка, Elastic, TickBin, StableSwap/Curve/NG/Nomi, Solidly stable, Balancer, DODO, OraclePmm, AmpV2, SmarDex) — по
+  каждому: состояние на блоке + ответы квотера на сетке входов; (2) записи для строгой проверки 18 отказов — стаканы обеих
+  сторон и пулы на моменте расчёта (проект Е.3 п. 2); (3) факты withdraw_seen по монетам MEXC/BingX (Е.3 п. 3) — тест
+  поправки вывода; (4) пулы между промежуточными при маршруте ≥ 3 хопов — строгая граница со встречными долями (проект
+  А.7) не введена; (5) поиск оптимума «ветви и границы» (функция U(q) — core/bound.rs u_at — готова к переиспользованию)
+  — после слияния t159; (6) отсев до котировки DEX сигнала — только решением Тиграна (меняет ряд σ).
+  **Ревью t162 (решения 376, 377)** — правки Н1–Н11 сделаны (docs/notes/t162-review-fixes-2026-11-17.md); ждут сборки
+  и тестов в GitHub. После выкладки — смотреть core.sieve_audit / core.sieve_violation (sieve.row_interval_ms удалена — решение 386)
+  и audit, audit_violation, audit_moved в сводке. Открыто: (7) у отсечённого нет «без потолка» (решение 141) и
+  почти-циклов DEX ↔ DEX — только через полный расчёт (заметка, Н11); фоновый «без потолка» по доле — решением
+  Тиграна; (8) число отсечённых живым кодом из 18 записанных отказов — только с записями стаканов и пулов на момент
+  расчёта (тест даёт верх: 17).
+
+- **Решение 330 (16.11.2026, задача t153, та же ветка) — пачка не ждёт; ждёт сборки и тестов в GitHub, ревью и
+  включения.** pools/session_lanes.rs, lanes.rs, per_block_par.rs; dex.event_lanes_max, dex.block_read_parallel_max
+  (не заданы — как раньше). **Как включать:** по одной, после 339: сначала log.pool_refresh_timing = да на время
+  замера, затем dex.event_lanes_max = 2, потом dex.block_read_parallel_max = 2 (советы FIRST_RUN, числа не из замера).
+  **Что мерить:** в dex.pool_refresh поле queued (при полосах — события этого же пула) и время от прихода события до
+  отправки ядру у быстрых пулов пачек с Algebra; StaleData «нет состояния блока» при приёме / повторе — уменьшить
+  dex.block_read_parallel_max. **Не сделано:** per_block одним Multicall3 по видам (внутренности load_*.rs — t152);
+  повтор и «каждым блоком» по-прежнему идут в ветке нового блока сессии — на это время новые логи пачки в полосы не
+  раздаются (чтения внутри — одновременно). **Нет записи (промпт серверному ИИ, только чтение):** «Не меняя настроек:
+  выгрузи из журнала бота за 2 часа записи dex.pool_refresh (замер log.pool_refresh_timing, если включён) — пул, вид,
+  шаги wait_ms / send_ms, queued, всего мс; сохрани как есть в docs/notes/ (без ключей).»
+- **Решение 331 (16.11.2026, задача t153, та же ветка) — перечтение маршрута перед сделкой параллельно; ждёт сборки
+  и тестов в GitHub, ревью и включения.** pools/load_batch_par.rs; verify.read_parallel_max (не задана — как раньше).
+  **Как включать:** «Настройки» → «DEX», bsc_dex: verify.read_parallel_max = 2 (совет FIRST_RUN; число не из замера).
+  **Что мерить:** время verify в записях предпроверки сделки DEX и отказы «перечтение пулов маршрута не уложилось в
+  verify.timeout_ms» — до и после. **Нет записи (промпт серверному ИИ, только чтение):** «Не меняя настроек и не трогая
+  бота: в журнале за сутки выбери записи предторговой верификации DEX (verify) с маршрутами, где есть пулы Algebra,
+  Slipstream, DODO, стейблсвапы, WooFi, LB или Infinity Bin, — время шага, число пулов маршрута по видам, итог/причину
+  отказа; сохрани выборку как есть в docs/notes/ (без ключей и адресов кошельков).»
+- **Решение 339 (16.11.2026, задача t153, ветка t153/session-verify-parallel от rel/dex-all 8fe83aa1) — ошибка
+  одного пула не рвёт пачку подписки (все виды пулов, все пути); ждёт сборки и тестов в GitHub, ревью и включения.**
+  Локально не собиралось (правило задачи). pools/pool_fail.rs; настройки dex.pool_fail_pause_ms,
+  dex.pool_fail_pause_max_ms (не заданы — как раньше). Разбор и таблица мест — docs/notes/t153-session-and-verify-2026-11-16.md.
+  **Как включать (перезапуск не нужен):** «Настройки» → «DEX», площадка bsc_dex: dex.pool_fail_pause_ms = 3000,
+  dex.pool_fail_pause_max_ms = 600000 (советы, docs/FIRST_RUN.md). **Что смотреть:** журнал dex.pool — записи
+  «… (решение 339)» вместо цикла «так и не прочитано за 6 попыток» на каждом переподключении; link.down пачек с причиной
+  ошибки пула пропадают; экран «Монеты» у пула DODO — «не прочитан: … KJUDGE_ERROR …». Откат — очистить dex.pool_fail_pause_ms.
+  **Открыто (а) — нужна запись с сервера (только чтение), промпт серверному ИИ:**
+  «Только чтение, ничего не менять, бот не трогать. 1) В журнале бота (таблица журнала SQLite) за последние сутки выбери
+  записи вида dex.pool с текстом KJUDGE_ERROR и записи link.down (обрыв пачки пулов) — время, текст целиком (адрес пула /
+  тикер, причина обрыва). 2) Для 3–5 разных пулов DODO из этих записей через свой узел BSC (HTTP, eth_call на latest)
+  запиши сырые ответы: pool.version() (селектор keccak('version()')), pool._MT_FEE_RATE_MODEL_(), pool._K_(),
+  pool._BASE_RESERVE_(), pool._QUOTE_RESERVE_(), pool.getPMMStateForCall(), pool.getUserFeeRate(0x000…000);
+  затем у адреса _MT_FEE_RATE_MODEL_: feeRateImpl(); у адреса feeRateImpl: version() и getFeeRate(pool, 0x000…000).
+  Сохрани запросы и ответы как есть (JSON: метод, params, result/error) в tests/data/dodo_kjudge_<дата>/ с README:
+  узел, номер блока, время.» По этой записи — тест на ответе KJUDGE_ERROR и факт «K = 0 и нулевой резерв» на BSC.
+  **(а) снято 16.11.2026** — tests/data/dodo_kjudge_2026-11-16 (тест tests/bsc_dex_dodo_kjudge_2026_11_16.rs, разбор —
+  docs/notes/t153-session-and-verify-2026-11-16.md, раздел 10): KJUDGE на блоке H не воспроизвёлся — сняты НЕ те пулы
+  (у всех 5 K ≠ 0); в журнале адресов пулов нет; один и тот же набор 19–21 пула DODO падает в каждом приёме пачки.
+  **Открыто (б) — промпт серверному ИИ:**
+  «Только чтение, ничего не менять, бот не трогать. Свой узел BSC по HTTP; все eth_call — на одном блоке H
+  (eth_blockNumber один раз). 1) Адреса пулов DODO, которые бот не читает: экран «Монеты» / GET /api/coins бота — у
+  монет USDC, CAKE, PORTO, BNB, ETH, DEXE, 1INCH пулы площадки bsc_dex видов dodo-dvm / dodo-dpp / dodo-dsp с
+  valid = false (адрес пула, обе монеты, details). Если API недоступен — фабрики из настроек dex.factory видов
+  dodo_dvm / dodo_dpp / dodo_dsp: getDODOPoolBidirection(монета, X) (0x794e5538) для X = USDT и каждого адреса из
+  dex.intermediate_tokens, все пулы. 2) У каждого пула — РОВНО вызовы бота по порядку (load_dodo.rs):
+  getPMMStateForCall() 0xfd1ed7e9, getUserFeeRate(0x0000000000000000000000000000000000000000) 0x44096609,
+  _BASE_TOKEN_() 0x4a248d2a, _QUOTE_TOKEN_() 0xd4b97046; и для разбора: version() 0x54fd4d50, _K_() 0xec2fd46d,
+  _BASE_RESERVE_() 0x7d721504, _QUOTE_RESERVE_() 0xbbf5ce78, querySellBase(0x0…0, 1) 0x79a04876,
+  querySellQuote(0x0…0, 1) 0x66410a21, у 0xe5e9b0cab984b58b7e7ae17707d633295d5a4c4d getFeeRate(пул, 0x0…0) 0x848cc303.
+  3) eth_getCode(0xe5e9b0cab984b58b7e7ae17707d633295d5a4c4d): есть ли в байткоде 4b4a554447455f4552524f52
+  («KJUDGE_ERROR») — да/нет. 4) Журнал бота за сутки: перед каждым всплеском записей dex.pool с KJUDGE_ERROR — все
+  записи ЛЮБОГО вида за 30 с до первой записи всплеска (почему пачка переподключилась), время и текст целиком.
+  Сохрани запросы и ответы как есть (JSON: метод, params, result/error) в tests/data/dodo_kjudge_<дата>_2/ с README:
+  узел, номер блока, время.» По записи — тест на самом ответе KJUDGE_ERROR, факт «K = 0 и нулевой резерв» у каждого
+  откатившегося пула и причина переподключений пачек.
+  **Сделано (DECISIONS «339 (журнал и приём, t153)»; ниже — что было):** в журнале dex.pool не было адреса пула — нельзя сопоставить
+  запись с пулом (у dodo-dpp USDC 7 разных пулов под одной подписью). Добавить адрес `{found.reference:?}` в тексты:
+  pools/admit.rs:62 и :125 («… не прочитано … — повтор на новых блоках»), pools/reload.rs:116 и :136 («… не прочитано
+  за N попыток …»), pools/pool_fail_note.rs note (текст «… (решение 339)»; в уведомлении dex.pool_unread адрес уже есть).
+  Сделано так: «{вид} {тикер} ({адрес}): …» (depth_book::label) во всех этих местах и в уведомлении dex.pool_unread;
+  приём пачки не читает пул на паузе 339 (без записи Warn на каждое переподключение). Ждёт сборки в GitHub.
+  **(б) снято 16.11.2026** — tests/data/dodo_kjudge_2026-11-16_2 (тест tests/bsc_dex_dodo_dead_pools_2026_11_16.rs,
+  разбор — заметка t153, раздел 11): все 28 пулов DODO, которые бот не читает, на цепи не котируются ни в одну сторону
+  (21 — K = 0 и нулевой резерв, KJUDGE_ERROR; 6 — «DPP Oracle 1.1.0», ORACLE_NOT_FEASIBLE, резервы 0/0; 1 — «DVM 1.0.0»,
+  откат без данных) — сделок не теряем. Сделано: при приёме пачки неудача — отметка 339 (журнал на эпизод), не Warn на
+  каждое переподключение. **Включить 339 на сервере** (dex.pool_fail_pause_ms / _max_ms) — без неё круг прежний.
+  **Открыто (в) — промпт серверному ИИ:** «Только чтение, ничего не менять, бот не трогать. В журнале бота за
+  16.11.2026 выбери все записи вида venue.ws с текстом «Связь с узлом BSC (WebSocket)» (потеряна / восстановлена) —
+  время и текст целиком; и для 13 всплесков KJUDGE_ERROR 11:22:00, 17:17:40, 17:18:47, 17:21:05, 17:27:07, 17:28:18,
+  17:29:49, 17:31:06, 17:32:40, 17:33:50, 17:55:54, 17:57:39, 18:00:31 — все записи ЛЮБОГО вида, кроме core.* / deal.* /
+  episode.*, за 5 минут до начала всплеска. Без адресов кошельков. Сохрани как есть (JSON) в
+  tests/data/dodo_kjudge_<дата>_3/ с README.» Цель — причина переподключений пачек (по коду обрыв пишется в журнал один
+  раз, пока не восстановятся все пачки, link.rs:29-45).
+  **Закрыто (DECISIONS «339 (экран и журнал, t153)», по правилам проекта):** (1) экран «Монеты» показывает пулы,
+  ни разу не прочитанные, с причиной и следующей попыткой — сделано; (2) каждый обрыв пачки — запись venue.ws с
+  причиной (log.pool_break_interval_s — частота одинаковых) — сделано; (3) неизвестные версии DODO — защита уже на
+  пути: обязательная сверка стороны с querySell* самого пула (quote/select.rs:101-107; заметка t153, раздел 12) —
+  без правки. Ждёт сборки в GitHub. **Как смотреть:** «Монеты» → окно монеты (USDC, CAKE, PORTO …) — строки
+  «пул исключён: пул ещё ни разу не прочитан…»; журнал venue.ws «Пачка пулов … сессия подписки прервана — …» —
+  по ним причина переподключений (промпт (в) после выкладки не нужен, если записи есть). Совет: log.pool_break_interval_s
+  = 60 (docs/FIRST_RUN.md).
+- **Ревью t153 (16.11.2026, та же ветка; DECISIONS «339 (ревью, t153)») — Б1 и Н1–Н9 исправлены, задача t160
+  (dex.per_block_skip_same) сделана; ждёт сборки и тестов в GitHub.** Локально не собиралось. **Как включать (после
+  339):** dex.pool_unread_alert_s = 300; dex.per_block_skip_same = да — только при dex.pool_events_keep = да (без неё не
+  действует). **Что смотреть:** после сбоя узла журнал dex.pool — одна запись «узел BSC не отвечает…», пулы снова
+  достоверны без link.down пачек; пул, не прочитанный за dex.pool_load_retries попыток, — одна запись Error «повтор
+  продолжается с паузой», затем «прочитано с попытки N». **Открыто:** (1) dex.pool_unread проверяется на неудаче пула —
+  у пула на паузе-потолке (10 мин) уведомление может прийти позже порога на величину паузы; (2) dex.per_block_skip_same:
+  событие, потерянное ДО включения dex.pool_events_keep (решение 313), для неизменившегося пула повторно не уйдёт до
+  смены его состояния или переподключения пачки — включать dex.pool_events_keep раньше; WooFi проверяет свежесть цены
+  оракула по времени блока — котировка может стать «устаревшей» без смены состояния пула, а ядро без события её не
+  пересчитает (сделка всё равно проходит предторговое перечтение, решение 83) — смотреть на живом боте до включения;
+  (3) тест сессии (listen_log / reload::retry с ошибкой пула) — по-прежнему нужна запись ответа KJUDGE_ERROR (выше).
+- **Решения 336–338 (16.11.2026, задача t157, ветка t157/cpu-parallel от rel/dex-all 8fe83aa1) — счёт процессора;
+  ждёт сборки и тестов в GitHub, ревью и включения.** Разбор «из чего 10 секунд» — docs/notes/t157-cpu-parallel-2026-11-16.md.
+  Сделано (необязательными настройками, не заданы — как раньше): повторное использование (допуск пулов классики и путей
+  графа — раз на кандидата; обмен пула монеты пути через промежуточную — раз на пул; в логике без dex.quote_reuse —
+  решение 363), size.early_exit_margin_usd
+  (ранний выход подбора без финальной котировки), size.parallel_points / size.bisect_probes (точки подбора пачками),
+  dex.quote_threads / dex.graph_threads (отбор и сплит графа, циклы, сборка фонового графа на нескольких потоках),
+  cpu.threads_max / cpu.reserve_deal / cpu.reserve_calc (общий предел потоков с приоритетом), книга глубины на RwLock,
+  замер «классика» по частям (log.quote_timing). Тест tests/core_size_parallel.rs (локально не собирался). Советы для
+  сервера 48 ядер / 96 потоков — docs/FIRST_RUN.md (проверить замером).
+  **Как включать:** 1) log.quote_timing — снять замер «классика» по частям (до); 2) повторное использование работает само
+  (решение 363) — сравнить «классика: допуск пулов», admit_hits; 3) size.early_exit_margin_usd = 0.5 — смотреть отказы «ранний выход подбора»;
+  4) cpu.threads_max 80 (резервы 8 / 24), затем size.parallel_points 4 при profit.calc_concurrency 16 — смотреть отказы
+  по сроку и загрузку процессора.
+  **Ревью (16.11):** Б1–Б2, Н1–Н6 исправлены (DECISIONS «336–338 (ревью, t157)»); новая настройка cpu.helper_threads.
+  **Открыто (решение Тиграна):** правило раннего выхода — владелец решает («короткая проверка K шагов вокруг лучшей
+  после изломов» — описание в docs/notes/t157-cpu-parallel-2026-11-16.md п. 5); (а) классика при пулах «только
+  сигнал» считается дважды (classic_direct.rs) — второй проход влияет только на signal_route карточки и текст NoRoute
+  (проверено ревью, заметка п. 5), убрать его внутри подбора выбор не меняет; (б) size.tolerance_pct 0.01 = 0,01 % — совет 0.5 (FIRST_RUN); (в) в режиме graph на каждой
+  точке подбора считаются и классика, и граф (решение 84) — можно считать граф только на финальной котировке
+  (меняет выбор объёма — нужно решение); (г) расчёт «без потолка» (uncapped.enabled) после каждого отказа с расчётом —
+  ещё один полный подбор в фоне.
+- **Решения 340, 341, 353 (16.11.2026, задача t158, ветка t158/deal-path-no-wait от rel/dex-all 8fe83aa1) — путь
+  сделки без ожиданий Telegram, журнала и чужих записей в базу; ждёт сборки и тестов в GitHub, ревью и включения.**
+  Локально не собиралось и не запускалось (по правилу задачи). Разбор и все места — docs/notes/t158-deal-path-no-wait-2026-11-16.md.
+  Сделано: (340, без настройки) уведомления — фоновой очередью, шаг сделки не ждёт отправки; `notify.queue_max` —
+  необязательный предел. (341, всегда — решение владельца) очередь и пачки журнала; `journal.queue_max`,
+  `journal.batch_max` — необязательные пределы; обработчик остановки дописывает очереди. (353, изменение устройства хранения, без настройки) учёт ядра (core_state,
+  daily_result, wallet_queue) — в `<data-dir>/ledger.sqlite` своим писателем; `ledger.synchronous` — необязательная.
+  Тесты: tests/notify_queue_340.rs, tests/journal_queue_341.rs, tests/ledger_db_353.rs.
+  **Как включать (после выкладки):**
+  1. Обновить бота обычным перезапуском. Сделать копию папки данных до запуска (arb.sqlite* — 8,5 ГБ; ledger.sqlite
+     создастся сам). При запуске — строка журнала storage.ledger «Учёт ядра … перенесён … N строк» (один раз).
+  2. Уведомления — сразу без ожидания (настройки нет). Проверка: в «Журнале» записи «Отправлено в Telegram» идут как
+     раньше и в том же порядке по сделке; потерь (notify.queue_lost) нет, пока notify.queue_max не задана.
+  3. Журнал без ожидания — сразу после выкладки (настройки-выключателя нет). journal.queue_max и journal.batch_max —
+     не задавать (без пределов). Остановка: Ctrl+C / SIGTERM ждёт дописывания очередей (второй сигнал — сразу).
+  4. ledger.synchronous не задавать (FULL, как сейчас). NORMAL — только осознанно (DECISIONS 353).
+  **Откат:** уведомления и журнал — откат кода. Учёт ядра — команда переноса
+  обратно из DECISIONS 353 перед запуском старой версии.
+  **Доделка (решение 354):** правила шлюза — из снимка в памяти; строки отказов предпроверки и кандидата —
+  метка в памяти и очередь; отметки по монете (чёрный список, закрытие входов) — своей задачей.
+  Тест tests/no_main_db_354.rs. Что осталось на основной базе — заметка, раздел 9.
+  **Решение владельца 16.11:** очередь журнала — всегда (DECISIONS «341, 354 (решение владельца: всегда)»); вопрос
+  «включать всегда?» закрыт. journal.queue_max — только предел длины, journal.batch_max — предел пачки; обработчик
+  остановки — всегда.
+  **Ревью t158 (решения 353 Б3, 355, 356):** отметки ядра — сразу в памяти; остановка — «Стоп» сразу, журнал до
+  границы, уведомления с пределом notify.stop_wait_ms; полосы уведомлений; перенос учёта — один раз; откат —
+  scripts/ledger_rollback.sh, повторный перенос — scripts/ledger_reimport.sh (sqlite3 на сервере; локально скрипты не
+  прогонялись — sqlite3 CLI в среде разработки нет).
+  **Вопрос Тиграну:** при остановке процесса ждать ли конца идущих сделок (перевод может идти минуты; нужен предел
+  ожидания) или прерывать, как до ветки (сейчас — прерывать; после запуска — «прервана перезапуском»)?
+- **Решение 332 (16.11.2026, задача t154, ветка t154/off-map-all-kinds от rel/dex-all 8fe83aa1) — сделано и исправлено
+  по ревью (DECISIONS «332 (ревью)»), ждёт прогона в GitHub, повторного ревью и приёмки.** Разбор по всем видам пулов —
+  docs/notes/t154-off-map-all-kinds-2026-11-16.md: перечитывания по выходу цены за прочитанную часть не было только у
+  Infinity Bin и LB V2.1 (пара с USDT). Сделано: pools/off_map_bins.rs (после события бинов в listen_log.rs) + необязательная
+  `dex.bin_reread_left_pct` [DEX]; не задана — 1 в 1 как раньше (кроме Б1). Ревью: **Б1 (деньги)** — LB каждым блоком
+  больше не кладёт «новый активный бин + старые резервы» и не отбрасывает логи блока (pools/lb_head.rs, не под
+  настройкой); Н2/Н7 — log.bin_reread_interval_s; Н3 — тесты на настоящем загрузчике у узла на записи; Н6 — bins.rs;
+  Н7 — обход Infinity Bin параллельно. Тесты tests/bsc_dex_off_map_bins_332.rs, tests/bsc_dex_lb_head_332.rs (локально не
+  собирались и не запускались — по правилу задачи). Открыто:
+  1. **Включение:** после приёмки — log.bin_reread_interval_s = 60, затем dex.bin_reread_left_pct = 50 у lb_v21; смотреть
+     журнал dex.pool («в сторону цены прочитано бинов меньше», Warn «проверка не считается») и замер
+     log.pool_refresh_timing (причина off_map_bins). Проверить: dex.bin_depth_usd × процент / 100 не меньше
+     dex.min_pool_liquidity_usd.
+  2. **Infinity Bin — НЕ включать до записи пула с узла и теста** (Н1; промпт серверному ИИ — в заметке t154).
+  3. Algebra: «для всех видов» — только при dex.algebra_off_map_reread = да (решение 320; Н4, FIRST_RUN).
+  4. Не в списке depth_sync.rs DEPTH: включение действует со следующего события бинов пула.
+  5. ~~**Найдено ревью, не исправлено (деньги, путь событий):** логи Swap одного обмена LB уходили ядру по одному с
+     промежуточным активным бином~~ — **исправлено решением 357** (pools/settle*.rs, не под настройкой; разбор по всем
+     видам — docs/notes/t154-settle-2026-11-16.md). Открыто: тест последовательности логов одного обмена ждёт записи
+     (промпт серверному ИИ — заметка, раздел 5); при слиянии с t152 / t153 — правки по заметке, раздел 6 (полосы:
+     settle_block ждёт и полосы пулов «в обновлении», revive t153 не для них, block_failed t153 → head_failed; t152:
+     ветка Bins — settle_bins, Applied::Fee SwapFee — в settle::opens).
+     Запись 17.11 (tests/data/settle_2026-11-17, тест tests/bsc_dex_settle_records_357.rs): LB — один обмен = два Swap,
+     ядру одна отправка; Infinity Bin — Swap разных tx без сдвига бина; thena-v3 — пара Fee → Swap (не SwapFee), Fee ведёт
+     к чтению на конце блока — ядру одно состояние. Открыто: (а) состояние LB / Infinity Bin на N−1 и N — суточный
+     наблюдатель (задание — заметка t154-settle, раздел 7; нужно «да» владельца); (б) при слиянии с t152
+     dex.event_refresh_fee_only для thena-v3 не включать до решения владельца; (в) кто выпускает Fee посреди обмена у
+     кастомных пулов thena-v3 — не установлено.
+  6. ~~**Найдено, зона t153:** голова LB ставит valid = true пулу, ждущему повтора после StaleData~~ — **риск
+     подтверждён и исправлен решением 357** (lb_head.rs renewed не поднимает достоверность; settle_head.rs head_failed /
+     head_ok — голова возвращает только снятую ею).
+  7. Н7 у LB: обход полосы load_lb_bins.rs band — по-прежнему последовательно (2 вызова на бин); можно так же, как
+     load_bin.rs side.
+- **Решение 335 (16.11.2026, задача t156, ветка t156/hook-quoter-pause от rel/dex-all 8fe83aa1) — пулы с крючком
+  массово на паузе сверки с квотером; сделано, ждёт прогона в GitHub (сборка, тесты, clippy -D warnings), ревью и
+  включения.** Сделано: hooks.probe_same_block (проба влияния на одном блоке H, check/hooks_head.rs),
+  hooks.reprobe_before_pause (перемер на блоке сверки перед паузой, check/quoter_reprobe.rs), hooks.requote_after_probe
+  (пул на паузе сверяется сразу после перемера). Разбор и таблица видов — docs/notes/t156-hook-pools-quoter-pause-2026-11-16.md.
+  Причина паузы — см. «Записи узла» ниже. Открыто: (1) вопрос (г) — скидка крючка (отрицательное влияние, quote/quoter.rs:166,
+  select.rs:184; варианты А–Г в заметке); (2) Algebra Integral — пробы «влияния плагина» нет; (3) что проверяет сверка
+  пула с крючком после (а). Нужны записи узла по пулам с крючком (промпт серверному ИИ — в заметке), затем тест на них.
+  **Ревью 335 (16.11, DECISIONS «335 (ревью, t156)»):** перемер (а) теперь снимает/не ставит паузу только в
+  безопасную сторону (наш выход ниже квотера), только по сверяемой стороне и в пределах обязательного
+  hooks.max_impact_b/c_pct; влияние на блоке хранится отдельно (hook_head), новая hooks.keep_impact_max_age_s (Н1),
+  requote только после удачной пробы. Сборка, тесты и clippy — только в GitHub.
+  Включение после выкладки: (б) и (в) с «335 (В1)» — всегда, без настроек; hooks.keep_impact_max_age_s
+  — число решает Тигран; **(а) hooks.reprobe_before_pause — НЕ включать** до записей узла и ответа на вопрос 3
+  (docs/FIRST_RUN.md). Оставшиеся паузы смотреть в журнале dex.hook_reprobe и в причине паузы.
+  Записи узла по пулам с крючком — получены (ниже); тест measure_on + compare + перемер (а) целиком (с узлом) по-прежнему
+  нет: tests/bsc_dex_hook_reprobe_335.rs — чистая логика на условных значениях (Н6), записи проверяют расчёт и правила. **Вопрос Тиграну (Н7):** Algebra Integral — пробы «влияния плагина» нет,
+  требование «для всех видов пулов с крючком» для него не выполнено; делать ли такую пробу (заметка, вопрос 2).
+  **Записи узла получены (16.11, DECISIONS «335 (записи узла)»):** tests/data/hook_pools_2026-11-16, тесты
+  tests/bsc_dex_hook_pools_1116.rs и _rules.rs (наш шаг против квотера по каждому вызову записи, комиссия против
+  событий Swap, from и блоки, правило безопасной стороны на настоящих числах, откат BLESS). Комиссия и чтение у нас
+  верны; на блоке записи наш выход = квотеру до wei у 30 из 35 пулов с паузой; живое «наш ниже квотера» — вычтенное
+  сохранённое влияние крючка (RIVER — ровно 1306 ppm). Код торговли не менялся. **Ждёт выбора Тиграна:** В1 (советую)
+  — влияние крючка только на одном блоке как базовое поведение (убрать настройку hooks.probe_same_block), В2 — включить
+  её на живом боте, В3, В4 — в DECISIONS. Выбран В1 (ниже). Для полной проверки: значения влияния (PoolFacts.hook) пулов с паузой из
+  живого бота — их в записи нет; карта тиков GAIB, BTCMT, CAKE 0xc528 (один шаг запись не решает).
+  **Сделано В1 (DECISIONS «335 (В1)»):** влияние крючка только на одном блоке — цикл крючков, проба перед сделкой
+  (hook_again: чтение пула и квотер на голове одновременно, +1 круг до узла на пул с крючком), перемер перед паузой;
+  настройки hooks.probe_same_block и hooks.requote_after_probe убраны; less_hook округляет вверх; тесты _b1.rs.
+  Ждёт прогона в GitHub (сборка, тесты, clippy). **Открыто:** (1) совместить пробу перед сделкой с перечтением
+  маршрута решения 83 — сделано «335 (В1, пакет)» (ниже); (2) записи серверного ИИ по промпту из заметки t156 (карта тиков GAIB, BTCMT, CAKE 0xc528; пул с
+  разными половинами protocolFee); (3) вопросы 2 (Algebra Integral) и 3 (смысл (а)) — прежние.
+  **Сделано «335 (В1, пакет)»:** проба крючков перед сделкой — все пулы доли одним пакетом на одном блоке (графовый
+  маршрут — состояния верификации решения 83 и только квотер; прочие — один Multicall3 / пачка JSON-RPC): 1 круг вместо
+  3·k после В1 (2·k до В1). Открыто: квотер внутри aggregate3 на своём узле — записать (промпт в заметке t156);
+  Infinity Bin без перечтения маршрута — читать бины тем же пакетом (сейчас — обычное чтение параллельно); слияние с
+  t153 (verify параллельно) — отдать Verdict::Ok.pools и там.
+  **Досъёмка 17.11 (DECISIONS «335 (досъёмка 17.11)»):** полный расчёт по карте тиков = квотеру до wei (GAIB, BTCMT,
+  CAKE 0xc528), расхождения покупки GAIB/BTCMT — подмена комиссии крючком по сумме; пакет Multicall3 = отдельным
+  вызовам; пулов с разными половинами protocolFee в BSC нет. Вопрос «мерить влияние крючка на сумме сделки» —
+  **закрыт решением «335 (лесенка влияния)»** (17.11): лесенка «вход → влияние» по сторонам, котировка на своей сумме,
+  проба перед сделкой на сумме сделки. Ревью 2 (решение «335 (лесенка влияния, ревью 2)»): Б1, Б2, Н1–Н7, Н10, Н12, Н13
+  исправлены; hooks.impact_points необязательна (без неё — как до лесенки). Ждёт прогона в GitHub. Без теста:
+  async-путь exec/hook_trade.rs / exec/trade_probe.rs с узлом, второй пакет доуточнения цикла крючков, строка
+  интерфейса. Открыто по ревью 2:
+  - Н8: без dex.multicall3 пакет пробы перед сделкой весит N вызовов (следующий запрос к узлу — через
+    N / bsc.node_http_rps); сузить чтение слов битмапа до диапазона обмена суммы сделки (сейчас — полоса чтения).
+  - Н9: пачка JSON-RPC и чтение Apart — разные eth_call с одним номером блока; закрепить блок по хешу (EIP-1898).
+  - Н11: доли через общий пул (решение 223) — влияние крючка на сумме доли по исходному состоянию пула; крючок,
+    зависящий от состояния после прошлой доли, не учтён (страхует eth_simulateV1 / minOut).
+  - Н14: размеры файлов (quote/select.rs 289, check/hooks_probe.rs 243, exec/bundle_trade.rs 216 строк);
+    hook_points.rs round_dp(2) — точность сумм лесенки до цента зашита; verify_decide.rs клонирует карту свежих пулов.
+  - Подготовка прямой сделки после approve идёт второй раз — и проба крючков с ней (ещё круг).
+  Ревью 3 (решение «335 (лесенка влияния, ревью 3)»): Б3, Б4, Н-а … Н-е, Н-з, Н-и, Н-к исправлены; ветка слита с
+  rel/dex-all 9b7f9546 (лесенка — в следующий релиз). Открыто:
+  - Н-ж: доли с общим пулом (graph_seq.rs resequence) — влияние на новой сумме доли по лесенке сделки (оценка), не
+    факт пробы; страхуют amountOutMin / MixedQuoter. **t173: входы по порядку исполнения тоже покрыты пробой**
+    (exec/hook_trade.rs seen); остаток — зависимость крючка от состояния после прошлых долей (см. «Ревью 4 — правки»).
+  - Лимит hooks.max_impact_* в котировке (сигнал) — по ближайшей большей точке (оценка сверху); на пути сделки — по факту.
+    С решения 406 (t190) — по правилу котировки (max(хорда, продолжение наклона прошлого участка), не выше ближайшей большей).
+  - Лесенки с настоящим убыванием в записях нет — ветка «с убыванием» проверена только правилом.
+  - Без теста: цикл exec/hook_trade.rs с узлом (его решения — exec/hook_drive.rs — покрыты на записи GAIB; ответ
+    квотера на промежуточной сумме — значение записи на ближайшей большей сумме), разбор отказов
+    exec/trade_probe.rs, ступени лесенки в изломах (quote/breaks_hook.rs), отметка крючка в коробе подбора.
+  - Размеры: check/state.rs 281, quote/route_calc.rs 247 строк (t173 их не трогала); check/hooks_probe.rs,
+    exec/hook_drive.rs, check/hooks_head.rs — разбиты в t173.
+  Ревью 4: Б5 (Drive мог крутиться без счёта кругов) исправлен — подъём не чаще одного раза на число проб, тест на
+  сценарии ревью; Н5 (on_success без новой точки не пишет) и Н6 (hook_mark — только у пулов с крючком) — сделаны.
+  **Ревью 4 — правки (задача t173, ветка t173/hook-ladder-n; DECISIONS «335 (лесенка влияния, ревью 4 — правки)»,
+  заметка docs/notes/t173-hook-ladder-review4-2026-11-17.md): Н1, Н2, Н3, Н4, Н5 (проверено по веткам), Н7, Н8, Н9,
+  Н-ж закрыты в коде; ждёт сборки, clippy и тестов в GitHub.**
+  **Можно ли включать hooks.impact_points в проде: ДА — после зелёной сборки и тестов ветки t173 в GitHub и выкладки
+  этой сборки** (совет числа и нагрузка на узел — docs/FIRST_RUN.md). Что осталось (не блокирует включение):
+  - без теста: асинхронный путь exec/hook_trade.rs с узлом (пробы на блоке первой пробы — pin, входы долей по порядку
+    исполнения), разбор отказов exec/trade_probe.rs, изломы крючка в пределе size.pool_breaks_max (quote/breaks.rs),
+    экран (impactText, side_off);
+  - Н-ж, остаток: крючок, влияние которого зависит от состояния пула после прошлых долей (квотер меряет на состоянии
+    блока) — страхуют eth_simulateV1 бандла и amountOutMin ноги (у исполнителя — amountOutMin и MixedQuoter); в
+    записях такого крючка нет;
+  - после выкладки (Н5 на живом): журнал — поколение итогов (эпоха котировки) не растёт от проб сделки без новой
+    точки; на «Монетах» у пулов с крючком точек «сделка …» на сторону не больше hooks.impact_points;
+  - **Независимое ревью t173 (правки в той же ветке):** Н-1 — значение вытесненной точки сделки получает большая
+    соседка (меньшая — только при вытеснении последней), малые суммы не завышаются (тест n1_evicted_value_goes_up_not_down);
+    Н-3 — resequence в цикле пробы только перед пробой и при итоге (hook_drive.rs would_probe); падение
+    b2_failure_cuts_side_only — ошибка теста (точки цикла продажи записи без суммы USDT выглядели точками сделки),
+    плюс предел точек сделки теперь применяется, только если проба добавила точку сделки. Н-2 (pin = блок
+    перечитывания t168) — при слиянии.
+  - **Вопрос Тиграну (Н-5):** у hooks.trade_probe_rounds_max нет верхнего предела, а предела времени пути сделки в
+    проекте нет (verify.timeout_ms — одно перечтение, verify.max_staleness_blocks — отставание блока, send.* — после
+    отправки); все пробы сделки — на блоке первой, и большое значение даёт N кругов на одном блоке без проверки
+    возраста. Варианты: (а) оставить только совет FIRST_RUN «не задавать»; (б) новая настройка-число «наибольший
+    возраст картины пробы сделки, блоков» (голова − блок первой пробы); (в) ограничить круги отставанием головы от
+    блока первой пробы по verify.max_staleness_blocks (но у неё другой смысл — Н7 ревью 4). Пока — (а).
+  - **Открыто (Н-6, ревью t173):** точка пробы сделки НИЖЕ наименьшей точки цикла с влиянием больше её делает лесенку
+    «с убыванием» (merge без выравнивания, Н2): котировка везде берёт наибольшее, ниже точки — «не измерено», при
+    лимите ниже наибольшего сторона не котируется до следующего цикла. Простой доказуемой правки нет: выравнивание
+    вверх подняло бы все точки (завышение), отбрасывание точки дало бы «лучше факта» на малых суммах. По записям
+    0x32c59d… влияние растёт с суммой (0 на 1 USDT) — на практике не срабатывает (гипотеза). Решить после записей
+    крючка с убыванием.
+  - **дозаписать на сервере (Н8)**: CLQuoter.quoteExactInputSingle пула GAIB 0x5c1b4d20… (и BTCMT 0x62166b8a…) покупкой
+    на промежуточных суммах 30, 45, 60, 60,35, 60,76, 80 USDT (вход в единицах USDT, hookData 0x) на ОДНОМ блоке вместе
+    с getSlot0 / getLiquidity / словами битмапа и тиками (как п.1 досъёмки 17.11) — тогда тест Б3
+    (tests/bsc_dex_hook_drive_logic_1117.rs) переводится на запись: ответ квотера на суммах проб Drive — факт.
+
+- **Задача t160 (16.11.2026, ветка t160/signal-sieve-and-reuse от rel/dex-all 8fe83aa1) — проект отсева на сигнале,
+  общей котировки DEX сигнала, «те же входные — тот же итог», «неизменённое не будит»; ждёт утверждения проекта.**
+  Сделаны: замер «кто вызвал котировку» (348, log.quote_count_s), пробуждение монет событием промежуточного пула (349,
+  после ревью 2 — снова под signal.mid_pool_wake до замера mid_wake_coins: приоритета ниже у разбуженных монет нет), котировка DEX сигнала по отпечатку (352,
+  signal.book_same_skip; вместо «флагов одинакового кадра»: кадр по-прежнему подтверждает сигнал). Сборки и тестов
+  в GitHub для 349/352 ещё не было. signal.book_same_skip остаётся настройкой до записи узла для сквозного теста
+  (голова, eth_gasPrice головы, decimals) и ядра с адаптером bsc_dex — DECISIONS «349, 352 (ревью t160)». Проект — docs/notes/t160-signal-sieve-2026-11-16.md. Нужны решения Тиграна: (1)–(2) решены 16.11 (349, 352); (3) Г —
+  версия ставки торговой комиссии бирж (К20) или Г не делать; (4) Е — варианты «классика + граф». Формула границы
+  отсева — от математика (profit-bound-design-v2). Правка пулов для Д — t153 (reload.rs, описана в заметке, раздел 6).
+- **Задача t161 (16.11.2026, ветка t161/price-risk от 8fe83aa1) — запас на движение цены k·σ·√T: разбор, режим
+  сравнения σ в журнале (решение 358), сигнал и возраст цен в записи отказа (решение 359), проект правки σ (решение
+  360, ждёт данных).** Разбор — docs/notes/t161-price-risk-2026-11-16.md. Итог по фактам: в JCT, ZIG, PARTI (DEX →
+  биржа) сделка в минусе и без запаса (−0,0205 / −0,0186 / −0,0312 USDT на ~1–5 USDT — газ и возврат USDT больше
+  разницы цен); «дрожание на один шаг» опровергнуто для JCT и ZIG; завышение σ на шуме цены доказать нечем — рядов
+  цены по времени в записях нет. Код решения о сделке не менялся. Локально не собиралось (по правилу задачи).
+  **Сбор (после выкладки):** идёт сам — сравнение σ всегда (решение 364, log.sigma_horizon удалена); через 1–2 суток
+  серверному ИИ — промпт из заметки (раздел Г). В журнале отказа и плане сделки появится sigma_check (σ плана, σ ряда,
+  σ_T, σ_T²/σ², ρ₁, отрезки, запас и прибыль с σ_T) и signal_note (сигнал, возраст цен).
+  **Открыто:** (а) правка оценки σ (решение 360) — только после сравнения на данных по критерию решения 360;
+  (б) второй ряд продажи по лучшему биду (объём ряда σ ≠ объём сделки) — отдельной задачей после данных;
+  (в) причина А1 (отрицательный спред расчёта при сигнале) — по signal_note после выкладки.
+  **Данные 48 ч (16.11, решение «360 (данные)»):** критерий 360 не проверяется (окна ≤ 228 с, 60-минутного ряда σ нет);
+  шумового завышения σ в окнах нет (медиана 1,00); запас пробивается в 28 % сделок (MEXC 29 %, 6,46 USDT); запас решил
+  исход у 113 из 14 561 отказов «ниже порога». Код торговли не меняется. Нужно: выложить релиз (сравнение σ в плане пишется всегда —
+  решение 364, настройки log.sigma_horizon нет) и собрать
+  на ≥ 2 суток; отдельной задачей — книга площадки продажи на T вперёд после отказа, решённого запасом (решение
+  Тиграна).
+
+- **Решение 316 (16.11.2026, задача t145, ветка t145/deposit-addr-store от rel/dex-all a510c7a1) — прогрев адресов
+  депозита бирж; ждёт сборки и тестов в GitHub, ревью и включения.** Сделано: core/deposit_warm.rs (задача ядра),
+  core/deposit_warm_plan.rs (чистая логика), precheck_deposit.rs::target (общий ключ монета + сеть), толчки из
+  engine.rs (запуск, secrets_changed) и rebuild.rs (новый справочник). Выбран вариант (а) — прогрев в памяти; SQLite
+  (вариант б) не используется: гарантию «устаревший адрес не уйдёт в вывод» дать нельзя (DECISIONS 316). Тест
+  tests/core_deposit_warm_316.rs (локально не собирался и не запускался — по правилу задачи).
+  **Как включать (после выкладки):**
+  1. «Настройки» → «Площадки», область — биржа-получатель (bingx, mexc …): venue.deposit_warm_gap_ms — пауза между
+     запросами по лимиту эндпоинта адреса депозита в документации биржи (у BingX лимит в коде проекта не записан —
+     число задаёт Тигран), затем venue.deposit_warm = да. Перезапуск не нужен — изменение настроек толкает прогрев.
+  2. Журнал: строка core.deposit_warm по бирже — «запрошено N, получено M, отказов K», первая причина отказа
+     (без адресов). Пауза не задана — core.not_configured «Прогрев адресов депозита … не идёт».
+  3. Проверка эффекта: перезапуск бота → дождаться строки core.deposit_warm → у первой сделки с продажей на этой
+     бирже в записи core.precheck («Время по шагам (предпроверка)») шаг «адрес депозита <биржа>» — около 0 мс
+     (было 214 мс у SHOPINX 16.11). Монета, до которой прогрев ещё не дошёл, — как раньше (запрос).
+  4. Выключить — venue.deposit_warm = нет или очистить (как раньше).
+  **Доработка по ревью (16.11, тот же коммит-ряд t145):** прогрев уступает сделке — к бирже, занятой сделкой
+  (открытая сделка, монета в работе — в т. ч. предпроверка, проходящее направление окна, возврат USDT), запросов нет,
+  проверка перед каждым запросом (core/deposit_warm_busy.rs, deposit_warm_pass.rs); прогрев не создаёт адреса
+  (gateway/addr_claim.rs; KuCoin и Kraken — NotApplicable), разрешить — venue.deposit_warm_create; AccountRestricted
+  и VenueNotConnected — стоп прохода; BadResponse — не запоминается; журнал без значений memo; перевод берёт ключ
+  адреса через precheck_deposit::target_on. Таблица пауз после 429 по биржам — DECISIONS 316. Локально не собиралось.
+  **Открыто:** (а) venue.deposit_warm_create = да у KuCoin/Kraken — только по решению Тиграна (создаст адреса по всем
+  монетам биржи). (б) Смена адреса депозита биржей
+  не отслеживается (ни раньше, ни сейчас — кэш адаптера до перезапуска; CoinEx — «Deposit addresses can be changed»);
+  нужна ли сверка — вопрос Тиграну. (в) У Kraken адрес в кэше адаптера истекает по expire_time — прогрев его повторно
+  не запрашивает (предпроверка запросит, как раньше). (г) Порядок прогрева — порядок справочника, не по вероятности
+  сделки; при сотнях монет и большой паузе первые минуты после старта часть монет ещё не прогрета.
+- **Решения 333/334 (16.11.2026, задача t155, ветка t155/no-silent-loss от rel/dex-all 8fe83aa1) — ни одно сообщение
+  ядру и ни один кандидат не теряются молча; ждёт сборки и тестов в GitHub, ревью и включения.** Локально не собиралось.
+  Таблица всех мест отправки — docs/notes/t155-no-silent-loss-2026-11-16.md. Настройки (все необязательные, вся система):
+  venue.info_events_max, venue.money_events_alert_ms, profit.calc_wait_ms (venue.info_events_keep — в логике, решение 362),
+  log.events_lost_interval_s (stuck.tick_lag_wake — в логике, решение 361) (venue.money_events_keep удалена ревью — см. ниже).
+  **Ревью (DECISIONS «333/334 (ревью, t155)») — исправлено:** Б1 денежные события не теряются всегда (без настройки);
+  Б2 порядок CoinCheck одной монеты (send_in_task); Н1–Н9, Н11 (core_out_must.rs разделён на 4 файла, UI.md).
+  Тест: tests/gateway_core_out_must_333.rs — логика очереди на явных значениях (не запись площадки): приоритет Money,
+  Money без настройки, порядок CoinCheck, доставщик при закрытом канале, предел Info, уведомление о задержке.
+  **Не покрыто тестами:** ожидание кандидата и цикл run (core/cand_wait.rs, candidates.rs — park/pop/expire, смена
+  profit.calc_concurrency) (Ticks застрявшей сделки при отставании — tests/core_sell_unsent.rs lagged_ticks_wake_at_once, решение 361); пометки BingX 418 и Gate.
+  **Размер:** core/candidates.rs — ~400 строк (до ветки 341), делить отдельной задачей.
+  **Открыто (вопрос Тиграну):** (а) закрыто ревью — денежные не теряются всегда. (б) Стаканы 324 / пулы 321 без
+  log.pool_events_lost_interval_s — потеря только в tracing; подписчики настроек (settings/live.rs) и raw_log — потеря
+  только в tracing: доводить ли до журнала.
+  **Н12 (вне ветки, зона t152–t153 — код не трогался): отправки через `tokio::spawn(out.send(ev).await)` не держат
+  порядок.** (1) venues/bsc_dex/pools/invalidated.rs:33-41 — канал полон: Invalidated пулов монеты уходит отдельной
+  задачей; событие Pool той же монеты, отданное позже через emit_pool.rs (набор keep_last 321) или прямо, может прийти
+  ядру РАНЬШЕ — ядро получит «недостоверно» после более свежего пула и сбросит данные монеты до следующего события пула
+  (сторона безопасности — торговли по старому нет, но монета выпадает из расчёта). Предложение: Invalidated пулов —
+  через общий набор канала срочным, как Invalidated бирж в 324 (core_out_book.rs: в начало очереди, снимает ждавшее
+  старое событие пулов этой монеты; события, пришедшие после, — следом), или через MustOut (Kind::of — Money, не
+  теряется, FIFO) вместе с переводом Pool этой монеты в ту же очередь. (2) venues/bsc_dex/node/head_stall_send.rs:35-39
+  и node/receipts_notice.rs:30-35 — уведомления «узел встал / ожил» (и квитанции) при полном канале — каждое своей
+  задачей: «ожил» может прийти раньше «встал» (в Telegram — неверная последовательность). Предложение: слать через
+  `MustOut::send` (очередь Info FIFO; при venue.info_events_keep не «да» (до решения 362) — потеря со счётом вместо нынешнего «не
+  теряется») либо одна задача-отправитель на источник (mpsc без предела → `send().await` по порядку).
+- **Решение 324 (16.11.2026, задача t151, ветка t151/book-events-keep от rel/dex-all 163fd8cf) — стаканы бирж не
+  теряются при полном канале ядра, Invalidated бирж не теряется никогда; ждёт сборки и тестов в GitHub, ревью и
+  включения.** Локально не собиралось и не запускалось (по правилу задачи). Один общий набор и один доставщик на канал
+  ядра для пулов DEX и стаканов всех 14 бирж (gateway/core_out.rs, набор находится по самому каналу — ядро и контракт
+  не менялись); venue.book_events_keep [вся система / площадка] (да/нет). Invalidated бирж — без настройки (исправление).
+  Тест tests/gateway_book_events_keep_324.rs (настоящий канал tokio ёмкости 1–2).
+  **Ревью 324 (16.11):** блокирующие Б1–Б3, неблокирующие Н1–Н7 и clippy (К1, К2) исправлены — DECISIONS «324 (ревью,
+  t151)»; тесты tests/gateway_book_events_keep_324_review.rs. Ждёт прогона GitHub (сборка, тесты, clippy -D warnings) и
+  повторного ревью. Н2 сделан кэшем потока в core_out::of, а не набором в сессии адаптеров (правка 14 ws.rs и 44 вызовов
+  без сборки).
+  **Как включать (после выкладки, перезапуск не нужен):** 1) log.pool_events_lost_interval_s = 60 (если ещё не задана);
+  2) dex.pool_events_keep = да И venue.book_events_keep = да (область «вся система») — вместе: по отдельности ждущий
+  класс забирает место у другого. **Что мерить** (Журнал): venue.book_events_lost по бирже и dex.pool_events_lost —
+  «потеряно» = 0, «доставлено» растёт, «ждут» падает до 0 между шквалами; «заменено» — сколько промежуточных кадров
+  ядро пропустило (свежий кадр всё равно дошёл). «ждут» не падает — ядро не успевает вообще (--live-buffer / разбор
+  ядра, не эта настройка). Сравнить до/после: число окон сделок и время «кадр → окно» в шквал.
+  **Открыто:** у DEX по-прежнему молча теряются при полном канале CoinCheck, Notice, WalletQueue, SendChannel (решение
+  321, не входило в задачу); Notice бирж (bingx/rate_pause.rs, gate/withdraw_notice.rs) — try_send, не тронуты.
+- **Решение 321 (16.11.2026, задача t144) — события пулов не теряются при полном канале ядра — ждёт сборки и тестов в
+  GitHub, ревью и включения.** Локально не собиралось. dex.pool_events_keep [bsc_dex] (да/нет) — событие пула при
+  полном канале ждёт в наборе и доставляется, как только место появится (pools/emit_pool.rs; набор с решения 324 —
+  gateway/keep_last.rs, gateway/core_out.rs). **Оговорка 324:** включать вместе с venue.book_events_keep (ниже).
+  **Как включать:** log.pool_events_lost_interval_s = 60, затем dex.pool_events_keep = да (перезапуск не нужен).
+  **Что смотреть** (Журнал, dex.pool_events_lost): «потеряно» = 0, «доставлено» растёт, «ждут» падает до 0 между
+  шквалами; если «ждут» не падает — ядро не успевает разбирать события вообще (тогда — --live-buffer или разбор ядра).
+  **Открыто (решение Тиграна; стаканы бирж и Invalidated бирж — сделано решением 324):** стаканы бирж (*/ws_conn.rs, xt/ws_book.rs) при полном канале теряют MarketEvent::Book
+  тем же образом (стакан в памяти адаптера есть, пересчёта монеты по нему нет до следующего кадра пары; решения о
+  сознательности сброса в журнале нет); у DEX молча теряются CoinCheck (check/tax_cycle.rs), Notice
+  (check/tax_pass.rs), WalletQueue (resubscribe_wallets.rs), SendChannel (send/stats.rs), Invalidated бирж (*/ws.rs).
+  Покрыть ли их тем же механизмом — DECISIONS 321.
+- **Решения 313–315 (16.11.2026, задача t144, ветка t144/event-refresh-fast от rel/dex-all a510c7a1; живой случай SHOPINX
+  16.11: запись «карта тиков перечитывается» 10:23:01.139 → окно 10:23:03.005, 1,866 с) — ждут сборки и тестов в GitHub,
+  ревью и включения.** Локально не собиралось и не запускалось (правило задачи).
+  **313 — замер (сделано):** log.pool_refresh_timing (да/нет) — запись dex.pool_refresh на каждое перечитывание пула по
+  событию; log.pool_events_lost_interval_s — запись dex.pool_events_lost о событиях пулов, потерянных при полном канале
+  ядра. **Как включать:** log.pool_events_lost_interval_s = 60 (можно постоянно); log.pool_refresh_timing = да на
+  десятки минут торговли (перезапуск не нужен). **Что мерить** (экран «Журнал», вид dex.pool_refresh, data числами):
+  total_ms по причинам off_map / refresh; steps — число обращений к узлу и у каждого wait_ms (очередь темпа узла) против
+  send_ms (сам запрос): wait_ms ≫ send_ms — перечитывание стоит в очереди за другими классами (вывод для 314), много
+  steps с малым wait_ms — последовательные запросы (вывод для 315); class — с каким классом шло; words — слов карты;
+  queued — сколько логов пачки ждало к концу (задержка остальных пулов пачки); error. Сопоставить с записями
+  core.window той же монеты (время между dex.pool «карта перечитывается» и окном). dex.pool_events_lost — были ли
+  потери вообще. **Открыто:** что ещё входило в 1,866 с SHOPINX (расчёт кандидата, ожидание блока) — этот замер покажет
+  только долю перечитывания.
+  **314 — класс очереди (сделано):** dex.event_refresh_urgency (trade / check / quote / background) — перечитывания по
+  событию (off_map, Refresh, Bins, пары многомонетного пула, пары WooFi по логу) идут этим классом только на время
+  чтения. **Как включать:** после замера 313; сначала `quote`, перезапуск не нужен. **Что мерить:** dex.pool_refresh —
+  class и wait_ms шагов до/после; core.window — время от «карта перечитывается» до окна; отказы «расчёт не уложился в
+  срок» и время предпроверки (не выросли ли — перечитывания теперь впереди фона/проверок). При проблеме — очистить.
+  **315 — одно обращение (сделано, нужна запись; НЕ ВКЛЮЧАТЬ на живом боте до теста по записи ниже — ревью 315):**
+  dex.event_refresh_one_call (да/нет, только при dex.multicall3) —
+  пул V3 (ABI PancakeSwap/Uniswap V3) при перечитывании по событию: голова + слова TickLens одним eth_call Multicall3.
+  Тест tests/bsc_dex_event_one_call_315.rs — разбор на записанных ответах eth_call SquadSwap V3 (блок 133618816), а
+  НЕ на записанном ответе aggregate3: такой записи в tests/data нет. **Снять с узла (только чтение, один блок B,
+  сначала eth_blockNumber):** для двух-трёх пулов PancakeSwap V3 и одного Uniswap V3 (в том числе пул SHOPINX/WBNB
+  PancakeSwap V3 0x3079ae2e… — полный адрес взять из журнала) — (1) по отдельности eth_call на B: пул.slot0(), пул.liquidity(),
+  пул.tickSpacing(), TickLens(dex.tick_lens этого DEX).getPopulatedTicksInWord(пул, w) для w = слово тика ±10;
+  (2) один eth_call на B к Multicall3 (dex.multicall3) aggregate3 с allowFailure = true и вызовами в порядке
+  load_batch_v2v3.rs head + words: [slot0, liquidity, getPopulatedTicksInWord(w − 10 … w + 10)]; (3) то же для пула с
+  dex.v3_fee_source = pool_fee_each_read (SquadSwap V3) — с fee() пула после liquidity. Ответы — как вернул узел (как
+  tests/data/squadswap_v3_2026-11-15). По записи — тест: node/multicall.rs decode ответа (2) = ответам (1) по байтам и
+  load_v3_once assemble по нему = последовательному разбору. **Как включать:** только после теста по записи (до него —
+  не включать, ревью 315);
+  dex.event_refresh_one_call = да (перезапуск не нужен). **Что мерить:** dex.pool_refresh — steps (1 вместо ≥3;
+  2 — когда диапазон по slot0 вышел за слова события), total_ms до/после, error (откаты, StaleData); время «карта
+  перечитывается» → core.window. При ошибках — очистить.
+- **Решение 325 (16.11.2026, задача t152, ветка t152/event-reread-all-kinds от rel/dex-all 8fe83aa1) — перечитывание
+  пула по событию быстрым у всех видов DEX; сделано, ждёт сборки и тестов в GitHub, ревью и записи с узла.** Разбор по
+  видам — docs/notes/t152-event-reread-all-kinds-2026-11-16.md. Настройки (обе — область «DEX», по одному DEX):
+  dex.event_refresh_batch — ответы, прочитанные заранее одним eth_call Multicall3 (pools/prefetch_read.rs), и бины
+  Infinity Bin события одной пачкой; dex.event_refresh_fee_only — у Algebra Integral событие только комиссии читает
+  только её (pools/integral_fee.rs). Не заданы — 1 в 1 как раньше. **Тест:** tests/bsc_dex_prefetch_325.rs (walk_plan
+  по записанному списку тиков Integral, индексы дерева, книга на записанном globalState; локально не собирался). **Ревью 325 (16.11, правки Н1–Н8 — DECISIONS «325 (ревью, t152)», разбор п. 7):** без настроек — без
+  лишней работы (prefetch::active; настройки в ячейках памяти pools/event_flags.rs, смена на лету); «только комиссия» —
+  только достоверный пул с состоянием Algebra, замер с причиной «fee»; обращений не больше, чем без книги, при любом
+  dex.load_batch (prefetch_ask.rs; Elastic — ticks() одним view_many; Integral — без тиков карты). Тест —
+  tests/bsc_dex_prefetch_325_review.rs (локально не собирался). Промпт серверному ИИ на записи aggregate3 по видам и
+  tickTable / tickTreeSecondLayer — разбор п. 8. **Отложено:** «Fee(uint16) без узла» (нужны pluginConfig в записи пула
+  и подписка PluginConfig — тип ядра); деление listen_log.rs (238 строк; правят t153/t154); многомонетные пары через
+  книгу — только если книга начнёт хранить откаты внутри aggregate3 (сейчас выигрыша нет: одно обращение).
+  **Ждёт записи (код есть, тест ждёт записи):** Integral (tickTable / tickTreeSecondLayer и aggregate3), CL, Slipstream,
+  Algebra V1.9, Elastic, DODO, Infinity Bin (getBin пачкой) — нет записанного ответа aggregate3 на узле, по которому
+  проверить «ответ из книги = отдельный eth_call» по байтам. **Промпт серверному ИИ (только чтение своего узла, бот и
+  настройки не трогать):** «Сними с узла BSC на одном блоке B (сначала eth_blockNumber, B = он − 5) и сохрани в
+  tests/data/prefetch_325_<дата>/probe.json: для одного пула каждого вида — thena-v3 (Algebra Integral), thena_fusion
+  (Algebra V1.9), Slipstream (Topaz v3), PancakeSwap Infinity CL, Uniswap V4 (StateView), KyberSwap Elastic, DODO,
+  PancakeSwap Infinity Bin — (1) по отдельности eth_call на B каждого view-вызова чтения пула, как их делает бот
+  (src/venues/bsc_dex/pools/load_<вид>.rs; у Integral дополнительно tickTreeSecondLayer(0..27) и tickTable(лист) для
+  листов тиков обхода, у Bin — getBin для пяти непустых бинов вокруг активного); (2) один eth_call на B к Multicall3
+  (адрес — настройка dex.multicall3 из каталога бота, только чтение) aggregate3 с allowFailure = true и ТЕМИ ЖЕ
+  вызовами в том же порядке. Формат — как tests/data/algebra_integral_2026-11-06/probe.json: для каждого вызова to,
+  data (hex), raw (hex ответа узла как есть); для aggregate3 — data и raw целиком; рядом README.md: блок, пулы, что
+  снято.» По записи — тест: node/multicall.rs decode ответа (2) = ответам (1) по байтам у каждого вида, load::refresh
+  с книгой из (2) = разбору (1). **Как включать:** после теста по записи; сначала thena-v3: dex.event_refresh_fee_only = да
+  и dex.event_refresh_batch = да (перезапуск не нужен), log.pool_refresh_timing = да на время замера; затем по одному
+  DEX остальных видов. **Что мерить:** dex.pool_refresh — steps (у thena-v3 было 16–65; ждём 1–3), total_ms, error;
+  queued — сколько логов пачки ждало (сессия пачки ждёт перечитывания — session.rs, отдельная задача). При ошибках —
+  очистить настройку у этого DEX.
+- **Решения 317, 318, 322 (16.11.2026, задача t146, ветка t146/signal-hold-fast от rel/dex-all a510c7a1) — сигнал
+  без лишнего ожидания; сделано, ждёт сборки и тестов в GitHub, ревью и включения.** Требование Тиграна 16.11: «ничего нас
+  не должно останавливать чтобы мы могли ловить жир». Живой случай SHOPINX 16.11: от записи о пуле до «Окно открыто»
+  1,866 с, чужие купили через 1–2 блока (что именно заняло 1,866 с — не установлено).
+  Сделано (318): signal.hold_timer — таймер дозревания «держится» без тиков (core/signal_ripen.rs, tick.rs
+  schedule_set). Тест tests/core_signal_ripen_318.rs (локально не собирался и не запускался).
+  Сделано (317, с доработкой 16.11 по ревью): signal.dex_event_skip_hold — кандидат от события пула без удержания,
+  если уровни стакана биржи на объёме сравнения не менялись ≥ signal.min_hold_ms — отметка из состояния рынка ядра
+  (core/book_still.rs), срабатывает на первом событии пула (core/signal_fast.rs, core/signal_ctx.rs); после пропуска
+  кандидат держится, пока спред выше порога (не мигает, эпизод не закрывается); log.signal_hold — запись
+  core.signal_hold при переходе в кандидата (core/signal_hold_log.rs). Тест tests/core_signal_hold_317.rs (локально не собирался и не запускался).
+  Сделано (322): signal.pool_event_now — событие пула будит сон задачи монеты, пересчёт сразу (core/tick_plan.rs,
+  core/tick_sched.rs); ограничитель signal.pool_event_min_interval_ms. Тест tests/core_tick_plan_322.rs (локально не
+  собирался и не запускался).
+  Сделано (замер): запись core.signal_hold несёт время прихода события пула в ядро (pool_at), блок (pool_block),
+  начало пересчёта (eval_started) и отрезки pool_to_eval_ms / eval_to_candidate_ms.
+  Сделано (повторное ревью 16.11): (1) отметки стакана считаются только при включённом признаке (signal.dex_event_skip_hold
+  или log.signal_hold; core/book_marks_on.rs, по рассылке изменений настроек) — не заданы: прежняя нагрузка, на кадр
+  одна проверка признака; стакан — один поиск в карте; tick_sched — на событие пула одна настройка; (2) страховка 317:
+  «стоит» — только если стакан ядра не старше кадра котировки биржи (Prices.buy_at / sell_at = Quote.at), кадр позже
+  прошлого больше чем на venue.book_stale_ms — отсчёт заново; (3) тесты tests/core_book_marks_317.rs и дополнение
+  tests/core_tick_plan_322.rs (локально не собирались и не запускались).
+  **Включение на живом боте (по одной, перезапуск не нужен — со следующего пересчёта):**
+  1. log.signal_hold = да при прежних настройках сигнала, 30–60 минут — база «до»: по core.signal_hold — pool_to_eval_ms
+     (событие пула → начало пересчёта; ожидается до signal.eval_min_interval_ms = 500 мс), eval_to_candidate_ms,
+     удержание (мс, обновлений) и запуск; по парам core.signal_hold → core.window «Окно открыто» той же монеты и
+     направления — время от кандидата до окна; по core.candidate_rejected — число отказов «финальная котировка»
+     (предпроверка) и число кандидатов.
+  2. signal.pool_event_now = да (322). Мерить: pool_to_eval_ms у записей с запуском «событие пула» (ожидается ≈ время
+     идущего пересчёта, а не до 500 мс); загрузка процессора. Процессор не справляется — signal.pool_event_min_interval_ms
+     (например, время блока BSC).
+  3. signal.dex_event_skip_hold = да (317 с доработкой) — **только вместе с решением «кадры стаканов бирж не теряются»
+     (задача t151, решение 324 — не в этой ветке)**: без него остаётся риск мигания уровня между дошедшими до ядра
+     кадрами (DECISIONS 317, остаточные риски). **Перед включением проверить** значение signal.anomaly_spread_pct на
+     живом боте: при спреде выше него правило не действует — состояние «аномалия» проверяется раньше
+     (core/signal.rs:155 до :161; вопрос владельцу ниже). Мерить: доля кандидатов «пропуск удержания» (skipped_hold),
+     pool_to_eval_ms + eval_to_candidate_ms у них, время до «Окно открыто»; рост отказов «финальная котировка» = ложные
+     сигналы — выключить. Проверить: кандидат после пропуска не мигает (нет закрытий эпизода «сигнал: спред держится
+     меньше signal.min_hold_*» сразу после кандидата).
+  4. signal.hold_timer = да (318) — только при заданной signal.eval_min_interval_ms и после подтверждения владельцем
+     (DECISIONS 318: пересчёт по таймеру засчитывается как обновление). Мерить: доля кандидатов с запуском «таймер
+     дозревания», удержание в записях (ожидается ≈ signal.min_hold_ms, а не секунды), отказы «финальная котировка».
+  5. При любой проблеме — очистить включённую настройку (поведение как было).
+  **Остаточные риски:** отметка «стакан стоит» — по стакану ядра; кадр, пропущенный адаптером при переполненном канале
+  событий (TrySendError::Full), по которому сделана котировка, страховка переводит в обычное удержание; не ловится
+  мигание уровня между дошедшими до ядра кадрами с тем же содержимым (DECISIONS 317, страховка и остаточные риски —
+  поэтому включение 317 только с задачей t151); pool_at — первое событие пула пересчёта (слитые следом — без отдельной
+  отметки).
+  **Вопрос Тиграну (не решено): аномалия спреда (signal.anomaly_spread_pct).** Живой случай SHOPINX 16.11 — спред
+  ~148 % (цифра из постановки ревью; в коде и журналах этой ветки не проверена). Если signal.anomaly_spread_pct на
+  живом боте ниже — самые жирные случаи отсекаются как аномалия при любых настройках скорости (317, 318, 322). Что
+  делает состояние «аномалия» по коду: (а) проверяется на каждом пересчёте после «пороги заданы» и паузы направления и
+  ДО удержания и правила 317 — core/signal.rs:152-155 (`spread > par.anomaly_pct` → State::Anomaly), правило 317
+  (skip_hold) — только в следующей ветке, core/signal.rs:156-170; (б) блокирует кандидата только на этот пересчёт:
+  своего срока нет, пока спред (по ценам объёма сравнения Prices) выше порога — «аномалия», ниже — обычный путь;
+  above_since и счётчик обновлений растут и во время аномалии (core/signal.rs:148-149 — до проверки), поэтому, когда
+  спред опустится ниже порога, удержание может считаться уже выполненным (кандидат сразу); пометка пропуска 317
+  (Track.passed) при аномалии не ставится; (в) вход в аномалию толкает перечитывание справочников сетей бирж
+  (статусы ввода/вывода) — core/evaluate.rs:120-123 (kick_networks.notify_waiters); (г) кандидат в расчёт не ставится
+  (core/evaluate.rs:124-129 — только State::Candidate), а открытый эпизод / окно направления закрывается с причиной
+  «сигнал: аномальный спред (signal.anomaly_spread_pct)» — core/evaluate.rs:130-136, state_text :193. Полный расчёт
+  кандидата аномалию сам не проверяет (других проверок State::Anomaly в core нет). **Живой случай:** окно SHOPINX
+  открылось (DECISIONS 317: core.window «Окно открыто» 10:23:03.005) — значит, на том пересчёте направление было
+  «кандидат», т. е. спред по ценам объёма сравнения был не выше signal.anomaly_spread_pct (по коду иначе кандидата
+  нет); каким было значение настройки и спред сигнала на том пересчёте — в данных этой ветки нет (нужны настройки
+  живого бота и запись core.signal_hold / строка «Живого экрана»). Решить: какое значение signal.anomaly_spread_pct
+  держать при включении 317 (или оставить аномалию как есть).
+- **Решение 323 (16.11.2026, задача t150, ветка t147/algebra-read-band после 320) — сделано (исправление ошибки, без
+  настройки), ждёт прогона в GitHub, ревью и приёмки.** Тик пула Algebra (THENA Fusion, Algebra Integral) вне
+  прочитанного окна карты тиков — math/swap_algebra.rs swap_to возвращает неполный итог с нулями, как V3 (раньше —
+  шаг в обратную сторону / постоянная ликвидность на непрочитанном отрезке, complete = true с неверными числами).
+  Такой пул получает глубину 0 до перечитывания — `dex.algebra_off_map_reread` (решение 320) включать вместе с этой
+  правкой. Другие виды концентрированной ликвидности проверены — той же ошибки нет (DECISIONS 323). Тест
+  tests/bsc_dex_algebra_out_of_window.rs (локально не собирался и не запускался — по правилу задачи).
+  **Независимое ревью 323 (исправлено):** вверх условие окна — lo − 1 ≤ tick < hi, как V3 next_tick (было lo ≤ tick < hi —
+  при tick = lo − 1 сторона покупки ложно «мелкая»); перечитывание Algebra Integral (dex.algebra_off_map_reread) —
+  по тому же правилу окна (math/swap_algebra.rs blocked_by_window), в т. ч. тик ровно hi, без петли (DECISIONS 323).
+  Тесты tests/bsc_dex_algebra_out_of_window.rs (lo − 1 вверх = полная карта), tests/bsc_dex_off_map_algebra.rs
+  integral_reread_on_upper_edge_without_loop — локально не собирались и не запускались. **Прогон CI 43883699804:** упал
+  integral_reread_on_upper_edge_without_loop — в карте aave_ts1 (depth_2026-10-25) инициализированных тиков нет вовсе,
+  предусловие ложно; тест переведён на запись Integral probe.json (пул 0x26399a…, выше окна — 1 записанный тик −94980),
+  в out_of_window добавлен случай с пересечением записанных тиков у нижнего края (tick_below_lower_edge_crosses_recorded_ticks),
+  DECISIONS 323 — арифметика остаточного случая (а) и случай (в); код src/ не менялся; локально не собиралось. Открыто:
+  1. **Вопрос Тиграну:** core/precheck_dex_sell.rs (шапка, «NotApplicable») — если адаптер не может симулировать
+     продажу DEX до покупки, проверка идёт по котировке, как раньше. Хопы Algebra перед сделкой квотером не сверяются
+     (только Maverick — exec/precheck_quoter.rs), защищают верификация quote/verify.rs, minOut и проба eth_simulateV1
+     при исполнении. Отказывать ли в сделке, когда симуляция продажи до покупки неприменима (NotApplicable), — решение
+     владельца.
+
+- **Решение 320 (16.11.2026, задача t147, ветка t147/algebra-read-band после 319) — сделано, ждёт прогона в GitHub,
+  ревью и приёмки.** Необязательная `dex.algebra_off_map_reread` [bsc_dex] (да/нет): да — пул Algebra (THENA Fusion,
+  Algebra Integral) после Swap, уведшего полосу глубины за карту тиков, перечитывается сразу (pools/depth.rs off_map →
+  pools/off_map_algebra.rs; ветка off_map в pools/listen_log.rs); не задана / нет — 1 в 1 как раньше. Разбор (DECISIONS
+  320): без неё после скачка за окно расчёт обмена и глубины Algebra неверен до следующего Mint/Burn пула. Тест
+  tests/bsc_dex_off_map_algebra.rs (локально не собирался и не запускался — по правилу задачи). Открыто:
+  1. **Включение:** «да» после приёмки; нагрузку на узел замерить по журналу dex.pool («вышла за прочитанные слова
+     битмапа») — у V1/V1.9 не чаще раза на слово сырого битмапа на пул.
+  2. Algebra Integral перечитывается, когда обмен хотя бы в одну сторону невозможен из-за края окна (тик вне окна или
+     ровно hi — ревью 323; у hi — только если выше прочитано меньше dex.integral_tick_steps тиков); остаточные случаи —
+     DECISIONS 323. Тик в окне, обмен в обе стороны возможен, полоса за краем — частичный итог (занижение), как раньше. Перечитывать и в этом случае — нужен признак, что отрезок списка от нового тика шире
+     прочитанного (иначе перечитывание на каждом Swap при малом dex.integral_tick_steps), — вопрос Тиграну.
+  3. Слияние с t144 (вынос ветки off_map в pools/refresh_event.rs): listen_log.rs в 320 не менялся; правка — тело
+     depth.rs off_map и новый pools/off_map_algebra.rs.
+  4. dex.algebra_off_map_reread не в списке depth_sync.rs DEPTH: включение действует со следующего Swap пула (сразу
+     все пулы не перечитываются).
+
+- **Решение 319 (16.11.2026, задача t147, ветка t147/algebra-read-band от rel/dex-all a510c7a1) — сделано, ждёт прогона в
+  GitHub, ревью и приёмки.** Необязательная `dex.tick_read_band_algebra_pct` [bsc_dex]: задана — сырой битмап Algebra
+  V1/V1.9 (THENA Fusion) читается по ней, dex.tick_read_band_pct на Algebra не действует; не задана — 1 в 1 как раньше
+  (pools/load_algebra.rs raw_band_words). Тест tests/bsc_dex_tick_read_band_algebra.rs (локально не собирался и не
+  запускался — по правилу задачи). Открыто:
+  1. **Порядок включения:** сначала задать `dex.tick_read_band_algebra_pct` = текущее значение dex.tick_read_band_pct,
+     затем поднимать dex.tick_read_band_pct (цель ~70% — случай SHOPINX 16.11: при tickSpacing 1 это ±49 слов, 99
+     вызовов TickLens на пул; один Multicall3 такого размера на своём узле не проверялся — DECISIONS 296).
+  2. Не затронуты (dex.tick_read_band_pct не читают, своя дальность): Algebra Integral (dex.integral_tick_steps),
+     KyberSwap Elastic (весь список тиков), Maverick V2 (dex.tick_radius), iZiSwap / Biswap V3 (лесенка квотера). Все
+     они на своих событиях тоже перечитываются целиком (Applied::Refresh в events_*.rs); полоса в % для них — открытый
+     вопрос TASKS 296 п. 3 (если появится — отдельной настройкой или этой, вопрос Тиграну).
+  3. Область — площадка DEX (не id DEX): вид Algebra V1.9 в каталоге один (thena_fusion), load_algebra::load не получает
+     Family. Нужна ли полоса по отдельной DEX — вопрос Тиграну (как TASKS 296 п. 5).
+
+- **Решение 310 (16.11.2026, задача t141, ветка t141/due-read-only от rel/dex-all c9b0cc19) — сделано, ждёт прогона в
+  GitHub, ревью и включения.** Сделано: check/fresh.rs due() при dex.check_due_read_only = да читает достоверность пула
+  без записи (Registry::entry), без отметки «пул изменён» для фонового графа и без роста версии реестра; не задана / нет —
+  как раньше. Тест tests/bsc_dex_due_read_only_310.rs (локально не собирался и не запускался — по правилу задачи).
+  **Включение на живом боте (после выкладки):**
+  1. До включения (режим, в котором был замер 16.11: dex.graph_background = да, log.graph_timing = да,
+     log.graph_timing_min_ms = 0 на 10–15 минут) — записать по dex.graph_build kind=incr «изменённых» и «зависимых» за
+     круг, длительность круга, отставание при публикации; отдельно — в classic и в graph.
+  2. dex.check_due_read_only = да (действует со следующего вызова due(), перезапуск не нужен). Повторить замер шага 1.
+     Ожидаемое по коду (не замерено): всплесков «изменённых» в тысячи пулов от прохода циклов проверок больше нет;
+     оставшиеся «изменённые» — события пулов и другие записи (DECISIONS 310, перечень).
+  3. dex.router_mode = graph — по критериям t137 (шаг 3): отказов «расчёт не уложился в срок» 0, расчётов в минуту не
+     меньше classic. Время одной «котировки B bsc_dex» в отказах по сроку сравнить с замером 16.11 (24–72 мс).
+  4. При любой проблеме — dex.check_due_read_only очистить (поведение как сейчас).
+  **Открыто:** (а) не установлено, что именно due() — главная причина тысяч «изменённых» за круг в режиме graph:
+  по коду due() даёт отметку каждого пула на каждый проход, но вклад других записей без фактического изменения
+  (DECISIONS 310: exec/solidly_gate.rs remember — по всем пулам реестра; повторные valid=false, asleep, fee_pips;
+  Applied::Ignored) на живом боте не замерен — решает замер шага 2; (б) остальные записи без изменения не правились —
+  отдельной задачей по итогам замера.
+
+- **Решение 312 (16.11.2026, задача t143, ветка t143/quote-stage-timing от t142/quote-legs-once b62bb52f) — замер этапов котировки DEX;
+  ждёт сборки и тестов в GitHub, ревью.** Сделано: необязательные log.quote_timing и log.quote_timing_min_ms («Настройки» → «Система»);
+  запись журнала dex.quote_timing на котировку дольше порога (quote/quote_timing.rs, quote_timing_outer.rs, quote_timing_log.rs).
+  **Доработка после ревью:** замер — вся Quoting::priced (до работы, cpu::run, после работы; запись после хвоста), быстрый путь
+  fills.rs — своя запись (fast = да), отдельные этапы prep и snapshot, явный rest_ms. **Внимание — нагрузка:** порог 0 даёт запись
+  SQLite на КАЖДУЮ котировку (котировок DEX сотни в секунду): каждая запись идёт через общий пул блокирующих задач tokio
+  (storage/db.rs call → spawn_blocking — тот же пул, что у счёта котировок quote/cpu.rs) и общий замок единственного соединения
+  SQLite (его ждут и настройки, и журнал, и учёт). На живом боте включать только с порогом больше нуля; значение порога задаёт
+  Тигран (совет — docs/FIRST_RUN.md). **Как включать на живом боте:** сначала log.quote_timing_min_ms (порог), затем
+  log.quote_timing = да; 10–15 минут в dex.router_mode = classic и столько же в graph; затем log.quote_timing = нет.
+  **Что смотреть** (экран «Журнал», вид dex.quote_timing; data числами): total_ms = pre_ms + run_ms + post_ms — сопоставлять с
+  «котировка B bsc_dex N мс ×K» ядра (N/K — среднее на котировку; в K входят и вызовы quote_fills — записи fast = да);
+  pre_ms — pre_decimals_ms, pre_gas_ms, pre_rest_ms; run_ms = wait_ms + work_ms + back_ms — wait_ms большой при малом
+  work_ms — очередь места dex.quote_cpu_max / старт потока счёта (вместе, не по отдельности); post_ms — post_approve_ms,
+  post_native_ms, post_tip_ms, post_rest_ms; work_ms — по этапам `<этап>_ms` и `<этап>_n`: classic (классика), paths (в т.ч.
+  paths_cached / graph_read / enumerate / hydrate), decimals, legs (допуск хопов; paths_in, paths_ok, hops), gas_usdt, best
+  (best_evals), split (split_steps, split_evals), exec, costs, fit (повтор графа решения 300), merge, prep (подготовка глубины),
+  snapshot (снимок путей для повтора); stages_ms — их сумма, rest_ms = work_ms − stages_ms (вне замеренных этапов);
+  dropped = да — котировку бросил вызывающий (срок расчёта). Сравнить classic и graph на одних монетах.
+  **Не установлено:** накладные расходы замера при «да» на живом боте (часы на каждом хопе допуска и запись журнала) — сравнить
+  число котировок «котировка B bsc_dex … ×K» в отказах с замером и без. eval и шаги отбора/сплита включают повтор графа (fit).
+  **Не сделано (по задаче):** id кандидата ядра в записи (контракт ядро ↔ адаптер), деление wait_ms на ожидание места и старт
+  потока (сигнатура cpu::run), агрегаты котировок ниже порога.
+- **Решение 311 А, выключатель (16.11.2026, Тигран: «сделай вкл выкл. по дефолту вкл»; ветка t143/quote-stage-timing) — сделано,
+  ждёт сборки и тестов в GitHub.** Настройка dex.quote_prep_once [bsc_dex] (да/нет, необязательная): не задана / да — одна
+  подготовка глубины на котировку графа (по умолчанию включено — решение Тиграна); нет — подготовка на каждый хоп, как до 311 А
+  (для сравнения или отката). Тест tests/bsc_dex_quote_prep_switch_311.rs (та же котировка; prep_n замера 312 = 0 при «нет»).
+- **Решение 311 (16.11.2026, задача t142, ветка t142/quote-legs-once от rel/dex-all c9b0cc19) — котировка графа дешевле;
+  ждёт сборки и тестов в GitHub.** Независимое ревью — «сливать можно»; неблокирующие замечания учтены (тест
+  tests/bsc_dex_legs_prep_311.rs пересчитывает глубину в обоих вариантах — Book::invalidate перед каждым; DECISIONS 311 А
+  дополнен: срез курса влияет и на слот книги глубины, гистерезис, журнал смен и «пул готов»; README quote/). **Открытым
+  остаётся замер на живом боте (t143)** — см. «Что мерить» ниже. Живой факт: на graph одна котировка DEX 24–72 мс × 140–400 на подбор объёма →
+  отказы по profit.calc_timeout_ms. **Сделано (А):** одна подготовка глубины на котировку графа (без настройки, расчёт тот
+  же). **Сделано (В):** запись пула пути переходит в ногу без копии (без настройки). **Не сделано (Б)** — кэш ног между
+  котировками подбора: нет версий у итогов проверок (check/state.rs), запретов пулов (directory) и настроек (хранилище) —
+  свежесть ключом не гарантировать (docs/DECISIONS.md 311 Б); **открыто:** решить, нужны ли эти версии (настройки — общий
+  стык, техлид). **Открыто (В, не делалось — не очевидно безопасно):** на каждый хоп ещё читаются настройки tax.max_*_pct
+  (pool_tax.rs), hooks.* (только пулы с крючком), вид DEX (families::still → dex_rules.rs classify), копия PoolFacts под
+  RwLock (checks.pool) и запрет пула (index.banned); вынос их в «один раз на котировку» — то же рассуждение, что у А, но
+  меняет момент чтения настроек проверок — только по решению. **Что мерить на живом боте после выкладки:** dex.router_mode = graph на тех же настройках, что 16.11 (11:07–11:11):
+  число отказов «расчёт не уложился в срок» и «котировка B bsc_dex N мс ×K» в строках отказа (мс на одну котировку).
+  Время котировки вне отказа в журнал не пишется — доля каждой части (набор путей, допуск хопов, отбор, сплит) на живом
+  боте не замерена (не установлено).
+- **Решения 307–308 (16.11.2026, задача t137, ветка t137/graph-snapshot от t132/graph-build-queue) — сделано, ждёт прогона,
+  ревью и включения.** Проект — docs/notes/graph-snapshot-design-2026-11-16.md. 307: кривая глубины не пересчитывается при
+  смене курса встречного токена. 308: граф маршрутов строит фоновый владелец, расчёт берёт готовый снимок (под
+  dex.graph_background). **Включение на живом боте (после выкладки, порядок; ревью №1/№2 учтены):**
+  1. Оставить dex.router_mode = classic; dex.graph_max_lag_ms НЕ задавать. Задать dex.graph_verify_s = 300,
+     dex.graph_alert_min_s = 600, dex.graph_retry_pause_s, log.graph_timing = да, log.graph_timing_min_ms = 0 (на 10–15 минут),
+     затем dex.graph_background = да. **Условие шага (ревью №1 R):** по dex.graph_build kind=incr замерить длительность круга и
+     число пересчитанных пулов (изменённых и зависимых по курсу — отдельно; WBNB–USDT меняется почти каждый блок и тянет всех
+     зависимых от WBNB); по kind=full — сборку и доводку отдельно. Экран «Площадки» → «Граф маршрутов (фон)»: снимок есть,
+     наибольшее отставание, которое видел расчёт, за час, полная пересборка — отличий 0, перезапусков 0.
+  2. dex.graph_hang_ms — с запасом над наибольшей длительностью круга; dex.graph_stage_b_max_ms — с запасом над
+     наибольшей ПОЛНОЙ длительностью ступени Б (экран «наибольшая полная длительность за час», dex.graph_build stage_b_ms —
+     включает сборку после смены настроек графа; превышение после одного перезапуска снимает льготу, а не владельца); dex.graph_max_lag_ms — только по
+     метрике читателя в ступени А (наибольшее отставание, которое видел расчёт в ступени А, за час) с запасом. Эпизодов
+     предохранителя за час — 0.
+  3. dex.router_mode = graph. Критерий успеха (Тигран 16.11): расчётов в минуту не меньше, чем в classic (16–28); отказов
+     «расчёт не уложился в срок» — 0; маршруты графа (сплиты, промежуточные, новые DEX) попадают в сделки (карточки
+     сделок с RouteMode::Graph); предохранитель — 0; расхождений самопроверки — 0; перезапусков — 0.
+  4. При любой проблеме — dex.graph_background = нет (поведение t132 без сборки), прислать журнал dex.graph / dex.graph_build.
+  5. После приёмки: log.graph_timing_min_ms поднять (или log.graph_timing = нет), dex.graph_verify_s оставить по решению Тиграна.
+  **Предложение (ревью №1 R, не внедрено):** круг клонирует запись пула в новое ребро (graph_eval.rs eval) у каждого
+  оценённого пула, в т. ч. у зависимых по курсу, у которых меняется только ранг; дешёвое сокращение — переиспользовать
+  прежний Arc<Edge>, если поколение записи то же (копия записи для гидратируемого расчёта не нужна свежей). Делать — после
+  замера шага 1.
+  **Ограничение (повторное ревью п. 1):** поток, зависший внутри расчёта одного пула, не останавливается до конца этого
+  расчёта (alive() — между пулами); его итог не публикуется.
+  **Открыто:** (а) не покрыто записями: живой поток событий тысяч пулов (длительность круга, отставание, гистерезис на
+  границе), паника/зависание владельца — для теста записать с сервера начальный реестр (все записи пулов) и сырой поток
+  событий пулов за 10–15 минут; (б) если круг окажется длиннее блока — дробление круга с приоритетом монет открытых
+  окон/сделок (проект п. 7); (в) решение 309 (параллельные глубины при полной сборке) — только по замеру full (проект п. 13);
+  (г) после приёмки — убрать путь t132 (замок building, кэш по Stamp) или оставить запасным — решение Тиграна.
+  (д) Ненадёжный по времени тест (не t137): tests/core_busy_calc_267.rs free_coin_candidate_goes_as_before упал один раз
+  (прогон 43770313465 на 6d56d2b6; на c6957b6c и на rel/dex-all проходит). Факт кода: строка 407 ждёт строку «Кандидатов»
+  (core/candidates.rs publish — внутри calc_one), строка 408 сразу требует пустую очередь queued, а queued.remove(&d)
+  делается в задаче расчёта ПОСЛЕ возврата calc_one (candidates.rs ~118: calc_one(...).await; затем remove) — если
+  тестовая задача проснётся между publish и remove, assert падает (419 — join() потока теста передаёт эту панику).
+  Ядро в тесте — с пустым реестром шлюза: адаптера DEX, Parts::pools и фонового владельца графа там нет — t137 не влияет.
+  Исправление теста (ждать и пустую очередь через until) — отдельной задачей, по решению техлида.
+- **Техдолг «ненадёжный тест big_file_splits_without_loss» (t140, ветка t140/flaky-report-split от rel/dex-all) —
+  исправлено, ждёт прогона в GitHub.** Факт лога (run 43774487553): tests/report_signals.rs:539, предел
+  max = «книга целиком − 1» от одной сборки, поток собирал книгу заново. Причина (факт кода): rust_xlsxwriter 0.102
+  пишет в docProps/core.xml время создания с точностью до секунды (src/properties.rs:376, src/core.rs:147–158), сжатый
+  размер записи зависит от цифр метки; сборка в другую секунду могла выйти на байт меньше и уложиться в max одним
+  файлом (n = 1, имя «s.xlsx»). Условие «часть ≤ max» нарушиться не может: fit (src/report/sig_parts.rs) отдаёт только
+  книги, проверенные по фактическим байтам. Код отчёта не менялся — ошибки в работе нет. Исправлен тест: помощник
+  split_below — если книга уложилась одним файлом и отличается от эталона только docProps/core.xml, предел опускается
+  ниже этой сборки (цикл конечен); проверки ≥ 2 частей, имена, ≤ предела, строки не теряются — те же; сообщение
+  assert потока выводит число частей, размеры и предел.
+
+- **Техдолг «ненадёжный тест free_coin_candidate_goes_as_before» (t139, ветка t139/flaky-busy-calc-267 от rel/dex-all)
+  — исправлено, ждёт прогона в GitHub.** Факт логов (runs 43770313465, 43772608878): tests/core_busy_calc_267.rs:408
+  `lk(&core.inner.queued).is_empty()`. Причина (факт кода): тест ждал строку «Кандидатов» (publish внутри calc_one,
+  src/core/candidates.rs:177/259) и сразу проверял очередь, а queued.remove делает задача расчёта после возврата
+  calc_one (candidates.rs:130); между ними await записи журнала отказа (candidates.rs:197–200). Гонка теста, ядро не
+  менялось. Исправлено: пустая очередь ждётся помощником until (срок 10 с), проверка «очередь в итоге пуста» осталась.
+  Другие проверки queued в tests/ (no_candidate_traces) — для занятой монеты, где enqueue в queued не ставит; гонки нет.
+
+- **Техдолг «ненадёжный тест maxwin_watch» (t138, 16.11.2026, ветка t138/flaky-maxwin от rel/dex-all) — исправлено, ждёт
+  прогона в GitHub.** Факт логов: tests/uncapped_maxwin (maxwin_watch, maxwin_windows_and_deal_time) падали на
+  tests/size_common/dex.rs:74 (Db::open) с SQLite «disk I/O error» (1802 IOERR_FSTAT, 522 IOERR_SHORT_READ), при
+  перезапуске проходили. Причина (факт кода): size_common::dex::ctx(name) брал каталог `arb-size-{name}-{pid}` и делал
+  remove_dir_all; тесты набора идут потоками одного процесса (один pid), а оба теста вызывают Rec::load("uncapped-maxwin")
+  — один каталог и один t.sqlite: второй тест удалял базу, открытую первым. Тот же общий каталог был у
+  core_start_sell_guard.rs (Rec::load("guard-reason") в двух тестах) и window_deal_price.rs (Rec::load("window-deal")
+  в двух тестах). Исправлено в помощнике: каталог уникален на вызов (pid + счётчик AtomicU64, как tests/route_common).
+  Остальные tests/*_common (каталог `{tag}-{pid}`): повторов одного литерального тега в одном наборе не найдено.
+- **Решение 305 (15.11.2026, ветка t135/nomi-depth-woofi-pairs) — сделано, ждёт ревью и приёмки.** Пары WooFi (общий контракт
+  WooPPV2) — по строке справочника на пару при dex.multi_pair = да у DEX woofi_v2 (DECISIONS 305; живой бот: 0 пулов WooFi из 8
+  пар). Новых настроек нет. **Задать в интерфейсе:** «Настройки» → DEX → id WooFi → `dex.multi_pair` = да (и как раньше
+  dex.pmm_pool, dex.oracle, dex.pool_implementation, index.factory_scan). Открыто:
+  0. Ревью t135 (DECISIONS 305, дополнение): исправлены В1 (реестр после «да → нет»), В5 (тест логики retune/ключей —
+     tests/bsc_dex_woofi_pairs_retune.rs), статус ban пары WooFi, селектор quoteToken() в тесте abi_woo.rs.
+  1. **Тест прохода ждёт записи с живого узла** (записанных ответов WooPPV2 в репозитории нет): на одном блоке N — `quoteToken()`
+     (0x217a4b70) и `wooracle()` контракта dex.pmm_pool, `state(base)` оракула dex.oracle по 8 базовым монетам, слот реализации
+     EIP-1967 → tests/data/woofi/pairs.json; по ним — тест прохода справочника (index_pass::take_with с разборами verify_woo на
+     записи): 8 строк WooFi с ключом-парой — 8 взятых.
+  2. **Не подтверждено фактом:** наличие селектора quoteToken() 0x217a4b70 в развёрнутой реализации (решение 122 F, 3:
+     реализация не верифицирована; та же проверка — tests/README.md, запись WooFi), адрес quoteToken() на BSC и список
+     8 ожидаемых пар; какая строка WooFi была первой в проходе на живом боте (причина «0» выведена по коду, журнал бота не сверен).
+  3. Строки WooFi со встречным ≠ quoteToken(), уже лежащие в справочнике (индексатор, прежние проходы фабрик), при настройке
+     проверяются и получают «отклонён» с причиной verify_woo (одна запись журнала на пул и причину) — не скрываются.
+  4. Не покрыто тестом: multi_pair::entry_fits (нужна запись реестра Entry и окружение) и пересборка подписки
+     market.rs целиком — проверено чтением кода; на живом боте после выкладки: «да → нет» — в реестре WooFi остаётся
+     одна пара, «нет → да» — все пары, без дублей.
+- **Решение 304 (15.11.2026, ветка t135/nomi-depth-woofi-pairs от rel/dex-all) — сделано, ждёт ревью и приёмки.** Глубина
+  стейбл-пула в полосе не обнуляется от округления: поиск в quote/stable_depth.rs и quote/solidly_depth.rs стартует с
+  пробы (баланс входа / vault_depth::PROBE_DIV), а не с 1 wei (DECISIONS 304; живой бот: nomiswap_stable USDT/USDC
+  попеременно 212615 / 0.00 USDT). Новых настроек нет. Открыто:
+  1. **Вопрос Тиграну:** DODO PMM (quote/pmm_depth.rs) стартует так же с 1 wei (`within(1)`; выход на 1 wei — floor, при
+     цене монеты выше 1 единицы встречного на единицу монеты выход покупки 0 → глубина покупки 0 по коду). Пробу по балансу
+     входа у PMM взять нельзя: баланс входа может быть 0 (односторонний пул DODO). Править ли и от какой величины брать
+     пробу (например, от целевого баланса B0/Q0 или от баланса выхода через getMidPrice)? Без решения не менялось.
+  2. Не покрыто записанными данными: стабильный Solidly (записей узла для стабильного пула Solidly нет —
+     нужны metadata() и getAmountOut пула THENA V1 / Topaz stable на одном блоке); Curve/Saddle/PancakeSwap StableSwap/Lista
+     идут той же веткой, отдельной записи для глубины нет. Покрыто: три пары Nomiswap Stable на блоке 133650877
+     (tests/bsc_dex_nomiswap_stable_depth.rs).
+  3. **Подтвердить на живом боте после выкладки (ревью В2):** правка действует без настройки на все StableSwap
+     (Ellipsis, Nerve, PancakeSwap Stable, Lista, NG, Infinity Stable, Nomiswap) и стабильный Solidly — список пулов, чья
+     глубина в полосе изменилась с 0 на ненулевую (они начнут проходить dex.min_pool_liquidity_usd и попадут в маршруты).
+
+- **Решение 299 (15.11.2026, ветка t130/bundle-skip-single от rel/dex-all) — сделано, ждёт ревью и приёмки.** Новая
+  необязательная настройка send.bundle_skip_single: да — одиночные каналы исключаются из отправки бандла (DECISIONS 299;
+  живой бот: 6 сигналов отклонены из-за BlockRazor RPC в режиме single). Чтобы заработало на живом боте — задать
+  send.bundle_skip_single = да (экран «Настройки» → «Отправка»). Открыто:
+  1. **Вопрос Тиграну:** граница газа на котировке (send::planned_floor) — по-прежнему по ВСЕМ готовым каналам (котировка
+     не знает формы до выбора маршрута); при одиночном канале с бо́льшим минимумом газ плана бандла выше факта (оценка с
+     запасом). Считать ли для бандловой формы границу по бандловым каналам и на котировке?
+  2. Карточка сделки показывает только каналы, куда ушёл бандл (ChainTx.channels); исключённые одиночные — в журнале
+     (send.bundle_skip_single) и в событии bundle.sent. Нужен ли список исключённых в самой карточке — это новое поле
+     общего типа ядра (запрос на изменение стыка).
+  3. Не покрыто записанными данными: ответы каналов на eth_sendBundle (живая отправка), попадание бандла в блок при
+     исключённом одиночном канале — записей ответов каналов нет; покрыты отбор каналов и проверка котировки
+     (tests/bsc_dex_bundle_skip_single.rs).
+- **Решение 300 (15.11.2026, ветка t131/graph-exec-fallback от rel/dex-all) — сделано, ждёт ревью и приёмки.** Лучший
+  исполнимый маршрут графа при неисполнимом лучшем (quote/graph_fit.rs, настройка `dex.graph_exec_fallback` [bsc_dex],
+  необязательная). После выкладки: (1) включить «да» на площадке bsc_dex (решает Тигран; при dex.router_mode = graph).
+  (2) Проверить на живом боте: сигналы вида SIREN 15.11 (лучший Graph через lista-v3 / «только бандлом») — в хронологии
+  сделки «DEX продажа: граф: на сделку — лучший исполнимый маршрут графа (S…)», выход не ниже классики; «Время расчёта»
+  до и после (повтор — только на котировках решения/исполнения: финальная, быстрая предпроверка, точки окна открытых
+  сделок, перед продажей, своя котировка «лучшего из двух»; до 3 сплитов, при dex.route_search_max_paths — и route_best
+  перед каждым; время не измерено).
+  (3) **Нужно записать с узла** (записей нет — тест на SIREN невозможен): пулы SIREN Uniswap V4 0x916de7e5…,
+  0x618bc80c…, 0x12a67c47…, lista-v3 (v3_fork) 0x3b6ed4e0…, PancakeSwap V3 0xb2af49… и 0x172fcd… на одном блоке
+  (состояние, карта тиков, ключи V4), плюс состояние каналов отправки бота (бандл / не бандл) и исполнителя кошелька.
+  (4) **Не покрыто тестом:** S2 (исполнитель кошелька) и S3 (бандл, доли в разных роутерах) — на записях CAKE нет
+  сцены, где они дают исполнимый итог при неисполнимом лучшем; проверены только кодом (executable повторно).
+  (5) **Ревью (исправлено):** «лучший из двух» — своя котировка сделки (best_of/trade.rs) теперь внутри
+  patience::exec_scope, граф ищется и там (нет расхождения «план — граф, сделка — классика»); включён ли best_of на
+  живом боте — по коду не установить (exec.via_kyber / exec.dex_best_of не заданы = «нет»), проверить в интерфейсе.
+  Газ approve и чаевые в сравнении pick не учитываются (как у graph_route::merge) — маршрут с новым approve может
+  выиграть и не пройти порог ядра (упущенная сделка, не убыток).
+  (6) **Вопросы Тиграну:** (а) S3 при числе роутеров итога > dex.bundle_max_routers — подмножество отбрасывается
+  (сплит не знает предела роутеров); подбирать подмножество роутеров — новые сплиты сверх 3; (б) метка выбора — в
+  Quote.pick (хронология сделки); в режиме «лучший из двух» (exec.dex_best_of) best_of/quote.rs перезаписывает
+  Quote.pick своим текстом — метка графа там не видна; карточка сигнала метку не показывает (нужно поле в
+  core/card.rs — зона ядра); (в) подбор объёма идёт без повтора — объём выбирается по кривой классики, финальная
+  котировка на нём может быть выше (не хуже); подбор по кривой исполнимого графа — повтор на сотнях котировок.
+- **Решение 301 (15.11.2026, ветка t132/graph-build-queue от rel/dex-all) — в работе / ждёт ревью.** Расчёт DEX висел
+  8,5–10 с без запросов к узлу (DECISIONS 301). Сделано: (а) кэш графа отдаёт граф не старше запроса — нет очереди
+  повторных построений; (б) неудачная глубина пула запоминается по ключу — не пересчитывается при каждом построении; (в) брошенный по сроку
+  расчёт выходит перед ожиданием замка графа, построением, отбором и сплитом (quote/abandon.rs); (е1) блок головы
+  убран из ключа графа; (е2) поколение состояния записи — ключ глубины без блока/logIndex; (е3) update отсутствующего пула не меняет версию
+  (вторая половина е3 — «не расти без фактических изменений» — не сделана, см. DECISIONS 301 е3); (д) замер
+  построения графа dex.graph_build (log.graph_timing, log.graph_timing_min_ms). Открыто: см. пункты ниже по частям.
+  Слито с rel/dex-all (t129–t131, t133, t138, t139); по ревью t132 сделано: В3 — abandon::check перед повтором графа
+  решения 300 (quote/graph_route.rs, перед graph_fit::best).
+  **Переполнение стека после слияния (DECISIONS 301, дополнение «стек»).** Факт: tests/bsc_dex_quote_cpu.rs —
+  «thread 'tokio-rt-worker' has overflowed its stack» на dd74d9b9 (run 43774848962; при перезапуске — снова; t137 с
+  dd74d9b9 внутри — там же); на fa53f394 (run 43768379526) и на rel/dex-all a3cc2b9f (run 43773512039) тест проходил.
+  Рекурсии в слиянии нет (по коду: quote_fit ↔ повтор графа). Исправление: quote/cpu.rs run — работа в куче (Box::pin) до spawn_blocking, цепочка
+  обёрток — cpu::scoped (принимает только Pin<Box<F>>). Замер и сторож — tests/bsc_dex_quote_cpu_stack.rs (числа
+  пишутся в журнал прогона и при успехе). Цифры размера (run 43776245966): routing::run 14768 → под 4 обёртками по
+  значению 237072 (удвоение на обёртку), сейчас 616 — это 11 % стека 2 МиБ, переполнение одной копией не объясняется.
+  **Доказано фактом** (tests/bsc_dex_quote_cpu_depth.rs, run 43776945366): стек потока счёта до начала работы — по
+  значению (вид dd74d9b9) 2047728 из 2097152 байт (оставалось 49424), из кучи (сейчас) 23488 — работе остаётся не
+  больше 2073664 байт (~2,07 МиБ). Причина переполнения в тесте — цепочка четырёх обёрток по значению; исправление —
+  Box::pin. Фон «без потолка» (run 43776529778): uncapped::compute 11704, под urgency::scope по значению 23440,
+  сейчас uncapped_queue::scoped 40 (Box::pin внутри замыкания spawn_blocking: до него не перенесено — нужен Send
+  будущего uncapped::compute, по коду не установлен). Других block_on в src нет.
+  Оценка (не измерено напрямую): на rel/dex-all a3cc2b9f (три обёртки, та же работа t131) цепочка 118512 против
+  237072; при той же пропорции глубины (2047728 / 237072 ≈ 8,64) — около 1,02 МБ до начала работы, запас ~1,07 МБ
+  (примерно вдвое больше, чем при четырёх обёртках — от края не вплотную, но половина стека уходила до работы).
+  **Открыто:** (1) глубина самой работы котировки/графа (синхронный счёт внутри опроса) не измерена — без правки
+  боевого кода нет точки замера (вариант — временная точка в abandon::check; решает Тигран); (2) размеры и глубина
+  в релизной сборке не мерялись — `cargo test --release --test bsc_dex_quote_cpu_stack --test bsc_dex_quote_cpu_depth`
+  (вручную или шагом workflow — решает Тигран); (3) **вопрос Тиграну:** рекурсия quote/route_paths.rs dfs / dfs_cycle
+  и quote/route_best.rs dfs ограничена dex.route_max_hops и dex_dex.max_cycle_len, у которых в каталоге нет верхнего
+  предела — вводить ли предел; (4) какой из двух тестов bsc_dex_quote_cpu.rs переполнял стек — закрыто: ОБА по
+  отдельности (test/diag-stack-* от dd74d9b9: run 43776962052 — heavy_quote_…, run 43776964914 — big_registry_…).
+  Второе ревью (по 0ee3748f): В1 — историческая ветка depth-теста в своём потоке со стеком 64 МиБ; В2 — cpu::run
+  принимает работу только из кучи (Pin<Box<F>>), вызывающие quote/mod.rs и venue.rs dex_cycles передают Box::pin,
+  сторож — размер будущего cpu::run не зависит от работы; В3 — uncapped_queue оставлен (compute 11704 байт в кадре
+  замыкания, обоснование — цифра). **Открыто:** (5) глубина стека рабочего потока tokio на пути котировки
+  (Quoting::quote → cpu::run) не измерена — нет точки замера без правки боевого кода (решает Тигран вместе с п. 1).
+  Открытые пункты ревью t132 — НЕ делаются сейчас:
+  1. **В1:** брошенный расчёт прерывает уже начатое построение графа — проверка признака на каждом пуле
+     (pools/graph.rs build_measured, abandon::check в цикле по пулам) внутри построения под замком
+     (pools/graph_cache.rs cached_as_of → build_measured); построение, которого ждут другие расчёты, обрывается, и
+     следующий в очереди строит заново. Решается после слияния t137.
+  2. **М2:** сравнение карт тиков (pools/state_gen.rs same / Snap) выполняется под замком записи реестра.
+  3. **М3:** ключ неудачи глубины (pools/depth_fail.rs, ключ depth_key.rs) включает поколения пулов курса
+     промежуточной монеты — смена пула курса сбрасывает запомненную неудачу расчёта по состоянию пула.
+  4. **М4:** записи depth_fail об удалённых из реестра пулах не удаляются.
+- **Решение 302 (15.11.2026, ветка t133/presell-fund-override от rel/dex-all) — сделано, ждёт ревью и приёмки.**
+  Необязательная `presell.fund_fallback` [bsc_dex] = `singleton`: нет пула-источника V2/V3 — пополнение в симуляции от
+  Uniswap V4 PoolManager / Infinity Vault (DECISIONS 302). Не задана — 1 в 1 как раньше. Открыто:
+  1. **Вопрос Тиграну:** пул маршрута в том же держателе с крючком обмена (before/after swap) сейчас запрещает держатель
+     (крючок мог бы читать баланс держателя). Есть ли у пула GAIB 0x5c1b4d20…fbbbf2 крючок обмена — не установлено.
+     Если есть — GAIB так и не пройдёт; ослаблять ли правило (например для групп крючков A/B, решение 32)?
+  2. **Записать с узла** (для теста на записи): на блоке из строки журнала предпроверки GAIB («блок N»):
+     (а) eth_call balanceOf(0x28e2ea090877bf75740558f6bfb36a5ffee9e9df) у токена GAIB; (б) PoolKey / hooks пула
+     0x5c1b4d202437dabcacbee41d382dd0f5fa281c0f58c6bfb8b36afd3625fbbbf2 (StateView / poolKeys менеджера); (в) сырой
+     запрос и ответ eth_simulateV1 предпроверки с presell.fund_fallback = singleton (перевод 3460500000000000000000 GAIB
+     от PoolManager на кошелёк → balanceOf → USDT до → разрешения → execute UR → USDT после) — включить настройку и
+     сохранить из сырого журнала узла. Сейчас покрыта только чистая логика (tests/bsc_dex_dry_fund_holder.rs).
+  3. Держатель Infinity берётся из `dex.vault` DEX (обязателен у Infinity CL / Bin / Stable — pools/families.rs; у DEX
+     без dex.vault держатель не известен — отказ с причиной). Пул V4 / CL / Bin маршрута в том же держателе с не
+     прочитанными крючками (hooks = None) — тоже отказ (ревью t133).
+- **Решение 303 (15.11.2026, ветка t134/probe-after-approve от rel/dex-all) — сделано, ждёт ревью и приёмки.** Обмен
+  DEX после approve: проба и отправка — только когда голова опроса блоков дошла до блока approve (exec/approve_seen.rs);
+  откат Permit2 понятными словами; предпроверка пишет dex.presell_approve (DECISIONS 303). Открыто:
+  1. **Вопрос Тиграну:** отправлять ли approve (Permit2) ЗАРАНЕЕ — в предпроверке до покупки, под новой необязательной
+     настройкой? Сейчас контракт dex_presell ничего не отправляет. Нужно решить: газ approve при отказе сделки после
+     него (вне сделки?) и учёт по решению 236 (газ approve в затраты сделки — сейчас его кладёт продажа); очередь
+     кошелька занята approve на ~1 блок во время чужих продаж.
+  2. **Вопрос Тиграну:** продлевать ли «истекающий» Permit2 (срок наступит до продажи) — нужна настройка запаса, сек.
+     Пока недостающим считается только срок ≤ время блока. Обход без кода: dex.approve_unlimited = да и большой
+     dex.permit2_expiration_s — approve перед продажей раз в этот срок на токен.
+  3. **Вопрос Тиграну:** повтор пробы/обмена внутри адаптера на новом блоке — не сделан: после (а) откат Permit2 на
+     блоке ≥ блока approve значит, что разрешения нет; при отказе всех каналов (SIREN) транзакция обмена уже ушла в
+     каналы — правило «отправлен и не исполнился — больше не пробуем»; повтор идёт ядром (решения 110, 154).
+  4. Причина отказа билдеров в SIREN фактом не установлена. Дополнение 303 (журнал) — сделано: теперь в журнале
+     блок и хеш каждого approve и голова опроса (dex.approve_seen), блок пробы (dex.rebuilt_after_approve), по
+     каждому каналу — код/текст, error.data, расшифровка Permit2, хеш транзакции, предел блока бандла
+     (send.channel_rejected; длина error.data — log.channel_data_max_bytes, необязательна). После выкладки при повторе случая — разобрать по этим строкам. Не покрыто тестом на
+     записанных ответах каналов с полем error.data (таких записей нет) — записать при первом отказе.
+  5. Не покрыто тестом (записать с узла): квитанция approve и последовательность eth_blockNumber того же интервала
+     (ожидание головы); eth_simulateV1 пробы после approve на блоке approve и на блоке до него; ответы каналов
+     club48/blockrazor/jetbuilder/nodereal на обмен сразу после approve.
+
+- **Решение 306 (15.11.2026, ветка t136/ladder-counter-token от rel/dex-all a3cc2b9f) — сделано; прогон 2be4ddae
+  зелёный, ревью «сливать можно»; правки по ревью — ждут прогона. Включать на живом боте — по плану п. 7.** Лесенка dex.pmm_ladder_usd и у пар не с USDT — по курсу X → USDT (quote/rate.rs best_in), под
+  `dex.pmm_ladder_counter` [DEX] (DECISIONS 306). Открыто:
+  1. Не покрыто тестом на записанных данных: чтение лесенки квотером с узла для пары не с USDT (load_metric_ladder.rs
+     read_with / load_woo_ladder.rs read с суммами в WBNB). Для теста — записать на ОДНОМ блоке: состояние пула
+     «WBNB — USDT» (например PancakeSwap V2 0x16b9a82891338f9ba80e2d6970fdda79d1eb0dae getReserves) и ответы
+     tokenX/tokenY/state + quoteIzi на суммах в WBNB пула 0xf37f8430271b3F572cd4eef92e9F7A0E089F39dd (CYBER/WBNB,
+     iziswap-bsc) или 0x7cD0Cdd8eC9Aa99Af1A489D4fa89d769eBB5037E (ETC/WBNB, biswap-v3-1); сверить, что котировка
+     в точках = ответу квотера и сверка с квотером не паузит пул.
+  2. Нагрузка на живом боте: включение добавляет до P_mw × 2N + P_izi × (3 + 2N) eth_call на блок (N = 9 → 18 на пару
+     Metric / WooFi, 21 на пару iZiSwap / Biswap V3). Число пар не с USDT у этих DEX по коду не установить — посмотреть
+     на экране «Глубина» / в справочнике до включения; включать по одной DEX.
+  3. Вопрос 297 п. 3 (Metric / WooFi пары не с USDT каждым блоком без лесенки — лишние вызовы) остаётся для DEX, где
+     dex.pmm_ladder_counter не включена; при «да» эти чтения нужны (лесенка строится каждым блоком).
+  4. Решение по ступени, на которую глубины пулов «X — USDT» не хватает: сейчас — край лесенки (точек дальше нет,
+     объём выше — неисполним). Если Тигран хочет иначе (не строить лесенку вовсе) — сказать.
+  5. Ревью 306 — нагрузка на сессию (факт кода, не менялось): пулы «каждым блоком» читаются по одному
+     (per_block.rs on_head → reload::load_one().await, 2–3 последовательных обращения к узлу на пару, без срока);
+     on_head идёт внутри цикла сессии (pools/session.rs, ветка heads.changed()) — пока он идёт, логи этой пачки пулов
+     не обрабатываются; чтение дольше блока — промежуточные блоки пропускаются. Пары, которые добавляет настройка
+     (iZiSwap / Biswap V3 не с USDT), идут тем же путём, что Metric / WooFi; путь в t136 не переделывался.
+     **Условие включения:** до включения замерить длительность on_head на живом боте; включать по одной DEX.
+  6. decimals ≠ 18 не покрыты тестом: в route_common у всех токенов 18; записанной пары «X — USDT» с decimals ≠ 18
+     в tests/data не нашёл. По коду decimals X в ladder_counter.rs не используются (вход — USDT в единицах decimals
+     USDT, выход — сразу в единицах X из математики пула); decimals USDT — tokens.decimals(USDT).
+  7. **План включения на живом боте:** (1) записать с узла на одном блоке пул WBNB — USDT и ответы квотера пары не с
+     USDT (п. 1), добавить тест; (2) посчитать в интерфейсе число пар не с USDT у каждой DEX с лесенкой
+     (dex.pmm_ladder_usd задана); (3) включать dex.pmm_ladder_counter по одной DEX, смотреть сверку с квотером
+     (паузы пулов) и длительность on_head.
+
+- **Решение 297 (15.11.2026, ветка t128/ladder-usdt-only от rel/dex-all) — сделано, ждёт ревью и приёмки.** Лесенка
+  dex.pmm_ladder_usd (WooFi, Metric OMM, iZiSwap, Biswap V3) — только у пары, где встречный токен = USDT площадки
+  (DECISIONS 297; ошибка живого бота: ложная пауза CYBER/WBNB iziswap-bsc и ETC/WBNB biswap-v3-1). Открыто:
+  1. ~~Вопрос Тиграну: переводить ли суммы лесенки во встречный токен по курсу~~ — ответ «да, все включать»: решение
+     306 (dex.pmm_ladder_counter, t136).
+  2. Не покрыто тестом на записанных данных: чтение лесенки с узлом (load_metric_ladder.rs read_with,
+     load_woo_ladder.rs read) для пары не к USDT — записанных ответов узла для таких пулов нет (tests/data/izi_2026-11-15
+     — только пары с USDT). Покрыто: правило usdt_quote на адресах записанных пулов (tests/bsc_dex_izi_live.rs
+     ladder_only_for_usdt_quote_t128). Для полного теста — записать на блоке ответы tokenX/tokenY/state пула
+     0xf37f8430271b3F572cd4eef92e9F7A0E089F39dd или 0x7cD0Cdd8eC9Aa99Af1A489D4fa89d769eBB5037E.
+  3. Metric и WooFi пары не с USDT по-прежнему перечитываются каждым блоком (per_block.rs each_block — по needs, как
+     раньше), хотя лесенки не получают: лишние вызовы узла. Отсекать ли их, как iZiSwap (ревью t118), — вопрос Тиграну.
+  4. После выкладки: пулы на паузе от прежней ложной сверки (CYBER, ETC) — проверить на экране «Глубина», снимается ли
+     пауза (как снимается пауза сверки — по правилам check/quoter_pause.rs; в этой задаче не менялось).
+
+- **Решение 298 (15.11.2026, ветка t129/stale-read-no-break от rel/dex-all f382c879) — сделано, ждёт ревью и приёмки.**
+  Чтение пула на выпавшем у своего (не архивного) узла блоке не рвёт подписку пачки (DECISIONS 298). Открыто:
+  1. listen_site.rs (решение 295) — закрыто ревью-доработкой: StaleData у пар многомонетного пула — пары в очередь
+     повтора, без обрыва. Блок повтора — не ниже synced_block записей; пока пул ждёт повтора — события без перечитывания.
+  2. Ждущий повтора пул продолжает получать события (если запись в реестре есть; новый пул без записи событий не
+     получает — listen_log.rs: записи нет → лог пропускается): они применяются к недостоверной записи, и при Updated пул
+     уходит ядру (listen_log::emit) — так было и раньше у пулов, не прочитанных при приёме. Котировки и граф берут только
+     valid (quote/select.rs, pick.rs, graph.rs, route_cache.rs); valid = true ставит только полное чтение (load.rs).
+  3. Повтор — прежний механизм (reload.rs retry, dex.pool_load_retries): не задана — пул ждёт её (запись в журнал).
+  4. Не покрыто тестами на записанных данных (нужен живой узел и подписка): асинхронный путь on_log → requeue → retry и
+     то, что чтение пула «по одному» на своём блоке укладывается в окно 128 блоков. Живые значения dex.load_batch и
+     dex.integral_tick_steps в этой задаче не установлены. Проверить на живом боте: нет новых «Связь с узлом BSC
+     (WebSocket) потеряна: … historical state», есть записи «перечитать пул на блоке события … не удалось» и затем
+     «состояние пула прочитано с попытки N».
+  5. **Брошенный пул без незаданной настройки** (попытки dex.pool_load_retries исчерпаны, setting = None) по факту кода
+     возвращается только при переподключении пачки, перечитывании по его событию (Refresh / off_map / бины) или
+     пересинхроне ленты (depth_sync.rs resync); изменение настроек его не возвращает (revive.rs — только брошенные из-за
+     заданной теперь настройки). Нужен ли периодический возврат таких пулов — вопрос Тиграну.
+- **Решение 296 (15.11.2026, ветка t127/tick-band от 38d8092a) — сделано, ждёт ревью и приёмки.** Необязательная
+  `dex.tick_read_band_pct` [bsc_dex] — дальность чтения карты тиков в % цены, слова — по tickSpacing каждого пула
+  (DECISIONS 296). Не задана — 1 в 1 как раньше. Открыто:
+  1. **После выкладки — задать значение** (таблица слов и вызовов — в отчёте t127 / DECISIONS 296): при tickSpacing 1
+     10% → ±6 слов (13 вызовов TickLens на пул вместо 5), 20% → ±10 (21), 50% → ±29 (59); при tickSpacing ≥ 50 до 50%
+     не меняется (до ≈72%), при tickSpacing 10 — с ≈22,6% (25% → ±3 слова). Смотреть журнал чтения пулов и нагрузку на узел.
+  2. **Тест на SHOPINX/WBNB (0x3079ae2e…, tickSpacing 1)** — запись tests/data/fit_volume_2026-11-15 лежит в ветке
+     t125/fit-volume; после её слияния добавить тест «помещается больше при dex.tick_read_band_pct» на этой записи
+     (слова ±12 — хватит для полосы до 25%). Сейчас «расчёт идёт дальше прежнего края» покрыт пулом PancakeSwap V3
+     AAVE/USDT tickSpacing 1 из depth_2026-10-25 (слова ±8).
+  3. Не применяется (своя дальность, не слова битмапа): Algebra Integral (dex.integral_tick_steps — инициализированные
+     тики по списку), Maverick V2 (dex.tick_radius у PoolLens), Bin и LB V2.1 (dex.bin_depth_usd), KyberSwap Elastic
+     (весь список тиков). Нужна ли им полоса в % — вопрос Тиграну.
+  4. Перечитывание карты по сдвигу цены (depth.rs off_map) — только по выходу полосы ГЛУБИНЫ за прочитанные слова; по
+     полосе чтения карта вокруг нового тика не перецентрируется (иначе лишние перечитывания). Дальность чтения в одну
+     сторону после сдвига цены уменьшается до следующего перечитывания пула. Перецентрировать ли и по полосе чтения —
+     вопрос Тиграну.
+  5. По отдельной DEX настройка сейчас не задаётся (область площадки, как dex.tick_words). Технически можно (область
+     «DEX» и ctx.dex_dec(…, f.id)), но word_range не получает DEX: нужен id в word_range, raw_word_range и в
+     load_slipstream::load / load_algebra::load (сейчас без Family). Нужно ли — вопрос Тиграну.
+  6. Смена значения на лету не перечитывает уже прочитанные карты — действует на пул после его следующего
+     перечитывания. В список слежения depth_sync.rs (DEPTH, строки 30–34) не добавлена: on_change перечитывает только
+     спящие пулы и пулы с выходом полосы ГЛУБИНЫ за карту (depth_sync.rs: need = !deep || off_map; depth.rs off_map —
+     только dex.depth_band_pct), глубокие пулы с картой от смены полосы чтения не перечитались бы, а спящие
+     перечитывались бы с заморозкой всей пачки. Чтобы применить ко всем пулам сразу — переподключение подписки или
+     перезапуск. Нужна ли перечитка всех карт по смене значения (отдельная ветка в on_change) — вопрос Тиграну.
+  7. Algebra: настройка расширяет окно сырого битмапа у ВСЕХ пулов Algebra (слово = 256 тиков при любом tickSpacing) и
+     может сделать их глубину полнее, если dex.depth_band_pct шире прежнего окна (≈ dex.tick_words × 2,56%), — пул
+     может перейти порог dex.min_pool_liquidity_usd (ревью t127).
+
+- **Решение 295 (15.11.2026, ветка t126/multi-pair от cab52fda) — сделано, ждёт независимого ревью и приёмки.** Все
+  нужные пары многомонетного пула: `PoolRef::Multi`, настройка `dex.multi_pair` [DEX] (DECISIONS 295). Без настройки —
+  1 в 1 как раньше (снимки tests/data/multi_pair_2026-11-15 совпали). Открыто:
+  1. **После выкладки — включать `dex.multi_pair` по одной DEX**, смотреть журнал и число записей пулов DEX на экране
+     «Монеты» / справочник, затем следующую: (1) Ellipsis и Nerve (3pool, пулы из `dex.stable_pools`; на USDT — +1 пара
+     на пул: BUSD–USDT и USDC–USDT вместо одной); (2) Curve NG (трёхмонетный пул 0xa5e0…); (3) PancakeSwap StableSwap
+     (три-пулы фабрики); (4) Balancer ACSI последним (24 пула, до 6 токенов; пулы на 4–5 токенов дают до 4–5 пар на
+     встречный). Откат — «нет»: подписка пересоберётся, записи Multi снимутся.
+  2. **Замер нагрузки после включения** (не мерилось): число записей реестра и проверок по паре — сверка с квотером
+     (check/quoter_cycle.rs, по паре), пробы налога (check/taxes.rs — по пулам монеты), газ сторон, глубина (на пару).
+     Чтение состояния — одно на контракт (load_site.rs); подписка — адрес пула один раз в фильтре.
+  3. Не покрыто тестом на узле (ревью 295, п. 4 — уточнено): разборы проверки до adopt включительно покрыты
+     verify_*::judge на записанных ответах (tests/bsc_dex_multi_pair_verify.rs, tests/bsc_dex_multi_pair.rs) для
+     Ellipsis, Nerve, Balancer (4 и 5 токенов), Curve NG; сетевая часть verify (try_chunks) — без узла. **PancakeSwap
+     StableSwap — записи нет**: нужны ответы verify_stable_u plan для трёхмонетного пула фабрики (coins(0..7) пула и
+     getPairInfo / getThreePoolPairInfo фабрики dex.factory по паре кандидата) и ответы чтения load_stable_u (coins /
+     balances / fee / A / is_killed) — в tests/data их нет. Не покрыто: число сетевых запросов load_site::states (покрыто
+     структурно); per_block_balancer по контракту и listen_site на потоке логов — без записанного потока подписки по
+     пулу Multi (есть один лог Curve NG 0xa5e0…, curve_ng_2026-11-14 logs[0] — им покрыто решение о пропуске,
+     listen_site::stale); трёхмонетный пул PancakeSwap StableSwap.
+  4. WooFi (`PoolRef::Member` теряет все базовые монеты, кроме одной: поиск по фабрике кладёт строку на каждую базовую
+     монету с одной строкой адреса общего контракта, а ключ строки справочника (seen / taken / status) — строка пула,
+     index_pass.rs pass): в t126 НЕ сделано — правка не точечная (ключ строки для вида WooPP с монетой, показ
+     справочника, ключ исключения directory::pool_key у Member, смена ключа «на лету») и меняет поведение уже
+     работающего вида; записанных ответов WooFi для теста в tests/data нет. Отдельная задача: ключ dir_key для WooPP —
+     «контракт|базовая монета» тем же путём, что Multi (multi_pair.rs).
+  5. Пачка подписки: при старте пары одного контракта не разрываются (batches.rs pack), контракт с парами больше
+     `dex.pools_per_sub` режется — две подписки на один адрес, каждая перечитывает свои пары (listen_site::stale — по
+     парам своей пачки). Поздние пары — в открытую позднюю пачку с их контрактом, пока есть место (attach.rs); пачки старта
+     канала новых пулов не имеют — поздняя пара их контракта идёт в позднюю пачку (тоже два слушателя адреса).
+- **Решение 292 (15.11.2026, ветка t123/saddle-from-list от 52ca0c10) — сделано, ждёт приёмки.** Пулы
+  `saddle_stableswap` / `curve_stableswap` из `dex.stable_pools` попадают в бот без индексатора при `index.factory_scan` = да
+  (pools/stable_list.rs; DECISIONS 292). Математика = квотер живого пула: Nerve 3pool calculateSwap 18/18, Ellipsis 3pool
+  get_dy 18/18 (tests/bsc_dex_stable_list_live.rs). Открыто:
+  1. ~~Пул с 3 монетами — одна пара в реестре~~ — **закрыто решением 295** при `dex.multi_pair` = да (без неё — как было):
+     какая — не задано кодом (первый кандидат обхода HashMap справочника; при
+     перепроверке по одной монете запись может перейти к её паре). Все пары пула — общий ключ справочника/реестра (TASKS 289 п. 7).
+  2. Устаревшие тексты в запретных для t123 местах (не трогал): комментарий pools/families.rs у pancake / lista / saddle —
+     «шага исполнителя нет» (шаги есть: exec_kind.rs StableU256 / Saddle); описание `dex.kind` (catalog/dex.rs и
+     docs/SETTINGS.md) — у Saddle / PancakeSwap / Lista «шага исполнителя нет (сигнал)», у THENA Fusion, Solidly,
+     Slipstream — «исполнения пока нет», хотя они в списке «виды с шагом контракта-исполнителя» того же текста; исправлена
+     только фраза про DODO.
+  3. Nerve BTC Pool `0x6C341938…270c` и ETH Pool `0x146CD24d…A9C0` (та же страница документации) на цепи не проверены и
+     математикой не сверены; метапулы Nerve (RUSD, fUSDT, UST) — другой код (MetaSwap), не подключать.
+  4. ~~#[ignore]-тест Nerve в tests/bsc_dex_stable_families.rs~~ — **закрыто ревью 292**: убран, сверка Nerve —
+     tests/bsc_dex_stable_list_live.rs (состояние собирает load_saddle на записи tests/data/nerve_2026-11-15).
+  5. Ellipsis 3pool у GeckoTerminal есть (dex ellipsis_finance, пара BUSD / USDC): для пары с USDT справочник индексатора
+     его не даёт — нужен источник решения 292 или промежуточная USDC.
+  6. Факт кода (ревью 292): load::state получает пару строго (token0, token1), token0 < token1 — путь: load.rs load
+     (Found) / refresh (Entry.pool ← load::built ← Found) / load_batch.rs states (Want из Entry.pool или Found);
+     Found видов Saddle и Curve 2020 строит discover::sorted(coin, quote). Индексы i0 / i1 состояния — по этой паре.
+- **Решение 293 (15.11.2026, ветка t124/bingx-minqty от 52ca0c10) — `venue.ignore_deprecated_qty` у BingX (площадка и монета), пауза направления после отклонённой продажи; ждёт приёмки.**
+  После выкладки (порядок):
+  0. Перезаписать tests/data/bingx_minqty_2026-11-15 сырыми ответами BingX — команды curl из `commands.txt` этой папки
+     (публичные GET без ключа, с сервера), сверить с текущими значениями (сейчас данные — пересказ WebFetch).
+  1. Задать signal.route_cooldown_s и `stuck.reject_route_pause = да` (у BingX или у системы) — без обеих пауза
+     направления после отклонённой продажи не ставится (повторное ревью 293). Пауза — одно направление, только в
+     памяти (после перезапуска её нет).
+  1а. Включить `venue.ignore_deprecated_qty = да` сначала только у монеты SHOPINX (область «монета»: в интерфейсе
+     монета добавляется по адресу контракта 0x4f0ed1f48beaa4797a62202a21804cadc2170d6b — ключ решения 211), не у
+     площадки. Проверить, что у монеты в справочнике ядра этот адрес (без адреса значение монеты не применяется).
+     Действует со следующего чтения справочника пар (venue.symbols_refresh_s); в журнале venue.symbols — «… только
+     пределы количества (minQty / maxQty)». Выключать — когда нет открытых сделок по BingX (окно до одного периода).
+     У площадки — только после факта п. 2(в).
+  2. Проверить фактом: (а) /api/spreads по SHOPINX — оба направления не NoPrice из-за объёма проверки (объём проверки
+     ≈ signal.probe_usd / цена, не 57 505); (б) сухая сделка / проверка ордера продажи 10 000 SHOPINX на BingX —
+     правила адаптера проходят; (в) первая живая продажа на BingX объёмом меньше minQty — принята биржей или код и
+     текст отказа (записать ответ в tests/data). Отказ после покупки — алерт «продажа не прошла» на «Ручное
+     управление», монеты на BingX (решение 293, «Риск»).
+  3. Пробного ордера у спота BingX официально нет (только USDT-M POST /openApi/swap/v2/trade/order/test) — проверка
+     продажи до покупки остаётся правилами без сети; новый сетевой вызов не добавлен. Появится официальный эндпоинт —
+     отдельная задача.
+  3а. Настройка убирает и maxQty: у CAKE-USDT 15.11 maxQty 10 689.471 × 1.627 ≈ 17 392 USDT строже maxNotional
+     173 228 — с настройкой предел ордера CAKE станет 173 228 USDT. Соблюдает ли BingX maxQty — не установлено; при
+     потолке money.max_per_trade_usd ниже ≈17 тыс. USDT это не проявится.
+  3б. Остатки (код не менялся): при «да» остаток после частичной продажи с суммой ≥ minNotional, но < minQty, уходит в
+     продажу, а не в пыль (core/dust.rs below_order, core/sell.rs ветка Partial; так же core/relay_value.rs). Если
+     BingX соблюдает minQty — отказ, алерт человеку и пауза направления.
+  3в. Тест 3 (объём проверки сигнала) не учитывает минимумы вывода и депозита SHOPINX: записанного ответа
+     capital/config/getall по SHOPINX нет (подписанный запрос) — записать с сервера и дополнить тест.
+  3г. Крайний случай (третье ревью, денег не стоит): тикер монеты справочника, добавленный в venue.price_assets биржи,
+     даёт две монеты подписки с одним тикером — с адресом и без (core/subscribe.rs: дубли отсекаются по монете целиком,
+     тикер+адрес); ядро хранит состояние пары по тикеру и берёт последнюю (core/market_state.rs SpotPairs) — у монеты
+     без адреса значение монеты venue.ignore_deprecated_qty не применяется, действует значение площадки. Правила ордера
+     адаптера — по монете запроса (с адресом). Возможное расхождение ядра и ордера только в этом случае.
+  4. Открытый вопрос: действует ли то же у других бирж (minQty строже minNotional / цена)? Сейчас настройка читается
+     только адаптером BingX; у других бирж пределы количества — из их документации (у части — обычные поля).
+  5. (E, после релиза, зона DEX — код не трогался) Путь через промежуточную монету при неполном шаге:
+     venues/bsc_dex/quote/route_calc.rs `complete` (стр. 121–127) — любой шаг `!s.complete` → NoRoute «шаг маршрута
+     не исполним целиком», хотя прямой путь (quote/direct.rs стр. 148–150) отдаёт исполнимую часть (`sold = used / k`,
+     `got.min(qty)`), а решение 87 считает грубый спред на max вливаемом объёме = min(fillable обеих сторон). Нужно:
+     в route_calc `sell` — при неполном шаге i пересчитать вход назад до шага 0 (монет фактически ушло = вход шага 0,
+     соответствующий исполненному входу шага i, через точный выход/вход предыдущих пулов) и отдать Path с
+     fillable < qty; в `buy` («с конца») — при неполном шаге взять наибольший исполнимый выход этого шага и пересчитать
+     последующие хопы вперёд. Path/Quote должны нести fillable_qty, как direct. Риски: (а) пересчёт назад через
+     пулы с крючком/налогом — округления единиц токена (вход ≠ ровно выход предыдущего); (б) сейчас путь via по коду
+     route_calc всегда полный (иначе NoRoute) — потребителей (quote/pick.rs, граф решения 80, сборка обмена) проверить
+     на неполный путь: он не должен попасть в исполнение без пересчёта объёма (подбор объёма решения 66 трактует NoRoute как «слишком
+     большой» — граница сверху; при fillable-части граница уйдёт в пересчёт объёма); (в) кэш котировок
+     (core/quote_cache.rs) и «кандидаты» — пометка неполного объёма. Тест — на записанном пуле
+     SHOPINX/WBNB 0x3079ae2e87dc2e0c75c9b98d65bc622ad10f326c (карта тиков) + WBNB/USDT.
+
+- **Решение 294 (15.11.2026, ветка t125/fit-volume от 52ca0c10) — путь через промежуточную отдаёт помещающуюся часть
+  (прямой расчёт, перебор отменён); ждёт приёмки.** После выкладки: (1) включить `dex.intermediate_partial_fill` = да
+  на площадке bsc_dex (экран «Площадки», раздел «DEX»; значений нет — решает Тигран); действует в обоих режимах
+  dex.router_mode (на сервере graph; в релизе — вместе с веткой 271). (2) Проверить на живом боте: направления монет с пулом только через промежуточную (как
+  SHOPINX) выходят из NoPrice, в «Кандидатах» — объём не больше помещающегося; «Время расчёта» до и после (лишний
+  расчёт — только у пар пулов с NoRoute: 1 расчёт свопа + контрольный eval, повторов не больше числа шагов).
+  (3) **Не покрыто — прежний NoRoute** (нужны записи и/или решение): предел на втором шаге продажи / первом шаге
+  покупки (обратный / прямой пересчёт через пул; в записи fit_volume_2026-11-15 второй шаг — V2, он предела не даёт —
+  нужна запись пути с узким V3 на шаге «промежуточная — USDT»); пулы-предел Bin, TickBin, Elastic, Algebra (частичный
+  итог и точный выход не проверены на записи); V2 «выход ≥ резерва» — частичного итога нет, «резерв − 1» помещается
+  только при бесконечной цене (решение 294); graph_seq.rs:191 «обмен доли не исполним целиком» и «нет пригодного»
+  умного режима; налог монеты ≠ 0 на пути через промежуточную (формула — доля keep, как route_calc.rs; записи пути с
+  налогом нет). (4) Режим graph, изменения только при «да»: ошибка графа с кодом NoRoute при неполной классике (в т.ч.
+  одного пула с USDT) в журнал «dex.router_graph» больше не пишется (другие ошибки — пишутся); исполнимый граф при
+  неполной классике одного пула с USDT должен пройти mids_ok (прежний merge этой проверки не делал — строже).
+  Неисполнимый граф монеты, у которой классика тоже не дала ничего, — прежний NoPrice (открыто в 271).
+  (5) Стоимость на сигнал там, где раньше был ранний NoPrice: повторная котировка обеих сторон на помещающемся объёме
+  (prices.rs), у кандидата — подбор и финальный расчёт, при неполной финальной котировке — исполнимый объём и ещё один
+  расчёт (profit.rs:228-243); замерить «Время расчёта» после включения. (6) Тестами не покрыто (записей нет или не
+  достигается на записи SHOPINX): повтор route_fit.rs «минус одна единица» (на записи контрольный расчёт проходит с
+  первого раза — нужен путь с налогом или крючком ≠ 0); signal_route при неисполнимом графе, который лучше классики
+  (часть графа по шагу сплита не больше точной части классики); пул-предел Infinity CL; налог монеты ≠ 0; mids_ok = нет
+  у исполнимого графа; предел на втором шаге продажи / первом шаге покупки. (5) Тест пути целиком через ядро (сигнал →
+  подбор → финальный расчёт с порогами прибыли) — нужны стакан, правила пары и сеть биржи (подписанный запрос) по
+  монете с таким пулом (SHOPINX: на какой бирже — в постановке не указано).
+- **Задача t122 (15.11.2026, ветка t122/small-fixes от 12040c4c) — малые правки перед сборкой, ждёт приёмки.**
+  Сделано: (1) повторная проверка пути исполнения после onchain::ensure — по версии из её результата
+  (exec/executor/callback_at.rs missing_at; trade.rs, check/probe_exec.rs). Исход меняется, только когда запись версии
+  у кошелька говорит «можно», а сверка — «нельзя», или запись не обновилась при сбое onchain.rs remember: первичный
+  отбор пулов (pools/exec_kind.rs via_executor → exec_callback::missing) остаётся по записи (п. 4 ниже); (2) docs/UI.md — POST …/executor/deploy
+  {sha256, wnative}; (3) комментарий ошибок api/dex_executor.rs deploy — по коду; (4) exec/dry_build.rs — причина
+  нативной монеты через исполнитель — native_block; (5) уведомление узла (решение 282): порог до fresh(), «сообщено» —
+  после ушедшего события; (6) 283 п. 3 — формулировка по коду; (7) SettingCard.svelte 201 строка — в ROADMAP «Техдолг»;
+  (9г) разбор пяти пулов curve-bsc других фабрик — решение 275 п. 2 (тип фактом не установлен). **Не сделано (нужно
+  решение / точная постановка):**
+  1. (9а) Общий Permit2 у двух групп Universal Router (решение 271, п. 8): сумма ERC-20 approve → Permit2 по (токен,
+     Permit2) вместо группы. Затрагивает exec/bundle.rs router_execute (361 строка; разрешения собираются внутри
+     группы через wallet/approve.rs missing/all — ERC-20 и Permit2 → UR вместе) и quote/approve_bundle.rs (Unit по
+     роутеру). Нужно постановкой: при dex.approve_unlimited = нет — ERC-20 approve на сумму входов ВСЕХ групп с этим
+     (токен, Permit2) один раз (перед первой группой) и Permit2 → UR — на сумму своей группы; котировка — то же
+     (план = факт); тест на записанных allowance (п. 7 того же решения — записи нет).
+  2. (9б) Общая группировка бандла для exec/bundle.rs build и quote/approve_bundle.rs plan: ключи различаются по
+     входу (бандл — order.token_in шага, котировка — запись первого пула, п. 9 решения 271) — общая функция без
+     решения п. 9 меняет поведение одной из сторон; в TASKS/ROADMAP как задача не описана.
+  3. (9в) `Lagged` в settings/live.rs Watch считать изменением: в TASKS/ROADMAP не описано. next() возвращает
+     Change — на отставание изменения нет (выдумать его нельзя); next_batch (9 вызовов) мог бы вернуть пробуждение
+     при Lagged без Change, next / try_next (всего Watch::new — 23 места) — нужен новый тип ответа и разбор вызывающих.
+     Нужна постановка: только next_batch или все.
+  4. Первичный отбор пулов остаётся по записи версии у кошелька: exec_kind::via_executor (pools/exec_kind.rs) →
+     exec_callback::missing → wallet_version; записи нет — Err «не сверен» → via_executor = нет, и до onchain::ensure
+     / missing_at не доходит (check/probe_exec.rs part, quote/graph_executor.rs all_via, exec/executor/mod.rs takes).
+     Правка — в pools/exec_kind.rs / exec_callback.rs (зона другого разработчика) — после слияния.
+  Ревью t122 (отдельный коммит): уведомление узла — запись журнала с текстом и «не ушло» по одному разу на переход
+  (node/head_stall.rs State.said), повторные попытки отправки — молча каждый круг; отправка вынесена в
+  node/head_stall_send.rs; текст отказа нативной монеты — общий executor::native_refusal (сделка и сухая сделка);
+  комментарий ошибок api/dex_executor.rs deploy — 409 NonceConflict и NotConfigured «нет такого кошелька» (502).
+
+- **Решение 283 (15.11.2026, ветка t116/ui-hide-dex-on-cex от rel/dex-all) — сделано, ждёт приёмки.** Экраны «Площадки»
+  и «Настройки» у бирж не показывают настройки, которые читает только площадка DEX (поле схемы `venue_for: "Dex"`, `.dex_venue()` в
+  каталоге: dex.*, dex_dex.*, smart.*, verify.*, index.*, send.*, feed.max_block_age_ms, exec.dex_slippage_pct,
+  exec.via_kyber, exec.dex_best_of, check.probe_usdt, kyber.assume_zero_transfer_tax). Только показ. **Открыто:**
+  1. ~~Экран «Настройки»~~ — закрыто 15.11 (уточнение Тиграна «только для DEX»): карточка настройки
+     (components/SettingCard.svelte) тоже не показывает строки бирж тем же признаком.
+  2. Настройки одной биржи (catalog/gate.rs, okx.rs, xt.rs и др.) тоже показываются у всех площадок — признака
+     «для какой биржи» в схеме нет; не трогалось.
+  3. Значения, уже сохранённые у бирж для этих настроек, остались в базе (их никто не читает). На экранах «Площадки»
+     (pages/Venues.svelte) и «Настройки» (карточка components/SettingCard.svelte) не показываются (shownAtVenue,
+     lib/settings.svelte.js); видны в «Истории» настройки (components/SettingHistory.svelte — без области, все области)
+     и в экспорте (GET /api/settings/export, api/settings_io.rs — признак venue_for не читает). Формулировка уточнена
+     по коду (задача t122).
+- **Решение 282 (15.11.2026, ветка t115/node-stall-alert от rel/dex-all) — сделано, ждёт приёмки.** Уведомление
+  «узел BSC: блок не растёт» (dex.node_stalled) и «блоки снова идут» (dex.node_resumed) по уже идущему опросу
+  eth_blockNumber. **После выкладки задать:** «Настройки» → «Узел BSC» → `bsc.node_stall_alert_s` (секунды); «Уведомления»
+  → «Площадки» → включить dex.node_stalled и dex.node_resumed. **Открыто (факты кода, без переделок):**
+  1. Если узел не отвечает уже при подписке DEX (eth_blockNumber в pools/market.rs), подписка не начинается и опроса
+     блоков нет — уведомление не сработает (о сбое подписки — только журнал core.subscribe). При зависании ПОСЛЕ
+     подписки (случай 14.11) — срабатывает: старые задачи живут, пока новая подписка не удалась.
+  2. Опрос (и уведомление) идёт, только пока DEX подписан на рынок: venue.enabled [bsc_dex] = да и список монет DEX
+     не пуст (нужен SpotPairs хотя бы одной биржи, core/subscribe.rs). Режим «Стоп» подписку не снимает.
+  3. Резервный узел bsc.node_http_url_backup при зависании (узел отвечает, номер стоит) не включается: переключение —
+     только на ошибки связи, таймаут, 5xx и 429 (node/failover.rs switchable). Решить, нужно ли переключение по
+     простою номера.
+  4. Число соседей (net_peerCount) без нового опроса — только по запросу («Проверить подключение») или лишним вызовом в
+     той же пачке опроса блоков; по инциденту 14.11 узел отдавал 200 при 4 реальных — как сигнал ненадёжен.
+  5. События venue.disconnected / venue.reconnected есть в каталоге и склейке (notify/glue.rs), но в коде их не шлёт
+     никто (grep по src) — включённые на экране «Уведомления», они не приходят.
+  **Сделано (задача t122, п. 5):** порог bsc.node_stall_alert_s читается ДО fresh() (не задан —
+     fresh() для уведомления не зовётся, node/heads.rs); «сообщено» ставится только после ушедшего события
+     (node/head_stall.rs step_with): канала ядру нет или закрыт — следующий круг молча пробует отправить снова; журнал
+     venue.head_stall — текст и «не ушло» по одному разу на простой / восстановление (ревью t122, State.said); ушло —
+     «сообщено» ставится, журнал не дублируется. Тест — tests/bsc_dex_head_stall.rs step_retells_after_lost_send.
+     П. 6 ниже этой правкой НЕ закрыт: он про сборку теста squadswap_review и «database is locked», а не про шаг.
+  6. База rel/dex-all f16a0fcf не собирала тест tests/bsc_dex_squadswap_review.rs (вызов pool_taxes::outcome без
+     пятого аргумента после решения 280) — в ветке t115 добавлен `&[]` (по комментарию функции — «как раньше»).
+     Тесты bsc_dex_squadswap_review и uncapped_maxwin падают при параллельном запуске «database is locked» (тесты
+     одного файла делят каталог SQLite во временной папке), с --test-threads=1 проходят — не связано с решением 282.
+
+- **Решение 280 (15.11.2026, ветка t112/v2-fork-executor от rel/dex-all) — сделано, ждёт приёмки.** Новый вид DEX
+  `v2_fork_executor`: V2-форк без известного роутера торгуется шагом V2 контракта-исполнителя (обмен прямо в паре), сверка
+  — обмен через код исполнителя в eth_simulateV1. Комиссии по замеру 15.11 (блок 133619188): dao_swap 0,25, orangedx 0,25,
+  plearn 0,20, pls2e 0,30, baryon_network 0,25, omni-exchange-v2-bsc 0,25 (ликвидность omni — 1,15 USDC). **Открыто:**
+  1. pls2e: пара 0x72f7922e…259d (USDT / 0x8267d169…) принимает обмен даже с комиссией 0 (у пары WBNB/USDT той же фабрики —
+     ровно 0,30%): у монеты 0x8267… особая механика баланса — по факту одной симуляции, причина не разобрана; наша
+     комиссия 0,30 для такой пары только занижает выход (в безопасную сторону).
+  2. Сделано (ревью 15.11): сверка берёт вход из самой пары + sync, перевод — исполнителю, execute на ВЕСЬ фактически
+     пришедший баланс (amountIn = 0; запись v2_executor_balance_2026-11-15: продажа dao_swap — монета с налогом на
+     перевод из пары — проходит; прежняя раскладка откатывалась «token call»). Причины: «пара отклонила обмен (K)» /
+     «сверка не собрана» / «откат не проверкой K» / «пара отдала меньше формулы» (dex.quoter_max_diff_pct). Точка кривой
+     сверки сдвинута на сумму сверки — проверка K с комиссией от неё не зависит.
+  3. Сделано (ревью 15.11): нога без своего пути исполнения (tradable = нет: v2_fork_executor, v3_fork, kyber_elastic) в
+     бандле — отказ «у DEX … нет своего пути исполнения — нужен исполнитель у кошелька» ДО чтения dex.router
+     (exec/bundle.rs fork_router); заданный роутер не используется. Проверка налогов: пара нового вида отклонила
+     пробную покупку — «налоги пула не измерены», но НЕ помеха (check/pool_taxes.rs outcome): вердикт по монете — по
+     остальным пулам (ханипот — «не прошла»); пул нового вида единственный — «не проверено» с его причиной; откат
+     перевода монеты из пары («…: TRANSFER_FAILED») голосует как у обычных пулов.
+  4. Нагрузка сверки: одна eth_simulateV1 из 7 вызовов (≈22 КБ кода исполнителя в запросе) на сторону пула раз в
+     dex.quoter_check_s — после включения замерить по журналу.
+  5. Запись снята на публичном узле (bsc-rpc.publicnode.com) — повторить на своём узле после выкладки.
+  6. При переводе DEX с v2_fork на v2_fork_executor очистить dex.router (если задавался): торговле он уже не мешает
+     (п. 3), но вводит в заблуждение на экране.
+
+- **Решение 279 (14.11.2026, ветка t111/scan-coalesce от rel/dex-all) — сделано, ждёт приёмки.** Склейка изменений
+  настроек перед тяжёлым проходом DEX (`Watch::next_batch`): поиск по фабрикам, перепроверка справочника, подписка на
+  создание пулов, индексатор, события кошелька — пачка правок даёт один проход, а не по проходу на правку (журнал
+  14.11: 147 проходов подряд, 13 минут после последней правки). **Открыто:** resubscribe.rs (пересборка подписки DEX
+  на dex.intermediate_*/native_*) не склеивает — журнал называет каждую изменённую настройку; склеивать ли — решение
+  Тиграна.
+
+- **Решение 277 (14.11.2026, ветка t110/credit-usdt-mexc-fee от f28f06f) — сделано, ждёт приёмки.** Налог перевода
+  USDT при возврате биржа → кошелёк DEX — из замера пробы переводов (check/service_tax.rs → CoinCheck ядру), ожидание
+  зачисления регистрируется, ложного Warn core.balance_external нет. Ревью 14.11: только для получателя-DEX
+  (получатель-биржа — как до 277); зачисление возврата — решение 76 (хеш вывода), не 151; сверка шести живых возвратов
+  — docs/notes/usdt-return-credit-277-2026-11-14.md (совпали точно). **Открыто:**
+  1. MEXC: Warn core.usdt_return «газ возврата не пересчитан в USDT (нет живой цены USDT-BSC …)» — НЕ исправлено.
+     Комиссия вывода MEXC берётся из поля `coin` записи withdraw/history (venues/mexc/transfers.rs transfer). Официальная
+     документация (Withdraw History (supporting network)) в примере даёт `"coin": "EOS", "network": "EOS"` — суффикса
+     сети нет, правила «МОНЕТА-СЕТЬ» нет; записанных ответов withdraw/history MEXC в tests/data нет. Что «USDT-BSC»
+     пришло из `coin`, следует из кода (другого источника тикера у этой затраты нет), но сырого ответа нет. Нужны
+     сырые ответы MEXC с сервера (zstd): GET /api/v3/capital/withdraw/history по этим 6 выводам (все поля записи:
+     coin, network, transactionFee) и GET /api/v3/capital/config/getall по USDT (coin, networkList[].netWork/network/
+     name) — по ним решить, как приводить тикер комиссии к тикеру монеты. **Нужно от Тиграна (сырые ответы с сервера,
+     zstd):** capital/withdraw/history по шести выводам MEXC 14.11 (сделки XTER 20261114181710252, TST 20261114184655323
+     и 20261114185055295; все поля записи) и capital/config/getall по USDT. Через веб-интерфейс (GET) бот справочник
+     сетей USDT не отдаёт (/api/coins/{адрес USDT} — 404: USDT нет в справочнике монет). На итог сделки не влияет (комиссия учтена
+     как «ушло − зачислено»). Сопоставление вывода идёт по id (withdrawal_status), не по тикеру.
+- **Решение 291 (15.11.2026, ветка t121/exec-lb) — four.meme не подключается** (DECISIONS 291; кода нет). Факты —
+  tests/data/four_meme_2026-11-15: монета на кривой TokenManager2 и монета на PancakeSwap не существуют одновременно
+  (официальная документация integration-guide.md L116-L126; на цепи 20 из 20 монет GeckoTerminal `four-meme` — без пула
+  PancakeSwap V2/V3); перевод токена до миграции разрешён (FourToken.sol L99-L107, eth_call); исходник TokenManager2 и
+  Helper3 закрыт (Sourcify 404, BscScan не опубликован). **Не установлено:**
+  1. Есть ли монеты, ещё не вышедшие с кривой four.meme, на биржах бота (BingX, MEXC и другие) — проверка списков монет бирж
+     по адресам контрактов (токены four.meme — клоны реализаций Token3 / Token9) не делалась.
+  2. Ограничения вызывающего у TokenManager2 (контракт-исполнитель, tx.origin) — исходник закрыт; у документированного
+     «router»-варианта sellToken — tx.origin == from (trade-guide.md L218).
+  3. LiquidityAdded за 120 000 блоков не найден — частота миграций и событие миграции на цепи сейчас (возможно, другой
+     контракт) — не установлены; на решение не влияет (после миграции монета на PancakeSwap).
+  4. Объём four.meme по DefiLlama (~6 млн USD за 7 дней из постановки) — не проверялся.
+- **Решение 290 (15.11.2026, ветка t121/exec-lb от rel/dex-all 12040c4c) — сделано, ждёт приёмки.** Liquidity Book V2.1
+  (LFJ / Trader Joe на BSC): вид `lb_v21` (ядро LbBin), точный порт getSwapOut / PairParameterHelper / FeeHelper (= getSwapOut
+  пула в 50 из 50 ответов на блоке 133716961), сверка getSwapOut пула, шаг исполнителя v2 LB = 18 (код в сети v2 16 212 байт;
+  на цепи шаг 18 = getSwapOut = наша формула 10 из 10). **Открыто:**
+  1. Значения настроек (id DEX `traderjoe-v2-1-bsc` — id у GeckoTerminal, факт 15.11: /networks/bsc/dexes/traderjoe-v2-1-bsc/pools
+     — 3 пула): dex.kind = lb_v21, dex.factory = 0x8e42f2f4101563bf679975178e880fd87d3efd4e, dex.pool_enabled = да; dex.quoter
+     и dex.quoter_virtual не нужны (квотер — сам пул). dex.bin_depth_usd (общая, [bsc_dex]) — уже задаётся для Infinity Bin;
+     dex.multicall3 желательна (состояние — одна пачка на блок).
+  2. Ликвидность малая (GeckoTerminal 15.11): BTC.b/WBNB 428,57 USD, BTCBR/WBNB 62,31, USDC/USDT 58,36 — сумма 549,24 USD.
+     У фабрики 147 пар, с ненулевыми резервами — 61 (в справочнике GeckoTerminal — 3).
+  3. Переразвернуть исполнитель v2 (docs/notes/executor-v2-redeploy.md: SHA-256 кода создания после решения 290 —
+     940fc09907eb0a746aa2232fb33b01f2a13b8f52d38b37ab523ff2788bba45dc); сухая сделка на живом пуле — после выкладки (на цепи — только eth_call с подменой кода,
+     tests/data/lb_v21_2026-11-15/exec_state.json).
+  4. Не установлено: настоящий пул-самозванец (клон реализации LBPair с выдуманными токенами, не в реестре фабрики) на BSC не
+     найден — отказ проверки «реестр знает другой адрес» тестом на записанных данных не покрыт; покрыты: настоящий пул
+     PancakeSwap V2 (getFactory откатывается) и монета не из пары пула.
+  5. Не установлено: другие фабрики LB на BSC — фабрика LB V2.0 (id GeckoTerminal `traderjoe-v2-bsc`: пулов у GeckoTerminal 0) и
+     V2.2 не проверялись; вид lb_v21 сверен только с исходником v2.1.0.
+  6. Замерить on_head на живом узле после выкладки: все пулы LB за блок — одна пачка (per_block_lb.rs, 3 вызова на пул + время).
+  7. Вместе со следующим изменением контракта (ревью 290: правка комментария меняет SHA-256 — отложено): в комментарий шага
+     LB ArbExecutor.sol одной строкой — токен входа не X и не Y пула: swapForY = false, пул считает вход по Y как баланс −
+     резерв = 0 → откат LBPair__InsufficientAmountIn (LBPair.sol L487-L488, source_excerpt.txt).
+  8. Ревью 290 — котировка на времени блока чтения (pool_quote.rs, d.block_ts), сделка — в следующем блоке: изменчивая
+     комиссия к блоку сделки может упасть или вырасти (updateReferences L412-L421; чужой обмен раньше нашего в том же блоке
+     растит накопитель); защищает только minOut маршрута. Замерить на живых сделках расхождение факта с котировкой.
+  9. Ревью 290 — начальное чтение пары без USDT: все бины последовательно, 2 eth_call на бин (у 0x722e…912f — 238 бинов,
+     ≈477 вызовов) — при первом чтении пула и при Refresh (StaticFeeParametersSet / ForcedDecay, реорг); на обычные события —
+     только затронутые бины одной пачкой. Ограничение глубины через пересчёт в USDT встречного (quote/rate.rs) не сделано:
+     у чтения пула (load.rs) нет реестра для курса встречного токена.
+  10. Не покрыто сверкой с цепью: разбор событий DepositedToBins / WithdrawnFromBins / CompositionFees / FlashLoan на
+     настоящих логах (за блоки 133726818–133732817 у пяти пулов был только один Swap); ветки комиссии — покрыты (72 из 72),
+     прямой вход — покрыт (3 из 3).
+- **Решение 289 (15.11.2026, ветка t120/exec-balancer от rel/dex-all fc06d328) — сделано, ждёт приёмки.** Balancer V2
+  (ACSI Finance BSC): вид `balancer_v2` (ядро VaultPool), порт WeightedMath / StableMath / LogExpMath (= Vault.queryBatchSwap
+  в 95 из 95 ответов GIVEN_IN и 63 из 63 GIVEN_OUT на блоке 133699740), сверка Vault.queryBatchSwap, шаг исполнителя v2
+  BALANCER = 17 (код в сети v2 15 946 байт; на цепи шаг 17 = queryBatchSwap 10 из 10). **Открыто:**
+  1. Значения настроек (id DEX `acsi-finance` — id у GeckoTerminal, факт 15.11: /networks/bsc/dexes/acsi-finance/pools — 200,
+     24 пула): dex.kind = balancer_v2, dex.vault = 0xa82f327bbbf0667356d2935c6532d164b06ceced, dex.factory =
+     0xb7238020c331e8cdfd26db299cfd2076df812e6f (WeightedPoolFactory), dex.balancer_stable_factory =
+     0xd2eada8bffdabb9321e1512d897afd3537dbc1a3 (StablePoolFactory), dex.pool_enabled = да. dex.quoter и
+     dex.quoter_virtual не нужны (квотер — само хранилище). dex.multicall3 желательна (чтение пула — одна пачка на блок).
+  2. Ликвидность малая (GeckoTerminal 15.11): ACS/WAV/WBNB 6 702 USD, XMT/WBNB 4 591, ACS/ACSI/WBNB/BUSD 3 754,
+     ETH/BTCB/WBNB 2 740, ADA/ETH/SOL/DOT/WBNB 1 451, остальные — сотни USD и меньше; сумма 24 пулов ≈ 24,0 тыс. USD. Пары с
+     USDT: стейблсвапы DAI/USDT/USDC/BUSD (93 USD), TUSD/UST/USDT/BUSD/MIM (119 USD — все запросы хранилища откатываются
+     BAL#322, несходимость), ACS/USDT (2 USD), USDT/BTCB (0xb978bd52 — не берётся, см. п. 3).
+  3. Не установлено: исходник трёх пулов acsi-finance с кодом 19 408 байт (0xb978bd52, 0x86ddc49f, 0xdaae64e8): не из фабрик
+     dex.factory / dex.balancer_stable_factory (isPoolFromFactory = 0), Sourcify 404, код не равен WeightedPool2Tokens
+     20210418 (19 384 байта). Проверка их отклонит. Их фабрика (если есть) — не установлена.
+  4. Не установлено: полный список пулов хранилища — eth_getLogs (PoolRegistered) с блока развёртывания на публичном узле
+     недоступен (архивный запрос); по id пулов справочника номер регистрации доходит до 50 (≥ 51 пула), в справочнике 24.
+     Бот берёт пулы из справочника индексатора.
+  5. Переразвернуть исполнитель v2 (docs/notes/executor-v2-redeploy.md: SHA-256 кода создания после ревью 289 —
+     d1abbc26…5bceb58); сухая сделка на живом пуле — после выкладки (на цепи — только eth_call с подменой кода,
+     tests/data/balancer_acsi_2026-11-15/exec_sim.json).
+  6. Налог монеты на входе: хранилище считает вход по сумме transferFrom, не по пришедшему (AssetTransfersHandler.sol L76) —
+     шаг BALANCER не в списке видов с прямым входом (graph_executor tax), монета с налогом на входе через него не идёт.
+  7. ~~Ревью 289 — одна пара на пул~~ — **закрыто решением 295** (`dex.multi_pair` = да — все нужные пары, `PoolRef::Multi`):
+     пул с 3–6 токенами даёт в графе ОДНУ пару (факт кода: справочник берёт у пула только
+     пару base/quote индексатора — directory/gt_parse.rs IndexedPool L33-L34; take() берёт один кандидат на адрес пула —
+     pools/index.rs L78 `seen.insert(p.pool)`, первый по порядку ctx.index.relevant() — обход HashMap монет
+     (directory/mod.rs L56, L118-L131), порядок не задан; монета — токен справочника, встречный — второй токен его пары,
+     если он среди встречных/промежуточных — is_relevant L156-L165; реестр — одна запись на ссылку пула,
+     registry_index.rs L89-L95). Все пары пула в граф — общий путь справочника и ключа реестра для всех видов,
+     добавочно не сделано (DECISIONS 289, ROADMAP).
+  8. Не установлено (ревью 289): настоящий пул-самозванец (контракт, называющий хранилище ACSI и чужой id) и настоящий пул
+     ДРУГОГО хранилища Balancer V2 на BSC не найдены (в списке /networks/bsc/dexes GeckoTerminal поиск по названию
+     «bal», «vault», «beethoven» дал только acsi-finance и wault_finance) — отказы проверки на них тестом не покрыты; покрыты: пул не из фабрик (0xb978…),
+     настоящий пул PancakeSwap V2 (getVault откатывается), монета не из токенов пула.
+  9. Замерить on_head на живом узле после выкладки: все пулы Balancer за блок — одна пачка (per_block_balancer.rs,
+     5 вызовов на пул, частями по dex.load_batch).
+- **Решение 288 (15.11.2026, ветка t119/exec-kyber-smardex) — сделано, ждёт приёмки.** SmarDex: вид `smardex` (ядро
+  Fictive), порт SmardexLibrary.getAmountOut со средней ценой к времени блока (= выходу самой пары в 24 из 24 ответов цепи),
+  сверка виртуальным квотером quoteSmardex, шаг исполнителя v2 SMARDEX = 16 (код в сети v2 15 128 байт). **Открыто:**
+  1. Значения настроек (id DEX `smardex-bsc` — id у GeckoTerminal, факт 15.11: /networks/bsc/dexes/smardex-bsc/pools — 200,
+     16 пулов — все пары фабрики): dex.kind = smardex, dex.factory = 0xa8ef6fea013034e62e2c4a9ec1cdb059fe23af33,
+     dex.quoter_virtual = да, dex.pool_enabled = да. dex.multicall3 желательна (время блока в той же пачке; без неё —
+     лишний eth_getBlockByNumber на каждое чтение пары).
+  2. Выход зависит от времени блока (средняя цена): котировка — на времени блока чтения, сделка — в следующем блоке;
+     расхождение ограничено сдвигом средней цены за это время (защита — minOut и сверка перед сделкой). Замер на живых
+     сделках — после выкладки.
+  3. Ликвидность малая (GeckoTerminal 15.11): SDEX/USDT 8 824 USD, LXIUM/BTCB 8 745 USD, остальные — сотни USD и меньше.
+  4. Переразвернуть исполнитель v2 (docs/notes/executor-v2-redeploy.md: SHA-256 кода создания после решения 288 —
+     34e40929…0bbf80); сухая сделка на живой паре — после выкладки (на цепи — только eth_call с подменой кода,
+     tests/data/smardex_2026-11-15/exec_sim.json).
+  5. Покрытие веток цепью (ревью 288, tests/data/smardex_2026-11-15/probe_time.json): dt = 0 и 0 < dt < 300 — только через
+     переопределение времени блока в eth_call (настоящих обменов в окне 300 с не найдено); last_ts = 0 — только пыльные
+     пары; ветка «last_ts = 0 + пересчёт фиктивных резервов» — только 2 случая с откатом в _update (выход getAmountOut
+     сверен, итог — None). Точный выход (getAmountIn) не портирован: котировка точного выхода — ошибка (pool_quote.rs).
+     Не установлено: поведение на настоящем обмене в окне 0 < dt < 300 (на цепи такого обмена не записано).
+  6. ~~Комментарии контракта — вместе со следующим изменением контракта~~ — **закрыто решением 289** (ветка t120): строка
+     «Uniswap V3 / PancakeSwap V3 / Slipstream / Algebra V1.9 — одна и та же подпись swap:» перенесена к IV3Pool;
+     у ArbExecutor._dmmFormula — комментарий; ссылка IIziPool swapX2Y.sol L321-L328 → L323-L331 (сверено по
+     tests/data/izi_2026-11-15/source_excerpt.txt: L326 перевод получателю, L330 swapX2YCallback, L331 проверка «XE»).
+     Хеш кода создания — общий с шагом BALANCER (docs/notes/executor-v2-redeploy.md).
+- **Решение 287 (15.11.2026, ветка t119/exec-kyber-smardex от rel/dex-all 4e214db4) — сделано, ждёт приёмки.** KyberSwap
+  Classic DMM: вид `kyber_dmm` (ядро AmpV2), порт DMMLibrary.getAmountOut (= DMMRouter02 в 24 из 24 ответов цепи),
+  сверка DMMRouter02.getAmountsOut, шаг исполнителя v2 KYBER_DMM = 15 (код в сети v2 14 960 байт). **Открыто:**
+  1. Значения настроек (id DEX `kyberswap_classic_bsc` — id у GeckoTerminal, факт 15.11: /networks/bsc/dexes/
+     kyberswap_classic_bsc/pools — 200): dex.kind = kyber_dmm, dex.factory = 0x878dfe971d44e9122048308301f540910bbd934c,
+     dex.quoter = 0x78df70615ffc8066cc0887917f2cd72092c86409 (DMMRouter02), dex.pool_enabled = да. dex.quoter_virtual не
+     нужна (у вида виртуального квотера нет).
+  2. Ликвидность малая: USDT/WBNB 0xec30…6381 — 6 730 USD, USDT/BUSD ×400 0xc3da…3b55 — 517 USD (GeckoTerminal 15.11).
+  3. 2 из 13 пулов справочника — фабрика KSFactory (статическая комиссия, другой вид KSPool) — будут отклонены проверкой
+     (factory() ≠ dex.factory); подключение KSPool — отдельная задача (docs/ROADMAP.md, техдолг 287).
+  4. Переразвернуть исполнитель v2 (docs/notes/executor-v2-redeploy.md: актуальный SHA-256 кода создания — там; после
+     решения 288 — 34e40929…0bbf80); сухая сделка на живом пуле — после выкладки (на цепи — только eth_call с подменой кода,
+     tests/data/kyber_dmm_2026-11-15/exec_sim.json).
+  5. Комиссия блока (ревью 287): котировка — по комиссии getTradeInfo блока чтения (quote/pool_quote.rs, ветка AmpV2),
+     исполнение — по комиссии блока исполнения (ArbExecutor._dmmOut); комиссия меняется каждым блоком без событий.
+     Разницу ограничивает только minOut маршрута (exec/executor/call.rs). Не установлено: величина сдвига комиссии за
+     блок на живых пулах — замер после выкладки.
+- **Решение 286 (15.11.2026, ветка t118/exec-izi от 9688044a) — сделано, ждёт приёмки.** iZiSwap и Biswap V3: виды
+  `iziswap` и `biswap_v3`, лесенка ответов пула через виртуальный квотер quoteIzi, шаг исполнителя v2 IZI = 14 (код в сети
+  v2 14 365 байт). **Открыто:**
+  1. Значения настроек (id DEX — id у GeckoTerminal, факт 15.11: /networks/bsc/dexes/{id}/pools отдаёт пулы):
+     iziswap-bsc — dex.kind = iziswap, dex.factory = 0x93bb94a0d5269cb437a1f71ff3a77ab753844422;
+     biswap-v3 — dex.kind = biswap_v3, dex.factory = 0x7c3d53606f9c03e7f54abddffc3868e1c5466863;
+     biswap-v3-1 — dex.kind = biswap_v3, dex.factory = 0x4d175f2cfe3e2215c1b55865b07787b751cedd36;
+     у всех трёх: dex.quoter_virtual = да, dex.pmm_ladder_usd = суммы USDT по возрастанию (числа — решение Тиграна; без
+     неё пулы без котировки), dex.pool_enabled = да.
+  2. Пулы без USDT (у biswap-v3-1 на странице 1 GeckoTerminal — 9 из 20: XRP/WBNB, BTCB/WBNB, ETH/BTCB …) — без котировки
+     (лесенка только у пар с USDT); своей математики точек iZiSwap нет (техдолг, docs/ROADMAP.md).
+  3. Biswap V3: скидка комиссии фабрики feeDiscount(пользователь, пул) ≤ 50 % — какой адрес считается «пользователем»,
+     не установлено (модуль обмена не опубликован). Косвенно (не факт): скидка выдаётся адресу и меньшую комиссию
+     означает; факт обмена может оказаться хуже котировки, только если скидка выдана адресу виртуального квотера
+     (котировка тогда завышена). Защита — minOut бандла и сверка перед сделкой.
+  4. Фабрика biswap-v3-1 0x4d17… на Sourcify нет: совпадение с BiswapFactoryV3 — по длине кода, селектору реестра и
+     ответам реестра на записанных пулах (байтового сравнения кода фабрик не делалось).
+  5. Переразвернуть исполнитель v2 (docs/notes/executor-v2-redeploy.md: актуальный SHA-256 кода создания — там; после решения 288 — 34e40929…0bbf80); сухая
+     сделка на живом пуле — после выкладки (на цепи — только eth_call с подменой кода, exec_sim.json).
+  6. Ликвидность: iziswap-bsc ≈2,8 тыс. USD, biswap-v3 ≈2,5 тыс. USD, biswap-v3-1 ≈0,31 млн USD (GeckoTerminal 15.11).
+  7. Ревью t118: каждым блоком перечитываются только пулы этих видов с USDT в паре (per_block::each_block; пулы без USDT
+     лесенки не получают никогда — состояние без лесенки = «без котировки», события их перечитывают). После выкладки —
+     замерить на сервере длительность per_block::on_head: на пул с USDT за блок 1–3 + 2N eth_call (N — точек
+     dex.pmm_ladder_usd), пулы по очереди.
+- **Решение 285 (15.11.2026, ветка t117/exec-nomi-metric) — сделано, ждёт приёмки.** Metric OMM: вид `metric_omm`,
+  лесенка ответов пула через виртуальный квотер, шаг исполнителя v2 METRIC = 13 (код в сети v2 13 948 байт). **Открыто:**
+  1. Значения настроек (id DEX `metric-bsc` — id у GeckoTerminal, факт 15.11: /networks/bsc/dexes/metric-bsc/pools отдаёт
+     пулы USDC/USDT, NVDAB/USDT, WBNB/USDT …): dex.kind = metric_omm, dex.factory = 0x2a53833cc95548cf52c7b159110e22d3a9018f32,
+     dex.quoter_virtual = да, dex.pmm_ladder_usd = суммы USDT по возрастанию (числа — решение Тиграна; без неё пулы без
+     котировки), dex.pool_enabled = да.
+  2. Исходник BSC не опубликован: ABI — SDK v1 + селекторы в коде; подпись simulateSwapAndRevert (0x658b6cb7), событие
+     создания пула и имена 4 topic0 — не установлены (вопрос команде Metric / BscScan verified).
+  3. Расширения пулов (0xe403…, 0xebc5…, 0x65fb… и др.) неверифицированы: у проверенных 5 пулов обмен любым контрактом
+     прошёл; у остальных — не проверялось (пул с белым списком откатит и квотер — лесенки не будет, сделки нет).
+  4. Совпадение монет Metric (ETH, BTCB, SOL, UNI, Cake, SHIB, NEAR, ZEC, TWT, ASTER …) с монетами бирж бота — не
+     установлено по записанным данным; акции (NVDAB, QQQB …) на биржах бота — не установлено.
+  5. Цена провайдера меняется каждым блоком: лесенка на блоке N, сделка — в N+1 (minOut и сверка перед сделкой защищают);
+     у акций вне торговых часов — откат PriceProviderFailed (пул без котировки).
+  6. Переразвернуть исполнитель v2 (новый SHA-256 кода создания — docs/notes/executor-v2-redeploy.md); сухая сделка на
+     живом пуле — после выкладки.
+  7. Ревью t117: лесенка Metric перечитывается целиком на каждом блоке, пулы — по очереди в per_block::on_head
+     (per_block.rs on_head; на пул — 2 вызова + 2 пачки eth_call квотера по числу сумм dex.pmm_ladder_usd,
+     load_metric_ladder.rs read). Задержку на блок на сервере не мерили — замерить после выкладки (сколько пулов Metric в
+     подписке × время чтения одного пула против интервала между блоками).
+- **Решение 284 (15.11.2026, ветка t117/exec-nomi-metric от t114 3e185eb0) — сделано, ждёт приёмки.** Nomiswap Stable:
+  вид `nomiswap_stable`, шаг исполнителя v2 NOMI_STABLE = 12 (контракт v2 изменён: код в сети 13 498 байт). **Открыто:**
+  1. Значения настроек (id DEX `nomiswap_stable` — id у GeckoTerminal, факт 15.11: /networks/bsc/dexes/nomiswap_stable/pools
+     отдаёт эти 3 пары, USDT/USDC ≈835 тыс. $): dex.kind = nomiswap_stable,
+     dex.factory = 0xc6b7ee49d386bae4fd501f2d2f8d18828f1f6285, dex.pool_enabled = да.
+  2. Переразвернуть исполнитель v2 (docs/notes/executor-v2-redeploy.md: актуальный SHA-256 кода создания — там; после решения 288 — 34e40929…0bbf80) —
+     до этого пулы Nomiswap Stable только сигнал («исполнитель v1 не знает шаг исполнителя NOMI_STABLE»).
+  3. Сухая сделка через исполнитель на живой паре — после выкладки (на цепи проверено только eth_call с подменой кода,
+     tests/data/nomiswap_stable_2026-11-15/exec_sim.json).
+  4. Пары тонкие, кроме USDT/USDC (≈629 тыс. USDT / 206 тыс. USDC на блоке 133650877); USDT/BUSD ≈2,6 тыс. / 0,8 тыс.,
+     USDC/BUSD — единицы долларов (резервы блока): польза для арбитража — в основном USDT/USDC.
+- **Задача t114 (15.11.2026, ветка t114/executor-v2-steps от rel/dex-all f16a0fcf) — сделано, ждёт приёмки.**
+  (0) проверка слияния: tests/bsc_dex_squadswap_review.rs — пятый аргумент pool_taxes::outcome, своя временная папка у
+  каждого теста; (1) dex.v3_swap_callback
+  — по версии исполнителя, сверенной у кошелька (pools/exec_callback.rs), повторная проверка после сверки в сделке и
+  пробе; (2) squadV3SwapCallback в ArbExecutor v2 (13 296 байт, запас 11 280; out/v1 не изменился); (3а) причина отказа
+  нативной монеты — native_block; (3б) инструкция: откат бинарника и итоговый порядок; (3в) подтверждение развёртывания
+  несёт адрес обёртки (POST …/executor/deploy {sha256, wnative}). Запись — docs/DECISIONS.md «281 (дополнение — t114)».
+  **Открыто:**
+  1. Исходник SquadV3Pool (Sourcify) из этой среды заново не скачан (прокси 403): подпись вызова — по ссылке решения 281
+     (L794, L800). EVM-теста с пулом Squad нет (кода пула в contracts/evmtest/fixtures нет) — проверка исполнения —
+     сухой сделкой «как пойдёт сделка» после переразвёртывания кошелька на v2.
+  2. ~~exec/dry_build.rs:133 — старый текст «нативная монета через исполнитель (решение 122) в v1 не исполняется»~~ —
+     закрыто задачей t122: причина — native_block, как в сделке (не сверен / v1 — «переразверните исполнитель» /
+     обёртка не та).
+  3. Повторная проверка обратного вызова после сверки — в сделке BingX ↔ DEX (exec/executor/trade.rs) и пробе налогов
+     (задача t122: повторная проверка — по версии из результата onchain::ensure, exec/executor/callback_at.rs
+     missing_at; вид шага только v2 у исполнителя v1 — та же проверка; первичный отбор пулов — по-прежнему по записи
+     версии у кошелька, см. запись «Задача t122», открытый п. 4);
+     в цикле DEX ↔ DEX (exec/cycle_exec.rs) и сухой сделке — нет (там проверка только при выборе пути; при устаревшей
+     версии у кошелька — откат транзакции/симуляции, газ, без чёрного списка).
+- **Решение 281 (15.11.2026, ветка t113/squadswap-v3 от rel/dex-all) — сделано, ждёт приёмки.** SquadSwap V3
+  (squadswap-v3-bsc): вид `v3_fork_pancake` + ключ реестра `dex.v3_registry_fee_method` + свежая fee()
+  `dex.v3_fee_source = pool_fee_each_read` + события менеджера `dex.v3_fee_manager`. **Открыто:**
+  1. **Исполнение:** ~~добавить squadV3SwapCallback в ArbExecutor v2~~ — сделано задачей t114 (см. ниже); осталось
+     переразвернуть исполнители кошельков на v2 (docs/notes/executor-v2-redeploy.md). До этого у кошелька с v1 (или не
+     сверенным исполнителем) пулы Squad — только граф и сигналы: dex.v3_swap_callback проверяется по сверенной версии.
+  2. Значения настроек (экран «Контракты DEX», id DEX `squadswap-v3-bsc`): dex.kind = v3_fork_pancake, dex.factory =
+     0x10d8612D9D8269e322AB551C18a307cB4D6BC07B, dex.tick_lens = 0x7C9C9220B563A09167943fd327d50e858C0A6373,
+     dex.quoter = 0xAF78c3C4100070337DBa8C79065339CfB77CFe7F, dex.v3_registry_fee_method = defaultFee(),
+     dex.v3_fee_source = pool_fee_each_read, dex.v3_fee_manager = 0x391eaa90f931c6330132efe6c73ebdf77d782ef5,
+     dex.v3_swap_callback = squadV3SwapCallback(int256,int256,bytes) (новая, ревью 281, В4), dex.pool_enabled = да
+     (по желанию — dex.quoter_virtual = да: виртуальный квотер со squadV3SwapCallback). Без dex.v3_fee_source =
+     pool_fee_each_read при заданных dex.v3_registry_fee_method / dex.v3_fee_manager пулы Squad не берутся (В3).
+  3. Живого лога SetCustomFee / ToggleCustomFee / UpdatePoolManager в доступной истории узла нет (блоки
+     129918817–133618816) — разбор событий (pools/abi_squad.rs pool_of) тестом на записанном логе не покрыт; при
+     первом событии на сервере проверить запись журнала «Комиссия пула …: … → …».
+  4. Тестами на записанных данных не покрыты: подписка fee_watch.rs и перечтение всех fee() в начале сессии
+     (fee_refresh.rs; сеть), чтение fee() по одному (load.rs) — пачечный путь (Extras + fee_fresh::split + parse_head,
+     в т. ч. смена настройки между сборкой и разбором — tests/bsc_dex_squadswap_review.rs) покрыт.
+  5. Пулы тонкие (USDT/WBNB ≈1,5 тыс. $, сторона USDT почти пуста): на записи WBNB → USDT уже на 1 $ уводит цену
+     за слова битмапа ±10 (расчёт бота частичный, если загрузчик читает столько же слов), USDT → WBNB на 10000 $ —
+     пул не берёт весь вход. Сверка 1 в 1 — 14 случаев из 18.
+  6. Смена dex.v3_registry_fee_method на лету не запускает перепроверку уже взятых пулов (ключ реестра в памяти —
+     прежний до перепроверки пула / перезапуска).
+  7. Гонка записи fee() в реестр: fee_watch / fee_refresh пишут fee() блока latest, а параллельное перечтение пула
+     (reload) на более раннем блоке может записать старую комиссию поверх. Сделку это не задевает (предторговая
+     проверка читает fee() на своём блоке), сигналы — до следующего чтения пула.
+- **Решение 275 (14.11.2026, ветка t107/sheepdex-curve-ng от rel/dex-all) — сделано, ждёт приёмки.** Curve
+  StableSwap-NG: новый вид `curve_stableswap_ng`. **Открыто:**
+  1. Значения настроек (id DEX `curve-bsc`): dex.kind = curve_stableswap_ng, dex.factory =
+     0xd7E72f3615aa65b92A4DBdC211E296a35512988B, dex.curve_ng_versions = [v7.0.0] (новая, доработка по ревью; без неё
+     DEX не подключена), dex.pool_enabled = да.
+  2. Версии пулов (доработка по ревью, блок 133600177, tests/data/curve_ng_2026-11-14/README.md): из 21 пула curve-bsc
+     у GeckoTerminal 16 — v7.0.0 фабрики NG (is_meta = false), 5 — v2.0.0 / v2.1.0 / v2.1.0d других фабрик (их
+     проверка не берёт: в реестре фабрики NG их нет).
+     **Разбор задачи t122 (п. 9г), только по записанным данным (versions.json, блок 0x7f693b1 = 133600177), без кода:**
+     фабрика 0x98ee851a00abee0d95d08cf4ca2bdce32aeaaf7f — bnbUSD/Sigma 0xb84637ab… (v2.1.0, ≈2 141 $), USDFI/ETH
+     0x5f0985a8… (v2.0.0, ≈18 $), PHPT/USDC 0xc62e1914… (v2.1.0d, ≈1 915 $); фабрика
+     0xc55837710bc500f1e3c7bb9dd1d51f7c5647e657 — COOKIE/Cake/U,Z,E 0x478ef60a… (v2.0.0, ≈5 $), ZEST/USDT/EV
+     0x229d7255… (v2.0.0, ≈7 $) (резервы — reserve_in_usd GeckoTerminal в той же записи). У всех пяти: N_COINS()
+     откатывается, get_coins фабрики NG пуст, is_meta = false. **Тип пула фактом НЕ установлен:** в репозитории нет ни
+     исходника этих фабрик/пулов, ни ответов, различающих виды. В docs/notes/networks/ethereum.md (строки 231–232) у
+     Curve кроме StableSwap-NG названы фабрики Twocrypto-NG / Tricrypto-NG (cryptoswap — другой инвариант, у нас нет);
+     совпадение строк версий и числа монет (2 у 0x98ee…, 3 у 0xc558…) с ними — косвенный признак, не факт. **Нужно для
+     решения:** исходник фабрик 0x98ee…f7f и 0xc558…e657 (Sourcify / BscScan verified) или eth_call к пулам на одном
+     блоке методов, есть только у cryptoswap (gamma(), price_scale(), D()) и у stableswap (A(), get_virtual_price()),
+     плюс coins(k) и balances(k); затем — решение Тиграна, подключать ли (ликвидность: два пула ≈2 тыс. $, три — < 20 $). Математика сверена с get_dy только у трёх пулов (rtUSQ/USDT,
+     WBNB/USDT, USDT/USDC/FDUSD).
+  3. Сухая сделка через исполнитель (шаг CURVE) на живом пуле NG не делалась — сделать на сервере после выкладки; у
+     rtUSQ (rebasing) отдельно.
+  4. Ликвидность почти вся в rtUSQ/USDT (≈0,21 млн, объём 0 за сутки на 14.11) — польза для арбитража мала.
+  5. Тестами на записанных данных не покрыт разбор load_curve_ng.rs (сборка PoolState из ответов try_many) — тест
+     проверяет математику на тех же полях, но не сам загрузчик.
+- **Решение 274 (14.11.2026, ветка t107/sheepdex-curve-ng от rel/dex-all) — сделано, ждёт приёмки.** SheepDex: вид
+  `v3_fork` + `dex.v3_fee_source` = `factory_swap_fee` + `dex.quoter_virtual` = да. Пул читается вместе со
+  `swapFee(адрес, 0)` фабрики для кошелька окружения и его исполнителя; у адреса своя комиссия — пул не торгуется.
+  **Открыто:**
+  1. Нужен кошелёк окружения с открытыми секретами (адрес кошелька — из ключа): без него пулы SheepDex не читаются
+     (причина видна у пула). Чтение графа без счёта проверяет кошелёк строки «Пробы и сигналы»; перед сделкой —
+     кошелёк счёта сделки (Parts::bound). Если у строки «пробы» и счёта сделки разные кошельки и у одного из них своя
+     комиссия — граф и сделка разойдутся (сделка откажет на перечтении). Сейчас своих комиссий нет ни у кого: у
+     фабрики одна транзакция — создание.
+  2. setFee без события: смена комиссии адреса видна при следующем чтении пула (событие пула, перечтение маршрута
+     перед сделкой), не мгновенно в графе.
+  3. Значения настроек — в интерфейсе (экран «Контракты DEX», id DEX `sheepdex`): dex.kind = v3_fork, dex.factory =
+     0x571521f8c16f3c4ed5f2490f19187ba7a5a3cbdf, dex.tick_lens = 0xD9270014D396281579760619CCf4c3af0501A47C,
+     dex.quoter_virtual = да, dex.v3_fee_source = factory_swap_fee, dex.pool_enabled = да.
+  4. Сухая сделка через исполнитель на живом пуле SheepDex (шаг V3 → swapCallback) не делалась — сделать на сервере.
+  5. Пулы тонкие: на записи 14.11 сумма 10000 $ (BUSD → BTCB, USDT → WBNB) уводит цену за слова битмапа ±6 от
+     текущего — расчёт бота будет частичным, если загрузчик читает столько же слов.
+  6. Защита от забытой настройки (доработка по ревью): фабрика V3 отвечает на `swapFee(0x0, 0)`, а dex.v3_fee_source
+     не задана — пулы DEX не берутся с причиной (pools/fee_probe.rs; один вызов на DEX при первой проверке пулов,
+     ответ в памяти до перезапуска; сбой узла — пулы «не проверены», повтор). Явное `pool` у такой DEX — осознанный
+     выбор человека, проба не мешает (как в задаче ревью: «не задана»).
+  7. Тестами на записанных данных не покрыты: склейка вызовов swapFee с головой V3 в пачке (load_batch_v2v3 head /
+     parse_head) и ответ swapFee для реальных адресов кошелька и исполнителя (записаны только нулевой адрес и адрес
+     виртуального квотера).
+- **Решение 272 (14.11.2026, ветка t105/executor-native от rel/dex-all) — сделано, ждёт приёмки и переразвёртывания.**
+  Исполнитель ArbExecutor v2 (executeNative): BNB монетой сделки через пулы форков и виды «только исполнитель».
+  Инструкция Тиграну — docs/notes/executor-v2-redeploy.md. **Открыто:**
+  1. Переразвернуть исполнители кошельков, через которые должен идти BNB, и кошелька строки «Пробы и сигналы» (замер
+     газа обёртки — им). До этого всё работает как раньше (v1).
+  2. Снять с живого узла после развёртывания: квитанции продажи и покупки BNB через исполнитель v2
+     (tests/bsc_dex_executor_v2_live.rs, #[ignore]); газ обёртки check/native_probe_exec.rs — первый замер в журнале
+     «dex.native_probe». Без замера котировка BNB через такие пулы — «не проверено» (CoinNotChecked).
+  3. Газ обёртки пула со своим путём (PancakeSwap/Uniswap V2/V3), когда маршрут идёт через исполнитель v2, берётся из
+     пробы Universal Router (WRAP/UNWRAP) — для исполнителя не перемерен; в маршруте через исполнитель берётся
+     наибольший замер долей (одна обёртка). Нужен ли отдельный замер — решение Тиграна.
+  4. Пулы StableSwap с BNB (STABLE_U256_BNB) внутри executeNative проверены EVM-тестом на фикстуре (кода пула
+     Pancake Stable / Lista в репозитории нет); на живом пуле — сухой сделкой после развёртывания.
+  **Доработки по двум ревью (14.11, та же ветка) — сделано:** А1 обёртка — аргумент конструктора v2 (слот 1, сеттера
+  нет, параметра у executeNative нет), бот передаёт dex.native_wrapped при развёртывании (не задана — отказ), сверка
+  читает слот и сравнивает с настройкой (exec/executor/mod.rs native_block; столбец dex_wallets.executor_wrapped), окно
+  развёртывания показывает адрес; А2 правило «native step»; А3 NativeSettled и «получено» — по разности балансов вокруг
+  своих операций; А4 сценарии ревьюеров в contracts/evmtest/review.mjs; А5 размер кода в сети 13 285 байт (запас до
+  EIP-170 — 11 291). Б1 запись версии — без сигнала «кошельки изменились»; Б2 откат «Записать после проверки»
+  возвращает и версию с обёрткой, ensure восстанавливает запись из памяти; Б3 точная причина у пулов BNB при кошельке
+  проб не v2 и внеочередная перепроверка BNB после сверки v2 кошелька проб; Б4 признак executeNative в SwapCtx; Б5
+  текст «код не совпал» с обеими версиями, уведомление wallet.executor_v1 (один раз на кошелёк и адрес за время работы);
+  Б6 инструкция — черновик до финальной версии контракта; Б7 tests/bsc_dex_executor_v2_review.rs. **Открыто по ревью:**
+  5. Переразвёртывать ещё РАНО: в контракт v2 войдут шаги для других DEX (одно переразвёртывание на всё) — после них
+     хеш байткода в инструкции и запись EVM обновятся.
+  6. Уведомление wallet.executor_v1 — «один раз» в пределах процесса: после перезапуска бота — снова по одному на
+     кошелёк с v1 (при первой сделке через исполнитель или «Проверить подключение»). Хранить «уже сообщено» в базе —
+     решение Тиграна.
+  7. Сверка в сухой сделке и в пробе (dry.rs, native_probe_exec.rs) уведомление v1 не шлёт (там нет канала событий
+     ядру) — его пошлёт первая сделка через исполнитель или «Проверить подключение».
+  8. Окно развёртывания показывает адрес обёртки из оценки; при отправке бот перечитывает dex.native_wrapped (подтверждение
+     несёт только SHA-256 кода создания). Если настройку сменили между оценкой и отправкой, сверка после блока покажет
+     «обёртка ≠ dex.native_wrapped». Добавить адрес в подтверждение (меняет контракт шлюза dex_executor_deploy) — решить.
+  9. Б2 (откат «Записать после проверки») проверен кодом и тестом записи версии; путь API целиком (с узлом) тестом без
+     сети не покрыт — живой узел нужен.
+- **Решение 270 (14.11.2026, ветка t103/fst-wrapper от b517985) — сделано, ждёт приёмки.** Обёртка нативной монеты —
+  только dex.native_wrapped; чужой WETH() роутера V2 (fstswap: 0x0EFb5fD2402A0967b92551d6AF54de148504A115) не «BNB».
+  **Открыто:**
+  1. Смена `dex.router` на лету подписку DEX не пересобирает (resubscribe.rs следит за dex.intermediate_*,
+     dex.native_ticker, dex.native_wrapped): список WETH() роутеров перечитывается при следующей пересборке. Добавлять
+     ли dex.router в слежение — не решено.
+  2. Известное ограничение: dex.native_wrapped НЕ задана — все WETH() роутеров V2 считаются нативной обёрткой, как до
+     решения 270 (чужая обёртка из dex.intermediate_tokens получила бы тикер BNB). Так задумано («как раньше»).
+  3. Пулы fstswap с её собственной обёрткой 0x0EFb…A115 как BNB не торгуются. Конвертируется ли этот токен 1:1 в BNB —
+     фактом не проверено; нужно ли торговать такие пулы — решение Тиграна.
+- **Решение 276 и 270 (дополнение 2) (14.11.2026, ветка t109/mid-dex-priced от rel/dex-all) — сделано, ждёт приёмки.**
+  Промежуточная без биржи (FIST) и чужая обёртка fstswap — при `dex.intermediate_dex_priced` = да, подпись с цепи
+  (pools/mid_dex.rs). Для интерфейса: dex.intermediate_enabled = да; dex.intermediate_dex_priced = да;
+  dex.intermediate_label_max_len (276, дополнение — ревью); в
+  dex.intermediate_tokens дописать 0xc9882def23bc42d53895b8361d0b1edc7570bc6a (FIST) и, если нужна ликвидность с
+  обёрткой fstswap, 0x0EFb5fD2402A0967b92551d6AF54de148504A115. **Открыто:**
+  1. Налоги FIST и обёртки 0x0EFb… фактом не проверены: промежуточная с любым налогом в маршрут не идёт (Via::mid_ok) —
+     решит живая проверка налогов (check/taxes.rs), её итог смотреть в журнале/«Монеты».
+  2. Пулы fstswap — форк V2: в классику не входят, котируются графом (`dex.router_mode` = graph, решение 271) и
+     исполняются бандлом своего роутера (dex.bundle_max_routers) или исполнителем. Без этого пулы «монета — FIST» в
+     сделку не пойдут.
+  3. Комиссия пар fstswap — **факт 14.11.2026** (tests/data/fstswap_fist_2026-11-14/fee_check.json, блок 0x7f6a588,
+     тест tests/bsc_dex_fstswap_fee.rs): getAmountsOut роутера 0x1B6C…BC2d на паре FIST/USDT совпал до wei в обе
+     стороны с формулой V2 по getReserves того же блока только при 0,3 % (0,2 и 0,25 % — нет). Открыто: в интерфейсе
+     строке fstswap задать dex.v2_fee_pct = 0,3 (источник комиссии — fixed); проверено на одной паре.
+  4. Подпись с цепи — только показ: два токена с одинаковым symbol() различаются (второй получает подпись адресом).
+     Конвертируемость обёртки 0x0EFb… в BNB 1:1 по-прежнему не проверена — она и не предполагается (цена — пулом).
+  5. Ревью (276 дополнение — ревью, 270 дополнение 2): для подписи с цепи задать dex.intermediate_label_max_len (не
+     задана — подпись адресом); живая проверка на сервере — подпись FIST и обёртки 0x0EFb… в журнале
+     «dex.intermediate» (Info/Warn с причиной) и что обёртка fstswap не получила тикер BNB.
+- **Решение 271 (14.11.2026, ветка t104/graph-noroute от b517985) — сделано, ждёт приёмки.** Монета с пулами только
+  на форках (классического пути нет) при `dex.router_mode` = graph котируется графом: классика ответила NoRoute —
+  считается граф, его исполнимый маршрут идёт котировкой; иначе прежняя ошибка классики (quote/routing.rs). **Открыто:**
+  1. Граф-маршрут такой монеты неисполним (например, не задан `dex.bundle_max_routers` или включён не-бандловый канал)
+     — в карточку сигнала он не попадает: котировки-на-сделку нет, а ошибка маршрут не несёт. Остаётся NoRoute с
+     текстом классики, причина неисполнимости графа в нём не названа. Нужно ли показывать такой сигнал — решить.
+  2. Запись ошибки графа в журнал (как в graph_route::merge, «dex.router_graph») в этой ветке не делается.
+  3. Остаточный риск: граф стал неисполним к приходу сделки (exec/trade.rs отказывает до ордера), а классики у монеты
+     нет — по такой монете сделки не будет до следующей исполнимой котировки (денег не рискуем, но и не торгуем).
+  4. Дешёвая отсечка нагрузки (ревью 271, п. 4) НЕ сделана: условие «у монеты нет ни одного пула форка или вида
+     исполнителя — граф не считать» неточное. Граф без форка и без исполнителя исполняет ногу из 3+ хопов внутри
+     ОДНОГО Universal Router (решение 122 R2, dex.route_max_hops; quote/graph_exec.rs), а классика считает путь только
+     из 1–2 пулов (quote/via_pools.rs: одна промежуточная) — отсечка потеряла бы такие исполнимые маршруты. Кроме того,
+     пулы «монета — промежуточная» во входе выбора маршрута (routing::Input.entries — только пулы с USDT) не переданы.
+     Нужна ли отсечка и по какому точному условию — решить Тиграну.
+  Ревью 271 (второй коммит): газ разрешений у графа с первым хопом на форке без исполнителя — allowance роутеру
+  форка (quote/approve_gas.rs); маршрут графа в новой ветке — только с проверенными промежуточными без налогов
+  (quote/routing.rs mids_ok). Тест: tests/bsc_dex_graph_noroute_gas.rs.
+  Дополнение 271 (ветка t108/approve-gas-split): газ разрешений бандла по всем группам (quote/approve_bundle.rs),
+  одно approve на пару (токен, роутер форка) в бандле, очистка памяти разрешений после бандла (exec/bundle_send.rs).
+  Тест: tests/bsc_dex_approve_plan.rs. **Открыто:**
+  5. mids_ok для пути из двух хопов (quote/routing.rs) слабее exec/live.rs:89-97 — не сверяет ориентацию пулов
+     в реестре (coin/usdt записи) так, как это делает живой пересчёт сделки.
+  6. В graph_route::merge нет проверки mids_ok: граф через непроверенную промежуточную может выиграть у исполнимой
+     классики (котировка-на-сделку — граф, а сделка откажет на живом пересчёте).
+  7. Тест газа разрешений на реальной записи allowance не сделан: нужно снять с узла сырой ответ eth_call
+     allowance(кошелёк, роутер форка) на фиксированном блоке — один с 0 и один ненулевой — и проверить
+     quote/approve_gas.rs / approve_bundle.rs (сейчас проверены сам запрос и совпадение групп плана с бандлом).
+  8. Две группы Universal Router разных семейств с ОДНИМ Permit2 и одним токеном входа: бандл (exec/bundle.rs) шлёт
+     ERC-20 approve → Permit2 в каждой группе по allowance до бандла; котировка считает так же (план = факт), но
+     второе ERC-20 approve при этом может быть лишним — дедупликации для Permit2 нет.
+  9. Токен входа группы в котировке — по записи первого пула ноги (покупка — usdt, продажа — coin), как и до решения;
+     у бандла — order.token_in шага. Совпадают при обычной ориентации записей реестра (см. п. 5).
+
+- **Решение 273 (14.11.2026, ветка t106/solidly-fee от f28f06f) — сделано, ждёт приёмки.** Комиссия Solidly по
+  источнику из настроек (dex.solidly_fee_source / _method / _method_stable / _method_volatile / _rule / _denominator) и
+  ограничения обмена пары (dex.solidly_pause_method, dex.solidly_max_gas_method) — подключение usdfi, veplus, magicfox
+  (вид solidly_v1). Не задан источник — как раньше. Значения для интерфейса — в отчёте ветки и в docs/SETTINGS.md.
+  **Открыто:**
+  1. magicfox: комиссия — stableFee()=3 / volatileFee()=24 фабрики, числитель над 10000 (совпало с getAmountOut пар на
+     записи до wei), но КАК сам пул получает комиссию (читает у фабрики при каждом обмене или хранит у себя) — исходник
+     пары не установлен. Если пул хранит копию, смена комиссии на фабрике могла бы разойтись с пулом: сверка с квотером
+     (getAmountOut пары) это поймает и поставит сторону на паузу.
+  2. usdfi maxGasPrice: предел проверяется по цене газа плана (котировка/цикл) и по цене самой транзакции перед
+     подписью; канал с минимальной ценой газа выше 5 gwei делает сделки через usdfi невозможными — это факт
+     контракта, а не ошибка бота (причина пишется в отказ).
+  3. Пауза и предел перечитываются перед каждым проходом сверки (dex.quoter_check_s) и заново перед отправкой; событие
+     паузы фабрики usdfi не слушается (не установлено, есть ли оно).
+  4. Живой сделки через пары трёх DEX не было: исполнение — шаг SOLIDLY ArbExecutor (getAmountOut пары), контракт не
+     менялся; проверено только расчётом против getAmountOut цепи.
+  **Ревью 273 (второй коммит) — сделано:** предел цены газа фабрики — при ВЫБОРЕ пулов (Quoting.plan_gas → quote/select.rs:
+  пул с пределом ниже плановой цены газа не допущен, маршрут строится через другие пулы; так же поиск циклов, venue.rs
+  dex_cycles); fresh_cap пишет свежие ограничения, отличные от памяти, в реестр всем пулам DEX; перечитывание — ограничения
+  один раз на DEX, комиссии пачкой (dex.verify_batch); maxGasPrice больше u64 — «предела нет» (Info один раз); has_gate —
+  сбой хранилища наружу; записи до 273 с `"fee": число` читаются (числитель над GETFEE_DENOMINATOR = fee_denominator()).
+  **Открыто после ревью:**
+  5. Плановая и фактическая цена газа: обе = max(eth_gasPrice с надбавкой, gas_floor(каналы)); каналы — одни и те же
+     (send::planned_floor и send::select оба берут каналы, прошедшие ready::prepare, и один gas_floor; select ещё
+     проверяет правило решения 33 и пишет состояние каналов). Расхождение только во времени: eth_gasPrice и готовность
+     каналов перечитываются при отправке. Поэтому отбор по plan_gas не заменяет проверку перед отправкой — она осталась
+     (fresh_cap + send_capped), как и пометка маршрута неисполнимым после выбора (quote/mod.rs) — страховка.
+  6. Отбор по пределу газа — на шаге допуска пула (select::usable), как у паузы; граф (pools/graph.rs) строится без
+     учёта паузы и предела: при dex.route_max_pools_per_edge пул usdfi может занять место на ребре, и пул сверх предела
+     ребра на это ребро не попадёт (так же у пула на паузе). Не меняется без правки построения графа.
+  7. Проверки по plan_gas нет у путей вне выбора котировки и поиска циклов (exec/live*.rs, verify_decide.rs,
+     cycle_legs.rs — свежие ноги перед сделкой): там остаются planned (cycle_cost.rs), fresh_cap и send_capped.
+- **Решение 268 (14.11.2026, ветка t102/market-sell от ef2c8a4) — сделано, ждёт приёмки.** Отказ продажи «цена ордера
+  вне диапазона биржи» (код шлюза PriceOutOfRange; живой случай FAR 13.11 — MEXC 30087) → свежий стакан и то же
+  условие, по которому продажа решена: выполнено — рыночный ордер (не больше одного на биржу в сделке); обычная
+  продажа невыгодна — режим застрявшей монеты; условие режима не выполнено — алерт. Включается настройкой
+  `sell.market_on_price_range` («Настройки» → «Застрявшие монеты»; не задана — как раньше). **Открыто:**
+  1. KuCoin, Kraken, Phemex — код «цена вне диапазона» НЕ сопоставлен: в официальной документации кода нет или смысл
+     не подтверждён. У них такой отказ остаётся обычным OrderRejected (алерт). Нужен живой ответ биржи.
+  2. Bybit: отказ статусом ордера — rejectReason EC_ReachRiskPriceLimit / EC_ReachMarketPriceLimit /
+     EC_LimitOrderInvalidPrice — описаний в официальной документации нет, НЕ сопоставлены (остаются OrderRejected).
+  3. Bitget: коды 43008, 43009, 43039, 43040, 40815, 40816 — по официальной V1-документации; для v2 кодов в
+     документации нет, живым ответом v2 не подтверждено.
+  4. MEXC: применяет ли биржа коридор PERCENT_PRICE_BY_SIDE к MARKET SELL — в документации не сказано; проверить на
+     живом ордере (отказ рыночного ордера — обычный OrderRejected → алерт; повтора по кругу нет).
+  5. «Продать» на экране «Балансы» (core/balance_sell.rs → trade_ops::trade напрямую) — ветка решения 268 туда не
+     заведена: отказ «цена вне диапазона» там остаётся отказом с причиной.
+  6. XT, Bybit, CoinEx, Kraken, KuCoin режут рыночный ордер своим правилом защиты цены (XT — ORDER_F0601 «Trigger
+     PROTECTION_MARKET Filter», KuCoin — исполнение до порога защиты, остаток снят): итог — частичное исполнение или
+     обычный отказ; остаток / отказ идут существующим путём (режим застрявшей монеты / алерт). Binance: правило
+     EXECUTION_RULE_PRICE_RANGE_EXCEEDED может снять и рыночный ордер; Gate / Binance «снят защитой цены без
+     исполнения» у РЫНОЧНОГО ордера приходит обычным отказом (алерт), а не «не исполнился».
+  7. Phemex: у рыночного ордера priceEp не передаётся (в таблице Place order поле без отметки обязательности) — живым
+     ордером не подтверждено. Пределы рыночного ордера из справочников бирж адаптеры не разбирают (у рыночного ордера
+     применяются правила лимитного с оценкой суммы по худшей цене).
+  8. Тела ответов на ордера в tests/core_market_sell_268.rs (XT: отказы ORDER_F0501 / ORDER_F0601, успех постановки,
+     состояние рыночного ордера) и в tests/core_price_range_268.rs (Gate finish_as = price_protect_cancelled, Binance
+     EXPIRED + EXECUTION_RULE_PRICE_RANGE_EXCEEDED) СОБРАНЫ ПО ОФИЦИАЛЬНОЙ ДОКУМЕНТАЦИИ, а не записаны — заменить
+     записанными после первого живого случая.
+  9. Вопросы Тиграну: (а) «Ожидание» по истечении stuck.wait_ms продаёт без порога убытка — при отказе «цена вне
+     диапазона» рыночного ордера нет, алерт (нет порога — нет автоматического рыночного). Так оставить, или задать
+     для этого случая порог? То же — продажа на A после частичной покупки (без порога → алерт). (б) В тексте
+     «условие режима выполнено» порог назван числом и причиной продажи режима; имя настройки порога есть у продажи
+     здесь в «Перегоне» (stuck.relay_max_loss_pct — в причине), у «Порога убытка» в причине только числа — добавить
+     имя настройки в текст причины режима (правка stuck.rs)?
+  10. Кнопка человека без свежей котировки: рыночный ордер идёт по котировке отклонённого лимитного ордера —
+      локальная проверка минимальной суммы считает по его цене → возможен ложный локальный отказ → алерт.
+  11. Кнопка человека при котировке «глубины хватает на X из qty»: рыночный ордер уходит на весь объём сделки.
+  12. Gate / Binance при включённой настройке: продажи вне sell.rs («Продать» в «Балансах») получают PriceOutOfRange
+      вместо OrderNotFilled; путь «условие не выполнено» (Keep) → алерт вместо повторов решения 182.
+  13. Вопрос Тиграну: правило шлюза (в том числе запасное правило OrderRejected с «Остановить площадку» / «Остановить
+      всё») срабатывает ДО ветки решения 268 — пауза площадки ставится, хотя бот затем продаёт рыночным ордером.
+      Так оставить?
+  14. «Вернуть боту» после кнопки человека: отметки сделки пусты (кнопка их очищает) — возможен второй автоматический
+      рыночный ордер на той же площадке (только через два действия человека).
+  15. Сбой записи сделки с отметкой «рыночный ордер отправлен» в базу: ордер уходит, отметка остаётся только в памяти.
+  16. HTTP 5XX с кодом коридора в теле: код PriceOutOfRange не присваивается (Binance, BingX, Bybit, OKX, XT — в
+      разборе ответа; MEXC, Poloniex, HTX, Bitget — в errors.rs; CoinEx читает коды только при HTTP 200). Тест —
+      tests/price_range_5xx_268.rs (Binance, Bybit, OKX, XT; тела собраны по документации — заменить записанными);
+      у BingX отдельного теста нет (parse в rest.rs — закрытая функция). Пробный ордер Binance (Op::Other) при HTTP
+      5XX с −1013 PERCENT_PRICE отказ по коридору узнаёт (пробный ордер не исполняется; статус в order_rules.rs не
+      виден); у MEXC — нет (при 5XX код Unreachable).
+  17. Стек в release — замеры в docs/ROADMAP.md, «Техдолг».
+- **Решение 267 (13.11.2026, ветка t101/busy-calc от f0bf5d6) — сделано, ждёт приёмки.** Замер «что было выгодно,
+  пока монета занята сделкой» — включаемый (window.busy_calc, window.busy_calc_min_ms; раздел «Окна»; не заданы —
+  как раньше). Пока монета под замком «одна сделка на монету», её направления-кандидаты считаются теневым расчётом
+  (только наблюдение); итог — сводка в окне монеты и одна строка журнала core.busy_calc на направление. Проверить на
+  живой сделке: включить обе настройки, дождаться сделки, после её конца — запись core.busy_calc в «Журнале» и строка
+  «…: пока занято сделкой …» у окна монеты на экране «Окна». **Ответы Тиграна 13.11 (через координатора) — сделано
+  вторым коммитом:** (1) бюджет теневого расчёта — без вычета текущей сделки монеты (core/busy_budget.rs; обычный
+  путь не изменён); (2) формулировки честные — «максимум прибыли СВЕРХ нашей сделки», «итого сделка + сверх»;
+  (3) первый теневой расчёт — не раньше window.busy_calc_min_ms после начала занятости; (4) лучший расчёт среди не
+  прошедших пороги — не делать; (5) конец занятости сверкой памяти — оставить. **Остаётся проверить на живой сделке:**
+  теневой расчёт, прошедший пороги (тестом на записях не покрыт), и строку «бюджет расчёта … (наша сделка из лимитов
+  не вычтена: …)». **Открытый вопрос:** «итого сделка + сверх» — сумма вложений (оценка сверху), прибыль единой
+  сделки на этот объём не считалась; нужна ли она — отдельной задачей. **Известные ограничения (код не менялся):**
+  (а) при гонке освобождения монеты возможна вторая строка core.busy_calc на направление (итог теневого расчёта
+  пришёл, когда монета снова занята, а прежняя сводка уже записана, или сделка монеты сменилась между итогами);
+  (б) отсрочка первого теневого расчёта обходится при сделках по монете подряд: новая занятость началась раньше, чем
+  задача монеты увидела конец прежней (в пределах window.busy_calc_min_ms), и новая сделка ещё не записана в учёт —
+  первый расчёт новой занятости может пойти раньше интервала; (в) если window.busy_calc_min_ms снять на ходу при
+  занятой монете, задача монеты не ждёт её освобождения и пишет сводки в журнал сразу; (г) при exec.via_kyber = да
+  теневые расчёты делят kyber.rps с исполнением сделки без приоритета; при profit.calc_concurrency = 0 / не заданной
+  теневых одновременно — до числа направлений-кандидатов занятых монет; dex.quote_cpu_max — общий без приоритета.
+- **Решение 266 (13.11.2026, ветка t100/precheck-fast от 4c4f4b0) — сделано, ждёт приёмки.** Быстрая предпроверка,
+  четыре части под своими настройками (раздел «Исполнение»; не заданы — предпроверка как раньше):
+  precheck.fast_recalc — пересчёт только объёма кандидата с откатом на полный подбор; precheck.parallel — запросы
+  сторон, удержаний вывода (и свободного баланса) одновременно, разбор в прежнем порядке; precheck.networks_memory —
+  справочник сетей из памяти, пока она моложе интервала фонового опроса; precheck.balance_first — свободный баланс A
+  один раз перед расчётом (изменяет решение 94). Совет первого запуска — «да» всем (docs/FIRST_RUN.md).
+  Ответы Тиграна 13.11 учтены: отказ из-за баланса — без открытия сделки и без паузы направления; биржа не отдала
+  баланс — ордер на посчитанный объём. Вопросы Тиграну:
+  1. ЗАКРЫТ (ревью 13.11): при precheck.parallel шаг «адрес депозита B» вынесен из одновременных запросов — он идёт
+     после них, по очереди, только если сторона A, «сети B» и сторона пары B прошли (как в последовательном коде):
+     адрес на бирже B (KuCoin create, Kraken claim) по сделке, не состоявшейся из-за стороны A, не создаётся.
+  2. При отказе предпроверки с precheck.fast_recalc = да к тексту отказа (журнал core.precheck) дописывается строка
+     «План: …» (как строки «Время по шагам» при log.step_timing). Текст отказа до скобки «(время: …)» прежний. Так
+     оставить?
+  3. ЗАКРЫТ (ревью 13.11): precheck.networks_memory не верит памяти, пока у монеты на этой бирже есть смена статуса
+     ввода/вывода, ждущая подтверждения сглаживателя (status_debounce.rs: ключи ждущих смен — в ядре,
+     inner.status_pending; precheck_nets.rs recent) — тогда запрос к бирже, как раньше. Известное ограничение (код не
+     трогали): фон заменяет справочник биржи целиком своим ответом (registry_sync.rs) — запись монеты, которую запрос
+     предпроверки положил в память между получением ответа фона и его записью, затирается более старым ответом фона,
+     а время записи становится временем разбора ответа фона; если в этом ответе статус другой и сглаживание выключено
+     (venue.status_confirm_polls не задана, 0 или 1), память до следующего опроса фона хранит статус из ответа фона.
+  4. ЗАКРЫТ (ответ Тиграна 13.11: в окно — «все основные отказы» предпроверки): каждый отказ предпроверки сделки
+     пишется в сводку открытого окна монеты (WindowInfo.rejects: направление, причина, счётчик повторов той же
+     причины, первое и последнее время, метка «баланс» у отказов по свободному балансу) и показывается на экране
+     «Окна». Ограничения по факту кода: окна не пишутся (window.enabled = нет / не задана window.*) или направление без
+     биржи — окна монеты нет, отказ остаётся только в журнале core.precheck; сводка открытого окна с отказами — в
+     памяти (экран читает её из памяти), в базу и файл окна попадает при закрытии окна — после перезапуска бота
+     отказы ещё не закрытого окна теряются; живое сообщение экрану на каждый отказ не шлётся (видно по «Обновить»).
+  5. precheck.balance_first, DEX на стороне A: при ошибке чтения баланса кошелька сделки — отказ предпроверки
+     (у биржи A — ордер без проверки баланса, как сказано). По коду не доказано, что покупка на DEX при нехватке
+     баланса на всех путях исполнения (прямой, Universal Router, бандл, исполнитель, KyberSwap) отсекается до отправки
+     транзакции без траты газа (в части путей есть проба eth_simulateV1 перед отправкой — exec/precheck_sim.rs, но
+     approve может уйти раньше обмена). Оставить отказ или разобрать пути исполнения DEX отдельной задачей?
+  6. ЗАКРЫТ (ответ Тиграна 13.11: «паузить направление из-за денег не нужно»): сделка закрыта потому, что биржа
+     отклонила ордер ПОКУПКИ с кодом шлюза «Не хватает средств» (InsufficientBalance: BingX 100202, MEXC 10101 /
+     30004 / 30005 и другие адаптеры с этим кодом) — пауза направления signal.route_cooldown_s не ставится
+     (executor.rs buy_refusal_pauses → ledger::finish_paused), в записи закрытия — пометка «пауза направления не
+     поставлена: отказ биржи из-за нехватки средств». Действует всегда, не под включателем precheck.*. Остальное при
+     таком отказе — как было: журнал core.op_error, в «ошибки подряд» не считается, отдельного алерта нет, правило
+     шлюза для этого кода (повтор / пауза площадки / стоп — задаётся в интерфейсе) не тронуто — проверить в интерфейсе,
+     что у кода «Не хватает средств» нет правила «пауза площадки» / «стоп всего». Покупка на DEX с этим кодом (нет BNB
+     на газ, нет средств кошелька) — пауза как раньше.
+  7. ЗАКРЫТ (ответ Тиграна 13.11: «Нет, не ограничивать»): предела частоты запросов баланса в предпроверке нет.
+  8. precheck.balance_first: в учёте «без потолка» (uncapped) «бюджет плана до чтения баланса» берётся из
+     составляющих бюджета, прочитанных исполнителем сразу после предпроверки (limits_parts — та же формула, что в
+     расчёте, но момент на миллисекунды позже расчёта), потому что бюджет плана уже урезан балансом. Баланс не
+     получен — «свободный остаток» в записи пуст. Так оставить?
+  9. Проход быстрого пути целиком (финальный расчёт ядра на записях не собирается — нет ставок комиссии, газа, σ) и
+     часть 4 с полученным балансом (баланс читает адаптер, записанных ответов балансов в tests/data нет) тестом не
+     покрыты — приёмка по живой сделке: строки «План: …», «Перед покупкой свободно на X: …», этап «пересчёт объёма
+     кандидата» и шаг «свободный баланс X» во «Время по шагам». Решение быстрого пути по готовому расчёту (пороги,
+     шаг количества, выбор объёма) и «A прошла, B отказала» при precheck.parallel — покрыты
+     (tests/core_precheck_fast_266.rs).
+  10. Bitget: отдельного кода «не хватает средств» у ордера нет — любой отказ ордера адаптер отдаёт как OrderRejected
+      (venues/bitget/errors.rs:62–65). При ордере без проверки баланса (биржа не отдала баланс) отказ Bitget из-за
+      нехватки средств пойдёт по правилу шлюза для «Ордер отклонён», а не «Не хватает средств». Разобрать коды Bitget
+      по официальной документации и выделить InsufficientBalance?
+  11. precheck.balance_first: отказ «свободный баланс X: свободно …, кандидату нужно … — на свободный остаток сделка
+      невыгодна» ставится только на отказ по порогам прибыли (money.min_profit_usd / pct) на объёме под остаток — его
+      расчёт отдаёт с записанным выбором объёма. Отказ подбора под остаток «объём меньше минимумов площадок» идёт
+      прежним текстом «пересчёт перед покупкой: …»: по типу отказа расчёта (Verdict::Reject) его не отличить от
+      делистинга, налогов и «нет цены» (расчёт отдаёт только текст). Нужно ли метить и его как «баланс» (потребует
+      вида отказа в итоге расчёта — правка profit.rs)?
+
+- **Решение 265 (13.11.2026, ветка t99/calc-timing от 473c829) — сделано, ждёт приёмки.** «Время по шагам» от
+  положительного расчёта до исполненной покупки: строки в хронологии сделки и журнале core.precheck (исполнение до
+  покупки, предпроверка, этапы пересчёта с числом расчётов объёма и средним, каждый HTTP-запрос ордера покупки, учёт
+  исполнения). Только измерение — логика расчёта и исполнения не менялась. Уточнение 13.11: включаемое — настройка
+  log.step_timing (да/нет, «Система»; не задана — выключено); прежняя строка «время: …» предпроверки и замер
+  «Кандидатов» (решение 129) — как до 265 при любом значении. Вопросы Тиграну:
+  1. Источник котировки (поток / REST-снимок / память / локальная математика DEX / квотер / KyberSwap) адаптер ядру не
+     сообщает — контракт шлюза не менялся; видно только, были ли за часть запросы к узлу BSC, агрегатору и HTTP к
+     бирже. Нужно явное имя источника в котировке — это поле в Quote (изменение контракта): делать?
+  2. Ожидание ограничителя веса MEXC (venue.public_ip_weight_10s) отдельным числом не пишется — оно внутри шага до
+     начала HTTP-запроса (виден разрыв «с +N мс» между запросами ордера). Нужно отдельным шагом — правка адаптера MEXC.
+  3. Bybit — свой HTTP-обмен (venues/bybit/http.rs), его запросы в «ордер покупки» не попадают (только время ордера
+     целиком). Подключить к журналу запросов — правка адаптера Bybit.
+
+- **Решение 263 (13.11.2026, ветка t97/live-adapters) — сделано, ждёт приёмки.** Сверка IOC-контрактов с офдокой
+  (Poloniex, BingX, MEXC, Bybit, XT, Binance). Вопросы Тиграну:
+  1. Poloniex: о монотонности и сбросе id канала book офдока молчит — своей переподписки при меньшем id нет, пара
+     замолкает и уходит к сторожу (202/213). Если Poloniex шлёт кадры с тем же id при неизменном стакане, тихие пары
+     будут свежими только через подтверждение сторожа — проверить на записи `raw.book_frames` (poloniex_ws_book.jsonl).
+  2. XT: clientOrderId больше не содержит номер сделки (не помещается в 22 знака) — связь ордера со сделкой только
+     через журнал и PendingRef. Нужен живой ордер XT: примет ли биржа ID и какой state у IOC с остатком.
+  3. XT: монета комиссии при скидке оплатой в XT (deductServices убран — в офдоке его нет) — проверить на живом ордере.
+  4. BingX: первый же опрос после постановки теперь может ждать до 2×venue.order_final_wait_ms (опрос, отмена, опрос) —
+     как у Binance; значение настройки — решает Тигран.
+
+- **Решение 264 (12.11.2026, ветка t98/off-adapters от 36b6e5b) — сделано, ждёт приёмки.** Контракт ордера IOC/FOK
+  OKX, Kraken, HTX, CoinEx, Phemex сверен с офдокой и поправлен (docs/DECISIONS.md, решение 264). Живых ответов этих
+  площадок в tests/data нет — тесты по полям и примерам документации. Вопросы Тиграну:
+  1. OKX tdMode = cash: по офдоке верно только в Spot mode (и Futures mode); режим счёта (acctLv 1) проверяется кнопкой
+     «Проверить подключение», перед ордером — нет. Смена режима в кабинете → ордера отклоняются (51010), денег не
+     теряем. Проверять acctLv перед ордером (лишний запрос GET /api/v5/account/config) или оставить?
+  2. CoinEx: неисполненный IOC не сохраняется («will not be saved … nor can be queried»), поэтому итог «не исполнился»
+     получается только после опроса order-status до venue.order_final_wait_ms, отмены и ещё одного срока (≥ 2 срока).
+     Ответ постановки сразу несёт filled_amount = 0, но офдока Place Order не говорит, что он окончательный (status в
+     ответе нет). Брать его итогом сразу — только после живой проверки: записать ответ постановки неисполненного IOC.
+  3. CoinEx: что отвечает отмена по client_id на уже закрытый IOC (code и message элемента) — офдока не описывает;
+     записать на живом ордере.
+  4. Phemex: ожидание итога теперь один срок venue.order_final_wait_ms (раньше — срок, отмена, ещё срок). Попадает ли
+     неисполненный IOC в /api-data/spots/orders/by-order-id и с какой задержкой — офдока не говорит: проверить на живом
+     ордере и при необходимости поднять venue.order_final_wait_ms. Окончательны ли cum*-поля ответа постановки — там же.
+  5. HTX: исполненный ордер, у которого matchresults за venue.order_final_wait_ms не сошёлся с filled-amount, теперь
+     «итог неизвестен» (раньше — молча комиссия 0). Срок общий с ожиданием итога ордера — хватит ли его, видно на
+     живых ордерах.
+
+- **Решение 260 (12.11.2026, ветка t94/signal-probe-volume от feat/own-bsc-node) — сделано, ждёт приёмки.** Объём проверки
+  сигнала signal.probe_usd (необязательная; пара «площадка + тип направления» → площадка покупки A → вся система):
+  грубый спред — на min(probe, потолок) / опорная цена, не ниже минимумов площадок из памяти, не выше потолка; не задана —
+  побайтно как раньше. Вопросы Тиграну:
+  1. Значение signal.probe_usd — решает Тигран (метод — docs/FIRST_RUN.md, раздел решения 242).
+  2. Маршрут DEX выбирается заново на каждый объём, при dex.route_gas_aware = да — по выходу после газа; газ в среднюю
+     цену котировки и в грубый спред не входит. На малом объёме возможен путь с меньшим газом и худшей ценой — спред на
+     объёме проверки может оказаться ниже, чем на потолке (не больше разницы газа путей / сумма проверки). На записях CAKE
+     (6 пулов, 2 блока) этого нет. Сделать «спред = лучший из объёма проверки и потолка» (сигнал никогда не хуже
+     прежнего) — ценой второй котировки обеих сторон почти на каждом пересчёте (котировка DEX — главный потребитель CPU
+     на тике, решение 131)? Сейчас не сделано.
+  3. Нижняя граница — сырые минимумы (minQty, minNotional / опорная цена, withdrawMin A, depositMin B), без комиссии
+     вывода и шага; точный минимум — подбор объёма (size_bounds.rs lower). Достаточно?
+  4. Замеры σ (vol.rs) берутся из цен сигнала — с настройкой это цены на объёме проверки; смена значения на лету даёт
+     один скачок цены в ряду σ (на время окна profit.sigma_window_min). Оставить так?
+  5. Спред на меньшем объёме выше — чаще «аномальный спред» (signal.anomaly_spread_pct; переход в аномалию перечитывает
+     справочники сетей бирж — REST) и больше расчётов кандидатов (profit.calc_concurrency). На записанных пулах CAKE
+     путь из 3 пулов через BTCB на объёме < 50 CAKE даёт выход ~10^6 USDT за CAKE (tests/core_signal_probe_route.rs) —
+     такое ловит только аномалия; причина в записи не разбиралась.
+- **Решение 262 (13.11.2026, ветка t96/plan-limit от 36b6e5b) — сделано, ждёт приёмки.** Лимит ордера покупки на
+  бирже — худший уровень стакана плана (Calc::buy_worst), не стакан в момент ордера (docs/DECISIONS.md, 262).
+  Открыто:
+  1. Перед ордером покупки на бирже больше нет проверки свежести стакана (exec_book, решение 238) — она шла только как
+     часть расчёта лимита. Свежесть данных проверяет предпроверка (пересчёт с финальной котировкой) прямо перед
+     покупкой. Нужна ли отдельная проверка «стакан не старше venue.book_stale_ms» перед ордером покупки?
+  2. Стакана живого случая BTW (ask 1.48) в tests/data нет — тест на записанном стакане XT (документация) и числах
+     плана BTW; записать стаканы poloniex/bitget на сервере бота при следующем разборе.
+- **Решение 261 (12.11.2026, ветка t95/quoter-check от 0a3d561) — сделано, ждёт приёмки.** Сверка с квотером перед
+  сделкой — односторонняя (против нас больше допуска — стоп, в нашу сторону — сделка идёт, строка в хронологию);
+  периодическая сверка пулов — на одном блоке, сумма стороны — min(наибольший money.max_per_trade_usd по направлениям с
+  DEX, ликвидность стороны), расхождение — пауза стороны с автоснятием и алертами pool.quoter_paused / pool.quoter_resumed.
+  Ответы Тиграна 12.11.2026 («ок» на рекомендации): 1 — да; 2 — да; 3 — ждёт живого ответа своего узла на широкий
+  диапазон eth_getLogs (проверка на сервере, только чтение); 4 — (а) оставить check.probe_usdt; 5 — оставить как есть;
+  6 — да; 7 — отдельной задачей, не в этот выпуск; 8 — не трогать; 9 — принять; 10 — да.
+  Вопросы (как были заданы):
+  1. Строка «в нашу сторону» пишется, только когда квотер больше расчёта БОЛЬШЕ допуска (в допуске — без строки).
+  2. «Не сверено (блок)» у стороны, которая ещё ни разу не сверялась, оставляет её «не сверенной» — она не в котировках,
+     как сейчас до первой сверки. Если блок долго не определяется (узел отказывает в eth_getLogs), сторона так и не войдёт.
+  3. Диапазон eth_getLogs — от блока последнего события пула до головы узла; у тихого пула это много блоков. Предел
+     диапазона у своего узла BSC не проверен (нет записанного ответа) — отказ узла даст «не сверено (блок)» с его текстом.
+     Нужен живой ответ своего узла на широкий диапазон.
+     **Закрыт фактом (узел 12.11, tests/data/node_limits_2026-11-12):** eth_getLogs — не больше 5000 блоков (больше —
+     отказ −32602), состояние — только H … H−127 (старше — −32000 «historical state … is not available»). Следствие:
+     у тихого пула (последнее событие старше 5000 блоков) блок сверки сейчас не определяется — «не сверено (блок)», а
+     ни разу не сверенная сторона (ответ 2) остаётся вне котировок → тихие пулы выпадут массово. Закрыто ответом на
+     вопрос 11 (eth_getLogs из сверки убран).
+  11. **Закрыт — Тигран 12.11: «(а) + сравнение с памятью», сделано.** Блок сверки — голова H одним eth_blockNumber,
+     пул читается заново на H (pools/load.rs refresh, в реестр не пишется; все чтения видов пулов — на номер блока),
+     математика по свежему состоянию, квотер на H; eth_getLogs и synced_block из сверки убраны. Память против сети на H
+     — причина «память отстаёт от сети» (журнал dex.quoter_memory, экран «Глубина»), без паузы; порог —
+     dex.quoter_memory_lag_blocks (необязательна, не задана — сравнения нет; число решает Тигран). Исходная постановка:
+     как определять блок сверки. Факт кода: позиции «лента учла все события до
+     блока B» нет. Лента квитанций (node/receipts.rs:152 deliver) ставит `last` = последний РАЗДАННЫЙ блок, но логи
+     применяются сессией пачки позже, асинхронно (pools/session.rs:98–110 — из канала по одному); у WebSocket отметки
+     блока нет вовсе (только логи). Логов позже `last` в каналах нет, но «раздано» ≠ «применено»: в момент сверки
+     часть логов блоков ≤ `last` может ещё ждать в канале сессии. Варианты:
+     (а) **Свежее чтение пула на блоке сверки** (рекомендую): прочитать состояние пула на голове H тем же загрузчиком
+         (pools/load.rs:318 refresh — без записи в реестр), посчитать нашу математику по нему и квотер на том же H —
+         один блок точно, eth_getLogs не нужен, H всегда в пределах H−127. Что теряем: сверка проверяет только
+         математику, не «память = сеть»; можно дополнительно сравнить свежее состояние с памятью отдельной причиной
+         (не пауза). Цена: чтение пула (у V3/CL — тики) раз в dex.quoter_check_s на пул.
+     (б) **Отметка «применено до B» в потоке ленты**: лента квитанций кладёт в канал каждой подписки маркер «блок B
+         разобран» после его логов, сессия ведёт «учтено до B» у своих пулов; блок сверки = B, если synced_block ≤ B.
+         Для источника ws так нельзя: у eth_subscribe logs нет отметки конца блока, порядок logs и newHeads между
+         подписками в документации не гарантирован — для ws остаётся «не сверено» или вариант (а). Правка слушателя.
+     (в) Окно eth_getLogs [H−N, H], N ≤ 5000, с опорой на то, что слушатель не отстаёт больше N — вывод по косвенному
+         признаку (у ws гарантии нет), не рекомендую.
+  4. Пулы с крючком B/C сверяются прежней суммой check.probe_usdt: влияние крючка измерено пробой именно на ней, вычесть
+     его на другой сумме по коду нельзя. Варианты: (а) оставить; (б) мерить влияние крючка на сумме сверки (ещё вызовы).
+  5. «Наш максимум» — биржи шлюза с привязкой к кошельку DEX (решение 132) и «DEX ↔ DEX», если привязан; выключенные
+     направления (решение 85) и выключенные биржи адаптер не читает — не учитываются. Учитывать ли?
+  6. Пауза держится при иной причине (пул опустел и т.п.); «пауза снята» — только после прошедшей сверки на одном блоке.
+     После перезапуска бота отметки паузы нет: пул сверяется заново, если расхождение держится — новый алерт.
+  7. Infinity Stable в прямом режиме и через исполнитель: перед сделкой дополнительный квотер get_dy не вызывается
+     (exec/precheck.rs quoter_hop — только основной квотер), только в умном маршруте. Не менял — вне постановки.
+  8. Продажа выхода (решение 177) при квотере БОЛЬШЕ расчёта: поправка по квотеру поднимает ожидаемое и минимум
+     (множитель > 1). Не трогал по постановке — подтвердить.
+  9. Параметры, зависящие от времени без событий (A-рампа Curve, динамическая комиссия Algebra): при сверке на голове
+     (событий пула после позиции нет) расхождение может быть от времени, а не от математики — ложная пауза. Так было и на
+     «latest»; перечитываются каждый блок только Lista, WooFi, Infinity Stable (pools/per_block.rs).
+  10. Виды площадок сообщает ядро при запуске (core/engine.rs); пока не сообщены — причина без имени настройки, сторона
+      сверится на следующем полном проходе dex.quoter_check_s.
+
+- **Решение 258 (12.11.2026, ветка t92/daily-limit-per-dir от t91) — сделано, ждёт приёмки.** Дневной лимит убытка —
+  по направлению каждой биржи (пара «площадка × тип»: биржа → DEX, DEX → биржа, биржа → биржа — у биржи покупки;
+  DEX ↔ DEX — общая). Пауза по убытку — только этого направления (Risk.pair_paused), прочие паузы площадки — как
+  раньше на всю площадку. Выпуск — вместе с t90 + t91. Открытые вопросы Тиграну:
+  1. Пауза по убытку больше не останавливает перегон и продажу идущей сделки (раньше площадка на паузе по убытку не
+     была целью перегона и с неё не перегоняли — relay.rs, manual_relay_targets.rs). Так задумано постановкой
+     («пауза по убытку направления не должна мешать перегону») — **Тигран 12.11: «да» (оставить как сейчас).**
+     Тигран 12.11 также подтвердил: биржа ↔ биржа — дневной лимит обязателен только у биржи покупки (направления
+     сделки), не у обеих бирж — «да».
+  2. У «DEX ↔ DEX» лимит и пауза — одни на все DEX (общая пара dex_dex, как настройки решения 242); значение площадки
+     для этой пары берётся у DEX реестра (Core::dex_id — первый DEX). Сейчас DEX один (bsc_dex) — разницы нет; если
+     появится второй DEX с циклами — решить, чьё значение площадки брать.
+  3. Автоснятие паузы площадки (ошибки подряд, правило) больше не превращает её в паузу по убытку — пауза по убытку
+     ставится только направлениям с превышенным лимитом, остальные направления площадки после автоснятия торгуют.
+  4. В день выкладки запись итога дня по площадкам разносится по парам сделок (по начислениям Deal.day_book, без них —
+     по result_usd закрытой сегодня); владелец: «забудь про сегодня». Паузы по убытку в день выкладки ставятся заново
+     по парам — направление, у которого уже сегодня минус больше лимита, встанет сразу после старта (уведомление).
+
+- **Отчёт «Итоги сделок» переделан (решение 257, 11.11.2026, ветка t90/results-report) — сделано, доработано по
+  приёмке.** Дни UTC, итог дня = итог дня бота (Deal.day_book, «Учёт дня», запись daily_result), оценки отдельно,
+  «По биржам» — биржа покупки, план с запасом и возвратом, длительность до закрытия (все исторические тексты), статьи
+  затрат, «Слепок по балансам» (без влияния на торговлю, «нет данных» вместо 0, полнота итога). Ответы Тиграна 11.11
+  записаны в решение 257 (дополнение). Осталось:
+  1. После деплоя задать report.snapshot_timeout_ms и report.long_deal_s (без них — причина в книге, отчёт выдаётся).
+  2. ~~**t91:** правило самого бота — итог дня и дневные лимиты по площадкам: биржа ↔ биржа — бирже покупки.~~
+     **Сделано (ветка t91/cex-cex-buy-venue от t90, выпуск одним релизом с t90; решение 173, дополнение t91):**
+     core/daily_venue.rs owner — одно правило для бота и отчёта; вход в сделку не менялся (entry_venues: пауза любой из
+     двух бирж направления не даёт начать биржа ↔ биржа, risk.max_daily_loss_usd требуется у обеих); запись итога дня
+     по прежнему правилу при загрузке приводится к новому (core/daily_rule.rs; прошлые дни не пересчитываются).
+     ~~Открытый вопрос Тиграну: оставить ли для входа в биржа ↔ биржа паузу по убытку дня биржи ПРОДАЖИ и её обязательный
+     risk.max_daily_loss_usd.~~ Закрыт решением 258 (t92): нет — лимит и пауза только у пары сделки (биржа покупки ·
+     «биржа → биржа»); core/daily_rule.rs удалён (старые записи разносит по парам daily_migrate.rs).
+  3. Сделки до решения 257: остаток итога — «восстановлено» в день закрытия (прежние оценки и поправки в другие дни у
+     бота — в своих днях; видно в колонке «Разница» «По дням»). Новые сделки разнесены точно.
+  4. Слепок: «В пути» (шаг перевода, возврат USDT «идёт») — под вопросом и в итог не входит (отдельная сумма в колонке
+     H): шаг ставится до отправки вывода, а вывод пишется в сделку только при зачислении — признака «вывод ушёл» в
+     учёте сделки нет. Если нужен точный учёт — записывать id вывода в сделку при отправке (отдельная задача).
+  5. Известное ограничение слепка: путь ордера и кэши котировок он не трогает, но запросы балансов к бирже делят с
+     ордерами паузу после ответа 429 (PAUSE_UNTIL_MS адаптеров Gate, HTX, Poloniex, Phemex, Bybit, MEXC (и фьючерсы
+     MEXC), CoinEx), а котировки DEX — общий предел dex.quote_cpu_max: выгрузка может на это время задержать торговлю.
+- **Решение 253, дополнение t89 (11.11.2026, ветка t89/binance-post-trade, Тигран 11.11: согласовано) — сделано.**
+  Живой случай 20261111122340181OPEN: возврат USDT через 0.6 с после продажи на Binance — отказ −4026. Теперь пауза
+  venue.withdraw_min_delay_ms, ожидание события (venue.withdraw_ready_wait_ms) и повтор −4026/−4024 в окне
+  venue.withdraw_unready_window_ms действуют у любого вывода с Binance сразу после своей сделки (покупки или продажи):
+  возврат USDT, «Перегнать», перегон монеты, «отдельно». Другие биржи — без изменений. Разбор —
+  docs/notes/binance-post-trade-2026-11-11.md.
+  1. После деплоя: проверить, что заданы venue.withdraw_min_delay_ms, venue.withdraw_ready_wait_ms,
+     venue.withdraw_unready_window_ms и transfer.locked_retry_ms / transfer.locked_retries_max [binance] (советы —
+     FIRST_RUN) — не заданы, у возврата USDT всё как раньше. Повтор после исчерпания transfer.locked_* — уже повтор
+     возврата usdt.return_retry_s / usdt.return_retries_max (WithdrawLocked — «вывод не ушёл»), если заданы.
+  2. *Вопрос (задача 2, правки нет):* в той же сделке две продажи на Binance (12:24:13.888, 12:24:14.788) прошли по
+     стакану потока, содержимое которого не менялось 2950 / 3935 мс (возраст в строке — от последнего ИЗМЕНЁННОГО
+     снимка), а свежесть ордера меряется от последнего КАДРА пары (touch) или подтверждения 213 — IOC по 0.0965 не
+     исполнился; в 12:24:21.980 кадра пары не было > 5000 мс — снимок REST, 0.0957. Почему IOC не исполнился и почему
+     кадры пары прекратились — по коду не установить. Варианты: (а) оставить; (б) новая настройка по площадке (например
+     exec.book_content_max_ms): у ОРДЕРА биржи стакан потока, содержимое которого не менялось дольше X мс, не берётся —
+     снимок REST (у Binance вес 5 на запрос; не задана — как сейчас); минус — у тихой, но верной пары лишний запрос на
+     каждый ордер; (в) сначала факты с сервера: журнал core.feed_watch / core.exec_book по OPEN 12:24:05–12:24:25, сырые
+     кадры стакана OPENUSDT (raw.book_frames), значение venue.book_interval [binance].
+  3. *Факта нет* (как вопрос 1 решения 253): видит ли сервис вывода Binance выручку USDT тогда же, когда поток аккаунта
+     прислал outboundAccountPosition по USDT. Если раньше — ожидание пройдёт сразу, отказ закроет повтор в окне.
+- **Тип ордера пары — отсев до расчёта (решение 254, ветка t86/order-type-filter, Тигран 11.11: согласовано) — сделано.** Факт: 38 сделок XT → DEX по PROVE (07.11–09.11) закрылись нашей проверкой перед ордером «prove_usdt: типа LIMIT нет в orderTypes пары». Теперь XT / Binance / MEXC помечают такую пару при разборе справочника (SpotPairState::order_block), ядро её не считает (OrderTypeNotAccepted), проверка перед ордером — страховка. Открыто (вопрос Тиграну): в живом справочнике XT 06.11 у pepe_usdt `orderTypes: []` и `timeInForces: []` (tests/data/xt_live_2026-11-06); пустой список бот считает «LIMIT нет» (так было и в проверке перед ордером). Документация XT не говорит, что значит пустой список; принимает ли XT LIMIT IOC на такой паре — живым ордером не проверено (отказы PROVE — наша проверка, не ответ биржи). Если такие пары нужны — проверить одним живым ордером на минимальную сумму и записать ответ.
+- **Отчёт «Сделки, лимиты и капитал» (11.11.2026, ветки t88/capital-report и t90/results-report, решение 256 с
+  дополнением по аудиту и словам Тиграна «адреса чтобы были в сделках», «все цифры точные») — сделано.** «📊 Отчёты» →
+  «Сделки, лимиты и капитал» → кнопки периодов и свой интервал как у «Сигналов и сделок», окно — календарные дни UTC;
+  xlsx: «Сделки» (сделки окна с итогом как «Итоги сделок», занятостью денег покупки и адресами), «Упущено из-за
+  потолка», «Итоги» (итог периода = «Итоги сделок»; баланс по площадке), «Лимиты на момент выгрузки», «Слепок по
+  балансам»; больше 50 МБ — части по дням, каждая сразу. Проверено: LibreOffice — 0 ошибок, Python — 0 расхождений.
+  Открыто (выбор сделан по коду — подтвердить Тиграну):
+  (а) занятость считается только у сделок С ПОКУПКОЙ (Deal.buy), сумма — «Вложено», с начала сделки;
+  (б) конец сделки — решено (решение 257): запись закрытия в хронологии;
+  (в) «что ограничило» эпизода — у его пиковой записи (наибольшее упущено);
+  (г) потолки модели — ТЕКУЩАЯ uncapped.ladder_usdt; записи до её смены — ячейка пустая (не 0);
+  (д) кнопки «Скачать» на веб-экране нет (задача — Telegram) — добавить ли GET /api/report/capital.xlsx;
+  (е) память вопроса своего интервала своя у каждого отчёта (range_prompts / cap_prompts) — свести при третьем отчёте;
+  (ж) возврата USDT у сделки нет (usdt_return.mode = «отдельно», путь без возврата, сделка до 138) — деньги считаются
+      свободными с концом сделки (выручка осталась на площадке продажи); «не вернулись» — занято до выгрузки (USDT не
+      на площадке покупки, пока человек не перегонит);
+  (з) хешей возврата USDT в учёте сделки нет (UsdtReturn без хеша) — в книге их нет; если нужны — это изменение учёта
+      (core/usdt_return_state.rs), отдельной задачей;
+  (и) адрес кошелька DEX — выводится адаптером из ключа на момент выгрузки (кошелёк по id сделки); DEX не подключена
+      или ключ не введён — в ячейке причина;
+  (к) лимиты — значения на момент выгрузки, не на момент каждой сделки (история значений — в журнале настроек);
+  (л) у «Сигналов и сделок» (255) кнопки «3 / 5 / 7 дней» остались N × 24 ч — свести ли к календарным дням UTC.
+- **Отчёт «Сигналы и сделки» (11.11.2026, ветка t87b/signals-report, решение 255) — сделано.** «📊 Отчёты» → «Сигналы
+  и сделки» → всё время / текущий день / 3 / 5 / 7 дней / свой интервал «дд.мм.гг – дд.мм.гг» (UTC); xlsx: «Сигналы»
+  (строка на направление окна, колонки задачи), «Тики», «Стаканы», «Ликвидность пула», «Пояснения»; больше 50 МБ —
+  части. Добавлено хранение: window.dex_pool_state — состояние пулов маршрута в точке цены DEX окна (доказано, что
+  ликвидность пулов за всё окно не хранилась). Открыто (вопросы Тиграну):
+  (а) окна, удалённые уборкой (window.keep_days / window.max_mb), удаляются ВМЕСТЕ со строкой в таблице windows
+  (core/window_cfg.rs remove(…, true)) — «все сигналы за всё время» физически теряются через keep_days дней. Вариант:
+  удалять только файл, строку-сводку оставлять (несколько КБ на окно);
+  (б) сигнал = окно (монета), начало / конец — окна; точное время прохода каждого направления есть только у эпизода
+  (episode.*, направление) и в строке «join» файла окна (вход направления). Оставить так или брать время эпизода;
+  (в) ленты сделок пула DEX (события Swap — отправители, хеши транзакций, важны для поиска кошельков) в окне нет: события
+  пулов пишутся только в сырой журнал узла raw/bsc_dex при raw.enabled = да и подписке WebSocket (режим квитанций
+  HTTP, решение 68, их не пишет вовсе); разбор — только в адаптере DEX. Нужна запись событий пулов маршрута в файл окна
+  (изменение стыка: Venue::window_tap для DEX) — согласовать;
+  (г) «текущий день», «N дней» — по UTC (как остальные отчёты); если нужен день по Еревану (UTC+4) — сказать;
+  (д) сырой журнал raw/<площадка> не убирается никогда (storage/raw_log.rs — ротация файлов raw.rotate_s, удаления нет),
+  журнал в SQLite (таблица journal) — тоже без удаления в коде: место растёт без предела.
+
+- **Шторм запросов интерфейса (10.11.2026, ветка t76/ui-storm) — сделано.** Факт: живой UI дал 893 ×
+  `net::ERR_INSUFFICIENT_RESOURCES`. Причина по коду: `ui/src/lib/coinNames.svelte.js` перечитывал GET /api/coins/names
+  (весь справочник) на КАЖДОЕ сообщение `coin_check` (итог проверки налогов одной монеты — тысячи за цикл), без защиты
+  «один запрос в полёте»; справочник имён строится из CoinBook, который меняет только пересборка (core/rebuild.rs →
+  сообщение `coins`). Сделано: имена — по `coins` и «lagged» ядра; `ui/src/lib/flight.js` (single-flight + отмена) во
+  всех перечитываниях по живому потоку и по параметрам; `get()` — не больше одного GET адреса в полёте; `send_channel` —
+  только каналы (статистика), а не виды пулов и справочник пулов. Открыто (вопросы Тиграну):
+  (а) ~~«Монеты» перечитывают ВЕСЬ список на каждое `coin_check` / `pool_check` / `coin_block`~~ — **сделано (Тигран
+  10.11: согласовано, ветка t84/coins-row):** новый GET /api/coins/{address} отдаёт строку одной монеты той же функцией
+  ядра, что полный список (core/coins_view.rs `row`; тест tests/api_coins_row.rs — строка по адресу == строка из
+  /api/coins для каждой монеты с адресом из записанных справочников); экран (ui/src/lib/coinsLive.svelte.js) по
+  `coin_check` / `pool_check` / `coin_block` запрашивает только строку монеты (pool_check — ещё строки с этим пулом) и
+  заменяет её на месте; один запрос в полёте на монету; полный перечит — `coins`, «lagged» ядра, переподключение, монета
+  без адреса, 404 / сбой строки. Факт по коду (не менялось): `coin_check` / `pool_check` толкают пересборку
+  (core/tick.rs request_rebuild); если пересборка изменила справочник (например block / tax_wait монеты), приходит
+  `coins` — и он по-прежнему перечитывает весь список. Сколько `coins` идёт за цикл проверок — на живом боте не замерено;
+  (б) ~~«Монеты» не перечитываются по `coins`~~ — **сделано (Тигран 10.11, ветка t80/journal-ui):** `coins` в списке
+  сообщений экрана, один запрос в полёте;
+  (в) ~~делистинги таймером 60000 мс~~ — **Тигран 10.11: оставить как есть, закрыто;**
+  (г) ~~dex.svelte.js без перечитывания по «lagged»~~ — **сделано (t80):** «lagged» = сервер не успел отдать интерфейсу
+  часть сообщений источника (api/ws.rs, приёмник broadcast отстал — сообщения потеряны) или переподключение WebSocket
+  (live.svelte.js, без источника). Было: экраны «Площадки» (справочник пулов, виды пулов), «Настройки» (id DEX),
+  «Каналы отправки» (статистика) и окно монеты (пулы справочника) после потери записи журнала dex.index оставались со
+  старым справочником до следующего dex.index или перезагрузки страницы; после потери send_channel — со старой
+  статистикой каналов до следующего send_channel. Стало: «lagged» журнала или переподключение — всё заново, «lagged»
+  ядра — каналы; один запрос в полёте.
+
+- **Решение 249 (10.11.2026), venue.cex_cex_deny и правила биржа ↔ биржа везде (ветки t67/cex-cex-deny, t70/cex-rules-followup).**
+  Пункты 1–5 — закрыты (Тигран 10.11: согласовано; DECISIONS 249, дополнение): (1) список проверяется у всех бирж
+  пути монеты; шаг A → B запрещён, если B в списке A или у A или B venue.cex_cex = нет; (2) сделка с DEX, монета ни на
+  одной бирже — DEX → биржа разрешён (тест); (3) ручной перевод USDT (решение 176) — решение человека, правила не
+  применяются (код не менялся); (4) повторы возврата USDT и «Перегнать» перепроверяют правило на каждой попытке;
+  (5) «Перегон» пишет отсеянные правилом биржи в хронологию. (6) **Решено (Тигран 10.11: «ИМЕННО ТАК», вариант б; сделано —
+  DECISIONS «249 (дополнение, п. 6)»).** Было: возврат USDT при закрытии — тот же шаг «деньги уходят с биржи продажи на
+  биржу покупки». Пример из решения 249: у binance список [bingx], у bingx пусто — сделка bingx → binance открывается
+  (направление проверяет список bingx), но возврат выручки binance → bingx (usdt_return.mode = per_trade или «Продать и
+  перегнать») теперь запрещён списком binance — каждая такая сделка кончается «USDT не вернулись» (страховка, решает
+  человек). Варианты: (а) оставить так (деньги с binance на bingx не уходят никогда); (б) возврат выручки на биржу
+  покупки по направлению самой сделки списком биржи продажи не ограничивать (только списками бирж, через которые монета
+  прошла сверх направления); (в) не открывать направление A → B, если A есть в списке B и возврат USDT включён.
+- **Решение 252 (10.11.2026), налог продажи reflection-монет PIG и SMARS (ветка t71/reflection-tax).** Сделано: проба
+  налогов продаёт до пробного перевода (DECISIONS 252; разбор docs/notes/reflection-tax-2026-11-10.md). Что осталось:
+  1. *Факты с сервера получены 10.11* (docs/notes/reflection-facts-2026-11-10.md): PIG _taxFee 2 + _liquidityFee 3 = 5 %,
+     SMARS 5 + 5 = 10 % (owner = 0); пара, w2, исполнитель, роутеры, Permit2 — НЕ исключены ни из наград, ни из налога;
+     Swap amountIn пары больше нетто Transfer (PIG TX1: 6 747 274 804 против 6 711 960 085); опыт eth_simulateV1 SMARS:
+     перевод между чужими адресами поднимает баланс пары на 1.166 % суммы, налог по выходу продажи «как есть» 8.83 %,
+     с переводом перед продажей — 7.66 % (= прежний замер бота 7.669 %). Версия «отражение доходит до пары» и правка 252
+     подтверждены фактом. После выкладки сверить на «Монетах»: SMARS ≈ 8.8 %; PIG — опыт не выполнен (за 20000 блоков
+     нет переводов PIG), ожидаемо ≈ 4.5 % (расчёт, не замер).
+  2. ~~Пополнение симуляции завышает выход продажи reflection-монеты~~ — **закрыто 10.11 (Тигран: вариант «б», да;
+     DECISIONS 252, дополнение «dry_fund»; ветка t72/dry-fund-surplus):** выход симуляции уменьшается на излишек пары,
+     созданный самим пополнением (exec/dry_surplus*.rs; тест tests/bsc_dex_dry_surplus.rs на фактах сервера SMARS).
+     Открыто (вопросы Тиграну): (а) первый шаг V4 / Infinity (CL, Bin) не замеряется — как Vault/PoolManager считает
+     вход при SETTLE (sync перед переводом или нет), по исходнику не проверено; у монеты с налогом в пуле такой пул не
+     берётся (решение 39), т. е. касается только монеты без налога в этом пуле, но с отражением на других переводах;
+     (б) пул хвоста доли, через который до неё прошла другая доля той же сделки (умный путь из нескольких долей),
+     квотируется на состоянии до сделки — разница поправки на этом состоянии и настоящем не измерена; (в) DODO DVM/DSP —
+     вход = баланс − резерв проверен по исходнику только у DPP (DPPTrader.sellBase); у всех PMM прирост баланса от
+     пополнения даёт отказ, так что завышения нет, но и поправки нет; (г) после выкладки сверить на живой предпроверке
+     reflection-монеты строку «излишек пары от пополнения» (SMARS ≈ 1.17 % перевода).
+- **Решение 251 (10.11.2026), алерты Telegram (ветка t69/alerts-clean).** Сделано: единый шаблон (путь, где сейчас, цифры,
+  причина, что делает бот, что нужно от вас, свёрнутый хвост), HTML, напоминание «Ручного управления» без записей в
+  обработке, изменения настроек пачкой — одним сообщением. Ждёт решения — что из событий ОТКЛЮЧИТЬ или увести только в
+  журнал (сам бот ничего не отключал; включение — notify.event.enabled, экран «Уведомления»). Факт кода: в «Общий»
+  (notify.telegram_chat) уходит КАЖДОЕ включённое событие каталога (dispatch.rs); «Управление» событий не получает
+  (только меню и ответы, routes.rs); «Сделки» — deal.closed; «Неудачные» — risk.reconcile_paused и дубль «Ручного
+  управления» (manual.record; не задан — в «Общий»). Какие события включены у Тиграна — в его базе настроек, здесь не видно.
+
+  | Событие | Сейчас идёт | Предложение |
+  | --- | --- | --- |
+  | deal.closed | «Общий» + «Сделки» (дубль) | в «Общем» выключить — итог есть в «Сделки» |
+  | stuck.loss_alert | «Общий»; та же проблема — запись с кнопками manual.record в «Неудачные» | выключить (дубль записи с кнопками), если «Неудачные» задан |
+  | deal.candidate, episode.opened/closed, window.opened/closed | «Общий» | только журнал (сигналы, частые) |
+  | deal.buy_filled, deal.transfer_sent, deal.transfer_credited, deal.sell_filled, deal.dust | «Общий» | только журнал: шаги видны в итоге deal.closed и на экране «Сделки» |
+  | exec.verified, cycle.dry, bundle.assembled, bundle.simulated, bundle.sent, bundle.included, dex.rebuilt_after_approve, dex.swap_waits_inflow | «Общий» | только журнал (технические шаги DEX) |
+  | coin.check_done, pool.hook_excluded, venue.transfer_status, dex.check_not_configured, wallet.added, system.secrets_unlocked | «Общий» | только журнал |
+  | venue.disconnected / venue.reconnected, venue.rate_limited, dex.receipts_stuck, venue.feed_conn_blocked | «Общий» | склеить в одно сообщение на площадку (потеряна → восстановлена правкой) — нужно согласие; пока оставить |
+  | system.settings_changed | «Общий» | склеено (одно сообщение на пачку) — сделано |
+  | route.quarantine_in/out, coin.blacklisted/unblacklisted, coin.credit_shortfall, coin.sell_slip, coin.exit_gap, venue.delisting | «Общий» | оставить |
+  | risk.*, usdt.relay_failed, usdt.not_returned, usdt.relayed, balance.external | «Общий» (reconcile_paused — ещё «Неудачные») | оставить |
+  | exec.order_not_filled, exec.swap_reverted, exec.withdraw_rejected, exec.withdraw_fail_pending, exec.transfer_slow, exec.deposit_not_credited, exec.credit_mismatch, exec.chain_hash_mismatch, exec.verify_rejected, transfer.to_trading_failed | «Общий» | оставить; вопрос — дублировать ли в «Неудачные» (routes.rs) |
+  | stuck.detected, stuck.relayed, stuck.market_sold | «Общий» | оставить |
+  | send.channel_rejected, send.tx_not_included, bundle.sim_reverted, bundle.not_included | «Общий» | только журнал, если за ними нет остановки (итог придёт отдельным событием) |
+  | send.tx_reverted, send.outcome_unknown, outcome.resolved/unresolved, send.queue_halted/released, executor.deployed, wallet.executor_deployed, wallet.mapping_changed | «Общий» | оставить |
+  | manual.record, manual.taken, manual.returned, balance.sell | дубль — «Неудачные» (или «Общий»); остальные — «Общий» | оставить |
+  | system.started, system.stopped | «Общий» | оставить |
+
+  Ещё вопросы по 251: (а) напоминание notify.manual_repeat_s само по себе — НОВОЕ сообщение с теми же записями каждые
+  N секунд (так задумано решением 156); оставить, увеличить интервал или очистить настройку (без повторов)?
+  (б) после перезапуска бота все записи «Ручного управления» уходят заново (память дубля — только в памяти,
+  mirror_state.rs) — хранить message_id в базе, чтобы после перезапуска править старые сообщения, а не слать новые?
+  (в) тот же отказ продажи определяется по тексту без чисел (manual_repeat.rs shape) — hex-хвост в тексте (буквы a–f)
+  сделает «другой отказ» и новый алерт; живых текстов отказов с hex в tests/data нет — нужен ли разбор по журналу?
+- **Решение 253 (10.11.2026), Binance: вывод сразу после покупки — ожидание доступности, повтор, закрытие входов,
+  комиссия по факту (ветка t68/depth-binance).** Сделано: см. DECISIONS 253. После деплоя задать (советы — FIRST_RUN):
+  venue.withdraw_ready_wait_ms [binance], venue.withdraw_unready_window_ms [binance], transfer.locked_retry_ms /
+  transfer.locked_retries_max [binance] (если не заданы на всю систему), transfer.seen_cost; venue.balance_events
+  [binance] = да. Вопросы:
+  1. *Факта нет:* видит ли сервис вывода Binance купленную монету тогда же, когда поток аккаунта присылает
+     outboundAccountPosition. Если событие приходит раньше (вместе с исполнением ордера), ожидание (а) будет ~0 мс, а
+     отказы закроет повтор (б). Записать на сервере кадры потока аккаунта (сырой журнал, соединение «account») вокруг
+     покупки и отказа −4026 — тогда решить, нужно ли ожидание сверх события.
+  2. Повтор после −4026/−4024 — по transfer.locked_retry_ms / transfer.locked_retries_max площадки (общие с −4060). Нужна
+     отдельная пара настроек?
+  3. ~~REST «свободно меньше суммы» — вывод всё равно отправляется~~ — Тигран 10.11: ОК, оставить.
+  4. ~~Окно (б) от своей покупки в памяти адаптера~~ — Тигран 10.11: ОК, оставить.
+  5. ~~Закрытие входов на любой отказ~~ — сделано дополнением 10.11 (InvalidAddress) и дополнением t82 (Тигран 10.11:
+     новый код AccountRestricted, разнос по таблицам всех бирж — DECISIONS 253, дополнение t82). Открыто после t82:
+     ~~(а) Лимит аккаунта, который пройдёт сам~~ — Тигран 11.11: «ставить биржу на паузу и отправить алерт» — сделано
+     дополнением t85 (код шлюза WithdrawLimit, пауза площадки до ручного снятия, алерт venue.withdraw_limit, монета не
+     закрывается; DECISIONS 253, дополнение t85).
+     ~~(б) Коды прав у вывода~~ — Тигран 11.11: у вывода → AccountRestricted — сделано дополнением t85 (MEXC 60005, Bybit
+     131004 / 131090–131092, KuCoin 411100 / 400700 / 200009, Gate ACCOUNT_LOCKED, OKX 58004; у других операций — права).
+     (в) Тигран 11.11: оставить как есть. Неясно по таблице, оставлены «монетой»: KuCoin 260210 «Currency/Chain withdraw is closed, or user is frozen»
+     (один код на оба смысла), Gate WITHDRAW_OVER_LIMIT «Withdrawal limit exceeded» (лимит аккаунта или суммы монеты —
+     не сказано). Нужен живой ответ (текст msg) — тогда решить.
+     (г) Нет таблиц кодов вывода: HTX (Wallet → Error Code — только 200/500/1002/1003/2002/2003), CoinEx, Kraken (у
+     Funding — только EFunding:Max fee exceeded), Phemex — отказы вывода там по-прежнему WithdrawRejected. Записать
+     живые ответы на отказ белого списка — тогда разнести.
+  6. ~~Последний перевод заменяет прежний / двойной счёт налога~~ — сделано дополнением 10.11 (сырые факты, разложение
+     против текущей модели, DECISIONS 253).
+  7. После деплоя задать venue.withdraw_min_delay_ms [binance] (совет FIRST_RUN — 1000).
+  8. Дополнение t85 (11.11): Тигран создаёт бота и чат «Аккаунты» — после деплоя ввести секрет telegram.accounts_token
+     (экран «Разблокировка»), задать notify.accounts_chat и нажать «Проверить подключение» (экран «Уведомления»). До этого
+     алерты аккаунта и лимита вывода — в «Общем», как раньше.
+- **Решение 250 (10.11.2026), проверка доли глубины h без полной котировки DEX — сделано (ветка t68/depth-binance).**
+  Выбор объёма тот же (доказано тестом на записях), полных котировок DEX на подбор вдвое меньше. Вопросы:
+  1. *Проверить на сервере* dex.swap_mode: быстрый ответ — только в прямом режиме (direct; dex.router_mode любой). В умном
+     (smart) — полная котировка, как раньше (сплит не монотонен по коду).
+  2. *Факт кода:* у пулов V2 продажа «точным входом» исполняется всегда целиком (выход x·y=k меньше резерва при любом
+     входе), поэтому проверка доли h по пулам V2 ничего не отсекает — она ограничивает только пулы с конечным окном
+     тиков/бинов (V3, V4, Infinity CL/Bin). Так и задумано? — Тигран 10.11: не нужно — выгоду режет расчёт задолго до доли. Закрыто.
+  3. Единственное отличие от прежнего: ошибка затрат маршрута, которая есть на sell_qty / h и нет на sell_qty
+     (разрешение кошелька меньше sell_qty / h, но не меньше sell_qty, и газ разрешений не измерен) раньше давала «расчёт
+     невозможен» на точке, теперь — нет.
+- **Решение 251 (10.11.2026), алерты Telegram (ветки t69/alerts-clean, t73/alerts-followup).** Тигран 10.11 ответил на
+  вопросы а–в и таблицу «Общего» — сделано (DECISIONS 251, дополнение): (а) напоминание notify.manual_repeat_s — как
+  есть, закрыто; (б) сообщения «Ручного управления» в SQLite — после перезапуска правятся, а не шлются заново; отказ
+  правки — новое сообщение; (в) hex (0x…, хеши, адреса) в «том же отказе» — как цифры; (г) deal.closed не в «Общий»,
+  если задан «Сделки»; stuck.loss_alert не в «Общий», если задан «Неудачные»; события связи площадки склеены по площадке.
+  1. *Тиграну — установить в интерфейсе после выкладки* («Уведомления», каждое событие: «Включено» = нет; это настройка
+     notify.event.enabled, область «событие» — `[event:<код>]`; бот значения не менял). Факт кода: выключенное событие
+     notify в журнал НЕ пишет (dispatch.rs passes) — «только журнал» значит «только то, что место события пишет в журнал
+     само»:
+     - своя запись журнала есть (видно в «Журнале»): deal.candidate (core.candidate), window.opened, window.closed,
+       deal.transfer_sent (core.transfer_sent), deal.transfer_credited (core.transfer_credited), deal.dust (deal.dust),
+       cycle.dry (core.cycle_dry), coin.check_done (core.check_done), pool.hook_excluded (core.pool_excluded),
+       venue.transfer_status (core.transfer_status), dex.check_not_configured (dex.check_not_configured), wallet.added
+       (журнал кошельков «Кошелёк DEX … добавлен»), system.secrets_unlocked («Секреты разблокированы»),
+       send.channel_rejected и send.tx_not_included (core.op_error с ошибкой; у адаптера — send.channel_rejected /
+       send.tx_not_included);
+     - своей записи журнала НЕТ (выключить = следа в журнале не будет): episode.opened, episode.closed (эпизод — в своей
+       таблице, экран эпизодов), deal.buy_filled, deal.sell_filled (сама сделка — на экране «Сделки»), exec.verified,
+       bundle.assembled, bundle.simulated, bundle.sent, bundle.included, bundle.sim_reverted, bundle.not_included,
+       dex.rebuilt_after_approve, dex.swap_waits_inflow (события адаптера DEX MarketEvent::Notice → только notify).
+     Остановка после send.channel_rejected / send.tx_not_included / отказов бандла шлёт своё событие: ошибки подряд →
+     пауза площадки — risk.stop (core/rules_apply.rs); исход неизвестен — send.outcome_unknown и risk.stop
+     (core/rules_stop.rs); сделка цикла DEX ↔ DEX с ошибкой бандла идёт через тот же rules_apply::on_error
+     (core/cycle_deal.rs).
+  2. ~~Выключение убирает след~~ — **сделано (Тигран 10.11: выключенное событие — в журнал; DECISIONS «251 (дополнение —
+     журнал выключенных событий)», ветка t80/journal-ui):** одна запись (вид — код события, текст без разметки, пометка
+     «в Telegram не отправлено»), кроме событий таблицы notify/journal_off.rs OWN_RECORD (своя запись у каждого места
+     отправки). Факт кода — своя запись есть не у всех мест, поэтому пишутся (возможна вторая запись рядом со своей):
+     risk.stop (своя — у прерванной перезапуском сделки core.ledger и правила «стоп всё» core.control; нет — у паузы по
+     ошибкам подряд, «исход неизвестен», правила «стоп площадка»); send.queue_halted (своя — у остановки трекером
+     send/settle.rs; нет — у остановки после перезапуска). Сделать их точнее можно только пометкой в месте отправки —
+     по решению.
+  3. *Факт кода:* venue.disconnected / venue.reconnected есть в каталоге (экран «Уведомления»), но в коде их никто не
+     отправляет — склейка для них заработает, когда появится отправитель.
+  4. *Проверить после выкладки:* перезапуск бота при записях на «Ручном управлении» — новых сообщений в «Неудачных» нет,
+     в журнале «Ручное управление: сообщений записей прошлого запуска — N».
+
+- **Решение 249 (10.11.2026), venue.cex_cex_deny и правила биржа ↔ биржа везде (ветка t67/cex-cex-deny).** Сделано: см.
+  DECISIONS 249. Подтвердить: (1) список venue.cex_cex_deny — только у биржи НАЧАЛА сделки (buy_on); у биржи, через
+  которую монета прошла позже (например сделка bingx → mexc, перегон с mexc), список mexc не проверяется — проверяется
+  только venue.cex_cex всех бирж пути; (2) сделка начата на DEX и монета ещё ни на одной бирже не была — перегон на
+  биржу с venue.cex_cex = нет разрешён (это DEX → биржа); (3) ручной перевод USDT (решение 176, кнопка человека)
+  правилами не ограничен — решение человека; (4) повторы возврата USDT и «Перегнать» (usdt_return_retry / attempt)
+  правило не перепроверяют — часть, запрещённая уже при закрытии, сразу «не вернулись»; (5) в автоматическом «Перегоне»
+  отсеянные правилом биржи не пишутся в хронологию (в «Продать и перегнать» — пишутся с причиной).
+
+- **Решение 246 (09.11.2026), отказы «расчёт не уложился в срок 5000 мс» — разбор и правка (ветка t64/calc-timeout).**
+  Сделано: объём сверх бюджета отбрасывается сразу после стороны A, без котировок B (выбор тот же; на записях CAKE
+  котировок DEX −4…−8 %). Срок 5000 мс сам по себе это не снимает. Вопросы и предложения (не сделано):
+  1. *Проверить на сервере* dex.route_paths_ttl_ms [bsc_dex]: не задана — граф и перебор путей на каждой котировке
+     (решение 189: ~17 мс на котировку); dex.quote_cpu_max — ожидание места входит в «котировка B»; smart.split_step_pct
+     и dex.route_max_paths — число шагов сплита × путей на котировку.
+  2. *Замер*: отдельная часть «ожидание места CPU DEX» (quote/cpu.rs permit) в calc_timing — сейчас слита с «котировка B».
+  3. *Проверка доли h* (вторая котировка B на sell_qty / h) — сделано решением 250 без изменения выбора: исполнимость без
+     полной котировки там, где она точно известна (прямой режим), иначе — как было.
+  4. *Точки по уровням стакана A* (по две на уровень) — главный источник числа расчётов у монет с длинным стаканом; любое
+     сокращение меняет алгоритм поиска (решение 66) — только по решению.
+- **Gate «кадра стакана пары нет 5009 мс» — гипотеза подтверждена кодом (разбор техлида 09.11, не сделано).**
+  Котировка (venues/gate/book.rs freeze) отказывает при возрасте кадра > venue.book_stale_ms (5000) без действующего
+  подтверждения; сторож спрашивает биржу только для «мёртвой» пары — кадра нет дольше book_stale_ms × pair_dead_mult
+  (core/feed_watch_logic.rs decide, dead_pair) = 15000; подтверждение «книга не менялась» даёт свежесть до отправки +
+  venue.quiet_confirm_min_ms + venue.pair_resub_interval_ms (core/feed_confirm.rs apply). Окно без котировки — с 5 до
+  ~15 с тишины (+ проход сторожа, ответ REST, ведро); у ответа Unchanged подтверждения нет совсем. Варианты:
+  (а) настройкой: venue.pair_dead_mult [gate] = 1 — проверка с 5 с; запросы GET /spot/order_book — один на каждую
+  тишину пары дольше 5 с и не чаще раза в quiet_confirm_min_ms на пару, всего не больше venue.quiet_confirm_max_per_s
+  (5/с = 50 за 10 с при лимите Gate 200 за 10 с на IP для публичных — комментарий gate/reply.rs); побочно тот же порог
+  у переподписки после «кадры потеряны» и у счёта мёртвых пар соединения (переподписка раньше); (б) кодом: свой порог
+  подтверждения (новая настройка, проверка с book_stale_ms), мёртвая пара для переподписки — как сейчас.
+- **«финальная котировка: сумма ордера меньше minNotional» / «возврат USDT меньше минимума вывода» (разбор техлида 09.11,
+  только анализ).** core/profit.rs: финальная котировка считается только на оптимуме подбора; её TooLarge ужимает объём
+  (решение 111), а TooSmall — сразу отказ, без пробы большего объёма; пороги прибыли — после неё. Если оптимум — на
+  наименьшем объёме и прибыль на нём ≥ порога, а к финальной цена сдвинулась под минимум — сделка теряется: код этого не
+  исключает. Когда прибыль оптимума (в тексте «оптимум … прибыль P») отрицательна — лучшая из всех посчитанных точек
+  отрицательна, сделки не было бы. Проверка по журналу: эти отказы с P ≥ money.min_profit_usd. Если такие есть —
+  вариант: при TooSmall финальной — один пересчёт на следующем допустимом объёме подбора (нужно решение).
+- **Решение 248 (10.11.2026, техлид по поручению Тиграна, кейс SMARS), пере-замер Universal Router и закрытие монеты
+  для входа по замеру — сделано (ветка t66/exit-ur-block; разбор — docs/notes/pig-minout-2026-11-09.md, раздел SMARS).**
+  После деплоя задать guard.exit_gap_pct (не задана — авто-закрытия нет). Вопросы:
+  1. guard.exit_gap_pct — новая настройка в процентах выхода (не exec.dex_slippage_pct): так оставить или брать допуск
+     исполнения? (откат «мало на выходе» — выход шага ниже ожидаемого по модели × (1 − exec.dex_slippage_pct),
+     exec/leg_min.rs, exec/chain.rs — с этим допуском монета закрывалась бы почти на каждом таком откате).
+  2. Перепроверка налогов (проба с переводом от пула) у SMARS, как у PIG, вероятно снова даст модельный налог (7.669 %)
+     — тогда авто-снятия не будет, снимать человеку. Нужна ли перепроверка налога продажи переводом с кошелька сделки
+     (реальный баланс), а не от пула? — **частично сделано 10.11 (t77, DECISIONS 252/247 дополнение «кошелёк
+     перепроверки»):** перепроверка после отката продажи выхода идёт кошельком сделки (его адрес, исполнитель, баланс
+     монеты; купленное пробы — приростом). USDT на покупку пробы по-прежнему переводом от другого пула (как у всех проб).
+  3. Бандл свопов (exec/bundle_trade.rs) — пере-замера нет; KyberSwap на первой продаже (exec.via_kyber) — замера нет
+     (у KyberSwap свой роутер и свои ошибки). Делать?
+  4. Изменение стыка: MarketEvent::ExitGap (gateway/events.rs) и тип ExitGap (core/types/check.rs) — утвердить.
+
+- **Решения 247/252, дополнения t78 (10.11, ветка t78/sell-remeasure-all, Тигран: согласовано) — сделано.** (1) Налог,
+  перепроверенный кошельком сделки, — отдельно, только для продажи этой сделки (check/deal_taxes.rs; признак продажи
+  выхода с id сделки — gateway/exit_scope.rs); общие — кошельком «Пробы», как до t77 (та же монета перепроверяется и
+  им). (2) Пере-замер по порогу «итог ≥ 0» (remeasure::PROFITABLE) — первая продажа сделки и «Вернуть боту»
+  (sell_or_stuck), «Ожидание» по истечении stuck.wait_ms, частичная покупка. (3) Проба кошельком сделки — без изменений.
+  Вопросы:
+  1. ~~По п. Г решения 247 при exec.via_kyber первая продажа сделки, «Вернуть боту», частичная покупка и «Ожидание» по
+     истечении идут своим сборщиком — так оставить?~~ — **Тигран 10.11: на этих путях — как до t78 (KyberSwap /
+     «лучший из двух»; свой — с пере-замером) — сделано в t81** (DECISIONS «247 (дополнение t81 …)»; признак
+     Remeasure.any_executor, venues/bsc_dex/trade_path.rs).
+  2. Запись налогов кошелька сделки снимается после продажи выхода целиком или вывода монеты сделки с кошелька; если
+     монеты ушли не через бота («Продано вручную», «Беру на себя»), запись остаётся в памяти до перезапуска (не
+     используется: продаж этой сделки больше нет). Снимать ли и по закрытию сделки ядром (нужен новый вызов шлюза)?
+  3. После выкладки сверить на живом откате журнал dex.tax_recheck (две проверки: «Пробы» и кошелёк сделки «…», «итог —
+     только для продажи этой сделки») — записанного ответа eth_simulateV1 от кошелька сделки в tests/data нет.
+- **Решение 247/252, дополнения 10.11 (t77/remeasure-relay, Тигран: согласовано) — сделано.** (1) Пере-замер выхода и в
+  продаже на цели сразу после автоматического «Перегона» (sell::sell_after_relay, порог «выгодно» = 0); «Продать и
+  перегнать» и продажа здесь в «Перегоне» — по факту кода уже были с пере-замером. (2) Перепроверка налогов после отката
+  продажи выхода — кошельком сделки (check/tax_wallet.rs). Вопросы:
+  1. ~~Итог перепроверки кошельком сделки — в общие налоги или отдельно?~~ — **Тигран 10.11: отдельно, только для
+     продажи этой сделки — сделано в t78** (DECISIONS «252 / 247 (дополнение t78 …)»).
+  2. ~~Без пере-замера остались первая продажа, «Вернуть боту», «Ожидание» по истечении, частичная покупка~~ — **Тигран
+     10.11: пере-замер во всех, порог «итог ≥ 0» — сделано в t78** (DECISIONS «247 (дополнение t78 …)»).
+  3. После выкладки сверить журнал dex.tax_recheck на живом откате (строка «кошельком сделки «…»» и налоги) — записанного
+     ответа eth_simulateV1 от кошелька сделки в tests/data нет.
+- **Решение 247 (10.11.2026), выход из позиции по замеру — сделано (ветка t65/minout-remeasure; разбор —
+  docs/notes/pig-minout-2026-11-09.md).** Пере-замер выхода при откате по minOut (путь исполнителя), налог в сети по
+  переводу сделки, перепроверка налогов, подписи «Прибыль/Убыток», обнуление счётчика кнопкой, продажа выхода без порогов
+  входа, KyberSwap → свой сборщик на повторах, комиссия вывода из ответа биржи в сверке зачисления, BNB на газ перед
+  отправкой. Вопросы:
+  1. ~~*Пере-замер только у исполнителя; Universal Router и бандл — нет*~~ — **решение 248 (техлид 10.11 по поручению
+     Тиграна, кейс SMARS): прямой и умный путь — сделано** (exec/ur_short.rs, exec/ur_remeasure.rs; селектор берётся
+     из returnData или текста узла «execution reverted: 0x…» — по execution-apis у CallResultFailure поля error.data
+     нет). Бандл — по-прежнему без пере-замера (вопрос остаётся).
+  2. «Продать и перегнать» после отката minOut: оценка «здесь» по модели только помечена. Нужен ли замер «здесь»
+     (новый метод адаптера) или исключать «здесь» из сравнения?
+  3. Почему симуляции с пополнением от пула (проба налогов 4.0003 %, предпроверка 234 — 102.16) занижают налог PIG
+     (в сети 5.0 %) — нужен код контракта PIG и трассировки (список данных — в разборе).
+  4. Неизмеренный налог пула и неизмеренный/недопущенный крючок по-прежнему закрывают продажу выхода (п. В) — так
+     оставить?
+
+- **Решение 242 (09.11.2026), деньги и прибыль по бирже и направлению — сделано (ветка t61/venue-direction-scope; разбор —
+  docs/notes/venue-direction-scope-2026-11-09.md).** Область «площадка + тип направления» у money.min_profit_usd,
+  money.min_profit_pct, money.max_per_trade_usd, profit.price_move_k, profit.closure_share; значений нет — расчёт прежний.
+  Экран — «Настройки» → «Деньги и риск › по биржам и направлениям». Вопросы:
+  1. ~~*profit.price_move_k: пара сильнее значения монеты*~~ — **ответ Тиграна 09.11 (согласовано), сделано** (ветка
+     t62/window-followups, DECISIONS «242 (дополнение, п. 2)»): монета сильнее пары — монета → площадка · направление →
+     вся система; остальные четыре настройки — без изменений.
+  2. ~~*profit.closure_share у «биржа → биржа» берётся у биржи покупки*~~ — **ответ Тиграна 09.11: оставить как есть**
+     (пара — у биржи покупки, откат — прежнее значение биржи-получателя, продажи).
+  3. ~~*Вид площадки в области хранилище не проверяет*~~ — **ответ Тиграна 09.11 (согласовано), сделано** (ветка
+     t62/window-followups, DECISIONS «242 (дополнение, п. 1)»): проверка при записи по видам площадок шлюза
+     (settings/venue_kinds.rs). Было: *Вид площадки в области хранилище не проверяет* (не знает видов шлюза): пару «DEX-площадка:cex_dex» можно записать
+     импортом/API, но расчёт её не прочитает; экран предлагает только верные пары. Нужна ли проверка при записи?
+  4. *Номер решения 242* — следующий свободный в docs/DECISIONS.md ветки feat/own-bsc-node; если параллельная ветка
+     заняла 242 — перенумеровать при слиянии.
+
+- **Решение 244 (09.11.2026), BingX — пауза после 429/418 — сделано (ветка t60/keys-bingx-429).** 429 — пауза только
+  эндпоинта, 418 — всей биржи + журнал Error + уведомление venue.rate_limited. Нужно от Тиграна: задать
+  venue.rate_limit_pause_ms [bingx] (сейчас не задана — паузы нет, 429 видно записью Warn venue.rate_limit; совет
+  FIRST_RUN — 10000). Вопросы: (1) окна лимитов BingX в документации расходятся (api-ai-skills «1/s per IP» у стакана и
+  справочника, docs-v3 «500 requests per 10 seconds») — совет взят по длинному окну; (2) Retry-After и вид тела 429/418
+  в документации нет — проверить на первом живом 429 (сырой журнал data/raw/bingx «rest <путь>»); (3) при паузе 10000
+  ручная команда ждёт её не дольше exec.rate_limit_wait_max_ms (совет 5000) — дольше паузы эндпоинта не ждёт, отказ сразу.
+- **Решение 243 (09.11.2026), лишние права ключа — предупреждение, не сбой — сделано (ветка t60/keys-bingx-429).**
+  Gate, Bybit, KuCoin, Bitget: лишние права — «Подключено» + список лишних прав (как Binance, Kraken); нехватка нужного
+  права — сбой, как раньше. Вопрос: у BingX, MEXC, XT, OKX, CoinEx, HTX, Phemex, Poloniex лишние права не проверяются
+  вовсе (сбоя не было и нет) — добавлять ли им строку-предупреждение (у кого API отдаёт права: BingX код 3 «фьючерсы»,
+  MEXC, OKX, HTX)? Не добавлено — точечная правка.
+- **Решение 245 (09.11.2026), окна: цена DEX на объём сделки и окно максимального объёма — сделано (ветка
+  t59/window-deal-size).** А — точки цены DEX на объём открытой сделки (биржа → DEX — пока сделка открыта; DEX → биржа —
+  до факта покупки) на событие любого пула маршрута сделки, не чаще window.dex_price_min_ms, котировка по памяти пулов
+  своей задачей. Б — окно максимального объёма кандидата, медиана и p75 длительности сделки пары, «успели бы»; настройки
+  uncapped.maxwin_gap_ms, uncapped.deal_time_min_n — без значений (советы — docs/FIRST_RUN.md: 60000, 5). Вопросы:
+  1. ~~*Конец окна максимального объёма чаще неизвестен*~~ — **ответ Тиграна 09.11 (согласовано), сделано** (ветка
+     t62/window-followups, DECISIONS «245 (дополнение, п. 1)»): наблюдение окна uncapped.maxwin_watch_ms (совет 120000) —
+     расчёты наблюдения и вне кандидатов, держалось всё наблюдение — «2 м+»; вариант «+1 расчёт» отклонён. Было: расчёт «без потолка» кандидата идёт, только пока направление —
+     кандидат (сигнал выше порога, монета не занята сделкой), и не чаще uncapped.min_interval_ms. Ушёл сигнал — расчётов
+     нет, конец «неизвестен» (длительность «не меньше», «успели бы» — «нет данных», если известная часть короче медианы).
+     Вариант: при выходе направления из кандидатов (window_run::fail / episode_run::failed) ставить ещё один расчёт
+     «без потолка» — тогда конец будет точным (+1 расчёт на эпизод, очередь uncapped.*). Делать?
+  2. *Точность* начала и конца — шаг расчётов (совет uncapped.min_interval_ms = 30000), а медиана сделки bingx → DEX —
+     десятки секунд (docs/notes/transit-times-2026-11-09.md): для честного «успели бы» шаг нужно уменьшить (цена — CPU
+     очереди «без потолка»). Какой шаг?
+  3. ~~*Длительность сделки*~~ — **ответ Тиграна 09.11 (согласовано), сделано** (ветка t62/window-followups, DECISIONS
+     «245 (дополнение, п. 2)»): от решения о сделке (Deal::decided_at — Calc.at прошедшего кандидата); старые сделки —
+     от открытия (их число видно). Было: от открытия сделки (после предпроверки) до последней продажи; время от расчёта кандидата
+     до открытия (предпроверка, подгонка под остаток) не входит. Устраивает?
+  4. *DEX → биржа (часть А)*: точки на объём сделки только до факта покупки на DEX — после покупки цена DEX на итог не
+     влияет, а пулы сдвинуты нашим обменом. Нужно ли после покупки (например, чтобы видеть возврат цены пула)?
+  5. ~~*Котировка на объём сделки — своя (без KyberSwap)*~~ — **ответ Тиграна 09.11 («маршрут важен»), сделано** (ветка
+     t62/window-followups, DECISIONS «245 (дополнение, п. 3)»): путём исполнения (свой / KyberSwap / лучший из двух),
+     путь в точке; при window.dex_price_min_ms = 0 KyberSwap для точек не спрашивается. Было: при exec.via_kyber продажа может пойти через KyberSwap, точка
+     окна — оценка нашим сборщиком. Устраивает?
+
+- **Решение 241 (09.11.2026), цена пула DEX в окне — сделано (ветка t56/window-pool-price).** Окно направления
+  биржа ↔ DEX пишет точки цены DEX (котировка стороны DEX, которую тик уже посчитал на событие пула монеты; без новых
+  запросов к узлу); настройки window.dex_price, window.dex_price_min_ms — без значений (совет — docs/FIRST_RUN.md: да, 0).
+  Вопросы:
+  1. *Ответ — решение 245:* у окна с открытой сделкой — ещё точки на объём сделки (window_deal.rs); кандидаты — объём тика.
+     Было: *Цена — средняя цена котировки на объём сравнения тика* (prices.rs: максимально вливаемый ≤ money.max_per_trade_usd),
+     не на объём сделки: котировка на объём сделки на каждое событие пула — новые котировки (самая дорогая операция
+     бота). Объём точки показан. Устраивает или нужна котировка именно на объём сделки (цена — нагрузка на расчёт)?
+  2. *Ответ — решение 245 (для открытой сделки):* событие любого пула маршрута сделки, включая промежуточные, — точка на
+     объём сделки. Для точек тика (кандидаты) — как было. Было: *Пулы маршрута без токена монеты* (промежуточная WBNB/USDT) пересчёт монеты не толкают (tick.rs) — их движение
+     попадает в точку только со следующим пересчётом монеты. Толкать пересчёт окна и на такие пулы?
+  3. *Номер решения 241* взят как следующий свободный в docs/DECISIONS.md ветки feat/own-bsc-node; если параллельная
+     ветка заняла 241 — перенумеровать при слиянии.
+
+- **Решение 240 (09.11.2026), запас на движение цены — код сделан, значений нет (ветка t52/price-reserve; разбор —
+  docs/notes/price-move-vs-reserve-2026-11-09.md).** Три необязательные настройки: profit.closure_share и
+  profit.sigma_floor_per_s [площадка-получатель], profit.sigma_min_changes [вся система]; не заданы — расчёт прежний.
+  Советы — docs/FIRST_RUN.md (доля 0.39 на биржах-получателях, bsc_dex — не задавать; граница — после пересчёта; минимум 1).
+  Вопросы:
+  1. *Значения* — поставить по FIRST_RUN или иначе?
+  2. ~~*Биржа-получатель = DEX → биржа и биржа → биржа вместе* (области «тип направления» в каталоге нет)~~ — **сделано**
+     решением 242 (Тигран 09.11: согласовано; ветка t61/venue-direction-scope): область «площадка + тип направления»;
+     прежнее значение площадки-получателя остаётся откатом.
+  3. *Частичная покупка* (partial.rs, «довезти или продать на A») оставлена как раньше — без доли, границы и проверки σ.
+     Включить туда тоже?
+  4. *Граница σ: эффект на истории не посчитан* — нужен пересчёт по σ, T и выручке каждой сделки (/api/deals) на сервере.
+     Скрипт разбора готов (09.11, ветка t55/reserve-analysis): docs/notes/reserve-analysis-2026-11-09.md, папка
+     docs/notes/scripts/reserve_analysis/ — упущенные биржа → DEX по цене пулов, DEX → биржа по сделкам, перебор
+     k / доли / границы σ / T. Ждёт запуска на сервере (инструкция — раздел 6 разбора).
+  5. *Видно ли, что запас взят по доле:* строка плана одна (PriceMoveReserve); показать отдельно, какая часть max
+     сработала (поле в плане и на экране)?
+
+- **Решение 238 (09.11.2026), стакан для ордера — сделано (ветка t47/stale-book; разбор — docs/notes/stale-book-2026-11-09.md).** Котировка исполнения и худшая цена ордера — одна мера свежести и один стакан; устарел — снимок REST; REST не ответил — один повтор и алерт. Вопросы:
+  1. *venue.book_stale_ms теперь обязательна у всех бирж.* Где она не задана (раньше необязательна у BingX, Bitget, KuCoin, OKX, CoinEx, HTX, Kraken, Phemex, Poloniex), после обновления котировок и сделок на бирже не будет до её задания — проверь в «Настройках» перед обновлением (советы — docs/FIRST_RUN.md, раздел решения 238).
+  2. *exec.rest_book_retry_ms* — задать по биржам (совет — не меньше venue.rate_limit_pause_ms биржи) или оставить пустой (без повтора, сразу алерт)?
+  3. *Poloniex, вид asks/bids в GET /markets/{symbol}/orderBook:* описание поля — «list of asks», пример — плоский список «цена, количество, …»; разобрано по примеру, иной вид — отказ с причиной. Записать живой ответ на сервере бота.
+  4. *Живые ответы стакана REST HTX, Kraken, Phemex* — записать на сервере бота (разбор по документации; из среды разработки адреса бирж закрыты); лимит публичного запроса стакана у HTX, Kraken, Poloniex в документации не указан.
+  5. *Кейс XTER:* по коду адаптер MEXC держал пару «свежей» кадрами с тем же снимком (решение 109: время кадра пары обновляется, ядру снимок не отдаётся), а ядро считало возраст по последнему изменённому снимку. Журнал core.feed_watch по XTER за 21:34–21:42 08.11 я не читал (доступ был только к /api/deals) — если нужно подтвердить фактом, пришли строки журнала по паре XTER.
+  6. *Ревью 238 (ветка t54/review-fixes), сделано:* п. 1 — снимок REST забывается после отправки ордера биржи (повтор — по свежему стакану). П. 2 — не задана настройка (NotConfigured) — застрявшая монета сразу «Остановлена» с причиной. ~~Вопрос: прочие незаданные настройки на пути котировки (venue.quote_asset, счёт DEX) приходят без кода~~ — **сделано** (Тигран 09.11: согласовано; ветка t57/agreed-fixes, DECISIONS «238 (ревью, п. 2 — дополнение)»): venue.quote_asset, кошелёк счёта DEX, NotConfigured котировки DEX и REST стакана — код NotConfigured, застрявшая монета сразу «Остановлена». Не тронуто: нет живой цены BNB для затрат (convert::rates — причины по биржам смешанные, без кода, как было) — нужно ли и его считать «не задано», если у всех бирж причина NotConfigured? П. 3 — котировка продажи и первая попытка ордера — по одному стакану (стакан передаётся из котировки в trade_seen). П. 4 — неудача REST стакана запоминается на exec.rest_book_retry_ms (не задана — venue.rate_limit_pause_ms), в окне — без запроса. Вопросы: (а) ~~у MEXC rest::public своего ограничителя частоты нет~~ — **сделано** (Тигран 09.11: согласовано; ветка t57/agreed-fixes, DECISIONS «238 (ревью, вопрос (а))»): venues/mexc/ip_weight.rs, настройка venue.public_ip_weight_10s [mexc] — задать по совету FIRST_RUN (не задана — ограничителя нет, как было); подписанные запросы с весом по IP (tradeFee, getall, account …) ограничитель не считает — нужен ли общий учёт корзины IP вместе с ними? (б) если у биржи не задана ни exec.rest_book_retry_ms, ни venue.rate_limit_pause_ms, частота REST стакана на пути застрявшей монеты не ограничена (сказано в тексте ошибки) — задать exec.rest_book_retry_ms у всех бирж?
+
+- **Решение 236 (09.11.2026), честный итог сделки — сделано (ветка t45/deal-accounting; аудит план/факт и масштаб —
+  docs/notes/deal-accounting-2026-11-09.md).** Затраты возврата USDT — в итоге сделки (по факту: 21.62 USDT, 12 сделок
+  из плюса в минус), deal.closed ждёт конца возврата, вопрос «Продано вручную» называет выручку бота (случай PIT).
+  Вопросы:
+  1. *Старые записи с округлением вывода MEXC (145 возвратов, 6.34 USDT):* **программа готова, не запускалась**
+     (техлид 09.11 по поручению Тиграна, DECISIONS «236 (дополнение, п. 5)»): `usdt_sent_backfill` дописывает «ушло» из
+     журнала core.transfer_sent. Тиграну: запустить по docs/notes/usdt-sent-backfill-2026-11-09.md (--dry-run → «да» →
+     бот остановлен, копия базы → --apply).
+  2. ~~*«Перегнано вручную»*~~ — **сделано** (техлид 09.11 по поручению Тиграна, DECISIONS «236 (дополнение, п. 2)»):
+     бот спрашивает, сколько зачислено; затраты = сумма части − зачислено — в итоге; «-» — как раньше, с пометкой.
+  3. *«Не вернулись»:* итог без затрат возврата (деньги на площадке) — согласен?
+  4. *deal.closed ждёт конца возврата (до итога повторов решения 163)* — так или слать сразу и вторым сообщением?
+  5. ~~*Проверка ввода «Продано вручную»*~~ — **сделано** (техлид 09.11 по поручению Тиграна, DECISIONS «236 (дополнение,
+     п. 3)»): настройка manual.sold_max_over_pct (не задана — проверки нет; совет FIRST_RUN — 20, метод без замера);
+     нет котировки — проверки нет, пометка. Отказ в тесте без площадок не проверен (нужна живая котировка).
+  6. ~~*Дыры факта вне возврата*~~ — **сделано** (решение техлида 09.11 по поручению Тиграна, ветка t50/accounting-2,
+     DECISIONS «236 (дополнение, п. 1 — газ)»): газ approve, чаевые канала, газ откатившихся / отменённых свопов,
+     газ неудачного вывода из кошелька DEX (и отмены) — в затратах сделки (core/deal_gas.rs). Газ транзакции перевода
+     чаевых — **сделано** (ветка t53/accounting-3, DECISIONS «236 (дополнение, п. 6)»); в плане — **сделано** (Тигран 09.11: согласовано;
+     ветка t57/agreed-fixes, DECISIONS «236 (дополнение, п. 6 — газ перевода чаевых в плане)»: send/tip_gas.rs — оценка узла
+     eth_estimateGas, ≈ 0,00000105 BNB на сделку). ~~Вопрос: бандл свопов и цикл бандлом чаевых не шлют, а план считает
+     сумму чаевых и их газ (planned_tip) — убрать их из плана этих путей?~~ — **сделано** (Тигран 09.11: согласовано; ветка
+     t58/bundle-tip-plan, DECISIONS «236 (дополнение, п. 6 — газ перевода чаевых в плане; дополнение: чаевые бандла)»):
+     путь известен на котировке (exec/trade.rs sends_tip, exec/cycle_gate.rs form) — у бандла чаевых и их газа в плане нет.
+     Не известен на котировке (не менялось): exec.via_kyber / «лучший из двух» — исполнитель выбирается на сделке. Газ вывода, найденного ботом после «исход неизвестен», — **проверено и сделано** (DECISIONS «236
+     (дополнение, п. 7)»): на пути опроса статуса он уже входил (газ из ответа статуса), путь «зачислено по блокчейну» — теперь тоже.
+- **Решение 234 (08.11.2026), продажа DEX до покупки (ветка t39/presell-sim; разбор — docs/notes/presell-sim-2026-11-08.md):**
+  п. 1 (симуляция настоящей продажи кошельком сделки, пересчёт по выходу) сделан. Вопросы:
+  1. *П. 2 — налог каждым кошельком маппинга:* проба пула — 4 запроса к узлу (2 × eth_simulateV1, 2 × balanceOf), × число
+     кошельков, × каждый проход tax.recheck_interval_s. Риск закрывает п. 1 (налог кошелька сделки на сумме сделки — перед
+     каждой покупкой). Делать п. 2?
+  2. *Монета с одним пулом:* пула-источника вне маршрута нет — симуляция не выполняется, сделки нет. Так и оставить?
+  3. *Нативная BNB продажей на DEX:* в симуляции не пополняется — без суммы на кошельке симуляция пропускается (журнал),
+     проверка как раньше (налога токена у BNB нет). Так и оставить?
+  4. *exec.via_kyber = да:* продажа идёт через KyberSwap, симуляция — своим сборщиком (запасной путь). Так и оставить?
+- **Решение 235 (08.11.2026), кнопки без порогов убытка и «Продать и перегнать» на лучшую площадку — сделано (ветка
+  t40/manual-sell; разбор — docs/notes/manual-sell-2026-11-08.md).** Вопросы:
+  1. ~~venue.cex_cex = нет у биржи, где ЛЕЖИТ монета~~ — **сделано** (решение 235, дополнение; ветка t42/small-fixes):
+     перегон с неё на другую биржу запрещён (как направления решения 214 — «у одной из сторон»), на DEX и «продать
+     здесь» — можно.
+  2. Остаток после частичной продажи кнопкой продаётся снова кнопкой, пока не продано всё, остаток не стал пылью или
+     биржа не исполнила ордер совсем (тогда алерт). Так?
+  3. Итог кнопки пишет «возврат начат»; сколько зачислено — отдельным уведомлением usdt.relayed (итог кнопки в
+     Telegram правится один раз). Достаточно?
+  4. Номер решения 235 взят по журналу этой ветки — при слиянии с параллельными ветками сверить.
+- **Решение 226 (08.11.2026), источники делистинга — уточнение Тиграна 08.11 сделано (ветка t26b/delist-rework):**
+  единое правило delist.block_hours для всех источников (время делистинга из анонса: API → страница анонса; не
+  определено — блок с причиной «время делистинга из анонса не определено»); метка ST — по delist.st_block площадки
+  (по умолчанию торгуем); время в прошлом — блок до явной отмены/переноса; Bybit — лента без тега Spot; Bitget — анонсы
+  со страницы. *Задать:* delist.block_hours = 12 (Тигран), delist.ann_max_age_h 720, delist.ann_max_pages 2,
+  delist.ann_html_per_refresh 5 (советы FIRST_RUN); delist.st_block — не задавать (= нет). Вопросы:
+  1. *Отмена / перенос делистинга анонсом* (Тигран: блок до явной отмены): спотовых анонсов «postpone / cancel» в живых
+     лентах 08.11 нет (у OKX — только для фьючерсов «OKX to postpone the delisting of ONEUSDT perpetual futures»), формат
+     неизвестен — не разбираются; блок снимается, когда пара исчезает из справочника, поле времени очистилось/сдвинулось
+     или анонс старше delist.ann_max_age_h. Как поступать, когда такой анонс появится, — прислать пример, подключу.
+  2. *MEXC «Tokens Moved to the Assessment Zone (November 2026)»* — в API нет поля «зона оценки», смысл не описан.
+     Блокировать такие монеты? (сейчас не разбирается; ST Warning = метка st).
+  3. *Phemex:* 6 пар Listed с timeline[3] в декабре 2025 — живая проверка: стакан пуст, объём 0, последняя сделка в
+     момент делистинга — торги сняты, блок верный. stStatus (SUSHI, GRASS = 1) в документации нет — что это?
+  4. *HTX:* tca у online-пар с dl = false (почти у всех 01.01.2030, у altusdt — 2029) не считается делистингом — верно?
+  5. *XT:* nextState / nextStateTime не описаны в документации (пусты у всех) — остаётся «неизвестно». *BingX:* offTime
+     в прошлом у 17 торгуемых пар — по-прежнему не используется. Если есть официальное описание — подключу.
+  6. *Не покрыто API:* анонсы «KuCoin Will Delist Multiple Tokens», Bybit «Delisting N Spot trading pairs», MEXC «ST
+     Warning», Bitget — тикеры только в HTML статьи (не разбирается). Binance делист-график и CoinEx на работающем боте
+     не включены — живой ответ не проверен.
+- **Решение 231 (08.11.2026), бот сам выясняет «исход неизвестен» — вопросы (ответы Тиграна 08.11 — сделано, решение
+  231 (дополнение), ветка t31b/outcome-more):**
+  1. ~~Вывод KuCoin и Bybit~~ — Bybit: сделано совпадением «монета + сеть + адрес + сумма с момента отправки», ровно
+     одна запись. *Уточнить:* ноль записей — бот ждёт до risk.outcome_max_s и только потом «человек» (запись могла ещё не
+     появиться в истории); больше одной — человек сразу. Так? История читается одной страницей (limit 50, без cursor) —
+     за 15 минут окна хватает. KuCoin — по-прежнему человек (своего ID у вывода нет).
+  2. ~~Своп DEX по квитанции~~ — сделано для прямого, умного пути и исполнителя (контекст в «чем найти», итог теми же
+     функциями + решение 222); разрешение (approve) в блоке — SwapReverted «обмен не отправлялся» (тем же кодом обычный
+     путь отвечает на непрошедший approve). *Осталось человеку:* KyberSwap (и «лучший из двух», выбравший KyberSwap — свой
+     адаптер, свои типы квитанции), бандл (несколько транзакций), цикл DEX ↔ DEX. Нужны ли? *Решение 222 при позднем
+     выяснении:* баланс на блоке−1 узел держит ~128 блоков (≈ 1,5 мин на BSC) — квитанция, найденная позже, даёт факт по
+     логам с записью dex.balance_fact (как обычный путь при недоступном состоянии).
+  3. ~~Отказ остановленной очереди~~ — код QueueHalted («не отправлено»): обычные правила шлюза, без паузы. *Риск,
+     решить:* пауза «исход неизвестен» в памяти и после перезапуска не восстанавливается, а остановленная очередь читается
+     из SQLite. Раньше первый отказ очереди ставил паузу DEX; теперь паузы нет — сделка биржа → DEX может купить на бирже
+     и упереться в остановленную очередь на продаже (дальше обычная логика: повтор продажи stuck.unsent_retries_max, затем
+     алерт с кнопками). Предлагаю: сделку с кошельком, чья очередь остановлена (ядро видит состояние очереди — событие
+     WalletQueue), не начинать (отказ на входе с причиной). Делать? Можно также задать правило шлюза для кода
+     «Не отправлено» («стоп площадка» и т. п.) в интерфейсе.
+  4. *BingX.* Ответ на постановку без orderId — теперь OutcomeUnknown с «чем найти» (сделано). Предел давности запроса
+     ордера по clientOrderID в api-ai-skills не указан — проверить на первом живом случае (журнал core.outcome_resolve).
+  5. *Перезапуск во время выяснения* — как раньше: сделка «прервана перезапуском», пауза в памяти не восстанавливается.
+  6. ~~Советы FIRST_RUN~~ risk.outcome_poll_s = 30, risk.outcome_max_s = 900 — подтверждены Тиграном (FIRST_RUN отмечен).
+  7. *Записанных ответов* запроса ордера по своему ID и истории выводов (в том числе Bybit Get Withdrawal Records) нет
+     (нужны ключи) — тесты на чистой логике; квитанция свопа в тесте — настоящая квитанция BSC (чужая транзакция,
+     взгляд теста). Первые живые ответы стоит записать в tests/data.
+  8. ~~Бандл с неустановленным исходом~~ — сделано решением 233 (ветка t35/bundle-outcome): OutcomeUnknown с «чем
+     найти» и позднее выяснение своим узлом. Вопросы — пункт «Решение 233» ниже.
+
+- **Решение 233 (08.11.2026), исход бандла «ушёл / не ушёл» — вопросы** (разбор docs/notes/bundle-outcome-2026-11-08.md):
+  1. *Запас после срока бандла.* Окончательное «не исполнено» при позднем выяснении — после maxBlockNumber +
+     send.replaced_confirm_blocks (та же настройка, что у одиночной; запас на отставание индекса узла и реорганизацию).
+     Обычный трекер ставит «не попал» сразу после maxBlockNumber. Оставить так или отдельная настройка?
+  2. ~~Паника задачи трекера~~ — сделано решением 233 (дополнение, п. 2), ветка t37/tracker-cycle: очередь
+     остановлена («отслеживание транзакции <хеш> прервано: …»), операция — OutcomeUnknown с «чем найти», исход
+     выясняет ядро.
+  3. *Записанных ответов* eth_sendBundle / blxr_submit_bundle нет — «после maxBlockNumber не включается» проверено
+     только по документации каналов; тесты — на чужих настоящих квитанциях BSC. Первый живой случай — записать.
+  4. ~~*Цикл DEX ↔ DEX* с неизвестным исходом~~ — сделано решением 233 (дополнение, п. 4), ветка t37/tracker-cycle:
+     «чем найти» цикла, позднее выяснение своим узлом (Venue::resolve_cycle), сделка закрывается по найденному итогу.
+     Вопросы — пункт «Решение 233, дополнения» ниже.
+
+- **Решение 233, дополнения п. 2 и п. 4 (08.11.2026, ветка t37/tracker-cycle) — вопросы:**
+  1. ~~*Одиночная транзакция цикла: nonce занят, а своей квитанции нет*~~ — **сделано** (решение 233, дополнение
+     «отмены»; ветка t42/small-fixes) и у свопа: хеши отмен — в «чем найти»; отмена в блоке — «не исполнено», газ
+     отмены в затраты; nonce занят ни нами, ни отменой — человек. Вопросы:
+     - ~~*Вывод из кошелька DEX*~~ — **сделано** (решение 233, дополнение «отмены», вывод; ветка t49/withdraw-cancel):
+       хеши отмен — в «чем найти» перевода (wallet/transfer.rs «вытеснена»); resolve_withdraw.rs: отмена в блоке —
+       WithdrawRejected «вывода нет» с фактом (cancel_hash, газ отмены); исходный в блоке — вывод есть, опрос статуса;
+       nonce занят чужой — человек; очередь снимается при выясненном исходе. Вопросы:
+       - ~~*Газ неудачного вывода в ядре*~~ — **сделано** (техлид 09.11 по поручению Тиграна, DECISIONS «236
+         (дополнение, п. 1 — газ)»): газ отката и отмены перевода — в затратах сделки (core/deal_gas.rs).
+       - ~~*Код итога*~~ — **сделано** (техлид 09.11, DECISIONS «236 (дополнение, п. 4)»): позднее выяснение отдаёт тот же
+         TxNotIncluded, что обычный путь; «перевод не ушёл, исход известен» — безопасный повтор (withdraw_unsent через
+         cancel_confirmed, как продажа в решении 229).
+       - *Тест:* чтение узлом и снятие очереди (resolve_withdraw.rs → resolve_single.rs verdict, release_if_ours) — через
+         узел, в тестах не проверялось (как у свопа); вердикт и итог — на настоящих квитанциях BSC.
+     - ~~*Своп: газ отмены*~~ — **сделано** (техлид 09.11, DECISIONS «236 (дополнение, п. 1 — газ)»): газ неудачной
+       транзакции сделки биржа ↔ DEX (и найденного итога) — в затратах сделки (core/deal_gas.rs).
+     - *Операции, ушедшие до этой ветки,* — в «чем найти» нет поля cancels: по ним как раньше (ждём, дальше человек).
+  2. *Выяснение цикла идёт в задаче сделки* — поиск циклов DEX ↔ DEX (core/cycle_watch.rs) ждёт его до
+     risk.outcome_max_s. Площадка в это время на паузе «исход неизвестен», очередь кошелька остановлена — новых циклов
+     и так нет. Оставить так?
+  3. *Тесты:* итог цикла — на чужих настоящих квитанциях BSC (взгляд теста: отправитель — кошелёк цикла); живого
+     цикла бота с неизвестным исходом и откатившегося цикла в записи нет — ветка «откат в блоке» у ядра проверена
+     чтением кода. Снятие очереди при позднем выяснении — через узел (resolve.rs release_if_ours), в тестах не
+     проверялось (нужен узел), как у решения 233. Первый живой случай — записать в tests/data.
+  4. *KyberSwap* (venues/kyberswap/tx.rs) следит за своей транзакцией без отдельной задачи — правка п. 2 его не
+     касается (паники отдельной задачи там нет).
+
+- **Решение 229 (08.11.2026), повтор продажи с известным исходом — вопросы:**
+  1. *«Затем продажа на месте по порогу».* Сделано только для цепочки, начатой случаем 229 (отмена подтверждена или
+     отказ до отправки после кнопки; метка Deal.unsent_here): исчерпание → один раз продажа здесь по порогу
+     stuck.relay_max_loss_pct, потом алерт. Цепочки решений 110/154/182 при исчерпании — алерт, как раньше. Нужно ли
+     и им продажу здесь по порогу?
+  2. *Кнопка и отмена.* «Продать сейчас», не попавшая в блок с подтверждённой отменой, и кнопка с отказом всех каналов
+     (154) / неисполненным ордером биржи (182) — по-прежнему сразу человеку (решение называет для кнопки только отказ до
+     отправки). Повторять ли и их?
+- **Решение 230 (08.11.2026), пауза кошелька и правила отказа вывода — вопросы:**
+  1. *Чат «Проблемы».* Такой роли в notify нет (роли: «Управление», «Общий», «Сделки», «Неудачные»). Сообщение
+     risk.reconcile_paused уходит в «Неудачные» (чат записей «Ручного управления») и в «Общий» по настройкам события.
+     Если нужен отдельный пятый чат «Проблемы» — сказать, это новая роль (токен, ID чата, пользователи).
+  2. *«Балансы кошелька не получены»* — тоже пауза только этого кошелька (как расхождение монет). Если узел BSC
+     недоступен, на паузу встанут все кошельки по очереди — по сути как пауза DEX. Подтвердить.
+  3. *Перегон.* Кошелёк на паузе — не цель перегона; монета, лежащая на нём, — продажа на месте (как с площадки на
+     паузе, 220 В). Подтвердить.
+  4. *Правило Retry для InvalidAddress / WithdrawLocked.* Раньше ядро такой повтор выполняло (запрет был только у
+     WithdrawRejected) — теперь не выполняет (форма помечает «не действует»). Свой повтор WithdrawLocked по
+     transfer.locked_retry_ms (решение 166) не тронут. Подтвердить.
+  5. ~~*Telegram-меню «Площадки и карантин»* паузы кошельков пока не показывает.~~ Сделано (Тигран 08.11 «да»; решение
+     230, дополнение): строка кошелька и кнопка «Снять паузу кошелька «имя»» — в меню и «Состоянии».
+
+- **Решение 232 (08.11.2026), монета комиссии остальных бирж — что не из документации:**
+  1. *KuCoin KCS.* Включена ли «Pay Fees with KCS», классический API не сообщает (в документации есть только UTA «KCS Fee
+     Deduction Management» — страница недоступна мне для чтения). Модель — USDT (факт 42/42). Если скидку включат —
+     комиссия уйдёт в KCS, USDT спишется с запасом. Нужно ли читать состояние (если счёт UTA)?
+  2. *KuCoin поле tax* в ответе ордера (пример: «0») — описания нет, бот его не читает. Если где-то tax ≠ 0 — в какой
+     монете и входит ли в fee, неизвестно. Прислать ордер с tax ≠ 0, если встретится.
+  3. *CoinEx продажа, Poloniex продажа, XT продажа* — в котируемой монете по образцу «получаемой монеты»; прямых слов в
+     документации нет (у Poloniex — пример SELL с feeCurrency USDT). CoinEx покупка — по примеру документации (base_fee),
+     живых ордеров нет — сверить на первом ордере.
+  4. *Phemex* — монета комиссии спота в документации не описана: модель USDT от суммы и у покупки (консервативно для
+     списания USDT). Если факт покупки окажется в монете — поменять на `in_received`.
+  5. *Kraken / OKX / CoinEx / Poloniex / Phemex — в книге «USDT»*, а не venue.quote_asset (как было). Если котируемая
+     монета площадки другая — сказать.
+  6. *Скидочные монеты (CET, TRX, HT, XT, PT)* — состояние скидки в документации не читается (CoinEx — только POST;
+     Poloniex — trxDiscount без размера и монеты; HTX — нет в документации; PT — API исключён): расчёт без скидки;
+     факт — части комиссии по монетам из ответа. ~~Монета HTX «hbpoint» — пересчёт в USDT не пройдёт~~ — **сделано**
+     (решение 232, дополнение «баллы HB»; ветка t42/small-fixes): баллы → USDT 1:1 по справке HTX «Point Card Usage
+     Instructions» («1 pts = 1 USDT fee»), в затраты сделки. Вопросы:
+     - *Ставка при оплате баллами.* Та же справка: «A standard 0.2% fixed spot trading fee rate will apply for users who
+       have enabled points deduction». Расчёт до сделки (venues/htx/fees.rs) берёт большую из takerFeeRate /
+       actualTakerRate в монете сделки; включено ли списание баллами, API не сообщает. Если баллы включены и ставка
+       ключа ниже 0.2%, план занижает комиссию (факт считается верно). Баллы на счёте HTX используются? Если да —
+       нужна настройка «ставка при баллах» или запрет баллов на счёте.
+     - *Справка прочитана по адресу huobi.br.com/support/360000182831* (страница справки HTX, ссылается на HTX APP);
+       htx.com из среды разработки недоступен (прокси 403). Сверить на htx.com/support/360000182831 и на первом живом
+       ордере с fee-deduct-currency = hbpoint (filled-points vs списание с GET /v2/point/account).
+- **Решение 227 (допуск, 08.11.2026) — сделано (ветка t34/return-tolerance):** usdt.return_tolerance_usd (совет 1).
+  *Задать:* usdt.return_tolerance_usd = 1. Вопрос: первая попытка возврата при закрытии свободный баланс не читает —
+  отправляет расчётную сумму; не хватает копеек — отказ площадки, затем повтор (через usdt.return_retry_s) уже с
+  допуском; повторы не заданы — сразу «не вернулись» (дальше «Перегнать» с допуском). Применять допуск и к первой
+  попытке (прочитать свободный баланс перед ней)?
+- **Решение 227, вопросы (08.11):** (а) худшая цена ордера по стакану не старше venue.book_stale_ms: у Bitget котировка исполнения берёт снимок REST именно когда кадр потока старше venue.book_stale_ms, а снимок доходит до ядра асинхронно — до его применения ордер теперь получит отказ «стакан устарел» (раньше — худшая цена по старому стакану). Если отказы пойдут — варианты: ждать применения снимка ядром (новая настройка ожидания) или считать худшую цену по снимку стакана котировки (quote_snapshot, решение 217). (б) Повтор возврата требует свободно ≥ сумма части: если биржа зачислила выручку на копейки меньше расчёта (округление комиссии), часть уйдёт в «не вернулись» — нужен ли допуск (и какой настройкой)? (в) Строка хронологии котировки пишется у каждой продажи sell.rs — у частых повторов продажи хронология станет длиннее.
+  5. *XT:* nextState / nextStateTime не описаны (пусты у всех) — «неизвестно». *BingX:* offTime в прошлом у 17
+     торгуемых пар — не используется. Binance и CoinEx на работающем боте не проверены живьём.
+  6. *Дата без времени* («on Aug 18, 2026», «on 2026-10-16») не считается временем (часовой пояс и час неизвестны):
+     тогда время берётся со страницы, а нет страницы — блок без времени. Так и оставить?
+
+- **Решение 225 (08.11.2026), автоснятие пауз — вопросы:**
+  1. *Пауза по убытку дня площадки — «без изменений (снимается с новым днём)».* В коде она с новым днём НЕ снималась
+     (daily_commit.rs: «паузы прошлого дня снимает человек»). Сделано, как в таблице: снимается сама в полночь UTC
+     (и «Стоп» по общему лимиту — так же). Если нужно оставить ручное снятие у площадки — сказать, верну.
+  2. *«Исход неизвестен».* Сделано отдельной задачей — решение 231 (бот сам выясняет исход; вопросы — ниже).
+  3. *«Стоп всё» для WithdrawRejected / InvalidAddress / WithdrawLocked.* В таблице — про «стоп площадка»; сделано и для
+     «стоп всё»: паузы/стопа нет, только запись core.rules и предупреждение. Подтвердить.
+  4. *Советы FIRST_RUN* risk.auto_resume_check_s = 60, risk.errors_resume_after_s = 300 — совет Claude, подтвердить.
+
+- **Решение 223 (08.11.2026), общие пулы в долях графа — вопросы (разбор: docs/notes/graph-shared-pools-2026-11-08.md):**
+  1. ~~*Минимум доли по worst_price.*~~ Решено — решение 228 (min_k = E_k × max(1 − допуск, B / E), exec/leg_min.rs).
+  2. *Запись пулов FLUX.* Состояний пулов сделки 20261108102130440FLUX в записях нет, узла из среды разработки нет —
+     сценарий проверен на записи CAKE. Нужна запись 6 пулов маршрута на блоке сделки, чтобы повторить старую и новую
+     котировку на них.
+  3. *Вторая доля через общий пул V4/Infinity CL, Bin, Algebra, Elastic, Solidly, Stable, DODO, WooFi, Maverick* не
+     открывается (состояние после обмена не считается). V4 CL без крючка можно добавить — нужно?
+- **Решение 221 (08.11.2026), автоснятие паузы сверки — вопросы:**
+  1. *«Балансы площадки не получены» мешает снятию.* Чистый круг — без единой проблемы risk.reconcile_mismatch, в том
+     числе «балансы не получены» (не сверили — не знаем). Если одна площадка долго недоступна (она и так на своей
+     паузе), системная пауза сверки сама не снимется — нужен «Старт». Оставить так или не считать недоступную
+     площадку (сверять только полученные)?
+  2. *Уведомление о постановке паузы.* Постановка пишется в журнал core.control; в Telegram уходит, как и раньше,
+     risk.reconcile_mismatch по каждому расхождению. Отдельное событие «пауза поставлена сверкой» нужно?
+- **Решение 219 (08.11.2026), комиссия по монетам — что не из документации и не сделано:**
+  1. *Bitget XTER, тестовые данные.* Сырой orderInfo живого ордера не сохранён — tests/data/fees_2026-11-08 собран из
+     значений d / r / t в формате документации. Нужен сырой ответ orderInfo (любой ордер с BGB) — заменить.
+  2. *Gate fee + gt_fee одного ордера.* Документация не уточняет, «fee» — остаток после GT или вся комиссия. Читается как
+     две непересекающиеся части («GT used to deduct fee»). Проверить на живом ордере, где GT не хватило.
+  3. *Сколько GT / BNB нужно на комиссию.* Скидка GT (Gate) и BNB (Binance) включается в расчёт, пока монеты скидки не
+     меньше venue.gt_min_balance / venue.discount_min_balance (решение 158). Цены GT/BNB в адаптере нет — сумма комиссии
+     в монете скидки не считается, проверка «хватает именно на эту сделку» не сделана. Что биржа делает при нехватке
+     GT — в документации Gate нет (при нехватке BNB Binance берёт всё из получаемой монеты — faqs/commission_faq).
+  4. *MEXC MX Deduction, KuCoin KCS.* Состояние скидки не читается: модель — USDT (худший случай для списания USDT;
+     факт 08.11 — USDT). Если включат скидку — комиссия уйдёт в MX/KCS, списание USDT будет с запасом.
+  5. ~~*Остальные биржи (OKX, CoinEx, Phemex, Poloniex, Kraken, HTX, XT, KuCoin).*~~ — **сверено решением 232**
+     (вопросы — «Решение 232» ниже).
+  6. *Bitget купон (newFees.c ≠ 0)* — по-прежнему ручная проверка (как купон делит комиссию — документация не говорит).
+  7. *Продажа BingX / Bybit / Bitget* — в USDT от суммы (документация: «в получаемой монете»); на живом боте продажи
+     этих бирж в выборке 08.11 не разбирались.
+- **Решение 221 (08.11.2026), пауза сверки — вопросы:**
+  1. ~~«Балансы площадки не получены» мешает снятию~~ — **решено (Тигран, 08.11):** пауза только площадки с проблемой,
+     автоснятие — по чистым кругам этой площадки, недоступность других не мешает.
+  2. ~~Уведомление о постановке паузы~~ — **решено (Тигран, 08.11):** Telegram, как и раньше, risk.reconcile_mismatch.
+  3. *«Балансы не получены» — тоже автоснятие?* Сделано так: эта пауза площадки (решение 118) ставится сверкой и
+     снимается сама, когда балансы площадки снова получены и расхождений нет reconcile_confirm_rounds кругов подряд
+     (по словам «пауза-плей автоматически — когда паузу поставил сам софт»). Раньше — только кнопкой. Подтвердить.
+  4. *DEX — пауза по кошельку.* Не поддерживается (venue_paused — по id площадки): расхождение одного кошелька ставит
+     на паузу всю площадку DEX (все кошельки, все направления с ней). Нужна ли пауза только кошелька?
+
+- **Решение 237 (09.11.2026), «без потолка» по данным момента входа — вопросы:**
+  1. ~~*Записи decision_snapshot (07.11–09.11, σ и курсы позже входа, в т. ч. INTCB).*~~ — **решено (решение 239,
+     техлид 09.11 по поручению Тиграна):** не пересчитываются, записи в базе не меняются; в итогах экрана, отчёта
+     «Упущено» (и его отправки в Telegram) складываются только decision_inputs, все прочие записи сделок
+     (decision_snapshot, live_after_buy, пересчёт по окну решения 218) — одной строкой «несравнимо (посчитано не по
+     данным момента входа)» и листом «Сделки — несравнимо»; в таблицу потолков и топ не входят.
+     *Вопрос Тиграну:* пересчёт по окну (recomputed_window*) тоже отнесён к «несравнимо» — в нём настройки модели
+     текущие и DEX-сторона из плана (решение 218, вопросы 3–4). Устраивает?
+  2. ~~*Налоги, decimals, газ разрешений DEX.*~~ — **решено (решение 239, техлид 09.11 по поручению Тиграна):** в снимок
+     DEX снимается копия проверок токенов и пулов снимка (check/state.rs pinned) и decimals (tokens.rs pinned, без узла).
+     *Вопрос Тиграну:* живыми в котировке по снимку ещё остаются разрешения кошелька, которых не было в памяти на момент
+     снимка (wallet/allow_cache.rs snapshot читает их с узла — после нашей покупки разрешение могло уменьшиться, и в
+     расчёт попадёт газ разрешений, которого не было в плане), и время/свежесть головы блока для срока Permit2
+     (quote/approve_gas.rs heads.at: голова устарела к расчёту — точка «не посчитано»). Закрепить и их (нет в памяти —
+     точка «не посчитано», время — блока снимка)?
+  3. ~~*Настройки модели*~~ — **решено (решение 239, техлид 09.11 по поручению Тиграна):** у сделки — копия хранилища
+     настроек на момент входа (settings/pinned.rs, снимается в core/frozen.rs take и в снимке DEX); почему копия, а не
+     история настроек — в решении 239.
+  4. ~~*Курс валюты затрат, которой нет в плане*~~ — **решено (решение 239, техлид 09.11 по поручению Тиграна):** точка —
+     «объём недопустим» (Fail::TooLarge), расчёт идёт дальше, сколько таких объёмов и первая причина — в записи
+     (Record.plan_gap). *Вопрос Тиграну:* вид TooLarge («объём больше возможного») выбран, потому что валюта появляется на
+     большом объёме; если она появится на объёме МЕНЬШЕ планового, поиск примет его за верхнюю границу — так ли редко это,
+     как кажется, проверить по записям plan_gap после запуска.
+
+- **Решение 218 (07.11.2026), пересчёт старых записей «без потолка» по окнам — вопросы:**
+  1. *Какой стакан «полный».* **Решено (решение 221, 08.11.2026): сначала снимок торгового потока, стакан всей
+     глубины — запасной.** Было по порядку: стакан всей глубины по изменениям окна (полный + изменения), иначе
+     последний снимок N уровней торгового потока (тот стакан, по которому бот котировал; у новых записей решения 217
+     снимок — тоже он). Глубина по изменениям даёт больше уровней, чем видел бот в момент решения, — потолок может
+     выйти выше, чем у записей по снимку. Оставить так или брать снимок торгового потока первым?
+  2. *Правила пары и минимумы вывода / депозита.* На момент сделки их в базе нет — в пересчёте не применяются, шаг
+     поиска — по знакам количества плана и стакана A. Устраивает, или брать текущие правила пар с бирж (не исторические)?
+  3. *Комиссия вывода.* Берётся из плана как постоянная (процентная часть решения 199 в плане отдельно не хранится —
+     на объёме потолка комиссия может быть больше). Так?
+  4. *Настройки модели* (k, h, пороги, предел поиска) — текущие из базы, а не на момент сделки (история настроек есть в
+     settings_history, но пересчёт её не читает). Так?
+  5. *Сухой режим.* Записи сухих сделок (Battle.dry) пересчитываются так же, как боевые. Так?
+
+- **Решение 217 (07.11.2026), снимок рынка для «без потолка» — вопросы:**
+  1. *Кандидаты.* По ним расчёт по-прежнему на живых данных в момент расчёта (нашей сделки не было, но очередь может
+     задержать расчёт на секунды — рынок уже другой). Снимать рынок и для кандидатов в момент вердикта? Цена — снимок
+     на каждый вердикт (сотни в минуту; после исправлений по проверке — десятки `Arc` пулов монеты и путей её графа).
+  3. *Graph-режим без путей в кэше.* Снимок берёт минимальный набор (как прямой режим), расчёт помечен «может быть
+     занижено». Устраивает, или в этом случае писать «не посчитано: нет путей графа на момент решения»? Для полноты
+     снимка на живом боте нужна dex.route_paths_ttl_ms.
+  4. *Bitget, снимок REST.* Годен не старше feed.stale_after_ms — так или своя настройка?
+  2. *Старые записи сделок.* Сейчас — отдельный итог «посчитано после покупки — занижено» и лист отчёта. Оставить так или
+     скрывать из экрана и отчёта совсем?
+
+- **Решение 215 (07.11.2026), отчёты — вопросы:**
+  1. *Где кнопка «📊 Отчёты».* Сделана в главном меню чата «Управление» (роль Control, notify/ctl). В меню /menu чата
+     «Общий» (notify/menu.rs) её нет — «только чат/роль управления». Нужна ли и там?
+  2. *Кнопка «Итоги сделок» на экране «Сделки».* Период добавлен только в API (?from=&to=) и в Telegram; на сайте кнопка
+     по-прежнему за всё время. Добавить выбор периода и на экран «Сделки»?
+
+- **Решение 213 (07.11.2026), тихие пары — вопросы:**
+  1. *Снимок REST вместо кадра.* Gate не присылает кадр spot.order_book при подписке, пока книга не меняется (живые
+     данные 07.11; в документации об этом ничего). Если книга менялась, пока подписка была мертва, а после переподписки
+     не менялась (вердикт «не менялась с переподписки»), или после переподключения соединения, — стакана нужной версии у
+     нас нет до следующего изменения книги, пара не торгуется. Ответ GET /spot/order_book (with_id=true) — это и есть
+     стакан с номером: ставить его в память как снимок (как окно, tap_snap.rs)? Нужна глубина limit = venue.depth_levels.
+  2. *Шкала номера.* Прямой фразы «lastUpdateId кадра spot.order_book = id ответа REST» в документации Gate нет:
+     основание — документированная связь id снимка REST с U/u spot.order_book_update и равенство lastUpdateId и u в
+     живой записи 04.11 (tests/gate_real_data.rs book_version_vs_frame_id). Подтвердить или спросить поддержку Gate.
+  3. *Перед исполнением.* Подтверждённая тихая пара свежа в котировке до «запрос + venue.quiet_confirm_min_ms +
+     venue.pair_resub_interval_ms» — и для расчёта, и для котировок исполнения (тот же quote адаптера). Ордер Gate —
+     ioc/fok по худшей цене (решение 135), поэтому при изменении книги после подтверждения хуже цены не исполнится.
+     Нужна ли перед сделкой отдельная свежая проверка версии по REST (плюс ~100–300 мс к сделке)?
+  4. *Другие биржи — ЗАДАЧА (Тигран 08.11: механизм для всех бирж).* Подтверждение есть только у Gate. Для остальных 12 адаптеров — book_version по их документации
+     (контракт gateway/contract.rs), до этого у них сторож не включается (feed_health = None).
+     - *MEXC (08.11, ветка t36/feed-watch-mexc-bitget):* сторож включён (feed_health, переподписка одной пары
+       UNSUBSCRIPTION + SUBSCRIPTION, переподключение соединения), **book_version НЕ реализован** (confirm = false) —
+       тихая пара только в журнал, не переподписывается. Причина — документация: Partial Book Depth Streams
+       (https://www.mexc.com/api-docs/spot-v3/websocket-market-streams/partial-book-depth-streams) описывает поле кадра
+       как «version | string | Version number», частота пушей не указана; связь с REST есть только у канала изменений:
+       «How to Properly Maintain a Local Copy of the Order Book» — «record `lastUpdateId`», «discard all pushes where
+       `toVersion` <= `lastUpdateId`» (канал spot@public.aggre.depth.v3.api.pb). Что version частичного стакана — тот же
+       счётчик, что lastUpdateId GET /api/v3/depth, нигде не сказано. Вопрос Тиграну: (а) спросить поддержку MEXC или
+       (б) записать на сервере бота одновременно кадры limit.depth и aggre.depth одной пары и ответ /api/v3/depth (hex
+       кадров — raw.book_frames = да; tests/README.md) — если version = toVersion при той же книге, реализовать
+       book_version по lastUpdateId с тестом на записи (как tests/gate_real_data.rs book_version_vs_frame_id).
+     - *Bitget (08.11, та же ветка):* сторож включён (feed_health, переподписка одной пары unsubscribe + subscribe,
+       переподключение соединения), **book_version НЕ реализован** (confirm = false) — тихая пара только в журнал.
+       Причина — документация: Depth Channel (https://www.bitget.com/docs/classic/websocket/spot/public/Depth-Channel):
+       seq — «Serial number. It increases when the order book is updated and can be used to determine whether there is
+       out-of-order packets», ts — «Matching engine timestamp(ms)»; о связи seq с REST — ничего; «Default data push
+       frequency for books, books5, books15 is 200ms» (без «и без изменений»). Страница REST «Get OrderBook Depth» в этой
+       работе не открылась (старый адрес api-doc ведёт на обзор UTA, каталог Classic инструменту недоступен); по выписке
+       в коде (rest_book.rs, docs/notes/bitget-analysis-2026-11-05.md §5) в ответе asks, bids, ts — номера книги нет;
+       живого ответа в tests/data нет. Вопрос Тиграну: записать на сервере ответ GET /api/v2/spot/market/orderbook и
+       кадры books15 (tests/README.md, раздел Bitget) — есть ли в ответе seq той же шкалы; нет — подтверждение у Bitget
+       невозможно, тихие пары остаются журналом (решение 201 — снимок REST перед исполнением — уже есть).
+       Замечание: в WebSocket intro сейчас лимит сообщений клиента — «subscribe» и «unsubscribe» по 50 сообщений за 5 с,
+       а venues/bitget/ws.rs держит «up to 10 messages per second» (MAX_MSGS_PER_SEC) — сверить формулировку (не правилось).
+       *Сверено и исправлено 08.11 (ветка t41/feed-watch-3):* WebSocket intro — лимиты на соединение и на каждый вид
+       сообщения за 5 с: ping 10 (превышение закрывает соединение, 30007), login 2, subscribe 50, unsubscribe 50 (лишние
+       отбрасываются); ws.rs — SUB_MSGS_PER_WINDOW = 50, MSG_WINDOW_S = 5, проверка venue.ws_subs_per_sec × 5 ≤ 50 (по
+       числу то же, что было: ≤ 10/с). Страница прочитана через инструмент чтения страниц (пересказ таблицы, не снимок
+       HTML). Проверки темпа ping (≥ 500 мс между ping) в ws.rs нет — при venue.ws_ping_ms порядка десятков секунд не
+       нужна.
+     - *MEXC и Bitget — СДЕЛАНО по содержимому (08.11, ветка t38/quiet-content; Тигран «да, согласен», решение
+       «202/213 (по содержимому)»):* confirm = true, тихая пара подтверждается сравнением первых venue.depth_levels
+       уровней ответа REST и стакана в памяти (core/feed_print.rs; MEXC — GET /api/v3/depth, Bitget —
+       GET /api/v2/spot/market/orderbook). Пункты «book_version НЕ реализован» выше — история; вопросы о номере
+       (version / seq) для подтверждения больше не нужны. Открыто:
+       (а) *Записи для теста на живых данных.* Пар «кадр WebSocket + ответ REST в тот же момент» у MEXC и Bitget в
+       tests/data нет: тест ядра — на структурах, разбор MEXC — на примере документации, Bitget — #[ignore] до записи
+       bitget_orderbook_CAKEUSDT.json. Если у биржи ответ REST и кадр стакана систематически различаются при одной книге
+       (другая точность цены, объединение уровней, другой набор уровней), каждая проверка даст «кадры потеряны» →
+       круги переподписки 202 по тихим парам (ограничены venue.pair_resub_* и паузой). Записать на сервере бота
+       одновременно: MEXC — hex кадров limit.depth пары (raw.book_frames = да) и GET /api/v3/depth?limit=N; Bitget —
+       кадры books15 и GET /api/v2/spot/market/orderbook?type=step0&limit=15 (команды — tests/README.md); после записи —
+       тест равенства отпечатков на ней. До записи — смотреть журнал core.feed_watch («кадры потеряны (первые N
+       уровней …)») в первые часы после включения venue.quiet_confirm_* у MEXC / Bitget.
+       (б) *Bitget, котировка исполнения (решение 201).* У подтверждённой тихой пары котировка исполнения по-прежнему
+       берёт снимок REST, если кадр старше venue.book_stale_ms (exec_needs_rest не смотрит подтверждение) — оставить
+       (лишний запрос, но свежая книга) или пропускать REST при действующем подтверждении?
+       (в) *Лимит MEXC.* README адаптера: корзина IP 300 веса / 10 с; шапка all_balances.rs упоминает «исходник
+       документации: 500/10 с на эндпоинт» — расхождение не сверено (страница General Info в этой работе не открылась);
+       совет FIRST_RUN — по меньшему.
+     - *Bybit — СДЕЛАНО (08.11, ветка t41/feed-watch-3, решение «202/213 (Bybit)»):* сторож включён (unsubscribe +
+       subscribe темы пары, переподключение соединения), confirm = true. Номер u — только при venue.depth_levels = 1000:
+       Get Orderbook — «For spot, corresponds to u in the 1000-level WebSocket orderbook stream»; при совете FIRST_RUN
+       (50) — по содержимому (GET /v5/market/orderbook, limit = N). Открыто:
+       (а) *Расхождение версий документации Bybit.* Живая страница Get Orderbook и исходник bybit-exchange/docs 07.11 —
+       u REST ↔ поток 1000 уровней; ветка main исходника (прочитана 08.11) — «corresponding to u in the wss 200-level
+       orderbook». Код верит живой странице (1000). Глубина 200 номером не подтверждается.
+       (б) *Запись для теста равенства.* В tests/data ответ REST (04.11) снят за 45 с до кадров orderbook.50 — равенство
+       отпечатков на одной книге не проверено (тест — разбор, «ответ против себя — Quiet», «против потока через 45 с —
+       Lost»). Записать на сервере бота подряд кадры orderbook.50.<SYM> (raw.book_frames = да) и
+       GET /v5/market/orderbook?category=spot&symbol=<SYM>&limit=50 в тот же момент.
+     - *KuCoin — СДЕЛАНО (08.11, ветка t41/feed-watch-3, решение «202/213 (KuCoin)»):* сторож включён, confirm = true —
+       по содержимому (у кадра /spotMarket/level2Depth5|50 номера нет): Get Part OrderBook level2_20 / level2_100, первые
+       venue.depth_levels уровней против стакана в памяти. Открыто:
+       (а) *Переподписка одной пары.* Пары подписаны темами по 100 символов («/spotMarket/level2Depth50:A,B,…»). Можно ли
+       отписать одну пару из такой темы ({"type":"unsubscribe","topic":"/spotMarket/level2Depth50:A"}) — в доступной
+       документации (спецификация SDK, страница introduction в этой работе не открылась — прокси) не сказано. Сделано
+       безопасно по факту: unsubscribe + subscribe ВСЕЙ темы пары (тот же текст темы, что при подключении), соседи по
+       теме — тоже переподписаны (2 сообщения из «100 за 10 с»). Если Тигран подтвердит по документации частичную
+       отписку — заменить на отписку одной пары.
+       (б) *Совпадение REST и кадра.* Get Part OrderBook — «aggregated by price»; что кадр Level50 агрегирован так же —
+       в документации не сказано. Записи «кадр + ответ в один момент» нет (ответ 04.11 снят за ≈ 65–84 с до кадров).
+       Записать на сервере бота подряд кадры /spotMarket/level2Depth50:<SYM> (raw.book_frames = да) и
+       GET /api/v1/market/orderbook/level2_100?symbol=<SYM>; до записи — смотреть журнал core.feed_watch («кадры
+       потеряны (первые N уровней …)») после включения venue.quiet_confirm_* у KuCoin.
+     - *BingX — СДЕЛАНО (08.11, ветка t41/feed-watch-3, решение «202/213 (BingX)»):* сторож включён (unsub + sub пары),
+       confirm = true — по содержимому (data.lastUpdateId кадра в ответе REST пары не имеет): GET
+       /openApi/spot/v1/market/depth, limit = venue.depth_levels. Открыто:
+       (а) *Свежесть стакана BingX.* Раньше — только живость соединения; теперь при заданной venue.book_stale_ms пара без
+       кадра дольше неё котируется только с подтверждением сторожа. Стакан BingX приходит только при изменении (запись
+       2026-10-23), поэтому venue.book_stale_ms у BingX включать вместе с venue.quiet_confirm_* — иначе тихие пары
+       перестанут котироваться. Устраивает?
+       (б) *Записи.* Живого ответа REST стакана BingX в tests/data нет (тест — пример docs-v3 и одинаковый разбор уровней
+       кадра и ответа на живых кадрах 23.10). Записать на сервере бота подряд кадры <SYM>@depth20 (сырые сообщения
+       raw.*) и GET /openApi/spot/v1/market/depth?symbol=<SYM>&limit=20.
+     - *XT — СДЕЛАНО (08.11, ветка t43/feed-watch-xt-binance, решение «202/213 (XT)»):* сторож, переподписка пары
+       (unsubscribe + subscribe), переподключение; подтверждение: depth_update — по номеру (lastUpdateId REST ↔ номер
+       локального стакана, «Orderbook manage»), depth — по содержимому. Открыто:
+       (а) *Записи.* Живых кадров и ответа REST одной пары в одно время нет — тесты на примерах документации
+       (tests/xt_book_version.rs); команды записи — tests/README.md, раздел XT.
+       (б) *updateId снимка depth.* Если на записи i снимка depth@ совпадёт с lastUpdateId REST при той же книге —
+       можно перейти на номер и у depth (сейчас только содержимое: в документации связи нет). Вопрос Тиграну: нужна ли
+       эта проверка или содержимого достаточно.
+       (в) *limit < 100.* Описание limit REST — «minimum number of queries is 100» при «1~500»: сколько уровней вернёт XT при
+       limit = venue.depth_levels (5–50), не сказано; сравниваются первые N — на результат не влияет, только на объём.
+       (г) *Бесконечные круги переподписки тихой пары — СДЕЛАНО (10.11, ветка t75/xt-watcher, решение «202/213
+       (дополнение 10.11)»):* тот же ответ REST после переподписки — Unchanged (core/feed_rest_ref.rs, для всех бирж);
+       снимок REST сразу при переподписке XT (ws_book.rs resub); журнал видимости сторожа всех бирж
+       (core/feed_watch_log.rs, venue.feed_watch_log_ms). Открыто:
+       — *Проверить на сервере:* после выкладки задать venue.feed_watch_log_ms (совет — FIRST_RUN) и посмотреть журнал
+         core.feed_watch по XT (строк «кадры потеряны» по одной паре по кругу быть не должно), MEXC, BingX, KuCoin
+         (строка «Сторож пар работает» и сводки). Если строки «работает» у биржи нет — сторож выключен (строка
+         «Сторож пар выключен: …» с именем незаданной настройки).
+       — *Unchanged без стакана — ЗАКРЫТО (10.11, ветка t79/quiet-rest-book, решение «202/213 (дополнение 10.11 — t79:
+         ответ REST стаканом тихой пары)», Тигран 10.11: согласовано):* у MEXC, BingX, KuCoin ответ REST, по которому
+         пара признана «не менялась с переподписки», ставится стаканом пары (core/feed_rest_book.rs, контракт
+         book_from_rest, venues/{mexc,bingx,kucoin}/book_rest.rs): время кадра — получение ответа, свежий
+         venue.book_stale_ms, дальше — кадр или подтверждение Quiet по прежнему правилу 213. Открыто:
+         (а) *Другие биржи по содержимому* (Bitget, Binance, Bybit, OKX, CoinEx, HTX, Kraken, Phemex, Poloniex, XT depth) —
+         book_from_rest не реализован (NotApplicable, пара не торгуется до кадра, строка в журнал). Нужно ли и у них —
+         решает Тигран; делать по документации каждой биржи (как ведётся её стакан в памяти).
+         (б) *Проверить на сервере:* после выкладки в журнале core.feed_watch MEXC / BingX / KuCoin у строк «не менялась с
+         переподписки» — «ответ REST поставлен стаканом пары» или причина, почему нет.
+       — *XT depth:* снимок при переподписке в канале depth берёт темп очереди venue.depth_snapshot_per_sec (у depth она
+         раньше не требовалась); не задана — снимка нет, строка журнала venue.ws. Достаточно ли — решает Тигран.
+       — *Живая запись XT.* Растёт ли lastUpdateId GET /v4/public/depth без кадров depth_update (при книге без
+         изменений) — в документации не сказано, в tests/data записей стакана XT нет; записать (tests/README.md, раздел
+         XT) — тогда тест на живых данных вместо примеров документации.
+     - *Binance — СДЕЛАНО по содержимому (08.11, та же ветка, решение «202/213 (Binance)»):* сторож, переподписка пары
+       (UNSUBSCRIBE + SUBSCRIBE в очереди отправки с темпом venue.ws_subs_per_sec), переподключение. Открыто:
+       (а) *Номер.* lastUpdateId частичного стакана — «Last update ID», связь с lastUpdateId GET /api/v3/depth в
+       документации есть только для потока изменений (U, u). Если на записи (tests/README.md, binance_book_print.rs)
+       lastUpdateId кадра и ответа совпадают при той же книге — можно перейти на номер (меньше ложных «кадры потеряны»
+       из-за гонки содержимого). Вопрос Тиграну: нужна ли эта проверка.
+       (б) *Записи.* Живых кадров и ответа REST одной пары в одно время нет — тесты на примерах документации.
+       (в) *Предел веса.* REQUEST_WEIGHT на IP — только в живом exchangeInfo.rateLimits; совет FIRST_RUN — по примеру
+       документации (6000/мин), сверить с живым ответом.
+     - *OKX — СДЕЛАНО (08.11, ветка t44/feed-watch-okx-coinex, решение «202/213 (OKX)»):* сторож включён (unsubscribe +
+       subscribe канала пары), confirm = true — по содержимому: GET /api/v5/market/books, sz = venue.depth_levels.
+       Открыто:
+       (а) *По номеру?* seqId есть и у ответа REST («Sequence ID of the current message»), и у кадров books5 / books
+       («Each instId has an unique set of sequence ID»), но фраза о связи REST и канала есть только у books-rpi
+       («Provides sequencing parity with the books-rpi WebSocket channel») и SBE; у GET / Order book — нет. Поэтому
+       номер не сравнивается. Проверить на записи: подряд кадры books5 пары (raw.book_frames = да) и
+       GET /api/v5/market/books?instId=<SYM>&sz=5 — равен ли seqId ответа seqId последнего кадра при той же книге. Если
+       да и Тигран согласен — подтверждение по номеру (как у Gate).
+       (б) *Записи.* Живых ответов и кадров OKX в tests/data нет (www.okx.com закрыт прокси); тест — пример документации.
+       Документация прочитана через пересказчик (WebFetch), дословно — только короткие фразы.
+     - *CoinEx — СДЕЛАНО (08.11, ветка t44/feed-watch-okx-coinex, решение «202/213 (CoinEx)»):* сторож включён,
+       confirm = true — по содержимому (номера у стакана нет): GET /v2/spot/depth, limit = venue.depth_levels. Открыто:
+       (а) *Переподписка — все рынки соединения.* Что делает повторный depth.subscribe (добавляет или заменяет список),
+       документация не говорит, поэтому «переподписать пару» = depth.unsubscribe всех + depth.subscribe всех рынков
+       соединения (итог один при любом варианте; соседи получают новый полный пуш). Проверить на живом подключении:
+       подписка двух рынков, затем depth.subscribe одного третьего — приходят ли пуши первых двух. Если добавляет —
+       можно переподписывать одну пару (depth.unsubscribe [рынок] + depth.subscribe [рынок]).
+       (б) *Полный пуш раз в минуту без изменений?* «Full market depth push is delivered every 1 minute» — приходит ли он,
+       когда книга не менялась, документация прямо не говорит (scheduled = false). Проверить по сырым кадрам
+       (raw.book_frames = да): интервалы между пушами тихой пары. Если приходит всегда — тишина пары дольше ~минуты =
+       мёртвая подписка, можно scheduled = true.
+       (в) *Записи.* Живых ответов и кадров CoinEx в tests/data нет (api.coinex.com закрыт прокси); тест — пример
+       документации Get Market Depth. Записать подряд кадры depth.update пары и GET /v2/spot/depth?market=<SYM>&limit=20&interval=0.
+     - *Poloniex — СДЕЛАНО (08.11, ветка t48/feed-watch-last, решение «202/213 (Poloniex)»):* сторож включён (unsubscribe
+       + subscribe канала book одной пары), confirm = true — по содержимому: GET /markets/{symbol}/orderBook, limit =
+       venue.depth_levels (в ответе номера нет). Открыто:
+       (а) *Вид ответа REST.* asks / bids — плоские списки строк; что это пары «цена, количество» подряд, видно только из
+       примера документации (прямой фразы нет). Проверить на живом ответе GET /markets/<SYM>/orderBook?limit=20.
+       (б) *Лимит.* У строки Order Book в таблице «Rate Limits» число не указано — ответ на превышение и сам предел
+       проверить на живом (venue.quiet_confirm_max_per_s держать низким).
+       (в) *Записи.* Живых ответов и кадров Poloniex в tests/data нет (api.poloniex.com закрыт прокси); тест — пример
+       документации, кадр book собран в тесте. Записать подряд кадры book пары (raw.book_frames = да) и ответ REST.
+     - *Kraken — СДЕЛАНО (08.11, ветка t48/feed-watch-last, решение «202/213 (Kraken)»):* сторож включён (unsubscribe +
+       subscribe канала book пары), confirm = true — по содержимому: GET /0/public/Depth, count = venue.depth_levels.
+       Открыто:
+       (а) *Глубина 1000.* Канал book разрешает depth 1000, а count у REST — «maximum 500»: при venue.depth_levels = 1000
+       подтверждения нет (ошибка с причиной, тихие пары устаревают). Вопрос Тиграну: держать глубину ≤ 500 или при 1000
+       сравнивать первые 500 уровней (тогда изменения глубже 500 подтверждение не увидит).
+       (б) *Лимит.* Лимит публичных REST-запросов Kraken в документации не описан — проверить ответ на превышение.
+       (в) *Записи.* Живых ответов и кадров Kraken в tests/data нет (api.kraken.com закрыт прокси); тест — пример
+       документации. Записать подряд кадры book пары и ответ Depth (ключ result — имя или внутреннее).
+     - *HTX — СДЕЛАНО (08.11, ветка t48/feed-watch-last, решение «202/213 (HTX)»):* сторож включён (unsub + sub темы
+       mbp.refresh пары), confirm = true — по содержимому: GET /market/depth, depth = venue.depth_levels, type step0.
+       Открыто:
+       (а) *По номеру?* version ответа REST — «Internal data», seqNum снимка — «Sequence number of the message»; связи
+       документация не даёт. Проверить на записи: подряд снимки mbp.refresh пары и GET /market/depth — равны ли version
+       и seqNum при той же книге. Если да и Тигран согласен — подтверждение по номеру.
+       (б) *Лимит.* Частота GET /market/depth в документации не указана; новый портал документации HTX не открылся.
+       (в) *Записи.* Живых ответов и снимков HTX в tests/data нет (api.huobi.pro закрыт прокси); тест — пример
+       документации (первые два уровня из пяти), снимок собран в тесте.
+     - *Phemex — СДЕЛАНО (08.11, ветка t48/feed-watch-last, решение «202/213 (Phemex)»):* сторож включён, confirm = true —
+       по содержимому: GET /md/orderbook, первые venue.depth_levels уровней. Открыто:
+       (а) *Переподписка — все пары соединения.* Отписки одной пары нет («It unsubscribes all orderbook related
+       subscriptions»), поэтому, как у CoinEx, — отписка всех + подписка каждой пары соединения; соседи получают новый
+       снимок. Что делает повторный orderbook.subscribe уже подписанной пары (новый снимок? ошибка? счёт в лимит 20?) —
+       не описано; проверить на живом подключении. Если даёт снимок без отписки — можно переподписывать одну пару.
+       (б) *По номеру?* sequence есть у ответа REST и у кадра; одна ли шкала — не сказано. Проверить на записи.
+       (в) *Снимок раз в 60 с без изменений?* «published with 60-second interval» — приходит ли он у тихой пары, проверить
+       по сырым кадрам. Если всегда — можно scheduled = true (тишина дольше ~60 с = мёртвая подписка).
+       (г) *Записи.* Живых ответов и кадров Phemex в tests/data нет (api.phemex.com закрыт прокси); тест — пример
+       документации, снимок собран в тесте.
+
+- **Решение 211, ревью К1 (07.11.2026):** нативный BNB бирж и BEP20-токен WBNB под тем же адресом — разные активы; сейчас токен WBNB биржи не торгуется (причина NativeVsToken на «Монетах»), нативный BNB торгуется как раньше (биржа ↔ биржа и биржа ↔ DEX). Нужна ли торговля самого токена WBNB биржи с DEX? Это две монеты с одним адресом — ядро различает монеты по адресу (Asset ==), понадобится отдельный признак «нативная» в монете. В записанных справочниках BingX/Gate/KuCoin токена WBNB нет.
+- **Решение 211, ревью В9:** настройки «по монете», не перенесённые миграцией (тикер неоднозначен), читаются по старому тикеру с записью settings.coin_ticker_fallback в журнале — задать их по адресу и удалить старые записи по тикеру.
+
+- **Решение 199 (06.11.2026), процентная комиссия вывода:** допущение «процент вычитается из суммы вывода» — подтвердить на первой живой сделке (сверка зачисления). Gate: прислать сырое значение withdraw_percent_on_chains из журнала (есть ли «%»); KuCoin withdrawFeeRate и HTX ratio/circulated — формат по сырому значению в журнале.
+
+- **Решение 188 (Algebra Integral, 06.11):** ABI и математика сверены на живых ответах (тест bsc_dex_algebra_integral_live). Ждём от сервера деплоеров кастомных пулов THENA V3 (события CustomPool фабрики 0x30055f87…) → dex.custom_deployers; затем в интерфейсе: dex.kind = algebra_integral, dex.factory (из factory() пула), dex.quoter_virtual = да, dex.pool_enabled = да, dex.integral_tick_steps.
+- **Решение 187 (граф, 06.11), после деплоя:** (1) данные справочника пулов (запрос серверу, только чтение SQLite) — какие встречные монеты реально хабы (сколько монет и $ ликвидности на каждую) → Тиграну список кандидатов в dex.intermediate_tokens (у каждой нужен тикер на бирже и нет налога); (2) задать dex.route_search_max_paths (совет 200), dex.route_gas_aware = да, dex.route_max_hops по решению Тиграна (3–5); (3) dex.router_mode = graph — только по слову Тиграна; проверка — «Сухая сделка DEX» и журнал dex.router_graph.
+- **Решение 176 (Telegram, 4 чата):** Тигран даст ID чатов и токены ботов → задать notify.control_chat / deals_chat / failures_chat, секреты telegram.control_token / deals_token / failures_token, notify.live_refresh_s = 5, notify.live_idle_s = 120, notify.dialog_ttl_s = 600, notify.transfer_pct = 25, 50; проверить «Проверить подключение» у каждой роли.
+- **После деплоя сборки решений 160–173 задать: risk.max_daily_loss_usd = 15 по каждой бирже (сейчас временно 100 на всю систему из-за застрявших), risk.max_daily_loss_total_usd — не задавать; delist.block_hours = 72, delist.refresh_s = 3600;** usdt.return_retry_s = 10, usdt.return_retries_max = 5; transfer.locked_retry_ms = 1000 (bybit 10000), transfer.locked_retries_max = 10 (решение 166); закрыть «Перегнано вручную» DOGE 20261104225504576DOGE (83.10 USDT, Тигран перевёл сам); разобрать старые «USDT не вернулись» (WKC, TWT); записать живые ответы Binance, OKX, Bitget, XT, Phemex, Poloniex, CoinEx, HTX, Kraken (команды — tests/README.md) и снять #[ignore]; HTX — venue.contract_field, CoinEx — venue.bsc_contract_chain, Kraken — есть ли сеть BSC.
+- **Решение 165, после деплоя:** закрыть «Продано вручную» сделку 20261104222708667LUCIC (406 LUCIC, выручка 44.50 USDT) — до исправления отказ «идёт другая сделка» (метка монеты не снималась). Gate выключен 05.11 до подтверждения адреса w3 в адресной книге Gate (ADDRESS_NOT_USED).
+- **Решение 158 (GT Gate), после деплоя:** venue.fee_deduction [gate] = gt, venue.gt_min_balance (≈ на 10 сделок), venue.gt_balance_poll_s = 30.
+- **Решения 156–157 (Telegram):** после деплоя — notify.manual_repeat_s = 10, включить событие manual.record на «Уведомлениях»; BotFather privacy mode (/menu без @имени может не доходить); нужен ли список разрешённых пользователей (сейчас любой участник группы); кнопка «Поставить площадку на паузу»; очереди кошельков и балансы в меню; записать живые ответы Telegram в tests/data.
+- **После деплоя сборки решений 146–155 задать:** guard.sell_slip_count = 3, guard.sell_slip_pct = 0.2; venue.fee_retry_s = 30 (все биржи); transfer.credit_by_chain [bsc_dex] = да; stuck.reject_retry_pause_ms = 1500 (и stuck.unsent_retries_max, если не задана); journal.repeat_flush_ms = 5000.
+- **Вопросы по решениям 146–155:** учёт дня — переоценка застрявшей позиции (постоянно или кнопкой), идущие сделки в итоге дня, как лимит после сброса видит разбор старых позиций, частичная глубина; зачисление по блокчейну — карантин при расхождении хеша, нет уведомления «Перевод отправлен»; повтор продажи — общая пауза для решения 110, полные тексты ответов каналов ASTER 12:07:57, учёт в risk.max_errors_in_row; MEXC — вес deposit/hisrec (1 или 10), вопрос в поддержку про PRE_SUCCESS; BingX «Фонд» — живой ответ (ждёт новой сборки с текстом).
+- **Решение 144 (панель «Балансы»), задать после деплоя:** ui.balances_refresh_ms = 3000; venue.futures_rest_url [mexc] = https://contract.mexc.com, [kucoin] = https://api-futures.kucoin.com; venue.futures_balance_currencies [kucoin] (USDT, USDC, XBT); venue.futures_settles [gate] (usdt, btc, usd1); venue.delivery_settles [gate] (usdt). Ключи бота — только спот: фьючерсные и прочие счета могут показывать «нет права» — это ожидаемо. Проверить на живом каждую биржу и записать ответы для тестов.
+- **FLOKI в чёрном списке (04.11):** продажа на DEX стабильно на 0,30% хуже плана (налог токена?), проба налога показывает 0 — разобрать транзакцию продажи на узле и пробу налогов.
+- **Решение 143 (минимум депозита Gate), задать и проверить на живом:** настройки venue.deposit_info_requests_per_sec и venue.deposit_info_refresh_s [gate] (советы — docs/FIRST_RUN.md: 2 и 3600); в журнале venue.deposit_info — «получены по N монетам». Вопрос: монеты подписки без адреса BSC на Gate попадают в «сбой» — устраивает так или убирать их из круга? KuCoin: depositMinSize = null у большинства монет — минимум считается 0 (venue.deposit_min_absent_ok [kucoin] = да); если перевод меньше настоящего минимума — Gate/KuCoin не зачислят, сделка остановится на ожидании депозита.
+- **Решение 142 (сжатие HTTP), проверить на живом:** справочник Gate грузится (журнал core.registry без «ответ не дочитан»), BingX/MEXC без новых ошибок разбора; ключ Gate привязывать к IPv4 37.59.21.151 (по IPv6 Gate недоступен).
+- **Gate, «Проверить подключение» (04.11):** /account/main_keys — список всех ключей аккаунта; исправлено (gate/key_info.rs, своя запись по key). Записать замаскированный ответ /account/main_keys в tests/data для теста (сейчас тест `#[ignore]`). Ключ Gate для бота пересоздать: запись — спот, кошелёк, вывод; Account — чтение; без фьючерсов/маржи/опционов/займов/копи/P2P/ботов; IP: IPv6 и IPv4 сервера.
+- **Возврат USDT после закрытия (решение 138, ветка router/retfix).** Разбор — `docs/notes/usdt-return-close-2026-11-04.md`.
+  Вопросы: (1) «Продано вручную» — бот выручку не перегоняет (не знает, где лежат USDT), только страховка «USDT не
+  вернулись». Нужна ли кнопка «Перегнать выручку» у закрытой сделки (сумма и площадка — ввод человека или баланс)?
+  (2) Деньги сейчас не на месте: 24.69 USDT (TWT) в кошельке DEX «BingX» w1 и 44.74 USDT (WKC) на MEXC — перегнать
+  вручную; бот их не трогает. (3) Почему у TWT не было ни одной записи перегона, по коду не доказать (вызов был): нужны
+  журнал и консоль 03:02:35–03:10 04.11 (ID `20261104030213216TWTu`, строки `panicked at`, очередь кошелька w1).
+  (4) Страховка не повторяет перегон сама (при неизвестном исходе перевод мог уйти) — так и оставить?
+- **Расчёт «без потолка» (решение 141, ветка router/uncapped).** Разбор и замер — `docs/notes/uncapped-2026-11-04.md`.
+  Вопросы: (1) «При нашем потолке» и упущено считаются той же моделью (дешёвые котировки подбора объёма), а не финальной
+  котировкой KyberSwap (её лимит запросов) — так и оставить? Боевая финальная прибыль видна рядом. (2) Сделка запущена,
+  но не дошла до покупки (предпроверка отказала, маппинг поменялся) — сейчас не пишется ни сделкой, ни кандидатом;
+  писать её кандидатом? (3) Предел поиска — прежний card.max_search_usdt (общий с карточкой сигнала); нужен отдельный?
+  (4) Карточка сигнала прошедшего (card_max.rs) и расчёт без потолка считают похожий поиск дважды для прошедших без
+  сделки (сухой режим) — объединить (карточка берёт итог «без потолка»)? (5) Ликвидность стакана биржи — только
+  загруженные уровни (venue.depth_levels): «без потолка» на мелком стакане упрётся в них — край пишется в записи.
+  Включение: заданы uncapped.* (советы — FIRST_RUN) и uncapped.enabled = да; смотреть процессор (замер — заметка).
+
+- **Биржа Gate (решение 135, ветка router/gate).** Разбор и чек-лист уроков — `docs/notes/gate-integration-2026-11-04.md`.
+  Вопросы: (1) тип ордера — limit + time_in_force `ioc` (остаток снимает биржа, finish_as = ioc); `fok` тоже допущен
+  правилами — оставить только ioc? (2) Счёт депозита — по документации спот («DONE: Funds Credited to Spot Account»),
+  перевод не нужен; статус DEP_CREDITED («Deposit Credited, Withdrawal Pending Unlock») считается «ещё не зачислено» —
+  можно ли продавать до DONE? (3) Права ключа: «Проверить подключение» требует key.mode = 1 (классический; единый счёт
+  не поддержан), spot — запись, wallet; запрещает запись futures/delivery/margin/unified/options/loan/copy; права вывода
+  в перечне perms /account/main_keys нет — проверится первым выводом; включить белый список адресов вывода в кабинете
+  (ADDRESS_NOT_USED → InvalidAddress). (4) Шаги пары: precision / amount_precision как число знаков (как решение 107) —
+  подтвердить первым ордером (INVALID_PRECISION — отказ без денег). (5) Предел подписок на соединение и срок жизни
+  соединения WebSocket в документации нет — venue.ws_symbols_per_conn замером. (6) Retry-After у Gate нет, заголовок
+  X-Gate-RateLimit-Reset-Timestamp транспорт шлюза не отдаёт — читать его = правка gateway/http.rs (запрос на стык);
+  пока venue.rate_limit_pause_ms. (7) /spot/batch_fee (до 50 пар) — формат списка пар не описан; ставки — по одной паре
+  /wallet/fee. (8) withdraw_percent_on_chains: формат процента не описан — при проценте не ноль сеть без комиссии (сделок
+  нет). (9) Вывод FAIL («On-Chain Failure Pending Confirmation») — пока «ждём». (10) Поле change в spot.balances — изменение
+  общего баланса? (11) Скидка GT: если включена, комиссия ордера в GT — итог с монетой «GT»; выключить скидку GT в
+  кабинете? (12) В живом ответе /wallet/currency_chains есть withdraw_amount_min (в модели SDK нет) — не используется.
+
+- **Биржа Gate (решение 135, ветка router/gate).** Разбор и чек-лист уроков — `docs/notes/gate-integration-2026-11-04.md`.
+  Отвечено Тиграном 04.11 (сделано в router/cexfix, DECISIONS 135 «Дополнение»): время жизни ioc/fok — настройкой; DEP_CREDITED —
+  зачислено, продаём сразу; вывод FAIL — ждём + событие `exec.withdraw_fail_pending`; скидка GT — `venue.fee_deduction`
+  (coin / gt). Открытые вопросы: (1) **нехватка GT** при `venue.fee_deduction` = gt: что делает Gate (списывает в монете
+  сделки по полной ставке? частично GT?) — в документации API нет (TradeFee, Order, /account/debit_fee). Сейчас: расчёт по
+  gt_taker_fee; если факт пришёл в монете — учёт по факту (core/fills.rs), если и fee, и gt_fee не ноль — итог «не в одной
+  монете», ручная проверка. Держать GT на счёте с запасом или проверять баланс GT до сделки? (2) В каком активе Gate
+  списывает комиссию при `coin`: сделано по ответу Тиграна «в монете сделки» — покупка в купленной монете, продажа — в
+  USDT (полученной); в документации API правила нет — сверить fee_currency первого живого ордера. (3) Права ключа:
+  «Проверить подключение» требует key.mode = 1 (классический; единый счёт не поддержан), spot — запись, wallet; запрещает
+  запись futures/delivery/margin/unified/options/loan/copy; права вывода в перечне perms /account/main_keys нет — проверится
+  первым выводом; включить белый список адресов вывода в кабинете (ADDRESS_NOT_USED → InvalidAddress). (4) Шаги пары:
+  precision / amount_precision как число знаков (как решение 107) — подтвердить первым ордером (INVALID_PRECISION — отказ
+  без денег). (5) Предел подписок на соединение и срок жизни соединения WebSocket в документации нет —
+  venue.ws_symbols_per_conn замером. (6) Retry-After у Gate нет, заголовок X-Gate-RateLimit-Reset-Timestamp транспорт шлюза
+  не отдаёт — читать его = правка gateway/http.rs (запрос на стык); пока venue.rate_limit_pause_ms. (7) /spot/batch_fee
+  (до 50 пар) — формат списка пар не описан; ставки — по одной паре /wallet/fee. (8) withdraw_percent_on_chains: формат
+  процента не описан — при проценте не ноль сеть без комиссии (сделок нет). (9) Поле change в spot.balances — изменение
+  общего баланса? (10) В живом ответе /wallet/currency_chains есть withdraw_amount_min (в модели SDK нет) — не используется.
+- **Gate — проверить на живом (tests/gate_real_data.rs #[ignore]):** первый ордер fok и ioc (finish_as, fee_currency,
+  gt_fee); /wallet/fee при скидке GT вкл/выкл (gt_discount, gt_taker_fee — разбор `fees::Rates::parse`); депозит со статусом
+  DEP_CREDITED: продажа проходит сразу, не мешает ли «Withdrawal Pending Unlock» выводу USDT после продажи (возврат); вывод
+  со статусом FAIL — событие в Telegram один раз, итоговый статус после FAIL. Замер нагрузки при «Стоп» (решение 109).
+
+- **Bybit (решение 136, ветка router/bybit).** Разбор — `docs/notes/bybit-integration-2026-11-04.md`. Отвечено Тиграном 04.11
+  (сделано в router/cexfix, DECISIONS 136 «Дополнение»): депозит — на UNIFIED в кабинете, бот не переводит
+  (`venue.deposit_to_spot` не задавать; AccountTransfer нужно только при «да»); строгая проверка `u` —
+  `venue.book_seq_strict`; тип счёта в «Проверить подключение» — явно (UTA 1.0 / 2.0, pro), аккаунты Тигран проверит сам.
+  Открытые вопросы: (1) IOC у спота Limit — в документации timeInForce IOC общий для всех категорий, явного «spot» нет:
+  подтвердить первым живым ордером (venue.order_time_in_force = IOC). (2) Права ключа: Spot — SpotTrade; Wallet — Withdraw
+  (+ AccountTransfer при venue.deposit_to_spot = да); ключ главного аккаунта; прав ContractTrade / Options / Derivatives не
+  должно быть. Вывод — только на адреса из адресной книги Bybit (кошельки DEX из «Маппинга кошельков» и адреса депозита
+  BingX/MEXC) — добавить их. (3) Статус депозита 10012 «Credited to funding pool successfully» — не «final» по документации,
+  бот ждёт 3; верно (при зачислении на UNIFIED)? (4) withdrawPercentageFee ≠ 0 у сети BSC — комиссия вывода «неизвестна»,
+  сделок с выводом нет (ядро считает комиссию числом монет); так оставить? (5) Изменений баланса событиями (решение 76) у
+  Bybit нет: зачисление — опросом статуса депозита. Ок? (6) Тихая пара без изменений стакана дольше venue.book_stale_ms
+  теряет котировку (как MEXC) — порог задать большим? (7) Счёт зачисления депозита API прочитать не даёт (только запись
+  Set Deposit Account): ставить ли его ботом (POST /v5/asset/deposit/deposit-to-account, accountType UNIFIED) по кнопке,
+  или только кабинет?
+- **Bybit — после выкладки (записать на живом боте, tests/bybit_real_data.rs #[ignore]):** coin/query-info целиком и ?coin=CAKE
+  (имя сети BSC в chain → venue.bsc_network, contractAddress, withdrawPercentageFee, minAccuracy); wallet-balance UNIFIED,
+  query-api, account/info (тип счёта в «Проверить подключение»); первый IOC-ордер (create, кадры order.spot и execution.spot,
+  realtime, execution/list, cumFeeDetail); депозит по BSC на UNIFIED (query-record?txID=, статус, баланс UNIFIED сразу),
+  вывод и его статусы, query-address; при venue.book_seq_strict = да — нет ли лишних пересинхронизаций в журнале. Замер
+  нагрузки при «Стоп» 10–15 минут (решение 109) до перевода в работу.
+- **KuCoin (решение 137, ветка router/kucoin).** Чек-лист и разбор — `docs/notes/kucoin-integration-2026-11-04.md`. Отвечено
+  Тиграном 04.11 (сделано в router/cexfix, DECISIONS 137 «Дополнение»): счёт Classic — «Проверить подключение» пишет тип
+  (Classic / UTA по selfAccountMode, HF), аккаунты Тигран проверит сам; адрес депозита BSC — в кабинете с зачислением на
+  TRADE, бот берёт его (адрес только MAIN без перевода — отказ), `venue.deposit_to_spot` не задавать; перед выводом
+  trade → main — `venue.withdraw_from_trade` = да. Автосоздание адреса — не нужно. Открытые вопросы: (3) **IOC.** Ордер —
+  limit + timeInForce IOC (или FOK) через hf/orders/sync: неисполненное снимает биржа; если ордер всё же активен к
+  venue.order_final_wait_ms — отмена. Подтвердить IOC. (4) **Passphrase и версия ключа.** Passphrase — секрет
+  `kucoin.api_passphrase` (в запросе — HMAC-SHA256 секретом, Base64), версия — `venue.api_key_version` (у новых ключей 3;
+  «Проверить подключение» сверяет с apiVersion). (5) **Права ключа:** General, Spot, Withdrawal, FlexTransfers (перевод
+  trade → main перед выводом); Margin и Futures — снять. Имена Withdrawal и FlexTransfers — из x-api-permission спецификации
+  SDK (в описании поля permission их нет): сверить с живым ответом /api/v1/user/api-key. IP — привязать ключ к IP сервера
+  (`venue.api_ip_bound`, `venue.api_ip`); белый список адресов вывода — включить в кабинете, если есть. (6) **Комиссия
+  вывода:** withdrawalMinFee; формулы с withdrawFeeRate в документации нет — у сети с ненулевой долей комиссия «неизвестна»
+  (вывода нет). (7) **Комиссия торговли:** ставка trade-fees × makerFeeCoefficient/takerFeeCoefficient пары — сверить с
+  feeRate живых сделок /api/v1/hf/fills. (8) **Свежесть стакана:** снимок level2Depth50 приходит только при изменении
+  рынка — `venue.book_stale_ms` у KuCoin необязательна. Задавать ли её? (9) Предел длины remark вывода не указан — метка
+  попытки ≤ 20 символов. (11) Запрос на изменение стыка: шлюзу нужен заголовок `gw-ratelimit-reset` (gateway/http.rs отдаёт
+  только Retry-After) — пока пауза пула на всё окно 30 с. (12) Перевод trade → main прошёл, а вывод отклонён — сумма
+  остаётся на main; следующий вывод снова переведёт с trade (на trade её уже нет — отказ перевода). Возвращать main → trade
+  при отказе вывода или оставить ручной проверке? **Записать на живом боте** (tests/README.md): /account/balance (депозит
+  на TRADE, перевод, сделка), ответ /api/v1/user/api-key (без ключа), /api/ua/v2/account/mode (selfAccountMode), ответы
+  hf/orders/sync + GET ордера + hf/fills одной сделки, deposit-addresses (поле to = TRADE), withdrawals/{id}, deposits,
+  /market/match. Замер нагрузки при «Стопе» (решение 109) — до включения.
+
+- **Маппинг кошельков (решение 132, ветка router/wallets, слита в feat/own-bsc-node).** План и ход — `docs/notes/wallet-mapping-2026-11-03.md`.
+  Вопросы: (1) строка маппинга «пробы» (кошелёк для налоговых проб, крючков, оценки разрешений и сигналов циклов —
+  только симуляции от адреса, без отправки) добавлена агентом, при переносе = «BingX» — оставить так?
+  (2) Перегон USDT «отдельно» теперь только между биржей и её кошельком по маппингу — так задумано?
+  После выкладки Тиграну: разблокировать секреты (перенос «BingX» сделается сам — проверить на «Маппинге кошельков»:
+  адрес, исполнитель 0x9ef5…f794, строки bingx и «Пробы»); добавить кошелёк MEXC (имя + ключ); «Развернуть
+  исполнитель» у него (оценка → подтверждение) и «Проверить подключение»; задать строку mexc → кошелёк MEXC; для циклов —
+  отдельный кошелёк и строка «DEX ↔ DEX»; пополнить кошелёк MEXC USDT и BNB на газ; устаревшую `exec.executor_address`
+  удалить в «Настройках» (блок «Устаревшие») после проверки переноса.
+- **Обе стороны до покупки (решение 134, ветка router/sellcheck, слита).** Разбор — `docs/notes/sell-precheck-2026-11-03.md`. Проверить на живом после выкладки: (1) в журнале core.precheck у сделок с продажей на бирже есть шаг «проверка продажи mexc/bingx N мс» — сколько он стоит (MEXC с `venue.order_test_first` = да — один подписанный запрос /api/v3/order/test); (2) повтор случая WKC (тип ордера не принят, пара без API-продажи, сумма ниже минимума) — «сделки нет — продажа на B не пройдёт: …», покупки нет, пауза площадки (risk.max_errors_in_row) не растёт; (3) у MEXC `venue.order_test_first` = да — иначе PERCENT_PRICE_BY_SIDE до покупки не проверяется. BingX — у ордера теперь соблюдаются minQty / maxQty пары (раньше только у расчёта, решение 66) — Тигран согласен (03.11: «одни правила»).
+
+- ~~MEXC: пары без IMMEDIATE_OR_CANCEL~~ — **решено (решение 133)**: MEXC не пишет IOC в orderTypes ни у одной пары, но принимает его (живая сделка XPL 02.11); IOC/FOK допустимы при LIMIT. Проверить после выкладки: покупка/продажа на MEXC IOC проходит пробный ордер и исполняется; снять паузу площадки mexc (risk.max_errors_in_row).
+
+- **ВАЖНО — безопасность разрешений (approve) кошелька (Тигран, 03.11.2026).** Сейчас `dex.approve_unlimited` = да: ERC-20 approve на Permit2 (PancakeSwap/Uniswap), роутеры форков V2 и исполнитель ArbExecutor — бесконечные и бессрочные, по каждой монете, которой бот торговал; срок есть только у Permit2 → Universal Router (`dex.permit2_expiration_s` = 7 дней). Риск: взлом любого из этих контрактов (даже через годы) уводит с кошелька токены, на которые выдано разрешение и которые на нём лежат. Отзыва разрешений в боте нет; режим «на сумму сделки» есть (`dex.approve_unlimited` = нет), но без запаса. Разобрано: отзыв по расписанию убирает только забытые разрешения (старые монеты, пыль, неиспользуемые роутеры) — рабочие (USDT → Permit2/роутеры/исполнитель) выдаются заново при следующей сделке; от основной угрозы защищает только разрешение на сумму сделки (между сделками разрешение ≈ 0; цена — лишний approve в сделке); плюс держать на кошельке только оборотную сумму. Решение Тиграна — что делать: (1) режим «на сумму сделки + запас %» (новая настройка запаса), (2) экран «Разрешения кошелька»: список выданных, кнопка «Отозвать все/выбранные», автоотзыв неиспользуемых раз в N дней только без открытых сделок, стоимость газа до отзыва, итог в Telegram, (3) оба. Исполнитель ArbExecutor по коду: execute — только владелец, обратные вызовы платят только ожидаемому пулу с баланса исполнителя.
+
+- Проверить на живом после выкладки (решение 130, mimalloc): с включённой MEXC top и perf — нет спин-блокировки futex musl, процессор не в потолке; отказов «не уложился в срок» нет или замер этапов называет этап (docs/notes/musl-malloc-2026-11-03.md).
+- **MEXC и процессор (решение 131, ветка router/starve).** Разбор — `docs/notes/mexc-cpu-starve-2026-11-03.md`. Исправлены проходы справочника и реестра, копии тиков, счёт котировки DEX вне рабочих потоков, неподвижные монеты, getall. После выкладки: процессор, замер этапов (очередь до старта ≈ 0), частота пересборок. Вопросы: (1) задать `dex.quote_cpu_max` (совет — ядер минус 2–4) и `venue.networks_fresh_ms [mexc]` (иначе толчок по аномалии качает getall сразу, как раньше); (2) главный оставшийся CPU — котировки DEX на тике (до 2 на направление на пересчёт, ~2–3 мс каждая): включить `signal.dex_quote_cache_ms`, поднять `signal.eval_min_interval_ms` или менять логику тика (котировать DEX один раз на объём по потолку, пока пулы не менялись) — решение Тиграна.
+
+- **Отказы «расчёт не уложился в срок» (решение 129, ветка router/timing).** Разбор — `docs/notes/calc-timeout-2026-11-03.md`. Исправлено: граф маршрутов DEX строился заново на каждую котировку (копия всего реестра пулов, O(N²) по ключам глубины) — теперь один на состояние реестра. Причина отказа по сроку теперь называет этап и часть, на которых расчёт стоял, и запросы к узлу. Проверить на живом с включённой MEXC: остались ли отказы по сроку и что в причине. Если стоит в «котировка A/B bsc_dex» без запросов к узлу — следующий шаг из техдолга решения 129 (ROADMAP); предел `profit.calc_concurrency` — значение задаёт Тигран.
+
+- **Окна (решение 125) — ответы получены 03.11 (DECISIONS «125 (дополнение)»).** Остались проверки на первых живых
+  записях (tests/README.md): уникальность tradeId MEXC; вид уровней BingX @incrDepth (объект или массив) и разрывы
+  lastUpdateId; сшивка снимка MEXC /api/v3/depth (lastUpdateId) с fromVersion / toVersion кадров.
+
+- **DEX ↔ DEX — исполнение (решение 124, ветка router/c, не слита).** Разбор и сценарии —
+  `docs/notes/dex-dex-exec-design-2026-11-03.md`. Вопросы: (1) порог цикла — только `dex_dex.min_profit_usd` или ещё
+  `money.min_profit_usd`; (2) токены с налогом внутри цикла — оставить запрет (рекомендация) или считать налог по пробе;
+  (3) бандл-форма цикла почти не проходит (передача по гарантированному минимуму, решение 86) — торговать циклы через
+  исполнитель (рекомендация) или переделать бандл. Проверка перед деньгами: сухие сделки цикла (OWN_NODE_SWITCH.md,
+  шаг 5а), затем `dex_dex.execute` на малом `money.max_per_trade_usd`; первую живую квитанцию записать (tests/README.md).
+
+- **Новая биржа — MEXC** (анализ: `docs/notes/mexc-analysis.md`; фаза 1 — только чтение, фаза 2 — деньги после записей живых ответов). Нужно от Тиграна: API-ключ MEXC с привязкой к IP сервера и разрешёнными парами. До начала решить: (1) направление биржа ↔ биржа (BingX ↔ новая) —
+  ядро генерирует его само (`core/registry.rs`, все пары площадок), в CLAUDE.md его нет — включать или дать
+  переключатель; (2) `money.max_per_coin_usd` = 45 при сделке 44 — одна сделка на монету одновременно, спред на двух
+  биржах сразу не возьмётся; (3) отдельный USDT на споте новой биржи. «Живой экран» под несколько бирж — сделан (решение 106).
+
+- **Запросы сделки к KyberSwap вне очереди котировок.** Продажи и покупки делят лимит KyberSwap с расчётными
+  котировками: ночью 02.11 продажа NEAR получила HTTP 429 и встала до утра; 02.11 11:58 сигнал UAI (+1.64 USDT)
+  отклонён по 429. `kyber.rps` = 2 вызвал другую беду: очередь > `kyber.max_wait_ms` и срыв `profit.calc_timeout_ms`
+  (UAI 12:00, REAL 12:01) — вернули 3, решение по доработке позже. Корень — финальная котировка KyberSwap запрашивается для КАЖДОГО кандидата, даже заведомо
+  минусового. Предложено: (1) звать KyberSwap только у кандидатов, близких к порогу по своей математике (новая
+  настройка); (2) запросы сделки — вне очереди котировок.
+- **Возврат USDT для направления DEX → BingX** — техдолг ПРИОРИТЕТ 1 (`docs/notes/usdt-return-bridge.md`);
+  вариант без новой сети — `usdt_return.mode = separate`.
+- **«Продать сейчас» на BingX при монетах на фондовом счёте** — сам переводить фондовый → спот. Делать, если
+  случай повторится (ATOM 01.11 — после исправления точности вывода, решение 104, не должен).
+
+- **MEXC: проверить на живых данных после ввода ключа (решение 107):** (1) пробный ордер IOC — принят ли тип
+  IMMEDIATE_OR_CANCEL (в живом orderTypes его нет); нет — `venue.order_type` = LIMIT; (2) код netWork сети BSC в
+  config/getall → `venue.bsc_network` [mexc]; (3) формат ipWhiteList в apiKeyInfo; (4) первый депозит: какой статус
+  (5, 9, 12) и когда монеты доступны; (4а) getall 02.11: withdrawMax = 32 девятки у 128 сетей — читается как
+  «без предела» (решение 108); (4б) у 16 монет пара не разрешена ключу (selfSymbols): AIC, BAY, BDCA, BRISE, BRN, BTSLR,
+  CRTAI, DEOD, GBCK, HGPT, LIME, OBI, OFT, OHO, PROM, TLF — добавить в пары ключа на MEXC, если нужны; (5) записать кадр потока баланса и стакана protobuf — тесты на них
+  (сейчас тест только на живом exchangeInfo, tests/mexc_real_data.rs); (6) смысл withdrawIntegerMultiple.
+
+- **MEXC после решения 119 (адаптер по разборам) — задать и проверить вживую:** задать `venue.my_trades_limit [mexc]`
+  = 1000 (без неё ордер не ставится), `venue.book_stale_ms [mexc]` (без неё котировок MEXC нет), по желанию
+  `venue.networks_fresh_ms [mexc]` = 5000. Вопросы: (1) **withdrawIntegerMultiple** — в таблице доки «Withdraw amount
+  increment» (шаг), в примере той же страницы `"18"` (похоже на знаки): сейчас шагом считается только дробное значение
+  0 < v < 1, целые — в журнал «venue.networks» и не применяются; по живому getall решить смысл; (2) уникальность
+  `withdrawOrderId` (в доке правил нет; теперь с меткой попытки `w<9 цифр><сделка>`); (3) тело ответа MEXC на 429 и
+  заголовок Retry-After (адаптер сам не шлёт запросов до его истечения); (4) имена прав в apiKeyInfo — проверка теперь
+  требует и SPOT_DEAL_READ; (5) формат `txId` в deposit/hisrec (сравнение уже без регистра, «0x» и «:индекс»);
+  (6) пауза правила шлюза по RateLimited не берёт Retry-After (ядро) — сейчас пауза держится в самом адаптере MEXC.
+
+- **Свой узел BSC вместо bsc-rpc.publicnode.com (решение 108):** публичный узел — балансировщик над серверами разной
+  высоты: nonce too low, TRANSFER_FROM_FAILED, exceeds balance, block not found (02.11). Проверить синхронизацию
+  своей ноды на сервере (127.0.0.1:8545/8546) и переключить bsc.node_http_url / bsc.node_ws_url.
+- **Разборы MEXC 03.11 (решение 118):** часть 1 — ядро сделана (Я-2…Я-14, Я-17…Я-23; ветка fix/118-core). Осталось: Я-15 (memo адреса депозита), Я-16 (gateway::tx_hash::same) и часть 2 — адаптер MEXC (другой агент). После обновления Тиграну задать: `profit.transit_credit_s` [mexc] (по первым переводам), `cex_cex.untaxed_ok` (по решению), `transfer.credit_shortfall_pct` (совет 0.5); и `risk.max_errors_in_row` у каждой площадки продажи (без неё направления на неё не открываются).
+- **Проверить вживую после решения 118:** (1) две сделки одной монеты (DEX дешевле обеих бирж) — вторая «Busy», в монете ≤ money.max_per_coin_usd; (2) BingX → MEXC: строка «Налог перевода» в расчёте; монета без пула и без cex_cex.untaxed_ok — на «Монетах» «Биржа ↔ биржа: налог перевода не измерен»; (3) у MEXC нет адреса депозита — отказ в предпроверке до покупки; (4) сбой балансов MEXC — пауза только MEXC; (5) карантин показывает «тикер (0x…)», «Снять карантин» снимает; (6) журнал core.ticker_split — есть ли адреса с разными тикерами у BingX и MEXC.
+- **«Непонятное сообщение» WebSocket bsc_dex:** после обновления текст пишется в лог — посмотреть и разобрать.
+
+- **MEXC: вывод через API (код 700012)** — 03.11 Тигран снял ограничение и включил MEXC; проверить первый вывод с MEXC.
+- **MEXC: замер нагрузки (решение 109)** — 02.11 с MEXC при «Стоп»: CPU ~140% (до правок ~1474%); сырой журнал
+  ~16 МБ/мин — config/getall каждые 2 с, исправлено venue.networks_poll_ms; после обновления замерить ещё раз.
+
+- **Свой узел, зона C (решение 121) — проверить вживую:** (1) записать сырой ответ 404 GeckoTerminal по монете
+  (`zstdcat ~/arb/data/raw/bsc_dex/*.jsonl.zst | grep '"c":"index"' | grep -m5 '→ 404'`) — подтвердить, что это «токен
+  не найден» (C2 сделан по смыслу HTTP 404); (2) задать `index.factory_scan` = да и `dex.v3_fee_tiers` у DEX V3
+  (уровни — из официального кода фабрики своей DEX), посмотреть «Справочник пулов» → «Поиск по фабрикам»: вызовов,
+  найдено, взято; (3) «Сухая сделка DEX» по каждой форме (V2, V3, Infinity, Uniswap V3/V4, умный, бандл, BNB) —
+  «Годится», выход по симуляции ≥ минимума; (4) старое значение `dex.v3_fee_tiers`, если сохранено до решения 60 не
+  списком, — причина «хранится не списком» в заметках поиска, задать заново.
+- **Свой исполнитель ArbExecutor (решение 122, часть X) — проверить вживую до развёртывания и вопросы:** (1) «Сухая
+  сделка DEX» в режиме «через исполнитель» по каждому виду на малой сумме (покупка и продажа): PancakeSwap V2, Uniswap V2,
+  V2-форк (Biswap — своя комиссия пары), PancakeSwap V3, Uniswap V3, двухшаговый путь через WBNB, сплит на 2 DEX; THENA
+  Fusion, THENA V1 (volatile и stable), Topaz Slipstream, DODO — когда часть F даст их в маршрут; ожидание — «Годится»,
+  выход по симуляции ≥ минимума и близок к живому пересчёту, газ обмена; (2) потом «Развернуть исполнитель», вписать адрес
+  в `exec.executor_address`, сухая сделка «как сделка» (форма «граф: исполнитель 0x…»), первая сделка — малой суммой.
+  Решено координатором 03.11: (а) Pancake Stable / Nerve / Lista не добавляем — техдолг в docs/ROADMAP.md (нет сверенного
+  исходника); (б) при заданном адресе исполнимость графа не требует бандловых каналов и разрешает ногу через разные
+  роутеры, если каждый шаг — вид исполнителя (quote/graph_exec.rs); (в) первый шаг V2/SOLIDLY/DODO/WOO на весь вход —
+  transferFrom(кошелёк → пул), налог один раз; (г) вид ELASTIC в контракте остаётся, семейство неисполнимо (121 B2).
+  (3) проверить сухой сделкой продажу монеты с налогом на перевод через первый шаг V2 (прямой вход в пул).
+
+- **Решение 122, часть F — открытое (после ответов 03.11).** (1) Maverick V2 — подключён (ветка router/m2, решение «122 (Maverick V2)»):
+  порт команды Maverick + сверка с квотером; записать ответы для теста (tests/README.md, bsc_dex_maverick_family) и
+  проверить вопросы из docs/notes/maverick-v2-research-2026-11-03.md («Что не подтверждено»). (2) [Закрыто частью F (3): WooFi под наблюдением, только квотер пула] WooFi (WooPPV2) не подключён: цена — от оракула WooracleV2, его обновления
+  (postPrice) не дают события пула, а один контракт WooPP держит все базовые монеты — нужно решение, как держать
+  состояние свежим без опроса (CLAUDE.md, ценность 1) и как ссылаться на пару внутри одного контракта. (3) StableSwap
+  подключён для шаблона Curve 2020 (Ellipsis StableSwap.vy) [частью F (3) подключены PancakeSwap Stable, Lista, Nerve]; Nerve (форк Saddle — Solidity Swap.sol/SwapUtils) и Lista
+  (Solidity-порт StableSwap) — другие интерфейсы, нужны их официальные исходники. (4) THENA V1 на сервере задан как
+  `solidly_v2` с фабрикой 0xAFD8…3970 — перевести на `solidly_v1` (передано Тиграну). (5) Записи для тестов THENA V1 и
+  Ellipsis — tests/README.md (bsc_dex_solidly_v1_family, bsc_dex_curve_family). (6) Шаг CURVE исполнителя
+  строится из состояния StableSwap (индексы i0/i1, направление — по токену входа, exec/executor/entry.rs); проверить
+  сухой сделкой «через исполнитель» на пуле Ellipsis.
+
+- **Решение 122, часть F (3) — открытое.** (1) Записи с узла для сверки математики: PancakeSwap Stable, Lista Stable,
+  Nerve (tests/README.md, tests/bsc_dex_stable_families.rs). (2) WooFi: на узле — eth_getCode прокси и реализации,
+  селекторы query 0x… и swap 0x7dc20382 в байткоде реализации; ответ query на 3 суммы (tests/README.md). (3) Решено Тиграном:
+  WooFi — «Лесенка цен пула» (dex.pmm_ladder_usd, решение «122 (часть F, 3, лесенка)»): задать суммы и записать
+  tests/data/woofi/ladder.json (tests/README.md).
+  (4) Новые виды шагов исполнителя — сделано («122 X (стейблсвапы)», Тигран 03.11: «все три, и Nerve тоже»):
+  STABLE_U256 (PancakeSwap Stable, Lista) и SADDLE (Nerve); проверить сухой сделкой «через исполнитель» по каждому
+  (docs/OWN_NODE_SWITCH.md, шаг 5) до развёртывания. Повторное ревью безопасности сделано («122 X (ревью
+  стейблсвапов)»: цикл — одна доля, CURVE через общий `_stable`, отказ по 0xEeee… до отправки); байткод снова новый —
+  сухие сделки «через исполнитель» делать на нём.
+  (5) Адреса для настроек — docs/OWN_NODE_SWITCH.md.
+- **«122 X (нативный BNB в стейблсвапах)» — открытое.** (1) Независимое ревью безопасности контракта (receive, bnbFrom,
+  _stableBnb, _sweepBnb — contracts/README.md, «Безопасность»). (2) Сухая сделка «через исполнитель» через Lista
+  slisBNB/BNB 0x3DcEA6AFBA8af84b25F1f8947058AF1ac4c06131 в обе стороны (docs/OWN_NODE_SWITCH.md, шаг 5). (3) На узле —
+  `coins(0)`, `coins(1)`, `bnb_gas()` пулов Pancake WBNB-stkBNB 0x0b03e3d6Ec0c5e5bBf993dED8D947C6fb6eEc18D и BNBx-BNB
+  0x9c138bE1D76ee4C5162E0fe9D4eEA5542a23D1bD (по SDK — WBNB, не 0xEeee…) и `bnb_gas()` Lista (по умолчанию 4029);
+  поиск пулов с меткой у фабрики Pancake V2 — getPairInfo(монета, 0xEeee…). (4) Проба пула через исполнитель (газ шага,
+  вместе с withdraw/deposit) — подключена (ветка router/probe, check/probe_exec.rs); проверить вживую замер газа у пулов
+  STABLE_U256 / STABLE_U256_BNB. (5) Решение Тиграна: справочник индексатора — каким адресом он отдаёт BNB таких пулов (WBNB или 0xEeee…);
+  если 0xEeee… — пул находится только поиском по фабрикам (index.factory_scan).
+
+- **Решение «122 (Infinity Stable)» — открытое.** (1) Открыть официальный API `https://explorer.pancakeswap.com/api/cached/pools/list?chains=bsc&protocols=infinityStable` (у агента прокси закрыт): поле `id` — PoolId или адрес (SDK делает checksumAddress(remote.id)), `hookAddress` → `dex.stable_hooks`. (2) Отдаёт ли индексатор справочника эти пулы и под каким id DEX; если нет — пулы только из истории Initialize (`dex.history_scan`). (3) Запись с узла для сверки математики (tests/README.md, tests/bsc_dex_inf_stable.rs). (4) Сухая сделка DEX на пуле Infinity Stable (путь CL с ключом пула). (5) Решено Тиграном («122 (Infinity Stable, ответы)»): крючки dex.stable_hooks видом Infinity CL не берутся; сверка — CLQuoter и get_dy крючка параллельно; перечитывание каждым блоком. Задать `dex.quoter` [Infinity Stable] = CLQuoter Infinity (тот же, что у Infinity CL).
+- **Решение 177 — проверить.** (1) Разбор Infinity CLMM (docs/notes/infinity-clmm-quoter-diff-2026-11-05.md): на узле по пулу GAIB — PoolKey (fee/hooks/parameters), getSlot0, квотер на нескольких суммах, исходник крючка; расчёт менять только по доказательству. (2) Подтверждено Тиграном 05.11 («согласен»): «исход неизвестен» ставит паузу и у ручной команды; правило StopAll у ручной команды — как было; перегон выручки после «Продать и перегнать» считается автоматикой; у выхода берётся квотер и когда он выше расчёта. (3) Пер-пуловый допуск dex.quoter_max_diff_pct — не делаем (Тигран согласен с советом 05.11).
+- **Gate B2/B3 (05.11) — ждёт живых ответов.** B2: проверка адреса вывода до покупки по GET /wallet/saved_address (модель SavedAddress SDK gateio: currency, chain, address, name, tag, verified «0-unverified, 1-verified»); параметры запроса в официальной документации не прочитаны — сначала записать живой ответ. B3: LUCIC 20261104222708667 (ref 1160861443751) — бот отметил Filled 406, а «LUCIC на Gate нет, USDT на месте»: нужны сырые ответы POST /spot/orders и GET /spot/orders/{id} этого ордера из записи сырых сообщений.
+- **Решение 186 — живая сверка:** на узле сравнить виртуальный квотер с официальным QuoterV2 (PancakeSwap V3 и Uniswap V3 пул) — расхождение 0; затем по dex-fingerprints: V3-форки (tiktokfun, unchain-x, squadswap-v3, hello-dex, sheepdex, sushiswap-v3, omni-v3) — dex.kind v3_fork / v3_fork_pancake, dex.factory, dex.tick_lens, dex.quoter_virtual = да; V2-форки — по ответу v2-fees (комиссия, роутер).
+- **Решение 179 — после обновления:** задать transfer.locked_retry_ms [gate] = 10000 (сейчас 1000 у всех, кроме bybit). Gate: адреса получателей (кошельки DEX w1–w5, депозиты других бирж в BSC) — в адресную книгу вывода (ADDRESS_NOT_USED).
+
+- **«Лучший из двух» (решение 123, слито в feat/own-bsc-node; дополнение — router/b) — проверить вживую:** (1) сухой режим,
+  `exec.via_kyber` = да + `exec.dex_best_of` = да: в «Кандидатах» строки «Исполнитель DEX: KyberSwap X vs свой Y USDT
+  за N (с газом) → …»; пометка «без газа: курс BNB не найден» — значит в реестре нет пула монеты BNB с USDT
+  (промежуточная BNB), газ не сравнивается ни у одной стороны; (2) при 429 KyberSwap — «KyberSwap не годится
+  (…RateLimited…) → свой», кандидат не теряется; (3) малая сделка: хронология «исполнил: свой сборщик: … / KyberSwap;
+  лучший из двух: …», журнал `dex.best_of` — выбор на сделке и откат «свой не отправлен (…) → KyberSwap»; (4) нагрузка
+  на KyberSwap не выросла: финальная котировка как раньше один раз на кандидата, на сделке — тот же /routes, что шёл
+  в своп; (5) откат «KyberSwap не отправлен (…) → свой» — при отказе KyberSwap до отправки. Решено Тиграном 03.11
+  (решение 123, дополнение): равенство — свой; откат в обе стороны; `kyber.final_gate_usd` без изменений.
+  **Осталось:** записать на сервере ответы KyberSwap /routes (покупка и продажа CAKE) и пулы CAKE на том же блоке —
+  что именно, tests/README.md «Лучший из двух»; затем снять #[ignore] с `recorded_kyber_routes_vs_own_same_block`.
+- **Ревью 122 (03.11) — проверить вживую:** (1) «Проверить подключение» исполнителя после развёртывания — «Подключено»;
+  с чужим адресом в exec.executor_address — причина и ни одного approve; (2) сухая сделка (все режимы: прямой,
+  умный, бандл, исполнитель; и сухая сделка цикла) с dex.deadline_s = 3–6 с — проба проходит (время блока = голова + 1 с,
+  решение 127), в журнале нет TransactionDeadlinePassed; (3) свой узел без feed.max_block_age_ms —
+  торговли нет, в журнале venue.head_age «задайте feed.max_block_age_ms»; (4) продажа монеты с налогом сплитом через
+  исполнитель — в котировке сигнал «налог на входе».
+- **«122 X (проба через исполнитель)» (ветка router/probe, не слита) — проверить вживую** (docs/notes/probe-executor-2026-11-03.md):
+  (1) при заданном exec.executor_address монеты только с пулами thena / topaz получают налоги или точную причину, записи
+  dex.check_not_configured «сборка пробы … не подключена» нет; (2) сухая сделка «как сделка» через такой пул — газ и
+  цена сходятся с пробой; (3) dex.native_probe для nomiswap / biswap / apeswap_bsc / … — одна запись «инфо» с причиной
+  «сделки BNB через этот пул нет», без dex.universal_router.
+- **Решение 127 — записать на сервере (своём узле):** eth_getBlockByNumber(N) и eth_simulateV1 поверх N с
+  blockOverrides.time = timestamp(N) + 1 (ждём успех, timestamp симулированного блока = это значение) и = timestamp(N)
+  (ждём отказ «block timestamps must be in order»). По записи — тест в tests/bsc_dex_sim_time.rs (сейчас тело запроса
+  проверено без сети). Затем Тигран ставит dex.deadline_s = 3–6 с (docs/OWN_NODE_SWITCH.md).
+
+## Сделано (сессия 01–02.11.2026)
+
+- Решение 139 (ветка router/retfix): журнал core.cycle — «нет кошелька DEX в маппинге» одной записью на смену причины,
+  а не по нескольку в секунду.
+- Решение 140 (ветка router/retfix): «Мало USDT … свободно 0» после разблокировки — у кошелька DEX до чтения баланса
+  USDT «нет данных», алерта нет; текст «Кошелёк DEX «имя»: …».
+
+- Решение 128 — id DEX в настройках (ветка router/d, не слита): адаптер сообщает DEX из справочника пулов и id с
+  заданными настройками (`dex_families`, `DexFamily.kind` → Option), «Добавить DEX» в карточках области «DEX», правило
+  записи id на сервере, необязательная `dex.id_max_len`; тесты settings_dex_id, bsc_dex_dex_ids. Проверить вживую:
+  строки `maverick-v2-bsc` и др. в карточке `dex.kind`; завести id для PancakeSwap Stable / Lista / Nerve / WooFi /
+  Infinity Stable / Ellipsis (OWN_NODE_SWITCH.md, раздел 2).
+
+- Решение 125 — окна (ветка router/w, не слита): запись сырых кадров стакана и сделок биржи по монете, пока её
+  направление проходит расчёт прибыльности и до конца нашей сделки; экран «Окна», настройки window.*,
+  venue.trades_interval [mexc], события window.opened / closed / stopped; тесты core_windows, bingx_window_tap,
+  mexc_window_tap (#[ignore] до записи).
+
+- Решение 121, часть B — свой исполнитель вместо KyberSwap (ветка own-node/zone-b, не слита): пересборка после approve (B1), KyberSwap Elastic — только сигнал (B2), бандл-маршрут при не-бандловых каналах неисполним (B3), верификация по границе сделки (B4), kyber.final_gate_usd только при exec.via_kyber (B5), неиспользуемые kyber.* необязательны (B6), исполнитель свопа в хронологии сделки (B7). После слияния в интерфейсе: verify.max_price_drift_pct = 10–20 %.
+
+- Решение 118, часть 1 — ядро: исправления по разбору ядра при второй бирже (Я-2…Я-14, Я-17…Я-23).
+
+- Решение 99 — после approve маршрут KyberSwap собирается заново.
+- Решение 100 — продажа не прошла → алерт; «Продать сейчас», «Продано вручную» для остановленных сделок.
+- Решение 101 — «Продать и перегнать».
+- Решение 102 — депозит BingX с фондового счёта на спот (`venue.deposit_to_spot`).
+- Решение 103 — объём под свободный остаток перед ордером.
+- Решение 104 — сумма вывода вниз до точности вывода биржи.
+- Решение 105 — Telegram: «Сделка закрыта» только при состоявшейся покупке.
+- Решение 117 — предпроверка больше не затирает справочник сетей биржи одной монетой (ошибка решения 113).
+- Решение 116 — экран «Монеты» по страницам (поле «Монет на странице» — задать один раз в интерфейсе).
+- Решение 115 — экран «Монеты» снова открывается: ключ строки как у ядра (монеты без адреса на BingX и MEXC).
+- Решение 114 — ID ордера биржи новый у каждой попытки (MEXC «duplicate client order id» на повторной продаже XPL 02.11).
+- Решение 113 — без лишних запросов на пути сделки: баланс одной монеты, справочник одной монеты (BingX ?coin=),
+  все балансы кошелька одним Multicall3, сверка без второго запроса. После обновления сверить время шагов предпроверки в журнале.
+- Решение 112 — nonce кошелька не меньше запомненного, свопы KyberSwap в общей очереди кошелька; сверка без ложной
+  паузы (учёт до и после балансов, ledger.reconcile_confirm_rounds); мигание статусов (venue.status_confirm_polls).
+  Введено 02.11: ledger.reconcile_confirm_rounds = 2, venue.status_confirm_polls [bingx] = 2.
+- Решение 111 — финальная котировка на исполнимый объём, фильтр kyber.final_gate_usd, время шагов предпроверки.
+- Решение 110 — продажа, не ушедшая в сеть, повторяется через режим застрявшей монеты (stuck.unsent_retries_max).
+- Решение 109 — нагрузка не зависит от частоты кадров бирж; MEXC выключен до замера нагрузки после обновления.
+- Решение 108 — перегон USDT с ожиданием баланса и повтором, своё название сети BSC у площадки.
+- Решение 107 — адаптер MEXC (код), направления BingX ↔ MEXC торгуются; ключ и настройки — вводятся в интерфейсе.
+- Настройки (интерфейс): `stuck.mode` = relay, `stuck.max_relays` = 1, `money.max_per_trade_usd` = 44,
+  `signal.route_cooldown_s` = 10, `profit.price_move_k` = 4.5, `kyber.rps` = 3 (2 пробовали 02.11 — очередь и срыв расчёта, вернули), `venue.deposit_to_spot` = да (bingx);
+  в Telegram выключены deal.candidate, episode.opened, episode.closed.
+
+- **Отсев (решение 378, следующий релиз):** строку отсева писать при изменении причины или чисел — без таймера и без настройки sieve.row_interval_ms (сделано, решение 386, задача t171); контроль sieve.audit_share на живом боте — временная страховка (Тигран 17.11: 0,1), убрать код контроля после суток без core.sieve_violation.
+- **Контроль отсева (t171, решения 385, 386) — решение владельца:** sieve.audit_share и код контроля кандидатов (core/sieve_audit.rs) и циклов (venues/bsc_dex/quote/cycle_audit.rs) в t171 НЕ удалены — убрать ли, решает Тигран после суток без core.sieve_violation (теперь — и по циклам: cycle_audit_violation = 0 в сводке dex.quote_count). Итог офлайн-перебора циклов на записях (tests/bsc_dex_bound_cycles_t171.rs) — смотреть прогон в GitHub.
+- **Строка отсева без journal.repeat_flush_ms (решение 386):** в прежнем режиме журнала (настройка не задана) строка отсева в браузере показывает числа первого отсева своего вида до смены вида причины — это следствие правила «показ = запись журнала»; если нужны живые числа без этой настройки — решение Тиграна.
+  - T471-04 (ревью): при слиянии с решением 460 (stdhttp.py бросает StaleState(BaseException)) — в pancake_stable.py ловить stdhttp.StaleState (или перейти на recnode.fresh), иначе повтор фазы на новом блоке не сработает; в тест добавить сверку calldata getPairInfo/getThreePoolPairInfo с ABI alloy.

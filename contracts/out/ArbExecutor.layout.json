@@ -1,0 +1,27 @@
+{
+  "storage": [
+    {
+      "astId": 162,
+      "contract": "ArbExecutor.sol:ArbExecutor",
+      "label": "owner",
+      "offset": 0,
+      "slot": "0",
+      "type": "t_address"
+    },
+    {
+      "astId": 164,
+      "contract": "ArbExecutor.sol:ArbExecutor",
+      "label": "wnative",
+      "offset": 0,
+      "slot": "1",
+      "type": "t_address"
+    }
+  ],
+  "types": {
+    "t_address": {
+      "encoding": "inplace",
+      "label": "address",
+      "numberOfBytes": "20"
+    }
+  }
+}

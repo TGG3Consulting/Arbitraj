@@ -65,11 +65,16 @@ impl Store {
         v.as_bool().ok_or_else(|| bad(name))
     }
 
-    /// Текст или адрес. Ошибки: NotConfigured, Internal.
+    /// Текст или адрес. Решение 200: в режиме подсказки имён сетей (settings/hint.rs) незаданная venue.bsc_network —
+    /// пустая строка. Ошибки: NotConfigured, Internal.
     pub fn text(&self, name: &str, at: At) -> Result<String, GatewayError> {
-        let v = self
-            .resolve(name, at.venue, at.coin)
-            .ok_or_else(|| not_set(name))?;
+        let Some(v) = self.resolve(name, at.venue, at.coin) else {
+            return if super::hint::empty_allowed(name) {
+                Ok(String::new())
+            } else {
+                Err(not_set(name))
+            };
+        };
         v.as_str().map(str::to_string).ok_or_else(|| bad(name))
     }
 

@@ -1,0 +1,36 @@
+{
+ "pool": "0x021352af332c70817e25a47578a8f0d8c0fa9210",
+ "topics": {
+  "Swap": "0xc528cda9e500228b16ce84fadae290d9a49aecb17483110004c5af0a07f6fd73",
+  "DepositedToBin": "0x4216cc3bd0c40a90259d92f800c06ede5c47765f41a488072b7e7104a1f95841",
+  "WithdrawnFromBin": "0xda5e7177dface55f5e0eff7dfc67420a1db4243ddfcf0ecc84ed93e034dd8cc2",
+  "CompositionFee": "0x56f8e764728c77dd99ffbc1b64e6d02e227e6ec8214f165d4ef31351de136a0d"
+ },
+ "logs": {
+  "request": {
+   "jsonrpc": "2.0",
+   "id": 1918,
+   "method": "eth_getLogs",
+   "params": [
+    {
+     "address": "0x021352af332c70817e25a47578a8f0d8c0fa9210",
+     "fromBlock": "0x1f599e5c",
+     "toBlock": "0x1f59ec7c",
+     "topics": [
+      [
+       "0xc528cda9e500228b16ce84fadae290d9a49aecb17483110004c5af0a07f6fd73",
+       "0x4216cc3bd0c40a90259d92f800c06ede5c47765f41a488072b7e7104a1f95841",
+       "0xda5e7177dface55f5e0eff7dfc67420a1db4243ddfcf0ecc84ed93e034dd8cc2",
+       "0x56f8e764728c77dd99ffbc1b64e6d02e227e6ec8214f165d4ef31351de136a0d"
+      ]
+     ]
+    }
+   ]
+  },
+  "response": {
+   "jsonrpc": "2.0",
+   "id": 1918,
+   "result": []
+  }
+ }
+}

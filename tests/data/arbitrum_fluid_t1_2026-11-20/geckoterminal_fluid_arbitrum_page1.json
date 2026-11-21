@@ -1,0 +1,1674 @@
+{
+ "body": {
+  "data": [
+   {
+    "attributes": {
+     "address": "0xde632c3a214d5f14c1d8ddf0b92f8bcd188fee45",
+     "base_token_price_native_currency": "0.000608813365092306",
+     "base_token_price_quote_token": "0.0006088133651",
+     "base_token_price_usd": "1.00099869102795",
+     "fdv_usd": "2764555872.77033",
+     "market_cap_usd": "68333037564.6605",
+     "name": "USDC / ETH",
+     "pool_created_at": "2025-02-06T18:47:54Z",
+     "price_change_percentage": {
+      "h1": "-0.131",
+      "h24": "-0.076",
+      "h6": "-0.005",
+      "m15": "0.227",
+      "m30": "0.188",
+      "m5": "0.067"
+     },
+     "quote_token_price_base_token": "1642.53949952",
+     "quote_token_price_native_currency": "1.0",
+     "quote_token_price_usd": "1644.38",
+     "reserve_in_usd": "18418.5524",
+     "transactions": {
+      "h1": {
+       "buyers": 11,
+       "buys": 84,
+       "sellers": 20,
+       "sells": 103,
+       "unique_traders": 26
+      },
+      "h24": {
+       "buyers": 25,
+       "buys": 619,
+       "sellers": 27,
+       "sells": 706,
+       "unique_traders": 37
+      },
+      "h6": {
+       "buyers": 18,
+       "buys": 301,
+       "sellers": 23,
+       "sells": 295,
+       "unique_traders": 30
+      },
+      "m15": {
+       "buyers": 5,
+       "buys": 10,
+       "sellers": 7,
+       "sells": 19,
+       "unique_traders": 10
+      },
+      "m30": {
+       "buyers": 6,
+       "buys": 25,
+       "sellers": 16,
+       "sells": 40,
+       "unique_traders": 19
+      },
+      "m5": {
+       "buyers": 3,
+       "buys": 4,
+       "sellers": 3,
+       "sells": 3,
+       "unique_traders": 5
+      }
+     },
+     "volume_usd": {
+      "h1": "9051.1965360681",
+      "h24": "69540.3164696222",
+      "h6": "28140.8404488711",
+      "m15": "1417.7801244664",
+      "m30": "3055.1906730086",
+      "m5": "321.1560923613"
+     }
+    },
+    "id": "arbitrum_0xde632c3a214d5f14c1d8ddf0b92f8bcd188fee45",
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "fluid-arbitrum",
+       "type": "dex"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+       "type": "token"
+      }
+     }
+    },
+    "type": "pool"
+   },
+   {
+    "attributes": {
+     "address": "0x3c0441b42195f4ad6aa9a0978e06096ea616cda7",
+     "base_token_price_native_currency": "0.000609506910517821",
+     "base_token_price_quote_token": "1.0012100206",
+     "base_token_price_usd": "1.00131623780599",
+     "fdv_usd": "2759901598.78246",
+     "market_cap_usd": "68217995332.2419",
+     "name": "USDC / USDT",
+     "pool_created_at": "2025-02-06T18:47:25Z",
+     "price_change_percentage": {
+      "h1": "-0.24",
+      "h24": "0.049",
+      "h6": "0.009",
+      "m15": "-0.066",
+      "m30": "-0.11",
+      "m5": "-0.115"
+     },
+     "quote_token_price_base_token": "0.9987914418",
+     "quote_token_price_native_currency": "0.000608770285955216",
+     "quote_token_price_usd": "1.00010608887581",
+     "reserve_in_usd": "11628241.7448",
+     "transactions": {
+      "h1": {
+       "buyers": 20,
+       "buys": 104,
+       "sellers": 15,
+       "sells": 142,
+       "unique_traders": 26
+      },
+      "h24": {
+       "buyers": 49,
+       "buys": 512,
+       "sellers": 39,
+       "sells": 496,
+       "unique_traders": 60
+      },
+      "h6": {
+       "buyers": 30,
+       "buys": 226,
+       "sellers": 18,
+       "sells": 226,
+       "unique_traders": 36
+      },
+      "m15": {
+       "buyers": 9,
+       "buys": 12,
+       "sellers": 6,
+       "sells": 84,
+       "unique_traders": 14
+      },
+      "m30": {
+       "buyers": 14,
+       "buys": 50,
+       "sellers": 10,
+       "sells": 101,
+       "unique_traders": 17
+      },
+      "m5": {
+       "buyers": 3,
+       "buys": 3,
+       "sellers": 2,
+       "sells": 14,
+       "unique_traders": 5
+      }
+     },
+     "volume_usd": {
+      "h1": "2717483.48166109",
+      "h24": "16689356.8251038",
+      "h6": "5164357.02790262",
+      "m15": "1176921.79110347",
+      "m30": "1852662.21063545",
+      "m5": "161784.102814597"
+     }
+    },
+    "id": "arbitrum_0x3c0441b42195f4ad6aa9a0978e06096ea616cda7",
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "fluid-arbitrum",
+       "type": "dex"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+       "type": "token"
+      }
+     }
+    },
+    "type": "pool"
+   },
+   {
+    "attributes": {
+     "address": "0xd0810e5cf08dcde266ecebef40cad806c7768d72",
+     "base_token_price_native_currency": "0.000609489933667519",
+     "base_token_price_quote_token": "0.9999721466",
+     "base_token_price_usd": "1.00128594048978",
+     "fdv_usd": "65801139.9918168",
+     "market_cap_usd": "2636893131.75917",
+     "name": "USDG / USDC",
+     "pool_created_at": "2026-09-13T09:25:05Z",
+     "price_change_percentage": {
+      "h1": "-0.283",
+      "h24": "-0.517",
+      "h6": "-0.276",
+      "m15": "-0.507",
+      "m30": "-0.287",
+      "m5": "0"
+     },
+     "quote_token_price_base_token": "1.0000278542",
+     "quote_token_price_native_currency": "0.000609506910517821",
+     "quote_token_price_usd": "1.00131623780599",
+     "reserve_in_usd": "5019289.8134",
+     "transactions": {
+      "h1": {
+       "buyers": 5,
+       "buys": 9,
+       "sellers": 9,
+       "sells": 29,
+       "unique_traders": 12
+      },
+      "h24": {
+       "buyers": 22,
+       "buys": 140,
+       "sellers": 25,
+       "sells": 212,
+       "unique_traders": 33
+      },
+      "h6": {
+       "buyers": 11,
+       "buys": 36,
+       "sellers": 16,
+       "sells": 73,
+       "unique_traders": 21
+      },
+      "m15": {
+       "buyers": 3,
+       "buys": 4,
+       "sellers": 2,
+       "sells": 3,
+       "unique_traders": 4
+      },
+      "m30": {
+       "buyers": 4,
+       "buys": 7,
+       "sellers": 3,
+       "sells": 10,
+       "unique_traders": 6
+      },
+      "m5": {
+       "buyers": 1,
+       "buys": 1,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 1
+      }
+     },
+     "volume_usd": {
+      "h1": "161185.407730588",
+      "h24": "1251757.46909517",
+      "h6": "607392.475131068",
+      "m15": "33109.5969087505",
+      "m30": "69207.6685488081",
+      "m5": "5083.8074337878"
+     }
+    },
+    "id": "arbitrum_0xd0810e5cf08dcde266ecebef40cad806c7768d72",
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x004b506865409877c9fa29bfb1eba929984b9bbc",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "fluid-arbitrum",
+       "type": "dex"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+       "type": "token"
+      }
+     }
+    },
+    "type": "pool"
+   },
+   {
+    "attributes": {
+     "address": "0x0b1a513ee24972daef112bc777a5610d4325c9e7",
+     "base_token_price_native_currency": "1.24722112426691",
+     "base_token_price_quote_token": "1.2472211243",
+     "base_token_price_usd": "2045.72787313985",
+     "fdv_usd": "103117568.733104",
+     "market_cap_usd": "103120416.651898",
+     "name": "wstETH / ETH",
+     "pool_created_at": "2024-12-19T07:59:43Z",
+     "price_change_percentage": {
+      "h1": "-1.883",
+      "h24": "-8.075",
+      "h6": "-5.788",
+      "m15": "-0.189",
+      "m30": "-0.189",
+      "m5": "0"
+     },
+     "quote_token_price_base_token": "0.801782443",
+     "quote_token_price_native_currency": "1.0",
+     "quote_token_price_usd": "1640.52",
+     "reserve_in_usd": "1268711.3655",
+     "transactions": {
+      "h1": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 7,
+       "sells": 19,
+       "unique_traders": 7
+      },
+      "h24": {
+       "buyers": 7,
+       "buys": 12,
+       "sellers": 11,
+       "sells": 30,
+       "unique_traders": 15
+      },
+      "h6": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 10,
+       "sells": 28,
+       "unique_traders": 10
+      },
+      "m15": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 4,
+       "sells": 7,
+       "unique_traders": 4
+      },
+      "m30": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 4,
+       "sells": 7,
+       "unique_traders": 4
+      },
+      "m5": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      }
+     },
+     "volume_usd": {
+      "h1": "932607.067371993",
+      "h24": "1159043.99911063",
+      "h6": "1000538.84485852",
+      "m15": "904437.435777928",
+      "m30": "904437.435777928",
+      "m5": "0.0"
+     }
+    },
+    "id": "arbitrum_0x0b1a513ee24972daef112bc777a5610d4325c9e7",
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x5979d7b546e38e414f7e9822514be443a4800529",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "fluid-arbitrum",
+       "type": "dex"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+       "type": "token"
+      }
+     }
+    },
+    "type": "pool"
+   },
+   {
+    "attributes": {
+     "address": "0x1dd125c32e4b5086c63cc13b3ca02c4a2a61fa9b",
+     "base_token_price_native_currency": "0.000606877178366761",
+     "base_token_price_quote_token": "0.9940532021",
+     "base_token_price_usd": "0.994380394297504",
+     "fdv_usd": "1713282.16393803",
+     "market_cap_usd": "4829068461.89393",
+     "name": "USDe / GHO",
+     "pool_created_at": "2025-08-25T18:35:38Z",
+     "price_change_percentage": {
+      "h1": "0.525",
+      "h24": "-0.269",
+      "h6": "-0.273",
+      "m15": "0",
+      "m30": "-1.038",
+      "m5": "0"
+     },
+     "quote_token_price_base_token": "1.0059823738",
+     "quote_token_price_native_currency": "0.000610507744514794",
+     "quote_token_price_usd": "1.00032914954238",
+     "reserve_in_usd": "73628.0098",
+     "transactions": {
+      "h1": {
+       "buyers": 8,
+       "buys": 10,
+       "sellers": 5,
+       "sells": 10,
+       "unique_traders": 12
+      },
+      "h24": {
+       "buyers": 13,
+       "buys": 15,
+       "sellers": 8,
+       "sells": 15,
+       "unique_traders": 18
+      },
+      "h6": {
+       "buyers": 9,
+       "buys": 11,
+       "sellers": 5,
+       "sells": 11,
+       "unique_traders": 13
+      },
+      "m15": {
+       "buyers": 1,
+       "buys": 1,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 1
+      },
+      "m30": {
+       "buyers": 2,
+       "buys": 2,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 2
+      },
+      "m5": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      }
+     },
+     "volume_usd": {
+      "h1": "30671.3703819135",
+      "h24": "64427.6772244188",
+      "h6": "31566.1352177431",
+      "m15": "716.0611492571",
+      "m30": "1372.0050218842",
+      "m5": "0.0"
+     }
+    },
+    "id": "arbitrum_0x1dd125c32e4b5086c63cc13b3ca02c4a2a61fa9b",
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "fluid-arbitrum",
+       "type": "dex"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0x7dff72693f6a4149b17e7c6314655f6a9f7c8b33",
+       "type": "token"
+      }
+     }
+    },
+    "type": "pool"
+   },
+   {
+    "attributes": {
+     "address": "0x276084527b801e00db8e4410504f9baf93f72c67",
+     "base_token_price_native_currency": "0.000606877178366761",
+     "base_token_price_quote_token": "0.9971907428",
+     "base_token_price_usd": "0.998229356930553",
+     "fdv_usd": "1719913.79003408",
+     "market_cap_usd": "4847760407.15875",
+     "name": "USDe / USDT",
+     "pool_created_at": "2025-08-25T18:33:27Z",
+     "price_change_percentage": {
+      "h1": "-0.063",
+      "h24": "-0.425",
+      "h6": "-0.041",
+      "m15": "0",
+      "m30": "-0.075",
+      "m5": "0"
+     },
+     "quote_token_price_base_token": "1.0028171714",
+     "quote_token_price_native_currency": "0.000608586855371431",
+     "quote_token_price_usd": "0.997181734263197",
+     "reserve_in_usd": "25757.1456",
+     "transactions": {
+      "h1": {
+       "buyers": 8,
+       "buys": 13,
+       "sellers": 4,
+       "sells": 4,
+       "unique_traders": 10
+      },
+      "h24": {
+       "buyers": 11,
+       "buys": 17,
+       "sellers": 9,
+       "sells": 10,
+       "unique_traders": 17
+      },
+      "h6": {
+       "buyers": 8,
+       "buys": 14,
+       "sellers": 6,
+       "sells": 6,
+       "unique_traders": 12
+      },
+      "m15": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 1,
+       "sells": 1,
+       "unique_traders": 1
+      },
+      "m30": {
+       "buyers": 1,
+       "buys": 1,
+       "sellers": 1,
+       "sells": 1,
+       "unique_traders": 2
+      },
+      "m5": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      }
+     },
+     "volume_usd": {
+      "h1": "19324.0268822786",
+      "h24": "30664.2307847356",
+      "h6": "20410.6285307779",
+      "m15": "718.8328175465",
+      "m30": "732.1026125306",
+      "m5": "0.0"
+     }
+    },
+    "id": "arbitrum_0x276084527b801e00db8e4410504f9baf93f72c67",
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "fluid-arbitrum",
+       "type": "dex"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+       "type": "token"
+      }
+     }
+    },
+    "type": "pool"
+   },
+   {
+    "attributes": {
+     "address": "0x86f874212335af27c41cdb855c2255543d1499ce",
+     "base_token_price_native_currency": "0.00068541940493079",
+     "base_token_price_quote_token": "1.1231220019",
+     "base_token_price_usd": "1.12498994974639",
+     "fdv_usd": "144132760.551494",
+     "market_cap_usd": "436362735.333087",
+     "name": "sUSDai / USDC",
+     "pool_created_at": "2025-07-18T19:47:58Z",
+     "price_change_percentage": {
+      "h1": "-0.788",
+      "h24": "0.027",
+      "h6": "0.159",
+      "m15": "0",
+      "m30": "0",
+      "m5": "0"
+     },
+     "quote_token_price_base_token": "0.8903752205",
+     "quote_token_price_native_currency": "0.000610280453770921",
+     "quote_token_price_usd": "1.00185470132396",
+     "reserve_in_usd": "7105235.1602",
+     "transactions": {
+      "h1": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 2,
+       "sells": 3,
+       "unique_traders": 2
+      },
+      "h24": {
+       "buyers": 3,
+       "buys": 4,
+       "sellers": 4,
+       "sells": 16,
+       "unique_traders": 4
+      },
+      "h6": {
+       "buyers": 1,
+       "buys": 1,
+       "sellers": 4,
+       "sells": 12,
+       "unique_traders": 4
+      },
+      "m15": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 1,
+       "sells": 1,
+       "unique_traders": 1
+      },
+      "m5": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      }
+     },
+     "volume_usd": {
+      "h1": "47101.1416937615",
+      "h24": "1400708.63849102",
+      "h6": "958255.544795692",
+      "m15": "0.0",
+      "m30": "25049.2376454454",
+      "m5": "0.0"
+     }
+    },
+    "id": "arbitrum_0x86f874212335af27c41cdb855c2255543d1499ce",
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x0b2b2b2076d95dda7817e785989fe353fe955ef9",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "fluid-arbitrum",
+       "type": "dex"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+       "type": "token"
+      }
+     }
+    },
+    "type": "pool"
+   },
+   {
+    "attributes": {
+     "address": "0xe8c831687ce8c9d015eb10b430d1a54faa0cb4ed",
+     "base_token_price_native_currency": "0.000671365053264965",
+     "base_token_price_quote_token": "1.0975376098",
+     "base_token_price_usd": "1.13262320011491",
+     "fdv_usd": "145110726.134587",
+     "market_cap_usd": "439323531.582791",
+     "name": "sUSDai / USDT",
+     "pool_created_at": "2026-02-13T18:45:28Z",
+     "price_change_percentage": {
+      "h1": "0",
+      "h24": "0.886",
+      "h6": "0.753",
+      "m15": "0",
+      "m30": "0",
+      "m5": "0"
+     },
+     "quote_token_price_base_token": "0.911130508",
+     "quote_token_price_native_currency": "0.000611701182034839",
+     "quote_token_price_usd": "1.00765535716599",
+     "reserve_in_usd": "6601724.8937",
+     "transactions": {
+      "h1": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 1,
+       "sells": 1,
+       "unique_traders": 1
+      },
+      "h24": {
+       "buyers": 2,
+       "buys": 5,
+       "sellers": 4,
+       "sells": 9,
+       "unique_traders": 5
+      },
+      "h6": {
+       "buyers": 1,
+       "buys": 1,
+       "sellers": 3,
+       "sells": 5,
+       "unique_traders": 3
+      },
+      "m15": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m5": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      }
+     },
+     "volume_usd": {
+      "h1": "4905.7375661482",
+      "h24": "1217358.89604149",
+      "h6": "656806.430526313",
+      "m15": "0.0",
+      "m30": "0.0",
+      "m5": "0.0"
+     }
+    },
+    "id": "arbitrum_0xe8c831687ce8c9d015eb10b430d1a54faa0cb4ed",
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x0b2b2b2076d95dda7817e785989fe353fe955ef9",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "fluid-arbitrum",
+       "type": "dex"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+       "type": "token"
+      }
+     }
+    },
+    "type": "pool"
+   },
+   {
+    "attributes": {
+     "address": "0x667701e51b4d1ca244f17c78f7ab8744b4c99f9b",
+     "base_token_price_native_currency": "1.10729149550385",
+     "base_token_price_quote_token": "1.1072914955",
+     "base_token_price_usd": "1813.98487779185",
+     "fdv_usd": "78637488.3812667",
+     "market_cap_usd": "78637488.3975168",
+     "name": "weETH / ETH",
+     "pool_created_at": "2024-12-17T17:39:24Z",
+     "price_change_percentage": {
+      "h1": "0.043",
+      "h24": "-4.9",
+      "h6": "0.043",
+      "m15": "0.043",
+      "m30": "0.043",
+      "m5": "0.02"
+     },
+     "quote_token_price_base_token": "0.903104561",
+     "quote_token_price_native_currency": "1.0",
+     "quote_token_price_usd": "1638.52",
+     "reserve_in_usd": "122504.8505",
+     "transactions": {
+      "h1": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 2,
+       "sells": 5,
+       "unique_traders": 2
+      },
+      "h24": {
+       "buyers": 1,
+       "buys": 1,
+       "sellers": 3,
+       "sells": 6,
+       "unique_traders": 3
+      },
+      "h6": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 2,
+       "sells": 5,
+       "unique_traders": 2
+      },
+      "m15": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 2,
+       "sells": 5,
+       "unique_traders": 2
+      },
+      "m30": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 2,
+       "sells": 5,
+       "unique_traders": 2
+      },
+      "m5": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 2,
+       "sells": 3,
+       "unique_traders": 2
+      }
+     },
+     "volume_usd": {
+      "h1": "15405.1029037522",
+      "h24": "26897.2326239472",
+      "h6": "15405.1029037522",
+      "m15": "15405.1029037522",
+      "m30": "15405.1029037522",
+      "m5": "9348.1131497402"
+     }
+    },
+    "id": "arbitrum_0x667701e51b4d1ca244f17c78f7ab8744b4c99f9b",
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x35751007a407ca6feffe80b3cb397736d2cf4dbe",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "fluid-arbitrum",
+       "type": "dex"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+       "type": "token"
+      }
+     }
+    },
+    "type": "pool"
+   },
+   {
+    "attributes": {
+     "address": "0xba9ed8ae94c70ef9aa2cd1045ed473aaa405c6c7",
+     "base_token_price_native_currency": "0.000575339673067568",
+     "base_token_price_quote_token": "0.9997981834",
+     "base_token_price_usd": "0.997475131220778",
+     "fdv_usd": "157483264.017767",
+     "market_cap_usd": "158159929.932809",
+     "name": "USDai / USDC",
+     "pool_created_at": "2025-07-18T19:47:18Z",
+     "price_change_percentage": {
+      "h1": "0",
+      "h24": "-0.341",
+      "h6": "0",
+      "m15": "0",
+      "m30": "0",
+      "m5": "0"
+     },
+     "quote_token_price_base_token": "1.0002018573",
+     "quote_token_price_native_currency": "0.000575455809596854",
+     "quote_token_price_usd": "0.997552645936146",
+     "reserve_in_usd": "103586.9704",
+     "transactions": {
+      "h1": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "h24": {
+       "buyers": 1,
+       "buys": 2,
+       "sellers": 2,
+       "sells": 2,
+       "unique_traders": 3
+      },
+      "h6": {
+       "buyers": 1,
+       "buys": 1,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 1
+      },
+      "m15": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m5": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      }
+     },
+     "volume_usd": {
+      "h1": "0.0",
+      "h24": "28807.5615049678",
+      "h6": "5539.7460610199",
+      "m15": "0.0",
+      "m30": "0.0",
+      "m5": "0.0"
+     }
+    },
+    "id": "arbitrum_0xba9ed8ae94c70ef9aa2cd1045ed473aaa405c6c7",
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x0a1a1a107e45b7ced86833863f482bc5f4ed82ef",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "fluid-arbitrum",
+       "type": "dex"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+       "type": "token"
+      }
+     }
+    },
+    "type": "pool"
+   },
+   {
+    "attributes": {
+     "address": "0x36a905dcd12c0201f884fafda71e63e9547975da",
+     "base_token_price_native_currency": "0.000606332157535331",
+     "base_token_price_quote_token": "0.9963399107",
+     "base_token_price_usd": "1.00100306956289",
+     "fdv_usd": "30111484.0533792",
+     "market_cap_usd": "699701145.6504",
+     "name": "GHO / USDC",
+     "pool_created_at": "2025-09-23T21:37:25Z",
+     "price_change_percentage": {
+      "h1": "-1.13",
+      "h24": "-0.016",
+      "h6": "-1.13",
+      "m15": "0",
+      "m30": "0",
+      "m5": "0"
+     },
+     "quote_token_price_base_token": "1.0036735348",
+     "quote_token_price_native_currency": "0.000608559539806096",
+     "quote_token_price_usd": "1.0014699210865",
+     "reserve_in_usd": "115.0811",
+     "transactions": {
+      "h1": {
+       "buyers": 1,
+       "buys": 1,
+       "sellers": 1,
+       "sells": 1,
+       "unique_traders": 2
+      },
+      "h24": {
+       "buyers": 1,
+       "buys": 1,
+       "sellers": 2,
+       "sells": 2,
+       "unique_traders": 3
+      },
+      "h6": {
+       "buyers": 1,
+       "buys": 1,
+       "sellers": 1,
+       "sells": 1,
+       "unique_traders": 2
+      },
+      "m15": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 1,
+       "sells": 1,
+       "unique_traders": 1
+      },
+      "m5": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      }
+     },
+     "volume_usd": {
+      "h1": "79.2663430872",
+      "h24": "100.8504230231",
+      "h6": "79.2663430872",
+      "m15": "0.0",
+      "m30": "36.8699463648",
+      "m5": "0.0"
+     }
+    },
+    "id": "arbitrum_0x36a905dcd12c0201f884fafda71e63e9547975da",
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x7dff72693f6a4149b17e7c6314655f6a9f7c8b33",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "fluid-arbitrum",
+       "type": "dex"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+       "type": "token"
+      }
+     }
+    },
+    "type": "pool"
+   },
+   {
+    "attributes": {
+     "address": "0xc800b0e15c40a1ff0539218100c86f4c1bac8d9c",
+     "base_token_price_native_currency": "0.000680354892239769",
+     "base_token_price_quote_token": "1.1927223319",
+     "base_token_price_usd": "1.19206457883858",
+     "fdv_usd": "599483.485231839",
+     "market_cap_usd": "757329640.943564",
+     "name": "syrupUSDC / USDC",
+     "pool_created_at": "2025-08-17T07:43:08Z",
+     "price_change_percentage": {
+      "h1": "0",
+      "h24": "0",
+      "h6": "0",
+      "m15": "0",
+      "m30": "0",
+      "m5": "0"
+     },
+     "quote_token_price_base_token": "0.8384181072",
+     "quote_token_price_native_currency": "0.00057042186100908",
+     "quote_token_price_usd": "0.999607269232312",
+     "reserve_in_usd": "8724.3056",
+     "transactions": {
+      "h1": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "h24": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 1,
+       "sells": 1,
+       "unique_traders": 1
+      },
+      "h6": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m5": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      }
+     },
+     "volume_usd": {
+      "h1": "0.0",
+      "h24": "1060.1004133794",
+      "h6": "0.0",
+      "m15": "0.0",
+      "m30": "0.0",
+      "m5": "0.0"
+     }
+    },
+    "id": "arbitrum_0xc800b0e15c40a1ff0539218100c86f4c1bac8d9c",
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x41ca7586cc1311807b4605fbb748a3b8862b42b5",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "fluid-arbitrum",
+       "type": "dex"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+       "type": "token"
+      }
+     }
+    },
+    "type": "pool"
+   },
+   {
+    "attributes": {
+     "address": "0x080574d224e960c272e005aa03efbe793f317640",
+     "base_token_price_native_currency": "0.000714848400791948",
+     "base_token_price_quote_token": "1.2594249782",
+     "base_token_price_usd": "1.25704138647198",
+     "fdv_usd": "2006290.74419379",
+     "market_cap_usd": "1164792133.88981",
+     "name": "sUSDe / USDT",
+     "pool_created_at": "2025-08-25T18:34:12Z",
+     "price_change_percentage": {
+      "h1": "0",
+      "h24": "-0.092",
+      "h6": "0",
+      "m15": "0",
+      "m30": "0",
+      "m5": "0"
+     },
+     "quote_token_price_base_token": "0.7940131546",
+     "quote_token_price_native_currency": "0.000567599033795449",
+     "quote_token_price_usd": "0.998304532620112",
+     "reserve_in_usd": "910873.8344",
+     "transactions": {
+      "h1": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "h24": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 2,
+       "sells": 2,
+       "unique_traders": 2
+      },
+      "h6": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 1,
+       "sells": 1,
+       "unique_traders": 1
+      },
+      "m15": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m5": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      }
+     },
+     "volume_usd": {
+      "h1": "0.0",
+      "h24": "486.788489374",
+      "h6": "411.4328203567",
+      "m15": "0.0",
+      "m30": "0.0",
+      "m5": "0.0"
+     }
+    },
+    "id": "arbitrum_0x080574d224e960c272e005aa03efbe793f317640",
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x211cc4dd073734da055fbf44a2b4667d5e5fe5d2",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "fluid-arbitrum",
+       "type": "dex"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+       "type": "token"
+      }
+     }
+    },
+    "type": "pool"
+   },
+   {
+    "attributes": {
+     "address": "0xc8f989e9b7ece1b4d092ae4db7faf1294146bda4",
+     "base_token_price_native_currency": "1.08635296149367",
+     "base_token_price_quote_token": "1.0863529615",
+     "base_token_price_usd": "1886.45229763723",
+     "fdv_usd": "2902077.04589132",
+     "market_cap_usd": "74422975.6741734",
+     "name": "ezETH / ETH",
+     "pool_created_at": "2025-08-28T19:43:36Z",
+     "price_change_percentage": {
+      "h1": "0",
+      "h24": "0",
+      "h6": "0",
+      "m15": "0",
+      "m30": "0",
+      "m5": "0"
+     },
+     "quote_token_price_base_token": "0.9205111372",
+     "quote_token_price_native_currency": "1.0",
+     "quote_token_price_usd": "1737.26",
+     "reserve_in_usd": "33228.1281",
+     "transactions": {
+      "h1": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "h24": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 1,
+       "sells": 1,
+       "unique_traders": 1
+      },
+      "h6": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 1,
+       "sells": 1,
+       "unique_traders": 1
+      },
+      "m15": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m5": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      }
+     },
+     "volume_usd": {
+      "h1": "0.0",
+      "h24": "881.7884667731",
+      "h6": "881.7884667731",
+      "m15": "0.0",
+      "m30": "0.0",
+      "m5": "0.0"
+     }
+    },
+    "id": "arbitrum_0xc8f989e9b7ece1b4d092ae4db7faf1294146bda4",
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x2416092f143378750bb29b79ed961ab195cceea5",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "fluid-arbitrum",
+       "type": "dex"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+       "type": "token"
+      }
+     }
+    },
+    "type": "pool"
+   },
+   {
+    "attributes": {
+     "address": "0xfd6d459f04c3f0568e7361f29d0390081a43b90b",
+     "base_token_price_native_currency": "1.08153177061465",
+     "base_token_price_quote_token": "1.0815317706",
+     "base_token_price_usd": "1828.72611030813",
+     "fdv_usd": "31026565.1543905",
+     "market_cap_usd": "605161724.398239",
+     "name": "rsETH / ETH",
+     "pool_created_at": "2025-07-17T17:53:51Z",
+     "price_change_percentage": {
+      "h1": "0",
+      "h24": "0",
+      "h6": "0",
+      "m15": "0",
+      "m30": "0",
+      "m5": "0"
+     },
+     "quote_token_price_base_token": "0.9246145395",
+     "quote_token_price_native_currency": "1.0",
+     "quote_token_price_usd": "1691.03",
+     "reserve_in_usd": "3119.2112",
+     "transactions": {
+      "h1": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "h24": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 1,
+       "sells": 1,
+       "unique_traders": 1
+      },
+      "h6": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 1,
+       "sells": 1,
+       "unique_traders": 1
+      },
+      "m15": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m5": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      }
+     },
+     "volume_usd": {
+      "h1": "0.0",
+      "h24": "4.4355769322",
+      "h6": "4.4355769322",
+      "m15": "0.0",
+      "m30": "0.0",
+      "m5": "0.0"
+     }
+    },
+    "id": "arbitrum_0xfd6d459f04c3f0568e7361f29d0390081a43b90b",
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x4186bfc76e2e237523cbc30fd220fe055156b41f",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "fluid-arbitrum",
+       "type": "dex"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+       "type": "token"
+      }
+     }
+    },
+    "type": "pool"
+   },
+   {
+    "attributes": {
+     "address": "0xdd72157a021804141817d46d9852a97addfb9f59",
+     "base_token_price_native_currency": "0.00061644996189395",
+     "base_token_price_quote_token": "1.112977896",
+     "base_token_price_usd": "1.11256939433569",
+     "fdv_usd": "5938766.24886978",
+     "market_cap_usd": "361579303.720033",
+     "name": "reusd / USDC",
+     "pool_created_at": "2026-09-23T19:22:40Z",
+     "price_change_percentage": {
+      "h1": "0",
+      "h24": "0",
+      "h6": "0",
+      "m15": "0",
+      "m30": "0",
+      "m5": "0"
+     },
+     "quote_token_price_base_token": "0.8984904404",
+     "quote_token_price_native_currency": "0.000553874397765244",
+     "quote_token_price_usd": "0.999433118303517",
+     "reserve_in_usd": "3173006.7351",
+     "transactions": {
+      "h1": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "h24": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "h6": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m5": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      }
+     },
+     "volume_usd": {
+      "h1": "0.0",
+      "h24": "0.0",
+      "h6": "0.0",
+      "m15": "0.0",
+      "m30": "0.0",
+      "m5": "0.0"
+     }
+    },
+    "id": "arbitrum_0xdd72157a021804141817d46d9852a97addfb9f59",
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x76ce01f0ef25aa66cc5f1e546a005e4a63b25609",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "fluid-arbitrum",
+       "type": "dex"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+       "type": "token"
+      }
+     }
+    },
+    "type": "pool"
+   },
+   {
+    "attributes": {
+     "address": "0xf063bd202e45d6b2843102cb4ece339026645d4a",
+     "base_token_price_native_currency": "0.000548791192635921",
+     "base_token_price_quote_token": "0.9988324213",
+     "base_token_price_usd": "0.999569509326311",
+     "fdv_usd": "157832428.212323",
+     "market_cap_usd": "156555255.51434",
+     "name": "USDai / USDT",
+     "pool_created_at": "2026-01-25T06:58:20Z",
+     "price_change_percentage": {
+      "h1": "0",
+      "h24": "0",
+      "h6": "0",
+      "m15": "0",
+      "m30": "0",
+      "m5": "0"
+     },
+     "quote_token_price_base_token": "1.0011689436",
+     "quote_token_price_native_currency": "0.000549432698561253",
+     "quote_token_price_usd": "0.998692827520818",
+     "reserve_in_usd": "41.7696",
+     "transactions": {
+      "h1": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "h24": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "h6": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      },
+      "m5": {
+       "buyers": 0,
+       "buys": 0,
+       "sellers": 0,
+       "sells": 0,
+       "unique_traders": 0
+      }
+     },
+     "volume_usd": {
+      "h1": "0.0",
+      "h24": "0.0",
+      "h6": "0.0",
+      "m15": "0.0",
+      "m30": "0.0",
+      "m5": "0.0"
+     }
+    },
+    "id": "arbitrum_0xf063bd202e45d6b2843102cb4ece339026645d4a",
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x0a1a1a107e45b7ced86833863f482bc5f4ed82ef",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "fluid-arbitrum",
+       "type": "dex"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+       "type": "token"
+      }
+     }
+    },
+    "type": "pool"
+   }
+  ]
+ },
+ "status": 200,
+ "url": "https://api.geckoterminal.com/api/v2/networks/arbitrum/dexes/fluid-arbitrum/pools?page=1"
+}

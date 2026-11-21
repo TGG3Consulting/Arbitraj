@@ -1,0 +1,590 @@
+{
+ "profit.price_move_k": [
+  {
+   "scope": {
+    "id": "mexc:cex_dex",
+    "kind": "VenueDir"
+   },
+   "value": "2"
+  },
+  {
+   "scope": {
+    "id": "gate:cex_dex",
+    "kind": "VenueDir"
+   },
+   "value": "2.5"
+  },
+  {
+   "scope": {
+    "id": "bingx:cex_dex",
+    "kind": "VenueDir"
+   },
+   "value": "2.5"
+  },
+  {
+   "scope": {
+    "kind": "Global"
+   },
+   "value": "4.5"
+  }
+ ],
+ "profit.sigma_window_min": [
+  {
+   "scope": {
+    "kind": "Global"
+   },
+   "value": 60
+  }
+ ],
+ "profit.sigma_floor_per_s": "нет такой настройки в /api/settings",
+ "profit.sigma_min_changes": "нет такой настройки в /api/settings",
+ "profit.closure_share": [
+  {
+   "scope": {
+    "id": "gate:dex_cex",
+    "kind": "VenueDir"
+   },
+   "value": "0.8"
+  }
+ ],
+ "profit.transit_mode": [
+  {
+   "scope": {
+    "id": "kraken",
+    "kind": "Venue"
+   },
+   "value": "manual_auto"
+  },
+  {
+   "scope": {
+    "id": "bsc_dex",
+    "kind": "Venue"
+   },
+   "value": "manual_auto"
+  },
+  {
+   "scope": {
+    "id": "bybit",
+    "kind": "Venue"
+   },
+   "value": "manual_auto"
+  },
+  {
+   "scope": {
+    "id": "mexc",
+    "kind": "Venue"
+   },
+   "value": "manual_auto"
+  },
+  {
+   "scope": {
+    "id": "coinex",
+    "kind": "Venue"
+   },
+   "value": "manual_auto"
+  },
+  {
+   "scope": {
+    "id": "gate",
+    "kind": "Venue"
+   },
+   "value": "manual_auto"
+  },
+  {
+   "scope": {
+    "id": "bingx",
+    "kind": "Venue"
+   },
+   "value": "manual_auto"
+  },
+  {
+   "scope": {
+    "id": "xt",
+    "kind": "Venue"
+   },
+   "value": "manual_auto"
+  },
+  {
+   "scope": {
+    "id": "phemex",
+    "kind": "Venue"
+   },
+   "value": "manual_auto"
+  },
+  {
+   "scope": {
+    "id": "bitget",
+    "kind": "Venue"
+   },
+   "value": "manual_auto"
+  },
+  {
+   "scope": {
+    "id": "poloniex",
+    "kind": "Venue"
+   },
+   "value": "manual_auto"
+  },
+  {
+   "scope": {
+    "id": "binance",
+    "kind": "Venue"
+   },
+   "value": "manual_auto"
+  },
+  {
+   "scope": {
+    "id": "htx",
+    "kind": "Venue"
+   },
+   "value": "manual_auto"
+  },
+  {
+   "scope": {
+    "id": "okx",
+    "kind": "Venue"
+   },
+   "value": "manual_auto"
+  },
+  {
+   "scope": {
+    "id": "kucoin",
+    "kind": "Venue"
+   },
+   "value": "manual_auto"
+  }
+ ],
+ "profit.transit_manual_s": [
+  {
+   "scope": {
+    "id": "kraken",
+    "kind": "Venue"
+   },
+   "value": 20
+  },
+  {
+   "scope": {
+    "id": "coinex",
+    "kind": "Venue"
+   },
+   "value": 20
+  },
+  {
+   "scope": {
+    "id": "bitget",
+    "kind": "Venue"
+   },
+   "value": 97
+  },
+  {
+   "scope": {
+    "id": "xt",
+    "kind": "Venue"
+   },
+   "value": 20
+  },
+  {
+   "scope": {
+    "id": "phemex",
+    "kind": "Venue"
+   },
+   "value": 20
+  },
+  {
+   "scope": {
+    "id": "gate",
+    "kind": "Venue"
+   },
+   "value": 37
+  },
+  {
+   "scope": {
+    "id": "htx",
+    "kind": "Venue"
+   },
+   "value": 20
+  },
+  {
+   "scope": {
+    "id": "okx",
+    "kind": "Venue"
+   },
+   "value": 20
+  },
+  {
+   "scope": {
+    "id": "poloniex",
+    "kind": "Venue"
+   },
+   "value": 20
+  },
+  {
+   "scope": {
+    "id": "bsc_dex",
+    "kind": "Venue"
+   },
+   "value": 1
+  },
+  {
+   "scope": {
+    "id": "bingx",
+    "kind": "Venue"
+   },
+   "value": 9
+  },
+  {
+   "scope": {
+    "id": "binance",
+    "kind": "Venue"
+   },
+   "value": 20
+  },
+  {
+   "scope": {
+    "id": "bybit",
+    "kind": "Venue"
+   },
+   "value": 20
+  },
+  {
+   "scope": {
+    "id": "kucoin",
+    "kind": "Venue"
+   },
+   "value": 19
+  },
+  {
+   "scope": {
+    "id": "mexc",
+    "kind": "Venue"
+   },
+   "value": 52
+  }
+ ],
+ "profit.transit_auto_after": [
+  {
+   "scope": {
+    "id": "phemex",
+    "kind": "Venue"
+   },
+   "value": 5
+  },
+  {
+   "scope": {
+    "id": "kucoin",
+    "kind": "Venue"
+   },
+   "value": 5
+  },
+  {
+   "scope": {
+    "id": "bitget",
+    "kind": "Venue"
+   },
+   "value": 5
+  },
+  {
+   "scope": {
+    "id": "mexc",
+    "kind": "Venue"
+   },
+   "value": 5
+  },
+  {
+   "scope": {
+    "id": "okx",
+    "kind": "Venue"
+   },
+   "value": 5
+  },
+  {
+   "scope": {
+    "id": "coinex",
+    "kind": "Venue"
+   },
+   "value": 5
+  },
+  {
+   "scope": {
+    "id": "bybit",
+    "kind": "Venue"
+   },
+   "value": 5
+  },
+  {
+   "scope": {
+    "id": "xt",
+    "kind": "Venue"
+   },
+   "value": 5
+  },
+  {
+   "scope": {
+    "id": "htx",
+    "kind": "Venue"
+   },
+   "value": 5
+  },
+  {
+   "scope": {
+    "id": "binance",
+    "kind": "Venue"
+   },
+   "value": 5
+  },
+  {
+   "scope": {
+    "id": "gate",
+    "kind": "Venue"
+   },
+   "value": 5
+  },
+  {
+   "scope": {
+    "id": "bsc_dex",
+    "kind": "Venue"
+   },
+   "value": 5
+  },
+  {
+   "scope": {
+    "id": "poloniex",
+    "kind": "Venue"
+   },
+   "value": 5
+  },
+  {
+   "scope": {
+    "id": "kraken",
+    "kind": "Venue"
+   },
+   "value": 5
+  },
+  {
+   "scope": {
+    "id": "bingx",
+    "kind": "Venue"
+   },
+   "value": 5
+  }
+ ],
+ "profit.transit_credit_s": [
+  {
+   "scope": {
+    "id": "bingx",
+    "kind": "Venue"
+   },
+   "value": 17
+  },
+  {
+   "scope": {
+    "id": "kucoin",
+    "kind": "Venue"
+   },
+   "value": 18
+  },
+  {
+   "scope": {
+    "id": "mexc",
+    "kind": "Venue"
+   },
+   "value": 38
+  },
+  {
+   "scope": {
+    "id": "bitget",
+    "kind": "Venue"
+   },
+   "value": 71
+  },
+  {
+   "scope": {
+    "id": "gate",
+    "kind": "Venue"
+   },
+   "value": 83
+  },
+  {
+   "scope": {
+    "id": "poloniex",
+    "kind": "Venue"
+   },
+   "value": 7
+  },
+  {
+   "scope": {
+    "id": "bsc_dex",
+    "kind": "Venue"
+   },
+   "value": 2
+  }
+ ],
+ "signal.eval_min_interval_ms": [
+  {
+   "scope": {
+    "kind": "Global"
+   },
+   "value": 500
+  }
+ ],
+ "signal.probe_usd": [
+  {
+   "scope": {
+    "kind": "Global"
+   },
+   "value": "10"
+  }
+ ],
+ "signal.pool_event_now": [
+  {
+   "scope": {
+    "kind": "Global"
+   },
+   "value": true
+  }
+ ],
+ "signal.pool_event_min_interval_ms": [
+  {
+   "scope": {
+    "kind": "Global"
+   },
+   "value": 250
+  }
+ ],
+ "signal.hold_timer": [
+  {
+   "scope": {
+    "kind": "Global"
+   },
+   "value": true
+  }
+ ],
+ "money.max_per_trade_usd": [
+  {
+   "scope": {
+    "id": "poloniex:cex_cex",
+    "kind": "VenueDir"
+   },
+   "value": "45"
+  },
+  {
+   "scope": {
+    "id": "mexc:dex_cex",
+    "kind": "VenueDir"
+   },
+   "value": "550"
+  },
+  {
+   "scope": {
+    "id": "bitget",
+    "kind": "Venue"
+   },
+   "value": "40"
+  },
+  {
+   "scope": {
+    "id": "mexc:cex_dex",
+    "kind": "VenueDir"
+   },
+   "value": "700"
+  },
+  {
+   "scope": {
+    "id": "binance:dex_cex",
+    "kind": "VenueDir"
+   },
+   "value": "200"
+  },
+  {
+   "scope": {
+    "id": "bsc_dex",
+    "kind": "Venue"
+   },
+   "value": "40"
+  },
+  {
+   "scope": {
+    "id": "poloniex:dex_cex",
+    "kind": "VenueDir"
+   },
+   "value": "43"
+  },
+  {
+   "scope": {
+    "id": "bingx:dex_cex",
+    "kind": "VenueDir"
+   },
+   "value": "500"
+  },
+  {
+   "scope": {
+    "id": "poloniex:cex_dex",
+    "kind": "VenueDir"
+   },
+   "value": "45"
+  },
+  {
+   "scope": {
+    "id": "bybit",
+    "kind": "Venue"
+   },
+   "value": "40"
+  },
+  {
+   "scope": {
+    "id": "bingx:cex_cex",
+    "kind": "VenueDir"
+   },
+   "value": "750"
+  },
+  {
+   "scope": {
+    "id": "mexc",
+    "kind": "Venue"
+   },
+   "value": "600"
+  },
+  {
+   "scope": {
+    "id": "gate",
+    "kind": "Venue"
+   },
+   "value": "40"
+  },
+  {
+   "scope": {
+    "id": "bingx:cex_dex",
+    "kind": "VenueDir"
+   },
+   "value": "750"
+  },
+  {
+   "scope": {
+    "id": "xt",
+    "kind": "Venue"
+   },
+   "value": "45"
+  },
+  {
+   "scope": {
+    "id": "kucoin",
+    "kind": "Venue"
+   },
+   "value": "45"
+  },
+  {
+   "scope": {
+    "id": "bingx",
+    "kind": "Venue"
+   },
+   "value": "750"
+  },
+  {
+   "scope": {
+    "id": "binance",
+    "kind": "Venue"
+   },
+   "value": "40"
+  }
+ ]
+}

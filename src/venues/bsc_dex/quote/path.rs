@@ -71,14 +71,8 @@ impl Path {
             Side::Buy => (e.usdt, e.coin, usdt_dec, coin_dec),
             Side::Sell => (e.coin, e.usdt, coin_dec, usdt_dec),
         };
-        let hop = hop(
-            ctx,
-            c.entry.clone(),
-            c.usable,
-            c.swapped,
-            (tin, tout),
-            (din, dout),
-        )?;
+        // Решение 410 (t195): кандидат принят по значению — запись переходит в шаг без копии.
+        let hop = hop(ctx, c.entry, c.usable, c.swapped, (tin, tout), (din, dout))?;
         Ok(Self {
             hops: vec![hop],
             coins: c.coins,

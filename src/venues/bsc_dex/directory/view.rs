@@ -1,14 +1,18 @@
 //! Файл: venues/bsc_dex/directory/view.rs
 //! Что делает: справочник пулов для интерфейса (контракт pool_directory, решение 58): источник и подпись из настроек,
 //! DEX индексатора, монеты, пулы с USDT/промежуточными (и с нативным BNB — «не поддержан», и из событий создания) с
-//! итогом адаптера по каждому.
+//! итогом адаптера по каждому; пулы, найденные фабриками на своём узле, и итог поиска по фабрикам (решение 121, C3).
 //! Кто вызывает: mod.rs адаптера (pool_directory), tests.
 //! От чего зависит: directory/mod.rs (Directory, Snap, is_relevant, is_native), core/types (directory.rs), ctx.rs.
+//! Решение 295: строки развёртки многомонетных пулов (Snap.multi), ключ строки — pools/multi_pair.rs dir_key.
 //! Настройки: index.api_url, index.network, index.attribution_text, index.attribution_url [bsc_dex].
 
-use crate::core::types::{DirectoryPool, DirectoryStatus, DirectoryToken, PoolDirectory};
+use crate::core::types::{
+    DirectoryPool, DirectoryStatus, DirectoryToken, FactoryScan, PoolDirectory,
+};
 
 use super::super::ctx::Ctx;
+use super::super::pools::multi_pair::dir_key;
 use super::gt_parse::IndexedPool;
 use super::{Directory, NATIVE, is_native, is_relevant};
 
@@ -32,15 +36,32 @@ impl Directory {
                 pages: t.pages,
                 total: t.pools.len(),
                 error: t.error.clone(),
+                note: t.note.clone(),
             });
             let shown = |p: &&IndexedPool| is_relevant(*addr, p, &s.quotes) || is_native(*addr, p);
             let from_events = s.events.get(addr).map(|v| v.as_slice()).unwrap_or_default();
-            for p in t.pools.iter().chain(from_events).filter(shown) {
+            let from_factory = s
+                .factory
+                .get(addr)
+                .map(|v| v.as_slice())
+                .unwrap_or_default();
+            // Решение 295: развёрнутые пары многомонетных пулов; ключ строки — с парой у DEX в режиме dex.multi_pair
+            // (multi_pair::dir_key), у прочих — строка пула, как до решения.
+            let from_multi = s.multi.get(addr).map(|v| v.as_slice()).unwrap_or_default();
+            let key = |p: &IndexedPool| dir_key(&s.multi_dex, &p.dex_id, &p.pool, p.base, p.quote);
+            let mut seen = std::collections::HashSet::new();
+            let all = t
+                .pools
+                .iter()
+                .chain(from_events)
+                .chain(from_factory)
+                .chain(from_multi);
+            for p in all.filter(shown).filter(|p| seen.insert(key(p))) {
                 let status = if is_native(*addr, p) {
                     DirectoryStatus::Unsupported(NATIVE.into())
                 } else {
                     s.status
-                        .get(&p.pool)
+                        .get(&key(p))
                         .cloned()
                         .unwrap_or(DirectoryStatus::Unchecked)
                 };
@@ -68,8 +89,25 @@ impl Directory {
             tokens,
             pools,
             error: s.error.clone(),
+            factory: factory_view(&s),
         }
     }
+}
+
+/// Итог поиска по фабрикам для интерфейса: сколько найденных фабриками пулов взято после проверки на узле
+/// (по итогу в status). Ошибок нет.
+fn factory_view(s: &super::Snap) -> FactoryScan {
+    let mut v = s.factory_scan.clone();
+    v.taken = s
+        .factory
+        .values()
+        .flatten()
+        .filter(|p| {
+            let k = dir_key(&s.multi_dex, &p.dex_id, &p.pool, p.base, p.quote);
+            s.status.get(&k) == Some(&DirectoryStatus::Taken)
+        })
+        .count();
+    v
 }
 
 /// Справочник для интерфейса (контракт pool_directory) с источником и подписью из настроек. Ошибок нет.

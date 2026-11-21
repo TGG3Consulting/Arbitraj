@@ -8,18 +8,20 @@
 //! Срочность (решение 61): очередь со строгим порядком классов и гарантированной долей фона — node/queue.rs,
 //! классы — gateway/urgency.rs.
 //! Кто вызывает: node/rpc.rs (call_raw, batch); правило — ещё directory/limit.rs (индексатор).
-//! От чего зависит: ctx.rs, node/queue.rs, gateway/urgency.rs, gateway/rules.rs, storage/rules.rs.
-//! Настройки: bsc.node_http_rps, bsc.node_background_share_pct (вся система; не задана — строгий порядок без доли
+//! От чего зависит: ctx.rs, node/queue.rs, gateway/urgency.rs, gateway/rules.rs, gateway/calc_meter.rs (решение 129:
+//! ожидание очереди и время запроса — в счётчик расчёта кандидата), node/req_trail.rs (решение 313: те же времена по
+//! каждому запросу — замеру перечитывания пула по событию), storage/rules.rs.
+//! Настройки: bsc.node_http_rps, bsc.node_background_share_pct (вся система + площадка DEX — решение 435; не задана — строгий порядок без доли
 //! фона); правила шлюза для RateLimited.
 //!
 //! HTTP 429 Too Many Requests — RFC 6585, раздел 4 (https://www.rfc-editor.org/rfc/rfc6585#section-4).
 
 use std::time::Duration;
 
+use crate::gateway::calc_meter::{self, Source};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::rules::{RuleAction, pick_rule};
 use crate::gateway::urgency;
-use crate::settings::read::At;
 
 use super::super::ctx::Ctx;
 pub use super::queue::Pace;
@@ -30,7 +32,7 @@ pub use super::queue::Pace;
 pub async fn wait(ctx: &Ctx, weight: usize) -> GatewayResult<()> {
     let rps = ctx
         .settings
-        .integer("bsc.node_http_rps", At::default())
+        .integer("bsc.node_http_rps", ctx.at())
         .map_err(|e| ctx.tag(e))?;
     if rps == 0 {
         let m = "bsc.node_http_rps должна быть больше нуля";
@@ -39,7 +41,7 @@ pub async fn wait(ctx: &Ctx, weight: usize) -> GatewayResult<()> {
     let step = Duration::from_secs_f64(weight.max(1) as f64 / rps as f64);
     let share = match ctx
         .settings
-        .decimal("bsc.node_background_share_pct", At::default())
+        .decimal("bsc.node_background_share_pct", ctx.at())
         .map_err(|e| ctx.tag(e))
     {
         Ok(p) => rust_decimal::prelude::ToPrimitive::to_f64(&p).unwrap_or(0.0),
@@ -59,8 +61,16 @@ where
 {
     let mut tries = 0u32;
     loop {
+        // Решение 129: ожидание очереди и время запроса — в счётчик расчёта кандидата (gateway/calc_meter.rs).
+        let t0 = std::time::Instant::now();
         wait(ctx, weight).await?;
-        let err = match send().await {
+        let t1 = std::time::Instant::now();
+        let res = send().await;
+        let send_took = t1.elapsed();
+        calc_meter::record(Source::Node, weight, t1 - t0, send_took);
+        // Решение 313: тот же запрос отдельной строкой — замеру перечитывания пула по событию (node/req_trail.rs).
+        super::req_trail::record(weight, t1 - t0, send_took);
+        let err = match res {
             Err(e) if e.code == ErrorCode::RateLimited => e,
             other => return other,
         };

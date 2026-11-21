@@ -1,0 +1,2536 @@
+{
+ "chosen": {
+  "19": [
+   {
+    "fam": "v4",
+    "kind": 19,
+    "pool_id": "0xa10a124576249676b14cde97002b8ee13d676720416ed5f3886174e6448e7ba8",
+    "tokens": [
+     "0xa0b862f60edef4452f25b4160f177db44deb6cf1",
+     "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+    ],
+    "hooks": "0x0000000000000000000000000000000000000000",
+    "manager": "0x360e68faccca8ca495c1b759fd9eee466db9fb32",
+    "pool_manager": "0x360e68faccca8ca495c1b759fd9eee466db9fb32",
+    "data": "0x000000000000000000000000a0b862f60edef4452f25b4160f177db44deb6cf1000000000000000000000000fd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb900000000000000000000000000000000000000000000000000000000000f395900000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000",
+    "step_pool": "0x360e68faccca8ca495c1b759fd9eee466db9fb32",
+    "token_in": "0xa0b862f60edef4452f25b4160f177db44deb6cf1",
+    "token_out": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+    "amount_in": "100000000000000000"
+   },
+   {
+    "fam": "v4",
+    "kind": 19,
+    "pool_id": "0x05158473bbf503a45ebc9252a9189f01ddd18f02d58e6901fb2f3bbf16a73ca7",
+    "tokens": [
+     "0x77643d2afc2496aab18e2c6a38e32c9cb1beb497",
+     "0xaf88d065e77c8cc2239327c5edb3a432268e5831"
+    ],
+    "hooks": "0x0000000000000000000000000000000000000000",
+    "manager": "0x360e68faccca8ca495c1b759fd9eee466db9fb32",
+    "pool_manager": "0x360e68faccca8ca495c1b759fd9eee466db9fb32",
+    "data": "0x00000000000000000000000077643d2afc2496aab18e2c6a38e32c9cb1beb497000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e58310000000000000000000000000000000000000000000000000000000000030d4000000000000000000000000000000000000000000000000000000000000007d00000000000000000000000000000000000000000000000000000000000000000",
+    "step_pool": "0x360e68faccca8ca495c1b759fd9eee466db9fb32",
+    "token_in": "0x77643d2afc2496aab18e2c6a38e32c9cb1beb497",
+    "token_out": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+    "amount_in": "1000000000000000000000"
+   },
+   {
+    "fam": "v4",
+    "kind": 19,
+    "pool_id": "0xd3b794936a095f9e6d8d302b31864a41915f9a3ebf3d830ba080fb679f4a8bc1",
+    "tokens": [
+     "0x31dba3c96481fde3cd81c2aaf51f2d8bf618c742",
+     "0xaf88d065e77c8cc2239327c5edb3a432268e5831"
+    ],
+    "hooks": "0x0000000000000000000000000000000000000000",
+    "manager": "0x360e68faccca8ca495c1b759fd9eee466db9fb32",
+    "pool_manager": "0x360e68faccca8ca495c1b759fd9eee466db9fb32",
+    "data": "0x00000000000000000000000031dba3c96481fde3cd81c2aaf51f2d8bf618c742000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000000000000000000000000000000000000005f3700000000000000000000000000000000000000000000000000000000000000f3c0000000000000000000000000000000000000000000000000000000000000000",
+    "step_pool": "0x360e68faccca8ca495c1b759fd9eee466db9fb32",
+    "token_in": "0x31dba3c96481fde3cd81c2aaf51f2d8bf618c742",
+    "token_out": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+    "amount_in": "1000000000000000000000"
+   }
+  ],
+  "22": [
+   {
+    "fam": "fluid",
+    "kind": 22,
+    "pool_id": "0x3c0441b42195f4ad6aa9a0978e06096ea616cda7",
+    "tokens": [
+     "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+     "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+    ],
+    "hooks": "0x0000000000000000000000000000000000000000",
+    "manager": "0x3c0441b42195f4ad6aa9a0978e06096ea616cda7",
+    "pool_manager": null,
+    "data": null,
+    "step_pool": "0x3c0441b42195f4ad6aa9a0978e06096ea616cda7",
+    "liquidity": "0x52aa899454998be5b000ad077a46bbe360f4e497",
+    "token_in": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+    "token_out": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+    "amount_in": "1000000000"
+   },
+   {
+    "fam": "fluid",
+    "kind": 22,
+    "pool_id": "0x36a905dcd12c0201f884fafda71e63e9547975da",
+    "tokens": [
+     "0x7dff72693f6a4149b17e7c6314655f6a9f7c8b33",
+     "0xaf88d065e77c8cc2239327c5edb3a432268e5831"
+    ],
+    "hooks": "0x0000000000000000000000000000000000000000",
+    "manager": "0x36a905dcd12c0201f884fafda71e63e9547975da",
+    "pool_manager": null,
+    "data": null,
+    "step_pool": "0x36a905dcd12c0201f884fafda71e63e9547975da",
+    "liquidity": "0x52aa899454998be5b000ad077a46bbe360f4e497",
+    "token_in": "0x7dff72693f6a4149b17e7c6314655f6a9f7c8b33",
+    "token_out": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+    "amount_in": "10000000000000000000"
+   },
+   {
+    "fam": "fluid",
+    "kind": 22,
+    "pool_id": "0xba9ed8ae94c70ef9aa2cd1045ed473aaa405c6c7",
+    "tokens": [
+     "0x0a1a1a107e45b7ced86833863f482bc5f4ed82ef",
+     "0xaf88d065e77c8cc2239327c5edb3a432268e5831"
+    ],
+    "hooks": "0x0000000000000000000000000000000000000000",
+    "manager": "0xba9ed8ae94c70ef9aa2cd1045ed473aaa405c6c7",
+    "pool_manager": null,
+    "data": null,
+    "step_pool": "0xba9ed8ae94c70ef9aa2cd1045ed473aaa405c6c7",
+    "liquidity": "0x52aa899454998be5b000ad077a46bbe360f4e497",
+    "token_in": "0x0a1a1a107e45b7ced86833863f482bc5f4ed82ef",
+    "token_out": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+    "amount_in": "1000000000000000000000"
+   }
+  ],
+  "24": [
+   {
+    "fam": "lb20",
+    "kind": 24,
+    "pool_id": "0x22780c4d8ea5de924e1a451c83273019ea644a7e",
+    "tokens": [
+     "0xa61f74247455a40b01b0559ff6274441fafa22a3",
+     "0x82af49447d8a07e3bd95bd0d56f35241523fbab1"
+    ],
+    "hooks": "0x0000000000000000000000000000000000000000",
+    "manager": "0x22780c4d8ea5de924e1a451c83273019ea644a7e",
+    "pool_manager": null,
+    "data": "0x",
+    "step_pool": "0x22780c4d8ea5de924e1a451c83273019ea644a7e",
+    "token_in": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+    "token_out": "0xa61f74247455a40b01b0559ff6274441fafa22a3",
+    "amount_in": "10000000000000"
+   },
+   {
+    "fam": "lb20",
+    "kind": 24,
+    "pool_id": "0xe71fd21a901f3d105de7760bb6f07c6af204d908",
+    "tokens": [
+     "0x7b5eb3940021ec0e8e463d5dbb4b7b09a89ddf96",
+     "0x82af49447d8a07e3bd95bd0d56f35241523fbab1"
+    ],
+    "hooks": "0x0000000000000000000000000000000000000000",
+    "manager": "0xe71fd21a901f3d105de7760bb6f07c6af204d908",
+    "pool_manager": null,
+    "data": "0x",
+    "step_pool": "0xe71fd21a901f3d105de7760bb6f07c6af204d908",
+    "token_in": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+    "token_out": "0x7b5eb3940021ec0e8e463d5dbb4b7b09a89ddf96",
+    "amount_in": "1000000000000000"
+   },
+   {
+    "fam": "lb20",
+    "kind": 24,
+    "pool_id": "0x562414c3c36226e37981d2ccc68b591f3c840c02",
+    "tokens": [
+     "0x371c7ec6d8039ff7933a2aa28eb827ffe1f52f07",
+     "0x82af49447d8a07e3bd95bd0d56f35241523fbab1"
+    ],
+    "hooks": "0x0000000000000000000000000000000000000000",
+    "manager": "0x562414c3c36226e37981d2ccc68b591f3c840c02",
+    "pool_manager": null,
+    "data": "0x",
+    "step_pool": "0x562414c3c36226e37981d2ccc68b591f3c840c02",
+    "token_in": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+    "token_out": "0x371c7ec6d8039ff7933a2aa28eb827ffe1f52f07",
+    "amount_in": "100000000000000"
+   }
+  ],
+  "23": [
+   {
+    "fam": "bv3",
+    "kind": 23,
+    "pool_id": "0x5418a64e0cdb20548acb394f5d00a089baf02161",
+    "tokens": [
+     "0x4ce13a79f45c1be00bdabd38b764ac28c082704e",
+     "0xec70dcb4a1efa46b8f2d97c310c9c4790ba5ffa8"
+    ],
+    "hooks": "0x0000000000000000000000000000000000000000",
+    "bv3_hook": "0x0000000000000000000000000000000000000000",
+    "bv3_hook_kind": "none",
+    "manager": "0xbA1333333333a1BA1108E8412f11850A5C319bA9",
+    "pool_manager": "0xbA1333333333a1BA1108E8412f11850A5C319bA9",
+    "data": "0x0000000000000000000000005418a64e0cdb20548acb394f5d00a089baf02161",
+    "step_pool": "0xbA1333333333a1BA1108E8412f11850A5C319bA9",
+    "src": "запись balancer_v3.py arbitrum_balancer_v3_2026-11-20",
+    "token_in": "0x4ce13a79f45c1be00bdabd38b764ac28c082704e",
+    "token_out": "0xec70dcb4a1efa46b8f2d97c310c9c4790ba5ffa8",
+    "amount_in": "10000000000000000000"
+   },
+   {
+    "fam": "bv3",
+    "kind": 23,
+    "pool_id": "0x412d928c31b82b78ccb8b04aa8bfcdadb9236fc6",
+    "tokens": [
+     "0xd09acb80c1e8f2291862c4978a008791c9167003",
+     "0xe98fc055c99decd8da0c111b090885d5d15c774e"
+    ],
+    "hooks": "0x0000000000000000000000000000000000000000",
+    "bv3_hook": "0x7c1b7a97bfacd39975de53e989a16c7bc4c78275",
+    "bv3_hook_kind": "surge",
+    "manager": "0xbA1333333333a1BA1108E8412f11850A5C319bA9",
+    "pool_manager": "0xbA1333333333a1BA1108E8412f11850A5C319bA9",
+    "data": "0x000000000000000000000000412d928c31b82b78ccb8b04aa8bfcdadb9236fc6",
+    "step_pool": "0xbA1333333333a1BA1108E8412f11850A5C319bA9",
+    "src": "getPools() фабрики 0x201efd508c8dfe9de1a13c2452863a78cb2a86cc",
+    "token_in": "0xd09acb80c1e8f2291862c4978a008791c9167003",
+    "token_out": "0xe98fc055c99decd8da0c111b090885d5d15c774e",
+    "amount_in": "10000000000000000"
+   }
+  ],
+  "1": [
+   {
+    "fam": "v3",
+    "kind": 1,
+    "pool_id": "0xf0213edd76abf62979434bf4ec5b236e35801565",
+    "tokens": [
+     "0x77643d2afc2496aab18e2c6a38e32c9cb1beb497",
+     "0xaf88d065e77c8cc2239327c5edb3a432268e5831"
+    ],
+    "hooks": "0x0000000000000000000000000000000000000000",
+    "manager": "0xf0213edd76abf62979434bf4ec5b236e35801565",
+    "pool_manager": null,
+    "data": "0x",
+    "step_pool": "0xf0213edd76abf62979434bf4ec5b236e35801565",
+    "fee": 10000,
+    "token_in": "0x77643d2afc2496aab18e2c6a38e32c9cb1beb497",
+    "token_out": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+    "amount_in": "100000000000000000000"
+   },
+   {
+    "fam": "v3",
+    "kind": 1,
+    "pool_id": "0xbce73c2e5a623054b0e8e2428e956f4b9d0412a5",
+    "tokens": [
+     "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+     "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+    ],
+    "hooks": "0x0000000000000000000000000000000000000000",
+    "manager": "0xbce73c2e5a623054b0e8e2428e956f4b9d0412a5",
+    "pool_manager": null,
+    "data": "0x",
+    "step_pool": "0xbce73c2e5a623054b0e8e2428e956f4b9d0412a5",
+    "fee": 500,
+    "token_in": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+    "token_out": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+    "amount_in": "1000000000"
+   },
+   {
+    "fam": "v3",
+    "kind": 1,
+    "pool_id": "0x9957ab69651efe39b17c778e1435258f6a2cd314",
+    "tokens": [
+     "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+     "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+    ],
+    "hooks": "0x0000000000000000000000000000000000000000",
+    "manager": "0x9957ab69651efe39b17c778e1435258f6a2cd314",
+    "pool_manager": null,
+    "data": "0x",
+    "step_pool": "0x9957ab69651efe39b17c778e1435258f6a2cd314",
+    "fee": 3000,
+    "token_in": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+    "token_out": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+    "amount_in": "10000000"
+   }
+  ],
+  "0": [
+   {
+    "fam": "v2",
+    "kind": 0,
+    "pool_id": "0xdeae1ff5282d83aadd42f85c57f6e69a037bf7cd",
+    "tokens": [
+     "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+     "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+    ],
+    "hooks": "0x0000000000000000000000000000000000000000",
+    "manager": "0xdeae1ff5282d83aadd42f85c57f6e69a037bf7cd",
+    "pool_manager": null,
+    "data": "0x0000000000000000000000000000000000000000000000000000000000000bb8",
+    "step_pool": "0xdeae1ff5282d83aadd42f85c57f6e69a037bf7cd",
+    "token_in": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+    "token_out": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+    "amount_in": "10000000"
+   }
+  ]
+ },
+ "skipped": [
+  {
+   "kind": 23,
+   "pool_id": "0x3e2c4c7bf211bdc432f7972e162953e8f6f4b988",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x55cc3c7680e20b59064ad1f0f4faea42a4349659",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc04a3646a5065ef15fb7591c5ccd7e8e95a52708",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x8abe47d701fc0e5270afc649133b53f8b13b8dd6",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x52ea69adeb4e544ddc0671686c9629890df1ee0f",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x81e97d8fbf01d6ddfc464525a8afeb15531bcc13",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xdbf7354f90720bca36da58ae237d260463131f45",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xb0519e04feca07f5efe3c281c7f6461b67a8cde3",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xed27918e92ee0b3dffb96a2cf47867c3a32014f1",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc72a124b81ef2d00704a5936dd46528f75bfbc0d",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xd23c1d2cda401884812329371dd494cc082cd0f3",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xf90e999df23b3a5fb7a5e7c8cca987a8d408b8e5",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xa57b34a43a010ce1da679b2c126912d58f2248b0",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x7807f00e967cffb11d21f580d8279649a3cae942",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x8356f561351878ebc93090391a3870059447f64a",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xffe1ba3811010cc8fb94dd0d55d40973c507467b",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x0704033ceb67320b175f8edcc2c5d8fd9d7f78dc",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x7c0f16bb2899e791756b4a2c78203915c90123c0",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xfbac411aec33167916641251d9c179ed3135dab9",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x5f49d77a69027642fd76a4d7aa7f626855fae26f",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x84efc4f8e9f15c29674e87b48a0b560bb1b67c26",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4b34282cd01716e5ba9f4c365b5bdd15338d3d9b",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x43f59de77bbac03d7056d4d41bd6f81ee5e211be",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xbe095e9ce6833aeeac7e0360fc7cb3884a5d0e75",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x89648927bb514335427e24ba2e039d056f50340d",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xf7b87c4dd011a9e6f628d74207ff491622d41cf7",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x9f52ef16f2cd76b727460c86eb81a235165161c1",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4762ef23288ffe5f7b1953abd2a51760647e3644",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x47c1b08a81d75e126bdcf58778172029f861dd5e",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xd0737d320360d1817f65ebe2176684009430d1a7",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xeac2102314601e5822392d94477ca37bf6523a19",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x7481915264ba2601d222404a9960156d7b550cd1",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x7a82d80d2f9068d975ef19b1c87b4967fc460ff5",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x279cd590bc78eabf3609ffd37a7aa8c319d2721e",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xe48791c19fbbe7b30c7aa824780ffc8a664a0ce8",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x725ba395ebd62c7d72289229096c8e77c78fb7c9",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x55675404633ed495084e00ac534fde740ba30636",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x0434b49d69c028f8f2b5897f7d6b269f62fee52b",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x519e56cdf36d69026dcdbd401808d56f7f0ce6d0",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xb4a924255af72c1764a9e659b0ebdd5ffba717a1",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x66539bb1ce2dc40054eefae023bafbe36f2c933a",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x875e1ae9086e8e49cb23fa2134a4f53cae86c854",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xafb0ffb95a04e8d7f039c8451889cdf66d52d24f",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x8665d693ae7d614c4b7fbdb3a6b85fad7d30beaf",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xce874371e312cd8ed198f712259a4076108a7e70",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xf2a32b2a9c158d1442cbf70065a1ae571d60ebb2",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xce3af944948bb624297837b7a21fef883fbb75e1",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xbf8b3c7f69e19340888beb2d5cfd51b39d2bf057",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x1ebb45e099d369dd0e49612756d1d0f4dd38bcc8",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xecb3a2622cc80629134b893f6e6ade4ebd0aeb7c",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x7e7504865577f6c898c2829899ea80b6ddc57efa",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4d2d15c7dd4b4f9c5b6c6b275f0fad9cdd3531e3",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xe1b25f629c652e43e81b7b07f3afe6adbab362bb",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x903dc28ef579205e9380e9b7df803030868747ca",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x9555ac353e250c8830714966c8b6bd8913539240",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x64eae44d38a2275196335d787000cdd63d427f83",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x3e43b881f9f098a14705eeb19993c12ec6f8bc58",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x3ee080b55fccff7966437566affc8201ea390c39",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x81c0a39bc627524d399a14bad7cad3bd5cba325e",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x5c177fcddc8a59745149fc9f615b6c1524c9a37e",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xa18512fcb4e491b0f26fbc7cce4cd0a46f62cd72",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xe314b1749fea005cc4b1633f0b5fa40bad7f3963",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xf274f9100cda22995703299b0ecadd845befc4b5",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x8f64aab2dee930f6acd8e6b0ca643a462e95156b",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xb9777f3d81a8b6194f5899175dc8dcb636e12c3c",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4b17f664f1523894a63733cd9a48ec419de8497d",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xbb8ebed3f831eaf17311fc08e9fe4aa52fa980b2",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x455548808f1e7e5dc9df52554725cb04f2311f5c",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xd01ef93952e8d88a676c5b702af041aabeefa21c",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x8817f0945df0075388ecfb6d8a95fb8fcf863ed0",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xb2771c669ffe1f4fc64d1dfc98fd9492a745ede4",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x509edbed32a28a846486366b86e6ca41beb8825f",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x7b42fe86ca2286b713aec903e2d7007c94585678",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xf10cda6b64a8b959f04c1e9903684e995f3490c3",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xee8b2d9182f2a2bfb1c7fc62d372b94e61278e1f",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xb407e25f958873bff5ba82ae2fe148733f1abce3",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x36686a12f3e0f03cde1734ab5c9360fe22a03453",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xf4acc91eba9df3e159c28fbeebbc2e6915a66819",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x8e8de80954422aa2a4b8e0b268aadcd72ae56574",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xb5d99a46684668b4efcc216b9bf25f13a9d707cf",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2c6c34a046ae1bfb5543ffd32745cc5e2ac7fb34",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xaccd4139d3d793901f694fe4312c0211e484a0be",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x98bcff7db14828520edb7f18ddd8de013bc82ded",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xa525b0a4b1aa06b2a7574f8f3fa2297623ea4ba5",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x765dbbee9ce5d58ba0b1820eccc8f7dedd8111b1",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4e4c54535c0b9bf697fb3bdc119c8bc95fa03ff8",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xd305fb29554c42edb9f7d1e7cda1dd4f6e01a5b1",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x1118ab614d315109b4522fb78140c78ad27cdd85",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xf3470e581688ae3104084cd5f85f3d67602439c5",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x22d879bb27dac39a7d6938a339398d75e242eb76",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x681fae0ca3ae40cd3e3b5f17860be960511a67e2",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x78a5ed47e47d3998c219d7bfc176e9837f7bc319",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xf35a9b484cf2c64d5a19048f9324f8bd3252748d",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x56da53ad0f231ba47a723af5bae7a2b9f82db9a9",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x74ca6e6367e57de11d246175a4cca5f5b392a4de",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x5a84327569bfe2dc71a33e714e6e37a968a51b0d",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x77aaabc8aef0a7ce8ff0cdb0fb6e29f33851a2fa",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x863c9fbbd2456668132e4317ae974e5813886b50",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc7ba6d1e36ccb60dfd62773e49d80aa0f80e27aa",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x3bfbc7d7ef9bca12ba05edf5b3a25be73f203bdb",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x3f0ee252df21e324c2ed7ef267562e3651fa8785",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x38ba94f6a4918ae842b102f11c23295c332b2820",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x7cdea3b47ed4966548fa6583ae749575f08b8c58",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4395bd9c77f5c04589aea261dffe44b75cf73e7e",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xed58e49102da22a1cb38f750be2eb9c98c07ea2b",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xd3197cf33d65af26bd701ee3a9f5f1c544eae6ac",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc0ef13a538e180151eb783a9e44fe0ae53d1bb08",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x492069d63b1b49cc01a080f77bad8177cd712d71",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x02594ffe2961a875bbd61e6a58fd3c6eeeb6b407",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2b566ba1743f2f3e97ef2093f400d22f388a49a2",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x7abe8caa137cdb2490a9fa9f8be70cfbb0ff8652",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xefdea188ba61e6f5ba1b7f6c2515f7ca403bdc52",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x9c5f17d96ca66748b459788148b7357220f2d100",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x187af649a92b69295c7345bea0b6dda5d22797f3",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x3e862ddd978fef9dc63318c490dd2ab3b7bb76e3",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc072880e1bc0bcddc99db882c7f3e7a839281cf4",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc8b43aa1c60c4cae0acbf3db9c79e407e09b13da",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xea45a845a7866f42a0ff2bd00d178bbdef119dcd",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xa1a9add7a554bcdce652cfa20cda8991d10183f3",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4f0b631770fcc2d0449aa500fb270d651d31f13c",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x85a43ad72fa39b1e0908d103df87fa0f2db95767",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2a6cc7055496738c6f42bf1e1ecb597f0b26d954",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x8c8691b7febf018bee5948acb6dcc7ff94a9bf6b",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xd8a2d6d5aca4434350a4f4d6173c397f81d7db94",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x48b550830080698fd990b6513997d0ab035b227b",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x84e489c61f85b81dc458d3b9042148cb92fe398b",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2380216b07a84a4e302c39987e8da14d6f23a0c7",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x457a1e1e1117eeafa2fdc213e09ce019eae8a277",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xa5474c47631210ec48fbd9b1c5a257bbb8c53014",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x76b842cbf9161896f044591716956641ecae5df0",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xb8ad5c928aee712c430e70fc18efc276a80657e8",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x1c542e324fd493645ede82af4b88da65b1d034ba",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xa0d9b4e8d6470e965977571661134ce8c0d9eb73",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xdb388e284d58f9daa084490e45f15e7320be8775",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4e4f68bddbd71cf42426196475f3c9a66c0a9f63",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x1a231da9b193869d43df940a9b5d8e4d3f96d92a",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x61069d4a795cd7b4be49400d2d0c55fe0602556c",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x920fb21a334e9b8c6a0ba28427d5501b19ac5608",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xb6937e531dcc95c2d8be8e9e6e44ea3a475b36ca",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xa978cc348a0b5de8bd564a1d8fe437787fd12664",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xce02c48ed2f8c38eed0640ecddf7791cadb27a5f",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x04c1489352dbaa505388d2a83f37d3d15a407d55",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x8ccc2c016a741ffa0e1222e4345efa729dafbad6",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x367a5dbe9d5dbf4db70c0cc204a573a1303ff5a5",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xd84da83f1973bbeb5fbd933f0f7488b0f737eebd",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2ec03a65ea1f9e2efd0cad50bd36bd73f5bdc068",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x161c2af3947a58c8d68df9dc0e05580eac6887a7",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc8ed7470a68c4f4bcc5db0b0dbb4507938679fca",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xdb3b0e8968bada17f4532672bca0a7f6d544eb1f",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x975facaddba3b92326cc9bcba01463051b41afac",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xbc8310ee69ed711c814dc5ffab503936dd9b6884",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xb5c9b75ad24cb3356d7c6df3807e77b496ac0d2e",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2eae513e0402b89ecdc9031f95c8da3382a45bbf",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xa04e63d67052e5bc71a9dfeedf009fb500e83243",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xf10aa21bf45b33bf80f9a4df400a8feb2055b40e",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x0536de3e5e69829525ccfbeebe454e34d7539a03",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2774a7eef9970fcfb0c0910ed4cb414071cd9623",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xcfacd416cb791d34bd68e435e0e1d6fc30e9f37a",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xa663114523045b0c5e109266e32bde8b9df57fd0",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x3234f950066788ef66998b8a5f942b4f6cea7e4b",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xa3f16e15fe3c2c187387b7428d5aeb9873a96cfb",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x30fff09f2766786e3841ab9465d00eab72a0ef2f",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x1a36195044abbad8807ceea78ec645c0c5d09593",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x61aa08aebaa140044c93b2e5324146bf98b4d76c",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xcb2840553945dbc776d98dabc141f9b2ccec3c30",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xfa0e477cb1a57664e51526f4dc7da5899a7c723e",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xbccea261d7501aab8d35c7ab977c085e2e06d5fe",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xfc94926e08cdf756adcf77347e3271730b0fa421",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xb1b8b406eeebbb636fdbb20e6732c117d828363c",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x1c00eeed6d206c1b251da99bdd63187704bc89a9",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2f6a2cc187bea92eeb7d3e14618e7564ed370851",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x7704840075c526c631e4922a88cb240828951ede",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2d2201c4a0aec6f02103deedc81eaa5bdea92f12",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4a2a9ca7b9096755aef69828aef82e3378d79b19",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x10f9e54aeea2fefa124238087dcfd919ba32f14d",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2ece6781bace5e37386adef7a3d45d0bb05f8fce",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x06c30bf83eaebdaeb10d82a1d04eb1a4b900e6e1",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x19b001e6bc2d89154c18e2216eec5c8c6047b6d8",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x7f98f42f9550f92dee91344d6b5ab11a9fec2b4e",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc2b0d1a1b4cdda10185859b5a5c543024c2df869",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4f073d894d8d3f43810ff1662d1792d9e32fe2ec",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2e067cbc590fc871ac52ce44d38d0e9157e60be0",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xff4365fdb4b77b4d193f9be42544c433d8223e63",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x710a726bce2ab4305638f788c17445e33564ba45",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2cf4b1ac5a5b9ab9389906eeef53016bfd2eb39d",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xee65ccbf201d673b8c44ced783b0d3d8c5e1b04f",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x36bb2968d80abaab6c67845ad00ebcb3a293a3de",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x8272c3d9228290b8b33080c41feacb943e926334",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x687e127d3772273cc7a79f02a7c29901c3937354",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xb00e346e535c388bb216bd5816f2daf455418c35",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x189e461d355ddf1cbd7e169742bb3d1894eb1a7e",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xba4fdd777a3b6adfd9b54582d35a2a95ea262b16",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x44ee740a0f80d904df15db2384e0be57985f209a",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x6c396cfcefc58194ce7ec5fea0e24e3c10d06ec7",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xde517b3ac5df6632e741e9357490b998ad6f1fa9",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xee2a7c6ff349657a8fe8d1dd447a353ee762f987",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xd2f049ebfab833db3d9249cf3555302efdaa65f0",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x9c92f1fe777a0ec04e1e9954af4840c1778dbbb3",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xabc0343b667b564777125916a8f7770aa96c3eab",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x70cceb572b14c44ae748c4f593b2b7fa8297e242",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x000005e94400f6e26ff86f56cfb7095d90366fdf",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x00000bffebcf55fb3b7f00c143ec8975d59d9ae4",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x00000bcc73f6ff498044efce4493594f52450dbf",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xdf8008bfe80f48050ef58e8ae2c7bcb16c63aada",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4fd5736921f6e28a81ced81bd00d83729340d229",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc16088dffbbdf9c590099bef80b7ec6293d62a84",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x5bc1a09d6695de98f1aa9c87c3bd7a483fa6cef2",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xeceed6966b4e569e07ce66d3fb9e04c6cd4efa76",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x612a03f49a94248695b8e3810e46db61b9a3a79f",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x07dfcc8bb29a65cfa4e314905f6e7ed0171cc14d",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xaed44688e35066ea82d417eaee07c21f2d59461d",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x05c22f7663634ff50805741fc1d3e1127fa9e1da",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xefc48777995d125147db01b340aad3986efb6ec0",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xcc3eb26ca1f41397e6457274ff46b2d4b84fc4b6",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xf87acdaff1b21db4b4906aa74816b0aaa8fdfdc0",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x7c60989d5e663836cf688f2bacf12a1208ae11b7",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x483bc7fe92fc392305dd97d4d3363e0e0a7f144d",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc11d4777d0bcc257bba293b90522f5d6bd875228",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x456a831ea331cc6d02a3bcd618d97dbce56edc30",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x5342f9fde83848e9f80ae8293450ab3fa28c615b",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x3ce00c10cc2f0f3a441e8eba87324ba1a845f008",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x400b84e366f6726d9afacb0207e2f69d4619b0e0",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xddddb66d4f44d4d1a8e5f6e927090fa9e7955139",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xfeeca513f535902609e5c5a3473cb68f97a82622",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x0c89cd3835e7e02e8858eaa9b6ed63c26caa1a84",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x17b90e87aa1abc9e7eed3b7a97efe64b40c109ee",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4b49404c0d675709e3ea5e415bcd05e78a16cc4d",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x28c08717b1accf831a7ce1b7ba8439b622e397a3",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x94409a5b6b7de9210d26c57c4f22140e1720d256",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xa8b7683936dff9e2f35404e61a875a76676a07b6",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x8f8bf1abf7a8251dc39e8feb906e3d3330b967b8",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xe07de33d1bac6505b0e4dd0b62fcd42fede69b15",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x7f7d7be271715c2146305adc10e8596a3815e3da",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x825aa0fbcd173621b6d2da0c6d679eccd8cca1a5",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4093d5bf6735161871aeab1248f545211f7de899",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x733cbf8dc76db5cc0532d1b81a3eb965ea9d4d77",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4037990a5a5e994a13eed5c35417405702ef3ee4",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x6af2831d4f91a97953d1435434033c0f0b87f1c8",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xd2bcc85ae5f9f039fe950f27fa9be9249025720b",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x8031a6f49e0610d8a71cdc8bb3d3266c1355e7e3",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x39ce64fe15a79946b25f9c23f7856c6ad8f887bb",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x6a98ff71d17ae69216eac7441a17351b4a304179",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x388b8397970f7a2c77c6215043fa61531acf815a",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x9ceaa2325610b101ba7f3e9052959980475c055c",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x21f132ade35684b230af974b80b5bfd2678ebd80",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xcfc1f02fe37933a65d0592f37058c63ee2841c3f",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xe8788e22e04d82e0a2b0dae6dfa80b9627060597",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x99734f9a5db045835a221adcd7597bf0a84fdcf7",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x61b59da91f8288eb24dcd767933005e86bea0836",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x32f5483f15b8d28ae01aa98a58fb984badcd46b2",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x1a91b33ee46eebce058ad3d5eb3767ca37ce9795",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xfbb416b891beac9971c51b5b3aff08e44f6e39be",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x28f5c82360c2ea3f64a36b67d2c08b00efefdb6c",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x325107b2232da501ed175c0d743912f92b758ef7",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x0d2ba126e63307dbf7e3c7c57bad752576184bac",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xa9fb6a51e72f32725ea016805d979e5ce22305df",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x9102af608df852ad3dee6b36a2e48f4da4e35029",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x3c842f18c8385f06114ac9a71a35453a9262a0a4",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xdafee0a40df0a1c87c502b97e3aed431382bf439",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc1fe8227faef04af3781af5a471c9ffca2293a68",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x9f777790ad924a06e2a6b3b3e6077cedb32306e4",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xf7202c01d02d02272517739c24de410f8a58ea67",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xce4a3f90658d2b955f5422b2d79af0e69c8a1f2e",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x35da0cfa657f6facc926ef5e98e9ce396673daaa",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x05c514bac3e961026f6e91a9210775ff1304e34e",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4c8e7f4a7b8bb2cf97acaf79bc3b0fbb6086c4ee",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xec9b92d9461909506ae56f221e0f3f2ca9c01f1c",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xb493ecaec7d7e2a9953c109f61483a664f771a40",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xb27ffb59f22cd4a849df1ac396d5cae4b37030dd",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x36a529687aa9fd3f7c5660a79b5f8505c766bd44",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xdfa00c1bfac109243007d1d7058fefd9ac8c1d0c",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2544aa7563a89bf871f54e0b72fdb1a4e961bfdd",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x48340491c8fbbc3005f63fb75c67c52ef3c11bee",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x357c7beb068a8dcca85a1614a32ca425c3177b1b",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xbbd8c87453dc86961670ba53b369b77d643a7308",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xd52dc6dfdf6bc23137bb3d4c93586cce7b7a7ccf",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xe1a8358ab24693da85229d46b34bf63976509462",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x293d5bea63c868b9255e26f821c05bc2eec31c33",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x63523adb779da6711db4c1f35f60fba5c0d6b0ca",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x5fb2f7dbca29502f421d5900fca81aebfb325713",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xe31155115717d0a2b412bcb3ffedbad115141e58",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x6bf9e829e46707fff999d9701f97d90ccea2d2e7",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc5c4236aec6b1e295bc84c3bb94ef0acf0d035a3",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x50631759e4ed0e35a38d57cd8350faab0581b525",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x1e533d02eef801feb17a995fbff8518a6a68a0c0",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xa9ac0ad9274ab1a573530c46ebddaf53c80903d9",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x0ca4ca64540d6d516b81402f6773f5d1a420fdfb",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xd1d97a4b95b604fb668a9748cd3a9fd1378f1674",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x45e2f409d2dcdd14e8b5473f877ca455710860d4",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xd074ea7f84e88a914fa2d657d0d630671b3edd72",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x71d5a0549ba0ba228192904042aa2b8929414ff8",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x9b816905c065839661e0977e7933a7cf5c8a1cda",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2fda9b544f62d1164742a4feea8700e6c58b08b1",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xffe29fd2678bfb7244c7c10b19082d945f4138fc",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xea977f7e7b425adfda7e5f7040d8389105bc5e0f",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xe232391f45904474b27e50d47d93fb75c13db5db",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x3f605f7efc487b6e9846765ebd8dd50e9087feb3",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x3ea69172d25efae4caf403448df4d7cac63667cb",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x59011e07bbcf95fad46154f8d83963dfe4242ad6",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x140d3b30157df6c8178969ac03c61d5325cb09d1",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xba63cb7cfd7752fcdf1a03bb5740f3609dcd2845",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x6af101595145ce2143bb6c52bfab213cb34acc18",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x8b6326d90a4ff0b762d7da5e93150150cd699aa1",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x11e3e091ec719625e3bb24ad2e79559e9058e81c",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x850d95d354b3af9457e59094e4123549a67bbf1f",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xd10e04b6e03f4e30f4b6b5b74bf8f8288897090d",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x0907d665fbab3c7101960677fa8af9c979658722",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x3a3ed84c4e5e2f91969e7443d5abb560b08ee6d8",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x698207ade1a8275a74d2dce55142eb34547f24fb",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2114298e20e9298147d024c2494acd0466b0b3d3",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x415c98252383dd0da23f43d1262ab988f8bdf9b8",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xeb73bd9fab9c163d6b18dcc6446600b2c05d1480",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x5ab5ea0f1243be31b36186acc76c6f3768036d49",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x38d9a262027030311dd2092e84cc8f1363112726",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x1e44aa42d3822629231fbedcfdb42025dbe37354",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x57f8bee6619200389949b6f7eae964b0986bfd25",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x795d2deaa40b1637a604c6eddd7c7bb20e00b568",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x6a232631fb1fb713cf36a4573364b0778846e4e8",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xe167af56afa07b52625de96f22926a76fb00aa25",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xce8fa6e3ec83ff8f20a5d40cb66d198cd109d791",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xd8249437a6b03895c50b5ac31e41b5984a3f84ce",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x9b5bdfad5e4825a862f69d2e88f565edcfe93c85",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xbcc8846acf8b16e81719e6db0d99b46fe92feebd",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x21a9b8c9e43af89b9866aa4560312f618f96dc16",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x31cdac560f94e6ef4c43345588abfae3eaf0e798",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x8ad9df1b4d506fa809ab1e88dd31cc580171ec13",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4e0c950a6eb76c41d76067a9a145144de4f69f0a",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x56753142400b2c49c451553b19299b011b78572b",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4cb5f8eb02a02f92176888bfb7dd8b5383d29d8f",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x58b64a219efb2a3da12ca72cc0cd9b1a757678f7",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xf6aed41bed07ec23d5fd749a5bb7634be3edc30c",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x6bb7ac41069a4126c2f6f62acd0fa8dfd75d16b5",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4e61f9ba994bc64ec5394c7c566b7027faca0b83",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x36fde1fb476c61ffca45f8971503bac6469707bd",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x280374e606dc7c5c4b5e4ad81179da6267a6e84f",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xdc85b3743bd8882d5babb4594fb16f64a6f47f53",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc8552b69f90cf55ca5ac8764714b43e16e3bc903",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x3a9380fce685b12389d15be6a03de3dccfd82395",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x7a7698b859c1b7ad2f4034bbdb9dd0b60a96ba90",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2cb4e9269ead7290218165c451718a3d38c0cf67",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x599f411b095bd08eb879d3e28e17809e4b768662",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xeb8bfc4b6867d10bc7344d673bba5447f96a0c54",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x5a0ce2b8a23155f2f2660a68d29c1f26c3db58aa",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x1e3f917b6ed2a9a99d2eae44ac00c5d3e1ac2d73",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xf649a5b69beeb3d44f33ab5de37a5fe272decc1c",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xd0db3c0dfe648828220291e3f9499415ccee86ac",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x500c655a136ec6066480eaa9ea1141fbffa67826",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc8dc8ff6f31a4fbcb29336585f1043e992f19ee3",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x55a589729e5753ed7c2e4346117f3d08f0ebcfad",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x608da2d0412b4b7420afda86ee50964f996c99ed",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x15ae002d8d021e2685c04a937d4b0fda169165a6",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x6de357ebddb4e2717069e1e5c1c544a766f945df",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x52ba6e6b21434f0a6e4a8027d20f85592edfc1b1",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xca3372c28438d0905c96a01d834f5c14a34ee295",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xd42bc5f7586ff7d596f1c78a774253936a5355cc",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x51ea9a8ee84479929c29d2d9c46e289b4f9b2faa",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xe509dbdd1b094ac4ea3530e381e490d201fc2ab0",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x6d89ef4da9bd77e94ade58b195342ec7a41bd7ef",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x12e37ff8163849fe60d358f410da9c65bc1ef04a",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x6fdbd272918e8ab796d0599585612b7e901ecaf3",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x834af51a18f21e2402ae2920665c876f41a96e2f",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc96d9351a66c565d89831141cd602af07c6ba945",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x92885a1dfa5754055786efe0ccf3cf62c416eb70",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xf39f82ec61944e7067c18e1622b498b0c20233b3",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xe56a18193bae6a61709078374127b2812f2365f2",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x8c5131f52c93564707aa73acc1162fc722385f08",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x133702254ed05514192165d41807579596e185b2",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xf78556b9ccce5a6eb9476a4d086ea15f3790660a",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x4dd0b9aac8698709517c36ca177874cd4b749b4a",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x6adda8a09dac8336abf13e70ee8bba1e55c3015f",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x5b42fb244193eb3c288684131df79a48e68a2876",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x185399ae5c4708f163509e2a6beb514ce1622d00",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xf14663de3f82228a504d81c0e0b475e4037b4d1c",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x34952507cbe8a857911d99ebe56b57af9020be0d",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x58774a316bc8efa2e25bc405953ca69d226f06d9",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x0523194dde40e0fa527a56ac8a0c3fc6cffd5f7f",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x9def1d1d09a7b095ed9b87cdbf7fe9b6bf7bd041",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xeb9d806e849544d4def66c2bc560154f34e98108",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2d4f0a021d2678a90b95c462418a521d87ada1ae",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x858f3da33f2166367e4b75f66756e441cf711954",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x430db591ba4a548f8c76e081a792d7035bdd7060",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2fdd507a38c4c27f3eb9962bce24cfa232ee3586",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x73d4c3a07a8dfae9b4f5b0f8017ac200c4f13fd8",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc488ecfaec4801b5267b543b35ac780c0e65983d",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2fcd6f4004514eaae411211b8d88dad4234a9631",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x8ebd44253cb35e7fbce30f8accea2e2466a1dfab",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x21c08f172aa7426544f1579672d1db03817acd36",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xa9f48e9cc477dcef0e00af6a58f24486bdc338e5",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x888fbd76a28f10d9b788f417dc12c93ec1142f0f",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xe554ca21bfb8afc1edf50cb27e595a23349ea193",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x93ffb9d43ea05d01324115c0cfd3ee67b6852254",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2cb03a8253e49a6c26fb79e92ebc584a661a8de1",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x02d592df591aa7a8884b4ec8de91e869c234ad1d",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xe8a024832133c2875b8d3cd478fe595b8287ff3b",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc6ac6abae59d58213800ace88d44526725d75f3a",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xdf96f0fb252fafbe76ec7606374ada8f85d32fae",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x92216fc1104d3d40ee8f3c7d69e5657a2a9622d9",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x892eb41c34baaac3093f721ee8addcfc2e394ca9",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x255c28ee8df728999174aa218115ac6067246e66",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc09a98b0138d8cfceff0e4ef672e8bd30ec6eda9",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xa0e5e7728e026bde02810d255a6b94a9aa47b5f9",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x2d39c2ddf0ae652071d0550718cc7aacaf647d39",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x616f69e3bc6163d7aabb942421e4b41c5e8fcd1a",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x875bed625e44d1cd03e512bebae085a440106529",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x1a99e8c1b4b645a39cc45b3435fa8921236e2819",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xd4e2affed8126edbbfbb481b1e33f61486ebf469",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc9a3f121bf01b8cdf6ba66026e191c8af941e758",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x28ef6a4e92ffdb1768a4849821d1d78acf6c32a4",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x677ffbf1220e7aa83b4c6f5c2723ed61cc0083e7",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc7e137630d8796ace49b59fa4c35a186a8e9eb37",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc7711bd407c3fa848b6b2e5476656a14f2555ad6",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x78c002874227cb33fbb8b3c32830db82363892e4",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x34e509fd83a2a9876df94a7146c4caf64d619e81",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xce7e459da935feca70918bb708f32fed7504a784",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x711f732fcc79fbc345a13ffae74650f3c4f876d2",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xa500a72243c39d47beb7f111b68c414be32c11fc",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xf656ecfc70b4586a1c11cb142eb47ec63808ce05",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xffde68dd77cd52938ff32b32829cdd1f6fa913b9",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x50bf83149c12ab99f2110caabf1004297c869f84",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xe73b19c80534730b957ac106a6e3f1ebaea3c089",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x34f1af3e24ccc1a03d36ba7f93636e07e7f3f49d",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xc68a7ec92560e7d7ba9bfe9db00a56be1deb0157",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x26a542aa78aa06d6126d551f0e85cb9173bd0477",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x5658ce330a9e93b0861f7e222edeb17c9f558acf",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xe482ef529b8f7ffc6eccdea7eaf29c717e9ed079",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x1d201e1e5cb9a6cb117374f20fb4c21404c68f2e",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xfe533ab8438d8ac992f2ffefb6e82d93390b0086",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x712ee515a631533ffda12e8e6f7372f7fc9b1657",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x9cf4125ce85463a13f297347bafc7199f124d37f",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x1f3f3aa9103e16506331804e620f851e25c78956",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x5ea58d57952b028c40bd200e5aff20fc4b590f51",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x350e557d07e2e04636665ebd5f27e49b3e02488c",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x89d9d76c1e5aa9a78364380bb17c4c7d385da83c",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x47f1d08e559739415c29d7b7432f5eb6da568b91",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x57a0d080ca0700746e64973b0982ba69ecac556f",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xfd5d1bfca130f8827f0056510c5a805a440d42d7",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x9d3e72c11ad7bf7132a141ff6f716491c6d01518",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x420e6883b999504f71fff7047642786457ad95ef",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x791fef0fe92a522dc82d0ea800708b035495147d",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x7022ff769cdbec9361c9086bcb6876585f62b823",
+   "why": "пул на паузе (Vault.isPoolPaused = true)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xb34243828e846fb7da8919a74802b2eafc90479c",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xfcc2e066e4019d1e06aadfe48b15f95345d8875b",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0x6e9758d6d5110bb97e0e15ba9fc2a8590c7c23bb",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 23,
+   "pool_id": "0xb8f5bbb2a979841e5e0b751028646dd1e07c12a1",
+   "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"
+  },
+  {
+   "kind": 24,
+   "pool_id": "0xba7c96e66f7808699f47c364e388272f95a8bfa8",
+   "why": "сумма не подобрана квотером: [{'amount': '1000000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '100000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '10000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '1000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '100000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '10000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '1000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '100000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '10000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '1000000000000', 'out': '0', 'err': None}]"
+  },
+  {
+   "kind": 24,
+   "pool_id": "0xc308a81cf3985baacc0a4496d937936339033407",
+   "why": "сумма не подобрана квотером: [{'amount': '1000000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '100000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '10000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '1000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '100000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '10000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '1000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '100000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '10000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '1000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}]"
+  },
+  {
+   "kind": 24,
+   "pool_id": "0x442153cb56ef3aee77b2eaacc042b2de311f30e0",
+   "why": "сумма не подобрана квотером: [{'amount': '1000000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '100000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '10000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '1000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '100000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '10000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '1000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '100000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '10000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '1000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}]"
+  },
+  {
+   "kind": 24,
+   "pool_id": "0x74b77fc12cff46fb775e1237e7780be384c26429",
+   "why": "сумма не подобрана квотером: [{'amount': '1000000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '100000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '10000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '1000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '100000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '10000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '1000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '100000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '10000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}, {'amount': '1000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted\", \"data\": \"0x10d64861\"}'}]"
+  },
+  {
+   "kind": 1,
+   "pool_id": "0x9a27ce248cd8a65d8a8c0f780418ae779b900ef1",
+   "why": "сумма не подобрана квотером: [{'amount': '1000000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted: Unexpected error\", \"data\": \"0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010556e6578706563746564206572726f7200000000000000000000000000000000\"}'}, {'amount': '100000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted: Unexpected error\", \"data\": \"0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010556e6578706563746564206572726f7200000000000000000000000000000000\"}'}, {'amount': '10000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted: Unexpected error\", \"data\": \"0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010556e6578706563746564206572726f7200000000000000000000000000000000\"}'}, {'amount': '1000000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted: Unexpected error\", \"data\": \"0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010556e6578706563746564206572726f7200000000000000000000000000000000\"}'}, {'amount': '100000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted: Unexpected error\", \"data\": \"0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010556e6578706563746564206572726f7200000000000000000000000000000000\"}'}, {'amount': '10000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted: Unexpected error\", \"data\": \"0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010556e6578706563746564206572726f7200000000000000000000000000000000\"}'}, {'amount': '1000000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted: Unexpected error\", \"data\": \"0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010556e6578706563746564206572726f7200000000000000000000000000000000\"}'}, {'amount': '100000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted: Unexpected error\", \"data\": \"0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010556e6578706563746564206572726f7200000000000000000000000000000000\"}'}, {'amount': '10000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted: Unexpected error\", \"data\": \"0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010556e6578706563746564206572726f7200000000000000000000000000000000\"}'}, {'amount': '1000000000000', 'out': None, 'err': '{\"code\": 3, \"message\": \"execution reverted: Unexpected error\", \"data\": \"0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010556e6578706563746564206572726f7200000000000000000000000000000000\"}'}]"
+  },
+  {
+   "kind": 0,
+   "pool_id": "0x9cd29ea944363485d84d2624168b7a21b4cc99b3",
+   "why": "сумма не подобрана квотером: [{'amount': '1000000000000000000000', 'out': '11439557852066464281', 'err': None}, {'amount': '100000000000000000000', 'out': '11439546512720079421', 'err': None}, {'amount': '10000000000000000000', 'out': '11439433120492619967', 'err': None}, {'amount': '1000000000000000000', 'out': '11438299321843338215', 'err': None}, {'amount': '100000000000000000', 'out': '11426973684294549116', 'err': None}, {'amount': '10000000000000000', 'out': '11314938763961030049', 'err': None}, {'amount': '1000000000000000', 'out': '10304629015537483739', 'err': None}, {'amount': '100000000000000', 'out': '5443834576849250365', 'err': None}, {'amount': '10000000000000', 'out': '952202433141086467', 'err': None}, {'amount': '1000000000000', 'out': '102931224602630491', 'err': None}]"
+  }
+ ],
+ "sim_errors": []
+}

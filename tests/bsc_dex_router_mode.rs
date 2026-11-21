@@ -38,8 +38,9 @@ fn zero() -> TokenTaxes {
 
 fn cake() -> Asset {
     Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(CAKE),
+        contract: Some(CAKE),
     }
 }
 
@@ -60,6 +61,7 @@ fn names<'a>(q: &'a Quoting) -> Names<'a> {
         usdt: (USDT, "USDT"),
         coin: (CAKE, "CAKE"),
         mids: &q.mids,
+        gas: "BNB",
     }
 }
 
@@ -249,6 +251,7 @@ fn edge(kind: &str, x: Address, y: Address) -> Edge {
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     };
     Edge { entry, a: x, b: y }
 }

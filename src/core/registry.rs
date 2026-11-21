@@ -33,6 +33,10 @@ pub enum Exclusion {
     /// Пара торгуется, но через API нельзя ни купить, ни продать (у BingX — apiStateBuy и apiStateSell = false):
     /// ордер через API не пройдёт.
     NoApiTrading,
+    /// Решение 254: биржа не примет на этой паре наш ордер (LIMIT с нужным timeInForce или типом из настройки) — по
+    /// справочнику пар биржи (SpotPairState::order_block); текст — причина от адаптера. Монета на этой бирже не
+    /// считается ни для покупки, ни для продажи.
+    OrderTypeNotAccepted(String),
     /// Не известен адрес USDT в BSC (ни одна биржа не сообщила его) — пулы искать не с чем.
     NoUsdtAddress,
     /// Пула с USDT для этого адреса контракта на DEX нет.
@@ -43,12 +47,21 @@ pub enum Exclusion {
     PoolsExcluded(Vec<String>),
     /// Пула с USDT нет, а промежуточные монеты (решение 52) не заданы как надо — причина.
     IntermediateNotConfigured(String),
+    /// Решение 211: у одного адреса на этой бирже несколько тикеров, и выбрать один нельзя (годны оба или ни один) —
+    /// перечень тикеров. Монета на этой бирже не торгуется.
+    TickerConflict(String),
+    /// Решение 211, ревью К1: на этой бирже под адресом обёртки — BEP20-токен (например WBNB), а на других биржах этот
+    /// адрес — нативная монета (BNB, решение 62). Разные активы: присутствие-токен не торгуется (registry_native.rs).
+    NativeVsToken(String),
 }
 
 /// Монета на одной площадке.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Presence {
     pub venue: VenueId,
+    /// Решение 211: тикер монеты НА ЭТОЙ площадке (у биржи — её тикер в справочнике сетей и паре; у DEX — показное
+    /// имя монеты). Им площадка зовётся в запросах (core/venue_ticker.rs); монета определяется адресом.
+    pub ticker: String,
     /// Название сети BSC у биржи (для вывода и депозита); у DEX — None.
     pub network: Option<String>,
     /// Можно продавать сюда (депозит открыт; у DEX — всегда).
@@ -68,7 +81,7 @@ pub struct Presence {
 }
 
 /// Монета справочника.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CoinEntry {
     pub asset: Asset,
     pub presence: Vec<Presence>,
@@ -78,6 +91,15 @@ pub struct CoinEntry {
     pub problem: Option<String>,
     /// Почему налоги ещё не проверены (блок NotChecked): причина ожидания от DEX (CoinCheck.wait). None — не ждёт.
     pub wait: Option<String>,
+    /// Почему нет направлений биржа ↔ биржа (решение 118, Я-3): налог перевода не измерен, а cex_cex.untaxed_ok не
+    /// «да» (заполняет rebuild_blacklist.rs). None — направления биржа ↔ биржа строятся.
+    pub cex_cex: Option<String>,
+    /// Решение 214: биржи монеты, у которых venue.cex_cex = «нет» — с другими биржами направлений нет (только с DEX).
+    /// Заполняет rebuild_blacklist.rs. Пусто — запретов нет.
+    pub cex_cex_off: Vec<VenueId>,
+    /// Решение 249: направления биржа → биржа (покупка, продажа), запрещённые списком venue.cex_cex_deny биржи покупки
+    /// (одностороннее правило: список у A запрещает только A → B). Заполняет rebuild_blacklist.rs. Пусто — запретов нет.
+    pub cex_cex_deny: Vec<(VenueId, VenueId)>,
 }
 
 impl CoinEntry {
@@ -91,7 +113,8 @@ impl CoinEntry {
     }
 
     /// Рабочие направления: на A можно купить и вывести, на B — принять и продать, монета не в чёрном списке. Оба направления
-    /// каждой пары считаются независимо (решение 5). Пусто — у монеты нет направлений.
+    /// каждой пары считаются независимо (решение 5). Биржа ↔ биржа — только если налог перевода измерен или разрешено
+    /// без него (поле cex_cex, решение 118). Пусто — у монеты нет направлений.
     pub fn directions(&self) -> Vec<Direction> {
         if self.block.is_some() || self.problem.is_some() {
             return vec![];
@@ -107,6 +130,25 @@ impl CoinEntry {
                 .iter()
                 .filter(|p| p.can_receive && p.can_sell && p.venue != a.venue)
             {
+                // Решение 118 (Я-3): обе стороны — биржи (у DEX нет данных сети биржи), налог перевода не измерен.
+                if a.info.is_some() && b.info.is_some() && self.cex_cex.is_some() {
+                    continue;
+                }
+                // Решение 214: биржа ↔ биржа запрещена у одной из сторон (venue.cex_cex = нет).
+                if a.info.is_some()
+                    && b.info.is_some()
+                    && (self.cex_cex_off.contains(&a.venue) || self.cex_cex_off.contains(&b.venue))
+                {
+                    continue;
+                }
+                // Решение 249: список «не взаимодействовать» биржи покупки — только направление A → B.
+                if self
+                    .cex_cex_deny
+                    .iter()
+                    .any(|(x, y)| x == &a.venue && y == &b.venue)
+                {
+                    continue;
+                }
                 out.push(Direction {
                     asset: self.asset.clone(),
                     buy_on: a.venue.clone(),

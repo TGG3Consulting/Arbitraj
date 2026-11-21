@@ -1,18 +1,20 @@
 //! Файл: venues/bsc_dex/pools/dex_rules.rs
 //! Что делает: правила по строке таблицы сопоставления DEX (решения 38, 58, 59): исполняет ли её пулы умный роутер
-//! (smart_ok), не изменился ли её вид на лету (still), список DEX для интерфейса (for_ui).
+//! (smart_ok), не изменился ли её вид на лету (still), список DEX для интерфейса (for_ui; решение 128 — с id из
+//! справочника пулов и настроек, pools/dex_ids.rs).
 //! Кто вызывает: quote/select.rs, quote/smart_*.rs, exec/universal.rs, mod.rs (через families.rs).
-//! От чего зависит: ctx.rs, families.rs (classify, all), gateway/contract (DexFamily).
+//! От чего зависит: ctx.rs, families.rs (classify, all), dex_ids.rs, gateway/contract (DexFamily).
 //! Настройки: dex.universal_router, dex.permit2, dex.universal_router_version [DEX]; smart.universal_router,
 //! smart.permit2 [bsc_dex]; через classify — dex.kind, dex.pool_enabled и адреса.
 
 use crate::gateway::contract::DexFamily;
 
 use super::super::ctx::Ctx;
-use super::families::{Family, all, classify};
+use super::families::{Family, Proto, all, classify};
 
 /// Исполняет ли пулы этой DEX умный роутер (решение 38): её dex.universal_router — это smart.universal_router, формат
-/// команд — pancakeswap_infinity и dex.permit2 = smart.permit2. Ошибок нет: не задано — нет.
+/// команд — pancakeswap_infinity (решение 450: или pancakeswap_v3 — Universal Router PancakeSwap v3, пулы V2/V3) и
+/// dex.permit2 = smart.permit2. Ошибок нет: не задано — нет.
 pub fn smart_ok(ctx: &Ctx, f: &Family) -> bool {
     let same = |a: &str, b: &str| match (ctx.dex_addr(a, f.id), ctx.addr(b)) {
         (Ok(x), Ok(y)) => x == y,
@@ -22,7 +24,16 @@ pub fn smart_ok(ctx: &Ctx, f: &Family) -> bool {
     f.tradable
         && same("dex.universal_router", "smart.universal_router")
         && same("dex.permit2", "smart.permit2")
-        && format.as_deref().is_ok_and(|v| v == "pancakeswap_infinity")
+        && format.as_deref().is_ok_and(|v| match v {
+            "pancakeswap_infinity" => true,
+            // Ревью 450 (п. 5): у Universal Router PancakeSwap v3 команды Infinity нет — пулы Infinity CL / Bin / Stable
+            // умным роутером с этим форматом не исполняются: отказ здесь (маршрут не строится), а не Internal при сборке.
+            "pancakeswap_v3" => !matches!(
+                f.proto,
+                Proto::InfinityCl | Proto::InfinityBin | Proto::InfinityStable
+            ),
+            _ => false,
+        })
 }
 
 /// Пул по-прежнему того вида, с которым он взят: DEX подключена и её вид в таблице не менялся (dex.kind и адреса
@@ -39,16 +50,20 @@ pub fn still(ctx: &Ctx, f: &'static Family) -> Result<(), String> {
     }
 }
 
-/// Список для контракта (dex_families): DEX с поддержанным видом из настроек. Ошибок нет.
+/// Список для контракта (dex_families): DEX с поддержанным видом из настроек; в названии — строка исполнителя
+/// (exec_kind::describe, решение 122 F). Решение 128: плюс DEX из справочника пулов и id с уже заданными настройками
+/// области «DEX» (вид None) — pools/dex_ids.rs. Ошибок нет.
 pub fn for_ui(ctx: &Ctx) -> Vec<DexFamily> {
-    all(ctx)
+    let known = all(ctx)
         .into_iter()
         .map(|f| DexFamily {
             dex: f.id.to_string(),
             family: f.id.to_string(),
-            kind: f.kind,
-            title: f.title.to_string(),
+            kind: Some(f.kind),
+            // Решение 122 F: как исполняются пулы этого вида (шаг контракта-исполнителя или его нет).
+            title: format!("{} — {}", f.title, super::exec_kind::describe(ctx, f)),
             docs: Vec::new(),
         })
-        .collect()
+        .collect();
+    super::dex_ids::merge(known, super::dex_ids::extra(ctx))
 }

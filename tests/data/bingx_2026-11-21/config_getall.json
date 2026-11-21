@@ -1,0 +1,2404 @@
+{
+ "code": 0,
+ "timestamp": 1795261756526,
+ "data": [
+  {
+   "coin": "USDT",
+   "name": "USDT",
+   "networkList": [
+    {
+     "name": "USDT",
+     "network": "ERC20",
+     "isDefault": true,
+     "minConfirm": 64,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "1",
+     "withdrawMax": "4999600",
+     "withdrawMin": "5",
+     "depositMin": "1",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+     "needTagOrMemo": "false",
+     "displayName": "USDT20"
+    },
+    {
+     "name": "USDT",
+     "network": "TRC20",
+     "isDefault": true,
+     "minConfirm": 2,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "1.5",
+     "withdrawMax": "4999600",
+     "withdrawMin": "1.5",
+     "depositMin": "1",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+     "needTagOrMemo": "false",
+     "displayName": "usdttrc20"
+    },
+    {
+     "name": "USDT",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.15",
+     "withdrawMax": "4999600",
+     "withdrawMin": "3",
+     "depositMin": "0.1",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x55d398326f99059ff775485246999027b3197955",
+     "needTagOrMemo": "false",
+     "displayName": "USDTBEP20"
+    },
+    {
+     "name": "USDT",
+     "network": "SOL",
+     "isDefault": true,
+     "minConfirm": 50,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "1",
+     "withdrawMax": "4999600",
+     "withdrawMin": "1.00000000000000000001",
+     "depositMin": "0.5",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+     "needTagOrMemo": "false",
+     "displayName": "USDTSOL"
+    },
+    {
+     "name": "USDT",
+     "network": "POLYGON",
+     "isDefault": true,
+     "minConfirm": 450,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.8",
+     "withdrawMax": "4999600",
+     "withdrawMin": "10",
+     "depositMin": "0.5",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
+     "needTagOrMemo": "false",
+     "displayName": "USDTPOLYGON"
+    },
+    {
+     "name": "USDT",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.5",
+     "withdrawMax": "4999600",
+     "withdrawMin": "0.5",
+     "depositMin": "1",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+     "needTagOrMemo": "false",
+     "displayName": "USDTARBITRUM"
+    },
+    {
+     "name": "USDT",
+     "network": "OPTIMISM",
+     "isDefault": true,
+     "minConfirm": 600,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "1",
+     "withdrawMax": "4999600",
+     "withdrawMin": "1.1",
+     "depositMin": "2",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58",
+     "needTagOrMemo": "false",
+     "displayName": "USDTOPTIMISM"
+    },
+    {
+     "name": "USDT",
+     "network": "TON",
+     "isDefault": true,
+     "minConfirm": 25,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.15",
+     "withdrawMax": "4999600",
+     "withdrawMin": "5",
+     "depositMin": "5",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs",
+     "needTagOrMemo": "false",
+     "displayName": "USDTTON"
+    },
+    {
+     "name": "USDT",
+     "network": "OPBNB",
+     "isDefault": true,
+     "minConfirm": 30,
+     "withdrawEnable": false,
+     "depositEnable": true,
+     "withdrawFee": "1.5",
+     "withdrawMax": "4999600",
+     "withdrawMin": "5",
+     "depositMin": "5",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x9e5aac1ba1a2e6aed6b32689dfcf62a509ca96f3",
+     "needTagOrMemo": "false",
+     "displayName": "USDTOPBNB"
+    },
+    {
+     "name": "USDT",
+     "network": "APT",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.01",
+     "withdrawMax": "4999600",
+     "withdrawMin": "5",
+     "depositMin": "1",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b",
+     "needTagOrMemo": "false",
+     "displayName": "USDTAPT"
+    },
+    {
+     "name": "USDT",
+     "network": "STABLECHAIN",
+     "isDefault": true,
+     "minConfirm": 30,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "1.5",
+     "withdrawMax": "4999600",
+     "withdrawMin": "5",
+     "depositMin": "1",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "",
+     "needTagOrMemo": "false",
+     "displayName": "USDTSTABLECHAIN"
+    }
+   ]
+  },
+  {
+   "coin": "ACE",
+   "name": "ACE",
+   "networkList": [
+    {
+     "name": "ACE",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.19",
+     "withdrawMax": "60019207.68307322",
+     "withdrawMin": "60.386474",
+     "depositMin": "11",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xc27a719105a987b4c34116223cae8bd8f4b5def4",
+     "needTagOrMemo": "false",
+     "displayName": "ACE"
+    }
+   ]
+  },
+  {
+   "coin": "ADA",
+   "name": "ADA",
+   "networkList": [
+    {
+     "name": "ADA",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.11",
+     "withdrawMax": "35609686.6096866",
+     "withdrawMin": "35.842294",
+     "depositMin": "6",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x3ee2200efb3400fabb9aacf31297cbdd1d435d47",
+     "needTagOrMemo": "false",
+     "displayName": "ADA"
+    },
+    {
+     "name": "ADA",
+     "network": "ADA",
+     "isDefault": true,
+     "minConfirm": 30,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.709",
+     "withdrawMax": "35609686.6096866",
+     "withdrawMin": "35.842294",
+     "depositMin": "2",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "",
+     "needTagOrMemo": "false",
+     "displayName": "ADAADA"
+    }
+   ]
+  },
+  {
+   "coin": "AGI",
+   "name": "AGI",
+   "networkList": [
+    {
+     "name": "AGI",
+     "network": "ERC20",
+     "isDefault": true,
+     "minConfirm": 64,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "362",
+     "withdrawMax": "1811449275.36231884",
+     "withdrawMin": "1811.594203",
+     "depositMin": "1773",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x7da2641000cbb407c329310c461b2cb9c70c3046",
+     "needTagOrMemo": "false",
+     "displayName": "AGI"
+    },
+    {
+     "name": "AGI",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "158.48",
+     "withdrawMax": "1811449275.36231884",
+     "withdrawMin": "1811.594203",
+     "depositMin": "355",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x818835503f55283cd51a4399f595e295a9338753",
+     "needTagOrMemo": "false",
+     "displayName": "AGIBEP20"
+    },
+    {
+     "name": "AGI",
+     "network": "SOL",
+     "isDefault": true,
+     "minConfirm": 50,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "362",
+     "withdrawMax": "1811449275.36231884",
+     "withdrawMin": "1811.594203",
+     "depositMin": "709",
+     "withdrawPrecision": 8,
+     "depositPrecision": 8,
+     "contractAddress": "8bUbe1ujsM1G3JEbBWVVCXa2widmuPdKUB2rGKMYFw7R",
+     "needTagOrMemo": "false",
+     "displayName": "AGISOL"
+    }
+   ]
+  },
+  {
+   "coin": "AEONBSC",
+   "name": "AEONBSC",
+   "networkList": [
+    {
+     "name": "AEONBSC",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "2.22",
+     "withdrawMax": "256389743.58974358",
+     "withdrawMin": "261.369577",
+     "depositMin": "41",
+     "withdrawPrecision": 8,
+     "depositPrecision": 8,
+     "contractAddress": "0x277add739c6e0477616948357af9e79fe1ec9b80",
+     "needTagOrMemo": "false",
+     "displayName": "AEON"
+    }
+   ]
+  },
+  {
+   "coin": "AEM",
+   "name": "AEM",
+   "networkList": [
+    {
+     "name": "AEM",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "13",
+     "withdrawMax": "117059236.71271365",
+     "withdrawMin": "117.068603",
+     "depositMin": "25",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xa0a906bc6a38c8249e0d89f57f72ad12606b952e",
+     "needTagOrMemo": "false",
+     "displayName": "AEM"
+    }
+   ]
+  },
+  {
+   "coin": "ANP",
+   "name": "ANP",
+   "networkList": [
+    {
+     "name": "ANP",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.9",
+     "withdrawMax": "8806764.13598731",
+     "withdrawMin": "8.803592",
+     "depositMin": "1.8",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x72c715b932aadebec77ef388b606e3592436065b",
+     "needTagOrMemo": "false",
+     "displayName": "ANP_V2BEP20"
+    }
+   ]
+  },
+  {
+   "coin": "ANTB",
+   "name": "ANTB",
+   "networkList": [
+    {
+     "name": "ANTB",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.016",
+     "withdrawMax": "56865.3321201",
+     "withdrawMin": "0.057287",
+     "depositMin": "0.05",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x38dd26788cf2d901e3abf04efe3007d459d0fc53",
+     "needTagOrMemo": "false",
+     "displayName": "ANTB"
+    }
+   ]
+  },
+  {
+   "coin": "USDC",
+   "name": "USDC",
+   "networkList": [
+    {
+     "name": "USDC",
+     "network": "ERC20",
+     "isDefault": true,
+     "minConfirm": 64,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "1",
+     "withdrawMax": "4992012.14154485",
+     "withdrawMin": "4.991963",
+     "depositMin": "2",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+     "needTagOrMemo": "false",
+     "displayName": "USDC"
+    },
+    {
+     "name": "USDC",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0",
+     "withdrawMax": "4992012.14154485",
+     "withdrawMin": "0.15",
+     "depositMin": "0.5",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+     "needTagOrMemo": "false",
+     "displayName": "USDCBEP20"
+    },
+    {
+     "name": "USDC",
+     "network": "SOL",
+     "isDefault": true,
+     "minConfirm": 50,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "1",
+     "withdrawMax": "4992012.14154485",
+     "withdrawMin": "1.00000000000000000001",
+     "depositMin": "0.9",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+     "needTagOrMemo": "false",
+     "displayName": "USDCSOL"
+    },
+    {
+     "name": "USDC",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.5",
+     "withdrawMax": "4992012.14154485",
+     "withdrawMin": "5.489574",
+     "depositMin": "1",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+     "needTagOrMemo": "false",
+     "displayName": "USDC.C"
+    },
+    {
+     "name": "USDC",
+     "network": "OPTIMISM",
+     "isDefault": true,
+     "minConfirm": 600,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.3",
+     "withdrawMax": "4992012.14154485",
+     "withdrawMin": "5.489574",
+     "depositMin": "1",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0x0b2c639c533813f4aa9d7837caf62653d097ff85",
+     "needTagOrMemo": "false",
+     "displayName": "USDC.COPTIMISM"
+    },
+    {
+     "name": "USDC",
+     "network": "POLYGON",
+     "isDefault": true,
+     "minConfirm": 450,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.5",
+     "withdrawMax": "4992012.14154485",
+     "withdrawMin": "5.489574",
+     "depositMin": "2",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
+     "needTagOrMemo": "false",
+     "displayName": "USDC.CPOLYGON"
+    },
+    {
+     "name": "USDC",
+     "network": "BASE",
+     "isDefault": true,
+     "minConfirm": 600,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.01",
+     "withdrawMax": "4992012.14154485",
+     "withdrawMin": "4.991963",
+     "depositMin": "1",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+     "needTagOrMemo": "false",
+     "displayName": "USDCBASE"
+    },
+    {
+     "name": "USDC",
+     "network": "AVAX-C",
+     "isDefault": true,
+     "minConfirm": 30,
+     "withdrawEnable": false,
+     "depositEnable": true,
+     "withdrawFee": "0.011",
+     "withdrawMax": "4992012.14154485",
+     "withdrawMin": "4.991963",
+     "depositMin": "5",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e",
+     "needTagOrMemo": "false",
+     "displayName": "USDCAVAX-C"
+    },
+    {
+     "name": "USDC",
+     "network": "APT",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.01",
+     "withdrawMax": "4992012.14154485",
+     "withdrawMin": "4.991963",
+     "depositMin": "1",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b",
+     "needTagOrMemo": "false",
+     "displayName": "USDCAPT"
+    },
+    {
+     "name": "USDC",
+     "network": "XDC",
+     "isDefault": true,
+     "minConfirm": 100,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0",
+     "withdrawMax": "4992012.14154485",
+     "withdrawMin": "4.995505",
+     "depositMin": "5",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0xfa2958cb79b0491cc627c1557f441ef849ca8eb1",
+     "needTagOrMemo": "false",
+     "displayName": "USDCXDC"
+    },
+    {
+     "name": "USDC",
+     "network": "SUI",
+     "isDefault": true,
+     "minConfirm": 50,
+     "withdrawEnable": false,
+     "depositEnable": true,
+     "withdrawFee": "0.01",
+     "withdrawMax": "4992012.14154485",
+     "withdrawMin": "4.992213",
+     "depositMin": "5",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",
+     "needTagOrMemo": "false",
+     "displayName": "USDCSUI"
+    },
+    {
+     "name": "USDC",
+     "network": "ARC",
+     "isDefault": true,
+     "minConfirm": 120,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "1.5",
+     "withdrawMax": "4992012.14154485",
+     "withdrawMin": "4.992213",
+     "depositMin": "2",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "",
+     "needTagOrMemo": "false",
+     "displayName": "USDC"
+    }
+   ]
+  },
+  {
+   "coin": "AAVE",
+   "name": "AAVE",
+   "networkList": [
+    {
+     "name": "AAVE",
+     "network": "ERC20",
+     "isDefault": true,
+     "minConfirm": 64,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.01",
+     "withdrawMax": "50363.65467915",
+     "withdrawMin": "0.051372",
+     "depositMin": "0.05",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9",
+     "needTagOrMemo": "false",
+     "displayName": "AAVE"
+    },
+    {
+     "name": "AAVE",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "0.00017",
+     "withdrawMax": "50363.65467915",
+     "withdrawMin": "0.051372",
+     "depositMin": "0.01",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xfb6115445bff7b52feb98650c87f44907e58f802",
+     "needTagOrMemo": "false",
+     "displayName": "AAVEBEP20"
+    }
+   ]
+  },
+  {
+   "coin": "GRT",
+   "name": "GRT",
+   "networkList": [
+    {
+     "name": "GRT",
+     "network": "ERC20",
+     "isDefault": true,
+     "minConfirm": 64,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "64",
+     "withdrawMax": "317838525.11125238",
+     "withdrawMin": "321.336761",
+     "depositMin": "259",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xc944e90c64b2c07662a292be6244bdf05cda44a7",
+     "needTagOrMemo": "false",
+     "displayName": "GRT"
+    },
+    {
+     "name": "GRT",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "3.32",
+     "withdrawMax": "317838525.11125238",
+     "withdrawMin": "321.336761",
+     "depositMin": "117",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x9623063377ad1b27544c965ccd7342f7ea7e88c7",
+     "needTagOrMemo": "false",
+     "displayName": "GRTARBITRUM"
+    }
+   ]
+  },
+  {
+   "coin": "ALICE",
+   "name": "ALICE",
+   "networkList": [
+    {
+     "name": "ALICE",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.17",
+     "withdrawMax": "54284473.39847991",
+     "withdrawMin": "54.884743",
+     "depositMin": "10",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0xac51066d7bec65dc4589368da368b212745d63e8",
+     "needTagOrMemo": "false",
+     "displayName": "ALICE"
+    },
+    {
+     "name": "ALICE",
+     "network": "ERC20",
+     "isDefault": true,
+     "minConfirm": 64,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "11",
+     "withdrawMax": "54284473.39847991",
+     "withdrawMin": "54.824562",
+     "depositMin": "4.25",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0xac51066d7bec65dc4589368da368b212745d63e8",
+     "needTagOrMemo": "false",
+     "displayName": "ALICEERC20"
+    }
+   ]
+  },
+  {
+   "coin": "AIOZ",
+   "name": "AIOZ",
+   "networkList": [
+    {
+     "name": "AIOZ",
+     "network": "ERC20",
+     "isDefault": true,
+     "minConfirm": 64,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "14",
+     "withdrawMax": "70866052.44507441",
+     "withdrawMin": "70.89182",
+     "depositMin": "65",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x626e8036deb333b408be468f951bdb42433cbf18",
+     "needTagOrMemo": "false",
+     "displayName": "AIOZ"
+    },
+    {
+     "name": "AIOZ",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "5",
+     "withdrawMax": "70866052.44507441",
+     "withdrawMin": "71.15412",
+     "depositMin": "6.35177644583829",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x33d08d8c7a168333a85285a68c0042b39fc3741d",
+     "needTagOrMemo": "false",
+     "displayName": "AIOZBEP20"
+    }
+   ]
+  },
+  {
+   "coin": "WOO",
+   "name": "WOO",
+   "networkList": [
+    {
+     "name": "WOO",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "1.91",
+     "withdrawMax": "440881834.21516754",
+     "withdrawMin": "440.917108",
+     "depositMin": "83",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x4691937a7508860f876c9c0a2a617e7d9e945d4b",
+     "needTagOrMemo": "false",
+     "displayName": "WOO"
+    },
+    {
+     "name": "WOO",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "22",
+     "withdrawMax": "440881834.21516754",
+     "withdrawMin": "440.917108",
+     "depositMin": "22.53510314760713",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xcafcd85d8ca7ad1e1c6f82f651fa15e33aefd07b",
+     "needTagOrMemo": "false",
+     "displayName": "WOOARBITRUM"
+    },
+    {
+     "name": "WOO",
+     "network": "ERC20",
+     "isDefault": true,
+     "minConfirm": 64,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "88",
+     "withdrawMax": "440881834.21516754",
+     "withdrawMin": "440.917108",
+     "depositMin": "14.80770401658508",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x4691937a7508860f876c9c0a2a617e7d9e945d4b",
+     "needTagOrMemo": "false",
+     "displayName": "WOOERC20"
+    }
+   ]
+  },
+  {
+   "coin": "MAGIC",
+   "name": "MAGIC",
+   "networkList": [
+    {
+     "name": "MAGIC",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.16",
+     "withdrawMax": "77035439.13713405",
+     "withdrawMin": "78.003121",
+     "depositMin": "2.5",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x539bde0d7dbd336b79148aa742883198bbf60342",
+     "needTagOrMemo": "false",
+     "displayName": "MAGIC"
+    }
+   ]
+  },
+  {
+   "coin": "APE",
+   "name": "APE",
+   "networkList": [
+    {
+     "name": "APE",
+     "network": "ERC20",
+     "isDefault": true,
+     "minConfirm": 64,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "14",
+     "withdrawMax": "71118065.4338549",
+     "withdrawMin": "71.530759",
+     "depositMin": "69",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x4d224452801aced8b2f0aebe155379bb5d594381",
+     "needTagOrMemo": "false",
+     "displayName": "APE"
+    },
+    {
+     "name": "APE",
+     "network": "APECHAIN",
+     "isDefault": true,
+     "minConfirm": 400,
+     "withdrawEnable": false,
+     "depositEnable": true,
+     "withdrawFee": "0.14",
+     "withdrawMax": "71118065.4338549",
+     "withdrawMin": "71.530759",
+     "depositMin": "0.1",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "",
+     "needTagOrMemo": "false",
+     "displayName": "APEAPE"
+    },
+    {
+     "name": "APE",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "0.22",
+     "withdrawMax": "71118065.4338549",
+     "withdrawMin": "71.530759",
+     "depositMin": "11",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x8f86a15ec17cb3369d8b3e666dadbc11daa82b79",
+     "needTagOrMemo": "false",
+     "displayName": "APEBEP20"
+    }
+   ]
+  },
+  {
+   "coin": "GMX",
+   "name": "GMX",
+   "networkList": [
+    {
+     "name": "GMX",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.0014",
+     "withdrawMax": "704169.0140845",
+     "withdrawMin": "0.713267",
+     "depositMin": "0.2",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a",
+     "needTagOrMemo": "false",
+     "displayName": "GMX"
+    }
+   ]
+  },
+  {
+   "coin": "GRAIL",
+   "name": "GRAIL",
+   "networkList": [
+    {
+     "name": "GRAIL",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "0.0012",
+     "withdrawMax": "13562.28298611",
+     "withdrawMin": "0.013564",
+     "depositMin": "0.0048043465257",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x3d9907f9a368ad0a51be60f7da3b97cf940982d8",
+     "needTagOrMemo": "false",
+     "displayName": "GRAIL"
+    }
+   ]
+  },
+  {
+   "coin": "JOE",
+   "name": "JOE",
+   "networkList": [
+    {
+     "name": "JOE",
+     "network": "AVAX-C",
+     "isDefault": true,
+     "minConfirm": 30,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "1.33",
+     "withdrawMax": "264529100.52910052",
+     "withdrawMin": "267.37968",
+     "depositMin": "17.66355462704894",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x6e84a6216ea6dacc71ee8e6b0a5b7322eebc0fdd",
+     "needTagOrMemo": "false",
+     "displayName": "JOE"
+    },
+    {
+     "name": "JOE",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "9.95",
+     "withdrawMax": "264529100.52910052",
+     "withdrawMin": "267.37968",
+     "depositMin": "18.86245425991711",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x371c7ec6d8039ff7933a2aa28eb827ffe1f52f07",
+     "needTagOrMemo": "false",
+     "displayName": "JOEARBITRUM"
+    }
+   ]
+  },
+  {
+   "coin": "VELA",
+   "name": "VELA",
+   "networkList": [
+    {
+     "name": "VELA",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "69",
+     "withdrawMax": "229339449.5412844",
+     "withdrawMin": "229.357799",
+     "depositMin": "6.7350874005083",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x088cd8f5ef3652623c22d48b1605dcfe860cd704",
+     "needTagOrMemo": "false",
+     "displayName": "VELA"
+    }
+   ]
+  },
+  {
+   "coin": "RDNT",
+   "name": "RDNT",
+   "networkList": [
+    {
+     "name": "RDNT",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "133.33",
+     "withdrawMax": "2813505908.83511536",
+     "withdrawMin": "2813.731008",
+     "depositMin": "10.84822992404537",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x3082cc23568ea640225c2467653db90e9250aaa0",
+     "needTagOrMemo": "false",
+     "displayName": "RDNT"
+    },
+    {
+     "name": "RDNT",
+     "network": "ERC20",
+     "isDefault": true,
+     "minConfirm": 64,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "1125",
+     "withdrawMax": "2813505908.83511536",
+     "withdrawMin": "2813.731008",
+     "depositMin": "2572",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x137ddb47ee24eaa998a535ab00378d6bfa84f893",
+     "needTagOrMemo": "false",
+     "displayName": "RDNTERC20"
+    }
+   ]
+  },
+  {
+   "coin": "DPX",
+   "name": "DPX",
+   "networkList": [
+    {
+     "name": "DPX",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "0.014",
+     "withdrawMax": "213840.88964927",
+     "withdrawMin": "0.213858",
+     "depositMin": "0.01318751808459",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x6c2c06790b3e3e3c38e12ee22f8183b37a13ee55",
+     "needTagOrMemo": "false",
+     "displayName": "DPX"
+    }
+   ]
+  },
+  {
+   "coin": "ARB",
+   "name": "ARB",
+   "networkList": [
+    {
+     "name": "ARB",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.1",
+     "withdrawMax": "45533697.63205828",
+     "withdrawMin": "46.210721",
+     "depositMin": "5",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x912ce59144191c1204e64559fe8253a0e49e6548",
+     "needTagOrMemo": "false",
+     "displayName": "ARB"
+    },
+    {
+     "name": "ARB",
+     "network": "ERC20",
+     "isDefault": true,
+     "minConfirm": 64,
+     "withdrawEnable": false,
+     "depositEnable": true,
+     "withdrawFee": "9",
+     "withdrawMax": "45533697.63205828",
+     "withdrawMin": "46.168052",
+     "depositMin": "39",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xb50721bcf8d664c30412cfbc6cf7a15145234ad1",
+     "needTagOrMemo": "false",
+     "displayName": "ARBERC20"
+    }
+   ]
+  },
+  {
+   "coin": "SPA",
+   "name": "SPA",
+   "networkList": [
+    {
+     "name": "SPA",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "25.37",
+     "withdrawMax": "1541183723.79778051",
+     "withdrawMin": "1541.307029",
+     "depositMin": "1010.47885680261884",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x5575552988a3a80504bbaeb1311674fcfd40ad4b",
+     "needTagOrMemo": "false",
+     "displayName": "SPA"
+    },
+    {
+     "name": "SPA",
+     "network": "ERC20",
+     "isDefault": true,
+     "minConfirm": 64,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "308",
+     "withdrawMax": "1541183723.79778051",
+     "withdrawMin": "1541.307029",
+     "depositMin": "1541",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xb4a3b0faf0ab53df58001804dda5bfc6a3d59008",
+     "needTagOrMemo": "false",
+     "displayName": "SPAERC20"
+    }
+   ]
+  },
+  {
+   "coin": "ALIEN",
+   "name": "ALIEN",
+   "networkList": [
+    {
+     "name": "ALIEN",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "35",
+     "withdrawMax": "115012652.40395675",
+     "withdrawMin": "115.021855",
+     "depositMin": "8.20148003657853",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x6740acb82ac5c63a7ad2397ee1faed7c788f5f8c",
+     "needTagOrMemo": "false",
+     "displayName": "ALIEN"
+    }
+   ]
+  },
+  {
+   "coin": "AIDOGE",
+   "name": "AIDOGE",
+   "networkList": [
+    {
+     "name": "AIDOGE",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "17064846416.38",
+     "withdrawMax": "255081632653061224.48979591",
+     "withdrawMin": "255102040816.326531",
+     "depositMin": "33568700059.78",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0x09e18590e8f76b6cf471b3cd75fe1a1a9d2b2c2b",
+     "needTagOrMemo": "false",
+     "displayName": "AIDOGE"
+    }
+   ]
+  },
+  {
+   "coin": "ZZZ",
+   "name": "ZZZ",
+   "networkList": [
+    {
+     "name": "ZZZ",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "167",
+     "withdrawMax": "555511111.11111111",
+     "withdrawMin": "555.555556",
+     "depositMin": "50",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x7a2c1b8e26c48a5b73816b7ec826fd4053f5f34b",
+     "needTagOrMemo": "false",
+     "displayName": "ZZZ"
+    }
+   ]
+  },
+  {
+   "coin": "VRTX",
+   "name": "VRTX",
+   "networkList": [
+    {
+     "name": "VRTX",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "6",
+     "withdrawMax": "354581560.28368794",
+     "withdrawMin": "354.60993",
+     "depositMin": "16.66666666666667",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x95146881b86b3ee99e63705ec87afe29fcc044d9",
+     "needTagOrMemo": "false",
+     "displayName": "VRTX"
+    }
+   ]
+  },
+  {
+   "coin": "XPET",
+   "name": "XPET",
+   "networkList": [
+    {
+     "name": "XPET",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": false,
+     "withdrawFee": "25",
+     "withdrawMax": "84595600.67681895",
+     "withdrawMin": "84.602369",
+     "depositMin": "10",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x00cbcf7b3d37844e44b888bc747bdd75fcf4e555",
+     "needTagOrMemo": "false",
+     "displayName": "XPET"
+    }
+   ]
+  },
+  {
+   "coin": "AVIVE",
+   "name": "AVIVE",
+   "networkList": [
+    {
+     "name": "AVIVE",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "100",
+     "withdrawMax": "32634464751.95822454",
+     "withdrawMin": "32637.075719",
+     "depositMin": "72.811999417504",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x5117f4ad0bc70dbb3b05bf39a1ec1ee40dd67654",
+     "needTagOrMemo": "false",
+     "displayName": "AVIVE"
+    }
+   ]
+  },
+  {
+   "coin": "ALU",
+   "name": "ALU",
+   "networkList": [
+    {
+     "name": "ALU",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "203.09",
+     "withdrawMax": "2036496945.01018329",
+     "withdrawMin": "2050.020501",
+     "depositMin": "408",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x8263cd1601fe73c066bf49cc09841f35348e3be0",
+     "needTagOrMemo": "false",
+     "displayName": "ALU"
+    }
+   ]
+  },
+  {
+   "coin": "HERMES",
+   "name": "HERMES",
+   "networkList": [
+    {
+     "name": "HERMES",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "25",
+     "withdrawMax": "83340556.7594599",
+     "withdrawMin": "83.347225",
+     "depositMin": "219.07400698086063",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x45940000009600102a1c002f0097c4a500fa00ab",
+     "needTagOrMemo": "false",
+     "displayName": "HERMESARBITRUM"
+    }
+   ]
+  },
+  {
+   "coin": "XAI",
+   "name": "XAI",
+   "networkList": [
+    {
+     "name": "XAI",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "9.58",
+     "withdrawMax": "1022413087.93456032",
+     "withdrawMin": "1026.694046",
+     "depositMin": "10",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x4cb9a7ae498cedcbb5eae9f25736ae7d428c9d66",
+     "needTagOrMemo": "false",
+     "displayName": "XAI"
+    }
+   ]
+  },
+  {
+   "coin": "GTA",
+   "name": "GTA",
+   "networkList": [
+    {
+     "name": "GTA",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": false,
+     "withdrawFee": "0.192307",
+     "withdrawMax": "8975942.54937163",
+     "withdrawMin": "8.976661",
+     "depositMin": "0.86743050265024",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x73db621cc8f0a767bed0e5c0a2920f480d77b765",
+     "needTagOrMemo": "false",
+     "displayName": "GTA"
+    }
+   ]
+  },
+  {
+   "coin": "CATCH_OLD",
+   "name": "CATCH_OLD",
+   "networkList": [
+    {
+     "name": "CATCH_OLD",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": false,
+     "withdrawFee": "1.81",
+     "withdrawMax": "98676407.12431716",
+     "withdrawMin": "99.126976",
+     "depositMin": "5.555555555555556",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xf0a479c9c3378638ec603b8b6b0d75903902550b",
+     "needTagOrMemo": "false",
+     "displayName": "CATCH_OLD"
+    }
+   ]
+  },
+  {
+   "coin": "UIBT",
+   "name": "UIBT",
+   "networkList": [
+    {
+     "name": "UIBT",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "43.864618",
+     "withdrawMax": "18114492753.623188405797101449",
+     "withdrawMin": "18115.942029",
+     "depositMin": "5",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x76bc2e765414e6c8b596c0f52c4240f80268f41d",
+     "needTagOrMemo": "false",
+     "displayName": "UIBT"
+    }
+   ]
+  },
+  {
+   "coin": "APTR",
+   "name": "APTR",
+   "networkList": [
+    {
+     "name": "APTR",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "189",
+     "withdrawMax": "629672544.080604",
+     "withdrawMin": "629.722922",
+     "depositMin": "111.11",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0x1c986661170c1834db49c3830130d4038eeeb866",
+     "needTagOrMemo": "false",
+     "displayName": "APTR"
+    }
+   ]
+  },
+  {
+   "coin": "KTC",
+   "name": "KTC",
+   "networkList": [
+    {
+     "name": "KTC",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "1667",
+     "withdrawMax": "16665333333.333333333333333333",
+     "withdrawMin": "16666.666667",
+     "depositMin": "3333",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x545356d4d69d8cd1213ee7e339867574738751ca",
+     "needTagOrMemo": "false",
+     "displayName": "KTC"
+    },
+    {
+     "name": "KTC",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "33.470491",
+     "withdrawMax": "16665333333.333333333333333333",
+     "withdrawMin": "16666.666667",
+     "depositMin": "6.26462732524645",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x487f6bab6dec7815dcd7dfa2c44a8a17bd3ded27",
+     "needTagOrMemo": "false",
+     "displayName": "KTCARBITRUM"
+    }
+   ]
+  },
+  {
+   "coin": "LAND",
+   "name": "LAND",
+   "networkList": [
+    {
+     "name": "LAND",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "4",
+     "withdrawMax": "39679365.079365079365079365",
+     "withdrawMin": "39.68254",
+     "depositMin": "8",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xa73164db271931cf952cbaeff9e8f5817b42fa5c",
+     "needTagOrMemo": "false",
+     "displayName": "LAND"
+    },
+    {
+     "name": "LAND",
+     "network": "POLYGON",
+     "isDefault": true,
+     "minConfirm": 450,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "0.45",
+     "withdrawMax": "39679365.079365079365079365",
+     "withdrawMin": "39.68254",
+     "depositMin": "3.23057246867423",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xc03e6ad83de7c58c9166ff08d66b960d78e64105",
+     "needTagOrMemo": "false",
+     "displayName": "LANDPOLYGON"
+    },
+    {
+     "name": "LAND",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "0.45",
+     "withdrawMax": "39679365.079365079365079365",
+     "withdrawMin": "39.68254",
+     "depositMin": "3.23057246867423",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x27bc2757fab0b8ab406016d1f71d8123452095d3",
+     "needTagOrMemo": "false",
+     "displayName": "LANDARBITRUM"
+    }
+   ]
+  },
+  {
+   "coin": "ZRO",
+   "name": "ZRO",
+   "networkList": [
+    {
+     "name": "ZRO",
+     "network": "ERC20",
+     "isDefault": true,
+     "minConfirm": 64,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.9",
+     "withdrawMax": "4440142.09591474",
+     "withdrawMin": "4.480287",
+     "depositMin": "3.6",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x6985884c4392d348587b19cb9eaaf157f13271cd",
+     "needTagOrMemo": "false",
+     "displayName": "ZRO"
+    },
+    {
+     "name": "ZRO",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.0467",
+     "withdrawMax": "4440142.09591474",
+     "withdrawMin": "4.480287",
+     "depositMin": "5",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x6985884c4392d348587b19cb9eaaf157f13271cd",
+     "needTagOrMemo": "false",
+     "displayName": "ZROARBITRUM"
+    },
+    {
+     "name": "ZRO",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.014",
+     "withdrawMax": "4440142.09591474",
+     "withdrawMin": "4.480287",
+     "depositMin": "0.7",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x6985884c4392d348587b19cb9eaaf157f13271cd",
+     "needTagOrMemo": "false",
+     "displayName": "ZROBEP20"
+    }
+   ]
+  },
+  {
+   "coin": "HIP",
+   "name": "HIP",
+   "networkList": [
+    {
+     "name": "HIP",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "100000",
+     "withdrawMax": "1369753424657.534246575342465753",
+     "withdrawMin": "1369863.013699",
+     "depositMin": "1228.29689181746229",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xa0995d43901551601060447f9abf93ebc277cec2",
+     "needTagOrMemo": "false",
+     "displayName": "HIP"
+    }
+   ]
+  },
+  {
+   "coin": "SYK",
+   "name": "SYK",
+   "networkList": [
+    {
+     "name": "SYK",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": false,
+     "withdrawFee": "7",
+     "withdrawMax": "38266627.88917694",
+     "withdrawMin": "38.441359",
+     "depositMin": "36.60322108345534",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xacc51ffdef63fb0c014c882267c3a17261a5ed50",
+     "needTagOrMemo": "false",
+     "displayName": "SYK"
+    }
+   ]
+  },
+  {
+   "coin": "CATCH",
+   "name": "CATCH",
+   "networkList": [
+    {
+     "name": "CATCH",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": false,
+     "withdrawFee": "4",
+     "withdrawMax": "18314883.92940358686368598",
+     "withdrawMin": "18.398512",
+     "depositMin": "17.64823280266508",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xbc4c97fb9befaa8b41448e1dfcc5236da543217f",
+     "needTagOrMemo": "false",
+     "displayName": "CATCH"
+    }
+   ]
+  },
+  {
+   "coin": "QTLX",
+   "name": "QTLX",
+   "networkList": [
+    {
+     "name": "QTLX",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "11.837253",
+     "withdrawMax": "1567272727.272727272727272727",
+     "withdrawMin": "1567.39812",
+     "depositMin": "25",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x4d840b741bc05fde325d4ec0b4cfcd0cea237e4e",
+     "needTagOrMemo": "false",
+     "displayName": "QTLX"
+    }
+   ]
+  },
+  {
+   "coin": "NST",
+   "name": "NST",
+   "networkList": [
+    {
+     "name": "NST",
+     "network": "SOL",
+     "isDefault": true,
+     "minConfirm": 50,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "1",
+     "withdrawMax": "5164876.03305785",
+     "withdrawMin": "5.16529",
+     "depositMin": "1.6",
+     "withdrawPrecision": 8,
+     "depositPrecision": 8,
+     "contractAddress": "G7iK3prSzAA4vzcJWvsLUEsdCqzR7PnMzJV61vSdFSNW",
+     "needTagOrMemo": "false",
+     "displayName": "NST"
+    },
+    {
+     "name": "NST",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.3",
+     "withdrawMax": "5164876.03305785",
+     "withdrawMin": "5.16529",
+     "depositMin": "1.6",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x88a269df8fe7f53e590c561954c52fccc8ec0cfb",
+     "needTagOrMemo": "false",
+     "displayName": "NSTARBITRUM"
+    }
+   ]
+  },
+  {
+   "coin": "MOZ",
+   "name": "MOZ",
+   "networkList": [
+    {
+     "name": "MOZ",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "310.56",
+     "withdrawMax": "3936692913.38582677",
+     "withdrawMin": "3937.007875",
+     "depositMin": "89",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xe16e2548a576ad448fb014bbe85284d7f3542df5",
+     "needTagOrMemo": "false",
+     "displayName": "MOZ"
+    }
+   ]
+  },
+  {
+   "coin": "VEMP",
+   "name": "VEMP",
+   "networkList": [
+    {
+     "name": "VEMP",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "1188.21",
+     "withdrawMax": "84738983050.84745762",
+     "withdrawMin": "84745.762712",
+     "depositMin": "628",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xaf7e3f16d747e77e927dc94287f86eb95a64d83d",
+     "needTagOrMemo": "false",
+     "displayName": "VEMP"
+    }
+   ]
+  },
+  {
+   "coin": "BLADE",
+   "name": "BLADE",
+   "networkList": [
+    {
+     "name": "BLADE",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "27.95",
+     "withdrawMax": "358497060.08891438",
+     "withdrawMin": "358.525743",
+     "depositMin": "8",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xe8b201be5357c07f0aa58693f98fb048323777f9",
+     "needTagOrMemo": "false",
+     "displayName": "BLADE"
+    }
+   ]
+  },
+  {
+   "coin": "EYWA",
+   "name": "EYWA",
+   "networkList": [
+    {
+     "name": "EYWA",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "3000",
+     "withdrawMax": "28916136495.0838635",
+     "withdrawMin": "28918.449972",
+     "depositMin": "41",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x7a10f506e4c7658e6ad15fdf0443d450b7fa80d7",
+     "needTagOrMemo": "false",
+     "displayName": "EYWA"
+    }
+   ]
+  },
+  {
+   "coin": "LAVA",
+   "name": "LAVA",
+   "networkList": [
+    {
+     "name": "LAVA",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "3.44",
+     "withdrawMax": "85550992.47091033",
+     "withdrawMin": "85.557838",
+     "depositMin": "30",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0x11e969e9b3f89cb16d686a03cd8508c9fc0361af",
+     "needTagOrMemo": "false",
+     "displayName": "LAVA"
+    }
+   ]
+  },
+  {
+   "coin": "OBT",
+   "name": "OBT",
+   "networkList": [
+    {
+     "name": "OBT",
+     "network": "BASE",
+     "isDefault": true,
+     "minConfirm": 600,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "172.164698",
+     "withdrawMax": "26313684210.52631578",
+     "withdrawMin": "26315.789474",
+     "depositMin": "250",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x514d8e8099286a13486ef6c525c120f51c239b52",
+     "needTagOrMemo": "false",
+     "displayName": "OBT"
+    },
+    {
+     "name": "OBT",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "262.33",
+     "withdrawMax": "26313684210.52631578",
+     "withdrawMin": "26315.789474",
+     "depositMin": "250",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x1cd9a56c8c2ea913c70319a44da75e99255aa46f",
+     "needTagOrMemo": "false",
+     "displayName": "OBTARBITRUM"
+    }
+   ]
+  },
+  {
+   "coin": "ANIME",
+   "name": "ANIME",
+   "networkList": [
+    {
+     "name": "ANIME",
+     "network": "ERC20",
+     "isDefault": true,
+     "minConfirm": 64,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "409",
+     "withdrawMax": "2046500204.66639377",
+     "withdrawMin": "2046.663938",
+     "depositMin": "1767",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x4dc26fc5854e7648a064a4abd590bbe71724c277",
+     "needTagOrMemo": "false",
+     "displayName": "ANIME"
+    },
+    {
+     "name": "ANIME",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "23.5",
+     "withdrawMax": "2046500204.66639377",
+     "withdrawMin": "2046.663938",
+     "depositMin": "729",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x37a645648df29205c6261289983fb04ecd70b4b3",
+     "needTagOrMemo": "false",
+     "displayName": "ANIMEARBITRUM"
+    }
+   ]
+  },
+  {
+   "coin": "K",
+   "name": "K",
+   "networkList": [
+    {
+     "name": "K",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "0.758",
+     "withdrawMax": "10868695.65217391",
+     "withdrawMin": "10.869566",
+     "depositMin": "0.3",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x6ba19ee69d5dde3ab70185c801fa404f66fedb58",
+     "needTagOrMemo": "false",
+     "displayName": "K"
+    }
+   ]
+  },
+  {
+   "coin": "SLING",
+   "name": "SLING",
+   "networkList": [
+    {
+     "name": "SLING",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "5411",
+     "withdrawMax": "60236144578.31325301",
+     "withdrawMin": "60240.963856",
+     "depositMin": "564",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x5f8a7c646511a790c53f171891e5d469ca884ede",
+     "needTagOrMemo": "false",
+     "displayName": "SLING"
+    }
+   ]
+  },
+  {
+   "coin": "AGT",
+   "name": "AGT",
+   "networkList": [
+    {
+     "name": "AGT",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "55",
+     "withdrawMax": "237793103.44827586",
+     "withdrawMin": "238.265428",
+     "depositMin": "42",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x5dbde81fce337ff4bcaaee4ca3466c00aecae274",
+     "needTagOrMemo": "false",
+     "displayName": "AGT"
+    }
+   ]
+  },
+  {
+   "coin": "SQD",
+   "name": "SQD",
+   "networkList": [
+    {
+     "name": "SQD",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "3.72",
+     "withdrawMax": "112073526.1152208",
+     "withdrawMin": "112.082493",
+     "depositMin": "25",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x1337420ded5adb9980cfc35f8f2b054ea86f8ab1",
+     "needTagOrMemo": "false",
+     "displayName": "SQD"
+    }
+   ]
+  },
+  {
+   "coin": "BOUNTY",
+   "name": "BOUNTY",
+   "networkList": [
+    {
+     "name": "BOUNTY",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "27",
+     "withdrawMax": "500460460.46046046",
+     "withdrawMin": "501.002005",
+     "depositMin": "111",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x6a9896837021ea3ed83f623f655c119c54abe02c",
+     "needTagOrMemo": "false",
+     "displayName": "BOUNTY"
+    }
+   ]
+  },
+  {
+   "coin": "AIO",
+   "name": "AIO",
+   "networkList": [
+    {
+     "name": "AIO",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "10",
+     "withdrawMax": "172876901.79806362",
+     "withdrawMin": "172.235619",
+     "depositMin": "28",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xa22159faca8bf5c57a48888a2d4ddafc88e4ddeb",
+     "needTagOrMemo": "false",
+     "displayName": "AIO"
+    }
+   ]
+  },
+  {
+   "coin": "RAINPROTOCOL",
+   "name": "RAINPROTOCOL",
+   "networkList": [
+    {
+     "name": "RAINPROTOCOL",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "14.24",
+     "withdrawMax": "1378097521.98241406",
+     "withdrawMin": "1386.654834",
+     "depositMin": "686",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x25118290e6a5f4139381d072181157035864099d",
+     "needTagOrMemo": "false",
+     "displayName": "RAIN"
+    }
+   ]
+  },
+  {
+   "coin": "0G",
+   "name": "0G",
+   "networkList": [
+    {
+     "name": "0G",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "0.15",
+     "withdrawMax": "46421541.31847725",
+     "withdrawMin": "46.948357",
+     "depositMin": "8",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x4b948d64de1f71fcd12fb586f4c776421a35b3ee",
+     "needTagOrMemo": "false",
+     "displayName": "0G"
+    },
+    {
+     "name": "0G",
+     "network": "ZEROG",
+     "isDefault": true,
+     "minConfirm": 250,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "0.16789",
+     "withdrawMax": "46421541.31847725",
+     "withdrawMin": "46.948357",
+     "depositMin": "0.77",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "",
+     "needTagOrMemo": "false",
+     "displayName": "0GZEROG"
+    }
+   ]
+  },
+  {
+   "coin": "TMX",
+   "name": "TMX",
+   "networkList": [
+    {
+     "name": "TMX",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "0.07",
+     "withdrawMax": "1993460.92503987",
+     "withdrawMin": "1.993621",
+     "depositMin": "1",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xa057bf62b7760ae11d782dab5e081728bcda7017",
+     "needTagOrMemo": "false",
+     "displayName": "TMX"
+    }
+   ]
+  },
+  {
+   "coin": "4",
+   "name": "4",
+   "networkList": [
+    {
+     "name": "4",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "52",
+     "withdrawMax": "665725699.06790945",
+     "withdrawMin": "650.195059",
+     "depositMin": "102",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x0a43fc31a73013089df59194872ecae4cae14444",
+     "needTagOrMemo": "false",
+     "displayName": "4"
+    }
+   ]
+  },
+  {
+   "coin": "APR",
+   "name": "APR",
+   "networkList": [
+    {
+     "name": "APR",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "12",
+     "withdrawMax": "193034749.03474903",
+     "withdrawMin": "191.570882",
+     "depositMin": "32",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x299ad4299da5b2b93fba4c96967b040c7f611099",
+     "needTagOrMemo": "false",
+     "displayName": "APR"
+    }
+   ]
+  },
+  {
+   "coin": "EVA",
+   "name": "EVA",
+   "networkList": [
+    {
+     "name": "EVA",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.033",
+     "withdrawMax": "147263.62297496",
+     "withdrawMin": "0.147711",
+     "depositMin": "0.2",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x45d9831d8751b2325f3dbf48db748723726e1c8c",
+     "needTagOrMemo": "false",
+     "displayName": "EVA"
+    }
+   ]
+  },
+  {
+   "coin": "ALLO",
+   "name": "ALLO",
+   "networkList": [
+    {
+     "name": "ALLO",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.13",
+     "withdrawMax": "42084175.08417508",
+     "withdrawMin": "42.123",
+     "depositMin": "8",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xcce5f304fd043d6a4e8ccb5376a4a4fb583b98d5",
+     "needTagOrMemo": "false",
+     "displayName": "ALLO"
+    }
+   ]
+  },
+  {
+   "coin": "ARTX",
+   "name": "ARTX",
+   "networkList": [
+    {
+     "name": "ARTX",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "5",
+     "withdrawMax": "55318772.26758724",
+     "withdrawMin": "55.248619",
+     "depositMin": "11",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x8105743e8a19c915a604d7d9e7aa3a060a4c2c32",
+     "needTagOrMemo": "false",
+     "displayName": "ARTX"
+    }
+   ]
+  },
+  {
+   "coin": "GRANT",
+   "name": "GRANT",
+   "networkList": [
+    {
+     "name": "GRANT",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "11",
+     "withdrawMax": "208229904.20658059",
+     "withdrawMin": "209.030101",
+     "depositMin": "50",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x7ce42e8a5a42eb15f0c9a08ee9a079d99b1d83cf",
+     "needTagOrMemo": "false",
+     "displayName": "GRANT"
+    }
+   ]
+  },
+  {
+   "coin": "ACU",
+   "name": "ACU",
+   "networkList": [
+    {
+     "name": "ACU",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "4.63",
+     "withdrawMax": "45998711.93302051",
+     "withdrawMin": "46.219265",
+     "depositMin": "7",
+     "withdrawPrecision": 8,
+     "depositPrecision": 12,
+     "contractAddress": "0x6ef2ffb38d64afe18ce782da280b300e358cfeaf",
+     "needTagOrMemo": "false",
+     "displayName": "ACU"
+    }
+   ]
+  },
+  {
+   "coin": "IDOS",
+   "name": "IDOS",
+   "networkList": [
+    {
+     "name": "IDOS",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "10.28",
+     "withdrawMax": "1032122213.04706853",
+     "withdrawMin": "1032.20479",
+     "depositMin": "25",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x68731d6f14b827bbcffbebb62b19daa18de1d79c",
+     "needTagOrMemo": "false",
+     "displayName": "IDOS"
+    }
+   ]
+  },
+  {
+   "coin": "CHIP",
+   "name": "CHIP",
+   "networkList": [
+    {
+     "name": "CHIP",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.4",
+     "withdrawMax": "191628976.6193944",
+     "withdrawMin": "191.131499",
+     "depositMin": "116",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x0c1c1c109fe34733fca54b82d7b46b75cfb71f6e",
+     "needTagOrMemo": "false",
+     "displayName": "CHIP"
+    }
+   ]
+  },
+  {
+   "coin": "AUTONOMI",
+   "name": "AUTONOMI",
+   "networkList": [
+    {
+     "name": "AUTONOMI",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "15",
+     "withdrawMax": "189128049.93379988",
+     "withdrawMin": "189.702926",
+     "depositMin": "50",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xa78d8321b20c4ef90ecd72f2588aa985a4bdb684",
+     "needTagOrMemo": "false",
+     "displayName": "AUTONOMI"
+    }
+   ]
+  }
+ ]
+}

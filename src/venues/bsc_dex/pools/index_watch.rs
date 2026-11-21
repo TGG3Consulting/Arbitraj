@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/pools/index_watch.rs
 //! Что делает: справочник пулов во время подписки (решение 58). Перепроверка и подключение новых пулов к идущей
 //! подписке (attach.rs): по обновлённым монетам (directory/refresh.rs), целиком — при изменении любой настройки dex.*
-//! (вид DEX, адреса, включатель — без перезапуска) и при повторе через dex.verify_retry_s, если узел не ответил на
+//! (вид DEX, адреса, включатель — без перезапуска; пачка изменений — одна перепроверка, решение 279) и при повторе через dex.verify_retry_s, если узел не ответил на
 //! часть проверки. Своя комиссия пар V2 — в реестр (в том числе её снятие при смене источника на «одна на DEX»);
 //! её же перечитывает сверка с квотером (refresh_fees).
 //! Кто вызывает: pools/market.rs (watch), check/quoter_cycle.rs (refresh_fees).
@@ -56,7 +56,7 @@ pub async fn watch(
                     Some(set)
                 }
             },
-            c = changes.next() => if c.is_none() { return } else { None },
+            c = changes.next_batch() => if c.is_none() { return } else { None },
             _ = pause => None,
         };
         retry = None;

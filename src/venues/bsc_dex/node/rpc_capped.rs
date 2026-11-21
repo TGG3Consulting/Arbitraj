@@ -115,7 +115,15 @@ async fn to_node(ctx: &Ctx, body: &Value, lim: Limits) -> GatewayResult<Capped<S
     let n = urls.len();
     let mut last = None;
     for (i, (node, url)) in urls.into_iter().enumerate() {
-        let res = match http::exchange(ctx.http.post(url.as_str()).json(body), lim).await {
+        let res = match http::exchange(
+            ctx.http
+                .post(url.as_str())
+                .header(reqwest::header::ACCEPT_ENCODING, "identity")
+                .json(body),
+            lim,
+        )
+        .await
+        {
             Ok((status, text)) => status_ok(status, text, SOURCE).map(Capped::Got),
             Err(f @ (Fail::TooBig { .. } | Fail::Total { .. })) => return Ok(Capped::Over(f)),
             Err(f) => Err(errors::from_fail(&f, &lim, SOURCE)),

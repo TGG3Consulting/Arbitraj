@@ -1,0 +1,23 @@
+# Перезапись tests/data/bingx_minqty_2026-11-15 сырыми ответами BingX (решение 293, ревью п. 4).
+# Только публичные GET без ключа. Выполнять с сервера из папки tests/data/bingx_minqty_2026-11-15 как есть;
+# каждый ответ пишется в файл с тем же именем, что сейчас (старый файл заменяется сырым ответом).
+# После — сверить значения с текущими (git diff) и обновить README папки (время запроса, «дословно»).
+TS=$(date +%s%3N)
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/common/symbols?timestamp=$TS&symbol=SHOPINX-USDT" -o symbols_SHOPINX-USDT.json
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/common/symbols?timestamp=$TS&symbol=CAKE-USDT" -o symbols_CAKE-USDT.json
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/common/symbols?timestamp=$TS&symbol=TWT-USDT" -o symbols_TWT-USDT.json
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/common/symbols?timestamp=$TS&symbol=SFP-USDT" -o symbols_SFP-USDT.json
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/common/symbols?timestamp=$TS&symbol=BTC-USDT" -o symbols_BTC-USDT.json
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/common/symbols?timestamp=$TS&symbol=DOGE-USDT" -o symbols_DOGE-USDT.json
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/common/symbols?timestamp=$TS&symbol=BNB-USDT" -o symbols_BNB-USDT.json
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/common/symbols?timestamp=$TS&symbol=MUBARAK-USDT" -o symbols_MUBARAK-USDT.json
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/common/symbols?timestamp=$TS&symbol=BANANAS31-USDT" -o symbols_BANANAS31-USDT.json
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/ticker/bookTicker?timestamp=$TS&symbol=SHOPINX-USDT" -o book_ticker_SHOPINX-USDT.json
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/ticker/bookTicker?timestamp=$TS&symbol=CAKE-USDT" -o book_ticker_CAKE-USDT.json
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/ticker/bookTicker?timestamp=$TS&symbol=TWT-USDT" -o book_ticker_TWT-USDT.json
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/ticker/bookTicker?timestamp=$TS&symbol=SFP-USDT" -o book_ticker_SFP-USDT.json
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/ticker/bookTicker?timestamp=$TS&symbol=BTC-USDT" -o book_ticker_BTC-USDT.json
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/ticker/bookTicker?timestamp=$TS&symbol=DOGE-USDT" -o book_ticker_DOGE-USDT.json
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/ticker/bookTicker?timestamp=$TS&symbol=BNB-USDT" -o book_ticker_BNB-USDT.json
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/ticker/bookTicker?timestamp=$TS&symbol=MUBARAK-USDT" -o book_ticker_MUBARAK-USDT.json
+curl -sS "https://open-api.bingx.com/openApi/spot/v1/ticker/bookTicker?timestamp=$TS&symbol=BANANAS31-USDT" -o book_ticker_BANANAS31-USDT.json

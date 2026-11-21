@@ -1,0 +1,1967 @@
+{
+ "url": "https://api.geckoterminal.com/api/v2/networks/bsc/dexes/thena-fusion/pools?page=1",
+ "response": {
+  "data": [
+   {
+    "id": "bsc_0x1b9a1120a17617d8ec4dc80b921a9a1c50caef7d",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "1.00207839649936",
+     "base_token_price_native_currency": "0.00184762592466141",
+     "quote_token_price_usd": "0.999171104416509",
+     "quote_token_price_native_currency": "0.00184226547757303",
+     "base_token_price_quote_token": "1.0029097039",
+     "quote_token_price_base_token": "0.9970987379",
+     "address": "0x1b9a1120a17617d8ec4dc80b921a9a1c50caef7d",
+     "name": "USDT / USDC 0.001%",
+     "pool_created_at": "2023-04-20T05:12:47Z",
+     "fdv_usd": "9203768519.7018",
+     "market_cap_usd": "9204081590.76826",
+     "price_change_percentage": {
+      "m5": "0.509",
+      "m15": "0.507",
+      "m30": "0.507",
+      "h1": "0.448",
+      "h6": "0.375",
+      "h24": "0.586"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 2,
+       "sells": 0,
+       "buyers": 2,
+       "sellers": 0,
+       "unique_traders": 2
+      },
+      "m15": {
+       "buys": 2,
+       "sells": 2,
+       "buyers": 2,
+       "sellers": 2,
+       "unique_traders": 4
+      },
+      "m30": {
+       "buys": 2,
+       "sells": 2,
+       "buyers": 2,
+       "sellers": 2,
+       "unique_traders": 4
+      },
+      "h1": {
+       "buys": 3,
+       "sells": 6,
+       "buyers": 3,
+       "sellers": 6,
+       "unique_traders": 9
+      },
+      "h6": {
+       "buys": 171,
+       "sells": 436,
+       "buyers": 116,
+       "sellers": 92,
+       "unique_traders": 195
+      },
+      "h24": {
+       "buys": 308,
+       "sells": 589,
+       "buyers": 192,
+       "sellers": 178,
+       "unique_traders": 340
+      }
+     },
+     "volume_usd": {
+      "m5": "95.5052615796",
+      "m15": "158.7303524659",
+      "m30": "158.7303524659",
+      "h1": "227.9257014993",
+      "h6": "40355.1033366044",
+      "h24": "79053.8164567778"
+     },
+     "reserve_in_usd": "12613.8438"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0x55d398326f99059ff775485246999027b3197955",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0x1123e75b71019962cd4d21b0f3018a6412edb63c",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "1624.2410119747",
+     "base_token_price_native_currency": "2.99621566655962",
+     "quote_token_price_usd": "542.19",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "2.9962156666",
+     "quote_token_price_base_token": "0.3337543459",
+     "address": "0x1123e75b71019962cd4d21b0f3018a6412edb63c",
+     "name": "ETH / WBNB 0.115%",
+     "pool_created_at": "2023-04-20T05:01:30Z",
+     "fdv_usd": "820215543.301391",
+     "market_cap_usd": "982665812.177809",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0.006",
+      "m30": "-0.114",
+      "h1": "-0.895",
+      "h6": "-6.763",
+      "h24": "-8.285"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 4,
+       "buyers": 0,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "m30": {
+       "buys": 0,
+       "sells": 10,
+       "buyers": 0,
+       "sellers": 3,
+       "unique_traders": 3
+      },
+      "h1": {
+       "buys": 15,
+       "sells": 17,
+       "buyers": 5,
+       "sellers": 4,
+       "unique_traders": 8
+      },
+      "h6": {
+       "buys": 79,
+       "sells": 163,
+       "buyers": 15,
+       "sellers": 51,
+       "unique_traders": 60
+      },
+      "h24": {
+       "buys": 263,
+       "sells": 286,
+       "buyers": 76,
+       "sellers": 80,
+       "unique_traders": 130
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "446.4442468988",
+      "m30": "1280.316172571",
+      "h1": "3871.7516710761",
+      "h6": "26790.1349261751",
+      "h24": "55262.7496638153"
+     },
+     "reserve_in_usd": "78793.3331"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0x2170ed0880ac9a755fd29b2688956bd959f933f8",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0xd405b976ac01023c9064024880999fc450a8668b",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.998441635894332",
+     "base_token_price_native_currency": "0.00184762168664245",
+     "quote_token_price_usd": "542.12",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.001847621687",
+     "quote_token_price_base_token": "541.236340334",
+     "address": "0xd405b976ac01023c9064024880999fc450a8668b",
+     "name": "USDT / WBNB 0.092%",
+     "pool_created_at": "2023-04-20T04:52:56Z",
+     "fdv_usd": "9170366040.57354",
+     "market_cap_usd": "9170677975.43696",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "-0.074",
+      "m30": "-0.179",
+      "h1": "-0.099",
+      "h6": "-0.077",
+      "h24": "-0.103"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 1,
+       "buyers": 0,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "m15": {
+       "buys": 1,
+       "sells": 4,
+       "buyers": 1,
+       "sellers": 4,
+       "unique_traders": 5
+      },
+      "m30": {
+       "buys": 5,
+       "sells": 7,
+       "buyers": 3,
+       "sellers": 7,
+       "unique_traders": 9
+      },
+      "h1": {
+       "buys": 10,
+       "sells": 9,
+       "buyers": 7,
+       "sellers": 7,
+       "unique_traders": 12
+      },
+      "h6": {
+       "buys": 88,
+       "sells": 78,
+       "buyers": 46,
+       "sellers": 52,
+       "unique_traders": 96
+      },
+      "h24": {
+       "buys": 234,
+       "sells": 219,
+       "buyers": 129,
+       "sellers": 120,
+       "unique_traders": 232
+      }
+     },
+     "volume_usd": {
+      "m5": "1.4317485293",
+      "m15": "16.4309369658",
+      "m30": "52.2630756073",
+      "h1": "86.0586415636",
+      "h6": "1246.6425764109",
+      "h24": "3590.5506110929"
+     },
+     "reserve_in_usd": "13709.1252"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0x55d398326f99059ff775485246999027b3197955",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0x6b67112aa7b45e8cdc0a93b8d66a6a36e68ae8e5",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "58874.6076778439",
+     "base_token_price_native_currency": "108.714047297713",
+     "quote_token_price_usd": "541.68",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "108.7140472977",
+     "quote_token_price_base_token": "0.0091984433",
+     "address": "0x6b67112aa7b45e8cdc0a93b8d66a6a36e68ae8e5",
+     "name": "BTCB / WBNB 0.13%",
+     "pool_created_at": "2023-04-20T05:01:22Z",
+     "fdv_usd": "3844152401.53032",
+     "market_cap_usd": "0.0",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "-0.171",
+      "m30": "-0.462",
+      "h1": "-0.782",
+      "h6": "-4.388",
+      "h24": "-6.048"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 8,
+       "buyers": 0,
+       "sellers": 2,
+       "unique_traders": 2
+      },
+      "m30": {
+       "buys": 0,
+       "sells": 21,
+       "buyers": 0,
+       "sellers": 2,
+       "unique_traders": 2
+      },
+      "h1": {
+       "buys": 32,
+       "sells": 21,
+       "buyers": 8,
+       "sellers": 2,
+       "unique_traders": 8
+      },
+      "h6": {
+       "buys": 114,
+       "sells": 70,
+       "buyers": 26,
+       "sellers": 4,
+       "unique_traders": 28
+      },
+      "h24": {
+       "buys": 263,
+       "sells": 184,
+       "buyers": 63,
+       "sellers": 49,
+       "unique_traders": 104
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "1685.704972535",
+      "m30": "3712.6621339627",
+      "h1": "8902.0337308739",
+      "h6": "29930.1915572621",
+      "h24": "71261.1100399025"
+     },
+     "reserve_in_usd": "155132.3263"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0x17661065fbc18e782a259db2022bc23bc74bd942",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.540422662321019",
+     "base_token_price_native_currency": "0.00099724359162648",
+     "quote_token_price_usd": "542.38",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.0009972435916",
+     "quote_token_price_base_token": "1002.764027161",
+     "address": "0x17661065fbc18e782a259db2022bc23bc74bd942",
+     "name": "FIL / WBNB 0.27%",
+     "pool_created_at": "2023-04-24T16:34:00Z",
+     "fdv_usd": "8111514.97555003",
+     "market_cap_usd": "8111744.16108339",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "1.502",
+      "m30": "2.03",
+      "h1": "0.056",
+      "h6": "-6.625",
+      "h24": "-8.501"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 8,
+       "sells": 0,
+       "buyers": 1,
+       "sellers": 0,
+       "unique_traders": 1
+      },
+      "m30": {
+       "buys": 8,
+       "sells": 1,
+       "buyers": 1,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "h1": {
+       "buys": 8,
+       "sells": 4,
+       "buyers": 1,
+       "sellers": 4,
+       "unique_traders": 4
+      },
+      "h6": {
+       "buys": 23,
+       "sells": 37,
+       "buyers": 7,
+       "sellers": 15,
+       "unique_traders": 21
+      },
+      "h24": {
+       "buys": 106,
+       "sells": 89,
+       "buyers": 29,
+       "sellers": 30,
+       "unique_traders": 54
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "76.0812991668",
+      "m30": "89.4128933103",
+      "h1": "139.2799497234",
+      "h6": "1140.4225567668",
+      "h24": "5858.8852046829"
+     },
+     "reserve_in_usd": "910.7657"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0x0d8ce2a99bb6e3b7db580ed848240e4a0f9ae153",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0x752328a1e16d38933789860b8c09f6f2cc6c63d6",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.0258039761999215",
+     "base_token_price_native_currency": "0.0000471086153932136",
+     "quote_token_price_usd": "1642.50465657234",
+     "quote_token_price_native_currency": "2.99836556511927",
+     "base_token_price_quote_token": "0.00001571143157",
+     "quote_token_price_base_token": "63647.9238477302",
+     "address": "0x752328a1e16d38933789860b8c09f6f2cc6c63d6",
+     "name": "THE / ETH 1%",
+     "pool_created_at": "2023-10-14T15:47:23Z",
+     "fdv_usd": "8404148.30254091",
+     "market_cap_usd": "3576469.25151996",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0",
+      "h1": "0",
+      "h6": "-7.063",
+      "h24": "-13.755"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "h1": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "h6": {
+       "buys": 24,
+       "sells": 23,
+       "buyers": 13,
+       "sellers": 18,
+       "unique_traders": 30
+      },
+      "h24": {
+       "buys": 84,
+       "sells": 76,
+       "buyers": 37,
+       "sellers": 30,
+       "unique_traders": 56
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "0.0",
+      "m30": "0.0",
+      "h1": "0.0",
+      "h6": "5340.527368696",
+      "h24": "18183.4888977879"
+     },
+     "reserve_in_usd": "26126.7623"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0xf4c8e32eadec4bfe97e0f595add0f4450a863a11",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0x2170ed0880ac9a755fd29b2688956bd959f933f8",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0x1b932598da273069e1878e4a1505b6f833462210",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "69.0268990539663",
+     "base_token_price_native_currency": "0.127535033485936",
+     "quote_token_price_usd": "541.49",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.1275350335",
+     "quote_token_price_base_token": "7.840982769",
+     "address": "0x1b932598da273069e1878e4a1505b6f833462210",
+     "name": "SOL / WBNB 0.15%",
+     "pool_created_at": "2023-12-23T18:57:20Z",
+     "fdv_usd": "103534804.983455",
+     "market_cap_usd": "75929595.8620209",
+     "price_change_percentage": {
+      "m5": "0.113",
+      "m15": "0.228",
+      "m30": "-0.014",
+      "h1": "-0.193",
+      "h6": "-3.51",
+      "h24": "-6.899"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 2,
+       "sells": 0,
+       "buyers": 2,
+       "sellers": 0,
+       "unique_traders": 2
+      },
+      "m15": {
+       "buys": 3,
+       "sells": 3,
+       "buyers": 3,
+       "sellers": 1,
+       "unique_traders": 3
+      },
+      "m30": {
+       "buys": 4,
+       "sells": 3,
+       "buyers": 3,
+       "sellers": 1,
+       "unique_traders": 3
+      },
+      "h1": {
+       "buys": 7,
+       "sells": 3,
+       "buyers": 4,
+       "sellers": 1,
+       "unique_traders": 4
+      },
+      "h6": {
+       "buys": 30,
+       "sells": 25,
+       "buyers": 9,
+       "sellers": 20,
+       "unique_traders": 25
+      },
+      "h24": {
+       "buys": 83,
+       "sells": 74,
+       "buyers": 38,
+       "sellers": 24,
+       "unique_traders": 55
+      }
+     },
+     "volume_usd": {
+      "m5": "28.1727735631",
+      "m15": "92.2086750668",
+      "m30": "106.7586812404",
+      "h1": "166.7261019862",
+      "h6": "1477.5651392242",
+      "h24": "3054.5824336921"
+     },
+     "reserve_in_usd": "6697.04"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0x570a5d26f7765ecb712c0924e4de545b89fd43df",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0x246505db95e5a60d8524d52b9ed3dbaf6ee2584f",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.0258864184564439",
+     "base_token_price_native_currency": "0.0000471086153932136",
+     "quote_token_price_usd": "59625.5945918222",
+     "quote_token_price_native_currency": "108.388494286274",
+     "base_token_price_quote_token": "0.0000004346274547",
+     "quote_token_price_base_token": "2300821.05749787",
+     "address": "0x246505db95e5a60d8524d52b9ed3dbaf6ee2584f",
+     "name": "THE / BTCB 1%",
+     "pool_created_at": "2023-11-10T15:54:05Z",
+     "fdv_usd": "8430999.08608165",
+     "market_cap_usd": "3587895.87064372",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0",
+      "h1": "0",
+      "h6": "-6.695",
+      "h24": "-13.391"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "h1": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "h6": {
+       "buys": 11,
+       "sells": 18,
+       "buyers": 8,
+       "sellers": 8,
+       "unique_traders": 15
+      },
+      "h24": {
+       "buys": 51,
+       "sells": 83,
+       "buyers": 25,
+       "sellers": 41,
+       "unique_traders": 60
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "0.0",
+      "m30": "0.0",
+      "h1": "0.0",
+      "h6": "1775.4887999671",
+      "h24": "9137.2452114092"
+     },
+     "reserve_in_usd": "18257.6318"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0xf4c8e32eadec4bfe97e0f595add0f4450a863a11",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0x98a0004b8e9fe161369528a2e07de56c15a27d76",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.025386143008629",
+     "base_token_price_native_currency": "0.0000471086153932136",
+     "quote_token_price_usd": "1.00014313584578",
+     "quote_token_price_native_currency": "0.00184103660533047",
+     "base_token_price_quote_token": "0.02558809274",
+     "quote_token_price_base_token": "39.0806774931",
+     "address": "0x98a0004b8e9fe161369528a2e07de56c15a27d76",
+     "name": "THE / USDT 1%",
+     "pool_created_at": "2023-04-20T07:25:13Z",
+     "fdv_usd": "8268063.38030773",
+     "market_cap_usd": "3518556.95363544",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0",
+      "h1": "0.038",
+      "h6": "-7.831",
+      "h24": "-15.045"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "h1": {
+       "buys": 0,
+       "sells": 2,
+       "buyers": 0,
+       "sellers": 2,
+       "unique_traders": 2
+      },
+      "h6": {
+       "buys": 7,
+       "sells": 25,
+       "buyers": 6,
+       "sellers": 17,
+       "unique_traders": 23
+      },
+      "h24": {
+       "buys": 55,
+       "sells": 73,
+       "buyers": 21,
+       "sellers": 33,
+       "unique_traders": 43
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "0.0",
+      "m30": "0.0",
+      "h1": "36.344079254",
+      "h6": "2534.8525399282",
+      "h24": "9029.0214671272"
+     },
+     "reserve_in_usd": "22680.2258"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0xf4c8e32eadec4bfe97e0f595add0f4450a863a11",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0x55d398326f99059ff775485246999027b3197955",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0x51bd5e6d3da9064d59bcaa5a76776560ab42ceb8",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.0255453178000247",
+     "base_token_price_native_currency": "0.0000471086153932136",
+     "quote_token_price_usd": "541.3",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.00004710861539",
+     "quote_token_price_base_token": "21227.5396263092",
+     "address": "0x51bd5e6d3da9064d59bcaa5a76776560ab42ceb8",
+     "name": "THE / WBNB 1%",
+     "pool_created_at": "2023-04-20T04:55:36Z",
+     "fdv_usd": "8319905.33407553",
+     "market_cap_usd": "3540618.81486333",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0",
+      "h1": "0",
+      "h6": "-7.691",
+      "h24": "-14.665"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buys": 1,
+       "sells": 0,
+       "buyers": 1,
+       "sellers": 0,
+       "unique_traders": 1
+      },
+      "h1": {
+       "buys": 1,
+       "sells": 0,
+       "buyers": 1,
+       "sellers": 0,
+       "unique_traders": 1
+      },
+      "h6": {
+       "buys": 10,
+       "sells": 13,
+       "buyers": 7,
+       "sellers": 6,
+       "unique_traders": 13
+      },
+      "h24": {
+       "buys": 51,
+       "sells": 68,
+       "buyers": 19,
+       "sellers": 23,
+       "unique_traders": 38
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "0.0",
+      "m30": "64.956",
+      "h1": "64.956",
+      "h6": "3850.0030449434",
+      "h24": "19343.0686093645"
+     },
+     "reserve_in_usd": "42286.4076"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0xf4c8e32eadec4bfe97e0f595add0f4450a863a11",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0xa60a504d92a1c95bda729c3f745b361ca822d6dd",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "1629.05998006658",
+     "base_token_price_native_currency": "3.00414918779681",
+     "quote_token_price_usd": "0.996825905956001",
+     "quote_token_price_native_currency": "0.00183824645648109",
+     "base_token_price_quote_token": "1634.24723448",
+     "quote_token_price_base_token": "0.0006119025193",
+     "address": "0xa60a504d92a1c95bda729c3f745b361ca822d6dd",
+     "name": "ETH / USDT 0.091%",
+     "pool_created_at": "2023-04-25T07:59:01Z",
+     "fdv_usd": "822649044.550595",
+     "market_cap_usd": "985581287.87321",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0.2",
+      "h1": "-0.001",
+      "h6": "-6.26",
+      "h24": "-8.468"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 1,
+       "sells": 0,
+       "buyers": 1,
+       "sellers": 0,
+       "unique_traders": 1
+      },
+      "m30": {
+       "buys": 1,
+       "sells": 1,
+       "buyers": 1,
+       "sellers": 1,
+       "unique_traders": 2
+      },
+      "h1": {
+       "buys": 2,
+       "sells": 3,
+       "buyers": 2,
+       "sellers": 3,
+       "unique_traders": 5
+      },
+      "h6": {
+       "buys": 18,
+       "sells": 33,
+       "buyers": 16,
+       "sellers": 29,
+       "unique_traders": 42
+      },
+      "h24": {
+       "buys": 38,
+       "sells": 59,
+       "buyers": 32,
+       "sellers": 50,
+       "unique_traders": 76
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "0.4597900521",
+      "m30": "1.8847837601",
+      "h1": "6.8636340086",
+      "h6": "85.4546199118",
+      "h24": "160.0329667936"
+     },
+     "reserve_in_usd": "1478.3765"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0x2170ed0880ac9a755fd29b2688956bd959f933f8",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0x55d398326f99059ff775485246999027b3197955",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0x1f9b1a3ddedbf47b96c65f29c0586b678de2623b",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "1626.58746930259",
+     "base_token_price_native_currency": "2.99958963118481",
+     "quote_token_price_usd": "59058.5090916604",
+     "quote_token_price_native_currency": "108.909784962584",
+     "base_token_price_quote_token": "0.02754196634",
+     "quote_token_price_base_token": "36.3082282424",
+     "address": "0x1f9b1a3ddedbf47b96c65f29c0586b678de2623b",
+     "name": "ETH / BTCB 0.025%",
+     "pool_created_at": "2023-12-06T12:41:54Z",
+     "fdv_usd": "821400466.448786",
+     "market_cap_usd": "984085418.861092",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0",
+      "h1": "-0.814",
+      "h6": "-6.599",
+      "h24": "-8.068"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 2,
+       "sells": 0,
+       "buyers": 1,
+       "sellers": 0,
+       "unique_traders": 1
+      },
+      "m30": {
+       "buys": 2,
+       "sells": 0,
+       "buyers": 1,
+       "sellers": 0,
+       "unique_traders": 1
+      },
+      "h1": {
+       "buys": 3,
+       "sells": 2,
+       "buyers": 2,
+       "sellers": 2,
+       "unique_traders": 4
+      },
+      "h6": {
+       "buys": 12,
+       "sells": 24,
+       "buyers": 11,
+       "sellers": 20,
+       "unique_traders": 30
+      },
+      "h24": {
+       "buys": 42,
+       "sells": 50,
+       "buyers": 37,
+       "sellers": 40,
+       "unique_traders": 68
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "3.9978590388",
+      "m30": "3.9978590388",
+      "h1": "19.4101821261",
+      "h6": "242.1962498045",
+      "h24": "683.5702925183"
+     },
+     "reserve_in_usd": "761.6598"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0x2170ed0880ac9a755fd29b2688956bd959f933f8",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0x7c0b5d39765b221810d477e8f02d47a9badf018a",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.0253527550277845",
+     "base_token_price_native_currency": "0.0000471086153932136",
+     "quote_token_price_usd": "0.999939123877579",
+     "quote_token_price_native_currency": "0.00184066106558229",
+     "base_token_price_quote_token": "0.02559331333",
+     "quote_token_price_base_token": "39.0727057083",
+     "address": "0x7c0b5d39765b221810d477e8f02d47a9badf018a",
+     "name": "THE / USDC 1%",
+     "pool_created_at": "2023-04-20T14:43:59Z",
+     "fdv_usd": "8257189.18273184",
+     "market_cap_usd": "3513929.33024458",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0",
+      "h1": "0",
+      "h6": "-8.491",
+      "h24": "-15.117"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "h1": {
+       "buys": 0,
+       "sells": 1,
+       "buyers": 0,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "h6": {
+       "buys": 3,
+       "sells": 26,
+       "buyers": 3,
+       "sellers": 12,
+       "unique_traders": 15
+      },
+      "h24": {
+       "buys": 28,
+       "sells": 57,
+       "buyers": 19,
+       "sellers": 25,
+       "unique_traders": 38
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "0.0",
+      "m30": "0.0",
+      "h1": "10.0201103711",
+      "h6": "818.8455937204",
+      "h24": "2338.4221066694"
+     },
+     "reserve_in_usd": "9979.217"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0xf4c8e32eadec4bfe97e0f595add0f4450a863a11",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0xb3f3312252cade3a15eba318f6caaacb5e8097f4",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.00124984364521859",
+     "base_token_price_native_currency": "0.00000227330439344194",
+     "quote_token_price_usd": "546.07",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.000002273304393",
+     "quote_token_price_base_token": "439888.297794529",
+     "address": "0xb3f3312252cade3a15eba318f6caaacb5e8097f4",
+     "name": "RWA / WBNB 0.334%",
+     "pool_created_at": "2024-12-03T23:49:52Z",
+     "fdv_usd": "20713.0587084951",
+     "market_cap_usd": "971846.595869749",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0",
+      "h1": "0",
+      "h6": "-0.328",
+      "h24": "-1.968"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "h1": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "h6": {
+       "buys": 11,
+       "sells": 7,
+       "buyers": 3,
+       "sellers": 2,
+       "unique_traders": 4
+      },
+      "h24": {
+       "buys": 18,
+       "sells": 11,
+       "buyers": 3,
+       "sellers": 2,
+       "unique_traders": 4
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "0.0",
+      "m30": "0.0",
+      "h1": "0.0",
+      "h6": "472.8305876424",
+      "h24": "739.3250012078"
+     },
+     "reserve_in_usd": "3629.4647"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0xe2b1dc2d4a3b4e59fdf0c47b71a7a86391a8b35a",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0x775cac1c1b47250121291934d15912efb69213e9",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.0742192337545722",
+     "base_token_price_native_currency": "0.000136798490434534",
+     "quote_token_price_usd": "541.95",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.0001367984904",
+     "quote_token_price_base_token": "7310.022185359",
+     "address": "0x775cac1c1b47250121291934d15912efb69213e9",
+     "name": "MATIC / WBNB 0.131%",
+     "pool_created_at": "2023-04-24T16:35:46Z",
+     "fdv_usd": "1627670.20838244",
+     "market_cap_usd": "0.0",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0",
+      "h1": "0.243",
+      "h6": "-4.601",
+      "h24": "-8.155"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buys": 1,
+       "sells": 0,
+       "buyers": 1,
+       "sellers": 0,
+       "unique_traders": 1
+      },
+      "h1": {
+       "buys": 3,
+       "sells": 0,
+       "buyers": 2,
+       "sellers": 0,
+       "unique_traders": 2
+      },
+      "h6": {
+       "buys": 6,
+       "sells": 5,
+       "buyers": 5,
+       "sellers": 5,
+       "unique_traders": 8
+      },
+      "h24": {
+       "buys": 13,
+       "sells": 7,
+       "buyers": 10,
+       "sellers": 7,
+       "unique_traders": 15
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "0.0",
+      "m30": "7.2067422046",
+      "h1": "16.7862766214",
+      "h6": "65.8557532685",
+      "h24": "134.5348002754"
+     },
+     "reserve_in_usd": "554.7228"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0xcc42724c6683b7e57334c4e856f4c9965ed682bd",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0x44aa475ed44dda30f4fb81a0eec7c44aed01c7c0",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.000352738817191807",
+     "base_token_price_native_currency": "0.00000064473107271263",
+     "quote_token_price_usd": "547.11",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.0000006447310727",
+     "quote_token_price_base_token": "1551034.28750939",
+     "address": "0x44aa475ed44dda30f4fb81a0eec7c44aed01c7c0",
+     "name": "ABOND / WBNB 0.319%",
+     "pool_created_at": "2023-12-11T23:59:07Z",
+     "fdv_usd": "121808.193096345",
+     "market_cap_usd": "117732.182491191",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0",
+      "h1": "0",
+      "h6": "-15.036",
+      "h24": "-15.036"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "h1": {
+       "buys": 0,
+       "sells": 1,
+       "buyers": 0,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "h6": {
+       "buys": 9,
+       "sells": 6,
+       "buyers": 7,
+       "sellers": 5,
+       "unique_traders": 11
+      },
+      "h24": {
+       "buys": 9,
+       "sells": 6,
+       "buyers": 7,
+       "sellers": 5,
+       "unique_traders": 11
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "0.0",
+      "m30": "0.0",
+      "h1": "16.641768147",
+      "h6": "1752.4076743943",
+      "h24": "1752.4076743943"
+     },
+     "reserve_in_usd": "6219.7166"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0x34294afabcbaffc616ac6614f6d2e17260b78bed",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0xff4840a06708e53b620e2670295265029fa72a78",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.0539411919894067",
+     "base_token_price_native_currency": "0.0000991557268923924",
+     "quote_token_price_usd": "542.02",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.00009915572689",
+     "quote_token_price_base_token": "10085.1461770356",
+     "address": "0xff4840a06708e53b620e2670295265029fa72a78",
+     "name": "DOGE / WBNB 0.221%",
+     "pool_created_at": "2023-05-01T23:14:58Z",
+     "fdv_usd": "138225616.793711",
+     "market_cap_usd": "138305216.26236",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0.001",
+      "h1": "0.001",
+      "h6": "-4.761",
+      "h24": "-7.564"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buys": 1,
+       "sells": 1,
+       "buyers": 1,
+       "sellers": 1,
+       "unique_traders": 2
+      },
+      "h1": {
+       "buys": 1,
+       "sells": 1,
+       "buyers": 1,
+       "sellers": 1,
+       "unique_traders": 2
+      },
+      "h6": {
+       "buys": 4,
+       "sells": 6,
+       "buyers": 2,
+       "sellers": 6,
+       "unique_traders": 8
+      },
+      "h24": {
+       "buys": 6,
+       "sells": 8,
+       "buyers": 4,
+       "sellers": 8,
+       "unique_traders": 12
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "0.0",
+      "m30": "7.0185775887",
+      "h1": "7.0185775887",
+      "h6": "13.8057362172",
+      "h24": "17.5285941813"
+     },
+     "reserve_in_usd": "465.8611"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0xba2ae424d960c26247dd6c32edc70b295c744c43",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0xde045462392a86a313239c5cbac87f7f57a92402",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.0000630159309683823",
+     "base_token_price_native_currency": "0.000000116216581575160495968480881305",
+     "quote_token_price_usd": "542.28",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.0000001162165816",
+     "quote_token_price_base_token": "8604624.1116916",
+     "address": "0xde045462392a86a313239c5cbac87f7f57a92402",
+     "name": "SDM / WBNB 0.326%",
+     "pool_created_at": "2024-12-29T21:23:16Z",
+     "fdv_usd": "63015.9309245205",
+     "market_cap_usd": "28150.7726433484",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0",
+      "h1": "0",
+      "h6": "-0.151",
+      "h24": "-1.471"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buys": 1,
+       "sells": 0,
+       "buyers": 1,
+       "sellers": 0,
+       "unique_traders": 1
+      },
+      "h1": {
+       "buys": 1,
+       "sells": 0,
+       "buyers": 1,
+       "sellers": 0,
+       "unique_traders": 1
+      },
+      "h6": {
+       "buys": 8,
+       "sells": 0,
+       "buyers": 7,
+       "sellers": 0,
+       "unique_traders": 7
+      },
+      "h24": {
+       "buys": 11,
+       "sells": 0,
+       "buyers": 9,
+       "sellers": 0,
+       "unique_traders": 9
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "0.0",
+      "m30": "3.8534026945",
+      "h1": "3.8534026945",
+      "h6": "34.9488481181",
+      "h24": "46.1092918954"
+     },
+     "reserve_in_usd": "307.8371"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0x516f8a1fb458ebdcfd0f544ff85c69c1c0ebc31d",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0xf2a4e4261fcdfbb891bcf703640fbe713c6cd0fe",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "602.511255096859",
+     "base_token_price_native_currency": "1.10996345937574",
+     "quote_token_price_usd": "542.82",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "1.1099634594",
+     "quote_token_price_base_token": "0.9009305591",
+     "address": "0xf2a4e4261fcdfbb891bcf703640fbe713c6cd0fe",
+     "name": "BNBx / WBNB 0.01%",
+     "pool_created_at": "2023-04-20T17:49:43Z",
+     "fdv_usd": "1548755.34163685",
+     "market_cap_usd": "2243467.82210667",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0",
+      "h1": "0",
+      "h6": "-4.023",
+      "h24": "-6.536"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "h1": {
+       "buys": 1,
+       "sells": 0,
+       "buyers": 1,
+       "sellers": 0,
+       "unique_traders": 1
+      },
+      "h6": {
+       "buys": 7,
+       "sells": 0,
+       "buyers": 6,
+       "sellers": 0,
+       "unique_traders": 6
+      },
+      "h24": {
+       "buys": 10,
+       "sells": 1,
+       "buyers": 9,
+       "sellers": 1,
+       "unique_traders": 10
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "0.0",
+      "m30": "0.0",
+      "h1": "4.7559181656",
+      "h6": "21.992441172",
+      "h24": "38.1003850909"
+     },
+     "reserve_in_usd": "28598.172"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0x1bdd3cf7f79cfb8edbb955f20ad99211551ba275",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "bsc_0x52ddb7bd7ca73a20b6334cc08fcaca9906992a15",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.937287644430818",
+     "base_token_price_native_currency": "0.00165539531382327",
+     "quote_token_price_usd": "564.62",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.001655395314",
+     "quote_token_price_base_token": "604.085315241",
+     "address": "0x52ddb7bd7ca73a20b6334cc08fcaca9906992a15",
+     "name": "XRP / WBNB 0.301%",
+     "pool_created_at": "2024-03-02T15:52:05Z",
+     "fdv_usd": "305299998.26838",
+     "market_cap_usd": "305368314.461163",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0",
+      "h1": "0",
+      "h6": "-1.134",
+      "h24": "-2.019"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "h1": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "h6": {
+       "buys": 0,
+       "sells": 3,
+       "buyers": 0,
+       "sellers": 3,
+       "unique_traders": 3
+      },
+      "h24": {
+       "buys": 4,
+       "sells": 6,
+       "buyers": 4,
+       "sellers": 6,
+       "unique_traders": 10
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "0.0",
+      "m30": "0.0",
+      "h1": "0.0",
+      "h6": "4.0979031326",
+      "h24": "10.5551935886"
+     },
+     "reserve_in_usd": "634.7227"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "bsc_0x1d2f0da169ceb9fc7b3144628db156f3f6c60dbe",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "bsc_0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "thena-fusion",
+       "type": "dex"
+      }
+     }
+    }
+   }
+  ]
+ }
+}

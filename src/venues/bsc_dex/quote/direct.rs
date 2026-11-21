@@ -1,6 +1,7 @@
 //! Файл: venues/bsc_dex/quote/direct.rs
 //! Что делает: котировка «прямого» режима (решение 29) — лучший одиночный пул монеты с USDT по её реальной
-//! ликвидности (локальная математика пула) с учётом налогов монеты и влияния крючка; затраты — в quote/costs.rs.
+//! ликвидности (локальная математика пула) с учётом налога монеты ИМЕННО в этом пуле (решение 146, Usable.tax_pct) и
+//! влияния крючка; затраты — в quote/costs.rs.
 //! Покупка Q монет: сколько USDT отдать, чтобы после налога покупки и крючка пришло Q (точный выход из пула);
 //! продажа Q монет: сколько USDT придёт (в пул доходит Q за вычетом налога продажи, точный вход).
 //! Не хватает ликвидности в прочитанных пределах — fillable_qty меньше qty.
@@ -50,18 +51,18 @@ pub fn best(
     let mut reasons = Vec::new();
     for e in entries {
         let r = select::usable(q, &e, side, usdt_dec).and_then(|u| {
-            calc(ctx, &e, &u, side, qty, &taxes, (coin_dec, usdt_dec))
-                .map(|(swapped, coins, usdt)| Candidate {
-                    entry: e.clone(),
+            calc_u(ctx, &e, &u, side, qty, (coin_dec, usdt_dec)).map_err(|err| err.message)
+        });
+        match r {
+            Ok((swapped, coins, usdt, u)) => {
+                // Решение 410 (t195): запись пула переходит в кандидата (цикл владеет `entries`) — раньше копия.
+                let c = Candidate {
+                    entry: e,
                     usable: u,
                     swapped,
                     coins,
                     usdt,
-                })
-                .map_err(|err| err.message)
-        });
-        match r {
-            Ok(c) => {
+                };
                 if best.as_ref().is_none_or(|b| better(&c, b, side)) {
                     best = Some(c);
                 }
@@ -83,8 +84,19 @@ pub fn best(
 
 /// Налоги монеты из проверки. Ошибки: CoinNotChecked, CoinCheckFailed.
 pub fn taxes(q: &Quoting, asset: &Asset) -> GatewayResult<TokenTaxes> {
-    match q.checks.coin(&asset.ticker).map(|c| c.taxes) {
+    // Решение 211: налоги — по адресу контракта монеты.
+    match q.checks.coin_of(asset).map(|c| c.taxes) {
         Some(CheckState::Known(t)) => Ok(t),
+        // Решение 247, п. В: продажа выхода (монета уже куплена) — проверка «не прошла» не закрывает продажу: модель
+        // без налога, реальный выход меряет проба перед отправкой (откат — ошибка с числами; у исполнителя —
+        // пере-замер). Честного отказа продажи (ханипот) проба не пропустит.
+        Some(CheckState::Failed { .. }) if crate::gateway::exit_scope::is_exit() => {
+            Ok(TokenTaxes {
+                buy_pct: Decimal::ZERO,
+                sell_pct: Decimal::ZERO,
+                transfer_pct: Decimal::ZERO,
+            })
+        }
         Some(CheckState::Failed { reason }) => Err(q.ctx.err(
             ErrorCode::CoinCheckFailed,
             format!("{}: {reason}", asset.ticker),
@@ -96,18 +108,33 @@ pub fn taxes(q: &Quoting, asset: &Asset) -> GatewayResult<TokenTaxes> {
     }
 }
 
-/// Расчёт в одном пуле. Принимает: пул, его допуск, сторону, количество монет, налоги, (decimals монеты, USDT).
+/// Расчёт в одном пуле. Принимает: пул, его допуск (налог монеты этой стороны в этом пуле — Usable.tax_pct, решение
+/// 146; крючок), сторону, количество монет, (decimals монеты, USDT).
 /// Возвращает: (обмен в пуле, монет получим/продадим, USDT отдадим/получим).
-/// Ошибки: NoRoute (математика, налоги забирают всё), BadResponse (числа не помещаются).
+/// Ошибки: NoRoute (математика, налоги забирают всё, влияние крючка на этой сумме не измерено или выше лимита),
+/// BadResponse (числа не помещаются).
 pub fn calc(
     ctx: &Ctx,
     e: &Entry,
     u: &Usable,
     side: Side,
     qty: Decimal,
-    t: &TokenTaxes,
-    (coin_dec, usdt_dec): (u8, u8),
+    decs: (u8, u8),
 ) -> GatewayResult<(Swapped, Decimal, Decimal)> {
+    calc_u(ctx, e, u, side, qty, decs).map(|(s, c, d, _)| (s, c, d))
+}
+
+/// Как calc, плюс допуск пула с влиянием крючка, применённым на входе этого расчёта (решение «335 (лесенка
+/// влияния)», quote/hook_curve.rs): покупка (точный выход) — settle, продажа (точный вход) — pct_at на входе монет.
+/// Ошибки: как calc.
+pub fn calc_u(
+    ctx: &Ctx,
+    e: &Entry,
+    u: &Usable,
+    side: Side,
+    qty: Decimal,
+    (coin_dec, usdt_dec): (u8, u8),
+) -> GatewayResult<(Swapped, Decimal, Decimal, Usable)> {
     let keep = |pct: Decimal| Decimal::ONE - pct / Decimal::ONE_HUNDRED;
     let bad = || {
         ctx.err(
@@ -115,29 +142,41 @@ pub fn calc(
             "сумма не переводится в единицы токена",
         )
     };
+    let no = |why: String| ctx.err(ErrorCode::NoRoute, why);
+    let mut applied = u.clone();
     match side {
         Side::Buy => {
-            let k = keep(t.buy_pct) * keep(u.hook_pct);
-            if k <= Decimal::ZERO {
-                return Err(ctx.err(ErrorCode::NoRoute, "налог покупки и крючок забирают всё"));
-            }
-            let pool_out = ceil_units(qty / k, coin_dec).ok_or_else(bad)?;
-            let s = pool_quote::swap(ctx, e, e.usdt, false, pool_out)?;
+            let (pct, (s, k)) = u.hook.settle(
+                u.hook_pct,
+                |pct| {
+                    let k = keep(u.tax_pct) * keep(pct);
+                    if k <= Decimal::ZERO {
+                        return Err(no("налог покупки и крючок забирают всё".into()));
+                    }
+                    let pool_out = ceil_units(qty / k, coin_dec).ok_or_else(bad)?;
+                    let s = pool_quote::swap(ctx, e, e.usdt, false, pool_out)?;
+                    Ok((s.amount_in, (s, k)))
+                },
+                no,
+            )?;
+            applied.hook_pct = pct;
             let got = num::to_decimal(s.amount_out, coin_dec).ok_or_else(bad)? * k;
             let usdt = num::to_decimal(s.amount_in, usdt_dec).ok_or_else(bad)?;
-            Ok((s, got.min(qty), usdt))
+            Ok((s, got.min(qty), usdt, applied))
         }
         Side::Sell => {
-            let k = keep(t.sell_pct);
+            let k = keep(u.tax_pct);
             if k <= Decimal::ZERO {
                 return Err(ctx.err(ErrorCode::NoRoute, "налог продажи забирает всё"));
             }
             let into_pool = num::to_units(qty * k, coin_dec).ok_or_else(bad)?;
+            let pct = u.hook.pct_at(u.hook_pct, into_pool).map_err(no)?;
+            applied.hook_pct = pct;
             let s = pool_quote::swap(ctx, e, e.coin, true, into_pool)?;
             let used = num::to_decimal(s.amount_in, coin_dec).ok_or_else(bad)?;
             let sold = if s.complete { qty } else { used / k };
-            let out = num::to_decimal(s.amount_out, usdt_dec).ok_or_else(bad)? * keep(u.hook_pct);
-            Ok((s, sold.min(qty), out))
+            let out = num::to_decimal(s.amount_out, usdt_dec).ok_or_else(bad)? * keep(pct);
+            Ok((s, sold.min(qty), out, applied))
         }
     }
 }

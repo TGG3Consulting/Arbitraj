@@ -31,7 +31,7 @@ pub fn liquidity_topics() -> Vec<B256> {
     vec![ISolidlyPool::Sync::SIGNATURE_HASH]
 }
 
-/// Применяет Sync: новые резервы в текущее состояние Solidly (stable/decimals/fee сохраняются). Ошибок нет: не
+/// Применяет Sync: новые резервы в текущее состояние Solidly (stable/decimals/fee/gate сохраняются). Ошибок нет: не
 /// разобрано или состояние не Solidly → Refresh (перечитать пул целиком).
 pub fn apply(e: &mut Entry, log: &Log) -> Applied {
     let s = match ISolidlyPool::Sync::decode_log_data(&log.inner.data) {

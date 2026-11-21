@@ -64,18 +64,19 @@ pub fn in_band(
 }
 
 /// Что делает: строка карточки по стакану. Принимает: площадку, сторону сделки, уровни нужной стороны (None — стакана
-/// нет), полосу (Err — почему её нет). Возвращает: BookSide. Ошибок нет — в error.
+/// нет), полосу (Err — почему её нет; Ok(None) — у направления нет DEX, полоса не задаётся и это не ошибка: стакан
+/// показывается без полосы — решение 118, Я-20). Возвращает: BookSide. Ошибок нет — в error.
 pub fn side(
     venue: &str,
     side: Side,
     levels: Option<&[PriceLevel]>,
-    band: Result<Decimal, String>,
+    band: Result<Option<Decimal>, String>,
 ) -> BookSide {
     let mut b = BookSide {
         venue: venue.to_string(),
         side,
         best: levels.and_then(|l| l.first()).map(|l| l.price),
-        band_pct: band.as_ref().ok().copied(),
+        band_pct: band.as_ref().ok().copied().flatten(),
         usd_in_band: None,
         qty_in_band: None,
         levels: levels.map_or(0, <[PriceLevel]>::len),
@@ -85,7 +86,8 @@ pub fn side(
     match (levels, band) {
         (None, _) => b.error = Some("стакана нет".into()),
         (_, Err(e)) => b.error = Some(e),
-        (Some(l), Ok(band)) => match in_band(l, side, band) {
+        (_, Ok(None)) => {}
+        (Some(l), Ok(Some(band))) => match in_band(l, side, band) {
             Some((usd, qty, beyond)) => {
                 b.usd_in_band = Some(usd.round_dp(2));
                 b.qty_in_band = Some(qty);

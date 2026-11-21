@@ -6,8 +6,13 @@
 //! Кто вызывает: mod.rs (subscribe_market, watch_settings).
 //! От чего зависит: parts.rs, pools/market.rs, settings/live.rs (Watch).
 //! При подписке очередь кошелька восстанавливается из SQLite (wallet/queue_store.rs); остановленная — событие ядру.
-//! С подпиской живёт и задача событий баланса кошелька (wallet/events.rs, решение 76).
-//! Настройки: dex.intermediate_*, dex.native_ticker (следит за изменениями).
+//! С подпиской живут задачи событий баланса — по одной на кошелёк (wallet/events.rs, решение 76; решение 132: у
+//! каждого кошелька своя очередь и свои события). Изменение кошельков или маппинга пересобирает подписку.
+//! Настройки: dex.intermediate_*, dex.native_ticker, dex.native_wrapped (следит за изменениями, как раньше);
+//! venue.price_assets, venue.quote_asset — решение 276 (ревью): занятые тикеры подписи промежуточной без биржи
+//! (pools/mid_dex.rs busy); их смена пересобирает подписку ТОЛЬКО при dex.intermediate_dex_priced = да (rebuild_on),
+//! флаг нет/не задан — ни пересборки, ни записи журнала, как до решения 276. Решение 295: dex.multi_pair [DEX] — смена
+//! вида ссылки многомонетных пулов (Contract ↔ Multi) пересобирает подписку (справочник, реестр, пачки).
 
 use std::sync::{Arc, Mutex};
 
@@ -20,6 +25,7 @@ use crate::gateway::events::MarketEvent;
 use crate::settings::live::{Change, Watch};
 use crate::storage::journal::Level;
 
+use super::ctx::Ctx;
 use super::parts::Parts;
 use super::pools;
 
@@ -31,6 +37,9 @@ type Last = Option<(Vec<Asset>, mpsc::Sender<MarketEvent>)>;
 pub struct Subs {
     tasks: Arc<Mutex<Vec<JoinHandle<()>>>>,
     last: Arc<Mutex<Last>>,
+    /// Задачи кошельков (события баланса, решение 132) и окружение слушателей, из которого они собраны.
+    pub(super) wallet_tasks: Arc<Mutex<Vec<JoinHandle<()>>>>,
+    pub(super) pools: Arc<Mutex<Option<super::pools::listen::Pools>>>,
 }
 
 impl Subs {
@@ -41,23 +50,10 @@ impl Subs {
         assets: Vec<Asset>,
         out: mpsc::Sender<MarketEvent>,
     ) -> GatewayResult<()> {
-        // Очередь кошелька после запуска — из SQLite; остановленная — сразу ядру (уведомление, экран).
-        p.nonces.restore(&p.ctx).await;
         let pools = p.pools(out.clone());
-        if let st @ crate::core::types::WalletQueueState::Halted { .. } = p.nonces.state() {
-            let q = crate::core::types::WalletQueue {
-                venue: p.ctx.venue(),
-                state: st,
-                nonce_taken: None,
-            };
-            let _ = out.try_send(MarketEvent::WalletQueue(q));
-        }
-        let mut new = pools::market::subscribe(&pools, &p.scanned, &p.wake, assets.clone()).await?;
-        // Изменения баланса кошелька событиями — для зачисления переводов без опроса (решение 76).
-        new.push(tokio::spawn(super::wallet::events::run(
-            pools.clone(),
-            p.inflows.clone(),
-        )));
+        let new = pools::market::subscribe(&pools, &p.scanned, &p.wake, assets.clone()).await?;
+        // Решение 132: очереди и события баланса — по кошелькам (resubscribe_wallets.rs).
+        self.wallets(p, Some(pools.clone())).await;
         let mut tasks = self.tasks.lock().unwrap_or_else(|x| x.into_inner());
         for old in tasks.drain(..) {
             old.abort();
@@ -74,26 +70,64 @@ impl Subs {
         tokio::spawn(async move {
             let mut w = Watch::new(
                 rx,
-                vec!["dex.intermediate_".into(), "dex.native_ticker".into()],
+                vec![
+                    "dex.intermediate_".into(),
+                    "dex.native_ticker".into(),
+                    // Решение 270: смена обёртки на лету меняет, какой WETH() нативный, — список пересобирается.
+                    "dex.native_wrapped".into(),
+                    // Решение 276 (ревью): занятые тикеры подписи промежуточной без биржи (pools/mid_dex.rs busy).
+                    "venue.price_assets".into(),
+                    "venue.quote_asset".into(),
+                    // Решение 295: режим «все пары многомонетного пула» — другой вид ссылки и другие записи реестра.
+                    "dex.multi_pair".into(),
+                ],
             );
-            while let Some(c) = w.next().await {
+            // Решение 132: кошельки или маппинг изменились — пересобираются только задачи кошельков (пулы не трогаем).
+            let mut acc = p.ctx.settings.accounts().subscribe();
+            loop {
+                let c = tokio::select! {
+                    c = w.next() => match c {
+                        Some(c) => c,
+                        None => return,
+                    },
+                    r = acc.changed() => match r {
+                        Ok(()) => {
+                            me.wallets(&p, None).await;
+                            continue;
+                        }
+                        Err(_) => return,
+                    },
+                };
+                let name = c.name;
+                if !rebuild_on(&p.ctx, &name) {
+                    continue;
+                }
                 let last = me.last.lock().unwrap_or_else(|x| x.into_inner()).clone();
                 let Some((assets, out)) = last else { continue };
                 let msg = match me.subscribe(&p, assets, out).await {
                     Ok(()) => (
                         Level::Info,
-                        format!("{} изменена — подписка DEX пересобрана", c.name),
+                        format!("{name} изменена — подписка DEX пересобрана"),
                     ),
                     Err(e) => (
                         Level::Error,
-                        format!(
-                            "{} изменена, подписка не пересобрана: {}",
-                            c.name, e.message
-                        ),
+                        format!("{name} изменена, подписка не пересобрана: {}", e.message),
                     ),
                 };
                 p.ctx.log(msg.0, "dex.intermediate", msg.1, None).await;
             }
         })
     }
+}
+
+/// Решение 276 (ревью): настройки, нужные только подписи промежуточной без биржи (pools/mid_dex.rs busy).
+const LABEL_ONLY: [&str; 2] = ["venue.price_assets", "venue.quote_asset"];
+
+/// Пересобирать ли подписку на изменение настройки name (имя уже прошло префиксы Watch). Принимает: окружение, имя.
+/// Возвращает: false — имя из LABEL_ONLY (тем же сравнением по префиксу, что у Watch), а dex.intermediate_dex_priced
+/// не «да» (нет, не задана или не читается); иначе true — прежнее слежение (dex.intermediate_*, dex.native_ticker,
+/// dex.native_wrapped) не меняется. Ошибок нет.
+pub fn rebuild_on(ctx: &Ctx, name: &str) -> bool {
+    !LABEL_ONLY.iter().any(|p| name.starts_with(p))
+        || matches!(ctx.flag("dex.intermediate_dex_priced"), Ok(true))
 }

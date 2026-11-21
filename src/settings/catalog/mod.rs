@@ -1,22 +1,77 @@
 //! Файл: settings/catalog/mod.rs
 //! Что делает: полный список настроек системы — зеркало docs/SETTINGS.md. Значений нет.
 //! Список разбит по файлам: base.rs (базовые), trade.rs (налоги, крючки, возврат USDT, застрявшие монеты,
-//! ручной чёрный список), dex.rs (адаптер DEX и узел BSC), index.rs (справочник пулов от индексатора, решение 58),
-//! send.rs (отправка и каналы), signals.rs (сухой режим, карточка сигнала, эпизоды — решение 74).
+//! ручной чёрный список), dex.rs (адаптер DEX и узел BSC), dex_fit.rs (DEX, решение 294), dex_graph.rs (DEX, решение 308), dex_event.rs (Система и DEX, решения 313–315), dex_fail.rs (DEX, решение 339), dex_par.rs (DEX, решения 330–331), dex_ekubo.rs (Ekubo, решение 447), dex_basin.rs (Basin, решение 485), dex_shell.rs (Shell Protocol Proteus, решение 486), dex_bv3_buffer.rs (буфер ERC4626 Balancer V3, решение 474), index.rs (справочник пулов от индексатора, решение 58),
+//! send.rs (отправка и каналы), signals.rs (сухой режим, карточка сигнала, эпизоды — решение 74), uncapped.rs (расчёт
+//! «без потолка» — решение 141), window.rs (окна —
+//! решение 125), gate.rs, okx.rs, binance.rs, bitget.rs и xt.rs (настройки только одной биржи).
+//! решение 125), gate.rs, okx.rs, phemex.rs (настройки только Gate, только OKX, только Phemex).
+//! решение 125), gate.rs, okx.rs, kraken.rs и др. (настройки только одной биржи).
+//! решение 125), gate.rs, okx.rs, coinex.rs (настройки только Gate, только OKX, только CoinEx).
+//! решение 125), gate.rs, okx.rs, htx.rs и др. (настройки одной биржи).
+//! kucoin.rs — только KuCoin (решение 423).
+//! cpu.rs — счёт процессора (решения 336–338, задача t157). bingx.rs — только BingX (решение 293). book_events.rs — стаканы бирж при полном канале ядра (решение 324).
+//! dex_lb.rs — Liquidity Book V2.2 (решение 446).
+//! dex_elastic.rs — KyberSwap Elastic, части чтения тиков (решение 475).
+//! bybit.rs — только Bybit (решение 428, страховка стакана).
+//! mexc.rs — только MEXC (решение 420, быстрый стакан).
+//! dex_wombat.rs — Wombat Exchange, реализации пула (решение 484).
+//! lost_events.rs — сообщения ядру и кандидаты не теряются молча (решения 333/334).
+//! write_path.rs — очередь уведомлений, очередь и пачки журнала, synchronous учёта ядра (решения 340, 341, 353).
 //! Кто вызывает: settings/store.rs (проверка имени и типа), api/settings.rs (схема для интерфейса).
 //! От чего зависит: settings/schema.rs.
 //! Настройки: это и есть их список.
 //!
-//! Новая настройка: строка в docs/SETTINGS.md + строка в нужном файле этой папки + поле в интерфейсе.
+//! Новая настройка: строка в docs/SETTINGS.md + строка в нужном файле этой папки + поле в интерфейсе + запись в
+//! docs/SETTINGS_CASES.md (решение 396; без неё падает tests/settings_cases_guard.rs).
+//! Решение 283: значение области «площадка» читается только у площадки DEX — .dex_venue() (поле venue_for, только показ).
 
 mod base;
+mod binance;
+mod bingx;
+mod bitget;
+mod book_events;
+mod bybit;
+mod coinex;
+mod cpu;
 pub mod dex;
+mod dex_basin;
+mod dex_bv3_buffer;
+mod dex_ekubo;
+mod dex_elastic;
+mod dex_event;
+mod dex_fail;
+mod dex_fit;
+mod dex_graph;
+mod dex_lb;
+mod dex_par;
+mod dex_shell;
+mod dex_wombat;
+mod feed_watch;
+mod gate;
+mod htx;
 mod index;
-mod send;
+mod kraken;
+mod kucoin;
+mod kyber;
+mod lost_events;
+mod mexc;
+mod okx;
+mod phemex;
+pub mod send;
+mod sieve;
 mod signals;
+mod sizing;
 mod trade;
+mod uncapped;
+mod window;
+mod write_path;
+mod xt;
 
-use super::schema::{DexId, Kind as K, Limit as L, ScopeKind as S, SettingDef, VenueRole};
+use super::schema::{
+    DexId, Kind as K, Limit as L, ScopeKind as S, SettingDef, VenueFor, VenueRole,
+};
+use super::venue_dir::DirKind;
 
 /// Короткая запись одной настройки. Принимает: группу, имя, тип, ограничение, единицу, области, описание.
 /// Возвращает: SettingDef без вариантов выбора и без верхней границы (их добавляют .choices() и .max()).
@@ -46,7 +101,11 @@ const fn d(
             DexId::None
         },
         venue_role: VenueRole::Venue,
+        // Решение 283: какие площадки читают значение области «площадка» (показ в интерфейсе) — .dex_venue().
+        venue_for: VenueFor::Any,
         optional: false,
+        // Решение 242: область «площадка + тип направления» задаётся .dir_kinds(…).
+        dir_kinds: &[],
     }
 }
 
@@ -64,21 +123,64 @@ const fn has_dex(scopes: &[S]) -> bool {
 
 const G: &[S] = &[S::Global];
 const GV: &[S] = &[S::Global, S::Venue];
-const GC: &[S] = &[S::Global, S::Coin];
 const V: &[S] = &[S::Venue];
 const VC: &[S] = &[S::Venue, S::Coin];
 const C: &[S] = &[S::Coin];
 const E: &[S] = &[S::Event];
 const DX: &[S] = &[S::Dex];
 const CH: &[S] = &[S::Channel];
+// Решение 242: наборы с областью «площадка + тип направления» и её типы.
+const GX: &[S] = &[S::Global, S::VenueDir];
+const GVX: &[S] = &[S::Global, S::Venue, S::VenueDir];
+const GCX: &[S] = &[S::Global, S::Coin, S::VenueDir];
+const VX: &[S] = &[S::Venue, S::VenueDir];
+/// Типы направлений с переводом (у биржи): биржа → DEX, DEX → биржа, биржа → биржа.
+const DIR_TRANSFER: &[DirKind] = &[DirKind::CexToDex, DirKind::DexToCex, DirKind::CexCex];
+/// Все типы, включая DEX ↔ DEX (у DEX).
+const DIR_ALL: &[DirKind] = &DirKind::ALL;
 
 /// Все части каталога. Порядок — как в docs/SETTINGS.md.
 static PARTS: &[&[SettingDef]] = &[
     base::BASE,
+    cpu::CPU,
+    sizing::SIZING,
     trade::TRADE,
     signals::SIGNALS,
+    uncapped::UNCAPPED,
+    window::WINDOW,
+    feed_watch::FEED_WATCH,
+    book_events::BOOK_EVENTS,
+    lost_events::LOST_EVENTS,
+    sieve::SIEVE,
+    write_path::WRITE_PATH,
+    bingx::BINGX,
+    gate::GATE,
+    bitget::BITGET,
+    okx::OKX,
+    binance::BINANCE,
+    xt::XT,
+    bybit::BYBIT,
+    mexc::MEXC,
+    kucoin::KUCOIN,
+    phemex::PHEMEX,
+    kraken::KRAKEN,
+    coinex::COINEX,
+    htx::HTX,
     dex::DEX,
+    dex_fit::DEX_FIT,
+    dex_graph::DEX_GRAPH,
+    dex_lb::DEX_LB,
+    dex_event::DEX_EVENT,
+    dex_fail::DEX_FAIL,
+    dex_par::DEX_PAR,
+    dex_ekubo::DEX_EKUBO,
+    dex_shell::DEX_SHELL,
+    dex_bv3_buffer::DEX_BV3_BUFFER,
+    dex_elastic::DEX_ELASTIC,
+    dex_wombat::DEX_WOMBAT,
+    dex_basin::DEX_BASIN,
     index::INDEX,
+    kyber::KYBER,
     send::SEND,
 ];
 
@@ -111,6 +213,16 @@ mod tests {
             assert_eq!(
                 s.scopes.contains(&S::Dex),
                 s.dex_id != DexId::None,
+                "{}",
+                s.name
+            );
+            // Решение 283: пометка «только DEX» имеет смысл лишь у настройки с областью «площадка».
+            if s.venue_for == VenueFor::Dex {
+                assert!(s.scopes.contains(&S::Venue), "{}", s.name);
+            }
+            assert_eq!(
+                s.scopes.contains(&S::VenueDir),
+                !s.dir_kinds.is_empty(),
                 "{}",
                 s.name
             );

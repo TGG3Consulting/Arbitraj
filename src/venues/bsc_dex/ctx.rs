@@ -1,12 +1,15 @@
 //! Файл: venues/bsc_dex/ctx.rs
 //! Что делает: общее окружение адаптера DEX — настройки (площадка, DEX/вид пула, канал), секреты,
 //! HTTP-клиент, журнал, запись сырых сообщений — и чтение настроек в одном месте.
-//! Адрес узла с ключом провайдера (node_url, with_key) — ctx_url.rs.
+//! Адрес узла с ключом провайдера (node_url, with_key) — ctx_url.rs. Кошелёк счёта (решение 132) — ctx_wallet.rs.
+//! chainId площадки для горячего пути (поле evm_chain, Ctx::chain_id; ревью t235) — ctx_chain.rs.
 //! Кто вызывает: все файлы адаптера DEX.
 //! От чего зависит: settings, secrets, storage (journal, raw_log), core/types.
-//! Настройки: venue.* и feed.* с областью «bsc_dex», dex.* (область «DEX»), channel.* (область «канал»),
+//! Решение 435 (433-г): id площадки — поле Ctx.place (ctx_place.rs, из main.rs), а не константа: тот же код обслуживает
+//! площадки DEX разных сетей (bsc_dex, arb_dex).
+//! Настройки: venue.* и feed.* с областью своей площадки (bsc_dex, arb_dex), dex.* (область «DEX»), channel.* (область «канал»),
 //! bsc.node_ws_url, bsc.node_http_url, http.timeout_ms (docs/SETTINGS.md).
-//! Секреты: bsc_dex.wallet_key, bsc.node_ws_key, bsc.node_http_key, channel.<id>.key (docs/SECURITY.md).
+//! Секреты: ключи кошельков (имя — у записи кошелька, settings/accounts/), bsc.node_ws_key, bsc.node_http_key, channel.<id>.key (docs/SECURITY.md).
 
 use std::time::Duration;
 
@@ -22,9 +25,9 @@ use crate::settings::store::Store;
 use crate::storage::journal::{Journal, Level};
 use crate::storage::raw_log::RawLog;
 
-/// Идентификатор площадки DEX — имя адаптера; по нему ищутся его настройки и секреты.
-pub const ID: &str = "bsc_dex";
-/// Имя секрета приватного ключа кошелька (тот же список — secrets::KNOWN).
+pub use super::ctx_place::{BSC_ID, Place};
+/// Имя секрета ключа прежнего единственного кошелька (secrets::KNOWN) — теперь источник кошелька переноса
+/// (решение 132, settings/accounts/migrate.rs); ключи кошельков берутся по записи кошелька (ctx_wallet.rs).
 pub const SECRET_WALLET_KEY: &str = "bsc_dex.wallet_key";
 /// Метка в адресе узла или канала, на место которой ставится ключ провайдера (docs/SETTINGS.md, «Узел BSC»).
 pub const KEY_MARK: &str = "{key}";
@@ -41,20 +44,31 @@ pub struct Ctx {
     pub pace: super::node::pace::Pace,
     /// Резервный узел: удержание на нём после сбоя основного (node/failover.rs).
     pub failover: super::node::failover::Failover,
+    /// Решение 416 (ревью М-1): подтверждённая сеть узлов HTTP (адрес → chainId) — сверка перед подписью
+    /// (node/chain_seen.rs).
+    pub chains: super::node::chain_seen::Seen,
     /// Справочник пулов от индексатора: очередь запросов и состояние (directory/, решение 58).
     pub index: super::directory::Directory,
+    /// Счёт (кошелёк) DEX, к которому привязано окружение (решение 132, ctx_wallet.rs). None — без счёта: только
+    /// чтение и симуляции от кошелька строки «пробы»; подписать и отправить транзакцию нельзя.
+    pub account: Option<String>,
+    /// Решение 435 (433-г): площадка окружения — свой id и все площадки DEX процесса (ctx_place.rs).
+    pub place: Place,
+    /// Ревью t235 (решение 461): chainId сети площадки (dex.evm_chain_id) — ячейка горячего пути (ctx_chain.rs,
+    /// Ctx::chain_id): без строк и замков, перечитывается по изменению настройки.
+    pub evm_chain: super::ctx_chain::ChainCell,
 }
 
 impl Ctx {
     /// Идентификатор площадки в формате ядра. Ошибок нет.
     pub fn venue(&self) -> VenueId {
-        VenueId(ID.to_string())
+        VenueId(self.place.id.to_string())
     }
 
-    /// Область настроек площадки (venue = bsc_dex). Ошибок нет.
+    /// Область настроек площадки (venue = id площадки окружения). Ошибок нет.
     pub fn at(&self) -> At<'static> {
         At {
-            venue: Some(ID),
+            venue: Some(self.place.id),
             coin: None,
         }
     }
@@ -172,18 +186,18 @@ impl Ctx {
         self.tag(GatewayError::not_set(None, name, message))
     }
 
-    /// Проставляет в ошибке площадку bsc_dex. Ошибок нет.
+    /// Проставляет в ошибке площадку окружения. Ошибок нет.
     pub fn tag(&self, mut e: GatewayError) -> GatewayError {
         e.venue = Some(self.venue());
         e
     }
 
-    /// Ошибка с площадкой bsc_dex. Принимает: код, текст. Возвращает: GatewayError.
+    /// Ошибка с площадкой окружения. Принимает: код, текст. Возвращает: GatewayError.
     pub fn err(&self, code: ErrorCode, message: impl Into<String>) -> GatewayError {
         GatewayError::new(code, Some(self.venue()), message)
     }
 
-    /// Запись в журнал с площадкой bsc_dex (ошибка базы уже выведена журналом в лог процесса).
+    /// Запись в журнал с площадкой окружения (ошибка базы уже выведена журналом в лог процесса).
     /// Принимает: уровень, вид записи, текст, данные. Ошибок не возвращает.
     pub async fn log(
         &self,
@@ -194,7 +208,7 @@ impl Ctx {
     ) {
         let _ = self
             .journal
-            .write(level, kind, Some(ID), message, data)
+            .write(level, kind, Some(self.place.id), message, data)
             .await;
     }
 }

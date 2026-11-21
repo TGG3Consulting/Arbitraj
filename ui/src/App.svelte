@@ -33,8 +33,11 @@
   import Notifications from './pages/Notifications.svelte';
   import Journal from './pages/Journal.svelte';
   import Episodes from './pages/Episodes.svelte';
+  import Windows from './pages/Windows.svelte';
+  import Uncapped from './pages/Uncapped.svelte';
   import FirstRun from './pages/FirstRun.svelte';
   import SettingsIO from './pages/SettingsIO.svelte';
+  import Wallets from './pages/Wallets.svelte';
 
   /**
    * Экраны в меню: адрес, название, компонент. Первый — открывается, если адрес пустой.
@@ -48,7 +51,10 @@
     { id: 'deals', title: 'Сделки', page: Deals },
     { id: 'coins', title: 'Монеты', page: Coins, wide: true },
     { id: 'episodes', title: 'Эпизоды', page: Episodes, wide: true },
+    { id: 'windows', title: 'Окна', page: Windows, wide: true },
+    { id: 'uncapped', title: 'Упущено из-за потолка', page: Uncapped, wide: true },
     { id: 'manual', title: 'Ручное управление', page: Manual },
+    { id: 'wallets', title: 'Маппинг кошельков', page: Wallets },
     { id: 'channels', title: 'Каналы отправки', page: Channels, more: true },
     { id: 'gas', title: 'Статистика газа', page: GasStats, more: true },
     { id: 'settings', title: 'Настройки', page: Settings, menu: 'settings' },

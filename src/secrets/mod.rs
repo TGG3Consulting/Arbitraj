@@ -14,6 +14,14 @@ pub use vault::Vault;
 
 /// Имя секрета токена Telegram-бота.
 pub const TELEGRAM_BOT_TOKEN: &str = "telegram.bot_token";
+/// Решение 176: токен бота чата «Управление» (notify/roles.rs). Может совпадать с другими — один бот на несколько чатов.
+pub const TELEGRAM_CONTROL_TOKEN: &str = "telegram.control_token";
+/// Решение 176: токен бота чата «Сделки».
+pub const TELEGRAM_DEALS_TOKEN: &str = "telegram.deals_token";
+/// Решение 176: токен бота чата «Неудачные».
+pub const TELEGRAM_FAILURES_TOKEN: &str = "telegram.failures_token";
+/// Решение 253, дополнение t85: токен бота чата «Аккаунты» (проблема аккаунта, лимит вывода).
+pub const TELEGRAM_ACCOUNTS_TOKEN: &str = "telegram.accounts_token";
 
 /// Известные секреты: имя, к чему относится (площадка или «система»), описание — для интерфейса.
 /// Новая площадка или сервис добавляет сюда свои секреты.
@@ -23,11 +31,157 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         "telegram",
         "Токен Telegram-бота (BotFather)",
     ),
+    (
+        TELEGRAM_CONTROL_TOKEN,
+        "telegram",
+        "Токен бота чата «Управление» (решение 176; может быть тем же ботом)",
+    ),
+    (
+        TELEGRAM_DEALS_TOKEN,
+        "telegram",
+        "Токен бота чата «Сделки» (решение 176; может быть тем же ботом)",
+    ),
+    (
+        TELEGRAM_FAILURES_TOKEN,
+        "telegram",
+        "Токен бота чата «Неудачные» (решение 176; может быть тем же ботом)",
+    ),
+    (
+        TELEGRAM_ACCOUNTS_TOKEN,
+        "telegram",
+        "Токен бота чата «Аккаунты» (решение 253, дополнение t85: проблема аккаунта, лимит вывода; может быть тем же ботом)",
+    ),
     ("bingx.api_key", "bingx", "API-ключ BingX"),
     (
         "bingx.api_secret",
         "bingx",
         "Секретный ключ BingX (Secret Key)",
+    ),
+    ("mexc.api_key", "mexc", "API-ключ MEXC (Access Key)"),
+    (
+        "mexc.api_secret",
+        "mexc",
+        "Секретный ключ MEXC (Secret Key)",
+    ),
+    ("gate.api_key", "gate", "API-ключ Gate (Key, API v4)"),
+    (
+        "gate.api_secret",
+        "gate",
+        "Секретный ключ Gate (Secret, API v4)",
+    ),
+    ("bybit.api_key", "bybit", "API-ключ Bybit (API Key, HMAC)"),
+    (
+        "bybit.api_secret",
+        "bybit",
+        "Секретный ключ Bybit (API Secret)",
+    ),
+    ("kucoin.api_key", "kucoin", "API-ключ KuCoin (API Key)"),
+    (
+        "kucoin.api_secret",
+        "kucoin",
+        "Секретный ключ KuCoin (API Secret)",
+    ),
+    (
+        "kucoin.api_passphrase",
+        "kucoin",
+        "Passphrase ключа KuCoin (задаётся при создании ключа; в запросе — зашифрованной HMAC-SHA256)",
+    ),
+    (
+        "bitget.api_key",
+        "bitget",
+        "API-ключ Bitget (API Key, Classic v2)",
+    ),
+    (
+        "bitget.api_secret",
+        "bitget",
+        "Секретный ключ Bitget (Secret Key, подпись HMAC SHA256)",
+    ),
+    (
+        "bitget.api_passphrase",
+        "bitget",
+        "Passphrase ключа Bitget (задаётся при создании ключа; заголовок ACCESS-PASSPHRASE)",
+    ),
+    (
+        "htx.api_key",
+        "htx",
+        "API-ключ HTX (Access Key; права Read, Trade, Withdraw)",
+    ),
+    (
+        "htx.api_secret",
+        "htx",
+        "Секретный ключ HTX (Secret Key, подпись HmacSHA256)",
+    ),
+    ("okx.api_key", "okx", "API-ключ OKX (API key, API v5)"),
+    ("okx.api_secret", "okx", "Секретный ключ OKX (Secret key)"),
+    (
+        "okx.api_passphrase",
+        "okx",
+        "Passphrase ключа OKX (задаётся при создании ключа; в запросе — заголовок OK-ACCESS-PASSPHRASE)",
+    ),
+    (
+        "binance.api_key",
+        "binance",
+        "API-ключ Binance (API Key, тип HMAC)",
+    ),
+    (
+        "binance.api_secret",
+        "binance",
+        "Секретный ключ Binance (Secret Key; подпись HMAC SHA256)",
+    ),
+    (
+        "binance.sbe_api_key",
+        "binance",
+        "Решение 425: API-ключ Binance типа Ed25519 (API Key из API Management) — только для быстрого стакана SBE (stream-sbe.binance.com, заголовок X-MBX-APIKEY, прав не нужно); приватный ключ Ed25519 не вводится. Не введён — стакан JSON, как раньше",
+    ),
+    (
+        "xt.api_key",
+        "xt",
+        "API-ключ XT.com (AppKey; заголовок validate-appkey)",
+    ),
+    (
+        "xt.api_secret",
+        "xt",
+        "Секретный ключ XT.com (SecretKey; подпись HmacSHA256)",
+    ),
+    (
+        "poloniex.api_key",
+        "poloniex",
+        "API-ключ Poloniex (Spot API Key; заголовок key)",
+    ),
+    (
+        "poloniex.api_secret",
+        "poloniex",
+        "Секретный ключ Poloniex (Secret Key; подпись HmacSHA256)",
+    ),
+    (
+        "phemex.api_key",
+        "phemex",
+        "API-ключ Phemex (API Key — поле id на странице ключей; заголовок x-phemex-access-token)",
+    ),
+    (
+        "phemex.api_secret",
+        "phemex",
+        "Секретный ключ Phemex (API Secret; подпись HMAC SHA256)",
+    ),
+    (
+        "kraken.api_key",
+        "kraken",
+        "API-ключ Kraken (API Key, спот)",
+    ),
+    (
+        "kraken.api_secret",
+        "kraken",
+        "Приватный ключ Kraken (Private Key, Base64; подпись HMAC-SHA512)",
+    ),
+    (
+        "coinex.api_key",
+        "coinex",
+        "access_id ключа CoinEx (API v2; заголовок X-COINEX-KEY)",
+    ),
+    (
+        "coinex.api_secret",
+        "coinex",
+        "secret_key ключа CoinEx (подпись HMAC-SHA256; сам секрет не передаётся)",
     ),
     // DEX в сети BSC (адаптер bsc_dex). Узел: у провайдеров ключ стоит в адресе
     // (NodeReal: wss://bsc-mainnet.nodereal.io/ws/v1/{apiKey}, Infura: /ws/v3/<KEY> — research/flow/bsc_node.md),
@@ -35,7 +189,7 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
     (
         "bsc_dex.wallet_key",
         "bsc_dex",
-        "Приватный ключ кошелька бота в сети BSC (решение 45: один кошелёк)",
+        "Приватный ключ прежнего кошелька бота в сети BSC — с решения 132 кошелёк «BingX» (ключи новых кошельков — wallet.<id>.key, экран «Маппинг кошельков»)",
     ),
     (
         "index.api_key",
@@ -87,5 +241,12 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         "channel.flashblock.key",
         "bsc_dex",
         "Flashblock: заголовок Authorization (регистрация flashblock.trade)",
+    ),
+    // DEX через агрегатор KyberSwap (адаптер kyberswap, решение 91). Кошелёк — кошелёк счёта сделки (решение 132),
+    // отдельного ключа кошелька у площадки нет. Узел BSC для исполнения — свой адрес.
+    (
+        "kyber.node_http_key",
+        "kyberswap",
+        "Ключ провайдера узла BSC для адреса HTTP агрегатора KyberSwap ({key} в kyber.node_http_url)",
     ),
 ];

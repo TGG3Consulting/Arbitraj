@@ -47,6 +47,10 @@ pub fn by_pool(e: &Entry, log: &SimLog) -> bool {
         PoolRef::Singleton { manager, id } => {
             log.address == *manager && log.topics.get(1) == Some(id)
         }
+        // Пара общего контракта (PMM от оракула): событие выпускает общий контракт.
+        PoolRef::Member { contract, .. } => log.address == *contract,
+        // Решение 295: события пары многомонетного пула — у его контракта.
+        PoolRef::Multi { contract, .. } => log.address == *contract,
     }
 }
 

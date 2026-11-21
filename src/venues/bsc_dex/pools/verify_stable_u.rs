@@ -1,0 +1,229 @@
+//! Файл: venues/bsc_dex/pools/verify_stable_u.rs
+//! Что делает: проверка пула из справочника (или поиска по фабрике) на своём узле (решение 59; решение 122 F, 3) для
+//! PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) и WooFi. Кто подтверждает пул:
+//! • PancakeSwap — реестр фабрики V2 (dex.factory): getPairInfo(монета, встречный) или getThreePoolPairInfo вернул этот
+//!   пул; пулы первого поколения (у фабрики V2 их нет) — список dex.stable_pools;
+//! • Lista — реестр фабрики (dex.factory): getPairInfos(монета, встречный) содержит этот пул;
+//! • Saddle — список dex.stable_pools (фабрики нет);
+//! и у всех трёх обе монеты пары — среди монет пула (coins(k) / getToken(k); CLAUDE.md: адрес токена у биржи = в пуле).
+//! Нативный BNB у PancakeSwap / Lista (решение «122 X (нативный BNB в стейблсвапах)», stable_native.rs): метка 0xEeee…
+//! среди монет пула = обёртка dex.native_wrapped в паре; реестр фабрики спрашивается и с меткой вместо обёртки (пул с
+//! BNB фабрика хранит под меткой). Пул, где есть и метка, и обёртка, не берётся.
+//! • WooFi — пул = dex.pmm_pool, quoteToken() = встречный токен, wooracle() = dex.oracle, реализация прокси (слот
+//!   EIP-1967) = dex.pool_implementation, оракул отдаёт состояние монеты (state(coin) не откатился, цена > 0).
+//!   Ссылка — PoolRef::Member (контракт, монета).
+//! Кто вызывает: pools/verify.rs.
+//! От чего зависит: ctx.rs, node/call.rs, verify_woo.rs, abi_curve.rs, abi_saddle.rs, abi_stable_u.rs, abi_woo.rs,
+//! load_curve.rs (coins_of), load_saddle.rs (tokens_of), stable_native.rs, discover.rs, verify.rs.
+//! Настройки: dex.factory, dex.stable_pools, dex.pmm_pool, dex.oracle, dex.pool_implementation [DEX];
+//! dex.native_wrapped [bsc_dex].
+
+use std::str::FromStr;
+
+use alloy::sol_types::SolCall;
+use alloy_primitives::{Address, Bytes, U256};
+
+use crate::core::types::PoolRef;
+
+use super::super::ctx::Ctx;
+use super::super::node::call;
+use super::abi_curve::{IStableSwapV1, MAX_COINS};
+use super::abi_saddle::{ISaddleSwap, MAX_TOKENS};
+use super::abi_stable_u::{IListaStableFactory, IPancakeStableFactory};
+use super::abi_woo::{IWooPP, IWooracle};
+use super::discover::Found;
+use super::families::Proto;
+use super::load_curve::coins_of;
+use super::load_saddle::tokens_of;
+use super::multi_pair;
+use super::stable_native;
+use super::verify::{Candidate, Verdict};
+use super::verify_woo;
+
+/// Проверка пачки кандидатов этих видов. Возвращает: итог по каждому. Ошибок нет (отказ — с причиной; узел — Failed).
+pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> {
+    let mut out = Vec::new();
+    for c in cands {
+        out.push(match one(ctx, c, size).await {
+            Ok(Ok(f)) => Verdict::Taken(Box::new(f)),
+            Ok(Err(why)) => Verdict::Rejected(why),
+            Err(node) => Verdict::Failed(node),
+        });
+    }
+    out
+}
+
+/// Один кандидат. Возвращает: Ok(Ok(пул)) — принят, Ok(Err) — отказ, Err — сбой узла.
+async fn one(ctx: &Ctx, c: &Candidate, size: usize) -> Result<Result<Found, String>, String> {
+    let pool = match Address::from_str(&c.pool) {
+        Ok(a) => a,
+        Err(_) => return Ok(Err(format!("«{}» — не адрес контракта пула", c.pool))),
+    };
+    let (calls, n_coins) = match plan(ctx, c, pool) {
+        Ok(p) => p,
+        Err(why) => return Ok(Err(why)),
+    };
+    let got: Result<Vec<_>, String> = call::try_chunks(ctx, &calls, "latest", size)
+        .await
+        .into_iter()
+        .collect();
+    let got = got?;
+    if c.family.proto == Proto::WooPP {
+        return verify_woo::woo(ctx, c, pool, &got).await;
+    }
+    Ok(judge(ctx, c, pool, &got, n_coins))
+}
+
+/// Что делает: итог по ответам проверки (без сети) — PancakeSwap / Lista StableSwap и Saddle: монеты пула, пара среди
+/// них, подтверждение пула (dex.stable_pools / реестр фабрики) и — решение 295 — multi_pair::adopt. Принимает:
+/// окружение, кандидата, пул, ответы plan по порядку, сколько из них — «монеты пула». Возвращает: Ok(пул) или причину
+/// отказа. Ошибок иных нет.
+pub fn judge(
+    ctx: &Ctx,
+    c: &Candidate,
+    pool: Address,
+    got: &[Result<Bytes, String>],
+    n_coins: usize,
+) -> Result<Found, String> {
+    let id = c.family.id;
+    let coins = match c.family.proto {
+        Proto::SaddleStable => tokens_of(&got[..n_coins]),
+        _ => coins_of(&got[..n_coins]),
+    };
+    let coins = coins?;
+    // PancakeSwap / Lista: метка нативной монеты 0xEeee… — это обёртка в паре (stable_native.rs).
+    let coins = match c.family.proto {
+        Proto::SaddleStable => coins,
+        _ => match stable_native::pair_coins(&coins, stable_native::wrapped(ctx)) {
+            Ok(list) => list,
+            Err(why) => return Err(format!("пул {pool:#x}: {why}")),
+        },
+    };
+    if !coins.contains(&c.coin) || !coins.contains(&c.quote) {
+        return Err(format!(
+            "среди монет пула {pool:#x} нет пары {} / {}",
+            c.coin, c.quote
+        ));
+    }
+    let listed = ctx
+        .dex_list("dex.stable_pools", id)
+        .map(|l| {
+            l.iter()
+                .filter_map(|s| Address::from_str(s.trim()).ok())
+                .any(|a| a == pool)
+        })
+        .unwrap_or(false);
+    let reg = &got[n_coins..];
+    let ok = match c.family.proto {
+        Proto::SaddleStable => listed,
+        // По паре вопросов (getPairInfo, getThreePoolPairInfo) на каждую пару — как в plan (и пара с меткой BNB).
+        Proto::PancakeStable => {
+            listed
+                || reg.chunks(2).any(|ch| {
+                    let two = ch.first().and_then(|r| r.as_ref().ok()).and_then(|b| {
+                        IPancakeStableFactory::getPairInfoCall::abi_decode_returns(b)
+                            .ok()
+                            .map(|i| i.swapContract)
+                    });
+                    let three = ch.get(1).and_then(|r| r.as_ref().ok()).and_then(|b| {
+                        IPancakeStableFactory::getThreePoolPairInfoCall::abi_decode_returns(b)
+                            .ok()
+                            .map(|i| i.swapContract)
+                    });
+                    two == Some(pool) || three == Some(pool)
+                })
+        }
+        Proto::ListaStable => reg.iter().any(|r| {
+            r.as_ref()
+                .ok()
+                .and_then(|b| IListaStableFactory::getPairInfosCall::abi_decode_returns(b).ok())
+                .is_some_and(|l| l.iter().any(|i| i.swapContract == pool))
+        }),
+        _ => false,
+    };
+    if !ok {
+        return Err(format!(
+            "пул {pool:#x} не подтверждён: нет в реестре фабрики dex.factory и нет в dex.stable_pools DEX {id}"
+        ));
+    }
+    // Решение 295: Saddle и PancakeSwap StableSwap в режиме dex.multi_pair — ссылка с парой и монеты пула (с обёрткой
+    // вместо метки BNB) для развёртки; Lista — не многомонетный вид (adopt не меняет).
+    let found = verify_woo::found(c, PoolRef::Contract(pool));
+    Ok(multi_pair::adopt(ctx, found, &coins))
+}
+
+/// Вызовы проверки и число вызовов «монеты пула» в начале. Ошибка — причина отказа (не задана настройка).
+fn plan(ctx: &Ctx, c: &Candidate, pool: Address) -> Result<(Vec<(Address, Bytes)>, usize), String> {
+    let id = c.family.id;
+    let mut calls: Vec<(Address, Bytes)> = Vec::new();
+    match c.family.proto {
+        Proto::WooPP => {
+            let want = ctx.dex_addr("dex.pmm_pool", id).map_err(|e| e.message)?;
+            if want != pool {
+                return Err(format!(
+                    "{pool:#x} — не общий контракт dex.pmm_pool DEX {id}"
+                ));
+            }
+            let oracle = ctx.dex_addr("dex.oracle", id).map_err(|e| e.message)?;
+            calls.push((pool, IWooPP::quoteTokenCall {}.abi_encode().into()));
+            calls.push((pool, IWooPP::wooracleCall {}.abi_encode().into()));
+            calls.push((
+                oracle,
+                IWooracle::stateCall { base: c.coin }.abi_encode().into(),
+            ));
+            return Ok((calls, 0));
+        }
+        Proto::SaddleStable => {
+            for k in 0..MAX_TOKENS {
+                calls.push((
+                    pool,
+                    ISaddleSwap::getTokenCall { index: k as u8 }
+                        .abi_encode()
+                        .into(),
+                ));
+            }
+            return Ok((calls, MAX_TOKENS));
+        }
+        _ => {}
+    }
+    for k in 0..MAX_COINS {
+        calls.push((
+            pool,
+            IStableSwapV1::coinsCall { i: U256::from(k) }
+                .abi_encode()
+                .into(),
+        ));
+    }
+    let factory = ctx.dex_addr("dex.factory", id).map_err(|e| e.message)?;
+    // Пара как есть и — если в ней обёртка BNB — пара с меткой 0xEeee… (stable_native.rs).
+    let alt = stable_native::registry_pair(c.coin, c.quote, stable_native::wrapped(ctx));
+    for (a, b) in std::iter::once((c.coin, c.quote)).chain(alt) {
+        if c.family.proto == Proto::PancakeStable {
+            calls.push((
+                factory,
+                IPancakeStableFactory::getPairInfoCall {
+                    _tokenA: a,
+                    _tokenB: b,
+                }
+                .abi_encode()
+                .into(),
+            ));
+            let three = IPancakeStableFactory::getThreePoolPairInfoCall {
+                _tokenA: a,
+                _tokenB: b,
+            };
+            calls.push((factory, three.abi_encode().into()));
+        } else {
+            calls.push((
+                factory,
+                IListaStableFactory::getPairInfosCall {
+                    _tokenA: a,
+                    _tokenB: b,
+                }
+                .abi_encode()
+                .into(),
+            ));
+        }
+    }
+    Ok((calls, MAX_COINS))
+}

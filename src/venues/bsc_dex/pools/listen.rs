@@ -55,6 +55,14 @@ pub struct Pools {
     pub lag: super::super::node::events_lag::EventsLag,
     /// Цена газа (кэш на блок) — для фонового прогрева quote/warm.rs (решение 89).
     pub gas: super::super::quote::gas::GasPrice,
+    /// Решения 321/324: общий набор канала ядра и проверка «пул годен» при доставке (emit_pool.rs Kept).
+    pub kept: super::emit_pool::Kept,
+    /// Решение 357: пулы «в обновлении» (логи одного действия применены не все) и отметки неудачного чтения LB на
+    /// голове (settle.rs).
+    pub holds: super::settle::Holds,
+    /// Решение 455: отметки «перевод токена на crypto-пул Curve без события пула» — чтение пула на голове
+    /// (transfer_in.rs).
+    pub transfers: super::transfer_in::Marks,
 }
 
 /// Чем кончилась сессия.
@@ -81,7 +89,7 @@ pub async fn run(p: Pools, name: String, pools: Vec<(Found, String)>, adds: Opti
         };
         // Пулы уже недостоверны, если загрузка была (session.rs — до закрытия «соединения»).
         // Журнал — одна запись на площадку при потере связи и одна при восстановлении (link.rs).
-        link::down(&p, &name, &why, loaded).await;
+        link::down(&p, &name, &why, loaded, pools.len()).await;
         // Не задана — пачка ждёт настройку и переподключается сама (settings_wait.rs), а не останавливается навсегда.
         let what = format!("Пулы {name}");
         let read = || p.ctx.int("venue.ws_reconnect_pause_ms");

@@ -5,6 +5,7 @@
 //! От чего зависит: ctx.rs (адрес bsc.node_http_url с ключом, http.timeout_ms), node/jsonrpc.rs, errors.rs.
 //! Темп и повтор на «превышен лимит» — node/pace.rs (bsc.node_http_rps, правило шлюза RateLimited); сбой основного
 //! узла — тот же запрос на резервный (node/failover.rs), и только потом правило шлюза.
+//! Решение 437: post_within — POST канала со своим сроком (секвенсор Arbitrum, channel.http_timeout_ms).
 //! Настройки: bsc.node_http_url, http.timeout_ms, bsc.node_http_rps; секрет bsc.node_http_key (если в адресе есть {key}).
 //!
 //! Транспорт — HTTP POST с телом JSON-RPC 2.0 (https://www.jsonrpc.org/specification, разделы 4–6);
@@ -37,7 +38,8 @@ pub const SECRET_HTTP_KEY: &str = "bsc.node_http_key";
 /// Ошибки: NotConfigured/SecretsLocked (адрес, ключ), Timeout/Unreachable, ответ-ошибка узла, BadResponse.
 pub async fn call<T: DeserializeOwned>(ctx: &Ctx, method: &str, params: Value) -> GatewayResult<T> {
     let raw = call_raw(ctx, method, params).await?;
-    jsonrpc::decode(&raw, SOURCE)
+    // Решение 435: ошибка — с площадкой своего окружения (errors.rs без Ctx ставит bsc_dex).
+    jsonrpc::decode(&raw, SOURCE).map_err(|e| ctx.tag(e))
 }
 
 /// Один запрос к узлу, result — сырой.
@@ -45,7 +47,7 @@ pub async fn call<T: DeserializeOwned>(ctx: &Ctx, method: &str, params: Value) -
 pub async fn call_raw(ctx: &Ctx, method: &str, params: Value) -> GatewayResult<Box<RawValue>> {
     let body = jsonrpc::request(1, method, &params);
     let text = pace::run(ctx, 1, || to_node(ctx, &body)).await?;
-    jsonrpc::parse_text(&text, SOURCE, Op::Read)
+    jsonrpc::parse_text(&text, SOURCE, Op::Read).map_err(|e| ctx.tag(e))
 }
 
 /// Один запрос мимо общей очереди темпа (node/pace.rs) — только для опроса номера блока (node/heads.rs, решение 57):
@@ -58,8 +60,8 @@ pub async fn call_unpaced<T: DeserializeOwned>(
 ) -> GatewayResult<T> {
     let body = jsonrpc::request(1, method, &params);
     let text = to_node(ctx, &body).await?;
-    let raw = jsonrpc::parse_text(&text, SOURCE, Op::Read)?;
-    jsonrpc::decode(&raw, SOURCE)
+    let raw = jsonrpc::parse_text(&text, SOURCE, Op::Read).map_err(|e| ctx.tag(e))?;
+    jsonrpc::decode(&raw, SOURCE).map_err(|e| ctx.tag(e))
 }
 
 /// Пачка запросов одним HTTP-запросом (JSON-RPC batch).
@@ -91,6 +93,7 @@ pub async fn batch(
         (0..calls.len()).map(|_| None).collect();
     for resp in list {
         let (id, res) = jsonrpc::parse(resp, SOURCE, Op::Read, &text);
+        let res = res.map_err(|e| ctx.tag(e));
         if let Some(slot) = id.and_then(|i| out.get_mut(i as usize)) {
             *slot = Some(res);
         }
@@ -139,17 +142,41 @@ pub async fn post(
     headers: &[(&str, &str)],
     source: &str,
 ) -> GatewayResult<String> {
+    post_within(ctx, url, body, headers, source, None).await
+}
+
+/// post со своим сроком (решение 437: канал секвенсора Arbitrum — channel.http_timeout_ms, ответ ждёт постановки в
+/// блок). Принимает: как post и срок, мс: до заголовков и весь обмен не меньше него (None — общие http.*).
+/// Возвращает: текст ответа. Ошибки: как post.
+pub async fn post_within(
+    ctx: &Ctx,
+    url: &str,
+    body: &Value,
+    headers: &[(&str, &str)],
+    source: &str,
+    within_ms: Option<u64>,
+) -> GatewayResult<String> {
     // Два срока (gateway/http.rs): до заголовков — http.timeout_ms, тело (пачка Multicall3 — до ~1 МБ) дочитывается,
     // пока данные идут чаще http.body_idle_ms.
-    let lim = ctx.limits()?;
-    let mut req = ctx.http.post(url).json(body);
+    let mut lim = ctx.limits()?;
+    if let Some(ms) = within_ms {
+        lim.head = std::time::Duration::from_millis(ms);
+        lim.total = lim.total.max(lim.head);
+    }
+    // Решение 142: сжатие HTTP включено для площадок; узел BSC свой и локальный — без сжатия (лишний процессор).
+    let mut req = ctx
+        .http
+        .post(url)
+        .header(reqwest::header::ACCEPT_ENCODING, "identity")
+        .json(body);
     for (k, v) in headers {
         req = req.header(*k, *v);
     }
     let (status, text) = http::exchange(req, lim)
         .await
-        .map_err(|f| errors::from_fail(&f, &lim, source))?;
-    status_ok(status, text, source)
+        .map_err(|f| ctx.tag(errors::from_fail(&f, &lim, source)))?;
+    // Решение 435: ошибка узла или канала — с площадкой своего окружения.
+    status_ok(status, text, source).map_err(|e| ctx.tag(e))
 }
 
 /// Ответ узла с HTTP-статусом: 2xx — текст; иначе — ошибка из тела JSON-RPC или по статусу. Ошибок кроме этих нет.

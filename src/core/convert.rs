@@ -15,15 +15,16 @@ use crate::core::types::{Asset, Cost, CostKind, Side, VenueId};
 
 use super::deps::Deps;
 
-/// Монета газа сети BSC. Задана протоколом сети (газ платится в BNB) и стыком:
-/// core/types/cost.rs — `Cost.asset` для газа и чаевых — «BNB».
-pub const GAS_TICKER: &str = "BNB";
+// Решение 416 (ревью шага 1): тикер газа — настройка площадки DEX dex.gas_ticker (core/gas_ticker.rs), а не «BNB» в
+// коде; `Cost.asset` газа и чаевых адаптер DEX пишет этим же тикером.
 
-/// Монета газа как актив для подписки на стакан биржи (у нативной монеты нет адреса контракта).
-pub fn gas_asset() -> Asset {
+/// Монета газа как актив для подписки на стакан биржи (у нативной монеты нет адреса контракта). Принимает: тикер газа
+/// (dex.gas_ticker). Ошибок нет.
+pub fn gas_asset(gas: &str) -> Asset {
     Asset {
-        ticker: GAS_TICKER.to_string(),
-        bsc_contract: None,
+        chain: None,
+        ticker: gas.to_string(),
+        contract: None,
     }
 }
 
@@ -83,16 +84,18 @@ pub fn to_usdt(c: &Cost, r: &Rates) -> Result<Decimal, String> {
     }
 }
 
-/// Сколько BNB среди затрат (газ, approve, перевод, чаевые). Ошибок нет.
-pub fn bnb_total(costs: &[Cost]) -> Decimal {
+/// Сколько газовой монеты среди затрат (газ, approve, перевод, чаевые). Принимает: затраты, тикер газа. Ошибок нет.
+pub fn bnb_total(costs: &[Cost], gas: &str) -> Decimal {
     costs
         .iter()
-        .filter(|c| c.asset == GAS_TICKER)
+        .filter(|c| c.asset == gas)
         .map(|c| c.amount)
         .sum()
 }
 
-/// Цена валюты в USDT по живому стакану биржи: средняя цена покупки нужного количества.
+/// Цена валюты в USDT по живому стакану биржи: средняя цена покупки нужного количества. Тикер — один на все биржи:
+/// только для валют, у которых площадка возникновения неизвестна (затраты сделки — BNB газа, промежуточные монеты);
+/// площадка известна — convert_at::price_at (решение 211, ревью В7).
 /// Принимает: зависимости, биржи (по порядку — первая ответившая), тикер, количество.
 /// Возвращает: цену. Ошибки: ни одна биржа не дала свежую котировку (причины перечислены).
 pub async fn price_of(
@@ -102,30 +105,51 @@ pub async fn price_of(
     qty: Decimal,
 ) -> Result<Decimal, String> {
     let asset = Asset {
+        chain: None,
         ticker: ticker.to_string(),
-        bsc_contract: None,
+        contract: None,
     };
     let mut why = vec![];
     for v in cex {
-        let q = match deps.gw.get(v).await {
-            Ok(a) => a.quote(&asset, Side::Buy, qty).await,
-            Err(e) => Err(e),
-        };
-        match q {
-            Ok(q) if q.fillable_qty >= qty && !q.avg_price.is_zero() => return Ok(q.avg_price),
-            Ok(q) => why.push(format!(
-                "{}: глубины {ticker} {} < {qty}",
-                v.0, q.fillable_qty
-            )),
-            Err(e) => why.push(format!("{}: {}", v.0, e.message)),
+        match quote_one(deps, v, &asset, qty).await {
+            Ok(p) => return Ok(p),
+            Err(e) => why.push(e),
         }
     }
     Err(format!("нет живой цены {ticker}: {}", why.join("; ")))
 }
 
-/// Цена BNB в USDT по живому стакану биржи (газ). Ошибки: как у price_of.
-pub async fn bnb_price(deps: &Deps, cex: &[VenueId], qty: Decimal) -> Result<Decimal, String> {
-    price_of(deps, cex, GAS_TICKER, qty).await
+/// Котировка одной биржи: средняя цена покупки qty по живому стакану. Принимает: зависимости, биржу, монету с тикером
+/// этой биржи, количество. Ошибки: текст «биржа: причина» — шлюз, мало глубины, нулевая цена.
+pub async fn quote_one(
+    deps: &Deps,
+    v: &VenueId,
+    asset: &Asset,
+    qty: Decimal,
+) -> Result<Decimal, String> {
+    let q = match deps.gw.get(v).await {
+        Ok(a) => a.quote(asset, Side::Buy, qty).await,
+        Err(e) => Err(e),
+    };
+    match q {
+        Ok(q) if q.fillable_qty >= qty && !q.avg_price.is_zero() => Ok(q.avg_price),
+        Ok(q) => Err(format!(
+            "{}: глубины {} {} < {qty}",
+            v.0, asset.ticker, q.fillable_qty
+        )),
+        Err(e) => Err(format!("{}: {}", v.0, e.message)),
+    }
+}
+
+/// Цена газовой монеты в USDT по живому стакану биржи. Принимает: зависимости, биржи, тикер газа (dex.gas_ticker),
+/// количество. Ошибки: как у price_of.
+pub async fn bnb_price(
+    deps: &Deps,
+    cex: &[VenueId],
+    gas: &str,
+    qty: Decimal,
+) -> Result<Decimal, String> {
+    price_of(deps, cex, gas, qty).await
 }
 
 /// Собирает курсы для набора затрат: живая цена каждой валюты, кроме котируемых и монеты сделки,

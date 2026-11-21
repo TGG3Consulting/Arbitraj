@@ -3,26 +3,49 @@
   Что делает: карточка одной настройки на экране «Настройки»: имя, описание, единица, вид значения,
     ограничение, допустимые области и значения по областям:
     вся система; каждая площадка из GET /api/venues (у настроек времени в пути — подпись направлением
-    перевода «bingx → кошелёк» / «кошелёк → биржа», решение 51); монеты — уже заданные + ввод тикера;
+    перевода «bingx → кошелёк» / «кошелёк → биржа», решение 51); монеты — уже заданные + ввод адреса контракта или тикера с единственным адресом (решение 211, ревью М2:
+    область «монета» — адрес 0x… в нижнем регистре; подпись — имя монеты из lib/coinNames.svelte.js; старые области по тикеру показываются как есть);
     события — уже заданные + выбор кода из схемы; DEX / вид пула и каналы — id от адаптера DEX
-    (lib/dex.svelte.js) + уже заданные (такой id адаптер сейчас не сообщает — помечено). Свои id для DEX и
-    каналов не вводятся: их даёт только адаптер. Кнопка «История».
+    (lib/dex.svelte.js) + уже заданные (такой id адаптер сейчас не сообщает — помечено). Решение 128: адаптер даёт
+    DEX с видом, DEX из справочника пулов и id с уже заданными настройками; DEX, которой нет нигде (её пулы находит
+    только поиск по фабрике, оракул или события Initialize), вводится руками — «Добавить DEX» в карточке настройки
+    области «DEX» (components/DexAdder.svelte; решение 490: выбор площадки DEX, сырой id по checkDexId, суффикс сети
+    «@сеть» — с сервера). Строка появляется в этой карточке; после первого сохранения площадка DEX сообщает ключ сама —
+    он во всех карточках области «DEX».
+    Свои id каналов не вводятся: их даёт только адаптер. Кнопка «История».
+    Решение 242: значения области «площадка + тип направления» задаются в подпункте «… › по биржам и направлениям»
+    (components/VenueDirMoney.svelte) — здесь ссылка и сколько таких значений задано.
+    Решение 249: у venue.cex_cex под значением каждой биржи — список «не взаимодействовать» и кнопка «Настроить список»
+    (components/CexCexDeny.svelte); у самой venue.cex_cex_deny — только ссылка на это окно и «История».
+    Решение 283: у настройки с venue_for «Dex» в схеме строк бирж (вид Cex) нет — значение читает только площадка DEX;
+    уже сохранённое у биржи значение не показывается и не меняется (видно в «Истории» и экспорте).
   Кто вызывает: pages/Settings.svelte.
-  От чего зависит: lib/settings.svelte.js, lib/dex.svelte.js, lib/labels.js, components/SettingEditor.svelte, SettingHistory.svelte.
-  Настройки: любая — по описанию из схемы.
+  От чего зависит: lib/settings.svelte.js, lib/dex.svelte.js, lib/labels.js, lib/coinNames.svelte.js, components/SettingEditor.svelte, SettingHistory.svelte, CexCexDeny.svelte, DexAdder.svelte.
+  Настройки: любая — по описанию из схемы; dex.id_max_len (через DexAdder.svelte → checkDexId).
 -->
 <script>
-  import { store, venueScopeLabel } from '../lib/settings.svelte.js';
+  import { uniq, uniqBy } from '../lib/uniq.js';
+  import { store, venueScopeLabel, shownAtVenue } from '../lib/settings.svelte.js';
   import { dex, dexIdsFor, allChannels, whyNoDex } from '../lib/dex.svelte.js';
   import { kindLabel, limitLabel, scopeLabel } from '../lib/labels.js';
+  import { href } from '../lib/router.svelte.js';
+  import { venueDirRoute } from '../lib/venueDir.js';
+  import { names, coinName, ensure, coinIdOf } from '../lib/coinNames.svelte.js';
   import SettingEditor from './SettingEditor.svelte';
   import SettingHistory from './SettingHistory.svelte';
+  import CexCexDeny from './CexCexDeny.svelte';
+  import DexAdder from './DexAdder.svelte';
+
+  // Справочник имён читается здесь напрямую (names.map) — загрузить его сразу (ревью М1).
+  ensure();
 
   /** def — описание настройки из схемы. */
   let { def } = $props();
   let showHistory = $state(false);
-  let added = $state({ Coin: [], Event: [] });
+  let added = $state({ Coin: [], Event: [], Dex: [] });
   let coinInput = $state('');
+  /** Почему введённую монету нельзя добавить (ревью М2: тикер без единственного адреса); '' — можно. */
+  let coinError = $state('');
   let eventInput = $state('');
 
   /** Идентификаторы областей вида kind, для которых значение уже задано, плюс добавленные вручную. */
@@ -40,6 +63,21 @@
   }
 
   /**
+   * Добавляет монету (решение 211, ревью М2): адрес — в нижнем регистре, как ключ бэкенда (settings/scope.rs coin_id);
+   * тикер — его единственный адрес по справочнику имён, иначе подсказка ввести адрес. Возвращает: true — добавлена.
+   */
+  function addCoin(v) {
+    try {
+      add('Coin', coinIdOf(v));
+      coinError = '';
+      return true;
+    } catch (e) {
+      coinError = e.message;
+      return false;
+    }
+  }
+
+  /**
    * Области вида kind (Dex/Channel) для показа: от адаптера + уже заданные.
    * Принимает: вид. Возвращает: [{id, title, unknown}] — unknown: адаптер такой id сейчас не сообщает.
    */
@@ -51,6 +89,16 @@
     const out = new Map(fromAdapter.map((x) => [x.id, { ...x, unknown: false }]));
     for (const id of idsOf(kind)) if (!out.has(id)) out.set(id, { id, title: id, unknown: true });
     return [...out.values()];
+  }
+
+  /**
+   * Подпись строки области DEX/канал. Принимает: вид, {id, title, unknown}. Возвращает: текст.
+   * Решение 128: id, добавленный руками и ещё без значений, подписан «добавлена руками — задайте dex.kind».
+   */
+  function scopeTitle(kind, sc) {
+    if (!sc.unknown) return `${sc.title} · ${sc.id}`;
+    if (kind === 'Dex' && added.Dex.includes(sc.id)) return `${sc.id} (добавлена руками — задайте dex.kind и адреса)`;
+    return `${sc.id} (адаптер не сообщает)`;
   }
 
   const eventTitle = (code) => store.schema.events.find((e) => e.code === code)?.title ?? code;
@@ -69,32 +117,44 @@
   {#if def.scopes.includes('Global')}
     <SettingEditor {def} scope={{ kind: 'Global' }} label="вся система" />
   {/if}
-  {#if def.scopes.includes('Venue')}
-    {#each store.venues as v (v)}
+  {#if def.name === 'venue.cex_cex_deny'}
+    <!-- Решение 249: список задаётся окном «Настроить список» у venue.cex_cex (выбор бирж, не текст). -->
+    <p class="muted">Задаётся кнопкой «Настроить список» в карточке venue.cex_cex (у каждой биржи).</p>
+  {:else if def.scopes.includes('Venue')}
+    <!-- Решение 283: у настройки venue_for «Dex» строки бирж не показываются (shownAtVenue); значения не трогаются. -->
+    {#each uniq(store.venues).filter((v) => shownAtVenue(def, v)) as v (v)}
       <SettingEditor {def} scope={{ kind: 'Venue', id: v }} label={venueScopeLabel(def, v)} />
+      {#if def.name === 'venue.cex_cex' && store.venueKinds.find((x) => x.id === v)?.kind === 'Cex'}
+        <CexCexDeny venue={v} />
+      {/if}
     {:else}
-      <p class="muted">Площадок в шлюзе нет — значение по площадке задать не для чего.</p>
+      <p class="muted">
+        {store.venues.length
+          ? 'Площадки DEX в шлюзе нет — значение этой настройки читает только площадка DEX.'
+          : 'Площадок в шлюзе нет — значение по площадке задать не для чего.'}
+      </p>
     {/each}
   {/if}
   {#if def.scopes.includes('Coin')}
-    {#each idsOf('Coin') as c (c)}
-      <SettingEditor {def} scope={{ kind: 'Coin', id: c }} label={`монета ${c}`} />
+    {#each uniq(idsOf('Coin')) as c (c)}
+      <SettingEditor {def} scope={{ kind: 'Coin', id: c }} label={names.map[c] ? `монета ${coinName({ ticker: names.map[c].ticker, bsc_contract: c })} (${c})` : `монета ${c}`} />
     {/each}
     <div class="adder">
-      <input bind:value={coinInput} placeholder="тикер монеты" />
-      <button disabled={!coinInput.trim()} onclick={() => { add('Coin', coinInput); coinInput = ''; }}>
+      <input bind:value={coinInput} placeholder="адрес монеты 0x… или тикер" />
+      <button disabled={!coinInput.trim()} onclick={() => { if (addCoin(coinInput)) coinInput = ''; }}>
         Задать для монеты
       </button>
     </div>
+    {#if coinError}<p class="err">{coinError}</p>{/if}
   {/if}
   {#if def.scopes.includes('Event')}
-    {#each idsOf('Event') as e (e)}
+    {#each uniq(idsOf('Event')) as e (e)}
       <SettingEditor {def} scope={{ kind: 'Event', id: e }} label={eventTitle(e)} />
     {/each}
     <div class="adder">
       <select bind:value={eventInput}>
         <option value="">— событие —</option>
-        {#each store.schema.events as ev (ev.code)}<option value={ev.code}>{ev.group}: {ev.title}</option>{/each}
+        {#each uniqBy(store.schema.events, (ev) => ev.code) as ev (ev.code)}<option value={ev.code}>{ev.group}: {ev.title}</option>{/each}
       </select>
       <button disabled={!eventInput} onclick={() => { add('Event', eventInput); eventInput = ''; }}>
         Задать для события
@@ -103,8 +163,8 @@
   {/if}
 
   {#each ['Dex', 'Channel'].filter((k) => def.scopes.includes(k)) as kind (kind)}
-    {#each adapterScopes(kind) as sc (sc.id)}
-      <SettingEditor {def} scope={{ kind, id: sc.id }} label={sc.unknown ? `${sc.id} (адаптер не сообщает)` : `${sc.title} · ${sc.id}`} />
+    {#each uniqBy(adapterScopes(kind), (sc) => sc.id) as sc (sc.id)}
+      <SettingEditor {def} scope={{ kind, id: sc.id }} label={scopeTitle(kind, sc)} />
     {:else}
       <p class="nodata">
         Нет данных: {scopeLabel(kind)} — список даёт адаптер DEX, сейчас ни одна площадка его не дала.
@@ -112,6 +172,17 @@
       </p>
     {/each}
   {/each}
+  {#if def.scopes.includes('Dex')}
+    <!-- Решение 128 / 490: DEX, которой нет в списке адаптера, — сырой id руками, ключ = id + суффикс сети площадки. -->
+    <DexAdder onadd={(key) => add('Dex', key)} />
+  {/if}
+
+  {#if def.scopes.includes('VenueDir')}
+    <p class="muted">
+      По площадке и типу направления: задано {idsOf('VenueDir').length} —
+      <a href={href('settings', venueDirRoute(store.schema))}>подпункт «по биржам и направлениям»</a>.
+    </p>
+  {/if}
 
   <button class="quiet" onclick={() => (showHistory = !showHistory)}>
     {showHistory ? 'Скрыть историю' : 'История'}

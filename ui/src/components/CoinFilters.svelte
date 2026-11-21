@@ -8,6 +8,7 @@
   Настройки: нет.
 -->
 <script>
+  import { uniq } from '../lib/uniq.js';
   import { RESULTS } from '../lib/coinFilter.js';
   import { poolKindLabel } from '../lib/labels.js';
 
@@ -23,7 +24,7 @@
   </select>
   <select bind:value={f.venue} aria-label="площадка">
     <option value="">площадка: все</option>
-    {#each opts.venues as v (v)}<option value={v}>{v}</option>{/each}
+    {#each uniq(opts.venues) as v (v)}<option value={v}>{v}</option>{/each}
   </select>
   <select bind:value={f.pools} aria-label="пулы">
     <option value="">пулы: все</option>
@@ -32,7 +33,7 @@
   </select>
   <select bind:value={f.kind} aria-label="вид пула">
     <option value="">вид пула: все</option>
-    {#each opts.kinds as k (k)}<option value={k}>{poolKindLabel(k)}</option>{/each}
+    {#each uniq(opts.kinds) as k (k)}<option value={k}>{poolKindLabel(k)}</option>{/each}
   </select>
   <select bind:value={f.tax} aria-label="налоги">
     <option value="">налоги: все</option>

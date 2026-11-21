@@ -7,6 +7,9 @@
 //! - без хеша (поток BingX, баланс BNB) — по сумме, при единственном подходящем ожидании (credit_event.rs);
 //! - и только если у получателя transfer.credit_by_event = да (флаг на момент события).
 //!
+//! Решение 151: у перевода сделки на DEX («вооружён» — chain_since) поступление в блокчейне может закрыть ожидание и
+//! без хеша отправителя (credit_chain.rs: chain_hit; методы Ticket::set_chain, chain_hit — там же).
+//!
 //! Ручной ввод и вывод, «Вернуть боту», «Беру на себя» ожиданий не создают — зачислением они не считаются.
 //!
 //! Кто вызывает: transfers.rs, transfer_credit.rs, credit_mismatch.rs (ожидание), credit_event.rs (сверка).
@@ -16,10 +19,11 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use tokio::sync::Notify;
 
-use crate::core::types::{Asset, BalanceChange, VenueId};
+use crate::core::types::{Asset, BalanceChange, DexAccountId, VenueId};
 
 use super::engine::Core;
 
@@ -49,9 +53,24 @@ pub(super) struct Expect {
     /// Прикреплённые события и закрывает ли каждое (transfer.credit_by_event на момент события).
     pub(super) hits: Vec<(BalanceChange, bool)>,
     pub(super) wake: Arc<Notify>,
+    /// Решение 132: кошелёк DEX перевода (получатель или отправитель — DEX); событие другого кошелька — не наше.
+    pub(super) account: Option<DexAccountId>,
+    /// Решение 151: перевод сделки на DEX — момент запроса вывода; приход в блокчейне может закрыть ожидание без
+    /// хеша от отправителя (credit_chain.rs). None — только как в решении 76.
+    pub(super) chain_since: Option<DateTime<Utc>>,
+    /// Решение 151: поступление, засчитанное зачислением по блокчейну.
+    pub(super) chain_hit: Option<BalanceChange>,
 }
 
 impl Expect {
+    /// Тот же кошелёк DEX (решение 132): у события и ожидания счёт известен и различается — не наше. Ошибок нет.
+    pub(super) fn same_wallet(&self, b: &BalanceChange) -> bool {
+        match (&self.account, &b.account) {
+            (Some(a), Some(x)) => a == x,
+            _ => true,
+        }
+    }
+
     /// Событие этого перевода: без хеша — да; с хешем — только если хеш отправителя известен и совпал.
     pub(super) fn ours(&self, b: &BalanceChange) -> bool {
         match (&b.tx_hash, &self.tx) {
@@ -69,8 +88,8 @@ pub fn norm(h: &str) -> String {
 
 /// Ожидание перевода; при удалении снимается.
 pub struct Ticket {
-    core: Core,
-    id: u64,
+    pub(super) core: Core,
+    pub(super) id: u64,
     pub wake: Arc<Notify>,
 }
 
@@ -87,6 +106,14 @@ impl Ticket {
         let (keep, foreign): (Vec<_>, Vec<_>) = hits.into_iter().partition(|(b, _)| e.ours(b));
         e.hits = keep;
         foreign.into_iter().map(|(b, _)| b).collect()
+    }
+
+    /// Кошелёк DEX перевода (решение 132): события баланса другого кошелька к этому ожиданию не прикрепляются.
+    /// Принимает: счёт. Ошибок нет.
+    pub fn set_account(&self, acc: Option<DexAccountId>) {
+        if let Some(e) = lock(&self.core).list.get_mut(&self.id) {
+            e.account = acc;
+        }
     }
 
     /// Событие, закрывающее ожидание (своё — Expect::ours — и закрытие включено). Ошибок нет.
@@ -151,6 +178,9 @@ pub fn register(
         tx: None,
         hits: Vec::new(),
         wake: wake.clone(),
+        account: None,
+        chain_since: None,
+        chain_hit: None,
     };
     st.list.insert(id, e);
     Ticket {
@@ -160,10 +190,13 @@ pub fn register(
     }
 }
 
-/// Тот же актив: тикер совпадает, и адреса контрактов совпадают, если известны оба. Ошибок нет.
+/// Тот же актив (решение 211, ревью К2) — как Asset::eq: адреса у обоих — по адресу; адреса нет у обоих — по тикеру;
+/// адрес только у одного — разные активы (событие площадки без адреса уже переведено в монету ядра —
+/// credit_event::on_change, venue_ticker::asset_back). Ошибок нет.
 pub fn same_asset(a: &Asset, b: &Asset) -> bool {
-    a.ticker == b.ticker
-        && (a.bsc_contract.is_none()
-            || b.bsc_contract.is_none()
-            || a.bsc_contract == b.bsc_contract)
+    match (a.contract, b.contract) {
+        (Some(x), Some(y)) => x == y,
+        (None, None) => a.ticker == b.ticker,
+        _ => false,
+    }
 }

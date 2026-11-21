@@ -3,7 +3,7 @@
 //! уведомления (и приём кнопок Telegram), шлюз, ядро и веб-сервер интерфейса (с раздачей собранного интерфейса, если задан --ui-dir).
 //! Кто вызывает: операционная система (запуск программы).
 //! От чего зависит: все модули. Адаптеры площадок (BingX, DEX в сети BSC) регистрируются здесь.
-//! Настройки: свои — нет; аргументы запуска — cli.rs.
+//! Настройки: свои — нет; аргументы запуска — cli.rs. Распределитель памяти — mimalloc (см. GLOBAL).
 
 use std::process::ExitCode;
 
@@ -17,6 +17,14 @@ use arb::settings::live::Watch;
 use arb::settings::store::Store;
 use arb::storage::db::Db;
 use arb::storage::journal::{Journal, Level};
+
+/// Распределитель памяти — mimalloc (https://github.com/microsoft/mimalloc, crate mimalloc: «#[global_allocator]
+/// static GLOBAL: MiMalloc = MiMalloc;»). Бинарь для Linux — статический musl (.github/workflows/linux.yml), а malloc musl
+/// держит одну общую блокировку на все потоки: на живом 03.11 с MEXC профиль perf — 64 % процессора в спин-блокировке
+/// futex (__lock/__unlock musl) и 54 % времени в ядре, 24 потока tokio на 70–100 %. mimalloc — свои кучи на поток, общей
+/// блокировки на каждое выделение нет.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 /// Имя файла базы в папке данных.
 const DB_FILE: &str = "arb.sqlite";
@@ -48,10 +56,29 @@ async fn run() -> Result<(), String> {
     let settings = Store::load(db.clone(), changes.clone(), journal.clone())
         .await
         .map_err(|e| e.to_string())?;
+    // Решение 353: учёт ядра — свой файл ledger.sqlite (Db::open); перенесённое из основной базы — в журнал.
+    let moved = db.ledger().moved();
+    if moved > 0 {
+        let m = format!(
+            "Учёт ядра (сделки, переводы, итог дня, очередь кошелька DEX) перенесён в свой файл {}: {moved} строк",
+            arb::storage::ledger_db::LEDGER_FILE
+        );
+        let _ = journal
+            .write(Level::Info, "storage.ledger", None, m, None)
+            .await;
+    }
+    // Решения 341, 353: пределы записи хранилища (длина очереди и пачки журнала, synchronous учёта ядра) — до первых записей
+    // адаптеров и до загрузки сделок ядром; дальше — на лету (storage/write_modes.rs).
+    arb::storage::write_modes::apply(&journal, &db, &settings);
+    tokio::spawn(arb::storage::write_modes::run(
+        journal.clone(),
+        db.clone(),
+        settings.clone(),
+        Watch::new(changes.subscribe(), arb::storage::write_modes::names()),
+    ));
     let vault = Vault::locked(arb::secrets::file::path_in(&args.data_dir));
-    let http = reqwest::Client::builder()
-        // Редиректы выключены: в адресе запроса может быть токен, его нельзя отдавать другому адресу.
-        .redirect(reqwest::redirect::Policy::none())
+    // Редиректы выключены (gateway/http_bind.rs builder — одно место для всех клиентов, решение 178).
+    let http = arb::gateway::http_bind::builder()
         .build()
         .map_err(|e| e.to_string())?;
     let notifier = Notifier {
@@ -76,12 +103,207 @@ async fn run() -> Result<(), String> {
         http: http.clone(),
         journal: journal.clone(),
         raw: raw.clone(),
+        taps: Default::default(),
     };
     registry
         .register(std::sync::Arc::new(arb::venues::bingx::Bingx::new(
             bingx_ctx,
         )))
         .await;
+    // Биржа MEXC (решение 107): тот же контракт, свои настройки venue.* [mexc] и секреты mexc.*.
+    let mexc_ctx = arb::venues::mexc::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: http.clone(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+        taps: Default::default(),
+    };
+    registry
+        .register(std::sync::Arc::new(arb::venues::mexc::Mexc::new(mexc_ctx)))
+        .await;
+    // Биржа Gate (решение 135): тот же контракт, свои настройки venue.* [gate] и секреты gate.*.
+    let gate_ctx = arb::venues::gate::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: http.clone(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+        taps: Default::default(),
+    };
+    registry
+        .register(std::sync::Arc::new(arb::venues::gate::Gate::new(gate_ctx)))
+        .await;
+    // Биржа Bybit (решение 136): API V5, только спот; свои настройки venue.* [bybit] и секреты bybit.*.
+    let bybit_ctx = arb::venues::bybit::ctx::Ctx::new(
+        settings.clone(),
+        vault.clone(),
+        http.clone(),
+        journal.clone(),
+        raw.clone(),
+    );
+    registry
+        .register(std::sync::Arc::new(arb::venues::bybit::Bybit::new(
+            bybit_ctx,
+        )))
+        .await;
+    // Биржа KuCoin (решение 137): тот же контракт, свои настройки venue.* [kucoin] и секреты kucoin.*.
+    let kucoin_ctx = arb::venues::kucoin::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: http.clone(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+        taps: Default::default(),
+    };
+    registry
+        .register(std::sync::Arc::new(arb::venues::kucoin::Kucoin::new(
+            kucoin_ctx,
+        )))
+        .await;
+    // Биржа Binance (решение 160): спот API и Wallet SAPI; свои настройки venue.* [binance] и секреты binance.*.
+    let binance_ctx = arb::venues::binance::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: http.clone(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+        taps: Default::default(),
+    };
+    registry
+        .register(std::sync::Arc::new(arb::venues::binance::Binance::new(
+            binance_ctx,
+        )))
+        .await;
+    // Биржа Bitget (решение 162): Classic API v2, только спот; свои настройки venue.* [bitget] и секреты bitget.*.
+    let bitget_ctx = arb::venues::bitget::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: http.clone(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+    };
+    registry
+        .register(std::sync::Arc::new(arb::venues::bitget::Bitget::new(
+            bitget_ctx,
+        )))
+        .await;
+    // Биржа XT.com (решение 167): спот API v4; свои настройки venue.* [xt] и секреты xt.*.
+    let xt_ctx = arb::venues::xt::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: http.clone(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+    };
+    registry
+        .register(std::sync::Arc::new(arb::venues::xt::Xt::new(xt_ctx)))
+        .await;
+    // Биржа OKX (решение 161): API v5, только спот; свои настройки venue.* [okx] и секреты okx.*.
+    let okx_ctx = arb::venues::okx::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: http.clone(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+    };
+    registry
+        .register(std::sync::Arc::new(arb::venues::okx::Okx::new(okx_ctx)))
+        .await;
+    // Биржа Poloniex (решение 169): Spot API, только спот; свои настройки venue.* [poloniex] и секреты poloniex.*.
+    let poloniex_ctx = arb::venues::poloniex::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: http.clone(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+    };
+    registry
+        .register(std::sync::Arc::new(arb::venues::poloniex::Poloniex::new(
+            poloniex_ctx,
+        )))
+        .await;
+    // Биржа Phemex (решение 168): только спот; свои настройки venue.* [phemex] и секреты phemex.*.
+    let phemex_ctx = arb::venues::phemex::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: http.clone(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+    };
+    registry
+        .register(std::sync::Arc::new(arb::venues::phemex::Phemex::new(
+            phemex_ctx,
+        )))
+        .await;
+    // Биржа Kraken (решение 172): спот REST /0 + Funding (Beta) + WebSocket v2, только спот; свои настройки venue.*
+    // [kraken] и секреты kraken.*; подписанные запросы ключа — по одному (nonce).
+    let kraken_ctx = arb::venues::kraken::ctx::Ctx::new(
+        settings.clone(),
+        vault.clone(),
+        http.clone(),
+        journal.clone(),
+        raw.clone(),
+    );
+    registry
+        .register(std::sync::Arc::new(arb::venues::kraken::Kraken::new(
+            kraken_ctx,
+        )))
+        .await;
+    // Биржа CoinEx (решение 170): API v2, только спот; свои настройки venue.* [coinex] и секреты coinex.*.
+    let coinex_ctx = arb::venues::coinex::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: http.clone(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+    };
+    registry
+        .register(std::sync::Arc::new(arb::venues::coinex::CoinEx::new(
+            coinex_ctx,
+        )))
+        .await;
+    // Биржа HTX (решение 171): спот API v1/v2, только спот; свои настройки venue.* [htx] и секреты htx.*.
+    let htx_ctx = arb::venues::htx::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: http.clone(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+    };
+    registry
+        .register(std::sync::Arc::new(arb::venues::htx::Htx::new(htx_ctx)))
+        .await;
+    // Площадка DEX — bsc_dex (решение 91): сигналы, цены и подбор размера всегда с нашего узла (WebSocket пулов) и
+    // математики пулов. Исполнение свопа по настройке exec.via_kyber [bsc_dex] делегируется агрегатору KyberSwap
+    // (внутри bsc_dex), иначе — собственный сборщик. Код исполнения kyberswap как площадка-цены не регистрируется.
+    // Решение 435 (433-к): площадки DEX процесса — bsc_dex и dex.venues (например arb_dex — сеть Arbitrum тем же кодом
+    // адаптера); не задана — только bsc_dex, как раньше. Список неверен — запись в журнал, только bsc_dex.
+    let dex_extra = match arb::venues::bsc_dex::dex_venues::extra(&settings) {
+        Ok(extra) => extra,
+        Err(why) => {
+            let _ = journal
+                .write(Level::Error, "venue.dex_venues", None, why, None)
+                .await;
+            Vec::new()
+        }
+    };
+    // Решение 435 (ревью, правки): id, уже занятый площадкой шлюза (биржи зарегистрированы выше), — не площадка DEX:
+    // запись в журнал и в Place.all не входит. Иначе у bsc_dex alone() = false и каналы, виды DEX и справочник BSC
+    // читали бы dex.default_chain (ctx_place.rs default_chain).
+    let mut dex_free: Vec<String> = Vec::with_capacity(dex_extra.len());
+    for id in dex_extra {
+        let vid = arb::core::types::VenueId(id.clone());
+        if registry.get(&vid).await.is_ok() {
+            let why = format!("dex.venues: id «{id}» уже занят площадкой шлюза — пропущен");
+            let _ = journal
+                .write(Level::Error, "venue.dex_venues", None, why, None)
+                .await;
+            continue;
+        }
+        dex_free.push(id);
+    }
+    let dex_ids = arb::venues::bsc_dex::dex_venues::all(dex_free);
     let dex_ctx = arb::venues::bsc_dex::ctx::Ctx {
         settings: settings.clone(),
         vault: vault.clone(),
@@ -90,12 +312,56 @@ async fn run() -> Result<(), String> {
         raw,
         pace: Default::default(),
         failover: Default::default(),
+        evm_chain: Default::default(),
+        place: arb::venues::bsc_dex::ctx::Place {
+            id: arb::venues::bsc_dex::ctx::BSC_ID,
+            all: dex_ids,
+        },
+        chains: Default::default(),
+        account: None,
         index: Default::default(),
     };
+    // Окружения остальных площадок DEX — до передачи dex_ctx адаптеру bsc_dex.
+    let more_dex: Vec<_> = dex_ids[1..]
+        .iter()
+        .copied()
+        .map(|id| dex_ctx.for_place(id))
+        .collect();
+    // Ревью t235 (решение 461): ячейка chainId (dex.evm_chain_id) каждой площадки DEX — при старте (ctx_chain.rs);
+    // дальше её перечитывает рассылка изменений настроек.
+    let _ = dex_ctx.chain_id();
+    for c in &more_dex {
+        let _ = c.chain_id();
+    }
+    // Решение 132, пункт 5: перенос прежнего единственного кошелька — один раз, после разблокировки секретов
+    // (api/secrets.rs): кошелёк «BingX» с тем же секретом, исполнитель — значение exec.executor_address [bsc_dex],
+    // строки маппинга bingx и «пробы». Деньги не переводятся.
+    settings
+        .accounts()
+        .configure_legacy(arb::settings::accounts::migrate::LegacyCfg {
+            name: "BingX".into(),
+            secret: arb::venues::bsc_dex::ctx::SECRET_WALLET_KEY.into(),
+            queue_key: arb::venues::bsc_dex::ctx::BSC_ID.into(),
+            executor_setting: "exec.executor_address".into(),
+            executor_scope: arb::settings::scope::Scope::Venue(
+                arb::venues::bsc_dex::ctx::BSC_ID.into(),
+            ),
+            rows: vec![
+                arb::venues::bingx::ctx::ID.into(),
+                arb::settings::accounts::ROW_PROBE.into(),
+            ],
+        });
     let dex = arb::venues::bsc_dex::BscDex::new(dex_ctx);
     // Изменение промежуточных монет (решение 52) — пересборка подписки DEX на лету.
     dex.watch_settings(changes.subscribe());
     registry.register(std::sync::Arc::new(dex)).await;
+    // Решение 435 (433-к): остальные площадки DEX (dex.venues) — тот же адаптер со своим id; занятые id отсеяны выше
+    // (в dex_ids их нет).
+    for ctx in more_dex {
+        let more = arb::venues::bsc_dex::BscDex::new(ctx);
+        more.watch_settings(changes.subscribe());
+        registry.register(std::sync::Arc::new(more)).await;
+    }
 
     // Ядро: работает с площадками только через шлюз; интерфейс читает его состояние через AppState.core.
     let core = arb::core::Core::start(arb::core::deps::Deps {
@@ -109,17 +375,52 @@ async fn run() -> Result<(), String> {
         data_dir: args.data_dir.clone(),
     })
     .await;
+    // Решение 356: Ctrl+C / SIGTERM — сразу «Стоп» новых входов, уведомления — с пределом notify.stop_wait_ms, журнал —
+    // до границы на момент сигнала, затем выход (core/shutdown.rs). До запуска ядра — как раньше (сигнал завершает сразу).
+    arb::core::shutdown::install(core.clone());
 
-    // Кнопки Telegram → команды ядру (CommandTx, core/types/control.rs). wake — сигнал «секреты
+    // Кнопки и команды Telegram → команды ядру (Core::command, решения 156, 157). wake — сигнал «секреты
     // изменились» от api/secrets.rs: приём начинает заново с актуальным токеном.
     let secrets_wake = std::sync::Arc::new(tokio::sync::Notify::new());
+    // Память дубля «Ручного управления» — общая у отправки (mirror.rs) и приёма нажатий (updates.rs).
+    let mirror_state = arb::notify::mirror_state::Shared::default();
+    // Решение 176: память экранов чата «Управление» — общая у приёма нажатий и лайв-обновления (notify/ctl/live.rs).
+    let ctl_state = arb::notify::ctl::sessions::Shared::default();
+    tokio::spawn(arb::notify::ctl::live::run(
+        arb::notify::ctl::live::Live {
+            http: http.clone(),
+            settings: settings.clone(),
+            vault: vault.clone(),
+            core: core.clone(),
+            mirror: mirror_state.clone(),
+            ctl: ctl_state.clone(),
+        },
+        Watch::new(changes.subscribe(), vec!["notify.".to_string()]),
+    ));
+    tokio::spawn(arb::notify::mirror::run(
+        arb::notify::mirror::Mirror {
+            core: core.clone(),
+            notifier: notifier.clone(),
+            state: mirror_state.clone(),
+            db: db.clone(),
+        },
+        Watch::new(
+            changes.subscribe(),
+            arb::notify::updates::WATCH_PREFIXES
+                .iter()
+                .map(|p| p.to_string())
+                .collect(),
+        ),
+    ));
     tokio::spawn(arb::notify::updates::run(
         arb::notify::updates::Updates {
             http: http.clone(),
             settings: settings.clone(),
             vault: vault.clone(),
             journal: journal.clone(),
-            commands: core.command_channel(),
+            core: core.clone(),
+            state: mirror_state,
+            ctl: ctl_state,
             wake: secrets_wake.clone(),
         },
         Watch::new(

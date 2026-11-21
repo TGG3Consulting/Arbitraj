@@ -1,7 +1,11 @@
 //! Файл: venues/bsc_dex/directory/fetch.rs
 //! Что делает: запросы справочника к индексатору: пулы одной монеты по страницам (не больше index.pages_per_token;
 //! пустая страница, HTTP 400 на странице > 1 или страница короче index.page_size — конец списка) и список DEX сети по links.next
-//! (сохраняется в SQLite и в состояние справочника).
+//! (сохраняется в SQLite и в состояние справочника). 404 по монете — сведение «индексатор не знает пулов монеты»
+//! (решение 121, C2), а не ошибка.
+//! Решение 435 (433-з): id DEX индексатора у площадки другой сети (не сети по умолчанию) — сразу ключ области «DEX»
+//! «id@сеть» (ctx_place.rs dex_suffix): списки DEX и пулы справочника дальше живут с ключом; у сети по умолчанию
+//! (bsc_dex) id — как есть.
 //! Кто вызывает: directory/refresh.rs.
 //! От чего зависит: ctx.rs, directory/{gt_http,gt_parse,store,mod}.rs.
 //! Настройки: через вызываемые — index.* [bsc_dex].
@@ -24,6 +28,8 @@ use super::store;
 /// Список DEX сети по всем страницам (links.next). Сбой связи — в журнал, список прежний.
 /// Ошибки: NotConfigured, SecretsLocked.
 pub async fn dexes(ctx: &Ctx, net: &str) -> GatewayResult<()> {
+    // Решение 435 (433-з): суффикс ключа области «DEX» площадки — до запросов (не задана сеть — справочника нет).
+    let suffix = ctx.dex_suffix()?;
     let mut all = Vec::new();
     let mut page = 1;
     loop {
@@ -31,6 +37,12 @@ pub async fn dexes(ctx: &Ctx, net: &str) -> GatewayResult<()> {
         let body = match gt_http::get(ctx, &path, page).await {
             Ok(Got::Body(b)) => b,
             Ok(Got::PageEnd(_)) => break,
+            Ok(Got::NotFound(t)) => {
+                let msg =
+                    format!("Список DEX: индексатор ответил 404 ({t}) — проверьте index.network");
+                ctx.log(Level::Warn, "dex.index", msg, None).await;
+                return Ok(());
+            }
             Err(e) if stops(&e) => return Err(e),
             Err(e) => {
                 ctx.log(
@@ -43,7 +55,7 @@ pub async fn dexes(ctx: &Ctx, net: &str) -> GatewayResult<()> {
                 return Ok(());
             }
         };
-        let (list, next) = match gt_parse::dexes(&body) {
+        let (mut list, next) = match gt_parse::dexes(&body) {
             Ok(v) => v,
             Err(why) => {
                 ctx.log(Level::Warn, "dex.index", format!("Список DEX: {why}"), None)
@@ -51,6 +63,9 @@ pub async fn dexes(ctx: &Ctx, net: &str) -> GatewayResult<()> {
                 return Ok(());
             }
         };
+        if let Some(s) = &suffix {
+            list.iter_mut().for_each(|d| d.id.push_str(s));
+        }
         all.extend(list);
         if !next {
             break;
@@ -65,15 +80,22 @@ pub async fn dexes(ctx: &Ctx, net: &str) -> GatewayResult<()> {
     Ok(())
 }
 
+/// Ответ индексатора по монете: пулы, сколько страниц прочитано, сведение «индексатор не знает пулов монеты».
+pub type TokenPools = (Vec<IndexedPool>, u32, Option<String>);
+
 /// Пулы одной монеты по страницам. Принимает: сеть, монету, предел страниц, размер страницы.
-/// Возвращает: (пулы, сколько страниц прочитано). Ошибки: запрос любой страницы (пол-списка — не факт), BadResponse.
+/// Возвращает: (пулы, сколько страниц прочитано, сведение). 404 на первой странице — пулов нет и сведение
+/// «индексатор не знает пулов монеты» (решение 121, C2), не ошибка. Ошибки: запрос любой страницы (пол-списка —
+/// не факт; 404 на странице больше первой — тоже ошибка BadResponse), BadResponse.
 pub async fn token_pools(
     ctx: &Ctx,
     net: &str,
     token: Address,
     pages: u32,
     size: usize,
-) -> GatewayResult<(Vec<IndexedPool>, u32)> {
+) -> GatewayResult<TokenPools> {
+    // Решение 435 (433-з): id DEX пулов — ключ области «DEX» площадки (у сети по умолчанию — как есть).
+    let suffix = ctx.dex_suffix()?;
     let mut out = Vec::new();
     let mut read = 0;
     for page in 1..=pages {
@@ -83,8 +105,16 @@ pub async fn token_pools(
         let body = match gt_http::get(ctx, &path, page).await? {
             Got::Body(b) => b,
             Got::PageEnd(_) => break,
+            Got::NotFound(t) if page == 1 => return Ok((Vec::new(), 0, Some(unknown(&t)))),
+            Got::NotFound(t) => {
+                let why = format!(
+                    "{}: HTTP 404 на странице {page} ({path}): {t}",
+                    gt_http::SOURCE
+                );
+                return Err(ctx.err(ErrorCode::BadResponse, why));
+            }
         };
-        let list = gt_parse::pools(&body).map_err(|w| {
+        let mut list = gt_parse::pools(&body).map_err(|w| {
             ctx.err(
                 ErrorCode::BadResponse,
                 format!("{}: {path}: {w}", gt_http::SOURCE),
@@ -94,6 +124,9 @@ pub async fn token_pools(
         if list.is_empty() {
             break;
         }
+        if let Some(s) = &suffix {
+            list.iter_mut().for_each(|p| p.dex_id.push_str(s));
+        }
         read = page;
         let last = list.len() < size;
         out.extend(list);
@@ -101,5 +134,19 @@ pub async fn token_pools(
             break;
         }
     }
-    Ok((out, read))
+    Ok((out, read, None))
+}
+
+/// Текст сведения «индексатор не знает пулов монеты» (решение 121, C2). Принимает: текст ошибки индексатора.
+/// Ошибок нет.
+pub fn unknown(title: &str) -> String {
+    let t = if title.is_empty() {
+        String::new()
+    } else {
+        format!(" ({title})")
+    };
+    format!(
+        "индексатор не знает пулов монеты — HTTP 404{t}; пулы — из других источников (события создания, поиск по \
+         фабрикам index.factory_scan)"
+    )
 }

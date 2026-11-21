@@ -1,0 +1,1130 @@
+# Liquidity Book V2.1 (LFJ / Trader Joe, BSC) — дословные выдержки с номерами строк (записано 15.11.2026)
+#
+# Официальный репозиторий: github.com/lfj-gg/joe-v2, тег v2.1.0 = коммит 8eeb42d73b5fe473f5b65d544d27827065a83e32.
+# Sourcify chainId 56: фабрика 0x8e42f2f4101563bf679975178e880fd87d3efd4e (exact_match, src/LBFactory.sol:LBFactory, solc
+# 0.8.10, runs 800) и реализация пула 0xee5a90098b270596ec35d637b30d908c862c86df (exact_match, src/LBPair.sol:LBPair) —
+# SHA-256 текстов 19 из 19 сверенных файлов = тег v2.1.0 (LBPair, LBFactory, BinHelper, FeeHelper, PriceHelper,
+# PairParameterHelper, Constants, TreeMath, Uint128x128Math, Uint256x256Math, PackedUint128Math, Encoded, SafeCast,
+# ILBPair, ILBFactory, ImmutableClone, TokenHelper, OracleHelper, LBToken). Вторая реализация пула
+# 0x3e30fdae04c08fc20fa2fe0cf55c95d99a9c2d8f (exact_match, развёрнута на блоке 28439323; у пулов 0x717d…073d, 0x3208…2f67):
+# LBPair.sol тот же (SHA-256 c7273a16…), у всех библиотек — pragma ^0.8.10 вместо 0.8.10, в TreeMath.remove — исправление
+# newLeaves (3 строки; удаление id из дерева — на обмен не влияет). Пул — клон EIP-1167 с аргументами (ImmutableClone):
+# код 97 байт, в нём адрес реализации, tokenX, tokenY, binStep (probe.json: code_bytes, clone_impl).
+
+### src/LBPair.sol
+120:     /**
+121:      * @notice Returns the Liquidity Book Factory
+122:      * @return factory The Liquidity Book Factory
+123:      */
+124:     function getFactory() external view override returns (ILBFactory factory) {
+125:         return _factory;
+126:     }
+127: 
+128:     /**
+129:      * @notice Returns the token X of the Liquidity Book Pair
+130:      * @return tokenX The address of the token X
+131:      */
+132:     function getTokenX() external pure override returns (IERC20 tokenX) {
+133:         return _tokenX();
+134:     }
+135: 
+136:     /**
+137:      * @notice Returns the token Y of the Liquidity Book Pair
+138:      * @return tokenY The address of the token Y
+139:      */
+140:     function getTokenY() external pure override returns (IERC20 tokenY) {
+141:         return _tokenY();
+142:     }
+143: 
+144:     /**
+145:      * @notice Returns the bin step of the Liquidity Book Pair
+146:      * @dev The bin step is the increase in price between two consecutive bins, in basis points.
+147:      * For example, a bin step of 1 means that the price of the next bin is 0.01% higher than the price of the previous bin.
+148:      * @return binStep The bin step of the Liquidity Book Pair, in 10_000th
+149:      */
+150:     function getBinStep() external pure override returns (uint16) {
+151:         return _binStep();
+152:     }
+153: 
+154:     /**
+155:      * @notice Returns the reserves of the Liquidity Book Pair
+156:      * This is the sum of the reserves of all bins, minus the protocol fees.
+157:      * @return reserveX The reserve of token X
+158:      * @return reserveY The reserve of token Y
+159:      */
+160:     function getReserves() external view override returns (uint128 reserveX, uint128 reserveY) {
+161:         (reserveX, reserveY) = _reserves.sub(_protocolFees).decode();
+162:     }
+163: 
+164:     /**
+165:      * @notice Returns the active id of the Liquidity Book Pair
+166:      * @dev The active id is the id of the bin that is currently being used for swaps.
+167:      * The price of the active bin is the price of the Liquidity Book Pair and can be calculated as follows:
+168:      * `price = (1 + binStep / 10_000) ^ (activeId - 2^23)`
+169:      * @return activeId The active id of the Liquidity Book Pair
+170:      */
+171:     function getActiveId() external view override returns (uint24 activeId) {
+172:         activeId = _parameters.getActiveId();
+173:     }
+174: 
+175:     /**
+176:      * @notice Returns the reserves of a bin
+177:      * @param id The id of the bin
+178:      * @return binReserveX The reserve of token X in the bin
+179:      * @return binReserveY The reserve of token Y in the bin
+180:      */
+181:     function getBin(uint24 id) external view override returns (uint128 binReserveX, uint128 binReserveY) {
+182:         (binReserveX, binReserveY) = _bins[id].decode();
+183:     }
+184: 
+185:     /**
+186:      * @notice Returns the next non-empty bin
+187:      * @dev The next non-empty bin is the bin with a higher (if swapForY is true) or lower (if swapForY is false)
+188:      * id that has a non-zero reserve of token X or Y.
+189:      * @param swapForY Whether the swap is for token Y (true) or token X (false
+190:      * @param id The id of the bin
+191:      * @return nextId The id of the next non-empty bin
+192:      */
+193:     function getNextNonEmptyBin(bool swapForY, uint24 id) external view override returns (uint24 nextId) {
+194:         nextId = _getNextNonEmptyBin(swapForY, id);
+195:     }
+196: 
+197:     /**
+198:      * @notice Returns the protocol fees of the Liquidity Book Pair
+199:      * @return protocolFeeX The protocol fees of token X
+200:      * @return protocolFeeY The protocol fees of token Y
+201:      */
+202:     function getProtocolFees() external view override returns (uint128 protocolFeeX, uint128 protocolFeeY) {
+203:         (protocolFeeX, protocolFeeY) = _protocolFees.decode();
+204:     }
+205: 
+206:     /**
+207:      * @notice Returns the static fee parameters of the Liquidity Book Pair
+208:      * @return baseFactor The base factor for the static fee
+209:      * @return filterPeriod The filter period for the static fee
+210:      * @return decayPeriod The decay period for the static fee
+211:      * @return reductionFactor The reduction factor for the static fee
+212:      * @return variableFeeControl The variable fee control for the static fee
+213:      * @return protocolShare The protocol share for the static fee
+214:      * @return maxVolatilityAccumulator The maximum volatility accumulator for the static fee
+215:      */
+216:     function getStaticFeeParameters()
+217:         external
+218:         view
+219:         override
+220:         returns (
+221:             uint16 baseFactor,
+222:             uint16 filterPeriod,
+223:             uint16 decayPeriod,
+224:             uint16 reductionFactor,
+225:             uint24 variableFeeControl,
+226:             uint16 protocolShare,
+227:             uint24 maxVolatilityAccumulator
+228:         )
+229:     {
+230:         bytes32 parameters = _parameters;
+231: 
+232:         baseFactor = parameters.getBaseFactor();
+233:         filterPeriod = parameters.getFilterPeriod();
+234:         decayPeriod = parameters.getDecayPeriod();
+235:         reductionFactor = parameters.getReductionFactor();
+236:         variableFeeControl = parameters.getVariableFeeControl();
+237:         protocolShare = parameters.getProtocolShare();
+238:         maxVolatilityAccumulator = parameters.getMaxVolatilityAccumulator();
+239:     }
+240: 
+241:     /**
+242:      * @notice Returns the variable fee parameters of the Liquidity Book Pair
+243:      * @return volatilityAccumulator The volatility accumulator for the variable fee
+244:      * @return volatilityReference The volatility reference for the variable fee
+245:      * @return idReference The id reference for the variable fee
+246:      * @return timeOfLastUpdate The time of last update for the variable fee
+247:      */
+248:     function getVariableFeeParameters()
+249:         external
+250:         view
+251:         override
+252:         returns (uint24 volatilityAccumulator, uint24 volatilityReference, uint24 idReference, uint40 timeOfLastUpdate)
+253:     {
+254:         bytes32 parameters = _parameters;
+255: 
+256:         volatilityAccumulator = parameters.getVolatilityAccumulator();
+257:         volatilityReference = parameters.getVolatilityReference();
+258:         idReference = parameters.getIdReference();
+259:         timeOfLastUpdate = parameters.getTimeOfLastUpdate();
+260:     }
+...
+355:      * @dev If `amountOutLeft` is greater than zero, the swap in is not possible,
+356:      * and the maximum amount that can be swapped from `amountIn` is `amountOut - amountOutLeft`.
+357:      * @param amountOut The amount of token X or Y to swap in
+358:      * @param swapForY Whether the swap is for token Y (true) or token X (false)
+359:      * @return amountIn The amount of token X or Y that can be swapped in, including the fee
+360:      * @return amountOutLeft The amount of token Y or X that cannot be swapped out
+361:      * @return fee The fee of the swap
+362:      */
+363:     function getSwapIn(uint128 amountOut, bool swapForY)
+364:         external
+365:         view
+366:         override
+367:         returns (uint128 amountIn, uint128 amountOutLeft, uint128 fee)
+368:     {
+369:         amountOutLeft = amountOut;
+370: 
+371:         bytes32 parameters = _parameters;
+372:         uint16 binStep = _binStep();
+373: 
+374:         uint24 id = parameters.getActiveId();
+375: 
+376:         parameters = parameters.updateReferences();
+377: 
+378:         while (true) {
+379:             uint128 binReserves = _bins[id].decode(!swapForY);
+380:             if (binReserves > 0) {
+381:                 uint256 price = id.getPriceFromId(binStep);
+382: 
+383:                 uint128 amountOutOfBin = binReserves > amountOutLeft ? amountOutLeft : binReserves;
+384: 
+385:                 parameters = parameters.updateVolatilityAccumulator(id);
+386: 
+387:                 uint128 amountInWithoutFee = uint128(
+388:                     swapForY
+389:                         ? uint256(amountOutOfBin).shiftDivRoundUp(Constants.SCALE_OFFSET, price)
+390:                         : uint256(amountOutOfBin).mulShiftRoundUp(price, Constants.SCALE_OFFSET)
+391:                 );
+392: 
+393:                 uint128 totalFee = parameters.getTotalFee(binStep);
+394:                 uint128 feeAmount = amountInWithoutFee.getFeeAmount(totalFee);
+395: 
+396:                 amountIn += amountInWithoutFee + feeAmount;
+397:                 amountOutLeft -= amountOutOfBin;
+398: 
+399:                 fee += feeAmount;
+400:             }
+401: 
+402:             if (amountOutLeft == 0) {
+403:                 break;
+404:             } else {
+405:                 uint24 nextId = _getNextNonEmptyBin(swapForY, id);
+406: 
+407:                 if (nextId == 0 || nextId == type(uint24).max) break;
+408: 
+409:                 id = nextId;
+410:             }
+411:         }
+412:     }
+413: 
+414:     /**
+415:      * @notice Simulates a swap out.
+416:      * @dev If `amountInLeft` is greater than zero, the swap out is not possible,
+417:      * and the maximum amount that can be swapped is `amountIn - amountInLeft` for `amountOut`.
+418:      * @param amountIn The amount of token X or Y to swap in
+419:      * @param swapForY Whether the swap is for token Y (true) or token X (false)
+420:      * @return amountInLeft The amount of token X or Y that cannot be swapped in
+421:      * @return amountOut The amount of token Y or X that can be swapped out
+422:      * @return fee The fee of the swap
+423:      */
+424:     function getSwapOut(uint128 amountIn, bool swapForY)
+425:         external
+426:         view
+427:         override
+428:         returns (uint128 amountInLeft, uint128 amountOut, uint128 fee)
+429:     {
+430:         bytes32 amountsInLeft = amountIn.encode(swapForY);
+431: 
+432:         bytes32 parameters = _parameters;
+433:         uint16 binStep = _binStep();
+434: 
+435:         uint24 id = parameters.getActiveId();
+436: 
+437:         parameters = parameters.updateReferences();
+438: 
+439:         while (true) {
+440:             bytes32 binReserves = _bins[id];
+441:             if (!binReserves.isEmpty(!swapForY)) {
+442:                 parameters = parameters.updateVolatilityAccumulator(id);
+443: 
+444:                 (bytes32 amountsInWithFees, bytes32 amountsOutOfBin, bytes32 totalFees) =
+445:                     binReserves.getAmounts(parameters, binStep, swapForY, id, amountsInLeft);
+446: 
+447:                 if (amountsInWithFees > 0) {
+448:                     amountsInLeft = amountsInLeft.sub(amountsInWithFees);
+449: 
+450:                     amountOut += amountsOutOfBin.decode(!swapForY);
+451: 
+452:                     fee += totalFees.decode(swapForY);
+453:                 }
+454:             }
+455: 
+456:             if (amountsInLeft == 0) {
+457:                 break;
+458:             } else {
+459:                 uint24 nextId = _getNextNonEmptyBin(swapForY, id);
+460: 
+461:                 if (nextId == 0 || nextId == type(uint24).max) break;
+462: 
+463:                 id = nextId;
+464:             }
+465:         }
+466: 
+467:         amountInLeft = amountsInLeft.decode(swapForY);
+468:     }
+469: 
+470:     /**
+471:      * @notice Swap tokens iterating over the bins until the entire amount is swapped.
+472:      * Token X will be swapped for token Y if `swapForY` is true, and token Y for token X if `swapForY` is false.
+473:      * This function will not transfer the tokens from the caller, it is expected that the tokens have already been
+474:      * transferred to this contract through another contract, most likely the router.
+475:      * That is why this function shouldn't be called directly, but only through one of the swap functions of a router
+476:      * that will also perform safety checks, such as minimum amounts and slippage.
+477:      * The variable fee is updated throughout the swap, it increases with the number of bins crossed.
+478:      * The oracle is updated at the end of the swap.
+479:      * @param swapForY Whether you're swapping token X for token Y (true) or token Y for token X (false)
+480:      * @param to The address to send the tokens to
+481:      * @return amountsOut The encoded amounts of token X and token Y sent to `to`
+482:      */
+483:     function swap(bool swapForY, address to) external override nonReentrant returns (bytes32 amountsOut) {
+484:         bytes32 reserves = _reserves;
+485:         bytes32 protocolFees = _protocolFees;
+486: 
+487:         bytes32 amountsLeft = swapForY ? reserves.receivedX(_tokenX()) : reserves.receivedY(_tokenY());
+488:         if (amountsLeft == 0) revert LBPair__InsufficientAmountIn();
+489: 
+490:         reserves = reserves.add(amountsLeft);
+491: 
+492:         bytes32 parameters = _parameters;
+493:         uint16 binStep = _binStep();
+494: 
+495:         uint24 activeId = parameters.getActiveId();
+496: 
+497:         parameters = parameters.updateReferences();
+498: 
+499:         while (true) {
+500:             bytes32 binReserves = _bins[activeId];
+501:             if (!binReserves.isEmpty(!swapForY)) {
+502:                 parameters = parameters.updateVolatilityAccumulator(activeId);
+503: 
+504:                 (bytes32 amountsInWithFees, bytes32 amountsOutOfBin, bytes32 totalFees) =
+505:                     binReserves.getAmounts(parameters, binStep, swapForY, activeId, amountsLeft);
+506: 
+507:                 if (amountsInWithFees > 0) {
+508:                     amountsLeft = amountsLeft.sub(amountsInWithFees);
+509:                     amountsOut = amountsOut.add(amountsOutOfBin);
+510: 
+511:                     bytes32 pFees = totalFees.scalarMulDivBasisPointRoundDown(parameters.getProtocolShare());
+512: 
+513:                     if (pFees > 0) {
+514:                         protocolFees = protocolFees.add(pFees);
+515:                         amountsInWithFees = amountsInWithFees.sub(pFees);
+516:                     }
+517: 
+518:                     _bins[activeId] = binReserves.add(amountsInWithFees).sub(amountsOutOfBin);
+519: 
+520:                     emit Swap(
+521:                         msg.sender,
+522:                         to,
+523:                         activeId,
+524:                         amountsInWithFees,
+525:                         amountsOutOfBin,
+526:                         parameters.getVolatilityAccumulator(),
+527:                         totalFees,
+528:                         pFees
+529:                         );
+530:                 }
+531:             }
+532: 
+533:             if (amountsLeft == 0) {
+534:                 break;
+535:             } else {
+536:                 uint24 nextId = _getNextNonEmptyBin(swapForY, activeId);
+537: 
+538:                 if (nextId == 0 || nextId == type(uint24).max) revert LBPair__OutOfLiquidity();
+539: 
+540:                 activeId = nextId;
+541:             }
+542:         }
+543: 
+544:         if (amountsOut == 0) revert LBPair__InsufficientAmountOut();
+545: 
+546:         _reserves = reserves.sub(amountsOut);
+547:         _protocolFees = protocolFees;
+548: 
+549:         parameters = _oracle.update(parameters, activeId);
+550:         _parameters = parameters.setActiveId(activeId);
+551: 
+552:         if (swapForY) {
+553:             amountsOut.transferY(_tokenY(), to);
+554:         } else {
+555:             amountsOut.transferX(_tokenX(), to);
+556:         }
+557:     }
+...
+812:     /**
+813:      * @dev Returns the address of the token X
+814:      * @return The address of the token X
+815:      */
+816:     function _tokenX() internal pure returns (IERC20) {
+817:         return IERC20(_getArgAddress(0));
+818:     }
+819: 
+820:     /**
+821:      * @dev Returns the address of the token Y
+822:      * @return The address of the token Y
+823:      */
+824:     function _tokenY() internal pure returns (IERC20) {
+825:         return IERC20(_getArgAddress(20));
+826:     }
+827: 
+828:     /**
+829:      * @dev Returns the bin step of the pool, in basis points
+830:      * @return The bin step of the pool
+831:      */
+832:     function _binStep() internal pure returns (uint16) {
+833:         return _getArgUint16(40);
+834:     }
+835: 
+836:     /**
+837:      * @dev Returns next non-empty bin
+838:      * @param swapForY Whether the swap is for Y
+839:      * @param id The id of the bin
+840:      * @return The id of the next non-empty bin
+841:      */
+842:     function _getNextNonEmptyBin(bool swapForY, uint24 id) internal view returns (uint24) {
+843:         return swapForY ? _tree.findFirstRight(id) : _tree.findFirstLeft(id);
+844:     }
+...
+
+### src/libraries/PairParameterHelper.sol
+28: library PairParameterHelper {
+29:     using SafeCast for uint256;
+30:     using Encoded for bytes32;
+31: 
+32:     error PairParametersHelper__InvalidParameter();
+33: 
+34:     uint256 internal constant OFFSET_BASE_FACTOR = 0;
+35:     uint256 internal constant OFFSET_FILTER_PERIOD = 16;
+36:     uint256 internal constant OFFSET_DECAY_PERIOD = 28;
+37:     uint256 internal constant OFFSET_REDUCTION_FACTOR = 40;
+38:     uint256 internal constant OFFSET_VAR_FEE_CONTROL = 54;
+39:     uint256 internal constant OFFSET_PROTOCOL_SHARE = 78;
+40:     uint256 internal constant OFFSET_MAX_VOL_ACC = 92;
+41:     uint256 internal constant OFFSET_VOL_ACC = 112;
+42:     uint256 internal constant OFFSET_VOL_REF = 132;
+43:     uint256 internal constant OFFSET_ID_REF = 152;
+44:     uint256 internal constant OFFSET_TIME_LAST_UPDATE = 176;
+45:     uint256 internal constant OFFSET_ORACLE_ID = 216;
+46:     uint256 internal constant OFFSET_ACTIVE_ID = 232;
+47: 
+48:     uint256 internal constant MASK_STATIC_PARAMETER = 0xffffffffffffffffffffffffffff;
+...
+200:     function getActiveId(bytes32 params) internal pure returns (uint24 activeId) {
+201:         activeId = params.decodeUint24(OFFSET_ACTIVE_ID);
+202:     }
+203: 
+204:     /**
+205:      * @dev Get the delta between the current active index and the cached active index
+206:      * @param params The encoded pair parameters, as follows:
+207:      * [0 - 232[: other parameters
+208:      * [232 - 256[: active index (24 bits)
+209:      * @param activeId The current active index
+210:      * @return The delta
+211:      */
+212:     function getDeltaId(bytes32 params, uint24 activeId) internal pure returns (uint24) {
+213:         uint24 id = getActiveId(params);
+214:         unchecked {
+215:             return activeId > id ? activeId - id : id - activeId;
+216:         }
+217:     }
+218: 
+219:     /**
+220:      * @dev Calculates the base fee, with 18 decimals
+221:      * @param params The encoded pair parameters
+222:      * @param binStep The bin step (in basis points)
+223:      * @return baseFee The base fee
+224:      */
+225:     function getBaseFee(bytes32 params, uint16 binStep) internal pure returns (uint256) {
+226:         unchecked {
+227:             // Base factor is in basis points, binStep is in basis points, so we multiply by 1e10
+228:             return uint256(getBaseFactor(params)) * binStep * 1e10;
+229:         }
+230:     }
+231: 
+232:     /**
+233:      * @dev Calculates the variable fee
+234:      * @param params The encoded pair parameters
+235:      * @param binStep The bin step (in basis points)
+236:      * @return variableFee The variable fee
+237:      */
+238:     function getVariableFee(bytes32 params, uint16 binStep) internal pure returns (uint256 variableFee) {
+239:         uint256 variableFeeControl = getVariableFeeControl(params);
+240: 
+241:         if (variableFeeControl != 0) {
+242:             unchecked {
+243:                 // The volatility accumulator is in basis points, binStep is in basis points,
+244:                 // and the variable fee control is in basis points, so the result is in 100e18th
+245:                 uint256 prod = uint256(getVolatilityAccumulator(params)) * binStep;
+246:                 variableFee = (prod * prod * variableFeeControl + 99) / 100;
+247:             }
+248:         }
+249:     }
+250: 
+251:     /**
+252:      * @dev Calculates the total fee, which is the sum of the base fee and the variable fee
+253:      * @param params The encoded pair parameters
+254:      * @param binStep The bin step (in basis points)
+255:      * @return totalFee The total fee
+256:      */
+257:     function getTotalFee(bytes32 params, uint16 binStep) internal pure returns (uint128) {
+258:         unchecked {
+259:             return (getBaseFee(params, binStep) + getVariableFee(params, binStep)).safe128();
+260:         }
+261:     }
+...
+279:     function setVolatilityReference(bytes32 params, uint24 volRef) internal pure returns (bytes32) {
+280:         if (volRef > Encoded.MASK_UINT20) revert PairParametersHelper__InvalidParameter();
+281: 
+282:         return params.set(volRef, Encoded.MASK_UINT20, OFFSET_VOL_REF);
+283:     }
+284: 
+285:     /**
+286:      * @dev Set the volatility accumulator in the encoded pair parameters
+287:      * @param params The encoded pair parameters
+288:      * @param volAcc The volatility accumulator
+289:      * @return The updated encoded pair parameters
+290:      */
+291:     function setVolatilityAccumulator(bytes32 params, uint24 volAcc) internal pure returns (bytes32) {
+292:         if (volAcc > Encoded.MASK_UINT20) revert PairParametersHelper__InvalidParameter();
+293: 
+294:         return params.set(volAcc, Encoded.MASK_UINT20, OFFSET_VOL_ACC);
+295:     }
+296: 
+297:     /**
+298:      * @dev Set the active id in the encoded pair parameters
+299:      * @param params The encoded pair parameters
+300:      * @param activeId The active id
+301:      * @return newParams The updated encoded pair parameters
+302:      */
+303:     function setActiveId(bytes32 params, uint24 activeId) internal pure returns (bytes32 newParams) {
+304:         return params.set(activeId, Encoded.MASK_UINT24, OFFSET_ACTIVE_ID);
+305:     }
+...
+345: 
+346:     /**
+347:      * @dev Updates the index reference in the encoded pair parameters
+348:      * @param params The encoded pair parameters
+349:      * @return newParams The updated encoded pair parameters
+350:      */
+351:     function updateIdReference(bytes32 params) internal pure returns (bytes32 newParams) {
+352:         uint24 activeId = getActiveId(params);
+353:         return params.set(activeId, Encoded.MASK_UINT24, OFFSET_ID_REF);
+354:     }
+355: 
+356:     /**
+357:      * @dev Updates the time of last update in the encoded pair parameters
+358:      * @param params The encoded pair parameters
+359:      * @return newParams The updated encoded pair parameters
+360:      */
+361:     function updateTimeOfLastUpdate(bytes32 params) internal view returns (bytes32 newParams) {
+362:         uint40 currentTime = block.timestamp.safe40();
+363:         return params.set(currentTime, Encoded.MASK_UINT40, OFFSET_TIME_LAST_UPDATE);
+364:     }
+365: 
+366:     /**
+367:      * @dev Updates the volatility reference in the encoded pair parameters
+368:      * @param params The encoded pair parameters
+369:      * @return The updated encoded pair parameters
+370:      */
+371:     function updateVolatilityReference(bytes32 params) internal pure returns (bytes32) {
+372:         uint256 volAcc = getVolatilityAccumulator(params);
+373:         uint256 reductionFactor = getReductionFactor(params);
+374: 
+375:         uint24 volRef;
+376:         unchecked {
+377:             volRef = uint24(volAcc * reductionFactor / Constants.BASIS_POINT_MAX);
+378:         }
+379: 
+380:         return setVolatilityReference(params, volRef);
+381:     }
+382: 
+383:     /**
+384:      * @dev Updates the volatility accumulator in the encoded pair parameters
+385:      * @param params The encoded pair parameters
+386:      * @param activeId The active id
+387:      * @return The updated encoded pair parameters
+388:      */
+389:     function updateVolatilityAccumulator(bytes32 params, uint24 activeId) internal pure returns (bytes32) {
+390:         uint256 idReference = getIdReference(params);
+391: 
+392:         uint256 deltaId;
+393:         uint256 volAcc;
+394: 
+395:         unchecked {
+396:             deltaId = activeId > idReference ? activeId - idReference : idReference - activeId;
+397:             volAcc = (uint256(getVolatilityReference(params)) + deltaId * Constants.BASIS_POINT_MAX);
+398:         }
+399: 
+400:         uint256 maxVolAcc = getMaxVolatilityAccumulator(params);
+401: 
+402:         volAcc = volAcc > maxVolAcc ? maxVolAcc : volAcc;
+403: 
+404:         return setVolatilityAccumulator(params, uint24(volAcc));
+405:     }
+406: 
+407:     /**
+408:      * @dev Updates the volatility reference and the volatility accumulator in the encoded pair parameters
+409:      * @param params The encoded pair parameters
+410:      * @return The updated encoded pair parameters
+411:      */
+412:     function updateReferences(bytes32 params) internal view returns (bytes32) {
+413:         uint256 dt = block.timestamp - getTimeOfLastUpdate(params);
+414: 
+415:         if (dt >= getFilterPeriod(params)) {
+416:             params = updateIdReference(params);
+417:             params = dt < getDecayPeriod(params) ? updateVolatilityReference(params) : setVolatilityReference(params, 0);
+418:         }
+419: 
+420:         return updateTimeOfLastUpdate(params);
+421:     }
+422: 
+423:     /**
+424:      * @dev Updates the volatility reference and the volatility accumulator in the encoded pair parameters
+425:      * @param params The encoded pair parameters
+426:      * @param activeId The active id
+427:      * @return The updated encoded pair parameters
+428:      */
+429:     function updateVolatilityParameters(bytes32 params, uint24 activeId) internal view returns (bytes32) {
+430:         params = updateReferences(params);
+431:         return updateVolatilityAccumulator(params, activeId);
+432:     }
+433: }
+...
+
+### src/libraries/FeeHelper.sol
+12: library FeeHelper {
+13:     error FeeHelper__FeeTooLarge();
+14:     error FeeHelper__ProtocolShareTooLarge();
+15: 
+16:     /**
+17:      * @dev Modifier to check that the fee is not too large
+18:      * @param fee The fee
+19:      */
+20:     modifier verifyFee(uint128 fee) {
+21:         if (fee > Constants.MAX_FEE) revert FeeHelper__FeeTooLarge();
+22:         _;
+23:     }
+24: 
+25:     /**
+26:      * @dev Modifier to check that the protocol share is not too large
+27:      * @param protocolShare The protocol share
+28:      */
+29:     modifier verifyProtocolShare(uint128 protocolShare) {
+30:         if (protocolShare > Constants.MAX_PROTOCOL_SHARE) revert FeeHelper__ProtocolShareTooLarge();
+31:         _;
+32:     }
+33: 
+34:     /**
+35:      * @dev Calculates the fee amount from the amount with fees, rounding up
+36:      * @param amountWithFees The amount with fees
+37:      * @param totalFee The total fee
+38:      * @return feeAmount The fee amount
+39:      */
+40:     function getFeeAmountFrom(uint128 amountWithFees, uint128 totalFee)
+41:         internal
+42:         pure
+43:         verifyFee(totalFee)
+44:         returns (uint128)
+45:     {
+46:         unchecked {
+47:             // Can't overflow, max(result) = (type(uint128).max * 0.1e18 + 1e18 - 1) / 1e18 < 2^128
+48:             return uint128((uint256(amountWithFees) * totalFee + Constants.PRECISION - 1) / Constants.PRECISION);
+49:         }
+50:     }
+51: 
+52:     /**
+53:      * @dev Calculates the fee amount that will be charged, rounding up
+54:      * @param amount The amount
+55:      * @param totalFee The total fee
+56:      * @return feeAmount The fee amount
+57:      */
+58:     function getFeeAmount(uint128 amount, uint128 totalFee) internal pure verifyFee(totalFee) returns (uint128) {
+59:         unchecked {
+60:             uint256 denominator = Constants.PRECISION - totalFee;
+61:             // Can't overflow, max(result) = (type(uint128).max * 0.1e18 + (1e18 - 1)) / 0.9e18 < 2^128
+62:             return uint128((uint256(amount) * totalFee + denominator - 1) / denominator);
+63:         }
+64:     }
+...
+
+### src/libraries/Constants.sol
+10: library Constants {
+11:     uint8 internal constant SCALE_OFFSET = 128;
+12:     uint256 internal constant SCALE = 1 << SCALE_OFFSET;
+13: 
+14:     uint256 internal constant PRECISION = 1e18;
+15:     uint256 internal constant SQUARED_PRECISION = PRECISION * PRECISION;
+16: 
+17:     uint256 internal constant MAX_FEE = 0.1e18; // 10%
+18:     uint256 internal constant MAX_PROTOCOL_SHARE = 2_500; // 25% of the fee
+19: 
+20:     uint256 internal constant BASIS_POINT_MAX = 10_000;
+21: 
+22:     /// @dev The expected return after a successful flash loan
+23:     bytes32 internal constant CALLBACK_SUCCESS = keccak256("LBPair.onFlashLoan");
+24: }
+...
+
+### src/libraries/BinHelper.sol
+214:      * @param binStep The step of the bin
+215:      * @param swapForY Whether the swap is for Y (true) or for X (false)
+216:      * @param activeId The id of the active bin
+217:      * @param amountsInLeft The amounts of tokens left to swap
+218:      * @return amountsInWithFees The encoded amounts of tokens that will be added to the bin, including fees
+219:      * @return amountsOutOfBin The encoded amounts of tokens that will be removed from the bin
+220:      * @return totalFees The encoded fees that will be charged
+221:      */
+222:     function getAmounts(
+223:         bytes32 binReserves,
+224:         bytes32 parameters,
+225:         uint16 binStep,
+226:         bool swapForY, // swap `swapForY` and `activeId` to avoid stack too deep
+227:         uint24 activeId,
+228:         bytes32 amountsInLeft
+229:     ) internal pure returns (bytes32 amountsInWithFees, bytes32 amountsOutOfBin, bytes32 totalFees) {
+230:         uint256 price = activeId.getPriceFromId(binStep);
+231: 
+232:         uint128 binReserveOut = binReserves.decode(!swapForY);
+233: 
+234:         uint128 maxAmountIn = swapForY
+235:             ? uint256(binReserveOut).shiftDivRoundUp(Constants.SCALE_OFFSET, price).safe128()
+236:             : uint256(binReserveOut).mulShiftRoundUp(price, Constants.SCALE_OFFSET).safe128();
+237: 
+238:         uint128 totalFee = parameters.getTotalFee(binStep);
+239:         uint128 maxFee = maxAmountIn.getFeeAmount(totalFee);
+240: 
+241:         maxAmountIn += maxFee;
+242: 
+243:         uint128 amountIn128 = amountsInLeft.decode(swapForY);
+244:         uint128 fee128;
+245:         uint128 amountOut128;
+246: 
+247:         if (amountIn128 >= maxAmountIn) {
+248:             fee128 = maxFee;
+249: 
+250:             amountIn128 = maxAmountIn;
+251:             amountOut128 = binReserveOut;
+252:         } else {
+253:             fee128 = amountIn128.getFeeAmountFrom(totalFee);
+254: 
+255:             uint256 amountIn = amountIn128 - fee128;
+256: 
+257:             amountOut128 = swapForY
+258:                 ? uint256(amountIn).mulShiftRoundDown(price, Constants.SCALE_OFFSET).safe128()
+259:                 : uint256(amountIn).shiftDivRoundDown(Constants.SCALE_OFFSET, price).safe128();
+260: 
+261:             if (amountOut128 > binReserveOut) amountOut128 = binReserveOut;
+262:         }
+263: 
+264:         (amountsInWithFees, amountsOutOfBin, totalFees) = swapForY
+265:             ? (amountIn128.encodeFirst(), amountOut128.encodeSecond(), fee128.encodeFirst())
+266:             : (amountIn128.encodeSecond(), amountOut128.encodeFirst(), fee128.encodeSecond());
+267:     }
+268: 
+269:     /**
+270:      * @dev Returns the encoded amounts that were transferred to the contract
+271:      * @param reserves The reserves
+272:      * @param tokenX The token X
+273:      * @param tokenY The token Y
+274:      * @return amounts The amounts, encoded as follows:
+275:      * [0 - 128[: amountX
+276:      * [128 - 256[: amountY
+277:      */
+278:     function received(bytes32 reserves, IERC20 tokenX, IERC20 tokenY) internal view returns (bytes32 amounts) {
+279:         amounts = _balanceOf(tokenX).encode(_balanceOf(tokenY)).sub(reserves);
+280:     }
+281: 
+282:     /**
+283:      * @dev Returns the encoded amounts that were transferred to the contract, only for token X
+284:      * @param reserves The reserves
+285:      * @param tokenX The token X
+286:      * @return amounts The amounts, encoded as follows:
+287:      * [0 - 128[: amountX
+288:      * [128 - 256[: empty
+289:      */
+290:     function receivedX(bytes32 reserves, IERC20 tokenX) internal view returns (bytes32) {
+291:         uint128 reserveX = reserves.decodeX();
+292:         return (_balanceOf(tokenX) - reserveX).encodeFirst();
+293:     }
+294: 
+295:     /**
+296:      * @dev Returns the encoded amounts that were transferred to the contract, only for token Y
+297:      * @param reserves The reserves
+298:      * @param tokenY The token Y
+299:      * @return amounts The amounts, encoded as follows:
+300:      * [0 - 128[: empty
+301:      * [128 - 256[: amountY
+302:      */
+303:     function receivedY(bytes32 reserves, IERC20 tokenY) internal view returns (bytes32) {
+304:         uint128 reserveY = reserves.decodeY();
+305:         return (_balanceOf(tokenY) - reserveY).encodeSecond();
+306:     }
+...
+
+### src/libraries/PriceHelper.sol
+15: library PriceHelper {
+16:     using Uint128x128Math for uint256;
+17:     using Uint256x256Math for uint256;
+18:     using SafeCast for uint256;
+19: 
+20:     int256 private constant REAL_ID_SHIFT = 1 << 23;
+21: 
+22:     /**
+23:      * @dev Calculates the price from the id and the bin step
+24:      * @param id The id
+25:      * @param binStep The bin step
+26:      * @return price The price as a 128.128-binary fixed-point number
+27:      */
+28:     function getPriceFromId(uint24 id, uint16 binStep) internal pure returns (uint256 price) {
+29:         uint256 base = getBase(binStep);
+30:         int256 exponent = getExponent(id);
+31: 
+32:         price = base.pow(exponent);
+33:     }
+34: 
+35:     /**
+36:      * @dev Calculates the id from the price and the bin step
+37:      * @param price The price as a 128.128-binary fixed-point number
+38:      * @param binStep The bin step
+39:      * @return id The id
+40:      */
+41:     function getIdFromPrice(uint256 price, uint16 binStep) internal pure returns (uint24 id) {
+42:         uint256 base = getBase(binStep);
+43:         int256 realId = price.log2() / base.log2();
+44: 
+45:         unchecked {
+46:             id = uint256(REAL_ID_SHIFT + realId).safe24();
+47:         }
+48:     }
+49: 
+50:     /**
+51:      * @dev Calculates the base from the bin step, which is `1 + binStep / BASIS_POINT_MAX`
+52:      * @param binStep The bin step
+53:      * @return base The base
+54:      */
+55:     function getBase(uint16 binStep) internal pure returns (uint256) {
+56:         unchecked {
+57:             return Constants.SCALE + (uint256(binStep) << Constants.SCALE_OFFSET) / Constants.BASIS_POINT_MAX;
+58:         }
+59:     }
+60: 
+61:     /**
+62:      * @dev Calculates the exponent from the id, which is `id - REAL_ID_SHIFT`
+63:      * @param id The id
+64:      * @return exponent The exponent
+65:      */
+66:     function getExponent(uint24 id) internal pure returns (int256) {
+67:         unchecked {
+68:             return int256(uint256(id)) - REAL_ID_SHIFT;
+69:         }
+70:     }
+...
+
+### src/libraries/math/Uint128x128Math.sol
+87:     }
+88: 
+89:     /**
+90:      * @notice Returns the value of x^y. It calculates `1 / x^abs(y)` if x is bigger than 2^128.
+91:      * At the end of the operations, we invert the result if needed.
+92:      * @param x The unsigned 128.128-binary fixed-point number for which to calculate the power
+93:      * @param y A relative number without any decimals, needs to be between ]2^21; 2^21[
+94:      */
+95:     function pow(uint256 x, int256 y) internal pure returns (uint256 result) {
+96:         bool invert;
+97:         uint256 absY;
+98: 
+99:         if (y == 0) return Constants.SCALE;
+100: 
+101:         assembly {
+102:             absY := y
+103:             if slt(absY, 0) {
+104:                 absY := sub(0, absY)
+105:                 invert := iszero(invert)
+106:             }
+107:         }
+108: 
+109:         if (absY < 0x100000) {
+110:             result = Constants.SCALE;
+111:             assembly {
+112:                 let squared := x
+113:                 if gt(x, 0xffffffffffffffffffffffffffffffff) {
+114:                     squared := div(not(0), squared)
+115:                     invert := iszero(invert)
+116:                 }
+117: 
+118:                 if and(absY, 0x1) { result := shr(128, mul(result, squared)) }
+119:                 squared := shr(128, mul(squared, squared))
+120:                 if and(absY, 0x2) { result := shr(128, mul(result, squared)) }
+121:                 squared := shr(128, mul(squared, squared))
+122:                 if and(absY, 0x4) { result := shr(128, mul(result, squared)) }
+123:                 squared := shr(128, mul(squared, squared))
+124:                 if and(absY, 0x8) { result := shr(128, mul(result, squared)) }
+125:                 squared := shr(128, mul(squared, squared))
+126:                 if and(absY, 0x10) { result := shr(128, mul(result, squared)) }
+127:                 squared := shr(128, mul(squared, squared))
+128:                 if and(absY, 0x20) { result := shr(128, mul(result, squared)) }
+129:                 squared := shr(128, mul(squared, squared))
+130:                 if and(absY, 0x40) { result := shr(128, mul(result, squared)) }
+131:                 squared := shr(128, mul(squared, squared))
+132:                 if and(absY, 0x80) { result := shr(128, mul(result, squared)) }
+133:                 squared := shr(128, mul(squared, squared))
+134:                 if and(absY, 0x100) { result := shr(128, mul(result, squared)) }
+135:                 squared := shr(128, mul(squared, squared))
+136:                 if and(absY, 0x200) { result := shr(128, mul(result, squared)) }
+137:                 squared := shr(128, mul(squared, squared))
+138:                 if and(absY, 0x400) { result := shr(128, mul(result, squared)) }
+139:                 squared := shr(128, mul(squared, squared))
+140:                 if and(absY, 0x800) { result := shr(128, mul(result, squared)) }
+141:                 squared := shr(128, mul(squared, squared))
+142:                 if and(absY, 0x1000) { result := shr(128, mul(result, squared)) }
+143:                 squared := shr(128, mul(squared, squared))
+144:                 if and(absY, 0x2000) { result := shr(128, mul(result, squared)) }
+145:                 squared := shr(128, mul(squared, squared))
+146:                 if and(absY, 0x4000) { result := shr(128, mul(result, squared)) }
+147:                 squared := shr(128, mul(squared, squared))
+148:                 if and(absY, 0x8000) { result := shr(128, mul(result, squared)) }
+149:                 squared := shr(128, mul(squared, squared))
+150:                 if and(absY, 0x10000) { result := shr(128, mul(result, squared)) }
+151:                 squared := shr(128, mul(squared, squared))
+152:                 if and(absY, 0x20000) { result := shr(128, mul(result, squared)) }
+153:                 squared := shr(128, mul(squared, squared))
+154:                 if and(absY, 0x40000) { result := shr(128, mul(result, squared)) }
+155:                 squared := shr(128, mul(squared, squared))
+156:                 if and(absY, 0x80000) { result := shr(128, mul(result, squared)) }
+157:             }
+158:         }
+159: 
+160:         // revert if y is too big or if x^y underflowed
+161:         if (result == 0) revert Uint128x128Math__PowUnderflow(x, y);
+162: 
+163:         return invert ? type(uint256).max / result : result;
+164:     }
+...
+
+### src/libraries/math/TreeMath.sol
+90:         }
+91: 
+92:         return false;
+93:     }
+94: 
+95:     /**
+96:      * @dev Returns the first id in the tree that is lower than or equal to the given id.
+97:      * It will return type(uint24).max if there is no such id.
+98:      * @param tree The tree
+99:      * @param id The id
+100:      * @return The first id in the tree that is lower than or equal to the given id
+101:      */
+102:     function findFirstRight(TreeUint24 storage tree, uint24 id) internal view returns (uint24) {
+103:         bytes32 leaves;
+104: 
+105:         bytes32 key2 = bytes32(uint256(id) >> 8);
+106:         uint8 bit = uint8(id & type(uint8).max);
+107: 
+108:         if (bit != 0) {
+109:             leaves = tree.level2[key2];
+110:             uint256 closestBit = _closestBitRight(leaves, bit);
+...
+140:                 key2 = bytes32(uint256(key1) << 8 | uint256(leaves).mostSignificantBit());
+141:                 leaves = tree.level2[key2];
+142: 
+143:                 return uint24(uint256(key2) << 8 | uint256(leaves).mostSignificantBit());
+144:             }
+145:         }
+146: 
+147:         return type(uint24).max;
+148:     }
+149: 
+150:     /**
+151:      * @dev Returns the first id in the tree that is higher than or equal to the given id.
+152:      * It will return 0 if there is no such id.
+153:      * @param tree The tree
+154:      * @param id The id
+155:      * @return The first id in the tree that is higher than or equal to the given id
+156:      */
+157:     function findFirstLeft(TreeUint24 storage tree, uint24 id) internal view returns (uint24) {
+158:         bytes32 leaves;
+159: 
+160:         bytes32 key2 = bytes32(uint256(id) >> 8);
+161:         uint8 bit = uint8(id & type(uint8).max);
+162: 
+163:         if (bit != type(uint8).max) {
+164:             leaves = tree.level2[key2];
+165:             uint256 closestBit = _closestBitLeft(leaves, bit);
+...
+195:                 key2 = bytes32(uint256(key1) << 8 | uint256(leaves).leastSignificantBit());
+196:                 leaves = tree.level2[key2];
+197: 
+198:                 return uint24(uint256(key2) << 8 | uint256(leaves).leastSignificantBit());
+199:             }
+200:         }
+201: 
+202:         return 0;
+203:     }
+204: 
+205:     /**
+...
+
+### src/LBFactory.sol
+160:     }
+161: 
+162:     /**
+163:      * @notice Returns the LBPairInformation if it exists,
+164:      * if not, then the address 0 is returned. The order doesn't matter
+165:      * @param tokenA The address of the first token of the pair
+166:      * @param tokenB The address of the second token of the pair
+167:      * @param binStep The bin step of the LBPair
+168:      * @return lbPairInformation The LBPairInformation
+169:      */
+170:     function getLBPairInformation(IERC20 tokenA, IERC20 tokenB, uint256 binStep)
+171:         external
+172:         view
+173:         override
+174:         returns (LBPairInformation memory lbPairInformation)
+175:     {
+176:         return _getLBPairInformation(tokenA, tokenB, binStep);
+177:     }
+...
+600:      * @notice Returns the LBPairInformation if it exists,
+601:      * if not, then the address 0 is returned. The order doesn't matter
+602:      * @param tokenA The address of the first token of the pair
+603:      * @param tokenB The address of the second token of the pair
+604:      * @param binStep The bin step of the LBPair
+605:      * @return The LBPairInformation
+606:      */
+607:     function _getLBPairInformation(IERC20 tokenA, IERC20 tokenB, uint256 binStep)
+608:         private
+609:         view
+610:         returns (LBPairInformation memory)
+611:     {
+612:         (tokenA, tokenB) = _sortTokens(tokenA, tokenB);
+613:         return _lbPairsInfo[tokenA][tokenB][binStep];
+614:     }
+615: 
+616:     /**
+617:      * @notice Private view function to sort 2 tokens in ascending order
+618:      * @param tokenA The first token
+619:      * @param tokenB The second token
+620:      * @return The sorted first token
+621:      * @return The sorted second token
+622:      */
+623:     function _sortTokens(IERC20 tokenA, IERC20 tokenB) private pure returns (IERC20, IERC20) {
+624:         if (tokenA > tokenB) (tokenA, tokenB) = (tokenB, tokenA);
+625:         return (tokenA, tokenB);
+626:     }
+627: }
+...
+
+### src/interfaces/ILBFactory.sol
+40:      * ignoredForRouting: Whether the pair is ignored for routing or not. An ignored pair will not be explored during routes finding
+41:      */
+42:     struct LBPairInformation {
+43:         uint16 binStep;
+44:         ILBPair LBPair;
+45:         bool createdByOwner;
+46:         bool ignoredForRouting;
+47:     }
+48: 
+49:     event LBPairCreated(
+50:         IERC20 indexed tokenX, IERC20 indexed tokenY, uint256 indexed binStep, ILBPair LBPair, uint256 pid
+51:     );
+52: 
+...
+
+### src/interfaces/ILBPair.sol
+30: 
+31:     struct MintArrays {
+32:         uint256[] ids;
+33:         bytes32[] amounts;
+34:         uint256[] liquidityMinted;
+35:     }
+36: 
+37:     event DepositedToBins(address indexed sender, address indexed to, uint256[] ids, bytes32[] amounts);
+38: 
+39:     event WithdrawnFromBins(address indexed sender, address indexed to, uint256[] ids, bytes32[] amounts);
+40: 
+41:     event CompositionFees(address indexed sender, uint24 id, bytes32 totalFees, bytes32 protocolFees);
+42: 
+43:     event CollectedProtocolFees(address indexed feeRecipient, bytes32 protocolFees);
+44: 
+45:     event Swap(
+46:         address indexed sender,
+47:         address indexed to,
+48:         uint24 id,
+49:         bytes32 amountsIn,
+50:         bytes32 amountsOut,
+51:         uint24 volatilityAccumulator,
+52:         bytes32 totalFees,
+53:         bytes32 protocolFees
+54:     );
+55: 
+56:     event StaticFeeParametersSet(
+57:         address indexed sender,
+58:         uint16 baseFactor,
+59:         uint16 filterPeriod,
+60:         uint16 decayPeriod,
+61:         uint16 reductionFactor,
+62:         uint24 variableFeeControl,
+63:         uint16 protocolShare,
+64:         uint24 maxVolatilityAccumulator
+65:     );
+66: 
+67:     event FlashLoan(
+68:         address indexed sender,
+69:         ILBFlashLoanCallback indexed receiver,
+70:         uint24 activeId,
+71:         bytes32 amounts,
+72:         bytes32 totalFees,
+73:         bytes32 protocolFees
+74:     );
+75: 
+76:     event OracleLengthIncreased(address indexed sender, uint16 oracleLength);
+77: 
+78:     event ForcedDecay(address indexed sender, uint24 idReference, uint24 volatilityReference);
+79: 
+80:     function initialize(
+...
+
+### src/libraries/math/Uint256x256Math.sol (mulShiftRoundDown / mulShiftRoundUp / shiftDivRoundDown / shiftDivRoundUp)
+67:     function mulShiftRoundDown(uint256 x, uint256 y, uint8 offset) internal pure returns (uint256 result) {
+68:         (uint256 prod0, uint256 prod1) = _getMulProds(x, y);
+69: 
+70:         if (prod0 != 0) result = prod0 >> offset;
+71:         if (prod1 != 0) {
+72:             // Make sure the result is less than 2^256.
+73:             if (prod1 >= 1 << offset) revert Uint256x256Math__MulShiftOverflow();
+74: 
+75:             unchecked {
+76:                 result += prod1 << (256 - offset);
+77:             }
+78:         }
+79:     }
+...
+95:     function mulShiftRoundUp(uint256 x, uint256 y, uint8 offset) internal pure returns (uint256 result) {
+96:         result = mulShiftRoundDown(x, y, offset);
+97:         if (mulmod(x, y, 1 << offset) != 0) result += 1;
+98:     }
+...
+114:     function shiftDivRoundDown(uint256 x, uint8 offset, uint256 denominator) internal pure returns (uint256 result) {
+115:         uint256 prod0;
+116:         uint256 prod1;
+117: 
+118:         prod0 = x << offset; // Least significant 256 bits of the product
+119:         unchecked {
+120:             prod1 = x >> (256 - offset); // Most significant 256 bits of the product
+121:         }
+122: 
+123:         return _getEndOfDivRoundDown(x, 1 << offset, denominator, prod0, prod1);
+124:     }
+...
+140:     function shiftDivRoundUp(uint256 x, uint8 offset, uint256 denominator) internal pure returns (uint256 result) {
+141:         result = shiftDivRoundDown(x, offset, denominator);
+142:         if (mulmod(x, 1 << offset, denominator) != 0) result += 1;
+143:     }
+...

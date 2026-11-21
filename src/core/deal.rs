@@ -34,6 +34,19 @@ pub enum Step {
 }
 
 /// Сделка.
+/// Решение 268: отметки сделки после отказа продажи «цена ордера вне диапазона биржи» (core/sell_range.rs).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RangeMarks {
+    /// Биржи, на которых в этой сделке уже отправлен РЫНОЧНЫЙ ордер продажи (core/sell_range_run.rs) — на площадке
+    /// автоматически не больше одного; после перегона на другую биржу там своя попытка.
+    #[serde(default)]
+    pub market: Vec<VenueId>,
+    /// Биржи, на которых обычная продажа после отказа оказалась невыгодной и сделка ушла в режим застрявшей монеты, —
+    /// не больше одного раза на площадку (второго круга режима из-за коридора нет).
+    #[serde(default)]
+    pub stuck: Vec<VenueId>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Deal {
     pub id: String,
@@ -60,14 +73,116 @@ pub struct Deal {
     pub dust: Decimal,
     /// Сколько раз монету перегоняли (режим «Перегон»).
     pub relays: u64,
-    /// Итог сделки, USDT (когда закрыта).
+    /// Решение 101: после продажи выручку USDT перегнать на площадку покупки (кнопка «Продать и перегнать»),
+    /// независимо от usdt_return.mode.
+    #[serde(default)]
+    pub return_usdt: bool,
+    /// Решение 110: сколько раз продажа не ушла в сеть и монета вернулась в режим застрявшей (предел —
+    /// stuck.unsent_retries_max, дальше — алерт человеку).
+    #[serde(default)]
+    pub unsent_retries: u32,
+    /// Решение 229: цепочку повторов продажи начал случай решения 229 (продажа не попала в блок, а отмена подтверждена;
+    /// отказ до отправки после кнопки человека) — исчерпание повторов ведёт к продаже здесь по порогу
+    /// stuck.relay_max_loss_pct (sell_unsent.rs → relay_here.rs), а не сразу к человеку.
+    #[serde(default)]
+    pub unsent_here: bool,
+    /// Решение 268: отметки ветки «цена ордера вне диапазона биржи» по площадкам (RangeMarks). В коробке и None, пока
+    /// отметок нет: сделка лежит по значению во всех задачах её пути — поле занимает один указатель (глубина стека).
+    /// Читать и ставить — range_market / range_stuck / mark_range_* / clear_range.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub range: Option<Box<RangeMarks>>,
+    /// Итог сделки, USDT (когда закрыта): выручка − вложено − затраты − затраты возврата USDT (return_cost_usd).
     pub result_usd: Option<Decimal>,
+    /// Решение 236: затраты возврата выручки USDT, уже вычтенные из result_usd, — по частям «вернулись»: отправлено −
+    /// зачислено + газ/комиссия не в USDT (deal_return_cost.rs). None — ещё не считались (старая запись: считаются при
+    /// загрузке в памяти).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub return_cost_usd: Option<Decimal>,
+    /// Решение 236: уведомление deal.closed ждёт конца возврата USDT (факт — с его затратами); текст — причина
+    /// закрытия. None — не ждёт (отправлено или возврата нет).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub closed_notice: Option<String>,
     /// Предварительный убыток, учтённый в итоге дня (решение 53, daily.rs): Halted или «Беру на себя»;
     /// None — не учитывался или уже заменён фактом.
     #[serde(default)]
     pub provisional_usd: Option<Decimal>,
+    /// Решение 132: счёт (кошелёк) DEX сделки — по маппингу на момент открытия; все шаги сделки идут им, даже если
+    /// маппинг потом поменяли. None — без DEX (биржа ↔ биржа) или сделка до решения 132 (тогда — кошелёк переноса).
+    #[serde(default)]
+    pub dex_account: Option<crate::core::types::DexAccountId>,
+    /// Решение 138: возврат выручки USDT на площадку покупки после закрытия (usdt_return_deal.rs): идёт / вернулись /
+    /// не вернулись. None — возврат не нужен (продано на площадке покупки, режим «отдельно») или сделка до решения 138.
+    #[serde(default)]
+    pub usdt_return: Option<super::usdt_return_state::UsdtReturn>,
+    /// Решение 227: остальные части возврата — выручка продаж на других площадках (кроме площадки покупки), каждая своим
+    /// переводом (usdt_return_parts.rs); usdt_return — первая часть. Возврат закончен, когда закончены все части.
+    /// Пусто — одна часть (и у сделок до решения 227).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub usdt_return_parts: Vec<super::usdt_return_state::UsdtReturn>,
+    /// Решение 405 (ревью 4 Б2, ревью 5 Н1): выводы перегонов USDT этой сделки, принятые площадкой (ответ на запрос
+    /// вывода; usdt_accepted.rs) — в учёте, чтобы и после перезапуска («идёт» → «не вернулись») резерв части не стоял
+    /// поверх уже списанных денег.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub usdt_accepted: Vec<super::usdt_accepted::Accepted>,
+    /// Решение 138: путь закрытия, на котором возврата по решению нет (например «Продано вручную», решение 100), —
+    /// причина; при закрытии вместо перегона — страховка «USDT не вернулись». None — обычный путь.
+    #[serde(default)]
+    pub usdt_return_skip: Option<String>,
+    /// Решение 227 (дополнение): площадки, отказавшие в выводе в этой сделке (WithdrawRejected / InvalidAddress /
+    /// WithdrawLocked, withdraw_refused.rs) — «Перегон» с них больше не выбирается. Пусто — отказов не было.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub withdraw_refused: Vec<VenueId>,
+    /// Решение 177: алерт, с которого человек запустил продажу («Продать сейчас», «Продать и перегнать»); тот же отказ —
+    /// эта запись обновляется (core/manual_repeat.rs), а не ставится новая. None — продажа не с алерта.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alert_was: Option<crate::core::types::StuckAlert>,
+    /// Решение 257: статьи затрат по факту (вид и USDT; сумма = spent у сделок после решения) — core/deal_book.rs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cost_items: Vec<super::deal_book::CostItem>,
+    /// Решение 257: начисления этой сделки в итог дня бота (день UTC, факт / оценка, сумма) — core/deal_book.rs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub day_book: Vec<super::deal_book::DayEntry>,
     /// Хронология: время и что случилось — для экрана «Сделки».
     pub timeline: Vec<(DateTime<Utc>, String)>,
+    /// Решение 245, дополнение п. 2 (Тигран 09.11: согласовано): момент решения о сделке — время расчёта кандидата,
+    /// прошедшего пороги прибыли (Calc.at вердикта Accept, по которому исполнитель запущен: executor.rs). Длительность
+    /// сделки для «успели бы» (deal_time.rs) — от него. None — сделка до дополнения или не с пути кандидата (цикл
+    /// DEX ↔ DEX, ручные действия): берётся started_at.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decided_at: Option<DateTime<Utc>>,
+    /// Решение 394 (t179, докупка — записка 269): группа докупки (deal_group.rs). None — сделка без докупки
+    /// (exec.top_up выключена): запись и API — как раньше.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<Box<super::deal_group::DealGroup>>,
+    /// Решение 413 (t198): зачисление перевода сделки на биржу — запись депозита (верхняя граница) и подтверждённое
+    /// фактом баланса количество (credit_fact.rs). None — получатель DEX, сделка без перевода или до решения 413.
+    /// В коробке: сделка лежит по значению во всех задачах её пути (глубина стека, решение 389).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credit: Option<Box<super::credit_fact::CreditFact>>,
+    /// Решение 413 (повторное ревью t198, С-1): куда идёт перевод монет сделки на шаге «перевод» (получатель) —
+    /// чтобы распределение долей на счёте получателя знало сделку в пути, а на счёте отправителя — нет. Ставится перед
+    /// выводом (executor.rs, relay.rs, manual_relay.rs), снимается при зачислении (fills.rs transfer).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transit_to: Option<VenueId>,
+    /// Решение 413 (повторное ревью, Б-3): факт счёта биржи не прочитан и сделка уже раз уходила из-за этого в режим
+    /// застрявшей монеты — следующий раз алерт человеку (remain_fact.rs). Только в памяти.
+    #[serde(skip)]
+    pub fact_unread: bool,
+    /// Решение 413 (повторное ревью, мелкое): факт счёта прочитан при этом шаге, количестве и площадке — второй вход в
+    /// продажу подряд не читает его снова (sell_fact.rs). Любое изменение шага, количества или площадки — читать.
+    /// Только в памяти.
+    #[serde(skip)]
+    pub fact_fresh: Option<Box<(Step, Decimal, VenueId)>>,
+    /// Решение 464 (t238, ревью): включатель log.step_timing, прочитанный один раз на сделку (executor.rs) — им же
+    /// пользуется замер ордера продажи (sell.rs). Только в памяти (после перезапуска — выключен).
+    #[serde(skip)]
+    pub step_timing: bool,
+    /// Решение 413 (четвёртое ревью С-7, пятое ревью): продажа сделки на бирже кончилась «исход неизвестен» — её учёт не
+    /// согласован с балансом: счёт (биржа, монета) «неясно» (credit_lock::unsure), её монеты — не «подтверждённые» в
+    /// распределении других. Снимается успешной продажей или прочитанным фактом этой сделки. В учёте (переживает
+    /// перезапуск).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sale_unsure: bool,
     pub started_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -92,9 +207,32 @@ impl Deal {
             sells: vec![],
             dust: Decimal::ZERO,
             relays: 0,
+            return_usdt: false,
+            unsent_retries: 0,
+            unsent_here: false,
+            range: None,
             result_usd: None,
+            return_cost_usd: None,
+            closed_notice: None,
             provisional_usd: None,
+            dex_account: None,
+            usdt_return: None,
+            usdt_return_parts: vec![],
+            usdt_accepted: vec![],
+            usdt_return_skip: None,
+            withdraw_refused: vec![],
+            alert_was: None,
+            cost_items: vec![],
+            day_book: vec![],
             timeline: vec![],
+            decided_at: None,
+            group: None,
+            credit: None,
+            transit_to: None,
+            fact_unread: false,
+            fact_fresh: None,
+            step_timing: false,
+            sale_unsure: false,
             started_at: now,
             updated_at: now,
         }
@@ -117,6 +255,37 @@ impl Deal {
             return Decimal::ZERO;
         }
         -self.result_if(value) / self.invested * Decimal::ONE_HUNDRED
+    }
+
+    /// Решение 268: биржи, где рыночный ордер после отказа «цена вне диапазона» уже отправлялся. Ошибок нет.
+    pub fn range_market(&self) -> &[VenueId] {
+        self.range.as_ref().map_or(&[], |r| r.market.as_slice())
+    }
+
+    /// Решение 268: биржи, где из-за отказа «цена вне диапазона» уже уходили в режим застрявшей монеты. Ошибок нет.
+    pub fn range_stuck(&self) -> &[VenueId] {
+        self.range.as_ref().map_or(&[], |r| r.stuck.as_slice())
+    }
+
+    /// Решение 268: отметка «рыночный ордер отправлен» на площадке. Ошибок нет.
+    pub fn mark_range_market(&mut self, v: VenueId) {
+        self.range
+            .get_or_insert_with(Default::default)
+            .market
+            .push(v);
+    }
+
+    /// Решение 268: отметка «из-за коридора ушли в режим застрявшей монеты» на площадке. Ошибок нет.
+    pub fn mark_range_stuck(&mut self, v: VenueId) {
+        self.range
+            .get_or_insert_with(Default::default)
+            .stuck
+            .push(v);
+    }
+
+    /// Решение 268: очистить отметки — новое нажатие кнопки человека (manual.rs, manual_halted.rs). Ошибок нет.
+    pub fn clear_range(&mut self) {
+        self.range = None;
     }
 
     /// Открыта ли сделка (у бота есть её монеты или идёт шаг).

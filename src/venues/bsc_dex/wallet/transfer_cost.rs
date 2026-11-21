@@ -16,7 +16,6 @@ use super::super::check::state::Checks;
 use super::super::exec::native;
 use super::super::exec::txs::Env;
 use super::super::num;
-use super::balances::BNB;
 use super::transfer::same_network;
 
 /// Стоимость перевода: газ (пробный перевод × цена газа) и налог на перевод (% проверки монеты).
@@ -30,7 +29,14 @@ pub async fn cost(
 ) -> GatewayResult<Vec<Cost>> {
     let ctx = &env.ctx;
     same_network(ctx, network)?;
-    let pct = match checks.coin(&asset.ticker).map(|c| c.taxes) {
+    // Решение 211: налоги и газ перевода — по адресу контракта монеты.
+    let token = asset.contract.ok_or_else(|| {
+        ctx.err(
+            ErrorCode::CoinNotChecked,
+            format!("{}: нет адреса контракта — налоги не найти", asset.ticker),
+        )
+    })?;
+    let pct = match checks.coin(&token).map(|c| c.taxes) {
         Some(CheckState::Known(t)) => t.transfer_pct,
         Some(CheckState::Failed { reason }) => {
             return Err(ctx.err(ErrorCode::CoinCheckFailed, reason));
@@ -44,9 +50,9 @@ pub async fn cost(
     };
     let native = native::is_native(ctx, asset);
     let gas = if native {
-        checks.native_transfer_gas(&asset.ticker)
+        checks.native_transfer_gas(&token)
     } else {
-        checks.transfer_gas(&asset.ticker)
+        checks.transfer_gas(&token)
     };
     let gas = gas.ok_or_else(|| {
         ctx.err(
@@ -62,7 +68,9 @@ pub async fn cost(
             format!("Газ перевода {wei} wei не переводится в BNB"),
         )
     })?;
-    let mut out = vec![Cost::new(CostKind::TransferGas, bnb, BNB, false)];
+    // Решение 416: тикер газа — dex.gas_ticker площадки (gas_ticker.rs).
+    let gas_t = super::super::gas_ticker::read(ctx)?;
+    let mut out = vec![Cost::new(CostKind::TransferGas, bnb, &gas_t, false)];
     if !native {
         out.push(Cost::new(
             CostKind::TransferTax,

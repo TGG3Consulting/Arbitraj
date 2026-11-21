@@ -1,9 +1,14 @@
 //! Файл: settings/scope.rs
 //! Что делает: конкретная область значения настройки (вся система, площадка, монета, событие,
 //! DEX/вид пула, канал отправки) и её запись в SQLite.
+//! Решение 128: id области «DEX» может ввести человек (DEX, которую находит только поиск по фабрике, оракул или
+//! события Initialize) — поэтому у id есть правило записи (check_dex_id) и необязательный предел длины нового id
+//! (check_new_dex_id_len, настройка dex.id_max_len).
+//! Решение 242: область «площадка + тип направления» (VenueDir) — id «площадка:тип» (settings/venue_dir.rs), ключ
+//! «venue_dir:bingx:cex_dex»; старые ключи читаются как раньше (новый вид только добавлен).
 //! Кто вызывает: settings/store.rs, settings/value.rs, settings/read*.rs, api/settings.rs.
-//! От чего зависит: settings/schema.rs (ScopeKind), serde.
-//! Настройки: нет.
+//! От чего зависит: settings/schema.rs (ScopeKind), settings/venue_dir.rs (разбор id), serde.
+//! Настройки: dex.id_max_len [вся система] — через store.rs (сюда приходит числом).
 
 use serde::{Deserialize, Serialize};
 
@@ -17,10 +22,14 @@ pub enum Scope {
     Venue(String),
     Coin(String),
     Event(String),
-    /// DEX («pancakeswap») или вид пула («pancakeswap_v3») — ids даёт адаптер DEX (contract::dex_families).
+    /// DEX («pancakeswap-v3-bsc») — ids даёт адаптер DEX (contract::dex_families: строки с видом, DEX из справочника
+    /// пулов и id, где уже есть настройки) или вводит человек (решение 128; правило записи — check_dex_id).
     Dex(String),
     /// Канал отправки («club48») — ids даёт адаптер DEX (contract::send_channels).
     Channel(String),
+    /// Решение 242: площадка + тип направления, id «площадка:тип» («bingx:cex_dex») или «dex_dex» (один набор на все
+    /// DEX ↔ DEX) — settings/venue_dir.rs.
+    VenueDir(String),
 }
 
 impl Scope {
@@ -33,11 +42,13 @@ impl Scope {
             Scope::Event(_) => ScopeKind::Event,
             Scope::Dex(_) => ScopeKind::Dex,
             Scope::Channel(_) => ScopeKind::Channel,
+            Scope::VenueDir(_) => ScopeKind::VenueDir,
         }
     }
 
-    /// Строка для хранения в SQLite: «global», «venue:bingx», «coin:CAKE», «event:deal.closed»,
-    /// «dex:pancakeswap_v3», «channel:club48».
+    /// Строка для хранения в SQLite: «global», «venue:bingx», «coin:0x0e09…» (решение 211; у монеты без адреса —
+    /// «coin:ТИКЕР»), «event:deal.closed»,
+    /// «dex:pancakeswap_v3», «channel:club48», «venue_dir:bingx:cex_dex» (решение 242).
     pub fn to_key(&self) -> String {
         match self {
             Scope::Global => "global".to_string(),
@@ -46,11 +57,12 @@ impl Scope {
             Scope::Event(e) => format!("event:{e}"),
             Scope::Dex(d) => format!("dex:{d}"),
             Scope::Channel(c) => format!("channel:{c}"),
+            Scope::VenueDir(id) => format!("venue_dir:{id}"),
         }
     }
 
     /// Разбор строки из SQLite обратно в область.
-    /// Возвращает: Scope или None, если строка не в известном формате.
+    /// Возвращает: Scope или None, если строка не в известном формате (у «venue_dir:» — и id не «площадка:тип»).
     pub fn from_key(key: &str) -> Option<Scope> {
         if key == "global" {
             return Some(Scope::Global);
@@ -66,7 +78,79 @@ impl Scope {
             "event" => Some(Scope::Event(id)),
             "dex" => Some(Scope::Dex(id)),
             "channel" => Some(Scope::Channel(id)),
+            "venue_dir" => super::venue_dir::parse_id(&id).map(|_| Scope::VenueDir(id.clone())),
             _ => None,
         }
+    }
+}
+
+/// Что делает: решение 211 — id области «монета»: адрес контракта BSC строчными («0x…», монета = адрес), у монеты без
+/// адреса — её тикер (как раньше). Одно правило для чтения и записи настроек монеты (чёрный список, блоки, пороги).
+/// Принимает: тикер, адрес. Возвращает: id. Ошибок нет.
+pub fn coin_id(ticker: &str, contract: Option<&alloy_primitives::Address>) -> String {
+    match contract {
+        Some(a) => format!("{a:#x}"),
+        None => ticker.to_string(),
+    }
+}
+
+/// Что делает: решение 487 (сети в id) — id области «монета» монеты сети `chain`: как coin_id, у монеты другой сети
+/// (chain = Some) — с суффиксом «@сеть» («0x…@arbitrum»): настройки монеты BSC и монеты Arbitrum с тем же адресом не
+/// сливаются. Сеть по умолчанию (chain = None, решение 430) — id прежний, старые значения читаются как есть.
+/// Принимает: тикер, адрес, id сети. Возвращает: id. Ошибок нет.
+pub fn coin_id_in(
+    ticker: &str,
+    contract: Option<&alloy_primitives::Address>,
+    chain: Option<&str>,
+) -> String {
+    match chain {
+        Some(c) => format!("{}@{c}", coin_id(ticker, contract)),
+        None => coin_id(ticker, contract),
+    }
+}
+
+/// Что делает: id области «монета» — адрес (решение 211), а не старая запись по тикеру. Ошибок нет.
+pub fn is_address_id(id: &str) -> bool {
+    id.len() == 42 && id.starts_with("0x") && id[2..].bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// Что делает: правило записи id области «DEX» (решение 128): непустой, только строчная латиница, цифры, «-» и «_» —
+/// так пишет id DEX индексатор (все 139 id DEX сети bsc в записи GeckoTerminal 2026-10-24 подходят, тест
+/// tests/settings_dex_id.rs). Решение 435 (433-з): у площадки DEX не сети по умолчанию ключ — «id@сеть»
+/// (venues/bsc_dex/ctx_place.rs): один «@», обе части — по тому же правилу. Это грамматика ключа, а не порог.
+/// Принимает: id. Возвращает: Ok(()) или Err(причина по-русски). Ошибки: пустой id или часть, недопустимый символ.
+pub fn check_dex_id(id: &str) -> Result<(), String> {
+    if id.is_empty() {
+        return Err("Не указан id DEX".into());
+    }
+    for part in id.splitn(2, '@') {
+        if part.is_empty() {
+            return Err(format!(
+                "id DEX «{id}»: пустая часть — нужно «id» или «id@сеть»"
+            ));
+        }
+        if let Some(c) = part
+            .chars()
+            .find(|c| !(c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '-' || *c == '_'))
+        {
+            return Err(format!(
+                "id DEX «{id}»: недопустимый символ «{c}» — только строчная латиница, цифры, «-» и «_» (и один «@» \
+                 перед сетью)"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Что делает: предел длины НОВОГО id области «DEX» (решение 128, настройка dex.id_max_len — необязательная).
+/// Уже существующие id (есть хоть одно значение) не проверяются: снижение предела не запирает их настройки.
+/// Принимает: id, предел (None — не задан: длина не ограничена), есть ли у id уже значения.
+/// Возвращает: Ok(()) или Err(причина). Ошибки: новый id длиннее предела.
+pub fn check_new_dex_id_len(id: &str, max: Option<u64>, known: bool) -> Result<(), String> {
+    match max {
+        Some(m) if !known && id.chars().count() as u64 > m => Err(format!(
+            "id DEX «{id}» длиннее {m} символов (dex.id_max_len)"
+        )),
+        _ => Ok(()),
     }
 }

@@ -3,45 +3,25 @@
 //! монету: paths = токены по порядку, действие и параметры на каждый пул) по MixedQuoter PancakeSwap
 //! (quoteMixedExactInput, eth_call на «latest») против локального расчёта доли. Квотер исполняет настоящий обмен
 //! (с крючками) и откатывается внутри, поэтому локальный выход сравнивается с учётом влияния крючка.
-//! Расхождение больше dex.quoter_max_diff_pct хотя бы у одной доли — сделки нет.
-//! Кто вызывает: exec/trade_smart.rs.
-//! От чего зависит: node/call.rs, pools/registry.rs, pools/key.rs, quote/quoter.rs (diff_pct).
+//! Решение 261 (Тигран 12.11): сверка перед сделкой — односторонняя. Выход доли по квотеру МЕНЬШЕ нашего расчёта
+//! больше чем на dex.quoter_max_diff_pct хотя бы у одной доли — сделки нет (как раньше); БОЛЬШЕ (на любую величину) —
+//! в нашу сторону, сделка идёт, строка «в нашу сторону» — в хронологию сделки. Шаг Infinity Stable — ещё сверка с
+//! get_dy крючка параллельно (quote/quoter_extra.rs, решение «122 (Infinity Stable, ответы)»), то же правило.
+//! Минимум выхода — по нашему расчёту (exec/leg_min.rs, решение 228), квотер его не поднимает.
+//! Кто вызывает: exec/smart_legs.rs (сделка), exec/dry_build.rs (сухая сделка).
+//! От чего зависит: node/call.rs, pools/registry.rs, pools/key.rs, quote/quoter.rs (diff_pct, less_hook), quote/quoter_extra.rs.
 //! Настройки: smart.mixed_quoter, dex.quoter_max_diff_pct [bsc_dex].
 //!
-//! Интерфейс и действия: quoteMixedExactInput(address[] paths, bytes actions, bytes[] params, uint256 amountIn)
-//! → (amountOut, gasEstimate); V2 = 0x02 (params пустые), V3 = 0x03 (abi.encode(uint24 fee)), INFI_CL = 0x04,
-//! INFI_BIN = 0x05 (abi.encode(QuoteMixedInfiExactInputSingleParams{poolKey, hookData})) —
-//! https://github.com/pancakeswap/infinity-periphery/blob/56a7a4f5076d57d5ed90c38a00421ecbac0d649c/src/interfaces/IMixedQuoter.sol#L19-L63 ,
-//! src/libraries/MixedQuoterActions.sol#L9-L16, src/MixedQuoter.sol#L210-L300; адрес в BSC —
-//! research/flow/bsc_smart_router.md, раздел 3.3.
+//! Вызов quoteMixedExactInput (действия, параметры, ABI) — quote/mixed_quoter_calls.rs (вынесено решением 261: файл был
+//! больше 200 строк; логика та же).
 
-use alloy::sol_types::SolValue;
-use alloy_primitives::Bytes;
-use alloy_primitives::aliases::U24;
-
-use crate::core::types::PoolKind;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::call;
-use super::super::pools::key::PoolKey;
-use super::super::pools::registry::Entry;
+use super::mixed_quoter_calls::request;
 use super::path::Path;
 use super::quoter::{diff_pct, less_hook};
-
-const V2_EXACT_INPUT_SINGLE: u8 = 0x02;
-const V3_EXACT_INPUT_SINGLE: u8 = 0x03;
-const INFI_CL_EXACT_INPUT_SINGLE: u8 = 0x04;
-const INFI_BIN_EXACT_INPUT_SINGLE: u8 = 0x05;
-
-alloy::sol! {
-    struct MqKey { address currency0; address currency1; address hooks; address poolManager; uint24 fee; bytes32 parameters; }
-    struct QuoteMixedInfiExactInputSingleParams { MqKey poolKey; bytes hookData; }
-    interface IMixedQuoter {
-        function quoteMixedExactInput(address[] paths, bytes actions, bytes[] params, uint256 amountIn)
-            external returns (uint256 amountOut, uint256 gasEstimate);
-    }
-}
 
 /// Доля для сверки: путь (один пул или два через промежуточную монету).
 pub struct Leg<'a> {
@@ -50,16 +30,46 @@ pub struct Leg<'a> {
 
 /// Сверка всех долей. Квотер исполняет весь путь доли (с крючками каждого пула); локальный выход последнего пула
 /// берётся за вычетом влияния его крючка (влияние крючка первого пула уже учтено во входе второго — quote/via.rs).
-/// Возвращает: Ok(()) — все в допуске. Ошибки: NotConfigured (адрес, допуск), узел (откат квотера — его текст),
-/// QuoteMismatch (расхождение — с цифрами), Internal (у пула V4 нет ключа, пустой путь).
-pub async fn check(ctx: &Ctx, legs: &[Leg<'_>]) -> GatewayResult<()> {
+/// Возвращает: строки «в нашу сторону» (решение 261; пусто — все в допуске). Ошибки: NotConfigured (адрес, допуск),
+/// узел (откат квотера — его текст), QuoteMismatch (квотер меньше нашего больше допуска — с цифрами), Internal (у пула
+/// V4 нет ключа, пустой путь).
+pub async fn check(ctx: &Ctx, legs: &[Leg<'_>]) -> GatewayResult<Vec<String>> {
+    check_at(ctx, legs, "latest").await
+}
+
+/// Решение 382: как check, но MixedQuoter и get_dy — на блоке `block` (номер hex — пулы перечитаны на нём,
+/// exec/quoter_refetch.rs — или «latest»). Возвращает и ошибки: как check; StaleData — состояния блока у узла нет.
+pub async fn check_at(ctx: &Ctx, legs: &[Leg<'_>], block: &str) -> GatewayResult<Vec<String>> {
     let to = ctx.addr("smart.mixed_quoter")?;
     let limit = ctx.dec("dex.quoter_max_diff_pct")?;
     let calls = legs
         .iter()
         .map(|l| request(ctx, l.path))
         .collect::<GatewayResult<Vec<_>>>()?;
-    let outs = call::view_many(ctx, to, &calls, "latest").await?;
+    // Решение «122 (Infinity Stable, ответы)»: шаги Infinity Stable — ещё get_dy крючка на свой вход (дополнительный
+    // квотер, quote/quoter_extra.rs), параллельно с MixedQuoter (основной: действие INFI_CL — swap с крючком).
+    let extras = legs.iter().flat_map(|l| l.path.hops.iter()).map(|h| {
+        super::quoter_extra::check(
+            ctx,
+            &h.entry,
+            h.token_in,
+            h.swapped.amount_in,
+            h.swapped.amount_out,
+            (block, true),
+        )
+    });
+    let (outs, extras) = tokio::join!(
+        call::view_many(ctx, to, &calls, block),
+        futures_util::future::join_all(extras)
+    );
+    let mut favour = Vec::new();
+    for r in extras {
+        match r? {
+            Ok(line) => favour.extend(line),
+            Err(why) => return Err(ctx.err(ErrorCode::QuoteMismatch, why)),
+        }
+    }
+    let outs = outs?;
     for (l, out) in legs.iter().zip(outs) {
         let last = l
             .path
@@ -74,6 +84,14 @@ pub async fn check(ctx: &Ctx, legs: &[Leg<'_>]) -> GatewayResult<()> {
         })?;
         match diff_pct(local, out.amountOut) {
             Some(d) if d <= limit => {}
+            // Решение 261: выход сети больше нашего — в нашу сторону, сделка идёт.
+            Some(d) if out.amountOut > local => favour.push(format!(
+                "{} {}: расчёт {local}, MixedQuoter {} (+{}%) — в нашу сторону, сделка идёт (решение 261)",
+                last.entry.family.title,
+                last.entry.ticker,
+                out.amountOut,
+                d.round_dp(4)
+            )),
             d => {
                 return Err(ctx.err(
                     ErrorCode::QuoteMismatch,
@@ -88,82 +106,5 @@ pub async fn check(ctx: &Ctx, legs: &[Leg<'_>]) -> GatewayResult<()> {
             }
         }
     }
-    Ok(())
-}
-
-/// Вызов quoteMixedExactInput для доли: путь токенов, действие и параметры на каждый пул, вход первого пула.
-/// Ошибки: Internal (пустой путь, нет fee у V3 или ключа у V4).
-fn request(ctx: &Ctx, p: &Path) -> GatewayResult<IMixedQuoter::quoteMixedExactInputCall> {
-    let first = p
-        .hops
-        .first()
-        .ok_or_else(|| ctx.err(ErrorCode::Internal, "доля без пулов"))?;
-    let mut paths = vec![first.token_in];
-    let (mut actions, mut params) = (Vec::new(), Vec::new());
-    for h in &p.hops {
-        let (a, b) = hop(ctx, &h.entry)?;
-        paths.push(h.token_out);
-        actions.push(a);
-        params.push(b);
-    }
-    Ok(IMixedQuoter::quoteMixedExactInputCall {
-        paths,
-        actions: Bytes::from(actions),
-        params,
-        amountIn: first.swapped.amount_in,
-    })
-}
-
-/// Действие и параметры одного пула. Ошибки: Internal (нет fee у V3 или ключа у V4).
-fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
-    Ok(match e.pool.kind {
-        PoolKind::V2 => (V2_EXACT_INPUT_SINGLE, Bytes::new()),
-        PoolKind::V3 => {
-            let fee = e
-                .pool
-                .fee_pips
-                .ok_or_else(|| ctx.err(ErrorCode::Internal, "у пула V3 нет fee"))?;
-            (
-                V3_EXACT_INPUT_SINGLE,
-                Bytes::from(U24::from(fee).abi_encode()),
-            )
-        }
-        PoolKind::Cl | PoolKind::Bin => {
-            let Some(PoolKey::Infinity(k)) = e.key.as_ref() else {
-                return Err(ctx.err(ErrorCode::Internal, "у пула Infinity нет ключа"));
-            };
-            let p = QuoteMixedInfiExactInputSingleParams {
-                poolKey: MqKey {
-                    currency0: k.currency0,
-                    currency1: k.currency1,
-                    hooks: k.hooks,
-                    poolManager: k.manager,
-                    fee: U24::from(k.fee),
-                    parameters: k.parameters,
-                },
-                hookData: Bytes::new(),
-            };
-            let action = if e.pool.kind == PoolKind::Bin {
-                INFI_BIN_EXACT_INPUT_SINGLE
-            } else {
-                INFI_CL_EXACT_INPUT_SINGLE
-            };
-            (action, Bytes::from(p.abi_encode()))
-        }
-        // DODO PMM (решение 86b): не входит в умный маршрут Universal Router (не tradable, исполнение — 86c).
-        PoolKind::Pmm => {
-            return Err(ctx.err(
-                ErrorCode::Internal,
-                "DODO PMM не исполняется умным маршрутом (фаза 86c)",
-            ));
-        }
-        // Solidly (Topaz v2, THENA V1; решения 80, 85): не входит в умный маршрут Universal Router (не tradable,
-        // исполнение — следующая фаза).
-        PoolKind::Solidly => {
-            return Err(ctx.err(
-                ErrorCode::Internal,
-                "Solidly не исполняется умным маршрутом (tradable=false, следующая фаза)",
-            ));
-        }
-    })
+    Ok(favour)
 }

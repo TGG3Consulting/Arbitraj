@@ -70,13 +70,12 @@ fn quoter_liquidity_reverts_from_live_journal_are_one_class() {
 
 #[test]
 fn recheck_button_queues_only_given_coins() {
+    // Решение 211: очередь — по адресу монеты (адрес CAKE в BSC, из записи GeckoTerminal 2026-10-24).
+    let cake = alloy_primitives::address!("0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82");
     let r = Recheck::default();
-    r.coins(&["TOWNS".to_string()]);
+    r.coins(&[cake]);
     let (taxes, new_pools) = r.taxes.take();
-    assert_eq!(
-        taxes.into_iter().collect::<Vec<_>>(),
-        vec!["TOWNS".to_string()]
-    );
+    assert_eq!(taxes.into_iter().collect::<Vec<_>>(), vec![cake]);
     assert!(!new_pools);
     assert!(r.taxes.take().0.is_empty(), "очередь забрана");
     assert_eq!(r.quoter.take().0.len(), 1);
@@ -116,6 +115,7 @@ fn entry(state: PoolState) -> Entry {
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     }
 }
 
@@ -150,7 +150,7 @@ fn v3_math_names_the_failing_step() {
     );
     let map = TickMap {
         spacing: 1,
-        ticks,
+        ticks: ticks.into(),
         words: (-1, 0),
     };
     let s = ClState {

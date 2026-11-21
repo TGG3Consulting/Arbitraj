@@ -1,0 +1,78 @@
+//! Файл: venues/bsc_dex/pools/abi_algebra_integral.rs
+//! Что делает: решение 188 — ABI пула Algebra Integral (THENA V3, DexSwap и другие форки Integral) для чтения
+//! состояния (load_algebra_integral.rs) и событий комиссии (events_algebra_integral.rs). Обмен (swap + обратный вызов
+//! algebraSwapCallback), события Swap/Mint/Burn и фабрика (poolByPair, событие Pool) у Integral — те же, что у Algebra
+//! V1.9 (pools/abi_algebra.rs), их здесь не повторяем.
+//! Кто вызывает: pools/load_algebra_integral.rs, pools/events_algebra_integral.rs.
+//! От чего зависит: alloy::sol!.
+//! Настройки: нет.
+//!
+//! Сигнатуры — официальный код cryptoalgebra/Algebra, пакет @cryptoalgebra/integral-core 1.2.10 (коммит 1ff43e1;
+//! ревью 325 Н8 — полные ссылки, коммит 1ff43e11407872f7c09b001cdeee1a59d2c334ec):
+//! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/interfaces/pool/IAlgebraPoolState.sol
+//! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/interfaces/pool/IAlgebraPoolEvents.sol
+//! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/libraries/TickTree.sol
+//! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/base/TickStructure.sol
+//! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/libraries/Plugins.sol
+//! - IAlgebraPoolState.sol: globalState() → (uint160 price, int24 tick, uint16 lastFee, uint8 pluginConfig,
+//!   uint16 communityFee, bool unlocked) (L44); ticks(int24) → (uint256 liquidityTotal, int128 liquidityDelta,
+//!   int24 prevTick, int24 nextTick, uint256 outerFeeGrowth0Token, uint256 outerFeeGrowth1Token) (L57-L69) — тики
+//!   связаны СПИСКОМ (prevTick/nextTick; концы — TickMath.MIN_TICK и MAX_TICK, TickManagement.initTickState L131-L132);
+//!   fee() → uint16 (L117: при флаге DYNAMIC_FEE — getCurrentFee() плагина, AlgebraPoolBase.sol L145-L150);
+//!   liquidity() → uint128 (L143); prevTickGlobal()/nextTickGlobal() → int24 (L156, L161) — ближайшие
+//!   инициализированные тики слева (≤ текущего) и справа (> текущего).
+//! - IAlgebraPoolEvents.sol: Fee(uint16 fee) (L122) — новая lastFee; SwapFee(address indexed sender, uint24
+//!   overrideFee, uint24 pluginFee) (L86) — комиссия, с которой прошёл обмен (SwapCalculation.sol: overrideFee ≠ 0 →
+//!   fee = overrideFee + pluginFee, иначе lastFee + pluginFee).
+//! - Версия 1.2.0/1.2.1 (THENA V3): Swap с 9 полями и Burn с pluginFee — интерфейс IAlgebraIntegral12Pool ниже.
+//! - Plugins.sol L26: DYNAMIC_FEE = 1 << 7 (флаг в globalState.pluginConfig).
+//! - Решение 325: IAlgebraPoolState.sol L99 tickTable(int16 wordPosition) → uint256 (листья дерева тиков), L173
+//!   tickTreeSecondLayer(int16) → uint256 (второй слой: бит — «лист не пуст»); одинаковы в 1.2.10 (1ff43e1) и тегах
+//!   v1.2-integral / v1.2.1-integral (THENA V3). Индексы — TickTree.sol (тот же файл во всех трёх версиях):
+//!   лист = sar(8, tick), бит = tick & 0xFF (_toggleBitInNode); узел второго слоя = sar(8, лист + SECOND_LAYER_OFFSET),
+//!   бит = (лист + SECOND_LAYER_OFFSET) & 0xFF; SECOND_LAYER_OFFSET = 3466 (TickTree.sol L10, «ceil(-MIN_TICK / 256)»).
+//!   Лист переключается вместе с вставкой/удалением тика из списка (TickStructure.sol _addOrRemoveTick L36-L64).
+
+alloy::sol! {
+    #[allow(missing_docs)]
+    interface IAlgebraIntegralPool {
+        event Fee(uint16 fee);
+        event SwapFee(address indexed sender, uint24 overrideFee, uint24 pluginFee);
+        function globalState() external view returns (uint160 price, int24 tick, uint16 lastFee, uint8 pluginConfig, uint16 communityFee, bool unlocked);
+        function liquidity() external view returns (uint128);
+        function fee() external view returns (uint16 currentFee);
+        function prevTickGlobal() external view returns (int24);
+        function nextTickGlobal() external view returns (int24);
+        function ticks(int24 tick) external view returns (uint256 liquidityTotal, int128 liquidityDelta, int24 prevTick, int24 nextTick, uint256 outerFeeGrowth0Token, uint256 outerFeeGrowth1Token);
+        // Решение 325: дерево поиска тиков (TickTree.sol) — для заранее читаемой цепочки списка (prefetch_integral.rs).
+        function tickTable(int16 wordPosition) external view returns (uint256);
+        function tickTreeSecondLayer(int16 node) external view returns (uint256);
+    }
+}
+
+// Integral 1.2.0 / 1.2.1 (теги v1.2-integral, v1.2.1-integral; так развёрнут THENA V3 — живые логи 06.11.2026,
+// tests/data/algebra_integral_2026-11-06): Swap несёт комиссию обмена (overrideFee, pluginFee) — 9 полей, отдельного
+// SwapFee нет; Burn несёт pluginFee. IAlgebraPoolEvents.sol тега v1.2.1-integral L50-L58, L70-L80. Отдельный интерфейс:
+// имена событий те же, что у 1.2.10, подписи другие.
+alloy::sol! {
+    #[allow(missing_docs, clippy::too_many_arguments)]
+    interface IAlgebraIntegral12Pool {
+        event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 price, uint128 liquidity, int24 tick, uint24 overrideFee, uint24 pluginFee);
+        event Burn(address indexed owner, int24 indexed bottomTick, int24 indexed topTick, uint128 liquidityAmount, uint256 amount0, uint256 amount1, uint24 pluginFee);
+    }
+}
+
+// Фабрика Integral: кастомные пулы — по адресу деплоера (IAlgebraFactory.sol тега v1.2.1-integral L137, L36).
+alloy::sol! {
+    #[allow(missing_docs)]
+    interface IAlgebraIntegralFactory {
+        event CustomPool(address indexed deployer, address indexed token0, address indexed token1, address pool);
+        function customPoolByPair(address customDeployer, address tokenA, address tokenB) external view returns (address customPool);
+    }
+}
+
+/// Флаг динамической комиссии в globalState.pluginConfig (Plugins.sol L26).
+pub const DYNAMIC_FEE: u8 = 1 << 7;
+
+/// Сдвиг индекса листа во втором слое дерева тиков (TickTree.sol L10: SECOND_LAYER_OFFSET = 3466, константа протокола).
+pub const SECOND_LAYER_OFFSET: i32 = 3466;

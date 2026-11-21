@@ -121,15 +121,18 @@ pub async fn build(core: &Core, calc: &Calc, dry: bool) -> Card {
         .into_iter()
         .find(|v| kind(v) == Some(VenueKind::Dex))
         .cloned();
-    let band = || -> Result<Decimal, String> {
-        let v = dex
-            .as_ref()
-            .ok_or("у направления нет DEX — полоса dex.depth_band_pct не задаётся")?;
+    // Решение 118 (Я-20): у биржа ↔ биржа DEX нет — полоса не задаётся, стаканы показываются без неё (не ошибка).
+    let band = || -> Result<Option<Decimal>, String> {
+        let Some(v) = dex.as_ref() else {
+            return Ok(None);
+        };
         let at = At {
             venue: Some(&v.0),
             coin: None,
         };
-        s.decimal("dex.depth_band_pct", at).map_err(|e| e.message)
+        s.decimal("dex.depth_band_pct", at)
+            .map(Some)
+            .map_err(|e| e.message)
     };
     let (mut books, mut pools, mut links) = (vec![], vec![], vec![]);
     for (v, side, route) in [
@@ -138,13 +141,15 @@ pub async fn build(core: &Core, calc: &Calc, dry: bool) -> Card {
     ] {
         match kind(v) {
             Some(VenueKind::Cex) => {
-                let book = rd(&core.inner.market).book(v, &d.asset.ticker).cloned();
+                // Решение 211: стакан и ссылка на пару — по тикеру площадки.
+                let t = super::venue_ticker::ticker_on(core, &d.asset, v);
+                let book = rd(&core.inner.market).book(v, &t).cloned();
                 let levels = book.as_ref().map(|b| match side {
                     Side::Buy => b.asks.as_slice(),
                     Side::Sell => b.bids.as_slice(),
                 });
                 books.push(card_book::side(&v.0, side, levels, band()));
-                links.push(card_links::pair(s, &v.0, &d.asset.ticker));
+                links.push(card_links::pair(s, &v.0, &t));
             }
             Some(VenueKind::Dex) => {
                 let got = route_pools(core, v, side, route.as_ref()).await;
@@ -186,7 +191,7 @@ pub async fn build(core: &Core, calc: &Calc, dry: bool) -> Card {
     Card {
         dry,
         ticker: d.asset.ticker.clone(),
-        contract: d.asset.bsc_contract.map(|a| format!("{a:#x}")),
+        contract: d.asset.contract.map(|a| format!("{a:#x}")),
         buy_on: d.buy_on.0.clone(),
         sell_on: d.sell_on.0.clone(),
         qty: calc.qty,

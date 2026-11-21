@@ -104,7 +104,7 @@ pub async fn recheck(core: &Core) {
 }
 
 /// Что делает: пятое ревью — снятие паузы NoFact биржи по тем же счетам, по которым её ставит чтение факта
-/// (account_balances: торговый и перекладываемые на торговый прочитаны, хотя бы один такой счёт есть); отметки NoFact
+/// (account_balances: прочитан торговый счёт (спот, роль Trading); Фонд и прочие не читаем — решение Тиграна 21.11.2026); отметки NoFact
 /// нет — ничего не читает. Принимает: ядро, биржу. Ошибок нет: не прочитано — пауза остаётся.
 pub async fn recheck_venue(core: &Core, v: &VenueId) {
     let marked = lk(&core.inner.risk)
@@ -117,12 +117,14 @@ pub async fn recheck_venue(core: &Core, v: &VenueId) {
     let Ok(gw) = core.inner.deps.gw.get(v).await else {
         return;
     };
+    // Решение Тиграна 21.11.2026: снятие паузы по тем же счетам, что и чтение факта (remain_read.rs) — только торговый
+    // счёт (спот, роль Trading). Фонд (Funding) и прочие не читаем: его ошибка не держит паузу (везде используется спот).
     let ok = match gw.account_balances().await {
         Ok(accs) => {
             let used: Vec<_> = accs
                 .iter()
                 .filter(|a| {
-                    gw.account_role(&a.account) != crate::gateway::contract::AccountRole::Other
+                    gw.account_role(&a.account) == crate::gateway::contract::AccountRole::Trading
                 })
                 .collect();
             !used.is_empty() && used.iter().all(|a| a.error.is_none())

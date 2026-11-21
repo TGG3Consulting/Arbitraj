@@ -43,9 +43,8 @@ async fn incident_disabled_arb_dex_strips_arbitrum() {
         assert_eq!(i.asset.contract, None, "адрес ARBITRUM снят");
         assert_eq!(i.asset.chain, None);
     }
-    let market = core.inner.market.read().unwrap();
-    let magic = market.spot_pair(&v("bingx"), "MAGIC");
-    drop(market);
+    // Замок рынка — только на время этого выражения: ниже rebuild(...).await (clippy await_holding_lock).
+    let magic = core.inner.market.read().unwrap().spot_pair(&v("bingx"), "MAGIC");
     assert!(magic, "MAGIC торгуется — на базе ушла бы в bsc_dex");
     assert_eq!(chain::active_dexes(&core), vec![v("bsc_dex")]);
     let groups = registry_chains::groups(&core, &chain::dexes(&core));

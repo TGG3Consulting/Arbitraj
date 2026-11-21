@@ -66,8 +66,13 @@ async fn state() -> AppState {
             .await
             .unwrap();
     }
-    // Решение 416: тикер газа площадки DEX — настройка; решение 461: chainId сети площадки — dex.evm_chain_id площадки.
-    for (venue, ticker, chain) in [("bsc_dex", "BNB", BSC_SYN), ("arb_dex", "ETH", ARB_SYN)] {
+    // Решение 416: тикер газа площадки DEX — настройка; решение 461: chainId сети площадки — dex.evm_chain_id площадки;
+    // решение 416/430: имя сети площадки — dex.chain (bsc / arbitrum), нужна, чтобы ядро выбрало площадку DEX
+    // (dex_of/dex_chain); синтетические chainId сторон (dex.evm_chain_id) не трогаем — отказ деплоя считается по ним.
+    for (venue, ticker, chain, net) in [
+        ("bsc_dex", "BNB", BSC_SYN, "bsc"),
+        ("arb_dex", "ETH", ARB_SYN, "arbitrum"),
+    ] {
         settings
             .set(
                 "dex.gas_ticker",
@@ -86,7 +91,26 @@ async fn state() -> AppState {
             )
             .await
             .unwrap();
+        settings
+            .set(
+                "dex.chain",
+                Scope::Venue(venue.into()),
+                Some(json!(net)),
+                "тест",
+            )
+            .await
+            .unwrap();
     }
+    // Решение 430: две площадки DEX в разных сетях — сеть по умолчанию задаётся явно (иначе dex_chain откажет).
+    settings
+        .set(
+            "dex.default_chain",
+            Scope::Global,
+            Some(json!("bsc")),
+            "тест",
+        )
+        .await
+        .unwrap();
     let vault = arb::secrets::Vault::locked(d.join("secrets.enc"));
     let p = arb::secrets::crypto::KdfParams {
         memory_kib: 64,

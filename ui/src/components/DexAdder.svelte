@@ -42,8 +42,10 @@
     error = '';
     busy = true;
     try {
+      // Площадка и id — на момент нажатия; поля на время запроса заблокированы (busy), ключ не уйдёт чужой сети.
       const id = raw.trim();
-      const r = await get(`/api/venues/${seg(venue)}/dex-key-suffix`);
+      const at = venue;
+      const r = await get(`/api/venues/${seg(at)}/dex-key-suffix`);
       const suffix = r?.suffix ?? '';
       const why = checkDexId(id, suffix);
       if (why) {
@@ -63,12 +65,17 @@
 <!-- Решение 128 / 490: DEX, которой нет в списке адаптера, — сырой id руками; суффикс сети — с сервера. -->
 <div class="adder">
   {#if dexVenues.length > 1}
-    <select bind:value={picked} onchange={() => (error = '')}>
+    <select bind:value={picked} disabled={busy} onchange={() => (error = '')}>
       <option value="">— площадка DEX —</option>
       {#each dexVenues as v (v)}<option value={v}>{v}</option>{/each}
     </select>
   {/if}
-  <input bind:value={raw} oninput={() => (error = '')} placeholder="id новой DEX, например lista-stable" />
+  <input
+    bind:value={raw}
+    disabled={busy}
+    oninput={() => (error = '')}
+    placeholder="id новой DEX, например lista-stable"
+  />
   <button disabled={!raw.trim() || !!inputError || !venue || busy} onclick={add}>Добавить DEX</button>
   {#if inputError}<span class="err">{inputError}</span>{/if}
   {#if error}<span class="err">{error}</span>{/if}

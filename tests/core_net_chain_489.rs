@@ -1,39 +1,52 @@
 //! Файл: tests/core_net_chain_489.rs
-//! Что делает: решение 489 — площадка DEX участвует в сетях ядра только при venue.enabled = да, на записанном справочнике
-//! сетей BingX (tests/data/bingx_2026-10-24/config_getall.json: у монет есть сеть ARBITRUM с contractAddress) и
-//! справочнике пар (symbols.json), на работающем ядре с настоящей SQLite (t489_common):
-//! (1) инцидент 21.11.2026: bsc_dex включена, arb_dex зарегистрирована, но НЕ включена — net_chain снимает адрес у
-//!     записей ARBITRUM; в справочнике нет монеты без сети с арбитрумным адресом и нет монет сети arbitrum; набор
-//!     подписки bsc_dex их не содержит; группа справочника одна (bsc_dex);
-//! (2) arb_dex включена — записи ARBITRUM с сетью «arbitrum» и адресом, монеты уходят в сеть arbitrum, в набор bsc_dex не
-//!     попадают;
-//! (3) справочник сетей ещё с привязкой «arb_dex включена», а её уже выключили (окно до перечитывания) — пересборка не
-//!     пускает записи с сетью в сеть по умолчанию (rebuild_build.rs);
-//! (4) tag_of_dex выключенной площадки — её сеть по реестру (решение 196: её сделки и учёт), не сеть по умолчанию;
-//!     kinds_in(None) её не содержит; active_dexes / in_play — без неё; net_chain::affects — venue.enabled DEX.
+//! Что делает: решение 489 — площадка DEX участвует в сетях ядра только «в игре» (venue.enabled = да или её держат
+//! идущие сделки), на записанных ответах BingX 2026-11-21 (tests/data/bingx_2026-11-21: config_getall.json — 50 монет с
+//! адресом только в сети ARBITRUM, symbols.json — их пары) на работающем ядре с настоящей SQLite (t489_common):
+//! (1) инцидент 21.11.2026: bsc_dex включена, arb_dex зарегистрирована, не включена, сделок нет — адрес записей
+//!     ARBITRUM снят; монет без сети с адресом «только ARBITRUM» 0, монет сети arbitrum 0, в наборе подписки bsc_dex их
+//!     нет. На коде базы (a3f8f568) та же проверка падала: net_chain.rs:37 брал все зарегистрированные DEX → записи
+//!     ARBITRUM с сетью и адресом (net_chain.rs:71); сборка из включённых давала одну группу → rebuild_build.rs:61,70
+//!     (single) отдавал справочник сетей без nets_of → registry_build.rs:166 ставил монете chain: None с адресом первой
+//!     записи с адресом (presence.rs:38) — VELA, MAGIC … без сети; MAGIC с торгуемой парой — в набор bsc_dex
+//!     (subscribe.rs dex_tradable);
+//! (2) arb_dex включена — монеты «только ARBITRUM» в сети arbitrum с адресом, без сети их нет, набор bsc_dex без них,
+//!     набор arb_dex — с ними;
+//! (3) окно до перечитывания справочника сетей: arb_dex выключили, справочник ещё с сетью arbitrum — записи с сетью в
+//!     сеть по умолчанию не идут (rebuild_build.rs), монет arbitrum нет;
+//! (4) предикаты: in_play, active_dexes, tag_of_dex выключенной — сеть по реестру, kinds_in, net_chain::affects.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core (chain, net_chain, registry_chains, rebuild, subscribe), t489_common. Моков нет.
 
 mod t489_common;
 
+use alloy_primitives::address;
 use serde_json::json;
 
 use arb::core::chain;
 use arb::core::registry_chains::{self, Group};
 use arb::settings::live::Change;
 use arb::settings::scope::Scope;
-use t489_common::{arb_chain, arb_only, chained, coins, count, dex_set, feed, raw, start, v};
+use t489_common::book::{coins, dex_set, pick};
+use t489_common::{NEW, arb_chain, arb_only, feed, raw, start, v};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn incident_disabled_arb_dex_strips_arbitrum() {
     let core = start("net-chain-489-incident", true, false).await;
-    let only = arb_only(&raw(&core));
-    assert!(!only.is_empty(), "в записи есть адреса только ARBITRUM");
-    let list = feed(&core);
+    let raw = raw(&core, NEW);
+    let only = arb_only(&raw);
+    // Факт записи: USDT (котируемая) + 49 монет; VELA — единственная сеть ARBITRUM.
+    assert_eq!(only.len(), 50);
+    let vela = address!("088cd8f5ef3652623c22d48b1605dcfe860cd704");
+    assert!(only.contains(&vela));
+    let list = feed(&core, NEW, raw);
     for i in list.iter().filter(|i| i.network == "ARBITRUM") {
         assert_eq!(i.asset.contract, None, "адрес ARBITRUM снят");
         assert_eq!(i.asset.chain, None);
     }
+    let market = core.inner.market.read().unwrap();
+    let magic = market.spot_pair(&v("bingx"), "MAGIC");
+    drop(market);
+    assert!(magic, "MAGIC торгуется — на базе ушла бы в bsc_dex");
     assert_eq!(chain::active_dexes(&core), vec![v("bsc_dex")]);
     let groups = registry_chains::groups(&core, &chain::dexes(&core));
     let one = Group {
@@ -44,23 +57,24 @@ async fn incident_disabled_arb_dex_strips_arbitrum() {
     arb::core::rebuild::rebuild(&core).await;
     let all = coins(&core);
     assert!(!all.is_empty(), "справочник собран");
-    assert_eq!(count(&all, None, &only), 0, "без сети нет ARBITRUM");
-    assert_eq!(chained(&all), 0, "монет сети arbitrum нет");
+    assert!(pick(&all, None, &only).is_empty(), "без сети нет ARB");
+    let chained = all.iter().filter(|c| c.asset.chain.is_some()).count();
+    assert_eq!(chained, 0, "сети arbitrum нет");
     let sub = dex_set(&core, "bsc_dex");
-    assert_eq!(count(&sub, None, &only), 0, "подписка bsc_dex чистая");
+    assert!(!sub.is_empty(), "набор bsc_dex есть");
+    let leak = pick(&sub, None, &only);
+    assert!(leak.is_empty(), "подписка bsc_dex чистая");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn enabled_arb_dex_gets_its_network() {
     let core = start("net-chain-489-enabled", true, true).await;
-    let only = arb_only(&raw(&core));
-    let list = feed(&core);
-    let usdt = list
-        .iter()
-        .find(|i| i.asset.ticker == "USDT" && i.network == "ARBITRUM")
-        .unwrap();
-    assert_eq!(usdt.asset.chain, Some(arb_chain()));
-    assert!(usdt.asset.contract.is_some());
+    let raw = raw(&core, NEW);
+    let only = arb_only(&raw);
+    let list = feed(&core, NEW, raw);
+    let vela = list.iter().find(|i| i.asset.ticker == "VELA").unwrap();
+    assert_eq!(vela.asset.chain, Some(arb_chain()));
+    assert!(vela.asset.contract.is_some());
     for i in list.iter().filter(|i| i.network == "BEP20") {
         assert_eq!(i.asset.chain, None, "BSC — без сети");
     }
@@ -69,17 +83,23 @@ async fn enabled_arb_dex_gets_its_network() {
     arb::core::rebuild::rebuild(&core).await;
     let all = coins(&core);
     let a = arb_chain();
-    assert!(count(&all, Some(&a), &only) > 0, "монеты arbitrum есть");
-    assert_eq!(count(&all, None, &only), 0, "без сети нет ARBITRUM");
+    let on_arb = pick(&all, Some(&a), &only);
+    assert!(on_arb.len() > 40, "монеты arbitrum есть");
+    assert!(pick(&all, None, &only).is_empty(), "без сети нет ARB");
     let sub = dex_set(&core, "bsc_dex");
-    assert_eq!(chained(&sub), 0, "bsc_dex без монет arbitrum");
+    let chained = sub.iter().filter(|c| c.asset.chain.is_some()).count();
+    assert_eq!(chained, 0, "bsc_dex без arbitrum");
+    let arb_sub = dex_set(&core, "arb_dex");
+    let magic = arb_sub.iter().any(|c| c.asset.ticker == "MAGIC");
+    assert!(magic, "MAGIC в arb_dex");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn stale_tagged_networks_stay_out_of_default_chain() {
     let core = start("net-chain-489-stale", true, true).await;
-    let only = arb_only(&raw(&core));
-    let list = feed(&core);
+    let raw = raw(&core, NEW);
+    let only = arb_only(&raw);
+    let list = feed(&core, NEW, raw);
     let a = arb_chain();
     assert!(list.iter().any(|i| i.asset.chain.as_ref() == Some(&a)));
     // Выключили arb_dex; справочник сетей бирж ещё прежний (с сетью arbitrum у записей ARBITRUM).
@@ -87,8 +107,10 @@ async fn stale_tagged_networks_stay_out_of_default_chain() {
     t489_common::set(&core, "venue.enabled", scope, json!(false)).await;
     arb::core::rebuild::rebuild(&core).await;
     let all = coins(&core);
-    assert_eq!(count(&all, None, &only), 0, "записи с сетью — не без сети");
-    assert_eq!(chained(&all), 0, "группы arbitrum нет");
+    let leak = pick(&all, None, &only);
+    assert!(leak.is_empty(), "записи с сетью — не без сети");
+    let chained = all.iter().filter(|c| c.asset.chain.is_some()).count();
+    assert_eq!(chained, 0, "группы arbitrum нет");
 }
 
 /// Изменение настройки для net_chain::affects. Ошибок нет.

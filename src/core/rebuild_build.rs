@@ -5,9 +5,11 @@
 //! бирж, USDT и нативная монета сети; монете — сеть группы).
 //! Решение 489: монеты сети по умолчанию собираются только из записей без сети — даже при одной группе: записи с сетью
 //! (Asset.chain = Some) в справочнике сетей, а группы их сети нет (площадку сети выключили, справочник сетей бирж ещё не
-//! перечитан), в сеть по умолчанию не попадают (иначе — адрес другой сети без сети, инцидент 21.11.2026).
+//! перечитан), в сеть по умолчанию не попадают (иначе — адрес другой сети без сети, инцидент 21.11.2026). Сеть, которую
+//! держат только идущие сделки выключенной площадки (chain::in_play), собирается в своей группе без DEX-присутствия, а
+//! её монетам ставится problem (held_only) — направлений, а значит и новых сделок, нет (executor.rs:97).
 //! Кто вызывает: core/rebuild.rs.
-//! От чего зависит: registry_chains.rs, registry_build.rs, pairs_fresh.rs, blacklist.rs, intermediate.rs, market_state.rs, settings.
+//! От чего зависит: chain.rs (dexes), registry_chains.rs, registry_build.rs, pairs_fresh.rs, blacklist.rs, intermediate.rs, market_state.rs, settings.
 //! Настройки: через вызываемые — venue.symbols_stale_s, hooks.*, dex.intermediate_*.
 
 use std::collections::HashMap;
@@ -60,7 +62,9 @@ pub fn build(
         .collect();
     // Решение 430: справочник по сетям (registry_chains.rs) — у каждой сети свои площадки DEX, записи сетей бирж, USDT и
     // нативная монета; монете ставится сеть группы. Одна группа — входы прежние (без копий справочника сетей).
-    let groups = super::registry_chains::groups(core, &dex);
+    // Решение 489: группы — по площадкам DEX в игре (реестр: включена или её держат идущие сделки); в группе остаются
+    // только включённые (DEX-присутствие, нативная монета — как до решения 489).
+    let groups = super::registry_chains::groups(core, &super::chain::dexes(core));
     // Решение 489: одна группа и записей с сетью нет — входы прежние, без копий (решение 129); записи с сетью есть —
     // сеть по умолчанию берёт только свои (nets_of), как при нескольких группах.
     let tagged = nets
@@ -68,7 +72,8 @@ pub fn build(
         .any(|l| l.iter().any(|i| i.asset.chain.is_some()));
     let single = groups.len() == 1 && !tagged;
     let mut out = Vec::new();
-    for g in groups {
+    for mut g in groups {
+        let stop = held_only(&mut g, &dex);
         let gv: Vec<(VenueId, VenueKind)> = venues
             .iter()
             .filter(|(v, k)| *k == VenueKind::Cex || g.dex.contains(v))
@@ -115,11 +120,37 @@ pub fn build(
         if g.tag.is_some() {
             for c in &mut part_g {
                 c.asset.chain = g.tag.clone();
+                // Решение 489: сеть держат только идущие сделки — монета есть (сделки ведутся, перегон находит её),
+                // направлений нет (CoinEntry::directions при problem пусто; присутствия не трогаются).
+                if let Some(why) = &stop {
+                    c.problem = Some(why.clone());
+                }
             }
         }
         out.extend(part_g);
     }
     out
+}
+
+/// Что делает: решение 489 — оставляет в группе только включённые площадки DEX (`on`); сеть не по умолчанию, у которой
+/// включённых не осталось (её держат только идущие сделки, решение 196), — причина «новых сделок нет». Сеть по умолчанию
+/// не останавливается (монеты бирж без DEX — как до решения 489). Принимает: группу, включённые площадки DEX.
+/// Возвращает: причину или None. Ошибок нет.
+fn held_only(g: &mut super::registry_chains::Group, on: &[VenueId]) -> Option<String> {
+    let off: Vec<String> = g
+        .dex
+        .iter()
+        .filter(|v| !on.contains(v))
+        .map(|v| v.0.clone())
+        .collect();
+    g.dex.retain(|v| on.contains(v));
+    let c = g.tag.as_ref()?;
+    (g.dex.is_empty() && !off.is_empty()).then(|| {
+        format!(
+            "сеть {c}: площадка {} выключена — только идущие сделки (решение 196)",
+            off.join(", ")
+        )
+    })
 }
 
 /// Что делает: имя сети `c` у каждой биржи (venue.<c>_network, gateway/own_nets.rs; решение 431). Принимает: хранилище,

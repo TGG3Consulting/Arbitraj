@@ -9,6 +9,7 @@
 //! От чего зависит: blacklist.rs, registry.rs, market_state.rs, engine.rs, settings.
 //! Решение 214: биржи с venue.cex_cex = нет — поле CoinEntry.cex_cex_off, направлений биржа ↔ биржа с ними нет.
 //! Решение 249: список venue.cex_cex_deny биржи покупки — поле CoinEntry.cex_cex_deny (направления A → B из списка A).
+//! Решение 489: problem, поставленный сборкой (сеть держат только идущие сделки, rebuild_build.rs), не затирается.
 //! Настройки: coin.*, tax.*, hooks.* — через blacklist.rs; cex_cex.untaxed_ok — через transfer_tax.rs; venue.cex_cex,
 //! venue.cex_cex_deny — через cex_link.rs.
 
@@ -86,7 +87,12 @@ pub fn apply_blacklist(
                 changes.push(bl.set(&c.asset, r, now));
                 c.block = bl.get(&c.asset).cloned();
             }
-            Err(e) => c.problem = Some(e),
+            // Решение 489: причина «сеть держат только сделки» (rebuild_build.rs) не затирается.
+            Err(e) => {
+                if c.problem.is_none() {
+                    c.problem = Some(e);
+                }
+            }
         }
     }
     changes

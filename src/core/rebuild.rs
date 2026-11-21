@@ -7,7 +7,7 @@
 //! Решение 131: неподвижные монеты (без адреса контракта) — только при смене их входов (coin_book.rs).
 //! Уведомляет о входе и выходе монеты из чёрного списка и об исключении пула по крючку.
 //! Кто вызывает: core/engine.rs (запускает задачи run и watch_settings).
-//! От чего зависит: engine.rs, registry.rs, blacklist.rs, subscribe.rs, episode_run.rs (закрыть эпизоды пропавших направлений), deposit_warm.rs (толчок прогрева адресов, решение 316), settings.
+//! От чего зависит: engine.rs, registry.rs, blacklist.rs, subscribe.rs, net_chain.rs (affects), chain.rs (dexes), episode_run.rs (закрыть эпизоды пропавших направлений), deposit_warm.rs (толчок прогрева адресов, решение 316), settings.
 //! Настройки: venue.enabled, venue.quote_asset, venue.bsc_network, venue.symbols_stale_s (по площадке); coin.*, tax.*, hooks.* — через blacklist.rs.
 
 use std::collections::HashMap;
@@ -176,12 +176,8 @@ pub async fn rebuild(core: &Core) {
     wr(&inner.spreads).retain(|d, _| live_dirs.contains(d));
     *wr(&inner.usdt) = usdt;
     // Решение 430: USDT сетей не по умолчанию — из справочников сетей бирж этой сети (registry_chains.rs).
-    let dex: Vec<VenueId> = venues
-        .iter()
-        .filter(|(_, k)| *k == VenueKind::Dex)
-        .map(|(v, _)| v.clone())
-        .collect();
-    let groups = super::registry_chains::groups(core, &dex);
+    // Решение 489: группы — по площадкам DEX в игре (сеть, которую держат идущие сделки, — тоже: её USDT нужен перегону).
+    let groups = super::registry_chains::groups(core, &super::chain::dexes(core));
     *wr(&inner.usdt_other) = super::registry_chains::usdt_other(&groups, &nets, &quote);
     // Карта (площадка, тикер) → монета для тика (решение 118, Я-9) и журнал разных тикеров одного адреса (Я-8).
     super::ticker_index::rebuild(core, &coins).await;

@@ -20,7 +20,8 @@
 //! Кто вызывает: core/engine.rs (задача run).
 //! От чего зависит: core/{cycle_plan, cycle_deal, cycle_state, cycle_scan_log, risk, dry, deps, dex_account}.rs, gateway (Venue,
 //! VenueKind).
-//! Настройки: dex_dex.execute, dex_dex.min_profit_usd, dex_dex.scan_min_interval_ms [площадка DEX]; через вызываемые —
+//! Настройки: venue.enabled (решение 489: выключенная DEX циклов не исполняет), dex_dex.execute, dex_dex.min_profit_usd,
+//! dex_dex.scan_min_interval_ms [площадка DEX]; через вызываемые —
 //! money.*, risk.*, size.*, dex_dex.size_step_base, dry.*.
 
 use std::collections::HashSet;
@@ -43,9 +44,10 @@ pub async fn run(core: Core) {
     loop {
         core.inner.cycles.kick.notified().await;
         let started = Instant::now();
+        // Решение 489 (как 196): выключенная площадка DEX новых циклов не исполняет, даже если её держат сделки.
         let dexes: Vec<VenueId> = rd(&core.inner.kinds)
             .iter()
-            .filter(|(_, k)| *k == VenueKind::Dex)
+            .filter(|(v, k)| *k == VenueKind::Dex && super::registry_sync::enabled(&core, v))
             .map(|(v, _)| v.clone())
             .collect();
         let mut gap = None;

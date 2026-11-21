@@ -1239,12 +1239,14 @@ _pausedAssets = isPaused(монета) у реализаций с геттеро
 (tests/data/arbitrum_basin_<дата>/): состояние и проверка скважины кодом бота, наш выход = getSwapOut побайтно и =
 симуляции swapFrom (откат ↔ None).
 
-Решение 489 (площадка DEX в сетях ядра только при venue.enabled = да): tests/core_net_chain_489.rs — на записанном
-справочнике сетей BingX (config_getall.json, сеть ARBITRUM с адресами) и справочнике пар (symbols.json), работающее ядро:
-инцидент 21.11.2026 (arb_dex зарегистрирована, не включена — адреса ARBITRUM сняты, в справочнике и наборе подписки bsc_dex
-нет монет без сети с арбитрумным адресом, монет arbitrum нет, группа одна), включённая arb_dex (записи и монеты сети
-arbitrum, в набор bsc_dex не идут), окно до перечитывания справочника сетей (записи с сетью не идут в сеть по умолчанию),
-предикаты (in_play, active_dexes, tag_of_dex выключенной — сеть по реестру, kinds_in, net_chain::affects);
-tests/core_net_chain_489_bsc.rs — справочник BSC байт в байт: «только bsc_dex» и «bsc_dex + выключенная arb_dex»;
-общие помощники — tests/t489_common. Фикстуры tests/core_cex_nets_431.rs, tests/core_registry_chains_430.rs — venue.enabled
-площадок DEX.
+Решение 489 (площадка DEX в сетях ядра только «в игре»: venue.enabled = да или её держат идущие сделки): записи
+tests/data/bingx_2026-11-21 (config_getall + symbols: 50 монет с адресом только в ARBITRUM, монеты BSC) и
+tests/data/mexc_2026-11-21 (config_getall: netWork «ARB»), работающее ядро. tests/core_net_chain_489.rs — инцидент
+21.11.2026 (arb_dex не включена, сделок нет: адреса ARBITRUM сняты, монет без сети с арбитрумным адресом и монет arbitrum
+нет, набор подписки bsc_dex чист; на коде базы та же проверка падала — условия в шапке теста), включённая arb_dex (монеты
+в сети arbitrum, набор arb_dex), окно до перечитывания справочника сетей, предикаты; tests/core_net_chain_489_held.rs —
+сеть держится сделкой (монеты в своей сети, присутствие биржи с данными сети, problem «… только идущие сделки», отказ
+исполнителя с этой причиной, USDT сети), сделка закрыта — сеть уходит, зеркальный случай (bsc_dex держится сделкой);
+tests/core_net_chain_489_bsc.rs — справочник BSC в четырёх состояниях arb_dex (один разбор записи — вход всех);
+tests/core_net_chain_489_mexc.rs — MEXC по своим сетям {BSC, ARB} и привязка к сети ядра. Помощники — tests/t489_common
+(mod.rs, book.rs). Фикстуры tests/core_cex_nets_431.rs, tests/core_registry_chains_430.rs — venue.enabled площадок DEX.

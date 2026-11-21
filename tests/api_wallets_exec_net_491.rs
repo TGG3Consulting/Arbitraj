@@ -208,7 +208,7 @@ fn chain<'a>(chains: &'a serde_json::Value, venue: &str) -> &'a serde_json::Valu
 async fn refusal_is_per_network_not_default_venue() {
     let st = state().await;
     // Кошелёк один на все сети (решение 432); отказ развёртывания считается по площадке, не зависит от разблокировки.
-    wallets::add(State(st.clone()), body("BingX", KEY))
+    let _ = wallets::add(State(st.clone()), body("BingX", KEY))
         .await
         .ok()
         .unwrap();

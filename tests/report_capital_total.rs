@@ -240,8 +240,9 @@ async fn capital_total_equals_results_and_edges() {
     let mut ne = deal(4, "ne");
     bought(&mut ne);
     (ne.step, ne.result_usd) = (Step::Closed, Some(ne.proceeds - ne.invested));
-    // Конец неизвестен — день по старту (как «Итоги сделок»): старт сегодня, чтобы сделка была в окне.
-    ne.started_at = Utc::now() - Duration::minutes(5);
+    // Конец неизвестен — день по старту (как «Итоги сделок»): старт = сейчас, сделка в окне «текущий день».
+    // Без сдвига назад: `now() - 5 мин` у границы полуночи попадал во вчера и выбрасывал сделку из окна (флак CI).
+    ne.started_at = Utc::now();
     arb::core::ledger::save(&core, &ne).await;
     // Открытая на продаже.
     let mut op = deal(6, "op");

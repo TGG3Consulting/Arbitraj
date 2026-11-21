@@ -355,7 +355,8 @@ mod tests {
     use super::*;
 
     /// Решение 472 (T472-08): шаг CURVE_ETH — только v5; у v1–v4 — причина «нужен исполнитель v5» (need_v5); у v5
-    /// сборки нет — check даёт причину, а не «селектор есть».
+    /// шаг есть. Решение 488: v5 собрана (contracts/out/) — check сверяет селектор по её коду (v5 ⊇ v4: селектор
+    /// tokenX() шага LB20 в v5 есть → None, а не ошибка «нет сборки»).
     #[test]
     fn curve_eth_only_v5() {
         assert_eq!(since(ExecKind::CurveEth), Version::V5);
@@ -365,7 +366,7 @@ mod tests {
         }
         assert!(step_absent(ExecKind::CurveEth, Version::V5).is_none());
         assert!(step_absent(ExecKind::Curve, Version::V1).is_none());
-        assert!(check(Version::V5, "tokenX()").is_some());
+        assert!(check(Version::V5, "tokenX()").is_none());
         assert_eq!(Version::parse("v5"), Some(Version::V5));
     }
 

@@ -8,6 +8,11 @@
 //! Кто вызывает: api/wallets.rs (list, map).
 //! От чего зависит: api/{state,wallets_dex}.rs, gateway (реестр), settings/accounts/, core/dex_account.rs.
 //! Решение 432: у кошелька — chains (исполнитель на площадке DEX каждой сети; одна площадка DEX — пусто).
+//! Решение 491: запрет развёртывания исполнителя и классы шага — ПО СЕТИ кошелька (строка chains[]), а не одним полем
+//! по площадке по умолчанию: dex_executor_refusal() и dex_executor_classes() уже считаются по своей сети площадки
+//! (venue.rs → live_proof::chain_of), раньше view вызывал их один раз на площадке по умолчанию (bsc_dex, chainId 56) и
+//! показывал статус BSC в блоке Arbitrum. Поле кошелька executor_deploy_refused / executor_v3_classes остаётся для
+//! случая одной площадки (chains пусто, экран прежний — решение 432).
 //! Настройки: нет.
 
 use serde_json::{Value, json};
@@ -100,7 +105,7 @@ pub async fn view(st: &AppState) -> Value {
             "rows": a.rows_of(&w.id),
             "open_deals": busy,
             "legacy": a.legacy().as_deref() == Some(w.id.as_str()),
-            "chains": by_chain(st, &w, &nets),
+            "chains": by_chain(st, &w, &nets).await,
         }));
     }
     let rows: Vec<Value> = rows(st)
@@ -124,28 +129,37 @@ pub async fn view(st: &AppState) -> Value {
 
 /// Решение 432: исполнитель кошелька на площадке DEX каждой сети (Wallet::at): площадка, сеть (dex.chain), адрес,
 /// версия, обёртка в исполнителе и dex.native_wrapped площадки, домашняя ли (прежние поля кошелька). Одна площадка
-/// DEX — пусто. Ошибок нет.
-fn by_chain(
+/// DEX — пусто. Решение 491: плюс запрет развёртывания (executor_deploy_refused) и классы шага (executor_v3_classes)
+/// ИМЕННО этой сети и этого кошелька — площадка сети на счёт кошелька (dex_for_at), её dex_executor_refusal() /
+/// dex_executor_classes() считаются по своей сети (chainId = dex.evm_chain_id площадки); площадки/кошелька нет — null /
+/// пусто. Ошибок не возвращает (сбой привязки — статус «неизвестен», как при закрытии кнопки по общему полю раньше).
+async fn by_chain(
     st: &AppState,
     w: &crate::settings::accounts::Wallet,
     nets: &[(crate::core::types::VenueId, Option<String>)],
 ) -> Vec<Value> {
-    nets.iter()
-        .map(|(v, chain)| {
-            let x = w.at(&v.0);
-            let at = crate::settings::read::At {
-                venue: Some(&v.0),
-                coin: None,
-            };
-            json!({
-                "venue": v.0,
-                "chain": chain,
-                "home": w.home() == v.0,
-                "executor": x.executor,
-                "executor_version": x.executor_version,
-                "executor_wrapped": x.executor_wrapped,
-                "native_wrapped": st.settings.text("dex.native_wrapped", at).ok(),
-            })
-        })
-        .collect()
+    let mut out = Vec::with_capacity(nets.len());
+    for (v, chain) in nets {
+        let x = w.at(&v.0);
+        let at = crate::settings::read::At {
+            venue: Some(&v.0),
+            coin: None,
+        };
+        let (refused, classes) = match super::wallets_dex::dex_for_at(st, &w.id, Some(&v.0)).await {
+            Ok(venue) => (venue.dex_executor_refusal(), venue.dex_executor_classes()),
+            Err(_) => (None, Vec::new()),
+        };
+        out.push(json!({
+            "venue": v.0,
+            "chain": chain,
+            "home": w.home() == v.0,
+            "executor": x.executor,
+            "executor_version": x.executor_version,
+            "executor_wrapped": x.executor_wrapped,
+            "native_wrapped": st.settings.text("dex.native_wrapped", at).ok(),
+            "executor_deploy_refused": refused,
+            "executor_v3_classes": classes,
+        }));
+    }
+    out
 }

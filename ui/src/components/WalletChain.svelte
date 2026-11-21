@@ -6,6 +6,9 @@
     проверки» — PUT /api/wallets/{id}/executor?venue=, «Развернуть исполнитель» — ExecutorDeploy с площадкой DEX сети)
     — у площадки DEX этой сети. Показывается, только когда площадок DEX две и больше (поле chains кошелька); одна —
     WalletRow прежний.
+    Решение 491: запрет развёртывания и классы шага исполнителя — из строки сети c (c.executor_deploy_refused,
+    c.executor_v3_classes), а не из общего поля кошелька (оно по площадке по умолчанию): иначе в блоке Arbitrum
+    кнопка «Развернуть исполнитель» закрывалась/открывалась по статусу BSC.
   Кто вызывает: components/WalletRow.svelte.
   От чего зависит: lib/api.js, lib/flight.js, components/{CheckConnection,ExecutorDeploy,ErrorText}.svelte.
   Настройки: dex.chain, dex.native_wrapped (только показ).
@@ -68,7 +71,7 @@
   {#if c.executor}
     <p class={nativeOk ? 'ok' : 'warn-text'}>Версия: {#if nativeOk}{c.executor_version} — нативная монета идёт через исполнитель (обёртка <code>{c.executor_wrapped}</code>){:else if modern}{c.executor_version}, но обёртка <code>{c.executor_wrapped ?? 'не прочитана'}</code> ≠ dex.native_wrapped <code>{c.native_wrapped ?? 'не задана'}</code>{:else if c.executor_version === 'v1'}v1 — переразверните{:else}не сверена — нажмите «Проверить подключение» исполнителя{/if}</p>
   {/if}
-  <ExecutorDeploy venue={c.venue} wallet={w.id} executor={c.executor ?? null} refused={w.executor_deploy_refused} classes={w.executor_v3_classes ?? []} ondone={onchange} />
+  <ExecutorDeploy venue={c.venue} wallet={w.id} executor={c.executor ?? null} refused={c.executor_deploy_refused} classes={c.executor_v3_classes ?? []} ondone={onchange} />
   <form class="inline" onsubmit={(e) => { e.preventDefault(); setExec(exec); exec = ''; }}>
     <input bind:value={exec} placeholder="адрес уже развёрнутого исполнителя в этой сети (0x…)" />
     <button disabled={!exec}>Записать после проверки</button>

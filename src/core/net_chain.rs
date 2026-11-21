@@ -6,7 +6,7 @@
 //! core/chain.rs); запись своей сети, у которой площадки DEX нет, — без адреса (как до решения 431: адрес был только у
 //! BSC). Так справочник BSC остаётся байт в байт прежним, даже если имя сети Arbitrum у биржи уже задано, а адреса
 //! разных сетей не склеиваются (один адрес в BSC и в Arbitrum — разные монеты).
-//! Решение 489: «площадка DEX этой сети в боте есть» = площадка DEX В ИГРЕ (core/chain.rs active_dexes: зарегистрирована и
+//! Решение 489: «площадка DEX этой сети в боте есть» = площадка DEX В ИГРЕ (core/chain_play.rs active_dexes: зарегистрирована и
 //! venue.enabled = да или её держат идущие сделки — решение 196) — то же понятие, что у групп справочника
 //! (registry_chains::groups). Выключенная площадка без сделок сети не даёт: адрес записи её сети снимается (инцидент
 //! 21.11.2026 — арбитрумные адреса без сети попали в подписку DEX BSC). Изменение venue.enabled площадки DEX, dex.chain,
@@ -15,7 +15,7 @@
 //! его конца — registry_sync.rs fresh_left).
 //! Кто вызывает: core/registry_sync.rs (справочник биржи), core/precheck.rs (справочник одной монеты),
 //! core/deposit_min_ask.rs (минимум депозита) — перед native::map (prepare); affects — core/rebuild.rs (watch_settings).
-//! От чего зависит: chain.rs, native.rs, gateway/own_nets.rs, settings, engine.rs.
+//! От чего зависит: chain.rs, chain_play.rs, native.rs, gateway/own_nets.rs, settings, engine.rs.
 //! Настройки: venue.bsc_network, venue.arbitrum_network (по бирже); dex.chain, dex.default_chain, venue.enabled (площадки
 //! DEX; через chain.rs).
 
@@ -45,7 +45,7 @@ pub fn others(core: &Core, v: &VenueId) -> Vec<(String, Option<ChainId>)> {
         return vec![];
     }
     // Решение 489: сети — только площадок DEX в игре (то же понятие, что у сборки справочника).
-    let tags: Vec<ChainId> = super::chain::active_dexes(core)
+    let tags: Vec<ChainId> = super::chain_play::active_dexes(core)
         .iter()
         .filter_map(|d| super::chain::tag_of_dex(core, d).ok().flatten())
         .collect();

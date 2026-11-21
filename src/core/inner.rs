@@ -73,6 +73,8 @@ pub struct Inner {
     pub spreads: RwLock<HashMap<Direction, SpreadView>>,
     /// Подписки площадок: на что подписана, идёт ли подписка, причина сбоя (sub_state.rs).
     pub subs: Mutex<super::sub_state::SubState>,
+    /// Решение 489: выключенные площадки DEX, чью сеть сейчас держат сделки (net_hold.rs) — один толчок на отпускании.
+    pub net_held: Mutex<HashSet<VenueId>>,
     /// Решение 196: время последнего события рынка (стакан, пул) по площадке — живость потока (feed_live.rs).
     pub feed_seen: super::feed_live::Seen,
     /// Монеты, по которым идёт пересчёт тика, и площадки, приславшие тик во время пересчёта или сна (tick_plan.rs).
@@ -266,6 +268,7 @@ impl Inner {
             vol: Mutex::default(),
             spreads: RwLock::default(),
             subs: Mutex::default(),
+            net_held: Mutex::default(),
             feed_seen: Default::default(),
             ticking: Mutex::default(),
             ripen: Mutex::default(),

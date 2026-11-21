@@ -7,12 +7,9 @@
 //! сделка RWA на bitget 06.11). Последняя такая сделка закрылась — следующая пересборка снимает подписку.
 //! Сделка держит поток, пока открыта (Deal::is_open) или остановлена с монетами (Halted, qty > 0 — по ней жмут
 //! «Продать сейчас»), и площадка — её покупка, продажа или место монет сейчас.
-//! Решение 489: то же условие держит СЕТЬ выключенной площадки DEX (chain::in_play через holds_any): записи сети, группа
-//! справочника, USDT сети; последняя такая сделка ушла с пути — on_saved толкает перечитывание справочника сетей бирж.
 //! Кто вызывает: core/subscribe.rs (sync — список выключенной площадки), core/feed_live.rs (on_disabled), core/ledger.rs
-//! (on_saved), core/chain.rs (holds_any).
-//! От чего зависит: engine.rs, deal.rs, sub_state.rs, venue_ticker.rs (тикер площадки, решение 211), daily_venue.rs,
-//! registry_sync.rs (venue.enabled).
+//! (on_saved); holds — core/net_hold.rs (решение 489: сеть выключенной площадки DEX).
+//! От чего зависит: engine.rs, deal.rs, sub_state.rs, venue_ticker.rs (тикер площадки, решение 211).
 //! Настройки: нет (venue.enabled — через вызывающих).
 
 use crate::core::types::{Asset, VenueId};
@@ -21,8 +18,9 @@ use crate::storage::journal::Level;
 use super::deal::{Deal, Step};
 use super::engine::{Core, lk};
 
-/// Держит ли сделка поток площадки. Ошибок нет.
-fn holds(d: &Deal, venue: &VenueId) -> bool {
+/// Держит ли сделка поток площадки. Решение 489: на этом же условии (и на идущем возврате USDT) сеть выключенной
+/// площадки DEX держит core/net_hold.rs. Ошибок нет.
+pub(super) fn holds(d: &Deal, venue: &VenueId) -> bool {
     let live = d.is_open() || (d.step == Step::Halted && !d.qty.is_zero());
     let on = &d.direction.buy_on == venue || &d.direction.sell_on == venue || &d.at == venue;
     live && on
@@ -37,13 +35,6 @@ pub fn holders(core: &Core, venue: &VenueId) -> Vec<(String, Asset)> {
         .collect();
     v.sort_by(|a, b| a.0.cmp(&b.0));
     v
-}
-
-/// Что делает: решение 489 — держит ли хоть одна сделка площадку (то же условие holds, что держит поток). Без копий —
-/// на нём chain::in_play (сеть выключенной площадки DEX держится, пока по ней идут сделки). Принимает: ядро, площадку.
-/// Возвращает: да/нет. Ошибок нет. Замок: deals (коротко, не вложенно).
-pub fn holds_any(core: &Core, venue: &VenueId) -> bool {
-    lk(&core.inner.deals).values().any(|d| holds(d, venue))
 }
 
 /// Список подписки выключенной площадки: пусто — сделок нет (подписка снимается); есть сделки — текущая подписка и
@@ -97,27 +88,15 @@ pub async fn mark(core: &Core, venue: &VenueId, held: bool) {
 
 /// Сделка сохранена (ledger.rs): больше не держит поток, а её площадка выключена и держит поток — толчок пересборки,
 /// чтобы снять подписку сразу, а не на следующем случайном толчке. Ошибок нет.
-/// Решение 489: последняя сделка выключенной площадки DEX ушла с пути — сеть площадки больше не держится: справочник
-/// сетей бирж перечитывается (адреса сети снимаются) и справочник пересобирается.
 pub fn on_saved(core: &Core, d: &Deal) {
     let venues = [&d.direction.buy_on, &d.direction.sell_on, &d.at];
     let held = {
         let subs = lk(&core.inner.subs);
         venues.iter().any(|v| subs.is_held(v) && !holds(d, v))
     };
-    let net = venues.iter().any(|v| !holds(d, v) && released(core, v));
-    if net {
-        core.inner.kick_networks.notify_waiters();
-    }
-    if held || net {
+    if held {
         core.request_rebuild();
     }
-}
-
-/// Решение 489: площадка — DEX реестра, выключена (venue.enabled) и сделок, которые её держат, нет. Ошибок нет.
-fn released(core: &Core, v: &VenueId) -> bool {
-    let dex = super::daily_venue::is_dex(core, &v.0);
-    dex && !super::registry_sync::enabled(core, v) && !holds_any(core, v)
 }
 
 /// Выключение площадки (venue.enabled да → нет): сделок нет — запись «поток снят»; есть — пересборка оставит поток,

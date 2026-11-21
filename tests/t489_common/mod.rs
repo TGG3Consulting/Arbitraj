@@ -5,10 +5,10 @@
 //! справочник сетей BingX из записанного ответа (папка записи — параметр: bingx_2026-10-24 или bingx_2026-11-21,
 //! config_getall.json, разбор адаптера по своим сетям); справочник пар BingX из записанного symbols.json — событие
 //! SpotPairs, как его шлёт адаптер; адреса, которые BingX даёт только в сети ARBITRUM; идущая сделка через arb_dex
-//! (решение 196: держит площадку); набор подписки DEX по тому же условию, что core/subscribe.rs wanted.
-//! Кто вызывает: tests/core_net_chain_489.rs, tests/core_net_chain_489_bsc.rs, tests/core_net_chain_489_held.rs.
-//! От чего зависит: arb::core (chain, deal, feed_hold, net_chain, subscribe), arb::venues::bingx, arb::gateway::own_nets,
-//! t198_common. Моков нет.
+//! (решение 196: держит площадку), её закрытие и возврат USDT — deals.rs; справочник монет и наборы подписки — book.rs.
+//! Кто вызывает: tests/core_net_chain_489.rs, tests/core_net_chain_489_bsc.rs, tests/core_net_chain_489_held.rs,
+//! tests/core_net_chain_489_mexc.rs.
+//! От чего зависит: arb::core::net_chain, arb::venues::bingx, arb::gateway::own_nets, t198_common. Моков нет.
 
 #![allow(dead_code)]
 
@@ -17,12 +17,10 @@ use std::sync::Arc;
 
 use alloy_primitives::Address;
 use chrono::DateTime;
-use rust_decimal::Decimal;
 use serde_json::{Value, json};
 
 use arb::core::Core;
-use arb::core::deal::{Deal, Step};
-use arb::core::types::{Asset, ChainId, CoinNetworkInfo, Direction, VenueId};
+use arb::core::types::{ChainId, CoinNetworkInfo, VenueId};
 use arb::gateway::contract::VenueKind;
 use arb::gateway::own_nets;
 use arb::settings::read::At;
@@ -34,6 +32,7 @@ use arb::venues::bingx::{symbols, wallet};
 mod t198_common;
 
 pub mod book;
+pub mod deals;
 
 /// Запись 2026-10-24: в сети ARBITRUM у BingX только USDT (котируемая монета, в справочник монет не входит).
 pub const OLD: &str = "bingx_2026-10-24";
@@ -159,31 +158,4 @@ pub fn feed(core: &Core, dir: &str, raw: Vec<CoinNetworkInfo>) -> Vec<CoinNetwor
     let ev = Snapshot::build(&s, &assets).event(v("bingx"), at);
     core.inner.market.write().unwrap().apply(ev);
     list
-}
-
-/// Идущая сделка bingx → `dex` монеты сети `chain` (шаг «покупка» — открыта): по решению 196 держит площадку `dex`.
-/// Ошибок нет.
-pub fn hold(core: &Core, id: &str, dex: &str, chain: Option<ChainId>) {
-    let dir = Direction {
-        asset: Asset {
-            chain,
-            ticker: "USDT".into(),
-            contract: None,
-        },
-        buy_on: v("bingx"),
-        sell_on: v(dex),
-    };
-    let d = Deal::new(id.into(), dir, json!({}), Decimal::ZERO);
-    core.inner.deals.lock().unwrap().insert(id.into(), d);
-}
-
-/// Сделка `id` закрыта (шаг Closed) и сохранена — как ledger.rs: запись в учёт памяти, затем feed_hold::on_saved.
-/// Паника — сделки нет.
-pub fn close(core: &Core, id: &str) {
-    let mut deals = core.inner.deals.lock().unwrap();
-    let d = deals.get_mut(id).unwrap();
-    d.step = Step::Closed;
-    let rec = d.clone();
-    drop(deals);
-    arb::core::feed_hold::on_saved(core, &rec);
 }

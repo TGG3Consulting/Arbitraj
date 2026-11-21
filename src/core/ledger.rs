@@ -9,7 +9,7 @@
 //! deal.closed ждёт (deal_closed.rs) — уходит из usdt_return_state::set с фактом после возврата.
 //! Кто вызывает: executor.rs, transfers.rs, stuck.rs, manual.rs; engine.rs (load при запуске — ledger_load.rs).
 //! Пауза направления — route_pause.rs (решение 293: та же у отклонённой продажи на бирже).
-//! От чего зависит: window_deal.rs (решение 245), deal.rs, deal_closed.rs (текст и отправка deal.closed, решения 216, 236, 237), deal_return_cost.rs, persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs, usdt_return_deal.rs.
+//! От чего зависит: window_deal.rs (решение 245), net_hold.rs (решение 489), deal.rs, deal_closed.rs (текст и отправка deal.closed, решения 216, 236, 237), deal_return_cost.rs, persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs, usdt_return_deal.rs.
 //! Решение 266 (ответ Тиграна 13.11): пауза направления не ставится, когда сделка закрыта отказом биржи по ордеру
 //! покупки из-за нехватки средств (finish_paused, решает executor.rs buy_refusal_pauses); прочие закрытия — как раньше.
 //! Решение 394 (t179, докупка): удачная сделка группы докупки (Closed, продана на площадке плана без перегонов, итог ≥ 0)
@@ -88,6 +88,8 @@ pub async fn save(core: &Core, deal: &Deal) {
         core.inner.live.send(CoreEvent::Deal(v));
     }
     super::feed_hold::on_saved(core, rec); // Решение 196: сделка закрылась — снять поток выключенной площадки.
+    // Решение 489: сеть выключенной площадки DEX отпущена (сделок и возвратов USDT по ней нет) — один толчок.
+    super::net_hold::on_saved(core);
     // Решение 394: сделка группы докупки — след её продажи (ride_trail.rs) и общий возврат, если она ушла с пути
     // последней из идущих (coin_group.rs); без группы — ничего.
     if rec.group.is_some() {

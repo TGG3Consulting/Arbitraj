@@ -21,7 +21,8 @@ use arb::core::registry::CoinEntry;
 use arb::core::registry_build::{Networks, Part, usdt_address};
 use arb::core::types::{CoinNetworkInfo, VenueId};
 use arb::gateway::contract::VenueKind;
-use t489_common::{NEW, arb_chain, feed, hold, raw, start, v};
+use t489_common::deals::hold;
+use t489_common::{NEW, arb_chain, feed, raw, start, v};
 
 /// Монеты справочника без сети: (рабочие, неподвижные) по входам, как их собирает core/rebuild.rs: включённые
 /// площадки, котируемая монета и имя сети BSC биржи, USDT из справочника сетей. Ошибок нет.

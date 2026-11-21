@@ -7,17 +7,13 @@
 //! `chain: Some(id)`. Площадка DEX сети — dex_of (одна площадка на сеть). Одна площадка DEX — ответы без чтения
 //! настроек, как до решения 430 (поведение BSC прежнее).
 //! Решение 489: два понятия — «DEX реестра» (dexes: зарегистрирована; сеть площадки и сеть по умолчанию, учёт и история)
-//! и «DEX в игре» (in_play, active_dexes: зарегистрирована и venue.enabled = да или её держат идущие сделки — решение
-//! 196, feed_hold.rs holds_any; какие сети есть у ядра — net_chain.rs, registry_chains::groups). Пока площадка сети
-//! выключена и сделок по ней нет, этой сети для ядра нет; держится только сделками — новых сделок по сети нет
-//! (rebuild_build.rs).
+//! и «DEX в игре» (core/chain_play.rs: какие сети есть у ядра).
 //! Кто вызывает: core/coin_account.rs, core/gas_ticker.rs, core/native.rs, core/balances_cache.rs, core/usdt_sources.rs,
 //! core/drawdown_fact.rs, core/day_pair.rs, core/subscribe.rs, core/registry_build.rs, core/rebuild*.rs, core/transfers.rs,
-//! core/dirctx.rs, core/transfer_tax.rs, core/net_chain.rs и core/registry_chains.rs (in_play, active_dexes), report/*,
-//! api/wallets_dex.rs; тесты tests/core_chain_416.rs, core_chain_430.rs, core_net_chain_489*.rs.
-//! От чего зависит: settings (store, read), core/types (Asset, ChainId, VenueId), engine.rs (виды площадок),
-//! registry_sync.rs (venue.enabled), feed_hold.rs (holds_any).
-//! Настройки: dex.chain (по площадке DEX), dex.default_chain (вся система; только при нескольких сетях), venue.enabled.
+//! core/dirctx.rs, core/transfer_tax.rs, core/chain_play.rs, report/*, api/wallets_dex.rs; тесты tests/core_chain_416.rs,
+//! core_chain_430.rs, core_net_chain_489*.rs.
+//! От чего зависит: settings (store, read), core/types (Asset, ChainId, VenueId), engine.rs (виды площадок).
+//! Настройки: dex.chain (по площадке DEX), dex.default_chain (вся система; только при нескольких сетях).
 
 use crate::core::types::{Asset, ChainId, Direction, VenueId};
 use crate::gateway::contract::VenueKind;
@@ -94,36 +90,12 @@ pub fn tag(s: &Store, dex: &[VenueId], c: &ChainId) -> Result<Option<ChainId>, S
 
 /// Что делает: площадки DEX РЕЕСТРА (решение 489, «DEX реестра»; venue.enabled не смотрится) — на нём сеть площадки и
 /// сеть по умолчанию: выключенная площадка знает свою сеть и не становится сетью по умолчанию. Какие сети в игре —
-/// active_dexes. Принимает: ядро. Ошибок нет.
+/// chain_play.rs (active_dexes). Принимает: ядро. Ошибок нет.
 pub fn dexes(core: &Core) -> Vec<VenueId> {
     rd(&core.inner.kinds)
         .iter()
         .filter(|(_, k)| *k == VenueKind::Dex)
         .map(|(v, _)| v.clone())
-        .collect()
-}
-
-/// Что делает: решение 489 — площадка DEX «в игре»: в реестре ядра вида DEX и включена (venue.enabled = да) или её держат
-/// идущие сделки (feed_hold::holds_any — то же условие, что держит поток по решению 196). Только площадка в игре даёт
-/// ядру свою сеть: записи сетей бирж (net_chain.rs) и группы справочника (registry_chains::groups). Принимает: ядро,
-/// площадку. Ошибок нет (не задано — не в игре). Замок: kinds, затем deals — коротко, не вложенно.
-pub fn in_play(core: &Core, v: &VenueId) -> bool {
-    let dex = rd(&core.inner.kinds)
-        .iter()
-        .any(|(id, k)| id == v && *k == VenueKind::Dex);
-    dex && live(core, v)
-}
-
-/// Включена ли площадка или её держат идущие сделки (решения 196, 489). Ошибок нет.
-fn live(core: &Core, v: &VenueId) -> bool {
-    super::registry_sync::enabled(core, v) || super::feed_hold::holds_any(core, v)
-}
-
-/// Что делает: решение 489 — площадки DEX в игре (in_play), по порядку реестра. Принимает: ядро. Ошибок нет.
-pub fn active_dexes(core: &Core) -> Vec<VenueId> {
-    dexes(core)
-        .into_iter()
-        .filter(|v| live(core, v))
         .collect()
 }
 
@@ -172,7 +144,7 @@ pub fn default_dex(core: &Core) -> Option<VenueId> {
 
 /// Что делает: сеть площадки DEX в каноническом виде (None — сеть по умолчанию). Площадок DEX в реестре не больше одной —
 /// None без чтения настроек. Решение 489: по реестру (dexes) — выключенная площадка тоже знает свою сеть (её сделки и учёт);
-/// в игре ли площадка — in_play. Принимает: ядро, площадку DEX. Ошибки: как у chain_at / dex_chain.
+/// в игре ли площадка — chain_play::in_play. Принимает: ядро, площадку DEX. Ошибки: как у chain_at / dex_chain.
 pub fn tag_of_dex(core: &Core, v: &VenueId) -> Result<Option<ChainId>, String> {
     let dex = dexes(core);
     // Площадок DEX в реестре не больше одной — сеть одна, это сеть по умолчанию (как до решения 430). Реестр бывает пуст

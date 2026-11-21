@@ -47,11 +47,11 @@ def write(out, d):
                               "sim_errors": rec["sim_errors"]})
     _dump(out, "raw_rpc.json", d["log"])
     lines = [
-        f"# {os.path.basename(out)} — живая проверка ArbExecutor v4 на Arbitrum One (eth_simulateV1, свой узел)", "",
+        f"# {os.path.basename(out)} — живая проверка ArbExecutor {d.get('label', 'v4')} на Arbitrum One (eth_simulateV1, свой узел)", "",
         "Только чтение: eth_call / eth_getLogs / eth_getCode / eth_getBalance / eth_simulateV1. Ничего не подписано и "
-        "не отправлено, ключи не использовались. Скрипт — tools/arbitrum_record/exec_v4_live.py (решения 400, 459).", "",
+        f"не отправлено, ключи не использовались. Скрипт — tools/arbitrum_record/{d.get('script', 'exec_v4_live.py')} (решения 400, 459).", "",
         "## Параметры",
-        f"- Код: contracts/out/ArbExecutor.bin-runtime (сборка v4, решение 457)",
+        f"- Код: contracts/out/ArbExecutor.bin-runtime ({d.get('build', 'сборка v4, решение 457')})",
         f"- chainId: {d['chain_id']} (Arbitrum One; запись судит кошельки только этой сети — TASKS T457-02)",
         f"- sha256 симулированного bin-runtime: {d['sha']} (совпал со строкой ArbExecutor.bin-runtime в "
         "ArbExecutor.sha256)",

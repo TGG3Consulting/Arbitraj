@@ -4,7 +4,8 @@
 //!     venue.arbitrum_network, gateway/own_nets.rs) — адрес и у сети Arbitrum: BingX «ARBITRUM», KuCoin «arbitrum»,
 //!     Gate «ARBEVM» (USDT Arbitrum 0xFd08…Cbb9, USDT BSC 0x55d3…7955);
 //! (б) ядро (core/net_chain.rs): площадки DEX Arbitrum нет — адрес записи Arbitrum снимается (справочник BSC прежний);
-//!     есть — записи Arbitrum получают сеть «arbitrum», BSC — без сети; USDT по сети (usdt_address_in) не склеивается;
+//!     есть и включена (решение 489: venue.enabled) — записи Arbitrum получают сеть «arbitrum», BSC — без сети; USDT
+//!     по сети (usdt_address_in) не склеивается;
 //! (в) имя сети перевода у биржи для сети Arbitrum — venue.arbitrum_network (core/transfers.rs own_name).
 //! Записи: tests/data/bingx_2026-10-24/config_getall.json, tests/data/cex_samples_2026_11_04/kucoin_currencies_v3.json,
 //! tests/data/cex_samples_2026_11_04/gate_spot_currencies.json. Ядро — t198_common (SQLite во временной папке).
@@ -191,6 +192,13 @@ async fn core_tags_records_by_chain() {
     set(&s, "dex.chain", Scope::Venue("bsc_dex".into()), "bsc").await;
     set(&s, "dex.chain", Scope::Venue("arb_dex".into()), "arbitrum").await;
     set(&s, "dex.default_chain", Scope::Global, "bsc").await;
+    // Решение 489: сеть даёт только площадка DEX в игре (venue.enabled = да).
+    for d in ["bsc_dex", "arb_dex"] {
+        let on = Some(json!(true));
+        s.set("venue.enabled", Scope::Venue(d.into()), on, "тест")
+            .await
+            .unwrap();
+    }
     let arb = ChainId("arbitrum".into());
     let two = arb::core::net_chain::tag(&core, &v("bingx"), raw);
     let usdt_arb = two

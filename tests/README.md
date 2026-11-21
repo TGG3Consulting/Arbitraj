@@ -1238,3 +1238,13 @@ _pausedAssets = isPaused(монета) у реализаций с геттеро
 (без записи); tests/arbitrum_basin_live.rs — #[ignore] до записи tools/arbitrum_record/basin.py
 (tests/data/arbitrum_basin_<дата>/): состояние и проверка скважины кодом бота, наш выход = getSwapOut побайтно и =
 симуляции swapFrom (откат ↔ None).
+
+Решение 489 (площадка DEX в сетях ядра только при venue.enabled = да): tests/core_net_chain_489.rs — на записанном
+справочнике сетей BingX (config_getall.json, сеть ARBITRUM с адресами) и справочнике пар (symbols.json), работающее ядро:
+инцидент 21.11.2026 (arb_dex зарегистрирована, не включена — адреса ARBITRUM сняты, в справочнике и наборе подписки bsc_dex
+нет монет без сети с арбитрумным адресом, монет arbitrum нет, группа одна), включённая arb_dex (записи и монеты сети
+arbitrum, в набор bsc_dex не идут), окно до перечитывания справочника сетей (записи с сетью не идут в сеть по умолчанию),
+предикаты (in_play, active_dexes, tag_of_dex выключенной — сеть по реестру, kinds_in, net_chain::affects);
+tests/core_net_chain_489_bsc.rs — справочник BSC байт в байт: «только bsc_dex» и «bsc_dex + выключенная arb_dex»;
+общие помощники — tests/t489_common. Фикстуры tests/core_cex_nets_431.rs, tests/core_registry_chains_430.rs — venue.enabled
+площадок DEX.

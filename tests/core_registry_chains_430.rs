@@ -6,7 +6,8 @@
 //!     Arbitrum адреса нет (биржи отдадут адреса по сетям — шаг 3);
 //! (3) записи той же биржи по сети ARBITRUM с сетью «arbitrum» — USDT Arbitrum из ответа BingX, USDT BSC прежний;
 //! (4) виды площадок сети (chain::kinds_in): биржи + DEX только этой сети.
-//! Ядро — t198_common (SQLite во временной папке; bingx, mexc — биржи, bsc_dex — DEX).
+//! Ядро — t198_common (SQLite во временной папке; bingx, mexc — биржи, bsc_dex — DEX); bsc_dex и arb_dex включены
+//! (решение 489: группы — только площадки DEX в игре).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::{chain, registry_build, registry_chains}, arb::venues::bingx::wallet. Моков нет.
 
@@ -52,6 +53,13 @@ async fn set(s: &arb::settings::store::Store, name: &str, scope: Scope, val: &st
 async fn registry_by_chain() {
     let core = t198_common::start("registry-chains-430").await;
     let s = core.inner.deps.settings.clone();
+    // Решение 489: в группы справочника входят только площадки DEX в игре (venue.enabled = да).
+    for d in ["bsc_dex", "arb_dex"] {
+        let on = Some(json!(true));
+        s.set("venue.enabled", Scope::Venue(d.into()), on, "тест")
+            .await
+            .unwrap();
+    }
     let one = registry_chains::groups(&core, &chain::dexes(&core));
     assert_eq!(
         one,

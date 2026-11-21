@@ -5,12 +5,14 @@
 //! нативная монета. Монете справочника ставится сеть группы — DEX-присутствие получают только площадки DEX её сети,
 //! направления несут сеть в монете. Одна группа (одна площадка DEX или все в одной сети) — входы прежние, без копий
 //! справочника сетей (решение 129): поведение BSC как раньше.
+//! Решение 489: в группы входят только площадки DEX в игре (core/chain.rs in_play: зарегистрирована и venue.enabled = да) —
+//! то же понятие, что у привязки записей к сети (net_chain.rs): выключенная площадка сети группы не даёт.
 //! USDT сети по умолчанию — Inner.usdt (как раньше), других сетей — Inner.usdt_other (по справочникам бирж этой сети;
 //! биржи отдают адреса по сетям — шаг 3 плана).
 //! Кто вызывает: core/rebuild_build.rs (сборка), core/rebuild.rs (USDT других сетей), core/subscribe.rs (USDT площадки
 //! DEX), core/transfer_tax.rs.
 //! От чего зависит: core/chain.rs, registry_build.rs (Networks, usdt_address), engine.rs.
-//! Настройки: dex.chain, dex.default_chain (через chain.rs).
+//! Настройки: dex.chain, dex.default_chain, venue.enabled (через chain.rs).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -33,6 +35,7 @@ pub struct Group {
 /// без сети (справочник сетей бирж до шага 3) собираются в ней. Площадка DEX, чью сеть не прочитать (dex.chain,
 /// dex.default_chain при двух сетях), ни в одну группу не входит — DEX-присутствия у неё нет (причина — в журнале
 /// подписки и в «Проверить подключение»). Одна площадка DEX — группа по умолчанию с ней, без чтения настроек.
+/// Решение 489: площадка не в игре (выключена, chain::in_play) ни в одну группу не входит, кто бы её ни передал.
 /// Принимает: ядро, площадки DEX (по порядку реестра). Возвращает: группы. Ошибок нет.
 pub fn groups(core: &Core, dex: &[VenueId]) -> Vec<Group> {
     let mut out = vec![Group {
@@ -40,6 +43,9 @@ pub fn groups(core: &Core, dex: &[VenueId]) -> Vec<Group> {
         dex: vec![],
     }];
     for v in dex {
+        if !super::chain::in_play(core, v) {
+            continue;
+        }
         let Ok(tag) = super::chain::tag_of_dex(core, v) else {
             continue;
         };

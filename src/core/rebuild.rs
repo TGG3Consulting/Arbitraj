@@ -61,8 +61,11 @@ pub async fn watch_settings(core: Core) {
         super::coin_book::on_setting(&c.name);
         // Решение 196: биржу включили — поднять поток, если молчит; выключили — держать до закрытия сделок.
         super::feed_live::on_setting(&core, &c);
-        // Решение 431: имена своих сетей биржи (gateway/own_nets.rs) — тоже: адрес по сети и привязка к сети ядра.
-        if super::native::affects(&c.name) || crate::gateway::own_nets::affects(&c.name) {
+        // Решения 431, 489: имена своих сетей биржи (own_nets.rs) и площадки DEX сетей в игре (net_chain::affects) — тоже.
+        if super::native::affects(&c.name)
+            || crate::gateway::own_nets::affects(&c.name)
+            || super::net_chain::affects(&core, &c)
+        {
             core.inner.kick_networks.notify_waiters();
         }
         if retry_on(&c.name, lk(&core.inner.subs).any_failed()) {

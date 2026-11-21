@@ -6,20 +6,28 @@
 //! core/chain.rs); запись своей сети, у которой площадки DEX нет, — без адреса (как до решения 431: адрес был только у
 //! BSC). Так справочник BSC остаётся байт в байт прежним, даже если имя сети Arbitrum у биржи уже задано, а адреса
 //! разных сетей не склеиваются (один адрес в BSC и в Arbitrum — разные монеты).
+//! Решение 489: «площадка DEX этой сети в боте есть» = площадка DEX В ИГРЕ (core/chain.rs active_dexes: зарегистрирована и
+//! venue.enabled = да) — то же понятие, что у сборки справочника (rebuild.rs, registry_chains::groups). Зарегистрированная,
+//! но выключенная площадка сети сети не даёт: адрес записи её сети снимается (инцидент 21.11.2026 — арбитрумные адреса
+//! без сети попали в подписку DEX BSC). Изменение venue.enabled площадки DEX, dex.chain, dex.default_chain — справочник
+//! сетей бирж перечитывается сразу (affects, rebuild.rs watch_settings): привязка к сети пишется при получении.
 //! Кто вызывает: core/registry_sync.rs (справочник биржи), core/precheck.rs (справочник одной монеты),
-//! core/deposit_min_ask.rs (минимум депозита) — перед native::map (prepare).
+//! core/deposit_min_ask.rs (минимум депозита) — перед native::map (prepare); affects — core/rebuild.rs (watch_settings).
 //! От чего зависит: chain.rs, native.rs, gateway/own_nets.rs, settings, engine.rs.
-//! Настройки: venue.bsc_network, venue.arbitrum_network (по бирже); dex.chain, dex.default_chain (через chain.rs).
+//! Настройки: venue.bsc_network, venue.arbitrum_network (по бирже); dex.chain, dex.default_chain, venue.enabled (площадки
+//! DEX; через chain.rs).
 
 use crate::core::types::{ChainId, CoinNetworkInfo, VenueId};
 use crate::gateway::own_nets;
+use crate::settings::live::Change;
 use crate::settings::read::At;
+use crate::settings::scope::Scope;
 
 use super::engine::Core;
 
-/// Что делает: своя сеть биржи не BSC — (имя сети у биржи, сеть ядра или None — площадки DEX этой сети в боте нет).
-/// Принимает: ядро, биржу. Возвращает: список (пусто — других своих сетей у биржи не задано). Ошибок нет: площадка DEX,
-/// чью сеть не прочитать, не считается.
+/// Что делает: своя сеть биржи не BSC — (имя сети у биржи, сеть ядра или None — площадки DEX этой сети в игре нет,
+/// решение 489). Принимает: ядро, биржу. Возвращает: список (пусто — других своих сетей у биржи не задано). Ошибок нет:
+/// площадка DEX, чью сеть не прочитать, и выключенная площадка (venue.enabled) не считаются.
 pub fn others(core: &Core, v: &VenueId) -> Vec<(String, Option<ChainId>)> {
     let s = &core.inner.deps.settings;
     let at = At {
@@ -34,7 +42,8 @@ pub fn others(core: &Core, v: &VenueId) -> Vec<(String, Option<ChainId>)> {
     if names.is_empty() {
         return vec![];
     }
-    let tags: Vec<ChainId> = super::chain::dexes(core)
+    // Решение 489: сети — только площадок DEX в игре (то же понятие, что у сборки справочника).
+    let tags: Vec<ChainId> = super::chain::active_dexes(core)
         .iter()
         .filter_map(|d| super::chain::tag_of_dex(core, d).ok().flatten())
         .collect();
@@ -80,4 +89,19 @@ pub fn tag(core: &Core, v: &VenueId, mut list: Vec<CoinNetworkInfo>) -> Vec<Coin
 /// Принимает: ядро, биржу, справочник из её API. Возвращает: список. Ошибок нет.
 pub fn prepare(core: &Core, v: &VenueId, list: Vec<CoinNetworkInfo>) -> Vec<CoinNetworkInfo> {
     super::native::map(core, v, tag(core, v, list))
+}
+
+/// Что делает: решение 489 — меняет ли настройка привязку записей к сети ядра (тогда справочник сетей бирж перечитывается
+/// сразу): venue.enabled площадки DEX (или всей системы), dex.chain, dex.default_chain. Принимает: ядро, изменение.
+/// Возвращает: да/нет. Ошибок нет.
+pub fn affects(core: &Core, c: &Change) -> bool {
+    match c.name.as_str() {
+        "dex.chain" | super::chain::DEFAULT => true,
+        "venue.enabled" => match &c.scope {
+            Scope::Venue(id) => super::chain::dexes(core).iter().any(|v| v.0 == *id),
+            Scope::Global => true,
+            _ => false,
+        },
+        _ => false,
+    }
 }

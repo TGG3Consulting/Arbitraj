@@ -3,6 +3,9 @@
 //! сетей, без блокировок и без await (решение 129): свежесть справочника пар каждой биржи, допуск пулов, промежуточные
 //! монеты DEX → registry_build::build_part; решение 430 — по сетям (registry_chains.rs: площадки DEX, записи сетей
 //! бирж, USDT и нативная монета сети; монете — сеть группы).
+//! Решение 489: монеты сети по умолчанию собираются только из записей без сети — даже при одной группе: записи с сетью
+//! (Asset.chain = Some) в справочнике сетей, а группы их сети нет (площадку сети выключили, справочник сетей бирж ещё не
+//! перечитан), в сеть по умолчанию не попадают (иначе — адрес другой сети без сети, инцидент 21.11.2026).
 //! Кто вызывает: core/rebuild.rs.
 //! От чего зависит: registry_chains.rs, registry_build.rs, pairs_fresh.rs, blacklist.rs, intermediate.rs, market_state.rs, settings.
 //! Настройки: через вызываемые — venue.symbols_stale_s, hooks.*, dex.intermediate_*.
@@ -58,7 +61,12 @@ pub fn build(
     // Решение 430: справочник по сетям (registry_chains.rs) — у каждой сети свои площадки DEX, записи сетей бирж, USDT и
     // нативная монета; монете ставится сеть группы. Одна группа — входы прежние (без копий справочника сетей).
     let groups = super::registry_chains::groups(core, &dex);
-    let single = groups.len() == 1;
+    // Решение 489: одна группа и записей с сетью нет — входы прежние, без копий (решение 129); записи с сетью есть —
+    // сеть по умолчанию берёт только свои (nets_of), как при нескольких группах.
+    let tagged = nets
+        .values()
+        .any(|l| l.iter().any(|i| i.asset.chain.is_some()));
+    let single = groups.len() == 1 && !tagged;
     let mut out = Vec::new();
     for g in groups {
         let gv: Vec<(VenueId, VenueKind)> = venues

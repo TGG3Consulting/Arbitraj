@@ -73,7 +73,12 @@ pub async fn fee(
     let tax = hook_tax(ctx, f, &tag).await?;
     let read = aero_cl_head::read(ctx, f, &[(pool, spacing)], block).await?;
     match read.into_iter().next() {
-        Some(Ok(view)) => Ok(aero_fee_seen::newest(ctx.place.id, pool, block, total(view, tax))),
+        Some(Ok(view)) => Ok(aero_fee_seen::newest(
+            ctx.place.id,
+            pool,
+            block,
+            total(view, tax),
+        )),
         Some(Err(why)) => Err(ctx.err(
             ErrorCode::BadResponse,
             format!("Aero Slipstream V3 {pool}: {why}"),

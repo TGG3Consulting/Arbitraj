@@ -108,6 +108,9 @@ mod tests {
             ISaddleOwn::FlashLoan::SIGNATURE_HASH,
             topic("FlashLoan(address,uint8,uint256,uint256,uint256)")
         );
-        assert_eq!(ISaddleOwn::swapStorageCall::SELECTOR, ISaddleSwap::swapStorageCall::SELECTOR);
+        assert_eq!(
+            ISaddleOwn::swapStorageCall::SELECTOR,
+            ISaddleSwap::swapStorageCall::SELECTOR
+        );
     }
 }

@@ -30,7 +30,8 @@ pub fn request(
     amount: U256,
 ) -> GatewayResult<(Address, Bytes)> {
     // Решение 295: и пара многомонетного пула (PoolRef::Multi) — квотер тот же контракт, индексы — из состояния пары.
-    let (PoolState::Crypto(d), Some(pool)) = (&e.pool.state, e.pool.reference.own_contract()) else {
+    let (PoolState::Crypto(d), Some(pool)) = (&e.pool.state, e.pool.reference.own_contract())
+    else {
         return Err(ctx.err(
             ErrorCode::Internal,
             "у crypto-пула Curve не прочитано состояние (индексы монет)",

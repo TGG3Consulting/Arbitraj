@@ -74,7 +74,11 @@ pub fn result(j: &Value) -> Option<Bytes> {
 /// globalState пула записи по ABI направленных комиссий (8 значений). Ошибок нет (тест падает).
 pub fn global_state(p: &Value) -> IAlgebraDirPool::globalStateReturn {
     let raw = result(&p["globalState()"]).expect("globalState без ответа");
-    assert_eq!(raw.len(), 8 * 32, "globalState: 8 слов по ABI ветки direction-based-fee");
+    assert_eq!(
+        raw.len(),
+        8 * 32,
+        "globalState: 8 слов по ABI ветки direction-based-fee"
+    );
     IAlgebraDirPool::globalStateCall::abi_decode_returns(&raw).unwrap()
 }
 

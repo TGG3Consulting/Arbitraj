@@ -21,7 +21,11 @@ pub fn check(name: &str, text: &str) {
     let want = std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("нет снимка {path}"));
     if want != text {
         let (w, g): (Vec<&str>, Vec<&str>) = (want.lines().collect(), text.lines().collect());
-        let at = w.iter().zip(&g).position(|(a, b)| a != b).unwrap_or(w.len().min(g.len()));
+        let at = w
+            .iter()
+            .zip(&g)
+            .position(|(a, b)| a != b)
+            .unwrap_or(w.len().min(g.len()));
         panic!(
             "снимок {name} изменился: строк было {}, стало {}; первая разница — строка {}:\n было: {:?}\n стало: {:?}",
             w.len(),

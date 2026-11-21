@@ -101,7 +101,10 @@ fn ids_carry_chain_only_for_other_network() {
     assert_eq!(coin_key::scope_id(&bsc), addr);
     assert_eq!(coin_key::scope_id(&arb), format!("{addr}@arbitrum"));
     assert_eq!(coin_key::rid(&bsc), bsc.contract.unwrap().to_string());
-    assert_eq!(coin_key::rid(&arb), format!("{}@arbitrum", bsc.contract.unwrap()));
+    assert_eq!(
+        coin_key::rid(&arb),
+        format!("{}@arbitrum", bsc.contract.unwrap())
+    );
     // Карантин: id интерфейса → ключ своей сети.
     let back = |a: &Asset| quarantine::key_of_id(&quarantine::id_of(a));
     assert!(back(&bsc) == CoinKey::of(&bsc), "карантин BSC");
@@ -119,7 +122,10 @@ fn ids_carry_chain_only_for_other_network() {
     assert_ne!(wb, wa);
     let eb = episode_run::new_id(&d(bsc), now);
     let ea = episode_run::new_id(&d(arb), now);
-    assert_eq!(eb, format!("{}-NUM-gate-bscdex", now.format("%Y%m%d%H%M%S%3f")));
+    assert_eq!(
+        eb,
+        format!("{}-NUM-gate-bscdex", now.format("%Y%m%d%H%M%S%3f"))
+    );
     assert_eq!(ea, format!("{eb}-arbitrum"));
 }
 
@@ -161,7 +167,11 @@ async fn records_of_two_networks_do_not_overwrite() {
         .await
         .unwrap();
     let same = holds.iter().filter(|h| h.asset.contract == bsc.contract);
-    assert_eq!(same.count(), 2, "замер удержания BSC и arbitrum — две записи");
+    assert_eq!(
+        same.count(),
+        2,
+        "замер удержания BSC и arbitrum — две записи"
+    );
     // Статистика газа: итог сделки по монете в обеих сетях.
     gas_stats::record_result(&core, &bsc, Decimal::ONE).await;
     gas_stats::record_result(&core, &arb, Decimal::ONE).await;
@@ -178,6 +188,12 @@ async fn blocked_in_one_network_only() {
     s.set("coin.blocked", at, Some(json!(true)), "тест")
         .await
         .unwrap();
-    assert!(blacklist::manual(s, &arb, &[]).is_some(), "arbitrum — в списке");
-    assert!(blacklist::manual(s, &bsc, &[]).is_none(), "BSC тем же адресом — нет");
+    assert!(
+        blacklist::manual(s, &arb, &[]).is_some(),
+        "arbitrum — в списке"
+    );
+    assert!(
+        blacklist::manual(s, &bsc, &[]).is_none(),
+        "BSC тем же адресом — нет"
+    );
 }

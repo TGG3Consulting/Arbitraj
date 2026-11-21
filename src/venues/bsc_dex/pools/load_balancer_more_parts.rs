@@ -46,8 +46,11 @@ fn take_time(c: &mut Cur) -> Result<u64, String> {
 pub fn factors(m: &More, c: &mut Cur) -> Result<(Vec<U256>, Option<Vec<U256>>), String> {
     if m.ty == PoolType::Phantom {
         // Кеш phantom обновляется после расчёта множителей обмена — обмен по getScalingFactor на блоке.
-        let f: Result<Vec<U256>, String> =
-            m.tokens.iter().map(|_| c.take::<Ph::getScalingFactorCall>()).collect();
+        let f: Result<Vec<U256>, String> = m
+            .tokens
+            .iter()
+            .map(|_| c.take::<Ph::getScalingFactorCall>())
+            .collect();
         return Ok((f?, None));
     }
     let cached = if m.ty == PoolType::Composable {
@@ -74,9 +77,15 @@ pub fn factors(m: &More, c: &mut Cur) -> Result<(Vec<U256>, Option<Vec<U256>>), 
         return Err("dex.multicall3 не задана — нет времени блока для кеша курсов пула".into());
     };
     // Предел курса в кеше: 96 бит (composable, PriceRateCache.sol L41) / 128 бит (meta-stable, L612).
-    let bits: usize = if m.ty == PoolType::Composable { 96 } else { 128 };
+    let bits: usize = if m.ty == PoolType::Composable {
+        96
+    } else {
+        128
+    };
     let live = |k: usize, t: &Address, r: &Result<U256, String>| -> Result<U256, String> {
-        let r = r.clone().map_err(|w| format!("getRate поставщика токена {t}: {w}"))?;
+        let r = r
+            .clone()
+            .map_err(|w| format!("getRate поставщика токена {t}: {w}"))?;
         if r >> bits != U256::ZERO {
             let w = "обмен откатится (PRICE_RATE_OVERFLOW)";
             return Err(format!("курс {r} токена {t} ≥ 2^{bits} — {w}"));
@@ -129,7 +138,11 @@ pub fn managed(
     let supply = c.take::<W::getActualSupplyCall>()?;
     let b = m.bpt.ok_or("managed: нет BPT среди токенов")?;
     if w.len() + 1 != m.tokens.len() {
-        return Err(format!("весов {} при токенах {} (с BPT)", w.len(), m.tokens.len()));
+        return Err(format!(
+            "весов {} при токенах {} (с BPT)",
+            w.len(),
+            m.tokens.len()
+        ));
     }
     let n = m.tokens.len();
     let mut weights = vec![U256::ZERO; n];
@@ -138,7 +151,10 @@ pub fn managed(
     for k in (0..n).filter(|k| *k != b) {
         weights[k] = wi.next().ok_or("весов меньше токенов")?;
         let s = c.take::<W::getCircuitBreakerStateCall>()?;
-        let sc = *scaling.get(k).filter(|x| !x.is_zero()).ok_or("нет множителя токена")?;
+        let sc = *scaling
+            .get(k)
+            .filter(|x| !x.is_zero())
+            .ok_or("нет множителя токена")?;
         lower[k] = s.lowerBptPriceBound / sc;
         upper[k] = s.upperBptPriceBound / sc;
     }

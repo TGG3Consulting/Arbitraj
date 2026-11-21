@@ -79,7 +79,8 @@ fn reason(f: &Family, factory: Address) -> String {
 /// Задана ли у DEX настройка комиссии от менеджера (решение 281): dex.v3_registry_fee_method или dex.v3_fee_manager.
 /// Ошибок нет.
 fn manager_set(ctx: &Ctx, f: &Family) -> bool {
-    super::registry_key::method(ctx, f).is_some() || ctx.dex_addr("dex.v3_fee_manager", f.id).is_ok()
+    super::registry_key::method(ctx, f).is_some()
+        || ctx.dex_addr("dex.v3_fee_manager", f.id).is_ok()
 }
 
 /// Причина «комиссию меняет менеджер, а fee() не перечитывается» (ревью 281, В3). Ошибок нет.

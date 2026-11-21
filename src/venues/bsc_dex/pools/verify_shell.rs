@@ -89,7 +89,9 @@ fn plan(ctx: &Ctx, c: &Candidate) -> Result<(Address, Address), String> {
             c.family.id
         ));
     }
-    let vault = ctx.dex_addr("dex.vault", c.family.id).map_err(|e| e.message)?;
+    let vault = ctx
+        .dex_addr("dex.vault", c.family.id)
+        .map_err(|e| e.message)?;
     Ok((pool, vault))
 }
 
@@ -119,8 +121,8 @@ pub fn decide(
     }
     let x = P::xTokenCall::abi_decode_returns(at(1)?).map_err(|e| dec("xToken()", e))?;
     let y = P::yTokenCall::abi_decode_returns(at(2)?).map_err(|e| dec("yToken()", e))?;
-    let imp =
-        P::implementationCall::abi_decode_returns(at(3)?).map_err(|e| dec("implementation()", e))?;
+    let imp = P::implementationCall::abi_decode_returns(at(3)?)
+        .map_err(|e| dec("implementation()", e))?;
     shell_sides::sides(x, y, (c.coin, c.quote), wrapped)?;
     shell_sides::utility(ctx, c.family.id, imp)?;
     let want = sorted(c.coin, c.quote);

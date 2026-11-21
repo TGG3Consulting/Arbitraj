@@ -71,8 +71,8 @@ use super::families::{Family, Proto};
 use super::family_variant::Variant;
 use super::listen::{End, Pools};
 use super::{
-    ladder_counter, load_batch_par, per_block_aero, per_block_balancer, per_block_lb, per_block_par,
-    pool_fail, reload, reload_many,
+    ladder_counter, load_batch_par, per_block_aero, per_block_balancer, per_block_lb,
+    per_block_par, pool_fail, reload, reload_many,
 };
 
 /// Решения 453, 455: crypto-пулы Curve без событий пула (рампа A/gamma, остановленный tricrypto 2021) —

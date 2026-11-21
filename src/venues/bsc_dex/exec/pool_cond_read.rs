@@ -79,7 +79,12 @@ pub async fn fresh(
 
 /// Подпись пула для журнала: DEX, монета, адрес контракта. Ошибок нет.
 fn label(e: &Entry) -> String {
-    format!("{} {} {:#x}", e.family.title, e.ticker, e.pool.reference.address())
+    format!(
+        "{} {} {:#x}",
+        e.family.title,
+        e.ticker,
+        e.pool.reference.address()
+    )
 }
 
 /// Чтение значений одной пачкой на блоке плана. Принимает: окружение, правила пулов, блок. Возвращает: условие (сбой

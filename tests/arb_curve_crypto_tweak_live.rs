@@ -80,7 +80,9 @@ fn check(name: &str, n: usize) {
             let i = r["i"].as_u64().unwrap() as usize;
             let j = r["j"].as_u64().unwrap() as usize;
             let dx = U256::from_str(r["dx"].as_str().unwrap()).unwrap();
-            let want = piece(&r["get_dy"]).ok().and_then(|b| quoter_crypto::decode(&b));
+            let want = piece(&r["get_dy"])
+                .ok()
+                .and_then(|b| quoter_crypto::decode(&b));
             let Some(want) = want else {
                 continue;
             };
@@ -122,7 +124,11 @@ fn sims(p: &serde_json::Value, data: &arb::core::types::CryptoData) -> (usize, u
             assert_eq!(ours, Some(want), "{pool} {i}->{j} {dx}: пул отдал выход");
             ok += 1;
         } else {
-            assert_eq!(ours, None, "{pool} {i}->{j} {dx}: пул откатил ({})", s["revert"]);
+            assert_eq!(
+                ours, None,
+                "{pool} {i}->{j} {dx}: пул откатил ({})",
+                s["revert"]
+            );
             rev += 1;
         }
     }

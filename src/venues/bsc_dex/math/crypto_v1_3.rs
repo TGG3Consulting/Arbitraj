@@ -28,7 +28,8 @@ const A_MULTIPLIER: u64 = 10_000;
 /// (L11-L12). Ошибок нет (false — откат).
 fn a_gamma_ok(ann: U256, gamma: U256) -> bool {
     let nn = N * N * N;
-    let a = (U256::from(nn * A_MULTIPLIER / 100)..=U256::from(nn * A_MULTIPLIER * 1000)).contains(&ann);
+    let a =
+        (U256::from(nn * A_MULTIPLIER / 100)..=U256::from(nn * A_MULTIPLIER * 1000)).contains(&ann);
     a && (ten::E10..=U256::from(5u8) * ten::pow(16)).contains(&gamma)
 }
 
@@ -108,7 +109,11 @@ pub fn newton_d(ann: U256, gamma: U256, xu: [U256; 3]) -> Option<U256> {
             k0 = du(mu(mu(k0, xk)?, n)?, d)?;
         }
         let g = au(gamma, E18)?;
-        let g1k0 = if g > k0 { au(su(g, k0)?, one)? } else { au(su(k0, g)?, one)? };
+        let g1k0 = if g > k0 {
+            au(su(g, k0)?, one)?
+        } else {
+            au(su(k0, g)?, one)?
+        };
         let m1 = mul1(d, gamma, g1k0, ann)?;
         // mul2 = (2 * 10**18) * N_COINS * K0 / _g1k0; neg_fprime — как у двух монет.
         let mul2 = du(mu(U256::from(2u8) * E18 * n, k0)?, g1k0)?;

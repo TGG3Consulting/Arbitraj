@@ -41,7 +41,9 @@ fn receipts_logs_route_like_ws_subscription() {
         .iter()
         .map(|f| match f.reference {
             PoolRef::Contract(a) => (a, events::topics(f.family)),
-            PoolRef::Singleton { .. } | PoolRef::Member { .. } | PoolRef::Multi { .. } => unreachable!(),
+            PoolRef::Singleton { .. } | PoolRef::Member { .. } | PoolRef::Multi { .. } => {
+                unreachable!()
+            }
         })
         .collect();
     let mut kinds = Vec::new();

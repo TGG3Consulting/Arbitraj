@@ -113,7 +113,9 @@ pub fn chain_in(doc: &str, summary: &str) -> Result<u64, String> {
     for r in &rows {
         let c = &r["chain_id"];
         if !c.is_null() && c.as_u64() != Some(chain) {
-            return Err(format!("summary.json: chain_id строки {c} ≠ chainId записи {chain}"));
+            return Err(format!(
+                "summary.json: chain_id строки {c} ≠ chainId записи {chain}"
+            ));
         }
     }
     Ok(chain)

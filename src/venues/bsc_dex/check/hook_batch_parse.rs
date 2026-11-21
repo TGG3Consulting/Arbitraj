@@ -38,7 +38,10 @@ pub fn classify(text: &str) -> Fail {
         return Fail::Fault;
     };
     let data = revert_hex(&text[at..]);
-    match data.as_deref().and_then(|d| quoter_revert::short_pool_id(&d[..])) {
+    match data
+        .as_deref()
+        .and_then(|d| quoter_revert::short_pool_id(&d[..]))
+    {
         Some(id) => Fail::Short(id),
         None => Fail::Revert,
     }

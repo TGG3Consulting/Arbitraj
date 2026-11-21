@@ -74,5 +74,8 @@ fn serde_round_trip() {
     assert_eq!(serde_json::from_str::<PoolRef>(&text).unwrap(), multi);
     // Прежний вид сериализации Contract не меняется.
     let c = serde_json::to_string(&PoolRef::Contract(pool)).unwrap();
-    assert_eq!(c, format!("{{\"Contract\":{}}}", serde_json::to_string(&pool).unwrap()));
+    assert_eq!(
+        c,
+        format!("{{\"Contract\":{}}}", serde_json::to_string(&pool).unwrap())
+    );
 }

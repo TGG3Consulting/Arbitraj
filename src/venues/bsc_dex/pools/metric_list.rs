@@ -63,9 +63,10 @@ static SEEN: LazyLock<Mutex<HashMap<(String, Address), Seen>>> = LazyLock::new(D
 /// Копия памяти по ключу (нет — с номера 1). Ошибок нет.
 fn seen(id: &str, fa: Address) -> Seen {
     let m = SEEN.lock().unwrap_or_else(|p| p.into_inner());
-    m.get(&(id.to_string(), fa))
-        .cloned()
-        .unwrap_or(Seen { next: 1, pools: Vec::new() })
+    m.get(&(id.to_string(), fa)).cloned().unwrap_or(Seen {
+        next: 1,
+        pools: Vec::new(),
+    })
 }
 
 /// Подключённые DEX вида metric_omm без справочника индексатора (indexer_gap.rs — у DEX из его списка, например
@@ -144,7 +145,10 @@ pub async fn scan(
             }
         };
         for i in old.next..n.unwrap_or(0) {
-            idx.push((*fa, F::idxToPoolCall { idx: U256::from(i) }.abi_encode().into()));
+            idx.push((
+                *fa,
+                F::idxToPoolCall { idx: U256::from(i) }.abi_encode().into(),
+            ));
             owner.push(k);
         }
         state.push((old, n, Vec::new()));
@@ -176,7 +180,9 @@ pub async fn scan(
     for ((k, p), a) in new.iter().zip(got) {
         match bytes(a, "getImmutables()").and_then(|b| tokens_of(&b).map_err(Some)) {
             Ok((_, t0, t1)) => fresh[*k].push((*p, t0, t1)),
-            Err(Some(why)) => x.notes.push(format!("{}: пул {p:#x}: {why}", dexes[*k].0.id)),
+            Err(Some(why)) => x
+                .notes
+                .push(format!("{}: пул {p:#x}: {why}", dexes[*k].0.id)),
             Err(None) => {
                 x.no_answer += 1;
                 full[*k] = false;
@@ -197,9 +203,19 @@ pub async fn scan(
         if let (Some(n), true) = (n, full[k]) {
             let mut m = SEEN.lock().unwrap_or_else(|p| p.into_inner());
             let pools = all.clone();
-            m.insert((f.id.to_string(), *fa), Seen { next: (*n).max(old.next), pools });
+            m.insert(
+                (f.id.to_string(), *fa),
+                Seen {
+                    next: (*n).max(old.next),
+                    pools,
+                },
+            );
         }
-        let note = format!("{}: пулов фабрики {}, пар построено {pairs}", f.id, all.len());
+        let note = format!(
+            "{}: пулов фабрики {}, пар построено {pairs}",
+            f.id,
+            all.len()
+        );
         x.notes.push(note);
     }
     x.calls = first.len() + idx.len() + imm.len();

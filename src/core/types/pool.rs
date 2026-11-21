@@ -25,9 +25,9 @@ pub use super::pool_fictive::FictiveData;
 pub use super::pool_lb::LbBinData;
 pub use super::pool_proteus::{ProteusData, ProteusUtility};
 pub use super::pool_smart::{ColReserves, DebtReserves, SmartColDebtData};
-pub use super::pool_vault::{VaultCurve, VaultPoolData};
 pub use super::pool_solidly::{FeeRule, SolidlyFee, SolidlyGate};
 pub use super::pool_tick_bin::{TickBinData, TickReserves};
+pub use super::pool_vault::{VaultCurve, VaultPoolData};
 pub use super::pool_wombat::WombatData;
 
 /// Вид пула — по его математике, без названия конкретной DEX (ядро не знает площадок).

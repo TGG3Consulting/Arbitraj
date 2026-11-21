@@ -84,12 +84,7 @@ impl Key {
 
 /// Состояние пулов «промежуточная — USDT» (решение 52), по которым глубина переводится в USDT: их поколения (решение
 /// 301 е2; достоверность входит в поколение). Встречный токен — USDT или USDT не известен — пусто. Ошибок нет.
-fn rate_key(
-    ctx: &Ctx,
-    reg: &Registry,
-    tokens: &Tokens,
-    e: &Entry,
-) -> Vec<u64> {
+fn rate_key(ctx: &Ctx, reg: &Registry, tokens: &Tokens, e: &Entry) -> Vec<u64> {
     let Ok(usdt) = tokens.usdt(ctx) else {
         return Vec::new();
     };

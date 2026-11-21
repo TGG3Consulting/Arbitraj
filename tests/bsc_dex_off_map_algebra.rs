@@ -187,10 +187,7 @@ async fn algebra_no_reread_when_window_is_already_centered() {
     );
     assert_eq!(by_flag(&c, &fusion).await, (false, false, false));
     // Та же карта у V3 (без условия «перечитывание поможет») — полоса вне окна.
-    assert!(off_map(
-        &c,
-        &narrowed(&base, row_range(&c, t0, 1).unwrap())
-    ));
+    assert!(off_map(&c, &narrowed(&base, row_range(&c, t0, 1).unwrap())));
 }
 
 /// Пул Algebra Integral записи probe.json (thena-v3, блок 132036268) записью реестра: globalState (цена, тик), fee(),

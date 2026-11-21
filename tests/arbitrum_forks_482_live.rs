@@ -43,7 +43,8 @@ fn data_dir(prefix: &str) -> PathBuf {
         })
         .collect();
     dirs.sort();
-    dirs.pop().expect("нет записи: tools/arbitrum_record/forks_482.py / saddle.py")
+    dirs.pop()
+        .expect("нет записи: tools/arbitrum_record/forks_482.py / saddle.py")
 }
 
 fn json(prefix: &str, name: &str) -> Value {
@@ -101,7 +102,11 @@ fn lens_vs_pool(map: &BTreeMap<i32, TickData>, ticks: &[Value]) -> Result<(), St
         match map.get(&tick) {
             Some(td) if td.gross == gross && td.net == net => {}
             None if gross == 0 => {}
-            got => return Err(format!("тик {tick}: TickLens {got:?}, пул ({gross}, {net})")),
+            got => {
+                return Err(format!(
+                    "тик {tick}: TickLens {got:?}, пул ({gross}, {net})"
+                ));
+            }
         }
     }
     Ok(())
@@ -169,7 +174,10 @@ fn v2_forks_math_equals_router_and_pair() {
             }
         }
     }
-    assert!(router > 0 && sims > 0, "в записи нет ответов роутера или симуляций");
+    assert!(
+        router > 0 && sims > 0,
+        "в записи нет ответов роутера или симуляций"
+    );
 }
 
 #[test]
@@ -218,7 +226,10 @@ fn v3_forks_ticks_and_math_equal_quoters() {
         let tm = TickMap {
             spacing: sword(res(&st["tickSpacing()"]).unwrap(), 0) as i32,
             ticks: map.into(),
-            words: (main.first().unwrap().0 as i16, main.last().unwrap().0 as i16),
+            words: (
+                main.first().unwrap().0 as i16,
+                main.last().unwrap().0 as i16,
+            ),
         };
         let s = ClState {
             sqrt_price: word(s0, 0),
@@ -242,12 +253,18 @@ fn v3_forks_ticks_and_math_equal_quoters() {
                 && let Some(qr) = qv2
             {
                 let q = word(qr, 0);
-                assert_eq!(q, out, "{case} {zfo} {amount}: QuoterV2 ≠ виртуальный квотер");
+                assert_eq!(
+                    q, out,
+                    "{case} {zfo} {amount}: QuoterV2 ≠ виртуальный квотер"
+                );
             }
             let r = swap_cl::swap(&s, zfo, true, amount).expect("расчёт");
             let case = format!("{case} {zfo} {amount}");
             if !r.complete || used != amount {
-                assert!(r.amount_out <= out, "{case}: частичный выход больше квотера");
+                assert!(
+                    r.amount_out <= out,
+                    "{case}: частичный выход больше квотера"
+                );
                 continue;
             }
             assert_eq!(r.amount_out, out, "{case}: математика ≠ виртуальный квотер");
@@ -273,7 +290,10 @@ fn ok(v: &Value) -> Result<Bytes, String> {
 #[ignore = "нет записи: tools/arbitrum_record/saddle.py (шаг zyber_stable)"]
 fn zyber_stable_math_equals_calculate_swap() {
     let mut checked = 0;
-    for p in json("arbitrum_zyber_stable_", "pools.json").as_array().unwrap() {
+    for p in json("arbitrum_zyber_stable_", "pools.json")
+        .as_array()
+        .unwrap()
+    {
         assert!(p.get("error").is_none(), "пул не записан: {p}");
         let storage = ok(&p["swapStorage"]).unwrap();
         assert_eq!(storage.len(), 7 * 32, "swapStorage — 7 слов (Saddle)");
@@ -284,7 +304,11 @@ fn zyber_stable_math_equals_calculate_swap() {
             head.push(ok(&p["getTokenBalance"][k]));
         }
         head.push(Err("Out of range".into()));
-        let tail = vec![ok(&p["getAPrecise"]), ok(&p["swapStorage"]), ok(&p["paused"])];
+        let tail = vec![
+            ok(&p["getAPrecise"]),
+            ok(&p["swapStorage"]),
+            ok(&p["paused"]),
+        ];
         let coin = |k: usize| Address::from_slice(&ok(&tokens[k]).unwrap()[12..]);
         let (a, b) = (coin(0), coin(1));
         let pair = if a < b { (a, b) } else { (b, a) };
@@ -306,7 +330,10 @@ fn zyber_stable_math_equals_calculate_swap() {
         };
         for q in p["quotes"].as_array().unwrap() {
             let Ok(raw) = ok(q) else { continue };
-            let (i, j) = (q["i"].as_u64().unwrap() as usize, q["j"].as_u64().unwrap() as usize);
+            let (i, j) = (
+                q["i"].as_u64().unwrap() as usize,
+                q["j"].as_u64().unwrap() as usize,
+            );
             let dx: U256 = q["dx"].as_str().unwrap().parse().unwrap();
             let ours = exchange_out_t(i, j, dx, &st.balances, &st.rates, st.amp, st.fee, &t);
             assert_eq!(ours, Some(U256::from_be_slice(&raw)), "{i}→{j} dx {dx}");

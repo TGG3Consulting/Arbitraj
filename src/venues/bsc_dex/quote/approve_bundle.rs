@@ -116,7 +116,10 @@ pub async fn units(
             None => q.allow.erc20(ctx, u.token, wallet, u.router).await? < amount,
             Some(permit2) => {
                 let (_, now) = q.heads.at(ctx).await?;
-                let r = q.allow.read(ctx, u.token, wallet, permit2, u.router).await?;
+                let r = q
+                    .allow
+                    .read(ctx, u.token, wallet, permit2, u.router)
+                    .await?;
                 !approve::lacking(ctx, &r, (u.token, permit2, u.router), amount, now)?.is_empty()
             }
         };

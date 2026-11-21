@@ -114,7 +114,11 @@ pub enum VaultV3Rule {
     Lbp(Box<LbpState>),
     /// Решение 452: LBP с фиксированной ценой (20251205-v3-fixed-price-lbp; кривая V3): окно продажи, индекс токена
     /// проекта, цена токена проекта в резерве (getProjectTokenRate, 18 знаков).
-    FixedLbp { enabled: bool, project: u8, rate: U256 },
+    FixedLbp {
+        enabled: bool,
+        project: u8,
+        rate: U256,
+    },
     /// Решение 452: QuantAMM (кривая — весовая, веса на блоке чтения): предел доли сделки maxTradeSizeRatio (18 знаков).
     QuantAmm { max_trade: U256 },
 }

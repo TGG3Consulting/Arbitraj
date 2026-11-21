@@ -35,7 +35,7 @@ use arb::venues::bsc_dex::pools::exec_kind::{self, ExecKind};
 use arb::venues::bsc_dex::pools::families::{self, Proto};
 use arb::venues::bsc_dex::pools::verify::Candidate;
 use arb::venues::bsc_dex::pools::{
-    events_lb20, lb20_head, lb_head, load_lb20, load_lb20_bins, verify_lb, verify_lb20,
+    events_lb20, lb_head, lb20_head, load_lb20, load_lb20_bins, verify_lb, verify_lb20,
 };
 use arb::venues::bsc_dex::quote::quoter_lb20;
 
@@ -128,11 +128,7 @@ fn bins(p: &Value, d: &LbBinData) -> BinMap {
             }
             let id: u32 = U256::from_be_slice(&answer(&s["next"]).unwrap()).to();
             m.insert(id, bin_of(&s["bin"]));
-            if down {
-                range.0 = id
-            } else {
-                range.1 = id
-            }
+            if down { range.0 = id } else { range.1 = id }
         }
         if p["bins"]["ends"][side] == "revert" {
             // Ревью 445: край стороны — откат с данными TreeMath__ErrorDepthSearch() или Panic(0x11) (load_lb20_bins edge).
@@ -160,8 +156,14 @@ fn selectors_and_topics_match_source_and_script() {
     assert_eq!(P::factoryCall::SELECTOR.to_vec(), sel("factory()"));
     assert_eq!(P::tokenXCall::SELECTOR.to_vec(), sel("tokenX()"));
     assert_eq!(P::tokenYCall::SELECTOR.to_vec(), sel("tokenY()"));
-    assert_eq!(P::getReservesAndIdCall::SELECTOR.to_vec(), sel("getReservesAndId()"));
-    assert_eq!(P::feeParametersCall::SELECTOR.to_vec(), sel("feeParameters()"));
+    assert_eq!(
+        P::getReservesAndIdCall::SELECTOR.to_vec(),
+        sel("getReservesAndId()")
+    );
+    assert_eq!(
+        P::feeParametersCall::SELECTOR.to_vec(),
+        sel("feeParameters()")
+    );
     assert_eq!(
         P::findFirstNonEmptyBinIdCall::SELECTOR.to_vec(),
         sel("findFirstNonEmptyBinId(uint24,bool)")
@@ -255,7 +257,11 @@ fn formula_equals_router_get_swap_out() {
                 continue;
             };
             let ours = lb_swap::swap_out(&d, &b, ts(), for_y, amount);
-            let side_full = if for_y { b.down_to_end() } else { b.up_to_end() };
+            let side_full = if for_y {
+                b.down_to_end()
+            } else {
+                b.up_to_end()
+            };
             match answer(&q["call"]) {
                 Ok(out) => {
                     let r = R::getSwapOutCall::abi_decode_returns(&out).unwrap();
@@ -280,7 +286,10 @@ fn formula_equals_router_get_swap_out() {
             }
         }
     }
-    assert!(equal > 0, "ни одного сравнения (равны {equal}, откатов {reverted})");
+    assert!(
+        equal > 0,
+        "ни одного сравнения (равны {equal}, откатов {reverted})"
+    );
 }
 
 #[test]
@@ -378,6 +387,11 @@ fn condition_slots_match_state() {
             })
             .collect();
         let st = PoolState::LbBin(Box::new(d));
-        assert_eq!(pool_cond_decode::differ(Proto::LbV20, &st, Some(w)), None, "{}", p["pool"]);
+        assert_eq!(
+            pool_cond_decode::differ(Proto::LbV20, &st, Some(w)),
+            None,
+            "{}",
+            p["pool"]
+        );
     }
 }

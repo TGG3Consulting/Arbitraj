@@ -85,7 +85,8 @@ async fn pass(
         s.factory_scan.started = Some(started);
     });
     let msg = "Поиск пулов по фабрикам: проход начат (DEX и их настройки — на этот момент)";
-    ctx.log(Level::Info, "dex.index", msg.to_string(), None).await;
+    ctx.log(Level::Info, "dex.index", msg.to_string(), None)
+        .await;
     let mut coin_list: Vec<Address> = coins.keys().copied().collect();
     coin_list.sort();
     let mut quote_list: Vec<Address> = quotes.iter().copied().collect();
@@ -130,7 +131,9 @@ async fn pass(
             // Решение 295: у DEX в режиме dex.multi_pair строки одного пула с разными парами — разные (dir_key); у
             // прочих ключ — строка пула, как до решения.
             let multi = s.multi_dex.clone();
-            let key = |x: &IndexedPool| super::multi_pair::dir_key(&multi, &x.dex_id, &x.pool, x.base, x.quote);
+            let key = |x: &IndexedPool| {
+                super::multi_pair::dir_key(&multi, &x.dex_id, &x.pool, x.base, x.quote)
+            };
             let have = s.factory.entry(coin).or_default();
             let before = have.len();
             for p in list {

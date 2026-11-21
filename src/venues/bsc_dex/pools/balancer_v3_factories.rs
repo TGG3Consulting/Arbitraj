@@ -67,7 +67,10 @@ impl Release {
 
     /// Стейблсвап (A читается каждым блоком). Ошибок нет.
     pub fn stable(self) -> bool {
-        matches!(self, Release::Stable | Release::StableOpen | Release::StableGuard)
+        matches!(
+            self,
+            Release::Stable | Release::StableOpen | Release::StableGuard
+        )
     }
 
     /// Веса меняются со временем (LBP, QuantAMM) — getNormalizedWeights каждым блоком. Ошибок нет.

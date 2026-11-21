@@ -35,9 +35,9 @@ use crate::core::types::{CycleTradeRequest, CycleTradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::super::check::simulate::{self, Base, Call};
+use super::super::quote::Quoting;
 use super::super::quote::cycle_cost::Rates;
 use super::super::quote::route_calc::Leg;
-use super::super::quote::Quoting;
 use super::super::wallet::approve_executor;
 use super::super::wallet::nonce::Nonces;
 use super::cycle_gas;

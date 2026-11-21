@@ -162,7 +162,10 @@ mod tests {
     fn formula() {
         let thr = U256::from(1_000_000_000u64);
         assert_eq!(tax_pips(1_000_000_000, thr, 1_000_000_000), 0);
-        assert_eq!(tax_pips(1_000_000_000 + 1_000_000_000_000, thr, 1_000_000_000), 100_000);
+        assert_eq!(
+            tax_pips(1_000_000_000 + 1_000_000_000_000, thr, 1_000_000_000),
+            100_000
+        );
         assert_eq!(tax_pips(1_000_000_000 + 1000, thr, 1_000_000_000), 1);
         assert_eq!(tax_pips(u128::MAX, thr, 0), 0);
         assert_eq!(basic_bps(1, 30), 1);

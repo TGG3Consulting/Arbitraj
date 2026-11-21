@@ -135,7 +135,10 @@ pub async fn on_log(
     // котировка и граф (другие задачи) не видят новую цену с прежней комиссией ни на мгновение. `was` — достоверность
     // до лога (её вернёт снятие отметки, settle_fusion.rs preset).
     let (applied, was) = if log.removed {
-        (Applied::Refresh("реорг: событие отменено (removed)".into()), None)
+        (
+            Applied::Refresh("реорг: событие отменено (removed)".into()),
+            None,
+        )
     } else {
         p.reg
             .update(&r, |e| {

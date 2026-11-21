@@ -30,24 +30,29 @@ use arb::settings::store::Store;
 use arb::storage::db::Db;
 use arb::storage::journal::Journal;
 use arb::storage::raw_log::RawLog;
-use arb::venues::bsc_dex::ctx::Ctx;
 use arb::venues::bsc_dex::check::{pool_taxes, taxes::Outcome};
+use arb::venues::bsc_dex::ctx::Ctx;
 use arb::venues::bsc_dex::pools::families;
-use arb::venues::bsc_dex::pools::verify::Verdict;
-use arb::venues::bsc_dex::pools::{exec_callback, exec_kind, fee_probe};
 use arb::venues::bsc_dex::pools::fee_fresh::{self, Extras};
 use arb::venues::bsc_dex::pools::load_batch::Want;
 use arb::venues::bsc_dex::pools::load_batch_v2v3::{self as v23, PoolStateTick};
+use arb::venues::bsc_dex::pools::verify::Verdict;
+use arb::venues::bsc_dex::pools::{exec_callback, exec_kind, fee_probe};
 
 const DEX: &str = "squadswap-v3-bsc";
 
 fn probe() -> Value {
-    let p = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/squadswap_v3_2026-11-15/probe.json");
+    let p = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/data/squadswap_v3_2026-11-15/probe.json"
+    );
     serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap()
 }
 
 fn bytes(v: &Value) -> Bytes {
-    Bytes::from(alloy_primitives::hex::decode(v.as_str().unwrap().trim_start_matches("0x")).unwrap())
+    Bytes::from(
+        alloy_primitives::hex::decode(v.as_str().unwrap().trim_start_matches("0x")).unwrap(),
+    )
 }
 
 /// Слово `i` ответа (беззнаковое).
@@ -106,7 +111,10 @@ async fn ctx() -> Ctx {
 
 async fn set(c: &Ctx, name: &str, v: Option<&str>) {
     let s = Scope::Dex(DEX.into());
-    c.settings.set(name, s, v.map(|x| json!(x)), "тест").await.unwrap();
+    c.settings
+        .set(name, s, v.map(|x| json!(x)), "тест")
+        .await
+        .unwrap();
 }
 
 async fn set_source(c: &Ctx, v: Option<&str>) {
@@ -156,7 +164,10 @@ async fn setting_changed_between_build_and_parse() {
             _ => panic!("голова V3"),
         }
         // Старый путь (признак разбора перечитан): fee() забрал бы liquidity — теперь ошибка, не паника.
-        let stale = Extras { swap_fee: false, fresh: true };
+        let stale = Extras {
+            swap_fee: false,
+            fresh: true,
+        };
         assert!(parse(&w, stale, &two).is_err());
         // 2. Сборка с pool_fee_each_read, к разбору — factory_swap_fee.
         let x1 = Extras::of(&c, f);
@@ -166,7 +177,17 @@ async fn setting_changed_between_build_and_parse() {
         let (_, got) = parse(&w, x1, &three).expect("fee() отделена по признаку сборки");
         assert_eq!(got, Some(fee));
         // Если бы разбор взял новый признак, fee() ушла бы в проверку swapFee 274 — ложный отказ.
-        assert!(parse(&w, Extras { swap_fee: true, fresh: false }, &three).is_err());
+        assert!(
+            parse(
+                &w,
+                Extras {
+                    swap_fee: true,
+                    fresh: false
+                },
+                &three
+            )
+            .is_err()
+        );
         // 3. Защита длины.
         let why = v23::parse_head(&w, &two[..1]).err().unwrap().message;
         assert!(why.contains("пул не прочитан"), "{why}");
@@ -187,8 +208,15 @@ async fn incomplete_setup_and_missing_executor_callback() {
     assert!(matches!(p.check(DEX), Err(Verdict::Rejected(w)) if w.contains("pool_fee_each_read")));
     set_source(&c, Some("pool_fee_each_read")).await;
     let (p, asks) = fee_probe::plan(&c, [f].iter());
-    assert_eq!(asks.len(), 1, "проба swapFee не пропускается при pool_fee_each_read (М5)");
-    assert!(matches!(p.check(DEX), Err(Verdict::Failed(_))), "ждёт ответа фабрики");
+    assert_eq!(
+        asks.len(),
+        1,
+        "проба swapFee не пропускается при pool_fee_each_read (М5)"
+    );
+    assert!(
+        matches!(p.check(DEX), Err(Verdict::Failed(_))),
+        "ждёт ответа фабрики"
+    );
     set_source(&c, Some("factory_swap_fee")).await;
     set(&c, "dex.v3_registry_fee_method", None).await;
     let (p, asks) = fee_probe::plan(&c, [f].iter());
@@ -196,18 +224,40 @@ async fn incomplete_setup_and_missing_executor_callback() {
     // В4: обратный вызов Squad — нет в коде исполнителя v1; PancakeSwap V3 — есть; не задан — проверки нет. Задача
     // t114: проверка — по версии, сверенной у кошелька (v2 и «не сверен» — tests/bsc_dex_squadswap_exec_v2.rs).
     let a = c.settings.accounts();
-    let (id, x) = (a.reserve_id().await.unwrap(), "0x00000000000000000000000000000000000000ee");
-    a.add(&id, "тест", "wallet.test.key", "bsc_dex", "тест").await.unwrap();
+    let (id, x) = (
+        a.reserve_id().await.unwrap(),
+        "0x00000000000000000000000000000000000000ee",
+    );
+    a.add(&id, "тест", "wallet.test.key", "bsc_dex", "тест")
+        .await
+        .unwrap();
     a.set_executor(&id, Some(x.into()), "тест").await.unwrap();
-    a.map_set(arb::settings::accounts::ROW_PROBE, Some(&id), "тест").await.unwrap();
-    a.set_executor_version(&id, x, Some("v1".into()), None, "тест").await.unwrap();
+    a.map_set(arb::settings::accounts::ROW_PROBE, Some(&id), "тест")
+        .await
+        .unwrap();
+    a.set_executor_version(&id, x, Some("v1".into()), None, "тест")
+        .await
+        .unwrap();
     assert_eq!(exec_callback::missing(&c, f), None);
-    set(&c, "dex.v3_swap_callback", Some("squadV3SwapCallback(int256,int256,bytes)")).await;
+    set(
+        &c,
+        "dex.v3_swap_callback",
+        Some("squadV3SwapCallback(int256,int256,bytes)"),
+    )
+    .await;
     let why = exec_callback::missing(&c, f).expect("вызова нет в коде исполнителя v1");
-    assert!(why.contains("0xc4e21d86") && why.contains("нужен исполнитель новой версии"), "{why}");
+    assert!(
+        why.contains("0xc4e21d86") && why.contains("нужен исполнитель новой версии"),
+        "{why}"
+    );
     assert!(!exec_kind::via_executor(&c, f));
     assert!(exec_kind::describe(&c, f).contains("без пути исполнения"));
-    set(&c, "dex.v3_swap_callback", Some("pancakeV3SwapCallback(int256,int256,bytes)")).await;
+    set(
+        &c,
+        "dex.v3_swap_callback",
+        Some("pancakeV3SwapCallback(int256,int256,bytes)"),
+    )
+    .await;
     assert_eq!(exec_callback::missing(&c, f), None);
     // Пул без пути исполнения — помеха (NoRoute → env), не вердикт: монета «не проверена», не в чёрный список.
     let out = pool_taxes::outcome(&[], false, &[], (Vec::new(), vec![why], Vec::new()), &[]);

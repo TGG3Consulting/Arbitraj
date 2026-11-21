@@ -48,7 +48,10 @@ pub fn topics() -> Vec<B256> {
 /// полей, NewFee, RampA, StopRampA; исходник L21-L77). Ошибок нет.
 pub fn topics_of(v: Variant) -> Vec<B256> {
     let mut out = topics();
-    if matches!(v, Variant::CurvePlain | Variant::CurveMeta | Variant::CurveOracle) {
+    if matches!(
+        v,
+        Variant::CurvePlain | Variant::CurveMeta | Variant::CurveOracle
+    ) {
         out.push(ICurvePlain::RemoveLiquidityOne::SIGNATURE_HASH);
         out.push(ICurvePlain::CommitNewFee::SIGNATURE_HASH);
         // Решение 472 (доделка): реализации с оракулом — смена комиссии CommitNewFee(uint256) / ApplyNewFee(uint256)

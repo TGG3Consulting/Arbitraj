@@ -70,7 +70,11 @@ fn pools_are_directional_raw_bitmap_code() {
             "{pool}: код пула не из версий с направленными комиссиями и сырым битмапом"
         );
         let by_pair = result(&p["poolByPair"]).unwrap();
-        assert_eq!(Address::from_slice(&by_pair[12..32]), pool, "poolByPair фабрики");
+        assert_eq!(
+            Address::from_slice(&by_pair[12..32]),
+            pool,
+            "poolByPair фабрики"
+        );
     }
 }
 

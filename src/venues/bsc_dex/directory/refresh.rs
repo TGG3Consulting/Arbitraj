@@ -137,7 +137,9 @@ async fn pass(
     let (mut ok, mut failed, mut first_err) = (0, 0, None);
     for (_, token) in due {
         let at = Utc::now();
-        let was = ctx.index.with(|s| s.tokens.entry(token).or_default().tried_at.replace(at));
+        let was = ctx
+            .index
+            .with(|s| s.tokens.entry(token).or_default().tried_at.replace(at));
         match fetch::token_pools(ctx, &net, token, pages, size).await {
             Ok((pools, n, note)) => {
                 ok += 1;
@@ -163,7 +165,8 @@ async fn pass(
             }
             Err(e) if due::stops(&e) => {
                 // Решение 449: остановка (секреты, настройка) — запроса не было, срок прежний.
-                ctx.index.with(|s| s.tokens.entry(token).or_default().tried_at = was);
+                ctx.index
+                    .with(|s| s.tokens.entry(token).or_default().tried_at = was);
                 return Err(e);
             }
             Err(e) => {

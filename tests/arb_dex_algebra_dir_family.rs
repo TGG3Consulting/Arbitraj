@@ -85,8 +85,16 @@ async fn requires_factory_and_virtual_quoter() {
         vec!["dex.factory", "dex.pool_code_hashes", "dex.quoter"]
     );
     c.settings
-        .set("dex.quoter_virtual", Scope::Dex(id.into()), Some(json!(true)), "тест")
+        .set(
+            "dex.quoter_virtual",
+            Scope::Dex(id.into()),
+            Some(json!(true)),
+            "тест",
+        )
         .await
         .unwrap();
-    assert_eq!(families::required(&c, f), vec!["dex.factory", "dex.pool_code_hashes"]);
+    assert_eq!(
+        families::required(&c, f),
+        vec!["dex.factory", "dex.pool_code_hashes"]
+    );
 }

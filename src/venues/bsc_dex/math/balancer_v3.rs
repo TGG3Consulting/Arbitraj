@@ -82,7 +82,10 @@ pub fn amount_out(
 /// Выход обмена в самом пуле (токены пула). Принимает и возвращает — как amount_out, в единицах токенов пула.
 fn pool_out(d: &VaultPoolData, v3: &VaultV3, i: usize, j: usize, amount_in: U256) -> Option<U256> {
     // _computeAmountGivenScaled18 (L333-L337): (сумма · множитель).mulDown(курс).
-    let scaled = mul_down(amount_in.checked_mul(*d.scaling.get(i)?)?, *v3.rates.get(i)?)?;
+    let scaled = mul_down(
+        amount_in.checked_mul(*d.scaling.get(i)?)?,
+        *v3.rates.get(i)?,
+    )?;
     // Решение 452: комиссия — статическая или крючка (Vault.sol L246-L253: крючок видит полную сумму до комиссии).
     let fee = balancer_v3_hook::fee(d, v3, i, j, scaled, true)?;
     // _swap L386-L390: комиссия mulUp со входа.

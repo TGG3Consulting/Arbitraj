@@ -31,7 +31,9 @@ use algebra_dir_common::{global_state, json, pool_state, pools};
 /// Логи записи по пулам в порядке цепи (блок, номер лога). Ошибок нет (тест падает).
 fn logs() -> Vec<Log> {
     let l = json("logs.json");
-    let list = l["response"]["result"].as_array().expect("eth_getLogs без ответа");
+    let list = l["response"]["result"]
+        .as_array()
+        .expect("eth_getLogs без ответа");
     let mut v: Vec<Log> = list
         .iter()
         .map(|j| serde_json::from_value(j.clone()).unwrap())
@@ -126,8 +128,15 @@ fn fee_and_swap_logs_rebuild_recorded_state() {
             else {
                 panic!("не Algebra");
             };
-            assert_eq!((s, t, l), (sqrt_price_x96, tick, liquidity), "{addr}: после Swap");
+            assert_eq!(
+                (s, t, l),
+                (sqrt_price_x96, tick, liquidity),
+                "{addr}: после Swap"
+            );
         }
     }
-    assert!(fees_all > 0, "в записи нет ни одного Fee — комиссии по событиям не проверены");
+    assert!(
+        fees_all > 0,
+        "в записи нет ни одного Fee — комиссии по событиям не проверены"
+    );
 }

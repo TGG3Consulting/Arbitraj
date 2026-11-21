@@ -523,7 +523,11 @@ async fn approve_ahead_only_for_dex_and_never_blocks() {
     let spent = deal.spent;
     sell_approve::start(&core, &dx, &deal, &plan);
     let mut n = 0;
-    while !deal.timeline.iter().any(|(_, t)| t.contains("approve заранее")) {
+    while !deal
+        .timeline
+        .iter()
+        .any(|(_, t)| t.contains("approve заранее"))
+    {
         assert!(n < 10_000, "задача разрешений не кончилась");
         n += 1;
         tokio::task::yield_now().await;

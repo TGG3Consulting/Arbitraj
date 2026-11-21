@@ -87,7 +87,10 @@ fn calldata_is_bot_abi() {
         for k in 0..8 {
             let i = U256::from(k);
             assert_eq!(data(&c[2 * k]), IStableSwapV1::coinsCall { i }.abi_encode());
-            assert_eq!(data(&c[2 * k + 1]), IStableSwapV1::balancesCall { i }.abi_encode());
+            assert_eq!(
+                data(&c[2 * k + 1]),
+                IStableSwapV1::balancesCall { i }.abi_encode()
+            );
         }
         assert_eq!(data(&c[16]), IStableSwapV1::feeCall {}.abi_encode());
         assert_eq!(data(&c[17]), IStableSwapV1::ACall {}.abi_encode());
@@ -115,7 +118,11 @@ fn coins(p: &Value) -> (Vec<Address>, Vec<U256>) {
 #[ignore = "нет записи: tools/arbitrum_record/pancake_stable.py"]
 fn registry_and_code() {
     let meta = read("meta.json");
-    assert_eq!(meta["chainId"].as_str(), Some("0xa4b1"), "сеть — Arbitrum One");
+    assert_eq!(
+        meta["chainId"].as_str(),
+        Some("0xa4b1"),
+        "сеть — Arbitrum One"
+    );
     let reg = read("factory.json");
     let listed: Vec<Address> = reg["swapPairContract"]
         .as_array()
@@ -124,7 +131,10 @@ fn registry_and_code() {
         .map(|r| Address::from_slice(&answer(r).expect("swapPairContract")[12..]))
         .collect();
     for a in meta["api_pools"].as_array().unwrap() {
-        assert!(listed.contains(&addr(a.as_str().unwrap())), "пул API {a} не в реестре");
+        assert!(
+            listed.contains(&addr(a.as_str().unwrap())),
+            "пул API {a} не в реестре"
+        );
     }
     for p in read("pools.json").as_array().unwrap() {
         let pool = addr(p["pool"].as_str().unwrap());
@@ -189,7 +199,10 @@ fn math_matches_get_dy() {
         for q in p["get_dy"].as_array().unwrap() {
             let Ok(raw) = answer(q) else { continue };
             let want = U256::from_be_slice(&raw);
-            let (i, j) = (q["i"].as_u64().unwrap() as usize, q["j"].as_u64().unwrap() as usize);
+            let (i, j) = (
+                q["i"].as_u64().unwrap() as usize,
+                q["j"].as_u64().unwrap() as usize,
+            );
             let dx: U256 = q["dx"].as_str().unwrap().parse().unwrap();
             let ours = get_dy(i, j, dx, &st.balances, &st.rates, st.amp, st.fee);
             assert_eq!(ours, want, "пул {} {i}→{j} dx {dx}", p["pool"]);
@@ -233,7 +246,12 @@ fn token_exchange_decodes() {
         }
         let d = Bytes::from(hex::decode(l["data"].as_str().unwrap()).unwrap());
         let ev = IPancakeStable::TokenExchange::decode_log_data(&LogData::new_unchecked(topics, d));
-        assert!(ev.is_ok(), "TokenExchange {}: {:?}", l["transactionHash"], ev.err());
+        assert!(
+            ev.is_ok(),
+            "TokenExchange {}: {:?}",
+            l["transactionHash"],
+            ev.err()
+        );
         n += 1;
     }
     eprintln!("TokenExchange в окне: {n}");

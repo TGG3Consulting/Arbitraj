@@ -119,11 +119,17 @@ mod tests {
         assert_eq!(exp2(one << 64usize), Some(U256::from(2u8) << 64usize));
         let x = (U256::from(3u8) << 64usize) / U256::from(2u8);
         assert_eq!(exp2(x), Some(n("52175271301331128849")));
-        assert_eq!(exp2(U256::from(16u8) << 64usize), Some(U256::from(65536u32) << 64usize));
+        assert_eq!(
+            exp2(U256::from(16u8) << 64usize),
+            Some(U256::from(65536u32) << 64usize)
+        );
         let y = (U256::from(127u8) << 64usize) / U256::from(2u8);
         assert_eq!(exp2(y), Some(n("240615969168004511545033772477625056927")));
         let max = (one << 70usize) - one;
-        assert_eq!(exp2(max), Some(n("340282366920938463450588298786565555714")));
+        assert_eq!(
+            exp2(max),
+            Some(n("340282366920938463450588298786565555714"))
+        );
         assert_eq!(exp2(one << 70usize), None);
     }
 }

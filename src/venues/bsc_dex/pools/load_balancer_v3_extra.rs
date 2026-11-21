@@ -55,7 +55,9 @@ pub fn calls(pool: Address, r: Release) -> Vec<(Address, Bytes)> {
             c(P::getNormalizedWeightsCall {}.abi_encode()),
             c(P::getMinTokenBalancesCall {}.abi_encode()),
         ],
-        Release::Gyro2Clp => vec![c(IGyro2Clp::getGyro2CLPPoolImmutableDataCall {}.abi_encode())],
+        Release::Gyro2Clp => vec![c(
+            IGyro2Clp::getGyro2CLPPoolImmutableDataCall {}.abi_encode()
+        )],
         Release::GyroEclp => vec![c(IGyroEclp::getECLPParamsCall {}.abi_encode())],
         Release::LbpV1 => vec![c(ILbpV1::getLBPoolImmutableDataCall {}.abi_encode())],
         Release::LbpV2 => vec![c(ILbpV2::getLBPoolImmutableDataCall {}.abi_encode())],
@@ -75,7 +77,9 @@ pub fn calls(pool: Address, r: Release) -> Vec<(Address, Bytes)> {
             c(ILbp::getProjectTokenRateCall {}.abi_encode()),
         ],
         Release::QuantAmm => {
-            vec![c(IQuantAmm::getQuantAMMWeightedPoolImmutableDataCall {}.abi_encode())]
+            vec![c(
+                IQuantAmm::getQuantAMMWeightedPoolImmutableDataCall {}.abi_encode()
+            )]
         }
         Release::Stable | Release::StableOpen | Release::StableGuard => Vec::new(),
         Release::ReClamm | Release::ReClammLive => Vec::new(),

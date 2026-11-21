@@ -28,7 +28,11 @@ pub fn calls(pool: Address, n: usize) -> Vec<(Address, Bytes)> {
     let mut data: Vec<Bytes> = match n {
         2 => vec![P2::price_oracleCall {}.abi_encode().into()],
         3 => (0..2u8)
-            .map(|k| P3::price_oracleCall { k: U256::from(k) }.abi_encode().into())
+            .map(|k| {
+                P3::price_oracleCall { k: U256::from(k) }
+                    .abi_encode()
+                    .into()
+            })
             .collect(),
         _ => return Vec::new(),
     };

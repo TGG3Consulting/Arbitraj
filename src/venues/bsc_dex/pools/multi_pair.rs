@@ -76,7 +76,13 @@ pub fn multi_dex(ctx: &Ctx) -> HashSet<String> {
 
 /// Что делает: ключ строки справочника. Принимает: DEX в режиме, id DEX, строку пула, две монеты пары.
 /// Возвращает: строку пула как есть (DEX не в режиме — так у всех парных пулов) или «пул|меньшая|большая». Ошибок нет.
-pub fn dir_key(multi: &HashSet<String>, dex_id: &str, pool: &str, a: Address, b: Address) -> String {
+pub fn dir_key(
+    multi: &HashSet<String>,
+    dex_id: &str,
+    pool: &str,
+    a: Address,
+    b: Address,
+) -> String {
     if !multi.contains(dex_id) {
         return pool.to_string();
     }
@@ -122,7 +128,8 @@ pub fn entry_fits(ctx: &Ctx, e: &Entry, known: &HashSet<PoolRef>) -> bool {
     if e.family.proto == Proto::WooPP {
         return known.contains(&e.pool.reference);
     }
-    !e.family.proto.is_multi_coin() || matches!(e.pool.reference, PoolRef::Multi { .. }) == enabled(ctx, e.family)
+    !e.family.proto.is_multi_coin()
+        || matches!(e.pool.reference, PoolRef::Multi { .. }) == enabled(ctx, e.family)
 }
 
 /// Что делает: режим справочника на этот проход — запомнить DEX в режиме и снять «взятые», чья ссылка не совпадает с
@@ -136,7 +143,8 @@ pub fn retune(s: &mut Snap, multi: &HashSet<String>) {
         .iter()
         .filter(|(k, f)| {
             !fits(f.family, &f.reference, multi)
-                || (f.family.proto == Proto::WooPP && k.contains('|') != multi.contains(f.family.id))
+                || (f.family.proto == Proto::WooPP
+                    && k.contains('|') != multi.contains(f.family.id))
         })
         .map(|(k, _)| k.clone())
         .collect();
@@ -158,7 +166,11 @@ pub fn retune(s: &mut Snap, multi: &HashSet<String>) {
 /// Возвращает: ключи новых строк (пусто — развёртывать нечего). Ошибок нет.
 pub fn expand(s: &mut Snap) -> HashSet<String> {
     // Взятых пар Multi нет (режим нигде не включён или пулов этих видов нет) — разворачивать нечего.
-    if !s.taken.values().any(|f| matches!(f.reference, PoolRef::Multi { .. })) {
+    if !s
+        .taken
+        .values()
+        .any(|f| matches!(f.reference, PoolRef::Multi { .. }))
+    {
         return HashSet::new();
     }
     let mut coins: Vec<Address> = s.tokens.keys().copied().collect();
@@ -183,7 +195,9 @@ pub fn expand(s: &mut Snap) -> HashSet<String> {
         .taken
         .values()
         .filter_map(|f| match f.reference {
-            PoolRef::Multi { contract, .. } => Some((f.family.id.to_string(), format!("{contract:#x}"))),
+            PoolRef::Multi { contract, .. } => {
+                Some((f.family.id.to_string(), format!("{contract:#x}")))
+            }
             _ => None,
         })
         .collect();

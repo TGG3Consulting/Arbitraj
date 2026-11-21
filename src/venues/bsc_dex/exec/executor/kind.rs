@@ -161,7 +161,11 @@ pub struct ShellStep {
 impl ShellStep {
     /// abi.encode(address primitive, uint8 native, uint8 decIn) — uint8 занимает слово. Ошибок нет.
     pub fn data(&self) -> Bytes {
-        let t = (self.primitive, U256::from(self.native), U256::from(self.dec_in));
+        let t = (
+            self.primitive,
+            U256::from(self.native),
+            U256::from(self.dec_in),
+        );
         Bytes::from(t.abi_encode_params())
     }
 }

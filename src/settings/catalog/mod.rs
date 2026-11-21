@@ -29,23 +29,23 @@
 mod base;
 mod binance;
 mod bingx;
-mod book_events;
 mod bitget;
+mod book_events;
 mod bybit;
 mod coinex;
 mod cpu;
 pub mod dex;
-mod dex_bv3_buffer;
 mod dex_basin;
+mod dex_bv3_buffer;
 mod dex_ekubo;
 mod dex_elastic;
 mod dex_event;
 mod dex_fail;
-mod dex_par;
-mod dex_shell;
 mod dex_fit;
 mod dex_graph;
 mod dex_lb;
+mod dex_par;
+mod dex_shell;
 mod dex_wombat;
 mod feed_watch;
 mod gate;
@@ -56,10 +56,10 @@ mod kucoin;
 mod kyber;
 mod lost_events;
 mod mexc;
-mod sieve;
 mod okx;
 mod phemex;
 pub mod send;
+mod sieve;
 mod signals;
 mod sizing;
 mod trade;
@@ -68,7 +68,9 @@ mod window;
 mod write_path;
 mod xt;
 
-use super::schema::{DexId, Kind as K, Limit as L, ScopeKind as S, SettingDef, VenueFor, VenueRole};
+use super::schema::{
+    DexId, Kind as K, Limit as L, ScopeKind as S, SettingDef, VenueFor, VenueRole,
+};
 use super::venue_dir::DirKind;
 
 /// Короткая запись одной настройки. Принимает: группу, имя, тип, ограничение, единицу, области, описание.

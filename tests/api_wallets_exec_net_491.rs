@@ -67,10 +67,7 @@ async fn state() -> AppState {
             .unwrap();
     }
     // Решение 416: тикер газа площадки DEX — настройка; решение 461: chainId сети площадки — dex.evm_chain_id площадки.
-    for (venue, ticker, chain) in [
-        ("bsc_dex", "BNB", BSC_SYN),
-        ("arb_dex", "ETH", ARB_SYN),
-    ] {
+    for (venue, ticker, chain) in [("bsc_dex", "BNB", BSC_SYN), ("arb_dex", "ETH", ARB_SYN)] {
         settings
             .set(
                 "dex.gas_ticker",
@@ -148,8 +145,12 @@ async fn state() -> AppState {
     };
     // Решение 435: вторая площадка DEX (arb_dex) — тот же код адаптера, своя сеть (её dex.evm_chain_id).
     let arb_ctx = dx.for_place("arb_dex");
-    registry.register(Arc::new(arb::venues::bingx::Bingx::new(bx))).await;
-    registry.register(Arc::new(arb::venues::mexc::Mexc::new(mx))).await;
+    registry
+        .register(Arc::new(arb::venues::bingx::Bingx::new(bx)))
+        .await;
+    registry
+        .register(Arc::new(arb::venues::mexc::Mexc::new(mx)))
+        .await;
     registry.register(Arc::new(BscDex::new(dx))).await;
     registry.register(Arc::new(BscDex::new(arb_ctx))).await;
     let notifier = Notifier {

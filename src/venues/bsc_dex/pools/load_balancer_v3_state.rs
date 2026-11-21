@@ -52,7 +52,12 @@ pub fn state(p: Parts, mut v3: VaultV3, pair: (Address, Address)) -> Result<Pool
         VaultV3Rule::Lbp(l) => n == 2 && (l.min.is_empty() || l.min.len() == n),
         _ => true,
     };
-    let lens = [p.balances.len(), p.scaling.len(), v3.live.len(), v3.rates.len()];
+    let lens = [
+        p.balances.len(),
+        p.scaling.len(),
+        v3.live.len(),
+        v3.rates.len(),
+    ];
     if n < 2 || lens.iter().any(|l| *l != n) || !weights_ok || !min_ok {
         return Err(format!(
             "длины токенов / балансов / множителей / курсов / весов не совпали (токенов {n})"
@@ -68,8 +73,13 @@ pub fn state(p: Parts, mut v3: VaultV3, pair: (Address, Address)) -> Result<Pool
         if let Some(i) = p.tokens.iter().position(|x| *x == t) {
             return Ok(i as u8);
         }
-        let k = p.buffers.iter().position(|b| b.as_ref().is_some_and(|b| b.underlying == t));
-        let k = k.ok_or(format!("монеты {t} нет среди токенов пула и их буферов ERC4626"))?;
+        let k = p
+            .buffers
+            .iter()
+            .position(|b| b.as_ref().is_some_and(|b| b.underlying == t));
+        let k = k.ok_or(format!(
+            "монеты {t} нет среди токенов пула и их буферов ERC4626"
+        ))?;
         via[k] = p.buffers[k].clone();
         Ok::<u8, String>(k as u8)
     };
@@ -77,7 +87,10 @@ pub fn state(p: Parts, mut v3: VaultV3, pair: (Address, Address)) -> Result<Pool
     // Обёртка и её же базовый токен одного пула: такая пара не строится (verify_balancer_v3_buffer.rs twin); здесь —
     // защита, если пара пришла из сохранённого справочника до повторной проверки пула.
     if i0 == i1 {
-        return Err(format!("обе монеты пары — один токен пула {}", p.tokens[i0 as usize]));
+        return Err(format!(
+            "обе монеты пары — один токен пула {}",
+            p.tokens[i0 as usize]
+        ));
     }
     if via.iter().any(Option::is_some) {
         v3.via = via;

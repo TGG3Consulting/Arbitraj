@@ -44,7 +44,10 @@ fn dirs() -> Vec<PathBuf> {
         })
         .collect();
     out.sort();
-    assert!(!out.is_empty(), "нет записи: tools/arbitrum_record/balancer_v3.py");
+    assert!(
+        !out.is_empty(),
+        "нет записи: tools/arbitrum_record/balancer_v3.py"
+    );
     out
 }
 
@@ -78,7 +81,11 @@ fn answer(v: &Value) -> Result<Bytes, String> {
 fn list(meta: &Value, name: &str) -> Vec<Address> {
     meta["lists"][name]
         .as_array()
-        .map(|a| a.iter().map(|x| x.as_str().unwrap().parse().unwrap()).collect())
+        .map(|a| {
+            a.iter()
+                .map(|x| x.as_str().unwrap().parse().unwrap())
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -88,7 +95,12 @@ fn lookup(
     want: &[(Address, Bytes)],
 ) -> Vec<Result<Bytes, String>> {
     want.iter()
-        .map(|k| calls.get(k).cloned().unwrap_or_else(|| Err(format!("нет в записи: {k:?}"))))
+        .map(|k| {
+            calls
+                .get(k)
+                .cloned()
+                .unwrap_or_else(|| Err(format!("нет в записи: {k:?}")))
+        })
         .collect()
 }
 
@@ -170,7 +182,10 @@ fn quote_matches_router_v3() {
                         let t = b.and_then(|b| quoted_out(&b));
                         (balancer_math::amount_in(&d, i, j, amount), t)
                     };
-                    assert_eq!(ours, theirs, "пул {pool:#x} ({release:?}) {i}→{j} {key} {amount}");
+                    assert_eq!(
+                        ours, theirs,
+                        "пул {pool:#x} ({release:?}) {i}→{j} {key} {amount}"
+                    );
                     same += 1;
                 }
             }

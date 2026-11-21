@@ -56,8 +56,14 @@ pub async fn read(
     let bad = |w: String| ctx.err(ErrorCode::BadResponse, format!("Balancer {pool}: {w}"));
     let mut dec = Vec::with_capacity(tokens.len());
     for t in tokens {
-        let s = scaling.get(t).ok_or_else(|| bad(format!("нет decimals токена {t}")))?;
-        dec.push(one().checked_mul(*s).ok_or_else(|| bad("множитель не помещается".into()))?);
+        let s = scaling
+            .get(t)
+            .ok_or_else(|| bad(format!("нет decimals токена {t}")))?;
+        dec.push(
+            one()
+                .checked_mul(*s)
+                .ok_or_else(|| bad("множитель не помещается".into()))?,
+        );
     }
     let bpt_call: Bytes = IComposable::getBptIndexCall {}.abi_encode().into();
     let mut calls: Vec<(Address, Bytes)> = Vec::new();
@@ -142,7 +148,11 @@ pub fn check(m: &More, pool: Address) -> Result<(), String> {
     }
     let rated = matches!(m.ty, PoolType::Composable | PoolType::MetaStable);
     if rated && m.providers.len() != m.tokens.len() {
-        return Err(format!("поставщиков курса {} ≠ токенов {}", m.providers.len(), m.tokens.len()));
+        return Err(format!(
+            "поставщиков курса {} ≠ токенов {}",
+            m.providers.len(),
+            m.tokens.len()
+        ));
     }
     Ok(())
 }

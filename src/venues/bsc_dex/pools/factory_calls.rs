@@ -80,7 +80,10 @@ pub fn plan(
         // dex.v3_fee_tiers: та же сигнатура getPool(address,address,uint24), что у V3, реестр — в обе стороны
         // (ks-elastic-sc 4ab08c0a contracts/Factory.sol L44, createPool L106-L109; фабрика v1 — Sourcify 42161
         // 0x5F1d…D50a, тот же код). Перечисления пулов у фабрики нет — только реестр по парам.
-        let v3 = matches!(f.proto, Proto::PancakeV3 | Proto::UniswapV3 | Proto::KyberElastic);
+        let v3 = matches!(
+            f.proto,
+            Proto::PancakeV3 | Proto::UniswapV3 | Proto::KyberElastic
+        );
         // Решение 450 (T448-05): iZiSwap — pool(a, b, fee) по уровням dex.v3_fee_tiers (как V3).
         let izi = f.proto == Proto::IziSwap;
         let mut qs: Vec<Q> = match f.proto {
@@ -152,7 +155,10 @@ pub fn plan(
                 }
             }
         }
-        if matches!(f.proto, Proto::CurveTwocrypto | Proto::CurveTricrypto | Proto::CurveCryptoV1) {
+        if matches!(
+            f.proto,
+            Proto::CurveTwocrypto | Proto::CurveTricrypto | Proto::CurveCryptoV1
+        ) {
             match lookup_max(ctx, f.id) {
                 Ok(n) => qs = (0..n).map(Q::CurveCrypto).collect(),
                 Err(why) => {

@@ -102,7 +102,11 @@ pub async fn read_calls(
 ) -> GatewayResult<Raw> {
     let got = call::try_many(ctx, calls, tag).await?;
     if got.len() != calls.len() {
-        let what = format!("Curve 2021 {pool}: ответов {} из {}", got.len(), calls.len());
+        let what = format!(
+            "Curve 2021 {pool}: ответов {} из {}",
+            got.len(),
+            calls.len()
+        );
         return Err(ctx.err(ErrorCode::BadResponse, what));
     }
     let mut decimals = Vec::new();
@@ -114,7 +118,12 @@ pub async fn read_calls(
             tokens.decimals(ctx, coin).await?
         });
     }
-    Ok(Raw { pool, got, tail, decimals })
+    Ok(Raw {
+        pool,
+        got,
+        tail,
+        decimals,
+    })
 }
 
 /// Монеты пула по ответам coins(k) / balances(k) через один (до первого отката coins). Ошибки: ответ не по ABI.
@@ -153,7 +162,11 @@ pub fn state_with(
         _ => t,
     };
     let ema = matches!(raw.got.get(raw.tail + 2), Some(Ok(b)) if b.len() == 32);
-    match plain(load_curve::state_with(raw, (sub(pair.0), sub(pair.1)), bad)?) {
+    match plain(load_curve::state_with(
+        raw,
+        (sub(pair.0), sub(pair.1)),
+        bad,
+    )?) {
         PoolState::StableSwap(mut d) => {
             d.native = native;
             d.ema = ema;

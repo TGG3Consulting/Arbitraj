@@ -128,7 +128,10 @@ pub fn decode_for(
         PoolRef::Contract(_) if v20 => {
             let id = call::decode::<Lb20::getReservesAndIdCall>(&a)?.activeId;
             u32::try_from(id).map_err(|_| {
-                ctx.err(ErrorCode::BadResponse, format!("{r:?}: активный бин {id} вне u32"))
+                ctx.err(
+                    ErrorCode::BadResponse,
+                    format!("{r:?}: активный бин {id} вне u32"),
+                )
             })?
         }
         PoolRef::Contract(_) => call::decode::<Lb::getActiveIdCall>(&a)?.to(),

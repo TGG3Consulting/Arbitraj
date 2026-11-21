@@ -194,7 +194,11 @@ pub fn decode(
     // Монета WETH20 — ETH пула (последнее слово), прочие — balanceOf (вызовы 9, 10).
     let mut gulp = Vec::with_capacity(coins.len());
     for k in 0..coins.len() {
-        gulp.push(if eth == Some(k) { w(CALLS + 1)? } else { w(9 + k)? });
+        gulp.push(if eth == Some(k) {
+            w(CALLS + 1)?
+        } else {
+            w(9 + k)?
+        });
     }
     Ok(Some(CryptoTweak {
         price_oracle: vec![w(0)?],

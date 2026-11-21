@@ -161,7 +161,15 @@ pub fn on_swap(
     // calcYGivenX: дан баланс токена 0; calcXGivenY: дан баланс токена 1 (s ↔ c, смещения и tau — свои).
     let given_y = |given: I256, of: usize| -> Option<I256> {
         if of == 0 {
-            solve(p, given, p.s, p.c, (rx, ry), (oa, ob), (p.tau_beta_x, p.tau_beta_y))
+            solve(
+                p,
+                given,
+                p.s,
+                p.c,
+                (rx, ry),
+                (oa, ob),
+                (p.tau_beta_x, p.tau_beta_y),
+            )
         } else {
             let tau = (neg(p.tau_alpha_x)?, p.tau_alpha_y);
             solve(p, given, p.c, p.s, (rx, ry), (ob, oa), tau)

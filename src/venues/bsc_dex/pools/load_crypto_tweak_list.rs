@@ -105,7 +105,11 @@ pub async fn statics(ctx: &Ctx, pool: Address, n: usize, tag: &str) -> GatewayRe
     }
     let got = call::try_many(ctx, &calls, tag).await?;
     if got.len() != n + 1 {
-        return Err(bad(ctx, pool, format!("постоянных {} из {}", got.len(), n + 1)));
+        return Err(bad(
+            ctx,
+            pool,
+            format!("постоянных {} из {}", got.len(), n + 1),
+        ));
     }
     let mut a = Vec::with_capacity(n + 1);
     for (k, r) in got.iter().enumerate() {

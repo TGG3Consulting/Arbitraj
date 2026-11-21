@@ -27,7 +27,10 @@ pub fn get_p(xp: [U256; 2], d: U256, a: U256, gamma: U256) -> Option<U256> {
         return None;
     }
     // K0 = unsafe_div(unsafe_div(4 * _xp[0] * _xp[1], _D) * 10**36, _D) (L480-L483).
-    let k0 = udiv_u(mu(udiv_u(mu(mu(U256::from(4u8), xp[0])?, xp[1])?, d), E36)?, d);
+    let k0 = udiv_u(
+        mu(udiv_u(mu(mu(U256::from(4u8), xp[0])?, xp[1])?, d), E36)?,
+        d,
+    );
     // GK0 = unsafe_div(unsafe_div(2*K0*K0, 10**36) * K0, 10**36) + pow_mod256(gamma + 10**18, 2)
     //   - unsafe_div(unsafe_div(pow_mod256(K0, 2), 10**36) * (2*gamma + 3*10**18), 10**18) (L492-L499).
     let t1 = udiv_u(mu(udiv_u(mu(mu(U256::from(2u8), k0)?, k0)?, E36), k0)?, E36);
@@ -39,7 +42,10 @@ pub fn get_p(xp: [U256; 2], d: U256, a: U256, gamma: U256) -> Option<U256> {
     let t3 = udiv_u(mu(udiv_u(k0.wrapping_mul(k0), E36), g3)?, E18);
     let gk0 = su(au(t1, t2)?, t3)?;
     // NNAG2 = unsafe_div(unsafe_mul(A, pow_mod256(gamma, 2)), A_MULTIPLIER) (L502).
-    let nnag2 = udiv_u(a.wrapping_mul(gamma.wrapping_mul(gamma)), U256::from(A_MULTIPLIER));
+    let nnag2 = udiv_u(
+        a.wrapping_mul(gamma.wrapping_mul(gamma)),
+        U256::from(A_MULTIPLIER),
+    );
     // denominator = GK0 + unsafe_div(unsafe_div(NNAG2 * _xp[0], _D) * K0, 10**36) (L505).
     let den = au(gk0, udiv_u(mu(udiv_u(mu(nnag2, xp[0])?, d), k0)?, E36))?;
     // unsafe_div(_xp[0] * (GK0 + unsafe_div(unsafe_div(NNAG2 * _xp[1], _D) * K0, 10**36)) / _xp[1] * 10**18,

@@ -362,7 +362,10 @@ mod tests {
         assert_eq!(since(ExecKind::CurveEth), Version::V5);
         for v in [Version::V1, Version::V2, Version::V3, Version::V4] {
             let why = step_absent(ExecKind::CurveEth, v).expect("шага нет");
-            assert!(why.contains("CURVE_ETH") && why.contains(need_v5()), "{v:?}: {why}");
+            assert!(
+                why.contains("CURVE_ETH") && why.contains(need_v5()),
+                "{v:?}: {why}"
+            );
         }
         assert!(step_absent(ExecKind::CurveEth, Version::V5).is_none());
         assert!(step_absent(ExecKind::Curve, Version::V1).is_none());
@@ -395,7 +398,11 @@ mod tests {
     fn via_ir_selector_form() {
         let v4 = code::runtime().unwrap();
         let v3 = code::runtime_v3().unwrap();
-        for sig in ["sync(address)", "settle()", "swapIn(bool,uint256,uint256,address)"] {
+        for sig in [
+            "sync(address)",
+            "settle()",
+            "swapIn(bool,uint256,uint256,address)",
+        ] {
             let sel = registry_key::selector(sig);
             let mut push4 = vec![0x63u8];
             push4.extend_from_slice(&sel);

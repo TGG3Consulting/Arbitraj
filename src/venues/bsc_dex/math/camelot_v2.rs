@@ -77,7 +77,11 @@ pub fn f(x0: U256, y: U256) -> U256 {
 pub fn d(x0: U256, y: U256) -> U256 {
     let one = e18();
     let x3 = (x0.wrapping_mul(x0) / one).wrapping_mul(x0) / one;
-    (U256::from(3u8).wrapping_mul(x0).wrapping_mul(y.wrapping_mul(y) / one) / one).wrapping_add(x3)
+    (U256::from(3u8)
+        .wrapping_mul(x0)
+        .wrapping_mul(y.wrapping_mul(y) / one)
+        / one)
+        .wrapping_add(x3)
 }
 
 /// Pair._get_y (L340-L362): Ньютон до 255 раундов, шаг `dy = |xy − k|·1e18 / _d`, выход при |y − y_prev| ≤ 1; после
@@ -145,11 +149,7 @@ pub fn get_amount_out(p: &Pair, amount_in: U256, zero_for_one: bool) -> Option<U
 /// обмен откатился бы.
 pub fn swap_out(p: &Pair, amount_in: U256, zero_for_one: bool) -> Option<U256> {
     let out = get_amount_out(p, amount_in, zero_for_one)?;
-    let r_out = if zero_for_one {
-        p.reserve1
-    } else {
-        p.reserve0
-    };
+    let r_out = if zero_for_one { p.reserve1 } else { p.reserve0 };
     if out.is_zero() || out >= r_out || !k_holds(p, amount_in, out, zero_for_one)? {
         return None;
     }

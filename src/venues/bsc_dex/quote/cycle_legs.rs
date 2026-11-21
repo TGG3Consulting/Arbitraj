@@ -24,10 +24,10 @@ use alloy_primitives::Address;
 use crate::core::types::DexCycle;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
-use super::super::pools::{fusion_book, load};
 use super::super::pools::load_batch::Want;
 use super::super::pools::load_batch_par;
 use super::super::pools::registry::Entry;
+use super::super::pools::{fusion_book, load};
 use super::Quoting;
 use super::graph_legs::hop_side;
 use super::route_calc::Leg;

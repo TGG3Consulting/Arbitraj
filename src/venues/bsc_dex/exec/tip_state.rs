@@ -35,7 +35,10 @@ pub fn applies(ctx: &Ctx) -> GatewayResult<()> {
     let why = match gas_mode::read(ctx) {
         Ok(GasMode::Eip1559L1) => return Ok(()),
         Ok(_) => "доля чаевых (PGA) — только у площадки с dex.gas_mode = eip1559_l1".to_string(),
-        Err(e) => format!("доля чаевых (PGA): модель газа не прочитана — {}", e.message),
+        Err(e) => format!(
+            "доля чаевых (PGA): модель газа не прочитана — {}",
+            e.message
+        ),
     };
     Err(ctx.err(ErrorCode::NotApplicable, why))
 }
@@ -98,7 +101,10 @@ pub async fn record(
     // Журнал — после изменения и записи (ревью 437, п. 3); победа — тоже строка send.tip_share (п. 8, без Telegram):
     // по ней экран «Доля чаевых» перечитывается.
     match &loss {
-        Some(l) => ctx.log(Level::Warn, "send.tip_loss", loss_text(l, was, now), None).await,
+        Some(l) => {
+            ctx.log(Level::Warn, "send.tip_loss", loss_text(l, was, now), None)
+                .await
+        }
         None => {
             let gwei = tip_mode::to_gwei(tip).map_or("—".to_string(), |g| g.to_string());
             let msg = format!(
@@ -162,7 +168,9 @@ pub async fn view(ctx: &Ctx) -> GatewayResult<TipShare> {
 pub async fn reset(ctx: &Ctx, by: &str) -> GatewayResult<TipShare> {
     applies(ctx)?;
     let was = change(ctx, |st| {
-        let was = st.share_pct.map_or("минимум".to_string(), |s| format!("{s} %"));
+        let was = st
+            .share_pct
+            .map_or("минимум".to_string(), |s| format!("{s} %"));
         st.share_pct = None;
         st.streak = 0;
         was

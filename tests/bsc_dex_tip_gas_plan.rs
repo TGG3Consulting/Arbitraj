@@ -178,7 +178,10 @@ async fn tip_transfer_gas_in_plan() {
         bnb_in_base: Decimal::new(600, 0),
     };
     let gwei = U256::from(1_000_000_000u64);
-    let flat = Bill::Flat { units: 300_000, wei: gwei };
+    let flat = Bill::Flat {
+        units: 300_000,
+        wei: gwei,
+    };
     let net = cycle_steps::net_check(&p.ctx, (dec("101"), dec("100")), &flat, &r, true)
         .await
         .unwrap();

@@ -36,7 +36,8 @@ fn data_dir() -> PathBuf {
         })
         .collect();
     dirs.sort();
-    dirs.pop().expect("нет записи: tools/arbitrum_record/kyber_elastic_v1.py")
+    dirs.pop()
+        .expect("нет записи: tools/arbitrum_record/kyber_elastic_v1.py")
 }
 
 /// Байты успешного ответа {"ok": "0x…"}; None — откат/ошибка узла.

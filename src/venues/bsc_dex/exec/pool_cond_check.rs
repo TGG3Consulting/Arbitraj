@@ -58,7 +58,11 @@ pub async fn apply(
             None => Some("свежего состояния пула нет".to_string()),
             Some(l) => {
                 let e = &l.entry;
-                differ(e.family.proto, &e.pool.state, words(*a, slots, &conds.known))
+                differ(
+                    e.family.proto,
+                    &e.pool.state,
+                    words(*a, slots, &conds.known),
+                )
             }
         };
         if let Some(w) = why {
@@ -93,7 +97,12 @@ pub async fn apply(
             }
             Some((_, Err(e))) => {
                 conds.known.remove(&key);
-                mark(rules, conds, at, Err(format!("{why}; корень не прочитан: {e}")));
+                mark(
+                    rules,
+                    conds,
+                    at,
+                    Err(format!("{why}; корень не прочитан: {e}")),
+                );
             }
             None => {
                 // Пул внутри общего контракта (V4): корень общий — убрать только слоты этого пула.

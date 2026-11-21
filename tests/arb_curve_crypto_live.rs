@@ -30,18 +30,30 @@ use curve_crypto_common::{answers, code, doc, ladder, same};
 /// Хеши кода Twocrypto-NG, собранного из исходника Vyper 0.3.10 (CREATE2-адреса сборки совпали с deployments.yaml):
 /// (имя, длина, keccak256). Математика — код целиком; реализация (blueprint) — 0xFE7100 + код развёртывания; пул —
 /// начало кода (runtime реализации, за ним — immutables).
-const MATH_V210: (usize, &str) =
-    (10137, "70d105ee0e9b857244d87521bbcef34cfb4cbd600592af61bbc7c76180648d61");
-const MATH_V200: (usize, &str) =
-    (9964, "bc931b24ccca3aae2cd24bf83022386ae21d4c96af2f7c7f57a91c743b8352e3");
-const AMM_V210: (usize, &str) =
-    (18837, "cb85feb205dc33b1704e8b492cb1d22c4b6728e23558123618b30216a15dea62");
-const AMM_V200: (usize, &str) =
-    (20742, "29fefecf08c8794a6a8af8d5382373a2ac7364f81e25f4950894dbaed4eef22d");
-const POOL_V210: (usize, &str) =
-    (17875, "e40fd9046a6204d8e7985312d45a721dae1ff759dd9d91358f06024c5ec4bc37");
-const POOL_V200: (usize, &str) =
-    (19738, "fe2e067b2dffd2dc7f5af5fe2dc58ab997acbceee805e562e569237ecd323a74");
+const MATH_V210: (usize, &str) = (
+    10137,
+    "70d105ee0e9b857244d87521bbcef34cfb4cbd600592af61bbc7c76180648d61",
+);
+const MATH_V200: (usize, &str) = (
+    9964,
+    "bc931b24ccca3aae2cd24bf83022386ae21d4c96af2f7c7f57a91c743b8352e3",
+);
+const AMM_V210: (usize, &str) = (
+    18837,
+    "cb85feb205dc33b1704e8b492cb1d22c4b6728e23558123618b30216a15dea62",
+);
+const AMM_V200: (usize, &str) = (
+    20742,
+    "29fefecf08c8794a6a8af8d5382373a2ac7364f81e25f4950894dbaed4eef22d",
+);
+const POOL_V210: (usize, &str) = (
+    17875,
+    "e40fd9046a6204d8e7985312d45a721dae1ff759dd9d91358f06024c5ec4bc37",
+);
+const POOL_V200: (usize, &str) = (
+    19738,
+    "fe2e067b2dffd2dc7f5af5fe2dc58ab997acbceee805e562e569237ecd323a74",
+);
 
 /// Пулы NG: формула по MATH() (crypto_variant::variant), только версии из записанных списков; хотя бы один сверенный
 /// пул каждой математики. Принимает: имя файла, число монет.
@@ -76,7 +88,10 @@ fn check_ng(name: &str, n: usize) {
         }
     }
     for (m, k) in maths.iter().zip(&per_math) {
-        assert!(*k > 0, "{name}: нет ни одного сверенного пула математики {m}");
+        assert!(
+            *k > 0,
+            "{name}: нет ни одного сверенного пула математики {m}"
+        );
     }
 }
 
@@ -97,11 +112,28 @@ fn tricrypto_matches_get_dy() {
 fn twocrypto_code_matches_source() {
     let d = doc("twocrypto.json");
     let math = |k: usize| d["maths"][k].as_str().unwrap().to_string();
-    assert!(same(&code(&d["code_of"][math(0)]), MATH_V210, true), "код math v2.1.0");
-    assert!(same(&code(&d["code_of"][math(1)]), MATH_V200, true), "код math v2.0.0");
-    let impls: Vec<Vec<u8>> = d["code_of"].as_object().unwrap().values().map(code).collect();
-    assert!(impls.iter().any(|c| same(c, AMM_V210, true)), "нет кода реализации v2.1.0");
-    assert!(impls.iter().any(|c| same(c, AMM_V200, true)), "нет кода реализации v2.0.0");
+    assert!(
+        same(&code(&d["code_of"][math(0)]), MATH_V210, true),
+        "код math v2.1.0"
+    );
+    assert!(
+        same(&code(&d["code_of"][math(1)]), MATH_V200, true),
+        "код math v2.0.0"
+    );
+    let impls: Vec<Vec<u8>> = d["code_of"]
+        .as_object()
+        .unwrap()
+        .values()
+        .map(code)
+        .collect();
+    assert!(
+        impls.iter().any(|c| same(c, AMM_V210, true)),
+        "нет кода реализации v2.1.0"
+    );
+    assert!(
+        impls.iter().any(|c| same(c, AMM_V200, true)),
+        "нет кода реализации v2.0.0"
+    );
     for p in d["pools"].as_array().unwrap() {
         let c = code(&p["code"]);
         let pool = p["pool"].as_str().unwrap();

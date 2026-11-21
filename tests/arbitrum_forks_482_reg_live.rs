@@ -37,8 +37,14 @@ const METRIC_CREATED: &str = concat!(
 
 #[test]
 fn created_topics_match_source_signatures() {
-    assert_eq!(ILBFactory::LBPairCreated::SIGNATURE_HASH, keccak256(LB_CREATED));
-    assert_eq!(IMetricOmmFactory::PoolCreated::SIGNATURE_HASH, keccak256(METRIC_CREATED));
+    assert_eq!(
+        ILBFactory::LBPairCreated::SIGNATURE_HASH,
+        keccak256(LB_CREATED)
+    );
+    assert_eq!(
+        IMetricOmmFactory::PoolCreated::SIGNATURE_HASH,
+        keccak256(METRIC_CREATED)
+    );
 }
 
 /// reg.json последней записи tests/data/arbitrum_forks_482_*. Паника — записи нет.
@@ -54,10 +60,16 @@ fn reg() -> Value {
         })
         .collect();
     dirs.sort();
-    let dir = dirs.pop().expect("нет записи: tools/arbitrum_record/forks_482.py");
+    let dir = dirs
+        .pop()
+        .expect("нет записи: tools/arbitrum_record/forks_482.py");
     let text = std::fs::read_to_string(dir.join("reg.json")).expect("reg.json");
     let v: Value = serde_json::from_str(&text).expect("json");
-    assert!(v.get("error").is_none(), "запись reg.json с ошибкой: {}", v["error"]);
+    assert!(
+        v.get("error").is_none(),
+        "запись reg.json с ошибкой: {}",
+        v["error"]
+    );
     v
 }
 
@@ -85,10 +97,17 @@ fn swapline_get_all_lb_pairs_finds_every_pair() {
     assert!(!pairs.is_empty(), "перечисление фабрики Swapline пусто");
     for p in pairs {
         let pair = addr(&p["pair"]);
-        assert_eq!(addr_of(&res(&p["getFactory"]).unwrap()), factory, "{pair}: getFactory");
+        assert_eq!(
+            addr_of(&res(&p["getFactory"]).unwrap()),
+            factory,
+            "{pair}: getFactory"
+        );
         let raw = res(&p["getAllLBPairs"]).expect("getAllLBPairs");
         let found = decode_q(Q::Lb, &raw).expect("getAllLBPairs по ABI");
-        assert!(found.contains(&pair), "{pair}: нет в getAllLBPairs ({found:?})");
+        assert!(
+            found.contains(&pair),
+            "{pair}: нет в getAllLBPairs ({found:?})"
+        );
     }
 }
 
@@ -100,7 +119,11 @@ fn metric_enumeration_and_verify() {
     let m = &r["metric"];
     let n = metric_list::count(&res(&m["nextPoolIdx"]).unwrap()).unwrap();
     let pools = m["pools"].as_array().unwrap();
-    assert_eq!(pools.len() as u64, n.saturating_sub(1), "idxToPool(1..n − 1)");
+    assert_eq!(
+        pools.len() as u64,
+        n.saturating_sub(1),
+        "idxToPool(1..n − 1)"
+    );
     let f = families::make("metric-v1@arbitrum", "metric_omm").unwrap();
     for p in pools {
         let pool = metric_list::pool_of(&res(&p["idxToPool"]).unwrap()).unwrap();
@@ -123,7 +146,10 @@ fn metric_enumeration_and_verify() {
         let mut needle = vec![0x7f_u8];
         needle.extend_from_slice(t.as_slice());
         let has = code.windows(33).any(|w| w == needle.as_slice());
-        assert!(has, "topic0 {t} события пула Metric BSC нет в коде пула Arbitrum");
+        assert!(
+            has,
+            "topic0 {t} события пула Metric BSC нет в коде пула Arbitrum"
+        );
     }
 }
 
@@ -138,7 +164,10 @@ fn created_logs_give_enumerated_pools() {
     ];
     for (name, id, kind, at) in cases {
         let f = families::make(id, kind).unwrap();
-        let logs = r["logs"][name]["logs"].as_array().cloned().unwrap_or_default();
+        let logs = r["logs"][name]["logs"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
         let (list, field) = match name {
             "swapline" => (&r["swapline"]["pairs"], "pair"),
             _ => (&r["metric"]["pools"], "pool"),
@@ -148,7 +177,11 @@ fn created_logs_give_enumerated_pools() {
             let quote = Address::from_word(log.topics()[at]);
             let c = created_log::candidate(f, &log, quote).expect("событие создания");
             let known = list.as_array().unwrap().iter().any(|p| p[field] == c.pool);
-            assert!(known, "{name}: пул события {} не найден перечислением", c.pool);
+            assert!(
+                known,
+                "{name}: пул события {} не найден перечислением",
+                c.pool
+            );
         }
     }
 }

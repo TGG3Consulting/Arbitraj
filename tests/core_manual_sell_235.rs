@@ -369,7 +369,10 @@ async fn relay_targets_respect_cex_cex_of_source() {
     cc("bingx", true).await;
     x.at = v("bsc_dex");
     let (to, skip) = targets(&x);
-    assert!(to.contains(&v("bingx")), "у mexc «да» — bingx цель: {skip:?}");
+    assert!(
+        to.contains(&v("bingx")),
+        "у mexc «да» — bingx цель: {skip:?}"
+    );
     cc("mexc", false).await;
     let (to, skip) = targets(&x);
     assert!(!to.contains(&v("bingx")), "{skip:?}");

@@ -36,7 +36,10 @@ pub fn get_p(xp: [U256; 3], d: U256, a: U256, gamma: U256) -> Option<[U256; 2]> 
     let t3 = udiv_u(mu(udiv_u(k0.wrapping_mul(k0), E36), g3)?, E18);
     let gk0 = su(au(t1, t2)?, t3)?;
     // NNAG2 = unsafe_div(unsafe_mul(A, pow_mod256(gamma, 2)), A_MULTIPLIER) (L576).
-    let nnag2 = udiv_u(a.wrapping_mul(gamma.wrapping_mul(gamma)), U256::from(A_MULTIPLIER));
+    let nnag2 = udiv_u(
+        a.wrapping_mul(gamma.wrapping_mul(gamma)),
+        U256::from(A_MULTIPLIER),
+    );
     // denominator = GK0 + unsafe_div(unsafe_div(NNAG2 * _xp[0], _D) * K0, 10**36) (L579).
     let den = au(gk0, udiv_u(mu(udiv_u(mu(nnag2, xp[0])?, d), k0)?, E36))?;
     // p_k = unsafe_div(_xp[0] * (GK0 + unsafe_div(unsafe_div(NNAG2 * _xp[k], _D) * K0, 10**36)) / _xp[k] * 10**18,

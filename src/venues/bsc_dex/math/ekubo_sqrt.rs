@@ -72,7 +72,11 @@ pub fn next_from_amount0(sqrt: U256, liquidity: u128, amount: i128) -> Option<U2
     let lx = U256::from(liquidity) << 128usize;
     if amount < 0 {
         let abs = U256::from(amount.unsigned_abs());
-        let lim = if r.is_zero() { U256::ZERO } else { U256::MAX / r };
+        let lim = if r.is_zero() {
+            U256::ZERO
+        } else {
+            U256::MAX / r
+        };
         if abs > lim {
             return Some(U256::from(U96_MAX));
         }

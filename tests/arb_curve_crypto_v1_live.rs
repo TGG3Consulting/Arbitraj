@@ -39,7 +39,14 @@ fn check_v1(name: &str, n: usize, killed: bool) {
             .iter()
             .map(|v| v.as_u64().unwrap() as u8)
             .collect();
-        let raw = load_crypto_v1::Raw { pool, n, got, now, decimals, killed };
+        let raw = load_crypto_v1::Raw {
+            pool,
+            n,
+            got,
+            now,
+            decimals,
+            killed,
+        };
         let (_, data) = load_crypto_v1::decode(&raw).unwrap_or_else(|w| panic!("{pool}: {w}"));
         if data.halted {
             continue;
@@ -47,7 +54,11 @@ fn check_v1(name: &str, n: usize, killed: bool) {
         if n == 2 && !killed {
             let t = proxy_target(&code(&p["code"])).expect("код пула v1 — не прокси EIP-1167");
             let templates = d["templates"].as_array().unwrap();
-            assert!(templates.iter().any(|x| Address::from_str(x.as_str().unwrap()).unwrap() == t));
+            assert!(
+                templates
+                    .iter()
+                    .any(|x| Address::from_str(x.as_str().unwrap()).unwrap() == t)
+            );
         }
         checked += ladder(name, pool, p, &data);
     }

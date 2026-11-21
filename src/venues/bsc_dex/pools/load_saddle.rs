@@ -108,14 +108,21 @@ pub async fn read(ctx: &Ctx, tokens: &Tokens, pool: Address, tag: &str) -> Gatew
         let coin = call::decode::<S::getTokenCall>(c)?;
         decimals.push(tokens.decimals(ctx, coin).await?);
     }
-    Ok(Raw { pool, got, tail, decimals })
+    Ok(Raw {
+        pool,
+        got,
+        tail,
+        decimals,
+    })
 }
 
 /// Что делает: состояние пары из прочитанного (решение 295, без сети) — тот же разбор и сборка, что у load.
 /// Принимает: окружение (текст ошибки), Raw, пару (token0, token1). Ошибки: как у parse / build.
 pub fn state(ctx: &Ctx, raw: &Raw, pair: (Address, Address)) -> GatewayResult<PoolState> {
     let pool = raw.pool;
-    state_with(raw, pair, &|what: String| ctx.err(ErrorCode::BadResponse, format!("Saddle {pool}: {what}")))
+    state_with(raw, pair, &|what: String| {
+        ctx.err(ErrorCode::BadResponse, format!("Saddle {pool}: {what}"))
+    })
 }
 
 /// Что делает: state с заданным конструктором ошибки (тесты на записанных ответах — без окружения).

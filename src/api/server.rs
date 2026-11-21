@@ -52,10 +52,7 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
             post(dex_graph::rebuild),
         )
         .route("/api/venues/{id}/tip-share", get(tip_share::state))
-        .route(
-            "/api/venues/{id}/tip-share/reset",
-            post(tip_share::reset),
-        )
+        .route("/api/venues/{id}/tip-share/reset", post(tip_share::reset))
         .route(
             "/api/venues/{id}/pool-cond-stat",
             get(pool_cond_stat::state),

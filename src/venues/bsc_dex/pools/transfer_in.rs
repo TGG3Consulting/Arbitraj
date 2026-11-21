@@ -66,7 +66,10 @@ impl Marks {
 /// чтение пула не различает (одни геттеры, abi_crypto.rs) — слушаются все: у реализации без gulp лишнее чтение
 /// состояния не меняет. Ошибок нет.
 pub fn watched(f: &Family) -> bool {
-    matches!(f.proto, Proto::CurveCryptoV1 | Proto::CurveTricryptoV1 | Proto::CurveTricrypto)
+    matches!(
+        f.proto,
+        Proto::CurveCryptoV1 | Proto::CurveTricryptoV1 | Proto::CurveTricrypto
+    )
 }
 
 /// Адрес контракта пула вида watched (у пары многомонетного — контракт). Ошибок нет.

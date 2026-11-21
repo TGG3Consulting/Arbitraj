@@ -53,10 +53,16 @@ fn pools_from_factory() {
     let r = rec();
     let fac = file(&r, "factory.json");
     let deployer = address(&fac["poolDeployer"]);
-    let hash: [u8; 32] = alloy_primitives::hex::decode(INIT_HASH).unwrap().try_into().unwrap();
+    let hash: [u8; 32] = alloy_primitives::hex::decode(INIT_HASH)
+        .unwrap()
+        .try_into()
+        .unwrap();
     for p in pools_all(&r) {
         let pool = address(&p["pool"]);
-        assert_eq!(Address::from_word(word(&p["poolByPair"]["result"], 0).into()), pool);
+        assert_eq!(
+            Address::from_word(word(&p["poolByPair"]["result"], 0).into()),
+            pool
+        );
         assert_eq!(p["tick_spacing"].as_i64(), Some(60), "{pool}");
         let (t0, t1) = (address(&p["token0"]), address(&p["token1"]));
         let salt = keccak256([t0.into_word().0, t1.into_word().0].concat());
@@ -106,7 +112,12 @@ fn swap_with_bot_fee_equals_pool() {
 #[ignore = "нет записи: tools/arbitrum_record/zyberswap_v3.py (T487-01, T487-02)"]
 fn next_block_same_or_next_second() {
     let h = file(&rec(), "heads.json");
-    let ts: Vec<U256> = h.as_array().unwrap().iter().map(|b| hex_u256(&b["timestamp"])).collect();
+    let ts: Vec<U256> = h
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|b| hex_u256(&b["timestamp"]))
+        .collect();
     assert!(ts.len() > 1, "в heads.json меньше двух блоков");
     let gaps: Vec<U256> = ts.windows(2).map(|w| w[1] - w[0]).collect();
     let max = gaps.iter().max().unwrap();

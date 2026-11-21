@@ -122,7 +122,10 @@ impl Accounts {
         })
         .await?;
         let shown = executor.clone().unwrap_or_else(|| "не задан".into());
-        let text = format!("Кошелёк DEX «{}» на {venue}: исполнитель {shown} ({by})", w.name);
+        let text = format!(
+            "Кошелёк DEX «{}» на {venue}: исполнитель {shown} ({by})",
+            w.name
+        );
         match executor {
             Some(x) => {
                 w.chains.insert(
@@ -157,7 +160,9 @@ impl Accounts {
     ) -> Result<Wallet, EditError> {
         let w0 = self.must(id)?;
         if w0.home() == venue {
-            return self.set_executor_version(id, executor, version, wrapped, by).await;
+            return self
+                .set_executor_version(id, executor, version, wrapped, by)
+                .await;
         }
         let _turn = self.writer.lock().await;
         let mut w = self.must(id)?;
@@ -175,7 +180,12 @@ impl Accounts {
             old: Some(json!({"version": cur.executor_version, "wrapped": cur.executor_wrapped})),
             new: Some(json!({"version": version, "wrapped": wrapped})),
         };
-        let (i, v, ver, x) = (id.to_string(), venue.to_string(), version.clone(), wrapped.clone());
+        let (i, v, ver, x) = (
+            id.to_string(),
+            venue.to_string(),
+            version.clone(),
+            wrapped.clone(),
+        );
         self.commit(h, by, move |tx| {
             tx.execute(
                 "UPDATE dex_wallet_exec SET executor_version = ?3, executor_wrapped = ?4, updated_at = ?5 \
@@ -202,7 +212,13 @@ impl Accounts {
         // Б1: только журнал, без Accounts::changed — подписки кошельков не перезапускаются.
         let _ = self
             .journal
-            .write(Level::Info, JOURNAL_KIND, None, format!("{text} ({by})"), None)
+            .write(
+                Level::Info,
+                JOURNAL_KIND,
+                None,
+                format!("{text} ({by})"),
+                None,
+            )
             .await;
         Ok(w.at(venue))
     }

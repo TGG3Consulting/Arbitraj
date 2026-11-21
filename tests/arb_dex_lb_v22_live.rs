@@ -208,8 +208,18 @@ fn pool_cond_slots_3_4_65545() {
         // Решение 477: getReserves = _reserves (слот 4) − _protocolFees (слот 5), по половинам (LBPair.sol v2.2.0).
         let mask = (U256::from(1u8) << 128usize) - U256::from(1u8);
         let (res, fees) = (w("4"), w("5"));
-        assert_eq!((res & mask) - (fees & mask), U256::from(r.reserveX), "{}", p["pool"]);
-        assert_eq!((res >> 128usize) - (fees >> 128usize), U256::from(r.reserveY), "{}", p["pool"]);
+        assert_eq!(
+            (res & mask) - (fees & mask),
+            U256::from(r.reserveX),
+            "{}",
+            p["pool"]
+        );
+        assert_eq!(
+            (res >> 128usize) - (fees >> 128usize),
+            U256::from(r.reserveY),
+            "{}",
+            p["pool"]
+        );
         // Ревью 446 (С2): слот 65545 — _hooksParameters = getLBHooksParameters.
         let hooks_out = out(p, "getLBHooksParameters");
         let hp = ILBPair22::getLBHooksParametersCall::abi_decode_returns(&hooks_out).unwrap();

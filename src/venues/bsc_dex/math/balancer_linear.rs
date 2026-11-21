@@ -90,7 +90,8 @@ pub fn out_given_in(t_in: Tok, t_out: Tok, a: U256, b: &Bal, p: &Params) -> Opti
         // _calcMainOutPerBptIn L142-L157.
         (Tok::Bpt, Tok::Main) => {
             let delta = div(inv.checked_mul(a)?, b.supply, false)?;
-            b.main.checked_sub(from_nominal(nom.checked_sub(delta)?, p)?)
+            b.main
+                .checked_sub(from_nominal(nom.checked_sub(delta)?, p)?)
         }
         // _calcWrappedOutPerBptIn L257-L273.
         (Tok::Bpt, Tok::Wrapped) => {
@@ -117,9 +118,7 @@ pub fn out_given_in(t_in: Tok, t_out: Tok, a: U256, b: &Bal, p: &Params) -> Opti
             div(b.supply.checked_mul(ni)?, inv, false)?.checked_sub(b.supply)
         }
         // _calcMainOutPerWrappedIn L159-L170.
-        (Tok::Wrapped, Tok::Main) => {
-            b.main.checked_sub(from_nominal(nom.checked_sub(a)?, p)?)
-        }
+        (Tok::Wrapped, Tok::Main) => b.main.checked_sub(from_nominal(nom.checked_sub(a)?, p)?),
         _ => None,
     }
 }
@@ -157,12 +156,11 @@ pub fn in_given_out(t_in: Tok, t_out: Tok, a: U256, b: &Bal, p: &Params) -> Opti
         // _calcBptInPerWrappedOut L212-L230.
         (Tok::Bpt, Tok::Wrapped) => {
             let ni = nom.checked_add(b.wrapped.checked_sub(a)?)?;
-            b.supply.checked_sub(div(b.supply.checked_mul(ni)?, inv, false)?)
+            b.supply
+                .checked_sub(div(b.supply.checked_mul(ni)?, inv, false)?)
         }
         // _calcMainInPerWrappedOut L172-L183.
-        (Tok::Main, Tok::Wrapped) => {
-            from_nominal(nom.checked_add(a)?, p)?.checked_sub(b.main)
-        }
+        (Tok::Main, Tok::Wrapped) => from_nominal(nom.checked_add(a)?, p)?.checked_sub(b.main),
         _ => None,
     }
 }

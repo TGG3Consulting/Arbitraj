@@ -69,6 +69,9 @@ mod tests {
     #[test]
     fn equals_constants_sol() {
         let src = "65251743116719673010965625540244653191619923014385985379600384103134737";
-        assert_eq!(MAX_LIQUIDITY_PER_BIN, U256::from_str_radix(src, 10).unwrap());
+        assert_eq!(
+            MAX_LIQUIDITY_PER_BIN,
+            U256::from_str_radix(src, 10).unwrap()
+        );
     }
 }

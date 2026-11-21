@@ -142,7 +142,8 @@ impl Directory {
                     .collect();
                 for k in same {
                     s.taken.remove(&k);
-                    s.status.insert(k, DirectoryStatus::Rejected(why.to_string()));
+                    s.status
+                        .insert(k, DirectoryStatus::Rejected(why.to_string()));
                 }
             }
             let first = s.banned.insert(r.site(), why.to_string()).is_none();
@@ -183,7 +184,11 @@ pub fn pool_key(r: &PoolRef) -> String {
         PoolRef::Member { contract, .. } => format!("{contract:#x}"),
         // Решение 295: пара многомонетного пула — ключ строки справочника с парой (тот же формат, что
         // multi_pair::dir_key у DEX в режиме dex.multi_pair).
-        PoolRef::Multi { contract, token0, token1 } => format!("{contract:#x}|{token0:#x}|{token1:#x}"),
+        PoolRef::Multi {
+            contract,
+            token0,
+            token1,
+        } => format!("{contract:#x}|{token0:#x}|{token1:#x}"),
     }
 }
 

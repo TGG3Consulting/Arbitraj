@@ -95,7 +95,9 @@ pub fn muli(x: I256, y: I256) -> Option<I256> {
         if y < lo || y > hi {
             return None;
         }
-        return y.checked_neg()?.checked_mul(I256::from_raw(U256::from(1u8) << 63));
+        return y
+            .checked_neg()?
+            .checked_mul(I256::from_raw(U256::from(1u8) << 63));
     }
     let negative = x.is_negative() != y.is_negative();
     let abs = mulu(I256::from_raw(x.unsigned_abs()), y.unsigned_abs())?;
@@ -126,8 +128,13 @@ pub fn divuu(x: U256, y: U256) -> Option<U256> {
     } else {
         let mut msb: usize = 192;
         let mut xc = x >> 192;
-        let steps: [(u64, usize); 5] =
-            [(1 << 32, 32), (1 << 16, 16), (1 << 8, 8), (1 << 4, 4), (4, 2)];
+        let steps: [(u64, usize); 5] = [
+            (1 << 32, 32),
+            (1 << 16, 16),
+            (1 << 8, 8),
+            (1 << 4, 4),
+            (4, 2),
+        ];
         for (lim, sh) in steps {
             if xc >= U256::from(lim) {
                 xc >>= sh;

@@ -80,7 +80,10 @@ mod tests {
             P::FeePercentUpdated::SIGNATURE_HASH,
             ev("FeePercentUpdated(uint16,uint16)")
         );
-        assert_eq!(P::SetStableSwap::SIGNATURE_HASH, ev("SetStableSwap(bool,bool)"));
+        assert_eq!(
+            P::SetStableSwap::SIGNATURE_HASH,
+            ev("SetStableSwap(bool,bool)")
+        );
         use super::super::abi_v2v3::IV2Pair;
         assert_eq!(P::Sync::SIGNATURE_HASH, IV2Pair::Sync::SIGNATURE_HASH);
         assert_eq!(P::Mint::SIGNATURE_HASH, IV2Pair::Mint::SIGNATURE_HASH);

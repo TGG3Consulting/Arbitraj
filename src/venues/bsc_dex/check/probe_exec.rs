@@ -40,8 +40,8 @@ use super::super::exec::executor::{self, call, callback_at, entry, onchain};
 use super::super::exec::plan::Order;
 use super::super::pools::abi_balancer::IBalancerVault;
 use super::super::pools::abi_balancer_v3::IBalancerV3Vault;
-use super::super::pools::{exec_callback, exec_kind};
 use super::super::pools::registry::Entry;
+use super::super::pools::{exec_callback, exec_kind};
 use super::super::wallet::approve::Approval;
 use super::super::wallet::approve_executor;
 use super::emitter;
@@ -92,7 +92,11 @@ pub async fn part(
 pub fn no_path(ctx: &Ctx, e: &Entry) -> GatewayError {
     let t = e.family.title;
     // Ревью 281 (В4): обратного вызова пула нет у исполнителя — не настройка и не вердикт по монете (NoRoute).
-    if let Some(why) = e.family.executor_kind.and(exec_callback::missing(ctx, e.family)) {
+    if let Some(why) = e
+        .family
+        .executor_kind
+        .and(exec_callback::missing(ctx, e.family))
+    {
         return no_route(ctx, e, &why);
     }
     match e.family.executor_kind {
@@ -159,7 +163,9 @@ pub async fn emitter(ctx: &Ctx, e: &Entry, logs: &[SimLog]) -> GatewayResult<()>
             IBalancerVault::Swap::SIGNATURE_HASH
         };
         if logs.iter().any(|l| {
-            l.address == vault && l.topics.first() == Some(&swap) && l.topics.get(1) == Some(&d.pool_id)
+            l.address == vault
+                && l.topics.first() == Some(&swap)
+                && l.topics.get(1) == Some(&d.pool_id)
         }) {
             return Ok(());
         }

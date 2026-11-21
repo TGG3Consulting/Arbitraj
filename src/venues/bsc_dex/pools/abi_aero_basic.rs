@@ -86,8 +86,14 @@ mod tests {
             IAeroBasicFactory::PoolCreated::SIGNATURE_HASH,
             B256::from(keccak256(b"PoolCreated(address,address,address,uint256)"))
         );
-        assert_eq!(IAeroBasicPool::metadataCall::SELECTOR.to_vec(), sel("metadata()"));
-        assert_eq!(IAeroBasicPool::POOL_TYPECall::SELECTOR.to_vec(), sel("POOL_TYPE()"));
+        assert_eq!(
+            IAeroBasicPool::metadataCall::SELECTOR.to_vec(),
+            sel("metadata()")
+        );
+        assert_eq!(
+            IAeroBasicPool::POOL_TYPECall::SELECTOR.to_vec(),
+            sel("POOL_TYPE()")
+        );
         assert_eq!(
             IAeroBasicPool::getAmountOutCall::SELECTOR.to_vec(),
             sel("getAmountOut(uint256,address)")
@@ -100,15 +106,30 @@ mod tests {
             IAeroBasicFactory::getBaseFeeCall::SELECTOR.to_vec(),
             sel("getBaseFee(address,address,uint256,uint256,uint256,uint256)")
         );
-        assert_eq!(IAeroBasicFactory::isPausedCall::SELECTOR.to_vec(), sel("isPaused()"));
-        assert_eq!(IAeroBasicFactory::mevTaxModuleCall::SELECTOR.to_vec(), sel("mevTaxModule()"));
-        assert_eq!(IAeroMevTaxModule::minThresholdCall::SELECTOR.to_vec(), sel("minThreshold()"));
+        assert_eq!(
+            IAeroBasicFactory::isPausedCall::SELECTOR.to_vec(),
+            sel("isPaused()")
+        );
+        assert_eq!(
+            IAeroBasicFactory::mevTaxModuleCall::SELECTOR.to_vec(),
+            sel("mevTaxModule()")
+        );
+        assert_eq!(
+            IAeroMevTaxModule::minThresholdCall::SELECTOR.to_vec(),
+            sel("minThreshold()")
+        );
         assert_eq!(
             IAeroMevTaxModule::priorityFeeMultiplierCall::SELECTOR.to_vec(),
             sel("priorityFeeMultiplier()")
         );
-        assert_eq!(IArbSys::arbOSVersionCall::SELECTOR.to_vec(), sel("arbOSVersion()"));
-        assert_eq!(IArbOwnerPublic::getCollectTipsCall::SELECTOR.to_vec(), sel("getCollectTips()"));
+        assert_eq!(
+            IArbSys::arbOSVersionCall::SELECTOR.to_vec(),
+            sel("arbOSVersion()")
+        );
+        assert_eq!(
+            IArbOwnerPublic::getCollectTipsCall::SELECTOR.to_vec(),
+            sel("getCollectTips()")
+        );
         assert_eq!(&stable_type()[..9], b"V2_STABLE");
         assert_eq!(&volatile_type()[..11], b"V2_VOLATILE");
     }

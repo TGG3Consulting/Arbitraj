@@ -99,7 +99,11 @@ pub fn passes(
         };
         Some((n, st))
     };
-    let early = if v.factory { Some(norm_step(true)?) } else { None };
+    let early = if v.factory {
+        Some(norm_step(true)?)
+    } else {
+        None
+    };
     let old = t.virtual_price > U256::ZERO;
     let mut needs = v.not_adjusted;
     if !needs {

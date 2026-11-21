@@ -72,7 +72,11 @@ pub fn oracle(p: &Value, block_vpl: bool) -> (Oracle, u32, i32, u128) {
     assert_eq!(s["time"].as_u64(), Some(u64::from(ts) + 1));
     let g = &s["getTimepoints"]["result"];
     let plus3 = &p["oracle"]["by_time"][(ts + 3).to_string()]["getTimepoints"]["result"];
-    let starts = vec![(ts, start(g, 0)), (ts + 1, start(g, 1)), (ts + 3, start(plus3, 1))];
+    let starts = vec![
+        (ts, start(g, 0)),
+        (ts + 1, start(g, 1)),
+        (ts + 3, start(plus3, 1)),
+    ];
     let slot = hex_u256(&p["storage_slot3"]["result"]);
     let vpl = (slot >> 128usize).to::<u128>();
     let o = Oracle {

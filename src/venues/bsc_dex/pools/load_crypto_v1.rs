@@ -123,11 +123,17 @@ pub async fn read(
     if f.proto == Proto::CurveCryptoV1 && !v1 {
         tweak_list::unconfirmed(ctx, pool, "crypto v1 фабрики (слот 33)");
     } else if killed && !list {
-        let what = format!("пул без фабрики из {n} монет (слот {})", tweak_list::slot(n));
+        let what = format!(
+            "пул без фабрики из {n} монет (слот {})",
+            tweak_list::slot(n)
+        );
         tweak_list::unconfirmed(ctx, pool, &what);
     }
     if v1 {
-        all.extend(tweak_v1::calls(pool, &tweak_v1::statics(ctx, pool, &tag).await?));
+        all.extend(tweak_v1::calls(
+            pool,
+            &tweak_v1::statics(ctx, pool, &tag).await?,
+        ));
     }
     if list {
         let (token, coins) = tweak_list::statics(ctx, pool, n, &tag).await?;

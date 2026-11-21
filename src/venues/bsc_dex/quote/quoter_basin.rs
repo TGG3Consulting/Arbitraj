@@ -26,12 +26,19 @@ pub fn request(
 ) -> GatewayResult<(Address, Bytes)> {
     let (PoolState::BasinWell(d), PoolRef::Contract(well)) = (&e.pool.state, &e.pool.reference)
     else {
-        return Err(ctx.err(ErrorCode::Internal, "у скважины Basin не прочитано состояние"));
+        return Err(ctx.err(
+            ErrorCode::Internal,
+            "у скважины Basin не прочитано состояние",
+        ));
     };
     if !d.has(token_in) {
         return Err(ctx.err(ErrorCode::NoRoute, "Basin: токен входа не из скважины"));
     }
-    let token_out = if token_in == d.token0 { d.token1 } else { d.token0 };
+    let token_out = if token_in == d.token0 {
+        d.token1
+    } else {
+        d.token0
+    };
     let c = W::getSwapOutCall {
         fromToken: token_in,
         toToken: token_out,

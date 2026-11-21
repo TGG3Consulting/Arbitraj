@@ -85,7 +85,12 @@ fn state(rec: &Value, config: B256, block_ts: u64) -> EkuboData {
         .as_array()
         .map(|a| {
             a.iter()
-                .map(|e| (e["word"].as_u64().unwrap(), U256::from_be_bytes(word(&e["bits"]).0)))
+                .map(|e| {
+                    (
+                        e["word"].as_u64().unwrap(),
+                        U256::from_be_bytes(word(&e["bits"]).0),
+                    )
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -106,7 +111,9 @@ fn state(rec: &Value, config: B256, block_ts: u64) -> EkuboData {
         let have: Vec<i32> = ticks.iter().map(|t| t.tick).collect();
         assert_eq!(set, have, "тики записи = установленные биты битмапа");
     }
-    let mev = rec.get("mev_state").map(|v| load_ekubo::mev_state(&word(v)));
+    let mev = rec
+        .get("mev_state")
+        .map(|v| load_ekubo::mev_state(&word(v)));
     EkuboData {
         config,
         sqrt_ratio,
@@ -136,7 +143,11 @@ fn key_gives_pool_id() {
         assert_eq!(abi_ekubo::pool_id(t0, t1, config), id);
         if let Some(ev) = rec.get("key_event") {
             let log: Log = serde_json::from_value(ev.clone()).expect("лог PoolInitialized");
-            assert_eq!(ekubo_route::pool_id(&log), Some(id), "PoolId события = PoolId пула");
+            assert_eq!(
+                ekubo_route::pool_id(&log),
+                Some(id),
+                "PoolId события = PoolId пула"
+            );
         }
         n += 1;
     }
@@ -163,7 +174,10 @@ fn math_equals_router_quote() {
             let is_token1 = q["is_token1"].as_bool().unwrap();
             let amount: u128 = q["amount"].as_str().unwrap().parse().unwrap();
             let Some(ours) = ekubo_swap::exact_in(&d, is_token1, amount) else {
-                assert!(router.is_none(), "наш расчёт — откат, роутер ответил {router:?}");
+                assert!(
+                    router.is_none(),
+                    "наш расчёт — откат, роутер ответил {router:?}"
+                );
                 continue;
             };
             if !ours.complete || ours.amount_in != amount {

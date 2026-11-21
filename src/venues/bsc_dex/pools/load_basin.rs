@@ -63,7 +63,10 @@ pub fn calls(well: Address, conf: &BasinConf, slot_impl: Address) -> Vec<(Addres
     .map(|d| (well, Bytes::from(d)))
     .collect();
     for w in [well, slot_impl] {
-        out.push((conf.aquifer, A::wellImplementationCall { well: w }.abi_encode().into()));
+        out.push((
+            conf.aquifer,
+            A::wellImplementationCall { well: w }.abi_encode().into(),
+        ));
     }
     for l in &conf.luts {
         out.push((*l, Bytes::from(L::getAParameterCall {}.abi_encode())));
@@ -157,8 +160,12 @@ pub fn state(r: &Raw, conf: &BasinConf, well: Address) -> Result<PoolState, Stri
 /// Реализация из слота ERC-1967 скважины на блоке (eth_getStorageAt). Принимает: окружение, скважину, блок (тег).
 /// Возвращает: адрес (ноль — не прокси). Ошибки: узел, ответ не слово.
 pub async fn slot_impl(ctx: &Ctx, well: Address, tag: &str) -> GatewayResult<Address> {
-    let word: B256 =
-        rpc::call(ctx, "eth_getStorageAt", json!([well, basin_conf::impl_slot(), tag])).await?;
+    let word: B256 = rpc::call(
+        ctx,
+        "eth_getStorageAt",
+        json!([well, basin_conf::impl_slot(), tag]),
+    )
+    .await?;
     Ok(Address::from_word(word))
 }
 

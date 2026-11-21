@@ -59,10 +59,14 @@ pub async fn read(ctx: &Ctx, size: usize) -> (WooQuotes, Vec<String>, usize) {
                 Ok(q) if q != Address::ZERO => {
                     out.insert(id, (pool, q));
                 }
-                Ok(_) => notes.push(format!("{id}: quoteToken() контракта {pool:#x} — нулевой адрес")),
+                Ok(_) => notes.push(format!(
+                    "{id}: quoteToken() контракта {pool:#x} — нулевой адрес"
+                )),
                 Err(e) => notes.push(format!("{id}: ответ quoteToken() не по ABI: {e}")),
             },
-            Ok(Err(why)) => notes.push(format!("{id}: quoteToken() контракта {pool:#x} откатился: {why}")),
+            Ok(Err(why)) => notes.push(format!(
+                "{id}: quoteToken() контракта {pool:#x} откатился: {why}"
+            )),
             Err(_) => no_answer += 1,
         }
     }

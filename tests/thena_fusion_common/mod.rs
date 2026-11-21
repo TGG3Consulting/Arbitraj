@@ -76,7 +76,11 @@ pub fn pools_all(rel: &str) -> Vec<Value> {
 
 /// JSON файла записи `rel/name`. Ошибок нет (тест падает).
 pub fn file(rel: &str, name: &str) -> Value {
-    read_json(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel).join(name))
+    read_json(
+        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join(rel)
+            .join(name),
+    )
 }
 
 /// Файл пула записи (pool_<адрес>.json). Ошибок нет.

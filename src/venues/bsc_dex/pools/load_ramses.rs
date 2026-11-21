@@ -78,11 +78,15 @@ pub async fn load(
     let nets = if v2line {
         let calls = tick_calls(ctx, &found, |tick| IRamsesClPool::ticksCall { tick })?;
         let got = call::view_many(ctx, pool, &calls, tag).await?;
-        got.into_iter().map(|t| (t.liquidityGross, t.liquidityNet)).collect::<Vec<_>>()
+        got.into_iter()
+            .map(|t| (t.liquidityGross, t.liquidityNet))
+            .collect::<Vec<_>>()
     } else {
         let calls = tick_calls(ctx, &found, |tick| IRamsesV3Pool::ticksCall { tick })?;
         let got = call::view_many(ctx, pool, &calls, tag).await?;
-        got.into_iter().map(|t| (t.liquidityGross, t.liquidityNet)).collect::<Vec<_>>()
+        got.into_iter()
+            .map(|t| (t.liquidityGross, t.liquidityNet))
+            .collect::<Vec<_>>()
     };
     let mut ticks = BTreeMap::new();
     for (t, (gross, net)) in found.iter().zip(nets) {
@@ -103,10 +107,6 @@ pub async fn load(
 
 /// Вызовы ticks() установленных тиков. Принимает: окружение, тики, конструктор вызова. Ошибка BadResponse — тик вне
 /// int24.
-fn tick_calls<C>(
-    ctx: &Ctx,
-    found: &[i32],
-    make: impl Fn(I24) -> C,
-) -> GatewayResult<Vec<C>> {
+fn tick_calls<C>(ctx: &Ctx, found: &[i32], make: impl Fn(I24) -> C) -> GatewayResult<Vec<C>> {
     found.iter().map(|t| Ok(make(i24(ctx, *t)?))).collect()
 }

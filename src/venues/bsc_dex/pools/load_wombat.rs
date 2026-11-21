@@ -81,7 +81,10 @@ async fn words(ctx: &Ctx, slots: &[(Address, B256)], tag: &str) -> GatewayResult
     for r in rpc::batch(ctx, &calls).await? {
         let raw = r?;
         let w: B256 = serde_json::from_str(raw.get()).map_err(|e| {
-            ctx.err(ErrorCode::BadResponse, format!("eth_getStorageAt: не слово: {e}"))
+            ctx.err(
+                ErrorCode::BadResponse,
+                format!("eth_getStorageAt: не слово: {e}"),
+            )
         })?;
         out.push(w);
     }
@@ -105,10 +108,18 @@ pub async fn read(ctx: &Ctx, f: &Family, pool: Address, tag: &str) -> GatewayRes
     let calls = c::vary_calls(pool, &fx.assets, true);
     let (got, read) = tokio::join!(call::try_many(ctx, &calls, tag), words(ctx, &slots, tag));
     let read = read?;
-    let imp = Address::from_word(*read.first().ok_or_else(|| bad("нет слота реализации".into()))?);
+    let imp = Address::from_word(
+        *read
+            .first()
+            .ok_or_else(|| bad("нет слота реализации".into()))?,
+    );
     let dynamic = implementation(ctx, f, pool, imp)?;
     let got = got?;
-    let got = if dynamic { got } else { without_price(got, fx.assets.len()) };
+    let got = if dynamic {
+        got
+    } else {
+        without_price(got, fx.assets.len())
+    };
     let (head, sides) = c::parse_vary(&got, &fx, dynamic).map_err(bad)?;
     Ok(Raw {
         pool,
@@ -141,9 +152,17 @@ async fn full(ctx: &Ctx, f: &Family, pool: Address, tag: &str) -> GatewayResult<
     let (calls, imp_slot) = (c::head_calls(pool), [(pool, implementation_slot())]);
     let (got, imp) = tokio::join!(call::try_many(ctx, &calls, tag), words(ctx, &imp_slot, tag));
     let head = c::parse_head(&got?).map_err(bad)?;
-    let imp = Address::from_word(*imp?.first().ok_or_else(|| bad("нет слота реализации".into()))?);
+    let imp = Address::from_word(
+        *imp?
+            .first()
+            .ok_or_else(|| bad("нет слота реализации".into()))?,
+    );
     let dynamic = implementation(ctx, f, pool, imp)?;
-    let slots: Vec<(Address, B256)> = head.tokens.iter().map(|t| (pool, paused_slot(*t))).collect();
+    let slots: Vec<(Address, B256)> = head
+        .tokens
+        .iter()
+        .map(|t| (pool, paused_slot(*t)))
+        .collect();
     let calls = c::asset_calls(pool, &head.tokens);
     let (got, paused) = tokio::join!(call::try_many(ctx, &calls, tag), words(ctx, &slots, tag));
     let assets = c::parse_assets(&got?, &head.tokens).map_err(bad)?;

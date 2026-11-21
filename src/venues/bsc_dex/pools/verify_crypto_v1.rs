@@ -58,7 +58,9 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
             (p.factory, data.into())
         })
         .collect();
-    let mut got = call::try_chunks(ctx, &calls, "latest", size).await.into_iter();
+    let mut got = call::try_chunks(ctx, &calls, "latest", size)
+        .await
+        .into_iter();
     let mut out = Vec::new();
     for (c, plan) in cands.iter().zip(plans) {
         let p = match plan {
@@ -80,7 +82,9 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
                 continue;
             }
             None => {
-                out.push(Verdict::Failed("реестр фабрики crypto v1: нет ответа".into()));
+                out.push(Verdict::Failed(
+                    "реестр фабрики crypto v1: нет ответа".into(),
+                ));
                 continue;
             }
         };
@@ -110,7 +114,9 @@ fn plan(ctx: &Ctx, c: &Candidate) -> Result<Plan, String> {
         templates.push(a);
     }
     if templates.is_empty() {
-        return Err(format!("{TEMPLATES} [dex:{id}] пуст — пулы crypto v1 не берутся"));
+        return Err(format!(
+            "{TEMPLATES} [dex:{id}] пуст — пулы crypto v1 не берутся"
+        ));
     }
     Ok(Plan {
         pool,

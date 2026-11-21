@@ -28,9 +28,11 @@ use super::super::math::ekubo_config::{self, Shape};
 use super::super::math::ekubo_tick::{MAX_TICK, MIN_TICK};
 use super::super::node::call::block_tag;
 use super::super::node::rpc;
-use super::abi_ekubo::{bitmap_slot, decode_state, decode_tick, sload_data, sload_words, tick_slot};
-use super::families::Family;
+use super::abi_ekubo::{
+    bitmap_slot, decode_state, decode_tick, sload_data, sload_words, tick_slot,
+};
 use super::ekubo_ext::{self, Ext};
+use super::families::Family;
 use super::{ekubo_keys, load_ekubo_twamm, load_smardex};
 
 /// Слова битмапа вокруг тика: (первое, последнее), обрезанные до слов MIN_TICK / MAX_TICK. Ошибок нет.
@@ -38,7 +40,10 @@ pub fn words_around(tick: i32, spacing: u32, n: u64) -> (u64, u64) {
     let (center, _) = word_index(tick, spacing);
     let (lo_max, _) = word_index(MIN_TICK, spacing);
     let (hi_max, _) = word_index(MAX_TICK, spacing);
-    (center.saturating_sub(n).max(lo_max), (center + n).min(hi_max))
+    (
+        center.saturating_sub(n).max(lo_max),
+        (center + n).min(hi_max),
+    )
 }
 
 /// Тики установленных битов слов. Принимает: (слово, биты), шаг. Возвращает: тики по возрастанию. Ошибок нет.

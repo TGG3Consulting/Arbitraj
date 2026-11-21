@@ -78,10 +78,7 @@ pub async fn load(
     let real = real_last(block_ts, last);
     let until = block_ts.saturating_add(horizon);
     let words = words_until(real, until);
-    let slots: Vec<B256> = words
-        .iter()
-        .map(|w| slot(id, TIME_BITMAPS, *w))
-        .collect();
+    let slots: Vec<B256> = words.iter().map(|w| slot(id, TIME_BITMAPS, *w)).collect();
     let got = sload(ctx, twamm, &slots, tag).await?;
     let mut bitmap = Vec::new();
     let mut at = Vec::new();

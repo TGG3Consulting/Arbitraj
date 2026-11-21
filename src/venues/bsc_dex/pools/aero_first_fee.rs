@@ -139,7 +139,11 @@ pub fn dynamic_at(h: &Head, d: &Defaults, scaling: U256, delta: u32) -> U256 {
         // secondsAgo = 0: деление на 0 в observe-ветке откатило бы крючок; setSecondsAgo запрещает 0 (MIN_SECONDS_AGO).
         return U256::ZERO;
     }
-    let oldest = if h.oldest.initialized { h.oldest.time } else { h.zero.time };
+    let oldest = if h.oldest.initialized {
+        h.oldest.time
+    } else {
+        h.zero.time
+    };
     let now = h.time + u64::from(delta);
     if u64::from(d.seconds_ago) > now.saturating_sub(u64::from(oldest)) {
         return U256::ZERO;

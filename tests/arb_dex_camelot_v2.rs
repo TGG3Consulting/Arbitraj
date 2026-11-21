@@ -160,7 +160,9 @@ fn real_logs_parsed() {
     let parse = |v: &Value| {
         let log: Log = serde_json::from_value(v.clone()).expect("лог RPC");
         assert!(topics.contains(log.topic0().unwrap()));
-        events_camelot::parse(&log).expect("разбор").expect("событие состояния")
+        events_camelot::parse(&log)
+            .expect("разбор")
+            .expect("событие состояния")
     };
     let sync = logs["sync"].as_array().unwrap();
     assert!(!sync.is_empty(), "в записи нет Sync");
@@ -187,7 +189,11 @@ fn real_logs_parsed() {
     }
     let (s, f, st, c) = (sync.len(), fees.len(), stables.len(), created.len());
     println!("логов: Sync {s}, FeePercentUpdated {f}, SetStableSwap {st}, PairCreated {c}");
-    for (name, k) in [("FeePercentUpdated", f), ("SetStableSwap", st), ("PairCreated", c)] {
+    for (name, k) in [
+        ("FeePercentUpdated", f),
+        ("SetStableSwap", st),
+        ("PairCreated", c),
+    ] {
         if k == 0 {
             println!("в записи нет {name} — разбор этого события на реальном логе не проверен");
         }

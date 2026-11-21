@@ -42,7 +42,10 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> Vec<Verdict> {
 /// Пул в dex.stable_pools DEX? Ошибок нет (не задана — нет).
 fn listed(ctx: &Ctx, c: &Candidate, pool: Address) -> bool {
     ctx.dex_list("dex.stable_pools", c.family.id)
-        .map(|l| l.iter().any(|s| Address::from_str(s.trim()).ok() == Some(pool)))
+        .map(|l| {
+            l.iter()
+                .any(|s| Address::from_str(s.trim()).ok() == Some(pool))
+        })
         .unwrap_or(false)
 }
 
@@ -58,7 +61,9 @@ async fn one(ctx: &Ctx, c: &Candidate) -> Result<Result<super::discover::Found, 
         )));
     }
     let calls: Vec<(Address, Bytes)> = vec![(pool, P::getTokensCall {}.abi_encode().into())];
-    let got = call::try_many(ctx, &calls, "latest").await.map_err(|e| e.message)?;
+    let got = call::try_many(ctx, &calls, "latest")
+        .await
+        .map_err(|e| e.message)?;
     let tokens = match got.first() {
         Some(Ok(b)) => match P::getTokensCall::abi_decode_returns(b) {
             Ok(t) => t,

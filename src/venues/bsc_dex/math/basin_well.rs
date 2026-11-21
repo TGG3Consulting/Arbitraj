@@ -59,7 +59,11 @@ pub fn cp2_reserve(other: U256, supply: U256) -> Option<U256> {
 /// ConstantProduct2.calcLpTokenSupply (L53-L58): floor(sqrt(b0·b1·1e12)) (OpenZeppelin Math.sqrt — вниз).
 /// None — переполнение.
 pub fn cp2_supply(r0: U256, r1: U256) -> Option<U256> {
-    Some(r0.checked_mul(r1)?.checked_mul(U256::from(EXP_PRECISION))?.root(2))
+    Some(
+        r0.checked_mul(r1)?
+            .checked_mul(U256::from(EXP_PRECISION))?
+            .root(2),
+    )
 }
 
 /// Stable2.getBandC (L437-L444): c = s·s/(x·N)·s·A_PRECISION/(Ann·N), b = x + s·A_PRECISION/Ann. None — переполнение
@@ -90,7 +94,10 @@ pub fn stable2_reserve(r: [U256; 2], j: usize, s: U256, a: U256, dec: [u8; 2]) -
         let prev = reserve;
         // _calcReserve L428-L435: (reserve·reserve + c) / (reserve·2 + b − lpTokenSupply).
         let num = reserve.checked_mul(reserve)?.checked_add(c)?;
-        let den = reserve.checked_mul(U256::from(2u8))?.checked_add(b)?.checked_sub(s)?;
+        let den = reserve
+            .checked_mul(U256::from(2u8))?
+            .checked_add(b)?
+            .checked_sub(s)?;
         reserve = num.checked_div(den)?;
         let diff = if reserve > prev {
             reserve - prev

@@ -109,7 +109,10 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
 async fn aero_fresh(q: &Quoting, e: &Entry, pool: Address) -> GatewayResult<()> {
     let (ctx, f) = (&q.ctx, e.family);
     let (Some(spacing), Some(was)) = (e.pool.tick_spacing, e.pool.fee_pips) else {
-        let why = format!("{}: у пула Aero Slipstream V3 нет tickSpacing или комиссии", f.id);
+        let why = format!(
+            "{}: у пула Aero Slipstream V3 нет tickSpacing или комиссии",
+            f.id
+        );
         return Err(ctx.err(ErrorCode::NoRoute, why));
     };
     let now = aero_cl::fee_latest(ctx, f, pool, spacing).await?;
@@ -118,7 +121,10 @@ async fn aero_fresh(q: &Quoting, e: &Entry, pool: Address) -> GatewayResult<()> 
     }
     Err(ctx.err(
         ErrorCode::NoRoute,
-        format!("{}: комиссия пула {now} пипс выше котировки {was} — своп не отправлен", f.id),
+        format!(
+            "{}: комиссия пула {now} пипс выше котировки {was} — своп не отправлен",
+            f.id
+        ),
     ))
 }
 

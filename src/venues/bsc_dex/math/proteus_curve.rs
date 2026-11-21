@@ -83,7 +83,10 @@ pub fn utility(f: ProteusUtility, x: I256, y: I256, s: Slice) -> Option<I256> {
                 .checked_sub(int(2).checked_mul(ay)?.checked_mul(bx)?)?;
             let disc = sqrt_cast(d);
             let r0 = muli(den_inv, disc.checked_add(ay)?.checked_add(bx)?)?;
-            let r1 = muli(den_inv, disc.checked_neg()?.checked_add(ay)?.checked_add(bx)?)?;
+            let r1 = muli(
+                den_inv,
+                disc.checked_neg()?.checked_add(ay)?.checked_add(bx)?,
+            )?;
             r0.max(r1)
         }
         ProteusUtility::V2 => {
@@ -96,8 +99,16 @@ pub fn utility(f: ProteusUtility, x: I256, y: I256, s: Slice) -> Option<I256> {
                 .checked_sub(a_q.checked_mul(c_q)?.checked_mul(int(4))?)?;
             let disc = sqrt_cast(d);
             let den = int(2).checked_mul(a_q)?;
-            let r0 = b_q.checked_neg()?.checked_add(disc)?.checked_mul(e18)?.checked_div(den)?;
-            let r1 = b_q.checked_neg()?.checked_sub(disc)?.checked_mul(e18)?.checked_div(den)?;
+            let r0 = b_q
+                .checked_neg()?
+                .checked_add(disc)?
+                .checked_mul(e18)?
+                .checked_div(den)?;
+            let r1 = b_q
+                .checked_neg()?
+                .checked_sub(disc)?
+                .checked_mul(e18)?
+                .checked_div(den)?;
             if s.a.is_negative() && s.b.is_negative() {
                 r0.min(r1)
             } else {

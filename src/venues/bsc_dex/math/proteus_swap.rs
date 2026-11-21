@@ -56,7 +56,11 @@ fn apply_fee(amount: I256, fee_up: bool, base_fee: U256) -> Option<I256> {
         abs.checked_sub(abs / base_fee)?.checked_sub(fixed_fee())?
     };
     let v = I256::try_from(r).ok()?;
-    if amount.is_negative() { v.checked_neg() } else { Some(v) }
+    if amount.is_negative() {
+        v.checked_neg()
+    } else {
+        Some(v)
+    }
 }
 
 /// _checkAmountWithBalance (L753-L760): баланс / сумма ≥ 10^11 — откат (сумма 0 — деление на ноль). Ошибок нет.
@@ -78,7 +82,15 @@ fn slices(d: &ProteusData) -> Option<Vec<Slice>> {
     if n == 0 || d.b.len() != n || d.k.len() != n || d.slopes.len() + 1 != n {
         return None;
     }
-    Some((0..n).map(|i| Slice { a: d.a[i], b: d.b[i], k: d.k[i] }).collect())
+    Some(
+        (0..n)
+            .map(|i| Slice {
+                a: d.a[i],
+                b: d.b[i],
+                k: d.k[i],
+            })
+            .collect(),
+    )
 }
 
 /// swapGivenInputAmount реализации (L58-L84 → _swap L264-L332, FEE_DOWN). Принимает: состояние, балансы ДО обмена
@@ -106,10 +118,26 @@ pub fn swap_given_input(
     let neg = rounded.is_negative();
     let (xf, yf) = if in_x {
         let fixed = xi.checked_add(rounded)?;
-        curve::final_point(fixed, Known::X, if neg { 1 } else { -1 }, u, i, &d.slopes, &sl)?
+        curve::final_point(
+            fixed,
+            Known::X,
+            if neg { 1 } else { -1 },
+            u,
+            i,
+            &d.slopes,
+            &sl,
+        )?
     } else {
         let fixed = yi.checked_add(rounded)?;
-        curve::final_point(fixed, Known::Y, if neg { -1 } else { 1 }, u, i, &d.slopes, &sl)?
+        curve::final_point(
+            fixed,
+            Known::Y,
+            if neg { -1 } else { 1 },
+            u,
+            i,
+            &d.slopes,
+            &sl,
+        )?
     };
     let computed = if in_x {
         let c = apply_fee(yf.checked_sub(yi)?, false, d.base_fee)?;
@@ -155,7 +183,11 @@ pub fn quote_in(d: &ProteusData, in_x: bool, amount: U256) -> Option<U256> {
     if d.frozen {
         return None;
     }
-    let (dec_in, dec_out) = if in_x { (d.dec_x, d.dec_y) } else { (d.dec_y, d.dec_x) };
+    let (dec_in, dec_out) = if in_x {
+        (d.dec_x, d.dec_y)
+    } else {
+        (d.dec_y, d.dec_x)
+    };
     let input = to_ocean(amount, dec_in)?;
     let out = swap_given_input(d, d.x_bal, d.y_bal, input, in_x)?;
     from_ocean(out, dec_out, d.unwrap_fee_divisor)

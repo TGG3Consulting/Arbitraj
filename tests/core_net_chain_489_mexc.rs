@@ -39,7 +39,9 @@ fn mexc(core: &Core) -> Vec<CoinNetworkInfo> {
 
 /// Запись монеты в сети. Паника — записи нет.
 fn rec<'a>(l: &'a [CoinNetworkInfo], ticker: &str, net: &str) -> &'a CoinNetworkInfo {
-    let i = l.iter().find(|i| i.asset.ticker == ticker && i.network == net);
+    let i = l
+        .iter()
+        .find(|i| i.asset.ticker == ticker && i.network == net);
     i.unwrap()
 }
 

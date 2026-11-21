@@ -43,7 +43,11 @@ pub async fn read(
     pool_token0: Address,
     tag: &str,
 ) -> GatewayResult<(Vec<LadderPoint>, Vec<LadderPoint>)> {
-    let q = Quoter { name: "Metric", func: "quoteMetric", data: virtual_quoter::data_metric };
+    let q = Quoter {
+        name: "Metric",
+        func: "quoteMetric",
+        data: virtual_quoter::data_metric,
+    };
     read_with(ctx, tokens, reg, id, pool, coin, quote, pool_token0, tag, q).await
 }
 

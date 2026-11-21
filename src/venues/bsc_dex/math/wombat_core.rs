@@ -169,6 +169,9 @@ mod tests {
     #[test]
     fn signed_rounding_toward_zero() {
         assert_eq!(wmul_i(int(-1), int(1)), Some(I256::ZERO));
-        assert_eq!(wdiv_i(int(-3), int(2)), Some(int(-1_499_999_999_999_999_999)));
+        assert_eq!(
+            wdiv_i(int(-3), int(2)),
+            Some(int(-1_499_999_999_999_999_999))
+        );
     }
 }

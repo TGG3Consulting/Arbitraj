@@ -90,7 +90,9 @@ async fn executor_and_queue_by_dex_venue() {
     assert_eq!(y.executor_version.as_deref(), Some("v3"));
     assert_eq!(a.wallet(&id).unwrap().executor.as_deref(), Some(EXECUTOR));
     // (д) снять.
-    a.set_executor_at("arb_dex", &id, None, "тест").await.unwrap();
+    a.set_executor_at("arb_dex", &id, None, "тест")
+        .await
+        .unwrap();
     assert!(a.wallet(&id).unwrap().chains.is_empty());
     assert_eq!(a.wallet_at("arb_dex", &id).unwrap().executor, None);
 }

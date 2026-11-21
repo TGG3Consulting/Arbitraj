@@ -43,7 +43,10 @@ pub fn calls(resolver: Address, pool: Address) -> Vec<(Address, Bytes)> {
     let v0 = B256::from(U256::from(SLOT_VARS).to_be_bytes::<32>());
     let v2 = B256::from(U256::from(SLOT_VARS2).to_be_bytes::<32>());
     vec![
-        (resolver, enc(R::getPoolReservesAdjustedCall { pool_: pool })),
+        (
+            resolver,
+            enc(R::getPoolReservesAdjustedCall { pool_: pool }),
+        ),
         (pool, enc(P::constantsViewCall {})),
         (pool, enc(P::constantsView2Call {})),
         (pool, enc(P::readFromStorageCall { slot_: v0 })),

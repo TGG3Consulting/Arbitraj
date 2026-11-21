@@ -104,12 +104,18 @@ fn woofi_retune_both_directions() {
     let pool = format!("{c:#x}");
     let usdt = tok("USDT");
     let coins = [tok("BTCB"), tok("USDC")];
-    let member = |x: Address| PoolRef::Member { contract: c, coin: x };
+    let member = |x: Address| PoolRef::Member {
+        contract: c,
+        coin: x,
+    };
     let on = set(&["woofi"]);
     let off = set(&[]);
     // Режим «нет»: одна пара под строкой контракта (так берёт проход без режима).
     let mut s = Snap::default();
-    s.taken.insert(pool.clone(), found(woo, member(coins[0]), coins[0], usdt, coins[0]));
+    s.taken.insert(
+        pool.clone(),
+        found(woo, member(coins[0]), coins[0], usdt, coins[0]),
+    );
     s.status.insert(pool.clone(), DirectoryStatus::Taken);
     retune(&mut s, &off);
     assert_eq!(s.taken.len(), 1, "«нет» → «нет»: ничего не снято");
@@ -128,7 +134,10 @@ fn woofi_retune_both_directions() {
     retune(&mut s, &off);
     assert!(s.taken.is_empty() && s.status.is_empty());
     // «нет → да» ещё раз после прохода «нет»: остаются только ключи-пары, каждая пара — одна запись.
-    s.taken.insert(pool.clone(), found(woo, member(coins[0]), coins[0], usdt, coins[0]));
+    s.taken.insert(
+        pool.clone(),
+        found(woo, member(coins[0]), coins[0], usdt, coins[0]),
+    );
     retune(&mut s, &on);
     for &x in &coins {
         let k = dir_key(&on, "woofi", &pool, x, usdt);
@@ -149,16 +158,32 @@ fn multi_coin_rows_kept_and_dropped_by_dex() {
     let (n_usdt, n_usdc) = (nerve_coin("USDT"), nerve_coin("USDC"));
     let multi = |c: Address, a: Address, b: Address| {
         let (token0, token1) = sorted(a, b);
-        PoolRef::Multi { contract: c, token0, token1 }
+        PoolRef::Multi {
+            contract: c,
+            token0,
+            token1,
+        }
     };
     let mut s = Snap::default();
     let all = set(&["ellipsis", "nerve", "woofi"]);
     let ke = dir_key(&all, "ellipsis", &format!("{pe:#x}"), usdc, usdt);
     let kn = dir_key(&all, "nerve", &format!("{pn:#x}"), n_usdc, n_usdt);
-    s.taken.insert(ke.clone(), found(ell, multi(pe, usdc, usdt), usdc, usdt, usdc));
-    s.taken.insert(kn.clone(), found(ner, multi(pn, n_usdc, n_usdt), n_usdc, n_usdt, n_usdc));
-    s.multi.entry(usdc).or_default().push(row("ellipsis", pe, usdc, usdt));
-    s.multi.entry(n_usdc).or_default().push(row("nerve", pn, n_usdc, n_usdt));
+    s.taken.insert(
+        ke.clone(),
+        found(ell, multi(pe, usdc, usdt), usdc, usdt, usdc),
+    );
+    s.taken.insert(
+        kn.clone(),
+        found(ner, multi(pn, n_usdc, n_usdt), n_usdc, n_usdt, n_usdc),
+    );
+    s.multi
+        .entry(usdc)
+        .or_default()
+        .push(row("ellipsis", pe, usdc, usdt));
+    s.multi
+        .entry(n_usdc)
+        .or_default()
+        .push(row("nerve", pn, n_usdc, n_usdt));
     // Все в режиме (и WooFi): ничего не теряется.
     retune(&mut s, &all);
     assert_eq!(s.taken.len(), 2);

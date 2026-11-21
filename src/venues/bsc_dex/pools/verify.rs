@@ -32,8 +32,10 @@ use super::family_variant::Variant;
 pub use super::verify_calls::{fee_method, field_calls, registry_call, registry_call_with};
 pub use super::verify_rules::{Read, check, fill, registered, registered_for, v2_fee_pips, v3_abi};
 use super::{
-    fee_probe, verify_algebra, verify_balancer, verify_balancer_v3, verify_basin, verify_crypto, verify_crypto_v1, verify_curve, verify_lb, verify_lb20, verify_lb22, verify_curve_ng, verify_curve_plain, verify_dodo, verify_fluid, verify_inf_stable, verify_izi, verify_metric,
-    verify_ekubo, verify_maverick, verify_solidly, verify_stable_u, verify_v4, verify_wombat,
+    fee_probe, verify_algebra, verify_balancer, verify_balancer_v3, verify_basin, verify_crypto,
+    verify_crypto_v1, verify_curve, verify_curve_ng, verify_curve_plain, verify_dodo, verify_ekubo,
+    verify_fluid, verify_inf_stable, verify_izi, verify_lb, verify_lb20, verify_lb22,
+    verify_maverick, verify_metric, verify_solidly, verify_stable_u, verify_v4, verify_wombat,
 };
 
 /// Кандидат на проверку: DEX (вид), пул как у источника (адрес или PoolId), монета и встречный токен.
@@ -208,22 +210,34 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     }
     // iZiSwap / Biswap V3 (решение 286): поля пула + реестр фабрики pool(x, y, fee) (verify_izi.rs).
     let list: Vec<Candidate> = izi.iter().map(|i| cands[*i].clone()).collect();
-    for (i, r) in izi.into_iter().zip(verify_izi::verify(ctx, &list, size).await) {
+    for (i, r) in izi
+        .into_iter()
+        .zip(verify_izi::verify(ctx, &list, size).await)
+    {
         out[i] = Some(r);
     }
     // Balancer V2 (решение 289): хранилище getPool(id) + фабрики isPoolFromFactory + токены пула (verify_balancer.rs).
     let list: Vec<Candidate> = balancer.iter().map(|i| cands[*i].clone()).collect();
-    for (i, r) in balancer.into_iter().zip(verify_balancer::verify(ctx, &list, size).await) {
+    for (i, r) in balancer
+        .into_iter()
+        .zip(verify_balancer::verify(ctx, &list, size).await)
+    {
         out[i] = Some(r);
     }
     // Balancer V3 (решение 441): хранилище знает пул + фабрики по выпускам + крючки обмена + токены (verify_balancer_v3.rs).
     let list: Vec<Candidate> = balancer_v3.iter().map(|i| cands[*i].clone()).collect();
-    for (i, r) in balancer_v3.into_iter().zip(verify_balancer_v3::verify(ctx, &list, size).await) {
+    for (i, r) in balancer_v3
+        .into_iter()
+        .zip(verify_balancer_v3::verify(ctx, &list, size).await)
+    {
         out[i] = Some(r);
     }
     // Liquidity Book V2.1 (решение 290): поля пула + реестр фабрики getLBPairInformation (verify_lb.rs).
     let list: Vec<Candidate> = lb.iter().map(|i| cands[*i].clone()).collect();
-    for (i, r) in lb.into_iter().zip(verify_lb::verify(ctx, &list, size).await) {
+    for (i, r) in lb
+        .into_iter()
+        .zip(verify_lb::verify(ctx, &list, size).await)
+    {
         out[i] = Some(r);
     }
     // Liquidity Book v2.0 (решение 445): factory / tokenX / tokenY / feeParameters пула и реестр фабрики (verify_lb20.rs).
@@ -236,7 +250,10 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     }
     // Liquidity Book V2.2 (решение 446): проверка V2.1 + реализация и крючки пула (verify_lb22.rs).
     let list: Vec<Candidate> = lb22.iter().map(|i| cands[*i].clone()).collect();
-    for (i, r) in lb22.into_iter().zip(verify_lb22::verify(ctx, &list, size).await) {
+    for (i, r) in lb22
+        .into_iter()
+        .zip(verify_lb22::verify(ctx, &list, size).await)
+    {
         out[i] = Some(r);
     }
     // StableSwap (решение 122 F): список dex.stable_pools + монеты пула (verify_curve.rs).
@@ -281,27 +298,42 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     }
     // Fluid DEX T1 (решение 440): isDex фабрики + constantsView пула (verify_fluid.rs).
     let list: Vec<Candidate> = fluid.iter().map(|i| cands[*i].clone()).collect();
-    for (i, r) in fluid.into_iter().zip(verify_fluid::verify(ctx, &list, size).await) {
+    for (i, r) in fluid
+        .into_iter()
+        .zip(verify_fluid::verify(ctx, &list, size).await)
+    {
         out[i] = Some(r);
     }
     // Скважина Basin (решение 485): реестр Aquifer / прокси, функция скважины, сверка calcLpTokenSupply
     // (verify_basin.rs).
     let list: Vec<Candidate> = basin.iter().map(|i| cands[*i].clone()).collect();
-    for (i, r) in basin.into_iter().zip(verify_basin::verify(ctx, &list, size).await) {
+    for (i, r) in basin
+        .into_iter()
+        .zip(verify_basin::verify(ctx, &list, size).await)
+    {
         out[i] = Some(r);
     }
     // Shell Protocol Proteus (решение 486): список dex.stable_pools, учёт dex.vault, стороны и реализация (verify_shell.rs).
     let list: Vec<Candidate> = shell.iter().map(|i| cands[*i].clone()).collect();
-    for (i, r) in shell.into_iter().zip(super::verify_shell::verify(ctx, &list, size).await) {
+    for (i, r) in shell
+        .into_iter()
+        .zip(super::verify_shell::verify(ctx, &list, size).await)
+    {
         out[i] = Some(r);
     }
     // Ekubo (решение 447): ключ у PoolKeyIndex + состояние у ядра (verify_ekubo.rs).
     let list: Vec<Candidate> = ekubo.iter().map(|i| cands[*i].clone()).collect();
-    for (i, r) in ekubo.into_iter().zip(verify_ekubo::verify(ctx, &list, size).await) {
+    for (i, r) in ekubo
+        .into_iter()
+        .zip(verify_ekubo::verify(ctx, &list, size).await)
+    {
         out[i] = Some(r);
     }
     let list: Vec<Candidate> = wombat.iter().map(|i| cands[*i].clone()).collect();
-    for (i, r) in wombat.into_iter().zip(verify_wombat::verify(ctx, &list).await) {
+    for (i, r) in wombat
+        .into_iter()
+        .zip(verify_wombat::verify(ctx, &list).await)
+    {
         out[i] = Some(r);
     }
     let list: Vec<Candidate> = v2v3.iter().map(|i| cands[*i].clone()).collect();
@@ -368,7 +400,9 @@ async fn contracts(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> 
                 Some(Ok(Err(rev))) => Verdict::Rejected(format!("реестр фабрики откатился: {rev}")),
                 Some(Ok(Ok(b))) => match probes.check(c.family.id) {
                     Err(v) => v,
-                    Ok(()) => match registered_for(c.family, a, &b).and_then(|_| found(ctx, c, a, &read, key)) {
+                    Ok(()) => match registered_for(c.family, a, &b)
+                        .and_then(|_| found(ctx, c, a, &read, key))
+                    {
                         Ok(f) => Verdict::Taken(Box::new(f)),
                         Err(w) => Verdict::Rejected(w),
                     },

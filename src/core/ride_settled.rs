@@ -74,7 +74,9 @@ fn in_flight(core: &Core, d: &Direction) -> Result<(), String> {
         return Err(format!(
             "{}: идёт наша продажа {} ({}) — попала ли она уже в пул, по которому считаем, не видно: ждём её итога, \
              чтобы не посчитать её монеты дважды или не пропустить {MARK}",
-            d.sell_on.0, d.asset.ticker, riders(core, d)
+            d.sell_on.0,
+            d.asset.ticker,
+            riders(core, d)
         ));
     }
     match unsure(core, d) {

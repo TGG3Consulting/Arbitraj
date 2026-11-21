@@ -77,7 +77,9 @@ fn decide(tokens: &[Address], part: Vec<call::Piece>) -> Result<Vec<(Address, Ad
 /// Пара — обёртка и её же базовый токен в одном пуле (обмен «сам в себя» через буфер, пул не нужен): такая пара не
 /// строится. Принимает: пары обёрток пула, две монеты. Ошибок нет.
 pub fn twin(pairs: &[(Address, Address)], a: Address, b: Address) -> bool {
-    pairs.iter().any(|&(w, u)| (w, u) == (a, b) || (u, w) == (a, b))
+    pairs
+        .iter()
+        .any(|&(w, u)| (w, u) == (a, b) || (u, w) == (a, b))
 }
 
 /// Запомнить пары «обёртка — базовый токен» пула для развёртки пар (multi_pair::expand их не строит). Принимает:

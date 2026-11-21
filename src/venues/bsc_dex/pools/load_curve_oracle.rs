@@ -89,7 +89,8 @@ pub fn calls(pool: Address, oracle: Address) -> (Vec<(Address, Bytes)>, usize) {
 /// блок-тег. Ошибки: оракул не подтверждён проверкой, узел, ответов не столько, сколько вызовов, ответ не по ABI.
 pub async fn read(ctx: &Ctx, tokens: &Tokens, pool: Address, tag: &str) -> GatewayResult<Raw> {
     let Some(oracle) = oracle(ctx.place.id, pool) else {
-        let what = format!("пул Curve с оракулом {pool}: оракул не подтверждён проверкой в этом запуске");
+        let what =
+            format!("пул Curve с оракулом {pool}: оракул не подтверждён проверкой в этом запуске");
         return Err(ctx.err(ErrorCode::BadResponse, what));
     };
     let (calls, tail) = calls(pool, oracle);
@@ -112,7 +113,10 @@ pub async fn load(
 pub fn state(ctx: &Ctx, raw: &Raw, pair: (Address, Address)) -> GatewayResult<PoolState> {
     let pool = raw.pool;
     state_with(raw, pair, stable_native::wrapped(ctx), &|what: String| {
-        ctx.err(ErrorCode::BadResponse, format!("пул Curve с оракулом {pool}: {what}"))
+        ctx.err(
+            ErrorCode::BadResponse,
+            format!("пул Curve с оракулом {pool}: {what}"),
+        )
     })
 }
 
@@ -133,7 +137,9 @@ pub fn state_with(
     };
     // `convert(int256, uint256)` Vyper откатывает отрицательное; ноль — деление на курс в exchange (L468).
     if answer.is_negative() || answer.is_zero() {
-        return Err(bad(format!("курс оракула {answer} ≤ 0 — обмен пула откатится")));
+        return Err(bad(format!(
+            "курс оракула {answer} ≤ 0 — обмен пула откатится"
+        )));
     }
     match load_curve_plain::state_with(raw, pair, wrapped, bad)? {
         PoolState::StableSwap(mut d) => {
@@ -141,7 +147,9 @@ pub fn state_with(
                 return Err(bad(format!("у пула монет {}, а не 2", d.rates.len())));
             }
             if d.native != Some(0) {
-                return Err(bad("монета 0 пула — не метка ETH 0xEeee… (не этот исходник)".into()));
+                return Err(bad(
+                    "монета 0 пула — не метка ETH 0xEeee… (не этот исходник)".into(),
+                ));
             }
             d.rates[1] = answer.into_raw();
             d.pair_d = false;

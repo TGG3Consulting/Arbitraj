@@ -72,7 +72,9 @@ pub fn third_calls(pool: Address) -> Vec<(Address, Bytes)> {
 /// Реализации третьего прохода (обязательна — без неё DEX не подключена, families.rs required). Ошибка — не задана
 /// dex.lb_implementations или элемент не адрес.
 fn settings(ctx: &Ctx, f: &Family) -> Result<Vec<Address>, String> {
-    let list = ctx.dex_list("dex.lb_implementations", f.id).map_err(|e| e.message)?;
+    let list = ctx
+        .dex_list("dex.lb_implementations", f.id)
+        .map_err(|e| e.message)?;
     list.iter()
         .map(|s| {
             Address::from_str(s.trim())
@@ -86,7 +88,9 @@ fn settings(ctx: &Ctx, f: &Family) -> Result<Vec<Address>, String> {
 pub fn third_pass(a: &[Result<Bytes, String>], implementations: &[Address]) -> Result<(), String> {
     let at = |i: usize, what: &str| match a.get(i) {
         Some(Ok(b)) => Ok(b.clone()),
-        Some(Err(r)) => Err(format!("пул откатил {what}: {r} — не пул Liquidity Book V2.2")),
+        Some(Err(r)) => Err(format!(
+            "пул откатил {what}: {r} — не пул Liquidity Book V2.2"
+        )),
         None => Err(format!("нет ответа пула на {what}")),
     };
     let imp = P22::implementationCall::abi_decode_returns(&at(0, "implementation()")?)

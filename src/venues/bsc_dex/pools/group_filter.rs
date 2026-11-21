@@ -84,7 +84,9 @@ pub fn index(pools: &[(Found, String)]) -> std::collections::HashMap<PoolRef, us
 
 /// Адреса контрактов пар многомонетных пулов (PoolRef::Multi) пачки (решение 295, ревью): лог такого адреса идёт и в
 /// listen_site.rs, даже если в пачке есть Contract того же адреса. Пусто — пар Multi нет. Ошибок нет.
-pub fn multi_sites(pools: &[(Found, String)]) -> std::collections::HashSet<alloy_primitives::Address> {
+pub fn multi_sites(
+    pools: &[(Found, String)],
+) -> std::collections::HashSet<alloy_primitives::Address> {
     pools
         .iter()
         .filter_map(|(f, _)| match f.reference {

@@ -76,7 +76,11 @@ async fn batch_gives_one_pass_with_last_value() {
         wakes.push(k);
         seen.push(pass(&s));
     }
-    assert_eq!(wakes, vec![n as usize], "пачка из {n} изменений — одно пробуждение");
+    assert_eq!(
+        wakes,
+        vec![n as usize],
+        "пачка из {n} изменений — одно пробуждение"
+    );
     assert_eq!(seen, vec![n], "проход видит итоговое значение пачки");
 }
 
@@ -91,7 +95,11 @@ async fn single_change_one_pass_and_change_during_pass_not_lost() {
     assert_eq!(pass(&s), 10);
     put(&s, 20).await;
     // После прохода — ещё одно пробуждение, и проход видит 20.
-    assert_eq!(ready(&mut w), Some(1), "изменение во время прохода даёт ещё проход");
+    assert_eq!(
+        ready(&mut w),
+        Some(1),
+        "изменение во время прохода даёт ещё проход"
+    );
     assert_eq!(pass(&s), 20);
     assert_eq!(ready(&mut w), None, "больше проходов нет");
 }

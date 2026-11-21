@@ -23,8 +23,9 @@ use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{
-    balancer_math, basin_well, bin_swap, crypto_swap, dmm, ekubo_mev, ekubo_swap, fluid_check, lb_swap, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_ema, stable_guard, stableswap_ng,
-    stableswap_nomi, stableswap_v1, swap_solidly, v2, wombat,
+    balancer_math, basin_well, bin_swap, crypto_swap, dmm, ekubo_mev, ekubo_swap, fluid_check,
+    lb_swap, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_ema, stable_guard,
+    stableswap_ng, stableswap_nomi, stableswap_v1, swap_solidly, v2, wombat,
 };
 use super::super::pools::ekubo_native;
 use super::super::pools::families::Proto;
@@ -322,8 +323,8 @@ pub fn swap(
                         .ok_or_else(none)
                 } else {
                     // Решение 483: у Ramses Legacy выход пары на 1 меньше формулы — формуле нужен выход + 1.
-                    let want = solidly_v1_math::variant_want(e.family.variant, amount)
-                        .ok_or_else(none)?;
+                    let want =
+                        solidly_v1_math::variant_want(e.family.variant, amount).ok_or_else(none)?;
                     v2::amount_in(want, r_in, r_out, ratio)
                         .map(|i| Swapped {
                             amount_in: i,
@@ -355,8 +356,8 @@ pub fn swap(
             // Решение 484: пул Wombat — выход PoolV2.swap (math/wombat.rs: CoreV2, haircut, высокое покрытие, проверки
             // addCash / removeCash / покрытия 1 %; пауза актива входа).
             if d.wombat.is_some() {
-                let out = wombat::swap_out(d, usize::from(i), usize::from(j), amount)
-                    .ok_or_else(none)?;
+                let out =
+                    wombat::swap_out(d, usize::from(i), usize::from(j), amount).ok_or_else(none)?;
                 return Ok(Swapped {
                     amount_in: amount,
                     amount_out: out,
@@ -420,8 +421,7 @@ pub fn swap(
             }
             // Решение 472 (доделка): реализации Curve с оракулом цены (Plain2BasicEMA / Plain2ETHEMA) — save_p после
             // обмена (pack_prices: цена < 2^128), иначе обмен откатится (math/stable_ema.rs).
-            if d.ema
-                && stable_ema::passes(i, j, amount, &d.balances, &d.rates, d.amp, &t).is_none()
+            if d.ema && stable_ema::passes(i, j, amount, &d.balances, &d.rates, d.amp, &t).is_none()
             {
                 return Err(why(
                     "StableSwap: save_p пула после обмена откатил бы его (цена пула ≥ 2^128)",
@@ -438,7 +438,9 @@ pub fn swap(
         // выше последней точки — неисполнимо. Только точный вход.
         (PoolState::OraclePmm(d), PoolKind::OraclePmm) => {
             if !exact_in {
-                return Err(why("PMM от оракула (WooFi / Metric): точный выход по лесенке не поддерживается"));
+                return Err(why(
+                    "PMM от оракула (WooFi / Metric): точный выход по лесенке не поддерживается",
+                ));
             }
             // zero_for_one — вход token0; продаём базовую, если она token0 и вход token0 (или наоборот).
             let points = if zero_for_one == d.base_is_token0 {
@@ -476,17 +478,31 @@ pub fn swap(
         // (math/dmm.rs); выход ограничен реальным резервом (иначе контракт откатит).
         (PoolState::AmpV2(d), PoolKind::AmpV2) => {
             let s = if zero_for_one {
-                dmm::Side { r_in: d.reserve0, r_out: d.reserve1, v_in: d.v_reserve0, v_out: d.v_reserve1 }
+                dmm::Side {
+                    r_in: d.reserve0,
+                    r_out: d.reserve1,
+                    v_in: d.v_reserve0,
+                    v_out: d.v_reserve1,
+                }
             } else {
-                dmm::Side { r_in: d.reserve1, r_out: d.reserve0, v_in: d.v_reserve1, v_out: d.v_reserve0 }
+                dmm::Side {
+                    r_in: d.reserve1,
+                    r_out: d.reserve0,
+                    v_in: d.v_reserve1,
+                    v_out: d.v_reserve0,
+                }
             };
             let r = if exact_in {
                 dmm::amount_out(amount, s, d.fee).map(|o| (amount, o))
             } else {
                 dmm::amount_in(amount, s, d.fee).map(|i| (i, amount))
             };
-            r.map(|(amount_in, amount_out)| Swapped { amount_in, amount_out, complete: true })
-                .ok_or_else(none)
+            r.map(|(amount_in, amount_out)| Swapped {
+                amount_in,
+                amount_out,
+                complete: true,
+            })
+            .ok_or_else(none)
         }
         // Пара с фиктивными резервами (SmarDex, решение 288): порт SmardexLibrary.getAmountOut со средней ценой, приведённой
         // к времени блока чтения (math/smardex_swap.rs swap_out). Только точный вход (обратной формулы у пары нет в обмене по входу).
@@ -495,20 +511,33 @@ pub fn swap(
                 return Err(why("SmarDex: точный выход не поддерживается"));
             }
             let p = smardex_swap::side(d, zero_for_one);
-            let out = smardex_swap::swap_out(&p, d.price_average_ts, d.block_ts, amount).ok_or_else(none)?;
-            Ok(Swapped { amount_in: amount, amount_out: out, complete: true })
+            let out = smardex_swap::swap_out(&p, d.price_average_ts, d.block_ts, amount)
+                .ok_or_else(none)?;
+            Ok(Swapped {
+                amount_in: amount,
+                amount_out: out,
+                complete: true,
+            })
         }
         // Пул в общем хранилище (Balancer V2, решение 289): формула пула как по вызову хранилища (math/balancer_math.rs):
         // комиссия, множители точности, весовая / стейблсвап; индексы пары — из состояния (i0 — token0).
         (PoolState::VaultPool(d), PoolKind::VaultPool) => {
-            let (i, j) = if zero_for_one { (d.i0, d.i1) } else { (d.i1, d.i0) };
+            let (i, j) = if zero_for_one {
+                (d.i0, d.i1)
+            } else {
+                (d.i1, d.i0)
+            };
             let r = if exact_in {
                 balancer_math::amount_out(d, i.into(), j.into(), amount).map(|o| (amount, o))
             } else {
                 balancer_math::amount_in(d, i.into(), j.into(), amount).map(|x| (x, amount))
             };
-            r.map(|(amount_in, amount_out)| Swapped { amount_in, amount_out, complete: true })
-                .ok_or_else(none)
+            r.map(|(amount_in, amount_out)| Swapped {
+                amount_in,
+                amount_out,
+                complete: true,
+            })
+            .ok_or_else(none)
         }
         // Crypto-пул Curve (решение 442): выход как в `_exchange` пула (math/crypto_swap.rs: get_y Twocrypto / Tricrypto,
         // комиссия с выхода); только точный вход (шаг исполнителя — exchange на точный вход). Рампа A/gamma — D через
@@ -520,7 +549,11 @@ pub fn swap(
             if d.halted {
                 return Err(why("crypto-пул Curve: обмены остановлены (is_killed)"));
             }
-            let (i, j) = if zero_for_one { (d.i0, d.i1) } else { (d.i1, d.i0) };
+            let (i, j) = if zero_for_one {
+                (d.i0, d.i1)
+            } else {
+                (d.i1, d.i0)
+            };
             let Some(out) = crypto_swap::exchange_out(d, i.into(), j.into(), amount) else {
                 // Решение 472: выход считается, а tweak_price после обмена откатил бы его (math/crypto_tweak2.rs).
                 let mut bare = (**d).clone();
@@ -528,11 +561,17 @@ pub fn swap(
                 if d.tweak.is_some()
                     && crypto_swap::exchange_out(&bare, i.into(), j.into(), amount).is_some()
                 {
-                    return Err(why("crypto-пул Curve: tweak_price после обмена откатил бы его"));
+                    return Err(why(
+                        "crypto-пул Curve: tweak_price после обмена откатил бы его",
+                    ));
                 }
                 return Err(none());
             };
-            Ok(Swapped { amount_in: amount, amount_out: out, complete: true })
+            Ok(Swapped {
+                amount_in: amount,
+                amount_out: out,
+                complete: true,
+            })
         }
         // Бины с изменчивой комиссией (Liquidity Book V2.1, решение 290): порт getSwapOut по прочитанной полосе бинов на
         // времени блока чтения (math/lb_swap.rs). Только точный вход (шаг исполнителя — вход переводом и swap).
@@ -600,8 +639,11 @@ pub fn swap(
             if !exact_in {
                 return Err(why("Shell: точный выход не поддерживается"));
             }
-            let in_x = d.is_x(token_in).ok_or_else(|| why("Shell: токен входа не из пула"))?;
-            let out = super::super::math::proteus_swap::quote_in(d, in_x, amount).ok_or_else(none)?;
+            let in_x = d
+                .is_x(token_in)
+                .ok_or_else(|| why("Shell: токен входа не из пула"))?;
+            let out =
+                super::super::math::proteus_swap::quote_in(d, in_x, amount).ok_or_else(none)?;
             Ok(Swapped {
                 amount_in: amount,
                 amount_out: out,

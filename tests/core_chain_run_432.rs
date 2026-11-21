@@ -87,7 +87,9 @@ async fn recorded_direction_of_stopped_chain_is_refused() {
     let db = Db::open(&dir.join("t.sqlite")).unwrap();
     let (tx, _) = broadcast::channel(16);
     let (jtx, _) = broadcast::channel(16);
-    let s = Store::load(db.clone(), tx, Journal::new(db, jtx)).await.unwrap();
+    let s = Store::load(db.clone(), tx, Journal::new(db, jtx))
+        .await
+        .unwrap();
     for (v, id) in [("bsc_dex", "bsc"), ("arb_dex", "arbitrum")] {
         s.set("dex.chain", Scope::Venue(v.into()), Some(json!(id)), "тест")
             .await
@@ -100,9 +102,14 @@ async fn recorded_direction_of_stopped_chain_is_refused() {
     // Сеть по умолчанию не задана — сеть монеты без сети не прочитать: при остановленной сети — отказ, не догадка.
     let why = refusal(&r, chain::of(&s, &dex, &d.asset)).unwrap();
     assert!(why.contains("не прочитать"), "{why}");
-    s.set("dex.default_chain", Scope::Global, Some(json!("bsc")), "тест")
-        .await
-        .unwrap();
+    s.set(
+        "dex.default_chain",
+        Scope::Global,
+        Some(json!("bsc")),
+        "тест",
+    )
+    .await
+    .unwrap();
     let why = refusal(&r, chain::of(&s, &dex, &d.asset)).unwrap();
     assert!(why.contains("сеть bsc остановлена"), "{why}");
     apply(&mut r, &two(), &c("bsc"), true, "тест").unwrap();

@@ -47,7 +47,10 @@ fn dirs() -> Vec<PathBuf> {
         })
         .collect();
     out.sort();
-    assert!(!out.is_empty(), "нет записи: tools/arbitrum_record/balancer_v3_buffer.py");
+    assert!(
+        !out.is_empty(),
+        "нет записи: tools/arbitrum_record/balancer_v3_buffer.py"
+    );
     out
 }
 
@@ -85,7 +88,12 @@ type Calls = HashMap<(Address, Bytes), Result<Bytes, String>>;
 /// Ответы на вызовы бота по записи; вызова нет в записи — Err (тест его не подменяет).
 fn lookup(calls: &Calls, want: &[(Address, Bytes)]) -> Vec<Result<Bytes, String>> {
     want.iter()
-        .map(|k| calls.get(k).cloned().unwrap_or_else(|| Err(format!("нет в записи: {k:?}"))))
+        .map(|k| {
+            calls
+                .get(k)
+                .cloned()
+                .unwrap_or_else(|| Err(format!("нет в записи: {k:?}")))
+        })
         .collect()
 }
 
@@ -99,13 +107,20 @@ fn fixed_of(meta: &Value, pool: Address, calls: &Calls) -> Option<Fixed> {
     }
     let hl = |n: &str| -> Vec<Address> {
         let l = meta["lists"][n].as_array().cloned().unwrap_or_default();
-        l.iter().map(|a| a.as_str().unwrap().parse().unwrap()).collect()
+        l.iter()
+            .map(|a| a.as_str().unwrap().parse().unwrap())
+            .collect()
     };
     let hooks = Lists {
         surge: hl("dex.bv3_stable_surge_hooks"),
         mev: hl("dex.bv3_mev_capture_hooks"),
     };
-    let got = first(&facs, &hooks, &lookup(calls, &first_calls(vault, pool, &facs))).ok()?;
+    let got = first(
+        &facs,
+        &hooks,
+        &lookup(calls, &first_calls(vault, pool, &facs)),
+    )
+    .ok()?;
     let (release, tokens, min_trade, hook) = got;
     let ex = extra::decode(release, &lookup(calls, &extra::calls(pool, release))).ok()?;
     let r = U256::from_str_radix(meta["preview_raw"].as_str().unwrap(), 10).unwrap();
@@ -169,7 +184,10 @@ fn buffer_quote_matches_batch_router() {
             let want = load_balancer_v3::calls(vault, pool, &fx, pre);
             let answers = lookup(&calls, &want);
             for q in p["quotes"].as_array().unwrap() {
-                let (i, j) = (q["i"].as_u64().unwrap() as u8, q["j"].as_u64().unwrap() as u8);
+                let (i, j) = (
+                    q["i"].as_u64().unwrap() as u8,
+                    q["j"].as_u64().unwrap() as u8,
+                );
                 let t_in: Address = q["token_in"].as_str().unwrap().parse().unwrap();
                 let t_out: Address = q["token_out"].as_str().unwrap().parse().unwrap();
                 let amount = U256::from_str_radix(q["amount"].as_str().unwrap(), 10).unwrap();
@@ -238,11 +256,17 @@ fn buffer_quote_matches_batch_router() {
                     continue;
                 }
                 let ours = balancer_math::amount_out(&d, i.into(), j.into(), amount);
-                assert_eq!(ours, theirs, "пул {pool:#x} {i}→{j} wrap {wi} unwrap {wo} {amount}");
+                assert_eq!(
+                    ours, theirs,
+                    "пул {pool:#x} {i}→{j} wrap {wi} unwrap {wo} {amount}"
+                );
                 same += 1;
             }
         }
     }
     assert!(same > 0, "ни одной сверки (не взяты: {skipped:?})");
-    eprintln!("сверок {same}, превью по одной точке {near}, пропущено {}", skipped.len());
+    eprintln!(
+        "сверок {same}, превью по одной точке {near}, пропущено {}",
+        skipped.len()
+    );
 }

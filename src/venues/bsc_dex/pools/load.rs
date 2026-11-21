@@ -28,8 +28,11 @@ use super::load_algebra_dir;
 use super::registry::{Entry, Registry};
 use super::ticks::TickMap;
 use super::{
-    aero_cl, load_aero_basic, load_algebra, load_algebra_integral, load_balancer, load_balancer_v3, load_basin, load_bin, load_camelot, load_cl, load_crypto, load_crypto_v1, load_curve, load_curve_meta, load_curve_ng, load_curve_oracle, load_curve_plain, load_dmm, load_dodo, load_ekubo,
-    load_elastic, load_fluid, load_inf_stable, load_izi, load_lb, load_lb20, load_maverick, load_metric, load_nomi, load_ramses, load_saddle, load_slipstream, load_smardex,
+    aero_cl, load_aero_basic, load_algebra, load_algebra_integral, load_balancer, load_balancer_v3,
+    load_basin, load_bin, load_camelot, load_cl, load_crypto, load_crypto_v1, load_curve,
+    load_curve_meta, load_curve_ng, load_curve_oracle, load_curve_plain, load_dmm, load_dodo,
+    load_ekubo, load_elastic, load_fluid, load_inf_stable, load_izi, load_lb, load_lb20,
+    load_maverick, load_metric, load_nomi, load_ramses, load_saddle, load_slipstream, load_smardex,
     load_solidly, load_stable_u, load_v2v3, load_wombat, load_woo,
 };
 
@@ -130,7 +133,10 @@ pub async fn state(
     // блока одной пачкой (load_crypto.rs). Tricrypto — и пара многомонетного пула (PoolRef::Multi).
     if matches!(f.proto, Proto::CurveTwocrypto | Proto::CurveTricrypto) {
         let Some(a) = reference.own_contract() else {
-            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на crypto-пул не того вида", f.title)));
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                format!("{}: ссылка на crypto-пул не того вида", f.title),
+            ));
         };
         return Ok(Loaded {
             state: load_crypto::load(ctx, f, a, pair, block).await?,
@@ -143,7 +149,10 @@ pub async fn state(
     // (load_crypto_v1.rs).
     if matches!(f.proto, Proto::CurveCryptoV1 | Proto::CurveTricryptoV1) {
         let Some(a) = reference.own_contract() else {
-            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на crypto-пул не того вида", f.title)));
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                format!("{}: ссылка на crypto-пул не того вида", f.title),
+            ));
         };
         return Ok(Loaded {
             state: load_crypto_v1::load(ctx, tokens, f, a, pair, block).await?,
@@ -185,7 +194,10 @@ pub async fn state(
     // KyberSwap Classic DMM (решение 287): вид ядра AmpV2, пул — отдельный контракт, одно чтение getTradeInfo (load_dmm.rs).
     if f.proto == Proto::KyberDmm {
         let PoolRef::Contract(a) = reference else {
-            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пул DMM не того вида", f.title)));
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                format!("{}: ссылка на пул DMM не того вида", f.title),
+            ));
         };
         return Ok(Loaded {
             state: load_dmm::load(ctx, *a, &tag).await?,
@@ -198,7 +210,10 @@ pub async fn state(
     if f.proto == Proto::BalancerV2 {
         // Решение 295: и пара многомонетного пула (PoolRef::Multi).
         let Some(a) = reference.own_contract() else {
-            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пул Balancer не того вида", f.title)));
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                format!("{}: ссылка на пул Balancer не того вида", f.title),
+            ));
         };
         return Ok(Loaded {
             state: load_balancer::load(ctx, f, a, pair, &tag).await?,
@@ -226,20 +241,31 @@ pub async fn state(
     // недопущенный крючок обмена — не ошибка чтения: состояние пишется, обмен через пул исключён с причиной.
     if matches!(f.proto, Proto::LbV21 | Proto::LbV22) {
         let PoolRef::Contract(a) = reference else {
-            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пул LB не того вида", f.title)));
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                format!("{}: ссылка на пул LB не того вида", f.title),
+            ));
         };
         let (state, bins) = if f.proto == Proto::LbV22 {
             super::lb_hooks::load(ctx, f, tokens, *a, pair, usdt, block).await?
         } else {
             load_lb::load(ctx, tokens, *a, pair, usdt, block).await?
         };
-        return Ok(Loaded { state, ticks: None, bins: Some(bins), fee_pips: None });
+        return Ok(Loaded {
+            state,
+            ticks: None,
+            bins: Some(bins),
+            fee_pips: None,
+        });
     }
     // Fluid DEX T1 (решение 440): вид ядра SmartColDebt, пул — отдельный контракт; резолвер (dex.quoter), слова пула и
     // время блока (load_fluid.rs).
     if f.proto == Proto::FluidT1 {
         let PoolRef::Contract(a) = reference else {
-            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пул Fluid не того вида", f.title)));
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                format!("{}: ссылка на пул Fluid не того вида", f.title),
+            ));
         };
         let resolver = ctx.dex_addr("dex.quoter", f.id)?;
         return Ok(Loaded {
@@ -267,7 +293,10 @@ pub async fn state(
     // реализации и знаки токенов (load_shell.rs).
     if f.proto == Proto::ShellProteus {
         let PoolRef::Contract(a) = reference else {
-            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пул Shell не того вида", f.title)));
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                format!("{}: ссылка на пул Shell не того вида", f.title),
+            ));
         };
         return Ok(Loaded {
             state: super::load_shell::load(ctx, f.id, *a, pair, block).await?,
@@ -279,7 +308,10 @@ pub async fn state(
     // Camelot V2 (решение 443): вид ядра Solidly, пара — отдельный контракт; одно try_many (load_camelot.rs).
     if f.proto == Proto::CamelotV2 {
         let PoolRef::Contract(a) = reference else {
-            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пару Camelot не того вида", f.title)));
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                format!("{}: ссылка на пару Camelot не того вида", f.title),
+            ));
         };
         return Ok(Loaded {
             state: load_camelot::load(ctx, *a, &tag).await?,
@@ -292,7 +324,10 @@ pub async fn state(
     // пауза, модуль MEV-налога фабрики (load_aero_basic.rs).
     if f.proto == Proto::AeroBasic {
         let PoolRef::Contract(a) = reference else {
-            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пул Aero Basic не того вида", f.title)));
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                format!("{}: ссылка на пул Aero Basic не того вида", f.title),
+            ));
         };
         return Ok(Loaded {
             state: load_aero_basic::load(ctx, f, *a, &tag).await?,
@@ -304,10 +339,18 @@ pub async fn state(
     // Liquidity Book v2.0 (решение 445): тот же вид ядра LbBin (признак v20), свои геттеры v2.0 (load_lb20.rs).
     if f.proto == Proto::LbV20 {
         let PoolRef::Contract(a) = reference else {
-            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пул LB v2.0 не того вида", f.title)));
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                format!("{}: ссылка на пул LB v2.0 не того вида", f.title),
+            ));
         };
         let (state, bins) = load_lb20::load(ctx, tokens, *a, pair, usdt, block).await?;
-        return Ok(Loaded { state, ticks: None, bins: Some(bins), fee_pips: None });
+        return Ok(Loaded {
+            state,
+            ticks: None,
+            bins: Some(bins),
+            fee_pips: None,
+        });
     }
     // Ekubo (решение 447): вид ядра Ekubo, пул — в ядре (PoolId); состояние, битмап, тики, MEVCapture и время блока
     // (load_ekubo.rs).
@@ -326,7 +369,10 @@ pub async fn state(
     // SmarDex (решение 288): вид ядра Fictive, пара — отдельный контракт; состояние и время блока (load_smardex.rs).
     if f.proto == Proto::Smardex {
         let PoolRef::Contract(a) = reference else {
-            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пару SmarDex не того вида", f.title)));
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                format!("{}: ссылка на пару SmarDex не того вида", f.title),
+            ));
         };
         return Ok(Loaded {
             state: load_smardex::load(ctx, *a, block).await?,
@@ -443,7 +489,10 @@ pub async fn state(
     // Algebra (THENA Fusion, решения 80, 81): вид ядра Cl, но пул — отдельный контракт, чтение своё (load_algebra.rs):
     // globalState + liquidity + tickSpacing + сжатый битмап tickTable (решение 463: код AlgebraV1, строка —
     // 256·spacing); у Algebra V1.9 с направленными комиссиями (решение 444) — сырой битмап, tickSpacing не нужен.
-    if matches!(f.proto, Proto::Algebra | Proto::AlgebraIntegral | Proto::AlgebraDirFee) {
+    if matches!(
+        f.proto,
+        Proto::Algebra | Proto::AlgebraIntegral | Proto::AlgebraDirFee
+    ) {
         if let PoolRef::Contract(a) = reference {
             // Решение 188: у Integral тики — связным списком (load_algebra_integral.rs), состояние то же. Решение 444:
             // у направленных комиссий — свой globalState (load_algebra_dir.rs), карта — та же, что у V1.9.

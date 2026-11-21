@@ -62,7 +62,8 @@ async fn unloaded(ctx: &Ctx, why: &str) {
         "Статистика условия пулов не загружена из SQLite ({why}) — пустая не кэшируется, \
          сохранённая не затирается"
     );
-    ctx.log(Level::Error, "send.pool_cond_stat", msg, None).await;
+    ctx.log(Level::Error, "send.pool_cond_stat", msg, None)
+        .await;
 }
 
 /// Копия из памяти. Ошибок нет.
@@ -108,6 +109,7 @@ async fn persist(ctx: &Ctx) {
     };
     if let Err(e) = saved {
         let msg = format!("Статистика условия пулов не сохранена в SQLite: {e}");
-        ctx.log(Level::Error, "send.pool_cond_stat", msg, None).await;
+        ctx.log(Level::Error, "send.pool_cond_stat", msg, None)
+            .await;
     }
 }

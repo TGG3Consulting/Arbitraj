@@ -107,7 +107,11 @@ pub async fn answers(
     }
     let got = call::try_many(ctx, &calls, tag).await?;
     if got.len() != calls.len() {
-        let what = format!("StableSwap {pool}: ответов {} из {}", got.len(), calls.len());
+        let what = format!(
+            "StableSwap {pool}: ответов {} из {}",
+            got.len(),
+            calls.len()
+        );
         return Err(ctx.err(ErrorCode::BadResponse, what));
     }
     Ok((got, tail))

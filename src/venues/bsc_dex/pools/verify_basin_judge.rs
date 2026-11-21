@@ -79,7 +79,10 @@ pub fn shifted(d: &BasinWellData) -> Result<[U256; 2], String> {
         return Err(nope("скважина пуста"));
     }
     let k = scale0(d).ok_or_else(|| nope("знаков больше 18"))?;
-    let x0 = d.reserve0.checked_mul(k).ok_or_else(|| nope("переполнение"))?;
+    let x0 = d
+        .reserve0
+        .checked_mul(k)
+        .ok_or_else(|| nope("переполнение"))?;
     let two = U256::from(2u8);
     let r0 = if x0.checked_mul(two).is_none_or(|v| v >= d.supply) {
         d.reserve0 + d.reserve0 / two

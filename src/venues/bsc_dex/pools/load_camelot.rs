@@ -39,12 +39,7 @@ pub struct Read {
 /// Состояние пары на блоке. Принимает: окружение, адрес пары, блок-тег. Ошибки: узел, вызов откатился, ответ не по
 /// ABI, состояние не пары Camelot (state).
 pub async fn load(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<PoolState> {
-    let bad = |what: String| {
-        ctx.err(
-            ErrorCode::BadResponse,
-            format!("Camelot V2 {pool}: {what}"),
-        )
-    };
+    let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("Camelot V2 {pool}: {what}"));
     let calls: Vec<(Address, Bytes)> = [
         P::getReservesCall {}.abi_encode(),
         P::stableSwapCall {}.abi_encode(),

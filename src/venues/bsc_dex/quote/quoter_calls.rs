@@ -278,8 +278,7 @@ pub fn request(
     // квотера нет). Пул применяет комиссию getFee(pool, stable) внутри — тот же fee, что наш локальный расчёт берёт из
     // состояния. Pool.getAmountOut (velodrome-finance Pool.sol, решение 23). Решение 443: пара Camelot V2 — тот же
     // getAmountOut(uint256, address) (CamelotPair Pair.sol L372, abi_camelot.rs), комиссия — входа этого направления.
-    if e.family.proto.is_solidly()
-        || matches!(e.family.proto, Proto::CamelotV2 | Proto::AeroBasic)
+    if e.family.proto.is_solidly() || matches!(e.family.proto, Proto::CamelotV2 | Proto::AeroBasic)
     {
         let PoolRef::Contract(pool) = e.pool.reference else {
             return Err(ctx.err(ErrorCode::Internal, "ссылка на пул Solidly не того вида"));
@@ -407,8 +406,7 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
             .map(|r| r.amountOut);
     }
     // Solidly (Topaz v2, THENA V1) и Camelot V2 (решение 443): getAmountOut — один uint256, выход после комиссии пары.
-    if e.family.proto.is_solidly()
-        || matches!(e.family.proto, Proto::CamelotV2 | Proto::AeroBasic)
+    if e.family.proto.is_solidly() || matches!(e.family.proto, Proto::CamelotV2 | Proto::AeroBasic)
     {
         return ISolidlyPool::getAmountOutCall::abi_decode_returns(out).ok();
     }

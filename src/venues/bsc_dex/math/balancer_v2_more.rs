@@ -49,7 +49,13 @@ pub fn amount_out(d: &VaultPoolData, c: &V2Curve, i: usize, j: usize, a: U256) -
         return None;
     }
     match c {
-        V2Curve::StableRated { amp, factors, bpt, v2, alt } => {
+        V2Curve::StableRated {
+            amp,
+            factors,
+            bpt,
+            v2,
+            alt,
+        } => {
             // Кеш курса может истечь к блоку исполнения — худший (меньший) выход из двух наборов множителей.
             let now = balancer_rated::out(d, (*amp, *bpt, *v2), factors, i, j, a)?;
             match alt {
@@ -57,7 +63,13 @@ pub fn amount_out(d: &VaultPoolData, c: &V2Curve, i: usize, j: usize, a: U256) -
                 None => Some(now),
             }
         }
-        V2Curve::Managed { weights, lower, upper, supply, bpt } => {
+        V2Curve::Managed {
+            weights,
+            lower,
+            upper,
+            supply,
+            bpt,
+        } => {
             if usize::from(*bpt) == i || usize::from(*bpt) == j {
                 return None;
             }
@@ -95,7 +107,13 @@ pub fn amount_in(d: &VaultPoolData, c: &V2Curve, i: usize, j: usize, a: U256) ->
         return None;
     }
     match c {
-        V2Curve::StableRated { amp, factors, bpt, v2, alt } => {
+        V2Curve::StableRated {
+            amp,
+            factors,
+            bpt,
+            v2,
+            alt,
+        } => {
             // Худший (больший) вход из двух наборов множителей (кеш курса может истечь к блоку исполнения).
             let now = balancer_rated::in_(d, (*amp, *bpt, *v2), factors, i, j, a)?;
             match alt {
@@ -103,7 +121,13 @@ pub fn amount_in(d: &VaultPoolData, c: &V2Curve, i: usize, j: usize, a: U256) ->
                 None => Some(now),
             }
         }
-        V2Curve::Managed { weights, lower, upper, supply, bpt } => {
+        V2Curve::Managed {
+            weights,
+            lower,
+            upper,
+            supply,
+            bpt,
+        } => {
             if usize::from(*bpt) == i || usize::from(*bpt) == j {
                 return None;
             }
@@ -158,7 +182,16 @@ fn tripped(supply: U256, weight: U256, balance: U256, bound: U256, lower: bool) 
 /// Линейный пул: виды токенов входа и выхода, балансы × множители (18 знаков) и параметры (комиссия, цели). None —
 /// не линейная кривая, индекс не из пула, виртуальный выпуск < баланса BPT.
 fn linear(d: &VaultPoolData, c: &V2Curve, i: usize, j: usize) -> Option<(Tok, Tok, Bal, Params)> {
-    let V2Curve::Linear { main, wrapped, bpt, factors, lower, upper, supply } = c else {
+    let V2Curve::Linear {
+        main,
+        wrapped,
+        bpt,
+        factors,
+        lower,
+        upper,
+        supply,
+    } = c
+    else {
         return None;
     };
     let tok = |x: usize| {
@@ -172,7 +205,12 @@ fn linear(d: &VaultPoolData, c: &V2Curve, i: usize, j: usize) -> Option<(Tok, To
             None
         }
     };
-    let up = |x: u8| mul_down(*d.balances.get(usize::from(x))?, *factors.get(usize::from(x))?);
+    let up = |x: u8| {
+        mul_down(
+            *d.balances.get(usize::from(x))?,
+            *factors.get(usize::from(x))?,
+        )
+    };
     let bal = Bal {
         main: up(*main)?,
         wrapped: up(*wrapped)?,

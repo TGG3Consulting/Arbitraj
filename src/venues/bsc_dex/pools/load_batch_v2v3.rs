@@ -81,7 +81,11 @@ pub fn head(ctx: &Ctx, w: &Want, x: Extras) -> Result<Vec<(Address, Bytes)>, Mis
 /// Ответов не меньше `n` — иначе «пул не прочитан» (а не выход за границу). Ошибки: причина.
 pub fn need(w: &Want, b: &[Bytes], n: usize) -> Result<(), Miss> {
     let (t, got) = (w.family.title, b.len());
-    (got >= n).then_some(()).ok_or_else(|| miss(format!("{t}: пул не прочитан — ответов головы {got}, нужно {n}")))
+    (got >= n).then_some(()).ok_or_else(|| {
+        miss(format!(
+            "{t}: пул не прочитан — ответов головы {got}, нужно {n}"
+        ))
+    })
 }
 
 /// Разбор ступени 1 (fee() 281 уже отделена, fee_fresh::split). Ошибки: причина (ответов мало, ответ не по ABI).

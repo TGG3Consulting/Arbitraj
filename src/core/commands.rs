@@ -233,7 +233,11 @@ impl Core {
             .deps
             .log(Level::Info, "core.control", None, &t, None)
             .await;
-        let code = if run { "system.started" } else { "system.stopped" };
+        let code = if run {
+            "system.started"
+        } else {
+            "system.stopped"
+        };
         self.inner.deps.notify(code, None, &t).await;
         Ok(t)
     }

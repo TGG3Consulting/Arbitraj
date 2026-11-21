@@ -37,8 +37,14 @@ fn stable2_official_vectors() {
     assert_eq!(stable2_supply([e18, e18], a(), [18, 18]), Some(a_lp));
     assert_eq!(stable2_supply([e18, b_b1], a(), [18, 6]), Some(b_lp));
     // calcReserve: A — обе позиции.
-    assert_eq!(stable2_reserve([U256::ZERO, e18], 0, a_lp, a(), [18, 18]), Some(e18));
-    assert_eq!(stable2_reserve([e18, U256::ZERO], 1, a_lp, a(), [18, 18]), Some(e18));
+    assert_eq!(
+        stable2_reserve([U256::ZERO, e18], 0, a_lp, a(), [18, 18]),
+        Some(e18)
+    );
+    assert_eq!(
+        stable2_reserve([e18, U256::ZERO], 1, a_lp, a(), [18, 18]),
+        Some(e18)
+    );
     // C (12, 18): reserves[0] = 20e12, найти reserves[1] = 25e18.
     let c_b0 = u("20000000000000");
     let c_b1 = u("25000000000000000000");
@@ -47,8 +53,14 @@ fn stable2_official_vectors() {
         Some(c_b1)
     );
     // B (18, 6): обе позиции.
-    assert_eq!(stable2_reserve([U256::ZERO, b_b1], 0, b_lp, a(), [18, 6]), Some(e18));
-    assert_eq!(stable2_reserve([e18, U256::ZERO], 1, b_lp, a(), [18, 6]), Some(b_b1));
+    assert_eq!(
+        stable2_reserve([U256::ZERO, b_b1], 0, b_lp, a(), [18, 6]),
+        Some(e18)
+    );
+    assert_eq!(
+        stable2_reserve([e18, U256::ZERO], 1, b_lp, a(), [18, 6]),
+        Some(b_b1)
+    );
     // Знаков больше 18 — откат decodeWellData (InvalidTokenDecimals).
     assert_eq!(stable2_supply([e18, e18], a(), [19, 18]), None);
 }

@@ -31,7 +31,8 @@ fn data_dir() -> PathBuf {
         })
         .collect();
     dirs.sort();
-    dirs.pop().expect("нет записи: tools/arbitrum_record/saddle.py")
+    dirs.pop()
+        .expect("нет записи: tools/arbitrum_record/saddle.py")
 }
 
 /// Ответ {"ok": "0x…"} → байты; откат — Err(текст).
@@ -50,7 +51,9 @@ fn bad(what: String) -> GatewayError {
 fn pools() -> Vec<Value> {
     let text = std::fs::read_to_string(data_dir().join("pools.json")).expect("pools.json");
     let all: Vec<Value> = serde_json::from_str(&text).expect("json");
-    all.into_iter().filter(|p| p.get("error").is_none()).collect()
+    all.into_iter()
+        .filter(|p| p.get("error").is_none())
+        .collect()
 }
 
 /// swapStorage() у пулов Saddle Arbitrum — 7 слов (struct Swap без полей Nerve), swapFee разбирается.
@@ -102,7 +105,10 @@ fn math_matches_calculate_swap() {
         for q in p["quotes"].as_array().unwrap() {
             let Ok(raw) = answer(q) else { continue };
             let want = U256::from_be_slice(&raw);
-            let (i, j) = (q["i"].as_u64().unwrap() as usize, q["j"].as_u64().unwrap() as usize);
+            let (i, j) = (
+                q["i"].as_u64().unwrap() as usize,
+                q["j"].as_u64().unwrap() as usize,
+            );
             let dx: U256 = q["dx"].as_str().unwrap().parse().unwrap();
             let ours = exchange_out_t(i, j, dx, &st.balances, &st.rates, st.amp, st.fee, &t);
             assert_eq!(ours, Some(want), "пул {} {i}→{j} dx {dx}", p["pool"]);

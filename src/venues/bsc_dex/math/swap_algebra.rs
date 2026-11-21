@@ -245,7 +245,10 @@ fn in_same_row(t: &TickMap, cur: i32, zero_for_one: bool) -> Option<(i32, bool)>
     };
     let (tick, init) = match found {
         Some((k, _)) => (*k, true),
-        None => ((if zero_for_one { row_lo } else { row_hi }).saturating_mul(sp), false),
+        None => (
+            (if zero_for_one { row_lo } else { row_hi }).saturating_mul(sp),
+            false,
+        ),
     };
     Some((tick.clamp(MIN_TICK, MAX_TICK), init))
 }

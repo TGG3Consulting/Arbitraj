@@ -136,9 +136,8 @@ fn adjust(
     }
     // norm = sqrt_int(norm / 10**18); p_new = (ps·(norm − step) + step·po) / norm (L547-L550).
     let norm = sqrt_int(norm / E18)?;
-    let pn = |k: usize| -> Option<U256> {
-        du(au(mu(ps[k], su(norm, step)?)?, mu(step, po[k])?)?, norm)
-    };
+    let pn =
+        |k: usize| -> Option<U256> { du(au(mu(ps[k], su(norm, step)?)?, mu(step, po[k])?)?, norm) };
     let p_new = [pn(0)?, pn(1)?];
     // xp[k+1] = _xp[k+1] * p_new[k] / price_scale[k] (L553-L555).
     let x = [

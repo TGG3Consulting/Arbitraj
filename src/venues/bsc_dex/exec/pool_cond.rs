@@ -105,12 +105,16 @@ pub fn rule(e: &Entry) -> How {
         (_, Proto::ShellProteus) => How::Off(
             "Shell: балансы пула в учёте Ocean (ERC-1155), слоты Ocean не сверены (решение 486)",
         ),
-        (_, Proto::InfinityCl | Proto::InfinityBin | Proto::InfinityStable) => How::Off(
-            "PancakeSwap Infinity: вид только BSC, слоты менеджера и крючка не сверены",
-        ),
+        (_, Proto::InfinityCl | Proto::InfinityBin | Proto::InfinityStable) => {
+            How::Off("PancakeSwap Infinity: вид только BSC, слоты менеджера и крючка не сверены")
+        }
         (PoolRef::Singleton { manager, id }, Proto::UniswapV4) => {
             let s = v4_state_slot(*id);
-            How::Slots(*manager, vec![s, plus(s, 3)], "slot0 + liquidity (PoolManager)")
+            How::Slots(
+                *manager,
+                vec![s, plus(s, 3)],
+                "slot0 + liquidity (PoolManager)",
+            )
         }
         (PoolRef::Singleton { .. } | PoolRef::Member { .. }, _) => How::Off(
             "пул внутри общего контракта: слоты пула не подтверждены, корень общий для всех пулов",
@@ -137,16 +141,16 @@ pub fn rule(e: &Entry) -> How {
             own(*a, &[4, 5], "_parameters + _reserves (слоты 4, 5)")
         }
         // Решение 445: LB v2.0 — раскладка v2.0.0 (таблица в шапке).
-        (PoolRef::Contract(a), Proto::LbV20) => {
-            own(*a, &[6, 7, 10], "_pairInformation + _feeParameters (слоты 6, 7, 10)")
-        }
-        (PoolRef::Contract(a), Proto::LbV22) => {
-            own(
-                *a,
-                &[3, 4, 65545],
-                "_parameters + _reserves + _hooksParameters (слоты 3, 4, 65545)",
-            )
-        }
+        (PoolRef::Contract(a), Proto::LbV20) => own(
+            *a,
+            &[6, 7, 10],
+            "_pairInformation + _feeParameters (слоты 6, 7, 10)",
+        ),
+        (PoolRef::Contract(a), Proto::LbV22) => own(
+            *a,
+            &[3, 4, 65545],
+            "_parameters + _reserves + _hooksParameters (слоты 3, 4, 65545)",
+        ),
         (PoolRef::Contract(a), _) => How::Root(*a),
         (PoolRef::Multi { contract, .. }, _) => How::Root(*contract),
     }

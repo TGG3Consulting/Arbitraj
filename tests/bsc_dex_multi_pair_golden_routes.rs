@@ -67,8 +67,14 @@ fn swaps(p: &Parts) -> String {
     for e in p.registry.snapshot() {
         for tin in [e.pool.token0, e.pool.token1] {
             for (exact_in, amt) in [(true, 15u32), (true, 18), (true, 20), (false, 18)] {
-                let r = pool_quote::swap(&p.ctx, &e, tin, exact_in, U256::from(10u8).pow(U256::from(amt)))
-                    .map_err(|x| x.message);
+                let r = pool_quote::swap(
+                    &p.ctx,
+                    &e,
+                    tin,
+                    exact_in,
+                    U256::from(10u8).pow(U256::from(amt)),
+                )
+                .map_err(|x| x.message);
                 out.push(format!(
                     "{:?} in={tin:#x} exact_in={exact_in} 1e{amt} -> {r:?}",
                     e.pool.reference
@@ -88,7 +94,11 @@ fn snapshot(p: &Parts) -> String {
     let mut edges = Vec::new();
     for t in [USDT, CAKE, WBNB, BTCB] {
         for e in g.edges_from(t) {
-            edges.push(format!("{t:#x} -> {:#x} via {:?}", e.other(t), e.entry.pool.reference));
+            edges.push(format!(
+                "{t:#x} -> {:#x} via {:?}",
+                e.other(t),
+                e.entry.pool.reference
+            ));
         }
     }
     text += &sorted(edges);
@@ -96,14 +106,29 @@ fn snapshot(p: &Parts) -> String {
     for (name, a) in [("allowed", allowed.clone()), ("direct", HashSet::new())] {
         for (from, to) in [(USDT, CAKE), (CAKE, USDT)] {
             text += &format!("## paths {name} {from:#x}->{to:#x}\n");
-            text += &sorted(route_paths::enumerate(&g, from, to, &a, 3, 500).iter().map(path_line).collect());
+            text += &sorted(
+                route_paths::enumerate(&g, from, to, &a, 3, 500)
+                    .iter()
+                    .map(path_line)
+                    .collect(),
+            );
             text += &format!("## best {name} {from:#x}->{to:#x}\n");
-            text += &sorted(route_best::enumerate(&g, from, to, &a, 3, 500).iter().map(path_line).collect());
+            text += &sorted(
+                route_best::enumerate(&g, from, to, &a, 3, 500)
+                    .iter()
+                    .map(path_line)
+                    .collect(),
+            );
         }
     }
     for base in [USDT, CAKE, WBNB, BTCB] {
         text += &format!("## cycles {base:#x}\n");
-        text += &sorted(route_paths::enumerate_cycles(&g, base, 4, 500).iter().map(path_line).collect());
+        text += &sorted(
+            route_paths::enumerate_cycles(&g, base, 4, 500)
+                .iter()
+                .map(path_line)
+                .collect(),
+        );
     }
     text += "## swaps\n";
     text += &swaps(p);

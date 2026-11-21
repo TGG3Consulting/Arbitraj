@@ -85,7 +85,12 @@ pub fn parse_head(got: &[Ans]) -> Result<Head, String> {
 pub fn asset_calls(pool: Address, tokens: &[Address]) -> Vec<(Address, Bytes)> {
     tokens
         .iter()
-        .map(|t| (pool, P::addressOfAssetCall { token: *t }.abi_encode().into()))
+        .map(|t| {
+            (
+                pool,
+                P::addressOfAssetCall { token: *t }.abi_encode().into(),
+            )
+        })
         .collect()
 }
 
@@ -138,7 +143,11 @@ pub fn parse_detail(
             return Err(format!("актив монеты {t}: pool() = {owner}, не этот пул"));
         }
         let price = if dynamic {
-            Some(dec::<A::getRelativePriceCall>(got, at + 5, "getRelativePrice()")?)
+            Some(dec::<A::getRelativePriceCall>(
+                got,
+                at + 5,
+                "getRelativePrice()",
+            )?)
         } else {
             None
         };
@@ -188,7 +197,11 @@ pub fn parse_vary(got: &[Ans], fixed: &Fixed, dynamic: bool) -> Result<(Head, Ve
         let cash = dec::<A::cashCall>(got, at, "cash()")?.to::<u128>();
         let liability = dec::<A::liabilityCall>(got, at + 1, "liability()")?.to::<u128>();
         let price = if dynamic {
-            Some(dec::<A::getRelativePriceCall>(got, at + 2, "getRelativePrice()")?)
+            Some(dec::<A::getRelativePriceCall>(
+                got,
+                at + 2,
+                "getRelativePrice()",
+            )?)
         } else {
             None
         };

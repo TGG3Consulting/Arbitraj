@@ -36,7 +36,10 @@ pub fn hashes(ctx: &Ctx, c: &Candidate) -> Result<Vec<B256>, String> {
         .dex_list(SETTING, c.family.id)
         .map_err(|e| format!("{}: версия кода пула не сверяется", e.message))?;
     if list.is_empty() {
-        return Err(format!("{SETTING} [dex:{}] пуста — пулы вида не берутся", c.family.id));
+        return Err(format!(
+            "{SETTING} [dex:{}] пуста — пулы вида не берутся",
+            c.family.id
+        ));
     }
     let parse = |h: &String| {
         B256::from_str(h.trim()).map_err(|_| format!("{SETTING}: «{h}» — не хеш (0x + 64 hex)"))
@@ -46,7 +49,10 @@ pub fn hashes(ctx: &Ctx, c: &Candidate) -> Result<Vec<B256>, String> {
 
 /// Вызов poolDeployer() фабрики. Принимает: адрес фабрики. Возвращает: (адрес, данные). Ошибок нет.
 pub fn deployer_call(factory: Address) -> (Address, Bytes) {
-    (factory, Bytes::from(IAlgebraDirFactory::poolDeployerCall {}.abi_encode()))
+    (
+        factory,
+        Bytes::from(IAlgebraDirFactory::poolDeployerCall {}.abi_encode()),
+    )
 }
 
 /// Адрес пула пары по CREATE2 (AlgebraFactory.sol:133-134, AlgebraPoolDeployer.sol:49). Принимает: деплоер, токены
@@ -71,7 +77,9 @@ pub fn check(
         None => return Some(Verdict::Failed("нет ответа poolDeployer() фабрики".into())),
         Some(Err(node)) => return Some(Verdict::Failed(node)),
         Some(Ok(Err(rev))) => {
-            return Some(Verdict::Rejected(format!("poolDeployer() фабрики откатился: {rev}")));
+            return Some(Verdict::Rejected(format!(
+                "poolDeployer() фабрики откатился: {rev}"
+            )));
         }
         Some(Ok(Ok(b))) => b,
     };

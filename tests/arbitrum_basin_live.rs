@@ -36,7 +36,8 @@ fn data_dir() -> PathBuf {
         })
         .collect();
     dirs.sort();
-    dirs.pop().expect("нет записи: tools/arbitrum_record/basin.py")
+    dirs.pop()
+        .expect("нет записи: tools/arbitrum_record/basin.py")
 }
 
 fn read(name: &str) -> Value {
@@ -67,7 +68,10 @@ fn answer(v: Option<&Value>) -> Result<Bytes, String> {
 
 /// Ответы записи на вызовы по порядку.
 fn answers(w: &Value, calls: &[(Address, Bytes)]) -> Vec<Result<Bytes, String>> {
-    calls.iter().map(|(to, d)| answer(w["answers"].get(key(*to, d)))).collect()
+    calls
+        .iter()
+        .map(|(to, d)| answer(w["answers"].get(key(*to, d))))
+        .collect()
 }
 
 fn conf(meta: &Value) -> BasinConf {

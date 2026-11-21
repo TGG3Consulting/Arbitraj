@@ -55,7 +55,10 @@ pub fn chunks(
     for (_, family, list) in by_family(found, coins) {
         // Решение 295: в пачке есть пары многомонетных пулов — пары одного контракта в одной пачке (одно чтение на
         // контракт); иначе — прежняя нарезка подряд.
-        let parts: Vec<Tickered> = if list.iter().any(|(f, _)| matches!(f.reference, PoolRef::Multi { .. })) {
+        let parts: Vec<Tickered> = if list
+            .iter()
+            .any(|(f, _)| matches!(f.reference, PoolRef::Multi { .. }))
+        {
             pack(list, per)
         } else {
             list.chunks(per).map(<[_]>::to_vec).collect()

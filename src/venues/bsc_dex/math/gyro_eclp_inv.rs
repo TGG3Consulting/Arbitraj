@@ -48,7 +48,10 @@ pub fn with_error(x: I256, y: I256, p: &EclpParams) -> Option<(I256, I256)> {
     let inv = mul_down_xp_to_np(sub(add(at_a_chi, root)?, err)?, mul_den)?;
     err = mul_up_xp_to_np(err, mul_den)?;
     let lam2 = div(mul(p.lambda, p.lambda)?, ten(36))?;
-    let term = div(mul(mul(mul_up_xp_to_np(inv, mul_den)?, lam2)?, int(40))?, one_xp())?;
+    let term = div(
+        mul(mul(mul_up_xp_to_np(inv, mul_den)?, lam2)?, int(40))?,
+        one_xp(),
+    )?;
     err = add(add(err, term)?, I256::ONE)?;
     if add(inv, err)? > mul(int(3), ten(37))? {
         return None;
@@ -59,7 +62,10 @@ pub fn with_error(x: I256, y: I256, p: &EclpParams) -> Option<(I256, I256)> {
 /// calcAtAChi (L395-L416).
 fn at_a_chi(x: I256, y: I256, p: &EclpParams) -> Option<I256> {
     let d_sq2 = mul_xp(p.d_sq, p.d_sq)?;
-    let term_xp = div_xp(div_down_mag(add(div_down_mag(p.w, p.lambda)?, p.z)?, p.lambda)?, d_sq2)?;
+    let term_xp = div_xp(
+        div_down_mag(add(div_down_mag(p.w, p.lambda)?, p.z)?, p.lambda)?,
+        d_sq2,
+    )?;
     let cx_sy = sub(mul_down_mag(x, p.c)?, mul_down_mag(y, p.s)?)?;
     let mut val = mul_down_xp_to_np(cx_sy, term_xp)?;
     let lam_x = mul_down_mag(mul_down_mag(x, p.lambda)?, p.s)?;
@@ -126,15 +132,24 @@ fn min_aty(x: I256, y: I256, p: &EclpParams) -> Option<I256> {
     let zz = mul_xp(p.z, p.z)?;
     let ww = div_down_mag(div_down_mag(mul_xp(p.w, p.w)?, p.lambda)?, p.lambda)?;
     let mut term_xp = add(zz, ww)?;
-    term_xp = add(term_xp, div_down_mag(mul_xp(mul(int(2), p.z)?, p.w)?, p.lambda)?)?;
+    term_xp = add(
+        term_xp,
+        div_down_mag(mul_xp(mul(int(2), p.z)?, p.w)?, p.lambda)?,
+    )?;
     term_xp = div_xp(term_xp, d_sq4(p)?)?;
     let val = mul_down_xp_to_np(neg(term_np)?, term_xp)?;
-    add(val, mul_down_xp_to_np(sub(term_np, int(9))?, div_xp(one_xp(), p.d_sq)?)?)
+    add(
+        val,
+        mul_down_xp_to_np(sub(term_np, int(9))?, div_xp(one_xp(), p.d_sq)?)?,
+    )
 }
 
 /// calcInvariantSqrt (L565-L583): (корень, ошибка). Подкоренное ≤ 0 — корень 0.
 fn inv_sqrt(x: I256, y: I256, p: &EclpParams) -> Option<(I256, I256)> {
-    let val = add(add(min_atx(x, y, p)?, two_at_a_chi(x, y, p)?)?, min_aty(x, y, p)?)?;
+    let val = add(
+        add(min_atx(x, y, p)?, two_at_a_chi(x, y, p)?)?,
+        min_aty(x, y, p)?,
+    )?;
     let err = div(add(mul_up_mag(x, x)?, mul_up_mag(y, y)?)?, ten(38))?;
     let root = if val.is_positive() {
         to_i(sqrt(to_u(val)?, alloy_primitives::U256::from(5u8))?)?

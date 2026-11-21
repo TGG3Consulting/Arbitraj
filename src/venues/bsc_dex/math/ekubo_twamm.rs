@@ -43,7 +43,11 @@ pub fn compute_c(sqrt_ratio: U256, sqrt_sale_ratio: U256) -> Option<I256> {
     } else {
         sqrt_sale_ratio - sqrt_ratio
     };
-    let unsigned = mul_div(dist, U256::from(1u8) << 128usize, sqrt_ratio + sqrt_sale_ratio)?;
+    let unsigned = mul_div(
+        dist,
+        U256::from(1u8) << 128usize,
+        sqrt_ratio + sqrt_sale_ratio,
+    )?;
     let v = I256::from_raw(unsigned);
     if sqrt_sale_ratio > sqrt_ratio {
         Some(v)
@@ -97,7 +101,11 @@ pub fn next_sqrt_ratio(
     let num = (e - c).unsigned_abs();
     let den = (e + c).unsigned_abs();
     let mut next = mul_div(ssr, num, den)?;
-    next = if round_up { next.max(ssr) } else { next.min(ssr) };
+    next = if round_up {
+        next.max(ssr)
+    } else {
+        next.min(ssr)
+    };
     to_sqrt_ratio(next, round_up)
 }
 
@@ -120,17 +128,35 @@ mod tests {
     /// 61d09daa — git diff пуст; в 61d09daa файл теста пуст).
     #[test]
     fn helpers_official_vectors() {
-        assert_eq!(amount_from_sale_rate(100 << 32, 3, false), U256::from(300u32));
-        assert_eq!(amount_from_sale_rate(125 << 31, 3, false), U256::from(187u32));
-        assert_eq!(amount_from_sale_rate(125 << 31, 3, true), U256::from(188u32));
+        assert_eq!(
+            amount_from_sale_rate(100 << 32, 3, false),
+            U256::from(300u32)
+        );
+        assert_eq!(
+            amount_from_sale_rate(125 << 31, 3, false),
+            U256::from(187u32)
+        );
+        assert_eq!(
+            amount_from_sale_rate(125 << 31, 3, true),
+            U256::from(188u32)
+        );
         assert_eq!(amount_from_sale_rate(1, 3, true), U256::from(1u32));
         let c = compute_c(sh(1, 128), sh(1, 129)).unwrap();
-        assert_eq!(c, I256::from_raw(n("113427455640312821154458202477256070485")));
+        assert_eq!(
+            c,
+            I256::from_raw(n("113427455640312821154458202477256070485"))
+        );
         assert_eq!(compute_c(sh(1, 128), sh(1, 127)).unwrap(), -c);
         assert!(compute_c(sh(1, 128), sh(1, 128)).unwrap().is_zero());
         assert_eq!(sqrt_sale_ratio(1, 1), sh(1, 128));
-        assert_eq!(sqrt_sale_ratio(100, 1), n("34028236692093846346337460743176821142"));
-        assert_eq!(sqrt_sale_ratio(1, 100), n("3402823669209384634633746074317682114560"));
+        assert_eq!(
+            sqrt_sale_ratio(100, 1),
+            n("34028236692093846346337460743176821142")
+        );
+        assert_eq!(
+            sqrt_sale_ratio(1, 100),
+            n("3402823669209384634633746074317682114560")
+        );
         let big = n("24519928653854221733733552434404944576644526926077100032");
         assert_eq!(sqrt_sale_ratio(1, (1u128 << 112) - 1), big);
     }

@@ -60,7 +60,10 @@ pub fn base(venue: &'static str, pool: Address) -> Option<Address> {
 /// Возвращает: вызовы и индекс A_precise(). Ошибок нет.
 pub fn calls(pool: Address, base: Address) -> (Vec<(Address, Bytes)>, usize) {
     let (mut calls, tail) = load_curve_plain::calls(pool);
-    calls.push((base, ICurveMeta::get_virtual_priceCall {}.abi_encode().into()));
+    calls.push((
+        base,
+        ICurveMeta::get_virtual_priceCall {}.abi_encode().into(),
+    ));
     (calls, tail)
 }
 
@@ -68,13 +71,18 @@ pub fn calls(pool: Address, base: Address) -> (Vec<(Address, Bytes)>, usize) {
 /// блок-тег. Ошибки: базовый пул не подтверждён проверкой, узел, ответов не столько, сколько вызовов, ответ не по ABI.
 pub async fn read(ctx: &Ctx, tokens: &Tokens, pool: Address, tag: &str) -> GatewayResult<Raw> {
     let Some(base) = base(ctx.place.id, pool) else {
-        let what = format!("метапул Curve {pool}: базовый пул не подтверждён проверкой в этом запуске");
+        let what =
+            format!("метапул Curve {pool}: базовый пул не подтверждён проверкой в этом запуске");
         return Err(ctx.err(ErrorCode::BadResponse, what));
     };
     let (calls, tail) = calls(pool, base);
     let got = call::try_many(ctx, &calls, tag).await?;
     if got.len() != calls.len() {
-        let what = format!("метапул Curve {pool}: ответов {} из {}", got.len(), calls.len());
+        let what = format!(
+            "метапул Curve {pool}: ответов {} из {}",
+            got.len(),
+            calls.len()
+        );
         return Err(ctx.err(ErrorCode::BadResponse, what));
     }
     let mut decimals = Vec::new();
@@ -83,7 +91,12 @@ pub async fn read(ctx: &Ctx, tokens: &Tokens, pool: Address, tag: &str) -> Gatew
         let coin = call::decode::<super::abi_curve::IStableSwapV1::coinsCall>(c)?;
         decimals.push(tokens.decimals(ctx, coin).await?);
     }
-    Ok(Raw { pool, got, tail, decimals })
+    Ok(Raw {
+        pool,
+        got,
+        tail,
+        decimals,
+    })
 }
 
 /// Состояние пары метапула на блоке. Принимает: окружение, токены, метапул, пару, блок-тег. Ошибки: как у read и
@@ -103,7 +116,10 @@ pub async fn load(
 pub fn state(ctx: &Ctx, raw: &Raw, pair: (Address, Address)) -> GatewayResult<PoolState> {
     let pool = raw.pool;
     state_with(raw, pair, &|what: String| {
-        ctx.err(ErrorCode::BadResponse, format!("метапул Curve {pool}: {what}"))
+        ctx.err(
+            ErrorCode::BadResponse,
+            format!("метапул Curve {pool}: {what}"),
+        )
     })
 }
 
@@ -117,7 +133,11 @@ pub fn state_with(
 ) -> GatewayResult<PoolState> {
     let vp = match raw.got.last() {
         Some(Ok(b)) => call::decode::<ICurveMeta::get_virtual_priceCall>(b)?,
-        Some(Err(r)) => return Err(bad(format!("get_virtual_price() базового пула откатился: {r}"))),
+        Some(Err(r)) => {
+            return Err(bad(format!(
+                "get_virtual_price() базового пула откатился: {r}"
+            )));
+        }
         None => return Err(bad("нет ответа get_virtual_price() базового пула".into())),
     };
     match load_curve_plain::state_with(raw, pair, None, bad)? {

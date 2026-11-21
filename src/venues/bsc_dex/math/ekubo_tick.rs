@@ -119,14 +119,8 @@ pub fn tick_at(sqrt: U256) -> Option<i32> {
     let y13 = (y11 * y2) >> 127usize;
     let y15 = (y13 * y2) >> 127usize;
     let n = |v: u8| U256::from(v);
-    let s = y
-        + y3 / n(3)
-        + y5 / n(5)
-        + y7 / n(7)
-        + y9 / n(9)
-        + y11 / n(11)
-        + y13 / n(13)
-        + y15 / n(15);
+    let s =
+        y + y3 / n(3) + y5 / n(5) + y7 / n(7) + y9 / n(9) + y11 / n(11) + y13 / n(13) + y15 / n(15);
     let frac = (s * U256::from(K_2_OVER_LN2_X64)) >> 127usize;
     let log2 = (U256::from(msb_high) << 64usize) + frac;
     let base = (negative, log2 * U256::from(INV_LB_X64));

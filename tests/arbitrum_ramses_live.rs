@@ -19,9 +19,9 @@ use alloy_primitives::{Address, B256, Bytes, LogData, U256};
 use serde_json::Value;
 
 use arb::core::types::{FeeRule, PoolKind, SolidlyFee};
+use arb::venues::bsc_dex::math::solidly_fee;
 use arb::venues::bsc_dex::math::solidly_v1_math::{self, variant_out, variant_want};
 use arb::venues::bsc_dex::math::swap_cl::{self, ClState, Version};
-use arb::venues::bsc_dex::math::solidly_fee;
 use arb::venues::bsc_dex::pools::abi_ramses::{IRamsesPoolFee, IRamsesV3Pool};
 use arb::venues::bsc_dex::pools::abi_v2v3::{IV2Factory, IV2Pair, IV3Pool};
 use arb::venues::bsc_dex::pools::exec_kind::{self, ExecKind};
@@ -37,9 +37,24 @@ const LEGACY_DENOM: u32 = 1_000_000;
 /// Вид, протокол, вариант и шаг исполнителя по dex.kind (исходники — шапка pools/abi_ramses.rs).
 #[test]
 fn kinds_variants_steps() {
-    let cl = (PoolKind::V3, Proto::UniswapV3, Variant::RamsesCl, ExecKind::V3);
-    let v3 = (PoolKind::V3, Proto::Slipstream, Variant::RamsesClV2, ExecKind::V3);
-    let leg = (PoolKind::Solidly, Proto::SolidlyV1, Variant::RamsesLegacy, ExecKind::Solidly);
+    let cl = (
+        PoolKind::V3,
+        Proto::UniswapV3,
+        Variant::RamsesCl,
+        ExecKind::V3,
+    );
+    let v3 = (
+        PoolKind::V3,
+        Proto::Slipstream,
+        Variant::RamsesClV2,
+        ExecKind::V3,
+    );
+    let leg = (
+        PoolKind::Solidly,
+        Proto::SolidlyV1,
+        Variant::RamsesLegacy,
+        ExecKind::Solidly,
+    );
     let cases = [
         ("v3_fork_ramses", cl),
         ("slipstream_ramses", v3),
@@ -70,7 +85,10 @@ fn kinds_variants_steps() {
     assert!(!t.contains(&IV3Pool::Mint::SIGNATURE_HASH));
     let leg = families::make("t483-leg@arbitrum", "solidly_v1_ramses").unwrap();
     assert_eq!(ramses::topics(leg), vec![IV2Pair::Sync::SIGNATURE_HASH]);
-    assert_eq!(ramses::created_topic(leg), Some(IV2Factory::PairCreated::SIGNATURE_HASH));
+    assert_eq!(
+        ramses::created_topic(leg),
+        Some(IV2Factory::PairCreated::SIGNATURE_HASH)
+    );
     assert_eq!(ramses::created_topic(cl), None);
 }
 
@@ -78,10 +96,16 @@ fn kinds_variants_steps() {
 #[test]
 fn legacy_out_minus_one() {
     let one = U256::from(1u8);
-    assert_eq!(variant_out(Variant::RamsesLegacy, U256::from(10u8)), Some(U256::from(9u8)));
+    assert_eq!(
+        variant_out(Variant::RamsesLegacy, U256::from(10u8)),
+        Some(U256::from(9u8))
+    );
     assert_eq!(variant_out(Variant::RamsesLegacy, U256::ZERO), None);
     assert_eq!(variant_out(Variant::Base, U256::ZERO), Some(U256::ZERO));
-    assert_eq!(variant_want(Variant::RamsesLegacy, one), Some(U256::from(2u8)));
+    assert_eq!(
+        variant_want(Variant::RamsesLegacy, one),
+        Some(U256::from(2u8))
+    );
     assert_eq!(variant_want(Variant::Base, one), Some(one));
 }
 
@@ -174,12 +198,26 @@ fn cl_math_equals_pool_swap() {
                 let (used, out) = if zfo { (a0, -a1) } else { (a1, -a0) };
                 let m = swap_cl::swap(&s, zfo, true, amount).expect("расчёт");
                 if !m.complete {
-                    assert!(m.amount_out <= U256::from(out as u128), "{line} {}", p["pool"]);
+                    assert!(
+                        m.amount_out <= U256::from(out as u128),
+                        "{line} {}",
+                        p["pool"]
+                    );
                     continue;
                 }
                 full += 1;
-                assert_eq!(m.amount_in, U256::from(used as u128), "{line} {} вход", p["pool"]);
-                assert_eq!(m.amount_out, U256::from(out as u128), "{line} {} выход", p["pool"]);
+                assert_eq!(
+                    m.amount_in,
+                    U256::from(used as u128),
+                    "{line} {} вход",
+                    p["pool"]
+                );
+                assert_eq!(
+                    m.amount_out,
+                    U256::from(out as u128),
+                    "{line} {} выход",
+                    p["pool"]
+                );
                 if line == "v3" {
                     let quoter = w(&q["quoter"], 0);
                     assert_eq!(quoter, Some(m.amount_out), "{line} {} QuoterV2", p["pool"]);
@@ -209,7 +247,9 @@ fn legacy_math_equals_get_amount_out() {
             },
         };
         for q in p["quotes"].as_array().unwrap() {
-            let Some(want) = w(&q["out"], 0) else { continue };
+            let Some(want) = w(&q["out"], 0) else {
+                continue;
+            };
             let tin: Address = q["tokenIn"].as_str().unwrap().parse().unwrap();
             let (ri, ro, di, dout) = if tin == t0 {
                 (r0, r1, dec0, dec1)
@@ -235,8 +275,12 @@ fn legacy_math_equals_get_amount_out() {
 #[ignore = "нет записи: tools/arbitrum_record/ramses.py"]
 fn registries_match() {
     let r = record();
-    let cl_factory: Address = "0xAA2cd7477c451E703f3B9Ba5663334914763edF8".parse().unwrap();
-    let v3_factory: Address = "0xd0019e86edB35E1fedaaB03aED5c3c60f115d28b".parse().unwrap();
+    let cl_factory: Address = "0xAA2cd7477c451E703f3B9Ba5663334914763edF8"
+        .parse()
+        .unwrap();
+    let v3_factory: Address = "0xd0019e86edB35E1fedaaB03aED5c3c60f115d28b"
+        .parse()
+        .unwrap();
     for (line, f) in [("cl", cl_factory), ("v3", v3_factory)] {
         for p in r[line].as_array().unwrap() {
             let pool: Address = p["pool"].as_str().unwrap().parse().unwrap();

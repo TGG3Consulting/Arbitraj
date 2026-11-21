@@ -65,10 +65,7 @@ pub type Touched = (Vec<u32>, Option<u32>);
 
 /// Затронутые бины события (без сети; её же зовут тесты на записанных логах). Принимает: topic0, данные лога.
 /// Возвращает: (бины, новый активный бин) или None — событие не про бины. Ошибка — данные не по ABI.
-pub fn bins_of(
-    t0: B256,
-    data: &alloy_primitives::LogData,
-) -> Result<Option<Touched>, String> {
+pub fn bins_of(t0: B256, data: &alloy_primitives::LogData) -> Result<Option<Touched>, String> {
     let ids = |v: &[U256]| -> Result<Vec<u32>, String> {
         v.iter()
             .map(|x| u32::try_from(*x).map_err(|_| format!("id бина {x} вне uint24")))

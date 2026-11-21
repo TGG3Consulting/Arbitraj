@@ -29,7 +29,8 @@ fn data_dir() -> PathBuf {
         })
         .collect();
     dirs.sort();
-    dirs.pop().expect("нет записи: tools/arbitrum_record/woofi.py")
+    dirs.pop()
+        .expect("нет записи: tools/arbitrum_record/woofi.py")
 }
 
 fn rec(name: &str) -> Value {
@@ -47,7 +48,11 @@ fn ok(v: &Value) -> Vec<u8> {
 fn implementation_has_selectors() {
     let p = rec("proxy.json");
     for (k, v) in p["selectors"].as_object().unwrap() {
-        assert_eq!(v.as_bool(), Some(true), "селектора {k} нет в коде реализации");
+        assert_eq!(
+            v.as_bool(),
+            Some(true),
+            "селектора {k} нет в коде реализации"
+        );
     }
     assert_eq!(p["oracle_code_has_state"].as_bool(), Some(true));
 }

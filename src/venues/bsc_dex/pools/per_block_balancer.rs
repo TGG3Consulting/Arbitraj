@@ -18,10 +18,10 @@ use alloy_primitives::{Address, Bytes};
 use crate::core::types::PoolRef;
 
 use super::super::node::call;
+use super::balancer_pool_type;
 use super::discover::Found;
 use super::listen::{End, Pools};
 use super::load::{self, Loaded};
-use super::balancer_pool_type;
 use super::load_balancer as lb;
 use super::load_balancer_fixed::{Fixed, cached, kind, live};
 use super::{load_batch, reload};

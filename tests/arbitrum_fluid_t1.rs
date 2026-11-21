@@ -40,7 +40,9 @@ fn dir() -> PathBuf {
         })
         .collect();
     found.sort();
-    found.pop().expect("нет записи: tools/arbitrum_record/fluid_t1.py")
+    found
+        .pop()
+        .expect("нет записи: tools/arbitrum_record/fluid_t1.py")
 }
 
 /// JSON из файла записи.

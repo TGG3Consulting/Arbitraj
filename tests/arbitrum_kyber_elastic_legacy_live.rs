@@ -76,7 +76,12 @@ fn chunked(p: &Value) -> Vec<i32> {
     let mut out = Vec::new();
     let mut start = MIN_TICK;
     for part in p["ticks_chunks"].as_array().expect("ticks_chunks") {
-        assert_eq!(part["start"].as_i64(), Some(i64::from(start)), "пул {}", p["pool"]);
+        assert_eq!(
+            part["start"].as_i64(),
+            Some(i64::from(start)),
+            "пул {}",
+            p["pool"]
+        );
         let len = part["length"].as_u64().unwrap() as u32;
         let got = ret::<ITicksFeesReader::getTicksInRangeCall>(part);
         match merge(&mut out, start, &got, len).unwrap() {
@@ -113,7 +118,10 @@ fn legacy_factory_confirms_pool() {
         .unwrap();
     for p in pools() {
         let pool: Address = p["pool"].as_str().unwrap().parse().unwrap();
-        assert_eq!(ret::<IElasticFactory::getPoolCall>(&p["factory_getPool"]), pool);
+        assert_eq!(
+            ret::<IElasticFactory::getPoolCall>(&p["factory_getPool"]),
+            pool
+        );
         let f = Address::from_slice(&ok(&p["factory"]).expect("factory()")[12..]);
         assert_eq!(f, factory, "пул {pool}");
     }

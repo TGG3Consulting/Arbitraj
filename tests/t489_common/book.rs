@@ -21,7 +21,11 @@ use arb::core::types::{ChainId, VenueId};
 use arb::gateway::contract::VenueKind;
 
 /// Входы сборки: площадки, котируемые монеты, справочник сетей.
-type In = (Vec<(VenueId, VenueKind)>, HashMap<VenueId, String>, Networks);
+type In = (
+    Vec<(VenueId, VenueKind)>,
+    HashMap<VenueId, String>,
+    Networks,
+);
 
 /// Входы сборки, как у core/rebuild.rs: включённые площадки, котируемая монета и имя сети BSC биржи bingx, справочник
 /// сетей. Ошибок нет.
@@ -80,7 +84,10 @@ pub fn dex_set(core: &Core, list: &[CoinEntry], dex: &str) -> Vec<CoinEntry> {
 pub fn cex_set(list: &[CoinEntry], cex: &str) -> Vec<CoinEntry> {
     let mut out = vec![];
     for c in list {
-        if c.presence.iter().any(|p| p.venue.0 == cex && p.info.is_some()) {
+        if c.presence
+            .iter()
+            .any(|p| p.venue.0 == cex && p.info.is_some())
+        {
             out.push(c.clone());
         }
     }

@@ -226,7 +226,10 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         ExecKind::Izi => match &e.pool.state {
             PoolState::OraclePmm(d) if d.pool_token0 == Some(e.pool.token0) => Params::Izi,
             _ => {
-                let why = format!("{}: у пула iZiSwap не прочитано состояние (tokenX)", e.family.id);
+                let why = format!(
+                    "{}: у пула iZiSwap не прочитано состояние (tokenX)",
+                    e.family.id
+                );
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },
@@ -255,7 +258,10 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
                 return Ok((Params::Balancer { pool_id: d.pool_id }, vault));
             }
             _ => {
-                let why = format!("{}: у пула Balancer нет состояния или он на паузе", e.family.id);
+                let why = format!(
+                    "{}: у пула Balancer нет состояния или он на паузе",
+                    e.family.id
+                );
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },
@@ -292,7 +298,10 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
                 Params::Fluid(fluid_step(d, token_in))
             }
             _ => {
-                let why = format!("{}: Fluid — нет состояния, пауза или чужой вход", e.family.id);
+                let why = format!(
+                    "{}: Fluid — нет состояния, пауза или чужой вход",
+                    e.family.id
+                );
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },
@@ -304,7 +313,10 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
                 return shell_step(d, pool, token_in).map_err(|w| ctx.err(ErrorCode::NoRoute, w));
             }
             _ => {
-                let why = format!("{}: Shell — нет состояния, заморожен, чужой вход", e.family.id);
+                let why = format!(
+                    "{}: Shell — нет состояния, заморожен, чужой вход",
+                    e.family.id
+                );
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },
@@ -357,7 +369,10 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         ExecKind::Basin => match &e.pool.state {
             PoolState::BasinWell(d) if d.has(token_in) => Params::Basin,
             _ => {
-                let why = format!("{}: скважина Basin — нет состояния или чужой вход", e.family.id);
+                let why = format!(
+                    "{}: скважина Basin — нет состояния или чужой вход",
+                    e.family.id
+                );
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },
@@ -499,17 +514,26 @@ pub fn singleton_step(ctx: &Ctx, e: &Entry, k: ExecKind) -> GatewayResult<(Param
 /// входа. Возвращает: параметры шага или причину (состояние не Crypto; обмены пула остановлены; токен входа не из пары).
 fn crypto_step(e: &Entry, token_in: Address) -> Result<Params, String> {
     let PoolState::Crypto(d) = &e.pool.state else {
-        return Err(format!("{}: у пула нет состояния crypto-пула Curve", e.family.id));
+        return Err(format!(
+            "{}: у пула нет состояния crypto-пула Curve",
+            e.family.id
+        ));
     };
     if d.halted {
-        return Err(format!("{}: обмены пула остановлены — шаг не строится", e.family.id));
+        return Err(format!(
+            "{}: обмены пула остановлены — шаг не строится",
+            e.family.id
+        ));
     }
     if token_in == e.pool.token0 {
         Ok(Params::StableU256 { i: d.i0, j: d.i1 })
     } else if token_in == e.pool.token1 {
         Ok(Params::StableU256 { i: d.i1, j: d.i0 })
     } else {
-        Err(format!("{}: токен входа {token_in} не из пары пула", e.family.id))
+        Err(format!(
+            "{}: токен входа {token_in} не из пары пула",
+            e.family.id
+        ))
     }
 }
 
@@ -655,8 +679,23 @@ fn shell_step(
         (d.native_y, d.native_x, d.dec_y)
     };
     if dec_in > 18 {
-        return Err(format!("Shell: у токена входа {dec_in} знаков (> 18) — вход в учёт не точен"));
+        return Err(format!(
+            "Shell: у токена входа {dec_in} знаков (> 18) — вход в учёт не точен"
+        ));
     }
-    let native = if native_in { 1 } else if native_out { 2 } else { 0 };
-    Ok((Params::Shell(ShellStep { primitive: pool, native, dec_in }), d.ocean))
+    let native = if native_in {
+        1
+    } else if native_out {
+        2
+    } else {
+        0
+    };
+    Ok((
+        Params::Shell(ShellStep {
+            primitive: pool,
+            native,
+            dec_in,
+        }),
+        d.ocean,
+    ))
 }

@@ -27,7 +27,8 @@ const A_MULTIPLIER: u64 = 10_000;
 /// [10^10; 2·10^16] (L95-L96). Ошибок нет (false — откат).
 fn a_gamma_ok(ann: U256, gamma: U256) -> bool {
     let nn = N * N;
-    let a = (U256::from(nn * A_MULTIPLIER / 10)..=U256::from(nn * A_MULTIPLIER * 100_000)).contains(&ann);
+    let a = (U256::from(nn * A_MULTIPLIER / 10)..=U256::from(nn * A_MULTIPLIER * 100_000))
+        .contains(&ann);
     a && (ten::E10..=U256::from(2u8) * ten::pow(16)).contains(&gamma)
 }
 
@@ -80,7 +81,11 @@ pub fn newton_d(ann: U256, gamma: U256, xu: [U256; 2]) -> Option<U256> {
         // K0 = (10**18 * N_COINS**2) * x[0] / D * x[1] / D (L304).
         let k0 = du(mu(du(mu(E18 * n * n, x[0])?, d)?, x[1])?, d)?;
         let g = au(gamma, E18)?;
-        let g1k0 = if g > k0 { au(su(g, k0)?, one)? } else { au(su(k0, g)?, one)? };
+        let g1k0 = if g > k0 {
+            au(su(g, k0)?, one)?
+        } else {
+            au(su(k0, g)?, one)?
+        };
         let m1 = mul1(d, gamma, g1k0, ann)?;
         // mul2 = (2 * 10**18) * N_COINS * K0 / _g1k0 (L316).
         let mul2 = du(mu(U256::from(2u8) * E18 * n, k0)?, g1k0)?;
@@ -154,7 +159,11 @@ pub fn y_loop(
         let k0 = du(mu(mu(k0_i, y)?, n)?, d)?;
         let s = au(s_i, y)?;
         let g = au(gamma, E18)?;
-        let g1k0 = if g > k0 { au(su(g, k0)?, one)? } else { au(su(k0, g)?, one)? };
+        let g1k0 = if g > k0 {
+            au(su(g, k0)?, one)?
+        } else {
+            au(su(k0, g)?, one)?
+        };
         let m1 = mul1(d, gamma, g1k0, ann)?;
         // mul2 = 10**18 + (2 * 10**18) * K0 / _g1k0.
         let mul2 = au(E18, du(mu(two * E18, k0)?, g1k0)?)?;
@@ -167,9 +176,16 @@ pub fn y_loop(
         yfprime -= dyfprime;
         let fprime = du(yfprime, y)?;
         let mut y_minus = du(m1, fprime)?;
-        let y_plus = au(du(au(yfprime, mu(E18, d)?)?, fprime)?, du(mu(y_minus, E18)?, k0)?)?;
+        let y_plus = au(
+            du(au(yfprime, mu(E18, d)?)?, fprime)?,
+            du(mu(y_minus, E18)?, k0)?,
+        )?;
         y_minus = au(y_minus, du(mu(E18, s)?, fprime)?)?;
-        y = if y_plus < y_minus { y_prev / two } else { y_plus - y_minus };
+        y = if y_plus < y_minus {
+            y_prev / two
+        } else {
+            y_plus - y_minus
+        };
         let diff = if y > y_prev { y - y_prev } else { y_prev - y };
         if diff < conv.max(y / ten::pow(14)) {
             return frac_ok(y, d)?.then_some(y);

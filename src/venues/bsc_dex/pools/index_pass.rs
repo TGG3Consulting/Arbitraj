@@ -26,10 +26,11 @@ use super::{multi_pair, order, sub_dex};
 
 /// Проверка пачки кандидатов: окружение и кандидаты → итог по каждому (verify.rs на своём узле; тест решения 295 —
 /// разборы на записанных ответах).
-pub type Verifier = for<'a> fn(
-    &'a Ctx,
-    &'a [Candidate],
-) -> Pin<Box<dyn Future<Output = GatewayResult<Vec<Verdict>>> + Send + 'a>>;
+pub type Verifier =
+    for<'a> fn(
+        &'a Ctx,
+        &'a [Candidate],
+    ) -> Pin<Box<dyn Future<Output = GatewayResult<Vec<Verdict>>> + Send + 'a>>;
 
 /// Проверка на своём узле (verify::verify). Ошибки: NotConfigured (dex.verify_batch).
 pub fn on_node<'a>(
@@ -59,7 +60,15 @@ pub async fn take_with(
             s.multi
                 .iter()
                 .filter(|(_, l)| {
-                    l.iter().any(|p| added.contains(&multi_pair::dir_key(&s.multi_dex, &p.dex_id, &p.pool, p.base, p.quote)))
+                    l.iter().any(|p| {
+                        added.contains(&multi_pair::dir_key(
+                            &s.multi_dex,
+                            &p.dex_id,
+                            &p.pool,
+                            p.base,
+                            p.quote,
+                        ))
+                    })
                 })
                 .map(|(a, _)| *a)
                 .collect()
@@ -157,4 +166,3 @@ fn combine(
     }
     (picked, ids, out)
 }
-

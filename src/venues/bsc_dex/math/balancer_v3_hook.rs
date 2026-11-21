@@ -80,7 +80,11 @@ fn surge(
     }
     let calc = on_swap(&d.curve, v3, i, j, given, exact_in)?;
     let mut new = v3.live.clone();
-    let (add, sub) = if exact_in { (given, calc) } else { (calc, given) };
+    let (add, sub) = if exact_in {
+        (given, calc)
+    } else {
+        (calc, given)
+    };
     *new.get_mut(i)? = new.get(i)?.checked_add(add)?;
     *new.get_mut(j)? = new.get(j)?.checked_sub(sub)?;
     if max < st {
@@ -108,14 +112,21 @@ fn imbalance(b: &[U256]) -> Option<U256> {
     sorted.sort();
     let mid = sorted.len() / 2;
     let median = if sorted.len().is_multiple_of(2) {
-        sorted.get(mid.checked_sub(1)?)?.checked_add(*sorted.get(mid)?)? / U256::from(2u8)
+        sorted
+            .get(mid.checked_sub(1)?)?
+            .checked_add(*sorted.get(mid)?)?
+            / U256::from(2u8)
     } else {
         *sorted.get(mid)?
     };
     let (mut total, mut diff) = (U256::ZERO, U256::ZERO);
     for x in b {
         total = total.checked_add(*x)?;
-        let d = if *x > median { *x - median } else { median - *x };
+        let d = if *x > median {
+            *x - median
+        } else {
+            median - *x
+        };
         diff = diff.checked_add(d)?;
     }
     div_down(diff, total)

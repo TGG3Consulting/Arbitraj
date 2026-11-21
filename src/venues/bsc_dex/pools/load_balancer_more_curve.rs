@@ -84,15 +84,25 @@ pub fn decode(
     } else {
         let a = c.take::<P::getAmplificationParameterCall>()?;
         if a.precision != U256::from(1_000u32) {
-            return Err(format!("точность A {} ≠ 1000 (StableMath _AMP_PRECISION)", a.precision));
+            return Err(format!(
+                "точность A {} ≠ 1000 (StableMath _AMP_PRECISION)",
+                a.precision
+            ));
         }
         amp = a.value;
     }
     paused |= c.take::<P::getPausedStateCall>()?.paused;
-    if m.ty.bpt_excluded() && m.bpt.is_some_and(|b| [pair.0, pair.1].contains(&m.tokens[b])) {
+    if m.ty.bpt_excluded()
+        && m.bpt
+            .is_some_and(|b| [pair.0, pair.1].contains(&m.tokens[b]))
+    {
         return Err("пара с BPT пула — вход / выход ликвидности, не обмен (не считается)".into());
     }
-    let scaling: Option<Vec<U256>> = m.tokens.iter().map(|t| fx.scaling.get(t).copied()).collect();
+    let scaling: Option<Vec<U256>> = m
+        .tokens
+        .iter()
+        .map(|t| fx.scaling.get(t).copied())
+        .collect();
     let scaling = scaling.ok_or("нет множителя токена пула")?;
     let mut balances = pt.balances;
     let bpt = m.bpt.map(|b| b as u8);
@@ -100,7 +110,11 @@ pub fn decode(
         PoolType::Composable | PoolType::MetaStable | PoolType::Phantom => {
             let (factors, alt) = parts::factors(m, &mut c)?;
             let v2 = m.ty == PoolType::Composable;
-            let bpt = if m.ty == PoolType::MetaStable { None } else { bpt };
+            let bpt = if m.ty == PoolType::MetaStable {
+                None
+            } else {
+                bpt
+            };
             let cv = V2Curve::StableRated {
                 amp,
                 factors,
@@ -132,5 +146,7 @@ pub fn decode(
         }
         PoolType::LinearV1 | PoolType::Linear => parts::linear(m, &mut c, targets, &balances)?,
     };
-    super::load_balancer::state(fx.id, &m.tokens, balances, scaling, fee, paused, curve, pair)
+    super::load_balancer::state(
+        fx.id, &m.tokens, balances, scaling, fee, paused, curve, pair,
+    )
 }

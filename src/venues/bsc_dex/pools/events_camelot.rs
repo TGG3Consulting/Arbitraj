@@ -49,16 +49,20 @@ pub fn parse(log: &Log) -> Result<Option<Change>, String> {
     };
     let data = &log.inner.data;
     if *t == P::Sync::SIGNATURE_HASH {
-        let s = P::Sync::decode_log_data(data)
-            .map_err(|e| format!("Sync не по ABI: {e}"))?;
-        return Ok(Some(Change::Reserves(U256::from(s.reserve0), U256::from(s.reserve1))));
+        let s = P::Sync::decode_log_data(data).map_err(|e| format!("Sync не по ABI: {e}"))?;
+        return Ok(Some(Change::Reserves(
+            U256::from(s.reserve0),
+            U256::from(s.reserve1),
+        )));
     }
     if *t == P::FeePercentUpdated::SIGNATURE_HASH {
         let s = P::FeePercentUpdated::decode_log_data(data)
             .map_err(|e| format!("FeePercentUpdated не по ABI: {e}"))?;
         let max = u32::from(s.token0FeePercent.max(s.token1FeePercent));
         if max > MAX_FEE_PERCENT {
-            return Err(format!("FeePercentUpdated: комиссия {max} > MAX_FEE_PERCENT"));
+            return Err(format!(
+                "FeePercentUpdated: комиссия {max} > MAX_FEE_PERCENT"
+            ));
         }
         // L100: setFeePercent требует обе комиссии > 0.
         if s.token0FeePercent == 0 || s.token1FeePercent == 0 {

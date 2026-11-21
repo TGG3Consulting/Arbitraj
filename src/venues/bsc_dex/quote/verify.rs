@@ -28,10 +28,10 @@ use rust_decimal::Decimal;
 use crate::core::types::{PoolRef, Quote};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
-use super::super::pools::{fusion_book, load};
 use super::super::pools::load_batch::Want;
 use super::super::pools::load_batch_par;
 use super::super::pools::registry::Entry;
+use super::super::pools::{fusion_book, load};
 use super::steps::Names;
 use super::via::Via;
 

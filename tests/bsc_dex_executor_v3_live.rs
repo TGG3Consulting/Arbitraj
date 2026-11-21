@@ -25,8 +25,8 @@ use std::collections::BTreeMap;
 use alloy_primitives::{Address, U256};
 use serde_json::Value;
 
-use arb::venues::bsc_dex::exec::executor::live_rule::{self, Class, Hook};
 use arb::venues::bsc_dex::exec::executor::code::{self, Version};
+use arb::venues::bsc_dex::exec::executor::live_rule::{self, Class, Hook};
 use arb::venues::bsc_dex::exec::executor::{deploy_gate, live_proof, live_record};
 use arb::venues::bsc_dex::pools::exec_kind::ExecKind;
 

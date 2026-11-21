@@ -407,9 +407,19 @@ fn side(
         // без комиссии; выход не может дойти до реального резерва — тогда глубина до него и full = false.
         (PoolState::AmpV2(d), PoolKind::AmpV2) => {
             let s = if zfo {
-                dmm::Side { r_in: d.reserve0, r_out: d.reserve1, v_in: d.v_reserve0, v_out: d.v_reserve1 }
+                dmm::Side {
+                    r_in: d.reserve0,
+                    r_out: d.reserve1,
+                    v_in: d.v_reserve0,
+                    v_out: d.v_reserve1,
+                }
             } else {
-                dmm::Side { r_in: d.reserve1, r_out: d.reserve0, v_in: d.v_reserve1, v_out: d.v_reserve0 }
+                dmm::Side {
+                    r_in: d.reserve1,
+                    r_out: d.reserve0,
+                    v_in: d.v_reserve1,
+                    v_out: d.v_reserve0,
+                }
             };
             let grow = if buy {
                 (1.0 + b).sqrt() - 1.0
@@ -417,7 +427,8 @@ fn side(
                 1.0 / (1.0 - b).sqrt() - 1.0
             };
             let f = U256::from((grow * SCALE) as u128);
-            let eff = s.v_in.checked_mul(f).ok_or("переполнение резерва")? / U256::from(SCALE as u128);
+            let eff =
+                s.v_in.checked_mul(f).ok_or("переполнение резерва")? / U256::from(SCALE as u128);
             if eff.is_zero() || s.r_out.is_zero() {
                 return Ok((U256::ZERO, true));
             }
@@ -425,7 +436,8 @@ fn side(
                 Some(o) => Ok((pick(eff, o), true)),
                 None => {
                     let o = s.r_out - U256::from(1u8);
-                    let i = dmm::amount_in(o, s, U256::ZERO).ok_or("расчёт глубины пула DMM невозможен")?;
+                    let i = dmm::amount_in(o, s, U256::ZERO)
+                        .ok_or("расчёт глубины пула DMM невозможен")?;
                     Ok((pick(i, o), false))
                 }
             }
@@ -455,7 +467,8 @@ fn side(
                 1.0 / (1.0 - b).sqrt() - 1.0
             };
             let f = U256::from((grow * SCALE) as u128);
-            let eff = s.fictive_in.checked_mul(f).ok_or("переполнение резерва")? / U256::from(SCALE as u128);
+            let eff = s.fictive_in.checked_mul(f).ok_or("переполнение резерва")?
+                / U256::from(SCALE as u128);
             let one = (U256::from(1u8), U256::from(1u8));
             let out = v2::amount_out(eff, s.fictive_in, s.fictive_out, one).unwrap_or(U256::ZERO);
             if out.is_zero() {
@@ -465,7 +478,8 @@ fn side(
                 return Ok((pick(eff, out), true));
             }
             let o = s.reserve_out.saturating_sub(U256::from(1u8));
-            let i = v2::amount_in(o, s.fictive_in, s.fictive_out, one).ok_or("расчёт глубины пары SmarDex невозможен")?;
+            let i = v2::amount_in(o, s.fictive_in, s.fictive_out, one)
+                .ok_or("расчёт глубины пары SmarDex невозможен")?;
             Ok((pick(i, o), false))
         }
         // Bin: до края прочитанных бинов (полосы нет — см. шапку), без комиссии.
@@ -496,7 +510,10 @@ fn side(
             };
             let r = swap(&nf, bins, d.block_ts, for_y, u128::MAX)
                 .ok_or("расчёт бинов Liquidity Book невозможен")?;
-            Ok((pick(U256::from(u128::MAX - r.in_left), U256::from(r.out)), false))
+            Ok((
+                pick(U256::from(u128::MAX - r.in_left), U256::from(r.out)),
+                false,
+            ))
         }
         // Пул Fluid DEX T1 (решение 440): x·y=k по мнимым резервам частей без комиссии до сдвига цены на полосу, не
         // дальше реального резерва (quote/fluid_depth.rs).

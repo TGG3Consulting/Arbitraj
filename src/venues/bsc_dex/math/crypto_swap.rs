@@ -29,7 +29,7 @@ use crate::core::types::{CryptoData, CryptoMath};
 use super::crypto_ops::{au, du, mu, su, udiv_u};
 use super::ten::{E10, E18};
 use super::{
-    crypto_d2, crypto_d3, crypto_tweak2, crypto_tweak3, crypto_tweak_v1, crypto_tweak_v1_3,
+    crypto_d2, crypto_d3, crypto_tweak_v1, crypto_tweak_v1_3, crypto_tweak2, crypto_tweak3,
     crypto_v1_2, crypto_v1_3, crypto_y2, crypto_y3,
 };
 
@@ -109,9 +109,14 @@ pub fn coins(m: CryptoMath) -> usize {
 fn get_y(p: &CryptoData, xp: &[U256], d: U256, j: usize) -> Option<(U256, U256)> {
     let pair = |r: [U256; 2]| (r[0], r[1]);
     match p.math {
-        CryptoMath::TwoNg210 | CryptoMath::TwoNg200 => {
-            Some(pair(crypto_y2::get_y(p.math, p.a, p.gamma, [xp[0], xp[1]], d, j)?))
-        }
+        CryptoMath::TwoNg210 | CryptoMath::TwoNg200 => Some(pair(crypto_y2::get_y(
+            p.math,
+            p.a,
+            p.gamma,
+            [xp[0], xp[1]],
+            d,
+            j,
+        )?)),
         CryptoMath::TriNg => Some(pair(crypto_y3::get_y(
             p.a,
             p.gamma,

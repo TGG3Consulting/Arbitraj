@@ -100,7 +100,13 @@ pub async fn read(
     (h, chunk): (u32, usize),
 ) -> GatewayResult<Got> {
     let i = head.index;
-    let idx = [i.wrapping_sub(1), i, i.wrapping_add(1), i.wrapping_add(2), 0];
+    let idx = [
+        i.wrapping_sub(1),
+        i,
+        i.wrapping_add(1),
+        i.wrapping_add(2),
+        0,
+    ];
     let op_call = P::dataStorageOperatorCall {}.abi_encode();
     let mut a = vec![eth_call(None, pool, op_call, tag)];
     for k in idx {

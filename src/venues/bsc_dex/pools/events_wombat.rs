@@ -48,7 +48,10 @@ pub fn liquidity_topics() -> Vec<B256> {
 /// Ревью t253: AssetAdded / AssetRemoved меняют монеты и активы пула — память неизменных частей (load_wombat_memo.rs)
 /// забывается, перечитывание будет полным.
 pub fn apply(e: &mut Entry, log: &Log) -> Applied {
-    let assets = [P::AssetAdded::SIGNATURE_HASH, P::AssetRemoved::SIGNATURE_HASH];
+    let assets = [
+        P::AssetAdded::SIGNATURE_HASH,
+        P::AssetRemoved::SIGNATURE_HASH,
+    ];
     if log.topic0().is_some_and(|t| assets.contains(t)) {
         load_wombat_memo::forget(e.family.id, log.address());
     }

@@ -53,7 +53,10 @@ pub fn math_v2(ctx: &Ctx, f: &Family) -> Result<bool, String> {
         Ok(v) => match v.trim() {
             "v1" => Ok(false),
             "v2" => Ok(true),
-            other => Err(format!("dex.balancer_math [{}] = «{other}»: известны v1, v2", f.id)),
+            other => Err(format!(
+                "dex.balancer_math [{}] = «{other}»: известны v1, v2",
+                f.id
+            )),
         },
     }
 }
@@ -131,7 +134,9 @@ pub async fn fixed(
         scaling.insert(*t, U256::from(10u8).pow(U256::from(18 - d)));
     }
     let more = match ty {
-        Some(t) => Some(Box::new(more_fixed::read(ctx, t, pool, &tokens, &scaling, tag).await?)),
+        Some(t) => Some(Box::new(
+            more_fixed::read(ctx, t, pool, &tokens, &scaling, tag).await?,
+        )),
         None => None,
     };
     let mut x = Fixed {

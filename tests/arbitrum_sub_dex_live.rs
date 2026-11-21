@@ -85,10 +85,20 @@ fn kyber_classic_created_and_math() {
                 .collect();
             let data = LogData::new(topics.clone(), Bytes::from(bytes(&lg["data"]))).unwrap();
             let (t0, t1, got) = abi_dmm::created(topics[0], &data).unwrap();
-            assert_eq!((t0, t1, got), (addr(&p["token0"]), addr(&p["token1"]), pool));
-            assert_eq!(word_addr(words(&p["factory"]["ok"])[0]), factory, "factory() пула");
+            assert_eq!(
+                (t0, t1, got),
+                (addr(&p["token0"]), addr(&p["token1"]), pool)
+            );
+            assert_eq!(
+                word_addr(words(&p["factory"]["ok"])[0]),
+                factory,
+                "factory() пула"
+            );
             let reg = dyn_list(&words(&p["getPools"]["ok"]), 0);
-            assert!(reg.iter().any(|w| word_addr(*w) == pool), "getPools содержит пул");
+            assert!(
+                reg.iter().any(|w| word_addr(*w) == pool),
+                "getPools содержит пул"
+            );
             let ti = words(&p["getTradeInfo"]["ok"]);
             for q in p["getAmountsOut"].as_array().unwrap() {
                 let zero_in = addr(&q["token_in"]) == t0;
@@ -163,7 +173,10 @@ fn balancer_v2_versions_match_vault() {
             };
             let id: B256 = p["getPoolId"]["ok"].as_str().unwrap().parse().unwrap();
             for q in p["queryBatchSwap"].as_array().unwrap() {
-                let (i, j) = (q["i"].as_u64().unwrap() as usize, q["j"].as_u64().unwrap() as usize);
+                let (i, j) = (
+                    q["i"].as_u64().unwrap() as usize,
+                    q["j"].as_u64().unwrap() as usize,
+                );
                 let st = load_balancer::state(
                     id,
                     &tokens,

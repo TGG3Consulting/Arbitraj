@@ -49,48 +49,77 @@ pub async fn states(
         // Решение 472 (доделка): метапул — курс LP базового пула (load_curve_meta.rs).
         Proto::CurveStable if f.variant == Variant::CurveMeta => {
             match load_curve_meta::read(ctx, tokens, contract, &tag).await {
-                Ok(raw) => pairs.iter().map(|p| load_curve_meta::state(ctx, &raw, *p)).collect(),
+                Ok(raw) => pairs
+                    .iter()
+                    .map(|p| load_curve_meta::state(ctx, &raw, *p))
+                    .collect(),
                 Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
             }
         }
         // Решение 481: пул с курсом оракула (load_curve_oracle.rs).
         Proto::CurveStable if f.variant == Variant::CurveOracle => {
             match load_curve_oracle::read(ctx, tokens, contract, &tag).await {
-                Ok(raw) => pairs.iter().map(|p| load_curve_oracle::state(ctx, &raw, *p)).collect(),
+                Ok(raw) => pairs
+                    .iter()
+                    .map(|p| load_curve_oracle::state(ctx, &raw, *p))
+                    .collect(),
                 Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
             }
         }
         Proto::CurveStable if f.variant == Variant::CurvePlain => {
             match load_curve_plain::read(ctx, tokens, contract, &tag).await {
-                Ok(raw) => pairs.iter().map(|p| load_curve_plain::state(ctx, &raw, *p)).collect(),
+                Ok(raw) => pairs
+                    .iter()
+                    .map(|p| load_curve_plain::state(ctx, &raw, *p))
+                    .collect(),
                 Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
             }
         }
         Proto::CurveStable => match load_curve::read(ctx, tokens, contract, &tag).await {
-            Ok(raw) => pairs.iter().map(|p| load_curve::state(ctx, &raw, *p)).collect(),
+            Ok(raw) => pairs
+                .iter()
+                .map(|p| load_curve::state(ctx, &raw, *p))
+                .collect(),
             Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
         },
         Proto::SaddleStable => match load_saddle::read(ctx, tokens, contract, &tag).await {
-            Ok(raw) => pairs.iter().map(|p| load_saddle::state(ctx, &raw, *p)).collect(),
+            Ok(raw) => pairs
+                .iter()
+                .map(|p| load_saddle::state(ctx, &raw, *p))
+                .collect(),
             Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
         },
         Proto::CurveNg => match load_curve_ng::read(ctx, contract, &tag).await {
-            Ok(raw) => pairs.iter().map(|p| load_curve_ng::state(ctx, &raw, *p)).collect(),
+            Ok(raw) => pairs
+                .iter()
+                .map(|p| load_curve_ng::state(ctx, &raw, *p))
+                .collect(),
             Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
         },
         // Curve Tricrypto-NG (решение 442): одно чтение пула и время блока на все пары (load_crypto.rs).
         Proto::CurveTricrypto => match load_crypto::read(ctx, f, contract, block).await {
-            Ok(raw) => pairs.iter().map(|p| load_crypto::state(ctx, f, &raw, *p)).collect(),
+            Ok(raw) => pairs
+                .iter()
+                .map(|p| load_crypto::state(ctx, f, &raw, *p))
+                .collect(),
             Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
         },
         // Tricrypto 2021 (решение 453): одно чтение пула на все пары (load_crypto_v1.rs).
-        Proto::CurveTricryptoV1 => match load_crypto_v1::read(ctx, tokens, f, contract, block).await {
-            Ok(raw) => pairs.iter().map(|p| load_crypto_v1::state(ctx, &raw, *p)).collect(),
-            Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
-        },
+        Proto::CurveTricryptoV1 => {
+            match load_crypto_v1::read(ctx, tokens, f, contract, block).await {
+                Ok(raw) => pairs
+                    .iter()
+                    .map(|p| load_crypto_v1::state(ctx, &raw, *p))
+                    .collect(),
+                Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
+            }
+        }
         // Решение 484: Wombat — одно чтение пула на все пары (load_wombat.rs).
         Proto::Wombat => match load_wombat::read(ctx, f, contract, &tag).await {
-            Ok(raw) => pairs.iter().map(|p| load_wombat::state(ctx, &raw, *p)).collect(),
+            Ok(raw) => pairs
+                .iter()
+                .map(|p| load_wombat::state(ctx, &raw, *p))
+                .collect(),
             Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
         },
         Proto::PancakeStable => match pancake_read(ctx, tokens, contract, &tag).await {
@@ -114,7 +143,10 @@ pub async fn states(
                 .iter()
                 .map(|p| {
                     load_balancer_v3::decode(contract, &fx, &got, *p).map_err(|w| {
-                        ctx.err(ErrorCode::BadResponse, format!("Balancer V3 {contract}: {w}"))
+                        ctx.err(
+                            ErrorCode::BadResponse,
+                            format!("Balancer V3 {contract}: {w}"),
+                        )
                     })
                 })
                 .collect(),
@@ -177,17 +209,33 @@ pub struct PancakeRaw {
 /// Что делает: сетевое чтение пула PancakeSwap StableSwap без пары — те же вызовы и части, что load_stable_u::load
 /// (answers, head, rates). Принимает: окружение, токены, пул, блок-тег. Возвращает: PancakeRaw.
 /// Ошибки: как у load_stable_u (узел, ответ не по ABI, decimals > 36).
-pub async fn pancake_read(ctx: &Ctx, tokens: &Tokens, pool: Address, tag: &str) -> GatewayResult<PancakeRaw> {
+pub async fn pancake_read(
+    ctx: &Ctx,
+    tokens: &Tokens,
+    pool: Address,
+    tag: &str,
+) -> GatewayResult<PancakeRaw> {
     let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("StableSwap {pool}: {what}"));
     let (got, tail) = load_stable_u::answers(ctx, pool, false, tag).await?;
     let (coins, balances) = load_stable_u::head(&got, &bad)?;
     let rates = load_stable_u::rates(ctx, tokens, &coins, &bad).await?;
-    Ok(PancakeRaw { pool, got, tail, coins, balances, rates })
+    Ok(PancakeRaw {
+        pool,
+        got,
+        tail,
+        coins,
+        balances,
+        rates,
+    })
 }
 
 /// Что делает: состояние пары пула PancakeSwap StableSwap из прочитанного (без сети): индексы пары и сборка
 /// load_stable_u::finish. Принимает: окружение, PancakeRaw, пару. Ошибки: монеты пары нет, откат обязательного вызова.
-pub fn pancake_state(ctx: &Ctx, raw: &PancakeRaw, pair: (Address, Address)) -> GatewayResult<PoolState> {
+pub fn pancake_state(
+    ctx: &Ctx,
+    raw: &PancakeRaw,
+    pair: (Address, Address),
+) -> GatewayResult<PoolState> {
     let pool = raw.pool;
     let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("StableSwap {pool}: {what}"));
     let ix = load_stable_u::indices(ctx, &raw.coins, pair, &bad)?;

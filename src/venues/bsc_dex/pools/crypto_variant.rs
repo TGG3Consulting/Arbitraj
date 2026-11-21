@@ -50,9 +50,15 @@ pub fn variant(
         ));
     }
     if in_ng {
-        return Ok(if n == 2 { CryptoMath::TwoNg210 } else { CryptoMath::TriNg });
+        return Ok(if n == 2 {
+            CryptoMath::TwoNg210
+        } else {
+            CryptoMath::TriNg
+        });
     }
-    Err(format!("MATH() пула {math:#x} нет в {MATH} / {MATH_V200} — формула не сверена"))
+    Err(format!(
+        "MATH() пула {math:#x} нет в {MATH} / {MATH_V200} — формула не сверена"
+    ))
 }
 
 /// Что делает: адреса математики из настроек DEX — (dex.curve_crypto_math_v2_0_0, dex.curve_crypto_math).
@@ -67,7 +73,10 @@ pub fn lists(ctx: &Ctx, id: &str) -> GatewayResult<(Vec<Address>, Vec<Address>)>
         Err(e) => return Err(e),
     };
     let ng = ctx.dex_list(MATH, id)?;
-    Ok((parse(ctx, MATH_V200, id, &v200)?, parse(ctx, MATH, id, &ng)?))
+    Ok((
+        parse(ctx, MATH_V200, id, &v200)?,
+        parse(ctx, MATH, id, &ng)?,
+    ))
 }
 
 /// Строки списка → адреса. Принимает: окружение, имя настройки, id DEX, строки. Ошибки: Internal — элемент не адрес.

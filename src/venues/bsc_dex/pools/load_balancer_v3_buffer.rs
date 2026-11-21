@@ -68,8 +68,14 @@ pub fn calls(vault: Address, fx: &Fixed) -> Vec<(Address, Bytes)> {
     ];
     for t in &fx.tokens {
         let w = *t;
-        l.push(c(vault, B::getERC4626BufferAssetCall { wrappedToken: w }.abi_encode()));
-        l.push(c(vault, B::getBufferBalanceCall { wrappedToken: w }.abi_encode()));
+        l.push(c(
+            vault,
+            B::getERC4626BufferAssetCall { wrappedToken: w }.abi_encode(),
+        ));
+        l.push(c(
+            vault,
+            B::getBufferBalanceCall { wrappedToken: w }.abi_encode(),
+        ));
         l.push(c(w, W::assetCall {}.abi_encode()));
         l.push(c(w, W::previewDepositCall { assets: r }.abi_encode()));
         l.push(c(w, W::previewRedeemCall { shares: r }.abi_encode()));

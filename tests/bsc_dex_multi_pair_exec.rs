@@ -33,7 +33,14 @@ use arb::venues::bsc_dex::quote::pool_quote;
 use multi_common::{bad, ctx, decimals, loader_answers, rec, set_dex, word};
 
 /// Запись пары (a, b) пула `pool` вида `kind` DEX `id` с состоянием `state`. Ошибок нет (паника теста).
-fn entry_of(id: &str, kind: &str, pool: Address, a: Address, b: Address, state: PoolState) -> Entry {
+fn entry_of(
+    id: &str,
+    kind: &str,
+    pool: Address,
+    a: Address,
+    b: Address,
+    state: PoolState,
+) -> Entry {
     let f = families::make(id, kind).unwrap();
     let (t0, t1) = if a < b { (a, b) } else { (b, a) };
     Entry {
@@ -42,7 +49,11 @@ fn entry_of(id: &str, kind: &str, pool: Address, a: Address, b: Address, state: 
             venue: VenueId("bsc_dex".into()),
             family: f.id.into(),
             kind: f.kind,
-            reference: PoolRef::Multi { contract: pool, token0: t0, token1: t1 },
+            reference: PoolRef::Multi {
+                contract: pool,
+                token0: t0,
+                token1: t1,
+            },
             token0: t0,
             token1: t1,
             fee_pips: None,
@@ -77,21 +88,43 @@ fn coins_of(probe: &Value, getter: &str) -> Vec<Address> {
 
 /// Сверка всех записанных котировок пула по записям пар. Принимает: окружение, запись, префикс, квотер, состояние пары,
 /// ожидаемый шаг по (i, j). Возвращает: число сверенных котировок. Ошибок нет (паника теста).
-fn check(ctx: &Ctx, probe: &Value, pre: &str, q: &str, coins: &[Address], mk: &dyn Fn(Address, Address) -> Entry, step: &dyn Fn(u8, u8) -> Params) -> usize {
+fn check(
+    ctx: &Ctx,
+    probe: &Value,
+    pre: &str,
+    q: &str,
+    coins: &[Address],
+    mk: &dyn Fn(Address, Address) -> Entry,
+    step: &dyn Fn(u8, u8) -> Params,
+) -> usize {
     let mut n = 0;
     for c in probe["calls"].as_array().unwrap() {
         let name = c["name"].as_str().unwrap();
-        let Some(args) = name.strip_prefix(&format!("{pre} {q}(")) else { continue };
+        let Some(args) = name.strip_prefix(&format!("{pre} {q}(")) else {
+            continue;
+        };
         let v: Vec<&str> = args.trim_end_matches(')').split(',').collect();
         let (i, j): (usize, usize) = (v[0].parse().unwrap(), v[1].parse().unwrap());
         let dx = U256::from_str(v[2]).unwrap();
         let e = mk(coins[i], coins[j]);
         let got = pool_quote::swap(ctx, &e, coins[i], true, dx).unwrap();
-        assert_eq!(got.amount_out, word(probe, name), "{name}: котировка записи пары");
+        assert_eq!(
+            got.amount_out,
+            word(probe, name),
+            "{name}: котировка записи пары"
+        );
         let (p, at) = entry::params(ctx, &e, coins[i]).unwrap();
         let want = step(i as u8, j as u8);
-        assert_eq!(p.data(), want.data(), "{name}: данные шага — индексы записи");
-        assert_eq!(at, e.pool.reference.address(), "{name}: шаг — к контракту пула");
+        assert_eq!(
+            p.data(),
+            want.data(),
+            "{name}: данные шага — индексы записи"
+        );
+        assert_eq!(
+            at,
+            e.pool.reference.address(),
+            "{name}: шаг — к контракту пула"
+        );
         n += 1;
     }
     n
@@ -103,28 +136,71 @@ async fn nerve_and_ellipsis_steps_for_each_pair() {
     let probe = rec("nerve_2026-11-15", "probe.json");
     let pool = Address::from_str(probe["pool"].as_str().unwrap()).unwrap();
     let (calls, tail) = load_saddle::calls(pool);
-    let (head, t) = loader_answers(&probe, &calls, tail, ["nerve getToken", "nerve getTokenBalance"], &["nerve getAPrecise()", "nerve swapStorage()", "nerve paused()"]);
+    let (head, t) = loader_answers(
+        &probe,
+        &calls,
+        tail,
+        ["nerve getToken", "nerve getTokenBalance"],
+        &[
+            "nerve getAPrecise()",
+            "nerve swapStorage()",
+            "nerve paused()",
+        ],
+    );
     let n = head.len();
-    let raw = load_saddle::Raw { pool, got: head.into_iter().chain(t).collect(), tail: n, decimals: decimals(&probe, "nerve", "getToken", 3) };
+    let raw = load_saddle::Raw {
+        pool,
+        got: head.into_iter().chain(t).collect(),
+        tail: n,
+        decimals: decimals(&probe, "nerve", "getToken", 3),
+    };
     let coins = coins_of(&probe, "nerve getToken");
     let mk = |a: Address, b: Address| {
         let s = load_saddle::state_with(&raw, if a < b { (a, b) } else { (b, a) }, &bad).unwrap();
         entry_of("nerve", "saddle_stableswap", pool, a, b, s)
     };
-    assert_eq!(check(&c, &probe, "nerve", "calculateSwap", &coins, &mk, &|i, j| Params::Saddle { i, j }), 18);
+    assert_eq!(
+        check(
+            &c,
+            &probe,
+            "nerve",
+            "calculateSwap",
+            &coins,
+            &mk,
+            &|i, j| Params::Saddle { i, j }
+        ),
+        18
+    );
     let probe = rec("ellipsis_2026-11-15", "probe.json");
     let pool = Address::from_str(probe["pool"].as_str().unwrap()).unwrap();
     let (calls, tail) = load_curve::calls(pool);
-    let (head, t) = loader_answers(&probe, &calls, tail, ["ellipsis coins", "ellipsis balances"], &["ellipsis A()", "ellipsis fee()"]);
+    let (head, t) = loader_answers(
+        &probe,
+        &calls,
+        tail,
+        ["ellipsis coins", "ellipsis balances"],
+        &["ellipsis A()", "ellipsis fee()"],
+    );
     let n = head.len();
-    let raw = load_curve::Raw { pool, got: head.into_iter().chain(t).collect(), tail: n, decimals: decimals(&probe, "ellipsis", "coins", 3) };
+    let raw = load_curve::Raw {
+        pool,
+        got: head.into_iter().chain(t).collect(),
+        tail: n,
+        decimals: decimals(&probe, "ellipsis", "coins", 3),
+    };
     let coins = coins_of(&probe, "ellipsis coins");
     let mk = |a: Address, b: Address| {
         let s = load_curve::state_with(&raw, if a < b { (a, b) } else { (b, a) }, &bad).unwrap();
         entry_of("ellipsis", "curve_stableswap", pool, a, b, s)
     };
-    let step = |i: u8, j: u8| Params::Curve { i: i as i128, j: j as i128 };
-    assert_eq!(check(&c, &probe, "ellipsis", "get_dy", &coins, &mk, &step), 18);
+    let step = |i: u8, j: u8| Params::Curve {
+        i: i as i128,
+        j: j as i128,
+    };
+    assert_eq!(
+        check(&c, &probe, "ellipsis", "get_dy", &coins, &mk, &step),
+        18
+    );
 }
 
 #[tokio::test]
@@ -140,18 +216,46 @@ async fn balancer_steps_for_each_pair() {
     // Запись пары хопа: состояние пары — load_balancer::state по записанному состоянию пула (как bsc_dex_balancer_acsi_live).
     let mk = |p: &Value, a: Address, b: Address| {
         let tokens: Vec<Address> = p["tokens"].as_array().unwrap().iter().map(addr).collect();
-        let scaling = list(&p["decimals"]).iter().map(|d| U256::from(10u8).pow(U256::from(18u8) - *d)).collect();
-        let curve = if p["weights"].is_null() { VaultCurve::Stable { amp: list(&p["amp"])[0] } } else { VaultCurve::Weighted { weights: list(&p["weights"]) } };
+        let scaling = list(&p["decimals"])
+            .iter()
+            .map(|d| U256::from(10u8).pow(U256::from(18u8) - *d))
+            .collect();
+        let curve = if p["weights"].is_null() {
+            VaultCurve::Stable {
+                amp: list(&p["amp"])[0],
+            }
+        } else {
+            VaultCurve::Weighted {
+                weights: list(&p["weights"]),
+            }
+        };
         let id: B256 = p["pool_id"].as_str().unwrap().parse().unwrap();
         let pair = if a < b { (a, b) } else { (b, a) };
-        let s = load_balancer::state(id, &tokens, list(&p["balances"]), scaling, dec(&p["swapFee"]), p["paused"][0] == "1", curve, pair).unwrap();
+        let s = load_balancer::state(
+            id,
+            &tokens,
+            list(&p["balances"]),
+            scaling,
+            dec(&p["swapFee"]),
+            p["paused"][0] == "1",
+            curve,
+            pair,
+        )
+        .unwrap();
         entry_of("acsi-finance", "balancer_v2", addr(&p["pool"]), a, b, s)
     };
     let mut n = 0;
     for x in st["exec"].as_array().unwrap() {
         let hops: Vec<(&Value, Address, Address)> = match x["route"].as_array() {
-            Some(r) => vec![(find(&r[0]), addr(&x["token_in"]), addr(&x["mid"])), (find(&r[1]), addr(&x["mid"]), addr(&x["token_out"]))],
-            None => vec![(find(&x["pool"]), addr(&x["token_in"]), addr(&x["token_out"]))],
+            Some(r) => vec![
+                (find(&r[0]), addr(&x["token_in"]), addr(&x["mid"])),
+                (find(&r[1]), addr(&x["mid"]), addr(&x["token_out"])),
+            ],
+            None => vec![(
+                find(&x["pool"]),
+                addr(&x["token_in"]),
+                addr(&x["token_out"]),
+            )],
         };
         let mut steps = Vec::new();
         let mut amount = dec(&x["balance_in"]);
@@ -159,11 +263,30 @@ async fn balancer_steps_for_each_pair() {
             let e = mk(p, *a, *b);
             let (params, at) = entry::params(&c, &e, *a).unwrap();
             assert!(matches!(params, Params::Balancer { .. }));
-            steps.push(kind::encode(&StepSpec { params, pool: at, token_in: *a, token_out: *b, share_bps: ALL_BPS }).unwrap());
-            amount = pool_quote::swap(&c, &e, *a, true, amount).unwrap().amount_out;
+            steps.push(
+                kind::encode(&StepSpec {
+                    params,
+                    pool: at,
+                    token_in: *a,
+                    token_out: *b,
+                    share_bps: ALL_BPS,
+                })
+                .unwrap(),
+            );
+            amount = pool_quote::swap(&c, &e, *a, true, amount)
+                .unwrap()
+                .amount_out;
         }
-        let call = ArbExecutor::executeCall { tokenIn: addr(&x["token_in"]), amountIn: U256::ZERO, tokenOut: addr(&x["token_out"]), minOut: U256::ZERO, deadline: U256::from(4_102_444_800u64), steps };
-        let mut want = alloy_primitives::hex::decode(x["calldata_selector"].as_str().unwrap()).unwrap();
+        let call = ArbExecutor::executeCall {
+            tokenIn: addr(&x["token_in"]),
+            amountIn: U256::ZERO,
+            tokenOut: addr(&x["token_out"]),
+            minOut: U256::ZERO,
+            deadline: U256::from(4_102_444_800u64),
+            steps,
+        };
+        let mut want =
+            alloy_primitives::hex::decode(x["calldata_selector"].as_str().unwrap()).unwrap();
         for w in x["calldata_words"].as_array().unwrap() {
             want.extend_from_slice(&dec(w).to_be_bytes::<32>());
         }

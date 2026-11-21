@@ -87,9 +87,8 @@ impl Holds {
     /// Стоит ли Need::NextFee от лога той же транзакции того же блока (Fee перед Swap одного вызова). Принимает:
     /// ссылку, блок, транзакцию. Ошибок нет.
     pub fn next_fee_open(&self, r: &PoolRef, block: u64, tx: Option<u64>) -> bool {
-        self.get(r).is_some_and(|h| {
-            h.need == Some(Need::NextFee) && h.block == block && h.tx == tx
-        })
+        self.get(r)
+            .is_some_and(|h| h.need == Some(Need::NextFee) && h.block == block && h.tx == tx)
     }
 
     /// Решение 463 (повторное ревью t236, п. 2): время головы не получено — пул недостоверен на этот блок

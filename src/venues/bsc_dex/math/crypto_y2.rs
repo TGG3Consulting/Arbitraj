@@ -20,8 +20,8 @@ use crate::core::types::CryptoMath;
 
 use super::crypto_lim2::{self as lim2, Lim};
 use super::crypto_ops::{
-    abs, add, au, cbrt, div, du, i, ie, isqrt, iu, mu, mul, sq, su, sub, to_i, to_u, udiv,
-    udiv_u, umul,
+    abs, add, au, cbrt, div, du, i, ie, isqrt, iu, mu, mul, sq, su, sub, to_i, to_u, udiv, udiv_u,
+    umul,
 };
 use super::ten::{self, E18};
 

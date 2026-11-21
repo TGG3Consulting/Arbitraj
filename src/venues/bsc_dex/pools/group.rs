@@ -110,12 +110,8 @@ impl Group {
         let flt = match &plan {
             Some(pl) if matches!(self.conn, Link::Ws(_)) => {
                 let hub = self.hub_of(pl).await?;
-                let fwd = ekubo_hub::forward(
-                    &hub,
-                    pl.ids.clone(),
-                    pl.topics.clone(),
-                    self.tx.clone(),
-                );
+                let fwd =
+                    ekubo_hub::forward(&hub, pl.ids.clone(), pl.topics.clone(), self.tx.clone());
                 return Ok(Held {
                     id: String::new(),
                     fwd,

@@ -43,7 +43,9 @@ fn addr(v: &Value) -> Address {
 /// Ответы проверки Ellipsis: coins(0..3) записи (coins(3) откатился — конец списка монет).
 fn ellipsis_answers() -> Vec<Result<Bytes, String>> {
     let p = rec("ellipsis_2026-11-15", "probe.json");
-    (0..4).map(|k| answer(&p, &format!("ellipsis coins({k})"))).collect()
+    (0..4)
+        .map(|k| answer(&p, &format!("ellipsis coins({k})")))
+        .collect()
 }
 
 /// Ответы второго прохода проверки Balancer по записи пула (как tests/bsc_dex_balancer_acsi_live.rs second).
@@ -53,8 +55,12 @@ fn balancer_answers(p: &Value) -> Vec<Result<Bytes, String>> {
     let bal: Vec<U256> = p["balances"].as_array().unwrap().iter().map(dec).collect();
     let ret = |b: bool| Ok(Bytes::from(b.abi_encode()));
     vec![
-        Ok(Bytes::from((addr(&p["getPool"][0]), dec(&p["getPool"][1])).abi_encode_params())),
-        Ok(Bytes::from((tokens, bal, dec(&p["lastChangeBlock"])).abi_encode_params())),
+        Ok(Bytes::from(
+            (addr(&p["getPool"][0]), dec(&p["getPool"][1])).abi_encode_params(),
+        )),
+        Ok(Bytes::from(
+            (tokens, bal, dec(&p["lastChangeBlock"])).abi_encode_params(),
+        )),
         ret(p["isPoolFromFactory"]["weighted"] == "1"),
         ret(p["isPoolFromFactory"]["stable"] == "1"),
     ]
@@ -62,8 +68,16 @@ fn balancer_answers(p: &Value) -> Vec<Result<Bytes, String>> {
 
 /// Ответы проверки Curve NG по записи пула: get_coins, is_meta (фабрика), version (пул).
 fn ng_answers(p: &Value) -> Vec<Result<Bytes, String>> {
-    let h = |s: &Value| Ok(Bytes::from(alloy_primitives::hex::decode(&s.as_str().unwrap()[2..]).unwrap()));
-    vec![h(&p["factory"]["get_coins"]), h(&p["factory"]["is_meta"]), h(&p["calls"]["version"])]
+    let h = |s: &Value| {
+        Ok(Bytes::from(
+            alloy_primitives::hex::decode(&s.as_str().unwrap()[2..]).unwrap(),
+        ))
+    };
+    vec![
+        h(&p["factory"]["get_coins"]),
+        h(&p["factory"]["is_meta"]),
+        h(&p["calls"]["version"]),
+    ]
 }
 
 /// Решение по кандидату — настоящий разбор проверки его вида после ответов узла (verify_*::judge, включая
@@ -79,33 +93,64 @@ fn decide(ctx: &Ctx, c: &Candidate) -> Verdict {
         "nerve" => {
             // getToken(0..31) — те же вызовы, что verify_stable_u plan (stable_list_2026-11-15/token_calls.json).
             let r = rec("stable_list_2026-11-15", "token_calls.json");
-            let a: Vec<_> = r["calls"].as_array().unwrap().iter().filter(|x| x["name"].as_str().unwrap().starts_with("nerve getToken(")).map(|x| match x["response"]["result"].as_str() {
-                Some(h) => Ok(Bytes::from(alloy_primitives::hex::decode(h).unwrap())),
-                None => Err(x["response"]["error"]["message"].to_string()),
-            }).collect();
+            let a: Vec<_> = r["calls"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|x| x["name"].as_str().unwrap().starts_with("nerve getToken("))
+                .map(|x| match x["response"]["result"].as_str() {
+                    Some(h) => Ok(Bytes::from(alloy_primitives::hex::decode(h).unwrap())),
+                    None => Err(x["response"]["error"]["message"].to_string()),
+                })
+                .collect();
             to_v(verify_stable_u::judge(ctx, c, pool, &a, a.len()))
         }
         "acsi-finance" => {
             let probe = rec("balancer_acsi_2026-11-15", "probe.json");
-            let p = probe["pools"].as_array().unwrap().iter().find(|p| p["pool"] == c.pool.as_str()).unwrap();
-            let plan = (pool, addr(&probe["vault"]["address"]), addr(&probe["factories"]["weighted"]["address"]), Some(addr(&probe["factories"]["stable"]["address"])));
+            let p = probe["pools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|p| p["pool"] == c.pool.as_str())
+                .unwrap();
+            let plan = (
+                pool,
+                addr(&probe["vault"]["address"]),
+                addr(&probe["factories"]["weighted"]["address"]),
+                Some(addr(&probe["factories"]["stable"]["address"])),
+            );
             verify_balancer::judge(ctx, c, plan, &balancer_answers(p))
         }
         _ => {
             let probe = rec("curve_ng_2026-11-14", "probe.json");
-            let p = probe["pools"].as_array().unwrap().iter().find(|p| p["pool"] == c.pool.as_str()).unwrap();
+            let p = probe["pools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|p| p["pool"] == c.pool.as_str())
+                .unwrap();
             verify_curve_ng::judge(ctx, c, pool, &["v7.0.0".to_string()], &ng_answers(p))
         }
     }
 }
 
 /// Проверка пачки для take_with (без сети).
-fn verifier<'a>(ctx: &'a Ctx, cands: &'a [Candidate]) -> Pin<Box<dyn Future<Output = GatewayResult<Vec<Verdict>>> + Send + 'a>> {
+fn verifier<'a>(
+    ctx: &'a Ctx,
+    cands: &'a [Candidate],
+) -> Pin<Box<dyn Future<Output = GatewayResult<Vec<Verdict>>> + Send + 'a>> {
     Box::pin(async move { Ok(cands.iter().map(|c| decide(ctx, c)).collect()) })
 }
 
 /// Справочник и проход. Принимает: id DEX, вид, пул, монеты, встречные, режим. Возвращает: ссылки взятых.
-async fn run(id: &str, kind: &str, pool: &str, tokens: &[Address], quotes: &[Address], on: bool) -> Vec<PoolRef> {
+async fn run(
+    id: &str,
+    kind: &str,
+    pool: &str,
+    tokens: &[Address],
+    quotes: &[Address],
+    on: bool,
+) -> Vec<PoolRef> {
     let c = ctx(&format!("{id}-{on}-{}", quotes.len())).await;
     set_dex(&c, id, "dex.kind", json!(kind)).await;
     set_dex(&c, id, "dex.pool_enabled", json!(true)).await;
@@ -114,10 +159,22 @@ async fn run(id: &str, kind: &str, pool: &str, tokens: &[Address], quotes: &[Add
         "balancer_v2" => {
             let probe = rec("balancer_acsi_2026-11-15", "probe.json");
             set_dex(&c, id, "dex.vault", probe["vault"]["address"].clone()).await;
-            set_dex(&c, id, "dex.factory", probe["factories"]["weighted"]["address"].clone()).await;
+            set_dex(
+                &c,
+                id,
+                "dex.factory",
+                probe["factories"]["weighted"]["address"].clone(),
+            )
+            .await;
         }
         "curve_stableswap_ng" => {
-            set_dex(&c, id, "dex.factory", rec("curve_ng_2026-11-14", "probe.json")["factory"].clone()).await;
+            set_dex(
+                &c,
+                id,
+                "dex.factory",
+                rec("curve_ng_2026-11-14", "probe.json")["factory"].clone(),
+            )
+            .await;
             set_dex(&c, id, "dex.curve_ng_versions", json!(["v7.0.0"])).await;
         }
         _ => set_dex(&c, id, "dex.stable_pools", json!([pool])).await,
@@ -131,11 +188,26 @@ async fn run(id: &str, kind: &str, pool: &str, tokens: &[Address], quotes: &[Add
         for (i, coin) in coins.iter().enumerate() {
             // Индексатор даёт одну пару пула — строка только у первой монеты.
             let pools = if i == 0 {
-                vec![IndexedPool { dex_id: id.into(), pool: pool.into(), base: *coin, quote: quotes[0], base_symbol: String::new(), quote_symbol: String::new(), reserve_usd: None }]
+                vec![IndexedPool {
+                    dex_id: id.into(),
+                    pool: pool.into(),
+                    base: *coin,
+                    quote: quotes[0],
+                    base_symbol: String::new(),
+                    quote_symbol: String::new(),
+                    reserve_usd: None,
+                }]
             } else {
                 Vec::new()
             };
-            s.tokens.insert(*coin, TokenEntry { ticker: format!("{coin:#x}"), pools, ..Default::default() });
+            s.tokens.insert(
+                *coin,
+                TokenEntry {
+                    ticker: format!("{coin:#x}"),
+                    pools,
+                    ..Default::default()
+                },
+            );
         }
     });
     let took = index_pass::take_with(&c, None, verifier).await.unwrap();
@@ -147,20 +219,37 @@ async fn run(id: &str, kind: &str, pool: &str, tokens: &[Address], quotes: &[Add
 /// Проверка итога: в режиме — n разных Multi одного контракта; без — одна Contract. Ошибок нет (паника теста).
 fn assert_pairs(on: &[PoolRef], off: &[PoolRef], pool: Address, n: usize) {
     assert_eq!(on.len(), n, "{on:?}");
-    assert!(on.iter().all(|r| matches!(r, PoolRef::Multi { contract, .. } if *contract == pool)), "{on:?}");
+    assert!(
+        on.iter()
+            .all(|r| matches!(r, PoolRef::Multi { contract, .. } if *contract == pool)),
+        "{on:?}"
+    );
     assert_eq!(on.iter().collect::<HashSet<_>>().len(), n, "пары разные");
-    assert_eq!(off, &[PoolRef::Contract(pool)], "без dex.multi_pair — одна запись Contract");
+    assert_eq!(
+        off,
+        &[PoolRef::Contract(pool)],
+        "без dex.multi_pair — одна запись Contract"
+    );
 }
 
 /// Пул и монеты 3pool записи (BUSD, USDC, USDT). Ошибок нет.
 fn three(dir: &str) -> (Address, Vec<Address>) {
     let (coins, probe) = (rec(dir, "coins.json"), rec(dir, "probe.json"));
-    (addr(&probe["pool"]), ["BUSD", "USDC", "USDT"].iter().map(|s| multi_common::coin(&coins, s)).collect())
+    (
+        addr(&probe["pool"]),
+        ["BUSD", "USDC", "USDT"]
+            .iter()
+            .map(|s| multi_common::coin(&coins, s))
+            .collect(),
+    )
 }
 
 #[tokio::test]
 async fn nerve_and_ellipsis_all_pairs() {
-    for (dir, id, kind) in [("ellipsis_2026-11-15", "ellipsis", "curve_stableswap"), ("nerve_2026-11-15", "nerve", "saddle_stableswap")] {
+    for (dir, id, kind) in [
+        ("ellipsis_2026-11-15", "ellipsis", "curve_stableswap"),
+        ("nerve_2026-11-15", "nerve", "saddle_stableswap"),
+    ] {
         let (pool, t) = three(dir);
         let p = format!("{pool:#x}");
         // Встречный USDT: монеты подписки BUSD и USDC — две пары с USDT.
@@ -176,8 +265,16 @@ async fn nerve_and_ellipsis_all_pairs() {
 #[tokio::test]
 async fn balancer_four_and_five_tokens() {
     let probe = rec("balancer_acsi_2026-11-15", "probe.json");
-    for a in ["0x894ed9026de37afd9cce1e6c0be7d6b510e3ffe5", "0xe901c4e9a56a175cb5c94bfb5f821ebd5fc826c5"] {
-        let p = probe["pools"].as_array().unwrap().iter().find(|p| p["pool"] == a).unwrap();
+    for a in [
+        "0x894ed9026de37afd9cce1e6c0be7d6b510e3ffe5",
+        "0xe901c4e9a56a175cb5c94bfb5f821ebd5fc826c5",
+    ] {
+        let p = probe["pools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["pool"] == a)
+            .unwrap();
         let t: Vec<Address> = p["tokens"].as_array().unwrap().iter().map(addr).collect();
         let on = run("acsi-finance", "balancer_v2", a, &t, &[t[0]], true).await;
         let off = run("acsi-finance", "balancer_v2", a, &t, &[t[0]], false).await;
@@ -188,7 +285,12 @@ async fn balancer_four_and_five_tokens() {
 #[tokio::test]
 async fn curve_ng_three_coins() {
     let probe = rec("curve_ng_2026-11-14", "probe.json");
-    let p = probe["pools"].as_array().unwrap().iter().find(|p| p["coins"].as_array().unwrap().len() == 3).unwrap();
+    let p = probe["pools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["coins"].as_array().unwrap().len() == 3)
+        .unwrap();
     let a = p["pool"].as_str().unwrap();
     let t: Vec<Address> = p["coins"].as_array().unwrap().iter().map(addr).collect();
     let on = run("curve-bsc", "curve_stableswap_ng", a, &t, &[t[0]], true).await;

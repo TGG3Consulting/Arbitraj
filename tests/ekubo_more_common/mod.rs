@@ -49,7 +49,12 @@ pub fn state(rec: &Value, block_ts: u64, native: Option<Address>) -> EkuboData {
         .as_array()
         .map(|a| {
             a.iter()
-                .map(|e| (e["word"].as_u64().unwrap(), U256::from_be_bytes(word(&e["bits"]).0)))
+                .map(|e| {
+                    (
+                        e["word"].as_u64().unwrap(),
+                        U256::from_be_bytes(word(&e["bits"]).0),
+                    )
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -65,7 +70,9 @@ pub fn state(rec: &Value, block_ts: u64, native: Option<Address>) -> EkuboData {
                 .collect()
         })
         .unwrap_or_default();
-    let mev = rec.get("mev_state").map(|v| load_ekubo::mev_state(&word(v)));
+    let mev = rec
+        .get("mev_state")
+        .map(|v| load_ekubo::mev_state(&word(v)));
     EkuboData {
         config: word(&rec["config"]),
         sqrt_ratio,
@@ -127,7 +134,12 @@ pub fn compare(rec: &Value, d: &EkuboData) -> usize {
                 continue;
             }
             let router = quoter_ekubo::decode(&hex(out)).map(|v| v.to::<u128>());
-            assert_eq!(router, Some(r.amount_out), "пул {} вход {amount}", rec["pool_id"]);
+            assert_eq!(
+                router,
+                Some(r.amount_out),
+                "пул {} вход {amount}",
+                rec["pool_id"]
+            );
             n += 1;
         }
     }

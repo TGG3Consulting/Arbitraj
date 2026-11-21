@@ -101,9 +101,7 @@ fn plan(ctx: &Ctx, c: &Candidate) -> Result<Plan, String> {
     // docs/SETTINGS_CASES.md); хранится не списком или не адрес — отказ с причиной (crypto_variant::lists).
     let (v200, ng) = crypto_variant::lists(ctx, id).map_err(|e| not_taken(e.message))?;
     if versions.is_empty() || (v200.is_empty() && ng.is_empty()) {
-        let what = format!(
-            "dex.curve_crypto_versions / dex.curve_crypto_math [dex:{id}] пуст"
-        );
+        let what = format!("dex.curve_crypto_versions / dex.curve_crypto_math [dex:{id}] пуст");
         return Err(not_taken(what));
     }
     Ok(Plan {

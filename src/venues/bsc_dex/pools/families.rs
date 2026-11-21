@@ -522,10 +522,22 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // Curve crypto v1 (решение 453): фабрика crypto v1 и tricrypto 2021 — в графе и сигналах; исполнение — шаг
         // STABLE_U256 исполнителя (exchange(uint256, uint256, dx, 0) у обоих есть).
         "curve_crypto_v1" => (PoolKind::Crypto, Proto::CurveCryptoV1, true, false, false),
-        "curve_tricrypto_v1" => (PoolKind::Crypto, Proto::CurveTricryptoV1, true, false, false),
+        "curve_tricrypto_v1" => (
+            PoolKind::Crypto,
+            Proto::CurveTricryptoV1,
+            true,
+            false,
+            false,
+        ),
         // Решение 472 (T472-10): двухмонетный crypto-пул без фабрики (EURS/2CRV) — протокол tricrypto 2021 из списка,
         // вариант CryptoPair (две монеты, math TwoV1).
-        "curve_crypto2_v1" => (PoolKind::Crypto, Proto::CurveTricryptoV1, true, false, false),
+        "curve_crypto2_v1" => (
+            PoolKind::Crypto,
+            Proto::CurveTricryptoV1,
+            true,
+            false,
+            false,
+        ),
         // Camelot V2 (решение 443): в графе и сигналах (своя математика пары); исполнение — шаг SOLIDLY исполнителя.
         "camelot_v2" => (PoolKind::Solidly, Proto::CamelotV2, true, false, false),
         // Решение 470: Aero Basic — в графе и сигналах (математика Solidly); исполнение — шаг SOLIDLY исполнителя.
@@ -882,7 +894,11 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             // Решение 470: Aero Slipstream V3 — ещё официальный крючок обмена (pools/aero_cl.rs) и окно первой
             // комиссии нового блока (T470-01, pools/aero_cl_head.rs).
             if f.variant == Variant::SlipstreamAero {
-                list.extend(["dex.cl_swap_hook", "dex.cl_hook_ahead_s", "dex.aero_mev_module"]);
+                list.extend([
+                    "dex.cl_swap_hook",
+                    "dex.cl_hook_ahead_s",
+                    "dex.aero_mev_module",
+                ]);
             }
         }
         // Maverick V2 (решение 122 F): фабрика (isFactoryPool, PoolCreated), квотер (сверка перед сделкой, решение 73),

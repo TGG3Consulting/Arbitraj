@@ -16,8 +16,8 @@ use alloy_primitives::{I256, U256};
 
 use super::crypto_newton3::{self, frac_ok};
 use super::crypto_ops::{
-    abs, add, cbrt, div, i, ie, isqrt, iu, mu, mul, sq, sub, to_i, to_u, uadd, udiv, udiv_u,
-    umul, usub,
+    abs, add, cbrt, div, i, ie, isqrt, iu, mu, mul, sq, sub, to_i, to_u, uadd, udiv, udiv_u, umul,
+    usub,
 };
 use super::ten::{self, E18, E36};
 
@@ -161,7 +161,10 @@ fn root_k0(b: I256, delta0: I256, delta1: I256, sqrt_val: I256) -> Option<I256> 
         neg(to_i(cbrt(udiv_u(v, two)))?)?
     };
     // C1 = unsafe_div(unsafe_div(b_cbrt * b_cbrt, 10**18) * second_cbrt, 10**18) (L199-L202).
-    let c1 = udiv(mul(udiv(mul(b_cbrt, b_cbrt)?, ie(18)), second_cbrt)?, ie(18));
+    let c1 = udiv(
+        mul(udiv(mul(b_cbrt, b_cbrt)?, ie(18)), second_cbrt)?,
+        ie(18),
+    );
     // root_K0 = unsafe_div(b + b * delta0 / C1 - C1, 3) (L205).
     let s = sub(add(b, div(mul(b, delta0)?, c1)?)?, c1)?;
     Some(udiv(s, iu(3)))

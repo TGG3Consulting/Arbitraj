@@ -162,7 +162,10 @@ fn bot_math_equals_thena_quoter() {
             let zfo = q["zero_for_one"].as_bool().unwrap();
             let hex = q["amount_in"].as_str().unwrap().trim_start_matches("0x");
             let amount = U256::from_str_radix(hex, 16).unwrap();
-            let (qr, vr) = (&q["at_last_timepoint"]["quoter"], &q["at_last_timepoint"]["virtual"]);
+            let (qr, vr) = (
+                &q["at_last_timepoint"]["quoter"],
+                &q["at_last_timepoint"]["virtual"],
+            );
             let quoter = word(&qr["result"], 0);
             let name = p["pool"].as_str().unwrap();
             assert_eq!(word(&qr["result"], 1).to::<u32>(), s.fee, "{name}");

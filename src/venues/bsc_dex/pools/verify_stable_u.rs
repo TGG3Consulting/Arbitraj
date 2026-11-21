@@ -35,8 +35,8 @@ use super::discover::Found;
 use super::families::Proto;
 use super::load_curve::coins_of;
 use super::load_saddle::tokens_of;
-use super::stable_native;
 use super::multi_pair;
+use super::stable_native;
 use super::verify::{Candidate, Verdict};
 use super::verify_woo;
 

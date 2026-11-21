@@ -58,7 +58,12 @@ pub fn is_listed_kind(proto: Proto) -> bool {
     // Решение 486: пулы Shell Protocol (shell_proteus) — тоже из списка, стороны — по id в учёте (shell_list.rs).
     matches!(
         proto,
-        Proto::SaddleStable | Proto::CurveStable | Proto::CurveTricryptoV1 | Proto::Wombat | Proto::BasinWell | Proto::ShellProteus
+        Proto::SaddleStable
+            | Proto::CurveStable
+            | Proto::CurveTricryptoV1
+            | Proto::Wombat
+            | Proto::BasinWell
+            | Proto::ShellProteus
     )
 }
 
@@ -202,10 +207,17 @@ pub async fn scan(
     let wrapped = stable_native::wrapped(ctx);
     let mut out = sort_with(&pools, answers, coins, quotes, wrapped);
     // Решение 295: у DEX в режиме dex.multi_pair в реестр идут все пары пула — заметка прохода об этом.
-    for f in pools.iter().map(|(f, _)| *f).filter(|f| super::multi_pair::enabled(ctx, f)) {
+    for f in pools
+        .iter()
+        .map(|(f, _)| *f)
+        .filter(|f| super::multi_pair::enabled(ctx, f))
+    {
         let mine = format!("{}: пул ", f.id);
         for n in out.notes.iter_mut().filter(|n| n.starts_with(&mine)) {
-            *n = n.replace(ONE_PAIR, "в реестр — все пары пула (dex.multi_pair, решение 295)");
+            *n = n.replace(
+                ONE_PAIR,
+                "в реестр — все пары пула (dex.multi_pair, решение 295)",
+            );
         }
     }
     out.notes.splice(0..0, notes);

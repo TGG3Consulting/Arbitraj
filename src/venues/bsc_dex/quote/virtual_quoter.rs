@@ -161,7 +161,11 @@ pub fn data_izi(pool: Address, x2y: bool, amount: U256) -> Bytes {
 /// Пул и вход вызова квотера для записи пула (V3-подобные — quoteExactIn по token0 пары; Metric — quoteMetric по
 /// token0 самого пула, OraclePmmData.pool_token0). Принимает: запись, токен входа, сумму. Возвращает: (пул, данные) или
 /// текст причины (пул не контракт; у пула Metric не прочитан порядок токенов). Ошибок иных нет.
-pub fn request(e: &Entry, token_in: Address, amount: U256) -> Result<(Address, Bytes), &'static str> {
+pub fn request(
+    e: &Entry,
+    token_in: Address,
+    amount: U256,
+) -> Result<(Address, Bytes), &'static str> {
     let PoolRef::Contract(pool) = e.pool.reference else {
         return Err("виртуальный квотер: пул не контракт");
     };
@@ -176,7 +180,11 @@ pub fn request(e: &Entry, token_in: Address, amount: U256) -> Result<(Address, B
     }
     // Решение 288: SmarDex — token0 пары записи = token0 пары (фабрика сортирует пару, SmardexFactory.sol L37).
     if e.family.proto == Proto::Smardex {
-        let data = quoteSmardexCall { pool, zeroForOne: token_in == e.pool.token0, amountIn: amount };
+        let data = quoteSmardexCall {
+            pool,
+            zeroForOne: token_in == e.pool.token0,
+            amountIn: amount,
+        };
         return Ok((pool, Bytes::from(data.abi_encode())));
     }
     // Решение 286: iZiSwap / Biswap V3 — tokenX = token0 пары записи (фабрика сортирует пару, verify_izi.rs).

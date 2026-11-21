@@ -32,8 +32,18 @@ async fn pair(p: &Value, a: Address, b: Address, synced: u64) -> Entry {
     let c = ctx(&format!("log-{synced}-{a}")).await;
     let pool: Address = p["pool"].as_str().unwrap().parse().unwrap();
     let k = &p["calls"];
-    let mut got = vec![Ok(hex(&k["A_precise"])), Ok(hex(&k["fee"])), Ok(hex(&k["offpeg"])), Ok(hex(&k["stored_rates"]))];
-    for (coin, bal) in p["coins"].as_array().unwrap().iter().zip(p["balances"].as_array().unwrap()) {
+    let mut got = vec![
+        Ok(hex(&k["A_precise"])),
+        Ok(hex(&k["fee"])),
+        Ok(hex(&k["offpeg"])),
+        Ok(hex(&k["stored_rates"])),
+    ];
+    for (coin, bal) in p["coins"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .zip(p["balances"].as_array().unwrap())
+    {
         got.push(Ok(hex(coin)));
         got.push(Ok(hex(bal)));
     }
@@ -46,7 +56,11 @@ async fn pair(p: &Value, a: Address, b: Address, synced: u64) -> Entry {
             venue: VenueId("bsc_dex".into()),
             family: f.id.into(),
             kind: f.kind,
-            reference: PoolRef::Multi { contract: pool, token0: t0, token1: t1 },
+            reference: PoolRef::Multi {
+                contract: pool,
+                token0: t0,
+                token1: t1,
+            },
             token0: t0,
             token1: t1,
             fee_pips: None,
@@ -74,21 +88,44 @@ async fn pair(p: &Value, a: Address, b: Address, synced: u64) -> Entry {
 #[tokio::test]
 async fn log_rereads_every_unapplied_pair() {
     let probe = rec("curve_ng_2026-11-14", "probe.json");
-    let p = probe["pools"].as_array().unwrap().iter().find(|p| p["coins"].as_array().unwrap().len() == 3).unwrap();
+    let p = probe["pools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["coins"].as_array().unwrap().len() == 3)
+        .unwrap();
     let log: Log = serde_json::from_value(probe["logs"][0].clone()).unwrap();
-    assert_eq!(format!("{:#x}", log.address()), p["pool"].as_str().unwrap(), "лог — этого пула");
+    assert_eq!(
+        format!("{:#x}", log.address()),
+        p["pool"].as_str().unwrap(),
+        "лог — этого пула"
+    );
     let (block, index) = (log.block_number.unwrap(), log.log_index.unwrap());
-    let coins: Vec<Address> = p["coins"].as_array().unwrap().iter().map(|c| Address::from_slice(&hex(c)[12..32])).collect();
+    let coins: Vec<Address> = p["coins"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| Address::from_slice(&hex(c)[12..32]))
+        .collect();
     // Пара A прочитана load_one позже лога (пробуждение / повтор), пара B — до лога. Блоки отметок «лог + 5» и «лог − 1»
     // ЗАДАНЫ ТЕСТОМ (не из записи): из записи — только лог (блок, номер) и состояние пула; проверяется решение о пропуске.
     let a = pair(p, coins[0], coins[1], block + 5).await;
     let mut b = pair(p, coins[0], coins[2], block - 1).await;
     assert!(a.has_applied(block, index) && !b.has_applied(block, index));
     // Лог учтён у A, но не у B: перечитывается B (прежняя проверка по первой паре пропустила бы лог целиком).
-    assert_eq!(listen_site::stale(&[a.clone(), b.clone()], block, index, false), vec![1]);
-    assert_eq!(listen_site::stale(&[b.clone(), a.clone()], block, index, false), vec![0]);
+    assert_eq!(
+        listen_site::stale(&[a.clone(), b.clone()], block, index, false),
+        vec![1]
+    );
+    assert_eq!(
+        listen_site::stale(&[b.clone(), a.clone()], block, index, false),
+        vec![0]
+    );
     // Событие лога у пары B — перечитка (у Curve NG точечного применения нет).
-    assert!(matches!(events::apply(&mut b.clone(), &log), Applied::Refresh(_)));
+    assert!(matches!(
+        events::apply(&mut b.clone(), &log),
+        Applied::Refresh(_)
+    ));
     // Учтён у обеих — пропуск; реорг — все пары.
     b.synced_block = block;
     b.synced_log = Some(index);

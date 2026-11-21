@@ -74,7 +74,10 @@ pub async fn load(ctx: &Ctx, f: &Family, pool: Address, tag: &str) -> GatewayRes
     if fee_module != want {
         return Err(ctx.err(
             ErrorCode::NotApplicable,
-            format!("{}: модуль комиссии фабрики {fee_module} ≠ {FEE_MODULE} {want}", f.id),
+            format!(
+                "{}: модуль комиссии фабрики {fee_module} ≠ {FEE_MODULE} {want}",
+                f.id
+            ),
         ));
     }
     aero_mev::pinned(ctx, f.id, module, "фабрики")?;

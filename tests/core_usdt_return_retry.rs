@@ -99,9 +99,14 @@ async fn retries_with_interval_then_record_with_two_buttons() {
     // mark_not_returned сначала ставит состояние (его и дождался wait_state), потом пишет журнал страховки —
     // запись может появиться чуть позже: ждём её появления, затем проверяем, что она ровно одна.
     assert_eq!(
-        wait_entries(&j, "core.usdt_not_returned", "r1DOGE", Duration::from_secs(60))
-            .await
-            .len(),
+        wait_entries(
+            &j,
+            "core.usdt_not_returned",
+            "r1DOGE",
+            Duration::from_secs(60)
+        )
+        .await
+        .len(),
         1
     );
     let rec = core

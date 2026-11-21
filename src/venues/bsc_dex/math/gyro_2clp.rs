@@ -38,7 +38,11 @@ pub fn invariant(b0: U256, b1: U256, sa: U256, sb: U256, down: bool) -> Option<U
     let mb = div_r(b1, sb, down)?.checked_add(mul_r(b0, sa, down)?)?;
     let mc = mul_r(b0, b1, down)?;
     let sq1 = mul_r(mul_r(mul_r(b0, b0, down)?, sa, down)?, sa, down)?;
-    let sq2 = div_r(two.checked_mul(mul_r(mul_r(b0, b1, down)?, sa, down)?)?, sb, down)?;
+    let sq2 = div_r(
+        two.checked_mul(mul_r(mul_r(b0, b1, down)?, sa, down)?)?,
+        sb,
+        down,
+    )?;
     // _mulDownOrUp: при ROUND_DOWN — mulUp (знаменатель вверх), при ROUND_UP — mulDown.
     let sq3 = div_r(mul_r(b1, b1, down)?, mul_r(sb, sb, !down)?, down)?;
     let b_sq = sq1.checked_add(sq2)?.checked_add(sq3)?;

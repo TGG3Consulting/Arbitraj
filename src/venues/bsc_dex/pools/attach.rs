@@ -95,7 +95,10 @@ fn place(p: &Pools, w: &Watch, key: &str, family: &str, list: Vec<(Found, String
     let mut rest = list;
     // Решение 295: пары Multi — сначала пары контрактов открытой пачки (попадут в неё, пока есть место), затем
     // остальные, сгруппированные по контракту. Без пар Multi порядок прежний.
-    if rest.iter().any(|(f, _)| matches!(f.reference, PoolRef::Multi { .. })) {
+    if rest
+        .iter()
+        .any(|(f, _)| matches!(f.reference, PoolRef::Multi { .. }))
+    {
         let open_sites = late.get(key).map(|o| o.sites.clone()).unwrap_or_default();
         rest = by_site(rest, &open_sites);
     }

@@ -98,7 +98,12 @@ pub fn of(ctx: &Ctx, f: &Family) -> Result<Option<PoolType>, String> {
         Err(e) => Err(format!("dex.balancer_pool [{}]: {}", f.id, e.message)),
         Ok(v) => parse(&v).map(Some).ok_or_else(|| {
             let known: Vec<&str> = NAMES.iter().map(|(n, _)| *n).collect();
-            format!("dex.balancer_pool [{}] = «{}»: известны {}", f.id, v.trim(), known.join(", "))
+            format!(
+                "dex.balancer_pool [{}] = «{}»: известны {}",
+                f.id,
+                v.trim(),
+                known.join(", ")
+            )
         }),
     }
 }

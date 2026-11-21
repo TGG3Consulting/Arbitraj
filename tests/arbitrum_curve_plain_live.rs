@@ -41,7 +41,8 @@ fn data_dir() -> PathBuf {
         })
         .collect();
     dirs.sort();
-    dirs.pop().expect("нет записи: tools/arbitrum_record/curve_plain.py")
+    dirs.pop()
+        .expect("нет записи: tools/arbitrum_record/curve_plain.py")
 }
 
 fn read(name: &str) -> Value {
@@ -81,7 +82,10 @@ fn raw_of(p: &Value) -> Raw {
         Some("meta") => load_curve_meta::calls(pool, addr(&p["base"])),
         _ => load_curve_plain::calls(pool),
     };
-    let got = calls.iter().map(|(to, d)| answer(p["answers"].get(key(*to, d)))).collect();
+    let got = calls
+        .iter()
+        .map(|(to, d)| answer(p["answers"].get(key(*to, d))))
+        .collect();
     let decimals = coins(p)
         .iter()
         .map(|c| {
@@ -92,7 +96,12 @@ fn raw_of(p: &Value) -> Raw {
             U256::from_be_slice(&b).to::<u8>()
         })
         .collect();
-    Raw { pool, got, tail, decimals }
+    Raw {
+        pool,
+        got,
+        tail,
+        decimals,
+    }
 }
 
 /// Состояние пары (i, j) пула и наш выход на dx: (exchange_out_t, пройдёт ли save_p модели stable_ema — у пула без
@@ -147,7 +156,10 @@ fn math_equals_get_dy() {
     for p in read("pools.json").as_array().unwrap() {
         let raw = raw_of(p);
         for q in p["get_dy"].as_array().unwrap() {
-            let (i, j) = (q["i"].as_u64().unwrap() as usize, q["j"].as_u64().unwrap() as usize);
+            let (i, j) = (
+                q["i"].as_u64().unwrap() as usize,
+                q["j"].as_u64().unwrap() as usize,
+            );
             let dx = U256::from_str_radix(q["dx"].as_str().unwrap(), 10).unwrap();
             let Some(h) = q.get("result").and_then(|h| h.as_str()) else {
                 continue;
@@ -177,7 +189,10 @@ fn model_revert_equals_pool_revert() {
             if s["ok"].is_null() || s["override_ok"] == Value::Bool(false) {
                 continue;
             }
-            let (i, j) = (s["i"].as_u64().unwrap() as usize, s["j"].as_u64().unwrap() as usize);
+            let (i, j) = (
+                s["i"].as_u64().unwrap() as usize,
+                s["j"].as_u64().unwrap() as usize,
+            );
             let dx = U256::from_str_radix(s["dx"].as_str().unwrap(), 10).unwrap();
             let o = quote(p, &raw, i, j, dx);
             if s["ok"] == Value::Bool(true) {
@@ -185,7 +200,11 @@ fn model_revert_equals_pool_revert() {
                 assert_eq!(o, Some(want), "{} {i}->{j} {dx}", p["pool"]);
                 ok += 1;
             } else {
-                assert_eq!(o, None, "{} {i}->{j} {dx}: пул откатил ({})", p["pool"], s["revert"]);
+                assert_eq!(
+                    o, None,
+                    "{} {i}->{j} {dx}: пул откатил ({})",
+                    p["pool"], s["revert"]
+                );
                 reverted += 1;
             }
         }

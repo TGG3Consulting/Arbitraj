@@ -45,7 +45,8 @@ fn data_dir() -> PathBuf {
         })
         .collect();
     dirs.sort();
-    dirs.pop().expect("нет записи: tools/arbitrum_record/curve_ren_wsteth.py")
+    dirs.pop()
+        .expect("нет записи: tools/arbitrum_record/curve_ren_wsteth.py")
 }
 
 fn read(name: &str) -> Value {
@@ -190,7 +191,10 @@ fn get_dy_matches() {
     for p in read("pools.json").as_array().unwrap() {
         let raw = raw_of(p);
         for q in p["get_dy"].as_array().unwrap() {
-            let (i, j) = (q["i"].as_u64().unwrap() as usize, q["j"].as_u64().unwrap() as usize);
+            let (i, j) = (
+                q["i"].as_u64().unwrap() as usize,
+                q["j"].as_u64().unwrap() as usize,
+            );
             let dx = U256::from_str_radix(q["dx"].as_str().unwrap(), 10).unwrap();
             let Some(h) = q.get("result").and_then(|h| h.as_str()) else {
                 continue;
@@ -220,7 +224,10 @@ fn exchange_sim_matches() {
             if s["ok"].is_null() || s["override_ok"] == Value::Bool(false) {
                 continue;
             }
-            let (i, j) = (s["i"].as_u64().unwrap() as usize, s["j"].as_u64().unwrap() as usize);
+            let (i, j) = (
+                s["i"].as_u64().unwrap() as usize,
+                s["j"].as_u64().unwrap() as usize,
+            );
             let dx = U256::from_str_radix(s["dx"].as_str().unwrap(), 10).unwrap();
             let (d, t) = state(p, &raw, i, j);
             let o = exchange_out_t(i, j, dx, &d.balances, &d.rates, d.amp, d.fee, &t);
@@ -229,7 +236,11 @@ fn exchange_sim_matches() {
                 assert_eq!(o, Some(want), "{} {i}->{j} {dx}", p["pool"]);
                 ok += 1;
             } else {
-                assert_eq!(o, None, "{} {i}->{j} {dx}: пул откатил ({})", p["pool"], s["revert"]);
+                assert_eq!(
+                    o, None,
+                    "{} {i}->{j} {dx}: пул откатил ({})",
+                    p["pool"], s["revert"]
+                );
                 reverted += 1;
             }
         }
@@ -271,7 +282,10 @@ fn selectors_in_code() {
     for a in pools.as_array().unwrap() {
         let c = &code[a.as_str().unwrap()];
         assert!(c["len"].as_i64().unwrap() > 0, "{a}: кода нет");
-        assert!(c["has_exchange4"].as_bool().unwrap(), "{a}: нет exchange из 4 аргументов");
+        assert!(
+            c["has_exchange4"].as_bool().unwrap(),
+            "{a}: нет exchange из 4 аргументов"
+        );
     }
     let w = &code["0x6eB2dc694eB516B16Dc9FBc678C60052BbdD7d80"];
     assert!(w["has_oracle"].as_bool().unwrap(), "wstETH: нет oracle()");

@@ -110,7 +110,8 @@ fn key_of(
                 (a, b)
             } else {
                 // Нативный token0 ключа — обёртка в паре кандидата; другой токен пары — token1 ключа.
-                let w = wrapped.ok_or("ключ пула с нативным ETH, а dex.native_wrapped не задана")?;
+                let w =
+                    wrapped.ok_or("ключ пула с нативным ETH, а dex.native_wrapped не задана")?;
                 (Address::ZERO, if a == w { b } else { a })
             };
             Ok(PoolKeyIn {

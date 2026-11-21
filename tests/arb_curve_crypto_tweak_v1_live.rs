@@ -40,7 +40,11 @@ fn crypto_v1_tweak_model_on_record() {
         let pool = Address::from_str(p["pool"].as_str().unwrap()).unwrap();
         let t = &p["tweak_v1"];
         for s in ["28", "31", "32", "34"] {
-            assert_eq!(t["slot_check"][s], Value::Bool(true), "{pool}: слот {s} ≠ геттер");
+            assert_eq!(
+                t["slot_check"][s],
+                Value::Bool(true),
+                "{pool}: слот {s} ≠ геттер"
+            );
         }
         let st = tv1::pre_decode(&answers(p, &tv1::pre_calls(pool))).unwrap();
         let mut got = answers(p, &load_crypto_v1::calls(pool, 2));
@@ -80,7 +84,9 @@ fn crypto_v1_tweak_model_on_record() {
             let i = r["i"].as_u64().unwrap() as usize;
             let j = r["j"].as_u64().unwrap() as usize;
             let dx = U256::from_str(r["dx"].as_str().unwrap()).unwrap();
-            let want = piece(&r["get_dy"]).ok().and_then(|b| quoter_crypto::decode(&b));
+            let want = piece(&r["get_dy"])
+                .ok()
+                .and_then(|b| quoter_crypto::decode(&b));
             let Some(want) = want else {
                 continue;
             };
@@ -108,7 +114,11 @@ fn crypto_v1_tweak_model_on_record() {
                 assert_eq!(ours, Some(want), "{pool} {i}->{j} {dx}: пул отдал выход");
                 sim_ok += 1;
             } else {
-                assert_eq!(ours, None, "{pool} {i}->{j} {dx}: пул откатил ({})", s["revert"]);
+                assert_eq!(
+                    ours, None,
+                    "{pool} {i}->{j} {dx}: пул откатил ({})",
+                    s["revert"]
+                );
                 sim_rev += 1;
             }
         }

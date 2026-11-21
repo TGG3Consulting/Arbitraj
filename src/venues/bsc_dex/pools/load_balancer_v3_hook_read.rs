@@ -63,7 +63,8 @@ pub fn hook(k: HookKind, cur: &mut Cursor) -> Result<V3Hook, String> {
             let max = max(cur.take()?).map_err(dec)?;
             let mult = M::getPoolMevTaxMultiplierCall::abi_decode_returns;
             let mult = mult(cur.take()?).map_err(dec)?;
-            let thr = M::getPoolMevTaxThresholdCall::abi_decode_returns(cur.take()?).map_err(dec)?;
+            let thr =
+                M::getPoolMevTaxThresholdCall::abi_decode_returns(cur.take()?).map_err(dec)?;
             let ver = IArbSys::arbOSVersionCall::abi_decode_returns(cur.take()?).map_err(dec)?;
             let tips = cur.take();
             let ver = ver.saturating_sub(U256::from(ARBOS_OFFSET));

@@ -28,7 +28,10 @@ const NO_RECORD: &str = "нет записи: tools/arbitrum_record/aero.py";
 #[test]
 fn kinds_and_steps() {
     let (pk, proto, graphable, ..) = families::spec("aero_basic").unwrap();
-    assert_eq!((pk, proto, graphable), (PoolKind::Solidly, Proto::AeroBasic, true));
+    assert_eq!(
+        (pk, proto, graphable),
+        (PoolKind::Solidly, Proto::AeroBasic, true)
+    );
     assert_eq!(exec_kind::of("aero_basic"), Some(ExecKind::Solidly));
     let (pk, proto, ..) = families::spec("slipstream_aero").unwrap();
     assert_eq!((pk, proto), (PoolKind::V3, Proto::Slipstream));
@@ -56,10 +59,16 @@ fn aero_basic_step_needs_v5() {
     assert_eq!(f.executor_kind, Some(ExecKind::Solidly));
     let v5 = exec_kind::for_version(f, Some(Version::V5));
     assert_eq!(v5, Some(ExecKind::AeroBasic));
-    assert_eq!(exec_kind::for_version(f, Some(Version::V4)), Some(ExecKind::Solidly));
+    assert_eq!(
+        exec_kind::for_version(f, Some(Version::V4)),
+        Some(ExecKind::Solidly)
+    );
     assert_eq!(exec_kind::for_version(f, None), Some(ExecKind::Solidly));
     let cl = families::make("aero-slipstream-arbitrum@arbitrum", "slipstream_aero").unwrap();
-    assert_eq!(exec_kind::for_version(cl, Some(Version::V5)), Some(ExecKind::V3));
+    assert_eq!(
+        exec_kind::for_version(cl, Some(Version::V5)),
+        Some(ExecKind::V3)
+    );
 }
 
 fn record() -> Value {
@@ -98,15 +107,27 @@ fn basic_math_equals_pool_get_amount_out() {
             let kind = w(&p["POOL_TYPE"], 0).unwrap();
             let stable = kind == U256::from_be_bytes(stable_type().0);
             assert!(stable || kind == U256::from_be_bytes(volatile_type().0));
-            assert_eq!(stable, want_stable, "кривая пула {} — фабрика {side}", p["pool"]);
+            assert_eq!(
+                stable, want_stable,
+                "кривая пула {} — фабрика {side}",
+                p["pool"]
+            );
             let pool: Address = p["pool"].as_str().unwrap().parse().unwrap();
-            assert_eq!(addr(w(&p["getPool"], 0).unwrap()), pool, "реестр getPool(t0, t1)");
+            assert_eq!(
+                addr(w(&p["getPool"], 0).unwrap()),
+                pool,
+                "реестр getPool(t0, t1)"
+            );
             let fee = SolidlyFee {
                 value: w(&p["getBaseFee"], 0).unwrap().to::<u32>(),
-                rule: FeeRule::Numerator { denominator: 10_000 },
+                rule: FeeRule::Numerator {
+                    denominator: 10_000,
+                },
             };
             for q in p["quotes"].as_array().unwrap() {
-                let Some(want) = w(&q["out"], 0) else { continue };
+                let Some(want) = w(&q["out"], 0) else {
+                    continue;
+                };
                 let amount: U256 = q["amountIn"].as_str().unwrap().parse().unwrap();
                 let tin: Address = q["tokenIn"].as_str().unwrap().parse().unwrap();
                 let (ri, ro, di, dout) = if tin == t0 {
@@ -132,11 +153,18 @@ fn basic_math_equals_pool_get_amount_out() {
 #[ignore = "нет записи: tools/arbitrum_record/aero.py"]
 fn cl_pools_use_official_hook() {
     let r = record();
-    let hook: Address = "0xC0ed888AfE87ed1AcF01D9f19bB850159e3ce434".parse().unwrap();
+    let hook: Address = "0xC0ed888AfE87ed1AcF01D9f19bB850159e3ce434"
+        .parse()
+        .unwrap();
     let pools = r["cl"]["pools"].as_array().unwrap();
     assert!(!pools.is_empty(), "в записи нет пулов CL");
     for p in pools {
-        assert_eq!(addr(w(&p["getPoolSwapHook"], 0).unwrap()), hook, "крючок пула {}", p["pool"]);
+        assert_eq!(
+            addr(w(&p["getPoolSwapHook"], 0).unwrap()),
+            hook,
+            "крючок пула {}",
+            p["pool"]
+        );
         // SwapHookLib._SWAP_FEE_CEIL = 100000 (metadex-slipstream-public cf1ae46f SwapHookLib.sol L24).
         assert!(w(&p["fee"], 0).unwrap() <= U256::from(100_000u32));
     }

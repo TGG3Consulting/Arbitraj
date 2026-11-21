@@ -104,7 +104,9 @@ fn first_fee_port_equals_hook_fee_next_block() {
         let k = ff::scaling_of(&cfg, &d);
         for (dk, at) in p["fee_at"].as_object().unwrap() {
             let delta: u32 = dk.parse().unwrap();
-            let Some(want) = w(&at["time_number"], 0) else { continue };
+            let Some(want) = w(&at["time_number"], 0) else {
+                continue;
+            };
             let (used, _) = ff::first(&cfg, &d, ts_fee, ff::dynamic_at(&head, &d, k, delta));
             // SwapHookLib: 0 — tickSpacingToFee, иначе не выше _SWAP_FEE_CEIL = 100000.
             let used = if used.is_zero() {
@@ -113,7 +115,11 @@ fn first_fee_port_equals_hook_fee_next_block() {
                 used.min(U256::from(100_000u32))
             };
             assert_eq!(used, want, "пул {} δ {delta}", p["pool"]);
-            assert!(U256::from(worst) >= want, "worst ниже fee() пула {} δ {delta}", p["pool"]);
+            assert!(
+                U256::from(worst) >= want,
+                "worst ниже fee() пула {} δ {delta}",
+                p["pool"]
+            );
             checked += 1;
         }
     }

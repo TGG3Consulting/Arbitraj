@@ -34,8 +34,12 @@ pub fn request(
     } else {
         e.pool.token0
     };
-    let from_amount = I256::try_from(amount)
-        .map_err(|_| ctx.err(ErrorCode::NoRoute, "сумма квотера Wombat не помещается в int256"))?;
+    let from_amount = I256::try_from(amount).map_err(|_| {
+        ctx.err(
+            ErrorCode::NoRoute,
+            "сумма квотера Wombat не помещается в int256",
+        )
+    })?;
     let c = IWombatPool::quotePotentialSwapCall {
         fromToken: token_in,
         toToken: token_out,

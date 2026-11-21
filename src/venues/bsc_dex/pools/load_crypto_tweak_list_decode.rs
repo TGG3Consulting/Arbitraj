@@ -50,8 +50,16 @@ pub fn decode(
             }
         }
     }
-    let (xp, vp, aep, step, ts) = if n == 3 { (6, 7, 8, 9, 10) } else { (4, 6, 7, 8, 11) };
-    let gulp = if n == 3 { Vec::new() } else { vec![w(12)?, w(13)?] };
+    let (xp, vp, aep, step, ts) = if n == 3 {
+        (6, 7, 8, 9, 10)
+    } else {
+        (4, 6, 7, 8, 11)
+    };
+    let gulp = if n == 3 {
+        Vec::new()
+    } else {
+        vec![w(12)?, w(13)?]
+    };
     let slot_word = if n == 3 { 11 } else { 14 };
     Ok(Some(CryptoTweak {
         price_oracle: oracle,

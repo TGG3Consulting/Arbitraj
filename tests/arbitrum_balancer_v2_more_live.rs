@@ -149,7 +149,10 @@ fn calls_and_math_equal_query_batch_swap() {
         };
         pools += 1;
         for q in p["query"].as_array().unwrap() {
-            let (i, j) = (q["i"].as_u64().unwrap() as usize, q["j"].as_u64().unwrap() as usize);
+            let (i, j) = (
+                q["i"].as_u64().unwrap() as usize,
+                q["j"].as_u64().unwrap() as usize,
+            );
             let amount: U256 = q["amount"].as_str().unwrap().parse().unwrap();
             let st = load_balancer::decode(&fx, &got, (tokens[i], tokens[j]));
             if ty.bpt_excluded() && (tokens[i] == pool || tokens[j] == pool) {
@@ -163,12 +166,18 @@ fn calls_and_math_equal_query_batch_swap() {
             match answer(q) {
                 Ok(raw) => {
                     let deltas = V::queryBatchSwapCall::abi_decode_returns(&raw).unwrap();
-                    assert!(deltas[j].is_negative(), "{pool}: дельта выхода не отрицательна");
+                    assert!(
+                        deltas[j].is_negative(),
+                        "{pool}: дельта выхода не отрицательна"
+                    );
                     let want = deltas[j].unsigned_abs();
                     assert_eq!(ours, Some(want), "{pool} {ty:?} {i}→{j} {amount}");
                 }
                 Err(_) => {
-                    assert_eq!(ours, None, "{pool} {ty:?} {i}→{j} {amount}: хранилище откатило")
+                    assert_eq!(
+                        ours, None,
+                        "{pool} {ty:?} {i}→{j} {amount}: хранилище откатило"
+                    )
                 }
             }
             checked += 1;
@@ -184,7 +193,10 @@ fn liquidity_by_type() {
     let mut sum: HashMap<String, f64> = HashMap::new();
     let rows = json("gt.json");
     for r in rows.as_array().unwrap() {
-        let usd: f64 = r["reserve_usd"].as_str().and_then(|s| s.parse().ok()).unwrap_or(0.0);
+        let usd: f64 = r["reserve_usd"]
+            .as_str()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.0);
         let ty = r["factory"]
             .as_str()
             .and_then(|f| f.split(':').nth(1))
@@ -209,6 +221,10 @@ fn linear_targets_ordered() {
             continue;
         }
         let t = L::getTargetsCall::abi_decode_returns(&ok(&p["batch"][3])).unwrap();
-        assert!(t.lowerTarget <= t.upperTarget, "{}: нижняя цель выше верхней", p["pool"]);
+        assert!(
+            t.lowerTarget <= t.upperTarget,
+            "{}: нижняя цель выше верхней",
+            p["pool"]
+        );
     }
 }

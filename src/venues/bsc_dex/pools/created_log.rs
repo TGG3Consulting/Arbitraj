@@ -143,7 +143,10 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // Crypto-пулы Curve (решение 453): события фабрик TwocryptoPoolDeployed / TricryptoPoolDeployed (адрес пула —
             // неиндексированное поле) и CryptoPoolDeployed фабрики v1 (адреса нет — поиск по фабрике на блоке события),
             // created_crypto.rs. У tricrypto 2021 фабрики нет — пул из dex.stable_pools.
-            p @ (Proto::CurveTwocrypto | Proto::CurveTricrypto | Proto::CurveCryptoV1 | Proto::CurveTricryptoV1) => match created_crypto::topic(p) {
+            p @ (Proto::CurveTwocrypto
+            | Proto::CurveTricrypto
+            | Proto::CurveCryptoV1
+            | Proto::CurveTricryptoV1) => match created_crypto::topic(p) {
                 Some(t) => ("dex.factory", t, false),
                 None => continue,
             },
@@ -361,7 +364,9 @@ fn remember(p: &Pools, w: &Watch, c: &Candidate) {
     p.ctx.index.with(|s| {
         // Решение 295: у DEX в режиме dex.multi_pair строки одного пула с разными парами — разные (dir_key); у прочих
         // ключ — строка пула, как до решения.
-        let key = |x: &IndexedPool| super::multi_pair::dir_key(&s.multi_dex, &x.dex_id, &x.pool, x.base, x.quote);
+        let key = |x: &IndexedPool| {
+            super::multi_pair::dir_key(&s.multi_dex, &x.dex_id, &x.pool, x.base, x.quote)
+        };
         let want = key(&item);
         let list = s.events.entry(c.coin).or_default();
         if !list.iter().any(|x| key(x) == want) {

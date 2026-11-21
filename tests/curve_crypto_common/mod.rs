@@ -29,7 +29,9 @@ pub fn dir() -> PathBuf {
         })
         .collect();
     found.sort();
-    found.pop().expect("нет записи: tools/arbitrum_record/curve_crypto.py")
+    found
+        .pop()
+        .expect("нет записи: tools/arbitrum_record/curve_crypto.py")
 }
 
 /// Файл записи. Паника — нет файла.
@@ -51,19 +53,29 @@ pub fn answers(p: &Value, calls: &[(Address, Bytes)]) -> Vec<Result<Bytes, Strin
         .iter()
         .map(|(_, d)| {
             let key = format!("{d}");
-            piece(p["calls"].get(&key).unwrap_or_else(|| panic!("в записи нет вызова бота {key}")))
+            piece(
+                p["calls"]
+                    .get(&key)
+                    .unwrap_or_else(|| panic!("в записи нет вызова бота {key}")),
+            )
         })
         .collect()
 }
 
 /// Код из записи {"code": hex}. Паника — нет кода.
 pub fn code(v: &Value) -> Vec<u8> {
-    Bytes::from_str(v["code"].as_str().expect("нет кода")).unwrap().to_vec()
+    Bytes::from_str(v["code"].as_str().expect("нет кода"))
+        .unwrap()
+        .to_vec()
 }
 
 /// Код (или его начало) совпадает с ожидаемым: длина и keccak256. Принимает: код, (длина, хеш без 0x), целиком ли.
 pub fn same(code: &[u8], want: (usize, &str), whole: bool) -> bool {
-    let ok_len = if whole { code.len() == want.0 } else { code.len() >= want.0 };
+    let ok_len = if whole {
+        code.len() == want.0
+    } else {
+        code.len() >= want.0
+    };
     ok_len && format!("{:x}", keccak256(&code[..want.0.min(code.len())])) == want.1
 }
 
@@ -74,7 +86,9 @@ pub fn ladder(name: &str, pool: Address, p: &Value, data: &CryptoData) -> usize 
         let i = r["i"].as_u64().unwrap() as usize;
         let j = r["j"].as_u64().unwrap() as usize;
         let dx = U256::from_str(r["dx"].as_str().unwrap()).unwrap();
-        let want = piece(&r["get_dy"]).ok().and_then(|b| quoter_crypto::decode(&b));
+        let want = piece(&r["get_dy"])
+            .ok()
+            .and_then(|b| quoter_crypto::decode(&b));
         let ours = crypto_swap::exchange_out(data, i, j, dx);
         assert_eq!(ours, want, "{name} {pool}: i={i} j={j} dx={dx}");
         n += 1;

@@ -59,7 +59,8 @@ fn data_dir() -> PathBuf {
         })
         .collect();
     dirs.sort();
-    dirs.pop().expect("нет записи: tools/arbitrum_record/wombat.py")
+    dirs.pop()
+        .expect("нет записи: tools/arbitrum_record/wombat.py")
 }
 
 /// Ответ {"result": "0x…"} → байты; откат или нет ответа — Err(текст).
@@ -112,7 +113,10 @@ fn wombat_state_quote_and_swap_match_node() {
         } else if PLAIN.contains(&imp) {
             false
         } else {
-            skipped.push(format!("{} {pool:#x}: реализация {imp:#x} не сверена", p["name"]));
+            skipped.push(format!(
+                "{} {pool:#x}: реализация {imp:#x} не сверена",
+                p["name"]
+            ));
             continue;
         };
         let tokens = head.tokens.clone();
@@ -127,11 +131,21 @@ fn wombat_state_quote_and_swap_match_node() {
             decimals: sides.iter().map(|s| s.decimals).collect(),
         };
         let all = lookup(p, &c::vary_calls(pool, &assets, true));
-        let got = if dynamic { all } else { without_price(all, assets.len()) };
+        let got = if dynamic {
+            all
+        } else {
+            without_price(all, assets.len())
+        };
         let (h2, s2) = c::parse_vary(&got, &fixed, dynamic).expect("каждым блоком");
-        assert_eq!((&h2, &s2), (&head, &sides), "{pool:#x}: чтение каждым блоком ≠ полному");
-        let paused: Vec<bool> =
-            tokens.iter().map(|t| !slot(p, pool, paused_slot(*t)).is_zero()).collect();
+        assert_eq!(
+            (&h2, &s2),
+            (&head, &sides),
+            "{pool:#x}: чтение каждым блоком ≠ полному"
+        );
+        let paused: Vec<bool> = tokens
+            .iter()
+            .map(|t| !slot(p, pool, paused_slot(*t)).is_zero())
+            .collect();
         // Слот 201 = isPaused(монета) у реализаций с геттером (откат — геттера нет, сверять нечем).
         for (k, t) in tokens.iter().enumerate() {
             let mut data = keccak256(b"isPaused(address)")[..4].to_vec();

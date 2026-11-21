@@ -36,8 +36,8 @@ use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::storage::journal::Level;
 
 use super::super::check::hook_batch::RouteFresh;
-use super::super::pools::{fusion_book, load};
 use super::super::pools::registry::Entry;
+use super::super::pools::{fusion_book, load};
 use super::super::quote::Quoting;
 use super::super::quote::via::Via;
 use super::{quoter_refetch_note, quoter_refetch_proof};

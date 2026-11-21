@@ -111,7 +111,10 @@ pub fn kinds(ctx: &Ctx, id: &str) -> (Vec<&'static Family>, Vec<String>) {
 /// вида, итог). Возвращает: индекс вида-итога (взят — его индекс, иначе 0) и итог. Ошибок нет.
 pub fn pick(all: Vec<(&str, Verdict)>) -> (usize, Verdict) {
     if all.len() == 1 {
-        let (_, v) = all.into_iter().next().unwrap_or(("", Verdict::Failed(String::new())));
+        let (_, v) = all
+            .into_iter()
+            .next()
+            .unwrap_or(("", Verdict::Failed(String::new())));
         return (0, v);
     }
     let mut failed = Vec::new();

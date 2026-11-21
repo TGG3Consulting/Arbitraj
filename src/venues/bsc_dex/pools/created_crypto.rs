@@ -151,12 +151,21 @@ async fn lookup(
     let n = lookup_max(ctx, f.id)?;
     let calls: Vec<(Address, Bytes)> = (0..n)
         .map(|i| {
-            let q = ICryptoFactory::find_pool_for_coinsCall { from: a, to: b, i: U256::from(i) };
+            let q = ICryptoFactory::find_pool_for_coinsCall {
+                from: a,
+                to: b,
+                i: U256::from(i),
+            };
             (factory, q.abi_encode().into())
         })
         .collect();
-    let tag = log.block_number.map(call::block_tag).unwrap_or_else(|| "latest".into());
-    let got = call::try_many(ctx, &calls, &tag).await.map_err(|e| e.message)?;
+    let tag = log
+        .block_number
+        .map(call::block_tag)
+        .unwrap_or_else(|| "latest".into());
+    let got = call::try_many(ctx, &calls, &tag)
+        .await
+        .map_err(|e| e.message)?;
     let mut out = Vec::new();
     for r in got {
         let bytes = r.map_err(|w| format!("find_pool_for_coins откатился: {w}"))?;
@@ -186,8 +195,14 @@ mod tests {
             "TricryptoPoolDeployed(address,string,string,address,address[3],address,bytes32,",
             "uint256,uint256,uint256,uint256,uint256,address)"
         );
-        assert_eq!(topic(Proto::CurveTwocrypto), Some(keccak256(two.as_bytes())));
-        assert_eq!(topic(Proto::CurveTricrypto), Some(keccak256(three.as_bytes())));
+        assert_eq!(
+            topic(Proto::CurveTwocrypto),
+            Some(keccak256(two.as_bytes()))
+        );
+        assert_eq!(
+            topic(Proto::CurveTricrypto),
+            Some(keccak256(three.as_bytes()))
+        );
         assert_eq!(topic(Proto::CurveTricryptoV1), None);
     }
 }

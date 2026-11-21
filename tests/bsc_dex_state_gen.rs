@@ -73,7 +73,10 @@ async fn same_state_reread_keeps_generation_and_depth() {
             .iter()
             .map(|e| (e.pool.reference.clone(), e.state_gen))
             .collect();
-        assert!(gens.iter().all(|(_, g)| *g != 0), "у записей реестра поколение есть");
+        assert!(
+            gens.iter().all(|(_, g)| *g != 0),
+            "у записей реестра поколение есть"
+        );
         // Каждый пул «перечитан» на следующем блоке с тем же состоянием (put и update).
         for e in reg.all() {
             let mut n = e.clone();
@@ -85,15 +88,27 @@ async fn same_state_reread_keeps_generation_and_depth() {
             reg.update(&e.pool.reference, |x| x.synced_log = Some(7));
         }
         for (r, g) in &gens {
-            assert_eq!(reg.get(r).unwrap().state_gen, *g, "то же состояние — то же поколение");
+            assert_eq!(
+                reg.get(r).unwrap().state_gen,
+                *g,
+                "то же состояние — то же поколение"
+            );
         }
         let g2 = graph::build(&p.ctx, reg, &p.tokens, 18).unwrap();
-        assert_eq!(reg.depth().calcs(), calcs, "глубина не пересчитана ни у одного пула");
+        assert_eq!(
+            reg.depth().calcs(),
+            calcs,
+            "глубина не пересчитана ни у одного пула"
+        );
         assert_eq!(picture(&g1, reg), picture(&g2, reg));
         // Без памяти: новый реестр с теми же записями считает всё заново — та же картина.
         let f = fresh_copy(&p);
         let g3 = graph::build(&p.ctx, &f, &p.tokens, 18).unwrap();
-        assert_eq!(picture(&g2, reg), picture(&g3, &f), "{dir}: память по поколению = расчёт заново");
+        assert_eq!(
+            picture(&g2, reg),
+            picture(&g3, &f),
+            "{dir}: память по поколению = расчёт заново"
+        );
     }
 }
 
@@ -111,7 +126,10 @@ async fn state_change_gives_new_generation() {
     assert_ne!(n.pool.state, before.pool.state, "резервы в записях разные");
     p.registry.put(n);
     let after = p.registry.get(&r).unwrap();
-    assert_ne!(after.state_gen, before.state_gen, "смена состояния — новое поколение");
+    assert_ne!(
+        after.state_gen, before.state_gen,
+        "смена состояния — новое поколение"
+    );
     let g = graph::build(&p.ctx, &p.registry, &p.tokens, 18).unwrap();
     assert!(p.registry.depth().calcs() > calcs, "глубина пересчитана");
     let f = fresh_copy(&p);
@@ -129,5 +147,9 @@ async fn update_of_missing_pool_keeps_version() {
     p.registry
         .update(&PoolRef::Contract(WBNB_USDT_V2), |e| e.synced_log = Some(3))
         .unwrap();
-    assert_eq!(p.registry.version(), v + 1, "запись существующего пула — версия растёт");
+    assert_eq!(
+        p.registry.version(),
+        v + 1,
+        "запись существующего пула — версия растёт"
+    );
 }

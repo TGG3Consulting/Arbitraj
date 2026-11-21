@@ -62,7 +62,10 @@ fn native_math_equals_router_quote() {
         let (a, b, native) = pair.unwrap();
         assert_eq!(native, Some(w));
         let d = state(rec, ts, native);
-        assert!(!ekubo_native::is_token1(&d, a, w), "вход обёрткой — token0 ключа");
+        assert!(
+            !ekubo_native::is_token1(&d, a, w),
+            "вход обёрткой — token0 ключа"
+        );
         assert_eq!(ekubo_native::key_tokens(&d, a, b), (Address::ZERO, t1));
         n += compare(rec, &d);
     }
@@ -89,6 +92,9 @@ fn twamm_math_equals_router_quote() {
 #[test]
 fn core_load_logs_route() {
     let load = json("core_load.json");
-    assert!(load["logs"].as_u64().unwrap() > 0, "логов ядра за окно замера нет");
+    assert!(
+        load["logs"].as_u64().unwrap() > 0,
+        "логов ядра за окно замера нет"
+    );
     assert!(load["logs_per_block"].as_f64().is_some());
 }

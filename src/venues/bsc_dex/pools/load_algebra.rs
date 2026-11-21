@@ -165,8 +165,10 @@ pub fn row_range(ctx: &Ctx, tick: i32, spacing: i32) -> GatewayResult<(i16, i16)
 /// не задана или не читается — read_band_words по dex.tick_read_band_pct. Принимает: окружение, шаг пула. Возвращает:
 /// число слов (0 — полосы нет). Ошибок нет.
 pub fn algebra_band_words(ctx: &Ctx, spacing: i32) -> i32 {
-    ctx.dec("dex.tick_read_band_algebra_pct")
-        .map_or_else(|_| read_band_words(ctx, spacing), |pct| band_words(pct, spacing))
+    ctx.dec("dex.tick_read_band_algebra_pct").map_or_else(
+        |_| read_band_words(ctx, spacing),
+        |pct| band_words(pct, spacing),
+    )
 }
 
 /// Тики по установленным битам сжатых слов: тик бита b слова w = (w·256 + b)·spacing (TickTable.sol AlgebraV1,

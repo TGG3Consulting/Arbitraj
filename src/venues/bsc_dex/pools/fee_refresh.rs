@@ -75,7 +75,9 @@ pub async fn all(p: &Pools, f: &Family, why: &str) {
     let mut missed = Vec::new();
     for (pool, piece) in pools.iter().zip(got) {
         let fee = match piece {
-            Ok(Ok(b)) => call::decode::<P::feeCall>(&b).map(|x| x.to::<u32>()).map_err(|e| e.message),
+            Ok(Ok(b)) => call::decode::<P::feeCall>(&b)
+                .map(|x| x.to::<u32>())
+                .map_err(|e| e.message),
             Ok(Err(rev)) => Err(format!("откат: {rev}")),
             Err(node) => Err(node),
         };
@@ -91,6 +93,9 @@ pub async fn all(p: &Pools, f: &Family, why: &str) {
 
 /// Запись Warn «fee() пулов DEX не перечитаны». Ошибок нет.
 async fn warn(p: &Pools, f: &Family, n: usize, why: &str) {
-    let msg = format!("{}: fee() {n} пулов не перечитана (решение 281): {why}", f.title);
+    let msg = format!(
+        "{}: fee() {n} пулов не перечитана (решение 281): {why}",
+        f.title
+    );
     p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
 }

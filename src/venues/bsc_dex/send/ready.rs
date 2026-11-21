@@ -130,7 +130,10 @@ fn min_gas(ctx: &Ctx, ch: &Channel, s: &Scope) -> Result<U256, ChannelState> {
         return arb_min_gas::floor(ctx).map_err(|reason| ChannelState::NotConfigured { reason });
     }
     let nc = |e: GatewayError| ChannelState::NotConfigured { reason: e.message };
-    let gwei = ctx.settings.decimal_in("channel.min_gas_price_gwei", s).map_err(nc)?;
+    let gwei = ctx
+        .settings
+        .decimal_in("channel.min_gas_price_gwei", s)
+        .map_err(nc)?;
     num::to_units(gwei * Decimal::from(1_000_000_000u64), 0).ok_or_else(|| {
         ChannelState::NotConfigured {
             reason: "channel.min_gas_price_gwei не переводится в wei".into(),
@@ -211,9 +214,10 @@ impl Ready {
             (SendMethod::Single, Some(Single::Raw), _) => {
                 ("eth_sendRawTransaction", json!([txs[0]]))
             }
-            (SendMethod::Single, Some(Single::Sequencer), _) if cond != Cond::Plain => {
-                (sequencer_cond::METHOD, sequencer_cond::params(&txs[0], cond, known))
-            }
+            (SendMethod::Single, Some(Single::Sequencer), _) if cond != Cond::Plain => (
+                sequencer_cond::METHOD,
+                sequencer_cond::params(&txs[0], cond, known),
+            ),
             (SendMethod::Single, Some(Single::Sequencer), _) => match self.submit {
                 Submit::Sync(t) => (seq_opts::SYNC_METHOD, seq_opts::sync_params(&txs[0], t)),
                 Submit::Raw => ("eth_sendRawTransaction", json!([txs[0]])),

@@ -55,7 +55,9 @@ pub async fn chains(st: &AppState) -> Vec<(VenueId, Option<String>)> {
     }
     dex.into_iter()
         .map(|v| {
-            let c = crate::core::chain::chain_at(&st.settings, &v).ok().map(|c| c.0);
+            let c = crate::core::chain::chain_at(&st.settings, &v)
+                .ok()
+                .map(|c| c.0);
             (v, c)
         })
         .collect()

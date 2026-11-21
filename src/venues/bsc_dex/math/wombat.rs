@@ -87,7 +87,14 @@ fn ideal_raw(w: &WombatData, amp: U256, i: usize, j: usize, amount: U256) -> Opt
         fl = fl.checked_mul(scale)? / wad();
         fa = fa.checked_mul(int(scale)?)?.checked_div(int(wad())?)?;
     }
-    swap_quote(int(fc)?, int(cash_out)?, int(fl)?, int(liab_out)?, fa, int(amp)?)
+    swap_quote(
+        int(fc)?,
+        int(cash_out)?,
+        int(fl)?,
+        int(liab_out)?,
+        fa,
+        int(amp)?,
+    )
 }
 
 /// Идеальный выход до haircut с проверкой cash (PoolV2.sol L791-L793: `fromAmount > 0 && toCash < ideal` —

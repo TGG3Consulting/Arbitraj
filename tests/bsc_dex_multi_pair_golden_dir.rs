@@ -85,7 +85,10 @@ pub async fn configure(c: &Ctx) {
         ("dex.kind", json!("pancakeswap_v3")),
         ("dex.pool_enabled", json!(true)),
         ("dex.universal_router", a.clone()),
-        ("dex.universal_router_version", json!("pancakeswap_infinity")),
+        (
+            "dex.universal_router_version",
+            json!("pancakeswap_infinity"),
+        ),
         ("dex.permit2", a.clone()),
         ("dex.factory", json!(format!("{PCS_V3_FACTORY}"))),
         ("dex.tick_lens", a.clone()),
@@ -93,17 +96,31 @@ pub async fn configure(c: &Ctx) {
     ] {
         set(c, n, s.clone(), v).await;
     }
-    set(c, "dex.kind", Scope::Dex("uniswap-bsc".into()), json!("unsupported")).await;
-    set(c, "dex.verify_batch", Scope::Venue("bsc_dex".into()), json!(50)).await;
+    set(
+        c,
+        "dex.kind",
+        Scope::Dex("uniswap-bsc".into()),
+        json!("unsupported"),
+    )
+    .await;
+    set(
+        c,
+        "dex.verify_batch",
+        Scope::Venue("bsc_dex".into()),
+        json!(50),
+    )
+    .await;
 }
 
 /// Справочник пяти монет из записи: адрес монеты — самый частый токен её страницы. Ошибок нет (паника теста).
 fn fill(c: &Ctx) {
     let body =
-        std::fs::read_to_string("tests/data/indexers_2026-10-24/arb_indexers_2026-10-24.json").unwrap();
+        std::fs::read_to_string("tests/data/indexers_2026-10-24/arb_indexers_2026-10-24.json")
+            .unwrap();
     let all: Value = serde_json::from_str(&body).unwrap();
     for t in ["CAKE", "ETH", "XRP", "TWT", "DOGE"] {
-        let pools = gt_parse::pools(all[format!("gt_pools_{t}_p1")]["body"].as_str().unwrap()).unwrap();
+        let pools =
+            gt_parse::pools(all[format!("gt_pools_{t}_p1")]["body"].as_str().unwrap()).unwrap();
         let mut n: HashMap<Address, usize> = HashMap::new();
         for p in &pools {
             *n.entry(p.base).or_default() += 1;
@@ -127,14 +144,16 @@ fn fill(c: &Ctx) {
 /// Снимок: итог take, статусы по строке пула, строки справочника. Ошибок нет (паника теста).
 pub async fn snapshot(c: &Ctx) -> String {
     let took = index::take(c, None).await.unwrap();
-    let mut text = format!("## take found={} failed={}\n", took.found.len(), took.failed);
+    let mut text = format!(
+        "## take found={} failed={}\n",
+        took.found.len(),
+        took.failed
+    );
     text += "## status\n";
-    text += &sorted(c.index.with(|s| {
-        s.status
-            .iter()
-            .map(|(k, v)| format!("{k} {v:?}"))
-            .collect()
-    }));
+    text += &sorted(
+        c.index
+            .with(|s| s.status.iter().map(|(k, v)| format!("{k} {v:?}")).collect()),
+    );
     text += "## view\n";
     let v = directory::snapshot(c);
     text += &sorted(
@@ -165,9 +184,18 @@ async fn paired_directory_unchanged_with_multi_pair() {
     set(&c, "dex.pool_enabled", e.clone(), json!(true)).await;
     set(&c, "dex.stable_pools", e.clone(), json!([])).await;
     set(&c, "dex.multi_pair", e, json!(true)).await;
-    set(&c, "dex.multi_pair", Scope::Dex("pancakeswap-v3-bsc".into()), json!(true)).await;
+    set(
+        &c,
+        "dex.multi_pair",
+        Scope::Dex("pancakeswap-v3-bsc".into()),
+        json!(true),
+    )
+    .await;
     fill(&c);
     let text = snapshot(&c).await;
-    assert_eq!(c.index.with(|s| s.multi_dex.clone()), HashSet::from(["ellipsis".to_string()]));
+    assert_eq!(
+        c.index.with(|s| s.multi_dex.clone()),
+        HashSet::from(["ellipsis".to_string()])
+    );
     check("directory_2026-10-24", &text);
 }

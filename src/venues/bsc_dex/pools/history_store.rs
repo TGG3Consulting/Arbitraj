@@ -18,8 +18,8 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::discover::Found;
-use super::history_ekubo;
 use super::families::Family;
+use super::history_ekubo;
 use crate::storage::venue_state;
 
 /// Вид записи пула (id — «вид:менеджер:PoolId»).

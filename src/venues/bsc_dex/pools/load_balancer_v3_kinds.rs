@@ -45,25 +45,39 @@ pub fn calls(pool: Address, fx: &Fixed, pre: Option<(Address, Address)>) -> Vec<
         l.push(c(pool, P::getNormalizedWeightsCall {}.abi_encode()));
     }
     if r == Release::QuantAmm {
-        l.push(c(pool, IQuantAmm::getQuantAMMWeightedPoolDynamicDataCall {}.abi_encode()));
+        l.push(c(
+            pool,
+            IQuantAmm::getQuantAMMWeightedPoolDynamicDataCall {}.abi_encode(),
+        ));
     }
-    if matches!(r, Release::LbpV1 | Release::LbpV2 | Release::LbpV3 | Release::LbpV4)
-        || r == Release::FixedLbp
+    if matches!(
+        r,
+        Release::LbpV1 | Release::LbpV2 | Release::LbpV3 | Release::LbpV4
+    ) || r == Release::FixedLbp
     {
         l.push(c(pool, ILbp::isSwapEnabledCall {}.abi_encode()));
     }
     if matches!(r, Release::ReClamm | Release::ReClammLive) {
-        l.push(c(pool, IReClamm::computeCurrentVirtualBalancesCall {}.abi_encode()));
+        l.push(c(
+            pool,
+            IReClamm::computeCurrentVirtualBalancesCall {}.abi_encode(),
+        ));
     }
     if r == Release::ReClamm {
-        l.push(c(pool, IReClamm::getLastVirtualBalancesCall {}.abi_encode()));
+        l.push(c(
+            pool,
+            IReClamm::getLastVirtualBalancesCall {}.abi_encode(),
+        ));
         l.push(c(pool, IReClamm::getCenterednessMarginCall {}.abi_encode()));
     }
     match fx.hook {
         HookKind::None => {}
         HookKind::Surge(h) => {
             l.push(c(h, S::getMaxSurgeFeePercentageCall { pool }.abi_encode()));
-            l.push(c(h, S::getSurgeThresholdPercentageCall { pool }.abi_encode()));
+            l.push(c(
+                h,
+                S::getSurgeThresholdPercentageCall { pool }.abi_encode(),
+            ));
         }
         HookKind::Mev(h) => {
             l.push(c(h, M::isMevTaxEnabledCall {}.abi_encode()));
@@ -72,7 +86,10 @@ pub fn calls(pool: Address, fx: &Fixed, pre: Option<(Address, Address)>) -> Vec<
             l.push(c(h, M::getPoolMevTaxThresholdCall { pool }.abi_encode()));
             if let Some((sys, owner)) = pre {
                 l.push(c(sys, IArbSys::arbOSVersionCall {}.abi_encode()));
-                l.push(c(owner, IArbOwnerPublic::getCollectTipsCall {}.abi_encode()));
+                l.push(c(
+                    owner,
+                    IArbOwnerPublic::getCollectTipsCall {}.abi_encode(),
+                ));
             }
         }
     }
@@ -95,7 +112,10 @@ pub fn decode(
     let amp = if r.stable() {
         let a = P::getAmplificationParameterCall::abi_decode_returns(cur.take()?).map_err(dec)?;
         if a.precision != U256::from(1_000u32) {
-            return Err(format!("точность A {} ≠ 1000 (StableMath.sol L38)", a.precision));
+            return Err(format!(
+                "точность A {} ≠ 1000 (StableMath.sol L38)",
+                a.precision
+            ));
         }
         a.value
     } else {
@@ -116,10 +136,15 @@ pub fn decode(
         let (end, upd) = (t.lastInteropTime, t.lastUpdateTime);
         if end < upd {
             let w = "onSwap откатывается (L284), котировки нет";
-            return Err(format!("QuantAMM: lastInteropTime {end} < lastUpdateTime {upd} — {w}"));
+            return Err(format!(
+                "QuantAMM: lastInteropTime {end} < lastUpdateTime {upd} — {w}"
+            ));
         }
     }
-    let lbp = matches!(r, Release::LbpV1 | Release::LbpV2 | Release::LbpV3 | Release::LbpV4);
+    let lbp = matches!(
+        r,
+        Release::LbpV1 | Release::LbpV2 | Release::LbpV3 | Release::LbpV4
+    );
     let enabled = if lbp || r == Release::FixedLbp {
         ILbp::isSwapEnabledCall::abi_decode_returns(cur.take()?).map_err(dec)?
     } else {
@@ -145,12 +170,32 @@ pub fn decode(
             let (va, vb) = reclamm(&mut cur, r, live, last_live, initialized)?;
             (VaultCurve::V3, VaultV3Rule::ReClamm { va, vb })
         }
-        (Extra::Gyro2 { sqrt_alpha, sqrt_beta }, _) => {
+        (
+            Extra::Gyro2 {
+                sqrt_alpha,
+                sqrt_beta,
+            },
+            _,
+        ) => {
             let (sqrt_alpha, sqrt_beta) = (*sqrt_alpha, *sqrt_beta);
-            (VaultCurve::V3, VaultV3Rule::Gyro2Clp { sqrt_alpha, sqrt_beta })
+            (
+                VaultCurve::V3,
+                VaultV3Rule::Gyro2Clp {
+                    sqrt_alpha,
+                    sqrt_beta,
+                },
+            )
         }
         (Extra::Eclp(p), _) => (VaultCurve::V3, VaultV3Rule::GyroEclp(p.clone())),
-        (Extra::Lbp { project, block_in, virt, min }, _) => {
+        (
+            Extra::Lbp {
+                project,
+                block_in,
+                virt,
+                min,
+            },
+            _,
+        ) => {
             let ver = match r {
                 Release::LbpV3 => LbpVer::Virtual,
                 Release::LbpV4 => LbpVer::VirtualMin,
@@ -164,14 +209,26 @@ pub fn decode(
                 virt: *virt,
                 min: min.clone(),
             };
-            (VaultCurve::Weighted { weights }, VaultV3Rule::Lbp(Box::new(l)))
+            (
+                VaultCurve::Weighted { weights },
+                VaultV3Rule::Lbp(Box::new(l)),
+            )
         }
         (Extra::FixedLbp { project, rate }, _) => {
             let (project, rate) = (*project, *rate);
-            (VaultCurve::V3, VaultV3Rule::FixedLbp { enabled, project, rate })
+            (
+                VaultCurve::V3,
+                VaultV3Rule::FixedLbp {
+                    enabled,
+                    project,
+                    rate,
+                },
+            )
         }
         (Extra::QuantAmm { max_trade }, _) => {
-            let rule = VaultV3Rule::QuantAmm { max_trade: *max_trade };
+            let rule = VaultV3Rule::QuantAmm {
+                max_trade: *max_trade,
+            };
             (VaultCurve::Weighted { weights }, rule)
         }
         (x, r) => return Err(format!("неизменяемое {x:?} не того выпуска {r:?}")),

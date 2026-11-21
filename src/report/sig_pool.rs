@@ -43,7 +43,11 @@ pub fn pool_ref(r: &PoolRef) -> String {
         PoolRef::Singleton { manager, id } => format!("{manager:#x}:{id:#x}"),
         PoolRef::Member { contract, coin } => format!("{contract:#x}:{coin:#x}"),
         // Решение 295: пара многомонетного пула — контракт и пара (разные пары одного пула — разные строки).
-        PoolRef::Multi { contract, token0, token1 } => format!("{contract:#x}:{token0:#x}:{token1:#x}"),
+        PoolRef::Multi {
+            contract,
+            token0,
+            token1,
+        } => format!("{contract:#x}:{token0:#x}:{token1:#x}"),
     }
 }
 

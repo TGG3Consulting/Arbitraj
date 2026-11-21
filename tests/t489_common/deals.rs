@@ -46,7 +46,11 @@ pub async fn hold(core: &Core, id: &str, dex: &str, chain: Option<ChainId>) {
 /// Сделка — в учёт памяти и набор незавершённых (как первые шаги ledger::save: учёт, unsettled::track), без записи в
 /// базу и без net_hold::on_saved — его тест зовёт сам и проверяет возвращаемое значение. Ошибок нет.
 pub fn remember(core: &Core, d: &Deal) {
-    core.inner.deals.lock().unwrap().insert(d.id.clone(), d.clone());
+    core.inner
+        .deals
+        .lock()
+        .unwrap()
+        .insert(d.id.clone(), d.clone());
     arb::core::unsettled::track(core, d);
 }
 

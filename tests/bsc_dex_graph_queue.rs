@@ -37,7 +37,8 @@ async fn waiter_takes_newer_graph_without_rebuild() {
     let asked = reg.version();
     // Запись в реестр (то же состояние пула) — версия выросла, как от события пула во время ожидания.
     let r = PoolRef::Contract(WBNB_USDT_V2);
-    reg.update(&r, |e| e.synced_log = Some(1)).expect("пул записи");
+    reg.update(&r, |e| e.synced_log = Some(1))
+        .expect("пул записи");
     assert!(reg.version() > asked);
     let built = graph::cached(&p.ctx, reg, &p.tokens, 18).unwrap();
     assert_eq!(cache.builds(), 1);
@@ -137,19 +138,14 @@ async fn abandoned_calc_does_not_build() {
     // Срок вышел (страж брошен) — граф не строится, ошибка Timeout.
     let (g, flag) = abandon::guard();
     drop(g);
-    let got = abandon::scope(flag, async {
-        graph::cached(&p.ctx, reg, &p.tokens, 18)
-    })
-    .await;
+    let got = abandon::scope(flag, async { graph::cached(&p.ctx, reg, &p.tokens, 18) }).await;
     assert_eq!(got.err().map(|e| e.code), Some(ErrorCode::Timeout));
     assert_eq!(cache.builds(), 0, "брошенный расчёт граф не строит");
     // Живой расчёт (страж держится) — граф строится; итог равен построению без обёртки.
     let (_g, flag) = abandon::guard();
-    let live = abandon::scope(flag, async {
-        graph::cached(&p.ctx, reg, &p.tokens, 18)
-    })
-    .await
-    .unwrap();
+    let live = abandon::scope(flag, async { graph::cached(&p.ctx, reg, &p.tokens, 18) })
+        .await
+        .unwrap();
     assert_eq!(cache.builds(), 1);
     assert_eq!(
         live.len(),
@@ -165,7 +161,13 @@ async fn build_measured_counts_pools_and_recomputed() {
     assert_eq!(s1.pools, reg.all().len());
     let (g2, s2) = graph::build_measured(&p.ctx, reg, &p.tokens, 18).unwrap();
     assert_eq!(s2.pools, s1.pools);
-    assert_eq!(s2.recomputed, 0, "реестр не менялся — все глубины из памяти");
+    assert_eq!(
+        s2.recomputed, 0,
+        "реестр не менялся — все глубины из памяти"
+    );
     assert_eq!(g1.len(), g2.len());
-    assert_eq!(g2.len(), graph::build(&p.ctx, reg, &p.tokens, 18).unwrap().len());
+    assert_eq!(
+        g2.len(),
+        graph::build(&p.ctx, reg, &p.tokens, 18).unwrap().len()
+    );
 }

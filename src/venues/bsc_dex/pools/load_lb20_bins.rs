@@ -116,7 +116,9 @@ pub async fn next_bin(
     if multicall::address(ctx).is_some() {
         let got = call::try_many(ctx, &[(pool, data)], tag).await?;
         return match got.into_iter().next() {
-            Some(Ok(b)) => Ok(Some(call::decode::<P::findFirstNonEmptyBinIdCall>(&b)?.to())),
+            Some(Ok(b)) => Ok(Some(
+                call::decode::<P::findFirstNonEmptyBinIdCall>(&b)?.to(),
+            )),
             Some(Err(w)) if mc_data(&w).is_some_and(|d| edge(&d)) => Ok(None),
             Some(Err(w)) => Err(not_edge(w.as_str())),
             None => Err(not_edge("нет ответа")),
@@ -125,7 +127,9 @@ pub async fn next_bin(
     // Без Multicall3: eth_call, данные отката — поле error.data сырого ответа узла (errors.rs from_rpc with_raw).
     let req = json!([{ "to": pool, "input": data }, tag]);
     match rpc::call::<Bytes>(ctx, "eth_call", req).await {
-        Ok(b) => Ok(Some(call::decode::<P::findFirstNonEmptyBinIdCall>(&b)?.to())),
+        Ok(b) => Ok(Some(
+            call::decode::<P::findFirstNonEmptyBinIdCall>(&b)?.to(),
+        )),
         Err(e) if raw_edge(e.raw.as_deref()) => Ok(None),
         Err(e) => Err(e),
     }
@@ -136,7 +140,10 @@ pub async fn next_bin(
 /// assert and Error via require»). Принимает: данные отката. Ошибок нет.
 pub fn edge(data: &[u8]) -> bool {
     data == &P::TreeMath__ErrorDepthSearch::SELECTOR[..]
-        || data == Panic::from(PanicKind::UnderOverflow).abi_encode().as_slice()
+        || data
+            == Panic::from(PanicKind::UnderOverflow)
+                .abi_encode()
+                .as_slice()
 }
 
 /// Данные отката из текста части пачки Multicall3 («вызов откатился: 0x…»). None — не тот вид. Ошибок нет.

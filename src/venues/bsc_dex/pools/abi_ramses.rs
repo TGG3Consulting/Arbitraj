@@ -63,16 +63,28 @@ mod tests {
     fn signatures_match_sources() {
         let topic = |sig: &str| B256::from(keccak256(sig.as_bytes()));
         let sel = |sig: &str| keccak256(sig.as_bytes())[..4].to_vec();
-        assert_eq!(IRamsesClPool::currentFeeCall::SELECTOR.to_vec(), sel("currentFee()"));
+        assert_eq!(
+            IRamsesClPool::currentFeeCall::SELECTOR.to_vec(),
+            sel("currentFee()")
+        );
         assert_eq!(IRamsesClPool::slot0Call::SELECTOR.to_vec(), sel("slot0()"));
-        assert_eq!(IRamsesClPool::ticksCall::SELECTOR.to_vec(), sel("ticks(int24)"));
+        assert_eq!(
+            IRamsesClPool::ticksCall::SELECTOR.to_vec(),
+            sel("ticks(int24)")
+        );
         assert_eq!(IRamsesV3Pool::feeCall::SELECTOR.to_vec(), sel("fee()"));
-        assert_eq!(IRamsesV3Pool::ticksCall::SELECTOR.to_vec(), sel("ticks(int24)"));
+        assert_eq!(
+            IRamsesV3Pool::ticksCall::SELECTOR.to_vec(),
+            sel("ticks(int24)")
+        );
         assert_eq!(
             IRamsesV3Pool::Mint::SIGNATURE_HASH,
             topic("Mint(address,address,uint256,int24,int24,uint128,uint256,uint256)")
         );
-        assert_ne!(IRamsesV3Pool::Mint::SIGNATURE_HASH, IV3Pool::Mint::SIGNATURE_HASH);
+        assert_ne!(
+            IRamsesV3Pool::Mint::SIGNATURE_HASH,
+            IV3Pool::Mint::SIGNATURE_HASH
+        );
         assert_eq!(
             IRamsesPoolFee::FeeAdjustment::SIGNATURE_HASH,
             topic("FeeAdjustment(uint24,uint24)")
@@ -88,10 +100,19 @@ mod tests {
         assert_eq!(IV3Factory::PoolCreated::SIGNATURE_HASH, topic(created));
         let get_pool = "getPool(address,address,int24)";
         assert_eq!(ICLFactory::getPoolCall::SELECTOR.to_vec(), sel(get_pool));
-        assert_eq!(ICLPool::liquidityCall::SELECTOR.to_vec(), sel("liquidity()"));
-        assert_eq!(ICLPool::tickBitmapCall::SELECTOR.to_vec(), sel("tickBitmap(int16)"));
+        assert_eq!(
+            ICLPool::liquidityCall::SELECTOR.to_vec(),
+            sel("liquidity()")
+        );
+        assert_eq!(
+            ICLPool::tickBitmapCall::SELECTOR.to_vec(),
+            sel("tickBitmap(int16)")
+        );
         // Легаси: Sync(uint112, uint112) и PairCreated без stable — подписи Uniswap V2.
-        assert_eq!(IV2Pair::Sync::SIGNATURE_HASH, topic("Sync(uint112,uint112)"));
+        assert_eq!(
+            IV2Pair::Sync::SIGNATURE_HASH,
+            topic("Sync(uint112,uint112)")
+        );
         let pair = "PairCreated(address,address,address,uint256)";
         assert_eq!(IV2Factory::PairCreated::SIGNATURE_HASH, topic(pair));
     }

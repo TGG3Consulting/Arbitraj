@@ -49,7 +49,9 @@ fn dir() -> PathBuf {
         })
         .collect();
     found.sort();
-    found.pop().expect("нет записи: tools/arbitrum_record/shell.py")
+    found
+        .pop()
+        .expect("нет записи: tools/arbitrum_record/shell.py")
 }
 
 /// JSON из файла записи.
@@ -60,7 +62,12 @@ fn json(p: &Path) -> Value {
 /// Ответ записи на вызов (to, data): байты или None (откат / нет ответа).
 fn answer(rec: &Value, to: Address, data: &Bytes) -> Option<Bytes> {
     let k = format!("{to:#x}|{data}").to_lowercase();
-    rec["answers"].get(&k)?.get("result")?.as_str()?.parse().ok()
+    rec["answers"]
+        .get(&k)?
+        .get("result")?
+        .as_str()?
+        .parse()
+        .ok()
 }
 
 /// Разбор ответа функции. Паника — не по ABI.

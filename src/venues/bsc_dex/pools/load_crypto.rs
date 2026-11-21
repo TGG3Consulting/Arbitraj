@@ -136,7 +136,12 @@ pub async fn load(
 /// пару. Возвращает: PoolState::Crypto. Ошибки: откат вызова, ответ не по ABI, MATH() не из списков настроек (формула
 /// не сверена) или сразу в обоих, нет монеты пары среди монет пула; списки математики (crypto_variant::lists) —
 /// NotConfigured (не задана dex.curve_crypto_math), Internal (не список, не адрес).
-pub fn state(ctx: &Ctx, f: &Family, raw: &Raw, pair: (Address, Address)) -> GatewayResult<PoolState> {
+pub fn state(
+    ctx: &Ctx,
+    f: &Family,
+    raw: &Raw,
+    pair: (Address, Address),
+) -> GatewayResult<PoolState> {
     let pool = raw.pool;
     let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("Crypto {pool}: {what}"));
     let (coins, mut data, math) = decode(raw).map_err(&bad)?;
@@ -177,19 +182,16 @@ pub fn decode(raw: &Raw) -> Result<(Vec<Address>, CryptoData, Address), String> 
         Ok(U256::from_be_slice(v))
     };
     let precisions = if raw.n == 2 {
-        let p = P2::precisionsCall::abi_decode_returns(ok(7)?)
-            .map_err(|e| e.to_string())?;
+        let p = P2::precisionsCall::abi_decode_returns(ok(7)?).map_err(|e| e.to_string())?;
         p.to_vec()
     } else {
-        let p = P3::precisionsCall::abi_decode_returns(ok(7)?)
-            .map_err(|e| e.to_string())?;
+        let p = P3::precisionsCall::abi_decode_returns(ok(7)?).map_err(|e| e.to_string())?;
         p.to_vec()
     };
     let mut coins = Vec::with_capacity(raw.n);
     let mut balances = Vec::with_capacity(raw.n);
     for k in 0..raw.n {
-        let c = P::coinsCall::abi_decode_returns(ok(HEAD + 2 * k)?)
-            .map_err(|e| e.to_string())?;
+        let c = P::coinsCall::abi_decode_returns(ok(HEAD + 2 * k)?).map_err(|e| e.to_string())?;
         coins.push(c);
         balances.push(w(HEAD + 2 * k + 1)?);
     }
@@ -197,8 +199,7 @@ pub fn decode(raw: &Raw) -> Result<(Vec<Address>, CryptoData, Address), String> 
     let price_scale = (0..raw.n - 1)
         .map(|k| w(tail + k))
         .collect::<Result<Vec<_>, _>>()?;
-    let math = P::MATHCall::abi_decode_returns(ok(tail + raw.n - 1)?)
-        .map_err(|e| e.to_string())?;
+    let math = P::MATHCall::abi_decode_returns(ok(tail + raw.n - 1)?).map_err(|e| e.to_string())?;
     // Решение 472: ответы состояния tweak_price — за MATH() (нет — запись без них: модель не применяется).
     let tweak = load_crypto_tweak::decode(got.get(tail + raw.n..).unwrap_or(&[]), raw.n)?;
     // Рампа A/gamma (`if t > block.timestamp`): обмен пересчитает D (newton_D), A и gamma меняются со временем (шапка).
@@ -213,7 +214,11 @@ pub fn decode(raw: &Raw) -> Result<(Vec<Address>, CryptoData, Address), String> 
         mid_fee: w(3)?,
         out_fee: w(4)?,
         fee_gamma: w(5)?,
-        math: if raw.n == 2 { CryptoMath::TwoNg210 } else { CryptoMath::TriNg },
+        math: if raw.n == 2 {
+            CryptoMath::TwoNg210
+        } else {
+            CryptoMath::TriNg
+        },
         ramp,
         moving: ramp,
         halted: false,

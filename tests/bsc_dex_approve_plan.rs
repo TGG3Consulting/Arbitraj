@@ -58,7 +58,11 @@ async fn scene() -> Parts {
         ("dex.permit2_expiration_s", json!(3600)),
         ("dex.bundle_max_routers", json!(3)),
     ] {
-        p.ctx.settings.set(n, v.clone(), Some(val), "тест").await.unwrap();
+        p.ctx
+            .settings
+            .set(n, v.clone(), Some(val), "тест")
+            .await
+            .unwrap();
     }
     route_common::channel(&p, "club48", "bundle").await;
     let real = p.registry.get(&PoolRef::Contract(WBNB_USDT_V2)).unwrap();
@@ -77,7 +81,10 @@ async fn scene() -> Parts {
         }
         let f = families::make(id, "v2_fork").unwrap();
         let mut e: Entry = real.clone();
-        assert!(matches!(e.pool.state, PoolState::V2 { .. }), "V2-пул записи");
+        assert!(
+            matches!(e.pool.state, PoolState::V2 { .. }),
+            "V2-пул записи"
+        );
         e.family = f;
         e.pool.family = f.id.into();
         e.pool.reference = PoolRef::Contract(pool);
@@ -101,7 +108,10 @@ fn route_and_legs(p: &Parts, legs: &[(Address, u64)]) -> (DexRoute, Vec<Vec<Step
     };
     let mut steps = Vec::new();
     for &(pool, amount) in legs {
-        let e = p.registry.get(&PoolRef::Contract(pool)).expect("пул в реестре");
+        let e = p
+            .registry
+            .get(&PoolRef::Contract(pool))
+            .expect("пул в реестре");
         r.legs.push(RouteLeg {
             share: Decimal::from(amount) / Decimal::from(total),
             hops: vec![RouteHop {
@@ -131,7 +141,11 @@ fn route_and_legs(p: &Parts, legs: &[(Address, u64)]) -> (DexRoute, Vec<Vec<Step
 async fn both(p: &Parts, legs: &[(Address, u64)]) -> (Vec<approve_bundle::Unit>, Vec<BundleTx>) {
     let (route, steps) = route_and_legs(p, legs);
     let q = p.quoting();
-    assert_eq!(graph_form(&q.ctx, &route), GraphForm::Bundle, "форма «бандл»");
+    assert_eq!(
+        graph_form(&q.ctx, &route),
+        GraphForm::Bundle,
+        "форма «бандл»"
+    );
     let units = approve_bundle::plan(&q, &route, Side::Buy).expect("план разрешений");
     let b = bundle::build(&q.ctx, &steps, CAKE, WALLET, 7, 1_000_000, true)
         .await
@@ -156,7 +170,10 @@ async fn fork_plus_ur_counts_permit2() {
     let p = scene().await;
     let (units, appr) = both(&p, &[(BISWAP.2, 700), (CAKE_USDT_PCS, 300)]).await;
     assert_eq!(units.len(), 2, "{units:?}");
-    assert!(units.iter().any(|u| !u.fork && u.permit2.is_some()), "группа UR с Permit2");
+    assert!(
+        units.iter().any(|u| !u.fork && u.permit2.is_some()),
+        "группа UR с Permit2"
+    );
     assert_eq!(approve_bundle::txs(&units), appr.len(), "план = факт");
     assert_eq!(appr.len(), 3);
 }

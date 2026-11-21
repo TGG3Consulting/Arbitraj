@@ -52,12 +52,21 @@ pub fn on_swap(
         (VaultV3Rule::Lbp(l), VaultCurve::Weighted { weights }) => {
             balancer_v3_lbp::on_swap(l, weights, bal, i, j, a, exact_in)
         }
-        (VaultV3Rule::FixedLbp { enabled, project, rate }, VaultCurve::V3) => {
-            balancer_v3_lbp::fixed(*enabled, *project, *rate, i, a, exact_in)
-        }
-        (VaultV3Rule::Gyro2Clp { sqrt_alpha, sqrt_beta }, VaultCurve::V3) => {
-            gyro_2clp::on_swap(bal, i, j, a, exact_in, *sqrt_alpha, *sqrt_beta)
-        }
+        (
+            VaultV3Rule::FixedLbp {
+                enabled,
+                project,
+                rate,
+            },
+            VaultCurve::V3,
+        ) => balancer_v3_lbp::fixed(*enabled, *project, *rate, i, a, exact_in),
+        (
+            VaultV3Rule::Gyro2Clp {
+                sqrt_alpha,
+                sqrt_beta,
+            },
+            VaultCurve::V3,
+        ) => gyro_2clp::on_swap(bal, i, j, a, exact_in, *sqrt_alpha, *sqrt_beta),
         (VaultV3Rule::GyroEclp(p), VaultCurve::V3) => gyro_eclp::on_swap(p, bal, i, j, a, exact_in),
         (VaultV3Rule::ReClamm { va, vb }, VaultCurve::V3) => {
             reclamm::on_swap(bal, *va, *vb, i, j, a, exact_in)

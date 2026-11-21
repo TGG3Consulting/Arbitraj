@@ -67,7 +67,9 @@ pub fn registered(
     if !tokens.contains(&quote) {
         return Ok(None);
     }
-    let coin = tokens.iter().find(|t| **t != quote && coins.contains_key(*t));
+    let coin = tokens
+        .iter()
+        .find(|t| **t != quote && coins.contains_key(*t));
     Ok(coin.map(|c| Candidate {
         family: f,
         pool: format!("{:#x}", e.pool),

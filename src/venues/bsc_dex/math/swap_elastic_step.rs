@@ -290,7 +290,9 @@ pub fn compute_swap_step(
     exact_in: bool,
     is_token0: bool,
 ) -> Option<Step> {
-    compute_swap_step_rule(liquidity, current, target, fee, specified, exact_in, is_token0, false)
+    compute_swap_step_rule(
+        liquidity, current, target, fee, specified, exact_in, is_token0, false,
+    )
 }
 
 /// Решение 451: computeSwapStep с выбором правила. v1 = true — KyberSwap Elastic v1 (Sourcify 42161 Factory
@@ -319,7 +321,11 @@ pub fn compute_swap_step_rule(
     }
     let mut used = calc_reach_amount(liquidity, current, target, fee, exact_in, is_token0)?;
     let mut next_sqrt = U256::ZERO;
-    let over = if v1 { used >= specified } else { used > specified };
+    let over = if v1 {
+        used >= specified
+    } else {
+        used > specified
+    };
     if (exact_in && over) || (!exact_in && used <= specified) {
         used = specified;
     } else {

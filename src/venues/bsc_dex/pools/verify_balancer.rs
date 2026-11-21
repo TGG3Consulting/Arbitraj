@@ -213,7 +213,10 @@ pub fn judge(ctx: &Ctx, c: &Candidate, p: Plan, answers: &[Result<Bytes, String>
     let ty = super::balancer_pool_type::of(ctx, c.family);
     let own_bpt = matches!(ty, Ok(Some(t)) if t.bpt_excluded());
     if own_bpt && (c.coin == p.0 || c.quote == p.0) {
-        let w = format!("пара с BPT пула {:#x} — вход / выход ликвидности, не обмен", p.0);
+        let w = format!(
+            "пара с BPT пула {:#x} — вход / выход ликвидности, не обмен",
+            p.0
+        );
         return Verdict::Rejected(w);
     }
     let mut list = tokens(answers);

@@ -118,7 +118,10 @@ pub async fn load(
     usdt: Address,
     block: u64,
 ) -> GatewayResult<(PoolState, BinMap)> {
-    let extra = [(pool, Bytes::from(ILBPair22::getLBHooksParametersCall {}.abi_encode()))];
+    let extra = [(
+        pool,
+        Bytes::from(ILBPair22::getLBHooksParametersCall {}.abi_encode()),
+    )];
     let (mut d, bins, rest) =
         load_lb::load_with(ctx, tokens, pool, pair, usdt, block, &extra).await?;
     let why = judge(ctx, f, &mut d, rest.first(), block).await?;

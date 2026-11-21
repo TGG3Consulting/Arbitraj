@@ -265,7 +265,10 @@ async fn net_after_simulation_must_clear_threshold() {
         bnb_in_base: Decimal::new(600, 0),
     };
     let gwei = U256::from(1_000_000_000u64);
-    let flat = Bill::Flat { units: 300_000, wei: gwei };
+    let flat = Bill::Flat {
+        units: 300_000,
+        wei: gwei,
+    };
     let io = (Decimal::new(101, 0), Decimal::new(100, 0));
     let e = cycle_steps::net_check(&p.ctx, io, &flat, &r, true)
         .await
@@ -313,7 +316,10 @@ async fn bundle_form_net_check_has_no_tip() {
     // Как quote/cycle_cost.rs: чаевые — только у формы «исполнитель».
     let with_tip = matches!(form, Form::Executor(_));
     let gwei = U256::from(1_000_000_000u64);
-    let flat = Bill::Flat { units: 300_000, wei: gwei };
+    let flat = Bill::Flat {
+        units: 300_000,
+        wei: gwei,
+    };
     let zero = (Decimal::ZERO, Decimal::ZERO);
     assert_eq!(
         cycle_steps::plan_tip(&q.ctx, gwei, with_tip).await.unwrap(),
@@ -445,7 +451,10 @@ async fn wbnb_base_cycle_end_to_end_without_network() {
     assert_eq!((call.token_in, call.token_out), (WBNB, WBNB));
     // Порог в USDT: 1 USDT = 1 / курс WBNB в базовой; выход, равный входу, его не проходит.
     set(&p, "dex_dex.min_profit_usd", json!("1")).await;
-    let zero_bill = Bill::Flat { units: 0, wei: U256::ZERO };
+    let zero_bill = Bill::Flat {
+        units: 0,
+        wei: U256::ZERO,
+    };
     let e = cycle_steps::net_check(&p.ctx, (input, input), &zero_bill, &r, true)
         .await
         .unwrap_err();

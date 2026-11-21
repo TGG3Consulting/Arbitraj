@@ -63,7 +63,12 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
 /// Что делает: итог по ответам coins(k) (без сети): decide и — решение 295 — в режиме dex.multi_pair ссылка с парой и
 /// монеты пула для развёртки (multi_pair::adopt). Принимает: окружение, кандидата, пул, ответы. Возвращает: итог.
 /// Ошибок нет.
-pub fn judge(ctx: &Ctx, c: &Candidate, pool: Address, answers: &[Result<Bytes, String>]) -> Verdict {
+pub fn judge(
+    ctx: &Ctx,
+    c: &Candidate,
+    pool: Address,
+    answers: &[Result<Bytes, String>],
+) -> Verdict {
     match decide(c, pool, answers) {
         Ok(f) => Verdict::Taken(Box::new(multi_pair::adopt(
             ctx,

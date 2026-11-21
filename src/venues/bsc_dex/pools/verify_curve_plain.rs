@@ -86,7 +86,11 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
             }
         };
         let imp = allowed.map(|list| (got.next(), list));
-        let base = if meta { Some(base_of(got.next())) } else { None };
+        let base = if meta {
+            Some(base_of(got.next()))
+        } else {
+            None
+        };
         let oracle = with_oracle.then(|| load_curve_oracle::oracle_of(got.next()));
         let part: Vec<call::Piece> = got.by_ref().take(MAX_COINS).collect();
         if let Some((answer, list)) = imp {
@@ -110,7 +114,9 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
                 continue;
             }
             Some(Err(None)) => {
-                let w = format!("пул {pool:#x}: фабрика не знает его базового пула — не метапул фабрики");
+                let w = format!(
+                    "пул {pool:#x}: фабрика не знает его базового пула — не метапул фабрики"
+                );
                 out.push(Verdict::Rejected(w));
                 continue;
             }
@@ -123,7 +129,9 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
                 continue;
             }
             Some(Err(None)) => {
-                let w = format!("пул {pool:#x}: oracle() откатился или ноль — не пул Curve с курсом оракула");
+                let w = format!(
+                    "пул {pool:#x}: oracle() откатился или ноль — не пул Curve с курсом оракула"
+                );
                 out.push(Verdict::Rejected(w));
                 continue;
             }
@@ -171,7 +179,9 @@ fn plan(ctx: &Ctx, c: &Candidate) -> Result<Plan, String> {
     if known && !meta {
         return Ok(Plan::Listed(pool));
     }
-    let factory = ctx.dex_addr("dex.factory", id).map_err(|_| reject(pool, id))?;
+    let factory = ctx
+        .dex_addr("dex.factory", id)
+        .map_err(|_| reject(pool, id))?;
     let imps: Vec<Address> = ctx
         .dex_list("dex.curve_plain_implementations", id)
         .map_err(|_| reject(pool, id))?

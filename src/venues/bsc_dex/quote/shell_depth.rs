@@ -44,7 +44,11 @@ fn probe(d: &ProteusData, in_x: bool) -> Option<(U256, U256)> {
 pub fn spot(d: &ProteusData, coin: Address, amount: U256) -> Option<U256> {
     let coin_x = d.is_x(coin)?;
     let in_x = !coin_x;
-    let (dec_in, dec_out) = if in_x { (d.dec_x, d.dec_y) } else { (d.dec_y, d.dec_x) };
+    let (dec_in, dec_out) = if in_x {
+        (d.dec_x, d.dec_y)
+    } else {
+        (d.dec_y, d.dec_x)
+    };
     let (p, o) = probe(d, in_x)?;
     let got = mul_div(to_ocean(amount, dec_in)?, o, p)?;
     from_ocean(got, dec_out, d.unwrap_fee_divisor)
@@ -94,7 +98,9 @@ pub fn side(d: &ProteusData, token_in: Address, b: f64, buy: bool) -> Result<(U2
             break;
         }
         lo = hi;
-        hi = hi.checked_mul(U256::from(2u8)).ok_or("Shell: переполнение суммы")?;
+        hi = hi
+            .checked_mul(U256::from(2u8))
+            .ok_or("Shell: переполнение суммы")?;
     }
     if full {
         for _ in 0..BISECT {
@@ -110,7 +116,11 @@ pub fn side(d: &ProteusData, token_in: Address, b: f64, buy: bool) -> Result<(U2
         }
     }
     let o = out(d, in_x, lo).ok_or("Shell: расчёт глубины невозможен")?;
-    let (dec_in, dec_out) = if in_x { (d.dec_x, d.dec_y) } else { (d.dec_y, d.dec_x) };
+    let (dec_in, dec_out) = if in_x {
+        (d.dec_x, d.dec_y)
+    } else {
+        (d.dec_y, d.dec_x)
+    };
     let units = if buy {
         lo / super::super::math::ten::pow10(u64::from(18u8.saturating_sub(dec_in)))
     } else {

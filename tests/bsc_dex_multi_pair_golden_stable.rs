@@ -17,7 +17,9 @@ use alloy_primitives::{Address, Bytes, U256};
 use serde_json::Value;
 
 use arb::venues::bsc_dex::pools::verify::Candidate;
-use arb::venues::bsc_dex::pools::{families, load_curve, load_saddle, verify_balancer, verify_curve_ng};
+use arb::venues::bsc_dex::pools::{
+    families, load_curve, load_saddle, verify_balancer, verify_curve_ng,
+};
 
 use golden_common::{check, sorted};
 use multi_common::{PAIRS3, bad, decimals, loader_answers, pair, rec};
@@ -33,12 +35,19 @@ fn stable_states() -> String {
         &calls,
         tail,
         ["nerve getToken", "nerve getTokenBalance"],
-        &["nerve getAPrecise()", "nerve swapStorage()", "nerve paused()"],
+        &[
+            "nerve getAPrecise()",
+            "nerve swapStorage()",
+            "nerve paused()",
+        ],
     );
     for (a, b) in PAIRS3 {
         let p = load_saddle::parse(&head, &t, pair("nerve_2026-11-15", a, b), &bad).unwrap();
         let dec = decimals(&nerve, "nerve", "getToken", p.coins.len());
-        out.push(format!("nerve {a}/{b} {:?}", load_saddle::build(p, &dec, &bad).unwrap()));
+        out.push(format!(
+            "nerve {a}/{b} {:?}",
+            load_saddle::build(p, &dec, &bad).unwrap()
+        ));
     }
     let ell = rec("ellipsis_2026-11-15", "probe.json");
     let pool = Address::from_str(ell["pool"].as_str().unwrap()).unwrap();
@@ -80,8 +89,12 @@ fn balancer() -> String {
         let bal: Vec<U256> = p["balances"].as_array().unwrap().iter().map(dec).collect();
         let ret = |b: bool| Ok::<Bytes, String>(Bytes::from(b.abi_encode()));
         let answers = vec![
-            Ok(Bytes::from((addr(&p["getPool"][0]), dec(&p["getPool"][1])).abi_encode_params())),
-            Ok(Bytes::from((tokens.clone(), bal, dec(&p["lastChangeBlock"])).abi_encode_params())),
+            Ok(Bytes::from(
+                (addr(&p["getPool"][0]), dec(&p["getPool"][1])).abi_encode_params(),
+            )),
+            Ok(Bytes::from(
+                (tokens.clone(), bal, dec(&p["lastChangeBlock"])).abi_encode_params(),
+            )),
             ret(p["isPoolFromFactory"]["weighted"] == "1"),
             ret(p["isPoolFromFactory"]["stable"] == "1"),
         ];
@@ -90,7 +103,12 @@ fn balancer() -> String {
                 if a == b {
                     continue;
                 }
-                let cand = Candidate { family: fam, pool: p["pool"].as_str().unwrap().into(), coin: *a, quote: *b };
+                let cand = Candidate {
+                    family: fam,
+                    pool: p["pool"].as_str().unwrap().into(),
+                    coin: *a,
+                    quote: *b,
+                };
                 let r = verify_balancer::decide(&cand, (pool, vault, wf, Some(sf)), &answers);
                 out.push(format!("{pool:#x} {a:#x}/{b:#x} {r:?}"));
             }
@@ -103,7 +121,8 @@ fn balancer() -> String {
 fn curve_ng() -> String {
     let probe = rec("curve_ng_2026-11-14", "probe.json");
     let fam = families::make("curve-bsc", "curve_stableswap_ng").expect("вид");
-    let hex = |s: &str| Bytes::from(alloy_primitives::hex::decode(s.trim_start_matches("0x")).unwrap());
+    let hex =
+        |s: &str| Bytes::from(alloy_primitives::hex::decode(s.trim_start_matches("0x")).unwrap());
     let v7 = vec!["v7.0.0".to_string()];
     let mut out = Vec::new();
     for p in probe["pools"].as_array().unwrap() {
@@ -125,7 +144,12 @@ fn curve_ng() -> String {
                 if a == b {
                     continue;
                 }
-                let cand = Candidate { family: fam, pool: p["pool"].as_str().unwrap().into(), coin: *a, quote: *b };
+                let cand = Candidate {
+                    family: fam,
+                    pool: p["pool"].as_str().unwrap().into(),
+                    coin: *a,
+                    quote: *b,
+                };
                 let r = verify_curve_ng::decide(&cand, pool, &v7, &answers);
                 out.push(format!("{pool:#x} {a:#x}/{b:#x} {r:?}"));
             }

@@ -112,7 +112,10 @@ mod tests {
             ICurveMeta::get_virtual_priceCall::SELECTOR.to_vec(),
             sel("get_virtual_price()")
         );
-        assert_eq!(ICurveOraclePool::oracleCall::SELECTOR.to_vec(), sel("oracle()"));
+        assert_eq!(
+            ICurveOraclePool::oracleCall::SELECTOR.to_vec(),
+            sel("oracle()")
+        );
         assert_eq!(
             IRateOracle::latestAnswerCall::SELECTOR.to_vec(),
             sel("latestAnswer()")

@@ -83,7 +83,10 @@ pub fn calls(
 ) -> Vec<(Address, Bytes)> {
     let mut l: Vec<(Address, Bytes)> = vec![
         (vault, V::getPoolTokenInfoCall { pool }.abi_encode().into()),
-        (vault, V::getCurrentLiveBalancesCall { pool }.abi_encode().into()),
+        (
+            vault,
+            V::getCurrentLiveBalancesCall { pool }.abi_encode().into(),
+        ),
         (vault, V::getPoolTokenRatesCall { pool }.abi_encode().into()),
         (vault, V::getPoolConfigCall { pool }.abi_encode().into()),
         (vault, V::isPoolPausedCall { pool }.abi_encode().into()),
@@ -121,7 +124,10 @@ pub fn decode(
     let vault_paused = V::isVaultPausedCall::abi_decode_returns(ok(5)?).map_err(dec)?;
     let rest = got.get(6..).unwrap_or_default();
     // Решение 474: ответы буферов — последние buffer::count(fx) (вид их не читает).
-    let tail = got.len().checked_sub(buffer::count(fx)).ok_or("нет ответов буферов")?;
+    let tail = got
+        .len()
+        .checked_sub(buffer::count(fx))
+        .ok_or("нет ответов буферов")?;
     let buffers = buffer::decode(fx, &got[tail..])?;
     let last = &info.lastBalancesLiveScaled18;
     let (curve, rule, hook) = kinds::decode(fx, rest, &live, last, cfg.isPoolInitialized)?;

@@ -32,9 +32,9 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::call;
-use super::super::pools::{fusion_book, load};
 use super::super::pools::load_batch::{self, Want};
 use super::super::pools::registry::{Entry, Registry};
+use super::super::pools::{fusion_book, load};
 use super::super::quote::virtual_quoter;
 use super::super::tokens::Tokens;
 use super::hook_batch_read::{Read, cl_parse, cl_plan, quoted, want};

@@ -98,7 +98,10 @@ pub async fn choose(
     let plan = TipPlan {
         cfg,
         tip,
-        pools: legs.iter().map(|l| l.entry.pool.reference.clone()).collect(),
+        pools: legs
+            .iter()
+            .map(|l| l.entry.pool.reference.clone())
+            .collect(),
         topics: legs
             .iter()
             .map(|l| pool_cond_topics::by_cond(&l.entry, known))
@@ -110,12 +113,7 @@ pub async fn choose(
 /// Итог отправки для доли чаевых — в фоновой задаче (сделка не ждёт). Принимает: окружение, план (None — ничего не
 /// делается), итог send_tipped, блок плана условия пулов (решение 438; None — условия пулов не было). Ошибок нет: сбой
 /// или неоднозначный разбор — строка журнала send.tip_loss, доля не меняется.
-pub fn after(
-    env: &Env,
-    plan: Option<TipPlan>,
-    res: &GatewayResult<Done>,
-    plan_block: Option<u64>,
-) {
+pub fn after(env: &Env, plan: Option<TipPlan>, res: &GatewayResult<Done>, plan_block: Option<u64>) {
     let Some(plan) = plan else { return };
     let ctx = &env.ctx;
     let mk = |blocks, ours, index| Probe {
@@ -131,7 +129,10 @@ pub fn after(
         Ok(d) if d.chain.outcome == TxOutcome::Reverted => {
             let at = d.receipt.as_ref().and_then(|x| x.transaction_index);
             let Some(b) = d.chain.block else {
-                return note(ctx, "откат без номера блока включения — разбор невозможен".into());
+                return note(
+                    ctx,
+                    "откат без номера блока включения — разбор невозможен".into(),
+                );
             };
             Some(mk((b, b), d.chain.hash, at.map(|i| i.to())))
         }

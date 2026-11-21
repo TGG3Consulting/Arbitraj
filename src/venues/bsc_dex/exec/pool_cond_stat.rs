@@ -47,7 +47,10 @@ pub fn applies(ctx: &Ctx) -> GatewayResult<()> {
     let why = match gas_mode::read(ctx) {
         Ok(GasMode::Eip1559L1) => return Ok(()),
         Ok(_) => "статистика условия пулов — только при dex.gas_mode = eip1559_l1".to_string(),
-        Err(e) => format!("статистика условия пулов: модель газа не прочитана — {}", e.message),
+        Err(e) => format!(
+            "статистика условия пулов: модель газа не прочитана — {}",
+            e.message
+        ),
     };
     Err(ctx.err(ErrorCode::NotApplicable, why))
 }

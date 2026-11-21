@@ -30,10 +30,10 @@ use super::super::tokens::Tokens;
 use super::families::{Family, Proto};
 use super::fee_fresh::{self, Extras};
 use super::load::{self, Loaded};
-use super::load_site;
 use super::load_batch_cl as cl;
 use super::load_batch_ticks as ticks3;
 use super::load_batch_v2v3::{PoolStateTick, head, parse_head, run, v3_ticks, words};
+use super::load_site;
 use super::load_v2v3::word_range;
 use super::registry::Registry;
 use super::ticks::TickMap;
@@ -87,7 +87,10 @@ pub async fn states(
     // (load_site.rs); остальные ссылки сюда не попадают (группы пусты — чтение прежнее).
     for (contract, idx) in load_site::groups(wants) {
         let w0 = &wants[idx[0]];
-        let pairs: Vec<(Address, Address)> = idx.iter().map(|&i| (wants[i].token0, wants[i].token1)).collect();
+        let pairs: Vec<(Address, Address)> = idx
+            .iter()
+            .map(|&i| (wants[i].token0, wants[i].token1))
+            .collect();
         let got = load_site::states(ctx, tokens, w0.family, contract, &pairs, block).await;
         for (i, r) in idx.into_iter().zip(got) {
             out[i] = Some(r);

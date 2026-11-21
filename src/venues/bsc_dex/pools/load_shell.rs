@@ -121,7 +121,10 @@ pub async fn load(
     };
     let vault = ctx.dex_addr("dex.vault", dex)?;
     if head.ocean != vault {
-        return Err(bad(format!("учёт пула {:#x} ≠ dex.vault {vault:#x}", head.ocean)));
+        return Err(bad(format!(
+            "учёт пула {:#x} ≠ dex.vault {vault:#x}",
+            head.ocean
+        )));
     }
     let (x, y) = shell_sides::sides(head.x_id, head.y_id, pair, stable_native::wrapped(ctx))
         .map_err(&bad)?;
@@ -162,7 +165,10 @@ pub fn state(
     b: &Body,
 ) -> Result<PoolState, String> {
     let [xb, yb] = b.balances[..] else {
-        return Err(format!("balanceOfBatch вернул {} балансов, нужно 2", b.balances.len()));
+        return Err(format!(
+            "balanceOfBatch вернул {} балансов, нужно 2",
+            b.balances.len()
+        ));
     };
     let n = b.a.len();
     if n == 0 || b.b.len() != n || b.k.len() != n || b.slopes.len() + 1 != n {

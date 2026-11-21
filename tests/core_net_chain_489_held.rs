@@ -52,7 +52,11 @@ async fn held_network_until_usdt_return_done() {
     let vela = held.iter().find(|c| c.asset.ticker == "VELA").unwrap();
     let ready = arb::core::net_ready::withdraw(&core, &v("bingx"), &vela.asset, "ARBITRUM");
     assert!(ready.is_ok(), "{ready:?}");
-    let p = vela.presence.iter().find(|p| p.venue == v("bingx")).unwrap();
+    let p = vela
+        .presence
+        .iter()
+        .find(|p| p.venue == v("bingx"))
+        .unwrap();
     let info = p.info.as_ref().unwrap();
     assert_eq!(info.network, "ARBITRUM");
     assert_eq!(p.can_send, rec.withdraw_enabled);
@@ -94,7 +98,14 @@ async fn held_network_until_usdt_return_done() {
     assert!(!net_held(&core, "arb_dex"), "отпущена (ledger::save)");
     assert!(!in_play(&core, &v("arb_dex")));
     edit(&core, "H489", |_| {}).await;
-    let rec = core.inner.deals.lock().unwrap().get("H489").cloned().unwrap();
+    let rec = core
+        .inner
+        .deals
+        .lock()
+        .unwrap()
+        .get("H489")
+        .cloned()
+        .unwrap();
     let kick = arb::core::net_hold::on_saved(&core, &rec);
     assert!(!kick, "повтор — без толчка");
     assert!(!net_held(&core, "arb_dex"));

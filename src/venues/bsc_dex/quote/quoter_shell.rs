@@ -41,9 +41,17 @@ pub fn request(
     let in_x = d
         .is_x(token_in)
         .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Shell: токен входа не из пула"))?;
-    let (dec_in, token_out) = if in_x { (d.dec_x, d.token_y) } else { (d.dec_y, d.token_x) };
-    let input = to_ocean(amount, dec_in)
-        .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Shell: вход не переводится в единицы учёта"))?;
+    let (dec_in, token_out) = if in_x {
+        (d.dec_x, d.token_y)
+    } else {
+        (d.dec_y, d.token_x)
+    };
+    let input = to_ocean(amount, dec_in).ok_or_else(|| {
+        ctx.err(
+            ErrorCode::NoRoute,
+            "Shell: вход не переводится в единицы учёта",
+        )
+    })?;
     let mc = multicall::address(ctx).ok_or_else(|| {
         ctx.not_set(
             "dex.multicall3",

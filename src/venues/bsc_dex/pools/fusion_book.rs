@@ -104,11 +104,15 @@ pub fn same_block(e: &mut Entry, own: Option<&Held>, block: u64) -> Result<(), S
         return Ok(());
     };
     let Some(h) = own.filter(|h| h.block == block) else {
-        return Err(format!("THENA Fusion: данных оракула чтения на блоке {block} нет"));
+        return Err(format!(
+            "THENA Fusion: данных оракула чтения на блоке {block} нет"
+        ));
     };
     let o = &h.got.oracle;
     if h.got.ts < o.last.ts {
-        return Err(format!("THENA Fusion: время блока {block} раньше последней точки оракула"));
+        return Err(format!(
+            "THENA Fusion: время блока {block} раньше последней точки оракула"
+        ));
     }
     match fee_algebra_v1::fee_at(o, h.got.ts, *tick) {
         Some(f) => {

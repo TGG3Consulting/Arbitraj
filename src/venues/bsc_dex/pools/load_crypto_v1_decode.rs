@@ -26,7 +26,9 @@ pub fn decode(raw: &Raw) -> Result<(Vec<Address>, CryptoData), String> {
         None => Err(format!("нет ответа на вызов {i}")),
     };
     let w = |i: usize| -> Result<U256, String> {
-        let v = ok(i)?.get(..32).ok_or(format!("ответ {i} короче 32 байт"))?;
+        let v = ok(i)?
+            .get(..32)
+            .ok_or(format!("ответ {i} короче 32 байт"))?;
         Ok(U256::from_be_slice(v))
     };
     let mut coins = Vec::with_capacity(raw.n);
@@ -37,7 +39,9 @@ pub fn decode(raw: &Raw) -> Result<(Vec<Address>, CryptoData), String> {
         coins.push(c);
         balances.push(w(HEAD + 2 * k + 1)?);
         let d = *raw.decimals.get(k).ok_or("нет decimals монеты")?;
-        let p = 18u64.checked_sub(d.into()).ok_or(format!("decimals {d} > 18"))?;
+        let p = 18u64
+            .checked_sub(d.into())
+            .ok_or(format!("decimals {d} > 18"))?;
         precisions.push(ten::pow(p));
     }
     let tail = HEAD + 2 * raw.n;
@@ -58,7 +62,11 @@ pub fn decode(raw: &Raw) -> Result<(Vec<Address>, CryptoData), String> {
         mid_fee: w(3)?,
         out_fee: w(4)?,
         fee_gamma: w(5)?,
-        math: if raw.n == 2 { CryptoMath::TwoV1 } else { CryptoMath::TriV1 },
+        math: if raw.n == 2 {
+            CryptoMath::TwoV1
+        } else {
+            CryptoMath::TriV1
+        },
         ramp: !t.is_zero(),
         moving: t > U256::from(raw.now),
         halted,

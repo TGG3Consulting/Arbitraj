@@ -73,7 +73,9 @@ fn check(name: &str, n: usize) {
             let i = row["i"].as_u64().unwrap() as usize;
             let j = row["j"].as_u64().unwrap() as usize;
             let dx = U256::from_str(row["dx"].as_str().unwrap()).unwrap();
-            let want = piece(&row["get_dy"]).ok().and_then(|b| quoter_crypto::decode(&b));
+            let want = piece(&row["get_dy"])
+                .ok()
+                .and_then(|b| quoter_crypto::decode(&b));
             let Some(want) = want else {
                 continue;
             };
@@ -100,7 +102,11 @@ fn check(name: &str, n: usize) {
                 let want = U256::from_str_radix(&h[..64.min(h.len())], 16).unwrap();
                 assert_eq!(ours, Some(want), "{pool} {i}->{j} {dx}: пул отдал выход");
             } else {
-                assert_eq!(ours, None, "{pool} {i}->{j} {dx}: пул откатил ({})", s["revert"]);
+                assert_eq!(
+                    ours, None,
+                    "{pool} {i}->{j} {dx}: пул откатил ({})",
+                    s["revert"]
+                );
             }
             sims += 1;
         }

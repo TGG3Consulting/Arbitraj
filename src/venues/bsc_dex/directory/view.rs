@@ -50,7 +50,12 @@ impl Directory {
             let from_multi = s.multi.get(addr).map(|v| v.as_slice()).unwrap_or_default();
             let key = |p: &IndexedPool| dir_key(&s.multi_dex, &p.dex_id, &p.pool, p.base, p.quote);
             let mut seen = std::collections::HashSet::new();
-            let all = t.pools.iter().chain(from_events).chain(from_factory).chain(from_multi);
+            let all = t
+                .pools
+                .iter()
+                .chain(from_events)
+                .chain(from_factory)
+                .chain(from_multi);
             for p in all.filter(shown).filter(|p| seen.insert(key(p))) {
                 let status = if is_native(*addr, p) {
                     DirectoryStatus::Unsupported(NATIVE.into())

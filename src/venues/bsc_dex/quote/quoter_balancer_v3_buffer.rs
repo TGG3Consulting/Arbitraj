@@ -95,7 +95,11 @@ pub fn request(
     };
     let zero_in = token_in == e.pool.token0;
     let ws = wrappers(d, zero_in)?;
-    let token_out = if zero_in { e.pool.token1 } else { e.pool.token0 };
+    let token_out = if zero_in {
+        e.pool.token1
+    } else {
+        e.pool.token0
+    };
     Some(
         ctx.dex_addr("dex.bv3_batch_router", e.family.id)
             .map(|r| (r, data(pool, (token_in, token_out), ws, amount))),

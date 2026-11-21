@@ -326,10 +326,15 @@ async fn batch_stages_match_recorded_calls_and_single_answers() {
         };
         let map = match w.family.kind {
             arb::core::types::PoolKind::V3 => format!("{:?}", v23::v3_ticks(&a2[i]).unwrap()),
-            arb::core::types::PoolKind::Cl => format!("{:?}", t3::tick_data(w, &set[i], &a3[i]).unwrap()),
+            arb::core::types::PoolKind::Cl => {
+                format!("{:?}", t3::tick_data(w, &set[i], &a3[i]).unwrap())
+            }
             _ => "-".into(),
         };
-        snap.push(format!("{:?} {} {head} ticks={map}", w.reference, w.family.id));
+        snap.push(format!(
+            "{:?} {} {head} ticks={map}",
+            w.reference, w.family.id
+        ));
     }
     golden_common::check("batch_load_2026-10-25", &golden_common::sorted(snap));
 }

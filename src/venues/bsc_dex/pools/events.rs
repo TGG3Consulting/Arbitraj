@@ -12,9 +12,11 @@ use super::events_algebra_dir;
 use super::families::{Family, Proto};
 use super::registry::Entry;
 use super::{
-    events_algebra, events_algebra_integral, events_balancer, events_balancer_v3, events_basin, events_camelot, events_ekubo, events_lb, events_lb20, events_lb22, events_bin, events_cl, events_crypto, events_curve, events_curve_ng, events_dmm,
-    events_dodo, events_fluid, events_shell, events_metric, events_elastic, events_izi, events_maverick, events_nomi, events_smardex, events_solidly, events_stable_u,
-    events_v2, events_v3, events_wombat,
+    events_algebra, events_algebra_integral, events_balancer, events_balancer_v3, events_basin,
+    events_bin, events_camelot, events_cl, events_crypto, events_curve, events_curve_ng,
+    events_dmm, events_dodo, events_ekubo, events_elastic, events_fluid, events_izi, events_lb,
+    events_lb20, events_lb22, events_maverick, events_metric, events_nomi, events_shell,
+    events_smardex, events_solidly, events_stable_u, events_v2, events_v3, events_wombat,
 };
 
 /// Что произошло с записью после события.
@@ -53,7 +55,10 @@ pub fn topics(f: &Family) -> Vec<B256> {
         Proto::CurveStable => events_curve::topics_of(f.variant),
         Proto::CurveNg => events_curve_ng::topics(),
         // Crypto-пулы Curve (решения 442, 453: NG и v1): любое событие пула — перечитать (events_crypto.rs).
-        Proto::CurveTwocrypto | Proto::CurveTricrypto | Proto::CurveCryptoV1 | Proto::CurveTricryptoV1 => events_crypto::topics(),
+        Proto::CurveTwocrypto
+        | Proto::CurveTricrypto
+        | Proto::CurveCryptoV1
+        | Proto::CurveTricryptoV1 => events_crypto::topics(),
         Proto::NomiStable => events_nomi::topics(),
         Proto::MetricOmm => events_metric::topics(),
         Proto::IziSwap | Proto::BiswapV3 => events_izi::topics(f.proto),
@@ -110,7 +115,10 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
         Proto::Solidly | Proto::SolidlyV1 | Proto::AeroBasic => events_solidly::liquidity_topics(),
         Proto::CurveStable => events_curve::liquidity_topics(),
         Proto::CurveNg => events_curve_ng::liquidity_topics(),
-        Proto::CurveTwocrypto | Proto::CurveTricrypto | Proto::CurveCryptoV1 | Proto::CurveTricryptoV1 => events_crypto::liquidity_topics(),
+        Proto::CurveTwocrypto
+        | Proto::CurveTricrypto
+        | Proto::CurveCryptoV1
+        | Proto::CurveTricryptoV1 => events_crypto::liquidity_topics(),
         Proto::NomiStable => events_nomi::liquidity_topics(),
         Proto::MetricOmm => events_metric::liquidity_topics(),
         Proto::IziSwap | Proto::BiswapV3 => events_izi::liquidity_topics(f.proto),
@@ -151,7 +159,10 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         Proto::Solidly | Proto::SolidlyV1 | Proto::AeroBasic => events_solidly::apply(e, log),
         Proto::CurveStable => events_curve::apply(e, log),
         Proto::CurveNg => events_curve_ng::apply(e, log),
-        Proto::CurveTwocrypto | Proto::CurveTricrypto | Proto::CurveCryptoV1 | Proto::CurveTricryptoV1 => events_crypto::apply(e, log),
+        Proto::CurveTwocrypto
+        | Proto::CurveTricrypto
+        | Proto::CurveCryptoV1
+        | Proto::CurveTricryptoV1 => events_crypto::apply(e, log),
         Proto::NomiStable => events_nomi::apply(e, log),
         Proto::MetricOmm => events_metric::apply(e, log),
         Proto::IziSwap | Proto::BiswapV3 => events_izi::apply(e, log),

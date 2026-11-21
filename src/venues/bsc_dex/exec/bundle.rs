@@ -182,7 +182,8 @@ pub async fn build(
         // пары, на СУММУ входов всех её ног (ERC-20 approve задаёт allowance, а не прибавляет; каждая нога списывает свой
         // вход). Раньше вторая нога пары слала свой approve по allowance до бандла — лишняя транзакция. Одна нога на
         // пару — как раньше (сумма = её вход). Котировка считает так же (quote/approve_bundle.rs).
-        let pair = |(r, p, ..): &(Address, Vec<Address>, U256, U256)| (*r, p[0]) == (router, token_in);
+        let pair =
+            |(r, p, ..): &(Address, Vec<Address>, U256, U256)| (*r, p[0]) == (router, token_in);
         let approvals = if forks[..i].iter().any(pair) {
             Vec::new()
         } else {

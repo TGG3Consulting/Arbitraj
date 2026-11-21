@@ -76,7 +76,8 @@ pub async fn run(p: Pools) {
         // Не задана — ждём её на лету (как пулы, listen.rs: settings_wait), а не завершаемся навсегда молча.
         let read = || p.ctx.int("venue.ws_reconnect_pause_ms");
         let what = "Комиссии пулов (менеджер)";
-        let Some(ms) = super::super::settings_wait::until_ok(&p.ctx, what, "venue.ws", read).await else {
+        let Some(ms) = super::super::settings_wait::until_ok(&p.ctx, what, "venue.ws", read).await
+        else {
             return;
         };
         tokio::time::sleep(Duration::from_millis(ms)).await;
@@ -152,7 +153,10 @@ async fn on_log(p: &Pools, list: &[(&'static Family, Address, Address)], raw: &s
     }
     // Ревью 281 (В2): событие менеджера не по ABI — не молча.
     if is_manager_event(t0) {
-        let msg = format!("Комиссия пула: лог менеджера {:#x} не разобран по ABI (решение 281)", log.address());
+        let msg = format!(
+            "Комиссия пула: лог менеджера {:#x} не разобран по ABI (решение 281)",
+            log.address()
+        );
         p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
         return;
     }
@@ -173,4 +177,3 @@ async fn on_log(p: &Pools, list: &[(&'static Family, Address, Address)], raw: &s
     p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
     fee_refresh::all(p, f, "смена менеджера").await;
 }
-

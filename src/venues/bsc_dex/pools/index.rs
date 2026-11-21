@@ -99,7 +99,9 @@ pub async fn record_with(
     let mut log = Vec::new();
     ctx.index.with(|s| {
         for (n, (c, v)) in cands.iter().zip(verdicts).enumerate() {
-            let id = ids.and_then(|l| l.get(n)).map_or(c.family.id, |x| x.as_str());
+            let id = ids
+                .and_then(|l| l.get(n))
+                .map_or(c.family.id, |x| x.as_str());
             // Решение 295: ключ строки — с парой у DEX в режиме dex.multi_pair, иначе строка пула (как до решения).
             let key = multi_pair::dir_key(&s.multi_dex, id, &c.pool, c.coin, c.quote);
             let st = match v {

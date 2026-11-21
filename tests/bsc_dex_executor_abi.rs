@@ -117,7 +117,12 @@ fn kinds_match_contract_constants() {
         // Решение 288: пара SmarDex — только v2.
         ("SMARDEX", Params::Smardex),
         // Решение 289: пул Balancer V2 — только v2.
-        ("BALANCER", Params::Balancer { pool_id: B256::ZERO }),
+        (
+            "BALANCER",
+            Params::Balancer {
+                pool_id: B256::ZERO,
+            },
+        ),
         // Решение 290: пул Liquidity Book V2.1 — только v2.
         ("LB", Params::Lb),
         // Решение 395 (t181): пулы внутри менеджеров — только v3.
@@ -127,7 +132,12 @@ fn kinds_match_contract_constants() {
         // Решение 440: пул Fluid DEX T1 — только v4.
         ("FLUID", Params::Fluid(fluid_step(1))),
         // Решение 441: пул Balancer V3 — только v4.
-        ("BALANCER_V3", Params::BalancerV3 { pool: Address::ZERO }),
+        (
+            "BALANCER_V3",
+            Params::BalancerV3 {
+                pool: Address::ZERO,
+            },
+        ),
         // Решение 474: пул Balancer V3 через буфер ERC4626 — шаг 27 (решение 488 — в сборке v5 out/).
         (
             "BALANCER_V3_BUF",
@@ -437,9 +447,15 @@ fn stable_bnb_contract_rules_present() {
     // ждут — слияние t247: по итоговому contracts/ArbExecutor.sol 9 установок и 9 сбросов; шаг SHELL — две, решение
     // 486: вход в нативной монете учёта (обёртка) и выход из Ocean — 11). Только строки кода (комментарии тоже
     // содержат «bnbFrom = …»).
-    let code: Vec<&str> =
-        src.lines().map(str::trim).filter(|l| l.starts_with("bnbFrom = ")).collect();
-    let resets = code.iter().filter(|l| **l == "bnbFrom = address(0);").count();
+    let code: Vec<&str> = src
+        .lines()
+        .map(str::trim)
+        .filter(|l| l.starts_with("bnbFrom = "))
+        .collect();
+    let resets = code
+        .iter()
+        .filter(|l| **l == "bnbFrom = address(0);")
+        .count();
     let sets = code.len() - resets;
     assert_eq!(resets, 11);
     assert_eq!(sets, resets);
@@ -564,7 +580,10 @@ fn buffer_step_in_v5_not_older() {
     use arb::venues::bsc_dex::exec::executor::kind_buffer::BUFFER_MARK;
     let sel = &keccak256(BUFFER_MARK.as_bytes())[..4];
     assert_eq!(sel, [0x43, 0x58, 0x3b, 0xe5]);
-    assert!(has_selector(&code::runtime().unwrap(), sel), "шаг 27 есть в v5");
+    assert!(
+        has_selector(&code::runtime().unwrap(), sel),
+        "шаг 27 есть в v5"
+    );
     for rt in [
         code::runtime_v4().unwrap(),
         code::runtime_v3().unwrap(),
@@ -596,12 +615,13 @@ fn v4_kept_after_rebuild() {
             .ok()
             .map(|t| alloy_primitives::hex::encode(Sha256::digest(t.as_bytes())))
     };
-    let readme = std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/contracts/README.md"
-    ))
-    .unwrap();
-    assert!(readme.contains(V4_RUNTIME_SHA), "хеш v4 в contracts/README.md");
+    let readme =
+        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/contracts/README.md"))
+            .unwrap();
+    assert!(
+        readme.contains(V4_RUNTIME_SHA),
+        "хеш v4 в contracts/README.md"
+    );
     if sha(&format!("{out}/ArbExecutor.bin-runtime")).as_deref() == Some(V4_RUNTIME_SHA) {
         return;
     }

@@ -79,13 +79,22 @@ pub fn refusal(r: &Risk, c: Result<ChainId, String>) -> Option<String> {
 /// Что делает: запуск или остановка сети в состоянии риска (правила — в шапке). Принимает: состояние, сети площадок DEX
 /// (chains), сеть, запуск ли, кто (причина для плашки и журнала). Возвращает: текст для журнала.
 /// Ошибки: текст — сетей меньше двух (кнопки по сети не нужны: «Старт»/«Стоп»), такой сети нет у площадок DEX.
-pub fn apply(r: &mut Risk, all: &[ChainId], c: &ChainId, run: bool, who: &str) -> Result<String, String> {
+pub fn apply(
+    r: &mut Risk,
+    all: &[ChainId],
+    c: &ChainId,
+    run: bool,
+    who: &str,
+) -> Result<String, String> {
     if all.len() < 2 {
         return Err("одна сеть площадок DEX — запуск и остановка кнопками «Старт» / «Стоп»".into());
     }
     if !all.contains(c) {
         let list: Vec<&str> = all.iter().map(ChainId::as_str).collect();
-        return Err(format!("сети {c} нет среди сетей площадок DEX ({})", list.join(", ")));
+        return Err(format!(
+            "сети {c} нет среди сетей площадок DEX ({})",
+            list.join(", ")
+        ));
     }
     if run {
         if r.mode != Mode::Running {
@@ -93,16 +102,26 @@ pub fn apply(r: &mut Risk, all: &[ChainId], c: &ChainId, run: bool, who: &str) -
             r.chain_off = all
                 .iter()
                 .filter(|x| *x != c)
-                .map(|x| (x.0.clone(), format!("не запускалась: запущена только сеть {c} — {who}")))
+                .map(|x| {
+                    (
+                        x.0.clone(),
+                        format!("не запускалась: запущена только сеть {c} — {who}"),
+                    )
+                })
                 .collect();
         } else {
             r.chain_off.remove(&c.0);
         }
         return Ok(format!("Сеть {c}: старт — {who}"));
     }
-    r.chain_off.insert(c.0.clone(), format!("остановлена — {who}"));
+    r.chain_off
+        .insert(c.0.clone(), format!("остановлена — {who}"));
     if r.mode == Mode::Running && all.iter().all(|x| r.chain_off.contains_key(&x.0)) {
-        super::risk::put_mode(r, Mode::Stopped, Some(format!("остановлены все сети — {who}")));
+        super::risk::put_mode(
+            r,
+            Mode::Stopped,
+            Some(format!("остановлены все сети — {who}")),
+        );
     }
     Ok(format!("Сеть {c}: стоп — {who}"))
 }

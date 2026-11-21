@@ -1238,3 +1238,4 @@ _pausedAssets = isPaused(монета) у реализаций с геттеро
 (без записи); tests/arbitrum_basin_live.rs — #[ignore] до записи tools/arbitrum_record/basin.py
 (tests/data/arbitrum_basin_<дата>/): состояние и проверка скважины кодом бота, наш выход = getSwapOut побайтно и =
 симуляции swapFrom (откат ↔ None).
+Решение 490 — суффикс сети ключа области «DEX» (settings/dex_key.rs: одна площадка / dex.chain = dex.default_chain — без суффикса, иначе «@сеть»; без dex.default_chain при двух — ошибка) и проверка нового ключа «id@сеть» из «Добавить DEX» (check_net: «x@arbitrum» — при площадке arb_dex сети arbitrum, без неё и с опечаткой сети — отказ, «x@bsc» — сеть по умолчанию, без «@» и существующий ключ — не проверяются) — tests/settings_dex_key_490.rs, настоящая SQLite.

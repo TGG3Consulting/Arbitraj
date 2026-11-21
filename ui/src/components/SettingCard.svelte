@@ -9,8 +9,9 @@
     (lib/dex.svelte.js) + уже заданные (такой id адаптер сейчас не сообщает — помечено). Решение 128: адаптер даёт
     DEX с видом, DEX из справочника пулов и id с уже заданными настройками; DEX, которой нет нигде (её пулы находит
     только поиск по фабрике, оракул или события Initialize), вводится руками — «Добавить DEX» в карточке настройки
-    области «DEX» (правило id — checkDexId: строчная латиница, цифры, «-», «_», длина — dex.id_max_len). Строка
-    появляется в этой карточке; после первого сохранения адаптер сообщает id сам — он во всех карточках области «DEX».
+    области «DEX» (components/DexAdder.svelte; решение 490: выбор площадки DEX, сырой id по checkDexId, суффикс сети
+    «@сеть» — с сервера). Строка появляется в этой карточке; после первого сохранения площадка DEX сообщает ключ сама —
+    он во всех карточках области «DEX».
     Свои id каналов не вводятся: их даёт только адаптер. Кнопка «История».
     Решение 242: значения области «площадка + тип направления» задаются в подпункте «… › по биржам и направлениям»
     (components/VenueDirMoney.svelte) — здесь ссылка и сколько таких значений задано.
@@ -19,13 +20,13 @@
     Решение 283: у настройки с venue_for «Dex» в схеме строк бирж (вид Cex) нет — значение читает только площадка DEX;
     уже сохранённое у биржи значение не показывается и не меняется (видно в «Истории» и экспорте).
   Кто вызывает: pages/Settings.svelte.
-  От чего зависит: lib/settings.svelte.js, lib/dex.svelte.js, lib/labels.js, lib/coinNames.svelte.js, components/SettingEditor.svelte, SettingHistory.svelte, CexCexDeny.svelte.
-  Настройки: любая — по описанию из схемы; dex.id_max_len (через checkDexId).
+  От чего зависит: lib/settings.svelte.js, lib/dex.svelte.js, lib/labels.js, lib/coinNames.svelte.js, components/SettingEditor.svelte, SettingHistory.svelte, CexCexDeny.svelte, DexAdder.svelte.
+  Настройки: любая — по описанию из схемы; dex.id_max_len (через DexAdder.svelte → checkDexId).
 -->
 <script>
   import { uniq, uniqBy } from '../lib/uniq.js';
   import { store, venueScopeLabel, shownAtVenue } from '../lib/settings.svelte.js';
-  import { dex, dexIdsFor, allChannels, whyNoDex, checkDexId } from '../lib/dex.svelte.js';
+  import { dex, dexIdsFor, allChannels, whyNoDex } from '../lib/dex.svelte.js';
   import { kindLabel, limitLabel, scopeLabel } from '../lib/labels.js';
   import { href } from '../lib/router.svelte.js';
   import { venueDirRoute } from '../lib/venueDir.js';
@@ -33,6 +34,7 @@
   import SettingEditor from './SettingEditor.svelte';
   import SettingHistory from './SettingHistory.svelte';
   import CexCexDeny from './CexCexDeny.svelte';
+  import DexAdder from './DexAdder.svelte';
 
   // Справочник имён читается здесь напрямую (names.map) — загрузить его сразу (ревью М1).
   ensure();
@@ -45,9 +47,6 @@
   /** Почему введённую монету нельзя добавить (ревью М2: тикер без единственного адреса); '' — можно. */
   let coinError = $state('');
   let eventInput = $state('');
-  let dexInput = $state('');
-  /** Причина, по которой введённый id DEX не подходит (решение 128); '' — подходит или поле пустое. */
-  const dexInputError = $derived(dexInput.trim() ? checkDexId(dexInput.trim()) : '');
 
   /** Идентификаторы областей вида kind, для которых значение уже задано, плюс добавленные вручную. */
   function idsOf(kind) {
@@ -174,17 +173,8 @@
     {/each}
   {/each}
   {#if def.scopes.includes('Dex')}
-    <!-- Решение 128: DEX, которой нет в списке адаптера (нет в справочнике пулов) — id вводится руками. -->
-    <div class="adder">
-      <input bind:value={dexInput} placeholder="id новой DEX, например lista-stable" />
-      <button
-        disabled={!dexInput.trim() || !!dexInputError}
-        onclick={() => { add('Dex', dexInput); dexInput = ''; }}
-      >
-        Добавить DEX
-      </button>
-      {#if dexInputError}<span class="err">{dexInputError}</span>{/if}
-    </div>
+    <!-- Решение 128 / 490: DEX, которой нет в списке адаптера, — сырой id руками, ключ = id + суффикс сети площадки. -->
+    <DexAdder onadd={(key) => add('Dex', key)} />
   {/if}
 
   {#if def.scopes.includes('VenueDir')}

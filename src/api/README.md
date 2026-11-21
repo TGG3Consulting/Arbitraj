@@ -14,6 +14,7 @@
 | `GET /api/venues` | Площадки, зарегистрированные в шлюзе (id по алфавиту) |
 | `GET /api/venues/kinds` | Площадки с видом `[{id, kind: "Cex" \| "Dex"}]` — подпись направления перевода у настроек `venue_role: "TransferSource"` (решение 51) |
 | `GET /api/venues/{id}/dex-families` | DEX и виды пулов адаптера (id области «DEX»); биржа — 400 «не применимо» |
+| `GET /api/venues/{id}/dex-key-suffix` | Решение 490: суффикс сети ключа области «DEX» площадки DEX — `{venue, suffix: null \| "@arbitrum"}` (settings/dex_key.rs; «Добавить DEX»); биржа или суффикс не определить — 400 с причиной |
 | `GET /api/venues/{id}/dex-cycles` | Сигналы циклов DEX ↔ DEX (решение 85): `[DexCycle {venue, base, base_ticker, input, output, gross_profit, gas_units, gas_bnb, tip_bnb, bnb_cost, bnb_cost_in_base, net_profit, hops: [{index, family, kind, pool, token_in, token_out, fee_pct, hook_pct, gas_units}], executable, exec_note, block}]` — шлюз `dex_cycles`; за `dex_dex.enabled`, выключено — пусто; биржа — 400 «не применимо» |
 | `GET /api/venues/{id}/dex-graph`, `POST …/dex-graph/rebuild` | Решение 308: состояние фонового графа маршрутов DEX и команда «Пересобрать граф» (api/dex_graph.rs) |
 | `GET /api/venues/{id}/tip-share`, `POST …/tip-share/reset` | Решение 437 (3): доля прибыли на чаевые сделок DEX ↔ DEX площадки и «Сбросить долю к минимуму» (api/tip_share.rs) |
@@ -137,6 +138,7 @@
 | Маршрут | Запрос | Ответ |
 | --- | --- | --- |
 | `GET /api/venues/{id}/dex-families` | — | `[DexFamily]` — шлюз `dex_families`; биржа — 400 «не применимо» |
+| `GET /api/venues/{id}/dex-key-suffix` | — | `{venue, suffix}` — решение 490, api/dex_key.rs; биржа / не задана dex.chain или dex.default_chain при нескольких площадках DEX — 400 |
 | `GET /api/venues/{id}/dex-cycles` | — | `[DexCycle]` — шлюз `dex_cycles` (сигналы циклов DEX ↔ DEX, решение 85; за `dex_dex.enabled`, выключено — пусто); биржа — 400 «не применимо» |
 | `GET /api/venues/{id}/dex-graph` | — | `DexGraphState` — шлюз `dex_graph_state` (решение 308: фоновый граф маршрутов — снимок, отставание, круг, полная пересборка со сверкой, предохранитель за час/сутки, перезапуски); биржа — 400 «не применимо» |
 | `POST /api/venues/{id}/dex-graph/rebuild` | — | `DexGraphState` — шлюз `dex_graph_rebuild` (полная пересборка со сверкой; котировки идут на действующем снимке); 404 — DEX не подписан на рынок; 502 — dex.graph_background не включена |
@@ -167,6 +169,7 @@
 | `wallets_migrate.rs` | Решение 132: перенос прежнего кошелька после разблокировки секретов и после ввода секрета |
 | `venues.rs` | Список площадок из реестра шлюза |
 | `dex.rs` | DEX и виды пулов, каналы отправки — из реестра шлюза |
+| `dex_key.rs` | Решение 490: суффикс сети ключа области «DEX» площадки DEX для «Добавить DEX» (GET /api/venues/{id}/dex-key-suffix; правило — settings/dex_key.rs) и список площадок DEX шлюза для проверки ключа «id@сеть» в PUT /api/settings |
 | `deposit_hold.rs` | Решение 413 (ревью t198): «Сбросить замер» удержания биржи при зачислении — POST /api/coins/deposit-hold/reset → core/deposit_hold.rs reset |
 | `dex_dry.rs` | «Сухая сделка DEX» (решение 121, C4): POST /api/dex/dry-swap → шлюз `dex_dry_swap` |
 | `dex_graph.rs` | Решение 308: GET /api/venues/{id}/dex-graph и POST …/dex-graph/rebuild → шлюз `dex_graph_state` / `dex_graph_rebuild` (фоновый граф маршрутов DEX, кнопка «Пересобрать граф») |

@@ -12,7 +12,8 @@
 //   её из ядра) — по нему перечитываются только каналы, а не виды пулов и справочник пулов (тысячи записей).
 //   «lagged» (t80; сообщения потеряны — api/ws.rs, или переподключение): журнал/переподключение — всё (мог пропасть
 //   dex.index), только ядро — каналы (мог пропасть send_channel).
-// Кто вызывает: App.svelte (start), экраны «Площадки», «Настройки», «Каналы отправки», components/SettingCard.svelte.
+// Кто вызывает: App.svelte (start), экраны «Площадки», «Настройки», «Каналы отправки», components/SettingCard.svelte,
+//   components/DexAdder.svelte (checkDexId, решение 490).
 // От чего зависит: lib/api.js, lib/live.svelte.js, lib/flight.js, lib/settings.svelte.js (список площадок).
 // Настройки: нет.
 
@@ -191,13 +192,18 @@ export const isDexLevel = (def) => def?.dex_id === 'Dex';
  * Что делает: проверка id DEX, который вводят руками (решение 128). Правило то же, что у сервера
  * (settings/scope.rs check_dex_id и check_new_dex_id_len): непустой, только строчная латиница, цифры, «-» и «_»;
  * не длиннее dex.id_max_len (вся система; не задана — без предела). Сервер проверяет то же при сохранении.
- * Принимает: id (уже без пробелов по краям). Возвращает: '' — подходит, иначе причину текстом.
+ * Решение 490: человек вводит только сырой id (без «@»); суффикс сети площадки («@arbitrum») даёт сервер
+ * (GET /api/venues/{id}/dex-key-suffix, components/DexAdder.svelte) — предел длины считается по ключу id + суффикс,
+ * как его сохранит сервер. Составной ключ «id@сеть» (есть ли площадка DEX этой сети) проверяет сервер при сохранении.
+ * Принимает: id (уже без пробелов по краям), суффикс сети ('' — нет или ещё не известен).
+ * Возвращает: '' — подходит, иначе причину текстом.
  */
-export function checkDexId(id) {
+export function checkDexId(id, suffix = '') {
   if (!id) return 'Не указан id DEX';
   const bad = [...id].find((c) => !/[a-z0-9_-]/.test(c));
   if (bad !== undefined) return `Недопустимый символ «${bad}» — только строчная латиница, цифры, «-» и «_»`;
   const max = store.values[valueKey('dex.id_max_len', { kind: 'Global' })];
-  if (typeof max === 'number' && [...id].length > max) return `Длиннее ${max} символов (dex.id_max_len)`;
+  const key = id + suffix;
+  if (typeof max === 'number' && [...key].length > max) return `Ключ «${key}» длиннее ${max} символов (dex.id_max_len)`;
   return '';
 }

@@ -1,0 +1,55 @@
+name: Recorded size replay
+on:
+  push:
+    branches: ["test/codex-size-replay-*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
+    outputs:
+      summary: ${{ steps.measure.outputs.summary }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: tests
+      - name: Compare search against an exhaustive grid
+        id: measure
+        shell: bash
+        run: |
+          set -eo pipefail
+          cargo test --locked --test core_size_t159 recorded_size_replay -- --ignored --exact --nocapture | tee "$RUNNER_TEMP/replay.txt"
+          sed -n 's/^SIZE_REPLAY //p' "$RUNNER_TEMP/replay.txt" > replay.jsonl
+          test -s replay.jsonl
+          python - <<'PY'
+          import json, os
+          from decimal import Decimal
+          from pathlib import Path
+          rows = [json.loads(s) for s in Path("replay.jsonl").read_text().splitlines()]
+          missed = sum(r["oracle_pass"] and not r["search_pass"] for r in rows)
+          regret = max(Decimal(str(r["regret_usdt"] or 0)) for r in rows)
+          calls = [r["search_calls"] for r in rows if r["search_calls"] is not None]
+          brute = [r["oracle_calls"] for r in rows]
+          summary = (f'{len(rows)} cases, {sum(r["oracle_pass"] for r in rows)} oracle passes, '
+                     f'{missed} missed, max gap {regret:.8f} USDT, '
+                     f'{min(calls)}-{max(calls)} search vs {min(brute)}-{max(brute)} oracle calls')
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              print("summary=" + summary, file=out)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: recorded-size-replay
+          path: replay.jsonl
+          if-no-files-found: error
+  result:
+    needs: replay
+    name: ${{ needs.replay.outputs.summary }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Detailed measurements are in the recorded-size-replay artifact."

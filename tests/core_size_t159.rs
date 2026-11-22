@@ -187,7 +187,7 @@ async fn pct_keeps_cached_passing_size_above_profit_peak() {
     assert_eq!(passing.choice.evals, peak.choice.evals);
 }
 
-/// Кривая записей с процентом прибыли от вложенного (DEX → биржа: база — USDT покупки в пуле = выручка − прибыль).
+/// Процент от стоимости покупки: сумма по asks биржи или USDT в пуле (выручка − прибыль).
 struct Pct<'a> {
     inner: RecCurve<'a>,
 }
@@ -199,8 +199,13 @@ impl Curve for Pct<'_> {
     async fn at(&mut self, q: Decimal) -> Result<Point<(Decimal, Decimal)>, Fail> {
         let p = self.inner.at(q).await?;
         let rec = self.inner.rec;
-        let (_, proceeds) = walk(&rec.bids, floor_step(q, Some(&rec.pair)));
-        let base = proceeds - p.profit;
+        let base = match self.inner.dir {
+            Dir::DexToBingx => {
+                let (_, proceeds) = walk(&rec.bids, floor_step(q, Some(&rec.pair)));
+                proceeds - p.profit
+            }
+            Dir::BingxToDex => walk(&rec.asks, q).1,
+        };
         Ok(Point {
             qty: p.qty,
             invested: p.invested,
@@ -227,6 +232,16 @@ fn pct_curve(rec: &Rec) -> Pct<'_> {
             slip: Decimal::ONE,
         },
     }
+}
+
+#[path = "size_common/replay.rs"]
+mod replay;
+
+/// Сравнение на одном фиксированном рынке; строки SIZE_REPLAY сохраняет CI.
+#[tokio::test]
+#[ignore = "полный перебор запускает workflow Recorded size replay"]
+async fn recorded_size_replay() {
+    replay::measure().await;
 }
 
 /// 342 на записанных данных: итог у границы «% ≥ порога» со стороны оптимума по USDT.

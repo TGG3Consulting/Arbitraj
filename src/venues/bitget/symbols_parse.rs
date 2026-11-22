@@ -29,6 +29,53 @@ const USDT: &str = "USDT";
 /// Наибольшая точность Decimal (28 знаков).
 const MAX_SCALE: u32 = 28;
 
+/// Ключом связи служит symbol биржи. isReality берётся из публичного справочника SPOT
+/// (https://www.bitget.com/docs/catalog/market-market-data/market-instruments).
+/// https://www.bitget.com/docs/uta/reality-trading-guide описывает отдельную торговлю rToken.
+pub(super) fn classic_list(
+    data: &Value,
+    instruments: &Value,
+    quote: &str,
+) -> GatewayResult<(HashMap<String, SymbolRules>, Vec<String>)> {
+    let rows = instruments
+        .as_array()
+        .filter(|rows| !rows.is_empty())
+        .ok_or_else(|| super::errors::bad("instruments SPOT: нужен непустой список", ""))?;
+    let mut reality = HashMap::new();
+    for row in rows {
+        let symbol = num::text(row, "symbol")?;
+        if row["category"] != "SPOT"
+            || reality.insert(symbol, row["isReality"].as_str()).is_some()
+        {
+            return Err(super::errors::bad(
+                "instruments SPOT: неверная категория или повтор symbol",
+                "",
+            ));
+        }
+    }
+    let (mut map, mut skipped) = parse_list(data, quote)?;
+    if !map.is_empty()
+        && !map
+            .values()
+            .any(|r| matches!(reality.get(&r.symbol), Some(Some("no" | "yes"))))
+    {
+        return Err(super::errors::bad(
+            "instruments SPOT: класс не подтверждён ни для одной пары Classic",
+            "",
+        ));
+    }
+    map.retain(|_, rules| match reality.get(&rules.symbol) {
+        Some(Some("no")) => true,
+        Some(Some("yes")) => false,
+        _ => {
+            skipped.push(format!("{}: класс isReality не подтверждён", rules.symbol));
+            false
+        }
+    });
+    skipped.sort();
+    Ok((map, skipped))
+}
+
 /// Разбор списка: пары с котируемой монетой quote (ключ — тикер монеты, baseCoin). Пара с неразборчивым полем
 /// не валит весь справочник, а попадает в skipped («символ: причина»). Ошибка BadResponse — data не массив.
 pub fn parse_list(
@@ -93,4 +140,66 @@ fn step(s: &Value, field: &str) -> GatewayResult<Decimal> {
         .filter(|n| *n <= MAX_SCALE)
         .ok_or_else(|| super::errors::bad(&format!("{field} = {n} вне 0…28"), &s.to_string()))?;
     Ok(Decimal::new(1, n))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    // Поля публичных ответов Bitget 22.11.2026, нужные разбору. Регистр baseCoin
+    // Reality отличается от регистра symbol. RWAUSDT — обычная торгуемая пара.
+    fn symbols() -> Value {
+        let rows: Vec<_> = [
+            ("RROLUSDT", "rROL", "2", "4", "10"),
+            ("RWAUSDT", "RWA", "7", "2", "1"),
+        ]
+        .into_iter()
+        .map(|(symbol, base, price, qty, minimum)| {
+            json!({"symbol":symbol,"baseCoin":base,"quoteCoin":"USDT","status":"online",
+                   "pricePrecision":price,"quantityPrecision":qty,"minTradeUSDT":minimum})
+        })
+        .collect();
+        Value::Array(rows)
+    }
+
+    #[test]
+    fn classic_subscription_excludes_reality_and_keeps_crypto() {
+        use super::super::{pairs::Snapshot, symbols::Symbols};
+        use crate::core::types::Asset;
+        let rows = json!([
+            {"category":"SPOT","symbol":"RROLUSDT","isReality":"yes"},
+            {"category":"SPOT","symbol":"RWAUSDT","isReality":"no"}
+        ]);
+        let (map, skipped) = classic_list(&symbols(), &rows, "USDT").unwrap();
+        assert!(skipped.is_empty());
+        let directory = Symbols::default();
+        directory.load(map, chrono::Utc::now());
+        let assets = ["rROL", "RWA"].map(|ticker| Asset {
+            chain: None,
+            ticker: ticker.into(),
+            contract: None,
+        });
+        let sub = Snapshot::build(&directory, &assets);
+        assert_eq!(sub.books.len(), 1);
+        assert_eq!(sub.books[0].1, "RWAUSDT");
+        assert_eq!(sub.tickers, ["RWA"]);
+        assert!(directory.symbol_of("rROL").is_none());
+    }
+
+    #[test]
+    fn missing_class_is_reported_and_broken_catalog_rejected() {
+        let regular = json!({"category":"SPOT","symbol":"RWAUSDT","isReality":"no"});
+        let (map, skipped) = classic_list(&symbols(), &json!([regular]), "USDT").unwrap();
+        assert!(map["RWA"].tradable());
+        assert_eq!(skipped.len(), 1);
+        assert!(skipped[0].contains("RROLUSDT"));
+        for broken in [
+            json!([]),
+            json!([regular, regular]),
+            json!([{"category":"SPOT","symbol":"RROLUSDT"}]),
+        ] {
+            assert!(classic_list(&symbols(), &broken, "USDT").is_err());
+        }
+    }
 }

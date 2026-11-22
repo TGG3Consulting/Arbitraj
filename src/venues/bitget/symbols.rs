@@ -82,7 +82,15 @@ impl Symbols {
     pub async fn refresh(&self, ctx: &Ctx) -> GatewayResult<usize> {
         let quote = ctx.text("venue.quote_asset")?;
         let data = rest::public(ctx, "/api/v2/spot/public/symbols", vec![]).await?;
-        let (map, skipped) = parse_list(&data, &quote)?;
+        // Classic возвращает также пары Reality со статусом online. Их стаканы и ордера
+        // обслуживает UTA. Классифицируем весь справочник до публикации снимка.
+        let instruments = rest::public(
+            ctx,
+            "/api/v3/market/instruments",
+            vec![("category", "SPOT".to_string())],
+        )
+        .await?;
+        let (map, skipped) = super::symbols_parse::classic_list(&data, &instruments, &quote)?;
         let n = map.len();
         self.load(map, Utc::now());
         let text = skipped.join("; ");

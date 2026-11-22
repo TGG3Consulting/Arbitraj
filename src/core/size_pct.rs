@@ -93,10 +93,9 @@ pub async fn best<C: Curve>(
         tern_all(m, &spans, p.refine_steps, tol, &g).await?;
     }
     // Шаг 3: граница проходящего участка в сторону q*.
-    let Some((a, _)) = m.best_pct(Some(right)) else {
-        return Ok(None);
-    };
-    edge(m, a, n_star, p, tol).await?;
+    if let Some((a, _)) = m.best_pct(Some(right)) {
+        edge(m, a, n_star, p, tol).await?;
+    }
     let Some((nb, b)) = m.best_pct(None) else {
         return Ok(None);
     };

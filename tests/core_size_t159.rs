@@ -134,6 +134,59 @@ async fn pct_band_narrower_than_grid() {
     assert!(new.choice.evals <= p.max_evals);
 }
 
+/// На двух соседних объёмах меняется маршрут покупки и база расчёта процента.
+struct RouteSwitch;
+
+#[async_trait]
+impl Curve for RouteSwitch {
+    type Data = (Decimal, Decimal);
+
+    async fn at(&mut self, qty: Decimal) -> Result<Point<Self::Data>, Fail> {
+        let (invested, profit) = if qty < d("10") {
+            return Err(Fail::TooSmall("минимум 10".into()));
+        } else if qty == d("10") {
+            (d("100"), d("10"))
+        } else if qty == d("11") {
+            (d("75"), d("9"))
+        } else {
+            return Err(Fail::TooLarge("глубина 11".into()));
+        };
+        Ok(Point {
+            qty,
+            invested,
+            arrive: qty,
+            profit,
+            data: (profit / invested * Decimal::ONE_HUNDRED, invested),
+        })
+    }
+
+    fn pct(data: &Self::Data) -> Option<Decimal> {
+        Some(data.0)
+    }
+
+    fn pct_base(data: &Self::Data) -> Option<Decimal> {
+        Some(data.1)
+    }
+}
+
+#[tokio::test]
+async fn pct_keeps_cached_passing_size_above_profit_peak() {
+    let mut p = quad_params();
+    p.guess = d("11");
+    p.budget = d("100");
+    p.ext.min_usd = Some(d("5"));
+    let peak = search(&mut RouteSwitch, &p).await.unwrap();
+    assert_eq!(peak.best.qty, d("10"));
+
+    p.ext.min_pct = Some(d("11"));
+    let passing = search(&mut RouteSwitch, &p).await.unwrap();
+    assert!(passing.pct_moved);
+    assert_eq!(passing.best.qty, d("11"));
+    assert_eq!(passing.best.profit, d("9"));
+    assert!(passing.fallback.is_none());
+    assert_eq!(passing.choice.evals, peak.choice.evals);
+}
+
 /// Кривая записей с процентом прибыли от вложенного (DEX → биржа: база — USDT покупки в пуле = выручка − прибыль).
 struct Pct<'a> {
     inner: RecCurve<'a>,

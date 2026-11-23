@@ -56,6 +56,7 @@ pub mod transfers;
 pub mod user_stream;
 pub mod user_stream_conn;
 pub mod wallet;
+mod withdraw_address;
 pub mod ws;
 pub mod ws_conn;
 

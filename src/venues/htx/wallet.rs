@@ -24,7 +24,7 @@ use crate::storage::journal::Level;
 
 use super::ctx::{Ctx, currency};
 use super::errors::Op;
-use super::networks_parse::{Contracts, Parsed, contracts, parse};
+use super::networks_parse::{Contracts, Parsed, TransferChain, contracts, parse};
 use super::rest::{self, Params, Req};
 
 /// Путь справочника монет и сетей.
@@ -69,6 +69,15 @@ pub async fn coin_networks_of(ctx: &Ctx, ticker: &str) -> GatewayResult<Vec<Coin
 
 /// chain HTX монеты по сети ядра (свежий справочник одной монеты). Ошибка NotConfigured — такой сети у монеты нет.
 pub async fn chain_of(ctx: &Ctx, ticker: &str, network: &str) -> GatewayResult<String> {
+    Ok(transfer_chain(ctx, ticker, network).await?.coin)
+}
+
+/// Имена одной выбранной сети для вывода и книги адресов. Ошибки справочника — см. chain_of.
+pub(super) async fn transfer_chain(
+    ctx: &Ctx,
+    ticker: &str,
+    network: &str,
+) -> GatewayResult<TransferChain> {
     let p = one(ctx, ticker).await?;
     p.chains
         .into_iter()

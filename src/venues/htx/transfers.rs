@@ -29,7 +29,7 @@ use crate::storage::journal::Level;
 
 use super::ctx::{Ctx, currency};
 use super::errors::Op;
-use super::{num, order_rules, records, rest, wallet};
+use super::{num, order_rules, records, rest, wallet, withdraw_address};
 
 /// Предел длины client-order-id вывода — «max 32 char» (Query Withdrawal Order by Client Order ID).
 pub const MAX_WITHDRAW_CID: usize = 32;
@@ -49,16 +49,16 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         ));
     }
     let t = &req.asset.ticker;
-    let chain = wallet::chain_of(ctx, t, &req.network).await?;
+    let chain = wallet::transfer_chain(ctx, t, &req.network).await?;
     let fee = wallet::withdraw_fee(ctx, t, &req.network).await?;
-    whitelisted(ctx, t, &chain, &req.address).await?;
+    withdraw_address::check(ctx, t, &chain, &req.address).await?;
     let cid = order_rules::client_oid('w', &req.deal_id, MAX_WITHDRAW_CID);
     let body = json!({
         "address": req.address,
         "currency": currency(t),
         "amount": req.amount.normalize().to_string(),
         "fee": fee.normalize().to_string(),
-        "chain": chain,
+        "chain": chain.coin,
         "client-order-id": cid,
     });
     let path = "/v1/dw/withdraw/api/create";
@@ -86,30 +86,6 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         fee: None,
         updated_at: Utc::now(),
     })
-}
-
-/// Адрес есть в списке адресов вывода монеты в сети chain. Ошибки: WithdrawRejected — нет; связь.
-async fn whitelisted(ctx: &Ctx, ticker: &str, chain: &str, address: &str) -> GatewayResult<()> {
-    let q = vec![
-        ("currency", currency(ticker)),
-        ("chain", chain.to_string()),
-        ("limit", records::SIZE_MAX.to_string()),
-    ];
-    let data = rest::get(ctx, "/v2/account/withdraw/address", q).await?;
-    let found = data.as_array().is_some_and(|a| {
-        a.iter()
-            .any(|r| num::text_opt(r, "address").is_some_and(|x| x.eq_ignore_ascii_case(address)))
-    });
-    if found {
-        return Ok(());
-    }
-    Err(reject(
-        ctx,
-        format!(
-            "Адреса {address} нет в списке адресов вывода HTX ({ticker}, chain {chain}) — добавьте его в веб-интерфейсе \
-             HTX (через API нельзя)"
-        ),
-    ))
 }
 
 /// Вывод по своему client-order-id. None — не найден или сбой.

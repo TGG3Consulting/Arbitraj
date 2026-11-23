@@ -36,12 +36,27 @@ use super::num;
 /// Адреса контракта: (тикер ядра, chain HTX) → адрес (строкой, как в ответе).
 pub type Contracts = HashMap<(String, String), String>;
 
+/// Два идентификатора одной сети HTX. Для самого перевода используется chain конкретной монеты.
+pub struct TransferChain {
+    pub coin: String,
+    pub universal: Option<&'static str>,
+}
+
+/// Имя сети общей адресной книги из displayName той же записи справочника HTX. Неизвестная сеть — None.
+/// https://www.htx.com/en-us/opend/newApiPages/?id=7ec50654-7773-11ed-9966-0242ac110003
+pub(super) fn universal_chain(row: &Value) -> Option<&'static str> {
+    let name = row.get("displayName")?.as_str()?;
+    ["bep20", "ARBITRUM"]
+        .into_iter()
+        .find(|known| known.eq_ignore_ascii_case(name))
+}
+
 /// Результат разбора.
 #[derive(Default)]
 pub struct Parsed {
     pub list: Vec<CoinNetworkInfo>,
     /// (тикер, сеть ядра, chain HTX) — для вывода и адреса депозита.
-    pub chains: Vec<(String, String, String)>,
+    pub chains: Vec<(String, String, TransferChain)>,
     /// Пропущенные сети: «монета/сеть: причина».
     pub skipped: Vec<String>,
     /// Сети BSC с комиссией вывода не fixed: «монета=тип» (комиссия неизвестна).
@@ -126,7 +141,11 @@ pub fn parse(
                             raw("maxTransactFeeWithdraw")
                         ));
                     }
-                    p.chains.push((t.clone(), net, chain));
+                    let transfer_chain = TransferChain {
+                        coin: chain,
+                        universal: universal_chain(n),
+                    };
+                    p.chains.push((t.clone(), net, transfer_chain));
                     p.list.push(info);
                 }
                 Err(e) => p.skipped.push(format!("{t}/{chain}: {}", e.message)),

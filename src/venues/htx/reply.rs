@@ -77,16 +77,20 @@ fn on_limit(ctx: &Ctx, retry_after_s: Option<u64>) -> String {
 /// {ch, status, ts, tick}); нет и его — null.
 /// Ошибки: RateLimited (429 — пауза), коды HTX (errors.rs), BadResponse — тело не JSON или без признака успеха.
 pub fn parse(ctx: &Ctx, path: &str, r: &Reply, op: Op) -> GatewayResult<Value> {
+    let mut v = envelope(ctx, path, r, op)?;
+    Ok(v.as_object_mut()
+        .and_then(|m| m.remove("data").or_else(|| m.remove("tick")))
+        .unwrap_or(Value::Null))
+}
+
+/// Проверяет тот же HTTP/HTX ответ и сохраняет внешний курсор страниц. Ошибки — см. parse.
+pub(super) fn envelope(ctx: &Ctx, path: &str, r: &Reply, op: Op) -> GatewayResult<Value> {
     ctx.raw.write(ID, &format!("rest {path}"), &r.text);
     let status = r.status.as_u16();
-    let mut v = serde_json::from_str::<Value>(&r.text).ok();
-    if status < 400 && v.as_ref().is_some_and(success) {
-        return Ok(v
-            .as_mut()
-            .and_then(Value::as_object_mut)
-            .and_then(|m| m.remove("data").or_else(|| m.remove("tick")))
-            .unwrap_or(Value::Null));
-    }
+    let v = match serde_json::from_str::<Value>(&r.text) {
+        Ok(v) if status < 400 && success(&v) => return Ok(v),
+        other => other.ok(),
+    };
     let note = (status == 429).then(|| on_limit(ctx, r.retry_after_s));
     let mut e = match v.as_ref().and_then(code_msg) {
         Some((c, m)) => errors::from_code(status, &c, &m, op, &r.text),

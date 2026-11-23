@@ -83,6 +83,21 @@ pub fn req<'a>(
 /// Что делает: отправка запроса на адреса venue.rest_url (+ резерв только при сбое сети).
 /// Принимает: окружение, запрос. Возвращает: data ответа. Ошибки: как public / signed.
 pub async fn send(ctx: &Ctx, r: Req<'_>) -> GatewayResult<Value> {
+    send_with(ctx, r, reply::parse).await
+}
+
+/// Подписанная страница списка с курсором вне data. Ошибки — те же, что у get.
+pub(super) async fn page(ctx: &Ctx, path: &str, query: Params) -> GatewayResult<Value> {
+    let request = req(Method::GET, path, query, None, Op::Other, true);
+    send_with(ctx, request, reply::envelope).await
+}
+
+/// Общая отправка и обработка ошибок; parse определяет представление успешного ответа.
+async fn send_with(
+    ctx: &Ctx,
+    r: Req<'_>,
+    parse: fn(&Ctx, &str, &crate::gateway::http::Reply, Op) -> GatewayResult<Value>,
+) -> GatewayResult<Value> {
     let urls = ctx.rest_urls()?;
     let body = r.body.as_ref().map(Value::to_string).unwrap_or_default();
     let lim = ctx.limits()?;
@@ -108,7 +123,7 @@ pub async fn send(ctx: &Ctx, r: Req<'_>) -> GatewayResult<Value> {
             Ok(reply) => {
                 let parsed = if r.heavy {
                     let (c, p, op) = (ctx.clone(), r.path.to_string(), r.op);
-                    tokio::task::spawn_blocking(move || reply::parse(&c, &p, &reply, op))
+                    tokio::task::spawn_blocking(move || parse(&c, &p, &reply, op))
                         .await
                         .map_err(|e| {
                             ctx.tag(GatewayError::new(
@@ -118,7 +133,7 @@ pub async fn send(ctx: &Ctx, r: Req<'_>) -> GatewayResult<Value> {
                             ))
                         })?
                 } else {
-                    reply::parse(ctx, r.path, &reply, r.op)
+                    parse(ctx, r.path, &reply, r.op)
                 };
                 return parsed.map_err(|e| errors::unsure(e, r.op));
             }

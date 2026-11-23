@@ -62,10 +62,7 @@ pub(super) fn classic_list(
             continue;
         }
         if let Some(symbol) = row["symbol"].as_str().filter(|s| !s.is_empty()) {
-            if row
-                .get("isReality")
-                .is_some_and(|v| !v.is_string() && !v.is_null())
-            {
+            if row.get("isReality").is_some_and(|v| !v.is_string()) {
                 ambiguous.insert(symbol);
             }
             // Даже одинаковый дубль нарушает однозначность ключа; он закрывает только свою пару.

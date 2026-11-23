@@ -162,3 +162,28 @@ async fn failed_batch_retries_one_by_one() {
     assert_eq!(lost[0].data.as_ref().unwrap()["lost"], 1);
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// При продолжении курсор остаётся строгим и на разрывах ID; новые записи и обновления
+/// счётчика старой строки не меняют порядок. list ждёт поставленные перед ним записи.
+#[tokio::test]
+async fn journal_cursor_preserves_order_during_inserts() {
+    let (j, _rx) = journal("cursor");
+    for _ in 0..5 {
+        j.write(Level::Info, "t.cursor", None, "курсоры", None).await.unwrap();
+    }
+    let first = j.list(2, None).await.unwrap();
+    let cursor = first[1].id;
+    j.db().call(move |c| {
+        c.execute("DELETE FROM journal WHERE id = ?1", [cursor - 1])?;
+        c.execute("UPDATE journal SET repeats = 17 WHERE id = ?1", [cursor - 2])?;
+        Ok(())
+    }).await.unwrap();
+    j.write(Level::Warn, "t.cursor", None, "после страницы", None).await.unwrap();
+    let next = j.list(2, Some(cursor)).await.unwrap();
+    assert_eq!(next.iter().map(|e| e.id).collect::<Vec<_>>(), [cursor - 2, cursor - 3]);
+    assert_eq!(next[0].repeats, Some(17));
+    assert!(j.list(2, Some(next[1].id)).await.unwrap().is_empty());
+    assert!(j.list(0, None).await.unwrap().is_empty());
+    assert!(j.list(0, Some(cursor)).await.unwrap().is_empty());
+    assert!(j.list(1, None).await.unwrap()[0].id > first[0].id);
+}

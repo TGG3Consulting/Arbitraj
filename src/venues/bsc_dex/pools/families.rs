@@ -442,7 +442,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // fork=true оставлен: пул не попадает в классический прямой путь (quote/classic_direct.rs) и не требует UR.
         // Решение 483: Ramses CL — V3-форк ABI Uniswap (вариант RamsesCl: currentFee, ticks из 10 полей, FeeAdjustment,
         // ramsesV2SwapCallback; pools/ramses.rs, load_ramses.rs).
-        "v3_fork" | "v3_fork_ramses" => (PoolKind::V3, Proto::UniswapV3, true, false, true),
+        "v3_fork" | "v3_fork_ramses" | "v3_fork_uniswap_lm" => {
+            (PoolKind::V3, Proto::UniswapV3, true, false, true)
+        }
         "v3_fork_pancake" => (PoolKind::V3, Proto::PancakeV3, true, false, true),
         // KyberSwap Elastic (решение 81): в графе, котируется своей математикой (math/swap_elastic). Решение 121 B2:
         // tradable=false — своего пути исполнения нет: в exec/ нет ветки Proto::KyberElastic, а нога форка собиралась

@@ -188,7 +188,9 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // (RamsesV2Pool.sol L944), обратный вызов ramsesV2SwapCallback (L1238) — проверка dex.v3_swap_callback
         // (exec_callback.rs); Ramses CL V2 — тот же swap и uniswapV3SwapCallback (RamsesV3Pool.sol L436-L442, L662).
         "pancakeswap_v3" | "uniswap_v3" | "v3_fork" | "v3_fork_pancake" | "slipstream"
-        | "slipstream_aero" | "v3_fork_ramses" | "slipstream_ramses" => ExecKind::V3,
+        | "slipstream_aero" | "v3_fork_ramses" | "slipstream_ramses" | "v3_fork_uniswap_lm" => {
+            ExecKind::V3
+        }
         "thena_fusion" => ExecKind::Algebra,
         // Решение 188: swap(recipient, zeroToOne, amountRequired, limitSqrtPrice, data) и algebraSwapCallback у
         // Integral — те же (integral-core 1.2.10 AlgebraPool.sol L246-L252, IAlgebraSwapCallback).

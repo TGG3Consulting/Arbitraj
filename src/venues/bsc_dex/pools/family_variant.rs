@@ -15,6 +15,8 @@
 pub enum Variant {
     /// Исходник, по которому сделан вид (поведение без изменений).
     Base,
+    /// Unchain X (UNX-V3-Contracts f6185ae6): slot0, Swap и callback от Uniswap V3, плюс геттер lmPool().
+    UniswapV3Lm,
     /// KyberSwap Elastic v1 (dex.kind = kyber_elastic_v1): код фабрики 0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a в любой
     /// сети (KyberNetwork/ks-elastic-sc 4ab08c0a README.md L6-L17 «v1» — в т.ч. Arbitrum и BSC; Sourcify 42161 full
     /// match, solc 0.8.9). Elastic v2 (вид kyber_elastic) — например фабрика 0xC7a590291e07B9fe9E64b86c58fD8fC764308C4A на
@@ -97,6 +99,7 @@ pub fn of(kind: &str) -> Variant {
         "curve_stableswap_oracle" => Variant::CurveOracle,
         "curve_crypto2_v1" => Variant::CryptoPair,
         "v3_fork_ramses" => Variant::RamsesCl,
+        "v3_fork_uniswap_lm" => Variant::UniswapV3Lm,
         "slipstream_ramses" => Variant::RamsesClV2,
         "solidly_v1_ramses" => Variant::RamsesLegacy,
         _ => Variant::Base,

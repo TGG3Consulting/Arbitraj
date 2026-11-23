@@ -389,3 +389,5 @@ Ekubo (решение 447, вид `ekubo`; EkuboProtocol/evm-contracts@61d09daa 
 | `abi_ramses.rs` | ABI отличий Ramses: slot0 / ticks() обеих CL-линий, currentFee() старой линии, Mint линии V3 (с index), FeeAdjustment пула; тест сверяет подписи с исходниками Sourcify |
 | `ramses.rs` | События и создание пулов вариантов Ramses: FeeAdjustment → комиссия записи, Mint с index, Sync(uint112, uint112) легаси, PoolCreated Uniswap V3 / PairCreated без stable |
 | `load_ramses.rs` | Состояние пула Ramses CL / CL V2: slot0 своей длины, liquidity, tickBitmap + ticks() прямыми геттерами, комиссия currentFee() / fee() при каждом чтении |
+
+Для Unchain X с фабрикой BSC `0x82fA7b2Ce2A76C7888A9D3B0a81E0b2ecfd8d40c` укажите `dex.kind = v3_fork_uniswap_lm`. У пула есть lmPool(), семиполевой Swap и обратный вызов Uniswap V3. Сохраните вид до создания новой подписки при запуске процесса. При смене вида у уже работающего слушателя `index_watch` перепроверяет справочник, а `attach` пропускает уже известный адрес. Для такой подписки нужна пересборка.

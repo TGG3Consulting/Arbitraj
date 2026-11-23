@@ -53,6 +53,7 @@ const CHOICE = {
   v2_fork: 'форк V2',
   v2_fork_executor: 'форк V2 без роутера (через исполнитель)',
   v3_fork: 'форк V3 (ABI Uniswap)',
+  v3_fork_uniswap_lm: 'форк V3 (ABI Uniswap с lmPool, Unchain X)',
   v3_fork_pancake: 'форк V3 (ABI PancakeSwap)',
   v3_fork_ramses: 'Ramses CL (форк V3: currentFee, FeeAdjustment, ramsesV2SwapCallback; решение 483)',
   solidly_v1: 'Solidly V1 (THENA V1)',

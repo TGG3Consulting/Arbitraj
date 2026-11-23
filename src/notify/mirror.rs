@@ -28,7 +28,6 @@ use tokio::sync::broadcast::error::RecvError;
 
 use crate::core::Core;
 use crate::core::types::ManualRecord;
-use crate::core::view::CoreEvent;
 use crate::settings::live::Watch;
 use crate::settings::read::At;
 use crate::storage::db::Db;
@@ -55,7 +54,7 @@ pub struct Mirror {
 /// Работает, пока система запущена. Принимает: дубль и подписку на настройки (notify.*, http.timeout_ms).
 /// Ошибок не возвращает: всё пишется в журнал.
 pub async fn run(m: Mirror, mut watch: Watch) {
-    let mut rx = m.core.subscribe();
+    let (mut commands, dirty) = m.core.inner.live.subscribe_mirror();
     // Решение 251 (б): сообщения записей прошлого запуска — в память до первой сверки (правятся, не шлются заново).
     m.restore().await;
     loop {
@@ -70,16 +69,16 @@ pub async fn run(m: Mirror, mut watch: Watch) {
             }
         };
         tokio::select! {
-            ev = rx.recv() => match ev {
-                Ok(CoreEvent::Command(v)) => {
+            outcome = commands.recv() => match outcome {
+                Ok(v) => {
                     m.reconcile().await;
                     m.outcome(&v).await;
                 }
-                Ok(_) => {}
-                // Решение 334: отстали от событий ядра — итог команды (CoreEvent::Command) мог пропасть: не молча.
+                // Отставание возможно только при переполнении самого кольца итогов кнопок.
                 Err(RecvError::Lagged(n)) => super::mirror_lag::lagged(&m.notifier, n),
                 Err(RecvError::Closed) => return,
             },
+            _ = dirty.notified() => {}
             _ = sleep_until(wake) => {}
             c = watch.next() => if c.is_none() { return },
         }

@@ -306,7 +306,10 @@ impl Venue for Okx {
     /// - confirm = true (решение 213, по содержимому): связь seqId кадра books5 / books с seqId ответа GET
     ///   /api/v5/market/books в документации не описана (описана только у books-rpi и SBE) — сравниваются первые
     ///   venue.depth_levels уровней ответа и стакана в памяти (book_print.rs, core/feed_print.rs).
-    fn feed_health_for(&self, pair: Option<(&str, &str)>) -> Option<crate::gateway::feed_health::FeedHealth> {
+    fn feed_health_for(
+        &self,
+        pair: Option<(&str, &str)>,
+    ) -> Option<crate::gateway::feed_health::FeedHealth> {
         Some(self.books.feed.health_for(false, true, true, pair))
     }
 

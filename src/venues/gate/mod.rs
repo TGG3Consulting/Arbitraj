@@ -335,7 +335,10 @@ impl Venue for Gate {
     /// обновлений), а живые данные 07.11 это опровергли: у неликвидных пар (AIL, KILO, PELL, U, XCV) поле update ответа
     /// GET /spot/order_book старше 1,5–6,5 ч, кадров нет при подписке со status success. Тишина пары подтверждается
     /// по REST (confirm = true, book_version.rs), вслепую не переподписывается.
-    fn feed_health_for(&self, pair: Option<(&str, &str)>) -> Option<crate::gateway::feed_health::FeedHealth> {
+    fn feed_health_for(
+        &self,
+        pair: Option<(&str, &str)>,
+    ) -> Option<crate::gateway::feed_health::FeedHealth> {
         Some(self.books.feed.health_for(false, true, true, pair))
     }
 

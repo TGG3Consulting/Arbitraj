@@ -129,6 +129,8 @@ fn pair_lines_and_summary_with_setting() {
     {
         lg.count(a);
     }
+    lg.rest_answer(0, 3);
+    lg.rest_answer(23, 1);
     let s = lg.summary(&h, 40_100, &c, &st).expect("сводка");
     for part in [
         "соединений 1 (живых 1)",
@@ -138,6 +140,7 @@ fn pair_lines_and_summary_with_setting() {
         "кадры потеряны 1",
         "в кругах переподписки (попытки или пауза) 1",
         "переподписок 1",
+        "ответов REST 2, максимум от первого до последнего в одном проходе 23 мс, максимум ожидания начала обработки готового ответа 3 мс",
     ] {
         assert!(s.contains(part), "нет «{part}»: {s}");
     }
@@ -147,4 +150,5 @@ fn pair_lines_and_summary_with_setting() {
     );
     let s = lg.summary(&h, 100_100, &c, &st).expect("сводка через 60 с");
     assert!(s.contains("переподписок 0"), "счётчики обнулены: {s}");
+    assert!(s.contains("ответов REST 0, максимум от первого до последнего в одном проходе 0 мс"));
 }

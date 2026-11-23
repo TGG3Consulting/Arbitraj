@@ -329,7 +329,10 @@ impl Venue for Mexc {
     ///   документации нет (с lastUpdateId связаны только fromVersion / toVersion канала изменений spot@public.aggre.depth
     ///   — «How to Properly Maintain a Local Copy of the Order Book»); сравниваются первые venue.depth_levels уровней
     ///   ответа REST и стакана в памяти (book_print.rs, core/feed_print.rs).
-    fn feed_health_for(&self, pair: Option<(&str, &str)>) -> Option<crate::gateway::feed_health::FeedHealth> {
+    fn feed_health_for(
+        &self,
+        pair: Option<(&str, &str)>,
+    ) -> Option<crate::gateway::feed_health::FeedHealth> {
         Some(self.books.feed.health_for(false, true, true, pair))
     }
 

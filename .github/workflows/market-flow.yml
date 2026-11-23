@@ -1,0 +1,36 @@
+name: Recorded market flow
+on:
+  push:
+    branches: ["test/codex-market-flow-*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: tests
+      - name: Build recorded flow replay
+        run: |
+          cargo test --locked --test market_flow_replay --no-run --message-format=json-render-diagnostics > "$RUNNER_TEMP/artifacts.jsonl"
+          jq -rs '[.[] | select(.reason == "compiler-artifact" and .target.name == "market_flow_replay" and .executable != null) | .executable] | if length == 1 then .[0] else error("test binary not unique") end' "$RUNNER_TEMP/artifacts.jsonl" > "$RUNNER_TEMP/replay-bin"
+      - name: Measure market delivery and match recorded sell quantities
+        run: |
+          export FLOW_REPLAY_OUTPUT="$RUNNER_TEMP/delivery.jsonl"
+          /usr/bin/time -f 'wall_s=%e user_s=%U system_s=%S max_rss_kib=%M' -o resource.txt "$(cat "$RUNNER_TEMP/replay-bin")" --ignored --exact recorded_market_flow
+          python tests/flow_replay/compare.py "$FLOW_REPLAY_OUTPUT" market-flow.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: recorded-market-flow
+          path: |
+            market-flow.json
+            resource.txt
+          if-no-files-found: error

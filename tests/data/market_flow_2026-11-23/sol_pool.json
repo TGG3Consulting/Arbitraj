@@ -1,0 +1,334 @@
+{
+  "address": "0x1cc4504a0d5254167520e2e36c35c82a932816fd",
+  "token0": "0x2170ed0880ac9a755fd29b2688956bd959f933f8",
+  "token1": "0x570a5d26f7765ecb712c0924e4de545b89fd43df",
+  "fee": 2500,
+  "spacing": 50,
+  "swap_rows": 39,
+  "states": [
+    {
+      "block": 135286446,
+      "block_hash": "0x048bb66903aab1b922cafb6e0385ddbe29592a4cf6d6215c61d86b2f31a20b27",
+      "log_index": 244,
+      "timestamp": 1795443858,
+      "sqrt_price_x96": "0x4ddc8c72ac38fb9d4ac821c40",
+      "liquidity": "302970677328250279303",
+      "tick": 31648
+    },
+    {
+      "block": 135286453,
+      "block_hash": "0xa7d160d25f3293ae7a0bf6a1c613615d53e3838ab8fea90245fc70d9706fe144",
+      "log_index": 137,
+      "timestamp": 1795443861,
+      "sqrt_price_x96": "0x4dd7669b2ae8664a25694520d",
+      "liquidity": "302970677328250279303",
+      "tick": 31643
+    },
+    {
+      "block": 135286460,
+      "block_hash": "0x73126c20d94a3e9db9216bfb31eefe79cd23f4d96a453133069328d3b42b8c91",
+      "log_index": 176,
+      "timestamp": 1795443865,
+      "sqrt_price_x96": "0x4dd1ed9e3a71f20f05e86dfd0",
+      "liquidity": "302970677328250279303",
+      "tick": 31637
+    },
+    {
+      "block": 135286498,
+      "block_hash": "0x5035280ffb74828e0a2131530841adea7d1c18367107e1c0a7953b6671baa5ae",
+      "log_index": 183,
+      "timestamp": 1795443882,
+      "sqrt_price_x96": "0x4dc9c9f5e9d4a1f389d456d72",
+      "liquidity": "302970677328250279303",
+      "tick": 31629
+    },
+    {
+      "block": 135286526,
+      "block_hash": "0x307cc164763c73f36a30ef0b4440c7355662e3aa1ee27492050bc8fea5a2a20e",
+      "log_index": 206,
+      "timestamp": 1795443894,
+      "sqrt_price_x96": "0x4dc45b53a4b0952c36030e022",
+      "liquidity": "302970677328250279303",
+      "tick": 31624
+    },
+    {
+      "block": 135286697,
+      "block_hash": "0x550d864fc60e946a5a38b302a73cfb758ed3b3a83a8b457fb1c97a5b487ddecc",
+      "log_index": 809,
+      "timestamp": 1795443971,
+      "sqrt_price_x96": "0x4dbce908633fd7a47a3ab9580",
+      "liquidity": "302970677328250279303",
+      "tick": 31616
+    },
+    {
+      "block": 135286713,
+      "block_hash": "0x3dcd85f80cd17793feca778c4e7b54d1e0ad0f8f5fd89215ddda6f7c3acb4265",
+      "log_index": 157,
+      "timestamp": 1795443978,
+      "sqrt_price_x96": "0x4db4fdb7f1d03a46a021dbab5",
+      "liquidity": "302970677328250279303",
+      "tick": 31608
+    },
+    {
+      "block": 135286742,
+      "block_hash": "0xf00b033f89ab4c4ed84d07e728b036f41c21eee43d692af6ff14bfaf5270003c",
+      "log_index": 1138,
+      "timestamp": 1795443992,
+      "sqrt_price_x96": "0x4da4ef7b3b98a617d3f25bbb8",
+      "liquidity": "302970677328250279303",
+      "tick": 31592
+    },
+    {
+      "block": 135287798,
+      "block_hash": "0x7289cd3f69c265cb81295260cf0367d893d6800d066caf7b62404fb3ffa8bc97",
+      "log_index": 250,
+      "timestamp": 1795444467,
+      "sqrt_price_x96": "0x4d9fd78f1a184a037685967a6",
+      "liquidity": "302970677328250279303",
+      "tick": 31587
+    },
+    {
+      "block": 135287852,
+      "block_hash": "0x682ddbe5fac87266178585a4c220f4373da892f554be7947e268fa5b628d328d",
+      "log_index": 262,
+      "timestamp": 1795444491,
+      "sqrt_price_x96": "0x4d9bb67af3d92c79572d50592",
+      "liquidity": "302970677328250279303",
+      "tick": 31583
+    },
+    {
+      "block": 135287877,
+      "block_hash": "0x23fb471ae879e0b27a798c05043ac0ae21a11be77a93a5182940be5a86caa061",
+      "log_index": 2266,
+      "timestamp": 1795444502,
+      "sqrt_price_x96": "0x4d939c85d60098df6c74763ce",
+      "liquidity": "302970677328250279303",
+      "tick": 31575
+    },
+    {
+      "block": 135288063,
+      "block_hash": "0xa2a2a879f2722174d498c26527258b2ab3260dd6e95f2def0ee5aa52ef73023f",
+      "log_index": 233,
+      "timestamp": 1795444586,
+      "sqrt_price_x96": "0x4d8b7ebde21fe25367ca597d3",
+      "liquidity": "302970677328250279303",
+      "tick": 31566
+    },
+    {
+      "block": 135288073,
+      "block_hash": "0x82dcf23fefbba08d1a8818595ac3eb5767ad28c0a9f4feb9c4b2d315c24432e2",
+      "log_index": 297,
+      "timestamp": 1795444590,
+      "sqrt_price_x96": "0x4d8362a885b4a28fa002c55cc",
+      "liquidity": "302970677328250279303",
+      "tick": 31558
+    },
+    {
+      "block": 135288089,
+      "block_hash": "0x6d1b184dad47e0eb4e9cf4d9c9d7898e61d34f82afd81dd4be703ab913172aa5",
+      "log_index": 141,
+      "timestamp": 1795444598,
+      "sqrt_price_x96": "0x4d7e0394652cd3b7cb9340872",
+      "liquidity": "302970677328250279303",
+      "tick": 31553
+    },
+    {
+      "block": 135288329,
+      "block_hash": "0x14bdc2e96506d54ec50737c94c42a28739b4ea2804477203ed410b6440e9d26c",
+      "log_index": 287,
+      "timestamp": 1795444706,
+      "sqrt_price_x96": "0x4d75ed8d124cd33e29933fb5b",
+      "liquidity": "302970677328250279303",
+      "tick": 31545
+    },
+    {
+      "block": 135289478,
+      "block_hash": "0x5352e60bc33335dc1ab865652d7da9b90daeae143d7b3dbc5b7637c6d0020a5e",
+      "log_index": 944,
+      "timestamp": 1795445224,
+      "sqrt_price_x96": "0x4d654b6f7ac47b590dd255694",
+      "liquidity": "302970677328250279303",
+      "tick": 31528
+    },
+    {
+      "block": 135289666,
+      "block_hash": "0x7e25633d4b6b70065514fb604762a62eeaa07c3a7085a7c7baa564c4a1184dab",
+      "log_index": 151,
+      "timestamp": 1795445309,
+      "sqrt_price_x96": "0x4d594c7aea91b8fea19cb3a86",
+      "liquidity": "302970677328250279303",
+      "tick": 31516
+    },
+    {
+      "block": 135289991,
+      "block_hash": "0x0bce4287de03c67ea69988781ddc0f3bf0b24f00adddd8f7da5ba9626c4fbba9",
+      "log_index": 435,
+      "timestamp": 1795445455,
+      "sqrt_price_x96": "0x4d5333dab6759c27ea6a6083b",
+      "liquidity": "302970677328250279303",
+      "tick": 31510
+    },
+    {
+      "block": 135290042,
+      "block_hash": "0x958ad5e974766f01c77872f81c9b9fdac1c4e85cdac8a510c3392a12b87d6f8e",
+      "log_index": 742,
+      "timestamp": 1795445478,
+      "sqrt_price_x96": "0x4d51bd99d57dbb95241384327",
+      "liquidity": "302970677328250279303",
+      "tick": 31508
+    },
+    {
+      "block": 135290043,
+      "block_hash": "0x75ab08939ec39cb5ce03f2adf64ebd02a0f994498c26c2b2909c487d361ca03e",
+      "log_index": 328,
+      "timestamp": 1795445478,
+      "sqrt_price_x96": "0x4d51c4404437ef838fac9e3af",
+      "liquidity": "302970677328250279303",
+      "tick": 31508
+    },
+    {
+      "block": 135290122,
+      "block_hash": "0x2731ef3772a549b926cf14c86fdb457ddd07fe9919c93903120d19279ee28d6e",
+      "log_index": 50,
+      "timestamp": 1795445514,
+      "sqrt_price_x96": "0x4d4d194875c93d9b9c72d3702",
+      "liquidity": "302970677328250279303",
+      "tick": 31503
+    },
+    {
+      "block": 135290138,
+      "block_hash": "0x351213133be46e29d8c90295f8303e9dc0365515bca4bfb3d207709378fdd3c7",
+      "log_index": 74,
+      "timestamp": 1795445521,
+      "sqrt_price_x96": "0x4d48618efd221a83bbb715d7a",
+      "liquidity": "302970677328250279303",
+      "tick": 31499
+    },
+    {
+      "block": 135290139,
+      "block_hash": "0x8a76dde80815456b4be250d4f777f76d153b5ee66336d2ed017dc6afc7659b0e",
+      "log_index": 825,
+      "timestamp": 1795445521,
+      "sqrt_price_x96": "0x4d41342bc88558d693309959c",
+      "liquidity": "302970677328250279303",
+      "tick": 31491
+    },
+    {
+      "block": 135291312,
+      "block_hash": "0x129e1c3ab85303bd12f239d71d0041568bb0e7cadb64f2fe235dfe7445f90a42",
+      "log_index": 1521,
+      "timestamp": 1795446050,
+      "sqrt_price_x96": "0x4d391ee8a7073de5e3cb0b3f6",
+      "liquidity": "302970677328250279303",
+      "tick": 31483
+    },
+    {
+      "block": 135292464,
+      "block_hash": "0xed47154779b6ff70bdf1aac0b75b7168b72354b4096c521524c0b1da853b18b7",
+      "log_index": 33,
+      "timestamp": 1795446569,
+      "sqrt_price_x96": "0x4d3dcb21d35944e921aedd0d0",
+      "liquidity": "302970677328250279303",
+      "tick": 31488
+    },
+    {
+      "block": 135292481,
+      "block_hash": "0x1d8b24577813d4fab90a5fa3d809e9bbee5b463c66444f1fa45cd4d8afffd6f3",
+      "log_index": 292,
+      "timestamp": 1795446576,
+      "sqrt_price_x96": "0x4d42bce7d8e4ec82a0240d1f3",
+      "liquidity": "302970677328250279303",
+      "tick": 31493
+    },
+    {
+      "block": 135292621,
+      "block_hash": "0x6754bbeb4ccb9e489fcb1d08f277a969615dc33e9c982fd93a58a2282357ebf1",
+      "log_index": 52,
+      "timestamp": 1795446639,
+      "sqrt_price_x96": "0x4d4ada645905306d1d15f8ba5",
+      "liquidity": "302970677328250279303",
+      "tick": 31501
+    },
+    {
+      "block": 135292657,
+      "block_hash": "0x66e80a4c6ff7dfefe82d577fb37472ccb15dafa67658ac4a5c5a907b1f70697e",
+      "log_index": 140,
+      "timestamp": 1795446655,
+      "sqrt_price_x96": "0x4d52f9ce5383f87372c789128",
+      "liquidity": "302970677328250279303",
+      "tick": 31509
+    },
+    {
+      "block": 135292722,
+      "block_hash": "0xd367eef7b1d0a69e587efb9b74bed6fc85a9d5fece906a91e9eccb9ebabd6c62",
+      "log_index": 192,
+      "timestamp": 1795446685,
+      "sqrt_price_x96": "0x4d57ab8712871424ec08c00c8",
+      "liquidity": "302970677328250279303",
+      "tick": 31514
+    },
+    {
+      "block": 135292757,
+      "block_hash": "0xdf7ba65981f7420edbf9805c833c0e6654ad53b497e4f2a8b3bad5360547af40",
+      "log_index": 192,
+      "timestamp": 1795446701,
+      "sqrt_price_x96": "0x4d5dc48ea97c1fa29f8bcf7c3",
+      "liquidity": "302970677328250279303",
+      "tick": 31520
+    },
+    {
+      "block": 135292781,
+      "block_hash": "0x414386e10cafd7356e2d7f817bbac7370cde75e3ea705bcf233578f2aebe4053",
+      "log_index": 21,
+      "timestamp": 1795446711,
+      "sqrt_price_x96": "0x4d65e70fb80b8bf4b81daa5f6",
+      "liquidity": "302970677328250279303",
+      "tick": 31529
+    },
+    {
+      "block": 135293100,
+      "block_hash": "0xb326f62147ed3385bdffb11fbae0f26e900a975c658836fc3949207cfe842890",
+      "log_index": 99,
+      "timestamp": 1795446856,
+      "sqrt_price_x96": "0x4d6e08f954c58f610ed49e8f4",
+      "liquidity": "302970677328250279303",
+      "tick": 31537
+    },
+    {
+      "block": 135293623,
+      "block_hash": "0x225b073a04a2b314928a89cac1bbac34ca123ca41068d1f84c85eba0254d9299",
+      "log_index": 288,
+      "timestamp": 1795447092,
+      "sqrt_price_x96": "0x4d762d2c01737a85a2642837b",
+      "liquidity": "302970677328250279303",
+      "tick": 31545
+    },
+    {
+      "block": 135294134,
+      "block_hash": "0xcad781b9fe3039a05a14d717ea651670efb8bc04f49bb75d9670d543567af67d",
+      "log_index": 448,
+      "timestamp": 1795447322,
+      "sqrt_price_x96": "0x4d7333457a9fcb68e2ff50da6",
+      "liquidity": "302970677328250279303",
+      "tick": 31542
+    },
+    {
+      "block": 135294245,
+      "block_hash": "0xd097594000212076d388ef96ae7853b06bcec093a97b39329213e1937a5eb7ff",
+      "log_index": 379,
+      "timestamp": 1795447372,
+      "sqrt_price_x96": "0x4d70ca2754228bf481b1a8d69",
+      "liquidity": "302970677328250279303",
+      "tick": 31540
+    },
+    {
+      "block": 135294331,
+      "block_hash": "0xad4f4d0daac3452841aa5043bf4bbe91897d1c504e4bab44bbd33717f7ba2241",
+      "log_index": 225,
+      "timestamp": 1795447410,
+      "sqrt_price_x96": "0x4d6c503c4a5f07f73e20669e4",
+      "liquidity": "302970677328250279303",
+      "tick": 31535
+    }
+  ]
+}

@@ -467,7 +467,7 @@ async fn go(
             return Ok((sent, credited, Some(note)));
         }
         // Событие зачисления только будит опрос: хеш вывода — только от отправителя (решение 76).
-        match gw_from.withdrawal_status(&created.venue_ref).await {
+        match gw_from.withdrawal_status_for(&created).await {
             // Решение 405 (ревью 6, Н1; факт кода адаптеров): отмена / отказ после принятия приходят не только ошибкой
             // WithdrawRejected — Phemex «Cancelled» (phemex/transfers.rs), kyberswap (transfer.rs rejected) и DEX
             // «транзакция откатилась» (bsc_dex/wallet/transfer_status.rs: receipt status ≠ 1 → Rejected, с хешем)

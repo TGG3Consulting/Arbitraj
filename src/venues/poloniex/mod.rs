@@ -44,6 +44,7 @@ pub mod trade;
 pub mod transfers;
 pub mod user_stream;
 pub mod wallet;
+mod withdraw_alias;
 pub mod ws;
 pub mod ws_book;
 pub mod ws_book_sync;
@@ -208,6 +209,12 @@ impl Venue for Poloniex {
 
     async fn withdrawal_status(&self, venue_ref: &str) -> GatewayResult<Transfer> {
         transfers::withdrawal_status(&self.ctx, venue_ref).await
+    }
+
+    async fn withdrawal_status_for(&self, created: &Transfer) -> GatewayResult<Transfer> {
+        let mut sent = self.withdrawal_status(&created.venue_ref).await?;
+        withdraw_alias::normalize(&self.ctx, &self.nets, created, &mut sent).await;
+        Ok(sent)
     }
 
     async fn deposit_address(&self, asset: &Asset, network: &str) -> GatewayResult<String> {

@@ -5,6 +5,7 @@
 Документация: https://www.htx.com/en-us/opend/newApiPages/?id=7ec50654-7773-11ed-9966-0242ac110003
 */
 use std::collections::HashSet;
+use std::future::Future;
 
 use serde_json::Value;
 
@@ -25,8 +26,8 @@ pub(super) async fn check(
     address: &str,
 ) -> GatewayResult<()> {
     let coin = currency(ticker);
-    if listed(&coin, chain, address, async |q| {
-        rest::page(ctx, BOOK, q).await
+    if listed(&coin, chain, address, |q: AddressPage| {
+        rest::page(ctx, BOOK, q.params())
     })
     .await?
     {
@@ -42,29 +43,50 @@ pub(super) async fn check(
     )))
 }
 
+/// Параметры страницы адресной книги HTX.
+struct AddressPage {
+    currency: String,
+    chain: String,
+    from: Option<u64>,
+}
+
+impl AddressPage {
+    fn params(self) -> rest::Params {
+        let mut params = vec![
+            ("currency", self.currency),
+            ("chain", self.chain),
+            ("limit", records::SIZE_MAX.to_string()),
+        ];
+        if let Some(id) = self.from {
+            params.push(("fromId", id.to_string()));
+        }
+        params
+    }
+}
+
 /// Читает сначала книгу монеты, затем общую книгу выбранной сети. Возвращает false только после
 /// последней страницы. Курсор HTX непрозрачный, порядок его значений не задан.
-async fn listed(
+async fn listed<F>(
     currency: &str,
     network: &TransferChain,
     address: &str,
-    mut read: impl AsyncFnMut(rest::Params) -> GatewayResult<Value>,
-) -> GatewayResult<bool> {
+    mut read: impl FnMut(AddressPage) -> F + Send,
+) -> GatewayResult<bool>
+where
+    F: Future<Output = GatewayResult<Value>> + Send,
+{
     let individual = (currency, network.coin.as_str());
     let universal = network.universal.map(|n| (UNIVERSAL, n));
     for (coin, chain) in std::iter::once(individual).chain(universal) {
         let mut from: Option<u64> = None;
         let mut seen = HashSet::new();
         loop {
-            let mut q = vec![
-                ("currency", coin.to_string()),
-                ("chain", chain.to_string()),
-                ("limit", records::SIZE_MAX.to_string()),
-            ];
-            if let Some(id) = from {
-                q.push(("fromId", id.to_string()));
-            }
-            let page = read(q).await?;
+            let page = read(AddressPage {
+                currency: coin.to_string(),
+                chain: chain.to_string(),
+                from,
+            })
+            .await?;
             let rows = page["data"]
                 .as_array()
                 .ok_or_else(|| errors::bad("адреса вывода: data не массив", ""))?;
@@ -150,7 +172,8 @@ mod tests {
             ),
         ]
         .into_iter();
-        let found = listed("xter", &network, ADDRESS, async |params| {
+        let found = listed("xter", &network, ADDRESS, |page: AddressPage| {
+            let params = page.params();
             let (coin, chain, from, response) = pages.next().expect("лишний запрос");
             let get = |name| {
                 params
@@ -161,7 +184,7 @@ mod tests {
             assert_eq!(get("currency"), Some(coin));
             assert_eq!(get("chain"), Some(chain));
             assert_eq!(get("fromId"), from);
-            Ok(response)
+            std::future::ready(Ok(response))
         })
         .await
         .unwrap();
@@ -182,8 +205,8 @@ mod tests {
             }]}),
         ]
         .into_iter();
-        let found = listed("xter", &network, ADDRESS, async |_| {
-            Ok(responses.next().expect("лишний запрос"))
+        let found = listed("xter", &network, ADDRESS, |_| {
+            std::future::ready(Ok(responses.next().expect("лишний запрос")))
         })
         .await
         .unwrap();
@@ -198,9 +221,10 @@ mod tests {
             universal: Some("bep20"),
         };
         assert!(
-            listed("usdt", &network, ADDRESS, async |params| {
+            listed("usdt", &network, ADDRESS, |page: AddressPage| {
+                let params = page.params();
                 assert!(params.contains(&("currency", "usdt".into())));
-                Ok(json!({"code":200, "data":[{"address":ADDRESS}]}))
+                std::future::ready(Ok(json!({"code":200, "data":[{"address":ADDRESS}]})))
             })
             .await
             .unwrap()

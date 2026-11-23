@@ -6,7 +6,7 @@
 //! Настройки: нет; ручной чёрный список — обычный PUT /api/settings (coin.blocked, coin.blocked_note).
 //!
 //! GET  /api/coins          — список монет (контракт — src/api/README.md, «Экран Монеты»)
-//! GET  /api/coins/{address} — t84: строка одной монеты по адресу контракта, ровно как в списке (обновление одной
+//! GET  /api/coins/{address}[?chain=...] — t84: строка монеты по сети и контракту, как в списке (обновление одной
 //!      строки экрана по живому сообщению coin_check / pool_check / coin_block); 400 — адрес не разобран, 404 — нет монеты
 //! POST /api/coins/recheck  — {venue, assets: [Asset]} → {ok, details}
 //! GET  /api/coins/ticker-splits — решение 211: [{address, venues: [[биржа, тикер]]}] — конфликт: один адрес под двумя
@@ -19,11 +19,12 @@
 //! разными токенами (Issue #9).
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use serde::Deserialize;
 
-use crate::core::types::{Asset, VenueId};
+use crate::core::chain;
+use crate::core::types::{Asset, ChainId, VenueId};
 use crate::gateway::contract::ConnectionCheck;
 use crate::storage::journal::Level;
 
@@ -39,18 +40,29 @@ pub async fn list(State(st): State<AppState>) -> Json<serde_json::Value> {
     Json(coins)
 }
 
-/// t84: строка одной монеты по адресу контракта — ровно как в GET /api/coins (та же строка ядра Core::coin_json и те
+#[derive(Default, Deserialize)]
+pub struct CoinQuery {
+    pub chain: Option<ChainId>,
+}
+
+/// t84: строка одной монеты по сети и адресу контракта — ровно как в GET /api/coins (та же строка ядра и те
 /// же `depth` / `depth_unavailable`, что кладёт `list`). Экран «Монеты» обновляет ею одну строку по живому сообщению.
 /// Принимает: адрес (0x…, 20 байт). Возвращает: строку монеты.
 /// Ошибки: 400 — адрес не разобран; 404 — монеты с таким адресом в справочнике нет.
 pub async fn one(
     State(st): State<AppState>,
     Path(address): Path<String>,
+    Query(query): Query<CoinQuery>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let a: alloy_primitives::Address = address
         .parse()
         .map_err(|e| ApiError::bad(format!("Адрес монеты «{address}» не разобран: {e}")))?;
-    let mut row = st.core.coin_json(a).ok_or_else(|| {
+    let tag = match query.chain.as_ref() {
+        Some(network) => chain::tag(&st.settings, &chain::dexes(&st.core), network)
+            .map_err(ApiError::no_data)?,
+        None => None,
+    };
+    let mut row = st.core.coin_json_in(a, tag.as_ref()).ok_or_else(|| {
         ApiError(
             StatusCode::NOT_FOUND,
             format!("Монеты с адресом {a} нет в справочнике"),
@@ -85,17 +97,39 @@ async fn with_depths<'a>(st: &AppState, rows: impl Iterator<Item = &'a mut serde
     }
     // Решение 339 (экран «Монеты»): пулы, ни разу не прочитанные площадкой (depth.unread), — ядро их не знает; они
     // добавляются в строку своей монеты (по адресу контракта) отдельными пулами с «admission» (в котировки не идут).
-    let mut unread: std::collections::HashMap<String, Vec<serde_json::Value>> = Default::default();
+    let tags: std::collections::HashMap<_, _> = chain::dexes(&st.core)
+        .into_iter()
+        .filter_map(|v| {
+            let tag = chain::tag_of_dex(&st.core, &v).ok()?;
+            Some((v, tag.map(|c| c.0).unwrap_or_default()))
+        })
+        .collect();
+    let mut venues_by_tag: std::collections::HashMap<_, Vec<&str>> = Default::default();
+    for (venue, tag) in &tags {
+        venues_by_tag.entry(tag.as_str()).or_default().push(&venue.0);
+    }
+    for venues in venues_by_tag.values_mut() {
+        venues.sort_unstable();
+    }
+    let mut unread: std::collections::HashMap<_, Vec<serde_json::Value>> = Default::default();
     for d in depths.values() {
-        if let Some(u) = &d.unread {
+        if let Some(u) = &d.unread
+            && let Some(tag) = tags.get(&d.venue)
+        {
             unread
-                .entry(json_key(&u.coin))
+                .entry((tag.as_str(), json_key(&u.coin)))
                 .or_default()
                 .push(unread_pool(d, u));
         }
     }
     for c in rows {
-        let coin = json_key(&c["asset"]["bsc_contract"]);
+        let tag = c["asset"]["chain"].as_str().unwrap_or_default();
+        c["dex_venues"] =
+            serde_json::json!(venues_by_tag.get(tag).map(Vec::as_slice).unwrap_or_default());
+        let extra = unread.get(&(
+            c["asset"]["chain"].as_str().unwrap_or_default(),
+            json_key(&c["asset"]["bsc_contract"]),
+        ));
         let Some(pools) = c["pools"].as_array_mut() else {
             continue;
         };
@@ -106,12 +140,15 @@ async fn with_depths<'a>(st: &AppState, rows: impl Iterator<Item = &'a mut serde
             p["depth_unavailable"] = serde_json::to_value(failed.get(&venue)).unwrap_or_default();
         }
         // Пул ядра с той же ссылкой (прочитан раньше) — уже показан своей строкой.
-        let shown: std::collections::HashSet<String> =
-            pools.iter().map(|p| p["pool"].to_string()).collect();
-        let extra = unread.get(&coin).into_iter().flatten();
+        let Some(extra) = extra else { continue };
+        let shown: std::collections::HashSet<_> = pools
+            .iter()
+            .map(|p| (p["venue"].to_string(), p["pool"].to_string()))
+            .collect();
         pools.extend(
             extra
-                .filter(|p| !shown.contains(&p["pool"].to_string()))
+                .iter()
+                .filter(|p| !shown.contains(&(p["venue"].to_string(), p["pool"].to_string())))
                 .cloned(),
         );
     }

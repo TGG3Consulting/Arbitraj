@@ -148,11 +148,11 @@ export function dexScopeIds() {
  * Пулы монеты из справочников всех DEX (решение 58).
  * Принимает: адрес контракта монеты. Возвращает: [{venue, pool, attribution}] — attribution: {text, url} | null.
  */
-export function directoryPools(addr) {
+export function directoryPools(addr, venues) {
   const a = (addr ?? '').toLowerCase();
   const out = [];
-  for (const [venue, v] of Object.entries(dex.byVenue)) {
-    const d = v.directory;
+  for (const venue of venues) {
+    const d = dex.byVenue[venue]?.directory;
     if (!d) continue;
     const attribution = d.attribution_text ? { text: d.attribution_text, url: d.attribution_url } : null;
     for (const pool of d.pools) if (pool.token.toLowerCase() === a) out.push({ venue, pool, attribution });

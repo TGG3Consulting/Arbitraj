@@ -18,7 +18,7 @@
 import { get, seg } from './api.js';
 import { onLive, lagFor } from './live.svelte.js';
 import { flight } from './flight.js';
-import { coinRowKey } from './coinFilter.js';
+import { checkedRows, coinRowKey } from './coinFilter.js';
 
 /** Сообщения по одной монете — обновить её строку. */
 const ROW_TYPES = ['coin_check', 'pool_check', 'coin_block'];
@@ -66,17 +66,17 @@ export function coinsLive() {
     fullBusy = true;
     for (const [k, run] of rows) {
       run.cancel();
-      dirty.set(k, run.address);
+      dirty.set(k, run.asset);
     }
     rows.clear();
     full().then(fullDone, fullDone);
   }
 
   /** Строка монеты address: один полёт на монету. Ошибки: 404 / сбой — полный перечит; отмена — ничего. */
-  function row(address) {
-    const k = address.toLowerCase();
+  function row(asset) {
+    const k = coinRowKey({ asset });
     if (fullBusy) {
-      dirty.set(k, address);
+      dirty.set(k, asset);
       return;
     }
     let run = rows.get(k);
@@ -84,14 +84,15 @@ export function coinsLive() {
       run = flight(async (signal) => {
         let c;
         try {
-          c = await get(`/api/coins/${seg(address)}`, signal);
+          const query = asset.chain ? `?chain=${seg(asset.chain)}` : '';
+          c = await get(`/api/coins/${seg(asset.bsc_contract)}${query}`, signal);
         } catch (e) {
           if (!e.aborted) fallback();
           return;
         }
         const i = Array.isArray(st.data) ? st.data.findIndex((x) => coinRowKey(x) === k) : -1;
         // Строки нет в списке (монета появилась без пересборки) — место знает только полный список.
-        if (i < 0) fallback();
+        if (i < 0 || coinRowKey(c) !== k) fallback();
         else st.data[i] = c;
       });
       /** Полный перечит вместо строки: сама строка после него не запрашивается (полный список её уже несёт). */
@@ -100,7 +101,7 @@ export function coinsLive() {
         run.cancel();
         reloadAll();
       };
-      run.address = address;
+      run.asset = asset;
       rows.set(k, run);
     }
     const my = run;
@@ -111,16 +112,10 @@ export function coinsLive() {
 
   /** Живое сообщение по монете → её строка (и строки с этим пулом); без адреса — полный перечит. */
   function onRow(msg) {
-    const a = msg.data?.asset?.bsc_contract;
-    if (!a || !Array.isArray(st.data)) return reloadAll();
-    row(a);
-    if (msg.type !== 'pool_check') return;
-    const pool = JSON.stringify(msg.data.pool);
-    const venue = JSON.stringify(msg.data.venue);
-    for (const c of st.data) {
-      const has = (c.pools ?? []).some((p) => JSON.stringify(p.venue) === venue && JSON.stringify(p.pool) === pool);
-      if (has && c.asset?.bsc_contract) row(c.asset.bsc_contract);
-    }
+    if (!Array.isArray(st.data)) return reloadAll();
+    const affected = checkedRows(st.data, msg);
+    if (!affected.length) return reloadAll();
+    for (const c of affected) row(c.asset);
   }
 
   $effect(() => {

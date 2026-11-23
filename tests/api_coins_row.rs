@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use serde_json::Value;
 use tokio::sync::{Notify, broadcast};
 
@@ -24,15 +24,63 @@ use arb::core::deps::Deps;
 use arb::core::market_state::MarketState;
 use arb::core::registry::Inputs;
 use arb::core::registry_build::{Part, build_part};
-use arb::core::types::{CoinNetworkInfo, Pool, VenueId};
+use arb::core::types::{ChainId, CoinNetworkInfo, Pool, VenueId};
 use arb::gateway::contract::VenueKind;
 use arb::gateway::registry::Registry;
 use arb::notify::dispatch::Notifier;
+use arb::settings::scope::Scope;
 use arb::settings::store::Store;
 use arb::storage::db::Db;
 use arb::storage::journal::Journal;
 
 const DIR: &str = "tests/data/cex_samples_2026_11_04";
+
+#[tokio::test]
+async fn one_contract_returns_the_requested_network() {
+    let st = state("multi-network").await;
+    for (venue, network) in [("bsc_dex", "bsc"), ("arb_dex", "arbitrum")] {
+        st.core.inner.kinds.write().unwrap().push((v(venue), VenueKind::Dex));
+        st.settings
+            .set("dex.chain", Scope::Venue(venue.into()), Some(network.into()), "test")
+            .await
+            .unwrap();
+    }
+    st.settings
+        .set("dex.default_chain", Scope::Global, Some("bsc".into()), "test")
+        .await
+        .unwrap();
+    let data = json("tests/data/mexc_2026-11-21/config_getall.json");
+    let mlk = data.as_array().unwrap().iter().find(|c| c["coin"] == "MLK").unwrap();
+    let networks = mlk["networkList"].as_array().unwrap();
+    let mut book = book();
+    let template = book.live.first().unwrap().clone();
+    for (network, chain) in [("BSC", None), ("ARB", Some("arbitrum"))] {
+        let record = networks.iter().find(|r| r["netWork"] == network).unwrap();
+        let mut row = template.clone();
+        row.asset.ticker = "MLK".into();
+        row.asset.contract = Some(record["contract"].as_str().unwrap().parse().unwrap());
+        row.asset.chain = chain.map(|s| ChainId(s.into()));
+        Arc::make_mut(&mut book.live).insert(0, row);
+    }
+    assert_eq!(book.live[0].asset.contract, book.live[1].asset.contract);
+    let address = book.live[0].asset.contract.unwrap().to_string();
+    *st.core.inner.coins.write().unwrap() = book;
+    for (requested, expected) in [
+        (None, None),
+        (Some("bsc"), None),
+        (Some("arbitrum"), Some("arbitrum")),
+    ] {
+        let query = coins::CoinQuery { chain: requested.map(|s| ChainId(s.into())) };
+        let row = coins::one(State(st.clone()), Path(address.clone()), Query(query))
+            .await.ok().unwrap().0;
+        assert_eq!(row["asset"]["chain"].as_str(), expected);
+        let venue = if expected.is_some() { "arb_dex" } else { "bsc_dex" };
+        assert_eq!(row["dex_venues"], serde_json::json!([venue]));
+    }
+    let other = coins::CoinQuery { chain: Some(ChainId("unknown".into())) };
+    let err = coins::one(State(st), Path(address), Query(other)).await.err().unwrap();
+    assert_eq!(err.0, axum::http::StatusCode::NOT_FOUND);
+}
 
 fn json(path: &str) -> Value {
     serde_json::from_str(&std::fs::read_to_string(path).expect("файл записи")).expect("JSON")
@@ -115,8 +163,8 @@ fn book() -> CoinBook {
 }
 
 /// Сервер состояния без площадок в реестре, ядро на SQLite во временной папке.
-async fn state() -> AppState {
-    let d = std::env::temp_dir().join(format!("arb-api-coins-row-{}", std::process::id()));
+async fn state(name: &str) -> AppState {
+    let d = std::env::temp_dir().join(format!("arb-api-coins-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     let db = Db::open(&d.join("t.sqlite")).unwrap();
@@ -163,7 +211,7 @@ async fn state() -> AppState {
 
 #[tokio::test]
 async fn row_equals_full_list_row() {
-    let st = state().await;
+    let st = state("row").await;
     let b = book();
     assert!(
         !b.live.is_empty() && !b.inert.is_empty(),
@@ -177,7 +225,7 @@ async fn row_equals_full_list_row() {
         let Some(addr) = full["asset"]["bsc_contract"].as_str() else {
             continue;
         };
-        let row = coins::one(State(st.clone()), Path(addr.to_string()))
+        let row = coins::one(State(st.clone()), Path(addr.to_string()), Query(coins::CoinQuery::default()))
             .await
             .ok()
             .expect("строка монеты")
@@ -187,7 +235,7 @@ async fn row_equals_full_list_row() {
             "строка {addr} не совпадает со строкой полного списка"
         );
         // Адрес в нижнем регистре (как ключ строки в интерфейсе) — та же строка.
-        let low = coins::one(State(st.clone()), Path(addr.to_lowercase()))
+        let low = coins::one(State(st.clone()), Path(addr.to_lowercase()), Query(coins::CoinQuery::default()))
             .await
             .ok()
             .unwrap()
@@ -205,12 +253,12 @@ async fn row_equals_full_list_row() {
     );
     // Неизвестный адрес — 404; не адрес — 400.
     let none = "0x0000000000000000000000000000000000000001".to_string();
-    let e = coins::one(State(st.clone()), Path(none))
+    let e = coins::one(State(st.clone()), Path(none), Query(coins::CoinQuery::default()))
         .await
         .err()
         .unwrap();
     assert_eq!(e.0, axum::http::StatusCode::NOT_FOUND, "{}", e.1);
-    let e = coins::one(State(st.clone()), Path("names-x".into()))
+    let e = coins::one(State(st.clone()), Path("names-x".into()), Query(coins::CoinQuery::default()))
         .await
         .err()
         .unwrap();

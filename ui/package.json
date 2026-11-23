@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node --test tests/walletExecutor.test.js",
+    "prebuild": "node --test",
     "build": "eslint . && vite build",
     "preview": "vite preview",
     "lint": "eslint ."

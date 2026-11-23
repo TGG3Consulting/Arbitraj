@@ -131,10 +131,28 @@ export function matches(c, f) {
  * с each_key_duplicate, экран «Монеты» не открывался.
  * Принимает: монету из GET /api/coins. Возвращает: строку.
  */
-export const coinRowKey = (c) =>
-  c.asset.bsc_contract
+export const coinRowKey = (c) => {
+  const key = c.asset.bsc_contract
     ? c.asset.bsc_contract.toLowerCase()
     : `${c.asset.ticker}@${(c.presence ?? []).map((p) => p.venue).join(',')}`;
+  return c.asset.chain ? JSON.stringify([c.asset.chain, key]) : key;
+};
+
+/** События адаптера могут содержать адрес без тега сети. Тогда сеть задаёт площадка проверки. */
+export function checkedRows(list, { type, data }) {
+  const address = data?.asset?.bsc_contract?.toLowerCase();
+  if (!address) return [];
+  const ref = type === 'pool_check' ? JSON.stringify(data.pool) : undefined;
+  const primary = list.filter((c) => c.asset.bsc_contract?.toLowerCase() === address && (
+    data.asset.chain || !data.venue
+      ? (c.asset.chain ?? null) === (data.asset.chain ?? null)
+      : (c.dex_venues ?? c.presence?.map((p) => p.venue) ?? []).includes(data.venue)
+  ));
+  if (!ref || !primary.length) return primary;
+  const related = list.filter((c) => c.asset.bsc_contract && c.pools?.some((p) =>
+    p.venue === data.venue && JSON.stringify(p.pool) === ref));
+  return [...new Set([...primary, ...related])];
+}
 
 /**
  * Решение 211: тикеры монеты — показной первым, затем уникальные тикеры площадок (Presence.ticker).

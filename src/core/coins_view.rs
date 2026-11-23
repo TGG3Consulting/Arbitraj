@@ -13,7 +13,7 @@
 use alloy_primitives::Address;
 use serde_json::{Value, json};
 
-use crate::core::types::CheckState;
+use crate::core::types::{ChainId, CheckState};
 use crate::settings::store::Store;
 
 use super::blacklist;
@@ -53,14 +53,18 @@ impl Core {
     }
 
     /// Строка одной монеты по адресу контракта (t84, GET /api/coins/{address}) — та же функция строки, что у
-    /// coins_json. Один адрес — одна запись справочника (решение 211, core/registry_build.rs: ключ — адрес). Решение 431:
-    /// монета сети по умолчанию (без сети); адрес в другой сети — другая монета, её ключ в API — вопрос Тиграну (TASKS).
+    /// coins_json. Вызов без сети выбирает прежнюю строку сети по умолчанию.
     /// Принимает: адрес. Возвращает: строку или None — монеты с таким адресом в справочнике нет. Ошибок нет.
     pub fn coin_json(&self, address: Address) -> Option<Value> {
+        self.coin_json_in(address, None)
+    }
+
+    /// Строка по контракту и каноническому тегу сети (None для сети по умолчанию).
+    pub fn coin_json_in(&self, address: Address, chain: Option<&ChainId>) -> Option<Value> {
         let coins = rd(&self.inner.coins);
         let c = coins
             .all()
-            .find(|c| c.asset.chain.is_none() && c.asset.contract == Some(address))?;
+            .find(|c| c.asset.chain.as_ref() == chain && c.asset.contract == Some(address))?;
         let market = rd(&self.inner.market);
         let usdt = rd(&self.inner.usdt).clone().ok();
         let nets = rd(&self.inner.networks);

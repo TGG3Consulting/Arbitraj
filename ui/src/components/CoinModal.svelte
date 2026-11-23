@@ -22,7 +22,7 @@
 </script>
 
 <Modal title={coinTitle(coin)} {onclose}>
-  <h4>Адрес контракта в BSC</h4>
+  <h4>Адрес контракта{coin.asset.chain ? ` в сети ${coin.asset.chain}` : ''}</h4>
   <CopyAddr addr={coin.asset.bsc_contract} />
   <h4>Итог отбора</h4>
   <ul class="res">
@@ -32,7 +32,7 @@
     <p class="muted">Направлений: {coin.directions.length} — {coin.directions.map((d) => `${d.buy_on} → ${d.sell_on}`).join(', ')}</p>
   {/if}
   <CoinRow {coin} />
-  <CoinDirectory addr={coin.asset.bsc_contract} />
+  <CoinDirectory addr={coin.asset.bsc_contract} venues={coin.dex_venues ?? []} />
 </Modal>
 
 <style>

@@ -14,8 +14,8 @@
   import Attribution from './Attribution.svelte';
 
   /** addr — адрес контракта монеты (или null). */
-  let { addr } = $props();
-  const list = $derived(directoryPools(addr));
+  let { addr, venues } = $props();
+  const list = $derived(directoryPools(addr, venues));
   const attr = $derived(list.find((x) => x.attribution)?.attribution);
 </script>
 

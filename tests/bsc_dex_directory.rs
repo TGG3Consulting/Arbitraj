@@ -109,6 +109,63 @@ fn http_codes() {
 }
 
 #[test]
+fn quota_reason_is_taken_only_from_recognised_fields() {
+    let message = |body| {
+        let e = answer(429, 1, body, "/networks/arbitrum/dexes").unwrap_err();
+        assert_eq!(e.code, ErrorCode::RateLimited);
+        assert!(!e.message.contains("private-value"));
+        e.message
+    };
+    // Публичные примеры ответов описаны в docs/notes/index-quota-reason-2026-11-23.md.
+    assert!(message(r#"{"status":{"error_code":10006,"error_message":"You've reached 10,000 calls limit. private-value"}}"#)
+        .contains("код поставщика 10006, исчерпан лимит 10000 вызовов"));
+    assert!(message(r#"{"status":{"error_code":429,"error_message":"You've exceeded the Rate Limit. private-value"}}"#)
+        .contains("код поставщика 429, поставщик сообщил об ограничении частоты"));
+    assert!(
+        message(r#"{"errors":[{"status":"429","title":"Rate limit exceeded"}]}"#)
+            .contains("ограничении частоты")
+    );
+    for body in [
+        "",
+        "<html>private-value</html>",
+        r#"{"errors":[{"title":"private-value"}]}"#,
+        r#"{"errors":[{"title":"Too Many Requests"}]}"#,
+        r#"{"status":{"error_code":"private-value","error_message":"private-value"}}"#,
+    ] {
+        assert!(message(body).contains("тип лимита не указан"));
+    }
+    assert!(
+        message(r#"{"status":{"error_code":10006,"error_message":"private-value"}}"#)
+            .contains("код поставщика 10006, тип лимита не указан")
+    );
+}
+
+#[test]
+fn last_attempt_is_distinct_from_success_and_optional_in_old_views() {
+    let directory = Directory::default();
+    let at = "2026-11-23T15:00:00Z".parse().unwrap();
+    directory.with(|s| {
+        s.tokens.insert(
+            addr(CAKE),
+            TokenEntry {
+                ticker: "CAKE".into(),
+                tried_at: Some(at),
+                error: Some("HTTP 429".into()),
+                ..Default::default()
+            },
+        );
+    });
+    let mut view = directory.view(None, None, (None, None));
+    let entry = view.tokens.pop().unwrap();
+    assert_eq!(entry.tried_at, Some(at));
+    assert!(entry.fetched_at.is_none());
+    let mut old = serde_json::to_value(entry).unwrap();
+    old.as_object_mut().unwrap().remove("tried_at");
+    let entry: arb::core::types::DirectoryToken = serde_json::from_value(old).unwrap();
+    assert!(entry.tried_at.is_none());
+}
+
+#[test]
 fn pools_of_five_coins() {
     for c in ["CAKE", "ETH", "XRP", "TWT", "DOGE"] {
         let (s, b) = rec(&format!("gt_pools_{c}_p1"));

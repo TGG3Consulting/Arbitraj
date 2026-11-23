@@ -85,7 +85,12 @@
 {#if failed.length}
   <details>
     <summary>Ошибки по монетам</summary>
-    {#each failed as t, ti (`${t.token}|${ti}`)}<p class="err">{t.ticker}: {t.error}</p>{/each}
+    {#each failed as t, ti (`${t.token}|${ti}`)}
+      <p class="err">
+        {t.ticker}: {t.error}
+        {#if t.tried_at}<span class="muted"> · Начало последней попытки {new Date(t.tried_at).toLocaleString('ru-RU')}</span>{/if}
+      </p>
+    {/each}
   </details>
 {/if}
 <details>

@@ -79,9 +79,15 @@ pub async fn get(ctx: &Ctx, path: &str, page: u32) -> GatewayResult<Got> {
 /// Разбор кода ответа. Принимает: HTTP-код, номер страницы, тело, путь (для текста). Возвращает: Got.
 /// Ошибки: по коду (errors::from_http) с текстом индексатора errors[].title.
 pub fn answer(status: u16, page: u32, text: &str, path: &str) -> GatewayResult<Got> {
-    let title = gt_parse::error_title(text);
+    if status == 200 {
+        return Ok(Got::Body(text.to_owned()));
+    }
+    let title = if status == 429 {
+        Some(gt_parse::quota_detail(text).unwrap_or_else(|| "тип лимита не указан".into()))
+    } else {
+        gt_parse::error_title(text)
+    };
     match status {
-        200 => Ok(Got::Body(text.to_string())),
         400 if page > 1 => Ok(Got::PageEnd(title.unwrap_or_default())),
         // HTTP 404 Not Found — RFC 9110 §15.5.5 (https://www.rfc-editor.org/rfc/rfc9110#name-404-not-found):
         // у сервера нет запрошенного ресурса. Тело — в сыром журнале (соединение index).

@@ -32,6 +32,7 @@ impl Directory {
             tokens.push(DirectoryToken {
                 token: *addr,
                 ticker: t.ticker.clone(),
+                tried_at: t.tried_at,
                 fetched_at: t.fetched_at,
                 pages: t.pages,
                 total: t.pools.len(),

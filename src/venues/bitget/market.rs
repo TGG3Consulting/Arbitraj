@@ -49,18 +49,22 @@ pub async fn subscribe(
     // Настройки соединения проверяются до запуска: ошибка видна сразу, а не в журнале каждого соединения.
     ws::config(ctx).map_err(|m| bad(ctx, m))?;
     symbols.ensure_fresh(ctx).await?;
-    let snap = Snapshot::build(symbols, &assets);
-    if !snap.missing.is_empty() {
+    let (snap, loaded_at) = Snapshot::build(symbols, &assets)
+        .ok_or_else(|| bad(ctx, "справочник пар Bitget не получен".to_string()))?;
+    if let Some(first) = snap.missing.first() {
         let m = format!(
-            "Bitget: нет торгуемой пары для {} монет: {}",
+            "Bitget: нет торгуемой пары Classic для {} записей подписки, первая: {first}",
             snap.missing.len(),
-            snap.missing.join(", ")
         );
         ctx.log(Level::Warn, "venue.subscribe", m).await;
     }
-    let loaded_at = symbols
-        .loaded_at()
-        .ok_or_else(|| bad(ctx, "справочник пар Bitget не получен".to_string()))?;
+    if snap.reality > 0 {
+        let m = format!(
+            "Bitget: для {} записей подписки нужен Reality API (UTA)",
+            snap.reality
+        );
+        ctx.log(Level::Info, "venue.subscribe", m).await;
+    }
     let _ = out
         .send(snap.event(VenueId(super::ctx::ID.to_string()), loaded_at))
         .await;
@@ -72,6 +76,7 @@ pub async fn subscribe(
             ctx.clone(),
             format!("market-{}", i + 1),
             chunk.to_vec(),
+            symbols.clone(),
             books.clone(),
             out.clone(),
         )));

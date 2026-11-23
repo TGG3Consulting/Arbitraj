@@ -25,6 +25,8 @@ pub struct Snapshot {
     pub books: Vec<(Asset, String)>,
     /// Монеты без пары со статусом 1 (для журнала).
     pub missing: Vec<String>,
+    /// Число записей подписки, где Bitget подтвердил Reality. Classic их не обслуживает.
+    pub reality: usize,
     /// Монеты, которыми можно торговать через API хотя бы в одну сторону (онлайн и разрешена ключу в одну из сторон).
     pub tickers: Vec<String>,
     /// Состояние пары каждой монеты, у которой пара есть в справочнике.
@@ -34,22 +36,27 @@ pub struct Snapshot {
 impl Snapshot {
     /// Строит снимок по справочнику пар. Принимает: справочник, монеты подписки. Ошибок нет: монета без пары
     /// попадает в missing и в pairs не входит.
-    pub fn build(symbols: &Symbols, assets: &[Asset]) -> Self {
+    pub fn build(symbols: &Symbols, assets: &[Asset]) -> Option<(Self, DateTime<Utc>)> {
+        let (catalog, at) = symbols.dated_catalog()?;
         let mut s = Snapshot {
             books: vec![],
             missing: vec![],
+            reality: 0,
             tickers: vec![],
             pairs: vec![],
         };
         for a in assets {
-            let Some(p) = symbols.state(&a.ticker) else {
-                s.missing.push(a.ticker.clone());
+            let Some(rules) = catalog.classic.get(&a.ticker) else {
+                if catalog.reality.contains(&a.ticker) {
+                    s.reality += 1;
+                } else {
+                    s.missing.push(a.ticker.clone());
+                }
                 continue;
             };
+            let p = rules.state(&a.ticker);
             if p.online {
-                if let Some(sym) = symbols.symbol_of(&a.ticker) {
-                    s.books.push((a.clone(), sym));
-                }
+                s.books.push((a.clone(), rules.symbol.clone()));
                 if p.api_buy || p.api_sell {
                     s.tickers.push(a.ticker.clone());
                 }
@@ -58,7 +65,7 @@ impl Snapshot {
             }
             s.pairs.push(p);
         }
-        s
+        Some((s, at))
     }
 
     /// Событие ядру. Принимает: площадку, когда справочник пар последний раз успешно получен (Symbols::loaded_at).

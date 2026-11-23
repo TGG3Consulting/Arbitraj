@@ -12,7 +12,8 @@
 //! таблице полей нет — не используется (проверить на живом ответе). Точность → шаг 10^−n (документация называет поля
 //! precision, шага нет — сверить с живым ордером, урок 2).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use rust_decimal::Decimal;
 use serde_json::Value;
@@ -28,6 +29,91 @@ use super::symbols::{
 const USDT: &str = "USDT";
 /// Наибольшая точность Decimal (28 знаков).
 const MAX_SCALE: u32 = 28;
+
+/// Снимок одного quote: правила Classic и тикеры, для которых биржа явно указала Reality.
+#[derive(Default)]
+pub(super) struct Catalog {
+    pub classic: Arc<HashMap<String, SymbolRules>>,
+    pub reality: HashSet<String>,
+}
+
+impl Catalog {
+    /// Стакан обслуживается Classic только для действующей онлайн-пары с тем же символом.
+    pub(super) fn has_book(&self, asset: &crate::core::types::Asset, symbol: &str) -> bool {
+        self.classic
+            .get(&asset.ticker)
+            .is_some_and(|r| r.tradable() && r.symbol == symbol)
+    }
+}
+
+/// Ключом связи служит symbol биржи. isReality берётся из публичного справочника SPOT
+/// (https://www.bitget.com/docs/catalog/market-market-data/market-instruments).
+/// https://www.bitget.com/docs/uta/reality-trading-guide описывает отдельную торговлю rToken.
+pub(super) fn classic_list(
+    data: &Value,
+    instruments: &Value,
+    quote: &str,
+) -> GatewayResult<(Catalog, Vec<String>)> {
+    let symbols = data
+        .as_array()
+        .ok_or_else(|| super::errors::bad("symbols: data не массив", ""))?;
+    if !symbols
+        .iter()
+        .any(|row| row["symbol"].is_string() && row["quoteCoin"].is_string())
+    {
+        return Err(super::errors::bad(
+            "symbols: нет ни одной распознаваемой пары",
+            "",
+        ));
+    }
+    let rows = instruments
+        .as_array()
+        .ok_or_else(|| super::errors::bad("instruments SPOT: data не массив", ""))?;
+    let mut classes = HashMap::new();
+    for row in rows {
+        if row["category"] != "SPOT" {
+            continue;
+        }
+        if let Some(symbol) = row["symbol"].as_str().filter(|s| !s.is_empty()) {
+            // Даже одинаковый дубль нарушает однозначность ключа; он закрывает только свою пару.
+            classes
+                .entry(symbol)
+                .and_modify(|class| *class = None)
+                .or_insert(row["isReality"].as_str());
+        }
+    }
+    if !classes
+        .values()
+        .any(|class| matches!(class, Some("yes" | "no")))
+    {
+        return Err(super::errors::bad(
+            "instruments SPOT: ни у одной пары не подтверждён класс",
+            "",
+        ));
+    }
+    let (map, mut skipped) = parse_list(data, quote)?;
+    let mut classic = HashMap::new();
+    let mut reality_bases = HashSet::new();
+    for (base, rules) in map {
+        match classes.get(rules.symbol.as_str()) {
+            Some(Some("no")) => {
+                classic.insert(base, rules);
+            }
+            Some(Some("yes")) => {
+                reality_bases.insert(base);
+            }
+            _ => skipped.push(format!("{}: класс isReality не подтверждён", rules.symbol)),
+        }
+    }
+    skipped.sort();
+    Ok((
+        Catalog {
+            classic: Arc::new(classic),
+            reality: reality_bases,
+        },
+        skipped,
+    ))
+}
 
 /// Разбор списка: пары с котируемой монетой quote (ключ — тикер монеты, baseCoin). Пара с неразборчивым полем
 /// не валит весь справочник, а попадает в skipped («символ: причина»). Ошибка BadResponse — data не массив.
@@ -94,3 +180,7 @@ fn step(s: &Value, field: &str) -> GatewayResult<Decimal> {
         .ok_or_else(|| super::errors::bad(&format!("{field} = {n} вне 0…28"), &s.to_string()))?;
     Ok(Decimal::new(1, n))
 }
+
+#[cfg(test)]
+#[path = "classic_catalog_tests.rs"]
+mod tests;

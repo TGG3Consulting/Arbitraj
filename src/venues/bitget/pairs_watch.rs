@@ -68,12 +68,16 @@ pub async fn run(
             );
             log(&p.ctx, Level::Warn, m, None).await;
             // Прежний снимок с прежним временем получения: ядро видит возраст справочника (core/pairs_fresh.rs).
-            send(&p, &out, &last).await;
+            if let Some((current, at)) = Snapshot::build(&p.symbols, &assets) {
+                let _ = out.send(current.event(p.ctx.venue(), at)).await;
+            }
             continue;
         }
-        let now = Snapshot::build(&p.symbols, &assets);
+        let Some((now, at)) = Snapshot::build(&p.symbols, &assets) else {
+            continue;
+        };
         if now == last {
-            send(&p, &out, &now).await;
+            let _ = out.send(now.event(p.ctx.venue(), at)).await;
             continue;
         }
         let changes = now.changes(&last);
@@ -97,21 +101,13 @@ pub async fn run(
                         e.message
                     );
                     log(&p.ctx, Level::Warn, m, None).await;
-                    send(&p, &out, &now).await;
+                    let _ = out.send(now.event(p.ctx.venue(), at)).await;
                 }
             }
         } else {
-            send(&p, &out, &now).await;
+            let _ = out.send(now.event(p.ctx.venue(), at)).await;
             last = now;
         }
-    }
-}
-
-/// Шлёт ядру SpotPairs по снимку со временем последнего успешного получения справочника. Ошибок нет
-/// (справочник ни разу не получен — не шлёт: подписки без него не бывает, market.rs).
-async fn send(p: &Parts, out: &mpsc::Sender<MarketEvent>, snap: &Snapshot) {
-    if let Some(at) = p.symbols.loaded_at() {
-        let _ = out.send(snap.event(p.ctx.venue(), at)).await;
     }
 }
 

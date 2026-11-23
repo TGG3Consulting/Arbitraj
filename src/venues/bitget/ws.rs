@@ -64,24 +64,43 @@ pub async fn run(
     ctx: Ctx,
     name: String,
     assets: Vec<(Asset, String)>,
+    symbols: super::symbols::Symbols,
     books: Books,
     out: mpsc::Sender<MarketEvent>,
 ) {
     // Решение 202: свежесть пар соединения и команды сторожа ядра (переподписать пару, переподключить соединение).
-    let tickers: Vec<String> = assets.iter().map(|(a, _)| a.ticker.clone()).collect();
+    let tickers: Vec<_> = assets.iter().map(|(a, _)| a.ticker.clone()).collect();
     let (feed, mut cmd) = books.feed.register(&name, &tickers);
     while !out.is_closed() {
+        let active = symbols.active_books(&assets);
+        let changed = symbols.wait_books_change(&assets, &active);
+        if active.is_empty() {
+            tokio::select! {
+                _ = changed => continue,
+                _ = out.closed() => return,
+            }
+        }
+
         let end = match config(&ctx) {
             Ok(cfg) => {
                 let w = ws_conn::Watch {
                     feed: &feed,
                     cmd: &mut cmd,
                 };
-                ws_conn::session(&ctx, &name, &assets, &books, &out, cfg, w).await
+                tokio::select! {
+                    biased;
+                    _ = changed => {
+                        for (a, _) in &active {
+                            invalidate(&ctx, &books, &out, &a.ticker);
+                        }
+                        continue;
+                    }
+                    end = ws_conn::session(&ctx, &name, &active, &books, &out, cfg, w) => end,
+                }
             }
             Err(e) => End::Config(e),
         };
-        for (a, _) in &assets {
+        for (a, _) in &active {
             invalidate(&ctx, &books, &out, &a.ticker);
         }
         let (level, text, pause) = match (end, ctx.int("venue.ws_reconnect_pause_ms")) {

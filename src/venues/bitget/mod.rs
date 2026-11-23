@@ -358,7 +358,14 @@ impl Venue for Bitget {
     ///   ts, номера книги нет; сравниваются первые venue.depth_levels уровней ответа REST и стакана в памяти
     ///   (book_print.rs, core/feed_print.rs).
     fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
-        Some(self.books.feed.health(false, true, true))
+        let rules = self.symbols.all();
+        let mut health = self.books.feed.health(false, true, true);
+        health.conns.retain_mut(|conn| {
+            conn.pairs
+                .retain(|pair| rules.get(&pair.ticker).is_some_and(|r| r.tradable()));
+            !conn.pairs.is_empty()
+        });
+        Some(health)
     }
 
     /// Решение 213: отпечатки стакана пары для подтверждения тихой пары по содержимому (book_print.rs). Символ — из
@@ -384,6 +391,9 @@ impl Venue for Bitget {
     /// Решение 202: переподписать одну пару в её соединении (unsubscribe + subscribe, ws_conn.rs).
     async fn resubscribe_pair(&self, conn: &str, ticker: &str) -> GatewayResult<()> {
         use crate::gateway::feed_health::Cmd;
+        if self.symbols.loaded_at().is_some() {
+            self.symbols.get(&self.ctx, ticker)?;
+        }
         self.books
             .feed
             .command(self.id(), conn, Cmd::Resub(ticker.to_string()))

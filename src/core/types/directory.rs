@@ -61,6 +61,9 @@ pub struct DirectoryPool {
 pub struct DirectoryToken {
     pub token: Address,
     pub ticker: String,
+    /// Начало последней попытки фоновой проверки монеты в этом процессе, до ожидания очереди.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tried_at: Option<DateTime<Utc>>,
     /// Когда получен последний полный ответ. None — ещё ни разу.
     pub fetched_at: Option<DateTime<Utc>>,
     pub pages: u32,

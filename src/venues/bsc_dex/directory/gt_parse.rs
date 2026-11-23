@@ -173,3 +173,49 @@ pub fn error_title(body: &str) -> Option<String> {
     let list: Vec<String> = e.errors.into_iter().filter_map(|i| i.title).collect();
     (!list.is_empty()).then(|| list.join("; "))
 }
+
+/// Причина HTTP 429 для интерфейса. Снаружи приходят управляющие строки, URL и прочие
+/// произвольные данные. В итог попадают только числовые поля кода/лимита и известный смысл.
+pub(super) fn quota_detail(body: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(body).ok()?;
+    let status = value.get("status");
+    let code = status
+        .and_then(|s| s.get("error_code"))
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|n| u32::try_from(n).ok());
+    let titles = value["errors"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|e| e["title"].as_str());
+    let messages = [
+        value["status"]["error_message"].as_str(),
+        value["error"].as_str(),
+    ];
+    let reason = messages
+        .into_iter()
+        .flatten()
+        .chain(titles)
+        .find_map(quota_reason);
+    match (code, reason) {
+        (Some(c), Some(why)) => Some(format!("код поставщика {c}, {why}")),
+        (Some(c), None) => Some(format!("код поставщика {c}, тип лимита не указан")),
+        (None, why) => why,
+    }
+}
+
+fn quota_reason(text: &str) -> Option<String> {
+    let text = text.trim();
+    if let Some(n) = text
+        .strip_prefix("You've reached ")
+        .and_then(|tail| tail.split_once(" calls limit"))
+        .and_then(|(count, _)| count.replace(',', "").parse::<u32>().ok())
+    {
+        return Some(format!("исчерпан лимит {n} вызовов"));
+    }
+    let first = text.split('.').next()?.trim();
+    ["You've exceeded the Rate Limit", "Rate limit exceeded"]
+        .iter()
+        .any(|title| first.eq_ignore_ascii_case(title))
+        .then(|| "поставщик сообщил об ограничении частоты запросов".to_owned())
+}

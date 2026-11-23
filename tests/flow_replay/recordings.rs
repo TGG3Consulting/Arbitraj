@@ -25,7 +25,7 @@ struct RawBook {
 }
 
 fn book(raw: RawBook) -> (i64, MarketEvent) {
-    let price = |[price, qty]| PriceLevel { price, qty };
+    let price = |[price, qty]: [Decimal; 2]| PriceLevel { price, qty };
     (
         raw.ns,
         MarketEvent::Book(OrderBook {

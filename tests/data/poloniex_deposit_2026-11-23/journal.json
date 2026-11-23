@@ -1,0 +1,13 @@
+[
+  {
+    "id": 9417247,
+    "at": "2026-11-23T14:53:01.266291220Z",
+    "level": "Warn",
+    "kind": "core.balance_external",
+    "venue": "poloniex",
+    "message": "Внешнее изменение баланса: USDT +70.5413350700 (Poloniex balances eventType=DEPOSIT)",
+    "data": null,
+    "repeats": null,
+    "last_at": null
+  }
+]

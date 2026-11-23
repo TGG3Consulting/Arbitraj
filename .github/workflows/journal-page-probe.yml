@@ -1,0 +1,19 @@
+name: Journal cursor measurement
+on:
+  push:
+    branches: ["codex/journal-seek"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare both queries at the archived journal size
+        run: python3 tools/journal_page_probe.py --fixture-rows 9490468 > journal-cursor.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: journal-cursor
+          path: journal-cursor.json
+          if-no-files-found: error

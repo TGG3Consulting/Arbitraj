@@ -91,6 +91,21 @@ pub fn fill(f: &Family, r: &mut Read, got: &[Result<Bytes, String>]) -> Result<(
 /// у Uniswap V3 его нет (UniswapV3Pool.sol без fallback — вызов откатывается). Вид DEX должен совпасть с пулом:
 /// разбор событий и slot0 у них разный. Принимает: вид, ответ lmPool(). Ошибка — причина отказа.
 pub fn v3_abi(f: &Family, lm: Option<&Result<Bytes, String>>) -> Result<(), String> {
+    // UNXwapV3Pool имеет lmPool(), но испускает семиполевой Uniswap Swap. Фабрику и реестр
+    // проверяем обычным путём. У других видов V3 требования к LM остаются прежними.
+    if f.variant == super::family_variant::Variant::UniswapV3Lm {
+        return match lm {
+            Some(Ok(data))
+                if data.len() == 32 && P::lmPoolCall::abi_decode_returns_validate(data).is_ok() =>
+            {
+                Ok(())
+            }
+            _ => Err(format!(
+                "{}: для форка Uniswap V3 с LM нужен ответ lmPool() по ABI адреса",
+                f.id
+            )),
+        };
+    }
     let has = matches!(lm, Some(Ok(b)) if b.len() >= 32);
     match (f.proto, has) {
         (Proto::PancakeV3, false) => Err(format!(
@@ -98,7 +113,7 @@ pub fn v3_abi(f: &Family, lm: Option<&Result<Bytes, String>>) -> Result<(), Stri
             f.id
         )),
         (Proto::UniswapV3, true) => Err(format!(
-            "пул отвечает lmPool() — это пул PancakeSwap V3, а вид DEX {} — Uniswap V3",
+            "пул отвечает lmPool() — обычный вид Uniswap V3 для DEX {} не подходит",
             f.id
         )),
         _ => Ok(()),

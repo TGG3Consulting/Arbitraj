@@ -16,7 +16,7 @@
 //! - Uniswap V4 PositionManager poolKeys(bytes25) — https://github.com/Uniswap/v4-periphery/blob/0c4e5bd3715ce2e72fd7609a1e2835f8300baf7b/src/PositionManager.sol#L126
 //!   (ключ сохраняется при первой позиции, #L373-L380; bytes25 — первые 25 байт PoolId, PositionInfoLibrary.sol#L96),
 //!   poolManager() — src/base/ImmutableState.sol#L11;
-//! - lmPool() — только у PancakeSwap V3: PancakeV3Pool.sol#L106 (pancake-v3-contracts 98684794); у Uniswap V3 его нет.
+//! - lmPool() — у PancakeSwap V3 и форков с LM (Unchain X): PancakeV3Pool.sol#L106 (pancake-v3-contracts 98684794); у Uniswap V3 его нет.
 
 alloy::sol! {
     interface IPoolImmutables {

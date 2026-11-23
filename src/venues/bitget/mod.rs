@@ -358,10 +358,10 @@ impl Venue for Bitget {
     ///   в документации нет; в выписке ответа (rest_book.rs, docs/notes/bitget-analysis-2026-11-05.md §5) — asks, bids,
     ///   ts, номера книги нет; сравниваются первые venue.depth_levels уровней ответа REST и стакана в памяти
     ///   (book_print.rs, core/feed_print.rs).
-    fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
+    fn feed_health_for(&self, pair: Option<(&str, &str)>) -> Option<crate::gateway::feed_health::FeedHealth> {
         let catalog = self.symbols.dated_catalog();
         let now = std::time::Instant::now();
-        let mut health = self.books.feed.health(false, true, true);
+        let mut health = self.books.feed.health_for(false, true, true, pair);
         health.conns.retain_mut(|conn| {
             conn.pairs.retain(|pair| {
                 catalog

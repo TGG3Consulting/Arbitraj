@@ -111,6 +111,11 @@ impl FeedReg {
     /// Снимок свежести. Принимает: признаки площадки (по расписанию, переподписка пары, подтверждение по REST —
     /// решение 213). Ошибок нет.
     pub fn health(&self, scheduled: bool, per_pair: bool, confirm: bool) -> FeedHealth {
+        self.health_for(scheduled, per_pair, confirm, None)
+    }
+
+    /// Для ответа REST копируются только данные его подписки; реестр читается в момент обработки.
+    pub fn health_for(&self, scheduled: bool, per_pair: bool, confirm: bool, pair: Option<(&str, &str)>) -> FeedHealth {
         let opt = |v: i64| (v > 0).then_some(v);
         let ver = |a: &AtomicI64| Some(a.load(Ordering::Relaxed)).filter(|&v| v != NO_VER);
         let conns = self
@@ -118,6 +123,7 @@ impl FeedReg {
             .read()
             .unwrap_or_else(|e| e.into_inner())
             .iter()
+            .filter(|c| pair.is_none_or(|(conn, _)| c.name == conn))
             .map(|c| ConnHealth {
                 conn: c.name.clone(),
                 alive_ms: opt(c.alive.load(Ordering::Relaxed)),
@@ -125,6 +131,7 @@ impl FeedReg {
                 pairs: c
                     .pairs
                     .iter()
+                    .filter(|p| pair.is_none_or(|(_, ticker)| p.ticker == ticker))
                     .map(|p| PairHealth {
                         ticker: p.ticker.clone(),
                         last_ms: opt(p.last.load(Ordering::Relaxed)),

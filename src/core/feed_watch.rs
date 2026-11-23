@@ -205,16 +205,60 @@ async fn confirm(
     let sent = now_ms();
     // t79: время получения — у каждого ответа своё (стакан из ответа REST свеж от него, а не от последнего ответа
     // прохода).
-    let res = futures_util::future::join_all(checks.iter().map(|(_, t)| async move {
-        let r = v.book_version(t).await;
-        (r, now_ms())
-    }))
-    .await;
-    let Some(h) = v.feed_health() else { return };
-    for ((conn, ticker), (r, recv)) in checks.into_iter().zip(res) {
-        let r = r.map_err(|e| e.message);
-        for a in super::feed_confirm::apply(&h, &conn, &ticker, r, sent, recv, c, st) {
-            act(core, venue, v, a, c, lg).await;
+    let (tx, mut rx) = tokio::sync::mpsc::channel(checks.len());
+    let requests = checks.into_iter().map(|(conn, ticker)| async move {
+        let result = v.book_version(&ticker).await.map_err(|e| e.message);
+        (conn, ticker, result, now_ms())
+    });
+    let producer = deliver(requests, tx);
+    let consume = async {
+        let mut first = None;
+        while let Some((conn, ticker, r, recv)) = rx.recv().await {
+            lg.rest_answer(recv - *first.get_or_insert(recv), now_ms() - recv);
+            let Some(h) = v.feed_health_for(Some((&conn, &ticker))) else { continue };
+            for a in super::feed_confirm::apply(&h, &conn, &ticker, r, sent, recv, c, st) {
+                act(core, venue, v, a, c, lg).await;
+            }
         }
+    };
+    tokio::join!(producer, consume);
+}
+
+/// Запускает все проверки прохода. Получение и отметка времени следующего ответа продолжаются
+/// во время записи в журнал или восстановления предыдущей пары. Канал ограничен размером прохода.
+async fn deliver<T>(
+    requests: impl IntoIterator<Item = impl Future<Output = T>>,
+    tx: tokio::sync::mpsc::Sender<T>,
+) {
+    use futures_util::stream::{FuturesUnordered, StreamExt};
+    let mut pending: FuturesUnordered<_> = requests.into_iter().collect();
+    while let Some(answer) = pending.next().await {
+        if tx.send(answer).await.is_err() {
+            return;
+        }
+    }
+}
+
+#[cfg(test)]
+mod delivery_tests {
+    use futures_util::FutureExt;
+    use tokio::sync::{mpsc, oneshot};
+
+    /// Контрольный порядок завершения. При общем барьере результат FAST в этой точке недоступен.
+    #[tokio::test]
+    async fn fast_book_reaches_consumer_while_slow_request_is_pending() {
+        let (release, slow) = oneshot::channel();
+        let (tx, mut rx) = mpsc::channel(2);
+        let inputs = [
+            async { slow.await.unwrap(); "slow" }.boxed(),
+            async { "fast" }.boxed(),
+        ];
+        let mut produce = Box::pin(super::deliver(inputs, tx));
+        assert!(produce.as_mut().now_or_never().is_none());
+        assert_eq!(rx.try_recv().unwrap(), "fast");
+        release.send(()).unwrap();
+        produce.await;
+        assert_eq!(rx.recv().await, Some("slow"));
+        assert_eq!(rx.recv().await, None);
     }
 }

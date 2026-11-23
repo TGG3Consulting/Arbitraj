@@ -269,8 +269,8 @@ impl Venue for Xt {
     ///   https://doc.xt.com/docs/spot/WebSocket%20Public/RequestMessageFormat), см. ws_conn.rs;
     /// - confirm = true (решение 213): depth_update — по номеру (lastUpdateId REST ↔ номер локального стакана,
     ///   «Orderbook manage»), depth — по содержимому (связи updateId снимка с REST нет) — book_version.rs.
-    fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
-        Some(self.books.feed.health(false, true, true))
+    fn feed_health_for(&self, pair: Option<(&str, &str)>) -> Option<crate::gateway::feed_health::FeedHealth> {
+        Some(self.books.feed.health_for(false, true, true, pair))
     }
 
     /// Решение 213: версия стакана пары по REST GET /v4/public/depth — номер или отпечатки (book_version.rs).

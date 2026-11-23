@@ -116,6 +116,13 @@ fn quiet_confirmed_not_resubscribed() {
 }
 
 #[test]
+fn response_for_subscription_before_reset_is_discarded() {
+    let h = health(40_100, true, true, vec![pair("AIL", None, None, 40_020)]);
+    let actions = apply(&h, "m1", "AIL", Ok(ver(100, 39_000, 40_050)), 40_000, 40_100, &cfg(), &mut State::default());
+    assert!(actions.is_empty());
+}
+
+#[test]
 fn newer_book_lost_frames_resub_then_check_again() {
     let (c, mut st, none) = (cfg(), State::default(), HashMap::new());
     let h = |n| {

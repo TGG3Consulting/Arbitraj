@@ -44,6 +44,8 @@
   import DexCycles from '../components/DexCycles.svelte';
   import UncappedLine from '../components/UncappedLine.svelte';
   import CalcTiming from '../components/CalcTiming.svelte';
+  import SizeExplanation from '../components/SizeExplanation.svelte';
+  import { explainSize } from '../lib/sizeExplanation.js';
   import { startDelist, delistMarks } from '../lib/delist.svelte.js';
 
   startDelist();
@@ -146,7 +148,7 @@
       <strong>{dirText(c.direction)}</strong>
       {#if c.dry}<span class="tag dry">СУХОЙ</span>{/if}
       {#if acc}<span class="ok">прошёл: прибыль {acc.profit_usd} USDT ({acc.profit_pct}%), объём {acc.qty}</span>
-      {:else}<span class="err">отказ: {rej.reason}</span>{/if}
+      {:else}<span class="err">отказ: {explainSize(rej.reason)}</span>{/if}
       <span class="muted">{showTime(c.at)}</span>
       {#each uniq(delistMarks(c.direction)) as m (m)}<span class="err">{m}</span>{/each}
     </header>
@@ -175,7 +177,7 @@
       </details>
     {/if}
     {#if calc?.size}
-      <p class="muted">Объём (решение 66): {calc.size.why}</p>
+      <SizeExplanation size={calc.size} />
     {/if}
     {#each pickLines(calc) as line, i (i)}
       <p>Исполнитель DEX, {line}</p>

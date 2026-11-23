@@ -42,10 +42,60 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
               print("summary=" + summary, file=out)
           PY
+      - name: Compare fresh candidate and adjacent quantities on recorded markets
+        shell: bash
+        run: |
+          set -eo pipefail
+          cargo test --locked --test core_size_cost_replay full_cost_volume_replay -- --ignored --exact --nocapture | tee "$RUNNER_TEMP/cost-replay.txt"
+          sed -n 's/^SIZE_REPLAY //p' "$RUNNER_TEMP/cost-replay.txt" > full-cost.jsonl
+          sed -n 's/^FAST_REPLAY //p' "$RUNNER_TEMP/cost-replay.txt" > fast.jsonl
+          test -s full-cost.jsonl
+          test -s fast.jsonl
+          python - <<'PY'
+          import json, math
+          from collections import defaultdict
+          from pathlib import Path
+
+          groups = defaultdict(list)
+          for line in Path("fast.jsonl").read_text().splitlines():
+              row = json.loads(line)
+              groups[(row["case"], row["direction"])].append(row)
+          assert sum(map(len, groups.values())) == 16 and len(groups) == 6
+          assert len(Path("full-cost.jsonl").read_text().splitlines()) == 16
+          for rows in groups.values():
+              assert all(1 <= len(r["trials"]) <= 3 for r in rows)
+          def quantiles(seq):
+              values = sorted(seq)
+              return {f"p{q}": values[math.ceil(q * len(values) / 100) - 1] for q in (50, 95, 99)}
+          with Path("fast-summary.jsonl").open("w") as out:
+              for (case, direction), rows in sorted(groups.items()):
+                  summary = {"case": case, "direction": direction, "n": len(rows),
+                             "basis": "runner fixed snapshot; synthetic seeds; nearest-rank over scenarios"}
+                  for key in ("baseline_us", "extra_us", "total_us"):
+                      summary[key] = quantiles(r[key] for r in rows)
+                  summary["fallback_required"] = sum(r["fallback_required"] for r in rows)
+                  summary["no_extra_point"] = sum(len(r["trials"]) == 1 for r in rows)
+                  summary["extra_points_checked"] = sum(len(r["trials"]) - 1 for r in rows)
+                  summary["extra_points_rejected"] = sum(t["rejection"] is not None
+                      for r in rows for t in r["trials"][1:])
+                  print(json.dumps(summary), file=out)
+          PY
+      - name: Check left edge of recorded sale plateau
+        shell: bash
+        run: |
+          set -eo pipefail
+          cargo test --locked --test core_size_plateau -- --nocapture | tee "$RUNNER_TEMP/plateau.txt"
+          sed -n 's/^VOLUME_PLATEAU //p' "$RUNNER_TEMP/plateau.txt" > plateau.jsonl
+          test -s plateau.jsonl
       - uses: actions/upload-artifact@v4
         with:
           name: recorded-size-replay
-          path: replay.jsonl
+          path: |
+            replay.jsonl
+            full-cost.jsonl
+            fast.jsonl
+            fast-summary.jsonl
+            plateau.jsonl
           if-no-files-found: error
   result:
     needs: replay

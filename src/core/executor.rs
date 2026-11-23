@@ -206,6 +206,9 @@ async fn run(
     });
     ts.mark(handed, || "от передачи исполнителю до старта задачи".into());
     // Решение 132: счёт DEX сделки — по маппингу сейчас; нет строки — сделки нет (биржа без кошелька с DEX не торгует).
+    // Общий отсчёт только для необязательного восстановления объёма до первой покупки.
+    // Предпроверка планирует с прежними сроками; refit не начинает новый отсчёт.
+    let depth_start = Instant::now();
     let pre = async {
         // Решение 180: лимит выводов биржи A — место занимается в момент решения; окно занято — сигнал пропускается.
         // Решение 211: ключ лимита «биржа и монета» — тикер этой биржи (так же, как в transfers.rs take).
@@ -236,7 +239,8 @@ async fn run(
     // Решение 155: отказ предпроверки повторяется на каждый прошедший расчёт (в тексте — новые миллисекунды) — одна
     // строка журнала на вид причины со счётчиком, как у core.candidate_rejected; прошла — строка закрывается.
     let key = format!("precheck|{}", super::candidates::reject_key(&d));
-    let (acc, plan, slot) = match pre.await {
+    let (pre, remaining_depth) = super::final_depth::before_order(Some(depth_start), pre).await;
+    let (acc, plan, slot) = match pre {
         Ok(x) => {
             // Решения 341, 354: закрытие строки отказов — постановка в очередь журнала, покупка базу не ждёт.
             core.inner.last_reject.close(&deps.journal, &key).await;
@@ -393,7 +397,8 @@ async fn run(
         // Решение 265: подбор под остаток — шаг и свои этапы пересчёта.
         let at = ts.at();
         let refit = Box::pin(super::refit::plan(core, &d, cap, &plan));
-        let (r, m) = super::step_timing::measure_if(on, refit).await;
+        let refit = super::final_depth::before_order(remaining_depth, refit);
+        let ((r, _), m) = super::step_timing::measure_if(on, refit).await;
         ts.mark(at, || "подбор объёма под свободный остаток".into());
         note(
             &mut deal,

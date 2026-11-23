@@ -1,0 +1,54 @@
+{
+  "source": "deals.json; compact extract; account order was never submitted",
+  "plan": {
+    "direction": {
+      "asset": {
+        "bsc_contract": "0xcdf2f3e0fa43c47a6662a91c9e4a7c5f69762699",
+        "ticker": "MUB"
+      },
+      "buy_on": "bingx",
+      "sell_on": "binance"
+    },
+    "at": "2026-11-09T14:31:01.505998860Z",
+    "qty": "0.673457",
+    "sell_qty": "0.672",
+    "arrive": "0.67218354",
+    "buy_avg": "699.29",
+    "sell_avg": "704.64000000",
+    "profit_usd": "0.8448602530174100513662835866",
+    "spend_max": "470.94174553",
+    "proceeds": "473.51808000000",
+    "sigma": "0.0001952221028857941388400498",
+    "transit_s": "9"
+  },
+  "quote_times": [
+    "2026-11-09T14:31:01.448437423Z",
+    "2026-11-09T14:30:57.105699238Z"
+  ],
+  "costs": {
+    "TradeFee_MUB": "0.000673457",
+    "WithdrawFee_MUB": "0.0006",
+    "TransferTax_MUB": "0",
+    "TradeFee_USDT": "0.47351808000000",
+    "StepRemainder_MUB": "0.00018354",
+    "UsdtReturn_USDT": "0.01",
+    "PriceMoveReserve_USDT": "1.2479561369825899486337164134"
+  },
+  "size": {
+    "evals": 300,
+    "capped": true,
+    "peaks": 7,
+    "min_qty": "0.008609",
+    "max_qty": "0.715010",
+    "budget": "500"
+  },
+  "reconstruction": {
+    "buy_step": "0.000001",
+    "sell_step": "0.001",
+    "withdraw_precision": 8,
+    "h": "0.7",
+    "single_level_depth": "2",
+    "assumptions": "Flat prices and depth, fixed fee schedule, no concurrent orders, no additional hold, unknown venue limits inactive except for recorded admissible minimum quantity. Effective risk retention fitted at recorded point. No full books, cache keys or timing trace for historical input."
+  },
+  "order_submitted": false
+}

@@ -184,6 +184,9 @@ pub async fn decide_capped(
     };
     let mut choice = found.choice;
     choice.why = why(&choice, &d.asset.ticker);
+    if choice.capped && choice.evals >= p.max_evals {
+        choice.why.push_str("; достигнут предел числа расчётов size.max_evals");
+    }
     // Ревью t157 Н3: size.parallel_points задана без cpu.threads_max — точки по одной; причина — в пояснении.
     if p.par_blocked {
         choice.why.push_str(super::size_par::PAR_BLOCKED);
@@ -217,8 +220,21 @@ pub async fn decide_capped(
     }
     // Решение 95: объём найден дешёвыми котировками; оптимум пересчитывается ФИНАЛЬНОЙ котировкой (quote_stage) —
     // площадка отдаёт цену того, кто исполнит (у DEX при exec.via_kyber — KyberSwap). Вердикт — по ней.
-    let fin = final_calc(core, &cx, choice.qty, budget, p.step);
-    let mut c = match stage(|| "финальная котировка".into(), fin).await {
+    let remaining = outer_from
+        .or_else(super::final_depth::before_buy)
+        .filter(|_| !found.late && choice.evals < p.max_evals)
+        .map(|started| (started, p.ext.deadline));
+    let fin = super::final_depth::after_search(
+        core,
+        &cx,
+        choice.qty,
+        budget,
+        p.step,
+        (min_usd, min_pct),
+        remaining,
+    );
+    let (mut c, recovered) = match stage(|| "финальная котировка".into(), Box::pin(fin)).await
+    {
         Ok(f) => f,
         Err(e) => {
             return reject(
@@ -227,6 +243,12 @@ pub async fn decide_capped(
             );
         }
     };
+    if recovered {
+        choice.why.push_str(
+            "; после отказа по измеренной глубине меньший объём прошёл полный финальный расчёт",
+        );
+        choice.profit = c.profit_usd;
+    }
     // Финальная цена хуже — объём мог быть ужат до бюджета (final_calc): объём сделки — фактический.
     if c.qty != choice.qty {
         choice.why = format!(
@@ -291,12 +313,22 @@ pub(super) async fn final_calc(
     budget: Decimal,
     step: Decimal,
 ) -> Result<Calc, String> {
-    let eval =
-        |q: Decimal| crate::gateway::quote_stage::final_scope(super::costs::evaluate(core, cx, q));
+    final_standard(core, cx, qty, budget, step, None).await
+}
+
+pub(super) async fn final_standard(
+    core: &Core,
+    cx: &DirCtx,
+    qty: Decimal,
+    budget: Decimal,
+    step: Decimal,
+    mut depth: Option<&mut super::final_depth::Observation>,
+) -> Result<Calc, String> {
+    use super::final_depth::evaluate;
     // Решение 111: исполнитель (KyberSwap) даёт маршрут не на весь объём — пересчёт на то, что он реально исполнит
     // (вниз до шага), а не отказ. Живой случай 02.11: RVV — 359317.97 из 360732.6 (99.6%), прибыль почти та же,
     // а кандидат отброшен. Пороги прибыли проверяются как обычно — уже на меньшем объёме.
-    let (c, qty) = match eval(qty).await {
+    let (c, qty) = match evaluate(core, cx, qty, depth.as_deref_mut()).await {
         Ok(c) => (c, qty),
         Err(super::size::Fail::TooLarge(t)) => {
             let fill = stage_detail(
@@ -304,16 +336,31 @@ pub(super) async fn final_calc(
                 final_fillable(core, cx, qty),
             )
             .await
-            .map_err(|e| format!("{t}; {e}"))?;
+            .map_err(|e| {
+                if let Some(o) = depth.as_deref_mut() {
+                    o.clear();
+                }
+                format!("{t}; {e}")
+            })?;
             let q = if step > Decimal::ZERO {
                 (fill / step).floor() * step
             } else {
                 fill
             };
             if q <= Decimal::ZERO || q >= qty {
+                if fill != qty
+                    && let Some(o) = depth.as_deref_mut()
+                {
+                    o.clear();
+                }
                 return Err(t);
             }
-            (eval(q).await.map_err(|f| f.to_string())?, q)
+            (
+                evaluate(core, cx, q, depth.as_deref_mut())
+                    .await
+                    .map_err(|f| f.to_string())?,
+                q,
+            )
         }
         Err(f) => return Err(f.to_string()),
     };
@@ -333,7 +380,9 @@ pub(super) async fn final_calc(
     if q <= Decimal::ZERO || q >= qty {
         return Err(over(&c));
     }
-    let c2 = eval(q).await.map_err(|f| f.to_string())?;
+    let c2 = evaluate(core, cx, q, depth)
+        .await
+        .map_err(|f| f.to_string())?;
     if c2.spend_max > budget {
         return Err(over(&c2));
     }
@@ -392,35 +441,24 @@ async fn final_fillable(core: &Core, cx: &DirCtx, qty: Decimal) -> Result<Decima
 /// Почему объём лучший — текст для журнала и «Кандидатов». Принимает: итог подбора, тикер. Ошибок нет.
 pub fn why(c: &SizeChoice, ticker: &str) -> String {
     let r = |v: Decimal| v.round_dp(4).normalize();
-    let head = format!(
-        "оптимум {} {ticker}: прибыль {}",
-        c.qty.normalize(),
-        r(c.profit)
-    );
-    let budget = if c.qty == c.max_qty {
-        format!(
-            "это и есть наибольший объём в пределах бюджета {}",
-            r(c.budget)
-        )
-    } else {
-        format!(
-            "на бюджете {} ({} {ticker}) — {}",
-            r(c.budget),
-            c.max_qty.normalize(),
-            r(c.at_budget_profit)
-        )
-    };
     let mut exact = String::new();
     if !c.max_exact {
-        exact.push_str("; граница бюджета не уточнена до шага (мало size.bisect_steps)");
+        exact.push_str("; граница участка не уточнена до шага");
     }
     if c.capped {
-        exact.push_str("; поиск остановлен пределом size.max_evals — лучший из посчитанных");
+        exact.push_str("; поиск ограничен, выбран лучший из посчитанных объёмов");
     }
     format!(
-        "{head}; {budget}; допустимо {}–{} {ticker}, посчитано объёмов {}, пиков {}{exact}",
-        c.min_qty.normalize(),
+        "подбор выбрал {} {ticker}, прибыль {} USDT при бюджете {} USDT. \
+         На границе участка поиска {} {ticker}, прибыль {} USDT. \
+         Нижняя найденная точка {} {ticker}. Общий максимум объёма не установлен. \
+         Посчитано объёмов {}, пиков {}{exact}",
+        c.qty.normalize(),
+        r(c.profit),
+        r(c.budget),
         c.max_qty.normalize(),
+        r(c.at_budget_profit),
+        c.min_qty.normalize(),
         c.evals,
         c.peaks
     )

@@ -102,12 +102,17 @@ impl Symbols {
     /// Перечитывает справочник, если он не загружен или старше venue.symbols_refresh_s.
     /// Ошибки: настройки, связь, ответ BingX.
     pub async fn ensure_fresh(&self, ctx: &Ctx) -> GatewayResult<()> {
-        let max_age = Duration::from_secs(ctx.int("venue.symbols_refresh_s")?);
-        let loaded = *self.loaded.read().unwrap_or_else(|p| p.into_inner());
-        if loaded.is_none_or(|at| at.elapsed() >= max_age) {
+        if !self.is_fresh(ctx)? {
             self.refresh(ctx).await?;
         }
         Ok(())
+    }
+
+    /// Тот же срок справочника, что перед ордером. Только чтение памяти и настройки.
+    pub(super) fn is_fresh(&self, ctx: &Ctx) -> GatewayResult<bool> {
+        let max_age = Duration::from_secs(ctx.int("venue.symbols_refresh_s")?);
+        let loaded = *self.loaded.read().unwrap_or_else(|p| p.into_inner());
+        Ok(loaded.is_some_and(|at| at.elapsed() < max_age))
     }
 
     /// Правила пары по тикеру. Ошибка BadResponse — такой пары у BingX нет (или справочник не загружен).

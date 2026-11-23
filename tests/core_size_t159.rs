@@ -375,6 +375,13 @@ async fn regions_find_volume_above_bisection() {
         old.best.profit
     );
     assert!(new.best.qty * rec.bids[5].price <= max_n);
+    let why = arb::core::profit::why(&new.choice, "CAKE");
+    assert!(why.contains(&format!("подбор выбрал {} CAKE", new.best.qty.normalize())));
+    assert!(why.contains(&format!(
+        "границе участка поиска {} CAKE",
+        new.choice.max_qty.normalize()
+    )));
+    assert!(why.contains("Общий максимум объёма не установлен"));
 }
 
 /// Кривая записей, которая сама отдаёт изломы стороны B (накопленные уровни записанных bids) — как DEX отдаёт изломы
@@ -459,6 +466,8 @@ async fn soft_deadline_keeps_bounds_and_passing() {
     let late = search(&mut c, &p2).await.expect("срок не обрывает границы");
     assert!(late.late && late.best.profit >= low.profit);
     assert!(late.choice.evals < old.choice.evals);
+    assert!(late.choice.capped && late.choice.evals < p2.max_evals);
+    assert!(!arb::core::profit::why(&late.choice, "CAKE").contains("size.max_evals"));
     // Порог выше любой посчитанной прибыли — проходящего нет: подбор как без срока.
     let mut p3 = p.clone();
     p3.ext.min_usd = Some(old.best.profit + Decimal::ONE);

@@ -56,7 +56,9 @@ use crate::core::types::{
     AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side,
     TradeRequest, TradeResult, Transfer, VenueId, WithdrawRequest,
 };
-use crate::gateway::contract::{AccountRole, ConnectionCheck, DexFamily, Venue, VenueKind};
+use crate::gateway::contract::{
+    AccountRole, ConnectionCheck, DexFamily, LocalSellRules, Venue, VenueKind,
+};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::MarketEvent;
 use crate::gateway::frozen::QuoteSnapshot;
@@ -173,6 +175,16 @@ impl Venue for Bingx {
         let book = book_print::snapshot(&self.ctx, asset).await?;
         let f = book::frozen(&self.ctx, &self.fees, asset, side, book)?;
         Ok(std::sync::Arc::new(f))
+    }
+
+    fn local_sell_rules(
+        &self,
+        asset: &Asset,
+        qty: Decimal,
+        worst: Decimal,
+        best_bid: Decimal,
+    ) -> LocalSellRules {
+        order_rules::local_sell(&self.ctx, &self.symbols, asset, qty, worst, best_bid)
     }
 
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {

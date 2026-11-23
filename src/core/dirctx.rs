@@ -241,7 +241,10 @@ impl DirCtx {
             _ => super::reserve::closure_share(s, dir, vd)?,
         };
         // Решение 211: пара площадки — по её тикеру монеты (Presence::ticker).
-        let pair_a = venue::pair_rules(core, &dir.buy_on, &a.ticker)?;
+        let pair_a = match at_m {
+            Moment::Held => None,
+            _ => venue::pair_rules(core, &dir.buy_on, &a.ticker)?,
+        };
         let pair_b = venue::pair_rules(core, &dir.sell_on, &b.ticker)?;
         // Решение 66: комиссии вывода и возврата — из последнего справочника сетей ядра (не из копии в справочнике
         // монет); справочник старше venue.networks_stale_s — сделки нет.

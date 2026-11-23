@@ -61,6 +61,7 @@ pub mod commands_ext;
 pub mod convert;
 pub mod convert_at;
 pub mod costs;
+mod costs_exit;
 pub mod costs_quote;
 pub mod costs_source;
 pub mod costs_types;
@@ -186,6 +187,7 @@ pub mod feed_watch_logic;
 #[cfg(test)]
 mod feed_watch_tests;
 pub mod fills;
+mod final_depth;
 pub mod first_pass;
 pub mod frozen;
 pub mod gas_stats;

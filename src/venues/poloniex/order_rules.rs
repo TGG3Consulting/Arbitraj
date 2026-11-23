@@ -25,7 +25,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use rust_decimal::{Decimal, RoundingStrategy};
 use serde_json::{Value, json};
 
-use crate::core::types::{Side, TradeRequest};
+use crate::core::types::{Asset, Side, TradeRequest};
+use crate::gateway::contract::LocalSellRules;
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -127,6 +128,47 @@ pub fn check_rules(
         return Err(format!("{s}: {why}"));
     }
     Ok((qty, price))
+}
+
+/// Локальная проверка лимитной продажи по тому же справочнику и check_rules, что у ready.
+/// Если сверка баланса уменьшит долю сделки, её худшая цена может вырасти до лучшего bid.
+/// Отказ по минимуму доказан, только если и при этой верхней оценке не хватает количества или суммы.
+pub fn local_sell(
+    ctx: &Ctx,
+    symbols: &Symbols,
+    asset: &Asset,
+    qty: Decimal,
+    worst: Decimal,
+    best_bid: Decimal,
+) -> LocalSellRules {
+    if worst <= Decimal::ZERO || best_bid < worst || !symbols.is_fresh(ctx).unwrap_or(false) {
+        return LocalSellRules::Unknown;
+    }
+    let Ok(mut rules) = symbols.get(ctx, &asset.ticker) else {
+        return LocalSellRules::Unknown;
+    };
+    let Ok(tif) = ctx.text("venue.order_time_in_force") else {
+        return LocalSellRules::Unknown;
+    };
+    if !rules.tradable()
+        || !TIF_ALLOWED.contains(&tif.as_str())
+        || ctx.flag("venue.order_test_first").unwrap_or(false)
+        || order_state::times(ctx).is_err()
+    {
+        return LocalSellRules::Unknown;
+    }
+    let check = |r: &SymbolRules, price| check_rules(r, Side::Sell, qty, price, &tif);
+    if check(&rules, worst).is_ok() {
+        return LocalSellRules::Passed;
+    }
+    // Верхние пределы и коридор не доказывают отказ меньшей доле. Проверяем только минимумы.
+    rules.max_qty = None;
+    rules.max_notional = None;
+    rules.lowest_ask = None;
+    match check(&rules, best_bid) {
+        Err(reason) => LocalSellRules::Rejected(reason),
+        Ok(_) => LocalSellRules::Unknown,
+    }
 }
 
 /// Что делает: всё, что проходит ордер до постановки — правила пары, сроки ожидания, отказ от пробного ордера. Вызывают

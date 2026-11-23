@@ -22,6 +22,7 @@ mod bingx_293_common;
 
 use arb::core::signal_probe::{floor_qty, qty};
 use arb::core::types::{Side, TradeRequest, VenueId};
+use arb::gateway::contract::LocalSellRules;
 use arb::venues::bingx::symbols::parse_list;
 use arb::venues::bingx::{market_sell, order_rules, symbols_qty};
 use bingx_293_common::{PAIRS, bid, ctx, d, load, read, set, shopinx};
@@ -75,23 +76,34 @@ async fn symbols_without_and_with_setting() {
 async fn order_rules_sell_11000_shopinx() {
     let c = ctx("ord").await;
     let req = sell("11000");
+    set(&c.settings, "venue.symbols_refresh_s", Some(json!(60))).await;
     // Не задана: отказ по minQty — у лимитного ордера (он же check_order) и у рыночной продажи.
     let s = load(&c);
     let e = order_rules::ready(&c, &s, &req).unwrap_err();
     assert!(e.message.contains("minQty 57505"), "{}", e.message);
+    let local =
+        |qty| order_rules::local_sell(&c, &s, &req.asset, qty, req.worst_price, req.worst_price);
+    assert_eq!(local(req.qty), LocalSellRules::Rejected(e.message.clone()));
     let e = market_sell::ready(&c, &s, &req).unwrap_err();
     assert!(e.message.contains("minQty"), "{}", e.message);
     // Да: проходит; количество и цена — по шагам пары.
     set(&c.settings, symbols_qty::SETTING, Some(json!(true))).await;
     let p = order_rules::ready(&c, &s, &req).unwrap();
+    assert_eq!(local(req.qty), LocalSellRules::Passed);
     assert_eq!((p.qty, p.price), (d("11000"), d("0.0087")));
     assert!(market_sell::ready(&c, &s, &req).is_ok());
     // Сумма сверх maxNotional 1029 (200 000 × 0.0087 = 1740) — отказ и с настройкой.
     let e = order_rules::ready(&c, &s, &sell("200000")).unwrap_err();
     assert!(e.message.contains("maxNotional"), "{}", e.message);
+    assert_eq!(
+        local(d("200000")),
+        LocalSellRules::Unknown,
+        "баланс может уменьшить долю"
+    );
     // Сумма меньше minNotional 1 (100 × 0.0087 = 0.87) — отказ и с настройкой.
     let e = order_rules::ready(&c, &s, &sell("100")).unwrap_err();
     assert!(e.message.contains("minNotional"), "{}", e.message);
+    assert_eq!(local(d("100")), LocalSellRules::Rejected(e.message));
 }
 
 #[tokio::test]

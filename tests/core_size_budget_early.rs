@@ -253,6 +253,128 @@ async fn core(dir: &std::path::Path) -> Core {
     Core::start(deps).await
 }
 
+/// Регрессия частичной покупки: на тех же записанных стакане и пуле вывод проходит ровно на
+/// чистом остатке. Повторный расчёт покупки с этого остатка теряет комиссию ещё раз и нарушает минимум.
+#[tokio::test]
+async fn held_coin_keeps_the_withdrawal_threshold_without_a_buy_book() {
+    let dirp = std::env::temp_dir().join(format!("arb_held_qty_{}", std::process::id()));
+    std::fs::create_dir_all(&dirp).unwrap();
+    let core = core(&dirp).await;
+    let rec = Rec::load("held-qty").await;
+    let mut c = cx(&rec);
+    let mut book = frozen_buy(&rec);
+    let snapshot = |book: FrozenBook| Frozen {
+        a: Arc::new(book.clone()),
+        b: Arc::new(book),
+        at: Utc::now(),
+        decided: None,
+    };
+    let full = snapshot(book.clone());
+    let src = Src {
+        live: Live {
+            core: &core,
+            src: Some(&full),
+        },
+        rec: &rec,
+        dex: AtomicU32::new(0),
+    };
+    let plan = costs::evaluate_with(&c, d("10"), &src).await.unwrap();
+    let net = d("9.99");
+    assert_eq!(plan.buy_quote.costs[0].amount, plan.qty - net);
+    c.a.info.as_mut().unwrap().withdraw_min = Some(net);
+    let duplicate_fee = costs::evaluate_with(&c, net, &src).await.unwrap_err();
+    assert!(matches!(duplicate_fee, Fail::TooSmall(t) if t.contains("вывод")));
+
+    // Сторона A больше не предлагает покупку. Та же будущая продажа должна дать ту же выручку
+    // после вывода, налога и запаса. При прежнем расчёте отказ был бы уже на котировке A.
+    book.book.asks.clear();
+    let empty = snapshot(book);
+    let after = Src {
+        live: Live {
+            core: &core,
+            src: Some(&empty),
+        },
+        rec: &rec,
+        dex: AtomicU32::new(0),
+    };
+    c.pair_a = None;
+    assert!(costs::evaluate_with(&c, net, &after).await.is_err());
+    let value = costs::held_value(&c, net, plan.buy_avg, &after)
+        .await
+        .unwrap();
+    assert_eq!(value, plan.proceeds - plan.costs_usdt);
+    assert_eq!(after.dex.load(Ordering::Relaxed), 2);
+    c.a.info.as_mut().unwrap().withdraw_min = Some(plan.qty);
+    let still_too_small = costs::held_value(&c, net, plan.buy_avg, &after)
+        .await
+        .unwrap_err();
+    assert!(matches!(still_too_small, Fail::TooSmall(t) if t.contains("вывод")));
+
+    // Комиссия в USDT либо уплаченная монетой скидки оставляет все 10 CAKE для вывода.
+    // Сравниваем с тем же планом на тех же данных, исключив только строку уже исполненной покупки.
+    for paid_in in [None, Some("GT".to_string())] {
+        let mut quoted = frozen_buy(&rec);
+        quoted.fee.per_coin = false;
+        quoted.fee.asset = "USDT".to_string();
+        quoted.fee.paid_in = paid_in;
+        let paid = snapshot(quoted);
+        let before = Src {
+            live: Live {
+                core: &core,
+                src: Some(&paid),
+            },
+            rec: &rec,
+            dex: AtomicU32::new(0),
+        };
+        let with_fee = costs::evaluate_with(&c, plan.qty, &before).await.unwrap();
+        let charged = with_fee
+            .costs
+            .iter()
+            .find(|line| line.stage == "A")
+            .unwrap()
+            .usdt
+            .unwrap();
+        assert!(charged > Decimal::ZERO);
+        let future = costs::held_value(&c, plan.qty, with_fee.buy_avg, &after)
+            .await
+            .unwrap();
+        assert_eq!(future, with_fee.proceeds - (with_fee.costs_usdt - charged));
+    }
+}
+
+/// Нормализованные числа из исполнения BingX PROM 23.11.2026. Заявка, отправка и приход
+/// сверены отдельно. Идентификаторы счёта, ордера и транзакции для воспроизведения не нужны.
+#[tokio::test]
+async fn recorded_prom_buy_leaves_the_quantity_that_was_actually_withdrawn() {
+    use arb::core::{deal::Deal, fills, types::TradeResult};
+    use serde_json::json;
+
+    let dirp = std::env::temp_dir().join(format!("arb_held_prom_{}", std::process::id()));
+    std::fs::create_dir_all(&dirp).unwrap();
+    let core = core(&dirp).await;
+    let fact: TradeResult = serde_json::from_value(json!({
+        "request": {"venue": "bingx", "asset": {"ticker": "PROM"}, "side": "Buy",
+                    "qty": "52.601", "worst_price": "6.107", "deal_id": "", "route": null},
+        "status": "PartiallyFilled", "filled_qty": "2.065", "avg_price": "6.107",
+        "fees": [{"asset": "PROM", "amount": "0.002065"}], "venue_ref": "", "chain": null,
+        "finished_at": "2026-11-23T00:00:00Z"
+    }))
+    .unwrap();
+    let direction = Direction {
+        asset: fact.request.asset.clone(),
+        buy_on: fact.request.venue.clone(),
+        sell_on: VenueId("bsc_dex".into()),
+    };
+    let mut deal = Deal::new(String::new(), direction, json!({}), Decimal::ZERO);
+    fills::trade(&core, &mut deal, &fact).await;
+    assert_eq!(deal.invested, d("12.610955"));
+    assert_eq!(deal.spent, Decimal::ZERO);
+    assert_eq!(deal.qty, d("2.06293500"));
+    assert_eq!(deal.qty - d("0.003600"), d("2.059335"));
+    let twice = (deal.qty * d("0.999")).trunc_with_scale(8);
+    assert_eq!(twice, d("2.06087206"));
+}
+
 #[tokio::test]
 async fn budget_on_curve_same_choice_fewer_dex_quotes() {
     let dirp = std::env::temp_dir().join(format!("arb_budget_early_{}", std::process::id()));

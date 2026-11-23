@@ -23,6 +23,7 @@
   import ErrorText from '../components/ErrorText.svelte';
   import CostLines from '../components/CostLines.svelte';
   import DealUncapped from '../components/DealUncapped.svelte';
+  import SizeExplanation from '../components/SizeExplanation.svelte';
 
   let deals = $state({});
   /** Записи «без потолка» всех сделок одним запросом: {id сделки: {id, body}}; null — ещё не получены. */
@@ -156,6 +157,7 @@
     {#if d.plan?.costs}
       <details>
         <summary>План: объём {d.plan.qty}, прибыль {d.plan.profit_usd} USDT</summary>
+        <SizeExplanation size={d.plan.size} />
         <CostLines lines={d.plan.costs} />
       </details>
     {/if}

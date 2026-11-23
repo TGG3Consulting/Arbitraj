@@ -1,0 +1,6 @@
+{
+  "market_url": "https://api.poloniex.com/markets/PIEVERSE_USDT",
+  "book_url": "https://api.poloniex.com/markets/PIEVERSE_USDT/orderBook?limit=5",
+  "market": {"symbol":"PIEVERSE_USDT","baseCurrencyName":"PIEVERSE","quoteCurrencyName":"USDT","displayName":"PIEVERSE/USDT","state":"NORMAL","visibleStartTime":1795172400000,"tradableStartTime":1795176000000,"symbolTradeLimit":{"symbol":"PIEVERSE_USDT","priceScale":3,"quantityScale":5,"amountScale":3,"minQuantity":"0.00001","minAmount":"1","maxQuantity":"0","maxAmount":"0","highestBid":"0","lowestAsk":"0"},"crossMargin":{"supportCrossMargin":false,"maxLeverage":1}},
+  "book": {"bids":["3.058","32.70111","3.057","261.20979","3.011","68.36632","2.300","11.29652","1.660","33.27243"],"asks":["3.670","0.29972","3.699","4.59581","3.700","2.96270","3.706","0.46835","3.742","0.63373"],"scale":"0.001","time":1795476991915,"ts":1795476991997}
+}

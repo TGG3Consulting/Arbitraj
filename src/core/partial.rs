@@ -1,7 +1,7 @@
 //! Файл: core/partial.rs
 //! Что делает: частичная покупка (решение 48) — обычным полным расчётом со всеми затратами сравниваются
 //! два итога сделки: «довезти и продать, как задумано» (costs.rs на фактический объём, с фактической
-//! ценой покупки вместо котировки) и «продать обратно на площадке покупки» (trade_ops::sell_value).
+//! ценой покупки вместо котировки) и «продать обратно на площадке покупки» (trade_ops::sell_quote).
 //! Выбирается больший итог (оба в минусе — меньший убыток). Режим застрявшей монеты здесь не включается.
 //! Решение 240: контекст — DirCtx::build_held (сделка уже идёт): как до решения 240, без доли закрытия разницы, границы
 //! σ и проверки profit.sigma_min_changes.
@@ -14,12 +14,11 @@
 //! От чего зависит: dirctx.rs, costs.rs, trade_ops.rs, deal.rs, sale_marks.rs.
 //! Настройки: через costs.rs и dirctx.rs.
 //!
-//! Осторожность расчёта: затраты покупки в монете из котировки уже вычтены из факта (deal.qty),
-//! а расчёт «довезти» вычитает их ещё раз — итог «довезти» слегка занижен, но не завышен.
+//! Довоз начинается с остатка deal.qty после комиссий исполнения. У обоих путей уже понесённые расходы
+//! и выручка берутся из одного денежного учёта (deal.result_if).
 
 use rust_decimal::Decimal;
 
-use super::costs::Calc;
 use super::deal::Deal;
 use super::engine::Core;
 
@@ -34,33 +33,23 @@ pub enum Choice {
     Neither(String),
 }
 
-/// Итог «довезти»: выручка расчёта минус затраты расчёта без затрат покупки (их заменяет факт),
-/// минус фактически вложенное и потраченное. Принимает: расчёт, сделку.
-fn deliver_result(c: &Calc, deal: &Deal) -> Decimal {
-    let buy_costs: Decimal = c
-        .costs
-        .iter()
-        .filter(|l| l.stage == "A" && !l.in_price && !l.in_qty)
-        .filter_map(|l| l.usdt)
-        .sum();
-    c.proceeds - (c.costs_usdt - buy_costs) - deal.invested - deal.spent
-}
-
 /// Итог «довезти» (расчёт на фактический объём). Решение 464 (t238, ревью): отказ ИЗ-ЗА НАШЕЙ продажи этой монеты на
 /// площадке продажи (по причине — метка sale_marks::MARK в тексте отказа ride_settled.rs / sale_marks.rs) — не повод
 /// продавать на A: ордер в полёте или кончился за время расчёта — ждём его конца и считаем снова; исход продажи другой
 /// сделки неизвестен — ждём разбора той сделки (строка «ждём разбора сделки Z» — в хронологию). Другой отказ — прежний
 /// выбор. Принимает: ядро, сделку. Ошибки: текст причины.
 async fn deliver_value(core: &Core, deal: &mut Deal) -> Result<Decimal, String> {
+    let buy_avg = deal.buy.as_ref().ok_or("нет факта покупки")?.avg_price;
+    let src = super::costs::Live { core, src: None };
     let (v, a) = (deal.direction.sell_on.clone(), deal.direction.asset.clone());
     let mut noted: Option<String> = None;
     loop {
         // Будильник — до расчёта: конец ордера или снятие блокировки во время расчёта не теряются.
         let wake = core.inner.sales.done.notified();
         let r = match super::dirctx::DirCtx::build_held(core, &deal.direction) {
-            Ok(cx) => super::costs::evaluate(core, &cx, deal.qty)
+            Ok(cx) => super::costs::held_value(&cx, deal.qty, buy_avg, &src)
                 .await
-                .map(|c| deliver_result(&c, deal))
+                .map(|value| deal.result_if(value))
                 .map_err(|e| e.to_string()),
             Err(e) => Err(e),
         };
@@ -113,7 +102,7 @@ pub async fn choose(core: &Core, deal: &mut Deal) -> Choice {
     let deal = &*deal;
     // Решение 220: котировка продажи на A — кошельком сделки (им пойдёт продажа).
     let back = match super::dex_account::of(core, deal) {
-        Ok(acc) => super::trade_ops::sell_value(
+        Ok(acc) => super::trade_ops::sell_quote(
             core,
             acc.as_ref(),
             &deal.direction.buy_on,
@@ -121,14 +110,59 @@ pub async fn choose(core: &Core, deal: &mut Deal) -> Choice {
             deal.qty,
         )
         .await
-        .map(|(v, _)| deal.result_if(v)),
+        .map(|(v, _, book)| (deal.result_if(v), book))
+        .map_err(|e| e.message),
         Err(e) => Err(e),
     };
-    match (deliver, back) {
-        (Ok(d), Ok(b)) if d >= b => Choice::Deliver(d),
-        (Ok(_), Ok(b)) => Choice::SellBack(b),
-        (Ok(d), Err(_)) => Choice::Deliver(d),
-        (Err(_), Ok(b)) => Choice::SellBack(b),
-        (Err(d), Err(b)) => Choice::Neither(format!("довезти: {d}; продать на A: {b}")),
+    let reason = match back {
+        Ok((b, book)) => {
+            use crate::gateway::contract::LocalSellRules;
+            if let Ok(d) = &deliver
+                && *d >= b
+            {
+                return Choice::Deliver(*d);
+            }
+            match local_sell_rules(core, deal, book.as_ref()).await {
+                LocalSellRules::Rejected(reason) => reason,
+                LocalSellRules::Passed | LocalSellRules::Unknown => return Choice::SellBack(b),
+            }
+        }
+        Err(reason) => reason,
+    };
+    match deliver {
+        Ok(d) => Choice::Deliver(d),
+        Err(d) => Choice::Neither(format!("довезти: {d}; продать на A: {reason}")),
     }
+}
+
+/// Проверка выбранной продажи по тому же снимку. Котировка уже потребовала глубину на весь deal.qty.
+/// Худший уровень берётся до округления количества, как в trade_seen. Дополнительных котировок нет.
+async fn local_sell_rules(
+    core: &Core,
+    deal: &Deal,
+    book: Option<&super::exec_book::Book>,
+) -> crate::gateway::contract::LocalSellRules {
+    use crate::core::types::Side;
+    use crate::gateway::contract::LocalSellRules;
+    let venue = &deal.direction.buy_on;
+    let Some(book) = book else {
+        return LocalSellRules::Unknown;
+    };
+    let Some(snapshot) = book.snap.book() else {
+        return LocalSellRules::Unknown;
+    };
+    let on = super::venue_ticker::on_venue(core, &deal.direction.asset, venue);
+    if snapshot.asset.ticker != on.ticker {
+        return LocalSellRules::Unknown;
+    }
+    let Some(top) = snapshot.bids.first() else {
+        return LocalSellRules::Unknown;
+    };
+    let Ok(worst) = super::worst::worst_of(venue, book, Side::Sell, deal.qty) else {
+        return LocalSellRules::Unknown;
+    };
+    let Ok(adapter) = core.inner.deps.gw.get(venue).await else {
+        return LocalSellRules::Unknown;
+    };
+    adapter.local_sell_rules(&on, deal.qty, worst.price, top.price)
 }

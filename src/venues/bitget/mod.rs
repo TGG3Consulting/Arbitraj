@@ -16,6 +16,7 @@ pub mod all_balances;
 pub mod book;
 pub mod book_decided;
 pub mod book_print;
+mod classic_catalog;
 pub mod ctx;
 pub mod delist;
 pub mod delist_ann;
@@ -358,11 +359,16 @@ impl Venue for Bitget {
     ///   ts, номера книги нет; сравниваются первые venue.depth_levels уровней ответа REST и стакана в памяти
     ///   (book_print.rs, core/feed_print.rs).
     fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
-        let rules = self.symbols.all();
+        let catalog = self.symbols.dated_catalog();
+        let now = std::time::Instant::now();
         let mut health = self.books.feed.health(false, true, true);
         health.conns.retain_mut(|conn| {
-            conn.pairs
-                .retain(|pair| rules.get(&pair.ticker).is_some_and(|r| r.tradable()));
+            conn.pairs.retain(|pair| {
+                catalog
+                    .as_ref()
+                    .and_then(|(c, _)| c.rule(&pair.ticker, now))
+                    .is_some_and(|r| r.tradable())
+            });
             !conn.pairs.is_empty()
         });
         Some(health)

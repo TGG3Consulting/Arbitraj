@@ -22,9 +22,9 @@ use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::SpotPairState;
 use crate::storage::journal::Level;
 
+use super::classic_catalog::{Catalog, Stamp};
 use super::ctx::Ctx;
 use super::rest;
-use super::symbols_parse::Catalog;
 pub use super::symbols_parse::parse_list;
 
 /// Статус пары (свои коды для ядра): offline.
@@ -71,7 +71,7 @@ impl SymbolRules {
 #[derive(Default)]
 struct Loaded {
     catalog: Arc<Catalog>,
-    at: Option<(Instant, DateTime<Utc>)>,
+    at: Option<Stamp>,
 }
 
 /// Справочник пар (ключ — тикер монеты). Дешёво клонируется; правила — за Arc (без копии всего справочника).
@@ -115,7 +115,11 @@ impl Symbols {
         let (catalog, skipped) = super::symbols_parse::classic_list(&data, &instruments, &quote)?;
         let n = catalog.classic.len();
         let reality = catalog.reality.len();
-        self.publish(catalog, Utc::now());
+        let stale_limit = ctx
+            .int("venue.symbols_stale_s")
+            .ok()
+            .map(Duration::from_secs);
+        self.publish_at(catalog, Stamp::now(), stale_limit);
         let mut text =
             format!("Bitget, пары к {quote}: Classic — {n}, Reality (требуют UTA) — {reality}");
         if let Some(first) = skipped.first() {
@@ -143,32 +147,53 @@ impl Symbols {
 
     /// Ставит разобранный справочник и время получения. Ошибок нет.
     pub fn load(&self, map: HashMap<String, SymbolRules>, at: DateTime<Utc>) {
-        self.publish(
+        self.publish_at(
             Catalog {
                 classic: Arc::new(map),
                 ..Default::default()
             },
-            at,
+            Stamp {
+                instant: Instant::now(),
+                utc: at,
+            },
+            None,
         );
     }
 
-    /// Публикует оба класса и время одним снимком. Ошибок нет.
-    pub(super) fn publish(&self, catalog: Catalog, at: DateTime<Utc>) {
-        self.loaded.send_replace(Loaded {
-            catalog: Arc::new(catalog),
-            at: Some((Instant::now(), at)),
+    /// Устанавливает атомарный снимок после двух успешных запросов.
+    pub(super) fn publish_at(&self, mut catalog: Catalog, at: Stamp, limit: Option<Duration>) {
+        self.loaded.send_modify(|loaded| {
+            if let Some(previous) = loaded.at {
+                catalog.retain_known(&loaded.catalog, previous, limit);
+            }
+            *loaded = Loaded {
+                catalog: Arc::new(catalog),
+                at: Some(at),
+            };
         });
+    }
+
+    #[cfg(test)]
+    pub(super) fn publish(&self, catalog: Catalog, utc: DateTime<Utc>) {
+        self.publish_at(
+            catalog,
+            Stamp {
+                instant: Instant::now(),
+                utc,
+            },
+            None,
+        )
     }
 
     /// Справочник и время одной публикации для WS и события SpotPairs.
     pub(super) fn dated_catalog(&self) -> Option<(Arc<Catalog>, DateTime<Utc>)> {
         let loaded = self.loaded.borrow();
-        Some((loaded.catalog.clone(), loaded.at?.1))
+        Some((loaded.catalog.clone(), loaded.at?.utc))
     }
 
     /// Когда справочник последний раз успешно получен. Ошибок нет.
     pub fn loaded_at(&self) -> Option<DateTime<Utc>> {
-        self.loaded.borrow().at.map(|(_, at)| at)
+        self.loaded.borrow().at.map(|stamp| stamp.utc)
     }
 
     /// Перечитывает справочник, если он не загружен или старше venue.symbols_refresh_s. Ошибки: как у refresh.
@@ -178,7 +203,7 @@ impl Symbols {
             self.loaded
                 .borrow()
                 .at
-                .is_none_or(|(at, _)| at.elapsed() >= max_age)
+                .is_none_or(|stamp| stamp.instant.elapsed() >= max_age)
         };
         if stale() {
             let _guard = self.refresh_lock.lock().await;
@@ -191,15 +216,24 @@ impl Symbols {
 
     /// Весь справочник (указатель, без копии). Ошибок нет.
     pub fn all(&self) -> Arc<HashMap<String, SymbolRules>> {
-        self.loaded.borrow().catalog.classic.clone()
+        let loaded = self.loaded.borrow();
+        let now = Instant::now();
+        let mut offered = loaded.catalog.classic.clone();
+        for (base, unknown) in &loaded.catalog.missing_class {
+            if loaded.catalog.rule(base, now).is_some() {
+                Arc::make_mut(&mut offered).insert(base.clone(), unknown.rules.clone());
+            }
+        }
+        offered
     }
 
     /// Пары соединения, которым текущий каталог всё ещё разрешает стакан Classic.
     pub(super) fn active_books(&self, assets: &[(Asset, String)]) -> Vec<(Asset, String)> {
         let loaded = self.loaded.borrow();
+        let now = Instant::now();
         assets
             .iter()
-            .filter(|(asset, symbol)| loaded.catalog.has_book(asset, symbol))
+            .filter(|(asset, symbol)| loaded.catalog.has_book(asset, symbol, now))
             .cloned()
             .collect()
     }
@@ -211,27 +245,55 @@ impl Symbols {
         active: &[(Asset, String)],
     ) {
         let mut updates = self.loaded.subscribe();
-        let _ = updates
-            .wait_for(|loaded| {
-                assets
+        loop {
+            let now = Instant::now();
+            let deadline = {
+                let loaded = updates.borrow_and_update();
+                if assets
                     .iter()
-                    .filter(|(asset, symbol)| loaded.catalog.has_book(asset, symbol))
+                    .filter(|(a, s)| loaded.catalog.has_book(a, s, now))
                     .ne(active.iter())
-            })
-            .await;
+                {
+                    return;
+                }
+                loaded.catalog.expiry(now)
+            };
+            tokio::select! {
+                _ = wait_deadline(deadline) => {},
+                res=updates.changed() => {if res.is_err() {return;}}
+            }
+        }
+    }
+
+    /// Наблюдатель читает справочник и ждёт публикации или индивидуального срока пары.
+    pub(super) fn updates(&self) -> CatalogUpdates {
+        CatalogUpdates(self.loaded.subscribe())
+    }
+
+    /// Ошибка обновления: отправить ядру прежние данные с их исходной датой.
+    pub(super) fn refresh_failed(&self) {
+        self.loaded.send_modify(|_| {});
     }
 
     /// Правила пары по тикеру. Ошибка BadResponse — такой пары у Bitget нет.
     pub fn get(&self, ctx: &Ctx, ticker: &str) -> GatewayResult<SymbolRules> {
         let loaded = self.loaded.borrow();
-        loaded.catalog.classic.get(ticker).cloned().ok_or_else(|| {
-            let reason = if loaded.catalog.reality.contains(ticker) {
-                format!("Пара {ticker} относится к Reality: для ордеров и стаканов требуется UTA")
-            } else {
-                format!("Пары {ticker} нет в справочнике Bitget")
-            };
-            ctx.tag(GatewayError::new(ErrorCode::BadResponse, None, reason))
-        })
+        loaded
+            .catalog
+            .rule(ticker, Instant::now())
+            .cloned()
+            .ok_or_else(|| {
+                let reason = if loaded.catalog.reality.contains(ticker) {
+                    format!(
+                        "Пара {ticker} относится к Reality: для ордеров и стаканов требуется UTA"
+                    )
+                } else if let Some(unknown) = loaded.catalog.missing_class.get(ticker) {
+                    unknown.reason()
+                } else {
+                    format!("Пары {ticker} нет в справочнике Bitget")
+                };
+                ctx.tag(GatewayError::new(ErrorCode::BadResponse, None, reason))
+            })
     }
 
     /// Правила пары для исполнения (решение 201): пары нет, а справочник ещё не загружен или устарел (сразу после
@@ -250,12 +312,16 @@ impl Symbols {
 
     /// Символ Bitget пары монеты. None — пары нет. Ошибок нет.
     pub fn symbol_of(&self, ticker: &str) -> Option<String> {
-        self.all().get(ticker).map(|r| r.symbol.clone())
+        self.loaded
+            .borrow()
+            .catalog
+            .rule(ticker, Instant::now())
+            .map(|r| r.symbol.clone())
     }
 
     /// Состояние пары монеты для ядра (MarketEvent::SpotPairs). None — пары нет. Ошибок нет.
     pub fn state(&self, ticker: &str) -> Option<SpotPairState> {
-        self.all().get(ticker).map(|r| r.state(ticker))
+        self.loaded.borrow().catalog.state(ticker, Instant::now())
     }
 }
 
@@ -276,5 +342,28 @@ impl SymbolRules {
             order_block: None,
             price_band: None,
         }
+    }
+}
+
+pub(super) struct CatalogUpdates(tokio::sync::watch::Receiver<Loaded>);
+
+impl CatalogUpdates {
+    pub fn current(&mut self) -> Option<(Arc<Catalog>, DateTime<Utc>)> {
+        let loaded = self.0.borrow_and_update();
+        Some((loaded.catalog.clone(), loaded.at?.utc))
+    }
+
+    pub async fn changed(&mut self, expiry: Option<Instant>) {
+        tokio::select! {
+            _ = wait_deadline(expiry) => {},
+            _ = self.0.changed() => {},
+        }
+    }
+}
+
+async fn wait_deadline(at: Option<Instant>) {
+    match at {
+        Some(t) => tokio::time::sleep_until(t.into()).await,
+        None => std::future::pending().await,
     }
 }

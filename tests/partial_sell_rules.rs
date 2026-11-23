@@ -5,6 +5,7 @@ mod t198_common;
 
 use std::time::Duration;
 
+use arb::core::partial::{Choice, choose_quoted};
 use arb::core::types::{Asset, Side, TradeRequest};
 use arb::gateway::{contract::LocalSellRules, frozen::deepest, rest_book};
 use arb::settings::value::Scope;
@@ -65,6 +66,30 @@ async fn partial_sell_matches_preparation_on_recorded_pieverse() {
         remeasure: None,
     };
     let local = |qty, worst, top| order_rules::local_sell(&ctx, &symbols, &asset, qty, worst, top);
+    // Обратная продажа дала более высокий расчётный итог. На свежих правилах PIEVERSE
+    // 0.32 не проходит минимум, а для 0.33 сохраняется прежний выбор.
+    let back = |qty| {
+        let worst = deepest(&book, Side::Sell, qty).unwrap();
+        Ok((qty * best, move || local(qty, worst, best)))
+    };
+    let deliver = d("0.31") * best;
+    assert_eq!(
+        choose_quoted(Ok(deliver), back(d("0.32"))),
+        Choice::Deliver(deliver)
+    );
+    let unavailable = "нет маршрута вывода";
+    let reason = order_rules::ready(&ctx, &symbols, &request(d("0.32"), best))
+        .await
+        .unwrap_err()
+        .message;
+    assert_eq!(
+        choose_quoted(Err(unavailable.into()), back(d("0.32"))),
+        Choice::Neither(format!("довезти: {unavailable}; продать на A: {reason}"))
+    );
+    assert_eq!(
+        choose_quoted(Ok(deliver), back(d("0.33"))),
+        Choice::SellBack(d("0.33") * best)
+    );
     for raw in [d("0.32"), d("0.33"), d("32.701111")] {
         let worst = deepest(&book, Side::Sell, raw).unwrap();
         let actual = order_rules::ready(&ctx, &symbols, &request(raw, worst)).await;
@@ -104,4 +129,8 @@ async fn partial_sell_matches_preparation_on_recorded_pieverse() {
         .unwrap();
     tokio::time::sleep(Duration::from_millis(1010)).await;
     assert_eq!(local(d("0.32"), best, best), LocalSellRules::Unknown);
+    assert_eq!(
+        choose_quoted(Ok(deliver), back(d("0.32"))),
+        Choice::SellBack(d("0.32") * best)
+    );
 }

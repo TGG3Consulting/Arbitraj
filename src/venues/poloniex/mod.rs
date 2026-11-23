@@ -58,7 +58,9 @@ use crate::core::types::{
     AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side,
     TradeRequest, TradeResult, Transfer, VenueId, WithdrawRequest,
 };
-use crate::gateway::contract::{ConnectionCheck, DexFamily, LocalSellRules, Venue, VenueKind};
+use crate::gateway::contract::{
+    ConnectionCheck, DexFamily, LocalSellOrder, LocalSellRules, Venue, VenueKind,
+};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::MarketEvent;
 use crate::gateway::frozen::QuoteSnapshot;
@@ -169,14 +171,18 @@ impl Venue for Poloniex {
         Ok(std::sync::Arc::new(f))
     }
 
-    fn local_sell_rules(
-        &self,
-        asset: &Asset,
-        qty: Decimal,
-        worst: Decimal,
-        best_bid: Decimal,
-    ) -> LocalSellRules {
-        order_rules::local_sell(&self.ctx, &self.symbols, asset, qty, worst, best_bid)
+    fn local_sell_rules(&self, order: &dyn Fn() -> Option<LocalSellOrder>) -> LocalSellRules {
+        let Some(order) = order() else {
+            return LocalSellRules::Unknown;
+        };
+        order_rules::local_sell(
+            &self.ctx,
+            &self.symbols,
+            &order.asset,
+            order.qty,
+            order.worst,
+            order.best_bid,
+        )
     }
 
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {

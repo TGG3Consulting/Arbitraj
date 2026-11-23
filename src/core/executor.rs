@@ -86,6 +86,15 @@ pub enum Start {
 /// по этой монете сейчас нет другой сделки (решение 118, Я-2: замок по монете, а не по направлению). Вся сделка — класс срочности Trade (gateway/urgency.rs, решение 61).
 /// Возвращает: Start — что вышло. Ошибок нет.
 pub async fn accepted(core: &Core, calc: Calc) -> Start {
+    accepted_with_depth(core, calc, None).await
+}
+
+/// Принятый торговый сигнал передаёт исполнителю остаток права на уменьшение при потере глубины.
+pub(super) async fn accepted_with_depth(
+    core: &Core,
+    calc: Calc,
+    remaining_depth: Option<Instant>,
+) -> Start {
     // Сухой режим проверяется первым: до справочника, учёта и шлюза — ни одного действия.
     if let Some(why) = super::dry::blocks(&core.inner.deps.settings) {
         return Start::Dry(why);
@@ -131,7 +140,16 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
                 boarded: None,
             },
         };
-        run(&g.core, d.clone(), decided, (on, handed), fast, &mut g.slot).await;
+        run(
+            &g.core,
+            d.clone(),
+            decided,
+            (on, handed),
+            fast,
+            remaining_depth,
+            &mut g.slot,
+        )
+        .await;
     };
     tokio::spawn(urgency::scope(
         Urgency::Trade,
@@ -192,6 +210,7 @@ async fn run(
     decided: chrono::DateTime<chrono::Utc>,
     (on, handed): (bool, Option<Instant>),
     fast: super::precheck_fast::Opts,
+    remaining_depth: Option<Instant>,
     ride: &mut Slot,
 ) {
     let deps = &core.inner.deps;
@@ -206,9 +225,6 @@ async fn run(
     });
     ts.mark(handed, || "от передачи исполнителю до старта задачи".into());
     // Решение 132: счёт DEX сделки — по маппингу сейчас; нет строки — сделки нет (биржа без кошелька с DEX не торгует).
-    // Общий отсчёт только для необязательного восстановления объёма до первой покупки.
-    // Предпроверка планирует с прежними сроками; refit не начинает новый отсчёт.
-    let depth_start = Instant::now();
     let pre = async {
         // Решение 180: лимит выводов биржи A — место занимается в момент решения; окно занято — сигнал пропускается.
         // Решение 211: ключ лимита «биржа и монета» — тикер этой биржи (так же, как в transfers.rs take).
@@ -239,7 +255,7 @@ async fn run(
     // Решение 155: отказ предпроверки повторяется на каждый прошедший расчёт (в тексте — новые миллисекунды) — одна
     // строка журнала на вид причины со счётчиком, как у core.candidate_rejected; прошла — строка закрывается.
     let key = format!("precheck|{}", super::candidates::reject_key(&d));
-    let (pre, remaining_depth) = super::final_depth::before_order(Some(depth_start), pre).await;
+    let (pre, remaining_depth) = super::final_depth::before_order(remaining_depth, pre).await;
     let (acc, plan, slot) = match pre {
         Ok(x) => {
             // Решения 341, 354: закрытие строки отказов — постановка в очередь журнала, покупка базу не ждёт.

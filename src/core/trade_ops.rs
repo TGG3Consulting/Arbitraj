@@ -28,6 +28,7 @@
 //! Настройки: exec.dex_slippage_pct (по площадке DEX), venue.quote_asset; risk.outcome_poll_s, risk.outcome_max_s
 //! (через outcome_resolve.rs).
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use rust_decimal::Decimal;
@@ -36,7 +37,7 @@ use crate::core::types::{
     Asset, CostKind, DexAccountId, DexRoute, Quote, Side, TradeRequest, TradeResult, TradeStatus,
     VenueId,
 };
-use crate::gateway::contract::VenueKind;
+use crate::gateway::contract::{Venue, VenueKind};
 use crate::gateway::errors::{ErrorCode, GatewayError};
 use crate::settings::read::At;
 
@@ -347,7 +348,9 @@ pub async fn deal_quote(
     let acc = super::dex_account::of(core, deal).map_err(OpError::not_configured)?;
     let (v, a) = (&deal.at, &deal.direction.asset);
     // t78: продажа ЭТОЙ сделки — адаптер DEX берёт её налоги, перепроверенные кошельком сделки (gateway/exit_scope.rs).
-    sell_quote_of(core, acc.as_ref(), v, a, deal.qty, Some(&deal.id)).await
+    sell_quote_of(core, acc.as_ref(), v, a, deal.qty, Some(&deal.id))
+        .await
+        .map(|(_, quote)| quote)
 }
 
 /// Сколько получим чистыми (USDT), если продать qty сейчас: котировка × количество минус затраты
@@ -383,19 +386,23 @@ pub async fn sell_quote(
     a: &Asset,
     qty: Decimal,
 ) -> Result<(Decimal, Quote, Option<super::exec_book::Book>), OpError> {
-    sell_quote_of(core, acc, v, a, qty, None).await
+    sell_quote_of(core, acc, v, a, qty, None)
+        .await
+        .map(|(_, quote)| quote)
 }
 
+type SellQuote = (Decimal, Quote, Option<super::exec_book::Book>);
+
 /// Как sell_quote; `deal` — id сделки, чьи монеты продаются (t78: признак продажи выхода несёт его адаптеру —
-/// gateway/exit_scope.rs; None — оценка не продажи сделки). Принимает и возвращает: как sell_quote.
-async fn sell_quote_of(
+/// gateway/exit_scope.rs; None — оценка не продажи сделки). Возвращает также адаптер для локальной проверки правил.
+pub(super) async fn sell_quote_of(
     core: &Core,
     acc: Option<&DexAccountId>,
     v: &VenueId,
     a: &Asset,
     qty: Decimal,
     deal: Option<&str>,
-) -> Result<(Decimal, Quote, Option<super::exec_book::Book>), OpError> {
+) -> Result<(Arc<dyn Venue>, SellQuote), OpError> {
     let x = core
         .inner
         .deps
@@ -462,5 +469,5 @@ async fn sell_quote_of(
     for c in q.costs.iter().filter(|c| !c.in_price) {
         net -= convert::to_usdt(c, &rates)?;
     }
-    Ok((net, q, book))
+    Ok((x, (net, q, book)))
 }

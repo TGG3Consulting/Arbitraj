@@ -1,21 +1,56 @@
 //! Регрессии определения границы глубины и пересчёта в единицы покупки.
 use super::*;
 
+#[test]
+fn only_two_known_cex_sides_allow_recovery() {
+    let a = VenueId("A".into());
+    let b = VenueId("B".into());
+    let dex = VenueId("D".into());
+    let missing = VenueId("unknown".into());
+    let kinds = [
+        (a.clone(), VenueKind::Cex),
+        (b.clone(), VenueKind::Cex),
+        (dex.clone(), VenueKind::Dex),
+    ];
+    assert!(cex_pair(&kinds, [&a, &b]));
+    for side in [&dex, &missing] {
+        assert!(!cex_pair(&kinds, [side, &b]));
+        assert!(!cex_pair(&kinds, [&a, side]));
+    }
+}
+
 #[tokio::test]
-async fn refit_shares_one_recovery_with_precheck() {
-    let start = Instant::now();
-    let (_, unused) = before_order(Some(start), async {
-        assert_eq!(before_buy(), Some(start));
+async fn candidate_precheck_and_refit_share_one_recovery_and_deadline() {
+    let hard = Instant::now() + std::time::Duration::from_secs(60);
+    let soft = hard - std::time::Duration::from_secs(30);
+    for first in 0..3 {
+        let mut remaining = Some(hard);
+        for stage in 0..3 {
+            let until = if stage == 0 { soft } else { hard };
+            let (_, next) = before_order(remaining, async {
+                if stage >= first {
+                    assert_eq!(reserve(until), (stage == first).then_some(until));
+                }
+            })
+            .await;
+            remaining = next;
+        }
+        assert_eq!(remaining, None);
+    }
+}
+
+#[tokio::test]
+async fn elapsed_soft_or_hard_deadline_and_absent_signal_cannot_reserve() {
+    let expired = Instant::now();
+    let later = expired + std::time::Duration::from_secs(60);
+    let (_, remaining) = before_order(Some(later), async {
+        assert_eq!(reserve(expired), None);
     })
     .await;
-    let (_, spent) = before_order(unused, async {
-        BEFORE_BUY.with(|slot| slot.set(None));
-    })
-    .await;
-    before_order(spent, async {
-        assert_eq!(before_buy(), None);
-    })
-    .await;
+    assert_eq!(remaining, Some(later));
+    before_order(Some(expired), async { assert_eq!(reserve(later), None) }).await;
+    before_order(None, async { assert_eq!(reserve(later), None) }).await;
+    assert_eq!(reserve(later), None);
 }
 
 fn short(o: &mut Observation, leg: Leg, requested: Decimal, filled: Decimal) {

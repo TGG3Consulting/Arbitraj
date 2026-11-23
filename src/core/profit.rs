@@ -220,10 +220,9 @@ pub async fn decide_capped(
     }
     // Решение 95: объём найден дешёвыми котировками; оптимум пересчитывается ФИНАЛЬНОЙ котировкой (quote_stage) —
     // площадка отдаёт цену того, кто исполнит (у DEX при exec.via_kyber — KyberSwap). Вердикт — по ней.
-    let remaining = outer_from
-        .or_else(super::final_depth::before_buy)
+    let remaining = super::final_depth::before_buy()
         .filter(|_| !found.late && choice.evals < p.max_evals)
-        .map(|started| (started, p.ext.deadline));
+        .map(|hard| p.ext.deadline.map_or(hard, |soft| soft.min(hard)));
     let fin = super::final_depth::after_search(
         core,
         &cx,

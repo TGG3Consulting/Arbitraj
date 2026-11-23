@@ -6,7 +6,16 @@ import { explainSize } from '../src/lib/sizeExplanation.js';
 const siren = 'оптимум 2936.62 SIREN: прибыль 0.1673; на бюджете 96.3215 (46.11 SIREN) — -0.076; допустимо 40.66–46.11 SIREN, посчитано объёмов 68, пиков 1';
 
 test('SIREN shows the chosen quantity and the first search boundary separately', () => {
-  assert.equal(explainSize(siren), 'Подбор выбрал 2936.62 SIREN, прибыль 0.1673 USDT при бюджете 96.3215 USDT. Граница участка поиска — 46.11 SIREN, прибыль -0.076 USDT. Общий максимум объёма не установлен. Посчитано объёмов 68, пиков 1');
+  assert.equal(explainSize(siren), 'Подбор выбрал 2936.62 SIREN, прибыль 0.1673 USDT при бюджете 96.3215 USDT. Граница участка поиска — 46.11 SIREN, прибыль -0.076 USDT. Нижняя найденная точка 40.66 SIREN. Общий максимум объёма не установлен. Посчитано объёмов 68, пиков 1');
+});
+
+test('historical AKE rejection retains both boundaries and the archived bisection reason without a size object', () => {
+  // docs/audits/2026-11-23-recent-episodes.json, episodes[4].close_reason.
+  const reason = 'прибыль -0.0245 USDT ниже порога 0.1 (оптимум 392.75 AKE: прибыль -0.0245; на бюджете 1000 (380866.25 AKE) — -20.504; допустимо 392.75–380866.25 AKE, посчитано объёмов 143, пиков 2; граница бюджета не уточнена до шага (мало size.bisect_steps))';
+  const shown = explainSize(reason);
+  assert.ok(shown.startsWith('прибыль -0.0245 USDT ниже порога 0.1 (Подбор выбрал 392.75 AKE'));
+  assert.ok(shown.includes('Граница участка поиска — 380866.25 AKE, прибыль -20.504 USDT. Нижняя найденная точка 392.75 AKE.'));
+  assert.ok(shown.endsWith('Посчитано объёмов 143, пиков 2; граница участка не уточнена до шага (в архиве указано: мало size.bisect_steps))'));
 });
 
 test('keeps simulation limits, threshold retries and the final resize visible', () => {

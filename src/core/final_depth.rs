@@ -9,41 +9,43 @@ use super::costs::{Calc, Live};
 use super::dirctx::DirCtx;
 use super::engine::Core;
 use super::size::Fail;
+use crate::core::types::VenueId;
 use crate::gateway::contract::VenueKind;
-use crate::settings::read::At;
 
 tokio::task_local! {
-    /// Один срок для предпроверки и подбора под остаток до первой заявки.
+    /// Абсолютный срок единственной дополнительной попытки сигнала до первой заявки.
     static BEFORE_BUY: std::cell::Cell<Option<Instant>>;
 }
 
-/// Начало общего отсчёта, если предпроверка и refit ещё не израсходовали попытку.
+/// Общий срок сигнала, пока дополнительный расчёт не начался.
 pub(super) fn before_buy() -> Option<Instant> {
     BEFORE_BUY.try_with(std::cell::Cell::get).ok().flatten()
 }
 
 /// Запускает этап до покупки и возвращает остаток права на попытку для следующего этапа.
 pub(super) async fn before_order<F: std::future::Future>(
-    start: Option<Instant>,
+    deadline: Option<Instant>,
     task: F,
 ) -> (F::Output, Option<Instant>) {
     BEFORE_BUY
-        .scope(std::cell::Cell::new(start), async {
+        .scope(std::cell::Cell::new(deadline), async {
             (task.await, before_buy())
         })
         .await
 }
 
-/// Фиксируем настройку и начало срока вместе. Нет действующего срока — нет повтора.
-fn deadline(core: &Core, from: Instant) -> Option<Instant> {
-    let ms = core
-        .inner
-        .deps
-        .settings
-        .integer("profit.calc_timeout_ms", At::default())
-        .ok()?;
-    (ms > 0)
-        .then(|| from.checked_add(std::time::Duration::from_millis(ms)))
+/// Мягкий срок поиска может сократить оставшееся время на этой стадии.
+fn reserve(until: Instant) -> Option<Instant> {
+    BEFORE_BUY
+        .try_with(|slot| {
+            let end = slot.get()?.min(until);
+            if Instant::now() >= end {
+                return None;
+            }
+            slot.set(None);
+            Some(end)
+        })
+        .ok()
         .flatten()
 }
 
@@ -144,6 +146,12 @@ pub(super) async fn evaluate(
     .await
 }
 
+fn cex_pair(kinds: &[(VenueId, VenueKind)], sides: [&VenueId; 2]) -> bool {
+    sides.into_iter().all(|v| {
+        kinds.iter().find(|(id, _)| id == v).map(|(_, k)| *k) == Some(VenueKind::Cex)
+    })
+}
+
 /// Сначала выполняется весь обычный финальный путь. При исчерпанных лимитах,
 /// внешнем исполнении или в предпроверке без заданного общего срока отказ сохраняется.
 pub(super) async fn after_search(
@@ -153,7 +161,7 @@ pub(super) async fn after_search(
     budget: Decimal,
     step: Decimal,
     min: (Decimal, Decimal),
-    window: Option<(Instant, Option<Instant>)>,
+    window: Option<Instant>,
 ) -> Result<(Calc, bool), String> {
     let mut observation = Observation::default();
     let capture = window.map(|_| &mut observation);
@@ -161,22 +169,13 @@ pub(super) async fn after_search(
         Ok(c) => return Ok((c, false)),
         Err(e) => e,
     };
-    if let Some((started, soft)) = window
+    if let Some(deadline) = window
         && observation.gap.is_some()
-        && [&cx.dir.buy_on, &cx.dir.sell_on]
-            .iter()
-            .all(|v| super::engine::rd(&core.inner.kinds).get(*v) == Some(&VenueKind::Cex))
-        && let Some(hard) = deadline(core, started)
-        && let Some(c) = recover(
-            core,
-            cx,
-            &observation,
-            soft.map_or(hard, |s| s.min(hard)),
-            budget,
-            step,
-            min,
-        )
-        .await
+        && {
+            let kinds = super::engine::rd(&core.inner.kinds);
+            cex_pair(&kinds, [&cx.dir.buy_on, &cx.dir.sell_on])
+        }
+        && let Some(c) = recover(core, cx, &observation, deadline, budget, step, min).await
     {
         return Ok((c, true));
     }
@@ -199,7 +198,7 @@ pub(super) async fn recover(
     }
     let fixed = cx.a.info.as_ref()?.withdraw_fee?;
     let q = observation.candidate(cx.h, fixed, step, cx.pair_b.as_ref()?.step_size)?;
-    let _ = BEFORE_BUY.try_with(|slot| slot.set(None));
+    let deadline = reserve(deadline)?;
     let work = evaluate(core, cx, q, None);
     let c = tokio::time::timeout_at(deadline.into(), work)
         .await

@@ -240,21 +240,26 @@ async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
     );
     // Ключ повтора причины в журнале: у отказа по сроку — без чисел замера (иначе каждый повтор — новая строка).
     let mut key = None;
-    let verdict = match core
+    let limit = core
         .inner
         .deps
         .settings
         .integer("profit.calc_timeout_ms", At::default())
         .ok()
-        .filter(|ms| *ms > 0)
-    {
+        .filter(|ms| *ms > 0);
+    // Общий срок V3 отсчитывается один раз от начала расчёта торгового сигнала.
+    let deadline = limit
+        .filter(|_| !audit && matches!(mode, Mode::Live))
+        .and_then(|ms| from.checked_add(Duration::from_millis(ms)));
+    let work = super::final_depth::before_order(deadline, Box::pin(work));
+    let (verdict, remaining_depth) = match limit {
         Some(ms) => match timeout(Duration::from_millis(ms), work).await {
             Ok(v) => v,
             Err(_) => {
                 // Решение 129: причина называет этап, на котором расчёт стоит, и сколько длились прошедшие.
                 let (reason, k) = calc_report::timeout_reason(ms, &calc_report::report(&t));
                 key = Some(k);
-                Verdict::Reject { reason, best: None }
+                (Verdict::Reject { reason, best: None }, None)
             }
         },
         None => work.await,
@@ -267,7 +272,7 @@ async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
             if audit {
                 Box::pin(super::sieve_audit::accepted(core, d, &calc)).await;
             }
-            accepted_timed(core, d, calc, &mode, timing).await
+            accepted_timed(core, d, calc, &mode, timing, remaining_depth).await
         }
         Verdict::Reject { reason, best } => {
             let row = json!({ "direction": d, "verdict": Verdict::Reject { reason: reason.clone(), best: best.clone() }, "at": chrono::Utc::now(), "timing": timing });
@@ -303,7 +308,7 @@ async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
 /// не вызывается. Затем строка «Кандидатов», эпизод (память и сообщение), карточка — отдельной задачей.
 /// Принимает: ядро, направление, расчёт, режим, в котором он посчитан. Ошибок нет. Без замера этапов (тесты).
 pub async fn accepted(core: &Core, d: &Direction, calc: Calc, mode: &Mode) {
-    accepted_timed(core, d, calc, mode, serde_json::Value::Null).await
+    accepted_timed(core, d, calc, mode, serde_json::Value::Null, None).await
 }
 
 /// То же с замером этапов расчёта (решение 129) — поле `timing` строки. Ошибок нет.
@@ -313,6 +318,7 @@ async fn accepted_timed(
     calc: Calc,
     mode: &Mode,
     timing: serde_json::Value,
+    remaining_depth: Option<Instant>,
 ) {
     // Решение 155: кандидат прошёл — строка отказа закрывается итоговым счётчиком.
     core.inner
@@ -325,7 +331,9 @@ async fn accepted_timed(
         Mode::Dry(_) => {
             Start::Dry("сухой режим (dry.enabled): ордера и переводы не выполняются".into())
         }
-        Mode::Live => super::executor::accepted(core, calc.clone()).await,
+        Mode::Live => {
+            super::executor::accepted_with_depth(core, calc.clone(), remaining_depth).await
+        }
     };
     let dry = matches!(start, Start::Dry(_));
     // Решение 147: отказ исполнителя на входе — причина в строку, журнал (повторы — счётчиком, t165) и текст карточки.

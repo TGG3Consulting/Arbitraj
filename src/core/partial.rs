@@ -19,11 +19,14 @@
 
 use rust_decimal::Decimal;
 
+use crate::core::types::Side;
+use crate::gateway::contract::{LocalSellOrder, LocalSellRules};
+
 use super::deal::Deal;
 use super::engine::Core;
 
 /// Что делать с купленным частично.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Choice {
     /// Довезти до B и продать — ожидаемый итог сделки, USDT.
     Deliver(Decimal),
@@ -102,27 +105,39 @@ pub async fn choose(core: &Core, deal: &mut Deal) -> Choice {
     let deal = &*deal;
     // Решение 220: котировка продажи на A — кошельком сделки (им пойдёт продажа).
     let back = match super::dex_account::of(core, deal) {
-        Ok(acc) => super::trade_ops::sell_quote(
+        Ok(acc) => super::trade_ops::sell_quote_of(
             core,
             acc.as_ref(),
             &deal.direction.buy_on,
             &deal.direction.asset,
             deal.qty,
+            None,
         )
         .await
-        .map(|(v, _, book)| (deal.result_if(v), book))
+        .map(|(adapter, (v, _, book))| {
+            let rules =
+                move || adapter.local_sell_rules(&|| local_sell_order(core, deal, book.as_ref()));
+            (deal.result_if(v), rules)
+        })
         .map_err(|e| e.message),
         Err(e) => Err(e),
     };
+    choose_quoted(deliver, back)
+}
+
+/// Выбор по чистым итогам двух котировок. Правила проверяются только если исходный выбор — продажа на A.
+pub fn choose_quoted(
+    deliver: Result<Decimal, String>,
+    back: Result<(Decimal, impl FnOnce() -> LocalSellRules), String>,
+) -> Choice {
     let reason = match back {
-        Ok((b, book)) => {
-            use crate::gateway::contract::LocalSellRules;
+        Ok((b, rules)) => {
             if let Ok(d) = &deliver
                 && *d >= b
             {
                 return Choice::Deliver(*d);
             }
-            match local_sell_rules(core, deal, book.as_ref()).await {
+            match rules() {
                 LocalSellRules::Rejected(reason) => reason,
                 LocalSellRules::Passed | LocalSellRules::Unknown => return Choice::SellBack(b),
             }
@@ -137,32 +152,24 @@ pub async fn choose(core: &Core, deal: &mut Deal) -> Choice {
 
 /// Проверка выбранной продажи по тому же снимку. Котировка уже потребовала глубину на весь deal.qty.
 /// Худший уровень берётся до округления количества, как в trade_seen. Дополнительных котировок нет.
-async fn local_sell_rules(
+fn local_sell_order(
     core: &Core,
     deal: &Deal,
     book: Option<&super::exec_book::Book>,
-) -> crate::gateway::contract::LocalSellRules {
-    use crate::core::types::Side;
-    use crate::gateway::contract::LocalSellRules;
+) -> Option<LocalSellOrder> {
     let venue = &deal.direction.buy_on;
-    let Some(book) = book else {
-        return LocalSellRules::Unknown;
-    };
-    let Some(snapshot) = book.snap.book() else {
-        return LocalSellRules::Unknown;
-    };
+    let book = book?;
+    let snapshot = book.snap.book()?;
     let on = super::venue_ticker::on_venue(core, &deal.direction.asset, venue);
     if snapshot.asset.ticker != on.ticker {
-        return LocalSellRules::Unknown;
+        return None;
     }
-    let Some(top) = snapshot.bids.first() else {
-        return LocalSellRules::Unknown;
-    };
-    let Ok(worst) = super::worst::worst_of(venue, book, Side::Sell, deal.qty) else {
-        return LocalSellRules::Unknown;
-    };
-    let Ok(adapter) = core.inner.deps.gw.get(venue).await else {
-        return LocalSellRules::Unknown;
-    };
-    adapter.local_sell_rules(&on, deal.qty, worst.price, top.price)
+    let best_bid = snapshot.bids.first()?.price;
+    let worst = super::worst::worst_of(venue, book, Side::Sell, deal.qty).ok()?;
+    Some(LocalSellOrder {
+        asset: on,
+        qty: deal.qty,
+        worst: worst.price,
+        best_bid,
+    })
 }

@@ -18,6 +18,7 @@
   import { flight } from '../lib/flight.js';
   import { dirText } from '../lib/coreLabels.js';
   import { showTime } from '../lib/labels.js';
+  import { explainSize } from '../lib/sizeExplanation.js';
   import PageSize from '../components/PageSize.svelte';
   import ErrorText from '../components/ErrorText.svelte';
   import EpisodeView from '../components/EpisodeView.svelte';
@@ -97,7 +98,7 @@
           <td class="num">{e.max_profit_unbounded ?? '—'}</td>
           <td class="num">{e.records}</td>
           <td>
-            {#if e.ended_at}{e.close_reason}{:else}<span class="ok">открыт</span>{/if}
+            {#if e.ended_at}{explainSize(e.close_reason)}{:else}<span class="ok">открыт</span>{/if}
             {#if e.stopped}<div class="warn-text">{e.stopped}</div>{/if}
           </td>
           <td>

@@ -42,6 +42,14 @@ pub enum LocalSellRules {
     Unknown,
 }
 
+/// Параметры первой лимитной продажи до округления адаптером, по одному снимку стакана.
+pub struct LocalSellOrder {
+    pub asset: Asset,
+    pub qty: Decimal,
+    pub worst: Decimal,
+    pub best_bid: Decimal,
+}
+
 /// Решение 174: роль счёта биржи из account_balances для кнопки «Продать» панели «Балансы».
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AccountRole {
@@ -235,15 +243,8 @@ pub trait Venue: Send + Sync {
         ))
     }
 
-    /// Проверяет количество, худшую цену продажи и лучший спрос того же стакана без запроса к бирже.
-    /// Адаптер с отсутствующими или устаревшими правилами возвращает Unknown.
-    fn local_sell_rules(
-        &self,
-        _asset: &Asset,
-        _qty: Decimal,
-        _worst: Decimal,
-        _best_bid: Decimal,
-    ) -> LocalSellRules {
+    /// Параметры со снимка вычисляются по запросу адаптера. Без локальных правил стакан не обходится.
+    fn local_sell_rules(&self, _order: &dyn Fn() -> Option<LocalSellOrder>) -> LocalSellRules {
         LocalSellRules::Unknown
     }
 

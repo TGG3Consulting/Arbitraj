@@ -13,6 +13,7 @@
   import CostLines from './CostLines.svelte';
   import UncappedLine from './UncappedLine.svelte';
   import { money, verdictLabel, basisLabel } from '../lib/uncappedLabels.js';
+  import { explainSize } from '../lib/sizeExplanation.js';
 
   /** rec — Record ядра (core/uncapped_types.rs) как JSON. */
   let { rec } = $props();
@@ -22,7 +23,7 @@
 <UncappedLine u={rec} />
 <p class="muted">Данные: {basisLabel(rec.basis)}{#if rec.snapshot} — {rec.snapshot}{/if}</p>
 <p>
-  На нашем бюджете: {verdictLabel(rec.battle.verdict)}{#if rec.battle.reason} — {rec.battle.reason}{/if}{#if rec.battle.dry} <span class="tag">сухой</span>{/if};
+  На нашем бюджете: {verdictLabel(rec.battle.verdict)}{#if rec.battle.reason} — {explainSize(rec.battle.reason)}{/if}{#if rec.battle.dry} <span class="tag">сухой</span>{/if};
   бюджет {money(rec.budget)}{#if p} (на сделку {money(p.per_trade)}, остаток на монету {money(p.coin_left)}, в пути {money(p.transit_left)}{#if p.dry != null}, сухой {money(p.dry)}{/if}){:else if rec.limits_error} <span class="muted">({rec.limits_error})</span>{/if}
   {#if rec.battle.free != null}; перед покупкой предел {money(rec.battle.free)} при бюджете плана {money(rec.battle.plan_budget)}{/if}
 </p>

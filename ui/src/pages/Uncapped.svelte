@@ -34,6 +34,7 @@
   import { flight } from '../lib/flight.js';
   import { coinName } from '../lib/coinNames.svelte.js';
   import { showTime } from '../lib/labels.js';
+  import { explainSize } from '../lib/sizeExplanation.js';
   import { limitedLabel, budgetBound, money, period, verdictLabel, duration, windowSec, understated, lateInputs, wouldText } from '../lib/uncappedLabels.js';
   import PageSize from '../components/PageSize.svelte';
   import ErrorText from '../components/ErrorText.svelte';
@@ -203,7 +204,7 @@
       <span class="tag">{deal ? `сделка ${b.battle.deal_id}` : verdictLabel(b.battle.verdict)}</span>
       {#if understated(b)}<span class="tag warn-text">посчитано после покупки — занижено</span>{/if}
       {#if lateInputs(b)}<span class="tag warn-text">σ и курсы позже входа — несравнимо</span>{/if}
-      {#if !deal && b.battle.reason}<span class="muted">{b.battle.reason}</span>{/if}
+      {#if !deal && b.battle.reason}<span class="muted">{explainSize(b.battle.reason)}</span>{/if}
       <span class="muted">{showTime(deal ? (b.decided_at ?? b.at) : b.ep.first_at)}</span>
     </header>
     <p>

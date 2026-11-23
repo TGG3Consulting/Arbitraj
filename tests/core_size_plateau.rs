@@ -89,10 +89,23 @@ async fn compare_quota<S: Source>(
     }
     let old = m.best().unwrap();
     assert_eq!(m.evals(), used as u32);
-    assert!(consider(&mut m, &old, edge, Instant::now()).await.is_none());
+    let target = old.data.sell_qty;
+    let projected = |u| forward(rec, src, u);
+    assert!(
+        consider(&mut m, &old, target, Instant::now(), projected)
+            .await
+            .is_none()
+    );
     assert_eq!(m.evals(), used as u32);
     let start = Instant::now();
-    let candidate = consider(&mut m, &old, edge, start + Duration::from_secs(5)).await;
+    let candidate = consider(
+        &mut m,
+        &old,
+        target,
+        start + Duration::from_secs(5),
+        projected,
+    )
+    .await;
     let took = start.elapsed().as_micros();
     let chosen = candidate.as_ref().unwrap_or(&old);
     let extra = m.evals() - used as u32;
@@ -122,7 +135,8 @@ async fn archived_mub() {
     let p = params(&rec, d("500"));
     let planned: u64 = (num(&rec.raw["plan"], "qty") / p.step).try_into().unwrap();
     let target = num(&rec.raw["plan"], "sell_qty");
-    let edge = first_equal(planned, target, |u| forward(&rec, &src, u))
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let edge = first_equal(planned, target, deadline, |u| forward(&rec, &src, u))
         .await
         .unwrap();
     assert_eq!(edge, 673274);
@@ -165,23 +179,20 @@ async fn archived_mub() {
     let search = search_in(&mut memo, &p).await.unwrap();
     let standard_us = start.elapsed().as_micros();
     let initial = memo.evals();
-    let n = memo.units(search.best.qty).unwrap();
     let refine = Instant::now();
-    let exact = first_equal(n, search.best.data.sell_qty, |u| forward(&rec, &src, u))
-        .await
-        .unwrap();
     let revised = consider(
         &mut memo,
         &search.best,
-        exact,
+        search.best.data.sell_qty,
         start + Duration::from_secs(5),
+        |u| forward(&rec, &src, u),
     )
     .await;
     let revision_us = refine.elapsed().as_micros();
     let chosen = revised.as_ref().unwrap_or(&search.best);
     assert!(memo.evals() <= p.max_evals);
     // Независимый перебор всех допустимых исходных шагов. Из одного уровня покупки
-    // следует точный верх floor(budget/ask). Ниже установленного minQty все заявки отклоняются.
+    // следует точный верх floor(budget/ask). Нижний предел сценария задан по size.min_qty плана.
     let first: u64 = (rec.cx.pair_a.as_ref().unwrap().min_qty.unwrap() / p.step)
         .try_into()
         .unwrap();
@@ -255,6 +266,17 @@ fn tie_break_uses_exact_spend() {
 }
 
 #[tokio::test]
+async fn expired_boundary_skips_all_probes() {
+    let calls = std::cell::Cell::new(0);
+    let edge = first_equal(100, Decimal::ONE, Instant::now(), |_| {
+        calls.set(calls.get() + 1);
+        std::future::ready(Some(Decimal::ONE))
+    })
+    .await;
+    assert_eq!((edge, calls.get()), (None, 0));
+}
+
+#[tokio::test]
 async fn changed_transfer_terms() {
     let mut rec = Recording::load();
     rec.step = d("0.000003");
@@ -288,7 +310,8 @@ async fn changed_transfer_terms() {
     let last = 225000u64;
     let plan = curve.at(rec.step * Decimal::from(last)).await.unwrap();
     let target = plan.data.sell_qty;
-    let edge = first_equal(last, target, |u| forward(&rec, &src, u))
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let edge = first_equal(last, target, deadline, |u| forward(&rec, &src, u))
         .await
         .unwrap();
     let mut first = None;
@@ -324,7 +347,12 @@ async fn changed_transfer_terms() {
         }
         Some(target)
     };
-    assert!(first_equal(last, target, unavailable).await.is_none());
+    let deadline = Instant::now() + Duration::from_secs(5);
+    assert!(
+        first_equal(last, target, deadline, unavailable)
+            .await
+            .is_none()
+    );
     println!(
         "VOLUME_PLATEAU {}",
         json!({"case":"synthetic_changed_terms","buy_step":rec.step,

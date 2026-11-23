@@ -57,7 +57,7 @@ use crate::core::types::{
     TradeRequest, TradeResult, Transfer, VenueId, WithdrawRequest,
 };
 use crate::gateway::contract::{
-    AccountRole, ConnectionCheck, DexFamily, LocalSellRules, Venue, VenueKind,
+    AccountRole, ConnectionCheck, DexFamily, LocalSellOrder, LocalSellRules, Venue, VenueKind,
 };
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::MarketEvent;
@@ -177,14 +177,18 @@ impl Venue for Bingx {
         Ok(std::sync::Arc::new(f))
     }
 
-    fn local_sell_rules(
-        &self,
-        asset: &Asset,
-        qty: Decimal,
-        worst: Decimal,
-        best_bid: Decimal,
-    ) -> LocalSellRules {
-        order_rules::local_sell(&self.ctx, &self.symbols, asset, qty, worst, best_bid)
+    fn local_sell_rules(&self, order: &dyn Fn() -> Option<LocalSellOrder>) -> LocalSellRules {
+        let Some(order) = order() else {
+            return LocalSellRules::Unknown;
+        };
+        order_rules::local_sell(
+            &self.ctx,
+            &self.symbols,
+            &order.asset,
+            order.qty,
+            order.worst,
+            order.best_bid,
+        )
     }
 
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {

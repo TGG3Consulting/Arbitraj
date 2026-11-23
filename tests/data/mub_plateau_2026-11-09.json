@@ -48,7 +48,7 @@
     "withdraw_precision": 8,
     "h": "0.7",
     "single_level_depth": "2",
-    "assumptions": "Flat prices and depth, fixed fee schedule, no concurrent orders, no additional hold, unknown venue limits inactive except for recorded admissible minimum quantity. Effective risk retention fitted at recorded point. No full books, cache keys or timing trace for historical input."
+    "assumptions": "Flat prices and depth, fixed fee schedule, no concurrent orders, no additional hold. The smallest quantity found by the historical search supplies the scenario lower bound. Actual venue limits are unknown. Effective risk retention fitted at recorded point. No full books, cache keys or timing trace for historical input."
   },
   "order_submitted": false
 }

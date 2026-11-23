@@ -126,9 +126,9 @@ pub async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) -> bool {
 async fn memory(p: &Pools, e: &Entry, h: &Head, now: &mut QuoterSides) {
     // Пул на H не прочитан — сравнивать не с чем, прежняя заметка остаётся. Настройка не задана — сравнение не
     // выполняется, заметки нет (без записи в журнал).
-    if !matches!(h, Head::Ready { .. }) {
+    let Head::Ready { block, entry } = h else {
         return;
-    }
+    };
     if p.ctx.int(quoter_block::MEMORY_LAG).is_err() {
         now.memory = None;
         return;
@@ -136,9 +136,7 @@ async fn memory(p: &Pools, e: &Entry, h: &Head, now: &mut QuoterSides) {
     let note = quoter_block::memory_note(&p.ctx, e, h);
     // Решение 382: «память отстаёт» — пул на полное чтение, только если ошибка доказана на блоке памяти
     // (check/quoter_memory_fix.rs, ревью Б1).
-    if note.is_some()
-        && let Head::Ready { block, entry } = h
-    {
+    if note.is_some() {
         super::quoter_memory_fix::on_lag(p, e, *block, entry);
     }
     let changed = match (&now.memory, &note) {
@@ -154,7 +152,12 @@ async fn memory(p: &Pools, e: &Entry, h: &Head, now: &mut QuoterSides) {
                 format!("{} {}: память снова равна сети", e.family.title, e.ticker),
             ),
         };
-        p.ctx.log(level, "dex.quoter_memory", text, None).await;
+        let data = serde_json::json!({
+            "pool": e.pool.reference,
+            "memory_block": e.synced_block,
+            "head_block": block,
+        });
+        p.ctx.log(level, "dex.quoter_memory", text, Some(data)).await;
     }
     now.memory = note;
 }

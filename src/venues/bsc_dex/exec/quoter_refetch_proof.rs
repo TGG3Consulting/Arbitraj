@@ -53,7 +53,12 @@ pub fn spawn(
     tokio::spawn(async move {
         let (marked, proof) = judge(&ctx, (&tokens, &reg), &mem, (head, &at), guard).await;
         if let Some((level, text)) = line(&mem, head, marked, proof, all) {
-            ctx.log(level, kind, text, None).await;
+            let data = serde_json::json!({
+                "pool": mem.pool.reference,
+                "memory_block": mem.synced_block,
+                "head_block": head,
+            });
+            ctx.log(level, kind, text, Some(data)).await;
         }
     });
 }

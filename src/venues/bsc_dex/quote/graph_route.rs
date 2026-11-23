@@ -258,7 +258,7 @@ pub async fn merge(
             out
         }
         Err(e) => {
-            failed(q, &e).await;
+            failed(q, &e, &classic).await;
             classic
         }
     }
@@ -266,7 +266,7 @@ pub async fn merge(
 
 /// Запись в журнал «граф-роутер не дал маршрут — котировка по классике» (Warn dex.router_graph). Общая для merge и
 /// route_fit.rs merge (решение 294). Принимает: расчёт, ошибку графа. Ошибок нет.
-pub async fn failed(q: &Quoting, e: &crate::gateway::errors::GatewayError) {
+pub async fn failed(q: &Quoting, e: &crate::gateway::errors::GatewayError, classic: &Quote) {
     // Решение 301 (в): брошенный расчёт (срок вышел) — его итог никто не читает, запись журнала не нужна.
     if abandon::is_set() {
         return;
@@ -283,7 +283,15 @@ pub async fn failed(q: &Quoting, e: &crate::gateway::errors::GatewayError) {
                 "граф-роутер не дал маршрут — котировка по классике: {}",
                 e.message
             ),
-            None,
+            Some(serde_json::json!({
+                "asset": classic.asset,
+                "side": classic.side,
+                "qty": classic.qty,
+                "classic_fillable_qty": classic.fillable_qty,
+                "classic_avg_price": classic.avg_price,
+                "classic_route_min_block": classic.route.as_ref().map(|r| r.block),
+                "classic_route_executable": classic.route.as_ref().map(|r| r.executable),
+            })),
         )
         .await;
 }

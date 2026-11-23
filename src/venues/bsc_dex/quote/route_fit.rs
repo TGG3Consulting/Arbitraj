@@ -177,7 +177,7 @@ pub async fn merge(
         // у которой классика всегда неполная. Любая другая (настройки, расчёт) — прежняя запись graph_route.rs failed.
         Err(e) if e.code == ErrorCode::NoRoute => classic,
         Err(e) => {
-            super::graph_route::failed(q, &e).await;
+            super::graph_route::failed(q, &e, &classic).await;
             classic
         }
     }

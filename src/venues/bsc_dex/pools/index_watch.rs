@@ -1,16 +1,13 @@
 //! Файл: venues/bsc_dex/pools/index_watch.rs
 //! Что делает: справочник пулов во время подписки (решение 58). Перепроверка и подключение новых пулов к идущей
 //! подписке (attach.rs): по обновлённым монетам (directory/refresh.rs), целиком — при изменении любой настройки dex.*
-//! (вид DEX, адреса, включатель — без перезапуска; пачка изменений — одна перепроверка, решение 279) и при повторе через dex.verify_retry_s, если узел не ответил на
-//! часть проверки. Своя комиссия пар V2 — в реестр (в том числе её снятие при смене источника на «одна на DEX»);
+//! (вид DEX, адреса, включатель — без перезапуска; пачка изменений — одна перепроверка, решение 279). Если узел не
+//! ответил на часть проверки, её монеты повторяются через dex.verify_retry_s. Своя комиссия пар V2 — в реестр;
 //! её же перечитывает сверка с квотером (refresh_fees).
 //! Кто вызывает: pools/market.rs (watch), check/quoter_cycle.rs (refresh_fees).
 //! От чего зависит: ctx.rs, index.rs, verify.rs, attach.rs, created.rs (Watch), discover.rs, families.rs,
 //! directory (pool_key), settings/live.rs, check/recheck.rs.
 //! Настройки: dex.verify_retry_s [bsc_dex]; изменения dex.*.
-
-use std::collections::HashSet;
-use std::time::Duration;
 
 use alloy_primitives::Address;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -25,41 +22,26 @@ use super::created::Watch;
 use super::discover::{Found, against};
 use super::families::Proto;
 use super::index;
+use super::index_retry::{Retry, Work};
 use super::listen::Pools;
 use super::verify::{self, Candidate, Verdict};
 
 /// Работает, пока жива подписка (см. шапку). Ошибок не возвращает: всё — в журнал.
-pub async fn watch(
+pub(super) async fn watch(
     p: Pools,
     mut rx: UnboundedReceiver<Address>,
+    mut retry: Retry,
     watches: Vec<Watch>,
     wake: Recheck,
 ) {
     let mut changes = Changes::new(p.ctx.settings.subscribe(), vec!["dex.".into()]);
-    let mut retry: Option<Duration> = None;
+    retry.arm(&p.ctx);
     loop {
-        let pause = async {
-            match retry {
-                Some(d) => tokio::time::sleep(d).await,
-                None => std::future::pending().await,
-            }
+        let only = match retry.next(&mut rx, &mut changes).await {
+            Some(Work::All) => None,
+            Some(Work::Coins(coins)) => Some(coins),
+            None => return,
         };
-        // None — все монеты (настройки изменились или повтор после сбоя узла).
-        let only: Option<HashSet<Address>> = tokio::select! {
-            t = rx.recv() => match t {
-                None => return,
-                Some(first) => {
-                    let mut set = HashSet::from([first]);
-                    while let Ok(x) = rx.try_recv() {
-                        set.insert(x);
-                    }
-                    Some(set)
-                }
-            },
-            c = changes.next_batch() => if c.is_none() { return } else { None },
-            _ = pause => None,
-        };
-        retry = None;
         let took = match index::take(&p.ctx, only.as_ref()).await {
             Ok(t) => t,
             Err(e) => {
@@ -68,13 +50,7 @@ pub async fn watch(
                 continue;
             }
         };
-        if took.failed > 0 {
-            retry = p
-                .ctx
-                .int("dex.verify_retry_s")
-                .ok()
-                .map(Duration::from_secs);
-        }
+        retry.checked(&p.ctx, only.as_ref(), took.retry_coins);
         fees(&p, &took.found);
         let mut n = 0;
         for w in &watches {

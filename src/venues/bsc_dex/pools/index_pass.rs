@@ -32,6 +32,12 @@ pub type Verifier =
         &'a [Candidate],
     ) -> Pin<Box<dyn Future<Output = GatewayResult<Vec<Verdict>>> + Send + 'a>>;
 
+/// Количество строк «не проверен» и монеты, которым потребуется повтор прохода.
+struct Failed {
+    rows: usize,
+    coins: HashSet<Address>,
+}
+
 /// Проверка на своём узле (verify::verify). Ошибки: NotConfigured (dex.verify_batch).
 pub fn on_node<'a>(
     ctx: &'a Ctx,
@@ -73,7 +79,9 @@ pub async fn take_with(
                 .map(|(a, _)| *a)
                 .collect()
         });
-        failed += pass(ctx, None, Some(&added), check).await?.0;
+        let (expanded, _) = pass(ctx, None, Some(&added), check).await?;
+        failed.rows += expanded.rows;
+        failed.coins.extend(expanded.coins);
     }
     let found = ctx.index.with(|s| {
         s.taken
@@ -84,7 +92,8 @@ pub async fn take_with(
     });
     Ok(Took {
         found: order::order(ctx, found),
-        failed,
+        failed: failed.rows,
+        retry_coins: failed.coins,
     })
 }
 
@@ -96,7 +105,7 @@ async fn pass(
     only: Option<&HashSet<Address>>,
     keys: Option<&HashSet<String>>,
     check: Verifier,
-) -> GatewayResult<(usize, BTreeSet<String>)> {
+) -> GatewayResult<(Failed, BTreeSet<String>)> {
     let multi = ctx.index.with(|s| s.multi_dex.clone());
     let mut cands = Vec::new();
     let mut rows: Vec<(String, Range<usize>)> = Vec::new();
@@ -136,8 +145,14 @@ async fn pass(
         }
     });
     let (picked, ids, verdicts) = combine(&cands, rows, verdicts);
-    let failed = record_with(ctx, &picked, Some(&ids), verdicts).await;
-    Ok((failed, unconnected))
+    let coins = picked
+        .iter()
+        .zip(&verdicts)
+        .filter(|(_, v)| matches!(v, Verdict::Failed(_)))
+        .map(|(c, _)| c.coin)
+        .collect();
+    let rows = record_with(ctx, &picked, Some(&ids), verdicts).await;
+    Ok((Failed { rows, coins }, unconnected))
 }
 
 /// Решение 450: итог строки справочника по итогам её видов (sub_dex::pick). Принимает: кандидатов, строки (id строки,

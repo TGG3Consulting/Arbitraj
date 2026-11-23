@@ -35,17 +35,24 @@ use super::{factory_scan, index_pass, multi_pair};
 pub struct Took {
     pub found: Vec<Found>,
     pub failed: usize,
+    /// Монеты строк, для которых проверка узла не дала вердикта (включая развёртку многомонетных пулов).
+    pub retry_coins: HashSet<Address>,
 }
 
 /// Справочник для подписки: встречные токены (USDT и промежуточные), старт, задача обновления от индексатора
 /// (directory/refresh.rs) и задача поиска по фабрикам на своём узле (factory_scan.rs, решение 121, C3) — обе шлют
-/// в один канал «монета обновлена». Возвращает: (задачи, приёмник «монета обновлена» для index_watch). Ошибок нет.
+/// в один канал «монета обновлена». Возвращает задачи, приёмник и очередь повторов начальной проверки. Ошибок нет.
 pub async fn begin(
     ctx: &Ctx,
     all: &HashMap<Address, String>,
     usdt: Address,
     mids: &[Mid],
-) -> (Vec<JoinHandle<()>>, UnboundedReceiver<Address>) {
+) -> (
+    Vec<JoinHandle<()>>,
+    UnboundedReceiver<Address>,
+    HashSet<Address>,
+) {
+    let mut retry_coins = HashSet::new();
     let quotes: HashSet<Address> = std::iter::once(usdt)
         .chain(mids.iter().map(|m| m.address))
         .collect();
@@ -57,17 +64,22 @@ pub async fn begin(
     if let Err(e) = res {
         let msg = format!("Справочник пулов при старте подписки: {}", e.message);
         ctx.log(Level::Warn, "dex.index", msg, None).await;
-    } else if let Err(e) = take(ctx, None).await {
-        let msg = format!(
-            "Справочник пулов: проверка при старте не выполнена: {}",
-            e.message
-        );
-        ctx.log(Level::Warn, "dex.index", msg, None).await;
+    } else {
+        match take(ctx, None).await {
+            Ok(took) => retry_coins = took.retry_coins,
+            Err(e) => {
+                let msg = format!(
+                    "Справочник пулов: проверка при старте не выполнена: {}",
+                    e.message
+                );
+                ctx.log(Level::Warn, "dex.index", msg, None).await;
+            }
+        }
     }
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let scan = factory_scan::run(ctx.clone(), all.clone(), quotes.clone(), tx.clone());
     let task = tokio::spawn(refresh::run(ctx.clone(), all.clone(), quotes, Some(tx)));
-    (vec![task, tokio::spawn(scan)], rx)
+    (vec![task, tokio::spawn(scan)], rx, retry_coins)
 }
 
 /// Проверяет пулы справочника (монеты `only` или все) и обновляет итог по каждому. Решение 295: у DEX в режиме

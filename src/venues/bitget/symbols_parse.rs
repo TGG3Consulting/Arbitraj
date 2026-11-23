@@ -30,21 +30,7 @@ const USDT: &str = "USDT";
 /// Наибольшая точность Decimal (28 знаков).
 const MAX_SCALE: u32 = 28;
 
-/// Снимок одного quote: правила Classic и тикеры, для которых биржа явно указала Reality.
-#[derive(Default)]
-pub(super) struct Catalog {
-    pub classic: Arc<HashMap<String, SymbolRules>>,
-    pub reality: HashSet<String>,
-}
-
-impl Catalog {
-    /// Стакан обслуживается Classic только для действующей онлайн-пары с тем же символом.
-    pub(super) fn has_book(&self, asset: &crate::core::types::Asset, symbol: &str) -> bool {
-        self.classic
-            .get(&asset.ticker)
-            .is_some_and(|r| r.tradable() && r.symbol == symbol)
-    }
-}
+use super::classic_catalog::{Catalog, Missing};
 
 /// Ключом связи служит symbol биржи. isReality берётся из публичного справочника SPOT
 /// (https://www.bitget.com/docs/catalog/market-market-data/market-instruments).
@@ -70,15 +56,25 @@ pub(super) fn classic_list(
         .as_array()
         .ok_or_else(|| super::errors::bad("instruments SPOT: data не массив", ""))?;
     let mut classes = HashMap::new();
+    let mut ambiguous = HashSet::new();
     for row in rows {
         if row["category"] != "SPOT" {
             continue;
         }
         if let Some(symbol) = row["symbol"].as_str().filter(|s| !s.is_empty()) {
+            if row
+                .get("isReality")
+                .is_some_and(|v| !v.is_string() && !v.is_null())
+            {
+                ambiguous.insert(symbol);
+            }
             // Даже одинаковый дубль нарушает однозначность ключа; он закрывает только свою пару.
             classes
                 .entry(symbol)
-                .and_modify(|class| *class = None)
+                .and_modify(|class| {
+                    *class = None;
+                    ambiguous.insert(symbol);
+                })
                 .or_insert(row["isReality"].as_str());
         }
     }
@@ -94,6 +90,7 @@ pub(super) fn classic_list(
     let (map, mut skipped) = parse_list(data, quote)?;
     let mut classic = HashMap::new();
     let mut reality_bases = HashSet::new();
+    let mut missing_class = HashMap::new();
     for (base, rules) in map {
         match classes.get(rules.symbol.as_str()) {
             Some(Some("no")) => {
@@ -102,7 +99,12 @@ pub(super) fn classic_list(
             Some(Some("yes")) => {
                 reality_bases.insert(base);
             }
-            _ => skipped.push(format!("{}: класс isReality не подтверждён", rules.symbol)),
+            class => {
+                skipped.push(format!("{}: класс isReality не подтверждён", rules.symbol));
+                let omitted = !ambiguous.contains(rules.symbol.as_str())
+                    && matches!(class, None | Some(None));
+                missing_class.insert(base, Missing::new(rules, omitted));
+            }
         }
     }
     skipped.sort();
@@ -110,6 +112,7 @@ pub(super) fn classic_list(
         Catalog {
             classic: Arc::new(classic),
             reality: reality_bases,
+            missing_class,
         },
         skipped,
     ))

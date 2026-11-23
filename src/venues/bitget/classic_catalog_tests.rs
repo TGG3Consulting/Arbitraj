@@ -182,8 +182,29 @@ async fn reclassified_pair_is_revoked_despite_another_missing_class_and_recovers
             .get(&bot.ctx, &asset.ticker)
             .unwrap_err()
             .message;
+        if asset.ticker == "RWA" {
+            assert!(bot.symbols.symbol_of("RWA").is_none());
+            assert_eq!(
+                bot.symbols.state("RWA").unwrap().order_block.as_deref(),
+                Some(reason.as_str())
+            );
+        }
         assert_eq!(bot.check_order(&req).await.unwrap_err().message, reason);
-        assert_eq!(bot.trade(req).await.unwrap_err().message, reason);
+        assert_eq!(bot.trade(req.clone()).await.unwrap_err().message, reason);
+        if asset.ticker == "rROL" {
+            // Восстановление старого ордера всё ещё доходит до опроса по сохранённым symbol/orderId.
+            // В окружении не задан интервал опроса, так что приватного сетевого вызова здесь нет.
+            let pending = crate::gateway::pending::PendingRef::order("RROLUSDT", "old", req.qty)
+                .received_coin("rROL")
+                .with_ref("prior-order");
+            assert!(
+                bot.resolve_trade(req, &pending)
+                    .await
+                    .unwrap_err()
+                    .message
+                    .contains("venue.order_poll_ms")
+            );
+        }
         assert_eq!(
             bot.book_version(&asset.ticker).await.unwrap_err().message,
             reason
@@ -202,4 +223,122 @@ async fn reclassified_pair_is_revoked_despite_another_missing_class_and_recovers
     bot.symbols.wait_books_change(&assigned, &current).await;
     assert!(bot.symbols.get(&bot.ctx, "RWA").unwrap().tradable());
     assert!(bot.symbols.get(&bot.ctx, "rROL").is_err());
+}
+
+/// У каждой временно неразмеченной пары своя дата. Обновление Z, новый symbol, дубль
+/// или отсутствие настройки срока не могут продлить её допуск. В ядре остаётся причина блока.
+#[test]
+fn individual_class_lifetime_survives_partial_refresh_and_expires_without_delisting() {
+    use crate::venues::bitget::classic_catalog::Stamp;
+    use std::time::{Duration, Instant};
+    let (v2, v3) = rows();
+    let origin = Instant::now();
+    let utc = Utc::now();
+    let make_stamp = |seconds: u64| Stamp {
+        instant: origin + Duration::from_secs(seconds),
+        utc: utc + chrono::Duration::seconds(seconds as i64),
+    };
+    let limit = Some(Duration::from_secs(10));
+    let directory = Symbols::default();
+    let mut prior = v3.clone();
+    for r in prior.as_array_mut().unwrap() {
+        if r["symbol"] == "RROLUSDT" {
+            r["isReality"] = json!("no");
+        }
+    }
+    directory.publish_at(
+        classic_list(&v2, &prior, "USDT").unwrap().0,
+        make_stamp(0),
+        limit,
+    );
+    let mut partial = v3.clone();
+    let field = partial
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|r| r["symbol"] == "RWAUSDT")
+        .unwrap();
+    field.as_object_mut().unwrap().remove("isReality");
+    directory.publish_at(
+        classic_list(&v2, &partial, "USDT").unwrap().0,
+        make_stamp(2),
+        limit,
+    );
+    directory.publish_at(
+        classic_list(&v2, &partial, "USDT").unwrap().0,
+        make_stamp(8),
+        limit,
+    );
+    let (catalog, at) = directory.dated_catalog().unwrap();
+    assert_eq!(at, make_stamp(8).utc);
+    assert!(catalog.rule("rROL", make_stamp(8).instant).is_none());
+    let before = Snapshot::at(&catalog, &assets(), make_stamp(9).instant);
+    let after = Snapshot::at(&catalog, &assets(), make_stamp(10).instant);
+    assert_eq!(before.tickers, ["CAKE", "RENDER", "RWA"]);
+    assert_eq!(after.tickers, ["CAKE", "RENDER"]);
+    assert!(after.missing.is_empty());
+    let blocked = after.pairs.iter().find(|p| p.ticker == "RWA").unwrap();
+    assert!(
+        blocked.online
+            && blocked
+                .order_block
+                .as_deref()
+                .unwrap()
+                .contains("Последнее подтверждение Classic")
+    );
+    assert_eq!(
+        catalog.expiry(make_stamp(9).instant),
+        Some(make_stamp(10).instant)
+    );
+    assert!(catalog.rule("RENDER", make_stamp(11).instant).is_some());
+
+    // У изменившегося symbol с прежним base нет подтверждения старого инструмента.
+    let mut renamed = v2.clone();
+    let rwa = renamed
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|r| r["baseCoin"] == "RWA")
+        .unwrap();
+    rwa["symbol"] = json!("changed-symbol");
+    directory.publish_at(
+        classic_list(&renamed, &partial, "USDT").unwrap().0,
+        make_stamp(9),
+        limit,
+    );
+    assert!(
+        directory
+            .dated_catalog()
+            .unwrap()
+            .0
+            .rule("RWA", make_stamp(9).instant)
+            .is_none()
+    );
+
+    directory.publish_at(
+        classic_list(&v2, &v3, "USDT").unwrap().0,
+        make_stamp(15),
+        limit,
+    );
+    assert!(
+        directory
+            .dated_catalog()
+            .unwrap()
+            .0
+            .rule("RWA", make_stamp(15).instant)
+            .is_some()
+    );
+    directory.publish_at(
+        classic_list(&v2, &partial, "USDT").unwrap().0,
+        make_stamp(16),
+        None,
+    );
+    assert!(
+        directory
+            .dated_catalog()
+            .unwrap()
+            .0
+            .rule("RWA", make_stamp(16).instant)
+            .is_none()
+    );
 }

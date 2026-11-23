@@ -38,6 +38,14 @@ impl Snapshot {
     /// попадает в missing и в pairs не входит.
     pub fn build(symbols: &Symbols, assets: &[Asset]) -> Option<(Self, DateTime<Utc>)> {
         let (catalog, at) = symbols.dated_catalog()?;
+        Some((Self::at(&catalog, assets, std::time::Instant::now()), at))
+    }
+
+    pub(super) fn at(
+        catalog: &super::classic_catalog::Catalog,
+        assets: &[Asset],
+        now: std::time::Instant,
+    ) -> Self {
         let mut s = Snapshot {
             books: vec![],
             missing: vec![],
@@ -46,9 +54,11 @@ impl Snapshot {
             pairs: vec![],
         };
         for a in assets {
-            let Some(rules) = catalog.classic.get(&a.ticker) else {
+            let Some(rules) = catalog.rule(&a.ticker, now) else {
                 if catalog.reality.contains(&a.ticker) {
                     s.reality += 1;
+                } else if let Some(state) = catalog.state(&a.ticker, now) {
+                    s.pairs.push(state);
                 } else {
                     s.missing.push(a.ticker.clone());
                 }
@@ -65,7 +75,7 @@ impl Snapshot {
             }
             s.pairs.push(p);
         }
-        Some((s, at))
+        s
     }
 
     /// Событие ядру. Принимает: площадку, когда справочник пар последний раз успешно получен (Symbols::loaded_at).
@@ -116,6 +126,7 @@ fn describe(p: Option<&SpotPairState>) -> String {
     let yn = |b: bool| if b { "да" } else { "нет" };
     match p {
         None => "нет пары".into(),
+        Some(p) if p.order_block.is_some() => p.order_block.clone().unwrap_or_default(),
         Some(p) if !p.online => format!("status {}", p.status),
         Some(p) => format!("API: покупка {}, продажа {}", yn(p.api_buy), yn(p.api_sell)),
     }

@@ -35,6 +35,7 @@ pub async fn subscribe(
     books: &Books,
     assets: Vec<Asset>,
     out: mpsc::Sender<MarketEvent>,
+    snapshot: Option<(Snapshot, chrono::DateTime<chrono::Utc>)>,
 ) -> GatewayResult<(Vec<JoinHandle<()>>, Snapshot, Vec<String>)> {
     let per_conn = ctx.int("venue.ws_symbols_per_conn")? as usize;
     let max = CHANNELS_PER_CONN;
@@ -48,9 +49,14 @@ pub async fn subscribe(
     }
     // Настройки соединения проверяются до запуска: ошибка видна сразу, а не в журнале каждого соединения.
     ws::config(ctx).map_err(|m| bad(ctx, m))?;
-    symbols.ensure_fresh(ctx).await?;
-    let (snap, loaded_at) = Snapshot::build(symbols, &assets)
-        .ok_or_else(|| bad(ctx, "справочник пар Bitget не получен".to_string()))?;
+    let (snap, loaded_at) = match snapshot {
+        Some(s) => s,
+        None => {
+            symbols.ensure_fresh(ctx).await?;
+            Snapshot::build(symbols, &assets)
+                .ok_or_else(|| bad(ctx, "справочник пар Bitget не получен".to_string()))?
+        }
+    };
     if let Some(first) = snap.missing.first() {
         let m = format!(
             "Bitget: нет торгуемой пары Classic для {} записей подписки, первая: {first}",

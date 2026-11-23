@@ -40,8 +40,17 @@ pub async fn run(
     p: Parts,
     assets: Vec<Asset>,
     out: mpsc::Sender<MarketEvent>,
-    mut last: Snapshot,
+    last: Snapshot,
 ) {
+    // Запрос REST может ждать сеть дольше оставшегося срока одной пары. Обновление ядра
+    // и отключение истёкшей пары продолжает работать независимо от этого ожидания.
+    tokio::select! {
+        _ = refresh_loop(&p) => {},
+        _ = publish_loop(&subs, &p, &assets, &out, last) => {},
+    }
+}
+
+async fn refresh_loop(p: &Parts) {
     loop {
         // Не задана — обновление ждёт настройку и продолжает само (settings/wait.rs, решение 75).
         let read = || p.ctx.int("venue.symbols_refresh_s");
@@ -67,33 +76,44 @@ pub async fn run(
                 e.message
             );
             log(&p.ctx, Level::Warn, m, None).await;
-            // Прежний снимок с прежним временем получения: ядро видит возраст справочника (core/pairs_fresh.rs).
-            if let Some((current, at)) = Snapshot::build(&p.symbols, &assets) {
-                let _ = out.send(current.event(p.ctx.venue(), at)).await;
-            }
-            continue;
+            p.symbols.refresh_failed();
         }
-        let Some((now, at)) = Snapshot::build(&p.symbols, &assets) else {
-            continue;
+    }
+}
+
+async fn publish_loop(
+    subs: &Subs,
+    p: &Parts,
+    assets: &[Asset],
+    out: &mpsc::Sender<MarketEvent>,
+    mut last: Snapshot,
+) {
+    let mut updates = p.symbols.updates();
+    loop {
+        let observed = std::time::Instant::now();
+        let Some((catalog, at)) = updates.current() else {
+            return;
         };
-        if now == last {
-            let _ = out.send(now.event(p.ctx.venue(), at)).await;
-            continue;
-        }
-        let changes = now.changes(&last);
+        let now = Snapshot::at(&catalog, assets, observed);
         let books_changed = now.books != last.books;
-        let m = format!(
-            "Справочник пар Bitget изменился у {} монет{}",
-            changes.len(),
-            if books_changed {
-                " — пересподписка стаканов"
-            } else {
-                " — только покупка/продажа через API"
-            }
-        );
-        log(&p.ctx, Level::Warn, m, Some(json!({ "changes": changes }))).await;
+        if now != last {
+            let changes = now.changes(&last);
+            let m = format!(
+                "Справочник пар Bitget изменился у {} монет{}",
+                changes.len(),
+                if books_changed {
+                    " — пересподписка стаканов"
+                } else {
+                    " — только состояние API"
+                }
+            );
+            log(&p.ctx, Level::Warn, m, Some(json!({"changes":changes}))).await;
+        }
         if books_changed {
-            match subs.resubscribe(&p, assets.clone(), out.clone()).await {
+            match subs
+                .resubscribe(p, assets.to_vec(), out.clone(), (now.clone(), at))
+                .await
+            {
                 Ok(s) => last = s,
                 Err(e) => {
                     let m = format!(
@@ -108,6 +128,7 @@ pub async fn run(
             let _ = out.send(now.event(p.ctx.venue(), at)).await;
             last = now;
         }
+        updates.changed(catalog.expiry(observed)).await;
     }
 }
 

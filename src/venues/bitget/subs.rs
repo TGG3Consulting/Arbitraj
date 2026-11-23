@@ -77,7 +77,7 @@ impl Subs {
         out: mpsc::Sender<MarketEvent>,
     ) -> GatewayResult<()> {
         let _g = self.inner.gate.lock().await;
-        let snap = self.start(p, assets.clone(), out.clone()).await?;
+        let snap = self.start(p, assets.clone(), out.clone(), None).await?;
         let kept = BookOut::new(&out, p.ctx.venue(), &p.ctx.settings, &p.ctx.journal);
         *self.inner.out.lock().unwrap_or_else(|e| e.into_inner()) = Some((out.clone(), kept));
         let mut watch = self.inner.watch.lock().unwrap_or_else(|e| e.into_inner());
@@ -101,9 +101,10 @@ impl Subs {
         p: &Parts,
         assets: Vec<Asset>,
         out: mpsc::Sender<MarketEvent>,
+        snapshot: (Snapshot, chrono::DateTime<chrono::Utc>),
     ) -> GatewayResult<Snapshot> {
         let _g = self.inner.gate.lock().await;
-        self.start(p, assets, out).await
+        self.start(p, assets, out, Some(snapshot)).await
     }
 
     /// Запускает задачи подписки и останавливает прежние (вызывать под замком gate).
@@ -113,9 +114,10 @@ impl Subs {
         p: &Parts,
         assets: Vec<Asset>,
         out: mpsc::Sender<MarketEvent>,
+        snapshot: Option<(Snapshot, chrono::DateTime<chrono::Utc>)>,
     ) -> GatewayResult<Snapshot> {
         let (new, snap, syms) =
-            super::market::subscribe(&p.ctx, &p.symbols, &p.books, assets, out).await?;
+            super::market::subscribe(&p.ctx, &p.symbols, &p.books, assets, out, snapshot).await?;
         let mut tasks = self.inner.tasks.lock().unwrap_or_else(|e| e.into_inner());
         for old in tasks.drain(..) {
             old.abort();

@@ -57,6 +57,18 @@ pub struct Seen {
 /// (комиссия вывода неизвестна, фикс вывода < 0 без поправки по фактам, доля ≥ 1, налог > 100 %, ставка < 0 в иной
 /// валюте или у продажи в монете, уровень с ценой ≤ 0, обе стороны DEX).
 pub fn assemble(cx: &DirCtx, a: &SideIn, b: &SideIn, seen: Option<&Seen>) -> Result<Bound, String> {
+    assemble_for_return(cx, a, b, seen, false)
+}
+
+/// Собирает верх прибыли, допускающий общий возврат USDT, если включены докупки.
+/// Группа может появиться или завершиться за время расчёта. Ошибки входов — как у assemble.
+pub fn assemble_for_return(
+    cx: &DirCtx,
+    a: &SideIn,
+    b: &SideIn,
+    seen: Option<&Seen>,
+    may_share_return: bool,
+) -> Result<Bound, String> {
     let buy = match a {
         SideIn::Book {
             book,
@@ -109,6 +121,6 @@ pub fn assemble(cx: &DirCtx, a: &SideIn, b: &SideIn, seen: Option<&Seen>) -> Res
         sell,
         arrive: arrive(cx, seen)?,
         kappa,
-        fixed: fixed(cx)?,
+        fixed: fixed(cx, may_share_return)?,
     })
 }

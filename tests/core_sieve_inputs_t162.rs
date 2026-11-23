@@ -268,3 +268,54 @@ async fn negative_inputs_are_not_applicable() {
         );
     }
 }
+
+/// Gate → BingX, журнал 7230071: фикс возврата 0.5, в докупке строка возврата 0.
+/// На неизменном рынке обе ветви стоимости покрываются даже при смене группы.
+#[tokio::test]
+async fn group_return_bound_covers_both_costs() {
+    use arb::core::bound_in::assemble_for_return;
+    use arb::core::costs_withdraw::return_b_top_up;
+
+    let rec = Rec::load("sieve-group-return").await;
+    let mut c = cx_with(&rec, Way::DexCex, d("0"), d("0"), &rec.net, Decimal::ZERO);
+    c.return_per_trade = true;
+    let da = dex_bound(&rec, false);
+    let sell = frozen(&rec, Side::Sell);
+    let sample = sell.price(d("1"));
+    let b = SideIn::Book {
+        book: &sell.book,
+        sample: &sample,
+        ticker: "CAKE",
+    };
+    let net = usdt_net();
+    for fix in [d("0.5"), Decimal::ZERO, d("-0.5")] {
+        let mut tariff = net.clone();
+        tariff.withdraw_fee = Some(fix);
+        tariff.withdraw_fee_pct = None;
+        c.usdt_b = Some(tariff.clone());
+        let ordinary = assemble(&c, &SideIn::Dex(&da), &b, None).unwrap();
+        let shared = assemble_for_return(&c, &SideIn::Dex(&da), &b, None, true).unwrap();
+        let amount = d("410.304712572");
+        let standalone_cost = tariff.fee_for(amount).unwrap();
+        let grouped_cost = return_b_top_up(&c, amount).unwrap()[0].amount;
+        assert_eq!(ordinary.fixed, standalone_cost);
+        assert_eq!(shared.fixed, standalone_cost.min(grouped_cost));
+        let q = d("1");
+        assert_eq!(
+            shared.u_at(q).unwrap().0 - ordinary.u_at(q).unwrap().0,
+            standalone_cost - shared.fixed
+        );
+        if fix > Decimal::ZERO {
+            let old = ordinary.best(None).unwrap();
+            let new = shared.best(None).unwrap();
+            let threshold = old.max_u.max(old.u0) + fix / Decimal::from(2);
+            assert!(old.below_usd(threshold));
+            assert!(!new.below_usd(threshold));
+        }
+        tariff.withdraw_fee_pct = Some(d("0.001"));
+        c.usdt_b = Some(tariff.clone());
+        let with_pct = assemble_for_return(&c, &SideIn::Dex(&da), &b, None, true).unwrap();
+        assert!(with_pct.fixed <= tariff.fee_for(amount).unwrap());
+        assert!(with_pct.fixed <= return_b_top_up(&c, amount).unwrap()[0].amount);
+    }
+}

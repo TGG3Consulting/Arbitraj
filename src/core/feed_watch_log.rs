@@ -43,12 +43,23 @@ pub struct LogGate {
     resubs: usize,
     recovered: usize,
     reconnects: usize,
+    rest_answers: usize,
+    rest_spread_ms: i64,
+    rest_queue_ms: i64,
     announced: bool,
     /// Решение 367 (ревью Н2): счётчики сторожа на прошлой сводке — в строке прирост с неё.
     prev: super::feed_confirm_queue::Stats,
 }
 
 impl LogGate {
+    /// Задержки REST с прошлой сводки: от первого ответа до данного в одном проходе
+    /// (именно столько первый ждал бы общего барьера) и от получения до начала проверки.
+    pub fn rest_answer(&mut self, spread_ms: i64, queue_ms: i64) {
+        self.rest_answers += 1;
+        self.rest_spread_ms = self.rest_spread_ms.max(spread_ms);
+        self.rest_queue_ms = self.rest_queue_ms.max(queue_ms);
+    }
+
     /// Писать ли строку решения по паре. Принимает: соединение, тикер, вид решения, прежнее правило (смена состояния,
     /// первая попытка круга), сейчас (unix мс). Возвращает: true — писать. Ошибок нет.
     pub fn pair(
@@ -158,9 +169,14 @@ impl LogGate {
         // Решение 367 (ревью Н2): хватает ли ведра и что дают проверки пар, нужных торговле.
         let (s, p) = (st.stats, self.prev);
         self.prev = s;
+        let rest = format!(
+            "ответов REST {}, максимум от первого до последнего в одном проходе {} мс, максимум ожидания начала обработки готового ответа {} мс",
+            self.rest_answers, self.rest_spread_ms, self.rest_queue_ms
+        );
+        (self.rest_answers, self.rest_spread_ms, self.rest_queue_ms) = (0, 0, 0);
         Some(format!(
             "{line}; отложено ведром {}; проверок нужных торговле пар {} — подтверждены {}, «книга новее» впервые (повторная \
-             сверка без переподписки) {}, кадры потеряны {}; ранних проверок из остатка ведра {}",
+             сверка без переподписки) {}, кадры потеряны {}; ранних проверок из остатка ведра {}; {rest}",
             s.deferred - p.deferred,
             s.early_checks - p.early_checks,
             s.early_confirmed - p.early_confirmed,

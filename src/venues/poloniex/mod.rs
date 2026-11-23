@@ -285,8 +285,8 @@ impl Venue for Poloniex {
     /// - confirm = true (решение 213, по содержимому): у кадра book id — «id of the record (SeqId)», в ответе GET
     ///   /markets/{symbol}/orderBook номера нет — сравниваются первые venue.depth_levels уровней ответа и стакана в
     ///   памяти (book_print.rs, core/feed_print.rs).
-    fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
-        Some(self.books.feed.health(false, true, true))
+    fn feed_health_for(&self, pair: Option<(&str, &str)>) -> Option<crate::gateway::feed_health::FeedHealth> {
+        Some(self.books.feed.health_for(false, true, true, pair))
     }
 
     /// Решение 213: отпечатки стакана пары для подтверждения тихой пары по содержимому (book_print.rs). Символ — из

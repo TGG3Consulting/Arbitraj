@@ -361,8 +361,8 @@ impl Venue for Binance {
     /// - confirm = true (решение 213, по содержимому): lastUpdateId кадра частичного стакана описан только как «Last
     ///   update ID», связь с lastUpdateId GET /api/v3/depth документация даёт лишь для потока изменений (U, u — «How to
     ///   manage a local order book correctly»); сравниваются первые venue.depth_levels уровней (book_print.rs).
-    fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
-        Some(self.books.feed.health(false, true, true))
+    fn feed_health_for(&self, pair: Option<(&str, &str)>) -> Option<crate::gateway::feed_health::FeedHealth> {
+        Some(self.books.feed.health_for(false, true, true, pair))
     }
 
     /// Решение 213: отпечатки стакана пары для подтверждения тихой пары по содержимому (book_print.rs).

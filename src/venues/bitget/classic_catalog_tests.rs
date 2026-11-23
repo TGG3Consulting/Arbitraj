@@ -156,6 +156,12 @@ async fn reclassified_pair_is_revoked_despite_another_missing_class_and_recovers
         ["CAKE", "RENDER"]
     );
     let health = bot.feed_health().unwrap();
+    let one = bot.feed_health_for(Some(("market-1", "CAKE"))).unwrap();
+    assert_eq!(one.conns.len(), 1);
+    assert_eq!(one.conns[0].pairs.len(), 1);
+    assert_eq!(one.conns[0].pairs[0].ticker, "CAKE");
+    let excluded = bot.feed_health_for(Some(("market-1", &assets[1].ticker))).unwrap();
+    assert!(excluded.conns.is_empty());
     assert_eq!(health.conns.len(), 1);
     assert_eq!(
         health.conns[0]

@@ -887,6 +887,11 @@ pub trait Venue: Send + Sync {
     /// Решение 202: свежесть потока стаканов по соединениям (пачкам пар) для сторожа ядра (core/feed_watch.rs).
     /// None — адаптер сторожа не поддерживает (сторож для площадки выключен). Ошибок нет.
     fn feed_health(&self) -> Option<super::feed_health::FeedHealth> {
+        self.feed_health_for(None)
+    }
+
+    /// Состояние конкретной подписки при обработке ответа REST. Без селектора — вся площадка.
+    fn feed_health_for(&self, _pair: Option<(&str, &str)>) -> Option<super::feed_health::FeedHealth> {
         None
     }
 

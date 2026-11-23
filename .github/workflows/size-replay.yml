@@ -25,6 +25,7 @@ jobs:
         run: |
           set -eo pipefail
           cargo test --locked --test core_size_t159 recorded_size_replay -- --ignored --exact --nocapture | tee "$RUNNER_TEMP/replay.txt"
+          cargo test --locked --test core_size_cost_replay full_cost_volume_replay -- --ignored --exact --nocapture | tee -a "$RUNNER_TEMP/replay.txt"
           sed -n 's/^SIZE_REPLAY //p' "$RUNNER_TEMP/replay.txt" > replay.jsonl
           test -s replay.jsonl
           python - <<'PY'
@@ -32,6 +33,12 @@ jobs:
           from decimal import Decimal
           from pathlib import Path
           rows = [json.loads(s) for s in Path("replay.jsonl").read_text().splitlines()]
+          from collections import Counter
+          counts = Counter(r.get("case", "legacy_bounded") for r in rows)
+          expected = {"legacy_bounded": 12, "aligned_full_costs": 8,
+                      "aligned_percentage_sensitivity": 4, "mixed_dates_full_cost_control": 4}
+          if counts != expected:
+              raise ValueError(f"Incomplete cases: {counts}")
           missed = sum(r["oracle_pass"] and not r["search_pass"] for r in rows)
           regret = max(Decimal(str(r["regret_usdt"] or 0)) for r in rows)
           calls = [r["search_calls"] for r in rows if r["search_calls"] is not None]

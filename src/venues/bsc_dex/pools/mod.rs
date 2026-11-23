@@ -177,6 +177,7 @@ pub mod load_ramses;
 pub mod ramses;
 // Ревью t251 (решение 482): есть ли у DEX справочник индексатора.
 pub mod index_pass;
+mod index_retry;
 pub mod index_watch;
 pub mod indexer_gap;
 pub mod integral_fee;

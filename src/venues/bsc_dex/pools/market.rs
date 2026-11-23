@@ -77,7 +77,9 @@ pub async fn subscribe(
     let all = market_mids::with_mids(&coins, &mid_list);
     // Справочник пулов от индексатора (решение 58): сохранённый — проверка на узле до первого поиска, обновления — задачей.
     // Поиск по фабрикам на своём узле (решение 121, C3) — вторая задача справочника, тот же канал «монета обновлена».
-    let (refresh, dir_rx) = index::begin(&p.ctx, &all, usdt, &mid_list).await;
+    let (refresh, dir_rx, retry_coins) = index::begin(&p.ctx, &all, usdt, &mid_list).await;
+    let mut retry = super::index_retry::Retry::default();
+    retry.checked(&p.ctx, None, retry_coins);
     tasks.extend(refresh);
     // Решение 305 (ревью В1): режим справочника — по текущим настройкам и тогда, когда проверка при старте (begin → take)
     // не выполнялась: взятые с ключом не того вида (смена dex.multi_pair) не попадут в найденное. retune идемпотентен.
@@ -170,6 +172,7 @@ pub async fn subscribe(
     tasks.push(tokio::spawn(index_watch::watch(
         p.clone(),
         dir_rx,
+        retry,
         watches.clone(),
         wake.clone(),
     )));

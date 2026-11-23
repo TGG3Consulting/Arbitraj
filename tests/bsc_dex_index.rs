@@ -271,6 +271,7 @@ async fn cake_directory_statuses() {
     let took = index::take(&c, None).await.unwrap();
     assert!(took.found.is_empty());
     assert_eq!(took.failed, 2);
+    assert_eq!(took.retry_coins, HashSet::from([CAKE]));
     let st = |pool: &str| c.index.with(|s| s.status.get(pool).cloned().unwrap());
     assert_eq!(
         st("0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1"),
@@ -287,6 +288,22 @@ async fn cake_directory_statuses() {
     );
     let v = arb::venues::bsc_dex::directory::snapshot(&c);
     assert_eq!(v.pools.len(), 8, "6 пулов CAKE/USDT и 2 — с нативным BNB");
+    // Та же сохранённая в памяти монета при старте подписки: оба сбоя переданы наблюдателю одним адресом.
+    set(
+        &c,
+        &[(
+            "index.network",
+            Scope::Venue("bsc_dex".into()),
+            json!("bsc"),
+        )],
+    )
+    .await;
+    let (tasks, _, pending) = index::begin(&c, &[(CAKE, "CAKE".into())].into(), USDT, &[]).await;
+    for task in tasks {
+        task.abort();
+        let _ = task.await;
+    }
+    assert_eq!(pending, HashSet::from([CAKE]));
 }
 
 #[tokio::test]

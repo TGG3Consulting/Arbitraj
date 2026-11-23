@@ -27,7 +27,8 @@
   Настройки: нет (адрес исполнителя — у кошелька).
 -->
 <script>
-  import { get, post, seg } from '../lib/api.js';
+  import { post, seg } from '../lib/api.js';
+  import { requestExecutorQuote } from '../lib/walletExecutor.js';
   import Modal from './Modal.svelte';
   import ErrorText from './ErrorText.svelte';
   import CheckConnection from './CheckConnection.svelte';
@@ -49,7 +50,7 @@
     done = null;
     busy = true;
     try {
-      quote = await get(`/api/venues/${seg(venue)}/executor/quote${q}`);
+      quote = await requestExecutorQuote(venue, wallet, executor);
     } catch (e) {
       error = e.message;
     }
@@ -61,10 +62,10 @@
     error = '';
     busy = true;
     try {
-      done = await post(`/api/venues/${seg(venue)}/executor/deploy${q}`, {
+      done = await post(quote.deployUrl, {
         sha256: quote.bytecode_sha256,
         wnative: quote.wnative,
-        executor,
+        executor: quote.previousExecutor,
       });
       quote = null;
       ondone?.();
@@ -98,23 +99,25 @@
 
 {#if quote}
   <Modal title="Развернуть исполнитель — подтверждение" onclose={() => (quote = null)}>
-    <p>С этого кошелька уйдёт транзакция создания контракта (владелец — он). Это трата BNB на газ, отменить её нельзя.</p>
+    <p>Кошелёк отправит транзакцию создания контракта и станет его владельцем. Газ оплачивается нативной монетой выбранной сети. После включения в блок отменить транзакцию нельзя.</p>
     <table>
       <tbody>
         <tr><th>Кошелёк (владелец)</th><td><code>{quote.wallet}</code></td></tr>
+        <tr><th>Площадка DEX</th><td><code>{quote.venue}</code></td></tr>
+        {#if quote.previousExecutor}<tr><th>Заменяемый исполнитель</th><td><code>{quote.previousExecutor}</code></td></tr>{/if}
         <tr><th>Адрес контракта (при nonce {quote.nonce})</th><td><code>{quote.address}</code></td></tr>
         <tr><th>Газ (лимит)</th><td>{quote.gas}</td></tr>
         <tr><th>Цена газа</th><td>{quote.gas_price_wei} wei</td></tr>
-        <tr><th>Стоимость</th><td>{quote.cost_bnb} BNB{quote.cost_usdt ? ` ≈ ${quote.cost_usdt} USDT` : ''}</td></tr>
+        <tr><th>Стоимость в нативной монете</th><td>{quote.cost_bnb}{quote.cost_usdt ? ` ≈ ${quote.cost_usdt} USDT` : ''}</td></tr>
         <tr><th>Байткод</th><td>{quote.bytecode_len} байт, SHA-256 <code>{quote.bytecode_sha256}</code>, solc {quote.solc}</td></tr>
-        <tr><th>Обёртка BNB (навсегда)</th><td><code>{quote.wnative}</code> — dex.native_wrapped, аргумент конструктора; сменить потом нельзя, только переразвернуть</td></tr>
+        <tr><th>Обёртка нативной монеты</th><td><code>{quote.wnative}</code> — dex.native_wrapped, аргумент конструктора; сменить потом нельзя, только переразвернуть</td></tr>
       </tbody>
     </table>
     {#if quote.warning}<p class="warn-text">{quote.warning}</p>{/if}
     {#if quote.classes?.length}{@render classTable(quote.classes)}{/if}
     {#if quote.note}<p class="muted">{quote.note}</p>{/if}
     <p class="muted">Если до отправки уйдёт другая транзакция кошелька, адрес будет другим — точный адрес покажется после блока.</p>
-    <button disabled={busy || !!quote.warning} title={quote.warning ?? ''} onclick={deploy}>{busy ? 'Отправляю…' : 'Подтвердить и отправить'}</button>
+    <button disabled={busy || !!quote.warning || !!refused} title={quote.warning ?? refused ?? ''} onclick={deploy}>{busy ? 'Отправляю…' : 'Подтвердить и отправить'}</button>
     <button disabled={busy} onclick={() => (quote = null)}>Отмена</button>
   </Modal>
 {/if}

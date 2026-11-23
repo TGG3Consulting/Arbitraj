@@ -23,6 +23,7 @@
 <script>
   import { get, put, request, seg } from '../lib/api.js';
   import { flight } from '../lib/flight.js';
+  import { executorFeatures } from '../lib/walletExecutor.js';
   import CheckConnection from './CheckConnection.svelte';
   import ExecutorDeploy from './ExecutorDeploy.svelte';
   import CopyAddr from './CopyAddr.svelte';
@@ -31,17 +32,10 @@
 
   /** w — кошелёк из GET /api/wallets; dex — id площадки DEX; unlocked — секреты разблокированы; onchange. */
   let { w, dex, unlocked, onchange } = $props();
-  // Ревью 272 (А1): нативный BNB через исполнитель — v2 / v3 и обёртка в нём = dex.native_wrapped (как бот, native_block).
-  let modern = $derived(w.executor_version === 'v2' || w.executor_version === 'v3');
-  let nativeOk = $derived(modern && !!w.executor_wrapped && !!w.native_wrapped
-    && w.executor_wrapped.toLowerCase() === w.native_wrapped.toLowerCase());
-  // Решение 395 (t181): шаги Uniswap V4 / PancakeSwap Infinity через исполнитель — только у v3. Решение 399 (Н2): пока
-  // развёртывание запрещено (executor_deploy_refused), без призыва переразвернуть — как бэкенд (deploy_gate.rs need_v3).
-  // Решение 400: у v3 исполняются классы шага, принятые записью симуляции на живых пулах (таблица ниже); решение 401 —
-  // и пулы непринятых классов, прошедшие пробу через этот исполнитель (колонка «Пулы кошелька»).
-  let singletonNote = $derived(w.executor_version === 'v3'
+  const features = $derived(executorFeatures(w));
+  let singletonNote = $derived(features.singleton
     ? '; шаги Uniswap V4 и PancakeSwap Infinity в коде есть — исполняются принятые классы и пулы, прошедшие пробу через этот исполнитель (таблица «Классы шага исполнителя»)'
-    : `; шагов Uniswap V4 и PancakeSwap Infinity нет — маршрут, где они смешаны с другими DEX, этим кошельком не исполняется (${w.executor_deploy_refused ? 'нужен исполнитель v3; запись приёмки текущей сборки в сети этого кошелька не приняла ни одного класса шага (или её нет) — развёртывание закрыто' : 'переразверните исполнитель'})`);
+    : `; шагов Uniswap V4 и PancakeSwap Infinity нет — маршрут, где они смешаны с другими DEX, этим кошельком не исполняется (${w.executor_deploy_refused ?? 'переразверните исполнитель'})`);
 
   let bal = $state(null);
   let error = $state('');
@@ -106,7 +100,7 @@
   {:else}
   {#if bal}
     {#if bal.error}<p class="err">Балансы: {bal.error}</p>{/if}
-    <p>BNB: {bal.bnb ?? '—'} · {bal.quote ?? 'USDT (venue.quote_asset не задана)'}: {bal.usdt ?? '—'}
+    <p>Газ: {bal.bnb ?? '—'} · {bal.quote ?? 'USDT (venue.quote_asset не задана)'}: {bal.usdt ?? '—'}
       <button onclick={balances}>Обновить</button></p>
   {/if}
   <CheckConnection url={`/api/check/wallet/${seg(w.id)}`} />
@@ -116,7 +110,7 @@
   {#if w.executor}
     <!-- Решение 272: версия по коду в сети (сверка — «Проверить подключение» исполнителя, сделка, развёртывание). -->
     <!-- Ревью 272 (А1): у v2 — обёртка из конструктора; ≠ dex.native_wrapped — BNB через исполнитель не идёт. -->
-    <p class={nativeOk ? 'ok' : 'warn-text'}>Версия: {#if nativeOk}{w.executor_version} — нативный BNB монетой сделки идёт через исполнитель (обёртка <code>{w.executor_wrapped}</code>){singletonNote}{:else if modern}{w.executor_version}, но обёртка в исполнителе <code>{w.executor_wrapped ?? 'не прочитана'}</code> ≠ dex.native_wrapped <code>{w.native_wrapped ?? 'не задана'}</code> — нативный BNB через исполнитель не идёт (ERC-20 — как обычно), переразверните при верной настройке{singletonNote}{:else if w.executor_version === 'v1'}v1 — нативный BNB через форки не торгуется, переразверните{:else}не сверена — нажмите «Проверить подключение» исполнителя{/if}</p>
+    <p class={features.nativeOk ? 'ok' : 'warn-text'}>Версия: {#if features.nativeOk}{w.executor_version} — нативная монета идёт через исполнитель (обёртка <code>{w.executor_wrapped}</code>){singletonNote}{:else if features.native}{w.executor_version}, но обёртка в исполнителе <code>{w.executor_wrapped ?? 'не прочитана'}</code> ≠ dex.native_wrapped <code>{w.native_wrapped ?? 'не задана'}</code> — нативная монета через исполнитель не идёт (ERC-20 — как обычно), переразверните при верной настройке{singletonNote}{:else if w.executor_version === 'v1'}v1 — нативная монета через форки не торгуется, переразверните{:else}не сверена — нажмите «Проверить подключение» исполнителя{/if}</p>
   {/if}
   {#if dex}<ExecutorDeploy venue={dex} wallet={w.id} executor={w.executor ?? null} refused={w.executor_deploy_refused} classes={w.executor_v3_classes ?? []} ondone={onchange} />{/if}
   <form class="inline" onsubmit={(e) => { e.preventDefault(); setExec(exec); exec = ''; }}>

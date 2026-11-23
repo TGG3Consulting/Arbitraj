@@ -35,6 +35,8 @@ use arb::storage::journal::Journal;
 use arb::storage::raw_log::RawLog;
 use arb::venues::bsc_dex::BscDex;
 use arb::venues::bsc_dex::ctx::{Ctx, Place};
+use arb::venues::bsc_dex::exec::executor::code::{self, Version};
+use arb::venues::bsc_dex::exec::executor::live_proof;
 
 const KEY: &str = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 /// Синтетические chainId сторон: не настоящие сети — записи приёмки для них нет ни у одной версии, поэтому отказ есть при
@@ -263,4 +265,44 @@ async fn refusal_is_per_network_not_default_venue() {
         "arb_dex не должен содержать chainId сети BSC: {arb}"
     );
     assert_ne!(bsc, arb, "тексты отказа по сетям должны различаться");
+
+    let current = code::current_version().unwrap();
+    let check_classes = |block: &serde_json::Value, version, network, message: &str| {
+        let rows = block["executor_v3_classes"].as_array().unwrap();
+        let expected = live_proof::proofs(version, Some(network));
+        assert!(!expected.is_empty());
+        assert_eq!(rows.len(), expected.len());
+        for (row, proof) in rows.iter().zip(expected) {
+            assert_eq!(row["why"], json!(proof.why));
+            assert!(row["live"].as_str().unwrap().contains(message));
+        }
+    };
+    // У нового кошелька таблица обеих сетей соответствует готовому к развёртыванию коду.
+    for (venue, network) in [("bsc_dex", BSC_SYN), ("arb_dex", ARB_SYN)] {
+        check_classes(chain(chains, venue), current, network, "ещё не развёрнут");
+    }
+
+    // Адрес зарегистрирован только на BSC, его версия ещё не сверена: прежняя семантика v3;
+    // Arbitrum по-прежнему показывает запись текущей сборки до развёртывания на этой сети.
+    let id = v["wallets"][0]["id"].as_str().unwrap();
+    let address = "0x0000000000000000000000000000000000000001";
+    st.settings
+        .accounts()
+        .set_executor_at("bsc_dex", id, Some(address.into()), "тест")
+        .await
+        .unwrap();
+    let v = wallets_view::view(&st).await;
+    let chains = &v["wallets"][0]["chains"];
+    check_classes(
+        chain(chains, "bsc_dex"),
+        Version::V3,
+        BSC_SYN,
+        "нет сверенного",
+    );
+    check_classes(
+        chain(chains, "arb_dex"),
+        current,
+        ARB_SYN,
+        "ещё не развёрнут",
+    );
 }

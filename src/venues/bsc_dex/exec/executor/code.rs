@@ -21,6 +21,8 @@
 //! От чего зависит: sha2, serde_json, contracts/out/*.
 //! Настройки: нет.
 
+use std::sync::OnceLock;
+
 use alloy_primitives::{B256, Bytes, U256};
 use sha2::{Digest, Sha256};
 
@@ -186,14 +188,20 @@ pub fn runtime_sha256_of(v: Version) -> Option<&'static str> {
 /// Версия текущей сборки contracts/out/ (её разворачивает кнопка «Развернуть исполнитель»): совпала с out/v3/ — V3,
 /// с out/v4/ — V4, иначе V5 (решение 488: сборка v5 — V5). Ошибки (текст): артефакт не сверен по хешу.
 pub fn current_version() -> Result<Version, String> {
-    let cur = runtime()?;
-    Ok(if cur == runtime_v3()? {
-        Version::V3
-    } else if cur == runtime_v4()? {
-        Version::V4
-    } else {
-        Version::V5
-    })
+    // Байткод и хеши всех трёх сборок вшиты через include_str!, результат постоянен для этого бинаря.
+    static VERSION: OnceLock<Result<Version, String>> = OnceLock::new();
+    VERSION
+        .get_or_init(|| {
+            let cur = runtime()?;
+            Ok(if cur == runtime_v3()? {
+                Version::V3
+            } else if cur == runtime_v4()? {
+                Version::V4
+            } else {
+                Version::V5
+            })
+        })
+        .clone()
 }
 
 /// Код в сети данной версии (для поиска селекторов, pools/exec_callback.rs). Решение 488: v5 — текущая сборка

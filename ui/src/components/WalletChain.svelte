@@ -16,6 +16,7 @@
 <script>
   import { get, put, seg } from '../lib/api.js';
   import { flight } from '../lib/flight.js';
+  import { executorFeatures } from '../lib/walletExecutor.js';
   import CheckConnection from './CheckConnection.svelte';
   import ExecutorDeploy from './ExecutorDeploy.svelte';
   import ErrorText from './ErrorText.svelte';
@@ -23,10 +24,7 @@
   /** w — кошелёк из GET /api/wallets; c — его строка сети (chains[]); unlocked; onchange. */
   let { w, c, unlocked, onchange } = $props();
   const q = $derived(`?venue=${encodeURIComponent(c.venue)}`);
-  // Как WalletRow (ревью 272 А1): нативная монета через исполнитель — v2 / v3 и обёртка = dex.native_wrapped площадки.
-  const modern = $derived(c.executor_version === 'v2' || c.executor_version === 'v3');
-  const nativeOk = $derived(modern && !!c.executor_wrapped && !!c.native_wrapped
-    && c.executor_wrapped.toLowerCase() === c.native_wrapped.toLowerCase());
+  const features = $derived(executorFeatures(c));
 
   let bal = $state(null);
   let error = $state('');
@@ -69,7 +67,7 @@
   <CheckConnection url={`/api/check/wallet/${seg(w.id)}${q}`} />
   <p>Исполнитель: {#if c.executor}<code>{c.executor}</code> <button onclick={() => setExec(null)}>Снять</button>{:else}не развёрнут в этой сети{/if}</p>
   {#if c.executor}
-    <p class={nativeOk ? 'ok' : 'warn-text'}>Версия: {#if nativeOk}{c.executor_version} — нативная монета идёт через исполнитель (обёртка <code>{c.executor_wrapped}</code>){:else if modern}{c.executor_version}, но обёртка <code>{c.executor_wrapped ?? 'не прочитана'}</code> ≠ dex.native_wrapped <code>{c.native_wrapped ?? 'не задана'}</code>{:else if c.executor_version === 'v1'}v1 — переразверните{:else}не сверена — нажмите «Проверить подключение» исполнителя{/if}</p>
+    <p class={features.nativeOk ? 'ok' : 'warn-text'}>Версия: {#if features.nativeOk}{c.executor_version} — нативная монета идёт через исполнитель (обёртка <code>{c.executor_wrapped}</code>){:else if features.native}{c.executor_version}, но обёртка <code>{c.executor_wrapped ?? 'не прочитана'}</code> ≠ dex.native_wrapped <code>{c.native_wrapped ?? 'не задана'}</code>{:else if c.executor_version === 'v1'}v1 — переразверните{:else}не сверена — нажмите «Проверить подключение» исполнителя{/if}</p>
   {/if}
   <ExecutorDeploy venue={c.venue} wallet={w.id} executor={c.executor ?? null} refused={c.executor_deploy_refused} classes={c.executor_v3_classes ?? []} ondone={onchange} />
   <form class="inline" onsubmit={(e) => { e.preventDefault(); setExec(exec); exec = ''; }}>

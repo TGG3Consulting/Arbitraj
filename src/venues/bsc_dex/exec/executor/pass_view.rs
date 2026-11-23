@@ -3,7 +3,7 @@
 //! - details: строки карточки пула (экран «Монеты», pools/depth_facts.rs → PoolDepth.details) — класс шага принят
 //!   записью или нет и по каждому кошельку с исполнителем v3: проходит обе стороны / отвергнут (причина) / не проверено,
 //!   с временем и блоком пробы;
-//! - proofs: таблица «Классы шага v3» окна кошелька (GET /api/wallets → executor_v3_classes) — к приёмке класса по
+//! - proofs: таблица классов установленного или готового к развёртыванию исполнителя (GET /api/wallets → executor_v3_classes) — к приёмке класса по
 //!   записи (live_proof.rs) сводка пулов класса у ЭТОГО кошелька: прошли / отвергнуты / не проверено.
 //!
 //! Кто вызывает: pools/depth_facts.rs, venue.rs (dex_executor_classes).
@@ -15,7 +15,7 @@ use crate::core::types::ExecutorClassProof;
 use super::super::super::ctx::Ctx;
 use super::super::super::pools::families::Proto;
 use super::super::super::pools::registry::{Entry, Registry};
-use super::code::Version;
+use super::code::{self, Version};
 use super::live_class::Class;
 use super::pool_pass::{self, State};
 use super::{entry, live_proof};
@@ -71,14 +71,29 @@ pub fn details(ctx: &Ctx, e: &Entry) -> Vec<String> {
     out
 }
 
-/// Классы шага v3 со сводкой по пулам кошелька окружения (см. шапку). Принимает: окружение (кошелёк), реестр пулов.
+/// Классы шага со сводкой по пулам кошелька окружения (см. шапку). Принимает: окружение (кошелёк), реестр пулов.
 /// Ошибок нет.
 pub fn proofs(ctx: &Ctx, reg: &Registry) -> Vec<ExecutorClassProof> {
+    let wallet = ctx.wallet().ok();
+    if wallet.as_ref().is_some_and(|w| w.executor.is_none()) {
+        // На этой сети ещё нет адреса: показываем ту же пару, что проверяет кнопка развёртывания.
+        let Ok(version) = code::current_version() else {
+            return Vec::new();
+        };
+        let mut list = live_proof::proofs(version, live_proof::chain_of(ctx));
+        for p in &mut list {
+            p.live = format!(
+                "исполнитель {} ещё не развёрнут в этой сети — пробы пулов кошелька отсутствуют",
+                version.label()
+            );
+        }
+        return list;
+    }
     let (ver, chain) = pair_of(ctx);
     let mut list = live_proof::proofs(ver, chain);
-    let Some(x) = ctx.wallet().ok().and_then(|w| pool_pass::v3(&w)) else {
+    let Some(x) = wallet.as_ref().and_then(pool_pass::v3) else {
         for p in &mut list {
-            p.live = "у кошелька нет исполнителя v3 — проба пулов через исполнитель не идёт".into();
+            p.live = "нет сверенного исполнителя для пробы пулов кошелька".into();
         }
         return list;
     };

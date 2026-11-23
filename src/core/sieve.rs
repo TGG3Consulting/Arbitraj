@@ -23,7 +23,7 @@ use serde_json::{Value, json};
 
 use crate::core::types::{Direction, Side};
 
-use super::bound_in::assemble;
+use super::bound_in::assemble_for_return;
 use super::dirctx::DirCtx;
 use super::engine::Core;
 use super::sieve_side::{seen, side};
@@ -98,7 +98,9 @@ async fn verdict(core: &Core, d: &Direction, cx: &DirCtx) -> Sieve {
         return na("no_data", "снимок без стакана".into());
     };
     let seen = seen(core, cx);
-    let bound = match assemble(cx, &ai, &bi, seen.as_ref()) {
+    let may_share_return =
+        cx.return_per_trade && cx.b.info.is_some() && super::coin_ride::top_up_on(core);
+    let bound = match assemble_for_return(cx, &ai, &bi, seen.as_ref(), may_share_return) {
         Ok(x) => x,
         Err(e) => return na("inputs", e),
     };

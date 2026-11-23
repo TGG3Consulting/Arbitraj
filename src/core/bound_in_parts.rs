@@ -113,7 +113,7 @@ pub(super) fn arrive(cx: &DirCtx, seen: Option<&Seen>) -> Result<Arrive, String>
 /// Что делает: постоянные затраты: фикс возврата USDT с биржи B в котируемой (режим per_trade); иначе 0. Принимает:
 /// контекст. Возвращает: USDT. Ошибки: возврат с биржи без сети USDT, комиссии или с долей < 0 (полный расчёт тоже не
 /// пройдёт), фикс < 0 в иной валюте. Фикс < 0 в котируемой — строго: расчёт вычтет фикс + доля·сумма ≥ фикс.
-pub(super) fn fixed(cx: &DirCtx) -> Result<Decimal, String> {
+pub(super) fn fixed(cx: &DirCtx, may_share_return: bool) -> Result<Decimal, String> {
     if !cx.return_per_trade || cx.b.info.is_none() {
         return Ok(Decimal::ZERO);
     }
@@ -125,7 +125,13 @@ pub(super) fn fixed(cx: &DirCtx) -> Result<Decimal, String> {
         return Err("доля комиссии возврата < 0".into());
     }
     if cx.quote.iter().any(|q| q == &info.asset.ticker) {
-        return Ok(fix);
+        // return_b_top_up уже учёл фикс в первой сделке группы. Для обеих ветвей
+        // нижняя граница затрат — меньшая из нуля и обычного фикса (включая скидку).
+        return Ok(if may_share_return {
+            fix.min(Decimal::ZERO)
+        } else {
+            fix
+        });
     }
     // Иная валюта — затрата по живой цене ≥ 0 при фиксе ≥ 0: не вычитается.
     if fix.is_sign_negative() {

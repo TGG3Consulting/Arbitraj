@@ -312,7 +312,10 @@ impl Venue for Bingx {
     /// - confirm = true (решение 213, по содержимому): data.lastUpdateId кадра в ответе REST GET
     ///   /openApi/spot/v1/market/depth не имеет пары (там bids, asks, ts); сравниваются первые venue.depth_levels уровней
     ///   ответа и стакана в памяти (book_print.rs, core/feed_print.rs).
-    fn feed_health_for(&self, pair: Option<(&str, &str)>) -> Option<crate::gateway::feed_health::FeedHealth> {
+    fn feed_health_for(
+        &self,
+        pair: Option<(&str, &str)>,
+    ) -> Option<crate::gateway::feed_health::FeedHealth> {
         Some(self.books.feed.health_for(false, true, true, pair))
     }
 

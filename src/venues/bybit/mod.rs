@@ -344,7 +344,10 @@ impl Venue for Bybit {
     /// - confirm = true (решение 213): book_print.rs — по номеру u только при venue.depth_levels = 1000 (документация
     ///   связывает u REST с u потока 1000 уровней), иначе по содержимому (первые venue.depth_levels уровней ответа
     ///   GET /v5/market/orderbook и стакана в памяти, core/feed_print.rs).
-    fn feed_health_for(&self, pair: Option<(&str, &str)>) -> Option<crate::gateway::feed_health::FeedHealth> {
+    fn feed_health_for(
+        &self,
+        pair: Option<(&str, &str)>,
+    ) -> Option<crate::gateway::feed_health::FeedHealth> {
         Some(self.books.feed.health_for(false, true, true, pair))
     }
 

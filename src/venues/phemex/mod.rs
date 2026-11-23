@@ -273,7 +273,10 @@ impl Venue for Phemex {
     /// - confirm = true (решение 213, по содержимому): связь sequence ответа GET /md/orderbook с sequence кадра в
     ///   документации не описана — сравниваются первые venue.depth_levels уровней ответа и стакана в памяти
     ///   (book_print.rs, core/feed_print.rs).
-    fn feed_health_for(&self, pair: Option<(&str, &str)>) -> Option<crate::gateway::feed_health::FeedHealth> {
+    fn feed_health_for(
+        &self,
+        pair: Option<(&str, &str)>,
+    ) -> Option<crate::gateway::feed_health::FeedHealth> {
         Some(self.books.feed.health_for(false, true, true, pair))
     }
 

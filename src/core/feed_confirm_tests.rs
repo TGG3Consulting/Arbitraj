@@ -117,9 +117,20 @@ fn quiet_confirmed_not_resubscribed() {
 
 #[test]
 fn response_for_subscription_before_reset_is_discarded() {
-    let h = health(40_100, true, true, vec![pair("AIL", None, None, 40_020)]);
-    let actions = apply(&h, "m1", "AIL", Ok(ver(100, 39_000, 40_050)), 40_000, 40_100, &cfg(), &mut State::default());
-    assert!(actions.is_empty());
+    for (last, since) in [(None, 40_020), (None, 40_000), (Some(40_000), 0)] {
+        let h = health(40_100, true, true, vec![pair("AIL", last, None, since)]);
+        let actions = apply(
+            &h,
+            "m1",
+            "AIL",
+            Ok(ver(100, 39_000, 40_050)),
+            40_000,
+            40_100,
+            &cfg(),
+            &mut State::default(),
+        );
+        assert!(actions.is_empty());
+    }
 }
 
 #[test]

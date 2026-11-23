@@ -260,7 +260,10 @@ impl Venue for Kraken {
     /// - confirm = true (решение 213, по содержимому): номера нет ни у кадра book, ни у ответа GET /0/public/Depth —
     ///   сравниваются первые venue.depth_levels уровней ответа и стакана в памяти (book_print.rs, core/feed_print.rs);
     ///   при venue.depth_levels = 1000 — ошибка с причиной (count у REST — не больше 500).
-    fn feed_health_for(&self, pair: Option<(&str, &str)>) -> Option<crate::gateway::feed_health::FeedHealth> {
+    fn feed_health_for(
+        &self,
+        pair: Option<(&str, &str)>,
+    ) -> Option<crate::gateway::feed_health::FeedHealth> {
         Some(self.books.feed.health_for(false, true, true, pair))
     }
 

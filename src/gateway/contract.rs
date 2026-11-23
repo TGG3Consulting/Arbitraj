@@ -891,8 +891,22 @@ pub trait Venue: Send + Sync {
     }
 
     /// Состояние конкретной подписки при обработке ответа REST. Без селектора — вся площадка.
-    fn feed_health_for(&self, _pair: Option<(&str, &str)>) -> Option<super::feed_health::FeedHealth> {
-        None
+    /// Старые адаптеры реализуют только feed_health: их полный снимок ограничивается здесь.
+    /// Если ни один метод не реализован, запрос полного снимка (None) сразу завершается.
+    fn feed_health_for(
+        &self,
+        pair: Option<(&str, &str)>,
+    ) -> Option<super::feed_health::FeedHealth> {
+        let (conn, ticker) = pair?;
+        let mut health = self.feed_health()?;
+        health.conns.retain_mut(|candidate| {
+            if candidate.conn != conn {
+                return false;
+            }
+            candidate.pairs.retain(|p| p.ticker == ticker);
+            !candidate.pairs.is_empty()
+        });
+        Some(health)
     }
 
     /// Решение 202: переподписать одну пару соединения (отписка + подписка), соседей не трогая.

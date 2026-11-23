@@ -338,7 +338,10 @@ impl Venue for Kucoin {
     /// - confirm = true (решение 213, по содержимому): у кадра Level5/Level50 номера нет (data — asks, bids, timestamp);
     ///   сравниваются первые venue.depth_levels уровней ответа Get Part OrderBook (level2_20 / level2_100) и стакана в
     ///   памяти (book_print.rs, core/feed_print.rs).
-    fn feed_health_for(&self, pair: Option<(&str, &str)>) -> Option<crate::gateway::feed_health::FeedHealth> {
+    fn feed_health_for(
+        &self,
+        pair: Option<(&str, &str)>,
+    ) -> Option<crate::gateway::feed_health::FeedHealth> {
         Some(self.books.feed.health_for(false, true, true, pair))
     }
 

@@ -202,20 +202,22 @@ async fn confirm(
     if checks.is_empty() {
         return;
     }
-    let sent = now_ms();
     // t79: время получения — у каждого ответа своё (стакан из ответа REST свеж от него, а не от последнего ответа
     // прохода).
     let (tx, mut rx) = tokio::sync::mpsc::channel(checks.len());
     let requests = checks.into_iter().map(|(conn, ticker)| async move {
+        let sent = now_ms();
         let result = v.book_version(&ticker).await.map_err(|e| e.message);
-        (conn, ticker, result, now_ms())
+        (conn, ticker, result, sent, now_ms())
     });
     let producer = deliver(requests, tx);
     let consume = async {
         let mut first = None;
-        while let Some((conn, ticker, r, recv)) = rx.recv().await {
+        while let Some((conn, ticker, r, sent, recv)) = rx.recv().await {
             lg.rest_answer(recv - *first.get_or_insert(recv), now_ms() - recv);
-            let Some(h) = v.feed_health_for(Some((&conn, &ticker))) else { continue };
+            let Some(h) = v.feed_health_for(Some((&conn, &ticker))) else {
+                continue;
+            };
             for a in super::feed_confirm::apply(&h, &conn, &ticker, r, sent, recv, c, st) {
                 act(core, venue, v, a, c, lg).await;
             }
@@ -250,7 +252,11 @@ mod delivery_tests {
         let (release, slow) = oneshot::channel();
         let (tx, mut rx) = mpsc::channel(2);
         let inputs = [
-            async { slow.await.unwrap(); "slow" }.boxed(),
+            async {
+                slow.await.unwrap();
+                "slow"
+            }
+            .boxed(),
             async { "fast" }.boxed(),
         ];
         let mut produce = Box::pin(super::deliver(inputs, tx));

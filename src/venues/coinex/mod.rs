@@ -254,7 +254,10 @@ impl Venue for CoinEx {
     /// - confirm = true (решение 213, по содержимому): номера у стакана CoinEx нет; updated_at — «Timestamp,
     ///   millisecond», checksum — «of the full depth data» — не «книга не менялась»; сравниваются первые
     ///   venue.depth_levels уровней GET /v2/spot/depth и стакана в памяти (book_print.rs, core/feed_print.rs).
-    fn feed_health_for(&self, pair: Option<(&str, &str)>) -> Option<crate::gateway::feed_health::FeedHealth> {
+    fn feed_health_for(
+        &self,
+        pair: Option<(&str, &str)>,
+    ) -> Option<crate::gateway::feed_health::FeedHealth> {
         Some(self.books.feed.health_for(false, true, true, pair))
     }
 

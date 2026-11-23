@@ -115,7 +115,13 @@ impl FeedReg {
     }
 
     /// Для ответа REST копируются только данные его подписки; реестр читается в момент обработки.
-    pub fn health_for(&self, scheduled: bool, per_pair: bool, confirm: bool, pair: Option<(&str, &str)>) -> FeedHealth {
+    pub fn health_for(
+        &self,
+        scheduled: bool,
+        per_pair: bool,
+        confirm: bool,
+        pair: Option<(&str, &str)>,
+    ) -> FeedHealth {
         let opt = |v: i64| (v > 0).then_some(v);
         let ver = |a: &AtomicI64| Some(a.load(Ordering::Relaxed)).filter(|&v| v != NO_VER);
         let conns = self

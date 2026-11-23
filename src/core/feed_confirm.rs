@@ -198,7 +198,8 @@ pub fn apply(
     };
     // Пока шёл запрос, пришёл кадр — стакан в памяти новее ответа, пара живая, ответ уже не нужен. t163 (решение 367):
     // по времени отправки, а не по «кадр моложе book_stale_ms × pair_dead_mult» — иначе ранний ответ (due) терялся.
-    if p.since_ms > sent_ms || p.last_ms.is_some_and(|l| l > sent_ms) {
+    // По миллисекундным часам порядок событий при равенстве восстановить невозможно.
+    if p.since_ms >= sent_ms || p.last_ms.is_some_and(|l| l >= sent_ms) {
         return out;
     }
     let rest = r.as_ref().ok().and_then(RestRef::of);

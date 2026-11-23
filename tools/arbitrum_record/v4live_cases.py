@@ -29,6 +29,9 @@ from v4live_rpc import ad, enc_execute, parse_call, sel, uint_of, word
 
 def quote_call(p, a, w_addr, tin, tout, amt):
     """Вызов квотера и разбор — по виду пула. Ошибок нет."""
+    if p["fam"] == "infinity_cl":
+        import v5_bsc_cl  # Доступен при запуске tools/bsc_record/exec_v5_bsc.py.
+        return v5_bsc_cl.quote_call(p, a, w_addr, tin, tout, amt)
     return (mgr if p["fam"] in ("v4", "bv3") else old).quote_call(p, a, w_addr, tin, tout, amt)
 
 
@@ -58,7 +61,7 @@ def size(node, tag, p, a, w_addr, tin, tout):
 
 def step(p, tin, tout):
     """Шаг исполнителя (вся доля 10000 bps). Ошибок нет."""
-    data = old.step_data(p, tin) if p["fam"] not in ("v4", "bv3") else p["data"]
+    data = old.step_data(p, tin) if p["fam"] not in ("v4", "bv3", "infinity_cl") else p["data"]
     return dict(kind=p["kind"], pool=p["step_pool"], tokenIn=tin, tokenOut=tout, shareBps=10000, data=data)
 
 
@@ -81,6 +84,9 @@ def _xleft(c1, c2):
 
 
 def _credit(p, logs, tout):
+    if p["fam"] == "infinity_cl":
+        import v5_bsc_cl
+        return v5_bsc_cl.credit(p, logs, tout)
     return mgr.credit(p, logs, tout) if p["fam"] in ("v4", "bv3") else None
 
 

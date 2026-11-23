@@ -1,0 +1,74 @@
+{
+ "0x55d398326f99059ff775485246999027b3197955": {
+  "balance": {
+   "kind": "sol",
+   "index": 1,
+   "slot": "0x0b983aef7536e69b485892626a0cec049ada3197d77c23c4503edce4d90639b8"
+  },
+  "allowance": {
+   "kind": "sol",
+   "index": 2,
+   "slot": "0x9811b4080c6d47c17670356fc63030d7d432d4f7be519f7e602a9487edc50f71"
+  }
+ },
+ "0x9bafc8d4b487cebff201721702507a3e2c67ad79": {
+  "balance": {
+   "kind": "sol",
+   "index": 5,
+   "slot": "0x8463532b70c5383ea4956992496809d6bc35066d26c26b08679633bebac255f8"
+  },
+  "allowance": {
+   "kind": "sol",
+   "index": 6,
+   "slot": "0x176ce424a942ec681ca5c3918414c78c3de47de37796946a46a0f4fdfbff6119"
+  }
+ },
+ "0xa67c48f86fc6d0176dca38883ca8153c76a532c7": {
+  "balance": {
+   "kind": "sol",
+   "index": 1,
+   "slot": "0x0b983aef7536e69b485892626a0cec049ada3197d77c23c4503edce4d90639b8"
+  },
+  "allowance": {
+   "kind": "sol",
+   "index": 2,
+   "slot": "0x9811b4080c6d47c17670356fc63030d7d432d4f7be519f7e602a9487edc50f71"
+  }
+ },
+ "0x36c51c465f5f8f25dc201f0152357cca394d2510": {
+  "balance": {
+   "kind": "sol",
+   "index": 1,
+   "slot": "0x0b983aef7536e69b485892626a0cec049ada3197d77c23c4503edce4d90639b8"
+  },
+  "allowance": {
+   "kind": "sol",
+   "index": 2,
+   "slot": "0x9811b4080c6d47c17670356fc63030d7d432d4f7be519f7e602a9487edc50f71"
+  }
+ },
+ "0xa177bdd433aea3702beb46652adcfc64248d4ab3": {
+  "balance": {
+   "kind": "sol",
+   "index": 0,
+   "slot": "0x1f63806531b7ae0316311109e7a525be8a1947f97e500a0e8bfdd4956ed4b6d3"
+  },
+  "allowance": {
+   "kind": "sol",
+   "index": 1,
+   "slot": "0x1ff2a99b0debd75e42750bab59b02aab51d9b4cd1f058e89891e1d35c3f32cb3"
+  }
+ },
+ "0x74ac77d7ca54c38eb5ea2e638a80a5182558d3a2": {
+  "balance": {
+   "kind": "sol",
+   "index": 0,
+   "slot": "0x1f63806531b7ae0316311109e7a525be8a1947f97e500a0e8bfdd4956ed4b6d3"
+  },
+  "allowance": {
+   "kind": "sol",
+   "index": 1,
+   "slot": "0x1ff2a99b0debd75e42750bab59b02aab51d9b4cd1f058e89891e1d35c3f32cb3"
+  }
+ }
+}

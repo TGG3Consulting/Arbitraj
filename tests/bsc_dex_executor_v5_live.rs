@@ -9,7 +9,8 @@
 //!    без крючка (2 из 2: 0x5418…2161 без крючка и 0x412d…6fc6 с StableSurge, bv3_hook_kind surge); у каждого (а) и (б) — статус 1,
 //!    x_left 0 / 0, получено = кредит Swap хранилища, (а) получено = quoter_out, (б) получено = quoter_out_after_a. Виды крючка
 //!    static / mev — «нет пулов»; 20 / 21 — пулов нет. После сборки deploy_gate::refusal_at(Some(42161)) для v5 = None (кнопка
-//!    «Развернуть исполнитель» в блоке сети Arbitrum открыта, решение 491); в BSC (56) и без сети записи v5 нет — закрыто.
+//!    «Развернуть исполнитель» в блоке сети Arbitrum открыта, решение 491). Отдельная запись BSC от 23.11
+//!    проверяется в executor_v5_bsc_record; без установленной сети развёртывание закрыто.
 //!    Новые виды v5 (26 AERO_BASIC, 27 BALANCER_V3_BUF, 28 CURVE_ETH …) этой записью не покрыты (README записи).
 //! 3. Виды 22 / 24 / 1 / 0 (правило не судит): в (б) получено = quoter_out_after_a; quoter_out (б) — квотер на H до (а) (другое
 //!    состояние, не сравнивается), у LB v2.0 (24) он откатился TreeMath__ErrorDepthSearch (null).
@@ -28,6 +29,8 @@ use arb::venues::bsc_dex::exec::executor::live_rule::{self, Class, Hook};
 use arb::venues::bsc_dex::exec::executor::{deploy_gate, live_proof, live_record};
 use arb::venues::bsc_dex::pools::exec_kind::ExecKind;
 
+mod executor_v5_bsc_record;
+
 const DIR: &str = "tests/data/executor_v5_live_2026-11-21";
 /// Блок записи H = 526309916 (README записи).
 const TAG: &str = "0x1f5eda1c";
@@ -35,17 +38,17 @@ const TAG: &str = "0x1f5eda1c";
 const X: &str = "0xc16f44b608bcab7f92d586a404ac10af79eaa2b6";
 /// Сеть записи — Arbitrum One (README: «- chainId: 42161»).
 const ARB: Option<u64> = Some(42161);
-/// Сеть BSC — записи v5 в ней нет.
+/// Сеть независимой записи BSC.
 const BSC: Option<u64> = Some(56);
 
 /// Текст файла записи. Ошибок нет (паника — файла нет).
-fn text(name: &str) -> String {
-    std::fs::read_to_string(format!("{}/{DIR}/{name}", env!("CARGO_MANIFEST_DIR"))).expect("запись")
+fn text(dir: &str, name: &str) -> String {
+    std::fs::read_to_string(format!("{}/{dir}/{name}", env!("CARGO_MANIFEST_DIR"))).expect("запись")
 }
 
 /// JSON файла записи. Ошибок нет (паника).
-fn json(name: &str) -> Value {
-    serde_json::from_str(&text(name)).expect("JSON")
+fn json(dir: &str, name: &str) -> Value {
+    serde_json::from_str(&text(dir, name)).expect("JSON")
 }
 
 /// Класс по виду и крючку (для чтения ожиданий).
@@ -60,12 +63,17 @@ fn v5(chain: Option<u64>, k: ExecKind) -> bool {
 
 #[test]
 fn record_bound_to_v5_code_and_arbitrum() {
-    let cur = code::runtime_sha256_of(Version::V5).expect("SHA-256 bin-runtime v5 записан");
-    let readme = text("README.md");
-    assert!(live_rule::bound(&readme, cur), "README записи — о коде v5");
-    let chain = live_record::chain_in(&readme, &text("summary.json"));
-    assert_eq!(chain, Ok(42161));
+    assert_record(DIR, 42161, TAG, X);
     assert!(live_record::chain_in("без строки сети", "[]").is_err());
+}
+
+/// Связь записи с конкретной сетью, родительским блоком и байтами кода v5 в первичных запросах узлу.
+fn assert_record(dir: &str, chain_id: u64, tag: &str, executor: &str) {
+    let cur = code::runtime_sha256_of(Version::V5).expect("SHA-256 bin-runtime v5 записан");
+    let readme = text(dir, "README.md");
+    assert!(live_rule::bound(&readme, cur), "README записи — о коде v5");
+    let chain = live_record::chain_in(&readme, &text(dir, "summary.json"));
+    assert_eq!(chain, Ok(chain_id));
     // Запись сделана кодом v5 — текущей сборкой contracts/out/.
     let runtime = std::fs::read_to_string(format!(
         "{}/contracts/out/ArbExecutor.bin-runtime",
@@ -73,24 +81,24 @@ fn record_bound_to_v5_code_and_arbitrum() {
     ))
     .unwrap();
     let runtime = runtime.trim().trim_start_matches("0x").to_ascii_lowercase();
-    let raw = json("raw_rpc.json");
+    let raw = json(dir, "raw_rpc.json");
     let all = raw.as_array().unwrap();
     let id = all.iter().find(|x| x["method"] == "eth_chainId");
-    assert_eq!(id.expect("eth_chainId")["result"], "0xa4b1");
+    assert_eq!(id.expect("eth_chainId")["result"], format!("{chain_id:#x}"));
     let sims: Vec<&Value> = all
         .iter()
         .filter(|x| x["method"] == "eth_simulateV1")
         .collect();
     assert!(!sims.is_empty());
     for s in &sims {
-        assert_eq!(s["params"][1], TAG, "симуляция на блоке H");
+        assert_eq!(s["params"][1], tag, "симуляция на блоке H");
         let ov = s["params"][0]["blockStateCalls"][0]["stateOverrides"]
             .as_object()
             .expect("подмены");
         let mut x = 0;
         for (a, v) in ov {
             if let Some(code) = v.get("code").and_then(Value::as_str) {
-                assert!(a.eq_ignore_ascii_case(X), "код подменён только у X");
+                assert!(a.eq_ignore_ascii_case(executor), "код подменён только у X");
                 let code = code.trim_start_matches("0x").to_ascii_lowercase();
                 assert_eq!(code, runtime, "в симуляции — bin-runtime v5");
                 x += 1;
@@ -129,22 +137,21 @@ fn verdict_v5_arbitrum_by_rule() {
     assert!(why(class(19, Hook::With)).contains("класс с крючком"));
     // Виды 22 / 24 / 1 / 0 правило не судит — их классов нет.
     assert!(v.iter().all(|x| [19, 20, 21, 23].contains(&x.class.kind)));
-    // Решение 488, 491: текущая сборка — v5; запись v5 × 42161 приняла классы — развёртывание открыто в Arbitrum, в BSC и без
-    // сети записи v5 нет — закрыто.
+    // Решения 488, 491: текущая сборка — v5. Незарегистрированная или неизвестная сеть остаётся закрытой.
     assert_eq!(code::current_version(), Ok(Version::V5));
     assert!(
         deploy_gate::refusal_at(ARB).is_none(),
         "запись v5 × 42161 приняла хотя бы один класс"
     );
-    for chain in [BSC, None] {
+    for chain in [Some(1), None] {
         let why = deploy_gate::refusal_at(chain)
             .expect("записи v5 для этой сети нет — развёртывание закрыто");
         assert!(why.contains("v5"), "{why}");
     }
     assert!(!deploy_gate::closed_everywhere());
-    // Шаги: Uniswap V4 без крючка и Balancer V3 у v5 — только в Arbitrum; не шаг менеджера — всегда.
+    // Uniswap V4 доказан в обеих сетях, Balancer V3 — только в Arbitrum; не шаг менеджера — всегда.
     assert!(v5(ARB, ExecKind::UniV4));
-    assert!(!v5(BSC, ExecKind::UniV4));
+    assert!(v5(BSC, ExecKind::UniV4));
     assert!(!v5(None, ExecKind::UniV4));
     assert!(v5(ARB, ExecKind::BalancerV3));
     assert!(!v5(BSC, ExecKind::BalancerV3));
@@ -162,7 +169,7 @@ fn verdict_v5_arbitrum_by_rule() {
 /// откатился (0x10d64861 — TreeMath__ErrorDepthSearch), quoter_out = null. got_eq_swap_credit у этих видов не записан.
 #[test]
 fn unjudged_kinds_sell_matches_quoter_after_a() {
-    let rows = json("summary.json");
+    let rows = json(DIR, "summary.json");
     let mut n = 0;
     for r in rows.as_array().unwrap() {
         let kind = r["kind"].as_u64().unwrap();

@@ -15,7 +15,7 @@
 //!    крючка» для любого пула (exec/executor/entry.rs — pool_gate::admitted(…, Address::ZERO)). Виды крючка static /
 //!    mev — «нет пулов». 20 / 21 — пулов нет; с крючком — не принимается. По записи v4 развёртывание v4 кошельком
 //!    площадки Arbitrum было бы разрешено; решение 488: текущая сборка — v5, запись приёмки v5 × 42161 есть
-//!    (tests/bsc_dex_executor_v5_live.rs) — развёртывание текущей сборки открыто в Arbitrum, закрыто в BSC и без сети.
+//!    (tests/bsc_dex_executor_v5_live.rs). У v4 на BSC записи нет.
 //! 3. Виды 22 / 24 / 1 / 0 (правило не судит): в (б) получено = quoter_out_after_a; quoter_out (б) — квотер на H до (а)
 //!    (другое состояние, не сравнивается), у LB v2.0 (24) он откатился TreeMath__ErrorDepthSearch (null).
 //!
@@ -134,14 +134,13 @@ fn verdict_v4_arbitrum_by_rule() {
     assert!(why(class(19, Hook::With)).contains("класс с крючком"));
     // Виды 22 / 24 / 1 / 0 правило не судит — их классов нет.
     assert!(v.iter().all(|x| [19, 20, 21, 23].contains(&x.class.kind)));
-    // Решение 488: текущая сборка — v5; запись приёмки v5 × 42161 есть (tests/bsc_dex_executor_v5_live.rs) —
-    // развёртывание открыто в Arbitrum (принят хотя бы один класс), в BSC и без сети записи v5 нет — закрыто.
+    // Решение 488: кнопка разворачивает текущий v5. Сети без записи и без заданного chainId остаются закрыты.
     assert_eq!(code::current_version(), Ok(Version::V5));
     assert!(
         deploy_gate::refusal_at(ARB).is_none(),
         "запись v5 × 42161 принята"
     );
-    for chain in [BSC, None] {
+    for chain in [Some(1), None] {
         let why = deploy_gate::refusal_at(chain)
             .expect("записи v5 для этой сети нет — развёртывание закрыто");
         assert!(why.contains("v5"), "{why}");

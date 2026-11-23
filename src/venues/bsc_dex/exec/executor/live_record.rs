@@ -9,6 +9,8 @@
 //! - v5, chainId из строки README «- chainId: 42161» — tests/data/executor_v5_live_2026-11-21 (свой узел Arbitrum One,
 //!   H = 526309916; tools/arbitrum_record/exec_v5_live.py — копия exec_v4_live.py под сборку v5, решение 488; docs/notes/arbitrum/
 //!   v5-record-integration.md);
+//! - v5, chainId 56 — tests/data/executor_v5_bsc_live_2026-11-23, BSC, H = 135328859: Uniswap V4 и Infinity CL
+//!   без крючков. Остальные классы в этой сети остаются без доказательства.
 //!
 //! Вердикты — правило live_rule.rs (SHA-256 bin-runtime той версии — code::runtime_sha256_of), один разбор за запуск.
 //! Записи для пары нет — missing: все классы «не проверен» (текст с парой — pair).
@@ -36,7 +38,7 @@ struct Source {
     chain_doc: &'static str,
 }
 
-const SOURCES: [Source; 3] = [
+const SOURCES: [Source; 4] = [
     Source {
         version: Version::V3,
         dir: "tests/data/executor_v3_live_2026-11-17",
@@ -95,6 +97,26 @@ const SOURCES: [Source; 3] = [
         chain_doc: include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/data/executor_v5_live_2026-11-21/README.md"
+        )),
+    },
+    Source {
+        version: Version::V5,
+        dir: "tests/data/executor_v5_bsc_live_2026-11-23",
+        readme: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v5_bsc_live_2026-11-23/README.md"
+        )),
+        summary: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v5_bsc_live_2026-11-23/summary.json"
+        )),
+        reject: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v5_bsc_live_2026-11-23/hooks_reject.json"
+        )),
+        chain_doc: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v5_bsc_live_2026-11-23/README.md"
         )),
     },
 ];

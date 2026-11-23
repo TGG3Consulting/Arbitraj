@@ -292,6 +292,50 @@ fn individual_class_lifetime_survives_partial_refresh_and_expires_without_delist
     );
     assert!(catalog.rule("RENDER", make_stamp(11).instant).is_some());
 
+    for invalid in [
+        json!(true),
+        json!(1),
+        json!({}),
+        Value::Null,
+        json!("unexpected"),
+    ] {
+        let mut wrong_type = partial.clone();
+        let row = wrong_type
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|r| r["symbol"] == "RWAUSDT")
+            .unwrap();
+        row["isReality"] = invalid;
+        let parsed = classic_list(&v2, &v3, "USDT").unwrap().0;
+        let mut changed = classic_list(&v2, &wrong_type, "USDT").unwrap().0;
+        changed.retain_known(&parsed, make_stamp(0), limit);
+        assert!(changed.rule("RWA", make_stamp(2).instant).is_none());
+    }
+
+    let mut missing_after_reality = partial.clone();
+    let row = missing_after_reality
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|r| r["symbol"] == "RROLUSDT")
+        .unwrap();
+    row.as_object_mut().unwrap().remove("isReality");
+    directory.publish_at(
+        classic_list(&v2, &missing_after_reality, "USDT").unwrap().0,
+        make_stamp(9),
+        limit,
+    );
+    let (still_blocked, _) = directory.dated_catalog().unwrap();
+    assert!(still_blocked.rule("rROL", make_stamp(9).instant).is_none());
+    assert!(
+        still_blocked
+            .state("rROL", make_stamp(9).instant)
+            .unwrap()
+            .order_block
+            .is_some()
+    );
+
     // У изменившегося symbol с прежним base нет подтверждения старого инструмента.
     let mut renamed = v2.clone();
     let rwa = renamed

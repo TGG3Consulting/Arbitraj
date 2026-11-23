@@ -148,11 +148,16 @@ impl Journal {
         self.db.journal_queue().flushed().await;
         self.db
             .call(move |c| {
+                // Отдельный диапазон даёт SQLite прямой поиск rowid даже у глубокой страницы.
+                let range = if before_id.is_some() { "WHERE id < ?2" } else { "" };
                 let mut st = c.prepare(&format!(
-                    "SELECT {COLUMNS} FROM journal WHERE (?1 IS NULL OR id < ?1) ORDER BY id DESC LIMIT ?2"
+                    "SELECT {COLUMNS} FROM journal {range} ORDER BY id DESC LIMIT ?1"
                 ))?;
-                let rows = st.query_map(params![before_id, limit], row_entry)?;
-                rows.collect()
+                if let Some(id) = before_id {
+                    st.query_map(params![limit, id], row_entry)?.collect()
+                } else {
+                    st.query_map([limit], row_entry)?.collect()
+                }
             })
             .await
     }

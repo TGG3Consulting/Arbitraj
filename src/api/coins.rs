@@ -111,13 +111,16 @@ async fn with_depths<'a>(st: &AppState, rows: impl Iterator<Item = &'a mut serde
     for venues in venues_by_tag.values_mut() {
         venues.sort_unstable();
     }
-    let mut unread: std::collections::HashMap<_, Vec<serde_json::Value>> = Default::default();
+    let mut unread: std::collections::HashMap<_, std::collections::HashMap<_, Vec<_>>> =
+        Default::default();
     for d in depths.values() {
         if let Some(u) = &d.unread
             && let Some(tag) = tags.get(&d.venue)
         {
             unread
-                .entry((tag.as_str(), json_key(&u.coin)))
+                .entry(tag.as_str())
+                .or_default()
+                .entry(json_key(&u.coin))
                 .or_default()
                 .push(unread_pool(d, u));
         }
@@ -126,10 +129,9 @@ async fn with_depths<'a>(st: &AppState, rows: impl Iterator<Item = &'a mut serde
         let tag = c["asset"]["chain"].as_str().unwrap_or_default();
         c["dex_venues"] =
             serde_json::json!(venues_by_tag.get(tag).map(Vec::as_slice).unwrap_or_default());
-        let extra = unread.get(&(
-            c["asset"]["chain"].as_str().unwrap_or_default(),
-            json_key(&c["asset"]["bsc_contract"]),
-        ));
+        let extra = unread
+            .get(c["asset"]["chain"].as_str().unwrap_or_default())
+            .and_then(|tokens| tokens.get(&json_key(&c["asset"]["bsc_contract"])));
         let Some(pools) = c["pools"].as_array_mut() else {
             continue;
         };

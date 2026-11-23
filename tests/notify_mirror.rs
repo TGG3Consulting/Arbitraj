@@ -276,3 +276,43 @@ fn second_confirm_does_not_repeat() {
     st.apply(&recs);
     assert_eq!(st.waiting(&recs).len(), 1);
 }
+
+/// Реальный broadcast с маленьким буфером: пока Telegram отправляет карточку, рыночные
+/// события будят одну сверку, а два разных итога остаются в порядке отправки ядра.
+#[tokio::test]
+async fn market_burst_preserves_command_outcomes() {
+    use arb::core::view::{CoreEvent, Live};
+    use futures_util::FutureExt;
+    let live = Live::new(2);
+    let (mut commands, dirty) = live.subscribe_mirror();
+    for n in 0..16 {
+        if n == 2 || n == 6 {
+            live.send(CoreEvent::Command(json!({"text": n})));
+        }
+        live.send(CoreEvent::Candidate(json!({"sequence": n})));
+    }
+    assert_eq!(commands.try_recv().unwrap()["text"], 2);
+    assert_eq!(commands.try_recv().unwrap()["text"], 6);
+    assert!(commands.try_recv().is_err());
+    assert!(dirty.notified().now_or_never().is_some());
+    assert!(dirty.notified().now_or_never().is_none());
+    live.send(CoreEvent::Deal(json!({})));
+    assert!(dirty.notified().now_or_never().is_some());
+}
+
+/// Переполнение самого кольца результатов сообщает точное число вытесненных итогов;
+/// новые итоги всё ещё доступны по порядку.
+#[test]
+fn mirror_reports_only_evicted_commands() {
+    use arb::core::view::{CoreEvent, Live};
+    use tokio::sync::broadcast::error::TryRecvError;
+    let live = Live::new(2);
+    let (mut commands, _) = live.subscribe_mirror();
+    for n in 0..5 {
+        live.send(CoreEvent::Command(json!({"text": n})));
+        live.send(CoreEvent::Balances(json!({})));
+    }
+    assert_eq!(commands.try_recv(), Err(TryRecvError::Lagged(3)));
+    assert_eq!(commands.try_recv().unwrap()["text"], 3);
+    assert_eq!(commands.try_recv().unwrap()["text"], 4);
+}

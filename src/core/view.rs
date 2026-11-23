@@ -10,7 +10,8 @@
 
 use serde::Serialize;
 use serde_json::Value;
-use tokio::sync::broadcast;
+use std::sync::Arc;
+use tokio::sync::{Notify, broadcast};
 
 use crate::core::types::{
     Asset, CoinBlock, CoinCheck, CoinGasStats, ManualHolding, PoolCheck, SendChannelStats,
@@ -63,18 +64,41 @@ pub enum CoreEvent {
 #[derive(Clone)]
 pub struct Live {
     tx: broadcast::Sender<CoreEvent>,
+    // Отдельное кольцо итогов кнопок: новые цены не вытесняют итог ручной операции.
+    commands: broadcast::Sender<Value>,
+    mirror_dirty: Arc<Notify>,
 }
 
 impl Live {
     /// Создаёт поток. Принимает: размер буфера (--live-buffer).
     pub fn new(buffer: usize) -> Self {
         let (tx, _) = broadcast::channel(buffer);
-        Self { tx }
+        let (commands, _) = broadcast::channel(buffer);
+        Self {
+            tx,
+            commands,
+            mirror_dirty: Arc::new(Notify::new()),
+        }
     }
 
     /// Публикует событие. Нет слушателей — событие просто не нужно никому; ошибок нет.
     pub fn send(&self, ev: CoreEvent) {
+        if self.commands.receiver_count() != 0 {
+            if let CoreEvent::Command(value) = &ev {
+                let _ = self.commands.send(value.clone());
+            } else {
+                // Единственный дубль перечитывает текущее состояние всех карточек. Одного
+                // ожидающего пробуждения достаточно для всех событий, пришедших за время отправки.
+                self.mirror_dirty.notify_one();
+            }
+        }
         let _ = self.tx.send(ev);
+    }
+
+    /// Подписка единственного Telegram-дубля: итоги команд по порядку, остальные изменения
+    /// будят сверку актуального состояния экрана. После запуска первая сверка выполняется сразу.
+    pub fn subscribe_mirror(&self) -> (broadcast::Receiver<Value>, Arc<Notify>) {
+        (self.commands.subscribe(), self.mirror_dirty.clone())
     }
 
     /// Подписка для интерфейса (api/ws.rs). Отстал — получит Lagged и перечитает данные по REST.

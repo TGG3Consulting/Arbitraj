@@ -1,0 +1,7 @@
+{
+ "url": "https://api.geckoterminal.com/api/v2/networks/arbitrum/dexes//pools?page=",
+ "response": {
+  "data": [],
+  "pages": []
+ }
+}

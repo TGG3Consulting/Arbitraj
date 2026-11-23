@@ -1,0 +1,17 @@
+{
+ "deployer": {
+  "url": "https://sourcify.dev/server/v2/contract/42161/0x24e85f5f94c6017d2d87b434394e87df4e4d56e3?fields=compilation",
+  "status": 200,
+  "body": "{\"compilation\":{\"language\":\"Solidity\",\"compiler\":\"solc\",\"compilerVersion\":\"0.7.6+commit.7338295f\",\"compilerSettings\":{\"metadata\":{\"bytecodeHash\":\"none\"},\"libraries\":{},\"optimizer\":{\"runs\":0,\"enabled\":true},\"evmVersion\":\"istanbul\",\"remappings\":[]},\"name\":\"AlgebraPoolDeployer\",\"fullyQualifiedName\":\"contracts/AlgebraPoolDeployer.sol:AlgebraPoolDeployer\"},\"matchId\":\"995103\",\"creationMatch\":\"match\",\"runtimeMatch\":\"match\",\"verifiedAt\":\"2024-08-08T12:19:46Z\",\"match\":\"match\",\"chainId\":\"42161\",\"address\":\"0x24E85F5F94C6017d2d87b434394e87df4e4D56E3\"}"
+ },
+ "factory": {
+  "url": "https://sourcify.dev/server/v2/contract/42161/0x9c2abd632771b433e5e7507bcaa41ca3b25d8544?fields=compilation",
+  "status": 200,
+  "body": "{\"compilation\":{\"language\":\"Solidity\",\"compiler\":\"solc\",\"compilerVersion\":\"0.7.6+commit.7338295f\",\"compilerSettings\":{\"metadata\":{\"bytecodeHash\":\"none\"},\"libraries\":{},\"optimizer\":{\"runs\":0,\"enabled\":true},\"evmVersion\":\"istanbul\",\"remappings\":[]},\"name\":\"AlgebraFactory\",\"fullyQualifiedName\":\"contracts/AlgebraFactory.sol:AlgebraFactory\"},\"matchId\":\"1785113\",\"creationMatch\":\"match\",\"runtimeMatch\":\"match\",\"verifiedAt\":\"2024-08-08T13:52:06Z\",\"match\":\"match\",\"chainId\":\"42161\",\"address\":\"0x9C2ABD632771b433E5E7507BcaA41cA3b25D8544\"}"
+ },
+ "pool": {
+  "url": "https://sourcify.dev/server/v2/contract/42161/0x308c5b91f63307439fdb51a9fa4dfc979e2ed6b0?fields=compilation",
+  "status": 200,
+  "body": "{\"compilation\":{\"language\":\"Solidity\",\"compiler\":\"solc\",\"compilerVersion\":\"0.7.6+commit.7338295f\",\"compilerSettings\":{\"metadata\":{\"bytecodeHash\":\"none\",\"useLiteralContent\":true},\"libraries\":{},\"optimizer\":{\"runs\":0,\"enabled\":true},\"evmVersion\":\"istanbul\",\"remappings\":[]},\"name\":\"AlgebraPool\",\"fullyQualifiedName\":\"contracts/AlgebraPool.sol:AlgebraPool\"},\"matchId\":\"1113849\",\"creationMatch\":\"match\",\"runtimeMatch\":\"match\",\"verifiedAt\":\"2024-08-08T12:30:54Z\",\"match\":\"match\",\"chainId\":\"42161\",\"address\":\"0x308C5B91F63307439FDB51a9fA4Dfc979E2ED6B0\"}"
+ }
+}

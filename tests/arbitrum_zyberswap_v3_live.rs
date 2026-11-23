@@ -12,7 +12,8 @@
 //! 4. next_block_same_or_next_second — T487-02: времена соседних блоков heads.json отличаются на 0 или 1 с
 //!    (next_block_fee берёт время блока и + 1 с); не так — тест падает с числом, вопрос к коду.
 //!
-//! Под #[ignore] до записи (запись делает Тигран своим узлом Arbitrum). Кто вызывает: cargo test.
+//! По умолчанию ищется только запись своего узла. Отдельный диагностический прогон GitHub
+//! выбирает публичную запись переменной ZYBER_PUBLIC_RECORD. Кто вызывает: cargo test.
 //! От чего зависит: tests/thena_fusion_common (oracle); arb::venues::bsc_dex::math::{fee_algebra_v1, swap_algebra}.
 
 mod thena_fusion_common;
@@ -39,6 +40,9 @@ const AT: [(&str, Option<u32>); 4] = [
 
 /// Папка последней записи. Ошибок нет (тест падает: записи нет).
 fn rec() -> String {
+    if std::env::var("ZYBER_PUBLIC_RECORD").as_deref() == Ok("1") {
+        return "tests/data/zyber_public_2026-11-23".to_owned();
+    }
     latest("arbitrum_zyberswap_v3_").expect("нет записи tools/arbitrum_record/zyberswap_v3.py")
 }
 
@@ -89,7 +93,16 @@ fn swap_with_bot_fee_equals_pool() {
     for p in pools_all(&rec()) {
         let (o, ts, tick, _) = oracle(&p, true);
         let m = map_of(&p);
-        for q in p["quotes"].as_array().unwrap() {
+        let quotes = p["quotes"].as_array().unwrap();
+        for side in [true, false] {
+            assert!(quotes.iter().any(|q| {
+                q["zero_for_one"].as_bool() == Some(side) && AT.iter().all(|(at, _)| {
+                    let result = &q[*at]["virtual"]["result"];
+                    !word(result, 0).is_zero() && !word(result, 1).is_zero()
+                })
+            }), "{}: нет непустого обмена во всех четырёх временах, zero_for_one={side}", p["pool"]);
+        }
+        for q in quotes {
             let zfo = q["zero_for_one"].as_bool().unwrap();
             let amount = hex_u256(&q["amount_in"]);
             for (at, d) in AT {
@@ -112,6 +125,13 @@ fn swap_with_bot_fee_equals_pool() {
 #[ignore = "нет записи: tools/arbitrum_record/zyberswap_v3.py (T487-01, T487-02)"]
 fn next_block_same_or_next_second() {
     let h = file(&rec(), "heads.json");
+    for two in h.as_array().unwrap().windows(2) {
+        assert_eq!(
+            hex_u256(&two[0]["number"]) + U256::from(1u8),
+            hex_u256(&two[1]["number"]),
+            "пропущен или повторён блок в heads.json"
+        );
+    }
     let ts: Vec<U256> = h
         .as_array()
         .unwrap()

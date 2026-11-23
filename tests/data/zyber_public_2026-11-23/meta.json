@@ -1,0 +1,57 @@
+{
+ "chainId": "0xa4b1",
+ "client": {
+  "jsonrpc": "2.0",
+  "id": 21,
+  "result": "nitro/v3.13.0-rc.9+b72783f-20261116T155937Z/linux-arm64/go1.27.3"
+ },
+ "args": {
+  "chain_id": 42161,
+  "name": "zyber_public",
+  "gecko_network": "arbitrum",
+  "pair_token": [
+   "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+   "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
+  ],
+  "heads": 200,
+  "factory": "0x9c2abd632771b433e5e7507bcaa41ca3b25d8544",
+  "quoter": "",
+  "gecko_dex": "",
+  "gecko_pages": 3,
+  "gecko_pools": 0,
+  "pool": [
+   "0x308c5b91f63307439fdb51a9fa4dfc979e2ed6b0",
+   "0x4ef385d20247f5d0f9cd2e3f716b9a55e71df934"
+  ],
+  "init_hash": [
+   "0xbce37a54eab2fcd71913a0d40723e04238970e7fc1159bfd58ad5b79531697e7",
+   "0x6ec6c9c8091d160c0aa74b2b14ba9c1717e95093bd3ac085cee99a49aab294a4"
+  ],
+  "words": 8,
+  "raw_words": 1,
+  "bps": [
+   1,
+   10,
+   100,
+   1000
+  ],
+  "batch": 4,
+  "vq_runtime": "contracts/out/VirtualQuoter.bin-runtime",
+  "out": "tests/data"
+ },
+ "poolByPair": {
+  "0x82af49447d8a07e3bd95bd0d56f35241523fbab1/0xaf88d065e77c8cc2239327c5edb3a432268e5831": {
+   "jsonrpc": "2.0",
+   "id": 20,
+   "result": "0x0000000000000000000000004ef385d20247f5d0f9cd2e3f716b9a55e71df934"
+  }
+ },
+ "source": {
+  "url": "https://arb1.arbitrum.io/rpc",
+  "type": "public_rpc_diagnostic",
+  "pool_batch": 12,
+  "head_batch": 4,
+  "heads_first": 526909336,
+  "heads_last": 526909535
+ }
+}

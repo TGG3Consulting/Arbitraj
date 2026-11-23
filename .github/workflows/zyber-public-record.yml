@@ -1,0 +1,28 @@
+name: ZyberSwap public RPC diagnostic
+on:
+  push:
+    branches: ["codex/zyber-records"]
+  workflow_dispatch:
+env:
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_INCREMENTAL: "0"
+jobs:
+  public-record:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: tests
+          save-if: false
+      - name: Четыре проверки на публичной записи Arbitrum One
+        env:
+          ZYBER_PUBLIC_RECORD: "1"
+        run: |
+          cargo test --locked --test arbitrum_zyberswap_v3_live -- --ignored | tee zyber-result.txt
+          grep -F '4 passed; 0 failed; 0 ignored;' zyber-result.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zyber-public-check
+          path: zyber-result.txt

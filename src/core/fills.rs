@@ -13,7 +13,7 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{Cost, CostKind, Side, TradeResult, Transfer, VenueId};
+use crate::core::types::{Asset, Cost, CostKind, Side, TradeResult, Transfer, VenueId};
 use crate::gateway::contract::VenueKind;
 use crate::settings::read::At;
 use crate::storage::journal::Level;
@@ -151,6 +151,16 @@ pub async fn trade(core: &Core, deal: &mut Deal, r: &TradeResult) {
     ));
 }
 
+/// Комиссия в пришедших монетах уже вошла в количество зачисления. Для разных тикеров
+/// требует прикреплённую отправителем монету той же сети и с тем же непустым контрактом.
+fn withdrawal_in_received(c: &Cost, sent: &Asset, received: &Asset) -> bool {
+    convert::in_coin(c, &received.ticker)
+        || (c.kind == CostKind::WithdrawFee
+            && sent.contract.is_some()
+            && sent == received
+            && c.asset == sent.ticker)
+}
+
 /// Факт перевода → учёт: монеты теперь на получателе в количестве «сколько дошло»; затраты вывода
 /// не в монете (газ кошелька, у BNB тоже — из резерва) — в spent (в монете они уже в разнице «отправлено − дошло»).
 /// Принимает: сделку, вывод (с комиссией), зачисление, получателя, цену монеты.
@@ -170,10 +180,10 @@ pub async fn transfer(
     // перед продажей и выводом (credit_fact.rs, sell_fact.rs); снимок посторонних — по хешу вывода. На DEX — по
     // событию Transfer, как раньше.
     super::credit_fact::on_credit(core, deal, to, sent.tx_hash.as_deref());
-    if let Some(c) = sent.fee.clone()
-        && !convert::in_coin(&c, &deal.direction.asset.ticker)
+    if let Some(c) = sent.fee.as_ref()
+        && !withdrawal_in_received(c, &sent.asset, &deal.direction.asset)
     {
-        charge(core, deal, &sent.venue, price, c).await;
+        charge(core, deal, &sent.venue, price, c.clone()).await;
     }
     deal.transfers.push(sent.clone());
     deal.transfers.push(t.clone());
@@ -181,4 +191,40 @@ pub async fn transfer(
         "Перевод зачислен на {}: {} {}",
         to.0, t.amount, t.asset.ticker
     ));
+}
+
+#[cfg(test)]
+mod fee_identity_tests {
+    use super::withdrawal_in_received;
+    use crate::core::types::{Asset, ChainId, CostKind, Transfer};
+    use serde_json::Value;
+
+    #[test]
+    fn confirmed_contract_and_network_allow_the_exchange_ticker_only_for_withdrawal_fees() {
+        let record: Value = serde_json::from_str(include_str!(
+            "../../tests/data/poloniex_withdraw_alias_2026-11-23/ledger.json"
+        ))
+        .unwrap();
+        let sent: Transfer = serde_json::from_value(record["sent"].clone()).unwrap();
+        let credited: Transfer = serde_json::from_value(record["credited"].clone()).unwrap();
+        let mut fee = sent.fee.unwrap();
+        let underlying = &credited.asset;
+        let same = Asset {
+            ticker: fee.asset.clone(),
+            ..underlying.clone()
+        };
+        // От получателя уже получено ровно sent.amount - fee.amount. По подтверждённой монете
+        // расход снова добавлять нельзя, хотя у отправителя она записана под другим тикером.
+        assert_eq!(sent.amount - fee.amount, credited.amount);
+        assert!(withdrawal_in_received(&fee, &same, underlying));
+        assert!(!withdrawal_in_received(&fee, &sent.asset, underlying));
+        let mut other = same.clone();
+        other.chain = Some(ChainId("arbitrum".into()));
+        assert!(!withdrawal_in_received(&fee, &other, underlying));
+        fee.kind = CostKind::TransferGas;
+        assert!(!withdrawal_in_received(&fee, &same, underlying));
+        fee.kind = CostKind::WithdrawFee;
+        fee.asset = "USDT".into();
+        assert!(!withdrawal_in_received(&fee, &same, underlying));
+    }
 }

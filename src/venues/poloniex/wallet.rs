@@ -30,7 +30,11 @@ use super::rest::{self, Req};
 const PATH: &str = "/v2/currencies";
 
 /// Справочник и когда он получен.
-type Cached = (Instant, Arc<Vec<CoinNetworkInfo>>);
+type Cached = (
+    Instant,
+    Arc<Vec<CoinNetworkInfo>>,
+    super::withdraw_alias::Book,
+);
 
 /// Справочник сетей в памяти. Дешёво клонируется.
 #[derive(Clone, Default)]
@@ -41,12 +45,25 @@ pub struct Networks {
 }
 
 impl Networks {
+    /// Подтверждение сетевого имени из свежего полного справочника. None — свежего снимка нет.
+    pub(super) fn confirms(
+        &self,
+        ctx: &Ctx,
+        created: &crate::core::types::Transfer,
+        alias: &str,
+    ) -> Option<bool> {
+        let fresh = Duration::from_millis(ctx.int("venue.networks_fresh_ms").ok()?);
+        let c = self.cache.read().unwrap_or_else(|e| e.into_inner());
+        let (at, _, book) = c.as_ref()?;
+        (at.elapsed() < fresh).then(|| book.confirms(created, alias))
+    }
+
     /// Справочник из кэша, если он моложе fresh (указатель, без копии). Ошибок нет.
     fn cached(&self, fresh: Duration) -> Option<Arc<Vec<CoinNetworkInfo>>> {
         let c = self.cache.read().unwrap_or_else(|p| p.into_inner());
         c.as_ref()
-            .filter(|(at, _)| at.elapsed() < fresh)
-            .map(|(_, l)| l.clone())
+            .filter(|(at, _, _)| at.elapsed() < fresh)
+            .map(|(_, l, _)| l.clone())
     }
 }
 
@@ -111,7 +128,8 @@ async fn shared(ctx: &Ctx, nets: &Networks) -> GatewayResult<Arc<Vec<CoinNetwork
         })??;
     note(ctx, Some(nets), &p).await;
     let list = Arc::new(p.list);
-    *nets.cache.write().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), list.clone()));
+    *nets.cache.write().unwrap_or_else(|e| e.into_inner()) =
+        Some((Instant::now(), list.clone(), p.aliases));
     Ok(list)
 }
 

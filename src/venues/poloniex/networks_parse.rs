@@ -33,6 +33,7 @@ pub const PAYMENT_ID: &str = "address-payment-id";
 #[derive(Default)]
 pub struct Parsed {
     pub list: Vec<CoinNetworkInfo>,
+    pub(super) aliases: super::withdraw_alias::Book,
     /// Сети BSC, которым нужен memo (currencyType = address-payment-id): «монета».
     pub need_memo: Vec<String>,
     /// Пропущенные сети: «монета/сеть: причина».
@@ -71,6 +72,7 @@ pub fn parse(
         let Some(nets) = c.get("networkList").and_then(Value::as_array) else {
             continue;
         };
+        p.aliases.insert(&ticker, nets);
         for n in nets {
             let Some(chain) = num::text_opt(n, "blockchain") else {
                 p.skipped.push(format!("{ticker}: сеть без blockchain"));

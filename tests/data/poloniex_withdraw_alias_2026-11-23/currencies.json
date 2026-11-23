@@ -1,0 +1,97 @@
+[
+  {
+    "coin": "BNB",
+    "networkList": [
+      {
+        "coin": "BSC",
+        "blockchain": "BSC",
+        "contractAddress": null
+      },
+      {
+        "coin": "BNB",
+        "blockchain": "BNB",
+        "contractAddress": null
+      }
+    ]
+  },
+  {
+    "coin": "USDT",
+    "networkList": [
+      {
+        "coin": "USDT0",
+        "blockchain": "ETHARB",
+        "contractAddress": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+      },
+      {
+        "coin": "USDTAPT",
+        "blockchain": "APT",
+        "contractAddress": "0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b"
+      },
+      {
+        "coin": "USDTAVAX",
+        "blockchain": "AVAX",
+        "contractAddress": "0x9702230a8ea53601f5cd2dc00fdbc13d4df4a8c7"
+      },
+      {
+        "coin": "USDTBSC",
+        "blockchain": "BSC",
+        "contractAddress": "0x55d398326f99059ff775485246999027b3197955"
+      },
+      {
+        "coin": "USDTETH",
+        "blockchain": "ETH",
+        "contractAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      },
+      {
+        "coin": "USDTNEAR",
+        "blockchain": "NEAR",
+        "contractAddress": "usdt.tether-token.near"
+      },
+      {
+        "coin": "USDTPOLY",
+        "blockchain": "POLPOLY",
+        "contractAddress": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f"
+      },
+      {
+        "coin": "USDTSOL",
+        "blockchain": "SOL",
+        "contractAddress": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"
+      },
+      {
+        "coin": "USDTTON",
+        "blockchain": "TON",
+        "contractAddress": "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs"
+      },
+      {
+        "coin": "USDTTRON",
+        "blockchain": "TRX",
+        "contractAddress": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+      },
+      {
+        "coin": "USDTXPL",
+        "blockchain": "XPL",
+        "contractAddress": "0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb"
+      },
+      {
+        "coin": "USDT",
+        "blockchain": "OMNI",
+        "contractAddress": null
+      }
+    ]
+  },
+  {
+    "coin": "RACA",
+    "networkList": [
+      {
+        "coin": "RACABSC",
+        "blockchain": "BSC",
+        "contractAddress": "0x12bb890508c125661e03b09ec06e404bc9289040"
+      },
+      {
+        "coin": "RACA",
+        "blockchain": "ETH",
+        "contractAddress": "0x12bb890508c125661e03b09ec06e404bc9289040"
+      }
+    ]
+  }
+]

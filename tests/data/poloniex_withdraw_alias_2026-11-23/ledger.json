@@ -1,0 +1,40 @@
+{
+  "sent": {
+    "venue": "poloniex",
+    "asset": {
+      "ticker": "BSC",
+      "bsc_contract": null
+    },
+    "network": "",
+    "amount": "0.71650811",
+    "status": "Sent",
+    "venue_ref": "4b667d3f5703a5557eae95ec8294ad013fff6a15bd140755b856f429aae5f558",
+    "tx_hash": "0x3fff3be63883c503f468d51555dd7a232f826381fb776463dc1805bf58ddd702",
+    "fee": {
+      "kind": "WithdrawFee",
+      "amount": "0.00078059",
+      "asset": "BSC",
+      "in_price": false,
+      "step": null
+    },
+    "updated_at": "2026-11-22T12:19:38.060609987Z"
+  },
+  "credited": {
+    "venue": "bsc_dex",
+    "asset": {
+      "ticker": "BNB",
+      "bsc_contract": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+    },
+    "network": "BEP20",
+    "amount": "0.715727520000000000",
+    "status": "Credited",
+    "venue_ref": "3fff3be63883c503f468d51555dd7a232f826381fb776463dc1805bf58ddd702",
+    "tx_hash": "0x3fff3be63883c503f468d51555dd7a232f826381fb776463dc1805bf58ddd702",
+    "fee": null,
+    "updated_at": "2026-11-22T12:19:38.070375300Z"
+  },
+  "asset_submitted": {
+    "ticker": "BNB",
+    "bsc_contract": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+  }
+}

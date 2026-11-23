@@ -130,7 +130,7 @@ pub async fn finish(
             to: c.to.clone(),
             ticker: c.asset.ticker.clone(),
             coin: super::coin_key::scope_id(c.asset),
-            venue_ref: c.created.venue_ref.clone(),
+            created: c.created,
             hash: hash.clone(),
             started: c.started,
             gw: c.gw_from.clone(),
@@ -149,7 +149,7 @@ struct Check {
     ticker: String,
     /// Решение 211: id области «монета» настроек (адрес; без адреса — тикер).
     coin: String,
-    venue_ref: String,
+    created: Transfer,
     /// Хеш пришедшей транзакции.
     hash: String,
     started: DateTime<Utc>,
@@ -184,6 +184,12 @@ async fn shortfall(core: &Core, c: &Check, fee: Option<&crate::core::types::Cost
         )
         .await;
     }
+}
+
+/// Пустые хеши не подтверждают транзакцию. Для непустых — та же нормализация, что у ожидания в сети.
+fn confirmed_hash(sender: &str, received: &str) -> bool {
+    let sender = norm(sender);
+    !sender.is_empty() && sender == norm(received)
 }
 
 /// Фоном: хеш вывода от биржи и сверка с пришедшей транзакцией (опрос withdrawal_status, не дольше
@@ -224,12 +230,12 @@ async fn sender_hash(core: Core, c: Check) {
     let quiet = Notify::new();
     let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(c.from.0.clone()));
     while tokio::time::Instant::now() < end {
-        match c.gw.withdrawal_status(&c.venue_ref).await {
+        match c.gw.withdrawal_status_for(&c.created).await {
             Ok(t) if t.tx_hash.is_some() && t.status != TransferStatus::Pending => {
                 // Решение 253 (д): фактическая комиссия вывода (у Binance — transactionFee истории выводов).
-                shortfall(&core, &c, t.fee.as_ref()).await;
                 let tx = t.tx_hash.unwrap_or_default();
-                if norm(&tx) == norm(&c.hash) {
+                if confirmed_hash(&tx, &c.hash) {
+                    shortfall(&core, &c, t.fee.as_ref()).await;
                     let text = format!("{head}; хеш вывода от {} совпал", c.from.0);
                     deps.log(
                         Level::Info,
@@ -280,4 +286,26 @@ async fn report(core: &Core, from: &VenueId, level: Level, text: String) {
     let tg = crate::notify::human::from_core("exec.chain_hash_mismatch", Some(&from.0), &text);
     deps.notify("exec.chain_hash_mismatch", Some(&from.0), &tg)
         .await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::confirmed_hash;
+    use serde_json::Value;
+
+    #[test]
+    fn a_different_or_empty_hash_cannot_confirm_the_deferred_withdrawal_fee() {
+        let record: Value = serde_json::from_str(include_str!(
+            "../../tests/data/poloniex_withdraw_alias_2026-11-23/ledger.json"
+        ))
+        .unwrap();
+        let sender = record["sent"]["tx_hash"].as_str().unwrap();
+        let credited = record["credited"]["tx_hash"].as_str().unwrap();
+        assert!(confirmed_hash(sender, credited));
+        assert!(!confirmed_hash(
+            sender,
+            record["sent"]["venue_ref"].as_str().unwrap()
+        ));
+        assert!(!confirmed_hash("", ""));
+    }
 }

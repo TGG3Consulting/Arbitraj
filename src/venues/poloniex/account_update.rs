@@ -131,9 +131,10 @@ fn rows(v: &Value) -> Frame {
     Frame::Balances(out)
 }
 
-/// Вид изменения по eventType. Возвращает: (вид, своё ли). Ошибок нет.
+/// Вид изменения по eventType. В документации `deposit`, в журнале Poloniex 9417247 — `DEPOSIT`.
+/// Исходное написание остаётся в источнике события. Возвращает: (вид, своё ли). Ошибок нет.
 pub fn kind(t: &str) -> (BalanceKind, bool) {
-    match t {
+    match t.to_ascii_lowercase().as_str() {
         "deposit" => (BalanceKind::Deposit, false),
         "withdraw" => (BalanceKind::Withdraw, false),
         // Ордера на споте делает бот (аккаунт только его — решение 76).

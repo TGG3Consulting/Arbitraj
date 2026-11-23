@@ -47,6 +47,8 @@ pub(super) struct Expect {
     pub(super) from: VenueId,
     pub(super) to: VenueId,
     pub(super) asset: Asset,
+    /// Имя актива у получателя на момент перевода. Баланс биржи может сообщить только это имя.
+    pub(super) recipient_ticker: String,
     pub(super) amount: Decimal,
     /// Хеш вывода от отправителя (нормализован — norm); None — ещё не известен.
     pub(super) tx: Option<String>,
@@ -166,6 +168,7 @@ pub fn register(
     amount: Decimal,
 ) -> Ticket {
     let wake = Arc::new(Notify::new());
+    let recipient_ticker = super::venue_ticker::ticker_on(core, asset, to);
     let mut st = lock(core);
     st.next += 1;
     let id = st.next;
@@ -174,6 +177,7 @@ pub fn register(
         from: from.clone(),
         to: to.clone(),
         asset: asset.clone(),
+        recipient_ticker,
         amount,
         tx: None,
         hits: Vec::new(),

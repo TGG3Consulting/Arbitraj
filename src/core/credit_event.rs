@@ -32,6 +32,13 @@ use super::engine::{Core, rd};
 
 /// Событие изменения баланса от адаптера. Ошибок нет: итог — в журнал.
 pub async fn on_change(core: &Core, mut b: BalanceChange) {
+    // Сеть и контракт, добавленные справочником ниже, не были сообщены биржей.
+    let bare_ticker = (b.kind == BalanceKind::Deposit
+        && b.tx_hash.is_none()
+        && b.asset.contract.is_none()
+        && b.asset.chain.is_none()
+        && b.account.is_none())
+    .then(|| b.asset.ticker.clone());
     // Решение 211: монета события — тикер площадки; в монету ядра (адрес, показное имя) — до сверки с ожиданиями.
     // Настройки монеты — по адресу (не нашёлся адрес — тикер, как раньше).
     b.asset = super::venue_ticker::asset_back(core, &b.venue, b.asset);
@@ -56,7 +63,10 @@ pub async fn on_change(core: &Core, mut b: BalanceChange) {
         }
         match b.kind {
             BalanceKind::Deposit if b.delta > Decimal::ZERO => match &tol {
-                Ok(tol) => deposit(&mut st, &b, *tol, (close, chain), strict),
+                Ok(tol) => bare_ticker
+                    .as_deref()
+                    .and_then(|ticker| ambiguous_currency(&st, &b, ticker))
+                    .or_else(|| deposit(&mut st, &b, *tol, (close, chain), strict)),
                 Err(e) => Some(format!("не сверено с переводами: {}", e.message)),
             },
             BalanceKind::Withdraw if b.delta < Decimal::ZERO => {
@@ -87,6 +97,28 @@ pub async fn on_change(core: &Core, mut b: BalanceChange) {
                 .await
         }
     }
+}
+
+/// Баланс одной биржевой валюты общий для её сетей. Если билеты соответствуют разным
+/// контрактам или сетям, запись без хеша не определяет перевод даже при совпадении сумм.
+fn ambiguous_currency(st: &State, b: &BalanceChange, ticker: &str) -> Option<String> {
+    let same = || {
+        st.list
+            .values()
+            .filter(|e| e.to == b.venue && e.recipient_ticker.eq_ignore_ascii_case(ticker))
+    };
+    let first = same().next()?;
+    if same()
+        .all(|e| e.asset.contract == first.asset.contract && e.asset.chain == first.asset.chain)
+    {
+        return None;
+    }
+    for e in same() {
+        e.wake.notify_one();
+    }
+    Some(format!(
+        "{ticker}: ожидаются переводы разных сетей или контрактов, в событии указан только тикер — проверяем статус по хешу"
+    ))
 }
 
 /// Текст изменения для журнала. Ошибок нет.

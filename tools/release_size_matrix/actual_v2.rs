@@ -2,7 +2,7 @@ use alloy_primitives::U256;
 use arb::core::convert::Rates;
 use arb::core::costs_source::Source;
 use arb::core::size::Fail;
-use arb::core::types::{Cost, Quote};
+use arb::core::types::{Cost, CostKind, Quote};
 use arb::venues::bsc_dex::num::{to_decimal, to_units};
 
 struct FixedV2 {
@@ -36,13 +36,16 @@ impl Source for FixedV2 {
         let out = to_decimal(raw, self.decimals_out)
             .filter(|out| *out > Decimal::ZERO)
             .ok_or_else(|| Fail::TooSmall("zero V2 output".into()))?;
-        let input = to_units(qty, self.decimals_in).and_then(|units| to_decimal(units, self.decimals_in))
-            .filter(|amount| *amount > Decimal::ZERO)
-            .ok_or_else(|| Fail::TooSmall("zero V2 input".into()))?;
+        // Native direct V2 reports the requested quantity for a complete swap.
+        // Only the contract input is rounded to atomic units.
         let mut quote = self.replay.quote(dir, sell, qty).await?;
-        // An unrepresentable fractional tail is not counted as filled.
-        quote.fillable_qty = input;
-        quote.avg_price = out / input;
+        quote.fillable_qty = qty;
+        quote.avg_price = out / qty;
+        for cost in &mut quote.costs {
+            if cost.kind == CostKind::PoolFee {
+                cost.amount = qty * Decimal::new(25, 4);
+            }
+        }
         if let Some(route) = &mut quote.route {
             route.legs[0].expected_out = out;
         }

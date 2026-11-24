@@ -23,6 +23,9 @@ jobs:
           inventory = "attribution.json" if attribution else "releases.json"
           rows = json.loads((Path("tools/release_size_matrix") / inventory).read_text(encoding="utf-8-sig"))
           assert len(rows) == len({r["sha"] for r in rows}) == (8 if attribution else 52)
+          if attribution and ref.endswith("-retry"):
+              rows = [r for r in rows if r["sha"].startswith(("98530a48", "534a97a1"))]
+              assert len(rows) == 2
           if not attribution and ref.endswith("-smoke"):
               anchors = ("f896a133", "cc1b4ef0", "7491b1e7", "8e02cc8")
               rows = [r for r in rows if r["sha"].startswith(anchors)]
@@ -115,11 +118,16 @@ jobs:
             *) test_case=release_size_matrix; expected=180 ;;
           esac
           cargo test --locked --test core_size_release_matrix "$test_case" -- --exact --nocapture > "$RUNNER_TEMP/replay.log" 2>&1 || {
-            grep -m 15 -A 4 -E 'error(\[E[0-9]+\])?:|panicked at|assertion|FAILED' "$RUNNER_TEMP/replay.log" | head -n 80 || true
+            grep -mi 15 -A 4 -E 'error(\[E[0-9]+\])?:|panicked at|assertion|FAILED|killed|no space|could not|signal:|lock file' "$RUNNER_TEMP/replay.log" | head -n 80 || true
             exit 1
           }
-          sed -n 's/^SIZE_MATRIX //p' "$RUNNER_TEMP/replay.log" > ../replay.jsonl
-          test "$(wc -l < ../replay.jsonl)" -eq "$expected"
+          sed -n -E 's/^(test [^ ]+ \.\.\. )?SIZE_MATRIX //p' "$RUNNER_TEMP/replay.log" > ../replay.jsonl
+          count="$(wc -l < ../replay.jsonl)"
+          if [[ "$count" != "$expected" ]]; then
+            printf 'Replay returned %s rows, expected %s\n' "$count" "$expected"
+            grep -m 8 -E 'running [0-9]+ test|test result:|SIZE_MATRIX ' "$RUNNER_TEMP/replay.log" | cut -c1-180 || true
+            exit 1
+          fi
       - name: Isolate bound-probe count and percentage-gate effects
         if: contains(github.ref_name, '-attribution-')
         shell: bash
@@ -136,7 +144,7 @@ jobs:
               grep -m 15 -A 4 -E 'error(\[E[0-9]+\])?:|panicked at|assertion|FAILED' "$RUNNER_TEMP/$mode.log" | head -n 80 || true
               exit 1
             }
-            sed -n 's/^SIZE_MATRIX //p' "$RUNNER_TEMP/$mode.log" > "../$mode.jsonl"
+            sed -n -E 's/^(test [^ ]+ \.\.\. )?SIZE_MATRIX //p' "$RUNNER_TEMP/$mode.log" > "../$mode.jsonl"
             test "$(wc -l < "../$mode.jsonl")" -eq 180
           done
       - uses: actions/upload-artifact@v4

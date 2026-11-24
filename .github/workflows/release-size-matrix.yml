@@ -107,8 +107,31 @@ jobs:
             stored-meta.json
             stored-replay.jsonl
           if-no-files-found: error
+      - name: Cross-replay real trades on a verified fixed V2 route
+        if: contains(github.ref_name, '-fixedv2-')
+        shell: bash
+        run: |
+          set -eo pipefail
+          python harness/tools/release_size_matrix/actual_v2.py stage release harness/tools/release_size_matrix/actual_v2_cases.json > fixedv2-meta.json
+          expected=$(python -c 'import json; print(json.load(open("fixedv2-meta.json")).get("expected_rows", 0))')
+          if [[ "$expected" != 0 ]]; then
+            (cd release && CARGO_TERM_COLOR=never cargo test --locked --test core_size_actual_v2 actual_v2_matrix -- --exact --nocapture) > "$RUNNER_TEMP/fixedv2.log" 2>&1 || {
+              grep -mi 15 -A 4 -E 'error|panicked at|assertion|FAILED|signal:' "$RUNNER_TEMP/fixedv2.log" | head -n 80 || true
+              exit 1
+            }
+            sed -n -E 's/^(test [^ ]+ \.\.\. )?ACTUAL_V2_MATRIX //p' "$RUNNER_TEMP/fixedv2.log" > fixedv2-replay.jsonl
+            test "$(wc -l < fixedv2-replay.jsonl)" -eq "$expected"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: contains(github.ref_name, '-fixedv2-')
+        with:
+          name: fixedv2-replay-${{ matrix.sha }}
+          path: |
+            fixedv2-meta.json
+            fixedv2-replay.jsonl
+          if-no-files-found: error
       - name: Run native size selection against the common cases
-        if: "!contains(github.ref_name, '-native-') && !contains(github.ref_name, '-stored-')"
+        if: "!contains(github.ref_name, '-native-') && !contains(github.ref_name, '-stored-') && !contains(github.ref_name, '-fixedv2-')"
         shell: bash
         working-directory: release
         run: |
@@ -157,7 +180,7 @@ jobs:
             percentage-gate-off.jsonl
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
-        if: "!contains(github.ref_name, '-native-') && !contains(github.ref_name, '-stored-') && !contains(github.ref_name, '-attribution-')"
+        if: "!contains(github.ref_name, '-native-') && !contains(github.ref_name, '-stored-') && !contains(github.ref_name, '-attribution-') && !contains(github.ref_name, '-fixedv2-')"
         with:
           name: replay-${{ matrix.sha }}
           path: replay.jsonl

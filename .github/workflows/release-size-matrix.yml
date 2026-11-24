@@ -60,7 +60,7 @@ jobs:
           workspaces: release -> target
           shared-key: release-size-matrix
       - name: Run native routing on saved pool states
-        if: contains(github.ref_name, '-native-')
+        if: contains(github.ref_name, '-native-') || contains(github.ref_name, '-combined-')
         shell: bash
         run: |
           set -eo pipefail
@@ -74,7 +74,7 @@ jobs:
             test "$(wc -l < native-route.jsonl)" -eq 80
           fi
       - uses: actions/upload-artifact@v4
-        if: contains(github.ref_name, '-native-')
+        if: contains(github.ref_name, '-native-') || contains(github.ref_name, '-combined-')
         with:
           name: native-route-${{ matrix.sha }}
           path: |
@@ -82,7 +82,7 @@ jobs:
             native-route.jsonl
           if-no-files-found: error
       - name: Cross-replay recorded trades on native cost and size code
-        if: contains(github.ref_name, '-stored-')
+        if: contains(github.ref_name, '-stored-') || contains(github.ref_name, '-combined-')
         shell: bash
         run: |
           set -eo pipefail
@@ -97,7 +97,7 @@ jobs:
             test "$(wc -l < stored-replay.jsonl)" -eq "$expected"
           fi
       - uses: actions/upload-artifact@v4
-        if: contains(github.ref_name, '-stored-')
+        if: contains(github.ref_name, '-stored-') || contains(github.ref_name, '-combined-')
         with:
           name: stored-replay-${{ matrix.sha }}
           path: |
@@ -111,7 +111,7 @@ jobs:
         run: |
           set -eo pipefail
           case "$GITHUB_REF_NAME" in
-            *-routes-*) test_case=routes::release_size_matrix_routes; expected=10240 ;;
+            *-routes-*|*-combined-*) test_case=routes::release_size_matrix_routes; expected=10240 ;;
             *) test_case=release_size_matrix; expected=180 ;;
           esac
           cargo test --locked --test core_size_release_matrix "$test_case" -- --exact --nocapture > "$RUNNER_TEMP/replay.log" 2>&1 || {

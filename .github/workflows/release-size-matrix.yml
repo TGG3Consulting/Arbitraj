@@ -18,9 +18,12 @@ jobs:
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import json, os
           from pathlib import Path
-          rows = json.loads(Path("tools/release_size_matrix/releases.json").read_text(encoding="utf-8-sig"))
-          assert len(rows) == len({r["sha"] for r in rows}) == 52
-          if os.environ["GITHUB_REF_NAME"].endswith("-smoke"):
+          ref = os.environ["GITHUB_REF_NAME"]
+          attribution = "-attribution-" in ref
+          inventory = "attribution.json" if attribution else "releases.json"
+          rows = json.loads((Path("tools/release_size_matrix") / inventory).read_text(encoding="utf-8-sig"))
+          assert len(rows) == len({r["sha"] for r in rows}) == (8 if attribution else 52)
+          if not attribution and ref.endswith("-smoke"):
               anchors = ("f896a133", "cc1b4ef0", "7491b1e7", "8e02cc8")
               rows = [r for r in rows if r["sha"].startswith(anchors)]
               assert len(rows) == len(anchors)
@@ -117,8 +120,36 @@ jobs:
           }
           sed -n 's/^SIZE_MATRIX //p' "$RUNNER_TEMP/replay.log" > ../replay.jsonl
           test "$(wc -l < ../replay.jsonl)" -eq "$expected"
+      - name: Isolate bound-probe count and percentage-gate effects
+        if: contains(github.ref_name, '-attribution-')
+        shell: bash
+        working-directory: release
+        run: |
+          set -eo pipefail
+          for mode in serial-bounds percentage-gate-off; do
+            if [[ "$mode" == serial-bounds ]]; then
+              export SIZE_MATRIX_PROBES=1 SIZE_MATRIX_PCT_MODE=on
+            else
+              export SIZE_MATRIX_PROBES=3 SIZE_MATRIX_PCT_MODE=off
+            fi
+            cargo test --locked --test core_size_release_matrix release_size_matrix -- --exact --nocapture > "$RUNNER_TEMP/$mode.log" 2>&1 || {
+              grep -m 15 -A 4 -E 'error(\[E[0-9]+\])?:|panicked at|assertion|FAILED' "$RUNNER_TEMP/$mode.log" | head -n 80 || true
+              exit 1
+            }
+            sed -n 's/^SIZE_MATRIX //p' "$RUNNER_TEMP/$mode.log" > "../$mode.jsonl"
+            test "$(wc -l < "../$mode.jsonl")" -eq 180
+          done
       - uses: actions/upload-artifact@v4
-        if: "!contains(github.ref_name, '-native-') && !contains(github.ref_name, '-stored-')"
+        if: contains(github.ref_name, '-attribution-')
+        with:
+          name: attribution-${{ matrix.sha }}
+          path: |
+            replay.jsonl
+            serial-bounds.jsonl
+            percentage-gate-off.jsonl
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: "!contains(github.ref_name, '-native-') && !contains(github.ref_name, '-stored-') && !contains(github.ref_name, '-attribution-')"
         with:
           name: replay-${{ matrix.sha }}
           path: replay.jsonl

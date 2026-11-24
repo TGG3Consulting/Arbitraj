@@ -18,7 +18,7 @@ SHARED_PARAMS = {
 
 OPTIONAL_PARAMS = {
     "par_points": "4",
-    "bisect_probes": "3",
+    "bisect_probes": 'std::env::var("SIZE_MATRIX_PROBES").ok().and_then(|s| s.parse().ok()).unwrap_or(3)',
     "early_floor": "None",
     "reuse": "true",
     "par_blocked": "false",
@@ -61,7 +61,11 @@ def adapt(source, target):
     setup = "" if not native else """
     let extra = arb::core::size_extra::Extra {
         min_usd: Some(floor.0),
-        min_pct: Some(floor.1),
+        min_pct: if std::env::var("SIZE_MATRIX_PCT_MODE").as_deref() == Ok("off") {
+            None
+        } else {
+            Some(floor.1)
+        },
         ..Default::default()
     };
 """

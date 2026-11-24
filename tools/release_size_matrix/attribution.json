@@ -1,0 +1,34 @@
+[
+  {
+    "sha": "8fe83aa1ac9565376001430d173bcc874f8e76f0",
+    "run": "last-tested-legacy"
+  },
+  {
+    "sha": "98530a482a3eed204230757020eb6f980efc7fb9",
+    "run": "t157-parallel-and-kary-bounds"
+  },
+  {
+    "sha": "f36fe93fc145a711051a74514ba717d37d270efc",
+    "run": "t157-reviewed"
+  },
+  {
+    "sha": "27bf569bf7e829d2cbfb50411ff4ea29c2e79731",
+    "run": "t157-merge"
+  },
+  {
+    "sha": "534a97a182bfee5996d892043cca022c78c58652",
+    "run": "t159-initial-percentage-constraint"
+  },
+  {
+    "sha": "a702d5b00f28909742cdbea7a1e1815c8410d466",
+    "run": "t159-reviewed"
+  },
+  {
+    "sha": "9b7f9546e13c25196061d424554fc53b142d9b84",
+    "run": "t159-merge"
+  },
+  {
+    "sha": "fa9b926856e7186522f8a3fcb74be2010f707a11",
+    "run": "first-tested-modern"
+  }
+]

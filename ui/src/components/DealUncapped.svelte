@@ -1,7 +1,7 @@
 <!--
   Файл: ui/src/components/DealUncapped.svelte
-  Что делает: в карточке сделки — расчёт «без потолка» (решение 141): «зашли на X USDT (что ограничило) → потенциал:
-    вложить Y, прибыль Z; упущено Z − план; потенциал − факт». Данные — GET /api/uncapped/deal/{id} (404 — не посчитано:
+  Что делает: в карточке сделки — расчёт «без потолка» (решение 141): «зашли на X USDT (что ограничило) → модель без лимита:
+    вложение и прибыль модели, разница вариантов, расчётная прибыль минус факт». Данные — GET /api/uncapped/deal/{id} (404 — не посчитано:
     фича выключена, сделка до решения 141 или расчёт ещё идёт). Запись приходит от экрана «Сделки» одним запросом
     GET /api/uncapped/deals на все сделки (06.11.2026: запрос на каждую сделку — сотни 404 и лаги интерфейса); свой
     запрос — только по кнопке «Обновить».
@@ -35,9 +35,9 @@
 
 {#if rec}
   <p>
-    Зашли на <strong>{money(rec.battle.invested)} USDT</strong> (ограничило: {limitedLabel(rec.limited_by)}) → потенциал:
+    Плановый вход <strong>{money(rec.battle.invested)} USDT</strong> (ограничило: {limitedLabel(rec.limited_by)}) → модель без лимита:
     вложить <strong>{money(rec.opt.invested)} USDT</strong>, прибыль <strong>{money(rec.opt.profit)} USDT</strong>;
-    план {money(rec.battle.profit)}{#if fact != null}, факт {money(fact)}, потенциал − факт
+    план {money(rec.battle.profit)}{#if fact != null}, факт {money(fact)}, расчётная прибыль без лимита минус факт
       <strong>{money(Number(rec.opt_passes ? rec.opt.profit : 0) - Number(fact))} USDT</strong>{/if}
   </p>
   <UncappedLine u={rec} />

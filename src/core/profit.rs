@@ -185,7 +185,9 @@ pub async fn decide_capped(
     let mut choice = found.choice;
     choice.why = why(&choice, &d.asset.ticker);
     if choice.capped && choice.evals >= p.max_evals {
-        choice.why.push_str("; достигнут предел числа расчётов size.max_evals");
+        choice
+            .why
+            .push_str("; достигнут предел числа расчётов size.max_evals");
     }
     // Ревью t157 Н3: size.parallel_points задана без cpu.threads_max — точки по одной; причина — в пояснении.
     if p.par_blocked {
@@ -342,7 +344,7 @@ pub(super) async fn final_standard(
                 format!("{t}; {e}")
             })?;
             let q = if step > Decimal::ZERO {
-                (fill / step).floor() * step
+                super::size_unit_grid::floor_buy(cx, fill, step)?
             } else {
                 fill
             };
@@ -375,7 +377,7 @@ pub(super) async fn final_standard(
     if step <= Decimal::ZERO || c.spend_max <= Decimal::ZERO {
         return Err(over(&c));
     }
-    let q = (qty * budget / c.spend_max / step).floor() * step;
+    let q = super::size_unit_grid::floor_buy(cx, qty * budget / c.spend_max, step)?;
     if q <= Decimal::ZERO || q >= qty {
         return Err(over(&c));
     }

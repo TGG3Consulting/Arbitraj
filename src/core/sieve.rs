@@ -81,6 +81,12 @@ pub async fn check(core: &Core, d: &Direction) -> Checked {
 /// Возвращает: Sieve. Ошибок нет.
 async fn verdict(core: &Core, d: &Direction, cx: &DirCtx) -> Sieve {
     let na = |class: &'static str, why: String| Sieve::Na { class, why };
+    if !cx.units_b_per_a.is_identity() {
+        return na(
+            "settlement_units",
+            super::bound_in::UNIT_BOUND_UNAVAILABLE.into(),
+        );
+    }
     let s = &core.inner.deps.settings;
     let (min_usd, min_pct) = match super::venue_dir::thresholds(s, super::venue_dir::of(core, d)) {
         Ok(t) => t,

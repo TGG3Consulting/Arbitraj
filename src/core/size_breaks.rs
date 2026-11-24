@@ -134,7 +134,15 @@ pub async fn core_breaks(
         let Ok(v) = super::dex_account::venue_dir(deps, d, venue).await else {
             continue;
         };
-        let Ok(b) = v.quote_breaks(&on, side, route, max_qty, limit).await else {
+        let max = if side == Side::Sell {
+            let Ok(max) = cx.units_b_per_a.to_sell(max_qty) else {
+                continue;
+            };
+            max
+        } else {
+            max_qty
+        };
+        let Ok(b) = v.quote_breaks(&on, side, route, max, limit).await else {
             continue;
         };
         if side == Side::Buy {

@@ -1,0 +1,21 @@
+[
+  {
+    "coin": "1MBABYDOGE",
+    "networkList": [
+      {
+        "network": "BSC",
+        "coin": "1MBABYDOGE",
+        "withdrawIntegerMultiple": "0.01",
+        "depositEnable": true,
+        "withdrawEnable": true,
+        "withdrawFee": "10",
+        "withdrawMin": "20",
+        "withdrawMax": "9999999999",
+        "depositDust": "0.01",
+        "minConfirm": 5,
+        "contractAddress": "0xc748673057861a797275cd8a068abb95a902e8de",
+        "denomination": 1000000
+      }
+    ]
+  }
+]

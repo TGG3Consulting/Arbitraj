@@ -24,6 +24,8 @@
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::{reserve, vol, costs, uncapped_replay}, tests/size_common. Моков нет.
 
+#[path = "size_common/settlement_replay.rs"]
+mod settlement_replay;
 mod size_common;
 
 use arb::core::Core;
@@ -169,6 +171,7 @@ fn cx(rec: &Rec, d_: Direction, sigma: Decimal, share: Option<Decimal>) -> DirCt
     let dex_a = d_.buy_on.0 == "bsc_dex";
     let dex_b = d_.sell_on.0 == "bsc_dex";
     DirCtx {
+        units_b_per_a: Default::default(),
         a: p(&d_.buy_on, dex_a),
         b: p(&d_.sell_on, dex_b),
         dir: d_,
@@ -220,7 +223,7 @@ impl<'a> PoolToBook<'a> {
                 taken_at: b.received_at,
                 book: b,
             },
-            plan: PlanCosts::new("CAKE", &[], Decimal::ZERO),
+            plan: PlanCosts::new("CAKE", &[], Decimal::ZERO, None),
         }
     }
 }

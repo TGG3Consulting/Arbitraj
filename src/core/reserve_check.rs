@@ -183,7 +183,7 @@ pub fn priced_box(
         .find(|l| l.kind == CostKind::PriceMoveReserve)
         .and_then(|l| l.usdt)
         .unwrap_or_default();
-    let (buy, sell) = (qa.avg_price, qb.avg_price);
+    let (buy, sell) = (cx.units_b_per_a.to_buy(qa.avg_price).ok()?, qb.avg_price);
     Some(Box::new(priced(
         c, cx, proceeds, buy, sell, r, profit, rates,
     )))

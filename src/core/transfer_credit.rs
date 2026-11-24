@@ -51,12 +51,26 @@ pub async fn wait(
     gw: Arc<dyn Venue>,
     ticket: Option<Ticket>,
 ) -> Transfer {
+    wait_with_units(core, leg, gw, ticket, None).await
+}
+
+pub(super) async fn wait_with_units(
+    core: &Core,
+    leg: &Leg<'_>,
+    gw: Arc<dyn Venue>,
+    ticket: Option<Ticket>,
+    pinned: Option<super::settlement_unit::UnitRatio>,
+) -> Transfer {
     let deps = &core.inner.deps;
     let quiet = Notify::new();
     let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(leg.to.0.clone()));
     let mut last = String::new();
     loop {
-        if let Some(hit) = by_event(ticket.as_ref()) {
+        if let Some(hit) = by_event(ticket.as_ref())
+            && (pinned.is_none()
+                || hit.tx_hash.is_some()
+                || super::credit_expect::units(core, leg.from, leg.to, leg.asset).ok() == pinned)
+        {
             let t = Transfer {
                 venue: leg.to.clone(),
                 asset: leg.asset.clone(),

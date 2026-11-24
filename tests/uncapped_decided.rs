@@ -91,6 +91,7 @@ fn cx(rec: &Rec, sigma: Decimal) -> DirCtx {
         via: None,
     };
     DirCtx {
+        units_b_per_a: Default::default(),
         dir: dir(),
         a: p("bingx"),
         b: p("mexc"),
@@ -206,7 +207,7 @@ fn frozen(rec: &Rec, sigma: Decimal, plan: &costs::Calc, s: &Store) -> Frozen {
         at: Utc::now(),
         decided: Some(Arc::new(Decided {
             cx: cx(rec, sigma),
-            plan: PlanCosts::new("CAKE", &lines, plan.arrive),
+            plan: PlanCosts::new("CAKE", &lines, plan.arrive, plan.transfer_sent_a),
             settings: s.pinned(),
         })),
     }

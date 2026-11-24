@@ -161,7 +161,17 @@ pub async fn recalc(
         )));
         return None;
     }
-    let qty = match floor_qty(w.qty, step) {
+    let aligned = if cx.pair_a.is_none() && !cx.units_b_per_a.is_identity() && step > Decimal::ZERO
+    {
+        super::size_unit_grid::floor_buy(cx, w.qty, step).and_then(|q| {
+            (q > Decimal::ZERO)
+                .then_some(q)
+                .ok_or_else(|| "объём кандидата меньше шага".into())
+        })
+    } else {
+        floor_qty(w.qty, step)
+    };
+    let qty = match aligned {
         Ok(q) => q,
         Err(e) => {
             w.path = Some(Path::Full(e));

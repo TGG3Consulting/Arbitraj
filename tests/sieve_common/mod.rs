@@ -97,6 +97,7 @@ pub fn cx_with(
 ) -> DirCtx {
     let (a_cex, b_cex) = (w != Way::DexCex, w != Way::CexDex);
     DirCtx {
+        units_b_per_a: Default::default(),
         dir: dir(w),
         a: presence(net, a_cex),
         b: presence(net, b_cex),

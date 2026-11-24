@@ -54,6 +54,7 @@ pub async fn save(core: &Core, deal: &Deal) {
         None
     };
     let rec: &Deal = marked.as_deref().unwrap_or(deal);
+    super::settlement_unit::observe(core, rec);
     // Решение 125: сделка изменилась — задача окон проверяет, не пора ли закрыть окно монеты.
     core.inner.window_kick.notify_one();
     super::window_deal::saved(core, rec); // Решение 245: цена DEX на объём сделки в окне — кто под наблюдением.

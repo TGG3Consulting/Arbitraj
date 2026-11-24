@@ -130,6 +130,7 @@ impl Recording {
             decided: None,
         };
         let cx = DirCtx {
+            units_b_per_a: Default::default(),
             dir,
             a,
             b,

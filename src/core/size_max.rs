@@ -65,6 +65,7 @@ where
     }
     // Одни расчёты на поиск оптимума и бисекцию наибольшего объёма — точки не считаются дважды.
     let mut m = Memo::new(curve, p.step, p.budget, p.max_evals).with_share(p.par_points, p.reuse);
+    m.sell_grid = p.ext.sell_grid;
     let f = search_in(&mut m, p).await?;
     let upper = f.choice.max_qty;
     let hi = m

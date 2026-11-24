@@ -34,12 +34,13 @@ pub fn params(
     price: Decimal,
     src: Option<&Frozen>,
 ) -> Result<Params, String> {
-    let step = cx
-        .pair_a
-        .as_ref()
-        .or(cx.pair_b.as_ref())
-        .map(|p| p.step_size)
-        .ok_or("шаг количества неизвестен: ни одна сторона сделки не биржа")?;
+    let (step, sell_grid) = match (&cx.pair_a, &cx.pair_b) {
+        (Some(a), _) => (a.step_size, None),
+        (None, Some(b)) => {
+            super::size_unit_grid::SellGrid::for_dex_buy(cx.units_b_per_a, b.step_size)?
+        }
+        _ => return Err("шаг количества неизвестен: ни одна сторона сделки не биржа".into()),
+    };
     let d = &cx.dir;
     // Решение 211: стаканы — по тикеру площадки (Presence::ticker стороны направления).
     let (ta, tb) = (&cx.a.ticker, &cx.b.ticker);
@@ -72,6 +73,7 @@ pub fn params(
         }
     };
     let mut p = search_params(s, step, budget, price, buy_breaks, sell_breaks)?;
+    p.ext.sell_grid = sell_grid;
     // Решения 336, 363 (в логику): повторное использование в подборе — у направления с DEX (сторона без правил пары
     // биржи, dirctx_venue.rs pair_rules: None — не биржа). Биржа ↔ биржа — короба ради reuse нет (DEX нет, ревью t157
     // Б1); цикл DEX ↔ DEX строит свои Params без reuse (cycle_plan.rs).

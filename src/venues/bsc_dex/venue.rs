@@ -70,8 +70,40 @@ impl Venue for BscDex {
         &self,
         token: alloy_primitives::Address,
     ) -> GatewayResult<Option<Decimal>> {
+        self.settlement_profile(token).await.map(|(_, _, m)| m)
+    }
+
+    async fn settlement_profile(
+        &self,
+        token: alloy_primitives::Address,
+    ) -> GatewayResult<(u64, u8, Option<Decimal>)> {
         let block = self.p.heads.fresh(&self.p.ctx)?.number;
-        self.p.scaled_units.read(&self.p.ctx, token, block).await
+        let (decimals, scale) = self.p.scaled_units.read(&self.p.ctx, token, block).await?;
+        Ok((block, decimals, scale))
+    }
+
+    async fn confirmed_ui_credit(
+        &self,
+        asset: &Asset,
+        tx_hash: &str,
+        raw_credited: Decimal,
+    ) -> GatewayResult<Option<Decimal>> {
+        self.p.ctx.bound()?;
+        Ok(self
+            .transfer_display_unit(asset, tx_hash, raw_credited, true)
+            .await?
+            .map(|(ui, _)| ui))
+    }
+
+    async fn transfer_display_unit(
+        &self,
+        asset: &Asset,
+        hash: &str,
+        raw: Decimal,
+        incoming: bool,
+    ) -> GatewayResult<Option<(Decimal, Decimal)>> {
+        self.p.ctx.bound()?;
+        wallet::scaled_credit::confirmed(&self.p, asset, hash, raw, incoming).await
     }
 
     /// Подписка на рынок: опрос блоков (решение 57), пулы монет (eth_subscribe logs, execution-apis subscribe.yaml), новые пулы,

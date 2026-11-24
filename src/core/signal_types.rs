@@ -12,13 +12,23 @@ use serde::Serialize;
 use super::signal_fast::Trigger;
 use crate::core::types::Direction;
 
-/// Цены направления на объём сравнения (prices.rs).
+/// Котировка продажи в собственных единицах площадки B.
+#[derive(Debug, Clone, Serialize)]
+pub struct VenueSale {
+    pub price: Decimal,
+    pub qty: Decimal,
+}
+
+/// Цены направления на объём сравнения, в единицах покупки A (prices.rs).
 #[derive(Debug, Clone, Serialize)]
 pub struct Prices {
     /// Средняя цена покупки на A.
     pub buy: Decimal,
-    /// Средняя цена продажи на B.
+    /// Средняя цена продажи на B, приведённая к единице покупки A для сравнения.
     pub sell: Decimal,
+    /// Исходные цена и глубина B при отличающихся единицах. Отметки стакана и σ берут их.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub venue_sale: Option<VenueSale>,
     /// Сумма процентных комиссий обеих сторон, которых нет в цене (торговая комиссия биржи), %.
     pub fees_pct: Decimal,
     /// Объём сравнения, монет: меньшая из глубин на потолке (решение 87) или, если задан signal.probe_usd, на объёме

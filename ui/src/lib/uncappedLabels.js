@@ -87,9 +87,6 @@ const BASIS = {
 /** Решение 237: запись сделки по снимку стаканов, но σ и курсы — на момент расчёта (до решения 237): несравнимо. */
 export const lateInputs = (b) => b?.battle?.verdict === 'deal' && b?.basis === 'decision_snapshot';
 
-/** Решение 237: «заработали бы» / «потеряли бы» по знаку расчёта. */
-export const wouldText = (profit) => (Number(profit) < 0 ? 'потеряли бы' : 'заработали бы');
-
 /** Решение 218: запись — пересчёт старой записи сделки по окну. */
 export const recomputed = (b) => (b?.basis ?? '').startsWith('recomputed_window');
 

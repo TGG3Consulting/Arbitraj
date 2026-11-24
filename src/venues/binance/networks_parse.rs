@@ -10,7 +10,7 @@
 //! withdrawIntegerMultiple (ошибка −4021 «сумма вывода должна быть кратна» — это шаг), depositDust (Changelog Wallet
 //! 2021-09-03: «minimum creditable amount»), minConfirm («for balance credit»), unLockConfirm, withdrawTag («whether the coin requires
 //! a memo to withdraw»), contractAddress, denomination («1 1MBABYDOGE = 1000000 BABYDOGE»), busy.
-//! Монета с denomination ≠ 1 в сети BSC пропускается: количество на бирже и в пуле — в разных единицах (вопрос Тиграну).
+//! Лот своей сети относится к биржевому тикеру и адресу именно этой строки. Курсы других сетей не подставляются.
 
 use chrono::Utc;
 use rust_decimal::Decimal;
@@ -35,6 +35,7 @@ pub struct DepositMin {
 #[derive(Default)]
 pub struct Parsed {
     pub list: Vec<CoinNetworkInfo>,
+    pub(super) units: super::denomination::Units,
     /// Пропущенные сети: «монета/сеть: причина».
     pub skipped: Vec<String>,
 }
@@ -63,8 +64,14 @@ pub fn parse_networks(
             let Some(code) = num::text_opt(n, "network") else {
                 continue;
             };
-            match one(n, &ticker, &code, own.has(&code), venue, min) {
-                Ok(i) => p.list.push(i),
+            let own = own.has(&code);
+            let parsed = one(n, &ticker, &code, own, venue, min);
+            if own {
+                p.units
+                    .record(&code, &ticker, parsed.as_ref().ok().map(|(i, u)| (i, *u)));
+            }
+            match parsed {
+                Ok((i, _)) => p.list.push(i),
                 Err(why) => p.skipped.push(format!("{ticker}/{code}: {why}")),
             }
         }
@@ -80,50 +87,56 @@ fn one(
     is_bsc: bool,
     venue: &VenueId,
     min: DepositMin,
-) -> Result<CoinNetworkInfo, String> {
+) -> Result<(CoinNetworkInfo, Option<Decimal>), String> {
     let e = |e: crate::gateway::errors::GatewayError| e.message;
-    if is_bsc
-        && let Some(d) = num::dec_opt(n, "denomination").map_err(e)?
-        && d != Decimal::ONE
-    {
-        return Err(format!(
-            "denomination = {d}: единицы на бирже и в пуле разные — монета не сопоставляется"
-        ));
-    }
     let contract = if is_bsc {
         num::text_opt(n, "contractAddress").and_then(|a| a.trim().parse().ok())
     } else {
         None
     };
+    let ratio = if is_bsc {
+        super::denomination::per_raw(n)?
+    } else {
+        None
+    };
+    if ratio.is_some()
+        && (contract.is_none_or(|a| a == alloy_primitives::Address::ZERO)
+            || n["coin"].as_str() != Some(ticker))
+    {
+        return Err("denomination указана без подтверждения адреса и спотового тикера".into());
+    }
     let dust = num::dec_opt(n, "depositDust").map_err(e)?;
     let deposit_min = match (min.dust_as_min, dust) {
         (true, Some(d)) => Some(d),
         _ if min.absent_ok => Some(Decimal::ZERO),
         _ => None,
     };
-    Ok(CoinNetworkInfo {
-        venue: venue.clone(),
-        asset: Asset {
-            chain: None,
-            ticker: ticker.to_string(),
-            contract,
+    Ok((
+        CoinNetworkInfo {
+            venue: venue.clone(),
+            asset: Asset {
+                chain: None,
+                ticker: ticker.to_string(),
+                contract,
+            },
+            network: code.to_string(),
+            deposit_enabled: flag(n, "depositEnable")?,
+            withdraw_enabled: flag(n, "withdrawEnable")?,
+            withdraw_fee: num::dec_opt(n, "withdrawFee").map_err(e)?,
+            withdraw_fee_pct: None,
+            withdraw_min: num::dec_opt(n, "withdrawMin").map_err(e)?,
+            withdraw_max: max_limit(n, "withdrawMax")?,
+            deposit_min,
+            deposit_confirmations: num::text_opt(n, "minConfirm").and_then(|s| s.parse().ok()),
+            withdraw_precision: None,
+            withdraw_step: n
+                .get("withdrawIntegerMultiple")
+                .and_then(num::to_dec)
+                .filter(|v| *v > Decimal::ZERO),
+            updated_at: Utc::now(),
         },
-        network: code.to_string(),
-        deposit_enabled: flag(n, "depositEnable")?,
-        withdraw_enabled: flag(n, "withdrawEnable")?,
-        withdraw_fee: num::dec_opt(n, "withdrawFee").map_err(e)?,
-        withdraw_fee_pct: None,
-        withdraw_min: num::dec_opt(n, "withdrawMin").map_err(e)?,
-        withdraw_max: max_limit(n, "withdrawMax")?,
-        deposit_min,
-        deposit_confirmations: num::text_opt(n, "minConfirm").and_then(|s| s.parse().ok()),
-        withdraw_precision: None,
-        withdraw_step: n
-            .get("withdrawIntegerMultiple")
-            .and_then(num::to_dec)
-            .filter(|v| *v > Decimal::ZERO),
-        updated_at: Utc::now(),
-    })
+        ratio,
+    ))
 }
 
 /// Наибольшая сумма вывода; целое длиннее предела Decimal — Decimal::MAX (заведомо больше любой нашей суммы).

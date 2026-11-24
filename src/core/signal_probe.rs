@@ -27,6 +27,7 @@ use crate::settings::store::Store;
 use crate::settings::venue_dir::VenueDir;
 
 use super::engine::{Core, rd};
+use super::settlement_unit::UnitRatio;
 
 /// Что делает: читает signal.probe_usd. Принимает: хранилище, пару «площадка + тип направления» (None — нет), прежнюю
 /// область (площадка покупки A). Возвращает: Some(сумма, USDT) или None — не задана нигде.
@@ -77,11 +78,16 @@ pub fn qty(
 /// Что делает: минимумы площадок направления из памяти ядра (пары — справочник пар, сети — справочник сетей, иначе
 /// копия в справочнике монет). Принимает: ядро, направление, опорную цену (> 0). Возвращает: монет (floor_qty).
 /// Ошибок нет: чего нет в памяти — не учитывается (точный минимум — подбор объёма, size_bounds.rs).
-pub(super) fn floor_of(core: &Core, dir: &Direction, ref_price: Decimal) -> Decimal {
+pub(super) fn floor_of(
+    core: &Core,
+    dir: &Direction,
+    ref_price: Decimal,
+    units: UnitRatio,
+) -> Result<Decimal, String> {
     let (a, b) = {
         let coins = rd(&core.inner.coins);
         let Some(entry) = super::ticker_index::find(core, &coins, &dir.asset) else {
-            return Decimal::ZERO;
+            return Ok(Decimal::ZERO);
         };
         (
             entry.at(&dir.buy_on).cloned(),
@@ -101,10 +107,22 @@ pub(super) fn floor_of(core: &Core, dir: &Direction, ref_price: Decimal) -> Deci
             .and_then(|p| market.pair(&p.venue, &p.ticker).cloned())
     };
     let (pa, pb) = (pair(&a), pair(&b));
-    floor_qty(
-        [pa.as_ref(), pb.as_ref()],
-        withdraw_min,
-        deposit_min,
-        ref_price,
-    )
+    if units.is_identity() {
+        return Ok(floor_qty(
+            [pa.as_ref(), pb.as_ref()],
+            withdraw_min,
+            deposit_min,
+            ref_price,
+        ));
+    }
+    let min_a = floor_qty([pa.as_ref(), None], withdraw_min, None, ref_price);
+    let min_qty_b = pb
+        .as_ref()
+        .and_then(|p| p.min_qty)
+        .unwrap_or_default()
+        .max(deposit_min.unwrap_or_default());
+    let notional_b = pb.as_ref().and_then(|p| p.min_notional).unwrap_or_default();
+    Ok(min_a
+        .max(units.to_buy(min_qty_b)?)
+        .max(notional_b / ref_price))
 }

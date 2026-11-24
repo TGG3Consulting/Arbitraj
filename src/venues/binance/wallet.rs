@@ -15,6 +15,7 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
 use reqwest::Method;
+use rust_decimal::Decimal;
 
 use crate::core::types::{Asset, CoinNetworkInfo, Cost, CostKind};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
@@ -25,8 +26,39 @@ use super::errors::Op;
 use super::networks_parse::{DepositMin, parse_networks};
 use super::rest;
 
-/// Справочник и когда он получен.
-type Cached = (Instant, Arc<Vec<CoinNetworkInfo>>);
+/// Метаданные единиц и сам справочник опубликованы одним снимком одного ответа getall.
+struct Cached {
+    started: Instant,
+    origin: Origin,
+    list: Arc<Vec<CoinNetworkInfo>>,
+    units: super::denomination::Units,
+}
+
+struct Origin {
+    keys: u64,
+    settings: u64,
+    urls: Vec<String>,
+    own: crate::gateway::own_nets::OwnNets,
+}
+
+impl Origin {
+    fn read(ctx: &Ctx) -> GatewayResult<Self> {
+        Ok(Self {
+            keys: crate::gateway::addr_book::key_epoch(),
+            settings: ctx.settings.generation(),
+            urls: ctx.rest_urls()?,
+            own: crate::gateway::own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?,
+        })
+    }
+
+    fn valid(&self, ctx: &Ctx) -> bool {
+        self.keys == crate::gateway::addr_book::key_epoch()
+            && (self.settings == ctx.settings.generation()
+                || (ctx.rest_urls().is_ok_and(|urls| urls == self.urls)
+                    && crate::gateway::own_nets::read(&ctx.settings, ctx.at())
+                        .is_ok_and(|own| own == self.own)))
+    }
+}
 
 /// Справочник сетей в памяти. Дешёво клонируется.
 #[derive(Clone, Default)]
@@ -34,6 +66,26 @@ pub struct Networks {
     cache: Arc<RwLock<Option<Cached>>>,
     /// Последний записанный в журнал список пропущенных сетей — пишем только при изменении.
     told: Arc<RwLock<String>>,
+}
+
+impl Networks {
+    /// При холодном, просроченном или сменившем счёт справочнике источник единицы неизвестен.
+    /// Штатный полный запрос или запрос отдельной монеты заново опубликует обе части справочника.
+    pub(super) fn units_per_raw(
+        &self,
+        ctx: &Ctx,
+        asset: &Asset,
+        network: &str,
+        withdrawing: bool,
+    ) -> Result<Option<Decimal>, String> {
+        let age_limit = ctx.int("venue.networks_stale_s").map_err(|e| e.message)?;
+        let cache = self.cache.read().unwrap_or_else(|p| p.into_inner());
+        let c = cache
+            .as_ref()
+            .filter(|c| c.origin.valid(ctx) && c.started.elapsed().as_secs() <= age_limit)
+            .ok_or("Binance: нет актуального config/getall для проверки единицы биржи")?;
+        c.units.for_side(asset, network, withdrawing)
+    }
 }
 
 /// Все монеты и сети. Ошибки: настройки, связь, формат.
@@ -63,13 +115,16 @@ pub async fn shared(ctx: &Ctx, nets: &Networks) -> GatewayResult<Arc<Vec<CoinNet
         .map(Duration::from_millis);
     if let Some(f) = fresh {
         let c = nets.cache.read().unwrap_or_else(|p| p.into_inner());
-        if let Some((at, list)) = c.as_ref()
-            && at.elapsed() < f
+        if let Some(s) = c.as_ref()
+            && s.started.elapsed() < f
+            && s.origin.valid(ctx)
         {
-            return Ok(list.clone());
+            return Ok(s.list.clone());
         }
     }
-    let bsc = crate::gateway::own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
+    let started = Instant::now();
+    let origin = Origin::read(ctx)?;
+    let bsc = origin.own.clone();
     let min = DepositMin {
         dust_as_min: ctx.flag("venue.deposit_dust_as_min").unwrap_or(false),
         absent_ok: ctx.flag("venue.deposit_min_absent_ok").unwrap_or(false),
@@ -87,7 +142,28 @@ pub async fn shared(ctx: &Ctx, nets: &Networks) -> GatewayResult<Arc<Vec<CoinNet
             ))
         })??;
     let list = Arc::new(p.list);
-    *nets.cache.write().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), list.clone()));
+    {
+        let mut cache = nets.cache.write().unwrap_or_else(|e| e.into_inner());
+        if !origin.valid(ctx) {
+            return Err(ctx.tag(GatewayError::new(
+                ErrorCode::StaleData,
+                None,
+                "Настройки сети, REST или ключ Binance сменились во время config/getall",
+            )));
+        }
+        if let Some(newer) = cache.as_ref()
+            && newer.started > started
+            && newer.origin.valid(ctx)
+        {
+            return Ok(newer.list.clone());
+        }
+        *cache = Some(Cached {
+            started,
+            origin,
+            list: list.clone(),
+            units: p.units,
+        });
+    }
     let skipped = p.skipped.join("; ");
     let new = {
         let mut t = nets.told.write().unwrap_or_else(|e| e.into_inner());

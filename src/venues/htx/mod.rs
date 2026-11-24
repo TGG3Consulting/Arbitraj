@@ -206,6 +206,23 @@ impl Venue for Htx {
         transfers::withdraw(&self.ctx, req).await
     }
 
+    fn requires_withdraw_destination_check(&self) -> bool {
+        true
+    }
+
+    /// Та же адресная книга ключа и те же идентификаторы сетей, что перед POST вывода.
+    /// GET /v2/account/withdraw/address: https://www.htx.com/en-us/opend/newApiPages/?id=7ec50654-7773-11ed-9966-0242ac110003
+    async fn check_withdraw_destination(
+        &self,
+        asset: &Asset,
+        network: &str,
+        address: &str,
+    ) -> GatewayResult<()> {
+        let chain =
+            wallet::address_check_chain(&self.ctx, &self.nets, &asset.ticker, network).await?;
+        withdraw_address::check(&self.ctx, &asset.ticker, &chain, address).await
+    }
+
     async fn withdrawal_status(&self, venue_ref: &str) -> GatewayResult<Transfer> {
         transfers::withdrawal_status(&self.ctx, venue_ref).await
     }

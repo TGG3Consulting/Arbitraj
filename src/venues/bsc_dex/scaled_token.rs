@@ -39,7 +39,7 @@ fn probes(token: Address) -> [(Address, Bytes); 5] {
     .map(|data| (token, Bytes::from(data)))
 }
 
-type Sample = Arc<OnceCell<Option<Decimal>>>;
+type Sample = Arc<OnceCell<(u8, Option<Decimal>)>>;
 
 #[derive(Default)]
 struct Samples {
@@ -69,7 +69,7 @@ impl Units {
         ctx: &Ctx,
         token: Address,
         block: u64,
-    ) -> GatewayResult<Option<Decimal>> {
+    ) -> GatewayResult<(u8, Option<Decimal>)> {
         let sample = self.sample(token, block);
         sample
             .get_or_try_init(|| read(ctx, token, block))
@@ -78,7 +78,7 @@ impl Units {
     }
 }
 
-async fn read(ctx: &Ctx, token: Address, block: u64) -> GatewayResult<Option<Decimal>> {
+async fn read(ctx: &Ctx, token: Address, block: u64) -> GatewayResult<(u8, Option<Decimal>)> {
     let block = format!("0x{block:x}");
     let calls = probes(token);
     let results: Vec<Option<Bytes>> = if let Some(mc) = multicall::address(ctx) {
@@ -121,13 +121,13 @@ fn word(bytes: &Option<Bytes>) -> Result<Option<U256>, &'static str> {
     }
 }
 
-fn decode(results: &[Option<Bytes>]) -> Result<Option<Decimal>, &'static str> {
+fn decode(results: &[Option<Bytes>]) -> Result<(u8, Option<Decimal>), &'static str> {
     let [decimals, supported, erc165, invalid, multiplier] = results else {
         return Err("неполная пачка ответов");
     };
-    if word(decimals)?.is_none_or(|d| d > U256::from(u8::MAX)) {
-        return Err("контракт не вернул decimals()");
-    }
+    let decimals = word(decimals)?
+        .and_then(|d| u8::try_from(d).ok())
+        .ok_or("контракт не вернул decimals()")?;
     let supported = word(supported)?;
     let erc165 = word(erc165)?;
     let invalid = word(invalid)?;
@@ -139,7 +139,7 @@ fn decode(results: &[Option<Bytes>]) -> Result<Option<Decimal>, &'static str> {
         && invalid.unwrap_or(zero) == zero
         && multiplier.unwrap_or(zero) == zero
     {
-        return Ok(None);
+        return Ok((decimals, None));
     }
     if supported != Some(one) || erc165 != Some(one) || invalid != Some(zero) {
         return Err("ответы ERC-165 не подтверждают интерфейс ERC-8056");
@@ -151,7 +151,7 @@ fn decode(results: &[Option<Bytes>]) -> Result<Option<Decimal>, &'static str> {
     let scale = num::to_decimal(raw, 18)
         .filter(|m| num::to_units(*m, 18) == Some(raw))
         .ok_or("uiMultiplier() не представим точно")?;
-    Ok(Some(scale.normalize()))
+    Ok((decimals, Some(scale.normalize())))
 }
 
 #[cfg(test)]
@@ -183,7 +183,7 @@ mod tests {
         for (address, expected) in cases {
             let token: Address = address.parse().unwrap();
             assert_eq!(&probes(token).map(|(_, data)| data)[..], &saved.calldata);
-            assert_eq!(decode(&saved.tokens[&token]), Ok(expected));
+            assert_eq!(decode(&saved.tokens[&token]), Ok((18, expected)));
         }
     }
 }

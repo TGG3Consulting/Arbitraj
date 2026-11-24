@@ -17,6 +17,7 @@ pub mod book;
 pub mod book_print;
 pub mod ctx;
 pub mod delist;
+mod denomination;
 pub mod deposit_addr;
 pub mod deposits;
 pub mod depth;
@@ -149,6 +150,16 @@ impl Venue for Binance {
 
     async fn coin_networks_of(&self, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
         wallet::coin_networks_of(&self.ctx, &self.nets, ticker).await
+    }
+
+    fn market_units_per_raw(
+        &self,
+        asset: &Asset,
+        network: &str,
+        withdrawing: bool,
+    ) -> Result<Option<Decimal>, String> {
+        self.nets
+            .units_per_raw(&self.ctx, asset, network, withdrawing)
     }
 
     async fn subscribe_market(

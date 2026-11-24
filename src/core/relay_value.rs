@@ -33,7 +33,7 @@ fn cex_costs(
     a: &Asset,
     net: &str,
     qty: Decimal,
-) -> Result<Vec<Cost>, String> {
+) -> Result<(Decimal, Vec<Cost>), String> {
     let info = venue::network(core, from, a, net).ok_or_else(|| {
         format!(
             "{}: сети {net} у {} нет в справочнике сетей",
@@ -67,8 +67,9 @@ fn cex_costs(
         Cost::new(CostKind::TransferTax, tax, a.ticker.clone(), false),
     ];
     // Решение 253 (д), дополнение: та же поправка по факту прошлого перевода, что в расчёте сделки (withdraw_seen.rs).
-    Ok(super::withdraw_seen::adjust_at(
-        core, from, a, &info, pct, qty, dir,
+    Ok((
+        qty,
+        super::withdraw_seen::adjust_route(core, (from, Some(to)), a, &info, pct, qty, dir),
     ))
 }
 
@@ -128,7 +129,7 @@ pub struct Parts {
     pub net: Decimal,
     /// Выручка продажи на цели до затрат: приход × средняя котировки цели (приход-пыль — 0).
     pub proceeds: Decimal,
-    /// Средняя котировки продажи на цели.
+    /// Средняя котировки продажи на цели в USDT за единицу отправителя (для сравнения с продажей здесь).
     pub avg: Decimal,
 }
 
@@ -141,8 +142,9 @@ pub async fn value_parts(
     qty: Decimal,
     acc_to: Option<&DexAccountId>,
 ) -> Result<Parts, String> {
+    let units = super::credit_expect::units(core, from, to, a)?;
     let net = super::transfers::network(core, a, from)?;
-    let costs = if is_dex(core, from) {
+    let (send_qty, costs) = if is_dex(core, from) {
         let gw = core.inner.deps.gw.get(from).await.map_err(|e| e.message)?;
         // Решение 211: площадке — её тикер монеты; затраты — обратно в имя ядра.
         let on = super::venue_ticker::on_venue(core, a, from);
@@ -150,18 +152,18 @@ pub async fn value_parts(
             .withdraw_cost(&on, &net, qty)
             .await
             .map_err(|e| e.message)?;
-        super::venue_ticker::costs_back(core, a, from, c)
+        (qty, super::venue_ticker::costs_back(core, a, from, c))
     } else {
         cex_costs(core, from, to, a, &net, qty)?
     };
     // Решение 413 (t198): удержание биржи-цели при зачислении — как в расчёте сделки (deposit_hold.rs).
-    let costs = super::deposit_hold::add(core, to, a, qty, costs);
+    let costs = super::deposit_hold::add(core, to, a, send_qty, costs);
     let coin: Decimal = costs
         .iter()
-        .filter(|c| c.asset == a.ticker)
+        .filter(|c| !c.in_price && convert::in_coin(c, &a.ticker))
         .map(|c| c.amount)
         .sum();
-    let arrive = qty - coin;
+    let arrive = units.to_sell(send_qty - coin)?;
     deposit_ok(core, to, a, arrive)?;
     let (v, q) = super::trade_ops::sell_value(core, acc_to, to, a, arrive).await?;
     // Решение 222: приход меньше шага / minQty / minNotional пары цели (dust.rs, решение 66) — продать там нельзя,
@@ -194,17 +196,21 @@ pub async fn value_parts(
         &cex,
         vec![quote],
         &a.ticker,
-        q.avg_price,
+        units.to_sell(q.avg_price)?,
         &costs,
     )
     .await?;
     let mut out = v;
-    for c in costs.iter().filter(|c| c.asset != a.ticker) {
+    for c in costs
+        .iter()
+        .filter(|c| !c.in_price && !convert::in_coin(c, &a.ticker))
+    {
         out -= convert::to_usdt(c, &rates)?;
     }
     Ok(Parts {
         net: out,
         proceeds,
-        avg: q.avg_price,
+        // relay_reserve сравнивает цену цели с ценой продажи здесь: обе за единицу from.
+        avg: units.to_sell(q.avg_price)?,
     })
 }

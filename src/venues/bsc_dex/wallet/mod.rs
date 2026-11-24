@@ -21,6 +21,7 @@ pub mod native_status;
 pub mod nonce;
 pub mod queue_ref;
 pub mod queue_store;
+pub(super) mod scaled_credit;
 pub mod signer;
 pub mod transfer;
 pub mod transfer_cost;

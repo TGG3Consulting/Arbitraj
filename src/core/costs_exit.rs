@@ -18,6 +18,7 @@ use super::size::Fail;
 
 /// Денежные и количественные составляющие плана от вывода с A до возврата USDT.
 pub(super) struct Sale {
+    pub sent_a: Decimal,
     pub arrive: Decimal,
     pub sell_qty: Decimal,
     pub qb: Quote,
@@ -53,10 +54,25 @@ pub(super) async fn calculate<S: Source>(
         src.withdraw(cx, to_send),
     )
     .await?;
-    let arrive = to_send - coin_fee(&wc, &coin);
+    let net = to_send - coin_fee(&wc, &coin);
+    let arrive = transferred(cx.units_b_per_a, net)?;
     lines.extend(wc.into_iter().map(|c| (c, "перевод")));
     cx.check_deposit(arrive)?;
-    let sell_qty = floor_step(arrive, cx.pair_b.as_ref());
+    let sell_qty = if !cx.units_b_per_a.is_identity()
+        && let Some(step) = cx
+            .pair_b
+            .as_ref()
+            .map(|p| p.step_size)
+            .filter(|s| *s > Decimal::ZERO)
+    {
+        // Деление Decimal может округлить почти целое частное вверх до шага сверх реального остатка.
+        arrive
+            - arrive
+                .checked_rem(step)
+                .ok_or_else(|| Fail::Stop("невозможно округлить приход до шага B".into()))?
+    } else {
+        floor_step(arrive, cx.pair_b.as_ref())
+    };
     if sell_qty <= Decimal::ZERO {
         return Err(Fail::TooSmall(format!(
             "приход {arrive} меньше шага количества B"
@@ -134,7 +150,14 @@ pub(super) async fn calculate<S: Source>(
     let keep = cx
         .keep
         .ok_or_else(|| Fail::Stop("время в пути не вычисляется".into()))?;
-    let reserve = super::reserve::amount(keep, proceeds, cx.closure_share, buy_avg, qb.avg_price);
+    let buy_price_per_b = cx.units_b_per_a.to_buy(buy_avg)?;
+    let reserve = super::reserve::amount(
+        keep,
+        proceeds,
+        cx.closure_share,
+        buy_price_per_b,
+        qb.avg_price,
+    );
     lines.push((
         Cost::new(
             CostKind::PriceMoveReserve,
@@ -160,10 +183,18 @@ pub(super) async fn calculate<S: Source>(
         // Остаток от шага (решение 66) уже вне выручки — только показ.
         let in_qty =
             (convert::in_coin(&c, &coin) && stage != "B") || c.kind == CostKind::StepRemainder;
+        let value =
+            if stage == "B" && !cx.units_b_per_a.is_identity() && convert::in_coin(&c, &coin) {
+                c.amount
+                    .checked_mul(qb.avg_price)
+                    .ok_or_else(|| "стоимость затрат B не помещается в число".to_owned())
+            } else {
+                convert::to_usdt(&c, &rates)
+            };
         let usdt = if c.in_price {
-            convert::to_usdt(&c, &rates).ok()
+            value.ok()
         } else {
-            let u = convert::to_usdt(&c, &rates)?;
+            let u = value?;
             if !in_qty {
                 costs_usdt += u;
             }
@@ -181,6 +212,7 @@ pub(super) async fn calculate<S: Source>(
         });
     }
     Ok(Sale {
+        sent_a: to_send,
         arrive,
         sell_qty,
         qb,
@@ -189,4 +221,54 @@ pub(super) async fn calculate<S: Source>(
         costs_usdt,
         rates,
     })
+}
+
+/// Физический перевод токена может передать только целое число его минимальных единиц.
+/// У обычных токенов остаётся прежний расчёт. Издержки вывода уже удержаны в единицах A.
+fn transferred(units: super::settlement_unit::UnitRatio, net: Decimal) -> Result<Decimal, String> {
+    if units.buy_per_raw == Decimal::ONE && units.sell_per_raw == Decimal::ONE {
+        return Ok(net);
+    }
+    let decimals = units
+        .raw_decimals
+        .ok_or("неизвестны decimals перевода масштабируемого токена")?;
+    let raw = super::settlement_unit::UnitRatio {
+        sell_per_raw: Decimal::ONE,
+        ..units
+    }
+    .to_sell(net)?
+    .round_dp_with_strategy(
+        u32::from(decimals).min(Decimal::MAX_SCALE),
+        rust_decimal::RoundingStrategy::ToZero,
+    );
+    super::settlement_unit::UnitRatio {
+        buy_per_raw: Decimal::ONE,
+        ..units
+    }
+    .to_sell(raw)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::settlement_unit::UnitRatio;
+    use std::str::FromStr;
+
+    #[test]
+    fn both_confirmed_withdrawals_arrive_in_actual_bsc_units() {
+        let units = UnitRatio {
+            buy_per_raw: Decimal::from(8),
+            raw_decimals: Some(18),
+            ..UnitRatio::IDENTITY
+        };
+        for (sent, raw) in [
+            ("3.22869477", "0.40358684625"),
+            ("0.36422120", "0.04552765"),
+        ] {
+            assert_eq!(
+                transferred(units, sent.parse().unwrap()).unwrap(),
+                Decimal::from_str(raw).unwrap()
+            );
+        }
+    }
 }

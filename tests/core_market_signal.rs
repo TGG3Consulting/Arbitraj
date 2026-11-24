@@ -107,6 +107,7 @@ fn signal_on_real_prices() {
     let prices = Prices {
         buy: b.asks[0].price,
         sell: b.bids[0].price,
+        venue_sale: None,
         fees_pct: Decimal::ZERO,
         qty: b.asks[0].qty,
         buy_at: Utc::now(),

@@ -277,6 +277,7 @@ fn cx(rec: &Rec) -> DirCtx {
         via: None,
     };
     DirCtx {
+        units_b_per_a: Default::default(),
         dir: Direction {
             asset: Asset {
                 chain: None,

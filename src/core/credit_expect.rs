@@ -14,12 +14,30 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{Asset, VenueId};
+use super::settlement_unit::UnitRatio;
+use crate::core::types::{Asset, Direction, VenueId};
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::credit_watch::Ticket;
 use super::engine::Core;
+
+/// Снимок единиц перед отправкой перевода; берём один раз для обоих способов зачисления.
+pub(super) fn units(
+    core: &Core,
+    from: &VenueId,
+    to: &VenueId,
+    asset: &Asset,
+) -> Result<UnitRatio, String> {
+    super::settlement_unit::ratio(
+        core,
+        &Direction {
+            asset: asset.clone(),
+            buy_on: from.clone(),
+            sell_on: to.clone(),
+        },
+    )
+}
 
 /// Ожидание зачисления, если у получателя включены события баланса и приход посчитан. Принимает: сделку, откуда, куда,
 /// монету, сеть отправителя, сумму вывода. Возвращает: ожидание или None (только опрос; причина расчёта — в журнал).
@@ -31,6 +49,19 @@ pub async fn ticket(
     asset: &Asset,
     net: &str,
     qty: Decimal,
+) -> Option<Ticket> {
+    let ratio = units(core, from, to, asset);
+    ticket_with_units(core, deal, (from, to), asset, net, qty, ratio.as_ref()).await
+}
+
+pub(super) async fn ticket_with_units(
+    core: &Core,
+    deal: &str,
+    (from, to): (&VenueId, &VenueId),
+    asset: &Asset,
+    net: &str,
+    qty: Decimal,
+    unit: Result<&UnitRatio, &String>,
 ) -> Option<Ticket> {
     let at = At {
         venue: Some(&to.0),
@@ -45,7 +76,13 @@ pub async fn ticket(
     {
         return None;
     }
-    match arrival(core, from, to, asset, net, qty).await {
+    let arrival = match unit {
+        Ok(r) => sender_amount(core, from, to, asset, net, qty)
+            .await
+            .and_then(|q| r.to_sell(q)),
+        Err(why) => Err(why.clone()),
+    };
+    match arrival {
         Ok(a) => Some(super::credit_watch::register(
             core, deal, from, to, asset, a,
         )),
@@ -67,6 +104,18 @@ pub async fn ticket(
 /// Ошибки: текст — комиссия вывода биржи или налог перевода неизвестны, шлюз DEX не дал стоимость вывода, приход не
 /// больше нуля.
 pub async fn arrival(
+    core: &Core,
+    from: &VenueId,
+    to: &VenueId,
+    asset: &Asset,
+    net: &str,
+    qty: Decimal,
+) -> Result<Decimal, String> {
+    let ratio = units(core, from, to, asset)?;
+    ratio.to_sell(sender_amount(core, from, to, asset, net, qty).await?)
+}
+
+pub(super) async fn sender_amount(
     core: &Core,
     from: &VenueId,
     to: &VenueId,

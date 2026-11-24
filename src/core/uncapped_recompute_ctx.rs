@@ -179,6 +179,7 @@ pub fn prepare(
     );
     let cx = DirCtx {
         dir: dir.clone(),
+        units_b_per_a: plan.units_b_per_a,
         a: presence(&dir.buy_on, &dir.asset),
         b: presence(&dir.sell_on, &dir.asset),
         net_a: String::new(),

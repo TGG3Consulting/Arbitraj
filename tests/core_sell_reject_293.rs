@@ -181,6 +181,7 @@ fn state(core: &Core, dir: &Direction) -> State {
     let p = Prices {
         buy: spent / bought,
         sell: got / sold,
+        venue_sale: None,
         fees_pct: Decimal::ZERO,
         qty: sold,
         buy_at: Utc::now(),

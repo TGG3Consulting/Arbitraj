@@ -40,7 +40,7 @@
 {#if rec.plan_gap}<p class="warn-text">{rec.plan_gap}</p>{/if}
 {#if rec.levels?.length}
   <table>
-    <thead><tr><th>потолок</th><th>объём</th><th>вложение</th><th>прибыль</th><th>проходит пороги</th></tr></thead>
+    <thead><tr><th>лимит вложения, USDT</th><th>объём, монет</th><th>вложение модели, USDT</th><th>прибыль модели, USDT</th><th>проходит пороги</th></tr></thead>
     <tbody>
       {#each rec.levels as l, li (`${l.cap}|${li}`)}
         <tr><td>{l.cap}</td><td>{l.at?.qty ?? '—'}</td><td>{money(l.at?.invested)}</td><td>{money(l.at?.profit)}</td><td>{l.passes ? 'да' : 'нет'}</td></tr>

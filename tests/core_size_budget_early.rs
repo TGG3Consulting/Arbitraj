@@ -76,6 +76,7 @@ fn cx(rec: &Rec) -> DirCtx {
         via: None,
     };
     DirCtx {
+        units_b_per_a: Default::default(),
         dir: dir(),
         a: p("bingx", Some(rec.net.clone())),
         b: p("bsc_dex", None),

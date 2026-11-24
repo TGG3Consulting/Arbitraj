@@ -108,6 +108,18 @@ pub trait Venue: Send + Sync {
     /// Возвращает: список по всем монетам и сетям. Ошибки: связь, ключ, разбор ответа.
     async fn coin_networks(&self) -> GatewayResult<Vec<CoinNetworkInfo>>;
 
+    /// Биржевых единиц спотового рынка на один токен контракта по правилам площадки.
+    /// `asset.ticker` и `network` — имена этой биржи. Только память, без запроса в пути расчёта.
+    /// None — площадка не задаёт самостоятельного коэффициента. Ошибка — её данные нельзя применять.
+    fn market_units_per_raw(
+        &self,
+        _asset: &Asset,
+        _network: &str,
+        _withdrawing: bool,
+    ) -> Result<Option<Decimal>, String> {
+        Ok(None)
+    }
+
     /// Единицы отображения на один токен контракта на свежем блоке сети (ERC-8056).
     /// Some(1) — масштабируемый токен с текущим коэффициентом 1; None — обычный ERC-20.
     /// Ошибка проверки метаданных не подтверждает единицу. Способ учёта монеты биржей проверяется отдельно.
@@ -120,6 +132,41 @@ pub trait Venue: Send + Sync {
             Some(self.id()),
             "Площадка не читает единицу токена из контракта сети",
         ))
+    }
+
+    /// Блок, число знаков ERC-20 и активный множитель ERC-8056 из одного состояния сети.
+    async fn settlement_profile(
+        &self,
+        _token: alloy_primitives::Address,
+    ) -> GatewayResult<(u64, u8, Option<Decimal>)> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "Площадка не читает единицы в сети",
+        ))
+    }
+
+    /// UI-количество из подтверждённой квитанции зачисления raw_credited на выбранный кошелёк.
+    /// None — площадка не располагает парным доказательством Transfer и TransferWithUIAmount.
+    async fn confirmed_ui_credit(
+        &self,
+        _asset: &Asset,
+        _tx_hash: &str,
+        _raw_credited: Decimal,
+    ) -> GatewayResult<Option<Decimal>> {
+        Ok(None)
+    }
+
+    /// Две единицы одного перевода в сети привязанного кошелька и множитель
+    /// на блоке операции. Для исходящего перевода допускается один получатель.
+    async fn transfer_display_unit(
+        &self,
+        _asset: &Asset,
+        _hash: &str,
+        _raw: Decimal,
+        _incoming: bool,
+    ) -> GatewayResult<Option<(Decimal, Decimal)>> {
+        Ok(None)
     }
 
     /// Справочник одной монеты (решение 113): предпроверке сделки нужен свежий статус ввода/вывода одной монеты, а не
@@ -336,6 +383,25 @@ pub trait Venue: Send + Sync {
     /// Вывод монеты с площадки на адрес. Для DEX — перевод из своего кошелька.
     /// Возвращает: созданный перевод. Ошибки: адрес, права, баланс, вывод закрыт.
     async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer>;
+
+    /// Требуется ли до покупки проверить адрес получателя в адресной книге отправителя.
+    fn requires_withdraw_destination_check(&self) -> bool {
+        false
+    }
+
+    /// Только чтение: разрешает ли площадка вывод данной монеты на адрес в указанной сети.
+    async fn check_withdraw_destination(
+        &self,
+        _asset: &Asset,
+        _network: &str,
+        _address: &str,
+    ) -> GatewayResult<()> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "проверка адреса вывода не поддерживается",
+        ))
+    }
 
     /// Решение 253: дождаться, пока купленная монета станет доступна для вывода (свободно на счёте вывода ≥ amount), но не
     /// дольше wait; ядро зовёт перед выводом, только если задана venue.withdraw_ready_wait_ms площадки. По умолчанию —

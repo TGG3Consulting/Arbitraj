@@ -34,9 +34,6 @@
 //! От чего зависит: engine.rs, persist.rs, settings, core/types, dirctx.rs.
 //! Настройки: transfer.seen_cost (вся система или по площадке-отправителю, необязательная).
 
-use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex};
-
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -63,9 +60,9 @@ pub struct Seen {
     pub fee: Option<Decimal>,
 }
 
-/// Факты по (монета, площадка). Одно ядро на процесс — общая память.
-static SEEN: LazyLock<Mutex<HashMap<(Asset, VenueId), Seen>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+#[path = "withdraw_units.rs"]
+mod units;
+pub(super) use units::{Receipt, get_for, record_for};
 
 /// id записи в учёте: адрес контракта (или тикер) и площадка; решение 487 (сети в id) — у монеты другой сети
 /// «…@сеть» (coin_key::rid; ключ памяти — Asset с сетью), сеть по умолчанию — id прежний. Ошибок нет.
@@ -75,11 +72,13 @@ fn id(a: &Asset, from: &VenueId) -> String {
 
 /// Что делает: загружает факты при запуске. Ошибка базы — в журнал (поправки начнутся с новых переводов). Ошибок нет.
 pub async fn load(core: &Core) {
+    if !units::load(core).await {
+        return;
+    }
     match super::persist::load::<Seen>(&core.inner.deps.db, KIND).await {
         Ok(list) => {
-            let mut m = SEEN.lock().unwrap_or_else(|p| p.into_inner());
-            for s in list {
-                m.insert((s.asset.clone(), s.from.clone()), s);
+            for fact in list {
+                units::put_legacy(fact);
             }
         }
         Err(e) => {
@@ -96,9 +95,7 @@ pub async fn load(core: &Core) {
 /// базы — журнал.
 pub async fn record(core: &Core, s: Seen) {
     let rid = id(&s.asset, &s.from);
-    SEEN.lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .insert((s.asset.clone(), s.from.clone()), s.clone());
+    units::put_legacy(s.clone());
     if let Err(e) = super::persist::save(&core.inner.deps.db, KIND, &rid, &s).await {
         let m = format!("Факты перевода {rid} не сохранены: {e}");
         core.inner
@@ -110,10 +107,7 @@ pub async fn record(core: &Core, s: Seen) {
 
 /// Факты по монете и площадке. None — переводов не было (или не загружены). Ошибок нет.
 pub fn get(asset: &Asset, from: &VenueId) -> Option<Seen> {
-    SEEN.lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .get(&(asset.clone(), from.clone()))
-        .cloned()
+    units::lookup(asset, from, None)
 }
 
 /// Что делает: затраты вывода с биржи A с поправкой по фактам (см. шапку). Принимает: ядро, контекст, сумму вывода,
@@ -125,7 +119,15 @@ pub fn adjust(core: &Core, cx: &DirCtx, amount: Decimal, dir: Vec<Cost>) -> Vec<
         return dir;
     };
     let t = cx.transfer_tax.unwrap_or_default();
-    adjust_at(core, &d.buy_on, &d.asset, info, t, amount, dir)
+    adjust_route(
+        core,
+        (&d.buy_on, Some(&d.sell_on)),
+        &d.asset,
+        info,
+        t,
+        amount,
+        dir,
+    )
 }
 
 /// Что делает: то же для любого вывода с биржи (расчёт сделки — adjust; оценка «Перегона» — relay_value.rs): одна
@@ -141,6 +143,18 @@ pub fn adjust_at(
     amount: Decimal,
     dir: Vec<Cost>,
 ) -> Vec<Cost> {
+    adjust_route(core, (from, None), asset, info, t, amount, dir)
+}
+
+pub(super) fn adjust_route(
+    core: &Core,
+    (from, to): (&VenueId, Option<&VenueId>),
+    asset: &Asset,
+    info: &crate::core::types::CoinNetworkInfo,
+    t: Decimal,
+    amount: Decimal,
+    dir: Vec<Cost>,
+) -> Vec<Cost> {
     let at = At {
         venue: Some(&from.0),
         coin: None,
@@ -149,7 +163,11 @@ pub fn adjust_at(
     if !on.unwrap_or(false) {
         return dir;
     }
-    let Some(s) = get(asset, from) else {
+    let seen = match to {
+        Some(to) => get_for(asset, from, to),
+        None => get(asset, from),
+    };
+    let Some(s) = seen else {
         return dir;
     };
     model(&s, info.fee_for(s.sent), t, amount, dir)

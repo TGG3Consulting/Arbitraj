@@ -123,6 +123,7 @@ fn cx(rec: &Rec, b: &str) -> DirCtx {
         via: None,
     };
     DirCtx {
+        units_b_per_a: Default::default(),
         dir: dir(b),
         a: p("bingx"),
         b: p(b),

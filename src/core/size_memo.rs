@@ -43,6 +43,7 @@ pub fn over_budget(qty: Decimal, invested: Decimal, budget: Decimal) -> Fail {
 pub struct Memo<'a, C: Curve> {
     pub(super) curve: &'a mut C,
     pub step: Decimal,
+    pub(super) sell_grid: Option<super::size_unit_grid::SellGrid>,
     pub budget: Decimal,
     pub map: BTreeMap<u64, Result<Point<C::Data>, Fail>>,
     /// Предел расчётов (size.max_evals) и сколько уже посчитано.
@@ -67,6 +68,7 @@ impl<'a, C: Curve> Memo<'a, C> {
         Memo {
             curve,
             step,
+            sell_grid: None,
             budget,
             map: BTreeMap::new(),
             max,
@@ -86,11 +88,17 @@ impl<'a, C: Curve> Memo<'a, C> {
 
     /// Номер шага объёма с округлением вниз. Принимает: объём ≥ 0. Возвращает: n; None — объём не помещается в u64.
     pub fn units(&self, qty: Decimal) -> Option<u64> {
+        if let Some(grid) = self.sell_grid {
+            return grid.index(qty);
+        }
         (qty / self.step).floor().to_u64()
     }
 
     /// Объём n шагов. Ошибок нет.
     pub fn qty(&self, n: u64) -> Decimal {
+        if let Some(grid) = self.sell_grid {
+            return grid.qty(n).unwrap_or(Decimal::MAX);
+        }
         Decimal::from(n) * self.step
     }
 
@@ -132,6 +140,11 @@ impl<'a, C: Curve> Memo<'a, C> {
             Err(Fail::TooSmall("объём 0".into()))
         } else {
             let q = self.qty(n);
+            if self.sell_grid.is_some() && q == Decimal::MAX {
+                let fail = Fail::TooLarge("объём не помещается в сетку продажи".into());
+                self.map.insert(n, Err(fail.clone()));
+                return Err(fail);
+            }
             self.done += 1;
             // Уступаем рабочий поток tokio перед тяжёлым вычислением точки (решение 90): параллельные расчёты
             // (решение 88) после ухода ожидания узла (решение 89) идут сплошным CPU и без этого монополизируют

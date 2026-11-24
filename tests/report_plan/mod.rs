@@ -54,6 +54,7 @@ fn cx(rec: &Rec) -> DirCtx {
     };
     let d_ = dir();
     DirCtx {
+        units_b_per_a: Default::default(),
         a: p(&d_.buy_on, false),
         b: p(&d_.sell_on, true),
         dir: d_,

@@ -44,6 +44,12 @@ pub struct CostLine {
 #[derive(Debug, Clone, Serialize)]
 pub struct Calc {
     pub direction: Direction,
+    /// Единицы площадок на момент входа. Архивный пересчёт использует тот же коэффициент.
+    #[serde(skip_serializing_if = "ordinary_units")]
+    pub units_b_per_a: super::settlement_unit::UnitRatio,
+    /// Количество вывода A до удержания комиссии вывода и до округления в атомы контракта.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transfer_sent_a: Option<Decimal>,
     /// Сколько покупаем на A.
     pub qty: Decimal,
     /// Сколько дойдёт до B.
@@ -117,6 +123,10 @@ pub fn order_cap(cap: Decimal, spend_max: Decimal, spend_fee: Decimal) -> Decima
         return cap;
     }
     cap * (spend_max - spend_fee) / spend_max
+}
+
+fn ordinary_units(units: &super::settlement_unit::UnitRatio) -> bool {
+    *units == super::settlement_unit::UnitRatio::IDENTITY
 }
 
 impl Calc {

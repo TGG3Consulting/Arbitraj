@@ -1,0 +1,129 @@
+{
+  "buy_quote": {
+    "asset": {
+      "bsc_contract": "0x3ee4df61bd4f867e349beae8bfe07bc31b4850fb",
+      "ticker": "SNDKB"
+    },
+    "at": "2026-11-24T14:25:25.499548174Z",
+    "avg_price": "83.27332619127047145329921026",
+    "costs": [
+      {
+        "amount": "0.006480854",
+        "asset": "SNDKB",
+        "in_price": false,
+        "kind": "TradeFee",
+        "step": null
+      }
+    ],
+    "fillable_qty": "3.240427",
+    "pick": null,
+    "qty": "3.240427",
+    "route": null,
+    "side": "Buy",
+    "signal_route": null,
+    "venue": "poloniex"
+  },
+  "sell_quote": {
+    "asset": {
+      "bsc_contract": "0x3ee4df61bd4f867e349beae8bfe07bc31b4850fb",
+      "ticker": "SNDKB"
+    },
+    "at": "2026-11-24T14:25:25.542215715Z",
+    "avg_price": "651.55331522913864172709275632",
+    "costs": [
+      {
+        "amount": "0.000017725100000000",
+        "asset": "BNB",
+        "in_price": false,
+        "kind": "Gas",
+        "step": {
+          "from": "SNDKB",
+          "from_token": "0x3ee4df61bd4f867e349beae8bfe07bc31b4850fb",
+          "index": 1,
+          "to": "USDT",
+          "to_token": "0x55d398326f99059ff775485246999027b3197955"
+        }
+      },
+      {
+        "amount": "0.00807173694000000000",
+        "asset": "SNDKB",
+        "in_price": true,
+        "kind": "PoolFee",
+        "step": {
+          "from": "SNDKB",
+          "from_token": "0x3ee4df61bd4f867e349beae8bfe07bc31b4850fb",
+          "index": 1,
+          "to": "USDT",
+          "to_token": "0x55d398326f99059ff775485246999027b3197955"
+        }
+      },
+      {
+        "amount": "0",
+        "asset": "SNDKB",
+        "in_price": true,
+        "kind": "SellTax",
+        "step": {
+          "from": "SNDKB",
+          "from_token": "0x3ee4df61bd4f867e349beae8bfe07bc31b4850fb",
+          "index": 1,
+          "to": "USDT",
+          "to_token": "0x55d398326f99059ff775485246999027b3197955"
+        }
+      },
+      {
+        "amount": "0",
+        "asset": "USDT",
+        "in_price": true,
+        "kind": "HookImpact",
+        "step": {
+          "from": "SNDKB",
+          "from_token": "0x3ee4df61bd4f867e349beae8bfe07bc31b4850fb",
+          "index": 1,
+          "to": "USDT",
+          "to_token": "0x55d398326f99059ff775485246999027b3197955"
+        }
+      },
+      {
+        "amount": "0.000010260100000000",
+        "asset": "BNB",
+        "in_price": false,
+        "kind": "ApproveGas",
+        "step": {
+          "from": "SNDKB",
+          "from_token": "0x3ee4df61bd4f867e349beae8bfe07bc31b4850fb",
+          "index": 1,
+          "to": "USDT",
+          "to_token": "0x55d398326f99059ff775485246999027b3197955"
+        }
+      }
+    ],
+    "fillable_qty": "3.228694776",
+    "pick": null,
+    "qty": "3.228694776",
+    "route": {
+      "block": 135478487,
+      "exec_note": null,
+      "executable": true,
+      "gas_units": 177251,
+      "legs": [
+        {
+          "expected_out": "2103.666785165801175524",
+          "hops": [
+            {
+              "family": "pancakeswap-v3-bsc",
+              "kind": "V3",
+              "pool": {
+                "Contract": "0xe4b5403f5103b02d1e8193b0d7d76d49f3f8ad77"
+              }
+            }
+          ],
+          "share": "1"
+        }
+      ],
+      "mode": "Direct"
+    },
+    "side": "Sell",
+    "signal_route": null,
+    "venue": "bsc_dex"
+  }
+}

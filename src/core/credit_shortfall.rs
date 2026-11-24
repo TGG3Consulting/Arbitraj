@@ -16,7 +16,7 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{Asset, Cost, VenueId};
+use crate::core::types::{Asset, Cost, CostKind, VenueId};
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
@@ -24,6 +24,10 @@ use super::engine::Core;
 
 /// Кто меняет настройку (журнал изменений настроек).
 const AUTHOR: &str = "ядро: зачислено меньше ожидаемого (решение 118)";
+
+#[path = "credit_units.rs"]
+mod units;
+pub use units::CreditProof;
 
 /// Сверяет зачисленное с ожидаемым и при недостаче больше допуска блокирует монету. Принимает: сделку, откуда,
 /// куда, монету, сеть отправителя, сумму вывода, зачислено, комиссию вывода из ответа площадки-отправителя (решение
@@ -41,6 +45,8 @@ pub async fn check(
     sent: Decimal,
     credited: Decimal,
     fee: Option<&Cost>,
+    proof: Option<CreditProof<'_>>,
+    units: Option<super::settlement_unit::UnitRatio>,
 ) {
     let deps = &core.inner.deps;
     // Решение 430: USDT сети монеты.
@@ -53,14 +59,19 @@ pub async fn check(
     }
     // Решение 247, п. Ж: комиссия вывода — факт из ответа площадки, если она в этой монете (имя площадки → ядра).
     let fact_fee = fee
-        .filter(|c| super::venue_ticker::name_back(core, asset, from, &c.asset) == asset.ticker)
+        .filter(|c| {
+            c.kind == CostKind::WithdrawFee
+                && c.paid_in.is_none()
+                && !c.in_price
+                && super::venue_ticker::name_back(core, asset, from, &c.asset) == asset.ticker
+        })
         .map(|c| c.amount);
     let expected = match fact_fee {
         Some(f) => match super::transfer_tax::pct(core, to, asset) {
             Ok(tax) => (sent - f) * (Decimal::ONE - tax / Decimal::ONE_HUNDRED),
             Err(_) => return,
         },
-        None => match super::credit_expect::arrival(core, from, to, asset, net, sent).await {
+        None => match super::credit_expect::sender_amount(core, from, to, asset, net, sent).await {
             Ok(e) => e,
             Err(_) => return,
         },
@@ -69,14 +80,56 @@ pub async fn check(
     // этой площадки (withdraw_seen.rs; в расчёт — при transfer.seen_cost). Пишутся всегда, порог ниже — отдельно.
     // Дополнение (Тигран 10.11): сырые числа (отправлено, зачислено, комиссия по факту) — разложение на комиссию, налог и
     // прочее делает расчёт против своей текущей модели (без двойного счёта при последующем замере налога).
-    let seen = super::withdraw_seen::Seen {
+    let mut seen = super::withdraw_seen::Seen {
         asset: asset.clone(),
         from: from.clone(),
         sent,
         credited,
         fee: fact_fee,
     };
-    super::withdraw_seen::record(core, seen).await;
+    let mut receipt = None;
+    let mut in_sender_units = credited;
+    let current = super::credit_expect::units(core, from, to, asset).ok();
+    if let Some(r) = self::units::stable(units, current)
+        && let Some(hash) = proof
+            .as_ref()
+            .and_then(|p| p.matched_tx(core, from, to, asset))
+        && let Ok(in_a) = r.to_buy(credited)
+    {
+        in_sender_units = in_a;
+        receipt = Some(super::withdraw_seen::Receipt {
+            tx: hash.to_owned(),
+            raw: credited,
+            requested: sent,
+            venue_units: Some(r),
+        });
+    }
+    if expected != in_sender_units
+        && let (Some(p), Some(f)) = (proof.as_ref(), fact_fee)
+        && p.sender.amount - f != in_sender_units
+        && let Some((hash, ui, gross)) = p.in_sender_units(core, to, net, &seen, expected, f).await
+    {
+        receipt = Some(super::withdraw_seen::Receipt {
+            tx: hash.to_owned(),
+            raw: credited,
+            requested: sent,
+            venue_units: None,
+        });
+        seen.sent = gross;
+        in_sender_units = ui;
+        deps.log(Level::Info, "core.credit_shortfall", Some(&to.0),
+            format!("{deal}: вывод {hash} подтверждён в двух единицах: зачислено {credited} в контракте, {ui} в единицах отправителя после комиссии {f}"), None).await;
+    }
+    if receipt.is_none()
+        && (units.is_some_and(|r| !r.is_identity()) || current.is_some_and(|r| !r.is_identity()))
+    {
+        deps.log(Level::Warn, "core.credit_shortfall", Some(&to.0),
+            format!("{deal}: по хешу не подтверждён пересчёт {sent} → {credited} между {} и {}; фактическое зачисление сохранено в единицах получателя", from.0, to.0), None).await;
+        return;
+    }
+    seen.credited = in_sender_units;
+    let credited = in_sender_units;
+    super::withdraw_seen::record_for(core, to, seen, receipt).await;
     let Ok(max) = deps
         .settings
         .decimal("transfer.credit_shortfall_pct", At::default())

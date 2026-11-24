@@ -29,6 +29,10 @@ pub struct PlanLine {
 /// Что нужно пересчёту из плана сделки (core/costs_types.rs Calc в JSON).
 #[derive(Debug, Clone, Deserialize)]
 pub struct Plan {
+    #[serde(default)]
+    pub units_b_per_a: super::settlement_unit::UnitRatio,
+    #[serde(default)]
+    pub transfer_sent_a: Option<Decimal>,
     pub qty: Decimal,
     pub arrive: Decimal,
     pub sell_qty: Decimal,

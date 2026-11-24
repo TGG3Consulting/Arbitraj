@@ -34,6 +34,7 @@ pub type TransitKey = (Asset, VenueId, VenueId);
 /// Общее состояние ядра.
 pub struct Inner {
     pub deps: Deps,
+    pub settlement: super::settlement_unit::Book,
     pub live: Live,
     pub market: RwLock<MarketState>,
     /// Справочник сетей каждой биржи (последний успешный coin_networks).
@@ -248,6 +249,7 @@ impl Inner {
             "windows",
         );
         Inner {
+            settlement: Default::default(),
             live: Live::new(deps.buffer),
             busy_calc: super::busy_calc::State::new(deps.buffer),
             cand_wait: Default::default(),

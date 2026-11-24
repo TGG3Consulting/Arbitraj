@@ -354,7 +354,18 @@ async fn go(
             from.0, asset.ticker
         )));
     }
-    let ticket = super::credit_expect::ticket(core, deal, from, to, asset, &net_from, qty).await;
+    let units = super::credit_expect::units(core, from, to, asset);
+    let ticket = super::credit_expect::ticket_with_units(
+        core,
+        deal,
+        (from, to),
+        asset,
+        &net_from,
+        qty,
+        units.as_ref(),
+    )
+    .await;
+    let units = units.ok();
     if let Some(t) = &ticket {
         t.set_account(acc.cloned());
     }
@@ -449,6 +460,7 @@ async fn go(
         if let Some(hit) = ticket
             .as_ref()
             .and_then(super::credit_watch::Ticket::chain_hit)
+            && super::credit_expect::units(core, from, to, asset).ok() == units
         {
             let c = super::transfer_chain::Chain {
                 deal,
@@ -459,6 +471,7 @@ async fn go(
                 net_to: net_to.clone(),
                 qty,
                 started,
+                units,
                 created: created.clone(),
                 gw_from: gw_from.clone(),
                 gw_to: gw_to.clone(),
@@ -585,13 +598,33 @@ async fn go(
         tx,
         started,
     };
-    let credited = super::transfer_credit::wait(core, &leg, gw_to, ticket).await;
+    let credited =
+        super::transfer_credit::wait_with_units(core, &leg, gw_to.clone(), ticket, units).await;
     // Решение 413: снимок посторонних (если чтение кончилось) — к хешу вывода, для записи зачисления сделки.
     super::credit_base::bind(base, sent.tx_hash.as_deref());
     // Решение 118 (Я-3): дошло меньше ожидаемого больше допуска — монета в ручной чёрный список.
     let (f, a) = (&net_from, credited.amount);
     // Решение 247, п. Ж: комиссия вывода — из ответа площадки (статус вывода, иначе ответ на создание).
     let fee = sent.fee.as_ref().or(created.fee.as_ref());
-    super::credit_shortfall::check(core, deal, from, to, asset, f, qty, a, fee).await;
+    let proof = super::credit_shortfall::CreditProof {
+        accepted_id: &created.venue_ref,
+        sender: &sent,
+        receiver: &credited,
+        wallet: gw_to.as_ref(),
+    };
+    super::credit_shortfall::check(
+        core,
+        deal,
+        from,
+        to,
+        asset,
+        f,
+        qty,
+        a,
+        fee,
+        Some(proof),
+        units,
+    )
+    .await;
     Ok((sent, credited, None))
 }

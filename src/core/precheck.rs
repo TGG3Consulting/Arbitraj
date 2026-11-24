@@ -458,8 +458,12 @@ async fn steps(
         }
     };
     // Ревью 2 t180, Н-C2: отказ стороны возвращается сразу — чтение коридора при этом отменяется (try_join).
-    let ((mut bands, band_ms), addr_due, ()) =
-        tokio::try_join!(band, sides, super::settlement_unit::check_entry(core, d))?;
+    let ((mut bands, band_ms), addr_due, verified_units, ()) = tokio::try_join!(
+        band,
+        sides,
+        super::settlement_unit::check_entry(core, d),
+        super::precheck_deposit::withdraw_destination(core, d, acc)
+    )?;
     // Решение 411: баланс A отказал, адрес B ещё не проверен — сначала адрес (его ошибка первая по порядку).
     if let Some(e) = bal_err {
         let at = Instant::now();
@@ -507,10 +511,13 @@ async fn steps(
         // Будущее расчёта большое — в куче: обёртки замера иначе копируют его на стек (переполнение в отладочной сборке).
         // Решение 265: этапы пересчёта по шагам — только при включённом замере (выключен — работа без обёрток).
         // Решение 266 (precheck.fast_recalc = да): сначала — только объём кандидата; не прошёл — полный подбор (profit.rs).
-        let mut want = fast.qty.map(|q| Want {
-            spend: cand.map(|c| c.spend_max),
-            ..Want::new(q)
-        });
+        let mut want = fast
+            .qty
+            .filter(|_| verified_units.is_identity())
+            .map(|q| Want {
+                spend: cand.map(|c| c.spend_max),
+                ..Want::new(q)
+            });
         // Решение 392 (t180): план считается внутри коридора, прочитанного выше одновременно с шагами сторон (контекст —
         // на справочнике сетей после шагов сторон).
         let plan = Box::pin(replan_pre(core, d, free, want.as_mut(), pre));
@@ -559,6 +566,11 @@ async fn steps(
         }
     }
     let (c, cut) = calc?;
+    if c.units_b_per_a.buy_per_raw != verified_units.buy_per_raw
+        || c.units_b_per_a.sell_per_raw != verified_units.sell_per_raw
+    {
+        return Err("во время пересчёта изменились единицы площадок, ожидается свежий план".into());
+    }
     // Часть 4: инвариант пары buy_cap + refit — списание плана по худшей цене не больше предела списания
     // (min(бюджет плана, свободно)); расчёт его держит сам (final_calc), здесь — сверка после проверки продажи.
     if let Some(free) = free {

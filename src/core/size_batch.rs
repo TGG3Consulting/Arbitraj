@@ -55,6 +55,12 @@ impl<C: Curve> Memo<'_, C> {
                 break;
             }
             let qs: Vec<Decimal> = chunk.iter().map(|&n| self.qty(n)).collect();
+            if self.sell_grid.is_some() && qs.contains(&Decimal::MAX) {
+                for &n in chunk {
+                    let _ = self.at(n).await;
+                }
+                continue;
+            }
             self.done += u32::try_from(chunk.len()).unwrap_or(u32::MAX);
             // Уступаем рабочий поток перед пачкой (решение 90, как at).
             tokio::task::yield_now().await;

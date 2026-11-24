@@ -82,7 +82,7 @@ impl Replay {
         Ok(Replay {
             buy,
             sell,
-            plan: PlanCosts::new(coin, &plan.costs, plan.arrive),
+            plan: PlanCosts::new(coin, &plan.costs, plan.arrive, plan.transfer_sent_a),
         })
     }
 }

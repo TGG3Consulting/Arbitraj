@@ -47,6 +47,7 @@ fn dex_to_bingx(rec: &Rec, q: Decimal) -> Prices {
     Prices {
         buy: to_decimal(b.amount_in, 18).unwrap() / q,
         sell: sum / q,
+        venue_sale: None,
         fees_pct: Decimal::ZERO,
         qty: q,
         buy_at: Utc::now(),

@@ -48,6 +48,7 @@ fn prices(buy: &str, sell: &str) -> Result<Prices, String> {
     Ok(Prices {
         buy: d(buy),
         sell: d(sell),
+        venue_sale: None,
         fees_pct: d("0.2"),
         qty: d("1000"),
         buy_at: Utc::now(),

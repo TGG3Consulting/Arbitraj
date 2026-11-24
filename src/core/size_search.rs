@@ -68,6 +68,7 @@ pub async fn search<C: Curve>(curve: &mut C, p: &Params) -> Result<Found<C::Data
     let mut m = Memo::new(curve, p.step, p.budget, p.max_evals)
         .with_share(p.par_points, p.reuse)
         .with_gate(p.ext.min_usd, p.ext.min_pct);
+    m.sell_grid = p.ext.sell_grid;
     search_in(&mut m, p).await
 }
 

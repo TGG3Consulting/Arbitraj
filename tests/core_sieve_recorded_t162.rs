@@ -186,6 +186,7 @@ fn one(c: &Value) -> (String, bool) {
     let k = -(Decimal::ONE - sum("PriceMoveReserve") / pro).ln() / (sigma * sqrt_t);
     let ret = sum("UsdtReturn");
     let cx = DirCtx {
+        units_b_per_a: Default::default(),
         dir: Direction {
             asset: asset.clone(),
             buy_on: VenueId(buy_on.into()),

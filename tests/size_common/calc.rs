@@ -68,6 +68,8 @@ pub fn calc(rec: &Rec, qty: Decimal) -> Calc {
     let (buy_avg, sell_avg) = (spent / qty, proceeds / qty);
     let profit = proceeds - spent;
     Calc {
+        units_b_per_a: Default::default(),
+        transfer_sent_a: None,
         direction: direction(),
         qty,
         arrive: qty,

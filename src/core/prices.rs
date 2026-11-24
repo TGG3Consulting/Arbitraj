@@ -28,6 +28,7 @@ use crate::settings::read::At;
 
 use super::deps::Deps;
 use super::engine::{Core, lk, rd};
+use super::settlement_unit::{self, UnitRatio};
 use super::signal::Prices;
 use crate::gateway::contract::VenueKind;
 use crate::gateway::quote_purpose::Purpose::Signal;
@@ -43,9 +44,10 @@ pub async fn quotes(core: &Core, dir: &Direction, qty: Decimal) -> Result<(Quote
     // Решение 211: каждой площадке — её тикер монеты; ответы — обратно в монету ядра.
     let vt = |v: &VenueId| super::venue_ticker::on_venue(core, &dir.asset, v);
     let (on_a, on_b) = (vt(&dir.buy_on), vt(&dir.sell_on));
+    let sell_qty = settlement_unit::ratio(core, dir)?.to_sell(qty)?;
     let (qa, qb) = tokio::join!(
         a.quote(&on_a, Side::Buy, qty),
-        b.quote(&on_b, Side::Sell, qty)
+        b.quote(&on_b, Side::Sell, sell_qty)
     );
     let qa = qa.map_err(|e| format!("{}: {}", dir.buy_on.0, e.message))?;
     let qb = qb.map_err(|e| format!("{}: {}", dir.sell_on.0, e.message))?;
@@ -54,10 +56,16 @@ pub async fn quotes(core: &Core, dir: &Direction, qty: Decimal) -> Result<(Quote
 }
 
 /// Котировки обеих сторон на тике: сторона DEX — из памяти, если годится (решение 109). Ошибки: как у quotes.
-async fn tick_quotes(core: &Core, dir: &Direction, qty: Decimal) -> Result<(Quote, Quote), String> {
+async fn tick_quotes(
+    core: &Core,
+    dir: &Direction,
+    qty: Decimal,
+    units: UnitRatio,
+) -> Result<(Quote, Quote), String> {
+    let sell_qty = units.to_sell(qty)?;
     let (qa, qb) = tokio::join!(
         side_quote(core, dir, Side::Buy, qty),
-        side_quote(core, dir, Side::Sell, qty)
+        side_quote(core, dir, Side::Sell, sell_qty)
     );
     Ok((qa?, qb?))
 }
@@ -120,7 +128,7 @@ async fn side_quote(
 }
 
 /// Цены направления для сигнала.
-/// Принимает: зависимости, направление, опорную цену монеты (лучший ask биржи; None — стакана нет).
+/// Принимает зависимости, направление и опорную цену за торговую единицу площадки покупки A.
 /// Возвращает: Prices на максимально вливаемом объёме (≤ потолка; решение 260 — ≤ объёма проверки signal.probe_usd).
 /// Ошибки: текст причины (нет опорной цены, не задан лимит сделки, signal.probe_usd в неверном виде, нет котировки,
 /// нет исполнимого объёма ни на сколько — глубина 0, комиссия в валюте, которую не перевести без convert.rs).
@@ -129,10 +137,58 @@ pub async fn for_direction(
     dir: &Direction,
     ref_price: Option<Decimal>,
 ) -> Result<Prices, String> {
-    let deps = &core.inner.deps;
+    let units = settlement_unit::ratio(core, dir)?;
     let ref_price = ref_price
-        .filter(|p| !p.is_zero())
+        .filter(|p| *p > Decimal::ZERO)
         .ok_or("нет опорной цены: стакан монеты не пришёл ни с одной биржи")?;
+    compare(core, dir, ref_price, units).await
+}
+
+/// Книга, как и её цена, принадлежит площадке. Берём A или B, затем проверенный стык A с третьей биржей.
+pub(super) async fn for_books(
+    core: &Core,
+    dir: &Direction,
+    books: &[(VenueId, Decimal)],
+) -> Result<Prices, String> {
+    let units = settlement_unit::ratio(core, dir)?;
+    let price_at = |v: &VenueId| {
+        books
+            .iter()
+            .find(|(id, p)| id == v && *p > Decimal::ZERO)
+            .map(|(_, p)| *p)
+    };
+    let px = if let Some(p) = price_at(&dir.buy_on) {
+        p
+    } else if let Some(p) = price_at(&dir.sell_on) {
+        units.to_sell(p)?
+    } else {
+        books
+            .iter()
+            .find_map(|(venue, p)| {
+                let reference = Direction {
+                    asset: dir.asset.clone(),
+                    buy_on: dir.buy_on.clone(),
+                    sell_on: venue.clone(),
+                };
+                let unit = settlement_unit::ratio(core, &reference).ok()?;
+                unit.to_sell(*p).ok().filter(|p| *p > Decimal::ZERO)
+            })
+            .ok_or("нет опорной цены в подтверждённых единицах покупки")?
+    };
+    compare(core, dir, px, units).await
+}
+
+/// Объёмы и комиссия каждой котировки остаются нативными вплоть до сравнения на стороне A.
+async fn compare(
+    core: &Core,
+    dir: &Direction,
+    ref_price: Decimal,
+    units: UnitRatio,
+) -> Result<Prices, String> {
+    let deps = &core.inner.deps;
+    if ref_price <= Decimal::ZERO {
+        return Err("опорная цена в единицах покупки округлена до нуля".into());
+    }
     let at = At {
         venue: Some(&dir.buy_on.0),
         coin: None,
@@ -147,7 +203,7 @@ pub async fn for_direction(
     let want = match super::signal_probe::probe_usd(&deps.settings, vd, at)? {
         None => usd / ref_price,
         Some(p) => {
-            let floor = super::signal_probe::floor_of(core, dir, ref_price);
+            let floor = super::signal_probe::floor_of(core, dir, ref_price, units)?;
             super::signal_probe::qty(usd, Some(p), ref_price, floor)
         }
     };
@@ -155,11 +211,11 @@ pub async fn for_direction(
     let generation = super::window_dex::generation(core, dir);
     // Решение 348: котировки сигнала помечены назначением (замер «кто вызвал»; на расчёт не влияет).
     let (qa, qb) =
-        crate::gateway::quote_purpose::scope(Signal, tick_quotes(core, dir, want)).await?;
+        crate::gateway::quote_purpose::scope(Signal, tick_quotes(core, dir, want, units)).await?;
     // Грубый спред — на максимально вливаемом объёме, не выше потолка (решение 87; решение 260 — не выше объёма
     // проверки). fillable_qty ≤ запрошенного, поэтому меньшая из глубин обеих сторон уже в его пределах. Требовать
     // полного заполнения потолка нельзя: тонкие пулы тогда умирают здесь и не доходят до подбора объёма (66).
-    let qty = qa.fillable_qty.min(qb.fillable_qty);
+    let qty = common_depth(qa.fillable_qty, qb.fillable_qty, units)?;
     if qty <= Decimal::ZERO {
         return Err(format!(
             "нет исполнимого объёма: покупка {} / продажа {}",
@@ -169,16 +225,40 @@ pub async fn for_direction(
     // Запрошенный объём не влез целиком — пересчитать обе стороны на реально доступный объём, чтобы цены и спред
     // были согласованы по одному объёму (у сторон разная глубина — берём меньшую).
     let (qa, qb) = if qty < want {
-        crate::gateway::quote_purpose::scope(Signal, tick_quotes(core, dir, qty)).await?
+        crate::gateway::quote_purpose::scope(Signal, tick_quotes(core, dir, qty, units)).await?
     } else {
         (qa, qb)
     };
     super::window_dex::note(core, dir, &qa, &qb, generation);
     let fees = fee_usdt(deps, &qa)? + fee_usdt(deps, &qb)?;
+    quoted_prices(&qa, &qb, qty, fees, units)
+}
+
+/// Сравнивает нативные глубины. Если B уже покрывает A, не округляем объём дважды при A → B → A.
+fn common_depth(a: Decimal, b: Decimal, units: UnitRatio) -> Result<Decimal, String> {
+    if b >= units.to_sell(a)? {
+        Ok(a)
+    } else {
+        Ok(a.min(units.to_buy(b)?))
+    }
+}
+
+/// Цена за единицу A для сравнения. Исходную котировку B сохраняем для её стакана и ряда σ.
+fn quoted_prices(
+    qa: &Quote,
+    qb: &Quote,
+    qty: Decimal,
+    fees: Decimal,
+    units: UnitRatio,
+) -> Result<Prices, String> {
     let notional = qa.avg_price * qty;
     Ok(Prices {
         buy: qa.avg_price,
-        sell: qb.avg_price,
+        sell: units.to_sell(qb.avg_price)?,
+        venue_sale: (!units.is_identity()).then_some(super::signal_types::VenueSale {
+            price: qb.avg_price,
+            qty: qb.fillable_qty,
+        }),
         fees_pct: if notional.is_zero() {
             Decimal::ZERO
         } else {
@@ -223,3 +303,7 @@ fn fee_usdt(deps: &Deps, q: &Quote) -> Result<Decimal, String> {
     }
     Ok(sum)
 }
+
+#[cfg(test)]
+#[path = "prices_unit_tests.rs"]
+mod unit_tests;

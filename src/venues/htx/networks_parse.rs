@@ -37,6 +37,7 @@ use super::num;
 pub type Contracts = HashMap<(String, String), String>;
 
 /// Два идентификатора одной сети HTX. Для самого перевода используется chain конкретной монеты.
+#[derive(Clone)]
 pub struct TransferChain {
     pub coin: String,
     pub universal: Option<&'static str>,

@@ -52,7 +52,7 @@
     { id: 'coins', title: 'Монеты', page: Coins, wide: true },
     { id: 'episodes', title: 'Эпизоды', page: Episodes, wide: true },
     { id: 'windows', title: 'Окна', page: Windows, wide: true },
-    { id: 'uncapped', title: 'Упущено из-за потолка', page: Uncapped, wide: true },
+    { id: 'uncapped', title: 'Прибыль по модели при разных лимитах', page: Uncapped, wide: true },
     { id: 'manual', title: 'Ручное управление', page: Manual },
     { id: 'wallets', title: 'Маппинг кошельков', page: Wallets },
     { id: 'channels', title: 'Каналы отправки', page: Channels, more: true },

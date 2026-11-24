@@ -29,6 +29,8 @@ use crate::settings::store::Store;
 /// Части подбора t159. По умолчанию — пусто: порогов нет, участков нет, срока нет (как до t159).
 #[derive(Debug, Clone, Default)]
 pub struct Extra {
+    /// Только DEX → CEX, когда шаг B в единицах A содержит непредставимую дробь.
+    pub sell_grid: Option<super::size_unit_grid::SellGrid>,
     /// Порог прибыли в USDT направления (решение 342: отсечение «лучший по USDT ниже порога — проходящих нет»;
     /// решение 345: признак «проходящий объём найден»). None — неизвестен.
     pub min_usd: Option<Decimal>,

@@ -126,13 +126,18 @@ fn matches(row: &Value, coin: &str, chain: &str, address: &str) -> bool {
             .as_str()
             .is_some_and(|s| s.eq_ignore_ascii_case(expected))
     };
-    if !same("address", address) {
+    if !same("address", address)
+        || !(row["addressTag"].is_null() || row["addressTag"].as_str() == Some(""))
+    {
         return false;
     }
-    coin != UNIVERSAL
-        || (same("currency", UNIVERSAL)
-            && same("chain", chain)
-            && (row["addressTag"].is_null() || row["addressTag"].as_str() == Some("")))
+    if coin == UNIVERSAL {
+        return same("currency", UNIVERSAL) && same("chain", chain);
+    }
+    // У старого индивидуального ответа бывает только адрес; GET уже ограничен валютой и сетью.
+    // Если HTX повторил поля строки, они должны соответствовать запросу.
+    (row.get("currency").is_none() || same("currency", coin))
+        && (row.get("chain").is_none() || same("chain", chain))
 }
 
 #[cfg(test)]

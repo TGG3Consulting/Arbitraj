@@ -14,9 +14,44 @@
 //! От чего зависит: transfers.rs (название сети BSC получателя), deps.rs (шлюз), deposit_proof.rs.
 //! Настройки: venue.bsc_network — через transfers.rs.
 
-use crate::core::types::{Asset, Direction, VenueId};
+use crate::core::types::{Asset, DexAccountId, Direction, VenueId};
+use crate::gateway::contract::VenueKind;
 
 use super::engine::Core;
+
+/// При новом входе биржа → DEX проверяет разрешение отправителя на вывод до покупки.
+/// Для получателя берётся тот же привязанный счёт, что при переводе. wallet_address
+/// только читает его адрес; deposit_address в DEX дополнительно регистрировал бы ожидаемый перевод.
+pub(super) async fn withdraw_destination(
+    core: &Core,
+    d: &Direction,
+    account: Option<&DexAccountId>,
+) -> Result<(), String> {
+    if super::trade_ops::kind(core, &d.sell_on)? != VenueKind::Dex
+        || super::trade_ops::kind(core, &d.buy_on)? != VenueKind::Cex
+    {
+        return Ok(());
+    }
+    let gw = &core.inner.deps.gw;
+    let from = gw.get(&d.buy_on).await.map_err(|e| e.message)?;
+    if !from.requires_withdraw_destination_check() {
+        return Ok(());
+    }
+    let to = gw
+        .get_as(&d.sell_on, account)
+        .await
+        .map_err(|e| e.message)?;
+    let address = to.wallet_address().await.map_err(|e| e.message)?;
+    let source = target_on(core, &d.asset, &d.buy_on)?;
+    from.check_withdraw_destination(&source.on, &source.net, &address)
+        .await
+        .map_err(|e| {
+            format!(
+                "{}: проверка адреса вывода до покупки: {}",
+                d.buy_on.0, e.message
+            )
+        })
+}
 
 /// Решение 316: что именно запрашивается у биржи B — монета её тикером и название её сети BSC. Тот же ключ, по которому
 /// адаптер кэширует адрес (монета, сеть), — им пользуются и предпроверка (ready), и фоновый прогрев (deposit_warm.rs),

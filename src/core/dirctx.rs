@@ -38,6 +38,8 @@ use super::size::Fail;
 /// Неизменная часть расчёта направления.
 pub struct DirCtx {
     pub dir: Direction,
+    /// Биржевые и сетевые единицы направления в момент расчёта. Объёмы ордеров остаются локальными.
+    pub units_b_per_a: super::settlement_unit::UnitRatio,
     pub a: Presence,
     pub b: Presence,
     /// Название сети BSC для вывода с A и для депозита на B (у DEX — сеть биржи-напарника).
@@ -94,6 +96,7 @@ enum Moment<'a> {
     Decided {
         sigma: Decimal,
         transit_s: Decimal,
+        units: super::settlement_unit::UnitRatio,
         settings: &'a Store,
     },
 }
@@ -121,6 +124,7 @@ impl DirCtx {
         dir: &Direction,
         sigma: Decimal,
         transit_s: Decimal,
+        units: super::settlement_unit::UnitRatio,
         settings: &Store,
     ) -> Result<DirCtx, String> {
         Self::build_with(
@@ -129,6 +133,7 @@ impl DirCtx {
             Moment::Decided {
                 sigma,
                 transit_s,
+                units,
                 settings,
             },
         )
@@ -136,6 +141,10 @@ impl DirCtx {
 
     /// Сборка контекста на момент `at_m` (см. Moment). Ошибки: как у build.
     fn build_with(core: &Core, dir: &Direction, at_m: Moment) -> Result<DirCtx, String> {
+        let units_b_per_a = match &at_m {
+            Moment::Decided { units, .. } => *units,
+            _ => super::settlement_unit::ratio(core, dir)?,
+        };
         let s = match &at_m {
             Moment::Decided { settings, .. } => *settings,
             _ => &core.inner.deps.settings,
@@ -282,6 +291,7 @@ impl DirCtx {
         };
         Ok(DirCtx {
             dir: dir.clone(),
+            units_b_per_a,
             a,
             b,
             net_a,

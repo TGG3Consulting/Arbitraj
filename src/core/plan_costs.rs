@@ -45,7 +45,12 @@ pub struct PlanCosts {
 impl PlanCosts {
     /// Что делает: из строк затрат плана. Принимает: монету сделки (тикер ядра), строки плана, приход на B по плану.
     /// Возвращает: PlanCosts. Ошибок нет.
-    pub fn new(coin: &str, lines: &[PlanLine], arrive: Decimal) -> PlanCosts {
+    pub fn new(
+        coin: &str,
+        lines: &[PlanLine],
+        arrive: Decimal,
+        sent_a: Option<Decimal>,
+    ) -> PlanCosts {
         let stage =
             |s: &str| -> Vec<PlanLine> { lines.iter().filter(|l| l.stage == s).cloned().collect() };
         let transfer = stage("перевод");
@@ -63,7 +68,8 @@ impl PlanCosts {
             })
             .collect();
         PlanCosts {
-            sent_plan: arrive + in_coin,
+            // Старые планы использовали общую единицу. Новые сохраняют точную сумму A до округления B.
+            sent_plan: sent_a.unwrap_or_else(|| arrive + in_coin),
             transfer,
             returns: stage(super::costs_types::RETURN_STAGE),
             prices,

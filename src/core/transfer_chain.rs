@@ -37,6 +37,7 @@ use super::wait::{Pacer, Unit};
 
 /// Что известно о переводе к моменту зачисления по блокчейну.
 pub struct Chain<'a> {
+    pub units: Option<super::settlement_unit::UnitRatio>,
     pub deal: &'a str,
     pub from: &'a VenueId,
     pub to: &'a VenueId,
@@ -100,7 +101,14 @@ pub async fn finish(
     let (d, f, t, a) = (c.deal, c.from, c.to, c.asset);
     let fee = c.created.fee.as_ref();
     let later = match fee {
-        Some(_) => {
+        Some(fee_from_create)
+            if c.qty - fee_from_create.amount == credited.amount
+                || (c.created.status == TransferStatus::Sent
+                    && c.created
+                        .tx_hash
+                        .as_deref()
+                        .is_some_and(|h| confirmed_hash(h, &hash))) =>
+        {
             super::credit_shortfall::check(
                 core,
                 d,
@@ -111,15 +119,24 @@ pub async fn finish(
                 c.qty,
                 credited.amount,
                 fee,
+                Some(super::credit_shortfall::CreditProof {
+                    accepted_id: &c.created.venue_ref,
+                    sender: &c.created,
+                    receiver: &credited,
+                    wallet: c.gw_to.as_ref(),
+                }),
+                c.units,
             )
             .await;
             None
         }
-        None => Some(Later {
+        _ => Some(Later {
             asset: a.clone(),
             net_from: c.net_from.to_string(),
             qty: c.qty,
-            credited: credited.amount,
+            credited: credited.clone(),
+            wallet: c.gw_to.clone(),
+            units: c.units,
         }),
     };
     tokio::spawn(sender_hash(
@@ -160,15 +177,17 @@ struct Check {
 
 /// Решение 253 (д): что нужно отложенной проверке зачисления (credit_shortfall.rs).
 struct Later {
+    units: Option<super::settlement_unit::UnitRatio>,
     asset: Asset,
     net_from: String,
     qty: Decimal,
-    credited: Decimal,
+    credited: Transfer,
+    wallet: Arc<dyn Venue>,
 }
 
 /// Что делает: отложенная проверка зачисления с фактической комиссией из статуса вывода (решение 253 (д)); комиссии нет
 /// (статус не получен) — как раньше, по справочнику сетей. Принимает: ядро, сверку, комиссию. Ошибок нет.
-async fn shortfall(core: &Core, c: &Check, fee: Option<&crate::core::types::Cost>) {
+async fn shortfall(core: &Core, c: &Check, sender: Option<&Transfer>) {
     if let Some(l) = &c.later {
         let (d, f, t) = (c.deal.as_str(), &c.from, &c.to);
         super::credit_shortfall::check(
@@ -179,8 +198,17 @@ async fn shortfall(core: &Core, c: &Check, fee: Option<&crate::core::types::Cost
             &l.asset,
             &l.net_from,
             l.qty,
-            l.credited,
-            fee,
+            l.credited.amount,
+            sender
+                .and_then(|s| s.fee.as_ref())
+                .or(c.created.fee.as_ref()),
+            sender.map(|s| super::credit_shortfall::CreditProof {
+                accepted_id: &c.created.venue_ref,
+                sender: s,
+                receiver: &l.credited,
+                wallet: l.wallet.as_ref(),
+            }),
+            l.units,
         )
         .await;
     }
@@ -233,9 +261,9 @@ async fn sender_hash(core: Core, c: Check) {
         match c.gw.withdrawal_status_for(&c.created).await {
             Ok(t) if t.tx_hash.is_some() && t.status != TransferStatus::Pending => {
                 // Решение 253 (д): фактическая комиссия вывода (у Binance — transactionFee истории выводов).
-                let tx = t.tx_hash.unwrap_or_default();
-                if confirmed_hash(&tx, &c.hash) {
-                    shortfall(&core, &c, t.fee.as_ref()).await;
+                let tx = t.tx_hash.as_deref().unwrap_or_default();
+                if confirmed_hash(tx, &c.hash) {
+                    shortfall(&core, &c, Some(&t)).await;
                     let text = format!("{head}; хеш вывода от {} совпал", c.from.0);
                     deps.log(
                         Level::Info,
@@ -251,6 +279,9 @@ async fn sender_hash(core: Core, c: Check) {
                         c.from.0
                     );
                     report(&core, &c.from, Level::Error, text).await;
+                    if c.created.fee.is_some() {
+                        shortfall(&core, &c, None).await;
+                    }
                 }
                 return;
             }

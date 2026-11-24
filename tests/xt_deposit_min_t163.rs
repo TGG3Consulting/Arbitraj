@@ -113,6 +113,7 @@ fn cx_to_xt(info: CoinNetworkInfo) -> DirCtx {
         via: None,
     };
     DirCtx {
+        units_b_per_a: Default::default(),
         dir: Direction {
             asset: asset.clone(),
             buy_on: VenueId("bsc_dex".into()),

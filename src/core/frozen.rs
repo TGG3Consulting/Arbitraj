@@ -88,12 +88,19 @@ pub async fn take(core: &Core, plan: &Calc) -> Result<Frozen, String> {
     let settings = core.inner.deps.settings.pinned();
     let a = side(core, d, &d.buy_on, Side::Buy).await?;
     let b = side(core, d, &d.sell_on, Side::Sell).await?;
-    let cx = DirCtx::build_decided(core, d, plan.sigma, plan.transit_s, &settings)
-        .map_err(|e| format!("контекст направления на момент решения: {e}"))?;
+    let cx = DirCtx::build_decided(
+        core,
+        d,
+        plan.sigma,
+        plan.transit_s,
+        plan.units_b_per_a,
+        &settings,
+    )
+    .map_err(|e| format!("контекст направления на момент решения: {e}"))?;
     let lines = PlanCosts::lines_of(&plan.costs);
     let decided = Decided {
         cx,
-        plan: PlanCosts::new(&d.asset.ticker, &lines, plan.arrive),
+        plan: PlanCosts::new(&d.asset.ticker, &lines, plan.arrive, plan.transfer_sent_a),
         settings,
     };
     Ok(Frozen {

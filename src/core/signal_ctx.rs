@@ -81,6 +81,11 @@ pub fn cex_still_ms(
         Side::Sell => (&dir.buy_on, Side::Buy, p.buy_at),
     };
     let ticker = super::venue_ticker::ticker_on(core, &dir.asset, venue);
-    let since = rd(&core.inner.market).book_still_since(venue, &ticker, side, p.qty, quote_at)?;
+    let qty = if side == Side::Sell {
+        p.venue_sale.as_ref().map_or(p.qty, |s| s.qty)
+    } else {
+        p.qty
+    };
+    let since = rd(&core.inner.market).book_still_since(venue, &ticker, side, qty, quote_at)?;
     Some((now - since).num_milliseconds().max(0) as u64)
 }

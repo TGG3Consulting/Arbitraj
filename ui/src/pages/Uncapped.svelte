@@ -35,7 +35,7 @@
   import { coinName } from '../lib/coinNames.svelte.js';
   import { showTime } from '../lib/labels.js';
   import { explainSize } from '../lib/sizeExplanation.js';
-  import { limitedLabel, budgetBound, money, period, verdictLabel, duration, windowSec, understated, lateInputs, wouldText } from '../lib/uncappedLabels.js';
+  import { limitedLabel, budgetBound, money, period, verdictLabel, duration, windowSec, understated, lateInputs } from '../lib/uncappedLabels.js';
   import PageSize from '../components/PageSize.svelte';
   import ErrorText from '../components/ErrorText.svelte';
   import UncappedRecord from '../components/UncappedRecord.svelte';
@@ -115,7 +115,7 @@
   const dirText = (d) => `${coinName(d.asset)} ${d.buy_on} → ${d.sell_on}`;
 </script>
 
-<h1>Упущено из-за потолка</h1>
+<h1>Прибыль по модели при разных лимитах</h1>
 <ErrorText text={error} />
 <div class="row">
   <label class="inline">Период
@@ -139,7 +139,7 @@
   {#if sum.maxwin_off}<p class="warn-text">Окна максимального объёма не ведутся: {sum.maxwin_off}</p>{/if}
   {#if sum.deal_time_off}<p class="warn-text">Длительность сделок для «успели бы» не считается: {sum.deal_time_off}</p>{/if}
   <table>
-    <thead><tr><th></th><th>записей</th><th>упёрлись в бюджет</th><th>план на нашем бюджете</th><th>факт</th><th>та же модель: сделки — на вложенном, кандидаты — на нашем бюджете</th><th>без потолка</th><th>упущено</th><th>окна</th></tr></thead>
+    <thead><tr><th></th><th>записей</th><th>упёрлись в бюджет</th><th>план на нашем бюджете</th><th>факт</th><th>та же модель: сделки — на вложенном, кандидаты — на нашем бюджете</th><th>прибыль модели без лимита</th><th>прирост по модели</th><th>окна</th></tr></thead>
     <tbody>
       <tr><td>Исполненные сделки</td><td>{sum.deals.count}</td><td>{sum.deals.budget_bound}</td><td>{money(sum.deals.battle_profit)}</td>
         <td>{money(sum.deals.fact)} <span class="muted">({sum.deals.fact_count} с итогом)</span></td><td>{money(sum.deals.at_budget_profit)}</td>
@@ -151,15 +151,15 @@
           <td>{money(sum.deals_old.potential_profit)}</td><td>{money(sum.deals_old.missed)}</td>
           <td>{sum.deals_old.windows}: {duration(sum.deals_old.window_s)}</td></tr>
       {/if}
-      <tr><td>Не исполненные: стали бы плюсовыми или больше без потолка (эпизоды)</td><td>{sum.candidates.count}</td><td>{sum.candidates.budget_bound}</td><td>{money(sum.candidates.battle_profit)}</td>
+      <tr><td>Кандидаты с расчётом без лимита (эпизоды)</td><td>{sum.candidates.count}</td><td>{sum.candidates.budget_bound}</td><td>{money(sum.candidates.battle_profit)}</td>
         <td class="muted">—</td><td>{money(sum.candidates.at_budget_profit)}</td>
         <td><strong>{money(sum.candidates.potential_profit)}</strong></td><td><strong>{money(sum.candidates.missed)}</strong>
           <span class="muted">(отклонённых, плюсовых без потолка: {sum.candidates.plus_uncapped})</span></td>
         <td>{sum.candidates.windows}: {duration(sum.candidates.window_s)}</td></tr>
     </tbody>
   </table>
-  {#if sum.hidden_zero}<p class="muted">Старых записей кандидатов с упущено 0 (до решения 197) в итог не входит: {sum.hidden_zero}.</p>{/if}
-  <h2>Потолок → прибыль («взяли бы»: лучший объём со списанием не больше потолка, если проходит пороги)</h2>
+  {#if sum.hidden_zero}<p class="muted">Старых записей кандидатов с нулевым приростом по модели (до решения 197) в итог не входит: {sum.hidden_zero}.</p>{/if}
+  <h2>Прибыль модели при разных лимитах вложения, USDT</h2>
   {#if sum.ladder_error}<p class="warn-text">{sum.ladder_error}</p>{/if}
   <table>
     <thead><tr><th>потолок, USDT</th><th>сделки</th><th>кандидаты</th></tr></thead>
@@ -168,12 +168,12 @@
       <tr><td><strong>без потолка</strong></td><td><strong>{money(sum.uncapped.deals)}</strong></td><td><strong>{money(sum.uncapped.candidates)}</strong></td></tr>
     </tbody>
   </table>
-  <h2>Топ направлений по упущенному</h2>
+  <h2>Направления по приросту прибыли в модели</h2>
   <table><tbody>
     {#each sum.top as t, ti (`${t.direction}|${ti}`)}<tr><td>{t.direction}</td><td>{money(t.missed)} USDT</td><td class="muted">записей {t.count}</td></tr>{/each}
   </tbody></table>
   <p class="muted">
-    Очередь: посчитано {sum.stats.counters.done} (кандидатов без упущенного, не записаны: {sum.stats.counters.no_missed}; наблюдение окна максимального объёма: {sum.stats.counters.watched ?? 0}),
+    Очередь: посчитано {sum.stats.counters.done} (кандидатов без прироста по модели, не записаны: {sum.stats.counters.no_missed}; наблюдение окна максимального объёма: {sum.stats.counters.watched ?? 0}),
     слито повторов {sum.stats.counters.merged}, сделок ждут {sum.stats.counters.deals_waiting} (сделки — вне очереди кандидатов),
     <strong>не посчитано (очередь полна) {sum.stats.counters.skipped_full}</strong>, сбоев {sum.stats.counters.failed},
     в работе {sum.stats.counters.running}, ждут {sum.stats.counters.waiting}; расчёт в среднем {money(sum.stats.mean_ms)} мс,
@@ -187,7 +187,7 @@
   <label class="inline">Вид
     <select bind:value={only}><option value="">все</option><option value="deal">сделки</option><option value="candidate">кандидаты</option></select>
   </label>
-  <label class="inline"><input type="checkbox" bind:checked={missedOnly} /> только с упущенным (сделки — все)</label>
+  <label class="inline"><input type="checkbox" bind:checked={missedOnly} /> только с приростом по модели (сделки — все)</label>
   <PageSize key="uncapped.rows" bind:value={limit} label="Строк на странице" />
   {#if limit}
     <button type="button" disabled={page <= 1} onclick={() => (page -= 1)}>←</button>
@@ -209,18 +209,18 @@
     </header>
     <p>
       {#if deal}
-        Зашли на <strong>{money(b.battle.invested)} USDT</strong> (бюджет {money(b.budget)}), план {money(b.battle.profit)} USDT{#if r.fact}, факт
+        Плановый вход <strong>{money(b.battle.invested)} USDT</strong> (бюджет {money(b.budget)}), план {money(b.battle.profit)} USDT{#if r.fact}, факт
           {#if r.fact.result_usd != null}<strong class={Number(r.fact.result_usd) < 0 ? 'err' : 'ok'}>{money(r.fact.result_usd)} USDT</strong>{:else}<span class="muted">ещё нет</span>{/if}{/if};
       {:else}
         На нашем бюджете {money(b.budget)} USDT: {#if b.at_budget?.at}вложить {money(b.at_budget.at.invested)} → прибыль {money(b.at_budget.at.profit)} USDT{#if !b.at_budget.passes} <span class="warn-text">— ниже порогов, сделки нет</span>{/if}{:else}<span class="muted">объёма нет</span>{/if};
       {/if}
       {#if deal}
-        по расчёту на вложенных — {money(b.at_budget?.at?.profit)} USDT;
-        потолок (сколько можно было вложить с максимальной прибылью без лимита) <strong>{money(b.opt.invested)}</strong> USDT — на потолке {wouldText(b.opt.profit)} <strong>{money(Math.abs(Number(b.opt.profit)))}</strong> USDT (расчёт по данным момента входа){#if !b.opt_passes} <span class="warn-text">(ниже порогов)</span>{/if};
-        упущено против вложенного <strong class={Number(b.missed) > 0 ? 'err' : ''}>{money(b.missed)} USDT</strong>;
+        прибыль модели при плановом входе — {money(b.at_budget?.at?.profit)} USDT;
+        вложение модели без лимита <strong>{money(b.opt.invested)}</strong> USDT — прибыль модели <strong>{money(b.opt.profit)}</strong> USDT{#if !b.opt_passes} <span class="warn-text">(ниже порогов)</span>{/if};
+        прирост прибыли по модели <strong>{money(b.missed)} USDT</strong>;
       {:else}
         без потолка: вложить <strong>{money(b.opt.invested)}</strong> → прибыль <strong>{money(b.opt.profit)}</strong> USDT{#if !b.opt_passes} <span class="warn-text">(ниже порогов)</span>{/if};
-        упущено <strong class={Number(b.missed) > 0 ? 'err' : ''}>{money(b.missed)} USDT</strong>;
+        прирост прибыли по модели <strong>{money(b.missed)} USDT</strong>;
       {/if}
       ограничило: <span class={budgetBound(b.limited_by) ? 'warn-text' : ''}>{limitedLabel(b.limited_by)}</span>
       <button type="button" onclick={() => (open = open === r.id ? null : r.id)}>{open === r.id ? 'Скрыть' : 'Подробнее'}</button>
@@ -229,7 +229,7 @@
       {#if deal}
         Окно: {#if b.battle.window_from}спред выше порога с {showTime(b.battle.window_from)}, до входа {duration(windowSec(b))}{:else}начало окна не записано (спред не был выше порога или запись до решения 197){/if}
       {:else}
-        Окно: {showTime(b.ep.first_at)} — {showTime(b.ep.last_at)} ({duration(windowSec(b))}), расчётов с упущенным {b.ep.count}, пик {showTime(b.ep.peak_at)}{#if b.battle.window_from}; спред выше порога с {showTime(b.battle.window_from)}{/if}
+        Окно: {showTime(b.ep.first_at)} — {showTime(b.ep.last_at)} ({duration(windowSec(b))}), расчётов с приростом по модели {b.ep.count}, пик {showTime(b.ep.peak_at)}{#if b.battle.window_from}; спред выше порога с {showTime(b.battle.window_from)}{/if}
       {/if}
     </p>
     {#if !deal}<MaxWinLine wins={b.maxwin ?? null} view={r.maxwin_view ?? null} />{/if}

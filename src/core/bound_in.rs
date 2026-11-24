@@ -33,6 +33,9 @@ use super::bound::{Bound, Buy, Sell};
 use super::bound_in_parts::{arrive, fixed, levels, positive, split_fee};
 use super::dirctx::DirCtx;
 
+pub(super) const UNIT_BOUND_UNAVAILABLE: &str =
+    "разные торговые единицы площадок: требуется полный подбор объёма";
+
 /// Вход одной стороны.
 pub enum SideIn<'a> {
     /// Биржа: стакан снимка, котировка снимка (для ставки комиссии), тикер монеты на площадке.
@@ -69,6 +72,12 @@ pub fn assemble_for_return(
     seen: Option<&Seen>,
     may_share_return: bool,
 ) -> Result<Bound, String> {
+    // Доказательство верхней границы ниже использует единую сетку Decimal обеих
+    // сторон. При преобразовании с округлением максимум может сместиться через излом.
+    // Такой кандидат проходит в полный подбор в нативных единицах каждой площадки.
+    if !cx.units_b_per_a.is_identity() {
+        return Err(UNIT_BOUND_UNAVAILABLE.into());
+    }
     let buy = match a {
         SideIn::Book {
             book,

@@ -135,6 +135,7 @@ pub(super) async fn evaluate_observed<S: Source>(
     let lines = qa.costs.iter().map(|c| (c.clone(), "A")).collect();
     let held_qty = qty - super::costs_exit::coin_fee(&qa.costs, &d.asset.ticker);
     let super::costs_exit::Sale {
+        sent_a,
         arrive,
         sell_qty,
         qb,
@@ -153,6 +154,9 @@ pub(super) async fn evaluate_observed<S: Source>(
         super::reserve_check::priced_box(cx, &costs, proceeds, &qa, &qb, profit, &rates);
     Ok(Calc {
         direction: d.clone(),
+        units_b_per_a: cx.units_b_per_a,
+        transfer_sent_a: (cx.units_b_per_a != super::settlement_unit::UnitRatio::IDENTITY)
+            .then_some(sent_a),
         qty,
         arrive,
         sell_qty,

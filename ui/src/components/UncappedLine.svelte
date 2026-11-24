@@ -13,7 +13,7 @@
   Настройки: нет (uncapped.* — экран «Настройки», категория «Упущено из-за потолка»).
 -->
 <script>
-  import { basisLabel, lateInputs, limitedLabel, money, recomputed, understated, wouldText } from '../lib/uncappedLabels.js';
+  import { basisLabel, lateInputs, limitedLabel, money, recomputed, understated } from '../lib/uncappedLabels.js';
   import { showTime } from '../lib/labels.js';
 
   /** u — {opt, opt_passes, min_plus, at_budget, budget, missed, limited_by, limit, at?}. */
@@ -32,15 +32,15 @@
 {/if}
 <p class="uncapped">
   {#if deal}
-    Потолок (сколько можно было вложить с максимальной прибылью без лимита): <strong>{money(u.opt.invested)} USDT</strong>
-    ({u.opt.qty} монет) — на потолке {wouldText(u.opt.profit)} <strong>{money(Math.abs(Number(u.opt.profit)))} USDT</strong> (расчёт){#if !u.opt_passes} <span class="warn-text">— ниже порогов прибыли</span>{/if};
-    на вложенных {money(u.at_budget?.at?.invested)} — {money(u.at_budget?.at?.profit)} USDT (тот же расчёт);
-    упущено против вложенного <strong class={Number(u.missed) > 0 ? 'err' : ''}>{money(u.missed)} USDT</strong>;
+    Вложение модели без лимита: <strong>{money(u.opt.invested)} USDT</strong>
+    ({u.opt.qty} монет) — прибыль модели <strong>{money(u.opt.profit)} USDT</strong>{#if !u.opt_passes} <span class="warn-text">— ниже порогов прибыли</span>{/if};
+    при плановом входе {money(u.at_budget?.at?.invested)} USDT модель даёт {money(u.at_budget?.at?.profit)} USDT;
+    прирост прибыли по модели <strong>{money(u.missed)} USDT</strong>;
   {:else}
-    Без потолка: вложить <strong>{money(u.opt.invested)} USDT</strong> → прибыль <strong>{money(u.opt.profit)} USDT</strong>
+    Модель без лимита: вложение <strong>{money(u.opt.invested)} USDT</strong> → прибыль <strong>{money(u.opt.profit)} USDT</strong>
     ({u.opt.qty} монет){#if !u.opt_passes} <span class="warn-text">— ниже порогов прибыли</span>{/if};
     на нашем бюджете {money(u.budget)} — {money(u.at_budget?.at?.profit)} USDT;
-    упущено <strong class={Number(u.missed) > 0 ? 'err' : ''}>{money(u.missed)} USDT</strong>;
+    прирост прибыли по модели <strong>{money(u.missed)} USDT</strong>;
   {/if}
   {#if u.min_plus}плюс от <strong>{money(u.min_plus.invested)} USDT</strong>{:else}<span class="muted">не становится плюсовой в пределах ликвидности</span>{/if};
   ограничило: {limitedLabel(u.limited_by)}

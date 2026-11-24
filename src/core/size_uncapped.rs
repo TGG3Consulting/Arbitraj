@@ -103,6 +103,7 @@ where
         )));
     }
     let mut m = Memo::new(curve, p.step, p.budget, p.max_evals).with_share(p.par_points, p.reuse);
+    m.sell_grid = p.ext.sell_grid;
     // Решение 237: объём сделки — первым, вне предела расчётов (Stop — расчёт невозможен при любом объёме).
     let own_pt = match own.and_then(|q| m.units(q)) {
         Some(n) => match m.force(n).await {

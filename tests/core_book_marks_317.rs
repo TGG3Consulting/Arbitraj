@@ -177,6 +177,7 @@ fn quote_newer_than_core_book_keeps_hold() {
     let p = Prices {
         buy: d("0.0022"),
         sell: d("0.0055"),
+        venue_sale: None,
         fees_pct: d("0.2"),
         qty: d("10"),
         buy_at: at(t0, 1000),

@@ -63,6 +63,7 @@ fn crash() -> Result<Prices, String> {
     Ok(Prices {
         buy: d("0.0022"),
         sell: d("0.0055"),
+        venue_sale: None,
         fees_pct: d("0.2"),
         qty: d("1000"),
         buy_at: Utc::now(),
@@ -296,6 +297,7 @@ fn step_after_skip_keeps_candidate() {
     let below = Ok(Prices {
         buy: d("0.0055"),
         sell: d("0.0055"),
+        venue_sale: None,
         fees_pct: d("0.2"),
         qty: d("1000"),
         buy_at: Utc::now(),

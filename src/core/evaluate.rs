@@ -36,7 +36,7 @@ pub async fn evaluate(
     started: chrono::DateTime<Utc>,
 ) {
     let venues = &run.venues;
-    let (dirs, ref_price, waiting, marks_on) = {
+    let (dirs, reference_books, waiting, marks_on) = {
         // Решение 131: место монеты — из карты пересборки (ticker_index.rs), проход справочника — только если
         // карта ещё от прежнего справочника.
         let coins = rd(&core.inner.coins);
@@ -46,12 +46,17 @@ pub async fn evaluate(
         let market = rd(&core.inner.market);
         // Решение 317 (ревью 16.11): отметки стакана включены (book_marks_on.rs) — иначе «сколько стоит» не считается.
         let marks_on = market.book_marks_on();
-        let ref_price = entry
+        let reference_books: Vec<_> = entry
             .presence
             .iter()
             .filter(|p| p.info.is_some())
             // Решение 211 (ревью В5): стакан биржи — по её тикеру монеты (Presence::ticker).
-            .find_map(|p| market.best(&p.venue, &p.ticker, Side::Buy));
+            .filter_map(|p| {
+                market
+                    .best(&p.venue, &p.ticker, Side::Buy)
+                    .map(|price| (p.venue.clone(), price))
+            })
+            .collect();
         let mut dirs: Vec<_> = entry
             .shown_directions()
             .into_iter()
@@ -67,7 +72,7 @@ pub async fn evaluate(
                 .unwrap_or_else(|| "проверка ещё не выполнена".into());
             format!("налоги не проверены: {why}")
         });
-        (dirs, ref_price, waiting, marks_on)
+        (dirs, reference_books, waiting, marks_on)
     };
     let params = Params::read(&core.inner.deps.settings);
     // Решение 349: отметка «разбужена промежуточным пулом» — один раз на пересчёт монеты.
@@ -77,7 +82,7 @@ pub async fn evaluate(
         // узла): сразу строка с причиной ожидания.
         let prices = match &waiting {
             Some(w) => Err(w.clone()),
-            None => super::prices::for_direction(core, &dir, ref_price).await,
+            None => super::prices::for_books(core, &dir, &reference_books).await,
         };
         if let Ok(p) = &prices {
             // Замеры цен для σ (vol.rs): покупка на A и продажа на B — отдельные ряды, у каждого направления свои
@@ -87,7 +92,8 @@ pub async fn evaluate(
             let (a, b) = (&dir.buy_on, &dir.sell_on);
             let mut vol = lk(&core.inner.vol);
             vol.sample(a, &dir.asset, Side::Buy, b, p.buy, now, w);
-            vol.sample(b, &dir.asset, Side::Sell, a, p.sell, now, w);
+            let sell_price = p.venue_sale.as_ref().map_or(p.sell, |s| s.price);
+            vol.sample(b, &dir.asset, Side::Sell, a, sell_price, now, w);
         }
         let timer = lk(&core.inner.ripen).take_fired(&dir);
         let now = Utc::now();

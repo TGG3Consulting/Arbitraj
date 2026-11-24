@@ -13,6 +13,7 @@
 //! GET /v1/settings/common/chains?currency= (https://huobiapi.github.io/docs/spot/v1/en/, раздел Reference Data) —
 //! поля в шапке networks_parse.rs. Без currency — все монеты.
 
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
@@ -33,7 +34,11 @@ const CURRENCIES: &str = "/v2/reference/currencies";
 const CHAINS: &str = "/v1/settings/common/chains";
 
 /// Справочник и когда он получен.
-type Cached = (Instant, Arc<Vec<CoinNetworkInfo>>);
+struct Cached {
+    at: Instant,
+    list: Arc<Vec<CoinNetworkInfo>>,
+    chains: HashMap<(String, String), TransferChain>,
+}
 
 /// Справочник сетей в памяти. Дешёво клонируется.
 #[derive(Clone, Default)]
@@ -51,14 +56,22 @@ pub async fn coin_networks(ctx: &Ctx, nets: &Networks) -> GatewayResult<Vec<Coin
         .map(Duration::from_millis);
     if let Some(f) = fresh {
         let c = nets.cache.read().unwrap_or_else(|p| p.into_inner());
-        if let Some((_, l)) = c.as_ref().filter(|(at, _)| at.elapsed() < f) {
-            return Ok(Arc::unwrap_or_clone(l.clone()));
+        if let Some(entry) = c.as_ref().filter(|entry| entry.at.elapsed() < f) {
+            return Ok(Arc::unwrap_or_clone(entry.list.clone()));
         }
     }
     let p = load(ctx, vec![]).await?;
     note(ctx, Some(nets), &p).await;
     let list = Arc::new(p.list);
-    *nets.cache.write().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), list.clone()));
+    let mut chains = HashMap::new();
+    for (ticker, net, chain) in p.chains {
+        chains.entry((ticker, net)).or_insert(chain);
+    }
+    *nets.cache.write().unwrap_or_else(|e| e.into_inner()) = Some(Cached {
+        at: Instant::now(),
+        list: list.clone(),
+        chains,
+    });
     Ok(Arc::unwrap_or_clone(list))
 }
 
@@ -70,6 +83,27 @@ pub async fn coin_networks_of(ctx: &Ctx, ticker: &str) -> GatewayResult<Vec<Coin
 /// chain HTX монеты по сети ядра (свежий справочник одной монеты). Ошибка NotConfigured — такой сети у монеты нет.
 pub async fn chain_of(ctx: &Ctx, ticker: &str, network: &str) -> GatewayResult<String> {
     Ok(transfer_chain(ctx, ticker, network).await?.coin)
+}
+
+/// Идентификаторы сети для предварительной проверки адреса. Если общий справочник
+/// уже свежий, повторно запрашивать его две публичные части для этой монеты не требуется.
+/// При самом выводе transfer_chain по-прежнему перечитывает сведения о сети.
+pub(super) async fn address_check_chain(
+    ctx: &Ctx,
+    nets: &Networks,
+    ticker: &str,
+    network: &str,
+) -> GatewayResult<TransferChain> {
+    if let Ok(ms) = ctx.int("venue.networks_fresh_ms") {
+        let cached = nets.cache.read().unwrap_or_else(|p| p.into_inner());
+        if let Some(entry) = cached.as_ref()
+            && entry.at.elapsed() < Duration::from_millis(ms)
+            && let Some(chain) = entry.chains.get(&(ticker.to_owned(), network.to_owned()))
+        {
+            return Ok(chain.clone());
+        }
+    }
+    transfer_chain(ctx, ticker, network).await
 }
 
 /// Имена одной выбранной сети для вывода и книги адресов. Ошибки справочника — см. chain_of.

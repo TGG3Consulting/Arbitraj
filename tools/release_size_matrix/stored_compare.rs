@@ -119,8 +119,14 @@ async fn replay(case: &Value, budget: Decimal, max_evals: u32) -> Result<Value, 
     let p = params(&plan, &a, &b, budget, floor, max_evals);
     let actual = search(&mut curve, &p).await;
     let best = actual.as_ref().ok().map(|f| &f.best);
+    let own = reference.as_ref().ok().map(|point| &point.data);
     Ok(json!({
-        "own_qty": plan.qty, "same_inputs_own_profit_usdt": reference.ok().map(|p| p.profit),
+        "own_qty": plan.qty, "same_inputs_own_profit_usdt": own.map(|p| p.profit_usd),
+        "own_cost_breakdown": own.map(|p| json!({
+            "buy_average": p.buy_avg, "sell_average": p.sell_avg, "sell_qty": p.sell_qty,
+            "invested_usdt": p.invested, "proceeds_usdt": p.proceeds, "costs_usdt": p.costs_usdt,
+            "costs": p.costs,
+        })) ,
         "search_error": actual.as_ref().err().map(|e| format!("{e:?}")),
         "selected_qty": best.map(|p| p.qty), "selected_spend_max_usdt": best.map(|p| p.invested),
         "selected_profit_usdt": best.map(|p| p.profit),

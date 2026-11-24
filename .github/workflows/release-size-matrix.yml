@@ -116,7 +116,7 @@ jobs:
           expected=$(python -c 'import json; print(json.load(open("fixedv2-meta.json")).get("expected_rows", 0))')
           if [[ "$expected" != 0 ]]; then
             (cd release && CARGO_TERM_COLOR=never cargo test --locked --test core_size_actual_v2 actual_v2_matrix -- --exact --nocapture) > "$RUNNER_TEMP/fixedv2.log" 2>&1 || {
-              grep -mi 15 -A 4 -E 'error|panicked at|assertion|FAILED|signal:' "$RUNNER_TEMP/fixedv2.log" | head -n 80 || true
+              grep -i -m 15 -A 4 -E 'error|panicked at|assertion|FAILED|signal:' "$RUNNER_TEMP/fixedv2.log" | head -n 80 || true
               exit 1
             }
             sed -n -E 's/^(test [^ ]+ \.\.\. )?ACTUAL_V2_MATRIX //p' "$RUNNER_TEMP/fixedv2.log" > fixedv2-replay.jsonl
@@ -141,7 +141,7 @@ jobs:
             *) test_case=release_size_matrix; expected=180 ;;
           esac
           CARGO_TERM_COLOR=never cargo test --locked --test core_size_release_matrix "$test_case" -- --exact --nocapture > "$RUNNER_TEMP/replay.log" 2>&1 || {
-            grep -mi 15 -A 4 -E 'error|panicked at|assertion|FAILED|killed|no space|could not|signal:|lock file' "$RUNNER_TEMP/replay.log" | head -n 80 || true
+            grep -i -m 15 -A 4 -E 'error|panicked at|assertion|FAILED|killed|no space|could not|signal:|lock file' "$RUNNER_TEMP/replay.log" | head -n 80 || true
             exit 1
           }
           sed -n -E 's/^(test [^ ]+ \.\.\. )?SIZE_MATRIX //p' "$RUNNER_TEMP/replay.log" > ../replay.jsonl

@@ -163,11 +163,7 @@ pub(super) fn adjust_route(
     if !on.unwrap_or(false) {
         return dir;
     }
-    let seen = match to {
-        Some(to) => get_for(asset, from, to),
-        None => get(asset, from),
-    };
-    let Some(s) = seen else {
+    let Some(s) = get_for(core, asset, from, to) else {
         return dir;
     };
     model(&s, info.fee_for(s.sent), t, amount, dir)

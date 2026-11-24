@@ -17,6 +17,10 @@ pub(super) enum Basis {
 
 pub(super) type Modes = HashMap<(VenueId, bool), Basis>;
 
+#[path = "settlement_legacy.rs"]
+mod legacy;
+pub(super) use legacy::{Interpretation, Legacy};
+
 #[cfg(test)]
 #[path = "settlement_history_tests.rs"]
 mod tests;
@@ -31,6 +35,14 @@ pub(super) struct Observation {
     hash: String,
     raw: Decimal,
     exchange: Decimal,
+    debit: Option<Debit>,
+}
+
+#[derive(Clone, PartialEq)]
+struct Debit {
+    held: Decimal,
+    reported: Decimal,
+    fee: Decimal,
 }
 
 /// Используем полное прямое исполнение. Возврат USDT, перегон и записи с одним
@@ -67,6 +79,7 @@ pub(super) fn observed(d: &Deal, dex: &VenueId) -> Option<Observation> {
     if credits.next().is_some() || r.amount <= Decimal::ZERO {
         return None;
     }
+    let mut debit = None;
     let (cex, raw, exchange) = if withdrawal {
         if r.asset != *a {
             return None;
@@ -88,6 +101,19 @@ pub(super) fn observed(d: &Deal, dex: &VenueId) -> Option<Observation> {
         let held = buy.filled_qty.checked_sub(buy_fee)?;
         if held.trunc_with_scale(s.amount.scale()) != s.amount {
             return None;
+        }
+        // Из старой агрегированной записи нельзя выбрать один из нескольких выводов одной покупки.
+        if d.transfers
+            .iter()
+            .filter(|t| t.status == TransferStatus::Sent && t.venue == s.venue)
+            .count()
+            == 1
+        {
+            debit = Some(Debit {
+                held,
+                reported: s.amount,
+                fee: fee.amount,
+            });
         }
         (&s.venue, r.amount, s.amount.checked_sub(fee.amount)?)
     } else {
@@ -117,6 +143,7 @@ pub(super) fn observed(d: &Deal, dex: &VenueId) -> Option<Observation> {
         hash: tx.to_ascii_lowercase(),
         raw,
         exchange,
+        debit,
     })
 }
 
@@ -129,7 +156,7 @@ pub(super) async fn verified(
     scale: Decimal,
     rows: &[Observation],
     receipts: &Receipts,
-) -> (Modes, bool) {
+) -> (Modes, Legacy, bool) {
     let mut modes = Modes::new();
     let mut unknown = HashSet::new();
     for row in rows {
@@ -192,5 +219,6 @@ pub(super) async fn verified(
     for key in &unknown {
         modes.remove(key);
     }
-    (modes, !unknown.is_empty())
+    let legacy = Legacy::from_receipts(rows, &super::engine::lk(receipts), &modes, scale);
+    (modes, legacy, !unknown.is_empty())
 }

@@ -12,6 +12,9 @@ use super::engine::{Core, lk, rd};
 use super::settlement_history::{self as history, Basis, Modes, Observation};
 use super::types::{Asset, Direction, VenueId};
 pub use super::unit_ratio::UnitRatio;
+#[cfg(test)]
+#[path = "settlement_legacy_replay.rs"]
+mod legacy_replay;
 use crate::gateway::contract::VenueKind;
 use crate::settings::read::At;
 
@@ -24,6 +27,7 @@ struct Snapshot {
     decimals: u8,
     multiplier: Option<Decimal>,
     modes: Arc<Modes>,
+    legacy: Arc<history::Legacy>,
     declared: Arc<Declarations>,
     sources: Arc<Sources>,
     revision: usize,
@@ -282,9 +286,9 @@ async fn refresh(core: &Core, asset: &Asset, dex: &VenueId) -> Result<Snapshot, 
             row.map(|r| r.receipts.clone()).unwrap_or_default(),
         )
     };
-    let (modes, pending_evidence) = match pending {
+    let (modes, legacy, pending_evidence) = match pending {
         Some(obs) => {
-            let (m, p) = history::verified(
+            let (m, legacy, p) = history::verified(
                 core,
                 asset,
                 multiplier.unwrap_or(Decimal::ONE),
@@ -292,23 +296,27 @@ async fn refresh(core: &Core, asset: &Asset, dex: &VenueId) -> Result<Snapshot, 
                 &receipts,
             )
             .await;
-            (Arc::new(m), p)
+            (Arc::new(m), Arc::new(legacy), p)
         }
         None => previous
             .as_ref()
-            .map(|p| (p.modes.clone(), p.pending_evidence))
+            .map(|p| (p.modes.clone(), p.legacy.clone(), p.pending_evidence))
             .unwrap_or_default(),
     };
     let (declared, sources) = declarations(core, asset).await;
     let declared = Arc::new(declared);
     let changed = previous.as_ref().is_none_or(|p| {
-        p.multiplier != multiplier || *p.modes != *modes || *p.declared != *declared
+        p.multiplier != multiplier
+            || *p.modes != *modes
+            || *p.legacy != *legacy
+            || *p.declared != *declared
     });
     let snapshot = Snapshot {
         height,
         decimals,
         multiplier,
         modes,
+        legacy,
         declared: declared.clone(),
         sources: Arc::new(sources),
         revision,
@@ -363,6 +371,24 @@ pub(super) fn confirmed_cached(core: &Core, d: &Direction) -> Result<UnitRatio, 
             .ok_or("ожидается свежий снимок единиц")?
     };
     route(core, d, &snap)
+}
+
+/// Подтверждения берутся из опубликованного снимка. Здесь нет постановки задания или сетевого вызова.
+pub(super) fn interpreted_legacy(
+    core: &Core,
+    seen: &super::withdraw_seen::Seen,
+    to: Option<&VenueId>,
+) -> history::Interpretation {
+    let rows = lk(&core.inner.settlement.rows);
+    rows.get(&seen.asset)
+        .and_then(|row| {
+            row.snapshot
+                .as_ref()
+                .filter(|s| s.revision == row.observations.len())
+        })
+        .map_or(history::Interpretation::Unknown, |s| {
+            s.legacy.interpreted(seen, to)
+        })
 }
 
 pub(super) async fn confirmed(core: &Core, d: &Direction) -> Result<UnitRatio, String> {

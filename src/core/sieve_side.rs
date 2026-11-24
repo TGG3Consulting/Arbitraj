@@ -124,7 +124,7 @@ pub(super) fn seen(core: &Core, cx: &DirCtx) -> Option<Seen> {
     {
         return None;
     }
-    let s = super::withdraw_seen::get_for(&d.asset, &d.buy_on, &d.sell_on)?;
+    let s = super::withdraw_seen::get_for(core, &d.asset, &d.buy_on, Some(&d.sell_on))?;
     Some(Seen {
         fee: s.fee?,
         sent: s.sent,

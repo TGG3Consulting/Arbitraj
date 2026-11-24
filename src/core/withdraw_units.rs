@@ -61,18 +61,22 @@ struct State {
 
 impl State {
     fn lookup(&self, asset: &Asset, from: &VenueId, to: Option<&VenueId>) -> Option<Seen> {
+        self.source(asset, from, to).map(|(s, _)| s)
+    }
+
+    fn source(&self, asset: &Asset, from: &VenueId, to: Option<&VenueId>) -> Option<(Seen, bool)> {
         if let Some(to) = to
             && !self.routes.is_empty()
             && let Some(s) = self.routes.get(&(asset.clone(), from.clone(), to.clone()))
         {
-            return Some(s.clone());
+            return Some((s.clone(), false));
         }
         let key = (asset.clone(), from.clone());
         let fact = self.legacy.get(&key)?;
         self.replaced
             .get(&key)
             .is_none_or(|(s, _)| s != fact)
-            .then(|| fact.clone())
+            .then(|| (fact.clone(), true))
     }
     fn put(&mut self, row: &Row) {
         let s = &row.fact;
@@ -128,8 +132,25 @@ pub(super) fn lookup(asset: &Asset, from: &VenueId, to: Option<&VenueId>) -> Opt
         .lookup(asset, from, to)
 }
 
-pub(in crate::core) fn get_for(asset: &Asset, from: &VenueId, to: &VenueId) -> Option<Seen> {
-    lookup(asset, from, Some(to))
+pub(in crate::core) fn get_for(
+    core: &Core,
+    asset: &Asset,
+    from: &VenueId,
+    to: Option<&VenueId>,
+) -> Option<Seen> {
+    use crate::core::settlement_history::Interpretation;
+    let (fact, legacy) = STATE
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .source(asset, from, to)?;
+    if legacy && fact.fee.is_some_and(|f| fact.sent - f > fact.credited) {
+        match crate::core::settlement_unit::interpreted_legacy(core, &fact, to) {
+            Interpretation::ThisRoute(converted) => return Some(converted),
+            Interpretation::OtherRoute => return None,
+            Interpretation::Unknown => {}
+        }
+    }
+    Some(fact)
 }
 
 pub(in crate::core) async fn record_for(

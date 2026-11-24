@@ -270,6 +270,12 @@ impl Venue for Binance {
         transfers::withdrawal_status(&self.ctx, venue_ref).await
     }
 
+    async fn withdrawal_status_for(&self, created: &Transfer) -> GatewayResult<Transfer> {
+        let mut sent = self.withdrawal_status(&created.venue_ref).await?;
+        transfers::bind_net_withdrawal(created, &mut sent);
+        Ok(sent)
+    }
+
     async fn deposit_address(&self, asset: &Asset, network: &str) -> GatewayResult<String> {
         deposit_addr::deposit_address(&self.ctx, &self.addrs, asset, network).await
     }

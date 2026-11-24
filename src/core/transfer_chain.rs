@@ -123,7 +123,7 @@ pub async fn finish(
                     accepted_id: &c.created.venue_ref,
                     sender: &c.created,
                     receiver: &credited,
-                    wallet: c.gw_to.as_ref(),
+                    wallet: &c.gw_to,
                 }),
                 c.units,
             )
@@ -206,7 +206,7 @@ async fn shortfall(core: &Core, c: &Check, sender: Option<&Transfer>) {
                 accepted_id: &c.created.venue_ref,
                 sender: s,
                 receiver: &l.credited,
-                wallet: l.wallet.as_ref(),
+                wallet: &l.wallet,
             }),
             l.units,
         )

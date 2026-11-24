@@ -1,0 +1,39 @@
+{
+  "direction": {
+    "asset": {
+      "ticker": "SNDKB",
+      "bsc_contract": "0x3ee4df61bd4f867e349beae8bfe07bc31b4850fb"
+    },
+    "buy_on": "poloniex",
+    "sell_on": "bsc_dex"
+  },
+  "dex_account": "fixture-wallet",
+  "relays": 0,
+  "buy": {
+    "request": {
+      "venue": "poloniex",
+      "asset": {
+        "ticker": "SNDKB",
+        "bsc_contract": "0x3ee4df61bd4f867e349beae8bfe07bc31b4850fb"
+      },
+      "side": "Buy",
+      "qty": "3.240427",
+      "worst_price": "83.41",
+      "route": null,
+      "exit_position": false,
+      "remeasure": null,
+      "deal_id": "fixture-deal"
+    },
+    "status": "Filled",
+    "filled_qty": "3.240427",
+    "avg_price": "83.27880681465745100877137488",
+    "fees": [
+      {
+        "asset": "SNDKB",
+        "amount": "0.006480854"
+      }
+    ],
+    "venue_ref": "fixture-purchase",
+    "finished_at": "2000-01-01T00:00:00Z"
+  }
+}

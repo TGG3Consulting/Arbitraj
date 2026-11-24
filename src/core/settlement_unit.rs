@@ -340,7 +340,32 @@ async fn refresh(core: &Core, asset: &Asset, dex: &VenueId) -> Result<Snapshot, 
     Ok(snapshot)
 }
 
-pub(super) async fn check_entry(core: &Core, d: &Direction) -> Result<UnitRatio, String> {
+pub(super) fn confirmed_cached(core: &Core, d: &Direction) -> Result<UnitRatio, String> {
+    if super::native::is_native(core, &d.asset)
+        || (super::trade_ops::kind(core, &d.buy_on)? == VenueKind::Dex
+            && super::trade_ops::kind(core, &d.sell_on)? == VenueKind::Dex)
+    {
+        return Ok(UnitRatio::IDENTITY);
+    }
+    let now = Instant::now();
+    let snap = {
+        let rows = lk(&core.inner.settlement.rows);
+        let record = rows
+            .get(&d.asset)
+            .ok_or("нет подтверждённого снимка единиц")?;
+        record
+            .snapshot
+            .as_ref()
+            .filter(|s| {
+                s.expires.is_none_or(|t| t > now) && s.revision == record.observations.len()
+            })
+            .cloned()
+            .ok_or("ожидается свежий снимок единиц")?
+    };
+    route(core, d, &snap)
+}
+
+pub(super) async fn confirmed(core: &Core, d: &Direction) -> Result<UnitRatio, String> {
     if super::native::is_native(core, &d.asset) {
         return Ok(UnitRatio::IDENTITY);
     }

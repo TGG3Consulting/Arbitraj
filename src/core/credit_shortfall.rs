@@ -16,7 +16,7 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{Asset, Cost, CostKind, VenueId};
+use crate::core::types::{Asset, Cost, CostKind, Direction, VenueId};
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
@@ -46,9 +46,8 @@ pub async fn check(
     credited: Decimal,
     fee: Option<&Cost>,
     proof: Option<CreditProof<'_>>,
-    units: Option<super::settlement_unit::UnitRatio>,
+    pinned: Option<super::settlement_unit::UnitRatio>,
 ) {
-    let deps = &core.inner.deps;
     // Решение 430: USDT сети монеты.
     if super::registry_chains::usdt_of(core, asset.chain.as_ref())
         .ok()
@@ -57,6 +56,74 @@ pub async fn check(
     {
         return;
     }
+    let current = super::credit_expect::units(core, from, to, asset).ok();
+    if current.is_none() {
+        let core = core.clone();
+        let dir = Direction {
+            asset: asset.clone(),
+            buy_on: from.clone(),
+            sell_on: to.clone(),
+        };
+        let deal = deal.to_owned();
+        let net = net.to_owned();
+        let fee = fee.cloned();
+        let proof = proof.map(|p| {
+            (
+                p.accepted_id.to_owned(),
+                p.sender.clone(),
+                p.receiver.clone(),
+                p.wallet.clone(),
+            )
+        });
+        // Восстановление справочника для учёта не задерживает продажу уже зачисленного актива.
+        tokio::spawn(async move {
+            let current = super::settlement_unit::confirmed(&core, &dir).await.ok();
+            let proof = proof.as_ref().map(|(id, s, r, w)| CreditProof {
+                accepted_id: id,
+                sender: s,
+                receiver: r,
+                wallet: w,
+            });
+            record(
+                &core,
+                &deal,
+                &dir.buy_on,
+                &dir.sell_on,
+                &dir.asset,
+                &net,
+                sent,
+                credited,
+                fee.as_ref(),
+                proof,
+                pinned,
+                current,
+            )
+            .await;
+        });
+        return;
+    }
+    record(
+        core, deal, from, to, asset, net, sent, credited, fee, proof, pinned, current,
+    )
+    .await;
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn record(
+    core: &Core,
+    deal: &str,
+    from: &VenueId,
+    to: &VenueId,
+    asset: &Asset,
+    net: &str,
+    sent: Decimal,
+    credited: Decimal,
+    fee: Option<&Cost>,
+    proof: Option<CreditProof<'_>>,
+    units: Option<super::settlement_unit::UnitRatio>,
+    current: Option<super::settlement_unit::UnitRatio>,
+) {
+    let deps = &core.inner.deps;
     // Решение 247, п. Ж: комиссия вывода — факт из ответа площадки, если она в этой монете (имя площадки → ядра).
     let fact_fee = fee
         .filter(|c| {
@@ -89,7 +156,6 @@ pub async fn check(
     };
     let mut receipt = None;
     let mut in_sender_units = credited;
-    let current = super::credit_expect::units(core, from, to, asset).ok();
     if let Some(r) = self::units::stable(units, current)
         && let Some(hash) = proof
             .as_ref()
@@ -120,9 +186,7 @@ pub async fn check(
         deps.log(Level::Info, "core.credit_shortfall", Some(&to.0),
             format!("{deal}: вывод {hash} подтверждён в двух единицах: зачислено {credited} в контракте, {ui} в единицах отправителя после комиссии {f}"), None).await;
     }
-    if receipt.is_none()
-        && (units.is_some_and(|r| !r.is_identity()) || current.is_some_and(|r| !r.is_identity()))
-    {
+    if receipt.is_none() && !self::units::same_identity(units, current) {
         deps.log(Level::Warn, "core.credit_shortfall", Some(&to.0),
             format!("{deal}: по хешу не подтверждён пересчёт {sent} → {credited} между {} и {}; фактическое зачисление сохранено в единицах получателя", from.0, to.0), None).await;
         return;

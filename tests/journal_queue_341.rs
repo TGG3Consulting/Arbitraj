@@ -35,13 +35,20 @@ async fn of_kind(j: &Journal, kind: &str) -> Vec<Entry> {
 
 /// Держит замок основной базы (долгая транзакция, как длинная пачка) заданное время; возвращается, когда замок взят.
 fn hold_main(j: &Journal, for_: Duration) -> tokio::task::JoinHandle<()> {
+    hold_main_while(j, move || std::thread::sleep(for_))
+}
+
+fn hold_main_while(
+    j: &Journal,
+    wait: impl FnOnce() + Send + 'static,
+) -> tokio::task::JoinHandle<()> {
     let (held_tx, held_rx) = std::sync::mpsc::channel();
     let db = j.db().clone();
     let h = tokio::task::spawn_blocking(move || {
         db.call_sync(|c| {
             let t = c.transaction()?;
             held_tx.send(()).unwrap();
-            std::thread::sleep(for_);
+            wait();
             t.commit()
         })
         .unwrap();
@@ -101,19 +108,31 @@ async fn queued_write_keeps_order_and_does_not_wait() {
 async fn full_queue_loses_with_record() {
     let (j, _rx) = journal("full");
     j.set_queue_max(Some(1));
-    let hold = hold_main(&j, Duration::from_millis(300));
+    let (release, waiting) = std::sync::mpsc::channel();
+    let hold = hold_main_while(&j, move || waiting.recv().unwrap());
     for i in 0..3 {
         let _ = j
             .write(Level::Info, "t.full", None, format!("{i}"), None)
             .await;
     }
+    release.send(()).unwrap();
     hold.await.unwrap();
     j.idle().await;
     // Следующая пачка дописывает запись о потерях.
     let _ = j.write(Level::Info, "t.full", None, "после", None).await;
     let lost = of_kind(&j, LOST_KIND).await;
-    assert_eq!(lost.len(), 1, "{lost:?}");
-    assert_eq!(lost[0].data.as_ref().unwrap()["total"], 2);
+    // Писатель забирает счётчик перед захватом SQLite. Он может снять его
+    // между двумя отказами: тогда часть потерь сообщит вторая пачка.
+    let reported: u64 = lost
+        .iter()
+        .map(|e| {
+            let n = e.data.as_ref().unwrap()["lost"].as_u64().unwrap();
+            assert!(n > 0);
+            n
+        })
+        .sum();
+    assert_eq!(reported, 2, "{lost:?}");
+    assert_eq!(lost.last().unwrap().data.as_ref().unwrap()["total"], 2);
     let kept: Vec<String> = of_kind(&j, "t.full")
         .await
         .into_iter()
@@ -169,18 +188,31 @@ async fn failed_batch_retries_one_by_one() {
 async fn journal_cursor_preserves_order_during_inserts() {
     let (j, _rx) = journal("cursor");
     for _ in 0..5 {
-        j.write(Level::Info, "t.cursor", None, "курсоры", None).await.unwrap();
+        j.write(Level::Info, "t.cursor", None, "курсоры", None)
+            .await
+            .unwrap();
     }
     let first = j.list(2, None).await.unwrap();
     let cursor = first[1].id;
-    j.db().call(move |c| {
-        c.execute("DELETE FROM journal WHERE id = ?1", [cursor - 1])?;
-        c.execute("UPDATE journal SET repeats = 17 WHERE id = ?1", [cursor - 2])?;
-        Ok(())
-    }).await.unwrap();
-    j.write(Level::Warn, "t.cursor", None, "после страницы", None).await.unwrap();
+    j.db()
+        .call(move |c| {
+            c.execute("DELETE FROM journal WHERE id = ?1", [cursor - 1])?;
+            c.execute(
+                "UPDATE journal SET repeats = 17 WHERE id = ?1",
+                [cursor - 2],
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    j.write(Level::Warn, "t.cursor", None, "после страницы", None)
+        .await
+        .unwrap();
     let next = j.list(2, Some(cursor)).await.unwrap();
-    assert_eq!(next.iter().map(|e| e.id).collect::<Vec<_>>(), [cursor - 2, cursor - 3]);
+    assert_eq!(
+        next.iter().map(|e| e.id).collect::<Vec<_>>(),
+        [cursor - 2, cursor - 3]
+    );
     assert_eq!(next[0].repeats, Some(17));
     assert!(j.list(2, Some(next[1].id)).await.unwrap().is_empty());
     assert!(j.list(0, None).await.unwrap().is_empty());

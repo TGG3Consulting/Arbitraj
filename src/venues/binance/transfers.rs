@@ -210,6 +210,39 @@ pub async fn withdrawal_status(ctx: &Ctx, id: &str) -> GatewayResult<Transfer> {
     transfer(ctx, rec, id, status)
 }
 
+/// История Binance не содержит адрес токена. Если собственная заявка и окончательная
+/// запись совпали и сумма из истории уже за вычетом комиссии, можно привязать
+/// контракт к локальному тикеру комиссии (в том числе у лота).
+pub(super) fn bind_net_withdrawal(created: &Transfer, sent: &mut Transfer) {
+    let Some(fee) = sent.fee.as_ref() else { return };
+    if created.asset.contract.is_some()
+        && created.asset.chain.is_some()
+        && created.venue == sent.venue
+        && !created.venue_ref.is_empty()
+        && created.venue_ref == sent.venue_ref
+        && !created.network.is_empty()
+        && created.network == sent.network
+        && sent.status == TransferStatus::Sent
+        && sent.tx_hash.as_ref().is_some_and(|h| !h.is_empty())
+        && created.tx_hash.as_ref().is_none_or(|old| {
+            sent.tx_hash
+                .as_ref()
+                .is_some_and(|h| crate::gateway::tx_hash::same(old, h))
+        })
+        && sent.asset.contract.is_none()
+        && sent.asset.chain.is_none()
+        && sent.asset.ticker == created.asset.ticker
+        && fee.asset == sent.asset.ticker
+        && fee.kind == CostKind::WithdrawFee
+        && !fee.in_price
+        && fee.paid_in.is_none()
+        && fee.amount > rust_decimal::Decimal::ZERO
+        && sent.amount.checked_add(fee.amount) == Some(created.amount)
+    {
+        sent.asset = created.asset.clone();
+    }
+}
+
 /// Перевод формата ядра из записи истории (вывода или депозита). Ошибки: нет coin/amount.
 pub fn transfer(
     ctx: &Ctx,
@@ -235,4 +268,48 @@ pub fn transfer(
         fee,
         updated_at: Utc::now(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::types::ChainId;
+    use serde_json::json;
+
+    #[test]
+    fn bind_only_when_own_gross_proves_fee_in_net_history() {
+        let rows: Vec<Value> = serde_json::from_str(include_str!(
+            "../../../tests/data/binance_docs_2026-11-10/withdraw_history.json"
+        ))
+        .unwrap();
+        let row = &rows[0];
+        let history: Transfer = serde_json::from_value(json!({
+            "venue": "binance", "asset": {"ticker":row["coin"], "bsc_contract":null},
+            "network":row["network"], "amount":row["amount"], "status":"Sent",
+            "venue_ref":row["id"], "tx_hash":row["txId"], "updated_at":"2023-03-23T16:52:41Z",
+            "fee":{"kind":"WithdrawFee","asset":row["coin"],"amount":row["transactionFee"],"in_price":false,"step":null}
+        })).unwrap();
+        let mut created = history.clone();
+        created.status = TransferStatus::Pending;
+        created.tx_hash = None;
+        created.asset.chain = Some(ChainId("ethereum".into()));
+        created.asset.contract = Some(
+            "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+                .parse()
+                .unwrap(),
+        );
+        created.amount += history.fee.as_ref().unwrap().amount;
+        let mut sent = history.clone();
+        bind_net_withdrawal(&created, &mut sent);
+        assert_eq!(sent.asset, created.asset);
+        assert_eq!(sent.amount, history.amount);
+        let mut other = history.clone();
+        other.network = "BSC".into();
+        bind_net_withdrawal(&created, &mut other);
+        assert!(other.asset.contract.is_none());
+        let mut uncertain = history.clone();
+        created.amount = history.amount;
+        bind_net_withdrawal(&created, &mut uncertain);
+        assert!(uncertain.asset.contract.is_none());
+    }
 }

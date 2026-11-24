@@ -458,12 +458,14 @@ async fn steps(
         }
     };
     // Ревью 2 t180, Н-C2: отказ стороны возвращается сразу — чтение коридора при этом отменяется (try_join).
-    let ((mut bands, band_ms), addr_due, verified_units, ()) = tokio::try_join!(
-        band,
-        sides,
-        super::settlement_unit::check_entry(core, d),
-        super::precheck_deposit::withdraw_destination(core, d, acc)
-    )?;
+    let unit_checks = async {
+        Ok::<_, String>(tokio::join!(
+            super::settlement_unit::confirmed(core, d),
+            super::precheck_deposit::withdraw_destination(core, d, acc)
+        ))
+    };
+    let ((mut bands, band_ms), addr_due, (units_result, destination_result)) =
+        tokio::try_join!(band, sides, unit_checks)?;
     // Решение 411: баланс A отказал, адрес B ещё не проверен — сначала адрес (его ошибка первая по порядку).
     if let Some(e) = bal_err {
         let at = Instant::now();
@@ -507,6 +509,8 @@ async fn steps(
         Some((step, at.elapsed().as_millis(), r))
     };
     let calc = Box::pin(async {
+        destination_result?;
+        let verified_units = units_result.as_ref().map_err(Clone::clone)?;
         let at = Instant::now();
         // Будущее расчёта большое — в куче: обёртки замера иначе копируют его на стек (переполнение в отладочной сборке).
         // Решение 265: этапы пересчёта по шагам — только при включённом замере (выключен — работа без обёрток).
@@ -566,6 +570,7 @@ async fn steps(
         }
     }
     let (c, cut) = calc?;
+    let verified_units = units_result?;
     if c.units_b_per_a.buy_per_raw != verified_units.buy_per_raw
         || c.units_b_per_a.sell_per_raw != verified_units.sell_per_raw
     {

@@ -73,7 +73,18 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
             ))
         })?,
         Err(e) if e.code == ErrorCode::OutcomeUnknown => find_id(ctx, &cid).await.ok_or(e)?,
-        Err(e) => return Err(e),
+        Err(mut e) => {
+            // Ровно поля состоявшегося запроса. Остаток для торговли и лимит вывода HTX могут отличаться.
+            e.message = format!(
+                "{}; заявка HTX {} в сети {}: amount={}, fee={}",
+                e.message,
+                t,
+                chain.coin,
+                req.amount.normalize(),
+                fee.normalize()
+            );
+            return Err(e);
+        }
     };
     Ok(Transfer {
         venue: ctx.venue(),

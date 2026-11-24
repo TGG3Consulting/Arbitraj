@@ -59,7 +59,7 @@ pub(in crate::venues::bsc_dex) async fn confirmed(
         .scaled_units
         .read(ctx, token, receipt.block_number.to())
         .await?;
-    Ok(scale.and_then(|m| credited_ui(raw, ui, credited, decimals).map(|amount| (amount, m))))
+    Ok(credited_ui(raw, ui, credited, decimals).zip(scale))
 }
 
 fn credited_ui(raw: U256, ui: U256, credited: Decimal, decimals: u8) -> Option<Decimal> {
@@ -146,6 +146,7 @@ mod tests {
     fn both_polo_withdrawals_match_wallet_and_credited_raw() {
         let token = Address::from_str("0x3ee4df61bd4f867e349beae8bfe07bc31b4850fb").unwrap();
         let wallet = Address::from_str("0x47f5b4462e13bb1d690e9e9ded9373b8b799079d").unwrap();
+        let sender = Address::from_str("0xb67a2540aee1e237dcaaf97ab774c8f3fbf08d93").unwrap();
         let mut receipts: Vec<Receipt> = serde_json::from_str(include_str!(
             "../../../../tests/data/bsc_units_2026_11_24/deposit_receipts.json"
         ))
@@ -158,6 +159,11 @@ mod tests {
         for (receipt, (raw, ui)) in receipts.iter().zip(amounts) {
             let tx = receipt.transaction_hash;
             let (a, b) = pairs(receipt, tx, token, wallet).unwrap();
+            assert_eq!(
+                directional_pairs(receipt, tx, token, sender, false),
+                Some((a, b))
+            );
+            assert_eq!(directional_pairs(receipt, tx, token, wallet, false), None);
             assert_eq!(
                 credited_ui(a, b, raw.parse().unwrap(), 18),
                 Some(ui.parse().unwrap())

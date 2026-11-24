@@ -17,6 +17,10 @@ pub(super) enum Basis {
 
 pub(super) type Modes = HashMap<(VenueId, bool), Basis>;
 
+#[cfg(test)]
+#[path = "settlement_history_tests.rs"]
+mod tests;
+
 #[derive(Clone, PartialEq)]
 pub(super) struct Observation {
     cex: VenueId,
@@ -87,7 +91,8 @@ pub(super) fn observed(d: &Deal, dex: &VenueId) -> Option<Observation> {
         }
         (&s.venue, r.amount, s.amount.checked_sub(fee.amount)?)
     } else {
-        if s.asset != *a
+        if r.venue_ref.is_empty()
+            || s.asset != *a
             || d.sells.is_empty()
             || d.sells
                 .iter()

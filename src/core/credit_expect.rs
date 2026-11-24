@@ -29,7 +29,14 @@ pub(super) fn units(
     to: &VenueId,
     asset: &Asset,
 ) -> Result<UnitRatio, String> {
-    super::settlement_unit::ratio(
+    // Служебный возврат котируемой USDT уже ведётся на обеих площадках в USDT.
+    // Сравниваем именно контракт котируемой монеты этой сети.
+    if asset.contract.is_some()
+        && super::registry_chains::usdt_of(core, asset.chain.as_ref()).ok() == asset.contract
+    {
+        return Ok(UnitRatio::IDENTITY);
+    }
+    super::settlement_unit::confirmed_cached(
         core,
         &Direction {
             asset: asset.clone(),

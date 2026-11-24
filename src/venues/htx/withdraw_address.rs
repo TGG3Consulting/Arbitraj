@@ -274,9 +274,32 @@ mod tests {
     fn individual_address_and_pagination_from_htx_example() {
         let page = json!({"code":200,"data":[{"currency":"usdt","chain":"hrc20usdt","note":"tom","addressTag":"","address":ADDRESS}],"next-id":30137790});
         assert!(matches(&page["data"][0], "usdt", "hrc20usdt", ADDRESS));
+        assert!(!matches(&page["data"][0], "xter", "hrc20usdt", ADDRESS));
+        assert!(!matches(&page["data"][0], "usdt", "bep20usdt", ADDRESS));
         assert_eq!(cursor(&page).unwrap(), Some(30137790));
         assert_eq!(cursor(&json!({"nextId":30137790})).unwrap(), Some(30137790));
         assert_eq!(cursor(&json!({"data":[]})).unwrap(), None);
         assert!(cursor(&json!({"next-id":{}})).is_err());
+    }
+
+    /// У индивидуальной записи с memo вывод без него невозможен. Универсальная запись
+    /// той же сети может разрешать перевод на этот адрес без memo.
+    #[tokio::test]
+    async fn individual_with_tag_keeps_searching_for_an_eligible_destination() {
+        let network = TransferChain {
+            coin: "xter".into(),
+            universal: Some("bep20"),
+        };
+        let mut pages = [
+            json!({"code":200,"data":[{"address":ADDRESS,"addressTag":"123"}]}),
+            json!({"code":200,"data":[{"currency":"t247117","chain":"bep20","address":ADDRESS,"status":"normal"}]}),
+        ]
+        .into_iter();
+        let matched = listed("xter", &network, ADDRESS, |_| {
+            std::future::ready(Ok(pages.next().expect("лишняя страница")))
+        })
+        .await
+        .unwrap();
+        assert!(matched && pages.next().is_none());
     }
 }

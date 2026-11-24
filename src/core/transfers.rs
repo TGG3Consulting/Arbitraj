@@ -610,7 +610,7 @@ async fn go(
         accepted_id: &created.venue_ref,
         sender: &sent,
         receiver: &credited,
-        wallet: gw_to.as_ref(),
+        wallet: &gw_to,
     };
     super::credit_shortfall::check(
         core,

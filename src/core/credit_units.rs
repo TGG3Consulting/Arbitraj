@@ -13,12 +13,35 @@ pub(super) fn stable(pinned: Option<UnitRatio>, current: Option<UnitRatio>) -> O
     pinned.filter(|r| !r.is_identity() && Some(*r) == current)
 }
 
+pub(super) fn same_identity(pinned: Option<UnitRatio>, current: Option<UnitRatio>) -> bool {
+    pinned.is_some_and(|r| r.is_identity() && Some(r) == current)
+}
+
+/// Истории ряда CEX отдают только тикер. Одного тикера недостаточно, если на бирже
+/// этому тикеру доступны несколько сетей.
+fn ticker_on_network(record: &Asset, network: &str, local: &Asset, expected: &str) -> bool {
+    !expected.is_empty()
+        && network == expected
+        && record.ticker == local.ticker
+        && record
+            .chain
+            .as_ref()
+            .is_none_or(|c| Some(c) == local.chain.as_ref())
+}
+
+fn same_transaction(a: &str, b: &str) -> bool {
+    let a = crate::core::credit_watch::norm(a);
+    a.len() == 64
+        && a.bytes().all(|x| x.is_ascii_hexdigit())
+        && a == crate::core::credit_watch::norm(b)
+}
+
 /// Статусы с обеих сторон и именно тот экземпляр DEX, который получил этот перевод.
 pub struct CreditProof<'a> {
     pub accepted_id: &'a str,
     pub sender: &'a Transfer,
     pub receiver: &'a Transfer,
-    pub wallet: &'a dyn Venue,
+    pub wallet: &'a std::sync::Arc<dyn Venue>,
 }
 
 fn same_credit<'a>(
@@ -40,8 +63,7 @@ fn same_credit<'a>(
         || accepted_id.is_empty()
         || sent.venue_ref != accepted_id
         || sent.amount != request.trunc_with_scale(sent.amount.scale())
-        || hash.is_empty()
-        || crate::core::credit_watch::norm(hash) != crate::core::credit_watch::norm(got)
+        || !same_transaction(hash, got)
     {
         return None;
     }
@@ -66,12 +88,8 @@ impl<'a> CreditProof<'a> {
                 return record.asset == *asset;
             }
             let local = crate::core::venue_ticker::on_venue(core, asset, &record.venue);
-            record.asset.ticker == local.ticker
-                && record
-                    .asset
-                    .chain
-                    .as_ref()
-                    .is_none_or(|c| Some(c) == asset.chain.as_ref())
+            crate::core::transfers::network(core, asset, &record.venue)
+                .is_ok_and(|net| ticker_on_network(&record.asset, &record.network, &local, &net))
         };
         let h = s.tx_hash.as_deref()?;
         let got = r.tx_hash.as_deref()?;
@@ -84,8 +102,7 @@ impl<'a> CreditProof<'a> {
             && s.venue_ref == self.accepted_id
             && identity(s)
             && identity(r)
-            && !h.is_empty()
-            && crate::core::credit_watch::norm(h) == crate::core::credit_watch::norm(got))
+            && same_transaction(h, got))
         .then_some(h)
     }
 
@@ -147,6 +164,34 @@ fn exact_units(reported_gross: Decimal, fee: Decimal, raw: Decimal, ui: Decimal)
 mod tests {
     use super::*;
     use serde_json::Value;
+
+    #[test]
+    fn binance_ticker_only_history_identifies_its_own_network() {
+        let rows: Vec<Value> = serde_json::from_str(include_str!(
+            "../../tests/data/binance_docs_2026-11-10/withdraw_history.json"
+        ))
+        .unwrap();
+        let row = &rows[0];
+        let record = Asset {
+            ticker: row["coin"].as_str().unwrap().into(),
+            chain: None,
+            contract: None,
+        };
+        let network = row["network"].as_str().unwrap();
+        assert!(ticker_on_network(&record, network, &record, "ETH"));
+        assert!(!ticker_on_network(&record, network, &record, "BSC"));
+        assert!(!ticker_on_network(&record, "", &record, ""));
+    }
+
+    #[test]
+    fn missing_snapshots_cannot_train_a_raw_shortfall_on_a_lot() {
+        let unit = Some(UnitRatio::IDENTITY);
+        assert!(same_identity(unit, unit));
+        assert!(!same_identity(None, None));
+        assert!(!same_identity(None, unit));
+        assert!(!same_identity(unit, None));
+        assert!(!same_transaction("0x", "0x"));
+    }
 
     #[test]
     fn both_recorded_withdrawals_use_the_reported_precision_and_require_the_whole_credit() {

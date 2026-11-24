@@ -17,7 +17,9 @@
         "transactionHash": "0xd08de6386b10e8d00db8404c71a776c29f87a73d5dd4f3e4d7a14c8bbfeaeace",
         "blockHash": "0x538ca9b3d16373bab3d944730b24bf5f3c5245a36b14d56ab3e45ee192d15f79",
         "logIndex": "0x0",
-        "removed": false
+        "removed": false,
+        "transactionIndex": "0x0",
+        "blockTimestamp": "0x6b059e58"
       },
       {
         "address": "0x3ee4df61bd4f867e349beae8bfe07bc31b4850fb",
@@ -31,7 +33,9 @@
         "transactionHash": "0xd08de6386b10e8d00db8404c71a776c29f87a73d5dd4f3e4d7a14c8bbfeaeace",
         "blockHash": "0x538ca9b3d16373bab3d944730b24bf5f3c5245a36b14d56ab3e45ee192d15f79",
         "logIndex": "0x1",
-        "removed": false
+        "removed": false,
+        "transactionIndex": "0x0",
+        "blockTimestamp": "0x6b059e58"
       }
     ]
   },
@@ -53,7 +57,9 @@
         "transactionHash": "0x5480db4857b68860dfcfe8bac622ec447581d0be66fdcc2d1779809dd1730133",
         "blockHash": "0x06c9bb165f5454378f1bb6fe1ffd8d69eebe877250df1d1676ca96d44c2f50d7",
         "logIndex": "0x0",
-        "removed": false
+        "removed": false,
+        "transactionIndex": "0x0",
+        "blockTimestamp": "0x6b059e5b"
       },
       {
         "address": "0x3ee4df61bd4f867e349beae8bfe07bc31b4850fb",
@@ -67,7 +73,9 @@
         "transactionHash": "0x5480db4857b68860dfcfe8bac622ec447581d0be66fdcc2d1779809dd1730133",
         "blockHash": "0x06c9bb165f5454378f1bb6fe1ffd8d69eebe877250df1d1676ca96d44c2f50d7",
         "logIndex": "0x1",
-        "removed": false
+        "removed": false,
+        "transactionIndex": "0x0",
+        "blockTimestamp": "0x6b059e5b"
       }
     ]
   }

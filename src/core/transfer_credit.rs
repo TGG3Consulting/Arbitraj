@@ -78,7 +78,9 @@ pub(super) async fn wait_with_units(
                 amount: hit.delta,
                 status: TransferStatus::Credited,
                 venue_ref: String::new(),
-                tx_hash: Some(leg.tx.clone()),
+                // Только хеш, сообщённый получателем, служит независимым
+                // подтверждением для сверки единиц и восстановления истории.
+                tx_hash: hit.tx_hash.clone(),
                 fee: None,
                 updated_at: hit.at,
             };

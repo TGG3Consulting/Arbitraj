@@ -54,6 +54,7 @@ def adapt(source, target):
         encoding="utf-8",
     )
     shutil.copyfile(source / "cake.json", target / "tests/size_matrix_cake.json")
+    shutil.copyfile(source / "routes.rs", target / "tests/size_matrix_routes.inc")
     fields = SHARED_PARAMS | OPTIONAL_PARAMS
     assignment = "".join(f"        {name}: {fields[name]},\n" for name in names)
     threshold = "inside_search" if native else "after_search"

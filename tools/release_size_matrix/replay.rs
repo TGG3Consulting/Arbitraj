@@ -7,6 +7,8 @@ use std::str::FromStr;
 use std::time::Instant;
 
 include!("size_matrix_adapter.inc");
+#[path = "size_matrix_routes.inc"]
+mod routes;
 
 fn d(s: &str) -> Decimal {
     Decimal::from_str(s).unwrap()
@@ -19,10 +21,17 @@ type Sample = Point<(Decimal, Decimal)>;
 enum Market {
     Book(Vec<Level>),
     Pool { coin: Decimal, usdt: Decimal },
+    Ladder(routes::Ladder),
+    Router(routes::Router),
 }
 
 impl Market {
-    fn price(&self, qty: Decimal, buy: bool) -> Option<(Decimal, Decimal)> {
+    fn price(
+        &self,
+        qty: Decimal,
+        buy: bool,
+        budget: Decimal,
+    ) -> Option<(Decimal, Decimal, Decimal)> {
         match self {
             Self::Book(levels) => {
                 let mut open = qty;
@@ -32,7 +41,7 @@ impl Market {
                     amount += fill * price;
                     open -= fill;
                     if open.is_zero() {
-                        return Some((amount, qty * price));
+                        return Some((amount, qty * price, Decimal::ZERO));
                     }
                 }
                 None
@@ -42,13 +51,15 @@ impl Market {
                 if buy {
                     (qty < *coin).then(|| {
                         let amount = *usdt * qty / ((*coin - qty) * fee);
-                        (amount, amount)
+                        (amount, amount, Decimal::ZERO)
                     })
                 } else {
                     let amount = *usdt * qty * fee / (*coin + qty * fee);
-                    Some((amount, amount))
+                    Some((amount, amount, Decimal::ZERO))
                 }
             }
+            Self::Ladder(book) => book.price(qty),
+            Self::Router(router) => router.price(qty, buy, budget),
         }
     }
 
@@ -56,6 +67,8 @@ impl Market {
         match self {
             Self::Book(levels) => levels.iter().map(|x| x.0).min().unwrap(),
             Self::Pool { coin, usdt } => *usdt / *coin,
+            Self::Ladder(book) => book.cheapest(),
+            Self::Router(router) => router.cheapest_buy(),
         }
     }
 
@@ -69,6 +82,9 @@ impl Market {
                 })
                 .collect();
         }
+        if let Self::Ladder(book) = self {
+            return book.breaks();
+        }
         Vec::new()
     }
 }
@@ -79,6 +95,7 @@ struct Scenario {
     buy: Market,
     sell: Market,
     withdraw: Decimal,
+    arrive_keep: Decimal,
     fixed: Decimal,
     fee_buy: Decimal,
     fee_sell: Decimal,
@@ -91,17 +108,17 @@ struct Scenario {
 
 impl Scenario {
     fn point(&self, qty: Decimal) -> Result<Sample, Fail> {
-        let arrived = ((qty - self.withdraw) / self.step).floor() * self.step;
+        let arrived = ((qty - self.withdraw) * self.arrive_keep / self.step).floor() * self.step;
         if arrived <= Decimal::ZERO {
             return Err(Fail::TooSmall("withdrawal amount".into()));
         }
-        let (buy, worst) = self
+        let (buy, worst, buy_gas) = self
             .buy
-            .price(qty, true)
+            .price(qty, true, self.budget)
             .ok_or_else(|| Fail::TooLarge("buy depth".into()))?;
-        let (sell, sell_worst) = self
+        let (sell, sell_worst, sell_gas) = self
             .sell
-            .price(arrived, false)
+            .price(arrived, false, self.budget)
             .ok_or_else(|| Fail::TooLarge("sell depth".into()))?;
         if sell_worst < self.min_sale {
             return Err(Fail::TooSmall("sell minimum notional".into()));
@@ -116,7 +133,11 @@ impl Scenario {
         let profit = if self.narrow {
             d("0.03") * qty - d("0.0001") * qty * qty - Decimal::ONE
         } else {
-            sell * (Decimal::ONE - self.fee_sell) - buy * (Decimal::ONE + self.fee_buy) - self.fixed
+            sell * (Decimal::ONE - self.fee_sell)
+                - buy * (Decimal::ONE + self.fee_buy)
+                - self.fixed
+                - buy_gas
+                - sell_gas
         };
         Ok(Point {
             qty,
@@ -179,6 +200,7 @@ fn scenarios() -> Vec<Scenario> {
         buy: asks,
         sell: pool.clone(),
         withdraw: d("0.01"),
+        arrive_keep: Decimal::ONE,
         fixed: d("0.02"),
         fee_buy: d("0.001"),
         fee_sell: Decimal::ZERO,

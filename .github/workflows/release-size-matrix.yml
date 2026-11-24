@@ -61,12 +61,16 @@ jobs:
         working-directory: release
         run: |
           set -eo pipefail
-          cargo test --locked --test core_size_release_matrix release_size_matrix -- --exact --nocapture > "$RUNNER_TEMP/replay.log" 2>&1 || {
+          case "$GITHUB_REF_NAME" in
+            *-routes-*) test_case=routes::release_size_matrix_routes; expected=10240 ;;
+            *) test_case=release_size_matrix; expected=180 ;;
+          esac
+          cargo test --locked --test core_size_release_matrix "$test_case" -- --exact --nocapture > "$RUNNER_TEMP/replay.log" 2>&1 || {
             grep -m 15 -A 4 -E 'error(\[E[0-9]+\])?:|panicked at|assertion|FAILED' "$RUNNER_TEMP/replay.log" | head -n 80 || true
             exit 1
           }
           sed -n 's/^SIZE_MATRIX //p' "$RUNNER_TEMP/replay.log" > ../replay.jsonl
-          test "$(wc -l < ../replay.jsonl)" -eq 180
+          test "$(wc -l < ../replay.jsonl)" -eq "$expected"
       - uses: actions/upload-artifact@v4
         with:
           name: replay-${{ matrix.sha }}

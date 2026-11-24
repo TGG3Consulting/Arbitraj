@@ -104,7 +104,7 @@ async fn no_fact_over_human_pause_changes_nothing() {
         .unwrap()
         .venue_paused
         .insert(mexc.clone(), "человек".into());
-    arb::core::fact_pause::set(&core, &mexc, "нет связи").await;
+    arb::core::fact_pause::set(&core, &mexc, "нет связи", None).await;
     let r = core.inner.risk.lock().unwrap();
     assert_eq!(
         r.venue_paused.get(&mexc).map(String::as_str),

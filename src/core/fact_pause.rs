@@ -21,7 +21,7 @@ use super::auto_pause::Kind;
 use super::engine::{Core, lk};
 
 /// Что делает: пауза биржи «баланс не читается» (если её ещё нет). Принимает: ядро, биржу, причину. Ошибок нет.
-pub async fn set(core: &Core, v: &VenueId, why: &str) {
+pub async fn set(core: &Core, v: &VenueId, why: &str, deal: Option<&str>) {
     let text = format!("баланс биржи не читается: {why}");
     // Четвёртое ревью (С-6): площадка уже на паузе (сверка 221, человек, другой модуль) — чужую паузу не трогаем (не
     // превращаем в NoFact и потом не снимаем): только журнал.
@@ -63,7 +63,9 @@ pub async fn set(core: &Core, v: &VenueId, why: &str) {
     deps.log(Level::Warn, "core.control", Some(&v.0), &msg, None)
         .await;
     let acts = vec![crate::notify::acts::resume_venue(&v.0)];
-    deps.notify_acts("risk.stop", Some(&v.0), &msg, acts).await;
+    let alert = deal.map_or_else(|| msg.clone(), |id| format!("{id}: {msg}"));
+    deps.notify_acts("risk.stop", Some(&v.0), &alert, acts)
+        .await;
 }
 
 /// Что делает: баланс биржи прочитан — снять паузу «баланс не читается», если отметка та же. Ошибок нет.

@@ -76,7 +76,13 @@ pub async fn with_fact<R>(
         let out = f(Err(text.clone()), o);
         drop(g);
         if cex {
-            Box::pin(super::fact_pause::set(core, &deal.at, &text)).await;
+            Box::pin(super::fact_pause::set(
+                core,
+                &deal.at,
+                &text,
+                Some(&deal.id),
+            ))
+            .await;
         }
         return out;
     }
@@ -135,7 +141,13 @@ pub async fn read_with(core: &Core, deal: &Deal, warn: bool) -> (Result<Decimal,
                     .await;
                 }
                 if cex {
-                    Box::pin(super::fact_pause::set(core, &deal.at, &text)).await;
+                    Box::pin(super::fact_pause::set(
+                        core,
+                        &deal.at,
+                        &text,
+                        Some(&deal.id),
+                    ))
+                    .await;
                 }
                 return (Err(text), o);
             }

@@ -113,7 +113,7 @@ pub async fn on_error(
         deps.notify_acts(
             "risk.stop",
             Some(&venue.0),
-            &paused_text(venue, &paused, note),
+            &paused_text(venue, &paused, note, deal),
             vec![crate::notify::acts::resume_venue(&venue.0)],
         )
         .await;
@@ -187,7 +187,7 @@ pub async fn on_error(
             Next::Stop
         }
         RuleAction::StopVenue => {
-            stop::stop_venue(core, rule.id, venue, err).await;
+            stop::stop_venue(core, rule.id, venue, deal, err).await;
             Next::Stop
         }
         RuleAction::StopAll => {

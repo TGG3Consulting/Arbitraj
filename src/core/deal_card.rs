@@ -83,7 +83,7 @@ pub fn with_original(d: &Deal, lookup: impl Fn(&str) -> Option<String>) -> DealC
     }
     if card.purchase.is_empty() {
         card.purchase = format!(
-            "По учёту {}; исходное исполнение недоступно",
+            "Вложение по возвращённой позиции {}; исходная покупка недоступна",
             h::usd(d.invested)
         );
     }

@@ -90,7 +90,7 @@ pub(super) async fn outcome(
     deps.notify_acts(
         "risk.stop",
         Some(&venue.0),
-        &paused_text(venue, &why, note),
+        &paused_text(venue, &why, note, deal),
         acts(),
     )
     .await;
@@ -98,7 +98,13 @@ pub(super) async fn outcome(
 
 /// Правило «стоп площадка»: пауза площадки (Kind::Rule), уведомление risk.stop; код из no_pause — только журнал.
 /// Принимает: ядро, № правила, площадку, ошибку. Ошибок нет.
-pub(super) async fn stop_venue(core: &Core, rule: i64, venue: &VenueId, err: &GatewayError) {
+pub(super) async fn stop_venue(
+    core: &Core,
+    rule: i64,
+    venue: &VenueId,
+    deal: Option<&str>,
+    err: &GatewayError,
+) {
     if no_pause_log(core, rule, "стоп площадка", venue, err).await {
         return;
     }
@@ -119,7 +125,7 @@ pub(super) async fn stop_venue(core: &Core, rule: i64, venue: &VenueId, err: &Ga
         .notify_acts(
             "risk.stop",
             Some(&venue.0),
-            &paused_text(venue, &why, note),
+            &paused_text(venue, &why, note, deal),
             vec![crate::notify::acts::resume_venue(&venue.0)],
         )
         .await;
@@ -236,7 +242,12 @@ pub(super) fn resume_note(core: &Core, venue: &VenueId, kind: Kind) -> Option<St
 
 /// Решение 164: площадка на паузе (risk.stop). Принимает: площадку, причину паузы, строку «снимется сама» (None —
 /// снимает человек). Ошибок нет.
-pub(super) fn paused_text(venue: &VenueId, why: &str, note: Option<String>) -> String {
+pub(super) fn paused_text(
+    venue: &VenueId,
+    why: &str,
+    note: Option<String>,
+    deal: Option<&str>,
+) -> String {
     let todo = if note.is_some() {
         "или разобраться с причиной и «Снять паузу» на экране «Управление»"
     } else {
@@ -246,5 +257,6 @@ pub(super) fn paused_text(venue: &VenueId, why: &str, note: Option<String>) -> S
         .reason(why)
         .line(note.unwrap_or_default())
         .todo(todo)
+        .id(deal.unwrap_or_default())
         .render()
 }

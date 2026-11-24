@@ -117,8 +117,8 @@ jobs:
             *-routes-*|*-combined-*) test_case=routes::release_size_matrix_routes; expected=10240 ;;
             *) test_case=release_size_matrix; expected=180 ;;
           esac
-          cargo test --locked --test core_size_release_matrix "$test_case" -- --exact --nocapture > "$RUNNER_TEMP/replay.log" 2>&1 || {
-            grep -mi 15 -A 4 -E 'error(\[E[0-9]+\])?:|panicked at|assertion|FAILED|killed|no space|could not|signal:|lock file' "$RUNNER_TEMP/replay.log" | head -n 80 || true
+          CARGO_TERM_COLOR=never cargo test --locked --test core_size_release_matrix "$test_case" -- --exact --nocapture > "$RUNNER_TEMP/replay.log" 2>&1 || {
+            grep -mi 15 -A 4 -E 'error|panicked at|assertion|FAILED|killed|no space|could not|signal:|lock file' "$RUNNER_TEMP/replay.log" | head -n 80 || true
             exit 1
           }
           sed -n -E 's/^(test [^ ]+ \.\.\. )?SIZE_MATRIX //p' "$RUNNER_TEMP/replay.log" > ../replay.jsonl

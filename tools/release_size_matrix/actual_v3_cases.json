@@ -1,0 +1,379 @@
+{
+  "cases": [
+    {
+      "deal_id": "20261122144730803TRADOOR",
+      "window_id": "20261122144721577-TRADOOR-bscdex-bingx",
+      "decision_utc": "2026-11-22T14:47:30.792117628Z",
+      "decision_time_basis": "archived_plan_at",
+      "direction": {
+        "asset": {
+          "ticker": "TRADOOR",
+          "bsc_contract": "0x9123400446a56176eb1b6be9ee5cf703e409f492"
+        },
+        "buy_on": "bsc_dex",
+        "sell_on": "bingx"
+      },
+      "basis": "cex_episode_book_bsc_v3_fixed_single_tick",
+      "sell": {
+        "recv_ns": 1795358842912322072,
+        "source": "episode_book",
+        "levels": [
+          [
+            "0.5966",
+            "3233.6"
+          ],
+          [
+            "0.5953",
+            "1163.4"
+          ],
+          [
+            "0.586",
+            "5392.2"
+          ],
+          [
+            "0.5821",
+            "10.26"
+          ],
+          [
+            "0.525",
+            "39.71"
+          ],
+          [
+            "0.5235",
+            "9.56"
+          ],
+          [
+            "0.4302",
+            "20"
+          ],
+          [
+            "0.4065",
+            "50"
+          ],
+          [
+            "0.4",
+            "50"
+          ],
+          [
+            "0.3955",
+            "265.48"
+          ]
+        ]
+      },
+      "thresholds": {
+        "min_usdt": "0.005",
+        "min_pct": "0.00001",
+        "source": "profit_threshold_history.json",
+        "usdt_scope": "BingX DEX→CEX",
+        "pct_scope": "global, no BingX DEX→CEX override"
+      },
+      "historical_result_usdt": "-0.2071474325456660900000000000",
+      "market_sample_utc": "2026-11-22T14:47:30.604425803Z",
+      "pool": {
+        "block": 135097645,
+        "current_tick": 5321,
+        "nearest_possible_tick": 5321,
+        "sqrt_price_x96": "103378774173740821338153950093",
+        "boundary_sqrt_price_x96": "103375554914191837777623730072",
+        "next_sqrt_price_x96": "103377772345188811151836178393",
+        "liquidity": "635831775144105185915216",
+        "tick_spacing": 1,
+        "fee_pips": 100,
+        "capacity_raw": "25835605026322564801",
+        "quote_result_raw": "4722805933900665092",
+        "asset_decimals": 18,
+        "quote_decimals": 18,
+        "decimals_evidence": "later_decimals_cross_checked_against_archived_own_quote",
+        "ref": "0x924e62a3689e7b94f397e61ac796dabfea32e93b",
+        "snapshot_ns": 1795358849890982918
+      },
+      "plan": {
+        "arrive": "8.04",
+        "at": "2026-11-22T14:47:30.792117628Z",
+        "buy_avg": "0.5874136733707294890547263682",
+        "buy_band": false,
+        "buy_quote": {
+          "asset": {
+            "bsc_contract": "0x9123400446a56176eb1b6be9ee5cf703e409f492",
+            "ticker": "TRADOOR"
+          },
+          "at": "2026-11-22T14:47:30.781563807Z",
+          "avg_price": "0.5874136733707294890547263682",
+          "costs": [
+            {
+              "amount": "0.000015350000000000",
+              "asset": "BNB",
+              "in_price": false,
+              "kind": "Gas",
+              "step": {
+                "from": "USDT",
+                "from_token": "0x55d398326f99059ff775485246999027b3197955",
+                "index": 1,
+                "to": "TRADOOR",
+                "to_token": "0x9123400446a56176eb1b6be9ee5cf703e409f492"
+              }
+            },
+            {
+              "amount": "0.0004722805933900665092",
+              "asset": "USDT",
+              "in_price": true,
+              "kind": "PoolFee",
+              "step": {
+                "from": "USDT",
+                "from_token": "0x55d398326f99059ff775485246999027b3197955",
+                "index": 1,
+                "to": "TRADOOR",
+                "to_token": "0x9123400446a56176eb1b6be9ee5cf703e409f492"
+              }
+            },
+            {
+              "amount": "0",
+              "asset": "TRADOOR",
+              "in_price": true,
+              "kind": "BuyTax",
+              "step": {
+                "from": "USDT",
+                "from_token": "0x55d398326f99059ff775485246999027b3197955",
+                "index": 1,
+                "to": "TRADOOR",
+                "to_token": "0x9123400446a56176eb1b6be9ee5cf703e409f492"
+              }
+            },
+            {
+              "amount": "0",
+              "asset": "TRADOOR",
+              "in_price": true,
+              "kind": "HookImpact",
+              "step": {
+                "from": "USDT",
+                "from_token": "0x55d398326f99059ff775485246999027b3197955",
+                "index": 1,
+                "to": "TRADOOR",
+                "to_token": "0x9123400446a56176eb1b6be9ee5cf703e409f492"
+              }
+            }
+          ],
+          "fillable_qty": "8.040000000000000000",
+          "pick": null,
+          "qty": "8.04",
+          "route": {
+            "block": 135097645,
+            "exec_note": null,
+            "executable": true,
+            "gas_units": 153500,
+            "legs": [
+              {
+                "expected_out": "8.040000000000000000",
+                "hops": [
+                  {
+                    "family": "pancakeswap-v3-bsc",
+                    "kind": "V3",
+                    "pool": {
+                      "Contract": "0x924e62a3689e7b94f397e61ac796dabfea32e93b"
+                    }
+                  }
+                ],
+                "share": "1"
+              }
+            ],
+            "mode": "Direct"
+          },
+          "side": "Buy",
+          "signal_route": null,
+          "venue": "bsc_dex"
+        },
+        "buy_worst": "0.5903507417375831365000000000",
+        "costs": [
+          {
+            "amount": "0.000015350000000000",
+            "asset": "BNB",
+            "in_price": false,
+            "in_qty": false,
+            "kind": "Gas",
+            "stage": "A",
+            "step": {
+              "from": "USDT",
+              "from_token": "0x55d398326f99059ff775485246999027b3197955",
+              "index": 1,
+              "to": "TRADOOR",
+              "to_token": "0x9123400446a56176eb1b6be9ee5cf703e409f492"
+            },
+            "usdt": "0.00855209900000000000000000"
+          },
+          {
+            "amount": "0.0004722805933900665092",
+            "asset": "USDT",
+            "in_price": true,
+            "in_qty": false,
+            "kind": "PoolFee",
+            "stage": "A",
+            "step": {
+              "from": "USDT",
+              "from_token": "0x55d398326f99059ff775485246999027b3197955",
+              "index": 1,
+              "to": "TRADOOR",
+              "to_token": "0x9123400446a56176eb1b6be9ee5cf703e409f492"
+            },
+            "usdt": "0.0004722805933900665092"
+          },
+          {
+            "amount": "0",
+            "asset": "TRADOOR",
+            "in_price": true,
+            "in_qty": true,
+            "kind": "BuyTax",
+            "stage": "A",
+            "step": {
+              "from": "USDT",
+              "from_token": "0x55d398326f99059ff775485246999027b3197955",
+              "index": 1,
+              "to": "TRADOOR",
+              "to_token": "0x9123400446a56176eb1b6be9ee5cf703e409f492"
+            },
+            "usdt": "0"
+          },
+          {
+            "amount": "0",
+            "asset": "TRADOOR",
+            "in_price": true,
+            "in_qty": true,
+            "kind": "HookImpact",
+            "stage": "A",
+            "step": {
+              "from": "USDT",
+              "from_token": "0x55d398326f99059ff775485246999027b3197955",
+              "index": 1,
+              "to": "TRADOOR",
+              "to_token": "0x9123400446a56176eb1b6be9ee5cf703e409f492"
+            },
+            "usdt": "0"
+          },
+          {
+            "amount": "0.000002872265000000",
+            "asset": "BNB",
+            "in_price": false,
+            "in_qty": false,
+            "kind": "TransferGas",
+            "stage": "перевод",
+            "step": null,
+            "usdt": "0.00160025372210000000000000"
+          },
+          {
+            "amount": "0",
+            "asset": "TRADOOR",
+            "in_price": false,
+            "in_qty": true,
+            "kind": "TransferTax",
+            "stage": "перевод",
+            "step": null,
+            "usdt": "0"
+          },
+          {
+            "amount": "0.0047966640000000000000000",
+            "asset": "USDT",
+            "in_price": false,
+            "in_qty": false,
+            "kind": "TradeFee",
+            "stage": "B",
+            "step": null,
+            "usdt": "0.0047966640000000000000000"
+          },
+          {
+            "amount": "0",
+            "asset": "USDT",
+            "in_price": false,
+            "in_qty": false,
+            "kind": "UsdtReturn",
+            "stage": "возврат USDT",
+            "step": null,
+            "usdt": "0"
+          },
+          {
+            "amount": "0.0412214934672265394950383221",
+            "asset": "USDT",
+            "in_price": false,
+            "in_qty": false,
+            "kind": "PriceMoveReserve",
+            "stage": "ядро",
+            "step": null,
+            "usdt": "0.0412214934672265394950383221"
+          }
+        ],
+        "costs_usdt": "0.0561705101893265394950383221",
+        "direction": {
+          "asset": {
+            "bsc_contract": "0x9123400446a56176eb1b6be9ee5cf703e409f492",
+            "ticker": "TRADOOR"
+          },
+          "buy_on": "bsc_dex",
+          "sell_on": "bingx"
+        },
+        "invested": "4.7228059339006650920000000003",
+        "proceeds": "4.796664",
+        "profit_pct": "0.3745137140411747301377016900",
+        "profit_usd": "0.0176875559100083685049616776",
+        "qty": "8.04",
+        "sell_avg": "0.5966",
+        "sell_qty": "8.04",
+        "sell_quote": {
+          "asset": {
+            "bsc_contract": "0x9123400446a56176eb1b6be9ee5cf703e409f492",
+            "ticker": "TRADOOR"
+          },
+          "at": "2026-11-22T14:47:22.912322072Z",
+          "avg_price": "0.5966",
+          "costs": [
+            {
+              "amount": "0.0047966640000000000000000",
+              "asset": "USDT",
+              "in_price": false,
+              "kind": "TradeFee",
+              "step": null
+            }
+          ],
+          "fillable_qty": "8.040000000000000000",
+          "pick": null,
+          "qty": "8.04",
+          "route": null,
+          "side": "Sell",
+          "signal_route": null,
+          "venue": "bingx"
+        },
+        "sigma": "0.0004726649855602779761129213",
+        "sigma_check": {
+          "horizon": {
+            "blocks": 139,
+            "changes": 45,
+            "rho1": "-0.0218027491331537952082338859",
+            "sigma_t": "0.0003983759124018031383331408",
+            "steps": 988
+          },
+          "horizon_s": "25.72780",
+          "note": null,
+          "profit_t_usd": "0.0241428242667153330558033185",
+          "reserve_t_usdt": "0.0347662251105195749441966812",
+          "sigma_plan": "0.0004726649855602779761129213",
+          "sigma_series": "0.0004726649855602779761129213",
+          "sigma_t_plan": "0.0003983759124018031383331408",
+          "variance_ratio": "0.7103612770388608931246342715"
+        },
+        "size": {
+          "at_budget_profit": "0.0174801344045807239638798742",
+          "budget": "11.033041579289450628",
+          "capped": false,
+          "evals": 55,
+          "max_exact": true,
+          "max_qty": "7.98",
+          "min_qty": "1.90",
+          "peaks": 1,
+          "profit": "0.0176875559100083685049616776",
+          "qty": "8.04",
+          "why": "оптимум 8.04 TRADOOR: прибыль 0.0177; на бюджете 11.033 (7.98 TRADOOR) — 0.0175; допустимо 1.9–7.98 TRADOOR, посчитано объёмов 55, пиков 1"
+        },
+        "spend_fee": "0",
+        "spend_max": "4.7464199635701684174600000000",
+        "transit_s": "25.72780"
+      }
+    }
+  ]
+}

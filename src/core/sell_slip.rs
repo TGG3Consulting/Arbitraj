@@ -188,6 +188,7 @@ async fn block(core: &Core, deal: &Deal, run: &[Obs]) {
     // Решение 408 (исключение из решения 157): «Убрать из чёрного списка» на тревоге (e:ub → «Да/Нет» → Unblacklist).
     let coin = super::coin_key::scope_id(a);
     let acts = vec![crate::notify::acts::e::unblacklist(&coin, &a.ticker)];
-    deps.notify_acts("coin.sell_slip", Some(v), &text, acts)
+    let alert = format!("{}: {text}", deal.id);
+    deps.notify_acts("coin.sell_slip", Some(v), &alert, acts)
         .await;
 }

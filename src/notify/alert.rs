@@ -19,7 +19,7 @@
 //! От чего зависит: notify/alert_card.rs, notify/tg_text.rs.
 //! Настройки: нет — это вид сообщения, не торговые параметры.
 
-use super::alert_card::{self, COIN, DEAL, NOW, PATH};
+use super::alert_card::{self, COIN, DEAL, NOW, PATH, PURCHASE};
 use super::tg_text::fit_text;
 
 /// Подпись блока цифр (строка «Цифры:», под ней строки «• подпись: значение»).
@@ -54,7 +54,7 @@ pub const FIGURE_LABELS: &[&str] = &[
 pub const BOT_LABELS: &[&str] = &[BOT, "Что бот делает"];
 
 /// Подписи, которые в Telegram выделяются жирным (строка «Подпись: значение»).
-const BOLD_LABELS: &[&str] = &[COIN, PATH, NOW, REASON, BOT, TODO];
+const BOLD_LABELS: &[&str] = &[COIN, PATH, NOW, PURCHASE, REASON, BOT, TODO];
 
 /// Текст алерта для Telegram в HTML: карточка сделки (если есть «Сделка: <id>» и ядро знает сделку), подгонка под
 /// предел длины, разметка. Принимает: текст (Msg::render или любой другой). Возвращает: HTML. Ошибок нет.

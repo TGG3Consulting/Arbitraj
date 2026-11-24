@@ -134,7 +134,8 @@ pub async fn close(core: &Core, deal: &str, asset: &Asset, from: &VenueId, e: &O
     // Решение 408 (исключение из решения 157): «Открыть вход монеты» на тревоге (e:oe → «Да/Нет» → OpenCoinEntry).
     let coin = super::coin_key::scope_id(asset);
     let acts = vec![crate::notify::acts::e::open_entry(from, &coin, ticker)];
-    deps.notify_acts("coin.withdraw_refused", Some(from), &text, acts)
+    let alert = format!("{deal}: {text}");
+    deps.notify_acts("coin.withdraw_refused", Some(from), &alert, acts)
         .await;
 }
 

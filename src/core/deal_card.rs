@@ -20,6 +20,7 @@ use crate::notify::alert_card::DealCard;
 use crate::notify::human as h;
 
 use super::deal::{Deal, Step};
+use super::types::Side;
 use super::usdt_return_state::UsdtReturn;
 
 /// Карточка сделки. Принимает: сделку. Возвращает: DealCard. Ошибок нет.
@@ -28,7 +29,70 @@ pub fn card(d: &Deal) -> DealCard {
         coin: coin(d),
         path: path(d),
         now: now(d),
+        purchase: purchase(d),
     }
+}
+
+/// Исходное исполнение покупки из учёта, до вывода, перегонов и продаж.
+fn purchase(d: &Deal) -> String {
+    if d.buy.is_none() && d.id.ends_with('r') {
+        return String::new();
+    }
+    let Some(buy) = d.buy.as_ref().filter(|b| !b.filled_qty.is_zero()) else {
+        return if d.invested.is_zero() {
+            "Исполнение покупки не подтверждено".into()
+        } else {
+            format!("По учёту {}; исходный объём не записан", h::usd(d.invested))
+        };
+    };
+    if buy.request.side != Side::Buy {
+        return format!(
+            "Вход цикла: {} {}, вложено {}",
+            buy.filled_qty.normalize(),
+            d.direction.asset.ticker,
+            h::usd(d.invested)
+        );
+    }
+    let amount = buy.filled_qty * buy.avg_price;
+    let fee = buy.fee_in("USDT");
+    let mut text = format!(
+        "{} {} на {} за {} USDT",
+        buy.filled_qty.normalize(),
+        d.direction.asset.ticker,
+        h::venue(&d.direction.buy_on.0),
+        amount.round_dp(8).normalize()
+    );
+    if !fee.is_zero() {
+        text.push_str(&format!(
+            " (комиссия {} USDT, всего списано {} USDT)",
+            fee.round_dp(8).normalize(),
+            (amount + fee).round_dp(8).normalize()
+        ));
+    }
+    text
+}
+
+/// Карточка возвращённой боту позиции сохраняет исходную покупку, если она есть в учёте.
+pub fn with_original(d: &Deal, lookup: impl Fn(&str) -> Option<String>) -> DealCard {
+    let mut card = card(d);
+    if d.buy.is_none()
+        && let Some(id) = d.id.strip_suffix('r')
+        && let Some(purchase) = lookup(id.trim_end_matches('r'))
+    {
+        card.purchase = purchase;
+    }
+    if card.purchase.is_empty() {
+        card.purchase = format!(
+            "По учёту {}; исходное исполнение недоступно",
+            h::usd(d.invested)
+        );
+    }
+    card
+}
+
+/// Исходная покупка для карточки продолжения сделки.
+pub(super) fn recorded_purchase(d: &Deal) -> Option<String> {
+    d.buy.as_ref().map(|_| purchase(d))
 }
 
 /// «PIG (0x1234…abcd)» или тикер, если адреса нет. Ошибок нет.

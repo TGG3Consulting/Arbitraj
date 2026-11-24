@@ -110,6 +110,7 @@ pub async fn release(core: &Core, asset: &Asset, to: &VenueId, deal: &str) {
                     asset.ticker,
                     crate::notify::human::venue(&to.0)
                 ))
+                .id(deal)
                 .render(),
         )
         .await;

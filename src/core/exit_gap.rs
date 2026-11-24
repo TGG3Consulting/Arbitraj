@@ -103,7 +103,8 @@ pub async fn on_gap(core: &Core, g: ExitGap) {
         );
         deps.log(Level::Warn, "core.exit_gap", Some(&venue), &text, None)
             .await;
-        deps.notify(CODE, Some(&venue), &text).await;
+        deps.notify(CODE, Some(&venue), &format!("{}: {text}", g.deal_id))
+            .await;
         return;
     }
     let note = format!(
@@ -127,7 +128,8 @@ pub async fn on_gap(core: &Core, g: ExitGap) {
     };
     deps.log(Level::Warn, "core.exit_gap", Some(&venue), &text, None)
         .await;
-    deps.notify(CODE, Some(&venue), &text).await;
+    deps.notify(CODE, Some(&venue), &format!("{}: {text}", g.deal_id))
+        .await;
 }
 
 /// Свежая проверка налогов монеты: авто-закрытие решения 248 снимается, если налог продажи сошёлся с замером

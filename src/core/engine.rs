@@ -67,7 +67,11 @@ impl Core {
         let weak = Arc::downgrade(&core.inner);
         crate::notify::alert_card::install(move |id| {
             let inner = weak.upgrade()?;
-            lk(&inner.deals).get(id).map(super::deal_card::card)
+            let deals = lk(&inner.deals);
+            let deal = deals.get(id)?;
+            Some(super::deal_card::with_original(deal, |id| {
+                deals.get(id).and_then(super::deal_card::recorded_purchase)
+            }))
         });
         // Учёт ядра: сделки, статистика газа, ручное управление — до запуска задач.
         // Итог дня — раньше сделок: прерванные перезапуском сделки сразу добавляют предварительный убыток.

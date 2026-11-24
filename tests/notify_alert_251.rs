@@ -25,7 +25,8 @@ use serde_json::json;
 
 use arb::core::deal::{Deal, Step};
 use arb::core::types::{
-    Asset, DexAccountId, Direction, ManualAction, StuckAlert, Transfer, TransferStatus, VenueId,
+    Asset, DexAccountId, Direction, Fee, ManualAction, Side, StuckAlert, TradeRequest, TradeResult,
+    TradeStatus, Transfer, TransferStatus, VenueId,
 };
 use arb::core::usdt_return_state::UsdtReturn;
 use arb::notify::alert::{html, telegram};
@@ -208,6 +209,45 @@ fn closed_with_relay() {
         text.contains("\n\nЦифры:\n• Размер ордера: 470.00 USDT\n"),
         "{text}"
     );
+}
+
+#[test]
+fn original_purchase_uses_execution_before_transfers() {
+    let mut deal = jct();
+    deal.direction.buy_on = v("mexc");
+    deal.direction.asset.ticker = "AI".into();
+    let buy = TradeResult {
+        request: TradeRequest {
+            venue: v("mexc"),
+            asset: deal.direction.asset.clone(),
+            side: Side::Buy,
+            qty: d("600"),
+            worst_price: d("0.02"),
+            deal_id: deal.id.clone(),
+            route: None,
+            exit_position: false,
+            remeasure: None,
+        },
+        status: TradeStatus::PartiallyFilled,
+        filled_qty: d("501.09"),
+        avg_price: d("0.0128984633498972240515675827"),
+        fees: vec![Fee {
+            asset: "USDT".into(),
+            amount: d("0.0032316455"),
+            usd: None,
+        }],
+        venue_ref: String::new(),
+        chain: None,
+        finished_at: Utc::now(),
+        executor: None,
+    };
+    deal.buy = Some(buy);
+    deal.qty = d("497.09");
+    let text = arb::core::deal_text::closed(&deal, "продано", None);
+    assert!(text.contains(
+        "Исходная покупка: 501.09 AI на MEXC за 6.463291 USDT (комиссия 0.00323165 USDT, всего списано 6.46652265 USDT)"
+    ), "{text}");
+    assert_eq!(telegram(&text).matches("Исходная покупка").count(), 1);
 }
 
 #[test]

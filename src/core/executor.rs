@@ -565,10 +565,7 @@ async fn run(
             crate::notify::human::venue(&d.buy_on.0),
             crate::notify::human::qty(r.avg_price)
         ))
-        .kv(
-            "Сумма",
-            crate::notify::human::usd(r.filled_qty * r.avg_price),
-        )
+        .card(super::deal_card::card(&deal))
         .kv(
             "План",
             crate::notify::human::signed_usd(deal.plan_profit_usd),

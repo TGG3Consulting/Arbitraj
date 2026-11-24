@@ -23,12 +23,26 @@ pub struct DealCard {
     pub path: String,
     /// «монета: 1234 PIG на DEX (кошелёк w2)» / «в пути: перевод с BingX» / «монет нет — сделка закрыта».
     pub now: String,
+    /// Фактическая исходная покупка до переводов и продаж.
+    pub purchase: String,
+}
+
+impl DealCard {
+    pub(super) fn lines(&self) -> [(&'static str, &str); 4] {
+        [
+            (COIN, &self.coin),
+            (PATH, &self.path),
+            (NOW, &self.now),
+            (PURCHASE, &self.purchase),
+        ]
+    }
 }
 
 /// Подписи строк карточки в тексте алерта (порядок — как в шаблоне).
 pub const COIN: &str = "Монета";
 pub const PATH: &str = "Путь";
 pub const NOW: &str = "Где сейчас";
+pub const PURCHASE: &str = "Исходная покупка";
 /// Подпись строки «где монеты» в записях экрана (core/manual_rows.rs) — при вставленной «Где сейчас» убирается.
 pub const COINS: &str = "Монеты";
 /// Подпись строки id сделки (Msg::id, notify/human_msg.rs).
@@ -69,7 +83,8 @@ pub fn deal_id(plain: &str) -> Option<&str> {
 /// Возвращает: текст. Ошибок нет.
 pub fn enrich(plain: &str, card: &DealCard) -> String {
     let has = |label: &str| plain.lines().any(|l| l.starts_with(&format!("{label}: ")));
-    let extra: Vec<String> = [(COIN, &card.coin), (PATH, &card.path), (NOW, &card.now)]
+    let extra: Vec<String> = card
+        .lines()
         .into_iter()
         .filter(|(l, v)| !v.is_empty() && !has(l))
         .map(|(l, v)| format!("{l}: {v}"))

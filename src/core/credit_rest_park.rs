@@ -67,7 +67,8 @@ pub async fn park(core: &Core, deal: &mut Deal, why: &str) {
         None,
     ))
     .await;
-    Box::pin(deps.notify("deal.credit_hold", Some(&deal.at.0), &text)).await
+    let alert = format!("{}: {text}", deal.id);
+    Box::pin(deps.notify("deal.credit_hold", Some(&deal.at.0), &alert)).await
 }
 
 /// Что делает: круг сверки (шестое ревью С-3, седьмое С-3) — остановленные сделки с остатком на бирже `v`: по каждой

@@ -28,7 +28,12 @@ pub async fn send(core: &Core, deal: &Deal, why: &str) {
         None => crate::notify::routes::Tag::Plain,
     };
     // Решение 340: копия сделки и карточка — на момент закрытия.
-    let snap = crate::notify::alert_card::Snap::of(&deal.id, Some(super::deal_card::card(deal)));
+    let card = super::deal_card::with_original(deal, |id| {
+        super::engine::lk(&core.inner.deals)
+            .get(id)
+            .and_then(super::deal_card::recorded_purchase)
+    });
+    let snap = crate::notify::alert_card::Snap::of(&deal.id, Some(card));
     let n = core.inner.deps.notifier.clone();
     let v = deal.direction.buy_on.0.clone();
     let (c, d, w, nn, vv) = (

@@ -10,7 +10,7 @@
 //! Настройки: нет.
 
 use super::alert::{self as t, BOT_LABELS, FIGURE_LABELS};
-use super::alert_card::{COIN, DEAL, DealCard, NOW, PATH};
+use super::alert_card::{DEAL, DealCard};
 use super::human::venue;
 
 /// Сообщение алерта по шаблону решения 251. Без повторов строк.
@@ -133,7 +133,7 @@ impl Msg {
             out.push(format!("{DEAL}: {id}"));
         }
         if let Some(c) = &self.card {
-            for (l, v) in [(COIN, &c.coin), (PATH, &c.path), (NOW, &c.now)] {
+            for (l, v) in c.lines() {
                 if !v.is_empty() {
                     out.push(format!("{l}: {v}"));
                 }

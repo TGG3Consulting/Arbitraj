@@ -82,7 +82,8 @@ async fn deliver_value(core: &Core, deal: &mut Deal) -> Result<Decimal, String> 
                 // Ревью t238: монета частичной покупки лежит без хеджа — человеку сразу (уведомления не держат сделку).
                 let text = waits_text(deal, &id);
                 let at = deal.direction.buy_on.0.clone();
-                core.inner.deps.notify(WAITS, Some(&at), &text).await;
+                let alert = format!("{}: {text}", deal.id);
+                core.inner.deps.notify(WAITS, Some(&at), &alert).await;
                 noted = Some(id);
             }
             wake.await;

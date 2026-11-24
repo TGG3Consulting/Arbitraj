@@ -145,17 +145,24 @@ async fn full_queue_loses_with_record() {
 #[tokio::test]
 async fn snapshot_card_wins_over_fresh() {
     let fresh = DealCard {
+        purchase: "Свежая покупка".into(),
         coin: "CAKE".into(),
         path: "BingX → DEX".into(),
         now: "в пути".into(),
     };
     let at_event = DealCard {
+        purchase: "501.09 AI на MEXC за 6.46 USDT".into(),
         now: "монета: 10 CAKE на BingX".into(),
         ..fresh.clone()
     };
     let f = fresh.clone();
     alert_card::install(move |id| (id == "D1").then(|| f.clone()));
     let snap = Snap::of("D1", Some(at_event.clone()));
+    let html = alert_card::scoped(snap.clone(), async {
+        arb::notify::alert::telegram("Тревога\nСделка: D1")
+    })
+    .await;
+    assert!(html.contains("<b>Исходная покупка:</b> 501.09 AI на MEXC за 6.46 USDT"));
     let got = alert_card::scoped(snap, async { alert_card::at_event("D1") }).await;
     assert_eq!(got, Some(at_event), "в задании — снимок на момент события");
     assert_eq!(

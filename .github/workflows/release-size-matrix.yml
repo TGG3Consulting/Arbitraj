@@ -78,8 +78,31 @@ jobs:
             native-route-meta.json
             native-route.jsonl
           if-no-files-found: error
+      - name: Cross-replay recorded trades on native cost and size code
+        if: contains(github.ref_name, '-stored-')
+        shell: bash
+        run: |
+          set -eo pipefail
+          python harness/tools/release_size_matrix/stored_compare.py release harness/tools/release_size_matrix/stored_cases.json > stored-meta.json
+          expected=$(python -c 'import json; print(json.load(open("stored-meta.json")).get("expected_rows", 0))')
+          if [[ "$expected" != 0 ]]; then
+            (cd release && cargo test --locked --test core_size_stored_compare stored_trade_matrix -- --exact --nocapture) > "$RUNNER_TEMP/stored.log" 2>&1 || {
+              grep -m 15 -A 4 -E 'error(\[E[0-9]+\])?:|panicked at|assertion|FAILED' "$RUNNER_TEMP/stored.log" | head -n 80 || true
+              exit 1
+            }
+            sed -n 's/^STORED_TRADE_MATRIX //p' "$RUNNER_TEMP/stored.log" > stored-replay.jsonl
+            test "$(wc -l < stored-replay.jsonl)" -eq "$expected"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: contains(github.ref_name, '-stored-')
+        with:
+          name: stored-replay-${{ matrix.sha }}
+          path: |
+            stored-meta.json
+            stored-replay.jsonl
+          if-no-files-found: error
       - name: Run native size selection against the common cases
-        if: "!contains(github.ref_name, '-native-')"
+        if: "!contains(github.ref_name, '-native-') && !contains(github.ref_name, '-stored-')"
         shell: bash
         working-directory: release
         run: |
@@ -95,7 +118,7 @@ jobs:
           sed -n 's/^SIZE_MATRIX //p' "$RUNNER_TEMP/replay.log" > ../replay.jsonl
           test "$(wc -l < ../replay.jsonl)" -eq "$expected"
       - uses: actions/upload-artifact@v4
-        if: "!contains(github.ref_name, '-native-')"
+        if: "!contains(github.ref_name, '-native-') && !contains(github.ref_name, '-stored-')"
         with:
           name: replay-${{ matrix.sha }}
           path: replay.jsonl

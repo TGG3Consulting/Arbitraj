@@ -38,12 +38,28 @@ use super::engine::{Core, lk};
 /// тикеру и этой сети (dirctx_venue::quote_network). Было: сеть прямо из venue.bsc_network — у площадки, чья запись
 /// справочника названа иначе, максимум брался из другой записи или не находился. Принимает: ядро, площадку.
 /// Возвращает: максимум; нет данных (DEX, справочника нет, сеть не найдена) или 0 — None. Ошибок нет.
-pub(super) fn max_withdraw(core: &Core, v: &VenueId) -> Option<Decimal> {
-    let usdt = super::usdt_return::usdt(core, v).ok()?;
-    let net = super::transfers::network(core, &usdt, v).ok()?;
-    super::dirctx_venue::quote_network(core, v, &usdt.ticker, &net)
+pub(super) fn return_parts(
+    core: &Core,
+    v: &VenueId,
+    total: Decimal,
+) -> (Option<Decimal>, Vec<(VenueId, Decimal)>) {
+    let info = super::usdt_return::usdt(core, v).ok().and_then(|usdt| {
+        let net = super::transfers::network(core, &usdt, v).ok()?;
+        super::dirctx_venue::quote_network(core, v, &usdt.ticker, &net)
+    });
+    let max = info
+        .as_ref()
         .and_then(|i| i.withdraw_max)
-        .filter(|m| !m.is_zero())
+        .filter(|m| !m.is_zero());
+    let split = match info.filter(|i| i.use_net_withdrawal_budget) {
+        Some(i) => super::withdraw_amount::group_parts(total, &i)
+            .unwrap_or_else(|_| vec![total])
+            .into_iter()
+            .map(|q| (v.clone(), q))
+            .collect(),
+        None => pieces(v, total, max),
+    };
+    (max, split)
 }
 
 /// Что делает: сумма общего возврата кусками, каждый НЕ БОЛЬШЕ максимума вывода (ревью 4, Н10): кусок —
@@ -136,7 +152,7 @@ pub(super) async fn flush(core: &Core, g: &str, parts: Vec<Part>, was: bool) {
         )
     };
     lead.note(format!("{why} (решение 394)"));
-    let max = max_withdraw(core, &bearer.from);
+    let (max, split) = return_parts(core, &bearer.from, total);
     let mut jobs = Box::pin(super::usdt_return_deal::start_parts(
         core,
         &mut lead,
@@ -144,7 +160,6 @@ pub(super) async fn flush(core: &Core, g: &str, parts: Vec<Part>, was: bool) {
     ))
     .await;
     // Ревью 3, Б1: выше максимума вывода — куски по очереди в ОДНОЙ задаче и одной части учёта (usdt_return_pieces.rs).
-    let split = pieces(&bearer.from, total, max);
     if split.len() > 1
         && let Some(j) = jobs.first_mut()
     {

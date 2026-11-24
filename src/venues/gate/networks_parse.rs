@@ -116,6 +116,7 @@ pub fn parse_networks(
                     && !off("withdraw_disabled")
                     && !off("withdraw_delayed"),
                 withdraw_fee: if pct_unclear { None } else { fee },
+                use_net_withdrawal_budget: false,
                 withdraw_fee_pct: match pct {
                     Pct::Share(v) => Some(v),
                     _ => None,

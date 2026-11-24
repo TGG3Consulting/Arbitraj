@@ -30,6 +30,11 @@ pub struct CoinNetworkInfo {
     /// transfer.credit_amount_tolerance_pct).
     #[serde(default)]
     pub withdraw_fee_pct: Option<Decimal>,
+    /// Use the shared budget calculation: reserve a fixed fee, then apply API limits
+    /// and precision to the remaining wire amount. False retains the adapter's
+    /// existing contract, including adapters that already normalize a separate fee.
+    #[serde(default)]
+    pub use_net_withdrawal_budget: bool,
     pub withdraw_min: Option<Decimal>,
     pub withdraw_max: Option<Decimal>,
     /// Минимальный депозит (решение 35: меньше — сделки нет); None — площадка не сообщила.
@@ -139,6 +144,7 @@ mod tests {
             deposit_enabled: true,
             withdraw_enabled: true,
             withdraw_fee: fixed.map(d),
+            use_net_withdrawal_budget: false,
             withdraw_fee_pct: pct.map(d),
             withdraw_min: None,
             withdraw_max: None,
@@ -150,7 +156,66 @@ mod tests {
         }
     }
 
-    /// Решение 199: фикс + доля × сумма; без доли — только фикс; без фикса — неизвестна.
+    /// Купленный остаток включает комиссию, ограничения сети действуют на отправляемую сумму.
+    #[test]
+    fn net_budget_reserves_one_fee_before_wire_precision_and_limits() {
+        use crate::core::withdraw_amount::{amounts, for_network};
+        let d = |s: &str| s.parse::<Decimal>().unwrap();
+        let mut i = info(Some("31.454144"), None);
+        i.use_net_withdrawal_budget = true;
+        i.withdraw_precision = Some(6);
+        let xter = amounts(d("10039.88"), &i).unwrap();
+        assert_eq!(
+            (xter.wire, xter.fee, xter.debit),
+            (d("10008.425856"), d("31.454144"), d("10039.88"))
+        );
+        i.withdraw_fee = Some(d(".009"));
+        i.withdraw_precision = Some(2);
+        i.withdraw_min = Some(d("1.01"));
+        i.withdraw_max = Some(d("1.01"));
+        let exact = amounts(d("1.019"), &i).unwrap();
+        assert_eq!((exact.wire, exact.debit), (d("1.01"), d("1.019")));
+        assert!(amounts(d("1.018"), &i).is_err());
+        assert_eq!(amounts(d("1.028"), &i).unwrap().debit, d("1.019"));
+        assert!(amounts(d("1.029"), &i).is_err());
+        i.withdraw_fee = Some(Decimal::ZERO);
+        assert_eq!(amounts(d("1.019"), &i).unwrap().debit, d("1.01"));
+        let mut saved = serde_json::to_value(&i).unwrap();
+        saved
+            .as_object_mut()
+            .unwrap()
+            .remove("use_net_withdrawal_budget");
+        let legacy: CoinNetworkInfo = serde_json::from_value(saved).unwrap();
+        assert!(for_network(d("1.019"), Some(&legacy)).unwrap().is_none());
+        assert!(!crate::core::registry_sync::same_lists(&[legacy], &[i]));
+    }
+
+    #[test]
+    fn grouped_net_budgets_use_one_fee_when_the_full_wire_fits() {
+        use crate::core::withdraw_amount::{amounts, group_parts};
+        let d = |s: &str| s.parse::<Decimal>().unwrap();
+        let mut i = info(Some(".009"), None);
+        i.use_net_withdrawal_budget = true;
+        i.withdraw_max = Some(d("100"));
+        i.withdraw_precision = Some(2);
+        let total = d("100.018");
+        assert_eq!(group_parts(total, &i).unwrap(), vec![total]);
+        let total = d("200.027");
+        let parts = group_parts(total, &i).unwrap();
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts.iter().copied().sum::<Decimal>(), total);
+        assert_eq!(
+            parts
+                .iter()
+                .map(|p| amounts(*p, &i).unwrap().wire)
+                .sum::<Decimal>(),
+            d("200")
+        );
+        i.withdraw_min = Some(d("90"));
+        i.withdraw_fee = Some(d("1"));
+        assert!(group_parts(d("103"), &i).is_err());
+    }
+
     #[test]
     fn fee_for_fixed_plus_share() {
         let a = "1000".parse::<Decimal>().unwrap();

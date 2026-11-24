@@ -160,6 +160,7 @@ pub fn usdt_net() -> CoinNetworkInfo {
         deposit_enabled: true,
         withdraw_enabled: true,
         withdraw_fee: num("withdrawFee"),
+        use_net_withdrawal_budget: false,
         withdraw_fee_pct: None,
         withdraw_min: num("withdrawMin"),
         withdraw_max: num("withdrawMax"),

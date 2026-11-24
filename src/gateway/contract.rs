@@ -384,6 +384,22 @@ pub trait Venue: Send + Sync {
     /// Возвращает: созданный перевод. Ошибки: адрес, права, баланс, вывод закрыт.
     async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer>;
 
+    /// Использует общий расчёт перечисляемой суммы из бюджета с фиксированной комиссией.
+    /// Для такого адаптера перед выводом нужны свежие условия даже после загрузки старого справочника.
+    fn use_net_withdrawal_budget(&self) -> bool {
+        false
+    }
+
+    /// Вывод по тем же сетевым условиям, по которым было зарегистрировано ожидание зачисления.
+    /// Остальные адаптеры сохраняют свой действующий порядок подготовки вывода.
+    async fn withdraw_with_network(
+        &self,
+        req: WithdrawRequest,
+        _network: &CoinNetworkInfo,
+    ) -> GatewayResult<Transfer> {
+        self.withdraw(req).await
+    }
+
     /// Требуется ли до покупки проверить адрес получателя в адресной книге отправителя.
     fn requires_withdraw_destination_check(&self) -> bool {
         false

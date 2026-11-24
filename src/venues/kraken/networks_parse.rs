@@ -130,6 +130,7 @@ pub fn parse(
             deposit_enabled: dep_on,
             withdraw_enabled: wd_ok && wm.is_some(),
             withdraw_fee: fee,
+            use_net_withdrawal_budget: false,
             withdraw_fee_pct: None,
             withdraw_min: wm.and_then(|m| m.min),
             withdraw_max: wm.and_then(|m| m.max),

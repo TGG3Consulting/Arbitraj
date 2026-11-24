@@ -188,6 +188,7 @@ fn network(
         deposit_enabled: allowed("depositStatus"),
         withdraw_enabled: allowed("withdrawStatus"),
         withdraw_fee: fee,
+        use_net_withdrawal_budget: true,
         withdraw_fee_pct: None,
         withdraw_min: num::dec_opt(n, "minWithdrawAmt")?,
         withdraw_max: num::dec_opt(n, "maxWithdrawAmt")?,

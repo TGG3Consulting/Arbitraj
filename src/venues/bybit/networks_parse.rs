@@ -98,6 +98,7 @@ fn one(
         // Пустая комиссия вывода — монета вывод не поддерживает (документация).
         withdraw_enabled: flag(n, "chainWithdraw")? && fee.is_some(),
         withdraw_fee: fee,
+        use_net_withdrawal_budget: false,
         withdraw_fee_pct: pct,
         withdraw_min: num::dec_opt(n, "withdrawMin")?,
         withdraw_max: max,

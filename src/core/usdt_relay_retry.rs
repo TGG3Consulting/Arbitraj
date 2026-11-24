@@ -64,15 +64,15 @@ async fn attempts_loop(
     loop {
         n += 1;
         // Ревью CI t191 (переполнение стека): ожидание баланса — будущее в куче.
-        Box::pin(wait_balance(
+        let budget = Box::pin(wait_balance(
             core,
             (from, acc),
-            (id, &asset.ticker),
+            (id, asset),
             amount,
             own.as_deref(),
         ))
         .await?;
-        match super::transfers::send_as(core, id, from, to, asset, amount, acc, gas).await {
+        match super::transfers::send_as(core, id, from, to, asset, budget, acc, gas).await {
             Ok(r) => return Ok(r),
             Err(e) if e.code == Some(ErrorCode::SwapReverted) && n < attempts => {
                 core.inner
@@ -108,10 +108,11 @@ async fn attempts_loop(
 async fn wait_balance(
     core: &Core,
     (venue, acc): (&VenueId, Option<&DexAccountId>),
-    (id, ticker): (&str, &str),
+    (id, asset): (&str, &Asset),
     amount: Decimal,
     own: Option<&str>,
-) -> Result<(), OpError> {
+) -> Result<Decimal, OpError> {
+    let ticker = &asset.ticker;
     let s = &core.inner.deps.settings;
     let wait = match (
         s.integer("usdt_return.balance_wait_ms", At::default()),
@@ -122,14 +123,26 @@ async fn wait_balance(
     };
     let reserved = |c: &Core| super::usdt_hold::held_except(c, venue, acc, own);
     if wait.is_none() && reserved(core).amount.is_zero() {
-        return Ok(());
+        return Ok(amount);
     }
     let (wait, poll) = wait.unwrap_or((0, 0));
+    let debit = super::transfers::network(core, asset, venue)
+        .ok()
+        .and_then(|net| super::dirctx_venue::quote_network(core, venue, ticker, &net))
+        .and_then(|info| {
+            super::withdraw_amount::for_network(amount, Some(&info))
+                .ok()
+                .flatten()
+        })
+        .map_or(amount, |a| a.debit);
     let started = Instant::now();
     loop {
         let h = reserved(core);
         let last = match super::limits::free_now(core, venue, acc, ticker).await {
-            Ok(free) if super::usdt_hold::spendable(free, &h) >= amount => return Ok(()),
+            Ok(free) if super::usdt_hold::spendable(free, &h) >= debit => {
+                // Retain the reservation even if terms change before the withdrawal.
+                return Ok(amount.min(super::usdt_hold::spendable(free, &h)));
+            }
             // Требование Тиграна 18.11: сколько хотели перегнать, сколько на счёте, сколько и чьё в резерве, чего
             // не хватает.
             Ok(free) => format!(

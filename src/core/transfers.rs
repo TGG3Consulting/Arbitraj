@@ -347,7 +347,31 @@ async fn go(
     // Решение 104: сумма вывода — вниз до точности вывода биржи (withdrawPrecision из справочника сетей; так же считает
     // расчёт, costs_withdraw::floor_precision). Без этого хвост вида 14.425559999999999999 (комиссия покупки в монете
     // пришла числом с плавающей точкой) — отказ BingX 100400 «decimal precision … Precision: 8».
-    let qty = floored_on(core, from, asset, &net_from, qty);
+    // Match the credit ticket to the same wire amount that will be submitted.
+    let (qty, wire, prepared_network) = if gw_from.use_net_withdrawal_budget() {
+        let networks = gw_from
+            .coin_networks_of(&on_from.ticker)
+            .await
+            .map_err(|e| e.message)?;
+        let info = networks
+            .into_iter()
+            .find(|i| {
+                i.venue == *from
+                    && i.asset.ticker == on_from.ticker
+                    && i.network == net_from
+                    && i.use_net_withdrawal_budget
+            })
+            .ok_or_else(|| {
+                format!(
+                    "{}: нет условий вывода {} в сети {net_from}",
+                    from.0, on_from.ticker
+                )
+            })?;
+        let amounts = super::withdraw_amount::amounts(qty, &info).map_err(|e| e.to_string())?;
+        (amounts.debit, Some(amounts.wire), Some(info))
+    } else {
+        (floored_on(core, from, asset, &net_from, qty), None, None)
+    };
     if qty <= Decimal::ZERO {
         return Err(OpError::from(format!(
             "{}: сумма вывода {} после округления до точности вывода — ноль",
@@ -363,6 +387,7 @@ async fn go(
         &net_from,
         qty,
         units.as_ref(),
+        wire,
     )
     .await;
     let units = units.ok();
@@ -391,7 +416,11 @@ async fn go(
         attempt += 1;
         // Решение 180: лимит выводов биржи-отправителя (withdraw_limit.rs; не задан — сразу, как раньше).
         super::withdraw_limit::take(core, deal, from, &on_from.ticker).await;
-        match gw_from.withdraw(req.clone()).await {
+        let result = match &prepared_network {
+            Some(info) => gw_from.withdraw_with_network(req.clone(), info).await,
+            None => gw_from.withdraw(req.clone()).await,
+        };
+        match result {
             Ok(t) => break t,
             Err(e) if super::transfer_locked::again(core, deal, from, &e, &mut locked).await => {}
             Err(e) => match rules_apply::on_error(core, "Вывод", from, Some(deal), &e, attempt)
@@ -619,7 +648,11 @@ async fn go(
         to,
         asset,
         f,
-        qty,
+        if prepared_network.is_some() {
+            sent.amount
+        } else {
+            qty
+        },
         a,
         fee,
         Some(proof),

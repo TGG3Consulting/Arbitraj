@@ -120,6 +120,7 @@ fn network(
         deposit_enabled: num::flag(n, "isDepositEnabled")?,
         withdraw_enabled: num::flag(n, "isWithdrawEnabled")?,
         withdraw_fee: min_fee,
+        use_net_withdrawal_budget: false,
         withdraw_fee_pct: rate,
         withdraw_min: num::dec_opt(n, "withdrawalMinSize")?,
         withdraw_max: num::dec_opt(n, "maxWithdraw")?,

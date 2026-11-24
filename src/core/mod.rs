@@ -450,6 +450,7 @@ pub mod window_tap;
 pub mod window_view;
 pub mod window_worker;
 pub mod withdraw_after;
+pub mod withdraw_amount;
 pub mod withdraw_block;
 pub mod withdraw_limit;
 pub mod withdraw_limit_pause;

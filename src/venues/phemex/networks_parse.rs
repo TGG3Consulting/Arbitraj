@@ -127,6 +127,7 @@ fn network(
         deposit_enabled: active(d),
         withdraw_enabled: active(w),
         withdraw_fee: dec(w, "withdrawFeeRv")?,
+        use_net_withdrawal_budget: false,
         withdraw_fee_pct: None,
         withdraw_min: dec(w, "minWithdrawAmountRv")?,
         withdraw_max: None,

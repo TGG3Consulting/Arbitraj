@@ -132,6 +132,16 @@ pub(super) async fn relay_try(
     let a = usdt(core, from)?;
     let sent_q = super::transfers::floored(core, from, &a, amount);
     let (sent, t) = super::usdt_relay_retry::send(core, id, from, to, acc, &a, amount).await?;
+    let sent_q = if deps
+        .gw
+        .get(from)
+        .await
+        .is_ok_and(|g| g.use_net_withdrawal_budget())
+    {
+        sent.amount
+    } else {
+        sent_q
+    };
     // Решение 236: газ кошелька DEX (BNB) — в USDT по живой цене; комиссия в USDT уже в «ушло − зачислено».
     let (fee_usd, fee_note) =
         match super::deal_return_cost::fee_usd(core, from, &a.ticker, sent.fee.as_ref()).await {

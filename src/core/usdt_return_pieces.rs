@@ -215,11 +215,7 @@ pub(super) fn start_manual(
     if super::usdt_return_deal::return_block(core, &d, from, to).is_some() {
         return false;
     }
-    let split = super::coin_group_flush::pieces(
-        from,
-        amount,
-        super::coin_group_flush::max_withdraw(core, from),
-    );
+    let (_, split) = super::coin_group_flush::return_parts(core, from, amount);
     let Ok(acc) = super::dex_account::of(core, &d) else {
         return false;
     };

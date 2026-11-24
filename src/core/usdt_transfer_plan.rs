@@ -152,8 +152,12 @@ pub async fn quote(
         (Some(n), r) => Some(format!("{n}{r}")),
         (None, r) => Some(r.trim_start_matches(" — ").to_string()),
     };
-    let amount =
-        super::costs_withdraw::floor_precision(amount.unwrap_or(withdrawable), fi.as_ref());
+    let budget = amount.unwrap_or(withdrawable);
+    let sizes =
+        super::withdraw_amount::for_network(budget, fi.as_ref()).map_err(|e| e.to_string())?;
+    let amount = sizes
+        .map(|s| s.debit)
+        .unwrap_or_else(|| super::costs_withdraw::floor_precision(budget, fi.as_ref()));
     // Решение 199: процентная часть комиссии — от суммы этого перевода (фиксированная проверена выше).
     let fee = fee.and(fi.as_ref().and_then(|i| i.fee_for(amount)));
     let lim = Limits {

@@ -41,15 +41,21 @@ fn cex_costs(
         )
     })?;
     venue::fresh(core, &info)?;
-    let qty = super::costs_withdraw::floor_precision(qty, Some(&info));
+    let amounts =
+        super::withdraw_amount::for_network(qty, Some(&info)).map_err(|e| e.to_string())?;
+    let qty = amounts
+        .as_ref()
+        .map(|a| a.debit)
+        .unwrap_or_else(|| super::costs_withdraw::floor_precision(qty, Some(&info)));
+    let wire = amounts.map_or(qty, |a| a.wire);
     if let Some(min) = info.withdraw_min
-        && qty < min
+        && wire < min
     {
         return Err(format!("вывод {qty} меньше минимума {min}"));
     }
     if let Some(max) = info.withdraw_max
         && !max.is_zero()
-        && qty > max
+        && wire > max
     {
         return Err(format!("вывод {qty} больше максимума {max}"));
     }

@@ -123,6 +123,7 @@ fn network(
         deposit_enabled: num::flag(n, "rechargeable")?,
         withdraw_enabled: num::flag(n, "withdrawable")?,
         withdraw_fee: fee,
+        use_net_withdrawal_budget: false,
         withdraw_fee_pct: extra,
         withdraw_min: num::dec_opt(n, "minWithdrawAmount")?,
         withdraw_max: None,

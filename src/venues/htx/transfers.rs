@@ -10,8 +10,7 @@
 //! - Create a Withdraw Request POST /v1/dw/withdraw/api/create («20times/2s», право Withdraw): address*, currency*,
 //!   amount*, fee («>=0», «check handling fees first»), chain (без него у USDT — ERC20: передаётся всегда), addr-tag,
 //!   client-order-id («repeated client-order-id … the previously successful order ID is returned»); data — id вывода
-//!   (целое). «Only support the existed addresses in your withdraw address list». Входит ли fee в amount — не описано
-//!   (вопрос Тиграну, проверить малым выводом).
+//!   (целое). В POST amount — перевод, fee передаётся отдельно (CCXT PR 16140, HTX withdraw includeFee).
 //! - Query Withdraw Address GET /v2/account/withdraw/address?currency=&chain=&limit= («[1-500]») — data[] {address,
 //!   addressTag, chain, note}; адрес «must first be added in the Web UI».
 //! - Query Withdrawal Order by Client Order ID GET /v1/query/withdraw/client-order-id?clientOrderId= («max 32 char»).
@@ -21,9 +20,10 @@
 
 use chrono::Utc;
 use reqwest::Method;
-use serde_json::{Value, json};
+use serde_json::Value;
 
-use crate::core::types::{Transfer, TransferStatus, WithdrawRequest};
+use crate::core::types::{CoinNetworkInfo, Transfer, TransferStatus, WithdrawRequest};
+use crate::core::withdraw_amount;
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::storage::journal::Level;
 
@@ -38,7 +38,11 @@ const SEP: char = '/';
 
 /// Вывод. Принимает: запрос ядра (сеть — сеть ядра). Возвращает: перевод Pending с «<id>/<client-order-id>».
 /// Ошибки: адрес не в списке вывода, комиссия неизвестна, отказ HTX, «итог неизвестен» (и не найден).
-pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer> {
+pub async fn withdraw(
+    ctx: &Ctx,
+    req: WithdrawRequest,
+    info: &CoinNetworkInfo,
+) -> GatewayResult<Transfer> {
     if req.deal_id.is_empty() || req.amount <= rust_decimal::Decimal::ZERO {
         return Err(reject(
             ctx,
@@ -49,50 +53,73 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         ));
     }
     let t = &req.asset.ticker;
+    if info.venue != req.venue
+        || info.asset.ticker != *t
+        || info.network != req.network
+        || !info.use_net_withdrawal_budget
+        || !info.withdraw_enabled
+        || matches!((req.asset.contract, info.asset.contract), (Some(a), Some(b)) if a != b)
+    {
+        return Err(super::errors::bad(
+            "параметры вывода принадлежат другой сети или монете",
+            "",
+        ));
+    }
+    let amounts = withdraw_amount::amounts(req.amount, info).map_err(|e| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::BadResponse,
+            None,
+            e.to_string(),
+        ))
+    })?;
     let chain = wallet::transfer_chain(ctx, t, &req.network).await?;
-    let fee = wallet::withdraw_fee(ctx, t, &req.network).await?;
     withdraw_address::check(ctx, t, &chain, &req.address).await?;
     let cid = order_rules::client_oid('w', &req.deal_id, MAX_WITHDRAW_CID);
-    let body = json!({
-        "address": req.address,
-        "currency": currency(t),
-        "amount": req.amount.normalize().to_string(),
-        "fee": fee.normalize().to_string(),
-        "chain": chain.coin,
-        "client-order-id": cid,
-    });
+    let submitted = super::withdraw_record::Submitted {
+        currency: currency(t),
+        chain: chain.coin,
+        wire: amounts.wire,
+        fee: amounts.fee,
+    };
+    let terms = serde_json::to_string(&submitted)
+        .map_err(|e| super::errors::bad("не записаны параметры вывода HTX", &e.to_string()))?;
+    let body = submitted.body(&req.address, &cid);
     let path = "/v1/dw/withdraw/api/create";
     let sent = rest::signed(ctx, Method::POST, path, vec![], Some(body), Op::Withdraw).await;
-    let id = match sent.map(|d| num::to_dec(&d)) {
-        Ok(Some(id)) => id.to_string(),
-        Ok(None) => find_id(ctx, &cid).await.ok_or_else(|| {
+    let sent = sent.and_then(|d| {
+        num::to_dec(&d).map(|n| n.to_string()).ok_or_else(|| {
             ctx.tag(GatewayError::new(
                 ErrorCode::OutcomeUnknown,
                 None,
-                format!("Вывод {cid}: ответ без id — итог неизвестен"),
+                "ответ HTX на вывод без id",
             ))
-        })?,
-        Err(e) if e.code == ErrorCode::OutcomeUnknown => find_id(ctx, &cid).await.ok_or(e)?,
-        Err(mut e) => {
+        })
+    });
+    let id = super::withdraw_record::accepted(sent, find_id(ctx, &cid))
+        .await
+        .map_err(|mut e| {
             // Ровно поля состоявшегося запроса. Остаток для торговли и лимит вывода HTX могут отличаться.
             e.message = format!(
-                "{}; заявка HTX {} в сети {}: amount={}, fee={}",
+                "{}; заявка HTX {cid} {} в сети {}: amount={}, fee={}",
                 e.message,
                 t,
-                chain.coin,
-                req.amount.normalize(),
-                fee.normalize()
+                submitted.chain,
+                submitted.wire.normalize(),
+                submitted.fee.normalize()
             );
-            return Err(e);
-        }
-    };
+            e
+        })?;
+    let mut asset = req.asset;
+    if asset.contract != info.asset.contract {
+        asset.contract = None;
+    }
     Ok(Transfer {
         venue: ctx.venue(),
-        asset: req.asset,
+        asset,
         network: req.network,
-        amount: req.amount,
+        amount: amounts.debit,
         status: TransferStatus::Pending,
-        venue_ref: format!("{id}{SEP}{cid}"),
+        venue_ref: format!("{id}{SEP}{cid}{SEP}{terms}"),
         tx_hash: None,
         fee: None,
         updated_at: Utc::now(),
@@ -115,12 +142,21 @@ async fn find_id(ctx: &Ctx, cid: &str) -> Option<String> {
 
 /// Статус вывода по «<id>/<client-order-id>». Ошибки: не найден, отказ (провал), неизвестное состояние, связь.
 pub async fn withdrawal_status(ctx: &Ctx, venue_ref: &str) -> GatewayResult<Transfer> {
-    let Some((_, cid)) = venue_ref.split_once(SEP) else {
+    let mut parts = venue_ref.splitn(3, SEP);
+    let id = parts.next().unwrap_or_default();
+    let Some(cid) = parts.next() else {
         return Err(super::errors::bad(
             &format!("ссылка вывода {venue_ref} не вида «id/client-order-id»"),
             "",
         ));
     };
+    let submitted = parts
+        .next()
+        .map(serde_json::from_str::<super::withdraw_record::Submitted>)
+        .transpose()
+        .map_err(|e| {
+            super::errors::bad("нечитаемые параметры принятого вывода HTX", &e.to_string())
+        })?;
     let rec = by_client(ctx, cid).await.ok_or_else(|| {
         ctx.tag(GatewayError::new(
             ErrorCode::BadResponse,
@@ -128,6 +164,9 @@ pub async fn withdrawal_status(ctx: &Ctx, venue_ref: &str) -> GatewayResult<Tran
             format!("HTX: вывод {venue_ref} не найден по client-order-id"),
         ))
     })?;
+    if let Some(terms) = &submitted {
+        terms.check_identity(&rec, id, cid)?;
+    }
     let state = num::text(&rec, "state")?;
     let status = match state.as_str() {
         "verifying" | "submitted" | "reexamine" | "pass" | "pre-transfer" | "wallet-transfer" => {
@@ -155,7 +194,24 @@ pub async fn withdrawal_status(ctx: &Ctx, venue_ref: &str) -> GatewayResult<Tran
             ));
         }
     };
-    records::transfer(ctx, &rec, venue_ref, status)
+    let mut transfer = records::transfer(ctx, &rec, venue_ref, status)?;
+    if let Some(terms) = submitted {
+        transfer.amount = terms.debit_from_record(&rec)?;
+        if let Some(actual) = &transfer.fee
+            && actual.amount != terms.fee
+        {
+            ctx.log(
+                Level::Warn,
+                "venue.transfer",
+                format!(
+                    "Вывод HTX {id}, комиссия в заявке {}, факт {}, списано {}",
+                    terms.fee, actual.amount, transfer.amount
+                ),
+            )
+            .await;
+        }
+    }
+    Ok(transfer)
 }
 
 /// Ошибка WithdrawRejected с площадкой HTX.

@@ -343,6 +343,7 @@ fn net(fee: Option<Decimal>, pct: Option<Decimal>) -> arb::core::types::CoinNetw
         deposit_enabled: true,
         withdraw_enabled: true,
         withdraw_fee: fee,
+        use_net_withdrawal_budget: false,
         withdraw_fee_pct: pct,
         withdraw_min: None,
         withdraw_max: None,

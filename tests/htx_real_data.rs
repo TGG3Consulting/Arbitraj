@@ -185,6 +185,7 @@ fn recorded_coins_bsc() {
         .expect("CAKE в сети BSC");
     let want: alloy_primitives::Address = CAKE.parse().unwrap();
     assert_eq!(cake.asset.contract, Some(want));
+    assert!(cake.use_net_withdrawal_budget);
     assert!(p.chains.iter().any(|(t, n, _)| t == "CAKE" && *n == bsc));
 }
 

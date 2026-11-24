@@ -55,6 +55,7 @@ fn net(venue: &str, ticker: &str, fix: Decimal) -> CoinNetworkInfo {
         deposit_enabled: true,
         withdraw_enabled: true,
         withdraw_fee: Some(fix),
+        use_net_withdrawal_budget: false,
         withdraw_fee_pct: None,
         withdraw_min: None,
         withdraw_max: None,

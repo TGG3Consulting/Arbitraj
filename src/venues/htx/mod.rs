@@ -57,6 +57,7 @@ pub mod user_stream;
 pub mod user_stream_conn;
 pub mod wallet;
 mod withdraw_address;
+mod withdraw_record;
 pub mod ws;
 pub mod ws_conn;
 
@@ -203,7 +204,20 @@ impl Venue for Htx {
     }
 
     async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer> {
-        transfers::withdraw(&self.ctx, req).await
+        let info = wallet::withdraw_network(&self.ctx, &req.asset.ticker, &req.network).await?;
+        transfers::withdraw(&self.ctx, req, &info).await
+    }
+
+    fn use_net_withdrawal_budget(&self) -> bool {
+        true
+    }
+
+    async fn withdraw_with_network(
+        &self,
+        req: WithdrawRequest,
+        info: &CoinNetworkInfo,
+    ) -> GatewayResult<Transfer> {
+        transfers::withdraw(&self.ctx, req, info).await
     }
 
     fn requires_withdraw_destination_check(&self) -> bool {
@@ -225,6 +239,17 @@ impl Venue for Htx {
 
     async fn withdrawal_status(&self, venue_ref: &str) -> GatewayResult<Transfer> {
         transfers::withdrawal_status(&self.ctx, venue_ref).await
+    }
+
+    async fn withdrawal_status_for(&self, created: &Transfer) -> GatewayResult<Transfer> {
+        let mut found = transfers::withdrawal_status(&self.ctx, &created.venue_ref).await?;
+        if created.venue_ref.splitn(3, '/').count() == 3
+            && found.asset.ticker == created.asset.ticker
+        {
+            found.asset = created.asset.clone();
+            found.network = created.network.clone();
+        }
+        Ok(found)
     }
 
     async fn deposit_address(&self, asset: &Asset, network: &str) -> GatewayResult<String> {

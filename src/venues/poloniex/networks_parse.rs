@@ -119,6 +119,7 @@ fn network(
         deposit_enabled: !delisted && num::flag(n, "depositEnable")?,
         withdraw_enabled: !delisted && num::flag(n, "withdrawalEnable")?,
         withdraw_fee: num::dec_opt(n, "withdrawFee")?,
+        use_net_withdrawal_budget: false,
         withdraw_fee_pct: None,
         withdraw_min: num::dec_opt(n, "withdrawMin")?.filter(|m| *m > Decimal::ZERO),
         withdraw_max: None,

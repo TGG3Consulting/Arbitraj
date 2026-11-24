@@ -128,6 +128,9 @@ pub async fn return_b(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec<C
             ))
         })?;
         // Решение 118 (Я-12): минимум и максимум вывода USDT у B — иначе перегон отклоняется биржей уже после сделки.
+        if let Some(amounts) = super::withdraw_amount::for_network(amount, Some(info))? {
+            return Ok(vec![fee_line(info, amounts.debit)?]);
+        }
         if let Some(min) = info.withdraw_min
             && amount < min
         {

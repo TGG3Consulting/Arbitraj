@@ -47,8 +47,14 @@ pub(super) async fn calculate<S: Source>(
 ) -> Result<Sale, Fail> {
     let d = &cx.dir;
     let coin = d.asset.ticker.clone();
-    let to_send = floor_precision(held_qty, cx.a.info.as_ref());
-    cx.check_withdraw(to_send)?;
+    let to_send = match super::withdraw_amount::for_network(held_qty, cx.a.info.as_ref())? {
+        Some(amounts) => amounts.debit,
+        None => {
+            let to_send = floor_precision(held_qty, cx.a.info.as_ref());
+            cx.check_withdraw(to_send)?;
+            to_send
+        }
+    };
     let wc = stage(
         || format!("стоимость вывода {}", d.buy_on.0),
         src.withdraw(cx, to_send),

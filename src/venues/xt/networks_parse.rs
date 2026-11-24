@@ -163,6 +163,7 @@ fn one(
         deposit_enabled: deposit,
         withdraw_enabled: flag(n, "withdrawEnabled")?,
         withdraw_fee: num::dec_opt(n, "withdrawFeeAmount").map_err(e)?,
+        use_net_withdrawal_budget: false,
         withdraw_fee_pct: None,
         withdraw_min: num::dec_opt(n, "withdrawMinAmount").map_err(e)?,
         withdraw_max: None,

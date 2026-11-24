@@ -233,14 +233,7 @@ pub async fn withdraw_fee(
     ticker: &str,
     network: &str,
 ) -> GatewayResult<rust_decimal::Decimal> {
-    let list = coin_networks_of(ctx, ticker).await?;
-    let info = list.iter().find(|c| c.network == network).ok_or_else(|| {
-        ctx.tag(GatewayError::new(
-            ErrorCode::NotConfigured,
-            None,
-            format!("У {ticker} нет сети {network} в справочнике HTX"),
-        ))
-    })?;
+    let info = withdraw_network(ctx, ticker, network).await?;
     info.withdraw_fee.ok_or_else(|| {
         ctx.tag(GatewayError::new(
             ErrorCode::BadResponse,
@@ -251,4 +244,22 @@ pub async fn withdraw_fee(
             ),
         ))
     })
+}
+
+pub(super) async fn withdraw_network(
+    ctx: &Ctx,
+    ticker: &str,
+    network: &str,
+) -> GatewayResult<CoinNetworkInfo> {
+    coin_networks_of(ctx, ticker)
+        .await?
+        .into_iter()
+        .find(|c| c.network == network)
+        .ok_or_else(|| {
+            ctx.tag(GatewayError::new(
+                ErrorCode::NotConfigured,
+                None,
+                format!("У {ticker} нет сети {network} в справочнике HTX"),
+            ))
+        })
 }

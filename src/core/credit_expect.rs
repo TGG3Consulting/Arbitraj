@@ -58,7 +58,17 @@ pub async fn ticket(
     qty: Decimal,
 ) -> Option<Ticket> {
     let ratio = units(core, from, to, asset);
-    ticket_with_units(core, deal, (from, to), asset, net, qty, ratio.as_ref()).await
+    ticket_with_units(
+        core,
+        deal,
+        (from, to),
+        asset,
+        net,
+        qty,
+        ratio.as_ref(),
+        None,
+    )
+    .await
 }
 
 pub(super) async fn ticket_with_units(
@@ -69,6 +79,7 @@ pub(super) async fn ticket_with_units(
     net: &str,
     qty: Decimal,
     unit: Result<&UnitRatio, &String>,
+    wire: Option<Decimal>,
 ) -> Option<Ticket> {
     let at = At {
         venue: Some(&to.0),
@@ -84,9 +95,13 @@ pub(super) async fn ticket_with_units(
         return None;
     }
     let arrival = match unit {
-        Ok(r) => sender_amount(core, from, to, asset, net, qty)
-            .await
-            .and_then(|q| r.to_sell(q)),
+        Ok(r) => {
+            let sender = match wire {
+                Some(wire) => after_transfer_tax(core, to, asset, wire),
+                None => sender_amount(core, from, to, asset, net, qty).await,
+            };
+            sender.and_then(|q| r.to_sell(q))
+        }
         Err(why) => Err(why.clone()),
     };
     match arrival {
@@ -132,6 +147,11 @@ pub(super) async fn sender_amount(
 ) -> Result<Decimal, String> {
     let costs = match super::dirctx_venue::network(core, from, asset, net) {
         Some(info) => {
+            if let Some(amounts) =
+                super::withdraw_amount::for_network(qty, Some(&info)).map_err(|e| e.to_string())?
+            {
+                return after_transfer_tax(core, to, asset, amounts.wire);
+            }
             // Решение 199: фиксированная + доля суммы вывода (допущение — из суммы; сверка зачисления ловит иное).
             let fee = info.fee_for(qty).ok_or_else(|| {
                 format!(
@@ -175,4 +195,14 @@ fn positive(v: Decimal, asset: &Asset) -> Result<Decimal, String> {
             asset.ticker
         ))
     }
+}
+
+fn after_transfer_tax(
+    core: &Core,
+    to: &VenueId,
+    asset: &Asset,
+    wire: Decimal,
+) -> Result<Decimal, String> {
+    let tax = super::transfer_tax::pct(core, to, asset)?;
+    positive(wire * (Decimal::ONE - tax / Decimal::ONE_HUNDRED), asset)
 }

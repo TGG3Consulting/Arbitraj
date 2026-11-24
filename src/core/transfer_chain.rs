@@ -197,7 +197,9 @@ async fn shortfall(core: &Core, c: &Check, sender: Option<&Transfer>) {
             t,
             &l.asset,
             &l.net_from,
-            l.qty,
+            sender
+                .filter(|_| c.gw.use_net_withdrawal_budget())
+                .map_or(l.qty, |s| s.amount),
             l.credited.amount,
             sender
                 .and_then(|s| s.fee.as_ref())

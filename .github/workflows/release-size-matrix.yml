@@ -108,7 +108,7 @@ jobs:
             stored-replay.jsonl
           if-no-files-found: error
       - name: Cross-replay real trades on a verified fixed V2 route
-        if: contains(github.ref_name, '-fixedv2-')
+        if: contains(github.ref_name, '-fixedv2-') || contains(github.ref_name, '-fixedreal-')
         shell: bash
         run: |
           set -eo pipefail
@@ -123,7 +123,7 @@ jobs:
             test "$(wc -l < fixedv2-replay.jsonl)" -eq "$expected"
           fi
       - uses: actions/upload-artifact@v4
-        if: contains(github.ref_name, '-fixedv2-')
+        if: contains(github.ref_name, '-fixedv2-') || contains(github.ref_name, '-fixedreal-')
         with:
           name: fixedv2-replay-${{ matrix.sha }}
           path: |
@@ -131,7 +131,7 @@ jobs:
             fixedv2-replay.jsonl
           if-no-files-found: error
       - name: Cross-replay real trades on a verified fixed V3 route
-        if: contains(github.ref_name, '-fixedv3-')
+        if: contains(github.ref_name, '-fixedv3-') || contains(github.ref_name, '-fixedreal-')
         shell: bash
         run: |
           set -eo pipefail
@@ -146,7 +146,7 @@ jobs:
             test "$(wc -l < fixedv3-replay.jsonl)" -eq "$expected"
           fi
       - uses: actions/upload-artifact@v4
-        if: contains(github.ref_name, '-fixedv3-')
+        if: contains(github.ref_name, '-fixedv3-') || contains(github.ref_name, '-fixedreal-')
         with:
           name: fixedv3-replay-${{ matrix.sha }}
           path: |
@@ -154,7 +154,7 @@ jobs:
             fixedv3-replay.jsonl
           if-no-files-found: error
       - name: Run native size selection against the common cases
-        if: "!contains(github.ref_name, '-native-') && !contains(github.ref_name, '-stored-') && !contains(github.ref_name, '-fixedv2-') && !contains(github.ref_name, '-fixedv3-')"
+        if: "!contains(github.ref_name, '-native-') && !contains(github.ref_name, '-stored-') && !contains(github.ref_name, '-fixedv2-') && !contains(github.ref_name, '-fixedv3-') && !contains(github.ref_name, '-fixedreal-')"
         shell: bash
         working-directory: release
         run: |
@@ -203,7 +203,7 @@ jobs:
             percentage-gate-off.jsonl
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
-        if: "!contains(github.ref_name, '-native-') && !contains(github.ref_name, '-stored-') && !contains(github.ref_name, '-attribution-') && !contains(github.ref_name, '-fixedv2-') && !contains(github.ref_name, '-fixedv3-')"
+        if: "!contains(github.ref_name, '-native-') && !contains(github.ref_name, '-stored-') && !contains(github.ref_name, '-attribution-') && !contains(github.ref_name, '-fixedv2-') && !contains(github.ref_name, '-fixedv3-') && !contains(github.ref_name, '-fixedreal-')"
         with:
           name: replay-${{ matrix.sha }}
           path: replay.jsonl

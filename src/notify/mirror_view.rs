@@ -125,11 +125,24 @@ pub fn batch_message_for(
         } else {
             String::new()
         };
+        // У каждой записи свой факт покупки, даже если в одном напоминании несколько сделок.
+        let record = super::alert_card::lookup(&r.deal_id).map_or_else(
+            || r.text.clone(),
+            |card| {
+                super::alert_card::enrich(
+                    &r.text,
+                    &super::alert_card::DealCard {
+                        purchase: card.purchase,
+                        ..Default::default()
+                    },
+                )
+            },
+        );
         // Решение 164: у записи свой заголовок — вид записи не повторяем.
-        if super::human::has_head(&r.text) {
-            text.push_str(&format!("\n\n{num}{}", r.text));
+        if super::human::has_head(&record) {
+            text.push_str(&format!("\n\n{num}{record}"));
         } else {
-            text.push_str(&format!("\n\n{num}{}\n{}", r.kind.title(), r.text));
+            text.push_str(&format!("\n\n{num}{}\n{record}", r.kind.title()));
         }
         if !notes.is_empty() {
             text.push_str(&format!("\n{}", notes.join("\n")));

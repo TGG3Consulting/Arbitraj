@@ -198,12 +198,29 @@ fn halted_buttons_match_screen_and_disabled() {
 
 #[test]
 fn batch_has_buttons_of_every_record() {
+    let mut stuck = alert();
+    stuck.deal_id = "batch-a".into();
+    let mut taken = holding();
+    taken.deal_id = "batch-b".into();
+    arb::notify::alert_card::install(|id| {
+        let purchase = match id {
+            "batch-a" => "501.09 AI на MEXC за 6.46 USDT",
+            "batch-b" => "2 CAKE на BingX за 4 USDT",
+            _ => return None,
+        };
+        Some(arb::notify::alert_card::DealCard {
+            purchase: purchase.into(),
+            ..Default::default()
+        })
+    });
     let recs = [
-        alert_record(&alert(), Decimal::ZERO),
-        holding_record(&holding(), Decimal::ZERO),
+        alert_record(&stuck, Decimal::ZERO),
+        holding_record(&taken, Decimal::ZERO),
     ];
     let refs: Vec<&ManualRecord> = recs.iter().collect();
     let (text, kb) = batch_message(&refs, "Напоминание");
+    assert!(text.contains("Сделка: batch-a\nИсходная покупка: 501.09 AI"));
+    assert!(text.contains("Сделка: batch-b\nИсходная покупка: 2 CAKE"));
     let b = kb_buttons(&kb);
     assert_eq!(b.len(), 6);
     assert!(b[0].0.starts_with("1 · ") && b[5].0.starts_with("2 · "));

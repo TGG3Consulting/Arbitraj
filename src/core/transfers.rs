@@ -379,15 +379,21 @@ async fn go(
         )));
     }
     let units = super::credit_expect::units(core, from, to, asset);
+    use super::credit_expect::WithdrawalAmount;
+    let credit_amount = match wire {
+        Some(amount) => WithdrawalAmount::Wire(amount),
+        None => WithdrawalAmount::Budget {
+            network: &net_from,
+            qty,
+        },
+    };
     let ticket = super::credit_expect::ticket_with_units(
         core,
         deal,
         (from, to),
         asset,
-        &net_from,
-        qty,
+        credit_amount,
         units.as_ref(),
-        wire,
     )
     .await;
     let units = units.ok();

@@ -63,12 +63,15 @@ pub async fn ticket(
         deal,
         (from, to),
         asset,
-        net,
-        qty,
+        WithdrawalAmount::Budget { network: net, qty },
         ratio.as_ref(),
-        None,
     )
     .await
+}
+
+pub(super) enum WithdrawalAmount<'a> {
+    Budget { network: &'a str, qty: Decimal },
+    Wire(Decimal),
 }
 
 pub(super) async fn ticket_with_units(
@@ -76,10 +79,8 @@ pub(super) async fn ticket_with_units(
     deal: &str,
     (from, to): (&VenueId, &VenueId),
     asset: &Asset,
-    net: &str,
-    qty: Decimal,
+    amount: WithdrawalAmount<'_>,
     unit: Result<&UnitRatio, &String>,
-    wire: Option<Decimal>,
 ) -> Option<Ticket> {
     let at = At {
         venue: Some(&to.0),
@@ -96,9 +97,11 @@ pub(super) async fn ticket_with_units(
     }
     let arrival = match unit {
         Ok(r) => {
-            let sender = match wire {
-                Some(wire) => after_transfer_tax(core, to, asset, wire),
-                None => sender_amount(core, from, to, asset, net, qty).await,
+            let sender = match amount {
+                WithdrawalAmount::Wire(wire) => after_transfer_tax(core, to, asset, wire),
+                WithdrawalAmount::Budget { network, qty } => {
+                    sender_amount(core, from, to, asset, network, qty).await
+                }
             };
             sender.and_then(|q| r.to_sell(q))
         }

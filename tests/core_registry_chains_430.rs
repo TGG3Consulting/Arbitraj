@@ -124,3 +124,93 @@ async fn registry_by_chain() {
     assert!(k.iter().any(|(x, _)| *x == v("bsc_dex")));
     assert!(!k.iter().any(|(x, _)| *x == v("arb_dex")));
 }
+
+/// Две карточки GET /api/coins/{address}?chain=... от 24.11.2026 и снимок
+/// data-api.binance.vision/api/v3/depth?symbol=APEUSDT&limit=5. В обеих сетях
+/// разрешён выход DEX → Binance. Одному событию стакана соответствуют два тика монет.
+#[tokio::test]
+async fn one_binance_book_wakes_both_ape_networks() {
+    use arb::core::registry::{CoinEntry, Presence};
+    use arb::core::ticker_index::index_of;
+    use arb::core::types::{Asset, Direction};
+    use arb::gateway::events::MarketEvent;
+    use arb::venues::binance::depth;
+
+    let rows: Value =
+        serde_json::from_str(include_str!("data/binance_ape_books_2026-11-24.json")).unwrap();
+    let mut coins = Vec::new();
+    for row in rows["coins"].as_array().unwrap() {
+        let asset: Asset = serde_json::from_value(row["asset"].clone()).unwrap();
+        let dirs: Vec<Direction> = serde_json::from_value(row["directions"].clone()).unwrap();
+        assert!(
+            dirs.iter()
+                .any(|d| d.asset == asset && d.sell_on == v("binance"))
+        );
+        let presence = row["presence"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| Presence {
+                venue: v(p["venue"].as_str().unwrap()),
+                ticker: p["ticker"].as_str().unwrap().into(),
+                network: p["network"].as_str().map(str::to_owned),
+                can_buy: p["can_buy"].as_bool().unwrap(),
+                can_sell: p["can_sell"].as_bool().unwrap(),
+                can_receive: p["can_receive"].as_bool().unwrap(),
+                can_send: p["can_send"].as_bool().unwrap(),
+                excluded: vec![],
+                info: None,
+                via: None,
+            })
+            .collect();
+        coins.push(CoinEntry {
+            asset,
+            presence,
+            block: None,
+            problem: None,
+            wait: None,
+            cex_cex: None,
+            cex_cex_off: vec![],
+            cex_cex_deny: vec![],
+        });
+    }
+    let core = t198_common::start("ape-book-networks").await;
+    let index = index_of(&coins);
+    // Перевод по тикеру по-прежнему разрешается в одну запись, а BingX в выборке
+    // есть только на BSC. Не рассылаем стакан другой биржи в сеть, которой у неё нет.
+    assert_eq!(
+        index.get(&v("binance"), "APE"),
+        Some(coins[0].asset.clone())
+    );
+    assert_eq!(
+        index.book_assets(&v("bingx"), "APE").collect::<Vec<_>>(),
+        vec![coins[0].asset.clone()]
+    );
+    *core.inner.tickers.write().unwrap() = index;
+    let raw = rows["depth"].to_string();
+    let depth: depth::Partial<'_> = serde_json::from_str(&raw).unwrap();
+    let (bids, asks) = depth::levels(&depth).unwrap();
+    let book = depth::to_book(
+        Asset {
+            ticker: "APE".into(),
+            chain: None,
+            contract: None,
+        },
+        bids,
+        asks,
+    );
+    core.inner
+        .market
+        .write()
+        .unwrap()
+        .apply(MarketEvent::Book(book.clone()));
+    let mut ticks = core.inner.coin_ticks.subscribe();
+    let (tx, rx) = tokio::sync::mpsc::channel(1);
+    tx.try_send(MarketEvent::Book(book)).unwrap();
+    drop(tx);
+    arb::core::tick::run(core, rx).await;
+    for c in coins {
+        assert_eq!(ticks.try_recv().unwrap(), c.asset);
+    }
+    assert!(ticks.try_recv().is_err());
+}

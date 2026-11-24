@@ -28,7 +28,16 @@ use super::engine::{Core, lk, rd, wr};
 use super::market_state::Touched;
 use super::view::CoreEvent;
 
-pub(super) use super::tick_sched::{schedule, schedule_set};
+pub(super) use super::tick_sched::schedule_set;
+
+/// Один общий стакан биржи обновляет каждую его сеть. Берём получателей одним чтением
+/// индекса и отпускаем его до отправки тиков и планирования пересчётов.
+pub(super) fn schedule_book(core: &Core, venue: &VenueId, ticker: &str) {
+    let assets = rd(&core.inner.tickers).book_assets(venue, ticker);
+    for asset in assets {
+        super::tick_sched::schedule(core, asset, venue.clone());
+    }
+}
 
 /// Задача приёма событий адаптеров. Работает, пока жив канал.
 pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
@@ -53,9 +62,7 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 if first {
                     core.request_rebuild();
                 }
-                if let Some(a) = asset_by_ticker(&core, &venue, &ticker) {
-                    schedule(&core, a, venue);
-                }
+                schedule_book(&core, &venue, &ticker);
             }
             Touched::Pool {
                 venue,

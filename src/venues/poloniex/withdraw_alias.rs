@@ -69,27 +69,40 @@ impl Book {
     }
 }
 
-/// Запись должна относиться к тому же принятому выводу. Комиссия сторонней валютой,
-/// обычный тикер, незавершённый статус или потерянное исходное имя/сеть не требуют справочника.
-fn needs_alias(created: &Transfer, sent: &Transfer) -> bool {
+/// Запись и удержанная комиссия относятся к тому же принятому выводу.
+fn same_withdrawal_fee(created: &Transfer, sent: &Transfer) -> bool {
     !created.asset.ticker.is_empty()
         && created.venue == sent.venue
         && !created.venue_ref.is_empty()
         && created.venue_ref == sent.venue_ref
         && !created.network.is_empty()
         && (sent.network.is_empty() || sent.network == created.network)
+        && (sent.asset.contract.is_none() || sent.asset.contract == created.asset.contract)
+        && (sent.asset.chain.is_none() || sent.asset.chain == created.asset.chain)
         && sent.status == TransferStatus::Sent
         && sent.tx_hash.as_ref().is_some_and(|h| !h.is_empty())
         && !sent.asset.ticker.is_empty()
-        && !sent
-            .asset
-            .ticker
-            .eq_ignore_ascii_case(&created.asset.ticker)
         && sent.fee.as_ref().is_some_and(|f| {
             f.kind == CostKind::WithdrawFee
                 && !f.amount.is_zero()
                 && f.asset.eq_ignore_ascii_case(&sent.asset.ticker)
         })
+}
+
+/// Для того же биржевого тикера идентификатор вывода связывает историю с отправленным активом
+/// и сетью. Например, у SNDK на Poloniex имя в обоих ответах SNDK, а в ядре — SNDKB.
+/// Возвращает true только для сетевого псевдонима, который ещё нужно проверить по справочнику.
+fn resolve_or_lookup(created: &Transfer, sent: &mut Transfer) -> bool {
+    if !same_withdrawal_fee(created, sent) {
+        return false;
+    }
+    if sent.asset.ticker.eq_ignore_ascii_case(&created.asset.ticker) {
+        if created.asset.contract.is_some() {
+            apply(created, sent);
+        }
+        return false;
+    }
+    true
 }
 
 /// Применяет доказанное биржей имя к комиссии и активу статуса. Суммы, статус и хеш сохраняются.
@@ -109,7 +122,7 @@ pub(super) async fn normalize(
     created: &Transfer,
     sent: &mut Transfer,
 ) {
-    if !needs_alias(created, sent) {
+    if !resolve_or_lookup(created, sent) {
         return;
     }
     let alias = &sent.asset.ticker;

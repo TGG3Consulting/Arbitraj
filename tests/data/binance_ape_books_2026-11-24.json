@@ -1,0 +1,134 @@
+{
+  "coins": [
+    {
+      "asset": {
+        "bsc_contract": "0x8f86a15ec17cb3369d8b3e666dadbc11daa82b79",
+        "ticker": "APE"
+      },
+      "presence": [
+        {
+          "ticker": "APE",
+          "venue": "binance",
+          "network": "BSC",
+          "can_buy": true,
+          "can_sell": true,
+          "can_receive": true,
+          "can_send": false
+        },
+        {
+          "ticker": "APE",
+          "venue": "bingx",
+          "network": "BEP20",
+          "can_buy": true,
+          "can_sell": true,
+          "can_receive": false,
+          "can_send": false
+        },
+        {
+          "ticker": "APE",
+          "venue": "bsc_dex",
+          "network": null,
+          "can_buy": true,
+          "can_sell": true,
+          "can_receive": true,
+          "can_send": true
+        }
+      ],
+      "directions": [
+        {
+          "asset": {
+            "bsc_contract": "0x8f86a15ec17cb3369d8b3e666dadbc11daa82b79",
+            "ticker": "APE"
+          },
+          "buy_on": "bsc_dex",
+          "sell_on": "binance"
+        }
+      ]
+    },
+    {
+      "asset": {
+        "bsc_contract": "0x7f9fbf9bdd3f4105c478b996b648fe6e828a1e98",
+        "chain": "arbitrum",
+        "ticker": "APE"
+      },
+      "presence": [
+        {
+          "ticker": "APE",
+          "venue": "binance",
+          "network": "ARBITRUM",
+          "can_buy": true,
+          "can_sell": true,
+          "can_receive": true,
+          "can_send": false
+        },
+        {
+          "ticker": "APE",
+          "venue": "arb_dex",
+          "network": null,
+          "can_buy": true,
+          "can_sell": true,
+          "can_receive": true,
+          "can_send": true
+        }
+      ],
+      "directions": [
+        {
+          "asset": {
+            "bsc_contract": "0x7f9fbf9bdd3f4105c478b996b648fe6e828a1e98",
+            "chain": "arbitrum",
+            "ticker": "APE"
+          },
+          "buy_on": "arb_dex",
+          "sell_on": "binance"
+        }
+      ]
+    }
+  ],
+  "depth": {
+    "lastUpdateId": 5765610822,
+    "bids": [
+      [
+        "0.07090000",
+        "3639.44000000"
+      ],
+      [
+        "0.07080000",
+        "58272.25000000"
+      ],
+      [
+        "0.07070000",
+        "159603.93000000"
+      ],
+      [
+        "0.07060000",
+        "62524.79000000"
+      ],
+      [
+        "0.07050000",
+        "62653.23000000"
+      ]
+    ],
+    "asks": [
+      [
+        "0.07100000",
+        "3013.15000000"
+      ],
+      [
+        "0.07110000",
+        "39084.57000000"
+      ],
+      [
+        "0.07120000",
+        "189585.22000000"
+      ],
+      [
+        "0.07130000",
+        "25198.73000000"
+      ],
+      [
+        "0.07140000",
+        "47244.78000000"
+      ]
+    ]
+  }
+}

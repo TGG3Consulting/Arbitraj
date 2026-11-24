@@ -1,0 +1,82 @@
+[
+  {
+    "sent": {
+      "venue": "poloniex",
+      "asset": {
+        "ticker": "SNDK",
+        "bsc_contract": null
+      },
+      "network": "",
+      "amount": "3.23394614",
+      "status": "Sent",
+      "venue_ref": "a99b4f20b9e099a11f82eda28f477090dc4fde7edf777c2bd976a88f5b760fac",
+      "tx_hash": "0xda4274519f78fdec708f1f52d149d69c6b152eed51f027a340fe155345a94542",
+      "fee": {
+        "kind": "WithdrawFee",
+        "amount": "0.00525137",
+        "asset": "SNDK",
+        "in_price": false,
+        "step": null
+      },
+      "updated_at": "2026-11-24T14:25:39.047088434Z"
+    },
+    "credited": {
+      "venue": "bsc_dex",
+      "asset": {
+        "ticker": "SNDKB",
+        "bsc_contract": "0x3ee4df61bd4f867e349beae8bfe07bc31b4850fb"
+      },
+      "network": "BEP20",
+      "amount": "0.403586846250000000",
+      "status": "Credited",
+      "venue_ref": "0xda4274519f78fdec708f1f52d149d69c6b152eed51f027a340fe155345a94542",
+      "tx_hash": "0xda4274519f78fdec708f1f52d149d69c6b152eed51f027a340fe155345a94542",
+      "fee": null,
+      "updated_at": "2026-11-24T14:25:39.066949668Z"
+    },
+    "asset_submitted": {
+      "ticker": "SNDK",
+      "bsc_contract": "0x3ee4df61bd4f867e349beae8bfe07bc31b4850fb"
+    }
+  },
+  {
+    "sent": {
+      "venue": "poloniex",
+      "asset": {
+        "ticker": "SNDK",
+        "bsc_contract": null
+      },
+      "network": "",
+      "amount": "0.36947257",
+      "status": "Sent",
+      "venue_ref": "0d8c37db07e52125e2a42a2ad5a054ba1c9aa3cec9c4098929928ccab315852d",
+      "tx_hash": "0xe9adbe00c682153e896530142d63648ea6cda77214da6d00abaebb9e3b17160b",
+      "fee": {
+        "kind": "WithdrawFee",
+        "amount": "0.00525137",
+        "asset": "SNDK",
+        "in_price": false,
+        "step": null
+      },
+      "updated_at": "2026-11-24T14:25:51.095220119Z"
+    },
+    "credited": {
+      "venue": "bsc_dex",
+      "asset": {
+        "ticker": "SNDKB",
+        "bsc_contract": "0x3ee4df61bd4f867e349beae8bfe07bc31b4850fb"
+      },
+      "network": "BEP20",
+      "amount": "0.045527650000000000",
+      "status": "Credited",
+      "venue_ref": "0xe9adbe00c682153e896530142d63648ea6cda77214da6d00abaebb9e3b17160b",
+      "tx_hash": "0xe9adbe00c682153e896530142d63648ea6cda77214da6d00abaebb9e3b17160b",
+      "fee": null,
+      "updated_at": "2026-11-24T14:25:51.115948848Z"
+    },
+    "asset_submitted": {
+      "ticker": "SNDK",
+      "bsc_contract": "0x3ee4df61bd4f867e349beae8bfe07bc31b4850fb"
+    }
+  }
+]

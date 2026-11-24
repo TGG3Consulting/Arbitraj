@@ -83,7 +83,7 @@ fn one(
 ) -> Result<CoinNetworkInfo, String> {
     let e = |e: crate::gateway::errors::GatewayError| e.message;
     if is_bsc
-        && let Some(d) = n.get("denomination").and_then(num::to_dec)
+        && let Some(d) = num::dec_opt(n, "denomination").map_err(e)?
         && d != Decimal::ONE
     {
         return Err(format!(

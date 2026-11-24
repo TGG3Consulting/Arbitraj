@@ -458,7 +458,8 @@ async fn steps(
         }
     };
     // Ревью 2 t180, Н-C2: отказ стороны возвращается сразу — чтение коридора при этом отменяется (try_join).
-    let ((mut bands, band_ms), addr_due) = tokio::try_join!(band, sides)?;
+    let ((mut bands, band_ms), addr_due, ()) =
+        tokio::try_join!(band, sides, super::settlement_unit::check_entry(core, d))?;
     // Решение 411: баланс A отказал, адрес B ещё не проверен — сначала адрес (его ошибка первая по порядку).
     if let Some(e) = bal_err {
         let at = Instant::now();

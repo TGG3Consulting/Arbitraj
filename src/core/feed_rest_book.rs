@@ -49,9 +49,7 @@ pub async fn install(
         if first {
             core.request_rebuild();
         }
-        if let Some(a) = super::venue_ticker::asset_by_venue_ticker(core, venue, ticker) {
-            super::tick::schedule(core, a, venue.clone());
-        }
+        super::tick::schedule_book(core, venue, ticker);
     }
     Ok(())
 }

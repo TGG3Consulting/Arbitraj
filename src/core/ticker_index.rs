@@ -24,6 +24,9 @@ pub struct TickerIndex {
     /// (площадка, ТИКЕР ПЛОЩАДКИ) → монета ядра (решение 211; у монеты есть адрес контракта; монеты без адреса не
     /// торгуются и не ищутся).
     pub map: HashMap<(VenueId, String), Asset>,
+    /// Другие сети той же биржевой пары. Только для доставки тика стакана: один баланс
+    /// или вывод площадки по-прежнему разрешается отдельно через get.
+    book_networks: HashMap<(VenueId, String), Vec<Asset>>,
     /// Решение 211: (площадка, адрес) → тикер этой площадки (core/venue_ticker.rs).
     pub venue_ticker: HashMap<(VenueId, Address), String>,
     /// Адрес контракта → монеты справочника с этим адресом (решение 129: событие пула находит монеты своих токенов
@@ -69,6 +72,18 @@ impl TickerIndex {
         self.map.get(&(venue.clone(), ticker.to_string())).cloned()
     }
 
+    /// Получатели изменения одного стакана. Для односетевой пары Vec не выделяется.
+    pub fn book_assets(
+        &self,
+        venue: &VenueId,
+        ticker: &str,
+    ) -> impl Iterator<Item = Asset> + use<> {
+        let key = (venue.clone(), ticker.to_owned());
+        let first = self.map.get(&key).cloned();
+        let others = self.book_networks.get(&key).cloned().unwrap_or_default();
+        first.into_iter().chain(others)
+    }
+
     /// Монеты справочника, чей адрес контракта — один из двух токенов пула. Ошибок нет.
     pub fn by_tokens(&self, t: (Address, Address)) -> Vec<Asset> {
         let mut out: Vec<Asset> = self.by_token.get(&t.0).cloned().unwrap_or_default();
@@ -85,6 +100,7 @@ impl TickerIndex {
 pub async fn rebuild(core: &Core, coins: &[CoinEntry]) {
     let TickerIndex {
         map,
+        book_networks,
         venue_ticker,
         by_token,
         pos,
@@ -101,6 +117,7 @@ pub async fn rebuild(core: &Core, coins: &[CoinEntry]) {
     let fresh: Vec<(Address, String)> = {
         let mut idx = wr(&core.inner.tickers);
         idx.map = map;
+        idx.book_networks = book_networks;
         idx.venue_ticker = venue_ticker;
         idx.by_token = by_token;
         idx.pos = pos;
@@ -150,9 +167,20 @@ pub fn index_of(coins: &[CoinEntry]) -> TickerIndex {
                 continue;
             }
             // Тикер ЭТОЙ площадки → монета ядра (у DEX — показное имя, его и передаёт подписка).
-            idx.map
+            let first = idx
+                .map
                 .entry((p.venue.clone(), p.ticker.clone()))
                 .or_insert_with(|| c.asset.clone());
+            if first.chain != c.asset.chain && p.excluded.is_empty() {
+                // Одно имя на двух адресах внутри одной сети не разрешаем по тикеру.
+                let others = idx
+                    .book_networks
+                    .entry((p.venue.clone(), p.ticker.clone()))
+                    .or_default();
+                if !others.iter().any(|a| a.chain == c.asset.chain) {
+                    others.push(c.asset.clone());
+                }
+            }
             idx.venue_ticker
                 .entry((p.venue.clone(), addr))
                 .or_insert_with(|| p.ticker.clone());

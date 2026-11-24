@@ -66,6 +66,14 @@ impl Venue for BscDex {
         coins::networks(&self.p.ctx, &self.p.registry)
     }
 
+    async fn scaled_token_unit(
+        &self,
+        token: alloy_primitives::Address,
+    ) -> GatewayResult<Option<Decimal>> {
+        let block = self.p.heads.fresh(&self.p.ctx)?.number;
+        self.p.scaled_units.read(&self.p.ctx, token, block).await
+    }
+
     /// Подписка на рынок: опрос блоков (решение 57), пулы монет (eth_subscribe logs, execution-apis subscribe.yaml), новые пулы,
     /// циклы проверок; события — в `out` (pools/market.rs). Прежние задачи подписки останавливаются.
     /// Решение 416: перед подпиской — сеть площадки (node/chain_id.rs check_start).

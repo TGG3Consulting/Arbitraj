@@ -44,6 +44,7 @@ pub mod resolve_single;
 pub mod resolve_withdraw;
 pub mod resubscribe;
 pub mod resubscribe_wallets;
+mod scaled_token;
 pub mod send;
 pub mod settings_wait;
 pub mod signal_epoch;

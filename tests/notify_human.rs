@@ -153,12 +153,12 @@ fn deal_closed_format() {
     let plus = arb::core::deal_text::closed(&deal("0.13", "45", "45.1", "0.01"), "продано", None);
     assert_eq!(
         plus,
-        "✅ Сделка плюсовая\nСделка: 20261104173851521BABYDOGE\nМонета: BABYDOGE\nПуть: MEXC\nГде сейчас: монет нет; USDT — на MEXC\n\nЦифры:\n• Размер ордера: 45.00 USDT\n• План: +0.13 USDT\n• Факт: +0.09 USDT\n• Заработали: 0.09 USDT"
+        "✅ Сделка плюсовая\nСделка: 20261104173851521BABYDOGE\nМонета: BABYDOGE\nПуть: MEXC\nГде сейчас: монет нет; USDT — на MEXC\nИсходная покупка: По учёту 45.00 USDT; исходный объём не записан\n\nЦифры:\n• Размер ордера: 45.00 USDT\n• План: +0.13 USDT\n• Факт: +0.09 USDT\n• Заработали: 0.09 USDT"
     );
     let minus = arb::core::deal_text::closed(&deal("0.02", "45", "44.9", "0.05"), "продано", None);
     assert_eq!(
         minus,
-        "❌ Сделка минусовая\nСделка: 20261104173851521BABYDOGE\nМонета: BABYDOGE\nПуть: MEXC\nГде сейчас: монет нет; USDT — на MEXC\n\nЦифры:\n• Размер ордера: 45.00 USDT\n• План: +0.02 USDT\n• Факт: −0.15 USDT\n• Итого минус: 0.15 USDT"
+        "❌ Сделка минусовая\nСделка: 20261104173851521BABYDOGE\nМонета: BABYDOGE\nПуть: MEXC\nГде сейчас: монет нет; USDT — на MEXC\nИсходная покупка: По учёту 45.00 USDT; исходный объём не записан\n\nЦифры:\n• Размер ордера: 45.00 USDT\n• План: +0.02 USDT\n• Факт: −0.15 USDT\n• Итого минус: 0.15 USDT"
     );
     let tiny = arb::core::deal_text::closed(&deal("0.01", "45", "45.004", "0"), "продано", None);
     assert!(tiny.contains("• Факт: +0.0040 USDT"), "{tiny}");

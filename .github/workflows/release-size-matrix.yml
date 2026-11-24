@@ -56,7 +56,30 @@ jobs:
         with:
           workspaces: release -> target
           shared-key: release-size-matrix
+      - name: Run native routing on saved pool states
+        if: contains(github.ref_name, '-native-')
+        shell: bash
+        run: |
+          set -eo pipefail
+          python harness/tools/release_size_matrix/native_routes.py release > native-route-meta.json
+          if python -c 'import json,sys; sys.exit(json.load(open("native-route-meta.json"))["status"] != "staged")'; then
+            (cd release && cargo test --locked --test native_route_release_matrix native_route_release_matrix -- --exact --nocapture) > "$RUNNER_TEMP/native.log" 2>&1 || {
+              grep -m 15 -A 4 -E 'error(\[E[0-9]+\])?:|panicked at|assertion|FAILED' "$RUNNER_TEMP/native.log" | head -n 80 || true
+              exit 1
+            }
+            sed -n 's/^NATIVE_ROUTE_MATRIX //p' "$RUNNER_TEMP/native.log" > native-route.jsonl
+            test "$(wc -l < native-route.jsonl)" -eq 80
+          fi
+      - uses: actions/upload-artifact@v4
+        if: contains(github.ref_name, '-native-')
+        with:
+          name: native-route-${{ matrix.sha }}
+          path: |
+            native-route-meta.json
+            native-route.jsonl
+          if-no-files-found: error
       - name: Run native size selection against the common cases
+        if: "!contains(github.ref_name, '-native-')"
         shell: bash
         working-directory: release
         run: |
@@ -72,6 +95,7 @@ jobs:
           sed -n 's/^SIZE_MATRIX //p' "$RUNNER_TEMP/replay.log" > ../replay.jsonl
           test "$(wc -l < ../replay.jsonl)" -eq "$expected"
       - uses: actions/upload-artifact@v4
+        if: "!contains(github.ref_name, '-native-')"
         with:
           name: replay-${{ matrix.sha }}
           path: replay.jsonl

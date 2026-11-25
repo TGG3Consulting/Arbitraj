@@ -209,3 +209,40 @@ fn after_transfer_tax(
     let tax = super::transfer_tax::pct(core, to, asset)?;
     positive(wire * (Decimal::ONE - tax / Decimal::ONE_HUNDRED), asset)
 }
+
+/// Сумма, отправленная биржей после её собственной комиссии, ещё не учитывает
+/// удержание контракта. При известном налоге и без измерения размер поступления
+/// устанавливается по квитанции; нулевой замер позволяет искать ровно один лог.
+pub(super) fn wire_without_tax(
+    wire: Decimal,
+    measured_tax: Option<Decimal>,
+    pinned: Option<UnitRatio>,
+) -> Option<Decimal> {
+    if measured_tax != Some(Decimal::ZERO) {
+        return None;
+    }
+    pinned?.to_sell(wire).ok()
+}
+
+#[cfg(test)]
+mod wire_tests {
+    use super::*;
+    #[test]
+    fn sender_wire_does_not_predict_the_wallet_amount_for_taxed_or_unmeasured_tokens() {
+        let gross_after_cex_fee = Decimal::from(100);
+        let units = Some(UnitRatio::IDENTITY);
+        assert_eq!(
+            wire_without_tax(gross_after_cex_fee, Some(Decimal::ZERO), units),
+            Some(gross_after_cex_fee)
+        );
+        assert_eq!(
+            wire_without_tax(gross_after_cex_fee, Some(Decimal::from(5)), units),
+            None
+        );
+        assert_eq!(wire_without_tax(gross_after_cex_fee, None, units), None);
+        assert_eq!(
+            wire_without_tax(gross_after_cex_fee, Some(Decimal::ZERO), None),
+            None
+        );
+    }
+}

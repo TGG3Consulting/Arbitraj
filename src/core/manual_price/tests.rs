@@ -230,10 +230,18 @@ async fn tradoor_left_group_values_the_actual_separate_return_before_choosing() 
         num("withdraw_fee")
     );
     // The first automatic individual withdrawal cannot use the manual retry's splitter.
-    let mut networks = wr(&core.inner.networks).get(&venue).unwrap().as_ref().clone();
+    let mut networks = wr(&core.inner.networks)
+        .get(&venue)
+        .unwrap()
+        .as_ref()
+        .clone();
     networks[0].withdraw_max = Some(Decimal::from(6));
-    wr(&core.inner.networks).insert(venue.clone(),std::sync::Arc::new(networks));
-    assert!(settlement_cost(&core,&d,&venue,None,&earlier,10.into()).await.is_err());
+    wr(&core.inner.networks).insert(venue.clone(), std::sync::Arc::new(networks));
+    assert!(
+        settlement_cost(&core, &d, &venue, None, &earlier, 10.into())
+            .await
+            .is_err()
+    );
     wr(&core.inner.networks).clear();
     assert!(sell_turn_fresh::settled(&core, &d, quote()).await.is_err());
     // A separate-mode deal explicitly holding proceeds uses the quoted sale amount.

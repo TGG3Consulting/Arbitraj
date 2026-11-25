@@ -78,14 +78,18 @@ pub async fn run(core: &Core, deal: Deal) {
     let raw = super::trade_ops::deal_quote(core, &deal).await;
     let upper_here = raw.as_ref().ok().map(|(amount, _, _)| *amount);
     let here = super::sell_turn_fresh::settled(core, &deal, raw)
-        .await.map(|x| x.0).map_err(|e| e.message);
+        .await
+        .map(|x| x.0)
+        .map_err(|e| e.message);
     let (list, skipped) = super::manual_relay_targets::targets(core, &deal);
     let (d, a) = (&deal, &a);
     let vals = join_all(list.iter().map(|to| async move {
         let acc = super::dex_account::for_relay(core, d, to).ok().flatten();
         let r = if super::manual_price::needs_individual_return(core, d) {
             match super::relay_value::value_parts(core, &d.at, to, a, d.qty, acc.as_ref()).await {
-                Ok(p) if p.net > Decimal::ZERO => super::manual_price::individual_value(core, d, to, p.net, p.cash).await,
+                Ok(p) if p.net > Decimal::ZERO => {
+                    super::manual_price::individual_value(core, d, to, p.net, p.cash).await
+                }
                 Ok(p) => Ok(p.net),
                 Err(e) => Err(e),
             }

@@ -18,7 +18,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: tests
-      - run: cargo fmt --check
+      - run: rustfmt --check --edition 2024 --config skip_children=true src/api/control.rs src/api/server.rs src/core/manual_price.rs src/core/manual_price/tests.rs src/core/mod.rs src/core/sale_preview.rs src/core/sale_price.rs src/core/sale_price_text.rs src/core/trade_ops.rs src/notify/press_confirm.rs src/venues/poloniex/transfers.rs
       - run: cargo test --locked --lib core::sale_preview && cargo test --locked --lib core::manual_price && cargo test --locked --lib venues::poloniex::transfers
       - run: cargo clippy --lib --locked -- -D warnings
   web:

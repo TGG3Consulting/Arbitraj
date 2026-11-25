@@ -210,7 +210,7 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
     loop {
         let value = loop {
             let raw = Box::pin(super::sell_turn_fresh::once(core, &deal)).await;
-        match Box::pin(super::sell_turn_fresh::settled(core, &deal, raw)).await {
+            match Box::pin(super::sell_turn_fresh::settled(core, &deal, raw)).await {
                 Ok((v, _, _)) => break v,
                 Err(e) if q::not_configured(&e) => {
                     return q::halt_not_configured(core, deal, &e).await;

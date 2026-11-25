@@ -196,7 +196,8 @@ pub(super) fn sale_cash(
     costs: &[crate::core::types::Cost],
 ) -> Result<Decimal, String> {
     let symbol = super::balance_sell_check::quote_of(core, venue)?;
-    let fee: Decimal = costs.iter()
+    let fee: Decimal = costs
+        .iter()
         .filter(|c| !c.in_price && c.paid_in.is_none() && c.asset == symbol)
         .map(|c| c.amount)
         .sum();
@@ -204,7 +205,9 @@ pub(super) fn sale_cash(
 }
 
 pub(super) fn needs_individual_return(core: &Core, deal: &Deal) -> bool {
-    deal.group.as_ref().is_some_and(|g| g.left || super::coin_group_left::recorded(core, deal))
+    deal.group
+        .as_ref()
+        .is_some_and(|g| g.left || super::coin_group_left::recorded(core, deal))
         && super::usdt_return_deal::wanted(core, deal)
 }
 
@@ -219,7 +222,8 @@ pub(super) async fn individual_value(
 ) -> Result<Decimal, String> {
     let past = previous_cash(core, deal)?;
     let wallet = super::manual_price_exec::wallet(core, deal, venue)?;
-    let cost = settlement_cost(core, deal, venue, wallet.as_ref(), &past, cash).await
+    let cost = settlement_cost(core, deal, venue, wallet.as_ref(), &past, cash)
+        .await
         .map_err(|e| format!("стоимость отдельного возврата USDT неизвестна: {e}"))?;
     Ok(net - cost)
 }
@@ -243,7 +247,11 @@ async fn settlement_cost(
         {
             return Err(reason);
         }
-        let parts = if deal.group.is_some() {
+        // Automatic close of a detached deal creates one ordinary withdrawal.
+        // Only a still-grouped close can split the aggregate before its first send.
+        let active_group = deal.group.as_ref().is_some_and(|g| !g.left)
+            && !super::coin_group_left::recorded(core, deal);
+        let parts = if active_group {
             super::coin_group_flush::return_parts(core, &from, &deal.direction.buy_on, budget).1
         } else {
             vec![(from, budget)]

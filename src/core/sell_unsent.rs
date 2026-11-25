@@ -224,8 +224,9 @@ pub async fn alert(core: &Core, deal: Deal, e: &OpError, r: &Retry) {
     // (route_pause.rs). Не задана или «нет» — как раньше: паузы нет, записей нет.
     super::route_pause::after_reject(core, &deal, e).await;
     // Хронологию пишет raise_alert («… — ждём решения человека»): своей строки здесь нет — без дубля (решение 154).
-    let value = super::trade_ops::deal_value(core, &deal).await;
-    let loss = value.ok().map(|(x, _)| deal.loss_pct_if(x));
+    let quote = super::trade_ops::deal_quote(core, &deal).await;
+    let value = Box::pin(super::sell_turn_fresh::settled(core, &deal, quote)).await;
+    let loss = value.ok().map(|(x, _, _)| deal.loss_pct_if(x));
     super::manual::raise_alert(core, deal, loss, why, Some(e.message.clone())).await;
 }
 

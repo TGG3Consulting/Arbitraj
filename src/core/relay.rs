@@ -236,6 +236,7 @@ pub async fn run_as(core: &Core, mut deal: Deal, profit_first: bool) {
     // Dust requires evidence about physical sale proceeds. Lack of a return quote
     // or an uneconomic stablecoin transfer must never write tradable tokens off.
     let physical_here = quote.as_ref().ok().map(|(v, _, _)| *v);
+    let physical_avg = quote.as_ref().ok().map(|(_, q, _)| q.avg_price);
     let had_quote = quote.is_ok();
     let quote = Box::pin(super::sell_turn_fresh::settled(core, &deal, quote)).await;
     let return_unknown_here = had_quote && quote.is_err();
@@ -249,8 +250,8 @@ pub async fn run_as(core: &Core, mut deal: Deal, profit_first: bool) {
                 deal.note(format!("Продажа здесь: {}", e.message));
                 super::ledger::save(core, &deal).await;
             }
-            (None, None)
-        },
+            (None, physical_avg)
+        }
     };
     // Решение 417 (правило Тиграна 19.11): продать здесь выгодно (итог сделки ≥ 0) — другие площадки не ищем.
     // Ревью t201 (С-1): продажа — с проверкой «выгодно» под ходом очереди (relay_here → sell_here_ok.rs); под ходом
@@ -309,7 +310,11 @@ pub async fn run_as(core: &Core, mut deal: Deal, profit_first: bool) {
             Ok((v, p)) => {
                 raw_best = Some(raw_best.map_or(v, |b| b.max(v)));
                 let v = if super::manual_price::needs_individual_return(core, &deal) {
-                    match Box::pin(super::manual_price::individual_value(core, &deal, &to, v, p.cash)).await {
+                    match Box::pin(super::manual_price::individual_value(
+                        core, &deal, &to, v, p.cash,
+                    ))
+                    .await
+                    {
                         Ok(net) => net,
                         Err(why) => {
                             deal.note(format!("Перегон на {}: {why}", to.0));
@@ -371,7 +376,7 @@ pub async fn run_as(core: &Core, mut deal: Deal, profit_first: bool) {
         }
     }
     // Решение 222: перегонять не во что, а продажа здесь не считается или не окупается — остаток пыль.
-    if super::dust::relay_dust(raw_best, tiny, physical_here) {
+    if super::dust::relay_dust(raw_best, tiny, here.max(physical_here)) {
         let why =
             "остаток — пыль: перегон не окупается, продажа здесь не даёт выручки (решение 222)";
         super::dust::write_off(core, &mut deal, why).await;
@@ -381,7 +386,11 @@ pub async fn run_as(core: &Core, mut deal: Deal, profit_first: bool) {
     // When local settlement cannot be priced, only a target beating even the local
     // cash before any return fees is provably better. Otherwise the normal local
     // decision reports the missing quote, retaining the operator's manual sale.
-    let comparison_here = if return_unknown_here { physical_here } else { here };
+    let comparison_here = if return_unknown_here {
+        physical_here
+    } else {
+        here
+    };
     let (to, e) = match best {
         Some((to, e)) if super::relay_reserve::better(comparison_here, &e) => (to, e),
         Some((to, e)) => {

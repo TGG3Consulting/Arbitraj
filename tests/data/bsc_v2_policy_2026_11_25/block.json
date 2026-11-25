@@ -1,0 +1,842 @@
+{
+ "block": 135689647,
+ "hash": "0x4121dbfd6ce61ffce534190f1ec92b699a2581218b889f5acac2da218d0ae139",
+ "timestamp": 1795625376,
+ "quote_token": "0x55d398326f99059ff775485246999027b3197955",
+ "tokens": {
+  "BNB": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+  "USDC": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d"
+ },
+ "books": {
+  "BNB": {
+   "venue": "MEXC",
+   "pair": "BNBUSDT",
+   "request_at": "2026-11-25T16:49:47.868766+00:00",
+   "received_at": "2026-11-25T16:49:48.824192+00:00",
+   "sequence": 9424275531,
+   "bids": [
+    [
+     "536.03",
+     "0.0180"
+    ],
+    [
+     "536.02",
+     "0.0575"
+    ],
+    [
+     "535.95",
+     "0.6973"
+    ],
+    [
+     "535.94",
+     "0.4757"
+    ],
+    [
+     "535.93",
+     "0.7791"
+    ],
+    [
+     "535.92",
+     "2.5976"
+    ],
+    [
+     "535.91",
+     "0.0126"
+    ],
+    [
+     "535.88",
+     "0.0171"
+    ],
+    [
+     "535.86",
+     "0.0126"
+    ],
+    [
+     "535.85",
+     "1.6778"
+    ]
+   ],
+   "asks": [
+    [
+     "536.15",
+     "0.0180"
+    ],
+    [
+     "536.17",
+     "0.0151"
+    ],
+    [
+     "536.23",
+     "0.1154"
+    ],
+    [
+     "536.24",
+     "1.6808"
+    ],
+    [
+     "536.25",
+     "0.0285"
+    ],
+    [
+     "536.29",
+     "0.0126"
+    ],
+    [
+     "536.34",
+     "0.0126"
+    ],
+    [
+     "536.38",
+     "0.6144"
+    ],
+    [
+     "536.39",
+     "1.1816"
+    ],
+    [
+     "536.41",
+     "2.5116"
+    ]
+   ]
+  },
+  "USDC": {
+   "venue": "MEXC",
+   "pair": "USDCUSDT",
+   "request_at": "2026-11-25T16:49:48.825190+00:00",
+   "received_at": "2026-11-25T16:49:49.651071+00:00",
+   "sequence": 837778699,
+   "bids": [
+    [
+     "1.00107",
+     "6507.06"
+    ],
+    [
+     "1.00106",
+     "570.35"
+    ],
+    [
+     "1.00105",
+     "54.89"
+    ],
+    [
+     "1.00104",
+     "2411.33"
+    ],
+    [
+     "1.00103",
+     "53.31"
+    ],
+    [
+     "1.00102",
+     "2015404.29"
+    ],
+    [
+     "1.00101",
+     "2030687.11"
+    ],
+    [
+     "1.00100",
+     "1999311.47"
+    ],
+    [
+     "1.00099",
+     "2063820.58"
+    ],
+    [
+     "1.00098",
+     "4195498.04"
+    ]
+   ],
+   "asks": [
+    [
+     "1.00109",
+     "77.45"
+    ],
+    [
+     "1.00110",
+     "66.23"
+    ],
+    [
+     "1.00111",
+     "23.64"
+    ],
+    [
+     "1.00112",
+     "73.05"
+    ],
+    [
+     "1.00113",
+     "6663113.58"
+    ],
+    [
+     "1.00114",
+     "2065007.07"
+    ],
+    [
+     "1.00115",
+     "2077532.83"
+    ],
+    [
+     "1.00116",
+     "1999352.68"
+    ],
+    [
+     "1.00117",
+     "2016758.05"
+    ],
+    [
+     "1.00118",
+     "73.57"
+    ]
+   ]
+  }
+ },
+ "pools": [
+  {
+   "coin": "USDC",
+   "family": "alium",
+   "address": "0x83877601bdeaa0396fc35a1b3dddf271fb2be8ed",
+   "reserve_coin": "1005",
+   "reserve_usdt": "999",
+   "fee_source": "fixed",
+   "fee_pct": "0.25"
+  },
+  {
+   "coin": "USDC",
+   "family": "ampleswap-bsc",
+   "address": "0x861f685da59c51909e5b54d81404b073d35adf9b",
+   "reserve_coin": "503092859785460193495",
+   "reserve_usdt": "504350514588118682469",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "USDC",
+   "family": "apeswap_bsc",
+   "address": "0xcd1e0b85b72ea3ecdf8a4b79c7bf9bcff5113829",
+   "reserve_coin": "256747337098633654",
+   "reserve_usdt": "256832460563847598",
+   "fee_source": "fixed",
+   "fee_pct": "0.2"
+  },
+  {
+   "coin": "USDC",
+   "family": "autoshark_finance",
+   "address": "0x81e6cd6adeda14d94993aa9d97193b7266001cd3",
+   "reserve_coin": "1314953907952048685520",
+   "reserve_usdt": "1317062648281608276150",
+   "fee_source": "pool",
+   "fee_pct": "0.17",
+   "fee_method": "swapFee()",
+   "fee_raw": 17,
+   "fee_denominator": 10000
+  },
+  {
+   "coin": "USDC",
+   "family": "babydogeswap",
+   "address": "0x30949ff5752f82d7ae6d0b0fcecf9f785ac8d95a",
+   "reserve_coin": "100490888543120582304941",
+   "reserve_usdt": "100451413376598129839939",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "USDC",
+   "family": "babyswap",
+   "address": "0xcc21b0a9a01fcd2103ff75614480bd6a07869053",
+   "reserve_coin": "824254196345982697753",
+   "reserve_usdt": "826231172081548509696",
+   "fee_source": "fixed",
+   "fee_pct": "0.4"
+  },
+  {
+   "coin": "USDC",
+   "family": "bakeryswap",
+   "address": "0x087a49f79cab8cc13f8a44f9d6e0b2487a9d28e3",
+   "reserve_coin": "897812887754850424",
+   "reserve_usdt": "897020251998298875",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "USDC",
+   "family": "biswap",
+   "address": "0x1483767e665b3591677fd49f724bf7430c18bf83",
+   "reserve_coin": "109690027456528770714610",
+   "reserve_usdt": "109861518981575647177574",
+   "fee_source": "pool",
+   "fee_pct": "0.1",
+   "fee_method": "swapFee()",
+   "fee_raw": 1,
+   "fee_denominator": 1000
+  },
+  {
+   "coin": "USDC",
+   "family": "fstswap",
+   "address": "0xc6ca8f17d397bae041e772fd2240e2e738c9696a",
+   "reserve_coin": "3259109768",
+   "reserve_usdt": "3252492990",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "USDC",
+   "family": "howswap",
+   "address": "0xe2e6167b93016e673a7d0f98ef2d323b7e6f4760",
+   "reserve_coin": "1000",
+   "reserve_usdt": "1000",
+   "fee_source": "fixed",
+   "fee_pct": "0.2"
+  },
+  {
+   "coin": "USDC",
+   "family": "jetswap_bsc",
+   "address": "0xf10f30a1dc215bde9bf65080babeaf6b20a4243c",
+   "reserve_coin": "1000",
+   "reserve_usdt": "1000",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "USDC",
+   "family": "jswap_bsc",
+   "address": "0x8b1089367dbb2fe76abacecebbc8f8bb5163c10b",
+   "reserve_coin": "199896155435158703",
+   "reserve_usdt": "200467384926313064",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "USDC",
+   "family": "leonicornswap",
+   "address": "0x118790545d2889a89cb60a8dc6ce8a6c176237fc",
+   "reserve_coin": "1001433410646895748",
+   "reserve_usdt": "998690355453170766",
+   "fee_source": "fixed",
+   "fee_pct": "1.9"
+  },
+  {
+   "coin": "USDC",
+   "family": "liquidus-finance-bsc",
+   "address": "0x07882ee42eb54741ab53b770b4d3c63c4951d556",
+   "reserve_coin": "2830866265732883687",
+   "reserve_usdt": "2830090744852156734",
+   "fee_source": "fixed",
+   "fee_pct": "0.35"
+  },
+  {
+   "coin": "USDC",
+   "family": "mdex_bsc",
+   "address": "0x9f4da89774570e27170873befd139a79cb1a3da2",
+   "reserve_coin": "39604838658118604150121",
+   "reserve_usdt": "39746649809447581098840",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "USDC",
+   "family": "melegaswap",
+   "address": "0x3e8b46eb75a574d0e2dd40d786fe05ad7272bc08",
+   "reserve_coin": "2130314701046363450",
+   "reserve_usdt": "2134768189607992099",
+   "fee_source": "fixed",
+   "fee_pct": "0.25"
+  },
+  {
+   "coin": "USDC",
+   "family": "nomiswap",
+   "address": "0xfc3a2aeff7141d6ce7c2afb2db6a9e676c2e18a7",
+   "reserve_coin": "3136709596818213476304",
+   "reserve_usdt": "3142758943798560809059",
+   "fee_source": "pool",
+   "fee_pct": "0.1",
+   "fee_method": "swapFee()",
+   "fee_raw": 1,
+   "fee_denominator": 1000
+  },
+  {
+   "coin": "USDC",
+   "family": "orion-bsc",
+   "address": "0x5de1ae4211628a7d9d89fa29c1e026d66636fa46",
+   "reserve_coin": "4963042125219192",
+   "reserve_usdt": "4952944832197516",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "USDC",
+   "family": "padswap-bsc",
+   "address": "0xb722787e9d381d6a1b22092261c8fdc080f6e5a4",
+   "reserve_coin": "1006",
+   "reserve_usdt": "995",
+   "fee_source": "fixed",
+   "fee_pct": "0.2"
+  },
+  {
+   "coin": "USDC",
+   "family": "pancakeswap-v1-bsc",
+   "address": "0x85f8628bfff75d08f1aa415e5c7e85d96bfd7f57",
+   "reserve_coin": "27372262867590580748409",
+   "reserve_usdt": "27419422505044188387259",
+   "fee_source": "fixed",
+   "fee_pct": "0.2"
+  },
+  {
+   "coin": "USDC",
+   "family": "pancakeswap_v2",
+   "address": "0xec6557348085aa57c72514d67070dc863c0a5a8c",
+   "reserve_coin": "527004863286366460659913",
+   "reserve_usdt": "528852907855354294232508",
+   "fee_source": "fixed",
+   "fee_pct": "0.25"
+  },
+  {
+   "coin": "USDC",
+   "family": "pandora_digital_swap",
+   "address": "0x005b4867e9d6e039867af0fdcdd4b7fd70f4713c",
+   "reserve_coin": "30624950888385580455",
+   "reserve_usdt": "30621925023814963472",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "USDC",
+   "family": "planet_finance",
+   "address": "0x776c8891f0a7c228bca8860cbb23ce8c9841c6a5",
+   "reserve_coin": "54056222953619079509",
+   "reserve_usdt": "54124695696809090593",
+   "fee_source": "fixed",
+   "fee_pct": "0.25"
+  },
+  {
+   "coin": "USDC",
+   "family": "pls2e",
+   "address": "0x70c7e532d83876915b50a283a444c01c5b5e5df3",
+   "reserve_coin": "9619375709273753047",
+   "reserve_usdt": "9624244506499797446",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "USDC",
+   "family": "sphynx_swap",
+   "address": "0x5a0ae86c6713d26cd5e5b2fc4b49d37e58280ead",
+   "reserve_coin": "14131565762103700",
+   "reserve_usdt": "14119376909489966",
+   "fee_source": "pool",
+   "fee_pct": "0.1",
+   "fee_method": "swapFee()",
+   "fee_raw": 1,
+   "fee_denominator": 1000
+  },
+  {
+   "coin": "USDC",
+   "family": "squadswap-deprecated",
+   "address": "0xd637c82f9d60f5f07e007bea46d153c1b845c31e",
+   "reserve_coin": "5897824137188158",
+   "reserve_usdt": "5912426738140751",
+   "fee_source": "fixed",
+   "fee_pct": "0.2"
+  },
+  {
+   "coin": "USDC",
+   "family": "sushiswap_bsc",
+   "address": "0x18dd96c4accaff702106b0923f671538a5abe540",
+   "reserve_coin": "84771947260578680662",
+   "reserve_usdt": "84876546608039009493",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "USDC",
+   "family": "uniswap-v2-bsc",
+   "address": "0x6ab0ae46c4b450bc1b4ffcaa192b235134d584b2",
+   "reserve_coin": "28692718765763233964",
+   "reserve_usdt": "28803238405680850067",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "USDC",
+   "family": "wault_finance",
+   "address": "0x0f882c5df51e45a4f09566c00d749b65c72ae1fe",
+   "reserve_coin": "23436596",
+   "reserve_usdt": "23463591",
+   "fee_source": "fixed",
+   "fee_pct": "0.2"
+  },
+  {
+   "coin": "BNB",
+   "family": "pancakeswap_v2",
+   "address": "0x16b9a82891338f9ba80e2d6970fdda79d1eb0dae",
+   "reserve_coin": "17461734607651956166745",
+   "reserve_usdt": "9359022466590297379117698",
+   "fee_source": "fixed",
+   "fee_pct": "0.25"
+  },
+  {
+   "coin": "BNB",
+   "family": "alium",
+   "address": "0xb55d67aa2d57861c81487b29a578ae1cdf272795",
+   "reserve_coin": "3019292532689430194",
+   "reserve_usdt": "1618892532781076614485",
+   "fee_source": "fixed",
+   "fee_pct": "0.25"
+  },
+  {
+   "coin": "BNB",
+   "family": "ampleswap-bsc",
+   "address": "0xe889c835030a21b12656d7799de8326c1560198e",
+   "reserve_coin": "333337999901541620",
+   "reserve_usdt": "178886243084165118435",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "BNB",
+   "family": "apeswap_bsc",
+   "address": "0x83c5b5b309ee8e232fe9db217d394e262a71bcc0",
+   "reserve_coin": "3213960101949887507",
+   "reserve_usdt": "1722451058260430362268",
+   "fee_source": "fixed",
+   "fee_pct": "0.2"
+  },
+  {
+   "coin": "BNB",
+   "family": "autoshark_finance",
+   "address": "0xbbbb885789bcc958da3de78748e0f40510d6a99b",
+   "reserve_coin": "839736673126904522",
+   "reserve_usdt": "450251875916222910681",
+   "fee_source": "pool",
+   "fee_pct": "0.17",
+   "fee_method": "swapFee()",
+   "fee_raw": 17,
+   "fee_denominator": 10000
+  },
+  {
+   "coin": "BNB",
+   "family": "babydogeswap",
+   "address": "0x2c3d4c9966a466ed6bc434afba8ea3c96ee35c86",
+   "reserve_coin": "921073438377942933205",
+   "reserve_usdt": "493437358900198218490240",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "BNB",
+   "family": "babyswap",
+   "address": "0x04580ce6dee076354e96fed53cb839de9efb5f3f",
+   "reserve_coin": "163829537303916830777",
+   "reserve_usdt": "87786215288938287076165",
+   "fee_source": "fixed",
+   "fee_pct": "0.4"
+  },
+  {
+   "coin": "BNB",
+   "family": "bakeryswap",
+   "address": "0x9ec271c041a18aa7bef070a1f196eea1d06ab7cb",
+   "reserve_coin": "16523494318666993015",
+   "reserve_usdt": "8854279726877874049964",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "BNB",
+   "family": "biswap",
+   "address": "0x8840c6252e2e86e545defb6da98b2a0e26d8c1ba",
+   "reserve_coin": "320938193087779720043",
+   "reserve_usdt": "171962653395464969495625",
+   "fee_source": "pool",
+   "fee_pct": "0.2",
+   "fee_method": "swapFee()",
+   "fee_raw": 2,
+   "fee_denominator": 1000
+  },
+  {
+   "coin": "BNB",
+   "family": "coinswap",
+   "address": "0xc600b285cbfc2098518d953e3a3147cda3a3b07c",
+   "reserve_coin": "3690978497388216",
+   "reserve_usdt": "1982214719062963668",
+   "fee_source": "fixed",
+   "fee_pct": "0.2"
+  },
+  {
+   "coin": "BNB",
+   "family": "definix",
+   "address": "0x7f1bbafc5a7a286b911bb940267e0ec0ee07fbcd",
+   "reserve_coin": "39349323594316",
+   "reserve_usdt": "21109624403805184",
+   "fee_source": "fixed",
+   "fee_pct": "0.2"
+  },
+  {
+   "coin": "BNB",
+   "family": "dinosaureggs",
+   "address": "0x2769549bb6c4a8562015a129b1fbeead2dfaa34e",
+   "reserve_coin": "3394948835096046902",
+   "reserve_usdt": "1821272209639530275037",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "BNB",
+   "family": "fstswap",
+   "address": "0x779680f4ed912b9ec1f4c3546411d535eee74e63",
+   "reserve_coin": "37024030702",
+   "reserve_usdt": "19842256017870",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "BNB",
+   "family": "honorswap",
+   "address": "0x34e827a37df784456295a30806881796bfd6c8ab",
+   "reserve_coin": "49458980447601709",
+   "reserve_usdt": "26575835345472956339",
+   "fee_source": "pool",
+   "fee_pct": "0.25",
+   "fee_method": "getSwapFee()",
+   "fee_raw": 25,
+   "fee_denominator": 10000
+  },
+  {
+   "coin": "BNB",
+   "family": "howswap",
+   "address": "0xc3f5433ff338a1c2e03c2fa6982f07618ed15e40",
+   "reserve_coin": "151475118341071735",
+   "reserve_usdt": "81200263705258011921",
+   "fee_source": "fixed",
+   "fee_pct": "0.2"
+  },
+  {
+   "coin": "BNB",
+   "family": "jetswap_bsc",
+   "address": "0x38153dae67b364dc2639717b5458461598762e0a",
+   "reserve_coin": "205777429494005952",
+   "reserve_usdt": "110420296351560806749",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "BNB",
+   "family": "jswap_bsc",
+   "address": "0x9656de03021d2ecc6d1620b044087b444b768dde",
+   "reserve_coin": "2572257582397624182",
+   "reserve_usdt": "1379925697436771644529",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "BNB",
+   "family": "julswap",
+   "address": "0x4d9f415bb0c31c978e3f0d0ba77239126638875e",
+   "reserve_coin": "63535868413516976",
+   "reserve_usdt": "34156929698624152036",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "BNB",
+   "family": "leonicornswap",
+   "address": "0x6b3917d49fdcddb30a56eb61e787dd4302fa7f2d",
+   "reserve_coin": "170264861556427",
+   "reserve_usdt": "144023677813612976",
+   "fee_source": "fixed",
+   "fee_pct": "1.9"
+  },
+  {
+   "coin": "BNB",
+   "family": "liquidus-finance-bsc",
+   "address": "0x1984e20aa0320c22653fe9640fe25909816a4f67",
+   "reserve_coin": "1370544331786",
+   "reserve_usdt": "957859527654918",
+   "fee_source": "fixed",
+   "fee_pct": "0.35"
+  },
+  {
+   "coin": "BNB",
+   "family": "mdex_bsc",
+   "address": "0x09cb618bf5ef305fadfd2c8fc0c26eecf8c6d5fd",
+   "reserve_coin": "51342807772470508265",
+   "reserve_usdt": "27512650521875133253374",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "BNB",
+   "family": "melegaswap",
+   "address": "0x94fadf053bad0c9d0a3874f82b1a09001926a548",
+   "reserve_coin": "1560282964029614",
+   "reserve_usdt": "839383373961631941",
+   "fee_source": "fixed",
+   "fee_pct": "0.25"
+  },
+  {
+   "coin": "BNB",
+   "family": "nomiswap",
+   "address": "0xe2bbf54dc0ccdd0cf6270f2af2f62ff79903bb27",
+   "reserve_coin": "38840756477015755049",
+   "reserve_usdt": "20827605525012504513938",
+   "fee_source": "pool",
+   "fee_pct": "0.1",
+   "fee_method": "swapFee()",
+   "fee_raw": 1,
+   "fee_denominator": 1000
+  },
+  {
+   "coin": "BNB",
+   "family": "omni-exchange-v2-bsc",
+   "address": "0xd34eac37bcab10118205b9d177fea46730f2b12f",
+   "reserve_coin": "33",
+   "reserve_usdt": "31019",
+   "fee_source": "fixed",
+   "fee_pct": "0.25"
+  },
+  {
+   "coin": "BNB",
+   "family": "orbitalswap",
+   "address": "0x6d8163e9db6c949e92e49c9b3cdb36c69395b680",
+   "reserve_coin": "530929126289390465",
+   "reserve_usdt": "284781121315175876460",
+   "fee_source": "pool",
+   "fee_pct": "0.25",
+   "fee_method": "feeAmount()",
+   "fee_raw": 25,
+   "fee_denominator": 10000
+  },
+  {
+   "coin": "BNB",
+   "family": "orion-bsc",
+   "address": "0x43140d439a685e2b369b34ee31cacc429b1bb396",
+   "reserve_coin": "8402647783825460345",
+   "reserve_usdt": "4506784177954629764917",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "BNB",
+   "family": "padswap-bsc",
+   "address": "0xa55d067e429f40762fc4441059ebd51cdce2aa8b",
+   "reserve_coin": "6215154498327536",
+   "reserve_usdt": "3339529739593545977",
+   "fee_source": "fixed",
+   "fee_pct": "0.2"
+  },
+  {
+   "coin": "BNB",
+   "family": "pancakeswap-v1-bsc",
+   "address": "0x20bcc3b8a0091ddac2d0bc30f68e6cbb97de59cd",
+   "reserve_coin": "157700859220382822209",
+   "reserve_usdt": "84570095762256790174193",
+   "fee_source": "fixed",
+   "fee_pct": "0.2"
+  },
+  {
+   "coin": "BNB",
+   "family": "pandora_digital_swap",
+   "address": "0x1e28726b27f2a78a380668a6cd653efd8878456c",
+   "reserve_coin": "1243415330881927130",
+   "reserve_usdt": "667031470206132010849",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "BNB",
+   "family": "planet_finance",
+   "address": "0x12d35a11bc532cec0e7d0da608b96924aff56aac",
+   "reserve_coin": "226678060362590150",
+   "reserve_usdt": "121574666816883162757",
+   "fee_source": "fixed",
+   "fee_pct": "0.25"
+  },
+  {
+   "coin": "BNB",
+   "family": "pls2e",
+   "address": "0xc7953c4167960c1b7560b9cbfb684087a54c17cc",
+   "reserve_coin": "3750352493228794936",
+   "reserve_usdt": "2011933635289456678767",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "BNB",
+   "family": "saitaswap-bsc",
+   "address": "0xc4176c7367ba654268fef96c21be33b5b96df07d",
+   "reserve_coin": "4583488586338033004",
+   "reserve_usdt": "2458882163442062506311",
+   "fee_source": "fixed",
+   "fee_pct": "0.2"
+  },
+  {
+   "coin": "BNB",
+   "family": "sphynx_swap",
+   "address": "0x9993964ad0ccd3d50d48d30805bfc491b7996391",
+   "reserve_coin": "1171071793178849427",
+   "reserve_usdt": "627964571591383393778",
+   "fee_source": "pool",
+   "fee_pct": "0.1",
+   "fee_method": "swapFee()",
+   "fee_raw": 1,
+   "fee_denominator": 1000
+  },
+  {
+   "coin": "BNB",
+   "family": "squadswap-deprecated",
+   "address": "0x6a1856a891e139c4a73189dda3baf7d65393a283",
+   "reserve_coin": "78441210934259",
+   "reserve_usdt": "42081153431201995",
+   "fee_source": "fixed",
+   "fee_pct": "0.2"
+  },
+  {
+   "coin": "BNB",
+   "family": "squadswap-v2-bsc",
+   "address": "0xcb1753e2751876e280116f029fd501bbf4e6a371",
+   "reserve_coin": "535697617138412144",
+   "reserve_usdt": "287194990546365767728",
+   "fee_source": "pool",
+   "fee_pct": "0.195",
+   "fee_method": "getFee()",
+   "fee_raw": 1950,
+   "fee_denominator": 1000000
+  },
+  {
+   "coin": "BNB",
+   "family": "sushiswap_bsc",
+   "address": "0x2905817b020fd35d9d09672946362b62766f0d69",
+   "reserve_coin": "33457376918314018595",
+   "reserve_usdt": "17945261122366674569127",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "BNB",
+   "family": "traderjoe-bsc",
+   "address": "0x8b566fcf22670a776796fb6de97af7f32cbfe41e",
+   "reserve_coin": "530553844926063409",
+   "reserve_usdt": "284722454438816307659",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "BNB",
+   "family": "uniswap-v2-bsc",
+   "address": "0x8a1ed8e124fdfbd534bf48baf732e26db9cc0cf4",
+   "reserve_coin": "978760924359750439",
+   "reserve_usdt": "525057190420493488055",
+   "fee_source": "fixed",
+   "fee_pct": "0.3"
+  },
+  {
+   "coin": "BNB",
+   "family": "wault_finance",
+   "address": "0xd6196036cb72bb921e013189cc594fec29453c2e",
+   "reserve_coin": "14524725629181796478",
+   "reserve_usdt": "7782704350015016061110",
+   "fee_source": "fixed",
+   "fee_pct": "0.2"
+  }
+ ],
+ "gas_price_wei": "50000000"
+}

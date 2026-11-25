@@ -118,7 +118,11 @@ pub fn take(core: &Core, key: &CoinKey) -> bool {
 pub fn free_active(core: &Core, key: &CoinKey) {
     let mut active = lk(&core.inner.active);
     if active.remove(key) {
-        super::window_queue_trace::released(core, key);
+        if core.inner.queue_trace_coins.load().contains(key)
+            && !lk(&core.inner.rides).contains_key(key)
+        {
+            super::window_queue_trace::released(core, key);
+        }
     }
     drop(active);
     core.inner.coin_wake.notify_waiters();
@@ -227,7 +231,6 @@ pub fn board(core: &Core, d: &Direction, deal_id: &str, group: Option<String>) {
     }
     // Решение 403 (ревью t188): счётчик записей — под замками `active` и `rides` (blocks_new читает его после `active`).
     core.inner.rides_live.fetch_add(1, Ordering::AcqRel);
-    super::window_queue_trace::released(core, &key);
     r.entry(key).or_default().push(Ride {
         deal_id: deal_id.to_string(),
         buy_on: d.buy_on.clone(),
@@ -245,6 +248,7 @@ pub fn release(core: &Core, key: &CoinKey, boarded: Option<&str>) {
         return;
     };
     let mut r = lk(&core.inner.rides);
+    let mut last = false;
     if let Some(v) = r.get_mut(key) {
         let grouped = v
             .iter()
@@ -260,10 +264,16 @@ pub fn release(core: &Core, key: &CoinKey, boarded: Option<&str>) {
             .fetch_sub(before - v.len(), Ordering::AcqRel);
         if v.is_empty() {
             r.remove(key);
-            super::window_queue_trace::released(core, key);
+            last = true;
         }
     }
     drop(r);
+    if last && core.inner.queue_trace_coins.load().contains(key) {
+        let active = lk(&core.inner.active);
+        if !active.contains(key) && !lk(&core.inner.rides).contains_key(key) {
+            super::window_queue_trace::released(core, key);
+        }
+    }
     // Решение 405: запись снята — ожидания ручных действий проверяют монету (manual_wait_run.rs).
     core.inner.coin_wake.notify_waiters();
 }

@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 pub struct QueueTrace {
     pub direction: Direction,
     pub busy_at: DateTime<Utc>,
+    /// First observation that both the outer coin lock and all rides were free. A top-up may queue sooner.
     pub released_at: Option<DateTime<Utc>>,
     pub book_delivered_at: Option<DateTime<Utc>>,
     pub pool_delivered: Option<(DateTime<Utc>, u64)>,
@@ -97,15 +98,20 @@ pub(super) fn market(
         return;
     }
     update(core, &CoinKey::of(asset), |r| {
-        if r.released_at.is_none()
-            || (&r.direction.buy_on != venue && &r.direction.sell_on != venue)
-        {
+        let Some(relevant_from) = r.released_at.or(r.queued_at) else {
+            return;
+        };
+        if &r.direction.buy_on != venue && &r.direction.sell_on != venue {
             return;
         }
-        if let Some(mark) = block {
-            r.pool_delivered.get_or_insert(mark);
-        } else {
-            r.book_delivered_at.get_or_insert_with(Utc::now);
+        match block {
+            Some((at, height)) if at >= relevant_from => {
+                r.pool_delivered.get_or_insert((at, height));
+            }
+            Some(_) => {}
+            None => {
+                r.book_delivered_at.get_or_insert_with(Utc::now);
+            }
         }
     });
 }
@@ -115,7 +121,7 @@ pub(super) fn queued(core: &Core, d: &Direction) {
         return;
     }
     update(core, &CoinKey::of(&d.asset), |r| {
-        if &r.direction == d && r.released_at.is_some() {
+        if &r.direction == d {
             r.queued_at.get_or_insert_with(Utc::now);
         }
     });

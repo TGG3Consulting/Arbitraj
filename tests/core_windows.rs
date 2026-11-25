@@ -328,7 +328,11 @@ async fn window_records_raw_frames_and_closes() {
     let key = CoinKey::of(&dir_.asset);
     assert!(arb::core::coin_ride::take(&core, &key));
     assert!(arb::core::coin_ride::admit(&core, &dir_).is_err());
-    arb::core::coin_ride::free_active(&core, &key);
+    arb::core::coin_ride::board(&core, &dir_, "competing-order", None);
+    assert!(arb::core::coin_ride::blocks_new(&core, &dir_));
+    let open = core.windows(Filter::default(), 10, 0).await.unwrap();
+    assert!(open["windows"][0]["queue_traces"][0]["released_at"].is_null());
+    arb::core::coin_ride::release(&core, &key, Some("competing-order"));
     candidates::enqueue(&core, &dir_);
     for _ in 0..100 {
         let windows = core.windows(Filter::default(), 10, 0).await.unwrap();

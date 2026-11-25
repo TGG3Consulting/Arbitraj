@@ -6419,3 +6419,10 @@
 - **Контроль отсева (t171, решения 385, 386) — решение владельца:** sieve.audit_share и код контроля кандидатов (core/sieve_audit.rs) и циклов (venues/bsc_dex/quote/cycle_audit.rs) в t171 НЕ удалены — убрать ли, решает Тигран после суток без core.sieve_violation (теперь — и по циклам: cycle_audit_violation = 0 в сводке dex.quote_count). Итог офлайн-перебора циклов на записях (tests/bsc_dex_bound_cycles_t171.rs) — смотреть прогон в GitHub.
 - **Строка отсева без journal.repeat_flush_ms (решение 386):** в прежнем режиме журнала (настройка не задана) строка отсева в браузере показывает числа первого отсева своего вида до смены вида причины — это следствие правила «показ = запись журнала»; если нужны живые числа без этой настройки — решение Тиграна.
   - T471-04 (ревью): при слиянии с решением 460 (stdhttp.py бросает StaleState(BaseException)) — в pancake_stable.py ловить stdhttp.StaleState (или перейти на recnode.fresh), иначе повтор фазы на новом блоке не сработает; в тест добавить сверку calldata getPairInfo/getThreePoolPairInfo с ABI alloy.
+
+## Предстоящие доработки по аудиту 25.11.2026
+
+- [ ] [#117 Gate: учитывать подтверждённый отказ вывода на конкретный адрес до новой покупки](https://github.com/TGG3Consulting/Arbitraj/issues/117)
+- [ ] [#118 После выхода сделки из группы учитывать отдельный возврат USDT при выборе продажи](https://github.com/TGG3Consulting/Arbitraj/issues/118)
+- [ ] [#119 Предпроверка CEX → V2: повторно выбирать объём при изменении резерва риска](https://github.com/TGG3Consulting/Arbitraj/issues/119)
+- [ ] [#120 Учитывать границы округления количества продажи при выборе объёма DEX → CEX](https://github.com/TGG3Consulting/Arbitraj/issues/120)

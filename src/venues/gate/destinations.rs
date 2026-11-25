@@ -124,6 +124,24 @@ impl Destinations {
             Ok(Mutex::new(rows))
         }).await
     }
+    pub(super) async fn relevant(
+        &self,
+        ctx: &Ctx,
+        asset: &str,
+        network: &str,
+    ) -> GatewayResult<bool> {
+        let states = self.states(ctx).await?;
+        if self.blocked.load(Ordering::Acquire) == 0 {
+            return Ok(false);
+        }
+        let account = account(ctx)?;
+        Ok(states
+            .lock()
+            .await
+            .keys()
+            .any(|key| key.asset == asset && key.network == network && key.account == account))
+    }
+
     pub(super) async fn check(
         &self,
         ctx: &Ctx,

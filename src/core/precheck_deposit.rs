@@ -37,12 +37,19 @@ pub(super) async fn withdraw_destination(
     if !from.requires_withdraw_destination_check() {
         return Ok(());
     }
+    let source = target_on(core, &d.asset, &d.buy_on)?;
+    if !from
+        .needs_withdraw_destination_address(&source.on, &source.net)
+        .await
+        .map_err(|e| e.message)?
+    {
+        return Ok(());
+    }
     let to = gw
         .get_as(&d.sell_on, account)
         .await
         .map_err(|e| e.message)?;
     let address = to.wallet_address().await.map_err(|e| e.message)?;
-    let source = target_on(core, &d.asset, &d.buy_on)?;
     from.check_withdraw_destination(&source.on, &source.net, &address)
         .await
         .map_err(|e| {

@@ -179,10 +179,6 @@ pub trait Venue: Send + Sync {
         Ok(None)
     }
 
-    /// Справочник одной монеты (решение 113): предпроверке сделки нужен свежий статус ввода/вывода одной монеты, а не
-    /// всех монет биржи. По умолчанию — coin_networks() с фильтром по тикеру (у API нет запроса одной монеты — так
-    /// у MEXC). Адаптер с таким запросом в официальной документации (BingX: config/getall?coin=) переопределяет.
-    /// Принимает: тикер. Возвращает: сети монеты (пусто — монеты нет). Ошибки: как coin_networks.
     /// Refresh rates after a withdrawal's final fee disagrees with the announced tariff.
     /// Adapters that cache the complete directory update the affected network in their local copy too.
     async fn refresh_withdraw_tariff(
@@ -193,6 +189,10 @@ pub trait Venue: Send + Sync {
         self.coin_networks_of(ticker).await
     }
 
+    /// Справочник одной монеты (решение 113): предпроверке сделки нужен свежий статус ввода/вывода одной монеты, а не
+    /// всех монет биржи. По умолчанию — coin_networks() с фильтром по тикеру (у API нет запроса одной монеты — так
+    /// у MEXC). Адаптер с таким запросом в официальной документации (BingX: config/getall?coin=) переопределяет.
+    /// Принимает: тикер. Возвращает: сети монеты (пусто — монеты нет). Ошибки: как coin_networks.
     async fn coin_networks_of(&self, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
         Ok(self
             .coin_networks()
@@ -423,6 +423,16 @@ pub trait Venue: Send + Sync {
     /// Требуется ли до покупки проверить адрес получателя в адресной книге отправителя.
     fn requires_withdraw_destination_check(&self) -> bool {
         false
+    }
+
+    /// Can this sender need the actual DEX address for this coin/network? Most address books always do.
+    /// A sender that only remembers past rejections can skip looking up unrelated wallets.
+    async fn needs_withdraw_destination_address(
+        &self,
+        _asset: &Asset,
+        _network: &str,
+    ) -> GatewayResult<bool> {
+        Ok(self.requires_withdraw_destination_check())
     }
 
     /// Local address rejection known to this sender also applies to CEX deposit addresses.

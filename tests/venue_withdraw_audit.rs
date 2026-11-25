@@ -109,6 +109,12 @@ async fn gate_rain_repeat_uses_local_account_scoped_denial_and_survives_restart(
         taps: Default::default(),
     };
     let adapter = Gate::new(ctx.clone());
+    assert!(
+        !adapter
+            .needs_withdraw_destination_address(&asset("RAIN"), "ARBEVM")
+            .await
+            .unwrap()
+    );
     let req = WithdrawRequest {
         venue: VenueId("gate".into()),
         asset: asset("RAIN"),
@@ -149,6 +155,18 @@ async fn gate_rain_repeat_uses_local_account_scoped_denial_and_survives_restart(
     drop(adapter);
     let adapter = Gate::new(ctx);
     assert!(adapter.checks_cex_withdraw_destination());
+    assert!(
+        adapter
+            .needs_withdraw_destination_address(&req.asset, &req.network)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !adapter
+            .needs_withdraw_destination_address(&asset("OTHER"), &req.network)
+            .await
+            .unwrap()
+    );
     assert_eq!(
         adapter
             .check_withdraw_destination(&req.asset, &req.network, &req.address.to_ascii_lowercase())

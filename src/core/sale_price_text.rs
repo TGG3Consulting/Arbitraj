@@ -65,7 +65,7 @@ pub(super) fn render(core: &Core, deal: &Deal, qty: Decimal, rates: &Comparison)
         }
     } else if here {
         lines.push(format!(
-            "Лучший доступный вариант: {}. Выгоднее текущего места не найдено.",
+            "Лучший доступный вариант: {}. Прирост к продаже здесь: 0 USDT (0%).",
             venue(core, &deal.at)
         ));
     } else {

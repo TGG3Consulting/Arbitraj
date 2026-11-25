@@ -46,7 +46,10 @@ pub fn targets(core: &Core, deal: &Deal) -> (Vec<VenueId>, Vec<String>) {
         return (vec![], skip);
     };
     if !e.at(from).is_some_and(|p| p.can_send) {
-        skip.push(format!("вывод с {} по BSC закрыт — перегона нет", from.0));
+        skip.push(format!(
+            "вывод с {} по сети сделки закрыт — перегона нет",
+            from.0
+        ));
     }
     if !skip.is_empty() {
         return (vec![], skip);

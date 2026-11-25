@@ -51,11 +51,9 @@ pub async fn compare(core: &Core, deal: &Deal) -> Result<Comparison, String> {
     if deal.qty <= Decimal::ZERO {
         return Err("У сделки нет монет для продажи".into());
     }
-    let (mut targets, mut skipped) = super::manual_relay_targets::targets(core, deal);
-    if super::credit_fact::rest(deal).is_some() {
-        targets.clear();
-        skipped.push("Размер зачисленной доли ещё уточняется, перегон недоступен".into());
-    }
+    // quote_qty has already projected this deal's share without assigning funds.
+    // Execution applies the normal allocation and verifies the amount before any order.
+    let (mut targets, skipped) = super::manual_relay_targets::targets(core, deal);
     targets.sort_by(|a, b| a.0.cmp(&b.0));
     let past: Vec<_> = super::usdt_return_parts::sell_venues(deal)
         .into_iter()

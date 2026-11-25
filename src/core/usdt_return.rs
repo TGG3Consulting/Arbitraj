@@ -35,6 +35,18 @@ pub type Holder = (VenueId, Option<DexAccountId>);
 /// The DEX end determines the on-chain USDT contract in both directions.
 /// CEX-to-CEX keeps the configured default settlement network.
 pub fn route_asset(core: &Core, venue: &VenueId, to: &VenueId) -> Result<Asset, String> {
+    let from_dex = super::daily_venue::is_dex(core, &venue.0);
+    let to_dex = super::daily_venue::is_dex(core, &to.0);
+    if from_dex
+        && to_dex
+        && venue != to
+        && super::chain::tag_of_dex(core, venue)? != super::chain::tag_of_dex(core, to)?
+    {
+        return Err(format!(
+            "{} → {}: для возврата USDT нужен межсетевой перевод",
+            venue.0, to.0
+        ));
+    }
     let ticker = core
         .inner
         .deps
@@ -47,9 +59,8 @@ pub fn route_asset(core: &Core, venue: &VenueId, to: &VenueId) -> Result<Asset, 
             },
         )
         .map_err(|e| e.message)?;
-    let is_dex = |v: &VenueId| super::daily_venue::is_dex(core, &v.0);
-    let network = if is_dex(to) { to } else { venue };
-    let tag = if is_dex(network) {
+    let network = if to_dex { to } else { venue };
+    let tag = if from_dex || to_dex {
         super::chain::tag_of_dex(core, network)?
     } else {
         None

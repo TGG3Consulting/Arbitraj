@@ -47,15 +47,14 @@ async fn available_qty(core: &Core, deal: &Deal, include_funding: bool) -> Resul
     let _guard = super::credit_lock::fact(v, asset).await;
     // Обычная кнопка сначала распределяет спорный остаток. Здесь рассчитывается
     // та же доля по тому же спот-факту, пока не записывая её другим сделкам.
-    if super::credit_fact::rest(deal).is_some() {
+    let others = super::remain_others::on_account(core, deal, v);
+    let rest_qty = if super::credit_fact::rest(deal).is_some() {
         let fact = super::remain_read::fact_at(core, deal, v).await?;
-        let others = super::remain_others::on_account(core, deal, v);
-        let own = super::credit_rest_lock::preview(core, deal, fact, &others)?;
-        if own <= Decimal::ZERO {
-            return Err("После сверки остатка у сделки нет монет.".into());
-        }
-        return Ok(own);
-    }
+        Some(super::credit_rest_lock::preview(core, deal, fact, &others)?)
+    } else {
+        None
+    };
+    let want = rest_qty.unwrap_or(deal.qty);
     let (total, free) = if super::trade_ops::kind(core, v)? == VenueKind::Cex {
         let gw = super::dex_account::venue_of(core, deal, v).await?;
         let balance = gw
@@ -67,13 +66,13 @@ async fn available_qty(core: &Core, deal: &Deal, include_funding: bool) -> Resul
         });
         // Ручная продажа умеет добирать монеты со счёта роли ToTrading (решение 174).
         // На запрос цены лишь считаем сколько сможет перейти, без вызова move_to_trading.
-        let movable = if include_funding && free < deal.qty {
+        let movable = if include_funding && free < want {
             let on = super::venue_ticker::ticker_on(core, asset, v);
             match gw.account_balances().await {
                 Ok(accounts) => super::to_trading::sources(gw.as_ref(), &accounts, &on)
                     .map(|(_, q)| q.max(Decimal::ZERO))
                     .sum::<Decimal>()
-                    .min(deal.qty - free),
+                    .min(want - free),
                 Err(e) if free.is_zero() => {
                     return Err(format!("{}: счета монеты не прочитаны: {}", v.0, e.message));
                 }
@@ -87,16 +86,19 @@ async fn available_qty(core: &Core, deal: &Deal, include_funding: bool) -> Resul
         let (free, _) = super::manual_halted::on_hand(core, deal, v, asset, Decimal::MAX).await?;
         (free, free)
     };
-    let others = super::remain_others::on_account(core, deal, v);
-    let input = super::credit_apply::input(core, deal, total, &others);
-    let split = super::credit_split::split(&input);
-    let own = if super::credit_fact::pending(deal) {
-        split.share_of(&deal.id).unwrap_or_default().min(deal.qty)
+    let own = if let Some(q) = rest_qty {
+        q
     } else {
-        let others = super::credit_apply::with_shares(&others, &split);
-        match super::remain_others::own_qty(deal.qty, total, &others) {
-            Own::Qty(q) => q,
-            Own::Human => return Err("Монеты на счёте принадлежат другим сделкам.".into()),
+        let input = super::credit_apply::input(core, deal, total, &others);
+        let split = super::credit_split::split(&input);
+        if super::credit_fact::pending(deal) {
+            split.share_of(&deal.id).unwrap_or_default().min(deal.qty)
+        } else {
+            let others = super::credit_apply::with_shares(&others, &split);
+            match super::remain_others::own_qty(deal.qty, total, &others) {
+                Own::Qty(q) => q,
+                Own::Human => return Err("Монеты на счёте принадлежат другим сделкам.".into()),
+            }
         }
     };
     if own <= Decimal::ZERO || free < own {
@@ -243,14 +245,9 @@ async fn sell_selected(
     }
     if super::trade_ops::kind(core, &deal.at) == Ok(VenueKind::Cex) {
         // Перекладка FUND → SPOT разрешена только теперь, после подтверждения.
-        let hand = super::manual_halted::on_hand_sell(
-            core,
-            &deal,
-            &deal.at,
-            &deal.direction.asset,
-            deal.qty,
-        )
-        .await;
+        let hand =
+            super::manual_halted::on_hand_sell(core, &deal, &deal.at, &deal.direction.asset, qty)
+                .await;
         match hand {
             Ok((free, note)) if free >= qty => {
                 if let Some(text) = note {

@@ -135,6 +135,11 @@ async fn usdt_return_from_cex_uses_the_buying_wallet_network() {
         );
     }
     // When the requested chain is missing, the default chain must never substitute for it.
+    assert!(
+        arb::core::usdt_return::route_asset(&core, &v("bsc_dex"), &v("arb_dex"))
+            .unwrap_err()
+            .contains("межсетевой перевод")
+    );
     core.inner.usdt_other.write().unwrap().clear();
     assert!(arb::core::usdt_return::route_asset(&core, &from, &v("arb_dex")).is_err());
 }

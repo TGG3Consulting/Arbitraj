@@ -1,0 +1,36 @@
+name: Independent wallet presell control
+on:
+  push:
+    branches: [codex/wallet-presell-control-20261125]
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sha: [34322e1617e0a393c2e60816ca61f36705062348, 4c4f4b0424ed7974397802c9eab64cf2b67f39e3, 91b86c672aa73ef0ba9ab6e1870fc9cc647cce4f]
+    env:
+      CARGO_PROFILE_TEST_DEBUG: 0
+      CARGO_PROFILE_DEV_DEBUG: 0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: control
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.sha }}
+          path: srcbot
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: srcbot -> target
+          shared-key: wallet-control
+      - run: python3 control/tools/wallet_presell_control/prepare.py
+      - run: cargo test --locked --test wallet_audit
+        working-directory: srcbot
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wallet-presell-${{ matrix.sha }}
+          path: srcbot/case-*.json

@@ -17,7 +17,7 @@ jobs:
           path: control
       - uses: actions/checkout@v4
         with:
-          ref: 288215a62d858bd3a70bfc0afbcbdb707e79edf0
+          ref: d328baf1853fe1c6ba69e672d2cbaf5e819a6e0d
           path: release
       - uses: actions/checkout@v4
         with:
@@ -60,7 +60,7 @@ jobs:
               grep -E '^error(\[E[0-9]+\])?:|panicked at|assertion .*failed|^test .*FAILED|^ *-->' -A 6 "$RUNNER_TEMP/$output.log" | head -n 75
               exit 1
             fi
-            grep -E 'ACTUAL_V2_MATRIX|NATIVE_NEIGHBOUR' "$RUNNER_TEMP/$output.log" > "../size-$output.jsonl"
+            grep -E 'ACTUAL_V2_MATRIX|NATIVE_NEIGHBOUR|NATIVE_RISK_PRECHECK' "$RUNNER_TEMP/$output.log" > "../size-$output.jsonl"
           done
           cargo test --locked --test core_card_disconnected --test core_precheck_fast_266
           cargo clippy --locked --lib -- -D warnings

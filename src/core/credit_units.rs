@@ -8,6 +8,20 @@ use crate::core::{
 use crate::gateway::contract::{Venue, VenueKind};
 use rust_decimal::Decimal;
 
+/// Сумма, отправленная биржей после её собственной комиссии, ещё не учитывает
+/// удержание контракта. При известном налоге и без измерения размер поступления
+/// устанавливается по квитанции; нулевой замер позволяет искать ровно один лог.
+pub(super) fn wire_without_tax(
+    wire: Decimal,
+    measured_tax: Option<Decimal>,
+    pinned: Option<UnitRatio>,
+) -> Option<Decimal> {
+    if measured_tax != Some(Decimal::ZERO) {
+        return None;
+    }
+    pinned?.to_sell(wire).ok()
+}
+
 /// Стабильность проверяется для единиц обеих площадок, а не только их отношения.
 pub(super) fn stable(pinned: Option<UnitRatio>, current: Option<UnitRatio>) -> Option<UnitRatio> {
     pinned.filter(|r| !r.is_identity() && Some(*r) == current)
@@ -164,6 +178,25 @@ fn exact_units(reported_gross: Decimal, fee: Decimal, raw: Decimal, ui: Decimal)
 mod tests {
     use super::*;
     use serde_json::Value;
+
+    #[test]
+    fn sender_wire_does_not_predict_the_wallet_amount_for_taxed_or_unmeasured_tokens() {
+        let gross_after_cex_fee = Decimal::from(100);
+        let units = Some(UnitRatio::IDENTITY);
+        assert_eq!(
+            wire_without_tax(gross_after_cex_fee, Some(Decimal::ZERO), units),
+            Some(gross_after_cex_fee)
+        );
+        assert_eq!(
+            wire_without_tax(gross_after_cex_fee, Some(Decimal::from(5)), units),
+            None
+        );
+        assert_eq!(wire_without_tax(gross_after_cex_fee, None, units), None);
+        assert_eq!(
+            wire_without_tax(gross_after_cex_fee, Some(Decimal::ZERO), None),
+            None
+        );
+    }
 
     #[test]
     fn binance_ticker_only_history_identifies_its_own_network() {

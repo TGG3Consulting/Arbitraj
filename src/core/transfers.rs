@@ -649,12 +649,12 @@ async fn go(
         tx,
         started,
     };
-    if indexed
-        && let Some(wire) = gw_from.withdrawal_wire(&created, &sent)
-        && super::transfer_tax::pct(core, to, asset).is_ok_and(|tax| tax.is_zero())
-        && let Some(ratio) = units
-    {
-        claim.expected = ratio.to_sell(wire).ok();
+    if indexed && let Some(wire) = gw_from.withdrawal_wire(&created, &sent) {
+        claim.expected = super::credit_units::wire_without_tax(
+            wire,
+            super::transfer_tax::pct(core, to, asset).ok(),
+            units,
+        );
     }
     let credited = Box::pin(super::transfer_credit::wait_with_units(
         core,

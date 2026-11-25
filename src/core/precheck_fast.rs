@@ -193,36 +193,43 @@ pub async fn recalc(
         let Ok(slot) = core.inner.hint_slot.clone().try_acquire_owned() else {
             return (calculate(qty).await, false);
         };
+        let warm = super::precheck_hint::ready(core, cx, qty, budget, step, (min_usd, min_pct));
+        let prepared = warm.is_some();
         let other = async {
-            let (q, mark, _slot) = super::precheck_hint::alternative(
-                core,
-                cx,
-                qty,
-                budget,
-                step,
-                (min_usd, min_pct),
-                slot,
-            )
-            .await
-            .ok_or_else(String::new)?;
+            let (q, mark, _slot) = match warm {
+                Some((q, mark)) => (q, mark, slot),
+                None => super::precheck_hint::alternative(
+                    core,
+                    cx,
+                    qty,
+                    budget,
+                    step,
+                    (min_usd, min_pct),
+                    slot,
+                )
+                .await
+                .ok_or_else(String::new)?,
+            };
             Ok((calculate(q).await?, Some(mark)))
         };
         let original = async { Ok((calculate(qty).await?, None)) };
-        let (result, moved) = super::precheck_hint::compare(original, other, |(a, mark), old| {
-            if super::precheck_hint::stamp(core, cx) != *mark {
-                return false;
-            }
-            old.is_none_or(|(b, _)| {
-                let same_block = |x: &crate::core::types::Quote, y: &crate::core::types::Quote| {
-                    x.route.as_ref().map(|r| r.block) == y.route.as_ref().map(|r| r.block)
-                };
-                same_block(&a.buy_quote, &b.buy_quote)
-                    && same_block(&a.sell_quote, &b.sell_quote)
-                    && (a.profit_usd, std::cmp::Reverse((a.spend_max, a.qty)))
-                        > (b.profit_usd, std::cmp::Reverse((b.spend_max, b.qty)))
+        let (result, moved) =
+            super::precheck_hint::compare(original, other, prepared, |(a, mark), old| {
+                if super::precheck_hint::stamp(core, cx) != *mark {
+                    return false;
+                }
+                old.is_none_or(|(b, _)| {
+                    let same_block =
+                        |x: &crate::core::types::Quote, y: &crate::core::types::Quote| {
+                            x.route.as_ref().map(|r| r.block) == y.route.as_ref().map(|r| r.block)
+                        };
+                    same_block(&a.buy_quote, &b.buy_quote)
+                        && same_block(&a.sell_quote, &b.sell_quote)
+                        && (a.profit_usd, std::cmp::Reverse((a.spend_max, a.qty)))
+                            > (b.profit_usd, std::cmp::Reverse((b.spend_max, b.qty)))
+                })
             })
-        })
-        .await;
+            .await;
         (result.map(|(c, _)| c), moved)
     };
     let (result, changed) = stage(|| STAGE.into(), work).await;

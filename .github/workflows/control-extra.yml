@@ -1,0 +1,70 @@
+name: CEX rounding sensitivity and NXT open decision
+on:
+  push:
+    branches: ["audit/control-rounding-20261125"]
+permissions:
+  contents: read
+env:
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_INCREMENTAL: "0"
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.inv.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: inv
+        run: python -c 'import json; r=json.load(open("tools/release_size_matrix/control_all.json")); assert len(r)==len({x["sha"] for x in r})==53; print("matrix="+json.dumps({"include":r}))' >> "$GITHUB_OUTPUT"
+  proof:
+    needs: inventory
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 16
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.inventory.outputs.matrix) }}
+    env:
+      RELEASE_SHA: ${{ matrix.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: harness
+      - uses: actions/checkout@v4
+        with:
+          path: release
+          ref: ${{ matrix.sha }}
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: release -> target
+          shared-key: release-size-matrix
+      - name: Stage controls against verified checkout
+        run: |
+          set -e
+          test "$(git -C release rev-parse HEAD)" = "$RELEASE_SHA"
+          p=harness/tools/release_size_matrix
+          python "$p/stored_compare.py" release "$p/stored_cases.json"
+          python "$p/actual_v2.py" stage release "$p/actual_v2_cases.json"
+          python "$p/actual_v3.py" stage release "$p/actual_v3_cases.json"
+          python "$p/with_history.py" release
+          python "$p/rounding_nxt.py" release
+      - name: Replay both legs with native core and historical settings
+        working-directory: release
+        run: |
+          set -e
+          for spec in 'core_size_stored_compare stored_trade_matrix STORED_TRADE_MATRIX 6' 'control_nxt nxt_control NXT_MATRIX 2'; do
+            read -r target case marker count <<< "$spec"
+            log="$RUNNER_TEMP/$target.log"
+            if ! cargo test --locked --test "$target" "$case" -- --exact --nocapture > "$log" 2>&1; then
+              grep -E 'error(\[E[0-9]+\])?:|panicked at|assertion|FAILED| -->' -A 4 "$log" | head -n 72
+              exit 1
+            fi
+            sed -n -E "s/^(test [^ ]+ \.\.\. )?$marker //p" "$log" > "../$marker.jsonl"
+            test "$(wc -l < "../$marker.jsonl")" -eq "$count"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: extra-${{ matrix.sha }}
+          path: "*.jsonl"
+          if-no-files-found: ignore

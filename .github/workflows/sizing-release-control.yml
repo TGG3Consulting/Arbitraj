@@ -17,7 +17,7 @@ jobs:
           path: control
       - uses: actions/checkout@v4
         with:
-          ref: 5c696b0dd6fd11bf0991409b5cb79a45222ce286
+          ref: 2925a361bb88edff0ee1aab3e18bdd3e6ff5b843
           path: release
       - uses: actions/checkout@v4
         with:

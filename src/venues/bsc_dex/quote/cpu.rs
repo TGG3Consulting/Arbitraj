@@ -94,8 +94,20 @@ where
     // Решение 348 (слияние t157 + t160): назначение «кто вызвал котировку» — в поток счёта, как класс срочности.
     let purpose = quote_purpose::current();
     // Решение 338: задан общий предел — место по ярусу (без dex.quote_cpu_max, ревью Н1); не задан — как до 336.
-    let (held, budget, tier) = match cpu_budget::limits(&ctx.settings) {
-        Some(lim) => {
+    let (held, budget, tier) = match (
+        cpu_budget::is_optional_quote(),
+        cpu_budget::limits(&ctx.settings),
+    ) {
+        (true, limits) => {
+            let p = cpu_budget::try_optional(limits).ok_or_else(|| {
+                ctx.err(
+                    ErrorCode::Internal,
+                    "нет свободного фонового места для необязательной котировки".to_owned(),
+                )
+            })?;
+            (None, Some(p), Some(Tier::Background))
+        }
+        (false, Some(lim)) => {
             let tier = cpu_budget::tier_of(class, fin || patience::is_exec());
             // Ожидание места — из кучи: будущее run не растёт (сторож стека tests/bsc_dex_quote_cpu_stack.rs).
             (
@@ -104,7 +116,7 @@ where
                 Some(tier),
             )
         }
-        None => (permit(ctx).await, None, None),
+        (false, None) => (permit(ctx).await, None, None),
     };
     let share = calc_share::current();
     let rt = tokio::runtime::Handle::current();

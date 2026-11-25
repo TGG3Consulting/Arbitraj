@@ -178,6 +178,29 @@ pub fn try_acquire(lim: Limits, t: Tier) -> Option<Permit> {
     }
 }
 
+tokio::task_local! { static OPTIONAL_QUOTE: (); }
+
+pub async fn optional_quote<F: Future>(work: F) -> F::Output {
+    OPTIONAL_QUOTE.scope((), work).await
+}
+
+pub fn is_optional_quote() -> bool {
+    OPTIONAL_QUOTE.try_with(|_| ()).is_ok()
+}
+
+/// Extra work may use only a free background slot in a configuration with a
+/// separate deal reserve. It never joins the queue ahead of another quote.
+pub fn try_optional(limits: Option<Limits>) -> Option<Permit> {
+    let lim = limits.filter(|l| l.reserve_deal > 0)?;
+    if BUDGET.waiting[..2]
+        .iter()
+        .any(|n| n.load(Ordering::Acquire) > 0)
+    {
+        return None;
+    }
+    try_acquire(lim, Tier::Background)
+}
+
 /// Взять место, дождавшись его. Принимает: пределы, ярус. Возвращает: место. Ошибок нет. Брошенное ожидание места не
 /// занимает и снимается из ждущих. Подписка на «освободилось» — до проверки: освобождение между проверкой и ожиданием
 /// не теряется (у Notify::notify_one без ждущего остаётся разрешение).

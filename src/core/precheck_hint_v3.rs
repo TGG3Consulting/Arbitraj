@@ -74,8 +74,21 @@ pub(super) fn best(points: &[Sample], bids: &[PriceLevel], model: &Model, fee: D
                 b.price * (keep - fee),
                 step,
             );
-            for q in [Some(lo), Some(hi), stationary].into_iter().flatten() {
-                let q = q - q.checked_rem(step)?;
+            let align = |q: D| q.checked_sub(q.checked_rem(step)?);
+            let low = align(lo)?;
+            let low = if low < lo {
+                low.checked_add(step)?
+            } else {
+                low
+            };
+            let near = stationary.and_then(align);
+            let above = near
+                .zip(stationary)
+                .and_then(|(n, target)| (n < target).then(|| n.checked_add(step)).flatten());
+            for q in [Some(low), Some(align(hi)?), near, above]
+                .into_iter()
+                .flatten()
+            {
                 if q <= D::ZERO || q < lo || q > hi {
                     continue;
                 }
@@ -112,4 +125,44 @@ pub(super) fn best(points: &[Sample], bids: &[PriceLevel], model: &Model, fee: D
         }
     }
     best.map(|(_, std::cmp::Reverse((_, q)))| q)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn d(x: &str) -> D {
+        x.parse().unwrap()
+    }
+    #[test]
+    fn upper_grid_neighbour_wins_on_the_same_interval() {
+        let point = |q: D| {
+            let price = D::ONE / (D::ONE - d("0.01") * q);
+            let proceeds = d("1.127") * q;
+            let investment = q * price;
+            Sample {
+                qty: q,
+                bought_at: price,
+                sold_at: d("1.127"),
+                invested: investment,
+                spend: investment,
+                proceeds,
+                before_reserve: proceeds - investment,
+            }
+        };
+        let m = Model {
+            keep: D::ONE,
+            share: None,
+            h: D::ONE,
+            budget: d("50"),
+            step: D::ONE,
+            floor: (D::ZERO, D::ZERO),
+        };
+        let bids = [PriceLevel {
+            price: d("1.127"),
+            qty: d("100"),
+        }];
+        let pts = [point(D::ONE), point(d("10"))];
+        assert!(point(d("6")).before_reserve > point(d("5")).before_reserve);
+        assert_eq!(best(&pts, &bids, &m, D::ZERO), Some(d("6")));
+    }
 }

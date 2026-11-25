@@ -59,6 +59,9 @@ struct Samples {
     keep: Decimal,
     fee: Option<Decimal>,
     risk_only: bool,
+    budget: Decimal,
+    step: Decimal,
+    floor: Option<(Decimal, Decimal)>,
     points: Vec<Sample>,
 }
 
@@ -162,6 +165,9 @@ pub(super) fn remember<C: Curve<Data = Calc>>(
         keep,
         fee,
         risk_only,
+        budget: memo.budget,
+        step: memo.step,
+        floor: memo.gate().min_usd.zip(memo.gate().min_pct),
         points,
     });
     let mut cache = lk(&core.inner.precheck_hints);
@@ -171,6 +177,18 @@ pub(super) fn remember<C: Curve<Data = Calc>>(
     }
     cache.0.push_back((cx.dir.clone(), history));
 }
+
+fn saved(core: &Core, d: &Direction, qty: Decimal) -> Option<Arc<Samples>> {
+    lk(&core.inner.precheck_hints)
+        .0
+        .iter()
+        .find(|(key, entry)| key == d && entry.anchor == qty)
+        .map(|(_, s)| s.clone())
+}
+
+#[path = "precheck_hint_warm.rs"]
+mod warm;
+pub(super) use warm::{during, ready};
 
 /// Short-lived candidate curves never carry authority to submit a trade.
 pub(super) async fn alternative(
@@ -182,11 +200,7 @@ pub(super) async fn alternative(
     floor: (Decimal, Decimal),
     slot: tokio::sync::OwnedSemaphorePermit,
 ) -> Option<(Decimal, Stamp, tokio::sync::OwnedSemaphorePermit)> {
-    let samples = lk(&core.inner.precheck_hints)
-        .0
-        .iter()
-        .find(|(d, s)| d == &cx.dir && s.anchor == qty)
-        .map(|(_, s)| s.clone())?;
+    let samples = saved(core, &cx.dir, qty)?;
     let mark = stamp(core, cx)?;
     let keep = cx.keep?;
     if samples.stamp.pools != mark.pools || !cx.units_b_per_a.is_identity() {
@@ -307,20 +321,31 @@ pub fn segment(
 
 /// Poll the incumbent first and accept an alternative only if it is ready by its
 /// completion. A pending optional future is dropped, including on caller cancellation.
-pub async fn compare<T, E, A, B, F>(first: A, second: B, better: F) -> (Result<T, E>, bool)
+pub async fn compare<T, E, A, B, F>(
+    first: A,
+    second: B,
+    prepared: bool,
+    better: F,
+) -> (Result<T, E>, bool)
 where
     A: std::future::Future<Output = Result<T, E>>,
     B: std::future::Future<Output = Result<T, E>>,
     F: FnOnce(&T, Option<&T>) -> bool,
 {
     tokio::pin!(first, second);
-    if let Some(ready) = first.as_mut().now_or_never() {
-        return (ready, false);
-    }
-    let (original, alternative) = tokio::select! {
-        biased;
-        alternative=&mut second=>(first.await,Some(alternative)),
-        original=&mut first=>(original,None),
+    let (original, alternative) = if let Some(ready) = first.as_mut().now_or_never() {
+        let other = if prepared {
+            second.as_mut().now_or_never()
+        } else {
+            None
+        };
+        (ready, other)
+    } else {
+        tokio::select! {
+            biased;
+            alternative=&mut second=>(first.await,Some(alternative)),
+            original=&mut first=>(original,None),
+        }
     };
     if let Some(Ok(alt)) = alternative
         && better(&alt, original.as_ref().ok())
@@ -346,21 +371,35 @@ mod tests {
     #[tokio::test]
     async fn slow_optional_quote_and_late_market_do_not_delay_or_replace_the_incumbent() {
         let never = pending::<Result<i64, ()>>();
-        assert_eq!(compare(later(4), never, larger).await, (Ok(4), false));
+        assert_eq!(
+            compare(later(4), never, false, larger).await,
+            (Ok(4), false)
+        );
+        assert_eq!(
+            compare(ready(Ok::<_, ()>(4)), ready(Ok(6)), true, larger).await,
+            (Ok(6), true)
+        );
+        assert_eq!(
+            compare(ready(Ok::<_, ()>(4)), pending(), true, larger).await,
+            (Ok(4), false)
+        );
         let untouched = async {
             panic!("an immediately ready incumbent started optional work");
         };
         assert_eq!(
-            compare(ready(Ok::<_, ()>(3)), untouched, larger).await,
+            compare(ready(Ok::<_, ()>(3)), untouched, false, larger).await,
             (Ok(3), false)
         );
-        assert_eq!(compare(later(5), ready(Ok(6)), larger).await, (Ok(6), true));
         assert_eq!(
-            compare(later(5), ready(Ok(6)), |_, _| false).await,
+            compare(later(5), ready(Ok(6)), false, larger).await,
+            (Ok(6), true)
+        );
+        assert_eq!(
+            compare(later(5), ready(Ok(6)), false, |_, _| false).await,
             (Ok(5), false)
         );
         assert_eq!(
-            compare(later(5), ready(Err(())), larger).await,
+            compare(later(5), ready(Err(())), false, larger).await,
             (Ok(5), false)
         );
     }

@@ -1,0 +1,45 @@
+name: Isolated same-market volume and risk control
+on:
+  push:
+    branches: [audit/control-precheck-risk-20261125]
+permissions:
+  contents: read
+env:
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_INCREMENTAL: "0"
+jobs:
+  controlled-risk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: harness
+      - uses: actions/checkout@v4
+        with:
+          path: release
+          ref: 91b86c672aa73ef0ba9ab6e1870fc9cc647cce4f
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: release -> target
+          shared-key: release-size-matrix
+      - shell: bash
+        run: |
+          set -e
+          p=harness/tools/release_size_matrix
+          python "$p/stored_compare.py" release "$p/stored_cases.json"
+          python "$p/actual_v2.py" stage release "$p/actual_v2_cases.json"
+          python "$p/actual_v3.py" stage release "$p/actual_v3_cases.json"
+          python "$p/with_history.py" release
+          python "$p/stage_risk.py" release
+          cd release
+          if ! cargo test --locked --test core_size_actual_v2 actual_v2_matrix -- --exact --nocapture > "$RUNNER_TEMP/risk.log" 2>&1; then
+            grep -E 'error(\[E[0-9]+\])?:|panicked at|assertion|FAILED| -->' -A 4 "$RUNNER_TEMP/risk.log" | head -n 75
+            exit 1
+          fi
+          sed -n -E 's/^(test [^ ]+ \.\.\. )?ACTUAL_V2_MATRIX //p' "$RUNNER_TEMP/risk.log" > ../risk-control.jsonl
+          test "$(wc -l < ../risk-control.jsonl)" -eq 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: controlled-risk
+          path: risk-control.jsonl

@@ -157,7 +157,6 @@ impl Venue for Gate {
         wallet::coin_networks(&self.ctx, &self.nets, &self.symbols).await
     }
 
-    /// Решение 113: у Gate есть запросы одной монеты (/spot/currencies/{c}, withdraw_status?currency=, currency_chains).
     async fn refresh_withdraw_tariff(
         &self,
         ticker: &str,
@@ -174,6 +173,7 @@ impl Venue for Gate {
         Ok(fresh)
     }
 
+    /// Решение 113: у Gate есть запросы одной монеты (/spot/currencies/{c}, withdraw_status?currency=, currency_chains).
     async fn coin_networks_of(&self, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
         self.symbols.ensure_fresh(&self.ctx).await?;
         wallet::coin_networks_of(&self.ctx, &self.nets, &self.symbols, ticker).await
@@ -287,6 +287,16 @@ impl Venue for Gate {
 
     fn requires_withdraw_destination_check(&self) -> bool {
         true
+    }
+
+    async fn needs_withdraw_destination_address(
+        &self,
+        asset: &Asset,
+        network: &str,
+    ) -> GatewayResult<bool> {
+        self.destinations
+            .relevant(&self.ctx, &asset.ticker, network)
+            .await
     }
 
     fn checks_cex_withdraw_destination(&self) -> bool {

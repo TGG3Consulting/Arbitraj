@@ -1,0 +1,43 @@
+name: SHOPINX archived width and executable volumes
+on:
+  push:
+    branches: [audit/shopinx-volume-20261125]
+permissions:
+  contents: read
+env:
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: "never"
+jobs:
+  shop-control:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: harness
+      - uses: actions/checkout@v4
+        with:
+          path: release
+          ref: 91b86c672aa73ef0ba9ab6e1870fc9cc647cce4f
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: release -> target
+          shared-key: release-size-matrix
+      - shell: bash
+        run: |
+          set -e
+          p=harness/tools/release_size_matrix
+          python "$p/shop_two_leg.py" release
+          python "$p/shop_width.py" release
+          cd release
+          if ! cargo test --locked --test native_route_release_matrix shop_width_and_size -- --nocapture > "$RUNNER_TEMP/shop.log" 2>&1; then
+            grep -E '^error(\[E[0-9]+\])?:|panicked at|assertion .*failed|^test .*FAILED|^ *-->' -A 5 "$RUNNER_TEMP/shop.log" | head -n 75
+            exit 1
+          fi
+          sed -n 's/^SHOP_WIDTH //p' "$RUNNER_TEMP/shop.log" > "$RUNNER_TEMP/shop-volume.jsonl"
+          test -s "$RUNNER_TEMP/shop-volume.jsonl"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shop-control
+          path: ${{ runner.temp }}/shop-volume.jsonl

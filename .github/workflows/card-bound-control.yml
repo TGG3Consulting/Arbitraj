@@ -1,0 +1,40 @@
+name: Isolated advisory card maximum counterexample
+on:
+  push:
+    branches: [audit/control-card-bound-20261125]
+permissions:
+  contents: read
+env:
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_INCREMENTAL: "0"
+jobs:
+  controlled-bound:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: harness
+      - uses: actions/checkout@v4
+        with:
+          path: release
+          ref: 91b86c672aa73ef0ba9ab6e1870fc9cc647cce4f
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: release -> target
+          shared-key: release-size-matrix
+      - shell: bash
+        run: |
+          set -e
+          cp harness/tools/release_size_matrix/card_bound_control.rs release/tests/card_bound_control.rs
+          cd release
+          if ! cargo test --locked --test card_bound_control display_bound -- --exact --nocapture > "$RUNNER_TEMP/bound.log" 2>&1; then
+            grep -E 'error(\[E[0-9]+\])?:|panicked at|assertion|left:|right:|FAILED| -->' -A 4 "$RUNNER_TEMP/bound.log" | head -n 75
+            exit 1
+          fi
+          sed -n -E 's/^(test [^ ]+ \.\.\. )?BOUND_CONTROL //p' "$RUNNER_TEMP/bound.log" > ../bound-control.jsonl
+          test "$(wc -l < ../bound-control.jsonl)" -eq 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: controlled-bound
+          path: bound-control.jsonl

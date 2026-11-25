@@ -111,10 +111,10 @@ pub(super) async fn wait_with_units(
                 })
                 .map(|ev| ev.delta);
             // Опрос сам по себе никогда не подставляет модельную комиссию.
-            if claim.expected.is_none() && delta == ticket.as_ref().and_then(Ticket::expected) {
-                claim.expected = delta;
+            if claim.expected.is_none() {
+                claim.expected = ticket.as_ref().and_then(|t| t.amount_observed(&leg.tx));
             }
-            gw.deposit_status_for(&on, &leg.tx, &claim, None).await
+            gw.deposit_status_for(&on, &leg.tx, &claim, delta).await
         } else {
             gw.deposit_status(&on, &leg.tx).await
         };

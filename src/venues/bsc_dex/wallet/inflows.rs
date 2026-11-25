@@ -39,8 +39,17 @@ struct Tok {
     expected: Vec<Instant>,
     /// Идёт обмен с этим токеном на выходе.
     swapping: bool,
+    /// Последняя квитанция подтверждённого события токена. При вытеснении используется штатный RPC.
+    confirmed: Option<Confirmed>,
     /// Уже учтённые завершения (хеш → когда): повторный запрос статуса не снимает чужое ожидание. Чистятся по сроку.
     finished: HashMap<String, Instant>,
+}
+
+struct Confirmed {
+    chain: u64,
+    wallet: Address,
+    tx: alloy_primitives::B256,
+    receipt: Arc<super::super::send::track::Receipt>,
 }
 
 /// Ожидаемые поступления и идущие обмены. Дешёво клонируется.
@@ -145,6 +154,43 @@ impl Inflows {
     pub fn waiting(&self, token: Address) -> bool {
         let m = self.m.lock().unwrap_or_else(|p| p.into_inner());
         m.get(&token).is_some_and(|t| !t.expected.is_empty())
+    }
+
+    pub(super) fn remember(
+        &self,
+        token: Address,
+        chain: u64,
+        wallet: Address,
+        tx: alloy_primitives::B256,
+        receipt: Arc<super::super::send::track::Receipt>,
+    ) {
+        if let Some(t) = self
+            .m
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .get_mut(&token)
+            && !t.expected.is_empty()
+        {
+            t.confirmed = Some(Confirmed {
+                chain,
+                wallet,
+                tx,
+                receipt,
+            });
+        }
+    }
+
+    pub(super) fn confirmed(
+        &self,
+        token: Address,
+        chain: u64,
+        wallet: Address,
+        tx: alloy_primitives::B256,
+    ) -> Option<Arc<super::super::send::track::Receipt>> {
+        let m = self.m.lock().unwrap_or_else(|p| p.into_inner());
+        let cached = m.get(&token)?.confirmed.as_ref()?;
+        (cached.chain == chain && cached.wallet == wallet && cached.tx == tx)
+            .then(|| cached.receipt.clone())
     }
 
     /// Поступление с ключом `key` (хеш вывода) закончилось — зачислено, отклонено или не разбирается: снимает самое

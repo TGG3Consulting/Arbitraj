@@ -37,6 +37,7 @@ pub struct Move {
     pub units: U256,
     pub tx: B256,
     pub block: u64,
+    pub block_hash: Option<B256>,
     /// Ключ лога: (хеш транзакции, номер лога в блоке).
     pub key: (B256, u64),
     /// Лог отменён реоргом (removed: true).
@@ -71,6 +72,7 @@ pub fn parse(log: &Log, wallet: Address) -> Result<Option<Move>, String> {
         units: t.value,
         tx,
         block,
+        block_hash: log.block_hash,
         key: (tx, index),
         removed: log.removed,
     }))

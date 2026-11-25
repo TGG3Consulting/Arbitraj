@@ -133,6 +133,17 @@ impl Ticket {
         lock(&self.core).list.get(&self.id).map(|e| e.amount)
     }
 
+    /// Индивидуальное событие подтверждает выбор лога при опросе и при выключенном закрытии по WS.
+    pub(super) fn amount_observed(&self, tx: &str) -> Option<Decimal> {
+        let state = lock(&self.core);
+        let expected = state.list.get(&self.id)?;
+        let hit = expected.hits.iter().find(|(hit, _)| {
+            hit.delta == expected.amount
+                && hit.tx_hash.as_deref().is_some_and(|h| norm(h) == norm(tx))
+        })?;
+        Some(hit.0.delta)
+    }
+
     /// Пришло ли своё событие (закрывает оно или нет). Ошибок нет.
     pub fn has_event(&self) -> bool {
         let st = lock(&self.core);

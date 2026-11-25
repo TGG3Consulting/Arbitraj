@@ -36,8 +36,16 @@ pub(in crate::venues::bsc_dex) async fn status_for(
     let w = signer::address(ctx)?;
     // Только событие, прошедшее confirmations в events.rs. Чистый опрос читает актуальный RPC.
     let confirmed = event_amount.and_then(|_| {
-        p.inflows
-            .confirmed(asset.contract?, ctx.chain_id()?, w, tx_hash.parse().ok()?)
+        p.inflows.confirmed(
+            asset.contract?,
+            ctx.chain_id()?,
+            w,
+            tx_hash.parse().ok()?,
+            (
+                ctx.int("send.deposit_confirmations").ok()?,
+                std::time::Duration::from_secs(ctx.int("transfer.max_time_s").ok()?),
+            ),
+        )
     });
     let proof = transfer_status::Proof {
         claim,

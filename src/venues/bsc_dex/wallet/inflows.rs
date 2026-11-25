@@ -46,6 +46,7 @@ struct Tok {
 }
 
 struct Confirmed {
+    depth: u64,
     chain: u64,
     wallet: Address,
     tx: alloy_primitives::B256,
@@ -163,6 +164,7 @@ impl Inflows {
         wallet: Address,
         tx: alloy_primitives::B256,
         receipt: Arc<super::super::send::track::Receipt>,
+        depth: u64,
     ) {
         if let Some(t) = self
             .m
@@ -172,6 +174,7 @@ impl Inflows {
             && !t.expected.is_empty()
         {
             t.confirmed = Some(Confirmed {
+                depth,
                 chain,
                 wallet,
                 tx,
@@ -186,10 +189,20 @@ impl Inflows {
         chain: u64,
         wallet: Address,
         tx: alloy_primitives::B256,
+        policy: (u64, Duration),
     ) -> Option<Arc<super::super::send::track::Receipt>> {
-        let m = self.m.lock().unwrap_or_else(|p| p.into_inner());
-        let cached = m.get(&token)?.confirmed.as_ref()?;
-        (cached.chain == chain && cached.wallet == wallet && cached.tx == tx)
+        let (required_depth, ttl) = policy;
+        let mut m = self.m.lock().unwrap_or_else(|p| p.into_inner());
+        let t = m.get_mut(&token)?;
+        if !t.expected.iter().any(|at| at.elapsed() < ttl) {
+            t.confirmed = None;
+            return None;
+        }
+        let cached = t.confirmed.as_ref()?;
+        (cached.depth >= required_depth
+            && cached.chain == chain
+            && cached.wallet == wallet
+            && cached.tx == tx)
             .then(|| cached.receipt.clone())
     }
 
@@ -228,12 +241,18 @@ fn remove_first(t: &mut Tok) {
     {
         t.expected.remove(i);
     }
+    if t.expected.is_empty() {
+        t.confirmed = None;
+    }
 }
 
 /// Снимает ожидания и учтённые завершения старше срока. Возвращает: сколько ожиданий снято. Ошибок нет.
 fn purge(t: &mut Tok, ttl: Duration) -> usize {
     let before = t.expected.len();
     t.expected.retain(|at| at.elapsed() < ttl);
+    if t.expected.is_empty() {
+        t.confirmed = None;
+    }
     t.finished.retain(|_, at| at.elapsed() < ttl);
     before - t.expected.len()
 }

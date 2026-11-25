@@ -52,6 +52,7 @@ jobs:
           python "$k/shop_target.py" release
           python "$k/shop_live.py" release
           python control/tools/sizing_archive.py release
+          python control/tools/sizing_entry.py release
           cd release
           cargo test --locked --lib precheck_hint::tests
           for row in 'core_size_actual_v2 actual_v2_matrix risk' 'native_route_release_matrix shop_live_control shop'; do

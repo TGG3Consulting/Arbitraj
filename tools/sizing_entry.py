@@ -1,0 +1,59 @@
+"""Re-enter production fast recalculation with the exact historical book/pool responses.
+Only the depth gateway is replaced by already-priced quotes. The core cache, record eligibility,
+risk hint, final calc budget/rounding, both thresholds, winner and fallback are unchanged.
+"""
+import sys
+from pathlib import Path
+root=Path(sys.argv[1])
+def append(path,s):
+ with (root/path).open('a') as f:f.write(s)
+def rewrite(path,a,b):
+ p=root/path;s=p.read_text();assert s.count(a)==1,(path,a[:60],s.count(a));p.write_text(s.replace(a,b))
+append('src/core/final_depth.rs',"""
+tokio::task_local! {pub(crate) static ARCHIVED: std::collections::BTreeMap<Decimal, Result<Calc, Fail>>;}
+""")
+rewrite('src/core/final_depth.rs','let src = Live { core, src: None };','''if let Ok(r)=ARCHIVED.try_with(|map|map.get(&qty).cloned().unwrap_or_else(||Err(Fail::Stop("quantity not in archived response set".into())))){return r;}
+    let src = Live { core, src: None };''')
+append('src/core/precheck_hint_warm.rs',"""
+pub(super) async fn archive<F:Future>(q:Option<(Decimal,Stamp)>,anchor:Decimal,budget:Decimal,step:Decimal,floor:(Decimal,Decimal),keep:Decimal,f:F)->F::Output{
+ let data=q.map(|(qty,mark)|Hint{anchor,qty,mark,budget,step,floor,keep});
+ READY.scope(Cell::new(data),f).await
+}
+""")
+append('src/core/precheck_hint.rs',"""
+pub async fn archived_entry<C:Curve<Data=Calc>, S:crate::core::costs::Source>(
+  core:&Core, old:&DirCtx, cx:&DirCtx, book:&crate::core::types::OrderBook, memo:&Memo<'_,C>, found:&Found<Calc>, anchor:Decimal, src:&S,budget:Decimal,step:Decimal,floor:(Decimal,Decimal)
+)->serde_json::Value{
+ use super::{precheck_fast::{Want,recalc},size::Fail};
+ core.inner.market.write().unwrap_or_else(|p|p.into_inner()).apply(crate::gateway::events::MarketEvent::Book(book.clone()));
+ let Some(mark)=stamp(core,old) else{return serde_json::json!({"reason":"missing book stamp"});};
+ remember(core,old,mark,memo,found);
+ let cached=saved(core,&cx.dir,anchor).map(|c|c.points.len());
+ let q=if let Ok(slot)=core.inner.hint_slot.clone().try_acquire_owned(){
+   alternative(core,cx,anchor,budget,step,floor,slot).await.map(|(n,m,_)|(n,m))
+ }else{None};
+ let mut responses=std::collections::BTreeMap::new();
+ for n in std::iter::once(anchor).chain(q.map(|x|x.0)) {
+   let c=crate::core::costs::evaluate_with(cx,n,src).await;
+   responses.insert(n,c);
+ }
+ let mut out=Vec::new();
+ for mode in [false,true] {
+   let mut w=Want::new(anchor);
+   let result=super::final_depth::ARCHIVED.scope(responses.clone(),warm::archive(if mode{q}else{None},anchor,budget,step,floor,cx.keep.unwrap(),recalc(core,cx,&mut w,budget,step,floor))).await;
+   out.push(serde_json::json!({"prepared":mode,"path":format!("{:?}",w.path),"selected":result.map(|c|(c.qty,c.profit_usd))}));
+ }
+ serde_json::json!({"cached":cached,"native_candidate":found.best.qty,"logged_anchor":anchor,"ready_hint":q.map(|x|x.0),"modes":out})
+}
+""".replace('size::Fail','size::Fail').replace('use super::{precheck_fast::{Want,recalc},size::Fail};','use super::precheck_fast::{Want,recalc};'))
+for test in ['tests/native_route_release_matrix.rs','tests/core_size_actual_v2.rs']:
+ if 'mod report_common;' not in (root/test).read_text():append(test,'\nmod report_common;\n')
+rewrite('tests/native_route_release_matrix.rs','let samples:Vec<_>=m.map.values().flatten().map(|p|p.data.clone()).collect();drop(m);','''let samples:Vec<_>=m.map.values().flatten().map(|p|p.data.clone()).collect();
+    let floor=(get("threshold"),get("min_pct"));
+    let (core,_)=report_common::start(&report_common::dir(&format!("shopnx-{id}-{block}"))).await;
+    let entry=if let Some(found)=native.as_ref(){arb::core::precheck_hint::archived_entry(&core,&cx,&cx,&src.book.book,&m,found,get("k_qty"),&src,budget,step,floor).await}else{serde_json::Value::Null};drop(m);''')
+rewrite('tests/native_route_release_matrix.rs','"cold":cold,"warm":warm}', '"cold":cold,"warm":warm,"entry":entry}')
+rewrite('tests/core_size_actual_v2.rs','let production=arb::core::precheck_hint::evidenced_hint', '''let (core,_)=report_common::start(&report_common::dir(&format!("source-{}",dir.asset.ticker))).await;
+    let entry=arb::core::precheck_hint::archived_entry(&core,&old_ctx,&cx,&a,&memo,&reconstructed,plan.qty,&source,budget,p.step,floor).await;
+    let production=arb::core::precheck_hint::evidenced_hint''')
+rewrite('tests/core_size_actual_v2.rs','"cold":cold,"warm":warm}', '"cold":cold,"warm":warm,"entry":entry}')

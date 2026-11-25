@@ -30,7 +30,42 @@ use arb::gateway::errors::ErrorCode;
 use arb::venues::bsc_dex::quote::route_calc::{self, Leg};
 use arb::venues::bsc_dex::quote::route_fit;
 use arb::venues::bsc_dex::quote::select::Usable;
-use fit_common::{USDT, WBNB, d, full, js, partial, scene};
+use fit_common::{USDT, WBNB, d, full, js, partial, scene, scene_with_words};
+
+/// На том же блоке граница узкой карты не должна ограничивать большой ордер на широкой
+/// карте или увеличивать малый ордер. Все слова ±12 действительно записаны в TickLens.
+#[tokio::test]
+async fn recorded_word_coverage_limits_the_quote_not_the_requested_order() {
+    let narrow = scene().await;
+    let wide = scene_with_words(12).await;
+    partial(&narrow, Some(true)).await;
+    partial(&wide, Some(true)).await;
+    let narrow = narrow.quoting();
+    let wide = wide.quoting();
+
+    let requested = d("57000");
+    for (side, narrow_limit) in [
+        (Side::Sell, d("29666.114904110584943289")),
+        (Side::Buy, d("28380.895110992572453266")),
+    ] {
+        let clipped = full(&narrow, side, requested).await.unwrap();
+        let complete = full(&wide, side, requested).await.unwrap();
+        assert_eq!(clipped.fillable_qty, narrow_limit, "{side:?}");
+        assert_eq!(complete.fillable_qty, requested, "{side:?}");
+
+        let small = d("1000");
+        let old = full(&narrow, side, small).await.unwrap();
+        let new = full(&wide, side, small).await.unwrap();
+        assert_eq!(new.fillable_qty, small, "{side:?}");
+        assert_eq!(new.avg_price, old.avg_price, "{side:?}");
+    }
+
+    // Для CEX → DEX при h = 0.7 ядро дополнительно требует глубину sell_qty / h.
+    // 81 429 — целый объём чуть выше 57 000 / 0.7, только запрос глубины.
+    let depth_probe = d("81429");
+    let depth = full(&wide, Side::Sell, depth_probe).await.unwrap();
+    assert_eq!(depth.fillable_qty, depth_probe);
+}
 
 #[tokio::test]
 async fn partial_fill_gives_exact_fitting_volume() {

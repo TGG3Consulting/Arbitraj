@@ -222,7 +222,7 @@
         без потолка: вложить <strong>{money(b.opt.invested)}</strong> → прибыль <strong>{money(b.opt.profit)}</strong> USDT{#if !b.opt_passes} <span class="warn-text">(ниже порогов)</span>{/if};
         прирост прибыли по модели <strong>{money(b.missed)} USDT</strong>;
       {/if}
-      ограничило: <span class={budgetBound(b.limited_by) ? 'warn-text' : ''}>{limitedLabel(b.limited_by)}</span>
+      ограничило: <span class={budgetBound(b.limited_by) ? 'warn-text' : ''}>{limitedLabel(b.limited_by, b.capped)}</span>
       <button type="button" onclick={() => (open = open === r.id ? null : r.id)}>{open === r.id ? 'Скрыть' : 'Подробнее'}</button>
     </p>
     <p class="muted">

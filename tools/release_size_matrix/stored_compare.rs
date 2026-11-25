@@ -45,26 +45,14 @@ fn params(
 }
 
 fn convert_asset(value: &mut Value) {
-    let Some(fields) = value.as_object_mut() else {
-        return;
-    };
-    if fields.contains_key("contract") && "NATIVE_ASSET_SCHEMA" == "old" {
-        let contract = fields.remove("contract").unwrap();
-        let asset_chain = fields.remove("chain");
-        // An Arbitrum contract must not be reinterpreted as a BSC address.
-        if asset_chain.is_none()
-            || asset_chain.is_some_and(|chain| chain.is_null() || chain == "bsc")
-        {
-            fields.insert("bsc_contract".into(), contract);
-        } else {
-            fields.insert("bsc_contract".into(), Value::Null);
-        }
+    let fields = value.as_object_mut().expect("archived asset is an object");
+    if !fields.contains_key("bsc_contract") && let Some(addr) = fields.remove("contract") {
+        fields.insert("bsc_contract".into(), addr);
     }
-    if fields.contains_key("bsc_contract") && "NATIVE_ASSET_SCHEMA" == "new" {
-        let contract = fields.remove("bsc_contract").unwrap();
-        fields.insert("chain".into(), Value::Null);
-        fields.insert("contract".into(), contract);
-    }
+    let expected = value["bsc_contract"].as_str().expect("positive historical contract required");
+    let parsed: Asset = serde_json::from_value(value.clone()).expect("native asset structure");
+    let actual = parsed.contract.expect("preserve original ERC-20 contract in Rust");
+    assert_eq!(format!("{actual:#x}"), expected.to_ascii_lowercase());
 }
 
 fn read_book(v: &Value, dir: &Direction, buy: bool) -> Result<OrderBook, String> {

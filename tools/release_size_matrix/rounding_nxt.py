@@ -30,7 +30,9 @@ nxt=nxt[:a]+r"""    sqrt: U256, boundary: U256, liquidity: u128, fee_pips: u32, 
 impl FixedV2 {
     fn calculate(&self, qty: Decimal) -> Option<(U256,U256)> {
         let input=to_units(qty,self.decimals_in)?;
-        if input.is_zero() || to_decimal(input,self.decimals_in)?!=qty {return None}
+        // The live Sell path rounds contract input down to atomic units and reports the
+        // original Decimal quantity when the swap completes (direct.rs, route_calc.rs).
+        if input.is_zero() {return None}
         let (next,spent,output,fee)=step_v3(self.sqrt,self.boundary,self.liquidity,I256::try_from(input).ok()?,self.fee_pips)?;
         if !(self.sqrt<next && next<self.boundary && spent.checked_add(fee)?==input) {return None}
         Some((output,fee))
@@ -46,6 +48,7 @@ nxt=nxt[:a]+r"""        sqrt:u256(&pool["sqrt_price_x96"])?, boundary:u256(&pool
 """+nxt[b:]
 nxt=nxt.replace('if source.amount_out(plan.sell_qty) != Some(u256(&pool["planned_out_raw"])?) {','assert_eq!(pool["zero_for_one"],false);\n    if source.calculate(plan.sell_qty).map(|v|v.0) != Some(u256(&pool["quote_result_raw"])?) {')
 nxt=nxt.replace('size_actual_v2_cases.json','control_nxt_cases.json').replace('ACTUAL_V2_MATRIX','NXT_MATRIX').replace('actual_v2_matrix','nxt_control')
+nxt=nxt.replace('let own = curve.at(plan.qty).await;', 'let own = curve.at(plan.qty).await; assert!(own.is_ok(), "saved NXT size must quote at both nominal and depth-check quantity: {:?}", own.as_ref().err());')
 p2=t/'control_nxt.rs';p2.write_text(nxt)
 c=json.loads((tools/'nxt_control.json').read_text(encoding='utf-8-sig'))['cases']
 for r in c: r['control']=json.loads((tools/'control_nxt_settings.json').read_text(encoding='utf-8-sig'))

@@ -34,7 +34,8 @@ jobs:
           grep -F '.filter(|(v, _)| enabled(core, v))' src/core/rebuild.rs >/dev/null
           cat ../control/tools/wallet_control/gate-test.fragment >> "$target"
           case "$REV" in
-            4c4f*|91b86*) cat ../control/tools/wallet_control/lock-test.fragment >> "$target";;
+            4c4f*) sed 's/e\.asset\.contract =/e.asset.bsc_contract =/' ../control/tools/wallet_control/lock-test.fragment >> "$target";;
+            91b86*) cat ../control/tools/wallet_control/lock-test.fragment >> "$target";;
           esac
           cargo test --locked --test core_start_sell_guard wallet_audit_ -- --nocapture | tee "$RUNNER_TEMP/wallet-test.out"
           { echo "SHA $REV"; grep -E 'WALLET_(GATE|LOCK)|test result:' "$RUNNER_TEMP/wallet-test.out"; } > "$RUNNER_TEMP/wallet-audit.txt"

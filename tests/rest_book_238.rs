@@ -236,3 +236,173 @@ fn poloniex_doc_orderbook_flat_pairs() {
     let bad = json!({"asks": ["1.91"], "bids": []});
     assert!(arb::venues::poloniex::book_print::levels_of(&bad).is_err());
 }
+
+#[tokio::test]
+async fn gate_rain_repeat_uses_local_account_scoped_denial_and_survives_restart() {
+    use arb::core::types::WithdrawRequest;
+    use arb::gateway::{contract::Venue, errors::ErrorCode};
+    use arb::secrets::crypto::KdfParams;
+    use arb::venues::gate::{Gate, ctx::Ctx};
+    use axum::{Json, Router, http::StatusCode, routing::post};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    use zeroize::Zeroizing;
+    let calls = Arc::new(AtomicUsize::new(0));
+    let count = calls.clone();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let app=Router::new().route("/withdrawals",post(move || {
+        let call=count.fetch_add(1,Ordering::SeqCst);
+        async move{match call{
+            0=>(StatusCode::BAD_REQUEST,Json(json!({"label":"ADDRESS_NOT_USED","message":"Address never being used in web console"}))),
+            1=>(StatusCode::BAD_REQUEST,Json(json!({"label":"TOO_FAST","message":"withdrawals too frequent"}))),
+            _=>(StatusCode::OK,Json(json!({"id":"w-manually-fixed"})))
+        }}
+    }));
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let e = env("rain-rejected-destination").await;
+    let kdf = KdfParams {
+        memory_kib: 64,
+        iterations: 1,
+        parallelism: 1,
+    };
+    let pw = || Zeroizing::new("test".to_string());
+    e.vault.create(pw(), kdf).await.unwrap();
+    for (key, value) in [("gate.api_key", "key-a"), ("gate.api_secret", "secret")] {
+        e.vault
+            .change(pw(), key, Some(Zeroizing::new(value.into())), kdf)
+            .await
+            .unwrap();
+    }
+    for (key, val) in [
+        ("http.timeout_ms", 5000),
+        ("http.total_ms", 5000),
+        ("http.body_idle_ms", 5000),
+        ("http.max_body_bytes", 100000),
+    ] {
+        e.settings
+            .set(key, Scope::Global, Some(json!(val)), "test")
+            .await
+            .unwrap();
+    }
+    e.settings
+        .set(
+            "venue.rest_url",
+            Scope::Venue("gate".into()),
+            Some(json!(url)),
+            "test",
+        )
+        .await
+        .unwrap();
+    let journal = e.journal.clone();
+    let ctx = Ctx {
+        settings: e.settings,
+        vault: e.vault.clone(),
+        http: reqwest::Client::new(),
+        journal: e.journal,
+        raw: e.raw,
+        taps: Default::default(),
+    };
+    let adapter = Gate::new(ctx.clone());
+    let req = WithdrawRequest {
+        venue: VenueId("gate".into()),
+        asset: asset("RAIN"),
+        network: "BSC".into(),
+        address: "0x00000000000000000000000000000000000000Ab".into(),
+        amount: Decimal::ONE,
+        deal_id: "rain-first".into(),
+    };
+    adapter
+        .check_withdraw_destination(&req.asset, &req.network, &req.address)
+        .await
+        .unwrap();
+    journal.db().ledger().write(|c|c.execute_batch("CREATE TRIGGER gate_fail_insert BEFORE INSERT ON gate_withdraw_denial BEGIN SELECT RAISE(ABORT,'test unable to save'); END")).await.unwrap();
+    assert_eq!(
+        adapter.withdraw(req.clone()).await.unwrap_err().code,
+        ErrorCode::InvalidAddress
+    );
+    assert!(
+        adapter
+            .check_withdraw_destination(&req.asset, &req.network, &req.address)
+            .await
+            .is_err()
+    );
+    journal
+        .db()
+        .ledger()
+        .write(|c| c.execute_batch("DROP TRIGGER gate_fail_insert"))
+        .await
+        .unwrap();
+    assert_eq!(
+        adapter
+            .check_withdraw_destination(&req.asset, &req.network, &req.address)
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidAddress
+    );
+    drop(adapter);
+    let adapter = Gate::new(ctx);
+    assert!(adapter.checks_cex_withdraw_destination());
+    assert_eq!(
+        adapter
+            .check_withdraw_destination(&req.asset, &req.network, &req.address.to_ascii_lowercase())
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidAddress
+    );
+    for (coin, net, address) in [
+        ("RAIN", "ARB", req.address.as_str()),
+        ("RAIN", "BSC", "different"),
+        ("OTHER", "BSC", req.address.as_str()),
+    ] {
+        adapter
+            .check_withdraw_destination(&asset(coin), net, address)
+            .await
+            .unwrap();
+    }
+    e.vault
+        .change(
+            pw(),
+            "gate.api_key",
+            Some(Zeroizing::new("key-b".into())),
+            kdf,
+        )
+        .await
+        .unwrap();
+    adapter
+        .check_withdraw_destination(&req.asset, &req.network, &req.address)
+        .await
+        .unwrap();
+    let err = adapter.withdraw(req.clone()).await.unwrap_err();
+    assert_ne!(err.code, ErrorCode::InvalidAddress);
+    adapter
+        .check_withdraw_destination(&req.asset, &req.network, &req.address)
+        .await
+        .unwrap();
+    e.vault
+        .change(
+            pw(),
+            "gate.api_key",
+            Some(Zeroizing::new("key-a".into())),
+            kdf,
+        )
+        .await
+        .unwrap();
+    assert!(
+        adapter
+            .check_withdraw_destination(&req.asset, &req.network, &req.address)
+            .await
+            .is_err()
+    );
+    // Existing holdings can still be withdrawn. Explicit acceptance for this key clears its remembered rejection.
+    adapter.withdraw(req.clone()).await.unwrap();
+    adapter
+        .check_withdraw_destination(&req.asset, &req.network, &req.address)
+        .await
+        .unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+}

@@ -183,6 +183,16 @@ pub trait Venue: Send + Sync {
     /// всех монет биржи. По умолчанию — coin_networks() с фильтром по тикеру (у API нет запроса одной монеты — так
     /// у MEXC). Адаптер с таким запросом в официальной документации (BingX: config/getall?coin=) переопределяет.
     /// Принимает: тикер. Возвращает: сети монеты (пусто — монеты нет). Ошибки: как coin_networks.
+    /// Refresh rates after a withdrawal's final fee disagrees with the announced tariff.
+    /// Adapters that cache the complete directory update the affected network in their local copy too.
+    async fn refresh_withdraw_tariff(
+        &self,
+        ticker: &str,
+        _network: &str,
+    ) -> GatewayResult<Vec<CoinNetworkInfo>> {
+        self.coin_networks_of(ticker).await
+    }
+
     async fn coin_networks_of(&self, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
         Ok(self
             .coin_networks()

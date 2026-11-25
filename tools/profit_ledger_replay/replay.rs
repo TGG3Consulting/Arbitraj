@@ -40,10 +40,17 @@ struct Stats {
     maximum_absolute_difference: Decimal,
 }
 
+#[derive(Deserialize)]
+struct Capture {
+    original: Vec<Row>,
+    latest: Vec<Row>,
+}
+
 #[test]
 fn all_observed_deals() {
     let path = env::var("PRIVATE_LEDGER_INPUT").unwrap();
-    let datasets: BTreeMap<String, Vec<Row>> = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+    let capture: Capture = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+    let datasets = [("original", capture.original), ("latest", capture.latest)];
     let mut output = BTreeMap::new();
     for (dataset, rows) in datasets {
         assert!(!rows.is_empty());
@@ -61,9 +68,9 @@ fn all_observed_deals() {
             d.usdt_return = row.first;
             d.usdt_return_parts = row.rest;
             if let Some(pieces) = row.pieces {
-                let mut group = DealGroup::new(String::new());
+                let mut group = DealGroup::new("");
                 group.pieces = Some(pieces);
-                d.group = Some(group);
+                d.group = Some(Box::new(group));
             }
             d.result_usd = row.recorded.map(|_| d.result_if(Decimal::ZERO));
             d.return_cost_usd = None;

@@ -40,14 +40,30 @@ jobs:
         with:
           workspaces: release -> target
           shared-key: tests
-      - name: Build native replay for target
-        working-directory: release
+      - name: Prepare both pinned sources
         run: |
-          cp ../harness/tools/profit_ledger_replay/replay.rs tests/profit_private_replay.rs
-          if ! cargo test --locked --test profit_private_replay --no-run > "$RUNNER_TEMP/build.txt" 2>&1; then
-            grep -E 'error(\[E[0-9]+\])?:|--> ' -A 5 "$RUNNER_TEMP/build.txt" | head -n 80 || true
-            exit 1
-          fi
+          git -C release fetch -q --depth=1 origin 91b86c672aa73ef0ba9ab6e1870fc9cc647cce4f
+          git -C release worktree add --quiet --detach ../baseline FETCH_HEAD
+      - name: Build native ledger and chain replay
+        run: |
+          export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/release/target"
+          controls="$GITHUB_WORKSPACE/harness/tools/profit_ledger_replay"
+          for tree in baseline release; do
+            (
+              cd "$tree"
+              cat "$controls/replay.rs" "$controls/chain_replay.rs" > tests/profit_private_replay.rs
+              variant=old
+              if test -f src/venues/bsc_dex/wallet/deposit_log.rs; then variant=new; fi
+              cat "$controls/receipt_$variant.rs" >> src/venues/bsc_dex/wallet/transfer_status.rs
+              if ! cargo test --locked --test profit_private_replay --no-run --message-format=json-render-diagnostics > "$RUNNER_TEMP/build.jsonl" 2> "$RUNNER_TEMP/build.txt"; then
+                grep -E 'error(\[E[0-9]+\])?:|--> ' -A 5 "$RUNNER_TEMP/build.txt" | head -n 80 || true
+                exit 1
+              fi
+              binary=$(jq -r 'select(.reason=="compiler-artifact" and .target.name=="profit_private_replay" and .executable != null) | .executable' "$RUNNER_TEMP/build.jsonl")
+              cp "$binary" "$RUNNER_TEMP/suite-$tree"
+              git rev-parse HEAD > "$RUNNER_TEMP/$tree-sha.txt"
+            )
+          done
       - name: Receive anonymous data
         working-directory: harness
         run: |
@@ -61,16 +77,17 @@ jobs:
           /usr/bin/python3 tools/profit_ledger_replay/envelope.py open "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/private.json" "$RUNNER_TEMP/envelope"
           rm -f "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/envelope"
       - name: Replay every observed card and publish aggregate only
-        working-directory: release
         run: |
           export PRIVATE_LEDGER_INPUT="$RUNNER_TEMP/private.json"
-          export LEDGER_RESULT="$RUNNER_TEMP/cashflow.json"
-          if ! cargo test --locked --test profit_private_replay -- --exact all_observed_deals > "$RUNNER_TEMP/replay.txt" 2>&1; then
-            grep -E 'error(\[E[0-9]+\])?:|panicked at|assertion|FAILED' -A 5 "$RUNNER_TEMP/replay.txt" | head -n 80 || true
-            exit 1
-          fi
-          test -s "$LEDGER_RESULT"
-          git rev-parse HEAD > "$RUNNER_TEMP/release-sha.txt"
+          for tree in baseline release; do
+            export LEDGER_RESULT="$RUNNER_TEMP/cashflow-$tree.json"
+            export CHAIN_RESULT="$RUNNER_TEMP/chain-$tree.json"
+            if ! "$RUNNER_TEMP/suite-$tree" > "$RUNNER_TEMP/replay.txt" 2>&1; then
+              grep -E 'panicked at|assertion|FAILED' -A 5 "$RUNNER_TEMP/replay.txt" | head -n 80 || true
+              exit 1
+            fi
+            test -s "$LEDGER_RESULT" && test -s "$CHAIN_RESULT"
+          done
       - name: Remove private test inputs
         if: always()
         run: rm -f "$RUNNER_TEMP/private.json" "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/envelope"
@@ -78,5 +95,6 @@ jobs:
         with:
           name: aggregate-${{ steps.source.outputs.sha }}
           path: |
-            ${{ runner.temp }}/cashflow.json
-            ${{ runner.temp }}/release-sha.txt
+            ${{ runner.temp }}/cashflow-*.json
+            ${{ runner.temp }}/chain-*.json
+            ${{ runner.temp }}/*-sha.txt

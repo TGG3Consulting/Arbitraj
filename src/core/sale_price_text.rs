@@ -33,13 +33,14 @@ pub(super) fn render(core: &Core, deal: &Deal, qty: Decimal, rates: &Comparison)
     }
     match &rates.here {
         Ok(v) => lines.push(format!(
-            "На текущем месте ({}): {}",
+            "На текущем месте ({}): {}. {}",
             venue(core, &deal.at),
             if v.is_sign_negative() {
                 hu::signed_usd(*v)
             } else {
                 hu::usd(*v)
-            }
+            },
+            super::sale_preview::pnl_text(deal, *v, rates.prior_cash)
         )),
         Err(e) => lines.push(format!(
             "На текущем месте ({}): расчёт недоступен — {e}",
@@ -49,9 +50,10 @@ pub(super) fn render(core: &Core, deal: &Deal, qty: Decimal, rates: &Comparison)
     let best_venue = best.map(|(to, _)| venue(core, to));
     if let Some((to, amount)) = best {
         lines.push(format!(
-            "Лучшая площадка: {} · {}",
+            "Лучшая площадка: {} · {}. {}",
             venue(core, to),
-            hu::usd(amount)
+            hu::usd(amount),
+            super::sale_preview::pnl_text(deal, amount, rates.prior_cash)
         ));
         if let Some((delta, pct)) = rates.difference(amount) {
             let percent =

@@ -403,6 +403,19 @@ pub(super) async fn sell_quote_of(
     qty: Decimal,
     deal: Option<&str>,
 ) -> Result<(Arc<dyn Venue>, SellQuote), OpError> {
+    sell_quote_source(core, acc, v, a, qty, deal, false).await
+}
+
+/// A manual preview can request a new CEX book directly without replacing the live execution cache.
+pub(super) async fn sell_quote_source(
+    core: &Core,
+    acc: Option<&DexAccountId>,
+    v: &VenueId,
+    a: &Asset,
+    qty: Decimal,
+    deal: Option<&str>,
+    fresh_cex: bool,
+) -> Result<(Arc<dyn Venue>, SellQuote), OpError> {
     let x = core
         .inner
         .deps
@@ -415,7 +428,15 @@ pub(super) async fn sell_quote_of(
     // исполнения (gateway/patience.rs exec_scope), как раньше.
     // Решение 211: площадке — её тикер монеты; ответ — обратно в монету ядра.
     let (q, book) = if kind(core, v)? == VenueKind::Cex {
-        let b = super::exec_book::book(core, v, a, Side::Sell).await?;
+        let b = if fresh_cex {
+            let on = super::venue_ticker::on_venue(core, a, v);
+            let snap = crate::gateway::patience::exec_scope(x.quote_rest(&on, Side::Sell))
+                .await
+                .map_err(|e| OpError::from(&e))?;
+            super::exec_book::Book { snap, rest: true }
+        } else {
+            super::exec_book::book(core, v, a, Side::Sell).await?
+        };
         let q = b
             .snap
             .quote(qty)

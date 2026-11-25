@@ -33,7 +33,7 @@ pub(super) struct Ticket {
     target: Option<(VenueId, Option<DexAccountId>)>,
 }
 
-fn record(core: &Core, key: &str) -> Result<(RecordKind, Deal), String> {
+pub(super) fn record(core: &Core, key: &str) -> Result<(RecordKind, Deal), String> {
     let (prefix, id) = key.split_once('.').ok_or(STALE)?;
     match prefix {
         "a" => lk(&core.inner.alerts)
@@ -48,11 +48,18 @@ fn record(core: &Core, key: &str) -> Result<(RecordKind, Deal), String> {
     .ok_or_else(|| STALE.into())
 }
 
-async fn estimate(core: &Core, deal: &Deal) -> Result<(Decimal, manual_price::Comparison), String> {
+async fn estimate(
+    core: &Core,
+    deal: &Deal,
+    fresh_here: bool,
+) -> Result<(Decimal, manual_price::Comparison), String> {
     let qty = manual_price_exec::quote_qty(core, deal).await?;
     let mut position = deal.clone();
     position.qty = qty;
-    Ok((qty, manual_price::compare(core, &position).await?))
+    Ok((
+        qty,
+        manual_price::compare(core, &position, fresh_here).await?,
+    ))
 }
 
 impl Core {
@@ -68,7 +75,7 @@ impl Core {
     pub async fn sale_price_query(&self, key: &str) -> Result<SalePriceReply, String> {
         let started = Instant::now();
         let (_, deal) = record(self, key)?;
-        let (qty, rates) = estimate(self, &deal).await?;
+        let (qty, rates) = estimate(self, &deal, true).await?;
         if !manual_price_exec::matches(&deal, &record(self, key)?.1) {
             return Err(STALE.into());
         }
@@ -136,7 +143,7 @@ impl Core {
         if !manual_price_exec::matches(&ticket.deal, &current) {
             return Err(STALE.into());
         }
-        let (qty, rates) = estimate(self, &current).await?;
+        let (qty, rates) = estimate(self, &current, false).await?;
         if qty != ticket.qty {
             return Err(STALE.into());
         }

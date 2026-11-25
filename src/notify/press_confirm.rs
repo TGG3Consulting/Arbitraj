@@ -31,15 +31,21 @@ pub fn yes_title(title: &str) -> String {
     }
 }
 
-impl Ctx<'_> {
-    /// Отправляет вопрос подтверждения. Принимает: id нажатия (ответить; «» — не нажатие), ответ на сообщение,
-    /// ожидание. Ошибок нет: сбой — в журнал и нажавшему.
-    pub async fn ask(&self, query: &str, reply_to: Option<i64>, p: Pending) {
+struct Question {
+    tg: super::telegram::Telegram,
+    chat: String,
+    state: super::mirror_state::Shared,
+    journal: crate::storage::journal::Journal,
+    ttl: Option<std::time::Duration>,
+}
+
+impl Question {
+    async fn send(&self, reply_to: Option<i64>, p: Pending) -> String {
         let (q, title) = (p.question.clone(), p.title.clone());
         let n = {
-            let mut st = lock(self.state);
+            let mut st = lock(&self.state);
             // Ревью t193 (Н1): вопросы без ответа старше notify.dialog_ttl_s — убираются (не задана — как раньше).
-            if let Ok(ttl) = self.ttl() {
+            if let Some(ttl) = self.ttl {
                 st.purge_pending(ttl);
             }
             st.add_pending(p)
@@ -48,7 +54,10 @@ impl Ctx<'_> {
             { "text": yes_title(&title), "callback_data": format!("y:{n}") },
             { "text": "Отмена", "callback_data": format!("n:{n}") },
         ]] });
-        let sent = self.tg.send_markup(self.chat, &q, Some(kb), reply_to).await;
+        let sent = self
+            .tg
+            .send_markup(&self.chat, &q, Some(kb), reply_to)
+            .await;
         let reply = match &sent {
             Ok(_) => "Подтвердите кнопкой «Да» ниже".to_string(),
             Err(e) => format!("Вопрос подтверждения не отправлен: {e}"),
@@ -56,23 +65,61 @@ impl Ctx<'_> {
         match sent {
             // Ревью t193 (Н5): «Да» — только с этого сообщения этого чата.
             Ok(id) => {
-                lock(self.state)
+                lock(&self.state)
                     .pending_at
                     .insert(n, (self.chat.to_string(), id));
             }
             Err(e) => {
                 {
-                    let mut st = lock(self.state);
+                    let mut st = lock(&self.state);
                     st.pending.remove(&n);
                     st.pending_born.remove(&n);
                 }
-                self.log(
-                    Level::Error,
-                    format!("«{title}»: вопрос подтверждения не отправлен: {e}"),
-                )
-                .await;
+                let _ = self
+                    .journal
+                    .write(
+                        Level::Error,
+                        "notify",
+                        None,
+                        format!("«{title}»: вопрос подтверждения не отправлен: {e}"),
+                        None,
+                    )
+                    .await;
             }
         }
+        reply
+    }
+}
+
+impl Ctx<'_> {
+    /// Отправляет вопрос подтверждения. Принимает: id нажатия (ответить; «» — не нажатие), ответ на сообщение,
+    /// ожидание. Ошибок нет: сбой — в журнал и нажавшему.
+    pub async fn ask(&self, query: &str, reply_to: Option<i64>, p: Pending) {
+        let question = Question {
+            tg: self.tg.clone(),
+            chat: self.chat.into(),
+            state: self.state.clone(),
+            journal: self.journal.clone(),
+            ttl: self.ttl().ok(),
+        };
+        if let Some((key, with_return)) = p.action.sale_preview_record() {
+            let core = self.core.clone();
+            if !query.is_empty() {
+                self.answer(query, Some("Получаю оценку продажи")).await;
+            }
+            tokio::spawn(async move {
+                let mut p = p;
+                let value = core
+                    .manual_sale_preview(&key, with_return)
+                    .await
+                    .unwrap_or_else(|e| format!("Оценка недоступна: {e}"));
+                p.question.push_str("\n\n");
+                p.question.push_str(&value);
+                question.send(reply_to, p).await;
+            });
+            return;
+        }
+        let reply = question.send(reply_to, p).await;
         if !query.is_empty() {
             self.answer(query, Some(&reply)).await;
         }

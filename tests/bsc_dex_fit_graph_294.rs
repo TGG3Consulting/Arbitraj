@@ -62,6 +62,56 @@ async fn graph_warns(p: &Parts) -> usize {
 }
 
 #[tokio::test]
+async fn single_graph_sell_confirms_fractional_depth_against_a_whole_atom() {
+    let p = graph_scene("5", true).await;
+    // У двух шагов разные Universal Router: доступен только исполнитель графа.
+    p.ctx
+        .settings
+        .set(
+            "dex.universal_router",
+            Scope::Dex("pancakeswap_v2".into()),
+            Some(json!("0x0000000000000000000000000000000000000088")),
+            "тест",
+        )
+        .await
+        .unwrap();
+    let router = p.quoting();
+    let h = d("0.7");
+    // На два шага BingX ниже покупки №31422. Объём вывода округляется до 8 знаков,
+    // глубина q/h — до точности Decimal. Пулы теста относятся к отдельному блоку 133732042.
+    let buy = d("13376.441936");
+    let transferable = (buy * d("0.999") - d("121")).trunc_with_scale(8);
+    assert_eq!(transferable, d("13242.06549406"));
+    let required = transferable / h;
+    let quoted = full(&router, Side::Sell, required).await.unwrap();
+    assert_eq!(quoted.fillable_qty, required);
+    let route = quoted.route.as_ref().unwrap();
+    assert_eq!(route.mode, RouteMode::Graph);
+    assert_eq!(route.legs.len(), 1);
+    assert_eq!(route.legs[0].hops.len(), 2);
+    // Экономический результат штатной котировки равен продаже того же числа полных атомов.
+    let native = full(&router, Side::Sell, required.trunc_with_scale(18)).await.unwrap();
+    assert_eq!(quoted.route, native.route);
+    assert_eq!(quoted.costs, native.costs);
+
+    // Максимум на архивном блоке и ±2 словах реально вычислен тестом core_fit_volume_294.
+    // На дробном превышении штатный пробный вход вниз помещается, но следующий атом уже нет.
+    let edge = fit(Side::Sell);
+    let below = d("29666.114904110584943288999990");
+    assert_eq!(
+        full(&router, Side::Sell, below).await.unwrap().fillable_qty,
+        below
+    );
+    for over in [
+        d("29666.114904110584943289000030"),
+        edge + d("0.000000000000000001"),
+    ] {
+        let partial = full(&router, Side::Sell, over).await.unwrap();
+        assert!(partial.fillable_qty > Decimal::ZERO && partial.fillable_qty < over);
+    }
+}
+
+#[tokio::test]
 async fn executable_graph_vs_exact_classic() {
     for pct in ["5", "10"] {
         let p = graph_scene(pct, true).await;

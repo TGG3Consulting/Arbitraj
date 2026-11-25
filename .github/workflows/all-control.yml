@@ -1,0 +1,31 @@
+name: Audit replay on exact source
+on:
+  push:
+    branches: [codex/all-controls-runner-20261125]
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - id: input
+        run: echo "sha=$(cat .github/all-audit-target | tr -d '\r')" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.input.outputs.sha }}
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: tests
+      - name: Recorded market and queue
+        run: |
+          mkdir -p results
+          git rev-parse HEAD > results/sha
+          GRAPH_POLICY_RESULT="$PWD/results/graph.json" cargo test --locked --test bsc_dex_graph recorded_bsc_depth_and_pool_limits
+          cargo test --locked --test core_windows
+      - uses: actions/upload-artifact@v4
+        with:
+          name: audit-markets
+          path: results/

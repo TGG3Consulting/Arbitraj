@@ -1,0 +1,82 @@
+name: Private ledger replay
+on:
+  push:
+    branches: [codex/profit-all-card-replay-20261125]
+permissions:
+  contents: read
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: harness
+      - name: Identify release source
+        id: source
+        run: |
+          sha=$(cat harness/tools/profit_ledger_replay/target-sha.txt)
+          [[ "$sha" =~ ^[a-f0-9]{40}$ ]]
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+          path: release
+      - name: Create one-time receiver
+        run: |
+          umask 077
+          /usr/bin/python3 harness/tools/profit_ledger_replay/envelope.py keygen "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/public.pem"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: receiver-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/public.pem
+          retention-days: 1
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: release -> target
+          shared-key: tests
+      - name: Build native replay for target
+        working-directory: release
+        run: |
+          cp ../harness/tools/profit_ledger_replay/replay.rs tests/profit_private_replay.rs
+          if ! cargo test --locked --test profit_private_replay --no-run > "$RUNNER_TEMP/build.txt" 2>&1; then
+            grep -E 'error(\[E[0-9]+\])?:|--> ' -A 5 "$RUNNER_TEMP/build.txt" | head -n 80 || true
+            exit 1
+          fi
+      - name: Receive anonymous data
+        working-directory: harness
+        run: |
+          ref=refs/heads/codex/ledger-envelope-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          for i in $(seq 1 28); do
+            if git ls-remote --exit-code origin "$ref" >/dev/null 2>&1; then break; fi
+            sleep 25
+          done
+          git fetch -q --depth=1 origin "$ref"
+          git show FETCH_HEAD:ledger.enc > "$RUNNER_TEMP/envelope"
+          /usr/bin/python3 tools/profit_ledger_replay/envelope.py open "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/private.json" "$RUNNER_TEMP/envelope"
+          rm -f "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/envelope"
+      - name: Replay every observed card and publish aggregate only
+        working-directory: release
+        run: |
+          export PRIVATE_LEDGER_INPUT="$RUNNER_TEMP/private.json"
+          export LEDGER_RESULT="$RUNNER_TEMP/cashflow.json"
+          if ! cargo test --locked --test profit_private_replay -- --exact all_observed_deals > "$RUNNER_TEMP/replay.txt" 2>&1; then
+            grep -E 'error(\[E[0-9]+\])?:|panicked at|assertion|FAILED' -A 5 "$RUNNER_TEMP/replay.txt" | head -n 80 || true
+            exit 1
+          fi
+          test -s "$LEDGER_RESULT"
+          git rev-parse HEAD > "$RUNNER_TEMP/release-sha.txt"
+      - name: Remove private test inputs
+        if: always()
+        run: rm -f "$RUNNER_TEMP/private.json" "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/envelope"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aggregate-${{ steps.source.outputs.sha }}
+          path: |
+            ${{ runner.temp }}/cashflow.json
+            ${{ runner.temp }}/release-sha.txt

@@ -88,7 +88,7 @@ pub struct Inner {
     /// Память котировок DEX для тика (решение 109, quote_cache.rs).
     pub quote_cache: Mutex<super::quote_cache::QuoteCache>,
     pub(super) precheck_hints: Mutex<super::precheck_hint::Cache>,
-    pub(super) hint_slot: tokio::sync::Semaphore,
+    pub(super) hint_slot: std::sync::Arc<tokio::sync::Semaphore>,
     /// Решение 352: котировки стороны DEX сигнала по отпечатку входов (signal_dex.rs; signal.book_same_skip).
     pub signal_dex: super::signal_dex::Memo,
     /// Решение 349: пробуждение монет событием промежуточного пула — ждущие пары, отметки (mid_wake.rs).
@@ -284,7 +284,7 @@ impl Inner {
             ripen: Mutex::default(),
             quote_cache: Mutex::default(),
             precheck_hints: Mutex::default(),
-            hint_slot: tokio::sync::Semaphore::new(1),
+            hint_slot: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
             signal_dex: Default::default(),
             mid_wake: Default::default(),
             spread_sent: Mutex::default(),

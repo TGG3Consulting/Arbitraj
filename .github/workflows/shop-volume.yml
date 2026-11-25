@@ -39,7 +39,7 @@ jobs:
           fi
           sed -n 's/^SHOP_LIVE //p' "$RUNNER_TEMP/shop.log" > "$RUNNER_TEMP/shop-volume.jsonl"
           test -s "$RUNNER_TEMP/shop-volume.jsonl"
-          test "$(wc -l < "$RUNNER_TEMP/shop-volume.jsonl")" -eq 4
+          test "$(wc -l < "$RUNNER_TEMP/shop-volume.jsonl")" -eq 12
       - uses: actions/upload-artifact@v4
         with:
           name: shop-control

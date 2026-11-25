@@ -330,11 +330,11 @@ pub async fn compare<T, E, A, B, F>(
 where
     A: std::future::Future<Output = Result<T, E>>,
     B: std::future::Future<Output = Result<T, E>>,
-    F: FnOnce(&T, Option<&T>) -> bool,
+    F: FnOnce(&T, &T) -> bool,
 {
     tokio::pin!(first, second);
     let (original, alternative) = if let Some(ready) = first.as_mut().now_or_never() {
-        let other = if prepared {
+        let other = if prepared && ready.is_ok() {
             second.as_mut().now_or_never()
         } else {
             None
@@ -347,8 +347,8 @@ where
             original=&mut first=>(original,None),
         }
     };
-    if let Some(Ok(alt)) = alternative
-        && better(&alt, original.as_ref().ok())
+    if let (Ok(incumbent), Some(Ok(alt))) = (&original, alternative)
+        && better(&alt, incumbent)
     {
         (Ok(alt), true)
     } else {
@@ -365,8 +365,8 @@ mod tests {
         tokio::task::yield_now().await;
         Ok(value)
     }
-    fn larger(a: &i64, b: Option<&i64>) -> bool {
-        b.is_none_or(|b| a > b)
+    fn larger(a: &i64, b: &i64) -> bool {
+        a > b
     }
     #[tokio::test]
     async fn slow_optional_quote_and_late_market_do_not_delay_or_replace_the_incumbent() {
@@ -382,6 +382,24 @@ mod tests {
         assert_eq!(
             compare(ready(Ok::<_, ()>(4)), pending(), true, larger).await,
             (Ok(4), false)
+        );
+        assert_eq!(
+            compare(
+                ready(Err::<i64, ()>(())),
+                async { panic!("a rejected ready incumbent started optional work") },
+                true,
+                larger
+            )
+            .await,
+            (Err(()), false)
+        );
+        let refused = async {
+            tokio::task::yield_now().await;
+            Err::<i64, ()>(())
+        };
+        assert_eq!(
+            compare(refused, ready(Ok(6)), true, larger).await,
+            (Err(()), false)
         );
         let untouched = async {
             panic!("an immediately ready incumbent started optional work");

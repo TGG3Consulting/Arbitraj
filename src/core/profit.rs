@@ -157,6 +157,7 @@ pub async fn decide_capped(
     // Решение 266: объём кандидата на свежих данных — один финальный расчёт; прошёл пороги — план без подбора, иначе
     // (ошибка, ниже порога, внешний исполнитель) — полный подбор ниже, как раньше. Будущее — в куче и собирается не
     // здесь (recalc_boxed): кадр расчёта кандидата не растёт; объём задан только у пересчёта предпроверки.
+    let capture = want.is_none() && cap.is_none() && super::precheck_hint::enabled(core, &cx);
     if let Some(w) = want {
         let min = (min_usd, min_pct);
         let fast = super::precheck_fast::recalc_boxed(core, &cx, w, budget, p.step, min);
@@ -171,11 +172,22 @@ pub async fn decide_capped(
         src: None,
         budget: Some(p.budget),
     };
+    let stamp = capture
+        .then(|| super::precheck_hint::stamp(core, &cx))
+        .flatten();
     let found = match stage(
         || "подбор объёма".into(),
         // Предел стека (tests/core_dry_mode.rs precheck_replans_live): будущее подбора — в куче, не в кадре
         // decide_capped (в нём части t159: участки, изломы, порог %, мягкий срок).
-        Box::pin(super::size_search::search(&mut curve, &p)),
+        Box::pin(super::size_search::search_observed(
+            &mut curve,
+            &p,
+            |memo, found| {
+                if let Some(stamp) = stamp {
+                    super::precheck_hint::remember(core, &cx, stamp, memo, found);
+                }
+            },
+        )),
     )
     .await
     {

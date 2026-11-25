@@ -59,6 +59,18 @@ pub const PCT: &str = "порог %";
 /// Поиск. Принимает: кривую, параметры. Возвращает: лучшую точку и сводку (why пустой — текст пишет profit.rs).
 /// Ошибки: Stop — расчёт невозможен; TooSmall / TooLarge — ни один объём в пределах бюджета не подходит.
 pub async fn search<C: Curve>(curve: &mut C, p: &Params) -> Result<Found<C::Data>, Fail> {
+    search_observed(curve, p, |_, _| ()).await
+}
+
+pub(super) async fn search_observed<C, F>(
+    curve: &mut C,
+    p: &Params,
+    observed: F,
+) -> Result<Found<C::Data>, Fail>
+where
+    C: Curve,
+    F: FnOnce(&Memo<'_, C>, &Found<C::Data>) + Send,
+{
     if p.step <= Decimal::ZERO {
         return Err(Fail::Stop(format!(
             "шаг количества {} не больше нуля",
@@ -69,7 +81,9 @@ pub async fn search<C: Curve>(curve: &mut C, p: &Params) -> Result<Found<C::Data
         .with_share(p.par_points, p.reuse)
         .with_gate(p.ext.min_usd, p.ext.min_pct);
     m.sell_grid = p.ext.sell_grid;
-    search_in(&mut m, p).await
+    let found = search_in(&mut m, p).await?;
+    observed(&m, &found);
+    Ok(found)
 }
 
 /// Тот же поиск на готовых расчётах (решение 74: поиск без бюджета продолжает на них бисекцию, не считая точки

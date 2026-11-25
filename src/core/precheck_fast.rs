@@ -70,6 +70,10 @@ pub fn read(s: &Store, cand: &Calc) -> Opts {
 pub enum Path {
     /// Объём кандидата пересчитан и прошёл пороги — подбора не было.
     Used,
+    Compared {
+        original: Decimal,
+        chosen: Decimal,
+    },
     /// Пересчёт объёма кандидата не прошёл (причина) — дальше полный подбор.
     Full(String),
     /// Быстрый путь не применяется (причина) — сразу полный подбор.
@@ -103,6 +107,9 @@ impl Want {
             Path::Used => {
                 "План: объём кандидата пересчитан на свежих данных (без повторного подбора)".into()
             }
+            Path::Compared { original, chosen } => format!(
+                "План: свежие расчёты двух объёмов, выбран {chosen} вместо {original} по чистой прибыли и списанию"
+            ),
             Path::Full(why) => {
                 format!(
                     "План: пересчёт объёма кандидата не прошёл ({why}) — выполнен полный подбор"
@@ -178,14 +185,43 @@ pub async fn recalc(
             return None;
         }
     };
-    let fin = super::profit::final_calc(core, cx, qty, budget, step);
-    let done = match stage(|| STAGE.into(), fin).await {
-        Ok(c) => accept(c, qty, budget, &d.asset.ticker, (min_usd, min_pct)),
-        Err(e) => Err(e),
+    let calculate = |q| async move {
+        let c = super::profit::final_calc(core, cx, q, budget, step).await?;
+        accept(c, q, budget, &d.asset.ticker, (min_usd, min_pct))
     };
-    match done {
+    let work = async {
+        let Ok(_slot) = core.inner.hint_slot.try_acquire() else {
+            return (calculate(qty).await, false);
+        };
+        let other = async {
+            let mark = super::precheck_hint::stamp(core, cx);
+            let q =
+                super::precheck_hint::alternative(core, cx, qty, budget, step, (min_usd, min_pct))
+                    .ok_or_else(String::new)?;
+            let result = calculate(q).await?;
+            // Never adopt an optional quote across an observed intervening market update.
+            if mark.is_none() || super::precheck_hint::stamp(core, cx) != mark {
+                return Err(String::new());
+            }
+            Ok(result)
+        };
+        super::precheck_hint::compare(calculate(qty), other, |a, b| {
+            (a.profit_usd, std::cmp::Reverse((a.spend_max, a.qty)))
+                > (b.profit_usd, std::cmp::Reverse((b.spend_max, b.qty)))
+        })
+        .await
+    };
+    let (result, changed) = stage(|| STAGE.into(), work).await;
+    match result {
         Ok(c) => {
-            w.path = Some(Path::Used);
+            w.path = Some(if !changed {
+                Path::Used
+            } else {
+                Path::Compared {
+                    original: qty,
+                    chosen: c.qty,
+                }
+            });
             Some(c)
         }
         Err(e) => {

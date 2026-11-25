@@ -190,13 +190,21 @@ pub async fn recalc(
         accept(c, q, budget, &d.asset.ticker, (min_usd, min_pct))
     };
     let work = async {
-        let Ok(_slot) = core.inner.hint_slot.try_acquire() else {
+        let Ok(slot) = core.inner.hint_slot.clone().try_acquire_owned() else {
             return (calculate(qty).await, false);
         };
         let other = async {
-            let (q, mark) =
-                super::precheck_hint::alternative(core, cx, qty, budget, step, (min_usd, min_pct))
-                    .ok_or_else(String::new)?;
+            let (q, mark, _slot) = super::precheck_hint::alternative(
+                core,
+                cx,
+                qty,
+                budget,
+                step,
+                (min_usd, min_pct),
+                slot,
+            )
+            .await
+            .ok_or_else(String::new)?;
             Ok((calculate(q).await?, Some(mark)))
         };
         let original = async { Ok((calculate(qty).await?, None)) };

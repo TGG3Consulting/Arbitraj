@@ -96,14 +96,12 @@ pub(super) fn remember<C: Curve<Data = Calc>>(
         return;
     }
     let risk_only = cx.pair_a.is_some();
-    let route = |c: &Calc| {
-        if risk_only {
-            c.sell_quote.route.as_ref().cloned()
-        } else {
-            c.buy_quote.route.as_ref().cloned()
-        }
-    };
-    let Some(base) = route(&found.best.data) else {
+    let c = &found.best.data;
+    let Some(base) = (if risk_only {
+        c.sell_quote.route.as_ref()
+    } else {
+        c.buy_quote.route.as_ref()
+    }) else {
         return;
     };
     let [leg] = base.legs.as_slice() else { return };
@@ -175,14 +173,15 @@ pub(super) fn remember<C: Curve<Data = Calc>>(
 }
 
 /// Short-lived candidate curves never carry authority to submit a trade.
-pub(super) fn alternative(
+pub(super) async fn alternative(
     core: &Core,
     cx: &DirCtx,
     qty: Decimal,
     budget: Decimal,
     step: Decimal,
     floor: (Decimal, Decimal),
-) -> Option<(Decimal, Stamp)> {
+    slot: tokio::sync::OwnedSemaphorePermit,
+) -> Option<(Decimal, Stamp, tokio::sync::OwnedSemaphorePermit)> {
     let samples = lk(&core.inner.precheck_hints)
         .0
         .iter()
@@ -193,36 +192,70 @@ pub(super) fn alternative(
     if samples.stamp.pools != mark.pools || !cx.units_b_per_a.is_identity() {
         return None;
     }
-    if samples.risk_only {
-        if samples.stamp.book != mark.book || samples.keep == keep {
-            return None;
-        }
-        return risk_best(&samples.points, cx, budget, floor)
-            .filter(|q| *q != qty)
-            .map(|q| (q, mark));
+    if samples.risk_only && (samples.stamp.book != mark.book || samples.keep == keep) {
+        return None;
     }
-    let book = rd(&core.inner.market);
-    let bids = &book.book(&cx.dir.sell_on, &cx.b.ticker)?.bids;
-    v3::best(&samples.points, bids, cx, samples.fee?, budget, step, floor)
-        .filter(|q| *q != qty)
-        .map(|q| (q, mark))
+    let bids = if samples.risk_only {
+        Vec::new()
+    } else {
+        rd(&core.inner.market)
+            .book(&cx.dir.sell_on, &cx.b.ticker)?
+            .bids
+            .iter()
+            .take(64)
+            .cloned()
+            .collect()
+    };
+    let model = Model {
+        keep,
+        share: cx.closure_share,
+        h: cx.h,
+        budget,
+        step,
+        floor,
+    };
+    use crate::gateway::cpu_budget::{self, Tier};
+    let cpu = match cpu_budget::limits(&core.inner.deps.settings) {
+        Some(limits) => Some(cpu_budget::try_acquire(limits, Tier::Background)?),
+        None => None,
+    };
+    tokio::task::spawn_blocking(move || {
+        let _cpu = cpu;
+        let choice = if samples.risk_only {
+            risk_best(&samples.points, &model)
+        } else {
+            v3::best(&samples.points, &bids, &model, samples.fee?)
+        };
+        choice.filter(|q| *q != qty).map(|q| (q, mark, slot))
+    })
+    .await
+    .ok()?
 }
 
 #[path = "precheck_hint_v3.rs"]
 mod v3;
 
-fn risk_best(
-    points: &[Sample],
-    cx: &DirCtx,
+struct Model {
+    keep: Decimal,
+    share: Option<Decimal>,
+    h: Decimal,
     budget: Decimal,
+    step: Decimal,
     floor: (Decimal, Decimal),
-) -> Option<Decimal> {
-    let keep = cx.keep?;
+}
+
+fn risk_best(points: &[Sample], model: &Model) -> Option<Decimal> {
+    let Model {
+        keep,
+        share,
+        budget,
+        floor,
+        ..
+    } = *model;
     points
         .iter()
         .filter_map(|p| {
-            let risk =
-                super::reserve::amount(keep, p.proceeds, cx.closure_share, p.bought_at, p.sold_at);
+            let risk = super::reserve::amount(keep, p.proceeds, share, p.bought_at, p.sold_at);
             let pnl = p.before_reserve - risk;
             (p.invested > Decimal::ZERO
                 && p.spend <= budget

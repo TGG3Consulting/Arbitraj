@@ -1,6 +1,6 @@
 //! Suggest one size on a sampled two-hop V3 buy / CEX sell. The CEX book is
 //! consumed cumulatively and the hint never evaluates outside sampled buy sizes.
-use super::{DirCtx, Sample, segment};
+use super::{Model, Sample, segment};
 use crate::core::types::PriceLevel;
 use rust_decimal::Decimal as D;
 
@@ -12,21 +12,20 @@ struct Band {
     before: D,
 }
 
-pub(super) fn best(
-    points: &[Sample],
-    bids: &[PriceLevel],
-    cx: &DirCtx,
-    fee: D,
-    budget: D,
-    step: D,
-    floor: (D, D),
-) -> Option<D> {
-    let keep = cx.keep?;
+pub(super) fn best(points: &[Sample], bids: &[PriceLevel], model: &Model, fee: D) -> Option<D> {
+    let Model {
+        keep,
+        share,
+        h,
+        budget,
+        step,
+        floor,
+    } = *model;
     let largest = points.last()?.qty;
-    if cx.h <= D::ZERO || cx.h > D::ONE || fee < D::ZERO || fee >= keep || step <= D::ZERO {
+    if h <= D::ZERO || h > D::ONE || fee < D::ZERO || fee >= keep || step <= D::ZERO {
         return None;
     }
-    let needed = largest.checked_div(cx.h)?;
+    let needed = largest.checked_div(h)?;
     let mut bands = Vec::new();
     let (mut depth, mut proceeds) = (D::ZERO, D::ZERO);
     // The optional calculation is bounded even if a venue supplies thousands of levels.
@@ -47,7 +46,7 @@ pub(super) fn best(
             break;
         }
     }
-    let max_sell = depth.checked_mul(cx.h)?;
+    let max_sell = depth.checked_mul(h)?;
     let mut best = None;
     let mut j = 0;
     for pair in points.windows(2) {
@@ -100,8 +99,7 @@ pub(super) fn best(
                 let gross = b.before + (q - b.lo) * b.price;
                 let fixed =
                     |p: Sample| p.proceeds - p.invested - p.before_reserve - p.proceeds * fee;
-                let risk =
-                    super::super::reserve::amount(keep, gross, cx.closure_share, price, gross / q);
+                let risk = super::super::reserve::amount(keep, gross, share, price, gross / q);
                 let pnl = gross - investment - gross * fee - interpolate(fixed(l), fixed(r)) - risk;
                 if pnl < floor.0 || pnl / investment * D::ONE_HUNDRED < floor.1 {
                     continue;

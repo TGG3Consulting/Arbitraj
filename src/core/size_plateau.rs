@@ -110,7 +110,11 @@ pub(super) async fn probe<C: Curve>(
             continue;
         }
         remaining -= 1;
-        let Ok(point) = m.at(n).await else { continue };
+        let point = match m.at(n).await {
+            Ok(p) => p,
+            Err(super::size::Fail::Stop(_)) => break,
+            Err(_) => continue,
+        };
         if arrival.amount(point.qty) != Some(point.arrive) {
             break;
         }

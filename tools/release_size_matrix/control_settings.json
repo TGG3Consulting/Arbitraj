@@ -1,0 +1,44 @@
+{
+  "20261124130101216DEOD": {
+    "money.min_profit_pct": "0.00001",
+    "money.min_profit_usd": "0.1",
+    "profit.closure_share": null,
+    "profit.liquidity_share_h": "0.7",
+    "profit.price_move_k": "3.6"
+  },
+  "20261123155505261RT": {
+    "money.min_profit_pct": "0.03",
+    "money.min_profit_usd": "0.1",
+    "profit.closure_share": null,
+    "profit.liquidity_share_h": "0.7",
+    "profit.price_move_k": "1.6"
+  },
+  "20261122144730803TRADOOR": {
+    "money.min_profit_pct": "0.00001",
+    "money.min_profit_usd": "0.005",
+    "profit.closure_share": null,
+    "profit.liquidity_share_h": "0.7",
+    "profit.price_move_k": "3.6"
+  },
+  "20261122120942578AI": {
+    "money.min_profit_pct": "0.00001",
+    "money.min_profit_usd": "1.5",
+    "profit.closure_share": null,
+    "profit.liquidity_share_h": "0.7",
+    "profit.price_move_k": "3.6"
+  },
+  "20261122035518146RAIN": {
+    "money.min_profit_pct": "0.00001",
+    "money.min_profit_usd": "1.5",
+    "profit.closure_share": null,
+    "profit.liquidity_share_h": "0.7",
+    "profit.price_move_k": "3.6"
+  },
+  "20261122022830984EVAA": {
+    "money.min_profit_pct": "0.00001",
+    "money.min_profit_usd": "1.5",
+    "profit.closure_share": null,
+    "profit.liquidity_share_h": "0.7",
+    "profit.price_move_k": "3.6"
+  }
+}

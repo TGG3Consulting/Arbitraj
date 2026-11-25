@@ -249,6 +249,7 @@ pub mod precheck_deposit;
 pub mod precheck_dex_cut;
 pub mod precheck_dex_sell;
 pub mod precheck_fast;
+pub mod precheck_hint;
 pub mod precheck_nets;
 pub mod precheck_par;
 pub mod precheck_sell;

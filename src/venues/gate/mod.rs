@@ -142,7 +142,7 @@ impl Venue for Gate {
             match self.destinations.reconcile(&self.ctx).await {
                 Ok(0) => {}
                 Ok(count) => result.details.push_str(&format!(
-                    ". Подтверждены выводы на {count} ранее отклонённых адресов."
+                    ". Gate подтвердила возможность вывода на {count} ранее отклонённых адресов."
                 )),
                 Err(e) => result.details.push_str(&format!(
                     ". Сверка ранее отклонённых адресов: {}",
@@ -244,12 +244,12 @@ impl Venue for Gate {
     }
 
     async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer> {
-        let attempt = self
-            .destinations
-            .attempt(&self.ctx, &req.asset.ticker, &req.network, &req.address)
-            .await?;
+        transfers::validate(&self.ctx, &req)?;
+        let attempt =
+            self.destinations
+                .attempt(&self.ctx, &req.asset.ticker, &req.network, &req.address)?;
         let mut res = attempt
-            .signed(transfers::withdraw(&self.ctx, req.clone()))
+            .signed(transfers::submit(&self.ctx, req.clone()))
             .await;
         let denied = res.as_ref().err().is_some_and(|e| {
             e.code == ErrorCode::InvalidAddress

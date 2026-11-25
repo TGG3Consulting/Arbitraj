@@ -37,7 +37,7 @@ const MAX_WITHDRAW_ORDER_ID: usize = 32;
 
 /// Вывод. Принимает: запрос ядра (сеть — chain Gate). Возвращает: перевод Pending с ID Gate («w…»).
 /// Ошибки: ключи, отказ Gate (WithdrawRejected, InvalidAddress — ADDRESS_NOT_USED), «итог неизвестен».
-pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer> {
+pub(super) fn validate(ctx: &Ctx, req: &WithdrawRequest) -> GatewayResult<()> {
     if req.deal_id.is_empty() || req.amount <= rust_decimal::Decimal::ZERO {
         let m = format!(
             "Вывод не отправлен: пустой ID сделки или сумма {} не больше нуля",
@@ -45,6 +45,15 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         );
         return Err(ctx.tag(GatewayError::new(ErrorCode::WithdrawRejected, None, m)));
     }
+    Ok(())
+}
+
+pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer> {
+    validate(ctx, &req)?;
+    submit(ctx, req).await
+}
+
+pub(super) async fn submit(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer> {
     // Метка попытки — миллисекунды (9 цифр) в начале, чтобы обрезка по длине её не съела (как решение 114 у ордеров).
     let attempt = Utc::now().timestamp_millis().rem_euclid(1_000_000_000);
     let order_id: String = format!("w{attempt:09}{}", req.deal_id)
@@ -138,7 +147,13 @@ pub async fn withdrawal_status(ctx: &Ctx, notices: &Notices, id: &str) -> Gatewa
         "DONE" => TransferStatus::Sent,
         "CANCEL" | "REJECT" | "INVALID" => {
             let why = num::text_opt(rec, "fail_reason").unwrap_or_default();
-            let m = format!("Gate: вывод {id} — {st} {why}");
+            let reason = if why.is_empty() {
+                "биржа не сообщила причину"
+            } else {
+                &why
+            };
+            let m =
+                format!("Gate GET /wallet/withdrawals: вывод {id}, status={st}, причина: {reason}");
             return Err(ctx.tag(
                 GatewayError::new(ErrorCode::WithdrawRejected, None, m).with_raw(rec.to_string()),
             ));

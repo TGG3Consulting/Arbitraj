@@ -150,7 +150,7 @@ async fn account(core: &Core, deal: &str, asset: &Asset, from: &VenueId, e: &OpE
         )
     } else {
         format!(
-            "исправьте в аккаунте {venue}: адрес кошелька DEX — в белом списке (адресной книге) вывода"
+            "исправьте в аккаунте {venue}: проверьте разрешение вывода на адрес получателя для этой монеты и сети"
         )
     };
     let text = crate::notify::human_msg::Msg::event("venue.account_problem")

@@ -174,7 +174,7 @@ mod tests {
             asset: asset.clone(),
             network: "BSC".into(),
             address: "address".into(),
-            amount: Decimal::from(1000),
+            amount: Decimal::new(3082954, 2),
             deal_id: "20261122120942578AI".into(),
         };
         let mut result = Transfer {

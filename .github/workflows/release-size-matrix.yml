@@ -1,7 +1,7 @@
 name: Release size matrix
 on:
   push:
-    branches: ["test/release-size-matrix-*"]
+    branches: ["audit/control-combined-fixedreal-20261125"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,9 +20,9 @@ jobs:
           from pathlib import Path
           ref = os.environ["GITHUB_REF_NAME"]
           attribution = "-attribution-" in ref
-          inventory = "attribution.json" if attribution else "releases.json"
+          inventory = "control.json"
           rows = json.loads((Path("tools/release_size_matrix") / inventory).read_text(encoding="utf-8-sig"))
-          assert len(rows) == len({r["sha"] for r in rows}) == (8 if attribution else 52)
+          assert len(rows) == len({r["sha"] for r in rows}) == 1
           if attribution and ref.endswith("-retry"):
               rows = [r for r in rows if r["sha"].startswith(("98530a48", "534a97a1"))]
               assert len(rows) == 2
@@ -154,7 +154,7 @@ jobs:
             fixedv3-replay.jsonl
           if-no-files-found: error
       - name: Run native size selection against the common cases
-        if: "!contains(github.ref_name, '-native-') && !contains(github.ref_name, '-stored-') && !contains(github.ref_name, '-fixedv2-') && !contains(github.ref_name, '-fixedv3-') && !contains(github.ref_name, '-fixedreal-')"
+        if: success()
         shell: bash
         working-directory: release
         run: |
@@ -203,7 +203,7 @@ jobs:
             percentage-gate-off.jsonl
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
-        if: "!contains(github.ref_name, '-native-') && !contains(github.ref_name, '-stored-') && !contains(github.ref_name, '-attribution-') && !contains(github.ref_name, '-fixedv2-') && !contains(github.ref_name, '-fixedv3-') && !contains(github.ref_name, '-fixedreal-')"
+        if: success()
         with:
           name: replay-${{ matrix.sha }}
           path: replay.jsonl

@@ -228,11 +228,8 @@ pub(super) async fn alternative(
         step,
         floor,
     };
-    use crate::gateway::cpu_budget::{self, Tier};
-    let cpu = match cpu_budget::limits(&core.inner.deps.settings) {
-        Some(limits) => Some(cpu_budget::try_acquire(limits, Tier::Background)?),
-        None => None,
-    };
+    use crate::gateway::cpu_budget;
+    let cpu = cpu_budget::try_optional(cpu_budget::limits(&core.inner.deps.settings))?;
     tokio::task::spawn_blocking(move || {
         let _cpu = cpu;
         let choice = if samples.risk_only {
@@ -315,7 +312,6 @@ pub fn segment(
     let q = a
         .checked_sub(a.checked_div(marginal)?.sqrt()?)?
         .checked_div(b)?;
-    let q = q.checked_sub(q.checked_rem(step)?)?;
     (q >= q0 && q <= q1).then_some(q)
 }
 

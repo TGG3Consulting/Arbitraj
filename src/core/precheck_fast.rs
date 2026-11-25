@@ -210,7 +210,10 @@ pub async fn recalc(
                 .await
                 .ok_or_else(String::new)?,
             };
-            Ok((calculate(q).await?, Some(mark)))
+            Ok((
+                crate::gateway::cpu_budget::optional_quote(calculate(q)).await?,
+                Some(mark),
+            ))
         };
         let original = async { Ok((calculate(qty).await?, None)) };
         let (result, moved) = compare_checked(original, other, prepared, |mark| {

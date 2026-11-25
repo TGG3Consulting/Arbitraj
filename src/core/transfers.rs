@@ -650,7 +650,7 @@ async fn go(
         started,
     };
     if indexed && let Some(wire) = gw_from.withdrawal_wire(&created, &sent) {
-        claim.expected = super::credit_units::wire_without_tax(
+        claim.expected = super::credit_expect::wire_without_tax(
             wire,
             super::transfer_tax::pct(core, to, asset).ok(),
             units,

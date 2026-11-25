@@ -213,23 +213,10 @@ pub async fn recalc(
             Ok((calculate(q).await?, Some(mark)))
         };
         let original = async { Ok((calculate(qty).await?, None)) };
-        let (result, moved) =
-            super::precheck_hint::compare(original, other, prepared, |(a, mark), old| {
-                if super::precheck_hint::stamp(core, cx) != *mark {
-                    return false;
-                }
-                old.is_none_or(|(b, _)| {
-                    let same_block =
-                        |x: &crate::core::types::Quote, y: &crate::core::types::Quote| {
-                            x.route.as_ref().map(|r| r.block) == y.route.as_ref().map(|r| r.block)
-                        };
-                    same_block(&a.buy_quote, &b.buy_quote)
-                        && same_block(&a.sell_quote, &b.sell_quote)
-                        && (a.profit_usd, std::cmp::Reverse((a.spend_max, a.qty)))
-                            > (b.profit_usd, std::cmp::Reverse((b.spend_max, b.qty)))
-                })
-            })
-            .await;
+        let (result, moved) = compare_checked(original, other, prepared, |mark| {
+            super::precheck_hint::stamp(core, cx) == *mark
+        })
+        .await;
         (result.map(|(c, _)| c), moved)
     };
     let (result, changed) = stage(|| STAGE.into(), work).await;
@@ -267,6 +254,32 @@ pub fn floor_qty(qty: Decimal, step: Decimal) -> Result<Decimal, String> {
         ));
     }
     Ok(q)
+}
+
+/// Compare executable plans under the incumbent deadline and recheck market identity.
+pub async fn compare_checked<M, A, B>(
+    original: A,
+    alternative: B,
+    prepared: bool,
+    current: impl FnOnce(&M) -> bool,
+) -> (Result<(Calc, M), String>, bool)
+where
+    A: Future<Output = Result<(Calc, M), String>>,
+    B: Future<Output = Result<(Calc, M), String>>,
+{
+    super::precheck_hint::compare(original, alternative, prepared, |(a, mark), old| {
+        if !current(mark) {
+            return false;
+        }
+        old.is_none_or(|(b, _)| {
+            let block = |q: &crate::core::types::Quote| q.route.as_ref().map(|r| r.block);
+            block(&a.buy_quote) == block(&b.buy_quote)
+                && block(&a.sell_quote) == block(&b.sell_quote)
+                && (a.profit_usd, std::cmp::Reverse((a.spend_max, a.qty)))
+                    > (b.profit_usd, std::cmp::Reverse((b.spend_max, b.qty)))
+        })
+    })
+    .await
 }
 
 /// Решение быстрого пути по готовому финальному расчёту: те же сравнения с порогами, что в конце profit.rs

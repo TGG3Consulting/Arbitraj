@@ -38,4 +38,4 @@ def hint(c, src):
   wb=y*f*n/(x+f*n);cost=q*px
   snew=S*x/(x+f*n);tnew=T*(1+wb*g/w)
   ok1=snew>=D('1.0001')**(D(tl)/2);ok2=tnew<=D('1.0001')**(D(t2u)/2)
- return {'qty':str((q/step).to_integral_value(rounding='ROUND_FLOOR')*step),'inside_shop_segment':ok1,'inside_bridge_segment':ok2,'inside_level':q<=depth,'inside_budget':cost*D(c['spend_mult'])<=D(c['budget']), 'ticks':[[tl,tu],[t2l,t2u]],'width':6,'first_level_size':str(depth)}
+ return {'price':str(px),'price_factor':str(M/K if rev else A/B),'curve_factor':str(J/K if rev else C/B),'qty':str((q/step).to_integral_value(rounding='ROUND_FLOOR')*step),'inside_shop_segment':ok1,'inside_bridge_segment':ok2,'inside_level':q<=depth,'inside_budget':cost*D(c['spend_mult'])<=D(c['budget']), 'ticks':[[tl,tu],[t2l,t2u]],'width':6,'first_level_size':str(depth)}

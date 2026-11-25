@@ -59,7 +59,15 @@ async fn shop_live_control(){
         for q in [get("k_qty"),get("alt"),num(data["hint"]["qty"].as_str().unwrap()).max(step),num("20000"),num("25000"),num("28000"),num("30000"),num("32000"),num("34000"),num("40000")]{
             points.push(curve.at(q).await.ok().map(&repr));
         }
-        let selected=search(&mut curve,&p).await.map(|f|json!({"point":repr(f.best),"evals":f.choice.evals,"hi":f.choice.max_qty,"cap":f.choice.capped})).ok();
+        let full_started=std::time::Instant::now(); let selected=search(&mut curve,&p).await.map(|f|json!({"point":repr(f.best),"evals":f.choice.evals,"hi":f.choice.max_qty,"cap":f.choice.capped})).ok();
+        let full_us=full_started.elapsed().as_micros() as u64;
+        use rust_decimal::MathematicalOps;
+        let hc=&data["hint"]; let dec=|k:&str|num(hc[k].as_str().unwrap()); 
+        let unit=dec("price_factor");let bend=dec("curve_factor");let bid=dec("price");let keep=cx.keep.unwrap();let pf=num("0.001");let depth=dec("first_level_size");let wd=get("withdraw");
+        let formula=||if rev{(Decimal::ONE-(unit/((keep-pf)*bid)).sqrt().unwrap())/bend}
+                    else{(((keep*unit*(Decimal::ONE-pf)/bid).sqrt().unwrap()-Decimal::ONE)/bend+wd)/(Decimal::ONE-pf)};
+        let mut kernel=Vec::new();for _ in 0..63 {let t=std::time::Instant::now();std::hint::black_box(std::hint::black_box(&formula)().max(Decimal::ZERO).min(depth));kernel.push(t.elapsed().as_nanos() as u64);}kernel.sort();
+        let mut single=Vec::new();for _ in 0..3 {let t=std::time::Instant::now();let _=std::hint::black_box(curve.at(get("k_qty")).await);single.push(t.elapsed().as_micros() as u64);}single.sort();
         let (mut lo,mut hi)=(num("200"),num("80000"));let mut probes=0;
         // Both pools have constant fee tiers, monotone marginal price between ticks; no liquidity gaps
         // may be assumed outside the captured range. This is a reference for this one frozen path.
@@ -76,7 +84,7 @@ async fn shop_live_control(){
             if pair[0]>=pair[1]{hi=b}else{lo=a}
         }
         let reference=match best {Some((_,n))=>Some(repr(curve.at(-n).await.unwrap())),None=>None}; let source_error=curve.at(get("k_qty")).await.err().map(|e|format!("{e:?}"));
-        println!("SHOP_LIVE {}",json!({"id":id,"block":block,"freeze":data["freeze"],"seq":data["seq"],"hint":data["hint"],"source_error":source_error,"k_qty":get("k_qty"),"k_profit":get("net"),"archive_alt":get("alt"),"archive_alt_net":get("alt_net"),"points":points,"native":selected,"ref":reference,"ref_probes":probes,"ref_final_bracket":[lo,hi]}));
+        println!("SHOP_LIVE {}",json!({"id":id,"block":block,"freeze":data["freeze"],"seq":data["seq"],"hint":data["hint"],"source_error":source_error,"full_us":full_us,"fresh_us_median3":single[1],"formula_ns_p50":kernel[31],"formula_ns_p95":kernel[59],"k_qty":get("k_qty"),"k_profit":get("net"),"archive_alt":get("alt"),"archive_alt_net":get("alt_net"),"points":points,"native":selected,"ref":reference,"ref_probes":probes,"ref_final_bracket":[lo,hi]}));
     }
 }
 

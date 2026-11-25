@@ -1,7 +1,7 @@
-name: Encrypted historical market comparison
+name: Encrypted fixed DEX historical markets
 on:
   push:
-    branches: [audit/private-cex-history-2511]
+    branches: [audit/private-dex-history-2511]
 permissions:
   contents: read
 jobs:
@@ -43,7 +43,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ref=refs/heads/audit/market-envelope-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          ref=refs/heads/audit/dex-market-envelope-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
           for i in $(seq 1 35); do
             if git -C harness ls-remote --exit-code origin "$ref" >/dev/null 2>&1; then break; fi
             sleep 25
@@ -61,17 +61,17 @@ jobs:
           PY
           export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/release/target"
           for tree in base release; do
-            python "$p/stored_compare.py" "$tree" "$RUNNER_TEMP/cases.json"
+            python "$p/actual_v2.py" stage "$tree" "$RUNNER_TEMP/cases.json"
             python - "$p" "$tree" <<'PY'
           import pathlib,sys
-          p=pathlib.Path(sys.argv[1]);code=(p/'with_history.py').read_text().replace('["stored_compare","actual_v2","actual_v3"]','["stored_compare"]')
+          p=pathlib.Path(sys.argv[1]);code=(p/'with_history.py').read_text().replace('["stored_compare","actual_v2","actual_v3"]','["actual_v2"]')
           tree=sys.argv[2];sys.argv=['with_history.py',tree];exec(compile(code,'with_history.py','exec'),{'__file__':str(p/'with_history.py'),'__name__':'__main__'})
           PY
-            if ! (cd "$tree" && cargo test --locked --test core_size_stored_compare -- --nocapture > "$RUNNER_TEMP/$tree.log" 2>&1); then
+            if ! (cd "$tree" && cargo test --locked --test core_size_actual_v2 -- --nocapture > "$RUNNER_TEMP/$tree.log" 2>&1); then
               grep -E 'error(\[E[0-9]+\])?:|panicked at|FAILED|assertion' -A 4 "$RUNNER_TEMP/$tree.log" | head -n 75 || true
               exit 1
             fi
-            sed -n -E 's/^(test [^ ]+ \.\.\. )?STORED_TRADE_MATRIX //p' "$RUNNER_TEMP/$tree.log" > "$RUNNER_TEMP/$tree.jsonl"
+            sed -n -E 's/^(test [^ ]+ \.\.\. )?ACTUAL_V2_MATRIX //p' "$RUNNER_TEMP/$tree.log" > "$RUNNER_TEMP/$tree.jsonl"
             test -s "$RUNNER_TEMP/$tree.jsonl"
           done
           python - "$RUNNER_TEMP" <<'PY'

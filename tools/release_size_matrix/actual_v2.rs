@@ -1,26 +1,43 @@
-use alloy_primitives::U256;
+use alloy_primitives::{I256, U256};
+use arb::venues::bsc_dex::math::swap_step::step_v3;
 use arb::core::convert::Rates;
 use arb::core::costs_source::Source;
 use arb::core::size::Fail;
 use arb::core::types::{Cost, CostKind, Quote};
 use arb::venues::bsc_dex::num::{to_decimal, to_units};
 
+enum FrozenPool {
+    V2 { reserve_in: U256, reserve_out: U256 },
+    V3 { sqrt: U256, boundary: U256, liquidity: u128, fee: u32 },
+}
 struct FixedV2 {
     replay: Replay,
     max_buy_qty: Decimal,
-    reserve_in: U256,
-    reserve_out: U256,
+    frozen: FrozenPool,
     decimals_in: u8,
     decimals_out: u8,
 }
 
 impl FixedV2 {
-    fn amount_out(&self, qty: Decimal) -> Option<U256> {
+    fn swap(&self, qty: Decimal) -> Option<(U256, Decimal)> {
         let received = to_units(qty, self.decimals_in)?;
-        let effective = received.checked_mul(U256::from(9975u32))?;
-        let numerator = effective.checked_mul(self.reserve_out)?;
-        let denominator = self.reserve_in.checked_mul(U256::from(10_000u32))?.checked_add(effective)?;
-        (!denominator.is_zero()).then(|| numerator / denominator)
+        if received.is_zero() { return None; }
+        match self.frozen {
+            FrozenPool::V2 { reserve_in, reserve_out } => {
+                let effective = received.checked_mul(U256::from(9975u32))?;
+                let numerator = effective.checked_mul(reserve_out)?;
+                let denominator = reserve_in.checked_mul(U256::from(10_000u32))?.checked_add(effective)?;
+                Some((numerator.checked_div(denominator)?, qty.checked_mul(Decimal::new(25, 4))?))
+            },
+            FrozenPool::V3 { sqrt, boundary, liquidity, fee } => {
+                let signed = I256::try_from(received).ok()?;
+                let (next, used, out, paid) = step_v3(sqrt, boundary, liquidity, signed, fee)?;
+                // No tick bitmap or liquidityNet outside this first open interval was recorded.
+                if next <= sqrt.min(boundary) || next >= sqrt.max(boundary) ||
+                    used.checked_add(paid)? != received { return None; }
+                Some((out, to_decimal(paid, self.decimals_in)?))
+            }
+        }
     }
 }
 
@@ -32,7 +49,7 @@ impl Source for FixedV2 {
             }
             return self.replay.quote(dir, sell, qty).await;
         }
-        let raw = self.amount_out(qty).ok_or_else(|| Fail::TooLarge("V2 quantity overflow".into()))?;
+        let (raw, pool_fee) = self.swap(qty).ok_or_else(|| Fail::TooLarge("V2 quantity overflow".into()))?;
         let out = to_decimal(raw, self.decimals_out)
             .filter(|out| *out > Decimal::ZERO)
             .ok_or_else(|| Fail::TooSmall("zero V2 output".into()))?;
@@ -43,7 +60,7 @@ impl Source for FixedV2 {
         quote.avg_price = out / qty;
         for cost in &mut quote.costs {
             if cost.kind == CostKind::PoolFee {
-                cost.amount = qty * Decimal::new(25, 4);
+                cost.amount = pool_fee;
             }
         }
         if let Some(route) = &mut quote.route {
@@ -91,12 +108,20 @@ async fn replay(case: &Value, budget: Decimal, max_evals: u32) -> Result<Value, 
     let source = FixedV2 {
         replay: Replay::new(&dir, &plan, a.clone(), None, ["USDT", "USDT"])?,
         max_buy_qty: a.asks.iter().map(|level| level.qty).sum(),
-        reserve_in: u256(&pool["coin_reserve_raw"])?,
-        reserve_out: u256(&pool["quote_reserve_raw"])?,
+        frozen: if pool["kind"] == "v3" {
+            FrozenPool::V3 {
+                sqrt: u256(&pool["sqrt"])?,
+                boundary: u256(&pool["boundary"])?,
+                liquidity: pool["liquidity"].as_str().ok_or("missing liquidity")?.parse::<u128>().map_err(|e| e.to_string())?,
+                fee: u32::try_from(pool["fee"].as_u64().ok_or("missing fee")?).map_err(|e|e.to_string())?,
+            }
+        } else {
+            FrozenPool::V2 { reserve_in: u256(&pool["coin_reserve_raw"])?, reserve_out: u256(&pool["quote_reserve_raw"])? }
+        },
         decimals_in: scale(&pool["coin_decimals"])?,
         decimals_out: scale(&pool["quote_decimals"])?,
     };
-    if source.amount_out(plan.sell_qty) != Some(u256(&pool["planned_out_raw"])?) {
+    if source.swap(plan.sell_qty).map(|x|x.0) != Some(u256(&pool["planned_out_raw"])?) {
         return Err("fixed-route reserve replay does not reproduce original input/output".into());
     }
     let cx = context(&dir, &plan);

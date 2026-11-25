@@ -33,8 +33,8 @@ use arb::core::registry::Presence;
 use arb::core::size::Fail;
 use arb::core::size_curve::{SourceCurve, params};
 use arb::core::size_uncapped::uncapped;
-use arb::core::types::{Asset, Cost, CostKind, Direction, OrderBook, Side, VenueId};
-use arb::core::uncapped_types::{BASIS_DECISION, Battle, missed};
+use arb::core::types::{Asset, Cost, CostKind, Direction, OrderBook, Quote, Side, VenueId};
+use arb::core::uncapped_types::{BASIS_DECISION, Battle, Brief, OptQuote, missed};
 use arb::gateway::frozen::{BookFee, FrozenBook};
 use arb::gateway::registry::Registry;
 use arb::notify::dispatch::Notifier;
@@ -282,6 +282,24 @@ async fn compute_uses_plan_sigma() {
         .await
         .unwrap();
     assert_eq!((r.opt.qty, r.opt.profit), (u.opt.qty, u.opt.profit));
+    let mut body = serde_json::to_value(&r).unwrap();
+    let evidence = &body["opt_quote_evidence"];
+    let calc = &u.opt.data;
+    assert_eq!(evidence["arrive"], json!(calc.arrive));
+    assert_eq!(evidence["sell_qty"], json!(calc.sell_qty));
+    for (side, q) in [("buy", &calc.buy_quote), ("sell", &calc.sell_quote)] {
+        assert_eq!(evidence[side]["venue"], json!(q.venue));
+        assert_eq!(evidence[side]["at"], json!(q.at));
+        assert_eq!(evidence[side]["requested_qty"], json!(q.qty));
+        assert_eq!(evidence[side]["fillable_qty"], json!(q.fillable_qty));
+        assert!(evidence[side].get("route_block").is_none());
+        assert!(evidence[side].get("legs").is_none());
+    }
+    // Итоги и суммы читаются одинаково и из новой строки, и из старого JSON без свидетельства.
+    let new: Brief = serde_json::from_value(body.clone()).unwrap();
+    body.as_object_mut().unwrap().remove("opt_quote_evidence");
+    let old: Brief = serde_json::from_value(body).unwrap();
+    assert_eq!((new.opt, new.missed), (old.opt, old.missed));
     // σ, которая была бы «живой» при расчёте (вдвое больше), — другой итог: compute её не берёт.
     let c2 = cx(&rec, sigma * d("2"));
     let mut curve2 = SourceCurve {
@@ -305,6 +323,27 @@ async fn compute_uses_plan_sigma() {
         r.missed,
         missed("deal", r.opt_passes, r.opt.profit, &r.at_budget)
     );
+}
+
+#[test]
+fn dex_quote_evidence_uses_only_the_selected_route() {
+    let pair: Value =
+        serde_json::from_str(include_str!("data/bsc_units_2026_11_24/signal_quotes.json")).unwrap();
+    let mut q: Quote = serde_json::from_value(pair["sell_quote"].clone()).unwrap();
+    let route = q.route.clone().unwrap();
+    let mut signal = route.clone();
+    signal.legs.clear();
+    signal.block += 1;
+    q.signal_route = Some(signal);
+    let stored = serde_json::to_value(OptQuote::from(&q)).unwrap();
+    assert_eq!(stored["route_block"], json!(route.block));
+    assert_eq!(stored["legs"][0]["share"], json!(route.legs[0].share));
+    assert_eq!(stored["legs"][0]["hops"], json!(route.legs[0].hops));
+    assert!(stored["legs"][0]["hops"][0].get("block").is_none());
+    q.route = None;
+    let absent = serde_json::to_value(OptQuote::from(&q)).unwrap();
+    assert!(absent.get("route_block").is_none());
+    assert!(absent.get("legs").is_none());
 }
 
 #[tokio::test]

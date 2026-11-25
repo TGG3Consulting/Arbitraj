@@ -17,7 +17,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::core::types::Direction;
+use crate::core::types::{Direction, RouteHop, VenueId};
 
 use super::costs_types::CostLine;
 use super::limits_parts::Parts;
@@ -66,6 +66,38 @@ pub struct Episode {
     pub peak_at: DateTime<Utc>,
 }
 
+/// Дополнение к opt для покупки, рассчитанной по замороженным входам. Фактические исполнения
+/// хранятся в карточке сделки. opt.qty и opt.invested уже содержат объём покупки и максимальное
+/// списание; выручка, затраты и прибыль также есть в Record.
+#[derive(Debug, Clone, Serialize)]
+pub struct OptQuoteEvidence {
+    pub arrive: Decimal,
+    pub sell_qty: Decimal,
+    pub buy: OptQuote,
+    pub sell: OptQuote,
+}
+
+/// at — метка Quote: у замороженной книги это received_at, у DEX возможно время расчёта.
+/// У DEX route_block может быть минимальным блоком обновления пулов. Для докупки список
+/// пулов наследуется от расчёта вместе с идущей партией. Проверка глубины на q/h сюда не входит.
+#[derive(Debug, Clone, Serialize)]
+pub struct OptQuote {
+    pub venue: VenueId,
+    pub at: DateTime<Utc>,
+    pub requested_qty: Decimal,
+    pub fillable_qty: Decimal,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub route_block: Option<u64>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub legs: Vec<OptLeg>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OptLeg {
+    pub share: Decimal,
+    pub hops: Vec<RouteHop>,
+}
+
 /// Итог одного расчёта без потолка (пиковый в эпизоде).
 #[derive(Debug, Clone, Serialize)]
 pub struct Record {
@@ -85,6 +117,9 @@ pub struct Record {
     pub min_profit_usd: Decimal,
     pub min_profit_pct: Decimal,
     pub opt: At,
+    /// Только совершённые сделки на входах момента решения. В старых JSON поля нет.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opt_quote_evidence: Option<Box<OptQuoteEvidence>>,
     pub opt_passes: bool,
     pub opt_profit_pct: Decimal,
     pub opt_buy_avg: Decimal,

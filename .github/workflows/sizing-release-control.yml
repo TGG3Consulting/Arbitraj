@@ -17,12 +17,16 @@ jobs:
           path: control
       - uses: actions/checkout@v4
         with:
-          ref: df91581ff612c38c7ef0c300adeeb92286853445
+          ref: d474bf3a300997fd2dbbe65ff6730c483ff9c649
           path: release
       - uses: actions/checkout@v4
         with:
           ref: 1b6ca7fafce309b81c80278385ac007f22d7d1ce
           path: historical
+      - uses: actions/checkout@v4
+        with:
+          path: shop
+          ref: 375bd387
       - uses: dtolnay/rust-toolchain@1.97.0
       - uses: Swatinem/rust-cache@v2
         with:
@@ -35,7 +39,27 @@ jobs:
           python "$p/adapt.py" release
           python "$p/ab_0392.py" release
           python control/tools/sizing_control.py release
+          python "$p/stored_compare.py" release "$p/stored_cases.json"
+          python "$p/actual_v2.py" stage release "$p/actual_v2_cases.json"
+          python "$p/actual_v3.py" stage release "$p/actual_v3_cases.json"
+          python "$p/with_history.py" release
+          python "$p/stage_risk.py" release
+          k=shop/tools/release_size_matrix
+          python "$k/shop_two_leg.py" release
+          python "$k/shop_width.py" release
+          python "$k/shop_target.py" release
+          python "$k/shop_live.py" release
+          python control/tools/sizing_archive.py release
           cd release
+          cargo test --locked --lib precheck_hint::tests
+          for row in 'core_size_actual_v2 actual_v2_matrix risk' 'native_route_release_matrix shop_live_control shop'; do
+            read -r test name output <<< "$row"
+            if ! cargo test --locked --test "$test" "$name" -- --nocapture > "$RUNNER_TEMP/$output.log" 2>&1; then
+              grep -E '^error(\[E[0-9]+\])?:|panicked at|assertion .*failed|^test .*FAILED|^ *-->' -A 6 "$RUNNER_TEMP/$output.log" | head -n 75
+              exit 1
+            fi
+            grep -E 'ACTUAL_V2_MATRIX|NATIVE_NEIGHBOUR' "$RUNNER_TEMP/$output.log" > "../size-$output.jsonl"
+          done
           cargo test --locked --test core_card_disconnected --test core_precheck_fast_266
           cargo clippy --locked --lib -- -D warnings
           for arm in off on; do

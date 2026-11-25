@@ -74,6 +74,17 @@ pub fn params(
     };
     let mut p = search_params(s, step, budget, price, buy_breaks, sell_breaks)?;
     p.ext.sell_grid = sell_grid;
+    if src.is_none()
+        && cx.pair_a.is_none()
+        && cx.pair_b.is_some()
+        && cx.units_b_per_a.is_identity()
+        && cx.a.info.is_none()
+        && let Some(token) = d.asset.contract
+        && let Some(check) = rd(&core.inner.market).coin_check(&d.buy_on, token)
+        && let crate::core::types::CheckState::Known(taxes) = &check.taxes
+    {
+        p.ext.plateau = super::size_plateau::Arrival::new(Decimal::ZERO, taxes.transfer_pct);
+    }
     // Решения 336, 363 (в логику): повторное использование в подборе — у направления с DEX (сторона без правил пары
     // биржи, dirctx_venue.rs pair_rules: None — не биржа). Биржа ↔ биржа — короба ради reuse нет (DEX нет, ревью t157
     // Б1); цикл DEX ↔ DEX строит свои Params без reuse (cycle_plan.rs).

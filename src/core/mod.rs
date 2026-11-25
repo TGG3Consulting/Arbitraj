@@ -358,6 +358,7 @@ pub mod size_refine;
 pub mod size_retry;
 pub mod size_scan;
 pub mod size_search;
+pub mod size_plateau;
 pub mod size_uncapped;
 pub mod size_uncapped_at;
 mod size_unit_grid;

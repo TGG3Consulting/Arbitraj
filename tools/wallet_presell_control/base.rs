@@ -47,3 +47,34 @@ fn prices_and_order_guards() {
     }
     fs::write("case-orders.json",serde_json::to_vec_pretty(&matrix).unwrap()).unwrap();
 }
+
+#[test]
+fn gate_minimum_on_archived_books() {
+    use arb::venues::gate::{order_rules,symbols_parse};
+    let raw=inputs();
+    let allowed=HashSet::new();
+    let rules=symbols_parse::parse_list(&json!([raw["gate_4nov"]]),"USDT",&allowed,1794560000).unwrap();
+    let rules=&rules["ADAPAD"];
+    assert_eq!(rules.min_notional,Some(dec("3")));
+    let buy=dec("8501");
+    let mut rows=Vec::new();
+    for book in raw["gate_asks"].as_array().unwrap() {
+        let mut left=buy;
+        let mut worst=Decimal::ZERO;
+        let mut cost=Decimal::ZERO;
+        for ask in book["asks"].as_array().unwrap() {
+            let take=left.min(dec(ask["qty"].as_str().unwrap()));
+            worst=dec(ask["price"].as_str().unwrap());
+            cost+=take*worst;
+            left-=take;
+            if left.is_zero(){break;}
+        }
+        assert!(left.is_zero());
+        let reason=order_rules::check_rules(rules,Side::Buy,buy,worst,"ioc").unwrap_err();
+        assert!(reason.contains("минимальн"),"{reason}");
+        assert!(cost<=buy*worst && buy*worst<dec("3"));
+        rows.push(json!({"t":book["t"],"quantity":buy,"worst":worst,"order_notional":buy*worst,"cash_spent_full_book":cost,"admission":reason}));
+    }
+    assert_eq!(rows.len(),34);
+    fs::write("case-gate.json",serde_json::to_vec_pretty(&rows).unwrap()).unwrap();
+}

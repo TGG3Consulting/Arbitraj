@@ -74,6 +74,9 @@ pub async fn trade(
     };
     let state = order_state::settle(ctx, &order_id).await?;
     if let Some((level, m)) = cancel_note(&p.symbol, &order_id, &state) {
+        if crate::gateway::step_meter::active() {
+            crate::gateway::step_meter::annotate_response(&format!("GET /orders/{order_id}"), &m);
+        }
         ctx.log(level, "venue.order", m).await;
     }
     order_state::result(ctx, req, &state, order_id).await

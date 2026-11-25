@@ -60,6 +60,17 @@ pub fn active() -> bool {
     REC.try_with(|_| ()).is_ok()
 }
 
+/// Attach the venue's final order status to the request already recorded for this task.
+pub(crate) fn annotate_response(request: &str, note: &str) {
+    let _ = REC.try_with(|rec| {
+        let mut requests = rec.list.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(entry) = requests.last_mut().filter(|entry| entry.name == request) {
+            entry.outcome.push_str(", ");
+            entry.outcome.push_str(note);
+        }
+    });
+}
+
 /// Запрос кончился: имя, момент начала, итог. Журнала на задаче нет — ничего. Ошибок нет.
 pub fn record(name: String, from: Instant, outcome: String) {
     let _ = REC.try_with(|r| {
@@ -71,4 +82,32 @@ pub fn record(name: String, from: Instant, outcome: String) {
         };
         r.list.lock().unwrap_or_else(|p| p.into_inner()).push(req);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn poloniex_btw_order_details_carries_the_cancellation_into_the_deal_trace() {
+        let rec = Rec::new();
+        let request = "GET /orders/648304427677188096";
+        scope(rec.clone(), async {
+            record(request.to_string(), Instant::now(), "код 200".into());
+            let (_, note) = crate::venues::poloniex::trade::cancel_note(
+                "BTW_USDT",
+                "648304427677188096",
+                &serde_json::json!({"state": "CANCELED", "cancelReason": 1003}),
+            )
+            .unwrap();
+            annotate_response("POST /orders", &note);
+            assert_eq!(rec.take()[0].outcome, "код 200");
+            annotate_response(request, &note);
+        })
+        .await;
+        let rows = rec.take();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].outcome.starts_with("код 200, "));
+        assert!(rows[0].outcome.contains("cancelReason 1003"));
+    }
 }

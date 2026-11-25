@@ -17,7 +17,7 @@ jobs:
           path: control
       - uses: actions/checkout@v4
         with:
-          ref: d474bf3a300997fd2dbbe65ff6730c483ff9c649
+          ref: 288215a62d858bd3a70bfc0afbcbdb707e79edf0
           path: release
       - uses: actions/checkout@v4
         with:
@@ -26,8 +26,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: shop
-          ref: 375bd387
+          ref: 375bd387f318f656984689348e964a687bfbb255
       - uses: dtolnay/rust-toolchain@1.97.0
+        with:
+          components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: release -> target

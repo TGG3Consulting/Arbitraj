@@ -9,7 +9,8 @@ pub fn evidenced_hint(points:&[Calc], cx:&DirCtx, budget:Decimal, floor:(Decimal
     let mut samples:Vec<_>=points.iter().filter_map(Sample::from_calc).collect();
     samples.sort_unstable_by_key(|s|s.qty);
     samples.dedup_by_key(|s|s.qty);
-    match book{None=>risk_best(&samples,cx,budget,floor),Some((bids,fee,step))=>v3::best(&samples,bids,cx,fee,budget,step,floor)}
+    let model=Model{keep:cx.keep?,share:cx.closure_share,h:cx.h,budget,step:book.map_or(Decimal::ONE, |x|x.2),floor};
+    match book{None=>risk_best(&samples,&model),Some((bids,fee,_))=>v3::best(&samples,bids,&model,fee)}
 }
 """)
 p=root/'tests/core_size_actual_v2.rs';s=p.read_text()

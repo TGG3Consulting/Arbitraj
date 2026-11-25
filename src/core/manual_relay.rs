@@ -75,12 +75,23 @@ pub async fn run(core: &Core, deal: Deal) {
         return Box::pin(super::sell::market(core, deal, BUTTON)).await;
     }
     let a = deal.direction.asset.clone();
-    let here = super::trade_ops::deal_value(core, &deal).await.map(|x| x.0);
+    let raw = super::trade_ops::deal_quote(core, &deal).await;
+    let upper_here = raw.as_ref().ok().map(|(amount, _, _)| *amount);
+    let here = super::sell_turn_fresh::settled(core, &deal, raw)
+        .await.map(|x| x.0).map_err(|e| e.message);
     let (list, skipped) = super::manual_relay_targets::targets(core, &deal);
     let (d, a) = (&deal, &a);
     let vals = join_all(list.iter().map(|to| async move {
         let acc = super::dex_account::for_relay(core, d, to).ok().flatten();
-        let r = super::relay_value::value_at(core, &d.at, to, a, d.qty, acc.as_ref()).await;
+        let r = if super::manual_price::needs_individual_return(core, d) {
+            match super::relay_value::value_parts(core, &d.at, to, a, d.qty, acc.as_ref()).await {
+                Ok(p) if p.net > Decimal::ZERO => super::manual_price::individual_value(core, d, to, p.net, p.cash).await,
+                Ok(p) => Ok(p.net),
+                Err(e) => Err(e),
+            }
+        } else {
+            super::relay_value::value_at(core, &d.at, to, a, d.qty, acc.as_ref()).await
+        };
         (to.clone(), r)
     }))
     .await;
@@ -107,7 +118,7 @@ pub async fn run(core: &Core, deal: Deal) {
         .into_iter()
         .filter_map(|(t, r)| r.ok().map(|v| (t, v)))
         .collect();
-    let choice = pick(here.as_ref().ok().copied(), &ok);
+    let choice = pick(here.as_ref().ok().copied().or(upper_here), &ok);
     let text = format!(
         "«Продать и перегнать»: оценка площадок — {}; выбор — {}",
         lines.join("; "),

@@ -27,15 +27,27 @@ pub fn mark(core: &Core, deal: &Deal) -> Option<Box<Deal>> {
     let group = deal.group.as_ref()?;
     let id = &group.id;
     let ledger = lk(&core.inner.deals);
-    let stored = ledger.get(&deal.id).filter(|d| d.group.as_ref().is_some_and(|g| g.left));
+    let stored = ledger
+        .get(&deal.id)
+        .filter(|d| d.group.as_ref().is_some_and(|g| g.left));
     let was = stored.is_some() || group.left;
     if !was && !off_path(deal.step) {
         return None;
     }
     let prefix = format!("Была частью группы докупки {id}:");
-    let prior = stored.and_then(|d| d.timeline.iter().find(|(_, text)| text.starts_with(&prefix))).cloned();
+    let prior = stored
+        .and_then(|d| {
+            d.timeline
+                .iter()
+                .find(|(_, text)| text.starts_with(&prefix))
+        })
+        .cloned();
     drop(ledger);
-    if group.left && prior.as_ref().is_none_or(|note| deal.timeline.contains(note)) {
+    if group.left
+        && prior
+            .as_ref()
+            .is_none_or(|note| deal.timeline.contains(note))
+    {
         return None;
     }
     let mut out = Box::new(deal.clone());
@@ -71,8 +83,8 @@ pub fn sync(core: &Core, deal: &mut Deal) {
     }
 }
 
-
 pub(super) fn recorded(core: &Core, deal: &Deal) -> bool {
-    lk(&core.inner.deals).get(&deal.id)
+    lk(&core.inner.deals)
+        .get(&deal.id)
         .is_some_and(|d| d.group.as_ref().is_some_and(|g| g.left))
 }

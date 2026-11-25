@@ -9,6 +9,7 @@ fn prices(here: Result<Decimal, String>, targets: &[(&str, i64)]) -> Comparison 
             .collect(),
         skipped: Vec::new(),
         prior_cash: Decimal::ZERO,
+        here_rest_error: None,
         wallets: HashMap::new(),
     }
 }

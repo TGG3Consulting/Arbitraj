@@ -54,6 +54,7 @@ jobs:
           python control/tools/sizing_cpu.py release
           python control/tools/sizing_archive.py release
           python control/tools/sizing_entry.py release
+          python control/tools/sizing_risk_side.py release
           cd release
           cargo test --locked --lib precheck_hint
           cargo test --locked --test optional_quote_capacity --test core_precheck_fast_266 --test core_dry_mode

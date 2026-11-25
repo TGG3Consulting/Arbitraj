@@ -8,7 +8,7 @@ fn uint(x:&Value)->Option<U256>{
 }
 enum Hop {
     Pair {res_in:U256,res_out:U256,fee:u32},
-    Tick {v4:bool,sqrt:U256,boundary:U256,liq:u128,fee:u32},
+    Tick {id:String,v4:bool,sqrt:U256,boundary:U256,liq:u128,fee:u32},
     Pmm {state:PmmState,base_input:bool,lp:U256,mt:U256},
 }
 impl Hop {
@@ -18,7 +18,7 @@ impl Hop {
             "v2"=>Self::Pair{res_in:uint(&h["r_in"])?,res_out:uint(&h["r_out"])?,fee:fee(&h["fee"])?},
             "v3"|"cl"=>{
                 let v4=h["k"]=="cl";let raw_fee=fee(&h["fee"])?;
-                Self::Tick{v4,sqrt:uint(&h["sqrt"])?,boundary:uint(&h["boundary"])?,
+                Self::Tick{id:h["pool_id"].as_str()?.into(),v4,sqrt:uint(&h["sqrt"])?,boundary:uint(&h["boundary"])?,
                     liq:u128::try_from(uint(&h["liq"])?).ok()?,
                     fee:if v4{swap_fee(fee(&h["protocol"])?,raw_fee,h["zin"].as_bool()?)}else{raw_fee}}
             }
@@ -30,19 +30,26 @@ impl Hop {
             _=>return None,
         })
     }
-    fn result(&self, amount:U256,exact_in:bool)->Result<U256,&'static str>{
+    fn result(&self, amount:U256,exact_in:bool,after:&mut std::collections::HashMap<String,U256>)->Result<U256,&'static str>{
         match self {
             Self::Pair{res_in,res_out,fee}=>{
                 let keep=1_000_000u32.checked_sub(*fee).ok_or("invalid V2 fee")?;
                 let scale=(U256::from(keep),U256::from(1_000_000u32));
                 (if exact_in{v2::amount_out}else{v2::amount_in})(amount,*res_in,*res_out,scale).ok_or("V2 reserve exhausted")
             }
-            Self::Tick{v4,sqrt,boundary,liq,fee}=>{
+            Self::Tick{id,v4,sqrt,boundary,liq,fee}=>{
+                let adjusted=after.get(id).copied().unwrap_or(*sqrt);let sqrt=&adjusted;
                 let positive=I256::try_from(amount).map_err(|_|"signed amount overflow")?;
                 let signed=if exact_in != *v4{positive}else{-positive};
                 let (next,input,output,charge)=(if *v4{step_v4}else{step_v3})(*sqrt,*boundary,*liq,signed,*fee).ok_or("invalid or missing tick state")?;
                 if next<=*sqrt.min(boundary) || next>=*sqrt.max(boundary){return Err("next initialized tick and liquidity are not recorded")}
                 let spent=input.checked_add(charge).ok_or("fee overflow")?;
+                let advanced=if exact_in {next} else {
+                    let sent=I256::try_from(spent).map_err(|_|"shared pool advance overflow")?;
+                    let (post,_,_,_)=(if *v4{step_v4}else{step_v3})(*sqrt,*boundary,*liq,if *v4{-sent}else{sent},*fee).ok_or("shared pool advance failed")?;
+                    post
+                };
+                after.insert(id.clone(),advanced);
                 if exact_in && spent==amount{Ok(output)}else if !exact_in && output==amount{Ok(spent)}else{Err("incomplete pool fill")}
             }
             Self::Pmm{state,base_input,lp,mt}=>{
@@ -60,12 +67,13 @@ struct Frozen {
 impl Frozen{
     fn amounts(&self,qty:Decimal)->Result<Vec<Decimal>,&'static str>{
         let mut result=Vec::with_capacity(self.legs.len());
+        let mut after=std::collections::HashMap::new();
         for leg in &self.legs{
             let part=qty.checked_mul(leg.share).ok_or("share overflow")?;
             let mut value=to_units(part,self.coin).ok_or("quantity cannot be represented in token units")?;
             if value.is_zero(){return Err("zero-size leg")}
-            if self.sale {for h in &leg.hops {value=h.result(value,true)?;}}
-            else {for h in leg.hops.iter().rev(){value=h.result(value,false)?;}}
+            if self.sale {for h in &leg.hops {value=h.result(value,true,&mut after)?;}}
+            else {for h in leg.hops.iter().rev(){value=h.result(value,false,&mut after)?;}}
             result.push(to_decimal(value,self.stable).ok_or("quote amount outside decimal range")?);
         }
         Ok(result)

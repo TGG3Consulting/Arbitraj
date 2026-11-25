@@ -113,7 +113,14 @@ async fn reservation_survives_restart_and_cannot_switch_withdrawal_or_log() {
     assert!(!check(db.clone(), 143, claim("B"), "61").await);
     assert!(!check(db.clone(), 144, claim("A"), "122").await);
     assert!(!check(db.clone(), 143, claim("A"), "62").await);
-    assert!(check(db, 144, claim("B"), "122").await);
+    assert!(check(db.clone(), 144, claim("B"), "122").await);
+    let (c, d) = tokio::join!(
+        check(db.clone(), 145, claim("C"), "33"),
+        check(db.clone(), 145, claim("D"), "33"),
+    );
+    assert_ne!(c, d);
+    let winner = if c { "C" } else { "D" };
+    assert!(check(db, 145, claim(winner), "33").await);
     std::fs::remove_dir_all(tmp).unwrap();
 }
 

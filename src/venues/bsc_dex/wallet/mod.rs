@@ -12,6 +12,7 @@ pub mod auto_release;
 pub mod balances;
 pub mod balances_mc;
 pub mod deposit;
+mod deposit_log;
 pub mod events;
 pub mod events_log;
 pub mod events_native;

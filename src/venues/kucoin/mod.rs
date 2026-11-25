@@ -223,6 +223,30 @@ impl Venue for Kucoin {
         deposit_addr::for_deposit(&self.addrs, &self.ctx, asset, network).await
     }
 
+    fn withdrawal_wire(
+        &self,
+        created: &Transfer,
+        sent: &Transfer,
+    ) -> Option<rust_decimal::Decimal> {
+        // Запрос отправлен с feeDeductType INTERNAL. HTTP-запрос статуса привязан к withdrawalId.
+        let fee = sent.fee.as_ref()?;
+        (sent.status == crate::core::types::TransferStatus::Sent
+            && !created.venue_ref.is_empty()
+            && created.venue_ref == sent.venue_ref
+            && created
+                .asset
+                .ticker
+                .eq_ignore_ascii_case(&sent.asset.ticker)
+            && fee.kind == crate::core::types::CostKind::WithdrawFee
+            && fee.asset.eq_ignore_ascii_case(&created.asset.ticker)
+            && fee.paid_in.is_none()
+            && !fee.in_price
+            && !fee.amount.is_sign_negative())
+        .then(|| created.amount.checked_sub(fee.amount))
+        .flatten()
+        .filter(|n| *n > rust_decimal::Decimal::ZERO)
+    }
+
     async fn deposit_status(&self, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer> {
         deposits::deposit_status(&self.ctx, asset, tx_hash).await
     }

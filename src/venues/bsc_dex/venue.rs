@@ -294,6 +294,25 @@ impl Venue for BscDex {
         .await
     }
 
+    fn needs_deposit_claim(&self, asset: &Asset) -> bool {
+        !super::exec::native::is_native(&self.p.ctx, asset)
+    }
+
+    async fn deposit_status_for(
+        &self,
+        asset: &Asset,
+        tx: &str,
+        claim: &crate::gateway::contract::DepositClaim,
+        event_amount: Option<Decimal>,
+    ) -> GatewayResult<Transfer> {
+        self.p.ctx.bound()?;
+        scope(
+            Class::Trade,
+            wallet::deposit::status_for(&self.p, asset, tx, Some(claim), event_amount),
+        )
+        .await
+    }
+
     /// Вывод на кошелёк не состоялся — ожидание поступления снято (wallet/deposit.rs). Ошибок нет.
     async fn deposit_abandoned(&self, asset: &Asset) -> GatewayResult<()> {
         self.p.ctx.bound()?;

@@ -10,6 +10,10 @@ env:
   CARGO_TERM_COLOR: "never"
 jobs:
   shop-control:
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [before, after]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +36,9 @@ jobs:
           python "$p/shop_width.py" release
           python "$p/shop_target.py" release
           python "$p/shop_live.py" release
+          if [[ '${{ matrix.version }}' == 'after' ]]; then
+            git -C release apply "../$p/shop_graph_fix.patch"
+          fi
           python "$p/shop_depth.py" release
           cd release
           if ! SHOP_TRACE=1 cargo test --locked --test native_route_release_matrix shop_depth_control -- --nocapture > "$RUNNER_TEMP/shop.log" 2>&1; then
@@ -46,11 +53,11 @@ jobs:
             exit 1
           fi
           sed -n 's/^SHOP_LIVE //p' "$RUNNER_TEMP/live.log" > "$RUNNER_TEMP/live.jsonl"
-          test "$(wc -l < "$RUNNER_TEMP/live.jsonl")" -eq 12
+          test "$(wc -l < "$RUNNER_TEMP/live.jsonl")" -eq 13
           grep -E "^SHOP_SPLIT_TRACE qty=18917" "$RUNNER_TEMP/shop.log" | sort -u | head -n 35 > "$RUNNER_TEMP/split.txt"
       - uses: actions/upload-artifact@v4
         with:
-          name: shop-control
+          name: shop-control-${{ matrix.version }}
           path: |
             ${{ runner.temp }}/shop-volume.jsonl
             ${{ runner.temp }}/split.txt

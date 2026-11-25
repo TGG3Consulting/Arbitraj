@@ -11,12 +11,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 3fecded9d930b033fdc571c2714ad7b7c127596a
+          ref: 267eab04eaf1867a89d42cfa6f67fcc62a002b81
       - uses: dtolnay/rust-toolchain@1.97.0
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: shop-volume
-      - run: cargo test --locked --test core_fit_volume_294 --test bsc_dex_fit_graph_294 --test report_missed --test report_capital --test uncapped_decided --test uncapped_maxwin --test uncapped_recompute
+      - run: cargo test --locked --test core_fit_volume_294 --test bsc_dex_graph --test bsc_dex_graph_fit_300 --test bsc_dex_graph_shared --test bsc_dex_graph_shared_split --test bsc_dex_split --test bsc_dex_fit_graph_294 --test report_missed --test report_capital --test uncapped_decided --test uncapped_maxwin --test uncapped_recompute
   ui:
     runs-on: ubuntu-latest
     defaults:
@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 3fecded9d930b033fdc571c2714ad7b7c127596a
+          ref: 267eab04eaf1867a89d42cfa6f67fcc62a002b81
       - uses: actions/setup-node@v4
         with:
           node-version: 22

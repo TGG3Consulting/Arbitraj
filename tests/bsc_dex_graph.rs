@@ -233,6 +233,5 @@ async fn cached_graph_rebuilds_only_on_change() {
     assert_eq!(d.between(COIN, WBNB).len(), 2);
 }
 
-#[allow(dead_code)]
 mod route_common;
 mod bsc_graph_policy;

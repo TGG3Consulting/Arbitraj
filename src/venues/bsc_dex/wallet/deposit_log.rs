@@ -49,7 +49,12 @@ pub(super) fn select(
     expected: Option<U256>,
 ) -> Result<(u64, U256), &'static str> {
     if let [one] = logs {
-        return Ok(*one);
+        return match expected {
+            Some(wire) if wire != one.1 => {
+                Err("Индивидуальная сумма вывода не совпадает с единственным поступлением")
+            }
+            _ => Ok(*one),
+        };
     }
     if logs.is_empty() {
         return Err("В квитанции нет поступления этого токена на кошелёк");

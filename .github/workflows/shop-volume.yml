@@ -32,18 +32,22 @@ jobs:
           python "$p/shop_width.py" release
           python "$p/shop_target.py" release
           python "$p/shop_live.py" release
+          python "$p/shop_depth.py" release
           cd release
-          if ! cargo test --locked --test native_route_release_matrix shop_live_control -- --nocapture > "$RUNNER_TEMP/shop.log" 2>&1; then
+          if ! SHOP_TRACE=1 cargo test --locked --test native_route_release_matrix shop_depth_control -- --nocapture > "$RUNNER_TEMP/shop.log" 2>&1; then
             grep -E '^error(\[E[0-9]+\])?:|panicked at|assertion .*failed|^test .*FAILED|^ *-->' -A 5 "$RUNNER_TEMP/shop.log" | head -n 75
             exit 1
           fi
-          sed -n 's/^SHOP_LIVE //p' "$RUNNER_TEMP/shop.log" > "$RUNNER_TEMP/shop-volume.jsonl"
+          sed -n 's/^SHOP_DEPTH //p' "$RUNNER_TEMP/shop.log" > "$RUNNER_TEMP/shop-volume.jsonl"
           test -s "$RUNNER_TEMP/shop-volume.jsonl"
-          test "$(wc -l < "$RUNNER_TEMP/shop-volume.jsonl")" -eq 12
+          test "$(wc -l < "$RUNNER_TEMP/shop-volume.jsonl")" -eq 24
+          grep -E "^SHOP_SPLIT_TRACE qty=18917" "$RUNNER_TEMP/shop.log" | sort -u | head -n 35 > "$RUNNER_TEMP/split.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: shop-control
-          path: ${{ runner.temp }}/shop-volume.jsonl
+          path: |
+            ${{ runner.temp }}/shop-volume.jsonl
+            ${{ runner.temp }}/split.txt
 
 
 

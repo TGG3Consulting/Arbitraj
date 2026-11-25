@@ -64,6 +64,7 @@ const KDF: KdfParams = KdfParams {
 struct Server {
     depth: Arc<AtomicUsize>,
     fail: Arc<AtomicBool>,
+    writes: Arc<AtomicUsize>,
 }
 
 /// Тело ответа XT: {"rc": 0, "mc": "SUCCESS", "ma": [], "result": …} (README tests/data/xt_live_2026-11-06).
@@ -92,6 +93,12 @@ async fn serve() -> (String, Server) {
                 let mut buf = vec![0u8; 16 * 1024];
                 let n = c.read(&mut buf).await.unwrap_or(0);
                 let head = String::from_utf8_lossy(&buf[..n]).to_string();
+                if matches!(
+                    head.split_whitespace().next(),
+                    Some("POST" | "PUT" | "DELETE")
+                ) {
+                    s.writes.fetch_add(1, Ordering::SeqCst);
+                }
                 let path = head.split_whitespace().nth(1).unwrap_or("").to_string();
                 let (code, body) = if path.starts_with("/v4/public/depth") {
                     s.depth.fetch_add(1, Ordering::SeqCst);
@@ -450,6 +457,45 @@ fn stuck_deal(id: &str) -> Deal {
     deal.at = xt();
     deal.qty = dec("1");
     deal
+}
+
+#[tokio::test]
+async fn manual_confirmation_reads_fresh_depth_without_writes_or_consuming_the_order_book() {
+    use arb::venues::xt::{pairs::Snapshot, symbols::Symbols, symbols_parse};
+    let d = dir("manual-preview");
+    let (core, _, _, srv) = start(&d).await;
+    let pairs: Value = serde_json::from_str(&symbols_body()).unwrap();
+    let parsed = symbols_parse::parse_list(&pairs["result"], "USDT").unwrap();
+    let symbols = Symbols::default();
+    let now = chrono::Utc::now();
+    symbols.load(parsed.map.unwrap(), now);
+    let event = Snapshot::build(&symbols, &[btc()], Some("IOC")).event(xt(), now);
+    core.inner.market.write().unwrap().apply(event);
+    let mut deal = stuck_deal("20261125000000001BTC");
+    deal.direction.buy_on = xt();
+    deal.step = Step::Halted;
+    deal.qty = dec("0.996");
+    deal.invested = dec("200");
+    arb::core::ledger::save(&core, &deal).await;
+    let key = format!("d.{}", deal.id);
+
+    // Ordinary execution holds its own snapshot. The explicit manual check must still read a new one.
+    arb::core::trade_ops::sell_value(&core, None, &xt(), &btc(), deal.qty)
+        .await
+        .unwrap();
+    assert_eq!(srv.depth.load(Ordering::SeqCst), 1);
+    let text = core.manual_sale_preview(&key, false).await.unwrap();
+    assert!(text.contains("−1.20 USDT"), "{text}"); // 0.996 × 200 × (1 − 0.002) − 200
+    assert_eq!(srv.depth.load(Ordering::SeqCst), 2);
+    srv.fail.store(true, Ordering::SeqCst);
+    assert!(core.manual_sale_preview(&key, false).await.is_err());
+    let reads = srv.depth.load(Ordering::SeqCst);
+    assert!(reads > 2);
+    arb::core::trade_ops::sell_value(&core, None, &xt(), &btc(), deal.qty)
+        .await
+        .unwrap();
+    assert_eq!(srv.depth.load(Ordering::SeqCst), reads);
+    assert_eq!(srv.writes.load(Ordering::SeqCst), 0);
 }
 
 /// Решение 238 (ревью, п. 2): сценарий ревью — у биржи не задана venue.book_stale_ms, монета в режиме застрявшей

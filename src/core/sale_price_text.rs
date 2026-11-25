@@ -47,6 +47,9 @@ pub(super) fn render(core: &Core, deal: &Deal, qty: Decimal, rates: &Comparison)
             venue(core, &deal.at)
         )),
     }
+    if let Some(reason) = &rates.here_rest_error {
+        lines.push(format!("Свежий снимок REST для {} недоступен: {reason}. Для продажи здесь применена штатная проверка стакана.", venue(core, &deal.at)));
+    }
     let best_venue = best.map(|(to, _)| venue(core, to));
     if let Some((to, amount)) = best {
         lines.push(format!(

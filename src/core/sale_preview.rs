@@ -17,6 +17,30 @@ impl ManualAction {
     }
 }
 
+/// A direct CEX snapshot only for a user-requested preview. No changes to the shared order cache.
+pub(super) async fn rest_book(
+    core: &Core,
+    deal: &Deal,
+) -> Result<Option<super::exec_book::Book>, String> {
+    if super::trade_ops::kind(core, &deal.at)? != crate::gateway::contract::VenueKind::Cex {
+        return Ok(None);
+    }
+    let adapter = core
+        .inner
+        .deps
+        .gw
+        .get(&deal.at)
+        .await
+        .map_err(|e| e.message)?;
+    let asset = super::venue_ticker::on_venue(core, &deal.direction.asset, &deal.at);
+    let snap = crate::gateway::patience::exec_scope(
+        adapter.quote_rest(&asset, crate::core::types::Side::Sell),
+    )
+    .await
+    .map_err(|e| e.message)?;
+    Ok(Some(super::exec_book::Book { snap, rest: true }))
+}
+
 impl Core {
     pub async fn manual_sale_preview(
         &self,
@@ -35,7 +59,7 @@ impl Core {
             &position.at,
             wallet.as_ref(),
             &past,
-            true,
+            rest_book(self, &position).await?,
             with_return,
         )
         .await?;

@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sha: [15095ea3c6b4bd27291d026e857f14f6556a1e49, af9f241769af5c49ce0a5d84e3051db56863e0ea]
+        sha: [15095ea3c6b4bd27291d026e857f14f6556a1e49, 5c696b0dd6fd11bf0991409b5cb79a45222ce286]
     runs-on: ubuntu-latest
     env:
       CARGO_PROFILE_DEV_DEBUG: '0'

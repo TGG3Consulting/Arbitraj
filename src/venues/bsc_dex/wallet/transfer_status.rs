@@ -34,7 +34,7 @@ pub async fn withdrawal_status(
     hash: &str,
     wallet: Address,
 ) -> GatewayResult<Transfer> {
-    status(ctx, tokens, hash, wallet, None, None, None).await
+    status(ctx, tokens, hash, wallet, None, Proof::default()).await
 }
 
 /// Зачисление в кошелёк по хешу: Transfer монеты на адрес кошелька → Credited. Ошибки: как у withdrawal_status.
@@ -45,7 +45,14 @@ pub async fn deposit_status(
     hash: &str,
     wallet: Address,
 ) -> GatewayResult<Transfer> {
-    deposit_for(ctx, tokens, asset, hash, wallet, None, None).await
+    deposit_for(ctx, tokens, asset, hash, wallet, Proof::default()).await
+}
+
+#[derive(Default)]
+pub(super) struct Proof<'a> {
+    pub claim: Option<&'a crate::gateway::contract::DepositClaim>,
+    pub event_amount: Option<Decimal>,
+    pub confirmed: Option<&'a Receipt>,
 }
 
 pub(super) async fn deposit_for(
@@ -54,10 +61,9 @@ pub(super) async fn deposit_for(
     asset: &Asset,
     hash: &str,
     wallet: Address,
-    claim: Option<&crate::gateway::contract::DepositClaim>,
-    event_amount: Option<Decimal>,
+    proof: Proof<'_>,
 ) -> GatewayResult<Transfer> {
-    status(ctx, tokens, hash, wallet, Some(asset), claim, event_amount).await
+    status(ctx, tokens, hash, wallet, Some(asset), proof).await
 }
 
 /// Общий разбор квитанции для статусов.
@@ -71,8 +77,7 @@ async fn status(
     hash: &str,
     wallet: Address,
     deposit: Option<&Asset>,
-    claim: Option<&crate::gateway::contract::DepositClaim>,
-    event_amount: Option<Decimal>,
+    proof: Proof<'_>,
 ) -> GatewayResult<Transfer> {
     let h: B256 = hash.parse().map_err(|_| {
         ctx.err(
@@ -80,7 +85,15 @@ async fn status(
             format!("«{hash}» — не хеш транзакции"),
         )
     })?;
-    let r: Option<Receipt> = rpc::call(ctx, "eth_getTransactionReceipt", json!([h])).await?;
+    let fetched;
+    let r = match proof.confirmed {
+        Some(receipt) => Some(receipt),
+        None => {
+            fetched =
+                rpc::call::<Option<Receipt>>(ctx, "eth_getTransactionReceipt", json!([h])).await?;
+            fetched.as_ref()
+        }
+    };
     let network = ctx.text("venue.bsc_network")?;
     let (asset, token) = match deposit {
         Some(a) => (a.clone(), Some(token(ctx, a)?)),
@@ -121,16 +134,26 @@ async fn status(
         (None, Some(token)) => {
             let decimals = tokens.decimals(ctx, token).await?;
             let units = if deposit.is_some() {
-                let exact = claim.and_then(|c| c.expected).and_then(|v| {
+                let exact = proof.claim.and_then(|c| c.expected).and_then(|v| {
                     num::to_units(v, decimals)
                         .filter(|units| num::to_decimal(*units, decimals) == Some(v))
                 });
-                let (index, units) = super::deposit_log::select(&r, token, wallet, h, exact)
+                let incoming = super::deposit_log::incoming(r, token, wallet, h)
                     .map_err(|why| ctx.err(ErrorCode::DepositNotCredited, why))?;
+                let (index, units) = match super::deposit_log::select(&incoming, exact) {
+                    Ok(hit) => hit,
+                    Err(why) => {
+                        let error = || ctx.err(ErrorCode::DepositNotCredited, why);
+                        let claim = proof.claim.ok_or_else(error)?;
+                        super::deposit_log::previous(ctx, h, token, wallet, claim, &incoming)
+                            .await?
+                            .ok_or_else(error)?
+                    }
+                };
                 log_index = Some(index);
                 units
             } else {
-                fill::moved(&r, token, Some(wallet), None)
+                fill::moved(r, token, Some(wallet), None)
             };
             (asset, units, decimals)
         }
@@ -166,19 +189,23 @@ async fn status(
             fee,
         ));
     }
-    let need = ctx.int("send.deposit_confirmations")?;
-    let now: U64 = rpc::call(ctx, "eth_blockNumber", json!([])).await?;
-    let block: u64 = r.block_number.to();
-    let st = if now.to::<u64>() >= block + need {
+    let confirmed = if proof.confirmed.is_some() {
+        true
+    } else {
+        let need = ctx.int("send.deposit_confirmations")?;
+        let now: U64 = rpc::call(ctx, "eth_blockNumber", json!([])).await?;
+        now.to::<u64>().saturating_sub(r.block_number.to()) >= need && now >= r.block_number
+    };
+    let st = if confirmed {
         TransferStatus::Credited
     } else {
         TransferStatus::Pending
     };
     let mut credit = state(asset, st, amount);
     if st == TransferStatus::Credited
-        && let (Some(index), Some(claim), Some(token)) = (log_index, claim, token)
+        && let (Some(index), Some(claim), Some(token)) = (log_index, proof.claim, token)
     {
-        if event_amount.is_some_and(|delta| delta != amount) {
+        if proof.event_amount.is_some_and(|delta| delta != amount) {
             return Err(ctx.err(
                 ErrorCode::DepositNotCredited,
                 "Сумма события отличается от перевода в квитанции",

@@ -137,9 +137,9 @@ async fn session(p: &Pools, inflows: &Inflows, wallet: Address) -> String {
                     tracing::debug!(token = %mv.token, skipped, "событие кошелька: токен не из справочника — пропущено");
                     continue;
                 }
-                // Своя ли транзакция — по отправителю (eth_getTransactionByHash.from). Не узнали — гадать нельзя:
+                // Своя ли транзакция — по отправителю (eth_getTransactionReceipt.from). Не узнали — гадать нельзя:
                 // ошибка в журнал, лог пропускается (решает опрос статуса).
-                match senders.own(&p.ctx, mv.tx, wallet).await {
+                match senders.own(&p.ctx, &mv, wallet).await {
                     Ok(own) => pending.push((mv, own)),
                     Err(e) => {
                         let msg = format!("Отправитель транзакции {} не прочитан: {} — событие пропущено, решает опрос", mv.tx, e.message);
@@ -159,7 +159,12 @@ async fn session(p: &Pools, inflows: &Inflows, wallet: Address) -> String {
                 pending = rest;
                 for (mv, own) in ready {
                     match super::events_tx::change(&p.ctx, &p.tokens, &mv, own).await {
-                        Ok(b) => { let _ = p.out.send(MarketEvent::Balance(b)).await; }
+                        Ok(b) => {
+                            if mv.inbound && !own && inflows.waiting(mv.token) && let (Some(chain), Some(receipt))=(p.ctx.chain_id(),senders.receipt(&mv,wallet)) {
+                                inflows.remember(mv.token,chain,wallet,mv.tx,receipt);
+                            }
+                            let _ = p.out.send(MarketEvent::Balance(b)).await;
+                        }
                         Err(e) => {
                             // Один раз на токен за сессию: дальше его события пропускаются, decimals не запрашиваются.
                             if bad.insert(mv.token) {

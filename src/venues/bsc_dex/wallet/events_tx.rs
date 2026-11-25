@@ -7,7 +7,7 @@
 //! От чего зависит: node/rpc.rs, wallet/native_status.rs (Tx), exec/native.rs, tokens.rs, num.rs, ctx.rs.
 //! Настройки: dex.native_ticker, dex.native_wrapped (через exec/native.rs).
 //!
-//! eth_getTransactionByHash → from — execution-apis 16caee27 src/eth/transaction.yaml, src/schemas/transaction.yaml.
+//! eth_getTransactionReceipt → from — execution-apis 16caee27 src/eth/transaction.yaml, src/schemas/transaction.yaml.
 
 use std::collections::HashMap;
 
@@ -22,33 +22,70 @@ use super::super::ctx::Ctx;
 use super::super::exec::native;
 use super::super::node::rpc;
 use super::super::num;
+use super::super::send::track::Receipt;
 use super::super::tokens::Tokens;
 use super::events_log::Move;
-use super::native_status::Tx;
+use std::sync::Arc;
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WalletReceipt {
+    from: Address,
+    block_hash: B256,
+    transaction_hash: B256,
+    #[serde(flatten)]
+    receipt: Receipt,
+}
 
 /// Отправители транзакций сессии: хеш → своя ли. В одной транзакции бывает несколько переводов кошелька (обмен) —
 /// узел спрашивается один раз.
 #[derive(Default)]
 pub struct Senders {
-    known: HashMap<B256, bool>,
+    known: HashMap<B256, (Address, B256, Arc<Receipt>)>,
 }
 
 impl Senders {
     /// Своя ли транзакция. Принимает: окружение, хеш, кошелёк. Ошибки: узел; BadResponse — транзакции нет у узла.
-    pub async fn own(&mut self, ctx: &Ctx, h: B256, wallet: Address) -> GatewayResult<bool> {
-        if let Some(own) = self.known.get(&h) {
-            return Ok(*own);
+    pub async fn own(&mut self, ctx: &Ctx, mv: &Move, wallet: Address) -> GatewayResult<bool> {
+        let h = mv.tx;
+        if self
+            .known
+            .get(&h)
+            .is_none_or(|(_, block, _)| Some(*block) != mv.block_hash)
+        {
+            let tx: Option<WalletReceipt> =
+                rpc::call(ctx, "eth_getTransactionReceipt", json!([h])).await?;
+            let tx = tx
+                .filter(|tx| {
+                    tx.transaction_hash == h
+                        && Some(tx.block_hash) == mv.block_hash
+                        && tx.receipt.block_number.to::<u64>() == mv.block
+                        && tx.receipt.status.to::<u64>() == 1
+                })
+                .ok_or_else(|| {
+                    ctx.err(
+                        ErrorCode::BadResponse,
+                        format!("Квитанция не подтверждает блок события {h}"),
+                    )
+                })?;
+            self.known
+                .insert(h, (tx.from, tx.block_hash, Arc::new(tx.receipt)));
         }
-        let tx: Option<Tx> = rpc::call(ctx, "eth_getTransactionByHash", json!([h])).await?;
-        let tx = tx.ok_or_else(|| {
-            ctx.err(
-                ErrorCode::BadResponse,
-                format!("лог Transfer есть, а транзакции {h} у узла нет"),
-            )
-        })?;
-        let own = tx.from == wallet;
-        self.known.insert(h, own);
-        Ok(own)
+        Ok(self.known[&h].0 == wallet)
+    }
+
+    pub fn receipt(&self, mv: &Move, wallet: Address) -> Option<Arc<Receipt>> {
+        self.known
+            .get(&mv.tx)
+            .filter(|(_, block, r)| {
+                Some(*block) == mv.block_hash
+                    && r.logs.iter().any(|l| {
+                        l.log_index == Some(mv.key.1)
+                            && super::events_log::parse(l, wallet).ok().flatten().as_ref()
+                                == Some(mv)
+                    })
+            })
+            .map(|(_, _, r)| r.clone())
     }
 
     /// Забывает транзакции, чьих переводов больше не ждём. Принимает: хеши ещё ждущих. Ошибок нет.

@@ -34,8 +34,17 @@ pub(in crate::venues::bsc_dex) async fn status_for(
 ) -> GatewayResult<Transfer> {
     let ctx = &p.ctx;
     let w = signer::address(ctx)?;
-    let res =
-        transfer_status::deposit_for(ctx, &p.tokens, asset, tx_hash, w, claim, event_amount).await;
+    // Только событие, прошедшее confirmations в events.rs. Чистый опрос читает актуальный RPC.
+    let confirmed = event_amount.and_then(|_| {
+        p.inflows
+            .confirmed(asset.contract?, ctx.chain_id()?, w, tx_hash.parse().ok()?)
+    });
+    let proof = transfer_status::Proof {
+        claim,
+        event_amount,
+        confirmed: confirmed.as_deref(),
+    };
+    let res = transfer_status::deposit_for(ctx, &p.tokens, asset, tx_hash, w, proof).await;
     let finished = match &res {
         Ok(t) => matches!(
             t.status,

@@ -194,22 +194,28 @@ pub async fn recalc(
             return (calculate(qty).await, false);
         };
         let other = async {
-            let mark = super::precheck_hint::stamp(core, cx);
-            let q =
+            let (q, mark) =
                 super::precheck_hint::alternative(core, cx, qty, budget, step, (min_usd, min_pct))
                     .ok_or_else(String::new)?;
-            let result = calculate(q).await?;
-            // Never adopt an optional quote across an observed intervening market update.
-            if mark.is_none() || super::precheck_hint::stamp(core, cx) != mark {
-                return Err(String::new());
-            }
-            Ok(result)
+            Ok((calculate(q).await?, Some(mark)))
         };
-        super::precheck_hint::compare(calculate(qty), other, |a, b| {
-            (a.profit_usd, std::cmp::Reverse((a.spend_max, a.qty)))
-                > (b.profit_usd, std::cmp::Reverse((b.spend_max, b.qty)))
+        let original = async { Ok((calculate(qty).await?, None)) };
+        let (result, moved) = super::precheck_hint::compare(original, other, |(a, mark), old| {
+            if super::precheck_hint::stamp(core, cx) != *mark {
+                return false;
+            }
+            old.is_none_or(|(b, _)| {
+                let same_block = |x: &crate::core::types::Quote, y: &crate::core::types::Quote| {
+                    x.route.as_ref().map(|r| r.block) == y.route.as_ref().map(|r| r.block)
+                };
+                same_block(&a.buy_quote, &b.buy_quote)
+                    && same_block(&a.sell_quote, &b.sell_quote)
+                    && (a.profit_usd, std::cmp::Reverse((a.spend_max, a.qty)))
+                        > (b.profit_usd, std::cmp::Reverse((b.spend_max, b.qty)))
+            })
         })
-        .await
+        .await;
+        (result.map(|(c, _)| c), moved)
     };
     let (result, changed) = stage(|| STAGE.into(), work).await;
     match result {

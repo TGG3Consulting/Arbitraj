@@ -34,6 +34,25 @@ struct Sample {
     proceeds: Decimal,
     before_reserve: Decimal,
 }
+impl Sample {
+    fn from_calc(c: &Calc) -> Option<Self> {
+        let reserve = c
+            .costs
+            .iter()
+            .find(|x| x.kind == CostKind::PriceMoveReserve)?
+            .usdt?;
+        Some(Self {
+            qty: c.qty,
+            bought_at: c.buy_avg,
+            sold_at: c.sell_avg,
+            invested: c.invested,
+            spend: c.spend_max,
+            proceeds: c.proceeds,
+            before_reserve: c.profit_usd + reserve,
+        })
+    }
+}
+
 struct Samples {
     stamp: Stamp,
     anchor: Decimal,
@@ -133,20 +152,7 @@ pub(super) fn remember<C: Curve<Data = Calc>>(
             {
                 return None;
             }
-            let reserve = c
-                .costs
-                .iter()
-                .find(|x| x.kind == CostKind::PriceMoveReserve)?
-                .usdt?;
-            Some(Sample {
-                qty: p.qty,
-                bought_at: c.buy_avg,
-                sold_at: c.sell_avg,
-                invested: c.invested,
-                spend: c.spend_max,
-                proceeds: c.proceeds,
-                before_reserve: c.profit_usd + reserve,
-            })
+            Sample::from_calc(c)
         })
         .collect();
     if points.len() < 2 {
@@ -176,7 +182,7 @@ pub(super) fn alternative(
     budget: Decimal,
     step: Decimal,
     floor: (Decimal, Decimal),
-) -> Option<Decimal> {
+) -> Option<(Decimal, Stamp)> {
     let samples = lk(&core.inner.precheck_hints)
         .0
         .iter()
@@ -191,60 +197,41 @@ pub(super) fn alternative(
         if samples.stamp.book != mark.book || samples.keep == keep {
             return None;
         }
-        let mut best = None;
-        for p in &samples.points {
+        return risk_best(&samples.points, cx, budget, floor)
+            .filter(|q| *q != qty)
+            .map(|q| (q, mark));
+    }
+    let book = rd(&core.inner.market);
+    let bids = &book.book(&cx.dir.sell_on, &cx.b.ticker)?.bids;
+    v3::best(&samples.points, bids, cx, samples.fee?, budget, step, floor)
+        .filter(|q| *q != qty)
+        .map(|q| (q, mark))
+}
+
+#[path = "precheck_hint_v3.rs"]
+mod v3;
+
+fn risk_best(
+    points: &[Sample],
+    cx: &DirCtx,
+    budget: Decimal,
+    floor: (Decimal, Decimal),
+) -> Option<Decimal> {
+    let keep = cx.keep?;
+    points
+        .iter()
+        .filter_map(|p| {
             let risk =
                 super::reserve::amount(keep, p.proceeds, cx.closure_share, p.bought_at, p.sold_at);
             let pnl = p.before_reserve - risk;
-            if p.invested > Decimal::ZERO
+            (p.invested > Decimal::ZERO
                 && p.spend <= budget
                 && pnl >= floor.0
-                && pnl / p.invested * Decimal::ONE_HUNDRED >= floor.1
-            {
-                let rank = (pnl, std::cmp::Reverse((p.spend, p.qty)));
-                if best.is_none_or(|b| rank > b) {
-                    best = Some(rank);
-                }
-            }
-        }
-        return best
-            .map(|(_, std::cmp::Reverse((_, q)))| q)
-            .filter(|q| *q != qty);
-    }
-    let top = rd(&core.inner.market)
-        .book(&cx.dir.sell_on, &cx.b.ticker)?
-        .bids
-        .first()?
-        .clone();
-    let marginal = top.price.checked_mul(keep.checked_sub(samples.fee?)?)?;
-    // Within one V3 liquidity segment the average price for exact output is
-    // 1/(a-b*q). Price only inside the interval supported by the two probes and
-    // the actual sell level. Crossing a tick may distort the hint, never the final quote.
-    let mut candidate = None;
-    for pair in samples.points.windows(2) {
-        let (left, right) = (pair[0], pair[1]);
-        if left.spend > budget || left.qty > top.qty * cx.h || right.qty < step {
-            continue;
-        }
-        let Some(q) = segment(
-            left.qty,
-            left.bought_at,
-            right.qty,
-            right.bought_at,
-            marginal,
-            step,
-        ) else {
-            continue;
-        };
-        if q > top.qty * cx.h || q == qty || q <= Decimal::ZERO || q * left.bought_at > budget {
-            continue;
-        }
-        let dist = (q - qty).abs();
-        if candidate.is_none_or(|(old, _)| dist < old) {
-            candidate = Some((dist, q));
-        }
-    }
-    candidate.map(|(_, q)| q)
+                && pnl / p.invested * Decimal::ONE_HUNDRED >= floor.1)
+                .then_some((pnl, std::cmp::Reverse((p.spend, p.qty))))
+        })
+        .max()
+        .map(|(_, std::cmp::Reverse((_, q)))| q)
 }
 
 /// Stationary output of two constant-liquidity V3 hops within the observed interval.
@@ -273,6 +260,11 @@ pub fn segment(
         return None;
     }
     let a = r.checked_add(b.checked_mul(q0)?)?;
+    if marginal < a.checked_mul(p0)?.checked_mul(p0)?
+        || marginal > a.checked_mul(p1)?.checked_mul(p1)?
+    {
+        return None;
+    }
     let q = a
         .checked_sub(a.checked_div(marginal)?.sqrt()?)?
         .checked_div(b)?;
@@ -286,7 +278,7 @@ pub async fn compare<T, E, A, B, F>(first: A, second: B, better: F) -> (Result<T
 where
     A: std::future::Future<Output = Result<T, E>>,
     B: std::future::Future<Output = Result<T, E>>,
-    F: FnOnce(&T, &T) -> bool,
+    F: FnOnce(&T, Option<&T>) -> bool,
 {
     tokio::pin!(first, second);
     if let Some(ready) = first.as_mut().now_or_never() {
@@ -298,10 +290,45 @@ where
         original=&mut first=>(original,None),
     };
     if let Some(Ok(alt)) = alternative
-        && original.as_ref().ok().is_none_or(|old| better(&alt, old))
+        && better(&alt, original.as_ref().ok())
     {
         (Ok(alt), true)
     } else {
         (original, false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compare;
+    use std::future::{pending, ready};
+
+    async fn later<T>(value: T) -> Result<T, ()> {
+        tokio::task::yield_now().await;
+        Ok(value)
+    }
+    fn larger(a: &i64, b: Option<&i64>) -> bool {
+        b.is_none_or(|b| a > b)
+    }
+    #[tokio::test]
+    async fn slow_optional_quote_and_late_market_do_not_delay_or_replace_the_incumbent() {
+        let never = pending::<Result<i64, ()>>();
+        assert_eq!(compare(later(4), never, larger).await, (Ok(4), false));
+        let untouched = async {
+            panic!("an immediately ready incumbent started optional work");
+        };
+        assert_eq!(
+            compare(ready(Ok::<_, ()>(3)), untouched, larger).await,
+            (Ok(3), false)
+        );
+        assert_eq!(compare(later(5), ready(Ok(6)), larger).await, (Ok(6), true));
+        assert_eq!(
+            compare(later(5), ready(Ok(6)), |_, _| false).await,
+            (Ok(5), false)
+        );
+        assert_eq!(
+            compare(later(5), ready(Err(())), larger).await,
+            (Ok(5), false)
+        );
     }
 }

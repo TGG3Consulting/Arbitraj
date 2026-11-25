@@ -31,13 +31,16 @@ jobs:
           python "$p/adapt.py" release
           python "$p/trace_0392.py" release
           cd release
-          if ! cargo test --locked --test core_size_release_matrix release_size_matrix_routes -- --nocapture > "$RUNNER_TEMP/trajectory.log" 2>&1; then
-            grep -E '^error(\[E[0-9]+\])?:|panicked at|assertion .*failed|^test .*FAILED|^ *-->' -A 5 "$RUNNER_TEMP/trajectory.log" | head -n 75
-            exit 1
-          fi
-          sed -n -E 's/^(test [^ ]+ \.\.\. )?TRACE0392 //p' "$RUNNER_TEMP/trajectory.log" > ../trace-0392.jsonl
-          test "$(wc -l < ../trace-0392.jsonl)" -eq 10
+          for TRACE0392_LANE in raw regions; do
+            export TRACE0392_LANE
+            if ! cargo test --locked --test core_size_release_matrix release_size_matrix_routes -- --nocapture > "$RUNNER_TEMP/trajectory-$TRACE0392_LANE.log" 2>&1; then
+              grep -E '^error(\[E[0-9]+\])?:|panicked at|assertion .*failed|^test .*FAILED|^ *-->' -A 5 "$RUNNER_TEMP/trajectory-$TRACE0392_LANE.log" | head -n 75
+              exit 1
+            fi
+            sed -n -E 's/^(test [^ ]+ \.\.\. )?TRACE0392 //p' "$RUNNER_TEMP/trajectory-$TRACE0392_LANE.log" > ../trace-0392-$TRACE0392_LANE.jsonl
+            test "$(wc -l < ../trace-0392-$TRACE0392_LANE.jsonl)" -eq 10
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: trajectory-0392
-          path: trace-0392.jsonl
+          path: trace-0392-*.jsonl

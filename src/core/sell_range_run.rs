@@ -99,7 +99,9 @@ pub async fn branch(
     let mut turn = Box::pin(super::sell_turn::take(&deal.at, &deal.direction.asset)).await;
     let quote = quote_boxed(core, deal, &mut turn).await;
     let quote = match rule {
-        Rule::Entry | Rule::MaxLoss(_) => Box::pin(super::sell_turn_fresh::settled(core, deal, quote)).await,
+        Rule::Entry | Rule::MaxLoss(_) => {
+            Box::pin(super::sell_turn_fresh::settled(core, deal, quote)).await
+        }
         _ => quote,
     };
     let fresh = quote.as_ref().ok().map(|(v, _, _)| Fresh {

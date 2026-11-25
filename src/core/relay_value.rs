@@ -198,7 +198,9 @@ pub async fn value_parts(
         proceeds,
         cash: if proceeds > Decimal::ZERO {
             super::manual_price::sale_cash(core, to, proceeds, &q.costs)?
-        } else { Decimal::ZERO },
+        } else {
+            Decimal::ZERO
+        },
         // relay_reserve сравнивает цену цели с ценой продажи здесь: обе за единицу from.
         avg: units.to_sell(q.avg_price)?,
     })

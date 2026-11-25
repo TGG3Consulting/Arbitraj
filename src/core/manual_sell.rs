@@ -88,10 +88,9 @@ async fn again(core: &Core, mut deal: Deal) {
 /// котировке сейчас; нет котировки — неизвестен). Принимает: ядро, сделку, причину, текст отказа (решение 177: тот же
 /// отказ — та же запись). Ошибок нет.
 async fn alert(core: &Core, deal: Deal, why: &str, error: &str) {
-    let loss = super::trade_ops::deal_value(core, &deal)
-        .await
-        .ok()
-        .map(|(v, _)| deal.loss_pct_if(v));
+    let quote = super::trade_ops::deal_quote(core, &deal).await;
+    let loss = Box::pin(super::sell_turn_fresh::settled(core, &deal, quote))
+        .await.ok().map(|(v, _, _)| deal.loss_pct_if(v));
     let d = deal.clone();
     super::manual::raise_alert(core, deal, loss, why.to_string(), Some(error.to_string())).await;
     super::manual_outcome::failed(core, &d, BUTTON, why).await;

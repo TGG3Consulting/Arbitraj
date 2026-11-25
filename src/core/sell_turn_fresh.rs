@@ -88,7 +88,8 @@ pub async fn once(core: &Core, deal: &Deal) -> Quoted {
 /// сделку. Ошибки: текст причины.
 pub async fn value(core: &Core, deal: &Deal) -> Result<(Decimal, Quote), String> {
     let raw = Box::pin(once(core, deal)).await;
-    Box::pin(settled(core, deal, raw)).await
+    Box::pin(settled(core, deal, raw))
+        .await
         .map(|(v, q, _)| (v, q))
         .map_err(|e| e.message)
 }

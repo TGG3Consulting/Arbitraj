@@ -46,7 +46,7 @@
     assert!(max_diff<d("0.00000000001"),"invariance of risk-only re-rating");
     let (pick,_,rerated)=rank();
     let fresh=curve.at(pick).await.map_err(|e|e.to_string())?;
-    let own=curve.at(plan.qty).await.map_err(|e|e.to_string())?;
+    let validated_incumbent=curve.at(plan.qty).await.map_err(|e|e.to_string())?;
     let mut rank_ns=Vec::new();let mut fixed_ns=Vec::new();let mut search_ns=Vec::new();
     for _ in 0..31 {
         let t=Instant::now();std::hint::black_box(rank());rank_ns.push(t.elapsed().as_nanos() as u64);
@@ -57,5 +57,5 @@
     let cmp=json!({"reconstructed_open_qty":reconstructed.best.qty,"archived_open_qty":plan.qty,
       "reconstructed_samples":memo.evals(),"successful_reconstructed_samples":old_points,
       "stored_points_with_incumbent":compact.len(),"compact_bytes":compact.len()*std::mem::size_of::<(Decimal,Decimal,Decimal,Decimal,Decimal,Decimal,Decimal)>(),
-      "incumbent_profit":own.profit,"reranked_qty":pick,"reranked_profit":rerated,"fresh_validation_profit":fresh.profit,
+      "incumbent_profit":validated_incumbent.profit,"reranked_qty":pick,"reranked_profit":rerated,"fresh_validation_profit":fresh.profit,
       "max_rerating_error":max_diff,"rank_control":times(rank_ns),"one_fresh":times(fixed_ns),"full_native":times(search_ns)});

@@ -32,6 +32,8 @@ use crate::core::types::{Side, TokenTaxes};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
+use super::super::num;
+use super::direct::ceil_units;
 use super::path::Path;
 use super::quote_timing::{self, Count};
 use super::route_calc;
@@ -162,8 +164,23 @@ pub fn split(
         let pick = choose(side, gas_aware, open, new);
         // Ни один путь шаг не принял — остаток не отдан: доли меньше qty. Это не теряется молча: costs::quote ставит
         // fillable_qty = сумма монет долей (< qty), ядро такую котировку отвергает (core/costs_quote.rs, trade_ops.rs).
-        let Some((i, paths, _)) = pick else { break };
-        cands[i].qty += step;
+        let Some((i, mut paths, _)) = pick else { break };
+        let mut assigned = cands[i].qty + step;
+        // Два накопителя Decimal (left и доля) иногда расходятся на последнем шаге. Если весь
+        // объём ушёл одному пути продажи, проверяем его исходный запрос на фактических атомах.
+        if side == Side::Sell
+            && step == left
+            && used == 1
+            && cands[i].got.is_some()
+            && assigned < qty
+            && let [(j, path)] = paths.as_mut_slice()
+            && *j == i
+            && let Some(exact) = exact_single_sell(ctx, &cands[i], assigned, qty, t)
+        {
+            *path = exact;
+            assigned = qty;
+        }
+        cands[i].qty = assigned;
         for (j, p) in paths {
             cands[j].got = Some(p);
         }
@@ -188,6 +205,31 @@ pub fn split(
         return Err(ctx.err(ErrorCode::NoRoute, "граф: ни один путь не принял объём"));
     }
     Ok(legs)
+}
+
+/// Балл шага остаётся верным только при том же фактическом входе после налога. Дробный
+/// запрос глубины должен помещаться и при округлении вверх до атома, а денежная котировка
+/// строится по исходному количеству. При отказе сохраняется уже проверенная частичная доля.
+fn exact_single_sell(
+    ctx: &Ctx,
+    c: &Cand,
+    assigned: Decimal,
+    qty: Decimal,
+    t: &TokenTaxes,
+) -> Option<Path> {
+    let decimals = c.legs.first()?.dec_in;
+    let keep = pool_tax::coin_keep(&c.legs, Side::Sell, t);
+    if num::to_units(assigned * keep, decimals)? != num::to_units(qty * keep, decimals)? {
+        return None;
+    }
+    let upper = num::to_decimal(ceil_units(qty, decimals)?, decimals)?;
+    let sell = |q| route_calc::eval(ctx, &c.legs, Side::Sell, q, keep).ok();
+    match upper.cmp(&qty) {
+        std::cmp::Ordering::Less => return None,
+        std::cmp::Ordering::Greater => { sell(upper)?; }
+        std::cmp::Ordering::Equal => {}
+    }
+    sell(qty)
 }
 
 /// Шаг пути `i`: новые пути затронутых долей и прирост их USDT (решение 223: общий пул с открытой долей — совместно,

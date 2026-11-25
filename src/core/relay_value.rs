@@ -135,6 +135,8 @@ pub struct Parts {
     pub net: Decimal,
     /// Выручка продажи на цели до затрат: приход × средняя котировки цели (приход-пыль — 0).
     pub proceeds: Decimal,
+    /// Quote-currency cash available on the target after its sale fee.
+    pub cash: Decimal,
     /// Средняя котировки продажи на цели в USDT за единицу отправителя (для сравнения с продажей здесь).
     pub avg: Decimal,
 }
@@ -194,6 +196,9 @@ pub async fn value_parts(
     Ok(Parts {
         net: out,
         proceeds,
+        cash: if proceeds > Decimal::ZERO {
+            super::manual_price::sale_cash(core, to, proceeds, &q.costs)?
+        } else { Decimal::ZERO },
         // relay_reserve сравнивает цену цели с ценой продажи здесь: обе за единицу from.
         avg: units.to_sell(q.avg_price)?,
     })

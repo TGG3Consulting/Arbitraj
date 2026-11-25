@@ -105,7 +105,7 @@ async fn sell_or_stuck_guarded(core: &Core, deal: Deal, g: Guard) {
     // Решение 415: ход очереди продажи счёта — после факта (sell_fact::before), котировка не раньше прошлой продажи
     // ключа; ход держится до итога ордера (sell), без ордера — снимается сразу (sell_turn.rs).
     let mut turn = Box::pin(super::sell_turn::take(&deal.at, &deal.direction.asset)).await;
-    let value = Box::pin(super::sell_turn_fresh::quote(core, &deal, &mut turn)).await;
+    let value = Box::pin(super::sell_turn_fresh::guarded(core, &deal, &mut turn)).await;
     match value {
         Ok((v, q, b)) if profitable(&deal, v) => {
             let f = super::remeasure::of(&deal, v, deal.qty * q.avg_price, g);

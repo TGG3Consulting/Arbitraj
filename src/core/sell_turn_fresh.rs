@@ -50,6 +50,23 @@ pub async fn quote(core: &Core, deal: &Deal, turn: &mut Turn) -> Quoted {
     Box::pin(quote_as(core, deal, turn, Use::Sale)).await
 }
 
+/// Apply the return fee to automatic guards only. Manual, unconditional sale can
+/// still execute when the withdrawal directory is temporarily unavailable.
+pub(super) async fn settled(core: &Core, deal: &Deal, quote: Quoted) -> Quoted {
+    let (net, q, book) = quote?;
+    if !super::manual_price::needs_individual_return(core, deal) {
+        return Ok((net, q, book));
+    }
+    let cash = super::manual_price::sale_cash(core, &deal.at, deal.qty * q.avg_price, &q.costs)?;
+    let net = super::manual_price::individual_value(core, deal, &deal.at, net, cash).await?;
+    Ok((net, q, book))
+}
+
+pub(super) async fn guarded(core: &Core, deal: &Deal, turn: &mut Turn) -> Quoted {
+    let raw = Box::pin(quote(core, deal, turn)).await;
+    Box::pin(settled(core, deal, raw)).await
+}
+
 /// Что делает: как quote, для продажи или решения (Use). Принимает: ядро, сделку, ход, назначение. Возвращает и
 /// ошибки: как deal_quote.
 pub async fn quote_as(core: &Core, deal: &Deal, turn: &mut Turn, u: Use) -> Quoted {
@@ -70,8 +87,8 @@ pub async fn once(core: &Core, deal: &Deal) -> Quoted {
 /// Что делает: как once, в форме trade_ops::deal_value (выручка и котировка, ошибка — текстом). Принимает: ядро,
 /// сделку. Ошибки: текст причины.
 pub async fn value(core: &Core, deal: &Deal) -> Result<(Decimal, Quote), String> {
-    Box::pin(once(core, deal))
-        .await
+    let raw = Box::pin(once(core, deal)).await;
+    Box::pin(settled(core, deal, raw)).await
         .map(|(v, q, _)| (v, q))
         .map_err(|e| e.message)
 }

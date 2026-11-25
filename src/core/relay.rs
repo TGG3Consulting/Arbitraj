@@ -233,12 +233,24 @@ pub async fn run_as(core: &Core, mut deal: Deal, profit_first: bool) {
         Box::pin(super::sell_turn_fresh::once(core, &deal)).await
     };
     // Решение 417: средняя котировки здесь — «цена здесь» для доли закрытия разницы в запасе цели (relay_reserve.rs).
+    // Dust requires evidence about physical sale proceeds. Lack of a return quote
+    // or an uneconomic stablecoin transfer must never write tradable tokens off.
+    let physical_here = quote.as_ref().ok().map(|(v, _, _)| *v);
+    let had_quote = quote.is_ok();
+    let quote = Box::pin(super::sell_turn_fresh::settled(core, &deal, quote)).await;
+    let return_unknown_here = had_quote && quote.is_err();
     let (mut here, mut here_avg) = match quote {
         Ok((v, q, _)) => (Some(v), Some(q.avg_price)),
         Err(e) if super::stuck_quote::not_configured(&e) => {
             return super::stuck_quote::halt_not_configured(core, deal, &e).await;
         }
-        Err(_) => (None, None),
+        Err(e) => {
+            if return_unknown_here {
+                deal.note(format!("Продажа здесь: {}", e.message));
+                super::ledger::save(core, &deal).await;
+            }
+            (None, None)
+        },
     };
     // Решение 417 (правило Тиграна 19.11): продать здесь выгодно (итог сделки ≥ 0) — другие площадки не ищем.
     // Ревью t201 (С-1): продажа — с проверкой «выгодно» под ходом очереди (relay_here → sell_here_ok.rs); под ходом
@@ -296,6 +308,17 @@ pub async fn run_as(core: &Core, mut deal: Deal, profit_first: bool) {
             }
             Ok((v, p)) => {
                 raw_best = Some(raw_best.map_or(v, |b| b.max(v)));
+                let v = if super::manual_price::needs_individual_return(core, &deal) {
+                    match Box::pin(super::manual_price::individual_value(core, &deal, &to, v, p.cash)).await {
+                        Ok(net) => net,
+                        Err(why) => {
+                            deal.note(format!("Перегон на {}: {why}", to.0));
+                            continue;
+                        }
+                    }
+                } else {
+                    v
+                };
                 // Решение 417: оценка цели — с запасом на движение цены за перевод, как у плана входа.
                 match super::relay_reserve::params_at(core, &deal.at, &to, &a, chrono::Utc::now()) {
                     Ok(rp) => {
@@ -348,15 +371,19 @@ pub async fn run_as(core: &Core, mut deal: Deal, profit_first: bool) {
         }
     }
     // Решение 222: перегонять не во что, а продажа здесь не считается или не окупается — остаток пыль.
-    if super::dust::relay_dust(raw_best, tiny, here) {
+    if super::dust::relay_dust(raw_best, tiny, physical_here) {
         let why =
             "остаток — пыль: перегон не окупается, продажа здесь не даёт выручки (решение 222)";
         super::dust::write_off(core, &mut deal, why).await;
         return super::ledger::finish(core, &mut deal, Step::Closed, why).await;
     }
     // Решение 417: перегон — только если оценка цели с запасом больше выручки здесь (чистыми).
+    // When local settlement cannot be priced, only a target beating even the local
+    // cash before any return fees is provably better. Otherwise the normal local
+    // decision reports the missing quote, retaining the operator's manual sale.
+    let comparison_here = if return_unknown_here { physical_here } else { here };
     let (to, e) = match best {
-        Some((to, e)) if super::relay_reserve::better(here, &e) => (to, e),
+        Some((to, e)) if super::relay_reserve::better(comparison_here, &e) => (to, e),
         Some((to, e)) => {
             let why = format!(
                 "перегон не выгоднее продажи здесь: лучшая цель {} — {} (решение 417)",

@@ -466,3 +466,6 @@ pub mod withdraw_wait;
 pub mod worst;
 
 pub use engine::Core;
+
+#[cfg(test)]
+mod test_core;

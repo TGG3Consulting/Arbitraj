@@ -1,16 +1,10 @@
 use super::*;
 use crate::core::deal::Deal;
-use crate::core::deps::Deps;
 use crate::core::types::{CoinNetworkInfo, Cost, CostKind, DexAccountId, TradeResult, Transfer};
 use crate::core::{persist, withdraw_seen};
-use crate::gateway::registry::Registry;
-use crate::notify::dispatch::Notifier;
-use crate::settings::{store::Store, value::Scope};
-use crate::storage::{db::Db, journal::Journal};
+use crate::settings::value::Scope;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::path::Path;
-use tokio::sync::broadcast;
 
 #[derive(Deserialize)]
 struct Entry {
@@ -26,32 +20,7 @@ struct Pair {
     withdraw_requested: Decimal,
 }
 
-async fn open(path: &Path) -> Core {
-    let db = Db::open(&path.join("ledger.sqlite")).unwrap();
-    let (changes, _) = broadcast::channel(32);
-    let (tx, _) = broadcast::channel(32);
-    let journal = Journal::new(db.clone(), tx);
-    let settings = Store::load(db.clone(), changes.clone(), journal.clone())
-        .await
-        .unwrap();
-    let notifier = Notifier {
-        http: reqwest::Client::new(),
-        settings: settings.clone(),
-        vault: crate::secrets::Vault::locked(path.join("secrets.enc")),
-        journal: journal.clone(),
-    };
-    Core::start(Deps {
-        gw: Registry::new(),
-        settings,
-        journal,
-        notifier,
-        db,
-        changes,
-        buffer: 32,
-        data_dir: path.into(),
-    })
-    .await
-}
+use crate::core::test_core::open;
 
 fn entry(json: &str, pair: &Pair) -> Deal {
     let e: Entry = serde_json::from_str(json).unwrap();

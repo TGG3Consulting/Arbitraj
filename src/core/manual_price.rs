@@ -180,19 +180,60 @@ pub(super) async fn scenario(
     {
         net -= super::fills::usdt(core, &deal.at, &asset.ticker, quote.avg_price, cost).await?;
     }
+    net += past.iter().map(|(_, cash)| *cash).sum::<Decimal>();
+    if with_return {
+        let cash = sale_cash(core, venue, sell_qty * quote.avg_price, &quote.costs)?;
+        net -= settlement_cost(core, deal, venue, wallet, past, cash).await?;
+    }
+    Ok(net)
+}
+
+/// Actual quote-currency cash available to withdraw. Other fees reduce PnL separately.
+pub(super) fn sale_cash(
+    core: &Core,
+    venue: &VenueId,
+    gross: Decimal,
+    costs: &[crate::core::types::Cost],
+) -> Result<Decimal, String> {
     let symbol = super::balance_sell_check::quote_of(core, venue)?;
-    let sale_fee: Decimal = quote
-        .costs
-        .iter()
+    let fee: Decimal = costs.iter()
         .filter(|c| !c.in_price && c.paid_in.is_none() && c.asset == symbol)
         .map(|c| c.amount)
         .sum();
-    let cash = sell_qty * quote.avg_price - sale_fee;
+    Ok(gross - fee)
+}
+
+pub(super) fn needs_individual_return(core: &Core, deal: &Deal) -> bool {
+    deal.group.as_ref().is_some_and(|g| g.left || super::coin_group_left::recorded(core, deal))
+        && super::usdt_return_deal::wanted(core, deal)
+}
+
+/// Net incremental exit proceeds. Earlier sale proceeds and trading fees are already booked.
+/// Apply only the still-unpaid return cost, once for each actual venue and split.
+pub(super) async fn individual_value(
+    core: &Core,
+    deal: &Deal,
+    venue: &VenueId,
+    net: Decimal,
+    cash: Decimal,
+) -> Result<Decimal, String> {
+    let past = previous_cash(core, deal)?;
+    let wallet = super::manual_price_exec::wallet(core, deal, venue)?;
+    let cost = settlement_cost(core, deal, venue, wallet.as_ref(), &past, cash).await
+        .map_err(|e| format!("стоимость отдельного возврата USDT неизвестна: {e}"))?;
+    Ok(net - cost)
+}
+
+async fn settlement_cost(
+    core: &Core,
+    deal: &Deal,
+    venue: &VenueId,
+    wallet: Option<&DexAccountId>,
+    past: &[(VenueId, Decimal)],
+    cash: Decimal,
+) -> Result<Decimal, String> {
+    let mut total = Decimal::ZERO;
     let parts = return_amounts(past, venue, cash);
-    net += past.iter().map(|(_, cash)| *cash).sum::<Decimal>();
-    if !with_return {
-        return Ok(net);
-    }
     for (from, budget) in parts {
         if budget <= Decimal::ZERO || from == deal.direction.buy_on {
             continue;
@@ -208,12 +249,12 @@ pub(super) async fn scenario(
             vec![(from, budget)]
         };
         for (from, amount) in parts {
-            net -=
+            total +=
                 super::usdt_return_quote::cost(core, &from, &deal.direction.buy_on, wallet, amount)
                     .await?;
         }
     }
-    Ok(net)
+    Ok(total)
 }
 
 /// A second fill on the same venue pays one withdrawal fee; fills elsewhere settle separately.

@@ -98,6 +98,10 @@ pub async fn branch(
     // прошлой продажи ключа, рыночный ордер — под тем же ходом; без ордера ход снимается сразу.
     let mut turn = Box::pin(super::sell_turn::take(&deal.at, &deal.direction.asset)).await;
     let quote = quote_boxed(core, deal, &mut turn).await;
+    let quote = match rule {
+        Rule::Entry | Rule::MaxLoss(_) => Box::pin(super::sell_turn_fresh::settled(core, deal, quote)).await,
+        _ => quote,
+    };
     let fresh = quote.as_ref().ok().map(|(v, _, _)| Fresh {
         profitable: super::sell::profitable(deal, *v),
         loss_pct: deal.loss_pct_if(*v),

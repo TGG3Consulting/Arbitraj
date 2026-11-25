@@ -173,6 +173,12 @@ pub async fn search_in<C: Curve>(m: &mut Memo<'_, C>, p: &Params) -> Result<Foun
             (best, fallback, pct_moved) = (b, fb, true);
         }
     }
+    if !early
+        && !m.capped()
+        && let Some(arrival) = p.ext.plateau
+    {
+        Box::pin(super::size_plateau::probe(m, arrival, (lo, hi), &mut best)).await;
+    }
     // Точка hi посчитана при поиске границы (в памяти) — предел расчётов её не трогает.
     let top = Box::pin(m.at(hi)).await?;
     let choice = SizeChoice {

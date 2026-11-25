@@ -31,6 +31,8 @@ use crate::settings::store::Store;
 pub struct Extra {
     /// Только DEX → CEX, когда шаг B в единицах A содержит непредставимую дробь.
     pub sell_grid: Option<super::size_unit_grid::SellGrid>,
+    /// Exact physical arrival for an ordinary DEX token, when the transfer contract is known.
+    pub plateau: Option<super::size_plateau::Arrival>,
     /// Порог прибыли в USDT направления (решение 342: отсечение «лучший по USDT ниже порога — проходящих нет»;
     /// решение 345: признак «проходящий объём найден»). None — неизвестен.
     pub min_usd: Option<Decimal>,

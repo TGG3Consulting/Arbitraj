@@ -490,12 +490,28 @@ async fn go(
     // 1. Ждём хеш транзакции вывода.
     let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(from.0.clone()));
     let mut last = String::new();
+    let mut claim = crate::gateway::contract::DepositClaim {
+        sender: from.clone(),
+        withdrawal_id: created.venue_ref.clone(),
+        deal: deal.to_owned(),
+        expected: None,
+    };
+    let indexed = gw_to.needs_deposit_claim(&on_to);
     let sent = loop {
         // Решение 151: приход в блокчейне уже засчитан зачислением — к продаже, хеш биржи сверяется фоном.
         if let Some(hit) = ticket
             .as_ref()
             .and_then(super::credit_watch::Ticket::chain_hit)
             && super::credit_expect::units(core, from, to, asset).ok() == units
+            && (!indexed
+                || Box::pin(super::transfer_credit::claim_chain_event(
+                    &gw_to,
+                    &on_to,
+                    &claim,
+                    &hit,
+                    ticket.as_ref(),
+                ))
+                .await)
         {
             let c = super::transfer_chain::Chain {
                 deal,
@@ -633,8 +649,22 @@ async fn go(
         tx,
         started,
     };
-    let credited =
-        super::transfer_credit::wait_with_units(core, &leg, gw_to.clone(), ticket, units).await;
+    if indexed
+        && let Some(wire) = gw_from.withdrawal_wire(&created, &sent)
+        && super::transfer_tax::pct(core, to, asset).is_ok_and(|tax| tax.is_zero())
+        && let Some(ratio) = units
+    {
+        claim.expected = ratio.to_sell(wire).ok();
+    }
+    let credited = Box::pin(super::transfer_credit::wait_with_units(
+        core,
+        &leg,
+        gw_to.clone(),
+        ticket,
+        units,
+        Some(&claim),
+    ))
+    .await;
     // Решение 413: снимок посторонних (если чтение кончилось) — к хешу вывода, для записи зачисления сделки.
     super::credit_base::bind(base, sent.tx_hash.as_deref());
     // Решение 118 (Я-3): дошло меньше ожидаемого больше допуска — монета в ручной чёрный список.

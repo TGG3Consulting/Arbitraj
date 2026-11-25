@@ -34,7 +34,7 @@ pub async fn withdrawal_status(
     hash: &str,
     wallet: Address,
 ) -> GatewayResult<Transfer> {
-    status(ctx, tokens, hash, wallet, None).await
+    status(ctx, tokens, hash, wallet, None, None, None).await
 }
 
 /// Зачисление в кошелёк по хешу: Transfer монеты на адрес кошелька → Credited. Ошибки: как у withdrawal_status.
@@ -45,7 +45,19 @@ pub async fn deposit_status(
     hash: &str,
     wallet: Address,
 ) -> GatewayResult<Transfer> {
-    status(ctx, tokens, hash, wallet, Some(asset)).await
+    deposit_for(ctx, tokens, asset, hash, wallet, None, None).await
+}
+
+pub(super) async fn deposit_for(
+    ctx: &Ctx,
+    tokens: &Tokens,
+    asset: &Asset,
+    hash: &str,
+    wallet: Address,
+    claim: Option<&crate::gateway::contract::DepositClaim>,
+    event_amount: Option<Decimal>,
+) -> GatewayResult<Transfer> {
+    status(ctx, tokens, hash, wallet, Some(asset), claim, event_amount).await
 }
 
 /// Общий разбор квитанции для статусов.
@@ -59,6 +71,8 @@ async fn status(
     hash: &str,
     wallet: Address,
     deposit: Option<&Asset>,
+    claim: Option<&crate::gateway::contract::DepositClaim>,
+    event_amount: Option<Decimal>,
 ) -> GatewayResult<Transfer> {
     let h: B256 = hash.parse().map_err(|_| {
         ctx.err(
@@ -95,6 +109,7 @@ async fn status(
     }
     // Нативная BNB (решение 62): сумма — value самой транзакции, событий Transfer нет (wallet/native_status.rs).
     let native = native_status::check(ctx, h, wallet, deposit, token.is_some()).await?;
+    let mut log_index = None;
     let (asset, units, dec) = match (native, token) {
         (Some((a, wei)), _) => (a, wei, num::BNB_DECIMALS),
         (None, None) => {
@@ -104,11 +119,20 @@ async fn status(
             ));
         }
         (None, Some(token)) => {
-            let units = match deposit {
-                Some(_) => fill::moved(&r, token, None, Some(wallet)),
-                None => fill::moved(&r, token, Some(wallet), None),
+            let decimals = tokens.decimals(ctx, token).await?;
+            let units = if deposit.is_some() {
+                let exact = claim.and_then(|c| c.expected).and_then(|v| {
+                    num::to_units(v, decimals)
+                        .filter(|units| num::to_decimal(*units, decimals) == Some(v))
+                });
+                let (index, units) = super::deposit_log::select(&r, token, wallet, h, exact)
+                    .map_err(|why| ctx.err(ErrorCode::DepositNotCredited, why))?;
+                log_index = Some(index);
+                units
+            } else {
+                fill::moved(&r, token, Some(wallet), None)
             };
-            (asset, units, tokens.decimals(ctx, token).await?)
+            (asset, units, decimals)
         }
     };
     if units.is_zero() {
@@ -150,5 +174,18 @@ async fn status(
     } else {
         TransferStatus::Pending
     };
-    Ok(state(asset, st, amount))
+    let mut credit = state(asset, st, amount);
+    if st == TransferStatus::Credited
+        && let (Some(index), Some(claim), Some(token)) = (log_index, claim, token)
+    {
+        if event_amount.is_some_and(|delta| delta != amount) {
+            return Err(ctx.err(
+                ErrorCode::DepositNotCredited,
+                "Сумма события отличается от перевода в квитанции",
+            ));
+        }
+        super::deposit_log::bind(ctx, h, token, wallet, index, units, claim).await?;
+        credit.venue_ref = format!("{h}#{index}");
+    }
+    Ok(credit)
 }

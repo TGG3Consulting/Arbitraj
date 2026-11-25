@@ -87,12 +87,15 @@ pub async fn finish(
     let by = format!("по блокчейну, не дожидаясь API {}", c.from.0);
     super::transfer_credit::done(core, &leg, &credited, hit.at, &by).await;
     super::transfer_credit::to_trading(core, &leg, &c.gw_to, &credited).await;
-    tokio::spawn(super::credit_mismatch::confirm(
-        core.clone(),
-        super::credit_mismatch::owned(&leg),
-        c.gw_to.clone(),
-        ticket,
-    ));
+    // Для адресного ERC-20 зачисления квитанция и её подтверждения уже проверены перед finish.
+    if !c.gw_to.needs_deposit_claim(c.asset) {
+        tokio::spawn(super::credit_mismatch::confirm(
+            core.clone(),
+            super::credit_mismatch::owned(&leg),
+            c.gw_to.clone(),
+            ticket,
+        ));
+    }
     let mut sent = c.created.clone();
     sent.tx_hash = Some(hash.clone());
     sent.status = TransferStatus::Sent;

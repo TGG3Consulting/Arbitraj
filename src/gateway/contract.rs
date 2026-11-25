@@ -61,6 +61,16 @@ pub enum AccountRole {
     Other,
 }
 
+/// Идентификатор заявки отправителя и её подтверждённый приход в единицах получателя.
+#[derive(Debug, Clone)]
+pub struct DepositClaim {
+    pub sender: VenueId,
+    pub withdrawal_id: String,
+    pub deal: String,
+    /// Только из подтверждённого ответа и известных единиц, для выбора из нескольких логов.
+    pub expected: Option<Decimal>,
+}
+
 /// Результат кнопки «Проверить подключение».
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionCheck {
@@ -496,6 +506,27 @@ pub trait Venue: Send + Sync {
     /// Статус депозита по хешу транзакции в сети.
     /// Возвращает: перевод с актуальным статусом. Ошибки: не найден, связь.
     async fn deposit_status(&self, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer>;
+
+    /// Реальный получатель ведёт привязку ERC-20 лога к конкретному выводу.
+    fn needs_deposit_claim(&self, _asset: &Asset) -> bool {
+        false
+    }
+
+    /// Индивидуальный факт только из подтверждённого статуса вывода, в единицах отправителя.
+    /// None оставляет нормальный перевод доступным, неоднозначную пакетную квитанцию — на сверке.
+    fn withdrawal_wire(&self, _created: &Transfer, _sent: &Transfer) -> Option<Decimal> {
+        None
+    }
+
+    async fn deposit_status_for(
+        &self,
+        asset: &Asset,
+        tx: &str,
+        _claim: &DepositClaim,
+        _event_amount: Option<Decimal>,
+    ) -> GatewayResult<Transfer> {
+        self.deposit_status(asset, tx).await
+    }
 
     /// Балансы всех активов на площадке (или в кошельке для DEX).
     /// Ошибки: ключ, связь.

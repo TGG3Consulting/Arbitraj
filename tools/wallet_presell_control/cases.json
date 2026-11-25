@@ -42,5 +42,59 @@
       "address": "0xfce9d0efbeeb15777d98c293f1282b4c3addb9da",
       "raw": "96355737973375573069"
     }
-  ]
+  ],
+  "mexc_observed_25nov": {
+    "date": "Wed, 25 Nov 2026 15:22:23 GMT",
+    "url": "https://api.mexc.com/api/v3/exchangeInfo?symbol=MBOOMUSDT",
+    "symbol": {
+      "symbol": "MBOOMUSDT",
+      "status": "1",
+      "baseAsset": "MBOOM",
+      "baseAssetPrecision": 2,
+      "quoteAsset": "USDT",
+      "quotePrecision": 7,
+      "quoteAssetPrecision": 7,
+      "baseCommissionPrecision": 2,
+      "quoteCommissionPrecision": 7,
+      "orderTypes": [
+        "LIMIT",
+        "MARKET",
+        "LIMIT_MAKER"
+      ],
+      "isSpotTradingAllowed": true,
+      "isMarginTradingAllowed": false,
+      "quoteAmountPrecision": "1",
+      "baseSizePrecision": "0",
+      "permissions": [
+        "SPOT"
+      ],
+      "filters": [
+        {
+          "filterType": "PERCENT_PRICE_BY_SIDE",
+          "bidMultiplierUp": "0.5",
+          "askMultiplierDown": "0.5"
+        }
+      ],
+      "maxQuoteAmount": "2000000",
+      "makerCommission": "0",
+      "takerCommission": "0.002",
+      "quoteAmountPrecisionMarket": "1",
+      "maxQuoteAmountMarket": "100000",
+      "fullName": "MBOOM",
+      "tradeSideType": 1,
+      "contractAddress": "0x7aC2B2378608B090f9d54742B9b2391876fC01f4",
+      "conceptPlateIds": [
+        52,
+        23,
+        40
+      ],
+      "firstOpenTime": 1756281600000,
+      "conceptPlates": [
+        "Assessment",
+        "AI",
+        "DePIN"
+      ],
+      "st": true
+    }
+  }
 }

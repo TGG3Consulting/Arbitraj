@@ -55,7 +55,8 @@ pub async fn archived_entry<C:Curve<Data=Calc>, S:crate::core::costs::Source>(
    out.push(serde_json::json!({"prepared":mode,"path":format!("{:?}",w.path),"selected":result.map(|c|(c.qty,c.profit_usd))}));
  }
  let mut routed=Vec::new();
- for mode in [false,true]{
+ for (mode,congested) in [(false,false),(true,false),(true,true)]{
+   let _occupied=congested.then(||core.inner.hint_slot.clone().try_acquire_owned().unwrap());
    use futures_util::stream::{FuturesUnordered,StreamExt};
    let (tx,mut rx)=tokio::sync::mpsc::unbounded_channel::<super::final_depth::Request>();
    let mut w=Want::new(anchor);
@@ -79,7 +80,7 @@ pub async fn archived_entry<C:Curve<Data=Calc>, S:crate::core::costs::Source>(
      }
    };
    let result=tokio::select!{biased; r=Box::pin(calc)=>r,_=Box::pin(serve)=>unreachable!()};
-   routed.push(serde_json::json!({"prepared":mode,"path":format!("{:?}",w.path),"selected":result.map(|c|(c.qty,c.profit_usd)),"native_calls":queries.get(),"us":started.elapsed().as_micros()}));
+   routed.push(serde_json::json!({"prepared":mode,"occupied":congested,"path":format!("{:?}",w.path),"selected":result.map(|c|(c.qty,c.profit_usd)),"native_calls":queries.get(),"us":started.elapsed().as_micros()}));
  }
  serde_json::json!({"cached":cached,"native_candidate":found.best.qty,"logged_anchor":anchor,"ready_hint":q.map(|x|x.0),"modes":out,"native_adapter":routed})
 }

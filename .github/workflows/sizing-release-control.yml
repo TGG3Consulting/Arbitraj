@@ -56,7 +56,7 @@ jobs:
           python control/tools/sizing_entry.py release
           cd release
           cargo test --locked --lib precheck_hint
-          cargo test --locked --test optional_quote_capacity
+          cargo test --locked --test optional_quote_capacity --test core_precheck_fast_266 --test core_dry_mode
           for row in 'core_size_actual_v2 actual_v2_matrix risk' 'native_route_release_matrix shop_live_control shop'; do
             read -r test name output <<< "$row"
             if ! cargo test --locked --test "$test" "$name" -- --nocapture > "$RUNNER_TEMP/$output.log" 2>&1; then
@@ -65,7 +65,7 @@ jobs:
             fi
             grep -E 'ACTUAL_V2_MATRIX|NATIVE_NEIGHBOUR|NATIVE_RISK_PRECHECK|SHOP_LIVE' "$RUNNER_TEMP/$output.log" > "../size-$output.jsonl"
           done
-          cargo test --locked --test core_card_disconnected --test core_precheck_fast_266
+          cargo test --locked --test core_card_disconnected
           cargo clippy --locked --lib -- -D warnings
           for arm in off on; do
             if ! SIZING_ARM="$arm" cargo test --locked --test core_size_release_matrix release_size_matrix_routes -- --nocapture > "$RUNNER_TEMP/size-$arm.log" 2>&1; then

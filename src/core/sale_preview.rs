@@ -137,7 +137,7 @@ mod tests {
         d.spent += paid_fee;
         let prior_cash = d.proceeds - paid_fee;
         assert_eq!(pnl_text(&d, net, prior_cash), first);
-        d.group = Some(super::super::deal_group::DealGroup::default());
+        d.group = Some(Box::default());
         assert!(pnl_text(&d, net, prior_cash).contains("возврате группы"));
         d.group.as_mut().unwrap().left = true;
         assert_eq!(pnl_text(&d, net, prior_cash), first);

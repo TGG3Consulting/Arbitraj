@@ -18,12 +18,12 @@ f=Path(sys.argv[1])/'src/core/precheck_hint.rs'
 h=f.read_text()
 a='book:&crate::core::types::OrderBook, memo:'
 assert h.count(a)==1
-h=h.replace(a,'book:&crate::core::types::OrderBook, initial_book:Option<chrono::DateTime<chrono::Utc>>, memo:')
+h=h.replace(a,'book:&crate::core::types::OrderBook, initial_book:Option<(chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)>, memo:')
 a='core.inner.market.write().unwrap_or_else(|p|p.into_inner()).apply(crate::gateway::events::MarketEvent::Book(book.clone()));'
 assert h.count(a)==1
-h=h.replace(a,'let mut old_book=book.clone();if let Some(t)=initial_book {old_book.received_at=t;}\n core.inner.market.write().unwrap_or_else(|p|p.into_inner()).apply(crate::gateway::events::MarketEvent::Book(old_book));')
-a='remember(core,old,mark,memo,found);';h=h.replace(a,a+'\n core.inner.market.write().unwrap_or_else(|p|p.into_inner()).apply(crate::gateway::events::MarketEvent::Book(book.clone()));')
+h=h.replace(a,'let mut old_book=book.clone();if let Some((t,_))=initial_book {old_book.received_at=t;}\n core.inner.market.write().unwrap_or_else(|p|p.into_inner()).apply(crate::gateway::events::MarketEvent::Book(old_book));')
+a='remember(core,old,mark,memo,found);';h=h.replace(a,a+'\n let mut final_book=book.clone();if let Some((_,t))=initial_book {final_book.received_at=t;}\n core.inner.market.write().unwrap_or_else(|p|p.into_inner()).apply(crate::gateway::events::MarketEvent::Book(final_book));')
 f.write_text(h)
 f=Path(sys.argv[1])/'tests/core_size_actual_v2.rs';h=f.read_text();a='&cx,&a,&memo,&reconstructed';assert h.count(a)==2
-h=h.replace(a,'&cx,&a,Some(earlier["book_stamp"].as_str().unwrap().parse().unwrap()),&memo,&reconstructed');f.write_text(h)
+h=h.replace(a,'&cx,&a,Some((earlier["book_stamp"].as_str().unwrap().parse().unwrap(),earlier["final_book_stamp"].as_str().unwrap().parse().unwrap())),&memo,&reconstructed');f.write_text(h)
 f=Path(sys.argv[1])/'tests/native_route_release_matrix.rs';s=f.read_text().replace('&src.book.book,&m,found','&src.book.book,None,&m,found');f.write_text(s)

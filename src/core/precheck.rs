@@ -209,8 +209,13 @@ pub async fn run(
         on,
         ..Timing::default()
     };
-    let res =
-        super::precheck_hint::during(core, d, fast.qty, steps(core, d, &mut t, &fast, acc)).await;
+    let res = super::precheck_hint::during(
+        core,
+        d,
+        fast.qty,
+        Box::pin(steps(core, d, &mut t, &fast, acc)),
+    )
+    .await;
     // Решение 380: строка урезания — в хронологию всегда (не зависит от log.step_timing).
     let lines: Vec<String> = t
         .plan

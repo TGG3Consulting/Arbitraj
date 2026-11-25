@@ -246,7 +246,13 @@ async fn failed_fast_path_falls_back_to_full_search() {
     let min = (d("0.1"), d("0.1"));
     // Финальный расчёт отказал (площадки не подключены) — плана нет, причина названа, отказа нет: дальше полный подбор.
     let mut w = Want::new(d("10"));
-    let got = Box::pin(recalc(&core, &cx, &mut w, d("20"), rec.pair.step_size, min)).await;
+    let check = recalc(&core, &cx, &mut w, d("20"), rec.pair.step_size, min);
+    let bytes = std::mem::size_of_val(&check);
+    assert!(
+        bytes < 128 * 1024,
+        "the fast precheck keeps {bytes} bytes inline"
+    );
+    let got = Box::pin(check).await;
     assert!(got.is_none());
     let why = match w.path.clone() {
         Some(Path::Full(why)) => why,

@@ -185,10 +185,7 @@ pub async fn recalc(
             return None;
         }
     };
-    let calculate = |q| async move {
-        let c = super::profit::final_calc(core, cx, q, budget, step).await?;
-        accept(c, q, budget, &d.asset.ticker, (min_usd, min_pct))
-    };
+    let calculate = |q| checked_boxed(core, cx, q, budget, step, (min_usd, min_pct));
     let work = async {
         let Ok(slot) = core.inner.hint_slot.clone().try_acquire_owned() else {
             return (calculate(qty).await, false);
@@ -216,10 +213,11 @@ pub async fn recalc(
             ))
         };
         let original = async { Ok((calculate(qty).await?, None)) };
-        let (result, moved) = compare_checked(original, other, prepared, |mark| {
-            super::precheck_hint::stamp(core, cx) == *mark
-        })
-        .await;
+        let (result, moved) =
+            compare_checked(Box::pin(original), Box::pin(other), prepared, |mark| {
+                super::precheck_hint::stamp(core, cx) == *mark
+            })
+            .await;
         (result.map(|(c, _)| c), moved)
     };
     let (result, changed) = stage(|| STAGE.into(), work).await;
@@ -257,6 +255,23 @@ pub fn floor_qty(qty: Decimal, step: Decimal) -> Result<Decimal, String> {
         ));
     }
     Ok(q)
+}
+
+/// Construct the large final quote in its own frame. The two contenders
+/// (and all callers of recalc) hold only pointers to these independent quotes.
+#[inline(never)]
+fn checked_boxed<'a>(
+    core: &'a Core,
+    cx: &'a DirCtx,
+    qty: Decimal,
+    budget: Decimal,
+    step: Decimal,
+    min: (Decimal, Decimal),
+) -> Pin<Box<dyn Future<Output = Result<Calc, String>> + Send + 'a>> {
+    Box::pin(async move {
+        let c = super::profit::final_calc(core, cx, qty, budget, step).await?;
+        accept(c, qty, budget, &cx.dir.asset.ticker, min)
+    })
 }
 
 /// Compare executable plans under the incumbent deadline and recheck market identity.

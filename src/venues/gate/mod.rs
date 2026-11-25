@@ -25,6 +25,7 @@ pub mod deposit_min;
 pub mod deposit_plan;
 pub mod deposits;
 pub mod depth;
+mod destinations;
 pub mod errors;
 pub mod fast_book;
 pub mod fast_io;
@@ -87,6 +88,7 @@ use withdraw_notice::Notices;
 /// Адаптер Gate.
 pub struct Gate {
     ctx: Ctx,
+    destinations: destinations::Destinations,
     /// Текущая подписка: задачи соединений и обновление справочника пар (subs.rs).
     subs: Subs,
     symbols: Symbols,
@@ -105,6 +107,7 @@ impl Gate {
     pub fn new(ctx: Ctx) -> Self {
         Self {
             ctx,
+            destinations: destinations::Destinations::default(),
             subs: Subs::default(),
             symbols: Symbols::default(),
             books: Books::default(),
@@ -134,7 +137,20 @@ impl Venue for Gate {
     }
 
     async fn check_connection(&self) -> GatewayResult<ConnectionCheck> {
-        Ok(account::check(&self.ctx).await)
+        let mut result = account::check(&self.ctx).await;
+        if result.ok {
+            match self.destinations.reconcile(&self.ctx).await {
+                Ok(0) => {}
+                Ok(count) => result.details.push_str(&format!(
+                    ". Подтверждены выводы на {count} ранее отклонённых адресов."
+                )),
+                Err(e) => result.details.push_str(&format!(
+                    ". Сверка ранее отклонённых адресов: {}",
+                    e.message
+                )),
+            }
+        }
+        Ok(result)
     }
 
     async fn coin_networks(&self) -> GatewayResult<Vec<CoinNetworkInfo>> {
@@ -212,7 +228,62 @@ impl Venue for Gate {
     }
 
     async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer> {
-        transfers::withdraw(&self.ctx, req).await
+        let attempt = self
+            .destinations
+            .attempt(&self.ctx, &req.asset.ticker, &req.network, &req.address)
+            .await?;
+        let mut res = transfers::withdraw(&self.ctx, req.clone()).await;
+        let denied = res.as_ref().err().is_some_and(|e| {
+            e.code == ErrorCode::InvalidAddress
+                && e.raw
+                    .as_deref()
+                    .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
+                    .is_some_and(|v| v["label"] == "ADDRESS_NOT_USED")
+        });
+        if denied || res.is_ok() {
+            if let Err(e) = self.destinations.record(&self.ctx, &attempt, denied).await {
+                let _ = self
+                    .ctx
+                    .journal
+                    .write(
+                        crate::storage::journal::Level::Error,
+                        "venue.withdraw_destination",
+                        Some(ctx::ID),
+                        e.message,
+                        None,
+                    )
+                    .await;
+            }
+        }
+        if let Err(e) = &mut res {
+            e.message = format!(
+                "POST /withdrawals, {} {} в сети {}: {}",
+                req.amount.normalize(),
+                req.asset.ticker,
+                req.network,
+                e.message
+            );
+        }
+        res
+    }
+
+    fn requires_withdraw_destination_check(&self) -> bool {
+        true
+    }
+
+    fn checks_cex_withdraw_destination(&self) -> bool {
+        true
+    }
+
+    async fn check_withdraw_destination(
+        &self,
+        asset: &Asset,
+        network: &str,
+        address: &str,
+    ) -> GatewayResult<()> {
+        self.destinations
+            .check(&self.ctx, &asset.ticker, network, address)
+            .await
     }
 
     async fn withdrawal_status(&self, venue_ref: &str) -> GatewayResult<Transfer> {

@@ -51,6 +51,10 @@ CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS gate_withdraw_denial (
+ account TEXT NOT NULL, asset TEXT NOT NULL, network TEXT NOT NULL, address TEXT NOT NULL, rejected_at INTEGER NOT NULL,
+ PRIMARY KEY(account,asset,network,address)
+);
 CREATE TABLE IF NOT EXISTS deposit_log_claim (
     chain TEXT NOT NULL, token TEXT NOT NULL, wallet TEXT NOT NULL, tx TEXT NOT NULL,
     log_index INTEGER NOT NULL, sender TEXT NOT NULL, withdrawal_id TEXT NOT NULL,

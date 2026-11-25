@@ -86,9 +86,19 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         ("walletType", wallet.to_string()),
     ];
     let path = "/sapi/v1/capital/withdraw/apply";
+    let sent_at = Utc::now().timestamp_millis();
+    let account = super::withdraw_diag::mark(ctx);
+    let snap = super::withdraw_diag::describe(account, wallet, &req.asset.ticker);
     let sent = rest::signed(ctx, Method::POST, path, params, Op::Withdraw)
         .await
-        .map_err(|e| not_ready(ctx, &req.asset.ticker, e));
+        .map_err(|e|{
+            let code=errors::code_of(&e);
+            let mut e=not_ready(ctx,&req.asset.ticker,e);
+            if matches!(code,Some(-4026 | -4024)){
+                e.message.push_str(&format!("; запрос {order_id}: {} {} в сети {}, walletType={wallet}, отправка t={sent_at}, ответ t={}; {snap}. Доступное именно для вывода Binance не сообщила.",req.amount.normalize(),req.asset.ticker,req.network,Utc::now().timestamp_millis()));
+            }
+            e
+        });
     let sent = sent.and_then(|d| {
         num::text_opt(&d, "id").ok_or_else(|| {
             let msg = format!("Вывод {order_id}: ответ без id — итог неизвестен");

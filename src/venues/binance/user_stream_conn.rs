@@ -34,10 +34,13 @@ const SUB_ID: &str = "sub";
 
 /// Сессия до обрыва. Возвращает: Some(причина) — переподключиться; None — канал ядра закрыт.
 pub async fn session(ctx: &Ctx, out: &mpsc::Sender<MarketEvent>, cfg: &Cfg) -> Option<String> {
+    let epoch = crate::gateway::addr_book::key_epoch();
+    let account = super::withdraw_diag::mark(ctx);
     let request = match subscribe_request(ctx) {
         Ok(r) => r,
         Err(e) => return Some(e),
     };
+    let account = account.filter(|_| epoch == crate::gateway::addr_book::key_epoch());
     let ws = match tokio::time::timeout(
         cfg.connect_timeout,
         tokio_tungstenite::connect_async(cfg.url.as_str()),
@@ -71,7 +74,7 @@ pub async fn session(ctx: &Ctx, out: &mpsc::Sender<MarketEvent>, cfg: &Cfg) -> O
                         if let Some(why) = reply_error(&t) {
                             return Some(why);
                         }
-                        match on_event(ctx, out, &t).await {
+                        match on_event(ctx, out, &t,account).await {
                             Ok(true) => {}
                             Ok(false) => return None,
                             Err(why) => return Some(why),
@@ -131,12 +134,27 @@ fn reply_error(t: &str) -> Option<String> {
 }
 
 /// Событие → журнал и ядру. Возвращает: Ok(false) — канал ядра закрыт; Err — подписка закрыта сервером.
-async fn on_event(ctx: &Ctx, out: &mpsc::Sender<MarketEvent>, t: &str) -> Result<bool, String> {
+async fn on_event(
+    ctx: &Ctx,
+    out: &mpsc::Sender<MarketEvent>,
+    t: &str,
+    account: Option<u64>,
+) -> Result<bool, String> {
     match account_update::parse(t, &ctx.venue()) {
         Event::Other(_) => Ok(true),
         // Решение 253: свободный остаток — ожиданию доступности вывода (withdraw_ready.rs), ядру не отдаётся.
         Event::Position(list, at) => {
-            super::withdraw_ready::on_position(&list, at);
+            super::withdraw_ready::on_positions(list.iter().map(|(a, f, _)| (a, *f)), at);
+            for (ticker, free, locked) in list {
+                super::withdraw_diag::record(
+                    account,
+                    &ticker,
+                    free,
+                    locked,
+                    at,
+                    "WS outboundAccountPosition",
+                );
+            }
             Ok(true)
         }
         Event::Terminated => Err("сервер закрыл подписку (eventStreamTerminated)".into()),

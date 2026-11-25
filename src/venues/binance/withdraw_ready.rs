@@ -56,6 +56,9 @@ static TRADED: LazyLock<Mutex<Marks>> = LazyLock::new(|| Mutex::new(HashMap::new
 /// Что делает: запоминает остатки события outboundAccountPosition (событие старше уже записанного — пропуск) и будит
 /// ожидающих. Принимает: (монета, свободно), время события E (мс). Ошибок нет.
 pub fn on_position(list: &[(String, Decimal)], at: i64) {
+    on_positions(list.iter().map(|(s, f)| (s, *f)), at)
+}
+pub(super) fn on_positions<'a>(list: impl Iterator<Item = (&'a String, Decimal)>, at: i64) {
     {
         let mut m = FREE.lock().unwrap_or_else(|p| p.into_inner());
         let rx = Instant::now();
@@ -63,7 +66,7 @@ pub fn on_position(list: &[(String, Decimal)], at: i64) {
             match m.get(a) {
                 Some((_, t, _)) if *t > at => {}
                 _ => {
-                    m.insert(a.clone(), (*f, at, rx));
+                    m.insert(a.clone(), (f, at, rx));
                 }
             }
         }
@@ -151,11 +154,27 @@ pub async fn wait(
             _ = tokio::time::sleep_until(end) => break,
         }
     }
+    let mark = super::withdraw_diag::mark(ctx);
+    let epoch = crate::gateway::addr_book::key_epoch();
     let list = super::account::balances(ctx).await?;
     let f = list
         .iter()
         .find(|b| b.asset == ticker)
         .map_or(Decimal::ZERO, |b| b.free);
+    if epoch == crate::gateway::addr_book::key_epoch() {
+        let locked = list
+            .iter()
+            .find(|b| b.asset == ticker)
+            .map_or(Decimal::ZERO, |b| b.locked);
+        super::withdraw_diag::record(
+            mark,
+            ticker,
+            f,
+            Some(locked),
+            chrono::Utc::now().timestamp_millis(),
+            "REST /api/v3/account получен",
+        );
+    }
     Ok(WithdrawReady {
         ready: Some(f >= amount),
         free: Some(f),

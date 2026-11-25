@@ -42,6 +42,7 @@ pub struct Inner {
     /// Решение 266 (ревью): смены статуса ввода/вывода, ждущие подтверждения сглаживателя (status_debounce.rs), по
     /// биржам — пока смена монеты ждёт, предпроверка справочнику сетей из памяти не верит (precheck_nets.rs).
     pub status_pending: RwLock<super::status_debounce::Pending>,
+    pub withdraw_fee_refresh: Mutex<HashSet<(VenueId, String, String)>>,
     /// Площадки реестра шлюза и их вид (заполняется при старте).
     pub kinds: RwLock<Vec<(VenueId, VenueKind)>>,
     /// Справочник монет и направлений.
@@ -258,6 +259,7 @@ impl Inner {
             market: RwLock::default(),
             networks: RwLock::default(),
             status_pending: RwLock::default(),
+            withdraw_fee_refresh: Mutex::default(),
             kinds: RwLock::new(kinds),
             coins: RwLock::default(),
             tickers: RwLock::default(),

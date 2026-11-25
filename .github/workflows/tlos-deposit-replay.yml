@@ -1,0 +1,31 @@
+name: Indexed deposit replay
+on:
+  push:
+    branches: [codex/tlos-control-ci-20261125]
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_PROFILE_TEST_DEBUG: 0
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-size-matrix
+      - name: Check real receipts and durable claims
+        run: |
+          set -euo pipefail
+          for suite in '--lib deposit_log::' '--test poloniex_credit_case' '--test bsc_dex_wallet_events' '--test ledger_db_353'; do
+            if ! cargo test --locked $suite > "$RUNNER_TEMP/part.txt" 2>&1; then
+              grep -E 'error(\[E[0-9]+\])?:|panicked at|assertion|FAILED' -A 5 "$RUNNER_TEMP/part.txt" | head -n 80 || true
+              exit 1
+            fi
+            grep -E '^test result:|^test [A-Za-z_]+.* \.\.\. ok' "$RUNNER_TEMP/part.txt" >> "$RUNNER_TEMP/results.txt"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: indexed-deposit-replay
+          path: ${{ runner.temp }}/results.txt

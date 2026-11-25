@@ -25,6 +25,23 @@ jobs:
           git rev-parse HEAD > results/sha
           GRAPH_POLICY_RESULT="$PWD/results/graph.json" cargo test --locked --test bsc_dex_graph recorded_bsc_depth_and_pool_limits
           cargo test --locked --test core_windows
+          cp tests/bsc_dex_graph.rs "$RUNNER_TEMP/graph_driver.rs"
+          cp -r tests/bsc_graph_policy "$RUNNER_TEMP/graph_driver"
+          cp -r tests/data/bsc_v2_policy_2026_11_25 "$RUNNER_TEMP/graph_market"
+          mv results "$RUNNER_TEMP/target-results"
+      - uses: actions/checkout@v4
+        with:
+          ref: 15095ea3c6b4bd27291d026e857f14f6556a1e49
+          clean: false
+      - name: Same graph market on prior released code
+        run: |
+          cp "$RUNNER_TEMP/graph_driver.rs" tests/bsc_dex_graph.rs
+          mkdir -p tests/bsc_graph_policy tests/data/bsc_v2_policy_2026_11_25
+          cp -a "$RUNNER_TEMP/graph_driver/." tests/bsc_graph_policy/
+          cp -a "$RUNNER_TEMP/graph_market/." tests/data/bsc_v2_policy_2026_11_25/
+          mv "$RUNNER_TEMP/target-results" results
+          git rev-parse HEAD > results/baseline-sha
+          GRAPH_POLICY_RESULT="$PWD/results/baseline-graph.json" cargo test --locked --test bsc_dex_graph recorded_bsc_depth_and_pool_limits
       - uses: actions/upload-artifact@v4
         with:
           name: audit-markets

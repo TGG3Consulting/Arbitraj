@@ -441,7 +441,7 @@ async fn go(
                     // Решение 231: исход неизвестен — бот ищет вывод по своему ID (или по хешу у DEX); создан — дальше
                     // обычный опрос статуса и зачисление (ожидание поступления уже стоит).
                     // Найден и отклонён (или перевод DEX откатился) — вывода нет: дальше как при обычном отказе.
-                    let e = match e.code {
+                    let mut e = match e.code {
                         ErrorCode::OutcomeUnknown => {
                             match super::outcome_resolve::withdraw(
                                 core, deal, from, &gw_from, &req, &e,
@@ -457,6 +457,10 @@ async fn go(
                     };
                     // Решение 411 (триггер в): биржа отклонила адрес — следующий раз адрес получателя запрашивается.
                     if e.code == ErrorCode::InvalidAddress {
+                        e.message.push_str(&format!(
+                            ". Получатель: {}, сеть вывода: {}",
+                            to.0, req.network
+                        ));
                         let why = format!(
                             "вывод с {} отклонён: адрес не принят ({})",
                             from.0, e.message

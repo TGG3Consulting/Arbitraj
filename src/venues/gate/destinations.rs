@@ -76,6 +76,7 @@ pub(super) struct Destinations {
     sequence: AtomicU64,
     /// Kept only while a POST for the destination is outstanding.
     flights: SyncMutex<HashMap<Key, Flight>>,
+    recheck: Mutex<()>,
 }
 #[derive(Default)]
 struct Flight {
@@ -140,19 +141,18 @@ impl Destinations {
             self.flush(ctx, &mut states, &key).await?;
         }
         if states.contains_key(&key) {
-            return Err(ctx.tag(GatewayError::new(ErrorCode::InvalidAddress,None,format!("Gate отклонила вывод {asset} в сети {network} на {address} (ADDRESS_NOT_USED). После успешного вывода из кабинета нажмите «Проверить подключение» Gate."))));
+            return Err(ctx.tag(GatewayError::new(ErrorCode::InvalidAddress,None,format!("Gate отклонила вывод {asset} в сети {network} на {address} (ADDRESS_NOT_USED). После успешного вывода из кабинета или верификации точного адреса нажмите «Проверить подключение» Gate."))));
         }
         Ok(())
     }
 
-    pub(super) async fn attempt<'a>(
+    pub(super) fn attempt<'a>(
         &'a self,
         ctx: &Ctx,
         asset: &str,
         network: &str,
         address: &str,
     ) -> GatewayResult<Attempt<'a>> {
-        self.states(ctx).await?;
         let key = Key::new(ctx, asset, network, address)?;
         let mut flights = self.flights.lock().unwrap_or_else(|p| p.into_inner());
         flights.entry(key.clone()).or_default().requests += 1;
@@ -230,6 +230,9 @@ impl Destinations {
         if self.blocked.load(Ordering::Acquire) == 0 {
             return Ok(0);
         }
+        let Ok(_guard) = self.recheck.try_lock() else {
+            return Ok(0);
+        };
         let current = account(ctx)?;
         let pending: Vec<_> = states
             .lock()
@@ -241,7 +244,7 @@ impl Destinations {
         let mut cleared = 0;
         for (key, at, order) in pending {
             if EXPECTED_ACCOUNT
-                .scope(current.clone(), history_proves(ctx, &key, at))
+                .scope(current.clone(), allowed(ctx, &key, at))
                 .await?
             {
                 let mut rows = states.lock().await;
@@ -260,6 +263,62 @@ impl Destinations {
     }
 }
 
+// RAIN's actual ADDRESS_NOT_USED response names two independently sufficient conditions:
+// "only used addresses or verified addresses are allowed for api withdrawal".
+async fn allowed(ctx: &Ctx, key: &Key, at: i64) -> GatewayResult<bool> {
+    let saved = verified_address(ctx, key).await;
+    if matches!(saved, Ok(true)) {
+        return Ok(true);
+    }
+    match history_proves(ctx, key, at).await {
+        Ok(true) => Ok(true),
+        Ok(false) => saved,
+        Err(e) => Err(e),
+    }
+}
+fn verified(row: &Value, key: &Key) -> bool {
+    row["verified"] == "1"
+        && row["currency"] == key.asset
+        && row["chain"] == key.network
+        && row["address"]
+            .as_str()
+            .is_some_and(|a| address_key(a) == key.address)
+        && row
+            .get("tag")
+            .is_none_or(|m| m.is_null() || m.as_str() == Some(""))
+}
+
+async fn verified_address(ctx: &Ctx, key: &Key) -> GatewayResult<bool> {
+    let mut page = 1;
+    loop {
+        let p = vec![
+            ("currency", key.asset.clone()),
+            ("chain", key.network.clone()),
+            ("verified", "1".into()),
+            ("limit", "100".into()),
+            ("page", page.to_string()),
+        ];
+        let list = rest::signed(
+            ctx,
+            Method::GET,
+            "/wallet/saved_address",
+            p,
+            None,
+            Op::Other,
+        )
+        .await?;
+        let list = list
+            .as_array()
+            .ok_or_else(|| super::errors::bad("Список адресов Gate не массив", ""))?;
+        if list.iter().any(|row| verified(row, key)) {
+            return Ok(true);
+        }
+        if list.len() < 100 {
+            return Ok(false);
+        }
+        page += 1;
+    }
+}
 async fn history_proves(ctx: &Ctx, key: &Key, at: i64) -> GatewayResult<bool> {
     let start = at.div_euclid(1000);
     let mut end = Utc::now().timestamp();
@@ -306,7 +365,8 @@ fn done_after(r: &Value, key: &Key, at: i64) -> bool {
         && r["address"]
             .as_str()
             .is_some_and(|a| address_key(a) == key.address)
-        && num::text_opt(r, "memo").unwrap_or_default().is_empty()
+        && r.get("memo")
+            .is_none_or(|m| m.is_null() || m.as_str() == Some(""))
         && num::dec_opt(r, "timestamp")
             .ok()
             .flatten()
@@ -334,6 +394,14 @@ mod tests {
             address: address_key("0x00000000000000000000000000000000000000aB"),
         };
         let good = json!({"status":"DONE","currency":"RAIN","chain":"BSC","address":"0x00000000000000000000000000000000000000Ab","timestamp":"1795300000.238","txid":"tx","memo":""});
+        let mut saved =
+            json!({"currency":"RAIN","chain":"BSC","address":key.address,"tag":"","verified":"1"});
+        assert!(verified(&saved, &key));
+        saved["verified"] = json!("0");
+        assert!(!verified(&saved, &key));
+        saved["verified"] = json!("1");
+        saved["tag"] = json!("42");
+        assert!(!verified(&saved, &key));
         assert!(done_after(&good, &key, 1795300000237));
         assert!(!done_after(&good, &key, 1795300000238));
         for (field, value) in [

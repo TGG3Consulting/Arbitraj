@@ -19,7 +19,17 @@ async fn stay_recorded_transfers_do_not_need_kucoin_status_with_chain_credit() {
     ];
     let (core, settings) = start("stay").await;
     let venue = Scope::Venue("bsc_dex".into());
-    configure(&settings, false).await;
+    settings
+        .set(
+            "transfer.credit_amount_tolerance_pct",
+            venue.clone(),
+            Some(json!("0")),
+            "STAY replay",
+        )
+        .await
+        .unwrap();
+    // Generic event credit was unset in the historical profile. The chain
+    // credit switch must work independently of that flag.
     for enabled in [false, true] {
         settings
             .set(

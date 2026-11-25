@@ -1,0 +1,87 @@
+name: Encrypted historical market comparison
+on:
+  push:
+    branches: [audit/private-cex-history-2511]
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_INCREMENTAL: '0'
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: harness
+      - name: Create ephemeral sealed-input receiver
+        run: |
+          umask 077
+          /usr/bin/python3 harness/tools/release_size_matrix/market_envelope.py keygen "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/public.pem"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: receiver
+          path: ${{ runner.temp }}/public.pem
+          retention-days: 1
+      - uses: actions/checkout@v4
+        with:
+          path: release
+          ref: af9f241769af5c49ce0a5d84e3051db56863e0ea
+      - uses: actions/checkout@v4
+        with:
+          path: base
+          ref: 15095ea3c6b4bd27291d026e857f14f6556a1e49
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: release -> target
+          shared-key: release-size-matrix
+      - name: Receive private inputs, replay and seal output
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref=refs/heads/audit/market-envelope-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          for i in $(seq 1 35); do
+            if git -C harness ls-remote --exit-code origin "$ref" >/dev/null 2>&1; then break; fi
+            sleep 25
+          done
+          git -C harness fetch -q --depth=1 origin "$ref"
+          git -C harness show FETCH_HEAD:market.enc > "$RUNNER_TEMP/enc"
+          p="$GITHUB_WORKSPACE/harness/tools/release_size_matrix"
+          env="$p/market_envelope.py"
+          /usr/bin/python3 "$env" open "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/data.json" "$RUNNER_TEMP/enc"
+          rm "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/enc"
+          cp "$RUNNER_TEMP/data.json" "$RUNNER_TEMP/cases.json"
+          /usr/bin/python3 - "$RUNNER_TEMP" "$p" <<'PY'
+          import pathlib,json,sys
+          temp,p=map(pathlib.Path,sys.argv[1:]);data=json.loads((temp/'data.json').read_bytes());(temp/'return.pem').write_text(data['return_key']);(p/'control_settings.json').write_text(json.dumps(data['settings']))
+          PY
+          export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/release/target"
+          for tree in base release; do
+            python "$p/stored_compare.py" "$tree" "$RUNNER_TEMP/cases.json"
+            python - "$p" "$tree" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1]);code=(p/'with_history.py').read_text().replace('["stored_compare","actual_v2","actual_v3"]','["stored_compare"]')
+          tree=sys.argv[2];sys.argv=['with_history.py',tree];exec(compile(code,'with_history.py','exec'),{'__file__':str(p/'with_history.py'),'__name__':'__main__'})
+          PY
+            if ! (cd "$tree" && cargo test --locked --test core_size_stored_compare -- --nocapture > "$RUNNER_TEMP/$tree.log" 2>&1); then
+              grep -E 'error(\[E[0-9]+\])?:|panicked at|FAILED|assertion' -A 4 "$RUNNER_TEMP/$tree.log" | head -n 75 || true
+              exit 1
+            fi
+            sed -n -E 's/^(test [^ ]+ \.\.\. )?STORED_TRADE_MATRIX //p' "$RUNNER_TEMP/$tree.log" > "$RUNNER_TEMP/$tree.jsonl"
+            test -s "$RUNNER_TEMP/$tree.jsonl"
+          done
+          python - "$RUNNER_TEMP" <<'PY'
+          import pathlib,sys,gzip,json
+          p=pathlib.Path(sys.argv[1]);d={k:[json.loads(x)for x in (p/(k+'.jsonl')).read_text().splitlines()] for k in ('base','release')}
+          n=len(json.loads((p/'cases.json').read_text())['cases']);assert all(len(v)==2*n and all('unavailable' not in x['result'] for x in v) for v in d.values());(p/'results.gz').write_bytes(gzip.compress(json.dumps(d).encode()))
+          PY
+          /usr/bin/python3 "$env" seal "$RUNNER_TEMP/return.pem" "$RUNNER_TEMP/result.enc" "$RUNNER_TEMP/results.gz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-native-result
+          path: ${{ runner.temp }}/result.enc
+          retention-days: 1

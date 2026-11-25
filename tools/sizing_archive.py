@@ -23,12 +23,12 @@ pub async fn archive_compare<S:crate::core::costs::Source>(cx:&DirCtx, src:&S, b
     let fresh=|q:Option<Decimal>|async move{
         let q=q.ok_or_else(String::new)?;
         calls.fetch_add(1,Ordering::Relaxed);
-        let c=Box::pin(crate::core::costs::evaluate_with(cx,q,src)).await.map_err(|e|e.to_string())?;
+        let c=crate::gateway::quote_stage::final_scope(Box::pin(crate::core::costs::evaluate_with(cx,q,src))).await.map_err(|e|e.to_string())?;
         if c.spend_max>budget{return Err(String::from("budget"));}
         crate::core::precheck_fast::accept(c,q,budget,&cx.dir.asset.ticker,floor).map(|c|(c,()))
     };
     let t=std::time::Instant::now();
-    let (r,moved)=crate::core::precheck_fast::compare_checked(Box::pin(fresh(Some(original))),Box::pin(fresh(alt.filter(|q|q!=&original))),warm,|_| true).await;
+    let (r,moved)=crate::core::precheck_fast::compare_checked(Box::pin(fresh(Some(original))),Box::pin(crate::gateway::cpu_budget::optional_quote(fresh(alt.filter(|q|q!=&original)))),warm,|_| true).await;
     (r.ok().map(|(c,_)|(c.qty,c.profit_usd)),moved,t.elapsed().as_micros(),calls.load(Ordering::Relaxed))
 }
 """)

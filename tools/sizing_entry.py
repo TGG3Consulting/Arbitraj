@@ -62,6 +62,8 @@ rewrite('tests/native_route_release_matrix.rs','let samples:Vec<_>=m.map.values(
     }else{serde_json::Value::Null};drop(m);''')
 rewrite('tests/native_route_release_matrix.rs','"cold":cold,"warm":warm}', '"cold":cold,"warm":warm,"entry":entry}')
 rewrite('tests/core_size_actual_v2.rs','let old_points=points.len(); let evals=memo.evals(); drop(memo);','''let (core,_)=report_common::start(&report_common::dir(&format!("source-{}",dir.asset.ticker))).await;
-    let entry=Box::pin(arb::core::precheck_hint::archived_entry(&core,&old_ctx,&cx,&a,&memo,&reconstructed,plan.qty,&source,budget,p.step,floor)).await;
+    let logged=Box::pin(arb::core::precheck_hint::archived_entry(&core,&old_ctx,&cx,&a,&memo,&reconstructed,plan.qty,&source,budget,p.step,floor)).await;
+    let rebuilt=Box::pin(arb::core::precheck_hint::archived_entry(&core,&old_ctx,&cx,&a,&memo,&reconstructed,reconstructed.best.qty,&source,budget,p.step,floor)).await;
+    let entry=serde_json::json!({"logged":logged,"rebuilt":rebuilt});
     let old_points=points.len(); let evals=memo.evals(); drop(memo);''')
 rewrite('tests/core_size_actual_v2.rs','"cold":cold,"warm":warm}', '"cold":cold,"warm":warm,"entry":entry}')

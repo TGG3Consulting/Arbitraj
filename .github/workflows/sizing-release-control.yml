@@ -51,6 +51,7 @@ jobs:
           python "$k/shop_width.py" release
           python "$k/shop_target.py" release
           python "$k/shop_live.py" release
+          python control/tools/sizing_cpu.py release
           python control/tools/sizing_archive.py release
           python control/tools/sizing_entry.py release
           cd release
@@ -119,6 +120,7 @@ jobs:
           python "$k/shop_width.py" release
           python "$k/shop_target.py" release
           python "$k/shop_live.py" release
+          python control/tools/sizing_cpu.py release
           cd release
           for row in 'core_size_actual_v2 actual_v2_matrix risk' 'native_route_release_matrix shop_live_control shop' 'core_size_release_matrix release_size_matrix_routes sizes'; do
             read -r test name output <<< "$row"

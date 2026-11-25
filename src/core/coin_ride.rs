@@ -117,12 +117,11 @@ pub fn take(core: &Core, key: &CoinKey) -> bool {
 /// ожидания ручных действий (решение 405, manual_wait_run.rs). Принимает: ядро, ключ. Ошибок нет.
 pub fn free_active(core: &Core, key: &CoinKey) {
     let mut active = lk(&core.inner.active);
-    if active.remove(key) {
-        if core.inner.queue_trace_coins.load().contains(key)
-            && !lk(&core.inner.rides).contains_key(key)
-        {
-            super::window_queue_trace::released(core, key);
-        }
+    if active.remove(key)
+        && core.inner.queue_trace_coins.load().contains(key)
+        && !lk(&core.inner.rides).contains_key(key)
+    {
+        super::window_queue_trace::released(core, key);
     }
     drop(active);
     core.inner.coin_wake.notify_waiters();

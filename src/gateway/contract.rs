@@ -415,6 +415,11 @@ pub trait Venue: Send + Sync {
         false
     }
 
+    /// Local address rejection known to this sender also applies to CEX deposit addresses.
+    fn checks_cex_withdraw_destination(&self) -> bool {
+        false
+    }
+
     /// Только чтение: разрешает ли площадка вывод данной монеты на адрес в указанной сети.
     async fn check_withdraw_destination(
         &self,

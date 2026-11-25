@@ -31,7 +31,7 @@ pub enum Event {
     /// Изменение баланса монеты.
     Balance(BalanceChange),
     /// Решение 253: остатки изменённых монет (outboundAccountPosition): (монета, свободно) и время события, мс.
-    Position(Vec<(String, Decimal)>, i64),
+    Position(Vec<(String, Decimal, Option<Decimal>)>, i64),
     /// Сервер закрыл подписку (eventStreamTerminated).
     Terminated,
     /// Событие не разобрано — причина.
@@ -68,7 +68,13 @@ fn position(ev: &Value) -> Event {
             .and_then(Value::as_str)
             .and_then(|f| f.parse::<Decimal>().ok());
         match (asset, free) {
-            (Some(a), Some(f)) => out.push((a.to_string(), f)),
+            (Some(a), Some(f)) => {
+                let locked = b
+                    .get("l")
+                    .and_then(Value::as_str)
+                    .and_then(|n| n.parse().ok());
+                out.push((a.to_string(), f, locked));
+            }
             _ => {
                 return Event::Bad(format!(
                     "outboundAccountPosition: запись B без a или f-числа: {b}"

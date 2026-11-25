@@ -94,13 +94,27 @@ pub async fn ready(core: &Core, d: &Direction) -> Result<(), String> {
         .await
         .map_err(|e| e.message)?;
     let key: super::deposit_proof::Key = (d.sell_on.clone(), on.ticker.clone(), net.clone());
-    super::deposit_proof::address(core, &gw, &key, &on)
+    let address = super::deposit_proof::address(core, &gw, &key, &on)
         .await
-        .map(|_| ())
         .map_err(|e| {
             format!(
                 "{}: нет адреса депозита {} в сети {net} — {}",
                 d.sell_on.0, d.asset.ticker, e.message
             )
-        })
+        })?;
+    let sender = core
+        .inner
+        .deps
+        .gw
+        .get(&d.buy_on)
+        .await
+        .map_err(|e| e.message)?;
+    if sender.checks_cex_withdraw_destination() {
+        let source = target_on(core, &d.asset, &d.buy_on)?;
+        sender
+            .check_withdraw_destination(&source.on, &source.net, &address)
+            .await
+            .map_err(|e| format!("{} → {}: {}", d.buy_on.0, d.sell_on.0, e.message))?;
+    }
+    Ok(())
 }

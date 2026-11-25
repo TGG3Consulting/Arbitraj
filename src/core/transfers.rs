@@ -415,6 +415,7 @@ async fn go(
     if chain {
         super::credit_chain::arm(core, ticket.as_ref(), to, acc.is_some(), started);
     }
+    let fee_before = super::withdraw_fee_audit::expected(core, from, asset, &net_from, qty);
     let mut attempt = 0;
     // Решение 166: повторы после «средства временно заблокированы для вывода» (transfer_locked.rs).
     let mut locked = 0;
@@ -604,6 +605,7 @@ async fn go(
         let kick = ticket.as_ref().map(|t| t.wake.as_ref()).unwrap_or(&quiet);
         pacer.pause(deps, kick).await;
     };
+    super::withdraw_fee_audit::finished(core, &req, &created.venue_ref, &sent, fee_before);
     let tx = sent.tx_hash.clone().unwrap_or_default();
     super::usdt_transfer::stage(
         core,

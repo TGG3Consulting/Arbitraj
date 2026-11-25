@@ -69,7 +69,14 @@ fn account_position_doc_example() {
     let t = std::fs::read_to_string(format!("{DIR}/outbound_account_position.json")).unwrap();
     match parse(&t, &venue()) {
         Event::Position(list, at) => {
-            assert_eq!(list, vec![("ETH".to_string(), Decimal::new(10_000, 0))]);
+            assert_eq!(
+                list,
+                vec![(
+                    "ETH".to_string(),
+                    Decimal::new(10_000, 0),
+                    Some(Decimal::ZERO)
+                )]
+            );
             assert_eq!(at, 1_564_034_571_105);
         }
         other => panic!("ожидался Position: {other:?}"),

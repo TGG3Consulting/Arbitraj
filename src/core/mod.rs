@@ -460,6 +460,7 @@ pub mod window_worker;
 pub mod withdraw_after;
 pub mod withdraw_amount;
 pub mod withdraw_block;
+mod withdraw_fee_audit;
 pub mod withdraw_limit;
 pub mod withdraw_limit_pause;
 pub mod withdraw_refused;

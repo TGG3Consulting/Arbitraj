@@ -14,12 +14,13 @@ struct FixedV2 {
     replay: Replay,
     max_buy_qty: Decimal,
     frozen: FrozenPool,
+    continuation: Option<(U256, U256, u128, u32, u8)>,
     decimals_in: u8,
     decimals_out: u8,
 }
 
 impl FixedV2 {
-    fn swap(&self, qty: Decimal) -> Option<(U256, Decimal)> {
+    fn swap(&self, qty: Decimal) -> Option<(U256, Vec<Decimal>)> {
         let received = to_units(qty, self.decimals_in)?;
         if received.is_zero() { return None; }
         match self.frozen {
@@ -27,7 +28,7 @@ impl FixedV2 {
                 let effective = received.checked_mul(U256::from(9975u32))?;
                 let numerator = effective.checked_mul(reserve_out)?;
                 let denominator = reserve_in.checked_mul(U256::from(10_000u32))?.checked_add(effective)?;
-                Some((numerator.checked_div(denominator)?, qty.checked_mul(Decimal::new(25, 4))?))
+                Some((numerator.checked_div(denominator)?, vec![qty.checked_mul(Decimal::new(25, 4))?]))
             },
             FrozenPool::V3 { sqrt, boundary, liquidity, fee } => {
                 let signed = I256::try_from(received).ok()?;
@@ -35,7 +36,16 @@ impl FixedV2 {
                 // No tick bitmap or liquidityNet outside this first open interval was recorded.
                 if next <= sqrt.min(boundary) || next >= sqrt.max(boundary) ||
                     used.checked_add(paid)? != received { return None; }
-                Some((out, to_decimal(paid, self.decimals_in)?))
+                let mut fees = vec![to_decimal(paid, self.decimals_in)?];
+                let final_out = if let Some((cur2, boundary2, liq2, fee2, decimals2)) = self.continuation {
+                    let (next2, used2, quote_out, paid2) =
+                        step_v3(cur2, boundary2, liq2, I256::try_from(out).ok()?, fee2)?;
+                    if next2 <= cur2.min(boundary2) || next2 >= cur2.max(boundary2) ||
+                        used2.checked_add(paid2)? != out { return None; }
+                    fees.push(to_decimal(paid2, decimals2)?);
+                    quote_out
+                } else { out };
+                Some((final_out, fees))
             }
         }
     }
@@ -60,7 +70,8 @@ impl Source for FixedV2 {
         quote.avg_price = out / qty;
         for cost in &mut quote.costs {
             if cost.kind == CostKind::PoolFee {
-                cost.amount = pool_fee;
+                let i = cost.step.as_ref().map_or(1, |step| step.index).saturating_sub(1) as usize;
+                cost.amount = *pool_fee.get(i).ok_or_else(|| Fail::TooLarge("missing fee for archived hop".into()))?;
             }
         }
         if let Some(route) = &mut quote.route {
@@ -118,7 +129,13 @@ async fn replay(case: &Value, budget: Decimal, max_evals: u32) -> Result<Value, 
         } else {
             FrozenPool::V2 { reserve_in: u256(&pool["coin_reserve_raw"])?, reserve_out: u256(&pool["quote_reserve_raw"])? }
         },
-        decimals_in: scale(&pool["coin_decimals"])?,
+        continuation: if let Some(hop) = pool.get("continuation") {
+            Some((u256(&hop["sqrt"])?, u256(&hop["boundary"])?,
+                hop["liquidity"].as_str().ok_or("missing bridge liquidity")?.parse::<u128>().map_err(|e| e.to_string())?,
+                u32::try_from(hop["fee"].as_u64().ok_or("missing fee")?).map_err(|e|e.to_string())?,
+                scale(&hop["input_decimals"])?))
+        } else { None },
+        decimals_in: scale(&pool["coin_decimals"])? ,
         decimals_out: scale(&pool["quote_decimals"])?,
     };
     if source.swap(plan.sell_qty).map(|x|x.0) != Some(u256(&pool["planned_out_raw"])?) {

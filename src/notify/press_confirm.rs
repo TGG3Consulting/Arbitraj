@@ -88,6 +88,14 @@ impl Ctx<'_> {
                 *m == msg.message_id && super::roles::chat_matches(c, &msg.chat)
             });
             if ok {
+                if st.pending.get(&n).is_some_and(|p| {
+                    matches!(
+                        p.action,
+                        crate::core::types::ManualAction::QuotedSale { .. }
+                    )
+                }) {
+                    super::price_query::clear_other_choices(&mut st, n);
+                }
                 st.pending_at.remove(&n);
                 st.pending_born.remove(&n);
                 st.pending.remove(&n)

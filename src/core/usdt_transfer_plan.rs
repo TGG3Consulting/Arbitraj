@@ -83,7 +83,7 @@ pub async fn quote(
     amount: Option<Decimal>,
 ) -> Result<Quote, String> {
     let acc = account(from, to)?;
-    let asset = super::usdt_return::usdt(core, &from.venue)?;
+    let asset = super::usdt_return::route_asset(core, &from.venue, &to.venue)?;
     let t = asset.ticker.clone();
     let network = super::transfers::network(core, &asset, &from.venue)?;
     let cex_from = from.wallet.is_none();

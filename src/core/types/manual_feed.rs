@@ -133,6 +133,9 @@ impl ManualRecord {
     pub fn matches(&self, a: &ManualAction) -> bool {
         use ManualAction as M;
         match (self.kind, a) {
+            (RecordKind::Alert | RecordKind::Halted, M::QuotedSale { record, .. }) => {
+                record == &self.key
+            }
             (
                 RecordKind::Alert,
                 M::SellNow { alert_id } | M::SellNowReturn { alert_id } | M::TakeOver { alert_id },

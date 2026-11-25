@@ -32,8 +32,9 @@ use super::op_error::OpError;
 /// Держатель USDT в сверке: площадка и счёт DEX (None — биржа).
 pub type Holder = (VenueId, Option<DexAccountId>);
 
-/// USDT в BSC как актив (тикер — котируемая монета площадки, адрес — из справочника бирж).
-pub(super) fn usdt(core: &Core, venue: &VenueId) -> Result<Asset, String> {
+/// The DEX end determines the on-chain USDT contract in both directions.
+/// CEX-to-CEX keeps the configured default settlement network.
+pub fn route_asset(core: &Core, venue: &VenueId, to: &VenueId) -> Result<Asset, String> {
     let ticker = core
         .inner
         .deps
@@ -46,14 +47,14 @@ pub(super) fn usdt(core: &Core, venue: &VenueId) -> Result<Asset, String> {
             },
         )
         .map_err(|e| e.message)?;
-    // Решение 430: у площадки DEX — USDT её сети; у биржи — сети по умолчанию (монета биржи без сети), как раньше.
-    let tag = if super::daily_venue::is_dex(core, &venue.0) {
-        super::chain::tag_of_dex(core, venue)?
+    let is_dex = |v: &VenueId| super::daily_venue::is_dex(core, &v.0);
+    let network = if is_dex(to) { to } else { venue };
+    let tag = if is_dex(network) {
+        super::chain::tag_of_dex(core, network)?
     } else {
         None
     };
-    // Решение 489: сеть захвачена, справочник ещё не перечитан — причина «перечитывается» (net_ready.rs).
-    let addr = super::net_ready::usdt_of(core, venue, tag.as_ref())?;
+    let addr = super::net_ready::usdt_of(core, network, tag.as_ref())?;
     Ok(Asset {
         chain: tag,
         ticker,
@@ -129,7 +130,7 @@ pub(super) async fn relay_try(
 ) -> Result<Relayed, OpError> {
     let deps = &core.inner.deps;
     // Решение 108: ожидание баланса у отправителя и повтор при откате (usdt_relay_retry.rs).
-    let a = usdt(core, from)?;
+    let a = route_asset(core, from, to)?;
     let sent_q = super::transfers::floored(core, from, &a, amount);
     let (sent, t) = super::usdt_relay_retry::send(core, id, from, to, acc, &a, amount).await?;
     let sent_q = if deps

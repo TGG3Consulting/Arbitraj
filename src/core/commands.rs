@@ -128,6 +128,14 @@ impl Core {
                 return Err(format!("чат {chat} — не настроенный чат уведомлений"));
             }
         }
+        if let ManualAction::QuotedSale {
+            record,
+            quote_id,
+            away,
+        } = &cmd.action
+        {
+            return self.execute_sale_price(record, quote_id, *away).await;
+        }
         // Решение 176: «Перевести USDT» (Telegram «Управление» и интерфейс) — usdt_transfer.rs.
         if let Some(r) = super::usdt_transfer::command(self, &cmd.action, &who(cmd)).await {
             return r;

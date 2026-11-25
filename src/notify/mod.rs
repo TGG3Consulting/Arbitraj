@@ -43,6 +43,7 @@ pub mod press_event_coin;
 pub mod press_event_exec;
 pub mod press_event_money;
 pub mod press_event_ttl;
+mod price_query;
 pub mod press_record;
 pub mod press_run;
 pub mod queue;

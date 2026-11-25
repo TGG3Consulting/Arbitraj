@@ -11,7 +11,7 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::Asset;
+use crate::core::types::{AccountBalances, Asset};
 use crate::gateway::contract::{AccountRole, Venue, VenueKind};
 
 /// Перевод `qty` монеты со счёта `account` на торговый. Принимает: адаптер, счёт (название из account_balances),
@@ -37,6 +37,21 @@ pub async fn move_from(
     })
 }
 
+/// Только счета, с которых адаптер разрешает перевод на спот. Те же остатки
+/// используются при предварительной оценке и при подтверждённом пополнении.
+pub(super) fn sources<'a>(
+    gw: &'a dyn Venue,
+    accounts: &'a [AccountBalances],
+    ticker: &'a str,
+) -> impl Iterator<Item = (&'a str, Decimal)> {
+    accounts
+        .iter()
+        .filter(|row| gw.account_role(&row.account) == AccountRole::ToTrading)
+        .filter_map(move |row| {
+            let balance = row.balances.iter().find(|b| b.asset == ticker)?;
+            Some((row.account.as_str(), balance.free))
+        })
+}
 /// Добрать монету на торговый счёт биржи до `want` со счетов роли ToTrading. Принимает: адаптер, монету, сколько нужно
 /// на торговом. Возвращает: None — переводить не нужно или нечего (DEX, хватает, на других счетах монеты нет);
 /// Some(текст переводов). Ошибки: только когда на торговом счёте монеты нет совсем, а балансы счетов не прочитаны или
@@ -72,20 +87,12 @@ pub async fn top_up(gw: &dyn Venue, a: &Asset, want: Decimal) -> Result<Option<S
     };
     let mut left = want - have;
     let mut done = Vec::new();
-    for acc in accs
-        .iter()
-        .filter(|x| gw.account_role(&x.account) == AccountRole::ToTrading)
-    {
-        let free = acc
-            .balances
-            .iter()
-            .find(|b| b.asset == a.ticker)
-            .map_or(Decimal::ZERO, |b| b.free);
+    for (account, free) in sources(gw, &accs, &a.ticker) {
         let take = free.min(left);
         if take <= Decimal::ZERO {
             continue;
         }
-        match move_from(gw, &acc.account, a, take).await {
+        match move_from(gw, account, a, take).await {
             Ok(t) => {
                 done.push(t);
                 left -= take;

@@ -215,7 +215,7 @@ pub(super) fn start_manual(
     if super::usdt_return_deal::return_block(core, &d, from, to).is_some() {
         return false;
     }
-    let (_, split) = super::coin_group_flush::return_parts(core, from, amount);
+    let (_, split) = super::coin_group_flush::return_parts(core, from, to, amount);
     let Ok(acc) = super::dex_account::of(core, &d) else {
         return false;
     };

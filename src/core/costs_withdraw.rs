@@ -127,28 +127,7 @@ pub async fn return_b(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec<C
                 d.sell_on.0, cx.net_b, cx.usdt.ticker
             ))
         })?;
-        // Решение 118 (Я-12): минимум и максимум вывода USDT у B — иначе перегон отклоняется биржей уже после сделки.
-        if let Some(amounts) = super::withdraw_amount::for_network(amount, Some(info))? {
-            return Ok(vec![fee_line(info, amounts.debit)?]);
-        }
-        if let Some(min) = info.withdraw_min
-            && amount < min
-        {
-            return Err(Fail::TooSmall(format!(
-                "возврат {amount} {} с {} меньше минимума вывода {min}",
-                cx.usdt.ticker, d.sell_on.0
-            )));
-        }
-        if let Some(max) = info.withdraw_max
-            && !max.is_zero()
-            && amount > max
-        {
-            return Err(Fail::TooLarge(format!(
-                "возврат {amount} {} с {} больше максимума вывода {max}",
-                cx.usdt.ticker, d.sell_on.0
-            )));
-        }
-        return Ok(vec![fee_line(info, amount)?]);
+        return Ok(vec![cex_return_fee(info, amount)?]);
     }
     let b = super::dex_account::venue_dir(deps, d, &d.sell_on).await?;
     b.withdraw_cost(&cx.usdt, &cx.net_b, amount)
@@ -159,4 +138,30 @@ pub async fn return_b(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec<C
                 d.sell_on.0, e.message
             ))
         })
+}
+
+/// Fee and amount limits used both in deal sizing and projected return of sale proceeds.
+pub(super) fn cex_return_fee(info: &CoinNetworkInfo, amount: Decimal) -> Result<Cost, Fail> {
+    // Решение 118 (Я-12): минимум и максимум вывода USDT у B — иначе перегон отклоняется биржей уже после сделки.
+    if let Some(amounts) = super::withdraw_amount::for_network(amount, Some(info))? {
+        return fee_line(info, amounts.debit);
+    }
+    if let Some(min) = info.withdraw_min
+        && amount < min
+    {
+        return Err(Fail::TooSmall(format!(
+            "возврат {amount} {} с {} меньше минимума вывода {min}",
+            info.asset.ticker, info.venue.0
+        )));
+    }
+    if let Some(max) = info.withdraw_max
+        && !max.is_zero()
+        && amount > max
+    {
+        return Err(Fail::TooLarge(format!(
+            "возврат {amount} {} с {} больше максимума вывода {max}",
+            info.asset.ticker, info.venue.0
+        )));
+    }
+    fee_line(info, amount)
 }

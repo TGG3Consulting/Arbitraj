@@ -23,6 +23,7 @@ use crate::core::types::{ManualAction, ManualRecord};
 /// Сообщения записи в Telegram.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Sent {
+    pub price_button: bool,
     /// Текст сообщения записи (для правки «выполнено: …»).
     pub text: String,
     /// id сообщений с кнопками этой записи (первое сообщение и вопросы подтверждения).
@@ -71,6 +72,7 @@ pub struct MirrorState {
     /// Выполнены из Telegram и ещё на экране — второе нажатие получает «уже выполнено».
     pub done: HashSet<String>,
     pub pending: HashMap<u64, Pending>,
+    pub(super) price_reads: HashSet<(i64, String)>,
     next: u64,
     /// (чат, id сообщения с ForceReply) → вопрос (id сообщения уникален только внутри чата, решение 176: чатов несколько).
     pub prompts: HashMap<(i64, i64), Prompt>,
@@ -177,8 +179,9 @@ impl MirrorState {
     /// Решение 251: человек сейчас обрабатывает запись — открыт вопрос «Да/Отмена» по её кнопке (pending) или вопрос
     /// суммы (prompts). Такая запись не повторяется в напоминании. Принимает: ключ записи. Ошибок нет.
     pub fn busy(&self, key: &str) -> bool {
-        self.pending.values().any(|p| p.key.as_deref() == Some(key))
-            || self.prompts.values().any(|p| p.key == key)
+        self.pending.values().any(|p| {
+            p.key.as_deref() == Some(key) && !matches!(p.action, ManualAction::QuotedSale { .. })
+        }) || self.prompts.values().any(|p| p.key == key)
     }
 
     /// Ещё не отправленные записи (из ждущих). Порядок — как на экране.
@@ -204,6 +207,10 @@ impl MirrorState {
     /// Отмечает отправку сообщения записи (и начало отсчёта напоминаний, если он не идёт).
     pub fn mark_sent(&mut self, key: &str, text: String, msg: i64, now: Instant) {
         let s = self.sent.entry(key.to_string()).or_default();
+        s.price_button = self
+            .known
+            .get(key)
+            .is_some_and(super::price_query::eligible);
         s.text = text;
         s.msgs.push(msg);
         self.last_reminder.get_or_insert(now);

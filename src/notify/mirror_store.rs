@@ -27,6 +27,8 @@ use super::mirror_state::{MirrorState, Sent, lock};
 /// Строка базы: сообщения одной записи.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Row {
+    #[serde(default)]
+    pub price_button: bool,
     /// Чат, в котором сообщения записи.
     pub chat: String,
     /// Запись, как она была при последней отправке или правке.
@@ -49,6 +51,7 @@ impl MirrorState {
             .filter_map(|(k, s)| {
                 let rec = self.known.get(k)?.clone();
                 let row = Row {
+                    price_button: s.price_button,
                     chat: chat.to_string(),
                     rec,
                     text: s.text.clone(),
@@ -94,6 +97,7 @@ impl MirrorState {
                 Ok(r) if r.chat == chat && r.rec.key == key => {
                     self.known.insert(key.clone(), r.rec);
                     let sent = Sent {
+                        price_button: r.price_button,
                         text: r.text,
                         msgs: r.msgs,
                     };

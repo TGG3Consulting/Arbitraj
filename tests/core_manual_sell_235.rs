@@ -116,6 +116,37 @@ fn get(core: &Core, id: &str) -> Deal {
     core.deals().into_iter().find(|d| d.id == id).unwrap()
 }
 
+/// Чтение цены при недоступной площадке и старая кнопка после перезапуска
+/// оставляют ту же остановленную позицию для ручного решения.
+#[tokio::test]
+async fn failed_price_read_and_old_choice_preserve_the_position() {
+    use arb::core::types::{CommandSource, ManualAction, ManualCommand};
+    let (core, settings) = start("quote-read-only").await;
+    set(&settings, "notify.dialog_ttl_s", json!(60)).await;
+    let mut d = deal("position");
+    d.step = Step::Halted;
+    arb::core::ledger::save(&core, &d).await;
+    assert!(core.sale_price_query("d.position").await.is_err());
+    let result = core
+        .command(ManualCommand {
+            action: ManualAction::QuotedSale {
+                record: "d.position".into(),
+                quote_id: "old-message".into(),
+                away: true,
+            },
+            source: CommandSource::Ui,
+            by: None,
+            at: chrono::Utc::now(),
+        })
+        .await;
+    assert!(result.unwrap_err().contains("устарел"));
+    let after = get(&core, "position");
+    assert_eq!(after.step, Step::Halted);
+    assert_eq!(after.qty, d.qty);
+    assert_eq!(after.timeline, d.timeline);
+    assert_eq!(after.return_usdt, d.return_usdt);
+}
+
 /// Итоги кнопки (manual_outcome.rs) из событий ядра: (ok, текст).
 fn finals(rx: &mut broadcast::Receiver<CoreEvent>) -> Vec<(bool, String)> {
     let mut out = vec![];

@@ -130,12 +130,12 @@ pub async fn run(core: &Core, deal: Deal) {
         .await;
     match choice {
         Pick::Here => super::sell::market(core, deal, BUTTON).await,
-        Pick::There(to, _) => relay_to(core, deal, to).await,
+        Pick::There(to, _) => relay_to(core, deal, to, true).await,
     }
 }
 
 /// Перегон на выбранную площадку и сразу продажа там по рынку кнопкой. Принимает: ядро, сделку, цель. Ошибок нет.
-async fn relay_to(core: &Core, mut deal: Deal, to: VenueId) {
+pub(super) async fn relay_to(core: &Core, mut deal: Deal, to: VenueId, sell_here_on_refusal: bool) {
     let (from, a) = (deal.at.clone(), deal.direction.asset.clone());
     // Решение 185: сделка без счёта DEX перегоняется на DEX кошельком строки биржи, где монета, — счёт до перевода.
     if deal.dex_account.is_none()
@@ -200,7 +200,11 @@ async fn relay_to(core: &Core, mut deal: Deal, to: VenueId) {
             let asset = deal.direction.asset.clone();
             super::withdraw_block::close(core, &deal.id, &asset, &from, &e).await;
             let why = format!("перегон на {} не состоялся: {e}", to.0);
-            here_after(core, deal, &why).await
+            if sell_here_on_refusal {
+                here_after(core, deal, &why).await
+            } else {
+                super::manual_price_exec::stop(core, deal, &why).await
+            }
         }
     }
 }

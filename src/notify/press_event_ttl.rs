@@ -33,6 +33,7 @@ pub fn money_action(a: &crate::core::types::ManualAction) -> bool {
     matches!(
         a,
         A::SellBalance { .. }
+            | A::QuotedSale { .. }
             | A::TransferUsdt { .. }
             | A::ReleaseWalletQueue { .. }
             | A::DeployExecutor { .. }

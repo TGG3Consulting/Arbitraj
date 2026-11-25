@@ -42,6 +42,61 @@ pub struct Locked {
     pub joint: Vec<String>,
 }
 
+struct Allocation {
+    idle: Vec<(String, Decimal, Decimal)>,
+    prior: Decimal,
+    shares: Vec<Decimal>,
+}
+
+// Единое распределение для записи факта и его предварительного просмотра.
+fn allocation(deal: &Deal, f: Decimal, o: &Others) -> Allocation {
+    let idle: Vec<(String, Decimal, Decimal)> = o
+        .rests
+        .iter()
+        .filter(|x| x.3)
+        .map(|x| (x.0.clone(), x.1, x.2))
+        .collect();
+    let theirs: Decimal = idle.iter().map(|x| x.1).sum();
+    let rest = super::credit_fact::rest(deal).unwrap_or_default();
+    // Восьмое ревью (С-1): своя с неизвестным исходом продажи — база 0 (её количество не доказано): получает только
+    // после подтверждённых соучастников, верхняя граница та же.
+    let own = if deal.sale_unsure {
+        (Decimal::ZERO, deal.qty + rest)
+    } else {
+        (deal.qty, rest)
+    };
+    let mut parts = vec![own];
+    parts.extend(idle.iter().map(|x| (x.1, x.2)));
+    let scale = parts
+        .iter()
+        .flat_map(|p| [p.0.scale(), p.1.scale()])
+        .chain([f.scale()])
+        .max()
+        .unwrap_or(0);
+    let prior = o.qty - theirs;
+    let shares = share_out(f - prior, &parts, scale);
+    Allocation {
+        idle,
+        prior,
+        shares,
+    }
+}
+
+/// Прогноз доли без изменения учёта. Вызывающий держит замок факта.
+pub(super) fn preview(
+    core: &Core,
+    deal: &Deal,
+    f: Decimal,
+    others: &Others,
+) -> Result<Decimal, String> {
+    if let Some(why) = busy(core, deal, others) {
+        return Err(format!(
+            "Счёт занят: {why}. Запросите цену после сверки остатка."
+        ));
+    }
+    Ok(allocation(deal, f, others).shares[0])
+}
+
 /// Что делает: решение под замком (шапка). Принимает: ядро, сделку, guard. Возвращает: Locked. Ошибок нет.
 pub async fn locked(core: &Core, deal: &mut Deal, guard: bool) -> Locked {
     let probe = deal.clone();
@@ -80,31 +135,11 @@ pub async fn locked(core: &Core, deal: &mut Deal, guard: bool) -> Locked {
             Ok(f) => *f,
             Err(e) => return (Res::Unread(e.clone()), r, o),
         };
-        let idle: Vec<(String, Decimal, Decimal)> = o
-            .rests
-            .iter()
-            .filter(|x| x.3)
-            .map(|x| (x.0.clone(), x.1, x.2))
-            .collect();
-        let theirs: Decimal = idle.iter().map(|x| x.1).sum();
-        let rest = super::credit_fact::rest(deal).unwrap_or_default();
-        // Восьмое ревью (С-1): своя с неизвестным исходом продажи — база 0 (её количество не доказано): получает только
-        // после подтверждённых соучастников, верхняя граница та же.
-        let own = if deal.sale_unsure {
-            (Decimal::ZERO, deal.qty + rest)
-        } else {
-            (deal.qty, rest)
-        };
-        let mut parts = vec![own];
-        parts.extend(idle.iter().map(|x| (x.1, x.2)));
-        let scale = parts
-            .iter()
-            .flat_map(|p| [p.0.scale(), p.1.scale()])
-            .chain([f.scale()])
-            .max()
-            .unwrap_or(0);
-        let prior = o.qty - theirs;
-        let shares = share_out(f - prior, &parts, scale);
+        let Allocation {
+            idle,
+            prior,
+            shares,
+        } = allocation(deal, f, &o);
         let peers: Vec<String> = idle
             .iter()
             .zip(shares.iter().skip(1))

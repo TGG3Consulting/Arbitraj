@@ -50,6 +50,9 @@ pub fn buttons_for(r: &ManualRecord, prefix: &str, all: bool) -> (Vec<Value>, Ve
             ));
         }
     }
+    if super::price_query::eligible(r) {
+        out.push(super::price_query::button(&r.key, prefix));
+    }
     // Решение 408: «Своих монет не видно» — «Открыть сделку <ID>» для сделок-держателей (notify/press_event.rs od).
     let acts: Vec<_> = r
         .holders

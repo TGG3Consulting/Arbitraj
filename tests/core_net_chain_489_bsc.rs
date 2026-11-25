@@ -101,3 +101,40 @@ async fn bsc_registry_same_in_all_arb_states() {
     assert_eq!(held, Some(arb_chain()), "(3): сеть держится");
     assert!(vela(&n3).asset.contract.is_some());
 }
+
+#[tokio::test]
+async fn usdt_return_from_cex_uses_the_buying_wallet_network() {
+    let core = start("return-to-buying-network", true, true).await;
+    let list = feed(&core, NEW, raw(&core, NEW));
+    let coin = |net: &str| {
+        list.iter()
+            .find(|i| i.network == net && i.asset.ticker == "USDT")
+            .and_then(|i| i.asset.contract)
+            .unwrap()
+    };
+    let arb = coin("ARBITRUM");
+    let bsc = coin("BEP20");
+    assert_ne!(arb, bsc);
+    *core.inner.usdt.write().unwrap() = Ok(bsc);
+    core.inner
+        .usdt_other
+        .write()
+        .unwrap()
+        .insert(arb_chain(), arb);
+    let from = v("bingx");
+    for (destination, contract, network) in [
+        ("arb_dex", arb, "ARBITRUM"),
+        ("bsc_dex", bsc, "BEP20"),
+        ("mexc", bsc, "BEP20"),
+    ] {
+        let asset = arb::core::usdt_return::route_asset(&core, &from, &v(destination)).unwrap();
+        assert_eq!(asset.contract, Some(contract));
+        assert_eq!(
+            arb::core::transfers::network(&core, &asset, &from).unwrap(),
+            network
+        );
+    }
+    // When the requested chain is missing, the default chain must never substitute for it.
+    core.inner.usdt_other.write().unwrap().clear();
+    assert!(arb::core::usdt_return::route_asset(&core, &from, &v("arb_dex")).is_err());
+}

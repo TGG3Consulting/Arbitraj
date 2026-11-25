@@ -141,6 +141,7 @@ impl Ctx<'_> {
             "s" => self.ctl_sell(&q, msg, object).await,
             "t" => self.ctl_transfer(&q, msg, object).await,
             "r" => self.ctl_report(&q, msg, object).await,
+            "pq" => self.price_query(&q, msg, object).await,
             // Решение 408: действия кнопок тревог (notify/press_event.rs).
             "e" => self.event_button(&q, msg, object).await,
             _ => self.record_button(&q, msg, code, object).await,

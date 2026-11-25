@@ -176,6 +176,7 @@ pub struct Inner {
     pub gas: Mutex<HashMap<Asset, CoinGasStats>>,
     /// Алерты «убыток выше порога» и их сделки (manual.rs).
     pub alerts: Mutex<HashMap<String, (StuckAlert, Deal)>>,
+    pub(super) sale_quotes: Mutex<HashMap<String, super::sale_price::Ticket>>,
     /// Алерт «мало USDT» (low_usdt.rs): площадка → ниже порога; площадки, о которых уже записано «не задано».
     pub usdt_below: Mutex<HashMap<VenueId, bool>>,
     pub usdt_alert_unset: Mutex<HashSet<VenueId>>,
@@ -314,6 +315,7 @@ impl Inner {
             usdt_moves: Mutex::default(),
             gas: Mutex::default(),
             alerts: Mutex::default(),
+            sale_quotes: Mutex::default(),
             holdings: Mutex::default(),
             usdt_below: Mutex::default(),
             usdt_alert_unset: Mutex::default(),

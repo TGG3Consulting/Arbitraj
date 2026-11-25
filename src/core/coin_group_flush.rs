@@ -41,12 +41,15 @@ use super::engine::{Core, lk};
 pub(super) fn return_parts(
     core: &Core,
     v: &VenueId,
+    to: &VenueId,
     total: Decimal,
 ) -> (Option<Decimal>, Vec<(VenueId, Decimal)>) {
-    let info = super::usdt_return::usdt(core, v).ok().and_then(|usdt| {
-        let net = super::transfers::network(core, &usdt, v).ok()?;
-        super::dirctx_venue::quote_network(core, v, &usdt.ticker, &net)
-    });
+    let info = super::usdt_return::route_asset(core, v, to)
+        .ok()
+        .and_then(|usdt| {
+            let net = super::transfers::network(core, &usdt, v).ok()?;
+            super::dirctx_venue::quote_network(core, v, &usdt.ticker, &net)
+        });
     let max = info
         .as_ref()
         .and_then(|i| i.withdraw_max)
@@ -152,7 +155,7 @@ pub(super) async fn flush(core: &Core, g: &str, parts: Vec<Part>, was: bool) {
         )
     };
     lead.note(format!("{why} (решение 394)"));
-    let (max, split) = return_parts(core, &bearer.from, total);
+    let (max, split) = return_parts(core, &bearer.from, &lead.direction.buy_on, total);
     let mut jobs = Box::pin(super::usdt_return_deal::start_parts(
         core,
         &mut lead,

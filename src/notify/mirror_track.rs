@@ -34,7 +34,12 @@ impl MirrorState {
                     self.done.remove(&r.key);
                     out.push(r.clone());
                 }
-            } else if self.known.get(&r.key).is_some_and(|k| k.text != r.text) {
+            } else if self.known.get(&r.key).is_some_and(|k| k.text != r.text)
+                || self
+                    .sent
+                    .get(&r.key)
+                    .is_some_and(|s| s.price_button != super::price_query::eligible(r))
+            {
                 self.done.remove(&r.key);
                 out.push(r.clone());
             }
@@ -46,6 +51,10 @@ impl MirrorState {
     pub fn set_text(&mut self, key: &str, text: String) {
         if let Some(s) = self.sent.get_mut(key) {
             s.text = text;
+            s.price_button = self
+                .known
+                .get(key)
+                .is_some_and(super::price_query::eligible);
         }
     }
 
@@ -54,6 +63,10 @@ impl MirrorState {
     pub fn replace_msg(&mut self, key: &str, text: String, msg: i64) {
         if let Some(s) = self.sent.get_mut(key) {
             s.text = text;
+            s.price_button = self
+                .known
+                .get(key)
+                .is_some_and(super::price_query::eligible);
             s.msgs = vec![msg];
         }
     }
@@ -84,6 +97,7 @@ pub fn is_sale(a: &ManualAction) -> bool {
     matches!(
         a,
         ManualAction::SellNow { .. }
+            | ManualAction::QuotedSale { .. }
             | ManualAction::SellNowReturn { .. }
             | ManualAction::SellHalted { .. }
             | ManualAction::SellHaltedReturn { .. }

@@ -48,7 +48,7 @@ pub async fn attempt(
         return Err(OpError::from(format!("{RULE}{w}")));
     }
     let acc = super::dex_account::of(core, &d)?;
-    let usdt = super::usdt_return::usdt(core, from)?;
+    let usdt = super::usdt_return::route_asset(core, from, to)?;
     let free = super::limits::free_now(core, from, acc.as_ref(), &usdt.ticker)
         .await
         .map_err(|e| OpError::from(format!("{}: свободные {}: {e}", from.0, usdt.ticker)))?;

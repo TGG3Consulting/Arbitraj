@@ -98,7 +98,28 @@ fn kb_buttons(kb: &Option<Value>) -> Vec<(String, String)> {
 /// Кнопки Telegram = доступные кнопки записи экрана (надписи и коды), недоступные — в тексте с причиной.
 fn same_as_screen(r: &ManualRecord) {
     let (text, kb) = record_message(r);
-    let tg: BTreeSet<(String, String)> = kb_buttons(&kb).into_iter().collect();
+    let buttons = kb_buttons(&kb);
+    let quotes: Vec<_> = buttons
+        .iter()
+        .filter(|(_, data)| data.starts_with("pq:"))
+        .collect();
+    let can_quote = r.button("sell_ret").is_some_and(|b| b.disabled.is_none());
+    assert_eq!(quotes.len(), usize::from(can_quote));
+    if can_quote {
+        assert_eq!(quotes[0].0, "Запрос цены");
+        assert!(quotes[0].1.len() <= 64);
+        let red = kb.as_ref().unwrap()["inline_keyboard"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|row| row.as_array().unwrap())
+            .any(|b| b["text"] == "Запрос цены" && b["style"] == "danger");
+        assert!(red);
+    }
+    let tg: BTreeSet<(String, String)> = buttons
+        .into_iter()
+        .filter(|(_, data)| !data.starts_with("pq:"))
+        .collect();
     let screen: BTreeSet<(String, String)> = r
         .buttons
         .iter()
@@ -205,9 +226,32 @@ fn batch_has_buttons_of_every_record() {
     let refs: Vec<&ManualRecord> = recs.iter().collect();
     let (text, kb) = batch_message(&refs, "Напоминание");
     let b = kb_buttons(&kb);
-    assert_eq!(b.len(), 6);
+    assert_eq!(b.len(), 7);
     assert!(b[0].0.starts_with("1 · ") && b[5].0.starts_with("2 · "));
     assert!(text.contains("1. ") && text.contains("2. "));
+}
+
+#[test]
+fn restored_card_gains_price_button_once() {
+    let r = alert_record(&alert(), Decimal::ZERO);
+    let now = Instant::now();
+    let legacy = json!({ "chat": "-123", "rec": &r, "text": &r.text, "msgs": [42] });
+    let mut state = MirrorState::default();
+    let rows = vec![(r.key.clone(), legacy.to_string())];
+    assert!(state.restore(rows, "-123", now).is_empty());
+    assert_eq!(
+        state.apply(std::slice::from_ref(&r)).changed,
+        vec![r.clone()]
+    );
+    state.set_text(&r.key, r.text.clone());
+    assert!(state.apply(std::slice::from_ref(&r)).changed.is_empty());
+    let mut again = MirrorState::default();
+    assert!(
+        again
+            .restore(state.rows().into_iter().collect(), "-123", now)
+            .is_empty()
+    );
+    assert!(again.apply(&[r]).changed.is_empty());
 }
 
 #[test]

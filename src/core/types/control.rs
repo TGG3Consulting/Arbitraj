@@ -98,6 +98,12 @@ pub enum ManualAction {
     SellNowReturn { alert_id: String },
     /// «Продать и перегнать» для остановленной сделки (решение 101).
     SellHaltedReturn { deal_id: String },
+    /// One of the two choices in a Telegram quote. The core owns the actual destination.
+    QuotedSale {
+        record: String,
+        quote_id: String,
+        away: bool,
+    },
     /// «Продано вручную»: человек продал сам; usdt — полученная выручка (строка-число) — сделка закрывается фактом.
     SoldManually { deal_id: String, usdt: String },
     /// Решение 163: «Перегнать» — ещё одна попытка возврата выручки USDT закрытой сделки («USDT не вернулись»).
@@ -190,6 +196,8 @@ impl ManualAction {
         match self {
             Self::SellNow { .. } | Self::SellHalted { .. } => "Продать сейчас",
             Self::SellNowReturn { .. } | Self::SellHaltedReturn { .. } => "Продать и перегнать",
+            Self::QuotedSale { away: true, .. } => "Перегнать и продать",
+            Self::QuotedSale { away: false, .. } => "Продать на текущем месте",
             Self::TakeOver { .. } => "Беру на себя",
             Self::ReturnToBot { .. } => "Вернуть боту",
             Self::SoldManually { .. } => "Продано вручную",

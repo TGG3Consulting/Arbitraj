@@ -88,13 +88,15 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
     let path = "/sapi/v1/capital/withdraw/apply";
     let sent_at = Utc::now().timestamp_millis();
     let account = super::withdraw_diag::mark(ctx);
-    let snap = super::withdraw_diag::describe(account, wallet, &req.asset.ticker);
+    let snap = super::withdraw_diag::snapshot(account, wallet, &req.asset.ticker);
+    let epoch = crate::gateway::addr_book::key_epoch();
     let sent = rest::signed(ctx, Method::POST, path, params, Op::Withdraw)
         .await
         .map_err(|e|{
             let code=errors::code_of(&e);
             let mut e=not_ready(ctx,&req.asset.ticker,e);
             if matches!(code,Some(-4026 | -4024)){
+                let snap=super::withdraw_diag::describe(snap.filter(|_|epoch==crate::gateway::addr_book::key_epoch()),wallet,sent_at);
                 e.message.push_str(&format!("; запрос {order_id}: {} {} в сети {}, walletType={wallet}, отправка t={sent_at}, ответ t={}; {snap}. Доступное именно для вывода Binance не сообщила.",req.amount.normalize(),req.asset.ticker,req.network,Utc::now().timestamp_millis()));
             }
             e

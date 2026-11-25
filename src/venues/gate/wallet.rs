@@ -61,6 +61,39 @@ impl Networks {
             .map(|(_, l)| l.clone())
     }
 
+    pub(super) fn cached_tariff(&self, ticker: &str, network: &str) -> Option<CoinNetworkInfo> {
+        self.cache
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()?
+            .1
+            .iter()
+            .find(|r| r.asset.ticker == ticker && r.network == network)
+            .cloned()
+    }
+
+    pub(super) fn refresh_tariff(&self, old: Option<CoinNetworkInfo>, new: &CoinNetworkInfo) {
+        let Some(old) = old else { return };
+        if old.asset != new.asset
+            || old.withdraw_fee == new.withdraw_fee && old.withdraw_fee_pct == new.withdraw_fee_pct
+        {
+            return;
+        }
+        let mut cached = self.cache.write().unwrap_or_else(|p| p.into_inner());
+        if let Some((_, list)) = cached.as_mut()
+            && let Some(i) = list.iter().position(|r| {
+                r.asset.ticker == old.asset.ticker
+                    && r.asset == old.asset
+                    && r.network == old.network
+                    && r.withdraw_fee == old.withdraw_fee
+                    && r.withdraw_fee_pct == old.withdraw_fee_pct
+            })
+        {
+            let row = &mut Arc::make_mut(list)[i];
+            row.withdraw_fee = new.withdraw_fee;
+            row.withdraw_fee_pct = new.withdraw_fee_pct;
+        }
+    }
     /// Сведения адреса депозита монеты (deposit_addr.rs): минимум депозита и подтверждения сети. Ошибок нет.
     pub fn note_deposit(
         &self,

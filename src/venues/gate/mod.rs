@@ -158,6 +158,22 @@ impl Venue for Gate {
     }
 
     /// Решение 113: у Gate есть запросы одной монеты (/spot/currencies/{c}, withdraw_status?currency=, currency_chains).
+    async fn refresh_withdraw_tariff(
+        &self,
+        ticker: &str,
+        network: &str,
+    ) -> GatewayResult<Vec<CoinNetworkInfo>> {
+        let before = self.nets.cached_tariff(ticker, network);
+        let fresh = self.coin_networks_of(ticker).await?;
+        if let Some(row) = fresh
+            .iter()
+            .find(|row| row.asset.ticker == ticker && row.network == network)
+        {
+            self.nets.refresh_tariff(before, row);
+        }
+        Ok(fresh)
+    }
+
     async fn coin_networks_of(&self, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
         self.symbols.ensure_fresh(&self.ctx).await?;
         wallet::coin_networks_of(&self.ctx, &self.nets, &self.symbols, ticker).await
@@ -232,7 +248,9 @@ impl Venue for Gate {
             .destinations
             .attempt(&self.ctx, &req.asset.ticker, &req.network, &req.address)
             .await?;
-        let mut res = transfers::withdraw(&self.ctx, req.clone()).await;
+        let mut res = attempt
+            .signed(transfers::withdraw(&self.ctx, req.clone()))
+            .await;
         let denied = res.as_ref().err().is_some_and(|e| {
             e.code == ErrorCode::InvalidAddress
                 && e.raw
@@ -240,20 +258,20 @@ impl Venue for Gate {
                     .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
                     .is_some_and(|v| v["label"] == "ADDRESS_NOT_USED")
         });
-        if denied || res.is_ok() {
-            if let Err(e) = self.destinations.record(&self.ctx, &attempt, denied).await {
-                let _ = self
-                    .ctx
-                    .journal
-                    .write(
-                        crate::storage::journal::Level::Error,
-                        "venue.withdraw_destination",
-                        Some(ctx::ID),
-                        e.message,
-                        None,
-                    )
-                    .await;
-            }
+        if (denied || res.is_ok())
+            && let Err(e) = self.destinations.record(&self.ctx, &attempt, denied).await
+        {
+            let _ = self
+                .ctx
+                .journal
+                .write(
+                    crate::storage::journal::Level::Error,
+                    "venue.withdraw_destination",
+                    Some(ctx::ID),
+                    e.message,
+                    None,
+                )
+                .await;
         }
         if let Err(e) = &mut res {
             e.message = format!(

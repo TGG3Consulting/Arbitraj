@@ -1,12 +1,11 @@
 //! Snapshot known when a spot withdrawal was attempted. Spot free is not a withdrawable balance.
 use super::ctx::{Ctx, SECRET_API_KEY};
-use chrono::Utc;
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
 
 #[derive(Clone)]
-struct Observation {
+pub(super) struct Observation {
     free: Decimal,
     locked: Option<Decimal>,
     at: i64,
@@ -46,23 +45,27 @@ pub(super) fn record(
     }
 }
 
-pub(super) fn describe(mark: Option<u64>, wallet: &str, ticker: &str) -> String {
+pub(super) fn snapshot(mark: Option<u64>, wallet: &str, ticker: &str) -> Option<Observation> {
+    if wallet != "0" {
+        return None;
+    }
+    let account = mark?;
+    LAST.lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .get(&(account, ticker.to_owned()))
+        .cloned()
+}
+pub(super) fn describe(observation: Option<Observation>, wallet: &str, sent_at: i64) -> String {
     if wallet != "0" {
         return "снимок funding на момент запроса отсутствует".into();
     }
-    let observation = mark.and_then(|m| {
-        LAST.lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .get(&(m, ticker.to_owned()))
-            .cloned()
-    });
     match observation {
         None => "нет снимка spot".into(),
         Some(o) => format!(
             "снимок spot {} t={} (возраст {} мс), свободно {}, заблокировано {}",
             o.origin,
             o.at,
-            Utc::now().timestamp_millis() - o.at,
+            sent_at - o.at,
             o.free,
             o.locked
                 .map_or_else(|| "не сообщено".into(), |n| n.to_string())

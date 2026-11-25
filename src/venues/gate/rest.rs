@@ -102,6 +102,7 @@ fn sign(
     body: &str,
 ) -> GatewayResult<[(&'static str, String); 3]> {
     let (key, secret) = ctx.keys()?;
+    super::destinations::validate_signer(ctx, &key)?;
     let ts = chrono::Utc::now().timestamp().to_string();
     let hashed = hex::encode(Sha512::digest(body.as_bytes()));
     let text = format!("{}\n{full_path}\n{q}\n{hashed}\n{ts}", m.as_str());

@@ -117,7 +117,7 @@ async fn refresh_fee(core: &Core, req: &WithdrawRequest) -> Result<(), String> {
         .await
         .map_err(|e| e.message)?;
     let rows = gw
-        .coin_networks_of(&req.asset.ticker)
+        .refresh_withdraw_tariff(&req.asset.ticker, &req.network)
         .await
         .map_err(|e| e.message)?;
     let rows = super::net_chain::prepare(core, &req.venue, rows);
@@ -132,18 +132,72 @@ async fn refresh_fee(core: &Core, req: &WithdrawRequest) -> Result<(), String> {
     if new.withdraw_fee == old.withdraw_fee && new.withdraw_fee_pct == old.withdraw_fee_pct {
         return Ok(());
     }
-    if let Some(list) = wr(&core.inner.networks).get_mut(&req.venue) {
-        if let Some(index) = list.iter().position(|x| {
-            x.network == old.network
-                && x.asset == old.asset
-                && x.asset.ticker == old.asset.ticker
-                && x.withdraw_fee == old.withdraw_fee
-                && x.withdraw_fee_pct == old.withdraw_fee_pct
-        }) {
+    let updated = {
+        let mut nets = wr(&core.inner.networks);
+        if let Some(list) = nets.get_mut(&req.venue)
+            && let Some(index) = list.iter().position(|x| {
+                x.network == old.network
+                    && x.asset == old.asset
+                    && x.asset.ticker == old.asset.ticker
+                    && x.withdraw_fee == old.withdraw_fee
+                    && x.withdraw_fee_pct == old.withdraw_fee_pct
+            })
+        {
             let row = &mut Arc::make_mut(list)[index];
             row.withdraw_fee = new.withdraw_fee;
             row.withdraw_fee_pct = new.withdraw_fee_pct;
+            true
+        } else {
+            false
         }
+    };
+    if updated {
+        core.request_rebuild();
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::types::{Cost, TransferStatus};
+    use chrono::Utc;
+    #[test]
+    fn gate_ai_final_40_compares_to_announced_36_34_only_on_the_same_withdrawal() {
+        let asset = Asset {
+            ticker: "AI".into(),
+            chain: None,
+            contract: None,
+        };
+        let req = WithdrawRequest {
+            venue: VenueId("gate".into()),
+            asset: asset.clone(),
+            network: "BSC".into(),
+            address: "address".into(),
+            amount: Decimal::from(1000),
+            deal_id: "20261122120942578AI".into(),
+        };
+        let mut result = Transfer {
+            venue: req.venue.clone(),
+            asset,
+            network: "BSC".into(),
+            amount: req.amount,
+            venue_ref: "w17".into(),
+            tx_hash: None,
+            status: TransferStatus::Sent,
+            updated_at: Utc::now(),
+            fee: Some(Cost::new(CostKind::WithdrawFee, 40.into(), "AI", false)),
+        };
+        let planned = Decimal::new(3634, 2);
+        assert_eq!(
+            charged(&req, "w17", &result).unwrap() - planned,
+            Decimal::new(366, 2)
+        );
+        assert_eq!(charged(&req, "w18", &result), None);
+        result.network = "ARB".into();
+        assert_eq!(charged(&req, "w17", &result), None);
+        result.network = "BSC".into();
+        result.fee.as_mut().unwrap().asset = "GT".into();
+        assert_eq!(charged(&req, "w17", &result), None);
+    }
 }

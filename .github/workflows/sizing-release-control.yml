@@ -17,7 +17,7 @@ jobs:
           path: control
       - uses: actions/checkout@v4
         with:
-          ref: af9f241769af5c49ce0a5d84e3051db56863e0ea
+          ref: 5c696b0dd6fd11bf0991409b5cb79a45222ce286
           path: release
       - uses: actions/checkout@v4
         with:
@@ -54,20 +54,21 @@ jobs:
           python control/tools/sizing_archive.py release
           python control/tools/sizing_entry.py release
           cd release
-          cargo test --locked --lib precheck_hint::tests
+          cargo test --locked --lib precheck_hint
+          cargo test --locked --test optional_quote_capacity
           for row in 'core_size_actual_v2 actual_v2_matrix risk' 'native_route_release_matrix shop_live_control shop'; do
             read -r test name output <<< "$row"
             if ! cargo test --locked --test "$test" "$name" -- --nocapture > "$RUNNER_TEMP/$output.log" 2>&1; then
-              grep -E '^error(\[E[0-9]+\])?:|panicked at|assertion .*failed|^test .*FAILED|^ *-->' -A 6 "$RUNNER_TEMP/$output.log" | head -n 75
+              grep -E '^error(\[E[0-9]+\])?:|panicked at|assertion .*failed|stack overflow|^test .*FAILED|^ *-->' -A 6 "$RUNNER_TEMP/$output.log" | head -n 75
               exit 1
             fi
-            grep -E 'ACTUAL_V2_MATRIX|NATIVE_NEIGHBOUR|NATIVE_RISK_PRECHECK' "$RUNNER_TEMP/$output.log" > "../size-$output.jsonl"
+            grep -E 'ACTUAL_V2_MATRIX|NATIVE_NEIGHBOUR|NATIVE_RISK_PRECHECK|SHOP_LIVE' "$RUNNER_TEMP/$output.log" > "../size-$output.jsonl"
           done
           cargo test --locked --test core_card_disconnected --test core_precheck_fast_266
           cargo clippy --locked --lib -- -D warnings
           for arm in off on; do
             if ! SIZING_ARM="$arm" cargo test --locked --test core_size_release_matrix release_size_matrix_routes -- --nocapture > "$RUNNER_TEMP/size-$arm.log" 2>&1; then
-              grep -E '^error(\[E[0-9]+\])?:|panicked at|assertion .*failed|^test .*FAILED|^ *-->' -A 5 "$RUNNER_TEMP/size-$arm.log" | head -n 75
+              grep -E '^error(\[E[0-9]+\])?:|panicked at|assertion .*failed|stack overflow|^test .*FAILED|^ *-->' -A 5 "$RUNNER_TEMP/size-$arm.log" | head -n 75
               exit 1
             fi
             sed -n -E 's/^(test [^ ]+ \.\.\. )?PLATEAU_CONTROL //p' "$RUNNER_TEMP/size-$arm.log" > "../size-$arm.jsonl"
@@ -77,3 +78,58 @@ jobs:
         with:
           name: native-sizing-comparison
           path: size-*.jsonl
+  deployed_baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: control
+      - uses: actions/checkout@v4
+        with:
+          ref: 15095ea3c6b4bd27291d026e857f14f6556a1e49
+          path: release
+      - uses: actions/checkout@v4
+        with:
+          ref: 1b6ca7fafce309b81c80278385ac007f22d7d1ce
+          path: historical
+      - uses: actions/checkout@v4
+        with:
+          path: shop
+          ref: 375bd387f318f656984689348e964a687bfbb255
+      - uses: dtolnay/rust-toolchain@1.97.0
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: release -> target
+          shared-key: release-size-matrix
+      - shell: bash
+        run: |
+          set -e
+          p=historical/tools/release_size_matrix
+          python "$p/adapt.py" release
+          python "$p/ab_0392.py" release
+          python "$p/stored_compare.py" release "$p/stored_cases.json"
+          python "$p/actual_v2.py" stage release "$p/actual_v2_cases.json"
+          python "$p/actual_v3.py" stage release "$p/actual_v3_cases.json"
+          python "$p/with_history.py" release
+          python "$p/stage_risk.py" release
+          k=shop/tools/release_size_matrix
+          python "$k/shop_two_leg.py" release
+          python "$k/shop_width.py" release
+          python "$k/shop_target.py" release
+          python "$k/shop_live.py" release
+          cd release
+          for row in 'core_size_actual_v2 actual_v2_matrix risk' 'native_route_release_matrix shop_live_control shop' 'core_size_release_matrix release_size_matrix_routes sizes'; do
+            read -r test name output <<< "$row"
+            if ! cargo test --locked --test "$test" "$name" -- --nocapture > "$RUNNER_TEMP/$output.log" 2>&1; then
+              grep -E '^error(\[E[0-9]+\])?:|panicked at|assertion .*failed|stack overflow|^test .*FAILED|^ *-->' -A 5 "$RUNNER_TEMP/$output.log" | head -n 70
+              exit 1
+            fi
+            grep -E 'ACTUAL_V2_MATRIX|SHOP_LIVE|PLATEAU_CONTROL' "$RUNNER_TEMP/$output.log" > "../baseline-$output.jsonl"
+          done
+          test "$(wc -l < ../baseline-sizes.jsonl)" -eq 5120
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deployed-native-sizing
+          path: baseline-*.jsonl

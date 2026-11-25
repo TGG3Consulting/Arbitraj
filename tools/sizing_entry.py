@@ -25,6 +25,9 @@ pub async fn archived_entry<C:Curve<Data=Calc>, S:crate::core::costs::Source>(
   core:&Core, old:&DirCtx, cx:&DirCtx, book:&crate::core::types::OrderBook, memo:&Memo<'_,C>, found:&Found<Calc>, anchor:Decimal, src:&S,budget:Decimal,step:Decimal,floor:(Decimal,Decimal)
 )->serde_json::Value{
  use super::{precheck_fast::{Want,recalc},size::Fail};
+ for (name,n) in [("cpu.threads_max",80),("cpu.reserve_deal",8),("cpu.reserve_calc",24)]{
+     core.inner.deps.settings.set(name,crate::settings::value::Scope::Global,Some(serde_json::json!(n)),"archived workload configuration").await.unwrap();
+ }
  core.inner.market.write().unwrap_or_else(|p|p.into_inner()).apply(crate::gateway::events::MarketEvent::Book(book.clone()));
  let Some(mark)=stamp(core,old) else{return serde_json::json!({"reason":"missing book stamp"});};
  remember(core,old,mark,memo,found);
@@ -40,7 +43,7 @@ pub async fn archived_entry<C:Curve<Data=Calc>, S:crate::core::costs::Source>(
  let mut out=Vec::new();
  for mode in [false,true] {
    let mut w=Want::new(anchor);
-   let result=super::final_depth::ARCHIVED.scope(responses.clone(),warm::archive(if mode{q}else{None},anchor,budget,step,floor,cx.keep.unwrap(),recalc(core,cx,&mut w,budget,step,floor))).await;
+   let result=super::final_depth::ARCHIVED.scope(responses.clone(),warm::archive(if mode{q}else{None},anchor,budget,step,floor,cx.keep.unwrap(),Box::pin(recalc(core,cx,&mut w,budget,step,floor)))).await;
    out.push(serde_json::json!({"prepared":mode,"path":format!("{:?}",w.path),"selected":result.map(|c|(c.qty,c.profit_usd))}));
  }
  serde_json::json!({"cached":cached,"native_candidate":found.best.qty,"logged_anchor":anchor,"ready_hint":q.map(|x|x.0),"modes":out})
@@ -51,7 +54,11 @@ for test in ['tests/native_route_release_matrix.rs','tests/core_size_actual_v2.r
 rewrite('tests/native_route_release_matrix.rs','let samples:Vec<_>=m.map.values().flatten().map(|p|p.data.clone()).collect();drop(m);','''let samples:Vec<_>=m.map.values().flatten().map(|p|p.data.clone()).collect();
     let floor=(get("threshold"),get("min_pct"));
     let (core,_)=report_common::start(&report_common::dir(&format!("shopnx-{id}-{block}"))).await;
-    let entry=if let Some(found)=native.as_ref(){arb::core::precheck_hint::archived_entry(&core,&cx,&cx,&src.book.book,&m,found,get("k_qty"),&src,budget,step,floor).await}else{serde_json::Value::Null};drop(m);''')
+    let entry=if let Some(found)=native.as_ref(){
+      let logged=Box::pin(arb::core::precheck_hint::archived_entry(&core,&cx,&cx,&src.book.book,&m,found,get("k_qty"),&src,budget,step,floor)).await;
+      let rebuilt=Box::pin(arb::core::precheck_hint::archived_entry(&core,&cx,&cx,&src.book.book,&m,found,found.best.qty,&src,budget,step,floor)).await;
+      serde_json::json!({"logged":logged,"rebuilt":rebuilt})
+    }else{serde_json::Value::Null};drop(m);''')
 rewrite('tests/native_route_release_matrix.rs','"cold":cold,"warm":warm}', '"cold":cold,"warm":warm,"entry":entry}')
 rewrite('tests/core_size_actual_v2.rs','let production=arb::core::precheck_hint::evidenced_hint', '''let (core,_)=report_common::start(&report_common::dir(&format!("source-{}",dir.asset.ticker))).await;
     let entry=arb::core::precheck_hint::archived_entry(&core,&old_ctx,&cx,&a,&memo,&reconstructed,plan.qty,&source,budget,p.step,floor).await;

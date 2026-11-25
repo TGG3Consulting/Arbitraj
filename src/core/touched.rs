@@ -19,6 +19,8 @@ pub enum Touched {
         venue: VenueId,
         ticker: String,
         first: bool,
+        received_at: chrono::DateTime<chrono::Utc>,
+        exchange_time: Option<chrono::DateTime<chrono::Utc>>,
     },
     /// Новое состояние пула. `first` — пул встречен впервые. `pool` — какой пул (решение 245: пулы маршрута сделки).
     /// `block` — номер блока состояния (Pool.block; решение 322 — в запись core.signal_hold).

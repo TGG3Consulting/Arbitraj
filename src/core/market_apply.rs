@@ -14,6 +14,8 @@ impl MarketState {
     /// Что делает: новый стакан. Принимает: стакан. Возвращает: Touched::Book (first — стакан пары впервые). Ошибок нет.
     pub(super) fn apply_book(&mut self, b: OrderBook) -> Touched {
         let key = (b.venue.clone(), b.asset.ticker.clone());
+        let received_at = b.received_at;
+        let exchange_time = b.exchange_time;
         // Один поиск стакана (get_mut + замена; нет — вставка). Отметки — только при включённом признаке.
         match self.books.get_mut(&key) {
             Some(slot) => {
@@ -29,6 +31,8 @@ impl MarketState {
                 *slot = b;
                 let (venue, ticker) = key;
                 Touched::Book {
+                    received_at,
+                    exchange_time,
                     venue,
                     ticker,
                     first: false,
@@ -41,6 +45,8 @@ impl MarketState {
                 let (venue, ticker) = key.clone();
                 self.books.insert(key, b);
                 Touched::Book {
+                    received_at,
+                    exchange_time,
                     venue,
                     ticker,
                     first: true,

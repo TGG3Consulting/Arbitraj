@@ -32,10 +32,16 @@ pub(super) use super::tick_sched::schedule_set;
 
 /// Один общий стакан биржи обновляет каждую его сеть. Берём получателей одним чтением
 /// индекса и отпускаем его до отправки тиков и планирования пересчётов.
-pub(super) fn schedule_book(core: &Core, venue: &VenueId, ticker: &str) {
+pub(super) fn schedule_book(
+    core: &Core,
+    venue: &VenueId,
+    ticker: &str,
+    received_at: chrono::DateTime<chrono::Utc>,
+    exchange_time: Option<chrono::DateTime<chrono::Utc>>,
+) {
     let assets = rd(&core.inner.tickers).book_assets(venue, ticker);
     for asset in assets {
-        super::window_queue_trace::market(core, &asset, venue, None);
+        super::window_queue_trace::book(core, &asset, venue, received_at, exchange_time);
         super::tick_sched::schedule(core, asset, venue.clone());
     }
 }
@@ -58,12 +64,14 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 venue,
                 ticker,
                 first,
+                received_at,
+                exchange_time,
             } => {
                 core.inner.feed_seen.mark(&venue);
                 if first {
                     core.request_rebuild();
                 }
-                schedule_book(&core, &venue, &ticker);
+                schedule_book(&core, &venue, &ticker, received_at, exchange_time);
             }
             Touched::Pool {
                 venue,
@@ -98,12 +106,7 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 // Решение 124: новые состояния пулов — толчок поиска циклов DEX ↔ DEX для исполнения (cycle_watch.rs).
                 core.inner.cycles.kick.notify_one();
                 for a in assets_by_tokens(&core, &venue, tokens) {
-                    super::window_queue_trace::market(
-                        &core,
-                        &a,
-                        &venue,
-                        Some((mark.at, mark.block)),
-                    );
+                    super::window_queue_trace::pool(&core, &a, &venue, (mark.at, mark.block));
                     super::tick_sched::schedule_pool(&core, a, venue.clone(), mark);
                 }
                 // Решение 349: соседи токенов (первый пул пары) и отметка пары — O(1); рассылка — задача mid_wake.rs.

@@ -13,6 +13,9 @@ pub struct QueueTrace {
     pub busy_at: DateTime<Utc>,
     /// First observation that both the outer coin lock and all rides were free. A top-up may queue sooner.
     pub released_at: Option<DateTime<Utc>>,
+    pub book_received_at: Option<DateTime<Utc>>,
+    pub book_exchange_time: Option<DateTime<Utc>>,
+    pub book_venue: Option<VenueId>,
     pub book_delivered_at: Option<DateTime<Utc>>,
     pub pool_delivered: Option<(DateTime<Utc>, u64)>,
     pub queued_at: Option<DateTime<Utc>>,
@@ -28,6 +31,9 @@ impl QueueTrace {
             direction: d.clone(),
             busy_at: Utc::now(),
             released_at: None,
+            book_received_at: None,
+            book_exchange_time: None,
+            book_venue: None,
             book_delivered_at: None,
             pool_delivered: None,
             queued_at: None,
@@ -88,30 +94,41 @@ pub(super) fn released(core: &Core, key: &CoinKey) {
     });
 }
 
-pub(super) fn market(
+fn observes(r: &QueueTrace, venue: &VenueId, at: DateTime<Utc>) -> bool {
+    (&r.direction.buy_on == venue || &r.direction.sell_on == venue)
+        && r.released_at
+            .or(r.queued_at)
+            .is_some_and(|start| at >= start)
+}
+
+pub(super) fn book(
     core: &Core,
     asset: &Asset,
     venue: &VenueId,
-    block: Option<(DateTime<Utc>, u64)>,
+    received: DateTime<Utc>,
+    exchange: Option<DateTime<Utc>>,
 ) {
     if core.inner.queue_trace_coins.load().is_empty() {
         return;
     }
+    let at = Utc::now();
     update(core, &CoinKey::of(asset), |r| {
-        let Some(relevant_from) = r.released_at.or(r.queued_at) else {
-            return;
-        };
-        if &r.direction.buy_on != venue && &r.direction.sell_on != venue {
-            return;
+        if r.book_delivered_at.is_none() && observes(r, venue, at) {
+            r.book_delivered_at = Some(at);
+            r.book_received_at = Some(received);
+            r.book_exchange_time = exchange;
+            r.book_venue = Some(venue.clone());
         }
-        match block {
-            Some((at, height)) if at >= relevant_from => {
-                r.pool_delivered.get_or_insert((at, height));
-            }
-            Some(_) => {}
-            None => {
-                r.book_delivered_at.get_or_insert_with(Utc::now);
-            }
+    });
+}
+
+pub(super) fn pool(core: &Core, asset: &Asset, venue: &VenueId, mark: (DateTime<Utc>, u64)) {
+    if core.inner.queue_trace_coins.load().is_empty() {
+        return;
+    }
+    update(core, &CoinKey::of(asset), |r| {
+        if observes(r, venue, mark.0) {
+            r.pool_delivered.get_or_insert(mark);
         }
     });
 }

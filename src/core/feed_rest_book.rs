@@ -45,11 +45,17 @@ pub async fn install(
             .is_some_and(|x| x.received_at.timestamp_millis() > b.sent_ms);
         (!newer).then(|| m.apply(MarketEvent::Book(book)))
     };
-    if let Some(Touched::Book { first, .. }) = touched {
+    if let Some(Touched::Book {
+        first,
+        received_at,
+        exchange_time,
+        ..
+    }) = touched
+    {
         if first {
             core.request_rebuild();
         }
-        super::tick::schedule_book(core, venue, ticker);
+        super::tick::schedule_book(core, venue, ticker, received_at, exchange_time);
     }
     Ok(())
 }

@@ -40,7 +40,13 @@ jobs:
           fi
           sed -n 's/^SHOP_DEPTH //p' "$RUNNER_TEMP/shop.log" > "$RUNNER_TEMP/shop-volume.jsonl"
           test -s "$RUNNER_TEMP/shop-volume.jsonl"
-          test "$(wc -l < "$RUNNER_TEMP/shop-volume.jsonl")" -eq 24
+          test "$(wc -l < "$RUNNER_TEMP/shop-volume.jsonl")" -eq 72
+          if ! cargo test --locked --test native_route_release_matrix shop_live_control -- --nocapture > "$RUNNER_TEMP/live.log" 2>&1; then
+            grep -E '^error(\[E[0-9]+\])?:|panicked at|assertion .*failed|^test .*FAILED|^ *-->' -A 5 "$RUNNER_TEMP/live.log" | head -n 75
+            exit 1
+          fi
+          sed -n 's/^SHOP_LIVE //p' "$RUNNER_TEMP/live.log" > "$RUNNER_TEMP/live.jsonl"
+          test "$(wc -l < "$RUNNER_TEMP/live.jsonl")" -eq 12
           grep -E "^SHOP_SPLIT_TRACE qty=18917" "$RUNNER_TEMP/shop.log" | sort -u | head -n 35 > "$RUNNER_TEMP/split.txt"
       - uses: actions/upload-artifact@v4
         with:
@@ -48,6 +54,7 @@ jobs:
           path: |
             ${{ runner.temp }}/shop-volume.jsonl
             ${{ runner.temp }}/split.txt
+            ${{ runner.temp }}/live.jsonl
 
 
 

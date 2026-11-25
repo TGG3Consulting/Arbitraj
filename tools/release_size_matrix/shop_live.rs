@@ -14,6 +14,7 @@ impl Source for LiveShop<'_>{
             }
         }
         assert_eq!(i,2);
+        if self.d("approve_bnb")>Decimal::ZERO{dq.costs.push(Cost::new(CostKind::ApproveGas,self.d("approve_bnb"),"BNB",false));}
         Ok(dq)
     }
     fn worst(&self,_:&Direction,sell:bool,q:Decimal,avg:Decimal)->Result<Decimal,Fail>{
@@ -45,7 +46,10 @@ async fn shop_live_control(){
         let venue=VenueId("bingx".into());let now=Utc::now();let book=OrderBook{venue:venue.clone(),asset:dir.asset.clone(),received_at:now,exchange_time:None,asks:levels("asks"),bids:levels("bids")};
         let rule=serde_json::from_value(json!({"ticker":"SHOPINX","online":true,"status":1,"api_buy":true,"api_sell":true,"min_notional":"1","max_notional":"1029","step_size":"0.000001"})).unwrap();
         let mut cx=ctx(&dir,get("h"));cx.sigma=get("sigma");cx.transit_s=get("ts");cx.keep=Some(get("risk_keep"));cx.closure_share=None;
-        if rev{cx.pair_b=Some(rule)}else{cx.pair_a=Some(rule)};
+        if rev{cx.pair_b=Some(rule)}else{
+            cx.pair_a=Some(rule);
+            cx.a.info=Some(serde_json::from_value(json!({"venue":"bingx","asset":dir.asset,"network":"BEP20","deposit_enabled":true,"withdraw_enabled":true,"withdraw_fee":data["withdraw"],"withdraw_precision":8,"updated_at":now})).unwrap());
+        };
         let mut ext=arb::core::size_extra::Extra::default();ext.min_usd=Some(get("threshold"));ext.min_pct=Some(get("min_pct"));ext.no_formula=true;ext.budget_monotone=!rev;
         if rev{ext.sell_regions=arb::core::size_scan::regions(&book.bids,cx.pair_b.as_ref());}
         let cum=|ls:&[PriceLevel]|{let mut q=Decimal::ZERO;ls.iter().map(|l|{q+=l.qty;q}).collect::<Vec<_>>()};

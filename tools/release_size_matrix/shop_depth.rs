@@ -4,7 +4,9 @@ async fn shop_depth_control(){
     let data:Value=serde_json::from_str(include_str!("shop_live_cases.json")).unwrap();
     let c=data.as_array().unwrap().iter().find(|c|c["id"]==31422).unwrap();
     let qty=num(c["k_qty"].as_str().unwrap());
+    for (origin,qty,precision) in [("unrounded_transfer_fixture",qty,false),("archived_order",qty,true),("two_lots_below",qty-num("0.000002"),true)] {
     let after=qty*(Decimal::ONE-num("0.001"))-num("121");
+    let after=if precision{after.trunc_with_scale(8)}else{after};
     let deep=after/num("0.7");
     let ceil=deep.round_dp_with_strategy(18,RoundingStrategy::ToPositiveInfinity);
     let unit=num("0.000000000000000001");
@@ -20,8 +22,9 @@ async fn shop_depth_control(){
                 let priced=q.priced(&shopinx::shopinx(),Side::Sell,a).await.map_err(|e|e.message);
                 let detail=priced.map(|z|json!({"fill":z.fillable_qty,"avg":z.avg_price,"route":z.route}));
                 let compact=|r:Result<Decimal,String>|r.map(|v|json!({"value":v,"delta":v-a,"covers":v>=a,"covers_original":v>=deep}));
-                println!("SHOP_DEPTH {}",json!({"case":31422,"width":w,"router":mode,"label":tag,"qty":qty,"net_token":after,"a":a,"depth":deep,"fills":compact(f),"priced":detail}));
+                println!("SHOP_DEPTH {}",json!({"origin":origin,"case":31422,"width":w,"router":mode,"label":tag,"qty":qty,"net_token":after,"a":a,"depth":deep,"fills":compact(f),"priced":detail}));
             }
         }
+    }
     }
 }

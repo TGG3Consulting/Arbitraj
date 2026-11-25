@@ -1,0 +1,51 @@
+name: Completed sizing controls
+on:
+  push:
+    branches: [audit/all-sizing-replay-20261125]
+permissions:
+  contents: read
+env:
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_INCREMENTAL: '0'
+  CARGO_TERM_COLOR: never
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: control
+      - uses: actions/checkout@v4
+        with:
+          ref: c64579d4d95dd50a5cf880b30b6bda926a222cea
+          path: release
+      - uses: actions/checkout@v4
+        with:
+          ref: 1b6ca7fafce309b81c80278385ac007f22d7d1ce
+          path: historical
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: release -> target
+          shared-key: release-size-matrix
+      - shell: bash
+        run: |
+          set -e
+          p=historical/tools/release_size_matrix
+          python "$p/adapt.py" release
+          python "$p/ab_0392.py" release
+          python control/tools/sizing_control.py release
+          cd release
+          cargo test --locked --test core_card_disconnected
+          for arm in off on; do
+            if ! SIZING_ARM="$arm" cargo test --locked --test core_size_release_matrix release_size_matrix_routes -- --nocapture > "$RUNNER_TEMP/size-$arm.log" 2>&1; then
+              grep -E '^error(\[E[0-9]+\])?:|panicked at|assertion .*failed|^test .*FAILED|^ *-->' -A 5 "$RUNNER_TEMP/size-$arm.log" | head -n 75
+              exit 1
+            fi
+            sed -n -E 's/^(test [^ ]+ \.\.\. )?PLATEAU_CONTROL //p' "$RUNNER_TEMP/size-$arm.log" > "../size-$arm.jsonl"
+            test "$(wc -l < ../size-$arm.jsonl)" -eq 5120
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-sizing-comparison
+          path: size-*.jsonl

@@ -565,6 +565,7 @@ async fn recompute_end_to_end() {
     let r = cex.row.unwrap();
     let body: Value = serde_json::from_str(&r.body).unwrap();
     assert_eq!(body["basis"], BASIS_RECOMPUTED);
+    assert!(body.get("opt_quote_evidence").is_none());
     assert_eq!(
         r.started_at, "2026-11-07T19:04:39Z",
         "начало — как у старой записи"
@@ -583,6 +584,7 @@ async fn recompute_end_to_end() {
     assert_eq!(dex.line.group, G_DEX, "{:?}", dex.line.reason);
     let dex_body: Value = serde_json::from_str(&dex.row.as_ref().unwrap().body).unwrap();
     assert_eq!(dex_body["basis"], BASIS_RECOMPUTED_DEX_PLAN);
+    assert!(dex_body.get("opt_quote_evidence").is_none());
     assert!(dex.line.source.contains("из плана"));
     let back = one(
         &env,

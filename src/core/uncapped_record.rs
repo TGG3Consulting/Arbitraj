@@ -11,13 +11,16 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
+use crate::core::types::Quote;
 use crate::settings::read::At as SAt;
 use crate::settings::store::Store;
 
 use super::costs::Calc;
 use super::limits_parts::Parts;
 use super::size_uncapped::{At, Uncapped};
-use super::uncapped_types::{Battle, Episode, Record, missed};
+use super::uncapped_types::{
+    BASIS_DECISION, Battle, Episode, OptLeg, OptQuote, OptQuoteEvidence, Record, missed,
+};
 
 /// Всё о расчёте, кроме итога поиска.
 pub struct Inputs {
@@ -39,12 +42,44 @@ pub struct Inputs {
     pub plan_gap: Option<String>,
 }
 
+impl From<&Quote> for OptQuote {
+    fn from(q: &Quote) -> Self {
+        let route = q.route.as_ref();
+        Self {
+            venue: q.venue.clone(),
+            at: q.at,
+            requested_qty: q.qty,
+            fillable_qty: q.fillable_qty,
+            route_block: route.map(|r| r.block).filter(|&b| b != 0 && b != u64::MAX),
+            legs: route
+                .map(|r| {
+                    r.legs
+                        .iter()
+                        .map(|leg| OptLeg {
+                            share: leg.share,
+                            hops: leg.hops.clone(),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+        }
+    }
+}
+
 /// Что делает: запись из итога поиска. Принимает: входы, итог поиска, время записи. Возвращает: Record (эпизод — из
 /// одного расчёта). Ошибок нет.
 pub fn record(i: Inputs, u: Uncapped<Calc>, now: DateTime<Utc>) -> Record {
     let missed = missed(&i.battle.verdict, u.opt_passes, u.opt.profit, &u.at_budget);
     let limited_by = limited_by(&i.battle, &u, i.parts.as_ref(), i.budget);
     let c = &u.opt.data;
+    let opt_quote_evidence = (i.battle.verdict == "deal" && i.basis == BASIS_DECISION).then(|| {
+        Box::new(OptQuoteEvidence {
+            arrive: c.arrive,
+            sell_qty: c.sell_qty,
+            buy: OptQuote::from(&c.buy_quote),
+            sell: OptQuote::from(&c.sell_quote),
+        })
+    });
     Record {
         at: now,
         direction: c.direction.clone(),
@@ -56,6 +91,7 @@ pub fn record(i: Inputs, u: Uncapped<Calc>, now: DateTime<Utc>) -> Record {
         min_profit_usd: i.min_usd,
         min_profit_pct: i.min_pct,
         opt: At::of(&u.opt),
+        opt_quote_evidence,
         opt_passes: u.opt_passes,
         opt_profit_pct: c.profit_pct,
         opt_buy_avg: c.buy_avg,

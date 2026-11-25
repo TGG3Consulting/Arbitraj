@@ -169,6 +169,7 @@ async fn record(rec: &Rec, floor: Decimal, at: DateTime<Utc>) -> Record {
         opt,
         opt_passes: u.opt_passes,
         opt_profit_pct: z,
+        opt_quote_evidence: None,
         opt_buy_avg: z,
         opt_sell_avg: z,
         opt_proceeds: z,

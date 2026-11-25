@@ -42,7 +42,7 @@ jobs:
           shared-key: tests
       - name: Prepare both pinned sources
         run: |
-          git -C release fetch -q --depth=1 origin 91b86c672aa73ef0ba9ab6e1870fc9cc647cce4f
+          git -C release fetch -q --depth=1 origin 15095ea3c6b4bd27291d026e857f14f6556a1e49
           git -C release worktree add --quiet --detach ../baseline FETCH_HEAD
       - name: Build native ledger and chain replay
         run: |

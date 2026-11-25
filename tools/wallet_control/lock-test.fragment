@@ -1,0 +1,31 @@
+#[tokio::test]
+async fn wallet_audit_4stock_executor_lock() {
+    use arb::core::{coin_key::CoinKey, executor, engine};
+    let (core, _, _) = start("wallet-4stock-executor").await;
+    let rec = Rec::load("wallet-4stock-executor").await;
+    let mut calc = size_common::calc::calc(&rec, d("10"));
+    let mut e = entry(&rec);
+    e.asset.ticker = "4STOCK".into();
+    e.asset.contract = Some("0xd270d4e1ec6e6e0d28c0ecb8be966ec75997ffff".parse().unwrap());
+    e.presence[0].venue = VenueId("kucoin".into());
+    let mut gate = e.presence[0].clone();
+    gate.venue = VenueId("gate".into());
+    e.presence.push(gate);
+    for p in &mut e.presence { p.ticker = "4STOCK".into(); }
+    calc.direction.asset=e.asset.clone();
+    calc.direction.buy_on=VenueId("kucoin".into());
+    calc.direction.sell_on=VenueId("bsc_dex".into());
+    let key=CoinKey::of(&e.asset);
+    let ds=e.directions();
+    assert!(ds.contains(&calc.direction));
+    let idx=arb::core::ticker_index::index_of(std::slice::from_ref(&e));
+    engine::wr(&core.inner.coins).live=std::sync::Arc::new(vec![e]);
+    *engine::wr(&core.inner.tickers)=idx;
+    assert!(engine::lk(&core.inner.active).insert(key.clone()));
+    let busy=executor::accepted(&core,calc.clone()).await;
+    assert!(matches!(busy,executor::Start::Busy(_)), "lock acquisition before presell must serialize KuCoin against Gate");
+    assert!(engine::lk(&core.inner.active).remove(&key));
+    let after=executor::accepted(&core,calc).await;
+    assert!(matches!(after,executor::Start::Started));
+    println!("WALLET_LOCK 223 while_gate_precheck=busy explicit_fresh_resubmission_after_release=started no_gateway=true");
+}

@@ -1,0 +1,16 @@
+#[tokio::test]
+async fn wallet_audit_nov5_gate_enabled() {
+    let (core, settings, _) = start("wallet-gate-windows").await;
+    let venue = VenueId("gate".into());
+    for (label, prior, at_buy) in [
+        ("THE-83", true, false), ("THE-84", true, false),
+        ("THE-85", true, false), ("THE-86", true, false),
+        ("THE-87", true, false), ("ZIX-89", true, false)
+    ] {
+        for enabled in [prior, at_buy] {
+            settings.set("venue.enabled", Scope::Venue("gate".into()), Some(json!(enabled)), "audit").await.unwrap();
+            assert_eq!(arb::core::registry_sync::enabled(&core, &venue), enabled);
+        }
+        println!("WALLET_GATE {label} allowed_before={} allowed_during={}", prior, at_buy);
+    }
+}

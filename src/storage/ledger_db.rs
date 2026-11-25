@@ -51,6 +51,13 @@ CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS deposit_log_claim (
+    chain TEXT NOT NULL, token TEXT NOT NULL, wallet TEXT NOT NULL, tx TEXT NOT NULL,
+    log_index INTEGER NOT NULL, sender TEXT NOT NULL, withdrawal_id TEXT NOT NULL,
+    deal TEXT NOT NULL, raw_amount TEXT NOT NULL,
+    PRIMARY KEY (chain, token, wallet, tx, log_index),
+    UNIQUE (sender, withdrawal_id, chain, wallet)
+);
 CREATE TABLE IF NOT EXISTS core_state (
     kind TEXT NOT NULL,
     id   TEXT NOT NULL,

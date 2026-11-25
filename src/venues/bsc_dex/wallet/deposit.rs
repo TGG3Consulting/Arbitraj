@@ -22,9 +22,20 @@ use super::{signer, transfer_status};
 /// Статус зачисления по хешу; завершение снимает ожидание поступления (один раз на хеш).
 /// Ошибки: узел, NotConfigured, BadResponse.
 pub async fn status(p: &Parts, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer> {
+    status_for(p, asset, tx_hash, None, None).await
+}
+
+pub(in crate::venues::bsc_dex) async fn status_for(
+    p: &Parts,
+    asset: &Asset,
+    tx_hash: &str,
+    claim: Option<&crate::gateway::contract::DepositClaim>,
+    event_amount: Option<rust_decimal::Decimal>,
+) -> GatewayResult<Transfer> {
     let ctx = &p.ctx;
     let w = signer::address(ctx)?;
-    let res = transfer_status::deposit_status(ctx, &p.tokens, asset, tx_hash, w).await;
+    let res =
+        transfer_status::deposit_for(ctx, &p.tokens, asset, tx_hash, w, claim, event_amount).await;
     let finished = match &res {
         Ok(t) => matches!(
             t.status,
@@ -33,7 +44,12 @@ pub async fn status(p: &Parts, asset: &Asset, tx_hash: &str) -> GatewayResult<Tr
         Err(e) => e.code == ErrorCode::BadResponse,
     };
     if finished && let Some(token) = asset.contract {
-        p.inflows.done(token, tx_hash);
+        let key = res
+            .as_ref()
+            .ok()
+            .filter(|t| t.status == TransferStatus::Credited)
+            .map_or(tx_hash, |t| t.venue_ref.as_str());
+        p.inflows.done(token, key);
     }
     res
 }

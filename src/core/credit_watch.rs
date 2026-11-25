@@ -128,6 +128,11 @@ impl Ticket {
             .map(|(b, _)| b.clone())
     }
 
+    /// Точный ожидаемый приход регистрации, до допуска сверки событий.
+    pub(super) fn expected(&self) -> Option<Decimal> {
+        lock(&self.core).list.get(&self.id).map(|e| e.amount)
+    }
+
     /// Пришло ли своё событие (закрывает оно или нет). Ошибок нет.
     pub fn has_event(&self) -> bool {
         let st = lock(&self.core);

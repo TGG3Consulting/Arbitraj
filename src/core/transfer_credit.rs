@@ -51,7 +51,7 @@ pub async fn wait(
     gw: Arc<dyn Venue>,
     ticket: Option<Ticket>,
 ) -> Transfer {
-    wait_with_units(core, leg, gw, ticket, None).await
+    wait_with_units(core, leg, gw, ticket, None, None).await
 }
 
 pub(super) async fn wait_with_units(
@@ -60,13 +60,18 @@ pub(super) async fn wait_with_units(
     gw: Arc<dyn Venue>,
     ticket: Option<Ticket>,
     pinned: Option<super::settlement_unit::UnitRatio>,
+    claim: Option<&crate::gateway::contract::DepositClaim>,
 ) -> Transfer {
     let deps = &core.inner.deps;
     let quiet = Notify::new();
     let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(leg.to.0.clone()));
     let mut last = String::new();
+    let on = super::venue_ticker::on_venue(core, leg.asset, leg.to);
+    let bound = claim.filter(|_| gw.needs_deposit_claim(&on));
     loop {
-        if let Some(hit) = by_event(ticket.as_ref())
+        let event = by_event(ticket.as_ref());
+        if let Some(hit) = event.as_ref()
+            && bound.is_none()
             && (pinned.is_none()
                 || hit.tx_hash.is_some()
                 || super::credit_expect::units(core, leg.from, leg.to, leg.asset).ok() == pinned)
@@ -95,8 +100,25 @@ pub(super) async fn wait_with_units(
             return t;
         }
         // Решение 211: площадке — её тикер монеты.
-        let on = super::venue_ticker::on_venue(core, leg.asset, leg.to);
-        match gw.deposit_status(&on, &leg.tx).await {
+        let result = if let Some(claim) = bound {
+            let mut claim = claim.clone();
+            let delta = event
+                .as_ref()
+                .filter(|ev| {
+                    ev.tx_hash.as_ref().is_some_and(|h| {
+                        super::credit_watch::norm(h) == super::credit_watch::norm(&leg.tx)
+                    })
+                })
+                .map(|ev| ev.delta);
+            // Опрос сам по себе никогда не подставляет модельную комиссию.
+            if claim.expected.is_none() && delta == ticket.as_ref().and_then(Ticket::expected) {
+                claim.expected = delta;
+            }
+            gw.deposit_status_for(&on, &leg.tx, &claim, None).await
+        } else {
+            gw.deposit_status(&on, &leg.tx).await
+        };
+        match result {
             Ok(t) if t.status == TransferStatus::Credited => {
                 done(core, leg, &t, Utc::now(), "статус депозита").await;
                 to_trading(core, leg, &gw, &t).await;
@@ -122,6 +144,27 @@ pub(super) async fn wait_with_units(
         let kick = ticket.as_ref().map(|t| t.wake.as_ref()).unwrap_or(&quiet);
         pacer.pause(deps, kick).await;
     }
+}
+
+/// Быстрое зачисление до ответа API отправителя сохраняет проверку единственного ожидания.
+/// Полная квитанция и запись в учёте обязательны и для этого входа.
+pub(super) async fn claim_chain_event(
+    gw: &Arc<dyn Venue>,
+    asset: &Asset,
+    claim: &crate::gateway::contract::DepositClaim,
+    hit: &crate::core::types::BalanceChange,
+    ticket: Option<&Ticket>,
+) -> bool {
+    let Some(tx) = hit.tx_hash.as_deref() else {
+        return false;
+    };
+    let mut claim = claim.clone();
+    claim.expected = ticket
+        .and_then(Ticket::expected)
+        .filter(|v| *v == hit.delta);
+    gw.deposit_status_for(asset, tx, &claim, Some(hit.delta))
+        .await
+        .is_ok_and(|t| t.status == TransferStatus::Credited && t.amount == hit.delta)
 }
 
 /// Зачислено: время в пути, снятие карантина, журнал и уведомление. Принимает: перевод, зачисление, момент, откуда

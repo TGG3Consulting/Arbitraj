@@ -48,6 +48,10 @@ fn tlos_and_num_match_individual_logs_and_refuse_ambiguous_credit() {
             .clone();
         r.logs = vec![chosen.clone()];
         assert_eq!(pick(&r, token, w, h, None).unwrap().0, amounts[0].0);
+        // A single payment belonging to the second withdrawal must remain unclaimed
+        // when the first has a different, independently confirmed net.
+        let other = num::to_units(amounts[1].1.parse().unwrap(), 18).unwrap();
+        assert!(pick(&r, token, w, h, Some(other)).is_err());
         let mut equal = chosen;
         equal.log_index = Some(amounts[1].0);
         r.logs.push(equal);
@@ -96,6 +100,15 @@ async fn reservation_survives_restart_and_cannot_switch_withdrawal_or_log() {
     let db = Db::open(&path).unwrap();
     let mut same = claim("A");
     same.expected = Some(Decimal::ONE);
+    let saved_key = key.clone();
+    let saved_owner = same.clone();
+    assert_eq!(
+        db.ledger()
+            .read(move |conn| find(conn, &saved_key, &saved_owner))
+            .await
+            .unwrap(),
+        Some((143, "61".into()))
+    );
     assert!(check(db.clone(), 143, same, "61").await);
     assert!(!check(db.clone(), 143, claim("B"), "61").await);
     assert!(!check(db.clone(), 144, claim("A"), "122").await);

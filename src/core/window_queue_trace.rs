@@ -176,3 +176,88 @@ pub(super) fn result(
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::{
+        market_state::{MarketState, Touched},
+        types::OrderBook,
+    };
+    use crate::gateway::events::MarketEvent;
+
+    #[tokio::test]
+    async fn only_post_release_market_deliveries_enter_the_contended_window() {
+        let dir = std::env::temp_dir().join(format!(
+            "arb-queue-trace-{}",
+            Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let core = crate::core::test_core::open(&dir).await;
+        let asset = Asset {
+            chain: None,
+            contract: None,
+            ticker: "4STOCK".into(),
+        };
+        let d = Direction {
+            asset: asset.clone(),
+            buy_on: VenueId("kucoin".into()),
+            sell_on: VenueId("bsc_dex".into()),
+        };
+        let key = CoinKey::of(&asset);
+        lk(&core.inner.windows).pass(
+            &d,
+            "control".into(),
+            true,
+            Decimal::ONE,
+            std::slice::from_ref(&d.buy_on),
+            Utc::now(),
+        );
+        blocked(&core, &d);
+        let before = Utc::now() - chrono::Duration::seconds(2);
+        released(&core, &key);
+        pool(&core, &asset, &d.sell_on, (before, 10));
+        book(&core, &asset, &VenueId("other".into()), before, None);
+        assert!(
+            lk(&core.inner.windows).get(&key).unwrap().queue_traces[0]
+                .pool_delivered
+                .is_none()
+        );
+        let now = Utc::now();
+        let market = OrderBook {
+            venue: d.buy_on.clone(),
+            asset: asset.clone(),
+            bids: vec![],
+            asks: vec![],
+            exchange_time: Some(before),
+            received_at: now,
+        };
+        let Touched::Book {
+            venue,
+            received_at,
+            exchange_time,
+            ..
+        } = MarketState::default().apply(MarketEvent::Book(market))
+        else {
+            panic!("book was not delivered")
+        };
+        book(&core, &asset, &venue, received_at, exchange_time);
+        pool(&core, &asset, &d.sell_on, (now, 11));
+        queued(&core, &d);
+        let ticket = started(&core, &d);
+        assert!(ticket.is_some());
+        result(&core, &d, ticket, "accept", Some(Decimal::ONE));
+        let w = lk(&core.inner.windows).get(&key).unwrap();
+        let r = &w.queue_traces[0];
+        assert_eq!(
+            (
+                r.book_received_at,
+                r.book_exchange_time,
+                r.book_venue.as_ref()
+            ),
+            (Some(now), Some(before), Some(&d.buy_on))
+        );
+        assert_eq!(r.pool_delivered, Some((now, 11)));
+        assert_eq!(r.model_profit_usdt, Some(Decimal::ONE));
+    }
+}

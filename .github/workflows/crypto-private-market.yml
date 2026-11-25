@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: release
-          ref: af9f241769af5c49ce0a5d84e3051db56863e0ea
+          ref: 5c696b0dd6fd11bf0991409b5cb79a45222ce286
       - uses: actions/checkout@v4
         with:
           path: base

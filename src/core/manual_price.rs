@@ -13,6 +13,7 @@ pub struct Comparison {
     pub targets: Vec<(VenueId, Result<Decimal, String>)>,
     pub skipped: Vec<String>,
     pub prior_cash: Decimal,
+    pub here_rest_error: Option<String>,
     wallets: HashMap<VenueId, DexAccountId>,
 }
 
@@ -61,27 +62,30 @@ pub async fn compare(core: &Core, deal: &Deal, fresh_here: bool) -> Result<Compa
     let quotes = join_all(std::iter::once(&deal.at).chain(targets.iter()).map(
         |venue| async move {
             let wallet = super::manual_price_exec::wallet(core, deal, venue);
+            let mut rest_error = None;
             let result = match &wallet {
                 Ok(w) => {
-                    scenario(
-                        core,
-                        deal,
-                        venue,
-                        w.as_ref(),
-                        past,
-                        fresh_here && *venue == deal.at,
-                        true,
-                    )
-                    .await
+                    let book = if fresh_here && *venue == deal.at {
+                        super::sale_preview::rest_book(core, deal)
+                            .await
+                            .unwrap_or_else(|e| {
+                                rest_error = Some(e);
+                                None
+                            })
+                    } else {
+                        None
+                    };
+                    scenario(core, deal, venue, w.as_ref(), past, book, true).await
                 }
                 Err(e) => Err(e.clone()),
             };
-            (venue.clone(), wallet.ok().flatten(), result)
+            (venue.clone(), wallet.ok().flatten(), result, rest_error)
         },
     ))
     .await;
+    let here_rest_error = quotes.first().and_then(|row| row.3.clone());
     let mut wallets = HashMap::new();
-    let mut rows = quotes.into_iter().map(|(venue, wallet, result)| {
+    let mut rows = quotes.into_iter().map(|(venue, wallet, result, _)| {
         if result.is_ok()
             && let Some(w) = wallet
         {
@@ -95,6 +99,7 @@ pub async fn compare(core: &Core, deal: &Deal, fresh_here: bool) -> Result<Compa
         here,
         targets,
         skipped,
+        here_rest_error,
         prior_cash: past.iter().map(|(_, v)| *v).sum(),
         wallets,
     })
@@ -117,7 +122,7 @@ pub(super) async fn scenario(
     venue: &VenueId,
     wallet: Option<&DexAccountId>,
     past: &[(VenueId, Decimal)],
-    fresh_cex: bool,
+    book: Option<super::exec_book::Book>,
     with_return: bool,
 ) -> Result<Decimal, String> {
     let asset = &deal.direction.asset;
@@ -148,7 +153,7 @@ pub(super) async fn scenario(
         asset,
         sell_qty,
         Some(&deal.id),
-        fresh_cex,
+        book,
     )
     .await
     .map_err(|e| e.message)?;

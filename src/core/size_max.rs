@@ -72,7 +72,10 @@ where
         .units(upper)
         .ok_or_else(|| Fail::Stop(format!("объём {upper} слишком велик")))?;
     let (cap_reached, limit) = edge(&mut m, p, hi, f.choice.max_exact).await;
-    let found = biggest(&mut m, hi, known_ok, &f.best, p.bisect_steps, &pass).await?;
+    biggest(&mut m, hi, known_ok, &f.best, p.bisect_steps, &pass).await?;
+    // Parallel probes can admit a deeper point outside the local bisection interval.
+    // The memo contains only budget-checked successes and is ordered by buy units.
+    let found = m.map.values().rev().flatten().find(|point| pass(point));
     let evals = m.evals();
     let (max_qty, max_profit, max_spend) = match found {
         Some(pt) => (Some(pt.qty), Some(pt.profit), Some(pt.invested)),

@@ -107,7 +107,7 @@ pub async fn try_sell_if(core: &Core, deal: Deal, why: &str, how: How) -> HereOk
     };
     // Решение 415: котировка и ордер — под одним ходом очереди продажи счёта.
     let mut turn = Box::pin(super::sell_turn::take(&deal.at, &deal.direction.asset)).await;
-    match Box::pin(super::sell_turn_fresh::quote(core, &deal, &mut turn)).await {
+    match Box::pin(super::sell_turn_fresh::guarded(core, &deal, &mut turn)).await {
         Ok((v, q, b)) if how.cond.ok(&deal, v) => {
             Box::pin(notify(core, &deal, why, how.note)).await;
             let f = super::remeasure::of(&deal, v, deal.qty * q.avg_price, how.guard);

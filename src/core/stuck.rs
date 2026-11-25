@@ -142,7 +142,8 @@ async fn wait(core: &Core, mut deal: Deal) {
     let until = Instant::now() + Duration::from_millis(ms);
     let mut first = true;
     while ticks.next(core, &deal, Some(until)).await {
-        match Box::pin(super::sell_turn_fresh::once(core, &deal)).await {
+        let raw = Box::pin(super::sell_turn_fresh::once(core, &deal)).await;
+        match Box::pin(super::sell_turn_fresh::settled(core, &deal, raw)).await {
             // Решение 47: выгодно — итог сделки не ниже нуля.
             Ok((v, _, _)) if super::sell::profitable(&deal, v) => {
                 // Решение 247: пере-замер — по тому же условию «выгодно» (итог ≥ 0 — порог убытка 0).
@@ -208,7 +209,8 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
     // Ревью 2 t201 (М-1): под ходом котировки нет — снова цикл котировки (ждём тика монеты), а не сразу алерт.
     loop {
         let value = loop {
-            match Box::pin(super::sell_turn_fresh::once(core, &deal)).await {
+            let raw = Box::pin(super::sell_turn_fresh::once(core, &deal)).await;
+        match Box::pin(super::sell_turn_fresh::settled(core, &deal, raw)).await {
                 Ok((v, _, _)) => break v,
                 Err(e) if q::not_configured(&e) => {
                     return q::halt_not_configured(core, deal, &e).await;

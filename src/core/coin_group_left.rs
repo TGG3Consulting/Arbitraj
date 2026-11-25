@@ -24,21 +24,32 @@ fn off_path(s: Step) -> bool {
 /// хронологию); в учёте уже помечена — перенести пометку. Принимает: ядро, сохраняемую сделку. Возвращает: копию с
 /// пометкой (сохранить её) или None — без изменений (нет группы, уже помечена, на пути). Ошибок нет.
 pub fn mark(core: &Core, deal: &Deal) -> Option<Box<Deal>> {
-    let g = deal.group.as_ref().filter(|x| !x.left)?;
-    let was = lk(&core.inner.deals)
-        .get(&deal.id)
-        .is_some_and(|x| x.group.as_ref().is_some_and(|y| y.left));
+    let group = deal.group.as_ref()?;
+    let id = &group.id;
+    let ledger = lk(&core.inner.deals);
+    let stored = ledger.get(&deal.id).filter(|d| d.group.as_ref().is_some_and(|g| g.left));
+    let was = stored.is_some() || group.left;
     if !was && !off_path(deal.step) {
         return None;
     }
-    let id = g.id.clone();
+    let prefix = format!("Была частью группы докупки {id}:");
+    let prior = stored.and_then(|d| d.timeline.iter().find(|(_, text)| text.starts_with(&prefix))).cloned();
+    drop(ledger);
+    if group.left && prior.as_ref().is_none_or(|note| deal.timeline.contains(note)) {
+        return None;
+    }
     let mut out = Box::new(deal.clone());
     if let Some(y) = out.group.as_mut() {
         y.left = true;
     }
-    if !was {
+    if let Some(note) = prior {
+        if !out.timeline.contains(&note) {
+            let i = out.timeline.partition_point(|(at, _)| *at <= note.0);
+            out.timeline.insert(i, note);
+        }
+    } else if !was {
         out.note(format!(
-            "Была частью группы докупки {id}: сделка ушла с пути ({}) — дальше отдельной сделкой, свой возврат USDT (п. 13, решение 394)",
+            "{prefix} сделка ушла с пути ({}) — дальше отдельной сделкой, свой возврат USDT (п. 13, решение 394)",
             super::deal_text::step_name(deal.step)
         ));
     }
@@ -54,10 +65,14 @@ pub fn sync(core: &Core, deal: &mut Deal) {
     if deal.group.as_ref().is_none_or(|g| g.left) {
         return;
     }
-    let was = lk(&core.inner.deals)
-        .get(&deal.id)
-        .is_some_and(|x| x.group.as_ref().is_some_and(|y| y.left));
+    let was = recorded(core, deal);
     if was && let Some(g) = deal.group.as_mut() {
         g.left = true;
     }
+}
+
+
+pub(super) fn recorded(core: &Core, deal: &Deal) -> bool {
+    lk(&core.inner.deals).get(&deal.id)
+        .is_some_and(|d| d.group.as_ref().is_some_and(|g| g.left))
 }

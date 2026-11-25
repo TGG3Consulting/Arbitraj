@@ -1,0 +1,58 @@
+name: Closed market control on historical inputs
+on:
+  push:
+    branches: [audit/completed-market-cross-replay-20261125]
+permissions:
+  contents: read
+jobs:
+  historical:
+    strategy:
+      fail-fast: false
+      matrix:
+        sha: [15095ea3c6b4bd27291d026e857f14f6556a1e49, af9f241769af5c49ce0a5d84e3051db56863e0ea]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_INCREMENTAL: '0'
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: harness
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.sha }}
+          path: release
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: release -> target
+          shared-key: release-size-matrix
+      - name: Replay saved ladders and states
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C release rev-parse HEAD)" = "${{ matrix.sha }}"
+          p=harness/tools/release_size_matrix
+          python "$p/stored_compare.py" release "$p/stored_cases.json"
+          python "$p/actual_v2.py" stage release "$p/actual_v2_cases.json"
+          python "$p/actual_v3.py" stage release "$p/actual_v3_cases.json"
+          python "$p/with_history.py" release
+          cd release
+          for lane in stored_compare actual_v2 actual_v3; do
+            log="$RUNNER_TEMP/$lane.txt"
+            if ! cargo test --locked --test "core_size_$lane" -- --nocapture > "$log" 2>&1; then
+              grep -E 'error(\[E[0-9]+\])?:|panicked at|FAILED|assertion' -A 4 "$log" | head -n 75 || true
+              exit 1
+            fi
+            sed -n -E 's/^(test [^ ]+ \.\.\. )?(STORED_TRADE_MATRIX|ACTUAL_V[23]_MATRIX) //p' "$log" > "../$lane.jsonl"
+            test -s "../$lane.jsonl"
+          done
+          test "$(wc -l < ../stored_compare.jsonl)" -eq 6
+          test "$(wc -l < ../actual_v2.jsonl)" -eq 4
+          test "$(wc -l < ../actual_v3.jsonl)" -eq 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pairs-${{ matrix.sha }}
+          path: '*.jsonl'

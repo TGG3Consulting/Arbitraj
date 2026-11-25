@@ -271,13 +271,14 @@ where
         if !current(mark) {
             return false;
         }
-        old.is_none_or(|(b, _)| {
+        let (b, _) = old;
+        {
             let block = |q: &crate::core::types::Quote| q.route.as_ref().map(|r| r.block);
             block(&a.buy_quote) == block(&b.buy_quote)
                 && block(&a.sell_quote) == block(&b.sell_quote)
                 && (a.profit_usd, std::cmp::Reverse((a.spend_max, a.qty)))
                     > (b.profit_usd, std::cmp::Reverse((b.spend_max, b.qty)))
-        })
+        }
     })
     .await
 }

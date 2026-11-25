@@ -21,6 +21,7 @@ pub(super) async fn archive<F:Future>(q:Option<(Decimal,Stamp)>,anchor:Decimal,b
 }
 """)
 append('src/core/precheck_hint.rs',"""
+#[allow(clippy::too_many_arguments)]
 pub async fn archived_entry<C:Curve<Data=Calc>, S:crate::core::costs::Source>(
   core:&Core, old:&DirCtx, cx:&DirCtx, book:&crate::core::types::OrderBook, memo:&Memo<'_,C>, found:&Found<Calc>, anchor:Decimal, src:&S,budget:Decimal,step:Decimal,floor:(Decimal,Decimal)
 )->serde_json::Value{
@@ -37,7 +38,7 @@ pub async fn archived_entry<C:Curve<Data=Calc>, S:crate::core::costs::Source>(
  }else{None};
  let mut responses=std::collections::BTreeMap::new();
  for n in std::iter::once(anchor).chain(q.map(|x|x.0)) {
-   let c=crate::core::costs::evaluate_with(cx,n,src).await;
+   let c=Box::pin(crate::core::costs::evaluate_with(cx,n,src)).await;
    responses.insert(n,c);
  }
  let mut out=Vec::new();
@@ -60,7 +61,7 @@ rewrite('tests/native_route_release_matrix.rs','let samples:Vec<_>=m.map.values(
       serde_json::json!({"logged":logged,"rebuilt":rebuilt})
     }else{serde_json::Value::Null};drop(m);''')
 rewrite('tests/native_route_release_matrix.rs','"cold":cold,"warm":warm}', '"cold":cold,"warm":warm,"entry":entry}')
-rewrite('tests/core_size_actual_v2.rs','let production=arb::core::precheck_hint::evidenced_hint', '''let (core,_)=report_common::start(&report_common::dir(&format!("source-{}",dir.asset.ticker))).await;
-    let entry=arb::core::precheck_hint::archived_entry(&core,&old_ctx,&cx,&a,&memo,&reconstructed,plan.qty,&source,budget,p.step,floor).await;
-    let production=arb::core::precheck_hint::evidenced_hint''')
+rewrite('tests/core_size_actual_v2.rs','let old_points=points.len(); let evals=memo.evals(); drop(memo);','''let (core,_)=report_common::start(&report_common::dir(&format!("source-{}",dir.asset.ticker))).await;
+    let entry=Box::pin(arb::core::precheck_hint::archived_entry(&core,&old_ctx,&cx,&a,&memo,&reconstructed,plan.qty,&source,budget,p.step,floor)).await;
+    let old_points=points.len(); let evals=memo.evals(); drop(memo);''')
 rewrite('tests/core_size_actual_v2.rs','"cold":cold,"warm":warm}', '"cold":cold,"warm":warm,"entry":entry}')

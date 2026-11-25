@@ -90,7 +90,9 @@ async fn again(core: &Core, mut deal: Deal) {
 async fn alert(core: &Core, deal: Deal, why: &str, error: &str) {
     let quote = super::trade_ops::deal_quote(core, &deal).await;
     let loss = Box::pin(super::sell_turn_fresh::settled(core, &deal, quote))
-        .await.ok().map(|(v, _, _)| deal.loss_pct_if(v));
+        .await
+        .ok()
+        .map(|(v, _, _)| deal.loss_pct_if(v));
     let d = deal.clone();
     super::manual::raise_alert(core, deal, loss, why.to_string(), Some(error.to_string())).await;
     super::manual_outcome::failed(core, &d, BUTTON, why).await;

@@ -19,7 +19,7 @@ jobs:
       - name: Check real receipts and durable claims
         run: |
           set -euo pipefail
-          for suite in '--lib deposit_log::' '--test poloniex_credit_case' '--test bsc_dex_wallet_events' '--test ledger_db_353' '--test core_credit_chain' '--test core_credit_chain_418' '--test core_usdt_return_tax_277_hash'; do
+          for suite in '--lib deposit_log::' '--lib core::credit_units::tests::sender_wire' '--test poloniex_credit_case' '--test bsc_dex_wallet_events' '--test ledger_db_353' '--test core_credit_chain' '--test core_credit_chain_418' '--test core_usdt_return_tax_277_hash'; do
             if ! cargo test --locked $suite > "$RUNNER_TEMP/part.txt" 2>&1; then
               grep -E 'error(\[E[0-9]+\])?:|panicked at|assertion|FAILED' -A 5 "$RUNNER_TEMP/part.txt" | head -n 80 || true
               exit 1

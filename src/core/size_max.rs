@@ -71,11 +71,20 @@ where
     let hi = m
         .units(upper)
         .ok_or_else(|| Fail::Stop(format!("объём {upper} слишком велик")))?;
-    let (cap_reached, limit) = edge(&mut m, p, hi, f.choice.max_exact).await;
+    let edge = m.beyond(hi + 1).await;
+    let (cap_reached, limit) = describe_edge(&edge, p, m.qty(hi + 1), f.choice.max_exact);
     biggest(&mut m, hi, known_ok, &f.best, p.bisect_steps, &pass).await?;
     // Parallel probes can admit a deeper point outside the local bisection interval.
     // The memo contains only budget-checked successes and is ordered by buy units.
     let found = m.map.values().rev().flatten().find(|point| pass(point));
+    let checked_edge = edge
+        .as_ref()
+        .ok()
+        .filter(|point| point.invested <= p.budget && pass(point));
+    let found = found
+        .into_iter()
+        .chain(checked_edge)
+        .max_by_key(|point| point.qty);
     let evals = m.evals();
     let (max_qty, max_profit, max_spend) = match found {
         Some(pt) => (Some(pt.qty), Some(pt.profit), Some(pt.invested)),
@@ -121,6 +130,7 @@ where
     let mut lo: Option<u64> = None;
     for q in [opt.qty, known_ok] {
         if let Some(n) = m.units(q).filter(|n| *n > 0 && *n < hi)
+            && (m.map.contains_key(&n) || !m.capped())
             && ok_at(&m.at(n).await)
             && lo.is_none_or(|l| n > l)
         {
@@ -132,6 +142,9 @@ where
     while hi - lo > 1 && left > 0 {
         left -= 1;
         let mid = lo + (hi - lo) / 2;
+        if m.capped() && !m.map.contains_key(&mid) {
+            break;
+        }
         let r = m.at(mid).await;
         if let Err(Fail::Stop(e)) = &r {
             return Err(Fail::Stop(e.clone()));
@@ -154,7 +167,17 @@ pub async fn edge<C: Curve>(
     exact: bool,
 ) -> (bool, String) {
     let next = m.qty(hi + 1);
-    match m.beyond(hi + 1).await {
+    let result = m.beyond(hi + 1).await;
+    describe_edge(&result, p, next, exact)
+}
+
+fn describe_edge<T>(
+    result: &Result<Point<T>, Fail>,
+    p: &Params,
+    next: Decimal,
+    exact: bool,
+) -> (bool, String) {
+    match result {
         Ok(pt) if pt.invested > p.budget => (
             true,
             format!(

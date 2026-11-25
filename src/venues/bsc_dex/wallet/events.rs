@@ -161,7 +161,7 @@ async fn session(p: &Pools, inflows: &Inflows, wallet: Address) -> String {
                     match super::events_tx::change(&p.ctx, &p.tokens, &mv, own).await {
                         Ok(b) => {
                             if mv.inbound && !own && inflows.waiting(mv.token) && let (Some(chain), Some(receipt))=(p.ctx.chain_id(),senders.receipt(&mv,wallet)) {
-                                inflows.remember(mv.token,chain,wallet,mv.tx,receipt);
+                                inflows.remember(mv.token,chain,wallet,mv.tx,receipt,head.number - mv.block);
                             }
                             let _ = p.out.send(MarketEvent::Balance(b)).await;
                         }

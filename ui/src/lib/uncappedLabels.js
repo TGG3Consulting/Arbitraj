@@ -15,14 +15,17 @@ const LIMITED = {
   dry: 'виртуальный бюджет dry.budget_usdt',
   free: 'свободный остаток на площадке покупки',
   budget: 'бюджет (составляющие не прочитаны)',
-  optimum: 'ничего: оптимум внутри бюджета',
+  optimum: 'лучший проверенный объём укладывается в бюджет',
   liquidity: 'ликвидность площадок',
   search_cap: 'предел поиска card.max_search_usdt',
   presell_sim: 'симуляция продажи до покупки (решение 380): проверен меньший объём',
 };
 
 /** Что ограничило — по коду. */
-export const limitedLabel = (k) => LIMITED[k] ?? k;
+export function limitedLabel(k, capped = false) {
+  const label = LIMITED[k] ?? k;
+  return k === 'optimum' && capped ? label + ' (достигнут предел расчёта)' : label;
+}
 
 /** Бюджет срезал оптимум (как core budget_bound). */
 export const budgetBound = (k) => !['optimum', 'liquidity', 'search_cap', 'presell_sim'].includes(k);

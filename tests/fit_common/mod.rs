@@ -52,9 +52,14 @@ pub fn zero() -> TokenTaxes {
     }
 }
 
-/// Запись: пул SHOPINX/WBNB (слова ±3) и пара WBNB/USDT, WBNB — промежуточная, налоги SHOPINX нулевые, пулы допущены
-/// (газ и сверка с квотером — как route_common), свежая голова, прямой режим, классика. Ошибок нет.
+/// Карта ±2 слова, с которой бот работал 15.11 до включения полосы чтения.
 pub async fn scene() -> Parts {
+    scene_with_words(2).await
+}
+
+/// Один блок и одни пулы. Меняется только число записанных слов с каждой стороны текущего слова.
+pub async fn scene_with_words(half_width: i16) -> Parts {
+    assert!((0..=12).contains(&half_width), "записаны только слова ±12");
     let got = super::route_common::load(DIR);
     let p = Parts::new(super::route_common::ctx().await);
     let usdt = Asset {
@@ -87,8 +92,7 @@ pub async fn scene() -> Parts {
         ticker: "BNB".into(),
     }]);
     let tag = "SHOPINX-WBNB pcs_v3";
-    // dex.tick_words = 2 — значение на сервере 15.11 (факт настроек бота); запись — ±12 слов.
-    let words = (WORD - 2, WORD + 2);
+    let words = (WORD - half_width, WORD + half_width);
     let mut pool = super::route_common::v3(&got, tag, true, 1, 100, words, POOL, SHOPINX, WBNB);
     pool.ticker = "SHOPINX".into();
     let pair = super::route_common::v2(&got, "WBNB-USDT v2", PAIR, WBNB, USDT);

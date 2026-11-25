@@ -35,7 +35,7 @@
 
 {#if rec}
   <p>
-    Плановый вход <strong>{money(rec.battle.invested)} USDT</strong> (ограничило: {limitedLabel(rec.limited_by)}) → модель без лимита:
+    Плановый вход <strong>{money(rec.battle.invested)} USDT</strong> (ограничило: {limitedLabel(rec.limited_by, rec.capped)}) → модель без лимита:
     вложить <strong>{money(rec.opt.invested)} USDT</strong>, прибыль <strong>{money(rec.opt.profit)} USDT</strong>;
     план {money(rec.battle.profit)}{#if fact != null}, факт {money(fact)}, расчётная прибыль без лимита минус факт
       <strong>{money(Number(rec.opt_passes ? rec.opt.profit : 0) - Number(fact))} USDT</strong>{/if}

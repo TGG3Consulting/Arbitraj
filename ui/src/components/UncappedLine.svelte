@@ -43,7 +43,7 @@
     прирост прибыли по модели <strong>{money(u.missed)} USDT</strong>;
   {/if}
   {#if u.min_plus}плюс от <strong>{money(u.min_plus.invested)} USDT</strong>{:else}<span class="muted">не становится плюсовой в пределах ликвидности</span>{/if};
-  ограничило: {limitedLabel(u.limited_by)}
+  ограничило: {limitedLabel(u.limited_by, u.capped)}
   <span class="muted">· край: {u.limit}</span>
 </p>
 

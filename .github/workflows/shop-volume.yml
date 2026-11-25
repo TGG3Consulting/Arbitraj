@@ -37,7 +37,9 @@ jobs:
           fi
           sed -n 's/^SHOP_WIDTH //p' "$RUNNER_TEMP/shop.log" > "$RUNNER_TEMP/shop-volume.jsonl"
           test -s "$RUNNER_TEMP/shop-volume.jsonl"
+          python "../$p/shop_continuous.py" . "$RUNNER_TEMP/shop-volume.jsonl"
       - uses: actions/upload-artifact@v4
         with:
           name: shop-control
           path: ${{ runner.temp }}/shop-volume.jsonl
+

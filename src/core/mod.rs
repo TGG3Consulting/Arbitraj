@@ -451,6 +451,7 @@ pub mod window_deal_run;
 pub mod window_dex;
 pub mod window_info;
 pub mod window_pool;
+pub mod window_queue_trace;
 pub mod window_run;
 pub mod window_tap;
 pub mod window_view;

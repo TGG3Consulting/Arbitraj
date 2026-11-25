@@ -58,6 +58,7 @@ impl Core {
                         maxwins: o.maxwins.clone(),
                         rejects: o.rejects.clone(),
                         busy: o.busy.clone(),
+                        queue_traces: o.queue_traces.clone(),
                         ..w
                     },
                     None => w,

@@ -323,9 +323,31 @@ async fn window_records_raw_frames_and_closes() {
         .push("bingx", "ETH", TapStream::Book, "t-conn", now_ns(), || {
             panic!("не пишется — не собирается")
         });
+    // A profitable competing direction met the coin lock. Its next attempt must be observable
+    // in the closed window even if the new market no longer allows a trade.
+    let key = CoinKey::of(&dir_.asset);
+    assert!(arb::core::coin_ride::take(&core, &key));
+    assert!(arb::core::coin_ride::admit(&core, &dir_).is_err());
+    arb::core::coin_ride::free_active(&core, &key);
+    candidates::enqueue(&core, &dir_);
+    for _ in 0..100 {
+        let windows = core.windows(Filter::default(), 10, 0).await.unwrap();
+        let row = &windows["windows"][0]["queue_traces"][0];
+        if row["result_at"].is_string() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+    }
     episode_run::failed(&core, &dir_, "прибыль ниже порога");
     let info = closed(&db).await;
     assert!(!ctx.taps.has("CAKE"), "запись выключена при закрытии");
+    let trace = &info.queue_traces[0];
+    assert_eq!(trace.direction, dir_);
+    assert!(trace.busy_at <= trace.released_at.unwrap());
+    assert!(trace.released_at.unwrap() <= trace.queued_at.unwrap());
+    assert!(trace.queued_at.unwrap() <= trace.started_at.unwrap());
+    assert!(trace.started_at.unwrap() <= trace.result_at.unwrap());
+    assert!(trace.result.is_some());
     assert_eq!(info.frames, frames.len() as u64);
     assert_eq!(info.lost, 0);
     assert!(info.dry && info.deals.is_empty() && info.outcome.is_none());
@@ -374,6 +396,10 @@ async fn window_records_raw_frames_and_closes() {
         .map(|l| l["type"].as_str().unwrap())
         .collect();
     assert_eq!(kinds, ["open", "tap", "close"]);
+    assert_eq!(
+        page["lines"][2]["info"]["queue_traces"],
+        json!(info.queue_traces)
+    );
 }
 
 /// Ждёт (не дольше 5 с) закрытую сводку окна в базе.

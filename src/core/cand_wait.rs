@@ -151,6 +151,7 @@ pub fn lost(core: &Core, d: &Direction, why: Why) {
             "кандидат не посчитан: ждал места дольше profit.calc_wait_ms",
         ),
     };
+    super::window_queue_trace::result(core, d, None, what, None);
     let note = Note {
         kind: LOST_KIND,
         venue: Some(&d.buy_on.0),

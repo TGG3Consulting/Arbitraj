@@ -75,6 +75,7 @@ impl Core {
                 Some(o) => WindowInfo {
                     directions: o.directions.clone(),
                     venues: o.venues.clone(),
+                    queue_traces: o.queue_traces.clone(),
                     max_profit: o.max_profit,
                     dex_points: o.dex_points.max(w.dex_points),
                     ..w

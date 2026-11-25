@@ -116,7 +116,11 @@ pub fn take(core: &Core, key: &CoinKey) -> bool {
 /// Что делает: снять замок монеты целиком, взятый take (ручное действие, цикл, продажа «Балансов»), и разбудить
 /// ожидания ручных действий (решение 405, manual_wait_run.rs). Принимает: ядро, ключ. Ошибок нет.
 pub fn free_active(core: &Core, key: &CoinKey) {
-    lk(&core.inner.active).remove(key);
+    let mut active = lk(&core.inner.active);
+    if active.remove(key) {
+        super::window_queue_trace::released(core, key);
+    }
+    drop(active);
     core.inner.coin_wake.notify_waiters();
 }
 
@@ -172,10 +176,14 @@ fn joinable(core: &Core, d: &Direction, rides: &[Ride]) -> Option<Seat> {
 pub fn admit(core: &Core, d: &Direction) -> Result<Seat, String> {
     let key = CoinKey::of(&d.asset);
     let mut a = lk(&core.inner.active);
-    let busy = || super::start_reason::busy(lk(&core.inner.deals).values(), d);
+    let busy = || {
+        super::window_queue_trace::blocked(core, d);
+        super::start_reason::busy(lk(&core.inner.deals).values(), d)
+    };
     if a.contains(&key) {
+        let why = busy();
         drop(a);
-        return Err(busy());
+        return Err(why);
     }
     // Решение 405 (ответ Тиграна на ревью Н3): ручное действие ждёт окончания сделок монеты — новых сделок нет.
     if let Some(why) = super::manual_wait::paused_why(core, &key) {
@@ -219,6 +227,7 @@ pub fn board(core: &Core, d: &Direction, deal_id: &str, group: Option<String>) {
     }
     // Решение 403 (ревью t188): счётчик записей — под замками `active` и `rides` (blocks_new читает его после `active`).
     core.inner.rides_live.fetch_add(1, Ordering::AcqRel);
+    super::window_queue_trace::released(core, &key);
     r.entry(key).or_default().push(Ride {
         deal_id: deal_id.to_string(),
         buy_on: d.buy_on.clone(),
@@ -251,6 +260,7 @@ pub fn release(core: &Core, key: &CoinKey, boarded: Option<&str>) {
             .fetch_sub(before - v.len(), Ordering::AcqRel);
         if v.is_empty() {
             r.remove(key);
+            super::window_queue_trace::released(core, key);
         }
     }
     drop(r);

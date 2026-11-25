@@ -94,6 +94,8 @@ pub struct WindowInfo {
     /// включается window.busy_calc). Старые сводки и окна без замера — пусто (поле не пишется).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub busy: Vec<super::busy_sum::BusySum>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub queue_traces: Vec<super::window_queue_trace::QueueTrace>,
     /// Запись остановлена (лимит места) — почему.
     pub stopped: Option<String>,
     pub close_reason: Option<String>,

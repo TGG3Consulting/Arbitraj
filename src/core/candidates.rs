@@ -88,6 +88,7 @@ pub fn enqueue(core: &Core, d: &Direction) {
         return;
     }
     let now = Instant::now();
+    super::window_queue_trace::queued(core, d);
     match core.inner.cand_tx.try_send((d.clone(), now)) {
         Ok(()) => {}
         // Решение 334: очередь полна — ждать места (profit.calc_wait_ms) или потеря со счётом; не молча.
@@ -204,12 +205,18 @@ fn start(
 /// решение 129. Принимает: ядро, направление, момент постановки в очередь. Ошибок нет — итог в «Кандидаты» и журнал.
 async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
     // Режим — один раз на расчёт: бюджет считается в нём же, решение по исполнителю — тоже (решение 74).
+    let observed = super::window_queue_trace::started(core, d);
     let mode = super::dry::mode(&core.inner.deps.settings);
     // Решения 372, 377: отсев по доказанной границе прибыли (sieve_gate.rs) — до тяжёлого расчёта, только память.
     // Отсечён — журнал; строка и эпизод — при записи журнала (решение 386), расчёта нет; доля sieve.audit_share отсечённых —
     // контрольный обычный расчёт ниже (класс Background, метка audit); иначе расчёт как раньше, с готовым контекстом.
     let (pre, audit) = match Box::pin(super::sieve_gate::run(core, d, &mode)).await {
-        super::sieve_gate::Gate::Done => return,
+        super::sieve_gate::Gate::Done => {
+            if observed.is_some() {
+                super::window_queue_trace::result(core, d, observed, "sieve", None);
+            }
+            return;
+        }
         super::sieve_gate::Gate::Calc { cx, audit } => (cx, audit),
     };
     let (class, purpose) = if audit {
@@ -267,6 +274,15 @@ async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
     let timing = serde_json::to_value(calc_report::report(&t)).unwrap_or_default();
     match verdict {
         Verdict::Accept(calc) => {
+            if observed.is_some() {
+                super::window_queue_trace::result(
+                    core,
+                    d,
+                    observed,
+                    "accept",
+                    Some(calc.profit_usd),
+                );
+            }
             // Решение 377: контроль отсева принял отсечённого — сверка границы и запись (sieve_audit.rs); сам кандидат —
             // обычным путём принятого.
             if audit {
@@ -275,6 +291,15 @@ async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
             accepted_timed(core, d, calc, &mode, timing, remaining_depth).await
         }
         Verdict::Reject { reason, best } => {
+            if observed.is_some() {
+                super::window_queue_trace::result(
+                    core,
+                    d,
+                    observed,
+                    &reason,
+                    best.as_ref().map(|c| c.profit_usd),
+                );
+            }
             let row = json!({ "direction": d, "verdict": Verdict::Reject { reason: reason.clone(), best: best.clone() }, "at": chrono::Utc::now(), "timing": timing });
             publish(core, d, row);
             // Решение 141: отказ с расчётом — фоновый расчёт «без потолка» (путь не ждёт).

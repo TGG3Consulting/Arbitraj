@@ -104,6 +104,7 @@ impl Windows {
             maxwins: vec![],
             rejects: vec![],
             busy: vec![],
+            queue_traces: vec![],
             stopped: None,
             close_reason: None,
         };
@@ -252,6 +253,13 @@ impl Windows {
     }
 
     /// Сводка открытого окна монеты (память). Ошибок нет.
+    pub(super) fn queue_traces(
+        &mut self,
+        k: &CoinKey,
+    ) -> Option<&mut Vec<super::window_queue_trace::QueueTrace>> {
+        Some(&mut self.open.get_mut(k)?.info.queue_traces)
+    }
+
     pub fn get(&self, k: &CoinKey) -> Option<WindowInfo> {
         self.open.get(k).map(|o| o.info.clone())
     }

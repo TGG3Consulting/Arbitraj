@@ -35,6 +35,7 @@ pub(super) use super::tick_sched::schedule_set;
 pub(super) fn schedule_book(core: &Core, venue: &VenueId, ticker: &str) {
     let assets = rd(&core.inner.tickers).book_assets(venue, ticker);
     for asset in assets {
+        super::window_queue_trace::market(core, &asset, venue, None);
         super::tick_sched::schedule(core, asset, venue.clone());
     }
 }
@@ -97,6 +98,12 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 // Решение 124: новые состояния пулов — толчок поиска циклов DEX ↔ DEX для исполнения (cycle_watch.rs).
                 core.inner.cycles.kick.notify_one();
                 for a in assets_by_tokens(&core, &venue, tokens) {
+                    super::window_queue_trace::market(
+                        &core,
+                        &a,
+                        &venue,
+                        Some((mark.at, mark.block)),
+                    );
                     super::tick_sched::schedule_pool(&core, a, venue.clone(), mark);
                 }
                 // Решение 349: соседи токенов (первый пул пары) и отметка пары — O(1); рассылка — задача mid_wake.rs.

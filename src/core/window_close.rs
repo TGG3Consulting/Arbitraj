@@ -54,7 +54,13 @@ pub fn deals(core: &Core, st: &mut HashMap<String, Run>) {
 
 /// Закрывает окно: запись на биржах выключена, последний кадр дописан, строка закрытия, сводка. Ошибок нет.
 pub async fn close(core: &Core, st: &mut HashMap<String, Run>, k: &CoinKey, why: &str) {
-    let Some(mut info) = lk(&core.inner.windows).close(k, why, Utc::now()) else {
+    let closed = {
+        let mut windows = lk(&core.inner.windows);
+        let info = windows.close(k, why, Utc::now());
+        super::window_queue_trace::forget(core, k);
+        info
+    };
+    let Some(mut info) = closed else {
         return;
     };
     if let Some(r) = st.remove(&info.id) {

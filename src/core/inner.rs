@@ -198,6 +198,7 @@ pub struct Inner {
     /// Приёмник канала — забирает задача эпизодов при запуске ядра (engine.rs).
     pub episode_rx: Mutex<Option<mpsc::Receiver<super::episode_run::EpMsg>>>,
     /// Открытые окна (решение 125, window.rs).
+    pub queue_trace_coins: arc_swap::ArcSwap<std::collections::HashSet<super::coin_key::CoinKey>>,
     pub windows: Mutex<super::window::Windows>,
     /// Файлы окон (storage/episode_files.rs, свой экземпляр): <data-dir>/windows.
     pub window_files: crate::storage::episode_files::EpisodeFiles,
@@ -326,6 +327,7 @@ impl Inner {
             episode_tx,
             episode_lost: Default::default(),
             episode_rx: Mutex::new(Some(episode_rx)),
+            queue_trace_coins: Default::default(),
             windows: Mutex::default(),
             window_files,
             window_off: Mutex::default(),

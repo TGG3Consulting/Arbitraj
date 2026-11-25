@@ -8,6 +8,7 @@ fn prices(here: Result<Decimal, String>, targets: &[(&str, i64)]) -> Comparison 
             .map(|(v, n)| (VenueId((*v).into()), Ok((*n).into())))
             .collect(),
         skipped: Vec::new(),
+        prior_cash: Decimal::ZERO,
         wallets: HashMap::new(),
     }
 }

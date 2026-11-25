@@ -45,10 +45,11 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
     // Урок 7: поиск вывода после отправки нужен окну — проверяется до денег.
     activity::window(ctx)?;
     let own_id = order_rules::client_id();
+    let amount = req.amount.normalize().to_string();
     let body = json!({
         "coin": req.asset.ticker,
         "network": req.network,
-        "amount": req.amount.normalize().to_string(),
+        "amount": amount,
         "address": req.address,
         "allowBorrow": false,
         "withdrawOrderId": own_id,
@@ -78,7 +79,13 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
                 None => return Err(e),
             }
         }
-        Err(e) => return Err(e),
+        Err(mut e) => {
+            if e.code == ErrorCode::WithdrawRejected {
+                e.message
+                    .push_str(&withdraw_fields(&req.asset.ticker, &req.network, &amount));
+            }
+            return Err(e);
+        }
     };
     Ok(Transfer {
         venue: ctx.venue(),
@@ -91,6 +98,11 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         fee: None,
         updated_at: Utc::now(),
     })
+}
+
+/// Only public request fields; exclude the account, signature, destination address and client ID.
+fn withdraw_fields(coin: &str, network: &str, amount: &str) -> String {
+    format!("; отправлено в /v2/wallets/withdraw: coin={coin}, network={network}, amount={amount}")
 }
 
 /// Запись вывода по полю (withdrawalRequestsId / withdrawOrderId) в окне. None — не найдена или сбой.
@@ -138,4 +150,17 @@ pub async fn withdrawal_status(ctx: &Ctx, id: &str) -> GatewayResult<Transfer> {
     };
     let ticker = num::text(rec, "currency")?.to_ascii_uppercase();
     activity::transfer(ctx, rec, &ticker, "", id, status)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn withdrawal_refusal_shows_only_the_public_wire_fields() {
+        assert_eq!(
+            withdraw_fields("山野万里", "BSC", "2365410.86"),
+            "; отправлено в /v2/wallets/withdraw: coin=山野万里, network=BSC, amount=2365410.86"
+        );
+    }
 }

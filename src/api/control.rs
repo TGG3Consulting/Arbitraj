@@ -31,6 +31,21 @@ pub struct CommandBody {
     action: ManualAction,
 }
 
+/// Read-only estimate for an existing sale button. It neither creates a ticket nor sends an order.
+pub async fn sale_preview(
+    State(st): State<AppState>,
+    Json(b): Json<CommandBody>,
+) -> Json<ConnectionCheck> {
+    let result = match b.action.sale_preview_record() {
+        Some((key, with_return)) => st.core.manual_sale_preview(&key, with_return).await,
+        None => Err("У этой команды нет оценки продажи".into()),
+    };
+    Json(match result {
+        Ok(details) => ConnectionCheck { ok: true, details },
+        Err(details) => ConnectionCheck { ok: false, details },
+    })
+}
+
 /// Команда человека из интерфейса (источник — CommandSource::Ui). Ядро пишет её в журнал.
 /// Принимает: действие. Возвращает: {ok, details}. Ошибки: 400/422 — неверное тело (разбор axum).
 pub async fn command(

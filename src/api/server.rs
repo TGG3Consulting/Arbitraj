@@ -82,6 +82,7 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route("/api/coins/{address}", get(coins::one))
         .route("/api/manual", get(control::manual))
         .route("/api/manual/command", post(control::command))
+        .route("/api/manual/sale-preview", post(control::sale_preview))
         .route("/api/gas-stats", get(control::gas_stats))
         .route("/api/spreads", get(core_api::spreads))
         .route("/api/candidates", get(core_api::candidates))

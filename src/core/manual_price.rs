@@ -12,6 +12,7 @@ pub struct Comparison {
     pub here: Result<Decimal, String>,
     pub targets: Vec<(VenueId, Result<Decimal, String>)>,
     pub skipped: Vec<String>,
+    pub prior_cash: Decimal,
     wallets: HashMap<VenueId, DexAccountId>,
 }
 
@@ -47,7 +48,7 @@ impl Comparison {
 
 /// Compare the net proceeds of this deal's recorded sales plus its remaining tokens.
 /// Each venue's own proceeds return together. No other deal's cash subsidizes the quote.
-pub async fn compare(core: &Core, deal: &Deal) -> Result<Comparison, String> {
+pub async fn compare(core: &Core, deal: &Deal, fresh_here: bool) -> Result<Comparison, String> {
     if deal.qty <= Decimal::ZERO {
         return Err("У сделки нет монет для продажи".into());
     }
@@ -55,20 +56,24 @@ pub async fn compare(core: &Core, deal: &Deal) -> Result<Comparison, String> {
     // Execution applies the normal allocation and verifies the amount before any order.
     let (mut targets, skipped) = super::manual_relay_targets::targets(core, deal);
     targets.sort_by(|a, b| a.0.cmp(&b.0));
-    let past: Vec<_> = super::usdt_return_parts::sell_venues(deal)
-        .into_iter()
-        .map(|venue| {
-            let symbol = super::balance_sell_check::quote_of(core, &venue)?;
-            let cash = super::usdt_return_parts::amount_at(deal, &venue, Some(&symbol));
-            Ok((venue, cash))
-        })
-        .collect::<Result<_, String>>()?;
+    let past = previous_cash(core, deal)?;
     let past = &past;
     let quotes = join_all(std::iter::once(&deal.at).chain(targets.iter()).map(
         |venue| async move {
             let wallet = super::manual_price_exec::wallet(core, deal, venue);
             let result = match &wallet {
-                Ok(w) => scenario(core, deal, venue, w.as_ref(), past).await,
+                Ok(w) => {
+                    scenario(
+                        core,
+                        deal,
+                        venue,
+                        w.as_ref(),
+                        past,
+                        fresh_here && *venue == deal.at,
+                        true,
+                    )
+                    .await
+                }
                 Err(e) => Err(e.clone()),
             };
             (venue.clone(), wallet.ok().flatten(), result)
@@ -90,16 +95,30 @@ pub async fn compare(core: &Core, deal: &Deal) -> Result<Comparison, String> {
         here,
         targets,
         skipped,
+        prior_cash: past.iter().map(|(_, v)| *v).sum(),
         wallets,
     })
 }
 
-async fn scenario(
+pub(super) fn previous_cash(core: &Core, deal: &Deal) -> Result<Vec<(VenueId, Decimal)>, String> {
+    super::usdt_return_parts::sell_venues(deal)
+        .into_iter()
+        .map(|venue| {
+            let symbol = super::balance_sell_check::quote_of(core, &venue)?;
+            let cash = super::usdt_return_parts::amount_at(deal, &venue, Some(&symbol));
+            Ok((venue, cash))
+        })
+        .collect()
+}
+
+pub(super) async fn scenario(
     core: &Core,
     deal: &Deal,
     venue: &VenueId,
     wallet: Option<&DexAccountId>,
     past: &[(VenueId, Decimal)],
+    fresh_cex: bool,
+    with_return: bool,
 ) -> Result<Decimal, String> {
     let asset = &deal.direction.asset;
     let (qty, charges) = if *venue == deal.at {
@@ -122,10 +141,17 @@ async fn scenario(
     if sell_qty <= Decimal::ZERO {
         return Err("остаток меньше шага продажи".into());
     }
-    let (adapter, (mut net, quote, book)) =
-        super::trade_ops::sell_quote_of(core, wallet, venue, asset, sell_qty, Some(&deal.id))
-            .await
-            .map_err(|e| e.message)?;
+    let (adapter, (mut net, quote, book)) = super::trade_ops::sell_quote_source(
+        core,
+        wallet,
+        venue,
+        asset,
+        sell_qty,
+        Some(&deal.id),
+        fresh_cex,
+    )
+    .await
+    .map_err(|e| e.message)?;
     if let Some(book) = book.as_ref() {
         let worst =
             super::worst::worst_of(venue, book, Side::Sell, sell_qty).map_err(|e| e.message)?;
@@ -159,6 +185,9 @@ async fn scenario(
     let cash = sell_qty * quote.avg_price - sale_fee;
     let parts = return_amounts(past, venue, cash);
     net += past.iter().map(|(_, cash)| *cash).sum::<Decimal>();
+    if !with_return {
+        return Ok(net);
+    }
     for (from, budget) in parts {
         if budget <= Decimal::ZERO || from == deal.direction.buy_on {
             continue;

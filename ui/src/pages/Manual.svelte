@@ -76,15 +76,26 @@
    * Результат или причина отказа — над таблицами; после ответа данные перечитываются.
    */
   async function command(action, question) {
-    if (!confirm(question)) return;
+    if (busy) return;
     busy = true;
     try {
+      if (['SellNow', 'SellNowReturn', 'SellHalted', 'SellHaltedReturn'].includes(Object.keys(action)[0])) {
+        let preview;
+        try {
+          preview = await post('/api/manual/sale-preview', { action });
+        } catch (e) {
+          preview = { ok: false, details: e.message };
+        }
+        question += '\n\n' + (preview.ok ? preview.details : 'Оценка недоступна: ' + preview.details);
+      }
+      if (!confirm(question)) return;
       result = await post('/api/manual/command', { action });
+      manual.reload();
     } catch (e) {
       result = { ok: false, details: e.message };
+    } finally {
+      busy = false;
     }
-    busy = false;
-    manual.reload();
   }
 
   /** Кнопки записи экрана по ключу («a.<id>», «h.<id>», «d.<id>», «u.<id>») — из records (решения 156, 163). */

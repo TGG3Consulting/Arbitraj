@@ -60,7 +60,8 @@ fn module_acceptance_is_base_specific_and_bound_to_actual_wallet_deltas() {
     ))
     .unwrap();
     let expected = archive["runtime_keccak"].as_str().unwrap().parse().unwrap();
-    assert_eq!(direct_module::accepted(8453, "elfomofi"), Some(expected));
+    assert!(direct_module::accepts(8453, "elfomofi", expected));
+    assert!(!direct_module::accepts(8453, "lunarbase", expected));
     assert_eq!(direct_module::accepted(1, "elfomofi"), None);
     let signal = families::make("elfomofi", "elfomofi").unwrap();
     let trade = families::make("elfomofi", "elfomofi_module").unwrap();

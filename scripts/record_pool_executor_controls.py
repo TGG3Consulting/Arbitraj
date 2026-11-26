@@ -19,6 +19,8 @@ def record(source, owner=FIRST_OWNER):
     step_kind={"metric":13,"v3":1}[mode]
     network=source["network"]
     url,weth=NETWORKS[network]
+    url=source.get("endpoint",url)
+    partial=source.get("capture_partial",False)
     tag={"blockHash":source["hash"],"requireCanonical":True}
     header=rpc(url,"eth_getBlockByHash",[source["hash"],False])
     deadline=int(header["timestamp"],16)+300
@@ -54,37 +56,47 @@ def record(source, owner=FIRST_OWNER):
             side=q["side"]
             cash,coin=tokens[side],tokens[1-side]
             amount=int(q["input"])
+            quote_details={}
             try:
                 deposit=amount if cash==weth else int(pool.get("funding_weth",10**16))
                 prefix=[call(weth,calldata("deposit()"),deposit)]
                 if cash!=weth:
-                    prefix.extend([approve(weth,router,deposit),call(router,calldata("swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",["uint256","uint256","address[]","address","uint256"],[deposit,amount,[weth,cash],owner,deadline]))])
+                    if alternate:=pool.get("funding_pool"):
+                        data=calldata("execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],
+                            [weth,deposit,cash,amount,deadline,[(1,alternate,weth,cash,10000,b"")]])
+                        prefix.extend([approve(weth,EXEC,deposit),call(EXEC,data)])
+                    else:
+                        prefix.extend([approve(weth,router,deposit),call(router,calldata("swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",["uint256","uint256","address[]","address","uint256"],[deposit,amount,[weth,cash],owner,deadline]))])
                 def preview(side,amount):
                     return call(VIRTUAL,calldata(quote_fn+"(address,bool,uint256)",["address","bool","uint256"],[addr,side==0,amount]))
                 def execute(side,x,minimum):
                     data=calldata("execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],[tokens[side],x,tokens[1-side],minimum,deadline,[(step_kind,addr,tokens[side],tokens[1-side],10000,encode(["bool"],[side==0]) if mode=="metric" else b"")]])
                     return call(EXEC,data)
-                def quote(calls,amount):
+                def quote(calls,amount,direction):
                     raw=bytes.fromhex(successful(calls)[-1]["returnData"][2:])
-                    if len(raw)!=64 or int.from_bytes(raw[:32],"big")!=amount or not int.from_bytes(raw[32:],"big"):
+                    if len(raw)!=64:raise ValueError("quoter returned nonstandard bytes")
+                    used,out=(int.from_bytes(raw[:32],"big"),int.from_bytes(raw[32:],"big"))
+                    if partial:
+                        quote_details[direction]={"requested":str(amount),"used":str(used),"out":str(out)}
+                    if not used or used>amount or not out or (not partial and used!=amount):
                         raise ValueError("partial or zero quote")
-                    return int.from_bytes(raw[32:],"big")
+                    return used,out
                 prefix.extend([approve(cash,EXEC,amount),balance(cash,owner)])
-                bought=quote(prefix+[preview(side,amount)],amount)
+                used_buy,bought=quote(prefix+[preview(side,amount)],amount,"buy_quote")
                 buy=execute(side,amount,bought)
                 legs=prefix+[buy,balance(coin,owner),approve(coin,EXEC,bought)]
-                sold=quote(legs+[preview(1-side,bought)],bought)
+                used_sell,sold=quote(legs+[preview(1-side,bought)],bought,"sell_quote")
                 full=successful(legs+[execute(1-side,bought,sold),balance(cash,owner),balance(coin,owner),balance(coin,EXEC),balance(cash,EXEC)])
                 def val(i):return int(full[i]["returnData"],16)
                 assert val(len(prefix)+1)==bought
-                assert val(-4)==val(len(prefix)-1)-amount+sold and [val(-3),val(-2),val(-1)]==[0,0,0]
+                assert val(-4)==val(len(prefix)-1)-used_buy+sold and [val(-3),val(-2),val(-1)]==[bought-used_sell,0,0]
                 for calls in [prefix+[execute(side,amount,bought+1)],legs+[execute(1-side,bought,sold+1)]]:
                     if int(simulate(calls)[-1]["status"],16)!=0:raise ValueError("minOut+1 passed")
-                result_row["cases"].append({"side":side,"input":str(amount),"bought":str(bought),"sold":str(sold),
+                result_row["cases"].append({**quote_details,"side":side,"input":str(amount),"bought":str(bought),"sold":str(sold),
                     "cash_before":str(val(len(prefix)-1)),"cash_after":str(val(-4)),"after_coin_owner":str(val(-3)),
                     "after_coin_executor":str(val(-2)),"after_cash_executor":str(val(-1)),
                     "min_out_plus_one_buy_reverted":True,"min_out_plus_one_sell_reverted":True})
-            except (ValueError,KeyError) as error:result_row["cases"].append({"side":side,"input":str(amount),"reason":str(error)[:160]})
+            except (ValueError,KeyError) as error:result_row["cases"].append({**quote_details,"side":side,"input":str(amount),"reason":str(error)[:160]})
     return result
 
 

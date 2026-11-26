@@ -17,6 +17,10 @@ on:
         description: Replay the CI-built executor against the two recorded Ethereum builder frames
         type: boolean
         default: false
+      derpdex_archive_replay:
+        description: Replay all verified DerpDEX Base pools on the archived factory block
+        type: boolean
+        default: false
       ring_archive_replay:
         description: Replay Ring Few underlying swaps at the pinned Ethereum block
         type: boolean
@@ -81,6 +85,21 @@ jobs:
       - name: Doc-тесты
         if: matrix.shard == 0
         run: cargo test --locked --doc
+  derpdex-archive:
+    if: inputs.derpdex_archive_replay
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0 beautifulsoup4==4.13.5 PyYAML==6.0.3
+      - run: python scripts/record_derpdex_markets.py "$RUNNER_TEMP/derpdex-base.json"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: derpdex-base-markets
+          path: ${{ runner.temp }}/derpdex-base.json
   ring-archive:
     if: inputs.ring_archive_replay
     runs-on: ubuntu-latest

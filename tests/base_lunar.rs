@@ -8,6 +8,54 @@ fn amount(v: &Value) -> U256 {
 }
 
 #[test]
+fn primary_module_matches_both_archives_and_settles_full_wallet_deltas() {
+    use arb::venues::bsc_dex::pools::direct_module;
+    for (kind, raw, count) in [
+        (
+            "elfomofi",
+            include_str!("data/first_run_dex_2026-11-26/base_pmm_executor_elfomo.json"),
+            8,
+        ),
+        (
+            "lunarbase",
+            include_str!("data/first_run_dex_2026-11-26/base_pmm_executor_lunar.json"),
+            4,
+        ),
+    ] {
+        let sample: Value = serde_json::from_str(raw).unwrap();
+        let expected = sample["runtime_keccak"].as_str().unwrap().parse().unwrap();
+        assert_eq!(direct_module::accepted(8453, kind), Some(expected));
+        assert!(!direct_module::accepts(1, kind, expected));
+        let cases = sample["cases"].as_array().unwrap();
+        assert_eq!(cases.len(), count);
+        for case in cases {
+            let r = &case["results"];
+            let n = |key: &str| amount(&r[key]["returnData"]);
+            assert_eq!(
+                n("wallet_in") - n("wallet_in_after"),
+                amount(&case["amount"])
+            );
+            assert_eq!(n("wallet_out_after") - n("wallet_out"), n("quote"));
+            assert_eq!(n("execute"), n("quote"));
+            for k in [
+                "wallet_allowance",
+                "module_allowance",
+                "module_in",
+                "module_out",
+            ] {
+                assert_eq!(n(k), U256::ZERO);
+            }
+            for k in ["expired", "above", "wrong_market", "wrong_token", "repeat"] {
+                assert_eq!(r[k]["status"], "0x0");
+            }
+            if kind == "lunarbase" {
+                assert_eq!(n("native_after"), n("native_before"));
+            }
+        }
+    }
+}
+
+#[test]
 fn only_one_proxy_is_open_and_native_wallet_deltas_match_the_quote() {
     let d: Value =
         serde_json::from_str(include_str!("data/first_run_dex_2026-11-26/lunarbase.json")).unwrap();

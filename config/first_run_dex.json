@@ -1906,10 +1906,18 @@
       "dex.pmm_ladder_counter": true
     },
     "verified_module": {
-      "runtime_keccak": "0xd3abddebdd155ff956b970579304da391511f945803c0ae5f1ec8f28c10a64bb",
+      "runtime_keccak": "0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403",
       "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
       "full": 8,
-      "markets": 2
+      "markets": 2,
+      "additional": [
+        {
+          "runtime_keccak": "0xd3abddebdd155ff956b970579304da391511f945803c0ae5f1ec8f28c10a64bb",
+          "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+          "full": 8,
+          "markets": 2
+        }
+      ]
     }
   },
   {
@@ -2141,6 +2149,12 @@
       "dex.pmm_pool": "0x0000efc4ec03a7c47d3a38a9be7ff1d52dd01b99",
       "dex.pool_implementation": "0x88460bd8dae6f632b9124e99b09d584e0b34b80f",
       "dex.pmm_ladder_counter": true
+    },
+    "verified_module": {
+      "runtime_keccak": "0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403",
+      "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "full": 4,
+      "markets": 1
     }
   },
   {

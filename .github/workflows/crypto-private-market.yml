@@ -1,7 +1,7 @@
 name: Encrypted historical market comparison
 on:
   push:
-    branches: [audit/bsc-arb-cycle-history-261126]
+    branches: [audit/bsc-arb-cycle-all-261126]
 permissions:
   contents: read
 jobs:

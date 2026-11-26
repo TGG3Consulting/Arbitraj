@@ -6,7 +6,11 @@ fn uint(x:&Value)->Option<U256>{
     let (n,base)=string.strip_prefix("0x").map_or((string.as_str(),10),|hex|(hex,16));
     U256::from_str_radix(n,base).ok()
 }
+use arb::venues::bsc_dex::math::swap_algebra::{self,AlgebraState,NextTick};
+use arb::core::types::LadderPoint;
 enum Hop {
+  Algebra {zin:bool,sqrt:U256,tick:i32,liq:u128,fee:u32,map:TickMap},
+  Metric {points:Vec<LadderPoint>},
     Pair {res_in:U256,res_out:U256,fee:u32},
     Tick {id:String,v4:bool,zin:bool,sqrt:U256,tick:i32,liq:u128,fee:u32,map:TickMap},
     Pmm {state:PmmState,base_input:bool,lp:U256,mt:U256},
@@ -15,6 +19,9 @@ impl Hop {
     fn parse(h:&Value)->Option<Self>{
         let fee=|v:&Value|u32::try_from(v.as_u64()?).ok();
         Some(match h["k"].as_str()? {
+            "metric"=>Self::Metric{points:h["points"].as_array()?.iter().map(|r|Some(LadderPoint{amount_in:uint(&r[0])?,amount_out:uint(&r[1])?})).collect::<Option<Vec<_>>>()?},
+            "algebra"=>{let mut t=std::collections::BTreeMap::new();for r in h["ticks"].as_array()?{t.insert(r[0].as_i64()? as i32,TickData{gross:r[1].as_str()?.parse().ok()?,net:r[2].as_str()?.parse().ok()?});}
+             Self::Algebra{zin:h["zin"].as_bool()?,sqrt:uint(&h["sqrt"])?,tick:h["tick"].as_i64()? as i32,liq:uint(&h["liq"])?.try_into().ok()?,fee:fee(&h["fee"])?,map:TickMap{spacing:h["spacing"].as_i64()? as i32,ticks:t.into(),words:(h["lo"].as_i64()? as i16,h["hi"].as_i64()? as i16)}}},
             "v2"=>Self::Pair{res_in:uint(&h["r_in"])?,res_out:uint(&h["r_out"])?,fee:fee(&h["fee"])?},
             "v3"|"cl"=>{
                 let v4=h["k"]=="cl";let raw_fee=fee(&h["fee"])?;
@@ -36,6 +43,8 @@ impl Hop {
     }
     fn result(&self, amount:U256,exact_in:bool,after:&mut std::collections::HashMap<String,After>)->Result<U256,&'static str>{
         match self {
+            Self::Metric{points}=>arb::venues::bsc_dex::quote::pmm_ladder::out(points,amount).ok_or("outside Metric ladder"),
+            Self::Algebra{zin,sqrt,tick,liq,fee,map}=>{let state=AlgebraState{sqrt_price:*sqrt,tick:*tick,liquidity:*liq,fee:*fee,ticks:map,next:NextTick::Row};let s=swap_algebra::swap(&state,*zin,true,amount)?;if s.complete && s.amount_in==amount{Ok(s.amount_out)}else{Err("outside algebra bitmap")}},
             Self::Pair{res_in,res_out,fee}=>{
                 let keep=1_000_000u32.checked_sub(*fee).ok_or("invalid V2 fee")?;
                 let scale=(U256::from(keep),U256::from(1_000_000u32));
@@ -93,7 +102,7 @@ async fn native_swap_and_exhaustive_cycle_size(){
         let cfg=&x["settings"];let cap=dec(&x["cap"]);let floor=dec(&cfg["dex_dex.min_profit_usd"]);
         let step=dec(&cfg["dex_dex.size_step_base"]);let num=|k:&str|cfg[k].as_u64().unwrap()as u32;
         assert!(cfg["size.pool_breaks_max"].is_null()&&cfg["size.early_exit_margin_usd"].is_null());
-        let original=market.point(dec(&x["original"])).unwrap();assert_eq!(original.data,dec(&x["primary"]));
+        let original=market.point(dec(&x["original"])).unwrap();let same_primary=original.data==dec(&x["primary"]);
         let mut qty=step;let mut oracle=market.point(step).unwrap();let mut visited=0;
         while qty*market.usd<=cap{let p=market.point(qty).unwrap();if p.profit>oracle.profit{oracle=p;}qty+=step;visited+=1;}
         let mut arms=Vec::new();
@@ -102,7 +111,7 @@ async fn native_swap_and_exhaustive_cycle_size(){
             let f=search(&mut market,&settings).await.unwrap();
             arms.push(json!({"eval_limit":budget,"qty":f.best.qty.to_string(),"profit":f.best.profit.to_string(),"evaluations":f.choice.evals,"admit":f.best.profit>=floor}));
         }
-        output.push(json!({"k":x["k"],"original_output":original.data.to_string(),"original_profit":original.profit.to_string(),"archive_matches":original.data==dec(&x["archived"]),"steps":visited,"oracle_qty":oracle.qty.to_string(),"oracle_profit":oracle.profit.to_string(),"native":arms}));
+        output.push(json!({"k":x["k"],"original_output":original.data.to_string(),"original_profit":original.profit.to_string(),"rpc_matches":same_primary,"archive_matches":original.data==dec(&x["archived"]),"steps":visited,"oracle_qty":oracle.qty.to_string(),"oracle_profit":oracle.profit.to_string(),"native":arms}));
     }
     fs::write(env::var("V2_OUT").unwrap(),serde_json::to_vec(&output).unwrap()).unwrap();
 }

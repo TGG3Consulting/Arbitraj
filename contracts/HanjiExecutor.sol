@@ -1,4 +1,10 @@
 // SPDX-License-Identifier: MIT
+// Файл: contracts/HanjiExecutor.sol.
+// Что делает: атомарный обмен на Hanji с проверкой размера остатка и фактической выручки.
+// Кто вызывает: кошелёк или исполнитель маршрута, который предоставил входные токены.
+// От чего зависит: прокси рынка Hanji и каноническая обёртка ETH конкретной сети.
+// Настройки: при ручном размещении задаётся контракт обёртки. Пара, предел цены,
+// предел комиссии, ID операции и минимальная выручка задаются каждым вызовом.
 pragma solidity 0.8.37;
 
 /// Quote and execute on the same proxy returned by Hanji's /aggregators/markets.
@@ -27,16 +33,15 @@ interface IHanjiWrapped {
     function deposit() external payable;
 }
 
-/// Separate owner-bound execution for a CLOB whose market-only orders may succeed with zero fills.
-/// Per-call balances isolate previous donations. The owner's input, residual and output are
+/// Shared execution for a CLOB whose market-only orders may succeed with zero fills.
+/// Per-call balances isolate previous donations. The caller's input, residual and output are
 /// checked after transfers. Both quote-token fees and lot-size dust are included in those amounts.
 contract HanjiExecutor {
-    address public owner;
     address public wrapped;
     bool private trading;
     // Stable ID of one economic leg. A reverted transaction rolls this write back, so the
     // original leg can still be retried after its revert is confirmed by the sender.
-    mapping(bytes32 => bool) public completed;
+    mapping(address => mapping(bytes32 => bool)) public completed;
 
     struct Order {
         address market;
@@ -58,7 +63,6 @@ contract HanjiExecutor {
 
     constructor(address wrappedToken) {
         if (wrappedToken.code.length == 0) revert InvalidOrder();
-        owner = msg.sender;
         wrapped = wrappedToken;
     }
 
@@ -67,12 +71,13 @@ contract HanjiExecutor {
     }
 
     function execute(Order calldata order) external returns (uint256 spent, uint256 received) {
-        if (msg.sender != owner || trading || block.timestamp > order.deadline ||
+        address payer = msg.sender;
+        if (trading || block.timestamp > order.deadline ||
             order.operationId == bytes32(0) || order.market.code.length == 0 || order.input == order.output ||
             order.budget == 0 || order.maxUnspent >= order.budget ||
             order.minReceived == 0 || order.limitPrice == 0) revert InvalidOrder();
-        if (completed[order.operationId]) revert AlreadyCompleted(order.operationId);
-        completed[order.operationId] = true;
+        if (completed[payer][order.operationId]) revert AlreadyCompleted(order.operationId);
+        completed[payer][order.operationId] = true;
         trading = true;
         IHanjiMarket market = IHanjiMarket(order.market);
         IHanjiMarket.Config memory config = market.getConfig();
@@ -86,10 +91,10 @@ contract HanjiExecutor {
         IHanjiToken output = IHanjiToken(order.output);
         uint256 originalIn = input.balanceOf(address(this));
         uint256 originalOut = output.balanceOf(address(this));
-        uint256 ownerIn = input.balanceOf(owner);
-        uint256 ownerOut = output.balanceOf(owner);
+        uint256 payerIn = input.balanceOf(payer);
+        uint256 payerOut = output.balanceOf(payer);
         uint256 originalEth = address(this).balance;
-        checkedCall(order.input, abi.encodeCall(input.transferFrom, (owner, address(this), order.budget)));
+        checkedCall(order.input, abi.encodeCall(input.transferFrom, (payer, address(this), order.budget)));
         if (input.balanceOf(address(this)) != originalIn + order.budget) revert TransferFailed();
         checkedCall(order.input, abi.encodeCall(input.approve, (order.market, order.budget)));
         if (sell) {
@@ -107,10 +112,10 @@ contract HanjiExecutor {
         if (leftover > order.maxUnspent) revert Unfilled();
         uint256 proceeds = output.balanceOf(address(this)) - originalOut;
         if (proceeds < order.minReceived) revert Unfilled();
-        if (leftover != 0) checkedCall(order.input, abi.encodeCall(input.transfer, (owner, leftover)));
-        checkedCall(order.output, abi.encodeCall(output.transfer, (owner, proceeds)));
-        spent = ownerIn - input.balanceOf(owner);
-        received = output.balanceOf(owner) - ownerOut;
+        if (leftover != 0) checkedCall(order.input, abi.encodeCall(input.transfer, (payer, leftover)));
+        checkedCall(order.output, abi.encodeCall(output.transfer, (payer, proceeds)));
+        spent = payerIn - input.balanceOf(payer);
+        received = output.balanceOf(payer) - payerOut;
         if (spent != order.budget - leftover || received < order.minReceived ||
             input.balanceOf(address(this)) != originalIn || output.balanceOf(address(this)) != originalOut ||
             address(this).balance != originalEth) revert Unfilled();

@@ -67,8 +67,8 @@ def capture(compiled):
             start_x, start_y = val(len(prefix)-2), val(len(prefix)-1)
             assert val(len(prefix)+1) == start_x + bought and val(len(prefix)+2) == start_y-spent
             assert val(-2) == start_x and val(-1) == start_y - spent + case["received_y"]
-            def completed(operation_id):
-                return call(executor, calldata("completed(bytes32)", ["bytes32"], [operation_id]))
+            def completed(operation_id, payer=OWNER):
+                return call(executor, calldata("completed(address,bytes32)", ["address", "bytes32"], [payer, operation_id]))
             # Prove a retry cannot debit twice even if its original signature was lost.
             repeated = simulate(entry + [completed(buy_id), order(buy), completed(buy_id), balance(x), balance(y)])
             if (int.from_bytes(success(repeated[-5]), "big") != 1 or
@@ -79,10 +79,11 @@ def capture(compiled):
                     int.from_bytes(success(repeated[-1]), "big") != start_y - spent):
                 raise ValueError("same leg replay did not give the expected duplicate error and balances")
             stranger = "0x" + keccak(text="independent review sender")[-20:].hex()
-            denied = simulate(prefix + [order(buy, stranger), completed(buy_id)])
-            if int(denied[-2]["status"], 16) != 0 or int.from_bytes(success(denied[-1]), "big"):
-                raise ValueError("non-owner consumed the operation ID")
-            controls = ["duplicate_operation", "unauthorized_sender"]
+            denied = simulate(prefix + [order(buy, stranger), completed(buy_id, stranger), completed(buy_id)])
+            if (int(denied[-3]["status"], 16) != 0 or int.from_bytes(success(denied[-2]), "big")
+                    or int.from_bytes(success(denied[-1]), "big")):
+                raise ValueError("unfunded account consumed another payer's operation ID")
+            controls = ["duplicate_operation", "unfunded_independent_sender"]
             altered_cases = [("buy_min_out_plus_one", prefix, buy, 5, bought+1),
                              ("sell_min_out_plus_one", entry, sell, 5, case["received_y"]+1),
                              ("buy_commission_above_cap", prefix, buy, 7, case["buy_return"][2]-1),

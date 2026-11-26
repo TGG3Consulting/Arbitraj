@@ -1,7 +1,7 @@
 name: Closed market control on historical inputs
 on:
   push:
-    branches: [audit/mexc-hardening-six-20261126]
+    branches: [audit/missing-linux-history-2611]
 permissions:
   contents: read
 jobs:
@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sha: [2925a361bb88edff0ee1aab3e18bdd3e6ff5b843, 3ca92702e0fd45be2148af3e1bc8b81c3d8c852b, acb36e580ad19b6a63b1330bcb4f15b3040e0e12]
+        sha: [acb36e580ad19b6a63b1330bcb4f15b3040e0e12, beaf489130f6ce882032c813f64edd516bb226b0, 26f00476f26572edf5ccf33281921c247a81d8cb, 3ca92702e0fd45be2148af3e1bc8b81c3d8c852b, 1038f50744602f88db08829d686063fc1c384524, 2925a361bb88edff0ee1aab3e18bdd3e6ff5b843, 5c696b0dd6fd11bf0991409b5cb79a45222ce286, af9f241769af5c49ce0a5d84e3051db56863e0ea, 15095ea3c6b4bd27291d026e857f14f6556a1e49, 94e3982da7465f1fafa97b0ef2d05c245fe74c7e, 89732498b8ed22e95d2a1320dcdf613074b302f4, 7491b1e7e977be6648c0a538f40169b521ceff45]
     runs-on: ubuntu-latest
     env:
       CARGO_PROFILE_DEV_DEBUG: '0'

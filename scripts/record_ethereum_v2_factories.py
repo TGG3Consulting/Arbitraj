@@ -7,9 +7,8 @@ import requests
 from eth_abi import decode
 from eth_utils import keccak
 
-from record_balancer_markets import Capture
+from record_balancer_markets import Capture, posts
 from record_base_slipstream_executor import ROOT, rpc
-from record_community_v3_ethereum import posts
 from record_v2_chain_pools import measure
 
 FACTORIES = {

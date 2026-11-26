@@ -9,7 +9,7 @@ from eth_abi import decode
 from eth_utils import keccak
 import requests
 
-from record_balancer_markets import Capture
+from record_balancer_markets import Capture, posts
 from record_base_slipstream_executor import ROOT, calldata
 from record_pool_executor_controls import record
 from record_rubicon_clmm import FOLDER, INDEX, FEE, CREATED, pool_address
@@ -33,19 +33,6 @@ def source(addr, snap):
     files[j["name"]+".sol"]=j["source_code"]
     return files, dict(source=url,compiler=j["compiler_version"],file_count=len(files),
                        runtime="0x"+keccak(bytes.fromhex(code[2:])).hex(),creation="0x"+keccak(bytes.fromhex(j["creation_bytecode"][2:])).hex())
-
-
-def posts(c, operations):
-    output=[]
-    multicall = "0xca11bde05977b3631167028862be2a173976ca11"
-    for i in range(0,len(operations),64):
-        group=operations[i:i+64]
-        packed=[(to,True,bytes.fromhex(calldata(key,args,values)[2:])) for to,key,args,values in group]
-        results,=c.one(multicall,"aggregate3((address,bool,bytes)[])",["(address,bool,bytes)[]"],[packed],["(bool,bytes)[]"])
-        for (to,key,_,_),(ok,value) in zip(group,results,strict=True):
-            if not ok:raise ValueError(f"{to} {key} reverted")
-            output.append(value)
-    return output
 
 
 def origin(c, snap):

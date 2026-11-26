@@ -16,6 +16,19 @@ from record_balancer_deployments import ROOT, read, write
 ZERO = "0x" + "00" * 20
 
 
+def posts(c, operations):
+    output=[]
+    multicall = "0xca11bde05977b3631167028862be2a173976ca11"
+    for i in range(0,len(operations),64):
+        group=operations[i:i+64]
+        packed=[(to,True,keccak(text=key)[:4]+encode(args,values)) for to,key,args,values in group]
+        results,=c.one(multicall,"aggregate3((address,bool,bytes)[])",["(address,bool,bytes)[]"],[packed],["(bool,bytes)[]"])
+        for (to,key,_,_),(ok,value) in zip(group,results,strict=True):
+            if not ok:raise ValueError(f"{to} {key} reverted")
+            output.append(value)
+    return output
+
+
 class Capture:
     """Запрашивает одну каноническую высоту и сохраняет все результаты, включая откаты."""
 

@@ -148,6 +148,9 @@ def tables(network, snapshots, profiles):
         oasis_v5_file = "tests/data/first_run_dex_2026-11-26/oasisswap_v5_base.json"
         oasis, oasis_v5 = read(Path(oasis_file)), read(Path(oasis_v5_file))
         cached = sum(any(map(int, row["fee_cache"])) for row in oasis["pools"])
+        capped_file = "tests/data/first_run_dex_2026-11-26/oasisswap_v5_capped_base.json"
+        rebate_file = "tests/data/first_run_dex_2026-11-26/oasisswap_rebate_base.json"
+        capped = read(Path(capped_file))
         out.extend(["", f"OasisSwap · фабрика подтвердила {len(oasis['pools'])} рынков, из них {cached} хранят протокольную комиссию сверх резервов. "
                     "На закреплённом блоке у всех пар ставка 100/10000, доля протокола в комиссии 5000/10000. "
                     "Прямой Router02 проверяет фактическую дельту получателя в варианте с поддержкой налога. Для пары `0x86bcde2d5b06bba5eb9b3c8332f770cdcaf0c95a` "
@@ -155,6 +158,10 @@ def tables(network, snapshots, profiles):
                     "обратная продажа не прошла на обоих объёмах. Возврат комиссии в нативном пути зависит от получателя, у адаптера — от EOA-отправителя транзакции. "
                     f"Базовый профиль применяет `oasisswap_v2_router`, отдельный модуль V5 использует `oasisswap_v2_v5` и `dex.router` от владельца. "
                     f"GitHub подтвердил скомпилированный runtime `{oasis_v5['module_runtime_hash']}` с адресом этой фабрики. "
+                    f"Следующий принятый runtime `{capped['module_runtime_hash']}` обрабатывает ответ estimator выше 10000 по обычной ставке. "
+                    "При таком ответе старый адаптер отзывает допуск, а нативный вызов сохраняет useRebate=false. На исходном блоке estimator равен нулевому адресу. "
+                    "В изолированной копии проверенных контрактов скидки 0, 1000, 10000 и 10001 дали итоговые ставки 100, 90, 0 и 100 bps. "
+                    f"[Новый V5 на архивных рынках](../{capped_file}) · [Границы скидки и откат](../{rebate_file}) · "
                     f"[Рынки и нативные обмены](../{oasis_file}) · [Архив V5](../{oasis_v5_file}) · [GitHub](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45897598960/job/140175260614)."])
         delta_file = "tests/data/first_run_dex_2026-11-26/deltaswap_base.json"
         delta = read(Path(delta_file))
@@ -197,6 +204,19 @@ def tables(network, snapshots, profiles):
                 "и отклоняется при проверке обратной связи. Профиль первого запуска использует официальный роутер. "
                 "Адрес адаптера и хеш его развёрнутого кода с прошитыми владельцем и размещением задаются владельцем для режима V5. "
                 f"[Реестр и реальные дельты кошелька](../{vista_file}) · [GitHub](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45898296581)."])
+    vista_volume_file = f"tests/data/first_run_dex_2026-11-26/ethervista_volume_{network}.json"
+    turnover = read(Path(vista_volume_file))
+    if turnover["last_hash"] != vista["selector"]["blockHash"] or turnover["registered_pairs"] != len(vista["registry"]):
+        raise ValueError(f"Числа EtherVista относятся к иному блоку или реестру: {network}")
+    whole, frac = divmod(int(turnover["weth_turnover_wei"]), 10**18)
+    weth_total = f"{whole}.{frac:018}".rstrip("0").rstrip(".")
+    out.extend(["", f"За 24 часа после {turnover['after_utc']} по {turnover['through_utc']} включительно "
+                f"на блоках {turnover['first_block']}–{turnover['last_block']} реальные Swap-события EtherVista дали {weth_total} WETH оборота. "
+                f"Вход составил {turnover['weth_in_wei']} wei WETH, выход {turnover['weth_out_wei']} wei WETH. "
+                f"Событий {turnover['swaps']}, транзакций {turnover['transactions']}, задействованных пар {turnover['active_pairs']} из {turnover['registered_pairs']}. "
+                "Для оборота суммируется одна сторона WETH каждого обмена. "
+                f"[События и канонические границы интервала](../{vista_volume_file}) · [GitHub](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45900157409)."])
+
     nami = read(Path(f"tests/data/first_run_dex_2026-11-26/nami_{network}.json"))
     samples = ", ".join(f"`{m['pool']}` — {m['tick_window']['measured_tick_steps']}" for m in nami["markets"])
     out.extend(["", f"Nami · фактический executor V5 выплатил полный результат {sum(len(m['cases']) for m in nami['markets'])} архивных обменов. "

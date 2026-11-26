@@ -205,7 +205,10 @@ async fn run(
     {
         let native = super::native::is_native(ctx, &req.asset);
         return Box::pin(super::vista_direct::NATIVE.scope(
-            native,
+            (
+                native,
+                h.fee_mode == Some(crate::core::types::RouterFeeMode::NativeGrossMinimum),
+            ),
             trade_direct::trade(q, env, nonces, req, &route, &leg, graph_mins),
         ))
         .await;

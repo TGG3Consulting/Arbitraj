@@ -1,0 +1,19 @@
+{
+  "network": "base",
+  "endpoint": "https://base.gateway.tenderly.co",
+  "first_block": 61830757,
+  "first_hash": "0x3e78748467b44a61223d359097c8156c6f079ee9d814c71ff12f10d21a39fcb2",
+  "last_block": 62262756,
+  "last_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+  "after_utc": "2026-11-24T21:42:06+00:00",
+  "through_utc": "2026-11-25T21:42:06+00:00",
+  "registered_pairs": 91,
+  "active_pairs": 0,
+  "transactions": 0,
+  "swaps": 0,
+  "non_weth_swaps": 0,
+  "weth_in_wei": "0",
+  "weth_out_wei": "0",
+  "weth_turnover_wei": "0",
+  "events": []
+}

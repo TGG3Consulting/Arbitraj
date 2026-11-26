@@ -109,6 +109,20 @@ pub async fn run(
     // симулированный блок — время головы + 1 с (решение 127, check/sim_base.rs): у пробы есть срок (deadline роутера),
     // с +12 с узла BSC проба падала бы при dex.deadline_s ≤ 12.
     let (at, now) = sim_base::head(ctx, heads).await?;
+    let vista = if super::super::quote::vista_pricing::is_vista(e) {
+        Box::pin(super::vista_probe::Probe::of(ctx, e, at.number, wallet))
+            .await?
+            .map(Box::new)
+    } else {
+        None
+    };
+    let verified = vista.as_ref().map(|p| {
+        let mut v = Box::new(e.clone());
+        v.pool.state = p.state();
+        v.pool.block = at.number;
+        v
+    });
+    let e = verified.as_deref().unwrap_or(e);
     let (buy_aps, buy_router, buy_data) = part(
         ctx,
         e,
@@ -120,6 +134,7 @@ pub async fn run(
         },
         wallet,
         now,
+        vista.as_deref(),
     )
     .await?;
     // Решение 388 (t174): «ожидалось без налога» — у DEX с виртуальным квотером его вызов с подменой кода в этих же
@@ -128,6 +143,13 @@ pub async fn run(
     let over = way.overrides(ctx)?;
     let (qto, qdata) = way.request(ctx, e, usdt, usdt_amount)?;
     let mut list = vec![pc::transfer(source, usdt, wallet, usdt_amount)];
+    if let Some(seed) = vista
+        .as_ref()
+        .and_then(|v| v.fund(wallet, usdt, usdt_amount))
+    {
+        list.push(seed);
+    }
+    let approvals_start = list.len();
     list.extend(buy_aps.iter().map(|(to, d)| Call {
         from: wallet,
         to: *to,
@@ -142,7 +164,16 @@ pub async fn run(
         (qto, qdata),
         (buy_router, buy_data),
     );
-    let first = simulate::run_with(ctx, &list, &[], &over, at).await?;
+    let mut values = Vec::new();
+    if let Some(v) = &vista {
+        values.push((h.buy, v.value(usdt, usdt_amount)));
+        if let Some(b) = v.balance(wallet, coin) {
+            list[h.before] = b.clone();
+            list[h.after] = b;
+        }
+    }
+    let hash = vista.as_ref().map(|v| v.head.hash);
+    let first = simulate::run_anchored(ctx, &list, &values, &over, at, hash).await?;
     let (q, x) = (h.quote, h.buy);
     if let Some((i, r)) = first.iter().enumerate().find(|(_, r)| !r.ok()) {
         // Решение 280: V2-форк без роутера — откат покупки через исполнитель — свойство пула, не монеты.
@@ -192,6 +223,7 @@ pub async fn run(
         },
         wallet,
         now,
+        vista.as_deref(),
     )
     .await?;
     // Решение 252: продажа — СРАЗУ после покупки, пробный перевод четверти — ПОСЛЕ продажи (порядок — pc::sell_tail).
@@ -200,7 +232,7 @@ pub async fn run(
     // пара V2 (вход = balanceOf − резерв) засчитала бы продаже лишний вход — налог продажи пробы занижен.
     let (sq_to, sq_data) = way.request(ctx, e, coin, rest)?;
     let base = list.len();
-    let t = pc::sell_tail(
+    let mut t = pc::sell_tail(
         &mut list,
         (wallet, coin, usdt, empty),
         quarter,
@@ -208,7 +240,19 @@ pub async fn run(
         (sq_to, sq_data),
         (sell_router, sell_data),
     );
-    let all = simulate::run_with(ctx, &list, &[], &over, at).await?;
+    if let Some(v) = &vista {
+        values.push((t.quote + 2, v.value(coin, rest)));
+        if let Some(b) = v.balance(wallet, usdt) {
+            list[t.quote + 1] = b.clone();
+            list[t.quote + 3] = b;
+        }
+        if let Some(w) = v.wrap_for_transfer(wallet, coin) {
+            values.push((t.transfer, quarter));
+            list.insert(t.transfer, w);
+            t.transfer += 1;
+        }
+    }
+    let all = simulate::run_anchored(ctx, &list, &values, &over, at, hash).await?;
     if let Some(r) = all.iter().find(|r| pc::late(r)) {
         let m = format!(
             "TransactionDeadlinePassed: срок транзакции вышел к симулированному блоку (время головы + 1 с, check/sim_base.rs) — проверьте dex.deadline_s и свежесть узла: {}",
@@ -251,7 +295,7 @@ pub async fn run(
         transfer_sent: quarter,
         transfer_got: xb,
         gas_buy: all[x].gas_used.to(),
-        gas_approve_buy: gas(&all[1..1 + n_appr]),
+        gas_approve_buy: gas(&all[approvals_start..approvals_start + n_appr]),
         gas_transfer: all[t.transfer].gas_used.to(),
         gas_sell: sold.then(|| (sell_swap.gas_used.to(), gas(sell_appr))),
     }))
@@ -269,16 +313,24 @@ async fn part(
     order: Order,
     wallet: Address,
     now: u64,
+    vista: Option<&super::vista_probe::Probe>,
 ) -> GatewayResult<(Vec<Approval>, Address, Bytes)> {
+    if let Some(v) = vista {
+        return v.leg(ctx, e, &order, wallet, now);
+    }
     // Решение 122 F/X: у вида без своего пути исполнения (family.tradable = false: DODO, THENA Fusion, Solidly,
     // Slipstream, форки V3, StableSwap, Maverick) пробу не собрать ни через Universal Router (чужой пул он не найдёт), ни
     // через classic V2 Router форка (у V3-форка его нет). Путь сделки для них — шаг контракта-исполнителя: тем же
     // вызовом execute идёт и проба (check/probe_exec.rs); нет шага / не задан адрес — точная причина оттуда.
-    if super::super::quote::vista_pricing::is_vista(e){
-        if e.family.executor_kind.is_some() && super::super::exec::executor::address(ctx)?.is_some(){
-            return Box::pin(probe_exec::part(ctx,e,order,wallet,now)).await;
+    if super::super::quote::vista_pricing::is_vista(e) {
+        if e.family.executor_kind.is_some() && super::super::exec::executor::address(ctx)?.is_some()
+        {
+            return Box::pin(probe_exec::part(ctx, e, order, wallet, now)).await;
         }
-        return Box::pin(super::super::exec::vista_direct::probe(ctx,e,order,wallet,now)).await;
+        return Box::pin(super::super::exec::vista_direct::probe(
+            ctx, e, order, wallet, now,
+        ))
+        .await;
     }
     if super::super::quote::oasis_pricing::is_oasis(e) {
         if e.family.executor_kind.is_some() && super::super::exec::executor::address(ctx)?.is_some()

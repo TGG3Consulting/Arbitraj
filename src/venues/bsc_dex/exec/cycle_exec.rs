@@ -85,7 +85,7 @@ pub async fn trade(
     let (mut c, mut at) = build(q, &legs, req, executor).await?;
     let need = approve_executor::missing(ctx, base, wallet, executor, c.amount_in).await?;
     if let Some(generation)=vista_generation && !need.is_empty() {
-        Box::pin(super::vista_gate::check(ctx,legs.iter().map(|s|(&s.entry,s.token_in)),generation)).await?;
+        Box::pin(super::vista_gate::check(ctx,legs.iter().map(|s|(&s.entry,s.token_in)).collect(),generation)).await?;
     }
     let approved = send_approvals(env, &slot, &need).await?;
     // Решение 236, дополнение (техлид 09.11): газ разрешений — в итог цикла и в любую ошибку после них (swap_send.rs).
@@ -135,7 +135,7 @@ pub async fn trade(
     let used: Vec<_> = legs.iter().map(|l| &l.entry).collect();
     let cap = super::solidly_gate::fresh_cap(q, &used).await?;
     if let Some(generation)=vista_generation {
-        Box::pin(super::vista_gate::check(ctx,legs.iter().map(|s|(&s.entry,s.token_in)),generation)).await?;
+        Box::pin(super::vista_gate::check(ctx,legs.iter().map(|s|(&s.entry,s.token_in)).collect(),generation)).await?;
     }
     let gas_tip = tips.as_ref().map(|t| t.tip);
     // Решение 438: какие пулы в условии — в журнал до отправки (в фоне).

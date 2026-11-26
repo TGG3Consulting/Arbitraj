@@ -9,13 +9,12 @@ use crate::{
 };
 use alloy_primitives::Address;
 
-pub(super) async fn check<'a>(
+pub(super) async fn check(
     ctx: &Ctx,
-    steps: impl Iterator<Item = (&'a Entry, Address)>,
+    steps: Vec<(&Entry, Address)>,
     generation: u64,
 ) -> GatewayResult<()> {
-    let mut pending = steps.filter(|(e, _)| vista_pricing::is_vista(e)).peekable();
-    if pending.peek().is_none() {
+    if steps.is_empty() {
         return Ok(());
     }
     let head = white_state::head(ctx, "latest").await?;
@@ -24,7 +23,10 @@ pub(super) async fn check<'a>(
         crate::core::types::PoolRef,
         crate::venues::bsc_dex::pools::ethervista::VistaMarket,
     )> = Vec::new();
-    for (e, input) in pending {
+    for (e, input) in steps {
+        if !vista_pricing::is_vista(e) {
+            continue;
+        }
         let index = markets
             .iter()
             .position(|(id, p, _)| *id == e.family.id && p == &e.pool.reference);
@@ -36,6 +38,12 @@ pub(super) async fn check<'a>(
             markets.push((e.family.id, e.pool.reference.clone(), value));
             &markets.last().expect("вставлен рынок").2
         };
+        if market.reserve_owner.is_none() {
+            return Err(ctx.err(
+                ErrorCode::NotConfigured,
+                "EtherVista: владелец резерва модуля не подтверждён",
+            ));
+        }
         vista_pricing::wire(ctx, e, input, market, super::vista_wire::Form::ModuleToken)?;
     }
     if ctx.settings.generation() != generation {

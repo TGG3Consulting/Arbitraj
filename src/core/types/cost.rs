@@ -148,6 +148,8 @@ pub enum RouteMode {
 pub enum RouterFeeMode {
     Standard,
     Rebate,
+    /// Официальный роутер проверяет валовую выплату ETH; аванс прибавлен к подписанному минимуму.
+    NativeGrossMinimum,
 }
 
 /// Один пул на пути доли.

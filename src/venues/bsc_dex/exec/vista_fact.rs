@@ -88,6 +88,11 @@ impl Proof {
                 }
                 (self.amount, net(output, true)?)
             }
+            Form::OfficialEthOut if side == Side::Buy && self.call.wrapped == output => {
+                let gross = native::moved(r, output, self.target, Side::Buy);
+                let received = gross.checked_sub(self.call.fee)?;
+                (net(input, false)?, received)
+            }
             Form::ModuleEthOut if side == Side::Buy && self.call.wrapped == output => {
                 let mut events = r
                     .logs

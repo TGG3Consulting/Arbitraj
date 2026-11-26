@@ -1,0 +1,33 @@
+{
+  "network": "ethereum",
+  "endpoint": "https://eth.drpc.org",
+  "first_block": 26487815,
+  "first_hash": "0x3378daa8ba7be301aebc49d0f665953b4df50b6a97fc7e2c75a27b55904d409c",
+  "last_block": 26494988,
+  "last_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+  "after_utc": "2026-11-24T21:49:11+00:00",
+  "through_utc": "2026-11-25T21:49:11+00:00",
+  "registered_pairs": 1087,
+  "active_pairs": 1,
+  "transactions": 1,
+  "swaps": 1,
+  "non_weth_swaps": 0,
+  "weth_in_wei": "206500000000000000",
+  "weth_out_wei": "0",
+  "weth_turnover_wei": "206500000000000000",
+  "events": [
+    {
+      "pool": "0xfdd05552f1377aa488afed744c8024358af02041",
+      "tx": "0x371ef02bddb12a6a52831105b0ec00c3886b2785d201dd78e2c7618e6251dd1b",
+      "height": 26493539,
+      "block_hash": "0x129e0513b24608fe89f85b461a27e0141a9104f172dee90bf28b05d04a64bfca",
+      "log_index": 530,
+      "amounts": [
+        "206500000000000000",
+        "0",
+        "0",
+        "1613261800626966324640"
+      ]
+    }
+  ]
+}

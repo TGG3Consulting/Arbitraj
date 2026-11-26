@@ -146,7 +146,7 @@ pub async fn trade(
         crate::venues::bsc_dex::pools::fraxswap::unchanged(ctx, frax_generation)?;
     }
     if let Some(generation)=vista_generation && !need.is_empty() {
-        Box::pin(super::super::vista_gate::check(ctx,legs.iter().flatten().map(|s|(&s.entry,s.order.token_in)),generation)).await?;
+        Box::pin(super::super::vista_gate::check(ctx,legs.iter().flatten().map(|s|(&s.entry,s.order.token_in)).collect(),generation)).await?;
     }
     let approved = send_approvals(env, &slot, &need).await?;
     // Решение 236, дополнение (техлид 09.11): газ разрешений — в итог обмена и в любую ошибку после них (swap_send.rs).
@@ -189,7 +189,7 @@ pub async fn trade(
     let cap = super::super::solidly_gate::fresh_cap(q, &used).await?;
     crate::venues::bsc_dex::pools::fraxswap::unchanged(ctx,frax_generation)?;
     if let Some(generation)=vista_generation {
-        Box::pin(super::super::vista_gate::check(ctx,legs.iter().flatten().map(|s|(&s.entry,s.order.token_in)),generation)).await?;
+        Box::pin(super::super::vista_gate::check(ctx,legs.iter().flatten().map(|s|(&s.entry,s.order.token_in)).collect(),generation)).await?;
     }
     let d = txs::send_capped(env, &slot, (executor, c.data(), value), true, None, cap)
         .await

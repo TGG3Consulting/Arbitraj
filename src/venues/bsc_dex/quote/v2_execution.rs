@@ -74,6 +74,11 @@ pub(super) async fn option(
     use crate::{core::types::RouteMode, gateway::errors::ErrorCode};
     use alloy_primitives::U256;
     let fee_mode = match &execution.wire {
+        super::v2_wallet_sim::Wire::Vista(v)
+            if v.form == super::super::exec::vista_wire::Form::OfficialEthOut =>
+        {
+            Some(RouterFeeMode::NativeGrossMinimum)
+        }
         super::v2_wallet_sim::Wire::Oasis { rebate: true } => Some(RouterFeeMode::Rebate),
         super::v2_wallet_sim::Wire::Oasis { rebate: false } => Some(RouterFeeMode::Standard),
         _ => None,
@@ -147,10 +152,12 @@ pub(super) async fn option(
         let vista_value = if super::vista_pricing::is_vista(&c.entry) {
             Some(match &execution.wire {
                 super::v2_wallet_sim::Wire::Vista(call) => call.value(amount),
-                super::v2_wallet_sim::Wire::V5(v) if matches!(v.native,Some((_,true))) => amount,
+                super::v2_wallet_sim::Wire::V5(v) if matches!(v.native, Some((_, true))) => amount,
                 _ => U256::ZERO,
             })
-        } else {None};
+        } else {
+            None
+        };
         let o = Order {
             payer,
             target,
@@ -168,7 +175,10 @@ pub(super) async fn option(
         )
         .await?;
         if let Some(value) = vista_value {
-            Box::pin(super::vista_pricing::funded(q, head, payer, value, &fill, i.gas)).await?;
+            Box::pin(super::vista_pricing::funded(
+                q, head, payer, value, &fill, i.gas,
+            ))
+            .await?;
         }
         if i.side == Side::Sell {
             c.usdt = num::to_decimal(fill.received, i.usdt_dec).ok_or_else(bad)?;

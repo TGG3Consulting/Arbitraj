@@ -12,9 +12,9 @@ use super::{
 };
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use alloy_primitives::{Address, U256};
-tokio::task_local! {pub(super) static NATIVE:bool;}
+tokio::task_local! {pub(super) static NATIVE:(bool,bool);}
 pub(super) fn native() -> bool {
-    NATIVE.try_with(|v| *v).unwrap_or(false)
+    NATIVE.try_with(|v| v.0).unwrap_or(false)
 }
 
 pub(super) async fn plan(
@@ -36,7 +36,16 @@ pub(super) async fn plan(
     let generation = ctx.settings.generation();
     let o = &s.order;
     let wrapped = ctx.addr("dex.native_wrapped")?;
-    let form = vista_pricing::form(native(), o.token_in, wrapped);
+    let mut form = vista_pricing::form(native(), o.token_in, wrapped);
+    if NATIVE.try_with(|v| v.1).unwrap_or(false) {
+        if form != Form::ModuleEthOut {
+            return Err(ctx.err(
+                ErrorCode::NoRoute,
+                "Выбранный нативный выход EtherVista не соответствует токенам",
+            ));
+        }
+        form = Form::OfficialEthOut;
+    }
     let h = white_state::head(ctx, "latest").await?;
     let m = vista_pricing::market(ctx, &s.entry, h, form).await?;
     let (target, call) = vista_pricing::wire(ctx, &s.entry, o.token_in, &m, form)?;
@@ -84,7 +93,7 @@ pub(super) fn proof(plan: &Plan) -> Option<super::vista_fact::Proof> {
     let Some(DirectCall::Vista {
         call:
             call @ Call {
-                form: Form::OfficialEthIn | Form::ModuleEthOut,
+                form: Form::OfficialEthIn | Form::ModuleEthOut | Form::OfficialEthOut,
                 ..
             },
         input,

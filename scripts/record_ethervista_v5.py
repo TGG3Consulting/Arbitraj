@@ -162,8 +162,12 @@ def scenario(directory, artifact, endpoint, cash, candidate=None):
                 events.append(dict(payer="0x"+log["topics"][1][-40:],recipient="0x"+log["topics"][2][-40:],
                                    token_in="0x"+log["topics"][3][-40:],token_out=money[0],
                                    spent=str(money[1]),received=str(money[2]),fee=str(money[3])))
-        return dict(status=rc["status"],gas=rc["gasUsed"],error=rc.get("error"),settled=events,
-                    before={k:str(v) for k,v in a.items()},after={k:str(v) for k,v in b.items()})
+        row=dict(status=rc["status"],gas=rc["gasUsed"],error=rc.get("error"),settled=events,
+                 before={k:str(v) for k,v in a.items()},after={k:str(v) for k,v in b.items()})
+        if call["to"].lower() in (router,ADAPTER):
+            row["transaction"]={key:call[key] for key in ("from","to","data","value","gas")}
+            row["logs"]=[{k:log[k] for k in ("address","topics","data")} for log in rc.get("logs",[])]
+        return row
     def delta(row,key):return int(row["after"][key])-int(row["before"][key])
     def successful(before,forward,amount):
         spend,receipt=("cash","coin") if forward else ("coin","cash")

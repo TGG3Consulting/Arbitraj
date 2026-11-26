@@ -50,7 +50,7 @@ pub(in crate::venues::bsc_dex) async fn market(
         e.pool.reference.address(),
         (e.pool.token0, e.pool.token1),
         &h.selector(),
-        form != Form::OfficialEthIn,
+        matches!(form, Form::ModuleEthOut | Form::ModuleToken),
     )
     .await
 }
@@ -74,6 +74,7 @@ pub(in crate::venues::bsc_dex) fn wire(
     let fee = if buy { m.buy_fee } else { m.sell_fee };
     let target = match form {
         Form::OfficialEthIn if buy => m.native,
+        Form::OfficialEthOut if !buy && m.router_weth.is_zero() => m.native,
         Form::ModuleEthOut if !buy => m.adapter.ok_or_else(invalid)?,
         Form::ModuleToken if buy || m.fee_reserve >= fee => m.adapter.ok_or_else(invalid)?,
         _ => return Err(invalid()),
@@ -98,7 +99,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, h: Option<Head>) -> Vec<O
     let input = if i.side == Side::Buy { i.usdt } else { i.coin };
     let mut out = Vec::new();
     for entry in i.entries.iter().filter(|e| is_vista(e)) {
-        let mut e = entry.clone();
+        let e = entry.clone();
         let PoolState::EtherVista(cached) = &e.pool.state else {
             continue;
         };
@@ -148,73 +149,118 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, h: Option<Head>) -> Vec<O
                 }
             }
         }
-        let (target, call) = if let Some(head) = h {
-            let Ok(m) = market(&q.ctx, &e, head, shape).await else {
-                continue;
-            };
-            let Ok(bound) = wire(&q.ctx, &e, input, &m, shape) else {
-                continue;
-            };
-            e.pool.state = m.state();
-            e.pool.block = head.number.to();
-            bound
-        } else {
-            let key = if shape == Form::OfficialEthIn {
-                "dex.quoter"
+        let direct_forms = std::iter::once(shape)
+            .chain((shape == Form::ModuleEthOut).then_some(Form::OfficialEthOut));
+        for shape in direct_forms {
+            let mut e = entry.clone();
+            let (target, call) = if let Some(head) = h {
+                let Ok(m) = market(&q.ctx, &e, head, shape).await else {
+                    continue;
+                };
+                let Ok(bound) = wire(&q.ctx, &e, input, &m, shape) else {
+                    continue;
+                };
+                e.pool.state = m.state();
+                e.pool.block = head.number.to();
+                bound
             } else {
-                "dex.router"
-            };
-            let Ok(target) = q.ctx.dex_addr(key, e.family.id) else {
-                continue;
-            };
-            if target.is_zero() {
-                continue;
-            }
-            (
-                target,
-                Call {
-                    form: shape,
-                    wrapped: cached.wrapped,
-                    fee: if input == cached.wrapped {
-                        cached.buy_fee
-                    } else {
-                        cached.sell_fee
+                let key = if matches!(shape, Form::OfficialEthIn | Form::OfficialEthOut) {
+                    "dex.quoter"
+                } else {
+                    "dex.router"
+                };
+                let Ok(target) = q.ctx.dex_addr(key, e.family.id) else {
+                    continue;
+                };
+                if target.is_zero() {
+                    continue;
+                }
+                (
+                    target,
+                    Call {
+                        form: shape,
+                        wrapped: cached.wrapped,
+                        fee: if input == cached.wrapped {
+                            cached.buy_fee
+                        } else {
+                            cached.sell_fee
+                        },
                     },
-                },
-            )
-        };
-        let exec = Execution {
-            mode: RouteMode::Direct,
-            target,
-            wire: Wire::Vista(call),
-        };
-        if let Ok(option) = v2_execution::option(q, i, e, payer, exec, h).await {
-            out.push(option);
+                )
+            };
+            let exec = Execution {
+                mode: RouteMode::Direct,
+                target,
+                wire: Wire::Vista(call),
+            };
+            if let Ok(option) = v2_execution::option(q, i, e, payer, exec, h).await {
+                out.push(option);
+            }
         }
     }
     out
 }
 
 /// Проверяет аванс ETH, разрешения, газ и публикацию на балансе плательщика перед допуском.
-pub(super) async fn funded(q:&Quoting, head:Head, payer:Address, value:alloy_primitives::U256, fill:&super::v2_wallet_sim::Fill, floor:alloy_primitives::U256)->GatewayResult<()> {
-    use super::super::{exec::gas_fund, node::rpc, send::{self,tx,tx_price}};
-    use alloy_primitives::{U256,U64};
-    let ctx=&q.ctx;
-    let (fees,base)=q.gas.fees(ctx,&q.heads).await?;
-    let price=tx_price::floored(fees,floor,base).ok_or_else(||ctx.err(ErrorCode::BadResponse,"Недоступна предельная цена газа EtherVista"))?;
-    let margin=ctx.dec("send.gas_limit_margin_pct")?;
-    let tip_cost=if let Some(t)=send::planned_tip(ctx) {
-        let units=send::tip_gas::planned_units(ctx).await?.ok_or_else(||ctx.err(ErrorCode::StaleData,"Газ перевода чаевых EtherVista неизвестен"))?;
-        Some((t,tx::with_margin(ctx,U64::from(units),margin)?))
-    } else {None};
-    let swap=tx::with_margin(ctx,U64::from(fill.swap_gas),margin)?;
-    let approvals=tx::with_margin(ctx,U64::from(fill.approval.0),margin)?;
-    let total=swap.saturating_add(approvals).saturating_add(fill.approval.1.saturating_sub(1) as u64);
-    let gas=total.saturating_add(tip_cost.map_or(0,|(_,g)|g));
-    let extra=q.gas.extra(ctx,gas,1+fill.approval.1+usize::from(tip_cost.is_some()))?;
-    let need=gas_fund::need_wei(value,U256::from(price.max_fee),total,tip_cost).saturating_add(extra);
-    let need=gas_fund::add_native_reserve(ctx,value,need)?;
-    let available:U256=rpc::call(ctx,"eth_getBalance",serde_json::json!([payer,head.selector()])).await?;
-    if available < need {return Err(ctx.err(ErrorCode::InsufficientBalance,"EtherVista: ETH кошелька не покрывает аванс, резерв, разрешения и газ"));}
+pub(super) async fn funded(
+    q: &Quoting,
+    head: Head,
+    payer: Address,
+    value: alloy_primitives::U256,
+    fill: &super::v2_wallet_sim::Fill,
+    floor: alloy_primitives::U256,
+) -> GatewayResult<()> {
+    use super::super::{
+        exec::gas_fund,
+        node::rpc,
+        send::{self, tx, tx_price},
+    };
+    use alloy_primitives::{U64, U256};
+    let ctx = &q.ctx;
+    let (fees, base) = q.gas.fees(ctx, &q.heads).await?;
+    let price = tx_price::floored(fees, floor, base).ok_or_else(|| {
+        ctx.err(
+            ErrorCode::BadResponse,
+            "Недоступна предельная цена газа EtherVista",
+        )
+    })?;
+    let margin = ctx.dec("send.gas_limit_margin_pct")?;
+    let tip_cost = if let Some(t) = send::planned_tip(ctx) {
+        let units = send::tip_gas::planned_units(ctx).await?.ok_or_else(|| {
+            ctx.err(
+                ErrorCode::StaleData,
+                "Газ перевода чаевых EtherVista неизвестен",
+            )
+        })?;
+        Some((t, tx::with_margin(ctx, U64::from(units), margin)?))
+    } else {
+        None
+    };
+    let swap = tx::with_margin(ctx, U64::from(fill.swap_gas), margin)?;
+    let approvals = tx::with_margin(ctx, U64::from(fill.approval.0), margin)?;
+    let total = swap
+        .saturating_add(approvals)
+        .saturating_add(fill.approval.1.saturating_sub(1) as u64);
+    let gas = total.saturating_add(tip_cost.map_or(0, |(_, g)| g));
+    let extra = q.gas.extra(
+        ctx,
+        gas,
+        1 + fill.approval.1 + usize::from(tip_cost.is_some()),
+    )?;
+    let need =
+        gas_fund::need_wei(value, U256::from(price.max_fee), total, tip_cost).saturating_add(extra);
+    let need = gas_fund::add_native_reserve(ctx, value, need)?;
+    let available: U256 = rpc::call(
+        ctx,
+        "eth_getBalance",
+        serde_json::json!([payer, head.selector()]),
+    )
+    .await?;
+    if available < need {
+        return Err(ctx.err(
+            ErrorCode::InsufficientBalance,
+            "EtherVista: ETH кошелька не покрывает аванс, резерв, разрешения и газ",
+        ));
+    }
     Ok(())
 }

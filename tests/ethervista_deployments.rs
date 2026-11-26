@@ -74,7 +74,14 @@ fn fees_and_active_router_match_every_registered_market_and_archived_wallet() {
                 defects[2] += usize::from(held > reserve);
             }
         }
-        assert_eq!(defects, if network == "base" { [0, 0, 0] } else { [1, 1, 1] });
+        assert_eq!(
+            defects,
+            if network == "base" {
+                [0, 0, 0]
+            } else {
+                [1, 1, 1]
+            }
+        );
         let observed = &j["observations"][0];
         let pool = rows.iter().find(|p| p["pool"] == observed["pool"]).unwrap();
         for (i, side) in ["buy", "sell"].into_iter().enumerate() {

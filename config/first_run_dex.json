@@ -2824,7 +2824,7 @@
     "chain_id": 8453,
     "network": "base",
     "id": "oasisswap-base",
-    "source": "https://sourcify.dev/server/v2/contract/8453/0xb588a34afa5be3f3af703159fb6586a2caf04ba8 · https://sourcify.dev/server/v2/contract/8453/0xc8126578093366968199707b7f8edff258f473b6?fields=storageLayout · tests/data/first_run_dex_2026-11-26/oasisswap_base.json · tests/data/first_run_dex_2026-11-26/oasisswap_v5_base.json",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xb588a34afa5be3f3af703159fb6586a2caf04ba8 · https://sourcify.dev/server/v2/contract/8453/0xc8126578093366968199707b7f8edff258f473b6?fields=storageLayout · tests/data/first_run_dex_2026-11-26/oasisswap_base.json · tests/data/first_run_dex_2026-11-26/oasisswap_v5_base.json · tests/data/first_run_dex_2026-11-26/oasisswap_v5_capped_base.json · tests/data/first_run_dex_2026-11-26/oasisswap_rebate_base.json",
     "settings": {
       "dex.kind": "oasisswap_v2_router",
       "dex.factory": "0xc8126578093366968199707b7f8edff258f473b6",
@@ -2836,7 +2836,8 @@
       "dex.quoter": "0xb588a34afa5be3f3af703159fb6586a2caf04ba8",
       "dex.router_runtime_hash": "0x2c23030b4de044f6a069e64082e231f12ef47b612489debfffc0869dbd003747",
       "dex.module_runtime_hashes": [
-        "0x18201dd118a5d2ddc1ca3580641434614984335c264c9d582625b8e09f20df28"
+        "0x18201dd118a5d2ddc1ca3580641434614984335c264c9d582625b8e09f20df28",
+        "0x7e56a9ba675688f8641f4ebb7ff672583d447d9a73e9eab133cdb46a200e3a1b"
       ]
     }
   },

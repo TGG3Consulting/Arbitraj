@@ -215,24 +215,48 @@ async fn no_swap_without_minimum() {
 #[tokio::test]
 async fn builder_http_start_marks_only_attempted_requests() {
     use alloy_primitives::Bytes;
-    use arb::venues::bsc_dex::send::{self, public, ready, sequencer_cond::Terms, stats::Stats};
+    use arb::venues::bsc_dex::send::{
+        self, blockrazor, public, ready, sequencer_cond::Terms, stats::Stats,
+    };
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    async fn serve(listener: TcpListener, body: &str) -> chrono::DateTime<Utc> {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let mut buf = [0u8; 4096];
+        assert!(stream.read(&mut buf).await.unwrap() > 0);
+        let observed = Utc::now();
+        let http = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        stream.write_all(http.as_bytes()).await.unwrap();
+        observed
+    }
 
     let c = ctx("builder-http-timestamp").await;
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let url = format!("http://{}", listener.local_addr().unwrap());
-    for (name, val) in [
-        ("channel.enabled", json!(true)),
-        ("channel.url", json!(url)),
-        ("channel.method", json!("single")),
-        ("channel.min_gas_price_gwei", json!("1")),
+    let rejected = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let accepted = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    for (id, addr) in [
+        ("public", rejected.local_addr().unwrap()),
+        ("blockrazor", accepted.local_addr().unwrap()),
     ] {
-        c.settings
-            .set(name, Scope::Channel("public".into()), Some(val), "тест")
-            .await
-            .unwrap();
+        for (name, val) in [
+            ("channel.enabled", json!(true)),
+            ("channel.url", json!(format!("http://{addr}"))),
+            ("channel.method", json!("single")),
+            ("channel.min_gas_price_gwei", json!("1")),
+        ] {
+            c.settings
+                .set(name, Scope::Channel(id.into()), Some(val), "тест")
+                .await
+                .unwrap();
+        }
     }
-    let targets = [ready::prepare(&c, &public::CHANNEL).unwrap()];
+    let targets = [
+        ready::prepare(&c, &public::CHANNEL).unwrap(),
+        ready::prepare(&c, &blockrazor::CHANNEL).unwrap(),
+    ];
     let bytes = Bytes::from_static(&[1, 2, 3]);
     let stats = Stats::default();
     let _ = send::dispatch(&c, &stats, &targets, &bytes, None, 1, Terms::default()).await;
@@ -248,41 +272,43 @@ async fn builder_http_start_marks_only_attempted_requests() {
             .await
             .unwrap();
     }
-    let peer = tokio::spawn(async move {
-        let (mut stream, _) = listener.accept().await.unwrap();
-        let mut buf = [0u8; 4096];
-        assert!(stream.read(&mut buf).await.unwrap() > 0);
-        let observed = Utc::now();
-        let response =
-            r#"{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"execution reverted"}}"#;
-        let http = format!(
-            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response}",
-            response.len()
-        );
-        stream.write_all(http.as_bytes()).await.unwrap();
-        observed
-    });
+    let reject_peer = tokio::spawn(serve(
+        rejected,
+        r#"{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"execution reverted"}}"#,
+    ));
+    let accept_peer = tokio::spawn(serve(
+        accepted,
+        r#"{"jsonrpc":"2.0","id":1,"result":"0x01"}"#,
+    ));
     let before = Utc::now();
-    let _ = send::dispatch(&c, &stats, &targets, &bytes, None, 1, Terms::default()).await;
-    let observed = peer.await.unwrap();
+    let dispatch = send::dispatch(&c, &stats, &targets, &bytes, None, 1, Terms::default())
+        .await
+        .unwrap();
+    let (seen_reject, seen_accept) = (reject_peer.await.unwrap(), accept_peer.await.unwrap());
+    assert_eq!(dispatch.accepted, ["blockrazor"]);
+    assert!(dispatch.uncertain.is_empty());
     assert!(
         before_rows.iter().any(|e| e.kind == "send.channel_rejected"
             && e.message.starts_with("public:")
             && e.message.contains("HTTP: не начат")),
         "{before_rows:?}"
     );
-    let after_rows = c.journal.list(20, None).await.unwrap();
-    let journal_start = after_rows
+    let rows = c.journal.list(20, None).await.unwrap();
+    let attempts = rows
         .iter()
         .find_map(|e| {
             e.message
                 .strip_prefix("public:")
-                .and_then(|t| t.split_once("HTTP: старт ").map(|(_, at)| at))
+                .and_then(|t| t.split_once("HTTP: старт ").map(|(_, tail)| tail))
         })
         .expect("начало конкретного HTTP запроса");
-    let recorded = chrono::DateTime::parse_from_rfc3339(journal_start)
-        .unwrap()
-        .to_utc();
-    // Вывод журнала округлён вниз до микросекунд.
-    assert!(before.timestamp_micros() <= recorded.timestamp_micros() && recorded <= observed);
+    let (failed, accepted) = attempts
+        .split_once("; принят blockrazor, HTTP старт ")
+        .expect("принятый соседний канал");
+    for (stamp, received) in [(failed, seen_reject), (accepted, seen_accept)] {
+        let recorded = chrono::DateTime::parse_from_rfc3339(stamp)
+            .unwrap()
+            .to_utc();
+        assert!(before.timestamp_micros() <= recorded.timestamp_micros() && recorded <= received);
+    }
 }

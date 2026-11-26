@@ -84,7 +84,7 @@ pub(super) async fn plan(
         o.min_out,
         deadline,
     )?;
-    p.direct_market = Some(DirectCall::Vista {
+    p.set_direct_market(DirectCall::Vista {
         call,
         input: o.token_in,
         amount: o.amount_in,
@@ -116,7 +116,7 @@ pub(super) fn proof(plan: &Plan) -> Option<super::vista_fact::Proof> {
             },
         input,
         amount,
-    }) = plan.direct_market
+    }) = plan.direct_market()
     else {
         return None;
     };

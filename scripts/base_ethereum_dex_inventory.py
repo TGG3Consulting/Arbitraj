@@ -1032,6 +1032,8 @@ def tables(network, snapshots, profiles):
             factory, roundtrip = q2["factory"], "getPair(address,address)"
         if base and id == "quickswap-v4-base" and quickswap.exists() and pool and any(m["pool"] == pool.lower() for m in qs["markets"]):
             factory, roundtrip = qs["addresses"]["AlgebraFactory"], "poolByPair(address,address)"
+        if not base and id == "swapr_ethereum":
+            factory,roundtrip = "0xd34971bab6e5e356fd250715f5de0492bb070452","getPair(address,address)"
         if base and id == "hydrex-integral" and Path(hydrex).exists():
             hx = read(Path(hydrex))
             if any(r["pool"] == pool.lower() and r["listed"] for r in hx["directory"]):
@@ -1074,6 +1076,9 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if not base and str(row["id"]) == "292":
+            candidates = ["0xd34971bab6e5e356fd250715f5de0492bb070452"]
+            task = "SWAPR-01 · 44 пары, две ставки. Оба маршрута прошли по двум размерам и направлениям"
         if not base and str(row["id"]) == "9436":
             stelaxis = read(Path("tests/data/first_run_dex_2026-11-26/stelaxis_ethereum.json"))
             candidates = [stelaxis["venue"]]

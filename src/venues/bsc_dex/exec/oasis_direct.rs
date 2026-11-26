@@ -144,7 +144,7 @@ pub(super) async fn plan(
         None => false,
     };
     let mut p = super::white_direct::build(ctx, s, wallet, m.native, now, all, generation).await?;
-    p.direct_market = Some(DirectCall::Oasis {
+    p.set_direct_market(DirectCall::Oasis {
         input: s.order.token_in,
         amount: s.order.amount_in,
         rebate,

@@ -67,7 +67,7 @@ pub struct Plan {
     /// Команды обмена (без проверки баланса).
     steps: Vec<(u8, Bytes)>,
     /// Аргументы прямого модуля; он сам измеряет выход на кошельке в том же вызове.
-    pub(super) direct_market: Option<DirectCall>,
+    direct_market: Option<Box<DirectCall>>,
     /// Сумма минимумов выхода (не 0).
     min_total: U256,
     deadline: U256,
@@ -76,6 +76,13 @@ pub struct Plan {
 }
 
 impl Plan {
+    pub(super) fn direct_market(&self) -> Option<DirectCall> {
+        self.direct_market.as_deref().copied()
+    }
+    pub(super) fn set_direct_market(&mut self, call: DirectCall) {
+        self.direct_market = Some(Box::new(call));
+    }
+
     /// Собирает план. Принимает: разрешения, роутер, кошелёк, выходной токен, команды, сумму минимумов, срок.
     /// Ошибки: Internal — сумма минимумов 0 (обмен без минимума не отправляется).
     pub fn new(
@@ -133,8 +140,8 @@ impl Plan {
     /// Сколько BNB (wei) уходит с транзакцией обмена: сумма WRAP_ETH или 0. Ошибок нет.
     pub(super) fn ekubo_proof(&self)->Option<super::ekubo_v2_fact::Proof>{super::ekubo_v2_fact::Proof::of(self,self.deadline)}
     pub fn value(&self) -> U256 {
-        if let Some(DirectCall::EkuboV2{key,..})=self.direct_market{return key.value();}
-        if let Some(DirectCall::Vista { call, amount, .. }) = self.direct_market {
+        if let Some(DirectCall::EkuboV2{key,..})=self.direct_market(){return key.value();}
+        if let Some(DirectCall::Vista { call, amount, .. }) = self.direct_market() {
             return call.value(amount);
         }
         match self.native {
@@ -148,7 +155,7 @@ impl Plan {
     /// Нативная монета: WRAP_ETH(роутер, сумма) первой командой; покупка — UNWRAP_WETH(кошелёк, сумма минимумов)
     /// последней вместо BALANCE_CHECK_ERC20 (база тогда не нужна).
     pub fn data(&self, base: U256) -> Bytes {
-        if let Some(direct) = self.direct_market {
+        if let Some(direct) = self.direct_market() {
             return match direct {
                 DirectCall::Module {
                     pool,

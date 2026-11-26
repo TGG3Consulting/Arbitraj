@@ -565,3 +565,72 @@ fn rabbit_module_and_v5_pay_the_same_wallet_amounts_as_the_official_router() {
         }
     }
 }
+
+#[test]
+fn swapr_both_actual_pair_rates_settle_the_signers_own_assets_on_both_routes() {
+    use arb::venues::bsc_dex::pools::families;
+    use std::collections::BTreeSet;
+
+    let archive: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+        &include_bytes!("data/first_run_dex_2026-11-26/swapr_ethereum.json.gz")[..],
+    ))
+    .unwrap();
+    let row = first_run_profiles::named(1, "swapr_ethereum").unwrap();
+    let settings = &row["settings"];
+    let family = families::make("user-swapr", settings["dex.kind"].as_str().unwrap()).unwrap();
+    assert!(family.variant.dual_v2_execution() && family.variant.v2_block_state());
+    let roles = &archive["roles"];
+    assert_eq!(
+        settings["dex.factory_runtime_hash"],
+        roles["Factory"]["runtime"]
+    );
+    assert_eq!(settings["dex.pair_runtime_hash"], roles["Pair"]["runtime"]);
+    assert_eq!(
+        settings["dex.router_runtime_hash"],
+        roles["Router"]["runtime"]
+    );
+    assert_eq!(
+        settings["dex.pool_code_hashes"][0],
+        archive["creation_code_hash"]
+    );
+    assert_eq!(settings["dex.v2_fee_source"], "pool");
+    assert_eq!(settings["dex.v2_fee_method"], "swapFee()");
+    assert_eq!(settings["dex.v2_fee_denominator"], 10000);
+    let pairs = archive["markets"].as_array().unwrap();
+    assert_eq!(pairs.len(), 44);
+    assert_eq!(pairs.iter().filter(|m| m["fee_bps"] == 25).count(), 43);
+    assert_eq!(pairs.iter().filter(|m| m["fee_bps"] == 50).count(), 1);
+    let mut observed = BTreeSet::new();
+    for e in archive["examples"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e.get("wallets").is_some())
+    {
+        let bps = e["fee_bps"].as_i64().unwrap();
+        let fee = fee_ratio(Decimal::new(bps, 2)).unwrap();
+        let m = pairs.iter().find(|m| m["pool"] == e["pool"]).unwrap();
+        assert_eq!(m["balances"], m["reserves"]);
+        for case in e["wallets"].as_array().unwrap() {
+            let buy = &case["buy"];
+            let sell = &case["sell"];
+            let i = usize::from(m["tokens"][0] != buy["input"]);
+            let rin = uint(&m["reserves"][i]);
+            let rout = uint(&m["reserves"][1 - i]);
+            let input = uint(&case["size"]);
+            let out = amount_out(input, rin, rout, fee).unwrap();
+            let back = amount_out(out, rout - out, rin + input, fee).unwrap();
+            for (leg, expected_spend, expected_credit, side) in
+                [(buy, input, out, "buy"), (sell, out, back, "sell")]
+            {
+                assert_eq!(uint(&leg["exact"]["spent"]), expected_spend);
+                assert_eq!(uint(&leg["exact"]["received"]), expected_credit);
+                assert_eq!(leg["above"]["status"], "0x0");
+                assert_eq!(uint(&leg["above"]["spent"]), U256::ZERO);
+                assert_eq!(uint(&leg["above"]["received"]), U256::ZERO);
+                assert!(observed.insert((bps, case["mode"].as_str().unwrap(), input, side)));
+            }
+        }
+    }
+    assert_eq!(observed.len(), 16);
+}

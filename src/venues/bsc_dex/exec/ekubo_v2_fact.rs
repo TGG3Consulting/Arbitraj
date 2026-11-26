@@ -32,7 +32,7 @@ impl Proof {
             key,
             core,
             wrapped: Some(wrapped),
-        } = p.direct_market?
+        } = p.direct_market()?
         else {
             return None;
         };

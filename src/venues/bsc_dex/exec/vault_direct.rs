@@ -209,7 +209,7 @@ pub(super) async fn plan(
         .await?;
     }
     let mut p = super::white_direct::build(ctx, s, wallet, vault, now, all, generation).await?;
-    p.direct_market = Some(DirectCall::Vault {
+    p.set_direct_market(DirectCall::Vault {
         id,
         input: s.order.token_in,
         amount: s.order.amount_in,
@@ -233,7 +233,7 @@ pub(in crate::venues::bsc_dex) async fn probe(
     let steps = super::plan::single(e, o);
     let step = &steps[0];
     let mut p = super::white_direct::build(ctx, step, wallet, vault, now, true, generation).await?;
-    p.direct_market = Some(DirectCall::Vault {
+    p.set_direct_market(DirectCall::Vault {
         id,
         input: step.order.token_in,
         amount: step.order.amount_in,

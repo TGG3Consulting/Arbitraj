@@ -49,7 +49,7 @@ pub(super) async fn plan(
         order.min_out,
         deadline,
     )?;
-    plan.direct_market = Some(super::plan::DirectCall::Module {
+    plan.set_direct_market(super::plan::DirectCall::Module {
         pool,
         input: order.token_in,
         amount: order.amount_in,

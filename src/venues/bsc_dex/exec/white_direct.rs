@@ -93,7 +93,7 @@ pub(super) async fn build(
         o.min_out,
         end,
     )?;
-    plan.direct_market = Some(DirectCall::V2SupportingFee {
+    plan.set_direct_market(DirectCall::V2SupportingFee {
         input: o.token_in,
         amount: o.amount_in,
     });

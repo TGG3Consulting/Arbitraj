@@ -114,7 +114,7 @@ pub(super) async fn plan(
         o.min_out,
         U256::from(now.saturating_add(ctx.int("dex.deadline_s")?)),
     )?;
-    plan.direct_market = Some(DirectCall::EkuboV2 {
+    plan.set_direct_market(DirectCall::EkuboV2 {
         key,
         core: s.entry.pool.reference.address(),
         wrapped,

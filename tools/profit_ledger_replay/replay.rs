@@ -9,6 +9,7 @@ use arb::core::{
     usdt_return_state::UsdtReturn,
 };
 use rust_decimal::Decimal;
+use sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -54,6 +55,7 @@ fn all_observed_deals() {
     let mut output = BTreeMap::new();
     for (dataset, rows) in datasets {
         assert!(!rows.is_empty());
+        let mut ordered = Sha256::new();
         let mut summaries: BTreeMap<String, Stats> = BTreeMap::new();
         for row in rows {
             let direction = Direction {
@@ -89,6 +91,13 @@ fn all_observed_deals() {
                 deal_return_cost::apply(&mut d);
                 assert_eq!(deal_return_cost::apply(&mut d), Decimal::ZERO);
             }
+            for value in [row.recorded, reconstructed, d.result_usd] {
+                match value {
+                    Some(v) => ordered.update(v.normalize().to_string().as_bytes()),
+                    None => ordered.update(b"missing"),
+                }
+                ordered.update([0u8]);
+            }
             for group in row.groups {
                 let s = summaries.entry(group).or_default();
                 s.count += 1;
@@ -107,7 +116,8 @@ fn all_observed_deals() {
             }
         }
         assert_eq!(summaries["all"].verified_corrections, 2, "TLOS receipt coverage");
-        output.insert(dataset, summaries);
+        let digest = hex::encode(ordered.finalize());
+        output.insert(dataset, serde_json::json!({"periods": summaries, "row_digest": digest}));
     }
     fs::write(env::var("LEDGER_RESULT").unwrap(), serde_json::to_vec_pretty(&output).unwrap()).unwrap();
 }

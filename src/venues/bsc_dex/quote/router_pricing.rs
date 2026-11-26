@@ -72,6 +72,43 @@ pub(in crate::venues::bsc_dex) async fn checked(
     Ok(())
 }
 
+/// У промежуточного шага плательщик — роутер, а служебное CONTRACT_BALANCE не является
+/// суммой котировки. Проверяется топология по коду, фабрике и реестру; реальный minOut
+/// всей группы измеряется уже собранным Router02-вызовом бандла.
+pub(in crate::venues::bsc_dex) async fn registered(
+    ctx: &Ctx,
+    e: &Entry,
+    h: Head,
+) -> GatewayResult<()> {
+    use super::super::pools::{abi_check::IPoolImmutables, abi_v2v3::IV2Factory, base_native_v3};
+    use alloy::sol_types::SolCall;
+    let (router, hash) = profile(ctx, e.family.id)?;
+    let registry = IV2Factory::getPairCall {
+        tokenA: e.pool.token0,
+        tokenB: e.pool.token1,
+    }
+    .abi_encode()
+    .into();
+    let factory = IPoolImmutables::factoryCall {}.abi_encode().into();
+    let (to, data) = base_native_v3::bound(ctx, e, router, registry, factory)?;
+    let at = h.selector();
+    let (code, frame) = tokio::try_join!(
+        rpc::call::<Bytes>(ctx, "eth_getCode", json!([router, at])),
+        rpc::call::<Bytes>(ctx, "eth_call", json!([{"to":to,"data":data},at]))
+    )?;
+    let expected = ctx.dex_addr("dex.factory", e.family.id)?;
+    let bound = base_native_v3::checked_data(e.pool.reference.address(), &frame)
+        .ok()
+        .and_then(|v| IPoolImmutables::factoryCall::abi_decode_returns(&v).ok());
+    if code.is_empty() || keccak256(code) != hash || bound != Some(expected) {
+        return Err(ctx.err(
+            ErrorCode::QuoteMismatch,
+            "Изменились код или регистрация Router02",
+        ));
+    }
+    Ok(())
+}
+
 /// Индикативный расчёт использует состояние пула; финальная котировка измеряет оба баланса и газ.
 pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Vec<OptionQuote> {
     let Ok(payer) = signer::address(&q.ctx) else {
@@ -85,7 +122,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         let execution = Execution {
             mode: RouteMode::Direct,
             target,
-            step: None,
+            wire: super::v2_wallet_sim::Wire::Router02,
         };
         if let Ok(option) = v2_execution::option(q, i, e.clone(), payer, execution, head).await {
             options.push(option);

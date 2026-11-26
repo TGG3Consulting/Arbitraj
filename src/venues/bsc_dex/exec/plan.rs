@@ -36,6 +36,11 @@ pub(super) enum DirectCall {
         input: Address,
         amount: U256,
     },
+    Oasis {
+        input: Address,
+        amount: U256,
+        rebate: bool,
+    },
     V2SupportingFee {
         input: Address,
         amount: U256,
@@ -145,6 +150,19 @@ impl Plan {
                     self.min_total,
                     self.deadline,
                 ),
+                DirectCall::Oasis {
+                    input,
+                    amount,
+                    rebate,
+                } => super::oasis_direct::swap_data(
+                    input,
+                    self.token_out,
+                    amount,
+                    self.min_total,
+                    self.wallet,
+                    self.deadline,
+                    rebate,
+                ),
                 DirectCall::V2SupportingFee { input, amount } => super::fork_swap::swap_data(
                     amount,
                     self.min_total,
@@ -199,6 +217,16 @@ pub async fn build(
         return Err(ctx.err(ErrorCode::Internal, "план без шагов"));
     };
     let e = &first.entry;
+    if super::super::quote::oasis_pricing::is_oasis(e) {
+        return Box::pin(super::oasis_direct::plan(
+            ctx,
+            steps,
+            wallet,
+            now,
+            all_approvals,
+        ))
+        .await;
+    }
     if super::super::quote::frax_pricing::is_frax(e) {
         return Box::pin(super::frax_direct::plan(
             ctx,

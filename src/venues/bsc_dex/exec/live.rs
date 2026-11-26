@@ -80,6 +80,25 @@ async fn eval(
     let (q, ctx) = (v.q, &v.q.ctx);
     let mut entries = Vec::with_capacity(found.len());
     for mut e in found.iter().cloned() {
+        if let Some((wallet, rebate, adapter)) = super::oasis_direct::chosen(&e) {
+            let at = super::quoter_refetch::block(q)
+                .map(|b| format!("{b:#x}"))
+                .unwrap_or_else(|| "latest".into());
+            let head = super::super::quote::white_state::head(ctx, &at).await?;
+            let m = Box::pin(super::super::quote::oasis_pricing::state(
+                ctx, &e, wallet, head, adapter,
+            ))
+            .await?;
+            if (adapter || rebate)
+                && super::super::quote::oasis_pricing::use_rebate(&m, adapter) != rebate
+            {
+                return Err(ctx.err(
+                    ErrorCode::StaleData,
+                    "OasisSwap: изменилась ставка кошелька",
+                ));
+            }
+            super::super::quote::oasis_pricing::apply(&mut e, &m, head, rebate);
+        }
         if direct_mode
             && found.len() == 1
             && super::white_direct::selected()

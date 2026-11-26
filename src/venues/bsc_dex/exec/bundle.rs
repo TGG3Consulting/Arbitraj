@@ -204,12 +204,8 @@ pub async fn build(
         if let Some((generation, h)) = gate {
             for s in leg {
                 if super::super::quote::router_pricing::is_native(&s.entry) {
-                    Box::pin(super::super::quote::router_pricing::checked(
-                        ctx,
-                        &s.entry,
-                        s.order.token_in,
-                        s.order.amount_in,
-                        h,
+                    Box::pin(super::super::quote::router_pricing::registered(
+                        ctx, &s.entry, h,
                     ))
                     .await?;
                 } else if s.entry.family.variant

@@ -66,6 +66,7 @@ impl Curve for CycleCurve {
             legs: vec![RouteLeg {
                 share: Decimal::ONE,
                 hops: vec![RouteHop {
+                    fee_mode: None,
                     family: h.family.clone(),
                     kind: h.kind,
                     pool: h.pool.clone(),

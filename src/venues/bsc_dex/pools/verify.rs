@@ -444,6 +444,7 @@ fn found(
         c.family.variant,
         Variant::V2Create2
             | Variant::V2Create2LiveFee
+            | Variant::Oasis
             | Variant::DeltaSwap
             | Variant::V2RouterCreate2
             | Variant::WhiteSwap

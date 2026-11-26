@@ -72,7 +72,7 @@ pub(super) async fn candidates(
                 Execution {
                     mode: RouteMode::Graph,
                     target,
-                    step: Some(v5),
+                    wire: super::v2_wallet_sim::Wire::V5(v5),
                 },
                 h,
             )
@@ -93,7 +93,7 @@ pub(super) async fn candidates(
                 Execution {
                     mode: RouteMode::Direct,
                     target,
-                    step: None,
+                    wire: super::v2_wallet_sim::Wire::Router02,
                 },
                 h,
             )

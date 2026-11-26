@@ -36,7 +36,7 @@ pub(super) async fn candidates(
         let execution = Execution {
             mode: RouteMode::Direct,
             target,
-            step: None,
+            wire: super::v2_wallet_sim::Wire::Router02,
         };
         if let Ok(option) = v2_execution::option(q, i, e, payer, execution, head).await {
             options.push(option);

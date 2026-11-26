@@ -59,6 +59,27 @@ pub fn request(
         ));
     }
     let zero_for_one = token_in == e.pool.token0;
+    if super::oasis_pricing::is_oasis(e) {
+        use super::super::exec::oasis_direct::{IOasisRouter, chosen};
+        let (user, rebate, _) = chosen(e).unwrap_or((Address::ZERO, false, false));
+        let call = IOasisRouter::getAmountsOutCall {
+            amountIn: amount,
+            path: vec![token_in, token_out],
+            useRebate: rebate,
+            user,
+        };
+        let registry = super::super::pools::abi_v2v3::IV2Factory::getPairCall {
+            tokenA: e.pool.token0,
+            tokenB: e.pool.token1,
+        };
+        return super::super::pools::base_native_v3::bound(
+            ctx,
+            e,
+            ctx.dex_addr("dex.quoter", e.family.id)?,
+            registry.abi_encode().into(),
+            call.abi_encode().into(),
+        );
+    }
     if e.family.variant.frax_twamm() {
         let q = super::super::pools::fraxswap::IFrax::getAmountsOutWithTwammCall {
             amountIn: amount,
@@ -472,7 +493,7 @@ pub fn request(
 
 /// Выход из ответа квотера. None — ответ не по ABI.
 pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> Option<U256> {
-    if e.family.variant.registered_v2_router() {
+    if e.family.variant.registered_v2_router() || super::oasis_pricing::is_oasis(e) {
         let PoolRef::Contract(pool) = e.pool.reference else {
             return None;
         };
@@ -494,7 +515,7 @@ pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> O
 }
 
 pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
-    if e.family.variant.registered_v2_router() {
+    if e.family.variant.registered_v2_router() || super::oasis_pricing::is_oasis(e) {
         let PoolRef::Contract(pool) = e.pool.reference else {
             return None;
         };

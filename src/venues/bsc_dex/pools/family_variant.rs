@@ -56,6 +56,9 @@ pub enum Variant {
     /// Пара исполняется родным роутером, обычный 4-аргументный swap V5 недоступен.
     V2RouterCreate2,
     DeltaSwap,
+    Oasis,
+    /// Solidly V1 с комиссией по получателю и внешним источником фабрики.
+    LeetSwap,
     /// Три обновляемые прокси WhiteSwap с комиссией прямого обмена и скидкой роутера.
     WhiteSwap,
     /// Пара CREATE2 с изменяемой ставкой. Резервы и комиссия сверяются вместе.
@@ -136,7 +139,7 @@ impl Variant {
     pub fn v2_block_state(self) -> bool {
         matches!(
             self,
-            Self::V2Create2LiveFee | Self::FraxTwamm | Self::FraxTwammRouter | Self::DeltaSwap
+            Self::V2Create2LiveFee | Self::FraxTwamm | Self::FraxTwammRouter | Self::DeltaSwap | Self::Oasis
         )
     }
 }
@@ -165,12 +168,14 @@ pub fn of(kind: &str) -> Variant {
         "v3_fork_uniswap_lm" => Variant::UniswapV3Lm,
         "fraxswap_twamm_router" => Variant::FraxTwammRouter,
         "fraxswap_twamm" | "fraxswap_twamm_v5" => Variant::FraxTwamm,
+        "oasisswap_v2_router" | "oasisswap_v2_v5" => Variant::Oasis,
         "v2_deltaswap_router" => Variant::DeltaSwap,
         "v2_fork_router_create2" => Variant::V2RouterCreate2,
         "v2_whiteswap" => Variant::WhiteSwap,
         "v2_fork_executor_create2" => Variant::V2Create2,
         "v2_fork_executor_create2_live_fee" => Variant::V2Create2LiveFee,
         "slipstream_ramses" => Variant::RamsesClV2,
+        "leetswap_v2" => Variant::LeetSwap,
         "solidly_v1_ramses" => Variant::RamsesLegacy,
         _ => Variant::Base,
     }

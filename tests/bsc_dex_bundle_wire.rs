@@ -176,6 +176,7 @@ async fn router_count_capped_by_bundle_max_routers() {
 
 fn hop(family: &str, pool: alloy_primitives::Address) -> RouteHop {
     RouteHop {
+        fee_mode: None,
         family: family.into(),
         kind: PoolKind::V3,
         pool: PoolRef::Contract(pool),

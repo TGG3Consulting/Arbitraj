@@ -115,6 +115,7 @@ fn route_and_legs(p: &Parts, legs: &[(Address, u64)]) -> (DexRoute, Vec<Vec<Step
         r.legs.push(RouteLeg {
             share: Decimal::from(amount) / Decimal::from(total),
             hops: vec![RouteHop {
+                fee_mode: None,
                 family: e.family.id.into(),
                 kind: e.pool.kind,
                 pool: e.pool.reference.clone(),

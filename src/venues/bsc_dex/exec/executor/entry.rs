@@ -177,6 +177,18 @@ pub fn shape(e: &Entry) -> Result<(ExecKind, Address, Address), String> {
 pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params, Address)> {
     let (k, pool) =
         supported(e.family, &e.pool.reference).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?;
+    if super::super::super::quote::oasis_pricing::is_oasis(e) {
+        if k != ExecKind::Basin
+            || !matches!(e.pool.state, PoolState::Oasis { .. })
+            || (token_in != e.pool.token0 && token_in != e.pool.token1)
+        {
+            return Err(ctx.err(
+                ErrorCode::NoRoute,
+                "OasisSwap: не подтверждены форма и адреса шага V5",
+            ));
+        }
+        return Ok((Params::Basin, ctx.dex_addr("dex.router", e.family.id)?));
+    }
     if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::FraxTwamm {
         if k != ExecKind::Basin
             || !matches!(e.pool.state, PoolState::V2 { .. })

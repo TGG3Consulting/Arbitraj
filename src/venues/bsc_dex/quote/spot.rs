@@ -32,7 +32,7 @@ fn q96() -> U256 {
 pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
     let coin0 = e.coin == e.pool.token0;
     match &e.pool.state {
-        PoolState::V2 { reserve0, reserve1 } | PoolState::DeltaSwap { reserve0, reserve1, .. } => {
+        PoolState::V2 { reserve0, reserve1 } | PoolState::Oasis { reserve0, reserve1, .. } | PoolState::DeltaSwap { reserve0, reserve1, .. } => {
             let (rc, ru) = if coin0 {
                 (*reserve0, *reserve1)
             } else {

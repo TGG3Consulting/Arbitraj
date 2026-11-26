@@ -70,7 +70,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 Execution {
                     mode: RouteMode::Direct,
                     target,
-                    step: None,
+                    wire: super::v2_wallet_sim::Wire::Router02,
                 },
                 head,
             )
@@ -100,7 +100,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         {
             continue;
         }
-        let step = Some(V5Step {
+        let wire = super::v2_wallet_sim::Wire::V5(V5Step {
             kind: 29,
             pool: adapter,
             data: Bytes::new(),
@@ -113,7 +113,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             Execution {
                 mode: RouteMode::Graph,
                 target,
-                step,
+                wire,
             },
             head,
         )

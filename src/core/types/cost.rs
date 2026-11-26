@@ -143,6 +143,13 @@ pub enum RouteMode {
     OrderbookIndicative,
 }
 
+/// Выбранная ставка опубликованного ABI роутера.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RouterFeeMode {
+    Standard,
+    Rebate,
+}
+
 /// Один пул на пути доли.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RouteHop {
@@ -150,6 +157,9 @@ pub struct RouteHop {
     pub family: String,
     pub kind: PoolKind,
     pub pool: PoolRef,
+    /// Вариант одного и того же обмена, зафиксированный сравнением чистой выплаты.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fee_mode: Option<RouterFeeMode>,
 }
 
 /// Доля маршрута: часть входа идёт по цепочке пулов.

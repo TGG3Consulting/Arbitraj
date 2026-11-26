@@ -165,7 +165,7 @@ fn side(
     let pick = |amount_in: U256, amount_out: U256| if buy { amount_in } else { amount_out };
     match (&e.pool.state, e.pool.kind) {
         (
-            PoolState::V2 { reserve0, reserve1 }
+            PoolState::V2 { reserve0, reserve1 } | PoolState::Oasis { reserve0, reserve1, .. }
             | PoolState::DeltaSwap {
                 reserve0, reserve1, ..
             },

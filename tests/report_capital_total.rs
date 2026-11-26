@@ -83,6 +83,7 @@ async fn capital_total_equals_results_and_edges() {
         legs: vec![RouteLeg {
             share: Decimal::ONE,
             hops: vec![RouteHop {
+                fee_mode: None,
                 family: rec.pool.family.id.to_string(),
                 kind: rec.pool.pool.kind,
                 pool: pool.clone(),

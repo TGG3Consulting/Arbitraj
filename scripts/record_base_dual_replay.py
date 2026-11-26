@@ -11,7 +11,8 @@ MARKETS = {
     "kim-v2-base":["0x4ca28220e0caea31bed133b3f22e1317dfeb79ab"],
     "leetswap-base":["0xde5a9e102ae116d3c392298b8d54f4e57db9b138","0x121fee573b1cee7a7b553c56c7c3446e57606014","0x83097b68027239c89576825bbb808ac405bf1c1e",
                      "0x74b0f4aef2ff55e5f0e229525530170ed930725c","0xef849707a01fff93a7b4b398307b8cd839f6a57b",
-                     "0xc6ac0110084f6ca058bfaa741aa68be5189a8ca4"],
+                     "0xc6ac0110084f6ca058bfaa741aa68be5189a8ca4","0x94dac4a3ce998143aa119c05460731da80ad90cf",
+                     "0x75c7928b43bfec6f960456af8a6d6bd47ac77930","0xe96df8f5ef1a8790415068c798765b07d57643bd"],
 }
 
 
@@ -51,6 +52,9 @@ def replay(name, book, endpoint, market, amount):
         inspect=[call(pool,calldata("getReserves()"))]
         if name!="leetswap-base":
             inspect.extend(call(pool,calldata(s)) for s in ("precisionMultiplier0()","precisionMultiplier1()"))
+        if name=="leetswap-base":
+            inspect.extend(call(book["factory"],calldata("tradingFees(address,address)",["address","address"],[pool,payer]))
+                           for payer in (EXEC,OWNER))
         pre=[*before,*inspect,approve,native,recipient,balance(tin,OWNER),balance(tout,OWNER)]
         post=[balance(tin,OWNER),balance(tout,OWNER),balance(tin,EXEC),balance(tout,EXEC)]
         def trial(minimum):
@@ -63,7 +67,8 @@ def replay(name, book, endpoint, market, amount):
             raw=calls[len(before)]["returnData"].removeprefix("0x")
             reserves=[str(int(raw[i:i+64],16)) for i in range(0,len(raw),64)]
             units=[str(money(c)) for c in calls[len(before)+1:len(before)+len(inspect)]]
-            return dict(reserves=reserves,units=units,status=trade["status"],gas=trade["gasUsed"],error=trade.get("error"),
+            evidence={"fees_by_recipient":units} if name=="leetswap-base" else {"units":units}
+            return dict(reserves=reserves,**evidence,status=trade["status"],gas=trade["gasUsed"],error=trade.get("error"),
                         spent=str(money(calls[len(pre)-2])-money(calls[-4])),
                         received=str(money(calls[-3])-money(calls[len(pre)-1])),
                         caller_quote=str(money(calls[len(pre)-4])),recipient_quote=str(money(calls[len(pre)-3])))
@@ -92,7 +97,8 @@ if __name__=="__main__":
         token=WETH if WETH in m["tokens"] else USDC
         r=int(m["reserves"][m["tokens"].index(token)])
         caps=[10**15,10**16] if token==WETH else [10**6,10**7]
-        for qty in sorted(set(min(l,r//d) for l,d in zip(caps,[10_000,500]))):
+        fractions=[100,20] if args.name=="leetswap-base" else [10_000,500]
+        for qty in sorted(set(min(l,r//d) for l,d in zip(caps,fractions))):
             if not qty:continue
             row=dict(market=m,requested=str(qty))
             try:row["result"]=replay(args.name,book,args.endpoint,m,qty)

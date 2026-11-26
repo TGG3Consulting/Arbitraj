@@ -639,6 +639,9 @@ pub async fn state(
         ));
     }
     match (f.kind, reference) {
+        (PoolKind::V2, PoolRef::Contract(a)) if f.variant == Variant::Oasis => {
+            Box::pin(super::oasis::load(ctx,f,*a,pair,&tag)).await
+        }
         (PoolKind::V2, PoolRef::Contract(a)) if f.variant == Variant::DeltaSwap => {
             Box::pin(super::deltaswap::load(ctx, f, *a, pair, block)).await
         }

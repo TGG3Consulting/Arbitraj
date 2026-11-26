@@ -1,0 +1,310 @@
+{
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "state_root": "0x037b0c48cd33236cb94ec9e9fc7438c120b138c2c31d39d0ebe42521ee65676b",
+  "height": 62262756,
+  "payer": "0x730a17276a9720871c98622ffce5db23f38acf99",
+  "module_runtime_hash": "0x18201dd118a5d2ddc1ca3580641434614984335c264c9d582625b8e09f20df28",
+  "v5_runtime_hash": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+  "factory": "0xc8126578093366968199707b7f8edff258f473b6",
+  "cases": [
+    {
+      "pool": "0xddb5c6730b1720b985dc4547541aedf58d4bdac9",
+      "asset": "0x4200000000000000000000000000000000000006",
+      "token": "0x71d26859daaa8675821cea459bb93748db82c57c",
+      "size": "13693444823755",
+      "buy": {
+        "accepted": {
+          "floor": "506803649803474399850885",
+          "status": "0x1",
+          "error": null,
+          "spent": "13693444823755",
+          "received": "506803649803474399850885",
+          "gas": 245791,
+          "approval_gas": 46031,
+          "fee": 100,
+          "rebate": 0,
+          "fee_cache": [
+            "185600242399757",
+            "0"
+          ],
+          "native_quote": "506803649803474399850885"
+        },
+        "strict": {
+          "floor": "506803649803474399850886",
+          "status": "0x0",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "spent": "0",
+          "received": "0",
+          "gas": 297698,
+          "approval_gas": 46031,
+          "fee": 100,
+          "rebate": 0,
+          "fee_cache": [
+            "185600242399757",
+            "0"
+          ],
+          "native_quote": "506803649803474399850885"
+        }
+      },
+      "sell": {
+        "minimum_one": {
+          "floor": "1",
+          "status": "0x0",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "spent": "0",
+          "received": "0",
+          "gas": 48047,
+          "approval_gas": 46203,
+          "fee": 100,
+          "rebate": 0,
+          "fee_cache": [
+            "185668709623875",
+            "0"
+          ],
+          "native_quote": "13420965267010"
+        }
+      }
+    },
+    {
+      "pool": "0xddb5c6730b1720b985dc4547541aedf58d4bdac9",
+      "asset": "0x4200000000000000000000000000000000000006",
+      "token": "0x71d26859daaa8675821cea459bb93748db82c57c",
+      "size": "273868896475103",
+      "buy": {
+        "accepted": {
+          "floor": "10117044718753078848921751",
+          "status": "0x1",
+          "error": null,
+          "spent": "273868896475103",
+          "received": "10117044718753078848921751",
+          "gas": 245803,
+          "approval_gas": 46031,
+          "fee": 100,
+          "rebate": 0,
+          "fee_cache": [
+            "185600242399757",
+            "0"
+          ],
+          "native_quote": "10117044718753078848921751"
+        },
+        "strict": {
+          "floor": "10117044718753078848921752",
+          "status": "0x0",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "spent": "0",
+          "received": "0",
+          "gas": 297710,
+          "approval_gas": 46031,
+          "fee": 100,
+          "rebate": 0,
+          "fee_cache": [
+            "185600242399757",
+            "0"
+          ],
+          "native_quote": "10117044718753078848921751"
+        }
+      },
+      "sell": {
+        "minimum_one": {
+          "floor": "1",
+          "status": "0x0",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "spent": "0",
+          "received": "0",
+          "gas": 48059,
+          "approval_gas": 46215,
+          "fee": 100,
+          "rebate": 0,
+          "fee_cache": [
+            "186969586882132",
+            "0"
+          ],
+          "native_quote": "268426888669893"
+        }
+      }
+    },
+    {
+      "pool": "0x86bcde2d5b06bba5eb9b3c8332f770cdcaf0c95a",
+      "asset": "0x4200000000000000000000000000000000000006",
+      "token": "0x2b5860e3b674af8ea8eb3048861fe1cfa18a7512",
+      "size": "7327843195438",
+      "buy": {
+        "accepted": {
+          "floor": "1821449774702103350414",
+          "status": "0x1",
+          "error": null,
+          "spent": "7327843195438",
+          "received": "1821449774702103350414",
+          "gas": 202994,
+          "approval_gas": 46031,
+          "fee": 100,
+          "rebate": 0,
+          "fee_cache": [
+            "1385927888453712643000",
+            "0"
+          ],
+          "native_quote": "1821449774702103350414"
+        },
+        "strict": {
+          "floor": "1821449774702103350415",
+          "status": "0x0",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "spent": "0",
+          "received": "0",
+          "gas": 253449,
+          "approval_gas": 46031,
+          "fee": 100,
+          "rebate": 0,
+          "fee_cache": [
+            "1385927888453712643000",
+            "0"
+          ],
+          "native_quote": "1821449774702103350414"
+        }
+      },
+      "sell": {
+        "accepted": {
+          "floor": "7182029816008",
+          "status": "0x1",
+          "error": null,
+          "spent": "1821449774702103350414",
+          "received": "7182029816008",
+          "gas": 183606,
+          "approval_gas": 46319,
+          "fee": 100,
+          "rebate": 0,
+          "fee_cache": [
+            "1385927888453712643000",
+            "36639215977"
+          ],
+          "native_quote": "7182029816008"
+        },
+        "strict": {
+          "floor": "7182029816009",
+          "status": "0x0",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "spent": "0",
+          "received": "0",
+          "gas": 229214,
+          "approval_gas": 46319,
+          "fee": 100,
+          "rebate": 0,
+          "fee_cache": [
+            "1385927888453712643000",
+            "36639215977"
+          ],
+          "native_quote": "7182029816008"
+        }
+      }
+    },
+    {
+      "pool": "0x86bcde2d5b06bba5eb9b3c8332f770cdcaf0c95a",
+      "asset": "0x4200000000000000000000000000000000000006",
+      "token": "0x2b5860e3b674af8ea8eb3048861fe1cfa18a7512",
+      "size": "146556863908778",
+      "buy": {
+        "accepted": {
+          "floor": "36360607960837992532701",
+          "status": "0x1",
+          "error": null,
+          "spent": "146556863908778",
+          "received": "36360607960837992532701",
+          "gas": 203004,
+          "approval_gas": 46031,
+          "fee": 100,
+          "rebate": 0,
+          "fee_cache": [
+            "1385927888453712643000",
+            "0"
+          ],
+          "native_quote": "36360607960837992532701"
+        },
+        "strict": {
+          "floor": "36360607960837992532702",
+          "status": "0x0",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "spent": "0",
+          "received": "0",
+          "gas": 253461,
+          "approval_gas": 46031,
+          "fee": 100,
+          "rebate": 0,
+          "fee_cache": [
+            "1385927888453712643000",
+            "0"
+          ],
+          "native_quote": "36360607960837992532701"
+        }
+      },
+      "sell": {
+        "accepted": {
+          "floor": "143644654426197",
+          "status": "0x1",
+          "error": null,
+          "spent": "36360607960837992532701",
+          "received": "143644654426197",
+          "gas": 183625,
+          "approval_gas": 46331,
+          "fee": 100,
+          "rebate": 0,
+          "fee_cache": [
+            "1385927888453712643000",
+            "732784319543"
+          ],
+          "native_quote": "143644654426197"
+        },
+        "strict": {
+          "floor": "143644654426198",
+          "status": "0x0",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "spent": "0",
+          "received": "0",
+          "gas": 229238,
+          "approval_gas": 46331,
+          "fee": 100,
+          "rebate": 0,
+          "fee_cache": [
+            "1385927888453712643000",
+            "732784319543"
+          ],
+          "native_quote": "143644654426197"
+        }
+      }
+    }
+  ]
+}

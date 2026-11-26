@@ -64,7 +64,28 @@ pub async fn trade(
         )
     });
     // Решение 231 (дополнение): подпись — и в «чем найти» ошибки «исход неизвестен» (позднее выяснение подпишет так же).
-    result::by(run(q, env, nonces, req).await, who).map_err(|e| super::swap_ctx::who(e, who))
+    let oasis_route = req
+        .route
+        .as_ref()
+        .filter(|r| {
+            r.legs.iter().flat_map(|l| &l.hops).any(|hop| {
+                q.reg
+                    .entry(&hop.pool)
+                    .is_some_and(|e| super::super::quote::oasis_pricing::is_oasis(&e))
+            })
+        })
+        .cloned();
+    let result = if let Some(route) = oasis_route {
+        Box::pin(super::oasis_direct::scope(
+            q,
+            &route,
+            run(q, env, nonces, req),
+        ))
+        .await
+    } else {
+        run(q, env, nonces, req).await
+    };
+    result::by(result, who).map_err(|e| super::swap_ctx::who(e, who))
 }
 
 /// Кто исполнит маршрут — по тем же правилам, что выбор пути в run: умный режим — умный; граф — по форме

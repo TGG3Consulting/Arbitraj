@@ -1,5 +1,6 @@
 """Каталоги CitadelSwap, Kim V2 и LeetSwap с обеими формами пары на одном каноническом блоке Base."""
 import argparse
+import gzip
 import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -104,4 +105,5 @@ if __name__=="__main__":
     parser.add_argument("--endpoint",default="https://base-rpc.publicnode.com")
     args=parser.parse_args()
     result=capture(args.market,args.endpoint,args.source_dir)
-    args.output.write_text(json.dumps(result,separators=(",",":"))+chr(10),encoding="utf-8")
+    data=(json.dumps(result,separators=(",",":"))+"\n").encode()
+    args.output.write_bytes(gzip.compress(data,mtime=0) if args.output.suffix==".gz" else data)

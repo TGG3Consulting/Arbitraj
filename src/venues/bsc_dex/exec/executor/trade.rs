@@ -133,8 +133,7 @@ pub async fn trade(
         .iter()
         .flatten()
         .any(|s| {
-            s.entry.family.variant
-                == crate::venues::bsc_dex::pools::family_variant::Variant::FraxTwamm
+            matches!(s.entry.family.variant,crate::venues::bsc_dex::pools::family_variant::Variant::FraxTwamm | crate::venues::bsc_dex::pools::family_variant::Variant::Oasis)
         })
         .then(|| ctx.settings.generation());
     let (mut c, mut at) = build(q, &legs, executor, nat).await?;

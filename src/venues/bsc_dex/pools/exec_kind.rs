@@ -217,7 +217,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "algebra_dir_fee" => ExecKind::Algebra,
         // Решение 483: пара Ramses Legacy — getReserves (uint112, Pair.sol L125), getAmountOut(uint256, address) L452 (уже
         // с −1) и swap(uint256, uint256, address, bytes) L308; вход = баланс − резерв (L339-L340) — шаг SOLIDLY.
-        "solidly_v2" | "solidly_v1" | "solidly_v1_ramses" => ExecKind::Solidly,
+        "solidly_v2" | "solidly_v1" | "solidly_v1_ramses" | "leetswap_v2" => ExecKind::Solidly,
         // Решение 443: пара Camelot V2 — тот же шаг SOLIDLY: getReserves (первые два слова — резервы), getAmountOut(uint256,
         // address) и swap(uint256, uint256, address, bytes) есть у CamelotPair (Pair.sol L46, L372, L228 — verified-исходник
         // фабрики Arbitrum 0x6EcC…A652, math/camelot_v2.rs); вход = баланс − резерв — так и считает swap пары (L276-L277).
@@ -305,7 +305,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "wombat" => ExecKind::Wombat,
         // Решение 485: swapFrom скважины без белого списка вызывающих (Well.sol L207-L217: nonReentrant и срок — общие).
         // Адаптер Fraxswap реализует тот же wire ABI swapFrom. Адрес шага выбирает executor/entry.
-        "basin_well" | "fraxswap_twamm_v5" => ExecKind::Basin,
+        "basin_well" | "fraxswap_twamm_v5" | "oasisswap_v2_v5" => ExecKind::Basin,
         // Решение 486: Ocean.doMultipleInteractions — вызывающий = пользователь, без белого списка (Ocean.sol aaa0ccf
         // L271-L297, v3 Sourcify 0x96B4f4E4… L190-L201); computeOutputAmount пула — только от Ocean (onlyOcean), учёт
         // передаёт адрес пользователя (LiquidityPool.sol L135). Шаг 31, только исполнитель v5.
@@ -417,6 +417,7 @@ mod tests {
             "fraxswap_twamm_router",
             "v2_fork_router_create2",
             "v2_deltaswap_router",
+            "oasisswap_v2_router",
             "base_native_v3",
             "base_native_v3_module",
             "solidly_v3_module",

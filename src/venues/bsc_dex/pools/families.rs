@@ -445,7 +445,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
         "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
-        "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
+        "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
         "v2_fork" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_whiteswap" => {
@@ -512,7 +512,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // В графе и сигналах; исполнение — шаг SOLIDLY контракта-исполнителя (exec_kind::via_executor).
         // Решение 483: Ramses Legacy V2 — тот же вид (вариант RamsesLegacy: getAmountOut − 1, Sync uint112, PairCreated без
         // stable; pools/ramses.rs).
-        "solidly_v1" | "solidly_v1_ramses" => {
+        "solidly_v1" | "solidly_v1_ramses" | "leetswap_v2" => {
             (PoolKind::Solidly, Proto::SolidlyV1, true, false, false)
         }
         // StableSwap (Ellipsis; решение 122 F): в графе и сигналах; исполнение — шаг CURVE контракта-исполнителя.
@@ -766,6 +766,12 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         ]);
     }
     match f.proto {
+        Proto::V2 if f.variant == Variant::Oasis => {
+            list.extend(["dex.factory","dex.factory_runtime_hash","dex.oasis_mev_slot",super::verify_algebra_dir::SETTING]);
+            if f.executor_kind.is_none(){ list.extend(["dex.quoter","dex.router_runtime_hash"]); }
+            // У dual-профиля два независимо проверяемых способа. load принимает хотя бы один.
+
+        }
         Proto::V2 if f.variant == Variant::DeltaSwap => {
             list.extend([
                 "dex.factory",
@@ -894,6 +900,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // Solidly V1 (THENA V1, решение 122 F) — то же: фабрика getPair(a, b, stable) / getFee(stable) / PairCreated.
         // Решение 273: задан источник комиссии dex.solidly_fee_source — ещё правило и то, что нужно источнику (метод
         // пула / методы фабрики по типу; делитель — при правиле numerator). Не задан — только фабрика, как раньше.
+        Proto::SolidlyV1 if f.variant == Variant::LeetSwap => list.push("dex.factory"),
         Proto::Solidly | Proto::SolidlyV1 => {
             list.push("dex.factory");
             if let Ok(src) = ctx.dex_text("dex.solidly_fee_source", f.id) {

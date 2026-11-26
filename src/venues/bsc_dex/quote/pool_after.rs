@@ -33,6 +33,7 @@ use super::pool_quote;
 /// Считается ли состояние пула после обмена (V2 и V3, см. шапку). Ошибок нет.
 pub fn appliable(e: &Entry) -> bool {
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::Oasis { repeatable, .. }, PoolKind::V2) => *repeatable,
         (PoolState::V2 { .. } | PoolState::DeltaSwap { .. }, PoolKind::V2) => true,
         (PoolState::V3 { .. }, PoolKind::V3) => e.ticks.is_some() && e.pool.fee_pips.is_some(),
         _ => false,
@@ -68,6 +69,32 @@ pub fn apply(
             .ok_or_else(|| {
                 no("DeltaSwap: невозможно воспроизвести комиссии и состояние после обмена")
             }),
+        (
+            PoolState::Oasis {
+                reserve0,
+                reserve1,
+                share,
+                repeatable: true,
+            },
+            PoolKind::V2,
+        ) => {
+            let swapped = pool_quote::swap(ctx, e, token_in, true, amount)?;
+            let pips = e
+                .pool
+                .fee_pips
+                .ok_or_else(|| no("OasisSwap: отсутствует комиссия"))?;
+            let next = super::super::pools::oasis::after(
+                *reserve0,
+                *reserve1,
+                *share,
+                pips,
+                zero_for_one,
+                swapped.amount_in,
+                swapped.amount_out,
+            )
+            .ok_or_else(|| no("OasisSwap: превышен размер резерва или отсутствует ставка"))?;
+            Ok((swapped, next))
+        }
         (PoolState::V2 { reserve0, reserve1 }, PoolKind::V2) => {
             // Выход — та же формула и комиссия, что у котировки (pool_quote, getAmountOut).
             let s = pool_quote::swap(ctx, e, token_in, true, amount)?;

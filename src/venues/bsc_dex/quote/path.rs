@@ -40,6 +40,7 @@ impl Hop {
     /// Шаг маршрута для ядра (вид пула, пул). Ошибок нет.
     pub fn route_hop(&self) -> RouteHop {
         RouteHop {
+            fee_mode: None,
             family: self.entry.family.id.to_string(),
             kind: self.entry.pool.kind,
             pool: self.entry.pool.reference.clone(),

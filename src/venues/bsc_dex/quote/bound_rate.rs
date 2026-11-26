@@ -62,7 +62,7 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
             };
             pair(rout, U256::ONE, rin, U256::ONE)
         }
-        (PoolState::V2 { reserve0, reserve1 }, PoolKind::V2) => {
+        (PoolState::V2 { reserve0, reserve1 } | PoolState::Oasis { reserve0, reserve1, .. }, PoolKind::V2) => {
             let (r_in, r_out) = if zfo {
                 (*reserve0, *reserve1)
             } else {

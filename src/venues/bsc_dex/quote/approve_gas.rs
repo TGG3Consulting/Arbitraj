@@ -96,12 +96,13 @@ pub async fn details(
     // Решение 280: первый хоп — V2-форк без роутера (без исполнителя маршрут — сигнал): роутера нет, разрешение пошло
     // бы исполнителю — газ, измеренный пробой (dex.router не читается).
     if route.mode == RouteMode::Direct
-        && (super::frax_pricing::is_frax(&e)
+        && (super::oasis_pricing::is_oasis(&e)
+            || super::frax_pricing::is_frax(&e)
             || super::white_pricing::is_white(&e)
             || super::router_pricing::is_native(&e)
             || super::delta_pricing::is_delta(&e))
     {
-        let router = if super::frax_pricing::is_frax(&e) {
+        let router = if super::oasis_pricing::is_oasis(&e) || super::frax_pricing::is_frax(&e) {
             ctx.dex_addr("dex.quoter", e.family.id)?
         } else {
             super::super::pools::deltaswap::router(ctx, &e)?

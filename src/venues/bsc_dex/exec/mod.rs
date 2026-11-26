@@ -31,6 +31,7 @@ pub mod cycle_segment;
 pub mod cycle_steps;
 pub mod cycle_trade;
 pub(super) mod delta_direct;
+pub(super) mod oasis_direct;
 pub mod dry_build;
 pub mod dry_build_once;
 pub mod dry_checks;

@@ -313,6 +313,8 @@ pub enum PoolState {
         reserve1: U256,
         fee: Box<DeltaFee>,
     },
+    /// Резервы Oasis исключают кэш протокольных сборов. Доля задана в bps от комиссии.
+    Oasis { reserve0:U256,reserve1:U256,share:u32,repeatable:bool },
 }
 
 /// Состояние пары PMM от оракула (решение 122 F, 3) — боксируется в `PoolState::OraclePmm`. Только то, что читается

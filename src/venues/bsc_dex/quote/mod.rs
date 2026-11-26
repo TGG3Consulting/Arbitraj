@@ -81,6 +81,7 @@ pub mod mixed_quoter;
 pub mod mixed_quoter_calls;
 mod nami_routes;
 pub mod native_gas;
+pub(super) mod oasis_pricing;
 pub mod par;
 pub mod par_pool;
 pub mod path;

@@ -175,6 +175,7 @@ fn route(block: u64) -> DexRoute {
         legs: vec![RouteLeg {
             share: Decimal::ONE,
             hops: vec![RouteHop {
+                fee_mode: None,
                 family: "pancakeswap_v2".into(),
                 kind: PoolKind::V2,
                 pool: pool(),

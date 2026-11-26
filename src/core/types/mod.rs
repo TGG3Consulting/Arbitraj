@@ -58,7 +58,7 @@ pub use check::{
 pub use control::{
     CoinGasStats, CommandSource, ManualAction, ManualCommand, ManualHolding, StuckAlert,
 };
-pub use cost::{Cost, CostKind, DexRoute, RouteHop, RouteLeg, RouteMode, RouteStep};
+pub use cost::{Cost, CostKind, DexRoute, RouteHop, RouteLeg, RouteMode, RouteStep, RouterFeeMode};
 pub use cycle_trade::{CycleQuote, CycleTradeRequest, CycleTradeResult};
 pub use delist::{DelistItem, Delistings};
 pub use dex_cycle::{DexCycle, DexCycleHop};

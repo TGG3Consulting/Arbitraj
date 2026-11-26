@@ -66,6 +66,26 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
     let mut cap: Option<U256> = None;
     for e in entries.iter().copied() {
         let f = e.family;
+        if f.variant == Variant::LeetSwap {
+            let PoolRef::Contract(pool) = e.pool.reference else {
+                return Err(ctx.err(ErrorCode::NoRoute, "У LeetSwap нет адреса пары"));
+            };
+            super::super::pools::leetswap::fresh(ctx, f, pool, &e.pool.state).await?;
+            continue;
+        }
+        if f.variant == Variant::Oasis {
+            let (wallet, _, adapter) = super::oasis_direct::chosen(e).unwrap_or((
+                super::super::wallet::signer::address(ctx)?,
+                false,
+                true,
+            ));
+            let h = super::super::quote::white_state::head(ctx, "latest").await?;
+            Box::pin(super::super::quote::oasis_pricing::state(
+                ctx, e, wallet, h, adapter,
+            ))
+            .await?;
+            continue;
+        }
         if f.variant == Variant::FraxTwamm {
             let pool = e
                 .pool

@@ -172,6 +172,7 @@ fn route(r: &Value, block: u64) -> DexRoute {
         legs: vec![RouteLeg {
             share: Decimal::ONE,
             hops: vec![RouteHop {
+                fee_mode: None,
                 family: sv(r, "pool_family").into(),
                 kind: PoolKind::V3,
                 pool: PoolRef::Contract(sv(r, "pool").parse::<Address>().unwrap()),

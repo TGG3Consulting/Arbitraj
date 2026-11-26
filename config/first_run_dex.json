@@ -2809,5 +2809,35 @@
       "dex.kind": "camelot_v2",
       "dex.factory": "0x14658340d7d1c112b62509bbf449be1897e8de01"
     }
+  },
+  {
+    "id": "leetswap-base",
+    "chain_id": 8453,
+    "network": "base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x169c06b4cfb09bfd73a81e6f2bb1eb514d75bb19 · https://sourcify.dev/server/v2/contract/8453/0x83097b68027239c89576825bbb808ac405bf1c1e",
+    "settings": {
+      "dex.kind": "leetswap_v2",
+      "dex.factory": "0x169c06b4cfb09bfd73a81e6f2bb1eb514d75bb19"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "oasisswap-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xb588a34afa5be3f3af703159fb6586a2caf04ba8 · https://sourcify.dev/server/v2/contract/8453/0xc8126578093366968199707b7f8edff258f473b6?fields=storageLayout · tests/data/first_run_dex_2026-11-26/oasisswap_base.json · tests/data/first_run_dex_2026-11-26/oasisswap_v5_base.json",
+    "settings": {
+      "dex.kind": "oasisswap_v2_router",
+      "dex.factory": "0xc8126578093366968199707b7f8edff258f473b6",
+      "dex.factory_runtime_hash": "0x64f57117e90cefaee4c36f5595ed17a9f5d64685b75270ce383938e9393073d9",
+      "dex.oasis_mev_slot": 7,
+      "dex.pool_code_hashes": [
+        "0x47fc8e334f0ee85a72de736b4bbf453c2c908b9ab63c4f4a22b66deebea49011"
+      ],
+      "dex.quoter": "0xb588a34afa5be3f3af703159fb6586a2caf04ba8",
+      "dex.router_runtime_hash": "0x2c23030b4de044f6a069e64082e231f12ef47b612489debfffc0869dbd003747",
+      "dex.module_runtime_hashes": [
+        "0x18201dd118a5d2ddc1ca3580641434614984335c264c9d582625b8e09f20df28"
+      ]
+    }
   }
 ]

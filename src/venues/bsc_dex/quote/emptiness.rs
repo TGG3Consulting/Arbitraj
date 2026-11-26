@@ -40,7 +40,7 @@ pub fn has_ticks(e: &Entry) -> bool {
 /// Пуст ли пул (см. шапку). Bin без прочитанных бинов — не пуст (не прочитан — это решает достоверность). Ошибок нет.
 pub fn empty(e: &Entry) -> bool {
     match &e.pool.state {
-        PoolState::V2 { reserve0, reserve1 } | PoolState::DeltaSwap { reserve0, reserve1, .. } => reserve0.is_zero() || reserve1.is_zero(),
+        PoolState::V2 { reserve0, reserve1 } | PoolState::Oasis { reserve0, reserve1, .. } | PoolState::DeltaSwap { reserve0, reserve1, .. } => reserve0.is_zero() || reserve1.is_zero(),
         // Решение 393 (t178): ликвидность 0 на ТЕКУЩЕМ тике — ещё не пустой пул, если в прочитанной карте есть
         // установленный тик: цена в «дыре» между позициями, обмен в сторону позиции проходит дыру даром (шаг обмена
         // при L = 0 — вход 0, цена до следующего тика: math/swap_step.rs, как SwapMath.computeSwapStep). Какая сторона

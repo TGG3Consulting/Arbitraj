@@ -1,0 +1,918 @@
+{
+  "protocol": "leetswap-base",
+  "chain": 8453,
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "endpoint": "https://mainnet.base.org",
+  "executor_runtime": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+  "cases": [
+    {
+      "market": {
+        "pool": "0xde5a9e102ae116d3c392298b8d54f4e57db9b138",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xcb1554e49176f41513b28a5b2fe639423e64a6f2"
+        ],
+        "stable": false,
+        "reserves": [
+          "6870969952176993023",
+          "145539859286321"
+        ],
+        "balances": [
+          "0",
+          "145539859286321"
+        ]
+      },
+      "requested": "1000000000000000",
+      "rejection": "V5 reverted {'code': 3, 'message': 'execution reverted: panic: arithmetic underflow or overflow (0x11)', 'data': '0x4e487b71000000000000000000"
+    },
+    {
+      "market": {
+        "pool": "0xde5a9e102ae116d3c392298b8d54f4e57db9b138",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xcb1554e49176f41513b28a5b2fe639423e64a6f2"
+        ],
+        "stable": false,
+        "reserves": [
+          "6870969952176993023",
+          "145539859286321"
+        ],
+        "balances": [
+          "0",
+          "145539859286321"
+        ]
+      },
+      "requested": "10000000000000000",
+      "rejection": "V5 reverted {'code': 3, 'message': 'execution reverted: panic: arithmetic underflow or overflow (0x11)', 'data': '0x4e487b71000000000000000000"
+    },
+    {
+      "market": {
+        "pool": "0x121fee573b1cee7a7b553c56c7c3446e57606014",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x99bddcd39aa066f4d4dab11a5b8d436670692680"
+        ],
+        "stable": false,
+        "reserves": [
+          "1187881809133703868",
+          "67346767485514815"
+        ],
+        "balances": [
+          "0",
+          "67346767485514815"
+        ]
+      },
+      "requested": "1000000000000000",
+      "rejection": "V5 reverted {'code': 3, 'message': 'execution reverted: panic: arithmetic underflow or overflow (0x11)', 'data': '0x4e487b71000000000000000000"
+    },
+    {
+      "market": {
+        "pool": "0x121fee573b1cee7a7b553c56c7c3446e57606014",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x99bddcd39aa066f4d4dab11a5b8d436670692680"
+        ],
+        "stable": false,
+        "reserves": [
+          "1187881809133703868",
+          "67346767485514815"
+        ],
+        "balances": [
+          "0",
+          "67346767485514815"
+        ]
+      },
+      "requested": "10000000000000000",
+      "rejection": "V5 reverted {'code': 3, 'message': 'execution reverted: panic: arithmetic underflow or overflow (0x11)', 'data': '0x4e487b71000000000000000000"
+    },
+    {
+      "market": {
+        "pool": "0x83097b68027239c89576825bbb808ac405bf1c1e",
+        "tokens": [
+          "0x2302e3080f01257a021eeeb518c3f4f6d3f58371",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "stable": false,
+        "reserves": [
+          "32260695275254861000020531",
+          "64767517368645"
+        ],
+        "balances": [
+          "32260695275254861000020531",
+          "64767517368645"
+        ]
+      },
+      "requested": "647675173686",
+      "rejection": "0x2302e3080f01257a021eeeb518c3f4f6d3f58371 amount 263349357743530047492270: exact 261516258723135199578076/362532606245, min+1 0x0 0/0"
+    },
+    {
+      "market": {
+        "pool": "0x83097b68027239c89576825bbb808ac405bf1c1e",
+        "tokens": [
+          "0x2302e3080f01257a021eeeb518c3f4f6d3f58371",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "stable": false,
+        "reserves": [
+          "32260695275254861000020531",
+          "64767517368645"
+        ],
+        "balances": [
+          "32260695275254861000020531",
+          "64767517368645"
+        ]
+      },
+      "requested": "3238375868432",
+      "rejection": "0x2302e3080f01257a021eeeb518c3f4f6d3f58371 amount 1266728346221363371675211: exact 1257911015020044207680050/1842908608781, min+1 0x0 0/0"
+    },
+    {
+      "market": {
+        "pool": "0x74b0f4aef2ff55e5f0e229525530170ed930725c",
+        "tokens": [
+          "0x1ced8aa8b017cc8ac7053c575fc2afbf3036d699",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "stable": false,
+        "reserves": [
+          "313049286730848125",
+          "5829453086595590"
+        ],
+        "balances": [
+          "313049286730848125",
+          "5829453086595590"
+        ]
+      },
+      "requested": "58294530865955",
+      "rejection": "0x1ced8aa8b017cc8ac7053c575fc2afbf3036d699 amount 3059388273730396: exact 3059388273730395/55686609859215, min+1 0x0 0/0"
+    },
+    {
+      "market": {
+        "pool": "0x74b0f4aef2ff55e5f0e229525530170ed930725c",
+        "tokens": [
+          "0x1ced8aa8b017cc8ac7053c575fc2afbf3036d699",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "stable": false,
+        "reserves": [
+          "313049286730848125",
+          "5829453086595590"
+        ],
+        "balances": [
+          "313049286730848125",
+          "5829453086595590"
+        ]
+      },
+      "requested": "291472654329779",
+      "rejection": "0x1ced8aa8b017cc8ac7053c575fc2afbf3036d699 amount 14715865956181781: exact 14715865956181780/258318623915857, min+1 0x0 0/0"
+    },
+    {
+      "market": {
+        "pool": "0xef849707a01fff93a7b4b398307b8cd839f6a57b",
+        "tokens": [
+          "0x0069b18587e93d508421f1120930406439b53bdb",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "stable": false,
+        "reserves": [
+          "1",
+          "3988000000000001"
+        ],
+        "balances": [
+          "1",
+          "3988000000000001"
+        ]
+      },
+      "requested": "39880000000000",
+      "rejection": "V5 reverted {'code': 3, 'message': 'execution reverted: B0\\x1c#', 'data': '0x42301c23'}"
+    },
+    {
+      "market": {
+        "pool": "0xef849707a01fff93a7b4b398307b8cd839f6a57b",
+        "tokens": [
+          "0x0069b18587e93d508421f1120930406439b53bdb",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "stable": false,
+        "reserves": [
+          "1",
+          "3988000000000001"
+        ],
+        "balances": [
+          "1",
+          "3988000000000001"
+        ]
+      },
+      "requested": "199400000000000",
+      "rejection": "V5 reverted {'code': 3, 'message': 'execution reverted: B0\\x1c#', 'data': '0x42301c23'}"
+    },
+    {
+      "market": {
+        "pool": "0xc6ac0110084f6ca058bfaa741aa68be5189a8ca4",
+        "tokens": [
+          "0x38f04e34b3e6f11c2bdf7a19d6558b3473c61362",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "stable": false,
+        "reserves": [
+          "1",
+          "3085193556048010"
+        ],
+        "balances": [
+          "1",
+          "3085193556048010"
+        ]
+      },
+      "requested": "30851935560480",
+      "rejection": "V5 reverted {'code': 3, 'message': 'execution reverted: B0\\x1c#', 'data': '0x42301c23'}"
+    },
+    {
+      "market": {
+        "pool": "0xc6ac0110084f6ca058bfaa741aa68be5189a8ca4",
+        "tokens": [
+          "0x38f04e34b3e6f11c2bdf7a19d6558b3473c61362",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "stable": false,
+        "reserves": [
+          "1",
+          "3085193556048010"
+        ],
+        "balances": [
+          "1",
+          "3085193556048010"
+        ]
+      },
+      "requested": "154259677802400",
+      "rejection": "V5 reverted {'code': 3, 'message': 'execution reverted: B0\\x1c#', 'data': '0x42301c23'}"
+    },
+    {
+      "market": {
+        "pool": "0x94dac4a3ce998143aa119c05460731da80ad90cf",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xeb466342c4d449bc9f53a865d5cb90586f405215"
+        ],
+        "stable": false,
+        "reserves": [
+          "3012186087394",
+          "9033"
+        ],
+        "balances": [
+          "3012186087394",
+          "9033"
+        ]
+      },
+      "requested": "30121860873",
+      "result": {
+        "buy": {
+          "input": "0x4200000000000000000000000000000000000006",
+          "output": "0xeb466342c4d449bc9f53a865d5cb90586f405215",
+          "amount": "30121860873",
+          "exact": {
+            "reserves": [
+              "3012186087394",
+              "9033",
+              "1765964453"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x1",
+            "gas": "0x3d988",
+            "error": null,
+            "spent": "30121860873",
+            "received": "89",
+            "caller_quote": "89",
+            "recipient_quote": "89"
+          },
+          "plus_one": {
+            "reserves": [
+              "3012186087394",
+              "9033",
+              "1765964453"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x0",
+            "gas": "0x408d3",
+            "error": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "spent": "0",
+            "received": "0",
+            "caller_quote": "89",
+            "recipient_quote": "89"
+          }
+        },
+        "sell": {
+          "input": "0xeb466342c4d449bc9f53a865d5cb90586f405215",
+          "output": "0x4200000000000000000000000000000000000006",
+          "amount": "89",
+          "exact": {
+            "reserves": [
+              "3042217582685",
+              "8944",
+              "1795642928"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x1",
+            "gas": "0x253a6",
+            "error": null,
+            "spent": "89",
+            "received": "29974246082",
+            "caller_quote": "29974246082",
+            "recipient_quote": "29974246082"
+          },
+          "plus_one": {
+            "reserves": [
+              "3042217582685",
+              "8944",
+              "1795642928"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x0",
+            "gas": "0x282f1",
+            "error": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "spent": "0",
+            "received": "0",
+            "caller_quote": "29974246082",
+            "recipient_quote": "29974246082"
+          }
+        }
+      }
+    },
+    {
+      "market": {
+        "pool": "0x94dac4a3ce998143aa119c05460731da80ad90cf",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xeb466342c4d449bc9f53a865d5cb90586f405215"
+        ],
+        "stable": false,
+        "reserves": [
+          "3012186087394",
+          "9033"
+        ],
+        "balances": [
+          "3012186087394",
+          "9033"
+        ]
+      },
+      "requested": "150609304369",
+      "result": {
+        "buy": {
+          "input": "0x4200000000000000000000000000000000000006",
+          "output": "0xeb466342c4d449bc9f53a865d5cb90586f405215",
+          "amount": "150609304369",
+          "exact": {
+            "reserves": [
+              "3012186087394",
+              "9033",
+              "1765964453"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x1",
+            "gas": "0x3d994",
+            "error": null,
+            "spent": "150609304369",
+            "received": "428",
+            "caller_quote": "428",
+            "recipient_quote": "428"
+          },
+          "plus_one": {
+            "reserves": [
+              "3012186087394",
+              "9033",
+              "1765964453"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x0",
+            "gas": "0x408df",
+            "error": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "spent": "0",
+            "received": "0",
+            "caller_quote": "428",
+            "recipient_quote": "428"
+          }
+        },
+        "sell": {
+          "input": "0xeb466342c4d449bc9f53a865d5cb90586f405215",
+          "output": "0x4200000000000000000000000000000000000006",
+          "amount": "428",
+          "exact": {
+            "reserves": [
+              "3162343563850",
+              "8605",
+              "1795642928"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x1",
+            "gas": "0x27d7a",
+            "error": null,
+            "spent": "428",
+            "received": "149504063525",
+            "caller_quote": "149504063525",
+            "recipient_quote": "149504063525"
+          },
+          "plus_one": {
+            "reserves": [
+              "3162343563850",
+              "8605",
+              "1795642928"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x0",
+            "gas": "0x2acc5",
+            "error": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "spent": "0",
+            "received": "0",
+            "caller_quote": "149504063525",
+            "recipient_quote": "149504063525"
+          }
+        }
+      }
+    },
+    {
+      "market": {
+        "pool": "0x75c7928b43bfec6f960456af8a6d6bd47ac77930",
+        "tokens": [
+          "0x0963a1abaf36ca88c21032b82e479353126a1c4b",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "stable": false,
+        "reserves": [
+          "919619805151734409764",
+          "492965194361252"
+        ],
+        "balances": [
+          "919619805151734409764",
+          "492965194361252"
+        ]
+      },
+      "requested": "4929651943612",
+      "result": {
+        "buy": {
+          "input": "0x4200000000000000000000000000000000000006",
+          "output": "0x0963a1abaf36ca88c21032b82e479353126a1c4b",
+          "amount": "4929651943612",
+          "exact": {
+            "reserves": [
+              "919619805151734409764",
+              "492965194361252",
+              "1794560876"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x1",
+            "gas": "0x486c6",
+            "error": null,
+            "spent": "4929651943612",
+            "received": "9078100792462527224",
+            "caller_quote": "9078100792462527224",
+            "recipient_quote": "9078100792462527224"
+          },
+          "plus_one": {
+            "reserves": [
+              "919619805151734409764",
+              "492965194361252",
+              "1794560876"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x0",
+            "gas": "0x4b611",
+            "error": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "spent": "0",
+            "received": "0",
+            "caller_quote": "9078100792462527224",
+            "recipient_quote": "9078100792462527224"
+          }
+        },
+        "sell": {
+          "input": "0x0963a1abaf36ca88c21032b82e479353126a1c4b",
+          "output": "0x4200000000000000000000000000000000000006",
+          "amount": "9078100792462527224",
+          "exact": {
+            "reserves": [
+              "910541704359271882540",
+              "497880057349034",
+              "1795642928"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x1",
+            "gas": "0x42c7d",
+            "error": null,
+            "spent": "9078100792462527224",
+            "received": "4754659510724",
+            "caller_quote": "4900263518853",
+            "recipient_quote": "4900263518853"
+          },
+          "plus_one": {
+            "reserves": [
+              "910541704359271882540",
+              "497880057349034",
+              "1795642928"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x0",
+            "gas": "0x45bc8",
+            "error": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "spent": "0",
+            "received": "0",
+            "caller_quote": "4900263518853",
+            "recipient_quote": "4900263518853"
+          }
+        }
+      }
+    },
+    {
+      "market": {
+        "pool": "0x75c7928b43bfec6f960456af8a6d6bd47ac77930",
+        "tokens": [
+          "0x0963a1abaf36ca88c21032b82e479353126a1c4b",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "stable": false,
+        "reserves": [
+          "919619805151734409764",
+          "492965194361252"
+        ],
+        "balances": [
+          "919619805151734409764",
+          "492965194361252"
+        ]
+      },
+      "requested": "24648259718062",
+      "result": {
+        "buy": {
+          "input": "0x4200000000000000000000000000000000000006",
+          "output": "0x0963a1abaf36ca88c21032b82e479353126a1c4b",
+          "amount": "24648259718062",
+          "exact": {
+            "reserves": [
+              "919619805151734409764",
+              "492965194361252",
+              "1794560876"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x1",
+            "gas": "0x486d2",
+            "error": null,
+            "spent": "24648259718062",
+            "received": "43666283075499574115",
+            "caller_quote": "43666283075499574115",
+            "recipient_quote": "43666283075499574115"
+          },
+          "plus_one": {
+            "reserves": [
+              "919619805151734409764",
+              "492965194361252",
+              "1794560876"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x0",
+            "gas": "0x4b61d",
+            "error": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "spent": "0",
+            "received": "0",
+            "caller_quote": "43666283075499574115",
+            "recipient_quote": "43666283075499574115"
+          }
+        },
+        "sell": {
+          "input": "0x0963a1abaf36ca88c21032b82e479353126a1c4b",
+          "output": "0x4200000000000000000000000000000000000006",
+          "amount": "43666283075499574115",
+          "exact": {
+            "reserves": [
+              "875953522076234835649",
+              "517539509300160",
+              "1795642928"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x1",
+            "gas": "0x42c89",
+            "error": null,
+            "spent": "43666283075499574115",
+            "received": "23802769981881",
+            "caller_quote": "24504082574220",
+            "recipient_quote": "24504082574220"
+          },
+          "plus_one": {
+            "reserves": [
+              "875953522076234835649",
+              "517539509300160",
+              "1795642928"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x0",
+            "gas": "0x45bd4",
+            "error": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "spent": "0",
+            "received": "0",
+            "caller_quote": "24504082574220",
+            "recipient_quote": "24504082574220"
+          }
+        }
+      }
+    },
+    {
+      "market": {
+        "pool": "0xe96df8f5ef1a8790415068c798765b07d57643bd",
+        "tokens": [
+          "0x27d2decb4bfc9c76f0309b8e88dec3a601fe25a8",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "stable": false,
+        "reserves": [
+          "3002590750115",
+          "10160766"
+        ],
+        "balances": [
+          "3002590750115",
+          "10160766"
+        ]
+      },
+      "requested": "101607",
+      "result": {
+        "buy": {
+          "input": "0x4200000000000000000000000000000000000006",
+          "output": "0x27d2decb4bfc9c76f0309b8e88dec3a601fe25a8",
+          "amount": "101607",
+          "exact": {
+            "reserves": [
+              "3002590750115",
+              "10160766",
+              "1742492255"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x1",
+            "gas": "0x3d89a",
+            "error": null,
+            "spent": "101607",
+            "received": "29640363045",
+            "caller_quote": "29640363045",
+            "recipient_quote": "29640363045"
+          },
+          "plus_one": {
+            "reserves": [
+              "3002590750115",
+              "10160766",
+              "1742492255"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x0",
+            "gas": "0x407e5",
+            "error": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "spent": "0",
+            "received": "0",
+            "caller_quote": "29640363045",
+            "recipient_quote": "29640363045"
+          }
+        },
+        "sell": {
+          "input": "0x27d2decb4bfc9c76f0309b8e88dec3a601fe25a8",
+          "output": "0x4200000000000000000000000000000000000006",
+          "amount": "29640363045",
+          "exact": {
+            "reserves": [
+              "2972950387070",
+              "10262069",
+              "1795642928"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x1",
+            "gas": "0x29cbe",
+            "error": null,
+            "spent": "29640363045",
+            "received": "101002",
+            "caller_quote": "101002",
+            "recipient_quote": "101002"
+          },
+          "plus_one": {
+            "reserves": [
+              "2972950387070",
+              "10262069",
+              "1795642928"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x0",
+            "gas": "0x2cc09",
+            "error": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "spent": "0",
+            "received": "0",
+            "caller_quote": "101002",
+            "recipient_quote": "101002"
+          }
+        }
+      }
+    },
+    {
+      "market": {
+        "pool": "0xe96df8f5ef1a8790415068c798765b07d57643bd",
+        "tokens": [
+          "0x27d2decb4bfc9c76f0309b8e88dec3a601fe25a8",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "stable": false,
+        "reserves": [
+          "3002590750115",
+          "10160766"
+        ],
+        "balances": [
+          "3002590750115",
+          "10160766"
+        ]
+      },
+      "requested": "508038",
+      "result": {
+        "buy": {
+          "input": "0x4200000000000000000000000000000000000006",
+          "output": "0x27d2decb4bfc9c76f0309b8e88dec3a601fe25a8",
+          "amount": "508038",
+          "exact": {
+            "reserves": [
+              "3002590750115",
+              "10160766",
+              "1742492255"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x1",
+            "gas": "0x3d89a",
+            "error": null,
+            "spent": "508038",
+            "received": "142571888166",
+            "caller_quote": "142571888166",
+            "recipient_quote": "142571888166"
+          },
+          "plus_one": {
+            "reserves": [
+              "3002590750115",
+              "10160766",
+              "1742492255"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x0",
+            "gas": "0x407e5",
+            "error": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "spent": "0",
+            "received": "0",
+            "caller_quote": "142571888166",
+            "recipient_quote": "142571888166"
+          }
+        },
+        "sell": {
+          "input": "0x27d2decb4bfc9c76f0309b8e88dec3a601fe25a8",
+          "output": "0x4200000000000000000000000000000000000006",
+          "amount": "142571888166",
+          "exact": {
+            "reserves": [
+              "2860018861949",
+              "10667280",
+              "1795642928"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x1",
+            "gas": "0x29cbe",
+            "error": null,
+            "spent": "142571888166",
+            "received": "505066",
+            "caller_quote": "505066",
+            "recipient_quote": "505066"
+          },
+          "plus_one": {
+            "reserves": [
+              "2860018861949",
+              "10667280",
+              "1795642928"
+            ],
+            "fees_by_recipient": [
+              "30",
+              "30"
+            ],
+            "status": "0x0",
+            "gas": "0x2cc09",
+            "error": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "spent": "0",
+            "received": "0",
+            "caller_quote": "505066",
+            "recipient_quote": "505066"
+          }
+        }
+      }
+    }
+  ]
+}

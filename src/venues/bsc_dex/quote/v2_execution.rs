@@ -53,7 +53,7 @@ fn prefer(
 pub(super) struct Execution {
     pub mode: crate::core::types::RouteMode,
     pub target: alloy_primitives::Address,
-    pub step: Option<super::v2_wallet_sim::V5Step>,
+    pub wire: super::v2_wallet_sim::Wire,
 }
 pub(super) async fn option(
     q: &Quoting,
@@ -70,8 +70,14 @@ pub(super) async fn option(
         steps::Names,
         v2_wallet_sim::{self, Order},
     };
+    use crate::core::types::RouterFeeMode;
     use crate::{core::types::RouteMode, gateway::errors::ErrorCode};
     use alloy_primitives::U256;
+    let fee_mode = match &execution.wire {
+        super::v2_wallet_sim::Wire::Oasis { rebate: true } => Some(RouterFeeMode::Rebate),
+        super::v2_wallet_sim::Wire::Oasis { rebate: false } => Some(RouterFeeMode::Standard),
+        _ => None,
+    };
     let mode = execution.mode;
     let target = execution.target;
     let ctx = &q.ctx;
@@ -139,16 +145,28 @@ pub(super) async fn option(
             output,
             amount,
             minimum,
-            v5: execution.step,
+            wire: execution.wire,
         };
-        let fill = v2_wallet_sim::measure(ctx, head, o).await?;
+        let fill =
+            v2_wallet_sim::measure(ctx, head, o, super::oasis_pricing::is_oasis(&c.entry)).await?;
         if i.side == Side::Sell {
             c.usdt = num::to_decimal(fill.received, i.usdt_dec).ok_or_else(bad)?;
         }
         c.usable.gas = fill.swap_gas;
         approval = Some(fill.approval);
     }
-    Ok((build(c)?, approval))
+    let mut quote = build(c)?;
+    if fee_mode.is_some() {
+        let route = quote.route.as_mut().ok_or_else(bad)?;
+        let [leg] = route.legs.as_mut_slice() else {
+            return Err(bad());
+        };
+        let [hop] = leg.hops.as_mut_slice() else {
+            return Err(bad());
+        };
+        hop.fee_mode = fee_mode;
+    }
+    Ok((quote, approval))
 }
 
 #[cfg(test)]

@@ -37,6 +37,9 @@ use super::solidly_fee_read;
 /// адрес пула, блок-тег. Ошибки: не задана dex.factory, узел, ответ не по ABI, комиссия пула не помещается в u32;
 /// решение 273 — не задан метод/правило/делитель заданного источника, комиссия ≥ 100% по правилу.
 pub async fn load(ctx: &Ctx, f: &Family, pool: Address, tag: &str) -> GatewayResult<PoolState> {
+    if f.variant == super::family_variant::Variant::LeetSwap {
+        return super::leetswap::load(ctx, f, pool, tag).await;
+    }
     let meta = call::view(ctx, pool, &ISolidlyPool::metadataCall {}, tag).await?;
     let factory = ctx.dex_addr("dex.factory", f.id)?;
     let fee = pool_fee(ctx, f, (factory, pool, meta.st), tag).await?;

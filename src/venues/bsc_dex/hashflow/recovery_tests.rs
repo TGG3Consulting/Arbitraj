@@ -244,6 +244,7 @@ async fn disabled_hashflow_preserves_ordinary_v3_quotes_and_mined_results_on_fou
             legs: vec![RouteLeg {
                 share: Decimal::ONE,
                 hops: vec![RouteHop {
+                    fee_mode: None,
                     family: if row.chain == 56 {
                         "pancakeswap-v3"
                     } else {

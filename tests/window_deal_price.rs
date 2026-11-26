@@ -121,6 +121,7 @@ fn sell_quote(rec: &Rec, qty: &str) -> Quote {
         legs: vec![RouteLeg {
             share: d("1"),
             hops: vec![RouteHop {
+                fee_mode: None,
                 family: rec.pool.family.id.to_string(),
                 kind: rec.pool.pool.kind,
                 pool: rec.pool.pool.reference.clone(),

@@ -118,6 +118,7 @@ async fn direct_and_no_route_keep_tip() {
     let leg = RouteLeg {
         share: Decimal::ONE,
         hops: vec![RouteHop {
+            fee_mode: None,
             family: "pancakeswap_v3".into(),
             kind: PoolKind::V3,
             pool: PoolRef::Contract(CAKE_USDT_PCS),

@@ -15,9 +15,12 @@ pub(super) async fn candidates(
     q: &Quoting,
     i: &routing::Input,
 ) -> (Vec<super::v2_execution::OptionQuote>, bool) {
-    use super::{delta_pricing, frax_pricing, router_pricing, white_pricing, white_state};
-    let mut kinds = [false; 4];
+    use super::{
+        delta_pricing, frax_pricing, oasis_pricing, router_pricing, white_pricing, white_state,
+    };
+    let mut kinds = [false; 5];
     for e in &i.entries {
+        kinds[4] |= oasis_pricing::is_oasis(e);
         kinds[0] |= white_pricing::is_white(e);
         kinds[1] |= frax_pricing::is_frax(e);
         kinds[2] |= delta_pricing::is_delta(e);
@@ -34,7 +37,7 @@ pub(super) async fn candidates(
     } else {
         None
     };
-    let (white, frax, delta, router) = tokio::join!(
+    let (white, frax, delta, router, oasis) = tokio::join!(
         async {
             if kinds[0] {
                 Box::pin(white_pricing::candidates(q, i, head)).await
@@ -62,17 +65,26 @@ pub(super) async fn candidates(
             } else {
                 Vec::new()
             }
+        },
+        async {
+            if kinds[4] {
+                Box::pin(oasis_pricing::candidates(q, i, head)).await
+            } else {
+                Vec::new()
+            }
         }
     );
     let mut all = white;
     all.extend(frax);
     all.extend(delta);
     all.extend(router);
+    all.extend(oasis);
     (all, q.exec_quote)
 }
 
 fn individual(e: &Entry) -> bool {
-    super::white_pricing::is_white(e)
+    super::oasis_pricing::is_oasis(e)
+        || super::white_pricing::is_white(e)
         || super::frax_pricing::is_frax(e)
         || super::router_pricing::is_native(e)
         || super::delta_pricing::is_delta(e)
@@ -161,7 +173,7 @@ pub(super) fn private(
         let Some(e) = one(quote).and_then(|p| q.reg.get(p)) else {
             continue;
         };
-        if !e.family.fork || !e.family.tradable {
+        if !e.family.fork || !e.family.tradable || super::oasis_pricing::is_oasis(&e) {
             continue;
         }
         let white = super::white_pricing::is_white(&e);
@@ -218,6 +230,7 @@ mod tests {
             .unwrap();
         let pool = PoolRef::Contract(sample["pool"].as_str().unwrap().parse().unwrap());
         let hop = RouteHop {
+            fee_mode: None,
             family: id.into(),
             kind: PoolKind::V2,
             pool: pool.clone(),

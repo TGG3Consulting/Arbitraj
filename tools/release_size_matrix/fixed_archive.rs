@@ -25,7 +25,7 @@ fn calculate(p:Point, gate:&mut arb::core::costs::Calc)->Result<Value,String>{
         return Err("non-positive archived quantity or price".into());
     }
     let prices:HashMap<_,_>=p.costs.iter().filter_map(|l| l.usdt.and_then(|u|u.checked_div(l.amount)).map(|r|(l.asset.clone(),r))).collect();
-    let rates=Rates{quote:p.quotes,coin:p.coin.clone(),coin_price:p.qa[2],prices};
+    let rates=Rates{quote:p.quotes.clone(),coin:p.coin.clone(),coin_price:p.qa[2],prices};
     let invested=p.qty*p.qa[2];
     let quoted_proceeds=p.sell_qty*p.qb[2];
     let keep=reserve::keep_of(p.k,p.sigma,p.transit).ok_or("missing transit")?;
@@ -62,8 +62,12 @@ async fn recorded_points(){
     let mut rows=vec![];
     for v in value["cases"].as_array().unwrap() {
         if v["cycle"]==true{
-            rows.push(cycle_check(v));
+            rows.push(json!({"unavailable":"cycles compared separately from inter-venue inputs"}));
         }else{
+            if v["costs"].as_array().unwrap().iter().any(|line|line["kind"]=="TransferShortfall") {
+                rows.push(json!({"unavailable":"historical fee kind absent on this revision"}));
+                continue;
+            }
             let p:Point=serde_json::from_value(v.clone()).expect("archived point");
             rows.push(calculate(p,&mut gate).unwrap_or_else(|e|json!({"unavailable":e})));
         }

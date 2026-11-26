@@ -16,6 +16,8 @@ exe, = [j["executable"] for l in compile_test.stdout.splitlines()
         if (j := json.loads(l)).get("executable") and j["target"]["name"]==target]
 sizes_file = args.output.with_suffix(".sizes")
 measure_env = {**os.environ,"ARB_CHECK_SIZES":str(sizes_file)}
+if not args.candidate:
+    measure_env["ARB_HISTORICAL_CHECK_SIZES"]="1"
 subprocess.run([exe,"--exact","bsc_startup_future_sizes"],env=measure_env,check=True)
 result = {"sha":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),"sizes":json.loads(sizes_file.read_bytes()),"runs":[]}
 normal_env=os.environ.copy()

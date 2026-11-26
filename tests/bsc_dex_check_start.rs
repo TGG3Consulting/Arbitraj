@@ -178,10 +178,8 @@ async fn bsc_startup_future_sizes() {
     if let Ok(path) = std::env::var("ARB_CHECK_SIZES") {
         std::fs::write(path, bytes.to_string()).unwrap();
     }
-    if let Ok(bound) = std::env::var("ARB_CHECK_BOUND") {
-        assert!(
-            bytes["one"].as_u64().unwrap() <= bound.parse::<u64>().unwrap(),
-            "{bytes}"
-        );
+    // RAW разрешён только при измерении исторических SHA. Обычный прогон ловит рост до падения стека.
+    if std::env::var_os("ARB_HISTORICAL_CHECK_SIZES").is_none() {
+        assert!(bytes["one"].as_u64().unwrap() <= 64 * 1024, "{bytes}");
     }
 }

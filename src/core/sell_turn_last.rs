@@ -85,8 +85,7 @@ impl Last {
 /// Что делает: маршрут запроса продажи на площадке `v` — фактический (С-3): биржа — маршрута нет (true); DEX — только
 /// если у площадки нет внешнего исполнителя шлюза (gateway/quote_stage.rs final_external). Ошибок нет.
 pub fn route_known(core: &Core, v: &VenueId) -> bool {
-    super::trade_ops::kind(core, v) != Ok(VenueKind::Dex)
-        || !crate::gateway::quote_stage::final_external(&core.inner.deps.settings, v)
+    super::trade_ops::kind(core, v) != Ok(VenueKind::Dex) || !super::profit::external_at(core, v)
 }
 
 /// Что делает: признак (а) — состояние пулов известного маршрута прошлой продажи в памяти ядра после неё (по блоку,

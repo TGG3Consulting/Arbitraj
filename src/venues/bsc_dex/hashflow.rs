@@ -42,6 +42,14 @@ fn router(chain: u64) -> Result<Address, String> {
         .ok_or_else(|| "Нет размещения Hashflow в этой сети".into())
 }
 
+pub(super) fn enabled(ctx: &Ctx) -> bool {
+    ctx.flag("hashflow.trading").unwrap_or(false)
+        && ctx.vault.has_secret("hashflow.taker_key")
+        && ctx
+            .text("hashflow.source")
+            .is_ok_and(|s| !s.trim().is_empty() && s.trim() != "api")
+}
+
 pub(super) async fn connection(ctx: &Ctx) -> Option<Result<String, String>> {
     let source = match ctx.text("hashflow.source") {
         Ok(s) if !s.trim().is_empty() => s,
@@ -49,6 +57,11 @@ pub(super) async fn connection(ctx: &Ctx) -> Option<Result<String, String>> {
         Err(e) if e.code == ErrorCode::NotConfigured => return None,
         Err(e) => return Some(Err(e.message)),
     };
+    if !ctx.vault.has_secret("hashflow.taker_key") {
+        return Some(Err(
+            "Нет ключа Hashflow в разблокированном хранилище секретов".into(),
+        ));
+    }
     let chain = ctx.chain_id()?;
     if router(chain).is_err() {
         return None;
@@ -145,6 +158,9 @@ async fn check(
 ) -> Result<Prepared, String> {
     if r.trader.is_zero() || r.input == r.output {
         return Err("Проверьте адрес трейдера и разные токены обмена".into());
+    }
+    if !ctx.vault.has_secret("hashflow.taker_key") {
+        return Err("Нет ключа Hashflow в разблокированном хранилище секретов".into());
     }
     let target = router(id)?;
     let h = sim::header(ctx, id).await?;

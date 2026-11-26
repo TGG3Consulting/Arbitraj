@@ -60,11 +60,15 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
         let start = Instant::now();
         let at = Utc::now().timestamp_millis();
         let duration = Duration::from_millis(age);
-        let data = tokio::time::timeout(duration, market::book(ctx, &source, chain, None))
-            .await
-            .ok()
-            .and_then(Result::ok)
-            .map(Arc::new);
+        let data = if ctx.vault.has_secret("hashflow.taker_key") {
+            tokio::time::timeout(duration, market::book(ctx, &source, chain, None))
+                .await
+                .ok()
+                .and_then(Result::ok)
+                .map(Arc::new)
+        } else {
+            None
+        };
         let markets = data
             .as_ref()
             .map(|book| book.markets(quote, &p.tokens))

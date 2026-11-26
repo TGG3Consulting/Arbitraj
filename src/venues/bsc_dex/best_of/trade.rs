@@ -93,7 +93,7 @@ pub async fn trade(
         |x: &Quote| choose::usable_own(x).and_then(|_| choose::within_worst(x, req.worst_price));
     match (c.who, k, o) {
         (Who::Kyber, Ok(prep), o) => {
-            let res = run_kyber(kyber, req.clone(), prep).await;
+            let res = run_kyber(p, kyber, req.clone(), prep).await;
             match (res, o) {
                 (Err(e), Ok(own)) if pre_send(e.code, e.tx.is_some()) && own_ok(&own).is_ok() => {
                     let why = format!("{}; KyberSwap не отправлен ({}) → свой", c.why, e.message);
@@ -108,7 +108,7 @@ pub async fn trade(
             (Err(e), Ok(prep)) if pre_send(e.code, e.tx.is_some()) => {
                 let why = format!("{}; свой не отправлен ({}) → KyberSwap", c.why, e.message);
                 log(p, &req, &why).await;
-                tag(run_kyber(kyber, req, prep).await, &why)
+                tag(run_kyber(p, kyber, req, prep).await, &why)
             }
             (res, _) => tag(res, &c.why),
         },
@@ -155,12 +155,13 @@ pub fn pre_send(code: ErrorCode, has_tx: bool) -> bool {
 /// Своп KyberSwap по подготовленному маршруту под строгой очередью кошелька (общий замок с bsc_dex, решение 112).
 /// Ошибки: как у kyberswap::trade::execute — подписаны «[KyberSwap]» (код и факт транзакции не меняются).
 async fn run_kyber(
+    p: &Parts,
     kyber: &kyberswap::state::Parts,
     req: TradeRequest,
     prep: Prepared,
 ) -> GatewayResult<TradeResult> {
     let res = {
-        let _guard = kyber.wallet_lock.lock().await;
+        let _guard = p.nonces.acquire(&p.ctx).await?;
         kyberswap::trade::execute(kyber, req, prep).await
     };
     res.map_err(|mut e| {

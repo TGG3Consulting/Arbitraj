@@ -124,7 +124,7 @@ pub(in crate::venues::bsc_dex) async fn consider(
     qty: Decimal,
     baseline: GatewayResult<Quote>,
 ) -> GatewayResult<Quote> {
-    if !p.ctx.flag("hashflow.trading").unwrap_or(false) || qty <= Decimal::ZERO {
+    if !super::enabled(&p.ctx) || qty <= Decimal::ZERO {
         return baseline;
     }
     if let Err(e) = &baseline
@@ -209,7 +209,7 @@ pub(in crate::venues::bsc_dex) fn breaks(
     side: Side,
     max: Decimal,
 ) -> Vec<Decimal> {
-    if !p.ctx.flag("hashflow.trading").unwrap_or(false) {
+    if !super::enabled(&p.ctx) {
         return Vec::new();
     }
     pair(p, asset, side)

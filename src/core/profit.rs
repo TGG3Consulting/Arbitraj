@@ -32,7 +32,7 @@
 use rust_decimal::Decimal;
 use serde::Serialize;
 
-use crate::core::types::{Direction, Side};
+use crate::core::types::{Direction, Side, VenueId};
 use crate::settings::read::At;
 
 use super::calc_detail::{stage_detail, stage_sync_detail};
@@ -426,11 +426,22 @@ fn final_gate(core: &Core, d: &Direction) -> Option<Decimal> {
 /// Есть ли в направлении DEX, чья финальная котировка — у внешнего исполнителя (exec.via_kyber = да; признак фильтра
 /// final_gate). Решение 266: при нём быстрый пересчёт объёма кандидата не применяется (precheck_fast.rs). Ошибок нет.
 pub(super) fn final_external(core: &Core, d: &Direction) -> bool {
-    let settings = &core.inner.deps.settings;
     rd(&core.inner.kinds).iter().any(|(v, k)| {
         (v == &d.buy_on || v == &d.sell_on)
             && *k == crate::gateway::contract::VenueKind::Dex
-            && crate::gateway::quote_stage::final_external(settings, v)
+            && external_at(core, v)
+    })
+}
+
+/// Для RFQ внешний вызов возможен только при уже полученных действующих уровнях.
+pub(super) fn external_at(core: &Core, v: &VenueId) -> bool {
+    crate::gateway::quote_stage::final_external(&core.inner.deps.settings, v, || {
+        rd(&core.inner.market)
+            .rfq
+            .get(v)
+            .is_some_and(|(_, rows, expires)| {
+                !rows.is_empty() && *expires > chrono::Utc::now().timestamp_millis()
+            })
     })
 }
 

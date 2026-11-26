@@ -94,6 +94,15 @@ impl Vault {
         }
     }
 
+    /// Наличие непустого секрета в разблокированной памяти, без копирования значения.
+    pub fn has_secret(&self, name: &str) -> bool {
+        let guard = self.keys.read().unwrap_or_else(|p| p.into_inner());
+        guard
+            .as_ref()
+            .and_then(|keys| keys.get(name))
+            .is_some_and(|v| !v.trim().is_empty())
+    }
+
     /// Возвращает секрет по имени (значение затирается в памяти после использования).
     /// Ошибки: SecretsLocked — не разблокировано; NotConfigured — такой секрет не введён.
     pub fn get(&self, name: &str) -> Result<Zeroizing<String>, GatewayError> {

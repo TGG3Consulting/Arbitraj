@@ -15,6 +15,9 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Передаёт ключ только официальному HTTP API. Тела подписанных ответов не сохраняются.
 pub(super) async fn read<T: DeserializeOwned>(ctx: &Ctx, req: RequestBuilder) -> Result<T, String> {
     let key = ctx.vault.get("hashflow.taker_key").map_err(|e| e.message)?;
+    if key.trim().is_empty() {
+        return Err("Нет ключа Hashflow".into());
+    }
     let mut header =
         HeaderValue::from_str(key.as_str()).map_err(|_| "Неверный формат ключа Hashflow")?;
     header.set_sensitive(true);

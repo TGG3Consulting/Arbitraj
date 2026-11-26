@@ -110,9 +110,9 @@ pub fn dex(venue: &VenueId, token: Address, ticker: &str, inp: &Inputs) -> Prese
     let (can_buy, can_sell) = if excluded.is_empty() {
         (true, true)
     } else {
-        rfq.unwrap_or((false, false))
+        rfq.unwrap_or((true, true))
     };
-    let excluded = if rfq.is_some() && (can_buy || can_sell) {
+    let excluded = if rfq.is_some_and(|(buy, sell)| buy || sell) {
         vec![]
     } else {
         excluded

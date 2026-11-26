@@ -45,12 +45,22 @@ pub fn is_final() -> bool {
 /// Финальная котировка площадки — у внешнего исполнителя с лимитом запросов (решения 95, 111, 121 B5): exec.via_kyber
 /// = да в области площадки (тот же переключатель, что читает её адаптер). Принимает: хранилище настроек, площадку.
 /// Возвращает: да/нет; не задано или ошибка чтения — нет (своя котировка, внешних запросов нет). Ошибок нет.
-pub fn final_external(settings: &Store, venue: &VenueId) -> bool {
-    let at = At {
-        venue: Some(&venue.0),
-        coin: None,
-    };
-    kyber_final(settings, venue) || settings.flag("hashflow.trading", at).unwrap_or(false)
+pub fn final_external(
+    settings: &Store,
+    venue: &VenueId,
+    current_rfq: impl FnOnce() -> bool,
+) -> bool {
+    kyber_final(settings, venue)
+        || settings
+            .flag(
+                "hashflow.trading",
+                At {
+                    venue: Some(&venue.0),
+                    coin: None,
+                },
+            )
+            .unwrap_or(false)
+            && current_rfq()
 }
 
 /// Применимость собственного лимита финальных запросов KyberSwap.

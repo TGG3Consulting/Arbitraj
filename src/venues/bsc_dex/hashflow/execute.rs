@@ -76,7 +76,7 @@ pub(in crate::venues::bsc_dex) fn marker(
         .try_with(|d| {
             if super::super::num::to_units(ctx.dec("hashflow.gas_budget_native")?, 18)
                 .is_none_or(|cap| need > cap)
-                || !ctx.flag("hashflow.trading").unwrap_or(false)
+                || !super::enabled(ctx)
                 || ctx.text("hashflow.source")? != d.source
                 || !routing::expiry_ok(d.expiry, ctx.int("hashflow.min_validity_ms")?)
                 || send::tip(ready).is_some()
@@ -154,7 +154,7 @@ pub(in crate::venues::bsc_dex) async fn reserve(
         })?;
     let (valid, k) = DISPATCH.with(|d| {
         (
-            ctx.flag("hashflow.trading").unwrap_or(false)
+            super::enabled(ctx)
                 && ctx.text("hashflow.source").ok().as_ref() == Some(&d.source)
                 && ctx
                     .int("hashflow.min_validity_ms")
@@ -407,7 +407,7 @@ async fn selected(
     q: &super::Prepared,
 ) -> GatewayResult<TradeResult> {
     let ctx = &p.ctx;
-    if !ctx.flag("hashflow.trading").unwrap_or(false)
+    if !super::enabled(ctx)
         || ctx.text("hashflow.source")? != q.source
         || !routing::timely(p, q)
         || req.remeasure.as_ref().is_some_and(|r| !r.any_executor)

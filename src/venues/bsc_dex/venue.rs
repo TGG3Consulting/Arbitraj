@@ -58,7 +58,7 @@ impl Venue for BscDex {
 
     /// Решение 372: строгий верх курса стороны DEX без котировок (quote/bound.rs). Ошибок нет.
     fn rate_bound(&self, asset: &Asset, side: Side) -> crate::gateway::rate_bound::RateBound {
-        if self.p.ctx.flag("hashflow.trading").unwrap_or(false) {
+        if super::hashflow::enabled(&self.p.ctx) {
             return crate::gateway::rate_bound::RateBound::na(
                 "rfq",
                 "Индикативные уровни RFQ не доказывают верх цены подписанной котировки",
@@ -184,7 +184,7 @@ impl Venue for BscDex {
     /// объём целиком — ответ без полной котировки; иначе — полная котировка, как quote. Финальная котировка через
     /// KyberSwap (решение 95) — как quote. Ошибки: как у quote.
     async fn quote_fills(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Decimal> {
-        if self.p.ctx.flag("hashflow.trading").unwrap_or(false)
+        if super::hashflow::enabled(&self.p.ctx)
             || (crate::gateway::quote_stage::is_final()
                 && self.p.ctx.flag("exec.via_kyber").unwrap_or(false))
         {
@@ -806,14 +806,23 @@ impl BscDex {
     async fn trade_logs(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
         // Решение 132: сделка — только кошельком счёта (Ctx::bound).
         self.p.ctx.bound()?;
+        let mut req = req;
         if matches!(
             req.route.as_ref().map(|r| r.mode),
             Some(crate::core::types::RouteMode::RfqIndicative)
         ) {
-            return Err(self.p.ctx.err(
-                ErrorCode::NoRoute,
-                "Для индикативного рынка Hashflow требуется финальная подписанная котировка",
-            ));
+            let firm =
+                crate::gateway::quote_stage::final_scope(self.quote(&req.asset, req.side, req.qty))
+                    .await?;
+            super::best_of::choose::within_worst(&firm, req.worst_price)
+                .map_err(|why| self.p.ctx.err(ErrorCode::QuoteMismatch, why).price_moved())?;
+            if firm.fillable_qty != req.qty || firm.route.as_ref().is_some_and(|r| !r.executable) {
+                return Err(self.p.ctx.err(
+                    ErrorCode::NoRoute,
+                    "Нет подписанной котировки или обычного маршрута на весь объём",
+                ));
+            }
+            req.route = firm.route;
         }
         if let Some(crate::core::types::RouteMode::Rfq(id)) = req.route.as_ref().map(|r| r.mode) {
             return super::hashflow::routing::trade(&self.p, req, id).await;
@@ -832,7 +841,14 @@ impl BscDex {
             return super::best_of::trade::trade(&self.p, &self.kyber, req).await;
         }
         if path == super::trade_path::Path::Kyber {
-            match crate::venues::kyberswap::trade::trade(&self.kyber, req.clone()).await {
+            let kyber_result = async {
+                let _slot = self.p.nonces.acquire(&self.p.ctx).await?;
+                let prepared =
+                    crate::venues::kyberswap::trade_prep::prepare(&self.kyber, &req).await?;
+                crate::venues::kyberswap::trade::execute(&self.kyber, req.clone(), prepared).await
+            }
+            .await;
+            match kyber_result {
                 Err(e) if e.code == ErrorCode::NoRoute => {}
                 // Решение 121 (B7): исполнитель — в тексте ошибки, как у своего сборщика.
                 Err(mut e) => {

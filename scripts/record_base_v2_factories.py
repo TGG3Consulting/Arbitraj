@@ -61,6 +61,9 @@ if __name__=="__main__":
             proof=source(cap,row)
             if row[2] is None:proof["fee_getter"]="getFeeForPair(address,address)"
             result=directory(args.market,cap,config=row[:4],network="base",proof=proof,wrapped=WETH,stables=(USDC,USDBC),funding_router=ROUTER)
+            if args.market=="bakeryswap-base":
+                from record_bakeryswap_base import inspect
+                result["native_router"]=inspect(cap,result,head)
             result.update(selector=cap.selector,height=snap["block"],state_root=head["stateRoot"],endpoint=endpoint)
             args.output.write_text(json.dumps(result,indent=2)+"\n",encoding="utf-8")
             break

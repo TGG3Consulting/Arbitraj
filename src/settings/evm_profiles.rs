@@ -18,8 +18,20 @@ pub struct ChainMeta {
 }
 
 pub const PROFILES: &[ChainMeta] = &[
-    ChainMeta { venue: "base_dex", chain: "base", evm_chain_id: 8453, gas_mode: "op_stack_eip1559", public_channel: "base_public" },
-    ChainMeta { venue: "eth_dex", chain: "ethereum", evm_chain_id: 1, gas_mode: "ethereum_eip1559", public_channel: "ethereum_public" },
+    ChainMeta {
+        venue: "base_dex",
+        chain: "base",
+        evm_chain_id: 8453,
+        gas_mode: "op_stack_eip1559",
+        public_channel: "base_public",
+    },
+    ChainMeta {
+        venue: "eth_dex",
+        chain: "ethereum",
+        evm_chain_id: 1,
+        gas_mode: "ethereum_eip1559",
+        public_channel: "ethereum_public",
+    },
 ];
 
 /// Ожидаемая идентичность для известной площадки.
@@ -29,23 +41,40 @@ pub fn profile(venue: &str) -> Option<&'static ChainMeta> {
 
 /// Настройки конкретной сети с исторически допустимой общей областью BSC.
 pub fn local_only(name: &str) -> bool {
-    matches!(name, "bsc.node_http_url" | "bsc.node_http_url_backup"
-        | "bsc.node_ws_url" | "bsc.node_ws_url_backup" | "bsc.receipts_node_urls"
-        | "index.network" | "venue.enabled")
+    matches!(
+        name,
+        "bsc.node_http_url"
+            | "bsc.node_http_url_backup"
+            | "bsc.node_ws_url"
+            | "bsc.node_ws_url_backup"
+            | "bsc.receipts_node_urls"
+            | "index.network"
+            | "venue.enabled"
+    )
 }
 
 impl ChainMeta {
     /// Сверяет значение, включая уже сохранённое в прежней версии. Агрегатор подписывает только BSC.
     pub fn check(&self, name: &str, value: Option<&Value>) -> Result<(), String> {
         match name {
-            "dex.chain" if value.and_then(Value::as_str) != Some(self.chain) =>
-                Err(format!("{}: требуется dex.chain = {}", self.venue, self.chain)),
-            "dex.evm_chain_id" if value.and_then(Value::as_u64) != Some(self.evm_chain_id) =>
-                Err(format!("{}: требуется dex.evm_chain_id = {}", self.venue, self.evm_chain_id)),
-            "dex.gas_mode" if value.and_then(Value::as_str) != Some(self.gas_mode) =>
-                Err(format!("{}: требуется dex.gas_mode = {}", self.venue, self.gas_mode)),
-            "exec.via_kyber" if value.and_then(Value::as_bool) == Some(true) =>
-                Err(format!("{}: адаптер KyberSwap подписывает транзакции сети BSC (56)", self.venue)),
+            "dex.chain" if value.and_then(Value::as_str) != Some(self.chain) => Err(format!(
+                "{}: требуется dex.chain = {}",
+                self.venue, self.chain
+            )),
+            "dex.evm_chain_id" if value.and_then(Value::as_u64) != Some(self.evm_chain_id) => {
+                Err(format!(
+                    "{}: требуется dex.evm_chain_id = {}",
+                    self.venue, self.evm_chain_id
+                ))
+            }
+            "dex.gas_mode" if value.and_then(Value::as_str) != Some(self.gas_mode) => Err(format!(
+                "{}: требуется dex.gas_mode = {}",
+                self.venue, self.gas_mode
+            )),
+            "exec.via_kyber" if value.and_then(Value::as_bool) == Some(true) => Err(format!(
+                "{}: адаптер KyberSwap подписывает транзакции сети BSC (56)",
+                self.venue
+            )),
             _ => Ok(()),
         }
     }
@@ -62,13 +91,27 @@ impl ChainMeta {
     /// Перед регистрацией требует явные идентификаторы и историческую BSC для записей без сети.
     pub fn ready(&self, s: &Store) -> Result<(), String> {
         let scope = Scope::Venue(self.venue.into());
-        for name in ["dex.chain", "dex.evm_chain_id", "dex.gas_mode", "exec.via_kyber"] {
+        for name in [
+            "dex.chain",
+            "dex.evm_chain_id",
+            "dex.gas_mode",
+            "exec.via_kyber",
+        ] {
             self.check(name, s.get_exact(name, &scope).as_ref())?;
         }
-        if s.get_exact("dex.default_chain", &Scope::Global).as_ref().and_then(Value::as_str) != Some("bsc")
-            || s.get_exact("dex.chain", &Scope::Venue("bsc_dex".into())).as_ref().and_then(Value::as_str) != Some("bsc")
+        if s.get_exact("dex.default_chain", &Scope::Global)
+            .as_ref()
+            .and_then(Value::as_str)
+            != Some("bsc")
+            || s.get_exact("dex.chain", &Scope::Venue("bsc_dex".into()))
+                .as_ref()
+                .and_then(Value::as_str)
+                != Some("bsc")
         {
-            return Err(format!("{}: для исторических записей задайте dex.default_chain = bsc и dex.chain = bsc у bsc_dex", self.venue));
+            return Err(format!(
+                "{}: для исторических записей задайте dex.default_chain = bsc и dex.chain = bsc у bsc_dex",
+                self.venue
+            ));
         }
         Ok(())
     }

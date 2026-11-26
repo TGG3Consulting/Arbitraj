@@ -68,7 +68,10 @@ pub fn read(ctx: &Ctx) -> GatewayResult<GasMode> {
         _ => true,
     };
     if !compatible {
-        return Err(ctx.not_set("dex.gas_mode", format!("модель {s} не подходит площадке {}", ctx.place.id)));
+        return Err(ctx.not_set(
+            "dex.gas_mode",
+            format!("модель {s} не подходит площадке {}", ctx.place.id),
+        ));
     }
     Ok(mode)
 }

@@ -1,0 +1,42 @@
+{
+  "url": "https://ethereum-rpc.publicnode.com",
+  "block_number": 26494988,
+  "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+  "read_at_utc": "2026-11-25T22:09:31.244265+00:00",
+  "txs": [
+    {
+      "tx": "0x9ce979db69ffed366f32b6e45fb6466ca5ee07799bf749e52c183a7ae999c665",
+      "status": 1,
+      "type": 2,
+      "nonce": 220468,
+      "gas_used": 148555,
+      "gas_limit": 350901,
+      "base_fee_wei": 50632157,
+      "max_fee_per_gas_wei": 105285967,
+      "max_priority_fee_per_gas_wei": 0,
+      "effective_gas_price_wei": 50632157,
+      "fee_wei": 7521660083135,
+      "fee_burned_wei": 7521660083135,
+      "priority_fee_paid_wei": 0,
+      "cap_reserve_wei": 36944951106267,
+      "effective_formula_matches_receipt": true
+    },
+    {
+      "tx": "0xcf770c3e46f2e3c809adfde06be05abcb2ee00ab9aad87408cd48ab935895d28",
+      "status": 1,
+      "type": 2,
+      "nonce": 136456,
+      "gas_used": 46097,
+      "gas_limit": 300000,
+      "base_fee_wei": 50632157,
+      "max_fee_per_gas_wei": 500000000000,
+      "max_priority_fee_per_gas_wei": 2000000000,
+      "effective_gas_price_wei": 2050632157,
+      "fee_wei": 94527990541229,
+      "fee_burned_wei": 2333990541229,
+      "priority_fee_paid_wei": 92194000000000,
+      "cap_reserve_wei": 150000000000000000,
+      "effective_formula_matches_receipt": true
+    }
+  ]
+}

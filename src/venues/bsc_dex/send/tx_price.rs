@@ -56,10 +56,17 @@ impl TxPrice {
     }
 
     /// Возвращает type-2 RLP для GasPriceOracle до подписи, с теми же данными, что и sign.
-    pub fn unsigned(&self, ctx: &Ctx, chain: u64, nonce: u64, gas: u64, (to,value,input): (TxKind,U256,Bytes)) -> GatewayResult<Bytes> {
+    pub fn unsigned(
+        &self,
+        ctx: &Ctx,
+        chain: u64,
+        nonce: u64,
+        gas: u64,
+        (to, value, input): (TxKind, U256, Bytes),
+    ) -> GatewayResult<Bytes> {
         use alloy::consensus::SignableTransaction;
         let Self::Eip1559(f, _) = self else {
-            return Err(ctx.err(ErrorCode::BadResponse,"Base требует type-2 транзакцию"));
+            return Err(ctx.err(ErrorCode::BadResponse, "Base требует type-2 транзакцию"));
         };
         let tx = tx_1559::eip1559(ctx, chain, nonce, *f, gas, to, value, input)?;
         Ok(tx.encoded_for_signing().into())

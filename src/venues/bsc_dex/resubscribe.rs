@@ -78,7 +78,12 @@ impl Subs {
     }
 
     /// Запускает подписку при удержанном change. Проверка сети предшествует первому рыночному запросу.
-    async fn subscribe_locked(&self, p: &Parts, assets: Vec<Asset>, out: mpsc::Sender<MarketEvent>) -> GatewayResult<()> {
+    async fn subscribe_locked(
+        &self,
+        p: &Parts,
+        assets: Vec<Asset>,
+        out: mpsc::Sender<MarketEvent>,
+    ) -> GatewayResult<()> {
         super::node::chain_id::check_start(&p.ctx).await?;
         let pools = p.pools(out.clone());
         let new = pools::market::subscribe(&pools, &p.scanned, &p.wake, assets.clone()).await?;

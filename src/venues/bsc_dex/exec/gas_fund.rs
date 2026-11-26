@@ -35,17 +35,21 @@ pub fn need_wei(value: U256, price: U256, gas: u64, tip: Option<(U256, u64)>) ->
 /// BNB кошелька хватает на транзакцию. Принимает: окружение, кошелёк, нужно wei (need_wei). Ошибки:
 /// InsufficientBalance (не хватает), BadResponse (число), узел.
 pub async fn ensure(ctx: &Ctx, wallet: Address, need: U256) -> GatewayResult<()> {
+    let ticker = match ctx.place.id {
+        "base_dex" | "eth_dex" => "ETH",
+        _ => "BNB",
+    };
     let need_bnb = num::to_decimal(need, num::BNB_DECIMALS).ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,
-            format!("{need} wei не переводится в BNB"),
+            format!("{need} wei не переводится в {ticker}"),
         )
     })?;
     let have = balances::bnb(ctx, wallet).await?;
     if have < need_bnb {
         let why = format!(
-            "на газ транзакции нужно {} BNB (с суммой и чаевыми), а на кошельке {wallet:#x} только {} BNB — \
-             пополните BNB кошелька, транзакция не отправлена",
+            "на газ транзакции нужно {} {ticker} (с суммой и чаевыми), а на кошельке {wallet:#x} только {} {ticker} — \
+             пополните {ticker} кошелька, транзакция не отправлена",
             need_bnb.normalize(),
             have.normalize()
         );

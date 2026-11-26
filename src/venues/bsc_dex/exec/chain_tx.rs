@@ -12,13 +12,11 @@
 
 use alloy_primitives::B256;
 use rust_decimal::Decimal;
-use serde_json::json;
 
 use crate::core::types::{ChainTx, SendMethod, TxOutcome};
 use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
-use super::super::node::rpc;
 use super::super::send::receipt::Receipt;
 use super::super::send::track::Tracked;
 
@@ -87,8 +85,7 @@ pub async fn tip_gas(ctx: &Ctx, mut chain: ChainTx) -> ChainTx {
     let (Some(_), Some(h)) = (chain.tip_bnb, chain.tip_hash) else {
         return chain;
     };
-    let read: Result<Option<Receipt>, _> =
-        rpc::call(ctx, "eth_getTransactionReceipt", json!([h])).await;
+    let read: Result<Option<Receipt>, _> = super::super::send::receipt::read(ctx, h).await;
     let why = match read {
         Ok(r) => set_tip_gas(&mut chain, r.as_ref()),
         Err(e) => Some(format!(

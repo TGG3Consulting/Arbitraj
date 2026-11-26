@@ -58,7 +58,7 @@ pub async fn trade(
     let deep: U64 = rpc::call(ctx, "eth_getTransactionCount", json!([wallet, deep_tag])).await?;
     let mut receipts = Vec::with_capacity(b.hashes.len());
     for h in &b.hashes {
-        let r: Option<Receipt> = rpc::call(ctx, "eth_getTransactionReceipt", json!([h])).await?;
+        let r: Option<Receipt> = receipt::read(ctx, *h).await?;
         receipts.push(r);
     }
     let in_block =

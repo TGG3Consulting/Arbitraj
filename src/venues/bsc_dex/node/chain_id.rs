@@ -28,7 +28,13 @@ pub fn chain_id(ctx: &Ctx) -> GatewayResult<u64> {
     if let Some(p) = crate::settings::evm_profiles::profile(ctx.place.id)
         && (p.evm_chain_id != id || ctx.text("dex.chain")? != p.chain)
     {
-        return Err(ctx.not_set("dex.evm_chain_id", format!("{}: ожидается {} (chainId {})", p.venue, p.chain, p.evm_chain_id)));
+        return Err(ctx.not_set(
+            "dex.evm_chain_id",
+            format!(
+                "{}: ожидается {} (chainId {})",
+                p.venue, p.chain, p.evm_chain_id
+            ),
+        ));
     }
     Ok(id)
 }

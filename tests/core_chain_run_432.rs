@@ -128,7 +128,14 @@ fn independent_control_for_bsc_arbitrum_base_and_ethereum() {
                 assert!(view(&risk, &all)[i].running);
             }
             let mask_after = mask ^ (1 << changed);
-            apply(&mut risk, &all, &all[changed], mask_after & (1 << changed) != 0, "оператор").unwrap();
+            apply(
+                &mut risk,
+                &all,
+                &all[changed],
+                mask_after & (1 << changed) != 0,
+                "оператор",
+            )
+            .unwrap();
             for (i, chain) in view(&risk, &all).iter().enumerate() {
                 assert_eq!(chain.running, mask_after & (1 << i) != 0);
             }

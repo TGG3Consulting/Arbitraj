@@ -341,8 +341,10 @@ impl Quoting {
             None => c,
         };
         let t = tm.now();
-        if let Some(units) = approve_gas::units(self, &q, coin_dec, usdt_dec).await? {
-            let wei = gas.saturating_mul(U256::from(units));
+        if let Some((units, count)) = approve_gas::details(self, &q, coin_dec, usdt_dec).await? {
+            let wei = gas
+                .saturating_mul(U256::from(units))
+                .saturating_add(self.gas.extra(ctx, units, count)?);
             let bnb = num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
                 ctx.err(
                     ErrorCode::BadResponse,
@@ -363,6 +365,23 @@ impl Quoting {
             q.costs.push(with_step(c));
             if let Some(r) = q.route.as_mut() {
                 r.gas_units += units;
+            }
+        }
+        if let Some(r) = &q.route {
+            let extra = self.gas.extra(ctx, r.gas_units, 1)?;
+            if !extra.is_zero() {
+                let native_fee = num::to_decimal(extra, num::BNB_DECIMALS).ok_or_else(|| {
+                    ctx.err(
+                        ErrorCode::BadResponse,
+                        "комиссия публикации и оператора Base слишком велика",
+                    )
+                })?;
+                q.costs.push(with_step(Cost::new(
+                    CostKind::Gas,
+                    native_fee,
+                    &gas_t,
+                    false,
+                )));
             }
         }
         tm.add(Part::Native, t);

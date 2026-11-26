@@ -116,7 +116,8 @@ async fn to_node(ctx: &Ctx, body: &Value) -> GatewayResult<String> {
         let response = async {
             super::chain_seen::verify_http(ctx, &url).await?;
             post(ctx, &url, body, &[], SOURCE).await
-        }.await;
+        }
+        .await;
         match response {
             Ok(t) => {
                 if node == Node::Main {

@@ -729,9 +729,11 @@ impl Venue for BscDex {
 
     /// Каналы отправки (id области «канал») — send/channels.rs. Ошибок нет.
     async fn send_channels(&self) -> GatewayResult<Vec<SendChannelInfo>> {
-        Ok(send::channels::ALL.iter()
+        Ok(send::channels::ALL
+            .iter()
             .filter(|ch| send::channels::compatible(self.p.ctx.place.id, ch))
-            .map(|c| c.info()).collect())
+            .map(|c| c.info())
+            .collect())
     }
 
     /// «Проверить подключение» канала: пустая транзакция — канал отвечает ошибкой JSON-RPC (send/check.rs; документация

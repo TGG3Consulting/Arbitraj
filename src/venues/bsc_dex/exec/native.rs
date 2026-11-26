@@ -155,8 +155,16 @@ pub async fn reserve_ok(
         .wei(ctx, &env.heads)
         .await?
         .max(send::planned_floor(ctx)?);
-    let gas = U256::from(tx::limit(ctx, wallet, to, data, value).await?);
-    let wei = value.saturating_add(price.saturating_mul(gas));
+    let (price, unit) = if matches!(ctx.place.id, "eth_dex" | "base_dex") {
+        let ready = send::select(ctx, &env.stats)?;
+        (super::tx_fee::price(env, &ready, None).await?.cap(), "ETH")
+    } else {
+        (price, "BNB")
+    };
+    let gas = tx::limit(ctx, wallet, to, data, value).await?;
+    let wei = value
+        .saturating_add(price.saturating_mul(U256::from(gas)))
+        .saturating_add(env.gas.extra(ctx, gas, 1)?);
     let spend = num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,
@@ -168,7 +176,7 @@ pub async fn reserve_ok(
         return Err(ctx.err(
             ErrorCode::InsufficientBalance,
             format!(
-                "BNB: нужно {spend} (сумма + газ), а сверх резерва на газ {reserve} (risk.min_bnb_balance) на кошельке только {}",
+                "{unit}: нужно {spend} (сумма + газ), а сверх резерва на газ {reserve} (risk.min_bnb_balance) на кошельке только {}",
                 (have - reserve).max(Decimal::ZERO)
             ),
         ));

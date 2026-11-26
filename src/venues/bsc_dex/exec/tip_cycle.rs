@@ -75,7 +75,10 @@ pub async fn choose(
 ) -> GatewayResult<(Bill, Option<TipPlan>)> {
     let ctx = &q.ctx;
     let (l2, base) = match bill {
-        Bill::Split { l2, base, .. } | Bill::Type2 { units: l2, base, .. } => (l2, base),
+        Bill::Split { l2, base, .. }
+        | Bill::Type2 {
+            units: l2, base, ..
+        } => (l2, base),
         Bill::Flat { .. } => return Ok((bill, None)),
     };
     let TipMode::ProfitShare(cfg) = tip_mode::read(ctx)? else {

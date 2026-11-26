@@ -170,7 +170,7 @@ async fn fill(
         Some(c) => cycle_gas::priced(q, wallet, c).await?,
         None => cycle_gas::flat(q, 0).await?,
     };
-    let bill = cycle_gas::simulated(q, bill, sim.gas_swap, sim.approvals, sim.gas_approve).await?;
+    let bill = cycle_gas::simulated(q, bill, sim.gas_swap, sim.approvals, sim.gas_approve)?;
     let net = net_check(
         ctx,
         (out, req.input),

@@ -75,7 +75,13 @@ pub async fn verify_http(ctx: &Ctx, url: &str) -> GatewayResult<()> {
         return Ok(());
     };
     let key = (alloy_primitives::keccak256(url.as_bytes()), p.evm_chain_id);
-    if ctx.chains.verified.lock().unwrap_or_else(|p| p.into_inner()).contains(&key) {
+    if ctx
+        .chains
+        .verified
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .contains(&key)
+    {
         return Ok(());
     }
     let body = jsonrpc::request(1, "eth_chainId", &json!([]));
@@ -83,7 +89,11 @@ pub async fn verify_http(ctx: &Ctx, url: &str) -> GatewayResult<()> {
     let raw = jsonrpc::parse_text(&text, rpc::SOURCE, Op::Read)?;
     let got: U64 = jsonrpc::decode(&raw, rpc::SOURCE)?;
     chain_id::same_chain(ctx, got.to::<u64>()).map_err(|e| ctx.err(ErrorCode::BadResponse, e))?;
-    ctx.chains.verified.lock().unwrap_or_else(|p| p.into_inner()).insert(key);
+    ctx.chains
+        .verified
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .insert(key);
     Ok(())
 }
 

@@ -75,7 +75,24 @@ pub async fn quote(q: &Quoting, env: &Env) -> GatewayResult<ExecutorDeployQuote>
         .wei(ctx, &env.heads)
         .await?
         .max(send::gas_floor(&ready));
-    let wei = price.saturating_mul(U256::from(gas));
+    let extra = if ctx.place.id == "base_dex" {
+        let oracle = super::super::super::node::op_fees::Oracle::read(ctx)?;
+        let p = super::super::tx_fee::price(env, &ready, None).await?;
+        let chain = super::super::super::node::chain_seen::ensure(ctx).await?;
+        let raw = p.unsigned(
+            ctx,
+            chain,
+            nonce,
+            gas,
+            (TxKind::Create, U256::ZERO, bin.clone()),
+        )?;
+        oracle
+            .for_tx(ctx, env.heads.fresh(ctx)?.number, gas, raw, true)
+            .await?
+    } else {
+        U256::ZERO
+    };
+    let wei = price.saturating_mul(U256::from(gas)).saturating_add(extra);
     let cost_bnb = num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,

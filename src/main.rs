@@ -281,7 +281,9 @@ async fn run() -> Result<(), String> {
     // адаптера); не задана — только bsc_dex, как раньше. Ошибочная запись пропускается с отдельной причиной в журнале.
     let (dex_extra, rejected) = arb::venues::bsc_dex::dex_venues::extra(&settings);
     for why in rejected {
-        let _ = journal.write(Level::Error, "venue.dex_venues", None, why, None).await;
+        let _ = journal
+            .write(Level::Error, "venue.dex_venues", None, why, None)
+            .await;
     }
     // Решение 435 (ревью, правки): id, уже занятый площадкой шлюза (биржи зарегистрированы выше), — не площадка DEX:
     // запись в журнал и в Place.all не входит. Иначе у bsc_dex alone() = false и каналы, виды DEX и справочник BSC
@@ -299,7 +301,9 @@ async fn run() -> Result<(), String> {
         dex_free.push(id);
     }
     for why in arb::venues::bsc_dex::dex_venues::unique_profiles(&settings, &mut dex_free) {
-        let _ = journal.write(Level::Error, "venue.dex_venues", None, why, None).await;
+        let _ = journal
+            .write(Level::Error, "venue.dex_venues", None, why, None)
+            .await;
     }
     let dex_ids = arb::venues::bsc_dex::dex_venues::all(dex_free);
     let dex_ctx = arb::venues::bsc_dex::ctx::Ctx {

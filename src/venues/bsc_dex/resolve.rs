@@ -36,7 +36,6 @@
 //! 16caee27 src/eth/state.yaml.
 
 use alloy_primitives::B256;
-use serde_json::json;
 
 use crate::core::types::{ChainTx, TradeRequest, TradeResult, WalletQueueState};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
@@ -44,7 +43,6 @@ use crate::gateway::pending::PendingRef;
 
 use super::exec::swap_ctx::SwapCtx;
 use super::exec::swap_rebuild;
-use super::node::rpc;
 use super::parts::Parts;
 use super::send::receipt::Receipt;
 use super::wallet;
@@ -168,7 +166,7 @@ pub(super) fn keys(p: &Parts, pend: &PendingRef) -> GatewayResult<(B256, Option<
 
 /// Квитанция по хешу. None — транзакции нет в блоке. Ошибки: узел.
 pub(super) async fn receipt(p: &Parts, hash: B256) -> GatewayResult<Option<Receipt>> {
-    rpc::call(&p.ctx, "eth_getTransactionReceipt", json!([hash])).await
+    super::send::receipt::read(&p.ctx, hash).await
 }
 
 /// Снимает очередь кошелька, если она остановлена этой транзакцией (тот же хеш и nonce; у бандла — последней его

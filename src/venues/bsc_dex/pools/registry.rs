@@ -113,7 +113,10 @@ impl Entry {
 impl Registry {
     /// Живой реестр нового адаптера. Кэши других сетей при отписке сохраняются.
     pub fn for_venue(venue: &'static str) -> Self {
-        Self { venue: Some(venue), ..Self::default() }
+        Self {
+            venue: Some(venue),
+            ..Self::default()
+        }
     }
 
     /// Глубина пулов по направлениям (решение 73). Ошибок нет.

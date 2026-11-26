@@ -31,6 +31,16 @@ pub async fn units(
     coin_dec: u8,
     usdt_dec: u8,
 ) -> GatewayResult<Option<u64>> {
+    Ok(details(q, quote, coin_dec, usdt_dec).await?.map(|(u, _)| u))
+}
+
+/// Суммарный замер газа и количество отдельных транзакций разрешений (плата за публикацию Base начисляется каждой).
+pub async fn details(
+    q: &Quoting,
+    quote: &Quote,
+    coin_dec: u8,
+    usdt_dec: u8,
+) -> GatewayResult<Option<(u64, usize)>> {
     let ctx = &q.ctx;
     // Продажа нативной BNB (решение 62): платит роутер из WRAP_ETH — разрешений кошелька нет (exec/native.rs).
     if quote.side == Side::Sell && super::super::exec::native::is_native(ctx, &quote.asset) {
@@ -71,7 +81,7 @@ pub async fn units(
         if q.allow.erc20(ctx, token, wallet, x).await? >= amount {
             return Ok(None);
         }
-        return measured(q, &e.pool.reference, quote.side);
+        return Ok(measured(q, &e.pool.reference, quote.side)?.map(|u| (u, 1)));
     }
     // Решение 271 (дополнение): исполнимый граф формы «бандл» без исполнителя (exec/trade.rs → exec/bundle_trade.rs) —
     // разрешения по всем группам бандла, а не только по первому хопу первой доли (quote/approve_bundle.rs).
@@ -79,14 +89,14 @@ pub async fn units(
         && route.executable
         && super::graph_exec::graph_form(ctx, route) == super::graph_exec::GraphForm::Bundle
     {
-        return super::approve_bundle::units(q, quote, route, (coin_dec, usdt_dec)).await;
+        return super::approve_bundle::details(q, quote, route, (coin_dec, usdt_dec)).await;
     }
     // Решение 271 (ревью): первый хоп — форк (граф, без исполнителя) — нога форка в бандле: одно ERC-20 approve роутеру
     // форка на токен входа (exec/bundle.rs, wallet/approve.rs::fork_missing — тот же allowance(кошелёк, роутер)).
     // Решение 280: первый хоп — V2-форк без роутера (без исполнителя маршрут — сигнал): роутера нет, разрешение пошло
     // бы исполнителю — газ, измеренный пробой (dex.router не читается).
     if super::v2_pair_quote::on(&e) {
-        return measured(q, &e.pool.reference, quote.side);
+        return Ok(measured(q, &e.pool.reference, quote.side)?.map(|u| (u, 1)));
     }
     if route.mode == RouteMode::Graph && e.family.fork {
         let router = ctx.dex_addr("dex.router", e.family.id)?;
@@ -94,7 +104,7 @@ pub async fn units(
         if q.allow.erc20(ctx, token, wallet, router).await? >= amount {
             return Ok(None);
         }
-        return measured(q, &e.pool.reference, quote.side);
+        return Ok(measured(q, &e.pool.reference, quote.side)?.map(|u| (u, 1)));
     }
     let (ur, permit2) = if route.mode == RouteMode::Smart {
         (
@@ -111,10 +121,11 @@ pub async fn units(
     let (_, now) = q.heads.at(ctx).await?;
     // Разрешения — из памяти до транзакции кошелька (wallet/allow_cache.rs, решение 61), не с узла на каждый тик.
     let r = q.allow.read(ctx, token, wallet, permit2, ur).await?;
-    if approve::lacking(ctx, &r, (token, permit2, ur), amount, now)?.is_empty() {
+    let approvals = approve::lacking(ctx, &r, (token, permit2, ur), amount, now)?;
+    if approvals.is_empty() {
         return Ok(None);
     }
-    measured(q, &e.pool.reference, quote.side)
+    Ok(measured(q, &e.pool.reference, quote.side)?.map(|u| (u, approvals.len())))
 }
 
 /// Газ разрешений, измеренный пробным обменом в пуле (сторона покупки или продажи). Ошибки: CoinNotChecked — не измерен.

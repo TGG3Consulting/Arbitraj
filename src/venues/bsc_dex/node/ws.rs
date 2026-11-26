@@ -118,7 +118,8 @@ impl Conn {
             timeout,
         };
         if crate::settings::evm_profiles::profile(ctx.place.id).is_some() {
-            let got: alloy_primitives::U64 = conn.request("eth_chainId", serde_json::json!([])).await?;
+            let got: alloy_primitives::U64 =
+                conn.request("eth_chainId", serde_json::json!([])).await?;
             super::chain_id::same_chain(ctx, got.to::<u64>())
                 .map_err(|e| ctx.err(ErrorCode::BadResponse, e))?;
         }

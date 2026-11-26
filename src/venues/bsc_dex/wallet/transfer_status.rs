@@ -89,8 +89,7 @@ async fn status(
     let r = match proof.confirmed {
         Some(receipt) => Some(receipt),
         None => {
-            fetched =
-                rpc::call::<Option<Receipt>>(ctx, "eth_getTransactionReceipt", json!([h])).await?;
+            fetched = super::super::send::receipt::read(ctx, h).await?;
             fetched.as_ref()
         }
     };

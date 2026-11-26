@@ -77,8 +77,26 @@ impl<'a> GasUsdt<'a> {
     /// Газ пути в USDT. Принимает: ноги пути (у каждой — газ обмена своей стороны пула). Возвращает: USDT.
     /// Ошибки: NoRoute — нет достоверного пула «WBNB — USDT» (rate.rs); BadResponse — сумма не помещается в число.
     pub fn path(&self, legs: &[Leg]) -> GatewayResult<Decimal> {
+        self.path_with(legs, None)
+    }
+
+    /// Для сравнения долей одного свопа учитывается переменная плата оператора. Фиксированные расходы входят в общий план один раз.
+    pub fn path_with(
+        &self,
+        legs: &[Leg],
+        gas: Option<&super::gas::GasPrice>,
+    ) -> GatewayResult<Decimal> {
         let units: u64 = legs.iter().map(|l| l.usable.gas).sum();
-        let wei = self.gas_wei.saturating_mul(U256::from(units));
+        let extra = match gas {
+            Some(g) => g
+                .extra(self.ctx, units, 1)?
+                .saturating_sub(g.extra(self.ctx, 0, 1)?),
+            None => U256::ZERO,
+        };
+        let wei = self
+            .gas_wei
+            .saturating_mul(U256::from(units))
+            .saturating_add(extra);
         if wei.is_zero() {
             return Ok(Decimal::ZERO);
         }

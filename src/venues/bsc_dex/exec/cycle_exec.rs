@@ -109,7 +109,12 @@ pub async fn trade(
     let out = super::super::num::to_decimal(got, dec)
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "выход пробы не в Decimal"))?;
     // Решение 437 (3): profit_share — чаевые сделки от прибыли цикла (exec/tip_cycle.rs), до проверки порога.
-    let bill = cycle_gas::simulated(q, bill, gas, 0, 0).await?;
+    let mut bill = cycle_gas::simulated(q, bill, gas, 0, 0)?;
+    if let (cycle_gas::Bill::Type2 { extra, .. }, Some(paid)) = (&mut bill, approved) {
+        let paid = super::super::num::to_units(paid,super::super::num::BNB_DECIMALS)
+            .ok_or_else(|| ctx.err(ErrorCode::BadResponse,"комиссия подтверждённых approve не помещается в wei"))?;
+        *extra = extra.saturating_add(paid);
+    }
     // Решение 438: knownAccounts — только непустые; ревью 439 (4) — по ним же фильтр разбора проигрыша (tip_cycle).
     let known = conds.as_ref().map(|k| &k.known).filter(|k| !k.is_empty());
     let (bill, tips) = tip_cycle::choose(q, bill, (out, req.input), &r, &legs, known).await?;

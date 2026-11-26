@@ -120,6 +120,33 @@ mod tests {
     use alloy::signers::local::PrivateKeySigner;
     use alloy_primitives::{address, hex};
 
+    /// Стоимость исполнения и резерв type-2 по двум реальным квитанциям Ethereum mainnet.
+    #[test]
+    fn ethereum_mainnet_plan_and_reserve() {
+        let r: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/data/base_ethereum_gas_2026-11-26/ethereum-type2.json"
+        ))
+        .unwrap();
+        for row in r["txs"].as_array().unwrap() {
+            let n = |key: &str| row[key].as_u64().unwrap();
+            let base = U256::from(n("base_fee_wei"));
+            let f = Fees {
+                max_fee: n("max_fee_per_gas_wei").into(),
+                tip: n("max_priority_fee_per_gas_wei").into(),
+            };
+            let effective = effective_price(base, f).unwrap();
+            assert_eq!(effective, U256::from(n("effective_gas_price_wei")));
+            assert_eq!(
+                effective * U256::from(n("gas_used")),
+                U256::from(n("fee_wei"))
+            );
+            assert_eq!(
+                U256::from(f.max_fee) * U256::from(n("gas_limit")),
+                U256::from(n("cap_reserve_wei"))
+            );
+        }
+    }
+
     /// Базовая цена и газ — из записи своего узла Arbitrum One (05_*.json), chainId — 01_eth_chainId.json (0xa4b1).
     fn recorded() -> (arb_gas::Components, u64) {
         let r: serde_json::Value = serde_json::from_str(include_str!(

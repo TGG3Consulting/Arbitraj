@@ -100,7 +100,13 @@ pub async fn quote(
     super::super::exec::solidly_gate::planned(ctx, legs.iter().map(|l| &l.entry), wei)?;
     let swap_units: u64 = path.hops.iter().map(|h| h.usable.gas).sum();
     let approve_units = approve_units(q, legs, form, base, input).await?;
-    let gas = wei.saturating_mul(U256::from(swap_units.saturating_add(approve_units)));
+    let all_units = swap_units.saturating_add(approve_units);
+    let extra = q
+        .gas
+        .extra(ctx, all_units, 1 + usize::from(approve_units != 0))?;
+    let gas = wei
+        .saturating_mul(U256::from(all_units))
+        .saturating_add(extra);
     let bad = || ctx.err(ErrorCode::BadResponse, "газ цикла не помещается в Decimal");
     // Тигран 09.11 (согласовано): газ отдельной транзакции перевода чаевых (send/tip_gas.rs, та же цена газа). Чаевые и
     // их газ — только у формы, которая их шлёт: исполнитель (одна транзакция); бандл свопов — нет (план = факт).

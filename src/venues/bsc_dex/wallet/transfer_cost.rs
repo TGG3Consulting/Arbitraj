@@ -61,7 +61,9 @@ pub async fn cost(
         )
     })?;
     let price = env.gas.wei(ctx, &env.heads).await?;
-    let wei = price.saturating_mul(U256::from(gas));
+    let wei = price
+        .saturating_mul(U256::from(gas))
+        .saturating_add(env.gas.extra(ctx, gas, 1)?);
     let bnb = num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,

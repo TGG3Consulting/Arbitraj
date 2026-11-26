@@ -146,12 +146,18 @@ pub async fn send_tipped(
     let sign = |nonce: u64, gas: u64, call: (TxKind, U256, Bytes)| {
         price.sign(ctx, &key, "Подпись транзакции", chain, nonce, gas, call)
     };
-    let oracle = (ctx.place.id == "base_dex").then(|| super::super::node::op_fees::Oracle::read(ctx)).transpose()?;
+    let oracle = (ctx.place.id == "base_dex")
+        .then(|| super::super::node::op_fees::Oracle::read(ctx))
+        .transpose()?;
     let extra = if let Some(oracle) = oracle {
         let unsigned = price.unsigned(ctx, chain, nonce, gas, (to, value, data.clone()))?;
         let block = env.heads.fresh(ctx)?.number;
-        oracle.for_tx(ctx, block, gas, unsigned).await?
-    } else { U256::ZERO };
+        oracle
+            .for_tx(ctx, block, gas, unsigned, to == TxKind::Create)
+            .await?
+    } else {
+        U256::ZERO
+    };
     let signed = sign(nonce, gas, (to, value, data))?;
     let mut tip_cost = None;
     let tip = match send::tip(&ready).filter(|_| with_tip) {

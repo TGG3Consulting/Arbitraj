@@ -119,6 +119,14 @@
     </span>
   </header>
   <p>{def.description}</p>
+  {#if def.name === 'dex.venues' && store.schema?.dex_profiles?.length}
+    <ul>
+      {#each store.schema.dex_profiles as p (p.venue)}
+        <li><code>{p.venue}</code> · {p.chain}, chain ID {p.evm_chain_id}, <code>{p.gas_mode}</code>
+          · {store.venues.includes(p.venue) ? 'зарегистрирована' : 'доступна для настройки до перезапуска'}</li>
+      {/each}
+    </ul>
+  {/if}
 
   {#if def.scopes.includes('Global')}
     <SettingEditor {def} scope={{ kind: 'Global' }} label="вся система" />

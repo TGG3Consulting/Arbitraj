@@ -123,21 +123,59 @@ async fn base_ethereum_registration_is_independent_and_opt_in() {
     use arb::settings::evm_profiles::PROFILES;
     use arb::venues::bsc_dex::{dex_venues, send::channels};
     let s = fresh("base-ethereum").await;
-    let recorded: Value = serde_json::from_str(include_str!("data/base_ethereum_networks.json")).unwrap();
+    let recorded: Value =
+        serde_json::from_str(include_str!("data/base_ethereum_networks.json")).unwrap();
     assert_eq!(dex_venues::extra(&s), (vec![], vec![]));
     set(&s, "dex.default_chain", Scope::Global, "bsc").await;
     set(&s, "dex.chain", Scope::Venue("bsc_dex".into()), "bsc").await;
     set(&s, "dex.chain", Scope::Venue("arb_dex".into()), "arbitrum").await;
-    s.set("dex.venues", Scope::Global, Some(json!(["arb_dex", "base_dex", "invalid-id", "eth_dex", "base_dex"])), "тест").await.unwrap();
+    s.set(
+        "dex.venues",
+        Scope::Global,
+        Some(json!([
+            "arb_dex",
+            "base_dex",
+            "invalid-id",
+            "eth_dex",
+            "base_dex"
+        ])),
+        "тест",
+    )
+    .await
+    .unwrap();
     for p in PROFILES {
         let scope = Scope::Venue(p.venue.into());
         assert_eq!(p.evm_chain_id, recorded[p.chain]["chain"].as_u64().unwrap());
-        assert!(s.set("dex.evm_chain_id", scope.clone(), Some(json!(56)), "тест").await.is_err());
-        assert!(s.set("dex.gas_mode", scope.clone(), Some(json!("eip1559_l1")), "тест").await.is_err());
-        assert!(s.set("exec.via_kyber", scope.clone(), Some(json!(true)), "тест").await.is_err());
+        assert!(
+            s.set("dex.evm_chain_id", scope.clone(), Some(json!(56)), "тест")
+                .await
+                .is_err()
+        );
+        assert!(
+            s.set(
+                "dex.gas_mode",
+                scope.clone(),
+                Some(json!("eip1559_l1")),
+                "тест"
+            )
+            .await
+            .is_err()
+        );
+        assert!(
+            s.set("exec.via_kyber", scope.clone(), Some(json!(true)), "тест")
+                .await
+                .is_err()
+        );
         set(&s, "dex.chain", scope.clone(), p.chain).await;
         set(&s, "dex.gas_mode", scope.clone(), p.gas_mode).await;
-        s.set("dex.evm_chain_id", scope, Some(json!(p.evm_chain_id)), "тест").await.unwrap();
+        s.set(
+            "dex.evm_chain_id",
+            scope,
+            Some(json!(p.evm_chain_id)),
+            "тест",
+        )
+        .await
+        .unwrap();
         let (ids, reasons) = dex_venues::extra(&s);
         assert!(ids.iter().any(|id| id == p.venue));
         assert!(ids.contains(&"arb_dex".to_string()));
@@ -145,22 +183,45 @@ async fn base_ethereum_registration_is_independent_and_opt_in() {
         if p.chain == "base" {
             assert!(reasons.iter().any(|r| r.contains("eth_dex")));
         }
-        let available: Vec<_> = channels::ALL.iter().filter(|ch| channels::compatible(p.venue, ch)).map(|ch| ch.id).collect();
+        let available: Vec<_> = channels::ALL
+            .iter()
+            .filter(|ch| channels::compatible(p.venue, ch))
+            .map(|ch| ch.id)
+            .collect();
         assert_eq!(available, [p.public_channel]);
     }
     let (mut ids, reasons) = dex_venues::extra(&s);
     assert_eq!(ids, ["arb_dex", "base_dex", "eth_dex"]);
     assert_eq!(reasons.len(), 2);
-    s.set("bsc.node_http_url", Scope::Global, Some(json!("https://bsc-rpc.publicnode.com")), "тест").await.unwrap();
-    assert!(s.resolve("bsc.node_http_url", Some("base_dex"), None).is_none());
-    assert!(s.resolve("bsc.node_http_url", Some("eth_dex"), None).is_none());
-    assert!(s.resolve("bsc.node_http_url", Some("bsc_dex"), None).is_some());
+    s.set(
+        "bsc.node_http_url",
+        Scope::Global,
+        Some(json!("https://bsc-rpc.publicnode.com")),
+        "тест",
+    )
+    .await
+    .unwrap();
+    assert!(
+        s.resolve("bsc.node_http_url", Some("base_dex"), None)
+            .is_none()
+    );
+    assert!(
+        s.resolve("bsc.node_http_url", Some("eth_dex"), None)
+            .is_none()
+    );
+    assert!(
+        s.resolve("bsc.node_http_url", Some("bsc_dex"), None)
+            .is_some()
+    );
     set(&s, "dex.chain", Scope::Venue("previous_dex".into()), "base").await;
     ids.push("previous_dex".into());
     assert_eq!(dex_venues::unique_profiles(&s, &mut ids).len(), 1);
     assert_eq!(ids, ["arb_dex", "eth_dex", "previous_dex"]);
     let venues = [v("bsc_dex"), v("incomplete"), v("eth_dex")];
     assert_eq!(chain::dex_of(&s, &venues, None).unwrap(), venues[0]);
-    assert_eq!(chain::dex_of(&s, &venues, Some(&c("ethereum"))).unwrap(), venues[2]);
+    assert_eq!(
+        chain::dex_of(&s, &venues, Some(&c("ethereum"))).unwrap(),
+        venues[2]
+    );
     assert!(chain::dex_of(&s, &venues, Some(&c("base"))).is_err());
 }

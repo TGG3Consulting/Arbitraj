@@ -242,18 +242,26 @@ impl Store {
         {
             p.check(name, new.as_ref()).map_err(SetError::Invalid)?;
         }
-        for p in super::evm_profiles::PROFILES.iter().filter(|p| self.venue_kinds.has_dex(p.venue)) {
+        for p in super::evm_profiles::PROFILES
+            .iter()
+            .filter(|p| self.venue_kinds.has_dex(p.venue))
+        {
             if let Scope::Venue(id) = &scope
                 && id != p.venue
                 && self.venue_kinds.has_dex(id)
                 && p.overlaps(name, new.as_ref())
             {
-                return Err(SetError::Invalid(format!("Сеть {} уже зарегистрирована у {}", p.chain, p.venue)));
+                return Err(SetError::Invalid(format!(
+                    "Сеть {} уже зарегистрирована у {}",
+                    p.chain, p.venue
+                )));
             }
             let legacy_default = name == "dex.default_chain" && scope == Scope::Global
                 || name == "dex.chain" && scope == Scope::Venue("bsc_dex".into());
             if legacy_default && new.as_ref().and_then(Value::as_str) != Some("bsc") {
-                return Err(SetError::Invalid("Исторические записи без сети принадлежат bsc".into()));
+                return Err(SetError::Invalid(
+                    "Исторические записи без сети принадлежат bsc".into(),
+                ));
             }
         }
         let old = self.get_exact(name, &scope);

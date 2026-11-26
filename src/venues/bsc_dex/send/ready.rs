@@ -59,13 +59,20 @@ pub struct Ready {
 /// Готов ли канал. Возвращает: Ready или состояние, почему нет (Disabled, NoKey, NotConfigured с причиной).
 pub fn prepare(ctx: &Ctx, ch: &'static Channel) -> Result<Ready, ChannelState> {
     if !super::channels::compatible(ctx.place.id, ch) {
-        return Err(ChannelState::NotConfigured { reason: format!("Канал {} не принадлежит площадке {}", ch.id, ctx.place.id) });
+        return Err(ChannelState::NotConfigured {
+            reason: format!("Канал {} не принадлежит площадке {}", ch.id, ctx.place.id),
+        });
     }
     let s = Scope::Channel(ch.id.to_string());
     if let Some(p) = crate::settings::evm_profiles::profile(ctx.place.id)
-        && !ctx.settings.text_in("channel.chain", &s).is_ok_and(|chain| chain == p.chain)
+        && !ctx
+            .settings
+            .text_in("channel.chain", &s)
+            .is_ok_and(|chain| chain == p.chain)
     {
-        return Err(ChannelState::NotConfigured { reason: format!("Задайте channel.chain = {} у {}", p.chain, ch.id) });
+        return Err(ChannelState::NotConfigured {
+            reason: format!("Задайте channel.chain = {} у {}", p.chain, ch.id),
+        });
     }
     let st = &ctx.settings;
     let nc = |e: GatewayError| ChannelState::NotConfigured { reason: e.message };
@@ -218,8 +225,10 @@ impl Ready {
             Ok(raw) if crate::settings::evm_profiles::profile(ctx.place.id).is_some() => {
                 let hash: alloy_primitives::B256 = jsonrpc::decode(&raw, self.ch.title)?;
                 if hash != alloy_primitives::keccak256(&txs[0]) {
-                    return Err(ctx.err(crate::gateway::errors::ErrorCode::BadResponse,
-                        "eth_sendRawTransaction вернул хеш другой транзакции"));
+                    return Err(ctx.err(
+                        crate::gateway::errors::ErrorCode::BadResponse,
+                        "eth_sendRawTransaction вернул хеш другой транзакции",
+                    ));
                 }
                 Ok(())
             }

@@ -36,8 +36,12 @@ impl VenueKinds {
 
     /// Зарегистрирован ли работающий адаптер DEX этой площадки.
     pub fn has_dex(&self, id: &str) -> bool {
-        self.map.read().unwrap_or_else(|p| p.into_inner())
-            .as_ref().and_then(|m| m.get(id)) == Some(&VenueKind::Dex)
+        self.map
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()
+            .and_then(|m| m.get(id))
+            == Some(&VenueKind::Dex)
     }
 
     /// Что делает: id бирж (CEX) шлюза — решение 261: адаптер DEX ищет наибольший money.max_per_trade_usd среди

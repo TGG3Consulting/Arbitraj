@@ -98,12 +98,25 @@ pub async fn units(
     route: &DexRoute,
     (coin_dec, usdt_dec): (u8, u8),
 ) -> GatewayResult<Option<u64>> {
+    Ok(details(q, quote, route, (coin_dec, usdt_dec))
+        .await?
+        .map(|(u, _)| u))
+}
+
+/// Возвращает газ групп и фактическое число недостающих разрешений.
+pub async fn details(
+    q: &Quoting,
+    quote: &Quote,
+    route: &DexRoute,
+    (coin_dec, usdt_dec): (u8, u8),
+) -> GatewayResult<Option<(u64, usize)>> {
     let ctx = &q.ctx;
     let (total, dec) = match quote.side {
         Side::Buy => (quote.avg_price * quote.fillable_qty, usdt_dec),
         Side::Sell => (quote.fillable_qty, coin_dec),
     };
     let wallet = signer::address(ctx)?;
+    let mut count = 0;
     let mut sum: Option<u64> = None;
     for u in plan(q, route, quote.side)? {
         let amount = num::to_units(total * u.share, dec).ok_or_else(|| {
@@ -113,20 +126,21 @@ pub async fn units(
             )
         })?;
         let lacking = match u.permit2 {
-            None => q.allow.erc20(ctx, u.token, wallet, u.router).await? < amount,
+            None => usize::from(q.allow.erc20(ctx, u.token, wallet, u.router).await? < amount),
             Some(permit2) => {
                 let (_, now) = q.heads.at(ctx).await?;
                 let r = q
                     .allow
                     .read(ctx, u.token, wallet, permit2, u.router)
                     .await?;
-                !approve::lacking(ctx, &r, (u.token, permit2, u.router), amount, now)?.is_empty()
+                approve::lacking(ctx, &r, (u.token, permit2, u.router), amount, now)?.len()
             }
         };
-        if lacking {
+        count += lacking;
+        if lacking > 0 {
             let g = measured(q, &u.pool, quote.side)?.unwrap_or_default();
             sum = Some(sum.unwrap_or_default().saturating_add(g));
         }
     }
-    Ok(sum)
+    Ok(sum.map(|u| (u, count)))
 }

@@ -153,7 +153,7 @@ pub async fn quote_fit(
         match legs {
             Ok(legs) => {
                 let g = match &conv {
-                    Some(c) => stage(Stage::GasUsdt, on, || c.path(&legs))?,
+                    Some(c) => stage(Stage::GasUsdt, on, || c.path_with(&legs, Some(&v.q.gas)))?,
                     None => Decimal::ZERO,
                 };
                 cands.push(Cand::new(legs, g));

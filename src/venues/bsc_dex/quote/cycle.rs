@@ -166,6 +166,32 @@ pub fn build_signal(
     tip_bnb: Decimal,
     bnb_in_base: Option<Decimal>,
 ) -> GatewayResult<CycleSignal> {
+    build_signal_with_fees(
+        ctx,
+        base,
+        base_ticker,
+        path,
+        legs,
+        gas_wei,
+        U256::ZERO,
+        tip_bnb,
+        bnb_in_base,
+    )
+}
+
+/// Сигнал с комиссией OP Stack в wei за одну транзакцию исполнения цикла.
+#[allow(clippy::too_many_arguments)]
+pub fn build_signal_with_fees(
+    ctx: &Ctx,
+    base: Address,
+    base_ticker: &str,
+    path: &Path,
+    legs: &[Leg],
+    gas_wei: U256,
+    extra: U256,
+    tip_bnb: Decimal,
+    bnb_in_base: Option<Decimal>,
+) -> GatewayResult<CycleSignal> {
     let mut hops = Vec::with_capacity(path.hops.len());
     let mut block = u64::MAX;
     let mut gas_units = 0u64;
@@ -185,7 +211,9 @@ pub fn build_signal(
         });
     }
     let gas_bnb = num::to_decimal(
-        gas_wei.saturating_mul(U256::from(gas_units)),
+        gas_wei
+            .saturating_mul(U256::from(gas_units))
+            .saturating_add(extra),
         num::BNB_DECIMALS,
     )
     .ok_or_else(|| {

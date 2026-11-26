@@ -76,6 +76,16 @@ pub async fn send_approvals(
                 .with_approve_gas(gas));
         }
         // Квитанция в блоке — газ по ней (gasUsed × effectiveGasPrice, exec/chain_tx.rs).
+        if matches!(env.ctx.place.id, "eth_dex" | "base_dex") && d.chain.gas_bnb.is_none() {
+            return Err(env
+                .ctx
+                .err(
+                    ErrorCode::BadResponse,
+                    "approve подтверждён, но полная комиссия в ETH неизвестна",
+                )
+                .with_tx(d.chain)
+                .with_approve_gas(gas));
+        }
         gas = Some(gas.unwrap_or_default() + d.chain.gas_bnb.unwrap_or_default());
         // Дополнение 303 (журнал): хеш, блок квитанции и голова опроса блоков в этот момент — для разбора.
         seen.push(super::approve_seen::Seen {

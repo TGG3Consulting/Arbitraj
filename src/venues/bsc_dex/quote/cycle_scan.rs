@@ -269,8 +269,23 @@ fn signal(
         Ok(Form::Bundle) => Decimal::ZERO,
         _ => tip,
     };
-    let sig = cycle::build_signal(ctx, base, base_ticker, &p, &legs, gas, tip, rate_to_base)
+    let units = p.hops.iter().map(|h| h.usable.gas).sum();
+    let extra = q
+        .gas
+        .extra(ctx, units, 1)
         .map_err(|e| Lost::Build(e.message))?;
+    let sig = cycle::build_signal_with_fees(
+        ctx,
+        base,
+        base_ticker,
+        &p,
+        &legs,
+        gas,
+        extra,
+        tip,
+        rate_to_base,
+    )
+    .map_err(|e| Lost::Build(e.message))?;
     if let Some(r) = rho {
         audit.verify(r, &sig, &legs);
     }

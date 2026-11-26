@@ -21,7 +21,10 @@ pub fn extra(s: &Store) -> (Vec<String>, Vec<String>) {
         return (vec![], vec![]);
     };
     let Some(list) = value.as_array() else {
-        return (vec![], vec![format!("{SETTING}: ожидается список id площадок DEX")]);
+        return (
+            vec![],
+            vec![format!("{SETTING}: ожидается список id площадок DEX")],
+        );
     };
     let mut out = Vec::new();
     let mut errors = Vec::new();
@@ -30,7 +33,11 @@ pub fn extra(s: &Store) -> (Vec<String>, Vec<String>) {
             errors.push(format!("{SETTING}: id площадки должен быть строкой"));
             continue;
         };
-        if id.is_empty() || !id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_') {
+        if id.is_empty()
+            || !id
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+        {
             errors.push(format!("{SETTING}: недопустимый id «{id}»"));
         } else if id == BSC_ID || out.iter().any(|existing| existing == id) {
             errors.push(format!("{SETTING}: повтор площадки «{id}»"));
@@ -54,10 +61,18 @@ pub fn unique_profiles(s: &Store, ids: &mut Vec<String>) -> Vec<String> {
             continue;
         }
         for id in std::iter::once(BSC_ID).chain(ids.iter().map(String::as_str)) {
-            if id == p.venue { continue; }
+            if id == p.venue {
+                continue;
+            }
             let scope = Scope::Venue(id.to_string());
-            if ["dex.chain", "dex.evm_chain_id"].iter().any(|name| p.overlaps(name, s.get_exact(name, &scope).as_ref())) {
-                errors.push(format!("{}: сеть {} или chainId {} уже принадлежит {id}", p.venue, p.chain, p.evm_chain_id));
+            if ["dex.chain", "dex.evm_chain_id"]
+                .iter()
+                .any(|name| p.overlaps(name, s.get_exact(name, &scope).as_ref()))
+            {
+                errors.push(format!(
+                    "{}: сеть {} или chainId {} уже принадлежит {id}",
+                    p.venue, p.chain, p.evm_chain_id
+                ));
                 conflicts.push(p.venue);
                 break;
             }

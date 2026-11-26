@@ -30,7 +30,9 @@ use super::state::{ApiError, AppState, CHANGED_BY_UI};
 /// Каталог настроек и событий. Ошибок нет.
 pub async fn schema() -> Json<Value> {
     let settings: Vec<_> = catalog::all().collect();
-    Json(json!({ "settings": settings, "events": EVENTS, "dex_profiles": crate::settings::evm_profiles::PROFILES }))
+    Json(
+        json!({ "settings": settings, "events": EVENTS, "dex_profiles": crate::settings::evm_profiles::PROFILES }),
+    )
 }
 
 /// Все заданные значения. Ошибок нет.

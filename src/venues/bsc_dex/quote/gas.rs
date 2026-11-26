@@ -33,17 +33,26 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::ctx::Ctx;
 use super::super::node::arb_min_gas;
 use super::super::node::heads::Heads;
+use super::super::node::op_fees::{Oracle, Tariff};
 use super::super::node::rpc;
 use super::super::num;
 use super::super::send::gas_mode::{self, GasMode};
 use super::super::send::tx_1559::Fees;
 use super::gas_base;
 
+#[derive(Clone, Copy)]
+struct Entry {
+    block: u64,
+    mode: GasMode,
+    price: U256,
+    tariff: Option<Tariff>,
+}
+
 /// Цена газа с кэшем на блок. Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct GasPrice {
     /// (блок, модель газа, цена узла: eth_gasPrice у legacy, baseFeePerGas у eip1559_l1).
-    cache: Arc<Mutex<Option<(u64, GasMode, U256)>>>,
+    cache: Arc<Mutex<Option<Entry>>>,
     /// Один запрос на блок на всех: одновременные промахи ждут первого (решение 61).
     flight: Arc<tokio::sync::Mutex<()>>,
     /// Решение 237: закреплена на момент снимка — узел не спрашивается, свежесть блока не проверяется.
@@ -68,7 +77,26 @@ impl GasPrice {
         self.cache
             .lock()
             .unwrap_or_else(|p| p.into_inner())
-            .map(|(b, _, p)| (b, p))
+            .map(|e| (e.block, e.price))
+    }
+
+    /// Надбавка Base в wei для одного или нескольких разрешений/обменов. Снимок котировки не обращается к RPC.
+    pub fn extra(&self, ctx: &Ctx, gas: u64, txs: usize) -> GatewayResult<U256> {
+        if ctx.place.id != "base_dex" || txs == 0 {
+            return Ok(U256::ZERO);
+        }
+        let oracle = Oracle::read(ctx)?;
+        let cached = *self.cache.lock().unwrap_or_else(|p| p.into_inner());
+        let tariff = cached
+            .and_then(|e| e.tariff)
+            .filter(|t| t.oracle == oracle)
+            .ok_or_else(|| {
+                ctx.err(
+                    ErrorCode::StaleData,
+                    "нет тарифа Base для выбранного предела размера транзакции",
+                )
+            })?;
+        Ok(tariff.extra(gas, txs))
     }
 
     /// Цена газа в wei для плана: legacy — с надбавкой; eip1559_l1 — база + чаевые (закреплённая — решение 237: без
@@ -99,23 +127,38 @@ impl GasPrice {
     async fn base(&self, ctx: &Ctx, heads: &Heads) -> GatewayResult<(GasMode, U256)> {
         if self.pinned {
             let p = *self.cache.lock().unwrap_or_else(|p| p.into_inner());
-            let (_, mode, p) = p.ok_or_else(|| {
+            let entry = p.ok_or_else(|| {
                 ctx.err(
                     ErrorCode::StaleData,
                     "цены газа на момент снимка в памяти не было — газ по снимку не посчитать",
                 )
             })?;
-            return Ok((mode, p));
+            return Ok((entry.mode, entry.price));
         }
         let mode = gas_mode::read(ctx)?;
+        let oracle = (mode == GasMode::OpStack)
+            .then(|| Oracle::read(ctx))
+            .transpose()?;
         let head = heads.fresh(ctx)?;
         let hit = || match *self.cache.lock().unwrap_or_else(|p| p.into_inner()) {
-            Some((b, m, p)) if b == head.number && m == mode => Some(p),
+            Some(e)
+                if e.block == head.number
+                    && e.mode == mode
+                    && e.tariff.map(|t| t.oracle) == oracle =>
+            {
+                Some(e.price)
+            }
             _ => None,
         };
         // Последняя известная цена любого блока (той же модели) — чтобы расчёт не ждал узел (решение 89).
         let last = || match *self.cache.lock().unwrap_or_else(|p| p.into_inner()) {
-            Some((_, m, p)) if m == mode => Some(p),
+            Some(e)
+                if e.mode == mode
+                    && e.tariff.map(|t| t.oracle) == oracle
+                    && mode != GasMode::OpStack =>
+            {
+                Some(e.price)
+            }
             _ => None,
         };
         let base = match hit() {
@@ -124,7 +167,7 @@ impl GasPrice {
                 // Ведущий: на этом блоке кэша нет и никто не тянет — обновляем с узла.
                 Ok(_one) => match hit() {
                     Some(p) => p,
-                    None => self.fetch(ctx, head.number, mode).await?,
+                    None => self.fetch(ctx, head.number, mode, oracle).await?,
                 },
                 // Кто-то уже тянет (обычно фоновый прогрев): берём последнюю известную цену, не блокируемся на узле.
                 Err(_) => match last() {
@@ -134,7 +177,7 @@ impl GasPrice {
                         let _one = self.flight.lock().await;
                         match hit() {
                             Some(p) => p,
-                            None => self.fetch(ctx, head.number, mode).await?,
+                            None => self.fetch(ctx, head.number, mode, oracle).await?,
                         }
                     }
                 },
@@ -166,10 +209,26 @@ impl GasPrice {
     /// минимум цены газа сети (node/arb_min_gas.rs refresh, решение 436).
     /// Держится под flight — один запрос на всех. Принимает: окружение, номер блока, модель. Возвращает: цену в wei.
     /// Ошибки: узел.
-    async fn fetch(&self, ctx: &Ctx, block: u64, mode: GasMode) -> GatewayResult<U256> {
+    async fn fetch(
+        &self,
+        ctx: &Ctx,
+        block: u64,
+        mode: GasMode,
+        oracle: Option<Oracle>,
+    ) -> GatewayResult<U256> {
+        let mut tariff = None;
         let p: U256 = match mode {
             GasMode::Legacy => rpc::call(ctx, "eth_gasPrice", json!([])).await?,
-            GasMode::Ethereum | GasMode::OpStack => gas_base::fetch(ctx, block).await?,
+            GasMode::Ethereum => gas_base::fetch(ctx, block).await?,
+            GasMode::OpStack => {
+                let oracle = oracle.ok_or_else(|| {
+                    ctx.not_set("dex.op_gas_price_oracle", "не задан GasPriceOracle Base")
+                })?;
+                let (price, t) =
+                    tokio::try_join!(gas_base::fetch(ctx, block), oracle.tariff(ctx, block))?;
+                tariff = Some(t);
+                price
+            }
             GasMode::Eip1559L1 => {
                 // Решение 436 (Б): минимум цены газа сети (ArbGasInfo) — с узла, вместе с baseFee того же блока.
                 let (p, ()) = tokio::try_join!(
@@ -179,7 +238,12 @@ impl GasPrice {
                 p
             }
         };
-        *self.cache.lock().unwrap_or_else(|x| x.into_inner()) = Some((block, mode, p));
+        *self.cache.lock().unwrap_or_else(|x| x.into_inner()) = Some(Entry {
+            block,
+            mode,
+            price: p,
+            tariff,
+        });
         Ok(p)
     }
 }

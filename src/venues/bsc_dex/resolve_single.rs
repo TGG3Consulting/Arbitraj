@@ -97,7 +97,7 @@ pub(super) async fn verdict(
     let head = p.heads.fresh(ctx)?.number;
     let deep_tag = format!("{:#x}", head.saturating_sub(confirm));
     let deep: U64 = rpc::call(ctx, "eth_getTransactionCount", json!([wallet, deep_tag])).await?;
-    let ours: Option<Receipt> = rpc::call(ctx, "eth_getTransactionReceipt", json!([hash])).await?;
+    let ours: Option<Receipt> = receipt::read(ctx, hash).await?;
     let cancel = match ours {
         Some(_) => None,
         None => receipt::find(ctx, &cancels)

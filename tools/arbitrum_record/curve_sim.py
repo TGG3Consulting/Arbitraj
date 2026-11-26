@@ -106,15 +106,19 @@ class Sim:
         self.reqs.extend(checks + [("eth_call", [tx, self.tag, ov])])
         self.recs.append((rec, (start, len(checks), dx)))
 
-    def run(self):
+    def responses(self, body):
+        response = requests.post(self.url, json=body, timeout=300)
+        response.raise_for_status()
+        return response.json()
+
+    def run(self, batch_size=None):
         """Шлёт накопленное одним пакетом. Возвращает: записи {pool, i, j, dx, sig, ok, result | error, revert,
         override_ok}."""
         body = [{"jsonrpc": "2.0", "id": k, "method": m, "params": p} for k, (m, p) in enumerate(self.reqs)]
         got = {}
-        if body:
-            r = requests.post(self.url, json=body, timeout=300)
-            r.raise_for_status()
-            got = {x["id"]: x for x in r.json()}
+        step = batch_size or len(body) or 1
+        for start in range(0, len(body), step):
+            got.update({x["id"]: x for x in self.responses(body[start:start + step])})
         out = []
         for rec, at in self.recs:
             if at is None:

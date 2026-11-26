@@ -1664,5 +1664,42 @@
       "dex.oracle": "0xf9b0c8ee13ae2fc0665764ecbdb417685dea8081",
       "dex.pool_implementation": "0x7b5fdb8c89a616d319202704b0ea18b168654281"
     }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "wombat-exchange",
+    "source": "https://docs.wombat.exchange/developers/contracts/base.md",
+    "settings": {
+      "dex.kind": "wombat",
+      "dex.stable_pools": [
+        "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1"
+      ],
+      "dex.wombat_implementations": [
+        "0x9a59f56f96a780f74167ec911ca59699bfc73ba6"
+      ]
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "wombat-exchange",
+    "source": "https://docs.wombat.exchange/developers/contracts/ethereum.md",
+    "settings": {
+      "dex.kind": "wombat",
+      "dex.stable_pools": [
+        "0x0020a8890e723cd94660a5404c4bccbb91680db6",
+        "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854",
+        "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734",
+        "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81",
+        "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32"
+      ],
+      "dex.wombat_implementations": [
+        "0x4705b477d35112f7b7ca2bc5059ed9b78bb46134"
+      ],
+      "dex.wombat_dynamic_implementations": [
+        "0x5fabce763446344a912d5cbf84b0e6541a376454"
+      ]
+    }
   }
 ]

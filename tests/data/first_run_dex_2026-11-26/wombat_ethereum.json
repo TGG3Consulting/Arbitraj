@@ -1,0 +1,2071 @@
+{
+  "url": "https://docs.wombat.exchange/developers/contracts/ethereum.md",
+  "chain_id": 1,
+  "selector": {
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "requireCanonical": true
+  },
+  "endpoint": "https://mainnet.gateway.tenderly.co",
+  "documented": {
+    "0xa45c0abeef67c363364e0e73832df9986aba3800": {
+      "name": "Cross Chain Pool",
+      "implementation": "0xddc2c27ea8a42b35b329c4e0216600f12eed13d1",
+      "status": "CrossChainPool/CoreV3"
+    },
+    "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc": {
+      "name": "FRAX Pool",
+      "implementation": "0x4705b477d35112f7b7ca2bc5059ed9b78bb46134",
+      "status": "insufficient_simulated_sides"
+    },
+    "0x0020a8890e723cd94660a5404c4bccbb91680db6": {
+      "name": "agEUR Pool",
+      "implementation": "0x4705b477d35112f7b7ca2bc5059ed9b78bb46134",
+      "status": "swap"
+    },
+    "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854": {
+      "name": "frxETH Pool",
+      "implementation": "0x5fabce763446344a912d5cbf84b0e6541a376454",
+      "status": "directional_swap"
+    },
+    "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734": {
+      "name": "wstETH Pool",
+      "implementation": "0x5fabce763446344a912d5cbf84b0e6541a376454",
+      "status": "swap"
+    },
+    "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81": {
+      "name": "ETHx Pool",
+      "implementation": "0x5fabce763446344a912d5cbf84b0e6541a376454",
+      "status": "directional_swap"
+    },
+    "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32": {
+      "name": "USDV Pool",
+      "implementation": "0x4705b477d35112f7b7ca2bc5059ed9b78bb46134",
+      "status": "directional_swap"
+    }
+  },
+  "implementations": {
+    "0x4705b477d35112f7b7ca2bc5059ed9b78bb46134": {
+      "kind": "HighCovRatioFeePoolV2",
+      "verified": "https://sourcify.dev/server/v2/contract/1/0x4705b477d35112f7b7ca2bc5059ed9b78bb46134?fields=compilation,sources,runtimeBytecode.onchainBytecode,runtimeBytecode.linkReferences,storageLayout",
+      "reference": "https://sourcify.dev/server/v2/contract/42161/0x44A0e2AC2c99D5cB2910ec1784DD158b7fa3A642?fields=compilation,sources,runtimeBytecode.onchainBytecode,runtimeBytecode.linkReferences,storageLayout",
+      "runtime": "0x988f2ef793c3763e1180d10e5d7939b446f96bf8d5958b6bdeb9c4f20ec709e9",
+      "paused_assets_slot": 201,
+      "source_keccak": {
+        "CoreV2.sol": "e69bed75cc623642aaca33cec3bfbbc600f704e50d53d57546c6e475b992a244",
+        "PoolV2.sol": "fccd9d5d095ccb68ecda68d305f2e11dfc7481902c90f84aa21b70250112e92a",
+        "PausableAssets.sol": "4655cb4b2f70d304fe1f3cc0c9e70fa2594ae45a14479fcf7dfc349633553ef0",
+        "HighCovRatioFeePoolV2.sol": "fe659fc51797973412b64ce96ec4d4b0c815bd8fafca91ec6c6850274e1ff23d"
+      },
+      "matched_functions": {
+        "DSMath.sol": 5,
+        "SignedSafeMath.sol": 8
+      }
+    },
+    "0x5fabce763446344a912d5cbf84b0e6541a376454": {
+      "kind": "DynamicPoolV2",
+      "verified": "https://sourcify.dev/server/v2/contract/1/0x5fabce763446344a912d5cbf84b0e6541a376454?fields=compilation,sources,runtimeBytecode.onchainBytecode,runtimeBytecode.linkReferences,storageLayout",
+      "reference": "https://sourcify.dev/server/v2/contract/42161/0x3DbF3e359a570D46CF5a663AC92DC7Cae77110FB?fields=compilation,sources,runtimeBytecode.onchainBytecode,runtimeBytecode.linkReferences,storageLayout",
+      "runtime": "0x26c9330845d40fb73da64af2069929506a4814fab24e3da151baf976fb6decd0",
+      "paused_assets_slot": 201,
+      "source_keccak": {
+        "CoreV2.sol": "e69bed75cc623642aaca33cec3bfbbc600f704e50d53d57546c6e475b992a244",
+        "PoolV2.sol": "fccd9d5d095ccb68ecda68d305f2e11dfc7481902c90f84aa21b70250112e92a",
+        "PausableAssets.sol": "4655cb4b2f70d304fe1f3cc0c9e70fa2594ae45a14479fcf7dfc349633553ef0",
+        "HighCovRatioFeePoolV2.sol": "fe659fc51797973412b64ce96ec4d4b0c815bd8fafca91ec6c6850274e1ff23d",
+        "DynamicPoolV2.sol": "17c13dc0d0284e9e0780ffde51017467e74573542daff46b56b4e621bc95c9a6"
+      },
+      "matched_functions": {
+        "DSMath.sol": 5,
+        "SignedSafeMath.sol": 8
+      }
+    }
+  },
+  "pools": [
+    {
+      "name": "FRAX Pool",
+      "pool": "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc",
+      "tokens": [
+        "0x853d955acef822db058eb8505911ed77f175b99e",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "answers": {
+        "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc|0xaa6ca808": {
+          "result": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000853d955acef822db058eb8505911ed77f175b99e000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7"
+        },
+        "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc|0x017b8292": {
+          "result": "0x000000000000000000000000000000000000000000000000000470de4df82000"
+        },
+        "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc|0xd0dd0e56": {
+          "result": "0x0000000000000000000000000000000000000000000000000000b5e620f48000"
+        },
+        "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc|0xfb7f5cc2": {
+          "result": "0x00000000000000000000000000000000000000000000000014d1120d7b160000"
+        },
+        "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc|0x74cbbdb9": {
+          "result": "0x00000000000000000000000000000000000000000000000018fae27693b40000"
+        },
+        "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc|0x5c975abb": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc|0xe9249cc7000000000000000000000000853d955acef822db058eb8505911ed77f175b99e": {
+          "result": "0x00000000000000000000000004d4e1c1f3d6539071b6d3849fdaed04d48d563d"
+        },
+        "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc|0x5b14f183000000000000000000000000853d955acef822db058eb8505911ed77f175b99e": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc|0xe9249cc7000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7": {
+          "result": "0x00000000000000000000000062a83c6791a3d7950d823bb71a38e47252b6b6f4"
+        },
+        "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc|0x5b14f183000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x04d4e1c1f3d6539071b6d3849fdaed04d48d563d|0x2495a599": {
+          "result": "0x000000000000000000000000853d955acef822db058eb8505911ed77f175b99e"
+        },
+        "0x04d4e1c1f3d6539071b6d3849fdaed04d48d563d|0x7284168a": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000012"
+        },
+        "0x04d4e1c1f3d6539071b6d3849fdaed04d48d563d|0x16f0115b": {
+          "result": "0x0000000000000000000000009c02eaf31efe3fee36ebe5aebca12ca979df25cc"
+        },
+        "0x04d4e1c1f3d6539071b6d3849fdaed04d48d563d|0x961be391": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x04d4e1c1f3d6539071b6d3849fdaed04d48d563d|0x705727b5": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x04d4e1c1f3d6539071b6d3849fdaed04d48d563d|0x2fa3a0d2": {
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          }
+        },
+        "0x62a83c6791a3d7950d823bb71a38e47252b6b6f4|0x2495a599": {
+          "result": "0x000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7"
+        },
+        "0x62a83c6791a3d7950d823bb71a38e47252b6b6f4|0x7284168a": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000006"
+        },
+        "0x62a83c6791a3d7950d823bb71a38e47252b6b6f4|0x16f0115b": {
+          "result": "0x0000000000000000000000009c02eaf31efe3fee36ebe5aebca12ca979df25cc"
+        },
+        "0x62a83c6791a3d7950d823bb71a38e47252b6b6f4|0x961be391": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x62a83c6791a3d7950d823bb71a38e47252b6b6f4|0x705727b5": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x62a83c6791a3d7950d823bb71a38e47252b6b6f4|0x2fa3a0d2": {
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          }
+        }
+      },
+      "storage": {
+        "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc|0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc": {
+          "result": "0x0000000000000000000000004705b477d35112f7b7ca2bc5059ed9b78bb46134"
+        },
+        "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc|0x7f805a6e2d913fb790aa3d83490d2072d42d92e2e32d87019aca1a197eec96d9": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc|0xb1936182c1f0138fa06a5dec487b65fc14a5aad68f757bb8edc1fa2118f6b082": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "quote": [
+        {
+          "i": 0,
+          "j": 1,
+          "dx": "1",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0xae032660"
+          }
+        },
+        {
+          "i": 0,
+          "j": 1,
+          "dx": "1",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0xae032660"
+          }
+        },
+        {
+          "i": 1,
+          "j": 0,
+          "dx": "1",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0xae032660"
+          }
+        },
+        {
+          "i": 1,
+          "j": 0,
+          "dx": "1",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0xae032660"
+          }
+        }
+      ],
+      "swap_sim": [
+        {
+          "pool": "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc",
+          "from": "0x853d955acef822db058eb8505911ed77f175b99e",
+          "to": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "dx": "1",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": false,
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0xae032660"
+          },
+          "revert": "sel 0xae032660 data 0xae032660",
+          "override_ok": true,
+          "i": 0,
+          "j": 1
+        },
+        {
+          "pool": "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc",
+          "from": "0x853d955acef822db058eb8505911ed77f175b99e",
+          "to": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "dx": "1",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": false,
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0xae032660"
+          },
+          "revert": "sel 0xae032660 data 0xae032660",
+          "override_ok": true,
+          "i": 0,
+          "j": 1
+        },
+        {
+          "pool": "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc",
+          "from": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "to": "0x853d955acef822db058eb8505911ed77f175b99e",
+          "dx": "1",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": false,
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0xae032660"
+          },
+          "revert": "sel 0xae032660 data 0xae032660",
+          "override_ok": true,
+          "i": 1,
+          "j": 0
+        },
+        {
+          "pool": "0x9c02eaf31efe3fee36ebe5aebca12ca979df25cc",
+          "from": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "to": "0x853d955acef822db058eb8505911ed77f175b99e",
+          "dx": "1",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": false,
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0xae032660"
+          },
+          "revert": "sel 0xae032660 data 0xae032660",
+          "override_ok": true,
+          "i": 1,
+          "j": 0
+        }
+      ],
+      "funded_swaps": []
+    },
+    {
+      "name": "agEUR Pool",
+      "pool": "0x0020a8890e723cd94660a5404c4bccbb91680db6",
+      "tokens": [
+        "0x1a7e4e63778b4f12a199c062f3efdd288afcbce8",
+        "0x3231cb76718cdef2155fc47b5286d82e6eda273f"
+      ],
+      "answers": {
+        "0x0020a8890e723cd94660a5404c4bccbb91680db6|0xaa6ca808": {
+          "result": "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000020000000000000000000000001a7e4e63778b4f12a199c062f3efdd288afcbce80000000000000000000000003231cb76718cdef2155fc47b5286d82e6eda273f"
+        },
+        "0x0020a8890e723cd94660a5404c4bccbb91680db6|0x017b8292": {
+          "result": "0x0000000000000000000000000000000000000000000000000008e1bc9bf04000"
+        },
+        "0x0020a8890e723cd94660a5404c4bccbb91680db6|0xd0dd0e56": {
+          "result": "0x0000000000000000000000000000000000000000000000000000b5e620f48000"
+        },
+        "0x0020a8890e723cd94660a5404c4bccbb91680db6|0xfb7f5cc2": {
+          "result": "0x00000000000000000000000000000000000000000000000014d1120d7b160000"
+        },
+        "0x0020a8890e723cd94660a5404c4bccbb91680db6|0x74cbbdb9": {
+          "result": "0x00000000000000000000000000000000000000000000000018fae27693b40000"
+        },
+        "0x0020a8890e723cd94660a5404c4bccbb91680db6|0x5c975abb": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x0020a8890e723cd94660a5404c4bccbb91680db6|0xe9249cc70000000000000000000000001a7e4e63778b4f12a199c062f3efdd288afcbce8": {
+          "result": "0x0000000000000000000000003f90a5a47364c0467031fb00246192d40e3d2d9d"
+        },
+        "0x0020a8890e723cd94660a5404c4bccbb91680db6|0x5b14f1830000000000000000000000001a7e4e63778b4f12a199c062f3efdd288afcbce8": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x0020a8890e723cd94660a5404c4bccbb91680db6|0xe9249cc70000000000000000000000003231cb76718cdef2155fc47b5286d82e6eda273f": {
+          "result": "0x0000000000000000000000005dace27d0b921b177cd9c6706c6acdeb3ec7bea7"
+        },
+        "0x0020a8890e723cd94660a5404c4bccbb91680db6|0x5b14f1830000000000000000000000003231cb76718cdef2155fc47b5286d82e6eda273f": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x3f90a5a47364c0467031fb00246192d40e3d2d9d|0x2495a599": {
+          "result": "0x0000000000000000000000001a7e4e63778b4f12a199c062f3efdd288afcbce8"
+        },
+        "0x3f90a5a47364c0467031fb00246192d40e3d2d9d|0x7284168a": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000012"
+        },
+        "0x3f90a5a47364c0467031fb00246192d40e3d2d9d|0x16f0115b": {
+          "result": "0x0000000000000000000000000020a8890e723cd94660a5404c4bccbb91680db6"
+        },
+        "0x3f90a5a47364c0467031fb00246192d40e3d2d9d|0x961be391": {
+          "result": "0x0000000000000000000000000000000000000000000000005af666af383c0343"
+        },
+        "0x3f90a5a47364c0467031fb00246192d40e3d2d9d|0x705727b5": {
+          "result": "0x0000000000000000000000000000000000000000000000006f00ae76d31bff49"
+        },
+        "0x3f90a5a47364c0467031fb00246192d40e3d2d9d|0x2fa3a0d2": {
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          }
+        },
+        "0x5dace27d0b921b177cd9c6706c6acdeb3ec7bea7|0x2495a599": {
+          "result": "0x0000000000000000000000003231cb76718cdef2155fc47b5286d82e6eda273f"
+        },
+        "0x5dace27d0b921b177cd9c6706c6acdeb3ec7bea7|0x7284168a": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000012"
+        },
+        "0x5dace27d0b921b177cd9c6706c6acdeb3ec7bea7|0x16f0115b": {
+          "result": "0x0000000000000000000000000020a8890e723cd94660a5404c4bccbb91680db6"
+        },
+        "0x5dace27d0b921b177cd9c6706c6acdeb3ec7bea7|0x961be391": {
+          "result": "0x0000000000000000000000000000000000000000000000007f5c7071e437ca7f"
+        },
+        "0x5dace27d0b921b177cd9c6706c6acdeb3ec7bea7|0x705727b5": {
+          "result": "0x0000000000000000000000000000000000000000000000006b4d52c79e68da45"
+        },
+        "0x5dace27d0b921b177cd9c6706c6acdeb3ec7bea7|0x2fa3a0d2": {
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          }
+        }
+      },
+      "storage": {
+        "0x0020a8890e723cd94660a5404c4bccbb91680db6|0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc": {
+          "result": "0x0000000000000000000000004705b477d35112f7b7ca2bc5059ed9b78bb46134"
+        },
+        "0x0020a8890e723cd94660a5404c4bccbb91680db6|0x6c3cdc99cd703d8b70ab4ecc313fbec0336fd9ee011cf5d22a69f3da4691dde4": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x0020a8890e723cd94660a5404c4bccbb91680db6|0x7b18a2d543395e812f92d8d1760b2d2ac0e71803c3311c145901004edaf6af22": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "quote": [
+        {
+          "i": 0,
+          "j": 1,
+          "dx": "655453921043310",
+          "result": "0x0000000000000000000000000000000000000000000000000002552bea74f3890000000000000000000000000000000000000000000000000000001e94d00a16"
+        },
+        {
+          "i": 0,
+          "j": 1,
+          "dx": "65545392104331032",
+          "result": "0x00000000000000000000000000000000000000000000000000e9423a9caa877500000000000000000000000000000000000000000000000000000bf1fae90a6c"
+        },
+        {
+          "i": 1,
+          "j": 0,
+          "dx": "917733377513670",
+          "result": "0x000000000000000000000000000000000000000000000000000340e2dfb54db70000000000000000000000000000000000000000000000000000002aa6fd79cb"
+        },
+        {
+          "i": 1,
+          "j": 0,
+          "dx": "91773337751367056",
+          "result": "0x000000000000000000000000000000000000000000000000014552d7997fb650000000000000000000000000000000000000000000000000000010a8ef3bd6d0"
+        }
+      ],
+      "swap_sim": [
+        {
+          "pool": "0x0020a8890e723cd94660a5404c4bccbb91680db6",
+          "from": "0x1a7e4e63778b4f12a199c062f3efdd288afcbce8",
+          "to": "0x3231cb76718cdef2155fc47b5286d82e6eda273f",
+          "dx": "655453921043310",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": true,
+          "result": "0x0000000000000000000000000000000000000000000000000002552bea74f3890000000000000000000000000000000000000000000000000000001e94d00a16",
+          "override_ok": true,
+          "i": 0,
+          "j": 1
+        },
+        {
+          "pool": "0x0020a8890e723cd94660a5404c4bccbb91680db6",
+          "from": "0x1a7e4e63778b4f12a199c062f3efdd288afcbce8",
+          "to": "0x3231cb76718cdef2155fc47b5286d82e6eda273f",
+          "dx": "65545392104331032",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": true,
+          "result": "0x00000000000000000000000000000000000000000000000000e9423a9caa877500000000000000000000000000000000000000000000000000000bf1fae90a6c",
+          "override_ok": true,
+          "i": 0,
+          "j": 1
+        },
+        {
+          "pool": "0x0020a8890e723cd94660a5404c4bccbb91680db6",
+          "from": "0x3231cb76718cdef2155fc47b5286d82e6eda273f",
+          "to": "0x1a7e4e63778b4f12a199c062f3efdd288afcbce8",
+          "dx": "917733377513670",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": null,
+          "error": "слоты не найдены: ответ 0x0 не совпал ни с одним кандидатом",
+          "i": 1,
+          "j": 0
+        },
+        {
+          "pool": "0x0020a8890e723cd94660a5404c4bccbb91680db6",
+          "from": "0x3231cb76718cdef2155fc47b5286d82e6eda273f",
+          "to": "0x1a7e4e63778b4f12a199c062f3efdd288afcbce8",
+          "dx": "91773337751367056",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": null,
+          "error": "слоты не найдены: ответ 0x0 не совпал ни с одним кандидатом",
+          "i": 1,
+          "j": 0
+        }
+      ],
+      "funded_swaps": [
+        {
+          "i": 1,
+          "j": 0,
+          "dx": "917733377513670",
+          "holder": "0x79c59db40fb74f76fc638286602b7791872e6aa0",
+          "paid": "917733377513670",
+          "received": "915768090119607",
+          "ok": true,
+          "parent_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+          "calls": [
+            {
+              "from": "0x79c59db40fb74f76fc638286602b7791872e6aa0",
+              "to": "0x3231cb76718cdef2155fc47b5286d82e6eda273f",
+              "data": "0x095ea7b30000000000000000000000000020a8890e723cd94660a5404c4bccbb91680db6000000000000000000000000000000000000000000000000000342ac73f718c6"
+            },
+            {
+              "from": "0x79c59db40fb74f76fc638286602b7791872e6aa0",
+              "to": "0x0020a8890e723cd94660a5404c4bccbb91680db6",
+              "data": "0x4fdd64e50000000000000000000000003231cb76718cdef2155fc47b5286d82e6eda273f0000000000000000000000001a7e4e63778b4f12a199c062f3efdd288afcbce8000000000000000000000000000000000000000000000000000342ac73f718c6"
+            },
+            {
+              "from": "0x79c59db40fb74f76fc638286602b7791872e6aa0",
+              "to": "0x3231cb76718cdef2155fc47b5286d82e6eda273f",
+              "data": "0x70a0823100000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0"
+            },
+            {
+              "from": "0x79c59db40fb74f76fc638286602b7791872e6aa0",
+              "to": "0x1a7e4e63778b4f12a199c062f3efdd288afcbce8",
+              "data": "0x70a0823100000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0"
+            },
+            {
+              "from": "0x79c59db40fb74f76fc638286602b7791872e6aa0",
+              "to": "0x0020a8890e723cd94660a5404c4bccbb91680db6",
+              "data": "0x9908fc8b0000000000000000000000003231cb76718cdef2155fc47b5286d82e6eda273f0000000000000000000000001a7e4e63778b4f12a199c062f3efdd288afcbce8000000000000000000000000000000000000000000000000000342ac73f718c6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            },
+            {
+              "from": "0x79c59db40fb74f76fc638286602b7791872e6aa0",
+              "to": "0x3231cb76718cdef2155fc47b5286d82e6eda273f",
+              "data": "0x70a0823100000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0"
+            },
+            {
+              "from": "0x79c59db40fb74f76fc638286602b7791872e6aa0",
+              "to": "0x1a7e4e63778b4f12a199c062f3efdd288afcbce8",
+              "data": "0x70a0823100000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0"
+            }
+          ],
+          "results": [
+            {
+              "returnData": "0x0000000000000000000000000000000000000000000000000000000000000001",
+              "logs": [
+                {
+                  "address": "0x39b8b6385416f4ca36a20319f70d28621895279d",
+                  "topics": [
+                    "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925",
+                    "0x00000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0",
+                    "0x0000000000000000000000000020a8890e723cd94660a5404c4bccbb91680db6"
+                  ],
+                  "data": "0x000000000000000000000000000000000000000000000000000342ac73f718c6",
+                  "blockHash": "0x8abb891f7937bd8f6ef08ed17a37ea6a6f8d9150a551acc4bec34c9969b640c3",
+                  "blockNumber": "0x194480d",
+                  "blockTimestamp": "0x6b0757e3",
+                  "transactionHash": "0x25b98ccc7060cac775fa736265390d171bf540a1f30e2f7be8b52e9237314fbf",
+                  "transactionIndex": "0x0",
+                  "logIndex": "0x0",
+                  "removed": false
+                },
+                {
+                  "address": "0x3231cb76718cdef2155fc47b5286d82e6eda273f",
+                  "topics": [
+                    "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925",
+                    "0x00000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0",
+                    "0x0000000000000000000000000020a8890e723cd94660a5404c4bccbb91680db6"
+                  ],
+                  "data": "0x000000000000000000000000000000000000000000000000000342ac73f718c6",
+                  "blockHash": "0x8abb891f7937bd8f6ef08ed17a37ea6a6f8d9150a551acc4bec34c9969b640c3",
+                  "blockNumber": "0x194480d",
+                  "blockTimestamp": "0x6b0757e3",
+                  "transactionHash": "0x25b98ccc7060cac775fa736265390d171bf540a1f30e2f7be8b52e9237314fbf",
+                  "transactionIndex": "0x0",
+                  "logIndex": "0x1",
+                  "removed": false
+                }
+              ],
+              "gasUsed": "0xeed5",
+              "maxUsedGas": "0xeed5",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x000000000000000000000000000000000000000000000000000340e2dfb54db70000000000000000000000000000000000000000000000000000002aa6fd79cb",
+              "logs": [],
+              "gasUsed": "0xf9c2",
+              "maxUsedGas": "0xf9c2",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x000000000000000000000000000000000000000000001249175414607e910000",
+              "logs": [],
+              "gasUsed": "0x876d",
+              "maxUsedGas": "0x876d",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x0000000000000000000000000000000000000000000000000000000000000000",
+              "logs": [],
+              "gasUsed": "0x7a1e",
+              "maxUsedGas": "0x7a1e",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x000000000000000000000000000000000000000000000000000340e2dfb54db70000000000000000000000000000000000000000000000000000002aa6fd79cb",
+              "logs": [
+                {
+                  "address": "0x03b15b0fd8dc5fd25d52fe3cf5f82135d80c641b",
+                  "topics": [
+                    "0x7421973e31248bda00bf2f04b80b46b34fc9e23ab57848234aed6cc5d437b6a8",
+                    "0x00000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0",
+                    "0x0000000000000000000000005dace27d0b921b177cd9c6706c6acdeb3ec7bea7"
+                  ],
+                  "data": "0x000000000000000000000000000000000000000000000000000342ac73f718c60000000000000000000000000000000000000000000000000000000000000001",
+                  "blockHash": "0x8abb891f7937bd8f6ef08ed17a37ea6a6f8d9150a551acc4bec34c9969b640c3",
+                  "blockNumber": "0x194480d",
+                  "blockTimestamp": "0x6b0757e3",
+                  "transactionHash": "0x2b5801c5f3c4e0a966f852caf84ae526358448be88e0b8dcfdee3f2c1fbc24d6",
+                  "transactionIndex": "0x4",
+                  "logIndex": "0x2",
+                  "removed": false
+                },
+                {
+                  "address": "0x39b8b6385416f4ca36a20319f70d28621895279d",
+                  "topics": [
+                    "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+                    "0x00000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0",
+                    "0x0000000000000000000000005dace27d0b921b177cd9c6706c6acdeb3ec7bea7"
+                  ],
+                  "data": "0x000000000000000000000000000000000000000000000000000342ac73f718c6",
+                  "blockHash": "0x8abb891f7937bd8f6ef08ed17a37ea6a6f8d9150a551acc4bec34c9969b640c3",
+                  "blockNumber": "0x194480d",
+                  "blockTimestamp": "0x6b0757e3",
+                  "transactionHash": "0x2b5801c5f3c4e0a966f852caf84ae526358448be88e0b8dcfdee3f2c1fbc24d6",
+                  "transactionIndex": "0x4",
+                  "logIndex": "0x3",
+                  "removed": false
+                },
+                {
+                  "address": "0x3231cb76718cdef2155fc47b5286d82e6eda273f",
+                  "topics": [
+                    "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+                    "0x00000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0",
+                    "0x0000000000000000000000005dace27d0b921b177cd9c6706c6acdeb3ec7bea7"
+                  ],
+                  "data": "0x000000000000000000000000000000000000000000000000000342ac73f718c6",
+                  "blockHash": "0x8abb891f7937bd8f6ef08ed17a37ea6a6f8d9150a551acc4bec34c9969b640c3",
+                  "blockNumber": "0x194480d",
+                  "blockTimestamp": "0x6b0757e3",
+                  "transactionHash": "0x2b5801c5f3c4e0a966f852caf84ae526358448be88e0b8dcfdee3f2c1fbc24d6",
+                  "transactionIndex": "0x4",
+                  "logIndex": "0x4",
+                  "removed": false
+                },
+                {
+                  "address": "0x1a7e4e63778b4f12a199c062f3efdd288afcbce8",
+                  "topics": [
+                    "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+                    "0x0000000000000000000000003f90a5a47364c0467031fb00246192d40e3d2d9d",
+                    "0x00000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0"
+                  ],
+                  "data": "0x000000000000000000000000000000000000000000000000000340e2dfb54db7",
+                  "blockHash": "0x8abb891f7937bd8f6ef08ed17a37ea6a6f8d9150a551acc4bec34c9969b640c3",
+                  "blockNumber": "0x194480d",
+                  "blockTimestamp": "0x6b0757e3",
+                  "transactionHash": "0x2b5801c5f3c4e0a966f852caf84ae526358448be88e0b8dcfdee3f2c1fbc24d6",
+                  "transactionIndex": "0x4",
+                  "logIndex": "0x5",
+                  "removed": false
+                },
+                {
+                  "address": "0x0020a8890e723cd94660a5404c4bccbb91680db6",
+                  "topics": [
+                    "0x54787c404bb33c88e86f4baf88183a3b0141d0a848e6a9f7a13b66ae3a9b73d1",
+                    "0x00000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0",
+                    "0x00000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0"
+                  ],
+                  "data": "0x0000000000000000000000003231cb76718cdef2155fc47b5286d82e6eda273f0000000000000000000000001a7e4e63778b4f12a199c062f3efdd288afcbce8000000000000000000000000000000000000000000000000000342ac73f718c6000000000000000000000000000000000000000000000000000340e2dfb54db7",
+                  "blockHash": "0x8abb891f7937bd8f6ef08ed17a37ea6a6f8d9150a551acc4bec34c9969b640c3",
+                  "blockNumber": "0x194480d",
+                  "blockTimestamp": "0x6b0757e3",
+                  "transactionHash": "0x2b5801c5f3c4e0a966f852caf84ae526358448be88e0b8dcfdee3f2c1fbc24d6",
+                  "transactionIndex": "0x4",
+                  "logIndex": "0x6",
+                  "removed": false
+                }
+              ],
+              "gasUsed": "0x2cb26",
+              "maxUsedGas": "0x2e8d6",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x0000000000000000000000000000000000000000000012491750d1b40a99e73a",
+              "logs": [],
+              "gasUsed": "0x876d",
+              "maxUsedGas": "0x876d",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x000000000000000000000000000000000000000000000000000340e2dfb54db7",
+              "logs": [],
+              "gasUsed": "0x7a1e",
+              "maxUsedGas": "0x7a1e",
+              "status": "0x1"
+            }
+          ]
+        },
+        {
+          "i": 1,
+          "j": 0,
+          "dx": "91773337751367056",
+          "holder": "0x79c59db40fb74f76fc638286602b7791872e6aa0",
+          "paid": "91773337751367056",
+          "received": "91570453377693264",
+          "ok": true,
+          "parent_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+          "calls": [
+            {
+              "from": "0x79c59db40fb74f76fc638286602b7791872e6aa0",
+              "to": "0x3231cb76718cdef2155fc47b5286d82e6eda273f",
+              "data": "0x095ea7b30000000000000000000000000020a8890e723cd94660a5404c4bccbb91680db600000000000000000000000000000000000000000000000001460b5d4c85ad90"
+            },
+            {
+              "from": "0x79c59db40fb74f76fc638286602b7791872e6aa0",
+              "to": "0x0020a8890e723cd94660a5404c4bccbb91680db6",
+              "data": "0x4fdd64e50000000000000000000000003231cb76718cdef2155fc47b5286d82e6eda273f0000000000000000000000001a7e4e63778b4f12a199c062f3efdd288afcbce800000000000000000000000000000000000000000000000001460b5d4c85ad90"
+            },
+            {
+              "from": "0x79c59db40fb74f76fc638286602b7791872e6aa0",
+              "to": "0x3231cb76718cdef2155fc47b5286d82e6eda273f",
+              "data": "0x70a0823100000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0"
+            },
+            {
+              "from": "0x79c59db40fb74f76fc638286602b7791872e6aa0",
+              "to": "0x1a7e4e63778b4f12a199c062f3efdd288afcbce8",
+              "data": "0x70a0823100000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0"
+            },
+            {
+              "from": "0x79c59db40fb74f76fc638286602b7791872e6aa0",
+              "to": "0x0020a8890e723cd94660a5404c4bccbb91680db6",
+              "data": "0x9908fc8b0000000000000000000000003231cb76718cdef2155fc47b5286d82e6eda273f0000000000000000000000001a7e4e63778b4f12a199c062f3efdd288afcbce800000000000000000000000000000000000000000000000001460b5d4c85ad90000000000000000000000000000000000000000000000000000000000000000100000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            },
+            {
+              "from": "0x79c59db40fb74f76fc638286602b7791872e6aa0",
+              "to": "0x3231cb76718cdef2155fc47b5286d82e6eda273f",
+              "data": "0x70a0823100000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0"
+            },
+            {
+              "from": "0x79c59db40fb74f76fc638286602b7791872e6aa0",
+              "to": "0x1a7e4e63778b4f12a199c062f3efdd288afcbce8",
+              "data": "0x70a0823100000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0"
+            }
+          ],
+          "results": [
+            {
+              "returnData": "0x0000000000000000000000000000000000000000000000000000000000000001",
+              "logs": [
+                {
+                  "address": "0x39b8b6385416f4ca36a20319f70d28621895279d",
+                  "topics": [
+                    "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925",
+                    "0x00000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0",
+                    "0x0000000000000000000000000020a8890e723cd94660a5404c4bccbb91680db6"
+                  ],
+                  "data": "0x00000000000000000000000000000000000000000000000001460b5d4c85ad90",
+                  "blockHash": "0x5b4505e3f1598288026cbf3259fe281174843807db273d22d19d0e7557da9801",
+                  "blockNumber": "0x194480d",
+                  "blockTimestamp": "0x6b0757e3",
+                  "transactionHash": "0xc36964074817b5ee5e92b7d6798ffa7ec8fd50f1b03828a2503b573c2b9fd578",
+                  "transactionIndex": "0x0",
+                  "logIndex": "0x0",
+                  "removed": false
+                },
+                {
+                  "address": "0x3231cb76718cdef2155fc47b5286d82e6eda273f",
+                  "topics": [
+                    "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925",
+                    "0x00000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0",
+                    "0x0000000000000000000000000020a8890e723cd94660a5404c4bccbb91680db6"
+                  ],
+                  "data": "0x00000000000000000000000000000000000000000000000001460b5d4c85ad90",
+                  "blockHash": "0x5b4505e3f1598288026cbf3259fe281174843807db273d22d19d0e7557da9801",
+                  "blockNumber": "0x194480d",
+                  "blockTimestamp": "0x6b0757e3",
+                  "transactionHash": "0xc36964074817b5ee5e92b7d6798ffa7ec8fd50f1b03828a2503b573c2b9fd578",
+                  "transactionIndex": "0x0",
+                  "logIndex": "0x1",
+                  "removed": false
+                }
+              ],
+              "gasUsed": "0xeee1",
+              "maxUsedGas": "0xeee1",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x000000000000000000000000000000000000000000000000014552d7997fb650000000000000000000000000000000000000000000000000000010a8ef3bd6d0",
+              "logs": [],
+              "gasUsed": "0xf9ce",
+              "maxUsedGas": "0xf9ce",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x000000000000000000000000000000000000000000001249175414607e910000",
+              "logs": [],
+              "gasUsed": "0x876d",
+              "maxUsedGas": "0x876d",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x0000000000000000000000000000000000000000000000000000000000000000",
+              "logs": [],
+              "gasUsed": "0x7a1e",
+              "maxUsedGas": "0x7a1e",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x000000000000000000000000000000000000000000000000014552d7997fb650000000000000000000000000000000000000000000000000000010a8ef3bd6d0",
+              "logs": [
+                {
+                  "address": "0x03b15b0fd8dc5fd25d52fe3cf5f82135d80c641b",
+                  "topics": [
+                    "0x7421973e31248bda00bf2f04b80b46b34fc9e23ab57848234aed6cc5d437b6a8",
+                    "0x00000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0",
+                    "0x0000000000000000000000005dace27d0b921b177cd9c6706c6acdeb3ec7bea7"
+                  ],
+                  "data": "0x00000000000000000000000000000000000000000000000001460b5d4c85ad900000000000000000000000000000000000000000000000000000000000000001",
+                  "blockHash": "0x5b4505e3f1598288026cbf3259fe281174843807db273d22d19d0e7557da9801",
+                  "blockNumber": "0x194480d",
+                  "blockTimestamp": "0x6b0757e3",
+                  "transactionHash": "0x0fc12e0de155ff5d41b9fb63623ceb50577397c34a0855c25503889569a4eb99",
+                  "transactionIndex": "0x4",
+                  "logIndex": "0x2",
+                  "removed": false
+                },
+                {
+                  "address": "0x39b8b6385416f4ca36a20319f70d28621895279d",
+                  "topics": [
+                    "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+                    "0x00000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0",
+                    "0x0000000000000000000000005dace27d0b921b177cd9c6706c6acdeb3ec7bea7"
+                  ],
+                  "data": "0x00000000000000000000000000000000000000000000000001460b5d4c85ad90",
+                  "blockHash": "0x5b4505e3f1598288026cbf3259fe281174843807db273d22d19d0e7557da9801",
+                  "blockNumber": "0x194480d",
+                  "blockTimestamp": "0x6b0757e3",
+                  "transactionHash": "0x0fc12e0de155ff5d41b9fb63623ceb50577397c34a0855c25503889569a4eb99",
+                  "transactionIndex": "0x4",
+                  "logIndex": "0x3",
+                  "removed": false
+                },
+                {
+                  "address": "0x3231cb76718cdef2155fc47b5286d82e6eda273f",
+                  "topics": [
+                    "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+                    "0x00000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0",
+                    "0x0000000000000000000000005dace27d0b921b177cd9c6706c6acdeb3ec7bea7"
+                  ],
+                  "data": "0x00000000000000000000000000000000000000000000000001460b5d4c85ad90",
+                  "blockHash": "0x5b4505e3f1598288026cbf3259fe281174843807db273d22d19d0e7557da9801",
+                  "blockNumber": "0x194480d",
+                  "blockTimestamp": "0x6b0757e3",
+                  "transactionHash": "0x0fc12e0de155ff5d41b9fb63623ceb50577397c34a0855c25503889569a4eb99",
+                  "transactionIndex": "0x4",
+                  "logIndex": "0x4",
+                  "removed": false
+                },
+                {
+                  "address": "0x1a7e4e63778b4f12a199c062f3efdd288afcbce8",
+                  "topics": [
+                    "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+                    "0x0000000000000000000000003f90a5a47364c0467031fb00246192d40e3d2d9d",
+                    "0x00000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0"
+                  ],
+                  "data": "0x000000000000000000000000000000000000000000000000014552d7997fb650",
+                  "blockHash": "0x5b4505e3f1598288026cbf3259fe281174843807db273d22d19d0e7557da9801",
+                  "blockNumber": "0x194480d",
+                  "blockTimestamp": "0x6b0757e3",
+                  "transactionHash": "0x0fc12e0de155ff5d41b9fb63623ceb50577397c34a0855c25503889569a4eb99",
+                  "transactionIndex": "0x4",
+                  "logIndex": "0x5",
+                  "removed": false
+                },
+                {
+                  "address": "0x0020a8890e723cd94660a5404c4bccbb91680db6",
+                  "topics": [
+                    "0x54787c404bb33c88e86f4baf88183a3b0141d0a848e6a9f7a13b66ae3a9b73d1",
+                    "0x00000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0",
+                    "0x00000000000000000000000079c59db40fb74f76fc638286602b7791872e6aa0"
+                  ],
+                  "data": "0x0000000000000000000000003231cb76718cdef2155fc47b5286d82e6eda273f0000000000000000000000001a7e4e63778b4f12a199c062f3efdd288afcbce800000000000000000000000000000000000000000000000001460b5d4c85ad90000000000000000000000000000000000000000000000000014552d7997fb650",
+                  "blockHash": "0x5b4505e3f1598288026cbf3259fe281174843807db273d22d19d0e7557da9801",
+                  "blockNumber": "0x194480d",
+                  "blockTimestamp": "0x6b0757e3",
+                  "transactionHash": "0x0fc12e0de155ff5d41b9fb63623ceb50577397c34a0855c25503889569a4eb99",
+                  "transactionIndex": "0x4",
+                  "logIndex": "0x6",
+                  "removed": false
+                }
+              ],
+              "gasUsed": "0x2cb32",
+              "maxUsedGas": "0x2e8e2",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x000000000000000000000000000000000000000000001249160e0903320b5270",
+              "logs": [],
+              "gasUsed": "0x876d",
+              "maxUsedGas": "0x876d",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x000000000000000000000000000000000000000000000000014552d7997fb650",
+              "logs": [],
+              "gasUsed": "0x7a1e",
+              "maxUsedGas": "0x7a1e",
+              "status": "0x1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frxETH Pool",
+      "pool": "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854",
+      "tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0x5e8422345238f34275888049021821e8e08caa1f",
+        "0xac3e018457b222d93114458476f3e3416abbe38f"
+      ],
+      "answers": {
+        "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854|0xaa6ca808": {
+          "result": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000003000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000000000000000000000005e8422345238f34275888049021821e8e08caa1f000000000000000000000000ac3e018457b222d93114458476f3e3416abbe38f"
+        },
+        "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854|0x017b8292": {
+          "result": "0x00000000000000000000000000000000000000000000000000071afd498d0000"
+        },
+        "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854|0xd0dd0e56": {
+          "result": "0x000000000000000000000000000000000000000000000000000110d9316ec000"
+        },
+        "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854|0xfb7f5cc2": {
+          "result": "0x00000000000000000000000000000000000000000000000014d1120d7b160000"
+        },
+        "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854|0x74cbbdb9": {
+          "result": "0x00000000000000000000000000000000000000000000000018fae27693b40000"
+        },
+        "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854|0x5c975abb": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854|0xe9249cc7000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": {
+          "result": "0x000000000000000000000000c096ff2606152ed2a06dd12f15a3c0466aa5a9fa"
+        },
+        "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854|0x5b14f183000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854|0xe9249cc70000000000000000000000005e8422345238f34275888049021821e8e08caa1f": {
+          "result": "0x000000000000000000000000724515010904518ecf638cc6d693046b82548068"
+        },
+        "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854|0x5b14f1830000000000000000000000005e8422345238f34275888049021821e8e08caa1f": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854|0xe9249cc7000000000000000000000000ac3e018457b222d93114458476f3e3416abbe38f": {
+          "result": "0x00000000000000000000000051e073d92b0c226f7b0065909440b18a85769606"
+        },
+        "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854|0x5b14f183000000000000000000000000ac3e018457b222d93114458476f3e3416abbe38f": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0xc096ff2606152ed2a06dd12f15a3c0466aa5a9fa|0x2495a599": {
+          "result": "0x000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        },
+        "0xc096ff2606152ed2a06dd12f15a3c0466aa5a9fa|0x7284168a": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000012"
+        },
+        "0xc096ff2606152ed2a06dd12f15a3c0466aa5a9fa|0x16f0115b": {
+          "result": "0x0000000000000000000000003161f40ea6c0c4cc8b2433d6d530ef255816e854"
+        },
+        "0xc096ff2606152ed2a06dd12f15a3c0466aa5a9fa|0x961be391": {
+          "result": "0x000000000000000000000000000000000000000000000000010bd769140513b1"
+        },
+        "0xc096ff2606152ed2a06dd12f15a3c0466aa5a9fa|0x705727b5": {
+          "result": "0x00000000000000000000000000000000000000000000000000a9db7ccc38b2bb"
+        },
+        "0xc096ff2606152ed2a06dd12f15a3c0466aa5a9fa|0x2fa3a0d2": {
+          "result": "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000"
+        },
+        "0x724515010904518ecf638cc6d693046b82548068|0x2495a599": {
+          "result": "0x0000000000000000000000005e8422345238f34275888049021821e8e08caa1f"
+        },
+        "0x724515010904518ecf638cc6d693046b82548068|0x7284168a": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000012"
+        },
+        "0x724515010904518ecf638cc6d693046b82548068|0x16f0115b": {
+          "result": "0x0000000000000000000000003161f40ea6c0c4cc8b2433d6d530ef255816e854"
+        },
+        "0x724515010904518ecf638cc6d693046b82548068|0x961be391": {
+          "result": "0x000000000000000000000000000000000000000000000000005fb06d2624d40a"
+        },
+        "0x724515010904518ecf638cc6d693046b82548068|0x705727b5": {
+          "result": "0x00000000000000000000000000000000000000000000000000075d1830056467"
+        },
+        "0x724515010904518ecf638cc6d693046b82548068|0x2fa3a0d2": {
+          "result": "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000"
+        },
+        "0x51e073d92b0c226f7b0065909440b18a85769606|0x2495a599": {
+          "result": "0x000000000000000000000000ac3e018457b222d93114458476f3e3416abbe38f"
+        },
+        "0x51e073d92b0c226f7b0065909440b18a85769606|0x7284168a": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000012"
+        },
+        "0x51e073d92b0c226f7b0065909440b18a85769606|0x16f0115b": {
+          "result": "0x0000000000000000000000003161f40ea6c0c4cc8b2433d6d530ef255816e854"
+        },
+        "0x51e073d92b0c226f7b0065909440b18a85769606|0x961be391": {
+          "result": "0x000000000000000000000000000000000000000000000000007224a3c334d04f"
+        },
+        "0x51e073d92b0c226f7b0065909440b18a85769606|0x705727b5": {
+          "result": "0x000000000000000000000000000000000000000000000000000434897013c01b"
+        },
+        "0x51e073d92b0c226f7b0065909440b18a85769606|0x2fa3a0d2": {
+          "result": "0x000000000000000000000000000000000000000000000000104f96a137e0cf3d"
+        }
+      },
+      "storage": {
+        "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854|0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc": {
+          "result": "0x0000000000000000000000005fabce763446344a912d5cbf84b0e6541a376454"
+        },
+        "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854|0xd19c737734396143d84fecab206eb205529a6af96bf19c648108a9e3631dc1fe": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854|0x499ca5ef09af6276d2d6860a6a9b9dce735031b0d854734c6ea667bda8d9fb4c": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854|0x82521a4d749334cc2c64c5376721798e2f1ecaaa2aaba48c6f72f37da3b84514": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "quote": [
+        {
+          "i": 0,
+          "j": 1,
+          "dx": "7539066508916",
+          "result": "0x00000000000000000000000000000000000000000000000000000519c981bc45000000000000000000000000000000000000000000000000000001c2edf44e3a"
+        },
+        {
+          "i": 0,
+          "j": 1,
+          "dx": "753906650891601",
+          "result": "0x0000000000000000000000000000000000000000000000000001ec386367e4e20000000000000000000000000000000000000000000000000000c1fdd5417df2"
+        },
+        {
+          "i": 0,
+          "j": 2,
+          "dx": "7539066508916",
+          "result": "0x000000000000000000000000000000000000000000000000000004570327e0410000000000000000000000000000000000000000000000000000017faae92cf9"
+        },
+        {
+          "i": 0,
+          "j": 2,
+          "dx": "753906650891601",
+          "result": "0x0000000000000000000000000000000000000000000000000001a2cca8fdab440000000000000000000000000000000000000000000000000000a50e262a998a"
+        },
+        {
+          "i": 1,
+          "j": 0,
+          "dx": "2693410562538",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          }
+        },
+        {
+          "i": 1,
+          "j": 0,
+          "dx": "269341056253839",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          }
+        },
+        {
+          "i": 1,
+          "j": 2,
+          "dx": "2693410562538",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          }
+        },
+        {
+          "i": 1,
+          "j": 2,
+          "dx": "269341056253839",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          }
+        },
+        {
+          "i": 2,
+          "j": 0,
+          "dx": "3212843311830",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          }
+        },
+        {
+          "i": 2,
+          "j": 0,
+          "dx": "321284331183022",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          }
+        },
+        {
+          "i": 2,
+          "j": 1,
+          "dx": "3212843311830",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          }
+        },
+        {
+          "i": 2,
+          "j": 1,
+          "dx": "321284331183022",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          }
+        }
+      ],
+      "swap_sim": [
+        {
+          "pool": "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854",
+          "from": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "to": "0x5e8422345238f34275888049021821e8e08caa1f",
+          "dx": "7539066508916",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": true,
+          "result": "0x00000000000000000000000000000000000000000000000000000519c981bc45000000000000000000000000000000000000000000000000000001c2edf44e3a",
+          "override_ok": true,
+          "i": 0,
+          "j": 1
+        },
+        {
+          "pool": "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854",
+          "from": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "to": "0x5e8422345238f34275888049021821e8e08caa1f",
+          "dx": "753906650891601",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": true,
+          "result": "0x0000000000000000000000000000000000000000000000000001ec386367e4e20000000000000000000000000000000000000000000000000000c1fdd5417df2",
+          "override_ok": true,
+          "i": 0,
+          "j": 1
+        },
+        {
+          "pool": "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854",
+          "from": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "to": "0xac3e018457b222d93114458476f3e3416abbe38f",
+          "dx": "7539066508916",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": true,
+          "result": "0x000000000000000000000000000000000000000000000000000004570327e0410000000000000000000000000000000000000000000000000000017faae92cf9",
+          "override_ok": true,
+          "i": 0,
+          "j": 2
+        },
+        {
+          "pool": "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854",
+          "from": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "to": "0xac3e018457b222d93114458476f3e3416abbe38f",
+          "dx": "753906650891601",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": true,
+          "result": "0x0000000000000000000000000000000000000000000000000001a2cca8fdab440000000000000000000000000000000000000000000000000000a50e262a998a",
+          "override_ok": true,
+          "i": 0,
+          "j": 2
+        },
+        {
+          "pool": "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854",
+          "from": "0x5e8422345238f34275888049021821e8e08caa1f",
+          "to": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "dx": "2693410562538",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": false,
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          },
+          "revert": "sel 0x6158a9f8 data 0x6158a9f8",
+          "override_ok": true,
+          "i": 1,
+          "j": 0
+        },
+        {
+          "pool": "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854",
+          "from": "0x5e8422345238f34275888049021821e8e08caa1f",
+          "to": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "dx": "269341056253839",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": false,
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          },
+          "revert": "sel 0x6158a9f8 data 0x6158a9f8",
+          "override_ok": true,
+          "i": 1,
+          "j": 0
+        },
+        {
+          "pool": "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854",
+          "from": "0x5e8422345238f34275888049021821e8e08caa1f",
+          "to": "0xac3e018457b222d93114458476f3e3416abbe38f",
+          "dx": "2693410562538",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": false,
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          },
+          "revert": "sel 0x6158a9f8 data 0x6158a9f8",
+          "override_ok": true,
+          "i": 1,
+          "j": 2
+        },
+        {
+          "pool": "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854",
+          "from": "0x5e8422345238f34275888049021821e8e08caa1f",
+          "to": "0xac3e018457b222d93114458476f3e3416abbe38f",
+          "dx": "269341056253839",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": false,
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          },
+          "revert": "sel 0x6158a9f8 data 0x6158a9f8",
+          "override_ok": true,
+          "i": 1,
+          "j": 2
+        },
+        {
+          "pool": "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854",
+          "from": "0xac3e018457b222d93114458476f3e3416abbe38f",
+          "to": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "dx": "3212843311830",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": false,
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          },
+          "revert": "sel 0x6158a9f8 data 0x6158a9f8",
+          "override_ok": true,
+          "i": 2,
+          "j": 0
+        },
+        {
+          "pool": "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854",
+          "from": "0xac3e018457b222d93114458476f3e3416abbe38f",
+          "to": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "dx": "321284331183022",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": false,
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          },
+          "revert": "sel 0x6158a9f8 data 0x6158a9f8",
+          "override_ok": true,
+          "i": 2,
+          "j": 0
+        },
+        {
+          "pool": "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854",
+          "from": "0xac3e018457b222d93114458476f3e3416abbe38f",
+          "to": "0x5e8422345238f34275888049021821e8e08caa1f",
+          "dx": "3212843311830",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": false,
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          },
+          "revert": "sel 0x6158a9f8 data 0x6158a9f8",
+          "override_ok": true,
+          "i": 2,
+          "j": 1
+        },
+        {
+          "pool": "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854",
+          "from": "0xac3e018457b222d93114458476f3e3416abbe38f",
+          "to": "0x5e8422345238f34275888049021821e8e08caa1f",
+          "dx": "321284331183022",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": false,
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          },
+          "revert": "sel 0x6158a9f8 data 0x6158a9f8",
+          "override_ok": true,
+          "i": 2,
+          "j": 1
+        }
+      ],
+      "funded_swaps": []
+    },
+    {
+      "name": "wstETH Pool",
+      "pool": "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734",
+      "tokens": [
+        "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "answers": {
+        "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734|0xaa6ca808": {
+          "result": "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000020000000000000000000000007f39c581f595b53c5cb19bd0b3f8da6c935e2ca0000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        },
+        "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734|0x017b8292": {
+          "result": "0x00000000000000000000000000000000000000000000000000071afd498d0000"
+        },
+        "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734|0xd0dd0e56": {
+          "result": "0x000000000000000000000000000000000000000000000000000110d9316ec000"
+        },
+        "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734|0xfb7f5cc2": {
+          "result": "0x00000000000000000000000000000000000000000000000014d1120d7b160000"
+        },
+        "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734|0x74cbbdb9": {
+          "result": "0x00000000000000000000000000000000000000000000000018fae27693b40000"
+        },
+        "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734|0x5c975abb": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734|0xe9249cc70000000000000000000000007f39c581f595b53c5cb19bd0b3f8da6c935e2ca0": {
+          "result": "0x000000000000000000000000a12ba2d89a16f57c4b714b03c7951c41c7695502"
+        },
+        "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734|0x5b14f1830000000000000000000000007f39c581f595b53c5cb19bd0b3f8da6c935e2ca0": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734|0xe9249cc7000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": {
+          "result": "0x00000000000000000000000094019d0fcc9699909e5b59727505e56252760524"
+        },
+        "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734|0x5b14f183000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0xa12ba2d89a16f57c4b714b03c7951c41c7695502|0x2495a599": {
+          "result": "0x0000000000000000000000007f39c581f595b53c5cb19bd0b3f8da6c935e2ca0"
+        },
+        "0xa12ba2d89a16f57c4b714b03c7951c41c7695502|0x7284168a": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000012"
+        },
+        "0xa12ba2d89a16f57c4b714b03c7951c41c7695502|0x16f0115b": {
+          "result": "0x000000000000000000000000f8e32ca46ac28799c8fb7dce1ac11a4541160734"
+        },
+        "0xa12ba2d89a16f57c4b714b03c7951c41c7695502|0x961be391": {
+          "result": "0x000000000000000000000000000000000000000000000000000b630080059de1"
+        },
+        "0xa12ba2d89a16f57c4b714b03c7951c41c7695502|0x705727b5": {
+          "result": "0x000000000000000000000000000000000000000000000000000ab3641f3f15d0"
+        },
+        "0xa12ba2d89a16f57c4b714b03c7951c41c7695502|0x2fa3a0d2": {
+          "result": "0x0000000000000000000000000000000000000000000000001159555771c7e890"
+        },
+        "0x94019d0fcc9699909e5b59727505e56252760524|0x2495a599": {
+          "result": "0x000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        },
+        "0x94019d0fcc9699909e5b59727505e56252760524|0x7284168a": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000012"
+        },
+        "0x94019d0fcc9699909e5b59727505e56252760524|0x16f0115b": {
+          "result": "0x000000000000000000000000f8e32ca46ac28799c8fb7dce1ac11a4541160734"
+        },
+        "0x94019d0fcc9699909e5b59727505e56252760524|0x961be391": {
+          "result": "0x00000000000000000000000000000000000000000000000003ce48829f2c4419"
+        },
+        "0x94019d0fcc9699909e5b59727505e56252760524|0x705727b5": {
+          "result": "0x00000000000000000000000000000000000000000000000003b138e4ec7c8934"
+        },
+        "0x94019d0fcc9699909e5b59727505e56252760524|0x2fa3a0d2": {
+          "result": "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000"
+        }
+      },
+      "storage": {
+        "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734|0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc": {
+          "result": "0x0000000000000000000000005fabce763446344a912d5cbf84b0e6541a376454"
+        },
+        "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734|0x8f2054f449ecb4e627e344da80292402ea1ea0542ca0026437904d6c2f375669": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734|0xd19c737734396143d84fecab206eb205529a6af96bf19c648108a9e3631dc1fe": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "quote": [
+        {
+          "i": 0,
+          "j": 1,
+          "dx": "320507854281",
+          "result": "0x0000000000000000000000000000000000000000000000000000005d402198d3000000000000000000000000000000000000000000000000000000000729ee0b"
+        },
+        {
+          "i": 0,
+          "j": 1,
+          "dx": "32050785428187",
+          "result": "0x0000000000000000000000000000000000000000000000000000246ce338d6de00000000000000000000000000000000000000000000000000000002cc5dc44c"
+        },
+        {
+          "i": 1,
+          "j": 0,
+          "dx": "27423635316960",
+          "result": "0x000000000000000000000000000000000000000000000000000013f28a1ed2a200000000000000000000000000000000000000000000000000000001884cc7f5"
+        },
+        {
+          "i": 1,
+          "j": 0,
+          "dx": "2742363531696056",
+          "result": "0x0000000000000000000000000000000000000000000000000007c337b81e6db700000000000000000000000000000000000000000000000000000098aa0370c9"
+        }
+      ],
+      "swap_sim": [
+        {
+          "pool": "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734",
+          "from": "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+          "to": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "dx": "320507854281",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": true,
+          "result": "0x0000000000000000000000000000000000000000000000000000005d402198d3000000000000000000000000000000000000000000000000000000000729ee0b",
+          "override_ok": true,
+          "i": 0,
+          "j": 1
+        },
+        {
+          "pool": "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734",
+          "from": "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+          "to": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "dx": "32050785428187",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": true,
+          "result": "0x0000000000000000000000000000000000000000000000000000246ce338d6de00000000000000000000000000000000000000000000000000000002cc5dc44c",
+          "override_ok": true,
+          "i": 0,
+          "j": 1
+        },
+        {
+          "pool": "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734",
+          "from": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "to": "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+          "dx": "27423635316960",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": true,
+          "result": "0x000000000000000000000000000000000000000000000000000013f28a1ed2a200000000000000000000000000000000000000000000000000000001884cc7f5",
+          "override_ok": true,
+          "i": 1,
+          "j": 0
+        },
+        {
+          "pool": "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734",
+          "from": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "to": "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+          "dx": "2742363531696056",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": true,
+          "result": "0x0000000000000000000000000000000000000000000000000007c337b81e6db700000000000000000000000000000000000000000000000000000098aa0370c9",
+          "override_ok": true,
+          "i": 1,
+          "j": 0
+        }
+      ],
+      "funded_swaps": []
+    },
+    {
+      "name": "ETHx Pool",
+      "pool": "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81",
+      "tokens": [
+        "0xa35b1b31ce002fbf2058d22f30f95d405200a15b",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "answers": {
+        "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81|0xaa6ca808": {
+          "result": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000a35b1b31ce002fbf2058d22f30f95d405200a15b000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        },
+        "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81|0x017b8292": {
+          "result": "0x00000000000000000000000000000000000000000000000000071afd498d0000"
+        },
+        "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81|0xd0dd0e56": {
+          "result": "0x000000000000000000000000000000000000000000000000000110d9316ec000"
+        },
+        "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81|0xfb7f5cc2": {
+          "result": "0x00000000000000000000000000000000000000000000000014d1120d7b160000"
+        },
+        "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81|0x74cbbdb9": {
+          "result": "0x00000000000000000000000000000000000000000000000018fae27693b40000"
+        },
+        "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81|0x5c975abb": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81|0xe9249cc7000000000000000000000000a35b1b31ce002fbf2058d22f30f95d405200a15b": {
+          "result": "0x00000000000000000000000025c9dd8a3774ef7c918cd28ff59cf9e29504c914"
+        },
+        "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81|0x5b14f183000000000000000000000000a35b1b31ce002fbf2058d22f30f95d405200a15b": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81|0xe9249cc7000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": {
+          "result": "0x00000000000000000000000075eaa804518a66196946598317aed57ef86235fe"
+        },
+        "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81|0x5b14f183000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x25c9dd8a3774ef7c918cd28ff59cf9e29504c914|0x2495a599": {
+          "result": "0x000000000000000000000000a35b1b31ce002fbf2058d22f30f95d405200a15b"
+        },
+        "0x25c9dd8a3774ef7c918cd28ff59cf9e29504c914|0x7284168a": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000012"
+        },
+        "0x25c9dd8a3774ef7c918cd28ff59cf9e29504c914|0x16f0115b": {
+          "result": "0x000000000000000000000000647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81"
+        },
+        "0x25c9dd8a3774ef7c918cd28ff59cf9e29504c914|0x961be391": {
+          "result": "0x00000000000000000000000000000000000000000000000007627f62cbc6f1d6"
+        },
+        "0x25c9dd8a3774ef7c918cd28ff59cf9e29504c914|0x705727b5": {
+          "result": "0x00000000000000000000000000000000000000000000000002a2fdc4a4c066f4"
+        },
+        "0x25c9dd8a3774ef7c918cd28ff59cf9e29504c914|0x2fa3a0d2": {
+          "result": "0x0000000000000000000000000000000000000000000000000f4c6f8cc0522668"
+        },
+        "0x75eaa804518a66196946598317aed57ef86235fe|0x2495a599": {
+          "result": "0x000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        },
+        "0x75eaa804518a66196946598317aed57ef86235fe|0x7284168a": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000012"
+        },
+        "0x75eaa804518a66196946598317aed57ef86235fe|0x16f0115b": {
+          "result": "0x000000000000000000000000647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81"
+        },
+        "0x75eaa804518a66196946598317aed57ef86235fe|0x961be391": {
+          "result": "0x000000000000000000000000000000000000000000000000023324d2889c21c7"
+        },
+        "0x75eaa804518a66196946598317aed57ef86235fe|0x705727b5": {
+          "result": "0x000000000000000000000000000000000000000000000000017687472cd824cb"
+        },
+        "0x75eaa804518a66196946598317aed57ef86235fe|0x2fa3a0d2": {
+          "result": "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000"
+        }
+      },
+      "storage": {
+        "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81|0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc": {
+          "result": "0x0000000000000000000000005fabce763446344a912d5cbf84b0e6541a376454"
+        },
+        "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81|0x8eaf47aa38af7236aac68da91e850bb8693bd8dbb4d3b3f6e4a104077eeb5e46": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81|0xd19c737734396143d84fecab206eb205529a6af96bf19c648108a9e3631dc1fe": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "quote": [
+        {
+          "i": 0,
+          "j": 1,
+          "dx": "53212776828547",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          }
+        },
+        {
+          "i": 0,
+          "j": 1,
+          "dx": "5321277682854753",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          }
+        },
+        {
+          "i": 1,
+          "j": 0,
+          "dx": "15851089854176",
+          "result": "0x00000000000000000000000000000000000000000000000000000cebdbb525ce0000000000000000000000000000000000000000000000000000002a1e390b6d"
+        },
+        {
+          "i": 1,
+          "j": 0,
+          "dx": "1585108985417650",
+          "result": "0x0000000000000000000000000000000000000000000000000004ebaa2b6fb284000000000000000000000000000000000000000000000000000030e854093090"
+        }
+      ],
+      "swap_sim": [
+        {
+          "pool": "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81",
+          "from": "0xa35b1b31ce002fbf2058d22f30f95d405200a15b",
+          "to": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "dx": "53212776828547",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": false,
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          },
+          "revert": "sel 0x6158a9f8 data 0x6158a9f8",
+          "override_ok": true,
+          "i": 0,
+          "j": 1
+        },
+        {
+          "pool": "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81",
+          "from": "0xa35b1b31ce002fbf2058d22f30f95d405200a15b",
+          "to": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "dx": "5321277682854753",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": false,
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          },
+          "revert": "sel 0x6158a9f8 data 0x6158a9f8",
+          "override_ok": true,
+          "i": 0,
+          "j": 1
+        },
+        {
+          "pool": "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81",
+          "from": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "to": "0xa35b1b31ce002fbf2058d22f30f95d405200a15b",
+          "dx": "15851089854176",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": true,
+          "result": "0x00000000000000000000000000000000000000000000000000000cebdbb525ce0000000000000000000000000000000000000000000000000000002a1e390b6d",
+          "override_ok": true,
+          "i": 1,
+          "j": 0
+        },
+        {
+          "pool": "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81",
+          "from": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "to": "0xa35b1b31ce002fbf2058d22f30f95d405200a15b",
+          "dx": "1585108985417650",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": true,
+          "result": "0x0000000000000000000000000000000000000000000000000004ebaa2b6fb284000000000000000000000000000000000000000000000000000030e854093090",
+          "override_ok": true,
+          "i": 1,
+          "j": 0
+        }
+      ],
+      "funded_swaps": []
+    },
+    {
+      "name": "USDV Pool",
+      "pool": "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32",
+      "tokens": [
+        "0x0e573ce2736dd9637a0b21058352e1667925c7a8",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "answers": {
+        "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32|0xaa6ca808": {
+          "result": "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000e573ce2736dd9637a0b21058352e1667925c7a8000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7"
+        },
+        "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32|0x017b8292": {
+          "result": "0x000000000000000000000000000000000000000000000000000470de4df82000"
+        },
+        "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32|0xd0dd0e56": {
+          "result": "0x0000000000000000000000000000000000000000000000000000b5e620f48000"
+        },
+        "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32|0xfb7f5cc2": {
+          "result": "0x00000000000000000000000000000000000000000000000014d1120d7b160000"
+        },
+        "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32|0x74cbbdb9": {
+          "result": "0x00000000000000000000000000000000000000000000000018fae27693b40000"
+        },
+        "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32|0x5c975abb": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32|0xe9249cc70000000000000000000000000e573ce2736dd9637a0b21058352e1667925c7a8": {
+          "result": "0x0000000000000000000000004dfa92842d05a790252a7f374323b9c86d7b7e12"
+        },
+        "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32|0x5b14f1830000000000000000000000000e573ce2736dd9637a0b21058352e1667925c7a8": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32|0xe9249cc7000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7": {
+          "result": "0x0000000000000000000000007bb67cfe4134d4c485659ff7769ec98d1c1dcdba"
+        },
+        "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32|0x5b14f183000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x4dfa92842d05a790252a7f374323b9c86d7b7e12|0x2495a599": {
+          "result": "0x0000000000000000000000000e573ce2736dd9637a0b21058352e1667925c7a8"
+        },
+        "0x4dfa92842d05a790252a7f374323b9c86d7b7e12|0x7284168a": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000006"
+        },
+        "0x4dfa92842d05a790252a7f374323b9c86d7b7e12|0x16f0115b": {
+          "result": "0x00000000000000000000000005a33c0eaf81367ce953d2dcd4ea1be8758f4d32"
+        },
+        "0x4dfa92842d05a790252a7f374323b9c86d7b7e12|0x961be391": {
+          "result": "0x000000000000000000000000000000000000000000000001a88bc1cbd81e738f"
+        },
+        "0x4dfa92842d05a790252a7f374323b9c86d7b7e12|0x705727b5": {
+          "result": "0x0000000000000000000000000000000000000000000000000aaf96eb9d0d0000"
+        },
+        "0x4dfa92842d05a790252a7f374323b9c86d7b7e12|0x2fa3a0d2": {
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          }
+        },
+        "0x7bb67cfe4134d4c485659ff7769ec98d1c1dcdba|0x2495a599": {
+          "result": "0x000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7"
+        },
+        "0x7bb67cfe4134d4c485659ff7769ec98d1c1dcdba|0x7284168a": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000006"
+        },
+        "0x7bb67cfe4134d4c485659ff7769ec98d1c1dcdba|0x16f0115b": {
+          "result": "0x00000000000000000000000005a33c0eaf81367ce953d2dcd4ea1be8758f4d32"
+        },
+        "0x7bb67cfe4134d4c485659ff7769ec98d1c1dcdba|0x961be391": {
+          "result": "0x00000000000000000000000000000000000000000000000090db69e67bb35000"
+        },
+        "0x7bb67cfe4134d4c485659ff7769ec98d1c1dcdba|0x705727b5": {
+          "result": "0x0000000000000000000000000000000000000000000000006735904854621000"
+        },
+        "0x7bb67cfe4134d4c485659ff7769ec98d1c1dcdba|0x2fa3a0d2": {
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          }
+        }
+      },
+      "storage": {
+        "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32|0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc": {
+          "result": "0x0000000000000000000000004705b477d35112f7b7ca2bc5059ed9b78bb46134"
+        },
+        "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32|0x34db0ffd335e37b0e25536e64c964ae29827d10a216a31482a51ceee311125de": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32|0xb1936182c1f0138fa06a5dec487b65fc14a5aad68f757bb8edc1fa2118f6b082": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "quote": [
+        {
+          "i": 0,
+          "j": 1,
+          "dx": "3059",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          }
+        },
+        {
+          "i": 0,
+          "j": 1,
+          "dx": "305917",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          }
+        },
+        {
+          "i": 1,
+          "j": 0,
+          "dx": "1043",
+          "result": "0x00000000000000000000000000000000000000000000000000000000000004130000000000000000000000000000000000000000000000000000000000000000"
+        },
+        {
+          "i": 1,
+          "j": 0,
+          "dx": "104380",
+          "result": "0x00000000000000000000000000000000000000000000000000000000000197e80000000000000000000000000000000000000000000000000000000000000014"
+        }
+      ],
+      "swap_sim": [
+        {
+          "pool": "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32",
+          "from": "0x0e573ce2736dd9637a0b21058352e1667925c7a8",
+          "to": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "dx": "3059",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": null,
+          "error": "слоты не найдены: ответ 0x0 не совпал ни с одним кандидатом",
+          "i": 0,
+          "j": 1
+        },
+        {
+          "pool": "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32",
+          "from": "0x0e573ce2736dd9637a0b21058352e1667925c7a8",
+          "to": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "dx": "305917",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": null,
+          "error": "слоты не найдены: ответ 0x0 не совпал ни с одним кандидатом",
+          "i": 0,
+          "j": 1
+        },
+        {
+          "pool": "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32",
+          "from": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "to": "0x0e573ce2736dd9637a0b21058352e1667925c7a8",
+          "dx": "1043",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": true,
+          "result": "0x00000000000000000000000000000000000000000000000000000000000004130000000000000000000000000000000000000000000000000000000000000000",
+          "override_ok": true,
+          "i": 1,
+          "j": 0
+        },
+        {
+          "pool": "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32",
+          "from": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "to": "0x0e573ce2736dd9637a0b21058352e1667925c7a8",
+          "dx": "104380",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": true,
+          "result": "0x00000000000000000000000000000000000000000000000000000000000197e80000000000000000000000000000000000000000000000000000000000000014",
+          "override_ok": true,
+          "i": 1,
+          "j": 0
+        }
+      ],
+      "funded_swaps": [
+        {
+          "i": 0,
+          "j": 1,
+          "dx": "3059",
+          "holder": "0xed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+          "paid": "0",
+          "received": "0",
+          "ok": false,
+          "parent_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+          "calls": [
+            {
+              "from": "0xed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+              "to": "0x0e573ce2736dd9637a0b21058352e1667925c7a8",
+              "data": "0x095ea7b300000000000000000000000005a33c0eaf81367ce953d2dcd4ea1be8758f4d320000000000000000000000000000000000000000000000000000000000000bf3"
+            },
+            {
+              "from": "0xed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+              "to": "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32",
+              "data": "0x4fdd64e50000000000000000000000000e573ce2736dd9637a0b21058352e1667925c7a8000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec70000000000000000000000000000000000000000000000000000000000000bf3"
+            },
+            {
+              "from": "0xed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+              "to": "0x0e573ce2736dd9637a0b21058352e1667925c7a8",
+              "data": "0x70a08231000000000000000000000000ed9ab5bc05a0152b9dc2f7902e8369af7bc18771"
+            },
+            {
+              "from": "0xed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+              "to": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+              "data": "0x70a08231000000000000000000000000ed9ab5bc05a0152b9dc2f7902e8369af7bc18771"
+            },
+            {
+              "from": "0xed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+              "to": "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32",
+              "data": "0x9908fc8b0000000000000000000000000e573ce2736dd9637a0b21058352e1667925c7a8000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec70000000000000000000000000000000000000000000000000000000000000bf30000000000000000000000000000000000000000000000000000000000000001000000000000000000000000ed9ab5bc05a0152b9dc2f7902e8369af7bc18771ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            },
+            {
+              "from": "0xed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+              "to": "0x0e573ce2736dd9637a0b21058352e1667925c7a8",
+              "data": "0x70a08231000000000000000000000000ed9ab5bc05a0152b9dc2f7902e8369af7bc18771"
+            },
+            {
+              "from": "0xed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+              "to": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+              "data": "0x70a08231000000000000000000000000ed9ab5bc05a0152b9dc2f7902e8369af7bc18771"
+            }
+          ],
+          "results": [
+            {
+              "returnData": "0x0000000000000000000000000000000000000000000000000000000000000001",
+              "logs": [
+                {
+                  "address": "0x0e573ce2736dd9637a0b21058352e1667925c7a8",
+                  "topics": [
+                    "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925",
+                    "0x000000000000000000000000ed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+                    "0x00000000000000000000000005a33c0eaf81367ce953d2dcd4ea1be8758f4d32"
+                  ],
+                  "data": "0x0000000000000000000000000000000000000000000000000000000000000bf3",
+                  "blockHash": "0x87cae60d3684b2f83a70d4cb3ea6167f0523e6fe73c25d7fcabbe4ef50352268",
+                  "blockNumber": "0x194480d",
+                  "blockTimestamp": "0x6b0757e3",
+                  "transactionHash": "0x615f80fba412131a34d95f83296910aaf02f92f384603df6aae41dcf325974d5",
+                  "transactionIndex": "0x0",
+                  "logIndex": "0x0",
+                  "removed": false
+                }
+              ],
+              "gasUsed": "0xc888",
+              "maxUsedGas": "0xc888",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x",
+              "logs": [],
+              "gasUsed": "0xf3b1",
+              "maxUsedGas": "0xf3b1",
+              "status": "0x0",
+              "error": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0x6158a9f8"
+              }
+            },
+            {
+              "returnData": "0x0000000000000000000000000000000000000000000000000000000d38c14ed2",
+              "logs": [],
+              "gasUsed": "0x71d3",
+              "maxUsedGas": "0x71d3",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x0000000000000000000000000000000000000000000000000000096c9bc7d506",
+              "logs": [],
+              "gasUsed": "0x675f",
+              "maxUsedGas": "0x675f",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x",
+              "logs": [],
+              "gasUsed": "0x123b6",
+              "maxUsedGas": "0x123b6",
+              "status": "0x0",
+              "error": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0x6158a9f8"
+              }
+            },
+            {
+              "returnData": "0x0000000000000000000000000000000000000000000000000000000d38c14ed2",
+              "logs": [],
+              "gasUsed": "0x71d3",
+              "maxUsedGas": "0x71d3",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x0000000000000000000000000000000000000000000000000000096c9bc7d506",
+              "logs": [],
+              "gasUsed": "0x675f",
+              "maxUsedGas": "0x675f",
+              "status": "0x1"
+            }
+          ]
+        },
+        {
+          "i": 0,
+          "j": 1,
+          "dx": "305917",
+          "holder": "0xed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+          "paid": "0",
+          "received": "0",
+          "ok": false,
+          "parent_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+          "calls": [
+            {
+              "from": "0xed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+              "to": "0x0e573ce2736dd9637a0b21058352e1667925c7a8",
+              "data": "0x095ea7b300000000000000000000000005a33c0eaf81367ce953d2dcd4ea1be8758f4d32000000000000000000000000000000000000000000000000000000000004aafd"
+            },
+            {
+              "from": "0xed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+              "to": "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32",
+              "data": "0x4fdd64e50000000000000000000000000e573ce2736dd9637a0b21058352e1667925c7a8000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7000000000000000000000000000000000000000000000000000000000004aafd"
+            },
+            {
+              "from": "0xed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+              "to": "0x0e573ce2736dd9637a0b21058352e1667925c7a8",
+              "data": "0x70a08231000000000000000000000000ed9ab5bc05a0152b9dc2f7902e8369af7bc18771"
+            },
+            {
+              "from": "0xed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+              "to": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+              "data": "0x70a08231000000000000000000000000ed9ab5bc05a0152b9dc2f7902e8369af7bc18771"
+            },
+            {
+              "from": "0xed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+              "to": "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32",
+              "data": "0x9908fc8b0000000000000000000000000e573ce2736dd9637a0b21058352e1667925c7a8000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7000000000000000000000000000000000000000000000000000000000004aafd0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000ed9ab5bc05a0152b9dc2f7902e8369af7bc18771ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            },
+            {
+              "from": "0xed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+              "to": "0x0e573ce2736dd9637a0b21058352e1667925c7a8",
+              "data": "0x70a08231000000000000000000000000ed9ab5bc05a0152b9dc2f7902e8369af7bc18771"
+            },
+            {
+              "from": "0xed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+              "to": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+              "data": "0x70a08231000000000000000000000000ed9ab5bc05a0152b9dc2f7902e8369af7bc18771"
+            }
+          ],
+          "results": [
+            {
+              "returnData": "0x0000000000000000000000000000000000000000000000000000000000000001",
+              "logs": [
+                {
+                  "address": "0x0e573ce2736dd9637a0b21058352e1667925c7a8",
+                  "topics": [
+                    "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925",
+                    "0x000000000000000000000000ed9ab5bc05a0152b9dc2f7902e8369af7bc18771",
+                    "0x00000000000000000000000005a33c0eaf81367ce953d2dcd4ea1be8758f4d32"
+                  ],
+                  "data": "0x000000000000000000000000000000000000000000000000000000000004aafd",
+                  "blockHash": "0x46835556366d9205b2cd8d118e388e6b64ea071451288dbdc1232949cc892cbe",
+                  "blockNumber": "0x194480d",
+                  "blockTimestamp": "0x6b0757e3",
+                  "transactionHash": "0x2cd247e4208c4951f9f5667a89100bd0839d4a363d76ddc424d853bbc9756bd6",
+                  "transactionIndex": "0x0",
+                  "logIndex": "0x0",
+                  "removed": false
+                }
+              ],
+              "gasUsed": "0xc894",
+              "maxUsedGas": "0xc894",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x",
+              "logs": [],
+              "gasUsed": "0xf3bd",
+              "maxUsedGas": "0xf3bd",
+              "status": "0x0",
+              "error": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0x6158a9f8"
+              }
+            },
+            {
+              "returnData": "0x0000000000000000000000000000000000000000000000000000000d38c14ed2",
+              "logs": [],
+              "gasUsed": "0x71d3",
+              "maxUsedGas": "0x71d3",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x0000000000000000000000000000000000000000000000000000096c9bc7d506",
+              "logs": [],
+              "gasUsed": "0x675f",
+              "maxUsedGas": "0x675f",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x",
+              "logs": [],
+              "gasUsed": "0x123c2",
+              "maxUsedGas": "0x123c2",
+              "status": "0x0",
+              "error": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0x6158a9f8"
+              }
+            },
+            {
+              "returnData": "0x0000000000000000000000000000000000000000000000000000000d38c14ed2",
+              "logs": [],
+              "gasUsed": "0x71d3",
+              "maxUsedGas": "0x71d3",
+              "status": "0x1"
+            },
+            {
+              "returnData": "0x0000000000000000000000000000000000000000000000000000096c9bc7d506",
+              "logs": [],
+              "gasUsed": "0x675f",
+              "maxUsedGas": "0x675f",
+              "status": "0x1"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

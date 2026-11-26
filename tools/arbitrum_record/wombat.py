@@ -46,9 +46,9 @@ def ans(rec, to, data):
     return rec["answers"].get(wc.key(to, data), {})
 
 
-def state_phase(b, sim, pools, tokens, fractions, head):
+def state_phase(b, sim, pools, tokens, fractions, head, *, block_selector=None):
     """Фаза состояния на блоке head. Возвращает: (head, recs). StaleState — наружу (recnode.fresh)."""
-    tag = head["number"]
+    tag = block_selector if block_selector is not None else head["number"]
     sim.tag, sim.reqs, sim.recs = tag, [], []
     recs = {p: {"name": n, "pool": p, "tokens": tokens.get(p, []), "answers": {}, "storage": {}} for n, p in pools}
 

@@ -1,0 +1,230 @@
+{
+  "url": "https://docs.wombat.exchange/developers/contracts/base.md",
+  "chain_id": 8453,
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "endpoint": "https://base-rpc.publicnode.com",
+  "documented": {
+    "0xc9bfc3efefe4cf96877009f75a61f5c1937e5d1a": {
+      "name": "Cross Chain Pool",
+      "implementation": "0xe85f625404eef8a55d9a8b385777d7c8e45e0c73",
+      "status": "CrossChainPool/CoreV3"
+    },
+    "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1": {
+      "name": "USDS Pool",
+      "implementation": "0x9a59f56f96a780f74167ec911ca59699bfc73ba6",
+      "status": "directional_swap"
+    }
+  },
+  "implementations": {
+    "0x9a59f56f96a780f74167ec911ca59699bfc73ba6": {
+      "kind": "HighCovRatioFeePoolV2",
+      "verified": "https://sourcify.dev/server/v2/contract/8453/0x9a59f56f96a780f74167ec911ca59699bfc73ba6?fields=compilation,sources,runtimeBytecode.onchainBytecode,runtimeBytecode.linkReferences,storageLayout",
+      "reference": "https://sourcify.dev/server/v2/contract/42161/0x44A0e2AC2c99D5cB2910ec1784DD158b7fa3A642?fields=compilation,sources,runtimeBytecode.onchainBytecode,runtimeBytecode.linkReferences,storageLayout",
+      "runtime": "0x61db37eab594c4299dafdb484bba1f7755faced7e6fc3c8afb8450415303a21f",
+      "paused_assets_slot": 201,
+      "source_keccak": {
+        "CoreV2.sol": "e69bed75cc623642aaca33cec3bfbbc600f704e50d53d57546c6e475b992a244",
+        "PoolV2.sol": "fccd9d5d095ccb68ecda68d305f2e11dfc7481902c90f84aa21b70250112e92a",
+        "PausableAssets.sol": "4655cb4b2f70d304fe1f3cc0c9e70fa2594ae45a14479fcf7dfc349633553ef0",
+        "HighCovRatioFeePoolV2.sol": "fe659fc51797973412b64ce96ec4d4b0c815bd8fafca91ec6c6850274e1ff23d"
+      },
+      "matched_functions": {
+        "DSMath.sol": 5,
+        "SignedSafeMath.sol": 8
+      }
+    }
+  },
+  "pools": [
+    {
+      "name": "USDS Pool",
+      "pool": "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1",
+      "tokens": [
+        "0xecf3e9b8ccb6f4a6efd68058fd706561c1727031",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "answers": {
+        "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1|0xaa6ca808": {
+          "result": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000ecf3e9b8ccb6f4a6efd68058fd706561c1727031000000000000000000000000d9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+        },
+        "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1|0x017b8292": {
+          "result": "0x000000000000000000000000000000000000000000000000000470de4df82000"
+        },
+        "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1|0xd0dd0e56": {
+          "result": "0x0000000000000000000000000000000000000000000000000000b5e620f48000"
+        },
+        "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1|0xfb7f5cc2": {
+          "result": "0x00000000000000000000000000000000000000000000000014d1120d7b160000"
+        },
+        "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1|0x74cbbdb9": {
+          "result": "0x00000000000000000000000000000000000000000000000018fae27693b40000"
+        },
+        "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1|0x5c975abb": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1|0xe9249cc7000000000000000000000000ecf3e9b8ccb6f4a6efd68058fd706561c1727031": {
+          "result": "0x000000000000000000000000e07829c8b7f934e03c83b0dc1fd2ccc9b62036d8"
+        },
+        "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1|0x5b14f183000000000000000000000000ecf3e9b8ccb6f4a6efd68058fd706561c1727031": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1|0xe9249cc7000000000000000000000000d9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca": {
+          "result": "0x000000000000000000000000e2a60c52c4abb9fbc3f711da3cb9e633269dbc67"
+        },
+        "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1|0x5b14f183000000000000000000000000d9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0xe07829c8b7f934e03c83b0dc1fd2ccc9b62036d8|0x2495a599": {
+          "result": "0x000000000000000000000000ecf3e9b8ccb6f4a6efd68058fd706561c1727031"
+        },
+        "0xe07829c8b7f934e03c83b0dc1fd2ccc9b62036d8|0x7284168a": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000012"
+        },
+        "0xe07829c8b7f934e03c83b0dc1fd2ccc9b62036d8|0x16f0115b": {
+          "result": "0x00000000000000000000000020d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1"
+        },
+        "0xe07829c8b7f934e03c83b0dc1fd2ccc9b62036d8|0x961be391": {
+          "result": "0x0000000000000000000000000000000000000000000000fe65fbc3c047ab445b"
+        },
+        "0xe07829c8b7f934e03c83b0dc1fd2ccc9b62036d8|0x705727b5": {
+          "result": "0x0000000000000000000000000000000000000000000001d0a6505a26bcc30025"
+        },
+        "0xe07829c8b7f934e03c83b0dc1fd2ccc9b62036d8|0x2fa3a0d2": {
+          "error": {
+            "code": 3,
+            "message": "execution reverted"
+          }
+        },
+        "0xe2a60c52c4abb9fbc3f711da3cb9e633269dbc67|0x2495a599": {
+          "result": "0x000000000000000000000000d9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+        },
+        "0xe2a60c52c4abb9fbc3f711da3cb9e633269dbc67|0x7284168a": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000006"
+        },
+        "0xe2a60c52c4abb9fbc3f711da3cb9e633269dbc67|0x16f0115b": {
+          "result": "0x00000000000000000000000020d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1"
+        },
+        "0xe2a60c52c4abb9fbc3f711da3cb9e633269dbc67|0x961be391": {
+          "result": "0x0000000000000000000000000000000000000000000001bd4f40a06f881a40c7"
+        },
+        "0xe2a60c52c4abb9fbc3f711da3cb9e633269dbc67|0x705727b5": {
+          "result": "0x0000000000000000000000000000000000000000000000eab78e9361a7611e76"
+        },
+        "0xe2a60c52c4abb9fbc3f711da3cb9e633269dbc67|0x2fa3a0d2": {
+          "error": {
+            "code": 3,
+            "message": "execution reverted"
+          }
+        }
+      },
+      "storage": {
+        "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1|0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc": {
+          "result": "0x0000000000000000000000009a59f56f96a780f74167ec911ca59699bfc73ba6"
+        },
+        "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1|0xcd2d952749cba53bffcc1c8a59213f3d8a4b192046043c87601d971d3847a26d": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1|0x67c740e48cea4c1352fcf584900214631419c79652e4f94103dc73c85a5827f0": {
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "quote": [
+        {
+          "i": 0,
+          "j": 1,
+          "dx": "469282167716981504",
+          "result": "0x0000000000000000000000000000000000000000000000000000000000072fc5000000000000000000000000000000000000000000000000000000000000005e"
+        },
+        {
+          "i": 0,
+          "j": 1,
+          "dx": "46928216771698147328",
+          "result": "0x0000000000000000000000000000000000000000000000000000000002cea11e00000000000000000000000000000000000000000000000000000000000024cd"
+        },
+        {
+          "i": 1,
+          "j": 0,
+          "dx": "821451",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          }
+        },
+        {
+          "i": 1,
+          "j": 0,
+          "dx": "82145118",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          }
+        }
+      ],
+      "swap_sim": [
+        {
+          "pool": "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1",
+          "from": "0xecf3e9b8ccb6f4a6efd68058fd706561c1727031",
+          "to": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+          "dx": "469282167716981504",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": true,
+          "result": "0x0000000000000000000000000000000000000000000000000000000000072fc5000000000000000000000000000000000000000000000000000000000000005e",
+          "override_ok": true,
+          "i": 0,
+          "j": 1
+        },
+        {
+          "pool": "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1",
+          "from": "0xecf3e9b8ccb6f4a6efd68058fd706561c1727031",
+          "to": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+          "dx": "46928216771698147328",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": true,
+          "result": "0x0000000000000000000000000000000000000000000000000000000002cea11e00000000000000000000000000000000000000000000000000000000000024cd",
+          "override_ok": true,
+          "i": 0,
+          "j": 1
+        },
+        {
+          "pool": "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1",
+          "from": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+          "to": "0xecf3e9b8ccb6f4a6efd68058fd706561c1727031",
+          "dx": "821451",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": false,
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          },
+          "revert": "sel 0x6158a9f8 data 0x6158a9f8",
+          "override_ok": true,
+          "i": 1,
+          "j": 0
+        },
+        {
+          "pool": "0x20d7b9ed2c4e2dcc55f9b463975b21bbf2a6ecd1",
+          "from": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+          "to": "0xecf3e9b8ccb6f4a6efd68058fd706561c1727031",
+          "dx": "82145118",
+          "sig": "swap(address,address,uint256,uint256,address,uint256)",
+          "ok": false,
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x6158a9f8"
+          },
+          "revert": "sel 0x6158a9f8 data 0x6158a9f8",
+          "override_ok": true,
+          "i": 1,
+          "j": 0
+        }
+      ],
+      "funded_swaps": []
+    }
+  ]
+}

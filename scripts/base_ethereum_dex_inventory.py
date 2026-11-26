@@ -170,6 +170,18 @@ def tables(network, snapshots, profiles):
                        if base else "У Classic проверены отдельные фабрики динамической и постоянной комиссии: "
                        "у каждой по два пула с четырьмя котировками getAmountsOut. ")
                     + f"[Реестры, код, тики и котировки](../{kyber})."])
+    wombat = f"tests/data/first_run_dex_2026-11-26/wombat_{network}.json"
+    if Path(wombat).exists():
+        out.extend(["", "Wombat · " + ("из двух опубликованных пулов Base в профиль включён USDS/USDbC. "
+                    "Две симуляции USDS → USDbC прошли. В обратную сторону обе суммы отклонил контракт "
+                    "по WOMBAT_COV_RATIO_LIMIT_EXCEEDED. " if base else
+                    "из семи опубликованных пулов Ethereum в профиле пять. agEUR и wstETH исполнили обе стороны, "
+                    "frxETH, ETHx и USDV — проверенные направления. Два размера по каждой направленной паре "
+                    "дали 16 исполнений swap и 16 контрактных отказов в шести пулах V2. У FRAX все четыре "
+                    "сценария вернули CORE_UNDERFLOW. ") + "Сверены класс реализации, слот EIP-1967, "
+                    "хранилище паузы каждого актива и исходники математики. Cross Chain Pool требует отдельного "
+                    "адаптера версии CoreV3. "
+                    f"[Реестр, исходники, состояние и обмены](../{wombat})."])
     woo = "tests/data/first_run_dex_2026-11-26/woofi_base.json"
     if base and Path(woo).exists():
         out.extend(["", "WOOFi Swap · IntegrationHelper вернул WETH и cbBTC со встречной USDC. WooPP "

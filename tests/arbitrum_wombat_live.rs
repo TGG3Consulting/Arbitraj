@@ -103,14 +103,39 @@ fn num(v: &Value) -> U256 {
 fn wombat_state_quote_and_swap_match_node() {
     let text = std::fs::read_to_string(data_dir().join("pools.json")).expect("pools.json");
     let pools: Value = serde_json::from_str(&text).expect("json");
+    check_pools(&pools, &PLAIN, &DYNAMIC);
+}
+
+#[test]
+fn base_ethereum_wombat_math_matches_pool_quotes_and_swaps() {
+    for snapshot in [
+        include_str!("data/first_run_dex_2026-11-26/wombat_base.json"),
+        include_str!("data/first_run_dex_2026-11-26/wombat_ethereum.json"),
+    ] {
+        let doc: Value = serde_json::from_str(snapshot).unwrap();
+        let mut plain = Vec::new();
+        let mut dynamic = Vec::new();
+        for (address, meta) in doc["implementations"].as_object().unwrap() {
+            let address: Address = address.parse().unwrap();
+            match meta["kind"].as_str().unwrap() {
+                "DynamicPoolV2" => dynamic.push(address),
+                "HighCovRatioFeePoolV2" => plain.push(address),
+                other => panic!("неизвестная реализация {other}"),
+            }
+        }
+        check_pools(&doc["pools"], &plain, &dynamic);
+    }
+}
+
+fn check_pools(pools: &Value, plain: &[Address], dynamic_impls: &[Address]) {
     let (mut quotes, mut swaps, mut skipped) = (0, 0, Vec::new());
     for p in pools.as_array().expect("список") {
         let pool: Address = p["pool"].as_str().unwrap().parse().unwrap();
         let head = c::parse_head(&lookup(p, &c::head_calls(pool))).expect("ступень 1");
         let imp = Address::from_word(slot(p, pool, implementation_slot()));
-        let dynamic = if DYNAMIC.contains(&imp) {
+        let dynamic = if dynamic_impls.contains(&imp) {
             true
-        } else if PLAIN.contains(&imp) {
+        } else if plain.contains(&imp) {
             false
         } else {
             skipped.push(format!(
@@ -190,6 +215,12 @@ fn wombat_state_quote_and_swap_match_node() {
                     assert_eq!(ours, None, "{pool:#x} swap {i}→{j} {dx}: пул откатил {why}");
                 }
             }
+            swaps += 1;
+        }
+        for s in p["funded_swaps"].as_array().into_iter().flatten() {
+            let (i, j, dx) = (idx(s, "i"), idx(s, "j"), num(&s["dx"]));
+            let expected = s["ok"].as_bool().unwrap().then(|| num(&s["received"]));
+            assert_eq!(swap_out(&state(i, j), i, j, dx), expected, "{pool:#x} funded swap");
             swaps += 1;
         }
     }

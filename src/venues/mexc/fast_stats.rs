@@ -1,92 +1,181 @@
-//! Файл: venues/mexc/fast_stats.rs
-//! Что делает: решение 420 — счётчики быстрого стакана MEXC на весь адаптер: переключения «быстрый → снимки» и
-//! «снимки → быстрый», пересинхронизации (снимок REST после разрыва, переподписки, сбоя) и неудавшиеся снимки. Видны в
-//! интерфейсе одной повторяющейся строкой журнала (решение 155: одна строка, счётчик повторов и время последнего;
-//! storage/journal_counted.rs — без ожидания базы): текст строки — итог счётчиков и последнее событие (пара, причина).
-//! Новых строк на каждое событие нет; события ограничены темпом снимков (venue.fast_book_snapshot_per_sec).
-//! Кто вызывает: fast_pair.rs.
-//! От чего зависит: storage/journal.rs, storage/journal_counted.rs, ctx.rs.
-//! Настройки: нет.
+//! Счётчики быстрого стакана MEXC. На активную UTC-минуту процесса создаётся одна
+//! повторяющаяся строка. Верхние поля JSON остаются накопительными (решение 420);
+//! minute_counts суммируется по minute_start_utc_s и разным ID строк, в том числе после рестарта.
+//! Запись выполняется через очередь журнала без ожидания SQLite (решение 354).
 
-use std::sync::Mutex;
+use std::collections::VecDeque;
+use std::sync::{LazyLock, Mutex};
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
+use serde::Serialize;
 use serde_json::json;
 
 use crate::storage::journal::{Journal, Level};
 
 use super::ctx::ID;
 
-/// Вид события быстрого стакана.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// События состояния быстрых книг (все пары процесса).
+#[derive(Clone, Copy)]
 pub enum Ev {
-    /// Ядру — снова стаканы потока снимков (страховка).
     ToSnap,
-    /// Ядру — снова быстрый стакан (синхронизирован).
     ToFast,
-    /// Запрошен снимок REST для пересинхронизации пары.
     Resync,
-    /// Снимок REST не получен.
     SnapFail,
 }
 
-/// Счётчики и метка строки журнала.
-#[derive(Default)]
-struct St {
+#[derive(Clone, Copy, Default, Serialize)]
+struct Counts {
     to_snap: u64,
     to_fast: u64,
     resyncs: u64,
-    snap_fail: u64,
-    /// Метка повторяющейся строки; None — строки ещё нет.
+    snapshot_failed: u64,
+}
+
+impl Counts {
+    fn add(&mut self, ev: Ev) -> &'static str {
+        let (count, label) = match ev {
+            Ev::ToSnap => (&mut self.to_snap, "на снимки"),
+            Ev::ToFast => (&mut self.to_fast, "на быстрый"),
+            Ev::Resync => (&mut self.resyncs, "пересинхронизация"),
+            Ev::SnapFail => (&mut self.snapshot_failed, "снимок REST не получен"),
+        };
+        *count += 1;
+        label
+    }
+
+    fn repeats(&self) -> i64 {
+        (self.to_snap + self.to_fast + self.resyncs + self.snapshot_failed) as i64
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+struct Minute {
+    utc_s: i64,
+    counts: Counts,
+    process: Counts,
+}
+
+impl Minute {
+    fn fields(
+        &self,
+        recent: Option<(&str, &str, &str)>,
+        coverage: Coverage,
+    ) -> (String, serde_json::Value) {
+        let p = self.process;
+        let m = self.counts;
+        let minute_of_day = self.utc_s.rem_euclid(86_400) / 60;
+        let mut msg = format!(
+            "MEXC быстрый стакан за {:02}:{:02} UTC: повторно поставлено снимков REST {}, сбоев снимка {}; с запуска процесса (все пары): на снимки {}, обратно на быстрый {}, пересинхронизаций {}, сбоев снимка {}",
+            minute_of_day / 60,
+            minute_of_day % 60,
+            m.resyncs,
+            m.snapshot_failed,
+            p.to_snap,
+            p.to_fast,
+            p.resyncs,
+            p.snapshot_failed
+        );
+        if let Some((ticker, what, why)) = recent {
+            use std::fmt::Write;
+            let _ = write!(msg, "; последнее — {ticker}: {what}: {why}");
+        }
+        (
+            msg,
+            json!({
+                "to_snap":p.to_snap, "to_fast":p.to_fast, "resyncs":p.resyncs, "snapshot_failed":p.snapshot_failed,
+                "counter_scope":"process", "ticker":recent.map(|v|v.0),
+                "minute_start_utc_s":self.utc_s, "minute_counts":m,
+                "unwritten_closed_minutes":coverage.pending, "evicted_unwritten_minutes":coverage.evicted,
+            }),
+        )
+    }
+
+    fn insert(
+        &self,
+        j: &Journal,
+        recent: Option<(&str, &str, &str)>,
+        coverage: Coverage,
+    ) -> Option<u64> {
+        let (msg, data) = self.fields(recent, coverage);
+        let n = self.counts.repeats();
+        // В обычном случае это единственная операция, n=1. После отказа первоначальной
+        // вставки repeats должен включить и события, уже накопленные именно в этой минуте.
+        j.counted_queued_with_repeats(Level::Warn, "venue.fast_book", Some(ID), msg, Some(data), n)
+    }
+}
+
+// Память на случай отказа регистрации строки ограничена одними сутками активных минут.
+const RETAIN_MINUTES: usize = 24 * 60;
+
+#[derive(Clone, Copy)]
+struct Coverage {
+    pending: usize,
+    evicted: u64,
+}
+
+#[derive(Default)]
+struct St {
+    process: Counts,
+    active: Option<Minute>,
     token: Option<u64>,
-    repeats: i64,
+    unsaved: VecDeque<Minute>,
+    evicted: u64,
 }
 
-/// Один адаптер MEXC на процесс — одни счётчики (как очередь снимков fast_snap.rs).
-static STATS: Mutex<St> = Mutex::new(St {
-    to_snap: 0,
-    to_fast: 0,
-    resyncs: 0,
-    snap_fail: 0,
-    token: None,
-    repeats: 0,
-});
+impl St {
+    fn note(&mut self, j: &Journal, at: DateTime<Utc>, ev: Ev, ticker: &str, why: &str) {
+        let minute = at.timestamp().div_euclid(60) * 60;
+        if self.active.is_some_and(|m| m.utc_s != minute) {
+            if let Some(token) = self.token.take() {
+                j.forget_queued(token);
+            } else if let Some(previous) = self.active {
+                if self.unsaved.len() == RETAIN_MINUTES {
+                    self.unsaved.pop_front();
+                    self.evicted += 1;
+                }
+                self.unsaved.push_back(previous);
+            }
+            self.active = None;
+        }
+        self.process.add(ev);
+        let current = self.active.get_or_insert_with(|| Minute {
+            utc_s: minute,
+            ..Default::default()
+        });
+        current.process = self.process;
+        let what = current.counts.add(ev);
+        // Максимум одна старая минута на событие. При заполненной очереди не делаем
+        // вторую заведомо неудачную вставку: новое событие уже учтено в своей минуте.
+        let mut coverage = Coverage {
+            pending: self.unsaved.len(),
+            evicted: self.evicted,
+        };
+        if let Some(previous) = self.unsaved.front() {
+            coverage.pending -= 1;
+            let Some(t) = previous.insert(j, None, coverage) else {
+                return;
+            };
+            j.forget_queued(t);
+            self.unsaved.pop_front();
+        }
+        let recent = Some((ticker, what, why));
+        match self.token {
+            None => self.token = current.insert(j, recent, coverage),
+            Some(t) => {
+                let (msg, data) = current.fields(recent, coverage);
+                j.update_queued(t, current.counts.repeats(), at, msg, Some(data));
+            }
+        }
+    }
+}
 
-/// Что делает: учитывает событие и обновляет строку журнала (синхронно, без ожидания). Принимает: журнал, событие,
-/// тикер пары, причину. Ошибок нет (очередь журнала полна — строка будет создана на следующем событии).
+static STATS: LazyLock<Mutex<St>> = LazyLock::new(|| Mutex::new(St::default()));
+
 pub fn note(journal: &Journal, ev: Ev, ticker: &str, why: &str) {
-    let mut s = STATS.lock().unwrap_or_else(|p| p.into_inner());
-    match ev {
-        Ev::ToSnap => s.to_snap += 1,
-        Ev::ToFast => s.to_fast += 1,
-        Ev::Resync => s.resyncs += 1,
-        Ev::SnapFail => s.snap_fail += 1,
-    }
-    let what = match ev {
-        Ev::ToSnap => "на снимки",
-        Ev::ToFast => "на быстрый",
-        Ev::Resync => "пересинхронизация",
-        Ev::SnapFail => "снимок REST не получен",
-    };
-    let msg = format!(
-        "MEXC быстрый стакан (решение 420): на снимки {} раз, обратно на быстрый {}, пересинхронизаций {}, сбоев снимка {}; последнее — {ticker}: {what}: {why}",
-        s.to_snap, s.to_fast, s.resyncs, s.snap_fail
-    );
-    let data = Some(json!({
-        "to_snap": s.to_snap,
-        "to_fast": s.to_fast,
-        "resyncs": s.resyncs,
-        "snapshot_failed": s.snap_fail,
-        "ticker": ticker,
-    }));
-    match s.token {
-        Some(t) => {
-            s.repeats += 1;
-            journal.update_queued(t, s.repeats, Utc::now(), msg, data);
-        }
-        None => {
-            s.token = journal.counted_queued(Level::Warn, "venue.fast_book", Some(ID), msg, data);
-            s.repeats = 1;
-        }
-    }
+    let mut state = STATS.lock().unwrap_or_else(|p| p.into_inner());
+    state.note(journal, Utc::now(), ev, ticker, why);
 }
+
+#[cfg(test)]
+#[path = "fast_stats_tests.rs"]
+mod tests;

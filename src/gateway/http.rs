@@ -136,11 +136,16 @@ pub async fn exchange_full(req: RequestBuilder, lim: Limits) -> Result<Reply, Fa
         |r| format!("{} {}", r.method(), r.url().path()),
     );
     let t0 = std::time::Instant::now();
+    // UTC на границе отправки клиентом. Не является отметкой приёма запроса биржей.
+    let http_start = name.starts_with("POST ").then(chrono::Utc::now);
     let r = full(req, lim).await;
-    let outcome = match &r {
+    let mut outcome = match &r {
         Ok(x) => format!("код {}", x.status.as_u16()),
         Err(f) => f.text(&lim),
     };
+    if let Some(start) = http_start {
+        outcome.push_str(&format!(", старт HTTP {}", start.to_rfc3339()));
+    }
     super::step_meter::record(name, t0, outcome);
     r
 }

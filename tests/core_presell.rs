@@ -60,6 +60,29 @@ async fn lower_out_cuts_profit_by_difference() {
     );
 }
 
+/// Карточка 202611250858009204 и core.precheck #11290412: проверяем решение на выходе адаптера.
+/// Цена из окна после допуска служит контрольной подстановкой, а не повтором eth_simulateV1.
+#[tokio::test]
+async fn four_uses_the_confirmed_full_volume_proceeds() {
+    let rec = Rec::load("presell-four").await;
+    let mut plan = size_common::calc::calc(&rec, d("10"));
+    plan.sell_qty = d("127249.12");
+    plan.invested = d("999.0081891000000000000000023");
+    plan.proceeds = d("1003.292726620297873207");
+    plan.profit_usd = d("0.3731989023298111099627163613");
+    let mut confirmed = sim(plan.proceeds, plan.sell_qty);
+    confirmed.block = 135626802;
+    let admitted = apply(plan.clone(), &confirmed, d("0.1"), d("0.03")).unwrap();
+    assert_eq!(admitted.profit_usd, plan.profit_usd);
+    // 08:58:00.951912865 UTC: первый последующий собственный маршрут окна, тот же объём.
+    let later = sim(
+        d("0.0078685448752298840068677882") * plan.sell_qty,
+        plan.sell_qty,
+    );
+    let error = apply(plan, &later, d("0.1"), d("0.03")).unwrap_err();
+    assert!(error.contains("ниже порога 0.1"), "{error}");
+}
+
 #[tokio::test]
 async fn below_threshold_rejects() {
     let rec = Rec::load("presell-reject").await;

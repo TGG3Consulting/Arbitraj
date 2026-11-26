@@ -17,10 +17,12 @@
 use chrono::Utc;
 use reqwest::Method;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 use crate::core::types::{Asset, Cost, CostKind, Transfer, TransferStatus, WithdrawRequest};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::pending::PendingRef;
+use crate::storage::journal::Level;
 
 use super::ctx::Ctx;
 use super::errors::{self, Op};
@@ -32,7 +34,7 @@ const MAX_WITHDRAW_ORDER_ID: usize = 32;
 const HISTORY_LIMIT: &str = "1000";
 
 /// Вывод (новый эндпоинт). Принимает: запрос ядра (сеть — код netWork). Возвращает: перевод Pending с ID MEXC.
-/// Ошибки: ключи, отказ MEXC (WithdrawRejected; InvalidAddress — 10212 адреса нет в списке разрешённых;
+/// Ошибки: ключи, отказ MEXC (WithdrawRejected; InvalidAddress — 10212 адрес не в списке или недействителен;
 /// AccountRestricted — аккаунт, errors.rs),
 /// «итог неизвестен» (нет ответа или ответ без id, и вывод не найден в истории по withdrawOrderId).
 pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer> {
@@ -54,12 +56,13 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
             ),
         )));
     }
+    let amount = req.amount.normalize().to_string();
     let params = vec![
         ("coin", req.asset.ticker.clone()),
         ("withdrawOrderId", order_id.clone()),
         ("netWork", req.network.clone()),
         ("address", req.address.clone()),
-        ("amount", req.amount.normalize().to_string()),
+        ("amount", amount.clone()),
     ];
     let sent = rest::signed(
         ctx,
@@ -77,6 +80,27 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
                 .with_raw(d.to_string())
         })
     });
+    // Результат первичной заявки, до сверки истории при неизвестном исходе.
+    // Кошелёк DEX записан в карточке сделки. Сравниваем точную строку address из этой заявки.
+    let fingerprint = hex::encode(Sha256::digest(req.address.as_bytes()));
+    let outcome = match &sent {
+        Ok(_) => "получен ID вывода".to_owned(),
+        Err(e) => format!("{:?}", e.code),
+    };
+    let note = format!(
+        "{}: заявка вывода {} {}, netWork={}, withdrawOrderId={}, SHA-256 адреса={fingerprint}; результат адаптера: {outcome}",
+        req.deal_id, amount, req.asset.ticker, req.network, order_id
+    );
+    let _ = ctx
+        .journal
+        .write(
+            Level::Info,
+            "mexc.withdraw_attempt",
+            Some(super::ctx::ID),
+            note,
+            None,
+        )
+        .await;
     let venue_ref = match sent {
         Ok(id) => id,
         // А-🟠5: итог неизвестен — поиск в истории по своему withdrawOrderId.

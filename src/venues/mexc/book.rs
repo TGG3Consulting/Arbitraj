@@ -162,17 +162,8 @@ impl Books {
         let now = now_ms();
         let age = now - seen.load(Ordering::Relaxed);
         let until = until.load(Ordering::Relaxed);
-        if age > pair_ms && now > until {
-            let tail = if until > 0 {
-                format!(", подтверждение биржи истекло {} мс назад", now - until)
-            } else {
-                String::new()
-            };
-            return Err(stale(
-                ctx,
-                &asset.ticker,
-                &format!("кадра стакана пары нет {age} мс (venue.book_stale_ms = {pair_ms}){tail}"),
-            ));
+        if let Some(reason) = stale_pair_reason(age, pair_ms, now, until) {
+            return Err(stale(ctx, &asset.ticker, &reason));
         }
         frozen(ctx, fees, asset, side, book)
     }
@@ -212,6 +203,24 @@ pub fn frozen(
 /// Проход по уровням от лучшего — общий для бирж (gateway/frozen.rs, решение 217).
 pub use crate::gateway::frozen::walk;
 
+/// Причина отказа по возрасту кадра пары с учётом последнего подтверждения её книги.
+fn stale_pair_reason(age: i64, max_ms: i64, now: i64, confirmed_until: i64) -> Option<String> {
+    if age <= max_ms || now <= confirmed_until {
+        return None;
+    }
+    let tail = if confirmed_until > 0 {
+        format!(
+            ", подтверждение биржи истекло {} мс назад",
+            now - confirmed_until
+        )
+    } else {
+        String::new()
+    };
+    Some(format!(
+        "кадра стакана пары нет {age} мс (venue.book_stale_ms = {max_ms}){tail}"
+    ))
+}
+
 /// Ошибка «данные устарели».
 fn stale(ctx: &Ctx, ticker: &str, why: &str) -> GatewayError {
     ctx.tag(GatewayError::new(
@@ -219,4 +228,25 @@ fn stale(ctx: &Ctx, ticker: &str, why: &str) -> GatewayError {
         None,
         format!("MEXC {ticker}: {why} — котировки нет"),
     ))
+}
+
+#[cfg(test)]
+mod freshness_tests {
+    use super::stale_pair_reason;
+
+    #[test]
+    fn unitas_age_and_confirmation_boundaries() {
+        let now = 12_000;
+        assert_eq!(stale_pair_reason(5_000, 5_000, now, 0), None);
+        assert_eq!(
+            stale_pair_reason(5_006, 5_000, now, 0).as_deref(),
+            Some("кадра стакана пары нет 5006 мс (venue.book_stale_ms = 5000)")
+        );
+        assert_eq!(stale_pair_reason(5_006, 5_000, now, now), None);
+        assert!(
+            stale_pair_reason(5_006, 5_000, now, now - 1)
+                .unwrap()
+                .contains("подтверждение биржи истекло 1 мс назад")
+        );
+    }
 }

@@ -25,9 +25,18 @@ use super::engine::Core;
 /// Возвращает: расчёт для сделки — у биржи B тот же (биржа примет ордер), у DEX — пересчитанный по симуляции продажи
 /// (решение 234, precheck_dex_sell.rs). Ошибки: текст «продажа на B не пройдёт: …» / «невыгодна по симуляции …».
 pub async fn check(core: &Core, d: &Direction, plan: Calc) -> Result<Calc, String> {
+    check_traced(core, d, plan, &mut None).await
+}
+
+pub(super) async fn check_traced(
+    core: &Core,
+    d: &Direction,
+    plan: Calc,
+    receipt: &mut Option<String>,
+) -> Result<Calc, String> {
     let b = &d.sell_on;
     if super::trade_ops::kind(core, b)? != VenueKind::Cex {
-        return super::precheck_dex_sell::check(core, d, plan).await;
+        return super::precheck_dex_sell::check(core, d, plan, receipt).await;
     }
     let fail = |why: String| format!("продажа на {} не пройдёт: {why}", b.0);
     let req = request(core, d, &plan).map_err(fail)?;

@@ -33,6 +33,7 @@ pub(super) struct State<K: Keyed, S> {
 /// Слот ждущего ключа и признак «вынужденный».
 pub(super) struct Entry<S> {
     pub(super) slot: S,
+    queued_at: Option<std::time::Instant>,
     /// Отложен без настройки (остаток срочного слота после его доставки — ревью 324, Б3).
     forced: bool,
 }
@@ -104,7 +105,11 @@ impl<K: Keyed, S: Slot> State<K, S> {
         } else {
             self.order.push_back(key.clone());
         }
-        let e = Entry { slot: item, forced };
+        let e = Entry {
+            queued_at: item.queue_start(),
+            slot: item,
+            forced,
+        };
         self.exempt_delta(&class, false, e.exempt());
         self.last.insert(key, e);
         let c = self.count(&class);
@@ -133,6 +138,9 @@ impl<K: Keyed, S: Slot> State<K, S> {
         // Ключ уже снят: счёт «ждут» уменьшается ДО слота — паника в Slot::take не оставит ложного «класс ждёт».
         self.exempt_delta(&class, e.exempt(), false);
         self.gone(&class);
+        if let Some(start) = e.queued_at {
+            e.slot.measure_ready(start, self.count(&class));
+        }
         let Take::Send(msg, rest) = e.slot.take() else {
             self.count(&class).dropped += 1;
             return None;
@@ -144,6 +152,7 @@ impl<K: Keyed, S: Slot> State<K, S> {
             let e = Entry {
                 slot: rest,
                 forced: true,
+                queued_at: e.queued_at,
             };
             self.last.insert(key.clone(), e);
         }

@@ -20,7 +20,7 @@ use alloy_primitives::Address;
 use arb::core::types::{Asset, OrderBook, PoolRef, VenueId};
 use arb::gateway::core_out;
 use arb::gateway::core_out_book::{self, BookOut, Fed};
-use arb::gateway::core_out_item::{Item, Key};
+use arb::gateway::core_out_item::{Class, Item, Key};
 use arb::gateway::events::MarketEvent;
 use arb::gateway::keep_last::{Keyed, Offer, Pending, Slot, Take};
 use arb::settings::store::Store;
@@ -51,6 +51,36 @@ async fn keep_on(s: &Store, venue: &str) {
     s.set("venue.book_events_keep", scope, Some(json!(true)), "тест")
         .await
         .expect("настройка");
+}
+
+#[tokio::test]
+async fn retained_book_times_follow_the_first_enqueue_and_the_frame_actually_sent() {
+    let (settings, journal) = fresh("retained-times").await;
+    keep_on(&settings, "mexc").await;
+    let (tx, mut rx) = mpsc::channel(1);
+    let out = BookOut::new(&tx, v("mexc"), &settings, &journal);
+    let feed = core_out::of(&tx);
+    let class = Class::Book(v("mexc"));
+
+    assert_eq!(out.book(&tx, book("mexc", "UNITAS", 1)), Fed::Sent);
+    assert_eq!(feed.peek(&class).max_book_wait_ms, None);
+    assert_eq!(out.book(&tx, book("mexc", "UNITAS", 2)), Fed::Kept);
+    tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+    let latest = chrono::Utc::now().timestamp_millis() - 5_006;
+    assert_eq!(out.book(&tx, book("mexc", "UNITAS", latest)), Fed::Kept);
+    let before = feed.take(&class);
+    assert_eq!((before.replaced, before.waiting), (1, 1));
+    assert_eq!(before.max_book_wait_ms, None);
+
+    // Место в канале появляется лишь сейчас. Сброс счётчиков между сводками не сбрасывает часы ждущего ключа.
+    assert_eq!(tag(&rx.recv().await.unwrap()), "UNITAS@1");
+    assert_eq!(tag(&rx.recv().await.unwrap()), format!("UNITAS@{latest}"));
+    let after = feed.take(&class);
+    assert_eq!(after.delivered, 1);
+    assert!(after.max_book_wait_ms.unwrap() >= 30);
+    let upper_age = (chrono::Utc::now().timestamp_millis() - latest) as u64;
+    assert!((5_006..=upper_age).contains(&after.max_book_age_ms.unwrap()));
+    assert_eq!(feed.take(&class), Default::default());
 }
 
 fn v(id: &str) -> VenueId {

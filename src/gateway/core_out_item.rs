@@ -95,4 +95,21 @@ impl Slot for Item {
     fn urgent(&self) -> bool {
         matches!(self, Item::Invalid(..))
     }
+
+    fn queue_start(&self) -> Option<std::time::Instant> {
+        matches!(self, Self::Event(MarketEvent::Book(_)) | Self::Invalid(..))
+            .then(std::time::Instant::now)
+    }
+
+    fn measure_ready(&self, start: std::time::Instant, counts: &mut super::keep_last::Counts) {
+        let Self::Event(MarketEvent::Book(book)) = self else {
+            return;
+        };
+        let wait = start.elapsed().as_millis() as u64;
+        counts.max_book_wait_ms = counts.max_book_wait_ms.max(Some(wait));
+        let age = (chrono::Utc::now() - book.received_at).num_milliseconds();
+        if let Ok(age) = u64::try_from(age) {
+            counts.max_book_age_ms = counts.max_book_age_ms.max(Some(age));
+        }
+    }
 }

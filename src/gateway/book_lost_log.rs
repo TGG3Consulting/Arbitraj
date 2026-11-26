@@ -46,17 +46,25 @@ pub fn note(feed: &Feed, venue: &VenueId, side: &Side, journal: &Journal) {
     };
     let c = feed.take(&class);
     let lost = side.lost.swap(0, Ordering::Relaxed);
-    let window = since.map_or("с запуска".to_string(), |d| {
-        format!("за {} с", d.as_secs())
+    let window = since.map_or("первая сводка".to_string(), |d| {
+        format!("с предыдущей сводки {} с", d.as_secs())
     });
-    let msg = format!(
+    let mut msg = format!(
         "стаканы: канал событий ядра полон — отложено {} (venue.book_events_keep), заменено более свежими {}, \
-         доставлено {}, потеряно {lost}, ждут {} {window}",
+         доставлено {}, потеряно {lost}, сейчас ждут ключей {}; {window}",
         c.deferred, c.replaced, c.delivered, c.waiting
     );
+    if let Some(wait) = c.max_book_wait_ms {
+        use std::fmt::Write;
+        let _ = write!(msg, "; к передаче в канал: макс. ожидание ключа {wait} мс");
+        if let Some(age) = c.max_book_age_ms {
+            let _ = write!(msg, ", макс. возраст переданной книги {age} мс");
+        }
+    }
     let data = json!({
         "deferred": c.deferred, "replaced": c.replaced, "delivered": c.delivered, "lost": lost,
         "waiting": c.waiting, "since_s": since.map(|d| d.as_secs()),
+        "max_book_wait_ms": c.max_book_wait_ms, "max_book_age_ms": c.max_book_age_ms,
     });
     let Ok(rt) = tokio::runtime::Handle::try_current() else {
         return;

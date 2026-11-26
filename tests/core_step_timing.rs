@@ -152,6 +152,52 @@ async fn order_requests_are_listed() {
     );
 }
 
+#[tokio::test]
+async fn each_placement_has_its_own_client_start() {
+    let base = serve("{}".into()).await;
+    let client = reqwest::Client::new();
+    let limits = Limits {
+        head: Duration::from_secs(5),
+        idle: Duration::from_secs(5),
+        total: Duration::from_secs(10),
+        max_bytes: 1024,
+    };
+    let mut bounds = Vec::new();
+    let (_, measured) = measure(async {
+        for path in ["order/test", "order", "order"] {
+            let before = chrono::Utc::now();
+            exchange_full(
+                client.post(format!("{base}/api/v3/{path}?signature=hidden")),
+                limits,
+            )
+            .await
+            .unwrap();
+            bounds.push((before, chrono::Utc::now()));
+        }
+        exchange_full(client.get(format!("{base}/api/v3/order")), limits)
+            .await
+            .unwrap();
+    })
+    .await;
+    assert_eq!(measured.reqs.len(), 4);
+    for ((request, (before, after)), path) in
+        measured
+            .reqs
+            .iter()
+            .zip(bounds)
+            .zip(["order/test", "order", "order"])
+    {
+        assert_eq!(request.name, format!("POST /api/v3/{path}"));
+        let (_, stamp) = request.outcome.split_once(", старт HTTP ").unwrap();
+        let start = chrono::DateTime::parse_from_rfc3339(stamp)
+            .unwrap()
+            .to_utc();
+        assert!(before <= start && start <= after);
+    }
+    assert!(!measured.reqs[3].outcome.contains("старт HTTP"));
+    assert!(!measured.reqs_text("MEXC").contains("hidden"));
+}
+
 /// Замер «Кандидатов» (решение 129) — как до решения 265: обычный замер (Timing::new) частей подбора объёма решения
 /// 265 (границы, точки, уточнение, расчёт объёма) не содержит.
 #[tokio::test]

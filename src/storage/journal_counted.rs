@@ -25,6 +25,19 @@ impl Journal {
         message: String,
         data: Option<serde_json::Value>,
     ) -> Option<u64> {
+        self.counted_queued_with_repeats(level, kind, venue, message, data, 1)
+    }
+
+    /// Восстановленная сводка может уже содержать несколько событий до первой успешной постановки.
+    pub(crate) fn counted_queued_with_repeats(
+        &self,
+        level: Level,
+        kind: &str,
+        venue: Option<&str>,
+        message: String,
+        data: Option<serde_json::Value>,
+        repeats: i64,
+    ) -> Option<u64> {
         let at = Utc::now();
         let e = Entry {
             id: 0,
@@ -34,7 +47,7 @@ impl Journal {
             venue: venue.map(str::to_string),
             message,
             data,
-            repeats: Some(1),
+            repeats: Some(repeats),
             last_at: Some(at),
         };
         let q = self.db.journal_queue();

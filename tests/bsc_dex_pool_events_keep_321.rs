@@ -102,6 +102,7 @@ async fn full_channel_defers_then_delivers_one_per_pool_in_order() {
         delivered: 3,
         dropped: 0,
         waiting: 0,
+        ..Counts::default()
     };
     assert_eq!(set.take(&0), want);
     assert!(rx.try_recv().is_err(), "лишних событий нет");

@@ -217,7 +217,7 @@ pub async fn run(
     )
     .await;
     // Решение 380: строка урезания — в хронологию всегда (не зависит от log.step_timing).
-    let lines: Vec<String> = t
+    let mut lines: Vec<String> = t
         .plan
         .clone()
         .into_iter()
@@ -257,6 +257,8 @@ pub async fn run(
         .chain(t.calc.iter()))
     .map(|l| format!(". {l}"))
     .collect();
+    // Подробности уже записаны адаптерной предпроверкой. Ссылка остаётся в карточке даже при последующем refit.
+    lines.extend(t.presell_receipt.take());
     res.map(|(c, bal)| (c, lines, bal))
         .map_err(|e| format!("{e} ({}){calc}", t.text()))
 }
@@ -265,6 +267,7 @@ pub async fn run(
 /// строка этапов пересчёта.
 #[derive(Default)]
 struct Timing {
+    presell_receipt: Option<String>,
     steps: Vec<(String, u128)>,
     on: bool,
     stop_ms: Option<u128>,
@@ -558,7 +561,7 @@ async fn steps(
         let at = Instant::now();
         // Решение 380 (ревью t166, Н6): план до проверки продажи — чтобы урезание по симуляции было видно своей строкой.
         let (pre, pre_sell) = (Cand::of(&c), c.sell_qty);
-        let r = super::precheck_sell::check(core, d, c).await;
+        let r = super::precheck_sell::check_traced(core, d, c, &mut t.presell_receipt).await;
         t.mark(format!("проверка продажи {}", d.sell_on.0), at);
         let c = r?;
         let cut = (c.sell_qty < pre_sell).then_some(pre);

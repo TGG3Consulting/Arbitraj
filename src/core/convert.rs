@@ -70,7 +70,10 @@ pub struct Rates {
 
 /// Затрата в USDT. Принимает: затрату, курсы. Ошибки: нет курса валюты затраты («не торгуем вслепую»).
 pub fn to_usdt(c: &Cost, r: &Rates) -> Result<Decimal, String> {
-    if r.quote.iter().any(|q| q == &c.asset) {
+    // rates и PlanCosts::rates намеренно не запрашивают курс для нулевой суммы.
+    if c.amount.is_zero() {
+        Ok(Decimal::ZERO)
+    } else if r.quote.iter().any(|q| q == &c.asset) {
         Ok(c.amount)
     } else if c.asset == r.coin {
         Ok(c.amount * r.coin_price)

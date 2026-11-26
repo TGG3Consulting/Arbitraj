@@ -36,9 +36,14 @@ use super::engine::Core;
 /// (precheck_dex_cut.rs) и симулируется снова на ТОЧНОМ новом объёме; второй раз мало — отказ (повторного пересчёта нет).
 /// Принимает: ядро, направление, свежий расчёт. Возвращает: расчёт с выручкой и прибылью по симуляции (или прежний —
 /// симуляция неприменима). Ошибки: текст «продажа на B не пройдёт / невыгодна по симуляции: …».
-pub async fn check(core: &Core, d: &Direction, plan: Calc) -> Result<Calc, String> {
+pub(super) async fn check(
+    core: &Core,
+    d: &Direction,
+    plan: Calc,
+    receipt: &mut Option<String>,
+) -> Result<Calc, String> {
     // Будущие в куче: Calc большой, а будущее предпроверки чувствительно к стеку (tests/core_dry_mode.rs).
-    let (plan, short) = match Box::pin(once(core, d, plan)).await? {
+    let (plan, short) = match Box::pin(once(core, d, plan, receipt)).await? {
         Once::Done(c) => return Ok(c),
         Once::Short(plan, short) => (plan, short),
     };
@@ -59,7 +64,7 @@ pub async fn check(core: &Core, d: &Direction, plan: Calc) -> Result<Calc, Strin
         .await
         .map_err(|e| fail(&format!("{}; {e}", short.why)))?;
     let cut_qty = cut.sell_qty;
-    let again = Box::pin(once(core, d, cut)).await.map_err(|e| {
+    let again = Box::pin(once(core, d, cut, receipt)).await.map_err(|e| {
         format!(
             "{e}; объём урезан до проверяемого симуляцией (решение 380): продажа {} монет вместо {}",
             cut_qty.normalize(),
@@ -92,21 +97,40 @@ enum Once {
 
 /// Одна симуляция продажи на объёме плана и пересчёт по её выходу (как до решения 380). Принимает: ядро,
 /// направление, расчёт. Возвращает: Once. Ошибки: текст «продажа на B не пройдёт / невыгодна по симуляции: …».
-async fn once(core: &Core, d: &Direction, plan: Calc) -> Result<Once, String> {
+async fn once(
+    core: &Core,
+    d: &Direction,
+    plan: Calc,
+    receipt: &mut Option<String>,
+) -> Result<Once, String> {
     let b = &d.sell_on;
     let req = super::precheck_sell::request(core, d, &plan)?;
     let tax = model_tax_pct(&plan);
     let gw = super::dex_account::venue_dir(&core.inner.deps, d, b).await?;
-    let mut sim = match gw.dex_presell(&req).await {
+    let result = gw.dex_presell(&req).await;
+    let completed = chrono::Utc::now();
+    let link = || {
+        format!(
+            "Предпроверка продажи DEX: расчёт {}, ответ адаптера {}",
+            plan.at.to_rfc3339(),
+            completed.to_rfc3339()
+        )
+    };
+    let mut sim = match result {
         Ok(PresellOutcome::Done(s)) => s,
         Ok(PresellOutcome::Short(s)) => return Ok(Once::Short(plan, s)),
         Err(e) if e.code == ErrorCode::NotApplicable => {
+            let trace = link();
             log(
                 core,
                 d,
-                format!("симуляция продажи до покупки не выполнена: {}", e.message),
+                format!(
+                    "симуляция продажи до покупки не выполнена: {}; {trace}",
+                    e.message
+                ),
             )
             .await;
+            *receipt = Some(trace);
             return Ok(Once::Done(plan));
         }
         Err(e) => {
@@ -125,23 +149,32 @@ async fn once(core: &Core, d: &Direction, plan: Calc) -> Result<Once, String> {
     // Задача t179 (решение 394): идут сделки монеты, чьи монеты будут проданы в тот же пул раньше нас, — симуляция
     // (на пуле до них) может план только понизить: выход выше выручки плана (план уже посчитан ПОСЛЕ их монет,
     // ride_quote.rs) не поднимает прибыль.
+    let raw_out = sim.out;
     if !super::ride_quote::idle(core, d)
         && super::ride_quote::sell_ahead(core, d) > Decimal::ZERO
         && sim.out > plan.proceeds
     {
         sim.out = plan.proceeds;
     }
-    let text = summary(&plan, &sim, tax);
+    let trace = link();
+    let mut text = summary(&plan, &sim, tax);
+    if raw_out != sim.out {
+        text.push_str(&format!(
+            "; выход симуляции до ограничения по идущим сделкам {} USDT",
+            raw_out.normalize()
+        ));
+    }
     let c = apply(plan, &sim, min_usd, min_pct).map_err(|e| format!("{e}; {text}"))?;
     log(
         core,
         d,
         format!(
-            "симуляция продажи до покупки: {text}; прибыль {} USDT",
+            "симуляция продажи до покупки: {text}; прибыль {} USDT; {trace}",
             c.profit_usd.round_dp(4)
         ),
     )
     .await;
+    *receipt = Some(trace);
     Ok(Once::Done(c))
 }
 

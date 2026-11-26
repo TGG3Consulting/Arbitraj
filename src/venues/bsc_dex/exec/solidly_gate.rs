@@ -66,7 +66,9 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
         // Решение 470: пул Aero Slipstream V3 — крючок, модуль и правило MEV-налога и комиссия заново (aero_fresh).
         if matches!(
             f.variant,
-            Variant::SlipstreamAero | Variant::SlipstreamDynamicFee
+            Variant::SlipstreamAero
+                | Variant::SlipstreamAeroMetaquoter
+                | Variant::SlipstreamDynamicFee
         ) && let PoolRef::Contract(pool) = e.pool.reference
         {
             aero_fresh(q, e, pool).await?;

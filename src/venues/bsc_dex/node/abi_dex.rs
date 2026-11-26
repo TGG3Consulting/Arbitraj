@@ -81,6 +81,12 @@ alloy::sol! {
         function quoteExactInputSingle(QuoteExactInputSingleParams memory params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate);
     }
 
+    /// Dromos Labs Metaquoter quotes the identified CL pool directly and returns three words.
+    interface IAeroMetaquoter {
+        function quoteExactInputSingleV3(address pool,address tokenIn,uint256 amountIn,uint160 sqrtPriceLimitX96)
+            external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed);
+    }
+
     interface ISlipstreamQuoterV2 {
         struct QuoteExactInputSingleParams { address tokenIn; address tokenOut; uint256 amountIn; int24 tickSpacing; uint160 sqrtPriceLimitX96; }
         function quoteExactInputSingle(QuoteExactInputSingleParams memory params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate);

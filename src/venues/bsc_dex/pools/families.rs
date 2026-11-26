@@ -592,9 +592,11 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // Решение 470: Aero Slipstream V3 — тот же CLPool (вариант SlipstreamAero: комиссия крючка, pools/aero_cl.rs).
         // Решение 483: Ramses CL V2 — тот же протокол (вариант RamsesClV2: свои slot0 / ticks / Mint / PoolCreated и
         // FeeAdjustment; pools/ramses.rs, load_ramses.rs).
-        "slipstream" | "slipstream_aero" | "slipstream_dynamic_fee" | "slipstream_ramses" => {
-            (PoolKind::V3, Proto::Slipstream, true, false, false)
-        }
+        "slipstream"
+        | "slipstream_aero"
+        | "slipstream_aero_metaquoter"
+        | "slipstream_dynamic_fee"
+        | "slipstream_ramses" => (PoolKind::V3, Proto::Slipstream, true, false, false),
         // Maverick V2 (решение 122 F): в графе и сигналах (порт расчёта команды Maverick); исполнение — шаг MAVERICK
         // контракта-исполнителя (exec_kind::via_executor), своего пути через Universal Router нет.
         "maverick_v2" => (PoolKind::TickBin, Proto::Maverick, true, false, false),
@@ -907,7 +909,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             list.extend(["dex.factory", "dex.quoter"]);
             // Решение 470: Aero Slipstream V3 — ещё официальный крючок обмена (pools/aero_cl.rs) и окно первой
             // комиссии нового блока (T470-01, pools/aero_cl_head.rs).
-            if f.variant == Variant::SlipstreamAero {
+            if matches!(
+                f.variant,
+                Variant::SlipstreamAero | Variant::SlipstreamAeroMetaquoter
+            ) {
                 list.extend([
                     "dex.cl_swap_hook",
                     "dex.cl_hook_ahead_s",

@@ -197,6 +197,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         | "v3_fork_pancake"
         | "slipstream"
         | "slipstream_aero"
+        | "slipstream_aero_metaquoter"
         | "slipstream_dynamic_fee"
         | "v3_fork_ramses"
         | "slipstream_ramses"

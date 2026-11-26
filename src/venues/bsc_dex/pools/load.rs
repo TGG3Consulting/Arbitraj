@@ -560,7 +560,9 @@ pub async fn state(
             let (state, t) = load_slipstream::load(ctx, *a, sp, &tag).await?;
             // Решение 470: Aero Slipstream V3 — комиссия крючка на этом блоке и проверки (aero_cl.rs).
             let fee_pips = match f.variant {
-                Variant::SlipstreamAero => Some(aero_cl::fee(ctx, f, *a, sp, block).await?),
+                Variant::SlipstreamAero | Variant::SlipstreamAeroMetaquoter => {
+                    Some(aero_cl::fee(ctx, f, *a, sp, block).await?)
+                }
                 // CLPool.fee() делегирует фабрике getSwapFee(pool), в том числе модулю комиссии.
                 // https://github.com/aerodrome-finance/slipstream/blob/main/contracts/core/CLPool.sol
                 Variant::SlipstreamDynamicFee => Some(fee_fresh::read(ctx, *a, &tag).await?),

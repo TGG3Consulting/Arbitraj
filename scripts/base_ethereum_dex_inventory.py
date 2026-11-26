@@ -72,6 +72,23 @@ def tables(network, snapshots, profiles):
                     "и двух внешних отправителях. Проверены обе стороны, зачисление на кошелёк, остатки на "
                     "исполнителе и отказ minOut + 1. Пригодность оракула, расширений и реального кошелька "
                     f"повторно проверяется перед обменом. [Снимок и результаты](../{metric_path.as_posix()})."])
+    metadex = Path(f"tests/data/first_run_dex_2026-11-26/metadex_{network}.json")
+    if metadex.exists():
+        observed = read(metadex)
+        active = sum(int(p["liquidity"]) > 0 for p in observed["pools"])
+        cases = len(observed["v5"]["cases"])
+        mev = ("У модуля приоритетной комиссии множитель равен нулю"
+               if network == "base" else "Крючок возвращает нулевой адрес модуля MEV")
+        out.extend(["", f"Aero MetaDEX Slipstream · блок {observed['block']}. Фабрика предоставляет семь шагов тика. "
+                    f"Проверены DynamicSwapFeeHook, реализация пула, библиотека и официальный Metaquoter. "
+                    f"{mev}. Скидка может зависеть от вызывающего. Для Metaquoter и V5 в выборке первая комиссия "
+                    f"совпала с расчётом по наблюдениям TWAP. Горизонт профиля — {2*observed['slot_seconds']} с. "
+                    f"Для {active} активных пулов записаны {cases} обменов V5 в обе стороны на двух размерах. "
+                    "Котировка совпала с выходом по событию Swap и приростом баланса. "
+                    "При увеличении минимального выхода на одну младшую единицу симуляция отклонила каждый обмен. "
+                    + ("У ETH-пула WETH/USDC с шагом 10 на этом блоке нулевая активная ликвидность. "
+                       if network == "ethereum" else "")
+                    + f"[Исходники, модуль, комиссии и симуляции](../{metadex.as_posix()})."])
     from_dir = f"../tests/data/executor_v5_{network}_2026-11-26"
     out.extend(["", f"Uniswap V4 · два пула USDT/USDC, hook 0. Для каждого выполнены симуляции "
                 f"покупки в размере 1 и 100 USDT и обратной продажи полученного USDC. На всех восьми шагах сети "
@@ -153,6 +170,31 @@ def tables(network, snapshots, profiles):
                        if base else "У Classic проверены отдельные фабрики динамической и постоянной комиссии: "
                        "у каждой по два пула с четырьмя котировками getAmountsOut. ")
                     + f"[Реестры, код, тики и котировки](../{kyber})."])
+    woo = "tests/data/first_run_dex_2026-11-26/woofi_base.json"
+    if base and Path(woo).exists():
+        out.extend(["", "WOOFi Swap · IntegrationHelper вернул WETH и cbBTC со встречной USDC. WooPP "
+                    "активен, обе цены его фактического оракула пригодны. "
+                    "Слот EIP-1967 подтвердил закреплённую реализацию. В восьми исторических симуляциях "
+                    "ArbExecutor V5 (шаг WOO) сумма query совпала с кредитом владельца и возвратом execute, "
+                    "исполнитель списал полный вход. Для каждого размера порог на единицу выше котировки "
+                    "привёл к откату, точный порог прошёл. Входы симуляции составили 1 и 100 USDC в каждой "
+                    "паре, 0,0001 и 0,01 WETH, 0,000001 и 0,0001 cbBTC. Это измеренные объёмы. "
+                    f"[Proxy, оракул, суммы и результаты](../{woo}) · "
+                    "[Контракты WOOFi Base](https://learn.woo.org/woofi-docs/woofi-dev-docs/references/readme/base).",
+                    "", "Для BSC справочник OWN_NODE_SWITCH фиксирует незаданную dex.pmm_ladder_usd и пример "
+                    "положительных ступеней 50, 200, 1000, 5000 USDT. Числа рабочего профиля WOOFi Arbitrum "
+                    "в справочнике размещений отсутствуют. На Base оператор задаёт dex.pmm_ladder_usd как "
+                    "возрастающие суммы котируемой валюты для опроса; верхняя ступень определяет максимальный "
+                    "объём, для которого есть полная котировка по лесенке. При venue.quote_asset = USDC и "
+                    "dex.settlement_contract = 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913 ступени выражены "
+                    "в USDC: загрузчик масштабирует их по decimals = 6. Для обеих пар WooPP адрес совпадает, "
+                    "поэтому dex.pmm_ladder_counter можно оставить незаданной. При другой расчётной монете "
+                    "получение ступеней требует dex.pmm_ladder_counter = да и доступного курса из реестра. "
+                    "По правилу первого запуска BSC/Arbitrum это переключение делается после замера нагрузки; "
+                    "при N ступенях WooFi запрашивает до 2N котировок на пару за блок. Денежный результат "
+                    "в USDT требует отдельного пересчёта фактической суммы USDC. "
+                    "[BSC](OWN_NODE_SWITCH.md) · [Правило первого запуска](FIRST_RUN.md) · "
+                    "[Размещение Arbitrum](notes/arbitrum/dex-settings-arbitrum.md)."])
     dodo_file = f"tests/data/first_run_dex_2026-11-26/dodo_{network}.json"
     if Path(dodo_file).exists():
         data_dodo = read(Path(dodo_file))

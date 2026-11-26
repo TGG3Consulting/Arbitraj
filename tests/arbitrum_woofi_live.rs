@@ -16,6 +16,37 @@ use serde_json::Value;
 
 use arb::venues::bsc_dex::pools::abi_woo::{IWooPP, IWooracle};
 
+/// Обе официальные пары Base. Одни и те же баланс, код и состояние оракула для квоты и полного execute.
+#[test]
+fn base_woo_v5_matches_quote_and_wallet_movements() {
+    use alloy_primitives::U256;
+    use arb::venues::bsc_dex::exec::executor::code::{Version, runtime_sha256_of};
+    use sha2::{Digest, Sha256};
+    let d: Value = serde_json::from_str(include_str!("data/first_run_dex_2026-11-26/woofi_base.json")).unwrap();
+    assert_eq!(d["runtime_file_sha256"].as_str(), runtime_sha256_of(Version::V5));
+    let bytes = hex::decode(include_str!("../contracts/out/ArbExecutor.bin-runtime").trim()).unwrap();
+    assert_eq!(d["runtime_sha256"], hex::encode(Sha256::digest(bytes)));
+    assert_eq!(d["markets"].as_array().unwrap().len(), 2);
+    let mut paths = std::collections::BTreeMap::new();
+    for c in d["cases"].as_array().unwrap() {
+        assert_eq!(c["parent_hash"], d["selector"]["blockHash"]);
+        let results = &c["results"];
+        let n = |name: &str| results[name]["returnData"].as_str().unwrap().parse::<U256>().unwrap();
+        let dx = c["input"].as_str().unwrap().parse::<U256>().unwrap();
+        assert_eq!(results["above"]["status"], "0x0");
+        assert_eq!(results["exact"]["status"], "0x1");
+        assert_eq!(n("in_before") - n("in_after"), dx);
+        assert_eq!(n("out_after") - n("out_before"), n("quote"));
+        assert_eq!(n("exact"), n("quote"));
+        assert!(n("exact") > U256::ZERO);
+        assert_eq!((n("executor_in"), n("executor_out")), (U256::ZERO, U256::ZERO));
+        let path = (c["source"].as_str().unwrap(), c["target"].as_str().unwrap());
+        paths.entry(path).or_insert_with(std::collections::BTreeSet::new).insert(dx);
+    }
+    assert_eq!(paths.len(), 4);
+    assert!(paths.values().all(|v| v.len() == 2));
+}
+
 /// Последняя по имени папка записи tests/data/arbitrum_woofi_*. Паника — записи нет.
 fn data_dir() -> PathBuf {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/data");

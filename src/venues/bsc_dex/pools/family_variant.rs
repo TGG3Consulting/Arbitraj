@@ -33,6 +33,8 @@ pub enum Variant {
     /// PoolCreated, Swap, цикл обмена), но комиссия обмена — от крючка (DynamicSwapFeeHook): меняется по блокам без
     /// событий пула — комиссия читается каждым блоком, крючок пула и правило MEV-налога проверяются (pools/aero_cl.rs).
     SlipstreamAero,
+    /// Тот же CLPool и DynamicSwapFeeHook. Официальный Metaquoter выбирает пул по адресу.
+    SlipstreamAeroMetaquoter,
     /// Aerodrome Base CLFactory.getSwapFee(pool), читается через CLPool.fee() на блоке.
     SlipstreamDynamicFee,
     /// V2 с фиксированной реализацией пары: адрес сверяется по хешу байткода создания CREATE2.
@@ -104,6 +106,7 @@ pub fn of(kind: &str) -> Variant {
         "smardex_exact_equality" => Variant::SmardexExactEquality,
         "kyber_elastic_v1" => Variant::ElasticV1,
         "slipstream_aero" => Variant::SlipstreamAero,
+        "slipstream_aero_metaquoter" => Variant::SlipstreamAeroMetaquoter,
         "slipstream_dynamic_fee" => Variant::SlipstreamDynamicFee,
         "curve_stableswap_plain" => Variant::CurvePlain,
         "curve_stableswap_meta" => Variant::CurveMeta,

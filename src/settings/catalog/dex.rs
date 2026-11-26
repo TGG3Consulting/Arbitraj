@@ -87,6 +87,7 @@ pub const DEX_KINDS: &[&str] = &[
     "wombat",
     "slipstream",
     "slipstream_aero",
+    "slipstream_aero_metaquoter",
     "slipstream_dynamic_fee",
     "slipstream_ramses",
     "maverick_v2",
@@ -96,7 +97,12 @@ pub const DEX_KINDS: &[&str] = &[
 
 /// Варианты dex.gas_mode (решение 433) — модель газа сети площадки DEX: тот же список разбирает
 /// venues/bsc_dex/send/gas_mode.rs (тест сверяет оба направления).
-pub const GAS_MODES: &[&str] = &["legacy", "eip1559_l1", "ethereum_eip1559", "op_stack_eip1559"];
+pub const GAS_MODES: &[&str] = &[
+    "legacy",
+    "eip1559_l1",
+    "ethereum_eip1559",
+    "op_stack_eip1559",
+];
 
 /// Варианты dex.balancer_math (решение 450) — версии библиотек пулов Balancer V2 (pools/load_balancer.rs).
 pub const BALANCER_MATH: &[&str] = &["v1", "v2"];

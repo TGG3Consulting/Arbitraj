@@ -124,7 +124,10 @@ pub fn needs(f: &Family) -> bool {
 /// Решение 470 (T470-07): лёгкое чтение каждым блоком — только комиссия крючка (Aero Slipstream V3, вариант
 /// SlipstreamAero: per_block_aero.rs); состояние пула — по событиям. Ошибок нет.
 pub fn light(f: &Family) -> bool {
-    f.variant == Variant::SlipstreamAero
+    matches!(
+        f.variant,
+        Variant::SlipstreamAero | Variant::SlipstreamAeroMetaquoter
+    )
 }
 
 /// Чтение каждым блоком — полное (needs) или лёгкое (light). Ошибок нет.

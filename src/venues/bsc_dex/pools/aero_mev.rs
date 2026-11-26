@@ -11,6 +11,7 @@
 //! ArbSys.arbOSVersion() = 55 + версия, precompiles/ArbSys.go L67-L69). Значит: сбор выключен — налог 0 всегда.
 //! Включён — налог по наибольшим чаевым режима (fixed — send.priority_fee_gwei, profit_share — send.tip_cap_gwei) и
 //! наименьшему порогу minThreshold (baseFeeFactor·basefee следующего блока неизвестен) — верхняя оценка.
+//! В Base OP Stack и Ethereum тип 2 оплачивает приоритетную комиссию. Их расчёт использует предел tip без ArbSys.
 //! Решение 470 (ревью t240): модуль MEV-налога закреплён настройкой dex.aero_mev_module (pinned): у фабрики Basic и у
 //! крючка Slipstream V3 текущий модуль читается при каждом чтении; не совпал — пул не торгуется (формула сверена только
 //! для этого кода модуля).
@@ -83,14 +84,22 @@ pub async fn tax(ctx: &Ctx, module: Address, tag: &str) -> GatewayResult<u32> {
     }
     let ask = IAeroMevTaxModule::priorityFeeMultiplierCall {};
     let mult = call::view(ctx, module, &ask, tag).await?;
-    if mult == 0 || !collect_tips(ctx, tag).await? {
+    if mult == 0 {
         return Ok(0);
     }
-    if gas_mode::read(ctx)? != GasMode::Eip1559L1 {
-        return Err(ctx.err(
-            ErrorCode::NotApplicable,
-            "MEV-налог Aero: сбор чаевых включён, нужна dex.gas_mode = eip1559_l1",
-        ));
+    match gas_mode::read(ctx)? {
+        GasMode::Eip1559L1 => {
+            if !collect_tips(ctx, tag).await? {
+                return Ok(0);
+            }
+        }
+        GasMode::Ethereum | GasMode::OpStack => {}
+        GasMode::Legacy => {
+            return Err(ctx.err(
+                ErrorCode::NotApplicable,
+                "Модуль MEV Aero требует подтверждённую модель приоритетной комиссии сети",
+            ));
+        }
     }
     let tip = max_tip(&tip_mode::read(ctx)?);
     let min = call::view(ctx, module, &IAeroMevTaxModule::minThresholdCall {}, tag).await?;

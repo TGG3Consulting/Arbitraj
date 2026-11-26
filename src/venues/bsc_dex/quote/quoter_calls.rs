@@ -21,8 +21,8 @@ use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::abi_dex::{
-    IAlgebraQuoterV2, IElasticQuoterV2, IInfinityQuoter, IQuoterV2, ISlipstreamQuoterV2, IV2Router,
-    IV4Quoter,
+    IAeroMetaquoter, IAlgebraQuoterV2, IElasticQuoterV2, IInfinityQuoter, IQuoterV2,
+    ISlipstreamQuoterV2, IV2Router, IV4Quoter,
 };
 use super::super::pools::abi_curve::IStableSwapV1;
 use super::super::pools::abi_dodo::IDodoPool;
@@ -293,6 +293,21 @@ pub fn request(
     // Slipstream (Topaz v3; решения 80, 85): свой QuoterV2.quoteExactInputSingle(tokenIn, tokenOut, amountIn,
     // int24 tickSpacing, sqrtPriceLimitX96) — ключ пула tickSpacing (а не uint24 fee как у Uniswap V3 QuoterV2); сам
     // квотер читает комиссию fee() пула (решение 73; velodrome-finance/slipstream). Вид ядра — V3, ветка по протоколу.
+    if e.family.variant == super::super::pools::family_variant::Variant::SlipstreamAeroMetaquoter {
+        let PoolRef::Contract(pool) = e.pool.reference else {
+            return Err(ctx.err(ErrorCode::Internal, "У пула Aero Slipstream нет адреса"));
+        };
+        let query = IAeroMetaquoter::quoteExactInputSingleV3Call {
+            pool,
+            tokenIn: token_in,
+            amountIn: amount,
+            sqrtPriceLimitX96: U160::ZERO,
+        };
+        return Ok((
+            ctx.dex_addr("dex.quoter", e.family.id)?,
+            Bytes::from(query.abi_encode()),
+        ));
+    }
     if e.family.proto == Proto::Slipstream {
         let spacing = e
             .pool
@@ -454,6 +469,11 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
         return IStableSwapV1::get_dyCall::abi_decode_returns(out).ok();
     }
     // Slipstream (Topaz v3): первое возвращаемое значение — amountOut (как Uni V3 QuoterV2).
+    if e.family.variant == super::super::pools::family_variant::Variant::SlipstreamAeroMetaquoter {
+        return IAeroMetaquoter::quoteExactInputSingleV3Call::abi_decode_returns(out)
+            .ok()
+            .map(|r| r.amountOut);
+    }
     if e.family.proto == Proto::Slipstream {
         return ISlipstreamQuoterV2::quoteExactInputSingleCall::abi_decode_returns(out)
             .ok()

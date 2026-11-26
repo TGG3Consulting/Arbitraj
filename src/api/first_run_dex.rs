@@ -153,15 +153,22 @@ mod tests {
                 validate(def, &scope, &input).unwrap_or_else(|e| panic!("{} {k}: {e}", p.id));
                 for text in values {
                     // Нулевой адрес означает явно выключенный модуль. Крючок подтверждает его на том же блоке.
-                    if k == "dex.aero_mev_module" && text == "0x0000000000000000000000000000000000000000" {
+                    if k == "dex.aero_mev_module"
+                        && text == "0x0000000000000000000000000000000000000000"
+                    {
                         let actual: Value = serde_json::from_str(include_str!(
                             "../../tests/data/first_run_dex_2026-11-26/metadex_ethereum.json"
-                        )).unwrap();
+                        ))
+                        .unwrap();
                         assert_eq!(actual["chain_id"], p.chain_id);
                         assert_eq!(actual["selector"], snapshot["selector"]);
-                        assert!(actual["reads"].as_array().unwrap().iter().any(|r|
-                            r["to"] == actual["hook"] && r["signature"] == "mevTaxModule()" &&
-                            r["response"].as_str().is_some_and(|v| v == format!("0x{}", "0".repeat(64)))));
+                        assert!(actual["reads"].as_array().unwrap().iter().any(|r| {
+                            r["to"] == actual["hook"]
+                                && r["signature"] == "mevTaxModule()"
+                                && r["response"]
+                                    .as_str()
+                                    .is_some_and(|v| v == format!("0x{}", "0".repeat(64)))
+                        }));
                         continue;
                     }
                     if text.len() == 42 && text.starts_with("0x") {

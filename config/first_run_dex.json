@@ -1613,12 +1613,21 @@
     "id": "aero-slipstream-base",
     "source": "https://raw.githubusercontent.com/dromos-labs/metadex-slipstream-public/f99f2095918cab69eafeffa2c3d0a8762de737b7/deployment-addresses/cl-base.json",
     "settings": {
-      "dex.kind": "slipstream_aero",
+      "dex.kind": "slipstream_aero_metaquoter",
       "dex.factory": "0x9cb220581b91b0c83223012fe69688b92ad07a76",
       "dex.quoter": "0x1ddfec5058180c207f55bb77d95acdd0d8227868",
       "dex.cl_swap_hook": "0xc0ed888afe87ed1acf01d9f19bb850159e3ce434",
       "dex.aero_mev_module": "0x29f12ce5be3d88b56d245b7f4e969c518f799a4a",
-      "dex.cl_hook_ahead_s": 0
+      "dex.cl_hook_ahead_s": 2,
+      "dex.cl_tick_spacings": [
+        "1",
+        "10",
+        "50",
+        "100",
+        "150",
+        "200",
+        "250"
+      ]
     }
   },
   {
@@ -1627,12 +1636,33 @@
     "id": "aero-slipstream-ethereum",
     "source": "https://raw.githubusercontent.com/dromos-labs/metadex-slipstream-public/f99f2095918cab69eafeffa2c3d0a8762de737b7/deployment-addresses/cl-ethereum.json",
     "settings": {
-      "dex.kind": "slipstream_aero",
+      "dex.kind": "slipstream_aero_metaquoter",
       "dex.factory": "0xf4fd2e6c5b60c5b365cd1b96dd6245e6d60414c2",
       "dex.quoter": "0x1ddfec5058180c207f55bb77d95acdd0d8227868",
       "dex.cl_swap_hook": "0xc0ed888afe87ed1acf01d9f19bb850159e3ce434",
       "dex.aero_mev_module": "0x0000000000000000000000000000000000000000",
-      "dex.cl_hook_ahead_s": 24
+      "dex.cl_hook_ahead_s": 24,
+      "dex.cl_tick_spacings": [
+        "1",
+        "10",
+        "50",
+        "100",
+        "150",
+        "200",
+        "250"
+      ]
+    }
+  },
+  {
+    "network": "base",
+    "id": "woofi-swap",
+    "chain_id": 8453,
+    "source": "https://learn.woo.org/woofi-docs/woofi-dev-docs/references/readme/base.md",
+    "settings": {
+      "dex.kind": "woofi_v2",
+      "dex.pmm_pool": "0x5520385bfcf07ec87c4c53a7d8d65595dff69fa4",
+      "dex.oracle": "0xf9b0c8ee13ae2fc0665764ecbdb417685dea8081",
+      "dex.pool_implementation": "0x7b5fdb8c89a616d319202704b0ea18b168654281"
     }
   }
 ]

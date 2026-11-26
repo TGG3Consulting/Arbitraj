@@ -340,3 +340,45 @@ fn slipstream_bitmap_tick_reconstruct() {
         "tick = (word·256+bit)·spacing, знак сохранён"
     );
 }
+
+/// Настройка двух сетей с тем же API квотера сохраняет раздельную привязку модулей.
+#[tokio::test]
+async fn metadex_selects_its_quoter_and_requires_its_own_mev_module() {
+    use arb::gateway::errors::ErrorCode;
+    use arb::venues::bsc_dex::pools::{aero_mev, family_variant::Variant, per_block};
+    let c = ctx("aero-quoter-abi").await;
+    let old = families::make("aero-slipstream-arbitrum", "slipstream_aero").unwrap();
+    assert_eq!(old.variant, Variant::SlipstreamAero);
+    assert!(per_block::light(old));
+    let snapshots: [Value; 2] = [
+        include_str!("data/first_run_dex_2026-11-26/metadex_base.json"),
+        include_str!("data/first_run_dex_2026-11-26/metadex_ethereum.json"),
+    ]
+    .map(|raw| serde_json::from_str(raw).unwrap());
+    let modules = snapshots
+        .each_ref()
+        .map(|v| v["module"].as_str().unwrap().parse::<Address>().unwrap());
+    assert_ne!(modules[0], modules[1]);
+    for (i, snap) in snapshots.iter().enumerate() {
+        let id = format!("aero-slipstream-{}", snap["network"].as_str().unwrap());
+        let f = families::make(&id, "slipstream_aero_metaquoter").unwrap();
+        assert_eq!(f.variant, Variant::SlipstreamAeroMetaquoter);
+        assert!(per_block::light(f));
+        set(
+            &c,
+            &[(
+                aero_mev::MEV_MODULE,
+                Scope::Dex(id.clone()),
+                snap["module"].clone(),
+            )],
+        )
+        .await;
+        assert!(aero_mev::pinned(&c, &id, modules[i], "hook").is_ok());
+        assert_eq!(
+            aero_mev::pinned(&c, &id, modules[1 - i], "hook")
+                .unwrap_err()
+                .code,
+            ErrorCode::NotApplicable
+        );
+    }
+}

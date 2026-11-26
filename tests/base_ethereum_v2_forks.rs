@@ -523,3 +523,45 @@ fn rabbit_router_wallets_match_the_two_fee_floors_in_both_directions() {
         assert_eq!(row["buy"]["received"], row["sell"]["amount"]);
     }
 }
+
+#[test]
+fn rabbit_module_and_v5_pay_the_same_wallet_amounts_as_the_official_router() {
+    let native: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/bunnyswap_base.json"
+    ))
+    .unwrap();
+    let module: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/bunnyswap_base_module.json"
+    ))
+    .unwrap();
+    let profile = first_run_profiles::named(8453, "bunnyswap").unwrap();
+    assert_eq!(
+        profile["settings"]["dex.module_runtime_hashes"][0],
+        module["module_hash"]
+    );
+    assert_eq!(native["selector"], module["selector"]);
+    assert_eq!(native["router"], module["router"]);
+    let forms = module["cases"].as_array().unwrap();
+    assert_eq!(forms.len(), 6);
+    for row in native["cases"].as_array().unwrap() {
+        for form in ["direct", "v5"] {
+            let case = forms
+                .iter()
+                .find(|c| c["mode"] == form && c["buy"]["amount"] == row["buy"]["amount"])
+                .unwrap();
+            assert_eq!(case["pool"], native["pair"]);
+            for side in ["buy", "sell"] {
+                let settled = &case[side];
+                assert_eq!(settled["amount"], row[side]["amount"]);
+                assert_eq!(settled["received"], row[side]["received"]);
+                assert_eq!(settled["strict"]["code"], 3);
+                assert_eq!(settled["expired"]["code"], 3);
+                assert_eq!(settled["before"][0], settled["amount"]);
+                assert_eq!(settled["after"][1], settled["received"]);
+                for index in [0, 2, 3, 4, 5, 6, 7] {
+                    assert_eq!(settled["after"][index], "0");
+                }
+            }
+        }
+    }
+}

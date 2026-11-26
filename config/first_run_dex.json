@@ -2771,7 +2771,10 @@
       "dex.bunny_token": "0x0bd4887f7d41b35cd75dff9ffee2856106f86670",
       "dex.quoter": "0xbf250ae227de43dedaf01ccbfd8cc83027efc1e2",
       "dex.quoter_runtime_hash": "0x28f604c8fed620b19f66357568f068d92096c3e61b8da23b686be689826595dd",
-      "dex.pair_runtime_hash": "0xa1c0708a77f8ed010599122c1cbe8cecfc02d0d87c380a9872a827e22bff2c82"
+      "dex.pair_runtime_hash": "0xa1c0708a77f8ed010599122c1cbe8cecfc02d0d87c380a9872a827e22bff2c82",
+      "dex.module_runtime_hashes": [
+        "0x6fcbd2570eade24fa80e8f77e79f1bf466885f863ccfadd395be7212540d88af"
+      ]
     }
   },
   {

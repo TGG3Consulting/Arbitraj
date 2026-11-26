@@ -192,6 +192,14 @@ def tables(network, snapshots, profiles):
                     "кошелёк купил FRIEND за ETH и получил ETH при обратной продаже. Комиссия пары 15/1 000; "
                     "дополнительный сбор протокола равен нулю. FRIEND возвращает пустые данные при успешном переводе. "
                     f"[Обе выплаты, границы цены и срока](../{bunny_path})."])
+        module_path = "tests/data/first_run_dex_2026-11-26/bunnyswap_base_module.json"
+        module = read(Path(module_path))
+        out.extend(["", f"При расчёте в WETH для BunnySwap доступны модуль и шаг 29 V5. "
+                    f"На том же блоке в {2 * len(module['cases'])} обменах проверены списание и выплата кошелька. "
+                    f"Владелец развёртывает BunnySwapAdapter с адресом RabbitRouter, указывает адрес модуля в "
+                    f"`dex.router` и выбирает `dex.kind = bunnyswap_module`. "
+                    f"Проверенный хеш модуля `{module['module_hash']}`. "
+                    f"[Измерения и проверки отказов](../{module_path})."])
         blue_path = "tests/data/first_run_dex_2026-11-26/bluedex_base.json"
         blue = read(Path(blue_path))
         router_samples = sum(2*len(p.get("cases", [])) for p in blue["native_router"]["samples"])

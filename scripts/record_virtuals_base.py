@@ -60,7 +60,8 @@ def capture(id,ep):
             if raw is None:raise ValueError("missing launch status")
             # ABI encodes four addresses then an offset to the dynamic Data tuple, six strings and the two trading flags.
             types=["address"]*4+["uint256"]*7+["bool","bool"]
-            h=decode(types,raw[:32*len(types)]);status.append(dict(entry=f,creator=h[0],token=h[1],pair=h[2],agent=h[3],trading=h[11],graduated=h[12]))
+            if len(fronts)>1:types+=["uint256"]*3+["bool"]
+            h=decode(types,raw[:32*len(types)]);status.append(dict(entry=f,creator=h[0],token=h[1],pair=h[2],agent=h[3],trading=h[11],graduated=h[12],launched=h[16] if len(fronts)>1 else None))
         balances=[one(c,t,"balanceOf(address)",["uint256"],["address"],[pool])[0] for t in [a,b]]
         samples.append(dict(pool=pool,token=a,reserves=list(map(str,res)),balances=list(map(str,balances)),k=str(k),status=status))
     return dict(id=id,selector=c.selector,roles=roles,registry_count=available,fees=fees,samples=samples,raw=c.calls)

@@ -1,0 +1,1388 @@
+{
+  "dooar_ethereum": {
+    "factory": "0x1e895bfe59e3a5103e8b7da3897d1f2391476f3c",
+    "origin": {
+      "url": "https://eth.blockscout.com/api/v2/smart-contracts/0x1e895bfe59e3a5103e8b7da3897d1f2391476f3c",
+      "runtime": "0xb5027c37e2932420eeb1cfbb283b96b6575f8cd95325d6314480f9cece376143",
+      "creation_code_hash": "0x8810cdfaaaa2c6c56fdebd83b2c9e7cc71e3ef06ec0c62e029c6476ff05136da",
+      "invariant": [
+        "uint balance0Adjusted = balance0.mul(100).sub(amount0In.mul(1));",
+        "uint balance1Adjusted = balance1.mul(100).sub(amount1In.mul(1));"
+      ]
+    },
+    "pools": [
+      {
+        "pool": "0x9c2dc3d5ffcecf61312c5f4c00660695b32fb3d1",
+        "tokens": [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "13714217",
+          "8077097655899188"
+        ]
+      },
+      {
+        "pool": "0xaeaca8c32039a466fb32bde6f566130a1f49d21e",
+        "tokens": [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xe3c408bd53c31c085a1746af401a4042954ff740"
+        ],
+        "reserves": [
+          "551",
+          "2531281"
+        ]
+      },
+      {
+        "pool": "0x770cbfff3c47134a878d513921ac59a1fd24e514",
+        "tokens": [
+          "0x473037de59cf9484632f4a27b509cfe8d4a31404",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        "reserves": [
+          "194279",
+          "10"
+        ]
+      },
+      {
+        "pool": "0x09d614845450c1002d04213b68c386a747d0a65a",
+        "tokens": [
+          "0x473037de59cf9484632f4a27b509cfe8d4a31404",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "318491234349",
+          "1233139020013695"
+        ]
+      },
+      {
+        "pool": "0x7d05aa560ab9c56a2961e78f1d848315192cd04f",
+        "tokens": [
+          "0x7f025b904a1c6c81e3411cefee691dd3132f6697",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        "reserves": [
+          "14145",
+          "73"
+        ]
+      },
+      {
+        "pool": "0xda976b2ae2e1e14a4194b5ad238f6b8958697228",
+        "tokens": [
+          "0x473037de59cf9484632f4a27b509cfe8d4a31404",
+          "0xe3c408bd53c31c085a1746af401a4042954ff740"
+        ],
+        "reserves": [
+          "11093219266",
+          "521065923"
+        ]
+      },
+      {
+        "pool": "0x67d4a7fc986e1b41bd077f9cc22758b02df261d8",
+        "tokens": [
+          "0x473037de59cf9484632f4a27b509cfe8d4a31404",
+          "0x4d224452801aced8b2f0aebe155379bb5d594381"
+        ],
+        "reserves": [
+          "19666879848",
+          "1121422735857221064"
+        ]
+      },
+      {
+        "pool": "0x1d24c75c0bd7021a04b2264fdc0004a3a398e593",
+        "tokens": [
+          "0x0000000000b3f879cb30fe243b4dfee438691c04",
+          "0x473037de59cf9484632f4a27b509cfe8d4a31404"
+        ],
+        "reserves": [
+          "27",
+          "2177293766"
+        ]
+      },
+      {
+        "pool": "0x5840103ec5d738a150dde0d6bd6621772fd7a526",
+        "tokens": [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xefb43e83324d70474d6e0b4f33394c9834254b06"
+        ],
+        "reserves": [
+          "93791246",
+          "71297468361"
+        ]
+      }
+    ],
+    "samples": [
+      {
+        "network": "ethereum",
+        "dex": "dooar_ethereum",
+        "pool": "0x9c2dc3d5ffcecf61312c5f4c00660695b32fb3d1",
+        "tokens": [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "factory": "0x1e895bfe59e3a5103e8b7da3897d1f2391476f3c",
+        "runtime_hash": "0x4acfec2f4d266e7552ab5ed066e0b1e09d60158989436ed32c89085aa763b3c2",
+        "creation_code_hash": "0x8810cdfaaaa2c6c56fdebd83b2c9e7cc71e3ef06ec0c62e029c6476ff05136da",
+        "verify_pair_boundary": true,
+        "invariant_error": "DooarSwapV2: K",
+        "fee_fraction": [
+          100,
+          1
+        ],
+        "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+        "reserves": [
+          "13714217",
+          "8077097655899188"
+        ],
+        "pips": 10000,
+        "cases": [
+          {
+            "in": "807709765589",
+            "bought": "1357",
+            "returned": "791303735633",
+            "buy_return": "1357",
+            "sell_return": "791303735633",
+            "observed_balances": [
+              "1357",
+              "791303735633",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "1357",
+                "next_revert": "DooarSwapV2: K"
+              },
+              "sell": {
+                "max": "791303735633",
+                "next_revert": "DooarSwapV2: K"
+              }
+            }
+          },
+          {
+            "in": "16154195311798",
+            "bought": "27100",
+            "returned": "15833069046366",
+            "buy_return": "27100",
+            "sell_return": "15833069046366",
+            "observed_balances": [
+              "27100",
+              "15833069046366",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "27100",
+                "next_revert": "DooarSwapV2: K"
+              },
+              "sell": {
+                "max": "15833069046366",
+                "next_revert": "DooarSwapV2: K"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "selector": {
+      "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "requireCanonical": true
+    },
+    "height": 26494988,
+    "state_root": "0xbd73f03df514c4d550c21a6d567e25a4190f646acbb94b8e8c2462d7c9b17db7",
+    "endpoint": "https://eth.drpc.org"
+  },
+  "justmoney-ethereum": {
+    "factory": "0xd36aba9ec96523b0a89886c76065852adfe2eb39",
+    "origin": {
+      "url": "https://eth.blockscout.com/api/v2/smart-contracts/0xd36aba9ec96523b0a89886c76065852adfe2eb39",
+      "runtime": "0xcd07ad13e2325fd0118bec4d65e8abcd6495e245355b0feb295cbb7d8939d568",
+      "creation_code_hash": "0xf51ca69eb1a82502fdd641b3105488d5e37d94e5277e55f63a9051e664d85c52",
+      "invariant": [
+        "uint256 balance0Adjusted = balance0.mul(1000).sub(amount0In.mul(3));",
+        "uint256 balance1Adjusted = balance1.mul(1000).sub(amount1In.mul(3));"
+      ]
+    },
+    "pools": [
+      {
+        "pool": "0x87f006e8356ea8214896a41b829b72169f1723d9",
+        "tokens": [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        "reserves": [
+          "372085315469756352",
+          "629624839"
+        ]
+      },
+      {
+        "pool": "0xe64cce041a6705c23f7df94af9cd824efb740a79",
+        "tokens": [
+          "0x388d819724dd6d71760a38f00dc01d310d879771",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "83127416518870846",
+          "1635120157631722461"
+        ]
+      },
+      {
+        "pool": "0x106293047d8263f86e4e3550bb44d4e5455e7e89",
+        "tokens": [
+          "0x388d819724dd6d71760a38f00dc01d310d879771",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        "reserves": [
+          "50737124444890354",
+          "1668662186"
+        ]
+      },
+      {
+        "pool": "0x54bfd4fa6dde7ce96140728b126af72702e4b354",
+        "tokens": [
+          "0x423f4e6138e475d85cf7ea071ac92097ed631eea",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "12699729476083460954619615005",
+          "217680928289349293"
+        ]
+      },
+      {
+        "pool": "0x206e459a238d441d16ac1f971257b8a567f481dc",
+        "tokens": [
+          "0xbe1936a67f503e0eaf2434b0cf9f4e3d7100008a",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "3797362551788345401335",
+          "44345377706108516"
+        ]
+      },
+      {
+        "pool": "0x554ae5330b61e9103fa65b39ef70b74c2a1c6be8",
+        "tokens": [
+          "0x98ce7f261e425ad0ca667e60675938dcffc1571a",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "410801656748098325555635",
+          "125547506061957"
+        ]
+      },
+      {
+        "pool": "0x8afd0426f831d5f66965170918b95d1a2705ce8b",
+        "tokens": [
+          "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+          "0xbe1936a67f503e0eaf2434b0cf9f4e3d7100008a"
+        ],
+        "reserves": [
+          "5357",
+          "164885448944681357442"
+        ]
+      },
+      {
+        "pool": "0xa860ae5626ec0ef656bf2ea59c2426dc4f4507b3",
+        "tokens": [
+          "0xbe1936a67f503e0eaf2434b0cf9f4e3d7100008a",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        "reserves": [
+          "2046640563344582403582",
+          "39432575"
+        ]
+      },
+      {
+        "pool": "0x3f03774a94056642cf51c30f007670ea93904146",
+        "tokens": [
+          "0xbe1936a67f503e0eaf2434b0cf9f4e3d7100008a",
+          "0xc669928185dbce49d2230cc9b0979be6dc797957"
+        ],
+        "reserves": [
+          "164238300273305463131",
+          "11135751955137628323958120"
+        ]
+      },
+      {
+        "pool": "0x0918afe95881c1efbe6e903390f1fec76ebedef3",
+        "tokens": [
+          "0x0c10bf8fcb7bf5412187a595ab97a3609160b5c6",
+          "0xbe1936a67f503e0eaf2434b0cf9f4e3d7100008a"
+        ],
+        "reserves": [
+          "3578110690673598538",
+          "170167954857725857763"
+        ]
+      },
+      {
+        "pool": "0xe3b7b20e3ffdcf0d9a9a43d8a6a04c9299d5230c",
+        "tokens": [
+          "0x9e9fbde7c7a83c43913bddc8779158f1368f0413",
+          "0xbe1936a67f503e0eaf2434b0cf9f4e3d7100008a"
+        ],
+        "reserves": [
+          "31216166011951142",
+          "119008382983898413586"
+        ]
+      },
+      {
+        "pool": "0xd9439f8ef8ec20f3aec8f6203e91d572673bcfd8",
+        "tokens": [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xe26cc5bea1e87c8e6c1cf3fbd23ebc71abf0f187"
+        ],
+        "reserves": [
+          "1793306369190777271",
+          "3421020889876304065956168074"
+        ]
+      },
+      {
+        "pool": "0x457aa8fa9ba75337f50fc5ee719fcda152092330",
+        "tokens": [
+          "0x4cce605ed955295432958d8951d0b176c10720d5",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "344106723",
+          "133889261552368318"
+        ]
+      },
+      {
+        "pool": "0x43c48351226d880ce7ef55feaf189be78fe7e34d",
+        "tokens": [
+          "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+          "0x4cce605ed955295432958d8951d0b176c10720d5"
+        ],
+        "reserves": [
+          "3665",
+          "3548837"
+        ]
+      },
+      {
+        "pool": "0xa45af4c5a1bba268098754dec77fecbf0abd2c3c",
+        "tokens": [
+          "0x4cce605ed955295432958d8951d0b176c10720d5",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        "reserves": [
+          "101646495",
+          "66376323"
+        ]
+      }
+    ],
+    "samples": [
+      {
+        "pool": "0xd9439f8ef8ec20f3aec8f6203e91d572673bcfd8",
+        "reason": "\u043d\u0435 \u043f\u0440\u043e\u0448\u0451\u043b \u043f\u043e\u043b\u043d\u044b\u0439 \u043a\u0440\u0443\u0433: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+      },
+      {
+        "network": "ethereum",
+        "dex": "justmoney-ethereum",
+        "pool": "0xe64cce041a6705c23f7df94af9cd824efb740a79",
+        "tokens": [
+          "0x388d819724dd6d71760a38f00dc01d310d879771",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "factory": "0xd36aba9ec96523b0a89886c76065852adfe2eb39",
+        "runtime_hash": "0x571903095b4ceafd0993f55004c2d9a25ed3a25f95274e3e47530c7938cce28c",
+        "creation_code_hash": "0xf51ca69eb1a82502fdd641b3105488d5e37d94e5277e55f63a9051e664d85c52",
+        "verify_pair_boundary": true,
+        "invariant_error": "Pair: Bad Swap (K)",
+        "fee_fraction": [
+          1000,
+          3
+        ],
+        "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+        "reserves": [
+          "83127416518870846",
+          "1635120157631722461"
+        ],
+        "pips": 3000,
+        "cases": [
+          {
+            "in": "163512015763172",
+            "bought": "8286977215303",
+            "returned": "162532512640225",
+            "buy_return": "8286977215303",
+            "sell_return": "162532512640225",
+            "observed_balances": [
+              "8286977215303",
+              "162532512640225",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "8286977215303",
+                "next_revert": "Pair: Bad Swap (K)"
+              },
+              "sell": {
+                "max": "162532512640225",
+                "next_revert": "Pair: Bad Swap (K)"
+              }
+            }
+          },
+          {
+            "in": "3270240315263444",
+            "bought": "165426208678523",
+            "returned": "3250687177524473",
+            "buy_return": "165426208678523",
+            "sell_return": "3250687177524473",
+            "observed_balances": [
+              "165426208678523",
+              "3250687177524473",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "165426208678523",
+                "next_revert": "Pair: Bad Swap (K)"
+              },
+              "sell": {
+                "max": "3250687177524473",
+                "next_revert": "Pair: Bad Swap (K)"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "selector": {
+      "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "requireCanonical": true
+    },
+    "height": 26494988,
+    "state_root": "0xbd73f03df514c4d550c21a6d567e25a4190f646acbb94b8e8c2462d7c9b17db7",
+    "endpoint": "https://eth.drpc.org"
+  },
+  "spice_trade_ethereum": {
+    "factory": "0x71bcc0bf974aae8cc55d033c17d50486fc77e3ae",
+    "origin": {
+      "url": "https://eth.blockscout.com/api/v2/smart-contracts/0x71bcc0bf974aae8cc55d033c17d50486fc77e3ae",
+      "runtime": "0xfe8b9baea71d3940c26654a2dc1229597ae0361fa598c661221c1eec4a5645e6",
+      "creation_code_hash": "0x091c23175436e185cedf6134823d54ea30b4830537611a85eb0321817486e523",
+      "invariant": [
+        "uint fee = IUniswapV2Factory(factory).getFeeForPair(address(this));",
+        "uint balance0Adjusted = balance0.mul(1000).sub(amount0In.mul(fee));",
+        "uint balance1Adjusted = balance1.mul(1000).sub(amount1In.mul(fee));"
+      ]
+    },
+    "pools": [
+      {
+        "pool": "0x09e1aa056712de237468239314723bbcae548e20",
+        "tokens": [
+          "0x45fdb1b92a649fb6a64ef1511d3ba5bf60044838",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        "reserves": [
+          "10996695056486149760612",
+          "93825189"
+        ]
+      },
+      {
+        "pool": "0x72eb5642dbb8af2f7435340b9f6403672bfd4cd2",
+        "tokens": [
+          "0x18a1ea69a50a85752b7bc204a2c45a95ce6e429d",
+          "0x45fdb1b92a649fb6a64ef1511d3ba5bf60044838"
+        ],
+        "reserves": [
+          "1521540094861852167351649",
+          "15992189600361866258938"
+        ]
+      },
+      {
+        "pool": "0x2957b7d42d9db0ff119118924e422f2d53fcf049",
+        "tokens": [
+          "0x45fdb1b92a649fb6a64ef1511d3ba5bf60044838",
+          "0x88536c9b2c4701b8db824e6a16829d5b5eb84440"
+        ],
+        "reserves": [
+          "2443257429475306787019",
+          "13513654622"
+        ]
+      }
+    ],
+    "samples": [
+      {
+        "network": "ethereum",
+        "dex": "spice_trade_ethereum",
+        "pool": "0x09e1aa056712de237468239314723bbcae548e20",
+        "tokens": [
+          "0x45fdb1b92a649fb6a64ef1511d3ba5bf60044838",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        "factory": "0x71bcc0bf974aae8cc55d033c17d50486fc77e3ae",
+        "runtime_hash": "0x182a20dd9dc59d4a7522564c105f207eb936c49a87a7dbc3c7fef9de7911363f",
+        "creation_code_hash": "0x091c23175436e185cedf6134823d54ea30b4830537611a85eb0321817486e523",
+        "verify_pair_boundary": true,
+        "invariant_error": "UniswapV2: K",
+        "fee_target": "0x71bcc0bf974aae8cc55d033c17d50486fc77e3ae",
+        "fee_getter": "getFeeForPair(address)",
+        "fee_fraction": [
+          1000,
+          2
+        ],
+        "funded_asset": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "funding_router": "0x7a250d5630b4cf539739df2c5dacb4c659f2488d",
+        "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+        "reserves": [
+          "10996695056486149760612",
+          "93825189"
+        ],
+        "pips": 2000,
+        "cases": [
+          {
+            "in": "9382",
+            "bought": "1097299966593865752",
+            "returned": "9344",
+            "buy_return": "1097299966593865752",
+            "sell_return": "9344",
+            "observed_balances": [
+              "1097299966593865752",
+              "9344",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "1097299966593865752",
+                "next_revert": "UniswapV2: K"
+              },
+              "sell": {
+                "max": "9344",
+                "next_revert": "UniswapV2: K"
+              }
+            }
+          },
+          {
+            "in": "187650",
+            "bought": "21905635557713043431",
+            "returned": "186901",
+            "buy_return": "21905635557713043431",
+            "sell_return": "186901",
+            "observed_balances": [
+              "21905635557713043431",
+              "186901",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "21905635557713043431",
+                "next_revert": "UniswapV2: K"
+              },
+              "sell": {
+                "max": "186901",
+                "next_revert": "UniswapV2: K"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "selector": {
+      "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "requireCanonical": true
+    },
+    "height": 26494988,
+    "state_root": "0xbd73f03df514c4d550c21a6d567e25a4190f646acbb94b8e8c2462d7c9b17db7",
+    "endpoint": "https://eth.drpc.org"
+  },
+  "standard_ethereum": {
+    "factory": "0x53ac1d1fa4f9f6c604b8b198ce29a50d28cba893",
+    "origin": {
+      "url": "https://eth.blockscout.com/api/v2/smart-contracts/0x53ac1d1fa4f9f6c604b8b198ce29a50d28cba893",
+      "runtime": "0xb7ad4ce8dc5c67129bf3194c261e225fe23c4d39b2821ee65544a087d7cf93bc",
+      "creation_code_hash": "0x914b7167277393b1c321f92b1b4746aaee9273174bc623118623f8dc4ba6c2d4",
+      "invariant": [
+        "uint256 balance0Adjusted = balance0.mul(1000).sub(amount0In.mul(3));",
+        "uint256 balance1Adjusted = balance1.mul(1000).sub(amount1In.mul(3));"
+      ]
+    },
+    "pools": [
+      {
+        "pool": "0x6d74748b7089409cd7c52dcb2cbcc3b204360296",
+        "tokens": [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "18267964",
+          "10790402927297020"
+        ]
+      },
+      {
+        "pool": "0x8784a0f6d01a9fe3b1b6e803ceaa7549c655b580",
+        "tokens": [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        "reserves": [
+          "261004736948856425",
+          "438971151"
+        ]
+      },
+      {
+        "pool": "0xd97f59cdb57d7741c83eadbdb88b32fe03356e6e",
+        "tokens": [
+          "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "7679",
+          "2618954513568859"
+        ]
+      },
+      {
+        "pool": "0xf1ebbf7aa9e802d28a2fb491cf290e6b39722555",
+        "tokens": [
+          "0x6b175474e89094c44da98b954eedeac495271d0f",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "20139646792233998026",
+          "11999008016799166"
+        ]
+      },
+      {
+        "pool": "0x895d4538bbd5e53809d6c5680dd88367a0837eb4",
+        "tokens": [
+          "0x9040e237c3bf18347bb00957dc22167d0f2b999d",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "42205093772057028902135",
+          "3274872908155053"
+        ]
+      },
+      {
+        "pool": "0xfc789fc17368c2b66709efe09c0aa76dc2c131d3",
+        "tokens": [
+          "0x6b175474e89094c44da98b954eedeac495271d0f",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        "reserves": [
+          "184372554979677754940",
+          "184610354"
+        ]
+      },
+      {
+        "pool": "0xe8d306adede6b56e970b48195199cc02864aa9ca",
+        "tokens": [
+          "0x9040e237c3bf18347bb00957dc22167d0f2b999d",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        "reserves": [
+          "43310221079248826861729",
+          "5788841"
+        ]
+      },
+      {
+        "pool": "0xc93995e313868d33455a6843d81b50024dce8fb3",
+        "tokens": [
+          "0x9040e237c3bf18347bb00957dc22167d0f2b999d",
+          "0xad41f311c835224447c54c98fadf5e0ad9eff077"
+        ],
+        "reserves": [
+          "4998560275610091539789",
+          "5084448970839354030288"
+        ]
+      },
+      {
+        "pool": "0xfec15512eb1a34e1dde6a5ac2f2557c15fdd67d0",
+        "tokens": [
+          "0xad41f311c835224447c54c98fadf5e0ad9eff077",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "197966949175956364717834",
+          "15604964543005516"
+        ]
+      },
+      {
+        "pool": "0xb08cb4706ba017eeaf1b0440dd56821b891058d8",
+        "tokens": [
+          "0x00e856ee945a49bb73436e719d96910cd9d116a4",
+          "0x9040e237c3bf18347bb00957dc22167d0f2b999d"
+        ],
+        "reserves": [
+          "7824029530448677695523",
+          "203146588467346857011813"
+        ]
+      },
+      {
+        "pool": "0x7149259a702732a7db78b8c58f864732b761bfec",
+        "tokens": [
+          "0x9040e237c3bf18347bb00957dc22167d0f2b999d",
+          "0x9e32b13ce7f2e80a01932b42553652e053d6ed8e"
+        ],
+        "reserves": [
+          "14067417741622875546172",
+          "939847941111336856"
+        ]
+      },
+      {
+        "pool": "0xf123504d3af8027ee7cd7f1957e43d4fefedbc06",
+        "tokens": [
+          "0x9e32b13ce7f2e80a01932b42553652e053d6ed8e",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "3132556656953729712",
+          "3924171797497372"
+        ]
+      },
+      {
+        "pool": "0x877e086786513e756514a92cbcf79c9322a3b08b",
+        "tokens": [
+          "0x315dc1b524de57ae8e809a2e97699dbc895b8a21",
+          "0x9040e237c3bf18347bb00957dc22167d0f2b999d"
+        ],
+        "reserves": [
+          "10319461557790",
+          "69861335479658421906572"
+        ]
+      }
+    ],
+    "samples": [
+      {
+        "network": "ethereum",
+        "dex": "standard_ethereum",
+        "pool": "0x8784a0f6d01a9fe3b1b6e803ceaa7549c655b580",
+        "tokens": [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        "factory": "0x53ac1d1fa4f9f6c604b8b198ce29a50d28cba893",
+        "runtime_hash": "0x238c8bf8c5e56a5ea344656301cf1e771cf76dedc244d97d4bc9e12715f336fd",
+        "creation_code_hash": "0x914b7167277393b1c321f92b1b4746aaee9273174bc623118623f8dc4ba6c2d4",
+        "verify_pair_boundary": true,
+        "invariant_error": "LTR: K",
+        "fee_fraction": [
+          1000,
+          3
+        ],
+        "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+        "reserves": [
+          "261004736948856425",
+          "438971151"
+        ],
+        "pips": 3000,
+        "cases": [
+          {
+            "in": "26100473694885",
+            "bought": "43761",
+            "returned": "25944085266405",
+            "buy_return": "43761",
+            "sell_return": "25944085266405",
+            "observed_balances": [
+              "43761",
+              "25944085266405",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "43761",
+                "next_revert": "LTR: K"
+              },
+              "sell": {
+                "max": "25944085266405",
+                "next_revert": "LTR: K"
+              }
+            }
+          },
+          {
+            "in": "522009473897712",
+            "bought": "873566",
+            "returned": "518887973558238",
+            "buy_return": "873566",
+            "sell_return": "518887973558238",
+            "observed_balances": [
+              "873566",
+              "518887973558238",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "873566",
+                "next_revert": "LTR: K"
+              },
+              "sell": {
+                "max": "518887973558238",
+                "next_revert": "LTR: K"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "selector": {
+      "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "requireCanonical": true
+    },
+    "height": 26494988,
+    "state_root": "0xbd73f03df514c4d550c21a6d567e25a4190f646acbb94b8e8c2462d7c9b17db7",
+    "endpoint": "https://eth.drpc.org"
+  },
+  "verse": {
+    "factory": "0xee3e9e46e34a27dc755a63e2849c9913ee1a06e2",
+    "origin": {
+      "url": "https://eth.blockscout.com/api/v2/smart-contracts/0xee3e9e46e34a27dc755a63e2849c9913ee1a06e2",
+      "runtime": "0x301e63e35abe863c77fd6db59db1630b292b46264f736d220415205cf0c52a55",
+      "creation_code_hash": "0x0a50f77f76135087ca96e2f94d9220fd6c435aa345a8de958603cb89c476cc02",
+      "invariant": [
+        "uint256 balance0Adjusted = balance0 * 1000 - (_amount0In * 3);",
+        "uint256 balance1Adjusted = balance1 * 1000 - (_amount1In * 3);"
+      ]
+    },
+    "pools": [
+      {
+        "pool": "0x682831244b0e97946abc52cb1893cce398de3a35",
+        "tokens": [
+          "0x6b175474e89094c44da98b954eedeac495271d0f",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "488389145221947947754",
+          "291174218851734213"
+        ]
+      },
+      {
+        "pool": "0x8ff77def1ff9a5c7230f0c224a716a6399da8336",
+        "tokens": [
+          "0x6b175474e89094c44da98b954eedeac495271d0f",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        "reserves": [
+          "37532959652305138724",
+          "37512510"
+        ]
+      },
+      {
+        "pool": "0xf3f82bc165a83425e81b8f2858d786e41ab21671",
+        "tokens": [
+          "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        "reserves": [
+          "1875993",
+          "1129517502"
+        ]
+      },
+      {
+        "pool": "0x6e1fbeeaba87bae1100d95f8340dc27ad7c8427b",
+        "tokens": [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "6720299207",
+          "3989809051282283192"
+        ]
+      },
+      {
+        "pool": "0x27a0c7e1d6051c334d1e80ef6f521aa38eb0a448",
+        "tokens": [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        "reserves": [
+          "73861039",
+          "74017575"
+        ]
+      },
+      {
+        "pool": "0xd0a9c569342da0d52ca409c5cf1eac19635de728",
+        "tokens": [
+          "0x6b175474e89094c44da98b954eedeac495271d0f",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        "reserves": [
+          "64890746019681936779",
+          "64815148"
+        ]
+      },
+      {
+        "pool": "0x5b7e21348ac2c1a845af24116337ccead94dcb52",
+        "tokens": [
+          "0x4d224452801aced8b2f0aebe155379bb5d594381",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        "reserves": [
+          "26136504265050022",
+          "3392"
+        ]
+      },
+      {
+        "pool": "0x690c1a9712674c1c5607234b39bcd8e8db57d93b",
+        "tokens": [
+          "0x4d224452801aced8b2f0aebe155379bb5d594381",
+          "0x6b175474e89094c44da98b954eedeac495271d0f"
+        ],
+        "reserves": [
+          "31537699708550792",
+          "2859723010890135"
+        ]
+      },
+      {
+        "pool": "0x845c0179060362f071ff5c7f1d2703617a480f3e",
+        "tokens": [
+          "0x249ca82617ec3dfb2589c4c17ab7ec9765350a18",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "17783164437977417447900188835",
+          "26312610144332450546"
+        ]
+      },
+      {
+        "pool": "0x362ddd14f69924ebbf9066ddd2ae7c171cf6d098",
+        "tokens": [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        "reserves": [
+          "4880656256190509508",
+          "8239481876"
+        ]
+      },
+      {
+        "pool": "0x5a89feea78872d7a10dda3ddb95ce7a05b99081a",
+        "tokens": [
+          "0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "79224602296944262110667793",
+          "168231882728585790"
+        ]
+      },
+      {
+        "pool": "0x928df92e4f5901a199d45938b90554983bdd455a",
+        "tokens": [
+          "0x249ca82617ec3dfb2589c4c17ab7ec9765350a18",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        "reserves": [
+          "276485643144440027327251",
+          "853075"
+        ]
+      },
+      {
+        "pool": "0x85b7d676185508c9edfe8bae73e2ad9bbbde596b",
+        "tokens": [
+          "0x249ca82617ec3dfb2589c4c17ab7ec9765350a18",
+          "0x6b175474e89094c44da98b954eedeac495271d0f"
+        ],
+        "reserves": [
+          "83535458409459189577827",
+          "261533776319090570"
+        ]
+      },
+      {
+        "pool": "0x9b357723fa65e5a22b0b48ae397c2c68859b7b38",
+        "tokens": [
+          "0x4d224452801aced8b2f0aebe155379bb5d594381",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "363647853955205210760",
+          "15386479723615652"
+        ]
+      },
+      {
+        "pool": "0xb52f0f46118ff80b1a4f68f32b7ce5bc7b63c8b2",
+        "tokens": [
+          "0x4d224452801aced8b2f0aebe155379bb5d594381",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        "reserves": [
+          "31255316150193",
+          "11"
+        ]
+      },
+      {
+        "pool": "0x333b04b266139954f018736e2924cb9658d01acc",
+        "tokens": [
+          "0x0bc529c00c6401aef6d220be8c6ea1667f6ad93e",
+          "0x6b175474e89094c44da98b954eedeac495271d0f"
+        ],
+        "reserves": [
+          "108540535101",
+          "412689251208674"
+        ]
+      },
+      {
+        "pool": "0x33d15c3c82e09d438d671a04c27e2cc8e1c9d134",
+        "tokens": [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xd9c2d319cd7e6177336b0a9c93c21cb48d84fb54"
+        ],
+        "reserves": [
+          "64418523",
+          "434253826519649002821"
+        ]
+      },
+      {
+        "pool": "0xf65a3cefda9d1b50c451c9b1fcd781d8c916c2fa",
+        "tokens": [
+          "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        "reserves": [
+          "117",
+          "74434"
+        ]
+      },
+      {
+        "pool": "0x0e157cc74a5c22aac654780a53f1d5273050f38a",
+        "tokens": [
+          "0x249ca82617ec3dfb2589c4c17ab7ec9765350a18",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        "reserves": [
+          "415017928978770554155628",
+          "1002615"
+        ]
+      },
+      {
+        "pool": "0xb748a43f30d8c8bce683482f58c4b97b51e8071a",
+        "tokens": [
+          "0x0f5d2fb29fb7d3cfee444a200298f468908cc942",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "178033759707143481",
+          "4186220362986"
+        ]
+      },
+      {
+        "pool": "0xaae49e22a787155cb474146fd4c8e09fd1014e32",
+        "tokens": [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xf629cbd94d3791c9250152bd8dfbdf380e2a3b9c"
+        ],
+        "reserves": [
+          "33028414317265",
+          "2084904968199187496"
+        ]
+      },
+      {
+        "pool": "0xeacadc656c9394fb09af25aebc0897fdffe484a1",
+        "tokens": [
+          "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "59470242",
+          "21202339374171494656"
+        ]
+      },
+      {
+        "pool": "0x0b02428e7c2c24ccf64426e637aee0c879bd1860",
+        "tokens": [
+          "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "0xf411903cbc70a74d22900a5de66a2dda66507255"
+        ],
+        "reserves": [
+          "98299330",
+          "29941405608779450644198594"
+        ]
+      },
+      {
+        "pool": "0x294fff8fbfe37da6ffd410b4ca370b92ae853a9b",
+        "tokens": [
+          "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "0xdb85f6685950e285b1e611037bebe5b34e2b7d78"
+        ],
+        "reserves": [
+          "1914216014",
+          "513401198471010990496"
+        ]
+      },
+      {
+        "pool": "0x24a6bcc7f2decb54f609266ea2ada23412da4aac",
+        "tokens": [
+          "0x18084fba666a33d37592fa2633fd49a74dd93a88",
+          "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"
+        ],
+        "reserves": [
+          "363274610610617",
+          "36214"
+        ]
+      },
+      {
+        "pool": "0xbdf774069f57b2a6e1a53ed97a9fe6f03be4f71e",
+        "tokens": [
+          "0x6f259637dcd74c767781e37bc6133cd6a68aa161",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "8146801316931776725",
+          "508845560428508"
+        ]
+      },
+      {
+        "pool": "0x573a999d9ee32eb8b04669a2540cdfdffea12539",
+        "tokens": [
+          "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+          "0x249ca82617ec3dfb2589c4c17ab7ec9765350a18"
+        ],
+        "reserves": [
+          "20",
+          "326797454355364696532"
+        ]
+      },
+      {
+        "pool": "0x5d8b09d1e3b239bbdaa4e61a32da5fda96636f42",
+        "tokens": [
+          "0x18084fba666a33d37592fa2633fd49a74dd93a88",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "170000002",
+          "58"
+        ]
+      },
+      {
+        "pool": "0xa163caed843d5addd44d613d546e30ce25746a4a",
+        "tokens": [
+          "0x111111111117dc0aa78b770fa6a738034120c302",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "19582759136969241844",
+          "684196365219681"
+        ]
+      },
+      {
+        "pool": "0x4364dfe7ae0e8508fce5e190e5c9778e3d245607",
+        "tokens": [
+          "0x8ff77def1ff9a5c7230f0c224a716a6399da8336",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "997",
+          "99683772"
+        ]
+      },
+      {
+        "pool": "0xa50123e013c1b4af675428be53bd4e7842309169",
+        "tokens": [
+          "0x8f7991e414d9c5864cdf7513ef358fae3942ed92",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "1",
+          "84746511158327"
+        ]
+      },
+      {
+        "pool": "0x8d51ca4aa919d596da24d317a3e0649fe3dc9ff7",
+        "tokens": [
+          "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "0xef8aee5dafff1d111c12bc904f67a859d3a7f639"
+        ],
+        "reserves": [
+          "1676",
+          "10125"
+        ]
+      }
+    ],
+    "samples": [
+      {
+        "network": "ethereum",
+        "dex": "verse",
+        "pool": "0x845c0179060362f071ff5c7f1d2703617a480f3e",
+        "tokens": [
+          "0x249ca82617ec3dfb2589c4c17ab7ec9765350a18",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "factory": "0xee3e9e46e34a27dc755a63e2849c9913ee1a06e2",
+        "runtime_hash": "0x03b4590e4ff386eea5e914b4f48f1b11735f8433e094128352c5033fa91309cf",
+        "creation_code_hash": "0x0a50f77f76135087ca96e2f94d9220fd6c435aa345a8de958603cb89c476cc02",
+        "verify_pair_boundary": true,
+        "invariant_error": "empty-revert",
+        "fee_fraction": [
+          1000,
+          3
+        ],
+        "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+        "reserves": [
+          "17783164437977417447900188835",
+          "26312610144332450546"
+        ],
+        "pips": 3000,
+        "cases": [
+          {
+            "in": "1000000000000000",
+            "bought": "673788844205733184385782",
+            "returned": "994009226312894",
+            "buy_return": "673788844205733184385782",
+            "sell_return": "994009226312894",
+            "observed_balances": [
+              "673788844205733184385782",
+              "994009226312894",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "673788844205733184385782",
+                "next_revert": "empty-revert"
+              },
+              "sell": {
+                "max": "994009226312894",
+                "next_revert": "empty-revert"
+              }
+            }
+          },
+          {
+            "in": "10000000000000000",
+            "bought": "6735591589975998245510151",
+            "returned": "9940112623597888",
+            "buy_return": "6735591589975998245510151",
+            "sell_return": "9940112623597888",
+            "observed_balances": [
+              "6735591589975998245510151",
+              "9940112623597888",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "6735591589975998245510151",
+                "next_revert": "empty-revert"
+              },
+              "sell": {
+                "max": "9940112623597888",
+                "next_revert": "empty-revert"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "selector": {
+      "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "requireCanonical": true
+    },
+    "height": 26494988,
+    "state_root": "0xbd73f03df514c4d550c21a6d567e25a4190f646acbb94b8e8c2462d7c9b17db7",
+    "endpoint": "https://eth.drpc.org"
+  }
+}

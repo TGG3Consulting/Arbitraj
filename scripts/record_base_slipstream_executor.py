@@ -51,8 +51,8 @@ def rpc(url, method, params):
     return payload["result"]
 
 
-def simulate_block(url, tag, overrides, calls):
-    blocks=rpc(url,"eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":overrides,"calls":calls}]},tag])
+def simulate_block(url, tag, overrides, calls, read_rpc=rpc):
+    blocks=read_rpc(url,"eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":overrides,"calls":calls}]},tag])
     if not isinstance(blocks,list) or len(blocks)!=1 or blocks[0].get("parentHash")!=tag["blockHash"]:
         raise RuntimeError("eth_simulateV1 returned a different parent block")
     values=blocks[0].get("calls")

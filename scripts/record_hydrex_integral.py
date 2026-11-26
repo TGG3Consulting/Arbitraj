@@ -57,9 +57,13 @@ def map_ticks(c, pool, observed):
     return dict(ticks=states, measured_tick_steps=max(before,count), lower_word=low, upper_word=high)
 
 
-def simulate(e, pool, quoter, token0, source, target, dx, state, deadline, sender=None):
+def simulate(e, pool, quoter, token0, source, target, dx, state, deadline, sender=None, flat_quoter=False, wrapped=WETH):
     sender = sender or HOLDERS[source]
-    official = calldata("quoteExactInputSingle(" + QUOTE + ")", [QUOTE], [(source,target,ZERO,dx,0)])
+    if flat_quoter:
+        official = calldata("quoteExactInputSingle(address,address,address,uint256,uint160)",
+                            ["address","address","address","uint256","uint160"], [source,target,ZERO,dx,0])
+    else:
+        official = calldata("quoteExactInputSingle(" + QUOTE + ")", [QUOTE], [(source,target,ZERO,dx,0)])
     virtual = calldata("quoteExactIn(address,bool,uint256)", ["address","bool","uint256"], [pool,source==token0,dx])
     def execute(limit):
         return calldata("execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
@@ -68,7 +72,7 @@ def simulate(e, pool, quoter, token0, source, target, dx, state, deadline, sende
     bal = lambda who: calldata("balanceOf(address)", ["address"], [who])
     approve = calldata("approve(address,uint256)", ["address","uint256"], [EXEC,dx])
     word = lambda x: "0x" + x.to_bytes(32).hex()
-    overrides = {EXEC:{"code":state[EXEC], "stateDiff":{word(0):word(int(sender,16)),word(1):word(int(WETH,16))}},
+    overrides = {EXEC:{"code":state[EXEC], "stateDiff":{word(0):word(int(sender,16)),word(1):word(int(wrapped,16))}},
                  VIRTUAL:{"code":state[VIRTUAL]}}
     def run(items):
         calls = [{"from":sender,"to":to,"data":data} for _,to,data in items]
@@ -90,23 +94,32 @@ def simulate(e, pool, quoter, token0, source, target, dx, state, deadline, sende
         ("executor_in",source,bal(EXEC)),("executor_out",target,bal(EXEC)),("next_fee",pool,calldata("fee()"))])
     raw = lambda k: bytes.fromhex(results[k]["returnData"][2:])
     n = lambda k: int.from_bytes(raw(k))
-    native = decode(RETURN,raw("official"))
-    if (not out or native[:2]!=(out,dx) or decode(["uint256","uint256"],raw("virtual"))!=(dx,out)
+    native = decode(["uint256","uint16"] if flat_quoter else RETURN,raw("official"))
+    if (not out or native[0]!=out or (not flat_quoter and native[1]!=dx) or decode(["uint256","uint256"],raw("virtual"))!=(dx,out)
             or n("in_before")-n("in_after")!=dx or n("out_after")-n("out_before")!=out or n("exact")!=out
             or n("executor_in") or n("executor_out")):
         raise ValueError("расход, выплата, квотеры и исполнитель не совпали")
-    topic = "0x"+keccak(text="Swap(address,address,int256,int256,uint160,uint128,int24,uint24,uint24)").hex()
-    own = [log for log in results["exact"]["logs"] if log["address"].lower()==pool and log["topics"][0]==topic]
-    events = [decode(["int256","int256","uint160","uint128","int24","uint24","uint24"],
-                     bytes.fromhex(log["data"][2:])) for log in own]
+    types = ["int256","int256","uint160","uint128","int24"]
+    if not flat_quoter:
+        types += ["uint24","uint24"]
+    topic = "0x"+keccak(text="Swap(address,address,"+",".join(types)+")").hex()
+    raw_logs = [r for r in results["exact"]["logs"] if r["address"].lower()==pool]
+    own = [r for r in raw_logs if r["topics"][0]==topic]
+    events = [decode(types,bytes.fromhex(r["data"][2:])) for r in own]
+    if flat_quoter:
+        fee_topic = "0x"+keccak(text="SwapFee(address,uint24,uint24)").hex()
+        fees = [r for r in raw_logs if r["topics"][0]==fee_topic]
+        if [f["topics"][1] for f in fees] != [r["topics"][1] for r in own]:
+            raise ValueError("Размещения и плательщики SwapFee/Swap не совпадают")
+        events = [ev+decode(["uint24","uint24"],bytes.fromhex(f["data"][2:])) for ev,f in zip(events,fees,strict=True)]
     event, = [r for log,r in zip(own,events,strict=True) if log["topics"][1][-40:]==EXEC[2:]]
     expected_deltas = (dx,-out) if source==token0 else (-out,dx)
     if event[:2]!=expected_deltas:
         raise ValueError("дельты события Swap не совпали с балансами")
-    return dict(sender=sender,source=source,target=target,dx=str(dx),out=str(out),fee_field=native[5],
+    return dict(sender=sender,source=source,target=target,dx=str(dx),out=str(out),fee_field=native[1] if flat_quoter else native[5],
                 tick_after=event[4],override_fee=event[5],plugin_fee=event[6],next_fee=n("next_fee"),
                 event_fees=[[r[5],r[6]] for r in events],
-                crossed=native[3],calls=calls,results=results)
+                crossed=None if flat_quoter else native[3],calls=calls,results=results)
 
 
 def main():

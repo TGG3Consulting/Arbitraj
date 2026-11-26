@@ -22,7 +22,8 @@ def record(source, owner=FIRST_OWNER):
     url=source.get("endpoint",url)
     partial=source.get("capture_partial",False)
     tag={"blockHash":source["hash"],"requireCanonical":True}
-    header=rpc(url,"eth_getBlockByHash",[source["hash"],False])
+    read_rpc=source.get("read_rpc",rpc)
+    header=read_rpc(url,"eth_getBlockByHash",[source["hash"],False])
     deadline=int(header["timestamp"],16)+300
     runtime=bytes.fromhex(RUNTIME.read_text().strip().removeprefix("0x"))
     virt=(ROOT/"contracts/out/VirtualQuoter.bin-runtime").read_text().strip().removeprefix("0x")
@@ -31,7 +32,7 @@ def record(source, owner=FIRST_OWNER):
     profiles=json.loads((ROOT/"config/first_run_dex.json").read_bytes())
     router=next(r["settings"]["dex.router"] for r in profiles if r["network"]==network and r["settings"]["dex.kind"]=="uniswap_v2")
     def simulate(calls):
-        return simulate_block(url,tag,overrides,calls)
+        return simulate_block(url,tag,overrides,calls,read_rpc=read_rpc)
     def successful(calls):
         values=simulate(calls)
         for index,row in enumerate(values):

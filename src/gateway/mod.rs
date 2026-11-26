@@ -35,6 +35,7 @@ pub mod feed_health;
 pub mod feed_reg;
 pub mod frozen;
 pub mod hashflow;
+pub mod hanji;
 pub mod http;
 pub mod http_bind;
 pub mod keep_last;

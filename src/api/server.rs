@@ -86,6 +86,7 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
             post(pool_cond_stat::reset),
         )
         .route("/api/venues/{id}/hashflow/quote", post(dex::hashflow))
+        .route("/api/venues/{id}/hanji/quote", post(dex::hanji))
         .route("/api/dex/dry-swap", post(dex_dry::dry_swap))
         .route("/api/dex/dry-cycle", post(dex_dry::dry_cycle))
         .route("/api/venues/{id}/executor/quote", get(dex_executor::quote))

@@ -34,6 +34,11 @@ impl Venue for BscDex {
         self.p.ctx.venue().0 == "base_dex"
     }
 
+    async fn hanji_quote(&self, req: crate::gateway::hanji::Request)
+        -> GatewayResult<crate::gateway::hanji::Preview> {
+        super::hanji::live::preview(&self.p.ctx, req).await
+    }
+
     async fn hashflow_quote(
         &self,
         request: crate::gateway::hashflow::Request,

@@ -41,6 +41,16 @@ pub async fn hashflow(
         .map_err(ApiError::gateway)
 }
 
+/// Ручная котировка по доступным уровням Hanji на одном каноническом блоке.
+pub async fn hanji(
+    State(st): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<crate::gateway::hanji::Request>,
+) -> Result<Json<crate::gateway::hanji::Preview>, ApiError> {
+    let venue = st.registry.get(&VenueId(id)).await.map_err(ApiError::gateway)?;
+    venue.hanji_quote(req).await.map(Json).map_err(ApiError::gateway)
+}
+
 /// Канал отправки для интерфейса: описание от адаптера и последняя статистика от ядра.
 #[derive(Serialize)]
 pub struct ChannelView {

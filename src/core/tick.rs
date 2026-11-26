@@ -217,7 +217,7 @@ fn assets_by_tokens(
 async fn expire_rfq(
     core: Core,
     venue: VenueId,
-    source: crate::gateway::events::LiquiditySource,
+    source: crate::gateway::events::SourceId,
     expiry: i64,
 ) {
     let ms = expiry

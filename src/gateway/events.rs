@@ -18,12 +18,19 @@ use crate::core::types::{
 
 use super::errors::GatewayError;
 
-/// Источники имеют отдельные рынки и время истечения.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum LiquiditySource {
-    #[default]
-    Hashflow,
-    Fermi,
+/// Непрозрачное имя источника внутри одной площадки. Имена назначает адаптер.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SourceId(String);
+impl SourceId {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self(name.into())
+    }
+}
+
+/// Формат прежних событий единственного поставщика, до появления поля source.
+fn legacy_rfq_source() -> SourceId {
+    SourceId::new("Hashflow")
 }
 
 /// Событие от адаптера в канал, переданный в subscribe_market: рынок (стакан, пул) и то,
@@ -35,8 +42,8 @@ pub enum MarketEvent {
     Book(OrderBook),
     /// Снимок односетевых индикативных рынков RFQ. Адрес исходной котируемой валюты и направления подтверждены API.
     RfqMarkets {
-        #[serde(default)]
-        source: LiquiditySource,
+        #[serde(default = "legacy_rfq_source")]
+        source: SourceId,
         venue: VenueId,
         quote: alloy_primitives::Address,
         markets: std::collections::BTreeMap<alloy_primitives::Address, (bool, bool)>,

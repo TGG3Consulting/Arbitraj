@@ -32,6 +32,9 @@ struct State {
 pub(in crate::venues::bsc_dex) struct Book(Arc<Mutex<State>>, super::availability::Cache);
 
 impl Book {
+    pub(super) fn populated(&self) -> bool {
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).market.as_ref().is_some_and(|(_, book)| book.is_some())
+    }
     pub(super) fn depth(
         &self,
         source: &str,

@@ -34,7 +34,7 @@ type RfqSnapshot = (
 /// Рыночное состояние в памяти.
 #[derive(Default)]
 pub struct MarketState {
-    pub(super) rfq: HashMap<VenueId, HashMap<crate::gateway::events::LiquiditySource, RfqSnapshot>>,
+    pub(super) rfq: HashMap<VenueId, HashMap<crate::gateway::events::SourceId, RfqSnapshot>>,
     pub(super) books: HashMap<(VenueId, String), OrderBook>,
     /// Решение 317 (доработка): когда последний раз менялось СОДЕРЖИМОЕ стакана (по префиксам уровней, book_still.rs);
     /// кадр с тем же содержимым отметки не двигает. Ключ — как у books.
@@ -81,6 +81,13 @@ pub(super) fn pair_key(venue: &VenueId, a: Address, b: Address) -> (VenueId, Add
 }
 
 impl MarketState {
+    pub(super) fn has_source(&self, venue: &VenueId, now: i64) -> bool {
+        self.rfq.get(venue).is_some_and(|sources| {
+            sources
+                .values()
+                .any(|(_, markets, expiry)| !markets.is_empty() && *expiry > now)
+        })
+    }
     pub(super) fn source_sides(
         &self,
         v: &VenueId,
@@ -101,7 +108,7 @@ impl MarketState {
     pub(super) fn expire_source(
         &mut self,
         venue: &VenueId,
-        source: crate::gateway::events::LiquiditySource,
+        source: crate::gateway::events::SourceId,
         expiry: i64,
     ) -> Option<std::collections::BTreeMap<Address, (bool, bool)>> {
         let group = self.rfq.get_mut(venue)?;
@@ -143,7 +150,7 @@ impl MarketState {
                         self.rfq.remove(&venue);
                     }
                 } else {
-                    group.insert(source, (quote, markets, expires_ms));
+                    group.insert(source.clone(), (quote, markets, expires_ms));
                 }
                 Touched::RfqMarkets {
                     source,
@@ -227,7 +234,7 @@ impl MarketState {
 #[cfg(test)]
 mod source_tests {
     use super::*;
-    use crate::gateway::events::LiquiditySource::{Fermi, Hashflow};
+    use crate::gateway::events::SourceId;
     #[test]
     fn refreshing_or_expiring_one_source_preserves_the_other_side() {
         let mut state = MarketState::default();
@@ -241,8 +248,8 @@ mod source_tests {
             markets: std::collections::BTreeMap::from([(token, side)]),
             expires_ms,
         };
-        state.apply(event(Hashflow, (true, false), 100));
-        state.apply(event(Fermi, (false, true), 90));
+        state.apply(event(SourceId::new("Hashflow"), (true, false), 100));
+        state.apply(event(SourceId::new("future-provider"), (false, true), 90));
         assert_eq!(
             state.source_sides(&venue, Some(quote), token, 80),
             Some((true, true))
@@ -251,22 +258,34 @@ mod source_tests {
             state.source_sides(&venue, Some(quote), token, 95),
             Some((true, false))
         );
-        state.apply(event(Fermi, (false, true), 105));
-        assert!(state.expire_source(&venue, Fermi, 90).is_none());
-        assert!(state.expire_source(&venue, Hashflow, 100).is_some());
+        state.apply(event(SourceId::new("future-provider"), (false, true), 105));
+        assert!(
+            state
+                .expire_source(&venue, SourceId::new("future-provider"), 90)
+                .is_none()
+        );
+        assert!(
+            state
+                .expire_source(&venue, SourceId::new("Hashflow"), 100)
+                .is_some()
+        );
         assert_eq!(
             state.source_sides(&venue, Some(quote), token, 101),
             Some((false, true))
         );
         assert_eq!(state.source_sides(&venue, Some(token), token, 101), None);
         let legacy = serde_json::json!({"RfqMarkets":{"venue":"eth_dex","quote":quote,"markets":{},"expires_ms":0}});
+        state.apply(event(SourceId::new("Hashflow"), (true, false), 109));
         state.apply(serde_json::from_value(legacy).unwrap());
+        assert!(state.has_source(&venue, 101));
+        assert!(!state.has_source(&VenueId("other-net".into()), 101));
+        assert!(!state.has_source(&venue, 105));
         assert_eq!(
             state.source_sides(&venue, Some(quote), token, 101),
             Some((false, true))
         );
         state.apply(MarketEvent::RfqMarkets {
-            source: Fermi,
+            source: SourceId::new("future-provider"),
             venue: venue.clone(),
             quote,
             markets: Default::default(),

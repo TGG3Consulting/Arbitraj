@@ -42,35 +42,6 @@ pub fn is_final() -> bool {
     FINAL.try_with(|f| *f).unwrap_or(false)
 }
 
-/// Финальная котировка площадки — у внешнего исполнителя с лимитом запросов (решения 95, 111, 121 B5): exec.via_kyber
-/// = да в области площадки (тот же переключатель, что читает её адаптер). Принимает: хранилище настроек, площадку.
-/// Возвращает: да/нет; не задано или ошибка чтения — нет (своя котировка, внешних запросов нет). Ошибок нет.
-pub fn final_external(
-    settings: &Store,
-    venue: &VenueId,
-    current: impl Fn(crate::gateway::events::LiquiditySource) -> bool,
-) -> bool {
-    use crate::gateway::events::LiquiditySource;
-    kyber_final(settings, venue)
-        || [
-            (LiquiditySource::Hashflow, "hashflow.trading"),
-            (LiquiditySource::Fermi, "fermi.trading"),
-        ]
-        .into_iter()
-        .any(|(source, setting)| {
-            settings
-                .flag(
-                    setting,
-                    At {
-                        venue: Some(&venue.0),
-                        coin: None,
-                    },
-                )
-                .unwrap_or(false)
-                && current(source)
-        })
-}
-
 /// Применимость собственного лимита финальных запросов KyberSwap.
 pub fn kyber_final(settings: &Store, venue: &VenueId) -> bool {
     settings

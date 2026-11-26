@@ -436,24 +436,16 @@ fn final_gate(core: &Core, d: &Direction) -> Option<Decimal> {
 /// Есть ли в направлении DEX, чья финальная котировка — у внешнего исполнителя (exec.via_kyber = да; признак фильтра
 /// final_gate). Решение 266: при нём быстрый пересчёт объёма кандидата не применяется (precheck_fast.rs). Ошибок нет.
 pub(super) fn final_external(core: &Core, d: &Direction) -> bool {
-    rd(&core.inner.kinds).iter().any(|(v, k)| {
-        (v == &d.buy_on || v == &d.sell_on)
-            && *k == crate::gateway::contract::VenueKind::Dex
-            && external_at(core, v)
-    })
+    let kinds = core.inner.deps.settings.venue_kinds();
+    [&d.buy_on, &d.sell_on]
+        .into_iter()
+        .any(|v| kinds.has_dex(&v.0) && external_at(core, v))
 }
 
 /// Для RFQ внешний вызов возможен только при уже полученных действующих уровнях.
 pub(super) fn external_at(core: &Core, v: &VenueId) -> bool {
-    crate::gateway::quote_stage::final_external(&core.inner.deps.settings, v, |source| {
-        rd(&core.inner.market)
-            .rfq
-            .get(v)
-            .and_then(|group| group.get(&source))
-            .is_some_and(|(_, rows, expires)| {
-                !rows.is_empty() && *expires > chrono::Utc::now().timestamp_millis()
-            })
-    })
+    crate::gateway::quote_stage::kyber_final(&core.inner.deps.settings, v)
+        || rd(&core.inner.market).has_source(v, chrono::Utc::now().timestamp_millis())
 }
 
 /// Сколько исполнитель реально исполнит на обеих сторонах (финальная котировка; меньшее из двух). Решение 111.

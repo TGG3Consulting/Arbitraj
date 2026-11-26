@@ -353,6 +353,40 @@ mod tests {
     use super::*;
 
     #[test]
+    fn canonical_router_contains_the_configured_immutables_and_quoter_returns_the_same_topology() {
+        let raw: Value = serde_json::from_str(include_str!(
+            "../../../../tests/data/first_run_dex_2026-11-26/ring_infrastructure.json"
+        ))
+        .unwrap();
+        let other: Value = serde_json::from_str(include_str!(
+            "../../../../tests/data/first_run_dex_2026-11-26/ring_ethereum.json"
+        ))
+        .unwrap();
+        let profile = super::ring::archived_profile(1, "ring-exchange-ethereum").unwrap();
+        let layout = ring::Layout::archived(profile).unwrap();
+        assert_eq!(raw["selector"], other["selector"]);
+        assert_eq!(raw["router"], format!("{:#x}", layout.router));
+        assert_eq!(raw["quoter"], format!("{:#x}", layout.quoter));
+        let code: Bytes = raw["router_code"].as_str().unwrap().parse().unwrap();
+        assert_eq!(keccak256(&code), layout.infrastructure[3]);
+        assert!(router_links(&code, &layout));
+        let mut changed = layout.clone();
+        changed.permit = Address::with_last_byte(31);
+        assert!(!router_links(&code, &changed));
+        for (getter, expected) in [
+            ("factory", layout.factory),
+            ("fewFactory", layout.few),
+            ("WETH", layout.native),
+            ("fwWETH", layout.wrapped(layout.native)),
+        ] {
+            assert_eq!(
+                raw["getters"][getter]["result"],
+                format!("{:#x}", expected.into_word())
+            );
+        }
+    }
+
+    #[test]
     fn enumerated_ring_pairs_resolve_to_canonical_underlying_only() {
         let j: Value = serde_json::from_str(include_str!(
             "../../../../tests/data/first_run_dex_2026-11-26/ring_directory.json"

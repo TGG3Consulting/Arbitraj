@@ -157,9 +157,9 @@ mod tests {
         let (commands, inputs) = <(Bytes, Vec<Bytes>)>::abi_decode_params(&bytes).unwrap();
         assert_eq!(nested, 0x21);
         assert_eq!(commands.as_ref(), &[0x02, 0x27, 0x23]);
-        let (asset, pool, raw) = <(Address, Address, U256)>::abi_decode_params(&inputs[1]).unwrap();
+        let (asset, pool, amount) = <(Address, Address, U256)>::abi_decode_params(&inputs[1]).unwrap();
         assert_eq!(
-            (asset, pool, raw),
+            (asset, pool, amount),
             (
                 usdt,
                 raw["pools"][0]["pool"]

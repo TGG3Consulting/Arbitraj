@@ -1,7 +1,7 @@
-name: Historical same-market decisions on enlarged archive
+name: Historical reconstructed multi-route releases
 on:
   push:
-    branches: [audit/all-expanded-markets-history-2611]
+    branches: [audit/all-extended-history-evidence-2611]
 permissions:
   contents: read
 jobs:
@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+        group: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]
     env:
       CARGO_PROFILE_DEV_DEBUG: '0'
       CARGO_INCREMENTAL: '0'
@@ -71,7 +71,7 @@ jobs:
           done
           python - "$RUNNER_TEMP" <<'PY'
           import json,gzip,pathlib,sys
-          t=pathlib.Path(sys.argv[1]);d=json.loads((t/'input.json').read_bytes());(t/'return.pem').write_text(d['return_key']);results={f.stem:json.loads(f.read_bytes())for f in (t/'results').glob('*.json')};assert len(results)==12
+          t=pathlib.Path(sys.argv[1]);d=json.loads((t/'input.json').read_bytes());(t/'return.pem').write_text(d['return_key']);results={f.stem:json.loads(f.read_bytes())for f in (t/'results').glob('*.json')};assert len(results)==([4]*16+[12,8])[int(__import__("os").environ["GROUP"])]
           (t/'result.gz').write_bytes(gzip.compress(json.dumps(results).encode()))
           PY
           /usr/bin/python3 "$p/market_envelope.py" seal "$RUNNER_TEMP/return.pem" "$RUNNER_TEMP/result.enc" "$RUNNER_TEMP/result.gz"

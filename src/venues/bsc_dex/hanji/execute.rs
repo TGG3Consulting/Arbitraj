@@ -136,6 +136,25 @@ pub(in crate::venues::bsc_dex) async fn prior(
         })?;
     Ok(Some(trade))
 }
+/// Владелец успешного INSERT ещё не передал подпись. Если пока сохранялся nonce
+/// допуск источника отозван, можно архивировать лишь свою нетронутую запись.
+pub(in crate::venues::bsc_dex) async fn release_unsent(
+    ctx:&Ctx, slot:&wallet::nonce::Slot, saved:&PendingRef, ready:&[send::ready::Ready], need:U256,
+)->GatewayResult<()> {
+    let Ok(key)=SIGNING.try_with(|(m,_,_)|m.key.clone()) else{return Ok(())};
+    let uncertain=||ctx.err(ErrorCode::OutcomeUnknown,"Hanji: подготовленная запись требует сверки").pending(saved.clone());
+    let hash=saved.venue_ref.as_deref().and_then(|v|v.parse().ok()).ok_or_else(uncertain)?;
+    let nonce=saved.nonce.ok_or_else(uncertain)?;
+    let Err(error)=marker(ctx,hash,nonce,ready,need) else{return Ok(())};
+    let db=ctx.journal.db();
+    let entry=intent::load(db,&key).await.map_err(|_|uncertain())?.ok_or_else(uncertain)?;
+    if entry.lookup.parse!=saved.parse || entry.lookup.venue_ref!=saved.venue_ref || entry.lookup.nonce!=Some(nonce)
+        || entry.result.is_some(){return Err(uncertain());}
+    intent::archive_attempt(db,&key,&entry,"Источник Hanji закрыт до первой передачи подписи")
+        .await.map_err(|_|uncertain())?;
+    wallet::queue_store::save(ctx,&slot.hold().free()).await;
+    Err(error)
+}
 pub(in crate::venues::bsc_dex) async fn trade(
     p: &Parts,
     r: TradeRequest,

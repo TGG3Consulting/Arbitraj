@@ -9,7 +9,7 @@ from eth_utils import keccak
 from record_base_slipstream_executor import OWNER, ROOT, call, calldata, rpc
 from record_v2_chain_pools import NETWORKS
 
-ORDER = "(address,address,address,uint256,uint256,uint256,uint72,uint128,uint256)"
+ORDER = "(address,address,address,uint256,uint256,uint256,uint72,uint128,uint256,bytes32)"
 FIXTURE = ROOT / "tests/data/first_run_dex_2026-11-26/hanji_base.json"
 
 
@@ -53,8 +53,10 @@ def capture(compiled):
                     ["uint256", "uint256", "address[]", "address", "uint256"],
                     [funding, budget, [wrapped, y], OWNER, deadline]))])
             prefix += [approve(y, executor, budget), balance(x), balance(y)]
-            buy = [proxy, y, x, budget, budget-spent, bought, market["asks"][0][0], case["buy_return"][2], deadline]
-            sell = [proxy, x, y, bought, 0, case["received_y"], case["bid_after"][0], case["sell_return"][3], deadline]
+            buy_id = keccak(text=f"{data['hash']}:{proxy}:{budget}:buy")
+            sell_id = keccak(text=f"{data['hash']}:{proxy}:{budget}:sell")
+            buy = [proxy, y, x, budget, budget-spent, bought, market["asks"][0][0], case["buy_return"][2], deadline, buy_id]
+            sell = [proxy, x, y, bought, 0, case["received_y"], case["bid_after"][0], case["sell_return"][3], deadline, sell_id]
             entry = prefix + [order(buy), balance(x), balance(y), approve(x, executor, bought)]
             full = simulate(entry + [order(sell), balance(x), balance(y)])
             for row in full:
@@ -65,7 +67,22 @@ def capture(compiled):
             start_x, start_y = val(len(prefix)-2), val(len(prefix)-1)
             assert val(len(prefix)+1) == start_x + bought and val(len(prefix)+2) == start_y-spent
             assert val(-2) == start_x and val(-1) == start_y - spent + case["received_y"]
-            controls = []
+            def completed(operation_id):
+                return call(executor, calldata("completed(bytes32)", ["bytes32"], [operation_id]))
+            # Prove a retry cannot debit twice even if its original signature was lost.
+            repeated = simulate(entry + [completed(buy_id), order(buy), completed(buy_id), balance(x), balance(y)])
+            if (int.from_bytes(success(repeated[-5]), "big") != 1 or
+                    int(repeated[-4]["status"], 16) != 0 or
+                    not repeated[-4]["returnData"][2:].startswith(keccak(text="AlreadyCompleted(bytes32)")[:4].hex()) or
+                    int.from_bytes(success(repeated[-3]), "big") != 1 or
+                    int.from_bytes(success(repeated[-2]), "big") != start_x + bought or
+                    int.from_bytes(success(repeated[-1]), "big") != start_y - spent):
+                raise ValueError("same leg replay did not give the expected duplicate error and balances")
+            stranger = "0x" + keccak(text="independent review sender")[-20:].hex()
+            denied = simulate(prefix + [order(buy, stranger), completed(buy_id)])
+            if int(denied[-2]["status"], 16) != 0 or int.from_bytes(success(denied[-1]), "big"):
+                raise ValueError("non-owner consumed the operation ID")
+            controls = ["duplicate_operation", "unauthorized_sender"]
             altered_cases = [("buy_min_out_plus_one", prefix, buy, 5, bought+1),
                              ("sell_min_out_plus_one", entry, sell, 5, case["received_y"]+1),
                              ("buy_commission_above_cap", prefix, buy, 7, case["buy_return"][2]-1),
@@ -80,6 +97,11 @@ def capture(compiled):
                 prior = simulate(lead + [balance(x), balance(y), order(altered), balance(x), balance(y)])
                 if int(prior[-3]["status"], 16) or success(prior[-5]) != success(prior[-2]) or success(prior[-4]) != success(prior[-1]):
                     raise ValueError(f"{label}: expected a revert and unchanged owner balances at {proxy}")
+                retry = simulate(lead + [order(altered), completed(args[-1]), order(args), completed(args[-1])])
+                if (int(retry[-4]["status"],16) != 0 or int.from_bytes(success(retry[-3]), "big") != 0
+                        or int.from_bytes(success(retry[-1]), "big") != 1):
+                    raise ValueError(f"{label}: retry after confirmed revert failed")
+                success(retry[-2])
                 controls.append(label)
             recorded.append({"proxy": proxy, "budget_y":budget, "actual_debit_y":spent, "received_x":bought,
                              "sold_x":bought, "actual_credit_y":case["received_y"], "reverted":controls})

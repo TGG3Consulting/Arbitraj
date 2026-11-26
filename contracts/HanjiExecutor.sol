@@ -34,6 +34,9 @@ contract HanjiExecutor {
     address public owner;
     address public wrapped;
     bool private trading;
+    // Stable ID of one economic leg. A reverted transaction rolls this write back, so the
+    // original leg can still be retried after its revert is confirmed by the sender.
+    mapping(bytes32 => bool) public completed;
 
     struct Order {
         address market;
@@ -45,10 +48,12 @@ contract HanjiExecutor {
         uint72 limitPrice;
         uint128 maxCommission;
         uint256 deadline;
+        bytes32 operationId;
     }
     error InvalidOrder();
     error TransferFailed();
     error Unfilled();
+    error AlreadyCompleted(bytes32 operationId);
     error UnexpectedNative();
 
     constructor(address wrappedToken) {
@@ -63,9 +68,11 @@ contract HanjiExecutor {
 
     function execute(Order calldata order) external returns (uint256 spent, uint256 received) {
         if (msg.sender != owner || trading || block.timestamp > order.deadline ||
-            order.market.code.length == 0 || order.input == order.output ||
+            order.operationId == bytes32(0) || order.market.code.length == 0 || order.input == order.output ||
             order.budget == 0 || order.maxUnspent >= order.budget ||
             order.minReceived == 0 || order.limitPrice == 0) revert InvalidOrder();
+        if (completed[order.operationId]) revert AlreadyCompleted(order.operationId);
+        completed[order.operationId] = true;
         trading = true;
         IHanjiMarket market = IHanjiMarket(order.market);
         IHanjiMarket.Config memory config = market.getConfig();

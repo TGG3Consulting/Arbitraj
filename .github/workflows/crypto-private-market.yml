@@ -1,7 +1,4 @@
-name: Encrypted independent remaining market verification
-on:
-  push:
-    branches: [audit/mexc-release-general-2611]
+name: Native fixed-size economics over the complete original card archive
 permissions:
   contents: read
 jobs:
@@ -14,73 +11,66 @@ jobs:
       CARGO_INCREMENTAL: '0'
       CARGO_TERM_COLOR: never
     steps:
-      - uses: actions/checkout@v4
-        with:
-          path: harness
-      - name: Create ephemeral sealed-input receiver
-        run: |
-          umask 077
-          /usr/bin/python3 harness/tools/release_size_matrix/market_envelope.py keygen "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/public.pem"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: receiver
-          path: ${{ runner.temp }}/public.pem
-          retention-days: 1
-      - uses: actions/checkout@v4
-        with:
-          path: release
-          ref: acb36e580ad19b6a63b1330bcb4f15b3040e0e12
-      - uses: actions/checkout@v4
-        with:
-          path: middle
-          ref: 3ca92702e0fd45be2148af3e1bc8b81c3d8c852b
-      - uses: actions/checkout@v4
-        with:
-          path: base
-          ref: 2925a361bb88edff0ee1aab3e18bdd3e6ff5b843
-      - uses: dtolnay/rust-toolchain@1.97.0
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: release -> target
-          shared-key: release-size-matrix
-      - name: Receive private inputs, replay and seal output
-        shell: bash
-        run: |
-          set -euo pipefail
-          ref=refs/heads/audit/general-market-envelope-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
-          for i in $(seq 1 35); do
-            if git -C harness ls-remote --exit-code origin "$ref" >/dev/null 2>&1; then break; fi
-            sleep 25
-          done
-          git -C harness fetch -q --depth=1 origin "$ref"
-          git -C harness show FETCH_HEAD:market.enc > "$RUNNER_TEMP/enc"
-          p="$GITHUB_WORKSPACE/harness/tools/release_size_matrix"
-          env="$p/market_envelope.py"
-          /usr/bin/python3 "$env" open "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/data.json" "$RUNNER_TEMP/enc"
-          rm "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/enc"
-          cp "$RUNNER_TEMP/data.json" "$RUNNER_TEMP/cases.json"
-          /usr/bin/python3 - "$RUNNER_TEMP" "$p" <<'PY'
-          import pathlib,json,sys
-          temp,p=map(pathlib.Path,sys.argv[1:]);data=json.loads((temp/'data.json').read_bytes());(temp/'return.pem').write_text(data['return_key']);(p/'control_settings.json').write_text(json.dumps(data['settings']))
-          PY
-          export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/release/target"
-          for tree in base middle release; do
-            python "$p/general_archive.py" "$tree" "$RUNNER_TEMP/cases.json"
-            if ! (cd "$tree" && cargo test --locked --test general_archive -- --nocapture > "$RUNNER_TEMP/$tree.log" 2>&1); then
-              grep -E 'error(\[E[0-9]+\])?:|panicked at|FAILED|assertion' -A 4 "$RUNNER_TEMP/$tree.log" | head -n 75 || true
-              exit 1
-            fi
-            sed -n -E 's/^(test [^ ]+ \.\.\. )?ACTUAL_V2_MATRIX //p' "$RUNNER_TEMP/$tree.log" > "$RUNNER_TEMP/$tree.jsonl"
-            test -s "$RUNNER_TEMP/$tree.jsonl"
-          done
-          python - "$RUNNER_TEMP" <<'PY'
-          import pathlib,sys,gzip,json
-          p=pathlib.Path(sys.argv[1]);d={k:[json.loads(x)for x in (p/(k+'.jsonl')).read_text().splitlines()] for k in ('base','middle','release')}
-          n=len(json.loads((p/'cases.json').read_text())['cases']);assert all(len(v)==2*n and all('result' in x for x in v) for v in d.values());(p/'results.gz').write_bytes(gzip.compress(json.dumps(d).encode()))
-          PY
-          /usr/bin/python3 "$env" seal "$RUNNER_TEMP/return.pem" "$RUNNER_TEMP/result.enc" "$RUNNER_TEMP/results.gz"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: encrypted-native-result
-          path: ${{ runner.temp }}/result.enc
-          retention-days: 1
+    - uses: actions/checkout@v4
+      with:
+        path: harness
+    - name: Create ephemeral sealed-input receiver
+      run: 'umask 077
+
+        /usr/bin/python3 harness/tools/release_size_matrix/market_envelope.py keygen "$RUNNER_TEMP/key.pem"
+        "$RUNNER_TEMP/public.pem"
+
+        '
+    - uses: actions/upload-artifact@v4
+      with:
+        name: receiver
+        path: ${{ runner.temp }}/public.pem
+        retention-days: 1
+    - uses: actions/checkout@v4
+      with:
+        path: release
+        ref: acb36e580ad19b6a63b1330bcb4f15b3040e0e12
+    - uses: actions/checkout@v4
+      with:
+        path: middle
+        ref: 3ca92702e0fd45be2148af3e1bc8b81c3d8c852b
+    - uses: actions/checkout@v4
+      with:
+        path: base
+        ref: 2925a361bb88edff0ee1aab3e18bdd3e6ff5b843
+    - uses: actions/checkout@v4
+      with:
+        ref: 15095ea3c6b4bd27291d026e857f14f6556a1e49
+        path: older
+    - uses: dtolnay/rust-toolchain@1.97.0
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: release -> target
+        shared-key: release-size-matrix
+    - name: Receive private inputs, replay and seal output
+      shell: bash
+      run: "set -euo pipefail\nref=refs/heads/audit/general-market-envelope-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}\n\
+        for i in $(seq 1 35); do\n  if git -C harness ls-remote --exit-code origin \"$ref\" >/dev/null\
+        \ 2>&1; then break; fi\n  sleep 25\ndone\ngit -C harness fetch -q --depth=1 origin \"$ref\"\n\
+        git -C harness show FETCH_HEAD:market.enc > \"$RUNNER_TEMP/enc\"\np=\"$GITHUB_WORKSPACE/harness/tools/release_size_matrix\"\
+        \nenv=\"$p/market_envelope.py\"\n/usr/bin/python3 \"$env\" open \"$RUNNER_TEMP/key.pem\" \"$RUNNER_TEMP/data.json\"\
+        \ \"$RUNNER_TEMP/enc\"\nrm \"$RUNNER_TEMP/key.pem\" \"$RUNNER_TEMP/enc\"\np=\"$GITHUB_WORKSPACE/harness/tools/release_size_matrix\"\
+        \nexport CARGO_TARGET_DIR=\"$GITHUB_WORKSPACE/release/target\" ARCHIVE_IN=\"$RUNNER_TEMP/data.json\"\
+        \nfor tree in older base middle release; do\n  export ARCHIVE_OUT=\"$RUNNER_TEMP/$tree.json\"\n\
+        \  cp \"$p/fixed_archive.rs\" \"$tree/tests/fixed_archive.rs\"\n  if ! (cd \"$tree\" && cargo\
+        \ test --locked --test fixed_archive > \"$RUNNER_TEMP/ci.log\" 2>&1); then\n    grep -E 'error(\\\
+        [E[0-9]+\\])?:|panicked at|assertion .*failed|FAILED' -A4 \"$RUNNER_TEMP/ci.log\" | head -n 75\
+        \ || true\n    exit 1\n  fi\ndone\npython - \"$RUNNER_TEMP\" <<'PY'\nimport pathlib,json,gzip,sys\n\
+        p=pathlib.Path(sys.argv[1]); inp=json.loads((p/'data.json').read_bytes())\n(p/'return.pem').write_text(inp['return_key'])\n\
+        d={t:json.loads((p/(t+'.json')).read_bytes())for t in ('older','base','middle','release')}\n(p/'results.gz').write_bytes(gzip.compress(json.dumps(d).encode()))\n\
+        PY\n/usr/bin/python3 \"$env\" seal \"$RUNNER_TEMP/return.pem\" \"$RUNNER_TEMP/result.enc\" \"\
+        $RUNNER_TEMP/results.gz\"\n"
+    - uses: actions/upload-artifact@v4
+      with:
+        name: encrypted-native-result
+        path: ${{ runner.temp }}/result.enc
+        retention-days: 1
+'on':
+  push:
+    branches:
+    - audit/full-fixed-cards-2611

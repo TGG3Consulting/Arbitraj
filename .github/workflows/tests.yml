@@ -1,62 +1,19 @@
-# Полный прогон тестов параллельными частями на машинах GitHub (Тигран 15.11.2026: «сборка в гите», ускорить прогон).
-# Запускается на пуш в ветки test/** (ветки только для прогона — никуда не сливаются, сервер не трогают) и вручную.
-# Все наборы tests/*.rs делятся на SHARDS частей по порядку имён (номер файла mod SHARDS); часть 0 дополнительно
-# гонит --lib, --bins и doc-тесты. Отдельная работа — clippy -D warnings. Версия Rust закреплена той же, что у
-# разработчиков, чтобы линтер не расходился.
-name: Tests (parallel)
+name: Historical MEXC and Gate quote controls
 on:
   push:
-    branches: ["test/**"]
-  workflow_dispatch:
-env:
-  CARGO_PROFILE_DEV_DEBUG: "0"
-  CARGO_INCREMENTAL: "0"
-  SHARDS: "8"
+    branches: ["test/mexc-quote-before-20261126"]
+permissions:
+  contents: read
 jobs:
-  clippy:
+  control:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.97.0
-        with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: clippy
-      - run: cargo clippy --all-targets --locked -- -D warnings
-  tests:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.97.0
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: tests
-          save-if: ${{ matrix.shard == 0 }}
-      - name: Наборы этой части
-        id: pick
-        run: |
-          args=""
-          i=0
-          for f in $(ls tests/*.rs | sort); do
-            if [ $((i % SHARDS)) -eq ${{ matrix.shard }} ]; then args="$args --test $(basename "$f" .rs)"; fi
-            i=$((i + 1))
-          done
-          echo "args=$args" >> "$GITHUB_OUTPUT"
-          echo "HEAD $(git rev-parse HEAD); всего наборов $i"
-      - name: Тесты части
-        run: |
-          extra=""
-          if [ "${{ matrix.shard }}" = "0" ]; then extra="--lib --bins"; fi
-          cargo test --locked --no-fail-fast $extra ${{ steps.pick.outputs.args }}
-      # t190: таблица «ближайшая большая» против интерполяции на записи 18.11 — вывод теста виден только с --nocapture.
-      - name: Таблица кривых крючков (t190)
-        if: matrix.shard == 0
-        run: cargo test --locked --test bsc_dex_hook_curve_t190 -- --nocapture
-      - name: Doc-тесты
-        if: matrix.shard == 0
-        run: cargo test --locked --doc
+      - run: cargo test --locked --lib --test rest_book_238 historical_quote

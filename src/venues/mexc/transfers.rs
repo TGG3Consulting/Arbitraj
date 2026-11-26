@@ -194,3 +194,59 @@ pub(super) fn transfer(
         updated_at: Utc::now(),
     })
 }
+
+#[cfg(test)]
+mod historical_quote_control {
+    use super::*;
+    use crate::settings::store::Store;
+    use crate::storage::{db::Db, journal::Journal, raw_log::RawLog};
+    use serde_json::json;
+    use tokio::sync::broadcast;
+
+    #[tokio::test]
+    async fn historical_quote_mexc_owl_and_jagent_raw_units() {
+        let d =
+            std::env::temp_dir().join(format!("mexc-historical-control-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let db = Db::open(&d.join("state.sqlite")).unwrap();
+        let (jtx, _) = broadcast::channel(8);
+        let journal = Journal::new(db.clone(), jtx);
+        let (changes, _) = broadcast::channel(8);
+        let settings = Store::load(db, changes, journal.clone()).await.unwrap();
+        let ctx = Ctx {
+            raw: RawLog::start(d.join("raw"), settings.clone()),
+            settings,
+            journal,
+            vault: crate::secrets::Vault::locked(&d.join("secrets.enc")),
+            http: reqwest::Client::new(),
+            taps: Default::default(),
+        };
+        let hold = crate::venues::mexc::deposit_hold::parse(&json!([{
+            "status":9,"coin":"USDT-BSC","network":"BNB Smart Chain(BEP20)",
+            "amount":"47.080337518416492026","confirmTimes":42,"unlockConfirm":61
+        }]))
+        .unwrap();
+        assert_eq!(hold.items.len(), 1);
+        assert_eq!(&hold.items[0].asset, "USDT-BSC");
+        assert_eq!(
+            hold.items[0].amount,
+            "47.080337518416492026"
+                .parse::<rust_decimal::Decimal>()
+                .unwrap()
+        );
+        // The report retained the wire amount, fee difference and reported fee unit, but no raw request id or network.
+        for network in [Some("BNB Smart Chain(BEP20)"), None] {
+            let mut record = json!({"coin":"USDT-BSC","amount":"160.5","transactionFee":"0.01","txId":"control-tx"});
+            if let Some(name) = network {
+                record["network"] = json!(name);
+            }
+            let sent = transfer(&ctx, &record, "control-withdrawal", TransferStatus::Sent).unwrap();
+            let fee = sent.fee.unwrap();
+            assert_eq!(&fee.asset, "USDT-BSC");
+            assert_eq!(
+                fee.amount,
+                sent.amount - "160.49".parse::<rust_decimal::Decimal>().unwrap()
+            );
+        }
+    }
+}

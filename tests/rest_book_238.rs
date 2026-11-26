@@ -236,3 +236,37 @@ fn poloniex_doc_orderbook_flat_pairs() {
     let bad = json!({"asks": ["1.91"], "bids": []});
     assert!(arb::venues::poloniex::book_print::levels_of(&bad).is_err());
 }
+
+#[tokio::test]
+async fn historical_quote_gate_received_rest_book_does_not_provide_ace_rate() {
+    let e = env("before-ace-fees").await;
+    e.settings
+        .set(
+            "venue.quote_asset",
+            Scope::Venue("gate".into()),
+            Some(json!("USDT")),
+            "control",
+        )
+        .await
+        .unwrap();
+    let ctx = arb::venues::gate::ctx::Ctx {
+        settings: e.settings.clone(),
+        vault: e.vault.clone(),
+        journal: e.journal.clone(),
+        raw: e.raw.clone(),
+        http: reqwest::Client::new(),
+        taps: Default::default(),
+    };
+    // The old ACE prices are absent. The recorded Gate payload isolates the post-book fee step.
+    let payload = read("tests/data/cex_samples_2026_11_04/gate_spot_order_book_CAKE_USDT.json");
+    let a = asset("ACE");
+    let arrived = arb::venues::gate::book_version::rest_book(&ctx, &payload, &a).unwrap();
+    assert!(!arrived.bids.is_empty());
+    let quote = arb::venues::gate::book::frozen(&ctx, &Default::default(), &a, Side::Sell, arrived);
+    let err = quote.err().expect("ACE_USDT has no cached rates");
+    assert!(
+        err.message.contains("ACE_USDT") && err.message.contains("ставка комиссии ещё не получена"),
+        "{}",
+        err.message
+    );
+}

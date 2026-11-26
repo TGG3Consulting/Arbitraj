@@ -18,8 +18,8 @@ ROUTER="0x423fae8ee58833f283e8845479bd705514110ec3"
 ENDPOINTS=["https://base.gateway.tenderly.co","https://mainnet.base.org","https://base-rpc.publicnode.com"]
 
 
-def role(c,addr):
-    url=f"https://sourcify.dev/server/v2/contract/8453/{addr}?fields=all"
+def role(c,addr,chain_id=8453):
+    url=f"https://sourcify.dev/server/v2/contract/{chain_id}/{addr}?fields=all"
     response=requests.get(url,timeout=25);response.raise_for_status();data=response.json()
     live=rpc(c.endpoint,"eth_getCode",[addr,c.selector])
     if not data.get("runtimeMatch") or live.lower()!=data["runtimeBytecode"]["onchainBytecode"].lower():

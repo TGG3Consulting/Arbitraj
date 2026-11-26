@@ -97,25 +97,52 @@ def curve(steps, supply, size, mint, rate, unit):
     return (reserve+royalty if mint else reserve-royalty),royalty
 
 
-def wallet(arc, token, amount, cost, refund):
-    bal=lambda t:leg(t,"balanceOf(address)",["address"],[OWNER])
+def wallet(arc, token, amount, cost, mint_royalty, refund, burn_royalty):
+    balance=lambda t,owner:leg(t,"balanceOf(address)",["address"],[owner])
     approve=lambda t,n:leg(t,"approve(address,uint256)",["address","uint256"],[BOND,n])
     mint=lambda ceiling:leg(BOND,"mint(address,uint256,uint256,address)",["address","uint256","uint256","address"],[token,amount,ceiling,OWNER])
     burn=lambda floor:leg(BOND,"burn(address,uint256,uint256,address)",["address","uint256","uint256","address"],[token,amount,floor,OWNER])
-    prefix=[leg(arc.weth,"deposit()",value=cost),approve(arc.weth,cost)]
-    before=[bal(arc.weth),bal(token)]
-    seq=prefix+before+[mint(cost-1)]+before+[mint(cost)]+before+[approve(token,amount),burn(refund+1)]+before+[burn(refund)]+before
+    # One parent and one sequence: issuer accounting, Bond's physical inventory, and both wallet balances.
+    balances=[balance(arc.weth,OWNER),balance(token,OWNER),balance(arc.weth,BOND),
+              leg(BOND,"tokenBond(address)",["address"],[token])]
+    seq=[leg(arc.weth,"deposit()",value=cost),approve(arc.weth,cost)]
+    def mark(calls):
+        idx=len(seq)
+        seq.extend(calls)
+        return idx
+    before=mark(balances)
+    refuse_mint=mark([mint(cost-1)])
+    rolled_mint=mark(balances)
+    buy=mark([mint(cost)])
+    minted=mark(balances)
+    quote=mark([leg(BOND,"getRefundForTokens(address,uint256)",["address","uint256"],[token,amount])])
+    mark([approve(token,amount)])
+    refuse_burn=mark([burn(refund+1)])
+    rolled_burn=mark(balances)
+    sell=mark([burn(refund)])
+    burned=mark(balances)
     r=arc.simulate(seq)
-    if [i for i,row in enumerate(r) if row["status"]!="0x1"]!=[4,11]:
+    if [i for i,row in enumerate(r) if row["status"]!="0x1"]!=[refuse_mint,refuse_burn]:
         raise ValueError(("unexpected wallet result",token,[(i,row.get("error")) for i,row in enumerate(r) if row["status"]!="0x1"]))
-    word=lambda i:int(r[i]["returnData"],16)
-    pairs=lambda i:(word(i),word(i+1))
-    if pairs(2)!=pairs(5) or pairs(8)!=pairs(12):
-        raise ValueError("rejected price changed balance")
-    if pairs(8)!=(word(2)-cost,word(3)+amount) or pairs(15)!=(word(8)+refund,word(9)-amount):
-        raise ValueError("wallet delta disagrees with official curve")
-    return dict(size=str(amount),mint_cost=str(cost),redeem=str(refund),mint_gas=int(r[7]["gasUsed"],16),
-                burn_gas=int(r[14]["gasUsed"],16),mint_reject=r[4]["error"],burn_reject=r[11]["error"])
+    def snapshot(idx):
+        wallet_reserve,wallet_token,physical=(int(r[idx+n]["returnData"],16) for n in range(3))
+        terms=decode(["address","uint16","uint16","uint40","address","uint256"],unpack(r[idx+3]["returnData"]))
+        if terms[4]!=arc.weth:raise ValueError("reserve changed")
+        return (wallet_reserve,wallet_token,physical,terms[5])
+    old,issued,final=map(snapshot,(before,minted,burned))
+    if old!=snapshot(rolled_mint) or issued!=snapshot(rolled_burn):
+        raise ValueError("rejected limit changed balances")
+    if tuple(b-a for a,b in zip(old,issued,strict=True))!=(-cost,amount,cost,cost-mint_royalty):
+        raise ValueError("mint delta disagrees with Bond accounting")
+    if tuple(b-a for a,b in zip(issued,final,strict=True))!=(refund,-amount,-refund,-refund-burn_royalty):
+        raise ValueError("burn delta disagrees with Bond accounting")
+    if decode(["uint256","uint256"],unpack(r[quote]["returnData"]))!=(refund,burn_royalty):
+        raise ValueError("post-mint refund and royalty disagree with model")
+    return dict(size=str(amount),mint_cost=str(cost),redeem=str(refund),mint_gas=int(r[buy]["gasUsed"],16),
+                burn_gas=int(r[sell]["gasUsed"],16),mint_reject=r[refuse_mint]["error"],burn_reject=r[refuse_burn]["error"],
+                mint_gross=str(cost-mint_royalty),mint_royalty=str(mint_royalty),burn_gross=str(refund+burn_royalty),burn_royalty=str(burn_royalty),
+                payer=OWNER,before=list(map(str,old)),after_mint=list(map(str,issued)),after_burn=list(map(str,final)),
+                mint_logs=r[buy]["logs"],burn_logs=r[sell]["logs"])
 
 
 def capture(network):
@@ -148,14 +175,14 @@ def capture(network):
             if not 0<cost<10**18:continue
             q=arc.view(BOND,"getReserveForToken(address,uint256)",["address","uint256"],[token,size],["uint256","uint256"])
             if q!=(cost,fee):raise ValueError(("mint rounding",row,size,q,cost,fee))
-            refund,_=curve(steps,supply+size,size,False,row["burn_bps"],unit)
-            if refund:trials.append(wallet(arc,token,size,cost,refund))
+            refund,burn_fee=curve(steps,supply+size,size,False,row["burn_bps"],unit)
+            if refund:trials.append(wallet(arc,token,size,cost,fee,refund,burn_fee))
         if trials:
             markets.append(dict(**row,supply=str(supply),steps=[[str(h),str(p)] for h,p in steps],trials=trials))
         if len(markets)==3:break
     if not markets:raise ValueError("no ERC20/WETH wallet controls covered")
     return dict(chain_id=arc.chain,height=arc.height,selector=arc.tag,state_root=arc.header["stateRoot"],bond=BOND,
-                bond_hash=BOND_HASH,token_implementation="0x"+TOKEN,weth=arc.weth,total=count,directory=directory,markets=markets)
+                bond_hash=BOND_HASH,token_implementation="0x"+TOKEN,weth=arc.weth,weth_runtime_hash=arc.code_hash(arc.weth),total=count,directory=directory,markets=markets)
 
 
 if __name__=="__main__":

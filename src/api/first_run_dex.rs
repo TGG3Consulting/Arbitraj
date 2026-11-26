@@ -308,6 +308,12 @@ mod tests {
                         let proof:Value=serde_json::from_reader(flate2::read::GzDecoder::new(raw.as_slice())).unwrap();
                         assert_eq!(proof["selector"],snapshot["selector"]);
                         assert_eq!(proof["init_code_hash"].as_str(),Some(text.as_str()));
+                    } else if k == "dex.pool_code_hashes" && p.id == "swapr_ethereum" {
+                        let raw=include_bytes!("../../tests/data/first_run_dex_2026-11-26/swapr_ethereum.json.gz");
+                        let proof:Value=serde_json::from_reader(flate2::read::GzDecoder::new(raw.as_slice())).unwrap();
+                        assert_eq!(proof["selector"],snapshot["selector"]);
+                        assert_eq!(proof["chain_id"],p.chain_id);
+                        assert_eq!(proof["creation_code_hash"].as_str(),Some(text.as_str()));
                     } else if k == "dex.pool_code_hashes" && p.id == "memebox-base" {
                         let archive:Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/memebox_base.json")).unwrap();
                         assert_eq!(archive["selector"],snapshot["selector"]);

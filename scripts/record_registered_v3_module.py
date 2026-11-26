@@ -14,7 +14,7 @@ from requests import RequestException
 WETH="0x4200000000000000000000000000000000000006"
 ADAPTER="0x"+keccak(text="isolated registered V3 module")[-20:].hex()
 
-def record(market,artifact,url,*,bunny=False):
+def record(market,artifact,url,*,bunny=False,candy=False):
     tag=market["selector"];authority=market["router"] if bunny else market["factory"]
     head=rpc(url,"eth_getBlockByHash",[tag["blockHash"],False])
     if head["stateRoot"]!=market["state_root"] or int(rpc(url,"eth_chainId",[]),16)!=8453:raise ValueError("unexpected parent")
@@ -40,7 +40,7 @@ def record(market,artifact,url,*,bunny=False):
                 def leg(prefix,token,out,reference):
                     qty=int(reference["amount"]);net=int(reference["received"])
                     def order(floor,end):
-                        if bunny and mode=="v5":
+                        if (bunny or candy) and mode=="v5":
                             return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
                                       ["address","uint256","address","uint256","uint256",STEP+"[]"],
                                       [token,qty,out,floor,end,[(29,ADAPTER,token,out,10000,b"")]])
@@ -76,13 +76,22 @@ if __name__=="__main__":
     ap=argparse.ArgumentParser(description=__doc__)
     for k in ("market","module","output"):ap.add_argument(k,type=Path)
     ap.add_argument("--bunny",action="store_true")
+    ap.add_argument("--candy",action="store_true")
     a=ap.parse_args();m=json.loads(a.market.read_bytes());b=json.loads(a.module.read_bytes());errors=[]
     if a.bunny:
         from record_bunnyswap_base import FRIEND, OWNER
         m["markets"]=[dict(pool=m["pair"],tokens=[WETH,FRIEND],
                            cases=[dict(owner=OWNER,input=WETH,buy=c["buy"],sell=c["sell"]) for c in m["cases"]])]
+    if a.candy:
+        from record_base_slipstream_executor import OWNER
+        markets={row["pool"]:row["tokens"] for row in m["pools"]}
+        def observed(row):
+            return {"amount":row["spent"],"received":row["paid"]}
+        m["markets"]=[dict(pool=row["pool"],tokens=markets[row["pool"]],cases=[
+            dict(owner=OWNER,input=WETH,buy=observed(c["buy"]),sell=observed(c["sell"])) for c in row["cases"]
+        ]) for row in m["net_payouts"]]
     for url in dict.fromkeys([m["endpoint"],*ENDPOINTS]):
-        try:j=record(m,b,url,bunny=a.bunny)
+        try:j=record(m,b,url,bunny=a.bunny,candy=a.candy)
         except (RequestException,ValueError,RuntimeError,KeyError) as err:errors.append((url,str(err)[:180]));continue
         a.output.write_text(json.dumps(j,separators=(",",":"))+"\n",encoding="utf8");break
     else:raise RuntimeError(f"Registered V3 archive failed: {errors}")

@@ -43,7 +43,10 @@ fn u(x: u64) -> U256 {
 }
 
 /// approxEq (L45-L51). Ошибок нет; None — переполнение.
-fn approx_eq(x: U256, y: U256) -> Option<bool> {
+fn approx_eq(x: U256, y: U256, exact_match: bool) -> Option<bool> {
+    if exact_match && x == y {
+        return Some(true);
+    }
     Some(if x > y {
         x < y.checked_add(y.checked_mul(U256::from(1u8))? / u(APPROX_BASE))?
     } else {
@@ -136,6 +139,15 @@ fn k_out(p: &Params, amount: U256) -> Option<(U256, U256, U256, U256, U256)> {
 /// стороны, вход. Возвращает: (выход, новые фиктивные резервы вход/выход). None — как откат: нулевой вход / резерв,
 /// переполнение, выход больше резерва.
 pub fn amount_out(p: &Params, amount: U256) -> Option<(U256, U256, U256)> {
+    amount_out_version(p, amount, false)
+}
+
+/// На Ethereum SmardexLibrary.approxEq явно принимает равные операнды даже при нулевом допуске.
+pub(super) fn amount_out_version(
+    p: &Params,
+    amount: U256,
+    exact_match: bool,
+) -> Option<(U256, U256, U256)> {
     let base = u(FEES_BASE);
     if amount.is_zero()
         || p.reserve_in.is_zero()
@@ -153,6 +165,7 @@ pub fn amount_out(p: &Params, amount: U256) -> Option<(U256, U256, U256)> {
         && approx_eq(
             s.fictive_in.checked_mul(s.price_out)?,
             s.fictive_out.checked_mul(s.price_in)?,
+            exact_match,
         )?
     {
         (s.fictive_in, s.fictive_out) =

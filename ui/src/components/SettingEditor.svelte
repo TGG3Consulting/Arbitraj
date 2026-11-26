@@ -31,8 +31,7 @@
 
   /**
    * Советуемое значение из «Первого запуска» — один раз при создании поля (как «не сохранено»), только если
-   * настройка ещё не задана. Ничего не сохраняет: Тигран жмёт «Сохранить» обычным путём. Для Bool/TextList
-   * ввод идёт не через draft — там совета нет, строки-переключатели в таблице первого запуска не предзаполняются.
+   * настройка ещё не задана. Для Bool показывается предложенное значение, оператор сохраняет его кнопкой.
    */
   function seedDraft() {
     const suggested = takePrefill(def.name, scope);
@@ -110,6 +109,7 @@
   {#if current === undefined && inherited}<span class="muted">→ действует {inherited}</span>{/if}
   {#if def.kind === 'Integer' && def.max != null}<span class="muted">не больше {def.max}</span>{/if}
   {#if def.kind === 'Bool'}
+    {#if draft === 'true' || draft === 'false'}<span class="muted">Предложено {draft === 'true' ? 'да' : 'нет'}</span>{/if}
     <button disabled={busy || current === true} onclick={() => save(true)}>да</button>
     <button disabled={busy || current === false} onclick={() => save(false)}>нет</button>
   {:else if def.kind === 'Choice'}

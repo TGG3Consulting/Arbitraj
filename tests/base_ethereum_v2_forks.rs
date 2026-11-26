@@ -24,7 +24,28 @@ fn fixed_fee_profiles_match_the_executor_and_wallet_balances() {
             .find(|row| row["dex"] == profile["id"] && row["network"] == profile["network"])
             .unwrap();
         assert_eq!(profile["settings"]["dex.factory"], capture["factory"]);
-        assert_eq!(capture["factory_proof"]["embedded_pair"], true);
+        if profile["settings"]["dex.kind"] == "v2_fork_executor_create2" {
+            use alloy_primitives::{Address, B256};
+            use arb::venues::bsc_dex::pools::verify::v2_create2;
+            let parse = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
+            let hash: B256 = capture["creation_code_hash"]
+                .as_str()
+                .unwrap()
+                .parse()
+                .unwrap();
+            assert_eq!(
+                profile["settings"]["dex.pool_code_hashes"][0],
+                capture["creation_code_hash"]
+            );
+            let (a, b) = (parse(&capture["tokens"][0]), parse(&capture["tokens"][1]));
+            let factory = parse(&capture["factory"]);
+            let pool = parse(&capture["pool"]);
+            assert_eq!(v2_create2(factory, a, b, hash), pool);
+            assert_eq!(v2_create2(factory, b, a, hash), pool);
+            assert_ne!(v2_create2(factory, a, b, B256::ZERO), pool);
+        } else {
+            assert_eq!(capture["factory_proof"]["embedded_pair"], true);
+        }
         assert_eq!(capture["runtime_match"], true);
         assert_eq!(profile["settings"]["dex.v2_fee_source"], "fixed");
         let pct: Decimal = profile["settings"]["dex.v2_fee_pct"]
@@ -72,5 +93,5 @@ fn fixed_fee_profiles_match_the_executor_and_wallet_balances() {
         }
         admitted += 1;
     }
-    assert!(admitted >= 13);
+    assert!(admitted >= 14);
 }

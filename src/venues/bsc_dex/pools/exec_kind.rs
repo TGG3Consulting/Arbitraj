@@ -183,7 +183,11 @@ impl ExecKind {
 /// deadline)) — SADDLE (решение 122 X, стейблсвапы). V2-форк без роутера (v2_fork_executor, решение 280) — V2. Ошибок нет.
 pub fn of(kind: &str) -> Option<ExecKind> {
     Some(match kind {
-        "pancakeswap_v2" | "uniswap_v2" | "v2_fork" | "v2_fork_executor" => ExecKind::V2,
+        "pancakeswap_v2"
+        | "uniswap_v2"
+        | "v2_fork"
+        | "v2_fork_executor"
+        | "v2_fork_executor_create2" => ExecKind::V2,
         // Решение 483: Ramses CL — swap(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data) как у V3
         // (RamsesV2Pool.sol L944), обратный вызов ramsesV2SwapCallback (L1238) — проверка dex.v3_swap_callback
         // (exec_callback.rs); Ramses CL V2 — тот же swap и uniswapV3SwapCallback (RamsesV3Pool.sol L436-L442, L662).
@@ -256,7 +260,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // Решение 287: swap пула — подпись V2 без белого списка (DMMPool.sol L162-L210: проверок вызывающего нет); шаг 15, только v2.
         "kyber_dmm" => ExecKind::KyberDmm,
         // Решение 288: swap пары без белого списка (SmardexPair.sol L155-L319: только lock и «to» не токен пары); шаг 16, v2.
-        "smardex" => ExecKind::Smardex,
+        "smardex" | "smardex_exact_equality" => ExecKind::Smardex,
         // Решение 289: Vault.swap — вызывающий = sender, без relayer и белого списка (Swaps.sol L56-L104: whenNotPaused,
         // authenticateFor(funds.sender)); проба на цепи — tests/data/balancer_acsi_2026-11-15/exec_sim.json; шаг 17, v2.
         "balancer_v2" => ExecKind::Balancer,

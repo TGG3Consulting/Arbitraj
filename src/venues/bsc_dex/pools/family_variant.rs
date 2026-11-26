@@ -35,6 +35,8 @@ pub enum Variant {
     SlipstreamAero,
     /// Aerodrome Base CLFactory.getSwapFee(pool), читается через CLPool.fee() на блоке.
     SlipstreamDynamicFee,
+    /// V2 with a fixed pair implementation authenticated by its CREATE2 init code.
+    V2Create2,
     /// Curve StableSwap 2021 (dex.kind = curve_stableswap_plain, решение 472): протокол Proto::CurveStable (геттеры
     /// coins/balances/fee, get_dy и exchange с int128 — те же), но A — `A_precise()` (A·A_PRECISION, A_PRECISION = 100),
     /// несходимость D/y — откат (`raise`), у пула из двух монет D_P — одной строкой `D·D/x0·D/x1/4`. Исходники: 2pool
@@ -89,11 +91,14 @@ pub enum Variant {
     /// комиссия — `fee()` пары над FEE_DENOM = 1 000 000 (L56, L63; настройки dex.solidly_fee_*), Sync(uint112, uint112)
     /// (IPair.sol L15), PairCreated(token0, token1, pair, uint256) без stable (IPairFactory.sol L5).
     RamsesLegacy,
+    /// Ethereum SmardexFactory 0xB878…214F: approxEq(x,x) возвращает true и при округлении допуска до нуля.
+    SmardexExactEquality,
 }
 
 /// Вариант по значению dex.kind. Принимает: значение dex.kind. Возвращает: вариант (неизвестное — Base). Ошибок нет.
 pub fn of(kind: &str) -> Variant {
     match kind {
+        "smardex_exact_equality" => Variant::SmardexExactEquality,
         "kyber_elastic_v1" => Variant::ElasticV1,
         "slipstream_aero" => Variant::SlipstreamAero,
         "slipstream_dynamic_fee" => Variant::SlipstreamDynamicFee,
@@ -103,6 +108,7 @@ pub fn of(kind: &str) -> Variant {
         "curve_crypto2_v1" => Variant::CryptoPair,
         "v3_fork_ramses" => Variant::RamsesCl,
         "v3_fork_uniswap_lm" => Variant::UniswapV3Lm,
+        "v2_fork_executor_create2" => Variant::V2Create2,
         "slipstream_ramses" => Variant::RamsesClV2,
         "solidly_v1_ramses" => Variant::RamsesLegacy,
         _ => Variant::Base,

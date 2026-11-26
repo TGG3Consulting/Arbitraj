@@ -55,6 +55,8 @@ def tables(network, snapshots, profiles):
             if isinstance(v, list):
                 values = [f"{x}{{суффикс}}" for x in v] if k == "dex.sub_dex" else v
                 v = ", ".join(values) or "[]"
+            elif isinstance(v, bool):
+                v = "да" if v else "нет"
             fields.append(f"`{k} = {v}`")
         params = "<br>".join(fields)
         out.append(f"| `{id}` | {params} | {row['source']} |")
@@ -105,6 +107,15 @@ def tables(network, snapshots, profiles):
                     "дал выход querySellBase и querySellQuote на двух объёмах. Комиссии LP и MT приведены "
                     "для нулевого адреса, который использует загрузчик PMM. Фабрики позволяют находить пулы "
                     f"при включении поиска по фабрике. [Реестры, состояние PMM и котировки](../{dodo_file})."])
+    smardex = f"tests/data/first_run_dex_2026-11-26/smardex_{network}.json"
+    if Path(smardex).exists():
+        info = read(Path(smardex))
+        included = sum(row["own"] and row["fees"] for row in info["lineage"])
+        out.extend(["", f"SmarDex · фабрика перечислила {len(info['lineage'])} пар. Свои фабрику и ABI getPairFees "
+                    f"подтвердили {included}. У трёх пар записаны getAmountOutFromPair по двум сторонам и размерам. "
+                    f"На одинаковых параметрах чистая функция роутера вернула {info['equal_price_example']['result'][0]} "
+                    "минимальных единиц. Проверка учитывает округление при равных отношениях цен и версию библиотеки. "
+                    f"[Фабрика, исходник, пары и котировки](../{smardex})."])
     if base:
         out.extend(["", "Aerodrome Slipstream · 3 разных пула WETH/USDC, по одному у каждой фабрики. "
                     "16 операций ArbExecutor.execute в eth_simulateV1, два направления и два размера у каждой фабрики, "

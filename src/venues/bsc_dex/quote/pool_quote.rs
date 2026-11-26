@@ -511,8 +511,14 @@ pub fn swap(
                 return Err(why("SmarDex: точный выход не поддерживается"));
             }
             let p = smardex_swap::side(d, zero_for_one);
-            let out = smardex_swap::swap_out(&p, d.price_average_ts, d.block_ts, amount)
-                .ok_or_else(none)?;
+            let out = smardex_swap::swap_out_version(
+                &p,
+                d.price_average_ts,
+                d.block_ts,
+                amount,
+                e.family.variant == Variant::SmardexExactEquality,
+            )
+            .ok_or_else(none)?;
             Ok(Swapped {
                 amount_in: amount,
                 amount_out: out,

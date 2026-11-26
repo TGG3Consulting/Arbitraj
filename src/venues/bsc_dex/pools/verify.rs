@@ -433,6 +433,18 @@ fn found(
     r: &Read,
     key: Option<u32>,
 ) -> Result<Found, String> {
+    if c.family.variant == Variant::V2Create2 {
+        let hashes = super::verify_algebra_dir::hashes(ctx, c)?;
+        if !hashes
+            .into_iter()
+            .any(|hash| v2_create2(r.factory, r.token0, r.token1, hash) == pool)
+        {
+            return Err(format!(
+                "DEX {}: адрес пары {pool} не совпал с проверенным кодом CREATE2",
+                c.family.id
+            ));
+        }
+    }
     let fee_pips = match (c.family.proto, r.v2_fee) {
         (Proto::V2, Some(v)) => {
             let den = ctx
@@ -459,4 +471,18 @@ fn found(
         key: None,
         hooks: None,
     })
+}
+
+/// Uniswap V2 factories salt CREATE2 with the packed, sorted 20-byte addresses.
+pub fn v2_create2(
+    factory: Address,
+    a: Address,
+    b: Address,
+    hash: alloy_primitives::B256,
+) -> Address {
+    let (t0, t1) = super::discover::sorted(a, b);
+    let mut packed = [0; 40];
+    packed[..20].copy_from_slice(t0.as_slice());
+    packed[20..].copy_from_slice(t1.as_slice());
+    factory.create2(alloy_primitives::keccak256(packed), hash)
 }

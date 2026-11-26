@@ -32,6 +32,20 @@
 Регрессионные сценарии охватывают 16 состояний разрешений четырёх сетей и одиночное переключение каждой из них, неполную регистрацию, конфликт ID, неприменимость общего URL к новым сетям и изоляцию каналов. Статус исполнения тестов фиксирует итоговый прогон CI.
 
 
+### Расчётная монета Base и сверка конверсии
+
+Нативный USDC Circle в Base имеет адрес `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. На исходной бирже нужен спотовый рынок USDC/USDT и открытая нужная сторона сети. Запись Gate от 26 ноября 2026 года содержит сеть `BASEEVM`, шаг USDC 0,01 и книги с разными ценами спроса и предложения. Эти параметры изменяются. При расчёте бот читает актуальный рынок, сетевые условия и комиссию аккаунта. [Контракты Circle](https://developers.circle.com/stablecoins/usdc-contract-addresses) · [Снимок публичного рынка Gate](../tests/data/base_usdc_gate_market.json).
+
+| Операция | Что сверяется |
+| --- | --- |
+| Биржа → кошелёк для покупки токена на Base | Действующая книга USDC/USDT, доступные USDT за вычетом резервов, спрос на целевой токен, комиссия и пределы вывода. Фактически купленные USDC с учётом комиссии должны покрыть план на кошельке. |
+| Кошелёк → биржа после продажи токена на Base | Спрос USDC/USDT на исходной бирже, кредит USDC по тому же хешу на правильной сети, затем биржевой ордер. Точные USDT берутся из `filled_total` с вычетом фактически списанной комиссии. Непроданные USDC остаются на бирже. |
+| Потеря ответа или перезапуск | До отправки Gate сохраняются клиентские ID, до отправки ERC-20 сохраняется хеш подписанной транзакции. Отсутствующий итог остаётся открытым до сверки. Поручение привязано к сделке, исходной бирже и кошельку. |
+
+В интерфейсе площадок доступна оценка USDC/USDT. `GET /api/venues/{id}/base-usdc-order?deal=…&side=Buy|Sell` показывает отправленный ордер и его списания, в том числе в третьей валюте. `GET /api/deals/{id}/base-settlement` показывает поручение, подтверждённые шаги и остатки. Публичный снимок подтверждает условия расчёта на момент записи. Фактические сделки и закрытый P&L этими данными не подтверждены. Для Gate добавлены идентификаторы восстановления. Допуск автоматического входа через прежний USDT-учёт закрыт, пока модель и основной исполнитель не доведены до фактического USDT на исходной бирже.
+
+Проверка HTTP RPC привязана к URL, ключу и ожидаемому chain ID. Переключение бэкенда провайдером за уже проверенным URL без изменения этих реквизитов требует новой проверки.
+
 <!-- GAS -->
 
 ## GAS · цена, отправка и сверка
@@ -62,7 +76,7 @@ Base дополнительно учитывает две комиссии в ET
 
 ### Base · DEX
 
-Снимок GeckoTerminal от 2026-11-25T21:58:07.688292+00:00, 119 идентификаторов. DefiLlama от 2026-11-25T21:58:07.688292+00:00, 211 строк. Сетевые разделы Velora — 40. Строки разных источников могут относиться к одному пулу. Контрольный блок 62262756, `0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715`. Из 119 строк GeckoTerminal адресные профили заданы для 29, остаются открытыми 90. Ещё 12 внутренних ключей обозначают отдельные фабрики и семейства.
+Снимок GeckoTerminal от 2026-11-25T21:58:07.688292+00:00, 119 идентификаторов. DefiLlama от 2026-11-25T21:58:07.688292+00:00, 211 строк. Сетевые разделы Velora — 40. Строки разных источников могут относиться к одному пулу. Контрольный блок 62262756, `0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715`. Из 119 строк GeckoTerminal адресные профили заданы для 31, остаются открытыми 88. Ещё 12 внутренних ключей обозначают отдельные фабрики и семейства.
 
 #### Значения для экрана «Первый запуск»
 
@@ -109,6 +123,8 @@ Base дополнительно учитывает две комиссии в ET
 | `dodo-amm-dvm` | `dex.kind = dodo_dvm`<br>`dex.factory = 0x0226fCE8c969604C3A0AD19c37d1FAFac73e13c2` | https://docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/base · DVMFactory |
 | `dodo-amm-dpp` | `dex.kind = dodo_dpp`<br>`dex.factory = 0xc0F9553Df63De5a97Fe64422c8578D0657C360f7` | https://docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/base · DPPFactory |
 | `dodo-amm-dsp` | `dex.kind = dodo_dsp`<br>`dex.factory = 0x200D866Edf41070DE251Ef92715a6Ea825A5Eb80` | https://docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/base · DSPFactory |
+| `baseswap` | `dex.kind = v2_fork_executor_create2`<br>`dex.factory = 0xfda619b6d20975be80a10332cd39b9a4b0faa8bb`<br>`dex.pool_code_hashes = 0xb618a2730fae167f5f8ac7bd659dd8436d571872655bcb6fd11f2158c8a64a3b`<br>`dex.v2_fee_source = fixed`<br>`dex.v2_fee_pct = 0.25` | https://sourcify.dev/server/v2/contract/8453/0xab067c01c7f5734da168c699ae9d23a4512c9fdb · tests/data/base_ethereum_v2_probes.json |
+| `smardex-base` | `dex.kind = smardex`<br>`dex.factory = 0xdd4536dD9636564D891c919416880a3e250f975A`<br>`dex.quoter_virtual = да` | https://raw.githubusercontent.com/SmarDex-Dev/smart-contracts/7ab2beb2afe0e5703c06dfd6eb6bf904c63dc72e/deployments/base/SmardexFactory.json |
 
 Uniswap V4 · два пула USDT/USDC, hook 0. Для каждого выполнены симуляции покупки в размере 1 и 100 USDT и обратной продажи полученного USDC. На всех восьми шагах сети ArbExecutor V5 вернул сумму квотера и кредита события Swap с нулевыми остатками обоих токенов. В отдельной проверке значение minOut = квота прошло для каждой стороны и размера, а квота + 1 дала откат. [Граница minOut](../tests/data/executor_v5_base_2026-11-26/min_out.json). Для обычного кошелька нужен его собственный исполнитель. [Запись V5](../tests/data/executor_v5_base_2026-11-26/README.md) · [Суммы и результаты](../tests/data/executor_v5_base_2026-11-26/summary.json).
 
@@ -117,6 +133,8 @@ Balancer · прямая и обратная котировки для 3 пул�
 Curve · по двум направлениям и двум размерам записаны get_dy для 2 пулов StableSwap-NG, 2 Twocrypto-NG и 2 Tricrypto-NG. Фабрика подтвердила монеты, каждый пул сообщил версию. Для Twocrypto две версии математики совпадают по байткоду с ранее проверенными. Tricrypto использует тот же байткод математики, что проверялся на Arbitrum. Исторические пулы Curve и метапулы StableSwap-NG требуют отдельного профиля. [Пулы, вызовы, квоты и сверка кода](../tests/data/first_run_dex_2026-11-26/curve_base.json).
 
 DODO V2 · getDODOPoolBidirection и токены пула подтвердили 2 пула DVM, 2 DPP и 1 DSP в выборке с положительными котировками. Каждый из них дал выход querySellBase и querySellQuote на двух объёмах. Комиссии LP и MT приведены для нулевого адреса, который использует загрузчик PMM. Фабрики позволяют находить пулы при включении поиска по фабрике. [Реестры, состояние PMM и котировки](../tests/data/first_run_dex_2026-11-26/dodo_base.json).
+
+SmarDex · фабрика перечислила 31 пар. Свои фабрику и ABI getPairFees подтвердили 31. У трёх пар записаны getAmountOutFromPair по двум сторонам и размерам. На одинаковых параметрах чистая функция роутера вернула 33 минимальных единиц. Проверка учитывает округление при равных отношениях цен и версию библиотеки. [Фабрика, исходник, пары и котировки](../tests/data/first_run_dex_2026-11-26/smardex_base.json).
 
 Aerodrome Slipstream · 3 разных пула WETH/USDC, по одному у каждой фабрики. 16 операций ArbExecutor.execute в eth_simulateV1, два направления и два размера у каждой фабрики, ещё один размер у второго и третьего поколений. Размер до 0,01 WETH или 10 USDC. Адреса источника и получателя, calldata и балансы до и после — в записи. [Данные исполнения](../tests/data/base_slipstream_2026-11-26/executor.json) · [Квотеры и тики](../tests/data/base_slipstream_2026-11-26/quotes.json).
 
@@ -135,7 +153,7 @@ Aerodrome Slipstream · 3 разных пула WETH/USDC, по одному у 
 | `synthswap` | Synthswap | [200, 18](https://api.geckoterminal.com/api/v2/networks/base/dexes/synthswap/pools?page=1) | `0x3458ffdc3b2cc274a9d8aa8d9b0b934558b7a498` | `0x4bd16d59a5e1e0db903f724aa9d721a31d7d720d`, getPair(address,address) | профиль, см. параметры выше |
 | `swapbased` | SwapBased | [200, 20](https://api.geckoterminal.com/api/v2/networks/base/dexes/swapbased/pools?page=1) | `0x86cd030822547105bd7952af4ba48534640a3824` | `0x04c9f118d21e8b767d2e50c946f0cc9f6c367300`, getPair(address,address) | профиль, см. параметры выше |
 | `horizondex-base` | HorizonDEX (Base) | [200, 12](https://api.geckoterminal.com/api/v2/networks/base/dexes/horizondex-base/pools?page=1) | `0x66543ab7d0ac497ee5ff77e8c5965efcdb895f7f` | `0x07aced5690e09935b1c0e6e88b772d9440f64718`, сверка не подтверждена | профиль не установлен |
-| `baseswap` | BaseSwap | [200, 20](https://api.geckoterminal.com/api/v2/networks/base/dexes/baseswap/pools?page=1) | `0xab067c01c7f5734da168c699ae9d23a4512c9fdb` | `0xfda619b6d20975be80a10332cd39b9a4b0faa8bb`, getPair(address,address) | профиль не установлен |
+| `baseswap` | BaseSwap | [200, 20](https://api.geckoterminal.com/api/v2/networks/base/dexes/baseswap/pools?page=1) | `0xab067c01c7f5734da168c699ae9d23a4512c9fdb` | `0xfda619b6d20975be80a10332cd39b9a4b0faa8bb`, getPair(address,address) | профиль, см. параметры выше |
 | `velocimeter-base` | Velocimeter (Base) | [200, 17](https://api.geckoterminal.com/api/v2/networks/base/dexes/velocimeter-base/pools?page=1) | `0x6546ecac3f80e041006edc3da891adce567b40b8` | не установлены, сверка не подтверждена | профиль не установлен |
 | `kokonutswap-base` | KokonutSwap (Base) | [200, 1](https://api.geckoterminal.com/api/v2/networks/base/dexes/kokonutswap-base/pools?page=1) | `0x888a09048c0eebdef0c8d4647a3da34e24375797` | `0x4cf1284dcf30345232d5bfd8a8aad6734b6941c4`, getPair(address,address) | профиль, см. параметры выше |
 | `lfgswap-base` | LFGSwap (Base) | [200, 4](https://api.geckoterminal.com/api/v2/networks/base/dexes/lfgswap-base/pools?page=1) | `0x73827df96e7f51960bae78f9b0d76aa4ea9958f9` | `0xe5552e0318531f9ec585c83bdc8956c08bf74b71`, getPair(address,address) | профиль не установлен |
@@ -162,7 +180,7 @@ Aerodrome Slipstream · 3 разных пула WETH/USDC, по одному у 
 | `pancakeswap-v3-base` | Pancakeswap V3 (Base) | [200, 20](https://api.geckoterminal.com/api/v2/networks/base/dexes/pancakeswap-v3-base/pools?page=1) | `0x72ab388e2e2f6facef59e3c3fa2c4e29011c2d38` | `0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865`, getPool(address,address,uint24) | профиль, см. параметры выше |
 | `pancakeswap-v2-base` | Pancakeswap V2 (Base) | [200, 20](https://api.geckoterminal.com/api/v2/networks/base/dexes/pancakeswap-v2-base/pools?page=1) | `0x8b9ae9726173f933972cdfd6b0b9b573826cd243` | `0x02a84c1b3bbd7401a5f7fa98a384ebc70bb5749e`, getPair(address,address) | профиль, см. параметры выше |
 | `aerodrome-base` | Aerodrome (Base) | [200, 20](https://api.geckoterminal.com/api/v2/networks/base/dexes/aerodrome-base/pools?page=1) | `0x01784ef301d79e4b2df3a21ad9a536d4cf09a5ce` | `0x420dd381b31aef6683db6b902084cb0ffece40da`, getPool(address,address,bool) | профиль, см. параметры выше |
-| `smardex-base` | SmarDex (Base) | [200, 7](https://api.geckoterminal.com/api/v2/networks/base/dexes/smardex-base/pools?page=1) | `0xd70e1bab713d84c3a110ded11e41714542e604ba` | `0xdd4536dd9636564d891c919416880a3e250f975a`, getPair(address,address) | профиль не установлен |
+| `smardex-base` | SmarDex (Base) | [200, 7](https://api.geckoterminal.com/api/v2/networks/base/dexes/smardex-base/pools?page=1) | `0xd70e1bab713d84c3a110ded11e41714542e604ba` | `0xdd4536dd9636564d891c919416880a3e250f975a`, getPair(address,address) | профиль, см. параметры выше |
 | `kyberswap-elastic-base` | Kyberswap Elastic (Base) | [200, 7](https://api.geckoterminal.com/api/v2/networks/base/dexes/kyberswap-elastic-base/pools?page=1) | `0x9be9f7cf5ceea938f65b3bc8b40c1d61bef04bea` | `0xc7a590291e07b9fe9e64b86c58fd8fc764308c4a`, сверка не подтверждена | профиль не установлен |
 | `dackieswap-v2-base` | DackieSwap V2 (Base) | [200, 20](https://api.geckoterminal.com/api/v2/networks/base/dexes/dackieswap-v2-base/pools?page=1) | `0x6bee1580471f38000951abd788a9c060a4ad3ac3` | `0x591f122d1df761e616c13d265006fcbf4c6d6551`, getPair(address,address) | профиль, см. параметры выше |
 | `plantbaseswap` | PlantBaseSwap | [200, 5](https://api.geckoterminal.com/api/v2/networks/base/dexes/plantbaseswap/pools?page=1) | `0x09dda12b6c612f1f016da5ea5041bb3973af53b5` | `0xa081ce40f079a381b59893b4dc0abf8b1817af70`, getPair(address,address) | профиль, см. параметры выше |
@@ -576,7 +594,7 @@ Aerodrome Slipstream · 3 разных пула WETH/USDC, по одному у 
 
 ### Ethereum · DEX
 
-Снимок GeckoTerminal от 2026-11-25T22:10:30.630109+00:00, 80 идентификаторов. DefiLlama от 2026-11-25T22:07:56.407610+00:00, 193 строк. Сетевые разделы Velora — 65. Строки разных источников могут относиться к одному пулу. Контрольный блок 26494988, `0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a`. Из 80 строк GeckoTerminal адресные профили заданы для 15, остаются открытыми 65. Ещё 29 внутренних ключей обозначают отдельные фабрики и семейства.
+Снимок GeckoTerminal от 2026-11-25T22:10:30.630109+00:00, 80 идентификаторов. DefiLlama от 2026-11-25T22:07:56.407610+00:00, 193 строк. Сетевые разделы Velora — 65. Строки разных источников могут относиться к одному пулу. Контрольный блок 26494988, `0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a`. Из 80 строк GeckoTerminal адресные профили заданы для 16, остаются открытыми 64. Ещё 29 внутренних ключей обозначают отдельные фабрики и семейства.
 
 #### Значения для экрана «Первый запуск»
 
@@ -626,6 +644,7 @@ Aerodrome Slipstream · 3 разных пула WETH/USDC, по одному у 
 | `dodo-pmm-ethereum` | `dex.kind = dodo_dvm`<br>`dex.factory = 0x72d220cE168C4f361dD4deE5D826a01AD8598f6C`<br>`dex.sub_dex = dodo-amm-dpp{суффикс}, dodo-amm-dsp{суффикс}` | https://docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/ethereum · DVMFactory |
 | `dodo-amm-dpp` | `dex.kind = dodo_dpp`<br>`dex.factory = 0x5336edE8F971339F6c0e304c66ba16F1296A2Fbe` | https://docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/ethereum · DPPFactory |
 | `dodo-amm-dsp` | `dex.kind = dodo_dsp`<br>`dex.factory = 0x6fdDB76c93299D985f4d3FC7ac468F9A168577A4` | https://docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/ethereum · DSPFactory |
+| `smardex-ethereum` | `dex.kind = smardex_exact_equality`<br>`dex.factory = 0xB878DC600550367e14220d4916Ff678fB284214F`<br>`dex.quoter_virtual = да` | https://raw.githubusercontent.com/SmarDex-Dev/smart-contracts/7ab2beb2afe0e5703c06dfd6eb6bf904c63dc72e/deployments/ethereum/SmardexFactory.json |
 
 Uniswap V4 · два пула USDT/USDC, hook 0. Для каждого выполнены симуляции покупки в размере 1 и 100 USDT и обратной продажи полученного USDC. На всех восьми шагах сети ArbExecutor V5 вернул сумму квотера и кредита события Swap с нулевыми остатками обоих токенов. В отдельной проверке значение minOut = квота прошло для каждой стороны и размера, а квота + 1 дала откат. [Граница minOut](../tests/data/executor_v5_ethereum_2026-11-26/min_out.json). Для обычного кошелька нужен его собственный исполнитель. [Запись V5](../tests/data/executor_v5_ethereum_2026-11-26/README.md) · [Суммы и результаты](../tests/data/executor_v5_ethereum_2026-11-26/summary.json).
 
@@ -634,6 +653,8 @@ Balancer · прямая и обратная котировки для 3 пул�
 Curve · по двум направлениям и двум размерам записаны get_dy для 2 пулов StableSwap-NG, 2 Twocrypto-NG и 2 Tricrypto-NG. Фабрика подтвердила монеты, каждый пул сообщил версию. Для Twocrypto две версии математики совпадают по байткоду с ранее проверенными. У Tricrypto математика скомпилирована Vyper 0.3.9. Текст исходника в Sourcify совпал с проверенной версией после трёх директив компилятора в эталоне. Исторические пулы Curve и метапулы StableSwap-NG требуют отдельного профиля. [Пулы, вызовы, квоты и сверка кода](../tests/data/first_run_dex_2026-11-26/curve_ethereum.json).
 
 DODO V2 · getDODOPoolBidirection и токены пула подтвердили 2 пула DVM, 2 DPP и 2 DSP в выборке с положительными котировками. Каждый из них дал выход querySellBase и querySellQuote на двух объёмах. Комиссии LP и MT приведены для нулевого адреса, который использует загрузчик PMM. Фабрики позволяют находить пулы при включении поиска по фабрике. [Реестры, состояние PMM и котировки](../tests/data/first_run_dex_2026-11-26/dodo_ethereum.json).
+
+SmarDex · фабрика перечислила 31 пар. Свои фабрику и ABI getPairFees подтвердили 27. У трёх пар записаны getAmountOutFromPair по двум сторонам и размерам. На одинаковых параметрах чистая функция роутера вернула 34 минимальных единиц. Проверка учитывает округление при равных отношениях цен и версию библиотеки. [Фабрика, исходник, пары и котировки](../tests/data/first_run_dex_2026-11-26/smardex_ethereum.json).
 
 Код каждого адреса проверен в [снимке размещений](../tests/data/first_run_dex_2026-11-26/ethereum.json). Две записи вызова Router.getAmountOut содержат исходные аргументы и ответ. У Maverick V2 параметр dex.tick_radius задаёт оператор по глубине рынка. Значение dex.pool_enabled, доверенный исполнитель кошелька и допуск его классов задаются отдельно.
 
@@ -670,7 +691,7 @@ DODO V2 · getDODOPoolBidirection и токены пула подтвердил�
 | `solidlydex` | Solidly | [200, 18](https://api.geckoterminal.com/api/v2/networks/eth/dexes/solidlydex/pools?page=1) | `0x6d7824c5b5b385d1dd8d56c543a0be2eaf140974` | не установлены, сверка не подтверждена | профиль не установлен |
 | `antfarm-ethereum` | Antfarm (Ethereum) | [200, 5](https://api.geckoterminal.com/api/v2/networks/eth/dexes/antfarm-ethereum/pools?page=1) | `0x0969f3866dfbc20130dc9cd3735fb02ab00c66f9` | `0xe48aee124f9933661d4dd3eb265fa9e153e32cbe`, сверка не подтверждена | профиль не установлен |
 | `pancakeswap-v3-ethereum` | Pancakeswap V3 (Ethereum) | [200, 20](https://api.geckoterminal.com/api/v2/networks/eth/dexes/pancakeswap-v3-ethereum/pools?page=1) | `0x1445f32d1a74872ba41f3d8cf4022e9996120b31` | `0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865`, getPool(address,address,uint24) | профиль, см. параметры выше |
-| `smardex-ethereum` | SmarDex (Ethereum) | [429, нет данных](https://api.geckoterminal.com/api/v2/networks/eth/dexes/smardex-ethereum/pools?page=1) | не установлены | не установлены, сверка не подтверждена | профиль не установлен, страница не прочитана |
+| `smardex-ethereum` | SmarDex (Ethereum) | [429, нет данных](https://api.geckoterminal.com/api/v2/networks/eth/dexes/smardex-ethereum/pools?page=1) | не установлены | не установлены, сверка не подтверждена | профиль, см. параметры выше, страница не прочитана |
 | `whiteswap` | Whiteswap | [200, 8](https://api.geckoterminal.com/api/v2/networks/eth/dexes/whiteswap/pools?page=1) | `0xa47caceff117ae0a889b13a920e1e9cd2279bae0` | `0x69bd16ae6f507bd3fc9ecc984d50b04f029ef677`, getPair(address,address) | профиль не установлен |
 | `saitaswap-ethereum` | Saitaswap (Ethereum) | [200, 16](https://api.geckoterminal.com/api/v2/networks/eth/dexes/saitaswap-ethereum/pools?page=1) | `0xe31dbc4e38b6099b03ca617206d16b446f657901` | `0x25393bb68c89a894b5e20fa3fc3b3b34f843c672`, getPair(address,address) | профиль не установлен |
 | `surge-protocol-eth` | Surge Protocol (ETH) | [429, нет данных](https://api.geckoterminal.com/api/v2/networks/eth/dexes/surge-protocol-eth/pools?page=1) | не установлены | не установлены, сверка не подтверждена | профиль не установлен, страница не прочитана |
@@ -1112,4 +1133,4 @@ DEX-1/8453 — исследователь dex_coverage, оппонент counter
 
 ### Проверка фиксированных комиссий V2 на Base и Ethereum
 
-13 профилей имеют проверенный исходник пары и фабрики, привязку getPair и контрольный обмен через байткод исполнителя V5. На двух объёмах сравнивались обе стороны с балансами кошелька и проверялся отказ при повышении минимума на одну младшую единицу. Ещё у одного пула BaseSwap прошли оба обмена; доказательства для допуска всей фабрики в этом наборе недостаточно. У выборочного пула BakerySwap полный круг не прошёл, в выборке Rubicon отсутствовала сторона WETH для контрольного пополнения. Эти результаты относятся к перечисленным пулам и блокам. Фикстура и повторяемая проверка находятся в `tests/data/base_ethereum_v2_probes.json` и `tests/base_ethereum_v2_forks.rs`.
+13 профилей имеют проверенный исходник пары и фабрики, привязку getPair и контрольный обмен через байткод исполнителя V5. На двух объёмах сравнивались обе стороны с балансами кошелька и проверялся отказ при повышении минимума на одну младшую единицу. В профиле BaseSwap дополнительно проверяется CREATE2 для каждой обнаруженной пары. Хеш байткода создания взят из подтверждённого развёртывания PancakePair; инверсия токенов воспроизводит тот же адрес, замена хеша — другой. Проверка выполняется локально после подтверждения getPair. У выборочного пула BakerySwap полный круг не прошёл, в выборке Rubicon отсутствовала сторона WETH для контрольного пополнения. Эти результаты относятся к перечисленным пулам и блокам. Фикстура и повторяемая проверка находятся в `tests/data/base_ethereum_v2_probes.json` и `tests/base_ethereum_v2_forks.rs`.

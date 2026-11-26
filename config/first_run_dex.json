@@ -1226,5 +1226,42 @@
       "dex.kind": "dodo_dsp",
       "dex.factory": "0x6fdDB76c93299D985f4d3FC7ac468F9A168577A4"
     }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "baseswap",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xab067c01c7f5734da168c699ae9d23a4512c9fdb · tests/data/base_ethereum_v2_probes.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0xfda619b6d20975be80a10332cd39b9a4b0faa8bb",
+      "dex.pool_code_hashes": [
+        "0xb618a2730fae167f5f8ac7bd659dd8436d571872655bcb6fd11f2158c8a64a3b"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.25"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "smardex-base",
+    "source": "https://raw.githubusercontent.com/SmarDex-Dev/smart-contracts/7ab2beb2afe0e5703c06dfd6eb6bf904c63dc72e/deployments/base/SmardexFactory.json",
+    "settings": {
+      "dex.kind": "smardex",
+      "dex.factory": "0xdd4536dD9636564D891c919416880a3e250f975A",
+      "dex.quoter_virtual": true
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "smardex-ethereum",
+    "source": "https://raw.githubusercontent.com/SmarDex-Dev/smart-contracts/7ab2beb2afe0e5703c06dfd6eb6bf904c63dc72e/deployments/ethereum/SmardexFactory.json",
+    "settings": {
+      "dex.kind": "smardex_exact_equality",
+      "dex.factory": "0xB878DC600550367e14220d4916Ff678fB284214F",
+      "dex.quoter_virtual": true
+    }
   }
 ]

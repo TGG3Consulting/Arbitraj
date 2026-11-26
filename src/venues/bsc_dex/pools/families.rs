@@ -435,7 +435,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // dex.v2_fee_pct), но tradable=false — своего роутера нет; исполнение — шаг V2 контракта-исполнителя (обмен
         // прямо в паре, exec_kind::via_executor). fork=true — как у v3_fork: не в классический прямой путь и без UR.
         // Сверка расчёта — обмен через код исполнителя в симуляции (quote/v2_pair_quote.rs), а не getAmountsOut роутера.
-        "v2_fork_executor" => (PoolKind::V2, Proto::V2, true, false, true),
+        "v2_fork_executor" | "v2_fork_executor_create2" => {
+            (PoolKind::V2, Proto::V2, true, false, true)
+        }
         // V3-форк (решение 122 F): в графе и сигналах — чтение, события, проверка и математика как у V3 своего ABI
         // (Uniswap / PancakeSwap: фабрика getPool, TickLens, QuoterV2 — настройки этой DEX). tradable=false: своего
         // пути через Universal Router нет; исполнение — шаг V3 контракта-исполнителя (exec_kind::via_executor).
@@ -510,7 +512,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // KyberSwap Classic DMM (решение 287): в графе и сигналах (своя формула); исполнение — шаг KYBER_DMM (только v2).
         "kyber_dmm" => (PoolKind::AmpV2, Proto::KyberDmm, true, false, false),
         // SmarDex (решение 288): в графе и сигналах (своя формула по времени блока); исполнение — шаг SMARDEX (только v2).
-        "smardex" => (PoolKind::Fictive, Proto::Smardex, true, false, false),
+        "smardex" | "smardex_exact_equality" => {
+            (PoolKind::Fictive, Proto::Smardex, true, false, false)
+        }
         // Balancer V2 (решение 289): в графе и сигналах (формулы пулов); исполнение — шаг BALANCER (только v2).
         "balancer_v2" => (PoolKind::VaultPool, Proto::BalancerV2, true, false, false),
         // Balancer V3 (решение 441): в графе и сигналах (расчёт хранилища V3); исполнение — шаг BALANCER_V3 (с v4).
@@ -711,6 +715,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
     match f.proto {
         Proto::V2 => {
             list.push("dex.factory");
+            if f.variant == Variant::V2Create2 {
+                list.push(super::verify_algebra_dir::SETTING);
+            }
             // Роутер — только у вида со своим путём исполнения (PancakeSwap/Uniswap V2, v2_fork: сверка getAmountsOut и
             // обмен роутером форка). v2_fork_executor (решение 280, tradable=false) роутера не имеет: сверка и обмен —
             // через контракт-исполнитель (quote/v2_pair_quote.rs).

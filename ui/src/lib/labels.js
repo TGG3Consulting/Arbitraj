@@ -76,6 +76,7 @@ const CHOICE = {
   biswap_v3: 'Biswap V3 (форк iZiSwap, лесенка ответов пула)',
   kyber_dmm: 'KyberSwap Classic DMM (усиление amp, динамическая комиссия)',
   smardex: 'SmarDex (фиктивные резервы, средняя цена по времени блока)',
+  smardex_exact_equality: 'SmarDex (Ethereum, версия с точным равенством цены)',
   fluid_t1: 'Fluid DEX T1 (смарт-залог и смарт-долг, мнимые резервы)',
   basin_well: 'Basin (скважины Beanstalk: ConstantProduct2 / Stable2, без комиссии; решение 485)',
   shell_proteus: 'Shell Protocol Proteus (кусочная гипербола, учёт Ocean)',

@@ -26,6 +26,7 @@ struct Profile {
 enum Parameter {
     Text(String),
     List(Vec<String>),
+    Bool(bool),
 }
 
 impl Parameter {
@@ -34,6 +35,7 @@ impl Parameter {
     fn display(&self, name: &str, suffix: &str) -> String {
         match self {
             Self::Text(text) => text.clone(),
+            Self::Bool(flag) => flag.to_string(),
             Self::List(items) if name == "dex.sub_dex" => items
                 .iter()
                 .map(|id| format!("{id}{suffix}"))
@@ -123,6 +125,10 @@ mod tests {
         ))
         .unwrap();
         let all = profiles().unwrap_or_else(|_| panic!("профили DEX повреждены"));
+        let pairs: Value = serde_json::from_str(include_str!(
+            "../../tests/data/base_ethereum_v2_probes.json"
+        ))
+        .unwrap();
         for p in all {
             let snapshot = [&base, &eth]
                 .into_iter()
@@ -134,19 +140,33 @@ mod tests {
                 let values = match v {
                     Parameter::Text(text) => vec![text],
                     Parameter::List(items) => items.iter().collect(),
+                    Parameter::Bool(_) => Vec::new(),
                 };
                 let input = match v {
                     Parameter::Text(t) => Value::String(t.clone()),
                     Parameter::List(xs) => serde_json::json!(xs),
+                    Parameter::Bool(flag) => Value::Bool(*flag),
                 };
                 validate(def, &scope, &input).unwrap_or_else(|e| panic!("{} {k}: {e}", p.id));
                 for text in values {
-                    if text.starts_with("0x") {
+                    if text.len() == 42 && text.starts_with("0x") {
                         assert!(
                             snapshot["contracts"][text.to_ascii_lowercase()]["bytes"]
                                 .as_u64()
                                 .unwrap()
                                 > 0
+                        );
+                    } else if k == "dex.pool_code_hashes" {
+                        assert!(
+                            pairs
+                                .as_array()
+                                .unwrap()
+                                .iter()
+                                .any(|row| row["network"] == p.network
+                                    && row["dex"] == p.id
+                                    && row["creation_code_hash"].as_str() == Some(text.as_str())),
+                            "{} {k}: нет хеша создания пары {text} в записи",
+                            p.id
                         );
                     } else if k == "dex.sub_dex" {
                         assert!(

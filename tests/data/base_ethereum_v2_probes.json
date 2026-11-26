@@ -330,7 +330,8 @@
           "data": "0x"
         }
       }
-    ]
+    ],
+    "creation_code_hash": "0xb618a2730fae167f5f8ac7bd659dd8436d571872655bcb6fd11f2158c8a64a3b"
   },
   {
     "network": "base",

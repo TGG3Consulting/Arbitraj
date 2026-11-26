@@ -14,7 +14,7 @@ use alloy_primitives::U256;
 
 use crate::core::types::FictiveData;
 
-use super::smardex::{Params, amount_out};
+use super::smardex::{Params, amount_out_version};
 
 /// MAX_BLOCK_DIFF_SECONDS = 300 (SmardexLibrary.sol L24) — за сколько секунд средняя цена догоняет фиктивные резервы.
 const MAX_DIFF_S: u64 = 300;
@@ -86,6 +86,17 @@ pub fn price_average(
 /// проверка _update — новые фиктивные резервы не 0 и не больше uint128. Принимает: состояние стороны со СТАРОЙ средней
 /// ценой, время её записи, время блока, вход. Возвращает: выход. None — как откат пары.
 pub fn swap_out(p: &Params, last_ts: u64, now: u64, amount: U256) -> Option<U256> {
+    swap_out_version(p, last_ts, now, amount, false)
+}
+
+/// Расчёт выпуска фабрики с указанным правилом сравнения равных отношений цены.
+pub fn swap_out_version(
+    p: &Params,
+    last_ts: u64,
+    now: u64,
+    amount: U256,
+    exact_match: bool,
+) -> Option<U256> {
     let (pi, po) = price_average(
         (p.fictive_in, p.fictive_out),
         last_ts,
@@ -102,7 +113,7 @@ pub fn swap_out(p: &Params, last_ts: u64, now: u64, amount: U256) -> Option<U256
         price_out: po,
         ..*p
     };
-    let (out, f_in, f_out) = amount_out(&s, amount)?;
+    let (out, f_in, f_out) = amount_out_version(&s, amount, exact_match)?;
     if f_in.is_zero() || f_out.is_zero() || f_in > max || f_out > max {
         return None;
     }

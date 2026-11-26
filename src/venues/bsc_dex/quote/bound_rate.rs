@@ -49,6 +49,13 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
         return Err(format!("{}: пул с крючком", e.family.title));
     }
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::MintClub(s), PoolKind::V2) => {
+            // Free initial mint steps make an ordinary spot-based upper bound unsound.
+            let output=if token_in==s.reserve {
+                s.steps.last().map_or(U256::ZERO,|&(end,_)| U256::from(end).saturating_sub(s.supply))
+            } else {s.bonded.min(s.available)};
+            pair(output,U256::ONE,U256::ONE,U256::ONE)
+        }
         (PoolState::Memebox(s), PoolKind::V2) => {
             let i=usize::from(!zfo);
             pair(s.reserves[1-i],U256::ONE,s.reserves[i],U256::ONE)

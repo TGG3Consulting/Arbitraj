@@ -108,5 +108,7 @@ pub(crate) mod memebox;
 pub(crate) mod ethervista;
 pub mod v2;
 pub mod virtuals;
+pub mod mint_club;
+pub mod mint_club_depth;
 pub mod wombat;
 pub mod wombat_core;

@@ -164,6 +164,8 @@ fn side(
 ) -> Result<(U256, bool), String> {
     let pick = |amount_in: U256, amount_out: U256| if buy { amount_in } else { amount_out };
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::MintClub(s),PoolKind::V2) => super::super::math::mint_club_depth::band(s,token_in,buy,(b*SCALE) as u64)
+            .ok_or_else(||"Mint Club: не вычислена исполнимая глубина ступеней".into()),
         (PoolState::Virtuals(s), PoolKind::V2) => {
             let i=usize::from(token_in==s.asset);let o=1-i;
             let grow=if buy{(1.0+b).sqrt()-1.0}else{1.0/(1.0-b).sqrt()-1.0};

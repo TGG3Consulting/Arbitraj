@@ -158,6 +158,21 @@ impl PoolRef {
     }
 }
 
+/// Один ERC20 Mint Club V2 и его собственное обеспечение в общем контракте Bond.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MintClubState {
+    pub token: Address,
+    pub reserve: Address,
+    pub supply: U256,
+    pub steps: Vec<(u128, u128)>,
+    pub mint_bps: u16,
+    pub burn_bps: u16,
+    /// Бухгалтерский остаток этого рынка до выплаты royalty за burn.
+    pub bonded: U256,
+    /// Фактический баланс резервного ERC20 у Bond, общий для рынков.
+    pub available: U256,
+}
+
 /// Виртуальные запасы кривой запуска и реальные средства, которыми пара может рассчитаться.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VirtualsState {
@@ -363,6 +378,7 @@ pub enum PoolState {
     /// Резервы пары и плата в ETH, уплачиваемая для каждого отдельного обмена.
     EtherVista(Box<EtherVistaState>),
     Virtuals(Box<VirtualsState>),
+    MintClub(Box<MintClubState>),
     /// Сумма, списанная с CandySwap, включает независимое удержание из выплаты получателю.
     CandySwap(Box<CandySwapState>),
     Memebox(Box<MemeboxState>),

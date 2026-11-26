@@ -58,6 +58,9 @@ pub fn apply(
     };
     let zero_for_one = token_in == e.pool.token0;
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::MintClub(s),PoolKind::V2) => super::super::math::mint_club::after(s,token_in,amount)
+            .map(|(fill,next)|(fill,PoolState::MintClub(Box::new(next))))
+            .ok_or_else(||no("Mint Club: обмен выходит за предел ступеней или обеспечения")),
         (PoolState::Memebox(s),PoolKind::V2) => super::super::math::memebox::quote(s,zero_for_one,true,amount)
             .map(|(fill,next)|(fill,PoolState::Memebox(Box::new(next))))
             .ok_or_else(||no("Memebox: объём не обеспечен")),

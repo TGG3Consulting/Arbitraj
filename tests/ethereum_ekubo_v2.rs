@@ -89,7 +89,13 @@ fn ethereum_v2_activity_registry_and_exact_input_match_at_the_saved_hash() {
         for q in m["quotes"].as_array().unwrap() {
             let side = q["direction"] == 1;
             let dx = integer(&q["amount"]);
+            let price_limit = ekubo_v2::price_limit(config, words, side).unwrap();
+            assert_eq!(
+                price_limit.to_string(),
+                m["price_limits"][usize::from(side)].as_str().unwrap()
+            );
             let order = ekubo_v2::OrderKey {
+                price_limit,
                 token0: address(&k["token0"]),
                 token1: address(&k["token1"]),
                 config,

@@ -59,11 +59,13 @@ def capture(source):
                     samples.extend((row["direction"],n) for n in (available//4,available//2))
         for side,amount in dict.fromkeys(samples):
             a,b=key[side],key[1-side]
-            limit=79227682466138141934206691491 if side else 4611797791050542631
+            limit=int(m["price_limits"][side])
             q=calldata("quote("+KEY+",bool,int128,uint96,uint256)",[KEY,"bool","int128","uint96","uint256"],
                        [key,bool(side),amount,limit,0])
             deltas=decode(["int128","int128"],raw(rpc(None,"eth_call",[{"from":OWNER,"to":ROUTER,"data":q},tag])))
             used,out=deltas[side],-deltas[1-side]
+            saved=next((v for v in m["quotes"] if v["direction"]==side and int(v["amount"])==amount),None)
+            if saved and tuple(int(saved[k]) for k in ("delta0","delta1"))!=deltas:raise ValueError("bounded and whole-range V2 payouts disagree")
             if out<=0 or not 0<used<=amount: raise ValueError("zero or malformed quote")
             prefix=[]
             if a!=ETH:

@@ -2,6 +2,7 @@
 import argparse
 import concurrent.futures
 import json
+import re
 import time
 from collections import Counter
 from pathlib import Path
@@ -62,6 +63,25 @@ def swap(event):
             "tx":event["transactionHash"], "index":int(event["logIndex"], 16), "wire":event["data"],
             "locker":"0x"+d[:20].hex(), "id":"0x"+d[20:52].hex(),
             "delta0":str(signed(d[52:68])), "delta1":str(signed(d[68:84]))}
+
+
+def price_limits(span, spacing, source):
+    if not spacing:
+        return ["4611797791050542631","79227682466138141934206691491"]
+    factors=re.findall(r"if \(\(t & (0x[0-9a-f]+)\) != 0\) \{\s*ratio = \(ratio \* (0x[0-9a-f]+)\) >> 128;",source)
+    if len(factors)!=26 or "0x8637b66cd638344daef276cd7c5" not in source:
+        raise ValueError("unexpected verified V2 tick arithmetic")
+    def at(t):
+        r=(1<<128)-(abs(t)&1)*0x8637b66cd638344daef276cd7c5
+        for mask,factor in factors:
+            if abs(t)&int(mask,16):r=r*int(factor,16)>>128
+        if t>0:r=((1<<256)-1)//r
+        for idx,shift in enumerate((2,34,66,98)):
+            if r < 1<<(96+idx*32):return str((idx<<94)|(r>>shift))
+        raise ValueError("tick outside the representable range")
+    lo=max(-88722835,(span[0]*256-89421695)*spacing)
+    hi=min(88722835,(span[1]*256+255-89421695)*spacing)
+    return [at(lo),at(hi)]
 
 
 def tick_window(pid, state, spacing, tag):
@@ -174,6 +194,10 @@ def collect():
     ids=sorted({s["id"] for s in swaps})
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         markets=list(pool.map(lambda pid:market(pid,h,tag,[s for s in swaps if s["id"]==pid]),ids))
+    ticks=next(x["source_code"] for x in source["additional_sources"] if x["file_path"]=="src/math/ticks.sol")
+    for m in markets:
+        w=m["tick_window"]
+        m["price_limits"]=price_limits(w["range"] if w else None,m["key"]["tick_spacing"],ticks)
     if header(h)["hash"]!=tag["blockHash"] or rpc(LOGS,"eth_getBlockByNumber",[hex(h),False])["hash"]!=b["hash"]:
         raise ValueError("log window reorganized")
     return dict(docs=DOCS,chain=1,core=core,router=router,selector=tag,state_root=b["stateRoot"],

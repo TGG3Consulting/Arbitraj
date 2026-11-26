@@ -416,7 +416,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        market: [x7-finance, x7-finance-ethereum, 9inch-ethereum, deltaswap-ethereum, supernova-cl, supernova-amm, ekubo-v2-ethereum, stelaxis-ethereum, swapr-ethereum]
+        market: [x7-finance, x7-finance-ethereum, 9inch-ethereum, deltaswap-ethereum, supernova-cl, supernova-amm, ekubo-v2-ethereum, stelaxis-ethereum, swapr-ethereum, mint-club-base, mint-club-ethereum]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -431,6 +431,10 @@ jobs:
           python scripts/record_base_classic_wallets.py "$RUNNER_TEMP/directory.json" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'stelaxis-ethereum'
         run: python scripts/record_stelaxis_ethereum.py "$RUNNER_TEMP/market.json"
+      - if: startsWith(matrix.market, 'mint-club-')
+        env:
+          MARKET: ${{ matrix.market }}
+        run: python scripts/record_mint_club.py "${MARKET#mint-club-}" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'swapr-ethereum'
         run: python scripts/record_swapr_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'ekubo-v2-ethereum'

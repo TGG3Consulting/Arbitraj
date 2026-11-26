@@ -31,12 +31,20 @@ pub fn position_topic() -> B256 {
     IRouterV2::PositionUpdated::SIGNATURE_HASH
 }
 
-pub fn limit(side: bool) -> U96 {
-    U96::from(if side {
-        79227682466138141934206691491u128
+pub fn price_limit(config: B256, words: (u64, u64), side: bool) -> Option<U96> {
+    use super::super::math::{
+        ekubo_bitmap::tick_of,
+        ekubo_tick::{MAX_TICK, MIN_TICK, to_sqrt_ratio_at},
+    };
+    let spacing = u32::from_be_bytes(config[28..].try_into().ok()?);
+    let tick = if spacing == 0 {
+        if side { MAX_TICK } else { MIN_TICK }
+    } else if side {
+        tick_of(words.1, 255, spacing).min(i64::from(MAX_TICK)) as i32
     } else {
-        4611797791050542631u128
-    })
+        tick_of(words.0, 0, spacing).max(i64::from(MIN_TICK)) as i32
+    };
+    Some(U96::from(to_sqrt_ratio_at(tick)?))
 }
 
 fn mapping(key: B256, base: B256) -> B256 {
@@ -95,6 +103,7 @@ pub struct OrderKey {
     pub config: B256,
     pub side: bool,
     pub amount: i128,
+    pub price_limit: U96,
 }
 impl OrderKey {
     fn pool(self) -> EkuboPoolKey {
@@ -115,7 +124,7 @@ impl OrderKey {
         let (input, output) = self.assets();
         let node = NodeV2 {
             poolKey: self.pool(),
-            sqrtRatioLimit: limit(self.side),
+            sqrtRatioLimit: self.price_limit,
             skipAhead: U256::ZERO,
         };
         let order = OrderV2 {
@@ -159,7 +168,7 @@ impl OrderKey {
             poolKey: self.pool(),
             isToken1: self.side,
             amount: self.amount,
-            sqrtRatioLimit: limit(self.side),
+            sqrtRatioLimit: self.price_limit,
             skipAhead: U256::ZERO,
         }
         .abi_encode()
@@ -317,7 +326,9 @@ pub fn order(e: &super::registry::Entry, input: Address, amount: U256) -> Option
     }
     let side = super::ekubo_native::is_token1(d, e.pool.token0, input);
     let amount = i128::try_from(amount).ok().filter(|n| *n > 0)?;
+    let price_limit = price_limit(config, d.words, side)?;
     Some(OrderKey {
+        price_limit,
         token0,
         token1,
         config,

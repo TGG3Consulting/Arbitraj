@@ -365,6 +365,40 @@ def tables(network, snapshots, profiles):
                         "превысил лимит. Для DEFROGS/WETH проверены обе стороны обмена на двух размерах."])
     lista = "tests/data/first_run_dex_2026-11-26/lista_ethereum.json"
     lista_stable = "tests/data/first_run_dex_2026-11-26/lista_stable_ethereum.json"
+    derp_path = Path("tests/data/first_run_dex_2026-11-26/derpdex_markets.json")
+    if base and derp_path.exists():
+        directory_path = derp_path.with_name("derpdex_directory.json")
+        directory = read(directory_path)
+        capture = read(derp_path)
+        markets = capture["markets"]
+        quotes = [q for m in markets for q in m["quotes"]]
+        full = sum(q.get("full", False) for q in quotes)
+        zero = sum(q.get("out") == "0" for q in quotes)
+        charged_zero = sum(q.get("out") == "0" and q.get("used") == q["requested"] for q in quotes)
+        partial = sum(0 < int(q.get("out", 0)) and not q["full"] for q in quotes)
+        failed = sum("reason" in q for q in quotes)
+        widened = sum(q.get("larger_gas", {}).get("full", False) for q in quotes)
+        rounds = sum("sold" in w for m in markets for w in m["wallet"])
+        more = sum("sold" in w for m in markets for w in m.get("larger_gas_wallet", []))
+        covered = sum(any("sold" in w for w in m["wallet"]) for m in markets)
+        existing = sum("sold" in w for m in markets for w in m.get("existing_holder", {}).get("wallet", []))
+        height = f"{directory['to']:,}".replace(",", " ")
+        out.extend(["", f"**DerpDEX, Base.** На блоке {height} фабрика зарегистрировала {len(markets)} пулов "
+                    f"при {len(directory['tiers'])} ставках комиссии. Корень хранилища фабрики воспроизведён по всем "
+                    f"ненулевым значениям ({directory['storage_slots']}). В открытом индексе GeckoTerminal были "
+                    f"{len(directory['indexed'])} из этих пулов. "
+                    f"[Реестр, тарифы и доказательство состояния](../{directory_path.as_posix()}).",
+                    "", f"Для каждого направления проверены четыре размера. При пределе 1 200 000 gas получены "
+                    f"{full} полных котировок с выплатой, {partial} положительных частичных, {zero} с нулевым выходом и {failed} откатов. "
+                    f"В {charged_zero} котировках с нулевым выходом пул принял весь вход. "
+                    f"Из откатов ещё {widened} вернули полный объём при 16 777 216 gas. Изолированный кошелёк, "
+                    f"получивший вход из ETH, выполнил {rounds} кругов покупки и обратной продажи на {covered} рынках "
+                    f"и ещё {more} круга с повышенным лимитом. В каждом проверены остатки и откат каждого плеча "
+                    f"при повышении minOut на единицу. "
+                    + (f"В паре GM/ETHEREUM отдельно прошли {existing} круга с существующим ERC-20 балансом "
+                       "исторического отправителя. Пополнение этих токенов из WETH в данном опыте не подтверждено. "
+                       if existing else "")
+                    + f"[Исходные запросы по размерам, котировки и балансы](../{derp_path.as_posix()})."])
     rubicon_base = Path("tests/data/first_run_dex_2026-11-26/rubicon_clmm_base.json")
     if base and rubicon_base.exists():
         registry = read(rubicon_base)

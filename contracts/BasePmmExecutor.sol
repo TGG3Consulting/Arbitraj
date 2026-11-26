@@ -7,6 +7,8 @@ pragma solidity 0.8.37;
 
 import {IElfomoRouter, IElfomoToken, ILunarPool, IBaseWrappedEther, IBaiEntry} from "./IBasePmm.sol";
 
+import {BaseNativeV3} from "./BaseNativeV3.sol";
+
 contract BasePmmExecutor {
     address private constant ELFOMO = address(bytes20(hex"f0f0f0f0fb0d738452efd03a28e8be14c76d5f73"));
     address private constant VAULT = address(bytes20(hex"bb1b19f138db3925883a96ff7a304277460e0c99"));
@@ -56,9 +58,15 @@ contract BasePmmExecutor {
 
     function execute(address market, address a, address b, uint256 amount, uint256 minimum,
                      uint256 deadline) external returns (uint256 received) {
-        if (block.chainid != 8453 || (market != ELFOMO && market != LUNAR && market != BAI) || trading || deadline < block.timestamp ||
+        if (block.chainid != 8453 || trading || deadline < block.timestamp ||
             minimum == 0 || amount == 0 || amount > uint256(type(int256).max)) revert InvalidOrder();
-        if (!supported(market, a, b)) revert UnsupportedToken();
+        bool nativeV3 = market != ELFOMO && market != LUNAR && market != BAI;
+        address spender = market;
+        uint24 fee;
+        if (nativeV3) {
+            (spender, fee) = BaseNativeV3.market(market, a, b);
+            if (spender == address(0)) revert InvalidOrder();
+        } else if (!supported(market, a, b)) revert UnsupportedToken();
         trading = true;
         IElfomoToken input = IElfomoToken(a);
         IElfomoToken output = IElfomoToken(b);
@@ -67,13 +75,15 @@ contract BasePmmExecutor {
         uint256 heldIn = input.balanceOf(address(this));
         uint256 heldOut = output.balanceOf(address(this));
         uint256 nativeBefore = address(this).balance;
-        if (input.allowance(address(this), market) != 0) revert UnsupportedToken();
+        if (input.allowance(address(this), spender) != 0) revert UnsupportedToken();
         checked(a, abi.encodeCall(input.transferFrom, (msg.sender, address(this), amount)));
         if (input.balanceOf(address(this)) != heldIn + amount) revert PartialFill();
         bool approve = market != LUNAR || a != WETH;
-        if (approve) checked(a, abi.encodeCall(input.approve, (market, amount)));
+        if (approve) checked(a, abi.encodeCall(input.approve, (spender, amount)));
         uint256 promised;
-        if (market == ELFOMO) {
+        if (nativeV3) {
+            BaseNativeV3.swap(spender, fee, a, b, amount, minimum, deadline, msg.sender);
+        } else if (market == ELFOMO) {
             if (getAmountOut(a, b, amount) < minimum) revert InsufficientOutput();
             IElfomoRouter(ELFOMO).swap(a, b, int256(amount), minimum, msg.sender, 0);
         } else if (market == BAI) {
@@ -83,12 +93,12 @@ contract BasePmmExecutor {
             if (quoteLunar(a, b, amount) < minimum) revert InsufficientOutput();
             promised = lunarSwap(a, amount, minimum, deadline, nativeBefore);
         }
-        if (approve) checked(a, abi.encodeCall(input.approve, (market, 0)));
-        if (input.allowance(address(this), market) != 0) revert UnsupportedToken();
+        if (approve) checked(a, abi.encodeCall(input.approve, (spender, 0)));
+        if (input.allowance(address(this), spender) != 0) revert UnsupportedToken();
         if (input.balanceOf(address(this)) != heldIn || output.balanceOf(address(this)) != heldOut ||
             address(this).balance != nativeBefore || beforeIn - input.balanceOf(msg.sender) != amount) revert PartialFill();
         received = output.balanceOf(msg.sender) - beforeOut;
-        if (received < minimum || (market != ELFOMO && received != promised)) revert InsufficientOutput();
+        if (received < minimum || (!nativeV3 && market != ELFOMO && received != promised)) revert InsufficientOutput();
         trading = false;
     }
 

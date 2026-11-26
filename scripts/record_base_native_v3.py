@@ -7,7 +7,8 @@ import requests
 from eth_abi import decode
 from eth_utils import keccak
 
-from record_base_slipstream_executor import ROOT, calldata, rpc
+from record_base_slipstream_executor import EXEC, ROOT, calldata, rpc
+from record_v2_chain_pools import view as read_call
 from record_solidly_v3 import HOLDERS
 
 WETH = "0x4200000000000000000000000000000000000006"
@@ -40,17 +41,20 @@ def verified(address, chain_code):
                 callbacks=[n for n in methods if n.endswith("SwapCallback")])
 
 
-def collect(snapshot, endpoint):
+def collect(snapshot, endpoint, module_code=None):
     selector = snapshot["selector"]
     header = rpc(endpoint, "eth_getBlockByHash", [selector["blockHash"], False])
     if int(rpc(endpoint, "eth_chainId", []), 16) != 8453 or int(header["number"], 16) != snapshot["block"]:
         raise ValueError("wrong Base snapshot")
     def view(target, signature, rtype, args=(), vals=()):
         data = calldata(signature, args, vals)
-        raw = rpc(endpoint, "eth_call", [{"to": target, "data": data}, selector])
-        return decode([rtype], bytes.fromhex(raw[2:]))[0]
+        raw = read_call(endpoint,selector,target,data)
+        return decode([rtype], raw)[0]
     def simulate(calls):
-        stage, = rpc(endpoint, "eth_simulateV1", [{"blockStateCalls": [{"calls": calls}], "validation": False}, selector])
+        frame = {"calls":calls}
+        if module_code:
+            frame["stateOverrides"] = {EXEC: {"code":"0x"+module_code}}
+        stage, = rpc(endpoint, "eth_simulateV1", [{"blockStateCalls": [frame], "validation": False}, selector])
         if stage["parentHash"] != selector["blockHash"] or len(stage["calls"]) != len(calls):
             raise ValueError("mismatched simulation frame")
         return stage["calls"]
@@ -80,26 +84,33 @@ def collect(snapshot, endpoint):
             return {"from":holder, "to":to, "gas":hex(2_000_000), "data":data}
         def balance(token):
             return tx(token,calldata("balanceOf(address)",["address"],[holder]))
-        def approve(token, x):
-            return tx(token,calldata("approve(address,uint256)",["address","uint256"],[router,x]))
+        def approve(token, x, spender=router):
+            return tx(token,calldata("approve(address,uint256)",["address","uint256"],[spender,x]))
         def price(a, b, x):
             return tx(quoter,calldata(quote_method+"("+QUOTE+")",[QUOTE],[(a,b,x,fee,0)]))
         def fill(a, b, x, minout, end):
             return tx(router,calldata("exactInputSingle("+ORDER+")",[ORDER],[(a,b,fee,holder,end,x,minout,0)]))
-        def output(reply):
+        def output(reply, words=1):
             if reply["status"] != "0x1":
                 return None
-            return int.from_bytes(bytes.fromhex(reply["returnData"][2:])[:32],"big")
+            raw = bytes.fromhex(reply["returnData"][2:])
+            if len(raw) != 32 * words:
+                raise ValueError(f"unexpected return length {len(raw)} from successful call")
+            return int.from_bytes(raw[:32],"big")
         def leg(prefix,a,b,amount):
             prepared = prefix+[balance(a),balance(b),approve(a,0),approve(a,amount)]
             replies = simulate(prepared+[price(a,b,amount)])
             row = dict(input=a, output=b, requested=str(amount))
-            q = output(replies[-1])
+            if any(r["status"] != "0x1" for r in replies[:-1]):
+                raise ValueError("funding, previous trade or approval reverted before quote")
+            q = output(replies[-1],4)
             if not q:
                 return {**row, "quote_error":replies[-1].get("error", "zero output")}, [], 0
             order = fill(a,b,amount,q,deadline)
             controls = [fill(a,b,amount,q+1,deadline),fill(a,b,amount,q,0)]
             after = simulate(prepared+controls+[order,balance(a),balance(b)])
+            if any(r["status"] != "0x1" for r in after[:len(prepared)]):
+                raise ValueError("preparation changed during execution")
             actual = after[-3]
             row.update(quoted=str(q), minimum_plus_one=after[-5].get("error"), expired=after[-4].get("error"))
             if not row["minimum_plus_one"] or not row["expired"]:
@@ -112,6 +123,30 @@ def collect(snapshot, endpoint):
             if used < 0 or used > amount or received < 0:
                 raise ValueError("unexpected balances")
             row.update(spent=str(used),received=str(received),reported=str(output(actual)),gas=int(actual["gasUsed"],16))
+            if module_code and received:
+                mprep=prefix+[balance(a),balance(b),approve(a,0,EXEC),approve(a,amount,EXEC)]
+                def checked(minimum,end=deadline):
+                    return tx(EXEC,calldata("execute(address,address,address,uint256,uint256,uint256)",
+                              ["address","address","address","uint256","uint256","uint256"],[pool,a,b,amount,minimum,end]))
+                def allowance(payer,spender):
+                    return tx(a,calldata("allowance(address,address)",["address","address"],[payer,spender]))
+                full=simulate(mprep+[checked(received+1),checked(received,0),checked(received),
+                                     balance(a),balance(b),allowance(EXEC,router),allowance(holder,EXEC)])
+                initial=len(mprep)
+                if any(r["status"]!="0x1" for r in full[:initial]):
+                    raise ValueError("module preparation failed")
+                if [r["status"] for r in full[initial:initial+2]]!=["0x0","0x0"]:
+                    raise ValueError("module delivered below wallet minimum or after deadline")
+                if used != amount:
+                    if full[initial+2]["status"] != "0x0":
+                        raise ValueError("module settled a partial input")
+                    row["module_partial_rejected"]=True
+                else:
+                    if (output(full[initial+2])!=received or output(full[n])-output(full[-4])!=amount or
+                        output(full[-3])-output(full[n+1])!=received or output(full[-2]) or output(full[-1])):
+                        raise ValueError(f"module payment or allowance mismatch: {full[initial+2].get('error')}")
+                    row["module"]={"net":str(received),"gas":int(full[initial+2]["gasUsed"],16),
+                                   "minimum_plus_one":full[initial].get("error"),"expired":full[initial+1].get("error")}
             return row,prepared+[order],received
         for amount in ((10**12,10**14,10**16) if cash==WETH else (10_000,1_000_000,10_000_000)):
             buy,prefix,received=leg([],cash,other,amount)
@@ -119,12 +154,15 @@ def collect(snapshot, endpoint):
             if received:
                 case["sell"],_,_=leg(prefix,other,cash,received)
             market["cases"].append(case)
-    return dict(chain_id=8453,selector=selector,block=snapshot["block"],state_root=header["stateRoot"],markets=markets)
+    return dict(chain_id=8453,selector=selector,block=snapshot["block"],state_root=header["stateRoot"],markets=markets,
+                module_runtime=("0x"+keccak(bytes.fromhex(module_code)).hex()) if module_code else None)
 
 
 if __name__ == "__main__":
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output",type=Path)
+    parser.add_argument("--module",type=Path)
     args=parser.parse_args()
+    code=json.loads(args.module.read_bytes())["runtime"] if args.module else None
     snapshot=json.loads((ROOT/"tests/data/first_run_dex_2026-11-26/base.json").read_bytes())
-    args.output.write_text(json.dumps(collect(snapshot,snapshot["endpoint"]),indent=2)+"\n",encoding="utf8",newline="\n")
+    args.output.write_text(json.dumps(collect(snapshot,snapshot["endpoint"],code),indent=2)+"\n",encoding="utf8",newline="\n")

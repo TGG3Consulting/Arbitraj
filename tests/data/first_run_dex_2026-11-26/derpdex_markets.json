@@ -1,0 +1,2609 @@
+{
+  "chain_id": 8453,
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "height": 62262756,
+  "endpoint": "https://base-rpc.publicnode.com",
+  "sender": "0x730a17276a9720871c98622ffce5db23f38acf99",
+  "factory": "0xeddef4273518b137cdbcb3a7fa1c6a688303dfe2",
+  "decimals": {
+    "0x4200000000000000000000000000000000000006": 18,
+    "0xeb466342c4d449bc9f53a865d5cb90586f405215": 6,
+    "0x50c5725949a6f0c72e6c4a641f24049a917db0cb": 18,
+    "0xfa7ed4e1f53f9a35271cf24c78f710e00d6b31b6": 18,
+    "0x66b05a9cde9557b05878c1a8a9251b4504ada5c2": 18,
+    "0xad371a1e6f9016b7e3d2512cac4e32f7bb69f6d5": 18,
+    "0xebb78043e29f4af24e6266a7d142f5a08443969e": 18,
+    "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca": 6
+  },
+  "markets": [
+    {
+      "pool": "0x09b852108b6ed78adb2e776d901b8d54ba708080",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "block": 2757335,
+      "hash": "0x66b1708f84fbbffe3cea454abd837d92bc8bc2469baf21d3cea707abc8ecd848",
+      "tx": "0xa15eb180d175143495cf2840a51e5c2e2716084e031e9ae74db32c7bd80d5c3e",
+      "log": 5,
+      "liquidity": "16938927175902",
+      "quotes": [
+        {
+          "side": 0,
+          "requested": "1000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000000000e8d4a510000000000000000000000000000000000000000000000000000000000000000691",
+          "gas_limit": 1200000,
+          "gas_used": 101784,
+          "used": "1000000000000",
+          "out": "1681",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000005af3107a400000000000000000000000000000000000000000000000000000000000000290d3",
+          "gas_limit": 1200000,
+          "gas_used": 108449,
+          "used": "100000000000000",
+          "out": "168147",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "10000000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000002386f26fc100000000000000000000000000000000000000000000000000000000000000facd34",
+          "gas_limit": 1200000,
+          "gas_used": 138507,
+          "used": "10000000000000000",
+          "out": "16436532",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000016345785d8a00000000000000000000000000000000000000000000000000000000000008908076",
+          "gas_limit": 1200000,
+          "gas_used": 494347,
+          "used": "100000000000000000",
+          "out": "143687798",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "1000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000003e8000000000000000000000000000000000000000000000000000000899accc44f",
+          "gas_limit": 1200000,
+          "gas_used": 101449,
+          "used": "1000",
+          "out": "591007630415",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "100000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000186a0000000000000000000000000000000000000000000000000000035be844adb57",
+          "gas_limit": 1200000,
+          "gas_used": 108122,
+          "used": "100000",
+          "out": "59092379556695",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "10000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000009896800000000000000000000000000000000000000000000000000014ae4eb5470147",
+          "gas_limit": 1200000,
+          "gas_used": 138293,
+          "used": "10000000",
+          "out": "5821152606224711",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "100000000",
+          "status": "0x1",
+          "returnData": "0x0000000000000000000000000000000000000000000000000000000005f5e10000000000000000000000000000000000000000000000000000b6748f33ae4b28",
+          "gas_limit": 1200000,
+          "gas_used": 336669,
+          "used": "100000000",
+          "out": "51356604157545256",
+          "full": true
+        }
+      ],
+      "funding_pool": null,
+      "wallet": [
+        {
+          "buy_quote": {
+            "requested": "1000000000000",
+            "used": "1000000000000",
+            "out": "1681"
+          },
+          "sell_quote": {
+            "requested": "1681",
+            "used": "1681",
+            "out": "992920363592"
+          },
+          "side": 0,
+          "input": "1000000000000",
+          "bought": "1681",
+          "sold": "992920363592",
+          "cash_before": "1000000000000",
+          "cash_after": "992920363592",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000000000",
+            "used": "100000000000000",
+            "out": "168147"
+          },
+          "sell_quote": {
+            "requested": "168147",
+            "used": "168147",
+            "out": "99400067144596"
+          },
+          "side": 0,
+          "input": "100000000000000",
+          "bought": "168147",
+          "sold": "99400067144596",
+          "cash_before": "100000000000000",
+          "cash_after": "99400067144596",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "10000000000000000",
+            "used": "10000000000000000",
+            "out": "16436532"
+          },
+          "sell_quote": {
+            "requested": "16436532",
+            "used": "16436532",
+            "out": "9940766336130130"
+          },
+          "side": 0,
+          "input": "10000000000000000",
+          "bought": "16436532",
+          "sold": "9940766336130130",
+          "cash_before": "10000000000000000",
+          "cash_after": "9940766336130130",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000000000000",
+            "used": "100000000000000000",
+            "out": "143687798"
+          },
+          "sell_quote": {
+            "requested": "143687798",
+            "used": "143687798",
+            "out": "99444298180936719"
+          },
+          "side": 0,
+          "input": "100000000000000000",
+          "bought": "143687798",
+          "sold": "99444298180936719",
+          "cash_before": "100000000000000000",
+          "cash_after": "99444298180936719",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        }
+      ]
+    },
+    {
+      "pool": "0x8f02789151ac557284515babfd6ceb9675ac68eb",
+      "tokens": [
+        "0x50c5725949a6f0c72e6c4a641f24049a917db0cb",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "fee": 100,
+      "spacing": 1,
+      "block": 2993230,
+      "hash": "0xfd302a51ac0efa7968a33fa079cae73f08bc12d49f4618220883827985e8bd94",
+      "tx": "0x92a431d881d2d675a6733c4a348c2a602a5f2e5ec20b9e7ca2c6978ad9cba7e0",
+      "log": 18,
+      "liquidity": "172192539346464",
+      "quotes": [
+        {
+          "side": 0,
+          "requested": "1000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000038d7ea4c6800000000000000000000000000000000000000000000000000000000000000003e4",
+          "gas_limit": 1200000,
+          "gas_used": 96643,
+          "used": "1000000000000000",
+          "out": "996",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000016345785d8a000000000000000000000000000000000000000000000000000000000000000184c9",
+          "gas_limit": 1200000,
+          "gas_used": 132892,
+          "used": "100000000000000000",
+          "out": "99529",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "10000000000000000000",
+          "status": "0x0",
+          "returnData": "0x",
+          "gas_limit": 1200000,
+          "gas_used": 1181761,
+          "reason": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "larger_gas": {
+            "status": "0x1",
+            "returnData": "0x0000000000000000000000000000000000000000000000008ac7230489e80000000000000000000000000000000000000000000000000000000000000022068c",
+            "gas_limit": 16777216,
+            "gas_used": 1265491,
+            "used": "10000000000000000000",
+            "out": "2229900",
+            "full": true
+          }
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000000000",
+          "status": "0x0",
+          "returnData": "0x",
+          "gas_limit": 1200000,
+          "gas_used": 1181761,
+          "reason": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "larger_gas": {
+            "status": "0x1",
+            "returnData": "0x0000000000000000000000000000000000000000000000056bc75e2d63100000000000000000000000000000000000000000000000000000000000000024d9dc",
+            "gas_limit": 16777216,
+            "gas_used": 2554770,
+            "used": "100000000000000000000",
+            "out": "2415068",
+            "full": true
+          }
+        },
+        {
+          "side": 1,
+          "requested": "1000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000038f44d6fd09a5",
+          "gas_limit": 1200000,
+          "gas_used": 96365,
+          "used": "1000",
+          "out": "1001950757587365",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "100000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000186a0000000000000000000000000000000000000000000000000016414814e76c1a1",
+          "gas_limit": 1200000,
+          "gas_used": 103110,
+          "used": "100000",
+          "out": "100227637308735905",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "10000000",
+          "status": "0x0",
+          "returnData": "0x",
+          "gas_limit": 1200000,
+          "gas_used": 1181760,
+          "reason": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "larger_gas": {
+            "status": "0x1",
+            "returnData": "0x000000000000000000000000000000000000000000000000000000000098968000000000000000000000000000000000000000000000000025507b00379ffc54",
+            "gas_limit": 16777216,
+            "gas_used": 1275475,
+            "used": "10000000",
+            "out": "2688784218403634260",
+            "full": true
+          }
+        },
+        {
+          "side": 1,
+          "requested": "100000000",
+          "status": "0x0",
+          "returnData": "0x",
+          "gas_limit": 1200000,
+          "gas_used": 1181760,
+          "reason": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "larger_gas": {
+            "status": "0x1",
+            "returnData": "0x0000000000000000000000000000000000000000000000000000000005f5e1000000000000000000000000000000000000000000000000002804dbe84b7e1a12",
+            "gas_limit": 16777216,
+            "gas_used": 2582905,
+            "used": "100000000",
+            "out": "2883671452169411090",
+            "full": true
+          }
+        }
+      ],
+      "funding_pool": "0x09b852108b6ed78adb2e776d901b8d54ba708080",
+      "wallet": [
+        {
+          "buy_quote": {
+            "requested": "1000",
+            "used": "1000",
+            "out": "1001950757587365"
+          },
+          "sell_quote": {
+            "requested": "1001950757587365",
+            "used": "1001950757587365",
+            "out": "998"
+          },
+          "side": 1,
+          "input": "1000",
+          "bought": "1001950757587365",
+          "sold": "998",
+          "cash_before": "261890297",
+          "cash_after": "261890295",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "100000",
+            "used": "100000",
+            "out": "100227637308735905"
+          },
+          "sell_quote": {
+            "requested": "100227637308735905",
+            "used": "100227637308735905",
+            "out": "99980"
+          },
+          "side": 1,
+          "input": "100000",
+          "bought": "100227637308735905",
+          "sold": "99980",
+          "cash_before": "261890297",
+          "cash_after": "261890277",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "side": 1,
+          "input": "10000000",
+          "reason": "call 5: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        },
+        {
+          "side": 1,
+          "input": "100000000",
+          "reason": "call 5: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        }
+      ],
+      "larger_gas_wallet": [
+        {
+          "buy_quote": {
+            "requested": "10000000",
+            "used": "10000000",
+            "out": "2688784218403634260"
+          },
+          "sell_quote": {
+            "requested": "2688784218403634260",
+            "used": "2688784218403634260",
+            "out": "9998506"
+          },
+          "side": 1,
+          "input": "10000000",
+          "bought": "2688784218403634260",
+          "sold": "9998506",
+          "cash_before": "261890297",
+          "cash_after": "261888803",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000",
+            "used": "100000000",
+            "out": "2883671452169411090"
+          },
+          "sell_quote": {
+            "requested": "2883671452169411090",
+            "used": "2883671452169411090",
+            "out": "99989208"
+          },
+          "side": 1,
+          "input": "100000000",
+          "bought": "2883671452169411090",
+          "sold": "99989208",
+          "cash_before": "261890297",
+          "cash_after": "261879505",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        }
+      ]
+    },
+    {
+      "pool": "0x5815f1c7b376aab55c04fd6a5144ffc81693259e",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xfa7ed4e1f53f9a35271cf24c78f710e00d6b31b6"
+      ],
+      "fee": 10000,
+      "spacing": 200,
+      "block": 3026531,
+      "hash": "0xb2c4aab448d50e625ea82d180de7cd33990d65372e9e680303eca2b1201f3912",
+      "tx": "0x9d44effc05e40218ade676981f801d51184db32d5805d64d9a5868fa0f0348bd",
+      "log": 14,
+      "liquidity": "0",
+      "quotes": [
+        {
+          "side": 0,
+          "requested": "1000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 215565,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 215577,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 0,
+          "requested": "10000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 215577,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 215589,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 1,
+          "requested": "1000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 153256,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 1,
+          "requested": "100000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 153256,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 1,
+          "requested": "10000000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 153256,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 1,
+          "requested": "100000000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 153268,
+          "used": "0",
+          "out": "0",
+          "full": false
+        }
+      ],
+      "funding_pool": null,
+      "wallet": [
+        {
+          "buy_quote": {
+            "requested": "1000000000000",
+            "used": "0",
+            "out": "0"
+          },
+          "side": 0,
+          "input": "1000000000000",
+          "reason": "partial or zero quote"
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000000000",
+            "used": "0",
+            "out": "0"
+          },
+          "side": 0,
+          "input": "100000000000000",
+          "reason": "partial or zero quote"
+        },
+        {
+          "buy_quote": {
+            "requested": "10000000000000000",
+            "used": "0",
+            "out": "0"
+          },
+          "side": 0,
+          "input": "10000000000000000",
+          "reason": "partial or zero quote"
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000000000000",
+            "used": "0",
+            "out": "0"
+          },
+          "side": 0,
+          "input": "100000000000000000",
+          "reason": "partial or zero quote"
+        }
+      ]
+    },
+    {
+      "pool": "0x7138d05be45207ab40cce8e50ab5c89207866429",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "fee": 100,
+      "spacing": 1,
+      "block": 3032369,
+      "hash": "0x7b708b42c1b5be352cf6e363b071c04f9925c441670e56f53432ac79e8d961f9",
+      "tx": "0x2bafb857f02050586721a5d4eace4778324be3093305b2ba37693e7a57d442e4",
+      "log": 23,
+      "liquidity": "120219870127",
+      "quotes": [
+        {
+          "side": 0,
+          "requested": "1000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000000000e8d4a51000000000000000000000000000000000000000000000000000000000000000066f",
+          "gas_limit": 1200000,
+          "gas_used": 115459,
+          "used": "1000000000000",
+          "out": "1647",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000005af3107a40000000000000000000000000000000000000000000000000000000000000026f1f",
+          "gas_limit": 1200000,
+          "gas_used": 130207,
+          "used": "100000000000000",
+          "out": "159519",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "10000000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000002386f26fc100000000000000000000000000000000000000000000000000000000000000397aa4",
+          "gas_limit": 1200000,
+          "gas_used": 966529,
+          "used": "10000000000000000",
+          "out": "3766948",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000000",
+          "status": "0x0",
+          "returnData": "0x",
+          "gas_limit": 1200000,
+          "gas_used": 1181761,
+          "reason": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "larger_gas": {
+            "status": "0x1",
+            "returnData": "0x000000000000000000000000000000000000000000000000016345785d8a00000000000000000000000000000000000000000000000000000000000000485a5f",
+            "gas_limit": 16777216,
+            "gas_used": 2169022,
+            "used": "100000000000000000",
+            "out": "4741727",
+            "full": true
+          }
+        },
+        {
+          "side": 1,
+          "requested": "1000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000003e80000000000000000000000000000000000000000000000000000008d00cddef5",
+          "gas_limit": 1200000,
+          "gas_used": 102587,
+          "used": "1000",
+          "out": "605603880693",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "100000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000186a0000000000000000000000000000000000000000000000000000036086cc1ce04",
+          "gas_limit": 1200000,
+          "gas_used": 115011,
+          "used": "100000",
+          "out": "59409812278788",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "10000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000009896800000000000000000000000000000000000000000000000000007110a596f1650",
+          "gas_limit": 1200000,
+          "gas_used": 747945,
+          "used": "10000000",
+          "out": "1989060984772176",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "100000000",
+          "status": "0x0",
+          "returnData": "0x",
+          "gas_limit": 1200000,
+          "gas_used": 1181760,
+          "reason": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "larger_gas": {
+            "status": "0x1",
+            "returnData": "0x0000000000000000000000000000000000000000000000000000000005f5e100000000000000000000000000000000000000000000000000000a0703c553b923",
+            "gas_limit": 16777216,
+            "gas_used": 1870445,
+            "used": "100000000",
+            "out": "2822462544001315",
+            "full": true
+          }
+        }
+      ],
+      "funding_pool": null,
+      "wallet": [
+        {
+          "buy_quote": {
+            "requested": "1000000000000",
+            "used": "1000000000000",
+            "out": "1647"
+          },
+          "sell_quote": {
+            "requested": "1647",
+            "used": "1647",
+            "out": "997433825093"
+          },
+          "side": 0,
+          "input": "1000000000000",
+          "bought": "1647",
+          "sold": "997433825093",
+          "cash_before": "1000000000000",
+          "cash_after": "997433825093",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000000000",
+            "used": "100000000000000",
+            "out": "159519"
+          },
+          "sell_quote": {
+            "requested": "159519",
+            "used": "159519",
+            "out": "99976619752280"
+          },
+          "side": 0,
+          "input": "100000000000000",
+          "bought": "159519",
+          "sold": "99976619752280",
+          "cash_before": "100000000000000",
+          "cash_after": "99976619752280",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "10000000000000000",
+            "used": "10000000000000000",
+            "out": "3766948"
+          },
+          "sell_quote": {
+            "requested": "3766948",
+            "used": "3766948",
+            "out": "9998668906735999"
+          },
+          "side": 0,
+          "input": "10000000000000000",
+          "bought": "3766948",
+          "sold": "9998668906735999",
+          "cash_before": "10000000000000000",
+          "cash_after": "9998668906735999",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "side": 0,
+          "input": "100000000000000000",
+          "reason": "call 3: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        }
+      ],
+      "larger_gas_wallet": [
+        {
+          "buy_quote": {
+            "requested": "100000000000000000",
+            "used": "100000000000000000",
+            "out": "4741727"
+          },
+          "sell_quote": {
+            "requested": "4741727",
+            "used": "4741727",
+            "out": "99989452987751094"
+          },
+          "side": 0,
+          "input": "100000000000000000",
+          "bought": "4741727",
+          "sold": "99989452987751094",
+          "cash_before": "100000000000000000",
+          "cash_after": "99989452987751094",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        }
+      ]
+    },
+    {
+      "pool": "0x903d79c48f100681eb421607535f2704a67ab3d2",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x66b05a9cde9557b05878c1a8a9251b4504ada5c2"
+      ],
+      "fee": 10000,
+      "spacing": 200,
+      "block": 3044541,
+      "hash": "0x65dac3c64cbc284d2252d2ecef5a4812e86d7d12cb311cad8346b7bb5ef55c7b",
+      "tx": "0x05781b49266eec66325bc18bc0ff7258055b25cdf5c3de3f9ef1a07b870cd703",
+      "log": 66,
+      "liquidity": "0",
+      "quotes": [
+        {
+          "side": 0,
+          "requested": "1000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 236705,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 236717,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 0,
+          "requested": "10000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 236717,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 236729,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 1,
+          "requested": "1000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 131860,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 1,
+          "requested": "100000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 131860,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 1,
+          "requested": "10000000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 131860,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 1,
+          "requested": "100000000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 131872,
+          "used": "0",
+          "out": "0",
+          "full": false
+        }
+      ],
+      "funding_pool": null,
+      "wallet": [
+        {
+          "buy_quote": {
+            "requested": "1000000000000",
+            "used": "0",
+            "out": "0"
+          },
+          "side": 0,
+          "input": "1000000000000",
+          "reason": "partial or zero quote"
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000000000",
+            "used": "0",
+            "out": "0"
+          },
+          "side": 0,
+          "input": "100000000000000",
+          "reason": "partial or zero quote"
+        },
+        {
+          "buy_quote": {
+            "requested": "10000000000000000",
+            "used": "0",
+            "out": "0"
+          },
+          "side": 0,
+          "input": "10000000000000000",
+          "reason": "partial or zero quote"
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000000000000",
+            "used": "0",
+            "out": "0"
+          },
+          "side": 0,
+          "input": "100000000000000000",
+          "reason": "partial or zero quote"
+        }
+      ]
+    },
+    {
+      "pool": "0xb5da4ce320ac01f90b59837c8706406b7706587e",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "fee": 500,
+      "spacing": 10,
+      "block": 3606502,
+      "hash": "0x8ed8d92ac21bc606963734121096ec868633a51533527b838b8edaf03aa497e6",
+      "tx": "0x588d30ef14e0cb298987337d4b12c5298d729ce15bd810ecb55bafe9b2f2fafc",
+      "log": 1,
+      "liquidity": "2725683484093",
+      "quotes": [
+        {
+          "side": 0,
+          "requested": "1000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000000000e8d4a510000000000000000000000000000000000000000000000000000000000000000699",
+          "gas_limit": 1200000,
+          "gas_used": 108348,
+          "used": "1000000000000",
+          "out": "1689",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000005af3107a400000000000000000000000000000000000000000000000000000000000000292dd",
+          "gas_limit": 1200000,
+          "gas_used": 108360,
+          "used": "100000000000000",
+          "out": "168669",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "10000000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000002386f26fc1000000000000000000000000000000000000000000000000000000000000003229fb",
+          "gas_limit": 1200000,
+          "gas_used": 422326,
+          "used": "10000000000000000",
+          "out": "3287547",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000016345785d8a00000000000000000000000000000000000000000000000000000000000000323a4f",
+          "gas_limit": 1200000,
+          "gas_used": 562836,
+          "used": "100000000000000000",
+          "out": "3291727",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "1000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000003e8000000000000000000000000000000000000000000000000000000899fbf0d1c",
+          "gas_limit": 1200000,
+          "gas_used": 95394,
+          "used": "1000",
+          "out": "591090617628",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "100000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000186a0000000000000000000000000000000000000000000000000000035bd24044a82",
+          "gas_limit": 1200000,
+          "gas_used": 108148,
+          "used": "100000",
+          "out": "59086469352066",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "10000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000000000000098968000000000000000000000000000000000000000000000000000012a05defb43b1",
+          "gas_limit": 1200000,
+          "gas_used": 343990,
+          "used": "10000000",
+          "out": "327679680922545",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "100000000",
+          "status": "0x1",
+          "returnData": "0x0000000000000000000000000000000000000000000000000000000005f5e10000000000000000000000000000000000000000000000000000012d2680fc298c",
+          "gas_limit": 1200000,
+          "gas_used": 478121,
+          "used": "100000000",
+          "out": "331118372727180",
+          "full": true
+        }
+      ],
+      "funding_pool": null,
+      "wallet": [
+        {
+          "buy_quote": {
+            "requested": "1000000000000",
+            "used": "1000000000000",
+            "out": "1689"
+          },
+          "sell_quote": {
+            "requested": "1689",
+            "used": "1689",
+            "out": "998783693888"
+          },
+          "side": 0,
+          "input": "1000000000000",
+          "bought": "1689",
+          "sold": "998783693888",
+          "cash_before": "1000000000000",
+          "cash_after": "998783693888",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000000000",
+            "used": "100000000000000",
+            "out": "168669"
+          },
+          "sell_quote": {
+            "requested": "168669",
+            "used": "168669",
+            "out": "99899507247977"
+          },
+          "side": 0,
+          "input": "100000000000000",
+          "bought": "168669",
+          "sold": "99899507247977",
+          "cash_before": "100000000000000",
+          "cash_after": "99899507247977",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "10000000000000000",
+            "used": "10000000000000000",
+            "out": "3287547"
+          },
+          "sell_quote": {
+            "requested": "3287547",
+            "used": "3287547",
+            "out": "9993995317487610"
+          },
+          "side": 0,
+          "input": "10000000000000000",
+          "bought": "3287547",
+          "sold": "9993995317487610",
+          "cash_before": "10000000000000000",
+          "cash_after": "9993995317487610",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000000000000",
+            "used": "100000000000000000",
+            "out": "3291727"
+          },
+          "sell_quote": {
+            "requested": "3291727",
+            "used": "3291727",
+            "out": "99948972832670686"
+          },
+          "side": 0,
+          "input": "100000000000000000",
+          "bought": "3291727",
+          "sold": "99948972832670686",
+          "cash_before": "100000000000000000",
+          "cash_after": "99948972832670686",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        }
+      ]
+    },
+    {
+      "pool": "0xef8a31e5ead830a4521e269643f679014ad5a0c3",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xad371a1e6f9016b7e3d2512cac4e32f7bb69f6d5"
+      ],
+      "fee": 10000,
+      "spacing": 200,
+      "block": 3858652,
+      "hash": "0xb7c89353839762a1205aa0f3b4f8cddaa29943dc84762114b9f38bdcdaf39752",
+      "tx": "0xb6ff12377aee1b08b26887b6339c4f8df2f81c11967c2737c3bc031769cea310",
+      "log": 32,
+      "liquidity": "0",
+      "quotes": [
+        {
+          "side": 0,
+          "requested": "1000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 187498,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 187510,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 0,
+          "requested": "10000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 187510,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 187522,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 1,
+          "requested": "1000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 181554,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 1,
+          "requested": "100000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 181554,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 1,
+          "requested": "10000000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 181554,
+          "used": "0",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 1,
+          "requested": "100000000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 181566,
+          "used": "0",
+          "out": "0",
+          "full": false
+        }
+      ],
+      "funding_pool": null,
+      "wallet": [
+        {
+          "buy_quote": {
+            "requested": "1000000000000",
+            "used": "0",
+            "out": "0"
+          },
+          "side": 0,
+          "input": "1000000000000",
+          "reason": "partial or zero quote"
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000000000",
+            "used": "0",
+            "out": "0"
+          },
+          "side": 0,
+          "input": "100000000000000",
+          "reason": "partial or zero quote"
+        },
+        {
+          "buy_quote": {
+            "requested": "10000000000000000",
+            "used": "0",
+            "out": "0"
+          },
+          "side": 0,
+          "input": "10000000000000000",
+          "reason": "partial or zero quote"
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000000000000",
+            "used": "0",
+            "out": "0"
+          },
+          "side": 0,
+          "input": "100000000000000000",
+          "reason": "partial or zero quote"
+        }
+      ]
+    },
+    {
+      "pool": "0x8dff358dc9ee5f3d44afb08128c5b0c2de4961d9",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "fee": 10000,
+      "spacing": 200,
+      "block": 5559941,
+      "hash": "0x563e29d8d19b728e8e1c1f26a600d32b84ce0dc915aad66f89f79b038f37c887",
+      "tx": "0x21f87575b6f97a1699acc73990c475460b32a3f2d849183da9c5a3c24959d750",
+      "log": 9,
+      "liquidity": "48292812414",
+      "quotes": [
+        {
+          "side": 0,
+          "requested": "1000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000000000e8d4a510000000000000000000000000000000000000000000000000000000000000000676",
+          "gas_limit": 1200000,
+          "gas_used": 108036,
+          "used": "1000000000000",
+          "out": "1654",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000005af3107a400000000000000000000000000000000000000000000000000000000000000254e8",
+          "gas_limit": 1200000,
+          "gas_used": 108098,
+          "used": "100000000000000",
+          "out": "152808",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "10000000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000002386f26fc1000000000000000000000000000000000000000000000000000000000000000de58e",
+          "gas_limit": 1200000,
+          "gas_used": 187135,
+          "used": "10000000000000000",
+          "out": "910734",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000016345785d8a000000000000000000000000000000000000000000000000000000000000000e31aa",
+          "gas_limit": 1200000,
+          "gas_used": 194562,
+          "used": "100000000000000000",
+          "out": "930218",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "1000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000089b6a9203d",
+          "gas_limit": 1200000,
+          "gas_used": 108116,
+          "used": "1000",
+          "out": "591475056701",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "100000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000186a000000000000000000000000000000000000000000000000000003340a54a5f47",
+          "gas_limit": 1200000,
+          "gas_used": 108128,
+          "used": "100000",
+          "out": "56352744038215",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "10000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000009896800000000000000000000000000000000000000000000000000001ca3ec485cced",
+          "gas_limit": 1200000,
+          "gas_used": 145227,
+          "used": "10000000",
+          "out": "503845910596845",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "100000000",
+          "status": "0x1",
+          "returnData": "0x0000000000000000000000000000000000000000000000000000000005f5e1000000000000000000000000000000000000000000000000000001dbaab265d65f",
+          "gas_limit": 1200000,
+          "gas_used": 152615,
+          "used": "100000000",
+          "out": "523001160652383",
+          "full": true
+        }
+      ],
+      "funding_pool": null,
+      "wallet": [
+        {
+          "buy_quote": {
+            "requested": "1000000000000",
+            "used": "1000000000000",
+            "out": "1654"
+          },
+          "sell_quote": {
+            "requested": "1654",
+            "used": "1654",
+            "out": "979344408949"
+          },
+          "side": 0,
+          "input": "1000000000000",
+          "bought": "1654",
+          "sold": "979344408949",
+          "cash_before": "1000000000000",
+          "cash_after": "979344408949",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000000000",
+            "used": "100000000000000",
+            "out": "152808"
+          },
+          "sell_quote": {
+            "requested": "152808",
+            "used": "152808",
+            "out": "98084949403926"
+          },
+          "side": 0,
+          "input": "100000000000000",
+          "bought": "152808",
+          "sold": "98084949403926",
+          "cash_before": "100000000000000",
+          "cash_after": "98084949403926",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "10000000000000000",
+            "used": "10000000000000000",
+            "out": "910734"
+          },
+          "sell_quote": {
+            "requested": "910734",
+            "used": "910734",
+            "out": "9894528595148866"
+          },
+          "side": 0,
+          "input": "10000000000000000",
+          "bought": "910734",
+          "sold": "9894528595148866",
+          "cash_before": "10000000000000000",
+          "cash_after": "9894528595148866",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000000000000",
+            "used": "100000000000000000",
+            "out": "930218"
+          },
+          "sell_quote": {
+            "requested": "930218",
+            "used": "930218",
+            "out": "98994409129365676"
+          },
+          "side": 0,
+          "input": "100000000000000000",
+          "bought": "930218",
+          "sold": "98994409129365676",
+          "cash_before": "100000000000000000",
+          "cash_after": "98994409129365676",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        }
+      ]
+    },
+    {
+      "pool": "0xa80d9b167538fa52425e7bd94baa037116db0066",
+      "tokens": [
+        "0xad371a1e6f9016b7e3d2512cac4e32f7bb69f6d5",
+        "0xfa7ed4e1f53f9a35271cf24c78f710e00d6b31b6"
+      ],
+      "fee": 10000,
+      "spacing": 200,
+      "block": 6056223,
+      "hash": "0x21e6ce973534d105f957953eba907940c26d98efb371140141cf8a4a35722154",
+      "tx": "0x7a9dad634ad74c9f1e79ecd0b1cdb311a6218f98ae90ebd21dcbaa83f0893965",
+      "log": 4,
+      "liquidity": "691541427755031314334",
+      "quotes": [
+        {
+          "side": 0,
+          "requested": "1000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000038d7ea4c68000000000000000000000000000000000000000000000000019a3e7aa0a63fa405f",
+          "gas_limit": 1200000,
+          "gas_used": 104081,
+          "used": "1000000000000000",
+          "out": "472979197352144945247",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000016345785d8a000000000000000000000000000000000000000000000000091f5cdfb16de0e58095",
+          "gas_limit": 1200000,
+          "gas_used": 103041,
+          "used": "100000000000000000",
+          "out": "43079839674768581558421",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "10000000000000000000",
+          "status": "0x1",
+          "returnData": "0x0000000000000000000000000000000000000000000000008ac7230489e80000000000000000000000000000000000000000000000005bfa73b7401fc67dd6be",
+          "gas_limit": 1200000,
+          "gas_used": 111659,
+          "used": "10000000000000000000",
+          "out": "434355374163305420412606",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000000000",
+          "status": "0x1",
+          "returnData": "0x0000000000000000000000000000000000000000000000056bc75e2d63100000000000000000000000000000000000000000000000006441a1dbeba85209ff23",
+          "gas_limit": 1200000,
+          "gas_used": 119213,
+          "used": "100000000000000000000",
+          "out": "473447349826523811675939",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "1000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000038d7ea4c68000000000000000000000000000000000000000000000000000000000007b63bfc0",
+          "gas_limit": 1200000,
+          "gas_used": 100787,
+          "used": "1000000000000000",
+          "out": "2070134720",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "100000000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000016345785d8a00000000000000000000000000000000000000000000000000000000003032f64164",
+          "gas_limit": 1200000,
+          "gas_used": 100787,
+          "used": "100000000000000000",
+          "out": "207013429604",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "10000000000000000000",
+          "status": "0x1",
+          "returnData": "0x0000000000000000000000000000000000000000000000008ac7230489e80000000000000000000000000000000000000000000000000000000012d3cee7fa80",
+          "gas_limit": 1200000,
+          "gas_used": 100787,
+          "used": "10000000000000000000",
+          "out": "20700918708864",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "100000000000000000000",
+          "status": "0x1",
+          "returnData": "0x0000000000000000000000000000000000000000000000056bc75e2d631000000000000000000000000000000000000000000000000000000000bc3d1aaf9559",
+          "gas_limit": 1200000,
+          "gas_used": 107786,
+          "used": "100000000000000000000",
+          "out": "206970626741593",
+          "full": true
+        }
+      ],
+      "funding_pool": "0xef8a31e5ead830a4521e269643f679014ad5a0c3",
+      "wallet": [
+        {
+          "side": 0,
+          "input": "1000000000000000",
+          "reason": "call 2: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        },
+        {
+          "side": 0,
+          "input": "100000000000000000",
+          "reason": "call 2: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        },
+        {
+          "side": 0,
+          "input": "10000000000000000000",
+          "reason": "call 2: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        },
+        {
+          "side": 0,
+          "input": "100000000000000000000",
+          "reason": "call 2: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        }
+      ],
+      "existing_holder": {
+        "sender": "0x9ce0979efccade8cb1de8a0cd17afbd9864866c6",
+        "creation_tx": "0x7a9dad634ad74c9f1e79ecd0b1cdb311a6218f98ae90ebd21dcbaa83f0893965",
+        "balances": [
+          "0",
+          "995818197057273109426786419"
+        ],
+        "wallet": [
+          {
+            "buy_quote": {
+              "requested": "1000000000000000",
+              "used": "1000000000000000",
+              "out": "2070134720"
+            },
+            "sell_quote": {
+              "requested": "2070134720",
+              "used": "2070134720",
+              "out": "980099999495408"
+            },
+            "coin_before": "0",
+            "side": 1,
+            "input": "1000000000000000",
+            "bought": "2070134720",
+            "sold": "980099999495408",
+            "cash_before": "995818197057273109426786419",
+            "cash_after": "995818197057253209426281827",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          },
+          {
+            "buy_quote": {
+              "requested": "100000000000000000",
+              "used": "100000000000000000",
+              "out": "207013429604"
+            },
+            "sell_quote": {
+              "requested": "207013429604",
+              "used": "207013429604",
+              "out": "98010000202423606"
+            },
+            "coin_before": "0",
+            "side": 1,
+            "input": "100000000000000000",
+            "bought": "207013429604",
+            "sold": "98010000202423606",
+            "cash_before": "995818197057273109426786419",
+            "cash_after": "995818197055283109629210025",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          },
+          {
+            "buy_quote": {
+              "requested": "10000000000000000000",
+              "used": "10000000000000000000",
+              "out": "20700918708864"
+            },
+            "sell_quote": {
+              "requested": "20700918708864",
+              "used": "20700918708864",
+              "out": "9801002028897269539"
+            },
+            "coin_before": "0",
+            "side": 1,
+            "input": "10000000000000000000",
+            "bought": "20700918708864",
+            "sold": "9801002028897269539",
+            "cash_before": "995818197057273109426786419",
+            "cash_after": "995818196858275138324055958",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          },
+          {
+            "buy_quote": {
+              "requested": "100000000000000000000",
+              "used": "100000000000000000000",
+              "out": "206970626741593"
+            },
+            "sell_quote": {
+              "requested": "206970626741593",
+              "used": "206970626741593",
+              "out": "98010202852372950315"
+            },
+            "coin_before": "0",
+            "side": 1,
+            "input": "100000000000000000000",
+            "bought": "206970626741593",
+            "sold": "98010202852372950315",
+            "cash_before": "995818197057273109426786419",
+            "cash_after": "995818195067475961799736734",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          }
+        ]
+      }
+    },
+    {
+      "pool": "0xf0498e1f551a4de3607c18fe77ee1185e3d99720",
+      "tokens": [
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "0xeb466342c4d449bc9f53a865d5cb90586f405215"
+      ],
+      "fee": 100,
+      "spacing": 1,
+      "block": 6329004,
+      "hash": "0x49bb225cd38f7bac1e6252849db666009de773addf28a60ed66952ade3b3924b",
+      "tx": "0xd87fd010ed6c313f7375ba7f980682b4a662088b4cbf10a4305dafb78c7607bc",
+      "log": 16,
+      "liquidity": "0",
+      "quotes": [
+        {
+          "side": 0,
+          "requested": "1000",
+          "status": "0x0",
+          "returnData": "0x",
+          "gas_limit": 1200000,
+          "gas_used": 1181760,
+          "reason": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "larger_gas": {
+            "status": "0x0",
+            "returnData": "0x",
+            "gas_limit": 16777216,
+            "gas_used": 16515582,
+            "reason": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          }
+        },
+        {
+          "side": 0,
+          "requested": "100000",
+          "status": "0x0",
+          "returnData": "0x",
+          "gas_limit": 1200000,
+          "gas_used": 1181760,
+          "reason": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "larger_gas": {
+            "status": "0x0",
+            "returnData": "0x",
+            "gas_limit": 16777216,
+            "gas_used": 16515582,
+            "reason": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          }
+        },
+        {
+          "side": 0,
+          "requested": "10000000",
+          "status": "0x0",
+          "returnData": "0x",
+          "gas_limit": 1200000,
+          "gas_used": 1181760,
+          "reason": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "larger_gas": {
+            "status": "0x0",
+            "returnData": "0x",
+            "gas_limit": 16777216,
+            "gas_used": 16515582,
+            "reason": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          }
+        },
+        {
+          "side": 0,
+          "requested": "100000000",
+          "status": "0x0",
+          "returnData": "0x",
+          "gas_limit": 1200000,
+          "gas_used": 1181760,
+          "reason": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "larger_gas": {
+            "status": "0x0",
+            "returnData": "0x",
+            "gas_limit": 16777216,
+            "gas_used": 16515582,
+            "reason": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          }
+        },
+        {
+          "side": 1,
+          "requested": "1000",
+          "status": "0x0",
+          "returnData": "0x",
+          "gas_limit": 1200000,
+          "gas_used": 1181760,
+          "reason": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "larger_gas": {
+            "status": "0x0",
+            "returnData": "0x",
+            "gas_limit": 16777216,
+            "gas_used": 16515582,
+            "reason": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          }
+        },
+        {
+          "side": 1,
+          "requested": "100000",
+          "status": "0x0",
+          "returnData": "0x",
+          "gas_limit": 1200000,
+          "gas_used": 1181760,
+          "reason": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "larger_gas": {
+            "status": "0x0",
+            "returnData": "0x",
+            "gas_limit": 16777216,
+            "gas_used": 16515582,
+            "reason": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          }
+        },
+        {
+          "side": 1,
+          "requested": "10000000",
+          "status": "0x0",
+          "returnData": "0x",
+          "gas_limit": 1200000,
+          "gas_used": 1181760,
+          "reason": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "larger_gas": {
+            "status": "0x0",
+            "returnData": "0x",
+            "gas_limit": 16777216,
+            "gas_used": 16515582,
+            "reason": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          }
+        },
+        {
+          "side": 1,
+          "requested": "100000000",
+          "status": "0x0",
+          "returnData": "0x",
+          "gas_limit": 1200000,
+          "gas_used": 1181760,
+          "reason": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "larger_gas": {
+            "status": "0x0",
+            "returnData": "0x",
+            "gas_limit": 16777216,
+            "gas_used": 16515582,
+            "reason": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          }
+        }
+      ],
+      "funding_pool": "0x09b852108b6ed78adb2e776d901b8d54ba708080",
+      "wallet": [
+        {
+          "side": 0,
+          "input": "1000",
+          "reason": "call 5: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        },
+        {
+          "side": 0,
+          "input": "100000",
+          "reason": "call 5: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        },
+        {
+          "side": 0,
+          "input": "10000000",
+          "reason": "call 5: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        },
+        {
+          "side": 0,
+          "input": "100000000",
+          "reason": "call 5: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        }
+      ]
+    },
+    {
+      "pool": "0xd6e59c35b11fb4b0c0855e27b29a49a8afa2b840",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xebb78043e29f4af24e6266a7d142f5a08443969e"
+      ],
+      "fee": 10000,
+      "spacing": 200,
+      "block": 6801968,
+      "hash": "0x2646f23be943e0b41005cf5b7b5e0e4b679e1d598d18fdad976cb25d361e6187",
+      "tx": "0x98ff897e93c0a4ffb92a17ab2a521cc1a95b104d731e58d3f9a37cfce23027e3",
+      "log": 5,
+      "liquidity": "1338630958003872890314",
+      "quotes": [
+        {
+          "side": 0,
+          "requested": "1000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000000000e8d4a51000000000000000000000000000000000000000000000d685562df8e01900e4e040",
+          "gas_limit": 1200000,
+          "gas_used": 121022,
+          "used": "1000000000000",
+          "out": "259339789872386569146785856",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000005af3107a400000000000000000000000000000000000000000002679a9aff663fecf2d0ebd8b",
+          "gas_limit": 1200000,
+          "gas_used": 120078,
+          "used": "100000000000000",
+          "out": "11907511723254614932686028171",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "10000000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000002386f26fc10000000000000000000000000000000000000000000045d8c015752ef2a35b2bc9bb",
+          "gas_limit": 1200000,
+          "gas_used": 136410,
+          "used": "10000000000000000",
+          "out": "21616500744899859298317486523",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000016345785d8a00000000000000000000000000000000000000000000465e47a28b935f94e0f50a26",
+          "gas_limit": 1200000,
+          "gas_used": 144086,
+          "used": "100000000000000000",
+          "out": "21777928000988241124796992038",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "1000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000038d7ea4c680000000000000000000000000000000000000000000000000000000000000000003",
+          "gas_limit": 1200000,
+          "gas_used": 96550,
+          "used": "1000000000000000",
+          "out": "3",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "100000000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000016345785d8a00000000000000000000000000000000000000000000000000000000000000000175",
+          "gas_limit": 1200000,
+          "gas_used": 96550,
+          "used": "100000000000000000",
+          "out": "373",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "10000000000000000000",
+          "status": "0x1",
+          "returnData": "0x0000000000000000000000000000000000000000000000008ac7230489e8000000000000000000000000000000000000000000000000000000000000000091de",
+          "gas_limit": 1200000,
+          "gas_used": 96550,
+          "used": "10000000000000000000",
+          "out": "37342",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "100000000000000000000",
+          "status": "0x1",
+          "returnData": "0x0000000000000000000000000000000000000000000000056bc75e2d63100000000000000000000000000000000000000000000000000000000000000005b2b0",
+          "gas_limit": 1200000,
+          "gas_used": 96864,
+          "used": "100000000000000000000",
+          "out": "373424",
+          "full": true
+        }
+      ],
+      "funding_pool": null,
+      "wallet": [
+        {
+          "buy_quote": {
+            "requested": "1000000000000",
+            "used": "1000000000000",
+            "out": "259339789872386569146785856"
+          },
+          "sell_quote": {
+            "requested": "259339789872386569146785856",
+            "used": "259339789872386569146785856",
+            "out": "980216631042"
+          },
+          "side": 0,
+          "input": "1000000000000",
+          "bought": "259339789872386569146785856",
+          "sold": "980216631042",
+          "cash_before": "1000000000000",
+          "cash_after": "980216631042",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000000000",
+            "used": "100000000000000",
+            "out": "11907511723254614932686028171"
+          },
+          "sell_quote": {
+            "requested": "11907511723254614932686028171",
+            "used": "11907511723254614932686028171",
+            "out": "98548385639801"
+          },
+          "side": 0,
+          "input": "100000000000000",
+          "bought": "11907511723254614932686028171",
+          "sold": "98548385639801",
+          "cash_before": "100000000000000",
+          "cash_after": "98548385639801",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "10000000000000000",
+            "used": "10000000000000000",
+            "out": "21616500744899859298317486523"
+          },
+          "sell_quote": {
+            "requested": "21616500744899859298317486523",
+            "used": "21616500744899859298317486523",
+            "out": "9899176465743406"
+          },
+          "side": 0,
+          "input": "10000000000000000",
+          "bought": "21616500744899859298317486523",
+          "sold": "9899176465743406",
+          "cash_before": "10000000000000000",
+          "cash_after": "9899176465743406",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000000000000",
+            "used": "100000000000000000",
+            "out": "21777928000988241124796992038"
+          },
+          "sell_quote": {
+            "requested": "21777928000988241124796992038",
+            "used": "21777928000988241124796992038",
+            "out": "98999170253702493"
+          },
+          "side": 0,
+          "input": "100000000000000000",
+          "bought": "21777928000988241124796992038",
+          "sold": "98999170253702493",
+          "cash_before": "100000000000000000",
+          "cash_after": "98999170253702493",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        }
+      ]
+    },
+    {
+      "pool": "0x60b3b8fdcf1c7c1bb5dae317d0ca445d4b68f1de",
+      "tokens": [
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "0xebb78043e29f4af24e6266a7d142f5a08443969e"
+      ],
+      "fee": 10000,
+      "spacing": 200,
+      "block": 6808571,
+      "hash": "0xd8a7c256d1d95c4cf8f727451e647c577eebb350b8fc99d92aadd7719e1b75c5",
+      "tx": "0x4612b3c29bf227850e233395c76ddeeb8ff8bc0fd51698206307c20b5919b7b3",
+      "log": 11,
+      "liquidity": "28301530449011169",
+      "quotes": [
+        {
+          "side": 0,
+          "requested": "1000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000069a9017f77c8f44e5a6cad",
+          "gas_limit": 1200000,
+          "gas_used": 119495,
+          "used": "1000",
+          "out": "127735318626916023752354989",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "100000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000186a00000000000000000000000000000000000000000127519dd2e892fc2fdc62c40",
+          "gas_limit": 1200000,
+          "gas_used": 119581,
+          "used": "100000",
+          "out": "5712296636924898793509760064",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "10000000",
+          "status": "0x1",
+          "returnData": "0x0000000000000000000000000000000000000000000000000000000000989680000000000000000000000000000000000000000020cbabab23d1db2938533bf5",
+          "gas_limit": 1200000,
+          "gas_used": 135134,
+          "used": "10000000",
+          "out": "10149742937307704266868341749",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "100000000",
+          "status": "0x1",
+          "returnData": "0x0000000000000000000000000000000000000000000000000000000005f5e100000000000000000000000000000000000000000021316628d31d4d74b08f62b9",
+          "gas_limit": 1200000,
+          "gas_used": 241918,
+          "used": "100000000",
+          "out": "10272725123728920029573374649",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "1000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000038d7ea4c680000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 63304,
+          "used": "1000000000000000",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 1,
+          "requested": "100000000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000016345785d8a00000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 63304,
+          "used": "100000000000000000",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 1,
+          "requested": "10000000000000000000",
+          "status": "0x1",
+          "returnData": "0x0000000000000000000000000000000000000000000000008ac7230489e800000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 63304,
+          "used": "10000000000000000000",
+          "out": "0",
+          "full": false
+        },
+        {
+          "side": 1,
+          "requested": "100000000000000000000",
+          "status": "0x1",
+          "returnData": "0x0000000000000000000000000000000000000000000000056bc75e2d631000000000000000000000000000000000000000000000000000000000000000000000",
+          "gas_limit": 1200000,
+          "gas_used": 63618,
+          "used": "100000000000000000000",
+          "out": "0",
+          "full": false
+        }
+      ],
+      "funding_pool": "0x09b852108b6ed78adb2e776d901b8d54ba708080",
+      "wallet": [
+        {
+          "buy_quote": {
+            "requested": "1000",
+            "used": "1000",
+            "out": "127735318626916023752354989"
+          },
+          "sell_quote": {
+            "requested": "127735318626916023752354989",
+            "used": "127735318626916023752354989",
+            "out": "980"
+          },
+          "side": 0,
+          "input": "1000",
+          "bought": "127735318626916023752354989",
+          "sold": "980",
+          "cash_before": "261890297",
+          "cash_after": "261890277",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "100000",
+            "used": "100000",
+            "out": "5712296636924898793509760064"
+          },
+          "sell_quote": {
+            "requested": "5712296636924898793509760064",
+            "used": "5712296636924898793509760064",
+            "out": "98560"
+          },
+          "side": 0,
+          "input": "100000",
+          "bought": "5712296636924898793509760064",
+          "sold": "98560",
+          "cash_before": "261890297",
+          "cash_after": "261888857",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "10000000",
+            "used": "10000000",
+            "out": "10149742937307704266868341749"
+          },
+          "sell_quote": {
+            "requested": "10149742937307704266868341749",
+            "used": "10149742937307704266868341749",
+            "out": "9899212"
+          },
+          "side": 0,
+          "input": "10000000",
+          "bought": "10149742937307704266868341749",
+          "sold": "9899212",
+          "cash_before": "261890297",
+          "cash_after": "261789509",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000",
+            "used": "100000000",
+            "out": "10272725123728920029573374649"
+          },
+          "sell_quote": {
+            "requested": "10272725123728920029573374649",
+            "used": "10272725123728920029573374649",
+            "out": "98999195"
+          },
+          "side": 0,
+          "input": "100000000",
+          "bought": "10272725123728920029573374649",
+          "sold": "98999195",
+          "cash_before": "261890297",
+          "cash_after": "260889492",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        }
+      ]
+    },
+    {
+      "pool": "0x3ca9feea5e1c81a010f0fed9734269944f7ae8fa",
+      "tokens": [
+        "0x50c5725949a6f0c72e6c4a641f24049a917db0cb",
+        "0xeb466342c4d449bc9f53a865d5cb90586f405215"
+      ],
+      "fee": 100,
+      "spacing": 1,
+      "block": 12368536,
+      "hash": "0x4c3637decee5e1e764b66d17843c975a0726b8f36d92b7b3065b593648e75755",
+      "tx": "0xdf8d4c1a32ad047a5d528e27cabcfcef9b385c67abef42acdd8a1f475dcbb2cc",
+      "log": 216,
+      "liquidity": "1800087618187",
+      "quotes": [
+        {
+          "side": 0,
+          "requested": "1000000000000000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000038d7ea4c6800000000000000000000000000000000000000000000000000000000000000003d9",
+          "gas_limit": 1200000,
+          "gas_used": 98078,
+          "used": "1000000000000000",
+          "out": "985",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000000",
+          "status": "0x1",
+          "returnData": "0x000000000000000000000000000000000000000000000000016345785d8a00000000000000000000000000000000000000000000000000000000000000016d21",
+          "gas_limit": 1200000,
+          "gas_used": 134227,
+          "used": "100000000000000000",
+          "out": "93473",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "10000000000000000000",
+          "status": "0x1",
+          "returnData": "0x0000000000000000000000000000000000000000000000008ac7230489e8000000000000000000000000000000000000000000000000000000000000001717bf",
+          "gas_limit": 1200000,
+          "gas_used": 1163346,
+          "used": "10000000000000000000",
+          "out": "1513407",
+          "full": true
+        },
+        {
+          "side": 0,
+          "requested": "100000000000000000000",
+          "status": "0x0",
+          "returnData": "0x",
+          "gas_limit": 1200000,
+          "gas_used": 1181761,
+          "reason": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "larger_gas": {
+            "status": "0x1",
+            "returnData": "0x0000000000000000000000000000000000000000000000056bc75e2d6310000000000000000000000000000000000000000000000000000000000000001acabb",
+            "gas_limit": 16777216,
+            "gas_used": 2387303,
+            "used": "100000000000000000000",
+            "out": "1755835",
+            "full": true
+          }
+        },
+        {
+          "side": 1,
+          "requested": "1000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000003e8000000000000000000000000000000000000000000000000000398957c5bd532",
+          "gas_limit": 1200000,
+          "gas_used": 97660,
+          "used": "1000",
+          "out": "1012192734074162",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "100000",
+          "status": "0x1",
+          "returnData": "0x00000000000000000000000000000000000000000000000000000000000186a0000000000000000000000000000000000000000000000000015508ed7fc18be0",
+          "gas_limit": 1200000,
+          "gas_used": 126460,
+          "used": "100000",
+          "out": "95992783201995744",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "10000000",
+          "status": "0x1",
+          "returnData": "0x0000000000000000000000000000000000000000000000000000000000989680000000000000000000000000000000000000000000000000155664e86b6a1a56",
+          "gas_limit": 1200000,
+          "gas_used": 1159765,
+          "used": "10000000",
+          "out": "1537527272190909014",
+          "full": true
+        },
+        {
+          "side": 1,
+          "requested": "100000000",
+          "status": "0x0",
+          "returnData": "0x",
+          "gas_limit": 1200000,
+          "gas_used": 1181760,
+          "reason": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "larger_gas": {
+            "status": "0x1",
+            "returnData": "0x0000000000000000000000000000000000000000000000000000000005f5e10000000000000000000000000000000000000000000000000018b5f96e783c7d57",
+            "gas_limit": 16777216,
+            "gas_used": 2380314,
+            "used": "100000000",
+            "out": "1780603480553848151",
+            "full": true
+          }
+        }
+      ],
+      "funding_pool": null,
+      "wallet": [
+        {
+          "buy_quote": {
+            "requested": "1000000000000000",
+            "used": "1000000000000000",
+            "out": "985"
+          },
+          "sell_quote": {
+            "requested": "985",
+            "used": "985",
+            "out": "998103073023743"
+          },
+          "side": 0,
+          "input": "1000000000000000",
+          "bought": "985",
+          "sold": "998103073023743",
+          "cash_before": "7529311102728762004",
+          "cash_after": "7529309205801785747",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "buy_quote": {
+            "requested": "100000000000000000",
+            "used": "100000000000000000",
+            "out": "93473"
+          },
+          "sell_quote": {
+            "requested": "93473",
+            "used": "93473",
+            "out": "99970336825820143"
+          },
+          "side": 0,
+          "input": "100000000000000000",
+          "bought": "93473",
+          "sold": "99970336825820143",
+          "cash_before": "7529311102728762004",
+          "cash_after": "7529281439554582147",
+          "after_coin_owner": "0",
+          "after_coin_executor": "0",
+          "after_cash_executor": "0",
+          "min_out_plus_one_buy_reverted": true,
+          "min_out_plus_one_sell_reverted": true
+        },
+        {
+          "side": 0,
+          "input": "10000000000000000000",
+          "reason": "call 2: {'code': 3, 'message': 'execution reverted: UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT', 'data': '0x08c379a00000000000000000000000000000000000000000000"
+        },
+        {
+          "side": 0,
+          "input": "100000000000000000000",
+          "reason": "call 2: {'code': 3, 'message': 'execution reverted: UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT', 'data': '0x08c379a00000000000000000000000000000000000000000000"
+        }
+      ],
+      "larger_gas_wallet": [
+        {
+          "side": 0,
+          "input": "100000000000000000000",
+          "reason": "call 2: {'code': 3, 'message': 'execution reverted: UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT', 'data': '0x08c379a00000000000000000000000000000000000000000000"
+        }
+      ]
+    }
+  ],
+  "index": [
+    "0x09b852108b6ed78adb2e776d901b8d54ba708080",
+    "0xb5da4ce320ac01f90b59837c8706406b7706587e",
+    "0xd6e59c35b11fb4b0c0855e27b29a49a8afa2b840",
+    "0x60b3b8fdcf1c7c1bb5dae317d0ca445d4b68f1de",
+    "0x8dff358dc9ee5f3d44afb08128c5b0c2de4961d9",
+    "0x7138d05be45207ab40cce8e50ab5c89207866429"
+  ],
+  "state_root": "0x037b0c48cd33236cb94ec9e9fc7438c120b138c2c31d39d0ebe42521ee65676b",
+  "virtual_quoter_keccak": "0x56f4529fa9bf808daea21d15a6060f9941aa6da575cc8f1ddf99feaa152a39d5",
+  "executor_runtime_keccak": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125"
+}

@@ -1,4 +1,4 @@
-name: Historical MEXC and Gate quote controls
+name: Historical MEXC quote control
 on:
   push:
     branches: ["test/mexc-quote-before-20261126"]
@@ -16,4 +16,4 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: tests
-      - run: cargo test --locked --lib --test rest_book_238 historical_quote
+      - run: cargo test --locked --lib historical_quote

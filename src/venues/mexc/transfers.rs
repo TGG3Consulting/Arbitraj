@@ -217,7 +217,7 @@ mod historical_quote_control {
             raw: RawLog::start(d.join("raw"), settings.clone()),
             settings,
             journal,
-            vault: crate::secrets::Vault::locked(&d.join("secrets.enc")),
+            vault: crate::secrets::Vault::locked(d.join("secrets.enc")),
             http: reqwest::Client::new(),
             taps: Default::default(),
         };

@@ -981,11 +981,18 @@ def tables(network, snapshots, profiles):
         ep=Path("tests/data/first_run_dex_2026-11-26/ekubo_v2_ethereum_activity.json.gz")
         with gzip.open(ep,"rt",encoding="utf8") as stream:
             ev=json.load(stream)
+        wallets_path=ep.with_name("ekubo_v2_ethereum_wallets.json.gz")
+        with gzip.open(wallets_path,"rt",encoding="utf8") as stream:
+            wallets=json.load(stream)["cases"]
+        filled=[r for r in wallets if r["exact"]["result"]["status"]=="0x1"]
+        gas=[int(r["exact"]["result"]["gasUsed"],16) for r in filled]
         trades=ev["swaps"]; stable_id=next(m["id"] for m in ev["markets"] if m["key"]["token1"]=="0xdac17f958d2ee523a2206206994597c13d831ec7")
         stable=[s for s in trades if s["id"]==stable_id]
         out.append(f"**Ekubo V2 Ethereum.** С блока {ev['window'][0]['number']} по {ev['window'][1]['number']} Core V2 выпустил {len(trades)} событий обмена в {len(ev['markets'])} пулах. "
                    f"В USDC/USDT зарегистрировано {len(stable)} обменов. Оборот одной стороны составил {sum(abs(int(s['delta1'])) for s in stable)/1e6:,.6f} USDT. "
-                   "В конце окна у USDT→USDC доступный вход сократился до 0,023556 USDT. Официальный Router допускает полную заявку через одношаговый multihopSwap; независимый минимум проверяется по приросту баланса получателя. "
+                   "На последнем блоке окна две заявки USDT→USDC получили частичную котировку с расходом 0,023556 USDT. Обе откатились при требовании полного входа. "
+                   f"На двух меньших размерах это направление исполнилось. На пяти рынках кошелёк получил {len(filled)} полных выплат с расходом газа от {min(gas):,} до {max(gas):,} единиц. Повышение минимума любой выплаты на одну минимальную единицу вызвало откат без списания. "
+                   f"[Выплаты и откаты](../{wallets_path.as_posix()}) · "
                    f"[События, ключи и котировки](../{ep.as_posix()}) · [Контракты V2](https://docs.ekubo.org/reference/contracts/evm-v2/).")
         dx=read(Path("tests/data/first_run_dex_2026-11-26/deltaswap_ethereum.json"))["current"]
         x7=read(Path("tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json"))
@@ -1032,6 +1039,8 @@ def tables(network, snapshots, profiles):
             factory, roundtrip = q2["factory"], "getPair(address,address)"
         if base and id == "quickswap-v4-base" and quickswap.exists() and pool and any(m["pool"] == pool.lower() for m in qs["markets"]):
             factory, roundtrip = qs["addresses"]["AlgebraFactory"], "poolByPair(address,address)"
+        if not base and id == "ekubo-v2-ethereum" and pool and pool.lower().split("-")[-1] in {m["id"] for m in ev["markets"]}:
+            factory,roundtrip=ev["core"]["address"],"PoolInitialized → keccak(ключ) → Core.sload"
         if not base and id == "swapr_ethereum":
             factory,roundtrip = "0xd34971bab6e5e356fd250715f5de0492bb070452","getPair(address,address)"
         if base and id == "hydrex-integral" and Path(hydrex).exists():

@@ -199,40 +199,56 @@ pub async fn check(ctx: &Ctx, f: &Family, core: Address, tag: &Value) -> Gateway
     let expected = |name| ctx.dex_text(name, f.id)?.parse::<B256>().map_err(|_| no());
     let core_hash = expected("dex.factory_runtime_hash")?;
     let router_hash = expected("dex.router_runtime_hash")?;
-    let (a, b) = tokio::try_join!(
-        rpc::call::<Bytes>(ctx, "eth_getCode", json!([core, tag])),
-        rpc::call::<Bytes>(ctx, "eth_getCode", json!([router, tag]))
-    )?;
-    // In the verified router all nine immutable address PUSH32 operands refer to Core.
-    if a.is_empty()
-        || keccak256(&a) != core_hash
-        || keccak256(&b) != router_hash
-        || [1369, 2044, 2979, 6490, 7103, 9996, 10923, 11045, 11147]
-            .iter()
-            .any(|&i| b.get(i..i + 20) != Some(core.as_slice()))
-    {
+    let block = tag
+        .get("blockHash")
+        .and_then(Value::as_str)
+        .and_then(|h| h.parse().ok())
+        .ok_or_else(no)?;
+    if tag.get("requireCanonical") != Some(&Value::Bool(true)) {
         return Err(no());
     }
+    let contract = super::ekubo_v2_deployment::Key {
+        block,
+        core,
+        router,
+        core_hash,
+        router_hash,
+    };
+    let seen = ctx.evm_chain.ekubo_v2().at(contract);
+    seen.get_or_try_init(|| async {
+        let (a, b) = tokio::try_join!(
+            rpc::call::<Bytes>(ctx, "eth_getCode", json!([core, tag])),
+            rpc::call::<Bytes>(ctx, "eth_getCode", json!([router, tag]))
+        )?;
+        // In the verified router all nine immutable address PUSH32 operands refer to Core.
+        if a.is_empty()
+            || keccak256(&a) != core_hash
+            || keccak256(&b) != router_hash
+            || [1369, 2044, 2979, 6490, 7103, 9996, 10923, 11045, 11147]
+                .iter()
+                .any(|&i| b.get(i..i + 20) != Some(core.as_slice()))
+        {
+            return Err(no());
+        }
+        Ok(())
+    })
+    .await?;
     Ok(router)
 }
 
-/// Canonical pool snapshot. One batch reads each sparse set of regular storage slots.
+/// The verified V2 Core exposes many storage words in one read; all chunks use the same canonical hash.
 async fn slots(ctx: &Ctx, core: Address, keys: &[B256], tag: &Value) -> GatewayResult<Vec<B256>> {
     let mut result = Vec::with_capacity(keys.len());
-    for chunk in keys.chunks(64) {
-        let requests: Vec<_> = chunk
-            .iter()
-            .map(|k| ("eth_getStorageAt", json!([core, k, tag])))
-            .collect();
-        let raw = rpc::batch(ctx, &requests).await?;
-        if raw.len() != chunk.len() {
-            return Err(ctx.err(ErrorCode::BadResponse, "Неполный ответ со слотами Ekubo V2"));
-        }
-        for reply in raw {
-            result.push(serde_json::from_str(reply?.get()).map_err(|_| {
-                ctx.err(ErrorCode::BadResponse, "Неверное слово хранилища Ekubo V2")
-            })?);
-        }
+    for chunk in keys.chunks(256) {
+        let input = super::abi_ekubo::sload_data(chunk);
+        let raw: Bytes = rpc::call(ctx, "eth_call", json!([{"to":core,"input":input},tag])).await?;
+        let words = super::abi_ekubo::sload_words(&raw, chunk.len()).ok_or_else(|| {
+            ctx.err(
+                ErrorCode::BadResponse,
+                "Неполный ответ Core.sload на слоты Ekubo V2",
+            )
+        })?;
+        result.extend(words);
     }
     Ok(result)
 }

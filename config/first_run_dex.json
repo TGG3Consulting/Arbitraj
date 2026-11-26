@@ -1441,6 +1441,20 @@
   {
     "network": "ethereum",
     "chain_id": 1,
+    "id": "ekubo-v2-ethereum",
+    "source": "https://docs.ekubo.org/reference/contracts/evm-v2/ · Ethereum 26494988, ekubo_v2_ethereum_wallets.json.gz",
+    "settings": {
+      "dex.kind": "ekubo_v2_router",
+      "dex.ekubo_core": "0xe0e0e08a6a4b9dc7bd67bcb7aade5cf48157d444",
+      "dex.factory_runtime_hash": "0xf3d28accb94c26334e15376aa2b13b0e5bb57b69b207e08f4538ae9884d5633b",
+      "dex.quoter": "0x9995855c00494d039ab6792f18e368e530dff931",
+      "dex.router_runtime_hash": "0xde5deeacc3e89f91cbbf91f90f4ec67c60c4865a2d05e80fce52f431d6707556",
+      "dex.ekubo_bitmap_words": 3
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
     "id": "ekubo-v3-ethereum",
     "source": "https://docs.ekubo.org/reference/contracts/evm-v3/",
     "settings": {

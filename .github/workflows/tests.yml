@@ -416,7 +416,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        market: [x7-finance, x7-finance-ethereum, 9inch-ethereum, deltaswap-ethereum, supernova-cl, supernova-amm, ekubo-v2-ethereum, stelaxis-ethereum, swapr-ethereum, mint-club-base, mint-club-ethereum]
+        market: [x7-finance, x7-finance-ethereum, 9inch-ethereum, deltaswap-ethereum, supernova-cl, supernova-amm, ekubo-v2-ethereum, stelaxis-ethereum, swapr-ethereum, templedao-ethereum, mint-club-base, mint-club-ethereum]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -435,6 +435,8 @@ jobs:
         env:
           MARKET: ${{ matrix.market }}
         run: python scripts/record_mint_club.py "${MARKET#mint-club-}" "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'templedao-ethereum'
+        run: python scripts/record_temple_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'swapr-ethereum'
         run: python scripts/record_swapr_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'ekubo-v2-ethereum'

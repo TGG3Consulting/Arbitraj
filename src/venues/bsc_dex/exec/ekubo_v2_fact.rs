@@ -138,3 +138,7 @@ impl Proof {
         (credited >= self.minimum && !credited.is_zero()).then_some((debit, credited))
     }
 }
+
+#[cfg(test)]
+#[path = "ekubo_v2_fact_tests.rs"]
+mod tests;

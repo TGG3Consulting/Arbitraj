@@ -60,6 +60,8 @@ contract HanjiExecutor {
     error Unfilled();
     error AlreadyCompleted(bytes32 operationId);
     error UnexpectedNative();
+    event Filled(address indexed payer, bytes32 indexed operationId, address indexed market,
+        address input, address output, uint256 spent, uint256 received, uint128 feeUnits);
 
     constructor(address wrappedToken) {
         if (wrappedToken.code.length == 0) revert InvalidOrder();
@@ -71,6 +73,18 @@ contract HanjiExecutor {
     }
 
     function execute(Order calldata order) external returns (uint256 spent, uint256 received, uint128 feeUnits) {
+        return swap(order, type(uint256).max);
+    }
+
+    /// Exact bought quantity can be protected even when a better ask would buy extra lots.
+    function executeExact(Order calldata order, uint256 maxReceived)
+        external returns (uint256 spent, uint256 received, uint128 feeUnits) {
+        if (maxReceived < order.minReceived) revert InvalidOrder();
+        return swap(order, maxReceived);
+    }
+
+    function swap(Order calldata order, uint256 maxReceived)
+        private returns (uint256 spent, uint256 received, uint128 feeUnits) {
         address payer = msg.sender;
         if (trading || block.timestamp > order.deadline ||
             order.operationId == bytes32(0) || order.market.code.length == 0 || order.input == order.output ||
@@ -116,10 +130,11 @@ contract HanjiExecutor {
         checkedCall(order.output, abi.encodeCall(output.transfer, (payer, proceeds)));
         spent = payerIn - input.balanceOf(payer);
         received = output.balanceOf(payer) - payerOut;
-        if (spent != order.budget - leftover || received < order.minReceived ||
+        if (spent != order.budget - leftover || received < order.minReceived || received > maxReceived ||
             input.balanceOf(address(this)) != originalIn || output.balanceOf(address(this)) != originalOut ||
             address(this).balance != originalEth) revert Unfilled();
         trading = false;
+        emit Filled(payer, order.operationId, order.market, order.input, order.output, spent, received, feeUnits);
     }
 
     function checkedCall(address token, bytes memory data) private {

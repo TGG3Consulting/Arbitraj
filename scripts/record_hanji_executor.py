@@ -34,6 +34,8 @@ def capture(compiled):
         return call(token, calldata("balanceOf(address)", ["address"], [OWNER]))
     def order(args, sender=OWNER):
         return {**call(executor, calldata("execute("+ORDER+")", [ORDER], [args]), gas=5_000_000), "from": sender}
+    def exact(args, ceiling):
+        return call(executor, calldata("executeExact("+ORDER+",uint256)", [ORDER,"uint256"], [args,ceiling]), gas=5_000_000)
     def success(row):
         if int(row["status"], 16) != 1:
             raise ValueError(row.get("error", "simulation failed"))
@@ -111,7 +113,22 @@ def capture(compiled):
             if (int(denied[-3]["status"], 16) != 0 or int.from_bytes(success(denied[-2]), "big")
                     or int.from_bytes(success(denied[-1]), "big")):
                 raise ValueError("unfunded account consumed another payer's operation ID")
-            controls = ["duplicate_operation", "unfunded_independent_sender"]
+            # Same block, market and funded payer; tightening only the upper bound must
+            # roll back a fill including its completed bit. Check the event against raw balances.
+            loose = list(buy)
+            loose[5] = 1
+            bounds = simulate(prefix + [exact(loose, bought-1), completed(buy_id), exact(buy, bought)])
+            if (int(bounds[-3]["status"],16) != 0 or
+                    int.from_bytes(success(bounds[-2]), "big") or read_fill(bounds[-1]) != (spent,bought,buy_fee)):
+                raise ValueError("exact buy ceiling or retry did not match the payer's fill")
+            signature = "0x"+keccak(text="Filled(address,bytes32,address,address,address,uint256,uint256,uint128)").hex()
+            events = [log for log in bounds[-1]["logs"] if log["address"].lower()==executor.lower()
+                      and log["topics"] == [signature, "0x"+encode(["address"],[OWNER]).hex(),
+                                            "0x"+buy_id.hex(), "0x"+encode(["address"],[proxy]).hex()]]
+            if len(events)!=1 or events[0]["data"]!="0x"+encode(["address","address","uint256","uint256","uint128"],
+                                                                  [y,x,spent,bought,buy_fee]).hex():
+                raise ValueError("exact buy is missing a unique payer's fill event")
+            controls = ["duplicate_operation", "unfunded_independent_sender", "buy_exact_ceiling_and_retry"]
             altered_cases = [("buy_min_out_plus_one", prefix, buy, 5, bought+1),
                              ("sell_min_out_plus_one", entry, sell, 5, credited+1),
                              ("buy_commission_above_cap", prefix, buy, 7, buy_fee-1),

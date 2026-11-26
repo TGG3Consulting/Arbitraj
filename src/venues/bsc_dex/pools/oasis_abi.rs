@@ -22,11 +22,11 @@ sol! {
         function feeCache0() external view returns(uint256);
         function feeCache1() external view returns(uint256);
         function getReserves() external view returns(uint112 r0,uint112 r1,uint32 stamp);
-        function balanceOf(address) external view returns(uint256);
-        function isRebateApprovedRouter(address) external view returns(bool);
+        function balanceOf(address account) external view returns(uint256);
+        function isRebateApprovedRouter(address router) external view returns(bool);
         function rebateEstimator() external view returns(address);
-        function getRebate(address) external view returns(uint64);
-        function calculateFee(uint64) external view returns(uint256);
+        function getRebate(address user) external view returns(uint64);
+        function calculateFee(uint64 rebate) external view returns(uint256);
     }
 }
 
@@ -47,7 +47,7 @@ pub(super) async fn rebate(
     owner: Address,
     base: u32,
 ) -> GatewayResult<Option<u32>> {
-    let ask = IOasis::getRebateCall { _0: owner };
+    let ask = IOasis::getRebateCall { user: owner };
     let data = multicall::encode(&[(factory, ask.abi_encode().into())]);
     let target = ctx.addr("dex.multicall3")?;
     let bytes: Bytes = rpc::call(
@@ -66,7 +66,7 @@ pub(super) async fn rebate(
             "OasisSwap: возврат выше делителя комиссии",
         ));
     }
-    let calc = IOasis::calculateFeeCall { _0: value };
+    let calc = IOasis::calculateFeeCall { rebate: value };
     let bytes: Bytes = rpc::call(
         ctx,
         "eth_call",

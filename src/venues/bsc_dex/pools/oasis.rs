@@ -37,7 +37,7 @@ pub(crate) async fn at(
         _0: tokens.0,
         _1: tokens.1,
     };
-    let bal = IOasis::balanceOfCall { _0: pool };
+    let bal = IOasis::balanceOfCall { account: pool };
     let [
         code,
         mev,
@@ -121,7 +121,7 @@ pub(crate) async fn at(
     } else {
         let native = ctx.dex_addr("dex.quoter", f.id)?;
         let placed = hash(ctx, f.id, "dex.router_runtime_hash")?;
-        let whitelisted = IOasis::isRebateApprovedRouterCall { _0: native };
+        let whitelisted = IOasis::isRebateApprovedRouterCall { router: native };
         let [native_code, bound, wrapped, allow] = batch::read(
             ctx,
             [

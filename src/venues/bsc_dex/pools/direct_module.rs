@@ -17,12 +17,7 @@ fn releases(chain: u64, kind: &str) -> Option<&'static Vec<B256>> {
     RELEASES
         .get_or_init(|| {
             let mut out = Releases::new();
-            let Ok(rows) = serde_json::from_str::<Vec<Value>>(include_str!(
-                "../../../../config/first_run_dex.json"
-            )) else {
-                return out;
-            };
-            for r in rows {
+            for r in super::deployment_profile::rows() {
                 if let (Some(chain), Some(kind), Some(hash)) = (
                     r["chain_id"].as_u64(),
                     r["settings"]["dex.kind"].as_str(),

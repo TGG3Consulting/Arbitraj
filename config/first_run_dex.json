@@ -2263,8 +2263,10 @@
         "100",
         "500",
         "2500",
-        "10000"
-      ]
+        "10000",
+        "20000"
+      ],
+      "dex.v3_quoter_method": "quoteExactInputSingle"
     },
     "verified_module": {
       "runtime_keccak": "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24",
@@ -2288,7 +2290,8 @@
         "500",
         "2500",
         "10000"
-      ]
+      ],
+      "dex.v3_quoter_method": "quoteExactInputSingleV3"
     },
     "verified_module": {
       "runtime_keccak": "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24",
@@ -2308,12 +2311,14 @@
       "dex.quoter": "0x134d3c90a4a4c712cf0b548fe02003c9d934baba",
       "dex.tick_lens": "0x9a489505a00ce272eaa5e07dba6491314cae3796",
       "dex.v3_fee_tiers": [
+        "50",
         "80",
         "100",
         "500",
         "2500",
         "10000"
-      ]
+      ],
+      "dex.v3_quoter_method": "quoteExactInputSingle"
     },
     "verified_module": {
       "runtime_keccak": "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24",

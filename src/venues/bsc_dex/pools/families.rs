@@ -796,8 +796,16 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::UniswapV3 if f.variant == Variant::RamsesCl => {
             list.extend(["dex.factory", "dex.quoter", "dex.v3_swap_callback"])
         }
-        Proto::PancakeV3 if f.variant == Variant::BaseNativeV3 && f.tradable => {
-            list.extend(["dex.factory", "dex.tick_lens", "dex.quoter", "dex.router"]);
+        Proto::PancakeV3 if f.variant == Variant::BaseNativeV3 => {
+            list.extend([
+                "dex.factory",
+                "dex.tick_lens",
+                "dex.quoter",
+                "dex.v3_quoter_method",
+            ]);
+            if f.tradable {
+                list.push("dex.router");
+            }
         }
         Proto::PancakeV3 | Proto::UniswapV3 => {
             list.extend(["dex.factory", "dex.tick_lens", "dex.quoter"])

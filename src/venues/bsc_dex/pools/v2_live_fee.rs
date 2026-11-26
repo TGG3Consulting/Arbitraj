@@ -10,31 +10,14 @@ use crate::venues::bsc_dex::{ctx::Ctx, node::call};
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
 
-#[derive(serde::Deserialize)]
-struct Profile {
-    settings: serde_json::Value,
-    chain_id: u64,
-}
-
 fn profile(chain: u64, factory: Address) -> Option<&'static serde_json::Value> {
-    use std::{collections::BTreeMap, sync::OnceLock};
-    static PROFILES: OnceLock<BTreeMap<(u64, Address), serde_json::Value>> = OnceLock::new();
-    PROFILES
-        .get_or_init(|| {
-            let rows: Vec<Profile> =
-                serde_json::from_str(include_str!("../../../../config/first_run_dex.json"))
-                    .expect("встроенные профили DEX");
-            rows.into_iter()
-                .filter_map(|r| {
-                    if r.settings["dex.kind"] != "v2_fork_executor_create2_live_fee" {
-                        return None;
-                    }
-                    let factory = r.settings["dex.factory"].as_str()?.parse().ok()?;
-                    Some(((r.chain_id, factory), r.settings))
-                })
-                .collect()
-        })
-        .get(&(chain, factory))
+    Some(
+        &super::deployment_profile::for_factory(
+            chain,
+            factory,
+            "v2_fork_executor_create2_live_fee",
+        )?["settings"],
+    )
 }
 
 fn matches_rate(

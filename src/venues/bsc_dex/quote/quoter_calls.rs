@@ -340,7 +340,7 @@ pub fn request(
         (PoolKind::V2, _) => {
             let path = if e.family.variant == super::super::pools::family_variant::Variant::RingFew
             {
-                super::super::pools::ring::path(token_in, token_out)
+                super::super::pools::ring::active(ctx,e.family.id)?.path(token_in, token_out)
                     .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Ring: отсутствует путь Few"))?
                     .to_vec()
             } else {
@@ -375,14 +375,17 @@ pub fn request(
                 sqrtPriceLimitX96: U160::ZERO,
             };
             if e.family.variant == super::super::pools::family_variant::Variant::BaseNativeV3 {
-                let target = ctx.dex_addr("dex.quoter", e.family.id)?;
-                if target == super::super::pools::base_native_v3::THRONE_QUOTER {
-                    let call =
-                        super::super::node::abi_dex::IThroneQuoter::quoteExactInputSingleV3Call {
-                            params: p,
-                        };
-                    return Ok((target, Bytes::from(call.abi_encode())));
-                }
+                let (target, mixed) =
+                    super::super::pools::base_native_v3::mixed_quoter(ctx, e.family)?;
+                let call = if mixed {
+                    super::super::node::abi_dex::IThroneQuoter::quoteExactInputSingleV3Call {
+                        params: p,
+                    }
+                    .abi_encode()
+                } else {
+                    IQuoterV2::quoteExactInputSingleCall { params: p }.abi_encode()
+                };
+                return Ok((target, Bytes::from(call)));
             }
             IQuoterV2::quoteExactInputSingleCall { params: p }.abi_encode()
         }

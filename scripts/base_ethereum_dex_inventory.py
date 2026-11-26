@@ -370,9 +370,9 @@ def tables(network, snapshots, profiles):
                     "При настройке `dex.kind=base_native_v3_module` указывается его адрес в `dex.router`. Предустановленный режим `base_native_v3` наблюдает рынок. "
                     "Роутер каждой фабрики оплачивает фактически потреблённый вход. Модуль сверяет полный расход и чистую выплату кошельку, включая перевод токена. "
                     "На блоке 62 262 756 в семи из девяти сценариев прошли обе стороны. Два отказа официального квотера Omni при 1 и 10 USDC получены при пределах 2 млн газа. "
-                    "Четыре тарифа подтверждены у каждой фабрики, у Omni также подтверждён 80 (0,008%). Строки настроек приводят проверенные ставки. "
+                    "Проверены события создания и getPool для 896 пулов 9mm, 24 Throne и 50 Omni. Настройки охватывают все использованные ставки на этом блоке, включая 20 000 у 83 пулов 9mm и 50 у 10 пулов Omni. "
                     "[Платежи, комиссии пулов и адреса](../tests/data/first_run_dex_2026-11-26/base_native_v3.json) · "
-                    "[Фабрики и TickLens на том же блоке](../tests/data/first_run_dex_2026-11-26/base_native_v3_profiles.json)."])
+                    "[Фабрики и TickLens](../tests/data/first_run_dex_2026-11-26/base_native_v3_profiles.json) · [970 пулов из событий фабрик](../tests/data/first_run_dex_2026-11-26/base_native_v3_directory.json)."])
     derp_path = Path("tests/data/first_run_dex_2026-11-26/derpdex_markets.json")
     if base and derp_path.exists():
         directory_path = derp_path.with_name("derpdex_directory.json")

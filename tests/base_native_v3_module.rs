@@ -25,6 +25,12 @@ fn archive_wallet_receipts_match_each_accepted_router_and_module() {
             .unwrap();
         assert_eq!(p["settings"]["dex.factory"], market["factory"]);
         assert_eq!(p["settings"]["dex.quoter"], market["quoter"]["address"]);
+        let selector = if name == "throne-v3-base" {
+            "quoteExactInputSingleV3"
+        } else {
+            "quoteExactInputSingle"
+        };
+        assert_eq!(p["settings"]["dex.v3_quoter_method"], selector);
         assert_eq!(market["quoter"]["deployer"], market["router"]["deployer"]);
         assert_eq!(market["quoter"]["callbacks"], market["router"]["callbacks"]);
         assert_eq!(
@@ -64,5 +70,45 @@ fn archive_wallet_receipts_match_each_accepted_router_and_module() {
     assert!(direct_module::accepts(8453, "base_native_v3", hash));
     for chain in [1, 56, 42161] {
         assert!(!direct_module::accepts(chain, "base_native_v3", hash));
+    }
+}
+#[test]
+fn configured_search_includes_every_created_pool_fee_on_the_archive_block() {
+    use std::collections::BTreeSet;
+    let directory: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/base_native_v3_directory.json"
+    ))
+    .unwrap();
+    let wallet: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/base_native_v3.json"
+    ))
+    .unwrap();
+    assert_eq!(directory["selector"], wallet["selector"]);
+    assert_eq!(directory["state_root"], wallet["state_root"]);
+    for (id, expected) in [
+        ("9mm-v3-base", 896),
+        ("throne-v3-base", 24),
+        ("omni-exchange-v3-base", 50),
+    ] {
+        let market = &directory["markets"][id];
+        let profile = arb::venues::bsc_dex::pools::deployment_profile::named(8453, id).unwrap();
+        let settings = &profile["settings"];
+        assert_eq!(market["factory"], settings["dex.factory"]);
+        let pools = market["pools"].as_array().unwrap();
+        assert_eq!(pools.len(), expected);
+        assert_eq!(market["nonce"].as_u64(), Some(expected as u64 + 1));
+        let used: BTreeSet<_> = pools.iter().map(|p| p["fee"].as_u64().unwrap()).collect();
+        let configured: BTreeSet<_> = settings["dex.v3_fee_tiers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s.as_str().unwrap().parse::<u64>().unwrap())
+            .collect();
+        assert!(
+            used.is_subset(&configured),
+            "{id} misses a created fee tier"
+        );
+        let unique: BTreeSet<_> = pools.iter().map(|p| p["pool"].as_str().unwrap()).collect();
+        assert_eq!(unique.len(), expected);
     }
 }

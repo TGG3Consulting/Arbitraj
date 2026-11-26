@@ -1,0 +1,75 @@
+name: Historical fixed volume accounting over archived card inputs
+on:
+  push:
+    branches: [audit/all-fixed-points-2611]
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    env:
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_INCREMENTAL: '0'
+      CARGO_TERM_COLOR: never
+      GROUP: ${{ matrix.group }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: harness
+      - name: Create ephemeral receiver
+        shell: bash
+        run: |
+          umask 077
+          /usr/bin/python3 harness/tools/release_size_matrix/market_envelope.py keygen "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/public.pem"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: receiver-${{ matrix.group }}
+          path: ${{ runner.temp }}/public.pem
+          retention-days: 1
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: harness -> target
+          shared-key: release-size-matrix
+          save-if: false
+      - name: Receive identical protected market inputs and replay pinned releases
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          ref="refs/heads/audit/fixed-history-envelope-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GROUP}"
+          for i in $(seq 1 60); do
+            if git -C harness ls-remote --exit-code origin "$ref" >/dev/null 2>&1; then break; fi
+            sleep 20
+          done
+          git -C harness fetch -q --depth=1 origin "$ref"
+          git -C harness show FETCH_HEAD:market.enc > "$RUNNER_TEMP/enc"
+          p="$GITHUB_WORKSPACE/harness/tools/release_size_matrix"
+          /usr/bin/python3 "$p/market_envelope.py" open "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/input.json" "$RUNNER_TEMP/enc"
+          rm "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/enc"
+          export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/harness/target"
+          shas=$(python -c 'import json,os,sys;print(" ".join(json.load(open(sys.argv[1]))[int(os.environ["GROUP"])]))' "$p/linux_groups.json")
+          mkdir "$RUNNER_TEMP/results"
+          for sha in $shas; do
+            git -C harness fetch -q --depth=1 origin "$sha"
+            git -C harness worktree add -q --detach "$RUNNER_TEMP/source" "$sha"
+            test "$(git -C "$RUNNER_TEMP/source" rev-parse HEAD)" = "$sha"
+            python "$p/batch_fixed.py" "$RUNNER_TEMP/source" "$RUNNER_TEMP/input.json" "$RUNNER_TEMP/results"
+            git -C harness worktree remove -f "$RUNNER_TEMP/source"
+          done
+          python - "$RUNNER_TEMP" <<'PY'
+          import json,gzip,pathlib,sys
+          t=pathlib.Path(sys.argv[1]);d=json.loads((t/'input.json').read_bytes());(t/'return.pem').write_text(d['return_key']);results={f.stem:json.loads(f.read_bytes())for f in (t/'results').glob('*.json')};assert len(results)==4
+          (t/'result.gz').write_bytes(gzip.compress(json.dumps(results).encode()))
+          PY
+          /usr/bin/python3 "$p/market_envelope.py" seal "$RUNNER_TEMP/return.pem" "$RUNNER_TEMP/result.enc" "$RUNNER_TEMP/result.gz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rows-${{ matrix.group }}
+          path: ${{ runner.temp }}/result.enc
+          retention-days: 1

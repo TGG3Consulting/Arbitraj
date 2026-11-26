@@ -132,6 +132,9 @@ async fn to_node(ctx: &Ctx, body: &Value, lim: Limits) -> GatewayResult<Capped<S
             }
         }
         .await;
+        if res.is_err() {
+            super::chain_seen::invalidate(ctx, &url);
+        }
         match res {
             Ok(t) => {
                 if node == Node::Main {

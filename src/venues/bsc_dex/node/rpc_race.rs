@@ -161,4 +161,5 @@ pub(super) async fn one(
         Err(f @ (Fail::TooBig { .. } | Fail::Total { .. })) => Ok(Capped::Over(f)),
         Err(f) => Err(errors::from_fail(&f, &lim, &source)),
     }
+    .inspect_err(|_| super::chain_seen::invalidate(ctx, url))
 }

@@ -39,7 +39,7 @@ async fn call<T: serde::de::DeserializeOwned>(
     method: &str,
 ) -> Result<T, String> {
     let body = jsonrpc::request(1, method, &json!([]));
-    let text = rpc::post(ctx, url, &body, &[], SOURCE)
+    let text = super::node::chain_seen::node_post(ctx, url, &body, SOURCE)
         .await
         .map_err(|e| e.message)?;
     let raw = jsonrpc::parse_text(&text, SOURCE, Op::Read).map_err(|e| e.message)?;

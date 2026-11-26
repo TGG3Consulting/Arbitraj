@@ -40,6 +40,7 @@ use super::sequencer_cond::{self, Cond, Terms};
 /// Канал, готовый к отправке.
 pub struct Ready {
     pub ch: &'static Channel,
+    endpoint_config: Option<(u64, u64)>,
     url: Zeroizing<String>,
     key: Option<Zeroizing<String>>,
     pub method: SendMethod,
@@ -58,6 +59,12 @@ pub struct Ready {
 
 /// Готов ли канал. Возвращает: Ready или состояние, почему нет (Disabled, NoKey, NotConfigured с причиной).
 pub fn prepare(ctx: &Ctx, ch: &'static Channel) -> Result<Ready, ChannelState> {
+    let endpoint_config = crate::settings::evm_profiles::profile(ctx.place.id).map(|_| {
+        (
+            ctx.settings.generation(),
+            crate::secrets::vault::generation(),
+        )
+    });
     if !super::channels::compatible(ctx.place.id, ch) {
         return Err(ChannelState::NotConfigured {
             reason: format!("Канал {} не принадлежит площадке {}", ch.id, ctx.place.id),
@@ -126,6 +133,7 @@ pub fn prepare(ctx: &Ctx, ch: &'static Channel) -> Result<Ready, ChannelState> {
     };
     Ok(Ready {
         ch,
+        endpoint_config,
         url,
         key,
         method,
@@ -175,6 +183,7 @@ impl Ready {
         };
         self.post(ctx, txs, max_block, (cond, terms.known), Some(started_at))
             .await
+            .inspect_err(|_| super::super::node::chain_seen::invalidate(ctx, &self.url))
     }
 
     /// «Проверить подключение» (send/check.rs): пустая транзакция тем методом, которым канал отправляет; у канала с
@@ -185,7 +194,14 @@ impl Ready {
         } else {
             Cond::Plain
         };
-        self.post(ctx, &[Bytes::new()], 0, (cond, None), None).await
+        super::super::node::chain_seen::invalidate(ctx, &self.url);
+        self.post(ctx, &[Bytes::new()], 0, (cond, None), None)
+            .await
+            .inspect_err(|e| {
+                if super::super::node::failover::switchable(e) {
+                    super::super::node::chain_seen::invalidate(ctx, &self.url);
+                }
+            })
     }
 
     /// Запрос в канал и разбор ответа. Принимает: транзакции, предел блока, условие и knownAccounts пулов (решение
@@ -199,7 +215,18 @@ impl Ready {
         started_at: Option<&mut Option<chrono::DateTime<chrono::Utc>>>,
     ) -> GatewayResult<()> {
         // Проверяется именно endpoint отправки: channel.url может отличаться от узла рыночных данных.
-        super::super::node::chain_seen::verify_submission(ctx, &self.url).await?;
+        super::super::node::chain_seen::verify_http(ctx, &self.url).await?;
+        if self.endpoint_config.is_some_and(|v| {
+            v != (
+                ctx.settings.generation(),
+                crate::secrets::vault::generation(),
+            )
+        }) {
+            return Err(ctx.err(
+                crate::gateway::errors::ErrorCode::NotConfigured,
+                "Настройки или ключ изменились после подготовки канала отправки",
+            ));
+        }
         let seq = self.ch.single == Some(Single::Sequencer);
         let conditional = seq && cond != Cond::Plain;
         let sync = seq && !conditional && matches!(self.submit, Submit::Sync(_));

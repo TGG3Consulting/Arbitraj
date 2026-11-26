@@ -35,7 +35,7 @@ pub struct Seen {
     gas: Arc<Mutex<Option<String>>>,
     /// Проверенные HTTP-точки новых сетей, включая резерв и список узлов квитанций.
     /// Ключ охватывает эффективный URL (включая смену секрета), в памяти остаётся только его хеш.
-    verified: Arc<Mutex<std::collections::HashSet<(alloy_primitives::B256, u64)>>>,
+    verified: super::endpoint_chain::Endpoints,
 }
 
 impl Seen {
@@ -71,48 +71,70 @@ impl Seen {
 
 /// Проверяет eth_chainId у того URL, которому непосредственно уйдёт запрос. Проверки разных URL независимы.
 pub async fn verify_http(ctx: &Ctx, url: &str) -> GatewayResult<()> {
-    verify_endpoint(ctx, url, false).await
-}
-/// Перед внешней отправкой идентичность проверяется повторно: провайдер может переключить
-/// физическую сеть за тем же URL. Старые подтверждения доступны только чтениям.
-pub async fn verify_submission(ctx: &Ctx, url: &str) -> GatewayResult<()> {
-    verify_endpoint(ctx, url, true).await
-}
-type Endpoint = (alloy_primitives::B256, u64);
-impl Seen {
-    fn cached(&self, key: Endpoint, submission: bool) -> bool {
-        !submission
-            && self
-                .verified
-                .lock()
-                .unwrap_or_else(|p| p.into_inner())
-                .contains(&key)
+    if let Some(check) = begin(ctx, url, false) {
+        let body = jsonrpc::request(1, "eth_chainId", &json!([]));
+        observed(ctx, url, &body, rpc::SOURCE, Some(check)).await?;
     }
-    fn set_verified(&self, key: Endpoint, valid: bool) {
-        let mut known = self.verified.lock().unwrap_or_else(|p| p.into_inner());
-        if valid {
-            known.insert(key);
-        } else {
-            known.remove(&key);
+    Ok(())
+}
+type Check = (super::endpoint_chain::Endpoint, u64, u64);
+fn begin(ctx: &Ctx, url: &str, refresh: bool) -> Option<Check> {
+    let key = endpoint(ctx, url)?;
+    let settings = ctx.settings.generation();
+    let epoch = ctx.chains.verified.check(key, settings, refresh)?;
+    Some((key, settings, epoch))
+}
+/// Запрошенный оператором/мониторингом eth_chainId обновляет подтверждение по фактически
+/// использованному URL. Для чтения другого метода подтверждение нужно только на холодном пути.
+pub(in crate::venues::bsc_dex) async fn node_post(
+    ctx: &Ctx,
+    url: &str,
+    body: &serde_json::Value,
+    source: &str,
+) -> GatewayResult<String> {
+    let res = if body.get("method").and_then(|v| v.as_str()) == Some("eth_chainId") {
+        observed(ctx, url, body, source, begin(ctx, url, true)).await
+    } else {
+        verify_http(ctx, url).await?;
+        rpc::post(ctx, url, body, &[], source).await
+    };
+    res.inspect_err(|_| invalidate(ctx, url))
+}
+async fn observed(
+    ctx: &Ctx,
+    url: &str,
+    body: &serde_json::Value,
+    source: &str,
+    check: Option<Check>,
+) -> GatewayResult<String> {
+    let text = rpc::post(ctx, url, body, &[], source).await?;
+    if let Some((key, settings, epoch)) = check {
+        let raw = jsonrpc::parse_text(&text, source, Op::Read)?;
+        let got: U64 = jsonrpc::decode(&raw, source)?;
+        if let Err(e) = chain_id::same_chain(ctx, got.to::<u64>()) {
+            ctx.chains.verified.forget(key);
+            return Err(ctx.err(ErrorCode::BadResponse, e));
+        }
+        if ctx.settings.generation() != settings
+            || !ctx.chains.verified.confirm(key, settings, epoch)
+        {
+            return Err(ctx.err(
+                ErrorCode::BadResponse,
+                "Настройки или соединение изменились во время проверки сети HTTP",
+            ));
         }
     }
+    Ok(text)
 }
-async fn verify_endpoint(ctx: &Ctx, url: &str, submission: bool) -> GatewayResult<()> {
-    let Some(p) = crate::settings::evm_profiles::profile(ctx.place.id) else {
-        return Ok(());
-    };
-    let key = (alloy_primitives::keccak256(url.as_bytes()), p.evm_chain_id);
-    if ctx.chains.cached(key, submission) {
-        return Ok(());
+fn endpoint(ctx: &Ctx, url: &str) -> Option<super::endpoint_chain::Endpoint> {
+    let expected = crate::settings::evm_profiles::profile(ctx.place.id)?.evm_chain_id;
+    Some((alloy_primitives::keccak256(url.as_bytes()), expected))
+}
+/// Следующая операция на этом endpoint вновь читает фактический eth_chainId.
+pub fn invalidate(ctx: &Ctx, url: &str) {
+    if let Some(k) = endpoint(ctx, url) {
+        ctx.chains.verified.forget(k);
     }
-    let body = jsonrpc::request(1, "eth_chainId", &json!([]));
-    let text = rpc::post(ctx, url, &body, &[], rpc::SOURCE).await?;
-    let raw = jsonrpc::parse_text(&text, rpc::SOURCE, Op::Read)?;
-    let got: U64 = jsonrpc::decode(&raw, rpc::SOURCE)?;
-    let result =
-        chain_id::same_chain(ctx, got.to::<u64>()).map_err(|e| ctx.err(ErrorCode::BadResponse, e));
-    ctx.chains.set_verified(key, result.is_ok());
-    result
 }
 
 /// Что делает: вердикт по узлу. Принимает: кто (основной/резервный), адрес, chainId узла, dex.evm_chain_id.
@@ -142,7 +164,7 @@ async fn ask(ctx: &Ctx, node: Node) -> GatewayResult<Option<(String, u64)>> {
     };
     let full = ctx.node_url(url, key)?;
     let body = jsonrpc::request(1, "eth_chainId", &json!([]));
-    let text = rpc::post(ctx, &full, &body, &[], rpc::SOURCE).await?;
+    let text = node_post(ctx, &full, &body, rpc::SOURCE).await?;
     let raw = jsonrpc::parse_text(&text, rpc::SOURCE, Op::Read)?;
     let got: U64 = jsonrpc::decode(&raw, rpc::SOURCE)?;
     Ok(Some((plain, got.to::<u64>())))
@@ -183,20 +205,4 @@ pub async fn ensure(ctx: &Ctx) -> GatewayResult<u64> {
         }
     }
     Ok(want)
-}
-
-#[cfg(test)]
-mod endpoint_tests {
-    use super::*;
-    #[test]
-    fn cached_read_never_authorizes_a_submission_at_the_same_url() {
-        let key = (alloy_primitives::keccak256("endpoint"), 8453);
-        let seen = Seen::default();
-        seen.set_verified(key, true);
-        assert!(seen.cached(key, false));
-        assert!(!seen.cached(key, true));
-        assert!(verdict("канал", "public", 1, 8453).is_err());
-        seen.set_verified(key, false);
-        assert!(!seen.cached(key, false));
-    }
 }

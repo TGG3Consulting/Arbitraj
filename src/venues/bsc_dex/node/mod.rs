@@ -12,6 +12,7 @@ pub mod block_ms;
 pub mod call;
 pub mod chain_id;
 pub mod chain_seen;
+mod endpoint_chain;
 pub mod events_lag;
 pub mod failover;
 pub mod head_age;

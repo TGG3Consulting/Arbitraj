@@ -113,11 +113,7 @@ async fn to_node(ctx: &Ctx, body: &Value) -> GatewayResult<String> {
     let n = urls.len();
     let mut last = None;
     for (i, (node, url)) in urls.into_iter().enumerate() {
-        let response = async {
-            super::chain_seen::verify_http(ctx, &url).await?;
-            post(ctx, &url, body, &[], SOURCE).await
-        }
-        .await;
+        let response = super::chain_seen::node_post(ctx, &url, body, SOURCE).await;
         match response {
             Ok(t) => {
                 if node == Node::Main {

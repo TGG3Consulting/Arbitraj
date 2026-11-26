@@ -51,4 +51,5 @@ pub fn final_external(settings: &Store, venue: &VenueId) -> bool {
         coin: None,
     };
     settings.flag("exec.via_kyber", at).unwrap_or(false)
+        || settings.flag("hashflow.trading", at).unwrap_or(false)
 }

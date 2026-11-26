@@ -45,6 +45,12 @@ pub(super) async fn once(
         RouteMode::Direct => "прямой".to_string(),
         RouteMode::Smart => "умный".to_string(),
         RouteMode::Graph => String::new(),
+        RouteMode::Rfq(_) => {
+            return Err(ctx.err(
+                ErrorCode::NotApplicable,
+                "RFQ проверяется с кошельком через Hashflow",
+            ));
+        }
     };
     if route.mode == RouteMode::Graph {
         if !route.executable {
@@ -155,6 +161,9 @@ pub(super) async fn once(
     }
     let (at, now) = q.heads.at(ctx).await?;
     let built = match shape {
+        RouteMode::Rfq(_) => {
+            return Err(ctx.err(ErrorCode::NotApplicable, "RFQ не является маршрутом пула"));
+        }
         RouteMode::Direct => Built::One(
             plan::build(ctx, &legs[0], wallet, now, false)
                 .await?

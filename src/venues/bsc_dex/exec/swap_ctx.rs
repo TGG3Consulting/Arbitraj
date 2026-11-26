@@ -33,6 +33,9 @@ pub struct SwapCtx {
     /// Транзакция — разрешение (approve): обмен после неё не отправлялся.
     #[serde(default)]
     pub approve: bool,
+    /// Публичные параметры подписанной RFQT для повторного разбора квитанции.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rfq: Option<super::super::hashflow::ReceiptProof>,
     /// Кошелёк сделки. None — контекста свопа нет.
     #[serde(default)]
     pub wallet: Option<Address>,

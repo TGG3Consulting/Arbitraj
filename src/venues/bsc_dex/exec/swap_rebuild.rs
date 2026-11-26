@@ -75,6 +75,14 @@ pub fn rebuild(
     // Решение 272, ревью Б4: executeNative — по признаку контекста (executor/trade.rs); транзакция в блоке без события
     // NativeSettled даёт OutcomeUnknown (fact.rs), а не «0 монет по пути ERC-20». Контекст без признака (записан до
     // ревью) — по событию, как раньше.
+    if outcome == TxOutcome::Included && c.rfq.as_ref().is_some_and(|proof| !proof.matches(&r)) {
+        return Err(ctx
+            .err(
+                ErrorCode::OutcomeUnknown,
+                "Квитанция не подтверждает подписанный объём Hashflow",
+            )
+            .with_tx(chain));
+    }
     let native = c.executor_native || c.executor.is_some_and(|x| fact::settled(&r, x).is_some());
     let d = txs::Done {
         chain,

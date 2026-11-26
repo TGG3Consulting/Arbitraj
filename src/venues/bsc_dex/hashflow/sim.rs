@@ -13,6 +13,7 @@ use serde_json::{Value, json};
 #[derive(Deserialize)]
 pub(super) struct Header {
     pub hash: B256,
+    pub number: U64,
     pub timestamp: U64,
 }
 

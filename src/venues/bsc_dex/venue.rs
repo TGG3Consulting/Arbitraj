@@ -143,30 +143,35 @@ impl Venue for BscDex {
     /// Котировка на объём по пулам (локальная математика по официальным библиотекам — quote/, math/).
     /// Ошибки: StaleData, CoinNotChecked / CoinCheckFailed, NoRoute, NotConfigured, узел.
     async fn quote(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {
-        // Решение 95: финальная котировка расчёта кандидата (ядро пересчитывает найденный оптимум) при exec.via_kyber —
-        // цена KyberSwap, того, кто исполнит обмен; по ней ядро решает «торговать или нет». У KyberSwap нет маршрута
-        // (пул, которого он не знает) — наша котировка: исполнит наш собственный сборщик (откат в trade()).
-        if crate::gateway::quote_stage::is_final()
-            && self.p.ctx.flag("exec.via_kyber").unwrap_or(false)
-        {
-            // Решение 123: «лучший из двух» — KyberSwap и своя параллельно, берётся лучшая (best_of/quote.rs).
-            if super::best_of::enabled(&self.p.ctx) {
-                return super::best_of::quote::quote(&self.p, &self.kyber, asset, side, qty).await;
-            }
-            match crate::venues::kyberswap::quote::quote(&self.kyber, asset, side, qty).await {
-                Err(e) if e.code == ErrorCode::NoRoute => {}
-                Err(e) => return Err(e),
-                Ok(mut q) => {
-                    // Котировка от имени площадки bsc_dex: ядро сверяет площадку стороны.
-                    q.venue = self.p.ctx.venue();
-                    return Ok(q);
+        let baseline = async {
+            // Решение 95: финальная котировка расчёта кандидата (ядро пересчитывает найденный оптимум) при exec.via_kyber —
+            // цена KyberSwap, того, кто исполнит обмен; по ней ядро решает «торговать или нет». У KyberSwap нет маршрута
+            // (пул, которого он не знает) — наша котировка: исполнит наш собственный сборщик (откат в trade()).
+            if crate::gateway::quote_stage::is_final()
+                && self.p.ctx.flag("exec.via_kyber").unwrap_or(false)
+            {
+                // Решение 123: «лучший из двух» — KyberSwap и своя параллельно, берётся лучшая (best_of/quote.rs).
+                if super::best_of::enabled(&self.p.ctx) {
+                    return super::best_of::quote::quote(&self.p, &self.kyber, asset, side, qty)
+                        .await;
+                }
+                match crate::venues::kyberswap::quote::quote(&self.kyber, asset, side, qty).await {
+                    Err(e) if e.code == ErrorCode::NoRoute => {}
+                    Err(e) => return Err(e),
+                    Ok(mut q) => {
+                        // Котировка от имени площадки bsc_dex: ядро сверяет площадку стороны.
+                        q.venue = self.p.ctx.venue();
+                        return Ok(q);
+                    }
                 }
             }
+            // Котировка: ядро на пути сделки ставит Trade (расчёт кандидата, предпроверка); иначе — Quote (живой экран,
+            // ниже проб налогов, выше фона).
+            let class = urgency::is_set().unwrap_or(Class::Quote);
+            scope(class, self.p.quoting().quote(asset, side, qty)).await
         }
-        // Котировка: ядро на пути сделки ставит Trade (расчёт кандидата, предпроверка); иначе — Quote (живой экран,
-        // ниже проб налогов, выше фона).
-        let class = urgency::is_set().unwrap_or(Class::Quote);
-        scope(class, self.p.quoting().quote(asset, side, qty)).await
+        .await?;
+        Ok(super::hashflow::routing::consider(&self.p, asset, side, qty, baseline).await)
     }
 
     /// Решение 250: исполнимость объёма (проверка доли глубины h) — quote/fills.rs: прямой путь одного пула исполняет
@@ -174,7 +179,8 @@ impl Venue for BscDex {
     /// KyberSwap (решение 95) — как quote. Ошибки: как у quote.
     async fn quote_fills(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Decimal> {
         if crate::gateway::quote_stage::is_final()
-            && self.p.ctx.flag("exec.via_kyber").unwrap_or(false)
+            && (self.p.ctx.flag("exec.via_kyber").unwrap_or(false)
+                || self.p.ctx.flag("hashflow.trading").unwrap_or(false))
         {
             return self.quote(asset, side, qty).await.map(|q| q.fillable_qty);
         }
@@ -222,7 +228,7 @@ impl Venue for BscDex {
         let r = scope(Class::Trade, fact).await.map_err(resolve::attach);
         // t78: продажа выхода сделки исполнилась целиком — её налоги кошелька сделки больше не нужны (deal_taxes.rs).
         self.p.checks.forget_after_sale(&asked, &r);
-        r
+        super::hashflow::record(&self.p, r?).await
     }
 
     /// Перевод монеты из кошелька на адрес (ERC-20 transfer, EIP-20) — wallet/transfer.rs.
@@ -263,9 +269,10 @@ impl Venue for BscDex {
         self.p.ctx.bound()?;
         let work = async {
             match resolve::trade(&self.p, req, p).await? {
-                Some(t) => exec::balance_fact::apply(&self.p.ctx, &self.p.tokens, Ok(t))
-                    .await
-                    .map(Some),
+                Some(t) => {
+                    let t = exec::balance_fact::apply(&self.p.ctx, &self.p.tokens, Ok(t)).await?;
+                    super::hashflow::record(&self.p, t).await.map(Some)
+                }
                 None => Ok(None),
             }
         };
@@ -553,6 +560,15 @@ impl Venue for BscDex {
         req: &TradeRequest,
         horizon_s: u64,
     ) -> GatewayResult<Option<Decimal>> {
+        if matches!(
+            req.route.as_ref().map(|r| r.mode),
+            Some(crate::core::types::RouteMode::Rfq(_))
+        ) {
+            return Err(self.p.ctx.err(
+                ErrorCode::NotApplicable,
+                "Hashflow требует ранее выданное разрешение кошелька",
+            ));
+        }
         let via_kyber = self.p.ctx.flag("exec.via_kyber").unwrap_or(false);
         let path = super::trade_path::of(req, via_kyber, super::best_of::enabled(&self.p.ctx));
         if path != super::trade_path::Path::Own {
@@ -761,6 +777,9 @@ impl BscDex {
     async fn trade_logs(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
         // Решение 132: сделка — только кошельком счёта (Ctx::bound).
         self.p.ctx.bound()?;
+        if let Some(crate::core::types::RouteMode::Rfq(id)) = req.route.as_ref().map(|r| r.mode) {
+            return super::hashflow::routing::trade(&self.p, req, id).await;
+        }
         // Исполнение через агрегатор KyberSwap (exec.via_kyber, решение 91): маршрут и своп строит KyberSwap по
         // объёму из расчёта (req.qty, req.worst_price); сигналы, цены и подбор размера — на bsc_dex. Нет маршрута у
         // KyberSwap (пул, которого он не знает) — откат на собственный исполнитель bsc_dex по маршруту котировки.

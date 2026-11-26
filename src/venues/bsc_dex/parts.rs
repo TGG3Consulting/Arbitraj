@@ -32,6 +32,7 @@ use super::wallet::nonce::Nonces;
 #[derive(Clone)]
 pub struct Parts {
     pub ctx: Ctx,
+    pub(super) rfqs: super::hashflow::routing::Book,
     pub heads: Heads,
     pub tokens: Tokens,
     pub(super) scaled_units: super::scaled_token::Units,
@@ -61,6 +62,7 @@ impl Parts {
         let registry = Registry::for_venue(ctx.place.id);
         Self {
             ctx,
+            rfqs: Default::default(),
             heads: Heads::default(),
             tokens: Tokens::default(),
             scaled_units: Default::default(),

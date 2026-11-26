@@ -179,11 +179,13 @@ pub async fn send_tipped(
     // channel.cond_time_window_s нет — None, узел не спрашивается.
     let head_time = send::sequencer_cond::head_time(ctx, &env.heads, &ready).await?;
     if crate::gateway::settlement_intent::active() {
-        let marker = crate::gateway::pending::PendingRef {
-            nonce: Some(nonce),
-            venue_ref: Some(signed.hash.to_string()),
-            ..Default::default()
-        };
+        let marker = super::super::hashflow::marker(ctx, signed.hash, nonce, &ready)?.unwrap_or(
+            crate::gateway::pending::PendingRef {
+                nonce: Some(nonce),
+                venue_ref: Some(signed.hash.to_string()),
+                ..Default::default()
+            },
+        );
         crate::gateway::settlement_intent::before_send(&marker).await?;
     }
     let d = send::dispatch(

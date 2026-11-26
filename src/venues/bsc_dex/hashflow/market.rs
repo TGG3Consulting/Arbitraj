@@ -62,7 +62,7 @@ pub(super) async fn makers(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Book {
+pub(super) struct Book {
     status: String,
     base_chain: Chain,
     levels: BTreeMap<String, Vec<Market>>,
@@ -85,40 +85,53 @@ struct Level {
 }
 
 /// Рассчитывает выход при заданном объёме. Несколько maker остаются независимыми маршрутами.
-fn amount_out(levels: &[Level], amount: Decimal) -> Option<Decimal> {
+fn amount_at(levels: &[Level], amount: Decimal, exact_output: bool) -> Option<Decimal> {
     let mut remaining = amount;
-    let mut out = Decimal::ZERO;
+    let mut total = Decimal::ZERO;
     for (i, level) in levels.iter().enumerate() {
         let qty = Decimal::from_str_exact(&level.q).ok()?;
         let price = Decimal::from_str_exact(&level.p).ok()?;
-        if qty <= Decimal::ZERO || price <= Decimal::ZERO || (i == 0 && amount < qty) {
+        if qty < Decimal::ZERO || price <= Decimal::ZERO {
             return None;
         }
-        let part = remaining.min(qty);
-        out = out.checked_add(part.checked_mul(price)?)?;
+        let capacity = if exact_output {
+            qty.checked_mul(price)?
+        } else {
+            qty
+        };
+        if i == 0 && amount < capacity {
+            return None;
+        }
+        let part = remaining.min(capacity);
+        total = total.checked_add(if exact_output {
+            part.checked_div(price)?
+        } else {
+            part.checked_mul(price)?
+        })?;
         remaining -= part;
         if remaining.is_zero() {
-            return Some(out);
+            return Some(total);
         }
     }
     None
 }
 
-/// Запрашивает подходящих по ликвидности maker и наибольший ориентировочный выход для сравнения.
-pub(super) async fn levels(
+/// Цена уровня измеряется в выходном токене, количество — во входном.
+pub(super) async fn book(
     ctx: &Ctx,
     source: &str,
     chain: u64,
-    req: &Request,
-    amount: Decimal,
-) -> Result<(Vec<String>, Decimal), String> {
+    input: Option<Address>,
+) -> Result<Book, String> {
     let known = makers(ctx, source, chain).await?;
     if known.is_empty() {
         return Err("Нет маркетмейкеров Hashflow на выбранной сети".into());
     }
     let mut url = market_url("price-levels", source, chain)?;
-    url.query_pairs_mut()
-        .append_pair("baseToken", &format!("{:#x}", req.input));
+    if let Some(token) = input {
+        url.query_pairs_mut()
+            .append_pair("baseToken", &format!("{token:#x}"));
+    }
     for maker in &known {
         url.query_pairs_mut().append_pair("marketMakers[]", maker);
     }
@@ -126,24 +139,41 @@ pub(super) async fn levels(
     if book.status != "success" || !book.base_chain.is(chain) {
         return Err("Нет уровней на запрошенной сети".into());
     }
-    let mut makers = vec![];
-    let mut best = Decimal::ZERO;
-    for (name, markets) in book.levels {
-        if !known.contains(&name) {
-            continue;
+    let mut book = book;
+    book.levels.retain(|name, _| known.contains(name));
+    Ok(book)
+}
+
+impl Book {
+    /// При точном выходе возвращает минимальный вход, при точном входе — максимальный выход.
+    pub(super) fn at(
+        &self,
+        req: &Request,
+        amount: Decimal,
+        exact_output: bool,
+    ) -> Result<(Vec<String>, Decimal), String> {
+        let mut names = vec![];
+        let mut best: Option<Decimal> = None;
+        for (name, markets) in &self.levels {
+            for m in markets
+                .iter()
+                .filter(|m| m.pair.base_token == req.input && m.pair.quote_token == req.output)
+            {
+                if let Some(value) = amount_at(&m.levels, amount, exact_output) {
+                    if names.last() != Some(name) {
+                        names.push(name.clone());
+                    }
+                    best = Some(match best {
+                        Some(b) if exact_output => b.min(value),
+                        Some(b) => b.max(value),
+                        None => value,
+                    });
+                }
+            }
         }
-        let quote = markets
-            .into_iter()
-            .filter(|m| m.pair.base_token == req.input && m.pair.quote_token == req.output)
-            .filter_map(|m| amount_out(&m.levels, amount))
-            .max();
-        if let Some(out) = quote {
-            makers.push(name);
-            best = best.max(out);
-        }
+        Ok((
+            names,
+            best.ok_or("Нет достаточной ликвидности на запрошенный объём")?,
+        ))
     }
-    if makers.is_empty() {
-        return Err("Нет уровня Hashflow с достаточной ликвидностью для заданной суммы".into());
-    }
-    Ok((makers, best))
 }

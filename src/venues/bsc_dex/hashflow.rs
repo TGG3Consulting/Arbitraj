@@ -1,6 +1,9 @@
 //! Ручная проверка и симуляция Hashflow Taker API v3 по запросу оператора.
 //! https://docs.hashflow.com/hashflow/taker/getting-started-api-v3
+mod execute;
 mod market;
+pub(super) mod routing;
+pub(in crate::venues::bsc_dex) use execute::{ReceiptProof, marker, record};
 mod sim;
 #[cfg(test)]
 mod tests;
@@ -106,12 +109,35 @@ pub(super) async fn preview(ctx: &Ctx, request: Request) -> GatewayResult<Previe
             "Нужен источник multi-wallet, выданный Hashflow",
         ));
     }
-    check(ctx, id, &source, request)
+    check(ctx, id, &source, request, false, None)
         .await
+        .map(|q| q.preview)
         .map_err(|e| ctx.err(ErrorCode::BadResponse, e))
 }
 
-async fn check(ctx: &Ctx, id: u64, source: &str, r: Request) -> Result<Preview, String> {
+#[derive(Clone)]
+struct Prepared {
+    source: String,
+    preview: Preview,
+    firm: wire::Firm,
+    request: Request,
+    input: U256,
+    output: U256,
+    value: U256,
+    di: u8,
+    dout: u8,
+    block: u64,
+    gas: u64,
+}
+
+async fn check(
+    ctx: &Ctx,
+    id: u64,
+    source: &str,
+    r: Request,
+    exact_output: bool,
+    known: Option<(Vec<String>, Decimal)>,
+) -> Result<Prepared, String> {
     if r.trader.is_zero() || r.input == r.output {
         return Err("Проверьте адрес трейдера и разные токены обмена".into());
     }
@@ -121,11 +147,21 @@ async fn check(ctx: &Ctx, id: u64, source: &str, r: Request) -> Result<Preview, 
         sim::decimals(ctx, r.input, h.hash),
         sim::decimals(ctx, r.output, h.hash)
     )?;
-    let (qty, human) = amount(&r, di)?;
-    let (makers, indicative) = market::levels(ctx, source, id, &r, human).await?;
+    let (desired, human) = amount(&r, if exact_output { do_ } else { di })?;
+    let (makers, indicative) = match known {
+        Some(x) => x,
+        None => market::book(ctx, source, id, Some(r.input))
+            .await?
+            .at(&r, human, exact_output)?,
+    };
+    let amount_key = if exact_output {
+        "quoteTokenAmount"
+    } else {
+        "baseTokenAmount"
+    };
     let chain = json!({"chainType":"evm","chainId":id});
     let body = json!({"source":source,"baseChain":chain,"quoteChain":chain,"calldata":true,
-        "rfqs":[{"baseToken":r.input,"quoteToken":r.output,"baseTokenAmount":qty.to_string(),"trader":r.trader,
+        "rfqs":[{"baseToken":r.input,"quoteToken":r.output,(amount_key):desired.to_string(),"trader":r.trader,
             "effectiveTrader":r.trader,"marketMakers":makers,"options":{"doNotRetryWithOtherMakers":true}}]});
     let resp: Response = market::read(
         ctx,
@@ -142,16 +178,24 @@ async fn check(ctx: &Ctx, id: u64, source: &str, r: Request) -> Result<Preview, 
         return Err("Маркетмейкер не предоставил подписанную котировку".into());
     }
     let quotes = resp.quotes.unwrap_or_default();
-    let [f] = quotes.as_slice() else {
+    let Ok([f]): Result<[_; 1], _> = quotes.try_into() else {
         return Err("Ожидалась одна котировка на одну заявку".into());
     };
     let now = || Utc::now().timestamp().max(0) as u64;
-    let (out, value) = wire::verify(f, id, target, &r, qty, now().max(h.timestamp.to::<u64>()))?;
-    let gas = sim::run(ctx, h.hash, &r, f, qty, out, value).await?;
+    let qty = if exact_output {
+        wire::raw(&f.quote_data.base_token_amount)?
+    } else {
+        desired
+    };
+    let (out, value) = wire::verify(&f, id, target, &r, qty, now().max(h.timestamp.to::<u64>()))?;
+    if exact_output && out != desired {
+        return Err("Подписанный выход расходится с размером сделки".into());
+    }
+    let gas = sim::run(ctx, h.hash, &r, &f, qty, out, value).await?;
     if now() >= f.quote_data.quote_expiry {
         return Err("Срок RFQ истёк во время симуляции".into());
     }
-    Ok(Preview {
+    let preview = Preview {
         rfq_id,
         txid: format!("{:#x}", f.quote_data.txid),
         amount_in: qty.to_string(),
@@ -169,5 +213,18 @@ async fn check(ctx: &Ctx, id: u64, source: &str, r: Request) -> Result<Preview, 
         block_hash: format!("{:#x}", h.hash),
         gas_used: gas.to_string(),
         maker_count: makers.len(),
+    };
+    Ok(Prepared {
+        source: source.to_owned(),
+        preview,
+        firm: f,
+        request: r,
+        input: qty,
+        output: out,
+        value,
+        di,
+        dout: do_,
+        block: h.number.to::<u64>(),
+        gas: gas.to::<u64>(),
     })
 }

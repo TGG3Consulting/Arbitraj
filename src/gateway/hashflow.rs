@@ -2,7 +2,7 @@
 use alloy_primitives::Address;
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Request {
     pub trader: Address,
@@ -13,7 +13,7 @@ pub struct Request {
 }
 
 /// Только итог симуляции. Подпись маркетмейкера и calldata остаются внутри адаптера.
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct Preview {
     pub rfq_id: String,
     pub txid: String,

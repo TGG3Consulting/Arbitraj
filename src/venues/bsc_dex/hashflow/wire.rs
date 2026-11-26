@@ -18,7 +18,7 @@ sol! {
                 address quoteToken, uint256 baseTokenAmount, uint256 quoteTokenAmount);
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct Chain {
     pub chain_type: String,
@@ -31,14 +31,14 @@ impl Chain {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct Data {
     base_chain: Chain,
     quote_chain: Chain,
     base_token: Address,
     quote_token: Address,
-    base_token_amount: String,
+    pub base_token_amount: String,
     quote_token_amount: String,
     trader: Address,
     effective_trader: Option<Address>,
@@ -49,7 +49,7 @@ pub(super) struct Data {
     nonce: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct Firm {
     pub quote_data: Data,

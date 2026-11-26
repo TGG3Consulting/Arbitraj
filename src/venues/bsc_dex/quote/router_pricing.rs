@@ -22,7 +22,7 @@ use serde_json::{Value, json};
 pub(in crate::venues::bsc_dex) fn is_native(e: &Entry) -> bool {
     matches!(
         e.family.variant,
-        Variant::V2RouterCreate2 | Variant::V2DualCreate2 | Variant::DiamondV2 | Variant::KewlV2
+        Variant::V2RouterCreate2 | Variant::V2DualCreate2 | Variant::V2DualCreate2LiveFee | Variant::DiamondV2 | Variant::KewlV2
     )
 }
 
@@ -49,6 +49,9 @@ async fn approved(
     hash: B256,
     at: &Value,
 ) -> GatewayResult<()> {
+    if e.family.variant == Variant::V2DualCreate2LiveFee {
+        super::super::pools::v2_pair_binding::fresh(ctx,e,at).await?;
+    }
     if e.family.variant == Variant::KewlV2 {
         return super::super::pools::kewl::checked(ctx, e, true, at).await;
     }
@@ -170,6 +173,8 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         } else {
             continue;
         };
+        if let Some(h) = head.filter(|_| e.family.variant == Variant::V2DualCreate2LiveFee)
+            && super::super::pools::v2_pair_binding::fresh(&q.ctx,e,&h.selector()).await.is_err() { continue; }
         if let Some(h) = head.filter(|_| e.family.variant.diamond_router()) {
             let at = h.selector();
             let ok = if e.family.variant == Variant::KewlV2 {

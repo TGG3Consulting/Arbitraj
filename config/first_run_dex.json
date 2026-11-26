@@ -3552,5 +3552,26 @@
       "dex.solidly_fee_denominator": 10000,
       "dex.solidly_pause_method": "isPaused()"
     }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "swapr_ethereum",
+    "source": "https://sourcify.dev/server/v2/contract/1/0xd34971bab6e5e356fd250715f5de0492bb070452 · https://sourcify.dev/server/v2/contract/1/0xb9960d9bca016e9748be75dd52f02188b9d0829f",
+    "settings": {
+      "dex.kind": "v2_fork_dual_create2_live_fee",
+      "dex.factory": "0xd34971bab6e5e356fd250715f5de0492bb070452",
+      "dex.router": "0xb9960d9bca016e9748be75dd52f02188b9d0829f",
+      "dex.factory_runtime_hash": "0x9f1eb50ba20ce34039868e5564d479653643b7c7ad8ce876f9f8fc47079204e9",
+      "dex.router_runtime_hash": "0xeb6a68850327c3992efe1160683fa8c81f8e33277c7510f23c6bda9e53ea5dc3",
+      "dex.pair_runtime_hash": "0x930c3f243986bca050edd99fd61e45e3ed87608f9137fa1fdcd9dd7428cedfbd",
+      "dex.pool_code_hashes": [
+        "0xd306a548755b9295ee49cc729e13ca4a45e00199bbd890fa146da43a50571776"
+      ],
+      "dex.v2_fee_source": "pool",
+      "dex.v2_fee_method": "swapFee()",
+      "dex.v2_fee_denominator": 10000,
+      "dex.v2_fee_rule_hash": "0xe4664df61026d2e8d16e31a3a20359506df9d7ac24216906d2672dca054e62ef"
+    }
   }
 ]

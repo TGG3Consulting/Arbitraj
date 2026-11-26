@@ -63,6 +63,8 @@ pub enum Variant {
     V2RouterCreate2,
     /// Каноническая пара допускает 4-аргументный swap V5 и собственный Router02.
     V2DualCreate2,
+    /// Зарегистрированные Router02 и V5 с изменяемой комиссией пары и проверкой обоих runtime.
+    V2DualCreate2LiveFee,
     DeltaSwap,
     Oasis,
     EtherVista,
@@ -163,24 +165,24 @@ impl Variant {
     pub(crate) fn diamond_router(self)->bool {matches!(self,Self::DiamondV2 | Self::KewlV2)}
 
     pub(crate) fn live_v2_fee(self) -> bool {
-        matches!(self, Self::V2Create2LiveFee | Self::CandySwap | Self::DiamondV2)
+        matches!(self, Self::V2Create2LiveFee | Self::V2DualCreate2LiveFee | Self::CandySwap | Self::DiamondV2)
     }
 
     pub fn frax_twamm(self) -> bool {
         matches!(self, Self::FraxTwamm | Self::FraxTwammRouter)
     }
     pub fn dual_v2_execution(self) -> bool {
-        self == Self::V2DualCreate2 || self.diamond_router()
+        matches!(self,Self::V2DualCreate2 | Self::V2DualCreate2LiveFee) || self.diamond_router()
     }
     pub fn registered_v2_router(self) -> bool {
-        matches!(self, Self::V2RouterCreate2 | Self::V2DualCreate2 | Self::DiamondV2 | Self::DeltaSwap)
+        matches!(self, Self::V2RouterCreate2 | Self::V2DualCreate2 | Self::V2DualCreate2LiveFee | Self::DiamondV2 | Self::DeltaSwap)
     }
 
     /// Резервы и комиссия этих V2-пар должны обновляться одним чтением состояния блока.
     pub fn v2_block_state(self) -> bool {
         matches!(
             self,
-            Self::V2Create2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::Memebox | Self::DeltaSwap | Self::Oasis | Self::EtherVista
+            Self::V2Create2LiveFee | Self::V2DualCreate2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::Memebox | Self::DeltaSwap | Self::Oasis | Self::EtherVista
         )
     }
 }
@@ -222,6 +224,7 @@ pub fn of(kind: &str) -> Variant {
         "v2_deltaswap_router" => Variant::DeltaSwap,
         "v2_fork_router_create2" => Variant::V2RouterCreate2,
         "v2_fork_dual_create2" => Variant::V2DualCreate2,
+        "v2_fork_dual_create2_live_fee" => Variant::V2DualCreate2LiveFee,
         "v2_whiteswap" => Variant::WhiteSwap,
         "v2_fork_executor_create2" => Variant::V2Create2,
         "v2_diamond_router" => Variant::DiamondV2,

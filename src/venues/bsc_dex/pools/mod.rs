@@ -372,6 +372,7 @@ pub mod sub_dex;
 pub mod ticks;
 pub mod transfer_in;
 pub(super) mod v2_live_fee;
+pub(crate) mod v2_pair_binding;
 pub mod verify;
 pub mod verify_algebra;
 pub mod verify_algebra_dir;

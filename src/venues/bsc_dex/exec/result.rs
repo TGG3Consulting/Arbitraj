@@ -74,6 +74,7 @@ pub fn result(
         (coin_dec, usdt_dec),
         native_routers,
         None,
+        None,
     )
 }
 
@@ -87,6 +88,7 @@ pub(super) fn with_native_fact(
     (coin_dec, usdt_dec): (u8, u8),
     native_routers: &[Address],
     vista: Option<&super::vista_fact::Proof>,
+    ekubo:Option<&super::ekubo_v2_fact::Proof>,
 ) -> GatewayResult<TradeResult> {
     let r = match (d.chain.outcome, &d.receipt) {
         (TxOutcome::Included, Some(r)) => r.clone(),
@@ -127,7 +129,9 @@ pub(super) fn with_native_fact(
                 .with_tx(d.chain));
         }
     };
-    let (spent, got) = if let Some(proof) = vista {
+    let (spent, got) = if let Some(proof)=ekubo {
+        proof.amounts(&r.logs,wallet,tin,tout).ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"Ekubo V2: лог Core не подтвердил выплату кошельку").with_tx(d.chain.clone()))?
+    }else if let Some(proof) = vista {
         proof.amounts(&r.logs, wallet, tin, tout).ok_or_else(|| {
             ctx.err(
                 ErrorCode::OutcomeUnknown,
@@ -147,7 +151,7 @@ pub(super) fn with_native_fact(
         (spent, got)
     };
     // Нативная BNB: на кошелёк приходит (или уходит с value) нативный BNB — событий Transfer кошелька нет.
-    let coins_u = if native_routers.is_empty() || vista.is_some() {
+    let coins_u = if native_routers.is_empty() || vista.is_some() || ekubo.is_some() {
         coins_u
     } else {
         let wbnb = if req.side == Side::Buy { tout } else { tin };

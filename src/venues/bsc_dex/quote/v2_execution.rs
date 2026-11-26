@@ -10,6 +10,7 @@ pub(super) async fn choose(q: &Quoting, baseline: Quote, alternate: Quote, dec: 
             && (!quote_stage::settlement()
                 || quote_stage::settlement_quote_supported(x, quote_stage::is_final()))
     };
+    if !ok(&alternate) { return baseline; }
     if !ok(&baseline) || alternate.fillable_qty > baseline.fillable_qty {
         return alternate;
     }
@@ -74,6 +75,7 @@ pub(super) async fn option(
     use crate::{core::types::RouteMode, gateway::errors::ErrorCode};
     use alloy_primitives::U256;
     let fee_mode = match &execution.wire {
+        super::v2_wallet_sim::Wire::EkuboV2(_,Some(_)) if super::vista_pricing::cash(&q.ctx,&i.usdt_ticker,i.usdt)=>Some(RouterFeeMode::NativeSettlement{gross_minimum:false}),
         super::v2_wallet_sim::Wire::Vista(v)
             if super::vista_pricing::cash(&q.ctx, &i.usdt_ticker, i.usdt) =>
         {
@@ -158,7 +160,7 @@ pub(super) async fn option(
         {
             super::router_pricing::checked(ctx, &c.entry, input, amount, head).await?;
         }
-        let vista_value = if super::vista_pricing::is_vista(&c.entry) || matches!(&execution.wire,super::v2_wallet_sim::Wire::Vista(_)) {
+        let vista_value = if let super::v2_wallet_sim::Wire::EkuboV2(key,Some(_))=&execution.wire {Some(if key.side{U256::ZERO}else{amount})}else if super::vista_pricing::is_vista(&c.entry) || matches!(&execution.wire,super::v2_wallet_sim::Wire::Vista(_)) {
             Some(match &execution.wire {
                 super::v2_wallet_sim::Wire::Vista(call) => call.value(amount),
                 super::v2_wallet_sim::Wire::V5(v) if matches!(v.native, Some((_, true))) => amount,

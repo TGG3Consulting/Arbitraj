@@ -38,6 +38,8 @@ pub struct SwapCtx {
     pub rfq: Option<super::super::hashflow::ReceiptProof>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vista: Option<super::vista_fact::Proof>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub ekubo:Option<super::ekubo_v2_fact::Proof>,
     /// Кошелёк сделки. None — контекста свопа нет.
     #[serde(default)]
     pub wallet: Option<Address>,

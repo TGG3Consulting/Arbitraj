@@ -109,7 +109,7 @@ pub async fn run(
     // симулированный блок — время головы + 1 с (решение 127, check/sim_base.rs): у пробы есть срок (deadline роутера),
     // с +12 с узла BSC проба падала бы при dex.deadline_s ≤ 12.
     let (at, now) = sim_base::head(ctx, heads).await?;
-    let vista = if super::super::quote::vista_pricing::native_router(e) {
+    let vista = if super::super::quote::vista_pricing::native_router(e) || (super::super::quote::ekubo_v2_pricing::enabled(e) && matches!(&e.pool.state,crate::core::types::PoolState::Ekubo(d) if d.native.is_some())) {
         Box::pin(super::vista_probe::Probe::of(ctx, e, at.number, wallet))
             .await?
             .map(Box::new)
@@ -322,6 +322,7 @@ async fn part(
     // Slipstream, форки V3, StableSwap, Maverick) пробу не собрать ни через Universal Router (чужой пул он не найдёт), ни
     // через classic V2 Router форка (у V3-форка его нет). Путь сделки для них — шаг контракта-исполнителя: тем же
     // вызовом execute идёт и проба (check/probe_exec.rs); нет шага / не задан адрес — точная причина оттуда.
+    if super::super::quote::ekubo_v2_pricing::enabled(e){return super::super::exec::ekubo_v2_direct::probe(ctx,e,&order,now);}
     if super::super::exec::vault_direct::enabled(e) && super::super::exec::executor::address(ctx)?.is_none() {
         return Box::pin(super::super::exec::vault_direct::probe(ctx,e,order,wallet,now)).await;
     }

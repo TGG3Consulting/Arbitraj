@@ -127,6 +127,14 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             super::super::pools::v2_live_fee::candy_fresh(ctx,e,at).await?;
             continue;
         }
+        if f.variant == Variant::V2DualCreate2LiveFee {
+            let at = match &role_block {
+                Some(at) => at,
+                None => role_block.insert(super::super::pools::nami::block(ctx, "latest").await?),
+            };
+            super::super::pools::v2_pair_binding::fresh(ctx,e,at).await?;
+            continue;
+        }
         if f.variant.diamond_router() {
             let at = match &role_block {
                 Some(at) => at,

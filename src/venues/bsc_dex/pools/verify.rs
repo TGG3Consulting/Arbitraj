@@ -418,12 +418,13 @@ async fn contracts(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> 
                 },
             },
         };
-        if c.family.variant==Variant::KewlV2 && let Verdict::Taken(f)=&verdict {
+        if matches!(c.family.variant,Variant::KewlV2 | Variant::V2DualCreate2LiveFee) && let Verdict::Taken(f)=&verdict {
             let block=match &create_block {
                 Some(at)=>at,
                 None=>create_block.insert(super::nami::block(ctx,"latest").await),
             };
             let checked=match block {
+                Ok(at) if c.family.variant==Variant::V2DualCreate2LiveFee => super::v2_pair_binding::code(ctx,c.family.id,f.reference.address(),at).await,
                 Ok(at)=>super::kewl::pair(ctx,c.family.id,f.reference.address(),(f.token0,f.token1),at).await,
                 Err(e)=>Err(e.clone()),
             };
@@ -468,6 +469,7 @@ fn found(
             | Variant::DeltaSwap
             | Variant::V2RouterCreate2
             | Variant::V2DualCreate2
+            | Variant::V2DualCreate2LiveFee
             | Variant::WhiteSwap
     ) {
         let hashes = super::verify_algebra_dir::hashes(ctx, c)?;

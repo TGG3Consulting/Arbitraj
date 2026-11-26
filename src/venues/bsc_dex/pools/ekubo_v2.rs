@@ -6,10 +6,11 @@ use alloy_primitives::{Address, B256, Bytes, U256, aliases::U96, keccak256};
 use serde_json::{Value, json};
 
 use super::super::{ctx::Ctx, node::rpc};
-use super::{abi_ekubo::EkuboPoolKey, families::Family};
+use super::families::Family;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 sol! {
+    struct EkuboPoolKey {address token0;address token1;bytes32 config;}
     struct BoundsV2 { int32 lower; int32 upper; }
     struct PositionV2 { bytes32 salt; BoundsV2 bounds; int128 liquidityDelta; }
     struct NodeV2 { EkuboPoolKey poolKey; uint96 sqrtRatioLimit; uint256 skipAhead; }
@@ -87,7 +88,7 @@ pub fn raw_config(mut math: B256) -> B256 {
     math
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct OrderKey {
     pub token0: Address,
     pub token1: Address,

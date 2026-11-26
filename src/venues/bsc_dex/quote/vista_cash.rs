@@ -30,7 +30,7 @@ pub(in crate::venues::bsc_dex) fn terminal_cash(
             h.fee_mode,
             Some(crate::core::types::RouterFeeMode::NativeSettlement { .. })
         )
-        && reg.entry(&h.pool).is_some_and(|e| native_router(&e))
+        && reg.entry(&h.pool).is_some_and(|e| native_router(&e) || super::ekubo_v2_pricing::enabled(&e))
 }
 /// Проверяет аванс ETH, разрешения, газ и публикацию на балансе плательщика перед допуском.
 pub(super) async fn funded(

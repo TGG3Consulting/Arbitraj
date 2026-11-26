@@ -22,10 +22,10 @@ pub(super) async fn candidates(
     let mut kinds = [false; 9];
     for e in &i.entries {
         kinds[5] |= super::vista_pricing::is_vista(e) || (native && super::vista_pricing::native_router(e));
+        kinds[8] |= super::ekubo_v2_pricing::enabled(e);
         if native {
             continue;
         }
-        kinds[8] |= super::ekubo_v2_pricing::enabled(e);
         kinds[7] |= super::module_pricing::enabled(e);
         kinds[6] |= super::super::exec::vault_direct::enabled(e);
         kinds[4] |= oasis_pricing::is_oasis(e);
@@ -109,6 +109,7 @@ pub(super) async fn candidates(
 }
 
 fn individual(e: &Entry, native: bool) -> bool {
+    if native && super::ekubo_v2_pricing::enabled(e) { return true; }
     if native {
         return super::vista_pricing::native_router(e);
     }
@@ -203,7 +204,7 @@ pub(super) fn private(
         let Some(e) = one(quote).and_then(|p| q.reg.get(p)) else {
             continue;
         };
-        if !e.family.fork || !e.family.tradable || super::ekubo_v2_pricing::enabled(&e) || super::oasis_pricing::is_oasis(&e) {
+        if !e.family.fork || !e.family.tradable || e.family.variant.wallet_module() || super::ekubo_v2_pricing::enabled(&e) || super::oasis_pricing::is_oasis(&e) {
             continue;
         }
         let white = super::white_pricing::is_white(&e);

@@ -187,10 +187,15 @@ pub(in crate::venues::bsc_dex) fn path_ok<'a>(
     let mut external = false;
     for e in entries {
         n += 1;
-        external |= e.family.variant.external_algebra_swap();
+        external |= external_swap(e);
         if external && n > 1 {
             return false;
         }
     }
     true
+}
+
+/// Для Classic условное исполнение внешнего рынка определяется актуальными ролями налогового контракта.
+pub(in crate::venues::bsc_dex) fn external_swap(e:&super::registry::Entry)->bool{
+    e.family.variant.external_algebra_swap() || matches!(&e.pool.state,crate::core::types::PoolState::Virtuals(s) if s.external_swap)
 }

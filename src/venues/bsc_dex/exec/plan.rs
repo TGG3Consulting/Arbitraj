@@ -31,7 +31,7 @@ use super::ur;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum DirectCall {
-    EkuboV2(super::super::pools::ekubo_v2::OrderKey),
+    EkuboV2 {key:super::super::pools::ekubo_v2::OrderKey,core:Address,wrapped:Option<Address>},
     Module {
         pool: Address,
         input: Address,
@@ -131,7 +131,9 @@ impl Plan {
     }
 
     /// Сколько BNB (wei) уходит с транзакцией обмена: сумма WRAP_ETH или 0. Ошибок нет.
+    pub(super) fn ekubo_proof(&self)->Option<super::ekubo_v2_fact::Proof>{super::ekubo_v2_fact::Proof::of(self,self.deadline)}
     pub fn value(&self) -> U256 {
+        if let Some(DirectCall::EkuboV2{key,..})=self.direct_market{return key.value();}
         if let Some(DirectCall::Vista { call, amount, .. }) = self.direct_market {
             return call.value(amount);
         }
@@ -185,7 +187,7 @@ impl Plan {
                     self.deadline,
                     rebate,
                 ),
-                DirectCall::EkuboV2(key)=>key.calldata(self.min_total,self.deadline),
+                DirectCall::EkuboV2{key,..}=>key.calldata(self.min_total,self.deadline),
                 DirectCall::Vault { id, input, amount } => super::vault_direct::data(
                     id, input, self.token_out, amount, self.min_total, self.wallet, self.deadline),
                 DirectCall::V2SupportingFee { input, amount } => super::fork_swap::swap_data(

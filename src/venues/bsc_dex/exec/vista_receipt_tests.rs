@@ -91,12 +91,15 @@ fn confirmed_native_wallet_fill_checks_original_recipient_input_and_terminal_min
                 );
                 assert!(p.signed_data(&data));
                 // eth_simulateV1 сохраняет адрес и содержимое события без полей добытой квитанции.
-                let logs: Vec<_> = result["logs"].as_array().unwrap().iter().map(|entry| {
-                    alloy::rpc::types::Log {
+                let logs: Vec<_> = result["logs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|entry| alloy::rpc::types::Log {
                         inner: serde_json::from_value(entry.clone()).unwrap(),
                         ..Default::default()
-                    }
-                }).collect();
+                    })
+                    .collect();
                 assert_eq!(
                     p.amounts(&logs, owner, input, output),
                     Some((amount, minimum))
@@ -123,6 +126,74 @@ fn confirmed_native_wallet_fill_checks_original_recipient_input_and_terminal_min
                     assert!(!wrong.signed_data(&foreign_data));
                 }
             }
+        }
+    }
+}
+
+#[test]
+fn rabbit_receipts_recover_the_payers_eth_and_friend_without_counting_router_inventory() {
+    let book: Value = serde_json::from_str(include_str!(
+        "../../../../tests/data/first_run_dex_2026-11-26/bunnyswap_base.json"
+    ))
+    .unwrap();
+    for row in book["cases"].as_array().unwrap() {
+        for (side, buy) in [("buy", true), ("sell", false)] {
+            let leg = &row[side];
+            let evidence = &leg["wallet_proof"];
+            let weth = addr(&evidence["wrapped"]);
+            let friend = addr(&evidence["token"]);
+            let wallet = addr(&evidence["wallet"]);
+            let data: Bytes =
+                serde_json::from_value(evidence["transaction"]["data"].clone()).unwrap();
+            let (input, output, form) = if buy {
+                (weth, friend, Form::RabbitEthIn)
+            } else {
+                (friend, weth, Form::RabbitEthOut)
+            };
+            let p = Proof {
+                call: Call {
+                    form,
+                    wrapped: weth,
+                    fee: U256::ZERO,
+                },
+                target: addr(&book["router"]),
+                wallet,
+                input,
+                output,
+                amount: number(&leg["amount"]),
+                minimum: number(&leg["received"]),
+                data_hash: keccak256(&data),
+            };
+            assert!(p.signed_data(&data));
+            let logs: Vec<_> = evidence["logs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| alloy::rpc::types::Log {
+                    inner: serde_json::from_value(v.clone()).unwrap(),
+                    ..Default::default()
+                })
+                .collect();
+            let revived: Proof = serde_json::from_value(serde_json::to_value(&p).unwrap()).unwrap();
+            assert_eq!(
+                revived.amounts(&logs, wallet, input, output),
+                Some((p.amount, p.minimum))
+            );
+            assert!(
+                revived
+                    .amounts(&logs, Address::ZERO, input, output)
+                    .is_none()
+            );
+            assert_eq!(
+                p.call.value(p.amount),
+                serde_json::from_value::<U256>(evidence["transaction"]["value"].clone()).unwrap()
+            );
+            let raised = Proof {
+                minimum: p.minimum + U256::ONE,
+                ..p
+            };
+            assert!(!raised.signed_data(&data));
+            assert!(raised.amounts(&logs, wallet, input, output).is_none());
         }
     }
 }

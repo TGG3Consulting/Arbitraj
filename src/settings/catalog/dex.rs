@@ -39,6 +39,7 @@ pub const DEX_KINDS: &[&str] = &[
     "v2_fork_executor_create2",
     "v2_fork_router_create2",
     "v2_fork_dual_create2",
+    "v2_fork_dual_create2_live_fee",
     "v2_deltaswap_router",
     "ethervista_native",
     "ethervista_v5",

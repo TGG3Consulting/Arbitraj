@@ -164,6 +164,22 @@ fn side(
 ) -> Result<(U256, bool), String> {
     let pick = |amount_in: U256, amount_out: U256| if buy { amount_in } else { amount_out };
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::Virtuals(s), PoolKind::V2) => {
+            let i=usize::from(token_in==s.asset);let o=1-i;
+            let grow=if buy{(1.0+b).sqrt()-1.0}else{1.0/(1.0-b).sqrt()-1.0};
+            let input=s.reserves[i].checked_mul(U256::from((grow*SCALE) as u128)).ok_or("Virtuals: переполнение полосы")?/U256::from(SCALE as u128);
+            if input.is_zero(){return Ok((U256::ZERO,true));}
+            let remaining=s.invariant.checked_div(s.reserves[i].checked_add(input).ok_or("Virtuals: переполнение резерва")?).ok_or("Virtuals: пустой резерв")?;
+            let output=s.reserves[o].saturating_sub(remaining);
+            let mut cap=s.backing[o];
+            if i==1 && let Some(threshold)=s.graduation {cap=cap.min(s.reserves[o].saturating_sub(threshold.saturating_add(U256::ONE)));}
+            if output<=cap{return Ok((pick(input,output),true));}
+            let floor=s.reserves[o]-cap;
+            let capped=(s.invariant/floor).saturating_sub(s.reserves[i]).min(input);
+            let left=s.invariant.checked_div(s.reserves[i].saturating_add(capped)).ok_or("Virtuals: пустой входной резерв")?;
+            let received=s.reserves[o].saturating_sub(left);
+            Ok((pick(capped,received),false))
+        }
         (PoolState::Memebox(s), PoolKind::V2) => {
             let i=usize::from(!zfo);
             xy_band(s.reserves[i],s.reserves[1-i],b,buy)

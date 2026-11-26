@@ -38,6 +38,11 @@ impl Probe {
         wallet: Address,
     ) -> GatewayResult<Option<Self>> {
         let head = white_state::head(ctx, &format!("{number:#x}")).await?;
+        if super::super::quote::ekubo_v2_pricing::enabled(e) {
+            let crate::core::types::PoolRef::Singleton{manager,id}=e.pool.reference else{return Ok(None);};
+            let state=Box::pin(super::super::pools::ekubo_v2::load(ctx,e.family,manager,id,number)).await?;
+            return Ok(Some(Self{market:None,state,wrapped:ctx.addr("dex.native_wrapped")?,head,multi:ctx.addr("dex.multicall3")?}));
+        }
         if e.family.variant == super::super::pools::family_variant::Variant::BunnySwap {
             let state =
                 super::super::pools::bunnyswap::native_state(ctx, e, &head.selector()).await?;
@@ -84,6 +89,7 @@ impl Probe {
         wallet: Address,
         now: u64,
     ) -> GatewayResult<(Vec<Approval>, Address, Bytes)> {
+        if super::super::quote::ekubo_v2_pricing::enabled(e){return super::super::exec::ekubo_v2_direct::probe(ctx,e,o,now);}
         let eth_in = o.token_in == self.wrapped;
         let form = if eth_in {
             Form::OfficialEthIn

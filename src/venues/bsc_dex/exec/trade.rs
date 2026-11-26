@@ -197,6 +197,10 @@ async fn run(
             return Err(ctx.err(ErrorCode::NoRoute, "Прямой маршрут должен быть одной долей"));
         }
     };
+    if route.mode==RouteMode::Direct && let [h]=leg.hops.as_slice() && q.reg.entry(&h.pool).is_some_and(|e|super::super::quote::ekubo_v2_pricing::enabled(&e)) {
+        let native=super::native::is_native(ctx,&req.asset) || super::native::cash(ctx,&ctx.text("venue.quote_asset")?,q.tokens.usdt(ctx)?);
+        return Box::pin(super::ekubo_v2_direct::NATIVE.scope(native,trade_direct::trade(q,env,nonces,req,&route,&leg,graph_mins))).await;
+    }
     if route.mode == RouteMode::Direct
         && let [h] = leg.hops.as_slice()
         && q.reg

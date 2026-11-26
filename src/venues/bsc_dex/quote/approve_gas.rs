@@ -73,6 +73,7 @@ pub async fn details(
         Side::Sell => (e.coin, num::to_units(quote.fillable_qty, coin_dec)),
     };
     let amount = amount.ok_or_else(bad)?;
+    if super::ekubo_v2_pricing::enabled(&e) && matches!(&e.pool.state,crate::core::types::PoolState::Ekubo(d) if d.native==Some(token)) {return Ok(None);}
     if quote.side == Side::Buy
         && super::vista_pricing::native_router(&e)
         && ctx

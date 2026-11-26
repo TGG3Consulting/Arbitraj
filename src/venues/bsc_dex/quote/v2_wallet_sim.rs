@@ -35,7 +35,7 @@ pub(in crate::venues::bsc_dex) struct V5Step {
 #[derive(Clone)]
 pub(in crate::venues::bsc_dex) enum Wire {
     Router02,
-    EkuboV2(super::super::pools::ekubo_v2::OrderKey),
+    EkuboV2(super::super::pools::ekubo_v2::OrderKey,Option<Address>),
     DirectModule { pool: Address },
     Vault(B256),
     Vista(super::super::exec::vista_wire::Call),
@@ -67,13 +67,14 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         )
     };
     let mut o=o;
-    if let Wire::EkuboV2(key)=&mut o.wire {key.amount=i128::try_from(o.amount).ok().filter(|n|*n>0).ok_or_else(fail)?;}
+    if let Wire::EkuboV2(key,_ )=&mut o.wire {key.amount=i128::try_from(o.amount).ok().filter(|n|*n>0).ok_or_else(fail)?;}
     let tx = |to, input| Call {
         from: o.payer,
         to,
         input,
     };
     let (wrapped, value) = match &o.wire {
+        Wire::EkuboV2(key,wrapped)=>(*wrapped,key.value()),
         Wire::Vista(v) => (
             if v.form == super::super::exec::vista_wire::Form::ModuleToken {
                 None
@@ -220,7 +221,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
 
 fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
     match &o.wire {
-        Wire::EkuboV2(key) => key.calldata(minimum,deadline),
+        Wire::EkuboV2(key,_) => key.calldata(minimum,deadline),
         Wire::Vault(id) => super::super::exec::vault_direct::data(
             *id, o.input, o.output, o.amount, minimum, o.payer, deadline,
         ),

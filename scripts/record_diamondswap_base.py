@@ -41,12 +41,12 @@ def facets(c,proxy,signatures):
     return dict(address=proxy,runtime=digest(root),selectors=selected,implementations=implementations,loupe=loupe,bytes=len(root),implementation_bytes=lengths)
 
 
-def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None):
-    token=next(t for t in market["tokens"] if t!=WETH)
+def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None, wrapped=WETH):
+    token=next(t for t in market["tokens"] if t!=wrapped)
     deadline=timestamp+120
     word=lambda n:"0x"+format(n,"064x")
     env={OWNER:{"balance":hex(10**19)},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
-         "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
+         "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(wrapped,16))}}}
     def leg(prefix, input_token, output_token, size, mode):
         target=EXEC if mode=="v5" else router
         approve=tx(input_token,"approve(address,uint256)",["address","uint256"],[target,size])
@@ -76,12 +76,12 @@ def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None)
     for size in sizes:
         for mode in ("v5","router"):
             if fund_sale is not None:
-                sell,_=leg([fund_sale(size)],token,WETH,size,mode)
+                sell,_=leg([fund_sale(size)],token,wrapped,size,mode)
                 trials.append(dict(mode=mode,size=str(size),sell=sell))
                 continue
-            fund=tx(WETH,"deposit()",value=size)
-            buy,next_prefix=leg([fund],WETH,token,size,mode)
-            sell,_=leg(next_prefix,token,WETH,int(buy["exact"]["received"]),mode)
+            fund=tx(wrapped,"deposit()",value=size)
+            buy,next_prefix=leg([fund],wrapped,token,size,mode)
+            sell,_=leg(next_prefix,token,wrapped,int(buy["exact"]["received"]),mode)
             trials.append(dict(mode=mode,size=str(size),buy=buy,sell=sell))
     return trials
 

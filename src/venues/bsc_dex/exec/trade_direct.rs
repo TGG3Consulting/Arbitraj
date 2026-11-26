@@ -134,6 +134,7 @@ pub async fn trade(
             prep.note.clone(),
         );
         sc.vista = super::vista_direct::proof(&p);
+        sc.ekubo=p.ekubo_proof();
         let min_out = p.min_total();
         let d = super::settlement_swap::with_parse(&sc, send_swap(env, &slot, p, guard))
             .await
@@ -156,6 +157,9 @@ pub async fn trade(
                 .await
                 .map_err(|e| sc.attach(e.with_tx(d.chain.clone())))?;
         }
+        if let Some(proof)=&sc.ekubo && let Some(receipt)=&d.receipt && receipt.status.to::<u64>()==1 {
+            proof.included(ctx,d.chain.hash,receipt).await.map_err(|e|sc.attach(e.with_tx(d.chain.clone())))?;
+        }
         let mut r = result::with_native_fact(
             ctx,
             req,
@@ -164,7 +168,7 @@ pub async fn trade(
             (tin, out_token),
             decs,
             router.as_slice(),
-            sc.vista.as_ref(),
+            sc.vista.as_ref(),sc.ekubo.as_ref(),
         )
         .map_err(|e| sc.attach(e))?;
         // Решение 177: «продажа по квотеру» — в хронологию сделки (exec/result.rs by допишет её к исполнителю).

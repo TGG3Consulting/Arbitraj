@@ -170,6 +170,7 @@ pub struct VirtualsState {
     pub buy_tax: u8,
     pub sell_tax: u8,
     pub launch_tax: u8,
+    pub external_swap: bool,
 }
 
 /// Оба резерва и обе фиксированные платы EtherVista на одном состоянии сети.

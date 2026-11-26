@@ -14,7 +14,7 @@ use rust_decimal::Decimal;
 
 pub(super) fn contains(legs: &[Leg]) -> bool {
     legs.iter()
-        .any(|h| h.entry.family.variant.external_algebra_swap())
+        .any(|h| super::super::pools::nami::external_swap(&h.entry))
 }
 pub(super) fn solo(legs: &[Leg]) -> bool {
     legs.len() == 1 && contains(legs)

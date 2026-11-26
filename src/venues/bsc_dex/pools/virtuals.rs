@@ -10,12 +10,14 @@ use alloy::{sol, sol_types::SolCall};
 use alloy_primitives::{Address, B256, Bytes, U256, keccak256};
 use serde_json::Value;
 
-sol! {pub(crate) interface IBond {
+sol! {interface IBond {
     function tokenA() view returns(address);
     function tokenB() view returns(address);
     function router() view returns(address);
     function factory() view returns(address);
     function assetToken() view returns(address);
+    function taxVault() view returns(address);
+    function taxManager() view returns(address);
     function hasRole(bytes32 role,address account) view returns(bool);
     function getPair(address a,address b) view returns(address);
     function tokenInfo(address token) view returns(bytes);
@@ -117,6 +119,12 @@ pub(crate) async fn market(
     } else {
         (0, Some(graduation))
     };
+    let external_swap = if unicorn {
+        false
+    } else {
+        views!(ctx,at; receiver:factory=>IBond::taxVaultCall{}, manager:router=>IBond::taxManagerCall{});
+        receiver == manager
+    };
     if ctx.settings.generation() != generation {
         return Err(ctx.err(
             ErrorCode::StaleData,
@@ -133,6 +141,7 @@ pub(crate) async fn market(
         buy_tax,
         sell_tax: u8::try_from(sell).unwrap_or(100),
         launch_tax,
+        external_swap,
     })
 }
 

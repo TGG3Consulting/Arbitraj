@@ -54,6 +54,8 @@ pub struct CallResult {
 pub struct SimLog {
     pub address: Address,
     #[serde(default)]
+    pub data: alloy_primitives::Bytes,
+    #[serde(default)]
     pub topics: Vec<alloy_primitives::B256>,
 }
 

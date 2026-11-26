@@ -22,9 +22,14 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         return Vec::new();
     };
     let input = if i.side == Side::Buy { i.usdt } else { i.coin };
+    let native = super::super::exec::native::is_native(&q.ctx, &i.asset)
+        || super::super::exec::native::cash(&q.ctx, &i.usdt_ticker, i.usdt);
     let mut choices = Vec::new();
     for e in &i.entries {
-        if !enabled(e) || !matches!(&e.pool.state,PoolState::Ekubo(d) if d.native.is_none()) {
+        let PoolState::Ekubo(d) = &e.pool.state else {
+            continue;
+        };
+        if !enabled(e) || d.native.is_some() != native {
             continue;
         }
         let Some(key) = ekubo_v2::order(e, input, U256::ONE) else {
@@ -42,7 +47,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         let exec = Execution {
             mode: RouteMode::Direct,
             target,
-            wire: Wire::EkuboV2(key),
+            wire: Wire::EkuboV2(key, d.native),
         };
         if let Ok(choice) = Box::pin(v2_execution::option(q, i, e.clone(), payer, exec, head)).await
         {

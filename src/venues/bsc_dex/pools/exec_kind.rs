@@ -193,6 +193,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         | "v2_fork_executor"
         | "v2_fork_executor_create2"
         | "v2_fork_dual_create2"
+        | "v2_fork_dual_create2_live_fee"
         | "v2_diamond_router" | "v2_diamond_create"
         | "v2_fork_executor_create2_live_fee" | "candyswap_v2" => ExecKind::V2,
         // Решение 483: Ramses CL — swap(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data) как у V3

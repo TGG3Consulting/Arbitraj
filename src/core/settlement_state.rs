@@ -50,6 +50,16 @@ pub struct Path {
     pub movement: Option<Movement>,
 }
 impl Path {
+    /// Разрешает восстановление только сохранённой сделки в том же рынке. Старое поручение
+    /// без снимка привязано к единственному ранее реализованному профилю.
+    pub fn permits(&self, p: &Plan, m: &super::settlement_market::Market) -> bool {
+        self.plan == *p
+            && self
+                .market
+                .as_ref()
+                .map_or_else(|| m.legacy(), |old| old.identical(m))
+    }
+
     pub(super) fn steps_confirmed(&self) -> bool {
         self.conversion.is_some() && self.movement.is_some()
     }

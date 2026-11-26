@@ -25,7 +25,7 @@ pub(super) async fn save(db: &Db, path: &Path, prev: Option<&Path>) -> Result<()
         .map(serde_json::to_string)
         .transpose()
         .map_err(|e| e.to_string())?;
-    let deal=path.plan.deal.clone();
+    let deal = path.plan.deal.clone();
     let n=db.ledger().write(move |c| {
         let now=Utc::now().to_rfc3339();
         let Some(previous)=previous else {
@@ -51,8 +51,10 @@ pub(super) async fn save(db: &Db, path: &Path, prev: Option<&Path>) -> Result<()
 }
 
 pub async fn get(db: &Db, p: &Plan) -> Result<Option<Path>, String> {
-    let mut possible=rows(db,Some(&p.deal)).await?;
-    if possible.len()>1{return Err("У исходной сделки больше одного сохранённого денежного поручения".into());}
+    let mut possible = rows(db, Some(&p.deal)).await?;
+    if possible.len() > 1 {
+        return Err("У исходной сделки больше одного сохранённого денежного поручения".into());
+    }
     Ok(possible.pop())
 }
 

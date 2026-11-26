@@ -81,11 +81,14 @@ struct Action {
 
 tokio::task_local! { static ACTION: Action; }
 
-tokio::task_local! { static CHECK: std::sync::Arc<dyn Fn()->GatewayResult<()> + Send + Sync>; }
+tokio::task_local! { static CHECK: std::sync::Arc<dyn Fn(&PendingRef)->GatewayResult<()> + Send + Sync>; }
 
 /// Поздняя сверка снимка маршрута перед записью первичного идентификатора и внешней отправкой.
-pub async fn checked<T>(guard:impl Fn()->GatewayResult<()>+Send+Sync+'static,f:impl Future<Output=T>)->T {
-    CHECK.scope(std::sync::Arc::new(guard),f).await
+pub async fn checked<T>(
+    guard: impl Fn(&PendingRef) -> GatewayResult<()> + Send + Sync + 'static,
+    f: impl Future<Output = T>,
+) -> T {
+    CHECK.scope(std::sync::Arc::new(guard), f).await
 }
 /// Требуется ли этой операции сохранение идентификатора до отправки.
 pub fn active() -> bool {
@@ -132,7 +135,9 @@ pub async fn load(db: &Db, key: &str) -> Result<Option<Entry>, String> {
 
 /// Непосредственно перед внешней отправкой сохраняет реальный prepared ID. Только выигравший INSERT может отправить.
 pub async fn before_send(lookup: &PendingRef) -> GatewayResult<()> {
-    if let Ok(result)=CHECK.try_with(|guard|guard()) {result?;}
+    if let Ok(result) = CHECK.try_with(|guard| guard(lookup)) {
+        result?;
+    }
     let Ok(action) = ACTION.try_with(Clone::clone) else {
         return Ok(());
     };
@@ -150,6 +155,9 @@ pub async fn before_send(lookup: &PendingRef) -> GatewayResult<()> {
             params![KIND,key,body,Utc::now().to_rfc3339(),LEGACY])
     }).await.map_err(|e| error(e.to_string()))?;
     if inserted == 1 {
+        if let Ok(r) = CHECK.try_with(|guard| guard(lookup)) {
+            r?;
+        }
         return Ok(());
     }
     let prior = load(&db, &id)

@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 pub struct Market {
     pub dex: VenueId,
     pub chain: ChainId,
-    pub evm_chain_id:u64,
-    pub cex_network:String,
+    pub evm_chain_id: u64,
+    pub cex_network: String,
     pub cex: VenueId,
     pub asset: Asset,
     pub quote: String,
@@ -55,9 +55,25 @@ impl Market {
             return Err("Требуются площадка DEX и исходная биржа".into());
         }
         let chain = super::chain::chain_at(&core.inner.deps.settings, dex)?;
-        let at=At{venue:Some(&dex.0),coin:None};
-        let evm_chain_id=core.inner.deps.settings.integer("dex.evm_chain_id",at).map_err(|e|e.message)?;
-        let cex_network=crate::gateway::own_nets::name_of(&core.inner.deps.settings,At{venue:Some(&cex.0),coin:None},Some(&chain)).map_err(|e|e.message)?;
+        let at = At {
+            venue: Some(&dex.0),
+            coin: None,
+        };
+        let evm_chain_id = core
+            .inner
+            .deps
+            .settings
+            .integer("dex.evm_chain_id", at)
+            .map_err(|e| e.message)?;
+        let cex_network = crate::gateway::own_nets::name_of(
+            &core.inner.deps.settings,
+            At {
+                venue: Some(&cex.0),
+                coin: None,
+            },
+            Some(&chain),
+        )
+        .map_err(|e| e.message)?;
         let asset = configured(core, dex)?.ok_or("Не задан контракт расчётного токена DEX")?;
         let quote = ticker(core, cex)?;
         if quote == asset.ticker {
@@ -65,19 +81,20 @@ impl Market {
                 "Расчётные валюты сторон совпадают, отдельная конверсия не требуется".into(),
             );
         }
-        if quote != evm_profiles::LEDGER_QUOTE {
-            return Err(
-                "Для перевода результата в валюту учёта требуется дополнительный исполнимый рынок"
-                    .into(),
-            );
-        }
         Ok(Self {
             dex: dex.clone(),
-            chain,evm_chain_id,cex_network,
+            chain,
+            evm_chain_id,
+            cex_network,
             cex: cex.clone(),
             asset,
             quote,
         })
+    }
+    /// У полного арбитражного плана результат выражен в валюте портфельного учёта.
+    /// Котировка самой конверсии может использовать любую настроенную пару.
+    pub fn accounting(&self)->Result<(),String>{
+        if self.quote==evm_profiles::LEDGER_QUOTE{Ok(())}else{Err(format!("Для оценки {} в валюте учёта требуется ещё одна исполнимая конверсия",self.quote))}
     }
     pub fn direction(core: &Core, d: &Direction) -> Result<Self, String> {
         let (dex, cex) = if super::daily_venue::is_dex(core, &d.buy_on.0) {
@@ -97,21 +114,46 @@ impl Market {
     pub fn identical(&self, other: &Self) -> bool {
         self == other && self.asset.ticker == other.asset.ticker
     }
-    pub fn legacy(&self)->bool{
-        self.asset.contract.is_some_and(|a|evm_profiles::legacy_settlement(&self.dex.0,self.chain.as_str(),&self.asset.ticker,a,&self.quote))
-            && evm_profiles::legacy_cash_venue(&self.cex.0,&self.cex_network,self.evm_chain_id)
+    pub fn legacy(&self) -> bool {
+        self.asset.contract.is_some_and(|a| {
+            evm_profiles::legacy_settlement(
+                &self.dex.0,
+                self.chain.as_str(),
+                &self.asset.ticker,
+                a,
+                &self.quote,
+            )
+        }) && evm_profiles::legacy_cash_venue(&self.cex.0, &self.cex_network, self.evm_chain_id)
     }
-    pub fn ensure(&self,core:&Core)->Result<(),String>{
-        if self.identical(&Self::new(core,&self.dex,&self.cex)?) {Ok(())}else{Err("Изменились сеть, площадка или валюты сохранённой операции".into())}
+    pub fn ensure(&self, core: &Core) -> Result<(), String> {
+        if self.identical(&Self::new(core, &self.dex, &self.cex)?) {
+            Ok(())
+        } else {
+            Err("Изменились сеть, площадка или валюты сохранённой операции".into())
+        }
     }
-    pub fn guard(&self,core:&Core)->impl Fn()->crate::gateway::errors::GatewayResult<()>+Send+Sync+'static{
-        let c=core.clone();
-        let m=self.clone();
-        move|| m.ensure(&c).map_err(|e|crate::gateway::errors::GatewayError::new(crate::gateway::errors::ErrorCode::NotConfigured,Some(m.dex.clone()),e))
+    pub fn guard(
+        &self,
+        core: &Core,
+    ) -> impl Fn(&crate::gateway::pending::PendingRef) -> crate::gateway::errors::GatewayResult<()>
+    + Send
+    + Sync
+    + 'static {
+        let c = core.clone();
+        let m = self.clone();
+        move |_| {
+            m.ensure(&c).map_err(|e| {
+                crate::gateway::errors::GatewayError::new(
+                    crate::gateway::errors::ErrorCode::NotConfigured,
+                    Some(m.dex.clone()),
+                    e,
+                )
+            })
+        }
     }
     pub fn network(&self, core: &Core, withdraw: bool) -> Result<CoinNetworkInfo, String> {
         self.ensure(core)?;
-        let network=&self.cex_network;
+        let network = &self.cex_network;
         let all = rd(&core.inner.networks);
         let mut rows = all
             .get(&self.cex)

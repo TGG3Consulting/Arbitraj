@@ -112,6 +112,16 @@ pub trait Venue: Send + Sync {
         false
     }
 
+    /// Сверяет сохранённый символ реальной заявки с реквизитами расчётной пары.
+    fn matches_settlement_order(
+        &self,
+        _pending: &super::pending::PendingRef,
+        _asset: &str,
+        _quote: &str,
+    ) -> bool {
+        false
+    }
+
     /// Сохраняет реальный ID вывода Base USDC до отправки и умеет сверить его после потери ответа.
     fn supports_settlement_withdrawal(&self) -> bool {
         false

@@ -131,6 +131,19 @@ impl Venue for Gate {
     fn supports_settlement_order(&self) -> bool {
         true
     }
+    fn matches_settlement_order(
+        &self,
+        pending: &crate::gateway::pending::PendingRef,
+        asset: &str,
+        quote: &str,
+    ) -> bool {
+        pending.symbol.as_deref().is_some_and(|s| {
+            s.strip_prefix(asset)
+                .and_then(|part| part.strip_prefix('_'))
+                == Some(quote)
+        })
+    }
+
     fn supports_settlement_withdrawal(&self) -> bool {
         true
     }

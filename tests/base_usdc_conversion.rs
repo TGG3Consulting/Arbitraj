@@ -54,7 +54,8 @@ fn recorded(side: Side) -> (QuoteSnapshot, SpotPairState, Market) {
         contract: Some(address),
     };
     let market = Market {
-        evm_chain_id:8453,cex_network:"BASEEVM".into(),
+        evm_chain_id: 8453,
+        cex_network: "BASEEVM".into(),
         dex: VenueId("base_dex".into()),
         cex: venue.clone(),
         chain: ChainId("base".into()),
@@ -133,4 +134,108 @@ async fn buy_and_sell_use_different_liquidity_and_round_down() {
             .is_err()
     );
     assert!(settlement::require_same("USDC", "USDT").is_err());
+}
+
+/// Историческая SQLite-схема и запись намерения до передачи площадке. Исходные цены и сеть взяты
+/// из публичного снимка. Здесь проверяется только восстановление записанных реквизитов.
+#[tokio::test]
+async fn legacy_cash_keys_reopen_without_authorizing_a_different_market() {
+    use arb::{
+        core::{
+            settlement_effect, settlement_path,
+            types::{DexAccountId, Direction, TradeRequest},
+        },
+        gateway::{
+            pending::PendingRef,
+            settlement_intent::{Entry, Request},
+        },
+        storage::db::Db,
+    };
+    let (book, _, market) = recorded(Side::Buy);
+    let first = &book.book().unwrap().asks[0];
+    let deal = "schema-replay";
+    let target = Direction {
+        asset: market.asset.clone(),
+        buy_on: market.dex.clone(),
+        sell_on: market.cex.clone(),
+    };
+    let wallet = DexAccountId("schema-wallet".into());
+    let old = serde_json::json!({"plan":{"deal":deal,"direction":target,"cex":market.cex,
+        "wallet":wallet,"leg":{"Fund":{"budget_usdt":first.qty*first.price,"buy_usdc":first.qty,
+        "maximum_price":first.price,"required_wallet_usdc":first.qty,"target_qty":first.qty,
+        "sell_qty":first.qty,"minimum_target_bid":first.price}}},"conversion":null,"movement":null});
+    let path: settlement_path::Path = serde_json::from_value(old.clone()).unwrap();
+    let prepared = TradeRequest {
+        venue: market.cex.clone(),
+        asset: market.asset.clone(),
+        side: Side::Buy,
+        qty: first.qty,
+        worst_price: first.price,
+        deal_id: deal.into(),
+        route: None,
+        exit_position: false,
+        remeasure: None,
+    };
+    let entry = Entry {
+        operation: Request::Order(Box::new(prepared)),
+        lookup: PendingRef::order("USDC_USDT", "t-schema-replay", first.qty),
+        result: None,
+    };
+    let dir = std::env::temp_dir().join(format!(
+        "settlement-schema-{}-{}",
+        std::process::id(),
+        chrono::Utc::now().timestamp_nanos_opt().unwrap()
+    ));
+    std::fs::create_dir(&dir).unwrap();
+    let filename = dir.join("test.sqlite");
+    {
+        let db = Db::open(&filename).unwrap();
+        let path_id = serde_json::to_string(&(deal, &target)).unwrap();
+        let order_id = serde_json::to_string(&("order", deal, &market.cex, Side::Buy)).unwrap();
+        let body = serde_json::to_string(&entry).unwrap();
+        db.ledger().write(move|c|{
+            c.execute("INSERT INTO core_state(kind,id,body,updated_at) VALUES('base_settlement_path',?1,?2,'schema')",rusqlite::params![path_id,old.to_string()])?;
+            c.execute("INSERT INTO core_state(kind,id,body,updated_at) VALUES('base_settlement_action',?1,?2,'schema')",rusqlite::params![order_id,body])?;
+            Ok(())
+        }).await.unwrap();
+    }
+    {
+        let db = Db::open(&filename).unwrap();
+        let row = settlement_path::get(&db, &path.plan)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(row.permits(&path.plan, &market));
+        assert!(
+            settlement_effect::order_record(&db, &market, deal, &market.cex, Side::Buy)
+                .await
+                .unwrap()
+                .is_some()
+        );
+        let mut other = market.clone();
+        other.evm_chain_id = 1;
+        assert!(!row.permits(&path.plan, &other));
+        assert!(
+            settlement_effect::order_record(&db, &other, deal, &market.cex, Side::Buy)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let mut alias = market.clone();
+        alias.cex_network = "ETH".into();
+        assert!(!row.permits(&path.plan, &alias));
+        let mut reassigned = path.plan.clone();
+        std::mem::swap(
+            &mut reassigned.direction.buy_on,
+            &mut reassigned.direction.sell_on,
+        );
+        assert!(
+            !settlement_path::get(&db, &reassigned)
+                .await
+                .unwrap()
+                .unwrap()
+                .permits(&reassigned, &market)
+        );
+    }
+    std::fs::remove_dir_all(dir).unwrap();
 }

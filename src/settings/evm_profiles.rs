@@ -166,4 +166,6 @@ pub fn settlement_contract(
 }
 
 /// У первого реализованного денежного пути сохранённый биржевой клиентский ID относится к этому сетевому справочнику.
-pub fn legacy_cash_venue(venue:&str,network:&str,chain_id:u64)->bool{venue=="gate" && network=="BASEEVM" && chain_id==8453}
+pub fn legacy_cash_venue(venue: &str, network: &str, chain_id: u64) -> bool {
+    venue == "gate" && network == "BASEEVM" && chain_id == 8453
+}

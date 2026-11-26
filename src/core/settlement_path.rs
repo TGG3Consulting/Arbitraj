@@ -14,6 +14,7 @@ use super::{
 pub async fn run(core: &Core, p: &Plan) -> Result<Path, String> {
     let db = &core.inner.deps.db;
     let market = super::settlement_market::Market::direction(core, &p.direction)?;
+    market.accounting()?;
     let dex = market.dex.clone();
     if p.deal.is_empty()
         || p.cex != market.cex
@@ -22,14 +23,7 @@ pub async fn run(core: &Core, p: &Plan) -> Result<Path, String> {
         return Err("Исходная биржа, направление или сеть не совпадают с денежным путём".into());
     }
     let mut path = match get(db, p).await? {
-        Some(v)
-            if v.plan == *p
-                && v.market
-                    .as_ref()
-                    .map_or_else(|| market.legacy(), |m| m.identical(&market)) =>
-        {
-            v
-        }
+        Some(v) if v.permits(p, &market) => v,
         Some(_) => return Err("Сохранённое поручение конверсии отличается от переданного".into()),
         None => {
             let v = Path {

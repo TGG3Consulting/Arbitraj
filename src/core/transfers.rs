@@ -461,15 +461,18 @@ async fn go(
         // Решение 180: лимит выводов биржи-отправителя (withdraw_limit.rs; не задан — сразу, как раньше).
         super::withdraw_limit::take(core, deal, from, &on_from.ticker).await;
         let result = if let Some(market) = settlement {
-            crate::gateway::settlement_intent::checked(market.guard(core),super::settlement_effect::withdraw(
-                &deps.db,
-                market,
-                gw_from.as_ref(),
-                &req,
-                to,
-                acc,
-                prepared_network.as_ref(),
-            ))
+            crate::gateway::settlement_intent::checked(
+                market.guard(core),
+                super::settlement_effect::withdraw(
+                    &deps.db,
+                    market,
+                    gw_from.as_ref(),
+                    &req,
+                    to,
+                    acc,
+                    prepared_network.as_ref(),
+                ),
+            )
             .await
         } else {
             match &prepared_network {

@@ -69,6 +69,12 @@ pub async fn withdraw(
             "Площадка не сохраняет идентификатор вывода расчётного токена до отправки",
         ));
     }
+    if venue == m.cex && req.network != m.cex_network {
+        return Err(uncertain(
+            &venue,
+            "Имя сети вывода отличается от сохранённой сети биржи",
+        ));
+    }
     let key = withdrawal_key(m, &req.deal_id, &venue, to, account)?;
     let operation = Request::Withdrawal(Box::new(req.clone()));
     let result = match log::load(db, &key)

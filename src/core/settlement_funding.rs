@@ -72,7 +72,7 @@ pub(super) async fn fund_for(
     let mut chosen = None;
     while low <= high {
         let mid = low + (high - low) / 2;
-        let qty=quantity(mid,step).ok_or("Размер ордера вне диапазона")?;
+        let qty = quantity(mid, step).ok_or("Размер ордера вне диапазона")?;
         if qty <= Decimal::ZERO {
             low = mid + 1;
             continue;
@@ -124,19 +124,21 @@ pub(super) async fn fund_for(
     chosen.ok_or_else(||"Нет объёма спотовой конверсии, который после комиссии и округления вывода финансирует покупку на конверсии".into())
 }
 
-
-fn quantity(lots:u128,step:Decimal)->Option<Decimal>{
+fn quantity(lots: u128, step: Decimal) -> Option<Decimal> {
     use rust_decimal::prelude::FromPrimitive;
     Decimal::from_u128(lots)?.checked_mul(step)
 }
 
 #[cfg(test)]
-mod tests{
+mod tests {
     use super::*;
     #[test]
-    fn lot_count_must_fit_a_decimal_before_multiplication(){
-        assert_eq!(quantity(u128::MAX,Decimal::ONE),None);
-        assert_eq!(quantity((1_u128<<96)-1,Decimal::ONE),Some(Decimal::MAX));
-        assert_eq!(quantity((1_u128<<96)-1,Decimal::TWO),None);
+    fn lot_count_must_fit_a_decimal_before_multiplication() {
+        assert_eq!(quantity(u128::MAX, Decimal::ONE), None);
+        assert_eq!(
+            quantity((1_u128 << 96) - 1, Decimal::ONE),
+            Some(Decimal::MAX)
+        );
+        assert_eq!(quantity((1_u128 << 96) - 1, Decimal::TWO), None);
     }
 }

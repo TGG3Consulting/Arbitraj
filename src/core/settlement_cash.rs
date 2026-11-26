@@ -170,6 +170,24 @@ pub async fn convert(
         }
     };
     m.ensure(core)?;
-    let fill=crate::gateway::settlement_intent::checked(m.guard(core),effect::order(&deps.db,m,gw.as_ref(),req)).await.map_err(|e|e.message)?;
+    let check = m.guard(core);
+    let spot = gw.clone();
+    let pair = m.clone();
+    let fill = crate::gateway::settlement_intent::checked(
+        move |key| {
+            check(key)?;
+            if !spot.matches_settlement_order(key, &pair.asset.ticker, &pair.quote) {
+                return Err(crate::gateway::errors::GatewayError::new(
+                    crate::gateway::errors::ErrorCode::BadResponse,
+                    Some(pair.cex.clone()),
+                    "Подготовленный ордер относится к другой торговой паре",
+                ));
+            }
+            Ok(())
+        },
+        effect::order(&deps.db, m, gw.as_ref(), req),
+    )
+    .await
+    .map_err(|e| e.message)?;
     cash(m, &fill, budget)
 }

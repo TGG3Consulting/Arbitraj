@@ -61,9 +61,9 @@ def origin(name,factory,c):
     return dict(url=url,runtime=digest(raw(code)),creation_code_hash=init,invariant=lines)
 
 
-def directory(name,c):
-    factory,den,fee,reason=FACTORIES[name]
-    proof=origin(name,factory,c)
+def directory(name,c,*,config=None,network="ethereum",proof=None,wrapped=WETH,stables=STABLES,funding_router=FUNDING):
+    factory,den,fee,reason=config or FACTORIES[name]
+    proof=proof or origin(name,factory,c)
     total,=c.one(factory,"allPairsLength()",returns=["uint256"])
     addresses=[decode(["address"],x)[0] for x in posts(c,[(factory,"allPairs(uint256)",["uint256"],[i]) for i in range(total)])]
     if not total or len(set(addresses))!=total:
@@ -85,7 +85,7 @@ def directory(name,c):
     for row in rows:
         if any(decode(["address"],next(checks))[0]!=row["pool"] for _ in (0,1)):
             raise ValueError("getPair failed for "+row["pool"])
-    for asset in (WETH,*STABLES):
+    for asset in (wrapped,*stables):
         available=[r for r in rows if asset in r["tokens"] and min(map(int,r["reserves"]))>0]
         if available:break
     ordered=sorted(available,key=lambda r:-int(r["reserves"][r["tokens"].index(asset)]))
@@ -93,18 +93,21 @@ def directory(name,c):
     for row in ordered:
         pool=row["pool"]
         code=rpc(c.endpoint,"eth_getCode",[pool,c.selector])
-        entry=dict(network="ethereum",dex=name,pool=pool,tokens=row["tokens"],factory=factory,
+        entry=dict(network=network,dex=name,pool=pool,tokens=row["tokens"],factory=factory,
                    runtime_hash=digest(raw(code)),creation_code_hash=proof["creation_code_hash"],
                    verify_pair_boundary=True,invariant_error=reason)
         if fee is None:
-            entry.update(fee_target=factory,fee_getter="getFeeForPair(address)")
-            actual_fee,=c.one(factory,entry["fee_getter"],["address"],[pool],["uint256"])
+            getter=proof.get("fee_getter","getFeeForPair(address)")
+            entry.update(fee_target=factory,fee_getter=getter)
+            token_args=getter=="getFeeForPair(address,address)"
+            actual_fee,=c.one(factory,getter,["address","address"] if token_args else ["address"],
+                row["tokens"] if token_args else [pool],["uint256"])
         else:
             actual_fee=fee
         entry["fee_fraction"]=[den,actual_fee]
-        if asset!=WETH:entry.update(funded_asset=asset,funding_router=FUNDING)
+        if asset!=wrapped:entry.update(funded_asset=asset,funding_router=funding_router)
         try:
-            chain=json.loads((ROOT/"tests/data/base_ethereum_networks.json").read_bytes())["ethereum"]
+            chain=json.loads((ROOT/"tests/data/base_ethereum_networks.json").read_bytes())[network]
             if chain["hash"]!=c.selector["blockHash"]:
                 raise RuntimeError("executor capture and registry refer to different blocks")
             replay=measure(entry,chain,endpoint=c.endpoint)

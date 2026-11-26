@@ -115,7 +115,12 @@ def measure(row, chain, endpoint=None):
         if target not in (pool, row["factory"]):
             raise ValueError("неизвестный источник комиссии")
         getter = row["fee_getter"]
-        data = calldata(getter, ["address"], [pool]) if getter == "getFeeForPair(address)" else calldata(getter)
+        if getter == "getFeeForPair(address,address)":
+            data=calldata(getter,["address","address"],tokens)
+        elif getter == "getFeeForPair(address)":
+            data=calldata(getter,["address"],[pool])
+        else:
+            data=calldata(getter)
         observed_fee, = decode(["uint256"], view(url, tag, target, data))
         if fee != observed_fee:
             raise ValueError("комиссия в ответе контракта не совпала со снимком")

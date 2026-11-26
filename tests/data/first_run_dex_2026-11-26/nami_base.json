@@ -1341,7 +1341,8 @@
         "measured_tick_steps": 2,
         "lower_word": -790,
         "upper_word": -790
-      }
+      },
+      "liquidity": "4999036040812112"
     },
     {
       "pool": "0x0b32f738a582126d395c796332b51e534e04c7d0",
@@ -2488,7 +2489,8 @@
         "measured_tick_steps": 4,
         "lower_word": -251,
         "upper_word": -251
-      }
+      },
+      "liquidity": "11469601495"
     }
   ],
   "raw": [
@@ -2797,6 +2799,18 @@
       "signature": "ticks(int24)",
       "data": "0xf30dba93ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff066e",
       "response": "0x00000000000000000000000000000000000000000000000000000001038c53d5fffffffffffffffffffffffffffffffffffffffffffffffffffffffefc73ac2bffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff05f6ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0678000000000000000000000000000000000169593e441a3cf773992da1aa282658000000000000000000000000000000000000a3eeb9489b699eb7097364d696ef"
+    },
+    {
+      "to": "0x0e8af367dba0c9cb4674d38539ef3465a25a7237",
+      "signature": "liquidity()",
+      "data": "0x1a686502",
+      "response": "0x0000000000000000000000000000000000000000000000000011c298c76e9650"
+    },
+    {
+      "to": "0x0b32f738a582126d395c796332b51e534e04c7d0",
+      "signature": "liquidity()",
+      "data": "0x1a686502",
+      "response": "0x00000000000000000000000000000000000000000000000000000002aba43ad7"
     }
   ],
   "v5_runtime_keccak": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125"

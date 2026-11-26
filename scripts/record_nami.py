@@ -87,6 +87,7 @@ def capture(net):
         if mev_ex==EXEC or mev_ex==quoter:raise ValueError("Квотер или V5 имеют особые условия MEV")
         row=dict(pool=pool,tokens=[t0,t1],plugin=pl,beacon=beacon,implementation=imp,extension=ext,
                  proxy_template="0x"+keccak(bytes(code)).hex(),mevx_executor=mev_ex,mevx_router=mev_router,
+                 liquidity=str(c.one(pool,"liquidity()",returns=["uint128"])[0]),
                  state=[str(x) if isinstance(x,int) and not isinstance(x,bool) else x for x in gs],directional=fees,
                  cases=[])
         for a,b,amounts in ((coin,usd,sizes),(usd,coin,[10**6,10**7])):

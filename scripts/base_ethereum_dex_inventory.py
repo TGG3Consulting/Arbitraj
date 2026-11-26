@@ -183,6 +183,31 @@ def tables(network, snapshots, profiles):
                        if base else "У Classic проверены отдельные фабрики динамической и постоянной комиссии: "
                        "у каждой по два пула с четырьмя котировками getAmountsOut. ")
                     + f"[Реестры, код, тики и котировки](../{kyber})."])
+    hydrex = "tests/data/first_run_dex_2026-11-26/hydrex_base.json"
+    if base and Path(hydrex).exists():
+        out.extend(["", "Hydrex Integral · фабрика подтвердила все 20 пулов из выборки GeckoTerminal через poolByPair. "
+                    "Для WETH/USDC, USDC/cbBTC и WETH/cbBTC измерены 12 обменов V5 и 12 защитных отказов при "
+                    "повышении минимума на единицу. QuoterV2, VirtualQuoter и изменение баланса владельца совпали. "
+                    "Поле fee официального QuoterV2 во всех случаях равно 500. На этих пулах пользователь заплатил "
+                    "соответственно 375, 145 и 124 миллионных доли. У шести операций плагин затем провёл собственный "
+                    "обмен по тарифу 1. Вид algebra_integral_hydrex по событию Swap перечитывает конечное состояние "
+                    "блока и комиссию следующей сделки из fee(). Двух, трёх и пяти инициализированных тиков в каждую "
+                    "сторону соответственно хватило для измеренных объёмов. Общую настройку глубины "
+                    "dex.integral_tick_steps для рабочего списка пулов задаёт владелец. "
+                    f"[Фабрика, квотеры, карты тиков и исполнение](../{hydrex})."])
+    saddle = "tests/data/first_run_dex_2026-11-26/saddle_ethereum.json"
+    if not base and Path(saddle).exists():
+        out.extend(["", "Saddle Finance · обследованы все 33 пула официального PoolRegistry на Ethereum. "
+                    "У 28 пулов paused() вернул true и swap в обе стороны завершился Pausable: paused. "
+                    "У EuroBP и исключённого из реестра FRAXBP-alUSD нулевые балансы. "
+                    "bUSD Metapool и baoUSD-FRAXBP используют реализацию PermissionlessMetaSwap. "
+                    "Профиль включает один PermissionlessSwap для BUSD, USDC и USDT. В реестре он помечен "
+                    "isSaddleApproved=false. Код реализации и двух связанных библиотек совпал с артефактами Saddle. "
+                    "Двенадцать симуляций от реальных держателей покрыли шесть направлений и два размера. "
+                    "В каждом случае calculateSwap совпал с возвратом swap и зачисленной суммой, повышение "
+                    "минимума на единицу вызвало откат. На контрольном блоке резервы составляли лишь "
+                    "6,180002642489249644 BUSD, 4,508036 USDC и 4,333058 USDT. "
+                    f"[Реестр, исходники и обмены](../{saddle})."])
     wombat = f"tests/data/first_run_dex_2026-11-26/wombat_{network}.json"
     if Path(wombat).exists():
         out.extend(["", "Wombat · " + ("из двух опубликованных пулов Base в профиль включён USDS/USDbC. "

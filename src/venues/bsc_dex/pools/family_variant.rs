@@ -15,6 +15,8 @@
 pub enum Variant {
     /// Исходник, по которому сделан вид (поведение без изменений).
     Base,
+    /// Hydrex Integral Base: после Swap плагин может обменять собственные комиссии в том же пуле по отдельному тарифу.
+    HydrexIntegral,
     /// Unchain X (UNX-V3-Contracts f6185ae6): slot0, Swap и callback от Uniswap V3, плюс геттер lmPool().
     UniswapV3Lm,
     /// KyberSwap Elastic v1 (dex.kind = kyber_elastic_v1): код фабрики 0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a в любой
@@ -112,6 +114,7 @@ pub fn of(kind: &str) -> Variant {
         "curve_stableswap_meta" => Variant::CurveMeta,
         "curve_stableswap_oracle" => Variant::CurveOracle,
         "curve_crypto2_v1" => Variant::CryptoPair,
+        "algebra_integral_hydrex" => Variant::HydrexIntegral,
         "v3_fork_ramses" => Variant::RamsesCl,
         "v3_fork_uniswap_lm" => Variant::UniswapV3Lm,
         "v2_fork_executor_create2" => Variant::V2Create2,

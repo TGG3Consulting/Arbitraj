@@ -474,7 +474,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "thena_fusion" => (PoolKind::Cl, Proto::Algebra, true, false, false),
         // Algebra Integral (THENA V3, DexSwap; решение 188): как thena_fusion — в графе (математика swap_algebra),
         // исполнение — шаг ALGEBRA контракта-исполнителя (тот же swap + algebraSwapCallback, exec_kind.rs).
-        "algebra_integral" => (PoolKind::Cl, Proto::AlgebraIntegral, true, false, false),
+        "algebra_integral" | "algebra_integral_hydrex" => {
+            (PoolKind::Cl, Proto::AlgebraIntegral, true, false, false)
+        }
         // Решение 444: Algebra V1.9 с направленными комиссиями (Camelot V3) — как thena_fusion: в графе (математика
         // swap_algebra, комиссия стороны), исполнение — шаг ALGEBRA исполнителя (exec_kind.rs).
         "algebra_dir_fee" => (PoolKind::Cl, Proto::AlgebraDirFee, true, false, false),

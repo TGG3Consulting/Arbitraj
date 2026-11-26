@@ -47,6 +47,7 @@ pub const DEX_KINDS: &[&str] = &[
     "dodo_dsp",
     "thena_fusion",
     "algebra_integral",
+    "algebra_integral_hydrex",
     "algebra_dir_fee",
     "solidly_v2",
     "solidly_v1",

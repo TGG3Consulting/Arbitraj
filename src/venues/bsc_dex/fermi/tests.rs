@@ -27,15 +27,15 @@ fn builders_drop_irrelevant_overrides_and_expire_at_target() {
         let frame = &f["frames"][name];
         let diff = &frame["stateDiff"];
         let row = json!({"maker":"Fermi","quoteAddress":ROUTER,"blockNumber":frame["target"],
-             "slot":frame["slot"],"stateOverride":{(ENGINE):{"stateDiff":diff,"balance":"0x100","nonce":"0x7"},
-             (ROUTER):{"code":"0x01"}}});
+             "slot":frame["slot"],"stateOverride":{(format!("{ENGINE:#x}")):{"stateDiff":diff,"balance":"0x100","nonce":"0x7"},
+             (format!("{ROUTER:#x}")):{"code":"0x01"}}});
         let result = match builder {
             Builder::Titan => json!({"venues":[row]}),
-            Builder::BuilderNet => json!({(ROUTER):row,"slot":frame["slot"],
+            Builder::BuilderNet => json!({(format!("{ROUTER:#x}")):row,"slot":frame["slot"],
                 "blockNumber":format!("0x{:x}",frame["target"].as_u64().unwrap())}),
         };
         let parsed = Frame::read(builder, &result).unwrap();
-        assert_eq!(parsed.overrides(), json!({(ENGINE):{"stateDiff":diff}}));
+        assert_eq!(parsed.overrides(), json!({(format!("{ENGINE:#x}")):{"stateDiff":diff}}));
         let t = parsed.timestamp;
         assert!(parsed.current(parsed.target - 1, t - 12, t - 1));
         assert!(!parsed.current(parsed.target - 2, t - 12, t - 1));
@@ -89,7 +89,7 @@ fn all_exact_swaps_match_wallet_and_minimum_and_require_the_target() {
             assert_eq!(&calldata[..10], &hash[..10]);
             let args = format!("0x{}", &calldata[10..]);
             assert_eq!((word(&args, 2), word(&args, 3)), (amount, min));
-            let swap = &v["swap"]["logs"]
+            let swap = v["swap"]["logs"]
                 .as_array()
                 .unwrap()
                 .iter()

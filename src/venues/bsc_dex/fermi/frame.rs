@@ -104,6 +104,6 @@ impl Frame {
     }
 
     pub fn overrides(&self) -> Value {
-        json!({(ENGINE):{"stateDiff":self.diff}})
+        json!({(format!("{ENGINE:#x}")):{"stateDiff":self.diff}})
     }
 }

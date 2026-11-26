@@ -1701,5 +1701,28 @@
         "0x5fabce763446344a912d5cbf84b0e6541a376454"
       ]
     }
+  },
+  {
+    "id": "saddle-finance",
+    "network": "ethereum",
+    "chain_id": 1,
+    "source": "https://docs.saddle.finance/contracts.md",
+    "settings": {
+      "dex.kind": "saddle_stableswap",
+      "dex.stable_pools": [
+        "0x1933b1d4a372ecbc3713d92f875b330846ae6a2b"
+      ]
+    }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "hydrex-integral",
+    "source": "https://hydrex.gitbook.io/home/resources/security-and-audits.md",
+    "settings": {
+      "dex.kind": "algebra_integral_hydrex",
+      "dex.factory": "0x36077d39cdc65e1e3fb65810430e5b2c4d5fa29e",
+      "dex.quoter_virtual": true
+    }
   }
 ]

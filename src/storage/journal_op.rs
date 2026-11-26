@@ -45,7 +45,7 @@ pub struct Upd {
 pub enum Op {
     /// Обычная запись.
     Insert(Box<Row>),
-    /// Повторяющаяся строка (счётчик 1) с меткой.
+    /// Повторяющаяся строка с исходным счётчиком и меткой.
     Counted(u64, Box<Row>),
     /// Обновление повторяющейся строки.
     Update(Box<Upd>),
@@ -111,19 +111,20 @@ pub fn apply(
     Ok(())
 }
 
-/// Вставляет повторяющуюся строку (счётчик 1, время последнего = время записи). Принимает: соединение, запись.
+/// Вставляет повторяющуюся строку с начальным счётчиком; время последнего = время записи.
 /// Возвращает: id. Ошибки: SQLite.
 fn insert_counted(c: &Connection, e: &Entry) -> rusqlite::Result<i64> {
     c.execute(
         "INSERT INTO journal (at, level, kind, venue, message, data, repeats, last_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?1)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?1)",
         params![
             e.at.to_rfc3339(),
             format!("{:?}", e.level),
             e.kind,
             e.venue,
             e.message,
-            e.data.as_ref().map(|d| d.to_string())
+            e.data.as_ref().map(|d| d.to_string()),
+            e.repeats
         ],
     )?;
     Ok(c.last_insert_rowid())

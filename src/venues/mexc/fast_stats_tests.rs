@@ -9,15 +9,18 @@ use super::{Ev, St};
 use crate::storage::db::Db;
 use crate::storage::journal::{Entry, Journal, Level};
 
-fn journal(name: &str) -> Journal {
+fn journal(name: &str) -> (Journal, broadcast::Receiver<Entry>) {
     let d = std::env::temp_dir().join(format!(
         "arb-mexc-fast-{name}-{}-{}",
         std::process::id(),
         Utc::now().timestamp_nanos_opt().unwrap()
     ));
     std::fs::create_dir_all(&d).unwrap();
-    let (tx, _) = broadcast::channel(16);
-    Journal::new(Db::open(&d.join("journal.sqlite")).unwrap(), tx)
+    let (tx, rx) = broadcast::channel(16);
+    (
+        Journal::new(Db::open(&d.join("journal.sqlite")).unwrap(), tx),
+        rx,
+    )
 }
 
 fn at(t: &str) -> DateTime<Utc> {
@@ -40,7 +43,7 @@ async fn minutes(j: &Journal) -> Vec<Entry> {
 
 #[tokio::test]
 async fn two_sessions_and_a_boundary_have_additive_utc_minutes() {
-    let j = journal("boundary");
+    let (j, _) = journal("boundary");
     // Старая накопительная строка остаётся читаемой, в сумму по минутам не входит.
     j.write(
         Level::Warn,
@@ -77,7 +80,7 @@ async fn two_sessions_and_a_boundary_have_additive_utc_minutes() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn refused_first_insert_preserves_its_minute_on_retry() {
-    let j = journal("full");
+    let (j, mut live) = journal("full");
     j.set_queue_max(Some(1));
     let (held, acquired) = mpsc::channel();
     let (release, wait) = mpsc::channel();
@@ -109,6 +112,12 @@ async fn refused_first_insert_preserves_its_minute_on_retry() {
 
     let rows = minutes(&j).await;
     assert_eq!(rows.len(), 2);
+    let mut published = BTreeMap::new();
+    while let Ok(e) = live.try_recv() {
+        if e.kind == "venue.fast_book" {
+            published.insert(e.id, e.repeats);
+        }
+    }
     for r in rows {
         let data = r.data.unwrap();
         let old = data["minute_start_utc_s"].as_i64().unwrap() == at("08:50:00").timestamp();
@@ -118,5 +127,6 @@ async fn refused_first_insert_preserves_its_minute_on_retry() {
             if old { 0 } else { 1 }
         );
         assert_eq!(r.repeats, Some(2));
+        assert_eq!(published.get(&r.id), Some(&r.repeats));
     }
 }

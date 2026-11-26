@@ -19,8 +19,8 @@ use alloy::{
 use chrono::Utc;
 use serde::Deserialize;
 use serde_json::json;
-fn fill(proof: &Proof, r: &send::receipt::Receipt) -> Option<(U256, U256)> {
-    let mut logs = r.logs.iter().filter(|l| {
+pub(super) fn fill(proof: &Proof, raw: &[alloy::rpc::types::Log]) -> Option<(U256, U256)> {
+    let mut logs = raw.iter().filter(|l| {
         l.address() == proof.executor && l.topics().first() == Some(&Filled::SIGNATURE_HASH)
     });
     let f = Filled::decode_log_data(&logs.next()?.inner.data).ok()?;
@@ -39,9 +39,9 @@ fn fill(proof: &Proof, r: &send::receipt::Receipt) -> Option<(U256, U256)> {
     }
     let moved = |token, out| {
         if out {
-            exec::fill::moved(r, token, Some(proof.payer), None)
+            exec::fill::moved_logs(raw, token, Some(proof.payer), None)
         } else {
-            exec::fill::moved(r, token, None, Some(proof.payer))
+            exec::fill::moved_logs(raw, token, None, Some(proof.payer))
         }
     };
     let spent = moved(proof.input, true).checked_sub(moved(proof.input, false))?;
@@ -191,7 +191,7 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
             )
             .with_tx(chain));
     }
-    let (spent, received) = fill(o, &r).ok_or_else(unknown)?;
+    let (spent, received) = fill(o, &r.logs).ok_or_else(unknown)?;
     let (units, cash) = if req.side == Side::Buy {
         (received, spent)
     } else {

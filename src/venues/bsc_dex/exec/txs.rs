@@ -204,7 +204,7 @@ pub async fn send_tipped(
         crate::gateway::settlement_intent::before_send(&marker).await?;
         if other {
             super::settlement_swap::reserve(ctx, slot, signed.hash, nonce).await?;
-            super::super::hanji::execute::release_unsent(ctx,slot,&marker,&ready,need).await?;
+            super::super::hanji::execute::release_unsent(ctx, slot, &marker, &ready, need).await?;
         } else {
             super::super::hashflow::reserve(ctx, slot, &marker).await?;
         }

@@ -123,6 +123,7 @@ pub(super) async fn simulate(
     };
     if block.parent_hash != h.hash
         || block.number != h.number + U64::from(1)
+        || block.timestamp <= h.timestamp
         || block.timestamp.to::<u64>() > q.deadline
         || block.calls.iter().any(|r| r.status != U64::from(1))
     {

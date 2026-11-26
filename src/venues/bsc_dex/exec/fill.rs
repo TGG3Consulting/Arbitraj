@@ -17,8 +17,16 @@ use super::super::send::track::Receipt;
 /// Сумма переводов токена по квитанции. Принимает: квитанцию, токен, «от кого» и/или «кому» (None — любой).
 /// Возвращает: сумму value подходящих событий. Ошибок нет (чужие и неразборчивые логи пропускаются).
 pub fn moved(r: &Receipt, token: Address, from: Option<Address>, to: Option<Address>) -> U256 {
-    r.logs
-        .iter()
+    moved_logs(&r.logs, token, from, to)
+}
+
+pub(in crate::venues::bsc_dex) fn moved_logs(
+    logs: &[alloy::rpc::types::Log],
+    token: Address,
+    from: Option<Address>,
+    to: Option<Address>,
+) -> U256 {
+    logs.iter()
         .filter(|l| l.address() == token)
         .filter_map(|l| IERC20::Transfer::decode_log_data(&l.inner.data).ok())
         .filter(|t| from.is_none_or(|f| t.from == f) && to.is_none_or(|x| t.to == x))

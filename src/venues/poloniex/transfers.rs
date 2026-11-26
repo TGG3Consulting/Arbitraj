@@ -158,19 +158,6 @@ pub async fn withdrawal_status(ctx: &Ctx, id: &str) -> GatewayResult<Transfer> {
     activity::transfer(ctx, rec, &ticker, "", id, status)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn withdrawal_refusal_shows_only_the_public_wire_fields() {
-        assert_eq!(
-            withdraw_fields("山野万里", "BSC", "2365410.86"),
-            "; отправлено в /v2/wallets/withdraw: coin=山野万里, network=BSC, amount=2365410.86"
-        );
-    }
-}
-
 /// Только поиск исходного вывода по клиентскому ID до передачи результата наблюдателю зачисления.
 pub(super) async fn recover_settlement(
     ctx: &Ctx,
@@ -191,4 +178,17 @@ pub(super) async fn recover_settlement(
         req,
         reference,
     )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn withdrawal_refusal_shows_only_the_public_wire_fields() {
+        assert_eq!(
+            withdraw_fields("山野万里", "BSC", "2365410.86"),
+            "; отправлено в /v2/wallets/withdraw: coin=山野万里, network=BSC, amount=2365410.86"
+        );
+    }
 }

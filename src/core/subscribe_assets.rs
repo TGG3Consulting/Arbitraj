@@ -75,6 +75,16 @@ fn select_quote(out: &mut Vec<Asset>, quote: Option<Asset>, pinned: bool, confir
     true
 }
 
+/// Подписывает исходную биржу на книгу конверсии, даже если расчётный токен отсутствует среди
+/// целевых кандидатов. Имя и контракт берутся из её собственного справочника сети.
+pub(super) fn settlement_books(core: &Core, venue: &VenueId) -> Vec<Asset> {
+    super::chain_play::active_dexes(core).into_iter().filter_map(|dex| {
+        let m = super::settlement_market::Market::new(core,&dex,venue).ok()?;
+        let row=m.network(core,false).or_else(|_| m.network(core,true)).ok()?;
+        Some(Asset{ticker:row.asset.ticker,chain:None,contract:None})
+    }).collect()
+}
+
 /// Промежуточные монеты площадок DEX, которые биржи знают по адресу (тикер для стакана). Принимает: ядро, биржу
 /// (Some — тикер этой биржи; None — тикер любой биржи, для DEX), площадку DEX (Some — только её список и её сеть,
 /// решение 430; None — все площадки DEX). Ошибок нет.
@@ -174,7 +184,7 @@ mod tests {
             let mut subs = vec![conflicting.clone()];
             assert!(!select_quote(&mut subs, Some(quote.clone()), true, false));
             assert!(select_quote(&mut subs, Some(quote.clone()), true, true));
-            assert_eq!(subs, [quote.clone()]);
+            assert_eq!(subs.as_slice(), std::slice::from_ref(&quote));
             let mut legacy = vec![conflicting.clone()];
             assert!(select_quote(&mut legacy, None, false, true));
             assert_eq!(legacy, [conflicting]);

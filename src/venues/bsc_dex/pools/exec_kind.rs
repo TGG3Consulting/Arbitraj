@@ -238,7 +238,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         | "curve_stableswap_meta"
         | "curve_stableswap_oracle" => ExecKind::Curve,
         "maverick_v2" => ExecKind::Maverick,
-        "pancake_stableswap" | "lista_stableswap" => ExecKind::StableU256,
+        "pancake_stableswap" | "lista_stableswap" | "lista_stableswap_proxy" => ExecKind::StableU256,
         // Решение 442: Curve Twocrypto-NG / Tricrypto-NG — exchange(uint256 i, uint256 j, dx, min_dy) с receiver =
         // msg.sender по умолчанию; вход — transferFrom(msg.sender) (twocrypto-ng 89c8dfb CurveTwocryptoOptimized.vy
         // L364-L404, L286-L335; tricrypto-ng ecaa816 CurveTricryptoOptimizedWETH.vy L410-L442, L313-L379 — use_eth =

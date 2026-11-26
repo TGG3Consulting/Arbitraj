@@ -3512,6 +3512,12 @@
   },
   "calls": [
     {
+      "to": "0xc5ad17b98d7fe73b6dd3b0df5b3040457e68c045",
+      "signature": "resolveNameToLatestAddress(bytes32)",
+      "data": "0x3705f625506f6f6c52656769737472790000000000000000000000000000000000000000",
+      "response": "0x000000000000000000000000fb4de84c4375d7c8577327153de88f58f69eec81"
+    },
+    {
       "to": "0xfb4de84c4375d7c8577327153de88f58f69eec81",
       "signature": "getPoolsLength()",
       "data": "0xce883cdb",
@@ -5169,5 +5175,6 @@
   },
   "active": [
     "0x1933b1d4a372ecbc3713d92f875b330846ae6a2b"
-  ]
+  ],
+  "master_registry": "0xc5ad17b98d7fe73b6dd3b0df5b3040457e68c045"
 }

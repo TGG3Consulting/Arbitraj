@@ -211,6 +211,28 @@ def tables(network, snapshots, profiles):
                        if base else "У Classic проверены отдельные фабрики динамической и постоянной комиссии: "
                        "у каждой по два пула с четырьмя котировками getAmountsOut. ")
                     + f"[Реестры, код, тики и котировки](../{kyber})."])
+    lista = "tests/data/first_run_dex_2026-11-26/lista_ethereum.json"
+    lista_stable = "tests/data/first_run_dex_2026-11-26/lista_stable_ethereum.json"
+    if not base and Path(lista).exists():
+        out.extend(["", "Lista DEX V3 · три пула официальной фабрики Ethereum и семь разрешённых уровней комиссии "
+                    "установлены по событиям и обратным запросам. У всех трёх пулов код 31 зависимой единицы Solidity "
+                    "совпал с Uniswap V3 после учёта путей импорта и переименования интерфейсов. Для трёх пар "
+                    "12 обменов через V5 совпали с двумя квотерами и изменением балансов. Повышение минимума на "
+                    "единицу отменило каждый обмен. На паре USDT/USDS при заявке 100 USDT пул взял только "
+                    "50,415023 USDT. При заявке 100 USDS он взял 48,517287003583698682 USDS. Официальный квотер "
+                    "возвратил положительный выход в обоих случаях. Профиль использует VirtualQuoter с проверкой "
+                    "полноты списания. " f"[Фабрика, тики, исходники, котировки и обмены](../{lista})."])
+    if not base and Path(lista_stable).exists():
+        out.extend(["", "Lista StableSwap · в официальном каталоге 685 кредитных рынков. Из них 22 рынка "
+                    "Ethereum с умным обеспечением используют 11 уникальных пулов. Три принадлежат ListaV3, "
+                    "остальные восемь перечислены фабрикой StableSwap. У всех восьми paused() = true, в обе "
+                    "стороны exchange вернул EnforcedPause. Вид lista_stableswap_proxy проверяет EIP-1967 на "
+                    "каждом чтении. У всех восьми текущая реализация 0xefcb1be95a933ba1918f035f90e6dba1c1d778da. "
+                    "Фабрика задаёт другую реализацию 0x86d2946bd6c807e797e8eec0d632931dc337dea3 для будущих пулов. "
+                    "На активном блоке 26 009 037 та же реализация USDC/USDT прошла четыре обмена от держателей "
+                    "и четыре защитных отказа. За 1 USDT get_dy показал 999 826 минимальных единиц USDC, "
+                    "exchange перечислил 999 825. На следующем блоке зарегистрировано событие Paused. "
+                    f"[Реестр, причина паузы, исходники и исторические обмены](../{lista_stable})."])
     hydrex = "tests/data/first_run_dex_2026-11-26/hydrex_base.json"
     if base and Path(hydrex).exists():
         out.extend(["", "Hydrex Integral · фабрика подтвердила все 20 пулов из выборки GeckoTerminal через poolByPair. "
@@ -338,6 +360,11 @@ def tables(network, snapshots, profiles):
         url = sample["url"]
         pool = probe.get("pool") or next((a["address"] for a in sample.get("samples", []) if a.get("address")), None)
         factory = probe.get("reported_factory")
+        roundtrip = probe.get("factory_roundtrip")
+        if base and id == "hydrex-integral" and Path(hydrex).exists():
+            hx = read(Path(hydrex))
+            if any(r["pool"] == pool.lower() and r["listed"] for r in hx["directory"]):
+                factory, roundtrip = hx["addresses"]["Factory"], "poolByPair(address,address)"
         if id in configured:
             status = "профиль, см. параметры выше"
         else:
@@ -357,7 +384,7 @@ def tables(network, snapshots, profiles):
             status += ", пустая страница снимка"
         out.append(f"| `{id}` | {cell(name)} | [{sample.get('status')}, {sample.get('rows_page1', 'нет данных')}]({url}) "
                    f"| {addresses([pool] if pool else [])} | {addresses([factory] if factory else [])}, "
-                   f"{probe.get('factory_roundtrip') or 'сверка не подтверждена'} | {status} |")
+                   f"{roundtrip or 'сверка не подтверждена'} | {status} |")
     out.extend(["", "#### DefiLlama", "",
                 "Адреса извлечены из секции нужной сети в коде адаптера объёмов. Их роль, реализация и исполнение требуют проверки. "
                 "Для строк с несколькими версиями или общей базовой ликвидностью соответствие торговому профилю устанавливается по контракту.",
@@ -372,6 +399,19 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if base and str(row["id"]) == "6365" and Path(hydrex).exists():
+            hx_factory = read(Path(hydrex))["addresses"]["Factory"]
+            if hx_factory in {a.lower() for a in candidates}:
+                task = "Hydrex Integral · фабрика из адаптера подтвердила 20 пар"
+        if not base and str(row["id"]) == "202" and Path(saddle).exists():
+            master = read(Path(saddle)).get("master_registry")
+            if master in {a.lower() for a in candidates}:
+                task = "Saddle · MasterRegistry из адаптера указал на проверенный реестр 33 пулов"
+        if not base and str(row["id"]) == "7599" and Path(lista).exists():
+            if read(Path(lista))["factory"] in {a.lower() for a in candidates}:
+                task = "Три пула ListaV3 подтверждены. Проверка пулов StableSwap из кредитных рынков ведётся отдельно"
+                if Path(lista_stable).exists():
+                    task = "11 уникальных пулов на 22 рынках Lista: 3 активных V3, 8 StableSwap на паузе"
         if not base and str(row["id"]) == "7979" and fermi.exists():
             candidates = [p["router"] for p in data_fermi["historical"]]
             task = "FERMI-01 · проверены два строителя, шлюз исполнения в разработке"

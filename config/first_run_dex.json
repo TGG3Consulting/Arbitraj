@@ -1739,5 +1739,37 @@
       "dex.factory": "0x36077d39cdc65e1e3fb65810430e5b2c4d5fa29e",
       "dex.quoter_virtual": true
     }
+  },
+  {
+    "network": "ethereum",
+    "id": "lista-dex-v3",
+    "chain_id": 1,
+    "source": "https://docs.bsc.lista.org/for-developer/dex/smart-contract-ethereum.md",
+    "settings": {
+      "dex.kind": "v3_fork",
+      "dex.factory": "0x956920f97690bdd76a6a10c7ba931dec14f61169",
+      "dex.quoter_virtual": true,
+      "dex.tick_lens": "0xbfd8137f7d1516d3ea5ca83523914859ec47f573",
+      "dex.v3_fee_tiers": [
+        "1",
+        "2",
+        "50",
+        "100",
+        "500",
+        "3000",
+        "10000"
+      ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "lista-dex-stableswap",
+    "source": "https://api.lista.org/api/moolah/borrow/marketList",
+    "settings": {
+      "dex.kind": "lista_stableswap_proxy",
+      "dex.factory": "0xf6c9ffa64bd0ae8a068dd7b7d954c654a3e7f8a6",
+      "dex.pool_implementation": "0xefcb1be95a933ba1918f035f90e6dba1c1d778da"
+    }
   }
 ]

@@ -18,9 +18,9 @@ def data(signature, types, values):
     return "0x" + (keccak(text=signature)[:4] + encode(types, values)).hex()
 
 
-def simulate(profile, pool, quote, expected):
+def simulate(profile, pool, quote, expected, holders=HOLDERS):
     source, target = (pool["coins"][quote[k]] for k in ("i", "j"))
-    sender = HOLDERS[source]
+    sender = holders[source]
     dx = int(quote["dx"])
     addr = pool["pool"]
     args = [quote["i"], quote["j"], dx]

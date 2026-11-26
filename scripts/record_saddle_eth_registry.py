@@ -92,6 +92,10 @@ def main():
     mainnet=response.text.split("## Mainnet",1)[1].split("\n## ")[0]
     docs=dict(re.findall(r"\| `([^`]+)`\s*\| \[(0x[\da-fA-F]{40})\]", mainnet))
     registry=docs["PoolRegistry"].lower()
+    master=docs["MasterRegistry"].lower()
+    latest,=c.one(master,"resolveNameToLatestAddress(bytes32)",["bytes32"],[b"PoolRegistry".ljust(32,b"\0")],["address"])
+    if latest!=registry:
+        raise ValueError("MasterRegistry указывает на другую версию PoolRegistry")
     pools={addr.lower():{"document_title":name} for name,addr in docs.items()
            if re.fullmatch(r"[a-zA-Z0-9]*Pool(?:V\d+|Updated)?",name)}
     length,=c.one(registry,"getPoolsLength()",returns=["uint256"])
@@ -161,7 +165,7 @@ def main():
         entry["swaps"]=cases
         code(e,pool)
         active.append(pool)
-    write(FOLDER/"saddle_ethereum.json",dict(source=DOC,registry=registry,chain_id=1,selector=e["selector"],
+    write(FOLDER/"saddle_ethereum.json",dict(source=DOC,registry=registry,master_registry=master,chain_id=1,selector=e["selector"],
           endpoint=e["endpoint"],registry_count=length,pools=pools,calls=c.calls,verified=verified,active=active))
     write(FOLDER/"ethereum.json",e)
     path=ROOT/"config/first_run_dex.json"

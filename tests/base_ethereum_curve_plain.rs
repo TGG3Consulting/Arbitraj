@@ -9,6 +9,55 @@ fn integer(value: &Value) -> U256 {
 }
 
 #[test]
+fn lista_proxy_registry_pause_and_historical_execution() {
+    use arb::venues::bsc_dex::pools::load_stable_u::ramp;
+
+    let doc: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/lista_stable_ethereum.json"
+    )).unwrap();
+    assert_ne!(doc["pool_implementation"], doc["implementation_for_new_pools"]);
+    let pools = doc["pools"].as_array().unwrap();
+    assert_eq!(pools.len(), 8);
+    for pool in pools {
+        assert_eq!(pool["implementation"], doc["pool_implementation"]);
+        assert_eq!(pool["paused"], true);
+        let reverts = pool["reverts"].as_array().unwrap();
+        assert_eq!(reverts.len(), 2);
+        for r in reverts {
+            assert_eq!(r["response"], "0xd93c0665");
+        }
+    }
+    let past = &doc["historical"];
+    let state = &past["state"];
+    assert_eq!(state["paused"], false);
+    assert_eq!(state["skipPriceDiff"], true);
+    let vector = |key: &str| state[key].as_array().unwrap().iter().map(integer).collect::<Vec<_>>();
+    let balances = vector("balances");
+    let rates = vector("RATES");
+    let amp = ramp(integer(&state["initial_A"]), integer(&state["future_A"]), integer(&state["initial_A_time"]),
+                   integer(&state["future_A_time"]), U256::from(past["timestamp"].as_u64().unwrap())).unwrap();
+    let t = Template { amp_precision: U256::from(100u8), max_rounds: 255, strict: false, pair_d: false };
+    let mut rounded = 0;
+    let samples = past["swaps"].as_array().unwrap();
+    assert_eq!(samples.len(), 4);
+    for row in samples {
+        let q = |fee| exchange_out_t(row["i"].as_u64().unwrap() as usize, row["j"].as_u64().unwrap() as usize,
+                                    integer(&row["dx"]), &balances, &rates, amp, fee, &t).unwrap();
+        let gross = q(U256::ZERO);
+        let fee = integer(&state["fee"]);
+        assert_eq!(gross - gross * fee / fee_denominator(), integer(&row["dy"]));
+        let raw = |i: usize| integer(&row["calls"][i]["returnData"]);
+        assert_eq!(row["calls"][4]["status"], "0x0");
+        assert_eq!(q(fee), raw(7) - raw(3));
+        assert_eq!(q(fee), integer(&row["out"]));
+        if row["dy"] != row["out"] {
+            rounded += 1;
+        }
+    }
+    assert_eq!(rounded, 2);
+}
+
+#[test]
 fn plain_factory_markets_match_dy() {
     let exchanges: Value = serde_json::from_str(include_str!(
         "data/first_run_dex_2026-11-26/pancake_stable_exchange_ethereum.json"

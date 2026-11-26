@@ -18,18 +18,38 @@
 //! Lista StableSwapPool.sol (moolah eb7d73a) `initialize` L125-L143 (RATES, A·A_PRECISION), `get_A` L161-L178.
 
 use alloy::sol_types::SolCall;
-use alloy_primitives::{Address, Bytes, U256};
+use alloy_primitives::{Address, B256, Bytes, U256};
 
 use crate::core::types::{PoolState, StableData, StableGuard};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::math::stableswap_v1::rate_for_decimals;
-use super::super::node::{call, multicall};
+use super::super::node::{call, multicall, rpc};
 use super::super::tokens::Tokens;
 use super::abi_curve::{IStableSwapV1, MAX_COINS};
 use super::abi_stable_u::{IListaStable as L, IMulticall3Time, IPancakeStable, LISTA_A_PRECISION};
 use super::stable_native::{self, NATIVE, NATIVE_DECIMALS};
+
+/// Проверяет реализацию Lista на том же блоке, по которому загрузчик читает состояние.
+pub async fn check_implementation(
+    ctx: &Ctx,
+    dex: &str,
+    pool: Address,
+    tag: &str,
+) -> GatewayResult<()> {
+    let expected = ctx.dex_addr("dex.pool_implementation", dex)?;
+    let slot = super::abi_woo::implementation_slot();
+    let word: B256 = rpc::call(ctx, "eth_getStorageAt", serde_json::json!([pool, slot, tag])).await?;
+    let actual = Address::from_word(word);
+    if actual != expected {
+        return Err(ctx.err(
+            ErrorCode::InvalidAddress,
+            format!("Lista StableSwap {pool}: реализация {actual}, ожидалась {expected}"),
+        ));
+    }
+    Ok(())
+}
 
 /// Состояние пула на блоке. Принимает: окружение, токены, пул, пару, true — Lista (иначе PancakeSwap), блок-тег.
 /// Ошибки: узел, ответ не по ABI, монеты пары нет в пуле, decimals > 36, не задан dex.multicall3 (Lista); BadResponse —

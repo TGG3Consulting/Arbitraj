@@ -429,6 +429,9 @@ pub async fn state(
                 load_stable_u::load(ctx, tokens, *contract, pair, false, &tag).await?
             }
             (Proto::PancakeStable | Proto::ListaStable, PoolRef::Contract(a)) => {
+                if f.variant == super::family_variant::Variant::ListaStableProxy {
+                    load_stable_u::check_implementation(ctx, f.id, *a, &tag).await?;
+                }
                 load_stable_u::load(ctx, tokens, *a, pair, f.proto == Proto::ListaStable, &tag)
                     .await?
             }

@@ -83,6 +83,7 @@ pub const DEX_KINDS: &[&str] = &[
     "ekubo",
     "pancake_stableswap",
     "lista_stableswap",
+    "lista_stableswap_proxy",
     "saddle_stableswap",
     "woofi_v2",
     "wombat",
@@ -133,6 +134,12 @@ pub const UR_FORMATS: &[&str] = &[
 /// Настройки DEX. Порядок — как в docs/SETTINGS.md.
 #[rustfmt::skip]
 pub static DEX: &[SettingDef] = &[
+    d("FermiSwap", "fermi.executor", K::Address, L::None, "адрес", V, "Адрес отдельно размещённого FermiSlotExecutor в основной сети Ethereum. Котировка исполнения требует побайтной проверки кода на родителе слота.").optional().dex_venue(),
+    d("FermiSwap", "fermi.trading", K::Bool, L::None, "да/нет", V, "Разрешить выбор Fermi через настроенного строителя Ethereum по свежему кадру и проверенному исполнителю.").optional().dex_venue(),
+    d("FermiSwap", "fermi.builder", K::Text, L::None, "имя", V, "Строитель Ethereum для торгового маршрута: titan или buildernet. Рыночные цены и транспорт сверяются по выбранному имени.").optional().dex_venue(),
+    d("FermiSwap", "fermi.gas_budget_native", K::Decimal, L::Positive, "ETH", V, "Верхняя сумма ETH на газ одной операции Fermi. До точной симуляции для подбора размера резервируется вся эта сумма.").optional().dex_venue(),
+    d("FermiSwap", "fermi.quote_budget_ms", K::Integer, L::Positive, "мс", V, "Предельная добавочная задержка финальной симуляции Fermi при сравнении с действующей котировкой.").optional().dex_venue(),
+    d("FermiSwap", "fermi.books_interval_ms", K::Integer, L::Positive, "мс", V, "Интервал фонового запроса кадра выбранного строителя и расчёта уровней при включённом источнике. Срок действия ограничен слотом самого сообщения.").optional().dex_venue(),
     d("Hashflow", "hashflow.gas_budget_native", K::Decimal, L::Positive, "нативная монета", GV, "Предельная стоимость газа RFQ. В локальном индикативном расчёте учитывается весь резерв; перед отправкой возврат с отказом, если верхняя оценка транзакции его превышает.").optional().dex_venue(),
     d("Hashflow", "hashflow.trading", K::Bool, L::None, "да/нет", GV, "Разрешить участие подтверждённых прямых RFQ в штатном выборе и исполнении на этой площадке; требуется доступ Hashflow и заданные сроки. Не задана — только ручная проверка.").optional().dex_venue(),
     d("Hashflow", "hashflow.levels_max_age_ms", K::Integer, L::Positive, "мс", GV, "Максимальный возраст индикативных уровней; на холодном кэше расчёт AMM продолжается, уровни загружаются в фоне.").optional().dex_venue(),

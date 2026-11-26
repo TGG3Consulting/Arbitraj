@@ -566,7 +566,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
             false,
             false,
         ),
-        "lista_stableswap" => (PoolKind::StableSwap, Proto::ListaStable, true, false, false),
+        "lista_stableswap" | "lista_stableswap_proxy" => {
+            (PoolKind::StableSwap, Proto::ListaStable, true, false, false)
+        }
         "saddle_stableswap" => (
             PoolKind::StableSwap,
             Proto::SaddleStable,
@@ -894,6 +896,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // функции (dex.basin_cp2 / dex.basin_stable2 — хотя бы одна) проверяет pools/basin_conf.rs.
         Proto::BasinWell => list.extend(["dex.factory", "dex.basin_well_impls"]),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
+        Proto::ListaStable if f.variant == Variant::ListaStableProxy => {
+            list.extend(["dex.factory", "dex.pool_implementation"])
+        }
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.
         Proto::SaddleStable => list.push("dex.stable_pools"),

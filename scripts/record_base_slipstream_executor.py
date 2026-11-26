@@ -34,7 +34,7 @@ def call(to, data, value=0, gas=1_200_000):
 
 def rpc(url, method, params):
     """Только чтение EVM. Возвращает JSON-RPC result или явную ошибку узла."""
-    if method not in {"eth_chainId", "eth_getBlockByHash", "eth_getCode", "eth_simulateV1"}:
+    if method not in {"eth_chainId", "eth_getBlockByHash", "eth_getCode", "eth_getTransactionCount", "eth_simulateV1"}:
         raise ValueError("Метод вне перечня чтения")
     from time import sleep
     request = dict(jsonrpc="2.0", id=1, method=method, params=params)

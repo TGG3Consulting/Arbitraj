@@ -60,7 +60,7 @@ def origin(name,factory,c):
     return dict(url=url,runtime=digest(raw(code)),creation_code_hash=init,invariant=lines)
 
 
-def registry(c,factory,init_hash):
+def registry(c,factory,init_hash,created=None):
     total,=c.one(factory,"allPairsLength()",returns=["uint256"])
     addresses=[decode(["address"],x)[0] for x in posts(c,[(factory,"allPairs(uint256)",["uint256"],[i]) for i in range(total)])]
     if not total or len(set(addresses))!=total:
@@ -72,10 +72,15 @@ def registry(c,factory,init_hash):
         tokens=[decode(["address"],next(values))[0] for _ in (0,1)]
         reserves=decode(["uint112","uint112","uint32"],next(values))[:2]
         owner,=decode(["address"],next(values))
-        expected="0x"+keccak(b'\xff'+raw(factory)+keccak(raw(tokens[0])+raw(tokens[1]))+raw(init_hash))[-20:].hex()
-        if owner!=factory or expected!=pool or tokens!=sorted(tokens):
-            raise ValueError("registry and CREATE2 disagree for "+pool)
-        rows.append(dict(pool=pool,tokens=tokens,reserves=list(map(str,reserves))))
+        if created is None:
+            expected="0x"+keccak(b'\xff'+raw(factory)+keccak(raw(tokens[0])+raw(tokens[1]))+raw(init_hash))[-20:].hex()
+            if expected!=pool:raise ValueError("registry and CREATE2 disagree for "+pool)
+        elif pool not in created:
+            raise ValueError("registry and CREATE nonce disagree for "+pool)
+        if owner!=factory or tokens!=sorted(tokens):raise ValueError("pair factory or token order differs")
+        row=dict(pool=pool,tokens=tokens,reserves=list(map(str,reserves)))
+        if created is not None:row["creation_nonce"]=created[pool]
+        rows.append(row)
     ops=[(factory,"getPair(address,address)",["address","address"],tokens)
          for p in rows for tokens in (p["tokens"],p["tokens"][::-1])]
     checks=iter(posts(c,ops))
@@ -85,7 +90,7 @@ def registry(c,factory,init_hash):
     return rows
 
 
-def directory(name,c,*,config=None,network="ethereum",proof=None,wrapped=WETH,stables=STABLES,funding_router=FUNDING):
+def directory(name,c,*,config=None,network="ethereum",proof=None,wrapped=WETH,stables=STABLES,funding_router=FUNDING,created=None):
     # Distinguish an unavailable historical EVM from a failed token or swap.
     frame,=rpc(c.endpoint,"eth_simulateV1",[{"blockStateCalls":[{"calls":[{
         "to":wrapped,"data":"0x313ce567"}]}],"validation":False},c.selector])
@@ -94,7 +99,7 @@ def directory(name,c,*,config=None,network="ethereum",proof=None,wrapped=WETH,st
         raise ValueError("archive cannot simulate WETH decimals on the canonical parent")
     factory,den,fee,reason=config or FACTORIES[name]
     proof=proof or origin(name,factory,c)
-    rows=registry(c,factory,proof["creation_code_hash"])
+    rows=registry(c,factory,proof["creation_code_hash"],created)
     candidates=[]
     for asset in (wrapped,*stables):
         matching=[r for r in rows if asset in r["tokens"] and min(map(int,r["reserves"]))>0]

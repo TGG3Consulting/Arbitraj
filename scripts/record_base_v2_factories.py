@@ -86,8 +86,14 @@ if __name__=="__main__":
             proof=bytecode_proof(args.market,cap,row) if args.market in PAIR_CODE else source(cap,row)
             standard_swap_origin(args.market,cap,row,proof)
             if row[2] is None:proof.setdefault("fee_getter","getFeeForPair(address,address)")
-            result=directory(args.market,cap,config=row[:4],network="base",proof=proof,wrapped=WETH,stables=(USDC,USDBC),funding_router=ROUTER)
+            created=None
+            if args.market=="kewlswap-base":
+                from record_kewlswap_base import create_directory, wallet
+                proof["account_nonce"],created=create_directory(cap,row[0])
+            result=directory(args.market,cap,created=created,config=row[:4],network="base",proof=proof,wrapped=WETH,stables=(USDC,USDBC),funding_router=ROUTER)
             if args.market in PAIR_CODE:check_deployments(cap,result)
+            if args.market=="kewlswap-base":
+                result["execution"]=wallet(cap,result,head)
             if args.market=="candyswap":
                 from record_candyswap_base import capture
                 result["net_payouts"]=capture(cap,result,head)

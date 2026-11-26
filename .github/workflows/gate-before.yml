@@ -1,0 +1,31 @@
+name: Gate quote control before fix
+on:
+  push:
+    branches: [test/quote-gate-before-20261126]
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      GATE_BEFORE_REPORT: gate-before.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Confirm unchanged production sources
+        run: git diff --exit-code 2925a361bb88edff0ee1aab3e18bdd3e6ff5b843 HEAD -- src Cargo.toml Cargo.lock
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: clippy
+      - run: cargo test --locked --test gate_quote_control_before
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-before
+          path: gate-before.json
+          if-no-files-found: error

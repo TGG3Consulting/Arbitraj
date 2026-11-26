@@ -63,18 +63,36 @@ impl Hop {
         }
     }
 }
-struct Leg{share:Decimal,hops:Vec<Hop>}
+struct Leg{share:Decimal,original_output_units:U256,hops:Vec<Hop>}
 struct Frozen {
     book_replay:Replay, dex_quote:Quote, legs:Vec<Leg>, sale:bool, coin:u8, stable:u8, book_depth:Decimal,
 }
 impl Frozen{
+    fn coin_parts(&self,qty:Decimal)->Result<Vec<U256>,&'static str>{
+        let mut parts=Vec::with_capacity(self.legs.len());
+        let total=to_units(qty,self.coin).ok_or("quantity cannot be represented in token units")?;
+        let anchor=self.legs.iter().try_fold(U256::ZERO,|a,x|a.checked_add(x.original_output_units)).ok_or("anchor output overflow")?;
+        let mut remaining=total;
+        for (index,leg) in self.legs.iter().enumerate(){
+            let value=if self.sale {
+                let part=qty.checked_mul(leg.share).ok_or("share overflow")?;
+                to_units(part,self.coin).ok_or("quantity cannot be represented in token units")?
+            } else if index+1==self.legs.len() {
+                remaining
+            } else {
+                let part=total.checked_mul(leg.original_output_units).and_then(|p|p.checked_div(anchor)).ok_or("output allocation outside integer range")?;
+                remaining=remaining.checked_sub(part).ok_or("negative remaining output")?;
+                part
+            };
+            if value.is_zero(){return Err("zero-size leg")}
+            parts.push(value);
+        }
+        Ok(parts)
+    }
     fn amounts(&self,qty:Decimal)->Result<Vec<Decimal>,&'static str>{
         let mut result=Vec::with_capacity(self.legs.len());
         let mut after=std::collections::HashMap::new();
-        for leg in &self.legs{
-            let part=qty.checked_mul(leg.share).ok_or("share overflow")?;
-            let mut value=to_units(part,self.coin).ok_or("quantity cannot be represented in token units")?;
-            if value.is_zero(){return Err("zero-size leg")}
+        for (leg,mut value) in self.legs.iter().zip(self.coin_parts(qty)?) {
             if self.sale {for h in &leg.hops {value=h.result(value,true,&mut after)?;}}
             else {for h in leg.hops.iter().rev(){value=h.result(value,false,&mut after)?;}}
             result.push(to_decimal(value,self.stable).ok_or("quote amount outside decimal range")?);
@@ -94,8 +112,9 @@ impl Source for Frozen{
         if total<=Decimal::ZERO || qty<=Decimal::ZERO{return Err(Fail::TooSmall("empty return".into()))}
         q.avg_price=total/qty;
         if let Some(route)=&mut q.route {
-            for ((row,leg),out) in route.legs.iter_mut().zip(&self.legs).zip(amounts) {
-                row.expected_out=if sell{out}else{qty*leg.share};
+            let parts=self.coin_parts(qty).map_err(|e|Fail::TooLarge(e.into()))?;
+            for ((row,part),out) in route.legs.iter_mut().zip(parts).zip(amounts) {
+                row.expected_out=if sell{out}else{to_decimal(part,self.coin).ok_or_else(||Fail::TooLarge("output outside decimal range".into()))?};
             }
         }
         Ok(q)
@@ -117,7 +136,8 @@ async fn replay(case:&Value,budget:Decimal,max_evals:u32)->Result<Value,String>{
     let (buy,sell)=if sale{(book.clone(),empty)}else{(empty,book.clone())};
     let legs=case["paths"].as_array().ok_or("missing split")?.iter().map(|leg|{
         let hs=leg["hops"].as_array().ok_or("missing hops")?.iter().map(|h|Hop::parse(h).ok_or("unknown hop fields")).collect::<Result<_,_>>()?;
-        Ok(Leg{share:decimal(&leg["share"])?,hops:hs})
+        let original_output_units=if sale {U256::ZERO}else{to_units(decimal(&leg["original_out"])?,case["coin_digits"].as_u64().ok_or("token decimals")? as u8).ok_or("original leg output outside token units")?};
+        Ok(Leg{share:decimal(&leg["share"])?,original_output_units,hops:hs})
     }).collect::<Result<Vec<_>,String>>()?;
     let cfg=&case["control"];let floor=(decimal(&cfg["money.min_profit_usd"])?,decimal(&cfg["money.min_profit_pct"])?);
     let cx=context(&dir,&plan,decimal(&cfg["profit.price_move_k"])?,decimal(&cfg["profit.liquidity_share_h"])?,cfg["profit.closure_share"].as_str().map(d));
@@ -133,6 +153,11 @@ async fn replay(case:&Value,budget:Decimal,max_evals:u32)->Result<Value,String>{
         let expected=observed*frozen.dex_quote.avg_price;let actual:Decimal=amounts.iter().sum();
         let tol=Decimal::new(2*frozen.legs.iter().map(|l|l.hops.len() as i64).sum::<i64>(),u32::from(frozen.stable));
         if (actual-expected).abs()>tol{return Err("native original exact-output cost differs from recorded price beyond rounding".into())}
+        let quoted_units=frozen.legs.iter().try_fold(U256::ZERO,|a,x|a.checked_add(x.original_output_units)).ok_or("output overflow")?;
+        if Some(quoted_units)!=to_units(observed,frozen.coin){return Err("sum of archived output legs differs from observed quantity".into())}
+        for (leg,spend) in frozen.legs.iter().zip(&amounts){
+            if (*spend-actual*leg.share).abs()>tol{return Err("native USDT allocation differs from archived spend share".into())}
+        }
     }
     let mut curve=SourceCurve{cx:&cx,src:&frozen};let own=curve.at(plan.qty).await.map_err(|e|format!("recorded quantity fails cost calculation: {e:?}"))?;
     // The standard search helper takes a CEX buyer as its reference. For DEX purchases

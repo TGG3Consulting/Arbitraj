@@ -1,7 +1,7 @@
 name: Encrypted independent remaining market verification
 on:
   push:
-    branches: [audit/dex-tick-archive-2611]
+    branches: [audit/dex-leg-allocation-2611]
 permissions:
   contents: read
 jobs:

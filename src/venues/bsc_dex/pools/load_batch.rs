@@ -247,7 +247,7 @@ pub fn one_by_one(f: &Family) -> bool {
         // Решение 483: Ramses CL (v3_fork_ramses) — свои ABI и тики без TickLens (load_ramses.rs).
         || super::ramses::is_cl(f)
         || f.proto.is_stable()
-        || f.proto == Proto::WooPP
+        || matches!(f.proto, Proto::WooPP | Proto::Elfomo)
         || f.proto == Proto::Maverick
         || f.proto == Proto::MetricOmm
         || matches!(f.proto, Proto::IziSwap | Proto::BiswapV3)

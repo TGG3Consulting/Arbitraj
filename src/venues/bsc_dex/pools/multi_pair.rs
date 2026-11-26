@@ -50,7 +50,7 @@ fn flag(ctx: &Ctx, id: &str) -> bool {
 /// woofi_v2 и dex.multi_pair = да; иначе (не задана, нет, не читается) — false, как до решения. Ошибок нет.
 /// Ревью 450 (п. 1): флаг — групповой, как у enabled.
 pub fn woo_pairs(ctx: &Ctx, f: &Family) -> bool {
-    f.proto == Proto::WooPP && flag(ctx, f.id)
+    matches!(f.proto, Proto::WooPP | Proto::Elfomo) && flag(ctx, f.id)
 }
 
 /// Что делает: id DEX, у которых строка справочника — ПАРА (ключ «пул|монета|монета», dir_key): DEX в режиме «все пары
@@ -125,7 +125,7 @@ pub fn fits(f: &Family, r: &PoolRef, multi: &HashSet<String>) -> bool {
 /// «да → нет» retune снимает взятые пары с ключом-парой, и запись реестра без этой сверки осталась бы без слушателя —
 /// пачки слушания строятся только из найденного); прочие виды — true. Ошибок нет.
 pub fn entry_fits(ctx: &Ctx, e: &Entry, known: &HashSet<PoolRef>) -> bool {
-    if e.family.proto == Proto::WooPP {
+    if matches!(e.family.proto, Proto::WooPP | Proto::Elfomo) {
         return known.contains(&e.pool.reference);
     }
     !e.family.proto.is_multi_coin()
@@ -143,7 +143,7 @@ pub fn retune(s: &mut Snap, multi: &HashSet<String>) {
         .iter()
         .filter(|(k, f)| {
             !fits(f.family, &f.reference, multi)
-                || (f.family.proto == Proto::WooPP
+                || (matches!(f.family.proto, Proto::WooPP | Proto::Elfomo)
                     && k.contains('|') != multi.contains(f.family.id))
         })
         .map(|(k, _)| k.clone())

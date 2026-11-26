@@ -64,7 +64,10 @@ pub enum Q {
     /// V3 (ABI PancakeSwap / Uniswap, форки V3): getPool(a, b, fee).
     V3(u32),
     /// Solidly: v1 = false — getPool(a, b, stable) (Velodrome), v1 = true — getPair(a, b, stable) (THENA V1).
-    Solidly { v1: bool, stable: bool },
+    Solidly {
+        v1: bool,
+        stable: bool,
+    },
     /// Algebra (THENA Fusion): poolByPair(a, b).
     Algebra,
     /// Slipstream: getPool(a, b, int24 tickSpacing) по уровню из dex.cl_tick_spacings (уже int24 — factory_calls.rs
@@ -74,12 +77,15 @@ pub enum Q {
     Dodo,
     /// PancakeSwap StableSwap V2 (решение 122 F, 3): getPairInfo(a, b) — двухмонетный пул; three = true —
     /// getThreePoolPairInfo(a, b) — трёхмонетный (PancakeStableSwapFactory.sol L194, L203).
-    PancakeStable { three: bool },
+    PancakeStable {
+        three: bool,
+    },
     /// Lista StableSwap: getPairInfos(a, b) — все пулы пары (StableSwapFactory.sol L206).
     ListaStable,
     /// WooFi (решение 122 F, 3): оракул state(монета) — цена > 0 значит, монета — базовая общего контракта `pool`
     /// (IWooracleV2_2.sol). Вопрос задаётся оракулу (dex.oracle), найденный пул — общий контракт dex.pmm_pool.
     Woo(Address),
+    Elfomo(Address, Address, Address),
     /// Maverick V2: lookup(tokenA, tokenB, 0, предел) — все пулы пары (предел — dex.pair_lookup_max).
     Maverick(u32),
     /// KyberSwap Classic DMM (решение 287): getPools(a, b) — все пулы пары (с разным усилением).
@@ -110,6 +116,7 @@ impl Q {
             Q::PancakeStable { three: true } => "getThreePoolPairInfo",
             Q::ListaStable => "getPairInfos",
             Q::Woo(_) => "state(base)",
+            Q::Elfomo(..) => "getSupportedPairs",
             Q::Maverick(_) => "lookup(tokenA, tokenB)",
             Q::Dmm => "getPools",
             Q::Izi(_) => "pool(tokenX, tokenY, fee)",
@@ -156,6 +163,9 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
         }
         .abi_encode()
         .into(),
+        Q::Elfomo(..) => super::elfomo::IElfomo::getSupportedPairsCall {}
+            .abi_encode()
+            .into(),
         Q::Woo(_) => IWooracle::stateCall { base: coin }.abi_encode().into(),
         // KyberSwap Classic DMM: реестр заполнен в обе стороны токенов (DMMFactory.sol createPool L52-L53) — порядок любой.
         Q::Dmm => IDmmFactory::getPoolsCall {
@@ -284,6 +294,13 @@ pub fn decode_q(q: Q, out: &[u8]) -> Result<Vec<Address>, String> {
             .into_iter()
             .map(|i| i.swapContract)
             .collect(),
+        Q::Elfomo(pool, coin, quote) => {
+            if super::elfomo::listed(out, coin, quote)? {
+                vec![pool]
+            } else {
+                Vec::new()
+            }
+        }
         Q::Woo(pool) => {
             let st = IWooracle::stateCall::abi_decode_returns(out)
                 .map_err(|e| format!("ответ state(base) не по ABI: {e}"))?;

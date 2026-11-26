@@ -419,7 +419,7 @@ pub async fn state(
         f.proto,
         Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::InfinityStable
     );
-    if stable || f.proto == Proto::WooPP {
+    if stable || matches!(f.proto, Proto::WooPP | Proto::Elfomo) {
         let state = match (f.proto, reference) {
             // Решение 295: Saddle и PancakeSwap — и пара многомонетного пула (PoolRef::Multi); Lista — только Contract.
             (Proto::SaddleStable, PoolRef::Contract(a) | PoolRef::Multi { contract: a, .. }) => {
@@ -438,6 +438,9 @@ pub async fn state(
             // Infinity Stable (решение «122 (Infinity Stable)»): состояние у крючка (load_inf_stable.rs).
             (Proto::InfinityStable, PoolRef::Contract(a)) => {
                 load_inf_stable::load(ctx, f, *a, pair, &tag).await?
+            }
+            (Proto::Elfomo, PoolRef::Member { contract, coin }) => {
+                super::elfomo::load(ctx, tokens, reg, f, *contract, *coin, pair, &tag).await?
             }
             (Proto::WooPP, PoolRef::Member { contract, coin }) => {
                 load_woo::load(ctx, tokens, reg, f, *contract, *coin, pair, &tag).await?

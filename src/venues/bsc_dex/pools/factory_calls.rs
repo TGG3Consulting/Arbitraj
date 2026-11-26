@@ -129,6 +129,7 @@ pub fn plan(
                 Q::PancakeStable { three: true },
             ],
             Proto::ListaStable => vec![Q::ListaStable],
+            Proto::Elfomo => Vec::new(),
             Proto::WooPP => match ctx.dex_addr("dex.pmm_pool", f.id) {
                 Ok(pool) => vec![Q::Woo(pool)],
                 Err(_) => Vec::new(),
@@ -140,7 +141,9 @@ pub fn plan(
             continue;
         }
         // WooFi: «реестр» — оракул (state(монета)); остальные — фабрика DEX.
-        let registry = if f.proto == Proto::WooPP {
+        let registry = if f.proto == Proto::Elfomo {
+            "dex.pmm_pool"
+        } else if f.proto == Proto::WooPP {
             "dex.oracle"
         } else {
             "dex.factory"
@@ -189,7 +192,7 @@ pub fn plan(
         // Решение 305 (dex.multi_pair = да у WooFi, multi_pair::woo_pairs): пара WooFi — (монета, quoteToken() КОНТРАКТА,
         // IWooPPV2.sol L67), state(монета) спрашивается только с этим встречным. Не прочитан (узел, откат) или не среди
         // встречных токенов подписки — WooFi этого прохода не ищется. Режим не включён — со всеми встречными, как раньше.
-        let woo_q = if multi_pair::woo_pairs(ctx, f) {
+        let woo_q = if f.proto == Proto::WooPP && multi_pair::woo_pairs(ctx, f) {
             match woo_quote::quote_of(woo, f.id, ctx.dex_addr("dex.pmm_pool", f.id).ok()) {
                 Some(q) if quotes.contains(&q) => Some(q),
                 Some(q) => {
@@ -223,6 +226,13 @@ pub fn plan(
                     .then(|| stable_native::registry_pair(coin, quote, wrapped))
                     .flatten();
                 for (a, b) in std::iter::once((coin, quote)).chain(alt) {
+                    if f.proto == Proto::Elfomo {
+                        if !super::elfomo::pair(a, b) {
+                            continue;
+                        }
+                        qs.clear();
+                        qs.push(Q::Elfomo(factory, a, b));
+                    }
                     for &q in &qs {
                         out.calls.push((factory, encode_q(q, a, b)));
                         out.asks.push(Ask {

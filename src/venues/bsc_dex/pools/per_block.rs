@@ -103,6 +103,7 @@ pub fn needs(f: &Family) -> bool {
         f.proto,
         Proto::ListaStable
             | Proto::WooPP
+            | Proto::Elfomo
             | Proto::InfinityStable
             | Proto::CurveNg
             | Proto::NomiStable

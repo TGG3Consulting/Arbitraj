@@ -220,7 +220,11 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // Решение 122 F, 3: PancakeSwap / Lista StableSwap — новые пулы из справочника и поиска по реестру фабрики
             // (getPairInfo / getPairInfos, factory_ask.rs); подписка на NewStableSwapPair — техдолг (docs/ROADMAP.md).
             // Saddle (Nerve) — фабрики нет; WooFi — общий контракт, новые базовые монеты — через поиск по оракулу.
-            Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::WooPP => {
+            Proto::PancakeStable
+            | Proto::ListaStable
+            | Proto::SaddleStable
+            | Proto::WooPP
+            | Proto::Elfomo => {
                 continue;
             }
             // Решение 484: Wombat — фабрики нет; пулы — справочник и список dex.stable_pools.

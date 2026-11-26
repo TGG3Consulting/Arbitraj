@@ -84,11 +84,20 @@ def capture():
     markets=c.one(ROUTER,"getSupportedPairs()",returns=["(address,address)[]"])[0]
     cases=[measure(e,a,b,n,vault) for x,y in markets if x in SIZES and y in SIZES
            for a,b in ((x,y),(y,x)) for n in SIZES[a]]
+    base,counter = next((a,b) for a,b in markets if a=="0x4200000000000000000000000000000000000006")
+    amount = 10**20
+    quote_call = {"from":HOLDERS["base"][counter],"to":ROUTER,
+                  "data":calldata("getAmountOut(address,address,uint256)",["address","address","uint256"],[counter,base,amount])}
+    capped = rpc(e,"eth_call",[quote_call,e["selector"]])
+    vault_balance, = c.one(base,"balanceOf(address)",["address"],[vault],["uint256"])
+    if int(capped,16)!=vault_balance:
+        raise ValueError("предельный пример перестал воспроизводиться")
     return dict(chain_id=e["chain_id"],selector=e["selector"],endpoint=e["endpoint"],source=DOC,router=ROUTER,
                 router_runtime=code(ROUTER),verified=url,source_sha256=hashlib.sha256(
                     router["sources"]["src/ElfomoFi.sol"]["content"].encode()).hexdigest(),
                 pricing=pricing,pricing_code=code(pricing),pricing_slot=SLOT,pricing_implementation=impl,
-                pricing_impl_code=code(impl),vault=vault,pairs=markets,reads=c.calls,cases=cases)
+                pricing_impl_code=code(impl),vault=vault,pairs=markets,reads=c.calls,cases=cases,
+                cap_probe=dict(call=quote_call,amount=str(amount),out=capped,vault_balance=str(vault_balance)))
 
 
 if __name__=="__main__":

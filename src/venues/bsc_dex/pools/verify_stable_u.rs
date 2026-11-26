@@ -59,6 +59,11 @@ async fn one(ctx: &Ctx, c: &Candidate, size: usize) -> Result<Result<Found, Stri
         Ok(a) => a,
         Err(_) => return Ok(Err(format!("«{}» — не адрес контракта пула", c.pool))),
     };
+    if c.family.proto == Proto::Elfomo {
+        return Ok(super::elfomo::verify(ctx, c, pool)
+            .await
+            .map_err(|e| e.message));
+    }
     let (calls, n_coins) = match plan(ctx, c, pool) {
         Ok(p) => p,
         Err(why) => return Ok(Err(why)),

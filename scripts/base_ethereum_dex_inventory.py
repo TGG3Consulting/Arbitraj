@@ -114,6 +114,15 @@ def tables(network, snapshots, profiles):
                     "По утверждённому BIP-928 пауза Vault V3 запланирована на 30.11.2026. "
                     f"[Вызовы и ответы](../{market_file}) · "
                     "[Решение Balancer](https://forum.balancer.fi/t/bip-928-orderly-winddown-of-balancer-and-distribution-of-the-treasury/7107/23)."])
+    v2_probes = Path("tests/data/base_ethereum_v2_probes.json")
+    fixed = [row["dex"] for row in read(v2_probes) if row["network"] == network
+             and row.get("verify_pair_boundary") and len(row.get("cases", [])) == 2]
+    if fixed:
+        out.extend(["", "Для " + ", ".join(sorted(fixed)) +
+                    " источник комиссии подтверждён кодом пары, а происхождение пула проверено по CREATE2. "
+                    "На двух размерах в обоих направлениях пул отдал расчётный выход; запрос ещё одной минимальной "
+                    "единицы отвергнут инвариантом самого пула. Исполнитель отдельно подтвердил движения кошелька. "
+                    f"[Блоки, пулы, объёмы и причины отката](../{v2_probes.as_posix()})."])
     curve_file = f"tests/data/first_run_dex_2026-11-26/curve_{network}.json"
     if Path(curve_file).exists():
         groups = read(Path(curve_file))["families"]
@@ -249,8 +258,11 @@ def tables(network, snapshots, profiles):
                     f"getSupportedPairs вернул {len(el['pairs'])} пар. У WETH/USDC и cbBTC/USDC {ok} исполнений "
                     "с partnerId=0 дали полные встречные дельты на плательщике и vault. Контракт вернул пустые байты. "
                     f"У USDT/USDC {zero} нулевых котировок. Для остальных пар двусторонняя проверка отсутствует. "
-                    "Для заявки требуются котировка от фактического плательщика, точный minOut, сверка реализации и доступного "
-                    "объёма. Подключение штатного маршрута ожидает проверки адаптера. "
+                    "Профиль elfomofi строит сигнальную лестницу только WETH/USDC и cbBTC/USDC. Каждый запрос цены "
+                    "передаёт фактический адрес кошелька с partnerId=0, платёжная ликвидность ограничена остатком vault "
+                    "и его allowance. Выход, достигший всего доступного остатка, отсекается. Размеры dex.pmm_ladder_usd "
+                    "задаёт владелец в USDT, dex.pmm_ladder_counter переводит эти объёмы в USDC по курсу реестра. "
+                    "Торговый путь требует доказанного механизма срока заявки: у нативного swap отсутствует deadline. "
                     f"[Сырые результаты](../{elfomo.as_posix()}) · [Спецификация]({el['source']})."])
     aero_basic = Path("tests/data/first_run_dex_2026-11-26/aero_basic_base.json")
     if base and aero_basic.exists():
@@ -310,7 +322,7 @@ def tables(network, snapshots, profiles):
                         "По завершении каждого вызова вход и выход на модуле, а также разрешение модуль → пул равны нулю. "
                         "При превышении фактической выплаты на одну минимальную единицу каждый вызов отклонился. "
                         f"[Вызовы и балансы получателя](../{wrapper.as_posix()}) · "
-                        "[Артефакт компиляции](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45875659089)."])
+                        "[Артефакт компиляции](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45878675517)."])
         if not base:
             out.extend(["", "Ethereum · у USDC/WETH из бюджета 1 WETH пул списал 0,219192077251805298 WETH "
                         "и выплатил 204,192073 USDC. У USDC/USDT без ограничения газа quoteSwap на 10 USDT "

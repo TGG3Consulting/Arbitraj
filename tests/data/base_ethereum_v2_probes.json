@@ -1296,5 +1296,587 @@
       ],
       "embedded_pair": true
     }
+  },
+  {
+    "network": "ethereum",
+    "dex": "apeswap_ethereum",
+    "pool": "0x8e4c56e78e8888cebf85e30f13c9a1b3a67889d6",
+    "factory": "0xbae5dc9b19004883d0377419fef3c2c8832d7d7b",
+    "tokens": [
+      "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "0xe57425f1598f9b0d6219706b77f4b3da573a3695"
+    ],
+    "match": "match",
+    "runtime_match": true,
+    "runtime_hash": "0x5d781790e45696884503b4a9d1ab315dda97ebc07e3cfef02b1ec637389fc469",
+    "source_url": "https://sourcify.dev/server/v2/contract/1/0x8e4c56e78e8888cebf85e30f13c9a1b3a67889d6",
+    "contract": "/contracts/ApePair.sol",
+    "fee_fraction": [
+      1000,
+      2
+    ],
+    "creation_code_hash": "0xe2200989b6f9506f3beca7e9c844741b3ad1a88ad978b6b0973e96d3ca4707aa",
+    "verify_pair_boundary": true,
+    "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "reserves": [
+      "16974870245898",
+      "1297203689628740843686424"
+    ],
+    "pips": 2000,
+    "cases": [
+      {
+        "in": "1697487024",
+        "bought": "129448009268645994258",
+        "returned": "1690704541",
+        "buy_return": "129448009268645994258",
+        "sell_return": "1690704541",
+        "observed_balances": [
+          "129448009268645994258",
+          "1690704541",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "pair_boundary": {
+          "buy": {
+            "max": "129448009268645994258",
+            "next_revert": "ApeSwap: K"
+          },
+          "sell": {
+            "max": "1690704541",
+            "next_revert": "ApeSwap: K"
+          }
+        }
+      },
+      {
+        "in": "33949740491",
+        "bought": "2584060779123249733640",
+        "returned": "33814347032",
+        "buy_return": "2584060779123249733640",
+        "sell_return": "33814347032",
+        "observed_balances": [
+          "2584060779123249733640",
+          "33814347032",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "pair_boundary": {
+          "buy": {
+            "max": "2584060779123249733640",
+            "next_revert": "ApeSwap: K"
+          },
+          "sell": {
+            "max": "33814347032",
+            "next_revert": "ApeSwap: K"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "network": "ethereum",
+    "dex": "elk_finance_ethereum",
+    "pool": "0xfa2048b1008039ca629747353791baef47e25456",
+    "factory": "0x6511eba915fc1b94b2364289cca2b27ae5898d80",
+    "tokens": [
+      "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "0xdac17f958d2ee523a2206206994597c13d831ec7"
+    ],
+    "match": "match",
+    "runtime_match": true,
+    "runtime_hash": "0x9dbd6b9c2b0d520363b65970540e2d5efbf42c4d996ce52a61874f08c87e0415",
+    "source_url": "https://sourcify.dev/server/v2/contract/1/0xfa2048b1008039ca629747353791baef47e25456",
+    "contract": "ElkPair.sol",
+    "fee_fraction": [
+      1000,
+      3
+    ],
+    "creation_code_hash": "0x84845e7ccb283dec564acfcd3d9287a491dec6d675705545a2ab8be22ad78f31",
+    "verify_pair_boundary": true,
+    "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "reserves": [
+      "95020149752496551",
+      "161274142"
+    ],
+    "pips": 3000,
+    "cases": [
+      {
+        "in": "9502014975249",
+        "bought": "16077",
+        "returned": "9444842012338",
+        "buy_return": "16077",
+        "sell_return": "9444842012338",
+        "observed_balances": [
+          "16077",
+          "9444842012338",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "pair_boundary": {
+          "buy": {
+            "max": "16077",
+            "next_revert": "Elk: K"
+          },
+          "sell": {
+            "max": "9444842012338",
+            "next_revert": "Elk: K"
+          }
+        }
+      },
+      {
+        "in": "190040299504993",
+        "bought": "320940",
+        "returned": "188903624737879",
+        "buy_return": "320940",
+        "sell_return": "188903624737879",
+        "observed_balances": [
+          "320940",
+          "188903624737879",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "pair_boundary": {
+          "buy": {
+            "max": "320940",
+            "next_revert": "Elk: K"
+          },
+          "sell": {
+            "max": "188903624737879",
+            "next_revert": "Elk: K"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "network": "ethereum",
+    "dex": "orion-ethereum",
+    "pool": "0x6855859bea41a682707c4aa98424a734515da111",
+    "factory": "0x5fa0060fcfea35b31f7a5f6025f0ff399b98edf1",
+    "tokens": [
+      "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "0xdac17f958d2ee523a2206206994597c13d831ec7"
+    ],
+    "match": "exact_match",
+    "runtime_match": true,
+    "runtime_hash": "0x2304221173805437a0089f320d8fed729003d9053b9441becba1c5c386ad2ea5",
+    "source_url": "https://sourcify.dev/server/v2/contract/1/0x6855859bea41a682707c4aa98424a734515da111",
+    "contract": "/Users/koloale/orion-projects/orion-exchange_dev/contracts/utils/orionpool/core/OrionPoolV2Pair.sol",
+    "fee_fraction": [
+      1000,
+      3
+    ],
+    "creation_code_hash": "0x0c591b9bd08f1704b700bd0b662cd000c1bf71b54704b340e7442d09778ed7c7",
+    "verify_pair_boundary": true,
+    "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "reserves": [
+      "2442820921730133820",
+      "4116930088"
+    ],
+    "pips": 3000,
+    "cases": [
+      {
+        "in": "244282092173013",
+        "bought": "410417",
+        "returned": "242818736992038",
+        "buy_return": "410417",
+        "sell_return": "242818736992038",
+        "observed_balances": [
+          "410417",
+          "242818736992038",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "pair_boundary": {
+          "buy": {
+            "max": "410417",
+            "next_revert": "OrionPoolV2: K"
+          },
+          "sell": {
+            "max": "242818736992038",
+            "next_revert": "OrionPoolV2: K"
+          }
+        }
+      },
+      {
+        "in": "4885641843460267",
+        "bought": "8192822",
+        "returned": "4856429972642842",
+        "buy_return": "8192822",
+        "sell_return": "4856429972642842",
+        "observed_balances": [
+          "8192822",
+          "4856429972642842",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "pair_boundary": {
+          "buy": {
+            "max": "8192822",
+            "next_revert": "OrionPoolV2: K"
+          },
+          "sell": {
+            "max": "4856429972642842",
+            "next_revert": "OrionPoolV2: K"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "network": "ethereum",
+    "dex": "saitaswap-ethereum",
+    "pool": "0xe31dbc4e38b6099b03ca617206d16b446f657901",
+    "factory": "0x25393bb68c89a894b5e20fa3fc3b3b34f843c672",
+    "tokens": [
+      "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "0xdac17f958d2ee523a2206206994597c13d831ec7"
+    ],
+    "match": "exact_match",
+    "runtime_match": true,
+    "runtime_hash": "0xea3bb1865317f8c010b4fbaf0c1d7aa3abcb4501e935a7b31d30105f90388ed0",
+    "source_url": "https://sourcify.dev/server/v2/contract/1/0xe31dbc4e38b6099b03ca617206d16b446f657901",
+    "contract": "contracts/SaitaSwapPair.sol",
+    "fee_fraction": [
+      1000,
+      2
+    ],
+    "creation_code_hash": "0xce30f06d03390218a95a12e2bb31c744b142f1064ccdfd037850b4194bfbe741",
+    "verify_pair_boundary": true,
+    "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "reserves": [
+      "885350509983359838",
+      "1493568140"
+    ],
+    "pips": 2000,
+    "cases": [
+      {
+        "in": "88535050998335",
+        "bought": "149043",
+        "returned": "88181166539511",
+        "buy_return": "149043",
+        "sell_return": "88181166539511",
+        "observed_balances": [
+          "149043",
+          "88181166539511",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "pair_boundary": {
+          "buy": {
+            "max": "149043",
+            "next_revert": "SaitaSwap: K"
+          },
+          "sell": {
+            "max": "88181166539511",
+            "next_revert": "SaitaSwap: K"
+          }
+        }
+      },
+      {
+        "in": "1770701019966719",
+        "bought": "2975223",
+        "returned": "1763639092048790",
+        "buy_return": "2975223",
+        "sell_return": "1763639092048790",
+        "observed_balances": [
+          "2975223",
+          "1763639092048790",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "pair_boundary": {
+          "buy": {
+            "max": "2975223",
+            "next_revert": "SaitaSwap: K"
+          },
+          "sell": {
+            "max": "1763639092048790",
+            "next_revert": "SaitaSwap: K"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "network": "ethereum",
+    "dex": "sakeswap",
+    "pool": "0xe2e5aca8e483a4c057892ee1f03bebc9bfa1f9c2",
+    "factory": "0x75e48c954594d64ef9613aeef97ad85370f13807",
+    "tokens": [
+      "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "0xdac17f958d2ee523a2206206994597c13d831ec7"
+    ],
+    "match": "match",
+    "runtime_match": true,
+    "runtime_hash": "0x7e7907605e4c2a33f9688a9e6757bef447af6b66d2da0cb94d44730242f304c8",
+    "source_url": "https://sourcify.dev/server/v2/contract/1/0xe2e5aca8e483a4c057892ee1f03bebc9bfa1f9c2",
+    "contract": "SakeSwapPair.sol",
+    "fee_fraction": [
+      1000,
+      3
+    ],
+    "creation_code_hash": "0xb2b53dca60cae1d1f93f64d80703b888689f28b63c483459183f2f4271fa0308",
+    "verify_pair_boundary": true,
+    "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "reserves": [
+      "1408785038296655436",
+      "2376484740"
+    ],
+    "pips": 3000,
+    "cases": [
+      {
+        "in": "140878503829665",
+        "bought": "236911",
+        "returned": "140034047623765",
+        "buy_return": "236911",
+        "sell_return": "140034047623765",
+        "observed_balances": [
+          "236911",
+          "140034047623765",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "pair_boundary": {
+          "buy": {
+            "max": "236911",
+            "next_revert": "SakeSwap: K"
+          },
+          "sell": {
+            "max": "140034047623765",
+            "next_revert": "SakeSwap: K"
+          }
+        }
+      },
+      {
+        "in": "2817570076593310",
+        "bought": "4729280",
+        "returned": "2800723276678809",
+        "buy_return": "4729280",
+        "sell_return": "2800723276678809",
+        "observed_balances": [
+          "4729280",
+          "2800723276678809",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "pair_boundary": {
+          "buy": {
+            "max": "4729280",
+            "next_revert": "SakeSwap: K"
+          },
+          "sell": {
+            "max": "2800723276678809",
+            "next_revert": "SakeSwap: K"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "network": "base",
+    "dex": "squadswap-base",
+    "pool": "0xa29180d0168f36427ce889810ca07df2922c7991",
+    "factory": "0xba34aa640b8be02a439221bcbea1f48c1035eef9",
+    "tokens": [
+      "0x4200000000000000000000000000000000000006",
+      "0x4ed4e862860bed51a9570b96d89af5e1b0efefed"
+    ],
+    "match": "match",
+    "runtime_match": true,
+    "runtime_hash": "0x4ecf45677ad5689af5bb61ec411d0e38f9b670db16180f3dce7cfb2e43cb5f09",
+    "source_url": "https://sourcify.dev/server/v2/contract/8453/0xa29180d0168f36427ce889810ca07df2922c7991",
+    "contract": "contracts/factory/SquadswapPair.sol",
+    "fee_fraction": [
+      1000,
+      2
+    ],
+    "creation_code_hash": "0x98859e91a2d7077a5647fc52bfa56461f1be3991cfafdee3a968bf5d9a947f22",
+    "verify_pair_boundary": true,
+    "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "reserves": [
+      "259169836933429768",
+      "660865026801691249110252"
+    ],
+    "pips": 2000,
+    "cases": [
+      {
+        "in": "25916983693342",
+        "bought": "65947748089546964331",
+        "returned": "25813429740518",
+        "buy_return": "65947748089546964331",
+        "sell_return": "25813429740518",
+        "observed_balances": [
+          "65947748089546964331",
+          "25813429740518",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "pair_boundary": {
+          "buy": {
+            "max": "65947748089546964331",
+            "next_revert": "Squadswap: K"
+          },
+          "sell": {
+            "max": "25813429740518",
+            "next_revert": "Squadswap: K"
+          }
+        }
+      },
+      {
+        "in": "518339673866859",
+        "bought": "1316458941449042083912",
+        "returned": "516272506344329",
+        "buy_return": "1316458941449042083912",
+        "sell_return": "516272506344329",
+        "observed_balances": [
+          "1316458941449042083912",
+          "516272506344329",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "pair_boundary": {
+          "buy": {
+            "max": "1316458941449042083912",
+            "next_revert": "Squadswap: K"
+          },
+          "sell": {
+            "max": "516272506344329",
+            "next_revert": "Squadswap: K"
+          }
+        }
+      }
+    ]
   }
 ]

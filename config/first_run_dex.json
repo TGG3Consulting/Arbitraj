@@ -1818,7 +1818,7 @@
       "dex.factory": "0x70fe4a44ea505cfa3a57b95cf2862d4fd5f0f687"
     },
     "verified_module": {
-      "runtime_keccak": "0x0538a91b6cf9f37efc80d7a242de902548ee9b473e3f9eab0b6e582629f23a2f",
+      "runtime_keccak": "0x9e4240b9b7ebde8f9838aadeec18c22bdf9a812df0468dd487b7af2fadd5e020",
       "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
       "full": 12,
       "partial_rejected": 0
@@ -1834,7 +1834,7 @@
       "dex.factory": "0x70fe4a44ea505cfa3a57b95cf2862d4fd5f0f687"
     },
     "verified_module": {
-      "runtime_keccak": "0x0538a91b6cf9f37efc80d7a242de902548ee9b473e3f9eab0b6e582629f23a2f",
+      "runtime_keccak": "0x9e4240b9b7ebde8f9838aadeec18c22bdf9a812df0468dd487b7af2fadd5e020",
       "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
       "full": 11,
       "partial_rejected": 1
@@ -1889,6 +1889,111 @@
       "dex.factory": "0x8e6a9fcd1d638cc760ffba397605fe3355de76d2",
       "dex.aero_fee_module": "0x7949de8d67e4f6b8509bdbb43ff0503af1247a7a",
       "dex.aero_mev_module": "0x0000000000000000000000000000000000000000"
+    }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "elfomofi",
+    "source": "https://docs.elfomo.fi/integration/",
+    "settings": {
+      "dex.kind": "elfomofi",
+      "dex.pmm_pool": "0xf0f0f0f0fb0d738452efd03a28e8be14c76d5f73",
+      "dex.oracle": "0xffffffbb2d432b8acb4c57d556c0c721a431d038",
+      "dex.pool_implementation": "0x223987c32325ba6eafca5b38aeae13a1c80e235d",
+      "dex.vault": "0xbb1b19f138db3925883a96ff7a304277460e0c99",
+      "dex.multi_pair": true,
+      "dex.pmm_ladder_counter": true
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "apeswap_ethereum",
+    "source": "https://sourcify.dev/server/v2/contract/1/0x8e4c56e78e8888cebf85e30f13c9a1b3a67889d6 · tests/data/base_ethereum_v2_probes.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0xbae5dc9b19004883d0377419fef3c2c8832d7d7b",
+      "dex.pool_code_hashes": [
+        "0xe2200989b6f9506f3beca7e9c844741b3ad1a88ad978b6b0973e96d3ca4707aa"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.2"
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "elk_finance_ethereum",
+    "source": "https://sourcify.dev/server/v2/contract/1/0xfa2048b1008039ca629747353791baef47e25456 · tests/data/base_ethereum_v2_probes.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x6511eba915fc1b94b2364289cca2b27ae5898d80",
+      "dex.pool_code_hashes": [
+        "0x84845e7ccb283dec564acfcd3d9287a491dec6d675705545a2ab8be22ad78f31"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "orion-ethereum",
+    "source": "https://sourcify.dev/server/v2/contract/1/0x6855859bea41a682707c4aa98424a734515da111 · tests/data/base_ethereum_v2_probes.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x5fa0060fcfea35b31f7a5f6025f0ff399b98edf1",
+      "dex.pool_code_hashes": [
+        "0x0c591b9bd08f1704b700bd0b662cd000c1bf71b54704b340e7442d09778ed7c7"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "saitaswap-ethereum",
+    "source": "https://sourcify.dev/server/v2/contract/1/0xe31dbc4e38b6099b03ca617206d16b446f657901 · tests/data/base_ethereum_v2_probes.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x25393bb68c89a894b5e20fa3fc3b3b34f843c672",
+      "dex.pool_code_hashes": [
+        "0xce30f06d03390218a95a12e2bb31c744b142f1064ccdfd037850b4194bfbe741"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.2"
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "sakeswap",
+    "source": "https://sourcify.dev/server/v2/contract/1/0xe2e5aca8e483a4c057892ee1f03bebc9bfa1f9c2 · tests/data/base_ethereum_v2_probes.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x75e48c954594d64ef9613aeef97ad85370f13807",
+      "dex.pool_code_hashes": [
+        "0xb2b53dca60cae1d1f93f64d80703b888689f28b63c483459183f2f4271fa0308"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "squadswap-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xa29180d0168f36427ce889810ca07df2922c7991 · tests/data/base_ethereum_v2_probes.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0xba34aa640b8be02a439221bcbea1f48c1035eef9",
+      "dex.pool_code_hashes": [
+        "0x98859e91a2d7077a5647fc52bfa56461f1be3991cfafdee3a968bf5d9a947f22"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.2"
     }
   }
 ]

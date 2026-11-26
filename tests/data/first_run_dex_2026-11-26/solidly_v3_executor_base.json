@@ -6,7 +6,7 @@
   },
   "endpoint": "https://base-rpc.publicnode.com",
   "executor": "0x1667014bc6f29a2f478960f7c2ca0fe0f5fae0ff",
-  "runtime_keccak": "0x0538a91b6cf9f37efc80d7a242de902548ee9b473e3f9eab0b6e582629f23a2f",
+  "runtime_keccak": "0x9e4240b9b7ebde8f9838aadeec18c22bdf9a812df0468dd487b7af2fadd5e020",
   "compiler": "0.8.37+commit.f401782d.Emscripten.clang",
   "cases": [
     {

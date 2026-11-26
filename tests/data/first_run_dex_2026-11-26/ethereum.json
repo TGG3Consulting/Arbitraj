@@ -670,6 +670,26 @@
     "0xdf7e8987421f541c50f821f8cf22a6bda5e1e05b": {
       "bytes": 8273,
       "keccak256": "0xd092899c8f94c08f7a737d33b1e25a9c9c70dc983a5f66fca98831c13bf9d9be"
+    },
+    "0x25393bb68c89a894b5e20fa3fc3b3b34f843c672": {
+      "bytes": 11317,
+      "keccak256": "0x57c3d91c058ea6dc78cc3c5340df389a751600b14371effa4e3da30bab092f5d"
+    },
+    "0x5fa0060fcfea35b31f7a5f6025f0ff399b98edf1": {
+      "bytes": 11101,
+      "keccak256": "0xf31f94bb97b8897adbc35199b226d1a75a290bcd11460331fd05270cd332cf58"
+    },
+    "0x6511eba915fc1b94b2364289cca2b27ae5898d80": {
+      "bytes": 11061,
+      "keccak256": "0x633982d4173e19789001ce05488b95046fd43678467b221c0ba6334d21afbb7f"
+    },
+    "0x75e48c954594d64ef9613aeef97ad85370f13807": {
+      "bytes": 18072,
+      "keccak256": "0x041a65f6ddc20022156de7d292f215b36a6aedca3868f242df7e5a33b3ec37c4"
+    },
+    "0xbae5dc9b19004883d0377419fef3c2c8832d7d7b": {
+      "bytes": 14060,
+      "keccak256": "0xfb4c1223fdc3a837a56f229e4aae7a6a9936ac5715def8d91cd9e9f2023e5e53"
     }
   },
   "router_getAmountOut": [

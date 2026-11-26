@@ -49,6 +49,20 @@ pub async fn out_at(
     amount: U256,
     block: &str,
 ) -> GatewayResult<U256> {
+    if e.family.proto == super::super::pools::families::Proto::Elfomo {
+        let out = if token_in == e.pool.token0 {
+            e.pool.token1
+        } else if token_in == e.pool.token1 {
+            e.pool.token0
+        } else {
+            return Err(ctx.err(
+                ErrorCode::InvalidAddress,
+                "Входной токен не принадлежит паре ElfomoFi",
+            ));
+        };
+        return super::super::pools::elfomo::quote(ctx, e.family.id, token_in, out, amount, block)
+            .await;
+    }
     // Решение 186: DEX без своего квотера — выход по коду самого пула (quote/virtual_quoter.rs).
     if super::virtual_quoter::on(ctx, e.family.id, e.family.proto) {
         return super::virtual_quoter::out_at(ctx, e, token_in, amount, block).await;

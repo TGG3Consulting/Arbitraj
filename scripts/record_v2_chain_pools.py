@@ -40,6 +40,44 @@ def swap(pool, token_in, token_out, amount, out, deadline, pips):
         ["address", "uint256", "address", "uint256", "uint256", STEP + "[]"], args))
 
 
+def pair_boundary(simulate, pool, weth, other, weth_index, amount, bought, sold):
+    """Ask the pair itself for its maximum output, independent of the executor fee input."""
+    def transfer(token, qty):
+        return call(token, calldata("transfer(address,uint256)", ["address", "uint256"], [pool, qty]))
+
+    def pair_swap(input_index, qty):
+        outputs = [0, 0]
+        outputs[1 - input_index] = qty
+        return call(pool, calldata("swap(uint256,uint256,address,bytes)",
+                    ["uint256", "uint256", "address", "bytes"], [*outputs, OWNER, b""]))
+
+    funding = [call(weth, calldata("deposit()"), amount), transfer(weth, amount)]
+    buy = pair_swap(weth_index, bought)
+    selling = funding + [buy, transfer(other, bought)]
+    results = {}
+    for direction, prefix, index, out in (
+        ("buy", funding, weth_index, bought), ("sell", selling, 1 - weth_index, sold)
+    ):
+        for extra in (0, 1):
+            calls = simulate(prefix + [pair_swap(index, out + extra)])
+            if not all(int(c["status"], 16) == 1 for c in calls[:-1]):
+                raise ValueError("pair boundary funding failed: " + direction)
+            last = calls[-1]
+            status = int(last["status"], 16)
+            if status != int(extra == 0):
+                raise ValueError("pair maximum differs from formula: " + direction)
+            if extra:
+                from eth_abi import decode
+                data = last.get("error", {}).get("data") or last.get("returnData", "")
+                if not data.startswith("0x08c379a0"):
+                    raise ValueError("missing invariant revert: " + direction)
+                reason, = decode(["string"], bytes.fromhex(data[10:]))
+                if not reason.endswith(": K"):
+                    raise ValueError("unexpected pair rejection: " + reason)
+                results[direction] = {"max": str(out), "next_revert": reason}
+    return results
+
+
 def measure(row, chain):
     url, weth = NETWORKS[row["network"]]
     tokens = row["tokens"]
@@ -100,6 +138,8 @@ def measure(row, chain):
             "buy_return":str(int(pos[2]["returnData"],16)),"sell_return":str(int(pos[5]["returnData"],16)),
             "observed_balances":[str(int(pos[i]["returnData"],16)) for i in (3,6,7,8,9)],
             "strict_buy":strict[0].get("error"),"strict_sell":strict[1].get("error")})
+        if row.get("verify_pair_boundary"):
+            results[-1]["pair_boundary"] = pair_boundary(simulate, pool, weth, other, index, amount, bought, sold)
     return dict(row, block_hash=chain["hash"], reserves=[str(v) for v in r], pips=pips, cases=results)
 
 

@@ -134,9 +134,11 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             Proto::LbV20 => lb20.push(i),
             // Решение 446: LB V2.2 — проверка V2.1 и ещё реализация и крючки пула (verify_lb22.rs).
             Proto::LbV22 => lb22.push(i),
-            Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::WooPP => {
-                stable_u.push(i)
-            }
+            Proto::PancakeStable
+            | Proto::ListaStable
+            | Proto::SaddleStable
+            | Proto::WooPP
+            | Proto::Elfomo => stable_u.push(i),
             Proto::Maverick => mav.push(i),
             Proto::InfinityStable => inf_stable.push(i),
             Proto::FluidT1 => fluid.push(i),

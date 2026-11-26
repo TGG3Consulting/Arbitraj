@@ -14,6 +14,7 @@ fn fixed_fee_profiles_match_the_executor_and_wallet_balances() {
     let profiles: Vec<Value> =
         serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
     let mut admitted = 0;
+    let mut verified_boundaries = std::collections::BTreeSet::new();
     for profile in profiles.iter().filter(|p| {
         p["source"]
             .as_str()
@@ -87,11 +88,27 @@ fn fixed_fee_profiles_match_the_executor_and_wallet_balances() {
                 balances,
                 [bought, returned, U256::ZERO, U256::ZERO, U256::ZERO]
             );
+            if capture["verify_pair_boundary"] == true {
+                for (direction, expected) in [("buy", bought), ("sell", returned)] {
+                    let observed = &trade["pair_boundary"][direction];
+                    assert_eq!(uint(&observed["max"]), expected);
+                    assert!(observed["next_revert"].as_str().unwrap().ends_with(": K"));
+                }
+            }
             for key in ["strict_buy", "strict_sell"] {
                 assert!(trade[key]["code"].is_number());
             }
         }
+        if capture["verify_pair_boundary"] == true {
+            verified_boundaries.insert(profile["id"].as_str().unwrap());
+        }
         admitted += 1;
     }
-    assert!(admitted >= 14);
+    for dex in [
+        "apeswap_ethereum", "elk_finance_ethereum", "orion-ethereum",
+        "saitaswap-ethereum", "sakeswap", "squadswap-base",
+    ] {
+        assert!(verified_boundaries.contains(dex), "missing pair proof for {dex}");
+    }
+    assert!(admitted >= 20);
 }

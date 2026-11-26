@@ -117,6 +117,8 @@ pub enum Proto {
     /// (контракт, базовая монета). Своей математики нет до проверенного исходника развёрнутой реализации (прокси):
     /// выход — лесенка ответов квотера контракта query(from, to, amount) (dex.pmm_ladder_usd). Вид ядра — OraclePmm.
     WooPP,
+    /// ElfomoFi on Base: oracle pricing behind a proxy and one router for many token pairs.
+    Elfomo,
     /// Maverick V2 (решение 122 F; maverickprotocol/v2-common d91e871, IMaverickV2Pool.sol): тики с резервами tokenA и
     /// tokenB, комиссия по направлению fee(bool), бины разных видов. Расчёт обмена — порт команды Maverick
     /// (math/maverick_swap.rs; Solidity-исходник закрыт), сверка — MaverickV2Quoter.calculateSwap (решение 73). Фабрика —
@@ -578,6 +580,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         ),
         // WooFi WooPPV2 (решение 122 F, 3): в графе и сигналах; своей математики нет (развёрнутый код закрыт) — котировка
         // по лесенке ответов квотера контракта (dex.pmm_ladder_usd, quote/pmm_ladder.rs); шага WOO нет до сухой сделки.
+        "elfomofi" => (PoolKind::OraclePmm, Proto::Elfomo, true, false, false),
         "woofi_v2" => (PoolKind::OraclePmm, Proto::WooPP, true, false, false),
         // Решение 484: Wombat Exchange — в графе и сигналах (порт CoreV2 + haircut + высокое покрытие); исполнение — шаг
         // WOMBAT исполнителя v5 (exec_kind.rs).
@@ -929,6 +932,12 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // читаются).
         Proto::Wombat => list.extend(["dex.stable_pools", "dex.wombat_implementations"]),
         // WooFi: общий контракт, оракул и закреплённая реализация прокси (сменилась — семейство стоит до сверки).
+        Proto::Elfomo => list.extend([
+            "dex.pmm_pool",
+            "dex.oracle",
+            "dex.pool_implementation",
+            "dex.vault",
+        ]),
         Proto::WooPP => list.extend(["dex.pmm_pool", "dex.oracle", "dex.pool_implementation"]),
         // Slipstream (Topaz v3; решения 80, 85): фабрика (проверка пула getPool(coin, quote, int24 tickSpacing),
         // решение 59; события создания PoolCreated) и квотер (сверка ISlipstreamQuoterV2.quoteExactInputSingle по

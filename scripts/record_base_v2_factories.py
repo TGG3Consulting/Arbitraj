@@ -11,6 +11,9 @@ from record_base_slipstream_executor import ROOT,rpc
 from record_ethereum_v2_factories import directory,digest,raw
 
 MARKETS={
+    "pixelswap-base":("0xd07739a9e9c46d3deded97c0edc49cea8bab1bb9",1000,3,"SwapV2: K",1742,9133),
+    "satori-base":("0x4858c605862a91a34d83c19a9704f837f64fa405",1000,3,"K",2171,11561),
+    "candyswap":("0xbfd866bd2502e1693bc31735253a2fb9e728f714",10000,None,"CandySwap: K",2012,10282),
     "moonbase":("0xe396465a85dedb00fa8774162b106833de51ea41",10000,30,"UniswapV2: K",1760,9300),
     "x7-finance-base":("0x8b76c05676d205563ffc1cbd11c0a6e3d83929c5",100000,200,"Xchange: K",2738,14062),
     "9mm-v2-base":("0x4c1b8d4ae77a37b94e195cab316391d3c687ebd1",10000,25,"NineMM: K",2383,11632),
@@ -78,10 +81,12 @@ if __name__=="__main__":
             head=rpc(endpoint,"eth_getBlockByHash",[snap["selector"]["blockHash"],False])
             if head["hash"]!=snap["selector"]["blockHash"] or int(head["number"],16)!=snap["block"] or int(rpc(endpoint,"eth_chainId",[]),16)!=8453:
                 raise ValueError("wrong chain or block")
-            proof=source(cap,row)
+            from base_v2_bytecode import PAIR_CODE, check_deployments, proof as bytecode_proof
+            proof=bytecode_proof(args.market,cap,row) if args.market in PAIR_CODE else source(cap,row)
             standard_swap_origin(args.market,cap,row,proof)
-            if row[2] is None:proof["fee_getter"]="getFeeForPair(address,address)"
+            if row[2] is None:proof.setdefault("fee_getter","getFeeForPair(address,address)")
             result=directory(args.market,cap,config=row[:4],network="base",proof=proof,wrapped=WETH,stables=(USDC,USDBC),funding_router=ROUTER)
+            if args.market in PAIR_CODE:check_deployments(cap,result)
             if args.market=="bakeryswap-base":
                 from record_bakeryswap_base import inspect
                 result["native_router"]=inspect(cap,result,head)

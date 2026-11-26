@@ -109,10 +109,14 @@ def directory(name,c,*,config=None,network="ethereum",proof=None,wrapped=WETH,st
                    verify_pair_boundary=True,invariant_error=reason)
         if fee is None:
             getter=proof.get("fee_getter","getFeeForPair(address)")
-            entry.update(fee_target=factory,fee_getter=getter)
-            token_args=getter=="getFeeForPair(address,address)"
-            actual_fee,=c.one(factory,getter,["address","address"] if token_args else ["address"],
-                row["tokens"] if token_args else [pool],["uint256"])
+            fee_target=pool if proof.get("fee_target")=="pool" else factory
+            entry.update(fee_target=fee_target,fee_getter=getter)
+            if getter.endswith("()"):
+                actual_fee,=c.one(fee_target,getter,returns=["uint256"])
+            elif getter=="getFeeForPair(address,address)":
+                actual_fee,=c.one(fee_target,getter,["address","address"],row["tokens"],["uint256"])
+            else:
+                actual_fee,=c.one(fee_target,getter,["address"],[pool],["uint256"])
         else:
             actual_fee=fee
         entry["fee_fraction"]=[den,actual_fee]

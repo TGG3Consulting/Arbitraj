@@ -509,7 +509,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        market: [9mm-v2-base, bakeryswap-base, cbswap, cloudbase, icecreamswap-base, lfgswap-base, treble-v2, robots-farm-base, moonbase, x7-finance-base]
+        market: [9mm-v2-base, bakeryswap-base, cbswap, cloudbase, icecreamswap-base, lfgswap-base, treble-v2, robots-farm-base, moonbase, x7-finance-base, pixelswap-base, satori-base, candyswap]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

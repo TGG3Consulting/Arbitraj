@@ -101,3 +101,29 @@ fn base_usdc_and_bridged_usdt_settle_in_the_original_wallet_currency() {
         round_trip(row, cash);
     }
 }
+
+#[test]
+fn ethereum_usdt_round_trip_records_actual_vista_and_vipe_spender_boundaries() {
+    let bytes = &include_bytes!("data/first_run_dex_2026-11-26/ethervista_v5_ethereum.json.gz")[..];
+    let rows: Vec<Value> = serde_json::from_reader(GzDecoder::new(bytes)).unwrap();
+    assert_eq!(rows.len(), 1);
+    let row = &rows[0];
+    assert_eq!(row["chain"], 1);
+    round_trip(row, "0xdac17f958d2ee523a2206206994597c13d831ec7");
+    assert_eq!(row["path"][2], "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48");
+    let original = &row["original_approval_proof"];
+    assert_eq!(
+        original["token"],
+        "0xc9bca88b04581699fab5aa276ccaff7df957cbbf"
+    );
+    assert_eq!(original["executor"]["status"], "0x0");
+    assert_eq!(original["router"]["status"], "0x1");
+    let rejected = &row["rejected_routes"][0];
+    assert_eq!(
+        rejected["asset"],
+        "0x564cf63fafc2b4ab1ab07175b10c4a17946ce15c"
+    );
+    assert_eq!(rejected["direction"], "sell");
+    assert_eq!(delta(&rejected["receipt"], "coin"), 0);
+    assert_eq!(delta(&rejected["receipt"], "cash"), 0);
+}

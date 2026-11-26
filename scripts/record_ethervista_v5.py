@@ -214,20 +214,20 @@ def scenario(directory, artifact, endpoint, cash, candidate=None):
             return c.one(router,"usdcToEth(uint256)",["uint256"],[n],["uint256"])[0]
         buy_fee,sell_fee=charge("buy"),charge("sell")
         reads.update(coin=balance(cash,OWNER),pair_weth=balance(weth,pair),module_approval=allowance(cash,ADAPTER,router))
-        def native(forward,amount,minimum,advance):
+        def native(forward,amount,minimum,advance,payee=PAYEE):
             a,b=(weth,cash) if forward else (cash,weth)
-            who=OWNER if forward else PAYEE
+            who=OWNER if forward else payee
             return tx(ADAPTER,"swapNative(address,address,uint256,uint256,address,uint256)",
                       ["address","address","uint256","uint256","address","uint256"],[a,b,amount,minimum,who,deadline],advance)
-        def official(forward,amount,minimum):
+        def official(forward,amount,minimum,payee=PAYEE):
             if forward:
                 return tx(router,"swapExactETHForTokensSupportingFeeOnTransferTokens(uint256,address[],address,uint256)",
                           ["uint256","address[]","address","uint256"],[minimum,[weth,cash],OWNER,deadline],amount)
             return tx(router,"swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
-                      ["uint256","uint256","address[]","address","uint256"],[amount,minimum,[cash,weth],PAYEE,deadline],sell_fee)
-        def event_check(row,forward,amount,received):
+                      ["uint256","uint256","address[]","address","uint256"],[amount,minimum,[cash,weth],payee,deadline],sell_fee)
+        def event_check(row,forward,amount,received,payee=PAYEE):
             a,b=(weth,cash) if forward else (cash,weth)
-            event=dict(payer=OWNER,recipient=OWNER if forward else PAYEE,token_in=a,token_out=b,
+            event=dict(payer=OWNER,recipient=OWNER if forward else payee,token_in=a,token_out=b,
                        spent=str(amount),received=str(received),fee=str(buy_fee if forward else sell_fee))
             if row["settled"]!=[event] or any(delta(row,k) for k in ("module_native","reserve","router_weth")):
                 raise ValueError(f"native receipt or ownership differs: {row['settled']} expected {event}")
@@ -257,7 +257,15 @@ def scenario(directory, artifact, endpoint, cash, candidate=None):
             else:
                 row["sell_module"]=trial(prefix,native(False,volume,net,sell_fee))
                 event_check(row["sell_module"],False,volume,net)
+                live_gross=net+sell_fee
+                row["sell_router_self"]=trial([buy_tx,approval(router)],official(False,volume,live_gross,OWNER))
+                row["sell_module_self"]=trial(prefix,native(False,volume,net,sell_fee,OWNER))
+                event_check(row["sell_module_self"],False,volume,net,OWNER)
+                if row["sell_router_self"]["status"]!="0x1":
+                    raise ValueError("official same-wallet sell rejected exact gross floor")
                 row["native_guards"]={
+                    "one_more_router_self":trial([buy_tx,approval(router)],official(False,volume,live_gross+1,OWNER)),
+                    "one_more_module_self":trial(prefix,native(False,volume,net+1,sell_fee,OWNER)),
                     "one_more_sell":trial(prefix,native(False,volume,net+1,sell_fee)),
                     "one_less_advance":trial(prefix,native(False,volume,net,sell_fee-1)),
                     "one_more_advance":trial(prefix,native(False,volume,net,sell_fee+1)),

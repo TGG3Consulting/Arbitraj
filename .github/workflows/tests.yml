@@ -29,6 +29,10 @@ on:
         description: Compare the OasisSwap router and the compiled V5 adapter on one canonical Base block
         type: boolean
         default: false
+      base_classic_archive:
+        description: Replay all Base classic Solidly registries and the V5 wallet
+        type: boolean
+        default: false
       base_factory_directory:
         description: Reconstruct every pool created by the three Base fork deployers
         type: boolean
@@ -474,6 +478,29 @@ jobs:
         with:
           name: deltaswap-base-archive
           path: ${{ runner.temp }}/deltaswap-base.json
+  base-classic-archive:
+    if: inputs.base_classic_archive
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dex: [baso-finance, infusion, archly-base, archly-v1-base, hydrex-classic, velocimeter-base, equalizer-base]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0 beautifulsoup4==4.14.2
+      - run: python scripts/record_base_classic_directory.py "${{ matrix.dex }}" "$RUNNER_TEMP/registry.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: base-classic-registry-${{ matrix.dex }}
+          path: ${{ runner.temp }}/registry.json
+      - run: python scripts/record_base_classic_wallets.py "$RUNNER_TEMP/registry.json" "$RUNNER_TEMP/wallets.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: base-classic-wallets-${{ matrix.dex }}
+          path: ${{ runner.temp }}/wallets.json
   oasis-base-archive:
     if: inputs.base_factory_directory || inputs.oasis_archive_replay
     runs-on: ubuntu-latest

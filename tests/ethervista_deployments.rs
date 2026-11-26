@@ -88,8 +88,12 @@ fn fees_and_active_router_match_every_registered_market_and_archived_wallet() {
             let units = observed["fees"][side]["units"].as_u64().unwrap();
             assert_eq!(pool["fee_units"][i], units);
             assert_eq!(
-                j["fee_wei_per_units"][units.to_string()],
-                observed["fees"][side]["native_wei"]
+                j["fee_wei_per_units"][units.to_string()]
+                    .as_str()
+                    .unwrap()
+                    .parse::<U256>()
+                    .unwrap(),
+                U256::from(observed["fees"][side]["native_wei"].as_u64().unwrap())
             );
         }
         let cases = observed["swaps"].as_array().unwrap();

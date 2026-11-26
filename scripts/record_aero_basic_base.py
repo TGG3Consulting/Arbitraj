@@ -18,7 +18,7 @@ MARKETS = {
 }
 
 
-def round_trip(e, pool, source, target, amount, deadline, runtime):
+def round_trip(e, pool, source, target, amount, deadline, runtime, kind=26):
     owner = HOLDERS["base"][source]
     word = lambda n: "0x" + format(n, "064x")
     override = {EXEC: {"code": "0x"+runtime, "stateDiff": {
@@ -28,14 +28,15 @@ def round_trip(e, pool, source, target, amount, deadline, runtime):
         return {"to": to, "from": sender, "data": data, "gas": hex(1200000)}
 
     def quote(token, n):
-        return call(pool, calldata("getAmountOutWithTotalFee(uint256,address)",
+        method = "getAmountOut(uint256,address)" if kind == 3 else "getAmountOutWithTotalFee(uint256,address)"
+        return call(pool, calldata(method,
                                    ["uint256", "address"], [n, token]), EXEC)
 
     def swap(token_in, token_out, n, minimum):
         signature = "execute(address,uint256,address,uint256,uint256,"+STEP+"[])"
         types = ["address", "uint256", "address", "uint256", "uint256", STEP+"[]"]
         return call(EXEC, calldata(signature, types, [token_in, n, token_out, minimum, deadline,
-                    [(26, pool, token_in, token_out, 10000, b"")]]))
+                    [(kind, pool, token_in, token_out, 10000, b"")]]))
 
     def approve(token, n):
         return call(token, calldata("approve(address,uint256)", ["address", "uint256"], [EXEC, n]))

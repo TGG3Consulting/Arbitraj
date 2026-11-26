@@ -1742,6 +1742,24 @@
   },
   {
     "network": "ethereum",
+    "id": "rubicon-clmm-ethereum",
+    "chain_id": 1,
+    "source": "https://docs.rubicon.finance/developers/deployments · tests/data/first_run_dex_2026-11-26/rubicon_clmm_ethereum.json",
+    "settings": {
+      "dex.kind": "v3_fork",
+      "dex.factory": "0xdf62d9e51d7c08360dcd41931a2e6b97ff8c73e8",
+      "dex.tick_lens": "0xd37eea4c271bfe41a655ac1bd596ba80e631ceea",
+      "dex.quoter_virtual": true,
+      "dex.v3_fee_tiers": [
+        "100",
+        "500",
+        "3000",
+        "10000"
+      ]
+    }
+  },
+  {
+    "network": "ethereum",
     "id": "lista-dex-v3",
     "chain_id": 1,
     "source": "https://docs.bsc.lista.org/for-developer/dex/smart-contract-ethereum.md",

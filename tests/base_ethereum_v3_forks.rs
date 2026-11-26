@@ -64,3 +64,56 @@ fn source_matched_v3_forks_settle_exact_amounts() {
         }
     }
 }
+
+#[test]
+fn rubicon_registered_pools_reproduce_the_verified_creation_address() {
+    use alloy::sol_types::SolValue;
+    use alloy_primitives::{Address, B256};
+    let registry: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/rubicon_clmm_ethereum.json"
+    ))
+    .unwrap();
+    let profiles: Vec<Value> =
+        serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
+    let profile = &profiles
+        .iter()
+        .find(|p| p["id"] == "rubicon-clmm-ethereum")
+        .unwrap()["settings"];
+    let factory: Address = registry["factory"].as_str().unwrap().parse().unwrap();
+    let init: B256 = registry["creation_hash"].as_str().unwrap().parse().unwrap();
+    assert_eq!(profile["dex.factory"], registry["factory"]);
+    assert_eq!(profile["dex.tick_lens"], registry["tick_lens"]);
+    assert_eq!(profile["dex.quoter_virtual"], true);
+    let enabled = profile["dex.v3_fee_tiers"].as_array().unwrap();
+    assert_eq!(enabled.len(), registry["tiers"].as_object().unwrap().len());
+    for key in registry["tiers"].as_object().unwrap().keys() {
+        assert!(enabled.iter().any(|v| v.as_str() == Some(key.as_str())));
+    }
+    let pools = registry["pools"].as_array().unwrap();
+    assert_eq!(pools.len(), 11);
+    for pool in pools {
+        let address = |index: usize| {
+            pool["tokens"][index]
+                .as_str()
+                .unwrap()
+                .parse::<Address>()
+                .unwrap()
+        };
+        let expected: Address = pool["address"].as_str().unwrap().parse().unwrap();
+        let fee = U256::from(pool["fee"].as_u64().unwrap());
+        let salt = keccak256((address(0), address(1), fee).abi_encode());
+        assert_eq!(factory.create2(salt, init), expected);
+    }
+    let replay: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/verified_v3_ethereum.json"
+    ))
+    .unwrap();
+    let market = &replay["rubicon-clmm-ethereum"]["pool"];
+    assert_eq!(registry["selector"]["blockHash"], market["hash"]);
+    assert_eq!(registry["lens_sample"]["pool"], market["pool"]);
+    assert!(
+        pools
+            .iter()
+            .any(|p| p["address"] == market["pool"] && p["liquidity"] != "0")
+    );
+}

@@ -293,6 +293,16 @@ def tables(network, snapshots, profiles):
                         "превысил лимит. Для DEFROGS/WETH проверены обе стороны обмена на двух размерах."])
     lista = "tests/data/first_run_dex_2026-11-26/lista_ethereum.json"
     lista_stable = "tests/data/first_run_dex_2026-11-26/lista_stable_ethereum.json"
+    rubicon = Path("tests/data/first_run_dex_2026-11-26/rubicon_clmm_ethereum.json")
+    if not base and rubicon.exists():
+        rubicon_registry = read(rubicon)
+        active = sum(int(p["liquidity"]) > 0 for p in rubicon_registry["pools"])
+        out.extend(["", f"Rubicon CLMM · на Ethereum зафиксированы {len(rubicon_registry['pools'])} пулов и "
+                    f"{len(rubicon_registry['tiers'])} уровня комиссии. Адрес каждого пула воспроизводится из фабрики, "
+                    "пары, комиссии и байткода создания (CREATE2). На блоке 26 494 988 текущая активная "
+                    f"ликвидность положительна у {active} пула. Два размера на нём прошли полный круг "
+                    "через V5 с проверкой конечных балансов и minOut. "
+                    f"[Адреса, события, тики и происхождение пулов](../{rubicon.as_posix()})."])
     if not base and Path(lista).exists():
         out.extend(["", "Lista DEX V3 · три пула официальной фабрики Ethereum и семь разрешённых уровней комиссии "
                     "установлены по событиям и обратным запросам. У всех трёх пулов код 31 зависимой единицы Solidity "

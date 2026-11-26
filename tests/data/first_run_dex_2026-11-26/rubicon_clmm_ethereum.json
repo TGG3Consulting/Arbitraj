@@ -1,0 +1,215 @@
+{
+  "chain_id": 1,
+  "selector": {
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "requireCanonical": true
+  },
+  "deployment_source": "https://docs.rubicon.finance/developers/deployments",
+  "event_index": "https://api.routescan.io/v2/network/mainnet/evm/1/etherscan/api",
+  "factory": "0xdf62d9e51d7c08360dcd41931a2e6b97ff8c73e8",
+  "tick_lens": "0xd37eea4c271bfe41a655ac1bd596ba80e631ceea",
+  "quoter": "0xdf7e8987421f541c50f821f8cf22a6bda5e1e05b",
+  "contracts": {
+    "0xdf62d9e51d7c08360dcd41931a2e6b97ff8c73e8": {
+      "bytes": 24116,
+      "keccak256": "0xf7c97d24a9cd76fa974d5cc5e84e941919d92782845f0a174d6d2e417fa92312"
+    },
+    "0xd37eea4c271bfe41a655ac1bd596ba80e631ceea": {
+      "bytes": 1385,
+      "keccak256": "0xbf1bb07babb013f146395ed6e1127f8f48d598f1765bc660a91d7b164cf93ff8"
+    },
+    "0xdf7e8987421f541c50f821f8cf22a6bda5e1e05b": {
+      "bytes": 8273,
+      "keccak256": "0xd092899c8f94c08f7a737d33b1e25a9c9c70dc983a5f66fca98831c13bf9d9be"
+    }
+  },
+  "source": "https://sourcify.dev/server/v2/contract/1/0x3b725d9017526f8e349d1613c7e3b530c5b865c2",
+  "creation_hash": "0xd3e7f58b9af034cfa7a0597e539bae7c6b393817a47a6fc1e1503cd6eaffe22a",
+  "tiers": {
+    "500": 10,
+    "3000": 60,
+    "10000": 200,
+    "100": 1
+  },
+  "pools": [
+    {
+      "address": "0xe7c40cfaab7ea4084a34a89387265db9d5611a89",
+      "tokens": [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "liquidity": "0",
+      "height": 24780613,
+      "block_hash": "0x616c7d4ad0e13fd97b6b67a1e87d1dc2c032791a7c508bdb105cc66f8f76b35e",
+      "tx": "0x7b8020740aefb52325835d432c64df4a9abffd70598337abb5682ef20a7b6da6"
+    },
+    {
+      "address": "0x028ab215a083f85233965b2c227d7246a1485a93",
+      "tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "liquidity": "0",
+      "height": 24887803,
+      "block_hash": "0x0605b93cbe1c0ddde21d040734ab0b73914a1f463bf1dc16521f192ef3953753",
+      "tx": "0xc6fe2ec75f56def79c1f12068bf5009aa97d1a52e230e25bbbced199f024ca1c"
+    },
+    {
+      "address": "0x61c611769e2630983a8ea3dce9d90f24ab7a7fb6",
+      "tokens": [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 500,
+      "spacing": 10,
+      "liquidity": "0",
+      "height": 24887803,
+      "block_hash": "0x0605b93cbe1c0ddde21d040734ab0b73914a1f463bf1dc16521f192ef3953753",
+      "tx": "0xc6fe2ec75f56def79c1f12068bf5009aa97d1a52e230e25bbbced199f024ca1c"
+    },
+    {
+      "address": "0x6000ee55d968ab528b56349a6b70bbd4d03ccd93",
+      "tokens": [
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 500,
+      "spacing": 10,
+      "liquidity": "0",
+      "height": 24887803,
+      "block_hash": "0x0605b93cbe1c0ddde21d040734ab0b73914a1f463bf1dc16521f192ef3953753",
+      "tx": "0xc6fe2ec75f56def79c1f12068bf5009aa97d1a52e230e25bbbced199f024ca1c"
+    },
+    {
+      "address": "0xb51e9bd9083d66dd479e441fa847fb0c703d0424",
+      "tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 500,
+      "spacing": 10,
+      "liquidity": "0",
+      "height": 24887804,
+      "block_hash": "0x7d11ee82955a19f2dd8e59480e1dd4b11048c83655b898c6becdcc81517007c6",
+      "tx": "0x5a0bd0e9df53e9f3f825ccb19273f110ff2dcaf368fc4c9520e836b025b93151"
+    },
+    {
+      "address": "0x9737b4f2559f795fc137d270b28f6667d25ee65e",
+      "tokens": [
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "liquidity": "0",
+      "height": 24887804,
+      "block_hash": "0x7d11ee82955a19f2dd8e59480e1dd4b11048c83655b898c6becdcc81517007c6",
+      "tx": "0x5a0bd0e9df53e9f3f825ccb19273f110ff2dcaf368fc4c9520e836b025b93151"
+    },
+    {
+      "address": "0x12f6541d6415d9709af49665005d7e5efa89cef7",
+      "tokens": [
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 500,
+      "spacing": 10,
+      "liquidity": "0",
+      "height": 24887804,
+      "block_hash": "0x7d11ee82955a19f2dd8e59480e1dd4b11048c83655b898c6becdcc81517007c6",
+      "tx": "0x5a0bd0e9df53e9f3f825ccb19273f110ff2dcaf368fc4c9520e836b025b93151"
+    },
+    {
+      "address": "0xaceea35546823865cc92618d7233886fa0325a85",
+      "tokens": [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 100,
+      "spacing": 1,
+      "liquidity": "0",
+      "height": 24887805,
+      "block_hash": "0xc76e3893b6f82c2fa00dc7afa4ea5eb3c73f66957bee190fca89b3948fa426bb",
+      "tx": "0x52edc1677e21885ee4374c10a30c745bed0147c04382ed497f1ece94db330b19"
+    },
+    {
+      "address": "0x2449aadcc68182dc40cd9d9e2a14957ecafe8ea6",
+      "tokens": [
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "liquidity": "0",
+      "height": 24887805,
+      "block_hash": "0xc76e3893b6f82c2fa00dc7afa4ea5eb3c73f66957bee190fca89b3948fa426bb",
+      "tx": "0x52edc1677e21885ee4374c10a30c745bed0147c04382ed497f1ece94db330b19"
+    },
+    {
+      "address": "0xdbb54a50ea089cf7d4f91a4cec707c4d104e7704",
+      "tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 100,
+      "spacing": 1,
+      "liquidity": "0",
+      "height": 24887805,
+      "block_hash": "0xc76e3893b6f82c2fa00dc7afa4ea5eb3c73f66957bee190fca89b3948fa426bb",
+      "tx": "0x52edc1677e21885ee4374c10a30c745bed0147c04382ed497f1ece94db330b19"
+    },
+    {
+      "address": "0x3b725d9017526f8e349d1613c7e3b530c5b865c2",
+      "tokens": [
+        "0x736609d310b5f925531b5ad895925cb0586f6241",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "liquidity": "3529622247915335780964",
+      "height": 25596511,
+      "block_hash": "0xcbfe3bc0373b4c1b3c80a07f7cbb10457675f2c70745786346b8d155177e154e",
+      "tx": "0x1462075028b5981dd75acc7e69113a38744648c4a8248ce3ba0b707b05fd56ad"
+    }
+  ],
+  "lens_sample": {
+    "pool": "0x3b725d9017526f8e349d1613c7e3b530c5b865c2",
+    "word": -7,
+    "ticks": [
+      [
+        -94740,
+        "-3415096654534303899550",
+        "3415096654534303899550"
+      ],
+      [
+        -95640,
+        "-114525593381031881414",
+        "114525593381031881414"
+      ],
+      [
+        -95700,
+        "-1727256833843202247410",
+        "1727256833843202247410"
+      ],
+      [
+        -96000,
+        "1727256833843202247410",
+        "1727256833843202247410"
+      ],
+      [
+        -98580,
+        "114525593381031881414",
+        "114525593381031881414"
+      ],
+      [
+        -99840,
+        "3415096654534303899550",
+        "3415096654534303899550"
+      ]
+    ]
+  }
+}

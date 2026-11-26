@@ -19,6 +19,7 @@ def capture(directory, endpoint):
     deadline=int(head["timestamp"],16)+120
     potential=[]
     for market in directory["markets"]:
+        if market.get("fixed_fee")=="0" and int(market.get("fee_manager","0"),16): continue
         if not market["current_init"] or market["balances"]!=market["reserves"] or not all(map(int,market["reserves"])) or market["fee"] is None: continue
         for i, token in enumerate(market["tokens"]):
             if token not in HOLDERS["base"]: continue

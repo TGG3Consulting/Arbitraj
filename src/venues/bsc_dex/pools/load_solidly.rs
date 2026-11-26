@@ -40,6 +40,10 @@ pub async fn load(ctx: &Ctx, f: &Family, pool: Address, tag: &str) -> GatewayRes
     if f.variant == super::family_variant::Variant::LeetSwap {
         return super::leetswap::load(ctx, f, pool, tag).await;
     }
+    if f.variant == super::family_variant::Variant::SolidlyClassic {
+        let at = super::elfomo::block(ctx, tag).await?;
+        return super::solidly_classic::state(ctx, f, pool, &at).await;
+    }
     let meta = call::view(ctx, pool, &ISolidlyPool::metadataCall {}, tag).await?;
     let factory = ctx.dex_addr("dex.factory", f.id)?;
     let fee = pool_fee(ctx, f, (factory, pool, meta.st), tag).await?;
@@ -76,9 +80,9 @@ pub async fn pool_fee(
         call::view(ctx, factory, &ask, tag).await?
     };
     Ok(SolidlyFee {
-        value: fee_u32(ctx, fee_raw)?,
+        value: u64::from(fee_u32(ctx, fee_raw)?),
         rule: FeeRule::Numerator {
-            denominator: fee_denominator().to::<u32>(),
+            denominator: fee_denominator().to::<u64>(),
         },
     })
 }

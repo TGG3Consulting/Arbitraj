@@ -38,7 +38,7 @@ use super::v2_pair_sim::{Sim, judge};
 
 /// Вид без своего роутера: протокол V2 и нет своего пути исполнения (v2_fork_executor). Ошибок нет.
 pub fn kind_on(f: &Family) -> bool {
-    f.proto == Proto::V2 && !f.tradable && !f.variant.frax_twamm()
+    f.proto == Proto::V2 && (!f.tradable || f.variant == super::super::pools::family_variant::Variant::DiamondV2) && !f.variant.frax_twamm()
         && !matches!(f.variant,super::super::pools::family_variant::Variant::Oasis | super::super::pools::family_variant::Variant::EtherVista)
 }
 
@@ -132,7 +132,7 @@ pub async fn out_at(
             .to::<u64>(),
     };
     let (r, ratio) =
-        if e.family.variant == super::super::pools::family_variant::Variant::V2Create2LiveFee {
+        if e.family.variant.live_v2_fee() {
             current_rate_simulation(ctx, e, token_in, amount, number).await?
         } else {
             let (list, over, ratio) = calls(ctx, e, token_in, amount)?;
@@ -143,7 +143,20 @@ pub async fn out_at(
         };
     let t = e.family.title;
     let (code, why) = match judge(&r, token_in == e.pool.token0, amount, ratio, limit) {
-        Sim::Ok { remote, .. } => return Ok(remote),
+        Sim::Ok { remote, .. } => {
+            if let crate::core::types::PoolState::CandySwap(state)=&e.pool.state {
+                // У тестового финансирования sync() убирает излишек баланса; восстанавливаем
+                // реальный вход по резервам первоначального, неизменённого блока.
+                let i=usize::from(token_in!=e.pool.token0);
+                if state.balances[i]!=state.reserves[i] {
+                    return super::super::math::candy::funded(state,i==0,ratio,true,amount)
+                        .map(|(v,_)|v.amount_out).ok_or_else(||ctx.err(ErrorCode::NoRoute,"CandySwap: остаток пары и объём не обеспечивают выплату"));
+                }
+                return super::super::math::candy::net(remote,state.payout_bps)
+                    .filter(|v|!v.is_zero()).ok_or_else(||ctx.err(ErrorCode::NoRoute,"CandySwap: вся выплата удержана"));
+            }
+            return Ok(remote);
+        }
         Sim::Prep(w) => (
             ErrorCode::NoRoute,
             format!(
@@ -194,6 +207,10 @@ async fn current_rate_simulation(
     if parent.number != U64::from(number) {
         return Err(ctx.err(ErrorCode::BadResponse, "Неверная высота блока V2"));
     }
+    if e.family.variant==super::super::pools::family_variant::Variant::DiamondV2 {
+        let at=json!({"blockHash":parent.hash,"requireCanonical":true});
+        super::super::pools::diamond::check(ctx,e.family.id,false,&at).await?;
+    }
     let rate = Rate::configured(
         ctx,
         e.family,
@@ -214,9 +231,19 @@ async fn current_rate_simulation(
                 input: input.clone(),
             },
         );
+        let candy = if let crate::core::types::PoolState::CandySwap(state) = &e.pool.state {
+            list.insert(0,Call {from:owner(),to:pair(ctx,e)?,input:Bytes::from_static(&super::super::math::candy::PAYOUT_RATE_SELECTOR)});
+            Some(state.payout_bps)
+        } else {None};
         let mut results =
             simulate::run_anchored(ctx, &list, &[], &[over], number.into(), Some(parent.hash))
                 .await?;
+        if let Some(expected)=candy {
+            let payout=results.remove(0);
+            if !payout.ok() || payout.return_data.len()!=32 || U256::from_be_slice(&payout.return_data)!=U256::from(expected) {
+                return Err(ctx.err(ErrorCode::StaleData,"CandySwap: ставка выплаты изменилась к блоку сверки"));
+            }
+        }
         let observed = results.remove(0);
         if observed.status != U64::from(1) {
             return Err(ctx.err(ErrorCode::BadResponse, "Вызов ставки V2 отклонён"));

@@ -85,6 +85,14 @@ impl FeeRule {
         let source = ctx.dex_text("dex.v2_fee_source", family.id)?;
         let getter = ctx.dex_text("dex.v2_fee_method", family.id)?;
         let denominator = ctx.dex_int("dex.v2_fee_denominator", family.id)?;
+        if family.variant == super::family_variant::Variant::DiamondV2
+            && (source!="factory" || getter!="swapFee()" || denominator!=10_000) {
+            return Err(miss("Вариант Diamond V2 требует swapFee() фабрики над 10000"));
+        }
+        if family.variant == super::family_variant::Variant::CandySwap
+            && (source!="pool" || getter!="swapFee()" || denominator!=10_000) {
+            return Err(miss("CandySwap: требуется swapFee() пары и знаменатель 10000"));
+        }
         let hashes = ctx.dex_list("dex.pool_code_hashes", family.id)?;
         let configured = ctx
             .dex_text("dex.v2_fee_rule_hash", family.id)?
@@ -229,6 +237,16 @@ pub(super) async fn many(
     };
     let mut reads = ReadPlan::default();
     let mut rules = std::collections::BTreeMap::new();
+    for (_,f,_) in pools {
+        if f.variant==super::family_variant::Variant::DiamondV2 && let std::collections::btree_map::Entry::Vacant(slot)=rules.entry(f.id) {
+            let at=serde_json::json!({"blockHash":hash,"requireCanonical":true});
+            let result=match super::diamond::check(ctx,f.id,false,&at).await {
+                Ok(())=>FeeRule::read(ctx,f),
+                Err(error)=>Err(error),
+            };
+            slot.insert(result);
+        }
+    }
     let plans = pools
         .iter()
         .map(|(_, f, a)| {
@@ -243,7 +261,17 @@ pub(super) async fn many(
                 Bytes::from(IV2Pair::getReservesCall {}.abi_encode()),
             ));
             let fi = reads.index(rate.call());
-            Ok((ri, fi, rate))
+            let candy = (f.variant == super::family_variant::Variant::CandySwap).then(|| {
+                use super::super::node::abi::IERC20;
+                let balance = Bytes::from(IERC20::balanceOfCall { owner: a.pool }.abi_encode());
+                [
+                    reads.index((a.pool, Bytes::from_static(&super::super::math::candy::PAYOUT_RATE_SELECTOR))),
+                    reads.index((a.tokens.0, balance.clone())),
+                    reads.index((a.tokens.1, balance)),
+                    reads.index((rule.factory, registry_key::selector("feeTo()"))),
+                ]
+            });
+            Ok((ri, fi, rate, candy))
         })
         .collect::<Vec<GatewayResult<_>>>();
     let mut answers = Vec::with_capacity(reads.calls.len());
@@ -262,16 +290,31 @@ pub(super) async fn many(
     plans
         .into_iter()
         .map(|plan| {
-            let (ri, fi, rate) = plan?;
+            let (ri, fi, rate, candy) = plan?;
             let reserves = call::decode::<IV2Pair::getReservesCall>(
                 answers[ri].as_ref().map_err(|m| miss(m.clone()))?,
             )?;
             let fee = rate.decode(answers[fi].as_ref().map_err(|m| miss(m.clone()))?)?;
+            let reserve0 = U256::from(reserves.reserve0);
+            let reserve1 = U256::from(reserves.reserve1);
+            let state = if let Some([payout, b0, b1, collector]) = candy {
+                let word = |index: usize| {
+                    let bytes = answers[index].as_ref().map_err(|m| miss(m.clone()))?;
+                    if bytes.len()!=32 {return Err(miss("CandySwap: ответ чтения не равен слову ABI"));}
+                    Ok(U256::from_be_slice(bytes))
+                };
+                let bps=word(payout)?;
+                let collector=word(collector)?.to_be_bytes::<32>();
+                if bps>U256::from(10_000) || collector[..12]!=[0;12] {
+                    return Err(miss("CandySwap: недействительная ставка выплаты или получатель"));
+                }
+                PoolState::CandySwap(Box::new(crate::core::types::CandySwapState {
+                    reserves:[reserve0,reserve1], balances:[word(b0)?,word(b1)?],
+                    payout_bps:bps.to::<u16>(), receiver:Address::from_slice(&collector[12..]),
+                }))
+            } else {PoolState::V2 {reserve0,reserve1}};
             Ok(Loaded {
-                state: PoolState::V2 {
-                    reserve0: U256::from(reserves.reserve0),
-                    reserve1: U256::from(reserves.reserve1),
-                },
+                state,
                 ticks: None,
                 bins: None,
                 fee_pips: Some(fee),
@@ -290,6 +333,37 @@ pub(super) async fn load(
         .await
         .pop()
         .ok_or_else(|| miss("Нет результата чтения V2"))?
+}
+
+/// Два изменяемых тарифа CandySwap должны соответствовать подписываемому маршруту.
+/// Для других семейств эта проверка не вызывается.
+pub(in crate::venues::bsc_dex) async fn candy_fresh(
+    ctx:&Ctx,e:&super::registry::Entry,at:&serde_json::Value
+)->GatewayResult<()> {
+    use super::nami_batch;
+    use serde_json::json;
+    let bad=||miss("CandySwap: ставка пары, удержание выплаты или получатель изменились");
+    let PoolState::CandySwap(state)=&e.pool.state else {return Err(bad());};
+    let pool=e.pool.reference.own_contract().ok_or_else(bad)?;
+    let factory=ctx.dex_addr("dex.factory",e.family.id)?;
+    let [fee,rate,receiver]=nami_batch::read(ctx,[
+        ("eth_call",json!([{"to":pool,"data":registry_key::selector("swapFee()")},at])),
+        ("eth_call",json!([{"to":pool,"data":"0xc3595a85"},at])),
+        ("eth_call",json!([{"to":factory,"data":registry_key::selector("feeTo()")},at])),
+    ]).await?;
+    let pips=e.pool.fee_pips.ok_or_else(bad)?;
+    if fee.len()!=32 || rate.len()!=32 || receiver.len()!=32
+        || U256::from_be_slice(&fee).checked_mul(U256::from(100))!=Some(U256::from(pips))
+        || U256::from_be_slice(&rate)!=U256::from(state.payout_bps)
+        || receiver[..12]!=[0;12] || Address::from_slice(&receiver[12..])!=state.receiver {
+        return Err(bad());
+    }
+    // Эти совпадения меняют прирост баланса конкретного получателя и повторное использование пары.
+    if state.receiver==pool || state.receiver==super::super::wallet::signer::address(ctx)?
+        || super::super::exec::executor::address(ctx)?==Some(state.receiver) {
+        return Err(miss("CandySwap: адрес сбора совпал с одним из участников маршрута; требуется повторная сверка его баланса"));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

@@ -2610,6 +2610,23 @@
   {
     "chain_id": 8453,
     "network": "base",
+    "id": "candyswap",
+    "source": "https://basescan.org/address/0xbfd866bd2502e1693bc31735253a2fb9e728f714#code · tests/data/first_run_dex_2026-11-26/candyswap_base.json",
+    "settings": {
+      "dex.kind": "candyswap_v2",
+      "dex.factory": "0xbfd866bd2502e1693bc31735253a2fb9e728f714",
+      "dex.pool_code_hashes": [
+        "0x823894b4cdbcf0e36ddb166860403899800e49c361fd5be59d579fba627fde17"
+      ],
+      "dex.v2_fee_source": "pool",
+      "dex.v2_fee_method": "swapFee()",
+      "dex.v2_fee_denominator": 10000,
+      "dex.v2_fee_rule_hash": "0x5e6392e0c7f284de6c2e819253d36ee04922174eaeb1be3a52fa15b580334362"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
     "id": "icecreamswap-base",
     "source": "https://sourcify.dev/server/v2/contract/8453/0x9e6d21e759a7a288b80eef94e4737d313d31c13f · tests/data/first_run_dex_2026-11-26/base_v2_factories.json",
     "settings": {
@@ -2901,6 +2918,177 @@
       "dex.pool_code_hashes": [
         "0xe260b72768e8ec6814aa811c576f346d208ba00840f835949d65c6424ac80a8d"
       ]
+    }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "diamondswap",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x1a62a841e83ecc3d72b0de6002af7a7dbf921cd5 · tests/data/first_run_dex_2026-11-26/diamondswap_base.json",
+    "settings": {
+      "dex.kind": "v2_diamond_router",
+      "dex.factory": "0x1a62a841e83ecc3d72b0de6002af7a7dbf921cd5",
+      "dex.router": "0x0681363e5da35a248e1abb5cddd6db9cdac9a771",
+      "dex.factory_runtime_hash": "0x9511e09d8ab0e424db2a82950352737f8dea77b1ec187c8d0b3e39c22b135e0f",
+      "dex.router_runtime_hash": "0x9511e09d8ab0e424db2a82950352737f8dea77b1ec187c8d0b3e39c22b135e0f",
+      "dex.proxy_implementations": [
+        "0xd5de080ad93886399f3fd221dc9c9892929d3ca4",
+        "0x6aa25e5ef3ac113d8b0f0b33d0af8999add492a1"
+      ],
+      "dex.proxy_runtime_hashes": [
+        "0x7747862a5bb8160bc85822102458d4ac90787ff1ef5b389f9291dc1edb158775",
+        "0x3d22d66fba7aa758fe040cc6a6ea40479dbf97bafa11beb6de68bdc97d351697"
+      ],
+      "dex.pool_code_hashes": [
+        "0xc7bb56e1f5223e9ce7987f4458efdd843330ba79d82f8ddbefa97b95b87083f6"
+      ],
+      "dex.v2_fee_source": "factory",
+      "dex.v2_fee_method": "swapFee()",
+      "dex.v2_fee_denominator": 10000,
+      "dex.v2_fee_rule_hash": "0x3fe722b2ddf79862d1aa5efa6510111ed698e3088996c0ecd5f09266f078e900"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "archly-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x12508dd9108abab2c5fd8fc6e4984e46a3cf7824 · https://docs.archly.fi/security · tests/data/first_run_dex_2026-11-26/base_classic_registry_archly-base.json.gz · tests/data/first_run_dex_2026-11-26/base_classic_wallets_archly-base.json.gz",
+    "settings": {
+      "dex.kind": "solidly_v1",
+      "dex.factory": "0x12508dd9108abab2c5fd8fc6e4984e46a3cf7824",
+      "dex.factory_runtime_hash": "0x0d8e8082d82564942b6bb7401b866d595907bfdec895abcbc69b064bc709d70f",
+      "dex.pool_code_hashes": [
+        "0xf9be845b4767c45e75145bc3236fca103be5547d1d676c89bd60a7db9595bb32"
+      ],
+      "dex.solidly_fee_source": "factory_stable",
+      "dex.solidly_fee_rule": "numerator",
+      "dex.solidly_fee_denominator": 10000,
+      "dex.solidly_pause_method": "isPaused()",
+      "dex.sub_dex": [
+        "archly-v1-base"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "archly-v1-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xba06043a777652baf540ccc785edafd94ee05b37 · https://docs.archly.fi/security · tests/data/first_run_dex_2026-11-26/base_classic_registry_archly-v1-base.json.gz · tests/data/first_run_dex_2026-11-26/base_classic_wallets_archly-v1-base.json.gz",
+    "settings": {
+      "dex.kind": "solidly_v1",
+      "dex.factory": "0xba06043a777652baf540ccc785edafd94ee05b37",
+      "dex.factory_runtime_hash": "0xee9db0db76fb55de0473a197305615ea3823cfa91c73c78e2d5995e1061e73b7",
+      "dex.pool_code_hashes": [
+        "0x097626bcc7f83b914758e141ccb461da7e449987ea71545357464b6ba9db17bf"
+      ],
+      "dex.solidly_fee_source": "factory_stable",
+      "dex.solidly_fee_rule": "numerator",
+      "dex.solidly_fee_denominator": 10000,
+      "dex.solidly_pause_method": "isPaused()"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "baso-finance",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xcefbebf0b85b1638c19b01ce2a02c262f421b07d · tests/data/first_run_dex_2026-11-26/base_classic_registry_baso-finance.json.gz · tests/data/first_run_dex_2026-11-26/base_classic_wallets_baso-finance.json.gz",
+    "settings": {
+      "dex.kind": "solidly_v1",
+      "dex.factory": "0xcefbebf0b85b1638c19b01ce2a02c262f421b07d",
+      "dex.factory_runtime_hash": "0xb332d3616f62329a6a42642f9b10c285b89b98da43d8d73c6289ff516a00f22a",
+      "dex.pool_code_hashes": [
+        "0x6411f9e01d7ee8f2da17300dd4b16c10b3aa9f35dabf9d57c55bc8283e8e5697"
+      ],
+      "dex.solidly_fee_source": "factory_stable",
+      "dex.solidly_fee_rule": "numerator",
+      "dex.solidly_fee_denominator": 10000,
+      "dex.solidly_pause_method": "isPaused()"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "equalizer-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xed8db60acc29e14bc867a497d94ca6e3ceb5ec04 · https://sourcify.dev/server/v2/contract/8453/0x8104beae44f19f0cbda1985ac983a107115a417f · tests/data/first_run_dex_2026-11-26/base_classic_registry_equalizer-base.json.gz · tests/data/first_run_dex_2026-11-26/base_classic_wallets_equalizer-base.json.gz",
+    "settings": {
+      "dex.kind": "solidly_v1",
+      "dex.factory": "0xed8db60acc29e14bc867a497d94ca6e3ceb5ec04",
+      "dex.factory_runtime_hash": "0x52b0ab45a1e836e6f8e01d08324b6fa68f86e7d7a782c59a4939fb8218635af2",
+      "dex.pool_code_hashes": [
+        "0x4cdedbff4479e31f12e0987605ccd3ee0d795540f8f9939af2bf9cd9e9fb3823"
+      ],
+      "dex.solidly_fee_source": "factory_address",
+      "dex.solidly_fee_rule": "numerator",
+      "dex.solidly_fee_denominator": 1000000000000000000,
+      "dex.proxy_implementations": [
+        "0x8104beae44f19f0cbda1985ac983a107115a417f"
+      ],
+      "dex.proxy_runtime_hashes": [
+        "0x98c8fe46cd135eae6c785f0b5011ca60cd5e180037564138470eea4957f0bfda"
+      ],
+      "dex.solidly_fee_method": "getRealFee(address)",
+      "dex.solidly_pause_method": "isPaused()"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "hydrex-classic",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xc47f17c4fd96f50efd2a2448cede5c185c084bf0 · https://sourcify.dev/server/v2/contract/8453/0x421656a4fc9943a2a7997d6f4f6c04eb2e336d18 · tests/data/first_run_dex_2026-11-26/base_classic_registry_hydrex-classic.json.gz · tests/data/first_run_dex_2026-11-26/base_classic_wallets_hydrex-classic.json.gz",
+    "settings": {
+      "dex.kind": "solidly_v1",
+      "dex.factory": "0xc47f17c4fd96f50efd2a2448cede5c185c084bf0",
+      "dex.factory_runtime_hash": "0xe9254068c76f9b19f4ab63f7a83b9f82f412362d41609faa232daa65f987bbac",
+      "dex.pool_code_hashes": [
+        "0x9bbd03d1e1f14c9b95dda0aea4eb438b212c58a1cf9aa3d5dfad574e312e3946"
+      ],
+      "dex.solidly_fee_source": "pool",
+      "dex.solidly_fee_rule": "numerator",
+      "dex.solidly_fee_denominator": 100000,
+      "dex.proxy_implementations": [
+        "0x421656a4fc9943a2a7997d6f4f6c04eb2e336d18"
+      ],
+      "dex.proxy_runtime_hashes": [
+        "0x628fe0455fa1787ee8dd00677bccf958dd341f0d74039da40b0582080ac92f5e"
+      ],
+      "dex.solidly_fee_method": "getFee()"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "infusion",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x2d9a3a2bd6400ee28d770c7254ca840c82faf23f · tests/data/first_run_dex_2026-11-26/base_classic_registry_infusion.json.gz · tests/data/first_run_dex_2026-11-26/base_classic_wallets_infusion.json.gz",
+    "settings": {
+      "dex.kind": "solidly_v1",
+      "dex.factory": "0x2d9a3a2bd6400ee28d770c7254ca840c82faf23f",
+      "dex.factory_runtime_hash": "0xc71b447648e6a76e34392e9cd0883342c354497a91e12fa48babbda5e9f4b055",
+      "dex.pool_code_hashes": [
+        "0x219feae2806b91b43e3369a02074b26dde4d33b44972f02d717f37ac78ab0245"
+      ],
+      "dex.solidly_fee_source": "factory_stable",
+      "dex.solidly_fee_rule": "numerator",
+      "dex.solidly_fee_denominator": 10000,
+      "dex.solidly_pause_method": "isPaused()"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "velocimeter-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xe21aac7f113bd5dc2389e4d8a8db854a87fd6951 · tests/data/first_run_dex_2026-11-26/base_classic_registry_velocimeter-base.json.gz · tests/data/first_run_dex_2026-11-26/base_classic_wallets_velocimeter-base.json.gz",
+    "settings": {
+      "dex.kind": "solidly_v1",
+      "dex.factory": "0xe21aac7f113bd5dc2389e4d8a8db854a87fd6951",
+      "dex.factory_runtime_hash": "0x6a756c04333074df0733634299e75ef2c52470187ab70cac1587242f9db77853",
+      "dex.pool_code_hashes": [
+        "0x0ccd005ee58d5fb11632ef5c2e0866256b240965c62c8e990c0f84a97f311879"
+      ],
+      "dex.solidly_fee_source": "factory_address",
+      "dex.solidly_fee_rule": "numerator",
+      "dex.solidly_fee_denominator": 10000,
+      "dex.solidly_fee_method": "getFee(address)",
+      "dex.solidly_pause_method": "isPaused()"
     }
   }
 ]

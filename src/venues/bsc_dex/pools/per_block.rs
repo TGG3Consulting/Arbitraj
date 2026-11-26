@@ -92,8 +92,11 @@ pub fn needs(f: &Family) -> bool {
     if matches!(
         f.variant,
         super::family_variant::Variant::SlipstreamDynamicFee
+            | Variant::CandySwap
             | Variant::V2Create2LiveFee
+            | Variant::DiamondV2
             | Variant::LeetSwap
+            | Variant::SolidlyClassic
             | Variant::EtherVista
             | Variant::Oasis
             | Variant::DeltaSwap
@@ -212,7 +215,7 @@ async fn others(p: &Pools, pools: &[(Found, String)], block: u64) -> Result<(), 
         if p.reg.get(&f.reference).is_none() {
             continue;
         }
-        if f.family.variant == Variant::V2Create2LiveFee {
+        if f.family.variant.live_v2_fee() {
             if !p.holds.pending(&f.reference) {
                 variable_v2.push((f, t.as_str()));
             }

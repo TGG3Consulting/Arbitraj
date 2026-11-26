@@ -241,9 +241,9 @@ fn legacy_math_equals_get_amount_out() {
         let stable = !word(4).is_zero();
         let t0 = Address::from_word(B256::from(word(5)));
         let fee = SolidlyFee {
-            value: w(&p["fee()"], 0).unwrap().to::<u32>(),
+            value: w(&p["fee()"], 0).unwrap().to::<u64>(),
             rule: FeeRule::Numerator {
-                denominator: LEGACY_DENOM,
+                denominator: u64::from(LEGACY_DENOM),
             },
         };
         for q in p["quotes"].as_array().unwrap() {

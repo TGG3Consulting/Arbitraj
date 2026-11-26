@@ -443,7 +443,9 @@ fn found(
     if matches!(
         c.family.variant,
         Variant::V2Create2
+            | Variant::CandySwap
             | Variant::V2Create2LiveFee
+            | Variant::DiamondV2
             | Variant::EtherVista
             | Variant::Oasis
             | Variant::DeltaSwap

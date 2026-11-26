@@ -1,0 +1,395 @@
+{
+  "factory": "0xbfd866bd2502e1693bc31735253a2fb9e728f714",
+  "origin": {
+    "url": "https://basescan.org/address/0xbfd866bd2502e1693bc31735253a2fb9e728f714#code",
+    "runtime": "0x335f28a2c41d864d94b9d3059ddba10b11cdda6fa8518a3ba5dfbd43ff8d8b18",
+    "pair_runtime": "0x3d594794412e87b15488124594b7bb35ed2be3adc175a7773065525ec5079963",
+    "pair": "0x87c7ebbea5301c7482764395470e0f139d189623",
+    "creation_code_hash": "0x823894b4cdbcf0e36ddb166860403899800e49c361fd5be59d579fba627fde17",
+    "creation_offset": 2012,
+    "creation_bytes": 10282,
+    "pair_runtime_offset": 2442,
+    "denominator_pc": 2719,
+    "invariant_bytes": "60400191505060405180910390fd5b600d5463ffffffff90811690600090610ab890610a9a9086908590611ddd16565b610aac8861271063ffffffff611ddd16565b9063ffffffff611e4016565b90506000610acf610a9a858563ffffffff611ddd16565b9050610b016305f5e100610af56001600160701b038c8116908c1663ffffffff611ddd16565b9063ffffffff611ddd16565b610b11838363ffffffff611ddd16565b1015610b53",
+    "provenance": "canonical EVM bytecode and wallet replay",
+    "fee_numerator": null,
+    "fee_denominator": 10000,
+    "fee_getter": "swapFee()",
+    "fee_target": "pool",
+    "fee_slot": 13
+  },
+  "pools": [
+    {
+      "pool": "0x87c7ebbea5301c7482764395470e0f139d189623",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x50c5725949a6f0c72e6c4a641f24049a917db0cb"
+      ],
+      "reserves": [
+        "11222890436563589",
+        "18784172636422703658"
+      ],
+      "commission": {
+        "getter": "swapFee()",
+        "value": 15,
+        "denominator": 10000
+      }
+    },
+    {
+      "pool": "0x67cc0ed362334d3d8e2a7b8e5a9c5fddc8ff647c",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "reserves": [
+        "5053977565415667",
+        "8388804"
+      ],
+      "commission": {
+        "getter": "swapFee()",
+        "value": 15,
+        "denominator": 10000
+      }
+    },
+    {
+      "pool": "0x18bd5d33bd767fce17e6e48292296df9eb520fdd",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x6b2e30f6b2bce0a0311f84738141e1dc0ccf088e"
+      ],
+      "reserves": [
+        "0",
+        "0"
+      ],
+      "commission": {
+        "getter": "swapFee()",
+        "value": 15,
+        "denominator": 10000
+      }
+    },
+    {
+      "pool": "0x0a57c4ea7757ae40bd0e6b28477841fde441f1c7",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd63ba2d434a52cced147552652fd2cb130df031a"
+      ],
+      "reserves": [
+        "0",
+        "0"
+      ],
+      "commission": {
+        "getter": "swapFee()",
+        "value": 15,
+        "denominator": 10000
+      }
+    },
+    {
+      "pool": "0x5849e816e9897ae560ca9332202de516cf8a5b58",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x8130190e237de133402f73f03096e16204f55a1c"
+      ],
+      "reserves": [
+        "500000000000000",
+        "9000000000000000000000"
+      ],
+      "commission": {
+        "getter": "swapFee()",
+        "value": 15,
+        "denominator": 10000
+      }
+    }
+  ],
+  "samples": [
+    {
+      "pool": "0x87c7ebbea5301c7482764395470e0f139d189623",
+      "funded_asset": "0x4200000000000000000000000000000000000006",
+      "reason": "buy input=1122289043656, simulated error {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+    },
+    {
+      "pool": "0x67cc0ed362334d3d8e2a7b8e5a9c5fddc8ff647c",
+      "funded_asset": "0x4200000000000000000000000000000000000006",
+      "reason": "buy input=505397756541, simulated error {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+    },
+    {
+      "pool": "0x5849e816e9897ae560ca9332202de516cf8a5b58",
+      "funded_asset": "0x4200000000000000000000000000000000000006",
+      "reason": "buy input=50000000000, simulated error {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+    },
+    {
+      "pool": "0x67cc0ed362334d3d8e2a7b8e5a9c5fddc8ff647c",
+      "funded_asset": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+      "reason": "buy input=838, simulated error {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+    }
+  ],
+  "net_payouts": [
+    {
+      "pool": "0x87c7ebbea5301c7482764395470e0f139d189623",
+      "transfer_fee": 15,
+      "fee_receiver": "0x399db7f59a79563a1dd4a687a0dea41bbeaa2254",
+      "cases": [
+        {
+          "buy": {
+            "spent": "1122289043656",
+            "gross": "1875412377820281",
+            "cut": "2813118566730",
+            "paid": "1872599259253551",
+            "deltas": [
+              "-1122289043656",
+              "1872599259253551",
+              "2813118566730",
+              "-1875412377820281"
+            ],
+            "gas": 146560,
+            "strict": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          },
+          "sell": {
+            "spent": "1872599259253551",
+            "gross": "1117246816579",
+            "cut": "1675870224",
+            "paid": "1115570946355",
+            "deltas": [
+              "-1872599259253551",
+              "1115570946355",
+              "1675870224",
+              "-1117246816579"
+            ],
+            "gas": 137411,
+            "strict": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          }
+        },
+        {
+          "buy": {
+            "spent": "22445780873127",
+            "gross": "37437230605416824",
+            "cut": "56155845908125",
+            "paid": "37381074759508699",
+            "deltas": [
+              "-22445780873127",
+              "37381074759508699",
+              "56155845908125",
+              "-37437230605416824"
+            ],
+            "gas": 146560,
+            "strict": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          },
+          "sell": {
+            "spent": "37381074759508699",
+            "gross": "22345126696288",
+            "cut": "33517690044",
+            "paid": "22311609006244",
+            "deltas": [
+              "-37381074759508699",
+              "22311609006244",
+              "33517690044",
+              "-22345126696288"
+            ],
+            "gas": 137411,
+            "strict": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "pool": "0x67cc0ed362334d3d8e2a7b8e5a9c5fddc8ff647c",
+      "transfer_fee": 15,
+      "fee_receiver": "0x399db7f59a79563a1dd4a687a0dea41bbeaa2254",
+      "cases": [
+        {
+          "buy": {
+            "spent": "505397756541",
+            "gross": "837",
+            "cut": "1",
+            "paid": "836",
+            "deltas": [
+              "-505397756541",
+              "836",
+              "1",
+              "-837"
+            ],
+            "gas": 154369,
+            "strict": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          },
+          "sell": {
+            "spent": "836",
+            "gross": "502957342815",
+            "cut": "754436014",
+            "paid": "502202906801",
+            "deltas": [
+              "-836",
+              "502202906801",
+              "754436014",
+              "-502957342815"
+            ],
+            "gas": 144238,
+            "strict": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          }
+        },
+        {
+          "buy": {
+            "spent": "10107955130831",
+            "gross": "16719",
+            "cut": "25",
+            "paid": "16694",
+            "deltas": [
+              "-10107955130831",
+              "16694",
+              "25",
+              "-16719"
+            ],
+            "gas": 154381,
+            "strict": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          },
+          "sell": {
+            "spent": "16694",
+            "gross": "10062642715122",
+            "cut": "15093964072",
+            "paid": "10047548751050",
+            "deltas": [
+              "-16694",
+              "10047548751050",
+              "15093964072",
+              "-10062642715122"
+            ],
+            "gas": 144250,
+            "strict": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "pool": "0x18bd5d33bd767fce17e6e48292296df9eb520fdd",
+      "transfer_fee": 15,
+      "fee_receiver": "0x399db7f59a79563a1dd4a687a0dea41bbeaa2254",
+      "cases": []
+    },
+    {
+      "pool": "0x0a57c4ea7757ae40bd0e6b28477841fde441f1c7",
+      "transfer_fee": 15,
+      "fee_receiver": "0x399db7f59a79563a1dd4a687a0dea41bbeaa2254",
+      "cases": []
+    },
+    {
+      "pool": "0x5849e816e9897ae560ca9332202de516cf8a5b58",
+      "transfer_fee": 15,
+      "fee_receiver": "0x399db7f59a79563a1dd4a687a0dea41bbeaa2254",
+      "cases": [
+        {
+          "buy": {
+            "spent": "50000000000",
+            "gross": "898560278756166196",
+            "cut": "1347840418134249",
+            "paid": "897212438338031947",
+            "deltas": [
+              "-50000000000",
+              "897212438338031947",
+              "1347840418134249",
+              "-898560278756166196"
+            ],
+            "gas": 198045,
+            "strict": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          },
+          "sell": {
+            "spent": "897212438338031947",
+            "gross": "49775359694",
+            "cut": "74663039",
+            "paid": "49700696655",
+            "deltas": [
+              "-897212438338031947",
+              "49700696655",
+              "74663039",
+              "-49775359694"
+            ],
+            "gas": 135817,
+            "strict": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          }
+        },
+        {
+          "buy": {
+            "spent": "1000000000000",
+            "gross": "17937179452633091715",
+            "cut": "26905769178949637",
+            "paid": "17910273683454142078",
+            "deltas": [
+              "-1000000000000",
+              "17910273683454142078",
+              "26905769178949637",
+              "-17937179452633091715"
+            ],
+            "gas": 198045,
+            "strict": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          },
+          "sell": {
+            "spent": "17910273683454142078",
+            "gross": "995515674976",
+            "cut": "1493273512",
+            "paid": "994022401464",
+            "deltas": [
+              "-17910273683454142078",
+              "994022401464",
+              "1493273512",
+              "-995515674976"
+            ],
+            "gas": 135817,
+            "strict": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "height": 62262756,
+  "state_root": "0x037b0c48cd33236cb94ec9e9fc7438c120b138c2c31d39d0ebe42521ee65676b",
+  "endpoint": "https://mainnet.base.org"
+}

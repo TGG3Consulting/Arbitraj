@@ -88,9 +88,9 @@ pub fn state(r: &Read) -> Result<PoolState, &'static str> {
         return Err("комиссия 0 — у пары Camelot V2 так не бывает (L27-L28, L100)");
     }
     let fee = |value: u16| SolidlyFee {
-        value: u32::from(value),
+        value: u64::from(value),
         rule: FeeRule::Numerator {
-            denominator: FEE_DENOMINATOR,
+            denominator: u64::from(FEE_DENOMINATOR),
         },
     };
     Ok(PoolState::Solidly {

@@ -170,6 +170,14 @@ pub struct EtherVistaState {
     pub sell_fee: U256,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CandySwapState {
+    pub reserves: [U256; 2],
+    pub balances: [U256; 2],
+    pub payout_bps: u16,
+    pub receiver: Address,
+}
+
 /// Состояние DeltaSwapPair для ordinary caller. У gammaPool отдельная ставка.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DeltaFee {
@@ -329,6 +337,8 @@ pub enum PoolState {
     Oasis { reserve0:U256,reserve1:U256,share:u32,repeatable:bool },
     /// Резервы пары и плата в ETH, уплачиваемая для каждого отдельного обмена.
     EtherVista(Box<EtherVistaState>),
+    /// Сумма, списанная с CandySwap, включает независимое удержание из выплаты получателю.
+    CandySwap(Box<CandySwapState>),
 }
 
 /// Состояние пары PMM от оракула (решение 122 F, 3) — боксируется в `PoolState::OraclePmm`. Только то, что читается

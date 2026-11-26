@@ -73,7 +73,7 @@ pub use manual_feed::{ManualButton, ManualRecord, RecordKind};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
 pub use pool::{
     AmpV2Data, BasinFunction, BasinWellData, ColReserves, CryptoData, CryptoMath, CryptoTweak,
-    DebtReserves, EtherVistaState, EkuboData, EkuboMev, EkuboTick, EkuboTwamm, FeeRule, FictiveData, HookGroup,
+    DebtReserves, CandySwapState, EtherVistaState, EkuboData, EkuboMev, EkuboTick, EkuboTwamm, FeeRule, FictiveData, HookGroup,
     HookInfo, LadderPoint, LbBinData, OraclePmmData, PmmData, Pool, PoolKind, PoolRef, PoolState,
     ProteusData, ProteusUtility, SmartColDebtData, SolidlyFee, SolidlyGate, StableData,
     StableGuard, StableNg, TickBinData, TickReserves, VaultCurve, VaultPoolData, WombatData,

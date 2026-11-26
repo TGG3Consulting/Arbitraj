@@ -119,7 +119,7 @@ fn basic_math_equals_pool_get_amount_out() {
                 "реестр getPool(t0, t1)"
             );
             let fee = SolidlyFee {
-                value: w(&p["getBaseFee"], 0).unwrap().to::<u32>(),
+                value: w(&p["getBaseFee"], 0).unwrap().to::<u64>(),
                 rule: FeeRule::Numerator {
                     denominator: 10_000,
                 },

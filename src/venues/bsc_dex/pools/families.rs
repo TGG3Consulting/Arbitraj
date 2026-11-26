@@ -448,14 +448,14 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
-        "v2_fork" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_whiteswap" => {
+        "v2_fork" | "v2_diamond_router" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_whiteswap" => {
             (PoolKind::V2, Proto::V2, true, true, true)
         }
         // V2-форк без известного роутера (решение 280): в графе и сигналах как v2_fork (V2-математика, своя комиссия
         // dex.v2_fee_pct), но tradable=false — своего роутера нет; исполнение — шаг V2 контракта-исполнителя (обмен
         // прямо в паре, exec_kind::via_executor). fork=true — как у v3_fork: не в классический прямой путь и без UR.
         // Сверка расчёта — обмен через код исполнителя в симуляции (quote/v2_pair_quote.rs), а не getAmountsOut роутера.
-        "v2_fork_executor" | "v2_fork_executor_create2" | "v2_fork_executor_create2_live_fee" => {
+        "v2_fork_executor" | "v2_fork_executor_create2" | "v2_fork_executor_create2_live_fee" | "candyswap_v2" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
         // V3-форк (решение 122 F): в графе и сигналах — чтение, события, проверка и математика как у V3 своего ABI
@@ -652,9 +652,19 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
 /// сочетание (id, протокол, graphable, tradable, fork, вид шага исполнителя); решение 409 — таблица без замка на чтение
 /// (pools/family_intern.rs). Ошибок нет.
 pub fn make(id: &str, kind: &str) -> Option<&'static Family> {
+    with_variant(id, kind, super::family_variant::of(kind))
+}
+
+fn configured(ctx: &Ctx, id: &str, kind: &str) -> Option<&'static Family> {
+    if ctx.chain_id() == Some(8453) && kind == "solidly_v1" {
+        return with_variant(id, kind, Variant::SolidlyClassic);
+    }
+    make(id,kind)
+}
+
+fn with_variant(id: &str, kind: &str, variant: Variant) -> Option<&'static Family> {
     let (pk, proto, graphable, tradable, fork) = spec(kind)?;
     let executor_kind = exec_kind::of(kind);
-    let variant = super::family_variant::of(kind);
     Some(super::family_intern::intern(
         id,
         |f| {
@@ -693,7 +703,7 @@ pub fn all(ctx: &Ctx) -> Vec<&'static Family> {
         .into_iter()
         .filter(|(name, _, _)| name == "dex.kind")
         .filter_map(|(_, scope, v)| match scope {
-            Scope::Dex(id) if own_dex(&id, suffix.as_deref()) => make(&id, v.as_str()?),
+            Scope::Dex(id) if own_dex(&id, suffix.as_deref()) => configured(ctx,&id, v.as_str()?),
             _ => None,
         })
         .collect();
@@ -708,7 +718,7 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
     let kind = ctx
         .dex_text("dex.kind", id)
         .map_err(|_| no("нет в таблице сопоставления (dex.kind)".into()))?;
-    let f = make(id, &kind).ok_or_else(|| no(format!("вид «{kind}» — не поддерживается")))?;
+    let f = configured(ctx,id, &kind).ok_or_else(|| no(format!("вид «{kind}» — не поддерживается")))?;
     // graphable=false — вид только в справочнике (например V3-форк): не отслеживается и не в графе. tradable отдельно
     // (решение 82): V2-форк graphable, но не исполняется — это не повод не подключать его к графу/сигналам; допуск к
     // сделке проверяет quote/graph_route::executable (маршрут через форк → сигнал, авто-сделкой не исполняется).
@@ -720,7 +730,7 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
     if f.variant == Variant::RingFew {
         super::ring::active(ctx, f.id).map_err(|e| no(e.message))?;
     }
-    if f.variant.registered_v2_router() {
+    if f.variant.registered_v2_router() && f.variant != Variant::DiamondV2 {
         ctx.addr("dex.multicall3").map_err(|e| no(e.message))?;
     }
     if f.variant == Variant::BaseNativeV3 && !super::base_native_v3::valid(ctx, f) {
@@ -797,7 +807,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             if matches!(
                 f.variant,
                 Variant::V2Create2
-                    | Variant::V2Create2LiveFee
+                    | Variant::CandySwap
+            | Variant::V2Create2LiveFee
+                    | Variant::DiamondV2
                     | Variant::V2RouterCreate2
                     | Variant::WhiteSwap
             ) {
@@ -806,13 +818,16 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             if f.variant == Variant::WhiteSwap {
                 list.extend(["dex.proxy_implementations", "dex.proxy_runtime_hashes"]);
             }
-            if f.variant == Variant::V2Create2LiveFee {
+            if f.variant == Variant::DiamondV2 {
+                list.extend(["dex.factory_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes"]);
+            }
+            if f.variant.live_v2_fee() {
                 list.push("dex.v2_fee_rule_hash");
             }
             // Роутер — только у вида со своим путём исполнения (PancakeSwap/Uniswap V2, v2_fork: сверка getAmountsOut и
             // обмен роутером форка). v2_fork_executor (решение 280, tradable=false) роутера не имеет: сверка и обмен —
             // через контракт-исполнитель (quote/v2_pair_quote.rs).
-            if f.tradable && f.variant != Variant::WhiteSwap {
+            if f.tradable && !matches!(f.variant, Variant::WhiteSwap | Variant::DiamondV2) {
                 list.push("dex.router");
             }
             match ctx.dex_text("dex.v2_fee_source", f.id).as_deref() {
@@ -906,10 +921,13 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::SolidlyV1 if f.variant == Variant::LeetSwap => list.push("dex.factory"),
         Proto::Solidly | Proto::SolidlyV1 => {
             list.push("dex.factory");
+            if f.variant == Variant::SolidlyClassic {
+                list.extend(["dex.factory_runtime_hash","dex.pool_code_hashes","dex.solidly_fee_source"]);
+            }
             if let Ok(src) = ctx.dex_text("dex.solidly_fee_source", f.id) {
                 list.push("dex.solidly_fee_rule");
                 match src.as_str() {
-                    "pool" => list.push("dex.solidly_fee_method"),
+                    "pool" | "factory_address" => list.push("dex.solidly_fee_method"),
                     "factory_by_type" => list.extend([
                         "dex.solidly_fee_method_stable",
                         "dex.solidly_fee_method_volatile",

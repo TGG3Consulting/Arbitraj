@@ -113,6 +113,19 @@ pub fn path_costs(
                 true,
             );
         }
+        if let PoolState::CandySwap(state) = &h.entry.pool.state {
+            let fee=super::super::math::v2::fee_ratio(super::pool_quote::v2_fee_pct(ctx,&h.entry)?)
+                .ok_or_else(||ctx.err(ErrorCode::BadResponse,"CandySwap: неверная комиссия пары"))?;
+            let (_,next)=super::super::math::candy::funded(state,h.token_in==h.entry.pool.token0,fee,true,h.swapped.amount_in)
+                .ok_or_else(||ctx.err(ErrorCode::NoRoute,"CandySwap: не восстановлен выход до удержания"))?;
+            let output=usize::from(h.token_in==h.entry.pool.token0);
+            let gross=state.balances[output]-next.balances[output];
+            let cut=gross-super::super::math::candy::net(gross,state.payout_bps)
+                .ok_or_else(||ctx.err(ErrorCode::BadResponse,"CandySwap: удержание не представимо"))?;
+            let cost=num::to_decimal(cut,h.dec_out)
+                .ok_or_else(||ctx.err(ErrorCode::BadResponse,"CandySwap: сумма комиссии не представима"))?;
+            add(&mut out,CostKind::PoolFee,cost,&to,true);
+        }
         if side == Side::Buy && h.token_out == coin {
             add(
                 &mut out,

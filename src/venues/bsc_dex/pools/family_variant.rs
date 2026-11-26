@@ -60,10 +60,15 @@ pub enum Variant {
     EtherVista,
     /// Solidly V1 с комиссией по получателю и внешним источником фабрики.
     LeetSwap,
+    /// Solidly V1 Base: привязка CREATE2 и наблюдаемое обеспечение на каноническом блоке.
+    SolidlyClassic,
     /// Три обновляемые прокси WhiteSwap с комиссией прямого обмена и скидкой роутера.
     WhiteSwap,
     /// Пара CREATE2 с изменяемой ставкой. Резервы и комиссия сверяются вместе.
     V2Create2LiveFee,
+    CandySwap,
+    /// EIP-2535 с отдельной привязкой исполняемого селектора фабрики и Router02.
+    DiamondV2,
     /// Fraxswap V2 исполняет долгосрочные ордера к timestamp блока перед обменом.
     FraxTwamm,
     /// Одиночное исполнение официальным роутером с проверкой выхода получателя.
@@ -129,18 +134,22 @@ pub enum Variant {
 }
 
 impl Variant {
+    pub(crate) fn live_v2_fee(self) -> bool {
+        matches!(self, Self::V2Create2LiveFee | Self::CandySwap | Self::DiamondV2)
+    }
+
     pub fn frax_twamm(self) -> bool {
         matches!(self, Self::FraxTwamm | Self::FraxTwammRouter)
     }
     pub fn registered_v2_router(self) -> bool {
-        matches!(self, Self::V2RouterCreate2 | Self::DeltaSwap)
+        matches!(self, Self::V2RouterCreate2 | Self::DiamondV2 | Self::DeltaSwap)
     }
 
     /// Резервы и комиссия этих V2-пар должны обновляться одним чтением состояния блока.
     pub fn v2_block_state(self) -> bool {
         matches!(
             self,
-            Self::V2Create2LiveFee | Self::FraxTwamm | Self::FraxTwammRouter | Self::DeltaSwap | Self::Oasis | Self::EtherVista
+            Self::V2Create2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::DeltaSwap | Self::Oasis | Self::EtherVista
         )
     }
 }
@@ -175,6 +184,8 @@ pub fn of(kind: &str) -> Variant {
         "v2_fork_router_create2" => Variant::V2RouterCreate2,
         "v2_whiteswap" => Variant::WhiteSwap,
         "v2_fork_executor_create2" => Variant::V2Create2,
+        "v2_diamond_router" => Variant::DiamondV2,
+        "candyswap_v2" => Variant::CandySwap,
         "v2_fork_executor_create2_live_fee" => Variant::V2Create2LiveFee,
         "slipstream_ramses" => Variant::RamsesClV2,
         "leetswap_v2" => Variant::LeetSwap,

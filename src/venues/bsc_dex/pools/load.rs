@@ -651,7 +651,7 @@ pub async fn state(
         (PoolKind::V2, PoolRef::Contract(a)) if f.variant.frax_twamm() => {
             Box::pin(super::fraxswap::load(ctx, f, *a, pair, &tag)).await
         }
-        (PoolKind::V2, PoolRef::Contract(a)) if f.variant == Variant::V2Create2LiveFee => {
+        (PoolKind::V2, PoolRef::Contract(a)) if f.variant.live_v2_fee() => {
             super::v2_live_fee::load(
                 ctx,
                 f,

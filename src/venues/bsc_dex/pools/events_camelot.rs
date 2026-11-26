@@ -103,8 +103,8 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
             *reserve1 = r1;
         }
         Change::Fees(f0, f1) => {
-            fee.value = u32::from(f0);
-            fee1.value = u32::from(f1);
+            fee.value = u64::from(f0);
+            fee1.value = u64::from(f1);
         }
         Change::Stable(s) => *stable = s,
     }

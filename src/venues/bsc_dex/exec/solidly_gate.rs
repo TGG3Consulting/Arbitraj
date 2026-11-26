@@ -64,8 +64,33 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
     }
     let mut seen: Vec<&str> = Vec::new();
     let mut cap: Option<U256> = None;
+    let mut role_block = None;
     for e in entries.iter().copied() {
         let f = e.family;
+        if f.variant == Variant::SolidlyClassic {
+            let at = match &role_block {
+                Some(at) => at,
+                None => role_block.insert(super::super::pools::nami::block(ctx, "latest").await?),
+            };
+            super::super::pools::solidly_classic::fresh(ctx,e,at).await?;
+            continue;
+        }
+        if f.variant == Variant::CandySwap {
+            let at = match &role_block {
+                Some(at) => at,
+                None => role_block.insert(super::super::pools::nami::block(ctx, "latest").await?),
+            };
+            super::super::pools::v2_live_fee::candy_fresh(ctx,e,at).await?;
+            continue;
+        }
+        if f.variant == Variant::DiamondV2 {
+            let at = match &role_block {
+                Some(at) => at,
+                None => role_block.insert(super::super::pools::nami::block(ctx, "latest").await?),
+            };
+            super::super::pools::diamond::fresh(ctx,e,at).await?;
+            continue;
+        }
         if f.variant == Variant::LeetSwap {
             let PoolRef::Contract(pool) = e.pool.reference else {
                 return Err(ctx.err(ErrorCode::NoRoute, "У LeetSwap нет адреса пары"));

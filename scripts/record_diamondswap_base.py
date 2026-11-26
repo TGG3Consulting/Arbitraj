@@ -27,26 +27,31 @@ def facets(c,proxy,signatures):
         actual,=c.one(proxy,"facetAddress(bytes4)",["bytes4"],[selector],["address"])
         if actual!=methods[selector.hex()] or int(actual,16)==0:raise ValueError("facet not active")
         selected[signature]=actual
+    lookup=keccak(text="facetAddress(bytes4)")[:4]
+    loupe,=c.one(proxy,"facetAddress(bytes4)",["bytes4"],[lookup],["address"])
+    if loupe!=proxy or methods.get(lookup.hex())!=proxy:raise ValueError("loupe is not in the verified shell")
     implementations={}
+    lengths={}
     for a in set(selected.values()):
         code=bytes.fromhex(rpc(c.endpoint,"eth_getCode",[a,c.selector])[2:])
         if not code:raise ValueError("missing facet")
         implementations[a]=digest(code)
-    return dict(address=proxy,runtime=digest(root),selectors=selected,implementations=implementations)
+        lengths[a]=len(code)
+    return dict(address=proxy,runtime=digest(root),selectors=selected,implementations=implementations,loupe=loupe,bytes=len(root),implementation_bytes=lengths)
 
 
-def direct_wallet(c, market, sizes, timestamp, fee):
+def direct_wallet(c, market, sizes, timestamp, fee_pips, router):
     token=next(t for t in market["tokens"] if t!=WETH)
     deadline=timestamp+120
     word=lambda n:"0x"+format(n,"064x")
     env={OWNER:{"balance":hex(10**19)},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
          "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
     def leg(prefix, input_token, output_token, size, mode):
-        target=EXEC if mode=="v5" else ROUTER
+        target=EXEC if mode=="v5" else router
         approve=tx(input_token,"approve(address,uint256)",["address","uint256"],[target,size])
         def trial(minimum):
-            action=(swap(market["pool"],input_token,output_token,size,minimum,deadline,100*fee) if mode=="v5"
-                    else tx(ROUTER,"swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
+            action=(swap(market["pool"],input_token,output_token,size,minimum,deadline,fee_pips) if mode=="v5"
+                    else tx(router,"swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
                             ["uint256","uint256","address[]","address","uint256"],[size,minimum,[input_token,output_token],OWNER,deadline]))
             reads=[tx(t,"balanceOf(address)",["address"],[who]) for who in (OWNER,EXEC) for t in (input_token,output_token)]
             answers=simulate_block(c.endpoint,c.selector,env,[*prefix,approve,*reads,action,*reads])
@@ -85,7 +90,7 @@ def capture(endpoint):
         raise ValueError("network or block differs")
     f=facets(c,FACTORY,["createPair(address,address)","getPair(address,address)","swapFee()","feesEnabled()",
                         "getTotalPairs()","getPairAddresses(uint256,uint256)"])
-    r=facets(c,ROUTER,["factory()","WETH()","getAmountsOut(uint256,address[])",
+    r=facets(c,ROUTER,["factory()","WETH()","getAmountsOut(uint256,address[])","getAmountsIn(uint256,address[])",
                         "getAmountOut(uint256,uint256,uint256,uint32)","swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)"])
     if c.one(ROUTER,"factory()",returns=["address"])[0]!=FACTORY or c.one(ROUTER,"WETH()",returns=["address"])[0]!=WETH:
         raise ValueError("router binding differs")
@@ -149,7 +154,7 @@ def capture(endpoint):
                 if candidate==fee and out!=path[1]:raise ValueError("path fee differs")
                 curve.append(dict(tokens=tokens,amount=str(amount),fee=candidate,out=str(out),live=str(path[1])))
     amounts=[int(row["in"]) for entry in samples if entry["pool"]==REFERENCE for row in entry["cases"]]
-    wallets=direct_wallet(c,sample,amounts,int(head["timestamp"],16),fee)
+    wallets=direct_wallet(c,sample,amounts,int(head["timestamp"],16),fee*100,ROUTER)
     return dict(chain=8453,selector=tag,height=chain["block"],state_root=head["stateRoot"],factory=f,router=r,wallets=wallets,
                 creation=dict(offset=start,bytes=size,hash="0x"+init.hex()),fee=fee,fees_enabled=enabled,markets=rows,curve=curve,samples=samples)
 

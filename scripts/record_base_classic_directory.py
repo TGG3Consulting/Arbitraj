@@ -91,6 +91,13 @@ def capture(endpoint, key):
         if not listed or decode(["address"],listed)[0]!=m["pool"]: raise ValueError("registry round trip differs")
         m["balances"]=[None if v is None else str(int.from_bytes(v,"big")) for v in (left,right)]
         m["fee"]=None if fee is None else str(int.from_bytes(fee,"big"))
+    if key=="equalizer-base":
+        controls=iter(posts(c,[(fac,fn,["address"],[m["pool"]]) for m in markets
+                               for fn in ("feesOverrideStatic(address)","feesOverrideDynamic(address)")]))
+        for m in markets:
+            fixed,=decode(["uint256"],next(controls)); manager,=decode(["address"],next(controls))
+            m["fixed_fee"]=str(fixed)
+            m["fee_manager"]=manager
     paused,=c.one(fac,"isPaused()",returns=["bool"])
     return dict(id=key,chain_id=8453,block=base["block"],selector=c.selector,state_root=head["stateRoot"],
                 factory=factory,pair_sources=contract_sources,init="0x"+init.hex(),fee_source=source_kind,

@@ -76,7 +76,7 @@ pub(crate) async fn load(
         decimals0: state.dec0,
         decimals1: state.dec1,
         fee: SolidlyFee {
-            value: fee.to::<u32>(),
+            value: fee.to::<u64>(),
             rule: FeeRule::Numerator {
                 denominator: 10_000,
             },

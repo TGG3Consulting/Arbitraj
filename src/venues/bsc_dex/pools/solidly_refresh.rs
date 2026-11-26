@@ -44,7 +44,7 @@ pub async fn refresh(p: &Pools) {
         }
         // Решение 443: пары Camelot V2 (тоже PoolState::Solidly) — не Solidly: комиссии у них из события пары.
         if !e.family.proto.is_solidly()
-            || e.family.variant == super::family_variant::Variant::LeetSwap
+            || matches!(e.family.variant, super::family_variant::Variant::LeetSwap | super::family_variant::Variant::SolidlyClassic)
         {
             continue;
         }
@@ -132,7 +132,7 @@ fn value(
         return read::checked(ctx, raw, rule).map_err(|e| e.message);
     }
     let value = load_solidly::fee_u32(ctx, raw).map_err(|e| e.message)?;
-    Ok(SolidlyFee { value, rule })
+    Ok(SolidlyFee { value: u64::from(value), rule })
 }
 
 /// Решение 470: пул Aero Basic — состояние заново на последнем блоке (load_aero_basic.rs: комиссия, пауза, правило

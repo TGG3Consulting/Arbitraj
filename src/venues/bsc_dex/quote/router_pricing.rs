@@ -17,10 +17,13 @@ use crate::{
     gateway::errors::{ErrorCode, GatewayResult},
 };
 use alloy_primitives::{Address, B256, Bytes, U256, keccak256};
-use serde_json::json;
+use serde_json::{Value, json};
 
 pub(in crate::venues::bsc_dex) fn is_native(e: &Entry) -> bool {
-    e.family.variant == Variant::V2RouterCreate2
+    matches!(
+        e.family.variant,
+        Variant::V2RouterCreate2 | Variant::DiamondV2
+    )
 }
 
 pub(in crate::venues::bsc_dex) fn profile(ctx: &Ctx, id: &str) -> GatewayResult<(Address, B256)> {
@@ -37,6 +40,27 @@ pub(in crate::venues::bsc_dex) fn profile(ctx: &Ctx, id: &str) -> GatewayResult<
         router,
         hash.ok_or_else(|| ctx.err(ErrorCode::NotConfigured, "Не задан хеш кода Router02"))?,
     ))
+}
+
+async fn approved(
+    ctx: &Ctx,
+    e: &Entry,
+    router: Address,
+    hash: B256,
+    at: &Value,
+) -> GatewayResult<()> {
+    if e.family.variant == Variant::DiamondV2 {
+        tokio::try_join!(
+            super::super::pools::diamond::fresh(ctx, e, at),
+            super::super::pools::diamond::check(ctx, e.family.id, true, at)
+        )?;
+    } else {
+        let code: Bytes = rpc::call(ctx, "eth_getCode", json!([router, at])).await?;
+        if code.is_empty() || keccak256(code) != hash {
+            return Err(ctx.err(ErrorCode::QuoteMismatch, "Изменился код Router02"));
+        }
+    }
+    Ok(())
 }
 
 /// Запрашивает один и тот же блок для кода роутера, реестра выбранного пула и его котировки.
@@ -56,14 +80,11 @@ pub(in crate::venues::bsc_dex) async fn checked(
     }
     let (to, data) = quoter_calls::request(ctx, e, input, amount)?;
     let at = h.selector();
-    let (code, frame) = tokio::try_join!(
-        rpc::call::<Bytes>(ctx, "eth_getCode", json!([router, at])),
+    let ((), frame) = tokio::try_join!(
+        approved(ctx, e, router, hash, &at),
         rpc::call::<Bytes>(ctx, "eth_call", json!([{"to":to,"data":data},at]))
     )?;
-    if code.is_empty()
-        || keccak256(&code) != hash
-        || !quoter_calls::decode_input(e, &frame, input, amount).is_some_and(|v| !v.is_zero())
-    {
+    if !quoter_calls::decode_input(e, &frame, input, amount).is_some_and(|v| !v.is_zero()) {
         return Err(ctx.err(
             ErrorCode::QuoteMismatch,
             "Не подтверждены код Router02, зарегистрированная пара или размер обмена",
@@ -92,15 +113,15 @@ pub(in crate::venues::bsc_dex) async fn registered(
     let factory = IPoolImmutables::factoryCall {}.abi_encode().into();
     let (to, data) = base_native_v3::bound(ctx, e, router, registry, factory)?;
     let at = h.selector();
-    let (code, frame) = tokio::try_join!(
-        rpc::call::<Bytes>(ctx, "eth_getCode", json!([router, at])),
+    let ((), frame) = tokio::try_join!(
+        approved(ctx, e, router, hash, &at),
         rpc::call::<Bytes>(ctx, "eth_call", json!([{"to":to,"data":data},at]))
     )?;
     let expected = ctx.dex_addr("dex.factory", e.family.id)?;
     let bound = base_native_v3::checked_data(e.pool.reference.address(), &frame)
         .ok()
         .and_then(|v| IPoolImmutables::factoryCall::abi_decode_returns(&v).ok());
-    if code.is_empty() || keccak256(code) != hash || bound != Some(expected) {
+    if bound != Some(expected) {
         return Err(ctx.err(
             ErrorCode::QuoteMismatch,
             "Изменились код или регистрация Router02",
@@ -116,13 +137,47 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
     };
     let mut options = Vec::new();
     for e in i.entries.iter().filter(|e| is_native(e)) {
-        let Ok((target, _)) = profile(&q.ctx, e.family.id) else {
+        if let Ok((target, _)) = profile(&q.ctx, e.family.id) {
+            let execution = Execution {
+                mode: RouteMode::Direct,
+                target,
+                wire: super::v2_wallet_sim::Wire::Router02,
+            };
+            if let Ok(option) = v2_execution::option(q, i, e.clone(), payer, execution, head).await
+            {
+                options.push(option);
+            }
+        }
+        if e.family.variant != Variant::DiamondV2
+            || crate::gateway::quote_stage::settlement()
+            || q.ctx.text("dex.router_mode").ok().as_deref() != Some("graph")
+        {
+            continue;
+        }
+        let (Ok(Some(target)), Some(pips)) = (
+            super::super::exec::executor::address(&q.ctx),
+            e.pool.fee_pips,
+        ) else {
             continue;
         };
+        if let Some(h) = head
+            && super::super::pools::diamond::fresh(&q.ctx, e, &h.selector())
+                .await
+                .is_err()
+        {
+            continue;
+        }
+        use alloy::sol_types::SolValue;
+        let step = super::v2_wallet_sim::V5Step {
+            native: None,
+            kind: 0,
+            pool: e.pool.reference.address(),
+            data: Bytes::from(pips.abi_encode()),
+        };
         let execution = Execution {
-            mode: RouteMode::Direct,
+            mode: RouteMode::Graph,
             target,
-            wire: super::v2_wallet_sim::Wire::Router02,
+            wire: super::v2_wallet_sim::Wire::V5(step),
         };
         if let Ok(option) = v2_execution::option(q, i, e.clone(), payer, execution, head).await {
             options.push(option);

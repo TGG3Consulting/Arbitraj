@@ -91,9 +91,9 @@ pub async fn load(ctx: &Ctx, f: &Family, pool: Address, tag: &str) -> GatewayRes
         decimals0: meta.dec0,
         decimals1: meta.dec1,
         fee: SolidlyFee {
-            value,
+            value: u64::from(value),
             rule: FeeRule::Numerator {
-                denominator: fee_denominator().to::<u32>(),
+                denominator: fee_denominator().to::<u64>(),
             },
         },
         gate: SolidlyGate {

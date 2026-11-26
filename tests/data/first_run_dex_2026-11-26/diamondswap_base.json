@@ -19,6 +19,11 @@
     },
     "implementations": {
       "0xd5de080ad93886399f3fd221dc9c9892929d3ca4": "0x7747862a5bb8160bc85822102458d4ac90787ff1ef5b389f9291dc1edb158775"
+    },
+    "loupe": "0x1a62a841e83ecc3d72b0de6002af7a7dbf921cd5",
+    "bytes": 9272,
+    "implementation_bytes": {
+      "0xd5de080ad93886399f3fd221dc9c9892929d3ca4": 15178
     }
   },
   "router": {
@@ -29,10 +34,16 @@
       "WETH()": "0x6aa25e5ef3ac113d8b0f0b33d0af8999add492a1",
       "getAmountsOut(uint256,address[])": "0x6aa25e5ef3ac113d8b0f0b33d0af8999add492a1",
       "getAmountOut(uint256,uint256,uint256,uint32)": "0x6aa25e5ef3ac113d8b0f0b33d0af8999add492a1",
-      "swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)": "0x6aa25e5ef3ac113d8b0f0b33d0af8999add492a1"
+      "swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)": "0x6aa25e5ef3ac113d8b0f0b33d0af8999add492a1",
+      "getAmountsIn(uint256,address[])": "0x6aa25e5ef3ac113d8b0f0b33d0af8999add492a1"
     },
     "implementations": {
       "0x6aa25e5ef3ac113d8b0f0b33d0af8999add492a1": "0x3d22d66fba7aa758fe040cc6a6ea40479dbf97bafa11beb6de68bdc97d351697"
+    },
+    "loupe": "0x0681363e5da35a248e1abb5cddd6db9cdac9a771",
+    "bytes": 9272,
+    "implementation_bytes": {
+      "0x6aa25e5ef3ac113d8b0f0b33d0af8999add492a1": 17996
     }
   },
   "wallets": [

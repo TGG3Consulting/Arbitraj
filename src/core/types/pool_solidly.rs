@@ -16,21 +16,21 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FeeRule {
     /// `amountIn -= amountIn * fee / denominator` (Velodrome, THENA V1: делитель 10000; veplus, magicfox — тоже).
-    Numerator { denominator: u32 },
+    Numerator { denominator: u64 },
     /// `amountIn -= amountIn / fee` (usdfi BasePair: fee — делитель; 100 → 1%, 10000 → 0,01%).
     Divisor,
 }
 
 /// Делитель числителя комиссии getFee Velodrome / THENA V1 (контракт: `amountIn * fee / 10000`) — и смысл поля `fee`
 /// в записях до решения 273. Единственный источник числа: адаптер берёт его же (math/solidly_math.rs fee_denominator).
-pub const GETFEE_DENOMINATOR: u32 = 10_000;
+pub const GETFEE_DENOMINATOR: u64 = 10_000;
 
 /// Комиссия пула Solidly: число с контракта и правило его применения. Чтение — оба вида записи (FeeRecord).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(from = "FeeRecord")]
 pub struct SolidlyFee {
     /// Значение с контракта как есть (getFee / fee() / swapFee() / stableFee() …).
-    pub value: u32,
+    pub value: u64,
     pub rule: FeeRule,
 }
 
@@ -40,7 +40,7 @@ pub struct SolidlyFee {
 #[serde(untagged)]
 enum FeeRecord {
     Legacy(u32),
-    Current { value: u32, rule: FeeRule },
+    Current { value: u64, rule: FeeRule },
 }
 
 impl From<FeeRecord> for SolidlyFee {
@@ -48,7 +48,7 @@ impl From<FeeRecord> for SolidlyFee {
     fn from(r: FeeRecord) -> Self {
         match r {
             FeeRecord::Legacy(value) => SolidlyFee {
-                value,
+                value: u64::from(value),
                 rule: FeeRule::Numerator {
                     denominator: GETFEE_DENOMINATOR,
                 },

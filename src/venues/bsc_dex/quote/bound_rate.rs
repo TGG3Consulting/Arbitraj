@@ -49,6 +49,11 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
         return Err(format!("{}: пул с крючком", e.family.title));
     }
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::CandySwap(s), PoolKind::V2) => {
+            let i=usize::from(!zfo);
+            let rin=if s.balances[i]>s.reserves[i] {U256::ONE} else {s.reserves[i]};
+            pair(s.reserves[1-i],U256::ONE,rin,U256::ONE)
+        }
         (PoolState::EtherVista(s), PoolKind::V2) => {
             // Без фиксированной платы это верх курса для любого размера; её точная величина входит в quote.
             let (rin, rout) = if zfo { (s.reserve0,s.reserve1) } else { (s.reserve1,s.reserve0) };

@@ -231,7 +231,7 @@ fn pool_record_reads_both_formats() {
     v["Solidly"].as_object_mut().unwrap().remove("gate");
     assert_eq!(serde_json::from_value::<PoolState>(v).unwrap(), state);
     let legacy: SolidlyFee = serde_json::from_value(json!(5)).unwrap();
-    let den = solidly_math::fee_denominator().to::<u32>();
+    let den = solidly_math::fee_denominator().to::<u64>();
     assert_eq!(
         legacy,
         SolidlyFee {

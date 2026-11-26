@@ -51,7 +51,7 @@ pub fn fee_of(dex: &str, d: &Value, p: &Value) -> SolidlyFee {
         }
     };
     SolidlyFee {
-        value: raw.to::<u32>(),
+        value: raw.to::<u64>(),
         rule,
     }
 }

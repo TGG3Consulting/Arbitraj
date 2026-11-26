@@ -97,6 +97,12 @@ pub fn fee_call(
         None if f.proto == Proto::SolidlyV1 => (factory, v1()),
         None | Some("factory_pool") => (factory, by_pool()),
         Some("factory_stable") => (factory, v1()),
+        Some("factory_address") => {
+            let signature = need("dex.solidly_fee_method")?;
+            let mut data = selector(&signature).to_vec();
+            data.extend_from_slice(&pool.abi_encode());
+            (factory, data.into())
+        }
         Some("pool") => (pool, sig(need("dex.solidly_fee_method")?)),
         Some("factory_by_type") => {
             let name = if stable {
@@ -117,7 +123,7 @@ pub fn fee_call(
 /// None — «числитель над fee_denominator()», как до решения 273. Ошибки: NotConfigured (правило, делитель).
 pub fn rule(ctx: &Ctx, f: &Family, src: Option<&str>) -> GatewayResult<FeeRule> {
     if src.is_none() {
-        let denominator = fee_denominator().to::<u32>();
+        let denominator = fee_denominator().to::<u64>();
         return Ok(FeeRule::Numerator { denominator });
     }
     let name = "dex.solidly_fee_rule";
@@ -125,9 +131,7 @@ pub fn rule(ctx: &Ctx, f: &Family, src: Option<&str>) -> GatewayResult<FeeRule> 
         .ok_or_else(|| ctx.not_set(name, format!("{}: не задана {name}", f.id)))?;
     match set.as_str() {
         "numerator" => Ok(FeeRule::Numerator {
-            denominator: u32::try_from(ctx.dex_int("dex.solidly_fee_denominator", f.id)?).map_err(
-                |_| ctx.not_set("dex.solidly_fee_denominator", "делитель не помещается"),
-            )?,
+            denominator: ctx.dex_int("dex.solidly_fee_denominator", f.id)?,
         }),
         "divisor" => Ok(FeeRule::Divisor),
         other => {
@@ -149,12 +153,12 @@ pub fn word(ctx: &Ctx, to: Address, out: &[u8]) -> GatewayResult<U256> {
 /// 0 — деление на ноль в контракте). Ошибка BadResponse — иначе.
 pub fn checked(ctx: &Ctx, raw: U256, rule: FeeRule) -> GatewayResult<SolidlyFee> {
     let bad = |w: String| ctx.err(ErrorCode::BadResponse, w);
-    let value: u32 = raw
+    let value: u64 = raw
         .try_into()
         .map_err(|_| bad(format!("комиссия Solidly {raw} не помещается")))?;
     let ok = match rule {
         FeeRule::Numerator { denominator } => value < denominator,
-        FeeRule::Divisor => value > 1,
+        FeeRule::Divisor => (2..=u64::from(u32::MAX)).contains(&value),
     };
     if !ok {
         return Err(bad(format!(

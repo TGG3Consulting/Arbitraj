@@ -51,7 +51,13 @@ pub fn quote_decode(
     } else {
         (b, a)
     };
-    v2::amount_out(amount, ri, ro, fee(ctx, e, token_in).ok()?.1)
+    let ratio=fee(ctx,e,token_in).ok()?.1;
+    if let crate::core::types::PoolState::CandySwap(state)=&e.pool.state {
+        // Резервы ответа учитывают предыдущие обмены в этом же симулируемом блоке.
+        let gross = v2::amount_out(amount,ri,ro,ratio)?;
+        return super::super::math::candy::net(gross,state.payout_bps);
+    }
+    v2::amount_out(amount, ri, ro, ratio)
 }
 
 /// Вызов «ожидалось без налога» для симуляции любого пула: у вида без роутера — quote_request, иначе квотер DEX

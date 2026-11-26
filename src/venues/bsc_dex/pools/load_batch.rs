@@ -85,7 +85,7 @@ pub async fn states(
     let mut out: Out = wants.iter().map(|_| None).collect();
     let mut live = Vec::new();
     for (index, w) in wants.iter().enumerate() {
-        if w.family.variant != super::family_variant::Variant::V2Create2LiveFee {
+        if !w.family.variant.live_v2_fee() {
             continue;
         }
         match w.reference {

@@ -64,7 +64,7 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
     if kind == VenueKind::Dex && !out.is_empty() {
         // Котируемая монета (USDT) сама в справочник не входит, а адаптер DEX ищет пулы «монета — USDT»
         // и берёт адрес USDT из этого списка (venues/bsc_dex/tokens.rs). Адрес — из API бирж (registry::usdt_address).
-        if !super::subscribe_assets::add_dex_quote(core,venue,&mut out) {
+        if !super::subscribe_assets::add_dex_quote(core, venue, &mut out) {
             return vec![];
         }
         // Решение 430: промежуточные монеты только этой площадки DEX (своей сети).

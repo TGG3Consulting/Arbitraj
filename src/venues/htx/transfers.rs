@@ -85,6 +85,16 @@ pub async fn withdraw(
         .map_err(|e| super::errors::bad("не записаны параметры вывода HTX", &e.to_string()))?;
     let body = submitted.body(&req.address, &cid);
     let path = "/v1/dw/withdraw/api/create";
+    if crate::gateway::settlement_intent::active() {
+        let marker =
+            crate::gateway::pending::PendingRef {
+                parse: Some(serde_json::to_value(&submitted).map_err(|e| {
+                    super::errors::bad("не кодируются условия вывода", &e.to_string())
+                })?),
+                ..crate::gateway::pending::PendingRef::withdraw(&cid)
+            };
+        crate::gateway::settlement_intent::before_send(&marker).await?;
+    }
     let sent = rest::signed(ctx, Method::POST, path, vec![], Some(body), Op::Withdraw).await;
     let sent = sent.and_then(|d| {
         num::to_dec(&d).map(|n| n.to_string()).ok_or_else(|| {
@@ -217,4 +227,31 @@ pub async fn withdrawal_status(ctx: &Ctx, venue_ref: &str) -> GatewayResult<Tran
 /// Ошибка WithdrawRejected с площадкой HTX.
 fn reject(ctx: &Ctx, msg: String) -> GatewayError {
     ctx.tag(GatewayError::new(ErrorCode::WithdrawRejected, None, msg))
+}
+
+/// Только поиск исходного вывода по клиентскому ID до передачи результата наблюдателю зачисления.
+pub(super) async fn recover_settlement(
+    ctx: &Ctx,
+    req: WithdrawRequest,
+    p: &crate::gateway::pending::PendingRef,
+) -> GatewayResult<Option<Transfer>> {
+    let Some(client) = p.client_id.as_deref() else {
+        return Ok(None);
+    };
+    let Some(id) = find_id(ctx, client).await else {
+        return Ok(None);
+    };
+    let Some(terms) = p.parse.as_ref() else {
+        return Ok(None);
+    };
+    let submitted: super::withdraw_record::Submitted = serde_json::from_value(terms.clone())
+        .map_err(|e| super::errors::bad("исходные условия вывода", &e.to_string()))?;
+    let terms = serde_json::to_string(&submitted)
+        .map_err(|e| super::errors::bad("условия вывода", &e.to_string()))?;
+    let reference = format!("{id}{SEP}{client}{SEP}{terms}");
+    Ok(Some(crate::gateway::pending::created(
+        ctx.venue(),
+        req,
+        reference,
+    )))
 }

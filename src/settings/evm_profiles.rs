@@ -117,55 +117,33 @@ impl ChainMeta {
     }
 }
 
-/// Публично подтверждённая идентичность исторической схемы журнала.
-pub const LEGACY_CASH_TOKEN: alloy_primitives::Address =
-    alloy_primitives::address!("833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
+/// Валюта существующего портфельного учёта.
 pub const LEDGER_QUOTE: &str = "USDT";
 
-pub fn legacy_settlement(
-    venue: &str,
-    chain: &str,
-    ticker: &str,
-    asset: alloy_primitives::Address,
-    quote: &str,
-) -> bool {
-    venue == "base_dex"
-        && chain == "base"
-        && ticker == "USDC"
-        && asset == LEGACY_CASH_TOKEN
-        && quote == LEDGER_QUOTE
+pub fn uses_settlement_contract(s: &Store, venue: &str) -> bool {
+    s.get_exact("dex.settlement_contract", &Scope::Venue(venue.into()))
+        .is_some()
 }
 
+/// Только явно сохранённый оператором адрес. При новой установке адрес отсутствует.
 pub fn settlement_contract(
     s: &Store,
     venue: &str,
-    chain: &str,
-    ticker: &str,
+    _chain: &str,
+    _ticker: &str,
 ) -> Result<Option<alloy_primitives::Address>, String> {
-    let scope = Scope::Venue(venue.to_string());
-    if s.get_exact("dex.settlement_contract", &scope).is_some() {
-        let at = super::read::At {
-            venue: Some(venue),
-            coin: None,
-        };
-        let addr = s
-            .address("dex.settlement_contract", at)
-            .map_err(|e| e.message)?;
-        if venue == "base_dex" && chain == "base" && ticker == "USDC" && addr != LEGACY_CASH_TOKEN {
-            return Err("Контракт USDC расходится с подтверждённым адресом Circle в Base".into());
-        }
-        if addr.is_zero() {
-            return Err("Нулевой адрес расчётного токена".into());
-        }
-        return Ok(Some(addr));
+    if !uses_settlement_contract(s, venue) {
+        return Ok(None);
     }
-    Ok(
-        legacy_settlement(venue, chain, ticker, LEGACY_CASH_TOKEN, LEDGER_QUOTE)
-            .then_some(LEGACY_CASH_TOKEN),
-    )
-}
-
-/// У первого реализованного денежного пути сохранённый биржевой клиентский ID относится к этому сетевому справочнику.
-pub fn legacy_cash_venue(venue: &str, network: &str, chain_id: u64) -> bool {
-    venue == "gate" && network == "BASEEVM" && chain_id == 8453
+    let at = super::read::At {
+        venue: Some(venue),
+        coin: None,
+    };
+    let addr = s
+        .address("dex.settlement_contract", at)
+        .map_err(|e| e.message)?;
+    if addr.is_zero() {
+        return Err("Нулевой адрес dex.settlement_contract".into());
+    }
+    Ok(Some(addr))
 }

@@ -14,8 +14,8 @@ use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 
-const KIND: &str = "settlement_action";
-const LEGACY: &str = "base_settlement_action";
+pub(super) const KIND: &str = "settlement_action";
+pub(super) const LEGACY: &str = "base_settlement_action";
 
 /// Действительный запрос к площадке, отдельный для ордера и вывода.
 #[derive(Clone, Serialize, Deserialize)]
@@ -33,6 +33,10 @@ pub struct SpotFill {
 
 tokio::task_local! { static GROSS: std::cell::Cell<Option<rust_decimal::Decimal>>; }
 
+pub fn capturing() -> bool {
+    GROSS.try_with(|_| ()).is_ok()
+}
+
 /// Адаптер передаёт точную сумму расчётной валюты из окончательного ответа биржи.
 pub fn note_gross(value: Option<rust_decimal::Decimal>) {
     let _ = GROSS.try_with(|cell| cell.set(value));
@@ -49,7 +53,7 @@ pub async fn capture(
                 GatewayError::new(
                     ErrorCode::OutcomeUnknown,
                     Some(trade.request.venue.clone()),
-                    "Нет фактической суммы исполнения ордера Base в USDT",
+                    "В ответе площадки отсутствует фактический оборот ордера в валюте котировки",
                 )
             })?;
             Ok(SpotFill { trade, gross_quote })
@@ -69,6 +73,7 @@ pub enum Outcome {
 pub struct Entry {
     pub operation: Request,
     pub lookup: PendingRef,
+    #[serde(default, deserialize_with = "super::settlement_archive::result")]
     pub result: Option<Outcome>,
 }
 
@@ -81,7 +86,8 @@ struct Action {
 
 tokio::task_local! { static ACTION: Action; }
 
-tokio::task_local! { static CHECK: std::sync::Arc<dyn Fn(&PendingRef)->GatewayResult<()> + Send + Sync>; }
+type Check = std::sync::Arc<dyn Fn(&PendingRef) -> GatewayResult<()> + Send + Sync>;
+tokio::task_local! { static CHECK: Check; }
 
 /// Поздняя сверка снимка маршрута перед записью первичного идентификатора и внешней отправкой.
 pub async fn checked<T>(
@@ -149,14 +155,26 @@ pub async fn before_send(lookup: &PendingRef) -> GatewayResult<()> {
     .map_err(|e| error(e.to_string()))?;
     let id = action.key;
     let db = action.db;
+    let original = body.clone();
     let key = id.clone();
     let inserted = db.ledger().write(move |c| {
         c.execute("INSERT INTO core_state(kind,id,body,updated_at) SELECT ?1,?2,?3,?4 WHERE NOT EXISTS(SELECT 1 FROM core_state WHERE kind=?5 AND id=?2) ON CONFLICT(kind,id) DO NOTHING",
             params![KIND,key,body,Utc::now().to_rfc3339(),LEGACY])
     }).await.map_err(|e| error(e.to_string()))?;
     if inserted == 1 {
-        if let Ok(r) = CHECK.try_with(|guard| guard(lookup)) {
-            r?;
+        if let Ok(Err(reason)) = CHECK.try_with(|guard| guard(lookup)) {
+            // Управление ещё у единственного владельца INSERT, POST не начат.
+            // Убирается только его собственная нетронутая запись.
+            db.ledger()
+                .write(move |c| {
+                    c.execute(
+                        "DELETE FROM core_state WHERE kind=?1 AND id=?2 AND body=?3",
+                        params![KIND, id, original],
+                    )
+                })
+                .await
+                .map_err(|e| error(e.to_string()))?;
+            return Err(reason);
         }
         return Ok(());
     }
@@ -179,15 +197,14 @@ pub async fn confirm(db: &Db, key: &str, original: &Entry, outcome: Outcome) -> 
     entry.result = Some(outcome);
     let body = serde_json::to_string(&entry).map_err(|e| e.to_string())?;
     let key = key.to_string();
-    let count = db
-        .ledger()
-        .write(move |c| {
-            c.execute(
-        "UPDATE core_state SET body=?1,updated_at=?2 WHERE kind IN (?3,?6) AND id=?4 AND body=?5",
-        params![body,Utc::now().to_rfc3339(),KIND,key,expected,LEGACY])
-        })
-        .await
-        .map_err(|e| e.to_string())?;
+    let count=db.ledger().write(move |c| {
+        let raw=c.query_row("SELECT body FROM core_state WHERE kind IN (?1,?2) AND id=?3",params![KIND,LEGACY,key],|r|r.get::<_,String>(0)).optional()?;
+        let Some(raw)=raw else{return Ok(0)};
+        let matches=serde_json::from_str::<Entry>(&raw).ok().and_then(|r|serde_json::to_string(&r).ok()).is_some_and(|s|s==expected);
+        if !matches{return Ok(0);}
+        c.execute("UPDATE core_state SET body=?1,updated_at=?2 WHERE kind IN (?3,?6) AND id=?4 AND body=?5",
+            params![body,Utc::now().to_rfc3339(),KIND,key,raw,LEGACY])
+    }).await.map_err(|e|e.to_string())?;
     if count == 1 {
         Ok(())
     } else {

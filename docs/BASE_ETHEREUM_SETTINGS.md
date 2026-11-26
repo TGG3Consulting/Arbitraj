@@ -34,7 +34,7 @@
 
 ### Расчётная монета Base и сверка конверсии
 
-Пара конверсии определяется двумя настройками `venue.quote_asset`, по одной для DEX и исходной биржи. `dex.settlement_contract` в области DEX связывает тикер с ERC-20. Для существующего профиля Base/USDC сохранён подтверждённый адрес Circle. Общий запрос `GET /api/venues/{cex}/settlement/{dex}/conversion?side=Buy|Sell&quantity=…` возвращает оба тикера и суммы в их единицах. Старый маршрут API для Base сохраняет имена прежних полей.
+Пара конверсии определяется двумя настройками `venue.quote_asset`, по одной для DEX и исходной биржи. `dex.settlement_contract` в области DEX связывает тикер с ERC-20. Оператор задаёт адрес явно и сверяет его с контрактом в выбранной сети и справочнике исходной биржи. Старые поручения без сохранённого снимка рынка доступны для ручной сверки через GET /api/deals/{id}/settlement-intents. Общий запрос `GET /api/venues/{cex}/settlement/{dex}/conversion?side=Buy|Sell&quantity=…` возвращает оба тикера и суммы в их единицах. Старый маршрут API для Base сохраняет имена прежних полей.
 
 В архиве первой страницы GeckoTerminal для 119 идентификаторов DEX у 94 сохранены примеры пулов. В выборке 255 различных адресов, максимум три примера на DEX. Наименование ровно `USDT` встречается с любой стороны в 6 из 255 пулов (2,35 %), `USDC` в 90 (35,29 %), `WETH` в 176 (69,02 %). Пул с двумя искомыми активами входит в оба счётчика. Среди 254 двухтокенных записей справа указаны USDT в 1 (0,39 %), USDC в 75 (29,53 %), WETH в 135 (53,15 %). Оставшийся пул содержит четыре токена. Порядок имён взят из ответа каталога. Знаменатель относится к образцам пулов, доли по обороту или объёму исполнимой заявки здесь не измерялись. Имена USDbC, axlUSDC, axlUSDT учитываются отдельно. Подтверждение токена при торговле требует адрес, сеть и доступную глубину. [Архив источников и адресов](../tests/data/base_settlement_public_sources.json) · [Справочник GeckoTerminal](https://api.geckoterminal.com/api/v2/networks/base/dexes?page=1).
 
@@ -49,6 +49,21 @@
 | CoinEx | ответ HTTP 503 | неизвестно | неизвестно | неизвестно |
 
 Архив биржевых справочников снят 25 ноября 2026 года в 22:00–22:02 UTC. У шести доступных бирж USDC сопоставлен с адресом Circle. Разрешение на ввод и вывод проверяется заново перед соответствующим действием. [Ответы бирж с исходными URL](../tests/data/base_settlement_public_sources.json).
+
+### R-12 · подтверждение биржевых операций
+
+До POST ядро сохраняет фактический ID запроса. При потере ответа сверка ордера использует GET с тем же клиентским ID. Для результата нужны окончательный статус, количество, оборот в котируемой валюте и комиссия со своей валютой. Таблица описывает реализованные стыки. Публичные данные подтверждают справочник и модель книги; проверка исполнения и зачисления требует обезличенных фактов конкретной операции.
+
+| Биржа | Подготовка и сверка спотового ордера | Перевод и критерий проверки |
+|---|---|---|
+| Gate | Входной text и currency_pair, запрос детали или завершённой истории, точный filled_total. Снимок книги позволяет воспроизвести обе стороны модели. [Рынки и ордера](https://www.gate.com/docs/developers/apiv4/en/spot/#list-currency-pairs) | ID вывода и хеш зачисления сохраняются раздельно. T-SETTLE-GATE — сквозная сверка до фактических USDT в исходном аккаунте. |
+| KuCoin | clientOid, symbol, dealFunds и комиссия из завершённого ордера. [Запрос по clientOid](https://www.kucoin.com/docs-new/api-3470182) | Внутренние переводы MAIN↔TRADE требуют отдельных устойчивых ID и сверки. T-SETTLE-KUCOIN. |
+| Bitget | clientOid, symbol, quoteVolume, фактическая feeDetail. [Order Info](https://www.bitget.com/legacy-docs/classic/spot/trade/Get-Order-Info) | Между FUNDING и SPOT требуется собственная сверка зачисления и каждого внутреннего перевода. T-SETTLE-BITGET. |
+| HTX | client-order-id, symbol, field-cash-amount и комиссия исполнения. [Order detail](https://huobiapi.github.io/docs/spot/v1/en/#get-the-order-detail-of-an-order-based-on-client-order-id) | Перед выводом сохраняются ID и условия заявки; GET по clientOrderId возвращает исходный перевод. T-SETTLE-HTX — комиссия и зачисление в торговый аккаунт. |
+| Poloniex | clientOrderId, symbol, filledAmount и комиссия из исполнений. [Order details](https://api-docs.poloniex.com/spot/api/private/order) | Сверка вывода по withdrawOrderId и истории кошелька. В снимке вывод USDC Base закрыт. T-SETTLE-POLONIEX — обе стороны после открытия вывода. [Wallet](https://api-docs.poloniex.com/spot/api/private/wallet) |
+| XT | clientOrderId, symbol, tradeQuote и комиссия из исполнений. [Query Single](https://doc.xt.com/docs/spot/Order/QuerySingle) | Вывод сверяется по исходному clientOrderId. T-SETTLE-XT — итоговые комиссии и совпадение сети, хеша и кредита. [Withdraw Detail](https://doc.xt.com/docs/spot/Deposit&Withdrawal/WithdrawDetail) |
+
+Критерии воспроизведения для каждой биржи указаны в [перечне задач](TASKS.md#денежный-цикл-и-восстановление-на-исходной-бирже).
 
 Нативный USDC Circle в Base имеет адрес `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. На исходной бирже нужен спотовый рынок USDC/USDT и открытая нужная сторона сети. Запись Gate от 26 ноября 2026 года содержит сеть `BASEEVM`, шаг USDC 0,01 и книги с разными ценами спроса и предложения. Эти параметры изменяются. При расчёте бот читает актуальный рынок, сетевые условия и комиссию аккаунта. [Контракты Circle](https://developers.circle.com/stablecoins/usdc-contract-addresses) · [Снимок публичного рынка Gate](../tests/data/base_usdc_gate_market.json).
 

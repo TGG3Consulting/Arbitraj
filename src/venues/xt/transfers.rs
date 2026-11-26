@@ -79,6 +79,12 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         "clientOrderId": client_id,
     });
     turn().await;
+    if crate::gateway::settlement_intent::active() {
+        crate::gateway::settlement_intent::before_send(
+            &crate::gateway::pending::PendingRef::withdraw(&client_id),
+        )
+        .await?;
+    }
     let sent = rest::signed(
         ctx,
         Method::POST,

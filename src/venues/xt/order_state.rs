@@ -135,6 +135,18 @@ pub fn result(
 ) -> GatewayResult<TradeResult> {
     let orig = num::dec_opt(s, "origQty")?.unwrap_or(sent_qty);
     let filled = num::dec(s, "executedQty")?;
+    if crate::gateway::settlement_intent::capturing() {
+        if !filled.is_zero() {
+            let fee = num::dec(s, "fee")?;
+            if !fee.is_zero() && num::text_opt(s, "feeCurrency").is_none_or(|v| v.is_empty()) {
+                return Err(super::errors::bad(
+                    "Не указана валюта комиссии исполнения",
+                    &s.to_string(),
+                ));
+            }
+        }
+        crate::gateway::settlement_intent::note_gross(num::dec_opt(s, "tradeQuote")?);
+    }
     let status = if filled.is_zero() {
         TradeStatus::NotFilled
     } else if filled < orig {
@@ -175,4 +187,38 @@ fn unknown(ctx: &Ctx, order_id: &str, why: &str) -> GatewayError {
         None,
         format!("Ордер {order_id} отправлен, но окончательное состояние не получено: {why}"),
     ))
+}
+
+/// Чтение итоговой заявки. Использует только GET; открытый ордер возвращается на следующую сверку.
+pub(super) async fn inspect(
+    ctx: &Ctx,
+    req: TradeRequest,
+    p: &crate::gateway::pending::PendingRef,
+) -> GatewayResult<Option<TradeResult>> {
+    let (Some(symbol), Some(client)) = (p.symbol.as_deref(), p.client_id.as_deref()) else {
+        return Ok(None);
+    };
+    let s = rest::signed(
+        ctx,
+        Method::GET,
+        "/v4/order",
+        vec![("clientOrderId", client.into())],
+        None,
+        Op::Other,
+    )
+    .await?;
+    if !is_final(&s)
+        || num::text_opt(&s, "symbol").as_deref() != Some(symbol)
+        || num::text_opt(&s, "clientOrderId").as_deref() != Some(client)
+    {
+        return Ok(None);
+    }
+    let Some(id) = num::text_opt(&s, "orderId") else {
+        return Ok(None);
+    };
+    if p.venue_ref.as_ref().is_some_and(|known| known != &id) {
+        return Ok(None);
+    }
+    let qty = p.sent_qty.unwrap_or(req.qty);
+    result(req, &s, id, qty).map(Some)
 }

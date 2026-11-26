@@ -38,6 +38,8 @@ pub async fn trade(
         None => order_rules::ready(ctx, symbols, &req).await?,
     };
     let path = "/api/v2/spot/trade/place-order";
+    let pending = PendingRef::order(&p.symbol, &p.client_oid, req.qty).received_coin(&p.received);
+    crate::gateway::settlement_intent::before_send(&pending).await?;
     let placed = rest::signed(ctx, Method::POST, path, vec![], Some(p.body), Op::Trade).await;
     let placed = placed.and_then(|r| {
         num::text_opt(&r, "orderId").ok_or_else(|| {
@@ -53,7 +55,7 @@ pub async fn trade(
         })
     });
     // Решение 231: «чем найти» — к любому «итог неизвестен» ниже (ядро выяснит исход само, outcome_resolve.rs).
-    let pending = PendingRef::order(&p.symbol, &p.client_oid, req.qty).received_coin(&p.received);
+
     let order_id = match placed {
         Ok(id) => id,
         Err(e) if e.code == ErrorCode::OutcomeUnknown => {

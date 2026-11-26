@@ -52,12 +52,8 @@ fn order_key(
     venue: &VenueId,
     side: crate::core::types::Side,
 ) -> GatewayResult<String> {
-    (if m.legacy() {
-        serde_json::to_string(&("order", deal, venue, side))
-    } else {
-        serde_json::to_string(&("order", deal, venue, side, m))
-    })
-    .map_err(|e| uncertain(venue, e.to_string()))
+    serde_json::to_string(&("order", deal, venue, side, m))
+        .map_err(|e| uncertain(venue, e.to_string()))
 }
 
 /// Доказательство по ID исходной сделки, стороне и бирже. При ошибке оценки комиссии
@@ -107,6 +103,18 @@ pub async fn order(
             "Нет подтверждаемого пути ордера расчётного токена",
         ));
     }
+    let old = serde_json::to_string(&("order", &req.deal_id, &venue, req.side))
+        .map_err(|e| uncertain(&venue, e.to_string()))?;
+    if let Some(row) = log::load(db, &old)
+        .await
+        .map_err(|e| uncertain(&venue, e))?
+    {
+        return Err(uncertain(
+            &venue,
+            "У сделки есть ордер без сохранённого рынка; требуется сверка исходного ID",
+        )
+        .pending(row.lookup));
+    }
     let key = order_key(m, &req.deal_id, &venue, req.side)?;
     let operation = Request::Order(Box::new(req.clone()));
     let result = match log::load(db, &key)
@@ -131,7 +139,7 @@ pub async fn order(
             }
             log::capture(async {
                 gateway
-                    .resolve_trade(req, &entry.lookup)
+                    .inspect_settlement_order(req, &entry.lookup)
                     .await?
                     .ok_or_else(|| {
                         uncertain(

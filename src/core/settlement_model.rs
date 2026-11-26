@@ -3,6 +3,8 @@
 //! Кто вызывает: API и выбор исполнимого маршрута.
 //! От чего зависит: снимки обеих сторон, комиссии и оценка расходов.
 //! Настройки: пара целевой сделки и расчётная пара исходной биржи.
+pub use super::settlement_values::Model;
+use super::settlement_values::{add, mul};
 use super::{
     costs_source::{Live, Source},
     settlement,
@@ -13,14 +15,10 @@ use crate::core::{
     types::{Cost, CostKind, Direction, Side},
 };
 use rust_decimal::Decimal;
-
-pub use super::settlement_values::Model;
-use super::settlement_values::{add, mul};
-
 /// Строит обе стороны на текущих данных. Учитывает встречные заявки других сделок через Live,
-/// проверенные пределы и удержания перевода токена через общий расчёт quantities.
 pub async fn evaluate(core: &Core, d: &Direction, qty: Decimal) -> Result<Model, String> {
     let market = super::settlement_market::Market::direction(core, d)?;
+    market.accounting()?;
     let dex = market.dex.clone();
     let cex = &market.cex;
     let funding = d.buy_on == dex;
@@ -39,7 +37,10 @@ pub async fn evaluate(core: &Core, d: &Direction, qty: Decimal) -> Result<Model,
         .get_as(cex, None)
         .await
         .map_err(|e| e.message)?;
-    if !gw.supports_settlement_order() || (funding && !gw.supports_settlement_withdrawal()) {
+    if !gw.supports_settlement_order()
+        || (funding && !gw.supports_settlement_withdrawal())
+        || (!funding && !gw.supports_settlement_credit())
+    {
         return Err("Для биржи отсутствует восстанавливаемая конверсия/вывод".into());
     }
     let cx = super::dirctx::DirCtx::for_settlement(core, d)?;

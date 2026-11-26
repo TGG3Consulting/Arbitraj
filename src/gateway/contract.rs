@@ -122,6 +122,24 @@ pub trait Venue: Send + Sync {
         false
     }
 
+    /// Только GET: окончательное исполнение сохранённого ордера по своему ID и фактическому символу.
+    async fn inspect_settlement_order(
+        &self,
+        _req: TradeRequest,
+        _pending: &super::pending::PendingRef,
+    ) -> GatewayResult<Option<TradeResult>> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "Нет чтения окончательного исполнения по своему ID",
+        ))
+    }
+
+    /// Подтверждённый кредит поступает прямо на торговый счёт без второго необратимого перевода.
+    fn supports_settlement_credit(&self) -> bool {
+        false
+    }
+
     /// Сохраняет реальный ID вывода Base USDC до отправки и умеет сверить его после потери ответа.
     fn supports_settlement_withdrawal(&self) -> bool {
         false

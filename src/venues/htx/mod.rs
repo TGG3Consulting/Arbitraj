@@ -122,6 +122,43 @@ impl Htx {
 
 #[async_trait]
 impl Venue for Htx {
+    fn supports_settlement_credit(&self) -> bool {
+        true
+    }
+    fn supports_settlement_withdrawal(&self) -> bool {
+        true
+    }
+    async fn resolve_withdraw(
+        &self,
+        req: WithdrawRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<Transfer>> {
+        transfers::recover_settlement(&self.ctx, req, p).await
+    }
+
+    /// GET сверяет окончательный ордер по ID из заявки. Открытый ордер остаётся на сверке.
+    async fn inspect_settlement_order(
+        &self,
+        req: TradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<TradeResult>> {
+        order_state::inspect(&self.ctx, req, p).await
+    }
+    fn supports_settlement_order(&self) -> bool {
+        true
+    }
+    /// Подготовленный символ проверяется по контракту спотового ордера. https://huobiapi.github.io/docs/spot/v1/en/#get-the-order-detail-of-an-order-based-on-client-order-id
+    fn matches_settlement_order(
+        &self,
+        p: &crate::gateway::pending::PendingRef,
+        asset: &str,
+        quote: &str,
+    ) -> bool {
+        p.symbol
+            .as_deref()
+            .is_some_and(|s| s == format!("{asset}{quote}").to_lowercase())
+    }
+
     fn id(&self) -> VenueId {
         self.ctx.venue()
     }

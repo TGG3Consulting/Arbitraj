@@ -136,7 +136,9 @@ pub async fn result(
 ) -> GatewayResult<TradeResult> {
     let size = num::dec(s, "amount")?;
     let qty = filled(s, "amount")?.unwrap_or(Decimal::ZERO);
-    let funds = filled(s, "cash-amount")?.unwrap_or(Decimal::ZERO);
+    let reported = filled(s, "cash-amount")?;
+    crate::gateway::settlement_intent::note_gross(reported);
+    let funds = reported.unwrap_or(Decimal::ZERO);
     let fees = if qty.is_zero() {
         Vec::new()
     } else {
@@ -211,4 +213,32 @@ fn unknown(ctx: &Ctx, order_id: &str, why: &str) -> GatewayError {
         None,
         format!("Ордер HTX {order_id} отправлен, но окончательное состояние не получено: {why}"),
     ))
+}
+
+/// Чтение итоговой заявки. Использует только GET; открытый ордер возвращается на следующую сверку.
+pub(super) async fn inspect(
+    ctx: &Ctx,
+    req: TradeRequest,
+    p: &crate::gateway::pending::PendingRef,
+) -> GatewayResult<Option<TradeResult>> {
+    let (Some(symbol), Some(client)) = (p.symbol.as_deref(), p.client_id.as_deref()) else {
+        return Ok(None);
+    };
+    let s = query(ctx, Id::Client(client)).await?;
+    if num::text_opt(&s, "state").is_none_or(|v| !FINAL.contains(&v.as_str()))
+        || num::text_opt(&s, "symbol").as_deref() != Some(symbol)
+        || num::text_opt(&s, "client-order-id").as_deref() != Some(client)
+    {
+        return Ok(None);
+    }
+    let Some(id) = num::text_opt(&s, "id") else {
+        return Ok(None);
+    };
+    if p.venue_ref.as_ref().is_some_and(|known| known != &id) {
+        return Ok(None);
+    }
+    let Some(received) = p.received.as_deref() else {
+        return Ok(None);
+    };
+    result(ctx, req, &s, id, received).await.map(Some)
 }

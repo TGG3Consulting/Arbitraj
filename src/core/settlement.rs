@@ -25,6 +25,20 @@ pub fn require_same(a: &str, b: &str) -> Result<(), String> {
         ))
     }
 }
+/// Старые возвраты требуют валюту отправителя. Необязательное поле получателя не добавляет
+/// требований старой установке; явно объявленная другая валюта требует собственного пути.
+pub fn direct_return(sender: &str, recipient: Option<&str>) -> Result<(), String> {
+    if sender != crate::settings::evm_profiles::LEDGER_QUOTE
+        || recipient.is_some_and(|v| v != sender)
+    {
+        return Err(
+            "Для различных расчётных валют нужны dex.settlement_contract и исполнимая конверсия"
+                .into(),
+        );
+    }
+    Ok(())
+}
+
 /// Модель одной конверсии на CEX. Обе валюты именованы: размеры и комиссии сохраняются в своей валюте.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Conversion {
@@ -58,7 +72,7 @@ pub async fn conversion(
         || rules.ticker != market.asset.ticker
     {
         return Err(
-            "Стакан или правила пары не относятся к исходной бирже и расчётного актива".into(),
+            "Стакан или правила пары не совпадают с исходной биржей и расчётным токеном".into(),
         );
     }
     if !rules.online

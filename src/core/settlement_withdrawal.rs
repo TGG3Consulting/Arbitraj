@@ -23,12 +23,8 @@ fn withdrawal_key(
     to: &VenueId,
     account: Option<&DexAccountId>,
 ) -> GatewayResult<String> {
-    (if m.legacy() {
-        serde_json::to_string(&("withdraw", deal, venue, to, account))
-    } else {
-        serde_json::to_string(&("withdraw", deal, venue, to, account, m))
-    })
-    .map_err(|e| uncertain(venue, e.to_string()))
+    serde_json::to_string(&("withdraw", deal, venue, to, account, m))
+        .map_err(|e| uncertain(venue, e.to_string()))
 }
 
 /// Записанные до POST реквизиты нужны для сверки вывода даже после списания всего баланса.
@@ -74,6 +70,18 @@ pub async fn withdraw(
             &venue,
             "Имя сети вывода отличается от сохранённой сети биржи",
         ));
+    }
+    let old = serde_json::to_string(&("withdraw", &req.deal_id, &venue, to, account))
+        .map_err(|e| uncertain(&venue, e.to_string()))?;
+    if let Some(row) = log::load(db, &old)
+        .await
+        .map_err(|e| uncertain(&venue, e))?
+    {
+        return Err(uncertain(
+            &venue,
+            "У сделки есть вывод без сохранённого рынка; требуется сверка исходного ID",
+        )
+        .pending(row.lookup));
     }
     let key = withdrawal_key(m, &req.deal_id, &venue, to, account)?;
     let operation = Request::Withdrawal(Box::new(req.clone()));

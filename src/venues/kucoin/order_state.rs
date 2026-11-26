@@ -124,7 +124,13 @@ pub fn result(
     let size = num::dec(s, "size")?;
     let filled = num::dec(s, "dealSize")?;
     let funds = num::dec(s, "dealFunds")?;
-    let fee = num::dec_opt(s, "fee")?.unwrap_or(Decimal::ZERO).abs();
+    crate::gateway::settlement_intent::note_gross(Some(funds));
+    let fee = if crate::gateway::settlement_intent::capturing() && !filled.is_zero() {
+        num::dec(s, "fee")?
+    } else {
+        num::dec_opt(s, "fee")?.unwrap_or_default()
+    }
+    .abs();
     let fee_asset = num::text_opt(s, "feeCurrency").unwrap_or_default();
     if !filled.is_zero() && fee_asset.is_empty() {
         return Err(unknown(
@@ -186,4 +192,29 @@ fn unknown(ctx: &Ctx, order_id: &str, why: &str) -> GatewayError {
         None,
         format!("Ордер KuCoin {order_id} отправлен, но окончательное состояние не получено: {why}"),
     ))
+}
+
+/// Чтение итоговой заявки. Использует только GET; открытый ордер возвращается на следующую сверку.
+pub(super) async fn inspect(
+    ctx: &Ctx,
+    req: TradeRequest,
+    p: &crate::gateway::pending::PendingRef,
+) -> GatewayResult<Option<TradeResult>> {
+    let (Some(symbol), Some(client)) = (p.symbol.as_deref(), p.client_id.as_deref()) else {
+        return Ok(None);
+    };
+    let s = query(ctx, symbol, Id::Client(client)).await?;
+    if s.get("active") != Some(&Value::Bool(false))
+        || num::text_opt(&s, "symbol").as_deref() != Some(symbol)
+        || num::text_opt(&s, "clientOid").as_deref() != Some(client)
+    {
+        return Ok(None);
+    }
+    let Some(id) = num::text_opt(&s, "id") else {
+        return Ok(None);
+    };
+    if p.venue_ref.as_ref().is_some_and(|known| known != &id) {
+        return Ok(None);
+    }
+    result(ctx, req, &s, id).map(Some)
 }

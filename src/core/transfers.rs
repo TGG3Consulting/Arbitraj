@@ -462,7 +462,7 @@ async fn go(
         super::withdraw_limit::take(core, deal, from, &on_from.ticker).await;
         let result = if let Some(market) = settlement {
             crate::gateway::settlement_intent::checked(
-                market.guard(core),
+                market.guard(core, from == &market.cex),
                 super::settlement_effect::withdraw(
                     &deps.db,
                     market,

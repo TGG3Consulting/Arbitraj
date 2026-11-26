@@ -186,6 +186,15 @@ pub fn result(
     } else {
         quote / filled
     };
+    if crate::gateway::settlement_intent::capturing() && !filled.is_zero() {
+        let fee = num::dec(s, "fee")?;
+        if !fee.is_zero() && num::text_opt(s, "fee_currency").is_none_or(|v| v.is_empty()) {
+            return Err(ctx.tag(errors::bad(
+                "Нет валюты фактически удержанной комиссии",
+                &s.to_string(),
+            )));
+        }
+    }
     let fees = fee_list(s, &order_id).map_err(|m| ctx.tag(errors::bad(&m, &s.to_string())))?;
     Ok(TradeResult {
         request: req,
@@ -244,4 +253,70 @@ async fn call(ctx: &Ctx, m: Method, symbol: &str, id: &str, op: Op) -> GatewayRe
 fn unknown(ctx: &Ctx, order_id: &str, why: &str) -> GatewayError {
     let m = format!("Ордер {order_id} отправлен, но окончательное состояние не получено: {why}");
     ctx.tag(GatewayError::new(ErrorCode::OutcomeUnknown, None, m))
+}
+
+/// Чтение итоговой заявки. Использует только GET; открытый ордер возвращается на следующую сверку.
+pub(super) async fn inspect(
+    ctx: &Ctx,
+    req: TradeRequest,
+    p: &crate::gateway::pending::PendingRef,
+) -> GatewayResult<Option<TradeResult>> {
+    let Some(symbol) = p.symbol.as_deref() else {
+        return Ok(None);
+    };
+    let Some(client) = p.client_id.as_deref() else {
+        return Ok(None);
+    };
+    let direct = call(
+        ctx,
+        Method::GET,
+        symbol,
+        p.venue_ref.as_deref().unwrap_or(client),
+        Op::Other,
+    )
+    .await;
+    let s = match direct {
+        Ok(v) => v,
+        Err(_) => {
+            let Some(since) = p.sent_at_s else {
+                return Ok(None);
+            };
+            let q = vec![
+                ("currency_pair", symbol.into()),
+                ("status", "finished".into()),
+                ("from", since.to_string()),
+                ("limit", history_limit(ctx)?.to_string()),
+            ];
+            let list = rest::signed(ctx, Method::GET, "/spot/orders", q, None, Op::Other).await?;
+            let Some(v) = list.as_array().and_then(|a| {
+                a.iter()
+                    .find(|o| num::text_opt(o, "text").as_deref() == Some(client))
+            }) else {
+                return Ok(None);
+            };
+            v.clone()
+        }
+    };
+    if !is_final(&s)
+        || num::text_opt(&s, "currency_pair").as_deref() != Some(symbol)
+        || num::text_opt(&s, "text").as_deref() != Some(client)
+    {
+        return Ok(None);
+    }
+    let Some(id) = num::text_opt(&s, "id") else {
+        return Ok(None);
+    };
+    if p.venue_ref.as_ref().is_some_and(|old| old != &id) {
+        return Ok(None);
+    }
+    let side = if req.side == Side::Buy { "buy" } else { "sell" };
+    if num::text_opt(&s, "side").is_some_and(|v| v != side)
+        || num::dec_opt(&s, "amount")?
+            .zip(p.sent_qty)
+            .is_some_and(|(a, b)| a != b)
+    {
+        return Ok(None);
+    }
+    let qty = p.sent_qty.unwrap_or(req.qty);
+    result(ctx, req, &s, id, qty).map(Some)
 }

@@ -55,6 +55,12 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         "withdrawOrderId": own_id,
         "withdrawalType": "0",
     });
+    if crate::gateway::settlement_intent::active() {
+        crate::gateway::settlement_intent::before_send(
+            &crate::gateway::pending::PendingRef::withdraw(&own_id),
+        )
+        .await?;
+    }
     let sent = rest::signed(
         ctx,
         Method::POST,
@@ -163,4 +169,26 @@ mod tests {
             "; отправлено в /v2/wallets/withdraw: coin=山野万里, network=BSC, amount=2365410.86"
         );
     }
+}
+
+/// Только поиск исходного вывода по клиентскому ID до передачи результата наблюдателю зачисления.
+pub(super) async fn recover_settlement(
+    ctx: &Ctx,
+    req: WithdrawRequest,
+    p: &crate::gateway::pending::PendingRef,
+) -> GatewayResult<Option<Transfer>> {
+    let Some(client) = p.client_id.as_deref() else {
+        return Ok(None);
+    };
+    let Some(row) = find(ctx, "withdrawOrderId", client).await else {
+        return Ok(None);
+    };
+    let Some(reference) = num::text_opt(&row, "withdrawalRequestsId") else {
+        return Ok(None);
+    };
+    Ok(Some(crate::gateway::pending::created(
+        ctx.venue(),
+        req,
+        reference,
+    )))
 }

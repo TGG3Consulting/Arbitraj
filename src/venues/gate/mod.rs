@@ -128,9 +128,24 @@ impl Gate {
 
 #[async_trait]
 impl Venue for Gate {
+    fn supports_settlement_credit(&self) -> bool {
+        true
+    }
+
+    /// GET сверяет окончательный ордер по ID из заявки. Открытый ордер остаётся на сверке.
+    async fn inspect_settlement_order(
+        &self,
+        req: TradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<TradeResult>> {
+        order_state::inspect(&self.ctx, req, p).await
+    }
+
     fn supports_settlement_order(&self) -> bool {
         true
     }
+    /// Gate возвращает запись currency_pair с id, base и quote; id использует BASE_QUOTE.
+    /// https://www.gate.com/docs/developers/apiv4/en/spot/#list-currency-pairs
     fn matches_settlement_order(
         &self,
         pending: &crate::gateway::pending::PendingRef,

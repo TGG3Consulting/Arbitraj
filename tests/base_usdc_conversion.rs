@@ -47,7 +47,7 @@ fn recorded(side: Side) -> (QuoteSnapshot, SpotPairState, Market) {
         .unwrap()
         .parse()
         .unwrap();
-    assert_eq!(arb::settings::evm_profiles::LEGACY_CASH_TOKEN, address);
+    assert_ne!(address, alloy_primitives::Address::ZERO);
     let asset = Asset {
         ticker: "USDC".into(),
         chain: Some(ChainId("base".into())),
@@ -205,12 +205,13 @@ async fn legacy_cash_keys_reopen_without_authorizing_a_different_market() {
             .await
             .unwrap()
             .unwrap();
-        assert!(row.permits(&path.plan, &market));
-        assert!(
-            settlement_effect::order_record(&db, &market, deal, &market.cex, Side::Buy)
+        assert!(!row.permits(&path.plan, &market));
+        assert_eq!(
+            arb::gateway::settlement_archive::deal(&db, deal)
                 .await
                 .unwrap()
-                .is_some()
+                .len(),
+            1
         );
         let mut other = market.clone();
         other.evm_chain_id = 1;
@@ -238,4 +239,15 @@ async fn legacy_cash_keys_reopen_without_authorizing_a_different_market() {
         );
     }
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn direct_return_keeps_legacy_destination_optional_and_rejects_mixed_quotes() {
+    assert!(settlement::direct_return("USDT", None).is_ok());
+    assert!(
+        settlement::direct_return("USDT", Some("USDC"))
+            .unwrap_err()
+            .contains("dex.settlement_contract")
+    );
+    assert!(settlement::direct_return("USDC", None).is_err());
 }

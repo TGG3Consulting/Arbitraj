@@ -134,7 +134,9 @@ pub fn result(
 ) -> GatewayResult<TradeResult> {
     let size = num::dec(s, "size")?;
     let filled = num::dec_opt(s, "baseVolume")?.unwrap_or(Decimal::ZERO);
-    let funds = num::dec_opt(s, "quoteVolume")?.unwrap_or(Decimal::ZERO);
+    let reported = num::dec_opt(s, "quoteVolume")?;
+    crate::gateway::settlement_intent::note_gross(reported);
+    let funds = reported.unwrap_or(Decimal::ZERO);
     let field = if req.side == crate::core::types::Side::Buy {
         "baseCoin"
     } else {
@@ -201,4 +203,32 @@ fn unknown(ctx: &Ctx, order_id: &str, why: &str) -> GatewayError {
         None,
         format!("Ордер Bitget {order_id} отправлен, но окончательное состояние не получено: {why}"),
     ))
+}
+
+/// Чтение итоговой заявки. Использует только GET; открытый ордер возвращается на следующую сверку.
+pub(super) async fn inspect(
+    ctx: &Ctx,
+    req: TradeRequest,
+    p: &crate::gateway::pending::PendingRef,
+) -> GatewayResult<Option<TradeResult>> {
+    let (Some(symbol), Some(client)) = (p.symbol.as_deref(), p.client_id.as_deref()) else {
+        return Ok(None);
+    };
+    let s = query(ctx, Id::Client(client)).await?;
+    if num::text_opt(&s, "status").is_none_or(|v| !FINAL.contains(&v.as_str()))
+        || num::text_opt(&s, "symbol").as_deref() != Some(symbol)
+        || num::text_opt(&s, "clientOid").as_deref() != Some(client)
+    {
+        return Ok(None);
+    }
+    let Some(id) = num::text_opt(&s, "orderId") else {
+        return Ok(None);
+    };
+    if p.venue_ref.as_ref().is_some_and(|known| known != &id) {
+        return Ok(None);
+    }
+    let Some(received) = p.received.as_deref() else {
+        return Ok(None);
+    };
+    result(ctx, req, &s, id, received).map(Some)
 }

@@ -51,13 +51,9 @@ pub struct Path {
 }
 impl Path {
     /// Разрешает восстановление только сохранённой сделки в том же рынке. Старое поручение
-    /// без снимка привязано к единственному ранее реализованному профилю.
+    /// без снимка остаётся в локальном архиве до ручной сверки.
     pub fn permits(&self, p: &Plan, m: &super::settlement_market::Market) -> bool {
-        self.plan == *p
-            && self
-                .market
-                .as_ref()
-                .map_or_else(|| m.legacy(), |old| old.identical(m))
+        self.plan == *p && self.market.as_ref().is_some_and(|old| old.identical(m))
     }
 
     pub(super) fn steps_confirmed(&self) -> bool {

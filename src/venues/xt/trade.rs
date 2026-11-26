@@ -36,6 +36,8 @@ pub async fn trade(
         Some(p) => p,
         None => order_rules::ready(ctx, symbols, &req).await?,
     };
+    let pending = PendingRef::order(&p.symbol, &p.client_id, p.qty);
+    crate::gateway::settlement_intent::before_send(&pending).await?;
     let placed = rest::signed(
         ctx,
         Method::POST,
@@ -60,7 +62,7 @@ pub async fn trade(
         })
     });
     // Решение 231: «чем найти» — к любому «итог неизвестен» ниже (ядро выяснит исход само, outcome_resolve.rs).
-    let pending = PendingRef::order(&p.symbol, &p.client_id, p.qty);
+
     let order_id = match placed {
         Ok(id) => id,
         Err(e) if e.code == ErrorCode::OutcomeUnknown => {

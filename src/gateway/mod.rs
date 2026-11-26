@@ -56,6 +56,7 @@ pub mod registry;
 pub mod rest_book;
 pub mod rules;
 pub mod setting_cell;
+pub mod settlement_archive;
 pub mod settlement_intent;
 pub mod shard_map;
 pub mod step_meter;

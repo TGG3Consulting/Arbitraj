@@ -36,11 +36,6 @@ pub async fn run(core: &Core, p: &Plan) -> Result<Path, String> {
             v
         }
     };
-    if path.market.is_none() {
-        let prior = path.clone();
-        path.market = Some(market.clone());
-        save(db, &path, Some(&prior)).await?;
-    }
     if path.steps_confirmed() {
         return Ok(path);
     }

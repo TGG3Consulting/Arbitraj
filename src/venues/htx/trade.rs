@@ -39,6 +39,13 @@ pub async fn trade(
         None => order_rules::ready(ctx, symbols, spot, &req).await?,
     };
     let path = "/v1/order/orders/place";
+    if crate::gateway::settlement_intent::active() {
+        crate::gateway::settlement_intent::before_send(
+            &crate::gateway::pending::PendingRef::order(&p.symbol, &p.client_oid, p.qty)
+                .received_coin(&p.received),
+        )
+        .await?;
+    }
     let placed = rest::signed(ctx, Method::POST, path, vec![], Some(p.body), Op::Trade).await;
     let placed = placed.and_then(|d| match d {
         Value::String(s) if !s.is_empty() => Ok(s),

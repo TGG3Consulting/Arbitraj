@@ -36,6 +36,15 @@ pub fn ticker(core: &Core, v: &VenueId) -> Result<String, String> {
 }
 pub fn configured(core: &Core, dex: &VenueId) -> Result<Option<Asset>, String> {
     let s = &core.inner.deps.settings;
+    if !evm_profiles::uses_settlement_contract(s, &dex.0) {
+        if ticker(core, dex).is_ok_and(|v| v != evm_profiles::LEDGER_QUOTE) {
+            return Err(format!(
+                "{}: для расчётной валюты требуется dex.settlement_contract",
+                dex.0
+            ));
+        }
+        return Ok(None);
+    }
     let chain = super::chain::chain_at(s, dex)?;
     let ticker = ticker(core, dex)?;
     let contract = evm_profiles::settlement_contract(s, &dex.0, chain.as_str(), &ticker)?;
@@ -93,8 +102,15 @@ impl Market {
     }
     /// У полного арбитражного плана результат выражен в валюте портфельного учёта.
     /// Котировка самой конверсии может использовать любую настроенную пару.
-    pub fn accounting(&self)->Result<(),String>{
-        if self.quote==evm_profiles::LEDGER_QUOTE{Ok(())}else{Err(format!("Для оценки {} в валюте учёта требуется ещё одна исполнимая конверсия",self.quote))}
+    pub fn accounting(&self) -> Result<(), String> {
+        if self.quote == evm_profiles::LEDGER_QUOTE {
+            Ok(())
+        } else {
+            Err(format!(
+                "Для оценки {} в валюте учёта требуется ещё одна исполнимая конверсия",
+                self.quote
+            ))
+        }
     }
     pub fn direction(core: &Core, d: &Direction) -> Result<Self, String> {
         let (dex, cex) = if super::daily_venue::is_dex(core, &d.buy_on.0) {
@@ -114,17 +130,6 @@ impl Market {
     pub fn identical(&self, other: &Self) -> bool {
         self == other && self.asset.ticker == other.asset.ticker
     }
-    pub fn legacy(&self) -> bool {
-        self.asset.contract.is_some_and(|a| {
-            evm_profiles::legacy_settlement(
-                &self.dex.0,
-                self.chain.as_str(),
-                &self.asset.ticker,
-                a,
-                &self.quote,
-            )
-        }) && evm_profiles::legacy_cash_venue(&self.cex.0, &self.cex_network, self.evm_chain_id)
-    }
     pub fn ensure(&self, core: &Core) -> Result<(), String> {
         if self.identical(&Self::new(core, &self.dex, &self.cex)?) {
             Ok(())
@@ -135,6 +140,7 @@ impl Market {
     pub fn guard(
         &self,
         core: &Core,
+        withdraw: bool,
     ) -> impl Fn(&crate::gateway::pending::PendingRef) -> crate::gateway::errors::GatewayResult<()>
     + Send
     + Sync
@@ -142,7 +148,16 @@ impl Market {
         let c = core.clone();
         let m = self.clone();
         move |_| {
-            m.ensure(&c).map_err(|e| {
+            let verify = || -> Result<(), String> {
+                super::executor::buy_gate(&c)?;
+                if !super::registry_sync::enabled(&c, &m.dex)
+                    || !super::registry_sync::enabled(&c, &m.cex)
+                {
+                    return Err("Одна из площадок расчётного маршрута выключена".into());
+                }
+                m.network(&c, withdraw).map(|_| ())
+            };
+            verify().map_err(|e| {
                 crate::gateway::errors::GatewayError::new(
                     crate::gateway::errors::ErrorCode::NotConfigured,
                     Some(m.dex.clone()),

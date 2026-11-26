@@ -107,6 +107,36 @@ impl Xt {
 
 #[async_trait]
 impl Venue for Xt {
+    fn supports_settlement_credit(&self) -> bool {
+        true
+    }
+    fn supports_settlement_withdrawal(&self) -> bool {
+        true
+    }
+
+    /// GET сверяет окончательный ордер по ID из заявки. Открытый ордер остаётся на сверке.
+    async fn inspect_settlement_order(
+        &self,
+        req: TradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<TradeResult>> {
+        order_state::inspect(&self.ctx, req, p).await
+    }
+    fn supports_settlement_order(&self) -> bool {
+        true
+    }
+    /// Подготовленный символ проверяется по контракту спотового ордера. https://doc.xt.com/docs/spot/
+    fn matches_settlement_order(
+        &self,
+        p: &crate::gateway::pending::PendingRef,
+        asset: &str,
+        quote: &str,
+    ) -> bool {
+        p.symbol
+            .as_deref()
+            .is_some_and(|s| s == format!("{asset}_{quote}").to_lowercase())
+    }
+
     fn id(&self) -> VenueId {
         self.ctx.venue()
     }

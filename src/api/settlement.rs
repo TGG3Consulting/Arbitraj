@@ -17,7 +17,6 @@ use crate::core::{
 pub struct Request {
     side: Side,
     quantity: Decimal,
-    dex: Option<String>,
 }
 
 /// Сначала сверяет направление, сеть и монету, затем получает стакан и комиссию аккаунта.
@@ -29,7 +28,10 @@ pub async fn quote(
     if q.quantity <= Decimal::ZERO {
         return Err(ApiError::bad("Количество USDC должно быть положительным"));
     }
-    let market = market(&st, q.dex, &id)?;
+    let market = market(&st, None, &id)?;
+    if market.asset.ticker != "USDC" || market.quote != "USDT" {
+        return Err(ApiError::bad("Маршрут требует рынка USDC/USDT"));
+    }
     let v = settlement::preview(&st.core, &market, q.side, q.quantity)
         .await
         .map_err(ApiError::no_data)?;
@@ -138,6 +140,17 @@ pub async fn market_quote(
 ) -> Result<Json<Conversion>, ApiError> {
     let m = market(&st, Some(dex), &venue)?;
     settlement::preview(&st.core, &m, q.side, q.quantity)
+        .await
+        .map(Json)
+        .map_err(ApiError::no_data)
+}
+
+/// Возвращает идентификаторы и первичные факты без обращения к бирже, в том числе после смены реквизитов.
+pub async fn intents(
+    State(st): State<AppState>,
+    Path(deal): Path<String>,
+) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
+    crate::gateway::settlement_archive::deal(&st.db, &deal)
         .await
         .map(Json)
         .map_err(ApiError::no_data)

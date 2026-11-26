@@ -40,6 +40,12 @@ pub async fn trade(
         Some(p) => p,
         None => order_rules::ready(ctx, symbols, &req).await?,
     };
+    if crate::gateway::settlement_intent::active() {
+        crate::gateway::settlement_intent::before_send(
+            &crate::gateway::pending::PendingRef::order(&p.symbol, &p.client_id, p.qty),
+        )
+        .await?;
+    }
     let placed = rest::signed(
         ctx,
         Method::POST,

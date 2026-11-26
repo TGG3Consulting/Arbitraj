@@ -73,6 +73,12 @@ pub async fn move_asset(
     if !sender.supports_settlement_withdrawal() || id.is_empty() || amount <= Decimal::ZERO {
         return Err("Нет исполнимого вывода расчётного токена".into());
     }
+    if !funding {
+        let receiver = deps.gw.get_as(to, None).await.map_err(|e| e.message)?;
+        if !receiver.supports_settlement_credit() {
+            return Err("Для биржи не подтверждено прямое зачисление на торговый счёт".into());
+        }
+    }
     if let Some(req) = effect::previous_withdrawal(&deps.db, m, id, from, to, Some(wallet))
         .await
         .map_err(|e| e.message)?

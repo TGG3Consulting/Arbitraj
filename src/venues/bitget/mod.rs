@@ -108,6 +108,29 @@ impl Bitget {
 
 #[async_trait]
 impl Venue for Bitget {
+    /// GET сверяет окончательный ордер по ID из заявки. Открытый ордер остаётся на сверке.
+    async fn inspect_settlement_order(
+        &self,
+        req: TradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<TradeResult>> {
+        order_state::inspect(&self.ctx, req, p).await
+    }
+    fn supports_settlement_order(&self) -> bool {
+        true
+    }
+    /// Подготовленный символ проверяется по контракту спотового ордера. https://www.bitget.com/api-doc/spot/trade/Get-Order-Info
+    fn matches_settlement_order(
+        &self,
+        p: &crate::gateway::pending::PendingRef,
+        asset: &str,
+        quote: &str,
+    ) -> bool {
+        p.symbol
+            .as_deref()
+            .is_some_and(|s| s == format!("{asset}{quote}"))
+    }
+
     fn id(&self) -> VenueId {
         self.ctx.venue()
     }

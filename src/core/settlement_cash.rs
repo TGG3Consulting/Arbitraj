@@ -170,7 +170,7 @@ pub async fn convert(
         }
     };
     m.ensure(core)?;
-    let check = m.guard(core);
+    let check = m.guard(core, side == Side::Buy);
     let spot = gw.clone();
     let pair = m.clone();
     let fill = crate::gateway::settlement_intent::checked(

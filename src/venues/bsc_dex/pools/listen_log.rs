@@ -135,6 +135,9 @@ pub async fn on_log(
     // котировка и граф (другие задачи) не видят новую цену с прежней комиссией ни на мгновение. `was` — достоверность
     // до лога (её вернёт снятие отметки, settle_fusion.rs preset).
     let (applied, was) = if log.removed {
+        if entry.family.variant == super::family_variant::Variant::V2Create2LiveFee {
+            p.reg.update(&r, |e| e.valid = false);
+        }
         (
             Applied::Refresh("реорг: событие отменено (removed)".into()),
             None,

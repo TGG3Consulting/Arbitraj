@@ -116,8 +116,8 @@ pub(super) async fn load(
     let reserves = call::decode::<IV2Pair::getReservesCall>(&unpack(reserves)?)?;
     Ok(Loaded {
         state: PoolState::V2 {
-            reserve0: reserves.reserve0.into(),
-            reserve1: reserves.reserve1.into(),
+            reserve0: U256::from(reserves.reserve0),
+            reserve1: U256::from(reserves.reserve1),
         },
         ticks: None,
         bins: None,

@@ -1878,5 +1878,102 @@
         }
       }
     ]
+  },
+  {
+    "network": "ethereum",
+    "dex": "radioshack_ethereum",
+    "pool": "0x2a79a0e0c226a58eeb99c5704d72d49177cc7516",
+    "factory": "0x91fae1bc94a9793708fbc66adcb59087c46dee10",
+    "tokens": [
+      "0x7a5d3a9dcd33cb8d527f7b5f96eb4fef43d55636",
+      "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+    ],
+    "match": "match",
+    "runtime_match": true,
+    "runtime_hash": "0x6f0c2c32b62f383278693acb93c247caf0d758f117a6bb89573a5f5d492c3adf",
+    "source_url": "https://eth.blockscout.com/api/v2/smart-contracts/0xc19c5b63705807079dbf6d54071f9113233283f5",
+    "contract": "contracts/uniswapv2/UniswapV2Pair.sol",
+    "fee_fraction": [
+      1000,
+      1
+    ],
+    "creation_code_hash": "0x3eef69365a159891ca18b545ccaf0d6aca9b22c988b8deb7a3e4fa2fc2418596",
+    "verify_pair_boundary": true,
+    "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "reserves": [
+      "56245845490784448816453422",
+      "1213039036259414184"
+    ],
+    "pips": 1000,
+    "cases": [
+      {
+        "in": "121303903625941",
+        "bought": "5618398686500565651340",
+        "returned": "121061441320355",
+        "buy_return": "5618398686500565651340",
+        "sell_return": "121061441320355",
+        "observed_balances": [
+          "5618398686500565651340",
+          "121061441320355",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "pair_boundary": {
+          "buy": {
+            "max": "5618398686500565651340",
+            "next_revert": "UniswapV2: K"
+          },
+          "sell": {
+            "max": "121061441320355",
+            "next_revert": "UniswapV2: K"
+          }
+        }
+      },
+      {
+        "in": "2426078072518828",
+        "bought": "112155113374065927998867",
+        "returned": "2421238003239823",
+        "buy_return": "112155113374065927998867",
+        "sell_return": "2421238003239823",
+        "observed_balances": [
+          "112155113374065927998867",
+          "2421238003239823",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "pair_boundary": {
+          "buy": {
+            "max": "112155113374065927998867",
+            "next_revert": "UniswapV2: K"
+          },
+          "sell": {
+            "max": "2421238003239823",
+            "next_revert": "UniswapV2: K"
+          }
+        }
+      }
+    ]
   }
 ]

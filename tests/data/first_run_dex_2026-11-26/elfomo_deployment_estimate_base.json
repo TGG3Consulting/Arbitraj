@@ -1,0 +1,132 @@
+{
+  "run": "https://github.com/TGG3Consulting/Arbitraj/actions/runs/45880688205",
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "compile_runtime": "0xd3abddebdd155ff956b970579304da391511f945803c0ae5f1ec8f28c10a64bb",
+  "creation_bytes": 2932,
+  "runtime_bytes": 2906,
+  "creation_sender": "0x682718efd1bd558afa17d02b1cd328bc705b5cef",
+  "creation_gas": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": "0xa80a2"
+  },
+  "swaps_gas": [
+    475747,
+    475759,
+    466446,
+    466446,
+    525917,
+    525917,
+    500031,
+    500031
+  ],
+  "fee_receipt_examples": [
+    {
+      "transactionHash": "0xce127d2d0d5be9ed8edf55427c4f001a62ddad858310f2e7be86eeaac1d4cc5b",
+      "blockHash": "0x1e287f22d1146722f0fed18eb4a8c72758a1e93e6b05a875d5139da54f13360e",
+      "gasUsed": "0x8aa29",
+      "effectiveGasPrice": "0x5b908c",
+      "l1Fee": "0xa22fe066",
+      "operatorFeeScalar": null,
+      "operatorFeeConstant": null
+    },
+    {
+      "transactionHash": "0x82ee3fb170e57837443d75aa203c7cc787a0bf006e0a4d7d0ef3bd51c88f094f",
+      "blockHash": "0x20832978af993334914691f9632334ffff1b7ed924c4d2e18ee654987045c3d0",
+      "gasUsed": "0x1ecb88",
+      "effectiveGasPrice": "0x65d222",
+      "l1Fee": "0x39b1e2527",
+      "operatorFeeScalar": null,
+      "operatorFeeConstant": null
+    },
+    {
+      "transactionHash": "0xe8e628a24af5b3f6cf62cf8f1de2a30427c2e18fc75700dedc51ed9d14b120e3",
+      "blockHash": "0x9978a55db4b7aec4f554ccd02c607522ca42e955f085359da73ec45f77813e93",
+      "gasUsed": "0x10dd5a",
+      "effectiveGasPrice": "0x5b8d80",
+      "l1Fee": "0x28d6befc8",
+      "operatorFeeScalar": null,
+      "operatorFeeConstant": null
+    },
+    {
+      "transactionHash": "0xf47c6181b9de19d77f9bebb6d580629f5a0b23fd1faf01b7978b97d255cfb277",
+      "blockHash": "0xe7be60d1ac8cd0adc028577c720d9070e6770777110bec0c94e0f27da4047c94",
+      "gasUsed": "0xfa45f",
+      "effectiveGasPrice": "0x98a672",
+      "l1Fee": "0x372aad8fb",
+      "operatorFeeScalar": null,
+      "operatorFeeConstant": null
+    },
+    {
+      "transactionHash": "0x171e278bf78c058c1fe042ffc9af31ad6419fed639a96e79d4ff9b7b5bd3d879",
+      "blockHash": "0xfe3e198b415c4fad2080021ea9d410d1459d782dbc873edd3e3b4f719224bd88",
+      "gasUsed": "0x182e30",
+      "effectiveGasPrice": "0x6ef6cc",
+      "l1Fee": "0x61cb89057",
+      "operatorFeeScalar": null,
+      "operatorFeeConstant": null
+    },
+    {
+      "transactionHash": "0xf6519b24ddbc7768f7a97cbb581172d0af045ca0d7306ef33b17eb5b5c030e0c",
+      "blockHash": "0x588953fd1d70ed009e0d84ae68b7f62be008e75abf8c0743b6b5b98af2c07ac9",
+      "gasUsed": "0xcff1c",
+      "effectiveGasPrice": "0x5b8d80",
+      "l1Fee": "0x63acb5f01",
+      "operatorFeeScalar": null,
+      "operatorFeeConstant": null
+    },
+    {
+      "transactionHash": "0xad459c0497c837fd7aba98bbb93b330b6b85c47acc74acbd6269e898d0ea42f0",
+      "blockHash": "0xd7dff5464ed37b2d6d615155a16f50e42c192fbbc3147cb57bc8650343f59b49",
+      "gasUsed": "0x12a44f",
+      "effectiveGasPrice": "0x5b8d80",
+      "l1Fee": "0x4ab181a32",
+      "operatorFeeScalar": null,
+      "operatorFeeConstant": null
+    },
+    {
+      "transactionHash": "0xc616662f96375263b2f4a1489513e262c6bb81a2a73d2cb9331fab37403b8fa9",
+      "blockHash": "0x489a6ab6807eeb85d2daeaeab5f6a230e3b030d2ad40da0b88799bc60284d5ee",
+      "gasUsed": "0x11c431",
+      "effectiveGasPrice": "0x5d1420",
+      "l1Fee": "0x14a5c2c54",
+      "operatorFeeScalar": null,
+      "operatorFeeConstant": null
+    }
+  ],
+  "fee_oracle": {
+    "swap": {
+      "unsigned_envelope_bytes_bound": 324,
+      "calldata_bytes": 196,
+      "fee_response": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": "0x000000000000000000000000000000000000000000000000000000006e1f822b"
+      },
+      "operator_gas": 525917,
+      "operator_fee_response": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "creation": {
+      "unsigned_envelope_bytes_bound": 3060,
+      "calldata_bytes": 2932,
+      "fee_response": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": "0x00000000000000000000000000000000000000000000000000000003bae75698"
+      },
+      "operator_gas": 688290,
+      "operator_fee_response": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    }
+  }
+}

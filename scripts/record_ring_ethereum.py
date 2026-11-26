@@ -132,6 +132,7 @@ def measure(endpoint, tag, deadline, asset, wrappers, reserves, amount, native):
     observations = [[value(p+"owner_weth"), value(p+"owner_other")] for p in ["before_", "bought_", "sold_"]]
     if observations != [[0 if native else amount, 0], [0, quoted], [0 if native else returned, 0]]:
         raise ValueError("остатки плательщика по ERC20 расходятся с котировкой")
+    native_transfers = []
     if native:
         # WETH9 списывает msg.sender с Withdrawal и перечисляет ETH роутеру; после UNWRAP
         # отдельно проверяем фактическую выплату ETH кошельку через traceTransfers.
@@ -141,10 +142,14 @@ def measure(endpoint, tag, deadline, asset, wrappers, reserves, amount, native):
         transfers = [log for log in rows if log["address"].lower() == "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
                      and len(log["topics"]) == 3 and log["topics"][1][-40:].lower() == ROUTER[2:]
                      and log["topics"][2][-40:].lower() == OWNER[2:]]
+        native_transfers = transfers
         if sum(int(log["data"], 16) for log in transfers) != returned:
             raise ValueError("отсутствует точная выплата ETH получателю")
     return {"in": str(amount), "out": str(quoted), "roundtrip": str(returned), "native": native,
-            "balances": [[str(x) for x in row] for row in observations], "calls": [
+            "balances": [[str(x) for x in row] for row in observations], "native_transfers": native_transfers,
+            "swaps": [{"direction": d, "target": ROUTER, "calldata": calls[labels.index("swap"+str(d))]["data"],
+                       "value": calls[labels.index("swap"+str(d))]["value"],
+                       "logs": got["swap"+str(d)]["logs"]} for d in [0, 1]], "calls": [
                 {"label": k, "status": v["status"], "gasUsed": v["gasUsed"], "returnData": v.get("returnData"),
                  **({"error": v["error"]} if "error" in v else {})} for k, v in got.items()]}
 

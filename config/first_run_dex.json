@@ -1904,6 +1904,12 @@
       "dex.vault": "0xbb1b19f138db3925883a96ff7a304277460e0c99",
       "dex.multi_pair": true,
       "dex.pmm_ladder_counter": true
+    },
+    "verified_module": {
+      "runtime_keccak": "0xd3abddebdd155ff956b970579304da391511f945803c0ae5f1ec8f28c10a64bb",
+      "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "full": 8,
+      "markets": 2
     }
   },
   {
@@ -2090,6 +2096,21 @@
       "dex.router": "0x39d1d8fcc5e6eeaf567bce4e29b94fec956d3519",
       "dex.v2_fee_source": "fixed",
       "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "radioshack_ethereum",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0xc19c5b63705807079dbf6d54071f9113233283f5 · tests/data/base_ethereum_v2_probes.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x91fae1bc94a9793708fbc66adcb59087c46dee10",
+      "dex.pool_code_hashes": [
+        "0x3eef69365a159891ca18b545ccaf0d6aca9b22c988b8deb7a3e4fa2fc2418596"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.1"
     }
   }
 ]

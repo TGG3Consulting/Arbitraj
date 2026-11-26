@@ -140,6 +140,7 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
         "saitaswap-ethereum",
         "sakeswap",
         "squadswap-base",
+        "radioshack_ethereum",
         "degenbrains-base",
         "defi_swap",
         "fwx-base",

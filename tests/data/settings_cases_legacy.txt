@@ -75,10 +75,6 @@ dex.tick_reader
 dex.tick_words
 dex.universal_router
 dex.universal_router_version
-dex.v2_fee_denominator
-dex.v2_fee_method
-dex.v2_fee_pct
-dex.v2_fee_source
 dex.vault
 dex.verify_batch
 dex.verify_retry_s

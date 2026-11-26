@@ -2,7 +2,6 @@
 use alloy_primitives::{Address, U256};
 use arb::venues::bsc_dex::pools::elfomo;
 use serde_json::Value;
-#[allow(dead_code)]
 mod native_common;
 
 #[test]

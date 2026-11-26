@@ -7,12 +7,13 @@ import solc from 'solc';
 const output = process.argv[2];
 if (!output) throw new Error('Expected an artifact directory');
 const name = process.argv[3] ?? 'HanjiExecutor';
-if (!['HanjiExecutor', 'FermiSlotExecutor', 'SolidlyV3Executor', 'ElfomoExecutor'].includes(name)) throw new Error('Unknown executor');
+if (!['HanjiExecutor', 'FermiSlotExecutor', 'SolidlyV3Executor', 'ElfomoExecutor', 'BasePmmExecutor'].includes(name)) throw new Error('Unknown executor');
 const file = name + '.sol';
 const root = import.meta.dirname;
+const files = name === 'BasePmmExecutor' ? [file, 'ElfomoExecutor.sol'] : [file];
 const input = {
   language: 'Solidity',
-  sources: { [file]: { content: readFileSync(join(root, file), 'utf8').replace(/^\uFEFF/, '') } },
+  sources: Object.fromEntries(files.map((path) => [path, { content: readFileSync(join(root, path), 'utf8').replace(/^\uFEFF/, '') }])),
   settings: {
     optimizer: { enabled: true, runs: 200 }, viaIR: true, evmVersion: 'cancun',
     outputSelection: { '*': { '*': ['abi', 'evm.bytecode.object', 'evm.deployedBytecode.object', 'storageLayout'] } },

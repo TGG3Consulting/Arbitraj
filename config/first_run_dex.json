@@ -2112,5 +2112,23 @@
       "dex.v2_fee_source": "fixed",
       "dex.v2_fee_pct": "0.1"
     }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "derpdex-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x09b852108b6ed78adb2e776d901b8d54ba708080 · tests/data/first_run_dex_2026-11-26/derpdex_base.json",
+    "settings": {
+      "dex.kind": "v3_fork",
+      "dex.factory": "0xeddef4273518b137cdbcb3a7fa1c6a688303dfe2",
+      "dex.tick_lens": "0x0cdee061c75d43c82520ed998c23ac2991c9ac6d",
+      "dex.quoter_virtual": true,
+      "dex.v3_fee_tiers": [
+        "100",
+        "500",
+        "3000",
+        "10000"
+      ]
+    }
   }
 ]

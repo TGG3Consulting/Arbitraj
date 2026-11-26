@@ -7,6 +7,10 @@
   },
   "endpoint": "https://base-rpc.publicnode.com",
   "contracts": {
+    "0xeddef4273518b137cdbcb3a7fa1c6a688303dfe2": {
+      "bytes": 24535,
+      "keccak256": "0x25831ea4f49dd5f98dc133c172c4f72a686d8c14692e63843bf66eee8bb72c8b"
+    },
     "0x000000000022d473030f116ddee9f6b43ac78ba3": {
       "bytes": 9152,
       "keccak256": "0xa67739abc3ede9dbdc0491636c67d6a14ac07fab9030c3f509b1eb7b11dff8ed"

@@ -241,6 +241,49 @@ mod tests {
                         .iter()
                         .all(|v| v.as_u64().unwrap() > 21_000)
                 );
+                let owner = j["owner"].as_str().unwrap().parse().unwrap();
+                let deadline = U256::from(j["deadline"].as_u64().unwrap());
+                let native = i >= 2;
+                for (d, (source, target, input, minimum)) in
+                    [(weth, *asset, amount, out), (*asset, weth, out, back)]
+                        .into_iter()
+                        .enumerate()
+                {
+                    use crate::venues::bsc_dex::exec::ur;
+                    let mut steps = Vec::new();
+                    if native && d == 0 {
+                        steps.push((ur::WRAP_ETH, ur::native(ur::ADDRESS_THIS, input)));
+                    }
+                    let recipient = if native && d == 1 {
+                        ur::ADDRESS_THIS
+                    } else {
+                        owner
+                    };
+                    steps.push(
+                        exact_input(
+                            source,
+                            target,
+                            recipient,
+                            input,
+                            minimum,
+                            !(native && d == 0),
+                        )
+                        .unwrap(),
+                    );
+                    if native && d == 1 {
+                        steps.push((ur::UNWRAP_WETH, ur::native(owner, minimum)));
+                    } else {
+                        steps.push((
+                            ur::BALANCE_CHECK_ERC20,
+                            ur::balance_check(owner, target, minimum),
+                        ));
+                    }
+                    let hash = alloy_primitives::keccak256(ur::execute(steps, deadline));
+                    assert_eq!(c["swap_calldata_keccak"][d], format!("{hash:#x}"));
+                }
+                if native {
+                    assert_eq!(raw(&c["native_received"]), back);
+                }
                 let controls = &c["checks"];
                 for name in [
                     "nominal_plus_one0",

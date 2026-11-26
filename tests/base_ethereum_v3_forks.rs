@@ -162,3 +162,67 @@ fn rubicon_base_replay_uses_the_profiled_factory_and_public_book() {
         }
     }
 }
+
+#[test]
+fn derpdex_base_uses_the_verified_pool_and_settles_at_four_input_sizes() {
+    use alloy::sol_types::SolValue;
+    use alloy_primitives::{Address, B256};
+    let archive: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/derpdex_base.json"
+    ))
+    .unwrap();
+    let profiles: Vec<Value> =
+        serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
+    let settings = &profiles
+        .iter()
+        .find(|p| p["network"] == "base" && p["id"] == "derpdex-base")
+        .unwrap()["settings"];
+    let factory: Address = settings["dex.factory"].as_str().unwrap().parse().unwrap();
+    let tokens: Vec<Address> = archive["tokens"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().parse().unwrap())
+        .collect();
+    let fee = U256::from(archive["fee"].as_u64().unwrap());
+    let market = &archive["execution"]["pools"][0];
+    let hash: B256 = archive["provenance"]["pool"]["actual"]["init_hash"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let salt = keccak256((tokens[0], tokens[1], fee).abi_encode());
+    assert_eq!(
+        format!("{:#x}", factory.create2(salt, hash)),
+        market["pool"]
+    );
+    assert_eq!(archive["lens"], settings["dex.tick_lens"]);
+    assert_eq!(settings["dex.quoter_virtual"], true);
+    for tier in settings["dex.v3_fee_tiers"].as_array().unwrap() {
+        assert!(archive["tiers"][tier.as_str().unwrap()].as_i64().unwrap() > 0);
+    }
+    assert!(!archive["lens_ticks"].as_array().unwrap().is_empty());
+    assert_eq!(
+        archive["execution"]["virtual_quoter_keccak"],
+        format!("{:#x}", keccak256(virtual_quoter::runtime().unwrap()))
+    );
+    let rows = market["cases"].as_array().unwrap();
+    assert_eq!(rows.len(), 4);
+    for row in rows {
+        let amount = |k: &str| row[k].as_str().unwrap().parse::<U256>().unwrap();
+        assert_eq!(
+            amount("cash_before") - amount("input") + amount("sold"),
+            amount("cash_after")
+        );
+        assert!(amount("bought") > U256::ZERO && amount("sold") > U256::ZERO);
+        for key in [
+            "after_coin_owner",
+            "after_cash_executor",
+            "after_coin_executor",
+        ] {
+            assert_eq!(amount(key), U256::ZERO);
+        }
+        assert_eq!(row["min_out_plus_one_buy_reverted"], true);
+        assert_eq!(row["min_out_plus_one_sell_reverted"], true);
+    }
+}

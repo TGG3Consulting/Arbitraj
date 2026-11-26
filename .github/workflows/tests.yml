@@ -95,6 +95,12 @@ jobs:
         with:
           name: ring-ethereum-replay
           path: ${{ runner.temp }}/ring-ethereum.json
+      - run: python scripts/record_ring_markets.py "$RUNNER_TEMP/ring-markets.json"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: ring-registered-markets
+          path: ${{ runner.temp }}/ring-markets.json
   hanji-executor:
     runs-on: ubuntu-latest
     steps:
@@ -110,6 +116,11 @@ jobs:
         run: node contracts/build-hanji.mjs "$RUNNER_TEMP/fermi-executor" FermiSlotExecutor
       - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/solidly-executor" SolidlyV3Executor
       - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/elfomo-executor" ElfomoExecutor
+      - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/base-pmm-executor" BasePmmExecutor
+      - uses: actions/upload-artifact@v4
+        with:
+          name: base-pmm-executor
+          path: ${{ runner.temp }}/base-pmm-executor/BasePmmExecutor.json
       - uses: actions/upload-artifact@v4
         with:
           name: elfomo-executor
@@ -136,6 +147,7 @@ jobs:
           pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0 beautifulsoup4==4.13.5 PyYAML==6.0.3
           python scripts/record_elfomo_executor.py "$RUNNER_TEMP/elfomo-executor/ElfomoExecutor.json"
           python scripts/record_elfomo_ladders.py "$RUNNER_TEMP/elfomo-executor/ElfomoExecutor.json"
+          python scripts/record_base_pmm_executor.py "$RUNNER_TEMP/base-pmm-executor/BasePmmExecutor.json"
       - uses: actions/upload-artifact@v4
         if: inputs.elfomo_archive_replay
         with:
@@ -143,6 +155,7 @@ jobs:
           path: |
             tests/data/first_run_dex_2026-11-26/elfomo_executor_base.json
             tests/data/first_run_dex_2026-11-26/elfomo_ladders_base.json
+            tests/data/first_run_dex_2026-11-26/base_pmm_executor_*.json
       - if: inputs.solidly_archive_replay
         name: Simulate Solidly V3 module with real wallet balances
         run: |

@@ -120,7 +120,12 @@
           "gas": [
             204980,
             227319
-          ]
+          ],
+          "swap_calldata_keccak": [
+            "0x995da57ae2e08b126c833bfb8f2ec6a025aad12cb46656df7f849e4aeaa11be6",
+            "0x87f16b68e5de0ca56e90746fd58cacad6b23b8dbfcaeaea0aab4283b17af2596"
+          ],
+          "native_received": "0"
         },
         {
           "in": "10000000000000000",
@@ -151,7 +156,12 @@
           "gas": [
             204971,
             227319
-          ]
+          ],
+          "swap_calldata_keccak": [
+            "0x150ac42ab51e071940b6640be588837a60a3b60a64366dab8cbb2817af745987",
+            "0x7de2f2a3c41c1478e78a5f392ce0999a4b0c2b0da5f07d2abd05ba086e309a48"
+          ],
+          "native_received": "0"
         },
         {
           "in": "1000000000000000",
@@ -181,7 +191,12 @@
           "gas": [
             213865,
             240090
-          ]
+          ],
+          "swap_calldata_keccak": [
+            "0x7668034b4aff43063a6271eff2b685f0d96ac7a8766437f8175b89b1abaa5cf1",
+            "0x332d8f352bae7bc536139466ee6bdb8fdc91c99efbe915fdd2e73505644d7c7d"
+          ],
+          "native_received": "994008870032285"
         },
         {
           "in": "10000000000000000",
@@ -211,7 +226,12 @@
           "gas": [
             213846,
             240090
-          ]
+          ],
+          "swap_calldata_keccak": [
+            "0x128c031eed55c6ecbed5081683adcb2aa0fc25add4d1c60c94768a9b865e3760",
+            "0x204fa9089023ce87193890827dcd19e2f6e5b78d9e719e4b306c5019aecf28da"
+          ],
+          "native_received": "9940089805207269"
         }
       ]
     },
@@ -249,7 +269,12 @@
           "gas": [
             204585,
             200159
-          ]
+          ],
+          "swap_calldata_keccak": [
+            "0x97c58463cbd55ef3e3459dac76fcd2afb601a8a2249ce1c77f67330e7bc1882e",
+            "0xa539adaaeb56675afd7aad9be55c200ff7cdde5cc3cd6c53eea81787cea533da"
+          ],
+          "native_received": "0"
         },
         {
           "in": "10000000000000000",
@@ -279,7 +304,12 @@
           "gas": [
             204576,
             200159
-          ]
+          ],
+          "swap_calldata_keccak": [
+            "0xdf0f4a54dc7e654ad1be997880d78ff80995fbb53f857fd8613cfe4d5782e03e",
+            "0xe4d1fce6d540d03f069f35dd104dcbb811df49ba1f99bf59e671edbbda16d464"
+          ],
+          "native_received": "0"
         },
         {
           "in": "1000000000000000",
@@ -308,7 +338,12 @@
           "gas": [
             213470,
             212928
-          ]
+          ],
+          "swap_calldata_keccak": [
+            "0xde1151f5184cde8602c77d02da2369aeeaa6ec4c32e72bb2dbc284916fc596f7",
+            "0x826b909097dd8aa53fc7c6752f9bf7371531653cc34fae53a69add24842c1c1c"
+          ],
+          "native_received": "994008568479771"
         },
         {
           "in": "10000000000000000",
@@ -337,7 +372,12 @@
           "gas": [
             213451,
             212928
-          ]
+          ],
+          "swap_calldata_keccak": [
+            "0x3670ecf094150e68095abd9afb83fd22e7998e4ed3ac188e0ac40f348ab802ce",
+            "0x79dfc37435db7d242af740202347f3ea07127cc57eb07d3cf3c48c6bda373f5b"
+          ],
+          "native_received": "9940089804504842"
         }
       ]
     },
@@ -375,7 +415,12 @@
           "gas": [
             197852,
             203912
-          ]
+          ],
+          "swap_calldata_keccak": [
+            "0x15cae9c6a031d7a4a1dd05487e83ddc61df1d340a81739751a9ccae9679c8fc6",
+            "0x0dc2889f3c171a5729d1349bba8bb37758b1efa6c161d76c375ccd531863ba8a"
+          ],
+          "native_received": "0"
         },
         {
           "in": "10000000000000000",
@@ -405,7 +450,12 @@
           "gas": [
             197842,
             203912
-          ]
+          ],
+          "swap_calldata_keccak": [
+            "0x261ec9c100aca5048fcf2e29e6322fabfb099bf2dec8d35521c57b9627840f77",
+            "0xe99004e605e070c3eb16585dcfac1f5425b4b028c2eb711ec9e2baacbff95860"
+          ],
+          "native_received": "0"
         },
         {
           "in": "1000000000000000",
@@ -434,7 +484,12 @@
           "gas": [
             206736,
             216681
-          ]
+          ],
+          "swap_calldata_keccak": [
+            "0x02c54ded5ead0f011944438a11eb125848e679a5515f8ab4f7f7df2e2b279211",
+            "0x42301f5cd2b99dadb6fcddf2240bcad957ff6fca4b54eba72356a0d644e6b4f6"
+          ],
+          "native_received": "993729321891326"
         },
         {
           "in": "10000000000000000",
@@ -463,7 +518,12 @@
           "gas": [
             206717,
             216681
-          ]
+          ],
+          "swap_calldata_keccak": [
+            "0x204909628755eaba285ca99ac8b6b875395ade47301198d1262e61ea14a2d7a5",
+            "0x88e665f9012f99dfeaa45a706d3917a1f41e61de5645a48cf838ea8224d454eb"
+          ],
+          "native_received": "9939786339445538"
         }
       ]
     },
@@ -501,7 +561,12 @@
           "gas": [
             200155,
             212338
-          ]
+          ],
+          "swap_calldata_keccak": [
+            "0x1c528a1a0bf709a74fa1cc10b9b2728762f9279f28c9e7175653e1ba6c52710f",
+            "0xfa1b9c34aec8cc9090b1cf8a379fda0bd86f3e3a906a1f4ce05494b0ba22902c"
+          ],
+          "native_received": "0"
         },
         {
           "in": "10000000000000000",
@@ -531,7 +596,12 @@
           "gas": [
             200145,
             212338
-          ]
+          ],
+          "swap_calldata_keccak": [
+            "0x1aaf17b3023e65f2ac6fc6863f64a7680890f227d680ad89609aa6fcce9f189e",
+            "0x9de7a47354c3091c6aeaa8826b1794f584e753f30e5f4cff57cdb58b3ee14ac2"
+          ],
+          "native_received": "0"
         },
         {
           "in": "1000000000000000",
@@ -560,7 +630,12 @@
           "gas": [
             209040,
             225107
-          ]
+          ],
+          "swap_calldata_keccak": [
+            "0xaf1c051432322822f806e8823120a000125315ffdf7447943562f27aa07bf65f",
+            "0x816a99b833ac692c1650ef469420d4c5f6bf1268a2ac240f5ff89fadca73b5e3"
+          ],
+          "native_received": "994009000291292"
         },
         {
           "in": "10000000000000000",
@@ -589,9 +664,16 @@
           "gas": [
             209020,
             225107
-          ]
+          ],
+          "swap_calldata_keccak": [
+            "0xde5c1f15d793f81cf94782f4bc2c81459a80ddda2521c266b665d7fe2eb83cc4",
+            "0xaeda141b10b1daae9ab50ba59762b963493a820a3fdc2bbcf2f5f9218f1b5551"
+          ],
+          "native_received": "9940090029129258"
         }
       ]
     }
-  ]
+  ],
+  "deadline": 1795643471,
+  "owner": "0x730a17276a9720871c98622ffce5db23f38acf99"
 }

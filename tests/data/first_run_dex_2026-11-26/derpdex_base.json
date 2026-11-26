@@ -1,0 +1,331 @@
+{
+  "provenance": {
+    "pool": {
+      "address": "0x09b852108b6ed78adb2e776d901b8d54ba708080",
+      "reference": "0xb4cb800910b228ed3d0834cf79d697127bbb00e5",
+      "contracts_checked": 31,
+      "compared_hash": "d97941e78f5f4e1480d4a4386fe5e171a9eac268a924d2b1e2ee09e9d4724976",
+      "actual": {
+        "url": "https://sourcify.dev/server/v2/contract/8453/0x09b852108b6ed78adb2e776d901b8d54ba708080",
+        "runtime_keccak": "0x21f70791257cb49d4b9f5bad05df6cdfd23035894d201e35fb7f85d41d14026f",
+        "init_hash": "0x851d77a45b8b9a205fb9f44cb829cceba85282714d2603d601840640628a3da7"
+      },
+      "original": {
+        "url": "https://sourcify.dev/server/v2/contract/8453/0xb4cb800910b228ed3d0834cf79d697127bbb00e5",
+        "runtime_keccak": "0xc4cf5547246c44150ee6b531697f4b80171a18ce116dcffd894d91ad81d7ad1d",
+        "init_hash": "0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54"
+      }
+    },
+    "factory": {
+      "address": "0xeddef4273518b137cdbcb3a7fa1c6a688303dfe2",
+      "reference": "0x33128a8fc17869897dce68ed026d694621f6fdfd",
+      "contracts_checked": 33,
+      "compared_hash": "517789cc8afd316bc6a3cc958a4e58338f655b20e79e0ba2c57f97f0ab91a110",
+      "actual": {
+        "url": "https://sourcify.dev/server/v2/contract/8453/0xeddef4273518b137cdbcb3a7fa1c6a688303dfe2",
+        "runtime_keccak": "0x25831ea4f49dd5f98dc133c172c4f72a686d8c14692e63843bf66eee8bb72c8b",
+        "init_hash": "0x1d548f307f873e80da44f1ba9b231889b0552b369a74eb5decc6e0d6f44b955d"
+      },
+      "original": {
+        "url": "https://sourcify.dev/server/v2/contract/8453/0x33128a8fc17869897dce68ed026d694621f6fdfd",
+        "runtime_keccak": "0x95707a4ac71f20181a63ef7d180e3c625be5d20fc8f6f980befa966bad568132",
+        "init_hash": "0xa9cb11ffa1b1bf9a9a2b70b66f6a22db3e8328b37ec44e6ce602749081efdb6d"
+      }
+    }
+  },
+  "tokens": [
+    "0x4200000000000000000000000000000000000006",
+    "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+  ],
+  "fee": 3000,
+  "spacing": 60,
+  "tiers": {
+    "100": 1,
+    "500": 10,
+    "3000": 60,
+    "10000": 200
+  },
+  "lens": "0x0cdee061c75d43c82520ed998c23ac2991c9ac6d",
+  "lens_word": -14,
+  "lens_ticks": [
+    [
+      -200040,
+      -646768807476,
+      646768807476
+    ],
+    [
+      -200460,
+      -5594229391,
+      5594229391
+    ],
+    [
+      -200700,
+      -346328712201,
+      346328712201
+    ],
+    [
+      -200760,
+      -110413132920,
+      110413132920
+    ],
+    [
+      -200820,
+      -51417967951,
+      51417967951
+    ],
+    [
+      -201240,
+      -14041746655316,
+      14041746655316
+    ],
+    [
+      -201360,
+      14006414102573,
+      14077079208059
+    ],
+    [
+      -201960,
+      -1543821735544,
+      1543821735544
+    ],
+    [
+      -202380,
+      -38448283569040,
+      38448283569040
+    ],
+    [
+      -202560,
+      1541319578290,
+      1546323892798
+    ],
+    [
+      -202680,
+      126834584176,
+      126834584176
+    ],
+    [
+      -202860,
+      38448283569040,
+      38448283569040
+    ],
+    [
+      -203040,
+      646768807476,
+      646768807476
+    ],
+    [
+      -203460,
+      5594229391,
+      5594229391
+    ],
+    [
+      -203520,
+      135151042144,
+      135151042144
+    ],
+    [
+      -203700,
+      346328712201,
+      346328712201
+    ],
+    [
+      -203760,
+      110413132920,
+      110413132920
+    ],
+    [
+      -203820,
+      51417967951,
+      51417967951
+    ],
+    [
+      -204360,
+      35332552743,
+      35332552743
+    ],
+    [
+      -204900,
+      283884936506,
+      283884936506
+    ],
+    [
+      -205560,
+      2479585364,
+      2479585364
+    ],
+    [
+      -205800,
+      150028448258,
+      150028448258
+    ],
+    [
+      -205860,
+      1265231763079,
+      1265231763079
+    ],
+    [
+      -205920,
+      24367740320,
+      24367740320
+    ],
+    [
+      -205980,
+      747313996416,
+      747313996416
+    ],
+    [
+      -206220,
+      1523950094,
+      1523950094
+    ],
+    [
+      -206580,
+      23627799950,
+      23627799950
+    ]
+  ],
+  "reads": [
+    {
+      "to": "0x09b852108b6ed78adb2e776d901b8d54ba708080",
+      "signature": "token0()",
+      "data": "0x0dfe1681",
+      "response": "0x0000000000000000000000004200000000000000000000000000000000000006"
+    },
+    {
+      "to": "0x09b852108b6ed78adb2e776d901b8d54ba708080",
+      "signature": "token1()",
+      "data": "0xd21220a7",
+      "response": "0x000000000000000000000000d9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+    },
+    {
+      "to": "0x09b852108b6ed78adb2e776d901b8d54ba708080",
+      "signature": "fee()",
+      "data": "0xddca3f43",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000bb8"
+    },
+    {
+      "to": "0x09b852108b6ed78adb2e776d901b8d54ba708080",
+      "signature": "tickSpacing()",
+      "data": "0xd0c93a7c",
+      "response": "0x000000000000000000000000000000000000000000000000000000000000003c"
+    },
+    {
+      "to": "0xeddef4273518b137cdbcb3a7fa1c6a688303dfe2",
+      "signature": "getPool(address,address,uint24)",
+      "data": "0x1698ee820000000000000000000000004200000000000000000000000000000000000006000000000000000000000000d9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca0000000000000000000000000000000000000000000000000000000000000bb8",
+      "response": "0x00000000000000000000000009b852108b6ed78adb2e776d901b8d54ba708080"
+    },
+    {
+      "to": "0xeddef4273518b137cdbcb3a7fa1c6a688303dfe2",
+      "signature": "feeAmountTickSpacing(uint24)",
+      "data": "0x22afcccb0000000000000000000000000000000000000000000000000000000000000064",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "to": "0xeddef4273518b137cdbcb3a7fa1c6a688303dfe2",
+      "signature": "feeAmountTickSpacing(uint24)",
+      "data": "0x22afcccb00000000000000000000000000000000000000000000000000000000000001f4",
+      "response": "0x000000000000000000000000000000000000000000000000000000000000000a"
+    },
+    {
+      "to": "0xeddef4273518b137cdbcb3a7fa1c6a688303dfe2",
+      "signature": "feeAmountTickSpacing(uint24)",
+      "data": "0x22afcccb0000000000000000000000000000000000000000000000000000000000000bb8",
+      "response": "0x000000000000000000000000000000000000000000000000000000000000003c"
+    },
+    {
+      "to": "0xeddef4273518b137cdbcb3a7fa1c6a688303dfe2",
+      "signature": "feeAmountTickSpacing(uint24)",
+      "data": "0x22afcccb0000000000000000000000000000000000000000000000000000000000002710",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000c8"
+    },
+    {
+      "to": "0x09b852108b6ed78adb2e776d901b8d54ba708080",
+      "signature": "slot0()",
+      "data": "0x3850c7bd",
+      "response": "0x00000000000000000000000000000000000000000002b114e03fa4a24a965243fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceae200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000220000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "to": "0x0cdee061c75d43c82520ed998c23ac2991c9ac6d",
+      "signature": "getPopulatedTicksInWord(address,int16)",
+      "data": "0x351fb47800000000000000000000000009b852108b6ed78adb2e776d901b8d54ba708080fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf298ffffffffffffffffffffffffffffffffffffffffffffffffffffff69699331cc00000000000000000000000000000000000000000000000000000096966cce34fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf0f4fffffffffffffffffffffffffffffffffffffffffffffffffffffffeb28ed571000000000000000000000000000000000000000000000000000000014d712a8ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf004ffffffffffffffffffffffffffffffffffffffffffffffffffffffaf5d333bf700000000000000000000000000000000000000000000000000000050a2ccc409fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcefc8ffffffffffffffffffffffffffffffffffffffffffffffffffffffe64add4b8800000000000000000000000000000000000000000000000000000019b522b478fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef8cfffffffffffffffffffffffffffffffffffffffffffffffffffffff4074012b10000000000000000000000000000000000000000000000000000000bf8bfed4ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcede8fffffffffffffffffffffffffffffffffffffffffffffffffffff33aa6adb7ac00000000000000000000000000000000000000000000000000000cc559524854fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced7000000000000000000000000000000000000000000000000000000cbd1f56502d00000000000000000000000000000000000000000000000000000ccd934e407bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceb18fffffffffffffffffffffffffffffffffffffffffffffffffffffe988d0dc9880000000000000000000000000000000000000000000000000000016772f23678fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce974ffffffffffffffffffffffffffffffffffffffffffffffffffffdd080fb73470000000000000000000000000000000000000000000000000000022f7f048cb90fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce8c000000000000000000000000000000000000000000000000000000166ddce52b20000000000000000000000000000000000000000000000000000016808161a3efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce8480000000000000000000000000000000000000000000000000000001d87ee2a700000000000000000000000000000000000000000000000000000001d87ee2a70fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce794000000000000000000000000000000000000000000000000000022f7f048cb90000000000000000000000000000000000000000000000000000022f7f048cb90fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce6e000000000000000000000000000000000000000000000000000000096966cce3400000000000000000000000000000000000000000000000000000096966cce34fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce53c000000000000000000000000000000000000000000000000000000014d712a8f000000000000000000000000000000000000000000000000000000014d712a8ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce5000000000000000000000000000000000000000000000000000000001f77a13e600000000000000000000000000000000000000000000000000000001f77a13e60fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce44c00000000000000000000000000000000000000000000000000000050a2ccc40900000000000000000000000000000000000000000000000000000050a2ccc409fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce41000000000000000000000000000000000000000000000000000000019b522b47800000000000000000000000000000000000000000000000000000019b522b478fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce3d40000000000000000000000000000000000000000000000000000000bf8bfed4f0000000000000000000000000000000000000000000000000000000bf8bfed4ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce1b80000000000000000000000000000000000000000000000000000000839fbf8270000000000000000000000000000000000000000000000000000000839fbf827fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcdf9c0000000000000000000000000000000000000000000000000000004218dc5d3a0000000000000000000000000000000000000000000000000000004218dc5d3afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcdd080000000000000000000000000000000000000000000000000000000093cb78540000000000000000000000000000000000000000000000000000000093cb7854fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcdc1800000000000000000000000000000000000000000000000000000022ee64720200000000000000000000000000000000000000000000000000000022ee647202fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcdbdc0000000000000000000000000000000000000000000000000000012695b096870000000000000000000000000000000000000000000000000000012695b09687fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcdba000000000000000000000000000000000000000000000000000000005ac6e35a000000000000000000000000000000000000000000000000000000005ac6e35a0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcdb64000000000000000000000000000000000000000000000000000000adff62a280000000000000000000000000000000000000000000000000000000adff62a280fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcda74000000000000000000000000000000000000000000000000000000005ad5a20e000000000000000000000000000000000000000000000000000000005ad5a20efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcd90c0000000000000000000000000000000000000000000000000000000580539d8e0000000000000000000000000000000000000000000000000000000580539d8e"
+    }
+  ],
+  "execution": {
+    "network": "base",
+    "block": 62262756,
+    "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "factory": "0xeddef4273518b137cdbcb3a7fa1c6a688303dfe2",
+    "executor_runtime_keccak": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+    "sender": "0x730a17276a9720871c98622ffce5db23f38acf99",
+    "kind": "v3",
+    "virtual_quoter_keccak": "0x56f4529fa9bf808daea21d15a6060f9941aa6da575cc8f1ddf99feaa152a39d5",
+    "pools": [
+      {
+        "idx": 0,
+        "pool": "0x09b852108b6ed78adb2e776d901b8d54ba708080",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+        ],
+        "immutables": null,
+        "prices": null,
+        "cases": [
+          {
+            "side": 0,
+            "input": "1000000000000",
+            "bought": "1681",
+            "sold": "992920363592",
+            "cash_before": "1000000000000",
+            "cash_after": "992920363592",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          },
+          {
+            "side": 0,
+            "input": "100000000000000",
+            "bought": "168147",
+            "sold": "99400067144596",
+            "cash_before": "100000000000000",
+            "cash_after": "99400067144596",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          },
+          {
+            "side": 0,
+            "input": "10000000000000000",
+            "bought": "16436532",
+            "sold": "9940766336130130",
+            "cash_before": "10000000000000000",
+            "cash_after": "9940766336130130",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          },
+          {
+            "side": 0,
+            "input": "100000000000000000",
+            "bought": "143687798",
+            "sold": "99444298180936719",
+            "cash_before": "100000000000000000",
+            "cash_after": "99444298180936719",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          }
+        ]
+      }
+    ]
+  }
+}

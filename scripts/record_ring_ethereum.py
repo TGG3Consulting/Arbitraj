@@ -208,6 +208,10 @@ def main(output):
 def summarize(source, output):
     """Уменьшает настоящий ответ CI, сохраняя нативные суммы и исходы каждого контроля."""
     result = json.loads(Path(source).read_bytes())
+    if "swaps" in result["pools"][0]["cases"][0]:
+        encoded = bytes.fromhex(result["pools"][0]["cases"][0]["swaps"][0]["calldata"][10:])
+        result["deadline"] = decode(["bytes","bytes[]","uint256"],encoded)[2]
+        result["owner"] = OWNER
     for pool in result["pools"]:
         for case in pool["cases"]:
             calls = case.pop("calls")

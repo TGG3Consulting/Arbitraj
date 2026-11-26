@@ -265,3 +265,35 @@ fn wait_profitable_then_worse_keeps_waiting() {
         assert!(count(st, Hit::Balance) > read, "истечение перечитало факт");
     });
 }
+
+/// Ошибка полной продажи на текущем месте сохраняется при каждой самостоятельной оценке,
+/// даже когда нет подходящих площадок для перегона.
+#[test]
+fn missing_local_quote_records_cause_without_selling() {
+    big(async {
+        let (core, stand) = start(&dir("missing-local"), "1").await;
+        set(&core, "stuck.mode", json!("relay")).await;
+        set(&core, "stuck.max_relays", json!(1)).await;
+        set(&core, "stuck.relay_max_loss_pct", json!("1")).await;
+        *stand.depth.lock().unwrap() = Some(r#"{"rc":0,"mc":"SUCCESS","ma":[],"result":{"timestamp":1662445330524,"lastUpdateId":137333589606963580,"bids":[],"asks":[]}}"#.to_owned());
+        let id = "MISSING-LOCAL";
+        arb::core::ledger::save(&core, &deal(id, "100")).await;
+        for expected in 1..=2 {
+            let x = saved(&core, id);
+            tokio::time::timeout(Duration::from_secs(30), arb::core::relay::run(&core, x))
+                .await
+                .expect("восстановление завершилось");
+            let d = saved(&core, id);
+            let reasons: Vec<_> = d
+                .timeline
+                .iter()
+                .filter(|(_, t)| t.starts_with("Продажа здесь: котировка полной продажи"))
+                .collect();
+            assert_eq!(reasons.len(), expected, "{:?}", d.timeline);
+            assert!(reasons[0].1.contains(" BTC на xt: "), "{:?}", reasons);
+            assert!(!reasons[0].1.ends_with(": "));
+        }
+        assert_eq!(count(&stand, Hit::Post), 0);
+        assert_eq!(count(&stand, Hit::Withdraw), 0);
+    });
+}

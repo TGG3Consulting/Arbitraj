@@ -209,3 +209,80 @@ async fn no_swap_without_minimum() {
     .unwrap();
     assert_eq!(o.min_out, U256::from(1_000_000u32));
 }
+
+/// Время фиксируется для конкретной попытки HTTP. Отказ настройки до отправки и
+/// повтор с реальным ответом канала различимы без логирования тела запроса.
+#[tokio::test]
+async fn builder_http_start_marks_only_attempted_requests() {
+    use alloy_primitives::Bytes;
+    use arb::venues::bsc_dex::send::{self, public, ready, sequencer_cond::Terms, stats::Stats};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let c = ctx("builder-http-timestamp").await;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    for (name, val) in [
+        ("channel.enabled", json!(true)),
+        ("channel.url", json!(url)),
+        ("channel.method", json!("single")),
+        ("channel.min_gas_price_gwei", json!("1")),
+    ] {
+        c.settings
+            .set(name, Scope::Channel("public".into()), Some(val), "тест")
+            .await
+            .unwrap();
+    }
+    let targets = [ready::prepare(&c, &public::CHANNEL).unwrap()];
+    let bytes = Bytes::from_static(&[1, 2, 3]);
+    let stats = Stats::default();
+    let _ = send::dispatch(&c, &stats, &targets, &bytes, None, 1, Terms::default()).await;
+    let before_rows = c.journal.list(20, None).await.unwrap();
+    for (name, val) in [
+        ("http.timeout_ms", 5000),
+        ("http.body_idle_ms", 5000),
+        ("http.total_ms", 10000),
+        ("http.max_body_bytes", 1000000),
+    ] {
+        c.settings
+            .set(name, Scope::Global, Some(json!(val)), "тест")
+            .await
+            .unwrap();
+    }
+    let peer = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let mut buf = [0u8; 4096];
+        assert!(stream.read(&mut buf).await.unwrap() > 0);
+        let observed = Utc::now();
+        let response =
+            r#"{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"execution reverted"}}"#;
+        let http = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response}",
+            response.len()
+        );
+        stream.write_all(http.as_bytes()).await.unwrap();
+        observed
+    });
+    let before = Utc::now();
+    let _ = send::dispatch(&c, &stats, &targets, &bytes, None, 1, Terms::default()).await;
+    let observed = peer.await.unwrap();
+    assert!(
+        before_rows.iter().any(|e| e.kind == "send.channel_rejected"
+            && e.message.starts_with("public:")
+            && e.message.contains("HTTP: не начат")),
+        "{before_rows:?}"
+    );
+    let after_rows = c.journal.list(20, None).await.unwrap();
+    let journal_start = after_rows
+        .iter()
+        .find_map(|e| {
+            e.message
+                .strip_prefix("public:")
+                .and_then(|t| t.split_once("HTTP: старт ").map(|(_, at)| at))
+        })
+        .expect("начало конкретного HTTP запроса");
+    let recorded = chrono::DateTime::parse_from_rfc3339(journal_start)
+        .unwrap()
+        .to_utc();
+    // Вывод журнала округлён вниз до микросекунд.
+    assert!(before.timestamp_micros() <= recorded.timestamp_micros() && recorded <= observed);
+}

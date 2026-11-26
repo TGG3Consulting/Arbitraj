@@ -1,0 +1,18 @@
+name: GAIB before-fix replay
+on:
+  push:
+    branches: [codex/gaib-before-20261126]
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: clippy
+      - run: cargo test --locked --no-fail-fast --test bsc_dex_send --test core_relay_live_417

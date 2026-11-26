@@ -5,6 +5,9 @@ from record_base_slipstream_executor import rpc
 
 # Адрес пары, хеши реально исполняемого кода фабрики и пары, начало runtime и PUSH2 знаменателя в swap.
 PAIR_CODE = {
+    "kewlswap-base": ("0xf64810a744b3863f81e33112d8b8f4914fe50069",
+        "053316c7b8665ddee5a60c45af871dfb62e43105ff9b06dce828ce46050f2104",
+        "6ef14f3e39ed31a2874c82f036261a213f3b0455ce3fa47c18c5e8b0d55b1dd9",9038,0x723),
     "pixelswap-base": ("0x1e9cb689c04324b1b7f63c6e40e2b6b4b4a6e6bc",
         "3043726025a029f9da3b255cf6cdec9c8c240f59cdcba7799fa4bac9df84b35b",
         "0e90d16685aa7f77c63f2a2b8d9392530f6e22dc2b214c2630f19a0a34842240",2005,0x9e6),
@@ -23,9 +26,21 @@ def proof(name,c,row):
     factory_code,pair_code=[bytes.fromhex(rpc(c.endpoint,"eth_getCode",[addr,c.selector])[2:]) for addr in (factory,pair)]
     if keccak(factory_code).hex()!=fh or keccak(pair_code).hex()!=ph:
         raise ValueError("the recorded deployment no longer matches the archived EVM code")
-    creation=factory_code[offset:offset+length]
+    creator_code=factory_code
+    facet=None
+    if name=="kewlswap-base":
+        roles=("createPair(address,address)","getPair(address,address)","allPairsLength()","allPairs(uint256)")
+        facets={c.one(factory,"facetAddress(bytes4)",["bytes4"],[keccak(text=role)[:4]],["address"])[0] for role in roles}
+        if facets!={"0x8dbca30eac999d14835ffd88424a70a9d24865d6"}:
+            raise ValueError("different KEWL factory implementation")
+        facet=facets.pop()
+        creator_code=bytes.fromhex(rpc(c.endpoint,"eth_getCode",[facet,c.selector])[2:])
+        if (keccak(creator_code).hex()!="e40853f78f1b01fc86fa3d372f8e6582c52d10d301ed877bdf222016b5ed46a2" or
+                bytes.fromhex("6122038062001fbf8339") not in creator_code[:offset]):
+            raise ValueError("different KEWL pair constructor")
+    creation=creator_code[offset:offset+length]
     if (runtime_at<offset or not creation.startswith(bytes.fromhex("6080604052")) or
-            factory_code[runtime_at:runtime_at+len(pair_code)]!=pair_code or runtime_at+len(pair_code)>offset+length):
+            creator_code[runtime_at:runtime_at+len(pair_code)]!=pair_code or runtime_at+len(pair_code)>offset+length):
         raise ValueError("the complete pair is not embedded in factory creation code")
     if pair_code[pc:pc+3]!=bytes([0x61])+den.to_bytes(2,"big"):
         raise ValueError("invariant denominator at the verified instruction differs")
@@ -41,7 +56,9 @@ def proof(name,c,row):
                 pair=pair,creation_code_hash="0x"+init.hex(),creation_offset=offset,creation_bytes=length,
                 pair_runtime_offset=runtime_at,denominator_pc=pc,invariant_bytes=pair_code[pc-52:pc+120].hex(),
                 provenance="canonical EVM bytecode and wallet replay",fee_numerator=fee,fee_denominator=den)
-    if name!="satori-base":
+    if facet:
+        result.update(creator_facet=facet,creator_runtime="0x"+keccak(creator_code).hex())
+    if name not in ("satori-base","kewlswap-base"):
         if c.one(factory,"INIT_CODE_PAIR_HASH()",returns=["bytes32"])!=(init,):
             raise ValueError("factory's public getter differs from the extracted creation code")
     if fee is None:

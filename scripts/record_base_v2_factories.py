@@ -11,6 +11,7 @@ from record_base_slipstream_executor import ROOT,rpc
 from record_ethereum_v2_factories import directory,digest,raw
 
 MARKETS={
+    "kewlswap-base":("0x5636a64b835f4e3821c798fda16e0ba106357646",1000,3,"KEWL: K",8127,8707),
     "pixelswap-base":("0xd07739a9e9c46d3deded97c0edc49cea8bab1bb9",1000,3,"SwapV2: K",1742,9133),
     "satori-base":("0x4858c605862a91a34d83c19a9704f837f64fa405",1000,3,"K",2171,11561),
     "candyswap":("0xbfd866bd2502e1693bc31735253a2fb9e728f714",10000,None,"CandySwap: K",2012,10282),

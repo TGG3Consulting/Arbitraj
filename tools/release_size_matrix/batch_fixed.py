@@ -27,7 +27,7 @@ else:
     start=test.index('    let keep=reserve::keep_of')
     end=test.index('    let mut outgoing',start)
     replacement='    let cx=&p; let proceeds=quoted_proceeds; let risk='+expr[1]+';'
-test=test[:start]+'    use rust_decimal::MathematicalOps;\\n    let sqrt_t=p.transit.sqrt().ok_or("missing transit")?;\\n'+replacement+'\\n'+test[end:]
+test=test[:start]+'    use rust_decimal::MathematicalOps;\n    let sqrt_t=p.transit.sqrt().ok_or("missing transit")?;\n'+replacement+'\n'+test[end:]
 (src/'tests/fixed_archive.rs').write_text(test)
 temp = Path(os.environ['RUNNER_TEMP'])
 native_output = temp/'sha-points.json'

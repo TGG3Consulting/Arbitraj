@@ -40,7 +40,10 @@ fn chosen_fee(
         (true, Some(_)) => None,
         (false, Some(RouterFeeMode::Rebate)) => eligible.then_some(true),
         (false, None | Some(RouterFeeMode::Standard)) => Some(false),
-        (false, Some(RouterFeeMode::NativeGrossMinimum)) => None,
+        (
+            false,
+            Some(RouterFeeMode::NativeGrossMinimum | RouterFeeMode::NativeSettlement { .. }),
+        ) => None,
     }
 }
 pub(super) async fn scope<F, T>(

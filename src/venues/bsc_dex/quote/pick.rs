@@ -55,6 +55,13 @@ pub async fn gas_usdt(q: &Quoting, x: &Quote, usdt_dec: u8) -> Option<Decimal> {
         .sum();
     // Решение 211: пулы BNB — по адресу обёртки нативной монеты (dex.native_wrapped, решение 62), не по тикеру.
     let wbnb = super::super::exec::native::wrapped(ctx)?.1;
+    if usdt == wbnb
+        && ctx
+            .text("venue.quote_asset")
+            .is_ok_and(|quote| super::vista_pricing::cash(ctx, &quote, usdt))
+    {
+        return Some(bnb);
+    }
     for e in q
         .reg
         .by_coin(&wbnb)

@@ -5,6 +5,7 @@
 """
 import argparse
 import hashlib
+import gzip
 import json
 from pathlib import Path
 
@@ -204,6 +205,25 @@ def tables(network, snapshots, profiles):
                 "и отклоняется при проверке обратной связи. Профиль первого запуска использует официальный роутер. "
                 "Адрес адаптера и хеш его развёрнутого кода с прошитыми владельцем и размещением задаются владельцем для режима V5. "
                 f"[Реестр и реальные дельты кошелька](../{vista_file}) · [GitHub](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45898296581)."])
+    routes_file = f"tests/data/first_run_dex_2026-11-26/ethervista_v5_{network}.json.gz"
+    with gzip.open(routes_file, "rt", encoding="utf8") as stream:
+        routes = json.load(stream)
+    native_row = next(r for r in routes if r["native"])
+    if native_row["selector"] != vista["selector"]:
+        raise ValueError("Архив выплаты EtherVista относится к другому блоку")
+    small, large = native_row["native"]
+    net = large["expected_sell_net"]
+    router_gas = int(large["sell_router_self"]["gas"],16)
+    module_gas = int(large["sell_module_self"]["gas"],16)
+    out.extend(["", f"Для пары `{large['pool']}` при продаже стейблкоина за ETH меньший архивный размер дал "
+                f"{small['expected_sell_net']} wei после протокольной платы. При большем размере тому же кошельку "
+                f"поступило {net} wei после аванса и до газа. Официальный роутер израсходовал {router_gas} ед. газа, "
+                f"модуль с восстановлением остатка — {module_gas}. В отправляемом официальном вызове валовой минимум "
+                "равен чистому минимуму плюс аванс. Положительный исходный остаток WETH у роутера исключает этот вариант. "
+                "Если расчётной валютой выбран ETH, проверяются совпадение тикера и адреса обёртки и реальная выплата ETH "
+                "на кошелёк. Для зачисления USDT требуется фактически исполненная конверсия. "
+                f"[Архив адресов, вызовов и событий](../{routes_file}) · "
+                "[GitHub Actions](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45901130658)."])
     vista_volume_file = f"tests/data/first_run_dex_2026-11-26/ethervista_volume_{network}.json"
     turnover = read(Path(vista_volume_file))
     if turnover["last_hash"] != vista["selector"]["blockHash"] or turnover["registered_pairs"] != len(vista["registry"]):

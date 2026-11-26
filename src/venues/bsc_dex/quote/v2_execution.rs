@@ -75,6 +75,13 @@ pub(super) async fn option(
     use alloy_primitives::U256;
     let fee_mode = match &execution.wire {
         super::v2_wallet_sim::Wire::Vista(v)
+            if super::vista_pricing::cash(&q.ctx, &i.usdt_ticker, i.usdt) =>
+        {
+            Some(RouterFeeMode::NativeSettlement {
+                gross_minimum: v.form == super::super::exec::vista_wire::Form::OfficialEthOut,
+            })
+        }
+        super::v2_wallet_sim::Wire::Vista(v)
             if v.form == super::super::exec::vista_wire::Form::OfficialEthOut =>
         {
             Some(RouterFeeMode::NativeGrossMinimum)
@@ -146,7 +153,7 @@ pub(super) async fn option(
                 U256::from(1),
             ),
         };
-        if super::router_pricing::is_native(&c.entry) {
+        if mode==RouteMode::Direct && super::router_pricing::is_native(&c.entry) {
             super::router_pricing::checked(ctx, &c.entry, input, amount, head).await?;
         }
         let vista_value = if super::vista_pricing::is_vista(&c.entry) {

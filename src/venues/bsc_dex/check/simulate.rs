@@ -66,6 +66,8 @@ pub struct CallError {
 
 #[derive(Deserialize)]
 struct BlockResult {
+    #[serde(default, rename = "parentHash")]
+    parent_hash: Option<B256>,
     calls: Vec<CallResult>,
 }
 
@@ -165,11 +167,19 @@ pub async fn run_anchored(
         request[1] = json!({"blockHash":hash,"requireCanonical":true});
     }
     let blocks: Vec<BlockResult> = rpc::call(ctx, "eth_simulateV1", request).await?;
-    let out = blocks
-        .into_iter()
-        .next()
-        .map(|b| b.calls)
-        .unwrap_or_default();
+    let [block]: [BlockResult; 1] = blocks.try_into().map_err(|_| {
+        ctx.err(
+            ErrorCode::BadResponse,
+            "eth_simulateV1: ожидался ровно один блок",
+        )
+    })?;
+    if canonical.is_some() && canonical != block.parent_hash {
+        return Err(ctx.err(
+            ErrorCode::StaleData,
+            "eth_simulateV1: узел вернул другой родительский блок",
+        ));
+    }
+    let out = block.calls;
     if out.len() != calls.len() {
         return Err(ctx.err(
             ErrorCode::BadResponse,

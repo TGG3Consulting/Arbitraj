@@ -46,8 +46,12 @@ def proof(name,c,row):
         raise ValueError("invariant denominator at the verified instruction differs")
     # Статические пары вычитают amountIn * 3 в обеих ногах. У CandySwap ставка загружается
     # из slot 13, младшего uint32. Не путать её с независимым получателем протокольной комиссии.
-    if fee is not None and (pair_code[pc-17:pc-15]!=bytes([0x60,fee]) or
-                            bytes([0x84,0x60,fee]) not in pair_code[pc+3:pc+53]):
+    if name=="kewlswap-base":
+        # Обе ноги заходят в общий блок mul(balance,1000)-mul(amountIn,3).
+        if any(pair_code[pos:pos+7]!=bytes.fromhex("84600361134156") for pos in (0x717,0x73b)):
+            raise ValueError("KEWL fee or shared multiplier changed")
+    elif fee is not None and (pair_code[pc-17:pc-15]!=bytes([0x60,fee]) or
+                              bytes([0x84,0x60,fee]) not in pair_code[pc+3:pc+53]):
         raise ValueError("one of the two swap input fee multipliers differs")
     if fee is None and bytes.fromhex("600d5463ffffffff") not in pair_code[pc-65:pc]:
         raise ValueError("CandySwap fee storage slot or bit mask differs")

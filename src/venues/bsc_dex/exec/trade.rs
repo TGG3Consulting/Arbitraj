@@ -203,11 +203,24 @@ async fn run(
             .entry(&h.pool)
             .is_some_and(|e| super::super::quote::vista_pricing::is_vista(&e))
     {
-        let native = super::native::is_native(ctx, &req.asset);
+        let native = super::native::is_native(ctx, &req.asset)
+            || super::super::quote::vista_pricing::cash(
+                ctx,
+                &ctx.text("venue.quote_asset")?,
+                q.tokens.usdt(ctx)?,
+            );
         return Box::pin(super::vista_direct::NATIVE.scope(
             (
                 native,
-                h.fee_mode == Some(crate::core::types::RouterFeeMode::NativeGrossMinimum),
+                matches!(
+                    h.fee_mode,
+                    Some(
+                        crate::core::types::RouterFeeMode::NativeGrossMinimum
+                            | crate::core::types::RouterFeeMode::NativeSettlement {
+                                gross_minimum: true
+                            }
+                    )
+                ),
             ),
             trade_direct::trade(q, env, nonces, req, &route, &leg, graph_mins),
         ))

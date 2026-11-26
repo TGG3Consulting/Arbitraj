@@ -9,7 +9,7 @@ use crate::{
     core::types::Side,
     gateway::errors::{ErrorCode, GatewayResult},
 };
-use alloy::sol_types::SolEvent;
+use alloy::sol_types::{SolCall, SolEvent};
 use alloy_primitives::{Address, B256, Bytes, U256, keccak256};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -26,6 +26,34 @@ pub struct Proof {
 }
 
 impl Proof {
+    /// Получатель, сумма, путь и минимум должны совпасть с сохранённым поручением даже при восстановлении.
+    pub(super) fn signed_data(&self, data: &Bytes) -> bool {
+        if keccak256(data) != self.data_hash {
+            return false;
+        }
+        let deadline = match self.call.form {
+            Form::OfficialEthIn => {
+                IVistaFlow::swapExactETHForTokensSupportingFeeOnTransferTokensCall::abi_decode(data)
+                    .map(|p| p.deadline)
+            }
+            Form::OfficialEthOut => {
+                IVistaFlow::swapExactTokensForETHSupportingFeeOnTransferTokensCall::abi_decode(data)
+                    .map(|p| p.deadline)
+            }
+            Form::ModuleEthOut => IVistaFlow::swapNativeCall::abi_decode(data).map(|p| p.deadline),
+            Form::ModuleToken => return false,
+        };
+        deadline.is_ok_and(|deadline| {
+            self.call.data(
+                self.input,
+                self.output,
+                self.amount,
+                self.minimum,
+                self.wallet,
+                deadline,
+            ) == *data
+        })
+    }
     /// Сверяет адрес отправителя/цели, calldata и реальное value именно включённой транзакции.
     pub(crate) async fn included(&self, ctx: &Ctx, hash: B256, r: &Receipt) -> GatewayResult<()> {
         #[derive(Deserialize)]
@@ -53,27 +81,26 @@ impl Proof {
                 && t.from == self.wallet
                 && t.to == Some(self.target)
                 && t.value == self.call.value(self.amount)
-                && keccak256(t.input) == self.data_hash
+                && self.signed_data(&t.input)
         }) {
             return Err(fail());
         }
         Ok(())
     }
-    /// Возвращает чистый вход и выход без включения газа и ранее имевшегося ETH/WETH у роутера.
+    /// Возвращает реальное списание и чистую выплату владельцу. Газ учитывается отдельно по квитанции.
     pub(super) fn amounts(
         &self,
-        r: &Receipt,
+        logs: &[alloy::rpc::types::Log],
         wallet: Address,
         input: Address,
         output: Address,
-        side: Side,
     ) -> Option<(U256, U256)> {
         if wallet != self.wallet || input != self.input || output != self.output {
             return None;
         }
         let net = |token, credit| {
-            let paid = fill::moved(r, token, Some(wallet), None);
-            let got = fill::moved(r, token, None, Some(wallet));
+            let paid = fill::moved_logs(logs, token, Some(wallet), None);
+            let got = fill::moved_logs(logs, token, None, Some(wallet));
             if credit {
                 got.checked_sub(paid)
             } else {
@@ -81,21 +108,20 @@ impl Proof {
             }
         };
         let (spent, received) = match self.call.form {
-            Form::OfficialEthIn if side == Side::Sell && self.call.wrapped == input => {
-                let wrapped = native::moved(r, input, self.target, Side::Sell);
+            Form::OfficialEthIn if self.call.wrapped == input => {
+                let wrapped = native::moved_logs(logs, input, self.target, Side::Sell);
                 if wrapped.is_zero() || wrapped > self.amount {
                     return None;
                 }
                 (self.amount, net(output, true)?)
             }
-            Form::OfficialEthOut if side == Side::Buy && self.call.wrapped == output => {
-                let gross = native::moved(r, output, self.target, Side::Buy);
+            Form::OfficialEthOut if self.call.wrapped == output => {
+                let gross = native::moved_logs(logs, output, self.target, Side::Buy);
                 let received = gross.checked_sub(self.call.fee)?;
                 (net(input, false)?, received)
             }
-            Form::ModuleEthOut if side == Side::Buy && self.call.wrapped == output => {
-                let mut events = r
-                    .logs
+            Form::ModuleEthOut if self.call.wrapped == output => {
+                let mut events = logs
                     .iter()
                     .filter(|l| l.address() == self.target)
                     .filter_map(|l| IVistaFlow::NativeSettled::decode_log_data(&l.inner.data).ok());

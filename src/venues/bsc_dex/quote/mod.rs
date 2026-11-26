@@ -82,7 +82,6 @@ pub mod mixed_quoter_calls;
 mod nami_routes;
 pub mod native_gas;
 pub(super) mod oasis_pricing;
-pub(super) mod vista_pricing;
 pub mod par;
 pub mod par_pool;
 pub mod path;
@@ -155,6 +154,7 @@ pub mod verify_decide;
 pub mod via;
 pub mod via_pools;
 pub mod virtual_quoter;
+pub(super) mod vista_pricing;
 pub mod warm;
 mod white_pricing;
 pub(super) mod white_state;
@@ -326,13 +326,27 @@ impl Quoting {
         // Решение 301 (дополнение — стек): работа — в кучу здесь, состояние этого future держит указатель
         // (quote/cpu.rs run).
         // Решение 312: замер этапов работы — tm.run() = None (выключен): timed сразу ведёт работу без замера.
-        let (mut alternatives,compare_single)=Box::pin(v2_fallback::candidates(&pick,&input,native)).await;
-        if compare_single && !alternatives.is_empty() {
+        let native_cash = input.entries.iter().any(vista_pricing::is_vista)
+            && vista_pricing::cash(ctx, &input.usdt_ticker, input.usdt);
+        let (mut alternatives, compare_single) = Box::pin(v2_fallback::candidates(
+            &pick,
+            &input,
+            native || native_cash,
+        ))
+        .await;
+        if compare_single && !native_cash && !alternatives.is_empty() {
             v2_fallback::private(&pick, &input, &mut alternatives);
         }
         let work =
             quote_timing::timed(tm.run(), v2_fallback::ordinary(pick, input, compare_single));
-        let raw = cpu::run(ctx, Box::pin(work)).await;
+        let raw = if native_cash {
+            Err(ctx.err(
+                ErrorCode::NoRoute,
+                "Для нативной расчётной валюты требуется выплата ETH на кошелёк",
+            ))
+        } else {
+            cpu::run(ctx, Box::pin(work)).await
+        };
         tm.back();
         let mut best = match raw {
             Ok(q) => {
@@ -343,7 +357,15 @@ impl Quoting {
         };
         for (quote, approval) in alternatives {
             let Ok(other) = self
-                .finish(quote, (coin_dec, usdt_dec), gas, &fees, native, approval, tm)
+                .finish(
+                    quote,
+                    (coin_dec, usdt_dec),
+                    gas,
+                    &fees,
+                    native,
+                    approval,
+                    tm,
+                )
                 .await
             else {
                 continue;

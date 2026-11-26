@@ -49,6 +49,12 @@ pub(super) async fn plan(
     let h = white_state::head(ctx, "latest").await?;
     let m = vista_pricing::market(ctx, &s.entry, h, form).await?;
     let (target, call) = vista_pricing::wire(ctx, &s.entry, o.token_in, &m, form)?;
+    if form == Form::OfficialEthOut && o.min_out.checked_add(call.fee).is_none() {
+        return Err(ctx.err(
+            ErrorCode::QuoteMismatch,
+            "Валовой минимум EtherVista не помещается в wei",
+        ));
+    }
     let approvals = if form == Form::OfficialEthIn {
         Vec::new()
     } else if all {

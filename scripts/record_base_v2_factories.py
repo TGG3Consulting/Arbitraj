@@ -88,6 +88,9 @@ if __name__=="__main__":
             if row[2] is None:proof.setdefault("fee_getter","getFeeForPair(address,address)")
             result=directory(args.market,cap,config=row[:4],network="base",proof=proof,wrapped=WETH,stables=(USDC,USDBC),funding_router=ROUTER)
             if args.market in PAIR_CODE:check_deployments(cap,result)
+            if args.market=="candyswap":
+                from record_candyswap_base import capture
+                result["net_payouts"]=capture(cap,result,head)
             if args.market=="bakeryswap-base":
                 from record_bakeryswap_base import inspect
                 result["native_router"]=inspect(cap,result,head)

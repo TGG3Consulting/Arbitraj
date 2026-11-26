@@ -63,6 +63,11 @@ pub fn wrapped(ctx: &Ctx) -> Option<(String, Address)> {
     ))
 }
 
+/// Настроенная нативная денежная сторона должна совпасть по тикеру и контракту обёртки.
+pub fn cash(ctx: &Ctx, ticker: &str, token: Address) -> bool {
+    matches!(ctx.place.id, "base_dex" | "eth_dex")
+        && wrapped(ctx).is_some_and(|(t, w)| t == ticker && w == token)
+}
 /// Нативная ли монета: адрес = dex.native_wrapped и тикер = dex.native_ticker (монета биржи без адреса, которой ядро
 /// дало адрес обёртки). Токен WBNB, который биржа сама перечисляет с адресом под другим тикером, — обычный токен.
 pub fn is_native(ctx: &Ctx, a: &Asset) -> bool {
@@ -188,8 +193,17 @@ pub async fn reserve_ok(
 /// Сколько WBNB роутер обернул (Deposit, продажа) или развернул (Withdrawal, покупка) по квитанции — столько монет BNB
 /// реально ушло из сделки или пришло на кошелёк. Принимает: квитанцию, WBNB, роутер, сторону. Ошибок нет.
 pub fn moved(r: &Receipt, wbnb: Address, router: Address, side: Side) -> U256 {
-    r.logs
-        .iter()
+    moved_logs(&r.logs, wbnb, router, side)
+}
+
+/// Суммирует только события проверенной обёртки и роутера в квитанции или архивном кадре.
+pub(super) fn moved_logs(
+    logs: &[alloy::rpc::types::Log],
+    wbnb: Address,
+    router: Address,
+    side: Side,
+) -> U256 {
+    logs.iter()
         .filter(|l| l.address() == wbnb)
         .filter_map(|l| match side {
             Side::Sell => IWETH9::Deposit::decode_log_data(&l.inner.data)

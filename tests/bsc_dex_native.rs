@@ -232,3 +232,54 @@ async fn via_skips_infinity_on_native_side() {
         assert!(why.contains("не поддержан"), "{why}");
     }
 }
+
+/// Те же публичные WETH-контракты в разных сетях остаются ERC-20 при выборе тикера WETH.
+#[tokio::test]
+async fn native_settlement_requires_operator_ticker_and_matching_chain_wrapper() {
+    use arb::settings::scope::Scope;
+    use arb::venues::bsc_dex::ctx::Place;
+    let mut c = ctx("native-settlement-ethervista").await;
+    for (venue, raw) in [
+        (
+            "base_dex",
+            include_str!("data/first_run_dex_2026-11-26/ethervista_base.json"),
+        ),
+        (
+            "eth_dex",
+            include_str!("data/first_run_dex_2026-11-26/ethervista_ethereum.json"),
+        ),
+    ] {
+        let proof: Value = serde_json::from_str(raw).unwrap();
+        let wrapped: Address = serde_json::from_value(proof["weth"].clone()).unwrap();
+        let other: Address =
+            serde_json::from_value(proof["observations"][0]["token"].clone()).unwrap();
+        c.place = Place {
+            id: venue,
+            all: &["bsc_dex", "arb_dex", "base_dex", "eth_dex"],
+        };
+        let scope = Scope::Venue(venue.into());
+        for (key, value) in [
+            ("dex.native_ticker", serde_json::json!("ETH")),
+            ("dex.native_wrapped", serde_json::json!(wrapped)),
+        ] {
+            c.settings
+                .set(key, scope.clone(), Some(value), "тест")
+                .await
+                .unwrap();
+        }
+        for (ticker, expected) in [("ETH", true), ("WETH", false), ("USDT", false)] {
+            c.settings
+                .set(
+                    "venue.quote_asset",
+                    scope.clone(),
+                    Some(serde_json::json!(ticker)),
+                    "тест",
+                )
+                .await
+                .unwrap();
+            let configured = c.text("venue.quote_asset").unwrap();
+            assert_eq!(native::cash(&c, &configured, wrapped), expected);
+            assert!(!native::cash(&c, &configured, other));
+        }
+    }
+}

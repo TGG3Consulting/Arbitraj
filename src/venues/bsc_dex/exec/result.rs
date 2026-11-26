@@ -128,15 +128,13 @@ pub(super) fn with_native_fact(
         }
     };
     let (spent, got) = if let Some(proof) = vista {
-        proof
-            .amounts(&r, wallet, tin, tout, req.side)
-            .ok_or_else(|| {
-                ctx.err(
-                    ErrorCode::OutcomeUnknown,
-                    "Квитанция EtherVista не подтверждает чистую выплату",
-                )
-                .with_tx(d.chain.clone())
-            })?
+        proof.amounts(&r.logs, wallet, tin, tout).ok_or_else(|| {
+            ctx.err(
+                ErrorCode::OutcomeUnknown,
+                "Квитанция EtherVista не подтверждает чистую выплату",
+            )
+            .with_tx(d.chain.clone())
+        })?
     } else {
         (
             fill::moved(&r, tin, Some(wallet), None),

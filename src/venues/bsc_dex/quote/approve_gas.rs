@@ -73,6 +73,14 @@ pub async fn details(
         Side::Sell => (e.coin, num::to_units(quote.fillable_qty, coin_dec)),
     };
     let amount = amount.ok_or_else(bad)?;
+    if quote.side == Side::Buy
+        && super::vista_pricing::is_vista(&e)
+        && ctx
+            .text("venue.quote_asset")
+            .is_ok_and(|t| super::vista_pricing::cash(ctx, &t, token))
+    {
+        return Ok(None);
+    }
     // Решение 122 (часть X): маршрут через исполнитель ArbExecutor — одно разрешение ERC-20 исполнителю, без Permit2
     // (память — wallet/allow_cache.rs::erc20). Газ — тот же измеренный пробным обменом (верхняя оценка).
     let native = super::super::exec::native::is_native(ctx, &quote.asset);
@@ -103,8 +111,15 @@ pub async fn details(
             || super::router_pricing::is_native(&e)
             || super::delta_pricing::is_delta(&e))
     {
-        let router = if hop.fee_mode == Some(crate::core::types::RouterFeeMode::NativeGrossMinimum)
-            || super::oasis_pricing::is_oasis(&e)
+        let router = if matches!(
+            hop.fee_mode,
+            Some(
+                crate::core::types::RouterFeeMode::NativeGrossMinimum
+                    | crate::core::types::RouterFeeMode::NativeSettlement {
+                        gross_minimum: true
+                    }
+            )
+        ) || super::oasis_pricing::is_oasis(&e)
             || super::frax_pricing::is_frax(&e)
         {
             ctx.dex_addr("dex.quoter", e.family.id)?

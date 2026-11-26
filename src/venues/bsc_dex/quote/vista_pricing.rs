@@ -29,6 +29,27 @@ use alloy_primitives::Address;
 pub(in crate::venues::bsc_dex) fn is_vista(e: &Entry) -> bool {
     e.family.variant == Variant::EtherVista
 }
+pub(in crate::venues::bsc_dex) use super::super::exec::native::cash;
+pub(in crate::venues::bsc_dex) fn cash_market(
+    p: &super::super::parts::Parts,
+    asset: &crate::core::types::Asset,
+) -> bool {
+    if !matches!(p.ctx.place.id, "base_dex" | "eth_dex") {
+        return false;
+    }
+    let Some(coin) = asset.contract else {
+        return false;
+    };
+    let Ok(ticker) = p.ctx.text("venue.quote_asset") else {
+        return false;
+    };
+    if !p.ctx.text("dex.native_ticker").is_ok_and(|v| v == ticker) {
+        return false;
+    }
+    p.tokens.usdt(&p.ctx).is_ok_and(|token| {
+        cash(&p.ctx, &ticker, token) && p.registry.by_pair(coin, token).iter().any(is_vista)
+    })
+}
 pub(in crate::venues::bsc_dex) fn form(native: bool, input: Address, wrapped: Address) -> Form {
     if !native {
         Form::ModuleToken
@@ -95,7 +116,8 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, h: Option<Head>) -> Vec<O
     let Ok(payer) = signer::address(&q.ctx) else {
         return Vec::new();
     };
-    let is_native = native::is_native(&q.ctx, &i.asset);
+    let native_cash = cash(&q.ctx, &i.usdt_ticker, i.usdt);
+    let is_native = native_cash || native::is_native(&q.ctx, &i.asset);
     let input = if i.side == Side::Buy { i.usdt } else { i.coin };
     let mut out = Vec::new();
     for entry in i.entries.iter().filter(|e| is_vista(e)) {
@@ -104,7 +126,8 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, h: Option<Head>) -> Vec<O
             continue;
         };
         let shape = form(is_native, input, cached.wrapped);
-        if !crate::gateway::quote_stage::settlement()
+        if !native_cash
+            && !crate::gateway::quote_stage::settlement()
             && e.family.executor_kind.is_some()
             && q.ctx.text("dex.router_mode").ok().as_deref() == Some("graph")
             && (!is_native || super::super::exec::executor::native_capable(&q.ctx))

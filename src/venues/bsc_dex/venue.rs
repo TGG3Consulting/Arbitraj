@@ -165,6 +165,13 @@ impl Venue for BscDex {
     /// Котировка на объём по пулам (локальная математика по официальным библиотекам — quote/, math/).
     /// Ошибки: StaleData, CoinNotChecked / CoinCheckFailed, NoRoute, NotConfigured, узел.
     async fn quote(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {
+        if super::quote::vista_pricing::cash_market(&self.p, asset) {
+            return scope(
+                urgency::is_set().unwrap_or(Class::Quote),
+                self.p.quoting().quote(asset, side, qty),
+            )
+            .await;
+        }
         if crate::gateway::quote_stage::settlement() {
             let class = urgency::is_set().unwrap_or(Class::Quote);
             let baseline = scope(class, self.p.quoting().quote(asset, side, qty)).await;
@@ -208,6 +215,9 @@ impl Venue for BscDex {
     /// объём целиком — ответ без полной котировки; иначе — полная котировка, как quote. Финальная котировка через
     /// KyberSwap (решение 95) — как quote. Ошибки: как у quote.
     async fn quote_fills(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Decimal> {
+        if super::quote::vista_pricing::cash_market(&self.p, asset) {
+            return self.quote(asset, side, qty).await.map(|q| q.fillable_qty);
+        }
         if crate::gateway::quote_stage::settlement() {
             return self.quote(asset, side, qty).await.map(|q| q.fillable_qty);
         }
@@ -902,7 +912,36 @@ impl BscDex {
         // выхода при откате по minOut (exec/executor/remeasure.rs). t81 (Тигран 10.11: согласовано): пути t78 (признак
         // Remeasure.any_executor) — как до t78; у своего сборщика при этом пере-замер остаётся (trade_path.rs).
         let via_kyber = self.p.ctx.flag("exec.via_kyber").unwrap_or(false);
-        let path = super::trade_path::of(&req, via_kyber, super::best_of::enabled(&self.p.ctx));
+        let marked = req.route.as_ref().is_some_and(|r| {
+            r.legs.iter().flat_map(|l| &l.hops).any(|h| {
+                matches!(
+                    h.fee_mode,
+                    Some(crate::core::types::RouterFeeMode::NativeSettlement { .. })
+                )
+            })
+        });
+        let cash_market = super::quote::vista_pricing::cash_market(&self.p, &req.asset);
+        let path = if cash_market || marked {
+            let selected = req.route.as_ref().is_some_and(|r| {
+                matches!(r.mode, crate::core::types::RouteMode::Direct)
+                    && r.legs.len() == 1
+                    && r.legs[0].hops.len() == 1
+                    && self
+                        .p
+                        .registry
+                        .entry(&r.legs[0].hops[0].pool)
+                        .is_some_and(|e| super::quote::vista_pricing::is_vista(&e))
+            });
+            if !selected || !cash_market || !marked {
+                return Err(self.p.ctx.err(
+                    ErrorCode::NoRoute,
+                    "Изменился выбранный кошельком путь расчёта в ETH",
+                ));
+            }
+            super::trade_path::Path::Own
+        } else {
+            super::trade_path::of(&req, via_kyber, super::best_of::enabled(&self.p.ctx))
+        };
         // Решение 123: «лучший из двух» — маршрут KyberSwap и свой в один момент, исполняет лучший (best_of/trade.rs).
         if path == super::trade_path::Path::BestOf {
             return super::best_of::trade::trade(&self.p, &self.kyber, req).await;

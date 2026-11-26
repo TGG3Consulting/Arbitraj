@@ -65,7 +65,12 @@ pub fn remember(core: &Core, key: Key, why: &str, waiting_for_local: bool) -> St
 /// Неудача REST по ключу моложе окна — ошибка без запроса (без кода: алерт, как у exec_book failed; журнала нет —
 /// неудача уже записана Error). Старше окна или окна нет — None (неудача снимается).
 /// Принимает: ядро, ключ, ошибку потока. Возвращает: ошибку или None. Ошибок сверх этого нет.
-pub fn recent(core: &Core, key: &Key, stream: &GatewayError, local_ready: bool) -> Option<OpError> {
+pub fn recent(
+    core: &Core,
+    key: &Key,
+    stream: &GatewayError,
+    local_error: Option<&GatewayError>,
+) -> Option<OpError> {
     let w = window(core, &key.0);
     let mut g = core
         .inner
@@ -73,16 +78,23 @@ pub fn recent(core: &Core, key: &Key, stream: &GatewayError, local_ready: bool) 
         .lock()
         .unwrap_or_else(|p| p.into_inner());
     let fail = g.fails.get(key)?;
-    if fail.waiting_for_local && local_ready {
+    if fail.waiting_for_local && local_error.is_none() {
         g.fails.remove(key);
         return None;
     }
-    let why = &fail.why;
     let age = fail.at.elapsed().as_millis() as u64;
     match w {
+        Some((ms, name)) if age < ms && fail.waiting_for_local => local_error.map(|e| {
+            let message = format!("{}: {}; снимок стакана по REST не запрашивался: {}; прошлая проверка {age} мс назад, окно {ms} мс ({name})", key.0.0, stream.message, e.message);
+            if e.code == crate::gateway::errors::ErrorCode::NotConfigured {
+                OpError::not_configured(message)
+            } else {
+                OpError::from(message)
+            }
+        }),
         Some((ms, name)) if age < ms => Some(OpError::from(format!(
-            "{}: {}; снимок стакана по REST не запрашивался: исполнимая котировка {age} мс назад не собралась ({why}), окно {ms} мс ({name})",
-            key.0.0, stream.message
+            "{}: {}; снимок стакана по REST не запрашивался: исполнимая котировка {age} мс назад не собралась ({}), окно {ms} мс ({name})",
+            key.0.0, stream.message, fail.why
         ))),
         _ => {
             g.fails.remove(key);

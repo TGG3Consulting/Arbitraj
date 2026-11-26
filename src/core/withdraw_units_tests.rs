@@ -115,6 +115,40 @@ fn historic_tstbsc_costs_use_the_current_tst_unit_only_for_the_same_chain_contra
             Decimal::TEN
         );
     }
+    // Изменён процент текущего тарифа: фиксированная/процентная модель держит прежние суммы.
+    let amount = seen.sent * Decimal::TWO;
+    let tariff = |x: Decimal| Decimal::ONE + x * Decimal::new(1, 4);
+    let measured = Seen {
+        fee: Some(Decimal::TEN),
+        ..seen.clone()
+    };
+    let priced = vec![Cost::new(
+        CostKind::WithdrawFee,
+        tariff(amount),
+        "TST",
+        false,
+    )];
+    let mut reference = super::super::model(
+        &measured,
+        Some(tariff(measured.sent)),
+        Decimal::ZERO,
+        amount,
+        priced.clone(),
+    );
+    for cost in &mut reference {
+        cost.asset = current.ticker.clone();
+    }
+    assert_eq!(
+        super::super::route_model(
+            measured,
+            &current,
+            Some(tariff(seen.sent)),
+            Decimal::ZERO,
+            amount,
+            priced
+        ),
+        reference
+    );
     for independent in [external, principal.clone().paid_with("MX")] {
         assert_eq!(
             model(&current, vec![independent.clone()]),

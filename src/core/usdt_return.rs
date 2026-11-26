@@ -188,7 +188,11 @@ pub(super) async fn relay_try(
             "; вывод {}, история {} (сеть {}), затрата {:?} {} {}",
             sent.venue_ref,
             sent.asset.ticker,
-            sent.network,
+            if sent.network.is_empty() {
+                "не указана"
+            } else {
+                &sent.network
+            },
             fee.kind,
             fee.amount.normalize(),
             fee.asset

@@ -114,7 +114,7 @@ pub async fn book(core: &Core, v: &VenueId, a: &Asset, side: Side) -> Result<Boo
     };
     // Решение 238 (ревью, п. 4): REST недавно не ответил — без нового запроса.
     let ready = x.rest_book_prerequisite(&on);
-    if let Some(e) = super::exec_book_fail::recent(core, &key, &stream, ready.is_ok()) {
+    if let Some(e) = super::exec_book_fail::recent(core, &key, &stream, ready.as_ref().err()) {
         return Err(e);
     }
     let (result, local) = rest_attempt(x.as_ref(), &on, side, ready).await;

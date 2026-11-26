@@ -49,7 +49,7 @@ impl HistoryCoins {
                 let slot = by_coin
                     .entry(name.to_owned())
                     .or_insert_with(|| Some(id.clone()));
-                if !parent_matches || slot.as_deref() != Some(&id) {
+                if !parent_matches || slot.as_deref() != Some(id.as_ref()) {
                     *slot = None;
                 }
             }
@@ -78,9 +78,29 @@ impl HistoryCoins {
 
     /// Сырое имя монеты в ответе остаётся на Transfer. Меняем только доказанную валюту комиссии.
     pub(super) fn withdrawal_fee(&self, created: &Transfer, sent: &mut Transfer) {
-        let Some(id) = self.identity(&sent.network, &sent.asset.ticker) else {
+        if sent.asset.ticker == created.asset.ticker {
+            return;
+        }
+        // MEXC документирует отсутствие network в истории мультисетевого актива.
+        // ID связывает статус с принятым запросом. При пустом network дополнительно
+        // требуем, чтобы это имя во всём ответе getall указывало только на эту сеть и актив.
+        let network = if sent.network.is_empty() {
+            &created.network
+        } else {
+            &sent.network
+        };
+        let Some(id) = self.identity(network, &sent.asset.ticker) else {
             return;
         };
+        if sent.network.is_empty()
+            && self
+                .networks
+                .values()
+                .filter_map(|rows| rows.get(&sent.asset.ticker))
+                .any(|other| other.as_deref() != Some(id))
+        {
+            return;
+        }
         let Some(fee) = &mut sent.fee else { return };
         if !created.venue_ref.is_empty()
             && created.venue_ref == sent.venue_ref

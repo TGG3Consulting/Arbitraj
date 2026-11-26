@@ -41,10 +41,17 @@ struct Conn {
     name: String,
     alive: AtomicI64,
     started: AtomicI64,
-    ended: AtomicI64,
+    session: RwLock<Session>,
     pairs: Vec<Pair>,
     idx: HashMap<String, usize>,
     tx: mpsc::UnboundedSender<Cmd>,
+}
+
+#[derive(Default)]
+struct Session {
+    active: bool,
+    /// Метка и вид завершения последней попытки. Сохраняются при новом подключении.
+    last_end: Option<(i64, &'static str)>,
 }
 
 /// Учёт свежести соединений адаптера. Дешёво клонируется.
@@ -79,7 +86,7 @@ impl FeedReg {
             name: name.to_string(),
             alive: AtomicI64::new(0),
             started: AtomicI64::new(0),
-            ended: AtomicI64::new(0),
+            session: RwLock::new(Session::default()),
             idx: tickers
                 .iter()
                 .cloned()
@@ -115,17 +122,23 @@ impl FeedReg {
         else {
             return "стакана нет: пары нет в текущем реестре подписок WS".into();
         };
-        let ended = conn.ended.load(Ordering::Acquire);
-        let state = if ended != 0 {
-            format!("сессия не активна с {ended} (Unix мс; причина в venue.ws)")
-        } else if conn.started.load(Ordering::Relaxed) == 0 {
+        let session = conn.session.read().unwrap_or_else(|p| p.into_inner());
+        let state = if !session.active && session.last_end.is_some() {
+            "сессия не активна".to_owned()
+        } else if !session.active {
             "сессия ещё не запущена".into()
         } else if pair.last.load(Ordering::Relaxed) == 0 {
             "первый кадр пары в текущей сессии ещё не наблюдался".into()
         } else {
             "кадр пары уже наблюдался, пригодная книга в памяти отсутствует".into()
         };
-        format!("стакана нет: основной WS {}, {state}", conn.name)
+        match session.last_end {
+            Some((ms, why)) => format!(
+                "стакана нет: основной WS {}, {state}; предыдущее завершение: {why}, Unix мс {ms}",
+                conn.name
+            ),
+            None => format!("стакана нет: основной WS {}, {state}", conn.name),
+        }
     }
 
     /// Снимок свежести. Принимает: признаки площадки (по расписанию, переподписка пары, подтверждение по REST —
@@ -214,12 +227,18 @@ impl ConnHandle {
             p.id.store(NO_VER, Ordering::Relaxed);
             p.changed.store(NO_VER, Ordering::Relaxed);
         }
-        self.conn.ended.store(0, Ordering::Release);
+        self.conn
+            .session
+            .write()
+            .unwrap_or_else(|p| p.into_inner())
+            .active = true;
     }
 
     /// Попытка подключения завершилась; текст сбоя уже пишет цикл соединения.
-    pub fn session_ended(&self) {
-        self.conn.ended.store(now_ms(), Ordering::Release);
+    pub fn session_ended(&self, why: &'static str) {
+        let mut state = self.conn.session.write().unwrap_or_else(|p| p.into_inner());
+        state.last_end = Some((now_ms(), why));
+        state.active = false;
     }
 
     /// Кадр соединения любого вида. Ошибок нет.
@@ -274,11 +293,16 @@ mod tests {
         assert!(reg.missing_book("ACE").contains("первый кадр"));
         ws.frame("ACE");
         assert!(reg.missing_book("ACE").contains("кадр пары уже наблюдался"));
-        ws.session_ended();
+        assert!(!reg.missing_book("ACE").contains("предыдущее завершение"));
+        ws.session_ended("сбой соединения WS (venue.ws)");
         let missing = reg.missing_book("ACE");
         assert!(missing.contains("market-2") && missing.contains("сессия не активна"));
         ws.session_started();
-        assert!(reg.missing_book("ACE").contains("первый кадр"));
+        let warming = reg.missing_book("ACE");
+        assert!(
+            warming.contains("первый кадр")
+                && warming.contains("сбой соединения WS (venue.ws), Unix мс")
+        );
         reg.clear();
         assert!(
             reg.missing_book("ACE")

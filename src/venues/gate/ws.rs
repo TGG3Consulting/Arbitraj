@@ -77,7 +77,11 @@ pub async fn run(
             }
             Err(e) => End::Config(e),
         };
-        feed.session_ended();
+        feed.session_ended(match &end {
+            End::Broken(_) => "сбой соединения WS (venue.ws)",
+            End::Config(_) => "ошибка настройки WS (venue.ws)",
+            End::Done => "канал ядра закрыт",
+        });
         if matches!(end, End::Done) {
             return;
         }

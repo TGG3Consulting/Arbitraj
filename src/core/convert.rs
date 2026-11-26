@@ -175,10 +175,11 @@ pub async fn rates(
             let sources = costs
                 .iter()
                 .filter(|c| c.asset == ticker && !c.amount.is_zero())
+                .take(4)
                 .map(|c| format!("{:?} {}", c.kind, c.amount.normalize()))
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("{e}; валюта затрат {ticker}, строки: {sources}")
+            format!("валюта затрат {ticker}, строки расчёта (до 4): {sources}; {e}")
         })?;
         prices.insert(ticker, price);
     }

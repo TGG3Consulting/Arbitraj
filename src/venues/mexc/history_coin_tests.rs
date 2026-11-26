@@ -43,6 +43,22 @@ fn owl_hold_and_final_credit_on_the_recorded_network() {
     for text in ["USDT-BSC", NETWORK, "42", "61", "в расчёте USDT"] {
         assert!(locked.reason.contains(text));
     }
+    let verdict = |spend| {
+        crate::core::precheck_withdraw::verdict(
+            "mexc",
+            "USDT",
+            Decimal::ONE_HUNDRED,
+            locked.amount,
+            spend,
+            &locked.reason,
+        )
+    };
+    assert!(verdict(Decimal::ONE_HUNDRED - locked.amount).is_ok());
+    assert!(
+        verdict(Decimal::ONE_HUNDRED - locked.amount + Decimal::new(1, 8))
+            .unwrap_err()
+            .contains("можно вывести")
+    );
     assert_eq!(parse(&rec).unwrap(), hold);
     let mut final_credit = rec.clone();
     final_credit[0]["status"] = json!(5);
@@ -142,6 +158,25 @@ fn only_fee_of_the_identified_jagent_return_is_in_usdt() {
             created.amount - "160.49".parse::<Decimal>().unwrap()
         );
     }
+    let mut omitted = raw.clone();
+    omitted.network.clear();
+    b.withdrawal_fee(&created, &mut omitted);
+    assert_eq!(omitted.fee.as_ref().unwrap().asset, "USDT");
+    let mut amb = book();
+    amb.insert(
+        "USDT",
+        "ARB",
+        "Arbitrum",
+        &json!({"coin":"USDT","name":"USDT-BSC","contract":"another contract"}),
+    );
+    let mut unknown = raw.clone();
+    unknown.network.clear();
+    amb.withdrawal_fee(&created, &mut unknown);
+    assert_eq!(unknown.fee.as_ref().unwrap().asset, "USDT-BSC");
+    let mut bad_network = raw.clone();
+    bad_network.network = "Wrong Network".into();
+    b.withdrawal_fee(&created, &mut bad_network);
+    assert_eq!(bad_network.fee.as_ref().unwrap().asset, "USDT-BSC");
     let mut foreign = created.clone();
     foreign.network = "ARB".into();
     b.withdrawal_fee(&foreign, &mut raw);

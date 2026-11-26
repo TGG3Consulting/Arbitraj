@@ -226,6 +226,9 @@ async fn gate_rest_quote_identifies_the_stage_of_failure() {
         .clone();
     let fee_reply = Arc::new(tokio::sync::Notify::new());
     let release = fee_reply.clone();
+    let fee_started = Arc::new(tokio::sync::Notify::new());
+    let started = fee_started.clone();
+    let calls = Arc::new(AtomicUsize::new(0));
     let app = Router::new()
         .route(
             "/spot/currency_pairs",
@@ -238,8 +241,13 @@ async fn gate_rest_quote_identifies_the_stage_of_failure() {
         .route(
             "/wallet/fee",
             get(move || async move {
+                started.notify_one();
                 release.notified().await;
-                Json(json!({"maker_fee":"0.001","taker_fee":"0.001"}))
+                if calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                    Json(json!({}))
+                } else {
+                    Json(json!({"maker_fee":"0.001","taker_fee":"0.001"}))
+                }
             }),
         )
         .route(
@@ -276,6 +284,7 @@ async fn gate_rest_quote_identifies_the_stage_of_failure() {
         ("venue.symbols_refresh_s", json!(3600)),
         ("venue.fee_requests_per_sec", json!(5)),
         ("venue.fee_cache_s", json!(3600)),
+        ("venue.fee_retry_s", json!(1)),
         ("venue.fee_deduction", json!("coin")),
         ("venue.book_stale_ms", json!(5000)),
         ("feed.stale_after_ms", json!(30000)),
@@ -379,10 +388,41 @@ async fn gate_rest_quote_identifies_the_stage_of_failure() {
     gate.subscribe_market(vec![coin.clone()], out)
         .await
         .unwrap();
+    let wait = std::time::Duration::from_secs(5);
+    tokio::time::timeout(wait, fee_started.notified())
+        .await
+        .unwrap();
+    assert!(
+        gate.rest_book_prerequisite(&coin)
+            .unwrap_err()
+            .message
+            .contains("получение ставки началось")
+    );
+    fee_reply.notify_one();
+    tokio::time::timeout(wait, async {
+        loop {
+            let err = gate.rest_book_prerequisite(&coin).unwrap_err();
+            if err.message.contains("BadResponse") && err.message.contains("venue.fees ACE_USDT") {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let cooling = quote().await.err().unwrap().message;
+    assert!(
+        cooling.contains("не запрашивался") && cooling.contains("BadResponse"),
+        "{cooling}"
+    );
+    assert_eq!(requests.load(Ordering::SeqCst), 3);
+    tokio::time::timeout(wait, fee_started.notified())
+        .await
+        .unwrap();
     fee_reply.notify_one();
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         while gate.rest_book_prerequisite(&coin).is_err() {
-            tokio::task::yield_now().await;
+            tokio::time::sleep(std::time::Duration::from_millis(2)).await;
         }
     })
     .await

@@ -183,7 +183,9 @@ fn route_model(
     if s.asset != *asset
         || dir.iter().any(|c| {
             matches!(c.kind, CostKind::WithdrawFee | CostKind::TransferTax)
-                && (c.asset != asset.ticker || c.paid_in.is_some() || c.in_price)
+                && ((c.asset != asset.ticker && !c.amount.is_zero())
+                    || c.paid_in.is_some()
+                    || c.in_price)
         })
     {
         return dir;

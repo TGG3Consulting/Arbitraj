@@ -1,10 +1,9 @@
 """Capture both sides of all CommunityV3 pools at the factory snapshot, using independent eth_call requests."""
 import argparse
 import json
-import time
 from pathlib import Path
 
-import requests
+from community_v3_rpc import Readers
 from eth_abi import decode
 from eth_utils import keccak
 
@@ -14,39 +13,9 @@ from v3_factory_storage import verify_directory
 
 FIXTURES = ROOT / "tests/data/first_run_dex_2026-11-26"
 GAS = 16_777_216
-RPC_BATCH_LIMIT = 3  # dRPC public endpoint rejects larger batches before executing them.
 
 
-def request_batch(session, endpoint, calls):
-    # Each response has its own gas budget and state, even for two amounts in the same pool.
-    collected = []
-    for start in range(0, len(calls), RPC_BATCH_LIMIT):
-        group = calls[start:start + RPC_BATCH_LIMIT]
-        payload = [dict(jsonrpc="2.0", id=i, method=method, params=params)
-                   for i, (method, params) in enumerate(group)]
-        for attempt in range(4):
-            try:
-                response = session.post(endpoint, json=payload, timeout=55)
-                response.raise_for_status()
-                replies = {r["id"]: r for r in response.json()}
-                if len(replies) != len(group):
-                    raise ValueError("incomplete batch")
-                ordered = [replies[i] for i in range(len(group))]
-                for reply in ordered:
-                    if error := reply.get("error"):
-                        msg = str(error.get("message", "")).lower()
-                        if not any(x in msg for x in ("revert", "out of gas", "gas required exceeds")):
-                            raise ValueError(f"RPC did not execute call: {msg[:140]}")
-                collected.extend(ordered)
-                break
-            except (requests.RequestException, KeyError, ValueError):
-                if attempt == 3:
-                    raise
-                time.sleep(2 ** attempt)
-    return collected
-
-
-def collect():
+def collect(cache_file):
     evidence = json.loads((FIXTURES / "community_v3_ethereum.json").read_bytes())
     proof = json.loads((FIXTURES / "community_v3_storage.json").read_bytes())
     if proof["selector"] != evidence["selector"] or proof["block"] != evidence["block"]:
@@ -55,21 +24,22 @@ def collect():
                       "tiers": {tier: entry["spacing"] for tier, entry in evidence["tiers"].items()}},
                      evidence["registry"])
     selector = evidence["selector"]
-    endpoint = json.loads((FIXTURES / "ethereum.json").read_bytes())["endpoint"]
     pools = evidence["pools"]
     tokens = sorted({t for p in pools for t in p["tokens"]})
     runtime = (ROOT / "contracts/out/VirtualQuoter.bin-runtime").read_text().strip().removeprefix("0x")
     runtime_hash = "0x" + keccak(bytes.fromhex(runtime)).hex()
     if runtime_hash != evidence["execution"]["virtual_quoter_keccak"]:
         raise ValueError("archived executor used a different virtual quoter")
-    with requests.Session() as session:
-        def batch(calls):
-            return request_batch(session, endpoint, calls)
-        header, chain = batch([("eth_getBlockByHash", [selector["blockHash"], False]), ("eth_chainId", [])])
-        if (int(chain["result"], 16) != 1 or header["result"]["hash"] != selector["blockHash"]
-                or int(header["result"]["number"], 16) != evidence["block"]
-                or header["result"]["stateRoot"] != proof["state_root"]):
-            raise ValueError("RPC did not return the requested Ethereum block")
+    ref = evidence["execution"]["pools"][0]
+    target = next(p for p in pools if p["pool"] == ref["pool"])
+    sample = ref["cases"][0]
+    size = int(sample["input"])
+    data = calldata("quoteExactIn(address,bool,uint256)", ["address","bool","uint256"],
+                    [target["pool"], sample["side"] == 0, size])
+    probe = ("eth_call", [{"to": VIRTUAL, "data": data, "gas": hex(GAS)}, selector, {VIRTUAL: {"code": "0x" + runtime}}])
+    expected = "0x" + size.to_bytes(32,"big").hex() + int(sample["bought"]).to_bytes(32,"big").hex()
+    with Readers(cache_file, selector, evidence["block"], proof["state_root"], probe, expected) as readers:
+        batch = readers.batch
         metadata = batch([("eth_call", [{"to": a, "data": calldata("decimals()")}, selector]) for a in tokens])
         decimals = {}
         missing = {}
@@ -109,7 +79,10 @@ def collect():
                 if used > int(row["input"]):
                     raise ValueError("quoter exceeded the requested input")
                 row.update(used=str(used), out=str(out))
-    return dict(chain=1, selector=selector, height=evidence["block"], state_root=header["result"]["stateRoot"],
+        providers = {node.url: node.requests for node in readers.nodes}
+        cached = readers.cached
+    return dict(chain=1, selector=selector, height=evidence["block"], state_root=proof["state_root"],
+                verified_providers=providers, cached_reads=cached,
                 factory=evidence["registry"], quoter=runtime_hash, gas=GAS, decimals=decimals,
                 missing_decimals=missing, markets=markets)
 
@@ -118,4 +91,5 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
-    args.output.write_text(json.dumps(collect(), indent=2) + "\n", encoding="utf-8", newline="\n")
+    cache_file = args.output.with_suffix(".sqlite")
+    args.output.write_text(json.dumps(collect(cache_file), indent=2) + "\n", encoding="utf-8", newline="\n")

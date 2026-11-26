@@ -193,6 +193,15 @@ mod tests {
                 );
             }
         }
+        let candy:Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/candyswap_base.json")).unwrap();
+        let diamond:Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/diamondswap_base.json")).unwrap();
+        for (id, hash, selector) in [
+            ("candyswap",&candy["origin"]["creation_code_hash"],&candy["selector"]),
+            ("diamondswap",&diamond["creation"]["hash"],&diamond["selector"]),
+        ] {
+            assert_eq!(selector,&base["selector"]);
+            pairs.push(serde_json::json!({"dex":id,"network":"base","creation_code_hash":hash}));
+        }
         for p in all {
             let snapshot = [&base, &eth]
                 .into_iter()

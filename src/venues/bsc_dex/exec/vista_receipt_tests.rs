@@ -90,9 +90,13 @@ fn confirmed_native_wallet_fill_checks_original_recipient_input_and_terminal_min
                     p.call.value(amount)
                 );
                 assert!(p.signed_data(&data));
-                let logs =
-                    serde_json::from_value::<Vec<alloy::rpc::types::Log>>(result["logs"].clone())
-                        .unwrap();
+                // eth_simulateV1 сохраняет адрес и содержимое события без полей добытой квитанции.
+                let logs: Vec<_> = result["logs"].as_array().unwrap().iter().map(|entry| {
+                    alloy::rpc::types::Log {
+                        inner: serde_json::from_value(entry.clone()).unwrap(),
+                        ..Default::default()
+                    }
+                }).collect();
                 assert_eq!(
                     p.amounts(&logs, owner, input, output),
                     Some((amount, minimum))

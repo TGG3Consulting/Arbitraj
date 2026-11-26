@@ -20,7 +20,7 @@
 //! От чего зависит: check/simulate.rs, exec/executor/{code, entry, kind}.rs, quote/{v2_pair_calls, v2_pair_sim}.rs.
 //! Настройки: через entry.rs — dex.v2_fee_pct [DEX] (процент × 10000 — целое); dex.quoter_max_diff_pct [bsc_dex].
 
-use alloy_primitives::{Address, B256, U64, U256, keccak256};
+use alloy_primitives::{Address, B256, Bytes, U64, U256, keccak256};
 use serde_json::json;
 
 use crate::core::types::PoolRef;
@@ -38,7 +38,7 @@ use super::v2_pair_sim::{Sim, judge};
 
 /// Вид без своего роутера: протокол V2 и нет своего пути исполнения (v2_fork_executor). Ошибок нет.
 pub fn kind_on(f: &Family) -> bool {
-    f.proto == Proto::V2 && (!f.tradable || f.variant == super::super::pools::family_variant::Variant::DiamondV2) && !f.variant.frax_twamm()
+    f.proto == Proto::V2 && (!f.tradable || f.variant.diamond_router()) && !f.variant.frax_twamm()
         && !matches!(f.variant,super::super::pools::family_variant::Variant::Oasis | super::super::pools::family_variant::Variant::EtherVista)
 }
 

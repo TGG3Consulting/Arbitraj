@@ -18,8 +18,8 @@ MARKETS = {
 }
 
 
-def round_trip(e, pool, source, target, amount, deadline, runtime, kind=26):
-    owner = HOLDERS["base"][source]
+def round_trip(e, pool, source, target, amount, deadline, runtime, kind=26, owner=None, funding=None):
+    owner = owner or HOLDERS["base"][source]
     word = lambda n: "0x" + format(n, "064x")
     override = {EXEC: {"code": "0x"+runtime, "stateDiff": {
         word(0): word(int(owner, 16)), word(1): word(int(BASE_WETH, 16))}}}
@@ -56,7 +56,8 @@ def round_trip(e, pool, source, target, amount, deadline, runtime, kind=26):
                 raise ValueError((pool, amount, k, r.get("error")))
         return results
 
-    head = [("before_in", balance(source, owner)), ("before_out", balance(target, owner)),
+    prefix = [] if funding is None else [("fund_wallet",call(source,calldata("transfer(address,uint256)",["address","uint256"],[owner,amount]),funding))]
+    head = prefix+[("before_in", balance(source, owner)), ("before_out", balance(target, owner)),
             ("approve_in", approve(source, amount)), ("quote_buy", quote(source, amount))]
     first = simulate(head)
     n = lambda results, k: int(results[k]["returnData"], 16)

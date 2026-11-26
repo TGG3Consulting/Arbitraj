@@ -27,6 +27,7 @@ enum Parameter {
     Text(String),
     List(Vec<String>),
     Bool(bool),
+    Integer(i64),
 }
 
 impl Parameter {
@@ -36,6 +37,7 @@ impl Parameter {
         match self {
             Self::Text(text) => text.clone(),
             Self::Bool(flag) => flag.to_string(),
+            Self::Integer(number) => number.to_string(),
             Self::List(items) if name == "dex.sub_dex" => items
                 .iter()
                 .map(|id| format!("{id}{suffix}"))
@@ -140,15 +142,28 @@ mod tests {
                 let values = match v {
                     Parameter::Text(text) => vec![text],
                     Parameter::List(items) => items.iter().collect(),
-                    Parameter::Bool(_) => Vec::new(),
+                    Parameter::Bool(_) | Parameter::Integer(_) => Vec::new(),
                 };
                 let input = match v {
                     Parameter::Text(t) => Value::String(t.clone()),
                     Parameter::List(xs) => serde_json::json!(xs),
                     Parameter::Bool(flag) => Value::Bool(*flag),
+                    Parameter::Integer(number) => Value::from(*number),
                 };
                 validate(def, &scope, &input).unwrap_or_else(|e| panic!("{} {k}: {e}", p.id));
                 for text in values {
+                    // Нулевой адрес означает явно выключенный модуль. Крючок подтверждает его на том же блоке.
+                    if k == "dex.aero_mev_module" && text == "0x0000000000000000000000000000000000000000" {
+                        let actual: Value = serde_json::from_str(include_str!(
+                            "../../tests/data/first_run_dex_2026-11-26/metadex_ethereum.json"
+                        )).unwrap();
+                        assert_eq!(actual["chain_id"], p.chain_id);
+                        assert_eq!(actual["selector"], snapshot["selector"]);
+                        assert!(actual["reads"].as_array().unwrap().iter().any(|r|
+                            r["to"] == actual["hook"] && r["signature"] == "mevTaxModule()" &&
+                            r["response"].as_str().is_some_and(|v| v == format!("0x{}", "0".repeat(64)))));
+                        continue;
+                    }
                     if text.len() == 42 && text.starts_with("0x") {
                         assert!(
                             snapshot["contracts"][text.to_ascii_lowercase()]["bytes"]

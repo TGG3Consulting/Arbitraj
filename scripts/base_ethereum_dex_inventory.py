@@ -142,6 +142,17 @@ def tables(network, snapshots, profiles):
                     "min_dy на единицу выше выплаты дал защитный откат. "
                     f"[Реестр и котировки](../{pancake}) · "
                     "[Исторические обмены](../tests/data/first_run_dex_2026-11-26/pancake_stable_exchange_ethereum.json)."])
+    kyber = f"tests/data/first_run_dex_2026-11-26/kyber_{network}.json"
+    if Path(kyber).exists():
+        out.extend(["", "KyberSwap Elastic V2 · фабрика подтвердила три пула и десять уровней комиссии. "
+                    "В каждом пуле прочитаны все инициализированные тики через TicksFeesReader частями "
+                    "по 1000; на двух объёмах в обе стороны QuoterV2 вернул полный usedAmount и положительный "
+                    "returnedAmount. Проверены initcode фабрики, код размещённого пула и 13 исходников "
+                    "из закреплённой ревизии Kyber. "
+                    + ("Кандидаты уровней получены из выборки и событий Ethereum, каждый подтверждён собственным реестром Base. "
+                       if base else "У Classic проверены отдельные фабрики динамической и постоянной комиссии: "
+                       "у каждой по два пула с четырьмя котировками getAmountsOut. ")
+                    + f"[Реестры, код, тики и котировки](../{kyber})."])
     dodo_file = f"tests/data/first_run_dex_2026-11-26/dodo_{network}.json"
     if Path(dodo_file).exists():
         data_dodo = read(Path(dodo_file))

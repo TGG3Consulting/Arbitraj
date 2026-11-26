@@ -1529,5 +1529,110 @@
         "10000"
       ]
     }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "kyberswap-elastic-base",
+    "source": "https://docs.kyberswap.com/reference/legacy/kyberswap-elastic/contracts/elastic-contract-addresses.md",
+    "settings": {
+      "dex.kind": "kyber_elastic",
+      "dex.factory": "0xc7a590291e07b9fe9e64b86c58fd8fc764308c4a",
+      "dex.router": "0xf9c2b5746c946ef883ab2660bbbb1f10a5bdeab4",
+      "dex.quoter": "0x4d47fd5a29904dae0ef51b1c450c9750f15d7856",
+      "dex.tick_reader": "0x8fd8cb948965d9305999d767a02bf79833eadbb3",
+      "dex.elastic_ticks_chunk": 1000,
+      "dex.v3_fee_tiers": [
+        "8",
+        "10",
+        "20",
+        "40",
+        "100",
+        "250",
+        "300",
+        "1000",
+        "2000",
+        "5000"
+      ]
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "kyberswap_classic_ethereum",
+    "source": "https://docs.kyberswap.com/reference/legacy/kyberswap-classic/contracts/classic-contract-addresses.md",
+    "settings": {
+      "dex.kind": "kyber_dmm",
+      "dex.factory": "0x833e4083b7ae46cea85695c4f7ed25cdad8886de",
+      "dex.quoter": "0x1c87257f5e8609940bc751a07bb085bb7f8cdbe6",
+      "dex.sub_dex": [
+        "kyberswap_classic_ethereum-static"
+      ]
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "kyberswap_classic_ethereum-static",
+    "source": "https://docs.kyberswap.com/reference/legacy/kyberswap-classic/contracts/classic-contract-addresses.md",
+    "settings": {
+      "dex.kind": "kyber_dmm",
+      "dex.factory": "0x1c758af0688502e49140230f6b0ebd376d429be5",
+      "dex.quoter": "0x5649b4dd00780e99bab7abb4a3d581ea1aeb23d0"
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "kyberswap_elastic",
+    "source": "https://docs.kyberswap.com/reference/legacy/kyberswap-elastic/contracts/elastic-contract-addresses.md",
+    "settings": {
+      "dex.kind": "kyber_elastic",
+      "dex.factory": "0xc7a590291e07b9fe9e64b86c58fd8fc764308c4a",
+      "dex.router": "0xf9c2b5746c946ef883ab2660bbbb1f10a5bdeab4",
+      "dex.quoter": "0x4d47fd5a29904dae0ef51b1c450c9750f15d7856",
+      "dex.tick_reader": "0x8fd8cb948965d9305999d767a02bf79833eadbb3",
+      "dex.elastic_ticks_chunk": 1000,
+      "dex.v3_fee_tiers": [
+        "8",
+        "10",
+        "20",
+        "40",
+        "100",
+        "250",
+        "300",
+        "1000",
+        "2000",
+        "5000"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "aero-slipstream-base",
+    "source": "https://raw.githubusercontent.com/dromos-labs/metadex-slipstream-public/f99f2095918cab69eafeffa2c3d0a8762de737b7/deployment-addresses/cl-base.json",
+    "settings": {
+      "dex.kind": "slipstream_aero",
+      "dex.factory": "0x9cb220581b91b0c83223012fe69688b92ad07a76",
+      "dex.quoter": "0x1ddfec5058180c207f55bb77d95acdd0d8227868",
+      "dex.cl_swap_hook": "0xc0ed888afe87ed1acf01d9f19bb850159e3ce434",
+      "dex.aero_mev_module": "0x29f12ce5be3d88b56d245b7f4e969c518f799a4a",
+      "dex.cl_hook_ahead_s": 0
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "aero-slipstream-ethereum",
+    "source": "https://raw.githubusercontent.com/dromos-labs/metadex-slipstream-public/f99f2095918cab69eafeffa2c3d0a8762de737b7/deployment-addresses/cl-ethereum.json",
+    "settings": {
+      "dex.kind": "slipstream_aero",
+      "dex.factory": "0xf4fd2e6c5b60c5b365cd1b96dd6245e6d60414c2",
+      "dex.quoter": "0x1ddfec5058180c207f55bb77d95acdd0d8227868",
+      "dex.cl_swap_hook": "0xc0ed888afe87ed1acf01d9f19bb850159e3ce434",
+      "dex.aero_mev_module": "0x0000000000000000000000000000000000000000",
+      "dex.cl_hook_ahead_s": 24
+    }
   }
 ]

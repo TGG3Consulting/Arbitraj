@@ -127,10 +127,16 @@ mod tests {
         ))
         .unwrap();
         let all = profiles().unwrap_or_else(|_| panic!("профили DEX повреждены"));
-        let pairs: Value = serde_json::from_str(include_str!(
+        let mut pairs: Vec<Value> = serde_json::from_str(include_str!(
             "../../tests/data/base_ethereum_v2_probes.json"
         ))
         .unwrap();
+        pairs.extend(
+            serde_json::from_str::<Vec<Value>>(include_str!(
+                "../../tests/data/base_ethereum_v2_variable_fees.json"
+            ))
+            .unwrap(),
+        );
         for p in all {
             let snapshot = [&base, &eth]
                 .into_iter()
@@ -198,13 +204,9 @@ mod tests {
                         );
                     } else if k == "dex.pool_code_hashes" {
                         assert!(
-                            pairs
-                                .as_array()
-                                .unwrap()
-                                .iter()
-                                .any(|row| row["network"] == p.network
-                                    && row["dex"] == p.id
-                                    && row["creation_code_hash"].as_str() == Some(text.as_str())),
+                            pairs.iter().any(|row| row["network"] == p.network
+                                && row["dex"] == p.id
+                                && row["creation_code_hash"].as_str() == Some(text.as_str())),
                             "{} {k}: нет хеша создания пары {text} в записи",
                             p.id
                         );

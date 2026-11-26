@@ -97,37 +97,147 @@ impl Rate {
     }
 }
 
-pub(super) async fn load(
+async fn parent(ctx: &Ctx, tag: &str) -> GatewayResult<alloy_primitives::B256> {
+    use super::super::node::rpc;
+    #[derive(serde::Deserialize)]
+    struct Header {
+        number: alloy_primitives::U64,
+        hash: alloy_primitives::B256,
+    }
+    let h: Header = rpc::call(ctx, "eth_getBlockByNumber", serde_json::json!([tag, false])).await?;
+    if h.hash.is_zero() || format!("{:#x}", h.number) != tag {
+        return Err(miss("Узел вернул другой блок для комиссии V2"));
+    }
+    Ok(h.hash)
+}
+
+type ReadCall = (Address, Bytes);
+#[derive(Default)]
+struct ReadPlan {
+    calls: Vec<ReadCall>,
+    indexes: std::collections::BTreeMap<ReadCall, usize>,
+}
+
+impl ReadPlan {
+    fn index(&mut self, call: ReadCall) -> usize {
+        *self.indexes.entry(call.clone()).or_insert_with(|| {
+            let i = self.calls.len();
+            self.calls.push(call);
+            i
+        })
+    }
+}
+
+async fn read_chunk(
     ctx: &Ctx,
-    family: &Family,
-    pool: Address,
+    calls: &[ReadCall],
+    hash: alloy_primitives::B256,
+) -> GatewayResult<Vec<Result<Bytes, String>>> {
+    use super::super::node::{jsonrpc, multicall, rpc};
+    use serde_json::json;
+    let block = json!({"blockHash":hash,"requireCanonical":true});
+    if let Some(mc) = multicall::address(ctx) {
+        let calldata = multicall::encode(calls);
+        let reply: Bytes =
+            rpc::call(ctx, "eth_call", json!([{"to":mc,"data":calldata},block])).await?;
+        return multicall::decode(&reply, calls.len());
+    }
+    let req: Vec<_> = calls
+        .iter()
+        .map(|(to, d)| ("eth_call", json!([{"to":to,"data":d},block])))
+        .collect();
+    Ok(rpc::batch(ctx, &req)
+        .await?
+        .into_iter()
+        .map(|v| {
+            v.and_then(|r| jsonrpc::decode(&r, rpc::SOURCE))
+                .map_err(|e| e.message)
+        })
+        .collect())
+}
+
+pub(super) async fn many(
+    ctx: &Ctx,
+    pools: &[(usize, &Family, Address)],
     tag: &str,
-) -> GatewayResult<Loaded> {
-    let rate = Rate::configured(ctx, family, pool)?;
-    let calls = [
-        (pool, Bytes::from(IV2Pair::getReservesCall {}.abi_encode())),
-        rate.call(),
-    ];
-    let values = call::try_many(ctx, &calls, tag).await?;
-    let [reserves, fee] = values.as_slice() else {
-        return Err(miss("Неполный ответ о резервах и комиссии V2"));
+    size: usize,
+) -> Vec<GatewayResult<Loaded>> {
+    let failure =
+        |e: crate::gateway::errors::GatewayError| pools.iter().map(|_| Err(e.clone())).collect();
+    let hash = match parent(ctx, tag).await {
+        Ok(hash) => hash,
+        Err(e) => return failure(e),
     };
-    let unpack = |v: &Result<Bytes, String>| v.clone().map_err(miss);
-    let reserves = call::decode::<IV2Pair::getReservesCall>(&unpack(reserves)?)?;
-    Ok(Loaded {
-        state: PoolState::V2 {
-            reserve0: U256::from(reserves.reserve0),
-            reserve1: U256::from(reserves.reserve1),
-        },
-        ticks: None,
-        bins: None,
-        fee_pips: Some(rate.decode(&unpack(fee)?)?),
-    })
+    let mut reads = ReadPlan::default();
+    let plans = pools
+        .iter()
+        .map(|(_, f, a)| {
+            let rate = Rate::configured(ctx, f, *a)?;
+            let ri = reads.index((*a, Bytes::from(IV2Pair::getReservesCall {}.abi_encode())));
+            let fi = reads.index(rate.call());
+            Ok((ri, fi, rate))
+        })
+        .collect::<Vec<GatewayResult<_>>>();
+    let mut answers = Vec::with_capacity(reads.calls.len());
+    for chunk in reads.calls.chunks(size.max(1)) {
+        match read_chunk(ctx, chunk, hash).await {
+            Ok(v) if v.len() == chunk.len() => answers.extend(v),
+            Ok(_) => answers.extend(chunk.iter().map(|_| Err("Неполная пачка V2".to_owned()))),
+            Err(e) => answers.extend(chunk.iter().map(|_| Err(e.message.clone()))),
+        }
+    }
+    match parent(ctx, tag).await {
+        Ok(current) if current == hash => {}
+        Ok(_) => return failure(miss("Реорганизация во время чтения резервов и комиссии V2")),
+        Err(e) => return failure(e),
+    }
+    plans
+        .into_iter()
+        .map(|plan| {
+            let (ri, fi, rate) = plan?;
+            let reserves = call::decode::<IV2Pair::getReservesCall>(
+                answers[ri].as_ref().map_err(|m| miss(m.clone()))?,
+            )?;
+            let fee = rate.decode(answers[fi].as_ref().map_err(|m| miss(m.clone()))?)?;
+            Ok(Loaded {
+                state: PoolState::V2 {
+                    reserve0: U256::from(reserves.reserve0),
+                    reserve1: U256::from(reserves.reserve1),
+                },
+                ticks: None,
+                bins: None,
+                fee_pips: Some(fee),
+            })
+        })
+        .collect()
+}
+
+pub(super) async fn load(ctx: &Ctx, f: &Family, pool: Address, tag: &str) -> GatewayResult<Loaded> {
+    many(ctx, &[(0, f, pool)], tag, 2)
+        .await
+        .pop()
+        .ok_or_else(|| miss("Нет результата чтения V2"))?
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn shared_factory_fee_is_read_once_and_other_targets_keep_their_own_indexes() {
+        let factory = Address::repeat_byte(1);
+        let first = Address::repeat_byte(2);
+        let second = Address::repeat_byte(3);
+        let fee = Bytes::from_static(&[1, 2, 3, 4]);
+        let reserve = Bytes::from(IV2Pair::getReservesCall {}.abi_encode());
+        let mut plan = ReadPlan::default();
+        assert_eq!(plan.index((first, reserve.clone())), 0);
+        assert_eq!(plan.index((factory, fee.clone())), 1);
+        assert_eq!(plan.index((second, reserve)), 2);
+        assert_eq!(plan.index((factory, fee.clone())), 1);
+        assert_eq!(plan.index((first, fee)), 3);
+        assert_eq!(plan.calls.len(), 4);
+    }
+
     #[test]
     fn verified_fee_origin_cannot_be_replaced_by_an_unrelated_successful_view() {
         let rows: Vec<serde_json::Value> = serde_json::from_str(include_str!(

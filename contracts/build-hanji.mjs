@@ -7,7 +7,7 @@ import solc from 'solc';
 const output = process.argv[2];
 if (!output) throw new Error('Expected an artifact directory');
 const name = process.argv[3] ?? 'HanjiExecutor';
-if (!['HanjiExecutor', 'FermiSlotExecutor', 'SolidlyV3Executor'].includes(name)) throw new Error('Unknown executor');
+if (!['HanjiExecutor', 'FermiSlotExecutor', 'SolidlyV3Executor', 'ElfomoExecutor'].includes(name)) throw new Error('Unknown executor');
 const file = name + '.sol';
 const root = import.meta.dirname;
 const input = {

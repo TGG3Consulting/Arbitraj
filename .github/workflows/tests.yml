@@ -25,6 +25,10 @@ on:
         description: Replay the CI-built Solidly V3 module on Base and Ethereum
         type: boolean
         default: false
+      elfomo_archive_replay:
+        description: Replay the CI-built ElfomoFi module on Base
+        type: boolean
+        default: false
 env:
   CARGO_PROFILE_DEV_DEBUG: "0"
   CARGO_INCREMENTAL: "0"
@@ -105,6 +109,11 @@ jobs:
       - id: compile_fermi
         run: node contracts/build-hanji.mjs "$RUNNER_TEMP/fermi-executor" FermiSlotExecutor
       - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/solidly-executor" SolidlyV3Executor
+      - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/elfomo-executor" ElfomoExecutor
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elfomo-executor
+          path: ${{ runner.temp }}/elfomo-executor/ElfomoExecutor.json
       - uses: actions/upload-artifact@v4
         with:
           name: solidly-v3-executor
@@ -118,9 +127,19 @@ jobs:
           name: hanji-executor
           path: ${{ runner.temp }}/hanji-executor/HanjiExecutor.json
       - uses: actions/setup-python@v5
-        if: inputs.hanji_archive_replay || inputs.fermi_archive_replay || inputs.solidly_archive_replay
+        if: inputs.hanji_archive_replay || inputs.fermi_archive_replay || inputs.solidly_archive_replay || inputs.elfomo_archive_replay
         with:
           python-version: '3.12'
+      - if: inputs.elfomo_archive_replay
+        name: Verify ElfomoFi module receipts and wallet balances at the recorded Base block
+        run: |
+          pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0 beautifulsoup4==4.13.5 PyYAML==6.0.3
+          python scripts/record_elfomo_executor.py "$RUNNER_TEMP/elfomo-executor/ElfomoExecutor.json"
+      - uses: actions/upload-artifact@v4
+        if: inputs.elfomo_archive_replay
+        with:
+          name: elfomo-archive-replay
+          path: tests/data/first_run_dex_2026-11-26/elfomo_executor_base.json
       - if: inputs.solidly_archive_replay
         name: Simulate Solidly V3 module with real wallet balances
         run: |

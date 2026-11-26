@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/pools/elfomo/market.rs.
 //! Что делает: читает цену от фактического кошелька, отсеивает исчерпанный остаток и строит лестницу по блоку.
-//! Кто вызывает: polls/load, quote/quoter. От чего зависит: ElfomoFi.getAmountOut, ERC-20 balanceOf и allowance.
+//! Кто вызывает: pools/load, quote/quoter. От чего зависит: ElfomoFi.getAmountOut, ERC-20 balanceOf и allowance.
 //! Настройки: dex.pmm_ladder_usd и dex.pmm_ladder_counter.
 use super::{IElfomo, IMPL, ROUTER, USDC, VAULT, block, pair, verify_at};
 use crate::core::types::{LadderPoint, OraclePmmData, PoolState};

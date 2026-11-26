@@ -125,7 +125,9 @@ async fn both_target_directions_survive_reopen_and_claim_the_exact_signed_operat
                     },
                 )
                 .unwrap();
-                crate::gateway::settlement_proofs::pin(&db,&venue,8453,tx).await.unwrap();
+                crate::gateway::settlement_proofs::pin(&db, &venue, 8453, tx)
+                    .await
+                    .unwrap();
                 assert!(
                     log::scope(&db, &id, action.clone(), log::before_send(&marker))
                         .await
@@ -146,9 +148,17 @@ async fn both_target_directions_survive_reopen_and_claim_the_exact_signed_operat
         {
             let db = Db::open(&file).unwrap();
             crate::gateway::settlement_proofs::scope(async {
-                crate::gateway::settlement_proofs::record(&venue,tx,"replaced".into(),||Box::pin(async{Ok(())})).unwrap();
-                assert!(crate::gateway::settlement_proofs::pin(&db,&venue,8453,tx).await.is_err());
-            }).await;
+                crate::gateway::settlement_proofs::record(&venue, tx, "replaced".into(), || {
+                    Box::pin(async { Ok(()) })
+                })
+                .unwrap();
+                assert!(
+                    crate::gateway::settlement_proofs::pin(&db, &venue, 8453, tx)
+                        .await
+                        .is_err()
+                );
+            })
+            .await;
             let entry = log::load(&db, &id).await.unwrap().unwrap();
             assert_eq!(entry.lookup, marker);
             assert!(entry.result.is_none());

@@ -199,7 +199,7 @@ impl Ready {
         started_at: Option<&mut Option<chrono::DateTime<chrono::Utc>>>,
     ) -> GatewayResult<()> {
         // Проверяется именно endpoint отправки: channel.url может отличаться от узла рыночных данных.
-        super::super::node::chain_seen::verify_http(ctx, &self.url).await?;
+        super::super::node::chain_seen::verify_submission(ctx, &self.url).await?;
         let seq = self.ch.single == Some(Single::Sequencer);
         let conditional = seq && cond != Cond::Plain;
         let sync = seq && !conditional && matches!(self.submit, Submit::Sync(_));

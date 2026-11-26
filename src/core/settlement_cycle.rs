@@ -48,7 +48,9 @@ pub(super) async fn save(core: &Core, d: &Deal) -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
     super::ledger::save(core, d).await;
-    crate::gateway::settlement_proofs::verify().await.map_err(|e|e.message)
+    crate::gateway::settlement_proofs::verify()
+        .await
+        .map_err(|e| e.message)
 }
 
 /// Результат одного прохода определяется сохранёнными ID. Каждая отправка предшествует только своей сверке.

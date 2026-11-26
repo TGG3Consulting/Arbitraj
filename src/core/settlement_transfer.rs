@@ -223,7 +223,7 @@ async fn current(
             .await
             .map_err(|e| e.message)?;
         let net = m.transfer_network(core, &to_asset, to)?;
-        crate::gateway::settlement_proofs::pin(&deps.db,&m.dex,m.evm_chain_id,tx).await?;
+        crate::gateway::settlement_proofs::pin(&deps.db, &m.dex, m.evm_chain_id, tx).await?;
         return verified(
             (&from_asset, &to_asset),
             sent,
@@ -261,11 +261,14 @@ async fn current(
         .map_err(|e| e.message)?
         .ok_or("У вывода отсутствует исходная заявка")?;
     crate::gateway::settlement_proofs::pin(
-        &deps.db,&m.dex,m.evm_chain_id,
+        &deps.db,
+        &m.dex,
+        m.evm_chain_id,
         sent.tx_hash
             .as_deref()
             .ok_or("Нет хеша подтверждённого движения")?,
-    ).await?;
+    )
+    .await?;
     verified(
         (&from_asset, &to_asset),
         sent,

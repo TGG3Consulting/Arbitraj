@@ -104,6 +104,16 @@ pub(in crate::venues::bsc_dex) fn marker(
         })
         .unwrap_or(Ok(None))
 }
+/// Смена выбранного источника или выключение Hanji не может повторить ранее отправленную ногу.
+/// Проверяет индекс локального журнала только при начале реальной сделки на Base.
+pub(in crate::venues::bsc_dex) async fn prior(p:&Parts,r:&TradeRequest)->GatewayResult<Option<TradeResult>>{
+    if p.ctx.chain_id()!=Some(8453) || intent::active() || r.deal_id.is_empty() || r.asset.contract.is_none(){return Ok(None);}
+    let k=key(p,r)?;
+    let Some(entry)=intent::load(p.ctx.journal.db(),&k).await.map_err(|e|p.ctx.err(ErrorCode::OutcomeUnknown,e))? else{return Ok(None)};
+    let trade=recovery::reconcile(p,r.clone(),&entry.lookup).await?.ok_or_else(||p.ctx.err(ErrorCode::OutcomeUnknown,
+        "Перед выбором другого маршрута требуется подтвердить предыдущую подпись Hanji").pending(entry.lookup))?;
+    Ok(Some(trade))
+}
 pub(in crate::venues::bsc_dex) async fn trade(
     p: &Parts,
     r: TradeRequest,
@@ -134,10 +144,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
     }
     let payer = wallet::signer::address(ctx)?;
     let t = p.hanji.tickets.take(payer, id).ok_or_else(stale)?;
-    if !p
-        .hanji
-        .current(p)
-        .is_some_and(|b| b.head.hash == t.book.head.hash)
+    if t.book.expires <= Utc::now().timestamp_millis()
         || Config::read(p).as_ref() != Some(&t.book.config)
     {
         return Err(stale());

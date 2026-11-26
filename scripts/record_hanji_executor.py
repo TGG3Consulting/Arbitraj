@@ -41,6 +41,7 @@ def capture(compiled):
             raise ValueError(row.get("error", "simulation failed"))
         return bytes.fromhex(row["returnData"][2:])
     recorded = []
+    receipt_examples = []
     for market in data["markets"]:
         proxy = market["registry"]["orderbookAddress"]
         x = market["registry"]["baseToken"]["contractAddress"]
@@ -140,6 +141,14 @@ def capture(compiled):
                     or int.from_bytes(success(padding[-2]),"big")!=start_x+bought
                     or int.from_bytes(success(padding[-1]),"big")!=start_y-spent):
                 raise ValueError("quantity bid spent the spare quote budget or bought additional lots")
+            if not receipt_examples:
+                for args, row, ceiling in [(cushioned,padding[-3],bought),(sell,full[-3],2**256-1)]:
+                    # Preserve the emitted RPC logs without synthesising gas price, block inclusion or transaction hash.
+                    receipt_examples.append({"order":{"executor":executor,"payer":OWNER,"market":args[0],
+                        "input":args[1],"output":args[2],"budget":hex(args[3]),"max_unspent":hex(args[4]),
+                        "min_received":hex(args[5]),"max_received":hex(ceiling),"price":args[6],
+                        "max_commission":args[7],"deadline":args[8],"leg":"0x"+args[9].hex()},
+                        "gas_used":row["gasUsed"],"return_data":row["returnData"],"logs":row["logs"]})
             controls = ["duplicate_operation","unfunded_independent_sender","buy_exact_ceiling_and_retry",
                         "better_ask_refunds_spare_budget_for_same_quantity"]
             altered_cases = [("buy_min_out_plus_one", prefix, buy, 5, bought+1),
@@ -171,7 +180,7 @@ def capture(compiled):
         raise ValueError("missing market observations or no positive controls")
     return {"chain_id":8453, "block":data["block"], "hash":data["hash"], "owner":OWNER,
             "executor":executor, "runtime_keccak":"0x"+keccak(bytes.fromhex(compiled["runtime"])).hex(),
-            "solc":compiled["solc"], "round_trips":recorded}
+            "solc":compiled["solc"], "round_trips":recorded,"receipt_examples":receipt_examples}
 
 
 if __name__ == "__main__":

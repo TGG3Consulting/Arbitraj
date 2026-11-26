@@ -68,18 +68,27 @@ fn candidate(
     };
     let (direction, levels) = m.direction(input);
     let f = m.units.exact_quantity(levels, direction, raw, buy)?;
+    let price=super::quantity::limit_price(f.last_price,book.config.slip,direction==super::Side::BuyX)?;
     let amount = if buy { f.spent } else { f.received };
     let cash = num::to_decimal(amount, m.decimals.1)?;
     let mut budget = f.spent;
+    let mut minimum = f.received;
     let mut commission = (f.fee_y / m.units.y).try_into().ok()?;
     if buy && output == m.x {
         // Market may temporarily pull the whole bid at the limit before refunding better fills.
-        let value = (raw / m.units.x).checked_mul(U256::from(f.last_price))?;
+        let value = (raw / m.units.x).checked_mul(U256::from(price))?;
         let fee = value
             .checked_mul(U256::from(m.units.fee_rate))?
             .div_ceil(U256::from(super::RATE_SCALE));
         budget = value.checked_add(fee)?.checked_mul(m.units.y)?;
         commission = fee.try_into().ok()?;
+    } else if !buy && input == m.x {
+        let lots = raw / m.units.x;
+        let scale=U256::from(super::RATE_SCALE);
+        let value=lots.checked_mul(U256::from(price))?;
+        minimum=value.checked_sub(value.checked_mul(U256::from(m.units.fee_rate))?.div_ceil(scale))?.checked_mul(m.units.y)?;
+        let highest=super::quantity::limit_price(levels.first()?.price,book.config.slip,true)?;
+        commission=lots.checked_mul(U256::from(highest))?.checked_mul(U256::from(m.units.fee_rate))?.div_ceil(scale).try_into().ok()?;
     }
     let who = p
         .hanji
@@ -105,9 +114,9 @@ fn candidate(
         } else {
             U256::ZERO
         },
-        min_received: f.received,
+        min_received: minimum,
         max_received: if buy { raw } else { U256::MAX },
-        price: f.last_price,
+        price,
         max_commission: commission,
         deadline: book
             .head

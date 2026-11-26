@@ -40,6 +40,7 @@ pub(super) struct Config {
     pub timeout: Duration,
     pub age: Duration,
     pub deadline: u64,
+    pub slip: alloy_primitives::U256,
     pub allowed: Vec<Address>,
 }
 impl Config {
@@ -69,6 +70,7 @@ impl Config {
             timeout: Duration::from_millis(c.int("hanji.quote_budget_ms").ok().filter(|v| *v > 0)?),
             age: Duration::from_millis(c.int("feed.stale_after_ms").ok().filter(|v| *v > 0)?),
             deadline: c.int("dex.deadline_s").ok().filter(|v| *v > 0)?,
+            slip: crate::venues::bsc_dex::num::to_units(c.dec("exec.dex_slippage_pct").ok()?.checked_div(Decimal::ONE_HUNDRED)?,18)?,
             allowed,
         })
     }

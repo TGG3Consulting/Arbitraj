@@ -115,7 +115,8 @@ pub(super) async fn order(
             .chain
             .as_ref()
             .ok_or("Идентификатор транзакции отсутствует")?;
-        crate::gateway::settlement_proofs::pin(&d.db,&v,m.evm_chain_id,&tx.hash.to_string()).await?;
+        crate::gateway::settlement_proofs::pin(&d.db, &v, m.evm_chain_id, &tx.hash.to_string())
+            .await?;
     }
     match super::settlement_effect::commit(&d.db, &key, &v, Outcome::Order(Box::new(fill)))
         .await

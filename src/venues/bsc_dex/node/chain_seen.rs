@@ -71,30 +71,48 @@ impl Seen {
 
 /// Проверяет eth_chainId у того URL, которому непосредственно уйдёт запрос. Проверки разных URL независимы.
 pub async fn verify_http(ctx: &Ctx, url: &str) -> GatewayResult<()> {
+    verify_endpoint(ctx, url, false).await
+}
+/// Перед внешней отправкой идентичность проверяется повторно: провайдер может переключить
+/// физическую сеть за тем же URL. Старые подтверждения доступны только чтениям.
+pub async fn verify_submission(ctx: &Ctx, url: &str) -> GatewayResult<()> {
+    verify_endpoint(ctx, url, true).await
+}
+type Endpoint = (alloy_primitives::B256, u64);
+impl Seen {
+    fn cached(&self, key: Endpoint, submission: bool) -> bool {
+        !submission
+            && self
+                .verified
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .contains(&key)
+    }
+    fn set_verified(&self, key: Endpoint, valid: bool) {
+        let mut known = self.verified.lock().unwrap_or_else(|p| p.into_inner());
+        if valid {
+            known.insert(key);
+        } else {
+            known.remove(&key);
+        }
+    }
+}
+async fn verify_endpoint(ctx: &Ctx, url: &str, submission: bool) -> GatewayResult<()> {
     let Some(p) = crate::settings::evm_profiles::profile(ctx.place.id) else {
         return Ok(());
     };
     let key = (alloy_primitives::keccak256(url.as_bytes()), p.evm_chain_id);
-    if ctx
-        .chains
-        .verified
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .contains(&key)
-    {
+    if ctx.chains.cached(key, submission) {
         return Ok(());
     }
     let body = jsonrpc::request(1, "eth_chainId", &json!([]));
     let text = rpc::post(ctx, url, &body, &[], rpc::SOURCE).await?;
     let raw = jsonrpc::parse_text(&text, rpc::SOURCE, Op::Read)?;
     let got: U64 = jsonrpc::decode(&raw, rpc::SOURCE)?;
-    chain_id::same_chain(ctx, got.to::<u64>()).map_err(|e| ctx.err(ErrorCode::BadResponse, e))?;
-    ctx.chains
-        .verified
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .insert(key);
-    Ok(())
+    let result =
+        chain_id::same_chain(ctx, got.to::<u64>()).map_err(|e| ctx.err(ErrorCode::BadResponse, e));
+    ctx.chains.set_verified(key, result.is_ok());
+    result
 }
 
 /// Что делает: вердикт по узлу. Принимает: кто (основной/резервный), адрес, chainId узла, dex.evm_chain_id.
@@ -165,4 +183,20 @@ pub async fn ensure(ctx: &Ctx) -> GatewayResult<u64> {
         }
     }
     Ok(want)
+}
+
+#[cfg(test)]
+mod endpoint_tests {
+    use super::*;
+    #[test]
+    fn cached_read_never_authorizes_a_submission_at_the_same_url() {
+        let key = (alloy_primitives::keccak256("endpoint"), 8453);
+        let seen = Seen::default();
+        seen.set_verified(key, true);
+        assert!(seen.cached(key, false));
+        assert!(!seen.cached(key, true));
+        assert!(verdict("канал", "public", 1, 8453).is_err());
+        seen.set_verified(key, false);
+        assert!(!seen.cached(key, false));
+    }
 }

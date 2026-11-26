@@ -4,7 +4,10 @@ from pathlib import Path
 
 from eth_utils import keccak
 
-from record_lista_ethereum import EXEC, FOLDER, ROOT, calldata, read, rpc, write
+from record_balancer_deployments import ROOT, read, write
+from record_base_slipstream_executor import EXEC, calldata, rpc
+
+FOLDER = ROOT / "tests/data/first_run_dex_2026-11-26"
 
 ORDER = "execute(address,address,address,uint256,uint256,uint256)"
 TYPES = ["address","address","address","uint256","uint256","uint256"]
@@ -14,9 +17,9 @@ def capture(compiled, net):
     source = read(FOLDER / f"solidly_v3_{net}.json")
     e = {k:source[k] for k in ("endpoint","selector")}
     runtime = compiled["runtime"]
-    if not runtime or rpc(e,"eth_getCode",[EXEC,e["selector"]]) != "0x":
+    if not runtime or rpc(e["endpoint"],"eth_getCode",[EXEC,e["selector"]]) != "0x":
         raise ValueError("ошибка байткода или адрес симуляции занят")
-    block = rpc(e,"eth_getBlockByHash",[e["selector"]["blockHash"],False])
+    block = rpc(e["endpoint"],"eth_getBlockByHash",[e["selector"]["blockHash"],False])
     deadline = int(block["timestamp"],16) + 300
     cases = []
     for market in source["markets"]:
@@ -46,7 +49,7 @@ def capture(compiled, net):
             calls = [{"from":sender,"to":to,"data":data,"gas":hex(min(2**24,native_gas*2+300000)
                      if key in ("execute","too_high") else 150000)} for key,to,data in entries]
             override = {EXEC:{"code":"0x"+runtime}}
-            stage, = rpc(e,"eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":override,"calls":calls}],
+            stage, = rpc(e["endpoint"],"eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":override,"calls":calls}],
                                               "validation":False},e["selector"]])
             if stage["parentHash"] != e["selector"]["blockHash"]:
                 raise ValueError("хеш блока изменился")

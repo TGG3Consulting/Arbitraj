@@ -12,6 +12,65 @@ fn number(value: &Value) -> U256 {
 }
 
 #[test]
+fn accepted_runtime_spends_whole_input_or_rolls_back() {
+    for (chain, full_count, partial_count, recording) in [
+        (
+            8453,
+            12,
+            0,
+            include_str!("data/first_run_dex_2026-11-26/solidly_v3_executor_base.json"),
+        ),
+        (
+            1,
+            11,
+            1,
+            include_str!("data/first_run_dex_2026-11-26/solidly_v3_executor_ethereum.json"),
+        ),
+    ] {
+        let snapshot: Value = serde_json::from_str(recording).unwrap();
+        let expected = snapshot["runtime_keccak"]
+            .as_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert_eq!(solidly_v3::accepted_runtime(chain), Some(expected));
+        let mut counts = (0, 0);
+        for case in snapshot["cases"].as_array().unwrap() {
+            let result = &case["results"];
+            for call in ["unregistered", "bad_tokens", "expired", "too_high"] {
+                assert_eq!(result[call]["status"], "0x0");
+            }
+            for call in ["module_input", "module_output", "pool_allowance"] {
+                assert_eq!(number(&result[call]["returnData"]), U256::ZERO);
+            }
+            let spent = number(&result["original_in"]["returnData"])
+                - number(&result["in_after"]["returnData"]);
+            let received = number(&result["out_after"]["returnData"])
+                - number(&result["original_out"]["returnData"]);
+            if case["full"] == true {
+                assert_eq!(result["execute"]["status"], "0x1");
+                assert_eq!(
+                    (spent, received),
+                    (number(&case["dx"]), number(&case["out"]))
+                );
+                assert_eq!(number(&result["execute"]["returnData"]), received);
+                counts.0 += 1;
+            } else {
+                assert_eq!(result["execute"]["status"], "0x0");
+                let error = alloy_primitives::keccak256(b"PartialFill()");
+                assert_eq!(
+                    result["execute"]["error"]["data"],
+                    format!("0x{}", hex::encode(&error[..4]))
+                );
+                assert_eq!((spent, received), (U256::ZERO, U256::ZERO));
+                counts.1 += 1;
+            }
+        }
+        assert_eq!(counts, (full_count, partial_count));
+    }
+}
+
+#[test]
 fn full_input_quote_matches_real_wallet_and_partial_input_is_rejected() {
     assert!(exec_kind::of("solidly_v3").is_none());
     let mut totals = (0, 0, 0);

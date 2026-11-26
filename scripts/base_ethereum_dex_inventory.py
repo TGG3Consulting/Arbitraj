@@ -259,6 +259,17 @@ def tables(network, snapshots, profiles):
                     "списание модулю, модуль выдаёт пулу разрешение ровно на вход вызова. "
                     f"[Фабрика и байткод, вызовы, балансы](../{solidly.as_posix()}) · "
                     "[Адреса протокола](https://docs.solidly.com/resources/contract-addresses.html)."])
+        wrapper = solidly.with_name(f"solidly_v3_executor_{network}.json")
+        if wrapper.exists():
+            accepted = read(wrapper)
+            full_count = sum(c["full"] for c in accepted["cases"])
+            out.extend(["", f"SolidlyV3Executor · runtime Keccak `{accepted['runtime_keccak']}`, "
+                        f"канонический блок `{accepted['selector']['blockHash']}`. Проверено полных обменов "
+                        f"{full_count}, атомарных отказов при неполном входе {len(accepted['cases']) - full_count}. "
+                        "По завершении каждого вызова вход и выход на модуле, а также разрешение модуль → пул равны нулю. "
+                        "При превышении фактической выплаты на одну минимальную единицу каждый вызов отклонился. "
+                        f"[Вызовы и балансы получателя](../{wrapper.as_posix()}) · "
+                        "[Артефакт компиляции](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45875659089)."])
         if not base:
             out.extend(["", "Ethereum · у USDC/WETH из бюджета 1 WETH пул списал 0,219192077251805298 WETH "
                         "и выплатил 204,192073 USDC. У USDC/USDT без ограничения газа quoteSwap на 10 USDT "

@@ -1780,6 +1780,12 @@
     "settings": {
       "dex.kind": "solidly_v3",
       "dex.factory": "0x70fe4a44ea505cfa3a57b95cf2862d4fd5f0f687"
+    },
+    "verified_module": {
+      "runtime_keccak": "0x0538a91b6cf9f37efc80d7a242de902548ee9b473e3f9eab0b6e582629f23a2f",
+      "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "full": 12,
+      "partial_rejected": 0
     }
   },
   {
@@ -1790,6 +1796,12 @@
     "settings": {
       "dex.kind": "solidly_v3",
       "dex.factory": "0x70fe4a44ea505cfa3a57b95cf2862d4fd5f0f687"
+    },
+    "verified_module": {
+      "runtime_keccak": "0x0538a91b6cf9f37efc80d7a242de902548ee9b473e3f9eab0b6e582629f23a2f",
+      "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "full": 11,
+      "partial_rejected": 1
     }
   },
   {

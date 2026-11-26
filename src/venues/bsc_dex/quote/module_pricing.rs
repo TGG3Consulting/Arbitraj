@@ -1,7 +1,7 @@
-//! Сравнивает прямой вызов MemeboxAdapter и шаг V5 по чистой выплате и расходам текущего кошелька.
+//! Сравнивает прямой вызов проверенного модуля рынка и шаг V5 по чистой выплате и расходам текущего кошелька.
 use super::super::{
     exec::executor,
-    pools::{family_variant::Variant, memebox, registry::Entry},
+    pools::{family_variant::Variant, memebox, registered_v3, registry::Entry},
     wallet::signer,
 };
 use super::{
@@ -15,7 +15,7 @@ use crate::{core::types::RouteMode, gateway::quote_stage};
 use alloy_primitives::Bytes;
 
 pub(super) fn enabled(e: &Entry) -> bool {
-    e.family.variant == Variant::Memebox && e.family.tradable && e.family.executor_kind.is_some()
+    e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
 }
 
 pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Vec<OptionQuote> {
@@ -31,10 +31,15 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             continue;
         };
         let mut e = e.clone();
-        if let Some(h) = head
-            && memebox::refresh(ctx, &mut e, h).await.is_err()
-        {
-            continue;
+        if let Some(h) = head {
+            let check = if e.family.variant == Variant::RegisteredV3 {
+                registered_v3::fresh(ctx, &e, &h.selector()).await
+            } else {
+                memebox::refresh(ctx, &mut e, h).await
+            };
+            if check.is_err() {
+                continue;
+            }
         }
         let direct = Execution {
             mode: RouteMode::Direct,
@@ -47,11 +52,19 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             quotes.push(option);
         }
         if graph && let Ok(Some(target)) = executor::address(ctx) {
+            let (kind, data) = if e.family.variant == Variant::RegisteredV3 {
+                (
+                    17,
+                    Bytes::copy_from_slice(e.pool.reference.address().into_word().as_slice()),
+                )
+            } else {
+                (29, Bytes::new())
+            };
             let step = V5Step {
                 native: None,
-                kind: 29,
+                kind,
                 pool: module,
-                data: Bytes::new(),
+                data,
             };
             let via = Execution {
                 mode: RouteMode::Graph,

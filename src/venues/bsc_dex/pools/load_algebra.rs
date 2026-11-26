@@ -55,6 +55,7 @@ pub async fn load(
     pool: Address,
     known: Option<i32>,
     tag: &str,
+    step: Option<u32>,
 ) -> GatewayResult<(PoolState, TickMap)> {
     let gs = call::view(ctx, pool, &IAlgebraPool::globalStateCall {}, tag).await?;
     let liquidity = call::view(ctx, pool, &IAlgebraPool::liquidityCall {}, tag).await?;
@@ -73,7 +74,7 @@ pub async fn load(
         index: gs.timepointIndex,
         fee: u32::from(gs.fee),
     };
-    let fee = fusion_fee::next_fee(ctx, pool, head, tag).await?;
+    let fee = fusion_fee::next_fee(ctx, pool, head, tag,step).await?;
     let state = PoolState::Algebra {
         sqrt_price_x96: U256::from(gs.price),
         tick,

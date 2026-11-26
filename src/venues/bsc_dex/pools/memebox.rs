@@ -155,20 +155,6 @@ pub(super) async fn load(
     })
 }
 
-pub(crate) async fn module(ctx: &Ctx, f: &Family, addr: Address, at: &Value) -> GatewayResult<()> {
-    let factory = ctx.dex_addr("dex.factory", f.id)?;
-    super::direct_module::verify_code(ctx, f.id, addr, at).await?;
-    let call = IP::factoryCall {};
-    let [raw] = batch::read(ctx, [batch::view(at, addr, call.clone())]).await?;
-    if batch::decode(&raw, call)? != factory {
-        return Err(ctx.err(
-            ErrorCode::InvalidAddress,
-            "Memebox: модуль привязан к другой фабрике",
-        ));
-    }
-    Ok(())
-}
-
 pub(crate) async fn refresh(
     ctx: &Ctx,
     e: &mut Entry,
@@ -177,7 +163,7 @@ pub(crate) async fn refresh(
     let at = h.selector();
     let pool = super::direct_module::market(ctx, e)?;
     let s = state(ctx, e.family, pool, (e.pool.token0, e.pool.token1), &at).await?;
-    module(ctx, e.family, ctx.dex_addr("dex.router", e.family.id)?, &at).await?;
+    super::direct_module::verify_factory(ctx, e.family, ctx.dex_addr("dex.router", e.family.id)?, &at).await?;
     e.pool.fee_pips = Some(u32::from(s.fee_bps) * 100);
     e.pool.state = PoolState::Memebox(Box::new(s));
     e.pool.block = h.number.to();
@@ -190,7 +176,7 @@ pub(crate) async fn fresh(ctx: &Ctx, e: &Entry, at: &Value) -> GatewayResult<()>
     if let PoolState::Memebox(s) = &e.pool.state
         && **s == expected
     {
-        return module(ctx, e.family, ctx.dex_addr("dex.router", e.family.id)?, at).await;
+        return super::direct_module::verify_factory(ctx, e.family, ctx.dex_addr("dex.router", e.family.id)?, at).await;
     }
     Err(ctx.err(
         ErrorCode::StaleData,
@@ -217,7 +203,7 @@ pub(crate) async fn quote(
 ) -> GatewayResult<U256> {
     let at = super::elfomo::block(ctx, block).await?;
     let module_address = ctx.dex_addr("dex.router", e.family.id)?;
-    module(ctx, e.family, module_address, &at).await?;
+    super::direct_module::verify_factory(ctx, e.family, module_address, &at).await?;
     let output = if input == e.pool.token0 {
         e.pool.token1
     } else if input == e.pool.token1 {

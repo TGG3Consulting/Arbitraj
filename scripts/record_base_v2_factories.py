@@ -91,7 +91,7 @@ if __name__=="__main__":
             if args.market=="kewlswap-base":
                 from record_kewlswap_base import create_directory, wallet
                 proof["account_nonce"],created=create_directory(cap,row[0])
-            result=directory(args.market,cap,created=created,config=row[:4],network="base",proof=proof,wrapped=WETH,stables=(USDC,USDBC),funding_router=ROUTER)
+            result=directory(args.market,cap,created=created,config=row[:4],network="base",proof=proof,wrapped=WETH,stables=(USDC,USDBC),funding_router=ROUTER,all_candidates=args.market=="bluedex")
             if args.market in PAIR_CODE:check_deployments(cap,result)
             if args.market=="kewlswap-base":
                 result["execution"]=wallet(cap,result,head)
@@ -103,7 +103,7 @@ if __name__=="__main__":
                 if "0x"+expected.hex()!=proof["creation_code_hash"]:
                     raise ValueError("factory getter disagrees with the deployed CREATE2 code")
                 from record_bakeryswap_base import inspect
-                result["native_router"]=inspect(cap,result,head,router="0x1926f2bec4cd34613ccaac82911204b87cf590a2")
+                result["native_router"]=inspect(cap,result,head,router="0x1926f2bec4cd34613ccaac82911204b87cf590a2",all_candidates=True)
                 if not any(len(p.get("cases", [])) == 2 for p in result["native_router"]["samples"]):
                     raise ValueError("no funded BlueDex router control in both directions")
             if args.market=="bakeryswap-base":

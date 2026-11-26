@@ -90,7 +90,7 @@ def registry(c,factory,init_hash,created=None):
     return rows
 
 
-def directory(name,c,*,config=None,network="ethereum",proof=None,wrapped=WETH,stables=STABLES,funding_router=FUNDING,created=None):
+def directory(name,c,*,config=None,network="ethereum",proof=None,wrapped=WETH,stables=STABLES,funding_router=FUNDING,created=None,all_candidates=False):
     # Distinguish an unavailable historical EVM from a failed token or swap.
     frame,=rpc(c.endpoint,"eth_simulateV1",[{"blockStateCalls":[{"calls":[{
         "to":wrapped,"data":"0x313ce567"}]}],"validation":False},c.selector])
@@ -135,7 +135,8 @@ def directory(name,c,*,config=None,network="ethereum",proof=None,wrapped=WETH,st
             examples.append(dict(pool=pool,funded_asset=asset,reason=str(error)[:250]))
             continue
         examples.append(replay)
-        break
+        if not all_candidates:
+            break
     return dict(factory=factory,origin=proof,pools=rows,samples=examples)
 
 

@@ -18,11 +18,11 @@ MARKETS = {
 }
 
 
-def round_trip(e, pool, source, target, amount, deadline, runtime, kind=26, owner=None, funding=None, algebra=None):
+def round_trip(e, pool, source, target, amount, deadline, runtime, kind=26, owner=None, funding=None, algebra=None, time=None):
     owner = owner or HOLDERS["base"][source]
     word = lambda n: "0x" + format(n, "064x")
     override = {EXEC: {"code": "0x"+runtime, "stateDiff": {
-        word(0): word(int(owner, 16)), word(1): word(int(BASE_WETH, 16))}}}
+        word(0): word(int(owner, 16)), word(1): word(int(wrapped, 16))}}}
 
     if algebra:
         virtual, virtual_runtime, token0=algebra
@@ -52,7 +52,9 @@ def round_trip(e, pool, source, target, amount, deadline, runtime, kind=26, owne
 
     def simulate(entries):
         calls = [v for _, v in entries]
-        stage, = rpc(e, "eth_simulateV1", [{"blockStateCalls": [{"stateOverrides": override, "calls": calls}],
+        frame={"stateOverrides":override,"calls":calls}
+        if time is not None:frame["blockOverrides"]={"time":hex(time)}
+        stage, = rpc(e, "eth_simulateV1", [{"blockStateCalls": [frame],
                                           "validation": False}, e["selector"]])
         if stage["parentHash"] != e["selector"]["blockHash"]:
             raise ValueError("хеш исходного блока изменился")

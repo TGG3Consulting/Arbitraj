@@ -466,6 +466,7 @@ fn found(
             | Variant::Oasis
             | Variant::DeltaSwap
             | Variant::V2RouterCreate2
+            | Variant::V2DualCreate2
             | Variant::WhiteSwap
     ) {
         let hashes = super::verify_algebra_dir::hashes(ctx, c)?;

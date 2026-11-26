@@ -119,7 +119,7 @@ pub async fn fee(
     queued: &UnboundedReceiver<Msg>,
 ) -> GatewayResult<()> {
     let class = refresh_urgency::class(&p.ctx);
-    let work = integral_fee::apply(p, r, e.family.proto, block, index);
+    let work = integral_fee::apply(p, r, e.family, block, index);
     if !refresh_timing::on(&p.ctx) {
         return refresh_urgency::with(class, work).await;
     }

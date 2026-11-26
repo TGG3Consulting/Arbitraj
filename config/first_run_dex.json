@@ -2763,6 +2763,23 @@
   {
     "chain_id": 8453,
     "network": "base",
+    "id": "bluedex",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x8437100ed18dbea089e0fa3caaae7f6f40e4a05c · https://sourcify.dev/server/v2/contract/8453/0x1926f2bec4cd34613ccaac82911204b87cf590a2",
+    "settings": {
+      "dex.kind": "v2_fork_dual_create2",
+      "dex.factory": "0x8437100ed18dbea089e0fa3caaae7f6f40e4a05c",
+      "dex.pool_code_hashes": [
+        "0xcfd11843ebb6a41346c34cac3b947806ca43340e84a192c13eb54da4ec62fb50"
+      ],
+      "dex.router": "0x1926f2bec4cd34613ccaac82911204b87cf590a2",
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3",
+      "dex.router_runtime_hash": "0xef848cb92f62c3e3f6b4daba6c909bd104e0677feebb7364e0538dc10345c2b6"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
     "id": "moonbase",
     "source": "https://sourcify.dev/server/v2/contract/8453/0xe396465a85dedb00fa8774162b106833de51ea41 · https://sourcify.dev/server/v2/contract/8453/0xf429af2d7805bb1bed1ada3cacf2bbbed87294c8 · tests/data/first_run_dex_2026-11-26/base_v2_factories.json",
     "settings": {
@@ -3353,6 +3370,77 @@
       "dex.quoter_runtime_hash": "0x5faa19a79ab9d8f2a97c3d31f17d976ecedb1db2486e71eb1a59efde666dc343",
       "dex.tick_reader": "0x2e1cba4a9f6e69d27e65046fc93b873b05f79a39",
       "dex.tick_reader_runtime_hash": "0x2d2f528bb488dfcc239adf96beb1a10a987f7669dcd41d24eb287e21894a9650"
+    }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "yum-yum-swap",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xac714a42bf2c9f8596ecf21bddabe8459dfb313e?fields=sources · tests/data/first_run_dex_2026-11-26/registered_v3_base_profiles.json",
+    "settings": {
+      "dex.kind": "registered_v3",
+      "dex.factory": "0xf6c96ac4251905572c7083b1804825850b9bc9e6",
+      "dex.factory_runtime_hash": "0xfbed4db6712c34c5a0479b022bece46d6ac67a0b96367dc9ca2a058ebde73627",
+      "dex.quoter": "0xac714a42bf2c9f8596ecf21bddabe8459dfb313e",
+      "dex.quoter_runtime_hash": "0xeea9723b6029304dc68dfa488cc728896ff28f5bae45a461c0b7321fdaf579b8",
+      "dex.pool_code_hashes": [
+        "0x5f77a2e6e9e09fd14bae12229869da91c1843cfd43d8bda95b61c67b0d149373"
+      ],
+      "dex.tick_lens": "0xf41e702c90bfdc0e488b6286ecf1428466cfa8e6",
+      "dex.v3_fee_tiers": [
+        "500",
+        "3000",
+        "10000"
+      ],
+      "dex.v3_quoter_method": "quoteExactInputSingle",
+      "dex.quoter_virtual": false
+    }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "bluedex-v3-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x2f657b1002c3938d99a6adf706ef393b1fdb1a44?fields=sources · tests/data/first_run_dex_2026-11-26/registered_v3_base_profiles.json",
+    "settings": {
+      "dex.kind": "registered_v3",
+      "dex.factory": "0x20fe0178e262be17260668716ba7922cf66b2d3f",
+      "dex.factory_runtime_hash": "0x5b142ebc57e4f801999d81872bac3086a5eac4501cb4ebb7509e7bf9f32b1afa",
+      "dex.quoter": "0x2f657b1002c3938d99a6adf706ef393b1fdb1a44",
+      "dex.quoter_runtime_hash": "0xd5e3ca00994bd1a073b67438c37fca620b932baab05ff7c45eb72c5d38e9d880",
+      "dex.pool_code_hashes": [
+        "0xef88dffbac8bfb2fab699913498e829db180c8e5733e35e49147319489e301a6"
+      ],
+      "dex.tick_lens": "0xf41e702c90bfdc0e488b6286ecf1428466cfa8e6",
+      "dex.v3_fee_tiers": [
+        "500",
+        "3000"
+      ],
+      "dex.v3_quoter_method": "quoteExactInputSingle",
+      "dex.quoter_virtual": false
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "synthswap-v3",
+    "source": "https://docs.algebra.finance/algebra-integral-documentation/overview-faq/partners/algebra-v1.9/synthswap · tests/data/first_run_dex_2026-11-26/synth_oracle_base.json.gz · base_algebra_synthswap-v3.json.gz",
+    "settings": {
+      "dex.kind": "algebra_v19_single",
+      "dex.factory": "0xa37359e63d1aa44c0acb2a4605d3b45785c97ee3",
+      "dex.factory_runtime_hash": "0x14149e7651118f63efa2b99df4b7cbeaf55b04ccb9ba6349f78b6fbafe094cd7",
+      "dex.pool_code_hashes": [
+        "0xbce37a54eab2fcd71913a0d40723e04238970e7fc1159bfd58ad5b79531697e7"
+      ],
+      "dex.plugin_runtime_hashes": [
+        "0xef945f9d48a86690133f6c8f65b3b5bb45d67673ceca22988f587c5e9555ebaf",
+        "0x5ca03050452259926d32a7f185c73712f48d3e789fe142df4d754e673ecd53ad"
+      ],
+      "dex.fusion_next_block_s": 1,
+      "dex.quoter_virtual": true
+    },
+    "venue_settings": {
+      "dex.fusion_fee_horizon_s": 8,
+      "dex.fusion_oracle_chunk": 4
     }
   }
 ]

@@ -25,7 +25,7 @@ pub(super) async fn candidates(
         if native {
             continue;
         }
-        kinds[7] |= super::memebox_pricing::enabled(e);
+        kinds[7] |= super::module_pricing::enabled(e);
         kinds[6] |= super::super::exec::vault_direct::enabled(e);
         kinds[4] |= oasis_pricing::is_oasis(e);
         kinds[0] |= white_pricing::is_white(e);
@@ -91,7 +91,7 @@ pub(super) async fn candidates(
             if kinds[6] { Box::pin(super::vault_pricing::candidates(q,i,head)).await } else { Vec::new() }
         },
         async {
-            if kinds[7] { Box::pin(super::memebox_pricing::candidates(q,i,head)).await } else { Vec::new() }
+            if kinds[7] { Box::pin(super::module_pricing::candidates(q,i,head)).await } else { Vec::new() }
         }
     );
     let mut all = white;
@@ -109,7 +109,7 @@ fn individual(e: &Entry, native: bool) -> bool {
     if native {
         return super::vista_pricing::is_vista(e);
     }
-    super::memebox_pricing::enabled(e) || super::super::exec::vault_direct::enabled(e) || super::vista_pricing::is_vista(e)
+    super::module_pricing::enabled(e) || super::super::exec::vault_direct::enabled(e) || super::vista_pricing::is_vista(e)
         || super::oasis_pricing::is_oasis(e)
         || super::white_pricing::is_white(e)
         || super::frax_pricing::is_frax(e)

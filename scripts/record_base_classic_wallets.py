@@ -5,6 +5,7 @@ from pathlib import Path
 
 from eth_utils import keccak
 from record_aero_basic_base import HOLDERS, RUNTIME, round_trip
+from record_solidly_v3 import BASE_WETH, ETH_WETH
 from record_base_classic_directory import ENDPOINTS, optional
 from record_balancer_markets import Capture
 from record_base_slipstream_executor import EXEC, OWNER, rpc
@@ -13,7 +14,7 @@ from record_base_slipstream_executor import EXEC, OWNER, rpc
 def capture(directory, endpoint):
     tag=directory["selector"]
     head=rpc(endpoint,"eth_getBlockByHash",[tag["blockHash"],False])
-    if rpc(endpoint,"eth_chainId",[])!="0x2105" or head["stateRoot"]!=directory["state_root"]:
+    if int(rpc(endpoint,"eth_chainId",[]),16)!=directory["chain_id"] or head["stateRoot"]!=directory["state_root"] or head["hash"]!=tag["blockHash"]:
         raise ValueError("wrong archive")
     e=dict(endpoint=endpoint,selector=tag)
     runtime=RUNTIME.read_text().strip().removeprefix("0x")
@@ -21,6 +22,9 @@ def capture(directory, endpoint):
     # This address supplied the archived Archly v1 stable pair in transaction 0x4a4b...63ff.
     # Its accepted header has an EIP-7702 delegation and a real wTV balance.
     holders={**HOLDERS["base"], "0x174d6d746503d897acec6e65dc57c024dd6ad4b7":"0x389bd7cad27acc90adef1d23ee2e8cc8608dcc18"}
+    wrapped=BASE_WETH
+    if directory["chain_id"]==1:
+        holders=HOLDERS["ethereum"];wrapped=ETH_WETH
     potential=[]
     for market in directory["markets"]:
         if market.get("fixed_fee")=="0" and int(market.get("fee_manager","0"),16): continue
@@ -52,7 +56,7 @@ def capture(directory, endpoint):
                 signers[signer]=code=="0x" or (len(code)==48 and code.startswith("0xef0100"))
             if not signers[signer]: continue
             try:
-                cases=[round_trip(e,m["pool"],a,b,qty,deadline,runtime,kind=3,owner=signer) for qty in sizes]
+                cases=[round_trip(e,m["pool"],a,b,qty,deadline,runtime,kind=3,owner=signer,wrapped=wrapped) for qty in sizes]
                 if a=="0x174d6d746503d897acec6e65dc57c024dd6ad4b7":
                     # Fund an unconnected signer through ERC20.transfer; its own approve and two swaps follow.
                     probe_start=len(c.calls)
@@ -82,7 +86,8 @@ if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("directory",type=Path);p.add_argument("output",type=Path);args=p.parse_args()
     directory=json.loads(args.directory.read_bytes())
-    for endpoint in ENDPOINTS:
+    from record_ethereum_x7 import ENDPOINTS as ETH_ENDPOINTS
+    for endpoint in (ETH_ENDPOINTS if directory["chain_id"]==1 else ENDPOINTS):
         try:
             result=capture(directory,endpoint)
             args.output.write_text(json.dumps(result,indent=2)+"\n",encoding="utf8",newline="\n")

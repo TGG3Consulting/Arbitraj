@@ -403,7 +403,7 @@ pub struct Family {
 
 impl Family {
     pub fn direct_module(&self) -> bool {
-        (self.variant == Variant::Memebox && self.tradable)
+        (self.variant.wallet_module() && self.tradable)
             || matches!(self.variant, Variant::SolidlyCl | Variant::BaseNativeV3)
             || matches!(self.proto, Proto::Elfomo | Proto::Lunar | Proto::BaiBai)
     }
@@ -450,7 +450,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
-        "v2_fork" | "v2_diamond_router" | "v2_diamond_create" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_whiteswap" => {
+        "v2_fork" | "v2_diamond_router" | "v2_diamond_create" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_fork_dual_create2" | "v2_whiteswap" => {
             (PoolKind::V2, Proto::V2, true, true, true)
         }
         // V2-форк без известного роутера (решение 280): в графе и сигналах как v2_fork (V2-математика, своя комиссия
@@ -469,6 +469,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "v3_fork" | "v3_fork_ramses" | "v3_fork_uniswap_lm" => {
             (PoolKind::V3, Proto::UniswapV3, true, false, true)
         }
+        "registered_v3" => (PoolKind::V3,Proto::UniswapV3,true,false,true),
+        "registered_v3_module" => (PoolKind::V3,Proto::UniswapV3,true,true,true),
         "base_native_v3" => (PoolKind::V3, Proto::PancakeV3, true, false, false),
         "base_native_v3_module" => (PoolKind::V3, Proto::PancakeV3, true, true, true),
         "v3_fork_pancake" => (PoolKind::V3, Proto::PancakeV3, true, false, true),
@@ -496,7 +498,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // только про Universal Router / бандл (UR своей фабрики и свой роутер-форк не подключены); исполнение —
         // шаг ALGEBRA контракта-исполнителя ArbExecutor (exec_kind.rs, с v1; решение 122 X): маршрут, где каждый шаг —
         // вид исполнителя, идёт через него раньше проверки tradable (quote/graph_exec.rs, exec/cycle_gate.rs). Вид ядра — Cl.
-        "thena_fusion" => (PoolKind::Cl, Proto::Algebra, true, false, false),
+        "thena_fusion" | "algebra_v19_single" => (PoolKind::Cl, Proto::Algebra, true, false, false),
         // Algebra Integral (THENA V3, DexSwap; решение 188): как thena_fusion — в графе (математика swap_algebra),
         // исполнение — шаг ALGEBRA контракта-исполнителя (тот же swap + algebraSwapCallback, exec_kind.rs).
         "algebra_integral"
@@ -517,7 +519,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // В графе и сигналах; исполнение — шаг SOLIDLY контракта-исполнителя (exec_kind::via_executor).
         // Решение 483: Ramses Legacy V2 — тот же вид (вариант RamsesLegacy: getAmountOut − 1, Sync uint112, PairCreated без
         // stable; pools/ramses.rs).
-        "solidly_v1" | "solidly_v1_ramses" | "leetswap_v2" => {
+        "solidly_v1" | "solidly_v1_generator" | "solidly_v1_ramses" | "leetswap_v2" => {
             (PoolKind::Solidly, Proto::SolidlyV1, true, false, false)
         }
         // StableSwap (Ellipsis; решение 122 F): в графе и сигналах; исполнение — шаг CURVE контракта-исполнителя.
@@ -735,10 +737,10 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
     if f.variant == Variant::RingFew {
         super::ring::active(ctx, f.id).map_err(|e| no(e.message))?;
     }
-    if f.variant.registered_v2_router() && f.variant != Variant::DiamondV2 {
+    if f.variant.registered_v2_router() && !f.variant.dual_v2_execution() {
         ctx.addr("dex.multicall3").map_err(|e| no(e.message))?;
     }
-    if f.variant == Variant::BaseNativeV3 && !super::base_native_v3::valid(ctx, f) {
+    if f.variant.factory_quoter() && !super::base_native_v3::valid(ctx, f) {
         return Err(no(
             "сеть, фабрика или квотер расходятся с профилем V3 Base".into()
         ));
@@ -771,6 +773,9 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
 /// роутера (v2_fork_executor, решение 280) роутер не нужен: сверка — обмен через исполнитель в симуляции. Ошибок нет.
 pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
     let mut list = Vec::new();
+    if f.variant == super::family_variant::Variant::AlgebraSingleV19 {
+        list.extend(["dex.factory_runtime_hash","dex.pool_code_hashes","dex.plugin_runtime_hashes","dex.fusion_next_block_s"]);
+    }
     if f.variant == super::family_variant::Variant::ElasticV5 {
         list.extend(["dex.factory_runtime_hash", "dex.router_runtime_hash", "dex.quoter_runtime_hash", "dex.tick_reader_runtime_hash"]);
     }
@@ -824,6 +829,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             | Variant::V2Create2LiveFee
                     | Variant::DiamondV2
                     | Variant::V2RouterCreate2
+                    | Variant::V2DualCreate2
                     | Variant::WhiteSwap
             ) {
                 list.push(super::verify_algebra_dir::SETTING);
@@ -841,7 +847,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             // Роутер — только у вида со своим путём исполнения (PancakeSwap/Uniswap V2, v2_fork: сверка getAmountsOut и
             // обмен роутером форка). v2_fork_executor (решение 280, tradable=false) роутера не имеет: сверка и обмен —
             // через контракт-исполнитель (quote/v2_pair_quote.rs).
-            if f.tradable && !matches!(f.variant, Variant::WhiteSwap | Variant::DiamondV2 | Variant::KewlV2) {
+            if f.tradable && !matches!(f.variant, Variant::WhiteSwap | Variant::DiamondV2 | Variant::KewlV2 | Variant::V2DualCreate2) {
                 list.push("dex.router");
             }
             match ctx.dex_text("dex.v2_fee_source", f.id).as_deref() {
@@ -856,6 +862,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // ramsesV2SwapCallback (RamsesV2Pool.sol L1238) — без dex.v3_swap_callback исполнитель не проверить.
         Proto::UniswapV3 if f.variant == Variant::RamsesCl => {
             list.extend(["dex.factory", "dex.quoter", "dex.v3_swap_callback"])
+        }
+        Proto::UniswapV3 if f.variant == Variant::RegisteredV3 => {
+            list.extend(["dex.factory","dex.factory_runtime_hash","dex.pool_code_hashes","dex.tick_lens","dex.quoter","dex.quoter_runtime_hash","dex.v3_quoter_method"]);
+            if f.tradable {list.extend(["dex.router","dex.module_runtime_hashes"]);}
         }
         Proto::PancakeV3 if f.variant == Variant::BaseNativeV3 => {
             list.extend([
@@ -938,7 +948,8 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::SolidlyV1 if f.variant == Variant::LeetSwap => list.push("dex.factory"),
         Proto::Solidly | Proto::SolidlyV1 => {
             list.push("dex.factory");
-            if f.variant == Variant::SolidlyClassic {
+            if f.variant == Variant::SolidlyGenerator {list.extend(["dex.solidly_generator_runtime_hash","dex.solidly_pause_method"]);}
+            if f.variant.solidly_classic() {
                 list.extend(["dex.factory_runtime_hash","dex.pool_code_hashes","dex.solidly_fee_source"]);
             }
             if let Ok(src) = ctx.dex_text("dex.solidly_fee_source", f.id) {

@@ -54,6 +54,8 @@ pub fn market(ctx: &Ctx, entry: &Entry) -> GatewayResult<Address> {
         {
             Ok(*address)
         }
+        (PoolRef::Contract(address), super::families::Proto::UniswapV3)
+            if entry.family.variant == super::family_variant::Variant::RegisteredV3 => Ok(*address),
         (PoolRef::Contract(address), super::families::Proto::V2)
             if entry.family.variant == super::family_variant::Variant::Memebox => Ok(*address),
         (PoolRef::Contract(address), super::families::Proto::Slipstream) => Ok(*address),
@@ -99,10 +101,24 @@ pub async fn verify_code(ctx: &Ctx, id: &str, addr: Address, tag: &Value) -> Gat
     Ok(())
 }
 
+pub(crate) async fn verify_factory(ctx: &Ctx, f: &Family, addr: Address, at: &Value) -> GatewayResult<()> {
+    let factory = ctx.dex_addr("dex.factory", f.id)?;
+    verify_code(ctx, f.id, addr, at).await?;
+    let call = super::abi_check::IPoolImmutables::factoryCall {};
+    let [raw] = super::nami_batch::read(ctx, [super::nami_batch::view(at, addr, call.clone())]).await?;
+    if super::nami_batch::decode(&raw, call)? != factory {
+        return Err(ctx.err(
+            ErrorCode::InvalidAddress,
+            "Модуль привязан к другой фабрике",
+        ));
+    }
+    Ok(())
+}
+
 pub async fn verify(ctx: &Ctx, f: &Family, addr: Address, at: &str) -> GatewayResult<()> {
-    if f.variant == super::family_variant::Variant::Memebox {
+    if f.variant.wallet_module() {
         let at = super::elfomo::block(ctx,at).await?;
-        return super::memebox::module(ctx,f,addr,&at).await;
+        return verify_factory(ctx,f,addr,&at).await;
     }
     if f.variant == super::family_variant::Variant::BaseNativeV3 {
         if !super::base_native_v3::valid(ctx, f) {

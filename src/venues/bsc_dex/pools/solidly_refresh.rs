@@ -44,7 +44,7 @@ pub async fn refresh(p: &Pools) {
         }
         // Решение 443: пары Camelot V2 (тоже PoolState::Solidly) — не Solidly: комиссии у них из события пары.
         if !e.family.proto.is_solidly()
-            || matches!(e.family.variant, super::family_variant::Variant::LeetSwap | super::family_variant::Variant::SolidlyClassic)
+            || e.family.variant==super::family_variant::Variant::LeetSwap || e.family.variant.solidly_classic()
         {
             continue;
         }

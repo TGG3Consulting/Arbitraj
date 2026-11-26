@@ -30,7 +30,7 @@ use crate::core::types::PoolRef;
 
 use super::super::ctx::Ctx;
 use super::super::node::call;
-use super::abi_algebra::IAlgebraFactory;
+use super::abi_algebra::{IAlgebraFactory, IAlgebraPool};
 use super::abi_algebra_integral::IAlgebraIntegralFactory;
 use super::discover::{Found, sorted};
 use super::families::Proto;
@@ -72,7 +72,34 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
                 continue;
             }
         }
-        out.push(judge(c, pool, answers));
+        let spacing = if c.family.variant == super::family_variant::Variant::AlgebraSingleV19 {
+            match answers.pop() {
+                Some(Err(err)) => {
+                    out.push(Verdict::Failed(err));
+                    continue;
+                }
+                Some(Ok(Ok(raw))) => IAlgebraPool::tickSpacingCall::abi_decode_returns(&raw)
+                    .ok()
+                    .map(|v| v.as_i32())
+                    .filter(|n| *n > 0),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let mut verdict = judge(c, pool, answers);
+        if let Verdict::Taken(found) = &mut verdict
+            && c.family.variant == super::family_variant::Variant::AlgebraSingleV19
+        {
+            if spacing.is_none() {
+                out.push(Verdict::Rejected(
+                    "Algebra V1.9: нет положительного tickSpacing".into(),
+                ));
+                continue;
+            }
+            found.tick_spacing = spacing;
+        }
+        out.push(verdict);
     }
     out
 }
@@ -113,8 +140,13 @@ fn plan(ctx: &Ctx, c: &Candidate) -> Result<Plan, String> {
             list.push((factory, Bytes::from(data)));
         }
     }
-    if c.family.proto == Proto::AlgebraDirFee {
+    if c.family.proto == Proto::AlgebraDirFee
+        || c.family.variant == super::family_variant::Variant::AlgebraSingleV19
+    {
         let hashes = verify_algebra_dir::hashes(ctx, c)?;
+        if c.family.variant == super::family_variant::Variant::AlgebraSingleV19 {
+            list.push((pool, IAlgebraPool::tickSpacingCall {}.abi_encode().into()));
+        }
         list.push(verify_algebra_dir::deployer_call(factory));
         return Ok((pool, list, Some(hashes)));
     }

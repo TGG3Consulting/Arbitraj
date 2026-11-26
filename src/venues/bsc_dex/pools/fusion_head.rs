@@ -21,7 +21,6 @@ use alloy_primitives::Address;
 use crate::core::types::{Pool, PoolRef, PoolState};
 use crate::storage::journal::Level;
 
-use super::super::math::fee_algebra_v1;
 use super::discover::Found;
 use super::families::Proto;
 use super::fusion_book::Held;
@@ -76,7 +75,12 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
         let Some(e) = p.reg.entry(r) else {
             continue;
         };
-        match step(&e, (p.ctx.place.id, addr), ts, clock) {
+        let next = super::synth_farming::step(&p.ctx, e.family);
+        let result = match next {
+            Ok(delay) => step(&e, (p.ctx.place.id, addr), ts, clock, delay),
+            Err(err) => Step::Dark(err.message),
+        };
+        match result {
             Step::Fee(new, edge) => {
                 // Третье ревью t236 (пп. 2, 3): комиссия, затем (Need::Clock: время снова есть, книга покрывает)
                 // достоверность до отметки — ОДНИМ изменением реестра и только если запись не новее посчитанной.
@@ -107,7 +111,13 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
 /// Недостоверная запись — только с отметкой Need::Clock (`clock`: недостоверна ею); спящая (asleep: обмены не
 /// приходят, не котируется; при пробуждении — полное чтение) — пропуск, её оракул не читается.
 /// Принимает: запись, (площадка DEX, адрес), время головы, стоит ли Need::Clock. Возвращает: итог шага. Ошибок нет.
-fn step(e: &Entry, (venue, addr): (&'static str, Address), ts: u32, clock: bool) -> Step {
+fn step(
+    e: &Entry,
+    (venue, addr): (&'static str, Address),
+    ts: u32,
+    clock: bool,
+    delay: Option<u32>,
+) -> Step {
     if (!e.valid && !clock) || e.asleep {
         return Step::Skip;
     }
@@ -137,7 +147,7 @@ fn judge(h: Option<&Held>, (synced, ts): (u64, u32), (tick, fee): (i32, u32)) ->
             o.last.ts
         ));
     }
-    let Some(n) = fee_algebra_v1::next_block_fee(o, ts, tick) else {
+    let Some(n) = super::fusion_fee::project(o, ts, tick, delay) else {
         return Step::Dark(format!(
             "нет начала окна оракула на время {ts} и + 1 с (прочитано на блоке {}, время {read_ts}, горизонт \
              dex.fusion_fee_horizon_s){}",
@@ -145,7 +155,8 @@ fn judge(h: Option<&Held>, (synced, ts): (u64, u32), (tick, fee): (i32, u32)) ->
             super::fusion_fee::gaps(&h.got.gaps)
         ));
     };
-    let edge = fee_algebra_v1::next_block_fee(o, ts.saturating_add(1), tick).is_none();
+    let edge =
+        super::fusion_fee::project(o, ts.saturating_add(delay.unwrap_or(1)), tick, delay).is_none();
     Step::Fee((n != fee).then_some(n), edge)
 }
 

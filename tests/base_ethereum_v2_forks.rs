@@ -377,3 +377,94 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
     }
     assert!(admitted >= 25);
 }
+
+#[test]
+fn bluedex_registered_pair_and_router_settle_at_the_independent_curve_output() {
+    use alloy_primitives::{Address, B256};
+    use arb::venues::bsc_dex::pools::verify::v2_create2;
+    let market: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/bluedex_base.json"
+    ))
+    .unwrap();
+    let profile = first_run_profiles::named(8453, "bluedex").unwrap();
+    let settings = &profile["settings"];
+    assert_eq!(settings["dex.kind"], "v2_fork_dual_create2");
+    assert_eq!(settings["dex.router"], market["native_router"]["router"]);
+    assert_eq!(
+        settings["dex.router_runtime_hash"],
+        market["native_router"]["runtime"]
+    );
+    assert_eq!(
+        settings["dex.pool_code_hashes"][0],
+        market["origin"]["creation_code_hash"]
+    );
+    let factory: Address = settings["dex.factory"].as_str().unwrap().parse().unwrap();
+    let init: B256 = settings["dex.pool_code_hashes"][0]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let registry = market["pools"].as_array().unwrap();
+    assert_eq!(registry.len(), 4);
+    for p in registry {
+        let [a, b]: [Address; 2] = serde_json::from_value(p["tokens"].clone()).unwrap();
+        let pool: Address = serde_json::from_value(p["pool"].clone()).unwrap();
+        assert_eq!(v2_create2(factory, a, b, init), pool);
+        assert_eq!(v2_create2(factory, b, a, init), pool);
+    }
+    let fee = fee_ratio(
+        settings["dex.v2_fee_pct"]
+            .as_str()
+            .unwrap()
+            .parse::<Decimal>()
+            .unwrap(),
+    )
+    .unwrap();
+    let mut matched = 0;
+    for via in market["native_router"]["samples"].as_array().unwrap() {
+        let Some(rows) = via["cases"].as_array() else {
+            continue;
+        };
+        let sample = market["samples"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["pool"] == via["pool"] && s["cases"].is_array())
+            .unwrap();
+        let weth = "0x4200000000000000000000000000000000000006";
+        let i = usize::from(sample["tokens"][1] == weth);
+        let rin = uint(&sample["reserves"][i]);
+        let rout = uint(&sample["reserves"][1 - i]);
+        for row in rows {
+            let buy = &row["buy"];
+            let sell = &row["sell"];
+            let n = uint(&buy["amount"]);
+            let out = amount_out(n, rin, rout, fee).unwrap();
+            let back = amount_out(out, rout - out, rin + n, fee).unwrap();
+            assert_eq!(
+                (out, back),
+                (uint(&buy["received"]), uint(&sell["received"]))
+            );
+            for leg in [buy, sell] {
+                assert_eq!(leg["amount"], leg["spent"]);
+                assert_eq!(leg["received"], leg["quoted"]);
+                assert!(leg["min_plus_one"].is_object());
+            }
+            let independent = sample["cases"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|c| uint(&c["in"]) == n)
+                .unwrap();
+            assert_eq!(
+                (out, back),
+                (
+                    uint(&independent["buy_return"]),
+                    uint(&independent["sell_return"])
+                )
+            );
+            matched += 1;
+        }
+    }
+    assert!(matched >= 2);
+}

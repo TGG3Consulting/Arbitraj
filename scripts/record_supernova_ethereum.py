@@ -3,14 +3,14 @@ import argparse
 import json
 from pathlib import Path
 
-import requests
 from eth_abi import decode, encode
 from eth_utils import keccak
-from record_balancer_markets import Capture, posts
 from record_base_slipstream_executor import OWNER
-from record_hydrex_integral import EXEC, FOLDER, RUNTIME, VIRTUAL, VIRTUAL_FILE, map_ticks, read, rpc, simulate
+from record_hydrex_integral import EXEC, FOLDER, RUNTIME, VIRTUAL, VIRTUAL_FILE, map_ticks, read, simulate
 from record_solidly_v3 import ETH_WETH, HOLDERS
-from record_ethereum_x7 import ENDPOINTS, ROOT_HASH
+from record_ethereum_x7 import ROOT_HASH
+from community_v3_rpc import ENDPOINTS
+from derpdex_archive_rpc import Readers
 
 FACTORY="0x44b7fbd4d87149efa5347c451e74b9fd18e89c55"
 QUOTER="0xf9439cd803dcb11fa574bcc8421207f89b529e41"
@@ -19,69 +19,77 @@ DEPLOYER="0x45bc0f9855a626743d57d37d989f3b9462deba45"
 ROUTER="0x72d63a5b080e1b89cc93f9b9f50cbfa5e291c8ac"
 USDT="0xdac17f958d2ee523a2206206994597c13d831ec7"
 USDC="0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+LINK="0x514910771af9ca656af840dff83e8264ecf986ca"
+XAUT="0x68749665ff8d2d112fa859aa293f07a622782f38"
+SIZES={USDC:(10**6,10**7),USDT:(10**6,10**7),ETH_WETH:(10**14,10**15),
+       LINK:(10**16,10**17),XAUT:(100,1000)}
+WALLETS={**HOLDERS["ethereum"],LINK:HOLDERS["ethereum"][ETH_WETH],XAUT:HOLDERS["ethereum"][ETH_WETH]}
+
+def chosen(tokens):
+    pair=set(tokens)
+    return pair<={ETH_WETH,USDT,USDC} or pair in ({ETH_WETH,LINK},{ETH_WETH,XAUT})
+
 
 
 def digest(b):
     return "0x"+keccak(b).hex()
 
 
+class Canonical:
+    def __init__(self, reader, tag):
+        self.reader,self.tag=reader,tag
+    def one(self, address, method, args=(), values=(), returns=()):
+        data="0x"+(keccak(text=method)[:4]+encode(args,values)).hex()
+        raw=self.reader.read(None,"eth_call",[{"to":address,"data":data},self.tag])
+        return decode(returns,bytes.fromhex(raw[2:]))
+
+
 def capture(e):
-    c=Capture(e)
     tag=e["selector"]
+    directory=read(FOLDER/"supernova_ethereum_directory.json")
+    if (directory["selector"], directory["state_root"], directory["block"])!=(tag,ROOT_HASH,e["block"]):
+        raise ValueError("wallet replay and on-chain registry refer to different canonical states")
+    marker={VIRTUAL:{"code":"0x602a60005260206000f3"}}
+    reader=Readers(tag,e["block"],ROOT_HASH,FACTORY,marker,{"to":VIRTUAL,"data":"0x"},
+                   "0x"+format(42,"064x"),urls=ENDPOINTS,chain=1,word_reads=False)
+    rpc=reader.read
+    c=Canonical(reader,tag)
     head=rpc(e,"eth_getBlockByHash",[tag["blockHash"],False])
-    if (head["hash"]!=tag["blockHash"] or head["stateRoot"]!=ROOT_HASH
-            or int(head["number"],16)!=e["block"] or int(rpc(e,"eth_chainId",[]),16)!=1):
-        raise ValueError("wrong Ethereum archive")
     def address(a,s):return c.one(a,s,returns=["address"])[0]
     code=lambda a: bytes.fromhex(rpc(e,"eth_getCode",[a,tag])[2:])
-    if (address(FACTORY,"defaultPluginFactory()")!=REGISTRY or address(FACTORY,"poolDeployer()")!=DEPLOYER
-            or any((address(a,"factory()"),address(a,"poolDeployer()"))!=(FACTORY,DEPLOYER) for a in [QUOTER,ROUTER])):
-        raise ValueError("unexpected deployment topology")
     init=c.one(FACTORY,"POOL_INIT_CODE_HASH()",returns=["bytes32"])[0]
     count=c.one(FACTORY,"allPairsLength()",returns=["uint256"])[0]
-    rows=[decode(["address"],r)[0] for r in posts(c,[(FACTORY,"allPairs(uint256)",["uint256"],[i]) for i in range(count)])]
-    methods=[("token0()",["address"]),("token1()",["address"]),("globalState()",["uint160","int24","uint16","uint8","uint16","bool"]),
-             ("plugin()",["address"]),("liquidity()",["uint128"])]
-    results=iter(posts(c,[(p,s,[],[]) for p in rows for s,_ in methods]))
+    if count!=len(directory["markets"]) or "0x"+init.hex()!=directory["init"]:
+        raise ValueError("factory index length or init code differs")
+    if any((address(a,"factory()"),address(a,"poolDeployer()"))!=(FACTORY,DEPLOYER) for a in (QUOTER,ROUTER)):
+        raise ValueError("unexpected periphery")
     markets=[]
-    for pool in rows:
-        t0,t1,gs,plugin,liq=(decode(abi,next(results)) for _,abi in methods)
-        markets.append(dict(pool=pool,tokens=[t0[0],t1[0]],state=list(map(str,gs)),plugin=plugin[0],liquidity=str(liq[0])))
-    # Перечень из событий создания, привязан к исчерпывающему индексу allPairs.
-    logs=rpc(e,"eth_getLogs",[dict(fromBlock=hex(24390427),toBlock=hex(e["block"]),address=FACTORY,
-                topics=[digest(b"CustomPool(address,address,address,address)")])])
-    roles={"0x"+r["data"][-40:]: {"deployer":"0x"+r["topics"][1][-40:],"tx":r["transactionHash"],
-            "block_hash":r["blockHash"]} for r in logs if not r.get("removed",False)}
-    lookups=[]
-    for m in markets:
-        a,b=m["tokens"];pool=m["pool"];custom=roles.get(pool,{}).get("deployer")
-        if custom:
-            methods=[(FACTORY,"customPoolByPair(address,address,address)",["address"]*3,[custom,*t]) for t in ((a,b),(b,a))]
-        else:
-            methods=[(FACTORY,"poolByPair(address,address)",["address"]*2,list(t)) for t in ((a,b),(b,a))]
-        lookups.extend(methods+[(REGISTRY,"pluginByPool(address)",["address"],[pool])])
-        preimage=[custom,a,b] if custom else [a,b]
-        salt=keccak(encode(["address"]*len(preimage),preimage))
+    for i,m in enumerate(directory["markets"]):
+        a,b=m["tokens"]
+        if not chosen(m["tokens"]):continue
+        p=m["pool"];custom=m["custom"]
+        salt=keccak(encode(["address"]*3,[custom,a,b]))
         derived="0x"+keccak(bytes([255])+bytes.fromhex(DEPLOYER[2:])+salt+init)[-20:].hex()
-        m.update(creation=roles.get(pool),create2=(derived==pool))
-    results=iter(posts(c,lookups))
-    for m in markets:
-        m["registered"]=all([decode(["address"],next(results))[0]==v for v in (m["pool"],m["pool"],m["plugin"])])
-    if len(set(rows))!=count or any(not m["create2"] or not m["registered"] for m in markets):
-        raise ValueError("incomplete or conflicting factory, CREATE2 or plugin directory")
+        found=c.one(FACTORY,"allPairs(uint256)",["uint256"],[i],["address"])[0]
+        registered=[c.one(FACTORY,"customPoolByPair(address,address,address)",["address"]*3,[custom,*t],["address"])[0] for t in ((a,b),(b,a))]
+        plugin=address(p,"plugin()")
+        if (found!=p or derived!=p or registered!=[p,p] or (address(p,"token0()"),address(p,"token1()"))!=(a,b)
+                or c.one(REGISTRY,"pluginByPool(address)",["address"],[p],["address"])[0]!=plugin or m["plugin"]!=plugin):
+            raise ValueError("wrong market for the requested deployment")
+        gs=c.one(p,"globalState()",returns=["uint160","int24","uint16","uint8","uint16","bool"])
+        markets.append(dict(m,state=list(map(str,gs)),creation={"deployer":custom}))
     state={EXEC:"0x"+RUNTIME.read_text().strip(),VIRTUAL:"0x"+VIRTUAL_FILE.read_text().strip()}
     if any(code(a) for a in [OWNER,EXEC,VIRTUAL]):raise ValueError("simulation address contains deployed code")
     deadline=int(head["timestamp"],16)+180
     evidence={}
     for m in markets:
-        if not m["registered"] or not m["create2"] or not set(m["tokens"])<={ETH_WETH,USDT,USDC}:continue
+        if not m["registered"] or not m["create2"]:continue
         pool,pl=m["pool"],m["plugin"]
         url="https://eth.blockscout.com/api/v2/smart-contracts/"+pl
-        res=requests.get(url,timeout=24);res.raise_for_status();record=res.json()
         live=code(pl);word=bytes(12)+bytes.fromhex(pool[2:])
         positions=[i for i in range(len(live)) if live.startswith(word,i)]
-        if (not record.get("is_verified") or record.get("is_changed_bytecode") or record["name"]!="AlgebraBasePluginV3"
-                or bytes.fromhex(record["deployed_bytecode"][2:])!=live or not positions or not all(live[i-1]==0x7f for i in positions)):
+        if (digest(live)!=m["plugin_hash"] or digest(live.replace(word,bytes(32)))!=m["template"]
+                or not positions or not all(live[i-1]==0x7f for i in positions)):
             raise ValueError("verified plugin runtime and immutable address differ")
         evidence[pool]=dict(source=url, runtime=digest(live), normalized=digest(live.replace(word,bytes(32))), offsets=positions)
         security=address(pl,"getSecurityRegistry()"); discounts=address(pl,"feeDiscountRegistry()")
@@ -99,13 +107,16 @@ def capture(e):
         m.update(discount=discount,pool_discount=reference,hook_fee=fee,roles={
             security:digest(code(security)),discounts:digest(code(discounts))})
         for n,a in enumerate(m["tokens"]):
-            b=m["tokens"][1-n]; funding=HOLDERS["ethereum"][a]
-            for dx in ((10**14,10**15) if a==ETH_WETH else (10**6,10**7)):
-                r=simulate(e,pool,QUOTER,m["tokens"][0],a,b,dx,state,deadline,OWNER,True,ETH_WETH,funding,(m["creation"] or {}).get("deployer"))
+            b=m["tokens"][1-n]; funding=WALLETS[a]
+            if c.one(a,"balanceOf(address)",["address"],[funding],["uint256"])[0]<max(SIZES[a]):
+                raise ValueError("funding account cannot provide this size")
+            for dx in SIZES[a]:
+                r=simulate(e,pool,QUOTER,m["tokens"][0],a,b,dx,state,deadline,OWNER,True,ETH_WETH,funding,m["custom"],read_rpc=rpc)
                 r["discount"]=discount;m["wallet"].append(r)
         m["tick_window"]=map_ticks(c,pool,[int(m["state"][1])]+[r["tick_after"] for r in m["wallet"]])
-    if not evidence:raise ValueError("no on-chain registered stablecoin / wrapped ETH markets")
-    return dict(selector=tag,block=e["block"],state_root=ROOT_HASH,endpoint=e["endpoint"],factory=FACTORY,
+    if {m["custom"] for m in markets if len(m["wallet"])==4}!=set(directory["custom_deployers"]):
+        raise ValueError("incomplete V5 settlement across the four deployers")
+    return dict(selector=tag,block=e["block"],state_root=ROOT_HASH,verified_endpoints=reader.urls,completed_reads=reader.counts,factory=FACTORY,
                 quoter=QUOTER,router=ROUTER,plugin_factory=REGISTRY,pool_deployer=DEPLOYER,
                 pair_init="0x"+init.hex(),contracts={a:digest(code(a)) for a in (FACTORY,REGISTRY,QUOTER,ROUTER,DEPLOYER)},
                 plugin_sources=evidence, markets=markets)
@@ -113,12 +124,5 @@ def capture(e):
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument("output",type=Path);args=parser.parse_args()
-    snapshot=read(FOLDER/"ethereum.json");errors=[]
-    for endpoint in ENDPOINTS:
-        try:
-            result=capture(dict(snapshot,endpoint=endpoint))
-            args.output.write_text(json.dumps(result,indent=2)+"\n",encoding="utf8")
-            break
-        except (requests.RequestException,KeyError,ValueError,RuntimeError) as err:
-            errors.append((endpoint,str(err)[:240]))
-    else:raise RuntimeError(f"canonical archive failed: {errors}")
+    result=capture(read(FOLDER/"ethereum.json"))
+    args.output.write_text(json.dumps(result,indent=2)+"\n",encoding="utf8")

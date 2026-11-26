@@ -140,5 +140,5 @@ fn exact_wallet_amounts_agree_across_sobal_settlement_paths() {
     }
     assert_eq!((rows.len(), zero), (78, 8));
     assert_eq!(paid + unfunded, 70);
-    assert!(paid >= 68 && !stable_directions.is_empty());
+    assert_eq!((paid, unfunded, stable_directions.len()), (70, 0, 2));
 }

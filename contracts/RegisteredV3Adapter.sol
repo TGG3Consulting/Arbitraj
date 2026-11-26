@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
-// One registered exact-input V3 pool, paid from the original caller in its callback.
+// Общая часть модулей BlueDex и Yum Yum. Исполняет точный вход из средств вызывающего.
+// Модуль вызывает кошелёк через execute или ArbExecutor V5 через шаг 17. Конкретную
+// реализацию развёртывает владелец для одной фабрики.
 pragma solidity 0.8.37;
 
 import {IBalancerVault} from "./IPools.sol";
@@ -24,7 +26,7 @@ interface IFundedV3Token {
 
 abstract contract RegisteredV3Adapter {
     IRegisteredV3Factory public immutable factory;
-    // Remains locked across ERC20 reads/transfers, callback and receipt checks.
+    // Блокировка действует до проверки фактической выплаты получателю.
     bool transient private trading;
     address transient private expectedPool;
     address transient private inputToken;
@@ -47,9 +49,9 @@ abstract contract RegisteredV3Adapter {
         return settle(pool,input,output,amount,minimum,deadline,msg.sender);
     }
 
-    // ArbExecutor V5 step 17 supplies an exact pool id. Its step 29 supplies only two tokens,
-    // which cannot distinguish fee tiers. The id here is a right-aligned pool address.
-    // This contract implements the one GIVEN_IN wire call and never looks up a Balancer pool.
+    // Шаг 17 V5 передаёт точный пул в младших 20 байтах poolId. Шаг 29 передаёт лишь
+    // пару токенов, общей для нескольких ставок комиссии. Принимается только GIVEN_IN,
+    // адрес сверяется с фабрикой выбранного протокола.
     function swap(IBalancerVault.SingleSwap calldata order,IBalancerVault.FundManagement calldata funds,
                   uint256 minimum,uint256 deadline) external payable returns(uint256) {
         if(msg.value!=0 || uint256(order.poolId)>>160!=0 || order.kind!=0 || order.userData.length!=0

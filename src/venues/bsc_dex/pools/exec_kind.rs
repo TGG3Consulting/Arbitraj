@@ -192,6 +192,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         | "v2_whiteswap"
         | "v2_fork_executor"
         | "v2_fork_executor_create2"
+        | "v2_fork_dual_create2"
         | "v2_diamond_router" | "v2_diamond_create"
         | "v2_fork_executor_create2_live_fee" | "candyswap_v2" => ExecKind::V2,
         // Решение 483: Ramses CL — swap(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data) как у V3
@@ -209,7 +210,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         | "slipstream_ramses"
         | "v3_fork_uniswap_lm" => ExecKind::V3,
         "kyber_elastic_v5" => ExecKind::Elastic,
-        "thena_fusion" => ExecKind::Algebra,
+        "thena_fusion" | "algebra_v19_single" => ExecKind::Algebra,
         // Решение 188: swap(recipient, zeroToOne, amountRequired, limitSqrtPrice, data) и algebraSwapCallback у
         // Integral — те же (integral-core 1.2.10 AlgebraPool.sol L246-L252, IAlgebraSwapCallback).
         "algebra_integral"
@@ -224,7 +225,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "algebra_dir_fee" => ExecKind::Algebra,
         // Решение 483: пара Ramses Legacy — getReserves (uint112, Pair.sol L125), getAmountOut(uint256, address) L452 (уже
         // с −1) и swap(uint256, uint256, address, bytes) L308; вход = баланс − резерв (L339-L340) — шаг SOLIDLY.
-        "solidly_v2" | "solidly_v1" | "solidly_v1_ramses" | "leetswap_v2" => ExecKind::Solidly,
+        "solidly_v2" | "solidly_v1" | "solidly_v1_generator" | "solidly_v1_ramses" | "leetswap_v2" => ExecKind::Solidly,
         // Решение 443: пара Camelot V2 — тот же шаг SOLIDLY: getReserves (первые два слова — резервы), getAmountOut(uint256,
         // address) и swap(uint256, uint256, address, bytes) есть у CamelotPair (Pair.sol L46, L372, L228 — verified-исходник
         // фабрики Arbitrum 0x6EcC…A652, math/camelot_v2.rs); вход = баланс − резерв — так и считает swap пары (L276-L277).
@@ -278,7 +279,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "smardex" | "smardex_exact_equality" => ExecKind::Smardex,
         // Решение 289: Vault.swap — вызывающий = sender, без relayer и белого списка (Swaps.sol L56-L104: whenNotPaused,
         // authenticateFor(funds.sender)); проба на цепи — tests/data/balancer_acsi_2026-11-15/exec_sim.json; шаг 17, v2.
-        "balancer_v2" => ExecKind::Balancer,
+        "balancer_v2" | "registered_v3_module" => ExecKind::Balancer,
         // Решение 290: LBPair.swap(swapForY, to) — вызывающий не ограничен (nonReentrant), вход = баланс − резерв
         // (LBPair.sol L483-L490, BinHelper.sol L290-L306); проба на цепи — tests/data/lb_v21_2026-11-15/exec_state.json;
         // шаг 18, v2.
@@ -419,6 +420,7 @@ mod tests {
     #[test]
     fn every_kind_is_decided() {
         let none = [
+            "registered_v3",
             "balancer_v2_wallet",
             "memebox",
             "ring_few_v2",

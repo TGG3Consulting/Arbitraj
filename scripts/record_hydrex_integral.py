@@ -57,7 +57,7 @@ def map_ticks(c, pool, observed):
     return dict(ticks=states, measured_tick_steps=max(before,count), lower_word=low, upper_word=high)
 
 
-def simulate(e, pool, quoter, token0, source, target, dx, state, deadline, sender=None, flat_quoter=False, wrapped=WETH, funding=None, custom_deployer=None):
+def simulate(e, pool, quoter, token0, source, target, dx, state, deadline, sender=None, flat_quoter=False, wrapped=WETH, funding=None, custom_deployer=None, read_rpc=rpc):
     sender = sender or HOLDERS[source]
     if flat_quoter:
         official = calldata("quoteExactInputSingle(address,address,address,uint256,uint160)",
@@ -78,7 +78,7 @@ def simulate(e, pool, quoter, token0, source, target, dx, state, deadline, sende
         calls = [{"from":sender,"to":to,"data":data} for _,to,data in items]
         if funding:
             calls.insert(0,{"from":funding,"to":source,"data":calldata("transfer(address,uint256)",["address","uint256"],[sender,dx])})
-        obj, = rpc(e, "eth_simulateV1", [{"blockStateCalls":[{"stateOverrides":overrides,"calls":calls}],
+        obj, = read_rpc(e, "eth_simulateV1", [{"blockStateCalls":[{"stateOverrides":overrides,"calls":calls}],
                                         "validation":False},e["selector"]])
         if obj["parentHash"] != e["selector"]["blockHash"]:
             raise ValueError("другой родительский блок")

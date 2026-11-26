@@ -25,6 +25,7 @@ pub enum Variant {
     RingFew,
     /// 9mm, Throne и Omni на Base проверяют свои callback через роутеры фабрик.
     BaseNativeV3,
+    RegisteredV3,
     /// Algebra Integral с проверяемым beacon-прокси плагина QuickSwap V4.
     QuickswapIntegral,
     /// Lista StableSwap с проверенной реализацией EIP-1967 на каждом чтении состояния.
@@ -58,6 +59,8 @@ pub enum Variant {
     V2Create2,
     /// Пара исполняется родным роутером, обычный 4-аргументный swap V5 недоступен.
     V2RouterCreate2,
+    /// Каноническая пара допускает 4-аргументный swap V5 и собственный Router02.
+    V2DualCreate2,
     DeltaSwap,
     Oasis,
     EtherVista,
@@ -65,7 +68,10 @@ pub enum Variant {
     LeetSwap,
     /// Solidly V1 Base: привязка CREATE2 и наблюдаемое обеспечение на каноническом блоке.
     SolidlyClassic,
+    /// Создание пар Solidly V1 вынесено в штатный PairGenerator.
+    SolidlyGenerator,
     BasePluginV1,
+    AlgebraSingleV19,
     TrebleIntegral,
     /// Три обновляемые прокси WhiteSwap с комиссией прямого обмена и скидкой роутера.
     WhiteSwap,
@@ -144,6 +150,9 @@ pub enum Variant {
 }
 
 impl Variant {
+    pub fn factory_quoter(self)->bool { matches!(self,Self::BaseNativeV3|Self::RegisteredV3) }
+    pub fn wallet_module(self)->bool { matches!(self,Self::Memebox|Self::RegisteredV3) }
+    pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator)}
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
 
     pub(crate) fn diamond_router(self)->bool {matches!(self,Self::DiamondV2 | Self::KewlV2)}
@@ -155,8 +164,11 @@ impl Variant {
     pub fn frax_twamm(self) -> bool {
         matches!(self, Self::FraxTwamm | Self::FraxTwammRouter)
     }
+    pub fn dual_v2_execution(self) -> bool {
+        self == Self::V2DualCreate2 || self.diamond_router()
+    }
     pub fn registered_v2_router(self) -> bool {
-        matches!(self, Self::V2RouterCreate2 | Self::DiamondV2 | Self::DeltaSwap)
+        matches!(self, Self::V2RouterCreate2 | Self::V2DualCreate2 | Self::DiamondV2 | Self::DeltaSwap)
     }
 
     /// Резервы и комиссия этих V2-пар должны обновляться одним чтением состояния блока.
@@ -171,6 +183,7 @@ impl Variant {
 /// Вариант по значению dex.kind. Принимает: значение dex.kind. Возвращает: вариант (неизвестное — Base). Ошибок нет.
 pub fn of(kind: &str) -> Variant {
     match kind {
+        "solidly_v1_generator" => Variant::SolidlyGenerator,
         "ring_few_v2" => Variant::RingFew,
         "lb_v21_clone" => Variant::LbV21Clone,
         "smardex_exact_equality" => Variant::SmardexExactEquality,
@@ -185,12 +198,14 @@ pub fn of(kind: &str) -> Variant {
         "curve_stableswap_oracle" => Variant::CurveOracle,
         "curve_crypto2_v1" => Variant::CryptoPair,
         "algebra_integral_treble" => Variant::TrebleIntegral,
+        "algebra_v19_single" => Variant::AlgebraSingleV19,
         "algebra_integral_base_plugin_v1" => Variant::BasePluginV1,
         "algebra_integral_hydrex" => Variant::HydrexIntegral,
         "algebra_integral_nami" => Variant::NamiIntegral,
         "algebra_integral_supernova" => Variant::SupernovaIntegral,
         "algebra_integral_quickswap" => Variant::QuickswapIntegral,
         "lista_stableswap_proxy" => Variant::ListaStableProxy,
+        "registered_v3" | "registered_v3_module" => Variant::RegisteredV3,
         "base_native_v3" | "base_native_v3_module" => Variant::BaseNativeV3,
         "v3_fork_ramses" => Variant::RamsesCl,
         "v3_fork_uniswap_lm" => Variant::UniswapV3Lm,
@@ -200,6 +215,7 @@ pub fn of(kind: &str) -> Variant {
         "oasisswap_v2_router" | "oasisswap_v2_v5" => Variant::Oasis,
         "v2_deltaswap_router" => Variant::DeltaSwap,
         "v2_fork_router_create2" => Variant::V2RouterCreate2,
+        "v2_fork_dual_create2" => Variant::V2DualCreate2,
         "v2_whiteswap" => Variant::WhiteSwap,
         "v2_fork_executor_create2" => Variant::V2Create2,
         "v2_diamond_router" => Variant::DiamondV2,

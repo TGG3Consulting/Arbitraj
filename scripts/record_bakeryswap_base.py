@@ -10,7 +10,7 @@ ROUTER = "0x10cc46af6964fba2b7266ddf2cd8a8585b71a210"
 WETH = "0x4200000000000000000000000000000000000006"
 
 
-def inspect(cap, directory, header, router=ROUTER):
+def inspect(cap, directory, header, router=ROUTER, all_candidates=False):
     factory=directory["factory"]
     target=f"https://sourcify.dev/server/v2/contract/8453/{router}"
     src=requests.get(target,params={"fields":"compilation,sources,runtimeBytecode.onchainBytecode"},timeout=25)
@@ -68,5 +68,6 @@ def inspect(cap, directory, header, router=ROUTER):
             tested.append({"pool":pool["pool"],"error":str(e)[:220]})
             continue
         tested.append({"pool":pool["pool"],"cases":samples})
-        break
+        if not all_candidates:
+            break
     return {"router":router,"runtime":"0x"+keccak(bytes.fromhex(code[2:])).hex(),"source":target,"samples":tested}

@@ -445,7 +445,7 @@ pub fn request(
                 fee,
                 sqrtPriceLimitX96: U160::ZERO,
             };
-            if e.family.variant == super::super::pools::family_variant::Variant::BaseNativeV3 {
+            if e.family.variant.factory_quoter() {
                 let (target, mixed) =
                     super::super::pools::base_native_v3::mixed_quoter(ctx, e.family)?;
                 let call = if mixed {
@@ -576,7 +576,7 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     if e.family.variant.external_algebra_swap() {
         return super::super::pools::nami::decoded(out);
     }
-    if e.family.variant == super::super::pools::family_variant::Variant::BaseNativeV3 {
+    if e.family.variant.factory_quoter() {
         let PoolRef::Contract(pool) = e.pool.reference else {
             return None;
         };

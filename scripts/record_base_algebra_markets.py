@@ -10,6 +10,7 @@ from record_base_classic_directory import ENDPOINTS
 from record_base_slipstream_executor import RUNTIME, ROOT, rpc
 from record_hydrex_integral import VIRTUAL, VIRTUAL_FILE
 from record_solidly_v3 import HOLDERS
+from record_synthswap_oracle import capture as synth_oracle
 
 MARKETS={
     "synthswap-v3":("0xa37359e63d1aa44c0acb2a4605d3b45785c97ee3","0xe0712c087ecb8a0dd20914626152ebf4890708c2"),
@@ -55,6 +56,7 @@ def capture(dex,endpoint):
             reads["security_status"]=status
     if dex=="synthswap-v3" and int(reads["activeIncentive()"],16):
         roles["incentive"]="0x"+reads["activeIncentive()"][-40:]
+    oracle=synth_oracle(c,endpoint,pool,gs,roles,header) if dex=="synthswap-v3" else None
     verified={}
     for name,address in roles.items():
         code=rpc(endpoint,"eth_getCode",[address,tag])
@@ -68,8 +70,8 @@ def capture(dex,endpoint):
     sizes=[max(1,10**decimals//x) for x in ((10**6,10**5) if decimals==18 else (100,10))]
     runtime=RUNTIME.read_text().strip().removeprefix("0x");virt=VIRTUAL_FILE.read_text().strip().removeprefix("0x")
     cases=[round_trip(e,pool,token,other,size,int(header["timestamp"],16)+120,runtime,kind=2,
-                      owner=HOLDERS["base"][token],algebra=(VIRTUAL,virt,a)) for size in sizes]
-    return dict(id=dex,chain_id=8453,selector=tag,state_root=header["stateRoot"],roles=verified,reads=reads,raw=c.calls,
+                      owner=HOLDERS["base"][token],algebra=(VIRTUAL,virt,a),time=(oracle["timestamp"]+oracle["block_step"] if oracle else None)) for size in sizes]
+    return dict(id=dex,oracle=oracle,chain_id=8453,selector=tag,state_root=header["stateRoot"],roles=verified,reads=reads,raw=c.calls,
                 tokens=[a,b],global_state=list(gs),liquidity=str(liquidity),tick_spacing=spacing,cases=cases,
                 v5="0x"+keccak(hexstr=runtime).hex(),virtual="0x"+keccak(hexstr=virt).hex())
 

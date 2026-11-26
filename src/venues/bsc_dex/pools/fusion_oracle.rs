@@ -98,6 +98,7 @@ pub async fn read(
     head: Head,
     tag: &str,
     (h, chunk): (u32, usize),
+    step: Option<u32>,
 ) -> GatewayResult<Got> {
     let i = head.index;
     let idx = [
@@ -134,11 +135,33 @@ pub async fn read(
     let liquidity = (slot & U256::from(u128::MAX)).to::<u128>();
     let vpl_in_block = (slot >> 128usize).to::<u128>();
     // Начало окна на время блока + k (k = 0 … h + 1): secondsAgo = WINDOW + h + 1 − k от времени блока + 1 + h.
-    let n = h + 2;
-    let ago: Vec<u32> = (0..n).map(|k| WINDOW + (n - 1 - k)).collect();
+    let n = match step {
+        None => h + 2,
+        Some(k) => h
+            .checked_add(k)
+            .filter(|v| *v <= WINDOW)
+            .and_then(|v| v.checked_add(1))
+            .ok_or_else(|| bad(ctx, pool, "горизонт с шагом блока превышает окно оракула"))?,
+    };
+    let ago: Vec<u32> = (0..n)
+        .map(|k| {
+            if step.is_some() {
+                WINDOW - k
+            } else {
+                WINDOW + (n - 1 - k)
+            }
+        })
+        .collect();
     let end = ts.wrapping_add(1).wrapping_add(h);
     let mut b = vec![eth_call(None, op, Op::feeConfigCall {}.abi_encode(), tag)];
     for part in ago.chunks(chunk) {
+        if step.is_some() {
+            let gt = P::getTimepointsCall {
+                secondsAgos: part.to_vec(),
+            };
+            b.push(eth_call(None, pool, gt.abi_encode(), tag));
+            continue;
+        }
         let gt = Op::getTimepointsCall {
             time: end,
             secondsAgos: part.to_vec(),

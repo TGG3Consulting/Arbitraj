@@ -40,7 +40,7 @@ pub async fn load(ctx: &Ctx, f: &Family, pool: Address, tag: &str) -> GatewayRes
     if f.variant == super::family_variant::Variant::LeetSwap {
         return super::leetswap::load(ctx, f, pool, tag).await;
     }
-    if f.variant == super::family_variant::Variant::SolidlyClassic {
+    if f.variant.solidly_classic() {
         let at = super::elfomo::block(ctx, tag).await?;
         return super::solidly_classic::state(ctx, f, pool, &at).await;
     }

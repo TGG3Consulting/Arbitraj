@@ -22,7 +22,7 @@ use serde_json::{Value, json};
 pub(in crate::venues::bsc_dex) fn is_native(e: &Entry) -> bool {
     matches!(
         e.family.variant,
-        Variant::V2RouterCreate2 | Variant::DiamondV2 | Variant::KewlV2
+        Variant::V2RouterCreate2 | Variant::V2DualCreate2 | Variant::DiamondV2 | Variant::KewlV2
     )
 }
 
@@ -154,7 +154,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 options.push(option);
             }
         }
-        if !e.family.variant.diamond_router()
+        if !e.family.variant.dual_v2_execution()
             || crate::gateway::quote_stage::settlement()
             || q.ctx.text("dex.router_mode").ok().as_deref() != Some("graph")
         {
@@ -170,7 +170,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         } else {
             continue;
         };
-        if let Some(h) = head {
+        if let Some(h) = head.filter(|_| e.family.variant.diamond_router()) {
             let at = h.selector();
             let ok = if e.family.variant == Variant::KewlV2 {
                 super::super::pools::kewl::checked(&q.ctx, e, false, &at).await

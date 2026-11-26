@@ -67,6 +67,11 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
     let mut role_block = None;
     for e in entries.iter().copied() {
         let f = e.family;
+        if f.variant==Variant::AlgebraSingleV19 {
+            let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            Box::pin(super::super::pools::synth_farming::check(ctx,f,e.pool.reference.address(),at)).await?;
+            continue;
+        }
         if f.variant == Variant::ElasticV5 {
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             Box::pin(super::super::pools::elastic_binding::check(ctx,f,e.pool.reference.address(),at)).await?;
@@ -80,13 +85,18 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             }
             continue;
         }
-        if f.variant == Variant::SolidlyClassic {
+        if f.variant.solidly_classic() {
             let at = match &role_block {
                 Some(at) => at,
                 None => role_block.insert(super::super::pools::nami::block(ctx, "latest").await?),
             };
             let gate = super::super::pools::solidly_classic::fresh(ctx,e,at).await?;
             cap = merged_cap(ctx, f.id, gate, cap)?;
+            continue;
+        }
+        if f.variant == Variant::RegisteredV3 {
+            let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            Box::pin(super::super::pools::registered_v3::fresh(ctx,e,at)).await?;
             continue;
         }
         if f.variant == Variant::Memebox {

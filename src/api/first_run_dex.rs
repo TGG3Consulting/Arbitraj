@@ -160,6 +160,10 @@ mod tests {
             include_str!("../../tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json"),
             include_str!("../../tests/data/first_run_dex_2026-11-26/base_v2_factories.json"),
         ];
+        let blue: Value = serde_json::from_str(include_str!(
+            "../../tests/data/first_run_dex_2026-11-26/bluedex_base.json"
+        )).unwrap();
+        pairs.extend(blue["samples"].as_array().unwrap().iter().filter(|row|row["cases"].is_array()).cloned());
         let white: Value = serde_json::from_str(include_str!(
             "../../tests/data/first_run_dex_2026-11-26/whiteswap_directory.json"
         ))
@@ -294,6 +298,15 @@ mod tests {
                         let archive:Value=serde_json::from_str(raw).unwrap();
                         assert_eq!(archive["selector"],snapshot["selector"]);
                         assert_eq!(archive["init"].as_str(),Some(text.as_str()));
+                    } else if k=="dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"),Some(Parameter::Text(kind)) if kind=="registered_v3") {
+                        let evidence: Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/registered_v3_base_profiles.json")).unwrap();
+                        assert_eq!(evidence["selector"],snapshot["selector"]);
+                        assert_eq!(evidence["markets"][p.id.as_str()]["init"].as_str(),Some(text.as_str()));
+                    } else if k=="dex.pool_code_hashes" && p.id=="synthswap-v3" {
+                        let raw=include_bytes!("../../tests/data/first_run_dex_2026-11-26/synth_oracle_base.json.gz");
+                        let proof:Value=serde_json::from_reader(flate2::read::GzDecoder::new(raw.as_slice())).unwrap();
+                        assert_eq!(proof["selector"],snapshot["selector"]);
+                        assert_eq!(proof["init_code_hash"].as_str(),Some(text.as_str()));
                     } else if k == "dex.pool_code_hashes" && p.id == "memebox-base" {
                         let archive:Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/memebox_base.json")).unwrap();
                         assert_eq!(archive["selector"],snapshot["selector"]);

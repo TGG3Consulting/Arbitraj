@@ -82,6 +82,33 @@ fn horizon_full_input_math_router_and_executor_share_net_payout() {
             (local.amount_in, local.amount_out),
             (amount, decimal(&case["buy"]["received"]))
         );
+        let parent = &case["buy"]["results"];
+        let field = |key: &str, i: usize| {
+            let raw = parent[key]["returnData"]
+                .as_str()
+                .unwrap()
+                .trim_start_matches("0x");
+            U256::from_str_radix(&raw[i * 64..i * 64 + 64], 16).unwrap()
+        };
+        let after = ElasticState {
+            sqrt_p: field("buypool_state", 0),
+            current_tick: i32::try_from(alloy_primitives::I256::from_raw(field(
+                "buypool_state",
+                1,
+            )))
+            .unwrap(),
+            base_l: field("buyliquidity", 0).to(),
+            reinvest_l: field("buyliquidity", 1).to(),
+            fee_units: state.fee_units,
+            ticks: &map,
+            v1: false,
+        };
+        let second = swap(&after, false, true, local.amount_out).unwrap();
+        assert!(second.complete);
+        assert_eq!(
+            (second.amount_in, second.amount_out),
+            (local.amount_out, decimal(&case["sell"]["received"]))
+        );
         for side in ["buy", "sell"] {
             let used = decimal(&case[side]["amount"]);
             let out = decimal(&case[side]["received"]);

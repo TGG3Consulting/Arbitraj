@@ -31,9 +31,11 @@ pub async fn ahead(p: &Pools, due: &[(&Found, &str, Address)], block: u64) -> Re
         return Ok(());
     }
     let tag = block_tag(block);
-    let reads = due
-        .iter()
-        .map(|(_, _, a)| super::fusion_fee::read_fee(&p.ctx, *a, &tag));
+    let reads = due.iter().map(|(f, _, a)| {
+        let step = super::synth_farming::step(&p.ctx, f.family);
+        let tag = &tag;
+        async move { super::fusion_fee::read_fee(&p.ctx, *a, tag, step?).await }
+    });
     let got = futures_util::future::join_all(reads).await;
     for ((f, t, _), r) in due.iter().zip(got) {
         match r {

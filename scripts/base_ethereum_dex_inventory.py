@@ -41,8 +41,8 @@ def tables(network, snapshots, profiles):
     refresh = read(extra_path).get(network, {}) if extra_path.exists() else {}
     refreshed = refresh.get("pages", {})
     open_index=Path("tests/data/first_run_dex_2026-11-26/ethereum_open_index.json")
-    if not base and open_index.exists():
-        refreshed={**refreshed,**read(open_index)["pages"]}
+    open_pages=read(open_index)["pages"] if not base and open_index.exists() else {}
+    refreshed={**refreshed,**open_pages}
     volume = refresh.get("volume", {})
     title = "Base" if base else "Ethereum"
     out = [f"### {title} · DEX", "",
@@ -160,6 +160,21 @@ def tables(network, snapshots, profiles):
                         f"состояние перед обменом, чистый выход и отказ при превышении минимума на единицу. Полных исполнений V5 {len(cases)*2}. "
                         + ("У пары WETH/0x7233… удержания различаются по входу: 250 и 2000 на 100 000. " if dex_id=="citadelswap" else "В единственной паре на этом блоке менее 0,18 USDC. ")
                         + f"[Фабрика, реестр и измерения](../{file})."])
+        out.extend(["", "Sobal · из 78 котировок 8 округлились к нулю. Для всех 70 положительных проверены оба варианта: "
+                    "отдельный Vault и V5. Во всех 140 обменах кошелёк получил расчётную сумму, минимальная выплата на единицу выше откатила обмен. "
+                    "Для двух продаж DAI начальные средства получены через независимый пул Uniswap. "
+                    "[Суммы, газ, начальные разрешения и причины отказов](../tests/data/first_run_dex_2026-11-26/sobal_base_wallets.json.gz).",
+                    "", "YumyumAdapter и BluedexAdapter собраны GitHub Actions и проверены на архивном состоянии Base. "
+                    "Публичное развёртывание этих сборок владельцем на текущем этапе не зафиксировано. "
+                    "Владелец развёртывает модуль с адресом фабрики своей площадки, затем указывает его адрес в профиле DEX. "
+                    "Контракты используют разные селекторы обратного вызова. [Проверка обеих сборок](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45908138387)."])
+        blue_path = "tests/data/first_run_dex_2026-11-26/bluedex_base.json"
+        blue = read(Path(blue_path))
+        router_samples = sum(2*len(p.get("cases", [])) for p in blue["native_router"]["samples"])
+        executor_samples = sum(2*len(p.get("cases", [])) for p in blue["samples"])
+        out.extend(["", f"BlueDex V2 · в реестре фабрики {len(blue['pools'])} пары. Пара удерживает 3 из 1 000 единиц входа. "
+                    f"Через V5 записано {executor_samples} обменов, через отдельный Router02 — {router_samples}. "
+                    f"Роутер проверяет зачисление на кошелёк. [Реестр, комиссии, результаты обеих форм](../{blue_path})."])
         kewl_file = "tests/data/first_run_dex_2026-11-26/kewlswap_base.json"
         kewl = read(Path(kewl_file))
         markets = kewl["execution"]["markets"]
@@ -235,7 +250,7 @@ def tables(network, snapshots, profiles):
             if dex in ("henjin","kim-v4-base"):
                 verdict="Профиль требует pluginByPool и обратную ссылку, режим 0xc1, нулевой incentive и подтверждённый код обеих фабрик."
             elif dex=="synthswap-v3":
-                verdict="Активен внешний farming incentive. Измерено исполнение данного пула, приёмка учёта оракула и программы продолжается."
+                verdict="Фабрика EternalFarming создала действующий корреспондент фермы при nonce=1. FarmingCenter подтвердил пул и единственную вечную программу. Проверяются код обеих ролей, регистрация пары, CREATE2, семь слов globalState и сырой tickTable. Прогноз использует публичный оракул пула и большую ставку для фактически наблюдаемых переходов времени 0 или 1 секунда."
             else: verdict="В 4 случаях SwapFee сообщил 201 миллионную и нулевую плату плагина при lastFee=500. Подтверждены фабрика плагина, LimitOrderManager и SecurityRegistry, разрешающий обмен. При активной внешней ферме, ребалансировщике или непринятом коде пул закрывается. После пересечения ордера менеджер может сжечь ликвидность того же пула, для повторного использования требуется новое состояние."
             out.append(f"| {dex} | {scope} | {rate}, пул `{pool}` | {verdict} [Вызовы и ответы](../{path.as_posix()}) |")
         out.extend(["", "HorizonDEX на Base. Kyber Elastic V2, 132 границы в прочитанном списке, порция чтения 32, шаг цены 8, комиссия 40/100000. На блоке 62 262 756 официальный роутер и штатный V5 (шаг 8) дали одинаковые поступления. За 10¹² и 10¹³ wei WETH получены 1688 и 16888 raw USDbC, обратные продажи дали 998650431964 и 9991255908839 wei WETH. Все восемь обменов использовали полный вход. Порог выше на одну единицу и истёкший срок откатили каждый вариант. Штатный путь использует V5 с проверкой выплаты получателю. [Архив котировок, тиков и выплат](../tests/data/first_run_dex_2026-11-26/horizondex_base.json.gz)"])
@@ -934,13 +949,14 @@ def tables(network, snapshots, profiles):
         pool = probe.get("pool") or next((a["address"] for a in sample.get("samples", []) if a.get("address")), None)
         factory = probe.get("reported_factory")
         roundtrip = probe.get("factory_roundtrip")
-        if not base and id in {"x7-finance","x7-finance-ethereum","deltaswap-ethereum","supernova-cl"} and sample.get("samples"):
+        if id in open_pages and sample.get("samples"):
             selected=sample["samples"][0]
             pool,factory=selected["address"],selected["reported_factory"]
-            if id in {"x7-finance","x7-finance-ethereum","deltaswap-ethereum"}:
+            if id in {"x7-finance","x7-finance-ethereum","deltaswap-ethereum","9inch-ethereum"}:
                 roundtrip="getPair(address,address)"
             elif id=="supernova-cl" and any(m["pool"]==pool.lower() and m["registered"] for m in sn["markets"]):
                 roundtrip="customPoolByPair(customDeployer,token0,token1)"
+            elif id=="supernova-amm":roundtrip="getPair(token0,token1,stable)"
         if base and id == "quickswap-v2-base" and quickswap_v2.exists() and pool and any(m["pool"] == pool.lower() for m in q2["directory"]):
             factory, roundtrip = q2["factory"], "getPair(address,address)"
         if base and id == "quickswap-v4-base" and quickswap.exists() and pool and any(m["pool"] == pool.lower() for m in qs["markets"]):

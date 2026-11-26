@@ -16,6 +16,13 @@ use alloy_primitives::{Address, B256, U256, keccak256};
 use serde_json::{Value, json};
 
 sol! {
+    interface IPairGenerator {
+        function pairGenerator() external view returns(address);
+        function factory() external view returns(address);
+        function pairCodeHash() external view returns(bytes32);
+        function dibs() external view returns(address);
+        function getReferralFee(address pool) external view returns(uint256);
+    }
     interface IEqualizerFee {
         function feesOverrideStatic(address pool) external view returns(uint256);
         function feesOverrideDynamic(address pool) external view returns(address);
@@ -63,6 +70,59 @@ pub fn address(factory: Address, a: Address, b: Address, stable: bool, init: B25
     factory.create2(keccak256(salt), init)
 }
 
+async fn generator(
+    ctx: &Ctx,
+    f: &Family,
+    factory: Address,
+    pool: Address,
+    accepted: &[B256],
+    at: &Value,
+) -> GatewayResult<Address> {
+    let err = || {
+        ctx.err(
+            ErrorCode::NotApplicable,
+            "Solidly PairGenerator: фабрика, шаблон пары или получатель комиссии изменились",
+        )
+    };
+    let [target, owner, referral, rate] = batch::read(
+        ctx,
+        [
+            batch::view(at, factory, IPairGenerator::pairGeneratorCall {}),
+            batch::view(at, pool, IPairGenerator::factoryCall {}),
+            batch::view(at, factory, IPairGenerator::dibsCall {}),
+            batch::view(at, factory, IPairGenerator::getReferralFeeCall { pool }),
+        ],
+    )
+    .await?;
+    let target = batch::decode(&target, IPairGenerator::pairGeneratorCall {})?;
+    if batch::decode(&owner, IPairGenerator::factoryCall {})? != factory
+        || (batch::decode(&referral, IPairGenerator::dibsCall {})? == pool
+            && !batch::decode(&rate, IPairGenerator::getReferralFeeCall { pool })?.is_zero())
+    {
+        return Err(err());
+    }
+    let hash = ctx
+        .dex_text("dex.solidly_generator_runtime_hash", f.id)?
+        .parse::<B256>()
+        .map_err(|_| err())?;
+    let ((), [origin, init]) = tokio::try_join!(
+        solidly_classic_factory::plain(ctx, target, hash, at),
+        batch::read(
+            ctx,
+            [
+                batch::view(at, target, IPairGenerator::factoryCall {}),
+                batch::view(at, target, IPairGenerator::pairCodeHashCall {})
+            ]
+        )
+    )?;
+    if batch::decode(&origin, IPairGenerator::factoryCall {})? != factory
+        || !accepted.contains(&batch::decode(&init, IPairGenerator::pairCodeHashCall {})?)
+    {
+        return Err(err());
+    }
+    Ok(target)
+}
+
 pub(crate) async fn state(
     ctx: &Ctx,
     f: &Family,
@@ -79,6 +139,11 @@ pub(crate) async fn state(
             "Solidly Classic: не подтверждены происхождение или обеспечение пары",
         )
     };
+    let physical = if f.variant == super::family_variant::Variant::SolidlyGenerator {
+        generator(ctx, f, factory, pool, &accepted, tag).await?
+    } else {
+        factory
+    };
     let [metadata] =
         batch::read(ctx, [batch::view(tag, pool, ISolidlyPool::metadataCall {})]).await?;
     let m = batch::decode(&metadata, ISolidlyPool::metadataCall {})?;
@@ -88,7 +153,7 @@ pub(crate) async fn state(
         || m.dec1.is_zero()
         || !accepted
             .iter()
-            .any(|init| address(factory, m.t0, m.t1, m.st, *init) == pool)
+            .any(|init| address(physical, m.t0, m.t1, m.st, *init) == pool)
     {
         return Err(bad());
     }
@@ -100,6 +165,17 @@ pub(crate) async fn state(
     })?;
     fee_origin(ctx, f, factory, pool, tag, &method).await?;
     let rule = fee::rule(ctx, f, Some(&method))?;
+    if f.variant == super::family_variant::Variant::SolidlyGenerator
+        && (method != "factory_pool"
+            || !matches!(
+                rule,
+                crate::core::types::FeeRule::Numerator { denominator: 10000 }
+            )
+            || fee::optional(ctx, "dex.solidly_pause_method", f.id)?.as_deref()
+                != Some("isPaused()"))
+    {
+        return Err(bad());
+    }
     let (target, wire) = fee::fee_call(ctx, f, Some(&method), (factory, pool, m.st))?;
     let pair = IThenaV1Factory::getPairCall {
         tokenA: m.t0,

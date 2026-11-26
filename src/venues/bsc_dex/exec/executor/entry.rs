@@ -177,6 +177,15 @@ pub fn shape(e: &Entry) -> Result<(ExecKind, Address, Address), String> {
 pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params, Address)> {
     let (k, pool) =
         supported(e.family, &e.pool.reference).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?;
+    if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::RegisteredV3 {
+        // Wire 17 takes a bytes32 poolId. Its destination is the factory-bound module and
+        // its right-aligned id is the exact V3 pool. Balancer pool state is decoded below.
+        if k!=ExecKind::Balancer || !matches!(&e.pool.state,PoolState::V3{..})
+            || (token_in!=e.pool.token0 && token_in!=e.pool.token1) {
+            return Err(ctx.err(ErrorCode::NoRoute,"Прямой модуль V3: не подтверждены рынок и вход"));
+        }
+        return Ok((Params::Balancer{pool_id:pool.into_word()},ctx.dex_addr("dex.router",e.family.id)?));
+    }
     if super::super::super::quote::vista_pricing::is_vista(e) {
         if k != ExecKind::Basin || !matches!(&e.pool.state,PoolState::EtherVista(_))
             || (token_in!=e.pool.token0 && token_in!=e.pool.token1) {

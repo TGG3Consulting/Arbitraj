@@ -132,7 +132,7 @@ pub async fn out_at(
     let (to, data) = quoter_calls::request(ctx, e, token_in, amount)?;
     let raw: Bytes =
         rpc::call(ctx, "eth_call", json!([{ "to": to, "input": data }, block])).await?;
-    if e.family.variant == super::super::pools::family_variant::Variant::BaseNativeV3
+    if e.family.variant.factory_quoter()
         && let crate::core::types::PoolRef::Contract(pool) = e.pool.reference
     {
         return super::super::pools::base_native_v3::checked(pool, &raw)

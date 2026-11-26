@@ -66,6 +66,10 @@ pub async fn state(
 ) -> GatewayResult<Loaded> {
     let token1 = pair.1;
     let tag = block_tag(block);
+    if f.variant == Variant::RegisteredV3 && let PoolRef::Contract(pool)=reference {
+        let at=super::nami::block(ctx,&tag).await?;
+        Box::pin(super::registered_v3::market(ctx,f,*pool,pair,None,&at)).await?;
+    }
     if f.variant == Variant::Memebox && let PoolRef::Contract(pool) = reference {
         return Box::pin(super::memebox::load(ctx,f,*pool,pair,&tag)).await;
     }
@@ -565,7 +569,14 @@ pub async fn state(
             } else if f.proto == Proto::AlgebraDirFee {
                 load_algebra_dir::load(ctx, *a, &tag).await?
             } else {
-                load_algebra::load(ctx, *a, spacing, &tag).await?
+                let step=super::synth_farming::step(ctx,f)?;
+                if step.is_some() {
+                    let at=super::elfomo::block(ctx,&tag).await?;
+                    Box::pin(super::synth_farming::check(ctx,f,*a,&at)).await?;
+                    let loaded=load_algebra::load(ctx,*a,Some(1),&tag,step).await?;
+                    if super::elfomo::block(ctx,&tag).await?!=at {return Err(ctx.err(ErrorCode::StaleData,"Algebra V1.9: блок заменён"));}
+                    loaded
+                }else{load_algebra::load(ctx, *a, spacing, &tag,None).await?}
             };
             return Ok(Loaded {
                 state,
@@ -830,7 +841,7 @@ pub async fn refresh(
 /// первого чтения (load_algebra.rs) он хранится в Pool.tick_spacing записи, и перечитывание его не запрашивает. Другие
 /// виды — прежнее значение. Принимает: вид, прежний tickSpacing, прочитанное. Возвращает: tickSpacing записи. Ошибок нет.
 fn known_spacing(f: &Family, old: Option<i32>, l: &Loaded) -> Option<i32> {
-    if f.proto != Proto::Algebra {
+    if f.proto != Proto::Algebra || f.variant==Variant::AlgebraSingleV19 {
         return old;
     }
     let map = l.ticks.as_ref().map(|m| m.spacing);

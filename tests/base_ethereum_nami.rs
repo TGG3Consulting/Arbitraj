@@ -110,3 +110,65 @@ fn directional_math_and_touched_sites_agree_with_real_active_hooks() {
         assert_eq!((count, external), (expected, with_external));
     }
 }
+
+#[test]
+fn supernova_four_custom_registries_bind_every_pool_and_plugin() {
+    use alloy_primitives::{Address, B256};
+    use std::collections::{BTreeMap, BTreeSet};
+    let archive: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/supernova_ethereum_directory.json"
+    ))
+    .unwrap();
+    let profiles: Vec<Value> =
+        serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
+    let p = &profiles
+        .iter()
+        .find(|p| p["chain_id"] == 1 && p["id"] == "supernova-cl")
+        .unwrap()["settings"];
+    let physical = archive["deployer"]
+        .as_str()
+        .unwrap()
+        .parse::<Address>()
+        .unwrap();
+    let init = archive["init"].as_str().unwrap().parse::<B256>().unwrap();
+    assert_eq!(p["dex.pool_code_hashes"][0], archive["init"]);
+    assert_eq!(archive["selector"]["requireCanonical"], true);
+    let mut counts = BTreeMap::new();
+    let mut flags = BTreeMap::new();
+    let mut addresses = BTreeSet::new();
+    for row in archive["markets"].as_array().unwrap() {
+        let custom = &row["custom"];
+        assert!(
+            p["dex.custom_deployers"]
+                .as_array()
+                .unwrap()
+                .contains(custom)
+        );
+        let mut salt = Vec::with_capacity(96);
+        for v in [custom, &row["tokens"][0], &row["tokens"][1]] {
+            salt.extend_from_slice(
+                v.as_str()
+                    .unwrap()
+                    .parse::<Address>()
+                    .unwrap()
+                    .into_word()
+                    .as_slice(),
+            );
+        }
+        let addr = row["pool"].as_str().unwrap().parse::<Address>().unwrap();
+        assert!(addresses.insert(addr));
+        assert_eq!(physical.create2(keccak256(salt), init), addr);
+        assert_eq!(row["registered"], true);
+        assert_eq!(row["slots"], 9);
+        assert_eq!(row["template"], p["dex.plugin_runtime_hashes"][1]);
+        assert!(row["created"]["block"].as_u64().unwrap() <= archive["block"].as_u64().unwrap());
+        *counts.entry(custom.as_str().unwrap()).or_insert(0usize) += 1;
+        *flags
+            .entry(row["flags"].as_u64().unwrap())
+            .or_insert(0usize) += 1;
+    }
+    let mut groups: Vec<_> = counts.into_values().collect();
+    groups.sort_unstable();
+    assert_eq!(groups, [4, 7, 16, 25]);
+    assert_eq!(flags, BTreeMap::from([(87, 42), (215, 10)]));
+}

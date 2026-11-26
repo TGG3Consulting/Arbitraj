@@ -80,6 +80,7 @@ fn slip_words(pool: Address, (lo, hi): (i16, i16)) -> Vec<Call> {
 /// tickSpacing пула THENA Fusion, известный записи (ревью t236: Pool.tick_spacing — load.rs known_spacing, иначе шаг
 /// прочитанной карты). None — ещё не читался. Ошибок нет.
 fn algebra_spacing(e: &Entry) -> Option<i32> {
+    if e.family.variant==super::family_variant::Variant::AlgebraSingleV19 {return Some(1);}
     let map = e.ticks.as_ref().map(|m| m.spacing);
     e.pool.tick_spacing.or(map)
 }

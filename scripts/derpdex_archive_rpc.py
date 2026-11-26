@@ -33,11 +33,12 @@ def single(url, method, params):
 
 
 class Readers:
-    def __init__(self, tag, number, root, factory, override, probe, expected):
+    def __init__(self, tag, number, root, factory, override, probe, expected, *, chain=8453, urls=URLS, word_reads=True):
         self.tag, self.number, self.root = tag, number, root
+        self.word_reads=word_reads
         def verify(url):
             try:
-                if int(single(url,"eth_chainId",[]),16) != 8453:
+                if int(single(url,"eth_chainId",[]),16) != chain:
                     return None
                 self.header(single(url,"eth_getBlockByNumber",[hex(number),False]))
                 if not bytes.fromhex(single(url,"eth_getCode",[factory,tag])[2:]):
@@ -49,9 +50,9 @@ class Readers:
                 pass
             return None
         with ThreadPoolExecutor(max_workers=3) as workers:
-            self.urls = list(filter(None, workers.map(verify, URLS)))
+            self.urls = list(filter(None, workers.map(verify, urls)))
         if not self.urls:
-            raise ArchiveError("no Base archive reproduced the canonical header and virtual quote")
+            raise ArchiveError("no archive reproduced the canonical header and reference override")
         self.lock = Lock()
         self.after = {url:0 for url in self.urls}
         self.failures = {url:0 for url in self.urls}
@@ -95,7 +96,7 @@ class Readers:
                         if not isinstance(result,str) or not result.startswith("0x"):
                             raise ArchiveError("invalid hex response")
                         data = bytes.fromhex(result[2:])
-                        if method == "eth_call" and len(data) != 32:
+                        if self.word_reads and method == "eth_call" and len(data) != 32:
                             raise ArchiveError("unexpected ABI word size")
                     elif result.get("hash") != params[0]:
                         raise ArchiveError("transaction hash mismatch")

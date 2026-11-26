@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: MIT
+// Принимает штатный обратный вызов BlueDex V3 и оплачивает только активный обмен.
+// Кошелёк или ArbExecutor V5 вызывает модуль, пул вызывает его при оплате.
+// Модуль для фабрики развёртывает владелец.
 pragma solidity 0.8.37;
 import {RegisteredV3Adapter,IRegisteredV3Factory} from "./RegisteredV3Adapter.sol";
 

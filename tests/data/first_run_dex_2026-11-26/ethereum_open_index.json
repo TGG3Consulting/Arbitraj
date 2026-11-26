@@ -246,6 +246,308 @@
           "reserve_usd": "67.1652"
         }
       ]
+    },
+    "9inch-ethereum": {
+      "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/9inch-ethereum/pools?page=1&include=base_token,quote_token",
+      "state": "enumerated",
+      "status": 200,
+      "rows_page1": 20,
+      "samples": [
+        {
+          "address": "0xe62c42b9857477c30e449247fa77adcf3e450834",
+          "name": "DAI / WETH",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "2539.5158"
+        },
+        {
+          "address": "0xe0533126c4013e2f5bcf44a2c84a396219be2d9d",
+          "name": "9INCH / WETH",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "8350.9672"
+        },
+        {
+          "address": "0x2feba6992aaa7b2397e5b212ae060c76857cf9bb",
+          "name": "HEX / WETH",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "975.1885"
+        },
+        {
+          "address": "0xf520a536f5eb4b7b2dbf05c28c104f35961889ac",
+          "name": "9INCH / LINK",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "892.2245"
+        },
+        {
+          "address": "0x1f8c1b7f5f826062da03fba69350dbebc4a76392",
+          "name": "9INCH / USDC",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "16348.3587"
+        },
+        {
+          "address": "0x8ffdc8c69e1c1afdbd4d37e9df98eba3e3aca92d",
+          "name": "HEX / COM",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "5181.6161"
+        },
+        {
+          "address": "0x66f7462b5178fcf5e31635f5a1648c0f2a65786f",
+          "name": "WPLS / 9INCH",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "176.3818"
+        },
+        {
+          "address": "0x914b4613c07db9e4239992cdcea3e5a9936fd5a0",
+          "name": "COM / WETH",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "1143.0085"
+        },
+        {
+          "address": "0xaac9ceb76646778c31389281d1d1caf8141b07bc",
+          "name": "COM / ICSA",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "1034.7967"
+        },
+        {
+          "address": "0xa759ae56db0bdd940163a18061218673bde8e519",
+          "name": "HEX / 9INCH",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "535.4619"
+        },
+        {
+          "address": "0xfd2184ae9af6671dc37cb6295174eed3ab94a0e4",
+          "name": "PEPE / SHIB",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "216.9325"
+        },
+        {
+          "address": "0xcb1a01c4b3217472ba74ca3e8f217ee0d0531ed6",
+          "name": "BBC / 9INCH",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "1469.0009"
+        },
+        {
+          "address": "0x8bd89a58f8354a1012a2ba83a4cadb457c61375a",
+          "name": "9INCH / DAI",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "17086.1033"
+        },
+        {
+          "address": "0xc6ce3f8fc142cc96879c53426ceeab64eb9e5c6f",
+          "name": "WPLS / WETH",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "164.3531"
+        },
+        {
+          "address": "0xa1e94f686a1baa4196852b67200a07e25a4814a8",
+          "name": "BBC / HEX",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "239.9996"
+        },
+        {
+          "address": "0x362d4073eb7583d6dffa15029918bcd531faa0bc",
+          "name": "BBC / PEPE",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "11.5727"
+        },
+        {
+          "address": "0xb4209f66626f51178be79fe452858071d6fd2e0d",
+          "name": "COM / ULTI",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "826.684"
+        },
+        {
+          "address": "0x88c5bb055a2ce0970970c8bfe8d585c6c6a86608",
+          "name": "HEX / USDC",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "92.3183"
+        },
+        {
+          "address": "0x277aeef44e1635aee9e53008aabc7cf55fbb562f",
+          "name": "COM / 9INCH",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "8.17847193"
+        },
+        {
+          "address": "0xe1b221af0f956631cfb99bae7c31a4e07da9b5be",
+          "name": "PP / WETH",
+          "reported_factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+          "reserve_usd": "323.997240028"
+        }
+      ]
+    },
+    "supernova-amm": {
+      "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/supernova-amm/pools?page=1&include=base_token,quote_token",
+      "state": "enumerated",
+      "status": 200,
+      "rows_page1": 10,
+      "samples": [
+        {
+          "address": "0x3e30fbdf2b486a0d6ac62df0ac96afb7867d2984",
+          "name": "USDC / BYTES",
+          "reported_factory": "0x5aef44edfc5a7edd30826c724ea12d7be15bdc30",
+          "reserve_usd": "9459.8839"
+        },
+        {
+          "address": "0xf2c6e60b0bae3a9e129f575ef6001d7300de3a83",
+          "name": "NOVA / SUPER",
+          "reported_factory": "0x5aef44edfc5a7edd30826c724ea12d7be15bdc30",
+          "reserve_usd": "59997.3471"
+        },
+        {
+          "address": "0xa9eae009fca124eb19092f55120fe6ba2cd2f1b5",
+          "name": "NOVA / WETH",
+          "reported_factory": "0x5aef44edfc5a7edd30826c724ea12d7be15bdc30",
+          "reserve_usd": "19606.6924"
+        },
+        {
+          "address": "0x4f20c37766759c3956f030d2e8749d493ef86e94",
+          "name": "NOVA / USDC",
+          "reported_factory": "0x5aef44edfc5a7edd30826c724ea12d7be15bdc30",
+          "reserve_usd": "12072.7414"
+        },
+        {
+          "address": "0xdb6655a7050ae52caaae5cf3d36098129a5e16f1",
+          "name": "NOVA / WBTC",
+          "reported_factory": "0x5aef44edfc5a7edd30826c724ea12d7be15bdc30",
+          "reserve_usd": "1413.8773"
+        },
+        {
+          "address": "0xd694cad4f40bef311301a1ca8376665bc426c8f1",
+          "name": "fBOMB / WETH",
+          "reported_factory": "0x5aef44edfc5a7edd30826c724ea12d7be15bdc30",
+          "reserve_usd": "320.2501"
+        },
+        {
+          "address": "0xe3b07bc14a3c96e55f474492f1c1c3324cb9ccfe",
+          "name": "CHAMP / USDT",
+          "reported_factory": "0x5aef44edfc5a7edd30826c724ea12d7be15bdc30",
+          "reserve_usd": "1321.4249"
+        },
+        {
+          "address": "0x83540501967b040d942badc61f89f736e509cae8",
+          "name": "fBOMB / USDT",
+          "reported_factory": "0x5aef44edfc5a7edd30826c724ea12d7be15bdc30",
+          "reserve_usd": "230.4218"
+        },
+        {
+          "address": "0x6a0a4110504e992a45a88b4666125eb0dd183e72",
+          "name": "fBOMB / USDC",
+          "reported_factory": "0x5aef44edfc5a7edd30826c724ea12d7be15bdc30",
+          "reserve_usd": "877.4766"
+        },
+        {
+          "address": "0x6c4ced4de136538d10cd805ff68cde69a52469fd",
+          "name": "OETH / WETH",
+          "reported_factory": "0x5aef44edfc5a7edd30826c724ea12d7be15bdc30",
+          "reserve_usd": "84.7475"
+        }
+      ]
+    },
+    "wagmi-ethereum": {
+      "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/wagmi-ethereum/pools?page=1&include=base_token,quote_token",
+      "state": "enumerated",
+      "status": 200,
+      "rows_page1": 8,
+      "samples": [
+        {
+          "address": "0x42e73578f175884455ee020af59ca5c355ed2278",
+          "name": "WETH / USDT 0.05%",
+          "reported_factory": "0xb9a14ee1cd3417f3acc988f61650895151abde24",
+          "reserve_usd": "50.2049"
+        },
+        {
+          "address": "0x00b72483a1a638e8863f10e378d090cec2770305",
+          "name": "WETH / USDT 0.3%",
+          "reported_factory": "0xb9a14ee1cd3417f3acc988f61650895151abde24",
+          "reserve_usd": "103.8019"
+        },
+        {
+          "address": "0x7595669f6defd33a0331cf06290dcbdd0f5e6385",
+          "name": "WBTC / USDT 0.3%",
+          "reported_factory": "0xb9a14ee1cd3417f3acc988f61650895151abde24",
+          "reserve_usd": "161.3885"
+        },
+        {
+          "address": "0x88c2b0e8925cbdc184ed411d8948256b89adb0ca",
+          "name": "WBTC / USDT 0.05%",
+          "reported_factory": "0xb9a14ee1cd3417f3acc988f61650895151abde24",
+          "reserve_usd": "90.2667"
+        },
+        {
+          "address": "0x4dd6a783394dddba2ff46f77c903e48da04f073e",
+          "name": "WAGMI / WETH 1%",
+          "reported_factory": "0xb9a14ee1cd3417f3acc988f61650895151abde24",
+          "reserve_usd": "687.1973"
+        },
+        {
+          "address": "0x38e14697d13b10daa77c7d1dcf64ada47959aa9e",
+          "name": "USDT / WBTC 1%",
+          "reported_factory": "0xb9a14ee1cd3417f3acc988f61650895151abde24",
+          "reserve_usd": "37.6216"
+        },
+        {
+          "address": "0xebfa07b399eed31b9b87f0117cc4ba6be5f67030",
+          "name": "WBTC / WETH 0.3%",
+          "reported_factory": "0xb9a14ee1cd3417f3acc988f61650895151abde24",
+          "reserve_usd": "92.9921"
+        },
+        {
+          "address": "0xe942858b47de58a1ac91188363924277348bb571",
+          "name": "WETH / USDT 1%",
+          "reported_factory": "0xb9a14ee1cd3417f3acc988f61650895151abde24",
+          "reserve_usd": "27.8496"
+        }
+      ]
+    },
+    "swapr_ethereum": {
+      "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/swapr_ethereum/pools?page=1&include=base_token,quote_token",
+      "state": "enumerated",
+      "status": 200,
+      "rows_page1": 7,
+      "samples": [
+        {
+          "address": "0x98f29f527c8e0ecc67a3c2d5567833bee01f2a12",
+          "name": "USDC / WETH",
+          "reported_factory": "0xd34971bab6e5e356fd250715f5de0492bb070452",
+          "reserve_usd": "196.3001"
+        },
+        {
+          "address": "0x83dd8227c5ef121f2ae99c6f1df0aa9e914448ce",
+          "name": "WETH / USDT",
+          "reported_factory": "0xd34971bab6e5e356fd250715f5de0492bb070452",
+          "reserve_usd": "56.6501"
+        },
+        {
+          "address": "0x7515be43d16f871588adc135d58a9c30a71eb34f",
+          "name": "DAI / WETH",
+          "reported_factory": "0xd34971bab6e5e356fd250715f5de0492bb070452",
+          "reserve_usd": "66.8445"
+        },
+        {
+          "address": "0xb10a30e6f5fea493b370f9e8d97d2a36f7ce859f",
+          "name": "BTC / WETH",
+          "reported_factory": "0xd34971bab6e5e356fd250715f5de0492bb070452",
+          "reserve_usd": "0.000201662531199468"
+        },
+        {
+          "address": "0xb0dc4b36e0b4d2e3566d2328f6806ea0b76b4f13",
+          "name": "DXD / WETH",
+          "reported_factory": "0xd34971bab6e5e356fd250715f5de0492bb070452",
+          "reserve_usd": "11.3466"
+        },
+        {
+          "address": "0x3fff4a26a98b730c9027d7ab70a2e89916cacd52",
+          "name": "RAD / WETH",
+          "reported_factory": "0xd34971bab6e5e356fd250715f5de0492bb070452",
+          "reserve_usd": "0.3369"
+        },
+        {
+          "address": "0x010946a9189f4fa8d6bf01d2fa32e0edf3d6e03b",
+          "name": "TORN / WETH",
+          "reported_factory": "0xd34971bab6e5e356fd250715f5de0492bb070452",
+          "reserve_usd": "2.1984855405"
+        }
+      ]
     }
   }
 }

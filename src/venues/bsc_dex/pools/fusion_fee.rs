@@ -47,14 +47,19 @@ pub const CHUNK: &str = "dex.fusion_oracle_chunk";
 
 /// Комиссия следующего блока: globalState пула на блоке, затем next_fee. Принимает: окружение, пул, блок-тег.
 /// Возвращает: комиссию (пипсы). Ошибки: как у next_fee.
-pub async fn read_fee(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<u32> {
+pub async fn read_fee(
+    ctx: &Ctx,
+    pool: Address,
+    tag: &str,
+    step: Option<u32>,
+) -> GatewayResult<u32> {
     let gs = call::view(ctx, pool, &P::globalStateCall {}, tag).await?;
     let head = Head {
         tick: gs.tick.as_i32(),
         index: gs.timepointIndex,
         fee: u32::from(gs.fee),
     };
-    next_fee(ctx, pool, head, tag).await
+    next_fee(ctx, pool, head, tag, step).await
 }
 
 /// Комиссия следующего блока по состоянию пула `head` на блоке `tag` (fee_algebra_v1::next_block_fee); данные — в
@@ -62,11 +67,17 @@ pub async fn read_fee(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<u32>
 /// Ошибки: NotConfigured (dex.fusion_fee_horizon_s или dex.fusion_oracle_chunk не задана или 0); узел;
 /// BadResponse — ответ не по ABI, откат нужного вызова, комиссия не считается (нужного начала окна нет — с причинами
 /// частей getTimepoints).
-pub async fn next_fee(ctx: &Ctx, pool: Address, head: Head, tag: &str) -> GatewayResult<u32> {
+pub async fn next_fee(
+    ctx: &Ctx,
+    pool: Address,
+    head: Head,
+    tag: &str,
+    step: Option<u32>,
+) -> GatewayResult<u32> {
     let h = horizon(ctx)?;
     let chunk = positive(ctx, CHUNK)?;
-    let got = fusion_oracle::read(ctx, pool, head, tag, (h, chunk)).await?;
-    let Some(fee) = fee_algebra_v1::next_block_fee(&got.oracle, got.ts, head.tick) else {
+    let got = fusion_oracle::read(ctx, pool, head, tag, (h, chunk), step).await?;
+    let Some(fee) = project(&got.oracle, got.ts, head.tick, step) else {
         let why = format!(
             "комиссия следующего блока (время блока {} и + 1 с) не считается — нет начала окна оракула на это время \
              или параметры feeConfig дают откат{}",
@@ -128,4 +139,18 @@ fn not_set(ctx: &Ctx, name: &str, why: &str) -> crate::gateway::errors::GatewayE
     let mut e = ctx.err(ErrorCode::NotConfigured, format!("{name} = {v}: {why}"));
     e.setting = Some(name.to_string());
     e
+}
+
+pub(super) fn project(
+    oracle: &fee_algebra_v1::Oracle,
+    ts: u32,
+    tick: i32,
+    step: Option<u32>,
+) -> Option<u32> {
+    match step {
+        Some(step) => (0..=step).try_fold(0, |worst, delay| {
+            fee_algebra_v1::fee_at(oracle, ts.wrapping_add(delay), tick).map(|fee| worst.max(fee))
+        }),
+        None => fee_algebra_v1::next_block_fee(oracle, ts, tick),
+    }
 }

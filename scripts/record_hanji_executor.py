@@ -1,0 +1,97 @@
+"""Read-only Base replay of an Actions-built Hanji executor. No signed transactions."""
+import argparse
+import json
+from pathlib import Path
+
+from eth_abi import decode, encode
+from eth_utils import keccak
+
+from record_base_slipstream_executor import OWNER, ROOT, call, calldata, rpc
+from record_v2_chain_pools import NETWORKS
+
+ORDER = "(address,address,address,uint256,uint256,uint256,uint72,uint128,uint256)"
+FIXTURE = ROOT / "tests/data/first_run_dex_2026-11-26/hanji_base.json"
+
+
+def capture(compiled):
+    data = json.loads(FIXTURE.read_bytes())
+    url, wrapped = NETWORKS["base"]
+    tag = {"blockHash": data["hash"], "requireCanonical": True}
+    header = rpc(url, "eth_getBlockByHash", [data["hash"], False])
+    deadline = int(header["timestamp"], 16) + 300
+    executor = "0x" + keccak(b"\xd6\x94" + bytes.fromhex(OWNER[2:]) + b"\x80")[-20:].hex()
+    profiles = json.loads((ROOT / "config/first_run_dex.json").read_bytes())
+    router = next(r["settings"]["dex.router"] for r in profiles if r["network"] == "base"
+                  and r["settings"]["dex.kind"] == "uniswap_v2")
+    deploy = {"from": OWNER, "data": "0x" + compiled["creation"] + encode(["address"], [wrapped]).hex(),
+              "gas": hex(4_000_000)}
+    def simulate(calls):
+        stage = {"stateOverrides": {OWNER: {"balance": hex(10**18), "nonce": "0x0"}}, "calls": calls}
+        return rpc(url, "eth_simulateV1", [{"blockStateCalls": [stage]}, tag])[0]["calls"]
+    def approve(token, spender, amount):
+        return call(token, calldata("approve(address,uint256)", ["address", "uint256"], [spender, amount]))
+    def balance(token):
+        return call(token, calldata("balanceOf(address)", ["address"], [OWNER]))
+    def order(args, sender=OWNER):
+        return {**call(executor, calldata("execute("+ORDER+")", [ORDER], [args]), gas=5_000_000), "from": sender}
+    def success(row):
+        if int(row["status"], 16) != 1:
+            raise ValueError(row.get("error", "simulation failed"))
+        return bytes.fromhex(row["returnData"][2:])
+    recorded = []
+    for market in data["markets"]:
+        proxy = market["registry"]["orderbookAddress"]
+        x = market["registry"]["baseToken"]["contractAddress"]
+        y = market["registry"]["quoteToken"]["contractAddress"]
+        for case in market["fills"]:
+            budget, spent, bought = [case[k] for k in ("budget_y", "debited_y", "received_x")]
+            funding = 10**16
+            prefix = [deploy, call(wrapped, calldata("deposit()"), funding)]
+            if y.lower() != wrapped:
+                prefix.extend([approve(wrapped, router, funding), call(router, calldata(
+                    "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
+                    ["uint256", "uint256", "address[]", "address", "uint256"],
+                    [funding, budget, [wrapped, y], OWNER, deadline]))])
+            prefix += [approve(y, executor, budget), balance(x), balance(y)]
+            buy = [proxy, y, x, budget, budget-spent, bought, market["asks"][0][0], case["buy_return"][2], deadline]
+            sell = [proxy, x, y, bought, 0, case["received_y"], case["bid_after"][0], case["sell_return"][3], deadline]
+            entry = prefix + [order(buy), balance(x), balance(y), approve(x, executor, bought)]
+            full = simulate(entry + [order(sell), balance(x), balance(y)])
+            for row in full:
+                success(row)
+            val = lambda i: int.from_bytes(success(full[i]), "big")
+            assert decode(["uint256","uint256"], success(full[len(prefix)])) == (spent, bought)
+            assert decode(["uint256","uint256"], success(full[-3])) == (bought, case["received_y"])
+            start_x, start_y = val(len(prefix)-2), val(len(prefix)-1)
+            assert val(len(prefix)+1) == start_x + bought and val(len(prefix)+2) == start_y-spent
+            assert val(-2) == start_x and val(-1) == start_y - spent + case["received_y"]
+            controls = []
+            altered_cases = [("buy_min_out_plus_one", prefix, buy, 5, bought+1),
+                             ("sell_min_out_plus_one", entry, sell, 5, case["received_y"]+1),
+                             ("buy_commission_above_cap", prefix, buy, 7, case["buy_return"][2]-1),
+                             ("buy_expired", prefix, buy, 8, deadline-301)]
+            if buy[4]:
+                altered_cases.append(("unspent_above_cap", prefix, buy, 4, buy[4]-1))
+            if case["bid_before"][0] != case["bid_after"][0]:
+                altered_cases.append(("stale_bid_zero_fill", entry, sell, 6, case["bid_before"][0]))
+            for label, lead, args, idx, value in altered_cases:
+                altered = list(args)
+                altered[idx] = value
+                prior = simulate(lead + [balance(x), balance(y), order(altered), balance(x), balance(y)])
+                if int(prior[-3]["status"], 16) or success(prior[-5]) != success(prior[-2]) or success(prior[-4]) != success(prior[-1]):
+                    raise ValueError(f"{label}: expected a revert and unchanged owner balances at {proxy}")
+                controls.append(label)
+            recorded.append({"proxy": proxy, "budget_y":budget, "actual_debit_y":spent, "received_x":bought,
+                             "sold_x":bought, "actual_credit_y":case["received_y"], "reverted":controls})
+            print(proxy, budget, len(controls), flush=True)
+    return {"chain_id":8453, "block":data["block"], "hash":data["hash"], "owner":OWNER,
+            "executor":executor, "runtime_keccak":"0x"+keccak(bytes.fromhex(compiled["runtime"])).hex(),
+            "solc":compiled["solc"], "round_trips":recorded}
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("build", type=Path)
+    parser.add_argument("output", type=Path)
+    args = parser.parse_args()
+    args.output.write_text(json.dumps(capture(json.loads(args.build.read_bytes())), indent=2)+"\n", encoding="utf8")

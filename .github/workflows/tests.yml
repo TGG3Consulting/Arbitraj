@@ -60,3 +60,17 @@ jobs:
       - name: Doc-тесты
         if: matrix.shard == 0
         run: cargo test --locked --doc
+  hanji-executor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - working-directory: contracts
+        run: npm ci --no-audit --no-fund
+      - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/hanji-executor"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hanji-executor
+          path: ${{ runner.temp }}/hanji-executor

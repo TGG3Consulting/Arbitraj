@@ -205,6 +205,12 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         }
         return Ok((Params::Basin, ctx.dex_addr("dex.router", e.family.id)?));
     }
+    if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::BunnySwap {
+        if k!=ExecKind::Basin || !matches!(e.pool.state,PoolState::V2{..}) || (token_in!=e.pool.token0 && token_in!=e.pool.token1) {
+            return Err(ctx.err(ErrorCode::NoRoute,"RabbitRouter: форма шага или актив не подтверждены"));
+        }
+        return Ok((Params::Basin,ctx.dex_addr("dex.router",e.family.id)?));
+    }
     if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::Memebox {
         if k != ExecKind::Basin || !matches!(e.pool.state,PoolState::Memebox(_)) {
             return Err(ctx.err(ErrorCode::NoRoute,"Memebox: отсутствует подтверждённый шаг модуля"));

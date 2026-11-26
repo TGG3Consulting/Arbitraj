@@ -44,6 +44,35 @@ pub(in crate::venues::bsc_dex) fn market(ctx: &Ctx, e: &Entry) -> GatewayResult<
     Ok((vault, s.pool_id))
 }
 
+// Сам по себе неизменный hash прокси не доказывает выплату: реализацию или ставку налога можно сменить.
+fn audited_transfer(chain: Option<u64>, token: Address, runtime: B256) -> bool {
+    use std::sync::LazyLock;
+    #[derive(serde::Deserialize)]
+    struct Token {
+        address: Address,
+        hash: B256,
+        exact: bool,
+    }
+    #[derive(serde::Deserialize)]
+    struct Audit {
+        chain_id: u64,
+        tokens: Vec<Token>,
+    }
+    static AUDIT: LazyLock<Option<Audit>> = LazyLock::new(|| {
+        serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/config/vault_exact_transfers.json"
+        )))
+        .ok()
+    });
+    AUDIT.as_ref().is_some_and(|a| {
+        Some(a.chain_id) == chain
+            && a.tokens
+                .iter()
+                .any(|t| t.exact && t.address == token && t.hash == runtime)
+    })
+}
+
 /// The Vault enforces its accounting amount. Only immutable, exact-transfer outputs have the same wallet minimum.
 pub(in crate::venues::bsc_dex) async fn exact_output(
     ctx: &Ctx,
@@ -60,7 +89,7 @@ pub(in crate::venues::bsc_dex) async fn exact_output(
                 .then(|| hash.trim().parse::<B256>().ok())
                 .flatten()
         })
-        .filter(|x| !x.is_zero())
+        .filter(|x| audited_transfer(ctx.chain_id(), output, *x))
         .ok_or_else(|| {
             ctx.err(
                 ErrorCode::NoRoute,
@@ -211,4 +240,29 @@ pub(in crate::venues::bsc_dex) async fn probe(
     });
     let data = p.data(U256::ZERO);
     Ok((p.approvals, p.router, data))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_proxy_or_transfer_tax_cannot_be_approved_by_copying_its_current_runtime_hash() {
+        let proof: serde_json::Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/config/vault_exact_transfers.json"
+        )))
+        .unwrap();
+        let mut audited = 0;
+        for row in proof["tokens"].as_array().unwrap() {
+            let token = row["address"].as_str().unwrap().parse().unwrap();
+            let runtime = row["hash"].as_str().unwrap().parse().unwrap();
+            let eligible = row["exact"].as_bool().unwrap();
+            audited += usize::from(eligible);
+            assert_eq!(audited_transfer(Some(8453), token, runtime), eligible);
+            assert!(!audited_transfer(Some(1), token, runtime));
+            assert!(!audited_transfer(Some(8453), token, B256::ZERO));
+        }
+        assert_eq!(audited, 6);
+    }
 }

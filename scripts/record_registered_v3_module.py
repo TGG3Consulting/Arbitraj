@@ -59,6 +59,8 @@ def record(market,artifact,url,*,bunny=False):
                     strict,expired=calls[start+n:start+n+2]; middle=list(map(scalar,calls[start+n+2:start+2*n+2]));done=calls[-n-1];after=list(map(scalar,calls[-n:]))
                     if any(c["status"]!="0x1" for c in calls[:start]) or strict["status"]!="0x0" or expired["status"]!="0x0" or middle!=before:
                         raise ValueError("deadline/minimum failed to contain state changes")
+                    if done["status"]!="0x1":
+                        raise ValueError(f"{mode} {pool['pool']} {token} {qty}: exact wallet call reverted {done.get('error')}")
                     if scalar(done)!=net or after[1]-before[1]!=net or before[0]-after[0]!=qty or any(before[3:]+after[2:]):
                         raise ValueError("wallet input/output, module balance or residual allowance differs")
                     return dict(amount=str(qty),received=str(net),gas=int(done["gasUsed"],16),approval_gas=int(calls[start-1]["gasUsed"],16),

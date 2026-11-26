@@ -199,7 +199,7 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
         assert_eq!(sample["block_hash"], market["selector"]["blockHash"]);
         captures.push(sample.clone());
     }
-    assert_eq!(pool_count, 1203);
+    assert_eq!(pool_count, 1280);
     let profiles: Vec<Value> =
         serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
     let mut admitted = 0;
@@ -361,6 +361,7 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
         "x7-finance-base",
         "x7-finance",
         "x7-finance-ethereum",
+        "9inch-ethereum",
         "cbswap",
         "cloudbase",
         "pixelswap-base",
@@ -467,4 +468,58 @@ fn bluedex_registered_pair_and_router_settle_at_the_independent_curve_output() {
         }
     }
     assert!(matched >= 2);
+}
+
+#[test]
+fn rabbit_router_wallets_match_the_two_fee_floors_in_both_directions() {
+    let market: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/bunnyswap_base.json"
+    ))
+    .unwrap();
+    let profile = first_run_profiles::named(8453, "bunnyswap").unwrap();
+    let s = &profile["settings"];
+    assert_eq!(s["dex.bunny_pair"], market["pair"]);
+    assert_eq!(s["dex.quoter"], market["router"]);
+    assert_eq!(
+        s["dex.quoter_runtime_hash"],
+        market["hashes"][market["router"].as_str().unwrap()]
+    );
+    assert_eq!(
+        s["dex.pair_runtime_hash"],
+        market["hashes"][market["pair"].as_str().unwrap()]
+    );
+    let rows = market["cases"].as_array().unwrap();
+    assert_eq!(rows.len(), 3);
+    for row in rows {
+        for (side, buy) in [("buy", true), ("sell", false)] {
+            let leg = &row[side];
+            let fee = leg["lp"].as_u64().unwrap();
+            let protocol = U256::from(leg["protocol"].as_u64().unwrap());
+            let n = uint(&leg["amount"]);
+            let i = usize::from(buy);
+            let net = if buy {
+                n - n * protocol / U256::from(1000)
+            } else {
+                n
+            };
+            let result = amount_out(
+                net,
+                uint(&leg["reserves"][i]),
+                uint(&leg["reserves"][1 - i]),
+                fee_ratio(Decimal::new(fee as i64, 1)).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(result, uint(&leg["gross"]));
+            assert_eq!(
+                if buy {
+                    result
+                } else {
+                    result - result * protocol / U256::from(1000)
+                },
+                uint(&leg["received"])
+            );
+            assert!(leg["min_plus_one"].is_object() && leg["expired"].is_object());
+        }
+        assert_eq!(row["buy"]["received"], row["sell"]["amount"]);
+    }
 }

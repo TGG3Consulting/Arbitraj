@@ -81,6 +81,7 @@ pub enum Variant {
     /// Direct Vault.swap with wallet debit and payout checked on the approval and signing path.
     BalancerVaultWallet,
     Memebox,
+    BunnySwap,
     /// EIP-2535 с отдельной привязкой исполняемого селектора фабрики и Router02.
     DiamondV2,
     /// Пара проверяется по фабрике CREATE и коду исполнения; общий прокси с Router02.
@@ -151,7 +152,7 @@ pub enum Variant {
 
 impl Variant {
     pub fn factory_quoter(self)->bool { matches!(self,Self::BaseNativeV3|Self::RegisteredV3) }
-    pub fn wallet_module(self)->bool { matches!(self,Self::Memebox|Self::RegisteredV3) }
+    pub fn wallet_module(self)->bool { matches!(self,Self::Memebox|Self::RegisteredV3|Self::BunnySwap) }
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator)}
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
 
@@ -220,6 +221,7 @@ pub fn of(kind: &str) -> Variant {
         "v2_fork_executor_create2" => Variant::V2Create2,
         "v2_diamond_router" => Variant::DiamondV2,
         "v2_diamond_create" => Variant::KewlV2,
+        "bunnyswap" | "bunnyswap_module" => Variant::BunnySwap,
         "memebox" | "memebox_v5" => Variant::Memebox,
         "candyswap_v2" => Variant::CandySwap,
         "balancer_v2_wallet" => Variant::BalancerVaultWallet,

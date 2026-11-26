@@ -2763,10 +2763,26 @@
   {
     "chain_id": 8453,
     "network": "base",
+    "id": "bunnyswap",
+    "source": "https://www.friend.tech/about · https://sourcify.dev/server/v2/contract/8453/0xbf250ae227de43dedaf01ccbfd8cc83027efc1e2",
+    "settings": {
+      "dex.kind": "bunnyswap",
+      "dex.bunny_pair": "0x7cfc830448484cdf830625373820241e61ef4acf",
+      "dex.bunny_token": "0x0bd4887f7d41b35cd75dff9ffee2856106f86670",
+      "dex.quoter": "0xbf250ae227de43dedaf01ccbfd8cc83027efc1e2",
+      "dex.quoter_runtime_hash": "0x28f604c8fed620b19f66357568f068d92096c3e61b8da23b686be689826595dd",
+      "dex.pair_runtime_hash": "0xa1c0708a77f8ed010599122c1cbe8cecfc02d0d87c380a9872a827e22bff2c82"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
     "id": "bluedex",
     "source": "https://sourcify.dev/server/v2/contract/8453/0x8437100ed18dbea089e0fa3caaae7f6f40e4a05c · https://sourcify.dev/server/v2/contract/8453/0x1926f2bec4cd34613ccaac82911204b87cf590a2",
     "settings": {
-      "dex.sub_dex": ["bluedex-v3-base"],
+      "dex.sub_dex": [
+        "bluedex-v3-base"
+      ],
       "dex.kind": "v2_fork_dual_create2",
       "dex.factory": "0x8437100ed18dbea089e0fa3caaae7f6f40e4a05c",
       "dex.pool_code_hashes": [
@@ -3448,6 +3464,46 @@
     "venue_settings": {
       "dex.fusion_fee_horizon_s": 8,
       "dex.fusion_oracle_chunk": 4
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "9inch-ethereum",
+    "source": "https://sourcify.dev/server/v2/contract/1/0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8 · https://sourcify.dev/server/v2/contract/1/0xe62c42b9857477c30e449247fa77adcf3e450834 · tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+      "dex.pool_code_hashes": [
+        "0xd2cf61d4acad30e9fe5ec59d0f94de554d88701f1bd8fc635546866716718511"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.29"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "supernova-amm",
+    "source": "https://sourcify.dev/server/v2/contract/1/0x5aef44edfc5a7edd30826c724ea12d7be15bdc30 · tests/data/first_run_dex_2026-11-26/ethereum_classic_registry_supernova-amm.json.gz · tests/data/first_run_dex_2026-11-26/ethereum_classic_wallets_supernova-amm.json.gz",
+    "settings": {
+      "dex.kind": "solidly_v1_generator",
+      "dex.factory": "0x5aef44edfc5a7edd30826c724ea12d7be15bdc30",
+      "dex.factory_runtime_hash": "0x65989f46eb6dae63c5b9a905c3cbc99e62cfff7d0e0a406bffb9080324b3ec40",
+      "dex.proxy_implementations": [
+        "0xb2fc2561cce25c9cc45970002bbb2ff1ea5660d4"
+      ],
+      "dex.proxy_runtime_hashes": [
+        "0x6b83fb16189811d3418b89c2ae82f6cca9034b6247e6e000c17c631785a63364"
+      ],
+      "dex.pool_code_hashes": [
+        "0x6f624a6b4cab33b9345468394ab1fd0e87007079c36217852804eb4d594530ff"
+      ],
+      "dex.solidly_generator_runtime_hash": "0x69680ed78fce1e039d41691c233512ee54fc2cb5ee41fa68b5c886a7f984d808",
+      "dex.solidly_fee_source": "factory_pool",
+      "dex.solidly_fee_rule": "numerator",
+      "dex.solidly_fee_denominator": 10000,
+      "dex.solidly_pause_method": "isPaused()"
     }
   }
 ]

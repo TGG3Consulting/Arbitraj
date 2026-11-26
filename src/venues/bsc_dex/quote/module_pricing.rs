@@ -32,7 +32,9 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         };
         let mut e = e.clone();
         if let Some(h) = head {
-            let check = if e.family.variant == Variant::RegisteredV3 {
+            let check = if e.family.variant == Variant::BunnySwap {
+                super::super::pools::bunnyswap::fresh(ctx,&e,&h.selector()).await
+            } else if e.family.variant == Variant::RegisteredV3 {
                 registered_v3::fresh(ctx, &e, &h.selector()).await
             } else {
                 memebox::refresh(ctx, &mut e, h).await

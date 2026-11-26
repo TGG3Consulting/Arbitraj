@@ -70,6 +70,14 @@ pub async fn state(
         let at=super::nami::block(ctx,&tag).await?;
         Box::pin(super::registered_v3::market(ctx,f,*pool,pair,None,&at)).await?;
     }
+    if f.variant == Variant::BunnySwap && let PoolRef::Contract(pool)=reference {
+        let at=super::nami::block(ctx,&tag).await?;
+        let fee=Box::pin(super::bunnyswap::market(ctx,f,*pool,pair,&at)).await?;
+        let get=super::abi_v2v3::IV2Pair::getReservesCall{};
+        let [r]=super::nami_batch::read(ctx,[super::nami_batch::view(&at,*pool,get.clone())]).await?;
+        let r=super::nami_batch::decode(&r,get)?;
+        return Ok(Loaded{state:PoolState::V2{reserve0:alloy_primitives::U256::from(r.reserve0),reserve1:alloy_primitives::U256::from(r.reserve1)},ticks:None,bins:None,fee_pips:Some(fee)});
+    }
     if f.variant == Variant::Memebox && let PoolRef::Contract(pool) = reference {
         return Box::pin(super::memebox::load(ctx,f,*pool,pair,&tag)).await;
     }

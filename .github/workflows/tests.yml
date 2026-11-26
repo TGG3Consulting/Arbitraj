@@ -361,6 +361,12 @@ jobs:
           python scripts/record_elfomo_executor.py "$RUNNER_TEMP/elfomo-executor/ElfomoExecutor.json"
           python scripts/record_elfomo_ladders.py "$RUNNER_TEMP/elfomo-executor/ElfomoExecutor.json"
           python scripts/record_base_pmm_executor.py "$RUNNER_TEMP/base-pmm-executor/BasePmmExecutor.json"
+      - if: inputs.elfomo_archive_replay
+        name: Compare Virtuals and Horizon native and protected wallet execution
+        run: |
+          for market in virtuals-base virtuals-unicorn-base horizon; do
+            python scripts/record_virtuals_wallets.py "$market" "$RUNNER_TEMP/base-pmm-executor/BasePmmExecutor.json" "$RUNNER_TEMP/base-pmm-executor/$market-wallets.json"
+          done
       - uses: actions/upload-artifact@v4
         if: inputs.elfomo_archive_replay
         with:
@@ -369,6 +375,7 @@ jobs:
             tests/data/first_run_dex_2026-11-26/elfomo_executor_base.json
             tests/data/first_run_dex_2026-11-26/elfomo_ladders_base.json
             tests/data/first_run_dex_2026-11-26/base_pmm_executor_*.json
+            ${{ runner.temp }}/base-pmm-executor/*-wallets.json
       - if: inputs.solidly_archive_replay
         name: Simulate Solidly V3 module with real wallet balances
         run: |

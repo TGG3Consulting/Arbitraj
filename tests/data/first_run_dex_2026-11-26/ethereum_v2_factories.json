@@ -3461,5 +3461,976 @@
     "height": 26494988,
     "state_root": "0xbd73f03df514c4d550c21a6d567e25a4190f646acbb94b8e8c2462d7c9b17db7",
     "endpoint": "https://eth.drpc.org"
+  },
+  "9inch-ethereum": {
+    "factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+    "origin": {
+      "url": "https://sourcify.dev/server/v2/contract/1/0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+      "runtime": "0x63b4b225596f942d4a4a4df700f5d64b1cfc789d1f0faee8fd56a32e66e6f2a1",
+      "creation_code_hash": "0xd2cf61d4acad30e9fe5ec59d0f94de554d88701f1bd8fc635546866716718511",
+      "codecopy": [
+        2719,
+        12121
+      ],
+      "verified_pair": "https://sourcify.dev/server/v2/contract/1/0xe62c42b9857477c30e449247fa77adcf3e450834",
+      "pair_runtime": "0xae70832ee576a2f2f46134450f5781b1d3d973449afb26c19f35140a0f245cc5",
+      "standard_swap_fee": {
+        "entry": "swap(uint256,uint256,address,bytes)",
+        "numerator": 29,
+        "denominator": 10000
+      }
+    },
+    "pools": [
+      {
+        "pool": "0xe62c42b9857477c30e449247fa77adcf3e450834",
+        "tokens": [
+          "0x6b175474e89094c44da98b954eedeac495271d0f",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "1262107185883493885746",
+          "752619968181088894"
+        ]
+      },
+      {
+        "pool": "0xe0533126c4013e2f5bcf44a2c84a396219be2d9d",
+        "tokens": [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "2473570028962340022",
+          "36094755622484404644407216410"
+        ]
+      },
+      {
+        "pool": "0xa0ca10e4627f31c473a2d7a012ea81ac8d8fd949",
+        "tokens": [
+          "0x015628ce9150db1bce2fbb717a09e846f8a32436",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "631284191791946041756353",
+          "49849568786639531"
+        ]
+      },
+      {
+        "pool": "0x8bd89a58f8354a1012a2ba83a4cadb457c61375a",
+        "tokens": [
+          "0x6b175474e89094c44da98b954eedeac495271d0f",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "8555189816813671648405",
+          "74513575036259452546465920249"
+        ]
+      },
+      {
+        "pool": "0x1f8c1b7f5f826062da03fba69350dbebc4a76392",
+        "tokens": [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "8192011020",
+          "71311062999049549632936634490"
+        ]
+      },
+      {
+        "pool": "0xd07ebab25e3b0cba2a75c36270ea35cb17434f15",
+        "tokens": [
+          "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "8675533062",
+          "75296802641108274403940782735"
+        ]
+      },
+      {
+        "pool": "0xf520a536f5eb4b7b2dbf05c28c104f35961889ac",
+        "tokens": [
+          "0x514910771af9ca656af840dff83e8264ecf986ca",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "48665542067111060368",
+          "3808807767489764085580432204"
+        ]
+      },
+      {
+        "pool": "0xcb1a01c4b3217472ba74ca3e8f217ee0d0531ed6",
+        "tokens": [
+          "0x015628ce9150db1bce2fbb717a09e846f8a32436",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "5472631945704558671656199",
+          "6376915241366460656481100369"
+        ]
+      },
+      {
+        "pool": "0xa759ae56db0bdd940163a18061218673bde8e519",
+        "tokens": [
+          "0x2b591e99afe9f32eaa6214f7b7629768c40eeb39",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "63558913886456",
+          "2353667450110853786680516954"
+        ]
+      },
+      {
+        "pool": "0x88c5bb055a2ce0970970c8bfe8d585c6c6a86608",
+        "tokens": [
+          "0x2b591e99afe9f32eaa6214f7b7629768c40eeb39",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        "reserves": [
+          "10684287414131",
+          "46047548"
+        ]
+      },
+      {
+        "pool": "0xa1e94f686a1baa4196852b67200a07e25a4814a8",
+        "tokens": [
+          "0x015628ce9150db1bce2fbb717a09e846f8a32436",
+          "0x2b591e99afe9f32eaa6214f7b7629768c40eeb39"
+        ],
+        "reserves": [
+          "924070590884654654848003",
+          "28511220004815"
+        ]
+      },
+      {
+        "pool": "0x03f4232b6a6e4d705424679f3b0f7304cdbe7d25",
+        "tokens": [
+          "0xde0220b69ce3e855a0124433a8e8d093f53a6be4",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "222647163576468234115460",
+          "1511744226465900930889964203"
+        ]
+      },
+      {
+        "pool": "0xf685e032ad9f5053c2db9e12b99686a7fa6e0074",
+        "tokens": [
+          "0x52ada28f70bc8ebe5dd4381120d3cd76863919a8",
+          "0x9565c2036963697786705120fc59310f747bcfd0"
+        ],
+        "reserves": [
+          "180056",
+          "43874939394526483221116294"
+        ]
+      },
+      {
+        "pool": "0x604958ae2c28da20b593ca132e3e5b16e3fd49c5",
+        "tokens": [
+          "0x52ada28f70bc8ebe5dd4381120d3cd76863919a8",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "1437701",
+          "172196338091493519537575101"
+        ]
+      },
+      {
+        "pool": "0xdfd795ed55860c3cdad40b61e46f2f54047fe323",
+        "tokens": [
+          "0x015628ce9150db1bce2fbb717a09e846f8a32436",
+          "0x6b175474e89094c44da98b954eedeac495271d0f"
+        ],
+        "reserves": [
+          "26953",
+          "38"
+        ]
+      },
+      {
+        "pool": "0x688a56b8de7d705dddf0fe21f35b467081bb45fd",
+        "tokens": [
+          "0x9565c2036963697786705120fc59310f747bcfd0",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "556431919240494673361023139",
+          "265376568197876606059207474"
+        ]
+      },
+      {
+        "pool": "0x3b8a1e807117881ecc8e3967118b3abfdc6cfea8",
+        "tokens": [
+          "0x3819f64f282bf135d62168c1e513280daf905e06",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "4199040827193434",
+          "93939247835232318405228"
+        ]
+      },
+      {
+        "pool": "0xb9b15999dcc460d898beed99784283fcddf6d727",
+        "tokens": [
+          "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "700",
+          "3368140668474948026015894"
+        ]
+      },
+      {
+        "pool": "0x34e01993d8929276b09c2ba1707456be2998b7d2",
+        "tokens": [
+          "0x6b0956258ff7bd7645aa35369b55b61b8e6d6140",
+          "0x6b32022693210cd2cfc466b9ac0085de8fc34ea6"
+        ],
+        "reserves": [
+          "8601771302024",
+          "9539746151190"
+        ]
+      },
+      {
+        "pool": "0xeee843c083610917251c414b8d6585cb9409b9f6",
+        "tokens": [
+          "0x5f98805a4e8be255a32880fdec7f6728c6568ba0",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        "reserves": [
+          "1000000000",
+          "1"
+        ]
+      },
+      {
+        "pool": "0xd00388fbed6d9e5f03a629207a2de0fba2cff3a2",
+        "tokens": [
+          "0x78a2809e8e2ef8e07429559f15703ee20e885588",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "36230514862547332735734784",
+          "187971948198840151769996838"
+        ]
+      },
+      {
+        "pool": "0xd35c0c1afa03b7cc5ecac721c9a31fbda2cb083e",
+        "tokens": [
+          "0x015628ce9150db1bce2fbb717a09e846f8a32436",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        "reserves": [
+          "9052346049213175651519",
+          "1111662"
+        ]
+      },
+      {
+        "pool": "0xfd2184ae9af6671dc37cb6295174eed3ab94a0e4",
+        "tokens": [
+          "0x6982508145454ce325ddbe47a25d4ec3d2311933",
+          "0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce"
+        ],
+        "reserves": [
+          "30578897107487142293431277",
+          "30371606925581677055607275"
+        ]
+      },
+      {
+        "pool": "0x9d1cdf54a2a3f498fbd5be7aa63afdf1e222a693",
+        "tokens": [
+          "0x015628ce9150db1bce2fbb717a09e846f8a32436",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        "reserves": [
+          "317917217603610",
+          "1"
+        ]
+      },
+      {
+        "pool": "0x8ffdc8c69e1c1afdbd4d37e9df98eba3e3aca92d",
+        "tokens": [
+          "0x2b591e99afe9f32eaa6214f7b7629768c40eeb39",
+          "0x5a9780bfe63f3ec57f01b087cd65bd656c9034a8"
+        ],
+        "reserves": [
+          "613171697491300",
+          "5812955619951144094081874071"
+        ]
+      },
+      {
+        "pool": "0x277aeef44e1635aee9e53008aabc7cf55fbb562f",
+        "tokens": [
+          "0x5a9780bfe63f3ec57f01b087cd65bd656c9034a8",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "8504106528353009275005220",
+          "37469216344469429353266498"
+        ]
+      },
+      {
+        "pool": "0x943a962b36863d4331152e2bc7618c9c0c857475",
+        "tokens": [
+          "0x015628ce9150db1bce2fbb717a09e846f8a32436",
+          "0x9565c2036963697786705120fc59310f747bcfd0"
+        ],
+        "reserves": [
+          "11",
+          "98787"
+        ]
+      },
+      {
+        "pool": "0x28eb1804401b8d84751d6eb77010e8fa1b377e25",
+        "tokens": [
+          "0x2de509bf0014ddf697b220be628213034d320ece",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "211139998246756425002",
+          "80662563543771074478718"
+        ]
+      },
+      {
+        "pool": "0xe1b221af0f956631cfb99bae7c31a4e07da9b5be",
+        "tokens": [
+          "0x9565c2036963697786705120fc59310f747bcfd0",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "2949845217055412118474755884",
+          "97567195469722643"
+        ]
+      },
+      {
+        "pool": "0x40f18c90b85b8bb3201d2f0f61aad410a4e0b7d8",
+        "tokens": [
+          "0x52ada28f70bc8ebe5dd4381120d3cd76863919a8",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "4167878",
+          "32820114889841434"
+        ]
+      },
+      {
+        "pool": "0x80721b57076970170b41dcbe151521184ec3a86c",
+        "tokens": [
+          "0x2de509bf0014ddf697b220be628213034d320ece",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "55835705207913384918479",
+          "781819383568991"
+        ]
+      },
+      {
+        "pool": "0x95d64bf395becee313ab3498f1f13d77a5dee2dd",
+        "tokens": [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xde0220b69ce3e855a0124433a8e8d093f53a6be4"
+        ],
+        "reserves": [
+          "24830845070447639",
+          "52036735745770826163511"
+        ]
+      },
+      {
+        "pool": "0x8f4224fb394bbb4af9764b32e2c48ec6d3f18a88",
+        "tokens": [
+          "0x9565c2036963697786705120fc59310f747bcfd0",
+          "0xde0220b69ce3e855a0124433a8e8d093f53a6be4"
+        ],
+        "reserves": [
+          "286501",
+          "4"
+        ]
+      },
+      {
+        "pool": "0x5c388cf43de2e99555c11b211c3832c9ba9fc8b3",
+        "tokens": [
+          "0x52ada28f70bc8ebe5dd4381120d3cd76863919a8",
+          "0xde0220b69ce3e855a0124433a8e8d093f53a6be4"
+        ],
+        "reserves": [
+          "1",
+          "95087082181"
+        ]
+      },
+      {
+        "pool": "0x2feba6992aaa7b2397e5b212ae060c76857cf9bb",
+        "tokens": [
+          "0x2b591e99afe9f32eaa6214f7b7629768c40eeb39",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "114524909636461",
+          "293821409471545563"
+        ]
+      },
+      {
+        "pool": "0xc6ce3f8fc142cc96879c53426ceeab64eb9e5c6f",
+        "tokens": [
+          "0xa882606494d86804b5514e07e6bd2d6a6ee6d68a",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "17601513099136081162897035",
+          "49421273968423816"
+        ]
+      },
+      {
+        "pool": "0x66f7462b5178fcf5e31635f5a1648c0f2a65786f",
+        "tokens": [
+          "0xa882606494d86804b5514e07e6bd2d6a6ee6d68a",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "19176772226938191291111984",
+          "758084696285726828499835316"
+        ]
+      },
+      {
+        "pool": "0xd616b238a9a0e40720223f8bf5d3102d089d8401",
+        "tokens": [
+          "0xbeef3bb9da340ebdf0f5bae2e85368140d7d85d0",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "3603669022925296771",
+          "148965230221738"
+        ]
+      },
+      {
+        "pool": "0xf37435093161a98b05198caf34d4e4eb2e9e572f",
+        "tokens": [
+          "0x1946c4edf247f4fc4ff390237ecaeeb87d38c565",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "1098163334467427281633871",
+          "90117728380014105"
+        ]
+      },
+      {
+        "pool": "0x914b4613c07db9e4239992cdcea3e5a9936fd5a0",
+        "tokens": [
+          "0x5a9780bfe63f3ec57f01b087cd65bd656c9034a8",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "1275393440721008985686588327",
+          "340675018417472476"
+        ]
+      },
+      {
+        "pool": "0x94078e1f834336fb811bc4b9e9b24a21e6eb75c2",
+        "tokens": [
+          "0x1316baf20a9ca33e9d0bcf70b4c09324ce5669be",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "10195320290719600965669",
+          "113513711250313"
+        ]
+      },
+      {
+        "pool": "0x64bd6df49d1527d6a1017d630025963eac88d4c2",
+        "tokens": [
+          "0x1316baf20a9ca33e9d0bcf70b4c09324ce5669be",
+          "0x24fcfc492c1393274b6bcd568ac9e225bec93584"
+        ],
+        "reserves": [
+          "318987",
+          "4"
+        ]
+      },
+      {
+        "pool": "0x23d2109b549d5c995b75d8b66d0d3bb563b265c2",
+        "tokens": [
+          "0x5a9780bfe63f3ec57f01b087cd65bd656c9034a8",
+          "0x6b32022693210cd2cfc466b9ac0085de8fc34ea6"
+        ],
+        "reserves": [
+          "8646142236478544698879114",
+          "906789439646"
+        ]
+      },
+      {
+        "pool": "0x307ff36894857d0d00038bf008847116aae62b40",
+        "tokens": [
+          "0x822f87634be03992641061bc22c8bf54f8d67b01",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "29054146606744856966",
+          "55463787557838966"
+        ]
+      },
+      {
+        "pool": "0x6b28a17d3886bca1c286d690e8b20cbcec6ccb04",
+        "tokens": [
+          "0x78a2809e8e2ef8e07429559f15703ee20e885588",
+          "0x7b30f30cd1d368bff6f8e81147f8520b6de87982"
+        ],
+        "reserves": [
+          "377881094132696347658",
+          "1879997881402057075"
+        ]
+      },
+      {
+        "pool": "0xf4bf0a2420be95e8266f277e3d1608c478b9a2a7",
+        "tokens": [
+          "0x7b30f30cd1d368bff6f8e81147f8520b6de87982",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "667449752436064392966010856785",
+          "18907143052623897296025"
+        ]
+      },
+      {
+        "pool": "0x913e5c7198dbfb069afcc38f1682a69c4b8bc9ed",
+        "tokens": [
+          "0x6982508145454ce325ddbe47a25d4ec3d2311933",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "4074339122484712254797371",
+          "8320010844514757"
+        ]
+      },
+      {
+        "pool": "0xbc38ccdb8c84f6fddc74e43ab3b3ec82c1902c59",
+        "tokens": [
+          "0x576e2bed8f7b46d34016198911cdf9886f78bea7",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "535208409472",
+          "4991162181950915"
+        ]
+      },
+      {
+        "pool": "0x9436cacb51d468b628300cc79ba057d347aff4e6",
+        "tokens": [
+          "0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "10831334796636343069952",
+          "22779740845040"
+        ]
+      },
+      {
+        "pool": "0xb617bf4667f54ab82fc91c2d49a0a223e12c0e6b",
+        "tokens": [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xcf0c122c6b73ff809c693db761e7baebe62b6a2e"
+        ],
+        "reserves": [
+          "17022357480472",
+          "715629558486"
+        ]
+      },
+      {
+        "pool": "0xecd0a81936663a83d28c8cad5d04b2feae519e5f",
+        "tokens": [
+          "0xaaee1a9723aadb7afa2810263653a34ba2c21c7a",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "2371405558774482340620649",
+          "105744511457999"
+        ]
+      },
+      {
+        "pool": "0xd243447c3e5945535c81bfc03f8dc4363919c463",
+        "tokens": [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xdcc97d2c1048e8f3f2fc58ace9024ab8b350e4b1"
+        ],
+        "reserves": [
+          "10236178984676137",
+          "6840812352078599247180198842"
+        ]
+      },
+      {
+        "pool": "0x362d4073eb7583d6dffa15029918bcd531faa0bc",
+        "tokens": [
+          "0x015628ce9150db1bce2fbb717a09e846f8a32436",
+          "0x6982508145454ce325ddbe47a25d4ec3d2311933"
+        ],
+        "reserves": [
+          "43674476465758899012138",
+          "1723887399758820264466496"
+        ]
+      },
+      {
+        "pool": "0x2c4badf3c89dedefe5c03e42009d25d7e4113012",
+        "tokens": [
+          "0x015628ce9150db1bce2fbb717a09e846f8a32436",
+          "0x576e2bed8f7b46d34016198911cdf9886f78bea7"
+        ],
+        "reserves": [
+          "5590732555056890150477",
+          "51705356625"
+        ]
+      },
+      {
+        "pool": "0xd440ca5d80bd9771b0080aed44f702cb68010a7b",
+        "tokens": [
+          "0x015628ce9150db1bce2fbb717a09e846f8a32436",
+          "0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce"
+        ],
+        "reserves": [
+          "71595312835012692195973",
+          "2525520085377190374768977"
+        ]
+      },
+      {
+        "pool": "0x9c7c1f0d7ba90817f9e8b18caa83bbbb0dda0c51",
+        "tokens": [
+          "0x015628ce9150db1bce2fbb717a09e846f8a32436",
+          "0xcf0c122c6b73ff809c693db761e7baebe62b6a2e"
+        ],
+        "reserves": [
+          "25927744324219743792899",
+          "206242418959402"
+        ]
+      },
+      {
+        "pool": "0xd333868dcba6f95dbfafc1d86198a87f47c4bcce",
+        "tokens": [
+          "0x015628ce9150db1bce2fbb717a09e846f8a32436",
+          "0xaaee1a9723aadb7afa2810263653a34ba2c21c7a"
+        ],
+        "reserves": [
+          "17962413052809223409733",
+          "30587862619727651693053559"
+        ]
+      },
+      {
+        "pool": "0xeaf45dea447e882bbda8a12cad0d90dadc21d9a5",
+        "tokens": [
+          "0x015628ce9150db1bce2fbb717a09e846f8a32436",
+          "0xdcc97d2c1048e8f3f2fc58ace9024ab8b350e4b1"
+        ],
+        "reserves": [
+          "3572607464830383952027",
+          "258081231555529208890381757"
+        ]
+      },
+      {
+        "pool": "0xaac9ceb76646778c31389281d1d1caf8141b07bc",
+        "tokens": [
+          "0x5a9780bfe63f3ec57f01b087cd65bd656c9034a8",
+          "0xfc4913214444af5c715cc9f7b52655e788a569ed"
+        ],
+        "reserves": [
+          "1161805895957128138312475969",
+          "237868889508242"
+        ]
+      },
+      {
+        "pool": "0x6954a938f49bf209d436949d0d50ed93db17dab5",
+        "tokens": [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xf19308f923582a6f7c465e5ce7a9dc1bec6665b1"
+        ],
+        "reserves": [
+          "5996468533133",
+          "153489924360834921477412"
+        ]
+      },
+      {
+        "pool": "0x167c26a6e71140f5e21f73b214561912712f49cd",
+        "tokens": [
+          "0x015628ce9150db1bce2fbb717a09e846f8a32436",
+          "0xfc4913214444af5c715cc9f7b52655e788a569ed"
+        ],
+        "reserves": [
+          "32007709179579873358",
+          "3184573037"
+        ]
+      },
+      {
+        "pool": "0xad0212a6539447c83f207fa985bcbdf1d7f181df",
+        "tokens": [
+          "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+          "0xbdf3a36e9ff787e114a419de44bce5d830d99a0a"
+        ],
+        "reserves": [
+          "4847",
+          "936799654600899"
+        ]
+      },
+      {
+        "pool": "0x69c92a23b1f8952616ddc80ec9884f89547738c1",
+        "tokens": [
+          "0x2b591e99afe9f32eaa6214f7b7629768c40eeb39",
+          "0x46f6e9bbcce8638b20ebbc83d33a2b5bfa9b7894"
+        ],
+        "reserves": [
+          "6711149124872",
+          "2751005256485"
+        ]
+      },
+      {
+        "pool": "0xe6868baa5a0421c489f8bef0ed6a2156ec2fb816",
+        "tokens": [
+          "0x46f6e9bbcce8638b20ebbc83d33a2b5bfa9b7894",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "9493464802036",
+          "58891475312090064"
+        ]
+      },
+      {
+        "pool": "0x356683d90ee2b118df2784a6cd003359d5a0f500",
+        "tokens": [
+          "0x12d9fe4c9494dc363c6290bfdbb2bd9ed6358c13",
+          "0x2741537d43f3d146c4130bca3ed99821915354bb"
+        ],
+        "reserves": [
+          "24574376900",
+          "1"
+        ]
+      },
+      {
+        "pool": "0x475080e82624d0fe80c3f6b6dee7a54b49142f7e",
+        "tokens": [
+          "0x12d9fe4c9494dc363c6290bfdbb2bd9ed6358c13",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "9",
+          "124563"
+        ]
+      },
+      {
+        "pool": "0x5e5e80bcf23d0d6d8e9a7ede176c8b7958fb1f54",
+        "tokens": [
+          "0x2741537d43f3d146c4130bca3ed99821915354bb",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "reserves": [
+          "1",
+          "3061045571370"
+        ]
+      },
+      {
+        "pool": "0x647a1ba1783a09d2de49047271eb37e80bba97b0",
+        "tokens": [
+          "0x015628ce9150db1bce2fbb717a09e846f8a32436",
+          "0x1121acc14c63f3c872bfca497d10926a6098aac5"
+        ],
+        "reserves": [
+          "28372760322908309654",
+          "6685460974634097706"
+        ]
+      },
+      {
+        "pool": "0x385ae785af10c8c534d02068f365cec78eb3a613",
+        "tokens": [
+          "0x0ad71a3ec6805d1200cbddde46b4f8c3564b7b2c",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "909825709951580166",
+          "2048019620641"
+        ]
+      },
+      {
+        "pool": "0x44e2390a0302df518aa09484fcac45fb36ec668b",
+        "tokens": [
+          "0x97ac4a2439a47c07ad535bb1188c989dae755341",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "79656446805268978149",
+          "454006803173"
+        ]
+      },
+      {
+        "pool": "0x54562e89b52533b19cf1df761d8b4de0732f2b73",
+        "tokens": [
+          "0x5a9780bfe63f3ec57f01b087cd65bd656c9034a8",
+          "0x6b175474e89094c44da98b954eedeac495271d0f"
+        ],
+        "reserves": [
+          "952097",
+          "2"
+        ]
+      },
+      {
+        "pool": "0xb4209f66626f51178be79fe452858071d6fd2e0d",
+        "tokens": [
+          "0x5a9780bfe63f3ec57f01b087cd65bd656c9034a8",
+          "0xf576e1f09e2eb4992d5ffdf68bec4ea489fa417d"
+        ],
+        "reserves": [
+          "906488513448465056976376063",
+          "1116283213266459444996818040"
+        ]
+      },
+      {
+        "pool": "0x5c2f0a1dbc0782f0b6220905411ce08b152fb78a",
+        "tokens": [
+          "0x2b591e99afe9f32eaa6214f7b7629768c40eeb39",
+          "0xa882606494d86804b5514e07e6bd2d6a6ee6d68a"
+        ],
+        "reserves": [
+          "25000995000",
+          "27998888875854495042224"
+        ]
+      },
+      {
+        "pool": "0xb47cea35426ae0017502fa8558da483067245daa",
+        "tokens": [
+          "0x22bd3793a7ef851b30fd8d9b64b02162667aed01",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "259371130667111801035910341513",
+          "386567615165615"
+        ]
+      },
+      {
+        "pool": "0xda16b657ac46bed5fd9f560d021f529f5d256ac0",
+        "tokens": [
+          "0x22bd3793a7ef851b30fd8d9b64b02162667aed01",
+          "0x6b175474e89094c44da98b954eedeac495271d0f"
+        ],
+        "reserves": [
+          "194903971756861890849495449830",
+          "513823760718205132"
+        ]
+      },
+      {
+        "pool": "0x069c5528d72a07996a3871a364e13237762ee067",
+        "tokens": [
+          "0x22bd3793a7ef851b30fd8d9b64b02162667aed01",
+          "0xa882606494d86804b5514e07e6bd2d6a6ee6d68a"
+        ],
+        "reserves": [
+          "21289229366631908293195732460",
+          "4704695291118021265177"
+        ]
+      },
+      {
+        "pool": "0x8646aa29205aeac8d4cb794ec739e1fbf821dfbd",
+        "tokens": [
+          "0x22bd3793a7ef851b30fd8d9b64b02162667aed01",
+          "0x2b591e99afe9f32eaa6214f7b7629768c40eeb39"
+        ],
+        "reserves": [
+          "46604567465600954703195626097",
+          "21500202374"
+        ]
+      }
+    ],
+    "samples": [
+      {
+        "network": "ethereum",
+        "dex": "9inch-ethereum",
+        "pool": "0xe0533126c4013e2f5bcf44a2c84a396219be2d9d",
+        "tokens": [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xfd8b9ba4845fb38c779317ec134b298c064937a2"
+        ],
+        "factory": "0xcbae5c3f8259181eb7e2309bc4c72fdf02dd56d8",
+        "runtime_hash": "0xae70832ee576a2f2f46134450f5781b1d3d973449afb26c19f35140a0f245cc5",
+        "creation_code_hash": "0xd2cf61d4acad30e9fe5ec59d0f94de554d88701f1bd8fc635546866716718511",
+        "verify_pair_boundary": true,
+        "invariant_error": "NineInch: K",
+        "fee_fraction": [
+          10000,
+          29
+        ],
+        "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+        "reserves": [
+          "2473570028962340022",
+          "36094755622484404644407216410"
+        ],
+        "pips": 2900,
+        "cases": [
+          {
+            "in": "247357002896234",
+            "bought": "3598649261800025874507410",
+            "returned": "245924554967008",
+            "buy_return": "3598649261800025874507410",
+            "sell_return": "245924554967008",
+            "observed_balances": [
+              "3598649261800025874507410",
+              "245924554967008",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "3598649261800025874507410",
+                "next_revert": "NineInch: K"
+              },
+              "sell": {
+                "max": "245924554967008",
+                "next_revert": "NineInch: K"
+              }
+            }
+          },
+          {
+            "in": "4947140057924680",
+            "bought": "71836904507389762438702202",
+            "returned": "4918545109712595",
+            "buy_return": "71836904507389762438702202",
+            "sell_return": "4918545109712595",
+            "observed_balances": [
+              "71836904507389762438702202",
+              "4918545109712595",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "71836904507389762438702202",
+                "next_revert": "NineInch: K"
+              },
+              "sell": {
+                "max": "4918545109712595",
+                "next_revert": "NineInch: K"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "selector": {
+      "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "requireCanonical": true
+    },
+    "height": 26494988,
+    "state_root": "0xbd73f03df514c4d550c21a6d567e25a4190f646acbb94b8e8c2462d7c9b17db7",
+    "endpoint": "https://eth.drpc.org"
   }
 }

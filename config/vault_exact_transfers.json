@@ -1,4 +1,5 @@
 {
+  "chain_id": 8453,
   "selector": {
     "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
     "requireCanonical": true

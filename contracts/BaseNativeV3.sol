@@ -6,6 +6,11 @@ interface IBaseForkPool {
     function factory() external view returns (address);
 }
 
+interface IBaseElastic {
+    function swapFeeUnits() external view returns(uint24);
+    function swapExactInputSingle(IBaseForkRouter.Input calldata order) external payable returns(uint256);
+}
+
 interface IBaseForkFactory {
     function getPool(address tokenA, address tokenB, uint24 fee) external view returns (address);
 }
@@ -28,6 +33,8 @@ interface IBaseForkRouter {
 /// The three verified Base deployments use the same order ABI but distinct pool callbacks.
 /// Resolve the pool against its actual factory before approving the corresponding native router.
 library BaseNativeV3 {
+    address private constant HORIZON=address(bytes20(hex"99aec509174cbf06f8f7e15ddeeb7bcc32363827"));
+
     function market(address pool, address a, address b) internal view returns (address router, uint24 fee) {
         if (a == b || a == address(0) || b == address(0)) return (address(0), 0);
         (bool ok, bytes memory value) = pool.staticcall(abi.encodeCall(IBaseForkPool.factory, ()));
@@ -39,15 +46,19 @@ library BaseNativeV3 {
             router = address(bytes20(hex"48e285bc3690415c3b6220c3f833ed9c303a4f46"));
         } else if (factory == address(bytes20(hex"d6ab0566e7e60b67c50ac73ddff4e3ddcb829ec2"))) {
             router = address(bytes20(hex"34c97b800876d9ca4658561f00512fa7abdaf315"));
+        } else if (factory==address(bytes20(hex"07aced5690e09935b1c0e6e88b772d9440f64718"))) {
+            router=HORIZON;
         } else {
             return (address(0), 0);
         }
-        fee = IBaseForkPool(pool).fee();
+        fee = router==HORIZON ? IBaseElastic(pool).swapFeeUnits() : IBaseForkPool(pool).fee();
         if (IBaseForkFactory(factory).getPool(a, b, fee) != pool) return (address(0), 0);
     }
 
     function swap(address router, uint24 fee, address a, address b, uint256 amount, uint256 minimum,
                   uint256 deadline, address recipient) internal {
-        IBaseForkRouter(router).exactInputSingle(IBaseForkRouter.Input(a,b,fee,recipient,deadline,amount,minimum,0));
+        IBaseForkRouter.Input memory order=IBaseForkRouter.Input(a,b,fee,recipient,deadline,amount,minimum,0);
+        if(router==HORIZON) IBaseElastic(router).swapExactInputSingle(order);
+        else IBaseForkRouter(router).exactInputSingle(order);
     }
 }

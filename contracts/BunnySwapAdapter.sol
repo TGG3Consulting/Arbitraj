@@ -31,6 +31,7 @@ interface IBunnyPair {
 contract BunnySwapAdapter {
     IRabbitRouter public immutable router;
     bool transient private trading;
+    address transient private nativeSender;
 
     error InvalidOrder();
     error IncompleteTransfer();
@@ -43,7 +44,14 @@ contract BunnySwapAdapter {
     }
 
     receive() external payable {
-        if (!trading || (msg.sender!=address(router) && msg.sender!=router.token1())) revert InvalidOrder();
+        if (msg.sender!=nativeSender) revert InvalidOrder();
+    }
+
+    // FRIEND возвращает пустые данные при успешных transferFrom и approve. WETH возвращает true.
+    // Ошибка вызова, false и некорректный ответ откатывают обмен.
+    function checkedCall(address token,bytes memory data) private {
+        (bool ok,bytes memory result)=token.call(data);
+        if (!ok || (result.length!=0 && !abi.decode(result,(bool)))) revert IncompleteTransfer();
     }
 
     function execute(address market,address input,address output,uint256 amount,uint256 minimum,uint256 deadline)
@@ -67,19 +75,23 @@ contract BunnySwapAdapter {
         uint256 baseIn=token.balanceOf(address(this));
         uint256 walletOut=payout.balanceOf(to);
         uint256 nativeBefore=address(this).balance;
-        if (!token.transferFrom(msg.sender,address(this),amount)
-            || token.balanceOf(address(this))-baseIn!=amount
+        checkedCall(input,abi.encodeCall(IBunnyToken.transferFrom,(msg.sender,address(this),amount)));
+        if (token.balanceOf(address(this))-baseIn!=amount
             || walletIn-token.balanceOf(msg.sender)!=amount) revert IncompleteTransfer();
         if (buy) {
+            nativeSender=weth;
             IBunnyWeth(weth).withdraw(amount);
+            nativeSender=address(0);
             router.swapExactETHForTokens{value:amount}(minimum,to,deadline);
         } else {
-            if (!token.approve(address(router),amount)) revert IncompleteTransfer();
+            checkedCall(input,abi.encodeCall(IBunnyToken.approve,(address(router),amount)));
+            nativeSender=address(router);
             uint256 paid=router.swapExactTokensForETH(amount,minimum,address(this),deadline);
+            nativeSender=address(0);
             if (address(this).balance-nativeBefore!=paid || token.allowance(address(this),address(router))!=0)
                 revert IncompleteTransfer();
             IBunnyWeth(weth).deposit{value:paid}();
-            if (!payout.transfer(to,paid)) revert IncompleteTransfer();
+            checkedCall(output,abi.encodeCall(IBunnyToken.transfer,(to,paid)));
         }
         received=payout.balanceOf(to)-walletOut;
         if (received==0 || received<minimum || token.balanceOf(address(this))!=baseIn

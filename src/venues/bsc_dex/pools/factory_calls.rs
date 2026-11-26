@@ -140,6 +140,17 @@ pub fn plan(
             out.notes.push(format!("{}: не ищется — {why}", f.id));
             continue;
         }
+        if f.variant == super::family_variant::Variant::BunnySwap {
+            let (token,wrapped)=super::bunnyswap::tokens(ctx,f)?;
+            let router=ctx.dex_addr("dex.quoter",f.id)?;
+            for (coin,quote) in [(token,wrapped),(wrapped,token)] {
+                if coins.contains(&coin) && quotes.contains(&quote) {
+                    out.asks.push(Ask{family:f,coin,quote,q:Q::V2});
+                    out.calls.push((router,super::bunnyswap::IRabbit::pairCall{}.abi_encode().into()));
+                }
+            }
+            continue;
+        }
         // WooFi: «реестр» — оракул (state(монета)); остальные — фабрика DEX.
         let registry = if matches!(f.proto, Proto::BaiBai | Proto::Elfomo | Proto::Lunar) {
             "dex.pmm_pool"

@@ -184,6 +184,8 @@ fn supernova_origin_fee_linked_ticks_and_terminal_wallet_match_at_both_sizes() {
         let ticks = map(m);
         let normal = m["wallet"].as_array().unwrap();
         assert_eq!(normal.len(), 4);
+        let discounted = m["discounted_wallet"].as_array().unwrap();
+        assert_eq!(discounted.len(), if m["pool"] == "0xde758db54c1b4a87b06b34b30ef0a710dc35388f" { 2 } else { 0 });
         for c in normal
             .iter()
             .chain(m["discounted_wallet"].as_array().into_iter().flatten())

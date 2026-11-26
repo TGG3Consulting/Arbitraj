@@ -65,6 +65,7 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // Nomiswap Stable (решение 284): PairCreated фабрики — та же подпись, что у UniswapV2Factory (L1216).
             // SmarDex (решение 288): PairCreated(token0, token1, pair, uint) — та же подпись (ISmardexFactory.sol L12).
             // Camelot V2 (решение 443): PairCreated(token0 indexed, token1 indexed, pair, uint) — CamelotFactory.sol L23.
+            Proto::V2 if f.variant == super::family_variant::Variant::BunnySwap => continue,
             Proto::V2 | Proto::NomiStable | Proto::Smardex | Proto::CamelotV2 => (
                 "dex.factory",
                 IV2Factory::PairCreated::SIGNATURE_HASH,

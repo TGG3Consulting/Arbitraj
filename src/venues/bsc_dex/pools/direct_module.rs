@@ -57,7 +57,7 @@ pub fn market(ctx: &Ctx, entry: &Entry) -> GatewayResult<Address> {
         (PoolRef::Contract(address), super::families::Proto::UniswapV3)
             if entry.family.variant == super::family_variant::Variant::RegisteredV3 => Ok(*address),
         (PoolRef::Contract(address), super::families::Proto::V2)
-            if entry.family.variant == super::family_variant::Variant::Memebox => Ok(*address),
+            if matches!(entry.family.variant,super::family_variant::Variant::Memebox | super::family_variant::Variant::BunnySwap) => Ok(*address),
         (PoolRef::Contract(address), super::families::Proto::Slipstream) => Ok(*address),
         _ => Err(ctx.err(
             ErrorCode::NoRoute,
@@ -101,11 +101,38 @@ pub async fn verify_code(ctx: &Ctx, id: &str, addr: Address, tag: &Value) -> Gat
     Ok(())
 }
 
-pub(crate) async fn verify_factory(ctx: &Ctx, f: &Family, addr: Address, at: &Value) -> GatewayResult<()> {
+/// Вход проверки V5 с уже выбранным каноническим блоком. Прямой кошелёк проходит сюда через verify().
+pub async fn verify_factory(ctx: &Ctx, f: &Family, addr: Address, at: &Value) -> GatewayResult<()> {
+    let generation=ctx.settings.generation();
+    let kind=ctx.dex_text("dex.kind",f.id)?;
+    if at["requireCanonical"]!=true || at["blockHash"].as_str().and_then(|s|s.parse::<B256>().ok()).is_none() {
+        return Err(ctx.err(ErrorCode::BadResponse,"Для сверки модуля требуется канонический хеш блока"));
+    }
+    if f.variant == super::family_variant::Variant::BunnySwap {
+        if kind!="bunnyswap_module" || !f.tradable { return Err(ctx.err(ErrorCode::NoRoute,"Не включён модуль RabbitRouter")); }
+        verify_code(ctx,f.id,addr,at).await?;
+        let c=super::bunnyswap::IRabbit::routerCall{};
+        let [r]=super::nami_batch::read(ctx,[super::nami_batch::view(at,addr,c.clone())]).await?;
+        if super::nami_batch::decode(&r,c)?!=ctx.dex_addr("dex.quoter",f.id)? || generation!=ctx.settings.generation(){
+            return Err(ctx.err(ErrorCode::QuoteMismatch,"Модуль связан с другим RabbitRouter или настройки изменились"));
+        }
+        return Ok(());
+    }
+    let expected=match f.variant {
+        super::family_variant::Variant::Memebox => "memebox_v5",
+        super::family_variant::Variant::RegisteredV3 => "registered_v3_module",
+        _ => return Err(ctx.err(ErrorCode::NotApplicable,"Для этого протокола нет модуля с привязкой к фабрике")),
+    };
+    if kind!=expected || !f.tradable {
+        return Err(ctx.err(ErrorCode::NotApplicable,"Выбранный вид модуля не соответствует семейству пула"));
+    }
     let factory = ctx.dex_addr("dex.factory", f.id)?;
     verify_code(ctx, f.id, addr, at).await?;
     let call = super::abi_check::IPoolImmutables::factoryCall {};
     let [raw] = super::nami_batch::read(ctx, [super::nami_batch::view(at, addr, call.clone())]).await?;
+    if generation!=ctx.settings.generation(){
+        return Err(ctx.err(ErrorCode::StaleData,"Настройки модуля изменились при сверке фабрики"));
+    }
     if super::nami_batch::decode(&raw, call)? != factory {
         return Err(ctx.err(
             ErrorCode::InvalidAddress,

@@ -186,6 +186,12 @@ def tables(network, snapshots, profiles):
                     "Публичное развёртывание этих сборок владельцем на текущем этапе не зафиксировано. "
                     "Владелец развёртывает модуль с адресом фабрики своей площадки, затем указывает его адрес в профиле DEX. "
                     "Контракты используют разные селекторы обратного вызова. [Проверка обеих сборок](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45908138387)."])
+        bunny_path = "tests/data/first_run_dex_2026-11-26/bunnyswap_base.json"
+        bunny = read(Path(bunny_path))
+        out.extend(["", f"BunnySwap · существует один рынок FRIEND/WETH в RabbitRouter. В {len(bunny['cases'])} размерах "
+                    "кошелёк купил FRIEND за ETH и получил ETH при обратной продаже. Комиссия пары 15/1 000; "
+                    "дополнительный сбор протокола равен нулю. FRIEND возвращает пустые данные при успешном переводе. "
+                    f"[Обе выплаты, границы цены и срока](../{bunny_path})."])
         blue_path = "tests/data/first_run_dex_2026-11-26/bluedex_base.json"
         blue = read(Path(blue_path))
         router_samples = sum(2*len(p.get("cases", [])) for p in blue["native_router"]["samples"])
@@ -942,8 +948,14 @@ def tables(network, snapshots, profiles):
                    "поэтому одиночный пул сравнивается с обычным маршрутом отдельно. "
                    f"V5 подтвердил {sum(len(m['wallet']) for m in swaps)} полных обменов пяти пар на двух размерах "
                    "в обе стороны и столько же откатов при повышении минимума на единицу. "
+                   "Для отдельного адреса с зарегистрированной скидкой проверены две дополнительные выплаты WETH/USDT. Расчёт действующей сделки использует скидку её плательщика. "
                    "[Выплаты кошелька](../tests/data/first_run_dex_2026-11-26/supernova_ethereum_wallets.json.gz). "
                    "[Пулы и источники комиссии](../tests/data/first_run_dex_2026-11-26/supernova_ethereum_directory.json).")
+        out.append("**Supernova AMM.** На том же блоке фабрика зарегистрировала 14 пар. Отдельный PairGenerator создал 12 волатильных и две стабильные пары. "
+                   "На одном пуле каждого типа V5 подтвердил восемь выплат на двух размерах в обоих направлениях. Минимум на единицу выше результата вызвал восемь откатов. "
+                   "Ставка читается для конкретного пула через factory.getFee(pool,stable). "
+                   "[Реестр и ставки](../tests/data/first_run_dex_2026-11-26/ethereum_classic_registry_supernova-amm.json.gz) · "
+                   "[Суммы и остатки](../tests/data/first_run_dex_2026-11-26/ethereum_classic_wallets_supernova-amm.json.gz).")
         dx=read(Path("tests/data/first_run_dex_2026-11-26/deltaswap_ethereum.json"))["current"]
         x7=read(Path("tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json"))
         for key in ("x7-finance","x7-finance-ethereum"):
@@ -958,6 +970,11 @@ def tables(network, snapshots, profiles):
                    "по обеим сторонам трёх рынков с точным списанием и порогом на 1 raw выше выплаты. "
                    "На этом блоке параметры фабрики равны [3, 0], комиссия обычного кошелька составляет 0,3%. "
                    "[Реестр и денежные результаты](../tests/data/first_run_dex_2026-11-26/deltaswap_ethereum.json).")
+        nine=x7["9inch-ethereum"]
+        out.append(f"**9inch Ethereum.** Фабрика подтвердила {len(nine['pools'])} CREATE2-пар. "
+                   "Ставка стандартного swap составляет 0,29%. В двух направлениях на двух размерах "
+                   "V5 получил расчётный выход, а повышение минимума на единицу вызвало откат. "
+                   "[Реестр, код и предел выплаты](../tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json).")
         out.append("")
     out.extend(["", f"Код каждого адреса проверен в [снимке размещений](../tests/data/first_run_dex_2026-11-26/{network}.json). "
                 "Две записи вызова Router.getAmountOut содержат исходные аргументы и ответ. "

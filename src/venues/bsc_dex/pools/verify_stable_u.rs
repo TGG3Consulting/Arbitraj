@@ -59,6 +59,9 @@ async fn one(ctx: &Ctx, c: &Candidate, size: usize) -> Result<Result<Found, Stri
         Ok(a) => a,
         Err(_) => return Ok(Err(format!("«{}» — не адрес контракта пула", c.pool))),
     };
+    if c.family.variant == super::family_variant::Variant::BunnySwap {
+        return Ok(super::bunnyswap::verify(ctx,c,pool).await.map_err(|e|e.message));
+    }
     if c.family.proto == Proto::BaiBai {
         return Ok(super::baibai::verify(ctx, c, pool)
             .await

@@ -141,6 +141,7 @@ pub mod fee_refresh;
 pub mod fee_watch;
 pub mod fraxswap;
 pub mod memebox;
+pub mod bunnyswap;
 pub mod registered_v3;
 pub mod fusion_book;
 pub mod fusion_clock;

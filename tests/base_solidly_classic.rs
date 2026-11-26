@@ -9,8 +9,9 @@ use std::{fs::File, path::Path};
 
 fn archive(kind: &str, id: &str) -> Value {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/first_run_dex_2026-11-26");
+    let network = if id == "supernova-amm" { "ethereum" } else { "base" };
     serde_json::from_reader(GzDecoder::new(
-        File::open(dir.join(format!("base_classic_{kind}_{id}.json.gz"))).unwrap(),
+        File::open(dir.join(format!("{network}_classic_{kind}_{id}.json.gz"))).unwrap(),
     ))
     .unwrap()
 }
@@ -60,14 +61,16 @@ fn factory_ownership_fee_and_both_wallet_directions_match_the_v1_curve() {
         "hydrex-classic",
         "infusion",
         "velocimeter-base",
+        "supernova-amm",
     ] {
         let dir = archive("registry", id);
         let wallets = archive("wallets", id);
         let profile = &cfg
             .iter()
-            .find(|v| v["id"] == id && v["chain_id"] == 8453)
+            .find(|v| v["id"] == id && v["chain_id"] == dir["chain_id"])
             .unwrap()["settings"];
-        assert_eq!(profile["dex.kind"], "solidly_v1");
+        let generator = dir["factory"].get("generator");
+        assert_eq!(profile["dex.kind"], if generator.is_some() { "solidly_v1_generator" } else { "solidly_v1" });
         assert_eq!(profile["dex.factory"], dir["factory"]["address"]);
         assert_eq!(
             profile["dex.factory_runtime_hash"],
@@ -85,7 +88,14 @@ fn factory_ownership_fee_and_both_wallet_directions_match_the_v1_curve() {
         }
         let rows = dir["markets"].as_array().unwrap();
         pools += rows.len();
-        let factory = profile["dex.factory"]
+        let deployer = match generator {
+            Some(g) => {
+                assert_eq!(profile["dex.solidly_generator_runtime_hash"], g["runtime_hash"]);
+                &g["address"]
+            }
+            None => &profile["dex.factory"],
+        };
+        let factory = deployer
             .as_str()
             .unwrap()
             .parse::<Address>()
@@ -178,8 +188,8 @@ fn factory_ownership_fee_and_both_wallet_directions_match_the_v1_curve() {
             }
         }
     }
-    assert_eq!(pools, 1169);
-    assert_eq!((fills, fresh_fills), (72, 4));
+    assert_eq!(pools, 1183);
+    assert_eq!((fills, fresh_fills), (80, 4));
 }
 
 #[test]

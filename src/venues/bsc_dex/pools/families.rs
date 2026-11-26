@@ -446,8 +446,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
         "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
-        "memebox_v5" => (PoolKind::V2, Proto::V2, true, true, true),
-        "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
+        "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
+        "bunnyswap" | "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
         "v2_fork" | "v2_diamond_router" | "v2_diamond_create" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_fork_dual_create2" | "v2_whiteswap" => {
@@ -814,6 +814,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             if f.executor_kind.is_some() {
                 list.extend(["dex.router", "dex.module_runtime_hashes"]);
             }
+        }
+        Proto::V2 if f.variant == Variant::BunnySwap => {
+            list.extend(["dex.bunny_pair","dex.bunny_token","dex.quoter","dex.quoter_runtime_hash","dex.pair_runtime_hash"]);
+            if f.tradable { list.extend(["dex.router","dex.module_runtime_hashes"]); }
         }
         Proto::V2 if f.variant == Variant::Memebox => {
             list.extend(["dex.factory", "dex.factory_runtime_hash", "dex.pool_code_hashes",

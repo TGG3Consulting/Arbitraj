@@ -7,6 +7,7 @@ pragma solidity 0.8.37;
 
 import {IElfomoRouter, IElfomoToken, ILunarPool, IBaseWrappedEther, IBaiEntry} from "./IBasePmm.sol";
 
+import {BaseVirtuals} from "./BaseVirtuals.sol";
 import {BaseNativeV3} from "./BaseNativeV3.sol";
 
 contract BasePmmExecutor {
@@ -63,8 +64,10 @@ contract BasePmmExecutor {
         bool nativeV3 = market != ELFOMO && market != LUNAR && market != BAI;
         address spender = market;
         uint24 fee;
+        address bonding;
         if (nativeV3) {
             (spender, fee) = BaseNativeV3.market(market, a, b);
+            if (spender == address(0)) (spender,bonding)=BaseVirtuals.market(market,a,b);
             if (spender == address(0)) revert InvalidOrder();
         } else if (!supported(market, a, b)) revert UnsupportedToken();
         trading = true;
@@ -81,7 +84,12 @@ contract BasePmmExecutor {
         bool approve = market != LUNAR || a != WETH;
         if (approve) checked(a, abi.encodeCall(input.approve, (spender, amount)));
         uint256 promised;
-        if (nativeV3) {
+        if (bonding!=address(0)) {
+            BaseVirtuals.swap(bonding,market,a,b,amount,minimum,deadline);
+            uint256 paid=output.balanceOf(address(this))-heldOut;
+            if(paid<minimum) revert InsufficientOutput();
+            checked(b,abi.encodeCall(output.transfer,(msg.sender,paid)));
+        } else if (nativeV3) {
             BaseNativeV3.swap(spender, fee, a, b, amount, minimum, deadline, msg.sender);
         } else if (market == ELFOMO) {
             if (getAmountOut(a, b, amount) < minimum) revert InsufficientOutput();

@@ -26,8 +26,10 @@ MARKETS = {
 }
 ORDER = "(address,address,uint24,address,uint256,uint256,uint256,uint160)"
 QUOTE = "(address,address,uint256,uint24,uint160)"
-OMNI_FUNDING_FACTORY = "0x5e7bb104d84c7cb9b682aac2f3d509f5f406809a"
-OMNI_FUNDING_POOL = "0xd3d9f0f7d0d477e0a19222965b59233ad7f6bc6b"
+OMNI_FUNDING_POOLS = [
+    ("0x9cb220581b91b0c83223012fe69688b92ad07a76","0x381f7549c86a6ca883147cda53088d6e04844342",10),
+    ("0x5e7bb104d84c7cb9b682aac2f3d509f5f406809a","0xd3d9f0f7d0d477e0a19222965b59233ad7f6bc6b",1),
+]
 FUNDING_EXEC = "0x"+keccak(text="isolated Omni archive frxUSD funding")[-20:].hex()
 
 
@@ -89,7 +91,7 @@ def collect(snapshot, endpoint, module_code=None):
         quote_method = "quoteExactInputSingleV3" if name == "throne-v3-base" else "quoteExactInputSingle"
         gas = 2_000_000
         def tx(to, data):
-            return {"from":holder, "to":to, "gas":hex(gas if to in (router,quoter,EXEC) else 2_000_000), "data":data}
+            return {"from":holder, "to":to, "gas":hex(gas if to in (router,quoter,EXEC,FUNDING_EXEC) else 2_000_000), "data":data}
         def balance(token):
             return tx(token,calldata("balanceOf(address)",["address"],[holder]))
         def approve(token, x, spender=router):
@@ -170,30 +172,52 @@ def collect(snapshot, endpoint, module_code=None):
             gas = 16_777_216
             market["extended_cash"] = [roundtrip(cash,other,n) for n in amounts]
             # Independently acquire frxUSD outside the target pool; reverse-side depth starts at the original price.
-            funding_pool = view(OMNI_FUNDING_FACTORY,"getPool(address,address,int24)","address",
-                                ["address","address","int24"],[cash,other,1])
-            if funding_pool!=OMNI_FUNDING_POOL or rpc(endpoint,"eth_getCode",[FUNDING_EXEC,selector])!="0x":
-                raise ValueError("invalid independent frxUSD funding market")
+            if rpc(endpoint,"eth_getCode",[FUNDING_EXEC,selector])!="0x":
+                raise ValueError("isolated funding executor address is occupied")
             unit=10**view(other,"decimals()","uint8")
             word=lambda n:"0x"+format(n,"064x")
             code=RUNTIME.read_text().strip().removeprefix("0x")
             extra_overrides[FUNDING_EXEC]={"code":"0x"+code,"stateDiff":{
                 word(0):word(int(holder,16)),word(1):word(int(WETH,16))}}
-            cash_in = 20_000_000
-            data=calldata("execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
-                          ["address","uint256","address","uint256","uint256",STEP+"[]"],
-                          [cash,cash_in,other,10*unit,deadline,[(1,funding_pool,cash,other,10000,b"")]])
-            funding=[balance(cash),balance(other),approve(cash,0,FUNDING_EXEC),
-                     approve(cash,cash_in,FUNDING_EXEC),tx(FUNDING_EXEC,data),balance(cash),balance(other)]
-            outcome=simulate(funding)
-            if any(r["status"]!="0x1" for r in outcome):
-                raise ValueError(f"independent frxUSD funding failed {[(i,r.get('error')) for i,r in enumerate(outcome) if r['status']!='0x1']}")
-            acquired=output(outcome[-1])-output(outcome[1])
-            if output(outcome[0])-output(outcome[-2])!=cash_in or acquired<10*unit:
-                raise ValueError("funding wallet balances did not reconcile")
-            market["reverse_funding"]={"factory":OMNI_FUNDING_FACTORY,"pool":funding_pool,"payer":holder,
-                "spent_usdc":str(cash_in),"received_frxusd":str(acquired),"executor_runtime":"0x"+keccak(bytes.fromhex(code)).hex()}
-            market["extended_frxusd"]=[roundtrip(other,cash,unit*n//10**6,funding) for n in amounts]
+            attempts=[]
+            market["funding_attempts"]=attempts
+            for fund_factory,fund_pool,spacing in OMNI_FUNDING_POOLS:
+                registered=view(fund_factory,"getPool(address,address,int24)","address",
+                                ["address","address","int24"],[cash,other,spacing])
+                if (registered!=fund_pool or view(fund_pool,"factory()","address")!=fund_factory or
+                        {view(fund_pool,"token0()","address"),view(fund_pool,"token1()","address")}!={cash,other}):
+                    raise ValueError(f"invalid independent funding market {fund_pool}")
+                cash_in=12_000_000
+                data=calldata("execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
+                              ["address","uint256","address","uint256","uint256",STEP+"[]"],
+                              [cash,cash_in,other,10*unit,deadline,[(1,fund_pool,cash,other,10000,b"")]])
+                funding=[balance(cash),balance(other),approve(cash,0,FUNDING_EXEC),
+                         approve(cash,cash_in,FUNDING_EXEC),tx(FUNDING_EXEC,data),balance(cash),balance(other)]
+                outcome=simulate(funding)
+                evidence={"factory":fund_factory,"pool":fund_pool,"spent_limit_usdc":str(cash_in),
+                          "minimum_frxusd":str(10*unit),"gas_limit":gas,
+                          "calls":[{"index":i,"status":r["status"],"gas_used":int(r["gasUsed"],16),
+                                    "returnData":r["returnData"],"error":r.get("error")} for i,r in enumerate(outcome)]}
+                attempts.append(evidence)
+                if any(r["status"]!="0x1" for r in outcome):
+                    continue
+                acquired=output(outcome[-1])-output(outcome[1])
+                spent=output(outcome[0])-output(outcome[-2])
+                if spent!=cash_in or acquired<10*unit:
+                    raise ValueError("funding wallet balances did not reconcile")
+                market["reverse_funding"]={"factory":fund_factory,"pool":fund_pool,"payer":holder,
+                    "spent_usdc":str(spent),"received_frxusd":str(acquired),"executor_runtime":"0x"+keccak(bytes.fromhex(code)).hex()}
+                market["extended_frxusd"]=[roundtrip(other,cash,unit*n//10**6,funding) for n in amounts]
+                break
+            if "reverse_funding" not in market:
+                # Preserve independent opposite-direction quotes when wallet funding cannot be demonstrated.
+                market["unfunded_reverse_quotes"]=[]
+                for n in amounts:
+                    size=unit*n//10**6
+                    reply=simulate([price(other,cash,size)])[0]
+                    q=output(reply,4)
+                    market["unfunded_reverse_quotes"].append({"requested":str(size),"quoted":str(q) if q is not None else None,
+                                                            "error":reply.get("error"),"gas_limit":gas})
             extra_overrides.clear()
     return dict(chain_id=8453,selector=selector,block=snapshot["block"],state_root=header["stateRoot"],markets=markets,
                 module_runtime=("0x"+keccak(bytes.fromhex(module_code)).hex()) if module_code else None)

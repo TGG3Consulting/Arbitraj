@@ -14,29 +14,58 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Movement {
+    /// Сумма из подготовленной принятой заявки (в единицах счёта отправителя).
+    #[serde(default)]
+    pub debited: Option<Decimal>,
     pub sent: Transfer,
     pub credit: Transfer,
 }
 
 fn verified(
-    m: &super::settlement_market::Market,
+    (sender, recipient): (&super::types::Asset, &super::types::Asset),
     sent: Transfer,
     credit: Transfer,
-    to: &VenueId,
-    network: &str,
-    budget: Decimal,
+    (from, to): (&VenueId, &VenueId),
+    (from_net, network): (&str, &str),
+    (budget, debited): (Decimal, Decimal),
 ) -> Result<Movement, String> {
     let tx = sent
         .tx_hash
         .as_deref()
         .filter(|v| !v.is_empty())
         .ok_or("У вывода конверсии нет хеша")?;
-    if credit.status != TransferStatus::Credited
+    if sent.venue != *from
+        || sent.network != from_net
+        || sent.venue_ref.is_empty()
+        || !matches!(sent.status, TransferStatus::Sent | TransferStatus::Credited)
+        || sent.asset.ticker != sender.ticker
+        || sent
+            .asset
+            .chain
+            .as_ref()
+            .is_some_and(|c| Some(c) != sender.chain.as_ref())
+        || sent
+            .asset
+            .contract
+            .is_some_and(|a| Some(a) != sender.contract)
+        || sent.amount <= Decimal::ZERO
+        || sent.amount > debited
+        || debited > budget
+        || credit.status != TransferStatus::Credited
         || credit.venue != *to
         || credit.amount <= Decimal::ZERO
-        || credit.asset.ticker != m.asset.ticker
+        || credit.asset.ticker != recipient.ticker
+        || credit
+            .asset
+            .chain
+            .as_ref()
+            .is_some_and(|c| Some(c) != recipient.chain.as_ref())
+        || credit
+            .asset
+            .contract
+            .is_some_and(|a| Some(a) != recipient.contract)
         || credit.network != network
-        || credit.amount > budget
+        || credit.amount > debited
         || !credit
             .tx_hash
             .as_deref()
@@ -46,7 +75,11 @@ fn verified(
             "Нет зачисления расчётного актива по хешу вывода на указанном получателе".into(),
         );
     }
-    Ok(Movement { sent, credit })
+    Ok(Movement {
+        sent,
+        credit,
+        debited: Some(debited),
+    })
 }
 
 /// После перезапуска сначала проверяет исход исходного вывода. Новый баланс и новый адрес депозита
@@ -59,11 +92,25 @@ pub async fn move_asset(
     funding: bool,
     amount: Decimal,
 ) -> Result<Movement, String> {
+    move_token(core, id, (m, &m.asset), wallet, funding, amount).await
+}
+
+/// Перевод только актива, закреплённого в поручении. Обратное направление проверяет собственный ввод/вывод.
+pub(super) async fn move_token(
+    core: &Core,
+    id: &str,
+    (m, token): (&super::settlement_market::Market, &super::types::Asset),
+    wallet: &DexAccountId,
+    from_cex: bool,
+    amount: Decimal,
+) -> Result<Movement, String> {
     use super::transfers;
     m.ensure(core)?;
     let dex = m.dex.clone();
     let cex = &m.cex;
-    let (from, to) = if funding { (cex, &dex) } else { (&dex, cex) };
+    let (from, to) = if from_cex { (cex, &dex) } else { (&dex, cex) };
+    let from_asset = super::venue_ticker::on_venue(core, token, from);
+    let to_asset = super::venue_ticker::on_venue(core, token, to);
     let deps = &core.inner.deps;
     let sender = deps
         .gw
@@ -73,7 +120,7 @@ pub async fn move_asset(
     if !sender.supports_settlement_withdrawal() || id.is_empty() || amount <= Decimal::ZERO {
         return Err("Нет исполнимого вывода расчётного токена".into());
     }
-    if !funding {
+    if !from_cex {
         let receiver = deps.gw.get_as(to, None).await.map_err(|e| e.message)?;
         if !receiver.supports_settlement_credit() {
             return Err("Для биржи не подтверждено прямое зачисление на торговый счёт".into());
@@ -83,17 +130,27 @@ pub async fn move_asset(
         .await
         .map_err(|e| e.message)?
     {
-        if req.amount > amount || !m.matches(&req.asset) {
+        if req.amount > amount || req.asset != *token || req.asset.ticker != from_asset.ticker {
             return Err("Ранее отправленный вывод не совпадает с бюджетом и активом этапа".into());
         }
-        let created = effect::withdraw(&deps.db, m, sender.as_ref(), &req, to, Some(wallet), None)
-            .await
-            .map_err(|e| e.message)?;
+        let created = effect::withdraw(
+            &deps.db,
+            (m, &from_asset),
+            sender.as_ref(),
+            &req,
+            to,
+            Some(wallet),
+            None,
+        )
+        .await
+        .map_err(|e| e.message)?;
         let sent = sender
             .withdrawal_status_for(&created)
             .await
             .map_err(|e| e.message)?;
-        if !matches!(sent.status, TransferStatus::Sent | TransferStatus::Credited) {
+        if sent.venue_ref != created.venue_ref
+            || !matches!(sent.status, TransferStatus::Sent | TransferStatus::Credited)
+        {
             return Err(format!(
                 "Вывод {} находится в состоянии {:?}",
                 created.venue_ref, sent.status
@@ -116,26 +173,45 @@ pub async fn move_asset(
             expected: sender.withdrawal_wire(&created, &sent),
         };
         let credit = recipient
-            .deposit_status_for(&req.asset, tx, &claim, None)
+            .deposit_status_for(&to_asset, tx, &claim, None)
             .await
             .map_err(|e| e.message)?;
         let net = transfers::network(core, &req.asset, to)?;
-        return verified(m, sent, credit, to, &net, amount);
+        return verified(
+            (&from_asset, &to_asset),
+            sent,
+            credit,
+            (from, to),
+            (&req.network, &net),
+            (amount, req.amount),
+        );
     }
     super::executor::buy_gate(core)?;
     if !super::registry_sync::enabled(core, cex) || !super::registry_sync::enabled(core, &dex) {
         return Err("Исходная биржа или конверсии выключены".into());
     }
-    let network = m.network(core, funding)?;
-    let free = super::limits::free_now(core, from, Some(wallet), &m.asset.ticker).await?;
+    let network = m.token_network(core, token, from_cex)?;
+    let balance_key = super::venue_ticker::balance_key(core, token, from);
+    let free = super::limits::free_now(core, from, Some(wallet), &balance_key).await?;
     if amount > free {
         return Err(format!(
             "Для вывода требуется {amount} расчётного актива, свободно {free}"
         ));
     }
-    let (sent, credit) = transfers::send_settlement(core, id, from, to, m, amount, wallet)
+    let (sent, credit) = transfers::send_settlement(core, id, from, to, (m, token), amount, wallet)
         .await
         .map_err(|e| e.to_string())?;
     let net = transfers::network(core, &network.asset, to)?;
-    verified(m, sent, credit, to, &net, amount)
+    let req = effect::previous_withdrawal(&deps.db, m, id, from, to, Some(wallet))
+        .await
+        .map_err(|e| e.message)?
+        .ok_or("У вывода отсутствует исходная заявка")?;
+    verified(
+        (&from_asset, &to_asset),
+        sent,
+        credit,
+        (from, to),
+        (&req.network, &net),
+        (amount, req.amount),
+    )
 }

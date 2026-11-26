@@ -38,7 +38,7 @@ pub async fn trade(
         None => order_rules::ready(ctx, symbols, &req).await?,
     };
     let path = "/api/v2/spot/trade/place-order";
-    let pending = PendingRef::order(&p.symbol, &p.client_oid, req.qty).received_coin(&p.received);
+    let pending = PendingRef::order(&p.symbol, &p.client_oid, p.qty).received_coin(&p.received);
     crate::gateway::settlement_intent::before_send(&pending).await?;
     let placed = rest::signed(ctx, Method::POST, path, vec![], Some(p.body), Op::Trade).await;
     let placed = placed.and_then(|r| {

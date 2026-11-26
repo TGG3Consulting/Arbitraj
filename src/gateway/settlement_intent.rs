@@ -244,3 +244,20 @@ pub async fn archive_attempt(
         Err("Подготовленная попытка уже изменилась".into())
     }
 }
+
+/// Сохраняется только односторонний отпечаток публичного идентификатора API.
+pub fn account(
+    vault: &crate::secrets::Vault,
+    name: &str,
+) -> crate::gateway::errors::GatewayResult<String> {
+    use sha2::{Digest, Sha256};
+    let key = vault.get(name)?;
+    if key.trim().is_empty() {
+        return Err(crate::gateway::errors::GatewayError::new(
+            crate::gateway::errors::ErrorCode::NotConfigured,
+            None,
+            "Не задан ключ торгового счёта",
+        ));
+    }
+    Ok(hex::encode(Sha256::digest(key.as_bytes())))
+}

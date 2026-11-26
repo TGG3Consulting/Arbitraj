@@ -135,6 +135,16 @@ pub fn result(
             )
             .with_tx(d.chain));
     };
+    if crate::gateway::settlement_intent::capturing() {
+        let quote_token = if req.side == Side::Buy { tin } else { tout };
+        crate::gateway::settlement_intent::note_gross(super::settlement_swap::amount(
+            &r,
+            wallet,
+            quote_token,
+            req.side,
+            usdt_dec,
+        ));
+    }
     let status = if coins.is_zero() {
         TradeStatus::NotFilled
     } else if coins < req.qty {

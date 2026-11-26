@@ -36,6 +36,29 @@ pub(super) async fn check_traced(
 ) -> Result<Calc, String> {
     let b = &d.sell_on;
     if super::trade_ops::kind(core, b)? != VenueKind::Cex {
+        if let Some(m) = plan.size.as_ref().and_then(|s| s.settlement.as_deref()) {
+            let req = request(core, d, &plan)?;
+            let gw = super::dex_account::venue_dir(&core.inner.deps, d, &d.sell_on).await?;
+            let actual = match gw.dex_presell(&req).await.map_err(|e| e.message)? {
+                crate::core::types::PresellOutcome::Done(x) => x,
+                crate::core::types::PresellOutcome::Short(x) => return Err(x.why),
+            };
+            m.ensure(core)?;
+            if actual.coins != req.qty
+                || actual.out
+                    < req
+                        .qty
+                        .checked_mul(req.worst_price)
+                        .ok_or("Лимит продажи вне диапазона")?
+            {
+                return Err("Симуляция DEX не покрывает исходную цену или объём конверсии".into());
+            }
+            let converted = super::settlement::sell_within(core, m, actual.out).await?;
+            if converted.net_quote < plan.proceeds {
+                return Err("Симуляция и книга конверсии не подтверждают выручку плана".into());
+            }
+            return Ok(plan);
+        }
         return super::precheck_dex_sell::check(core, d, plan, receipt).await;
     }
     let fail = |why: String| format!("продажа на {} не пройдёт: {why}", b.0);

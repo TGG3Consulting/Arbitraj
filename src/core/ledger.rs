@@ -35,7 +35,13 @@ pub(super) fn recompute_exposure(core: &Core) {
     let deals = lk(&core.inner.deals);
     let mut ex = Exposure::default();
     for d in deals.values().filter(|d| d.is_open()) {
-        let left = (d.invested - d.proceeds).max(Decimal::ZERO);
+        let reserved = d
+            .plan
+            .get(super::settlement_cycle::FIELD)
+            .and_then(|v| v.get("quote_cap"))
+            .and_then(|v| serde_json::from_value::<Decimal>(v.clone()).ok())
+            .unwrap_or_default();
+        let left = (d.invested - d.proceeds).max(reserved).max(Decimal::ZERO);
         *ex.per_coin.entry(d.direction.asset.clone()).or_default() += left;
         if d.step == Step::Transfer {
             ex.in_transit += left;

@@ -221,6 +221,18 @@ pub(super) async fn inspect(
     {
         return Ok(None);
     }
+    let expected_side = if req.side == crate::core::types::Side::Buy {
+        "buy"
+    } else {
+        "sell"
+    };
+    if num::text_opt(&s, "side").is_none_or(|v| !v.eq_ignore_ascii_case(expected_side))
+        || num::dec_opt(&s, "size")?
+            .zip(p.sent_qty)
+            .is_none_or(|(actual, expected)| actual != expected)
+    {
+        return Ok(None);
+    }
     let Some(id) = num::text_opt(&s, "orderId") else {
         return Ok(None);
     };

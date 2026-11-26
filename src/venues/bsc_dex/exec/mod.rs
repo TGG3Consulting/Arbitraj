@@ -86,6 +86,7 @@ pub mod result;
 pub mod single_rebuild;
 pub mod smart_legs;
 pub mod solidly_gate;
+pub mod settlement_swap;
 pub mod swap_ctx;
 pub mod swap_rebuild;
 pub mod swap_send;

@@ -347,6 +347,7 @@ pub fn choice(c: &Calc, asked: Decimal, budget: Decimal, ticker: &str) -> SizeCh
         );
     }
     SizeChoice {
+        settlement: None,
         qty: c.qty,
         profit: c.profit_usd,
         min_qty: c.qty,

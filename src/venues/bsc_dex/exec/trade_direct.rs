@@ -134,11 +134,13 @@ pub async fn trade(
             prep.note.clone(),
         );
         let min_out = p.min_total();
-        let d = send_swap(env, &slot, p, guard).await.map_err(|e| {
-            sc.attach(super::swap_send::rejection_state(
-                e, &entries, at.number, min_out,
-            ))
-        })?;
+        let d = super::settlement_swap::with_parse(&sc, send_swap(env, &slot, p, guard))
+            .await
+            .map_err(|e| {
+                sc.attach(super::swap_send::rejection_state(
+                    e, &entries, at.number, min_out,
+                ))
+            })?;
         drop(slot);
         let sc = SwapCtx {
             tip_bnb: d.tip_bnb,

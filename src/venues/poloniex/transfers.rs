@@ -173,6 +173,17 @@ pub(super) async fn recover_settlement(
     let Some(reference) = num::text_opt(&row, "withdrawalRequestsId") else {
         return Ok(None);
     };
+    // История документирует amount включая комиссию. Для автоматического восстановления
+    // нужны все реквизиты исходной заявки; неполная строка остаётся для ручной сверки.
+    if p.venue_ref.as_ref().is_some_and(|id| id != &reference)
+        || !num::text_opt(&row, "currency")
+            .is_some_and(|v| v.eq_ignore_ascii_case(&req.asset.ticker))
+        || !num::text_opt(&row, "network").is_some_and(|v| v == req.network)
+        || !num::text_opt(&row, "address").is_some_and(|v| v.eq_ignore_ascii_case(&req.address))
+        || num::dec_opt(&row, "amount")? != Some(req.amount)
+    {
+        return Ok(None);
+    }
     Ok(Some(crate::gateway::pending::created(
         ctx.venue(),
         req,

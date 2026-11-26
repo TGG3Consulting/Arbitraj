@@ -131,6 +131,9 @@ impl Venue for Kucoin {
     ) -> GatewayResult<Option<TradeResult>> {
         order_state::inspect(&self.ctx, req, p).await
     }
+    fn settlement_account(&self) -> GatewayResult<String> {
+        crate::gateway::settlement_intent::account(&self.ctx.vault, ctx::SECRET_API_KEY)
+    }
     fn supports_settlement_order(&self) -> bool {
         true
     }

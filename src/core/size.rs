@@ -52,6 +52,12 @@ impl fmt::Display for Fail {
     }
 }
 
+impl From<&str> for Fail {
+    fn from(s: &str) -> Self {
+        Self::Stop(s.to_owned())
+    }
+}
+
 impl From<String> for Fail {
     /// Любая ошибка без вида — расчёт невозможен (Stop).
     fn from(s: String) -> Self {
@@ -167,6 +173,9 @@ pub struct Params {
 /// Итог подбора — для журнала и «Кандидатов».
 #[derive(Debug, Clone, Serialize)]
 pub struct SizeChoice {
+    /// Подтверждённый рынок отдельной конверсии; сохраняется при передаче кандидата исполнителю.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub settlement: Option<Box<super::settlement_market::Market>>,
     /// Найденный объём и его прибыль.
     pub qty: Decimal,
     pub profit: Decimal,

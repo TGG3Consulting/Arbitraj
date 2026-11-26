@@ -119,6 +119,16 @@ pub async fn decide_capped(
     ) {
         return reject(e, None);
     }
+    if super::settlement_market::mixed(core, d) {
+        return match Box::pin(super::settlement_entry::decide(
+            core, d, mode, cap, outer_from,
+        ))
+        .await
+        {
+            Ok(c) => Verdict::Accept(c),
+            Err(e) => reject(e, None),
+        };
+    }
     let cx = match pre {
         Some(c) => *c,
         None => match stage_sync(|| "контекст направления".into(), || DirCtx::build(core, d))

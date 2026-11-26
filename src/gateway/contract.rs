@@ -107,7 +107,15 @@ pub trait Venue: Send + Sync {
     /// Идентификатор площадки. Не может ошибиться.
     fn id(&self) -> VenueId;
 
-    /// Сохраняет реальный ID ордера Base USDC до отправки и умеет сверить его после потери ответа.
+    /// Идентичность текущего торгового счёта, пригодная для сравнения после рестарта.
+    fn settlement_account(&self) -> GatewayResult<String> {
+        Err(GatewayError::new(
+            ErrorCode::NotConfigured,
+            Some(self.id()),
+            "Не определена привязка расчётного счёта",
+        ))
+    }
+    /// Сохраняет реальный ID ордера конверсии до отправки и умеет сверить его после потери ответа.
     fn supports_settlement_order(&self) -> bool {
         false
     }
@@ -132,6 +140,19 @@ pub trait Venue: Send + Sync {
             ErrorCode::NotApplicable,
             Some(self.id()),
             "Нет чтения окончательного исполнения по своему ID",
+        ))
+    }
+
+    /// Исполняет подготовленную сделку DEX с сохранением контекста квитанции до передачи в сеть.
+    async fn trade_settlement_swap(
+        &self,
+        _req: TradeRequest,
+        _quote: &Asset,
+    ) -> GatewayResult<TradeResult> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "Нет подтверждаемого обмена DEX для расчётного маршрута",
         ))
     }
 

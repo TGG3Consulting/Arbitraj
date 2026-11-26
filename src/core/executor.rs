@@ -100,6 +100,10 @@ pub(super) async fn accepted_with_depth(
         return Start::Dry(why);
     }
     let d = calc.direction.clone();
+    let settlement = calc.size.as_ref().and_then(|s| s.settlement.clone());
+    if settlement.is_some() != super::settlement_market::mixed(core, &d) {
+        return Start::NotTradable("Валюты кандидата изменились до предпроверки".into());
+    }
     let refused = {
         let coins = rd(&core.inner.coins);
         let c = super::ticker_index::find(core, &coins, &d.asset);
@@ -127,7 +131,11 @@ pub(super) async fn accepted_with_depth(
     let on = super::step_timing::enabled(&core.inner.deps.settings);
     let handed = on.then(Instant::now);
     // Решение 266: включатели быстрой предпроверки — один раз на сделку (здесь); объём кандидата — Calc.qty.
-    let fast = super::precheck_fast::read(&core.inner.deps.settings, &calc);
+    let mut fast = super::precheck_fast::read(&core.inner.deps.settings, &calc);
+    if settlement.as_ref().is_some_and(|m| m.dex == d.buy_on) {
+        // До финансирования на кошельке находится другая валюта. Свободное читается на исходной бирже.
+        fast.balance = None;
+    }
     // Решение 338 (ревью t157 Н1): вся задача сделки (предпроверка, пересчёт, котировки) — ярус счёта «сделка».
     let work = async move {
         // Решение 394: место сделки (группа докупки) и ID сделки, перешедшей в «идущие» (coin_ride::board) — снимается
@@ -146,7 +154,7 @@ pub(super) async fn accepted_with_depth(
             decided,
             (on, handed),
             fast,
-            remaining_depth,
+            (remaining_depth, settlement),
             &mut g.slot,
         )
         .await;
@@ -210,7 +218,10 @@ async fn run(
     decided: chrono::DateTime<chrono::Utc>,
     (on, handed): (bool, Option<Instant>),
     fast: super::precheck_fast::Opts,
-    remaining_depth: Option<Instant>,
+    (remaining_depth, settlement): (
+        Option<Instant>,
+        Option<Box<super::settlement_market::Market>>,
+    ),
     ride: &mut Slot,
 ) {
     let deps = &core.inner.deps;
@@ -291,6 +302,31 @@ async fn run(
     // Решение 141: составляющие бюджета — до открытия сделки (своя сделка ещё не в учёте лимитов).
     let at = ts.at();
     let (plan, lines, bal) = plan;
+    let current = plan.size.as_ref().and_then(|s| s.settlement.as_deref());
+    if settlement.is_some() || current.is_some() || super::settlement_market::mixed(core, &d) {
+        let outcome = match (settlement.as_deref(), current, acc.as_ref()) {
+            (Some(a), Some(b), Some(wallet))
+                if a.identical(b) && !matches!(ride.seat, super::coin_ride::Seat::Join(_)) =>
+            {
+                Box::pin(super::settlement_run::begin(
+                    core, a, &plan, wallet, decided, slot,
+                ))
+                .await
+            }
+            _ => Err("Состав расчётного маршрута изменился либо монета занята группой".into()),
+        };
+        if let Err(e) = outcome {
+            deps.log(
+                Level::Warn,
+                "core.settlement_pending",
+                Some(&d.buy_on.0),
+                e,
+                None,
+            )
+            .await;
+        }
+        return;
+    }
     let parts = super::limits_parts::parts(core, &d, &super::dry::Mode::Live).ok();
     // Решение 118 (Я-17): ID сделки выдаётся и занимается в учёте под одним замком — повтор невозможен.
     let mut deal = super::ledger::open(

@@ -82,6 +82,19 @@ fn of_deal(d: &Deal, venue: &VenueId) -> Vec<Line> {
     let r = super::deal_words::route(&d.direction);
     let to = |v: &VenueId| crate::notify::human::venue(&v.0);
     let mut out = vec![];
+    if d.is_open()
+        && let Some(v) = d.plan.get(super::settlement_cycle::FIELD)
+        && v.pointer("/market/cex").and_then(|s| s.as_str()) == Some(&venue.0)
+        && let Some(cap) = v
+            .get("quote_cap")
+            .and_then(|s| serde_json::from_value::<Decimal>(s.clone()).ok())
+    {
+        out.push(line(
+            (cap - d.invested).max(Decimal::ZERO),
+            "на конверсию и покупку",
+            false,
+        ));
+    }
     if let Some(g) = d.group.as_ref()
         && let Some((from, amount)) = g.wait.as_ref()
         && from == venue

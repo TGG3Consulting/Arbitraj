@@ -196,6 +196,7 @@ pub async fn search_in<C: Curve>(m: &mut Memo<'_, C>, p: &Params) -> Result<Foun
     // Точка hi посчитана при поиске границы (в памяти) — предел расчётов её не трогает.
     let top = Box::pin(m.at(hi)).await?;
     let choice = SizeChoice {
+        settlement: None,
         qty: best.qty,
         profit: best.profit,
         // Решение 343: допустимый объём ниже границы бисекции — наименьший допустимый.

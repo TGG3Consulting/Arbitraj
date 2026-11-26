@@ -50,7 +50,10 @@ pub async fn load(core: &Core) {
         .collect();
     for mut d in deals {
         // Ждущие решения человека остаются ждать (алерты загружает manual.rs).
-        if d.is_open() && d.step != Step::WaitingHuman {
+        if d.is_open()
+            && d.step != Step::WaitingHuman
+            && d.plan.get(super::settlement_cycle::FIELD).is_none()
+        {
             let text = format!(
                 "{INTERRUPTED} (шаг: {}, {}) — проверьте вручную",
                 super::deal_text::step_name(d.step),

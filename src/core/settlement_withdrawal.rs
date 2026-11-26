@@ -50,7 +50,7 @@ pub async fn previous_withdrawal(
 /// Один вывод расчётного актива. Успешный результат позволяет обычному наблюдателю продолжить отслеживание зачисления.
 pub async fn withdraw(
     db: &Db,
-    m: &Market,
+    (m, token): (&Market, &crate::core::types::Asset),
     gateway: &dyn Venue,
     req: &WithdrawRequest,
     to: &VenueId,
@@ -58,7 +58,13 @@ pub async fn withdraw(
     network: Option<&CoinNetworkInfo>,
 ) -> GatewayResult<Transfer> {
     let venue = gateway.id();
-    if !gateway.supports_settlement_withdrawal() || req.venue != venue || !m.matches(&req.asset) {
+    if !gateway.supports_settlement_withdrawal()
+        || req.venue != venue
+        || req.asset != *token
+        || req.asset.ticker != token.ticker
+        || token.contract.is_none()
+        || token.chain != m.asset.chain
+    {
         return Err(GatewayError::new(
             ErrorCode::NotApplicable,
             Some(venue),

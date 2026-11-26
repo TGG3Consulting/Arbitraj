@@ -40,7 +40,7 @@ pub async fn trade(
         None => order_rules::ready(ctx, symbols, &req).await?,
     };
     let path = "/api/v1/hf/orders/sync";
-    let pending = PendingRef::order(&p.symbol, &p.client_oid, req.qty);
+    let pending = PendingRef::order(&p.symbol, &p.client_oid, p.qty);
     crate::gateway::settlement_intent::before_send(&pending).await?;
     let placed = rest::signed(
         ctx,

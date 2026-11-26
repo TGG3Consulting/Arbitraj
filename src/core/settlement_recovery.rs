@@ -87,6 +87,12 @@ pub async fn resume(core: &Core) {
         }
     };
     for path in paths.into_iter().filter(|p| !p.steps_confirmed()) {
+        if super::engine::lk(&core.inner.deals)
+            .get(&path.plan.deal)
+            .is_some_and(|d| d.plan.get(super::settlement_cycle::FIELD).is_some())
+        {
+            continue;
+        }
         let c = core.clone();
         tokio::spawn(urgency::scope(Urgency::Trade, async move {
             let mut repeats = 0;

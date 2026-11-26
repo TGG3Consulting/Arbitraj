@@ -181,7 +181,7 @@ pub(super) async fn send_settlement(
     id: &str,
     from: &VenueId,
     to: &VenueId,
-    market: &super::settlement_market::Market,
+    (market, token): (&super::settlement_market::Market, &Asset),
     amount: Decimal,
     wallet: &crate::core::types::DexAccountId,
 ) -> Result<(Transfer, Transfer), OpError> {
@@ -189,7 +189,7 @@ pub(super) async fn send_settlement(
         core,
         id,
         (from, to),
-        &market.asset,
+        token,
         amount,
         Some(wallet),
         false,
@@ -462,10 +462,10 @@ async fn go(
         super::withdraw_limit::take(core, deal, from, &on_from.ticker).await;
         let result = if let Some(market) = settlement {
             crate::gateway::settlement_intent::checked(
-                market.guard(core, from == &market.cex),
+                market.guard(core, asset, from == &market.cex),
                 super::settlement_effect::withdraw(
                     &deps.db,
-                    market,
+                    (market, &on_from),
                     gw_from.as_ref(),
                     &req,
                     to,
@@ -557,9 +557,10 @@ async fn go(
     let indexed = gw_to.needs_deposit_claim(&on_to);
     let sent = loop {
         // Решение 151: приход в блокчейне уже засчитан зачислением — к продаже, хеш биржи сверяется фоном.
-        if let Some(hit) = ticket
-            .as_ref()
-            .and_then(super::credit_watch::Ticket::chain_hit)
+        if settlement.is_none()
+            && let Some(hit) = ticket
+                .as_ref()
+                .and_then(super::credit_watch::Ticket::chain_hit)
             && super::credit_expect::units(core, from, to, asset).ok() == units
             && (!indexed
                 || Box::pin(super::transfer_credit::claim_chain_event(
@@ -714,6 +715,18 @@ async fn go(
             super::transfer_tax::pct(core, to, asset).ok(),
             units,
         );
+    }
+    if settlement.is_some() {
+        if created.venue_ref != sent.venue_ref {
+            return Err(OpError::from(
+                "Статус вывода относится к другому идентификатору".to_string(),
+            ));
+        }
+        let credited = gw_to
+            .deposit_status_for(&on_to, &leg.tx, &claim, None)
+            .await
+            .map_err(|e| OpError::from(&e))?;
+        return Ok((sent, credited, None));
     }
     let credited = Box::pin(super::transfer_credit::wait_with_units(
         core,

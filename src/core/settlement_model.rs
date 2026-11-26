@@ -17,6 +17,15 @@ use crate::core::{
 use rust_decimal::Decimal;
 /// Строит обе стороны на текущих данных. Учитывает встречные заявки других сделок через Live,
 pub async fn evaluate(core: &Core, d: &Direction, qty: Decimal) -> Result<Model, String> {
+    point(core, d, qty).await.map_err(|e| e.to_string())
+}
+
+pub(super) async fn point(
+    core: &Core,
+    d: &Direction,
+    qty: Decimal,
+) -> Result<Model, super::size::Fail> {
+    use super::size::Fail;
     let market = super::settlement_market::Market::direction(core, d)?;
     market.accounting()?;
     let dex = market.dex.clone();
@@ -38,32 +47,49 @@ pub async fn evaluate(core: &Core, d: &Direction, qty: Decimal) -> Result<Model,
         .await
         .map_err(|e| e.message)?;
     if !gw.supports_settlement_order()
-        || (funding && !gw.supports_settlement_withdrawal())
-        || (!funding && !gw.supports_settlement_credit())
+        || !gw.supports_settlement_withdrawal()
+        || !gw.supports_settlement_credit()
     {
         return Err("Для биржи отсутствует восстанавливаемая конверсия/вывод".into());
     }
     let cx = super::dirctx::DirCtx::for_settlement(core, d)?;
-    let src = Live { core, src: None };
-    let qa = src.quote(d, false, qty).await.map_err(|e| e.to_string())?;
-    if qa.fillable_qty < qty {
-        return Err("Покупка основного токена не покрыта ликвидностью".into());
+    if !cx.units_b_per_a.is_identity() {
+        return Err(
+            "Единицы целевого токена на двух площадках требуют подтверждённой отдельной сверки"
+                .into(),
+        );
     }
-    let worst = src
-        .worst(d, false, qty, qa.avg_price)
-        .map_err(|e| e.to_string())?;
-    super::costs_quote::order_limits(&d.buy_on.0, cx.pair_a.as_ref(), qty, worst)
-        .map_err(|e| e.to_string())?;
-    super::price_band::check(&d.buy_on.0, cx.band_a.as_deref(), Side::Buy, worst)
-        .map_err(|e| e.to_string())?;
+    market.token_network(core, &d.asset, !funding)?;
+    let src = Live { core, src: None };
+    let qa = src.quote(d, false, qty).await?;
+    if qa.fillable_qty < qty {
+        return Err(Fail::TooLarge(
+            "Покупка основного токена не покрыта ликвидностью".into(),
+        ));
+    }
+    let worst = src.worst(d, false, qty, qa.avg_price)?;
+    super::costs_quote::order_limits(&d.buy_on.0, cx.pair_a.as_ref(), qty, worst)?;
+    super::price_band::check(&d.buy_on.0, cx.band_a.as_deref(), Side::Buy, worst)?;
     let held = qty - super::costs_exit::coin_fee(&qa.costs, &d.asset.ticker);
     let lines = qa.costs.iter().cloned().map(|c| (c, "A")).collect();
-    let exit = super::costs_exit::quantities(&cx, &src, held, lines, None)
-        .await
-        .map_err(|e| e.to_string())?;
-    let worst_b = src
-        .worst(d, true, exit.sell_qty, exit.qb.avg_price)
-        .map_err(|e| e.to_string())?;
+    let exit = super::costs_exit::quantities(&cx, &src, held, lines, None).await?;
+    let dex_order = if funding { &qa } else { &exit.qb };
+    if !dex_order.route.as_ref().is_some_and(|r| {
+        r.executable
+            && matches!(
+                r.mode,
+                super::types::RouteMode::Smart | super::types::RouteMode::Direct
+            )
+    }) || dex_order
+        .costs
+        .iter()
+        .any(|c| c.kind == CostKind::ApproveGas && !c.amount.is_zero())
+    {
+        return Err(
+            "Маршрут требует отдельно подтверждаемых разрешений или другого исполнителя DEX".into(),
+        );
+    }
+    let worst_b = src.worst(d, true, exit.sell_qty, exit.qb.avg_price)?;
     let net = market.network(core, funding)?;
     let principal = mul(qty, qa.avg_price)?;
     let budget = mul(qty, worst)?;
@@ -81,8 +107,24 @@ pub async fn evaluate(core: &Core, d: &Direction, qty: Decimal) -> Result<Model,
             .withdraw_cost(&net.asset, &cx.net_b, proceeds)
             .await
             .map_err(|e| e.message)?;
-        lines.extend(fee.into_iter().map(|c| (c, "возврат")));
+        lines.extend(
+            fee.into_iter()
+                .map(|c| (c, super::costs_types::RETURN_STAGE)),
+        );
     }
+    let cost_lines = lines
+        .iter()
+        .map(|(c, stage)| super::costs::CostLine {
+            kind: c.kind,
+            stage,
+            amount: c.amount,
+            asset: c.asset.clone(),
+            usdt: None,
+            in_price: c.in_price,
+            in_qty: super::convert::in_coin(c, &d.asset.ticker),
+            step: c.step.clone(),
+        })
+        .collect();
     let mut usdc = Decimal::ZERO;
     let mut buy_fee = Decimal::ZERO;
     let mut other = vec![];
@@ -128,9 +170,7 @@ pub async fn evaluate(core: &Core, d: &Direction, qty: Decimal) -> Result<Model,
             .filter(|x| *x > Decimal::ZERO)
             .ok_or("Расходы превышают выручку расчётного актива")?;
         if net.deposit_min.is_none_or(|min| received < min) {
-            return Err(
-                "Выручка расчётного актива не покрывает подтверждённый минимум депозита исходной биржи".into(),
-            );
+            return Err(Fail::TooSmall("Выручка расчётного актива не покрывает подтверждённый минимум депозита исходной биржи".into()));
         }
         let q = settlement::sell_within(core, &market, received).await?;
         let final_quote = q.net_quote;
@@ -180,6 +220,7 @@ pub async fn evaluate(core: &Core, d: &Direction, qty: Decimal) -> Result<Model,
     );
     let profit = final_quote - invested - costs - reserve;
     Ok(Model {
+        cost_lines,
         direction: d.clone(),
         source: cex.clone(),
         wallet,

@@ -49,7 +49,10 @@ pub fn wanted(core: &Core, deal: &Deal) -> bool {
 /// Принимает: ядро, сделку. Возвращает: перегоны — запустить после сохранения; пусто — возврат не нужен или уже решён.
 /// Ошибок нет: сбой — страховка.
 pub async fn prepare(core: &Core, deal: &mut Deal) -> Vec<Job> {
-    if deal.usdt_return.is_some() || !wanted(core, deal) {
+    if deal.plan.get(super::settlement_cycle::FIELD).is_some()
+        || deal.usdt_return.is_some()
+        || !wanted(core, deal)
+    {
         return vec![];
     }
     let parts = if super::usdt_return_parts::multi(deal) {

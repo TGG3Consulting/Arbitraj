@@ -30,6 +30,18 @@ use crate::gateway::urgency::{self, Urgency as Class, scope};
 
 #[async_trait]
 impl Venue for BscDex {
+    async fn trade_settlement_swap(
+        &self,
+        req: TradeRequest,
+        quote: &Asset,
+    ) -> GatewayResult<TradeResult> {
+        scope(
+            Class::Trade,
+            exec::settlement_swap::trade(&self.p, req, quote),
+        )
+        .await
+    }
+
     fn supports_settlement_withdrawal(&self) -> bool {
         self.p.ctx.venue().0 == "base_dex"
     }
@@ -368,6 +380,10 @@ impl Venue for BscDex {
     }
 
     /// Адрес кошелька счёта (решение 132) — wallet/signer.rs; только у вида на счёт. Ошибки: счёт не выбран, ключ.
+    fn settlement_account(&self) -> GatewayResult<String> {
+        self.p.ctx.bound()?;
+        Ok(wallet::signer::address(&self.p.ctx)?.to_string())
+    }
     async fn wallet_address(&self) -> GatewayResult<String> {
         self.p.ctx.bound()?;
         Ok(wallet::signer::address(&self.p.ctx)?.to_string())

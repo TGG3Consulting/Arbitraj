@@ -99,6 +99,12 @@ pub fn held(core: &Core, key: &CoinKey) -> bool {
 /// действие — новых действий с ней нет, кроме повтора самой ждавшей команды: он берёт монету и этим снимает паузу
 /// (manual_wait::claim, ревью 4 Н3 — пауза держится до take). Ошибок нет. Замки: active, затем manual_waits.
 pub fn take(core: &Core, key: &CoinKey) -> bool {
+    if super::settlement_run::pending(core, key) {
+        return false;
+    }
+    take_settlement(core, key)
+}
+pub(super) fn take_settlement(core: &Core, key: &CoinKey) -> bool {
     let mut a = lk(&core.inner.active);
     if a.contains(key)
         || lk(&core.inner.rides)
@@ -178,6 +184,9 @@ fn joinable(core: &Core, d: &Direction, rides: &[Ride]) -> Option<Seat> {
 /// Ошибки: текст причины отказа (прежний).
 pub fn admit(core: &Core, d: &Direction) -> Result<Seat, String> {
     let key = CoinKey::of(&d.asset);
+    if super::settlement_run::pending(core, &key) {
+        return Err("Есть незавершённое расчётное поручение по монете".into());
+    }
     let mut a = lk(&core.inner.active);
     let busy = || {
         super::window_queue_trace::blocked(core, d);

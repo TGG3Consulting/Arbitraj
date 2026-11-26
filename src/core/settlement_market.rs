@@ -4,8 +4,8 @@
 //! От чего зависит: реестр площадок, подтверждённые записи сетей биржи и настройки DEX.
 //! Настройки: dex.chain, dex.settlement_contract, venue.quote_asset, сетевые имена площадок.
 use super::{
-    engine::{Core, rd},
-    types::{Asset, ChainId, CoinNetworkInfo, Direction, VenueId},
+    engine::Core,
+    types::{Asset, ChainId, Direction, VenueId},
 };
 use crate::settings::{evm_profiles, read::At};
 use serde::{Deserialize, Serialize};
@@ -19,6 +19,16 @@ pub struct Market {
     pub cex: VenueId,
     pub asset: Asset,
     pub quote: String,
+}
+
+pub fn mixed(core: &Core, d: &Direction) -> bool {
+    let s = &core.inner.deps.settings;
+    [(&d.buy_on, &d.sell_on), (&d.sell_on, &d.buy_on)]
+        .into_iter()
+        .any(|(dex, cex)| {
+            evm_profiles::uses_settlement_contract(s, &dex.0)
+                && matches!((ticker(core,dex),ticker(core,cex)),(Ok(a),Ok(b)) if a!=b)
+        })
 }
 
 pub fn ticker(core: &Core, v: &VenueId) -> Result<String, String> {
@@ -136,64 +146,5 @@ impl Market {
         } else {
             Err("Изменились сеть, площадка или валюты сохранённой операции".into())
         }
-    }
-    pub fn guard(
-        &self,
-        core: &Core,
-        withdraw: bool,
-    ) -> impl Fn(&crate::gateway::pending::PendingRef) -> crate::gateway::errors::GatewayResult<()>
-    + Send
-    + Sync
-    + 'static {
-        let c = core.clone();
-        let m = self.clone();
-        move |_| {
-            let verify = || -> Result<(), String> {
-                super::executor::buy_gate(&c)?;
-                if !super::registry_sync::enabled(&c, &m.dex)
-                    || !super::registry_sync::enabled(&c, &m.cex)
-                {
-                    return Err("Одна из площадок расчётного маршрута выключена".into());
-                }
-                m.network(&c, withdraw).map(|_| ())
-            };
-            verify().map_err(|e| {
-                crate::gateway::errors::GatewayError::new(
-                    crate::gateway::errors::ErrorCode::NotConfigured,
-                    Some(m.dex.clone()),
-                    e,
-                )
-            })
-        }
-    }
-    pub fn network(&self, core: &Core, withdraw: bool) -> Result<CoinNetworkInfo, String> {
-        self.ensure(core)?;
-        let network = &self.cex_network;
-        let all = rd(&core.inner.networks);
-        let mut rows = all
-            .get(&self.cex)
-            .into_iter()
-            .flat_map(|r| r.iter())
-            .filter(|r| r.venue == self.cex && &r.network == network && self.matches(&r.asset));
-        let r = rows
-            .next()
-            .ok_or("Биржа не подтвердила сеть и контракт расчётного токена")?;
-        if rows.next().is_some() {
-            return Err("Неоднозначная запись расчётного токена".into());
-        }
-        super::dirctx_venue::fresh(core, r)?;
-        if (withdraw && !r.withdraw_enabled) || (!withdraw && !r.deposit_enabled) {
-            return Err(format!(
-                "{} {} в сети {} закрыт",
-                if withdraw {
-                    "Вывод"
-                } else {
-                    "Депозит"
-                },
-                self.asset.ticker,
-                network
-            ));
-        }
-        Ok(r.clone())
     }
 }

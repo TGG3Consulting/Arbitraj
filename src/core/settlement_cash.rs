@@ -147,7 +147,10 @@ pub async fn convert(
             };
             let free = super::limits::free_now(core, cex, None, ticker).await?;
             let free = if side == Side::Buy {
-                super::usdt_hold::spendable(free, &super::usdt_hold::held(core, cex, None))
+                super::usdt_hold::spendable(
+                    free,
+                    &super::usdt_hold::held_except(core, cex, None, Some(deal)),
+                )
             } else {
                 free
             };
@@ -170,7 +173,7 @@ pub async fn convert(
         }
     };
     m.ensure(core)?;
-    let check = m.guard(core, side == Side::Buy);
+    let check = m.guard(core, &m.asset, side == Side::Buy);
     let spot = gw.clone();
     let pair = m.clone();
     let fill = crate::gateway::settlement_intent::checked(

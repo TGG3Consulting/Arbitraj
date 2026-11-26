@@ -143,6 +143,12 @@ pub async fn send_tipped(
     // отправки ключ и маппинг кошельков не читаются.
     ctx.bound()?;
     let key = signer::signer(ctx)?;
+    if crate::gateway::settlement_intent::active() && key.address() != from {
+        return Err(ctx.err(
+            ErrorCode::NotConfigured,
+            "Подписант не совпадает с владельцем очереди транзакции",
+        ));
+    }
     let sign = |nonce: u64, gas: u64, call: (TxKind, U256, Bytes)| {
         price.sign(ctx, &key, "Подпись транзакции", chain, nonce, gas, call)
     };
@@ -179,14 +185,26 @@ pub async fn send_tipped(
     // channel.cond_time_window_s нет — None, узел не спрашивается.
     let head_time = send::sequencer_cond::head_time(ctx, &env.heads, &ready).await?;
     if crate::gateway::settlement_intent::active() {
-        let marker = super::super::hashflow::marker(ctx, signed.hash, nonce, &ready, need)?
+        let rfq = super::super::hashflow::marker(ctx, signed.hash, nonce, &ready, need)?;
+        let other = rfq.is_none();
+        let marker = rfq
+            .or(super::settlement_swap::marker(
+                ctx,
+                signed.hash,
+                nonce,
+                &ready,
+            )?)
             .unwrap_or(crate::gateway::pending::PendingRef {
                 nonce: Some(nonce),
                 venue_ref: Some(signed.hash.to_string()),
                 ..Default::default()
             });
         crate::gateway::settlement_intent::before_send(&marker).await?;
-        super::super::hashflow::reserve(ctx, slot, &marker).await?;
+        if other {
+            super::settlement_swap::reserve(ctx, slot, signed.hash, nonce).await?;
+        } else {
+            super::super::hashflow::reserve(ctx, slot, &marker).await?;
+        }
     }
     let d = send::dispatch(
         ctx,

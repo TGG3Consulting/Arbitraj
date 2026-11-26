@@ -11,8 +11,9 @@ use super::{
 use rust_decimal::Decimal;
 use serde::Serialize;
 /// Стоимость/прибыль моделируются в валюты учёта. Оценки расчётного актива, лимиты ордеров и объёмы токена явно разделены.
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct Model {
+    pub cost_lines: Vec<super::costs::CostLine>,
     pub direction: Direction,
     pub source: VenueId,
     pub wallet: DexAccountId,

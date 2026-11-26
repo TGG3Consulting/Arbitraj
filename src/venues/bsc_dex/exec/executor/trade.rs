@@ -136,12 +136,17 @@ pub async fn trade(
             matches!(s.entry.family.variant,crate::venues::bsc_dex::pools::family_variant::Variant::FraxTwamm | crate::venues::bsc_dex::pools::family_variant::Variant::Oasis)
         })
         .then(|| ctx.settings.generation());
+    let vista_generation = legs.iter().flatten().any(|s|super::super::super::quote::vista_pricing::is_vista(&s.entry))
+        .then(|| ctx.settings.generation());
     let (mut c, mut at) = build(q, &legs, executor, nat).await?;
     let need = super::approvals(ctx, &c, wallet, executor).await?;
     if frax_generation.is_some() && !need.is_empty() {
         let used: Vec<_> = legs.iter().flatten().map(|s| &s.entry).collect();
         super::super::solidly_gate::fresh_cap(q, &used).await?;
         crate::venues::bsc_dex::pools::fraxswap::unchanged(ctx, frax_generation)?;
+    }
+    if let Some(generation)=vista_generation && !need.is_empty() {
+        Box::pin(super::super::vista_gate::check(ctx,legs.iter().flatten().map(|s|(&s.entry,s.order.token_in)),generation)).await?;
     }
     let approved = send_approvals(env, &slot, &need).await?;
     // Решение 236, дополнение (техлид 09.11): газ разрешений — в итог обмена и в любую ошибку после них (swap_send.rs).
@@ -183,6 +188,9 @@ pub async fn trade(
     let used: Vec<_> = legs.iter().flatten().map(|s| &s.entry).collect();
     let cap = super::super::solidly_gate::fresh_cap(q, &used).await?;
     crate::venues::bsc_dex::pools::fraxswap::unchanged(ctx,frax_generation)?;
+    if let Some(generation)=vista_generation {
+        Box::pin(super::super::vista_gate::check(ctx,legs.iter().flatten().map(|s|(&s.entry,s.order.token_in)),generation)).await?;
+    }
     let d = txs::send_capped(env, &slot, (executor, c.data(), value), true, None, cap)
         .await
         .map_err(|e| sc.attach(e))?;

@@ -65,6 +65,29 @@ pub fn result(
     (coin_dec, usdt_dec): (u8, u8),
     native_routers: &[Address],
 ) -> GatewayResult<TradeResult> {
+    with_native_fact(
+        ctx,
+        req,
+        d,
+        wallet,
+        (tin, tout),
+        (coin_dec, usdt_dec),
+        native_routers,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn with_native_fact(
+    ctx: &Ctx,
+    req: TradeRequest,
+    d: txs::Done,
+    wallet: Address,
+    (tin, tout): (Address, Address),
+    (coin_dec, usdt_dec): (u8, u8),
+    native_routers: &[Address],
+    vista: Option<&super::vista_fact::Proof>,
+) -> GatewayResult<TradeResult> {
     let r = match (d.chain.outcome, &d.receipt) {
         (TxOutcome::Included, Some(r)) => r.clone(),
         (TxOutcome::Reverted, _) => {
@@ -104,15 +127,29 @@ pub fn result(
                 .with_tx(d.chain));
         }
     };
-    let spent = fill::moved(&r, tin, Some(wallet), None);
-    let got = fill::moved(&r, tout, None, Some(wallet));
+    let (spent, got) = if let Some(proof) = vista {
+        proof
+            .amounts(&r, wallet, tin, tout, req.side)
+            .ok_or_else(|| {
+                ctx.err(
+                    ErrorCode::OutcomeUnknown,
+                    "Квитанция EtherVista не подтверждает чистую выплату",
+                )
+                .with_tx(d.chain.clone())
+            })?
+    } else {
+        (
+            fill::moved(&r, tin, Some(wallet), None),
+            fill::moved(&r, tout, None, Some(wallet)),
+        )
+    };
     let (coins_u, usdt_u) = if req.side == Side::Buy {
         (got, spent)
     } else {
         (spent, got)
     };
     // Нативная BNB: на кошелёк приходит (или уходит с value) нативный BNB — событий Transfer кошелька нет.
-    let coins_u = if native_routers.is_empty() {
+    let coins_u = if native_routers.is_empty() || vista.is_some() {
         coins_u
     } else {
         let wbnb = if req.side == Side::Buy { tout } else { tin };

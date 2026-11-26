@@ -65,6 +65,9 @@ pub fn swap(
         )
     };
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::EtherVista(state), PoolKind::V2) =>
+            super::super::math::ethervista::quote(state, token_in, zero_for_one, exact_in, amount)
+                .ok_or_else(|| why("EtherVista: объём не покрывает фиксированную плату или не помещается в резервы")) ,
         (
             PoolState::DeltaSwap {
                 reserve0,

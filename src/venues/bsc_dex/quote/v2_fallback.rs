@@ -14,12 +14,17 @@ tokio::task_local! {static SINGLE: Vec<PoolRef>;}
 pub(super) async fn candidates(
     q: &Quoting,
     i: &routing::Input,
+    native: bool,
 ) -> (Vec<super::v2_execution::OptionQuote>, bool) {
     use super::{
         delta_pricing, frax_pricing, oasis_pricing, router_pricing, white_pricing, white_state,
     };
-    let mut kinds = [false; 5];
+    let mut kinds = [false; 6];
     for e in &i.entries {
+        kinds[5] |= super::vista_pricing::is_vista(e);
+        if native {
+            continue;
+        }
         kinds[4] |= oasis_pricing::is_oasis(e);
         kinds[0] |= white_pricing::is_white(e);
         kinds[1] |= frax_pricing::is_frax(e);
@@ -37,7 +42,7 @@ pub(super) async fn candidates(
     } else {
         None
     };
-    let (white, frax, delta, router, oasis) = tokio::join!(
+    let (white, frax, delta, router, oasis, vista) = tokio::join!(
         async {
             if kinds[0] {
                 Box::pin(white_pricing::candidates(q, i, head)).await
@@ -72,6 +77,13 @@ pub(super) async fn candidates(
             } else {
                 Vec::new()
             }
+        },
+        async {
+            if kinds[5] {
+                Box::pin(super::vista_pricing::candidates(q, i, head)).await
+            } else {
+                Vec::new()
+            }
         }
     );
     let mut all = white;
@@ -79,11 +91,13 @@ pub(super) async fn candidates(
     all.extend(delta);
     all.extend(router);
     all.extend(oasis);
+    all.extend(vista);
     (all, q.exec_quote)
 }
 
 fn individual(e: &Entry) -> bool {
-    super::oasis_pricing::is_oasis(e)
+    super::vista_pricing::is_vista(e)
+        || super::oasis_pricing::is_oasis(e)
         || super::white_pricing::is_white(e)
         || super::frax_pricing::is_frax(e)
         || super::router_pricing::is_native(e)

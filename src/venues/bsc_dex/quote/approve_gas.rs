@@ -96,7 +96,7 @@ pub async fn details(
     // Решение 280: первый хоп — V2-форк без роутера (без исполнителя маршрут — сигнал): роутера нет, разрешение пошло
     // бы исполнителю — газ, измеренный пробой (dex.router не читается).
     if route.mode == RouteMode::Direct
-        && (super::oasis_pricing::is_oasis(&e)
+        && (super::vista_pricing::is_vista(&e) || super::oasis_pricing::is_oasis(&e)
             || super::frax_pricing::is_frax(&e)
             || super::white_pricing::is_white(&e)
             || super::router_pricing::is_native(&e)

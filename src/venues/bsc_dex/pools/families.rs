@@ -445,7 +445,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
         "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
-        "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
+        "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
         "v2_fork" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_whiteswap" => {
@@ -766,6 +766,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         ]);
     }
     match f.proto {
+        Proto::V2 if f.variant == Variant::EtherVista => {
+            list.extend(["dex.factory","dex.factory_runtime_hash","dex.quoter","dex.router_runtime_hash",super::verify_algebra_dir::SETTING]);
+        }
         Proto::V2 if f.variant == Variant::Oasis => {
             list.extend(["dex.factory","dex.factory_runtime_hash","dex.oasis_mev_slot",super::verify_algebra_dir::SETTING]);
             if f.executor_kind.is_none(){ list.extend(["dex.quoter","dex.router_runtime_hash"]); }

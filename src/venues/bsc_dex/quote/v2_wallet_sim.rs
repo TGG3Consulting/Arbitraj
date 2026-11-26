@@ -21,11 +21,13 @@ use alloy_primitives::{Address, B256, Bytes, U256};
 use serde_json::json;
 
 sol! {interface IMoney {
+    function getEthBalance(address owner) external view returns(uint256);
     function balanceOf(address owner) external view returns(uint256);
     function allowance(address owner,address spender) external view returns(uint256);
 }}
 #[derive(Clone)]
 pub(super) struct V5Step {
+    pub native: Option<(Address, bool)>,
     pub kind: u8,
     pub pool: Address,
     pub data: Bytes,
@@ -33,6 +35,7 @@ pub(super) struct V5Step {
 #[derive(Clone)]
 pub(super) enum Wire {
     Router02,
+    Vista(super::super::exec::vista_wire::Call),
     Oasis { rebate: bool },
     V5(V5Step),
 }
@@ -65,35 +68,72 @@ pub(super) async fn measure(ctx: &Ctx, h: Head, o: Order, boundary: bool) -> Gat
         to,
         input,
     };
-    let balance = |token| {
-        tx(
-            token,
-            Bytes::from(IMoney::balanceOfCall { owner: o.payer }.abi_encode()),
-        )
+    let (wrapped, value) = match &o.wire {
+        Wire::Vista(v) => (
+            if v.form == super::super::exec::vista_wire::Form::ModuleToken {
+                None
+            } else {
+                Some(v.wrapped)
+            },
+            v.value(o.amount),
+        ),
+        Wire::V5(v) => (
+            v.native.map(|(w, _)| w),
+            if matches!(v.native, Some((_, true))) {
+                o.amount
+            } else {
+                U256::ZERO
+            },
+        ),
+        _ => (None, U256::ZERO),
     };
-    let encoded = Bytes::from(
-        IMoney::allowanceCall {
-            owner: o.payer,
-            spender: o.target,
+    let multicall = if wrapped.is_some() {
+        Some(ctx.addr("dex.multicall3")?)
+    } else {
+        None
+    };
+    let balance = |token| {
+        if let Some(mc) = multicall
+            && wrapped == Some(token)
+        {
+            tx(
+                mc,
+                Bytes::from(IMoney::getEthBalanceCall { owner: o.payer }.abi_encode()),
+            )
+        } else {
+            tx(
+                token,
+                Bytes::from(IMoney::balanceOfCall { owner: o.payer }.abi_encode()),
+            )
         }
-        .abi_encode(),
-    );
-    let current: Bytes = rpc::call(
-        ctx,
-        "eth_call",
-        json!([{"to":o.input,"data":encoded},h.selector()]),
-    )
-    .await?;
-    if current.len() != 32 {
-        return Err(fail());
-    }
-    let approvals = approve::fork_known(
-        ctx,
-        o.input,
-        o.target,
-        U256::from_be_slice(&current),
-        o.amount,
-    )?;
+    };
+    let approvals = if wrapped == Some(o.input) {
+        Vec::new()
+    } else {
+        let encoded = Bytes::from(
+            IMoney::allowanceCall {
+                owner: o.payer,
+                spender: o.target,
+            }
+            .abi_encode(),
+        );
+        let current: Bytes = rpc::call(
+            ctx,
+            "eth_call",
+            json!([{"to":o.input,"data":encoded},h.selector()]),
+        )
+        .await?;
+        if current.len() != 32 {
+            return Err(fail());
+        }
+        approve::fork_known(
+            ctx,
+            o.input,
+            o.target,
+            U256::from_be_slice(&current),
+            o.amount,
+        )?
+    };
     let mut calls = vec![balance(o.input), balance(o.output)];
     calls.extend(approvals.iter().map(|(a, d)| tx(*a, d.clone())));
     let deadline = U256::from(
@@ -103,7 +143,8 @@ pub(super) async fn measure(ctx: &Ctx, h: Head, o: Order, boundary: bool) -> Gat
     );
     let data = calldata(&o, deadline, o.minimum);
     calls.extend([tx(o.target, data), balance(o.input), balance(o.output)]);
-    let r = frame(ctx, h, &calls).await?;
+    let values = (!value.is_zero()).then_some((approvals.len() + 2, value));
+    let r = frame(ctx, h, &calls, values.as_slice()).await?;
     if r.iter().any(|x| !x.ok()) {
         return Err(fail());
     }
@@ -121,7 +162,7 @@ pub(super) async fn measure(ctx: &Ctx, h: Head, o: Order, boundary: bool) -> Gat
         // Тот же плательщик, исходные остатки и разрешения. Более строгий лишь минимум.
         let strict = received.checked_add(U256::ONE).ok_or_else(fail)?;
         calls[n + 2].input = calldata(&o, deadline, strict);
-        let alt = frame(ctx, h, &calls).await?;
+        let alt = frame(ctx, h, &calls, values.as_slice()).await?;
         if alt[n + 2].ok()
             || alt[n + 2].error.is_none()
             || alt.iter().enumerate().any(|(j, v)| j != n + 2 && !v.ok())
@@ -143,6 +184,7 @@ pub(super) async fn measure(ctx: &Ctx, h: Head, o: Order, boundary: bool) -> Gat
 
 fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
     match &o.wire {
+        Wire::Vista(v) => v.data(o.input, o.output, o.amount, minimum, o.payer, deadline),
         Wire::V5(v5) => {
             let step = ArbExecutor::Step {
                 kind: v5.kind,
@@ -160,7 +202,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
                 min_out: minimum,
                 deadline,
                 steps: vec![step],
-                native: None,
+                native: v5.native,
                 gated: vec![],
             }
             .data()
@@ -174,10 +216,15 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
     }
 }
 
-async fn frame(ctx: &Ctx, h: Head, calls: &[Call]) -> GatewayResult<Vec<CallResult>> {
+async fn frame(
+    ctx: &Ctx,
+    h: Head,
+    calls: &[Call],
+    values: &[(usize, U256)],
+) -> GatewayResult<Vec<CallResult>> {
     let mut req = simulate::params(
         calls,
-        &[],
+        values,
         &[],
         Base::timed(h.number.to(), h.timestamp.to()),
     );

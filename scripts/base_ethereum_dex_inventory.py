@@ -165,6 +165,38 @@ def tables(network, snapshots, profiles):
                     "В исторической паре обменов за один блок первая комиссия составила 0, обратная — 0,3% вследствие накопления объёма. Реальные балансы совпали на двух объёмах в обе стороны. "
                     "Роутер проверил минимальную дельту получателя и откатил каждый обмен с минимумом на одну единицу выше. "
                     f"[Архив](../{delta_file}) · [Исходник роутера]({current['proof']['router']['url']})."])
+    vista_file = f"tests/data/first_run_dex_2026-11-26/ethervista_{network}.json"
+    vista = read(Path(vista_file))
+    observation = vista["observations"][-1]
+    fees = observation["fees"]
+    rows = [p for p in vista["registry"] if vista["weth"] in p["tokens"] and all(map(int,p["reserves"]))]
+    scala = vista["fee_wei_per_units"]
+    bands = [[int(scala[str(p["fee_units"][side])]) for p in rows] for side in (0,1)]
+    same = sum(p["balances"] == p["reserves"] for p in vista["registry"])
+    backing = (f"Оба фактических баланса совпали с резервами у {same}/{len(vista['registry'])} пар. "
+               + ("" if base else "У пары UNI `0xf6f275d6fd242dbd10d6c026808e2918009be90f` избыток 100000000000000 raw UNI, "
+                  "у пары `0x3b0da15b994745a164905c06e6df7dca55b928d8` сохранён резерв токена 10²⁷ при балансе 10⁶ raw. "
+                  "У `0xf6fc63c8482416d3f1a5e89281a713e21724ddfa` не получено значение баланса первого токена. "))
+    owner_note = ("На Base модуль обращается к фабрике Base и местному WETH. "
+                  if base else "На Ethereum этот же интерфейс использует другую фабрику и WETH основной сети. ")
+
+    out.extend(["", f"EtherVista · фабрика подтвердила {len(vista['registry'])} пар, из них у {vista['funded_native_pairs']} "
+                "есть обёрнутый ETH и два положительных резерва. Для каждой пары сохранены buyTotalFee и sellTotalFee, "
+                "а также перевод каждого уникального значения через usdcToEth активного роутера. "
+                f"На проверенном рынке `{observation['pool']}` покупка стоила {fees['buy']['native_wei']} wei протокольной комиссии, "
+                f"продажа — {fees['sell']['native_wei']} wei. Газ учтён отдельно. "
+                f"Среди пар с WETH и положительной ликвидностью диапазон платы за покупку {min(bands[0])}–{max(bands[0])} wei, "
+                f"за продажу {min(bands[1])}–{max(bands[1])} wei. Нулевой платёж был у {bands[0].count(0)} рынков на покупке "
+                f"и {bands[1].count(0)} на продаже. {backing}{owner_note}"
+                "Значение owner() — владельцем указанная при развёртывании роль пополнения и вывода ETH-резерва. "
+                "Адрес торгового EOA и владелец резерва могут различаться. В V5 покупка использует входной WETH, "
+                "продажа платит fee из возобновляемого feeReserve, а затем восполняет резерв из выручки. "
+                "При нулевом резерве покупка сохраняется, продажа через swapFrom требует покрытия sell fee. "
+                "У отдельного native-вызова кошелёк дополнительно передаёт плату ETH в msg.value. "
+                f"Фабрика разрешает `{vista['router']}`. Прежний `{vista['previous_router']}` сохранил ссылку на ту же фабрику "
+                "и отклоняется при проверке обратной связи. Профиль первого запуска использует официальный роутер. "
+                "Адрес адаптера и хеш его развёрнутого кода с прошитыми владельцем и размещением задаются владельцем для режима V5. "
+                f"[Реестр и реальные дельты кошелька](../{vista_file}) · [GitHub](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45898296581)."])
     nami = read(Path(f"tests/data/first_run_dex_2026-11-26/nami_{network}.json"))
     samples = ", ".join(f"`{m['pool']}` — {m['tick_window']['measured_tick_steps']}" for m in nami["markets"])
     out.extend(["", f"Nami · фактический executor V5 выплатил полный результат {sum(len(m['cases']) for m in nami['markets'])} архивных обменов. "

@@ -70,7 +70,14 @@ def asset_path(directory, endpoint, cash):
     return tokens,steps,uni["dex.router"]
 
 
-def scenario(directory, artifact, endpoint, cash):
+class RouteBoundary(ValueError):
+    """Точная направленная проба, не допущенная кошельком в изолированном блоке."""
+    def __init__(self, result):
+        self.result=result
+        super().__init__(str(result.get("error"))[:250])
+
+
+def scenario(directory, artifact, endpoint, cash, candidate=None):
     tag = directory["selector"]
     head = rpc(endpoint,"eth_getBlockByHash",[tag["blockHash"],False])
     if int(rpc(endpoint,"eth_chainId",[]),16)!={"base":8453,"ethereum":1}[directory["network"]] or head["stateRoot"]!=directory["state_root"]:
@@ -91,8 +98,8 @@ def scenario(directory, artifact, endpoint, cash):
         approval_proof={"token":original,"executor":spender_answer(EXEC),"router":spender_answer(directory["router"])}
         if approval_proof["executor"]["status"]!="0x0" or approval_proof["router"]["status"]!="0x1":
             raise ValueError("historical VISTA allowance boundary differs")
-        # Следующий по WETH-резерву рынок EtherVista. Владельцу нужен отдельный допуск каждой монеты.
-        pair=next(p for p in directory["registry"] if p["pool"]=="0xd0a9bb124c4611ec375d93b5e9f20156c73b2004")
+        # Проверен однозначный исходный рынок: одного approve недостаточно для входа и выхода.
+        pair=next(p for p in directory["registry"] if p["pool"]==candidate)
         token=next(t for t in pair["tokens"] if t!=directory["weth"])
         c=Capture(dict(endpoint=endpoint,selector=tag))
         fees={}
@@ -161,7 +168,9 @@ def scenario(directory, artifact, endpoint, cash):
     def successful(before,forward,amount):
         spend,receipt=("cash","coin") if forward else ("coin","cash")
         probe=trial(before,route(forward,amount,1))
-        if probe["status"]!="0x1":raise ValueError(f"funded route rejected {forward} {amount}: {probe['error']}")
+        if probe["status"]!="0x1":
+            raise RouteBoundary(dict(pool=market["pool"],asset=asset,direction="buy" if forward else "sell",
+                                     amount=str(amount),cash=cash,selector=tag,error=probe["error"],receipt=probe))
         paid=delta(probe,receipt)
         exact=trial(before,route(forward,amount,paid))
         upper=trial(before,route(forward,amount,paid+1))
@@ -277,7 +286,21 @@ if __name__=="__main__":
     network=directory["network"]; funds=[BASE_USDC,BASE_USDT] if network=="base" else [USDT]
     for endpoint in NETWORKS[network][-1]:
         try:
-            cases=[scenario(directory,artifact,endpoint,cash) for cash in funds]
+            cases=[]
+            for cash in funds:
+                blocked=[]
+                # Первая пара VIPE прошла approval. Второй контроль — штатный ERC20 Circle USDC.
+                candidates=["0xd0a9bb124c4611ec375d93b5e9f20156c73b2004","0x36df698fb1e4c072a9c85e9848edd9c4c96dd194"] if network=="ethereum" else [None]
+                for target in candidates:
+                    try:
+                        row=scenario(directory,artifact,endpoint,cash,target)
+                    except RouteBoundary as boundary:
+                        blocked.append(boundary.result)
+                        continue
+                    row["rejected_routes"]=blocked
+                    cases.append(row)
+                    break
+                else:raise ValueError(f"no fully settled cash route: {[(r['pool'],r['direction'],r['error']) for r in blocked]}")
             args.output.write_text(json.dumps(cases,indent=2)+"\n",encoding="utf8")
             break
         except (requests.RequestException, ValueError, RuntimeError, KeyError) as exc:

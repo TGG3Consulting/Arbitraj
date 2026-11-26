@@ -85,6 +85,10 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
         details.push_str("; Hashflow RFQ: ");
         details.push_str(&result.unwrap_or_else(|e| e));
     }
+    for status in super::pools::ethervista_reserve::connection(ctx).await {
+        details.push_str("; ");
+        details.push_str(&status);
+    }
     ConnectionCheck {
         ok,
         details: if ok {

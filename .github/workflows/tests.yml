@@ -449,6 +449,11 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci --prefix contracts --no-audit --no-fund
+      - run: python scripts/record_ethervista_terms.py "$RUNNER_TEMP/ethervista.json" "$RUNNER_TEMP/ethervista-terms.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ethervista-market-terms-${{ matrix.network }}
+          path: ${{ runner.temp }}/ethervista-terms.json
       - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/vista-module" EtherVistaAdapter
       - run: python scripts/record_ethervista_v5.py "$RUNNER_TEMP/ethervista.json" "$RUNNER_TEMP/vista-module/EtherVistaAdapter.json" "$RUNNER_TEMP/vista-wallet-routes.json"
       - uses: actions/upload-artifact@v4
@@ -489,6 +494,11 @@ jobs:
         with:
           name: oasisswap-base-v5
           path: ${{ runner.temp }}/oasis-v5.json
+      - run: python scripts/record_oasisswap_rebate.py "$RUNNER_TEMP/oasis.json" "$RUNNER_TEMP/oasis-module/OasisSwapAdapter.json" "$RUNNER_TEMP/oasis-rebate.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oasisswap-rebate-boundaries
+          path: ${{ runner.temp }}/oasis-rebate.json
       - uses: actions/upload-artifact@v4
         with:
           name: oasisswap-base-wallets

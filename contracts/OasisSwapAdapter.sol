@@ -25,6 +25,7 @@ interface IOasisToken {
 
 contract OasisSwapAdapter {
     IOasisRegistry public immutable factory;
+    uint64 public constant MAX_REBATE=10_000;
     bool transient private entered;
     constructor(IOasisRegistry registry) {
         require(address(registry).code.length>0,"factory");
@@ -51,7 +52,7 @@ contract OasisSwapAdapter {
         // Протокол принимает tx.origin как получателя скидки. Право списания входных
         // токенов определяется отдельно: плательщик всегда msg.sender.
         uint64 rebate;
-        try factory.getRebate(tx.origin) returns(uint64 value) { rebate=value; } catch {}
+        try factory.getRebate(tx.origin) returns(uint64 value) { if (value<=MAX_REBATE) rebate=value; } catch {}
         (uint112 r0,uint112 r1,)=pair.getReserves();
         (uint256 rin,uint256 rout)=forward?(r0,r1):(r1,r0);
         uint256 den=pair.FEE_DIVISOR();

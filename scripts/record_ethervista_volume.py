@@ -17,8 +17,14 @@ def capture(directory,endpoint):
     session=requests.Session()
     def read(method,params):
         res=session.post(endpoint,json=dict(jsonrpc="2.0",id=1,method=method,params=params),timeout=18)
+        try:
+            obj=res.json()
+        except ValueError:
+            res.raise_for_status()
+            raise
+        if "error" in obj:
+            raise ValueError(f"{method}: {str(obj['error'])[:260]}")
         res.raise_for_status()
-        obj=res.json()
         if "result" not in obj:raise ValueError(str(obj.get("error"))[:240])
         return obj["result"]
     def header(h):
@@ -31,8 +37,12 @@ def capture(directory,endpoint):
         raise ValueError("контрольный блок не совпадает с реестром")
     finish=int(end["timestamp"],16)
     lower=finish-86400
-    low=max(0,height-100000)
-    if int(header(low)["timestamp"],16)>lower:raise ValueError("левый край поиска не покрывает сутки")
+    distance=8192
+    low=max(0,height-distance)
+    while int(header(low)["timestamp"],16)>lower:
+        if low==0:raise ValueError("до основания сети меньше суток")
+        distance*=2
+        low=max(0,height-distance)
     high=height
     while low<high:
         mid=(low+high)//2
@@ -69,10 +79,13 @@ def capture(directory,endpoint):
 
     addresses=sorted(pools)
     # Ответы непересекающихся прямоугольников (адреса, высоты) объединяются по ID лога.
-    for i in range(0,len(addresses),32):
-        group=addresses[i:i+32]
-        for a in range(low,height+1,2048):
-            for log in logs(a,min(height,a+2047),group):
+    publicnode="publicnode" in endpoint
+    group_size=10 if publicnode else 128
+    span=100 if "drpc.org" in endpoint else 10000
+    for i in range(0,len(addresses),group_size):
+        group=addresses[i:i+group_size]
+        for a in range(low,height+1,span):
+            for log in logs(a,min(height,a+span-1),group):
                 h=int(log["blockNumber"],16)
                 idx=int(log["logIndex"],16)
                 market=log["address"].lower()
@@ -111,7 +124,10 @@ if __name__=="__main__":
     ap.add_argument("output",type=Path)
     args=ap.parse_args()
     data=json.loads(args.directory.read_bytes())
-    for endpoint in NETWORKS[data["network"]][-1]:
+    urls=NETWORKS[data["network"]][-1]
+    if data["network"]=="ethereum":
+        urls=sorted(urls,key=lambda url:"publicnode" not in url)
+    for endpoint in urls:
         try:
             out=capture(data,endpoint)
             args.output.write_text(json.dumps(out,indent=2)+"\n",encoding="utf8")

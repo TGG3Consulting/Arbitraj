@@ -260,6 +260,11 @@ mod tests {
                             p.network,
                             p.id
                         );
+                    } else if k == "dex.pool_code_hashes" && matches!(p.id.as_str(),"ethervista"|"ethervista-base") {
+                        let raw=if p.network=="base" {include_str!("../../tests/data/first_run_dex_2026-11-26/ethervista_base.json")}else{include_str!("../../tests/data/first_run_dex_2026-11-26/ethervista_ethereum.json")};
+                        let archive:Value=serde_json::from_str(raw).unwrap();
+                        assert_eq!(archive["selector"],snapshot["selector"]);
+                        assert_eq!(archive["init"].as_str(),Some(text.as_str()));
                     } else if k == "dex.pool_code_hashes" && p.id == "oasisswap-base" {
                         let archive:Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/oasisswap_base.json")).unwrap();
                         assert_eq!(archive["selector"],snapshot["selector"]);

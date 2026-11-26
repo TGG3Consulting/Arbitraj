@@ -158,6 +158,18 @@ impl PoolRef {
     }
 }
 
+/// Оба резерва и обе фиксированные платы EtherVista на одном состоянии сети.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EtherVistaState {
+    pub reserve0: U256,
+    pub reserve1: U256,
+    pub balance0: U256,
+    pub balance1: U256,
+    pub wrapped: Address,
+    pub buy_fee: U256,
+    pub sell_fee: U256,
+}
+
 /// Состояние DeltaSwapPair для ordinary caller. У gammaPool отдельная ставка.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DeltaFee {
@@ -315,6 +327,8 @@ pub enum PoolState {
     },
     /// Резервы Oasis исключают кэш протокольных сборов. Доля задана в bps от комиссии.
     Oasis { reserve0:U256,reserve1:U256,share:u32,repeatable:bool },
+    /// Резервы пары и плата в ETH, уплачиваемая для каждого отдельного обмена.
+    EtherVista(Box<EtherVistaState>),
 }
 
 /// Состояние пары PMM от оракула (решение 122 F, 3) — боксируется в `PoolState::OraclePmm`. Только то, что читается

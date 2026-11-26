@@ -150,7 +150,9 @@ fn legs(
         };
     let ver = ver.as_ref().map(std::slice::from_ref);
     leg_min::set_leg_mins(ctx, req, [(path, req.qty)], &mut legs, ver, decs)?;
-    let wrap = if is_native {
+    let vista =
+        path.hops.len() == 1 && super::super::quote::vista_pricing::is_vista(&path.hops[0].entry);
+    let wrap = if is_native && !vista {
         native::adapt(ctx, req.side, &mut legs)?
     } else {
         Wrap::None

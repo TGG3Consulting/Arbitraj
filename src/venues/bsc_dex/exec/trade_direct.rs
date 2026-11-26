@@ -125,7 +125,7 @@ pub async fn trade(
         quoter_favour::log(ctx, &req, &prep.favour).await;
         let tin = if req.side == Side::Buy { usdt } else { coin };
         // Решение 231 (дополнение): контекст разбора — в «чем найти» любой ошибки «исход неизвестен» ниже (exec/swap_ctx.rs).
-        let sc = SwapCtx::swap(
+        let mut sc = SwapCtx::swap(
             wallet,
             (tin, out_token),
             decs,
@@ -133,6 +133,7 @@ pub async fn trade(
             None,
             prep.note.clone(),
         );
+        sc.vista = super::vista_direct::proof(&p);
         let min_out = p.min_total();
         let d = super::settlement_swap::with_parse(&sc, send_swap(env, &slot, p, guard))
             .await
@@ -146,7 +147,16 @@ pub async fn trade(
             tip_bnb: d.tip_bnb,
             ..sc
         };
-        let mut r = result::result(
+        if let Some(proof) = &sc.vista
+            && let Some(receipt) = &d.receipt
+            && receipt.status.to::<u64>() == 1
+        {
+            proof
+                .included(ctx, d.chain.hash, receipt)
+                .await
+                .map_err(|e| sc.attach(e.with_tx(d.chain.clone())))?;
+        }
+        let mut r = result::with_native_fact(
             ctx,
             req,
             d,
@@ -154,6 +164,7 @@ pub async fn trade(
             (tin, out_token),
             decs,
             router.as_slice(),
+            sc.vista.as_ref(),
         )
         .map_err(|e| sc.attach(e))?;
         // Решение 177: «продажа по квотеру» — в хронологию сделки (exec/result.rs by допишет её к исполнителю).

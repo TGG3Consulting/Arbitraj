@@ -49,6 +49,13 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
         return Err(format!("{}: пул с крючком", e.family.title));
     }
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::EtherVista(s), PoolKind::V2) => {
+            // Без фиксированной платы это верх курса для любого размера; её точная величина входит в quote.
+            let (rin, rout) = if zfo { (s.reserve0,s.reserve1) } else { (s.reserve1,s.reserve0) };
+            let backing = if zfo { s.balance0 } else { s.balance1 };
+            let floor_in = if backing > rin { U256::ONE } else { rin };
+            pair(rout, U256::ONE, floor_in, U256::ONE)
+        }
         (
             PoolState::DeltaSwap {
                 reserve0, reserve1, ..

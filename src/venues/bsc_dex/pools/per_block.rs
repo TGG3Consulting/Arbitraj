@@ -94,6 +94,7 @@ pub fn needs(f: &Family) -> bool {
         super::family_variant::Variant::SlipstreamDynamicFee
             | Variant::V2Create2LiveFee
             | Variant::LeetSwap
+            | Variant::EtherVista
             | Variant::Oasis
             | Variant::DeltaSwap
             | Variant::FraxTwamm

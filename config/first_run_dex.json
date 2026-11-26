@@ -2839,5 +2839,37 @@
         "0x18201dd118a5d2ddc1ca3580641434614984335c264c9d582625b8e09f20df28"
       ]
     }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "ethervista-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x9c9dfc8b5d8f1cb1b7f854108db16be1c21ea400 · https://sourcify.dev/server/v2/contract/8453/0x4aab7db193bf3d0083e9db51735ab3da0328c3d7 · tests/data/first_run_dex_2026-11-26/ethervista_base.json",
+    "settings": {
+      "dex.kind": "ethervista_native",
+      "dex.factory": "0x9c9dfc8b5d8f1cb1b7f854108db16be1c21ea400",
+      "dex.factory_runtime_hash": "0xa47c4f7abc23dea3826f4851799ce70c44b7363656cff3bfed918b08de305a1a",
+      "dex.quoter": "0x4aab7db193bf3d0083e9db51735ab3da0328c3d7",
+      "dex.router_runtime_hash": "0x8b249c226a1453d38117a2b8784703404fdb55f4ff187ccf958ec46c6005cbd8",
+      "dex.pool_code_hashes": [
+        "0x14ed3c77ea87fd259f590e3050a245adeb8c60131fe112f3a1610a316a5c076d"
+      ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "ethervista",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x9a27cb5ae0b2cee0bb71f9a85c0d60f3920757b4 · https://eth.blockscout.com/api/v2/smart-contracts/0x9bd63c5d44ff28390df1eaafd4eb4bd73e94a72a · tests/data/first_run_dex_2026-11-26/ethervista_ethereum.json",
+    "settings": {
+      "dex.kind": "ethervista_native",
+      "dex.factory": "0x9a27cb5ae0b2cee0bb71f9a85c0d60f3920757b4",
+      "dex.factory_runtime_hash": "0xb1278fb5955f780738c61c844c4129ef5133285740aa46611c84a110a58f11fe",
+      "dex.quoter": "0x9bd63c5d44ff28390df1eaafd4eb4bd73e94a72a",
+      "dex.router_runtime_hash": "0xc9dbb3d5bb248a52119a6e2deb5b15102c337f4de743dc84c7f658ad73ae13e2",
+      "dex.pool_code_hashes": [
+        "0xe260b72768e8ec6814aa811c576f346d208ba00840f835949d65c6424ac80a8d"
+      ]
+    }
   }
 ]

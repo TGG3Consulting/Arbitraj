@@ -36,6 +36,11 @@ pub(super) enum DirectCall {
         input: Address,
         amount: U256,
     },
+    Vista {
+        call: super::vista_wire::Call,
+        input: Address,
+        amount: U256,
+    },
     Oasis {
         input: Address,
         amount: U256,
@@ -125,6 +130,9 @@ impl Plan {
 
     /// Сколько BNB (wei) уходит с транзакцией обмена: сумма WRAP_ETH или 0. Ошибок нет.
     pub fn value(&self) -> U256 {
+        if let Some(DirectCall::Vista { call, amount, .. }) = self.direct_market {
+            return call.value(amount);
+        }
         match self.native {
             Wrap::Wrap(v) => v,
             _ => U256::ZERO,
@@ -148,6 +156,18 @@ impl Plan {
                     self.token_out,
                     amount,
                     self.min_total,
+                    self.deadline,
+                ),
+                DirectCall::Vista {
+                    call,
+                    input,
+                    amount,
+                } => call.data(
+                    input,
+                    self.token_out,
+                    amount,
+                    self.min_total,
+                    self.wallet,
                     self.deadline,
                 ),
                 DirectCall::Oasis {
@@ -217,6 +237,16 @@ pub async fn build(
         return Err(ctx.err(ErrorCode::Internal, "план без шагов"));
     };
     let e = &first.entry;
+    if super::super::quote::vista_pricing::is_vista(e) {
+        return Box::pin(super::vista_direct::plan(
+            ctx,
+            steps,
+            wallet,
+            now,
+            all_approvals,
+        ))
+        .await;
+    }
     if super::super::quote::oasis_pricing::is_oasis(e) {
         return Box::pin(super::oasis_direct::plan(
             ctx,

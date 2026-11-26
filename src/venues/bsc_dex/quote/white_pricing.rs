@@ -60,6 +60,7 @@ pub(super) async fn candidates(
             let mut base = e.clone();
             base.pool.fee_pips = Some(3000);
             let v5 = V5Step {
+                            native:None,
                 kind: 0,
                 pool: e.pool.reference.address(),
                 data: Bytes::from(U256::from(3000).abi_encode()),

@@ -144,7 +144,7 @@ pub(crate) async fn at(
     let discounted = if estimator.is_zero() {
         Some(rate)
     } else if let Some(owner) = controller {
-        rebate(ctx, factory, pool, tag, owner, rate).await?
+        rebate(ctx, factory, pool, tag, owner, rate, active_adapter).await?
     } else {
         None
     };

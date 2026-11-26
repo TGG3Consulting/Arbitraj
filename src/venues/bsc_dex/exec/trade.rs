@@ -198,6 +198,19 @@ async fn run(
         }
     };
     if route.mode == RouteMode::Direct
+        && let [h] = leg.hops.as_slice()
+        && q.reg
+            .entry(&h.pool)
+            .is_some_and(|e| super::super::quote::vista_pricing::is_vista(&e))
+    {
+        let native = super::native::is_native(ctx, &req.asset);
+        return Box::pin(super::vista_direct::NATIVE.scope(
+            native,
+            trade_direct::trade(q, env, nonces, req, &route, &leg, graph_mins),
+        ))
+        .await;
+    }
+    if route.mode == RouteMode::Direct
         && let [hop] = leg.hops.as_slice()
         && q.reg
             .get(&hop.pool)

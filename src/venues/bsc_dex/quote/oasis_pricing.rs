@@ -93,6 +93,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                     (
                         executor,
                         Wire::V5(V5Step {
+                            native:None,
                             kind: 29,
                             pool: module,
                             data: Bytes::new(),
@@ -111,6 +112,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 (
                     executor,
                     Wire::V5(V5Step {
+                            native:None,
                         kind: 29,
                         pool: module,
                         data: Bytes::new(),

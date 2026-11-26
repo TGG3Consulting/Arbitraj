@@ -93,7 +93,16 @@ pub fn rebuild(
     };
     let out = match c.executor {
         Some(x) => fact::result(ctx, req, d, (wallet, x), tokens, decs, native),
-        None => result::result(ctx, req, d, wallet, tokens, decs, &c.native_routers),
+        None => result::with_native_fact(
+            ctx,
+            req,
+            d,
+            wallet,
+            tokens,
+            decs,
+            &c.native_routers,
+            c.vista.as_ref(),
+        ),
     };
     // Решение 177: пометка «по квотеру» — как в пути (trade_direct.rs, executor/trade.rs: r.executor = note).
     let out = out.map(|mut t| {

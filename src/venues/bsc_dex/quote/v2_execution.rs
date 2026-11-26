@@ -115,7 +115,13 @@ pub(super) async fn option(
     if mode == RouteMode::Graph {
         let provisional = build(c.clone())?;
         let route = provisional.route.as_ref().ok_or_else(bad)?;
-        if executor::takes(ctx, &q.reg, route, false)? != Some(target) {
+        if executor::takes(
+            ctx,
+            &q.reg,
+            route,
+            super::super::exec::native::is_native(ctx, &i.asset),
+        )? != Some(target)
+        {
             return Err(bad());
         }
     }
@@ -138,6 +144,13 @@ pub(super) async fn option(
         if super::router_pricing::is_native(&c.entry) {
             super::router_pricing::checked(ctx, &c.entry, input, amount, head).await?;
         }
+        let vista_value = if super::vista_pricing::is_vista(&c.entry) {
+            Some(match &execution.wire {
+                super::v2_wallet_sim::Wire::Vista(call) => call.value(amount),
+                super::v2_wallet_sim::Wire::V5(v) if matches!(v.native,Some((_,true))) => amount,
+                _ => U256::ZERO,
+            })
+        } else {None};
         let o = Order {
             payer,
             target,
@@ -147,8 +160,16 @@ pub(super) async fn option(
             minimum,
             wire: execution.wire,
         };
-        let fill =
-            v2_wallet_sim::measure(ctx, head, o, super::oasis_pricing::is_oasis(&c.entry)).await?;
+        let fill = v2_wallet_sim::measure(
+            ctx,
+            head,
+            o,
+            super::oasis_pricing::is_oasis(&c.entry) || super::vista_pricing::is_vista(&c.entry),
+        )
+        .await?;
+        if let Some(value) = vista_value {
+            Box::pin(super::vista_pricing::funded(q, head, payer, value, &fill, i.gas)).await?;
+        }
         if i.side == Side::Sell {
             c.usdt = num::to_decimal(fill.received, i.usdt_dec).ok_or_else(bad)?;
         }

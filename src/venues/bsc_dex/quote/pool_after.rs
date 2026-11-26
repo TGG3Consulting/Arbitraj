@@ -34,7 +34,7 @@ use super::pool_quote;
 pub fn appliable(e: &Entry) -> bool {
     match (&e.pool.state, e.pool.kind) {
         (PoolState::Oasis { repeatable, .. }, PoolKind::V2) => *repeatable,
-        (PoolState::V2 { .. } | PoolState::DeltaSwap { .. }, PoolKind::V2) => true,
+        (PoolState::V2 { .. } | PoolState::DeltaSwap { .. } | PoolState::EtherVista(_), PoolKind::V2) => true,
         (PoolState::V3 { .. }, PoolKind::V3) => e.ticks.is_some() && e.pool.fee_pips.is_some(),
         _ => false,
     }
@@ -58,6 +58,10 @@ pub fn apply(
     };
     let zero_for_one = token_in == e.pool.token0;
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::EtherVista(state), PoolKind::V2) =>
+            super::super::math::ethervista::after(state, token_in, zero_for_one, amount)
+                .map(|(fill,next)| (fill,PoolState::EtherVista(Box::new(next))))
+                .ok_or_else(|| no("EtherVista: обмен не покрывает плату или превышает резерв")),
         (
             PoolState::DeltaSwap {
                 reserve0,

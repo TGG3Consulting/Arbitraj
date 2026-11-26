@@ -177,6 +177,13 @@ pub fn shape(e: &Entry) -> Result<(ExecKind, Address, Address), String> {
 pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params, Address)> {
     let (k, pool) =
         supported(e.family, &e.pool.reference).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?;
+    if super::super::super::quote::vista_pricing::is_vista(e) {
+        if k != ExecKind::Basin || !matches!(&e.pool.state,PoolState::EtherVista(_))
+            || (token_in!=e.pool.token0 && token_in!=e.pool.token1) {
+            return Err(ctx.err(ErrorCode::NoRoute,"EtherVista: неверная пара или версия шага V5"));
+        }
+        return Ok((Params::Basin,ctx.dex_addr("dex.router",e.family.id)?));
+    }
     if super::super::super::quote::oasis_pricing::is_oasis(e) {
         if k != ExecKind::Basin
             || !matches!(e.pool.state, PoolState::Oasis { .. })

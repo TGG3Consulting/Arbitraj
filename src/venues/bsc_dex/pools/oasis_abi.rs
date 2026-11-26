@@ -17,6 +17,7 @@ sol! {
         function getPair(address,address) external view returns(address);
         function pairCodeHash() external view returns(bytes32);
         function fee() external view returns(uint64);
+        function MAX_REBATE() external view returns(uint64);
         function FEE_DIVISOR() external view returns(uint64);
         function oasisFeeProportion() external view returns(uint64);
         function feeCache0() external view returns(uint256);
@@ -46,6 +47,7 @@ pub(super) async fn rebate(
     tag: &Value,
     owner: Address,
     base: u32,
+    module: Option<Address>,
 ) -> GatewayResult<Option<u32>> {
     let ask = IOasis::getRebateCall { user: owner };
     let data = multicall::encode(&[(factory, ask.abi_encode().into())]);
@@ -61,10 +63,19 @@ pub(super) async fn rebate(
     };
     let value = batch::decode(&first, ask)?;
     if value > 10000 {
-        return Err(ctx.err(
-            ErrorCode::BadResponse,
-            "OasisSwap: возврат выше делителя комиссии",
-        ));
+        if let Some(adapter) = module {
+            // Исторический принятый runtime вызывает calculateFee даже для 10001.
+            let cap = IOasis::MAX_REBATECall {};
+            let [reply] = batch::read(ctx, [batch::view(tag, adapter, cap.clone())]).await?;
+            if batch::decode(&reply, cap)? != 10_000 {
+                return Err(ctx.err(
+                    ErrorCode::NotApplicable,
+                    "OasisSwap: модуль не подтверждает предел скидки",
+                ));
+            }
+        }
+        // Нативный router с useRebate=false и принятый модуль со своим ограничением берут fee().
+        return Ok(None);
     }
     let calc = IOasis::calculateFeeCall { rebate: value };
     let bytes: Bytes = rpc::call(

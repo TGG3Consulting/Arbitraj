@@ -80,8 +80,13 @@ pub async fn trade(
     {
         return Err(ctx.err(ErrorCode::NoRoute, why));
     }
+    let vista_generation=legs.iter().any(|s|super::super::quote::vista_pricing::is_vista(&s.entry))
+        .then(|| ctx.settings.generation());
     let (mut c, mut at) = build(q, &legs, req, executor).await?;
     let need = approve_executor::missing(ctx, base, wallet, executor, c.amount_in).await?;
+    if let Some(generation)=vista_generation && !need.is_empty() {
+        Box::pin(super::vista_gate::check(ctx,legs.iter().map(|s|(&s.entry,s.token_in)),generation)).await?;
+    }
     let approved = send_approvals(env, &slot, &need).await?;
     // Решение 236, дополнение (техлид 09.11): газ разрешений — в итог цикла и в любую ошибку после них (swap_send.rs).
     let out: GatewayResult<CycleTradeResult> = async {
@@ -129,6 +134,9 @@ pub async fn trade(
     // Решение 273: пары Solidly с паузой/пределом газа фабрики — заново с фабрики; предел проверяет send_capped.
     let used: Vec<_> = legs.iter().map(|l| &l.entry).collect();
     let cap = super::solidly_gate::fresh_cap(q, &used).await?;
+    if let Some(generation)=vista_generation {
+        Box::pin(super::vista_gate::check(ctx,legs.iter().map(|s|(&s.entry,s.token_in)),generation)).await?;
+    }
     let gas_tip = tips.as_ref().map(|t| t.tip);
     // Решение 438: какие пулы в условии — в журнал до отправки (в фоне).
     let note = conds.as_ref().map(|k| pool_cond_row::log(ctx, &req.deal_id, k));

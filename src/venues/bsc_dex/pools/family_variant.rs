@@ -57,6 +57,7 @@ pub enum Variant {
     V2RouterCreate2,
     DeltaSwap,
     Oasis,
+    EtherVista,
     /// Solidly V1 с комиссией по получателю и внешним источником фабрики.
     LeetSwap,
     /// Три обновляемые прокси WhiteSwap с комиссией прямого обмена и скидкой роутера.
@@ -139,7 +140,7 @@ impl Variant {
     pub fn v2_block_state(self) -> bool {
         matches!(
             self,
-            Self::V2Create2LiveFee | Self::FraxTwamm | Self::FraxTwammRouter | Self::DeltaSwap | Self::Oasis
+            Self::V2Create2LiveFee | Self::FraxTwamm | Self::FraxTwammRouter | Self::DeltaSwap | Self::Oasis | Self::EtherVista
         )
     }
 }
@@ -168,6 +169,7 @@ pub fn of(kind: &str) -> Variant {
         "v3_fork_uniswap_lm" => Variant::UniswapV3Lm,
         "fraxswap_twamm_router" => Variant::FraxTwammRouter,
         "fraxswap_twamm" | "fraxswap_twamm_v5" => Variant::FraxTwamm,
+        "ethervista_native" | "ethervista_v5" => Variant::EtherVista,
         "oasisswap_v2_router" | "oasisswap_v2_v5" => Variant::Oasis,
         "v2_deltaswap_router" => Variant::DeltaSwap,
         "v2_fork_router_create2" => Variant::V2RouterCreate2,

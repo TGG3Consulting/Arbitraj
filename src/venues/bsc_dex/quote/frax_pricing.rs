@@ -101,6 +101,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             continue;
         }
         let wire = super::v2_wallet_sim::Wire::V5(V5Step {
+                            native:None,
             kind: 29,
             pool: adapter,
             data: Bytes::new(),

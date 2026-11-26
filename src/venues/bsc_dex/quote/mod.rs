@@ -82,6 +82,7 @@ pub mod mixed_quoter_calls;
 mod nami_routes;
 pub mod native_gas;
 pub(super) mod oasis_pricing;
+pub(super) mod vista_pricing;
 pub mod par;
 pub mod par_pool;
 pub mod path;
@@ -325,11 +326,7 @@ impl Quoting {
         // Решение 301 (дополнение — стек): работа — в кучу здесь, состояние этого future держит указатель
         // (quote/cpu.rs run).
         // Решение 312: замер этапов работы — tm.run() = None (выключен): timed сразу ведёт работу без замера.
-        let (mut alternatives, compare_single) = if native {
-            (Vec::new(), false)
-        } else {
-            Box::pin(v2_fallback::candidates(&pick, &input)).await
-        };
+        let (mut alternatives,compare_single)=Box::pin(v2_fallback::candidates(&pick,&input,native)).await;
         if compare_single && !alternatives.is_empty() {
             v2_fallback::private(&pick, &input, &mut alternatives);
         }
@@ -346,7 +343,7 @@ impl Quoting {
         };
         for (quote, approval) in alternatives {
             let Ok(other) = self
-                .finish(quote, (coin_dec, usdt_dec), gas, &fees, false, approval, tm)
+                .finish(quote, (coin_dec, usdt_dec), gas, &fees, native, approval, tm)
                 .await
             else {
                 continue;

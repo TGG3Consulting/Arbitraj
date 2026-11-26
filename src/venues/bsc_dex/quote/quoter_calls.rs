@@ -59,6 +59,16 @@ pub fn request(
         ));
     }
     let zero_for_one = token_in == e.pool.token0;
+    if let PoolState::EtherVista(state) = &e.pool.state {
+        let debit = super::super::math::ethervista::credited(state, token_in, zero_for_one, amount)
+            .ok_or_else(|| ctx.err(ErrorCode::NoRoute,"EtherVista: вход не покрывает плату покупки"))?;
+        let quote = IV2Router::getAmountsOutCall { amountIn: debit, path: vec![token_in,token_out] };
+        let pair = super::super::pools::abi_v2v3::IV2Factory::getPairCall {
+            tokenA: e.pool.token0, tokenB: e.pool.token1,
+        };
+        return super::super::pools::base_native_v3::bound(ctx,e,ctx.dex_addr("dex.quoter",e.family.id)?,
+            pair.abi_encode().into(),quote.abi_encode().into());
+    }
     if super::oasis_pricing::is_oasis(e) {
         use super::super::exec::oasis_direct::{IOasisRouter, chosen};
         let (user, rebate, _) = chosen(e).unwrap_or((Address::ZERO, false, false));
@@ -493,6 +503,16 @@ pub fn request(
 
 /// Выход из ответа квотера. None — ответ не по ABI.
 pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> Option<U256> {
+    if let PoolState::EtherVista(state) = &e.pool.state {
+        let expected_input = super::super::math::ethervista::credited(state,token_in,token_in==e.pool.token0,amount)?;
+        let data = super::super::pools::base_native_v3::checked_data(e.pool.reference.own_contract()?,out).ok()?;
+        let amounts = IV2Router::getAmountsOutCall::abi_decode_returns(&data).ok()?;
+        return match amounts.as_slice() {
+            [input, gross] if *input == expected_input =>
+                super::super::math::ethervista::wallet_output(state,token_in,*gross),
+            _ => None,
+        };
+    }
     if e.family.variant.registered_v2_router() || super::oasis_pricing::is_oasis(e) {
         let PoolRef::Contract(pool) = e.pool.reference else {
             return None;
@@ -515,6 +535,10 @@ pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> O
 }
 
 pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
+    if matches!(&e.pool.state, PoolState::EtherVista(_)) {
+        // Без направления нельзя определить, с какой стороны фиксированная плата в ETH.
+        return None;
+    }
     if e.family.variant.registered_v2_router() || super::oasis_pricing::is_oasis(e) {
         let PoolRef::Contract(pool) = e.pool.reference else {
             return None;

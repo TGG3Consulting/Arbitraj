@@ -164,6 +164,10 @@ fn side(
 ) -> Result<(U256, bool), String> {
     let pick = |amount_in: U256, amount_out: U256| if buy { amount_in } else { amount_out };
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::EtherVista(s), PoolKind::V2) => {
+            let (rin,rout) = if zfo { (s.reserve0,s.reserve1) } else { (s.reserve1,s.reserve0) };
+            xy_band(rin,rout,b,buy)
+        }
         (
             PoolState::V2 { reserve0, reserve1 } | PoolState::Oasis { reserve0, reserve1, .. }
             | PoolState::DeltaSwap {
@@ -176,17 +180,7 @@ fn side(
             } else {
                 (*reserve1, *reserve0)
             };
-            // Цена монеты сдвигается на полосу: продажа — резерв монеты растёт в 1/√(1−b), покупка — резерв встречного
-            // в √(1+b) (x·y = k); без комиссии пары (решение Тиграна: глубина — чистый объём пула).
-            let grow = if buy {
-                (1.0 + b).sqrt() - 1.0
-            } else {
-                1.0 / (1.0 - b).sqrt() - 1.0
-            };
-            let f = U256::from((grow * SCALE) as u128);
-            let eff =
-                r_in.checked_mul(f).ok_or("переполнение резерва")? / U256::from(SCALE as u128);
-            Ok(pair_depth(eff, r_in, r_out, buy))
+            xy_band(r_in,r_out,b,buy)
         }
         (
             PoolState::V3 {
@@ -544,6 +538,21 @@ fn side(
         }
         _ => Err("вид пула и состояние не совпадают".into()),
     }
+}
+
+/// Объём пары x·y=k внутри выбранной полосы изменения цены.
+fn xy_band(r_in: U256, r_out: U256, b: f64, buy: bool) -> Result<(U256,bool),String> {
+            // Цена монеты сдвигается на полосу: продажа — резерв монеты растёт в 1/√(1−b), покупка — резерв встречного
+            // в √(1+b) (x·y = k); без комиссии пары (решение Тиграна: глубина — чистый объём пула).
+            let grow = if buy {
+                (1.0 + b).sqrt() - 1.0
+            } else {
+                1.0 / (1.0 - b).sqrt() - 1.0
+            };
+            let f = U256::from((grow * SCALE) as u128);
+            let eff =
+                r_in.checked_mul(f).ok_or("переполнение резерва")? / U256::from(SCALE as u128);
+            Ok(pair_depth(eff, r_in, r_out, buy))
 }
 
 /// Пара x·y=k (V2, Solidly volatile) без комиссии: (сумма во встречном токене, true). Решение 205: пустой пул

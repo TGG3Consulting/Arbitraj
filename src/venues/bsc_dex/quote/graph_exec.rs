@@ -33,6 +33,11 @@ use super::pool_tax;
 /// в Hop.usable.tax_pct, решение 146), нативная ли монета (BNB).
 /// Возвращает: Ok — исполним; Err — причина (сигнал). Ошибок иных нет.
 pub fn executable(ctx: &Ctx, legs: &[Path], native: bool) -> Result<(), String> {
+    if !super::super::pools::nami::path_ok(
+        legs.iter().flat_map(|l| l.hops.iter().map(|h| &h.entry)),
+    ) {
+        return Err("Nami вызывает внешние пулы; требуется один изолированный обмен".into());
+    }
     if legs.is_empty() {
         return Err("пустой маршрут".to_string());
     }

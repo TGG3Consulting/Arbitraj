@@ -49,7 +49,26 @@ pub fn request(
     } else {
         e.pool.token0
     };
+    if e.family.variant == super::super::pools::family_variant::Variant::NamiIntegral {
+        if token_in != e.pool.token0 && token_in != e.pool.token1 {
+            return Err(ctx.err(ErrorCode::InvalidAddress, "Вход не входит в пару Nami"));
+        }
+        return Ok((
+            ctx.dex_addr("dex.quoter", e.family.id)?,
+            super::super::pools::nami::calldata(token_in, token_out, amount),
+        ));
+    }
     let zero_for_one = token_in == e.pool.token0;
+    if e.family.variant == super::super::pools::family_variant::Variant::FraxTwamm {
+        let q = super::super::pools::fraxswap::IFrax::getAmountsOutWithTwammCall {
+            amountIn: amount,
+            path: vec![token_in, token_out],
+        };
+        return Ok((
+            ctx.dex_addr("dex.quoter", e.family.id)?,
+            Bytes::from(q.abi_encode()),
+        ));
+    }
     if e.family.variant == super::super::pools::family_variant::Variant::SolidlyCl {
         let pool = e
             .pool
@@ -453,6 +472,9 @@ pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> O
 }
 
 pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
+    if e.family.variant == super::super::pools::family_variant::Variant::NamiIntegral {
+        return super::super::pools::nami::decoded(out);
+    }
     if e.family.variant == super::super::pools::family_variant::Variant::BaseNativeV3 {
         let PoolRef::Contract(pool) = e.pool.reference else {
             return None;

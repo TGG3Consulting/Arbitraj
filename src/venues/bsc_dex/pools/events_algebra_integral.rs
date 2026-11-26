@@ -52,6 +52,14 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
     let Some(t0) = log.topic0().copied() else {
         return Applied::Ignored;
     };
+    if e.family.variant == super::family_variant::Variant::NamiIntegral
+        && (t0 == P::Fee::SIGNATURE_HASH
+            || t0 == P::SwapFee::SIGNATURE_HASH
+            || t0 == super::abi_algebra::IAlgebraPool::Swap::SIGNATURE_HASH)
+    {
+        e.valid = false;
+        return Applied::Refresh("Nami: перечитать итоговое состояние после вызовов hook и комиссию обычного отправителя".into());
+    }
     if t0 == P::Fee::SIGNATURE_HASH {
         return Applied::Fee("Algebra Integral Fee: перечитать комиссию пула".into());
     }

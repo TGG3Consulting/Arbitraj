@@ -7,6 +7,8 @@
   },
   "endpoint": "https://eth.drpc.org",
   "contracts": {
+    "0xc14d550632db8592d1243edc8b95b0ad06703867": {"bytes": 23773, "keccak256": "0x9db25446358b9a455da7fba2b74f1b47ef1f023dfc369472afd40c28fd45c418"},
+    "0x43ec799eadd63848443e2347c49f5f52e8fe0f6f": {"bytes": 24576, "keccak256": "0x8a97316dbf261f04ec3530d65ba9f3372259caf92d7cab020aa56dcd9de9e42c"},
     "0x00a38533c68327abe0cc265436e036066e2d6b38": {
       "bytes": 24535,
       "keccak256": "0x3a211598ad06c045ed08c18a425c9dbd9ef28fa8a27256ebf47a117ae1d3427b"
@@ -762,6 +764,30 @@
     "0xee3e9e46e34a27dc755a63e2849c9913ee1a06e2": {
       "bytes": 1804,
       "keccak256": "0x301e63e35abe863c77fd6db59db1630b292b46264f736d220415205cf0c52a55"
+    },
+    "0xd1bf4a24dc17da21410a7b047471e191ea538d43": {
+      "bytes": 10684,
+      "keccak256": "0x57e9dbbb1de68b753e26cd1dfff4f3fe1d342c755736f213a91dc008decaebb4"
+    },
+    "0x8c9f3b1f8a82253a58c5013483ceb91728c3a909": {
+      "bytes": 5723,
+      "keccak256": "0x401fd23da57e6a880af0d52b43d72983ce6744e9661ccae6a80ac2a2115e0ab3"
+    },
+    "0x2fe20b71eb355eb373b6318cb5fb8f121c0d4ecf": {
+      "bytes": 2841,
+      "keccak256": "0x9f884eb5bfb8b05f626e10182e5a0a61ff5c30d5fcdfac4bcba682df0811d0bc"
+    },
+    "0x44ce18e6e618a35f05ddd384571fc32b3fa0b879": {
+      "bytes": 1101,
+      "keccak256": "0x914bff18c1952ab662de06b80b4fb1ddbe8ea45aa82bd61b936d1a6bd505d1f2"
+    },
+    "0x7360c8207add8b8dd0332831a19c20bba6e3cabd": {
+      "bytes": 17230,
+      "keccak256": "0xfbe1d3b232707c843d5a07f91d32a9f9eaf443ef6f0e2fa086a20398d7f0e31a"
+    },
+    "0xcfe4b8da37befb6d09a5874be8666f75e00311d4": {
+      "bytes": 20318,
+      "keccak256": "0x8b2647de23dccd7e70676490a796667e8a9c27eeadad4fa998f45b72b3f15a9c"
     }
   },
   "router_getAmountOut": [

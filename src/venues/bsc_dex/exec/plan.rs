@@ -197,13 +197,7 @@ pub async fn build(
                 "минимум шага 0 — обмен без минимума не отправляется",
             ));
         }
-        commands.push(chain::routed_command(
-            ctx,
-            s,
-            fmt,
-            wallet,
-            (router, permit2),
-        )?);
+        commands.push(chain::routed_command(ctx, s, fmt, wallet, (router, permit2)).await?);
     }
     Plan::new(
         ctx,

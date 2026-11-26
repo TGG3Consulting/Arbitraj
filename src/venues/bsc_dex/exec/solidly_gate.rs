@@ -59,13 +59,43 @@ pub fn planned<'a>(
 /// Ошибки: NoRoute — фабрика на паузе; узел, BadResponse, NotConfigured (dex.factory), хранилище настроек (has_gate).
 pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<U256>> {
     let ctx = &q.ctx;
+    if !super::super::pools::nami::path_ok(entries.iter().copied()) {
+        return Err(ctx.err(ErrorCode::NoRoute, "Nami разрешает только отдельный обмен"));
+    }
     let mut seen: Vec<&str> = Vec::new();
     let mut cap: Option<U256> = None;
     for e in entries.iter().copied() {
         let f = e.family;
+        if f.variant == Variant::FraxTwamm {
+            let pool = e
+                .pool
+                .reference
+                .own_contract()
+                .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Fraxswap: нет адреса пары"))?;
+            Box::pin(super::super::pools::fraxswap::check_adapter(
+                ctx,
+                f,
+                pool,
+                (e.pool.token0, e.pool.token1),
+                "latest",
+            ))
+            .await?;
+            continue;
+        }
         if f.direct_module() && f.tradable {
             let module = ctx.dex_addr("dex.router", f.id)?;
             super::super::pools::direct_module::verify(ctx, f, module, "latest").await?;
+            continue;
+        }
+        if f.variant == Variant::NamiIntegral
+            && let PoolRef::Contract(pool) = e.pool.reference
+        {
+            let hash = super::super::pools::nami::block(ctx, "latest").await?;
+            let fee = Box::pin(super::super::pools::nami::check(ctx, f.id, pool, &hash)).await?;
+            if !matches!(&e.pool.state,crate::core::types::PoolState::Algebra {fee:quoted, ..} if *quoted==u32::from(fee))
+            {
+                return Err(ctx.err(ErrorCode::StaleData, "Изменилась комиссия отправителя Nami"));
+            }
             continue;
         }
         if f.variant == Variant::QuickswapIntegral

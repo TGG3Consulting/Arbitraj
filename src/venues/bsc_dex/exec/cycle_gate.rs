@@ -87,6 +87,16 @@ pub fn guard_ur(ctx: &Ctx, leg: &Leg) -> GatewayResult<()> {
 /// Выбор формы: исполнитель, иначе бандл, иначе отказ с причинами. Принимает: ноги цикла. Ошибки: NoRoute (обе формы
 /// не годятся — причины обеих), Internal (адрес исполнителя кошелька не читается).
 pub fn form(ctx: &Ctx, legs: &[Leg]) -> GatewayResult<Form> {
+    if legs.len() > 1
+        && legs.iter().any(|leg| {
+            leg.entry.family.variant == super::super::pools::family_variant::Variant::NamiIntegral
+        })
+    {
+        return Err(ctx.err(
+            ErrorCode::NoRoute,
+            "В цикле Nami может изменить ликвидность другой ноги",
+        ));
+    }
     let bundle = || match legs.iter().find_map(|l| guard_ur(ctx, l).err()) {
         Some(e) => Err(e.message),
         None => send::planned_bundle_ok(ctx),

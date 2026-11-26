@@ -152,6 +152,10 @@ pub async fn quote_fit(
     for legs in admitted {
         match legs {
             Ok(legs) => {
+                if legs.len() > 1 && super::nami_routes::contains(&legs) {
+                    why.push("Составной путь включает внешний callback Nami".into());
+                    continue;
+                }
                 let g = match &conv {
                     Some(c) => stage(Stage::GasUsdt, on, || c.path_with(&legs, Some(&v.q.gas)))?,
                     None => Decimal::ZERO,

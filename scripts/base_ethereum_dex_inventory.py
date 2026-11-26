@@ -114,6 +114,14 @@ def tables(network, snapshots, profiles):
                     "По утверждённому BIP-928 пауза Vault V3 запланирована на 30.11.2026. "
                     f"[Вызовы и ответы](../{market_file}) · "
                     "[Решение Balancer](https://forum.balancer.fi/t/bip-928-orderly-winddown-of-balancer-and-distribution-of-the-treasury/7107/23)."])
+    nami = read(Path(f"tests/data/first_run_dex_2026-11-26/nami_{network}.json"))
+    samples = ", ".join(f"`{m['pool']}` — {m['tick_window']['measured_tick_steps']}" for m in nami["markets"])
+    out.extend(["", f"Nami · фактический executor V5 выплатил полный результат {sum(len(m['cases']) for m in nami['markets'])} архивных обменов. "
+                f"На этих пулах окно тиков потребовало следующее число шагов в каждую сторону: {samples}. Лимит dex.integral_tick_steps задаёт владелец. "
+                "Наблюдаемый pluginConfig равен 195, оба alpha равны 0, сегментный источник выключен и cap равен 0. "
+                "Проверенные исходники в этом режиме дают обычному отправителю baseFee; площадка сверяет обе стороны swapFee, обе привязки фабрики, "
+                "слот beacon, runtime реализации и расширения. Отдельный обмен Nami сравнивается по сумме и газу с обычными вариантами маршрута. "
+                f"[Архив пула, двух направлений и полных дельт](../tests/data/first_run_dex_2026-11-26/nami_{network}.json)"])
     v2_probes = Path("tests/data/base_ethereum_v2_probes.json")
     fixed = [row["dex"] for row in read(v2_probes) if row["network"] == network
              and row.get("verify_pair_boundary") and len(row.get("cases", [])) == 2]
@@ -746,12 +754,13 @@ def tables(network, snapshots, profiles):
                     "Адаптер объёма маркирован doublecounted. Тот же обмен учитывается в исходном пуле")
         if str(row["id"]) == "9154":
             nami = read(Path(f"tests/data/first_run_dex_2026-11-26/nami_{network}.json"))
+            candidates = [nami["config"]["factory"]]
             count = sum(len(m["cases"]) for m in nami["markets"])
             task = (f"DEX-27 · фабрика {nami['config']['factory']}, квотер {nami['config']['quoter']}; "
                     f"{count} архивных полных обменов V5. "
                     + ("8/8 обменов изменили собственный пул." if base else
                        "4/4 обмена дополнительно изменили пул Uniswap V3 0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640.")
-                    + " Динамический hook требует проверки профиля и области воздействия при объединении путей")
+                    + " Исполнитель сравнивает одиночный Nami с обычным сплитом на тот же объём и направляет сюда только отдельный обмен")
         if base and str(row["id"]) == "7260" and elfomo.exists():
             task = "DEX-23 · 12 пар в реестре ElfomoFi. Подтверждены прямые выплаты WETH/USDC и cbBTC/USDC, нулевые котировки USDT/USDC"
         if base and str(row["id"]) == "9172" and aero_basic.exists():

@@ -64,13 +64,16 @@ pub async fn build(
             }
             // Решение 450: формат — по dex.universal_router_version пула (pancakeswap_infinity или pancakeswap_v3; smart_ok
             // других не пускает): у обоих входы V2/V3 одни и те же, пулы Infinity v3-роутер не исполняет (swap_v4.rs).
-            commands.push(chain::routed_command(
-                ctx,
-                s,
-                ur::format(ctx, &s.entry)?,
-                wallet,
-                (router, permit2),
-            )?);
+            commands.push(
+                chain::routed_command(
+                    ctx,
+                    s,
+                    ur::format(ctx, &s.entry)?,
+                    wallet,
+                    (router, permit2),
+                )
+                .await?,
+            );
         }
         if let Some(last) = leg.last() {
             total_min = total_min.saturating_add(last.order.min_out);

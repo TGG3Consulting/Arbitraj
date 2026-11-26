@@ -9,6 +9,10 @@ on:
     branches: ["test/**"]
   workflow_dispatch:
     inputs:
+      fraxswap_archive_replay:
+        description: Replay the V5 Fraxswap adapter against the canonical TWAMM snapshot
+        type: boolean
+        default: false
       hanji_archive_replay:
         description: Replay the CI-built contract against the pinned Base block
         type: boolean
@@ -223,6 +227,11 @@ jobs:
         with:
           name: whiteswap-ethereum-wallets
           path: ${{ runner.temp }}/whiteswap-wallets.json
+      - run: python scripts/record_whiteswap_directory.py "$RUNNER_TEMP/whiteswap-directory.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: whiteswap-ethereum-directory
+          path: ${{ runner.temp }}/whiteswap-directory.json
   derpdex-archive:
     if: inputs.derpdex_archive_replay
     runs-on: ubuntu-latest
@@ -302,9 +311,19 @@ jobs:
           name: hanji-executor
           path: ${{ runner.temp }}/hanji-executor/HanjiExecutor.json
       - uses: actions/setup-python@v5
-        if: inputs.hanji_archive_replay || inputs.fermi_archive_replay || inputs.solidly_archive_replay || inputs.elfomo_archive_replay
+        if: inputs.fraxswap_archive_replay || inputs.hanji_archive_replay || inputs.fermi_archive_replay || inputs.solidly_archive_replay || inputs.elfomo_archive_replay
         with:
           python-version: '3.12'
+      - if: inputs.fraxswap_archive_replay
+        name: Check Fraxswap TWAMM settlement on unchanged V5
+        run: |
+          python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0
+          python scripts/record_fraxswap_swaps.py tests/data/first_run_dex_2026-11-26/fraxswap_ethereum.json "$RUNNER_TEMP/fraxswap-swaps.json" --endpoint https://eth.drpc.org --adapter "$RUNNER_TEMP/fraxswap/FraxswapAdapter.json"
+      - uses: actions/upload-artifact@v4
+        if: inputs.fraxswap_archive_replay
+        with:
+          name: fraxswap-v5-settlement
+          path: ${{ runner.temp }}/fraxswap-swaps.json
       - if: inputs.elfomo_archive_replay
         name: Verify ElfomoFi module receipts and wallet balances at the recorded Base block
         run: |

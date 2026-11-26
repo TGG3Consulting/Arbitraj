@@ -261,7 +261,7 @@ pub async fn states(
 /// причины см. в states. Ещё — reload_many.rs (решение 298: такому пулу — свой свежий блок).
 /// Принимает: вид пула. Возвращает: true — по одному. Ошибок нет.
 pub fn one_by_one(f: &Family) -> bool {
-    f.kind == PoolKind::Bin
+    f.variant == super::family_variant::Variant::FraxTwamm || f.kind == PoolKind::Bin
         || f.proto == Proto::KyberElastic
         || f.proto.is_dodo()
         || f.proto == Proto::Algebra

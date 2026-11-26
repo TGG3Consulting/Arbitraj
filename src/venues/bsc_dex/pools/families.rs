@@ -445,6 +445,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
         "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
+        "fraxswap_twamm" | "fraxswap_twamm_v5" => (PoolKind::V2, Proto::V2, true, false, true),
         "v2_fork" => (PoolKind::V2, Proto::V2, true, true, true),
         // V2-форк без известного роутера (решение 280): в графе и сигналах как v2_fork (V2-математика, своя комиссия
         // dex.v2_fee_pct), но tradable=false — своего роутера нет; исполнение — шаг V2 контракта-исполнителя (обмен
@@ -491,9 +492,10 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "thena_fusion" => (PoolKind::Cl, Proto::Algebra, true, false, false),
         // Algebra Integral (THENA V3, DexSwap; решение 188): как thena_fusion — в графе (математика swap_algebra),
         // исполнение — шаг ALGEBRA контракта-исполнителя (тот же swap + algebraSwapCallback, exec_kind.rs).
-        "algebra_integral" | "algebra_integral_hydrex" | "algebra_integral_quickswap" => {
-            (PoolKind::Cl, Proto::AlgebraIntegral, true, false, false)
-        }
+        "algebra_integral"
+        | "algebra_integral_hydrex"
+        | "algebra_integral_quickswap"
+        | "algebra_integral_nami" => (PoolKind::Cl, Proto::AlgebraIntegral, true, false, false),
         // Решение 444: Algebra V1.9 с направленными комиссиями (Camelot V3) — как thena_fusion: в графе (математика
         // swap_algebra, комиссия стороны), исполнение — шаг ALGEBRA исполнителя (exec_kind.rs).
         "algebra_dir_fee" => (PoolKind::Cl, Proto::AlgebraDirFee, true, false, false),
@@ -719,7 +721,9 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
             "сеть, фабрика или квотер расходятся с профилем V3 Base".into()
         ));
     }
-    if f.direct_module() && f.fork {
+    if (f.direct_module() && f.fork)
+        || (f.variant == Variant::FraxTwamm && f.executor_kind.is_some())
+    {
         super::direct_module::configured(ctx, id).map_err(|e| no(e.message))?;
     }
     match ctx.dex_flag("dex.pool_enabled", id) {
@@ -755,6 +759,12 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         ]);
     }
     match f.proto {
+        Proto::V2 if f.variant == Variant::FraxTwamm => {
+            list.extend(["dex.factory", "dex.quoter"]);
+            if f.executor_kind.is_some() {
+                list.extend(["dex.router", "dex.module_runtime_hashes"]);
+            }
+        }
         Proto::V2 => {
             list.push("dex.factory");
             if matches!(f.variant, Variant::V2Create2 | Variant::V2Create2LiveFee) {
@@ -829,12 +839,22 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // (dex.quoter_virtual = да убирает dex.quoter из списка, virtual_quoter.rs); без него пул не подключается.
         Proto::AlgebraIntegral => {
             list.extend(["dex.factory", "dex.quoter"]);
-            if f.variant == Variant::QuickswapIntegral {
+            if matches!(
+                f.variant,
+                Variant::QuickswapIntegral | Variant::NamiIntegral
+            ) {
                 list.extend([
                     "dex.plugin_factory",
                     "dex.plugin_beacon",
                     "dex.plugin_implementation",
                 ]);
+                if f.variant == Variant::NamiIntegral {
+                    list.extend([
+                        "dex.plugin_extension",
+                        "dex.plugin_runtime_hashes",
+                        "dex.plugin_pool_offset",
+                    ]);
+                }
             }
         }
         // Решение 444: фабрика (poolByPair, событие Pool — как V1.9); квотер — виртуальный (dex.quoter_virtual = да).
@@ -1045,7 +1065,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         ]),
     }
     // Решение 186: виртуальный квотер — квотер DEX не нужен (quote/virtual_quoter.rs).
-    if super::super::quote::virtual_quoter::on(ctx, f.id, f.proto) {
+    if f.variant != Variant::NamiIntegral
+        && super::super::quote::virtual_quoter::on(ctx, f.id, f.proto)
+    {
         list.retain(|n| *n != "dex.quoter");
     }
     list

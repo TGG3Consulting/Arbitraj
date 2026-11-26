@@ -161,7 +161,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
     use alloy::sol_types::SolEvent;
     let r = match e.family.proto {
         // Sync содержит только резервы. Setter платы может пройти в том же блоке без события.
-        Proto::V2 if e.family.variant == super::family_variant::Variant::V2Create2LiveFee => {
+        Proto::V2 if e.family.variant.v2_block_state() => {
             e.valid = false;
             Applied::Refresh("Резервы и изменяемая комиссия V2 требуют одного блока".into())
         }

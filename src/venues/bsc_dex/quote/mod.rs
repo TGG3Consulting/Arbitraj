@@ -72,6 +72,7 @@ pub mod graph_reuse;
 pub mod graph_route;
 pub mod graph_seq;
 pub mod graph_split;
+mod nami_routes;
 pub mod hook_curve;
 pub mod hook_rule;
 pub mod hook_settle;

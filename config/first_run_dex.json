@@ -2638,5 +2638,61 @@
       "dex.v2_fee_source": "fixed",
       "dex.v2_fee_pct": "0.3"
     }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "nami",
+    "source": "https://raw.githubusercontent.com/namifi/paraswap-dex-lib/f14c5093fc9e19ad9639b2b8bf9db9841a53f8af/src/dex/algebra-integral/config.ts · tests/data/first_run_dex_2026-11-26/nami_base.json",
+    "settings": {
+      "dex.kind": "algebra_integral_nami",
+      "dex.factory": "0xf4502a98a15e82d66d28d2381e2f3a407ea45b83",
+      "dex.quoter": "0x5ed0c723cd5680f0f6a4c8f334876e9cd92f3bcb",
+      "dex.plugin_factory": "0x8b7e4b0eb40ecc9db79b84d354fb54f48c7f8d3e",
+      "dex.plugin_beacon": "0x82e097c1cef63090c84c134563150705a8b84a74",
+      "dex.plugin_implementation": "0xd1dfa0aede1dd17153457d8d8c7c042b8e37a642",
+      "dex.plugin_extension": "0x1ba180dba695cf489a111f1d4cb71d262ce44d8b",
+      "dex.plugin_pool_offset": 75,
+      "dex.plugin_runtime_hashes": [
+        "0x9171a518741190c2e0100942b1e175a8d96031d6e780be4d90c21beb884f9982",
+        "0x685472f2b18e0e6f258e13a255c097d584fccd0ca2b83b4081e31ddf20439b70",
+        "0x8931a92885135b5ffcfda8b35a928b9a1d70dcc6425a3154ebcab015112a1c54"
+      ]
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "nami",
+    "source": "https://raw.githubusercontent.com/namifi/paraswap-dex-lib/f14c5093fc9e19ad9639b2b8bf9db9841a53f8af/src/dex/algebra-integral/config.ts · tests/data/first_run_dex_2026-11-26/nami_ethereum.json",
+    "settings": {
+      "dex.kind": "algebra_integral_nami",
+      "dex.factory": "0xd1bf4a24dc17da21410a7b047471e191ea538d43",
+      "dex.quoter": "0x8c9f3b1f8a82253a58c5013483ceb91728c3a909",
+      "dex.plugin_factory": "0x2fe20b71eb355eb373b6318cb5fb8f121c0d4ecf",
+      "dex.plugin_beacon": "0x44ce18e6e618a35f05ddd384571fc32b3fa0b879",
+      "dex.plugin_implementation": "0x7360c8207add8b8dd0332831a19c20bba6e3cabd",
+      "dex.plugin_extension": "0xcfe4b8da37befb6d09a5874be8666f75e00311d4",
+      "dex.plugin_pool_offset": 75,
+      "dex.plugin_runtime_hashes": [
+        "0x9171a518741190c2e0100942b1e175a8d96031d6e780be4d90c21beb884f9982",
+        "0xfbe1d3b232707c843d5a07f91d32a9f9eaf443ef6f0e2fa086a20398d7f0e31a",
+        "0x8b2647de23dccd7e70676490a796667e8a9c27eeadad4fa998f45b72b3f15a9c"
+      ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "fraxswap_ethereum",
+    "source": "https://docs.frax.finance/fraxswap/fraxswap-contract-addresses · https://eth.blockscout.com/address/0x43ec799eadd63848443e2347c49f5f52e8fe0f6f#code",
+    "settings": {
+      "dex.kind": "fraxswap_twamm",
+      "dex.factory": "0x43ec799eadd63848443e2347c49f5f52e8fe0f6f",
+      "dex.quoter": "0xc14d550632db8592d1243edc8b95b0ad06703867",
+      "dex.module_runtime_hashes": [
+        "0xeefc2b1675d449826fe53a2e19a3ac5cb27a7708466843b2ad3d661eb3a66087"
+      ]
+    }
   }
 ]

@@ -99,8 +99,9 @@ def run(out):
             return int(v["returnData"],16)
         def swap(mode,i,n,minimum):
             path=[tokens[i],tokens[1-i]]
-            if mode=="router":
-                return tx(router,"swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
+            if mode in ("router","router_net"):
+                method="swapExactTokensForTokens" if mode=="router" else "swapExactTokensForTokensSupportingFeeOnTransferTokens"
+                return tx(router,method+"(uint256,uint256,address[],address,uint256)",
                           ["uint256","uint256","address[]","address","uint256"],[n,minimum,path,sender,deadline])
             return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
                       ["address","uint256","address","uint256","uint256",STEP+"[]"],
@@ -120,11 +121,11 @@ def run(out):
                     # Fund WBT with an ordinary router swap from this EOA in both alternatives.
                     n=amount_out(budget,int(source["reserves"][1]),int(source["reserves"][0]),d)
                     prefix.append(swap("router",1,budget,n))
-                for mode,spender in (("router",router),("v5",EXEC)):
+                for mode,spender in (("router",router),("router_net",router),("v5",EXEC)):
                     before=simulate(prefix+[allowance(tokens[i],spender),tx(pool,"getReserves()")])
                     assert all(r["status"]=="0x1" for r in before)
                     reserves=decode(["uint112","uint112","uint32"],bytes.fromhex(before[-1]["returnData"][2:]))[:2]
-                    minimum=amount_out(n,reserves[i],reserves[1-i],d if mode=="router" else 0)
+                    minimum=amount_out(n,reserves[i],reserves[1-i],0 if mode=="v5" else d)
                     present=value(before[-2])
                     prep=[]
                     if present<n:
@@ -153,7 +154,7 @@ def run(out):
                                         prefunding_gas=int(replies[0]["gasUsed"],16) if prefix else 0))
         return results
     rows=[case for wallet in source["rows"] for case in measure(wallet)]
-    if len(rows)!=24 or {r["tier"] for r in rows}!={0,1,2}:
+    if len(rows)!=36 or {r["tier"] for r in rows}!={0,1,2}:
         raise RuntimeError("incomplete router/V5 wallet comparison")
     assert tag==json.loads(ETH.read_bytes())["selector"]
     result=dict(chain_id=1,block=source["block"],selector=tag,state_root=source["state_root"],source=source["sources"],

@@ -521,7 +521,11 @@ pub async fn state(
         if let PoolRef::Contract(a) = reference {
             // Решение 188: у Integral тики — связным списком (load_algebra_integral.rs), состояние то же. Решение 444:
             // у направленных комиссий — свой globalState (load_algebra_dir.rs), карта — та же, что у V1.9.
-            let (state, t) = if f.proto == Proto::AlgebraIntegral {
+            let (state, t) = if f.variant == Variant::NamiIntegral {
+                let hash = super::elfomo::block(ctx, &tag).await?;
+                let fee = Box::pin(super::nami::check(ctx, f.id, *a, &hash)).await?;
+                Box::pin(load_algebra_integral::canonical(ctx, *a, &hash, fee)).await?
+            } else if f.proto == Proto::AlgebraIntegral {
                 if f.variant == Variant::QuickswapIntegral {
                     super::quickswap_plugin::check(ctx, f.id, *a, &tag).await?;
                 }
@@ -622,6 +626,9 @@ pub async fn state(
         ));
     }
     match (f.kind, reference) {
+        (PoolKind::V2, PoolRef::Contract(a)) if f.variant == Variant::FraxTwamm => {
+            Box::pin(super::fraxswap::load(ctx, f, *a, pair, &tag)).await
+        }
         (PoolKind::V2, PoolRef::Contract(a)) if f.variant == Variant::V2Create2LiveFee => {
             super::v2_live_fee::load(
                 ctx,

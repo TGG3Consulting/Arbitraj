@@ -44,9 +44,7 @@ use super::{event_flags, load, load_batch, prefetch_ask, prefetch_memo, prefetch
 /// задана — одна атомарная загрузка, хранилище не читается.
 pub fn size(ctx: &Ctx, e: &Entry) -> Option<usize> {
     // Комиссия и резервы V2 читаются вместе по хешу блока в v2_live_fee.
-    if e.family.variant == super::family_variant::Variant::V2Create2LiveFee
-        || !event_flags::batch(ctx, e.family)
-    {
+    if e.family.variant.v2_block_state() || !event_flags::batch(ctx, e.family) {
         return None;
     }
     multicall::address(ctx)?;

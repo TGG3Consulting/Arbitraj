@@ -43,6 +43,7 @@ use super::{graph_seq, pool_tax};
 /// (0 — учёт газа выключен).
 pub struct Cand {
     pub legs: Vec<route_calc::Leg>,
+    pub(super) external_swap: bool,
     pub qty: Decimal,
     pub got: Option<Path>,
     pub gas_usdt: Decimal,
@@ -52,6 +53,7 @@ impl Cand {
     /// Кандидат без отданного объёма. Ошибок нет.
     pub fn new(legs: Vec<route_calc::Leg>, gas_usdt: Decimal) -> Self {
         Self {
+            external_swap: super::nami_routes::contains(&legs),
             legs,
             qty: Decimal::ZERO,
             got: None,
@@ -107,6 +109,20 @@ fn choose<T>(
 /// пути налог — пула его шага монеты, quote/pool_tax.rs coin_keep, решение 146), учитывать ли газ.
 /// Возвращает: доли (пути). Ошибки: NotConfigured (шаг/число долей), NoRoute (ни один путь не принял объём).
 pub fn split(
+    ctx: &Ctx,
+    cands: &mut [Cand],
+    side: Side,
+    qty: Decimal,
+    t: &TokenTaxes,
+    gas_aware: bool,
+) -> GatewayResult<Vec<Path>> {
+    if cands.iter().any(|c| c.external_swap) {
+        return super::nami_routes::choose(ctx, cands, side, qty, t, gas_aware);
+    }
+    ordinary(ctx, cands, side, qty, t, gas_aware)
+}
+
+pub(super) fn ordinary(
     ctx: &Ctx,
     cands: &mut [Cand],
     side: Side,

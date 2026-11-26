@@ -72,7 +72,7 @@ pub(super) fn verify(ctx: &Ctx, id: &str, code: &[u8], hash: B256) -> GatewayRes
     let with_vault = match kind.as_str() {
         "baibai_module" | "elfomofi_module" => true,
         "lunarbase_module" => false,
-        "base_native_v3_module" | "solidly_v3_module" => return Ok(()),
+        "base_native_v3_module" | "solidly_v3_module" | "fraxswap_twamm_v5" => return Ok(()),
         _ => return Err(wrong()),
     };
     let mut roles = vec![ctx.dex_addr("dex.pmm_pool", id)?];

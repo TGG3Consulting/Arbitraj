@@ -17,6 +17,8 @@ pub enum Variant {
     Base,
     /// Hydrex Integral Base: после Swap плагин может обменять собственные комиссии в том же пуле по отдельному тарифу.
     HydrexIntegral,
+    /// Nami v4: обновляемый plugin может исполнить дополнительный обмен в стороннем пуле.
+    NamiIntegral,
     /// Ring Few V2 на Ethereum, отдельный путь underlying через проверенные fw wrappers.
     RingFew,
     /// 9mm, Throne и Omni на Base проверяют свои callback через роутеры фабрик.
@@ -53,6 +55,8 @@ pub enum Variant {
     V2Create2,
     /// Пара CREATE2 с изменяемой ставкой. Резервы и комиссия сверяются вместе.
     V2Create2LiveFee,
+    /// Fraxswap V2 исполняет долгосрочные ордера к timestamp блока перед обменом.
+    FraxTwamm,
     /// Curve StableSwap 2021 (dex.kind = curve_stableswap_plain, решение 472): протокол Proto::CurveStable (геттеры
     /// coins/balances/fee, get_dy и exchange с int128 — те же), но A — `A_precise()` (A·A_PRECISION, A_PRECISION = 100),
     /// несходимость D/y — откат (`raise`), у пула из двух монет D_P — одной строкой `D·D/x0·D/x1/4`. Исходники: 2pool
@@ -113,6 +117,13 @@ pub enum Variant {
     LbV21Clone,
 }
 
+impl Variant {
+    /// Резервы и комиссия этих V2-пар должны обновляться одним чтением состояния блока.
+    pub fn v2_block_state(self) -> bool {
+        matches!(self, Self::V2Create2LiveFee | Self::FraxTwamm)
+    }
+}
+
 /// Вариант по значению dex.kind. Принимает: значение dex.kind. Возвращает: вариант (неизвестное — Base). Ошибок нет.
 pub fn of(kind: &str) -> Variant {
     match kind {
@@ -129,11 +140,13 @@ pub fn of(kind: &str) -> Variant {
         "curve_stableswap_oracle" => Variant::CurveOracle,
         "curve_crypto2_v1" => Variant::CryptoPair,
         "algebra_integral_hydrex" => Variant::HydrexIntegral,
+        "algebra_integral_nami" => Variant::NamiIntegral,
         "algebra_integral_quickswap" => Variant::QuickswapIntegral,
         "lista_stableswap_proxy" => Variant::ListaStableProxy,
         "base_native_v3" | "base_native_v3_module" => Variant::BaseNativeV3,
         "v3_fork_ramses" => Variant::RamsesCl,
         "v3_fork_uniswap_lm" => Variant::UniswapV3Lm,
+        "fraxswap_twamm" | "fraxswap_twamm_v5" => Variant::FraxTwamm,
         "v2_fork_executor_create2" => Variant::V2Create2,
         "v2_fork_executor_create2_live_fee" => Variant::V2Create2LiveFee,
         "slipstream_ramses" => Variant::RamsesClV2,

@@ -94,6 +94,12 @@ pub async fn trade(
     };
     let (legs, mut note, exp, mut favour) =
         prep_refetch::prepare(&v, &req, route, &verified.amount_out_min, decs).await?;
+    if !super::super::super::pools::nami::path_ok(legs.iter().flatten().map(|s| &s.entry)) {
+        return Err(ctx.err(
+            ErrorCode::NoRoute,
+            "Сохранённый маршрут Nami содержит другие шаги",
+        ));
+    }
     // Решение 234 (п. 4): minOut, ожидаемое и модельный налог каждой доли — в текст отката пробы (хронология сделки).
     let mut diag = sim::legs_text(&legs, &exp, &req, decs);
     let mut model = exp;
@@ -122,8 +128,22 @@ pub async fn trade(
     if let (Some(_), Some(why)) = (nat, super::native_block(ctx)) {
         return Err(ctx.err(ErrorCode::NoRoute, why));
     }
+    // Для Frax адрес шага есть в самой инструкции V5. Не смешиваем её со сменившейся настройкой адаптера.
+    let frax_generation = legs
+        .iter()
+        .flatten()
+        .any(|s| {
+            s.entry.family.variant
+                == crate::venues::bsc_dex::pools::family_variant::Variant::FraxTwamm
+        })
+        .then(|| ctx.settings.generation());
     let (mut c, mut at) = build(q, &legs, executor, nat).await?;
     let need = super::approvals(ctx, &c, wallet, executor).await?;
+    if frax_generation.is_some() && !need.is_empty() {
+        let used: Vec<_> = legs.iter().flatten().map(|s| &s.entry).collect();
+        super::super::solidly_gate::fresh_cap(q, &used).await?;
+        crate::venues::bsc_dex::pools::fraxswap::unchanged(ctx, frax_generation)?;
+    }
     let approved = send_approvals(env, &slot, &need).await?;
     // Решение 236, дополнение (техлид 09.11): газ разрешений — в итог обмена и в любую ошибку после них (swap_send.rs).
     let out: GatewayResult<TradeResult> = async {
@@ -163,6 +183,7 @@ pub async fn trade(
     // Решение 273: пары Solidly с паузой/пределом газа фабрики — заново с фабрики; предел проверяет send_capped.
     let used: Vec<_> = legs.iter().flatten().map(|s| &s.entry).collect();
     let cap = super::super::solidly_gate::fresh_cap(q, &used).await?;
+    crate::venues::bsc_dex::pools::fraxswap::unchanged(ctx,frax_generation)?;
     let d = txs::send_capped(env, &slot, (executor, c.data(), value), true, None, cap)
         .await
         .map_err(|e| sc.attach(e))?;

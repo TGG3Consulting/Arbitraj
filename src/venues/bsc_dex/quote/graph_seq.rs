@@ -53,6 +53,14 @@ pub fn shared(shares: &[&[Leg]]) -> HashSet<PoolRef> {
 /// Общий пул, для вида которого состояние после обмена не считается (pool_after::appliable). Возвращает: текст причины
 /// или None. Ошибок нет.
 pub fn unsupported(shares: &[&[Leg]], common: &HashSet<PoolRef>) -> Option<String> {
+    if shares.iter().any(|legs| super::nami_routes::contains(legs))
+        && !(shares.len() == 1 && shares[0].len() == 1)
+    {
+        return Some(
+            "Nami вызывает внешние пулы: составная последовательность требует полной симуляции"
+                .into(),
+        );
+    }
     shares.iter().flat_map(|l| l.iter()).find_map(|l| {
         (common.contains(&l.entry.liquidity_site()) && !pool_after::appliable(&l.entry)).then(|| {
             format!(

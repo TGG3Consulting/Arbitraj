@@ -65,9 +65,18 @@ def capture(endpoint, selected=()):
                 evidence = c.calls[-1]
                 evidence["decoded"] = list(map(str,decode([UINT]*5, out))) if out else None
                 m.setdefault("projection", {})[str(t)] = evidence
-    code = rpc(endpoint, "eth_getCode", [FACTORY, c.selector])
+    router = "0xc14d550632db8592d1243edc8b95b0ad06703867"
+    bound, = c.one(router, "factory()", returns=["address"])
+    if bound != FACTORY:
+        raise ValueError("official router belongs to a different factory")
+    contracts = {}
+    for address in (router, FACTORY):
+        code = bytes.fromhex(rpc(endpoint, "eth_getCode", [address, c.selector])[2:])
+        if not code:
+            raise ValueError("missing deployment")
+        contracts[address] = dict(bytes=len(code), keccak256="0x"+keccak(code).hex())
     return dict(chain=1, selector=c.selector, height=source["block"], state_root=head["stateRoot"],
-                timestamp=timestamp, factory=FACTORY, factory_runtime="0x"+keccak(bytes.fromhex(code[2:])).hex(),
+                timestamp=timestamp, factory=FACTORY, router=router, contracts=contracts,
                 markets=markets, endpoint=endpoint)
 
 

@@ -3,6 +3,7 @@
 //! обеих обёрток, реестрами в обе стороны и decimals исходной монеты.
 //! Сетевые обращения выполняются при приёме кандидата в реестр.
 
+use super::ring_acceptance::{self, Anchor};
 use super::{
     discover::Found,
     ring,
@@ -81,7 +82,7 @@ fn router_links(code: &[u8], layout: &ring::Layout) -> bool {
     found.into_iter().all(|x| x)
 }
 
-async fn infrastructure(ctx: &Ctx, layout: &ring::Layout, tag: &Value) -> Result<(), String> {
+async fn infrastructure(ctx: &Ctx, layout: &ring::Layout, tag: &Value) -> Result<bool, String> {
     let replies = futures_util::future::try_join_all(
         layout
             .contracts()
@@ -94,11 +95,10 @@ async fn infrastructure(ctx: &Ctx, layout: &ring::Layout, tag: &Value) -> Result
         .iter()
         .zip(&layout.infrastructure)
         .all(|(code, hash)| !code.is_empty() && keccak256(code) == *hash);
-    if hashes_match && router_links(&replies[3], layout) {
-        Ok(())
-    } else {
-        Err("Ring: код контрактов или адреса в коде Universal Router расходятся".into())
+    if replies.iter().any(|code| code.is_empty()) {
+        return Err("Ring: размещение ещё не подтверждено в проверяемом блоке".into());
     }
+    Ok(hashes_match && router_links(&replies[3], layout))
 }
 
 struct Market {
@@ -197,7 +197,14 @@ impl Market {
             })
     }
 
-    async fn verdict(&self, ctx: &Ctx, c: &Candidate, tag: &Value, initial: (u64, u64)) -> Verdict {
+    async fn verdict(
+        &self,
+        ctx: &Ctx,
+        c: &Candidate,
+        tag: &Value,
+        initial: (u64, u64),
+        anchor: Anchor,
+    ) -> Verdict {
         let calls = self.requests();
         let response = tokio::try_join!(
             code(ctx, self.pool, tag),
@@ -209,7 +216,13 @@ impl Market {
             Ok(v) => v,
             Err(e) => return Verdict::Failed(e.message),
         };
+        if [pool, fw0, fw1].contains(&keccak256([])) {
+            return Verdict::Failed(
+                "Ring: пара или обёртка ещё отсутствует в проверяемом блоке".into(),
+            );
+        }
         let Ok(words) = words.into_iter().collect::<Result<Vec<_>, _>>() else {
+            super::ring_acceptance::revoke(ctx, c.family.id, &self.layout, Some(self.pool));
             return Verdict::Rejected("Ring: ошибка чтения связанных контрактов".into());
         };
         if pool != self.layout.pair_runtime
@@ -217,6 +230,7 @@ impl Market {
             || fw1 != self.layout.wrapper_runtime
             || !self.check(&words)
         {
+            super::ring_acceptance::revoke(ctx, c.family.id, &self.layout, Some(self.pool));
             return Verdict::Rejected(
                 "Ring: код, реестр, исходный токен или decimals расходятся".into(),
             );
@@ -228,7 +242,14 @@ impl Market {
                 "Ring: настройки изменились во время проверки, требуется повтор".into(),
             );
         }
-        super::ring_acceptance::record(ctx, c.family.id, &self.layout, self.pool, initial.1);
+        super::ring_acceptance::record(
+            ctx,
+            c.family.id,
+            &self.layout,
+            self.pool,
+            initial.1,
+            anchor,
+        );
         Verdict::Taken(Box::new(Found {
             family: c.family,
             reference: PoolRef::Contract(self.pool),
@@ -241,6 +262,66 @@ impl Market {
             key: None,
             hooks: None,
         }))
+    }
+}
+
+/// Привязки свежей пары используются сразу. До финальности сверяем их исходный
+/// blockHash; при замене ветки заново проверяем текущую топологию на узле.
+pub(in crate::venues::bsc_dex) async fn admitted(
+    ctx: &Ctx,
+    e: &super::registry::Entry,
+) -> crate::gateway::errors::GatewayResult<ring::Layout> {
+    use crate::gateway::errors::ErrorCode;
+    let id = e.family.id;
+    let pool = e.pool.reference.address();
+    if let Ok((layout, anchor)) = ring_acceptance::lookup(ctx, id, pool) {
+        let Some(anchor) = anchor else {
+            return Ok(layout);
+        };
+        let tag = json!({"blockHash":anchor.hash,"requireCanonical":true});
+        let final_known = ring_acceptance::final_known(ctx, id, &layout, anchor);
+        if code(ctx, pool, &tag)
+            .await
+            .is_ok_and(|hash| hash == layout.pair_runtime)
+        {
+            if final_known {
+                ring_acceptance::settle(
+                    ctx,
+                    id,
+                    &layout,
+                    pool,
+                    anchor,
+                    ring_acceptance::Outcome::Finalized,
+                );
+            }
+            return Ok(layout);
+        }
+        ring_acceptance::settle(
+            ctx,
+            id,
+            &layout,
+            pool,
+            anchor,
+            ring_acceptance::Outcome::Orphaned,
+        );
+    }
+    let c = Candidate {
+        family: e.family,
+        pool: format!("{pool:#x}"),
+        coin: e.coin,
+        quote: e.usdt,
+    };
+    let mut row = [None];
+    verify(ctx, &[c], &[0], &mut row).await;
+    match row[0].take() {
+        Some(Verdict::Taken(_)) => ring::checked(ctx, id, pool),
+        Some(Verdict::Rejected(reason) | Verdict::Failed(reason)) => {
+            Err(ctx.err(ErrorCode::NoRoute, reason))
+        }
+        None => Err(ctx.err(
+            ErrorCode::NoRoute,
+            "Ring: пул не прошёл проверку в текущей ветке",
+        )),
     }
 }
 
@@ -263,7 +344,7 @@ pub(in crate::venues::bsc_dex) async fn backed_quote(
         return Err(ctx.err(ErrorCode::NoRoute, "Ring: вход отсутствует в паре"));
     };
     let quote = quoter_calls::request(ctx, e, token_in, amount)?;
-    let layout = ring::checked(ctx, e.family.id, e.pool.reference.address())?;
+    let layout = admitted(ctx, e).await?;
     let collateral = IRingProof::balanceOfCall {
         owner: layout.wrapped(output),
     };
@@ -301,17 +382,14 @@ pub(super) async fn verify(
     if indices.is_empty() {
         return;
     }
-    #[derive(serde::Deserialize)]
-    struct Head {
-        hash: B256,
-    }
     let initial = (
         ctx.settings.generation(),
         ctx.int("dex.evm_chain_id").unwrap_or(0),
     );
-    let tag = rpc::call::<Head>(ctx, "eth_getBlockByNumber", json!(["latest", false]))
-        .await
-        .map(|h| json!({"blockHash":h.hash,"requireCanonical":true}));
+    let head = rpc::call::<Anchor>(ctx, "eth_getBlockByNumber", json!(["latest", false])).await;
+    let tag = head
+        .as_ref()
+        .map(|a| json!({"blockHash":a.hash,"requireCanonical":true}));
     let mut deployments = std::collections::HashMap::new();
     for &i in indices {
         let c = &candidates[i];
@@ -332,17 +410,28 @@ pub(super) async fn verify(
             if let std::collections::hash_map::Entry::Vacant(entry) = deployments.entry(lookup) {
                 entry.insert(infrastructure(ctx, &layout, tag).await);
             }
-            if let Err(why) = &deployments[&lookup] {
-                out[i] = Some(Verdict::Failed(why.clone()));
-                continue;
+            match &deployments[&lookup] {
+                Ok(true) => {}
+                Ok(false) => {
+                    super::ring_acceptance::revoke(ctx, c.family.id, &layout, None);
+                    out[i] = Some(Verdict::Rejected(
+                        "Ring: код контрактов или адреса в коде Universal Router расходятся".into(),
+                    ));
+                    continue;
+                }
+                Err(why) => {
+                    out[i] = Some(Verdict::Failed(why.clone()));
+                    continue;
+                }
             }
         }
-        let result = match (&tag, Market::from(c, layout)) {
-            (Err(e), _) => Verdict::Failed(e.message.clone()),
-            (_, None) => Verdict::Rejected(
+        let result = match (&head, &tag, Market::from(c, layout)) {
+            (Err(e), _, _) => Verdict::Failed(e.message.clone()),
+            (_, _, None) => Verdict::Rejected(
                 "Ring: адрес не совпадает с CREATE2 пары канонических обёрток".into(),
             ),
-            (Ok(tag), Some(m)) => m.verdict(ctx, c, tag, initial).await,
+            (Ok(h), Ok(tag), Some(m)) => m.verdict(ctx, c, tag, initial, *h).await,
+            (_, Err(e), _) => Verdict::Failed(e.message.clone()),
         };
         out[i] = Some(result);
     }

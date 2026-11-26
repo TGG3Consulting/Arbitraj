@@ -130,6 +130,9 @@ pub async fn build(
     now: u64,
     all_approvals: bool,
 ) -> GatewayResult<Bundle> {
+    if !super::super::pools::nami::path_ok(legs.iter().flatten().map(|s| &s.entry)) {
+        return Err(ctx.err(ErrorCode::NoRoute, "Бандл Nami содержит другие шаги"));
+    }
     if legs.is_empty() {
         return Err(ctx.err(ErrorCode::NoRoute, "бандл без ног"));
     }
@@ -377,13 +380,7 @@ async fn router_execute(
                     "минимум выхода шага 0 — обмен без минимума в бандл не ставится",
                 ));
             }
-            commands.push(chain::routed_command(
-                ctx,
-                s,
-                fmt,
-                wallet,
-                (router, permit2),
-            )?);
+            commands.push(chain::routed_command(ctx, s, fmt, wallet, (router, permit2)).await?);
         }
         total_min = total_min.saturating_add(last.order.min_out);
         legs_min.push(last.order.min_out);

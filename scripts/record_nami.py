@@ -88,6 +88,10 @@ def capture(net):
         row=dict(pool=pool,tokens=[t0,t1],plugin=pl,beacon=beacon,implementation=imp,extension=ext,
                  proxy_template="0x"+keccak(bytes(code)).hex(),mevx_executor=mev_ex,mevx_router=mev_router,
                  liquidity=str(c.one(pool,"liquidity()",returns=["uint128"])[0]),
+                 fee_config=list(c.one(pl,"feeConfig()",returns=["uint16","uint16","uint32","uint32","uint16","uint16","uint16"])),
+                 fee_source=list(c.one(pl,"feeSource()",returns=["address","bool"])),
+                 fee_bounds=list(c.one(pl,"feeBounds()",returns=["(uint16,uint16,uint16,uint16,uint32,uint16)"])[0]),
+                 fee_override=list(c.one(pl,"feeOverride()",returns=["(uint16,uint16,uint40)"])[0]),
                  state=[str(x) if isinstance(x,int) and not isinstance(x,bool) else x for x in gs],directional=fees,
                  cases=[])
         for a,b,amounts in ((coin,usd,sizes),(usd,coin,[10**6,10**7])):

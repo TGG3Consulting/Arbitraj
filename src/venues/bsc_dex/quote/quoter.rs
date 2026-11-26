@@ -49,6 +49,20 @@ pub async fn out_at(
     amount: U256,
     block: &str,
 ) -> GatewayResult<U256> {
+    if e.family.variant == super::super::pools::family_variant::Variant::NamiIntegral {
+        let to = if token_in == e.pool.token0 {
+            e.pool.token1
+        } else if token_in == e.pool.token1 {
+            e.pool.token0
+        } else {
+            return Err(ctx.err(
+                ErrorCode::InvalidAddress,
+                "Пара Nami не содержит входной токен",
+            ));
+        };
+        return super::super::pools::nami::quote(ctx, e.family.id, token_in, to, amount, block)
+            .await;
+    }
     if e.family.variant == super::super::pools::family_variant::Variant::RingFew {
         return super::super::pools::ring_proof::backed_quote(ctx, e, token_in, amount, block)
             .await;

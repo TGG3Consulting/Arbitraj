@@ -111,7 +111,7 @@ pub fn steps(
 }
 
 /// Команда шага. Принимает: шаг, формат Universal Router, кошелёк. Ошибки: как у swap_v2v3 / swap_v4.
-pub fn routed_command(
+pub async fn routed_command(
     ctx: &Ctx,
     s: &Step,
     f: Format,
@@ -119,11 +119,7 @@ pub fn routed_command(
     target: (Address, Address),
 ) -> GatewayResult<(u8, Bytes)> {
     if s.entry.family.variant == super::super::pools::family_variant::Variant::RingFew {
-        let layout = super::super::pools::ring::checked(
-            ctx,
-            s.entry.family.id,
-            s.entry.pool.reference.address(),
-        )?;
+        let layout = Box::pin(super::super::pools::ring_proof::admitted(ctx, &s.entry)).await?;
         if f != Format::RingFew || (layout.router, layout.permit) != target {
             return Err(ctx.err(
                 ErrorCode::NoRoute,

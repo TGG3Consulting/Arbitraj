@@ -8,10 +8,8 @@
 //!     полю prevTick — по dex.integral_tick_steps тиков в каждую сторону. Между соседями списка инициализированных
 //!     тиков нет (TickTree/TickManagement), поэтому прочитанный отрезок [нижний, верхний] известен ПОЛНОСТЬЮ. Концы
 //!     списка — TickMath.MIN_TICK / MAX_TICK: дошли до конца — сторона известна до края.
-//! (2) комиссия: при флаге DYNAMIC_FEE в pluginConfig — fee() пула (getCurrentFee() плагина), иначе
-//!     globalState.lastFee. Добавку плагина (pluginFee) пул отдаёт только в событии SwapFee — её учитывают события
-//!     (events_algebra_integral.rs), расхождение ловит сверка квотером (виртуальный квотер, решение 186). Правило —
-//!     integral_fee.rs dynamic (решение 325: одно на полное чтение и на чтение только комиссии).
+//! (2) комиссия — fee() при DYNAMIC_FEE, иначе globalState.lastFee. SwapFee обрабатывает events_algebra_integral.rs.
+//! У Nami направленные ответы проверяются на том же каноническом блоке, что карта тиков.
 //! Окно карты тиков математика считает словами по 256 сырых тиков (swap_algebra::window_ticks), поэтому отрезок
 //! переводится в слова, ЦЕЛИКОМ лежащие внутри него (окно не шире известного — безопасная сторона: край отрезка
 //! внутри неполного слова не используется). Текущий тик вне окна — ошибка (тиков прочитано мало, расчёт невозможен).
@@ -21,14 +19,15 @@
 
 use std::collections::BTreeMap;
 
+use super::integral_block::At;
 use alloy_primitives::{Address, U256};
+use serde_json::Value;
 
 use crate::core::types::PoolState;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::math::tick_math::{MAX_TICK, MIN_TICK};
-use super::super::node::call;
 use super::abi_algebra_integral::IAlgebraIntegralPool as P;
 use super::load_cl::i24;
 use super::ticks::{TickData, TickMap};
@@ -37,19 +36,48 @@ use super::ticks::{TickData, TickMap};
 /// Ошибки: NotConfigured (dex.integral_tick_steps), узел (в т.ч. откат fee() плагина), ответ не по ABI, тик вне int24,
 /// список тиков не сходится, текущий тик вне прочитанного окна.
 pub async fn load(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<(PoolState, TickMap)> {
+    read(ctx, pool, At::Height(tag), None).await
+}
+
+/// Nami использует цену, активную на том же каноническом блоке, что проверка плагина.
+pub(super) async fn canonical(
+    ctx: &Ctx,
+    pool: Address,
+    tag: &Value,
+    fee: u16,
+) -> GatewayResult<(PoolState, TickMap)> {
+    read(ctx, pool, At::Canonical(tag), Some(fee)).await
+}
+
+async fn read(
+    ctx: &Ctx,
+    pool: Address,
+    tag: At<'_>,
+    confirmed_fee: Option<u16>,
+) -> GatewayResult<(PoolState, TickMap)> {
     let steps = ctx.int("dex.integral_tick_steps")?;
-    let gs = call::view(ctx, pool, &P::globalStateCall {}, tag).await?;
-    let liquidity = call::view(ctx, pool, &P::liquidityCall {}, tag).await?;
-    let fee = if super::integral_fee::dynamic(gs.pluginConfig) {
-        call::view(ctx, pool, &P::feeCall {}, tag).await?
+    let gs = tag.view(ctx, pool, &P::globalStateCall {}).await?;
+    let liquidity = tag.view(ctx, pool, &P::liquidityCall {}).await?;
+    let fee = if let Some(fee) = confirmed_fee {
+        if !gs.unlocked || gs.pluginConfig != super::nami::PLUGIN_FLAGS {
+            return Err(ctx.err(
+                ErrorCode::NoRoute,
+                "Флаги или блокировка пула Nami изменились",
+            ));
+        }
+        fee
+    } else if super::integral_fee::dynamic(gs.pluginConfig) {
+        tag.view(ctx, pool, &P::feeCall {}).await?
     } else {
         gs.lastFee
     };
     let tick = gs.tick.as_i32();
-    let next = call::view(ctx, pool, &P::nextTickGlobalCall {}, tag)
+    let next = tag
+        .view(ctx, pool, &P::nextTickGlobalCall {})
         .await?
         .as_i32();
-    let prev = call::view(ctx, pool, &P::prevTickGlobalCall {}, tag)
+    let prev = tag
+        .view(ctx, pool, &P::prevTickGlobalCall {})
         .await?
         .as_i32();
     let mut map: BTreeMap<i32, TickData> = BTreeMap::new();
@@ -91,7 +119,7 @@ pub async fn load(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<(PoolSta
 async fn walk(
     ctx: &Ctx,
     pool: Address,
-    tag: &str,
+    tag: At<'_>,
     start: i32,
     up: bool,
     steps: u64,
@@ -99,7 +127,9 @@ async fn walk(
 ) -> GatewayResult<i32> {
     let (mut t, mut last) = (start, start);
     for _ in 0..steps.max(1) {
-        let i = call::view(ctx, pool, &P::ticksCall { tick: i24(ctx, t)? }, tag).await?;
+        let i = tag
+            .view(ctx, pool, &P::ticksCall { tick: i24(ctx, t)? })
+            .await?;
         if i.liquidityTotal > U256::ZERO {
             let gross = u128::try_from(i.liquidityTotal).map_err(|_| {
                 ctx.err(

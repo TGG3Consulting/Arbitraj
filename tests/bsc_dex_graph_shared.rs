@@ -347,3 +347,20 @@ fn algebra_entry() -> arb::venues::bsc_dex::pools::registry::Entry {
         state_gen: 0,
     }
 }
+
+#[tokio::test]
+async fn nested_swap_isolated_even_when_visible_sites_are_disjoint() {
+    use arb::venues::bsc_dex::pools::families;
+    let p = route_common::parts().await;
+    let q = p.quoting();
+    let mut nested = leg(&q, WBNB_USDT_V2, WBNB, USDT);
+    nested.entry.family = families::make("nami", "algebra_integral_nami").unwrap();
+    let other = leg(&q, CAKE_USDT_PCS, CAKE, USDT);
+    let only = [nested.clone()];
+    assert!(graph_seq::unsupported(&[&only], &Default::default()).is_none());
+    let second = [other.clone()];
+    let split = [only.as_slice(), second.as_slice()];
+    assert!(graph_seq::shared(&split).is_empty());
+    assert!(graph_seq::unsupported(&split, &Default::default()).is_some());
+    assert!(graph_seq::unsupported(&[&[other, nested]], &Default::default()).is_some());
+}

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
+// Адаптер OasisSwap для вызова через swapFrom штатным ArbExecutor V5.
+// Часть комиссии хранится на паре отдельно от резервов. Вход измеряется по текущему переводу,
+// минимальный выход — по приросту баланса получателя. Развёртывание выполняет владелец.
 pragma solidity 0.8.37;
-
-// OasisSwap leaves part of each fee at the pair outside getReserves().
-// Compute input from the current payment and enforce the recipient's actual output.
 interface IOasisRegistry {
     function getPair(address,address) external view returns(address);
     function getRebate(address) external view returns(uint64);
@@ -48,8 +48,8 @@ contract OasisSwapAdapter {
         require(beforePayer-input.balanceOf(msg.sender)==amount,"spent");
         uint256 actual=input.balanceOf(address(pair))-beforePool;
         require(actual>0 && actual<=type(uint112).max,"input");
-        // The protocol explicitly permits tx.origin as feeController. It is used only
-        // for the optional fee rebate. Tokens are pulled exclusively from msg.sender.
+        // Протокол принимает tx.origin как получателя скидки. Право списания входных
+        // токенов определяется отдельно: плательщик всегда msg.sender.
         uint64 rebate;
         try factory.getRebate(tx.origin) returns(uint64 value) { rebate=value; } catch {}
         (uint112 r0,uint112 r1,)=pair.getReserves();

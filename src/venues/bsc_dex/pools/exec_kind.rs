@@ -414,6 +414,7 @@ mod tests {
         let none = [
             "ring_few_v2",
             "fraxswap_twamm",
+            "fraxswap_twamm_router",
             "v2_fork_router_create2",
             "v2_deltaswap_router",
             "base_native_v3",

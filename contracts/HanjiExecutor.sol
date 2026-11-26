@@ -113,6 +113,13 @@ contract HanjiExecutor {
         checkedCall(order.input, abi.encodeCall(input.approve, (order.market, order.budget)));
         if (sell) {
             (,,,feeUnits) = market.placeOrder(true, lots, order.limitPrice, order.maxCommission, true, false, true, order.deadline);
+        } else if (maxReceived == order.minReceived) {
+            // quantity in placeOrder is always denominated in scaled X, also on the bid side.
+            // Paying a better ask returns spare Y and cannot change the quantity of X.
+            if (config.scaleX == 0 || maxReceived % config.scaleX != 0 ||
+                maxReceived / config.scaleX > type(uint128).max) revert InvalidOrder();
+            (,,,feeUnits) = market.placeOrder(false, uint128(maxReceived / config.scaleX),
+                order.limitPrice, order.maxCommission, true, false, true, order.deadline);
         } else {
             (,,feeUnits) = market.placeMarketOrderWithTargetValue(false, lots, order.limitPrice, order.maxCommission, true, order.deadline);
         }

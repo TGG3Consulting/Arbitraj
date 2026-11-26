@@ -128,7 +128,20 @@ def capture(compiled):
             if len(events)!=1 or events[0]["data"]!="0x"+encode(["address","address","uint256","uint256","uint128"],
                                                                   [y,x,spent,bought,buy_fee]).hex():
                 raise ValueError("exact buy is missing a unique payer's fill event")
-            controls = ["duplicate_operation", "unfunded_independent_sender", "buy_exact_ceiling_and_retry"]
+            # The observed ask is cheaper than the protection limit. Fund one additional
+            # lot at the limit. A target-value order could buy it, but a quantity bid may not.
+            cushioned = list(buy)
+            quantum = 10**max(0,len(str(ask))-6)
+            cushioned[6] = ask + quantum
+            cushioned[3] = budget + (ask + 2) * scale_y
+            cushioned[4] = cushioned[3]-1
+            padding = simulate(prefix + [approve(y,executor,cushioned[3]),exact(cushioned,bought),balance(x),balance(y)])
+            if (read_fill(padding[-3])!=(spent,bought,buy_fee)
+                    or int.from_bytes(success(padding[-2]),"big")!=start_x+bought
+                    or int.from_bytes(success(padding[-1]),"big")!=start_y-spent):
+                raise ValueError("quantity bid spent the spare quote budget or bought additional lots")
+            controls = ["duplicate_operation","unfunded_independent_sender","buy_exact_ceiling_and_retry",
+                        "better_ask_refunds_spare_budget_for_same_quantity"]
             altered_cases = [("buy_min_out_plus_one", prefix, buy, 5, bought+1),
                              ("sell_min_out_plus_one", entry, sell, 5, credited+1),
                              ("buy_commission_above_cap", prefix, buy, 7, buy_fee-1),

@@ -60,15 +60,7 @@ def origin(name,factory,c):
     return dict(url=url,runtime=digest(raw(code)),creation_code_hash=init,invariant=lines)
 
 
-def directory(name,c,*,config=None,network="ethereum",proof=None,wrapped=WETH,stables=STABLES,funding_router=FUNDING):
-    # Distinguish an unavailable historical EVM from a failed token or swap.
-    frame,=rpc(c.endpoint,"eth_simulateV1",[{"blockStateCalls":[{"calls":[{
-        "to":wrapped,"data":"0x313ce567"}]}],"validation":False},c.selector])
-    if (frame["parentHash"]!=c.selector["blockHash"] or frame["calls"][0]["status"]!="0x1"
-            or decode(["uint8"],raw(frame["calls"][0]["returnData"]))[0]!=18):
-        raise ValueError("archive cannot simulate WETH decimals on the canonical parent")
-    factory,den,fee,reason=config or FACTORIES[name]
-    proof=proof or origin(name,factory,c)
+def registry(c,factory,init_hash):
     total,=c.one(factory,"allPairsLength()",returns=["uint256"])
     addresses=[decode(["address"],x)[0] for x in posts(c,[(factory,"allPairs(uint256)",["uint256"],[i]) for i in range(total)])]
     if not total or len(set(addresses))!=total:
@@ -80,7 +72,7 @@ def directory(name,c,*,config=None,network="ethereum",proof=None,wrapped=WETH,st
         tokens=[decode(["address"],next(values))[0] for _ in (0,1)]
         reserves=decode(["uint112","uint112","uint32"],next(values))[:2]
         owner,=decode(["address"],next(values))
-        expected="0x"+keccak(b'\xff'+raw(factory)+keccak(raw(tokens[0])+raw(tokens[1]))+raw(proof["creation_code_hash"]))[-20:].hex()
+        expected="0x"+keccak(b'\xff'+raw(factory)+keccak(raw(tokens[0])+raw(tokens[1]))+raw(init_hash))[-20:].hex()
         if owner!=factory or expected!=pool or tokens!=sorted(tokens):
             raise ValueError("registry and CREATE2 disagree for "+pool)
         rows.append(dict(pool=pool,tokens=tokens,reserves=list(map(str,reserves))))
@@ -90,6 +82,19 @@ def directory(name,c,*,config=None,network="ethereum",proof=None,wrapped=WETH,st
     for row in rows:
         if any(decode(["address"],next(checks))[0]!=row["pool"] for _ in (0,1)):
             raise ValueError("getPair failed for "+row["pool"])
+    return rows
+
+
+def directory(name,c,*,config=None,network="ethereum",proof=None,wrapped=WETH,stables=STABLES,funding_router=FUNDING):
+    # Distinguish an unavailable historical EVM from a failed token or swap.
+    frame,=rpc(c.endpoint,"eth_simulateV1",[{"blockStateCalls":[{"calls":[{
+        "to":wrapped,"data":"0x313ce567"}]}],"validation":False},c.selector])
+    if (frame["parentHash"]!=c.selector["blockHash"] or frame["calls"][0]["status"]!="0x1"
+            or decode(["uint8"],raw(frame["calls"][0]["returnData"]))[0]!=18):
+        raise ValueError("archive cannot simulate WETH decimals on the canonical parent")
+    factory,den,fee,reason=config or FACTORIES[name]
+    proof=proof or origin(name,factory,c)
+    rows=registry(c,factory,proof["creation_code_hash"])
     candidates=[]
     for asset in (wrapped,*stables):
         matching=[r for r in rows if asset in r["tokens"] and min(map(int,r["reserves"]))>0]

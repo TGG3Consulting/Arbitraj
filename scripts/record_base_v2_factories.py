@@ -11,6 +11,8 @@ from record_base_slipstream_executor import ROOT,rpc
 from record_ethereum_v2_factories import directory,digest,raw
 
 MARKETS={
+    "moonbase":("0xe396465a85dedb00fa8774162b106833de51ea41",10000,30,"UniswapV2: K",1760,9300),
+    "x7-finance-base":("0x8b76c05676d205563ffc1cbd11c0a6e3d83929c5",100000,200,"Xchange: K",2738,14062),
     "9mm-v2-base":("0x4c1b8d4ae77a37b94e195cab316391d3c687ebd1",10000,25,"NineMM: K",2383,11632),
     "bakeryswap-base":("0xad376065d4fa9abb6dda0ded0eadd911fe6e0f92",1000,3,"SwapPair: K",2086,11745),
     "cbswap":("0x0a1c657b839a7fe9a976ffd4ac5a1a363de3ee69",1000,3,"CBSwap: K",1742,9124),
@@ -45,6 +47,24 @@ def source(cap,row):
                 codecopy=[offset,size],invariant=invariant)
 
 
+def standard_swap_origin(market,cap,row,proof):
+    """Bind the ordinary swap fee to the exact pair creation bytes produced by its factory."""
+    samples={"moonbase":"0xf429af2d7805bb1bed1ada3cacf2bbbed87294c8",
+             "x7-finance-base":"0x9c38075ddee473e28a063cec3ae556c2ac0daa8f"}
+    if market not in samples:return
+    sample=samples[market]
+    url="https://sourcify.dev/server/v2/contract/8453/"+sample
+    result=requests.get(url,params={"fields":"runtimeBytecode.onchainBytecode,creationBytecode.onchainBytecode"},timeout=25)
+    result.raise_for_status()
+    pair=result.json()
+    deployed=raw(rpc(cap.endpoint,"eth_getCode",[sample,cap.selector]))
+    if (deployed!=raw(pair["runtimeBytecode"]["onchainBytecode"])
+            or digest(raw(pair["creationBytecode"]["onchainBytecode"]))!=proof["creation_code_hash"]):
+        raise ValueError("verified pair differs from canonical factory creation code")
+    proof["verified_pair"]=url
+    proof["standard_swap_fee"]={"entry":"swap(uint256,uint256,address,bytes)","numerator":row[2],"denominator":row[1]}
+
+
 if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("market",choices=MARKETS)
@@ -59,6 +79,7 @@ if __name__=="__main__":
             if head["hash"]!=snap["selector"]["blockHash"] or int(head["number"],16)!=snap["block"] or int(rpc(endpoint,"eth_chainId",[]),16)!=8453:
                 raise ValueError("wrong chain or block")
             proof=source(cap,row)
+            standard_swap_origin(args.market,cap,row,proof)
             if row[2] is None:proof["fee_getter"]="getFeeForPair(address,address)"
             result=directory(args.market,cap,config=row[:4],network="base",proof=proof,wrapped=WETH,stables=(USDC,USDBC),funding_router=ROUTER)
             if args.market=="bakeryswap-base":

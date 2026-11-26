@@ -66,8 +66,11 @@ pub fn route_asset(core: &Core, venue: &VenueId, to: &VenueId) -> Result<Asset, 
         None
     };
     // Этот путь проводит USDT. Вернуть USDC можно лишь с отдельным подтверждённым обменом.
-    let other=super::settlement_market::ticker(core,to)?;
-    super::settlement::require_same(&ticker,&other)?;
+    if (from_dex || to_dex) && crate::settings::evm_profiles::uses_settlement_contract(&core.inner.deps.settings,&network.0) {
+        let other=super::settlement_market::ticker(core,to)?;
+        super::settlement::require_same(&ticker,&other)?;
+        super::settlement::require_same(&ticker,crate::settings::evm_profiles::LEDGER_QUOTE)?;
+    }
     let addr = super::net_ready::usdt_of(core, network, tag.as_ref())?;
     Ok(Asset {
         chain: tag,

@@ -197,7 +197,9 @@ impl DirCtx {
         let settlement = if conversion {
             Some(super::settlement_market::Market::direction(core, dir)?.asset)
         } else {
-            super::settlement::require_same(&qa, &qb)?;
+            if [&dir.buy_on,&dir.sell_on].iter().any(|v|crate::settings::evm_profiles::uses_settlement_contract(s,&v.0)) {
+                super::settlement::require_same(&qa,&qb)?;
+            }
             None
         };
         let usdt = match &settlement {

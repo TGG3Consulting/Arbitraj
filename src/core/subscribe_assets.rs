@@ -35,39 +35,36 @@ pub(super) fn price_assets(core: &Core, venue: &VenueId) -> Vec<Asset> {
 
 /// Котируемая монета площадки DEX: тикер — venue.quote_asset этой площадки, адрес — USDT в BSC из справочника бирж.
 /// None — тикер не задан или адрес USDT ещё неизвестен (причина видна на экране «Монеты» и в журнале). Ошибок нет.
-pub(super) fn dex_quote(core: &Core, venue: &VenueId) -> Option<Asset> {
-    let at = crate::settings::read::At {
-        venue: Some(&venue.0),
-        coin: None,
-    };
-    let ticker = core
-        .inner
-        .deps
-        .settings
-        .text("venue.quote_asset", at)
-        .ok()?;
-    // Решение 430: USDT сети этой площадки DEX (сеть по умолчанию — адрес из справочника бирж, как раньше).
-    let tag = super::chain::tag_of_dex(core, venue).ok()?;
-    let addr = if let Some(asset) = super::settlement_market::configured(core, venue).ok()? {
-        let known = super::engine::rd(&core.inner.networks)
-            .values()
-            .any(|rows| {
-                rows.iter()
-                    .any(|row| row.asset == asset && row.asset.ticker == asset.ticker)
-            });
-        if !known {
-            return None;
+pub(super) fn add_dex_quote(core:&Core,venue:&VenueId,out:&mut Vec<Asset>)->bool{
+    match super::settlement_market::configured(core,venue){
+        Err(_)=>false,
+        Ok(Some(quote))=>{
+            let known=rd(&core.inner.networks).values().any(|rows|rows.iter().any(|row|
+                row.asset==quote && row.asset.ticker==quote.ticker));
+            select_quote(out,Some(quote),true,known)
         }
-        asset.contract?
-    } else {
-        super::registry_chains::usdt_of(core, tag.as_ref()).ok()?
-    };
-    Some(Asset {
-        chain: tag,
-        ticker,
-        contract: Some(addr),
-    })
+        Ok(None)=>{
+            let quote=(|| {
+                let ticker=super::settlement_market::ticker(core,venue).ok()?;
+                let chain=super::chain::tag_of_dex(core,venue).ok()?;
+                let addr=super::registry_chains::usdt_of(core,chain.as_ref()).ok()?;
+                Some(Asset{chain,ticker,contract:Some(addr)})
+            })();
+            select_quote(out,quote,false,true)
+        }
+    }
 }
+
+/// Для закреплённого адреса одноимённые токены отсекаются до передачи подписки адаптеру.
+fn select_quote(out:&mut Vec<Asset>,quote:Option<Asset>,pinned:bool,confirmed:bool)->bool{
+    if pinned && !confirmed {return false;}
+    if let Some(q)=quote {
+        if pinned {out.retain(|a|a.ticker!=q.ticker);}
+        out.push(q);
+    }
+    true
+}
+
 
 /// Промежуточные монеты площадок DEX, которые биржи знают по адресу (тикер для стакана). Принимает: ядро, биржу
 /// (Some — тикер этой биржи; None — тикер любой биржи, для DEX), площадку DEX (Some — только её список и её сеть,

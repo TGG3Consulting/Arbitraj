@@ -2358,8 +2358,8 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (ключ `traderjoe-v2-2-arbitrum@arbitrum`); каталог src/settings/catalog/dex_lb.rs.
 - **Что ставить:** совета нет, решает Тигран: адреса из записи tools/arbitrum_record/lb_v22.py (implementation() пулов, getLBPairImplementation() фабрики), каждый — после сверки кода реализации с исходником (docs/FIRST_RUN.md).
 - **Если не задана:** в каталоге без .optional(); src/venues/bsc_dex/pools/families.rs required (ветка Proto::LbV22) — DEX «не подключена: не задана dex.lb_implementations» (classify), пулы DEX не проверяются и не торгуются.
-- **Влияет на торговлю:** да — какие пулы LB V2.2 допускаются (pools/verify_lb22.rs third_pass).
-- **Связанные ключи:** dex.kind (`lb_v22`), dex.factory, dex.lb_hooks_allowed.
+- **Влияет на торговлю:** да — какие пулы LB V2.2 и проверенных клонов V2.1 допускаются (pools/verify_lb22.rs third_pass).
+- **Связанные ключи:** dex.kind (`lb_v22`, `lb_v21_clone`), dex.factory, dex.lb_hooks_allowed.
 - **Статус:** ещё не в релизе (ветка t223-f7/arb-family-f7).
 
 ### `dex.lb_hooks_allowed`

@@ -1,0 +1,830 @@
+{
+  "chain": 8453,
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "height": 62262756,
+  "state_root": "0x037b0c48cd33236cb94ec9e9fc7438c120b138c2c31d39d0ebe42521ee65676b",
+  "factory": {
+    "address": "0x1a62a841e83ecc3d72b0de6002af7a7dbf921cd5",
+    "runtime": "0x9511e09d8ab0e424db2a82950352737f8dea77b1ec187c8d0b3e39c22b135e0f",
+    "selectors": {
+      "createPair(address,address)": "0xd5de080ad93886399f3fd221dc9c9892929d3ca4",
+      "getPair(address,address)": "0xd5de080ad93886399f3fd221dc9c9892929d3ca4",
+      "swapFee()": "0xd5de080ad93886399f3fd221dc9c9892929d3ca4",
+      "feesEnabled()": "0xd5de080ad93886399f3fd221dc9c9892929d3ca4",
+      "getTotalPairs()": "0xd5de080ad93886399f3fd221dc9c9892929d3ca4",
+      "getPairAddresses(uint256,uint256)": "0xd5de080ad93886399f3fd221dc9c9892929d3ca4"
+    },
+    "implementations": {
+      "0xd5de080ad93886399f3fd221dc9c9892929d3ca4": "0x7747862a5bb8160bc85822102458d4ac90787ff1ef5b389f9291dc1edb158775"
+    }
+  },
+  "router": {
+    "address": "0x0681363e5da35a248e1abb5cddd6db9cdac9a771",
+    "runtime": "0x9511e09d8ab0e424db2a82950352737f8dea77b1ec187c8d0b3e39c22b135e0f",
+    "selectors": {
+      "factory()": "0x6aa25e5ef3ac113d8b0f0b33d0af8999add492a1",
+      "WETH()": "0x6aa25e5ef3ac113d8b0f0b33d0af8999add492a1",
+      "getAmountsOut(uint256,address[])": "0x6aa25e5ef3ac113d8b0f0b33d0af8999add492a1",
+      "getAmountOut(uint256,uint256,uint256,uint32)": "0x6aa25e5ef3ac113d8b0f0b33d0af8999add492a1",
+      "swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)": "0x6aa25e5ef3ac113d8b0f0b33d0af8999add492a1"
+    },
+    "implementations": {
+      "0x6aa25e5ef3ac113d8b0f0b33d0af8999add492a1": "0x3d22d66fba7aa758fe040cc6a6ea40479dbf97bafa11beb6de68bdc97d351697"
+    }
+  },
+  "wallets": [
+    {
+      "mode": "v5",
+      "size": "29752729729011",
+      "buy": {
+        "input": "0x4200000000000000000000000000000000000006",
+        "output": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "exact": {
+          "status": "0x1",
+          "spent": "29752729729011",
+          "received": "50080",
+          "gas": "0x22f10",
+          "approval_gas": "0xb3cf",
+          "error": null
+        },
+        "above": {
+          "status": "0x0",
+          "spent": "0",
+          "received": "0",
+          "gas": "0x25e5b",
+          "approval_gas": "0xb3cf",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          }
+        }
+      },
+      "sell": {
+        "input": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "output": "0x4200000000000000000000000000000000000006",
+        "exact": {
+          "status": "0x1",
+          "spent": "50080",
+          "received": "29633276675749",
+          "gas": "0x20b1b",
+          "approval_gas": "0xc7da",
+          "error": null
+        },
+        "above": {
+          "status": "0x0",
+          "spent": "0",
+          "received": "0",
+          "gas": "0x23a66",
+          "approval_gas": "0xc7da",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          }
+        }
+      }
+    },
+    {
+      "mode": "router",
+      "size": "29752729729011",
+      "buy": {
+        "input": "0x4200000000000000000000000000000000000006",
+        "output": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "exact": {
+          "status": "0x1",
+          "spent": "29752729729011",
+          "received": "50080",
+          "gas": "0x20e93",
+          "approval_gas": "0xb3cf",
+          "error": null
+        },
+        "above": {
+          "status": "0x0",
+          "spent": "0",
+          "received": "0",
+          "gas": "0x23f56",
+          "approval_gas": "0xb3cf",
+          "error": {
+            "code": 3,
+            "message": "execution reverted: UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT",
+            "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002b556e69737761705632526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e54000000000000000000000000000000000000000000"
+          }
+        }
+      },
+      "sell": {
+        "input": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "output": "0x4200000000000000000000000000000000000006",
+        "exact": {
+          "status": "0x1",
+          "spent": "50080",
+          "received": "29633276675749",
+          "gas": "0x1ea9e",
+          "approval_gas": "0xc7da",
+          "error": null
+        },
+        "above": {
+          "status": "0x0",
+          "spent": "0",
+          "received": "0",
+          "gas": "0x21b61",
+          "approval_gas": "0xc7da",
+          "error": {
+            "code": 3,
+            "message": "execution reverted: UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT",
+            "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002b556e69737761705632526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e54000000000000000000000000000000000000000000"
+          }
+        }
+      }
+    },
+    {
+      "mode": "v5",
+      "size": "595054594580230",
+      "buy": {
+        "input": "0x4200000000000000000000000000000000000006",
+        "output": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "exact": {
+          "status": "0x1",
+          "spent": "595054594580230",
+          "received": "999723",
+          "gas": "0x22f28",
+          "approval_gas": "0xb3db",
+          "error": null
+        },
+        "above": {
+          "status": "0x0",
+          "spent": "0",
+          "received": "0",
+          "gas": "0x25e73",
+          "approval_gas": "0xb3db",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          }
+        }
+      },
+      "sell": {
+        "input": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "output": "0x4200000000000000000000000000000000000006",
+        "exact": {
+          "status": "0x1",
+          "spent": "999723",
+          "received": "592680962223873",
+          "gas": "0x20b33",
+          "approval_gas": "0xc7e6",
+          "error": null
+        },
+        "above": {
+          "status": "0x0",
+          "spent": "0",
+          "received": "0",
+          "gas": "0x23a7e",
+          "approval_gas": "0xc7e6",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          }
+        }
+      }
+    },
+    {
+      "mode": "router",
+      "size": "595054594580230",
+      "buy": {
+        "input": "0x4200000000000000000000000000000000000006",
+        "output": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "exact": {
+          "status": "0x1",
+          "spent": "595054594580230",
+          "received": "999723",
+          "gas": "0x20eab",
+          "approval_gas": "0xb3db",
+          "error": null
+        },
+        "above": {
+          "status": "0x0",
+          "spent": "0",
+          "received": "0",
+          "gas": "0x23f6e",
+          "approval_gas": "0xb3db",
+          "error": {
+            "code": 3,
+            "message": "execution reverted: UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT",
+            "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002b556e69737761705632526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e54000000000000000000000000000000000000000000"
+          }
+        }
+      },
+      "sell": {
+        "input": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "output": "0x4200000000000000000000000000000000000006",
+        "exact": {
+          "status": "0x1",
+          "spent": "999723",
+          "received": "592680962223873",
+          "gas": "0x1eab6",
+          "approval_gas": "0xc7e6",
+          "error": null
+        },
+        "above": {
+          "status": "0x0",
+          "spent": "0",
+          "received": "0",
+          "gas": "0x21b79",
+          "approval_gas": "0xc7e6",
+          "error": {
+            "code": 3,
+            "message": "execution reverted: UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT",
+            "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002b556e69737761705632526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e54000000000000000000000000000000000000000000"
+          }
+        }
+      }
+    }
+  ],
+  "creation": {
+    "offset": 4231,
+    "bytes": 10935,
+    "hash": "0xc7bb56e1f5223e9ce7987f4458efdd843330ba79d82f8ddbefa97b95b87083f6"
+  },
+  "fee": 20,
+  "fees_enabled": true,
+  "markets": [
+    {
+      "pool": "0xb2f8f0bffc8f400a45aeb24ed5d93044c0f91490",
+      "tokens": [
+        "0x1655cac6b8b878274b9837a074e13a753e898ffd",
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "reserves": [
+        "20045900559175968207564239808",
+        "13699850480720150"
+      ],
+      "balances": [
+        "20045900559175968207564239808",
+        "13699850480720150"
+      ]
+    },
+    {
+      "pool": "0x2adc726148b26e7d6a0de7c0276afe7a25e97228",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "reserves": [
+        "297527297290115082",
+        "501863391"
+      ],
+      "balances": [
+        "297527297290115082",
+        "501863391"
+      ]
+    },
+    {
+      "pool": "0xf94f61e2cb07dca2d2a58aaa384de6ad387e23e7",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x8544fe9d190fd7ec52860abbf45088e81ee24a8c"
+      ],
+      "reserves": [
+        "2769941005862643",
+        "198863080977679540319385754"
+      ],
+      "balances": [
+        "2769941005862643",
+        "198863080977679540319385754"
+      ]
+    },
+    {
+      "pool": "0xbcda6fbc1b2fddb24cc7dc7a3000e02c3dcabc1b",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x421d91ff9c167c31de843572798bdcbbe503b91e"
+      ],
+      "reserves": [
+        "17426667581448674",
+        "6083805405395038516753031278"
+      ],
+      "balances": [
+        "17426667581448674",
+        "6083805405395038516753031278"
+      ]
+    },
+    {
+      "pool": "0xfd58b79ceeffb0110f0e62ab2e40eddafa42fc68",
+      "tokens": [
+        "0x4efa79a860961253bc27f3688a42b326e496f2ae",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "reserves": [
+        "4861103177017746",
+        "15824"
+      ],
+      "balances": [
+        "4861103177017746",
+        "15824"
+      ]
+    },
+    {
+      "pool": "0x2bebd8b1cd3de46918a6418f1d21343bff3e884e",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xf5b009cb681813d40f33d290a9f9393a8189226b"
+      ],
+      "reserves": [
+        "7636030163478",
+        "212782014533229329721"
+      ],
+      "balances": [
+        "7636030163478",
+        "212782014533229329721"
+      ]
+    },
+    {
+      "pool": "0x4ec51c89d11618555813c3a4ca2d496ef846a459",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xa4220a2b0cb10bf5fdc3b8c3d9e13728f5e7ca56"
+      ],
+      "reserves": [
+        "2036733854314668",
+        "172048021340070"
+      ],
+      "balances": [
+        "2036733854314668",
+        "172048021340070"
+      ]
+    },
+    {
+      "pool": "0x3550b96f5fe90e788001dfda70a3dc9fd4235ce6",
+      "tokens": [
+        "0x04c45af3bc7bf5542432fea9670ac5565ef16cd9",
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "reserves": [
+        "40012401783379657126057",
+        "312345965954946329"
+      ],
+      "balances": [
+        "40012401783379657126057",
+        "312345965954946329"
+      ]
+    },
+    {
+      "pool": "0x8ff83d3fe6c2c81f00623b8817f3534664603475",
+      "tokens": [
+        "0x04c45af3bc7bf5542432fea9670ac5565ef16cd9",
+        "0x421d91ff9c167c31de843572798bdcbbe503b91e"
+      ],
+      "reserves": [
+        "189062921794402799",
+        "47488874002790512146938516"
+      ],
+      "balances": [
+        "189062921794402799",
+        "47488874002790512146938516"
+      ]
+    },
+    {
+      "pool": "0x2c60ffdb8af8847889dc66f44f0a28da9773794a",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xb09fef17c00bc4196a0abd3756e714e28066e64d"
+      ],
+      "reserves": [
+        "55484837224",
+        "2762044316"
+      ],
+      "balances": [
+        "55484837224",
+        "2762044316"
+      ]
+    },
+    {
+      "pool": "0x6a46b45d9ea22e863caa05200854676ee70322cc",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xef3b8512196ab65f8603b82d1fa5a29bb5adfed0"
+      ],
+      "reserves": [
+        "1432443912114397",
+        "121680908906208888507083"
+      ],
+      "balances": [
+        "1432443912114397",
+        "121680908906208888507083"
+      ]
+    },
+    {
+      "pool": "0x2e50c5ff5c812f14fba7561c71de24e8f360b6b2",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x85dd034af10db06cd1d2f81a51ea78583828fc32"
+      ],
+      "reserves": [
+        "0",
+        "0"
+      ],
+      "balances": [
+        "0",
+        "0"
+      ]
+    },
+    {
+      "pool": "0x52548bc8f94d00a361732682f812a5666b165ae5",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd166cb2e7c76cdf716b42510af1693603645fb6e"
+      ],
+      "reserves": [
+        "0",
+        "0"
+      ],
+      "balances": [
+        "0",
+        "0"
+      ]
+    },
+    {
+      "pool": "0x05dbe59cb29086f9c9c0637d60914bd1420b34af",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xfa2b8bbfedf4f48f3f1852594efa2260a31fb3f5"
+      ],
+      "reserves": [
+        "0",
+        "0"
+      ],
+      "balances": [
+        "0",
+        "0"
+      ]
+    },
+    {
+      "pool": "0xd2b96054cf5c54bd833e98b156ee1cd0d3d8b644",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x9430a7e6283fb704fd1d9302868bc39d16fe82ba"
+      ],
+      "reserves": [
+        "4829010451319085",
+        "92389953460112124711752"
+      ],
+      "balances": [
+        "4829010451319085",
+        "92389953460112124711752"
+      ]
+    },
+    {
+      "pool": "0x2f3245353c54de3cd976a7f3a0638d0bceb022ea",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4"
+      ],
+      "reserves": [
+        "398511100859205",
+        "8357232062234923779344"
+      ],
+      "balances": [
+        "398511100859205",
+        "8357232062234923779344"
+      ]
+    }
+  ],
+  "curve": [
+    {
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "amount": "29752729729011",
+      "fee": 0,
+      "out": "50181",
+      "live": "50080"
+    },
+    {
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "amount": "29752729729011",
+      "fee": 1,
+      "out": "50176",
+      "live": "50080"
+    },
+    {
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "amount": "29752729729011",
+      "fee": 20,
+      "out": "50080",
+      "live": "50080"
+    },
+    {
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "amount": "29752729729011",
+      "fee": 100,
+      "out": "49679",
+      "live": "50080"
+    },
+    {
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "amount": "29752729729011",
+      "fee": 1000,
+      "out": "45163",
+      "live": "50080"
+    },
+    {
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "amount": "29752729729011508",
+      "fee": 0,
+      "out": "45623944",
+      "live": "45540976"
+    },
+    {
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "amount": "29752729729011508",
+      "fee": 1,
+      "out": "45619796",
+      "live": "45540976"
+    },
+    {
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "amount": "29752729729011508",
+      "fee": 20,
+      "out": "45540976",
+      "live": "45540976"
+    },
+    {
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "amount": "29752729729011508",
+      "fee": 100,
+      "out": "45208804",
+      "live": "45540976"
+    },
+    {
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "amount": "29752729729011508",
+      "fee": 1000,
+      "out": "41438261",
+      "live": "45540976"
+    },
+    {
+      "tokens": [
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "amount": "50186",
+      "fee": 0,
+      "out": "29749553759932",
+      "live": "29690060589791"
+    },
+    {
+      "tokens": [
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "amount": "50186",
+      "fee": 1,
+      "out": "29746579101990",
+      "live": "29690060589791"
+    },
+    {
+      "tokens": [
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "amount": "50186",
+      "fee": 20,
+      "out": "29690060589791",
+      "live": "29690060589791"
+    },
+    {
+      "tokens": [
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "amount": "50186",
+      "fee": 100,
+      "out": "29452087671277",
+      "live": "29690060589791"
+    },
+    {
+      "tokens": [
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "amount": "50186",
+      "fee": 1000,
+      "out": "26774866104019",
+      "live": "29690060589791"
+    },
+    {
+      "tokens": [
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "amount": "50186339",
+      "fee": 0,
+      "out": "27047936068287719",
+      "live": "26998749059607634"
+    },
+    {
+      "tokens": [
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "amount": "50186339",
+      "fee": 1,
+      "out": "27045477142654469",
+      "live": "26998749059607634"
+    },
+    {
+      "tokens": [
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "amount": "50186339",
+      "fee": 20,
+      "out": "26998749059607634",
+      "live": "26998749059607634"
+    },
+    {
+      "tokens": [
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "amount": "50186339",
+      "fee": 100,
+      "out": "26801822000288240",
+      "live": "26998749059607634"
+    },
+    {
+      "tokens": [
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "amount": "50186339",
+      "fee": 1000,
+      "out": "24566474043265905",
+      "live": "26998749059607634"
+    }
+  ],
+  "samples": [
+    {
+      "network": "base",
+      "dex": "diamondswap",
+      "factory": "0x1a62a841e83ecc3d72b0de6002af7a7dbf921cd5",
+      "runtime_hash": "0xa2761884242fde3b6d98e5a593d5efd66b1e0c353a0c8b9016535824a03df618",
+      "creation_code_hash": "0xc7bb56e1f5223e9ce7987f4458efdd843330ba79d82f8ddbefa97b95b87083f6",
+      "fee_fraction": [
+        10000,
+        20
+      ],
+      "fee_target": "0x1a62a841e83ecc3d72b0de6002af7a7dbf921cd5",
+      "fee_getter": "swapFee()",
+      "verify_pair_boundary": true,
+      "invariant_error": "0xcd6fabbb",
+      "pool": "0x3550b96f5fe90e788001dfda70a3dc9fd4235ce6",
+      "tokens": [
+        "0x04c45af3bc7bf5542432fea9670ac5565ef16cd9",
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "reserves": [
+        "40012401783379657126057",
+        "312345965954946329"
+      ],
+      "balances": [
+        "40012401783379657126057",
+        "312345965954946329"
+      ],
+      "reason": "buy input=31234596595494, simulated error {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+    },
+    {
+      "network": "base",
+      "dex": "diamondswap",
+      "factory": "0x1a62a841e83ecc3d72b0de6002af7a7dbf921cd5",
+      "runtime_hash": "0x30126a850b3f9b72734f67edb3a260a2ec3afb237712a945852b7b46c73f1820",
+      "creation_code_hash": "0xc7bb56e1f5223e9ce7987f4458efdd843330ba79d82f8ddbefa97b95b87083f6",
+      "fee_fraction": [
+        10000,
+        20
+      ],
+      "fee_target": "0x1a62a841e83ecc3d72b0de6002af7a7dbf921cd5",
+      "fee_getter": "swapFee()",
+      "verify_pair_boundary": true,
+      "invariant_error": "0xcd6fabbb",
+      "pool": "0x2adc726148b26e7d6a0de7c0276afe7a25e97228",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "reserves": [
+        "297527297290115082",
+        "501863391"
+      ],
+      "balances": [
+        "297527297290115082",
+        "501863391"
+      ],
+      "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "pips": 2000,
+      "cases": [
+        {
+          "in": "29752729729011",
+          "bought": "50080",
+          "returned": "29633276675749",
+          "buy_return": "50080",
+          "sell_return": "29633276675749",
+          "observed_balances": [
+            "50080",
+            "29633276675749",
+            "0",
+            "0",
+            "0"
+          ],
+          "strict_buy": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "strict_sell": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "pair_boundary": {
+            "buy": {
+              "max": "50080",
+              "next_revert": "0xcd6fabbb"
+            },
+            "sell": {
+              "max": "29633276675749",
+              "next_revert": "0xcd6fabbb"
+            }
+          }
+        },
+        {
+          "in": "595054594580230",
+          "bought": "999723",
+          "returned": "592680962223873",
+          "buy_return": "999723",
+          "sell_return": "592680962223873",
+          "observed_balances": [
+            "999723",
+            "592680962223873",
+            "0",
+            "0",
+            "0"
+          ],
+          "strict_buy": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "strict_sell": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "pair_boundary": {
+            "buy": {
+              "max": "999723",
+              "next_revert": "0xcd6fabbb"
+            },
+            "sell": {
+              "max": "592680962223873",
+              "next_revert": "0xcd6fabbb"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

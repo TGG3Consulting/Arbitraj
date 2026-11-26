@@ -11806,5 +11806,416 @@
     "height": 62262756,
     "state_root": "0x037b0c48cd33236cb94ec9e9fc7438c120b138c2c31d39d0ebe42521ee65676b",
     "endpoint": "https://mainnet.base.org"
+  },
+  "pixelswap-base": {
+    "factory": "0xd07739a9e9c46d3deded97c0edc49cea8bab1bb9",
+    "origin": {
+      "url": "https://basescan.org/address/0xd07739a9e9c46d3deded97c0edc49cea8bab1bb9#code",
+      "runtime": "0x3043726025a029f9da3b255cf6cdec9c8c240f59cdcba7799fa4bac9df84b35b",
+      "pair_runtime": "0x0e90d16685aa7f77c63f2a2b8d9392530f6e22dc2b214c2630f19a0a34842240",
+      "pair": "0x1e9cb689c04324b1b7f63c6e40e2b6b4b4a6e6bc",
+      "creation_code_hash": "0xa6989c59e22818841eefd99458f30c45d0d5e6d1489d1a2369c5effb38f9773d",
+      "creation_offset": 1742,
+      "creation_bytes": 9133,
+      "pair_runtime_offset": 2005,
+      "denominator_pc": 2534,
+      "invariant_bytes": "602001806121b86021913960400191505060405180910390fd5b60006109ff6109e184600363ffffffff611a7f16565b6109f3876103e863ffffffff611a7f16565b9063ffffffff611ae216565b90506000610a176109e184600363ffffffff611a7f16565b9050610a48620f4240610a3c6001600160701b038b8116908b1663ffffffff611a7f16565b9063ffffffff611a7f16565b610a58838363ffffffff611a7f16565b1015610a97",
+      "provenance": "canonical EVM bytecode and wallet replay",
+      "fee_numerator": 3,
+      "fee_denominator": 1000
+    },
+    "pools": [
+      {
+        "pool": "0x1e9cb689c04324b1b7f63c6e40e2b6b4b4a6e6bc",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+        ],
+        "reserves": [
+          "5142247210569301",
+          "8549236"
+        ]
+      }
+    ],
+    "samples": [
+      {
+        "network": "base",
+        "dex": "pixelswap-base",
+        "pool": "0x1e9cb689c04324b1b7f63c6e40e2b6b4b4a6e6bc",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+        ],
+        "factory": "0xd07739a9e9c46d3deded97c0edc49cea8bab1bb9",
+        "runtime_hash": "0x0e90d16685aa7f77c63f2a2b8d9392530f6e22dc2b214c2630f19a0a34842240",
+        "creation_code_hash": "0xa6989c59e22818841eefd99458f30c45d0d5e6d1489d1a2369c5effb38f9773d",
+        "verify_pair_boundary": true,
+        "invariant_error": "SwapV2: K",
+        "fee_fraction": [
+          1000,
+          3
+        ],
+        "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+        "reserves": [
+          "5142247210569301",
+          "8549236"
+        ],
+        "pips": 3000,
+        "cases": [
+          {
+            "in": "514224721056",
+            "bought": "852",
+            "returned": "510980063096",
+            "buy_return": "852",
+            "sell_return": "510980063096",
+            "observed_balances": [
+              "852",
+              "510980063096",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "852",
+                "next_revert": "SwapV2: K"
+              },
+              "sell": {
+                "max": "510980063096",
+                "next_revert": "SwapV2: K"
+              }
+            }
+          },
+          {
+            "in": "10284494421138",
+            "bought": "17013",
+            "returned": "10222850743082",
+            "buy_return": "17013",
+            "sell_return": "10222850743082",
+            "observed_balances": [
+              "17013",
+              "10222850743082",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "17013",
+                "next_revert": "SwapV2: K"
+              },
+              "sell": {
+                "max": "10222850743082",
+                "next_revert": "SwapV2: K"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "selector": {
+      "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "requireCanonical": true
+    },
+    "height": 62262756,
+    "state_root": "0x037b0c48cd33236cb94ec9e9fc7438c120b138c2c31d39d0ebe42521ee65676b",
+    "endpoint": "https://mainnet.base.org"
+  },
+  "satori-base": {
+    "factory": "0x4858c605862a91a34d83c19a9704f837f64fa405",
+    "origin": {
+      "url": "https://basescan.org/address/0x4858c605862a91a34d83c19a9704f837f64fa405#code",
+      "runtime": "0x043d2849408a7faae3d2e674b482eb62df76e920009e776657c238d7400848e5",
+      "pair_runtime": "0xed93a8e950a7beb7a796ea08c228357fbb1074528679b7d1245f5a2c15da671a",
+      "pair": "0xebd231ee6854517d228aff9266b7068a784dc15f",
+      "creation_code_hash": "0x863fcfbbee75e679d2a43818f377afc8a63590091c47f069b36b7cf8a4d4cad2",
+      "creation_offset": 2171,
+      "creation_bytes": 11561,
+      "pair_runtime_offset": 2433,
+      "denominator_pc": 3122,
+      "invariant_bytes": "4e5400000000000000604482015290519081900360640190fd5b6000610c4b610c2d84600363ffffffff61225616565b610c3f876103e863ffffffff61225616565b9063ffffffff6122dc16565b90506000610c63610c2d84600363ffffffff61225616565b9050610c9b620f4240610c8f6dffffffffffffffffffffffffffff8b8116908b1663ffffffff61225616565b9063ffffffff61225616565b610cab838363ffffffff61225616",
+      "provenance": "canonical EVM bytecode and wallet replay",
+      "fee_numerator": 3,
+      "fee_denominator": 1000
+    },
+    "pools": [
+      {
+        "pool": "0xebd231ee6854517d228aff9266b7068a784dc15f",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+        ],
+        "reserves": [
+          "68206343887060562",
+          "115210565"
+        ]
+      },
+      {
+        "pool": "0x6408be2bc4f4b1e1ae015197c26e4f4d9cb4a05d",
+        "tokens": [
+          "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "0xec45e3c3c5410cbdbce81dd35edcf9f0f13fc2cb"
+        ],
+        "reserves": [
+          "28875593",
+          "417045852378696382"
+        ]
+      },
+      {
+        "pool": "0xba38d4be409a041a37b7e31448f8576f4c1c5792",
+        "tokens": [
+          "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "0xbfa536126c1c2b7cba94807a39213fab913950a3"
+        ],
+        "reserves": [
+          "99877",
+          "159297016620281155819246"
+        ]
+      },
+      {
+        "pool": "0x23a2d5b2936196025f70450a81b6dcc603eb4407",
+        "tokens": [
+          "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "0xaa4f4801c0379ad93f20d6afa610405f6751d0ef"
+        ],
+        "reserves": [
+          "28563189",
+          "235868915530713067050"
+        ]
+      },
+      {
+        "pool": "0xe05bfbbb4acfb9d79daf3718c8e4f8fb539c579a",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x5cc5e64ab764a0f1e97f23984e20fd4528356a6a"
+        ],
+        "reserves": [
+          "6",
+          "189720"
+        ]
+      },
+      {
+        "pool": "0x244143bff6a0fb10408c534dfc665f95c0bc8dff",
+        "tokens": [
+          "0x5cc5e64ab764a0f1e97f23984e20fd4528356a6a",
+          "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+        ],
+        "reserves": [
+          "2714103179",
+          "1"
+        ]
+      },
+      {
+        "pool": "0xb8f463ed2d02858182ddebdb9904650a3f178fe9",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x8c476c7ecd6d5a1faa7d3a69718806019a4d9519"
+        ],
+        "reserves": [
+          "42342014155182",
+          "19000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x72a0b6f294d461ce2fb30358d4b0641f0e6bda35",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x4ed4e862860bed51a9570b96d89af5e1b0efefed"
+        ],
+        "reserves": [
+          "716073338484990",
+          "1739638224987047331794"
+        ]
+      },
+      {
+        "pool": "0x29584628b9d81991fa461b510b4224372cb95d0e",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x532f27101965dd16442e59d40670faf5ebb142e4"
+        ],
+        "reserves": [
+          "656688322258371",
+          "373629494188233913162"
+        ]
+      },
+      {
+        "pool": "0xc1a2853259e140ee07fe4a710aaad54d7b2d2833",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x7f12d13b34f5f4f0a9449c16bcd42f0da47af200"
+        ],
+        "reserves": [
+          "456322968386",
+          "123950157075094"
+        ]
+      },
+      {
+        "pool": "0x271a3b7bff42b5aaade80a9070b5582aac84e297",
+        "tokens": [
+          "0x0d97f261b1e88845184f678e2d1e7a98d9fd38de",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "1556304650442934128483607",
+          "4356768519219236"
+        ]
+      },
+      {
+        "pool": "0xebfbe6e301ffcc1788b7e133c7660538d38ec554",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4"
+        ],
+        "reserves": [
+          "17308732385102173",
+          "356772628424521354192693"
+        ]
+      },
+      {
+        "pool": "0xd47894f63b478f5b09277ffa9961da62662e9cb8",
+        "tokens": [
+          "0x532f27101965dd16442e59d40670faf5ebb142e4",
+          "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+        ],
+        "reserves": [
+          "34975785061197515973",
+          "116249"
+        ]
+      },
+      {
+        "pool": "0x6b999142dd980c177bf24095c9480bd15ca06d49",
+        "tokens": [
+          "0x4ed4e862860bed51a9570b96d89af5e1b0efefed",
+          "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+        ],
+        "reserves": [
+          "22705778938",
+          "1"
+        ]
+      }
+    ],
+    "samples": [
+      {
+        "network": "base",
+        "dex": "satori-base",
+        "pool": "0xebd231ee6854517d228aff9266b7068a784dc15f",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+        ],
+        "factory": "0x4858c605862a91a34d83c19a9704f837f64fa405",
+        "runtime_hash": "0xed93a8e950a7beb7a796ea08c228357fbb1074528679b7d1245f5a2c15da671a",
+        "creation_code_hash": "0x863fcfbbee75e679d2a43818f377afc8a63590091c47f069b36b7cf8a4d4cad2",
+        "verify_pair_boundary": true,
+        "invariant_error": "K",
+        "fee_fraction": [
+          1000,
+          3
+        ],
+        "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+        "reserves": [
+          "68206343887060562",
+          "115210565"
+        ],
+        "pips": 3000,
+        "cases": [
+          {
+            "in": "6820634388706",
+            "bought": "11485",
+            "returned": "6779570463310",
+            "buy_return": "11485",
+            "sell_return": "6779570463310",
+            "observed_balances": [
+              "11485",
+              "6779570463310",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "11485",
+                "next_revert": "K"
+              },
+              "sell": {
+                "max": "6779570463310",
+                "next_revert": "K"
+              }
+            }
+          },
+          {
+            "in": "136412687774121",
+            "bought": "229272",
+            "returned": "135596648705904",
+            "buy_return": "229272",
+            "sell_return": "135596648705904",
+            "observed_balances": [
+              "229272",
+              "135596648705904",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "229272",
+                "next_revert": "K"
+              },
+              "sell": {
+                "max": "135596648705904",
+                "next_revert": "K"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "selector": {
+      "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "requireCanonical": true
+    },
+    "height": 62262756,
+    "state_root": "0x037b0c48cd33236cb94ec9e9fc7438c120b138c2c31d39d0ebe42521ee65676b",
+    "endpoint": "https://mainnet.base.org"
   }
 }

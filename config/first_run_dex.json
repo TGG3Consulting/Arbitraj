@@ -2580,6 +2580,36 @@
   {
     "chain_id": 8453,
     "network": "base",
+    "id": "pixelswap-base",
+    "source": "https://basescan.org/address/0xd07739a9e9c46d3deded97c0edc49cea8bab1bb9#code · tests/data/first_run_dex_2026-11-26/base_v2_factories.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0xd07739a9e9c46d3deded97c0edc49cea8bab1bb9",
+      "dex.pool_code_hashes": [
+        "0xa6989c59e22818841eefd99458f30c45d0d5e6d1489d1a2369c5effb38f9773d"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "satori-base",
+    "source": "https://basescan.org/address/0x4858c605862a91a34d83c19a9704f837f64fa405#code · tests/data/first_run_dex_2026-11-26/base_v2_factories.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x4858c605862a91a34d83c19a9704f837f64fa405",
+      "dex.pool_code_hashes": [
+        "0x863fcfbbee75e679d2a43818f377afc8a63590091c47f069b36b7cf8a4d4cad2"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
     "id": "icecreamswap-base",
     "source": "https://sourcify.dev/server/v2/contract/8453/0x9e6d21e759a7a288b80eef94e4737d313d31c13f · tests/data/first_run_dex_2026-11-26/base_v2_factories.json",
     "settings": {

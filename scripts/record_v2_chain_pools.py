@@ -68,6 +68,9 @@ def pair_boundary(simulate, pool, weth, other, weth_index, amount, bought, sold,
                 raise ValueError("pair maximum differs from formula: " + direction)
             if extra:
                 data = last.get("error", {}).get("data") or last.get("returnData", "")
+                if expected_error and expected_error.startswith("0x") and data == expected_error and last.get("error", {}).get("code") == 3:
+                    results[direction] = {"max": str(out), "next_revert": data}
+                    continue
                 if expected_error == "empty-revert" and data in ("0x", "") and last.get("error", {}).get("code") == 3:
                     results[direction] = {"max": str(out), "next_revert": "empty-revert"}
                     continue

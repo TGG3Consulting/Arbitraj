@@ -48,6 +48,8 @@ pub(super) async fn once(
         RouteMode::Rfq(_)
         | RouteMode::RfqIndicative
         | RouteMode::Slot(_)
+        | RouteMode::Orderbook(_)
+        | RouteMode::OrderbookIndicative
         | RouteMode::SlotIndicative => {
             return Err(ctx.err(
                 ErrorCode::NotApplicable,
@@ -167,6 +169,8 @@ pub(super) async fn once(
         RouteMode::Rfq(_)
         | RouteMode::RfqIndicative
         | RouteMode::Slot(_)
+        | RouteMode::Orderbook(_)
+        | RouteMode::OrderbookIndicative
         | RouteMode::SlotIndicative => {
             return Err(ctx.err(ErrorCode::NotApplicable, "RFQ не является маршрутом пула"));
         }

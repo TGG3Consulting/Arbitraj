@@ -76,6 +76,12 @@ pub async fn trade(
 ) -> GatewayResult<Option<TradeResult>> {
     if matches!(
         req.route.as_ref().map(|r| r.mode),
+        Some(crate::core::types::RouteMode::Orderbook(_))
+    ) {
+        return super::hanji::recovery::reconcile(p, req, pend).await;
+    }
+    if matches!(
+        req.route.as_ref().map(|r| r.mode),
         Some(crate::core::types::RouteMode::Slot(_))
     ) {
         return super::fermi::reconcile(p, req, pend).await;

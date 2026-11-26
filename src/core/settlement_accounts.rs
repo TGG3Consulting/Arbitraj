@@ -54,7 +54,12 @@ impl Accounts {
                     .into(),
             );
         }
-        ACTIVE.scope((self, core.clone(), plan.clone()), f).await
+        ACTIVE
+            .scope(
+                (self, core.clone(), plan.clone()),
+                crate::gateway::settlement_proofs::scope(f),
+            )
+            .await
     }
     fn verify(&self) -> Result<(), String> {
         if self.dex.settlement_account().map_err(|e| e.message)? != self.expected.wallet

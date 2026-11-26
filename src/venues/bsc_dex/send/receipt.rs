@@ -27,6 +27,8 @@ use super::super::num;
 pub struct Receipt {
     pub status: U64,
     pub block_number: U64,
+    pub block_hash: Option<B256>,
+    pub transaction_hash: Option<B256>,
     pub gas_used: U64,
     pub effective_gas_price: U256,
     pub logs: Vec<Log>,
@@ -86,6 +88,11 @@ pub async fn read(ctx: &Ctx, hash: B256) -> GatewayResult<Option<Receipt>> {
             crate::gateway::errors::ErrorCode::BadResponse,
             format!("Base: квитанция {hash} не содержит l1Fee, полная комиссия неизвестна"),
         ));
+    }
+    if let Some(r) = &receipt
+        && crate::gateway::settlement_proofs::active()
+    {
+        super::canonical_receipt::observe(ctx, hash, r).await?;
     }
     Ok(receipt)
 }

@@ -71,7 +71,10 @@ impl Venue for BscDex {
 
     /// Решение 372: строгий верх курса стороны DEX без котировок (quote/bound.rs). Ошибок нет.
     fn rate_bound(&self, asset: &Asset, side: Side) -> crate::gateway::rate_bound::RateBound {
-        if super::hashflow::enabled(&self.p.ctx) || super::fermi::routing::active(&self.p) {
+        if super::hashflow::enabled(&self.p.ctx)
+            || super::hanji::routing::active(&self.p)
+            || super::fermi::routing::active(&self.p)
+        {
             return crate::gateway::rate_bound::RateBound::na(
                 "rfq",
                 "Индикативные уровни RFQ не доказывают верх цены подписанной котировки",
@@ -164,7 +167,8 @@ impl Venue for BscDex {
     async fn quote(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {
         if crate::gateway::quote_stage::settlement() {
             let class = urgency::is_set().unwrap_or(Class::Quote);
-            return scope(class, self.p.quoting().quote(asset, side, qty)).await;
+            let baseline = scope(class, self.p.quoting().quote(asset, side, qty)).await;
+            return super::hanji::routing::consider(&self.p, asset, side, qty, baseline).await;
         }
         let baseline = async {
             // Решение 95: финальная котировка расчёта кандидата (ядро пересчитывает найденный оптимум) при exec.via_kyber —
@@ -196,7 +200,8 @@ impl Venue for BscDex {
         .await;
         let baseline =
             super::hashflow::routing::consider(&self.p, asset, side, qty, baseline).await;
-        super::fermi::routing::consider(&self.p, asset, side, qty, baseline).await
+        let baseline = super::fermi::routing::consider(&self.p, asset, side, qty, baseline).await;
+        super::hanji::routing::consider(&self.p, asset, side, qty, baseline).await
     }
 
     /// Решение 250: исполнимость объёма (проверка доли глубины h) — quote/fills.rs: прямой путь одного пула исполняет
@@ -207,6 +212,7 @@ impl Venue for BscDex {
             return self.quote(asset, side, qty).await.map(|q| q.fillable_qty);
         }
         if super::hashflow::enabled(&self.p.ctx)
+            || super::hanji::routing::active(&self.p)
             || super::fermi::routing::active(&self.p)
             || (crate::gateway::quote_stage::is_final()
                 && self.p.ctx.flag("exec.via_kyber").unwrap_or(false))
@@ -229,11 +235,13 @@ impl Venue for BscDex {
         limit: u32,
     ) -> GatewayResult<Vec<Decimal>> {
         let q = self.p.quoting();
-        if crate::gateway::quote_stage::settlement() {
-            return super::quote::breaks::breaks(&q, asset, side, route, max_qty, limit).await;
+        let mut extra = super::hanji::routing::breaks(&self.p, asset, side, max_qty);
+        if !crate::gateway::quote_stage::settlement() {
+            extra.extend(super::hashflow::routing::breaks(
+                &self.p, asset, side, max_qty,
+            ));
+            extra.extend(super::fermi::routing::breaks(&self.p, asset, side, max_qty));
         }
-        let mut extra = super::hashflow::routing::breaks(&self.p, asset, side, max_qty);
-        extra.extend(super::fermi::routing::breaks(&self.p, asset, side, max_qty));
         if extra.is_empty() {
             return super::quote::breaks::breaks(&q, asset, side, route, max_qty, limit).await;
         }
@@ -241,7 +249,9 @@ impl Venue for BscDex {
             route.mode,
             crate::core::types::RouteMode::RfqIndicative
                 | crate::core::types::RouteMode::Rfq(_)
+                | crate::core::types::RouteMode::Orderbook(_)
                 | crate::core::types::RouteMode::Slot(_)
+                | crate::core::types::RouteMode::OrderbookIndicative
                 | crate::core::types::RouteMode::SlotIndicative
         ) {
             vec![]
@@ -625,7 +635,11 @@ impl Venue for BscDex {
     ) -> GatewayResult<Option<Decimal>> {
         if matches!(
             req.route.as_ref().map(|r| r.mode),
-            Some(crate::core::types::RouteMode::Rfq(_) | crate::core::types::RouteMode::Slot(_))
+            Some(
+                crate::core::types::RouteMode::Rfq(_)
+                    | crate::core::types::RouteMode::Orderbook(_)
+                    | crate::core::types::RouteMode::Slot(_)
+            )
         ) {
             return Err(self.p.ctx.err(
                 ErrorCode::NotApplicable,
@@ -845,6 +859,7 @@ impl BscDex {
             req.route.as_ref().map(|r| r.mode),
             Some(
                 crate::core::types::RouteMode::RfqIndicative
+                    | crate::core::types::RouteMode::OrderbookIndicative
                     | crate::core::types::RouteMode::SlotIndicative
             )
         ) {
@@ -860,6 +875,11 @@ impl BscDex {
                 ));
             }
             req.route = firm.route;
+        }
+        if let Some(crate::core::types::RouteMode::Orderbook(id)) =
+            req.route.as_ref().map(|r| r.mode)
+        {
+            return super::hanji::execute::trade(&self.p, req, id).await;
         }
         if let Some(crate::core::types::RouteMode::Slot(id)) = req.route.as_ref().map(|r| r.mode) {
             return super::fermi::trade(&self.p, req, id).await;

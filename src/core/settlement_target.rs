@@ -49,10 +49,13 @@ pub(super) async fn order(
         {
             return Err("Параметры сохранённого целевого ордера изменились".into());
         }
-        if let Some(Outcome::Order(done)) = entry.result {
-            return Ok(*done);
-        }
-        log::capture(async {
+        let recorded = match entry.result {
+            Some(Outcome::Order(done)) if !dex => return Ok(*done),
+            Some(Outcome::Order(done)) => Some(done),
+            Some(_) => return Err("Сохранён результат вывода на месте целевого ордера".into()),
+            None => None,
+        };
+        let fresh = log::capture(async {
             let read = if dex {
                 g.resolve_trade(*stored, &entry.lookup).await?
             } else {
@@ -70,7 +73,15 @@ pub(super) async fn order(
             })
         })
         .await
-        .map_err(|e| e.message)?
+        .map_err(|e| e.message)?;
+        if let Some(prior) = recorded
+            && !same_execution(&prior, &fresh)
+        {
+            return Err(
+                "Исходный ордер изменился при повторной проверке блока. Требуется сверка".into(),
+            );
+        }
+        fresh
     } else {
         let check = m.guard(core, &token, from_cex);
         let market = m.clone();
@@ -98,6 +109,14 @@ pub(super) async fn order(
         .await
         .map_err(|e| e.message)?
     };
+    if dex {
+        let tx = fill
+            .trade
+            .chain
+            .as_ref()
+            .ok_or("Идентификатор транзакции отсутствует")?;
+        crate::gateway::settlement_proofs::pin(&d.db,&v,m.evm_chain_id,&tx.hash.to_string()).await?;
+    }
     match super::settlement_effect::commit(&d.db, &key, &v, Outcome::Order(Box::new(fill)))
         .await
         .map_err(|e| e.message)?
@@ -105,6 +124,24 @@ pub(super) async fn order(
         Outcome::Order(x) => Ok(*x),
         _ => Err("Несовместимое подтверждение целевого ордера".into()),
     }
+}
+
+fn same_execution(a: &SpotFill, b: &SpotFill) -> bool {
+    a.trade.filled_qty == b.trade.filled_qty
+        && a.gross_quote == b.gross_quote
+        && a.trade.status == b.trade.status
+        && a.trade.fees == b.trade.fees
+        && a.trade
+            .chain
+            .as_ref()
+            .zip(b.trade.chain.as_ref())
+            .is_some_and(|(p, q)| {
+                p.hash == q.hash
+                    && p.nonce == q.nonce
+                    && p.block == q.block
+                    && p.gas_bnb == q.gas_bnb
+                    && p.outcome == q.outcome
+            })
 }
 
 fn key(

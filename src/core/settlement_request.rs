@@ -59,6 +59,9 @@ pub(super) async fn request(
             return Err("Полученных монет сделки или свободного баланса недостаточно для продажи с комиссией".into());
         }
     }
+    if venue == &p.market.dex && !super::settlement_model::supports(&q, true) {
+        return Err("Нет подтверждённого однотранзакционного маршрута для этого ордера".into());
+    }
     let worst = super::costs_quote::worst(core, venue, &d.asset, side, qty, q.avg_price, None)
         .map_err(|e| e.to_string())?;
     if q.fillable_qty < qty || (sell && worst < limit) || (!sell && worst > limit) {

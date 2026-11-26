@@ -33,12 +33,18 @@ pub async fn trade(p: &Parts, req: TradeRequest, quote: &Asset) -> GatewayResult
     })?;
     if !crate::gateway::settlement_intent::active()
         || p.tokens.usdt(ctx)? != cash
-        || !req
-            .route
-            .as_ref()
-            .is_some_and(|r| r.executable && matches!(r.mode, RouteMode::Direct | RouteMode::Smart))
+        || !req.route.as_ref().is_some_and(|r| {
+            r.executable
+                && matches!(
+                    r.mode,
+                    RouteMode::Direct | RouteMode::Smart | RouteMode::Orderbook(_)
+                )
+        })
     {
         return Err(ctx.err(ErrorCode::NoRoute,"Для денежного свопа требуется закреплённый расчётный актив и однотранзакционный маршрут AMM"));
+    }
+    if let Some(RouteMode::Orderbook(id)) = req.route.as_ref().map(|r| r.mode) {
+        return super::super::hanji::execute::trade(p, req, id).await;
     }
     let sides = if req.side == Side::Buy {
         (cash, token)

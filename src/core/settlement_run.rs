@@ -120,7 +120,9 @@ pub(super) async fn follow(core: &Core, mut deal: Deal, p: &Mandate) -> Result<(
                 .run(
                     core,
                     p,
-                    Box::pin(settlement_cycle::advance(core, &mut deal, p)),
+                    Box::pin(crate::gateway::quote_stage::final_scope(
+                        settlement_cycle::advance(core, &mut deal, p),
+                    )),
                 )
                 .await
         }

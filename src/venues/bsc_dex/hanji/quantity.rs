@@ -37,7 +37,9 @@ impl Units {
                     return None;
                 }
                 // Чистая выручка равна floor(value * (scale - rate) / scale).
-                (quantity / self.y).checked_mul(scale)?.div_ceil(scale - rate)
+                (quantity / self.y)
+                    .checked_mul(scale)?
+                    .div_ceil(scale - rate)
             }
         };
         let mut budget = U256::ZERO;
@@ -67,7 +69,8 @@ impl Units {
             return None;
         }
         let budget = match side {
-            Side::BuyX => budget.checked_add(budget.checked_mul(rate)?.div_ceil(scale))?
+            Side::BuyX => budget
+                .checked_add(budget.checked_mul(rate)?.div_ceil(scale))?
                 .checked_mul(self.y)?,
             Side::SellX => budget.checked_mul(self.x)?,
         };

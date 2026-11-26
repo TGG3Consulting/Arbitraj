@@ -101,6 +101,11 @@ pub fn active() -> bool {
     ACTION.try_with(|_| ()).is_ok()
 }
 
+/// Возвращает исходный ключ действия для идентификатора исполнителя внутри той же транзакции.
+pub fn current_key() -> Option<String> {
+    ACTION.try_with(|action| action.key.clone()).ok()
+}
+
 /// Связывает один денежный шаг с устойчивым ключом вида «сделка + этап».
 pub async fn scope<T>(db: &Db, key: &str, operation: Request, f: impl Future<Output = T>) -> T {
     ACTION
@@ -162,7 +167,10 @@ pub async fn before_send(lookup: &PendingRef) -> GatewayResult<()> {
             params![KIND,key,body,Utc::now().to_rfc3339(),LEGACY])
     }).await.map_err(|e| error(e.to_string()))?;
     if inserted == 1 {
-        if let Ok(Err(reason)) = CHECK.try_with(|guard| guard(lookup)) {
+        let ready = super::settlement_proofs::verify()
+            .await
+            .and_then(|()| CHECK.try_with(|guard| guard(lookup)).unwrap_or(Ok(())));
+        if let Err(reason) = ready {
             // Управление ещё у единственного владельца INSERT, POST не начат.
             // Убирается только его собственная нетронутая запись.
             db.ledger()

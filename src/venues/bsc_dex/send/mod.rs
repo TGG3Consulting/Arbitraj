@@ -27,6 +27,7 @@ pub mod bloxroute_cloud;
 pub mod bloxroute_protect;
 pub mod bundle_pick;
 pub mod cancel;
+pub mod canonical_receipt;
 pub mod channel;
 pub mod channels;
 pub mod check;

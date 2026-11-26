@@ -135,7 +135,10 @@ fn hanji_crosses_two_price_levels_and_reconciles_both_fees() {
             let recovered = units
                 .exact_quantity(&levels(&f["fresh_bids"]), Side::SellX, sell.received, true)
                 .unwrap();
-            assert_eq!((recovered.spent, recovered.received), (sell.spent, sell.received));
+            assert_eq!(
+                (recovered.spent, recovered.received),
+                (sell.spent, sell.received)
+            );
             assert_eq!(sell.unspent, U256::ZERO);
             paths += 1;
         }

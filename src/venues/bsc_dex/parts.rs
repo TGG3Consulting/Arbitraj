@@ -32,6 +32,7 @@ use super::wallet::nonce::Nonces;
 #[derive(Clone)]
 pub struct Parts {
     pub ctx: Ctx,
+    pub(super) hanji: super::hanji::feed::Cache,
     pub(super) slot_markets: super::fermi::markets::Cache,
     pub(super) rfqs: super::hashflow::routing::Book,
     pub heads: Heads,
@@ -65,6 +66,7 @@ impl Parts {
             ctx,
             rfqs: Default::default(),
             slot_markets: Default::default(),
+            hanji: Default::default(),
             heads: Heads::default(),
             tokens: Tokens::default(),
             scaled_units: Default::default(),

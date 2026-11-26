@@ -7,9 +7,15 @@
 //! Стакан Hanji содержит целые лоты X. Цена измеряется в единицах Y за лот X.
 //! Комиссия считается в Y. На покупку округляется сумма затрат вверх, при продаже
 //! проверяется выручка после комиссии. Остаток входа хранится отдельно.
+mod book;
+pub(super) mod execute;
+pub(super) mod feed;
 pub(super) mod live;
 pub(super) mod model;
 mod quantity;
+pub(super) mod recovery;
+pub(super) mod routing;
+mod wire;
 use alloy_primitives::U256;
 
 /// Знаменатель ставки комиссии в разделе Simulation документации Hanji.

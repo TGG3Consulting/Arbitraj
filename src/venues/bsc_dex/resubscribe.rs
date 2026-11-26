@@ -74,6 +74,9 @@ impl Subs {
         }
         if let Some((_, out)) = last {
             super::hashflow::feed::clear(p, &out).await;
+            if p.ctx.chain_id() == Some(8453) {
+                super::hanji::feed::clear(p, &out).await;
+            }
             if p.ctx.chain_id() == Some(1) {
                 super::fermi::markets::clear(p, &out).await;
             }
@@ -105,12 +108,21 @@ impl Subs {
         let last = self.last.lock().unwrap_or_else(|x| x.into_inner()).clone();
         if let Some((_, previous)) = last {
             super::hashflow::feed::clear(p, &previous).await;
+            if p.ctx.chain_id() == Some(8453) {
+                super::hanji::feed::clear(p, &previous).await;
+            }
             if p.ctx.chain_id() == Some(1) {
                 super::fermi::markets::clear(p, &previous).await;
             }
         }
         if p.ctx.chain_id() == Some(1) {
             new.push(tokio::spawn(super::fermi::markets::run(
+                p.clone(),
+                out.clone(),
+            )));
+        }
+        if p.ctx.chain_id() == Some(8453) {
+            new.push(tokio::spawn(super::hanji::feed::run(
                 p.clone(),
                 out.clone(),
             )));

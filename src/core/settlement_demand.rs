@@ -16,11 +16,21 @@ pub(super) async fn demand(
 ) -> Result<(), String> {
     use super::costs_quote::{fetch, worst};
     let d = &plan.direction;
-    let (a, b) = tokio::try_join!(
-        fetch(core, d, false, target, None),
-        fetch(core, d, true, sell_qty, None)
+    let quotes = async {
+        tokio::try_join!(
+            fetch(core, d, false, target, None),
+            fetch(core, d, true, sell_qty, None)
+        )
+    };
+    let (a, b) = crate::gateway::quote_stage::settlement_if(
+        true,
+        crate::gateway::quote_stage::final_scope(quotes),
     )
+    .await
     .map_err(|e| e.to_string())?;
+    if !super::settlement_model::supports(&a, true) {
+        return Err("Финансирование требует исполнимого маршрута целевой покупки".into());
+    }
     if target <= Decimal::ZERO
         || sell_qty <= Decimal::ZERO
         || bid <= Decimal::ZERO

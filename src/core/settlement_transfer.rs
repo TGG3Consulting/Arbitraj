@@ -104,6 +104,52 @@ pub(super) async fn move_token(
     from_cex: bool,
     amount: Decimal,
 ) -> Result<Movement, String> {
+    current(core, id, (m, token), wallet, from_cex, amount, false).await
+}
+
+/// Сохранённое зачисление сверяется с площадками по прежней заявке. При отсутствии заявки
+/// только ручная сверка, поскольку вывод уже мог состояться.
+pub(super) async fn recheck_cash(
+    core: &Core,
+    p: &super::settlement_state::Plan,
+    m: &super::settlement_market::Market,
+    old: &Movement,
+) -> Result<(), String> {
+    let debited = old
+        .debited
+        .ok_or("У прежнего движения отсутствует исходное списание")?;
+    let fresh = current(
+        core,
+        &p.deal,
+        (m, &m.asset),
+        &p.wallet,
+        p.direction.buy_on == m.dex,
+        debited,
+        true,
+    )
+    .await?;
+    if fresh.sent.venue_ref != old.sent.venue_ref
+        || fresh.credit.venue_ref != old.credit.venue_ref
+        || fresh.sent.tx_hash != old.sent.tx_hash
+        || fresh.credit.tx_hash != old.credit.tx_hash
+        || fresh.sent.amount != old.sent.amount
+        || fresh.credit.amount != old.credit.amount
+        || fresh.sent.fee != old.sent.fee
+    {
+        return Err("Изменился подтверждённый перевод или зачисление. Требуется сверка".into());
+    }
+    Ok(())
+}
+
+async fn current(
+    core: &Core,
+    id: &str,
+    (m, token): (&super::settlement_market::Market, &super::types::Asset),
+    wallet: &DexAccountId,
+    from_cex: bool,
+    amount: Decimal,
+    read_only: bool,
+) -> Result<Movement, String> {
     use super::transfers;
     m.ensure(core)?;
     let dex = m.dex.clone();
@@ -177,6 +223,7 @@ pub(super) async fn move_token(
             .await
             .map_err(|e| e.message)?;
         let net = m.transfer_network(core, &to_asset, to)?;
+        crate::gateway::settlement_proofs::pin(&deps.db,&m.dex,m.evm_chain_id,tx).await?;
         return verified(
             (&from_asset, &to_asset),
             sent,
@@ -185,6 +232,9 @@ pub(super) async fn move_token(
             (&req.network, &net),
             (amount, req.amount),
         );
+    }
+    if read_only {
+        return Err("Нет исходной заявки ранее подтверждённого перевода".into());
     }
     super::executor::buy_gate(core)?;
     if !super::registry_sync::enabled(core, cex) || !super::registry_sync::enabled(core, &dex) {
@@ -210,6 +260,12 @@ pub(super) async fn move_token(
         .await
         .map_err(|e| e.message)?
         .ok_or("У вывода отсутствует исходная заявка")?;
+    crate::gateway::settlement_proofs::pin(
+        &deps.db,&m.dex,m.evm_chain_id,
+        sent.tx_hash
+            .as_deref()
+            .ok_or("Нет хеша подтверждённого движения")?,
+    ).await?;
     verified(
         (&from_asset, &to_asset),
         sent,

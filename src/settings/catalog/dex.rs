@@ -137,6 +137,12 @@ pub const UR_FORMATS: &[&str] = &[
 /// Настройки DEX. Порядок — как в docs/SETTINGS.md.
 #[rustfmt::skip]
 pub static DEX: &[SettingDef] = &[
+    d("Hanji", "hanji.trading", K::Bool, L::None, "да/нет", V, "Разрешить выбор Hanji на Base с отдельно проверенным контрактом исполнителя.").optional().dex_venue(),
+    d("Hanji", "hanji.executor", K::Address, L::None, "адрес", V, "Адрес размещённого shared HanjiExecutor. Проверяются точный код и Base WETH.").optional().dex_venue(),
+    d("Hanji", "hanji.markets", K::TextList, L::None, "адреса", V, "Разрешённые оператором прокси Hanji из активного реестра Base.").optional().dex_venue(),
+    d("Hanji", "hanji.registry_refresh_s", K::Integer, L::Positive, "с", V, "Срок до повторной загрузки реестра рынков Hanji. Стаканы загружаются на новых блоках.").optional().dex_venue(),
+    d("Hanji", "hanji.quote_budget_ms", K::Integer, L::Positive, "мс", V, "Лимит времени финальной симуляции Hanji при выборе с другими площадками.").optional().dex_venue(),
+    d("Hanji", "hanji.gas_budget_native", K::Decimal, L::Positive, "ETH", V, "Верхняя сумма общей комиссии Hanji на Base с публикацией данных и операторской комиссией.").optional().dex_venue(),
     d("FermiSwap", "fermi.quote_sizes", K::TextList, L::None, "суммы валюты котировки", V, "Суммы встречной валюты для расчёта уровней Fermi на Ethereum. Список положительных возрастающих десятичных чисел; каждый размер проверяется для обеих сторон на выбранном кадре.").optional().dex_venue(),
     d("FermiSwap", "fermi.executor", K::Address, L::None, "адрес", V, "Адрес отдельно размещённого FermiSlotExecutor в основной сети Ethereum. Котировка исполнения требует побайтной проверки кода на родителе слота.").optional().dex_venue(),
     d("FermiSwap", "fermi.trading", K::Bool, L::None, "да/нет", V, "Разрешить выбор Fermi через настроенного строителя Ethereum по свежему кадру и проверенному исполнителю.").optional().dex_venue(),

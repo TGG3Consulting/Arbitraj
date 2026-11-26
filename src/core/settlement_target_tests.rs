@@ -87,6 +87,7 @@ async fn both_target_directions_survive_reopen_and_claim_the_exact_signed_operat
                 u64::from_str_radix(row["nonce"].as_str()?.trim_start_matches("0x"), 16).ok()
             })
             .unwrap();
+        check_route_gate(&venue, &token, side, qty, quote, tx.parse().unwrap());
         let action = log::Request::Order(Box::new(TradeRequest {
             venue: venue.clone(),
             asset: token,
@@ -106,12 +107,48 @@ async fn both_target_directions_survive_reopen_and_claim_the_exact_signed_operat
         };
         {
             let db = Db::open(&file).unwrap();
-            let make = || log::scope(&db, &id, action.clone(), log::before_send(&marker));
+            assert_eq!(log::current_key(), None);
+            crate::gateway::settlement_proofs::scope(async {
+                let original_block = row["block_hash"].as_str().unwrap();
+                crate::gateway::settlement_proofs::record(
+                    &venue,
+                    tx,
+                    original_block.into(),
+                    || {
+                        Box::pin(async {
+                            Err(crate::gateway::errors::GatewayError::new(
+                                crate::gateway::errors::ErrorCode::OutcomeUnknown,
+                                None,
+                                "Блок заменён на прежней высоте",
+                            ))
+                        })
+                    },
+                )
+                .unwrap();
+                crate::gateway::settlement_proofs::pin(&db,&venue,8453,tx).await.unwrap();
+                assert!(
+                    log::scope(&db, &id, action.clone(), log::before_send(&marker))
+                        .await
+                        .is_err()
+                );
+                assert!(log::load(&db, &id).await.unwrap().is_none());
+            })
+            .await;
+            let make = || {
+                log::scope(&db, &id, action.clone(), async {
+                    assert_eq!(log::current_key().as_deref(), Some(id.as_str()));
+                    log::before_send(&marker).await
+                })
+            };
             let (a, b) = tokio::join!(make(), make());
             assert_ne!(a.is_ok(), b.is_ok());
         }
         {
             let db = Db::open(&file).unwrap();
+            crate::gateway::settlement_proofs::scope(async {
+                crate::gateway::settlement_proofs::record(&venue,tx,"replaced".into(),||Box::pin(async{Ok(())})).unwrap();
+                assert!(crate::gateway::settlement_proofs::pin(&db,&venue,8453,tx).await.is_err());
+            }).await;
             let entry = log::load(&db, &id).await.unwrap().unwrap();
             assert_eq!(entry.lookup, marker);
             assert!(entry.result.is_none());
@@ -129,4 +166,61 @@ async fn both_target_directions_survive_reopen_and_claim_the_exact_signed_operat
         }
     }
     std::fs::remove_dir_all(folder).unwrap();
+}
+
+fn check_route_gate(
+    venue: &VenueId,
+    token: &Asset,
+    side: Side,
+    qty: rust_decimal::Decimal,
+    quote: rust_decimal::Decimal,
+    handle: alloy_primitives::B256,
+) {
+    use crate::core::{
+        settlement_model::supports,
+        types::{Cost, CostKind, DexRoute, Quote, RouteMode},
+    };
+    let mut q = Quote {
+        venue: venue.clone(),
+        asset: token.clone(),
+        side,
+        qty,
+        fillable_qty: qty,
+        avg_price: quote / qty,
+        costs: vec![],
+        route: None,
+        signal_route: None,
+        pick: None,
+        at: chrono::Utc::now(),
+    };
+    for (mode, executable, size, firm) in [
+        (RouteMode::Direct, true, true, true),
+        (RouteMode::Smart, true, true, true),
+        (RouteMode::OrderbookIndicative, false, true, false),
+        (RouteMode::OrderbookIndicative, true, true, false),
+        (RouteMode::Orderbook(handle), false, false, false),
+        (RouteMode::Orderbook(handle), true, true, true),
+        (RouteMode::Slot(handle), true, false, false),
+        (RouteMode::Rfq(handle), true, false, false),
+        (RouteMode::Graph, true, false, false),
+    ] {
+        q.route = Some(DexRoute {
+            mode,
+            executable,
+            legs: vec![],
+            block: 0,
+            gas_units: 0,
+            exec_note: None,
+        });
+        assert_eq!(supports(&q, false), size);
+        assert_eq!(supports(&q, true), firm);
+        q.costs.push(Cost::new(
+            CostKind::ApproveGas,
+            rust_decimal::Decimal::ONE,
+            "ETH",
+            false,
+        ));
+        assert!(!supports(&q, false) && !supports(&q, true));
+        q.costs.clear();
+    }
 }

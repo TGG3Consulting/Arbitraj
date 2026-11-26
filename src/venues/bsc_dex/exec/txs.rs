@@ -187,7 +187,9 @@ pub async fn send_tipped(
     if crate::gateway::settlement_intent::active() {
         let rfq = super::super::hashflow::marker(ctx, signed.hash, nonce, &ready, need)?;
         let other = rfq.is_none();
+        let hanji = super::super::hanji::execute::marker(ctx, signed.hash, nonce, &ready, need)?;
         let marker = rfq
+            .or(hanji)
             .or(super::settlement_swap::marker(
                 ctx,
                 signed.hash,

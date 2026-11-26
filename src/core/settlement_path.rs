@@ -36,6 +36,11 @@ pub async fn run(core: &Core, p: &Plan) -> Result<Path, String> {
             v
         }
     };
+    if let Some(movement) = &path.movement
+        && crate::gateway::settlement_proofs::active()
+    {
+        settlement_transfer::recheck_cash(core, p, &market, movement).await?;
+    }
     if path.steps_confirmed() {
         return Ok(path);
     }

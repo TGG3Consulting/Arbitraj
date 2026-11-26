@@ -20,8 +20,8 @@ use serde::Deserialize;
 use serde_json::json;
 
 const REGISTRY: &str = "https://api-base.hanji.io/aggregators/markets";
-const HELPER: Address = address!("c032b6dfec3511a00cde9ea341d140f4733609de");
-const DEPTH: u32 = 64;
+pub(super) const HELPER: Address = address!("c032b6dfec3511a00cde9ea341d140f4733609de");
+pub(super) const DEPTH: u32 = 64;
 
 sol! {
     interface IHanji {
@@ -37,15 +37,15 @@ sol! {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Market {
-    orderbook_address: Address,
-    base_token: Token,
-    quote_token: Token,
+pub(super) struct Market {
+    pub(super) orderbook_address: Address,
+    pub(super) base_token: Token,
+    pub(super) quote_token: Token,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Token {
-    contract_address: Address,
+pub(super) struct Token {
+    pub(super) contract_address: Address,
 }
 #[derive(Deserialize)]
 struct Header {
@@ -53,7 +53,7 @@ struct Header {
     hash: B256,
 }
 
-async fn canonical<C: SolCall>(
+pub(super) async fn canonical<C: SolCall>(
     ctx: &Ctx,
     to: Address,
     call: C,
@@ -70,6 +70,29 @@ async fn canonical<C: SolCall>(
         ctx.err(
             ErrorCode::BadResponse,
             format!("Hanji: неверный результат {}", C::SIGNATURE),
+        )
+    })
+}
+
+pub(super) async fn registry(ctx: &Ctx) -> GatewayResult<Vec<Market>> {
+    let (status, body) = http::exchange(ctx.http.get(REGISTRY), ctx.limits()?)
+        .await
+        .map_err(|_| {
+            ctx.err(
+                ErrorCode::Unreachable,
+                "Hanji: не получен публичный реестр рынков",
+            )
+        })?;
+    if !status.is_success() {
+        return Err(ctx.err(
+            ErrorCode::BadResponse,
+            format!("Hanji: реестр вернул HTTP {status}"),
+        ));
+    }
+    serde_json::from_str(&body).map_err(|_| {
+        ctx.err(
+            ErrorCode::BadResponse,
+            "Hanji: неверный ответ реестра рынков",
         )
     })
 }
@@ -96,26 +119,7 @@ pub(in crate::venues::bsc_dex) async fn preview(ctx: &Ctx, req: Request) -> Gate
             "Для Hanji укажите два разных контракта. Для ETH используйте WETH",
         ));
     }
-    let (status, body) = http::exchange(ctx.http.get(REGISTRY), ctx.limits()?)
-        .await
-        .map_err(|_| {
-            ctx.err(
-                ErrorCode::Unreachable,
-                "Hanji: не получен публичный реестр рынков",
-            )
-        })?;
-    if !status.is_success() {
-        return Err(ctx.err(
-            ErrorCode::BadResponse,
-            format!("Hanji: реестр вернул HTTP {status}"),
-        ));
-    }
-    let markets: Vec<Market> = serde_json::from_str(&body).map_err(|_| {
-        ctx.err(
-            ErrorCode::BadResponse,
-            "Hanji: неверный ответ реестра рынков",
-        )
-    })?;
+    let markets = registry(ctx).await?;
     let mut matches = markets.iter().filter(|m| {
         let x = m.base_token.contract_address;
         let y = m.quote_token.contract_address;

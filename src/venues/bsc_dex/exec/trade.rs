@@ -74,6 +74,7 @@ fn by_whom(ctx: &Ctx, reg: &Registry, route: &DexRoute, native: bool) -> &'stati
     match route.mode {
         RouteMode::Rfq(_) | RouteMode::RfqIndicative => "Hashflow RFQT",
         RouteMode::Slot(_) | RouteMode::SlotIndicative => "FermiSwap",
+        RouteMode::Orderbook(_) | RouteMode::OrderbookIndicative => "Hanji",
         RouteMode::Smart => result::BY_SMART,
         RouteMode::Graph => match graph_route::graph_form(ctx, route) {
             GraphForm::Direct => result::BY_DIRECT,

@@ -201,6 +201,8 @@ pub fn bundle_result(
     let receipt = (outcome == crate::core::types::TxOutcome::Included).then(|| Receipt {
         status: U64::from(1u8),
         block_number: U64::from(block.unwrap_or_default()),
+        block_hash: None,
+        transaction_hash: None,
         gas_used: U64::from(gas_used),
         effective_gas_price: U256::ZERO,
         rollup: Default::default(),

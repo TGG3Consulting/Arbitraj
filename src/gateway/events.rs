@@ -18,6 +18,14 @@ use crate::core::types::{
 
 use super::errors::GatewayError;
 
+/// Источники имеют отдельные рынки и время истечения.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum LiquiditySource {
+    #[default]
+    Hashflow,
+    Fermi,
+}
+
 /// Событие от адаптера в канал, переданный в subscribe_market: рынок (стакан, пул) и то,
 /// что решает, можно ли торговать монетой (проверка налогов, крючков, состояние каналов отправки).
 /// Ядро обновляет своё состояние и передаёт всё в интерфейс (api/ws.rs).
@@ -27,6 +35,8 @@ pub enum MarketEvent {
     Book(OrderBook),
     /// Снимок односетевых индикативных рынков RFQ. Адрес исходной котируемой валюты и направления подтверждены API.
     RfqMarkets {
+        #[serde(default)]
+        source: LiquiditySource,
         venue: VenueId,
         quote: alloy_primitives::Address,
         markets: std::collections::BTreeMap<alloy_primitives::Address, (bool, bool)>,

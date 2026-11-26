@@ -445,10 +445,11 @@ pub(super) fn final_external(core: &Core, d: &Direction) -> bool {
 
 /// Для RFQ внешний вызов возможен только при уже полученных действующих уровнях.
 pub(super) fn external_at(core: &Core, v: &VenueId) -> bool {
-    crate::gateway::quote_stage::final_external(&core.inner.deps.settings, v, || {
+    crate::gateway::quote_stage::final_external(&core.inner.deps.settings, v, |source| {
         rd(&core.inner.market)
             .rfq
             .get(v)
+            .and_then(|group| group.get(&source))
             .is_some_and(|(_, rows, expires)| {
                 !rows.is_empty() && *expires > chrono::Utc::now().timestamp_millis()
             })

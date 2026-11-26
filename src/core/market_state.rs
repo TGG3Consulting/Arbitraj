@@ -34,7 +34,7 @@ type RfqSnapshot = (
 /// Рыночное состояние в памяти.
 #[derive(Default)]
 pub struct MarketState {
-    pub(super) rfq: HashMap<VenueId, RfqSnapshot>,
+    pub(super) rfq: HashMap<VenueId, HashMap<crate::gateway::events::LiquiditySource, RfqSnapshot>>,
     pub(super) books: HashMap<(VenueId, String), OrderBook>,
     /// Решение 317 (доработка): когда последний раз менялось СОДЕРЖИМОЕ стакана (по префиксам уровней, book_still.rs);
     /// кадр с тем же содержимым отметки не двигает. Ключ — как у books.
@@ -81,27 +81,72 @@ pub(super) fn pair_key(venue: &VenueId, a: Address, b: Address) -> (VenueId, Add
 }
 
 impl MarketState {
+    pub(super) fn source_sides(
+        &self,
+        v: &VenueId,
+        quote: Option<Address>,
+        token: Address,
+        now: i64,
+    ) -> Option<(bool, bool)> {
+        self.rfq
+            .get(v)?
+            .values()
+            .filter_map(|(cash, markets, expires)| {
+                (Some(*cash) == quote && *expires > now)
+                    .then(|| markets.get(&token).copied())
+                    .flatten()
+            })
+            .reduce(|a, b| (a.0 || b.0, a.1 || b.1))
+    }
+    pub(super) fn expire_source(
+        &mut self,
+        venue: &VenueId,
+        source: crate::gateway::events::LiquiditySource,
+        expiry: i64,
+    ) -> Option<std::collections::BTreeMap<Address, (bool, bool)>> {
+        let group = self.rfq.get_mut(venue)?;
+        if group.get(&source)?.2 != expiry {
+            return None;
+        }
+        let (_, rows, _) = group.remove(&source)?;
+        if group.is_empty() {
+            self.rfq.remove(venue);
+        }
+        Some(rows)
+    }
+
     /// Применяет событие адаптера. Принимает: событие. Возвращает: что изменилось. Ошибок нет.
     pub fn apply(&mut self, ev: MarketEvent) -> Touched {
         match ev {
             // Стакан и пул — market_apply.rs.
             MarketEvent::RfqMarkets {
+                source,
                 venue,
                 quote,
                 markets,
                 expires_ms,
             } => {
+                let group = self.rfq.entry(venue.clone()).or_default();
                 let mut tokens = markets.keys().copied().collect::<Vec<_>>();
-                let changed = self
-                    .rfq
-                    .get(&venue)
-                    .is_none_or(|(q, prev, _)| q != &quote || prev != &markets);
-                if changed && let Some((_, old, _)) = self.rfq.get(&venue) {
+                let changed = group
+                    .get(&source)
+                    .map_or(!markets.is_empty(), |(q, prev, _)| {
+                        q != &quote || prev != &markets
+                    });
+                if changed && let Some((_, old, _)) = group.get(&source) {
                     tokens.extend(old.keys().filter(|t| !markets.contains_key(*t)).copied());
                 }
                 let expiration = (!markets.is_empty()).then_some(expires_ms);
-                self.rfq.insert(venue.clone(), (quote, markets, expires_ms));
+                if markets.is_empty() {
+                    group.remove(&source);
+                    if group.is_empty() {
+                        self.rfq.remove(&venue);
+                    }
+                } else {
+                    group.insert(source, (quote, markets, expires_ms));
+                }
                 Touched::RfqMarkets {
+                    source,
                     venue,
                     tokens,
                     changed,
@@ -176,5 +221,57 @@ impl MarketState {
             }
             MarketEvent::Balance(b) => Touched::Balance(b),
         }
+    }
+}
+
+#[cfg(test)]
+mod source_tests {
+    use super::*;
+    use crate::gateway::events::LiquiditySource::{Fermi, Hashflow};
+    #[test]
+    fn refreshing_or_expiring_one_source_preserves_the_other_side() {
+        let mut state = MarketState::default();
+        let venue = VenueId("eth_dex".into());
+        let token = Address::repeat_byte(1);
+        let quote = Address::repeat_byte(2);
+        let event = |source, side, expires_ms| MarketEvent::RfqMarkets {
+            source,
+            venue: venue.clone(),
+            quote,
+            markets: std::collections::BTreeMap::from([(token, side)]),
+            expires_ms,
+        };
+        state.apply(event(Hashflow, (true, false), 100));
+        state.apply(event(Fermi, (false, true), 90));
+        assert_eq!(
+            state.source_sides(&venue, Some(quote), token, 80),
+            Some((true, true))
+        );
+        assert_eq!(
+            state.source_sides(&venue, Some(quote), token, 95),
+            Some((true, false))
+        );
+        state.apply(event(Fermi, (false, true), 105));
+        assert!(state.expire_source(&venue, Fermi, 90).is_none());
+        assert!(state.expire_source(&venue, Hashflow, 100).is_some());
+        assert_eq!(
+            state.source_sides(&venue, Some(quote), token, 101),
+            Some((false, true))
+        );
+        assert_eq!(state.source_sides(&venue, Some(token), token, 101), None);
+        let legacy = serde_json::json!({"RfqMarkets":{"venue":"eth_dex","quote":quote,"markets":{},"expires_ms":0}});
+        state.apply(serde_json::from_value(legacy).unwrap());
+        assert_eq!(
+            state.source_sides(&venue, Some(quote), token, 101),
+            Some((false, true))
+        );
+        state.apply(MarketEvent::RfqMarkets {
+            source: Fermi,
+            venue: venue.clone(),
+            quote,
+            markets: Default::default(),
+            expires_ms: 0,
+        });
+        assert!(!state.rfq.contains_key(&venue));
     }
 }

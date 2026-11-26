@@ -48,19 +48,27 @@ pub fn is_final() -> bool {
 pub fn final_external(
     settings: &Store,
     venue: &VenueId,
-    current_rfq: impl FnOnce() -> bool,
+    current: impl Fn(crate::gateway::events::LiquiditySource) -> bool,
 ) -> bool {
+    use crate::gateway::events::LiquiditySource;
     kyber_final(settings, venue)
-        || settings
-            .flag(
-                "hashflow.trading",
-                At {
-                    venue: Some(&venue.0),
-                    coin: None,
-                },
-            )
-            .unwrap_or(false)
-            && current_rfq()
+        || [
+            (LiquiditySource::Hashflow, "hashflow.trading"),
+            (LiquiditySource::Fermi, "fermi.trading"),
+        ]
+        .into_iter()
+        .any(|(source, setting)| {
+            settings
+                .flag(
+                    setting,
+                    At {
+                        venue: Some(&venue.0),
+                        coin: None,
+                    },
+                )
+                .unwrap_or(false)
+                && current(source)
+        })
 }
 
 /// Применимость собственного лимита финальных запросов KyberSwap.

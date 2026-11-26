@@ -25,6 +25,7 @@ pub enum Touched {
     /// Новое состояние пула. `first` — пул встречен впервые. `pool` — какой пул (решение 245: пулы маршрута сделки).
     /// `block` — номер блока состояния (Pool.block; решение 322 — в запись core.signal_hold).
     RfqMarkets {
+        source: crate::gateway::events::LiquiditySource,
         venue: VenueId,
         tokens: Vec<Address>,
         changed: bool,

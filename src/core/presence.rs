@@ -98,15 +98,12 @@ pub fn dex(venue: &VenueId, token: Address, ticker: &str, inp: &Inputs) -> Prese
             },
         },
     };
-    let rfq = inp
-        .market
-        .rfq
-        .get(venue)
-        .and_then(|(quote, markets, expires)| {
-            (Some(*quote) == inp.usdt && *expires > chrono::Utc::now().timestamp_millis())
-                .then(|| markets.get(&token).copied())
-                .flatten()
-        });
+    let rfq = inp.market.source_sides(
+        venue,
+        inp.usdt,
+        token,
+        chrono::Utc::now().timestamp_millis(),
+    );
     let (can_buy, can_sell) = if excluded.is_empty() {
         (true, true)
     } else {

@@ -74,13 +74,14 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 schedule_book(&core, &venue, &ticker, received_at, exchange_time);
             }
             Touched::RfqMarkets {
+                source,
                 venue,
                 tokens,
                 changed,
                 expires_ms,
             } => {
                 if let Some(expiry) = expires_ms {
-                    tokio::spawn(expire_rfq(core.clone(), venue.clone(), expiry));
+                    tokio::spawn(expire_rfq(core.clone(), venue.clone(), source, expiry));
                 }
                 core.inner.feed_seen.mark(&venue);
                 if changed {
@@ -209,25 +210,18 @@ fn assets_by_tokens(
 }
 
 /// Снимает устаревшую индикацию и запрашивает пересборку даже при остановке адаптера. Последующий снимок заменяет его таймер по expires_ms.
-async fn expire_rfq(core: Core, venue: VenueId, expiry: i64) {
+async fn expire_rfq(
+    core: Core,
+    venue: VenueId,
+    source: crate::gateway::events::LiquiditySource,
+    expiry: i64,
+) {
     let ms = expiry
         .saturating_sub(chrono::Utc::now().timestamp_millis())
         .max(0) as u64;
     tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
-    let tokens = {
-        let mut market = wr(&core.inner.market);
-        if !market
-            .rfq
-            .get(&venue)
-            .is_some_and(|(_, _, end)| *end == expiry)
-        {
-            return;
-        }
-        market
-            .rfq
-            .remove(&venue)
-            .map(|(_, tokens, _)| tokens)
-            .unwrap_or_default()
+    let Some(tokens) = wr(&core.inner.market).expire_source(&venue, source, expiry) else {
+        return;
     };
     for token in tokens.keys() {
         lk(&core.inner.quote_cache).bump(&venue, *token);

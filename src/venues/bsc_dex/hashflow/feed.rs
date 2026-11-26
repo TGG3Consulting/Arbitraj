@@ -37,6 +37,7 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
                 p.rfqs.install("", 0, Instant::now(), None);
                 if out
                     .send(MarketEvent::RfqMarkets {
+                        source: crate::gateway::events::LiquiditySource::Hashflow,
                         venue: ctx.venue(),
                         quote: Address::ZERO,
                         markets: BTreeMap::new(),
@@ -78,6 +79,7 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
             advertised = !markets.is_empty();
             if out
                 .send(MarketEvent::RfqMarkets {
+                    source: crate::gateway::events::LiquiditySource::Hashflow,
                     venue: ctx.venue(),
                     quote,
                     markets,

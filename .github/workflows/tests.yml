@@ -21,6 +21,10 @@ on:
         description: Reconstruct every pool created by the three Base fork deployers
         type: boolean
         default: false
+      stack_check_only:
+        description: Compare BSC startup futures and repeat the untouched trading check on historical commits
+        type: boolean
+        default: false
       native_v3_only:
         description: Run only the read-only replay of the three Base fork routers
         type: boolean
@@ -51,7 +55,7 @@ env:
   SHARDS: "8"
 jobs:
   clippy:
-    if: ${{ !inputs.native_v3_only }}
+    if: ${{ !inputs.native_v3_only && !inputs.stack_check_only }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -63,7 +67,7 @@ jobs:
           shared-key: clippy
       - run: cargo clippy --all-targets --locked -- -D warnings
   tests:
-    if: ${{ !inputs.native_v3_only }}
+    if: ${{ !inputs.native_v3_only && !inputs.stack_check_only }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -124,6 +128,41 @@ jobs:
         with:
           name: communityv3-ethereum-depth
           path: ${{ runner.temp }}/communityv3-depth.json
+  bsc-startup-stack:
+    if: inputs.stack_check_only
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: [0bff8340, ffce2052, candidate]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: tests
+          save-if: false
+      - name: Compare the same BSC check on each revision
+        env:
+          REVISION: ${{ matrix.revision }}
+        run: |
+          cp tests/bsc_dex_check_start.rs "$RUNNER_TEMP/check.rs"
+          cp scripts/measure_bsc_startup_stack.py "$RUNNER_TEMP/measure.py"
+          args=()
+          if [[ "$REVISION" == candidate ]]; then
+            args+=(--candidate)
+          else
+            git checkout --detach "$REVISION"
+            cp "$RUNNER_TEMP/check.rs" tests/bsc_dex_check_start.rs
+          fi
+          python "$RUNNER_TEMP/measure.py" "$RUNNER_TEMP/bsc-startup.json" "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bsc-startup-stack-${{ matrix.revision }}
+          path: ${{ runner.temp }}/bsc-startup.json
   base-v3-factory-directory:
     if: inputs.base_factory_directory
     runs-on: ubuntu-latest
@@ -195,7 +234,7 @@ jobs:
           name: ring-registered-markets
           path: ${{ runner.temp }}/ring-markets.json
   hanji-executor:
-    if: ${{ !inputs.native_v3_only }}
+    if: ${{ !inputs.native_v3_only && !inputs.stack_check_only }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

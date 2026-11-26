@@ -151,3 +151,37 @@ async fn invalid_during_pass_is_checked_as_soon_as_read() {
     p.reg.update(&f.reference, |e| e.valid = true);
     assert_eq!(fresh.due(&p, |_| false), vec![f.reference.clone()]);
 }
+
+/// Размеры измеряются на одной конфигурации BSC, без опроса будущих и без обращения к узлу.
+#[tokio::test]
+async fn bsc_startup_future_sizes() {
+    use arb::venues::bsc_dex::{
+        check::{quoter_block, quoter_cycle},
+        pools::load,
+        quote::quoter,
+    };
+    fn future_size<F: std::future::Future>(_: impl FnOnce() -> F) -> usize {
+        std::mem::size_of::<F>()
+    }
+    let parts = Parts::new(native_common::ctx("check-start-size").await);
+    let (tx, _) = tokio::sync::mpsc::channel(1);
+    let p = parts.pools(tx);
+    let (f, t) = &pools("CAKE")[0];
+    let e = read(f, t, false);
+    let first = &mut None;
+    let bytes = serde_json::json!({
+        "one":future_size(||quoter_cycle::one(&p,&f.reference,first)),
+        "at_head":future_size(||quoter_block::at_head(&p,&e)),
+        "refresh":future_size(||load::refresh(&p.ctx,&p.tokens,&p.reg,&e,1)),
+        "out_at":future_size(||quoter::out_at(&p.ctx,&e,e.coin,alloy_primitives::U256::from(1),"latest")),
+    });
+    if let Ok(path) = std::env::var("ARB_CHECK_SIZES") {
+        std::fs::write(path, bytes.to_string()).unwrap();
+    }
+    if let Ok(bound) = std::env::var("ARB_CHECK_BOUND") {
+        assert!(
+            bytes["one"].as_u64().unwrap() <= bound.parse::<u64>().unwrap(),
+            "{bytes}"
+        );
+    }
+}

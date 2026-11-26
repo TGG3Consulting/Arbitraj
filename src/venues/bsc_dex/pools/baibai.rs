@@ -77,36 +77,41 @@ pub(super) async fn verify_at(ctx: &Ctx, id: &str, tag: &Value) -> GatewayResult
         return Err(wrong());
     }
     let zero = Address::ZERO;
-    let (entry, book, vault, eb, ev, eq, be, bq, ve, vb) = tokio::try_join!(
-        identity(
-            ctx,
-            tag,
-            ENTRY,
-            ENTRY_IMPL,
-            b256!("1292147a441b4ad7c8c67aaeb97982096e9d5c932715ac102670c924ab4d698d")
-        ),
-        identity(
-            ctx,
-            tag,
-            BOOK,
-            address!("3e6abc41e9f41d7f6f7f26a6bf8851434fa69f1d"),
-            b256!("b1e5561b5f7f96f74142020fa5ee43ade3f6484f08c678d93eff103641d014a7")
-        ),
-        identity(
-            ctx,
-            tag,
-            VAULT,
-            address!("997b2d1b539dfccc9d42f2d10fe804f0ac9b3076"),
-            b256!("f824799c1dba49382fb6da460837c833572d0eaa73d4db0f7df3daf0ab5de107")
-        ),
-        view(ctx, tag, zero, ENTRY, IBai::curveBookCall {}),
-        view(ctx, tag, zero, ENTRY, IBai::custodianCall {}),
-        view(ctx, tag, zero, ENTRY, IBai::quoteTokenCall {}),
-        view(ctx, tag, zero, BOOK, IBai::entrypointCall {}),
-        view(ctx, tag, zero, BOOK, IBai::quoteTokenCall {}),
-        view(ctx, tag, zero, VAULT, IBai::entrypointCall {}),
-        view(ctx, tag, zero, VAULT, IBai::curveBookCall {}),
-    )?;
+    // Проверки трёх proxy содержат по три RPC. В куче живёт только работа BaiBai:
+    // её размер не входит в будущее общей сверки BSC и других протоколов.
+    let (entry, book, vault, eb, ev, eq, be, bq, ve, vb) = Box::pin(async {
+        tokio::try_join!(
+            identity(
+                ctx,
+                tag,
+                ENTRY,
+                ENTRY_IMPL,
+                b256!("1292147a441b4ad7c8c67aaeb97982096e9d5c932715ac102670c924ab4d698d")
+            ),
+            identity(
+                ctx,
+                tag,
+                BOOK,
+                address!("3e6abc41e9f41d7f6f7f26a6bf8851434fa69f1d"),
+                b256!("b1e5561b5f7f96f74142020fa5ee43ade3f6484f08c678d93eff103641d014a7")
+            ),
+            identity(
+                ctx,
+                tag,
+                VAULT,
+                address!("997b2d1b539dfccc9d42f2d10fe804f0ac9b3076"),
+                b256!("f824799c1dba49382fb6da460837c833572d0eaa73d4db0f7df3daf0ab5de107")
+            ),
+            view(ctx, tag, zero, ENTRY, IBai::curveBookCall {}),
+            view(ctx, tag, zero, ENTRY, IBai::custodianCall {}),
+            view(ctx, tag, zero, ENTRY, IBai::quoteTokenCall {}),
+            view(ctx, tag, zero, BOOK, IBai::entrypointCall {}),
+            view(ctx, tag, zero, BOOK, IBai::quoteTokenCall {}),
+            view(ctx, tag, zero, VAULT, IBai::entrypointCall {}),
+            view(ctx, tag, zero, VAULT, IBai::curveBookCall {}),
+        )
+    })
+    .await?;
     if !entry
         || !book
         || !vault

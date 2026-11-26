@@ -199,8 +199,9 @@ mod tests {
                         assert!(
                             snapshot["contracts"][text.to_ascii_lowercase()]["bytes"]
                                 .as_u64()
-                                .unwrap()
-                                > 0
+                                .is_some_and(|size| size > 0),
+                            "{} / {} / {k}: нет записи о коде адреса {text}",
+                            p.network, p.id
                         );
                     } else if k == "dex.pool_code_hashes" {
                         assert!(

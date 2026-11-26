@@ -26,6 +26,13 @@ impl Bucket {
         {
             return Err("Не установлены биржа, торговый счёт или валюта".into());
         }
+        if self.venue.trim() != self.venue
+            || self.account.trim() != self.account
+            || self.currency.trim() != self.currency
+            || self.currency != self.currency.to_ascii_uppercase()
+        {
+            return Err("Для счёта и валюты требуются канонические идентификаторы адаптера".into());
+        }
         serde_json::to_string(&(&self.venue, &self.account, &self.currency))
             .map_err(|e| e.to_string())
     }
@@ -103,7 +110,7 @@ pub async fn admit(
     bucket: &Bucket,
     claim: Claim,
     free: Balance,
-    holds: Holds,
+    read_holds: impl FnOnce(&Connection) -> Result<Holds, String> + Send + 'static,
 ) -> Result<Admission, String> {
     let key = bucket.key()?;
     if [&claim.action, &claim.client, &claim.deal]
@@ -126,6 +133,9 @@ pub async fn admit(
             stmt.query_map([&key],decode)?.collect::<Result<Vec<_>,_>>()?
         };
         rows.push(Row{claim:claim.clone(),settled:None});
+        let holds=match read_holds(&tx) {
+            Ok(holds)=>holds, Err(reason)=>return Ok(Err(reason)),
+        };
         match balance::covers(&free,&holds,&rows){
             Err(e)=>return Ok(Err(e)),
             Ok(false)=>return Ok(Ok(Admission::Insufficient)),

@@ -52,14 +52,14 @@ async fn concurrent_normal_and_mixed_100_cannot_both_send_80_and_restart_keeps_o
             &b,
             claim("normal", 80, false),
             snapshot(&b, 0, 100),
-            Holds::default()
+            |_| Ok(Holds::default())
         ),
         admit(
             l,
             &b,
             claim("mixed", 80, true),
             snapshot(&b, 0, 100),
-            Holds::default()
+            |_| Ok(Holds::default())
         )
     );
     let (first, mixed, next) = match (a.unwrap(), z.unwrap()) {
@@ -74,9 +74,11 @@ async fn concurrent_normal_and_mixed_100_cannot_both_send_80_and_restart_keeps_o
     let mut retry = claim(first, 80, mixed);
     retry.client = "новый ID, который адаптер успел подготовить при повторе".into();
     assert_eq!(
-        admit(l, &b, retry, snapshot(&b, rev, 100), Holds::default())
-            .await
-            .unwrap(),
+        admit(l, &b, retry, snapshot(&b, rev, 100), |_| Ok(
+            Holds::default()
+        ))
+        .await
+        .unwrap(),
         Admission::Inspect(format!("client-{first}"))
     );
     assert_eq!(
@@ -85,7 +87,7 @@ async fn concurrent_normal_and_mixed_100_cannot_both_send_80_and_restart_keeps_o
             &b,
             claim(next, 80, !mixed),
             snapshot(&b, rev, 100),
-            Holds::default()
+            |_| Ok(Holds::default())
         )
         .await
         .unwrap(),
@@ -97,7 +99,7 @@ async fn concurrent_normal_and_mixed_100_cannot_both_send_80_and_restart_keeps_o
             &b,
             claim(next, 9920, !mixed),
             snapshot(&b, rev, 10000),
-            Holds::default()
+            |_| Ok(Holds::default())
         )
         .await
         .unwrap(),
@@ -134,7 +136,7 @@ async fn terminal_partial_spend_includes_fee_until_this_balance_books_the_exact_
             &b,
             claim("one", 80, false),
             snapshot(&b, 0, 100),
-            Holds::default()
+            |_| Ok(Holds::default())
         )
         .await
         .unwrap(),
@@ -159,7 +161,7 @@ async fn terminal_partial_spend_includes_fee_until_this_balance_books_the_exact_
             &b,
             claim("blocked", 19, false),
             snapshot(&b, rev, 50),
-            Holds::default()
+            |_| Ok(Holds::default())
         )
         .await
         .unwrap(),
@@ -172,9 +174,11 @@ async fn terminal_partial_spend_includes_fee_until_this_balance_books_the_exact_
         debit: money(32),
     });
     assert_eq!(
-        admit(l, &b, claim("second", 68, false), s, Holds::default())
-            .await
-            .unwrap(),
+        admit(l, &b, claim("second", 68, false), s, |_| Ok(
+            Holds::default()
+        ))
+        .await
+        .unwrap(),
         Admission::Insufficient
     );
     let mut s = snapshot(&b, rev, 68);
@@ -184,9 +188,11 @@ async fn terminal_partial_spend_includes_fee_until_this_balance_books_the_exact_
         debit: money(32),
     });
     assert_eq!(
-        admit(l, &b, claim("second", 68, false), s, Holds::default())
-            .await
-            .unwrap(),
+        admit(l, &b, claim("second", 68, false), s, |_| Ok(
+            Holds::default()
+        ))
+        .await
+        .unwrap(),
         Admission::Send
     );
     drop(db);
@@ -226,4 +232,32 @@ fn mixed_open_budget_and_its_cash_order_share_the_original_cap() {
         });
         assert!(balance::covers(&s, &budget(invested), &settled).unwrap());
     }
+}
+
+#[tokio::test]
+async fn a_return_pledged_after_http_balance_is_seen_by_the_admission_transaction() {
+    let path = file("late-hold");
+    let b = bucket();
+    let db = Db::open(&path).unwrap();
+    let l = db.ledger();
+    let s = snapshot(&b, epoch(l, &b).await.unwrap(), 100);
+    l.write(|c|c.execute("INSERT INTO core_state(kind,id,body,updated_at) VALUES('test_return','original','30','test')",[])).await.unwrap();
+    let funds = |c: &Connection| {
+        let amount:i64=c.query_row("SELECT CAST(body AS INTEGER) FROM core_state WHERE kind='test_return' AND id='original'",[],|r|r.get(0)).map_err(|e|e.to_string())?;
+        Ok(Holds {
+            other: money(amount),
+            funding: vec![],
+        })
+    };
+    assert_eq!(
+        admit(l, &b, claim("too-late", 80, false), s, funds)
+            .await
+            .unwrap(),
+        Admission::Insufficient
+    );
+    let mut lower = b;
+    lower.currency = "usdt".into();
+    assert!(epoch(l, &lower).await.is_err());
+    drop(db);
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }

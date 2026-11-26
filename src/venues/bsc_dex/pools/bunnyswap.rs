@@ -17,6 +17,7 @@ sol! {
     interface IRabbit {
         function pair() external view returns(address);
         function router() external view returns(address);
+        function isOpen(bytes4 selector) external view returns(bool);
         function owner() external view returns(address);
         function feeTier() external view returns(uint64);
         function protocolFee() external view returns(uint64);
@@ -200,4 +201,60 @@ pub(crate) fn decode(e: &Entry, raw: &[u8]) -> Option<U256> {
         return None;
     }
     IRabbit::getAmountOutCall::abi_decode_returns(&rows.next()?.ok()?).ok()
+}
+
+/// Штатный роутер проверяет минимум FRIEND до перевода. Подтверждаем точный перевод в неизменяемом коде Points.
+pub(crate) async fn native_state(ctx: &Ctx, e: &Entry, at: &Value) -> GatewayResult<PoolState> {
+    fresh(ctx, e, at).await?;
+    let (token, _) = tokens(ctx, e.family)?;
+    let fail = || {
+        ctx.err(
+            ErrorCode::QuoteMismatch,
+            "RabbitRouter: код FRIEND или разрешение передачи не подтверждено",
+        )
+    };
+    if ctx.chain_id() != Some(8453)
+        || token != alloy_primitives::address!("0bd4887f7d41b35cd75dff9ffee2856106f86670")
+    {
+        return Err(fail());
+    }
+    let opened = |s: &[u8]| IRabbit::isOpenCall {
+        selector: alloy_primitives::FixedBytes::<4>::from_slice(&keccak256(s)[..4]),
+    };
+    let open = [
+        opened(b"transfer(address,uint256)"),
+        opened(b"transferFrom(address,address,uint256)"),
+        opened(b"approve(address,uint256)"),
+    ];
+    let pool = e.pool.reference.address();
+    let [code, admin, t, tf, a, r] = batch::read(
+        ctx,
+        [
+            ("eth_getCode", json!([token, at])),
+            batch::view(at, token, IRabbit::ownerCall {}),
+            batch::view(at, token, open[0].clone()),
+            batch::view(at, token, open[1].clone()),
+            batch::view(at, token, open[2].clone()),
+            batch::view(at, pool, Pair::getReservesCall {}),
+        ],
+    )
+    .await?;
+    if keccak256(&code)
+        != alloy_primitives::b256!(
+            "358aa3e7ee950f58863c601550d37477d36b1dd76c1ce15342ac6649acf9caa8"
+        )
+        || !batch::decode(&admin, IRabbit::ownerCall {})?.is_zero()
+    {
+        return Err(fail());
+    }
+    for (reply, call) in [t, tf, a].into_iter().zip(open) {
+        if !batch::decode(&reply, call)? {
+            return Err(fail());
+        }
+    }
+    let r = batch::decode(&r, Pair::getReservesCall {})?;
+    Ok(PoolState::V2 {
+        reserve0: U256::from(r.reserve0),
+        reserve1: U256::from(r.reserve1),
+    })
 }

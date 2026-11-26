@@ -54,6 +54,7 @@ pub fn pool_id_raw(address: Address, topics: &[B256], data: &[u8]) -> Option<B25
     }
     let second = [
         C::PositionUpdated::SIGNATURE_HASH,
+        super::ekubo_v2::position_topic(),
         C::PositionFeesCollected::SIGNATURE_HASH,
     ];
     let first = [

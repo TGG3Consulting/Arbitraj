@@ -109,7 +109,7 @@ pub async fn run(
     // симулированный блок — время головы + 1 с (решение 127, check/sim_base.rs): у пробы есть срок (deadline роутера),
     // с +12 с узла BSC проба падала бы при dex.deadline_s ≤ 12.
     let (at, now) = sim_base::head(ctx, heads).await?;
-    let vista = if super::super::quote::vista_pricing::is_vista(e) {
+    let vista = if super::super::quote::vista_pricing::native_router(e) {
         Box::pin(super::vista_probe::Probe::of(ctx, e, at.number, wallet))
             .await?
             .map(Box::new)

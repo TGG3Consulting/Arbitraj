@@ -65,6 +65,7 @@ pub fn swap(
         )
     };
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::Virtuals(s), PoolKind::V2) => super::super::math::virtuals::quote(s,token_in,exact_in,amount).ok_or_else(none),
         (PoolState::Memebox(s), PoolKind::V2) => super::super::math::memebox::quote(s,zero_for_one,exact_in,amount)
             .map(|(fill,_)|fill).ok_or_else(none),
         (PoolState::CandySwap(s), PoolKind::V2) => {

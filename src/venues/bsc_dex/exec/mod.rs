@@ -32,6 +32,7 @@ pub mod cycle_steps;
 pub mod cycle_trade;
 pub(super) mod delta_direct;
 pub(super) mod vault_direct;
+mod ekubo_v2_direct;
 pub mod dry_build;
 pub mod dry_build_once;
 pub mod dry_checks;

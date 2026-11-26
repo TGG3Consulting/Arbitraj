@@ -26,15 +26,16 @@ sol! {interface IMoney {
     function allowance(address owner,address spender) external view returns(uint256);
 }}
 #[derive(Clone)]
-pub(super) struct V5Step {
+pub(in crate::venues::bsc_dex) struct V5Step {
     pub native: Option<(Address, bool)>,
     pub kind: u8,
     pub pool: Address,
     pub data: Bytes,
 }
 #[derive(Clone)]
-pub(super) enum Wire {
+pub(in crate::venues::bsc_dex) enum Wire {
     Router02,
+    EkuboV2(super::super::pools::ekubo_v2::OrderKey),
     DirectModule { pool: Address },
     Vault(B256),
     Vista(super::super::exec::vista_wire::Call),
@@ -43,7 +44,7 @@ pub(super) enum Wire {
 }
 
 #[derive(Clone)]
-pub(super) struct Order {
+pub(in crate::venues::bsc_dex) struct Order {
     pub payer: Address,
     pub target: Address,
     pub input: Address,
@@ -53,18 +54,20 @@ pub(super) struct Order {
     pub wire: Wire,
 }
 
-pub(super) struct Fill {
+pub(in crate::venues::bsc_dex) struct Fill {
     pub received: U256,
     pub swap_gas: u64,
     pub approval: (u64, usize),
 }
-pub(super) async fn measure(ctx: &Ctx, h: Head, o: Order, boundary: bool) -> GatewayResult<Fill> {
+pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, boundary: bool) -> GatewayResult<Fill> {
     let fail = || {
         ctx.err(
             ErrorCode::QuoteMismatch,
             "V2: средства, газ или поступление обмена не подтверждены",
         )
     };
+    let mut o=o;
+    if let Wire::EkuboV2(key)=&mut o.wire {key.amount=i128::try_from(o.amount).ok().filter(|n|*n>0).ok_or_else(fail)?;}
     let tx = |to, input| Call {
         from: o.payer,
         to,
@@ -217,6 +220,7 @@ pub(super) async fn measure(ctx: &Ctx, h: Head, o: Order, boundary: bool) -> Gat
 
 fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
     match &o.wire {
+        Wire::EkuboV2(key) => key.calldata(minimum,deadline),
         Wire::Vault(id) => super::super::exec::vault_direct::data(
             *id, o.input, o.output, o.amount, minimum, o.payer, deadline,
         ),

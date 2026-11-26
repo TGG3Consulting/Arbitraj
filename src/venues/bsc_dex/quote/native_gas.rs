@@ -33,7 +33,7 @@ pub fn cost(q: &Quoting, quote: &Quote, gas_wei: U256) -> GatewayResult<Option<(
         .route
         .as_ref()
         .ok_or_else(|| ctx.err(ErrorCode::Internal, "у котировки нет маршрута"))?;
-    if route.legs.len()==1 && route.legs[0].hops.len()==1 && q.reg.entry(&route.legs[0].hops[0].pool).is_some_and(|e|super::vista_pricing::is_vista(&e)) {return Ok(None);}
+    if route.legs.len()==1 && route.legs[0].hops.len()==1 && q.reg.entry(&route.legs[0].hops[0].pool).is_some_and(|e|super::vista_pricing::is_vista(&e) || (route.mode==crate::core::types::RouteMode::Direct && super::vista_pricing::native_router(&e))) {return Ok(None);}
     // Наибольший замер по каждому роутеру (графовый маршрут) или один на всю транзакцию (прямой/умный, исполнитель).
     let via_exec = matches!(
         super::super::exec::executor::takes(ctx, &q.reg, route, true),

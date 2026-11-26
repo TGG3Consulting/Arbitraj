@@ -29,6 +29,31 @@ use alloy_primitives::Address;
 pub(in crate::venues::bsc_dex) fn is_vista(e: &Entry) -> bool {
     e.family.variant == Variant::EtherVista
 }
+pub(in crate::venues::bsc_dex) fn native_router(e: &Entry) -> bool {
+    matches!(e.family.variant, Variant::EtherVista | Variant::BunnySwap)
+}
+pub(in crate::venues::bsc_dex) fn rabbit_wire(
+    ctx: &Ctx,
+    e: &Entry,
+    input: Address,
+) -> GatewayResult<(Address, Call)> {
+    let (friend, wrapped) = super::super::pools::bunnyswap::tokens(ctx, e.family)?;
+    let form = if input == wrapped {
+        Form::RabbitEthIn
+    } else if input == friend {
+        Form::RabbitEthOut
+    } else {
+        return Err(ctx.err(ErrorCode::NoRoute, "RabbitRouter: неизвестная сторона пула"));
+    };
+    Ok((
+        ctx.dex_addr("dex.quoter", e.family.id)?,
+        Call {
+            form,
+            wrapped,
+            fee: alloy_primitives::U256::ZERO,
+        },
+    ))
+}
 pub(in crate::venues::bsc_dex) use super::vista_cash::{cash, cash_market, terminal_cash};
 pub(in crate::venues::bsc_dex) fn form(native: bool, input: Address, wrapped: Address) -> Form {
     if !native {
@@ -100,7 +125,35 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, h: Option<Head>) -> Vec<O
     let is_native = native_cash || native::is_native(&q.ctx, &i.asset);
     let input = if i.side == Side::Buy { i.usdt } else { i.coin };
     let mut out = Vec::new();
-    for entry in i.entries.iter().filter(|e| is_vista(e)) {
+    for entry in i.entries.iter().filter(|e| native_router(e)) {
+        if entry.family.variant == Variant::BunnySwap {
+            if !is_native {
+                continue;
+            }
+            let mut e = entry.clone();
+            if let Some(head) = h {
+                let Ok(state) =
+                    super::super::pools::bunnyswap::native_state(&q.ctx, &e, &head.selector())
+                        .await
+                else {
+                    continue;
+                };
+                e.pool.state = state;
+                e.pool.block = head.number.to();
+            }
+            let Ok((target, call)) = rabbit_wire(&q.ctx, &e, input) else {
+                continue;
+            };
+            let spec = Execution {
+                mode: RouteMode::Direct,
+                target,
+                wire: Wire::Vista(call),
+            };
+            if let Ok(option) = v2_execution::option(q, i, e, payer, spec, h).await {
+                out.push(option);
+            }
+            continue;
+        }
         let e = entry.clone();
         let PoolState::EtherVista(cached) = &e.pool.state else {
             continue;

@@ -33,6 +33,7 @@ struct Plan {
     core: Address,
     index: Address,
     known: Option<Key>,
+    state_slot:B256,
 }
 
 /// Проверка пачки кандидатов Ekubo частями по `size` вызовов. Возвращает: итог по каждому. Ошибок нет.
@@ -45,15 +46,19 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
             let core = ctx
                 .dex_addr("dex.ekubo_core", c.family.id)
                 .map_err(|e| e.message)?;
-            let index = ctx
-                .dex_addr("dex.ekubo_key_index", c.family.id)
-                .map_err(|e| e.message)?;
             let known = ekubo_keys::get(ctx.place.id, id);
+            let (index,state_slot) = if c.family.variant == super::family_variant::Variant::EkuboV2 {
+                if known.is_none() { return Err("Для V2 требуется ключ из события PoolInitialized выбранного Core".into()); }
+                (Address::ZERO,super::ekubo_v2::state_slot(id))
+            } else {
+                (ctx.dex_addr("dex.ekubo_key_index",c.family.id).map_err(|e|e.message)?,id)
+            };
             Ok(Plan {
                 id,
                 core,
                 index,
                 known,
+                state_slot,
             })
         })();
         if let Ok(p) = &plan {
@@ -61,7 +66,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
                 let key = IEkuboKeyIndex::poolKeyByIdCall { poolId: p.id }.abi_encode();
                 calls.push((p.index, Bytes::from(key)));
             }
-            calls.push((p.core, sload_data(&[p.id])));
+            calls.push((p.core, sload_data(&[p.state_slot])));
         }
         plans.push(plan);
     }

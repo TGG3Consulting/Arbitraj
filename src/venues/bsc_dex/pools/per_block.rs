@@ -92,6 +92,7 @@ pub fn needs(f: &Family) -> bool {
     if matches!(
         f.variant,
         super::family_variant::Variant::SlipstreamDynamicFee
+            | Variant::Virtuals
             | Variant::Memebox
             | Variant::CandySwap
             | Variant::V2Create2LiveFee

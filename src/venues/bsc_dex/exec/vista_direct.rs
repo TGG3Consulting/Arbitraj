@@ -36,26 +36,33 @@ pub(super) async fn plan(
     let generation = ctx.settings.generation();
     let o = &s.order;
     let wrapped = ctx.addr("dex.native_wrapped")?;
-    let mut form = vista_pricing::form(native(), o.token_in, wrapped);
-    if NATIVE.try_with(|v| v.1).unwrap_or(false) {
-        if form != Form::ModuleEthOut {
-            return Err(ctx.err(
-                ErrorCode::NoRoute,
-                "Выбранный нативный выход EtherVista не соответствует токенам",
-            ));
-        }
-        form = Form::OfficialEthOut;
-    }
     let h = white_state::head(ctx, "latest").await?;
-    let m = vista_pricing::market(ctx, &s.entry, h, form).await?;
-    let (target, call) = vista_pricing::wire(ctx, &s.entry, o.token_in, &m, form)?;
+    let (target, call) =
+        if s.entry.family.variant == super::super::pools::family_variant::Variant::BunnySwap {
+            super::super::pools::bunnyswap::native_state(ctx, &s.entry, &h.selector()).await?;
+            vista_pricing::rabbit_wire(ctx, &s.entry, o.token_in)?
+        } else {
+            let mut form = vista_pricing::form(native(), o.token_in, wrapped);
+            if NATIVE.try_with(|v| v.1).unwrap_or(false) {
+                if form != Form::ModuleEthOut {
+                    return Err(ctx.err(
+                        ErrorCode::NoRoute,
+                        "Выбранный нативный выход EtherVista не соответствует токенам",
+                    ));
+                }
+                form = Form::OfficialEthOut;
+            }
+            let m = vista_pricing::market(ctx, &s.entry, h, form).await?;
+            vista_pricing::wire(ctx, &s.entry, o.token_in, &m, form)?
+        };
+    let form = call.form;
     if form == Form::OfficialEthOut && o.min_out.checked_add(call.fee).is_none() {
         return Err(ctx.err(
             ErrorCode::QuoteMismatch,
             "Валовой минимум EtherVista не помещается в wei",
         ));
     }
-    let approvals = if form == Form::OfficialEthIn {
+    let approvals = if matches!(form, Form::OfficialEthIn | Form::RabbitEthIn) {
         Vec::new()
     } else if all {
         approve::fork_all(ctx, o.token_in, target, o.amount_in)?
@@ -99,7 +106,12 @@ pub(super) fn proof(plan: &Plan) -> Option<super::vista_fact::Proof> {
     let Some(DirectCall::Vista {
         call:
             call @ Call {
-                form: Form::OfficialEthIn | Form::ModuleEthOut | Form::OfficialEthOut,
+                form:
+                    Form::OfficialEthIn
+                    | Form::ModuleEthOut
+                    | Form::OfficialEthOut
+                    | Form::RabbitEthIn
+                    | Form::RabbitEthOut,
                 ..
             },
         input,

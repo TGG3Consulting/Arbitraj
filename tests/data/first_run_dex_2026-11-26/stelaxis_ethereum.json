@@ -1,0 +1,299 @@
+{
+  "chain_id": 1,
+  "venue": "0x77047af6cd8f7f84d96a020a2833d24916b75fde",
+  "implementation": "0x5922cad27c88e4d9d8701a2706229072768a707a",
+  "oracle": "0x07f04d0346a8b8584d4c35d88b4af42de34d8e71",
+  "registry": "0xda7afeed021eafc1c1af9c362de477dad0396b81",
+  "hashes": {
+    "proxy": "0x18f95d772587f01e910a390c7b48d767fbfa7726584405e8277da572b72f9386",
+    "implementation": "0x3c862f988d985ad57bace1d9d1d659ec37b946f7c8decf260ae5fb8865e95c79",
+    "oracle": "0x98ac3ce95feebea3451fa8e65986ff39f2bc54f72ead8e631d3565f64982d9ff",
+    "registry": "0xcc6b013888e9bc9bb487c5301fff645b5d91007cf88053d145963921f6e2d026"
+  },
+  "directory": {
+    "block": 26494988,
+    "selector": {
+      "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "requireCanonical": true
+    },
+    "pairs": [
+      [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      [
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+      ],
+      [
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ]
+    ],
+    "activity": {
+      "isActive:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "quote:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": {
+        "code": 3,
+        "message": "execution reverted",
+        "data": "0x9c3d724b"
+      },
+      "isActive:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2:0xdac17f958d2ee523a2206206994597c13d831ec7": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "quote:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2:0xdac17f958d2ee523a2206206994597c13d831ec7": {
+        "code": 3,
+        "message": "execution reverted",
+        "data": "0x9c3d724b"
+      },
+      "isActive:0x2260fac5e5542a773aa44fbcfedf7c193bc2c599:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "quote:0x2260fac5e5542a773aa44fbcfedf7c193bc2c599:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": {
+        "code": 3,
+        "message": "execution reverted",
+        "data": "0x9c3d724b"
+      },
+      "isActive:0x2260fac5e5542a773aa44fbcfedf7c193bc2c599:0xdac17f958d2ee523a2206206994597c13d831ec7": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "quote:0x2260fac5e5542a773aa44fbcfedf7c193bc2c599:0xdac17f958d2ee523a2206206994597c13d831ec7": {
+        "code": 3,
+        "message": "execution reverted",
+        "data": "0x9c3d724b"
+      },
+      "isActive:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48:0xdac17f958d2ee523a2206206994597c13d831ec7": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "quote:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48:0xdac17f958d2ee523a2206206994597c13d831ec7": {
+        "code": 3,
+        "message": "execution reverted",
+        "data": "0x9c3d724b"
+      },
+      "isActive:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "quote:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": {
+        "code": 3,
+        "message": "execution reverted",
+        "data": "0x9c3d724b"
+      },
+      "isActive:0xdac17f958d2ee523a2206206994597c13d831ec7:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "quote:0xdac17f958d2ee523a2206206994597c13d831ec7:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": {
+        "code": 3,
+        "message": "execution reverted",
+        "data": "0x9c3d724b"
+      },
+      "isActive:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48:0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "quote:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48:0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": {
+        "code": 3,
+        "message": "execution reverted",
+        "data": "0x9c3d724b"
+      },
+      "isActive:0xdac17f958d2ee523a2206206994597c13d831ec7:0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "quote:0xdac17f958d2ee523a2206206994597c13d831ec7:0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": {
+        "code": 3,
+        "message": "execution reverted",
+        "data": "0x9c3d724b"
+      },
+      "isActive:0xdac17f958d2ee523a2206206994597c13d831ec7:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "quote:0xdac17f958d2ee523a2206206994597c13d831ec7:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": {
+        "code": 3,
+        "message": "execution reverted",
+        "data": "0x9c3d724b"
+      }
+    }
+  },
+  "window": {
+    "first": 26494739,
+    "last": 26494988,
+    "events": 100,
+    "blocks_with_fills": 60,
+    "payer_count": 49,
+    "counts_50": [
+      34,
+      9,
+      14,
+      16,
+      27
+    ],
+    "blocks_with_fills_by_builder": {
+      "BuilderNet": 7,
+      "other": 27,
+      "Titan": 22,
+      "ambiguous": 4
+    }
+  },
+  "slot_examples": [
+    [
+      26494985,
+      "0xe341275017616bdaf3f39995827fdf002717c4fc7650667f321a8c4d60d4d238",
+      "0x396343362be2a4da1ce0c1c210945346fb82aa49",
+      "other",
+      [
+        {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": "0x000000000000000000000000000000000000000000000000000000000101ada0"
+        }
+      ]
+    ],
+    [
+      26494977,
+      "0xe5e1ef6ab0b5d1ac1ddee143dc246365a87c452330c2d6b0b60eb7efbf1ae8a0",
+      "0xdadb0d80178819f2319190d340ce9a924f783711",
+      "BuilderNet",
+      [
+        {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x9c3d724b"
+          }
+        }
+      ]
+    ],
+    [
+      26494971,
+      "0xc381a57379b043bfb2deec84d2b25361646206fd588637a0b4429845bddc0d10",
+      "0x4838b106fce9647bdf1e7877bf73ce8b0bad5f97",
+      "other",
+      [
+        {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x9c3d724b"
+          }
+        }
+      ]
+    ],
+    [
+      26494964,
+      "0x200ec61f56d6e4c8ce388cdbb10e1c41150db3f089a01d6fc3eda6e4efa4e54d",
+      "0x4838b106fce9647bdf1e7877bf73ce8b0bad5f97",
+      "Titan",
+      [
+        {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": "0x000000000000000000000000000000000000000000000000000000000101e900"
+        }
+      ]
+    ],
+    [
+      26494763,
+      "0xdcdacd4cc06e9cc857f4891df312bf21033382d4412c090d72106f828db629d6",
+      "0x4838b106fce9647bdf1e7877bf73ce8b0bad5f97",
+      "ambiguous",
+      [
+        {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "error": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x9c3d724b"
+          }
+        }
+      ]
+    ]
+  ],
+  "receipt": {
+    "block_hash": "0xe341275017616bdaf3f39995827fdf002717c4fc7650667f321a8c4d60d4d238",
+    "transaction": "0xcc93e7d627b113f22a0c9aad8a73cff8dc03af76af9d309a85329397594a8d1d",
+    "event": {
+      "address": "0x77047af6cd8f7f84d96a020a2833d24916b75fde",
+      "topics": [
+        "0x1eeaa4acf3c225a4033105c2647625dbb298dec93b14e16253c4231e26c02b1d",
+        "0x000000000000000000000000addc26a3854feabfd20d6bf658254088d83a425a",
+        "0x000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7",
+        "0x000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "data": "0x0000000000000000000000000000000000000000000000000000000008eb18a8000000000000000000000000000000000000000000000000013ab29d23050f2a000000000000000000000000addc26a3854feabfd20d6bf658254088d83a425a",
+      "blockNumber": "0x1944809",
+      "transactionHash": "0xcc93e7d627b113f22a0c9aad8a73cff8dc03af76af9d309a85329397594a8d1d",
+      "transactionIndex": "0x6b",
+      "blockHash": "0xe341275017616bdaf3f39995827fdf002717c4fc7650667f321a8c4d60d4d238",
+      "logIndex": "0xd2",
+      "blockTimestamp": "0x6b0757b3",
+      "removed": false
+    },
+    "venue_call": "0x9e51844f000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000000000000000000000000000000000000000000000000000000008eb18a8000000000000000000000000000000000000000000000000011b616f4e22f549000000000000000000000000000000000000000000000000000000006b0758d00000000000000000000000000000000000000000000000000000000000000000",
+    "venue_result": "0x000000000000000000000000000000000000000000000000013ab29d23050f2a0000000000000000000000000000000000000000000000000000000000000000",
+    "registry_call": {
+      "caller": "0x07f04d0346a8b8584d4c35d88b4af42de34d8e71",
+      "target": "0xda7afeed021eafc1c1af9c362de477dad0396b81",
+      "calldata": "0x16c83adc0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006b0757b3000000000000000000000000000000000000000000000000000000006b0757b3"
+    },
+    "trace_source": "https://eth.blockscout.com/api/v2/transactions/0xcc93e7d627b113f22a0c9aad8a73cff8dc03af76af9d309a85329397594a8d1d/raw-trace",
+    "transaction_from": "0x1deb1af72b407a8d99e32fcf75088469e30dc988",
+    "transaction_to": "0x0000000000001ff3684f28c67538d4d072c22734",
+    "transaction_index": 107,
+    "height": 26494985,
+    "event_payer": "0xaddc26a3854feabfd20d6bf658254088d83a425a",
+    "recipient": "0xaddc26a3854feabfd20d6bf658254088d83a425a",
+    "token_in": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+    "token_out": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    "paid": "149625000",
+    "received": "88579530654289706",
+    "transfers": [
+      {
+        "token": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "sender": "0xaddc26a3854feabfd20d6bf658254088d83a425a",
+        "recipient": "0x77047af6cd8f7f84d96a020a2833d24916b75fde",
+        "amount": "149625000",
+        "log_index": 207
+      },
+      {
+        "token": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "sender": "0x77047af6cd8f7f84d96a020a2833d24916b75fde",
+        "recipient": "0xb5378cf59f35e6e8bf5679ec6c22d1c5ff912433",
+        "amount": "149625000",
+        "log_index": 208
+      },
+      {
+        "token": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "sender": "0xb5378cf59f35e6e8bf5679ec6c22d1c5ff912433",
+        "recipient": "0xaddc26a3854feabfd20d6bf658254088d83a425a",
+        "amount": "88579530654289706",
+        "log_index": 209
+      }
+    ]
+  },
+  "sources": {
+    "volume": "https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/stelaxis/index.ts",
+    "public_interface": "https://github.com/lambdaclass/propamm-router-contracts/blob/d6e41d3d6f3bf9f8ec78dfea5957f81b7bed467b/src/interfaces/IPropAMM.sol",
+    "buildernet": "https://buildernet.org/docs/api",
+    "titan": "https://docs.titanbuilder.xyz/propamms",
+    "api": "https://stelaxis.com/api/",
+    "registry": "https://sourcify.dev/server/v2/contract/1/0xda7afeed021eafc1c1af9c362de477dad0396b81"
+  },
+  "scope": "Публичные канонические чтения и квитанция другой операции. Доступ кошелька бота и будущая выплата не установлены."
+}

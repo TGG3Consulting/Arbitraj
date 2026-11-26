@@ -15,6 +15,8 @@
 pub enum Variant {
     /// Исходник, по которому сделан вид (поведение без изменений).
     Base,
+    /// Ethereum V2 singleton and its official full-input router.
+    EkuboV2,
     /// Hydrex Integral Base: после Swap плагин может обменять собственные комиссии в том же пуле по отдельному тарифу.
     HydrexIntegral,
     /// Nami v4: обновляемый plugin может исполнить дополнительный обмен в стороннем пуле.
@@ -82,6 +84,8 @@ pub enum Variant {
     BalancerVaultWallet,
     Memebox,
     BunnySwap,
+    /// Launch Bonding with virtual reserves and tax on the VIRTUAL side.
+    Virtuals,
     /// EIP-2535 с отдельной привязкой исполняемого селектора фабрики и Router02.
     DiamondV2,
     /// Пара проверяется по фабрике CREATE и коду исполнения; общий прокси с Router02.
@@ -184,6 +188,7 @@ impl Variant {
 /// Вариант по значению dex.kind. Принимает: значение dex.kind. Возвращает: вариант (неизвестное — Base). Ошибок нет.
 pub fn of(kind: &str) -> Variant {
     match kind {
+        "ekubo_v2_router" => Variant::EkuboV2,
         "solidly_v1_generator" => Variant::SolidlyGenerator,
         "ring_few_v2" => Variant::RingFew,
         "lb_v21_clone" => Variant::LbV21Clone,
@@ -221,6 +226,7 @@ pub fn of(kind: &str) -> Variant {
         "v2_fork_executor_create2" => Variant::V2Create2,
         "v2_diamond_router" => Variant::DiamondV2,
         "v2_diamond_create" => Variant::KewlV2,
+        "virtuals_bonding" | "virtuals_bonding_module" | "virtuals_unicorn" | "virtuals_unicorn_module" => Variant::Virtuals,
         "bunnyswap" | "bunnyswap_module" => Variant::BunnySwap,
         "memebox" | "memebox_v5" => Variant::Memebox,
         "candyswap_v2" => Variant::CandySwap,

@@ -40,6 +40,12 @@ impl Proof {
                 IVistaFlow::swapExactTokensForETHSupportingFeeOnTransferTokensCall::abi_decode(data)
                     .map(|p| p.deadline)
             }
+            Form::RabbitEthIn => {
+                IVistaFlow::swapExactETHForTokensCall::abi_decode(data).map(|p| p.deadline)
+            }
+            Form::RabbitEthOut => {
+                IVistaFlow::swapExactTokensForETHCall::abi_decode(data).map(|p| p.deadline)
+            }
             Form::ModuleEthOut => IVistaFlow::swapNativeCall::abi_decode(data).map(|p| p.deadline),
             Form::ModuleToken => return false,
         };
@@ -108,6 +114,17 @@ impl Proof {
             }
         };
         let (spent, received) = match self.call.form {
+            Form::RabbitEthIn if self.call.wrapped == input => {
+                let deposited = native::moved_logs(logs, input, self.target, Side::Sell);
+                if deposited != self.amount {
+                    return None;
+                }
+                (deposited, net(output, true)?)
+            }
+            Form::RabbitEthOut if self.call.wrapped == output => (
+                net(input, false)?,
+                native::moved_logs(logs, output, self.target, Side::Buy),
+            ),
             Form::OfficialEthIn if self.call.wrapped == input => {
                 let wrapped = native::moved_logs(logs, input, self.target, Side::Sell);
                 if wrapped.is_zero() || wrapped > self.amount {

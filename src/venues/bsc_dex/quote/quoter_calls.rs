@@ -44,6 +44,9 @@ pub fn request(
     token_in: Address,
     amount: U256,
 ) -> GatewayResult<(Address, Bytes)> {
+    if e.family.variant==super::super::pools::family_variant::Variant::Virtuals {
+        return super::super::pools::virtuals::quote(ctx,e,token_in,amount);
+    }
     if e.family.variant==super::super::pools::family_variant::Variant::BunnySwap {
         return super::super::pools::bunnyswap::quote(ctx,e,token_in,amount);
     }
@@ -175,6 +178,10 @@ pub fn request(
         return super::quoter_lb20::request(ctx, e, token_in, amount);
     }
     // Ekubo (решение 447): квотер — Router.quote MEVCaptureRouter (dex.quoter), quoter_ekubo.rs.
+    if e.family.variant == super::super::pools::family_variant::Variant::EkuboV2 {
+        let order=super::super::pools::ekubo_v2::order(e,token_in,amount).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Неполный ключ или размер Ekubo V2"))?;
+        return Ok((ctx.dex_addr("dex.quoter",e.family.id)?, order.quote()));
+    }
     if e.family.proto == Proto::Ekubo {
         return super::quoter_ekubo::request(ctx, e, token_in, amount);
     }
@@ -515,6 +522,12 @@ pub fn request(
 
 /// Выход из ответа квотера. None — ответ не по ABI.
 pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> Option<U256> {
+    if e.family.variant==super::super::pools::family_variant::Variant::Virtuals {
+        return super::super::pools::virtuals::decode(e,out,token_in);
+    }
+    if e.family.variant==super::super::pools::family_variant::Variant::EkuboV2 {
+        return super::super::pools::ekubo_v2::order(e,token_in,amount)?.payout(out);
+    }
     if e.family.variant == super::super::pools::family_variant::Variant::ElasticV5 {
         let r=IElasticQuoterV2::quoteExactInputSingleCall::abi_decode_returns(out).ok()?;
         return (r.usedAmount==amount).then_some(r.returnedAmount);
@@ -646,6 +659,7 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     if e.family.proto == Proto::LbV20 {
         return super::quoter_lb20::decode(out);
     }
+    if e.family.variant == super::super::pools::family_variant::Variant::EkuboV2 { return None; }
     if e.family.proto == Proto::Ekubo {
         return super::quoter_ekubo::decode(out);
     }

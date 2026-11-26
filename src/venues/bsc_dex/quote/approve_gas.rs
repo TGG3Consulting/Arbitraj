@@ -74,7 +74,7 @@ pub async fn details(
     };
     let amount = amount.ok_or_else(bad)?;
     if quote.side == Side::Buy
-        && super::vista_pricing::is_vista(&e)
+        && super::vista_pricing::native_router(&e)
         && ctx
             .text("venue.quote_asset")
             .is_ok_and(|t| super::vista_pricing::cash(ctx, &t, token))
@@ -104,15 +104,15 @@ pub async fn details(
     // Решение 280: первый хоп — V2-форк без роутера (без исполнителя маршрут — сигнал): роутера нет, разрешение пошло
     // бы исполнителю — газ, измеренный пробой (dex.router не читается).
     if route.mode == RouteMode::Direct
-        && (super::vista_pricing::is_vista(&e)
+        && (super::vista_pricing::native_router(&e)
             || super::oasis_pricing::is_oasis(&e)
             || super::frax_pricing::is_frax(&e)
             || super::white_pricing::is_white(&e)
             || super::router_pricing::is_native(&e)
-            || super::super::exec::vault_direct::enabled(&e)
+            || super::ekubo_v2_pricing::enabled(&e) || super::super::exec::vault_direct::enabled(&e)
             || super::delta_pricing::is_delta(&e))
     {
-        let router = if super::super::exec::vault_direct::enabled(&e) {ctx.dex_addr("dex.vault",e.family.id)?} else if matches!(
+        let router = if super::ekubo_v2_pricing::enabled(&e) {ctx.dex_addr("dex.quoter",e.family.id)?} else if super::super::exec::vault_direct::enabled(&e) {ctx.dex_addr("dex.vault",e.family.id)?} else if matches!(
             hop.fee_mode,
             Some(
                 crate::core::types::RouterFeeMode::NativeGrossMinimum
@@ -120,7 +120,7 @@ pub async fn details(
                         gross_minimum: true
                     }
             )
-        ) || super::oasis_pricing::is_oasis(&e)
+        ) || (e.family.variant==super::super::pools::family_variant::Variant::BunnySwap && (native || matches!(hop.fee_mode,Some(crate::core::types::RouterFeeMode::NativeSettlement{..})))) || super::oasis_pricing::is_oasis(&e)
             || super::frax_pricing::is_frax(&e)
         {
             ctx.dex_addr("dex.quoter", e.family.id)?

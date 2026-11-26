@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 sol! {interface IVistaFlow {
     function swapExactETHForTokensSupportingFeeOnTransferTokens(uint256 minimum,address[] calldata path,address recipient,uint256 deadline) external payable;
     function swapExactTokensForETHSupportingFeeOnTransferTokens(uint256 amount,uint256 minimum,address[] calldata path,address recipient,uint256 deadline) external payable;
+    function swapExactETHForTokens(uint256 minimum,address to,uint256 deadline) external payable returns(uint256);
+    function swapExactTokensForETH(uint256 amount,uint256 minimum,address to,uint256 deadline) external returns(uint256);
     function swapNative(address tokenIn,address tokenOut,uint256 amount,uint256 minimum,address recipient,uint256 deadline) external payable returns(uint256);
     function swapFrom(address tokenIn,address tokenOut,uint256 amount,uint256 minimum,address recipient,uint256 deadline) external returns(uint256);
     event NativeSettled(address indexed payer,address indexed recipient,address indexed tokenIn,address tokenOut,uint256 spent,uint256 received,uint256 fee);
@@ -18,6 +20,8 @@ pub enum Form {
     OfficialEthOut,
     ModuleEthOut,
     ModuleToken,
+    RabbitEthIn,
+    RabbitEthOut,
 }
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Call {
@@ -28,9 +32,9 @@ pub struct Call {
 impl Call {
     pub fn value(self, amount: U256) -> U256 {
         match self.form {
-            Form::OfficialEthIn => amount,
+            Form::OfficialEthIn | Form::RabbitEthIn => amount,
             Form::OfficialEthOut | Form::ModuleEthOut => self.fee,
-            Form::ModuleToken => U256::ZERO,
+            Form::ModuleToken | Form::RabbitEthOut => U256::ZERO,
         }
     }
     pub fn data(
@@ -62,6 +66,19 @@ impl Call {
                 }
                 .abi_encode()
             }
+            Form::RabbitEthIn => IVistaFlow::swapExactETHForTokensCall {
+                minimum,
+                to: recipient,
+                deadline,
+            }
+            .abi_encode(),
+            Form::RabbitEthOut => IVistaFlow::swapExactTokensForETHCall {
+                amount,
+                minimum,
+                to: recipient,
+                deadline,
+            }
+            .abi_encode(),
             Form::ModuleEthOut => IVistaFlow::swapNativeCall {
                 tokenIn: input,
                 tokenOut: output,

@@ -115,7 +115,7 @@ pub(super) async fn plain(
     bind(ctx, address, runtime, None, tag).await
 }
 
-async fn bind(
+pub(super) async fn bind(
     ctx: &Ctx,
     address: Address,
     runtime: B256,

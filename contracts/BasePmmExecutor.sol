@@ -107,7 +107,7 @@ contract BasePmmExecutor {
         if (input.balanceOf(address(this)) != heldIn || output.balanceOf(address(this)) != heldOut ||
             address(this).balance != nativeBefore || beforeIn - input.balanceOf(msg.sender) != amount) revert PartialFill();
         received = output.balanceOf(msg.sender) - beforeOut;
-        if (received < minimum || (!nativeV3 && market != ELFOMO && received != promised)) revert InsufficientOutput();
+        if (received < minimum || ((bonding != address(0) || (!nativeV3 && market != ELFOMO)) && received != promised)) revert InsufficientOutput();
         trading = false;
     }
 

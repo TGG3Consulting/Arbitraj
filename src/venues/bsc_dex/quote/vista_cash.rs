@@ -1,6 +1,6 @@
 //! Нативная расчётная валюта EtherVista и покрытие расходов на каноническом блоке кошелька.
 //! Содержит проверку терминального платежа при подборе и отправке.
-use super::{Quoting, vista_pricing::is_vista, white_state::Head};
+use super::{Quoting, vista_pricing::native_router, white_state::Head};
 use crate::{
     core::types::RouteMode,
     gateway::errors::{ErrorCode, GatewayResult},
@@ -30,7 +30,7 @@ pub(in crate::venues::bsc_dex) fn terminal_cash(
             h.fee_mode,
             Some(crate::core::types::RouterFeeMode::NativeSettlement { .. })
         )
-        && reg.entry(&h.pool).is_some_and(|e| is_vista(&e))
+        && reg.entry(&h.pool).is_some_and(|e| native_router(&e))
 }
 /// Проверяет аванс ETH, разрешения, газ и публикацию на балансе плательщика перед допуском.
 pub(super) async fn funded(

@@ -59,6 +59,14 @@ async fn one(ctx: &Ctx, c: &Candidate, size: usize) -> Result<Result<Found, Stri
         Ok(a) => a,
         Err(_) => return Ok(Err(format!("«{}» — не адрес контракта пула", c.pool))),
     };
+    if c.family.variant == super::family_variant::Variant::Virtuals {
+        let at=super::nami::block(ctx,"latest").await.map_err(|e|e.message)?;
+        return match super::virtuals::market(ctx,c.family,pool,super::discover::sorted(c.coin,c.quote),&at).await {
+            Ok(_) => Ok(Ok(super::verify_woo::found(c,PoolRef::Contract(pool)))),
+            Err(e) if e.code==crate::gateway::errors::ErrorCode::NotApplicable => Ok(Err(e.message)),
+            Err(e)=>Err(e.message),
+        };
+    }
     if c.family.variant == super::family_variant::Variant::BunnySwap {
         return Ok(super::bunnyswap::verify(ctx,c,pool).await.map_err(|e|e.message));
     }

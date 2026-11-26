@@ -107,5 +107,6 @@ pub(crate) mod candy;
 pub(crate) mod memebox;
 pub(crate) mod ethervista;
 pub mod v2;
+pub mod virtuals;
 pub mod wombat;
 pub mod wombat_core;

@@ -79,6 +79,12 @@ pub fn request_any(
     token_in: Address,
     amount: U256,
 ) -> GatewayResult<(Address, Bytes)> {
+    if e.family.variant == Variant::BunnySwap {
+        return Ok((
+            pair(ctx, e)?,
+            Bytes::from(IV2Pair::getReservesCall {}.abi_encode()),
+        ));
+    }
     if on(e) {
         quote_request(ctx, e, token_in)
     } else {
@@ -94,6 +100,24 @@ pub fn decode_any(
     token_in: Address,
     amount: U256,
 ) -> Option<U256> {
+    if e.family.variant == Variant::BunnySwap {
+        let r = IV2Pair::getReservesCall::abi_decode_returns(raw).ok()?;
+        let fee = e.pool.fee_pips.filter(|p| *p < 1_000_000)?;
+        let reserves = (U256::from(r.reserve0), U256::from(r.reserve1));
+        let (ri, ro) = if token_in == e.pool.token0 {
+            reserves
+        } else if token_in == e.pool.token1 {
+            (reserves.1, reserves.0)
+        } else {
+            return None;
+        };
+        return v2::amount_out(
+            amount,
+            ri,
+            ro,
+            (U256::from(1_000_000 - fee), U256::from(1_000_000u32)),
+        );
+    }
     if on(e) {
         quote_decode(ctx, e, raw, token_in, amount)
     } else {

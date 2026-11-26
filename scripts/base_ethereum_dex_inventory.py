@@ -285,6 +285,15 @@ def tables(network, snapshots, profiles):
                 verdict="Фабрика EternalFarming создала действующий корреспондент фермы при nonce=1. FarmingCenter подтвердил пул и единственную вечную программу. Проверяются код обеих ролей, регистрация пары, CREATE2, семь слов globalState и сырой tickTable. Прогноз использует публичный оракул пула и большую ставку для фактически наблюдаемых переходов времени 0 или 1 секунда."
             else: verdict="В 4 случаях SwapFee сообщил 201 миллионную и нулевую плату плагина при lastFee=500. Подтверждены фабрика плагина, LimitOrderManager и SecurityRegistry, разрешающий обмен. При активной внешней ферме, ребалансировщике или непринятом коде пул закрывается. После пересечения ордера менеджер может сжечь ликвидность того же пула, для повторного использования требуется новое состояние."
             out.append(f"| {dex} | {scope} | {rate}, пул `{pool}` | {verdict} [Вызовы и ответы](../{path.as_posix()}) |")
+        out.extend(["", "Virtuals на Base. Канонический блок 62 262 756: Classic зарегистрировал 17 357 пар, Unicorn — 21 877. "
+                    "В каждом реестре проверены адреса трёх пар и их остатки. Обе фабрики удерживали 1% на покупке и 1% на продаже. "
+                    "Встречный актив VIRTUAL 0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b; комиссии округляются независимо в его атомах. "
+                    "Размер обмена ограничен реальным балансом токена на паре. В Unicorn проверяются launchExecuted и временный стартовый налог. "
+                    "После перехода токена на внешний рынок прежняя ссылка Bonding перестаёт действовать. По каждой строке dex.bonding_roles указаны "
+                    "прокси, хеш прокси, реализация и хеш реализации. Для Unicorn изучена привязка V4; архивный V2 остаётся без подтверждённого кошелькового рынка. "
+                    "Основной вид считывает рынок. Для модульного режима владелец задаёт проверенный адрес dex.router и совместимый runtime. "
+                    "[Реестр Classic](../tests/data/first_run_dex_2026-11-26/virtuals-base-registry.json.gz) · "
+                    "[Реестр Unicorn](../tests/data/first_run_dex_2026-11-26/virtuals-unicorn-base-registry.json.gz)."])
         out.extend(["", "HorizonDEX на Base. Kyber Elastic V2, 132 границы в прочитанном списке, порция чтения 32, шаг цены 8, комиссия 40/100000. На блоке 62 262 756 официальный роутер и штатный V5 (шаг 8) дали одинаковые поступления. За 10¹² и 10¹³ wei WETH получены 1688 и 16888 raw USDbC, обратные продажи дали 998650431964 и 9991255908839 wei WETH. Все восемь обменов использовали полный вход. Порог выше на одну единицу и истёкший срок откатили каждый вариант. Штатный путь использует V5 с проверкой выплаты получателю. [Архив котировок, тиков и выплат](../tests/data/first_run_dex_2026-11-26/horizondex_base.json.gz)"])
         oasis_file = "tests/data/first_run_dex_2026-11-26/oasisswap_base.json"
         oasis_v5_file = "tests/data/first_run_dex_2026-11-26/oasisswap_v5_base.json"
@@ -1051,6 +1060,10 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if not base and str(row["id"]) == "9436":
+            stelaxis = read(Path("tests/data/first_run_dex_2026-11-26/stelaxis_ethereum.json"))
+            candidates = [stelaxis["venue"]]
+            task = "STEL-01 · 5 пар, 100 событий в 250 блоках. Собственный исполнимый маршрут не подтверждён"
         if not base and str(row["id"])=="7382":
             candidates=[sn["factory"]]
             task=f"Supernova CL · {len(sn['markets'])} рынков в четырёх реестрах customDeployer по CREATE2"

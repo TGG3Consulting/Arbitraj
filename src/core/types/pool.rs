@@ -158,6 +158,20 @@ impl PoolRef {
     }
 }
 
+/// Виртуальные запасы кривой запуска и реальные средства, которыми пара может рассчитаться.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VirtualsState {
+    pub agent: Address,
+    pub asset: Address,
+    pub reserves: [U256; 2],
+    pub backing: [U256; 2],
+    pub invariant: U256,
+    pub graduation: Option<U256>,
+    pub buy_tax: u8,
+    pub sell_tax: u8,
+    pub launch_tax: u8,
+}
+
 /// Оба резерва и обе фиксированные платы EtherVista на одном состоянии сети.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EtherVistaState {
@@ -347,6 +361,7 @@ pub enum PoolState {
     Oasis { reserve0:U256,reserve1:U256,share:u32,repeatable:bool },
     /// Резервы пары и плата в ETH, уплачиваемая для каждого отдельного обмена.
     EtherVista(Box<EtherVistaState>),
+    Virtuals(Box<VirtualsState>),
     /// Сумма, списанная с CandySwap, включает независимое удержание из выплаты получателю.
     CandySwap(Box<CandySwapState>),
     Memebox(Box<MemeboxState>),

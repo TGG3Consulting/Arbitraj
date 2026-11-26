@@ -66,6 +66,11 @@ pub async fn state(
 ) -> GatewayResult<Loaded> {
     let token1 = pair.1;
     let tag = block_tag(block);
+    if f.variant == Variant::Virtuals && let PoolRef::Contract(pool)=reference {
+        let at=super::nami::block(ctx,&tag).await?;
+        let state=Box::pin(super::virtuals::market(ctx,f,*pool,pair,&at)).await?;
+        return Ok(Loaded{state:PoolState::Virtuals(Box::new(state)),ticks:None,bins:None,fee_pips:None});
+    }
     if f.variant == Variant::RegisteredV3 && let PoolRef::Contract(pool)=reference {
         let at=super::nami::block(ctx,&tag).await?;
         Box::pin(super::registered_v3::market(ctx,f,*pool,pair,None,&at)).await?;

@@ -158,7 +158,7 @@ pub(super) async fn option(
         {
             super::router_pricing::checked(ctx, &c.entry, input, amount, head).await?;
         }
-        let vista_value = if super::vista_pricing::is_vista(&c.entry) {
+        let vista_value = if super::vista_pricing::is_vista(&c.entry) || matches!(&execution.wire,super::v2_wallet_sim::Wire::Vista(_)) {
             Some(match &execution.wire {
                 super::v2_wallet_sim::Wire::Vista(call) => call.value(amount),
                 super::v2_wallet_sim::Wire::V5(v) if matches!(v.native, Some((_, true))) => amount,
@@ -181,7 +181,7 @@ pub(super) async fn option(
             head,
             o,
             super::oasis_pricing::is_oasis(&c.entry) || super::vista_pricing::is_vista(&c.entry)
-                || super::super::exec::vault_direct::enabled(&c.entry) || super::module_pricing::enabled(&c.entry),
+                || super::super::exec::vault_direct::enabled(&c.entry) || super::module_pricing::enabled(&c.entry) || vista_value.is_some() || super::ekubo_v2_pricing::enabled(&c.entry),
         )
         .await?;
         if let Some(value) = vista_value {

@@ -31,6 +31,7 @@ use super::ur;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum DirectCall {
+    EkuboV2(super::super::pools::ekubo_v2::OrderKey),
     Module {
         pool: Address,
         input: Address,
@@ -184,6 +185,7 @@ impl Plan {
                     self.deadline,
                     rebate,
                 ),
+                DirectCall::EkuboV2(key)=>key.calldata(self.min_total,self.deadline),
                 DirectCall::Vault { id, input, amount } => super::vault_direct::data(
                     id, input, self.token_out, amount, self.min_total, self.wallet, self.deadline),
                 DirectCall::V2SupportingFee { input, amount } => super::fork_swap::swap_data(
@@ -240,10 +242,11 @@ pub async fn build(
         return Err(ctx.err(ErrorCode::Internal, "план без шагов"));
     };
     let e = &first.entry;
+    if super::super::quote::ekubo_v2_pricing::enabled(e) {return Box::pin(super::ekubo_v2_direct::plan(ctx,steps,wallet,now,all_approvals)).await;}
     if super::vault_direct::enabled(e) {
         return Box::pin(super::vault_direct::plan(ctx,steps,wallet,now,all_approvals)).await;
     }
-    if super::super::quote::vista_pricing::is_vista(e) {
+    if super::super::quote::vista_pricing::is_vista(e) || (super::vista_direct::native() && super::super::quote::vista_pricing::native_router(e)) {
         return Box::pin(super::vista_direct::plan(
             ctx,
             steps,

@@ -19,12 +19,13 @@ pub(super) async fn candidates(
     use super::{
         delta_pricing, frax_pricing, oasis_pricing, router_pricing, white_pricing, white_state,
     };
-    let mut kinds = [false; 8];
+    let mut kinds = [false; 9];
     for e in &i.entries {
-        kinds[5] |= super::vista_pricing::is_vista(e);
+        kinds[5] |= super::vista_pricing::is_vista(e) || (native && super::vista_pricing::native_router(e));
         if native {
             continue;
         }
+        kinds[8] |= super::ekubo_v2_pricing::enabled(e);
         kinds[7] |= super::module_pricing::enabled(e);
         kinds[6] |= super::super::exec::vault_direct::enabled(e);
         kinds[4] |= oasis_pricing::is_oasis(e);
@@ -44,7 +45,7 @@ pub(super) async fn candidates(
     } else {
         None
     };
-    let (white, frax, delta, router, oasis, vista, vault, memebox) = tokio::join!(
+    let (white, frax, delta, router, oasis, vista, vault, memebox, ekubo) = tokio::join!(
         async {
             if kinds[0] {
                 Box::pin(white_pricing::candidates(q, i, head)).await
@@ -92,10 +93,12 @@ pub(super) async fn candidates(
         },
         async {
             if kinds[7] { Box::pin(super::module_pricing::candidates(q,i,head)).await } else { Vec::new() }
-        }
+        },
+        async { if kinds[8] { Box::pin(super::ekubo_v2_pricing::candidates(q,i,head)).await } else { Vec::new() } }
     );
     let mut all = white;
     all.extend(memebox);
+    all.extend(ekubo);
     all.extend(frax);
     all.extend(delta);
     all.extend(router);
@@ -107,9 +110,9 @@ pub(super) async fn candidates(
 
 fn individual(e: &Entry, native: bool) -> bool {
     if native {
-        return super::vista_pricing::is_vista(e);
+        return super::vista_pricing::native_router(e);
     }
-    super::module_pricing::enabled(e) || super::super::exec::vault_direct::enabled(e) || super::vista_pricing::is_vista(e)
+    super::ekubo_v2_pricing::enabled(e) || super::module_pricing::enabled(e) || super::super::exec::vault_direct::enabled(e) || super::vista_pricing::is_vista(e)
         || super::oasis_pricing::is_oasis(e)
         || super::white_pricing::is_white(e)
         || super::frax_pricing::is_frax(e)
@@ -200,7 +203,7 @@ pub(super) fn private(
         let Some(e) = one(quote).and_then(|p| q.reg.get(p)) else {
             continue;
         };
-        if !e.family.fork || !e.family.tradable || super::oasis_pricing::is_oasis(&e) {
+        if !e.family.fork || !e.family.tradable || super::ekubo_v2_pricing::enabled(&e) || super::oasis_pricing::is_oasis(&e) {
             continue;
         }
         let white = super::white_pricing::is_white(&e);

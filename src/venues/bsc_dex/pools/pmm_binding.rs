@@ -69,6 +69,11 @@ pub(super) fn verify(ctx: &Ctx, id: &str, code: &[u8], hash: B256) -> GatewayRes
             format!("{id}: модуль не связан с рабочим рынком и хранилищем"),
         )
     };
+    if matches!(kind.as_str(),"virtuals_bonding_module" | "virtuals_unicorn_module") {
+        let front=ctx.dex_list("dex.bonding_roles",id)?.get(1).and_then(|v|v.split_whitespace().next()).and_then(|v|v.parse().ok()).ok_or_else(wrong)?;
+        let roles=[ctx.dex_addr("dex.factory",id)?,ctx.dex_addr("dex.quoter",id)?,front];
+        return bound(code,hash,&ctx.dex_list("dex.pmm_module_bindings",id)?,&roles).then_some(()).ok_or_else(wrong);
+    }
     let with_vault = match kind.as_str() {
         "baibai_module" | "elfomofi_module" => true,
         "lunarbase_module" => false,

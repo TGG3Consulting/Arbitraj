@@ -53,10 +53,10 @@ def capture(archive, endpoint):
         gross=adjusted*ro//(ri*1000+adjusted)
         received=gross if buy else gross-gross*protocol//1000
         q=tx(ROUTER,"getAmountOut(uint256,uint256,uint256,uint64)",["uint256","uint256","uint256","uint64"],[funded,ri,ro,lp])
-        def swap(floor,expiry):
+        def swap(floor,expiry,payee=RECEIVER):
             if buy:
                 return tx(ROUTER,"swapExactETHForTokens(uint256,address,uint256)",["uint256","address","uint256"],[floor,OWNER,expiry],value=amount)
-            return tx(ROUTER,"swapExactTokensForETH(uint256,uint256,address,uint256)",["uint256","uint256","address","uint256"],[amount,floor,RECEIVER,expiry])
+            return tx(ROUTER,"swapExactTokensForETH(uint256,uint256,address,uint256)",["uint256","uint256","address","uint256"],[amount,floor,payee,expiry])
         calls=prefix+[q,swap(received+1,deadline),swap(received,1)]+state()+[swap(received,deadline)]+state()
         results=run(calls); k=len(prefix)
         if any(r["status"]!="0x1" for r in results[:k]) or scalar(results[k])!=gross or received==0:
@@ -68,7 +68,20 @@ def capture(archive, endpoint):
             raise ValueError("wallet delta differs from the two-stage price")
         if (after[7]-before[7],after[8]-before[8],after[6])!=((funded,-gross,0) if buy else (-gross,amount,0)):
             raise ValueError("unexpected pool debit, credit or remaining allowance")
-        return dict(amount=str(amount),reserves=[str(rf),str(rw)],lp=lp,protocol=protocol,gross=str(gross),received=str(received),
+        # The actual trading wallet receives both sides. The separate payee above independently proves ETH delivery.
+        signed=swap(received,deadline,OWNER)
+        cash=tx(MULTICALL,"getEthBalance(address)",["address"],[OWNER])
+        read_wallet=[balance(FRIEND,OWNER),cash]
+        wallet_run=run(prefix+read_wallet+[signed]+read_wallet)
+        start=len(prefix); mined=wallet_run[start+2]
+        if any(x["status"]!="0x1" for x in wallet_run):raise ValueError("payer receipt replay failed")
+        token_delta=scalar(wallet_run[-2])-scalar(wallet_run[start])
+        cash_delta=scalar(wallet_run[-1])-scalar(wallet_run[start+1])
+        if token_delta!=(received if buy else -amount) or cash_delta!=(-amount if buy else received):
+            raise ValueError("payer ETH or FRIEND delta disagrees with its receipt")
+        proof=dict(wallet=OWNER,token=FRIEND,wrapped=WETH,router=ROUTER,transaction=signed,logs=mined["logs"],
+                   token_delta=str(token_delta),cash_delta=str(cash_delta))
+        return dict(wallet_proof=proof,amount=str(amount),reserves=[str(rf),str(rw)],lp=lp,protocol=protocol,gross=str(gross),received=str(received),
                     min_plus_one=results[k+1]["error"],expired=results[k+2]["error"],gas=int(fill["gasUsed"],16)),prefix+[swap(received,deadline)]
     cases=[]
     for amount in (10**13,10**15,10**16):

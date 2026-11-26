@@ -46,10 +46,15 @@ pub fn accept(
     if pool_id(k.token0, k.token1, k.config) != id {
         return Err(format!("ключ пула даёт другой PoolId, а не {id}"));
     }
-    ekubo_ext::classify(ctx, f.id, ekubo_config::extension(&k.config))?;
+    let config = if f.variant == super::family_variant::Variant::EkuboV2 {
+        super::ekubo_v2::math_config(k.config).ok_or("Неизвестное расширение или шаг Ekubo V2")?
+    } else {
+        ekubo_ext::classify(ctx, f.id, ekubo_config::extension(&k.config))?;
+        k.config
+    };
     let wrapped = ctx.addr("dex.native_wrapped").ok();
     let (t0, t1, native) = ekubo_native::pair(k.token0, k.token1, wrapped)?;
-    let spacing = match ekubo_config::shape(&k.config) {
+    let spacing = match ekubo_config::shape(&config) {
         Shape::Concentrated { spacing } => Some(spacing as i32),
         Shape::FullRange | Shape::Stable { .. } => None,
     };

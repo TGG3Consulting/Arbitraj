@@ -142,7 +142,7 @@ pub async fn emitter(ctx: &Ctx, e: &Entry, logs: &[SimLog]) -> GatewayResult<()>
     if e.family.tradable
         || super::super::quote::frax_pricing::is_frax(e)
         || super::super::quote::oasis_pricing::is_oasis(e)
-        || super::super::quote::vista_pricing::is_vista(e)
+        || super::super::quote::vista_pricing::native_router(e)
     {
         return emitter::check(ctx, &[e], logs)
             .await

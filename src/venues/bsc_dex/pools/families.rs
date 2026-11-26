@@ -403,7 +403,7 @@ pub struct Family {
 
 impl Family {
     pub fn direct_module(&self) -> bool {
-        (self.variant.wallet_module() && self.tradable)
+        ((self.variant.wallet_module() || self.variant == Variant::Virtuals) && self.tradable)
             || matches!(self.variant, Variant::SolidlyCl | Variant::BaseNativeV3)
             || matches!(self.proto, Proto::Elfomo | Proto::Lunar | Proto::BaiBai)
     }
@@ -446,7 +446,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
         "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
-        "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
+        "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
+        "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
         "bunnyswap" | "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
@@ -585,6 +586,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // Liquidity Book V2.2 (решение 446): тот же путь, что у lb_v21 (порт getSwapOut + откат MAX_LIQUIDITY_PER_BIN), шаг LB.
         "lb_v22" => (PoolKind::LbBin, Proto::LbV22, true, false, false),
         // Ekubo (решение 447): в графе и сигналах (порт swap ядра); исполнение — шаг EKUBO исполнителя.
+        "ekubo_v2_router" => (PoolKind::Ekubo, Proto::Ekubo, true, true, true),
         "ekubo" => (PoolKind::Ekubo, Proto::Ekubo, true, false, false),
         // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; Universal
         // Router их не исполняет (tradable = false); исполнение — шагом контракта-исполнителя: STABLE_U256 у pancake / lista
@@ -814,6 +816,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             if f.executor_kind.is_some() {
                 list.extend(["dex.router", "dex.module_runtime_hashes"]);
             }
+        }
+        Proto::V2 if f.variant == Variant::Virtuals => {
+            list.extend(["dex.factory","dex.factory_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes","dex.quoter","dex.bonding_roles"]);
+            if f.tradable { list.extend(["dex.router","dex.module_runtime_hashes","dex.pmm_module_bindings"]); }
         }
         Proto::V2 if f.variant == Variant::BunnySwap => {
             list.extend(["dex.bunny_pair","dex.bunny_token","dex.quoter","dex.quoter_runtime_hash","dex.pair_runtime_hash"]);
@@ -1057,6 +1063,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // Ekubo (решение 447): ядро (состояние, события, обмен), PoolKeyIndex (ключ пула по PoolId), слова битмапа и
         // квотер сверки (Router.quote — MEVCaptureRouter). Расширение MEVCapture — по желанию (не задано — пулы с ним
         // не берутся).
+        Proto::Ekubo if f.variant == Variant::EkuboV2 => list.extend(["dex.ekubo_core","dex.ekubo_bitmap_words","dex.quoter","dex.factory_runtime_hash","dex.router_runtime_hash"]),
         Proto::Ekubo => list.extend([
             "dex.ekubo_core",
             "dex.ekubo_key_index",

@@ -82,6 +82,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
         Proto::LbV20 => events_lb20::topics(),
         // Решение 446: LB V2.2 — те же события и HooksParametersSet (events_lb22.rs).
         Proto::LbV22 => events_lb22::topics(),
+        Proto::Ekubo if f.variant==super::family_variant::Variant::EkuboV2 => vec![super::ekubo_v2::position_topic(), events_ekubo::SWAP_MARK],
         Proto::Ekubo => events_ekubo::topics(),
         // PancakeSwap / Lista StableSwap, Saddle, WooFi — решение 122 F, 3; Infinity Stable (события крючка) —
         // решение «122 (Infinity Stable)» (events_stable_u.rs).
@@ -141,6 +142,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
         Proto::ShellProteus => events_shell::liquidity_topics(),
         Proto::CamelotV2 => events_camelot::liquidity_topics(),
         Proto::LbV20 => events_lb20::liquidity_topics(),
+        Proto::Ekubo if f.variant==super::family_variant::Variant::EkuboV2 => vec![super::ekubo_v2::position_topic()],
         Proto::Ekubo => events_ekubo::liquidity_topics(),
         Proto::PancakeStable
         | Proto::ListaStable
@@ -213,6 +215,12 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         Proto::CamelotV2 => events_camelot::apply(e, log),
         Proto::LbV20 => events_lb20::apply(e, log),
         Proto::LbV22 => events_lb22::apply(e, log),
+        Proto::Ekubo if e.family.variant==super::family_variant::Variant::EkuboV2 => {
+            if super::ekubo_route::singleton(log)==Some(e.pool.reference.clone()) &&
+                (log.topics().is_empty() || log.topic0()==Some(&super::ekubo_v2::position_topic())) {
+                Applied::Refresh("Ekubo V2: изменились цена или позиция; перечитать каноническое состояние".into())
+            } else { Applied::Ignored }
+        }
         Proto::Ekubo => events_ekubo::apply(e, log),
         Proto::PancakeStable
         | Proto::ListaStable

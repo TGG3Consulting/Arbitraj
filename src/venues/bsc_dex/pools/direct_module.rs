@@ -57,7 +57,7 @@ pub fn market(ctx: &Ctx, entry: &Entry) -> GatewayResult<Address> {
         (PoolRef::Contract(address), super::families::Proto::UniswapV3)
             if entry.family.variant == super::family_variant::Variant::RegisteredV3 => Ok(*address),
         (PoolRef::Contract(address), super::families::Proto::V2)
-            if matches!(entry.family.variant,super::family_variant::Variant::Memebox | super::family_variant::Variant::BunnySwap) => Ok(*address),
+            if matches!(entry.family.variant,super::family_variant::Variant::Virtuals | super::family_variant::Variant::Memebox | super::family_variant::Variant::BunnySwap) => Ok(*address),
         (PoolRef::Contract(address), super::families::Proto::Slipstream) => Ok(*address),
         _ => Err(ctx.err(
             ErrorCode::NoRoute,
@@ -143,6 +143,11 @@ pub async fn verify_factory(ctx: &Ctx, f: &Family, addr: Address, at: &Value) ->
 }
 
 pub async fn verify(ctx: &Ctx, f: &Family, addr: Address, at: &str) -> GatewayResult<()> {
+    if f.variant == super::family_variant::Variant::Virtuals {
+        let at=super::nami::block(ctx,at).await?;
+        super::virtuals_roles::at(ctx,f,&at).await?;
+        return verify_code(ctx,f.id,addr,&at).await;
+    }
     if f.variant.wallet_module() {
         let at = super::elfomo::block(ctx,at).await?;
         return verify_factory(ctx,f,addr,&at).await;

@@ -9,7 +9,11 @@ use std::{fs::File, path::Path};
 
 fn archive(kind: &str, id: &str) -> Value {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/first_run_dex_2026-11-26");
-    let network = if id == "supernova-amm" { "ethereum" } else { "base" };
+    let network = if id == "supernova-amm" {
+        "ethereum"
+    } else {
+        "base"
+    };
     serde_json::from_reader(GzDecoder::new(
         File::open(dir.join(format!("{network}_classic_{kind}_{id}.json.gz"))).unwrap(),
     ))
@@ -70,7 +74,14 @@ fn factory_ownership_fee_and_both_wallet_directions_match_the_v1_curve() {
             .find(|v| v["id"] == id && v["chain_id"] == dir["chain_id"])
             .unwrap()["settings"];
         let generator = dir["factory"].get("generator");
-        assert_eq!(profile["dex.kind"], if generator.is_some() { "solidly_v1_generator" } else { "solidly_v1" });
+        assert_eq!(
+            profile["dex.kind"],
+            if generator.is_some() {
+                "solidly_v1_generator"
+            } else {
+                "solidly_v1"
+            }
+        );
         assert_eq!(profile["dex.factory"], dir["factory"]["address"]);
         assert_eq!(
             profile["dex.factory_runtime_hash"],
@@ -90,16 +101,15 @@ fn factory_ownership_fee_and_both_wallet_directions_match_the_v1_curve() {
         pools += rows.len();
         let deployer = match generator {
             Some(g) => {
-                assert_eq!(profile["dex.solidly_generator_runtime_hash"], g["runtime_hash"]);
+                assert_eq!(
+                    profile["dex.solidly_generator_runtime_hash"],
+                    g["runtime_hash"]
+                );
                 &g["address"]
             }
             None => &profile["dex.factory"],
         };
-        let factory = deployer
-            .as_str()
-            .unwrap()
-            .parse::<Address>()
-            .unwrap();
+        let factory = deployer.as_str().unwrap().parse::<Address>().unwrap();
         let init = dir["init"].as_str().unwrap().parse::<B256>().unwrap();
         let accepted = profile["dex.pool_code_hashes"].as_array().unwrap();
         let mut population = vec![0usize; accepted.len()];

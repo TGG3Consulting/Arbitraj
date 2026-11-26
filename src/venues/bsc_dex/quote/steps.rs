@@ -99,7 +99,13 @@ pub fn path_costs(
             names.gas,
             false,
         );
-        if let PoolState::EtherVista(state) = &h.entry.pool.state {
+        if let PoolState::Virtuals(state)=&h.entry.pool.state {
+            let (raw,asset)=super::super::math::virtuals::charge(state,h.token_in,&h.swapped)
+                .ok_or_else(||ctx.err(ErrorCode::BadResponse,"Virtuals: не удалось проверить налог на VIRTUAL"))?;
+            let (decimals,symbol)=if h.token_in==asset{(h.dec_in,&from)}else{(h.dec_out,&to)};
+            let value=num::to_decimal(raw,decimals).ok_or_else(||ctx.err(ErrorCode::BadResponse,"Virtuals: налог не помещается в Decimal"))?;
+            add(&mut out,CostKind::PoolFee,value,symbol,true);
+        } else if let PoolState::EtherVista(state) = &h.entry.pool.state {
             let fee = if h.token_in == state.wrapped { state.buy_fee } else { state.sell_fee };
             let amount = num::to_decimal(fee, num::BNB_DECIMALS)
                 .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "EtherVista: плата в ETH не помещается в Decimal"))?;
@@ -207,7 +213,7 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
     let pips = |p: u32| Decimal::from(p) / Decimal::from(10_000u32);
     let zero_for_one = token_in == e.pool.token0;
     match (&e.pool.state, e.pool.kind) {
-        (PoolState::EtherVista(_), PoolKind::V2) => Ok(Decimal::ZERO),
+        (PoolState::Virtuals(_) | PoolState::EtherVista(_), PoolKind::V2) => Ok(Decimal::ZERO),
         (_, PoolKind::V2) => super::pool_quote::v2_fee_pct(ctx, e),
         (_, PoolKind::V3) => e
             .pool

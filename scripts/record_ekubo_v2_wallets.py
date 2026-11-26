@@ -95,7 +95,11 @@ def capture(source):
                     raise ValueError(f"{m['id']} {side} {amount}: {label} status={success}, delta={(spent,received)}, error={result.get('error')}")
                 if not success:
                     selector="PartialSwapsDisallowed()" if used!=amount else "MinimumOutputNotReceived(address,uint256)"
-                    if not result.get("returnData","").startswith("0x"+keccak(text=selector)[:4].hex()):
+                    revert=raw(result.get("returnData","0x")) or raw(result.get("error",{}).get("data","0x"))
+                    expected_error=keccak(text=selector)[:4]
+                    if used==amount:
+                        expected_error+=bytes.fromhex(b[2:]).rjust(32,b"\x00")+minimum.to_bytes(32,"big")
+                    if revert!=expected_error:
                         raise ValueError(f"unexpected error: {result}")
                 trial[label]={"tx":order,"result":result,"balances":list(map(str,values))}
             cases.append(trial)

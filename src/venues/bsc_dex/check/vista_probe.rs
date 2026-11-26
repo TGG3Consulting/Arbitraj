@@ -23,7 +23,9 @@ sol! {interface IProbeAsset {
     function getEthBalance(address owner) external view returns(uint256);
 }}
 pub(super) struct Probe {
-    market: VistaMarket,
+    market: Option<VistaMarket>,
+    state: crate::core::types::PoolState,
+    wrapped: Address,
     pub head: Head,
     multi: Address,
 }
@@ -36,6 +38,17 @@ impl Probe {
         wallet: Address,
     ) -> GatewayResult<Option<Self>> {
         let head = white_state::head(ctx, &format!("{number:#x}")).await?;
+        if e.family.variant == super::super::pools::family_variant::Variant::BunnySwap {
+            let state =
+                super::super::pools::bunnyswap::native_state(ctx, e, &head.selector()).await?;
+            return Ok(Some(Self {
+                market: None,
+                state,
+                wrapped: ctx.addr("dex.native_wrapped")?,
+                head,
+                multi: ctx.addr("dex.multicall3")?,
+            }));
+        }
         let market = vista_pricing::market(ctx, e, head, Form::OfficialEthIn).await?;
         if !market.router_weth.is_zero() {
             return Ok(None);
@@ -53,13 +66,15 @@ impl Probe {
             ));
         }
         Ok(Some(Self {
-            market,
+            wrapped: market.wrapped,
+            state: market.state(),
+            market: Some(market),
             head,
             multi: ctx.addr("dex.multicall3")?,
         }))
     }
     pub fn state(&self) -> crate::core::types::PoolState {
-        self.market.state()
+        self.state.clone()
     }
     pub fn leg(
         &self,
@@ -69,13 +84,16 @@ impl Probe {
         wallet: Address,
         now: u64,
     ) -> GatewayResult<(Vec<Approval>, Address, Bytes)> {
-        let eth_in = o.token_in == self.market.wrapped;
+        let eth_in = o.token_in == self.wrapped;
         let form = if eth_in {
             Form::OfficialEthIn
         } else {
             Form::OfficialEthOut
         };
-        let (router, call) = vista_pricing::wire(ctx, e, o.token_in, &self.market, form)?;
+        let (router, call) = match &self.market {
+            Some(m) => vista_pricing::wire(ctx, e, o.token_in, m, form)?,
+            None => vista_pricing::rabbit_wire(ctx, e, o.token_in)?,
+        };
         let approvals = if eth_in {
             Vec::new()
         } else {
@@ -96,24 +114,23 @@ impl Probe {
         ))
     }
     pub fn value(&self, input: Address, amount: U256) -> U256 {
-        let eth_in = input == self.market.wrapped;
+        let eth_in = input == self.wrapped;
         VistaCall {
             form: if eth_in {
                 Form::OfficialEthIn
             } else {
                 Form::OfficialEthOut
             },
-            wrapped: self.market.wrapped,
-            fee: if eth_in {
-                self.market.buy_fee
-            } else {
-                self.market.sell_fee
-            },
+            wrapped: self.wrapped,
+            fee: self
+                .market
+                .as_ref()
+                .map_or(U256::ZERO, |m| if eth_in { m.buy_fee } else { m.sell_fee }),
         }
         .value(amount)
     }
     pub fn fund(&self, wallet: Address, token: Address, amount: U256) -> Option<Call> {
-        (token == self.market.wrapped).then(|| {
+        (token == self.wrapped).then(|| {
             pc::call(
                 wallet,
                 token,
@@ -122,7 +139,7 @@ impl Probe {
         })
     }
     pub fn balance(&self, wallet: Address, token: Address) -> Option<Call> {
-        (token == self.market.wrapped).then(|| {
+        (token == self.wrapped).then(|| {
             pc::call(
                 wallet,
                 self.multi,
@@ -131,7 +148,7 @@ impl Probe {
         })
     }
     pub fn wrap_for_transfer(&self, wallet: Address, token: Address) -> Option<Call> {
-        (token == self.market.wrapped)
+        (token == self.wrapped)
             .then(|| pc::call(wallet, token, IProbeAsset::depositCall {}.abi_encode()))
     }
 }

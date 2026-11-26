@@ -87,6 +87,9 @@ pub async fn load(
     id: B256,
     block: u64,
 ) -> GatewayResult<PoolState> {
+    if f.variant == super::family_variant::Variant::EkuboV2 {
+        return Box::pin(super::ekubo_v2::load(ctx,f,core,id,block)).await;
+    }
     let bad = |w: String| ctx.err(ErrorCode::BadResponse, format!("{} {id}: {w}", f.title));
     let Some(key) = ekubo_keys::get(ctx.place.id, id) else {
         let why = format!(

@@ -201,7 +201,7 @@ async fn run(
         && let [h] = leg.hops.as_slice()
         && q.reg
             .entry(&h.pool)
-            .is_some_and(|e| super::super::quote::vista_pricing::is_vista(&e))
+            .is_some_and(|e| super::super::quote::vista_pricing::native_router(&e))
     {
         let native = super::native::is_native(ctx, &req.asset)
             || super::super::quote::vista_pricing::cash(

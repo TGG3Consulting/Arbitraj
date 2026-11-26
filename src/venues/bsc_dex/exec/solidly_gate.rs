@@ -99,6 +99,12 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             Box::pin(super::super::pools::registered_v3::fresh(ctx,e,at)).await?;
             continue;
         }
+        if f.variant == Variant::Virtuals {
+            let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            Box::pin(super::super::pools::virtuals::fresh(ctx,e,at)).await?;
+            if f.tradable {super::super::pools::direct_module::verify_code(ctx,f.id,ctx.dex_addr("dex.router",f.id)?,at).await?;}
+            continue;
+        }
         if f.variant == Variant::BunnySwap {
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             Box::pin(super::super::pools::bunnyswap::fresh(ctx,e,at)).await?;

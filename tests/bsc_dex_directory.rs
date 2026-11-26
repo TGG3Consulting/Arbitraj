@@ -233,7 +233,7 @@ fn relevant_pairs_only() {
             },
         );
     });
-    let v = d.view(None, None, (None, None));
+    let v = d.view_with_native(None, None, (None, None), Some("BNB"));
     assert_eq!(v.tokens[0].total, 20);
     // 6 пулов CAKE/USDT («не проверен») и 2 пула Infinity CAKE / нативный BNB — видны со статусом «не поддержан».
     assert_eq!(v.pools.len(), 8);
@@ -250,5 +250,20 @@ fn relevant_pairs_only() {
         )
         .count();
     assert_eq!((unchecked, native), (6, 2));
+    for (ticker, label) in [
+        (Some("ETH"), "нативный ETH"),
+        (None, "нативная монета сети"),
+    ] {
+        let other = d.view_with_native(None, None, (None, None), ticker);
+        assert_eq!(
+            other
+                .pools
+                .iter()
+                .filter(|p| matches!(&p.status,
+            DirectoryStatus::Unsupported(why) if why.contains(label)))
+                .count(),
+            native
+        );
+    }
     assert_eq!(d.relevant().len(), 6);
 }

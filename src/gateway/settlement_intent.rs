@@ -23,10 +23,43 @@ pub enum Request {
     Withdrawal(Box<WithdrawRequest>),
 }
 
+/// Фактические объёмы ордера по данным биржи. gross_quote — точное поле filled_total.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SpotFill {
+    pub trade: TradeResult,
+    pub gross_quote: rust_decimal::Decimal,
+}
+
+tokio::task_local! { static GROSS: std::cell::Cell<Option<rust_decimal::Decimal>>; }
+
+/// Адаптер передаёт точную сумму расчётной валюты из окончательного ответа биржи.
+pub fn note_gross(value: Option<rust_decimal::Decimal>) {
+    let _ = GROSS.try_with(|cell| cell.set(value));
+}
+
+/// Извлекает итог того же ответа, которым подтверждено количество и комиссия ордера.
+pub async fn capture(
+    f: impl Future<Output = GatewayResult<TradeResult>>,
+) -> GatewayResult<SpotFill> {
+    GROSS
+        .scope(std::cell::Cell::new(None), async {
+            let trade = f.await?;
+            let gross_quote = GROSS.with(std::cell::Cell::get).ok_or_else(|| {
+                GatewayError::new(
+                    ErrorCode::OutcomeUnknown,
+                    Some(trade.request.venue.clone()),
+                    "Нет фактической суммы исполнения ордера Base в USDT",
+                )
+            })?;
+            Ok(SpotFill { trade, gross_quote })
+        })
+        .await
+}
+
 /// Итог принятого действия. У вывода это запись отправителя; зачисление подтверждается отдельно.
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Outcome {
-    Order(Box<TradeResult>),
+    Order(Box<SpotFill>),
     Withdrawal(Box<Transfer>),
 }
 

@@ -14,7 +14,7 @@ use crate::core::types::{
 use super::super::ctx::Ctx;
 use super::super::pools::multi_pair::dir_key;
 use super::gt_parse::IndexedPool;
-use super::{Directory, NATIVE, is_native, is_relevant};
+use super::{Directory, is_native, is_relevant};
 
 impl Directory {
     /// Справочник для интерфейса: источник, DEX, монеты, пулы с итогом. Принимает: источник, сеть, подпись
@@ -25,6 +25,24 @@ impl Directory {
         network: Option<String>,
         attr: (Option<String>, Option<String>),
     ) -> PoolDirectory {
+        self.view_with_native(source, network, attr, None)
+    }
+
+    pub fn view_with_native(
+        &self,
+        source: Option<String>,
+        network: Option<String>,
+        attr: (Option<String>, Option<String>),
+        native: Option<&str>,
+    ) -> PoolDirectory {
+        let unit = native.map(str::trim).filter(|s| !s.is_empty());
+        let why = match unit {
+            Some(ticker) => format!(
+                "валюта пула — нативный {ticker} (адрес 0x0): такие пулы пока не поддержаны"
+            ),
+            None => "валюта пула — нативная монета сети (адрес 0x0): такие пулы пока не поддержаны"
+                .into(),
+        };
         let s = self.snap.read().unwrap_or_else(|p| p.into_inner());
         let mut tokens = Vec::new();
         let mut pools = Vec::new();
@@ -59,7 +77,7 @@ impl Directory {
                 .chain(from_multi);
             for p in all.filter(shown).filter(|p| seen.insert(key(p))) {
                 let status = if is_native(*addr, p) {
-                    DirectoryStatus::Unsupported(NATIVE.into())
+                    DirectoryStatus::Unsupported(why.clone())
                 } else {
                     s.status
                         .get(&key(p))
@@ -118,5 +136,10 @@ pub fn snapshot(ctx: &Ctx) -> PoolDirectory {
         ctx.text("index.attribution_url").ok(),
     );
     let source = ctx.text("index.api_url").ok();
-    ctx.index.view(source, ctx.text("index.network").ok(), attr)
+    ctx.index.view_with_native(
+        source,
+        ctx.text("index.network").ok(),
+        attr,
+        ctx.text("dex.native_ticker").ok().as_deref(),
+    )
 }

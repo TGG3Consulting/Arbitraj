@@ -2,8 +2,7 @@
 //! При повторном входе используется сохранённый запрос и подтверждение площадки. Отсутствующий
 //! в истории ордер или вывод после потери ответа остаётся незавершённым.
 use crate::core::types::{
-    Asset, CoinNetworkInfo, DexAccountId, TradeRequest, TradeResult, Transfer, VenueId,
-    WithdrawRequest,
+    Asset, CoinNetworkInfo, DexAccountId, TradeRequest, Transfer, VenueId, WithdrawRequest,
 };
 use crate::gateway::{
     contract::Venue,
@@ -29,21 +28,65 @@ fn same(old: &Request, new: &Request) -> bool {
 }
 
 /// Записывает итог только после подтверждения реального идентификатора.
-async fn commit(db: &Db, key: &str, venue: &VenueId, outcome: Outcome) -> GatewayResult<()> {
+async fn commit(db: &Db, key: &str, venue: &VenueId, outcome: Outcome) -> GatewayResult<Outcome> {
     let entry = log::load(db, key)
         .await
         .map_err(|e| uncertain(venue, e))?
         .ok_or_else(|| uncertain(venue, "Адаптер не сохранил идентификатор до отправки"))?;
-    if entry.result.is_some() {
-        return Ok(());
+    if let Some(done) = entry.result {
+        return Ok(done);
     }
-    log::confirm(db, key, &entry, outcome)
-        .await
-        .map_err(|e| uncertain(venue, e).pending(entry.lookup))
+    match log::confirm(db, key, &entry, outcome.clone()).await {
+        Ok(()) => Ok(outcome),
+        Err(reason) => log::load(db, key)
+            .await
+            .map_err(|e| uncertain(venue, e))?
+            .and_then(|row| row.result)
+            .ok_or_else(|| uncertain(venue, reason).pending(entry.lookup)),
+    }
+}
+
+fn order_key(deal: &str, venue: &VenueId, side: crate::core::types::Side) -> GatewayResult<String> {
+    serde_json::to_string(&("order", deal, venue, side))
+        .map_err(|e| uncertain(venue, e.to_string()))
+}
+
+/// Доказательство по ID исходной сделки, стороне и бирже. При ошибке оценки комиссии
+/// возвращает фактический ордер целиком, включая валюты всех списаний.
+pub async fn order_record(
+    db: &Db,
+    deal: &str,
+    venue: &VenueId,
+    side: crate::core::types::Side,
+) -> GatewayResult<Option<Entry>> {
+    let key = order_key(deal, venue, side)?;
+    log::load(db, &key).await.map_err(|e| uncertain(venue, e))
+}
+
+/// Восстанавливает параметры уже отправленного ордера независимо от новых котировок.
+pub async fn previous_order(
+    db: &Db,
+    deal: &str,
+    venue: &VenueId,
+    side: crate::core::types::Side,
+) -> GatewayResult<Option<TradeRequest>> {
+    let key = order_key(deal, venue, side)?;
+    match log::load(db, &key).await.map_err(|e| uncertain(venue, e))? {
+        None => Ok(None),
+        Some(Entry {
+            operation: Request::Order(req),
+            ..
+        }) => Ok(Some(*req)),
+        Some(_) => Err(uncertain(venue, "Несовместимая запись ордера Base")),
+    }
 }
 
 /// Один ордер конверсии. Ключ определяется участниками и устойчивым ID этапа, без времени попытки.
-pub async fn order(db: &Db, gateway: &dyn Venue, req: TradeRequest) -> GatewayResult<TradeResult> {
+pub async fn order(
+    db: &Db,
+    gateway: &dyn Venue,
+    req: TradeRequest,
+) -> GatewayResult<log::SpotFill> {
     let venue = gateway.id();
     if !gateway.supports_settlement_order() || req.venue != venue || !base_usdc(&req.asset) {
         return Err(GatewayError::new(
@@ -52,8 +95,7 @@ pub async fn order(db: &Db, gateway: &dyn Venue, req: TradeRequest) -> GatewayRe
             "Нет подтверждаемого пути ордера Base USDC",
         ));
     }
-    let key = serde_json::to_string(&("order", &req.deal_id, &venue, req.side))
-        .map_err(|e| uncertain(&venue, e.to_string()))?;
+    let key = order_key(&req.deal_id, &venue, req.side)?;
     let operation = Request::Order(Box::new(req.clone()));
     let result = match log::load(db, &key)
         .await
@@ -69,21 +111,58 @@ pub async fn order(db: &Db, gateway: &dyn Venue, req: TradeRequest) -> GatewayRe
             if let Some(Outcome::Order(r)) = entry.result {
                 return Ok(*r);
             }
-            gateway
-                .resolve_trade(req, &entry.lookup)
-                .await?
-                .ok_or_else(|| {
-                    uncertain(
-                        &venue,
-                        "Исход ранее отправленного ордера Base ещё не подтверждён",
-                    )
-                    .pending(entry.lookup)
-                })?
+            log::capture(async {
+                gateway
+                    .resolve_trade(req, &entry.lookup)
+                    .await?
+                    .ok_or_else(|| {
+                        uncertain(
+                            &venue,
+                            "Исход ранее отправленного ордера Base ещё не подтверждён",
+                        )
+                        .pending(entry.lookup)
+                    })
+            })
+            .await?
         }
-        None => log::scope(db, &key, operation, gateway.trade(req)).await?,
+        None => log::capture(log::scope(db, &key, operation, gateway.trade(req))).await?,
     };
-    commit(db, &key, &venue, Outcome::Order(Box::new(result.clone()))).await?;
-    Ok(result)
+    match commit(db, &key, &venue, Outcome::Order(Box::new(result))).await? {
+        Outcome::Order(done) => Ok(*done),
+        _ => Err(uncertain(
+            &venue,
+            "Несовместимый вид сохранённого результата Base",
+        )),
+    }
+}
+
+fn withdrawal_key(
+    deal: &str,
+    venue: &VenueId,
+    to: &VenueId,
+    account: Option<&DexAccountId>,
+) -> GatewayResult<String> {
+    serde_json::to_string(&("withdraw", deal, venue, to, account))
+        .map_err(|e| uncertain(venue, e.to_string()))
+}
+
+/// Записанные до POST реквизиты нужны для сверки вывода даже после списания всего баланса.
+pub async fn previous_withdrawal(
+    db: &Db,
+    deal: &str,
+    venue: &VenueId,
+    to: &VenueId,
+    account: Option<&DexAccountId>,
+) -> GatewayResult<Option<WithdrawRequest>> {
+    let key = withdrawal_key(deal, venue, to, account)?;
+    match log::load(db, &key).await.map_err(|e| uncertain(venue, e))? {
+        None => Ok(None),
+        Some(Entry {
+            operation: Request::Withdrawal(req),
+            ..
+        }) => Ok(Some(*req)),
+        Some(_) => Err(uncertain(venue, "Несовместимая запись вывода Base")),
+    }
 }
 
 /// Один вывод USDC. Успешный результат позволяет обычному наблюдателю продолжить отслеживание зачисления.
@@ -103,8 +182,7 @@ pub async fn withdraw(
             "Площадка не сохраняет идентификатор вывода Base USDC до отправки",
         ));
     }
-    let key = serde_json::to_string(&("withdraw", &req.deal_id, &venue, to, account))
-        .map_err(|e| uncertain(&venue, e.to_string()))?;
+    let key = withdrawal_key(&req.deal_id, &venue, to, account)?;
     let operation = Request::Withdrawal(Box::new(req.clone()));
     let result = match log::load(db, &key)
         .await
@@ -145,12 +223,11 @@ pub async fn withdraw(
             .await?
         }
     };
-    commit(
-        db,
-        &key,
-        &venue,
-        Outcome::Withdrawal(Box::new(result.clone())),
-    )
-    .await?;
-    Ok(result)
+    match commit(db, &key, &venue, Outcome::Withdrawal(Box::new(result))).await? {
+        Outcome::Withdrawal(done) => Ok(*done),
+        _ => Err(uncertain(
+            &venue,
+            "Несовместимый вид сохранённого результата Base",
+        )),
+    }
 }

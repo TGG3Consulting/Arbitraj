@@ -169,7 +169,9 @@ pub fn result(
         let e = GatewayError::new(ErrorCode::PriceOutOfRange, None, m);
         return Err(ctx.tag(e).with_raw(s.to_string()));
     }
-    let quote = num::dec_opt(s, "filled_total")?
+    let filled_total = num::dec_opt(s, "filled_total")?;
+    crate::gateway::settlement_intent::note_gross(filled_total);
+    let quote = filled_total
         .or(num::dec_opt(s, "fill_price")?)
         .ok_or_else(|| errors::bad("нет filled_total", &s.to_string()))?;
     let status = if filled.is_zero() {

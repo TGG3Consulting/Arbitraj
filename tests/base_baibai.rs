@@ -1,4 +1,6 @@
 //! Плательщик, индивидуальная комиссия, остаток кастодиана и срок кривой BaiBai на архивном хеше.
+#[path = "common/first_run_profiles.rs"]
+mod first_run_profiles;
 use alloy_primitives::U256;
 use arb::venues::bsc_dex::pools::families;
 use serde_json::Value;
@@ -54,11 +56,10 @@ fn check_market(sample: &Value) {
 #[test]
 fn compatible_two_market_release_cannot_spend_for_baibai() {
     use alloy_primitives::b256;
-    use arb::venues::bsc_dex::pools::direct_module;
     let old = b256!("ce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403");
-    assert!(direct_module::accepts(8453, "elfomofi", old));
-    assert!(direct_module::accepts(8453, "lunarbase", old));
-    assert!(!direct_module::accepts(8453, "baibai", old));
+    assert!(first_run_profiles::recommended(8453, "elfomofi").contains(&old));
+    assert!(first_run_profiles::recommended(8453, "lunarbase").contains(&old));
+    assert!(!first_run_profiles::recommended(8453, "baibai").contains(&old));
 }
 
 #[test]

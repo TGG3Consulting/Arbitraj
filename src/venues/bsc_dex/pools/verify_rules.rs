@@ -143,13 +143,10 @@ pub fn check(c: &Candidate, expected_factory: Address, r: &Read) -> Result<(), S
             r.factory, c.family.id
         ));
     }
-    let want = if c.family.variant == super::family_variant::Variant::RingFew {
-        let [a, b] =
-            super::ring::path(c.coin, c.quote).ok_or("Ring: нет проверенной пары underlying")?;
-        sorted(a, b)
-    } else {
-        sorted(c.coin, c.quote)
-    };
+    if c.family.variant == super::family_variant::Variant::RingFew {
+        return Err("Ring: нужна проверка обеих обёрток через ring_proof".into());
+    }
+    let want = sorted(c.coin, c.quote);
     if (r.token0, r.token1) != want {
         return Err(format!(
             "токены пула {} / {} ≠ монета {} и встречный {} (адрес монеты — от биржи)",

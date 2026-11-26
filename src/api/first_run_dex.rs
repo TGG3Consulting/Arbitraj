@@ -18,6 +18,8 @@ struct Profile {
     id: String,
     source: String,
     settings: BTreeMap<String, Parameter>,
+    #[serde(default)]
+    venue_settings: BTreeMap<String, Parameter>,
 }
 
 /// Строковое поле, перечень адресов или сетевые ключи дочерних фабрик (dex.sub_dex).
@@ -77,12 +79,16 @@ pub async fn sections(st: &AppState) -> Result<Vec<Section>, ApiError> {
         ) else {
             continue;
         };
-        scopes.insert((chain_id, network), suffix.unwrap_or_default());
+        scopes.insert(
+            (chain_id, network),
+            (suffix.unwrap_or_default(), id.clone()),
+        );
     }
     let mut sections = Vec::new();
     for p in profiles()? {
-        let suffix = scopes.get(&(p.chain_id, p.network.clone()));
-        let rec = p
+        let place = scopes.get(&(p.chain_id, p.network.clone()));
+        let suffix = place.map(|(s, _)| s);
+        let mut rec: Vec<_> = p
             .settings
             .iter()
             .map(|(name, value)| Rec {
@@ -99,6 +105,19 @@ pub async fn sections(st: &AppState) -> Result<Vec<Section>, ApiError> {
                 }),
             })
             .collect();
+        rec.extend(p.venue_settings.iter().map(|(name, value)| Rec {
+            name: name.clone(),
+            area: p.network.clone(),
+            unit: None,
+            value: Some(value.display(name, "")),
+            method: None,
+            source: Some(p.source.clone()),
+            rationale: format!("Сетевое чтение контрактов {}.", p.id),
+            prefill: place.map(|(_, venue)| Prefill {
+                kind: "Venue".into(),
+                id: Some(venue.clone()),
+            }),
+        }));
         sections.push(Section {
             title: format!("{} · {}", p.network, p.id),
             intro: format!("Сеть {}. Результаты проверки пулов и квотеров приведены в docs/BASE_ETHEREUM_SETTINGS.md.", p.chain_id),
@@ -137,6 +156,20 @@ mod tests {
             ))
             .unwrap(),
         );
+        let registered: std::collections::BTreeMap<String, Value> = serde_json::from_str(
+            include_str!("../../tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json"),
+        )
+        .unwrap();
+        for record in registered.values() {
+            pairs.extend(
+                record["samples"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|s| s["cases"].is_array())
+                    .cloned(),
+            );
+        }
         for p in all {
             let snapshot = [&base, &eth]
                 .into_iter()
@@ -201,8 +234,15 @@ mod tests {
                                 .as_u64()
                                 .is_some_and(|size| size > 0),
                             "{} / {} / {k}: нет записи о коде адреса {text}",
-                            p.network, p.id
+                            p.network,
+                            p.id
                         );
+                    } else if k == "dex.pool_code_hashes" && p.id == "ring-exchange-ethereum" {
+                        let directory: serde_json::Value = serde_json::from_str(include_str!(
+                            "../../tests/data/first_run_dex_2026-11-26/ring_directory.json"
+                        ))
+                        .unwrap();
+                        assert_eq!(directory["pair_init"].as_str(), Some(text.as_str()));
                     } else if k == "dex.pool_code_hashes" {
                         assert!(
                             pairs.iter().any(|row| row["network"] == p.network

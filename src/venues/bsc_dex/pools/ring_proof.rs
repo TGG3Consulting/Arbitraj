@@ -12,13 +12,16 @@ use crate::core::types::PoolRef;
 use crate::venues::bsc_dex::{ctx::Ctx, node::rpc};
 use alloy::sol;
 use alloy::sol_types::SolCall;
-use alloy_primitives::{Address, B256, Bytes, U256, b256, keccak256};
+use alloy_primitives::{Address, B256, Bytes, U256, keccak256};
 use serde_json::{Value, json};
 
 sol! {
     interface IRingProof {
         function getWrappedToken(address asset) external view returns (address);
         function getPair(address a, address b) external view returns (address);
+        function WETH() external view returns (address);
+        function fwWETH() external view returns (address);
+        function fewFactory() external view returns (address);
         function factory() external view returns (address);
         function token() external view returns (address);
         function token0() external view returns (address);
@@ -28,24 +31,24 @@ sol! {
     }
 }
 
-const PAIR_RUNTIME: B256 =
-    b256!("330be2c0f89c41b8879b8015445a667347764915107aced846fd148cc7c03bc0");
-const FW_RUNTIME: B256 = b256!("be63f68c8de6e3f7cf411d9b117b931128468c36e0753fc5878fd5359f16acf5");
-
-const MC: Address = alloy_primitives::address!("ca11bde05977b3631167028862be2a173976ca11");
-
 fn view<C: SolCall>(target: Address, method: C) -> (Address, Bytes) {
     (target, Bytes::from(method.abi_encode()))
 }
 
 async fn aggregate(
     ctx: &Ctx,
+    multicall_address: Address,
     calls: &[(Address, Bytes)],
     tag: &Value,
 ) -> crate::gateway::errors::GatewayResult<Vec<Result<Bytes, String>>> {
     use crate::venues::bsc_dex::node::multicall;
     let data = multicall::encode(calls);
-    let bytes: Bytes = rpc::call(ctx, "eth_call", json!([{"to":MC,"input":data},tag])).await?;
+    let bytes: Bytes = rpc::call(
+        ctx,
+        "eth_call",
+        json!([{"to":multicall_address,"input":data},tag]),
+    )
+    .await?;
     multicall::decode(&bytes, calls.len())
 }
 
@@ -54,17 +57,62 @@ async fn code(ctx: &Ctx, a: Address, tag: &Value) -> crate::gateway::errors::Gat
     Ok(keccak256(raw))
 }
 
+/// Solidity immutables: ищем целые операнды PUSH32, пропуская данные других PUSH.
+fn router_links(code: &[u8], layout: &ring::Layout) -> bool {
+    let expected =
+        [layout.factory, layout.few, layout.permit, layout.native].map(|a| a.into_word());
+    let mut found = [false; 4];
+    let mut index = 0;
+    while let Some(&op) = code.get(index) {
+        index += 1;
+        if (0x60..=0x7f).contains(&op) {
+            let end = index + usize::from(op - 0x5f);
+            let Some(value) = code.get(index..end) else {
+                break;
+            };
+            if op == 0x7f {
+                for (slot, key) in found.iter_mut().zip(&expected) {
+                    *slot |= value == key.as_slice();
+                }
+            }
+            index = end;
+        }
+    }
+    found.into_iter().all(|x| x)
+}
+
+async fn infrastructure(ctx: &Ctx, layout: &ring::Layout, tag: &Value) -> Result<(), String> {
+    let replies = futures_util::future::try_join_all(
+        layout
+            .contracts()
+            .into_iter()
+            .map(|a| rpc::call::<Bytes>(ctx, "eth_getCode", json!([a, tag]))),
+    )
+    .await
+    .map_err(|e| e.message)?;
+    let hashes_match = replies
+        .iter()
+        .zip(&layout.infrastructure)
+        .all(|(code, hash)| !code.is_empty() && keccak256(code) == *hash);
+    if hashes_match && router_links(&replies[3], layout) {
+        Ok(())
+    } else {
+        Err("Ring: код контрактов или адреса в коде Universal Router расходятся".into())
+    }
+}
+
 struct Market {
+    layout: ring::Layout,
     pool: Address,
     assets: [Address; 2],
     fw: [Address; 2],
 }
 
 impl Market {
-    fn from(c: &Candidate) -> Option<Self> {
+    fn from(c: &Candidate, layout: ring::Layout) -> Option<Self> {
         let pool = c.pool.parse().ok()?;
-        let [a, b] = ring::path(c.coin, c.quote)?;
-        if !ring::check_pool(pool, a, b) {
+        let [a, b] = layout.path(c.coin, c.quote)?;
+        if !layout.check_pool(pool, a, b) {
             return None;
         }
         let (assets, fw) = if a < b {
@@ -72,15 +120,24 @@ impl Market {
         } else {
             ([c.quote, c.coin], [b, a])
         };
-        Some(Self { pool, assets, fw })
+        Some(Self {
+            layout,
+            pool,
+            assets,
+            fw,
+        })
     }
     fn requests(&self) -> Vec<(Address, Bytes)> {
         let mut calls = vec![
+            view(self.layout.quoter, IRingProof::WETHCall {}),
+            view(self.layout.quoter, IRingProof::fwWETHCall {}),
+            view(self.layout.quoter, IRingProof::factoryCall {}),
+            view(self.layout.quoter, IRingProof::fewFactoryCall {}),
             view(self.pool, IRingProof::factoryCall {}),
             view(self.pool, IRingProof::token0Call {}),
             view(self.pool, IRingProof::token1Call {}),
             view(
-                ring::FACTORY,
+                self.layout.factory,
                 IRingProof::getPairCall {
                     a: self.fw[0],
                     b: self.fw[1],
@@ -91,7 +148,7 @@ impl Market {
             calls.extend([
                 view(fw, IRingProof::factoryCall {}),
                 view(fw, IRingProof::tokenCall {}),
-                view(ring::FEW, IRingProof::getWrappedTokenCall { asset }),
+                view(self.layout.few, IRingProof::getWrappedTokenCall { asset }),
                 view(fw, IRingProof::decimalsCall {}),
                 view(asset, IRingProof::decimalsCall {}),
             ]);
@@ -101,10 +158,25 @@ impl Market {
 
     fn check(&self, rows: &[Bytes]) -> bool {
         let addr = |data: &Bytes, a: Address| data.as_ref() == a.into_word().as_slice();
-        let [factory, t0, t1, pair, wrappers @ ..] = rows else {
+        let [
+            qnative,
+            qfw,
+            qfactory,
+            qfew,
+            factory,
+            t0,
+            t1,
+            pair,
+            wrappers @ ..,
+        ] = rows
+        else {
             return false;
         };
-        if !addr(factory, ring::FACTORY)
+        if !addr(qnative, self.layout.native)
+            || !addr(qfw, self.layout.wrapped(self.layout.native))
+            || !addr(qfactory, self.layout.factory)
+            || !addr(qfew, self.layout.few)
+            || !addr(factory, self.layout.factory)
             || !addr(t0, self.fw[0])
             || !addr(t1, self.fw[1])
             || !addr(pair, self.pool)
@@ -116,7 +188,7 @@ impl Market {
             .chunks_exact(5)
             .zip(self.assets.iter().zip(&self.fw))
             .all(|(r, (&asset, &fw))| {
-                addr(&r[0], ring::FEW)
+                addr(&r[0], self.layout.few)
                     && addr(&r[1], asset)
                     && addr(&r[2], fw)
                     && r[3].len() == 32
@@ -125,13 +197,13 @@ impl Market {
             })
     }
 
-    async fn verdict(&self, ctx: &Ctx, c: &Candidate, tag: &Value) -> Verdict {
+    async fn verdict(&self, ctx: &Ctx, c: &Candidate, tag: &Value, initial: (u64, u64)) -> Verdict {
         let calls = self.requests();
         let response = tokio::try_join!(
             code(ctx, self.pool, tag),
             code(ctx, self.fw[0], tag),
             code(ctx, self.fw[1], tag),
-            aggregate(ctx, &calls, tag)
+            aggregate(ctx, self.layout.multicall, &calls, tag)
         );
         let (pool, fw0, fw1, words) = match response {
             Ok(v) => v,
@@ -140,11 +212,23 @@ impl Market {
         let Ok(words) = words.into_iter().collect::<Result<Vec<_>, _>>() else {
             return Verdict::Rejected("Ring: ошибка чтения связанных контрактов".into());
         };
-        if pool != PAIR_RUNTIME || fw0 != FW_RUNTIME || fw1 != FW_RUNTIME || !self.check(&words) {
+        if pool != self.layout.pair_runtime
+            || fw0 != self.layout.wrapper_runtime
+            || fw1 != self.layout.wrapper_runtime
+            || !self.check(&words)
+        {
             return Verdict::Rejected(
                 "Ring: код, реестр, исходный токен или decimals расходятся".into(),
             );
         }
+        if ctx.settings.generation() != initial.0
+            || ctx.int("dex.evm_chain_id").ok() != Some(initial.1)
+        {
+            return Verdict::Failed(
+                "Ring: настройки изменились во время проверки, требуется повтор".into(),
+            );
+        }
+        super::ring_acceptance::record(ctx, c.family.id, &self.layout, self.pool, initial.1);
         Verdict::Taken(Box::new(Found {
             family: c.family,
             reference: PoolRef::Contract(self.pool),
@@ -179,11 +263,13 @@ pub(in crate::venues::bsc_dex) async fn backed_quote(
         return Err(ctx.err(ErrorCode::NoRoute, "Ring: вход отсутствует в паре"));
     };
     let quote = quoter_calls::request(ctx, e, token_in, amount)?;
+    let layout = ring::checked(ctx, e.family.id, e.pool.reference.address())?;
     let collateral = IRingProof::balanceOfCall {
-        owner: ring::wrapped(output),
+        owner: layout.wrapped(output),
     };
     let results = aggregate(
         ctx,
+        layout.multicall,
         &[quote, (output, Bytes::from(collateral.abi_encode()))],
         &json!(block),
     )
@@ -219,17 +305,44 @@ pub(super) async fn verify(
     struct Head {
         hash: B256,
     }
+    let initial = (
+        ctx.settings.generation(),
+        ctx.int("dex.evm_chain_id").unwrap_or(0),
+    );
     let tag = rpc::call::<Head>(ctx, "eth_getBlockByNumber", json!(["latest", false]))
         .await
         .map(|h| json!({"blockHash":h.hash,"requireCanonical":true}));
+    let mut deployments = std::collections::HashMap::new();
     for &i in indices {
         let c = &candidates[i];
-        let result = match (&tag, Market::from(c)) {
+        let layout = match ring::active(ctx, c.family.id) {
+            Ok(layout) => layout,
+            Err(e) => {
+                out[i] = Some(Verdict::Failed(e.message));
+                continue;
+            }
+        };
+        if let Ok(tag) = &tag {
+            let lookup = (
+                c.family.id,
+                layout.contracts(),
+                layout.infrastructure,
+                layout.native,
+            );
+            if let std::collections::hash_map::Entry::Vacant(entry) = deployments.entry(lookup) {
+                entry.insert(infrastructure(ctx, &layout, tag).await);
+            }
+            if let Err(why) = &deployments[&lookup] {
+                out[i] = Some(Verdict::Failed(why.clone()));
+                continue;
+            }
+        }
+        let result = match (&tag, Market::from(c, layout)) {
             (Err(e), _) => Verdict::Failed(e.message.clone()),
             (_, None) => Verdict::Rejected(
                 "Ring: адрес не совпадает с CREATE2 пары канонических обёрток".into(),
             ),
-            (Ok(tag), Some(m)) => m.verdict(ctx, c, tag).await,
+            (Ok(tag), Some(m)) => m.verdict(ctx, c, tag, initial).await,
         };
         out[i] = Some(result);
     }
@@ -246,7 +359,9 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(j["count"], 474);
-        let family = super::super::families::make("ring", "ring_few_v2").unwrap();
+        let id = "ring-exchange-ethereum";
+        let layout = ring::Layout::archived(super::ring::archived_profile(1, id).unwrap()).unwrap();
+        let family = super::super::families::make(id, "ring_few_v2").unwrap();
         let mut passed = 0;
         let mut wrong = 0;
         for p in j["rows"].as_array().unwrap() {
@@ -262,19 +377,19 @@ mod tests {
                 coin: a,
                 quote: b,
             };
-            let market = Market::from(&c);
+            let market = Market::from(&c, layout.clone());
             if p["verified"] == true {
                 let m = market.unwrap();
                 assert_eq!(m.assets, [a, b]);
                 assert_eq!(
                     j["code_hash"][c.pool.as_str()],
-                    format!("{PAIR_RUNTIME:#x}")
+                    format!("{:#x}", layout.pair_runtime)
                 );
                 for (i, fw) in m.fw.into_iter().enumerate() {
                     assert_eq!(ws[i], format!("{fw:#x}"));
                     assert_eq!(
                         j["code_hash"][format!("{fw:#x}")],
-                        format!("{FW_RUNTIME:#x}")
+                        format!("{:#x}", layout.wrapper_runtime)
                     );
                     assert_eq!(token(i)["verified"], true);
                 }

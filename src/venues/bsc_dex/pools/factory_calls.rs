@@ -149,6 +149,9 @@ pub fn plan(
             "dex.factory"
         };
         let factory = ctx.dex_addr(registry, f.id)?;
+        let ring = (f.variant == super::family_variant::Variant::RingFew)
+            .then(|| super::ring::active(ctx, f.id))
+            .transpose()?;
         if f.proto == Proto::Slipstream {
             match spacings(ctx, f.id) {
                 Ok(list) => qs = list.into_iter().map(Q::Slipstream).collect(),
@@ -213,6 +216,20 @@ pub fn plan(
         } else {
             None
         };
+        let pmm = if matches!(f.proto, Proto::Elfomo | Proto::BaiBai | Proto::Lunar) {
+            match super::pmm_profile::Profile::read(ctx, f.id, f.proto) {
+                Ok(p) if p.pool == factory => Some(p),
+                _ => {
+                    out.notes.push(format!(
+                        "{}: набор рабочих параметров PMM неполон или противоречив",
+                        f.id
+                    ));
+                    continue;
+                }
+            }
+        } else {
+            None
+        };
         let before = out.calls.len();
         let stable_u = matches!(f.proto, Proto::PancakeStable | Proto::ListaStable);
         let wrapped = stable_native::wrapped(ctx);
@@ -226,30 +243,19 @@ pub fn plan(
                     .then(|| stable_native::registry_pair(coin, quote, wrapped))
                     .flatten();
                 for (a, b) in std::iter::once((coin, quote)).chain(alt) {
-                    if matches!(f.proto, Proto::BaiBai | Proto::Lunar) {
-                        if !(if f.proto == Proto::BaiBai {
-                            super::baibai::pair(a, b)
-                        } else {
-                            super::lunar::pair(a, b)
-                        }) {
+                    if let Some(p) = &pmm {
+                        if !p.pair(a, b) {
                             continue;
                         }
                         qs.clear();
-                        qs.push(if f.proto == Proto::BaiBai {
-                            Q::BaiBai(factory)
-                        } else {
-                            Q::Lunar(factory)
+                        qs.push(match f.proto {
+                            Proto::BaiBai => Q::BaiBai(factory, p.counter),
+                            Proto::Lunar => Q::Lunar(factory, p.counter),
+                            _ => Q::Elfomo(factory, a, b),
                         });
                     }
-                    if f.proto == Proto::Elfomo {
-                        if !super::elfomo::pair(a, b) {
-                            continue;
-                        }
-                        qs.clear();
-                        qs.push(Q::Elfomo(factory, a, b));
-                    }
-                    let (a, b) = if f.variant == super::family_variant::Variant::RingFew {
-                        let Some([x, y]) = super::ring::path(a, b) else {
+                    let (a, b) = if let Some(layout) = &ring {
+                        let Some([x, y]) = layout.path(a, b) else {
                             continue;
                         };
                         (x, y)

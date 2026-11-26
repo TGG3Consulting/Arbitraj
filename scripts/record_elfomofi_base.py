@@ -18,6 +18,23 @@ SIZES = {"0x4200000000000000000000000000000000000006":(10**14,10**15),
          "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2":(10**6,10**7)}
 
 
+def immutable_layout(url, roles, runtime):
+    """Сверенные компилятором смещения ролей в реальном runtime, включая все использования."""
+    r=requests.get(url.partition("?")[0],params={"fields":"runtimeBytecode.transformations,runtimeBytecode.transformationValues"},timeout=20)
+    r.raise_for_status()
+    layout=r.json()["runtimeBytecode"]
+    values=layout["transformationValues"]["immutables"]
+    result={}
+    for role, address in roles.items():
+        word=bytes.fromhex(address[2:]).rjust(32,b"\x00")
+        ids={i for i,value in values.items() if bytes.fromhex(value[2:])==word}
+        offsets=[t["offset"] for t in layout["transformations"] if t.get("reason")=="immutable" and t["id"] in ids]
+        if not offsets or any(runtime[n-1]!=0x7f or runtime[n:n+32]!=word for n in offsets):
+            raise ValueError(f"Роль {role} расходится с runtime")
+        result[role]=offsets
+    return result
+
+
 def measure(e, token_in, token_out, amount, vault):
     owner = HOLDERS["base"][token_in]
     call = lambda to, data: {"from":owner,"to":to,"data":data,"gas":hex(1500000)}
@@ -79,6 +96,7 @@ def capture():
         raise ValueError("ABI swap изменился")
     args=params["creationBytecode"]["transformationValues"]["constructorArguments"]
     pricing,vault=decode(["address","address"],bytes.fromhex(args[2:]))
+    layout=immutable_layout(url,dict(pricing=pricing,vault=vault),bytes.fromhex(rpc(e,"eth_getCode",[ROUTER,e["selector"]])[2:]))
     impl="0x"+rpc(e,"eth_getStorageAt",[pricing,SLOT,e["selector"]])[-40:]
     code=lambda a: "0x"+keccak(bytes.fromhex(rpc(e,"eth_getCode",[a,e["selector"]])[2:])).hex()
     markets=c.one(ROUTER,"getSupportedPairs()",returns=["(address,address)[]"])[0]
@@ -95,7 +113,7 @@ def capture():
     return dict(chain_id=e["chain_id"],selector=e["selector"],endpoint=e["endpoint"],source=DOC,router=ROUTER,
                 router_runtime=code(ROUTER),verified=url,source_sha256=hashlib.sha256(
                     router["sources"]["src/ElfomoFi.sol"]["content"].encode()).hexdigest(),
-                pricing=pricing,pricing_code=code(pricing),pricing_slot=SLOT,pricing_implementation=impl,
+                immutable_layout=layout,pricing=pricing,pricing_code=code(pricing),pricing_slot=SLOT,pricing_implementation=impl,
                 pricing_impl_code=code(impl),vault=vault,pairs=markets,reads=c.calls,cases=cases,
                 cap_probe=dict(call=quote_call,amount=str(amount),out=capped,vault_balance=str(vault_balance)))
 

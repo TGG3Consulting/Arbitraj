@@ -123,6 +123,14 @@ def tables(network, snapshots, profiles):
                     "На двух размерах в обоих направлениях пул отдал расчётный выход; запрос ещё одной минимальной "
                     "единицы отвергнут инвариантом самого пула. Исполнитель отдельно подтвердил движения кошелька. "
                     f"[Блоки, пулы, объёмы и причины отката](../{v2_probes.as_posix()})."])
+    if not base:
+        registry_path = Path("tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json")
+        registered = read(registry_path)
+        counts = ", ".join(f"{dex} {len(row['pools'])}" for dex, row in registered.items())
+        out.extend(["", f"Пять фабрик V2 Ethereum. Все адреса проверены по обоим getPair и CREATE2: {counts}. "
+                    "На одном пуле каждой фабрики подтверждены списание, выплата, возврат и цена ещё одной единицы на двух размерах. "
+                    "Первый испробованный пул JustMoney отклонил обмен. Проверка сделки через такую пару по-прежнему требуется. "
+                    f"[Реестры, расчёты и исходные отказы](../{registry_path.as_posix()})."])
     variable_path = Path("tests/data/base_ethereum_v2_variable_fees.json")
     variable = [r for r in read(variable_path) if r["network"] == network]
     if variable:
@@ -279,6 +287,13 @@ def tables(network, snapshots, profiles):
     baibai = Path("tests/data/first_run_dex_2026-11-26/baibai_base.json")
     if base and baibai.exists():
         bai = read(baibai)
+        out.extend(["", "Для ElfomoFi, LunarBase и BaiBai адреса рабочих контрактов и токенов, реализации прокси и хеши runtime "
+                    "берутся из настроек соответствующего DEX. Таблица первого запуска предлагает значения архивного снимка. "
+                    "dex.pmm_counter — встречная монета; dex.pmm_base_tokens — базовые монеты с полными обменами в архиве. "
+                    "В dex.pmm_runtime_hashes у ElfomoFi идут router, pricing proxy, implementation; у LunarBase — pool proxy, implementation; "
+                    "у BaiBai — общий runtime прокси, затем реализации Entry, CurveBook, Custodian. В dex.pmm_aux_implementations у BaiBai "
+                    "сначала адрес реализации CurveBook, затем Custodian. dex.pmm_pricing_offsets и dex.pmm_vault_offsets у ElfomoFi привязывают эти роли к словам PUSH32 в runtime. "
+                    "Другое размещение проверяется по его фактическому коду, слотам и ABI на одном блоке. Для *_module dex.pmm_module_bindings сопоставляет фактические байты PUSH рынка и vault в runtime исполнителя с рабочими ролями. Старая ссылка BaiBai на один контракт соответствует рынку dex.native_wrapped."])
         out.extend(["", "BaiBai · профиль WETH/USDC и NVDAc/USDC сверяет три proxy, их реализации и взаимные ссылки. "
                     "quoteFor читает чистую сумму для фактического плательщика. На контрольном блоке TTL книги составил 8 секунд. "
                     "В четырёх архивных обменах точный минимум совпал с зачислением на кошелёк, а минимум на единицу выше привёл к отказу. "
@@ -369,7 +384,7 @@ def tables(network, snapshots, profiles):
         out.extend(["", "9mm V3, Throne V3 и Omni V3 на Base. Для собственного кошелька подтверждён общий модуль 0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24. "
                     "При настройке `dex.kind=base_native_v3_module` указывается его адрес в `dex.router`. Предустановленный режим `base_native_v3` наблюдает рынок. "
                     "Роутер каждой фабрики оплачивает фактически потреблённый вход. Модуль сверяет полный расход и чистую выплату кошельку, включая перевод токена. "
-                    "На блоке 62 262 756 в семи из девяти сценариев прошли обе стороны. Два отказа официального квотера Omni при 1 и 10 USDC получены при пределах 2 млн газа. "
+                    "На блоке 62 262 756 в семи из девяти сценариев прошли обе стороны. При лимите 16 777 216 газа через Omni прошли дополнительные круги с входом 0,05 и 0,10 USDC, а также 0,05, 0,10 и 1 frxUSD. Исходные frxUSD получены в другом пуле за 12 USDC. Каждый из десяти обменов проверен по поступлению в кошелёк через роутер и общий модуль, с откатом при minOut+1. Из 1 frxUSD поступило 0,999945 USDC, после обратного обмена — 0,999799709272636829 frxUSD. Для входа 1 и 10 USDC и 10 frxUSD квотер вернул Unexpected error. Причина внутри пула не установлена. "
                     "Проверены события создания и getPool для 896 пулов 9mm, 24 Throne и 50 Omni. Настройки охватывают все использованные ставки на этом блоке, включая 20 000 у 83 пулов 9mm и 50 у 10 пулов Omni. "
                     "[Платежи, комиссии пулов и адреса](../tests/data/first_run_dex_2026-11-26/base_native_v3.json) · "
                     "[Фабрики и TickLens](../tests/data/first_run_dex_2026-11-26/base_native_v3_profiles.json) · [970 пулов из событий фабрик](../tests/data/first_run_dex_2026-11-26/base_native_v3_directory.json)."])
@@ -723,6 +738,20 @@ def tables(network, snapshots, profiles):
             task = "DEX-25 · Entry подтвердил выплаты и комиссии WETH/USDC и NVDAc/USDC. В обоих рынках проверено по две стороны и два объёма"
         if base and str(row["id"]) == "7601" and lunar.exists():
             task = "DEX-24 · один действующий native ETH/USDC, фактические implementation и выплаты по обеим сторонам; три размещения приостановлены"
+        if base and str(row["id"]) == "8849":
+            homelander = read(Path("tests/data/first_run_dex_2026-11-26/homelander_base.json"))
+            markets = homelander["markets"]
+            count = sum(m["matches_active"] for m in markets)
+            task = (f"DEX-26 · у {count}/{len(markets)} пулов Hydrex и QuickSwap активный hook совпал с реестром Homelander. "
+                    "Адаптер объёма маркирован doublecounted. Тот же обмен учитывается в исходном пуле")
+        if str(row["id"]) == "9154":
+            nami = read(Path(f"tests/data/first_run_dex_2026-11-26/nami_{network}.json"))
+            count = sum(len(m["cases"]) for m in nami["markets"])
+            task = (f"DEX-27 · фабрика {nami['config']['factory']}, квотер {nami['config']['quoter']}; "
+                    f"{count} архивных полных обменов V5. "
+                    + ("8/8 обменов изменили собственный пул." if base else
+                       "4/4 обмена дополнительно изменили пул Uniswap V3 0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640.")
+                    + " Динамический hook требует проверки профиля и области воздействия при объединении путей")
         if base and str(row["id"]) == "7260" and elfomo.exists():
             task = "DEX-23 · 12 пар в реестре ElfomoFi. Подтверждены прямые выплаты WETH/USDC и cbBTC/USDC, нулевые котировки USDT/USDC"
         if base and str(row["id"]) == "9172" and aero_basic.exists():

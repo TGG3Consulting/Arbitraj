@@ -1815,6 +1815,9 @@
     "source": "https://docs.solidly.com/resources/contract-addresses.html",
     "settings": {
       "dex.kind": "solidly_v3",
+      "dex.module_runtime_hashes": [
+        "0x9e4240b9b7ebde8f9838aadeec18c22bdf9a812df0468dd487b7af2fadd5e020"
+      ],
       "dex.factory": "0x70fe4a44ea505cfa3a57b95cf2862d4fd5f0f687"
     },
     "verified_module": {
@@ -1831,6 +1834,9 @@
     "source": "https://docs.solidly.com/resources/contract-addresses.html",
     "settings": {
       "dex.kind": "solidly_v3",
+      "dex.module_runtime_hashes": [
+        "0x9e4240b9b7ebde8f9838aadeec18c22bdf9a812df0468dd487b7af2fadd5e020"
+      ],
       "dex.factory": "0x70fe4a44ea505cfa3a57b95cf2862d4fd5f0f687"
     },
     "verified_module": {
@@ -1895,15 +1901,52 @@
     "network": "base",
     "chain_id": 8453,
     "id": "elfomofi",
-    "source": "https://docs.elfomo.fi/integration/",
+    "source": "https://docs.elfomo.fi/integration/ · tests/data/first_run_dex_2026-11-26/elfomofi_base.json",
     "settings": {
       "dex.kind": "elfomofi",
+      "dex.module_runtime_hashes": [
+        "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24",
+        "0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403",
+        "0xd3abddebdd155ff956b970579304da391511f945803c0ae5f1ec8f28c10a64bb"
+      ],
       "dex.pmm_pool": "0xf0f0f0f0fb0d738452efd03a28e8be14c76d5f73",
       "dex.oracle": "0xffffffbb2d432b8acb4c57d556c0c721a431d038",
       "dex.pool_implementation": "0x223987c32325ba6eafca5b38aeae13a1c80e235d",
       "dex.vault": "0xbb1b19f138db3925883a96ff7a304277460e0c99",
       "dex.multi_pair": true,
-      "dex.pmm_ladder_counter": true
+      "dex.pmm_ladder_counter": true,
+      "dex.pmm_counter": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "dex.pmm_base_tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+      ],
+      "dex.pmm_runtime_hashes": [
+        "0xea30384390487d3c69cf1457cac8d768d0ec6f2cbb9e29de948e40b9a386eb59",
+        "0x4d9be648c5bf39973670d9f8b481d5d0b971e6a2db2deccc6b98cde21c5dd83e",
+        "0x366d1ba06b126b868f54510ecc4a3e64110d72f9e49de1e1d22e20148e041636"
+      ],
+      "dex.pmm_pricing_offsets": [
+        "401",
+        "503",
+        "1666",
+        "1919",
+        "2480",
+        "2904",
+        "3628",
+        "3729",
+        "4285",
+        "4547"
+      ],
+      "dex.pmm_vault_offsets": [
+        "632",
+        "3127",
+        "3900"
+      ],
+      "dex.pmm_module_bindings": [
+        "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24 289 4473",
+        "0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403 736 3407",
+        "0xd3abddebdd155ff956b970579304da391511f945803c0ae5f1ec8f28c10a64bb 352 2111"
+      ]
     },
     "verified_module": {
       "runtime_keccak": "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24",
@@ -2029,7 +2072,8 @@
       ],
       "dex.v2_fee_source": "factory",
       "dex.v2_fee_method": "totalFeeBasisPoint()",
-      "dex.v2_fee_denominator": 10000
+      "dex.v2_fee_denominator": 10000,
+      "dex.v2_fee_rule_hash": "0x4d3e8e72d6ddf8c7fbddb4b6bfd224a6ce7b575141d0f5fadb1e4a43fb0637b6"
     }
   },
   {
@@ -2045,7 +2089,8 @@
       ],
       "dex.v2_fee_source": "pool",
       "dex.v2_fee_method": "swapFee()",
-      "dex.v2_fee_denominator": 10000
+      "dex.v2_fee_denominator": 10000,
+      "dex.v2_fee_rule_hash": "0x6ee7759317c63f63802db7a26a092757aa2026921f4e342e2ab255cf24c50c08"
     }
   },
   {
@@ -2061,7 +2106,8 @@
       ],
       "dex.v2_fee_source": "pool",
       "dex.v2_fee_method": "fee()",
-      "dex.v2_fee_denominator": 10000
+      "dex.v2_fee_denominator": 10000,
+      "dex.v2_fee_rule_hash": "0x3577f23030ad9476f93b74a83b35966e1be2b13c243152c16760182bca0587d4"
     }
   },
   {
@@ -2077,7 +2123,8 @@
       ],
       "dex.v2_fee_source": "pool",
       "dex.v2_fee_method": "totalFee()",
-      "dex.v2_fee_denominator": 1000
+      "dex.v2_fee_denominator": 1000,
+      "dex.v2_fee_rule_hash": "0xcb27e2dab75ffcace9a4a90c59bf674c71db5bb17f479c987a467ecb56106fb8"
     }
   },
   {
@@ -2093,7 +2140,8 @@
       ],
       "dex.v2_fee_source": "pool",
       "dex.v2_fee_method": "swapFee()",
-      "dex.v2_fee_denominator": 10000
+      "dex.v2_fee_denominator": 10000,
+      "dex.v2_fee_rule_hash": "0x4bd21fa0a08d1ac944a1916fafb8f789b42bacff69e2b1f48473c7b059f14fd1"
     }
   },
   {
@@ -2101,6 +2149,10 @@
     "network": "ethereum",
     "id": "ring-exchange-ethereum",
     "source": "https://ringprotocol.gitbook.io/ring/docs/deployments · https://sourcify.dev/server/v2/contract/1/0xEff87A51f5Abd015F1AFCD5737BBab450eA15A24 · scripts/record_ring_ethereum.py",
+    "venue_settings": {
+      "dex.native_wrapped": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "dex.multicall3": "0xca11bde05977b3631167028862be2a173976ca11"
+    },
     "settings": {
       "dex.kind": "ring_few_v2",
       "dex.universal_router": "0xeff87a51f5abd015f1afcd5737bbab450ea15a24",
@@ -2109,7 +2161,28 @@
       "dex.factory": "0xeb2a625b704d73e82946d8d026e1f588eed06416",
       "dex.router": "0x39d1d8fcc5e6eeaf567bce4e29b94fec956d3519",
       "dex.v2_fee_source": "fixed",
-      "dex.v2_fee_pct": "0.3"
+      "dex.v2_fee_pct": "0.3",
+      "dex.few_factory": "0x7d86394139bf1122e82fdf45bb4e3b038a4464dd",
+      "dex.ring_infrastructure_hashes": [
+        "0xfeb00fc5c61aba63f63d828dfeef57ab7cbcc25053ee7abbd3467da4ebce80c8",
+        "0x5126b02f7eec0470df7780456cdcee61bc47bf7bf574f213674c66393fd50ae9",
+        "0xd36679637b22ffaacb933f43f6f5b36f275751401fbb61300b619f7930efac8f",
+        "0xb80c353864a3ef885b52b7e9eb2ae4c181ee96cf75ec111700fa7076d76cc69f",
+        "0xc67d1657868aa5146eaf24fb879fb1fdec3d2d493b3683a61c9c2f4fb2851131",
+        "0xd5c15df687b16f2ff992fc8d767b4216323184a2bbc6ee2f9c398c318e770891"
+      ],
+      "dex.pool_code_hashes": [
+        "0xa7ae6a5ec37f0c21bbdac560794258c4089b8ae3ffa6e3909b53c6091764a676"
+      ],
+      "dex.few_init_hash": "0x2bdba5734ddf754fb149ef1faa937956c52cfd1f24d68163a95f42d08ec06d38",
+      "dex.pair_runtime_hash": "0x330be2c0f89c41b8879b8015445a667347764915107aced846fd148cc7c03bc0",
+      "dex.few_runtime_hash": "0xbe63f68c8de6e3f7cf411d9b117b931128468c36e0753fc5878fd5359f16acf5",
+      "dex.ring_direct_assets": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984"
+      ]
     }
   },
   {
@@ -2152,9 +2225,25 @@
     "source": "https://raw.githubusercontent.com/Lunarbase-Lab/LunarBaseIntegrations/2adec126295e866efbf3c1c2be936a792ba1303a/mainnet/addresses.json · tests/data/first_run_dex_2026-11-26/lunarbase.json",
     "settings": {
       "dex.kind": "lunarbase",
+      "dex.module_runtime_hashes": [
+        "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24",
+        "0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403"
+      ],
       "dex.pmm_pool": "0x0000efc4ec03a7c47d3a38a9be7ff1d52dd01b99",
       "dex.pool_implementation": "0x88460bd8dae6f632b9124e99b09d584e0b34b80f",
-      "dex.pmm_ladder_counter": true
+      "dex.pmm_ladder_counter": true,
+      "dex.pmm_counter": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "dex.pmm_base_tokens": [
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "dex.pmm_runtime_hashes": [
+        "0x0281e85a65fd03a885a66dadaf6d9dbeacad82e3e3f98a8106a678d5d4299936",
+        "0x3fecc332729c2ab166dd413d97200e2ab11953132c7fc8962aef3bc837c3ef6c"
+      ],
+      "dex.pmm_module_bindings": [
+        "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24 78",
+        "0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403 78"
+      ]
     },
     "verified_module": {
       "runtime_keccak": "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24",
@@ -2193,15 +2282,36 @@
     "id": "baibai",
     "network": "base",
     "chain_id": 8453,
-    "source": "https://docs.baibai.cx/takers/deployments.md · tests/data/first_run_dex_2026-11-26/baibai_base.json",
+    "source": "https://docs.baibai.cx/takers/deployments.md · tests/data/first_run_dex_2026-11-26/baibai_base.json · tests/data/first_run_dex_2026-11-26/baibai_nvdac_base.json",
     "settings": {
       "dex.kind": "baibai",
+      "dex.module_runtime_hashes": [
+        "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24"
+      ],
       "dex.pmm_pool": "0x98c1d9e102eb2806d902b13186bdc7892ac4ffba",
       "dex.pool_implementation": "0xcc61f0acb73eea94c160af15da4471b9b456f3b0",
       "dex.oracle": "0x604d9b9eb1e1571c78661a6c1088427ec9c8c6e5",
       "dex.vault": "0xaac48feb93c5c97e0fb3c7c57e1633922a4acda3",
       "dex.pmm_ladder_counter": true,
-      "dex.multi_pair": true
+      "dex.multi_pair": true,
+      "dex.pmm_counter": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "dex.pmm_base_tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xb20000000000000000000078ee7ce2fe4908108c"
+      ],
+      "dex.pmm_aux_implementations": [
+        "0x3e6abc41e9f41d7f6f7f26a6bf8851434fa69f1d",
+        "0x997b2d1b539dfccc9d42f2d10fe804f0ac9b3076"
+      ],
+      "dex.pmm_runtime_hashes": [
+        "0x4a36b37c1e3367a597a7e97c82b6870a6b7b73884a180ffc14e486b17f9a4245",
+        "0x1292147a441b4ad7c8c67aaeb97982096e9d5c932715ac102670c924ab4d698d",
+        "0xb1e5561b5f7f96f74142020fa5ee43ade3f6484f08c678d93eff103641d014a7",
+        "0xf824799c1dba49382fb6da460837c833572d0eaa73d4db0f7df3daf0ab5de107"
+      ],
+      "dex.pmm_module_bindings": [
+        "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24 2374 5150"
+      ]
     },
     "verified_module": {
       "runtime_keccak": "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24",
@@ -2256,6 +2366,9 @@
     "source": "https://sourcify.dev/server/v2/contract/8453/0xa07d063b595168e081b51280ada5fc8e11cde52b · tests/data/first_run_dex_2026-11-26/base_native_v3.json",
     "settings": {
       "dex.kind": "base_native_v3",
+      "dex.module_runtime_hashes": [
+        "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24"
+      ],
       "dex.factory": "0x7b72c4002ea7c276dd717b96b20f4956c5c904e7",
       "dex.quoter": "0xf26600e17728f41adfb73d986e3deaf6df29f1c4",
       "dex.tick_lens": "0x9a489505a00ce272eaa5e07dba6491314cae3796",
@@ -2273,6 +2386,9 @@
       "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
       "full": 6,
       "markets": 1
+    },
+    "venue_settings": {
+      "dex.multicall3": "0xca11bde05977b3631167028862be2a173976ca11"
     }
   },
   {
@@ -2282,6 +2398,9 @@
     "source": "https://sourcify.dev/server/v2/contract/8453/0x48e285bc3690415c3b6220c3f833ed9c303a4f46 · tests/data/first_run_dex_2026-11-26/base_native_v3.json",
     "settings": {
       "dex.kind": "base_native_v3",
+      "dex.module_runtime_hashes": [
+        "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24"
+      ],
       "dex.factory": "0xe8839bf8175812691c6578c0fc80e721bc3e00fb",
       "dex.quoter": "0xf2e99648bf3b788690b6091b7ae19b507220c80b",
       "dex.tick_lens": "0x9a489505a00ce272eaa5e07dba6491314cae3796",
@@ -2298,6 +2417,9 @@
       "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
       "full": 6,
       "markets": 1
+    },
+    "venue_settings": {
+      "dex.multicall3": "0xca11bde05977b3631167028862be2a173976ca11"
     }
   },
   {
@@ -2307,6 +2429,9 @@
     "source": "https://sourcify.dev/server/v2/contract/8453/0x34c97b800876d9ca4658561f00512fa7abdaf315 · tests/data/first_run_dex_2026-11-26/base_native_v3.json",
     "settings": {
       "dex.kind": "base_native_v3",
+      "dex.module_runtime_hashes": [
+        "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24"
+      ],
       "dex.factory": "0xd6ab0566e7e60b67c50ac73ddff4e3ddcb829ec2",
       "dex.quoter": "0x134d3c90a4a4c712cf0b548fe02003c9d934baba",
       "dex.tick_lens": "0x9a489505a00ce272eaa5e07dba6491314cae3796",
@@ -2325,6 +2450,86 @@
       "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
       "full": 2,
       "markets": 1
+    },
+    "venue_settings": {
+      "dex.multicall3": "0xca11bde05977b3631167028862be2a173976ca11"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "dooar_ethereum",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x1e895bfe59e3a5103e8b7da3897d1f2391476f3c · tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x1e895bfe59e3a5103e8b7da3897d1f2391476f3c",
+      "dex.pool_code_hashes": [
+        "0x8810cdfaaaa2c6c56fdebd83b2c9e7cc71e3ef06ec0c62e029c6476ff05136da"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "1"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "justmoney-ethereum",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0xd36aba9ec96523b0a89886c76065852adfe2eb39 · tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0xd36aba9ec96523b0a89886c76065852adfe2eb39",
+      "dex.pool_code_hashes": [
+        "0xf51ca69eb1a82502fdd641b3105488d5e37d94e5277e55f63a9051e664d85c52"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "spice_trade_ethereum",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x71bcc0bf974aae8cc55d033c17d50486fc77e3ae · tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2_live_fee",
+      "dex.factory": "0x71bcc0bf974aae8cc55d033c17d50486fc77e3ae",
+      "dex.pool_code_hashes": [
+        "0x091c23175436e185cedf6134823d54ea30b4830537611a85eb0321817486e523"
+      ],
+      "dex.v2_fee_source": "factory",
+      "dex.v2_fee_method": "getFeeForPair(address)",
+      "dex.v2_fee_denominator": 1000,
+      "dex.v2_fee_rule_hash": "0xc604faf33a117dc201b8d6a725e5711f59919154f7ab1e90958e7644ecabd295"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "standard_ethereum",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x53ac1d1fa4f9f6c604b8b198ce29a50d28cba893 · tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x53ac1d1fa4f9f6c604b8b198ce29a50d28cba893",
+      "dex.pool_code_hashes": [
+        "0x914b7167277393b1c321f92b1b4746aaee9273174bc623118623f8dc4ba6c2d4"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "verse",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0xee3e9e46e34a27dc755a63e2849c9913ee1a06e2 · tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0xee3e9e46e34a27dc755a63e2849c9913ee1a06e2",
+      "dex.pool_code_hashes": [
+        "0x0a50f77f76135087ca96e2f94d9220fd6c435aa345a8de958603cb89c476cc02"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
     }
   }
 ]

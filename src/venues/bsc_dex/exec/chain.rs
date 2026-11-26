@@ -111,6 +111,40 @@ pub fn steps(
 }
 
 /// Команда шага. Принимает: шаг, формат Universal Router, кошелёк. Ошибки: как у swap_v2v3 / swap_v4.
+pub fn routed_command(
+    ctx: &Ctx,
+    s: &Step,
+    f: Format,
+    wallet: Address,
+    target: (Address, Address),
+) -> GatewayResult<(u8, Bytes)> {
+    if s.entry.family.variant == super::super::pools::family_variant::Variant::RingFew {
+        let layout = super::super::pools::ring::checked(
+            ctx,
+            s.entry.family.id,
+            s.entry.pool.reference.address(),
+        )?;
+        if f != Format::RingFew || (layout.router, layout.permit) != target {
+            return Err(ctx.err(
+                ErrorCode::NoRoute,
+                "Ring: адрес исполнения или Permit2 отличается от проверенного",
+            ));
+        }
+        let recipient = if s.to_wallet { wallet } else { ADDRESS_THIS };
+        return layout
+            .exact_input(
+                s.order.token_in,
+                s.order.token_out,
+                recipient,
+                s.order.amount_in,
+                s.order.min_out,
+                s.from_wallet,
+            )
+            .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Ring: путь отсутствует"));
+    }
+    command(ctx, s, f, wallet)
+}
+
 pub fn command(ctx: &Ctx, s: &Step, f: Format, wallet: Address) -> GatewayResult<(u8, Bytes)> {
     let to = if s.to_wallet { wallet } else { ADDRESS_THIS };
     match s.entry.pool.kind {

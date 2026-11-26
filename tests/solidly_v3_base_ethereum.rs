@@ -1,4 +1,6 @@
 //! Solidly V3: фактические выплаты, частичное списание и ABI пула на Ethereum и Base.
+#[path = "common/first_run_profiles.rs"]
+mod first_run_profiles;
 use alloy_primitives::U256;
 use arb::venues::bsc_dex::math::swap_cl::{ClState, Version, swap_final};
 use arb::venues::bsc_dex::pools::{
@@ -33,7 +35,19 @@ fn accepted_runtime_spends_whole_input_or_rolls_back() {
             .unwrap()
             .parse()
             .unwrap();
-        assert_eq!(solidly_v3::accepted_runtime(chain), Some(expected));
+        assert_eq!(
+            first_run_profiles::recommended(
+                chain,
+                if chain == 1 {
+                    "solidly-v3"
+                } else {
+                    "solidly-v3-base"
+                }
+            )
+            .first()
+            .copied(),
+            Some(expected)
+        );
         let mut counts = (0, 0);
         for case in snapshot["cases"].as_array().unwrap() {
             let result = &case["results"];
@@ -150,4 +164,61 @@ fn full_input_quote_matches_real_wallet_and_partial_input_is_rejected() {
         }
     }
     assert_eq!(totals, (23, 1, 1));
+}
+
+mod native_common;
+
+#[tokio::test]
+async fn two_modules_of_one_kind_read_only_their_active_settings() {
+    use alloy_primitives::{B256, keccak256};
+    use arb::settings::scope::Scope;
+    use arb::venues::bsc_dex::pools::{direct_module, families};
+    use serde_json::json;
+
+    let ctx = native_common::ctx("module-runtime-scope").await;
+    let (one, two) = ("one@base", "two@base");
+    for id in [one, two] {
+        ctx.settings
+            .set(
+                "dex.kind",
+                Scope::Dex(id.into()),
+                Some(json!("solidly_v3_module")),
+                "test",
+            )
+            .await
+            .unwrap();
+        assert!(
+            families::classify(&ctx, id)
+                .unwrap_err()
+                .contains("dex.module_runtime_hashes")
+        );
+    }
+    let key = "dex.module_runtime_hashes";
+    let code = [0x60, 0x42];
+    let hash = keccak256(code);
+    for (id, allowed) in [(one, hash), (two, keccak256([0x00]))] {
+        ctx.settings
+            .set(key, Scope::Dex(id.into()), Some(json!([allowed])), "test")
+            .await
+            .unwrap();
+        let selected = direct_module::configured(&ctx, id).unwrap();
+        assert_eq!(
+            direct_module::matching_hash(&selected, &code),
+            (id == one).then_some(hash)
+        );
+        assert!(direct_module::matching_hash(&selected, &[]).is_none());
+    }
+    for bad in [
+        json!([]),
+        json!([hash, "malformed"]),
+        json!([B256::ZERO]),
+        json!([keccak256([])]),
+    ] {
+        ctx.settings
+            .set(key, Scope::Dex(one.into()), Some(bad), "test")
+            .await
+            .unwrap();
+        assert!(direct_module::configured(&ctx, one).is_err());
+        assert!(direct_module::configured(&ctx, two).is_ok());
+    }
 }

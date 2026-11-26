@@ -31,20 +31,31 @@ struct Slot {
 
 /// Ячейка chainId площадки (поле Ctx.evm_chain). Пустая — создаётся при первом вопросе. Дешёво клонируется.
 #[derive(Clone, Default)]
-pub struct ChainCell(Arc<OnceLock<Slot>>);
+pub struct ChainCell(Arc<Local>);
+
+#[derive(Default)]
+struct Local {
+    id: OnceLock<Slot>,
+    ring: super::pools::ring_acceptance::Book,
+}
+impl ChainCell {
+    pub(super) fn ring_proofs(&self) -> &super::pools::ring_acceptance::Book {
+        &self.0.ring
+    }
+}
 
 impl Ctx {
     /// chainId сети площадки DEX окружения (dex.evm_chain_id). Горячий путь: без строк и замков (см. шапку).
     /// Возвращает: None — не задана (или не целое). Ошибок нет.
     pub fn chain_id(&self) -> Option<u64> {
-        if let Some(s) = self.evm_chain.0.get() {
+        if let Some(s) = self.evm_chain.0.id.get() {
             return self.chain_from(s);
         }
         // Ячейку некому обновлять без рантайма — прямое чтение, ячейка не создаётся.
         if tokio::runtime::Handle::try_current().is_err() {
             return self.int(NAME).ok();
         }
-        let s = self.evm_chain.0.get_or_init(|| Slot {
+        let s = self.evm_chain.0.id.get_or_init(|| Slot {
             store: self.settings.clone(),
             cell: setting_cell::watch(
                 &self.settings,

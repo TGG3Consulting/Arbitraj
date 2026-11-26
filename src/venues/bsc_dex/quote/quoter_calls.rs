@@ -340,7 +340,8 @@ pub fn request(
         (PoolKind::V2, _) => {
             let path = if e.family.variant == super::super::pools::family_variant::Variant::RingFew
             {
-                super::super::pools::ring::active(ctx,e.family.id)?.path(token_in, token_out)
+                super::super::pools::ring::active(ctx, e.family.id)?
+                    .path(token_in, token_out)
                     .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Ring: отсутствует путь Few"))?
                     .to_vec()
             } else {
@@ -385,7 +386,13 @@ pub fn request(
                 } else {
                     IQuoterV2::quoteExactInputSingleCall { params: p }.abi_encode()
                 };
-                return Ok((target, Bytes::from(call)));
+                return super::super::pools::base_native_v3::request(
+                    ctx,
+                    e,
+                    target,
+                    fee,
+                    Bytes::from(call),
+                );
             }
             IQuoterV2::quoteExactInputSingleCall { params: p }.abi_encode()
         }
@@ -446,6 +453,12 @@ pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> O
 }
 
 pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
+    if e.family.variant == super::super::pools::family_variant::Variant::BaseNativeV3 {
+        let PoolRef::Contract(pool) = e.pool.reference else {
+            return None;
+        };
+        return super::super::pools::base_native_v3::checked(pool, out).ok();
+    }
     if e.family.variant == super::super::pools::family_variant::Variant::SolidlyCl {
         // Для quoteSwap обязательны направление и заявленный вход. См. decode_input.
         return None;

@@ -2,7 +2,7 @@
 //! Что делает: читает цену от фактического кошелька, отсеивает исчерпанный остаток и строит лестницу по блоку.
 //! Кто вызывает: pools/load, quote/quoter. От чего зависит: ElfomoFi.getAmountOut, ERC-20 balanceOf и allowance.
 //! Настройки: dex.pmm_ladder_usd и dex.pmm_ladder_counter.
-use super::{IElfomo, IMPL, ROUTER, USDC, VAULT, block, pair, verify_at};
+use super::{IElfomo, Profile, Proto, block, verify_at};
 use crate::core::types::{OraclePmmData, PoolState};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::venues::bsc_dex::{
@@ -47,11 +47,19 @@ pub(super) async fn ask(
     call::decode::<IElfomo::getAmountOutCall>(&raw)
 }
 
-async fn capacity(ctx: &Ctx, token: Address, tag: &Value) -> GatewayResult<U256> {
-    let balance = IERC20::balanceOfCall { owner: VAULT }.abi_encode();
+async fn capacity(
+    ctx: &Ctx,
+    profile: &Profile,
+    token: Address,
+    tag: &Value,
+) -> GatewayResult<U256> {
+    let balance = IERC20::balanceOfCall {
+        owner: profile.vault,
+    }
+    .abi_encode();
     let allow = IERC20::allowanceCall {
-        owner: VAULT,
-        spender: ROUTER,
+        owner: profile.vault,
+        spender: profile.pool,
     }
     .abi_encode();
     let balance: Bytes = rpc::call(
@@ -70,13 +78,13 @@ async fn capacity(ctx: &Ctx, token: Address, tag: &Value) -> GatewayResult<U256>
         .min(call::decode::<IERC20::allowanceCall>(&allow)?))
 }
 
-async fn target(ctx: &Ctx, id: &str, tag: &Value) -> GatewayResult<Address> {
+async fn target(ctx: &Ctx, profile: &Profile, id: &str, tag: &Value) -> GatewayResult<Address> {
     if ctx.dex_text("dex.kind", id)? == "elfomofi_module" {
         let module = ctx.dex_addr("dex.router", id)?;
-        super::super::direct_module::verify_code(ctx, "elfomofi", module, tag).await?;
+        super::super::direct_module::verify_code(ctx, id, module, tag).await?;
         return Ok(module);
     }
-    Ok(ROUTER)
+    Ok(profile.pool)
 }
 
 pub async fn quote(
@@ -87,19 +95,21 @@ pub async fn quote(
     dx: U256,
     at: &str,
 ) -> GatewayResult<U256> {
-    if !(pair(from, to) || pair(to, from)) {
+    let profile = Profile::read(ctx, id, Proto::Elfomo)?;
+    if !profile.unordered(from, to) {
         return Err(ctx.err(ErrorCode::NoRoute, "Пара ElfomoFi не подтверждена"));
     }
     let tag = block(ctx, at).await?;
-    verify_at(ctx, id, ROUTER, &tag).await?;
-    let target = target(ctx, id, &tag).await?;
+    verify_at(ctx, &profile, &tag).await?;
+    let target = target(ctx, &profile, id, &tag).await?;
     let out = ask(ctx, from, to, dx, &tag, signer::address(ctx)?, target).await?;
-    if !within_capacity(out, capacity(ctx, to, &tag).await?) {
+    if !within_capacity(out, capacity(ctx, &profile, to, &tag).await?) {
         return Err(ctx.err(
             ErrorCode::NoRoute,
             "Нулевая котировка или исчерпан объём vault ElfomoFi",
         ));
     }
+    profile.current(ctx)?;
     Ok(out)
 }
 
@@ -115,21 +125,27 @@ pub async fn load(
     at: &str,
 ) -> GatewayResult<PoolState> {
     let tag = block(ctx, at).await?;
-    verify_at(ctx, f.id, router, &tag).await?;
-    if !pair(coin, USDC) || !(ordered == (coin, USDC) || ordered == (USDC, coin)) {
+    let profile = Profile::read(ctx, f.id, Proto::Elfomo)?;
+    verify_at(ctx, &profile, &tag).await?;
+    if router != profile.pool
+        || !profile.pair(coin, profile.counter)
+        || !(ordered == (coin, profile.counter) || ordered == (profile.counter, coin))
+    {
         return Err(ctx.err(ErrorCode::NoRoute, "Недопустимая пара ElfomoFi"));
     }
     let owner = signer::address(ctx)?;
-    let target = target(ctx, f.id, &tag).await?;
+    let target = target(ctx, &profile, f.id, &tag).await?;
     let (coin_cap, quote_cap) = (
-        capacity(ctx, coin, &tag).await?,
-        capacity(ctx, USDC, &tag).await?,
+        capacity(ctx, &profile, coin, &tag).await?,
+        capacity(ctx, &profile, profile.counter, &tag).await?,
     );
-    let sizes = ladder_counter::amounts(ctx, tokens, reg, f.id, USDC).await?;
+    let sizes = ladder_counter::amounts(ctx, tokens, reg, f.id, profile.counter).await?;
     let reader = super::ladder::Reader {
         ctx,
         tag: &tag,
         wallet: owner,
+        router: profile.pool,
+        counter: profile.counter,
         target,
         coin,
     };
@@ -137,13 +153,14 @@ pub async fn load(
         reader.side(true, &sizes, coin_cap),
         reader.side(false, &sizes, quote_cap)
     )?;
+    profile.current(ctx)?;
     Ok(PoolState::OraclePmm(Box::new(OraclePmmData {
         price: U256::ZERO,
         spread: U256::ZERO,
         coeff: U256::ZERO,
         feasible: !buy.is_empty() || !sell.is_empty(),
         paused: false,
-        implementation: IMPL,
+        implementation: profile.implementation,
         base_is_token0: ordered.0 == coin,
         ladder_quote_in: buy,
         ladder_base_in: sell,

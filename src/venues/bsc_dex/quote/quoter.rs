@@ -105,6 +105,12 @@ pub async fn out_at(
     let (to, data) = quoter_calls::request(ctx, e, token_in, amount)?;
     let raw: Bytes =
         rpc::call(ctx, "eth_call", json!([{ "to": to, "input": data }, block])).await?;
+    if e.family.variant == super::super::pools::family_variant::Variant::BaseNativeV3
+        && let crate::core::types::PoolRef::Contract(pool) = e.pool.reference
+    {
+        return super::super::pools::base_native_v3::checked(pool, &raw)
+            .map_err(|why| ctx.err(ErrorCode::BadResponse, why));
+    }
     quoter_calls::decode_input(e, &raw, token_in, amount).ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,

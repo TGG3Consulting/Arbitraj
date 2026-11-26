@@ -711,10 +711,8 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
             "DEX {id} не подключена: вид «{kind}» — только справочник, в граф маршрутов пока не берётся (решение 59)"
         ));
     }
-    if f.variant == Variant::RingFew && !super::ring::profile(ctx, f) {
-        return Err(no(
-            "адреса, комиссия или сеть расходятся с проверенным профилем Ring".into(),
-        ));
+    if f.variant == Variant::RingFew {
+        super::ring::active(ctx, f.id).map_err(|e| no(e.message))?;
     }
     if f.variant == Variant::BaseNativeV3 && !super::base_native_v3::valid(ctx, f) {
         return Err(no(
@@ -722,22 +720,7 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
         ));
     }
     if f.direct_module() && f.fork {
-        let kind = match f.proto {
-            Proto::Elfomo => "elfomofi",
-            Proto::Lunar => "lunarbase",
-            Proto::BaiBai => "baibai",
-            _ if f.variant == Variant::BaseNativeV3 => "base_native_v3",
-            _ => "solidly_v3",
-        };
-        if ctx
-            .chain_id()
-            .and_then(|c| super::direct_module::accepted(c, kind))
-            .is_none()
-        {
-            return Err(no(format!(
-                "модуль {kind} ещё не принят в этой сборке для сети"
-            )));
-        }
+        super::direct_module::configured(ctx, id).map_err(|e| no(e.message))?;
     }
     match ctx.dex_flag("dex.pool_enabled", id) {
         Ok(true) => {}
@@ -776,6 +759,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             list.push("dex.factory");
             if matches!(f.variant, Variant::V2Create2 | Variant::V2Create2LiveFee) {
                 list.push(super::verify_algebra_dir::SETTING);
+            }
+            if f.variant == Variant::V2Create2LiveFee {
+                list.push("dex.v2_fee_rule_hash");
             }
             // Роутер — только у вида со своим путём исполнения (PancakeSwap/Uniswap V2, v2_fork: сверка getAmountsOut и
             // обмен роутером форка). v2_fork_executor (решение 280, tradable=false) роутера не имеет: сверка и обмен —
@@ -983,9 +969,15 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::Wombat => list.extend(["dex.stable_pools", "dex.wombat_implementations"]),
         // WooFi: общий контракт, оракул и закреплённая реализация прокси (сменилась — семейство стоит до сверки).
         Proto::Lunar => {
-            list.extend(["dex.pmm_pool", "dex.pool_implementation"]);
+            list.extend([
+                "dex.pmm_pool",
+                "dex.pool_implementation",
+                "dex.pmm_counter",
+                "dex.pmm_base_tokens",
+                "dex.pmm_runtime_hashes",
+            ]);
             if f.fork {
-                list.push("dex.router");
+                list.extend(["dex.router", "dex.pmm_module_bindings"]);
             }
         }
         Proto::Elfomo | Proto::BaiBai => {
@@ -994,9 +986,17 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
                 "dex.oracle",
                 "dex.pool_implementation",
                 "dex.vault",
+                "dex.pmm_counter",
+                "dex.pmm_base_tokens",
+                "dex.pmm_runtime_hashes",
             ]);
+            if f.proto == Proto::BaiBai {
+                list.push("dex.pmm_aux_implementations");
+            } else {
+                list.extend(["dex.pmm_pricing_offsets", "dex.pmm_vault_offsets"]);
+            }
             if f.fork {
-                list.push("dex.router");
+                list.extend(["dex.router", "dex.pmm_module_bindings"]);
             }
         }
         Proto::WooPP => list.extend(["dex.pmm_pool", "dex.oracle", "dex.pool_implementation"]),

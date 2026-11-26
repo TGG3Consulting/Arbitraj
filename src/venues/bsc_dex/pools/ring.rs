@@ -4,154 +4,139 @@
 //! Контракты и ABI: https://ringprotocol.gitbook.io/ring/docs/deployments.
 //! Изолированное воспроизведение: scripts/record_ring_ethereum.py.
 
+pub use super::ring_acceptance::checked;
+pub use super::ring_profile::{Layout, active};
 use alloy::sol_types::SolValue;
-use alloy_primitives::{Address, Bytes, U256, address, b256};
-use rust_decimal::Decimal;
+use alloy_primitives::{Address, Bytes, U256};
+impl Layout {
+    /// FewFactory.createToken: salt=keccak256(abi.encode(originalToken)), не abi.encodePacked.
+    pub(super) fn wrapped(&self, asset: Address) -> Address {
+        self.few.create2(
+            alloy_primitives::keccak256(asset.into_word()),
+            self.wrapper_init,
+        )
+    }
 
-use super::super::ctx::Ctx;
-use super::families::Family;
+    /// Обе стороны — underlying. Регистрация подтверждает фабрики, байткод,
+    /// обратные связи, decimals и резервы; исполнимую сумму проверяет финальная котировка.
+    pub fn path(&self, a: Address, b: Address) -> Option<[Address; 2]> {
+        (a != b && !a.is_zero() && !b.is_zero()).then(|| [self.wrapped(a), self.wrapped(b)])
+    }
 
-pub(super) const FACTORY: Address = address!("eb2a625b704d73e82946d8d026e1f588eed06416");
-const QUOTER: Address = address!("39d1d8fcc5e6eeaf567bce4e29b94fec956d3519");
-const ROUTER: Address = address!("eff87a51f5abd015f1afcd5737bbab450ea15a24");
-const PERMIT: Address = address!("000000000022d473030f116ddee9f6b43ac78ba3");
-pub(super) const INIT: alloy_primitives::B256 =
-    b256!("a7ae6a5ec37f0c21bbdac560794258c4089b8ae3ffa6e3909b53c6091764a676");
-#[cfg(test)]
-const ASSETS: [(Address, Address); 5] = [
-    (
-        address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"),
-        address!("a250cc729bb3323e7933022a67b52200fe354767"),
-    ),
-    (
-        address!("dac17f958d2ee523a2206206994597c13d831ec7"),
-        address!("ef87f4608e601e8564800265aee1c1ffadf73283"),
-    ),
-    (
-        address!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
-        address!("0492560fa7cfd6a85e50d8be3f77318994f8f429"),
-    ),
-    (
-        address!("2260fac5e5542a773aa44fbcfedf7c193bc2c599"),
-        address!("2078f336fdd260f708bec4a20c82b063274e1b23"),
-    ),
-    (
-        address!("1f9840a85d5af5bf1d1762f925bdaddc4201f984"),
-        address!("e8e1f50392bd61d0f8f48e8e7af51d3b8a52090a"),
-    ),
-];
+    pub fn check_pool(&self, pool: Address, fw0: Address, fw1: Address) -> bool {
+        super::verify::v2_create2(self.factory, fw0, fw1, self.pair_init) == pool
+    }
 
-/// Котировка и разрешение Permit2 должны принадлежать одной и той же принятой сети и фабрике.
-pub fn profile(ctx: &Ctx, f: &Family) -> bool {
-    ctx.chain_id() == Some(1)
-        && [
-            ("dex.factory", FACTORY),
-            ("dex.router", QUOTER),
-            ("dex.universal_router", ROUTER),
-            ("dex.permit2", PERMIT),
-        ]
-        .iter()
-        .all(|(name, addr)| ctx.dex_addr(name, f.id).ok() == Some(*addr))
-        && ctx
-            .dex_text("dex.universal_router_version", f.id)
-            .ok()
-            .as_deref()
-            == Some("ring_few")
-        && ctx.dex_text("dex.v2_fee_source", f.id).ok().as_deref() == Some("fixed")
-        && ctx.dex_dec("dex.v2_fee_pct", f.id).ok() == Some(Decimal::new(3, 1))
-}
-
-pub(super) const FEW: Address = address!("7d86394139bf1122e82fdf45bb4e3b038a4464dd");
-const WRAPPER_INIT: alloy_primitives::B256 =
-    b256!("2bdba5734ddf754fb149ef1faa937956c52cfd1f24d68163a95f42d08ec06d38");
-
-/// FewFactory.createToken: salt=keccak256(abi.encode(originalToken)), не abi.encodePacked.
-pub(super) fn wrapped(asset: Address) -> Address {
-    FEW.create2(alloy_primitives::keccak256(asset.into_word()), WRAPPER_INIT)
-}
-
-/// Обе стороны — underlying. Регистрация подтверждает фабрики, байткод,
-/// обратные связи, decimals и резервы; исполнимую сумму проверяет финальная котировка.
-pub fn path(a: Address, b: Address) -> Option<[Address; 2]> {
-    (a != b && !a.is_zero() && !b.is_zero()).then(|| [wrapped(a), wrapped(b)])
-}
-
-pub fn check_pool(pool: Address, fw0: Address, fw1: Address) -> bool {
-    super::verify::v2_create2(FACTORY, fw0, fw1, INIT) == pool
-}
-
-/// FEW_V2_SWAP_EXACT_IN возвращает underlying получателю через unwrapTo.
-/// Последующую проверку реального баланса добавляет штатный Plan::data.
-pub fn exact_input(
-    token_in: Address,
-    token_out: Address,
-    recipient: Address,
-    amount: U256,
-    minimum: U256,
-    payer_user: bool,
-) -> Option<(u8, Bytes)> {
-    let path = path(token_in, token_out)?.to_vec();
-    if ![
-        address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"),
-        address!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
-        address!("2260fac5e5542a773aa44fbcfedf7c193bc2c599"),
-        address!("1f9840a85d5af5bf1d1762f925bdaddc4201f984"),
-    ]
-    .contains(&token_in)
-    {
-        // У остальных входов используем условное разрешение. USDT запрещает
-        // approve(nonzero) поверх прежнего разрешения. Команда 0x27
-        // использует существующий allowance UR → fwUSDT, как Payments.wrapFewToken.
-        let mut commands = Vec::new();
-        let mut inputs = Vec::new();
-        if payer_user {
-            if amount.bit_len() > 160 {
-                return None;
+    /// FEW_V2_SWAP_EXACT_IN возвращает underlying получателю через unwrapTo.
+    /// Последующую проверку реального баланса добавляет штатный Plan::data.
+    pub fn exact_input(
+        &self,
+        token_in: Address,
+        token_out: Address,
+        recipient: Address,
+        amount: U256,
+        minimum: U256,
+        payer_user: bool,
+    ) -> Option<(u8, Bytes)> {
+        let path = self.path(token_in, token_out)?.to_vec();
+        if !self.direct.contains(&token_in) {
+            // У остальных входов используем условное разрешение. USDT запрещает
+            // approve(nonzero) поверх прежнего разрешения. Команда 0x27
+            // использует существующий allowance UR → fwUSDT, как Payments.wrapFewToken.
+            let mut commands = Vec::new();
+            let mut inputs = Vec::new();
+            if payer_user {
+                if amount.bit_len() > 160 {
+                    return None;
+                }
+                commands.push(0x02u8);
+                inputs.push(Bytes::from(
+                    (token_in, Address::with_last_byte(2), amount).abi_encode_params(),
+                ));
             }
-            commands.push(0x02u8);
+            let pool = super::verify::v2_create2(self.factory, path[0], path[1], self.pair_init);
+            commands.extend([0x27, 0x23]);
+            inputs.push(Bytes::from((token_in, pool, amount).abi_encode_params()));
             inputs.push(Bytes::from(
-                (token_in, Address::with_last_byte(2), amount).abi_encode_params(),
+                (recipient, U256::ZERO, minimum, path, false, true).abi_encode_params(),
+            ));
+            return Some((
+                0x21,
+                Bytes::from((Bytes::from(commands), inputs).abi_encode_params()),
             ));
         }
-        let pool = super::verify::v2_create2(FACTORY, path[0], path[1], INIT);
-        commands.extend([0x27, 0x23]);
-        inputs.push(Bytes::from((token_in, pool, amount).abi_encode_params()));
-        inputs.push(Bytes::from(
-            (recipient, U256::ZERO, minimum, path, false, true).abi_encode_params(),
-        ));
-        return Some((
-            0x21,
-            Bytes::from((Bytes::from(commands), inputs).abi_encode_params()),
-        ));
+        Some((
+            0x23,
+            Bytes::from((recipient, amount, minimum, path, payer_user, true).abi_encode_params()),
+        ))
     }
-    Some((
-        0x23,
-        Bytes::from((recipient, amount, minimum, path, payer_user, true).abi_encode_params()),
-    ))
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/common/first_run_profiles.rs"]
+mod first_run_profiles;
+#[cfg(test)]
+pub(super) use first_run_profiles::named as archived_profile;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn inputs() -> (Layout, [(Address, Address); 5], serde_json::Value) {
+        let raw: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/data/first_run_dex_2026-11-26/ring_ethereum.json"
+        ))
+        .unwrap();
+        let d =
+            super::archived_profile(raw["chain_id"].as_u64().unwrap(), "ring-exchange-ethereum")
+                .unwrap();
+        let layout = Layout::archived(d).unwrap();
+        let pools = raw["pools"].as_array().unwrap();
+        let assets: Vec<_> = pools.iter().map(|p| p["asset"].as_str().unwrap()).collect();
+        let wrappers = raw["wrappers"].as_object().unwrap();
+        let wrapped_native = wrappers
+            .keys()
+            .find(|asset| !assets.contains(&asset.as_str()))
+            .unwrap()
+            .as_str();
+        let a: Vec<_> = std::iter::once(wrapped_native)
+            .chain(assets)
+            .map(|k| {
+                (
+                    k.parse().unwrap(),
+                    wrappers[k].as_str().unwrap().parse().unwrap(),
+                )
+            })
+            .collect();
+        (layout, a.try_into().unwrap(), raw)
+    }
     #[test]
     fn wrapped_reserves_keep_their_physical_order_and_approval_uses_underlying() {
+        let (layout, assets, raw) = inputs();
         let [
             (eth, w_eth),
             (usdt, w_usdt),
             (usdc, w_usdc),
             (wbtc, _),
             (uni, _),
-        ] = ASSETS;
-        let usdc_pool = address!("54222f404dcfac705322045f01d100380b871450");
-        assert!(check_pool(usdc_pool, w_usdc, w_eth));
-        assert_eq!(wrapped(usdc), w_usdc);
-        assert_eq!(wrapped(eth), w_eth);
-        assert_eq!(path(eth, usdt), Some([w_eth, w_usdt]));
-        assert_eq!(path(Address::ZERO, usdt), None);
-        assert_eq!(path(wbtc, uni), Some([wrapped(wbtc), wrapped(uni)]));
-        let (command, data) =
-            exact_input(eth, usdt, eth, U256::from(7), U256::from(4), true).unwrap();
+        ] = assets;
+        let usdc_pool = raw["pools"][1]["pool"]
+            .as_str()
+            .unwrap()
+            .parse::<Address>()
+            .unwrap();
+        assert!(layout.check_pool(usdc_pool, w_usdc, w_eth));
+        assert_eq!(layout.wrapped(usdc), w_usdc);
+        assert_eq!(layout.wrapped(eth), w_eth);
+        assert_eq!(layout.path(eth, usdt), Some([w_eth, w_usdt]));
+        assert_eq!(layout.path(Address::ZERO, usdt), None);
+        assert_eq!(
+            layout.path(wbtc, uni),
+            Some([layout.wrapped(wbtc), layout.wrapped(uni)])
+        );
+        let (command, data) = layout
+            .exact_input(eth, usdt, eth, U256::from(7), U256::from(4), true)
+            .unwrap();
         let args =
             <(Address, U256, U256, Vec<Address>, bool, bool)>::abi_decode_params(&data).unwrap();
         assert_eq!(command, 0x23);
@@ -166,8 +151,9 @@ mod tests {
                 true
             )
         );
-        let (nested, bytes) =
-            exact_input(usdt, eth, eth, U256::from(7), U256::from(4), true).unwrap();
+        let (nested, bytes) = layout
+            .exact_input(usdt, eth, eth, U256::from(7), U256::from(4), true)
+            .unwrap();
         let (commands, inputs) = <(Bytes, Vec<Bytes>)>::abi_decode_params(&bytes).unwrap();
         assert_eq!(nested, 0x21);
         assert_eq!(commands.as_ref(), &[0x02, 0x27, 0x23]);
@@ -176,7 +162,11 @@ mod tests {
             (asset, pool, raw),
             (
                 usdt,
-                address!("147d15e009a63ebed5196ea029679329204f98fd"),
+                raw["pools"][0]["pool"]
+                    .as_str()
+                    .unwrap()
+                    .parse::<Address>()
+                    .unwrap(),
                 U256::from(7)
             )
         );
@@ -197,10 +187,7 @@ mod tests {
     }
     #[test]
     fn archived_underlying_and_native_roundtrips_match_both_reserve_directions() {
-        let j: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../tests/data/first_run_dex_2026-11-26/ring_ethereum.json"
-        ))
-        .unwrap();
+        let (layout, assets, j) = inputs();
         assert_eq!(j["chain_id"], 1);
         assert_eq!(j["block"], 26_494_988);
         assert_eq!(j["selector"]["requireCanonical"], true);
@@ -209,15 +196,15 @@ mod tests {
             let net = a * U256::from(997);
             net * ro / (ri * U256::from(1000) + net)
         };
-        let (weth, fw_eth) = ASSETS[0];
+        let (weth, fw_eth) = assets[0];
         let pools = j["pools"].as_array().unwrap();
-        assert_eq!(pools.len(), ASSETS.len() - 1);
-        for (row, (asset, fw)) in pools.iter().zip(&ASSETS[1..]) {
+        assert_eq!(pools.len(), assets.len() - 1);
+        for (row, (asset, fw)) in pools.iter().zip(&assets[1..]) {
             assert_eq!(row["asset"], format!("{asset:#x}"));
             assert_eq!(j["wrappers"][format!("{asset:#x}")], format!("{fw:#x}"));
-            assert_eq!(path(weth, *asset), Some([fw_eth, *fw]));
+            assert_eq!(layout.path(weth, *asset), Some([fw_eth, *fw]));
             let pool = row["pool"].as_str().unwrap().parse().unwrap();
-            assert!(check_pool(pool, fw_eth, *fw));
+            assert!(layout.check_pool(pool, fw_eth, *fw));
             let ri = raw(&row["reserve_weth"]);
             let ro = raw(&row["reserve_other"]);
             let cases = row["cases"].as_array().unwrap();
@@ -260,15 +247,16 @@ mod tests {
                         owner
                     };
                     steps.push(
-                        exact_input(
-                            source,
-                            target,
-                            recipient,
-                            input,
-                            minimum,
-                            !(native && d == 0),
-                        )
-                        .unwrap(),
+                        layout
+                            .exact_input(
+                                source,
+                                target,
+                                recipient,
+                                input,
+                                minimum,
+                                !(native && d == 0),
+                            )
+                            .unwrap(),
                     );
                     if native && d == 1 {
                         steps.push((ur::UNWRAP_WETH, ur::native(owner, minimum)));
@@ -295,7 +283,7 @@ mod tests {
                 if i < 2 {
                     assert_eq!(controls["balance_plus_one1"], "0x0");
                 }
-                if *asset == ASSETS[1].0 {
+                if *asset == assets[1].0 {
                     assert_eq!(controls["legacy_usdt_nonzero_approve"], "0x0");
                 }
             }

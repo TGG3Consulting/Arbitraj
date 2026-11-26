@@ -2,13 +2,15 @@
 //! Что делает: сверяет активный proxy LunarBase, реализацию, порядок native ETH/USDC и код общего модуля.
 //! Кто вызывает: поиск, загрузка, квотер, подготовка сделки. От чего зависит: ABI и архив lunarbase.json.
 //! Настройки: dex.kind, dex.pmm_pool, dex.pool_implementation, dex.router и dex.pmm_ladder_usd.
-use super::super::{ctx::Ctx, node::rpc};
-use super::{discover::Found, verify::Candidate, verify_woo};
+use super::super::ctx::Ctx;
+use super::{
+    discover::Found, families::Proto, pmm_profile::Profile, verify::Candidate, verify_woo,
+};
 use crate::core::types::PoolRef;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use alloy::sol;
-use alloy_primitives::{Address, B256, Bytes, address, b256, keccak256};
-use serde_json::{Value, json};
+use alloy_primitives::{Address, B256};
+use serde_json::Value;
 
 use super::pmm_view::view;
 mod market;
@@ -38,79 +40,47 @@ sol! {
         event MaxPunishmentX24Set(uint24 value);
     }
 }
-pub const POOL: Address = address!("0000efc4ec03a7c47d3a38a9be7ff1d52dd01b99");
-const IMPL: Address = address!("88460bd8dae6f632b9124e99b09d584e0b34b80f");
-pub const WETH: Address = address!("4200000000000000000000000000000000000006");
-pub const USDC: Address = address!("833589fcd6edb6e08f4c7c32d4f71b54bda02913");
-
-pub fn pair(coin: Address, counter: Address) -> bool {
-    coin == WETH && counter == USDC
-}
-
-pub(super) async fn open(ctx: &Ctx, tag: &Value, owner: Address) -> GatewayResult<bool> {
+pub(super) async fn open(
+    ctx: &Ctx,
+    tag: &Value,
+    owner: Address,
+    pool: Address,
+) -> GatewayResult<bool> {
     let (paused, fresh) = tokio::try_join!(
-        view(ctx, tag, owner, POOL, ILunar::pausedCall {}),
-        view(ctx, tag, owner, POOL, ILunar::isFreshCall {})
+        view(ctx, tag, owner, pool, ILunar::pausedCall {}),
+        view(ctx, tag, owner, pool, ILunar::isFreshCall {})
     )?;
     Ok(!paused && fresh)
 }
 
-pub(super) async fn verify_at(ctx: &Ctx, id: &str, tag: &Value) -> GatewayResult<()> {
+pub(super) async fn verify_at(ctx: &Ctx, profile: &Profile, tag: &Value) -> GatewayResult<()> {
     let wrong = || {
         ctx.err(
             ErrorCode::NotApplicable,
             "Изменилось размещение, код или состав рынка LunarBase",
         )
     };
-    if ctx.chain_id() != Some(8453)
-        || ctx.dex_addr("dex.pmm_pool", id)? != POOL
-        || ctx.dex_addr("dex.pool_implementation", id)? != IMPL
-    {
-        return Err(wrong());
-    }
-    let word: B256 = rpc::call(
-        ctx,
-        "eth_getStorageAt",
-        json!([POOL, super::abi_woo::implementation_slot(), tag]),
-    )
-    .await?;
-    if Address::from_word(word) != IMPL {
-        return Err(wrong());
-    }
-    for (addr, expected) in [
-        (
-            POOL,
-            b256!("0281e85a65fd03a885a66dadaf6d9dbeacad82e3e3f98a8106a678d5d4299936"),
-        ),
-        (
-            IMPL,
-            b256!("3fecc332729c2ab166dd413d97200e2ab11953132c7fc8962aef3bc837c3ef6c"),
-        ),
-    ] {
-        let bytes: Bytes = rpc::call(ctx, "eth_getCode", json!([addr, tag])).await?;
-        if keccak256(bytes) != expected {
-            return Err(wrong());
-        }
-    }
+    profile.verify_code(ctx, tag).await?;
     let (x, y) = tokio::try_join!(
-        view(ctx, tag, Address::ZERO, POOL, ILunar::XCall {}),
-        view(ctx, tag, Address::ZERO, POOL, ILunar::YCall {})
+        view(ctx, tag, Address::ZERO, profile.pool, ILunar::XCall {}),
+        view(ctx, tag, Address::ZERO, profile.pool, ILunar::YCall {})
     )?;
-    if x != Address::ZERO || y != USDC {
+    if x != Address::ZERO || y != profile.counter {
         return Err(wrong());
     }
     Ok(())
 }
 
 pub async fn verify(ctx: &Ctx, c: &Candidate, address: Address) -> GatewayResult<Found> {
-    if address != POOL || !pair(c.coin, c.quote) {
+    let profile = Profile::read(ctx, c.family.id, Proto::Lunar)?;
+    if address != profile.pool || !profile.pair(c.coin, c.quote) {
         return Err(ctx.err(
             ErrorCode::NotApplicable,
             "Для этого рынка LunarBase нет подтверждения native ETH/USDC",
         ));
     }
     let tag = super::elfomo::block(ctx, "latest").await?;
-    verify_at(ctx, c.family.id, &tag).await?;
+    verify_at(ctx, &profile, &tag).await?;
     Ok(verify_woo::found(c, PoolRef::Contract(address)))
 }
 

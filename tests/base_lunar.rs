@@ -1,6 +1,8 @@
 //! Проверка фактического размещения LunarBase и платежей в ETH/USDC по архиву контрольного блока.
+#[path = "common/first_run_profiles.rs"]
+mod first_run_profiles;
 use alloy_primitives::{Address, U256};
-use arb::venues::bsc_dex::pools::lunar;
+
 use serde_json::Value;
 
 fn amount(v: &Value) -> U256 {
@@ -9,7 +11,6 @@ fn amount(v: &Value) -> U256 {
 
 #[test]
 fn primary_module_matches_all_markets_and_settles_full_wallet_deltas() {
-    use arb::venues::bsc_dex::pools::direct_module;
     for (kind, raw, count) in [
         (
             "elfomofi",
@@ -29,8 +30,11 @@ fn primary_module_matches_all_markets_and_settles_full_wallet_deltas() {
     ] {
         let sample: Value = serde_json::from_str(raw).unwrap();
         let expected = sample["runtime_keccak"].as_str().unwrap().parse().unwrap();
-        assert_eq!(direct_module::accepted(8453, kind), Some(expected));
-        assert!(!direct_module::accepts(1, kind, expected));
+        assert_eq!(
+            first_run_profiles::recommended(8453, kind).first().copied(),
+            Some(expected)
+        );
+        assert!(!first_run_profiles::recommended(1, kind).contains(&expected));
         let cases = sample["cases"].as_array().unwrap();
         assert_eq!(cases.len(), count);
         for case in cases {
@@ -86,7 +90,11 @@ fn only_one_proxy_is_open_and_native_wallet_deltas_match_the_quote() {
             .unwrap()
             .parse::<Address>()
             .unwrap(),
-        lunar::POOL
+        first_run_profiles::named(8453, "lunarbase").unwrap()["settings"]["dex.pmm_pool"]
+            .as_str()
+            .unwrap()
+            .parse::<Address>()
+            .unwrap()
     );
     assert_ne!(
         live[0]["implementation"]

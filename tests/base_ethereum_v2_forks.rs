@@ -2,6 +2,100 @@ use alloy_primitives::U256;
 use arb::venues::bsc_dex::math::v2::{amount_out, fee_ratio};
 use rust_decimal::Decimal;
 use serde_json::Value;
+#[path = "common/first_run_profiles.rs"]
+mod first_run_profiles;
+mod native_common;
+
+#[tokio::test]
+async fn arbitrary_ring_id_reads_its_own_settings_and_requires_archive_proof_before_spend() {
+    use arb::settings::scope::Scope;
+    use arb::venues::bsc_dex::{ctx::Place, pools::ring};
+    let mut ctx = native_common::ctx("ring-active-profile").await;
+    ctx.place = Place {
+        id: "eth_dex",
+        all: &["eth_dex"],
+    };
+    let id = "user-ring@ethereum";
+    let venue = Scope::Venue("eth_dex".to_string());
+    let dex = Scope::Dex(id.into());
+    let row = first_run_profiles::named(1, "ring-exchange-ethereum").unwrap();
+    ctx.settings
+        .set(
+            "dex.evm_chain_id",
+            venue.clone(),
+            Some(serde_json::json!(1)),
+            "test",
+        )
+        .await
+        .unwrap();
+    ctx.settings
+        .set(
+            "dex.native_wrapped",
+            venue.clone(),
+            Some(row["venue_settings"]["dex.native_wrapped"].clone()),
+            "test",
+        )
+        .await
+        .unwrap();
+    ctx.settings
+        .set(
+            "dex.multicall3",
+            venue,
+            Some(row["venue_settings"]["dex.multicall3"].clone()),
+            "test",
+        )
+        .await
+        .unwrap();
+    for (key, value) in row["settings"].as_object().unwrap() {
+        ctx.settings
+            .set(key, dex.clone(), Some(value.clone()), "test")
+            .await
+            .unwrap();
+    }
+    let original = ring::active(&ctx, id).unwrap();
+    assert!(ring::checked(&ctx, id, original.factory).is_err());
+    ctx.settings
+        .set(
+            "dex.few_factory",
+            dex.clone(),
+            Some(serde_json::json!(
+                "0x0000000000000000000000000000000000001234"
+            )),
+            "test",
+        )
+        .await
+        .unwrap();
+    let moved = ring::active(&ctx, id).unwrap();
+    assert_ne!(moved.few, original.few);
+    assert!(ring::checked(&ctx, id, original.factory).is_err());
+    assert!(ring::active(&ctx, "other-ring").is_err());
+    for key in [
+        "dex.few_factory",
+        "dex.pool_code_hashes",
+        "dex.pair_runtime_hash",
+        "dex.ring_direct_assets",
+    ] {
+        ctx.settings
+            .set(key, dex.clone(), None, "test")
+            .await
+            .unwrap();
+        assert!(ring::active(&ctx, id).is_err());
+        ctx.settings
+            .set(key, dex.clone(), Some(row["settings"][key].clone()), "test")
+            .await
+            .unwrap();
+    }
+    ctx.settings
+        .set(
+            "dex.few_runtime_hash",
+            dex,
+            Some(row["settings"]["dex.pair_runtime_hash"].clone()),
+            "test",
+        )
+        .await
+        .unwrap();
+    assert!(ring::active(&ctx, id).is_err());
+}
 
 fn uint(value: &Value) -> U256 {
     value.as_str().unwrap().parse().unwrap()
@@ -17,6 +111,43 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
         ))
         .unwrap(),
     );
+    let factories: serde_json::Map<String, Value> = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/ethereum_v2_factories.json"
+    ))
+    .unwrap();
+    let mut pool_count = 0;
+    for (id, market) in &factories {
+        let factory = market["factory"].as_str().unwrap().parse().unwrap();
+        let init = market["origin"]["creation_code_hash"]
+            .as_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+        for pool in market["pools"].as_array().unwrap() {
+            let token = |i: usize| pool["tokens"][i].as_str().unwrap().parse().unwrap();
+            let actual =
+                arb::venues::bsc_dex::pools::verify::v2_create2(factory, token(0), token(1), init);
+            assert_eq!(
+                actual,
+                pool["pool"]
+                    .as_str()
+                    .unwrap()
+                    .parse::<alloy_primitives::Address>()
+                    .unwrap()
+            );
+            pool_count += 1;
+        }
+        let sample = market["samples"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["cases"].is_array())
+            .unwrap();
+        assert_eq!(sample["dex"], id.as_str());
+        assert_eq!(sample["block_hash"], market["selector"]["blockHash"]);
+        captures.push(sample.clone());
+    }
+    assert_eq!(pool_count, 72);
     let profiles: Vec<Value> =
         serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
     let mut admitted = 0;
@@ -25,6 +156,7 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
         p["source"].as_str().is_some_and(|s| {
             s.contains("base_ethereum_v2_probes.json")
                 || s.contains("base_ethereum_v2_variable_fees.json")
+                || s.contains("ethereum_v2_factories.json")
         })
     }) {
         let capture = captures
@@ -55,7 +187,9 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
         } else {
             assert_eq!(capture["factory_proof"]["embedded_pair"], true);
         }
-        assert_eq!(capture["runtime_match"], true);
+        if !factories.contains_key(profile["id"].as_str().unwrap()) {
+            assert_eq!(capture["runtime_match"], true);
+        }
         let settings = &profile["settings"];
         let pct: Decimal = if live {
             use arb::venues::bsc_dex::pools::verify::v2_fee_pips;
@@ -89,7 +223,7 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
             .as_array()
             .unwrap()
             .iter()
-            .position(|t| t == weth)
+            .position(|t| t == capture["funded_asset"].as_str().unwrap_or(weth))
             .unwrap();
         let input_reserve = uint(&capture["reserves"][i]);
         let output_reserve = uint(&capture["reserves"][1 - i]);
@@ -146,6 +280,11 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
         "fwx-base",
         "shibaswap",
         "torus",
+        "dooar_ethereum",
+        "standard_ethereum",
+        "justmoney-ethereum",
+        "verse",
+        "spice_trade_ethereum",
     ] {
         assert!(
             verified_boundaries.contains(dex),

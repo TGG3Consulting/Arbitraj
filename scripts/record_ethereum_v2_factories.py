@@ -8,9 +8,9 @@ from eth_abi import decode
 from eth_utils import keccak
 
 from record_balancer_markets import Capture
-from record_base_slipstream_executor import ROOT, calldata, rpc
+from record_base_slipstream_executor import ROOT, rpc
 from record_community_v3_ethereum import posts
-from record_v2_chain_pools import measure, view
+from record_v2_chain_pools import measure
 
 FACTORIES = {
     "dooar_ethereum": ("0x1e895bfe59e3a5103e8b7da3897d1f2391476f3c",100,1,"DooarSwapV2: K"),
@@ -105,6 +105,8 @@ def directory(name,c):
         if asset!=WETH:entry.update(funded_asset=asset,funding_router=FUNDING)
         try:
             chain=json.loads((ROOT/"tests/data/base_ethereum_networks.json").read_bytes())["ethereum"]
+            if chain["hash"]!=c.selector["blockHash"]:
+                raise RuntimeError("executor capture and registry refer to different blocks")
             replay=measure(entry,chain,endpoint=c.endpoint)
         except (ValueError,KeyError) as error:
             examples.append(dict(pool=pool,reason=str(error)[:250]))

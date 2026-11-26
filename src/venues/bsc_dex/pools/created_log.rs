@@ -318,7 +318,8 @@ async fn one(p: &Pools, w: &Watch, log: &Log, v4: bool, f: &'static Family) -> R
     } else if f.variant == super::family_variant::Variant::RingFew {
         let event =
             IV2Factory::PairCreated::decode_log_data(&log.inner.data).map_err(|e| e.to_string())?;
-        let wq = super::ring::wrapped(w.usdt);
+        let layout = super::ring::active(&p.ctx, f.id).map_err(|e| e.message)?;
+        let wq = layout.wrapped(w.usdt);
         let other = if event.token0 == wq {
             event.token1
         } else if event.token1 == wq {
@@ -326,7 +327,7 @@ async fn one(p: &Pools, w: &Watch, log: &Log, v4: bool, f: &'static Family) -> R
         } else {
             return Ok(());
         };
-        let Some(&coin) = w.coins.keys().find(|a| super::ring::wrapped(**a) == other) else {
+        let Some(&coin) = w.coins.keys().find(|a| layout.wrapped(**a) == other) else {
             return Ok(());
         };
         Candidate {

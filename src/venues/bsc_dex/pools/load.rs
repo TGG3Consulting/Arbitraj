@@ -450,7 +450,8 @@ pub async fn state(
                 super::baibai::load(ctx, tokens, reg, f, *contract, pair, &tag).await?
             }
             (Proto::BaiBai, PoolRef::Contract(pool))
-                if pair.0 == super::lunar::WETH || pair.1 == super::lunar::WETH =>
+                if super::stable_native::wrapped(ctx)
+                    .is_some_and(|base| base == pair.0 || base == pair.1) =>
             {
                 super::baibai::load(ctx, tokens, reg, f, *pool, pair, &tag).await?
             }

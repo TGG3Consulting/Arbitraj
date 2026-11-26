@@ -377,7 +377,13 @@ async fn router_execute(
                     "минимум выхода шага 0 — обмен без минимума в бандл не ставится",
                 ));
             }
-            commands.push(chain::command(ctx, s, fmt, wallet)?);
+            commands.push(chain::routed_command(
+                ctx,
+                s,
+                fmt,
+                wallet,
+                (router, permit2),
+            )?);
         }
         total_min = total_min.saturating_add(last.order.min_out);
         legs_min.push(last.order.min_out);

@@ -138,13 +138,3 @@ pub fn execution_data(
     .abi_encode()
     .into()
 }
-
-/// Хеш попадает в справочник выпуска после канонических симуляций собранного модуля на этой сети.
-/// Проверенная сборка и адрес, заданный владельцем, сверяются независимо.
-pub fn accepted_runtime(chain: u64) -> Option<alloy_primitives::B256> {
-    super::direct_module::accepted(chain, "solidly_v3")
-}
-
-pub async fn verify_executor(ctx: &Ctx, router: Address, tag: &str) -> GatewayResult<()> {
-    super::direct_module::verify_code(ctx, "solidly_v3", router, &serde_json::json!(tag)).await
-}

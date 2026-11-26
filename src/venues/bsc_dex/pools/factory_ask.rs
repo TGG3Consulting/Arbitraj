@@ -86,8 +86,8 @@ pub enum Q {
     /// (IWooracleV2_2.sol). Вопрос задаётся оракулу (dex.oracle), найденный пул — общий контракт dex.pmm_pool.
     Woo(Address),
     Elfomo(Address, Address, Address),
-    Lunar(Address),
-    BaiBai(Address),
+    Lunar(Address, Address),
+    BaiBai(Address, Address),
     /// Maverick V2: lookup(tokenA, tokenB, 0, предел) — все пулы пары (предел — dex.pair_lookup_max).
     Maverick(u32),
     /// KyberSwap Classic DMM (решение 287): getPools(a, b) — все пулы пары (с разным усилением).
@@ -118,8 +118,8 @@ impl Q {
             Q::PancakeStable { three: true } => "getThreePoolPairInfo",
             Q::ListaStable => "getPairInfos",
             Q::Woo(_) => "state(base)",
-            Q::BaiBai(_) => "quoteToken",
-            Q::Lunar(_) => "Y",
+            Q::BaiBai(..) => "quoteToken",
+            Q::Lunar(..) => "Y",
             Q::Elfomo(..) => "getSupportedPairs",
             Q::Maverick(_) => "lookup(tokenA, tokenB)",
             Q::Dmm => "getPools",
@@ -167,8 +167,8 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
         }
         .abi_encode()
         .into(),
-        Q::BaiBai(_) => super::baibai::IBai::quoteTokenCall {}.abi_encode().into(),
-        Q::Lunar(_) => super::lunar::ILunar::YCall {}.abi_encode().into(),
+        Q::BaiBai(..) => super::baibai::IBai::quoteTokenCall {}.abi_encode().into(),
+        Q::Lunar(..) => super::lunar::ILunar::YCall {}.abi_encode().into(),
         Q::Elfomo(..) => super::elfomo::IElfomo::getSupportedPairsCall {}
             .abi_encode()
             .into(),
@@ -300,19 +300,19 @@ pub fn decode_q(q: Q, out: &[u8]) -> Result<Vec<Address>, String> {
             .into_iter()
             .map(|i| i.swapContract)
             .collect(),
-        Q::BaiBai(pool) => {
+        Q::BaiBai(pool, expected) => {
             let quote = super::baibai::IBai::quoteTokenCall::abi_decode_returns_validate(out)
                 .map_err(|e| e.to_string())?;
-            if pool == super::baibai::ENTRY && quote == super::lunar::USDC {
+            if quote == expected {
                 vec![pool]
             } else {
                 Vec::new()
             }
         }
-        Q::Lunar(pool) => {
+        Q::Lunar(pool, expected) => {
             let quote = super::lunar::ILunar::YCall::abi_decode_returns_validate(out)
                 .map_err(|e| e.to_string())?;
-            if pool == super::lunar::POOL && quote == super::lunar::USDC {
+            if quote == expected {
                 vec![pool]
             } else {
                 Vec::new()

@@ -1,5 +1,5 @@
 //! Отдельные лестницы двух направлений ElfomoFi в одном состоянии сети.
-use super::{IElfomo, ROUTER, USDC, market};
+use super::{IElfomo, market};
 use crate::core::types::LadderPoint;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::venues::bsc_dex::{
@@ -15,6 +15,8 @@ pub(super) struct Reader<'a> {
     pub tag: &'a Value,
     pub wallet: Address,
     pub target: Address,
+    pub router: Address,
+    pub counter: Address,
     pub coin: Address,
 }
 
@@ -23,13 +25,13 @@ impl Reader<'_> {
         let data = Bytes::from(
             IElfomo::getAmountInCall {
                 fromToken: self.coin,
-                toToken: USDC,
+                toToken: self.counter,
                 toAmount: quote_amount,
             }
             .abi_encode(),
         );
         // Используется только размер входа. Выплата всегда запрашивается фактическим путём кошелька.
-        let caller = if self.target == ROUTER {
+        let caller = if self.target == self.router {
             self.wallet
         } else {
             self.target
@@ -37,7 +39,7 @@ impl Reader<'_> {
         let raw: Bytes = rpc::call(
             self.ctx,
             "eth_call",
-            json!([{"from": caller, "to": ROUTER, "data":data}, self.tag]),
+            json!([{"from": caller, "to": self.router, "data":data}, self.tag]),
         )
         .await?;
         call::decode::<IElfomo::getAmountInCall>(&raw)
@@ -45,9 +47,9 @@ impl Reader<'_> {
 
     async fn point(&self, buy: bool, size: U256) -> GatewayResult<LadderPoint> {
         let (from, to, input) = if buy {
-            (USDC, self.coin, size)
+            (self.counter, self.coin, size)
         } else {
-            (self.coin, USDC, self.sell_input(size).await?)
+            (self.coin, self.counter, self.sell_input(size).await?)
         };
         let output = if input.is_zero() {
             U256::ZERO

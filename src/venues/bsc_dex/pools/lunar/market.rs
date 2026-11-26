@@ -1,5 +1,5 @@
 //! Читает площадку LunarBase в закреплённом состоянии, отдельно строит котировки покупки и продажи.
-use super::{ILunar, IMPL, POOL, USDC, WETH, pair, verify_at, view};
+use super::{ILunar, Profile, Proto, verify_at, view};
 use crate::core::types::{LadderPoint, OraclePmmData, PoolState};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::venues::bsc_dex::{
@@ -17,33 +17,41 @@ struct Reader<'a> {
     tag: &'a Value,
     owner: Address,
     target: Address,
+    profile: Profile,
 }
 
 impl<'a> Reader<'a> {
-    async fn new(ctx: &'a Ctx, id: &str, tag: &'a Value) -> GatewayResult<Self> {
-        verify_at(ctx, id, tag).await?;
+    async fn new(ctx: &'a Ctx, id: &str, profile: Profile, tag: &'a Value) -> GatewayResult<Self> {
+        verify_at(ctx, &profile, tag).await?;
         let target = if ctx.dex_text("dex.kind", id)? == "lunarbase_module" {
             let module = ctx.dex_addr("dex.router", id)?;
-            direct_module::verify_code(ctx, "lunarbase", module, tag).await?;
+            direct_module::verify_code(ctx, id, module, tag).await?;
             module
         } else {
-            POOL
+            profile.pool
         };
         Ok(Self {
             ctx,
             tag,
             owner: signer::address(ctx)?,
             target,
+            profile,
         })
     }
     async fn ask(&self, from: Address, to: Address, size: U256) -> GatewayResult<U256> {
-        if self.target == POOL {
-            let token = |a| if a == WETH { Address::ZERO } else { a };
+        if self.target == self.profile.pool {
+            let token = |a| {
+                if a == self.profile.bases[0] {
+                    Address::ZERO
+                } else {
+                    a
+                }
+            };
             return view(
                 self.ctx,
                 self.tag,
                 self.owner,
-                POOL,
+                self.profile.pool,
                 ILunar::quoteExactInCall {
                     tokenIn: token(from),
                     tokenOut: token(to),
@@ -76,13 +84,13 @@ impl<'a> Reader<'a> {
         let q96 = U256::ONE << 96u32;
         for &size in sizes {
             let (a, b, dx) = if buy {
-                (USDC, WETH, size)
+                (self.profile.counter, self.profile.bases[0], size)
             } else {
                 let Some(dx) = mul_div(size, q96, anchor).and_then(|v| mul_div(v, q96, anchor))
                 else {
                     break;
                 };
-                (WETH, USDC, dx)
+                (self.profile.bases[0], self.profile.counter, dx)
             };
             if dx.is_zero() {
                 break;
@@ -117,14 +125,16 @@ pub async fn quote(
     dx: U256,
     at: &str,
 ) -> GatewayResult<U256> {
-    if !(pair(from, to) || pair(to, from)) {
+    let profile = Profile::read(ctx, id, Proto::Lunar)?;
+    if !profile.unordered(from, to) {
         return Err(ctx.err(ErrorCode::NoRoute, "Пара LunarBase не подтверждена"));
     }
     let tag = elfomo::block(ctx, at).await?;
-    let r = Reader::new(ctx, id, &tag).await?;
-    if super::open(ctx, &tag, r.owner).await? {
+    let r = Reader::new(ctx, id, profile, &tag).await?;
+    if super::open(ctx, &tag, r.owner, r.profile.pool).await? {
         let out = r.ask(from, to, dx).await?;
         if !out.is_zero() {
+            r.profile.current(ctx)?;
             return Ok(out);
         }
     }
@@ -143,20 +153,33 @@ pub async fn load(
     ordered: (Address, Address),
     at: &str,
 ) -> GatewayResult<PoolState> {
-    if reference != POOL || !(pair(ordered.0, ordered.1) || pair(ordered.1, ordered.0)) {
+    let profile = Profile::read(ctx, f.id, Proto::Lunar)?;
+    if reference != profile.pool || !profile.unordered(ordered.0, ordered.1) {
         return Err(ctx.err(ErrorCode::NotApplicable, "Неизвестный рынок LunarBase"));
     }
     let tag = elfomo::block(ctx, at).await?;
-    let r = Reader::new(ctx, f.id, &tag).await?;
+    let r = Reader::new(ctx, f.id, profile, &tag).await?;
     let (active, state, rx, ry) = tokio::try_join!(
-        super::open(ctx, &tag, r.owner),
-        view(ctx, &tag, r.owner, POOL, ILunar::stateCall {}),
-        view(ctx, &tag, r.owner, POOL, ILunar::getXReserveCall {}),
-        view(ctx, &tag, r.owner, POOL, ILunar::getYReserveCall {})
+        super::open(ctx, &tag, r.owner, r.profile.pool),
+        view(ctx, &tag, r.owner, r.profile.pool, ILunar::stateCall {}),
+        view(
+            ctx,
+            &tag,
+            r.owner,
+            r.profile.pool,
+            ILunar::getXReserveCall {}
+        ),
+        view(
+            ctx,
+            &tag,
+            r.owner,
+            r.profile.pool,
+            ILunar::getYReserveCall {}
+        )
     )?;
     let anchor = U256::from(state.anchorPrice);
     let (buy, sell) = if active && !anchor.is_zero() {
-        let sizes = ladder_counter::amounts(ctx, tokens, reg, f.id, USDC).await?;
+        let sizes = ladder_counter::amounts(ctx, tokens, reg, f.id, r.profile.counter).await?;
         tokio::try_join!(
             r.side(true, &sizes, anchor, U256::from(rx)),
             r.side(false, &sizes, anchor, U256::from(ry))
@@ -164,14 +187,15 @@ pub async fn load(
     } else {
         (Vec::new(), Vec::new())
     };
+    r.profile.current(ctx)?;
     Ok(PoolState::OraclePmm(Box::new(OraclePmmData {
         price: anchor,
         spread: U256::ZERO,
         coeff: U256::ZERO,
         feasible: !buy.is_empty() || !sell.is_empty(),
         paused: !active,
-        implementation: IMPL,
-        base_is_token0: ordered.0 == WETH,
+        implementation: r.profile.implementation,
+        base_is_token0: ordered.0 == r.profile.bases[0],
         ladder_quote_in: buy,
         ladder_base_in: sell,
         pool_token0: Some(Address::ZERO),

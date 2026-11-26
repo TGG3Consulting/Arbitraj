@@ -109,8 +109,25 @@ def collect(snapshot, endpoint, module_code=None):
             return int.from_bytes(raw[:32],"big")
         def leg(prefix,a,b,amount):
             prepared = prefix+[balance(a),balance(b),approve(a,0),approve(a,amount)]
-            replies = simulate(prepared+[price(a,b,amount)])
-            row = dict(input=a, output=b, requested=str(amount), gas_limit=gas)
+            direct=price(a,b,amount)
+            multicall="0xca11bde05977b3631167028862be2a173976ca11"
+            get_factory=bytes.fromhex(calldata("factory()")[2:])
+            get_pool=bytes.fromhex(calldata("getPool(address,address,uint24)",["address","address","uint24"],[*tokens,fee])[2:])
+            bundle=[(quoter,True,get_factory),(pool,True,get_factory),(factory,True,get_pool),(quoter,True,bytes.fromhex(direct["data"][2:]))]
+            packed=tx(multicall,calldata("aggregate3((address,bool,bytes)[])",["(address,bool,bytes)[]"],[bundle]))
+            packed["gas"]=hex(16_777_216)
+            replies = simulate(prepared+[direct])
+            bundled=simulate(prepared+[packed])[-1]
+            if bundled["status"]!="0x1":
+                raise ValueError("checked native quoter did not return its call results")
+            answers,=decode(["(bool,bytes)[]"],bytes.fromhex(bundled["returnData"][2:]))
+            if not all(ok for ok,_ in answers[:3]) or [decode(["address"],v)[0] for _,v in answers[:3]]!=[factory,factory,pool]:
+                raise ValueError("checked native quoter points to another factory or pool")
+            if direct["gas"]==packed["gas"] or replies[-1]["status"]=="0x1":
+                if answers[3][0]!=(replies[-1]["status"]=="0x1") or (answers[3][0] and answers[3][1].hex()!=replies[-1]["returnData"][2:]):
+                    raise ValueError("checked and direct quotes disagreed at matching state and gas")
+
+            row = dict(input=a, output=b, requested=str(amount), gas_limit=gas, checked_factory=factory, checked_pool=pool, checked_ok=answers[3][0], checked_gas=int(bundled["gasUsed"],16))
             if any(r["status"] != "0x1" for r in replies[:-1]):
                 raise ValueError("funding, previous trade or approval reverted before quote")
             q = output(replies[-1],4)

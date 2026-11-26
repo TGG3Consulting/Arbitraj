@@ -1,4 +1,6 @@
 //! Файл: tests/base_elfomofi.rs. Проверяет ABI реестра, границу vault и полные дельты с канонического Base.
+#[path = "common/first_run_profiles.rs"]
+mod first_run_profiles;
 use alloy_primitives::{Address, U256};
 use arb::venues::bsc_dex::pools::elfomo;
 use serde_json::Value;
@@ -19,11 +21,26 @@ fn canonical_pairs_pay_exact_amount_or_have_no_executable_quote() {
         .find(|r| r["signature"] == "getSupportedPairs()")
         .unwrap()["response"];
     let raw = hex::decode(registry.as_str().unwrap().strip_prefix("0x").unwrap()).unwrap();
+    let rows: Value = serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
+    let profile = &rows
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["id"] == "elfomofi")
+        .unwrap()["settings"];
+    let counter = addr(&profile["dex.pmm_counter"]);
+    let bases: Vec<_> = profile["dex.pmm_base_tokens"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(addr)
+        .collect();
     let mut amounts = (0, 0);
     for c in data["cases"].as_array().unwrap() {
         let (input, output) = (addr(&c["token_in"]), addr(&c["token_out"]));
-        let confirmed = elfomo::listed(&raw, input, output).unwrap()
-            || elfomo::listed(&raw, output, input).unwrap();
+        let confirmed = ((input == counter && bases.contains(&output))
+            || (output == counter && bases.contains(&input)))
+            && elfomo::listed(&raw, input, output).unwrap();
         if c["status"] == "zero_quote" {
             assert!(!confirmed);
             assert_eq!(number(&c["quote"]["returnData"]), U256::ZERO);
@@ -54,15 +71,20 @@ fn canonical_pairs_pay_exact_amount_or_have_no_executable_quote() {
 
 #[test]
 fn module_acceptance_is_base_specific_and_bound_to_actual_wallet_deltas() {
-    use arb::venues::bsc_dex::pools::{direct_module, families};
+    use arb::venues::bsc_dex::pools::families;
     let archive: Value = serde_json::from_str(include_str!(
         "data/first_run_dex_2026-11-26/elfomo_executor_base.json"
     ))
     .unwrap();
     let expected = archive["runtime_keccak"].as_str().unwrap().parse().unwrap();
-    assert!(direct_module::accepts(8453, "elfomofi", expected));
-    assert!(!direct_module::accepts(8453, "lunarbase", expected));
-    assert_eq!(direct_module::accepted(1, "elfomofi"), None);
+    assert!(first_run_profiles::recommended(8453, "elfomofi").contains(&expected));
+    assert!(!first_run_profiles::recommended(8453, "lunarbase").contains(&expected));
+    assert_eq!(
+        first_run_profiles::recommended(1, "elfomofi")
+            .first()
+            .copied(),
+        None
+    );
     let signal = families::make("elfomofi", "elfomofi").unwrap();
     let trade = families::make("elfomofi", "elfomofi_module").unwrap();
     assert!(!signal.tradable && trade.tradable && trade.direct_module());

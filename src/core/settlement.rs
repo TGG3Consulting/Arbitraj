@@ -205,8 +205,18 @@ pub async fn preview(
     side: Side,
     quantity: Decimal,
 ) -> Result<Conversion, String> {
+    let (_, rules, book) = terms(core, cex, side).await?;
+    conversion(&book, &rules, cex, side, quantity).await
+}
+
+/// Книга и торговые условия конверсии берутся один раз для расчёта соседних объёмов.
+pub(super) async fn terms(
+    core: &Core,
+    ce: &VenueId,
+    side: Side,
+) -> Result<(CoinNetworkInfo, SpotPairState, QuoteSnapshot), String> {
     let at = At {
-        venue: Some(&cex.0),
+        venue: Some(&ce.0),
         coin: None,
     };
     if core
@@ -219,11 +229,125 @@ pub async fn preview(
     {
         return Err("Расчётная валюта исходной биржи должна быть USDT".into());
     }
-    let row = usdc_network(core, cex, side == Side::Buy)?;
-    let rules = super::dirctx_venue::pair_rules(core, cex, "USDC")?
-        .ok_or("Для конверсии требуется биржа")?;
-    let book = super::exec_book::book(core, cex, &row.asset, side)
+    let network = usdc_network(core, ce, side == Side::Buy)?;
+    let rules = super::dirctx_venue::pair_rules(core, ce, "USDC")?
+        .ok_or("Для конверсии требуется спотовая биржа")?;
+    let book = super::exec_book::book(core, ce, &network.asset, side)
         .await
         .map_err(|e| e.to_string())?;
-    conversion(&book.snap, &rules, cex, side, quantity).await
+    Ok((network, rules, book.snap))
+}
+
+/// Максимальный исполнимый ордер продажи в пределах имеющихся USDC и ими же уплачиваемой комиссии.
+pub(super) async fn sell_within(
+    core: &Core,
+    cex: &VenueId,
+    available: Decimal,
+) -> Result<Conversion, String> {
+    let (_, rules, book) = terms(core, cex, Side::Sell).await?;
+    let q = conversion(&book, &rules, cex, Side::Sell, available).await?;
+    if q.net_usdc <= available {
+        return Ok(q);
+    }
+    let qty = available
+        .checked_mul(q.order_usdc)
+        .and_then(|v| v.checked_div(q.net_usdc))
+        .ok_or("Не удалось вычислить ордер с комиссией USDC")?;
+    let q = conversion(&book, &rules, cex, Side::Sell, qty).await?;
+    if q.net_usdc > available {
+        return Err("Комиссия продажи превышает доступные USDC".into());
+    }
+    Ok(q)
+}
+
+/// Минимальное число шагов ордера с подтверждённым зачислением required на Base. Проверяются
+/// фактические комиссии книги, сетевые пределы и обе точности; промежуточные оценки не становятся заявками.
+pub(super) async fn fund_for(
+    core: &Core,
+    cex: &VenueId,
+    required: Decimal,
+) -> Result<Conversion, String> {
+    use rust_decimal::prelude::ToPrimitive;
+    let (network, rules, book) = terms(core, cex, Side::Buy).await?;
+    let snapshot = book.book().ok_or("Нет книги финансирования USDC")?;
+    let level = snapshot
+        .asks
+        .first()
+        .filter(|v| v.price > Decimal::ZERO)
+        .ok_or("Нет предложения USDC")?;
+    let step = rules.step_size;
+    if step <= Decimal::ZERO || required <= Decimal::ZERO {
+        return Err("Неположительная потребность в USDC или шаг".into());
+    }
+    let capacity = snapshot
+        .asks
+        .iter()
+        .try_fold(Decimal::ZERO, |n, l| n.checked_add(l.qty))
+        .ok_or("Глубина вне диапазона")?;
+    let lot = |n: Decimal| {
+        n.checked_div(step)
+            .and_then(|v| v.floor().to_u128())
+            .ok_or("Количество шагов вне диапазона")
+    };
+    let maximum = capacity.min(rules.max_qty.unwrap_or(capacity));
+    let mut high = lot(maximum)?;
+    let mut low = lot(required
+        .max(rules.min_qty.unwrap_or_default())
+        .max(rules.min_notional.unwrap_or_default() / level.price))?;
+    let mut chosen = None;
+    while low <= high {
+        let mid = low + (high - low) / 2;
+        let qty = Decimal::try_from(mid)
+            .ok()
+            .and_then(|m| m.checked_mul(step))
+            .ok_or("Размер ордера вне диапазона")?;
+        if qty <= Decimal::ZERO {
+            low = mid + 1;
+            continue;
+        }
+        let Some(price) = crate::gateway::frozen::deepest(snapshot, Side::Buy, qty) else {
+            return Err("Книга не покрывает заявленную глубину".into());
+        };
+        if rules.max_notional.is_some_and(|v| qty * price > v)
+            || network
+                .withdraw_max
+                .filter(|v| *v > Decimal::ZERO)
+                .is_some_and(|v| qty > v && chosen.is_some())
+        {
+            if mid == 0 {
+                break;
+            }
+            high = mid - 1;
+            continue;
+        }
+        if rules.min_notional.is_some_and(|v| qty * price < v)
+            || rules.min_qty.is_some_and(|v| qty < v)
+        {
+            low = mid + 1;
+            continue;
+        }
+        let q = conversion(&book, &rules, cex, Side::Buy, qty).await?;
+        if network
+            .withdraw_max
+            .filter(|v| *v > Decimal::ZERO)
+            .is_some_and(|v| q.net_usdc > v)
+        {
+            if mid == 0 {
+                break;
+            }
+            high = mid - 1;
+            continue;
+        }
+        let wire = super::settlement_path::funding_wire(&network, q.net_usdc);
+        if wire.is_ok_and(|v| v >= required) {
+            chosen = Some(q);
+            if mid == 0 {
+                break;
+            }
+            high = mid - 1;
+        } else {
+            low = mid + 1;
+        }
+    }
+    chosen.ok_or_else(||"Нет объёма USDC/USDT, который после комиссии и округления вывода финансирует покупку на Base".into())
 }

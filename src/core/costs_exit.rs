@@ -37,14 +37,22 @@ pub(super) fn coin_fee(costs: &[Cost], coin: &str) -> Decimal {
         .sum()
 }
 
-pub(super) async fn calculate<S: Source>(
+pub(super) struct Quantities {
+    pub sent_a: Decimal,
+    pub arrive: Decimal,
+    pub sell_qty: Decimal,
+    pub qb: Quote,
+    pub lines: Vec<(Cost, &'static str)>,
+}
+
+/// Одни и те же проверки количества, удержаний, глубины и лимитов используются для конверсионного и прямого путей.
+pub(super) async fn quantities<S: Source>(
     cx: &DirCtx,
     src: &S,
     held_qty: Decimal,
-    buy_avg: Decimal,
     mut lines: Vec<(Cost, &'static str)>,
     mut depth: Option<&mut super::final_depth::Observation>,
-) -> Result<Sale, Fail> {
+) -> Result<Quantities, Fail> {
     let d = &cx.dir;
     let coin = d.asset.ticker.clone();
     let to_send = match super::withdraw_amount::for_network(held_qty, cx.a.info.as_ref())? {
@@ -134,6 +142,32 @@ pub(super) async fn calculate<S: Source>(
         );
         lines.push((rest, "B"));
     }
+    Ok(Quantities {
+        sent_a: to_send,
+        arrive,
+        sell_qty,
+        qb,
+        lines,
+    })
+}
+
+pub(super) async fn calculate<S: Source>(
+    cx: &DirCtx,
+    src: &S,
+    held_qty: Decimal,
+    buy_avg: Decimal,
+    lines: Vec<(Cost, &'static str)>,
+    depth: Option<&mut super::final_depth::Observation>,
+) -> Result<Sale, Fail> {
+    let Quantities {
+        sent_a: to_send,
+        arrive,
+        sell_qty,
+        qb,
+        mut lines,
+    } = quantities(cx, src, held_qty, lines, depth).await?;
+    let d = &cx.dir;
+    let coin = d.asset.ticker.clone();
     let proceeds = sell_qty * qb.avg_price;
     if cx.return_per_trade {
         // Решение 118 (Я-22): перегоняется выручка минус комиссия продажи в котируемой монете B — то, что пришло.

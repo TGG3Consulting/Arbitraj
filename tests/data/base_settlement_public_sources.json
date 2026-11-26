@@ -1,0 +1,1521 @@
+{
+  "source_pool_index": [
+    {
+      "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes?page=1",
+      "n": 100
+    },
+    {
+      "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes?page=2",
+      "n": 19
+    }
+  ],
+  "index_utc": "2026-11-25T21:58:07.688292+00:00",
+  "sampling": "saved samples of first page for each listed Base DEX, up to three pools",
+  "dex_count": 119,
+  "pools": [
+    {
+      "address": "0x83097b68027239c89576825bbb808ac405bf1c1e",
+      "name": "FREN / WETH",
+      "dex": "leetswap-base"
+    },
+    {
+      "address": "0xf869ee10c36d80e440edabed43926d1065ddef6f",
+      "name": "LEET / axlUSDC",
+      "dex": "leetswap-base"
+    },
+    {
+      "address": "0x86cd8533b0166bdcf5d366a3bb0c3465e56d3ad5",
+      "name": "axlUSDC / WETH",
+      "dex": "rocketswap"
+    },
+    {
+      "address": "0x0054c66cb7b352dc79fd5f6a024d6f8a215ff2ce",
+      "name": "RCKT / WETH",
+      "dex": "rocketswap"
+    },
+    {
+      "address": "0x1a7975836bd4f1a53e5251f41b6da5ff5fd105f5",
+      "name": "RCKT / axlUSDC",
+      "dex": "rocketswap"
+    },
+    {
+      "address": "0xca6d066b741bb792596db019739b32a57e366193",
+      "name": "0xSniper / WETH",
+      "dex": "cbswap"
+    },
+    {
+      "address": "0x0a480fa98ef28efc722785c3361660c5a44e1c27",
+      "name": "D / WETH",
+      "dex": "oasisswap-base"
+    },
+    {
+      "address": "0xe693bca867cefcba689c102d0add8c3aa8d46b5f",
+      "name": "TOSHI / WETH",
+      "dex": "oasisswap-base"
+    },
+    {
+      "address": "0xb0118c9c31d666f78c04dd2851ea762c7abc1d19",
+      "name": "axlUSDC / WETH",
+      "dex": "oasisswap-base"
+    },
+    {
+      "address": "0x57713f7716e0b0f65ec116912f834e49805480d2",
+      "name": "WETH / USDC 0.05%",
+      "dex": "sushiswap-v3-base"
+    },
+    {
+      "address": "0xcaeedd8f1acf55f2df259afc090d519069f72a2b",
+      "name": "ZRO / WETH 0.05%",
+      "dex": "sushiswap-v3-base"
+    },
+    {
+      "address": "0x457ffb47a73f764db333048ff737ec16ef33a729",
+      "name": "PINK / USDC 0.3%",
+      "dex": "sushiswap-v3-base"
+    },
+    {
+      "address": "0x3458ffdc3b2cc274a9d8aa8d9b0b934558b7a498",
+      "name": "USDbC / WETH",
+      "dex": "synthswap"
+    },
+    {
+      "address": "0xc4c5fd6b39014a37defe5b567c8eb76418cc12bb",
+      "name": "WETH / USDC",
+      "dex": "synthswap"
+    },
+    {
+      "address": "0x61a4d7429cd8792d744a184f9191898e4529b5b0",
+      "name": "DAI / WETH",
+      "dex": "synthswap"
+    },
+    {
+      "address": "0x86cd030822547105bd7952af4ba48534640a3824",
+      "name": "USDbC / WETH",
+      "dex": "swapbased"
+    },
+    {
+      "address": "0x5554419ccd0293d9383901f461c7c3e0c66e925f",
+      "name": "BASE / WETH",
+      "dex": "swapbased"
+    },
+    {
+      "address": "0xaeeb835f3aa21d19ea5e33772daa9e64f1b6982f",
+      "name": "USDC / WETH",
+      "dex": "swapbased"
+    },
+    {
+      "address": "0x66543ab7d0ac497ee5ff77e8c5965efcdb895f7f",
+      "name": "USDbC / WETH 0.04%",
+      "dex": "horizondex-base"
+    },
+    {
+      "address": "0xd5c5a89ae6292d8c1fe342cf05111e7540a136b5",
+      "name": "axlUSDC / WETH 0.04%",
+      "dex": "horizondex-base"
+    },
+    {
+      "address": "0xea742dfacd860aa0ab2084a136e6a321b7830157",
+      "name": "axlUSDT / WETH 1%",
+      "dex": "horizondex-base"
+    },
+    {
+      "address": "0xab067c01c7f5734da168c699ae9d23a4512c9fdb",
+      "name": "USDC / WETH",
+      "dex": "baseswap"
+    },
+    {
+      "address": "0x41d160033c222e6f3722ec97379867324567d883",
+      "name": "USDbC / WETH",
+      "dex": "baseswap"
+    },
+    {
+      "address": "0xcefb04d884c9414140286b01754126b61df6b247",
+      "name": "TOSHI / WETH",
+      "dex": "baseswap"
+    },
+    {
+      "address": "0x6546ecac3f80e041006edc3da891adce567b40b8",
+      "name": "USDbC / WETH",
+      "dex": "velocimeter-base"
+    },
+    {
+      "address": "0x7b809866eaa8137d902f83bf7cbe77b41d0df70c",
+      "name": "FTW / DAI",
+      "dex": "velocimeter-base"
+    },
+    {
+      "address": "0x1c2f16eb9e2c18a87037194c5ea00f569953a1cc",
+      "name": "axlUSDC / WETH",
+      "dex": "velocimeter-base"
+    },
+    {
+      "address": "0x888a09048c0eebdef0c8d4647a3da34e24375797",
+      "name": "axlUSDC / WETH",
+      "dex": "kokonutswap-base"
+    },
+    {
+      "address": "0x73827df96e7f51960bae78f9b0d76aa4ea9958f9",
+      "name": "BRIAN / WETH",
+      "dex": "lfgswap-base"
+    },
+    {
+      "address": "0x2e0483df4e5bcbf4bdca0e1712f6b1204afad63b",
+      "name": "BTC / WETH",
+      "dex": "lfgswap-base"
+    },
+    {
+      "address": "0x47ecf2def6b54e4012c78fc992f87b50169aa802",
+      "name": "LFG / WETH",
+      "dex": "lfgswap-base"
+    },
+    {
+      "address": "0x809568656c4874850d931570d0b5cd5bb1b0e3b9",
+      "name": "axlUSDC / WETH 0.05%",
+      "dex": "crescentswap-base"
+    },
+    {
+      "address": "0x2851b16cfb7ad606b25384e5fc99cdb8da9abc2a",
+      "name": "EURC / USDC",
+      "dex": "swapline-base"
+    },
+    {
+      "address": "0x55f546a65ddbc8f6df90f12584034469a8f01b18",
+      "name": "eve69 / WETH",
+      "dex": "swapline-base"
+    },
+    {
+      "address": "0x2da6e67c45af2aaa539294d9fa27ea50ce4e2c5f",
+      "name": "OLAS / WETH 0.3%",
+      "dex": "balancer-v2-base"
+    },
+    {
+      "address": "0x5332584890d6e415a6dc910254d6430b8aab7e69",
+      "name": "OLAS / USDC 0.3%",
+      "dex": "balancer-v2-base"
+    },
+    {
+      "address": "0x44d46a43ceb5a1e04ef12b5731de5f9917f0ec8a",
+      "name": "VLR / WETH 0.1%",
+      "dex": "balancer-v2-base"
+    },
+    {
+      "address": "0xaa3104800adc8ff21061e77b3f1f89b1b1ca6282",
+      "name": "USDC / WETH 0.1%",
+      "dex": "sobal-base"
+    },
+    {
+      "address": "0xa4872638ec9ec45bc0d6942cfc69dbcc3b18e8ec",
+      "name": "USDbC / WETH 0.1%",
+      "dex": "sobal-base"
+    },
+    {
+      "address": "0xae4699763ccaedf917a857965d758786aa327205",
+      "name": "USDbC / WETH 0.3%",
+      "dex": "sobal-base"
+    },
+    {
+      "address": "0x17d7b7bd4fc771555d8cccfe90d2efcf3c7106dd",
+      "name": "USDbC / WETH 0.05%",
+      "dex": "dackieswap-v3-base"
+    },
+    {
+      "address": "0xfcd3960075c00af339a4e26afc76b949e5ff06ec",
+      "name": "USDC / WETH 0.05%",
+      "dex": "dackieswap-v3-base"
+    },
+    {
+      "address": "0x4195e7a7c8d7cc9269f594f425fd1036941f7242",
+      "name": "USDbC / WETH 0.25%",
+      "dex": "dackieswap-v3-base"
+    },
+    {
+      "address": "0xb4cb800910b228ed3d0834cf79d697127bbb00e5",
+      "name": "WETH / USDC 0.01%",
+      "dex": "uniswap-v3-base"
+    },
+    {
+      "address": "0x2df380544b88adb3ad0a94100dcc45fd705aae2d",
+      "name": "xdp / USDC 0.01%",
+      "dex": "uniswap-v3-base"
+    },
+    {
+      "address": "0xd0b53d9277642d899df5c87a3966a349a798f224",
+      "name": "USDC / WETH 0.05%",
+      "dex": "uniswap-v3-base"
+    },
+    {
+      "address": "0xdcd326eca7a941719d27bb95858456b5695d3f43",
+      "name": "DBX / USDbC",
+      "dex": "degenbrains-base"
+    },
+    {
+      "address": "0xb563899d301619126436765ed695999122a997a0",
+      "name": "DBX / WETH",
+      "dex": "degenbrains-base"
+    },
+    {
+      "address": "0xeb8467c9b63cd5023d50394628513c30489f5bd0",
+      "name": "USDbC / WETH",
+      "dex": "cloudbase"
+    },
+    {
+      "address": "0xaa64e1790d3450a449d3d39e0525d48c4bb5e10a",
+      "name": "DAI / WETH",
+      "dex": "cloudbase"
+    },
+    {
+      "address": "0x0ba0f4f35cf3dad8070e913615a80ec77a5ec180",
+      "name": "CLOUD / WETH",
+      "dex": "cloudbase"
+    },
+    {
+      "address": "0x8a68943967421a7096fe5763eae756dd14409142",
+      "name": "axlUSDC / WETH 0.3%",
+      "dex": "yum-yum-swap"
+    },
+    {
+      "address": "0x761d922ae11396c14583dcf3d78dc8ab9bf985c0",
+      "name": "axlUSDT / axlUSDC 0.05%",
+      "dex": "yum-yum-swap"
+    },
+    {
+      "address": "0xa7a79ac15187d3582eafdd2eb174de42aa416ffb",
+      "name": "axlUSDT / WETH 0.3%",
+      "dex": "yum-yum-swap"
+    },
+    {
+      "address": "0x56fcc093d4fa30e1eea14d9ea963b9f90b29de04",
+      "name": "USDbC / WETH 0.01%",
+      "dex": "throne-v3-base"
+    },
+    {
+      "address": "0xfefb4b916e01b6995de918df418fbce4a14f92da",
+      "name": "axlUSDC / WETH 1%",
+      "dex": "throne-v3-base"
+    },
+    {
+      "address": "0x27e7bb9f178b6051854f62418b2e3a8c658095ca",
+      "name": "USDbC / WETH 1%",
+      "dex": "throne-v3-base"
+    },
+    {
+      "address": "0x4c1453376952f899365d295c716aaa1010b8feaa",
+      "name": "B3 / WETH",
+      "dex": "alien-base"
+    },
+    {
+      "address": "0xef24722d5dae32dc155d961561cffbc5f347eee7",
+      "name": "USDbC / WETH",
+      "dex": "alien-base"
+    },
+    {
+      "address": "0xbd30f3902284fa159643ca0833a950fc207de447",
+      "name": "GR4YS / WETH",
+      "dex": "alien-base"
+    },
+    {
+      "address": "0xe1ada5acb1759b3159c9d2d0ff9d6a3bbfe775d7",
+      "name": "USDbC / WETH",
+      "dex": "baso-finance"
+    },
+    {
+      "address": "0xb7e5b72bda6e97872ead52aa823982c967b61983",
+      "name": "YFX / USDbC",
+      "dex": "baso-finance"
+    },
+    {
+      "address": "0x0363a56c52572bc6bc63a34473c95500a845ae8e",
+      "name": "DAI / USDbC",
+      "dex": "baso-finance"
+    },
+    {
+      "address": "0x5969adf464ebcd3a043df7c8abc64fd78af8e8e6",
+      "name": "DAI / WETH",
+      "dex": "icecreamswap-base"
+    },
+    {
+      "address": "0x90c3c2f526500bf3d705f6ff85d6ae0c1cac3843",
+      "name": "WETH / USDC",
+      "dex": "icecreamswap-base"
+    },
+    {
+      "address": "0x609b33c6ce5bd2c09282a7538a243fe496aeadfc",
+      "name": "ICE / BSWAP",
+      "dex": "icecreamswap-base"
+    },
+    {
+      "address": "0x0351f5efd5fb8ef36856d2c7e2aa5356528f47b9",
+      "name": "Punk / WETH",
+      "dex": "bakeryswap-base"
+    },
+    {
+      "address": "0x723854239cd0726d85b6eff24b4fd21e5053e19e",
+      "name": "USDbC / WETH",
+      "dex": "throne-v2-base"
+    },
+    {
+      "address": "0xabe1f462e7ab9c6986d281d6e28d8c4949a5d192",
+      "name": "OATH / USDbC",
+      "dex": "throne-v2-base"
+    },
+    {
+      "address": "0xba1a0b373c182f4f6dbb32aff38168cfb769aacd",
+      "name": "axlUSDC / WETH",
+      "dex": "throne-v2-base"
+    },
+    {
+      "address": "0x1bd1a3cb756bd20eef8ebaddc8dd48595594aa66",
+      "name": "fBOMB / WETH",
+      "dex": "archly-base"
+    },
+    {
+      "address": "0x6af6c8de5e2ca6c4e9ab156a4652ff242292d6ff",
+      "name": "ACS / WETH",
+      "dex": "archly-base"
+    },
+    {
+      "address": "0x5a278e529ee2c41dd0fafaab812745ccc6ac1753",
+      "name": "ACS / WETH",
+      "dex": "archly-base"
+    },
+    {
+      "address": "0x3b190783a47db6acb11c0899ecf31f47896f3a17",
+      "name": "WETH / USDC",
+      "dex": "soswap"
+    },
+    {
+      "address": "0xba13875b4cb06c0e4e148f9ef4e12d2b270526ef",
+      "name": "SAINTS / VVV",
+      "dex": "soswap"
+    },
+    {
+      "address": "0xe812e4949aca2f614b43cf7896844a107f04a99a",
+      "name": "SAINTS / USDC",
+      "dex": "soswap"
+    },
+    {
+      "address": "0x09b852108b6ed78adb2e776d901b8d54ba708080",
+      "name": "USDbC / WETH 0.3%",
+      "dex": "derpdex-base"
+    },
+    {
+      "address": "0xb5da4ce320ac01f90b59837c8706406b7706587e",
+      "name": "USDbC / WETH 0.05%",
+      "dex": "derpdex-base"
+    },
+    {
+      "address": "0x8dff358dc9ee5f3d44afb08128c5b0c2de4961d9",
+      "name": "USDbC / WETH 1%",
+      "dex": "derpdex-base"
+    },
+    {
+      "address": "0x1e9cb689c04324b1b7f63c6e40e2b6b4b4a6e6bc",
+      "name": "USDbC / WETH",
+      "dex": "pixelswap-base"
+    },
+    {
+      "address": "0x2adc726148b26e7d6a0de7c0276afe7a25e97228",
+      "name": "USDbC / WETH",
+      "dex": "diamondswap"
+    },
+    {
+      "address": "0x2f3245353c54de3cd976a7f3a0638d0bceb022ea",
+      "name": "TOSHI / WETH",
+      "dex": "diamondswap"
+    },
+    {
+      "address": "0x4ec51c89d11618555813c3a4ca2d496ef846a459",
+      "name": "MOCHI / WETH",
+      "dex": "diamondswap"
+    },
+    {
+      "address": "0x72ab388e2e2f6facef59e3c3fa2c4e29011c2d38",
+      "name": "WETH / USDC 0.01%",
+      "dex": "pancakeswap-v3-base"
+    },
+    {
+      "address": "0x83f3aca29bc79b048b99c56013475570acc97ccf",
+      "name": "ELSA / USDC 0.01%",
+      "dex": "pancakeswap-v3-base"
+    },
+    {
+      "address": "0xb94b22332abf5f89877a14cc88f2abc48c34b3df",
+      "name": "cbBTC / USDC 0.01%",
+      "dex": "pancakeswap-v3-base"
+    },
+    {
+      "address": "0x8b9ae9726173f933972cdfd6b0b9b573826cd243",
+      "name": "VCAT / VVV",
+      "dex": "pancakeswap-v2-base"
+    },
+    {
+      "address": "0x97a7c3ef92e8d058144abf7f040cc78daafc2631",
+      "name": "GPP / WETH",
+      "dex": "pancakeswap-v2-base"
+    },
+    {
+      "address": "0x79474223aedd0339780bacce75abda0be84dcbf9",
+      "name": "USDC / WETH",
+      "dex": "pancakeswap-v2-base"
+    },
+    {
+      "address": "0x01784ef301d79e4b2df3a21ad9a536d4cf09a5ce",
+      "name": "VVV / WETH",
+      "dex": "aerodrome-base"
+    },
+    {
+      "address": "0xcdac0d6c6c59727a65f871236188350531885c43",
+      "name": "USDC / WETH",
+      "dex": "aerodrome-base"
+    },
+    {
+      "address": "0xe2444faa67022125a059c19d5737d8e4dad251fa",
+      "name": "OVPP / WETH",
+      "dex": "aerodrome-base"
+    },
+    {
+      "address": "0xd70e1bab713d84c3a110ded11e41714542e604ba",
+      "name": "SDEX / WETH",
+      "dex": "smardex-base"
+    },
+    {
+      "address": "0x5a60c797993ee91f012260d995e1e6c6ce3dda6d",
+      "name": "USDbC / WETH",
+      "dex": "smardex-base"
+    },
+    {
+      "address": "0xa52ae73578023cb55ec65c1f8ecae6f65b62c7f3",
+      "name": "DAI / WETH",
+      "dex": "smardex-base"
+    },
+    {
+      "address": "0x9be9f7cf5ceea938f65b3bc8b40c1d61bef04bea",
+      "name": "USDC / USDbC 0.008%",
+      "dex": "kyberswap-elastic-base"
+    },
+    {
+      "address": "0x78ada30e808a85940800857e084cd22e68bb3df8",
+      "name": "WETH / USDC 0.1%",
+      "dex": "kyberswap-elastic-base"
+    },
+    {
+      "address": "0xc4b88b97c526b3312c4138c3e68f4b9b52e2b139",
+      "name": "DAI / USDbC 0.008%",
+      "dex": "kyberswap-elastic-base"
+    },
+    {
+      "address": "0x6bee1580471f38000951abd788a9c060a4ad3ac3",
+      "name": "WETH / USDC",
+      "dex": "dackieswap-v2-base"
+    },
+    {
+      "address": "0xf6f60d084d5d5d4dd448f18d094bc66669623310",
+      "name": "DACKIE / WETH",
+      "dex": "dackieswap-v2-base"
+    },
+    {
+      "address": "0x689cdab9a012b162f29065d6feac2e849dec4e0d",
+      "name": "DEGEN / DACKIE",
+      "dex": "dackieswap-v2-base"
+    },
+    {
+      "address": "0x09dda12b6c612f1f016da5ea5041bb3973af53b5",
+      "name": "USDbC / WETH",
+      "dex": "plantbaseswap"
+    },
+    {
+      "address": "0x88f8d2667dfeb9d10a44272fc4cf8d6fc6d08f53",
+      "name": "PLANT / WETH",
+      "dex": "plantbaseswap"
+    },
+    {
+      "address": "0xa293cf008e6b34efe457101ac812cae66e72ad33",
+      "name": "DAI / WETH",
+      "dex": "plantbaseswap"
+    },
+    {
+      "address": "0xf429af2d7805bb1bed1ada3cacf2bbbed87294c8",
+      "name": "USDbC / WETH",
+      "dex": "moonbase"
+    },
+    {
+      "address": "0x95355f0764c6b26d13c1452dc89ab175320f489f",
+      "name": "DAI / WETH",
+      "dex": "moonbase"
+    },
+    {
+      "address": "0x989b21613d13ddb599565ad0c63e4db21daa03f1",
+      "name": "USDbC / MOON",
+      "dex": "moonbase"
+    },
+    {
+      "address": "0x659908a3353c48aa92f9b0aeb6d3b473ac091b83",
+      "name": "cbETH / cbBTC",
+      "dex": "equalizer-base"
+    },
+    {
+      "address": "0x62046274558e152f0e318d12666a9da93ccd2cc8",
+      "name": "SOL / uSOL",
+      "dex": "equalizer-base"
+    },
+    {
+      "address": "0x83240b049fa89b65be714aed68e5b074df6aac84",
+      "name": "WETH / USDC",
+      "dex": "equalizer-base"
+    },
+    {
+      "address": "0x4cfd5ba4b8e0475d9a3cfa863e0e18ccf9d3eb25",
+      "name": "WETH / USDC 0.05%",
+      "dex": "iziswap-base"
+    },
+    {
+      "address": "0xb92a9a91a9f7e8e6bb848508a6daf08f9d718554",
+      "name": "WETH / USDC 0.3%",
+      "dex": "iziswap-base"
+    },
+    {
+      "address": "0xdb5d62f06eecef0da7506e0700c2f03c57016de5",
+      "name": "USDbC / WETH 0.3%",
+      "dex": "iziswap-base"
+    },
+    {
+      "address": "0xbad04cdb100fe1d36362fec958e77b50fa291665",
+      "name": "USDbC / WETH",
+      "dex": "area-51-alien-base"
+    },
+    {
+      "address": "0x79e83b8419c8f6af03829c344ab71ba9f8823327",
+      "name": "ALB / WETH",
+      "dex": "area-51-alien-base"
+    },
+    {
+      "address": "0x59d8d8e417b11ddd6f93593ef1819a4a362e6811",
+      "name": "VPPE / WETH",
+      "dex": "area-51-alien-base"
+    },
+    {
+      "address": "0x2f8818d1b0f3e3e295440c1c0cddf40aaa21fa87",
+      "name": "WETH / USDC",
+      "dex": "sushiswap-v2-base"
+    },
+    {
+      "address": "0xedc8f86740daafed0a38f1b73f9964aa5c80901c",
+      "name": "USDbC / WETH",
+      "dex": "sushiswap-v2-base"
+    },
+    {
+      "address": "0xfe83058f06869da5d70a1355dca64c873480ab1d",
+      "name": "toby / WETH",
+      "dex": "sushiswap-v2-base"
+    },
+    {
+      "address": "0xae45f7eb428eb6403f2567c3a3ec47e9230bc823",
+      "name": "DAI / WETH",
+      "dex": "sharkswap-base"
+    },
+    {
+      "address": "0x9ccc7afe654b9c842a792e9567a30031c1943a1d",
+      "name": "USDbC / WETH",
+      "dex": "sharkswap-base"
+    },
+    {
+      "address": "0x28b3fce8ce6decbd6db865d62d70b564976ebb7f",
+      "name": "cbETH / USDC",
+      "dex": "sharkswap-base"
+    },
+    {
+      "address": "0x675c406186ef55ac35bc5f1c0112a05517bd642a",
+      "name": "TORUS / TOSHI",
+      "dex": "torus"
+    },
+    {
+      "address": "0x1baa5856f415f84613dd51df082e9c699044a906",
+      "name": "WETH / USDC",
+      "dex": "torus"
+    },
+    {
+      "address": "0xe846431db89c7ece9a078380c77bad42dc59a0df",
+      "name": "TORUS / AERO",
+      "dex": "torus"
+    },
+    {
+      "address": "0x3fe49194d3cf9a7005203468073a32d764fb86b6",
+      "name": "WETH / USDC",
+      "dex": "citadelswap"
+    },
+    {
+      "address": "0xfa7745938ff43e5a4a2713237d5dc998718bfc28",
+      "name": "USDbC / WETH",
+      "dex": "citadelswap"
+    },
+    {
+      "address": "0x9dcff9c872bbf746633ce6d1c7a511a92bf75d39",
+      "name": "USDbC / USDC",
+      "dex": "citadelswap"
+    },
+    {
+      "address": "0xebd231ee6854517d228aff9266b7068a784dc15f",
+      "name": "WETH / USDC",
+      "dex": "satori-base"
+    },
+    {
+      "address": "0xebfbe6e301ffcc1788b7e133c7660538d38ec554",
+      "name": "TOSHI / WETH",
+      "dex": "satori-base"
+    },
+    {
+      "address": "0x29584628b9d81991fa461b510b4224372cb95d0e",
+      "name": "BRETT / WETH",
+      "dex": "satori-base"
+    },
+    {
+      "address": "0x7b4bb1742b6f77f922e43f009139d52cb4f90fdd",
+      "name": "AYB / WETH",
+      "dex": "uniswap-v2-base"
+    },
+    {
+      "address": "0xf4cc31534dafbe18eebe512b1a6f66b3226f16b9",
+      "name": "TenX / USDC",
+      "dex": "uniswap-v2-base"
+    },
+    {
+      "address": "0x88a43bbdf9d098eec7bceda4e2494615dfd9bb9c",
+      "name": "WETH / USDC",
+      "dex": "uniswap-v2-base"
+    },
+    {
+      "address": "0x9ab7730b09ebd9ff2df70f06339bd289a1680a46",
+      "name": "USDT / USDC",
+      "dex": "solidly-v3-base"
+    },
+    {
+      "address": "0x74ad64bac8df96af2b63ea50c3d8840b79aa7a3b",
+      "name": "cbETH / WETH 0.005%",
+      "dex": "solidly-v3-base"
+    },
+    {
+      "address": "0x551a0e3d267bea87048f08cc94cc6035ad99221b",
+      "name": "WETH / USDC 0.045%",
+      "dex": "solidly-v3-base"
+    },
+    {
+      "address": "0xc868fcf8af03a2306c6b37db23b5a25b38b27eb9",
+      "name": "WETH / USDC",
+      "dex": "infusion"
+    },
+    {
+      "address": "0x76431a0c757cf5450c3fed304d9bb6bb2a601bac",
+      "name": "DEGEN / WETH",
+      "dex": "infusion"
+    },
+    {
+      "address": "0x5fb25d26e001c7dfe6e4bb1faac06ee1c14a840f",
+      "name": "doginme / WETH",
+      "dex": "infusion"
+    },
+    {
+      "address": "0x87c7ebbea5301c7482764395470e0f139d189623",
+      "name": "DAI / WETH",
+      "dex": "candyswap"
+    },
+    {
+      "address": "0x67cc0ed362334d3d8e2a7b8e5a9c5fddc8ff647c",
+      "name": "WETH / USDbC",
+      "dex": "candyswap"
+    },
+    {
+      "address": "0x0abe1765039d980da385501544afe9c4bb84b2da",
+      "name": "WETH / USDC 0.3%",
+      "dex": "basex"
+    },
+    {
+      "address": "0x8a60aa2c5fc51994c92ccaff6d7fcf38cda3c462",
+      "name": "WETH / USDbC 0.3%",
+      "dex": "basex"
+    },
+    {
+      "address": "0xfff86278345924ddb7eb7924c685f4c60bb48029",
+      "name": "USDC / USDbC 0.05%",
+      "dex": "basex"
+    },
+    {
+      "address": "0x519dd69c98152ef21aa06fe025e313c57c1d0afd",
+      "name": "WETH / USDC",
+      "dex": "robots-farm-base"
+    },
+    {
+      "address": "0x49fad5d1c0bb91197272c565ac4dd15d9e167d0c",
+      "name": "RBF / USDC",
+      "dex": "robots-farm-base"
+    },
+    {
+      "address": "0x51c84b14f63999604246ec7de0e777500d0631d0",
+      "name": "RBF / WETH",
+      "dex": "robots-farm-base"
+    },
+    {
+      "address": "0x7cfc830448484cdf830625373820241e61ef4acf",
+      "name": "FRIEND / WETH",
+      "dex": "bunnyswap"
+    },
+    {
+      "address": "0xb2cc224c1c9fee385f8ad6a55b4d94e92359dc59",
+      "name": "WETH / USDC 0.05%",
+      "dex": "aerodrome-slipstream"
+    },
+    {
+      "address": "0x6b0f53cbd9272d8117e9535fe25371dedf39a1be",
+      "name": "VELVET / USDC 0.01%",
+      "dex": "aerodrome-slipstream"
+    },
+    {
+      "address": "0xa41bc0affba7fd420d186b84899d7ab2ac57fcd1",
+      "name": "USDT / USDC 0.01%",
+      "dex": "aerodrome-slipstream"
+    },
+    {
+      "address": "0xa2b19417861c75ffc0ac68eb3e6a783f519130fe",
+      "name": "ZRO / WETH",
+      "dex": "memebox-base"
+    },
+    {
+      "address": "0xf6062550e8711dd6a38ca87299b14dcd6d45d783",
+      "name": "USDC / USDbC 0.004%",
+      "dex": "swapbased-v3"
+    },
+    {
+      "address": "0xcbfe08767247fd75234e640d047bdd34364fef48",
+      "name": "BASE / WETH 1%",
+      "dex": "swapbased-v3"
+    },
+    {
+      "address": "0x471128c7e5a4e4e8f0a86d65187c2d7482a7b7b8",
+      "name": "WETH / USDC 0.25%",
+      "dex": "swapbased-v3"
+    },
+    {
+      "address": "0xa3c2fb43c7445d8ff8bd93dac53d98bde7444020",
+      "name": "WETH / USDC 0.007%",
+      "dex": "baseswap-v3"
+    },
+    {
+      "address": "0xf1e34e97716c0e52b95f9262a44da0aa3cf777c2",
+      "name": "axlUSDC / WETH 0.008%",
+      "dex": "baseswap-v3"
+    },
+    {
+      "address": "0xef3c164b0fee8eb073513e88ecea280a58cc9945",
+      "name": "WETH / USDbC 0.045%",
+      "dex": "baseswap-v3"
+    },
+    {
+      "address": "0xf6c5f01c7f3148891ad0e19df78743d31e390d1f",
+      "name": "axlUSDC / USDC / USDbC / crvUSD",
+      "dex": "curve-base"
+    },
+    {
+      "address": "0xde37e221442fa15c35dc19fbae11ed106ba52fb2",
+      "name": "CRV / crvUSD",
+      "dex": "curve-base"
+    },
+    {
+      "address": "0x1429ec186c30938ce88dac87cb3b3929a402fc39",
+      "name": "VVV / USDC",
+      "dex": "curve-base"
+    },
+    {
+      "address": "0xe0712c087ecb8a0dd20914626152ebf4890708c2",
+      "name": "WETH / USDbC 0.119%",
+      "dex": "synthswap-v3"
+    },
+    {
+      "address": "0x724c6723b67eceb0101a81820364a05cc40da4df",
+      "name": "DAI / WETH 0.191%",
+      "dex": "synthswap-v3"
+    },
+    {
+      "address": "0x8a30f9fdaeae41cb675509b44f8b9ebde9bf590b",
+      "name": "BAI / USDbC 0.015%",
+      "dex": "synthswap-v3"
+    },
+    {
+      "address": "0x80fa3a7bc67a31b057be3ebff13382ae7a1ec148",
+      "name": "DANSEN / WETH",
+      "dex": "ethervista-base"
+    },
+    {
+      "address": "0x7682d268f34e86accadff56db9668eb6a449ff07",
+      "name": "EURC / WETH 0.02%",
+      "dex": "alien-base-v3"
+    },
+    {
+      "address": "0x1d6cfee6eec4688dad33e6fbb2304a9efe8be3c8",
+      "name": "WETH / cbBTC 0.01%",
+      "dex": "alien-base-v3"
+    },
+    {
+      "address": "0x7b2c99188d8ec7b82d6b3b3b1c1002095f1b8498",
+      "name": "EURC / USDC 0.01%",
+      "dex": "alien-base-v3"
+    },
+    {
+      "address": "0xa29180d0168f36427ce889810ca07df2922c7991",
+      "name": "DEGEN / WETH",
+      "dex": "squadswap-base"
+    },
+    {
+      "address": "0x3694be94b63c8f4e165f198c0a45ddc1641143e4",
+      "name": "BRETT / WETH",
+      "dex": "squadswap-base"
+    },
+    {
+      "address": "0x6db04732cc8ff547fc9f51a083038e58ed84e65f",
+      "name": "WELL / WETH",
+      "dex": "squadswap-base"
+    },
+    {
+      "address": "0x4d082f31de75a6686930f75d9a3eb3a034f33607",
+      "name": "USDT / WETH 1%",
+      "dex": "squadswap-v3-base"
+    },
+    {
+      "address": "0x3a6540f69bb9756d8e7893aceedf2f26d4f1b3a7",
+      "name": "WETH / USDC 0.25%",
+      "dex": "squadswap-v3-base"
+    },
+    {
+      "address": "0x9c38075ddee473e28a063cec3ae556c2ac0daa8f",
+      "name": "SEVEN / DAI",
+      "dex": "x7-finance-base"
+    },
+    {
+      "address": "0x60060b2bc2b1240d94feb0a24eb56a4b831142b9",
+      "name": "SEVEN / ZRO",
+      "dex": "x7-finance-base"
+    },
+    {
+      "address": "0x98dd11e09ab0557f9b3d6d1dae5137fe7ba9559d",
+      "name": "SEVEN / WETH",
+      "dex": "x7-finance-base"
+    },
+    {
+      "address": "0xf85a8d1cef91ecc4c12d3968bdbe78966f9fe157",
+      "name": "WETH / USDC",
+      "dex": "fwx-base"
+    },
+    {
+      "address": "0x3cb50baf12220d7e8cb0e722b35f148c4d491d49",
+      "name": "BLZ / USDC",
+      "dex": "fwx-base"
+    },
+    {
+      "address": "0xee5eed077d5f45f9bee6fbe880c3ef1809d33d06",
+      "name": "B4FWX / WETH",
+      "dex": "fwx-base"
+    },
+    {
+      "address": "0xbbd7d3f242fe8f4eb318c96b2fac0c459ecca908",
+      "name": "USDC / WETH 0.3%",
+      "dex": "kim-v4-base"
+    },
+    {
+      "address": "0x86cd107166d65143642be129c1037f326316d532",
+      "name": "weETH.base / WETH 0.01%",
+      "dex": "kim-v4-base"
+    },
+    {
+      "address": "0xfb8b05ab938350485fd2668366aaaf04efff074b",
+      "name": "KIM / WETH 0.3%",
+      "dex": "kim-v4-base"
+    },
+    {
+      "address": "0x4ca28220e0caea31bed133b3f22e1317dfeb79ab",
+      "name": "USDC / WETH",
+      "dex": "kim-v2-base"
+    },
+    {
+      "address": "0xe301ca0e15446d7f2eea46e8d158c5bda1f760f2",
+      "name": "HENAI / USDC 0.298%",
+      "dex": "henjin"
+    },
+    {
+      "address": "0x461637b5fb2ce4f7eee23246247d383f0a533be6",
+      "name": "HENAI / WETH 0.142%",
+      "dex": "henjin"
+    },
+    {
+      "address": "0x3a619042a383edb747d6b5ea915583c7cd844720",
+      "name": "USDC / WETH 0.3%",
+      "dex": "henjin"
+    },
+    {
+      "address": "0xe87077fd043c1a6afa5256104acb1d1eb5ca5bc031ee57f9d96c8172ead4bef8",
+      "name": "ETH / USDC 0.01%",
+      "dex": "uniswap-v4-base"
+    },
+    {
+      "address": "0x0faae4ff5f4180b90a4234cc7877c01dbabb5d70eae518cc7b67118a96c89026",
+      "name": "VVV / USDC 0.038%",
+      "dex": "uniswap-v4-base"
+    },
+    {
+      "address": "0x96d4b53a38337a5733179751781178a2613306063c511b78cd02684739288c0a",
+      "name": "ETH / USDC 0.05%",
+      "dex": "uniswap-v4-base"
+    },
+    {
+      "address": "0x3b78e165138c669280b07bbd073d6139b912171c",
+      "name": "AERO / USDC",
+      "dex": "treble-v2"
+    },
+    {
+      "address": "0x91250cc71781b45c422faba12e3be3ffcbfe96d1",
+      "name": "TREB / USDC",
+      "dex": "treble-v2"
+    },
+    {
+      "address": "0x24e98cd1425705661508d8b20a0bd7be643efd80",
+      "name": "TREB / WETH",
+      "dex": "treble-v2"
+    },
+    {
+      "address": "0xdf033790907c60c9b81ae355f76f74f52f92114a",
+      "name": "WETH / USDC 0.01%",
+      "dex": "maverick-v2-base"
+    },
+    {
+      "address": "0x5fb33b095c6e739be19364ab408cd8f102262bb6",
+      "name": "DAI / USDC 0.001%",
+      "dex": "maverick-v2-base"
+    },
+    {
+      "address": "0xb6e91d9b24092d6cf422c37aff8ccaa9f95abe4e",
+      "name": "cbETH / WETH 0.004%",
+      "dex": "maverick-v2-base"
+    },
+    {
+      "address": "0x8c7857a0e5c9bf5f9e4b18e4b761018cb1e2324d",
+      "name": "MOONKIN / VIRTUAL",
+      "dex": "virtuals-base"
+    },
+    {
+      "address": "0x4c0ad635f1c9d3c3a6f57593eba1bed7b5ff9720",
+      "name": "RAIDEN / VIRTUAL",
+      "dex": "virtuals-base"
+    },
+    {
+      "address": "0xd65ead50f1ba26695f099605b7ca1bc9c4015943",
+      "name": "LOOT / VIRTUAL",
+      "dex": "virtuals-base"
+    },
+    {
+      "address": "0x4647ee5955f9d58f76cd86756bfb2eee543fd2b8",
+      "name": "WETH / USDC 0.25%",
+      "dex": "9mm-v3-base"
+    },
+    {
+      "address": "0x11ef9c2ba20aec31e114ecd828d7514fdc944eae",
+      "name": "WETH / USDC 0.05%",
+      "dex": "9mm-v3-base"
+    },
+    {
+      "address": "0xc1b49090f74d784110b2129378e372d16a3a764a",
+      "name": "VVV / WETH 1%",
+      "dex": "9mm-v3-base"
+    },
+    {
+      "address": "0xaa4fc260880291d5133141110f098242cd667ebe",
+      "name": "wBEPE / WETH",
+      "dex": "9mm-v2-base"
+    },
+    {
+      "address": "0xc97653617535ae3802ebe2de362e29f3545fa5aa",
+      "name": "wNIOC / USDC",
+      "dex": "9mm-v2-base"
+    },
+    {
+      "address": "0xfe89442063c8863c9cbac7e94a7203e05bc8251c",
+      "name": "BTCBR / WETH",
+      "dex": "9mm-v2-base"
+    },
+    {
+      "address": "0xe5ca910f564e7a3ee1ca7a4d9e0d83e0e5dbdd02",
+      "name": "WETH / USDC",
+      "dex": "deltaswap-base"
+    },
+    {
+      "address": "0x288976ed5c798937cc58954deee471dfbcd3f23b",
+      "name": "weETH.base / USDC",
+      "dex": "deltaswap-base"
+    },
+    {
+      "address": "0xe161989b9c0be5162ca664ef53db7fc79716bd56",
+      "name": "DRV / USDC",
+      "dex": "deltaswap-base"
+    },
+    {
+      "address": "0x09f3805c6743d9d0548ffe5657a985a057f82a7b",
+      "name": "WETH / cbBTC 0.05%",
+      "dex": "treble-v4"
+    },
+    {
+      "address": "0x256f399754f7ed5baa75b911ae6fd3c1a63b169c",
+      "name": "WETH / USDC 0.05%",
+      "dex": "treble-v4"
+    },
+    {
+      "address": "0x94da083f5e7e2a6f64a54640544641c8b20b422a",
+      "name": "GITLAWB / WETH 0.05%",
+      "dex": "treble-v4"
+    },
+    {
+      "address": "0xa883c11a3742f74f0b29750764146e8675306e24",
+      "name": "RUBI / USDC",
+      "dex": "rubicon-base"
+    },
+    {
+      "address": "0xd8edf10e243e2a176789d2ad1cb47151e76e8865",
+      "name": "RUBI / WETH",
+      "dex": "rubicon-base"
+    },
+    {
+      "address": "0x60358d466e305974544d5229c200f5536b8d4133",
+      "name": "KOLZ / USDT",
+      "dex": "rubicon-base"
+    },
+    {
+      "address": "0xf64810a744b3863f81e33112d8b8f4914fe50069",
+      "name": "WETH / USDC",
+      "dex": "kewlswap-base"
+    },
+    {
+      "address": "0xd30b9fa98713425c0302593d7f8f094be31e9710",
+      "name": "USDT / USDC 0.05%",
+      "dex": "quickswap-v4-base"
+    },
+    {
+      "address": "0x5a9ad2bb92b0b3e5c571fdd5125114e04e02be1a",
+      "name": "WETH / USDC 0.05%",
+      "dex": "quickswap-v4-base"
+    },
+    {
+      "address": "0xacc2874ed22e811afdc47979c7b7985cced53b29",
+      "name": "USDC / cbBTC 0.05%",
+      "dex": "quickswap-v4-base"
+    },
+    {
+      "address": "0x1f4c9e2ed56a76d6297e3217bb5c2b87e5937fc0",
+      "name": "frxUSD / USDC 0.01%",
+      "dex": "omni-exchange-v3-base"
+    },
+    {
+      "address": "0x26256173952d07125a6adb2bf6a6a576583f0d3c",
+      "name": "FUEGO / WETH 1%",
+      "dex": "omni-exchange-v3-base"
+    },
+    {
+      "address": "0xd96abbad4b744cb7746adc908a3df39c5991aae0",
+      "name": "WETH / USDC 0.008%",
+      "dex": "omni-exchange-v3-base"
+    },
+    {
+      "address": "0x25424bf60fbb8b43bdf2efee7bb9b89b1ff991f0256f8e1e5206fd23cd6fe2db",
+      "name": "ETH / cbBTC 0.005%",
+      "dex": "pancakeswap-infinity-clmm-base"
+    },
+    {
+      "address": "0x7430f01d42c1a72f50cc38dfea831e33e4db79106737076d5a554cae454c0e33",
+      "name": "ETH / USDC 0.02%",
+      "dex": "pancakeswap-infinity-clmm-base"
+    },
+    {
+      "address": "0xf6e81e5d16a7274d273905e0068f9f607b840c20bec23b2e442976ee03b29d91",
+      "name": "ETH / USDC 0.005%",
+      "dex": "pancakeswap-infinity-clmm-base"
+    },
+    {
+      "address": "0x2872b72ebf3383e544058a799e37bc7dfb8fab54",
+      "name": "CSL / VIRTUAL",
+      "dex": "virtuals-unicorn-base"
+    },
+    {
+      "address": "0xa432e195535eef6cdfc621002b0134e0f65cc7ed",
+      "name": "BOB / VIRTUAL",
+      "dex": "virtuals-unicorn-base"
+    },
+    {
+      "address": "0xdbe9722f44b984fba6cc608da9f726c347515fb8",
+      "name": "PRINTCLAW / VIRTUAL",
+      "dex": "virtuals-unicorn-base"
+    },
+    {
+      "address": "0x98637c29abc801001c63fb0e3b94f27a65b610ac",
+      "name": "USDL / WETH 0.05%",
+      "dex": "aerodrome-slipstream-2"
+    },
+    {
+      "address": "0xbe4c36b9542610df83ca690c8b5bc53bbbc5d542",
+      "name": "LMTS / USDC 0.05%",
+      "dex": "aerodrome-slipstream-2"
+    },
+    {
+      "address": "0x8bb9eaf3c5a906d20c4cc10ea2f73a3ac2d5d41a",
+      "name": "cbETH / cbBTC 0.05%",
+      "dex": "aerodrome-slipstream-2"
+    },
+    {
+      "address": "0x9a7297c3d7ec9a27b76dba35ef7eeb89bd78c81d",
+      "name": "BRETT / USDC 1%",
+      "dex": "hello-dex-base"
+    },
+    {
+      "address": "0x52826c24d69450757a0c81a86a83273489d75cfb",
+      "name": "TRUMP / WETH 1%",
+      "dex": "hello-dex-base"
+    },
+    {
+      "address": "0x4f3c7968c873265e9e4d5faf1718354acd46be45",
+      "name": "USDT / USDC",
+      "dex": "sectorone-v2.0-base"
+    },
+    {
+      "address": "0xbdf175a75c8bbbf140461248d8080156879d16a0",
+      "name": "HYPE / WETH",
+      "dex": "sectorone-v2.0-base"
+    },
+    {
+      "address": "0xcc1c3ea7c56bca3a1b8856cb919cd0abc99a28ce",
+      "name": "cbBTC / WETH",
+      "dex": "sectorone-v2.0-base"
+    },
+    {
+      "address": "0x8a8e4170c09074b109352190d47e54d7c1f61e4e",
+      "name": "PROS / USDC 0.01%",
+      "dex": "aerodrome-slipstream-3"
+    },
+    {
+      "address": "0x7c7420dd105e2779316423ba3e973f434315efa9",
+      "name": "cbBTC / WETH 0.009%",
+      "dex": "aerodrome-slipstream-3"
+    },
+    {
+      "address": "0x0ab02e160f0df68dc049b012c514857306960eae",
+      "name": "CTR / USDC 0.029%",
+      "dex": "aerodrome-slipstream-3"
+    },
+    {
+      "address": "0xd288889ef25ca7483277f39c262098f6ba615ff2",
+      "name": "U1 / WETH",
+      "dex": "umbrae-dlmm"
+    },
+    {
+      "address": "0x4a27eeff8abe2a467425fdac65e5b579e26a90b5",
+      "name": "WETH / USDC",
+      "dex": "umbrae-dlmm"
+    },
+    {
+      "address": "0x05de9d85b9a32e4a97814b6c4ede8768536d3ec5",
+      "name": "VIRTUAL / WETH",
+      "dex": "umbrae-dlmm"
+    },
+    {
+      "address": "0x5e9782079683037fc8bb57625683359d9efaef80f2b829c4bb5b1896c6bb40b6",
+      "name": "Ratspeak / WETH",
+      "dex": "bankr"
+    },
+    {
+      "address": "0x94b92751ff831acb4aaf7e36a16e1fe68a0fdf4486a3e8a858c7c76f406cd3a5",
+      "name": "SEAL / WETH",
+      "dex": "bankr"
+    },
+    {
+      "address": "0xd6c84c2e4fd6e7ad6f8382583f2586b2437b3f632e44f5df97b0598cb0762609",
+      "name": "YYY / WETH",
+      "dex": "bankr"
+    },
+    {
+      "address": "0x9bfc9fcea8c6272d7aa1bb9b994ba26503d5e24edea8dd7af2064612a3f92f9d",
+      "name": "ROSTRUM / ETH",
+      "dex": "o1-launchpad"
+    },
+    {
+      "address": "0xfc93768ac628364eaec1494d560f4749b20576165c18bdde9c61f623abdef66b",
+      "name": "SVAG / ANTc",
+      "dex": "o1-launchpad"
+    },
+    {
+      "address": "0x6cf637a82362d304dfa56a6387fc8f909ec0008ec520ee5fb999506d9b1f3514",
+      "name": "worth / ETH",
+      "dex": "o1-launchpad"
+    },
+    {
+      "address": "0xf634058dc94e6bf8e828e27621320c423bc8b18e",
+      "name": "AERO / USDC",
+      "dex": "aero-volatile-base"
+    },
+    {
+      "address": "0xcfc7dc24e9d302976f0b1efb90a4d9b22b54b2a5",
+      "name": "VVV / WETH",
+      "dex": "aero-volatile-base"
+    },
+    {
+      "address": "0x002ae5ae3653a1e46387542c0f68c2dc2a687036",
+      "name": "DRV / WETH",
+      "dex": "aero-volatile-base"
+    },
+    {
+      "address": "0x98c1d9e102eb2806d902b13186bdc7892ac4ffba-0x4200000000000000000000000000000000000006",
+      "name": "WETH / USDC",
+      "dex": "baibai"
+    },
+    {
+      "address": "0x98c1d9e102eb2806d902b13186bdc7892ac4ffba-0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+      "name": "cbBTC / USDC",
+      "dex": "baibai"
+    },
+    {
+      "address": "0x4b73dcc28f5c2bb4f132dc397a0535e8846126d1549f06ab12797648b891173d",
+      "name": "AI12 / USDC",
+      "dex": "bankr-index-base"
+    },
+    {
+      "address": "0x600f6a74cdd42540030504df36f8be8e8206bcb82d1d090c3b248b7a5a860acb",
+      "name": "AI12 / WETH",
+      "dex": "bankr-index-base"
+    },
+    {
+      "address": "0x51253bd31621f4448bad54f4200e5596b04d4dd8ac32511e007e88c496ea29c9",
+      "name": "COMPUTE / WETH",
+      "dex": "bankr-index-base"
+    }
+  ],
+  "cex_observations_utc": "2026-11-25T22:00:53.520923+00:00",
+  "cex": {
+    "KuCoin": {
+      "USDT": {
+        "url": "https://api.kucoin.com/api/v3/currencies/USDT",
+        "row_count": 19,
+        "base_rows": []
+      },
+      "USDC": {
+        "url": "https://api.kucoin.com/api/v3/currencies/USDC",
+        "row_count": 17,
+        "base_rows": [
+          {
+            "chainName": "Base",
+            "chainId": "base",
+            "withdrawalMinSize": "1",
+            "withdrawMinSize": "1",
+            "depositMinSize": "0",
+            "withdrawFeeRate": "0",
+            "withdrawalMinFee": "0.5",
+            "withdrawMinFee": "0.5",
+            "isWithdrawEnabled": true,
+            "isDepositEnabled": true,
+            "confirms": 500,
+            "preConfirms": 200,
+            "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "withdrawPrecision": 6,
+            "maxWithdraw": null,
+            "maxDeposit": null,
+            "needTag": false,
+            "addressRegex": "^(0x)[0-9A-Fa-f]{40}$",
+            "memoRegex": ""
+          }
+        ]
+      }
+    },
+    "Gate": {
+      "USDT": {
+        "url": "https://api.gateio.ws/api/v4/spot/currencies/USDT",
+        "row_count": 26,
+        "base_rows": []
+      },
+      "USDC": {
+        "url": "https://api.gateio.ws/api/v4/spot/currencies/USDC",
+        "row_count": 23,
+        "base_rows": [
+          {
+            "name": "BASEEVM",
+            "addr": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            "withdraw_disabled": false,
+            "withdraw_delayed": false,
+            "deposit_disabled": false
+          }
+        ]
+      }
+    },
+    "Bitget": {
+      "USDT": {
+        "url": "https://api.bitget.com/api/v2/spot/public/coins?coin=USDT",
+        "row_count": 12,
+        "base_rows": []
+      },
+      "USDC": {
+        "url": "https://api.bitget.com/api/v2/spot/public/coins?coin=USDC",
+        "row_count": 14,
+        "base_rows": [
+          {
+            "chain": "BASE",
+            "needTag": "false",
+            "withdrawable": "true",
+            "rechargeable": "true",
+            "withdrawFee": "0.099881",
+            "extraWithdrawFee": "0",
+            "depositConfirm": "200",
+            "withdrawConfirm": "500",
+            "minDepositAmount": "0.009988",
+            "minWithdrawAmount": "4.994007",
+            "browserUrl": "https://basescan.org/tx/",
+            "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "withdrawStep": "0",
+            "withdrawMinScale": "6",
+            "congestion": "normal"
+          }
+        ]
+      }
+    },
+    "HTX": {
+      "USDT": {
+        "url": "https://api.huobi.pro/v2/reference/currencies?currency=usdt",
+        "row_count": 13,
+        "base_rows": []
+      },
+      "USDC": {
+        "url": "https://api.huobi.pro/v2/reference/currencies?currency=usdc",
+        "row_count": 12,
+        "base_rows": [
+          {
+            "chain": "baseusdc",
+            "displayName": "BASE",
+            "fullName": "",
+            "baseChain": "BASE",
+            "baseChainProtocol": "BASEERC20",
+            "contractAddress": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            "chainType": 1,
+            "isDynamic": false,
+            "numOfConfirmations": 400,
+            "numOfFastConfirmations": 200,
+            "depositStatus": "allowed",
+            "minDepositAmt": "0.5",
+            "withdrawStatus": "allowed",
+            "minWithdrawAmt": "0.5",
+            "withdrawPrecision": 6,
+            "maxWithdrawAmt": "999999999999999999.000000000000000000",
+            "withdrawQuotaPerDay": "999999999999999999.000000000000000000",
+            "withdrawQuotaPerYear": null,
+            "withdrawQuotaTotal": null,
+            "withdrawFeeType": "fixed",
+            "withdrawFeeExpandType": "fixed",
+            "withdrawFeeExpandData": null,
+            "transactFeeWithdraw": "2.6",
+            "addrWithTag": false,
+            "addrDepositTag": false
+          }
+        ]
+      }
+    },
+    "Poloniex": {
+      "USDT": {
+        "url": "https://api.poloniex.com/v2/currencies/USDT",
+        "row_count": 12,
+        "base_rows": []
+      },
+      "USDC": {
+        "url": "https://api.poloniex.com/v2/currencies/USDC",
+        "row_count": 8,
+        "base_rows": [
+          {
+            "id": 1674,
+            "coin": "USDCBASE",
+            "name": "BASE",
+            "currencyType": "address",
+            "blockchain": "ETHBASE",
+            "withdrawalEnable": false,
+            "depositEnable": true,
+            "depositAddress": null,
+            "withdrawMin": "1.00000000",
+            "decimals": 6,
+            "withdrawFee": "1.00000000",
+            "minConfirm": 12,
+            "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+          }
+        ]
+      }
+    },
+    "CoinEx": {
+      "USDT": {
+        "url": "https://api.coinex.com/v2/assets/deposit-withdraw-config?ccy=USDT",
+        "error": "HTTP Error 503: Service Temporarily Unavailable"
+      },
+      "USDC": {
+        "url": "https://api.coinex.com/v2/assets/deposit-withdraw-config?ccy=USDC",
+        "error": "HTTP Error 503: Service Temporarily Unavailable"
+      }
+    },
+    "XT": {
+      "urls": [
+        "https://sapi.xt.com/v4/public/wallet/support/currency",
+        "https://sapi.xt.com/v4/public/currencies"
+      ],
+      "utc": "2026-11-25T22:02:29.289611+00:00",
+      "assets": {
+        "USDT": {
+          "status": {
+            "depositStatus": 1,
+            "withdrawStatus": 1
+          },
+          "networks": [
+            "Tron",
+            "Ethereum",
+            "BNB Smart Chain",
+            "Polygon POS",
+            "XT Smart Chain",
+            "AVAX C-Chain",
+            "Arbitrum One",
+            "Optimism",
+            "Solana",
+            "The Open Network",
+            "Aptos"
+          ],
+          "base_rows": []
+        },
+        "USDC": {
+          "status": {
+            "depositStatus": 1,
+            "withdrawStatus": 1
+          },
+          "networks": [
+            "Ethereum",
+            "BNB Smart Chain",
+            "Solana",
+            "Polygon POS",
+            "XT Smart Chain",
+            "Base",
+            "AVAX C-Chain",
+            "Optimism",
+            "Arbitrum One",
+            "Aptos",
+            "XDC"
+          ],
+          "base_rows": [
+            {
+              "chain": "Base",
+              "depositEnabled": true,
+              "withdrawEnabled": true,
+              "contract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+              "depositMinAmount": 0.1,
+              "depositFeeRate": 0,
+              "depositConfirmations": 60,
+              "withdrawMinAmount": 10,
+              "withdrawPrecision": 8,
+              "withdrawFeeAmount": 1.0,
+              "withdrawFeeCurrency": "usdc",
+              "withdrawFeeCurrencyId": 564
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -78,6 +78,7 @@ impl Core {
         super::settlement_unit::start(&core);
         // Решение 163: возвраты USDT «ждёт повтора» продолжают повторы после перезапуска.
         super::usdt_return_retry::resume(&core);
+        super::settlement_path::resume(&core).await;
         super::gas_stats::load(&core).await;
         super::manual::load(&core).await;
         // Решение 408 (ответ Тиграна 9а): ожидания ручных кнопок прошлого запуска — «потеряно при перезапуске».

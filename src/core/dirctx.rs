@@ -106,13 +106,13 @@ impl DirCtx {
     /// настройка, σ ещё не измерена (решение 240: и ненулевых изменений цены меньше profit.sigma_min_changes), нет сети
     /// BSC ни у одной стороны, нет адреса USDT).
     pub fn build(core: &Core, dir: &Direction) -> Result<DirCtx, String> {
-        Self::build_with(core, dir, Moment::Entry)
+        Self::build_with(core, dir, Moment::Entry, false)
     }
 
     /// Решение 240: контекст для сделки, которая уже идёт (частичная покупка, partial.rs) — как до решения 240: σ ряда
     /// без проверки profit.sigma_min_changes и границы, без доли закрытия. Ошибки: как у build.
     pub fn build_held(core: &Core, dir: &Direction) -> Result<DirCtx, String> {
-        Self::build_with(core, dir, Moment::Held)
+        Self::build_with(core, dir, Moment::Held, false)
     }
 
     /// Решение 237: контекст на момент решения о входе (core/frozen.rs take) — σ и время в пути T берутся из плана
@@ -136,11 +136,21 @@ impl DirCtx {
                 units,
                 settings,
             },
+            false,
         )
     }
 
     /// Сборка контекста на момент `at_m` (см. Moment). Ошибки: как у build.
-    fn build_with(core: &Core, dir: &Direction, at_m: Moment) -> Result<DirCtx, String> {
+    pub(super) fn base_usdc(core: &Core, dir: &Direction) -> Result<DirCtx, String> {
+        Self::build_with(core, dir, Moment::Entry, true)
+    }
+
+    fn build_with(
+        core: &Core,
+        dir: &Direction,
+        at_m: Moment,
+        conversion: bool,
+    ) -> Result<DirCtx, String> {
         let units_b_per_a = match &at_m {
             Moment::Decided { units, .. } => *units,
             _ => super::settlement_unit::ratio(core, dir)?,
@@ -190,10 +200,25 @@ impl DirCtx {
             .as_ref()
             .is_some_and(|c| c.as_str() == "base")
         {
-            super::settlement::require_usdt(&qa, &qb)?;
+            if conversion {
+                let valid = if dir.buy_on.0 == "base_dex" {
+                    qa == "USDC" && qb == "USDT"
+                } else {
+                    dir.sell_on.0 == "base_dex" && qa == "USDT" && qb == "USDC"
+                };
+                if !valid {
+                    return Err("Для Base требуются USDC на DEX и USDT на исходной бирже".into());
+                }
+            } else {
+                super::settlement::require_usdt(&qa, &qb)?;
+            }
         }
         // Решение 430: USDT сети направления (монеты; сеть по умолчанию — как раньше).
-        let usdt = super::registry_chains::usdt_of(core, dir.asset.chain.as_ref())?;
+        let usdt = if conversion {
+            super::settlement::BASE_USDC
+        } else {
+            super::registry_chains::usdt_of(core, dir.asset.chain.as_ref())?
+        };
         let cex: Vec<VenueId> = rd(&core.inner.kinds)
             .iter()
             .filter(|(v, k)| *k == VenueKind::Cex && super::registry_sync::enabled(core, v))
@@ -285,7 +310,7 @@ impl DirCtx {
             Some(_) => Some(super::transfer_tax::pct(core, &dir.sell_on, &dir.asset)?),
             None => None,
         };
-        let usdt_b = if cx_return(&mode) && b.info.is_some() {
+        let usdt_b = if !conversion && cx_return(&mode) && b.info.is_some() {
             Some(
                 venue::quote_network(core, &dir.sell_on, &qb, &net_b)
                     .ok_or(format!(
@@ -307,7 +332,7 @@ impl DirCtx {
             quote: vec![qa.clone(), qb],
             usdt: Asset {
                 chain: dir.asset.chain.clone(),
-                ticker: qa,
+                ticker: if conversion { "USDC".into() } else { qa },
                 contract: Some(usdt),
             },
             cex,

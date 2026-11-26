@@ -178,3 +178,15 @@ pub async fn confirm(db: &Db, key: &str, original: &Entry, outcome: Outcome) -> 
         Err("Шаг Base изменился во время сверки результата".into())
     }
 }
+
+/// Сохраняет завершённую без исполнения попытку под её хешем. Сравнение полного прежнего состояния исключает гонку с восстановлением.
+pub async fn archive_attempt(db:&Db, key:&str, original:&Entry, reason:&str)->Result<(),String>{
+    let hash=original.lookup.venue_ref.as_deref().ok_or("Нет идентификатора подготовленной попытки")?;
+    let prior=serde_json::to_string(original).map_err(|e|e.to_string())?;
+    let after=serde_json::to_string(&serde_json::json!({"attempt":original,"closed":reason})).map_err(|e|e.to_string())?;
+    let dst=format!("{key}/closed/{hash}");let key=key.to_owned();
+    let n=db.ledger().write(move |c|c.execute(
+        "UPDATE core_state SET id=?1,body=?2,updated_at=?3 WHERE kind=?4 AND id=?5 AND body=?6",
+        params![dst,after,Utc::now().to_rfc3339(),KIND,key,prior])).await.map_err(|e|e.to_string())?;
+    if n==1 {Ok(())}else{Err("Подготовленная попытка уже изменилась".into())}
+}

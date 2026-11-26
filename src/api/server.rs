@@ -46,6 +46,18 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
             "/api/venues/{id}/base-usdc-conversion",
             get(super::settlement::quote),
         )
+        .route(
+            "/api/venues/{id}/base-usdc-order",
+            get(super::settlement::order),
+        )
+        .route(
+            "/api/deals/{id}/base-settlement",
+            get(super::settlement::paths),
+        )
+        .route(
+            "/api/venues/{id}/base-usdc-circle",
+            get(super::settlement::circle),
+        )
         .route("/api/venues/{id}/dex-families", get(dex::families))
         .route("/api/venues/{id}/pool-directory", get(dex::directory))
         .route("/api/venues/{id}/dex-cycles", get(dex::cycles))

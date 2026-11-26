@@ -34,7 +34,7 @@ def compare(c,head,pool,pair,terms):
     def leg(prefix,via,x,y,amount):
         target=EXEC if via=="v5" else ROUTER;fee=0 if via=="flat" else total
         appro=tx(x,"approve(address,uint256)",["address","uint256"],[target,amount]);bal=lambda t,a:tx(t,"balanceOf(address)",["address"],[a])
-        reads=[bal(x,payer),bal(y,payer),tx(pool,"getReserves()")]
+        reads=[bal(x,pool),bal(y,pool),bal(x,payer),bal(y,payer),tx(pool,"getReserves()")]
         pre=prefix+[appro]+reads
         front=run(pre,via);r=list(decode(["uint112","uint112","uint32"],raw(front[-1]["returnData"])))[:2]
         if pair.index(x):r.reverse()
@@ -44,13 +44,20 @@ def compare(c,head,pool,pair,terms):
             if via=="v5":return {**swap(pool,x,y,amount,minimum,when,total*100),"from":payer}
             return tx(ROUTER,"swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
                       ["uint256","uint256","address[]","address","uint256"],[amount,minimum,[x,y],payer,when],flat if via=="flat" else 0)
+        value=lambda a:decode(["uint256"],raw(a["returnData"]))[0]
+        model=out
+        probe=run(pre+[order(1,deadline),bal(x,payer),bal(y,payer)],via)
+        if probe[-3]["status"]!="0x1":
+            raise ValueError((via,x,amount,"unavailable at one raw unit",probe[-3].get("error",{}).get("message")))
+        out=value(probe[-1])-value(front[-2])
+        if out<=0 or value(front[-3])-value(probe[-2])!=amount:
+            raise ValueError((via,x,amount,"wallet debit/credit unavailable"))
         calls=pre+[order(out+1,deadline),order(out,0),order(out,deadline),bal(x,payer),bal(y,payer)]
         result=run(calls,via);exact=result[-3]
         if exact["status"]!="0x1" or result[-5]["status"]!="0x0" or result[-4]["status"]!="0x0":
             raise ValueError((via,amount,exact.get("error"),"controls",result[-5]["status"],result[-4]["status"]))
-        value=lambda a:decode(["uint256"],raw(a["returnData"]))[0]
         if value(result[-8])-value(result[-2])!=amount or value(result[-1])-value(result[-7])!=out:raise ValueError("not full wallet settlement")
-        return calls,out,dict(input=str(amount),net=str(out),msg_value=str(flat if via=="flat" else 0),calls=calls,results=result)
+        return calls,out,dict(input=str(amount),net=str(out),nominal=str(model),reserves=list(map(str,r)),pair_balances=[str(value(a)) for a in front[-5:-3]],msg_value=str(flat if via=="flat" else 0),calls=calls,results=result)
     cases=[]
     for via in ["percentage","v5","flat"]:
         for amount in [10**8,10**9]:
@@ -81,8 +88,10 @@ def capture(chain,endpoint):
         r["runtime_hash"]=digest(raw(rpc(endpoint,"eth_getCode",[r["pool"],c.selector])))
         if WETH in r["tokens"] and all(map(int,r["reserves"])):
             r["settlements"]=compare(c,head,r["pool"],r["tokens"],terms)
-    if not any(case.get("buy") for r in rows for case in r.get("settlements",{}).get("cases",[])):
-        raise ValueError(str([r.get("settlements",{}).get("cases",[{}])[0].get("rejected") for r in rows])[:500])
+    cases=[case for r in rows for case in r.get("settlements",{}).get("cases",[])]
+    if not cases or len(cases)!=sum("settlements" in r for r in rows)*6:
+        raise ValueError("incomplete ordinary router or V5 observations")
+    info["complete_round_trips"]=sum("buy" in case and "sell" in case for case in cases)
     return info
 
 if __name__=="__main__":

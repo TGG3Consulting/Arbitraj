@@ -42,7 +42,7 @@
       "bonded": "4018396525491883597",
       "available": "54822015963263819152",
       "clone_code": "0x363d3d373d3d3d363d73aa70bc79fd1cb4a6fba717018351f0c3c64b79df5af43d82803e903d91602b57fd5bf3",
-      "name": "getRefundForTokens(address,uint256)",
+      "name": "Japan",
       "symbol": "🇯🇵",
       "creation_time": 1715317769,
       "creation": {
@@ -87,7 +87,7 @@
       "bonded": "3897275183886707325",
       "available": "54822015963263819152",
       "clone_code": "0x363d3d373d3d3d363d73aa70bc79fd1cb4a6fba717018351f0c3c64b79df5af43d82803e903d91602b57fd5bf3",
-      "name": "getRefundForTokens(address,uint256)",
+      "name": "Chicken Coin",
       "symbol": "CHICKEN",
       "creation_time": 1707250033,
       "creation": {
@@ -127,7 +127,7 @@
       "bonded": "1500214077515876504",
       "available": "54822015963263819152",
       "clone_code": "0x363d3d373d3d3d363d73aa70bc79fd1cb4a6fba717018351f0c3c64b79df5af43d82803e903d91602b57fd5bf3",
-      "name": "getRefundForTokens(address,uint256)",
+      "name": "Touching Grass",
       "symbol": "GRASS",
       "creation_time": 1724360193,
       "creation": {
@@ -163,5 +163,41 @@
       0
     ],
     "samples": []
-  }
+  },
+  "historical_swaps": [
+    {
+      "address": "0xc5a076cad94176c2996b32d8466be1ce757faa27",
+      "topics": [
+        "0x02ed9b10d8b33a6a9fda664247bfd8f6248f74cff85cc84e56b7530c2fce560a",
+        "0x000000000000000000000000ef6dd3f0be6f599e7bca38b47db638d5a749cf9c",
+        "0x00000000000000000000000091523b39813f3f4e406ece406d0beaaa9de251fa",
+        "0x0000000000000000000000004200000000000000000000000000000000000006"
+      ],
+      "data": "0x000000000000000000000000be14b9950dc61642a084eab491fa516d8fe557e600000000000000000000000000000000000000000001a784379d99db420000000000000000000000000000000000000000000000000000000005c5cd331c1800",
+      "blockNumber": "0xd9a826",
+      "transactionHash": "0x3ae459eda18677be53b0149f86b1a950ead654f82cda3c8e669a8107b1dfa04b",
+      "transactionIndex": "0x22",
+      "blockHash": "0x64793f87241c86b0d995a7d66e7b7fd0752ae70380a9d0a800025f31a788ed44",
+      "logIndex": "0x70",
+      "blockTimestamp": "0x663dad2f",
+      "removed": false
+    },
+    {
+      "address": "0xc5a076cad94176c2996b32d8466be1ce757faa27",
+      "topics": [
+        "0x80a56de61873550ae491e454783a8dfc9d08a6f8bdace0887eabd4315c4b9da8",
+        "0x000000000000000000000000ef6dd3f0be6f599e7bca38b47db638d5a749cf9c",
+        "0x00000000000000000000000091523b39813f3f4e406ece406d0beaaa9de251fa",
+        "0x0000000000000000000000004200000000000000000000000000000000000006"
+      ],
+      "data": "0x00000000000000000000000091523b39813f3f4e406ece406d0beaaa9de251fa000000000000000000000000000000000000000000281e466e4ff71ff6ac0000000000000000000000000000000000000000000000000000017197fd95c7d2c8",
+      "blockNumber": "0xd9b0b8",
+      "transactionHash": "0xb82cb44be78762b78bf9f7b89336b4a38c98977fe3da99e0aaf7ca1b4694dd94",
+      "transactionIndex": "0x2b",
+      "blockHash": "0x67dd457e335f29339ae1bb45b83028292147142205e3090fb6d08c71866e708e",
+      "logIndex": "0x9f",
+      "blockTimestamp": "0x663dbe53",
+      "removed": false
+    }
+  ]
 }

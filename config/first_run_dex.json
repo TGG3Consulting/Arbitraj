@@ -2690,6 +2690,9 @@
     "source": "https://basescan.org/address/0xbfd866bd2502e1693bc31735253a2fb9e728f714#code · tests/data/first_run_dex_2026-11-26/candyswap_base.json",
     "settings": {
       "dex.kind": "candyswap_v2",
+      "dex.module_runtime_hashes": [
+        "0x60ed220bc96c2633107cebbcf8e9898e9313f32679b9f43e8f89b90ed05149f3"
+      ],
       "dex.factory": "0xbfd866bd2502e1693bc31735253a2fb9e728f714",
       "dex.pool_code_hashes": [
         "0x823894b4cdbcf0e36ddb166860403899800e49c361fd5be59d579fba627fde17"
@@ -3645,6 +3648,21 @@
       "dex.proxy_runtime_hashes": [
         "0xf5b45d177423e2bfdd96aa07e25bbae482ea773490b3b2ce82579d0693b4f68b"
       ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "omni-exchange-v2-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x7d9d51267f7e9e6b46a48e0a75c0086f46777087?fields=all · https://sourcify.dev/server/v2/contract/8453/0x423fae8ee58833f283e8845479bd705514110ec3?fields=all · tests/data/first_run_dex_2026-11-26/omni-v2-base.json.gz",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x7d9d51267f7e9e6b46a48e0a75c0086f46777087",
+      "dex.pool_code_hashes": [
+        "0x6ea5d2f9a28cd0f6ba538d5423bc3a6f7bf6d8c32d7699524b144ce72d5d6ebf"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.25"
     }
   }
 ]

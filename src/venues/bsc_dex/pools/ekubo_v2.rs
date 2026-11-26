@@ -207,12 +207,9 @@ pub async fn check(ctx: &Ctx, f: &Family, core: Address, tag: &Value) -> Gateway
     if tag.get("requireCanonical") != Some(&Value::Bool(true)) {
         return Err(no());
     }
-    let contract = super::ekubo_v2_deployment::Key {
+    let contract = super::deployment_at_head::Key {
         block,
-        core,
-        router,
-        core_hash,
-        router_hash,
+        contracts: [(core, core_hash), (router, router_hash)],
     };
     let seen = ctx.evm_chain.ekubo_v2().at(contract);
     seen.get_or_try_init(|| async {

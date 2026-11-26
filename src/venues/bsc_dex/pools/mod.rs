@@ -86,7 +86,7 @@ pub mod ekubo_ext;
 pub mod ekubo_hub;
 pub mod mint_club;
 pub mod ekubo_v2;
-pub(super) mod ekubo_v2_deployment;
+pub(super) mod deployment_at_head;
 pub mod ekubo_keys;
 pub mod ekubo_native;
 pub mod ekubo_route;

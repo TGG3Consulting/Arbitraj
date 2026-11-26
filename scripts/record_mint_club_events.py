@@ -62,8 +62,8 @@ def capture(network):
         for trial in m["trials"]:
             amount=trial["size"]
             q={"size":amount}
-            for label,name in [("mint","getReserveForToken(address,uint256)"),("burn","getRefundForTokens(address,uint256)")]:
-                payload=calldata(name,["address","uint256"],[token,int(amount)])
+            for label,method in [("mint","getReserveForToken(address,uint256)"),("burn","getRefundForTokens(address,uint256)")]:
+                payload=calldata(method,["address","uint256"],[token,int(amount)])
                 if label=="burn" and int(amount)>int(m["supply"]):
                     reply=arc.session.post(arc.endpoints[0],json={"jsonrpc":"2.0","id":1,"method":"eth_call","params":[{"to":BOND,"data":payload},arc.tag]},timeout=20).json()
                     if reply.get("error",{}).get("data")!="0x"+keccak(text="MCV2_Bond__ExceedTotalSupply()")[:4].hex():raise ValueError("unexpected burn revert")
@@ -96,8 +96,20 @@ def capture(network):
             number=int(sample["blockNumber"],16)
             if not begin<=number<=arc.height or sample["blockHash"]!=header(number)["hash"] or sample.get("removed"):raise ValueError("stale execution event")
             samples.append(sample)
+    historical={}
+    for market in rows:
+        start=int(market["creation"]["blockNumber"],16)
+        for delta in range(0,5400,450):
+            if len(historical)==len(events):break
+            lo=start+delta
+            by_token="0x"+encode(["address"],[market["token"]]).hex()
+            for raw in arc.rpc("eth_getLogs",[{"fromBlock":hex(lo),"toBlock":hex(lo+449),"address":BOND,"topics":[events,by_token]}]):
+                action=raw["topics"][0]
+                if action in historical:continue
+                if raw["blockHash"]!=header(int(raw["blockNumber"],16))["hash"] or raw["topics"][1]!=by_token or raw.get("removed"):raise ValueError("stale historical exchange")
+                historical[action]=raw
     window={"from":begin,"to":arc.height,"counts":[sum(l["topics"][0]==t for l in logs) for t in events],"samples":samples}
-    return {"chain_id":arc.chain,"block":arc.height,"selector":arc.tag,"state_root":arc.header["stateRoot"],"contracts":contracts,"markets":rows,"erc1155":nft,"window":window}
+    return {"chain_id":arc.chain,"block":arc.height,"selector":arc.tag,"state_root":arc.header["stateRoot"],"contracts":contracts,"markets":rows,"erc1155":nft,"window":window,"historical_swaps":list(historical.values())}
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument("network",choices=["base","ethereum"]);parser.add_argument("output",type=Path);args=parser.parse_args()

@@ -156,6 +156,11 @@ mod tests {
             ))
             .unwrap(),
         );
+        let omni: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+            include_bytes!("../../tests/data/first_run_dex_2026-11-26/omni-v2-base.json.gz").as_slice(),
+        )).unwrap();
+        assert_eq!(omni["selector"], base["selector"]);
+        pairs.extend(omni["examples"].as_array().unwrap().iter().filter_map(|v| v.get("measured")).cloned());
         let markets = [
             include_str!("../../tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json"),
             include_str!("../../tests/data/first_run_dex_2026-11-26/base_v2_factories.json"),

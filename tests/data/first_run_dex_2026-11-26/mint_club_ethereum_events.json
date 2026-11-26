@@ -42,7 +42,7 @@
       "bonded": "61593853731523092",
       "available": "256783194802694891",
       "clone_code": "0x363d3d373d3d3d363d73aa70bc79fd1cb4a6fba717018351f0c3c64b79df5af43d82803e903d91602b57fd5bf3",
-      "name": "getRefundForTokens(address,uint256)",
+      "name": "Unity",
       "symbol": "UNY",
       "creation_time": 1722976931,
       "creation": {
@@ -87,7 +87,7 @@
       "bonded": "32981027186445949",
       "available": "256783194802694891",
       "clone_code": "0x363d3d373d3d3d363d73aa70bc79fd1cb4a6fba717018351f0c3c64b79df5af43d82803e903d91602b57fd5bf3",
-      "name": "getRefundForTokens(address,uint256)",
+      "name": "Axarco",
       "symbol": "AXC",
       "creation_time": 1713022715,
       "creation": {
@@ -132,7 +132,7 @@
       "bonded": "22476312239398900",
       "available": "256783194802694891",
       "clone_code": "0x363d3d373d3d3d363d73aa70bc79fd1cb4a6fba717018351f0c3c64b79df5af43d82803e903d91602b57fd5bf3",
-      "name": "getRefundForTokens(address,uint256)",
+      "name": "Chocolate Bar",
       "symbol": "BAR",
       "creation_time": 1724033927,
       "creation": {
@@ -168,5 +168,24 @@
       0
     ],
     "samples": []
-  }
+  },
+  "historical_swaps": [
+    {
+      "address": "0xc5a076cad94176c2996b32d8466be1ce757faa27",
+      "topics": [
+        "0x02ed9b10d8b33a6a9fda664247bfd8f6248f74cff85cc84e56b7530c2fce560a",
+        "0x000000000000000000000000e48b29a43ed24bbb670dc52a83648eec2e11e4cc",
+        "0x00000000000000000000000091523b39813f3f4e406ece406d0beaaa9de251fa",
+        "0x000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "data": "0x000000000000000000000000ef2e0a4417961faba7e4f0602e458beca52dcc3100000000000000000000000000000000000000000000021e19e0c9bab240000000000000000000000000000000000000000000000000000000006d567c64d5d0",
+      "blockNumber": "0x13860bf",
+      "transactionHash": "0x9047799cc2095f0ba6d763a4951f79e4f910c14869e17dca2c5d82d9c3b4b2e1",
+      "transactionIndex": "0x31",
+      "blockHash": "0x8e93e4580db99d5788b735f8ddaf0b6d6c9b9c0fb6fe8493f642921017f17f6f",
+      "logIndex": "0x70",
+      "blockTimestamp": "0x66b28b4b",
+      "removed": false
+    }
+  ]
 }

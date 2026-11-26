@@ -1,4 +1,4 @@
-//! Share immutable Core/Router checks between markets at the same block and with the same operator settings.
+//! Share verified deployments between markets at an identical canonical block and operator address/hash settings.
 use alloy_primitives::{Address, B256};
 use std::sync::{Arc, Mutex};
 use tokio::sync::OnceCell;
@@ -6,10 +6,7 @@ use tokio::sync::OnceCell;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) struct Key {
     pub block: B256,
-    pub core: Address,
-    pub router: Address,
-    pub core_hash: B256,
-    pub router_hash: B256,
+    pub contracts: [(Address, B256); 2],
 }
 type Slot = (Key, Arc<OnceCell<()>>);
 #[derive(Default)]

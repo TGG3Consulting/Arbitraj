@@ -63,6 +63,18 @@ def record(market,artifact,url,*,bunny=False,candy=False):
                         raise ValueError(f"{mode} {pool['pool']} {token} {qty}: exact wallet call reverted {done.get('error')}")
                     if scalar(done)!=net or after[1]-before[1]!=net or before[0]-after[0]!=qty or any(before[3:]+after[2:]):
                         raise ValueError("wallet input/output, module balance or residual allowance differs")
+                    if candy:
+                        view=tx(ADAPTER,"getAmountOut(address,address,uint256)",["address","address","uint256"],[token,out,qty])
+                        if scalar(run(prep+[view])[-1])!=net:
+                            raise ValueError("CandySwap module quote differs from wallet receipt")
+                        if token==WETH:
+                            # The isolated payer makes its own earlier deposit. It must not be counted
+                            # as payment for its subsequent order, including when V5 calls the module.
+                            gift=max(1,qty//10)
+                            own_deposit=[tx(WETH,"deposit()",value=gift),tx(WETH,"transfer(address,uint256)",["address","uint256"],[pool["pool"],gift])]
+                            proof=run(prep+own_deposit+[view,balance(out,owner),success,balance(out,owner)])
+                            if any(x["status"]!="0x1" for x in proof) or scalar(proof[-4])!=net or scalar(proof[-1])-scalar(proof[-3])!=net:
+                                raise ValueError("prior payer deposit changed the subsequent order payout")
                     return dict(amount=str(qty),received=str(net),gas=int(done["gasUsed"],16),approval_gas=int(calls[start-1]["gasUsed"],16),
                                 strict=strict["error"],expired=expired["error"],before=list(map(str,before)),after=list(map(str,after))),prep+[success]
                 fund=ref.get("funding", [tx(WETH,"deposit()",value=size)] if a==WETH else [])

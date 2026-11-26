@@ -66,14 +66,11 @@ pub(crate) async fn market(
         )
     };
     let generation = ctx.settings.generation();
-    if at["requireCanonical"] != true
-        || at["blockHash"]
-            .as_str()
-            .and_then(|s| s.parse::<B256>().ok())
-            .is_none()
-        || token.is_zero()
-        || pair.0 == pair.1
-    {
+    let block = at["blockHash"]
+        .as_str()
+        .and_then(|s| s.parse::<B256>().ok())
+        .ok_or_else(no)?;
+    if at["requireCanonical"] != true || token.is_zero() || pair.0 == pair.1 {
         return Err(no());
     }
     let reserve = if pair.0 == token {
@@ -103,21 +100,25 @@ pub(crate) async fn market(
         return Err(no());
     }
     let code = |a: Address| ("eth_getCode", json!([a, at]));
-    let [
-        factory,
-        implementation,
-        clone,
-        metadata,
-        terms,
-        total,
-        issuer,
-        decimals,
-        balance,
-    ] = batch::read(
+    let key = super::deployment_at_head::Key {
+        block,
+        contracts: [(bond, factory_hash), (template, expected)],
+    };
+    let seen = ctx.evm_chain.mint_club().at(key);
+    let verify = seen.get_or_try_init(|| async {
+        let [factory, implementation] = batch::read(ctx, [code(bond), code(template)]).await?;
+        if factory.is_empty()
+            || implementation.is_empty()
+            || keccak256(factory) != factory_hash
+            || keccak256(implementation) != expected
+        {
+            return Err(no());
+        }
+        Ok(())
+    });
+    let state = batch::read(
         ctx,
         [
-            code(bond),
-            code(template),
             code(token),
             batch::view(at, bond, IBond::tokenBondCall { token }),
             batch::view(at, bond, IBond::getStepsCall { token }),
@@ -126,14 +127,10 @@ pub(crate) async fn market(
             batch::view(at, token, IBond::decimalsCall {}),
             batch::view(at, reserve, IBond::balanceOfCall { account: bond }),
         ],
-    )
-    .await?;
-    if factory.is_empty()
-        || implementation.is_empty()
-        || keccak256(factory) != factory_hash
-        || keccak256(implementation) != expected
-        || !clone_of(&clone, template)
-    {
+    );
+    let (_, [clone, metadata, terms, total, issuer, decimals, balance]) =
+        tokio::try_join!(verify, state)?;
+    if !clone_of(&clone, template) {
         return Err(no());
     }
     let m = batch::decode(&metadata, IBond::tokenBondCall { token })?;
@@ -282,3 +279,7 @@ pub(in crate::venues::bsc_dex) fn emitted(
         && log.data.len() == 96
         && matches!(log.topics.as_slice(),[action,token,_,reserve] if (*action==IBond::Mint::SIGNATURE_HASH || *action==IBond::Burn::SIGNATURE_HASH) && *token==s.token.into_word() && *reserve==s.reserve.into_word())
 }
+
+#[cfg(test)]
+#[path = "mint_club_tests.rs"]
+mod tests;

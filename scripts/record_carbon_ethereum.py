@@ -45,20 +45,24 @@ def wallet(c,row,source,target,amount,by_target,end):
     approve=lambda coin,n:tx(coin,"approve(address,uint256)",["address","uint256"],[CTRL,n])
     def getbalance(t):
         return tx(MULTI,"getEthBalance(address)",["address"],[OWNER]) if t==NATIVE else tx(t,"balanceOf(address)",["address"],[OWNER])
-    def quotes(actions):
-        name="calculateTradeSourceAmount" if by_target else "calculateTradeTargetAmount"
-        return c.one(CTRL,name+"(address,address,"+ACTION+")",["address","address",ACTION],[source,target,actions],["uint128"])[0]
     # The controller accepts order IDs, not a pair-wide implicit swap. Verify fills against each
     # order's actual remaining target inventory. Compare all eligible single-order allocations.
-    candidates=[]
+    eligible=[]
     for sid,_,tokens,orders in row["orders"]:
         y,_,a,b=orders[tokens.index(target)]
         if y==0 or (a==0 and b==0) or (by_target and y<amount):continue
-        try:other=quotes([(sid,amount)])
-        except ValueError as err:
-            if "revert" not in str(err).lower():raise
-            continue
-        if other and (by_target or other<=y):candidates.append((other,sid))
+        eligible.append((sid,y))
+    name="calculateTradeSourceAmount" if by_target else "calculateTradeTargetAmount"
+    sig=name+"(address,address,"+ACTION+")"
+    candidates=[]
+    for off in range(0,len(eligible),32):
+        group=eligible[off:off+32]
+        calls=[(CTRL,True,bytes.fromhex(calldata(sig,["address","address",ACTION],[source,target,[(sid,amount)]])[2:])) for sid,_ in group]
+        batch,=c.one(MULTI,"aggregate3((address,bool,bytes)[])",["(address,bool,bytes)[]"],[calls],["(bool,bytes)[]"])
+        for (sid,y),(ok,data) in zip(group,batch,strict=True):
+            if not ok:continue
+            other,=decode(["uint128"],data)
+            if other and (by_target or other<=y):candidates.append((other,sid))
     if not candidates:return None
     other,sid=(min if by_target else max)(candidates)
     spent,received=(other,amount) if by_target else (amount,other)

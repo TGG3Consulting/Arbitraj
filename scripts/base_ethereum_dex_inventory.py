@@ -234,6 +234,15 @@ def tables(network, snapshots, profiles):
                     f"Из 837 минимальных единиц USDbC кошелёк получил 836, сбор составил 1. В реестре подтверждены "
                     f"{sides} направленных исполнений V5 на трёх парах, во всех случаях минимум на единицу выше отклонился. "
                     f"При повторном использовании пула расход резерва включает сбор. [Кошелёк и получатель комиссии](../{candy_file.as_posix()})."])
+        funded_candy=Path("tests/data/first_run_dex_2026-11-26/candy_module_wallets.json.gz")
+        with gzip.open(funded_candy,"rt",encoding="utf8") as handle:
+            funded=json.load(handle)
+        out.append(f"**CandySwap с учётом собственного взноса.** Владелец развёртывает CandySwapAdapter "
+                   f"с фабрикой `{funded['factory']}`, указывает адрес модуля в `dex.router` и выбирает "
+                   f"`dex.kind = candyswap_module`. Проверенный `dex.module_runtime_hashes = {funded['module_hash']}`. "
+                   f"На трёх рынках зафиксированы {2*len(funded['cases'])} обмена прямым вызовом и через шаг 29 V5. "
+                   f"Исходящий сбор входит в выплату и в проверку минимума. Сумма прежних переводов в пул "
+                   f"не увеличивает размер заявки. [Архив кошельков](../{funded_candy.as_posix()}).")
         leet = "tests/data/first_run_dex_2026-11-26/leetswap_base_swaps.json"
         out.extend(["", "LeetSwap V2 · фабрика зарегистрировала 4505 волатильных пар и 0 стабильных. У 4196 положительны "
                     "оба сохранённых резерва, у 4115 положительны оба фактических баланса. Профиль leetswap_v2 сверяет баланс "
@@ -1017,9 +1026,11 @@ def tables(network, snapshots, profiles):
     mint_path=Path(f"tests/data/first_run_dex_2026-11-26/mint_club_{network}_wallets.json.gz")
     with gzip.open(mint_path,"rt",encoding="utf8") as stream:
         mint=json.load(stream)
+    reserves=len({row["reserve"] for row in mint["directory"]})
+    reserve_count=len({t["reserve"] for t in mint["directory"]})
     pairs=mint["markets"]
     trials=sum(len(p["trials"]) for p in pairs)
-    out.append(f"**Mint Club V2.** Bond зарегистрировал {mint['total']} выпусков ERC20 и ERC1155 с {mint['unique_reserve_assets']} видами обеспечения. "
+    out.append(f"**Mint Club V2.** Bond зарегистрировал {mint['total']} выпусков ERC20 и ERC1155 с {reserves} видами обеспечения. "
                f"На блоке {mint['height']} три проверенных ERC20 с резервом WETH прошли {trials} циклов выпуска и погашения. "
                "Уменьшение максимальной суммы покупки и увеличение минимальной суммы погашения на одну минимальную единицу дали откат. "
                "Для отслеживаемого токена проверяются tokenBond, байткод клона и его реализации, ступени цены и текущий выпуск. "

@@ -2,7 +2,7 @@ name: Private original precheck on six archived V2 markets
 'on':
   push:
     branches:
-    - audit/private-all-risk-final-2511
+    - audit/acb-risk-final-2611
 permissions:
   contents: read
 env:
@@ -20,8 +20,7 @@ jobs:
     - name: Create ephemeral sealed-input receiver
       run: 'umask 077
 
-        /usr/bin/python3 control/tools/market_envelope.py keygen "$RUNNER_TEMP/key.pem"
-        "$RUNNER_TEMP/public.pem"
+        /usr/bin/python3 control/tools/market_envelope.py keygen "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/public.pem"
 
         '
     - uses: actions/upload-artifact@v4
@@ -31,7 +30,7 @@ jobs:
         retention-days: 1
     - uses: actions/checkout@v4
       with:
-        ref: 2925a361bb88edff0ee1aab3e18bdd3e6ff5b843
+        ref: acb36e580ad19b6a63b1330bcb4f15b3040e0e12
         path: release
     - uses: actions/checkout@v4
       with:
@@ -43,7 +42,7 @@ jobs:
         ref: 375bd387f318f656984689348e964a687bfbb255
     - uses: actions/checkout@v4
       with:
-        ref: 15095ea3c6b4bd27291d026e857f14f6556a1e49
+        ref: 2925a361bb88edff0ee1aab3e18bdd3e6ff5b843
         path: baseline
     - uses: dtolnay/rust-toolchain@1.97.0
       with:
@@ -55,63 +54,56 @@ jobs:
     - name: Receive the six verified private market states
       shell: bash
       run: "set -euo pipefail\nref=refs/heads/audit/risk-market-envelope-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}\n\
-        for i in $(seq 1 35); do\n  if git -C control ls-remote --exit-code origin\
-        \ \"$ref\" >/dev/null 2>&1; then break; fi\n  sleep 25\ndone\ngit -C control\
-        \ fetch -q --depth=1 origin \"$ref\"\ngit -C control show FETCH_HEAD:market.enc\
-        \ > \"$RUNNER_TEMP/enc\"\np=\"$GITHUB_WORKSPACE/control/tools\"\nenv=\"$p/market_envelope.py\"\
-        \n/usr/bin/python3 \"$env\" open \"$RUNNER_TEMP/key.pem\" \"$RUNNER_TEMP/data.json\"\
-        \ \"$RUNNER_TEMP/enc\"\nrm \"$RUNNER_TEMP/key.pem\" \"$RUNNER_TEMP/enc\"\n\
-        \npython - \"$RUNNER_TEMP\" historical/tools/release_size_matrix <<'PY'\n\
-        import json,pathlib,sys\nt,p=map(pathlib.Path,sys.argv[1:]);dd=json.loads((t/'data.json').read_bytes());(t/'return.pem').write_text(dd['return_key']);cs=dd['cases']\n\
+        for i in $(seq 1 35); do\n  if git -C control ls-remote --exit-code origin \"$ref\" >/dev/null\
+        \ 2>&1; then break; fi\n  sleep 25\ndone\ngit -C control fetch -q --depth=1 origin \"$ref\"\n\
+        git -C control show FETCH_HEAD:market.enc > \"$RUNNER_TEMP/enc\"\np=\"$GITHUB_WORKSPACE/control/tools\"\
+        \nenv=\"$p/market_envelope.py\"\n/usr/bin/python3 \"$env\" open \"$RUNNER_TEMP/key.pem\" \"$RUNNER_TEMP/data.json\"\
+        \ \"$RUNNER_TEMP/enc\"\nrm \"$RUNNER_TEMP/key.pem\" \"$RUNNER_TEMP/enc\"\n\npython - \"$RUNNER_TEMP\"\
+        \ historical/tools/release_size_matrix <<'PY'\nimport json,pathlib,sys\nt,p=map(pathlib.Path,sys.argv[1:]);dd=json.loads((t/'data.json').read_bytes());(t/'return.pem').write_text(dd['return_key']);cs=dd['cases']\n\
         (p/'actual_v2_cases.json').write_text(json.dumps({'cases':cs}));(p/'risk_open_evidence.json').write_text(json.dumps({c['deal_id']:c['risk']\
         \ for c in cs}))\ncfg=json.loads((p/'control_settings.json').read_bytes());cfg.update(dd['settings']);(p/'control_settings.json').write_text(json.dumps(cfg))\n\
         PY\n"
     - name: True precheck base
       shell: bash
-      run: "export CARGO_TARGET_DIR=\"$GITHUB_WORKSPACE/release/target\"\nset -e\n\
-        p=historical/tools/release_size_matrix\npython \"$p/adapt.py\" baseline\n\
-        python \"$p/ab_0392.py\" baseline\npython \"$p/stored_compare.py\" baseline\
-        \ \"$p/stored_cases.json\"\npython \"$p/actual_v2.py\" stage baseline \"$p/actual_v2_cases.json\"\
-        \npython \"$p/actual_v3.py\" stage baseline \"$p/actual_v3_cases.json\"\n\
-        python \"$p/with_history.py\" baseline\npython \"$p/stage_risk.py\" baseline\n\
-        k=shop/tools/release_size_matrix\npython \"$k/shop_two_leg.py\" baseline\n\
-        python \"$k/shop_width.py\" baseline\npython \"$k/shop_target.py\" baseline\n\
-        python \"$k/shop_live.py\" baseline\npython control/tools/sizing_cpu.py baseline\n\
-        python control/tools/sizing_asset_serde.py baseline\ncd baseline\nif ! cargo\
-        \ test --locked --test core_size_actual_v2 actual_v2_matrix -- --nocapture\
-        \ > \"$RUNNER_TEMP/risk.log\" 2>&1; then\n  grep -E '^error(\\[E[0-9]+\\])?:|panicked\
-        \ at|assertion .*failed|stack overflow|FAILED|^ *-->' -A 5 \"$RUNNER_TEMP/risk.log\"\
-        \ | head -n 70\n  exit 1\nfi\ngrep -E 'ACTUAL_V2_MATRIX' \"$RUNNER_TEMP/risk.log\"\
+      run: "export CARGO_TARGET_DIR=\"$GITHUB_WORKSPACE/release/target\"\nset -e\np=historical/tools/release_size_matrix\n\
+        python \"$p/adapt.py\" baseline\npython \"$p/ab_0392.py\" baseline\npython control/tools/sizing_control.py\
+        \ baseline\npython \"$p/stored_compare.py\" baseline \"$p/stored_cases.json\"\npython \"$p/actual_v2.py\"\
+        \ stage baseline \"$p/actual_v2_cases.json\"\npython \"$p/actual_v3.py\" stage baseline \"$p/actual_v3_cases.json\"\
+        \npython \"$p/with_history.py\" baseline\npython \"$p/stage_risk.py\" baseline\nk=shop/tools/release_size_matrix\n\
+        python \"$k/shop_two_leg.py\" baseline\npython \"$k/shop_width.py\" baseline\npython \"$k/shop_target.py\"\
+        \ baseline\npython \"$k/shop_live.py\" baseline\npython control/tools/sizing_cpu.py baseline\n\
+        python control/tools/sizing_archive.py baseline\npython control/tools/sizing_entry.py baseline\n\
+        python control/tools/sizing_risk_side.py baseline\npython control/tools/sizing_asset_serde.py\
+        \ baseline\ncd baseline\nif ! cargo test --locked --test core_size_actual_v2 actual_v2_matrix\
+        \ -- --nocapture > \"$RUNNER_TEMP/risk.log\" 2>&1; then\n  grep -E '^error(\\[E[0-9]+\\])?:|panicked\
+        \ at|assertion .*failed|stack overflow|FAILED|^ *-->' -A 5 \"$RUNNER_TEMP/risk.log\" | head -n\
+        \ 70\n  exit 1\nfi\ngrep -E 'NATIVE_RISK_PRECHECK|ACTUAL_V2_MATRIX' \"$RUNNER_TEMP/risk.log\"\
         \ > \"$RUNNER_TEMP/base.jsonl\"\n"
     - name: True precheck release
       shell: bash
-      run: "export CARGO_TARGET_DIR=\"$GITHUB_WORKSPACE/release/target\"\nset -e\n\
-        p=historical/tools/release_size_matrix\npython \"$p/adapt.py\" release\npython\
-        \ \"$p/ab_0392.py\" release\npython control/tools/sizing_control.py release\n\
-        python \"$p/stored_compare.py\" release \"$p/stored_cases.json\"\npython \"\
-        $p/actual_v2.py\" stage release \"$p/actual_v2_cases.json\"\npython \"$p/actual_v3.py\"\
-        \ stage release \"$p/actual_v3_cases.json\"\npython \"$p/with_history.py\"\
-        \ release\npython \"$p/stage_risk.py\" release\nk=shop/tools/release_size_matrix\n\
-        python \"$k/shop_two_leg.py\" release\npython \"$k/shop_width.py\" release\n\
-        python \"$k/shop_target.py\" release\npython \"$k/shop_live.py\" release\n\
-        python control/tools/sizing_cpu.py release\npython control/tools/sizing_archive.py\
-        \ release\npython control/tools/sizing_entry.py release\npython control/tools/sizing_risk_side.py\
-        \ release\npython control/tools/sizing_asset_serde.py release\ncd release\n\
-        if ! cargo test --locked --test core_size_actual_v2 actual_v2_matrix -- --nocapture\
-        \ > \"$RUNNER_TEMP/risk.log\" 2>&1; then\n  grep -E '^error(\\[E[0-9]+\\])?:|panicked\
-        \ at|assertion .*failed|stack overflow|FAILED|^ *-->' -A 5 \"$RUNNER_TEMP/risk.log\"\
-        \ | head -n 70\n  exit 1\nfi\ngrep -E 'NATIVE_RISK_PRECHECK|ACTUAL_V2_MATRIX'\
-        \ \"$RUNNER_TEMP/risk.log\" > \"$RUNNER_TEMP/release.jsonl\"\n"
+      run: "export CARGO_TARGET_DIR=\"$GITHUB_WORKSPACE/release/target\"\nset -e\np=historical/tools/release_size_matrix\n\
+        python \"$p/adapt.py\" release\npython \"$p/ab_0392.py\" release\npython control/tools/sizing_control.py\
+        \ release\npython \"$p/stored_compare.py\" release \"$p/stored_cases.json\"\npython \"$p/actual_v2.py\"\
+        \ stage release \"$p/actual_v2_cases.json\"\npython \"$p/actual_v3.py\" stage release \"$p/actual_v3_cases.json\"\
+        \npython \"$p/with_history.py\" release\npython \"$p/stage_risk.py\" release\nk=shop/tools/release_size_matrix\n\
+        python \"$k/shop_two_leg.py\" release\npython \"$k/shop_width.py\" release\npython \"$k/shop_target.py\"\
+        \ release\npython \"$k/shop_live.py\" release\npython control/tools/sizing_cpu.py release\npython\
+        \ control/tools/sizing_archive.py release\npython control/tools/sizing_entry.py release\npython\
+        \ control/tools/sizing_risk_side.py release\npython control/tools/sizing_asset_serde.py release\n\
+        cd release\nif ! cargo test --locked --test core_size_actual_v2 actual_v2_matrix -- --nocapture\
+        \ > \"$RUNNER_TEMP/risk.log\" 2>&1; then\n  grep -E '^error(\\[E[0-9]+\\])?:|panicked at|assertion\
+        \ .*failed|stack overflow|FAILED|^ *-->' -A 5 \"$RUNNER_TEMP/risk.log\" | head -n 70\n  exit 1\n\
+        fi\ngrep -E 'NATIVE_RISK_PRECHECK|ACTUAL_V2_MATRIX' \"$RUNNER_TEMP/risk.log\" > \"$RUNNER_TEMP/release.jsonl\"\
+        \n"
     - name: Seal precheck outcomes
       shell: bash
       run: "python - \"$RUNNER_TEMP\" <<'PY'\nimport gzip,json,pathlib,sys\np=pathlib.Path(sys.argv[1]);results={}\n\
         for name in ('base','release'):\n rows=[]\n for line in (p/(name+'.jsonl')).read_text().splitlines():\n\
-        \  for marker in ('ACTUAL_V2_MATRIX ','NATIVE_RISK_PRECHECK '):\n   if marker\
-        \ in line: rows.append({'kind':marker.strip(),'record':json.loads(line.split(marker,1)[1])});break\n\
-        \ assert sum(r['kind']=='ACTUAL_V2_MATRIX'for r in rows)==6, (name,len(rows))\n\
-        \ results[name]=rows\n(p/'results.gz').write_bytes(gzip.compress(json.dumps(results).encode()))\n\
-        PY\n/usr/bin/python3 control/tools/market_envelope.py seal \"$RUNNER_TEMP/return.pem\"\
-        \ \"$RUNNER_TEMP/result.enc\" \"$RUNNER_TEMP/results.gz\"\n"
+        \  for marker in ('ACTUAL_V2_MATRIX ','NATIVE_RISK_PRECHECK '):\n   if marker in line: rows.append({'kind':marker.strip(),'record':json.loads(line.split(marker,1)[1])});break\n\
+        \ assert sum(r['kind']=='ACTUAL_V2_MATRIX'for r in rows)==6, (name,len(rows))\n results[name]=rows\n\
+        (p/'results.gz').write_bytes(gzip.compress(json.dumps(results).encode()))\nPY\n/usr/bin/python3\
+        \ control/tools/market_envelope.py seal \"$RUNNER_TEMP/return.pem\" \"$RUNNER_TEMP/result.enc\"\
+        \ \"$RUNNER_TEMP/results.gz\"\n"
     - uses: actions/upload-artifact@v4
       with:
         name: encrypted-native-result

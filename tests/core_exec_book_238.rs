@@ -75,12 +75,10 @@ fn symbols_body() -> String {
 }
 
 /// Локальный сервер с записанными ответами. Возвращает: адрес и счётчики.
-async fn serve() -> (String, Server) {
+async fn serve(depth: String) -> (String, Server) {
     let l = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = format!("http://{}", l.local_addr().unwrap());
     let srv = Server::default();
-    let depth =
-        std::fs::read_to_string("tests/data/rest_book_2026-11-09/xt_depth_doc.json").unwrap();
     let symbols = symbols_body();
     let s = srv.clone();
     tokio::spawn(async move {
@@ -149,6 +147,11 @@ fn dir(name: &str) -> PathBuf {
 /// Ядро с адаптером XT на базе в папке (ключи заданы, хранилище открыто). Возвращает: ядро, настройки, журнал, счётчики
 /// сервера.
 async fn start(d: &Path) -> (Core, Store, Journal, Server) {
+    let depth = include_str!("data/rest_book_2026-11-09/xt_depth_doc.json");
+    start_with_depth(d, depth.to_owned()).await
+}
+
+async fn start_with_depth(d: &Path, depth: String) -> (Core, Store, Journal, Server) {
     let db = Db::open(&d.join("t.sqlite")).unwrap();
     let (changes, _) = broadcast::channel(64);
     let (jtx, _) = broadcast::channel(64);
@@ -156,7 +159,7 @@ async fn start(d: &Path) -> (Core, Store, Journal, Server) {
     let settings = Store::load(db.clone(), changes.clone(), journal.clone())
         .await
         .unwrap();
-    let (url, srv) = serve().await;
+    let (url, srv) = serve(depth).await;
     let vault = arb::secrets::Vault::locked(d.join("secrets.enc"));
     // Решение 413 (t198, CI 1576258a): перед продажей бот читает баланс счёта подписанным GET /v4/balances — хранилище
     // открыто тестовым паролем, ключи XT заданы (как в tests/t175_common), баланс стенда — монеты сделки (1 BTC).
@@ -262,6 +265,38 @@ async fn quote_and_order_use_one_rest_snapshot() {
         1,
         "один запрос стакана на котировку и ордер"
     );
+}
+
+#[tokio::test]
+async fn four_ace_depth_shortfalls_refuse_only_the_full_quote_on_the_same_book() {
+    // Actual available/requested pairs from the deal timelines. The original price levels
+    // were not archived; use one explicit bid to check the common CEX execution boundary.
+    for (available, requested) in [
+        ("1000", "2189.512484"),
+        ("3189.512484", "3422.51520285"),
+        ("1149.5", "1207.617949"),
+        ("1329.52", "3790.22"),
+    ] {
+        let mut response: Value =
+            serde_json::from_str(include_str!("data/rest_book_2026-11-09/xt_depth_doc.json"))
+                .unwrap();
+        response["result"]["bids"] = json!([["0.017", available]]);
+        let d = dir(&format!("ace-depth-{requested}"));
+        let (core, _, _, srv) = start_with_depth(&d, response.to_string()).await;
+
+        for _ in 0..2 {
+            let why = arb::core::trade_ops::sell_value(&core, None, &xt(), &btc(), dec(requested))
+                .await
+                .unwrap_err();
+            assert_eq!(why, format!("xt: глубины хватает на {available} из {requested}"));
+        }
+        let (_, q) = arb::core::trade_ops::sell_value(&core, None, &xt(), &btc(), dec(available))
+            .await
+            .expect("снимок покрывает весь граничный объём");
+        assert_eq!(q.fillable_qty, dec(available));
+        assert_eq!(srv.depth.load(Ordering::SeqCst), 1);
+        assert_eq!(srv.writes.load(Ordering::SeqCst), 0);
+    }
 }
 
 #[tokio::test]

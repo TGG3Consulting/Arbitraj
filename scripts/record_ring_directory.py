@@ -76,8 +76,8 @@ def catalog(endpoint,tag):
     expected.update({w:FW_RUNTIME for p in admitted for w in p["wrappers"]})
     code_hash={}
     addresses=sorted(expected)
-    for n in range(0,len(addresses),3):
-        group=addresses[n:n+3]
+    for offset in range(0,len(addresses),3):
+        group=addresses[offset:offset+3]
         payload=[{"jsonrpc":"2.0","id":i,"method":"eth_getCode","params":[a,tag]} for i,a in enumerate(group)]
         response=requests.post(endpoint,json=payload,timeout=30)
         response.raise_for_status()

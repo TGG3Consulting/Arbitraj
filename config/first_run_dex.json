@@ -2130,5 +2130,17 @@
         "10000"
       ]
     }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "lunarbase",
+    "source": "https://raw.githubusercontent.com/Lunarbase-Lab/LunarBaseIntegrations/2adec126295e866efbf3c1c2be936a792ba1303a/mainnet/addresses.json · tests/data/first_run_dex_2026-11-26/lunarbase.json",
+    "settings": {
+      "dex.kind": "lunarbase",
+      "dex.pmm_pool": "0x0000efc4ec03a7c47d3a38a9be7ff1d52dd01b99",
+      "dex.pool_implementation": "0x88460bd8dae6f632b9124e99b09d584e0b34b80f",
+      "dex.pmm_ladder_counter": true
+    }
   }
 ]

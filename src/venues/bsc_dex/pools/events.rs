@@ -90,6 +90,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
         | Proto::SaddleStable
         | Proto::WooPP
         | Proto::Elfomo
+        | Proto::Lunar
         | Proto::InfinityStable => events_stable_u::topics(f.proto),
         Proto::Maverick => events_maverick::topics(),
         // Решение 484: Wombat — любое событие пула → перечитать (events_wombat.rs).
@@ -145,6 +146,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
         | Proto::SaddleStable
         | Proto::WooPP
         | Proto::Elfomo
+        | Proto::Lunar
         | Proto::InfinityStable => events_stable_u::liquidity_topics(f.proto),
         Proto::Maverick => events_maverick::liquidity_topics(),
         Proto::Wombat => events_wombat::liquidity_topics(),
@@ -215,6 +217,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         | Proto::SaddleStable
         | Proto::WooPP
         | Proto::Elfomo
+        | Proto::Lunar
         | Proto::InfinityStable => events_stable_u::apply(e, log),
         Proto::Maverick => events_maverick::apply(e, log),
         Proto::Wombat => events_wombat::apply(e, log),

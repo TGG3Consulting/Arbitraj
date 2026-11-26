@@ -53,7 +53,10 @@ pub async fn out_at(
         return super::super::pools::ring_proof::backed_quote(ctx, e, token_in, amount, block)
             .await;
     }
-    if e.family.proto == super::super::pools::families::Proto::Elfomo {
+    if matches!(
+        e.family.proto,
+        super::super::pools::families::Proto::Elfomo | super::super::pools::families::Proto::Lunar
+    ) {
         let out = if token_in == e.pool.token0 {
             e.pool.token1
         } else if token_in == e.pool.token1 {
@@ -61,9 +64,20 @@ pub async fn out_at(
         } else {
             return Err(ctx.err(
                 ErrorCode::InvalidAddress,
-                "Входной токен не принадлежит паре ElfomoFi",
+                "Входной токен не принадлежит паре котировки",
             ));
         };
+        if e.family.proto == super::super::pools::families::Proto::Lunar {
+            return super::super::pools::lunar::quote(
+                ctx,
+                e.family.id,
+                token_in,
+                out,
+                amount,
+                block,
+            )
+            .await;
+        }
         return super::super::pools::elfomo::quote(ctx, e.family.id, token_in, out, amount, block)
             .await;
     }

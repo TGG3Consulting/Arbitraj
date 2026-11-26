@@ -129,7 +129,7 @@ pub fn plan(
                 Q::PancakeStable { three: true },
             ],
             Proto::ListaStable => vec![Q::ListaStable],
-            Proto::Elfomo => Vec::new(),
+            Proto::Elfomo | Proto::Lunar => Vec::new(),
             Proto::WooPP => match ctx.dex_addr("dex.pmm_pool", f.id) {
                 Ok(pool) => vec![Q::Woo(pool)],
                 Err(_) => Vec::new(),
@@ -141,7 +141,7 @@ pub fn plan(
             continue;
         }
         // WooFi: «реестр» — оракул (state(монета)); остальные — фабрика DEX.
-        let registry = if f.proto == Proto::Elfomo {
+        let registry = if matches!(f.proto, Proto::Elfomo | Proto::Lunar) {
             "dex.pmm_pool"
         } else if f.proto == Proto::WooPP {
             "dex.oracle"
@@ -226,6 +226,13 @@ pub fn plan(
                     .then(|| stable_native::registry_pair(coin, quote, wrapped))
                     .flatten();
                 for (a, b) in std::iter::once((coin, quote)).chain(alt) {
+                    if f.proto == Proto::Lunar {
+                        if !super::lunar::pair(a, b) {
+                            continue;
+                        }
+                        qs.clear();
+                        qs.push(Q::Lunar(factory));
+                    }
                     if f.proto == Proto::Elfomo {
                         if !super::elfomo::pair(a, b) {
                             continue;

@@ -64,6 +64,7 @@ pub fn topics(p: Proto) -> Vec<B256> {
             // Решение 451: Saddle SwapFlashLoan (Arbitrum) — flashLoan меняет баланс пула; у Nerve события нет.
             SaddleOwn::FlashLoan::SIGNATURE_HASH,
         ],
+        Proto::Lunar => super::lunar::topics(),
         Proto::Elfomo => vec![super::elfomo::IElfomo::ElfomoTrade::SIGNATURE_HASH],
         Proto::WooPP => vec![
             W::WooSwap::SIGNATURE_HASH,

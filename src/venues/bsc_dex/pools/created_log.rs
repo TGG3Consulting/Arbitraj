@@ -224,7 +224,8 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             | Proto::ListaStable
             | Proto::SaddleStable
             | Proto::WooPP
-            | Proto::Elfomo => {
+            | Proto::Elfomo
+            | Proto::Lunar => {
                 continue;
             }
             // Решение 484: Wombat — фабрики нет; пулы — справочник и список dex.stable_pools.

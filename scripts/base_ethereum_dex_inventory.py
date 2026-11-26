@@ -269,11 +269,24 @@ def tables(network, snapshots, profiles):
                     "с partnerId=0 дали полные встречные дельты на плательщике и vault. Контракт вернул пустые байты. "
                     f"У USDT/USDC {zero} нулевых котировок. Для остальных пар двусторонняя проверка отсутствует. "
                     "Профиль elfomofi строит сигнальную лестницу только WETH/USDC и cbBTC/USDC. Каждый запрос цены "
-                    "передаёт фактический адрес кошелька с partnerId=0, платёжная ликвидность ограничена остатком vault "
+                    "передаёт фактический адрес кошелька с partnerId=0. Покупка и продажа имеют отдельные ступени. Для продажи getAmountIn предлагает размер "
+                    "входа в монете, getAmountOut фактического плательщика подтверждает выплату. В [архивной проверке шести состояний](../tests/data/first_run_dex_2026-11-26/elfomo_ladders_base.json) "
+                    "при исчерпании одной стороны сохранились обе ступени встречного направления. Платёжная ликвидность ограничена остатком vault "
                     "и его allowance. Выход, достигший всего доступного остатка, отсекается. Размеры dex.pmm_ladder_usd "
                     "задаёт владелец в USDT, dex.pmm_ladder_counter переводит эти объёмы в USDC по курсу реестра. "
                     "Нативный swap сравнивает limitAmount с котировкой до transferFrom. Архивная проверка ElfomoExecutor подтвердила срок, полный вход, зачисление и возврат разрешения к нулю в 8 случаях. В режиме elfomofi_module котировка кошелька проходит через адрес адаптера. Принятый runtime 0xd3abddebdd155ff956b970579304da391511f945803c0ae5f1ec8f28c10a64bb, размещение по решению 408. За отдельные 24 часа эти две пары дали 2 094 922,843102 из 2 132 483,689949 USDC оборота роутера. [Расчёт стоимости и границы применения](DECISIONS.md#дополнение-к-t488-01-elfomofi-на-base-dex-23-r-22). "
                     f"[Сырые результаты](../{elfomo.as_posix()}) · [Спецификация]({el['source']})."])
+    lunar = Path("tests/data/first_run_dex_2026-11-26/lunarbase.json")
+    if base and lunar.exists():
+        lb = read(lunar)
+        market = lb["markets"][2]
+        out.extend(["", f"LunarBase · у proxy `{market['address']}` в EIP-1967 получена реализация `{market['implementation']}`. "
+                    f"В опубликованном mainnet/addresses.json 0.4.1 указан `{lb['official']['implementation']}`. "
+                    "Из четырёх размещений каталога три были на паузе с устаревшей ценой. В действующем пуле X — native ETH, Y — USDC. "
+                    "Для четырёх обменов публичного кошелька фактические балансы совпали с quoteExactIn; minOut + 1 и просроченный deadline отклонились. "
+                    "Цена зависит от вызывающего адреса. Профиль lunarbase показывает котировку прямого кошелька; в режиме lunarbase_module расчёт идёт через проверенный модуль, "
+                    "который принимает WETH и сам оборачивает либо разворачивает ETH. Для рабочего режима нужен отдельный допуск владельца. "
+                    f"[Сырые вызовы и ответы](../{lunar.as_posix()})."])
     aero_basic = Path("tests/data/first_run_dex_2026-11-26/aero_basic_base.json")
     if base and aero_basic.exists():
         ab = read(aero_basic)
@@ -524,16 +537,28 @@ def tables(network, snapshots, profiles):
     ring_path = Path("tests/data/first_run_dex_2026-11-26/ring_ethereum.json")
     if not base and ring_path.exists():
         ring = read(ring_path)
+        directory_path = ring_path.with_name("ring_directory.json")
+        directory = read(directory_path)
+        proved = [r for r in directory["rows"] if r["verified"]]
+        funded = sum(all(map(int, r["reserves"])) and all(int(directory["tokens"][w]["backing"] or 0) > 0
+                     for w in r["wrappers"]) for r in proved)
         cases = [c for pool in ring["pools"] for c in pool["cases"]]
         gas = [n for c in cases for n in c["gas"]]
-        out.extend(["", f"**Ring Swap / Few, Ethereum.** На блоке {ring['block']} фабрика зарегистрировала 474 пары. "
+        out.extend(["", f"**Ring Swap / Few, Ethereum.** На блоке {ring['block']} фабрика зарегистрировала {directory['count']} пары. "
                     f"Для {len(ring['pools'])} книг WETH с USDT, USDC, WBTC и UNI получены {2*len(cases)} обмена "
                     "через Universal Router: 0,001 и 0,01 WETH, обе стороны, оплата или получение в WETH и ETH. "
                     f"Газ одного обмена составил {min(gas)}–{max(gas)} единиц до отдельных разрешений. "
                     "Пара держит Few wrappers. Шаг роутера обменивает их с комиссией 0,3% и выдаёт исходную монету. "
                     "Для входящего USDT команда WRAP_FEW_TOKEN использует имеющийся allowance. В прямом "
                     "FEW_V2_SWAP_EXACT_IN попытка повторного approve откатилась. Нижняя граница выплаты проверена при "
-                    "обоих направлениях. Оставшиеся 470 пар требуют отдельной проверки токенов и доступного объёма. "
+                    "обоих направлениях. "
+                    f"Для всех {directory['count']} пар проверены allPairs и обе стороны. Код пула, код обеих обёрток, "
+                    f"CREATE2 и встречные записи обеих фабрик совпали у {len(proved)} пар; из них {funded} имели "
+                    "ненулевые резервы и некоторое обеспечение обоих underlying. Объём, доступный для погашения, "
+                    "проверяется вместе с ценой на одном блоке. Вне четырёх указанных пар приложенная проверка обоих "
+                    "объёмов кошелька учитывается отдельно. Оператор может обнаружить кошелёчную пару по двум "
+                    "адресам исходных активов; исполнитель допускает её после обычной проверки газа, налогов и выплаты. "
+                    f"[Полный реестр](../{directory_path.as_posix()}) · "
                     "[Размещения](https://ringprotocol.gitbook.io/ring/docs/deployments) · "
                     f"[Суммы и результаты](../{ring_path.as_posix()}) · "
                     "[Архивный прогон](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45881656010)."])
@@ -574,7 +599,7 @@ def tables(network, snapshots, profiles):
         if id == ("solidly-v3-base" if base else "solidly-v3") and solidly.exists():
             status = "DEX-19 · проверены исходники, комиссия и прямые обмены. Для торговли требуется проверенное размещение модуля"
         if not base and id == "ring-exchange-ethereum" and ring_path.exists():
-            status = "Ring Few · 4 пары underlying через Permit2/Universal Router; расчёты и контрольные обмены выше"
+            status = "Ring Few · адресная проверка всех пар; котировки, обеспечение и контрольные обмены выше"
         if sample.get("state") != "enumerated":
             status += ", страница не прочитана"
         elif not sample.get("rows_page1"):
@@ -596,6 +621,8 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if base and str(row["id"]) == "7601" and lunar.exists():
+            task = "DEX-24 · один действующий native ETH/USDC, фактические implementation и выплаты по обеим сторонам; три размещения приостановлены"
         if base and str(row["id"]) == "7260" and elfomo.exists():
             task = "DEX-23 · 12 пар в реестре ElfomoFi. Подтверждены прямые выплаты WETH/USDC и cbBTC/USDC, нулевые котировки USDT/USDC"
         if base and str(row["id"]) == "9172" and aero_basic.exists():

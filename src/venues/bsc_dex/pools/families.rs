@@ -119,6 +119,8 @@ pub enum Proto {
     WooPP,
     /// ElfomoFi on Base: oracle pricing behind a proxy and one router for many token pairs.
     Elfomo,
+    /// LunarBase native ETH/USDC. Исполнение WETH требует отдельной атомарной обёртки.
+    Lunar,
     /// Maverick V2 (решение 122 F; maverickprotocol/v2-common d91e871, IMaverickV2Pool.sol): тики с резервами tokenA и
     /// tokenB, комиссия по направлению fee(bool), бины разных видов. Расчёт обмена — порт команды Maverick
     /// (math/maverick_swap.rs; Solidity-исходник закрыт), сверка — MaverickV2Quoter.calculateSwap (решение 73). Фабрика —
@@ -399,7 +401,7 @@ pub struct Family {
 
 impl Family {
     pub fn direct_module(&self) -> bool {
-        self.variant == Variant::SolidlyCl || self.proto == Proto::Elfomo
+        self.variant == Variant::SolidlyCl || matches!(self.proto, Proto::Elfomo | Proto::Lunar)
     }
 }
 
@@ -588,6 +590,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         ),
         // WooFi WooPPV2 (решение 122 F, 3): в графе и сигналах; своей математики нет (развёрнутый код закрыт) — котировка
         // по лесенке ответов квотера контракта (dex.pmm_ladder_usd, quote/pmm_ladder.rs); шага WOO нет до сухой сделки.
+        "lunarbase" => (PoolKind::OraclePmm, Proto::Lunar, true, false, false),
+        "lunarbase_module" => (PoolKind::OraclePmm, Proto::Lunar, true, true, true),
         "elfomofi_module" => (PoolKind::OraclePmm, Proto::Elfomo, true, true, true),
         "elfomofi" => (PoolKind::OraclePmm, Proto::Elfomo, true, false, false),
         "woofi_v2" => (PoolKind::OraclePmm, Proto::WooPP, true, false, false),
@@ -706,10 +710,10 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
         ));
     }
     if f.direct_module() && f.fork {
-        let kind = if f.proto == Proto::Elfomo {
-            "elfomofi"
-        } else {
-            "solidly_v3"
+        let kind = match f.proto {
+            Proto::Elfomo => "elfomofi",
+            Proto::Lunar => "lunarbase",
+            _ => "solidly_v3",
         };
         if ctx
             .chain_id()
@@ -953,6 +957,12 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // читаются).
         Proto::Wombat => list.extend(["dex.stable_pools", "dex.wombat_implementations"]),
         // WooFi: общий контракт, оракул и закреплённая реализация прокси (сменилась — семейство стоит до сверки).
+        Proto::Lunar => {
+            list.extend(["dex.pmm_pool", "dex.pool_implementation"]);
+            if f.fork {
+                list.push("dex.router");
+            }
+        }
         Proto::Elfomo => {
             list.extend([
                 "dex.pmm_pool",

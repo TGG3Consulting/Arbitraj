@@ -140,7 +140,8 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             | Proto::ListaStable
             | Proto::SaddleStable
             | Proto::WooPP
-            | Proto::Elfomo => stable_u.push(i),
+            | Proto::Elfomo
+            | Proto::Lunar => stable_u.push(i),
             Proto::Maverick => mav.push(i),
             Proto::InfinityStable => inf_stable.push(i),
             Proto::FluidT1 => fluid.push(i),

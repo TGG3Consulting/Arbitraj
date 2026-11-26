@@ -175,6 +175,7 @@ pub mod http_wait;
 pub mod index;
 pub mod load_aero_basic;
 pub mod load_ramses;
+pub mod lunar;
 pub mod quickswap_plugin;
 pub mod ramses;
 // Ревью t251 (решение 482): есть ли у DEX справочник индексатора.

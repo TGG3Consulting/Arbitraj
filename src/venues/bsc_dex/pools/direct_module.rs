@@ -10,11 +10,13 @@ use alloy_primitives::{Address, B256, Bytes, keccak256};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, sync::OnceLock};
 
-pub fn accepted(chain: u64, kind: &str) -> Option<B256> {
-    static ACCEPTED: OnceLock<BTreeMap<u64, BTreeMap<String, B256>>> = OnceLock::new();
-    ACCEPTED
+type Releases = BTreeMap<u64, BTreeMap<String, Vec<B256>>>;
+
+fn releases(chain: u64, kind: &str) -> Option<&'static Vec<B256>> {
+    static RELEASES: OnceLock<Releases> = OnceLock::new();
+    RELEASES
         .get_or_init(|| {
-            let mut out: BTreeMap<u64, BTreeMap<String, B256>> = BTreeMap::new();
+            let mut out = Releases::new();
             let Ok(rows) = serde_json::from_str::<Vec<Value>>(include_str!(
                 "../../../../config/first_run_dex.json"
             )) else {
@@ -28,14 +30,30 @@ pub fn accepted(chain: u64, kind: &str) -> Option<B256> {
                         .as_str()
                         .and_then(|s| s.parse().ok()),
                 ) {
-                    out.entry(chain).or_default().insert(kind.to_owned(), hash);
+                    let mut versions = vec![hash];
+                    if let Some(more) = r["verified_module"]["additional"].as_array() {
+                        versions
+                            .extend(more.iter().filter_map(|x| {
+                                x["runtime_keccak"].as_str()?.parse::<B256>().ok()
+                            }));
+                    }
+                    out.entry(chain)
+                        .or_default()
+                        .insert(kind.to_owned(), versions);
                 }
             }
             out
         })
         .get(&chain)?
         .get(kind)
-        .copied()
+}
+
+pub fn accepted(chain: u64, kind: &str) -> Option<B256> {
+    releases(chain, kind)?.first().copied()
+}
+
+pub fn accepts(chain: u64, kind: &str, hash: B256) -> bool {
+    releases(chain, kind).is_some_and(|xs| xs.contains(&hash))
 }
 
 pub fn market(ctx: &Ctx, entry: &Entry) -> GatewayResult<Address> {
@@ -44,6 +62,11 @@ pub fn market(ctx: &Ctx, entry: &Entry) -> GatewayResult<Address> {
             if *contract == elfomo::ROUTER =>
         {
             Ok(*contract)
+        }
+        (PoolRef::Contract(address), super::families::Proto::Lunar)
+            if *address == super::lunar::POOL =>
+        {
+            Ok(*address)
         }
         (PoolRef::Contract(address), super::families::Proto::Slipstream) => Ok(*address),
         _ => Err(ctx.err(
@@ -56,7 +79,7 @@ pub fn market(ctx: &Ctx, entry: &Entry) -> GatewayResult<Address> {
 pub async fn verify_code(ctx: &Ctx, kind: &str, addr: Address, tag: &Value) -> GatewayResult<()> {
     let expected = ctx
         .chain_id()
-        .and_then(|chain| accepted(chain, kind))
+        .and_then(|chain| releases(chain, kind))
         .ok_or_else(|| {
             ctx.err(
                 ErrorCode::NotApplicable,
@@ -64,7 +87,7 @@ pub async fn verify_code(ctx: &Ctx, kind: &str, addr: Address, tag: &Value) -> G
             )
         })?;
     let code: Bytes = rpc::call(ctx, "eth_getCode", json!([addr, tag])).await?;
-    if keccak256(code) != expected {
+    if !expected.contains(&keccak256(code)) {
         return Err(ctx.err(
             ErrorCode::InvalidAddress,
             format!("{kind}: код модуля расходится с принятой сборкой"),
@@ -74,6 +97,17 @@ pub async fn verify_code(ctx: &Ctx, kind: &str, addr: Address, tag: &Value) -> G
 }
 
 pub async fn verify(ctx: &Ctx, f: &Family, addr: Address, at: &str) -> GatewayResult<()> {
+    if f.proto == super::families::Proto::Lunar {
+        let tag = elfomo::block(ctx, at).await?;
+        super::lunar::verify_at(ctx, f.id, &tag).await?;
+        if !super::lunar::open(ctx, &tag, super::super::wallet::signer::address(ctx)?).await? {
+            return Err(ctx.err(
+                ErrorCode::NoRoute,
+                "LunarBase на паузе или срок цены оператора истёк",
+            ));
+        }
+        return verify_code(ctx, "lunarbase", addr, &tag).await;
+    }
     if f.proto == super::families::Proto::Elfomo {
         let tag = elfomo::block(ctx, at).await?;
         elfomo::verify_at(ctx, f.id, elfomo::ROUTER, &tag).await?;

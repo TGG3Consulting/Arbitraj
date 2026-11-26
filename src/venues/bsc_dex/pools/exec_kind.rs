@@ -415,6 +415,8 @@ mod tests {
             "kyber_elastic",
             "kyber_elastic_v1",
             "woofi_v2",
+            "lunarbase",
+            "lunarbase_module",
             "elfomofi",
             "elfomofi_module",
             "unsupported",

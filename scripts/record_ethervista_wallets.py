@@ -12,13 +12,15 @@ from record_base_slipstream_executor import ROOT, OWNER, call, calldata, rpc, si
 from record_ethereum_v2_factories import registry
 
 NETWORKS = {
-    "base": ("0x9c9dfc8b5d8f1cb1b7f854108db16be1c21ea400","0x018004f8b21b3511d98b1bbffaee034f58ae288e",
+    "base": ("0x9c9dfc8b5d8f1cb1b7f854108db16be1c21ea400","0x4aab7db193bf3d0083e9db51735ab3da0328c3d7",
              "0x4200000000000000000000000000000000000006","0x14ed3c77ea87fd259f590e3050a245adeb8c60131fe112f3a1610a316a5c076d",
              ["https://mainnet.base.org","https://base.gateway.tenderly.co","https://base-rpc.publicnode.com"]),
-    "ethereum": ("0x9a27cb5ae0b2cee0bb71f9a85c0d60f3920757b4","0xcedd366065a146a039b92db35756ecd7688fcc77",
+    "ethereum": ("0x9a27cb5ae0b2cee0bb71f9a85c0d60f3920757b4","0x9bd63c5d44ff28390df1eaafd4eb4bd73e94a72a",
                  "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2","0xe260b72768e8ec6814aa811c576f346d208ba00840f835949d65c6424ac80a8d",
-                 ["https://ethereum-rpc.publicnode.com","https://eth.drpc.org","https://ethereum.publicnode.com"]),
+                 ["https://eth.drpc.org","https://ethereum-rpc.publicnode.com","https://ethereum.publicnode.com"]),
 }
+PREVIOUS_ROUTERS = {"base":"0x018004f8b21b3511d98b1bbffaee034f58ae288e",
+                    "ethereum":"0xcedd366065a146a039b92db35756ecd7688fcc77"}
 MULTICALL = "0xca11bde05977b3631167028862be2a173976ca11"
 
 
@@ -55,7 +57,7 @@ def provenance(network,address,c):
     return dict(source=url,name=name,runtime_hash="0x"+keccak(bytes.fromhex(code[2:])).hex())
 
 
-def settlement(c,head,row,token,weth,router):
+def settlement(c,head,row,token,weth,router,previous):
     pool=row["pool"]
     at=int(head["timestamp"],16)
     ttl=at+120
@@ -109,6 +111,7 @@ def settlement(c,head,row,token,weth,router):
             raise ValueError("token or ETH buy delta incorrect")
         accepted=min_buy(total,volume)
         rec["buy_at_measured"]=execute([],accepted)
+        rec["previous_router_same_buy"]=execute([],dict(accepted,to=previous))
         rec["buy_min_plus_one"]=execute([],min_buy(total,volume+1))
         rec["buy_only_fee"]=execute([],min_buy(fee_in,1))
         if (rec["buy_at_measured"]["status"],rec["buy_min_plus_one"]["status"],rec["buy_only_fee"]["status"])!=("0x1","0x0","0x0"):
@@ -138,8 +141,11 @@ def settlement(c,head,row,token,weth,router):
 def directory(network,c,snapshot,head):
     factory,router,weth,init,_=NETWORKS[network]
     for target,sig,wanted in ((factory,"router()",router),(router,"factory()",factory),(router,"WETH()",weth)):
-        if c.one(target,sig,returns=["address"])!=(wanted,):
-            raise ValueError("factory's current router or router's origin changed")
+        found,=c.one(target,sig,returns=["address"])
+        if found!=wanted:
+            raise ValueError(f"{target} {sig}: expected {wanted}, received {found}")
+    previous=PREVIOUS_ROUTERS[network]
+    historical_binding,=c.one(previous,"factory()",returns=["address"])
     verified={a:provenance(network,a,c) for a in (factory,router)}
     (init_code,)=c.one(factory,"INIT_CODE_HASH()",returns=["bytes32"])
     if "0x"+init_code.hex()!=init:raise ValueError("registry and verified router init code disagree")
@@ -149,11 +155,12 @@ def directory(network,c,snapshot,head):
     attempts=[]
     for row in eligible:
         token,=[t for t in row["tokens"] if t!=weth]
-        res=settlement(c,head,row,token,weth,router)
+        res=settlement(c,head,row,token,weth,router,previous)
         attempts.append(dict(pool=row["pool"],token=token,**res))
         if len(res["swaps"])==2 and all("sell_same_wallet" in case for case in res["swaps"]):break
     return dict(network=network,block=snapshot["block"],selector=c.selector,state_root=head["stateRoot"],
-                factory=factory,router=router,weth=weth,init=init,verified=verified,registry=pools,
+                factory=factory,router=router,previous_router=previous,previous_router_factory=historical_binding,
+                weth=weth,init=init,verified=verified,registry=pools,
                 funded_native_pairs=len(eligible),observations=attempts)
 
 

@@ -445,7 +445,7 @@ mod tests {
             "lunarbase_module",
             "elfomofi",
             "elfomofi_module",
-            "virtuals_bonding", "virtuals_unicorn", "virtuals_bonding_module", "virtuals_unicorn_module",
+            "kyber_elastic_module", "virtuals_bonding", "virtuals_unicorn", "virtuals_bonding_module", "virtuals_unicorn_module",
             "unsupported",
         ];
         for k in DEX_KINDS {

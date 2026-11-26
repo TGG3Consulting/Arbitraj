@@ -1705,6 +1705,12 @@
       "dex.bonding_roles": [
         "0x8292b43ab73efac11faf357419c38acf448202c5 0xae4af78cace6bb2c428c8f5907582d2e9b64c4ddc7b7856619e6a180b2f4d470 0x3a75de22c7b41b71f2c077de56c9b5ca2454ae56 0xaa66bc55de0886f5baf8c979ef913310ff8e40f0910caf64bf1d7b6ddb2d04c6",
         "0xf66dea7b3e897cd44a5a231c61b6b4423d613259 0xe449f5082de7304dd17850793cb306f74849b4e30515c1db7bf3855f07333ad6 0xc9a91ccacfdc0001e2c41a56a75384598b70b89f 0xe2328c5e21a3b91dfe64a4c6ce9641b0e02d8bf3a9db203d3bd0aa24bc4568f8"
+      ],
+      "dex.module_runtime_hashes": [
+        "0xdc2280df198afc2be904a5f3f670d2b2b36f37e9b8e73240680a1aacbe4916c7"
+      ],
+      "dex.pmm_module_bindings": [
+        "0xdc2280df198afc2be904a5f3f670d2b2b36f37e9b8e73240680a1aacbe4916c7 7277 7203 7393"
       ]
     }
   },
@@ -1727,6 +1733,12 @@
       "dex.bonding_roles": [
         "0xbfce3fbe9ce3a19adb8dbb096ea2cb2bb1073f95 0xc15fdd762da443f873c6618f9192c6651bc4476551661b4d4a692881d4ee4987 0xa782902001f4e43405ee16a6ac6ef909623ab1c4 0x2c22aad7dbbc9d862f3ff5e6544045fa64052f7069a41a7dd5e05c56bfae463f",
         "0xa31bd6a0edbc4da307b8fa92bd6cf39e0fae262c 0x847451bca541370080cfd70bb7af50ded66e70833c3db4a0ad9352c95edaa532 0xd5e2309fce0484877f2727baaf50916a77f5ba63 0x1861477a20076f01a82fc4a97e82d75c9dec56d207bcfd9bb149b7a71eaa2d3f"
+      ],
+      "dex.module_runtime_hashes": [
+        "0xdc2280df198afc2be904a5f3f670d2b2b36f37e9b8e73240680a1aacbe4916c7"
+      ],
+      "dex.pmm_module_bindings": [
+        "0xdc2280df198afc2be904a5f3f670d2b2b36f37e9b8e73240680a1aacbe4916c7 8352 7764 7849"
       ]
     }
   },
@@ -1949,6 +1961,7 @@
     "settings": {
       "dex.kind": "elfomofi",
       "dex.module_runtime_hashes": [
+        "0xdc2280df198afc2be904a5f3f670d2b2b36f37e9b8e73240680a1aacbe4916c7",
         "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24",
         "0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403",
         "0xd3abddebdd155ff956b970579304da391511f945803c0ae5f1ec8f28c10a64bb"
@@ -1987,6 +2000,7 @@
         "3900"
       ],
       "dex.pmm_module_bindings": [
+        "0xdc2280df198afc2be904a5f3f670d2b2b36f37e9b8e73240680a1aacbe4916c7 290 5154",
         "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24 289 4473",
         "0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403 736 3407",
         "0xd3abddebdd155ff956b970579304da391511f945803c0ae5f1ec8f28c10a64bb 352 2111"
@@ -2270,6 +2284,7 @@
     "settings": {
       "dex.kind": "lunarbase",
       "dex.module_runtime_hashes": [
+        "0xdc2280df198afc2be904a5f3f670d2b2b36f37e9b8e73240680a1aacbe4916c7",
         "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24",
         "0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403"
       ],
@@ -2285,6 +2300,7 @@
         "0x3fecc332729c2ab166dd413d97200e2ab11953132c7fc8962aef3bc837c3ef6c"
       ],
       "dex.pmm_module_bindings": [
+        "0xdc2280df198afc2be904a5f3f670d2b2b36f37e9b8e73240680a1aacbe4916c7 78",
         "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24 78",
         "0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403 78"
       ]
@@ -2330,6 +2346,7 @@
     "settings": {
       "dex.kind": "baibai",
       "dex.module_runtime_hashes": [
+        "0xdc2280df198afc2be904a5f3f670d2b2b36f37e9b8e73240680a1aacbe4916c7",
         "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24"
       ],
       "dex.pmm_pool": "0x98c1d9e102eb2806d902b13186bdc7892ac4ffba",
@@ -2354,6 +2371,7 @@
         "0xf824799c1dba49382fb6da460837c833572d0eaa73d4db0f7df3daf0ab5de107"
       ],
       "dex.pmm_module_bindings": [
+        "0xdc2280df198afc2be904a5f3f670d2b2b36f37e9b8e73240680a1aacbe4916c7 3051 5831",
         "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24 2374 5150"
       ]
     },
@@ -3433,7 +3451,14 @@
       "dex.quoter": "0x94ddde405a00180891ed79dc1147f0d841c30d73",
       "dex.quoter_runtime_hash": "0x5faa19a79ab9d8f2a97c3d31f17d976ecedb1db2486e71eb1a59efde666dc343",
       "dex.tick_reader": "0x2e1cba4a9f6e69d27e65046fc93b873b05f79a39",
-      "dex.tick_reader_runtime_hash": "0x2d2f528bb488dfcc239adf96beb1a10a987f7669dcd41d24eb287e21894a9650"
+      "dex.tick_reader_runtime_hash": "0x2d2f528bb488dfcc239adf96beb1a10a987f7669dcd41d24eb287e21894a9650",
+      "dex.elastic_native_router": "0x99aec509174cbf06f8f7e15ddeeb7bcc32363827",
+      "dex.module_runtime_hashes": [
+        "0xdc2280df198afc2be904a5f3f670d2b2b36f37e9b8e73240680a1aacbe4916c7"
+      ],
+      "dex.pmm_module_bindings": [
+        "0xdc2280df198afc2be904a5f3f670d2b2b36f37e9b8e73240680a1aacbe4916c7 6945 2584"
+      ]
     }
   },
   {

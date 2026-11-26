@@ -75,6 +75,7 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
         if f.variant == Variant::ElasticV5 {
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             Box::pin(super::super::pools::elastic_binding::check(ctx,f,e.pool.reference.address(),at)).await?;
+            if f.tradable {super::super::pools::direct_module::verify_code(ctx,f.id,ctx.dex_addr("dex.router",f.id)?,at).await?;}
             continue;
         }
         if matches!(f.variant,Variant::BasePluginV1|Variant::TrebleIntegral) {

@@ -69,6 +69,10 @@ pub(super) fn verify(ctx: &Ctx, id: &str, code: &[u8], hash: B256) -> GatewayRes
             format!("{id}: модуль не связан с рабочим рынком и хранилищем"),
         )
     };
+    if kind=="kyber_elastic_module" {
+        let roles=[ctx.dex_addr("dex.factory",id)?,ctx.dex_addr("dex.elastic_native_router",id)?];
+        return bound(code,hash,&ctx.dex_list("dex.pmm_module_bindings",id)?,&roles).then_some(()).ok_or_else(wrong);
+    }
     if matches!(kind.as_str(),"virtuals_bonding_module" | "virtuals_unicorn_module") {
         let front=ctx.dex_list("dex.bonding_roles",id)?.get(1).and_then(|v|v.split_whitespace().next()).and_then(|v|v.parse().ok()).ok_or_else(wrong)?;
         let roles=[ctx.dex_addr("dex.factory",id)?,ctx.dex_addr("dex.quoter",id)?,front];
@@ -96,6 +100,29 @@ mod tests {
     use super::*;
     use alloy_primitives::keccak256;
     use serde_json::Value;
+    #[test]
+    fn virtuals_and_elastic_roles_are_bound_to_each_accepted_module() {
+        let archives:Value=serde_json::from_str(include_str!("../../../../tests/data/first_run_dex_2026-11-26/pmm_module_bindings.json")).unwrap();
+        let rows:Vec<Value>=serde_json::from_str(include_str!("../../../../config/first_run_dex.json")).unwrap();
+        for id in ["virtuals-base","virtuals-unicorn-base","horizondex-base"] {
+            let row=&rows.iter().find(|v|v["id"]==id && v["chain_id"]==8453).unwrap()["settings"];
+            let mut roles=vec![row["dex.factory"].as_str().unwrap().parse::<Address>().unwrap()];
+            if id=="horizondex-base" {
+                roles.push(row["dex.elastic_native_router"].as_str().unwrap().parse().unwrap());
+            }else{
+                roles.push(row["dex.quoter"].as_str().unwrap().parse().unwrap());
+                roles.push(row["dex.bonding_roles"][1].as_str().unwrap().split_whitespace().next().unwrap().parse().unwrap());
+            }
+            let bindings:Vec<String>=serde_json::from_value(row["dex.pmm_module_bindings"].clone()).unwrap();
+            for hash in row["dex.module_runtime_hashes"].as_array().unwrap() {
+                let h=hash.as_str().unwrap();
+                let code=hex::decode(archives["versions"][h]["runtime"].as_str().unwrap()).unwrap();
+                let hash=h.parse().unwrap();assert_eq!(hash,keccak256(&code));
+                assert!(bound(&code,hash,&bindings,&roles));
+                for n in 0..roles.len(){let mut changed=roles.clone();changed[n]=Address::with_last_byte(17);assert!(!bound(&code,hash,&bindings,&changed));}
+            }
+        }
+    }
     #[test]
     fn archived_modules_reject_a_new_market_or_wrong_vault() {
         let archives: Value = serde_json::from_str(include_str!(

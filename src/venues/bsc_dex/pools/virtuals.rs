@@ -40,7 +40,9 @@ macro_rules! views {
 
 fn open(raw: &Bytes, token: Address, pool: Address, unicorn: bool) -> bool {
     let word = |i: usize| raw.get(i * 32..(i + 1) * 32);
-    word(1) == Some(token.into_word().as_slice())
+    let offset = U256::from(if unicorn { 544 } else { 416 }).to_be_bytes::<32>();
+    word(4) == Some(offset.as_slice())
+        && word(1) == Some(token.into_word().as_slice())
         && word(2) == Some(pool.into_word().as_slice())
         && word(11) == Some(B256::with_last_byte(1).as_slice())
         && word(12) == Some(B256::ZERO.as_slice())

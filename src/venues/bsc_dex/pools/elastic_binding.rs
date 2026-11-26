@@ -31,7 +31,7 @@ pub(in crate::venues::bsc_dex) async fn check(
         )
     };
     let factory = super::solidly_classic_factory::at(ctx, f, tag).await?;
-    let router = ctx.dex_addr("dex.router", f.id)?;
+    let router = ctx.dex_addr(if f.tradable {"dex.elastic_native_router"}else{"dex.router"}, f.id)?;
     let quoter = ctx.dex_addr("dex.quoter", f.id)?;
     let reader = ctx.dex_addr("dex.tick_reader", f.id)?;
     for (address, key) in [

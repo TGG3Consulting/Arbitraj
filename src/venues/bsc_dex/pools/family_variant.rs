@@ -196,7 +196,7 @@ pub fn of(kind: &str) -> Variant {
         "lb_v21_clone" => Variant::LbV21Clone,
         "smardex_exact_equality" => Variant::SmardexExactEquality,
         "kyber_elastic_v1" => Variant::ElasticV1,
-        "kyber_elastic_v5" => Variant::ElasticV5,
+        "kyber_elastic_v5" | "kyber_elastic_module" => Variant::ElasticV5,
         "slipstream_aero" => Variant::SlipstreamAero,
         "slipstream_aero_metaquoter" => Variant::SlipstreamAeroMetaquoter,
         "slipstream_dynamic_fee" => Variant::SlipstreamDynamicFee,

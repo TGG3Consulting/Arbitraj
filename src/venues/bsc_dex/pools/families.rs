@@ -403,7 +403,7 @@ pub struct Family {
 
 impl Family {
     pub fn direct_module(&self) -> bool {
-        ((self.variant.wallet_module() || self.variant == Variant::Virtuals) && self.tradable)
+        ((self.variant.wallet_module() || matches!(self.variant,Variant::Virtuals | Variant::ElasticV5)) && self.tradable)
             || matches!(self.variant, Variant::SolidlyCl | Variant::BaseNativeV3)
             || matches!(self.proto, Proto::Elfomo | Proto::Lunar | Proto::BaiBai)
     }
@@ -484,6 +484,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // квотер — свои (не как Infinity/V4). Вид ядра — Cl, ссылка на пул — отдельный контракт (как V3).
         // Решение 451: kyber_elastic_v1 — тот же вид для развёртываний Elastic v1 (Arbitrum), отличие — правило шага
         // SwapMath (pools/family_variant.rs Variant::ElasticV1).
+        "kyber_elastic_module" => (PoolKind::Cl, Proto::KyberElastic, true, true, true),
         "kyber_elastic_v5" => (PoolKind::Cl, Proto::KyberElastic, true, false, false),
         "kyber_elastic" | "kyber_elastic_v1" => {
             (PoolKind::Cl, Proto::KyberElastic, true, false, true)
@@ -779,6 +780,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         list.extend(["dex.factory_runtime_hash","dex.pool_code_hashes","dex.plugin_runtime_hashes","dex.fusion_next_block_s"]);
     }
     if f.variant == super::family_variant::Variant::ElasticV5 {
+        if f.tradable {list.extend(["dex.elastic_native_router","dex.router","dex.module_runtime_hashes","dex.pmm_module_bindings"]);}
         list.extend(["dex.factory_runtime_hash", "dex.router_runtime_hash", "dex.quoter_runtime_hash", "dex.tick_reader_runtime_hash"]);
     }
     // Universal Router и Permit2 — только у НЕ-форка (поддержанного DEX): форк исполняется своим роутером (dex.router)

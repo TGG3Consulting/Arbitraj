@@ -292,9 +292,14 @@ def tables(network, snapshots, profiles):
                     "После перехода токена на внешний рынок прежняя ссылка Bonding перестаёт действовать. По каждой строке dex.bonding_roles указаны "
                     "прокси, хеш прокси, реализация и хеш реализации. Для Unicorn изучена привязка V4; архивный V2 остаётся без подтверждённого кошелькового рынка. "
                     "Основной вид считывает рынок. Для модульного режима владелец задаёт проверенный адрес dex.router и совместимый runtime. "
+                    "В GitHub 45911204066 на двух размерах 0,01/0,1 VIRTUAL фактически получено при обратной продаже 0,009801/0,09801 VIRTUAL до газа. "
+                    "Восемь обменов для каждого рынка, включая родные и защищённые, подтвердили дельты обычного кошелька и отказы min+1 и срока. "
+                    "На 0,01 VIRTUAL модуль расходовал 342271/316495 gas на Classic и 369928/331428 gas на Unicorn (купить/продать). "
+                    "[Выплаты Classic](../tests/data/first_run_dex_2026-11-26/virtuals-base-protected.json.gz) · "
+                    "[Выплаты Unicorn](../tests/data/first_run_dex_2026-11-26/virtuals-unicorn-base-protected.json.gz). "
                     "[Реестр Classic](../tests/data/first_run_dex_2026-11-26/virtuals-base-registry.json.gz) · "
                     "[Реестр Unicorn](../tests/data/first_run_dex_2026-11-26/virtuals-unicorn-base-registry.json.gz)."])
-        out.extend(["", "HorizonDEX на Base. Kyber Elastic V2, 132 границы в прочитанном списке, порция чтения 32, шаг цены 8, комиссия 40/100000. На блоке 62 262 756 официальный роутер и штатный V5 (шаг 8) дали одинаковые поступления. За 10¹² и 10¹³ wei WETH получены 1688 и 16888 raw USDbC, обратные продажи дали 998650431964 и 9991255908839 wei WETH. Все восемь обменов использовали полный вход. Порог выше на одну единицу и истёкший срок откатили каждый вариант. Штатный путь использует V5 с проверкой выплаты получателю. [Архив котировок, тиков и выплат](../tests/data/first_run_dex_2026-11-26/horizondex_base.json.gz)"])
+        out.extend(["", "HorizonDEX на Base. Kyber Elastic V2, 132 границы в прочитанном списке, порция чтения 32, шаг цены 8, комиссия 40/100000. На блоке 62 262 756 официальный роутер и штатный V5 (шаг 8) дали одинаковые поступления. За 10¹² и 10¹³ wei WETH получены 1688 и 16888 raw USDbC, обратные продажи дали 998650431964 и 9991255908839 wei WETH. Все восемь обменов использовали полный вход. Порог выше на одну единицу и истёкший срок откатили каждый вариант. Штатный путь использует V5 с проверкой выплаты получателю. При наличии отдельного проверенного модуля доступен kyber_elastic_module: dex.elastic_native_router хранит официальный роутер, dex.router — адрес модуля владельца. По 10¹² wei WETH покупка в архиве потребовала 127002 gas напрямую, 140243 через V5 и 189093 через защищённый BasePmmExecutor. Обратная продажа потребовала 112254, 125542 и 185575 gas соответственно. На этой выборке V5 экономит газ среди двух способов с полной проверкой. [Защищённые выплаты](../tests/data/first_run_dex_2026-11-26/horizon-protected.json.gz). [Архив котировок, тиков и выплат](../tests/data/first_run_dex_2026-11-26/horizondex_base.json.gz)"])
         oasis_file = "tests/data/first_run_dex_2026-11-26/oasisswap_base.json"
         oasis_v5_file = "tests/data/first_run_dex_2026-11-26/oasisswap_v5_base.json"
         oasis, oasis_v5 = read(Path(oasis_file)), read(Path(oasis_v5_file))
@@ -973,6 +978,15 @@ def tables(network, snapshots, profiles):
                    "Ставка читается для конкретного пула через factory.getFee(pool,stable). "
                    "[Реестр и ставки](../tests/data/first_run_dex_2026-11-26/ethereum_classic_registry_supernova-amm.json.gz) · "
                    "[Суммы и остатки](../tests/data/first_run_dex_2026-11-26/ethereum_classic_wallets_supernova-amm.json.gz).")
+        ep=Path("tests/data/first_run_dex_2026-11-26/ekubo_v2_ethereum_activity.json.gz")
+        with gzip.open(ep,"rt",encoding="utf8") as stream:
+            ev=json.load(stream)
+        trades=ev["swaps"]; stable_id=next(m["id"] for m in ev["markets"] if m["key"]["token1"]=="0xdac17f958d2ee523a2206206994597c13d831ec7")
+        stable=[s for s in trades if s["id"]==stable_id]
+        out.append(f"**Ekubo V2 Ethereum.** С блока {ev['window'][0]['number']} по {ev['window'][1]['number']} Core V2 выпустил {len(trades)} событий обмена в {len(ev['markets'])} пулах. "
+                   f"В USDC/USDT зарегистрировано {len(stable)} обменов. Оборот одной стороны составил {sum(abs(int(s['delta1'])) for s in stable)/1e6:,.6f} USDT. "
+                   "В конце окна у USDT→USDC доступный вход сократился до 0,023556 USDT. Официальный Router допускает полную заявку через одношаговый multihopSwap; независимый минимум проверяется по приросту баланса получателя. "
+                   f"[События, ключи и котировки](../{ep.as_posix()}) · [Контракты V2](https://docs.ekubo.org/reference/contracts/evm-v2/).")
         dx=read(Path("tests/data/first_run_dex_2026-11-26/deltaswap_ethereum.json"))["current"]
         x7=read(Path("tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json"))
         for key in ("x7-finance","x7-finance-ethereum"):

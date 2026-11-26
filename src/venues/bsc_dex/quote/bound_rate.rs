@@ -58,6 +58,11 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
             let rin=if s.balances[i]>s.reserves[i] {U256::ONE} else {s.reserves[i]};
             pair(s.reserves[1-i],U256::ONE,rin,U256::ONE)
         }
+        (PoolState::Virtuals(s),PoolKind::V2) => {
+            // Один атом входа способен получить остаток округления. Физическая выплата всегда ограничена активами пары.
+            let output=if token_in==s.asset {0}else{1};
+            pair(s.backing[output].min(s.reserves[output]),U256::ONE,U256::ONE,U256::ONE)
+        }
         (PoolState::EtherVista(s), PoolKind::V2) => {
             // Без фиксированной платы это верх курса для любого размера; её точная величина входит в quote.
             let (rin, rout) = if zfo { (s.reserve0,s.reserve1) } else { (s.reserve1,s.reserve0) };

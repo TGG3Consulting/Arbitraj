@@ -37,6 +37,9 @@ fn hydrex_executor_quotes_and_sender_specific_fee() {
     let mut special = 0;
     let number = |v: &Value| U256::from_str(v.as_str().unwrap()).unwrap();
     let markets = data["markets"].as_array().unwrap();
+    let sequential: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/hydrex_sequential_base.json"
+    )).unwrap();
     assert_eq!(markets.len(), 3);
     for m in markets {
         let mut ticks = BTreeMap::new();
@@ -63,6 +66,41 @@ fn hydrex_executor_quotes_and_sender_specific_fee() {
             next: NextTick::Linked,
         };
         let cases = m["cases"].as_array().unwrap();
+        if m["pool"] == sequential["pool"] {
+            use arb::core::types::PoolState;
+            use arb::venues::bsc_dex::quote::pool_after;
+            let mut entry = native_common::entry("algebra_integral_hydrex", Some(state.fee));
+            entry.pool.state = PoolState::Algebra {
+                sqrt_price_x96: state.sqrt_price, tick: state.tick, liquidity: state.liquidity,
+                fee: state.fee, fee_otz: None,
+            };
+            entry.ticks = Some(map.clone());
+            assert!(!pool_after::appliable(&entry));
+            let pairs = sequential["cases"].as_array().unwrap();
+            assert_eq!(pairs.len(), 4);
+            for c in pairs {
+                let logs = c["events"].as_array().unwrap();
+                let out = |after: &Value| {
+                    let next = AlgebraState {
+                        sqrt_price: number(&after["price"]),
+                        tick: after["tick"].as_i64().unwrap() as i32,
+                        liquidity: after["liquidity"].as_str().unwrap().parse().unwrap(),
+                        fee: state.fee, ticks: &map, next: NextTick::Linked,
+                    };
+                    let r = swap_algebra::swap(&next, c["zero_for_one"].as_bool().unwrap(), true, number(&c["dx"])).unwrap();
+                    assert!(r.complete);
+                    r.amount_out
+                };
+                assert_eq!(logs[0]["sender"], sequential["executor"]);
+                assert_ne!(logs[1]["sender"], sequential["executor"]);
+                assert_eq!(logs[2]["sender"], sequential["executor"]);
+                let second = number(&c["output"][1]);
+                assert_ne!(out(&logs[0]), second);
+                assert_eq!(out(&logs[1]), second);
+                assert_eq!(c["results"]["above"]["status"], "0x0");
+                assert_eq!(number(&c["results"]["exact"]["returnData"]), number(&c["output"][0]) + second);
+            }
+        }
         assert_eq!(cases.len(), 4);
         for case in cases {
             let amount = number(&case["dx"]);

@@ -223,6 +223,14 @@ def tables(network, snapshots, profiles):
                     "сторону соответственно хватило для измеренных объёмов. Общую настройку глубины "
                     "dex.integral_tick_steps для рабочего списка пулов задаёт владелец. "
                     f"[Фабрика, квотеры, карты тиков и исполнение](../{hydrex})."])
+        sequential = "tests/data/first_run_dex_2026-11-26/hydrex_sequential_base.json"
+        if Path(sequential).exists():
+            out.extend(["", "Hydrex WETH/USDC · в четырёх симуляциях две равные доли прошли через один пул "
+                        "в одном execute. Между долями плагин совершил собственный обмен. При двух входах по 1 USDC "
+                        "держатель получил 591 086 786 282 727 и 591 834 767 451 764 wei WETH. Одиночные проходы "
+                        "и сплиты с разными пулами доступны. Общий пул Hydrex между долями исключается до расчёта "
+                        "маршрута в graph_seq::unsupported по признаку pool_after::appliable. "
+                        f"[Доли, промежуточные состояния и суммы](../{sequential})."])
     saddle = "tests/data/first_run_dex_2026-11-26/saddle_ethereum.json"
     if not base and Path(saddle).exists():
         out.extend(["", "Saddle Finance · обследованы все 33 пула официального PoolRegistry на Ethereum. "

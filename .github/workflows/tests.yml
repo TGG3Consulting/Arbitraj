@@ -33,6 +33,10 @@ on:
         description: Quote both sides of all registered Ethereum CommunityV3 pools at the pinned block
         type: boolean
         default: false
+      whiteswap_archive_replay:
+        description: Compare funded Ethereum WhiteSwap EOA discounts and V5 wallet balances
+        type: boolean
+        default: false
       derpdex_archive_replay:
         description: Replay Base concentrated-liquidity markets and their native routers on the archived block
         type: boolean
@@ -205,6 +209,20 @@ jobs:
         with:
           name: base-native-v3-replay
           path: ${{ runner.temp }}/base-native-v3.json
+  whiteswap-archive:
+    if: inputs.whiteswap_archive_replay
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0
+      - run: python scripts/record_whiteswap_wallets.py "$RUNNER_TEMP/whiteswap-wallets.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: whiteswap-ethereum-wallets
+          path: ${{ runner.temp }}/whiteswap-wallets.json
   derpdex-archive:
     if: inputs.derpdex_archive_replay
     runs-on: ubuntu-latest

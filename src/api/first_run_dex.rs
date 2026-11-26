@@ -156,19 +156,23 @@ mod tests {
             ))
             .unwrap(),
         );
-        let registered: std::collections::BTreeMap<String, Value> = serde_json::from_str(
+        let markets = [
             include_str!("../../tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json"),
-        )
-        .unwrap();
-        for record in registered.values() {
-            pairs.extend(
-                record["samples"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .filter(|s| s["cases"].is_array())
-                    .cloned(),
-            );
+            include_str!("../../tests/data/first_run_dex_2026-11-26/base_v2_factories.json"),
+        ];
+        for raw in markets {
+            let registered: std::collections::BTreeMap<String, Value> =
+                serde_json::from_str(raw).unwrap();
+            for record in registered.values() {
+                pairs.extend(
+                    record["samples"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .filter(|s| s["cases"].is_array())
+                        .cloned(),
+                );
+            }
         }
         for p in all {
             let snapshot = [&base, &eth]

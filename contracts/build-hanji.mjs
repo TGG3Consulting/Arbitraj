@@ -16,7 +16,7 @@ const input = {
   sources: Object.fromEntries(files.map((path) => [path, { content: readFileSync(join(root, path), 'utf8').replace(/^\uFEFF/, '') }])),
   settings: {
     optimizer: { enabled: true, runs: 200 }, viaIR: true, evmVersion: 'cancun',
-    outputSelection: { '*': { '*': ['abi', 'evm.bytecode.object', 'evm.deployedBytecode.object', 'storageLayout'] } },
+    outputSelection: { '*': { '*': ['abi', 'evm.bytecode.object', 'evm.deployedBytecode.object', 'evm.deployedBytecode.immutableReferences', 'storageLayout'] } },
   },
 };
 const result = JSON.parse(solc.compile(JSON.stringify(input)));
@@ -30,4 +30,5 @@ mkdirSync(output, { recursive: true });
 writeFileSync(join(output, name + '.json'), JSON.stringify({
   solc: solc.version(), abi: contract.abi, creation: contract.evm.bytecode.object,
   runtime: contract.evm.deployedBytecode.object, storage: contract.storageLayout.storage,
+  ...(name === 'FraxswapAdapter' ? { immutableReferences: contract.evm.deployedBytecode.immutableReferences } : {}),
 }));

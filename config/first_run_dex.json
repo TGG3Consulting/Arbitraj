@@ -2531,5 +2531,112 @@
       "dex.v2_fee_source": "fixed",
       "dex.v2_fee_pct": "0.3"
     }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "9mm-v2-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x4c1b8d4ae77a37b94e195cab316391d3c687ebd1 · tests/data/first_run_dex_2026-11-26/base_v2_factories.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x4c1b8d4ae77a37b94e195cab316391d3c687ebd1",
+      "dex.pool_code_hashes": [
+        "0x6039d803db8e6f74aa7b5585b3209f67e1ebf47ee6c88fc044271912b14a862e"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.25"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "cbswap",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x0a1c657b839a7fe9a976ffd4ac5a1a363de3ee69 · tests/data/first_run_dex_2026-11-26/base_v2_factories.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x0a1c657b839a7fe9a976ffd4ac5a1a363de3ee69",
+      "dex.pool_code_hashes": [
+        "0x6cafacbf2b6f5a69d8ad06689a3f451265c7339e1f12ad71f478819a23f365d0"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "cloudbase",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x0dccfdf227c3f7b1e5d34b2488a7b0ca01d400a4 · tests/data/first_run_dex_2026-11-26/base_v2_factories.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x0dccfdf227c3f7b1e5d34b2488a7b0ca01d400a4",
+      "dex.pool_code_hashes": [
+        "0x7a1d6bc7df460b200a3b4ec03571f2d70efa35a1d13f3f117be42c20617cebb1"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "icecreamswap-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x9e6d21e759a7a288b80eef94e4737d313d31c13f · tests/data/first_run_dex_2026-11-26/base_v2_factories.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x9e6d21e759a7a288b80eef94e4737d313d31c13f",
+      "dex.pool_code_hashes": [
+        "0x58c1b429d0ffdb4407396ae8118c58fed54898473076d0394163ea2198f7c4a3"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "lfgswap-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xe5552e0318531f9ec585c83bdc8956c08bf74b71 · tests/data/first_run_dex_2026-11-26/base_v2_factories.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0xe5552e0318531f9ec585c83bdc8956c08bf74b71",
+      "dex.pool_code_hashes": [
+        "0xca97d699049b87540a23ade75d58fb29000ad13083c8eef7e5e0c6b5fb321180"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "robots-farm-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x77efb7acee1b0b4f26714c9a61c7de19c053e69f · tests/data/first_run_dex_2026-11-26/base_v2_factories.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2_live_fee",
+      "dex.factory": "0x77efb7acee1b0b4f26714c9a61c7de19c053e69f",
+      "dex.pool_code_hashes": [
+        "0xd69dc2bfd445f1d592eb6625bc257f5cc2b8dcedbeeabb447f1c08bd6e230554"
+      ],
+      "dex.v2_fee_source": "factory",
+      "dex.v2_fee_method": "getFeeForPair(address,address)",
+      "dex.v2_fee_denominator": 10000,
+      "dex.v2_fee_rule_hash": "0xb5f4be9ddefa648ddc9d9ed9090620590d03d2ac5499e2702240e0b7fc161267"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "treble-v2",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x6ae1d7efa0640b6a2fa393d1eff21fc38a08cd8f · tests/data/first_run_dex_2026-11-26/base_v2_factories.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x6ae1d7efa0640b6a2fa393d1eff21fc38a08cd8f",
+      "dex.pool_code_hashes": [
+        "0x530ed2b434e16939e3be04908dfed9fb565515cf8b41bf5e06faaec8c977a985"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
   }
 ]

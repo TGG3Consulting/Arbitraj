@@ -23,7 +23,7 @@ interface IFraxToken {
 
 contract FraxswapAdapter {
     // Устанавливается конструктором один раз. Фабрика проверяется при подключении конкретного адаптера.
-    IFraxRegistry public factory;
+    IFraxRegistry public immutable factory;
     bool transient private entered;
 
     constructor(IFraxRegistry registry) {

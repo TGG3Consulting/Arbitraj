@@ -38,7 +38,15 @@ fn rule_hash(
     Some(keccak256(rule))
 }
 
-fn fee_call(getter: &str, pool: Address) -> Option<Bytes> {
+#[derive(Clone, Copy)]
+pub(in crate::venues::bsc_dex) struct Market {
+    pub pool: Address,
+    pub tokens: (Address, Address),
+}
+
+fn fee_call(getter: &str, market: Market) -> Option<Bytes> {
+    use alloy::sol_types::SolValue;
+
     let (name, params) = getter.split_once('(')?;
     let mut letters = name.bytes();
     if !letters.next()?.is_ascii_alphabetic()
@@ -47,17 +55,15 @@ fn fee_call(getter: &str, pool: Address) -> Option<Bytes> {
         return None;
     }
     let selector = registry_key::selector(getter);
-    match params {
-        ")" => Some(selector),
-        "address)" => {
-            let mut call = Vec::with_capacity(36);
-            call.extend_from_slice(&selector);
-            call.extend_from_slice(&[0u8; 12]);
-            call.extend_from_slice(pool.as_slice());
-            Some(call.into())
-        }
-        _ => None,
-    }
+    let args = match params {
+        ")" => return Some(selector),
+        "address)" => market.pool.abi_encode(),
+        "address,address)" => market.tokens.abi_encode_params(),
+        _ => return None,
+    };
+    let mut call = selector.to_vec();
+    call.extend_from_slice(&args);
+    Some(call.into())
 }
 
 pub(in crate::venues::bsc_dex) struct Rate {
@@ -67,7 +73,9 @@ pub(in crate::venues::bsc_dex) struct Rate {
 }
 
 struct FeeRule {
-    factory: Option<Address>,
+    factory: Address,
+    factory_source: bool,
+    init: B256,
     getter: String,
     denominator: u64,
 }
@@ -82,37 +90,49 @@ impl FeeRule {
             .dex_text("dex.v2_fee_rule_hash", family.id)?
             .parse::<B256>()
             .map_err(|_| miss("dex.v2_fee_rule_hash не является keccak256"))?;
-        let actual = match (ctx.chain_id(), hashes.as_slice()) {
-            (Some(chain), [init]) => init
-                .parse::<B256>()
-                .ok()
-                .and_then(|h| rule_hash(chain, factory, h, &source, &getter, denominator)),
+        let init = match hashes.as_slice() {
+            [init] => init.parse::<B256>().ok(),
             _ => None,
-        };
+        }
+        .ok_or_else(|| miss("Требуется один хеш создания пары V2"))?;
+        let actual = ctx
+            .chain_id()
+            .and_then(|chain| rule_hash(chain, factory, init, &source, &getter, denominator));
         if actual != Some(configured) {
             return Err(miss(
                 "Сеть, фабрика, хеш создания пары или формула комиссии отличаются от подтверждения в dex.v2_fee_rule_hash",
             ));
         }
         Ok(Self {
-            factory: (source == "factory").then_some(factory),
+            factory,
+            factory_source: source == "factory",
+            init,
             getter,
             denominator,
         })
     }
-    fn at(&self, pool: Address) -> GatewayResult<Rate> {
+    fn at(&self, market: Market) -> GatewayResult<Rate> {
+        let (a, b) = market.tokens;
+        if a.is_zero()
+            || a >= b
+            || super::verify::v2_create2(self.factory, a, b, self.init) != market.pool
+        {
+            return Err(miss(
+                "Адрес пары не совпадает с CREATE2 текущих настроек фабрики V2",
+            ));
+        }
         Ok(Rate {
-            target: self.factory.unwrap_or(pool),
-            selector: fee_call(&self.getter, pool).ok_or_else(|| {
-                miss("Метод комиссии должен принимать адрес пары или не иметь аргументов")
+            target: if self.factory_source { self.factory } else { market.pool },
+            selector: fee_call(&self.getter, market).ok_or_else(|| {
+                miss("Метод комиссии должен принимать (), (address пары) или (address token0, address token1)")
             })?,
             denominator: self.denominator,
         })
     }
 }
 impl Rate {
-    pub fn configured(ctx: &Ctx, family: &Family, pool: Address) -> GatewayResult<Self> {
-        FeeRule::read(ctx, family)?.at(pool)
+    pub fn configured(ctx: &Ctx, family: &Family, market: Market) -> GatewayResult<Self> {
+        FeeRule::read(ctx, family)?.at(market)
     }
 
     pub fn call(&self) -> (Address, Bytes) {
@@ -123,7 +143,16 @@ impl Rate {
         if bytes.len() != 32 {
             return Err(miss("Ответ метода комиссии V2 не равен одному слову ABI"));
         }
-        verify_rules::v2_fee_pips(U256::from_be_slice(bytes), self.denominator).map_err(miss)
+        let value = U256::from_be_slice(bytes);
+        if value >= U256::from(self.denominator) {
+            return Err(miss("Комиссия V2 должна быть меньше 100%"));
+        }
+        if value * U256::from(1_000_000) % U256::from(self.denominator) != U256::ZERO {
+            return Err(miss(
+                "Комиссия V2 не представима целым числом миллионных долей",
+            ));
+        }
+        verify_rules::v2_fee_pips(value, self.denominator).map_err(miss)
     }
 }
 
@@ -188,7 +217,7 @@ async fn read_chunk(
 
 pub(super) async fn many(
     ctx: &Ctx,
-    pools: &[(usize, &Family, Address)],
+    pools: &[(usize, &Family, Market)],
     tag: &str,
     size: usize,
 ) -> Vec<GatewayResult<Loaded>> {
@@ -209,7 +238,10 @@ pub(super) async fn many(
                 .as_ref()
                 .map_err(Clone::clone)?;
             let rate = rule.at(*a)?;
-            let ri = reads.index((*a, Bytes::from(IV2Pair::getReservesCall {}.abi_encode())));
+            let ri = reads.index((
+                a.pool,
+                Bytes::from(IV2Pair::getReservesCall {}.abi_encode()),
+            ));
             let fi = reads.index(rate.call());
             Ok((ri, fi, rate))
         })
@@ -248,8 +280,13 @@ pub(super) async fn many(
         .collect()
 }
 
-pub(super) async fn load(ctx: &Ctx, f: &Family, pool: Address, tag: &str) -> GatewayResult<Loaded> {
-    many(ctx, &[(0, f, pool)], tag, 2)
+pub(super) async fn load(
+    ctx: &Ctx,
+    f: &Family,
+    market: Market,
+    tag: &str,
+) -> GatewayResult<Loaded> {
+    many(ctx, &[(0, f, market)], tag, 2)
         .await
         .pop()
         .ok_or_else(|| miss("Нет результата чтения V2"))?
@@ -258,6 +295,53 @@ pub(super) async fn load(ctx: &Ctx, f: &Family, pool: Address, tag: &str) -> Gat
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn pair_and_tokens_fee_calls_encode_the_registered_market() {
+        use alloy::sol_types::SolValue;
+        let factory = Address::repeat_byte(1);
+        let init = B256::repeat_byte(3);
+        let tokens = (Address::repeat_byte(2), Address::repeat_byte(4));
+        let pool = super::super::verify::v2_create2(factory, tokens.0, tokens.1, init);
+        let market = Market { pool, tokens };
+        let getter = "getFeeForPair(address,address)";
+        let rule = FeeRule {
+            factory,
+            init,
+            getter: getter.to_owned(),
+            factory_source: true,
+            denominator: 10_000,
+        };
+        let rate = rule.at(market).unwrap();
+        let (target, calldata) = rate.call();
+        assert_eq!(target, factory);
+        assert_eq!(&calldata[..4], registry_key::selector(getter).as_ref());
+        assert_eq!(&calldata[4..], tokens.abi_encode_params());
+        assert_eq!(rate.decode(&U256::from(25).abi_encode()).unwrap(), 2500);
+        assert!(
+            rule.at(Market {
+                pool: factory,
+                ..market
+            })
+            .is_err()
+        );
+        assert!(
+            rule.at(Market {
+                pool,
+                tokens: (tokens.1, tokens.0)
+            })
+            .is_err()
+        );
+        assert_eq!(
+            &fee_call("getFeeForPair(address)", market).unwrap()[4..],
+            pool.abi_encode()
+        );
+        let inexact = Rate {
+            denominator: 3,
+            ..rate
+        };
+        assert!(inexact.decode(&U256::from(1).abi_encode()).is_err());
+    }
+
     #[test]
     fn shared_factory_fee_is_read_once_and_other_targets_keep_their_own_indexes() {
         let factory = Address::repeat_byte(1);

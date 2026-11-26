@@ -111,10 +111,16 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
         ))
         .unwrap(),
     );
-    let factories: serde_json::Map<String, Value> = serde_json::from_str(include_str!(
+    let mut factories: serde_json::Map<String, Value> = serde_json::from_str(include_str!(
         "data/first_run_dex_2026-11-26/ethereum_v2_factories.json"
     ))
     .unwrap();
+    factories.extend(
+        serde_json::from_str::<serde_json::Map<String, Value>>(include_str!(
+            "data/first_run_dex_2026-11-26/base_v2_factories.json"
+        ))
+        .unwrap(),
+    );
     let mut pool_count = 0;
     for (id, market) in &factories {
         let factory = market["factory"].as_str().unwrap().parse().unwrap();
@@ -141,13 +147,23 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
             .as_array()
             .unwrap()
             .iter()
-            .find(|s| s["cases"].is_array())
-            .unwrap();
+            .find(|s| s["cases"].is_array());
+        let Some(sample) = sample else {
+            assert_eq!(id, "bakeryswap-base");
+            assert!(
+                market["samples"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|s| s["reason"].is_string())
+            );
+            continue;
+        };
         assert_eq!(sample["dex"], id.as_str());
         assert_eq!(sample["block_hash"], market["selector"]["blockHash"]);
         captures.push(sample.clone());
     }
-    assert_eq!(pool_count, 72);
+    assert_eq!(pool_count, 781);
     let profiles: Vec<Value> =
         serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
     let mut admitted = 0;
@@ -157,6 +173,7 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
             s.contains("base_ethereum_v2_probes.json")
                 || s.contains("base_ethereum_v2_variable_fees.json")
                 || s.contains("ethereum_v2_factories.json")
+                || s.contains("base_v2_factories.json")
         })
     }) {
         let capture = captures
@@ -285,6 +302,13 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
         "justmoney-ethereum",
         "verse",
         "spice_trade_ethereum",
+        "9mm-v2-base",
+        "cbswap",
+        "cloudbase",
+        "icecreamswap-base",
+        "lfgswap-base",
+        "robots-farm-base",
+        "treble-v2",
     ] {
         assert!(
             verified_boundaries.contains(dex),

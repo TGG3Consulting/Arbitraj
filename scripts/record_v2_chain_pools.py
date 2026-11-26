@@ -161,7 +161,9 @@ def measure(row, chain, endpoint=None):
             return simulate_block(url,tag,overrides,calls)
         pos=simulate(positive)
         if not all(int(c["status"],16)==1 for c in pos):
-            raise ValueError("не прошёл полный круг: "+str(next(c.get("error") for c in pos if int(c["status"],16)!=1))[:100])
+            step=next(i for i,c in enumerate(pos) if int(c["status"],16)!=1)
+            labels=("fund","approve_buy","buy","buy_balance","approve_sell","sell","sell_balance","wallet_rest","executor_out","executor_in")
+            raise ValueError(f"{labels[step]} input={amount}, simulated error {str(pos[step].get('error'))[:140]}")
         if [int(pos[i]["returnData"],16) for i in (3,6,7,8,9)]!=[bought,sold,0,0,0]:
             raise ValueError("фактические балансы не равны формуле V2")
         strict=[simulate(prefix+[mk(1)])[-1],simulate(prefix+[buy,approve(other,bought),swap(pool,other,weth,bought,sold+1,deadline,pips)])[-1]]

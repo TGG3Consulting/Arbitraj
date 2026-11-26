@@ -89,7 +89,14 @@ pub async fn states(
             continue;
         }
         match w.reference {
-            PoolRef::Contract(pool) => live.push((index, w.family, *pool)),
+            PoolRef::Contract(pool) => live.push((
+                index,
+                w.family,
+                super::v2_live_fee::Market {
+                    pool: *pool,
+                    tokens: (w.token0, w.token1),
+                },
+            )),
             _ => out[index] = Some(Err(miss("Нет адреса пары V2"))),
         }
     }

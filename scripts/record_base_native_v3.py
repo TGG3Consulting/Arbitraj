@@ -123,11 +123,24 @@ def collect(snapshot, endpoint, module_code=None):
             answers,=decode(["(bool,bytes)[]"],bytes.fromhex(bundled["returnData"][2:]))
             if not all(ok for ok,_ in answers[:3]) or [decode(["address"],v)[0] for _,v in answers[:3]]!=[factory,factory,pool]:
                 raise ValueError("checked native quoter points to another factory or pool")
-            if direct["gas"]==packed["gas"] or replies[-1]["status"]=="0x1":
-                if answers[3][0]!=(replies[-1]["status"]=="0x1") or (answers[3][0] and answers[3][1].hex()!=replies[-1]["returnData"][2:]):
-                    raise ValueError("checked and direct quotes disagreed at matching state and gas")
+            # QuoterV2 returns (amountOut, sqrtPriceAfter, initializedTicksCrossed, gasEstimate).
+            # Multicall warms the pool while checking its factory; measured gas may therefore differ.
+            direct_ok=replies[-1]["status"]=="0x1"
+            direct_estimate=checked_estimate=None
+            if direct_ok:
+                if not answers[3][0]:
+                    raise ValueError(f"{name} {a} input={amount}: direct succeeded, checked call reverted")
+                types=["uint256","uint160","uint32","uint256"]
+                direct_quote=decode(types,bytes.fromhex(replies[-1]["returnData"][2:]))
+                checked_quote=decode(types,answers[3][1])
+                if direct_quote[:3]!=checked_quote[:3]:
+                    raise ValueError(f"{name} {a} input={amount}: output, price or ticks differ")
+                direct_estimate,checked_estimate=direct_quote[3],checked_quote[3]
+            elif direct["gas"]==packed["gas"] and answers[3][0]:
+                raise ValueError(f"{name} {a} input={amount}: only checked call succeeded at same budget")
 
-            row = dict(input=a, output=b, requested=str(amount), gas_limit=gas, checked_factory=factory, checked_pool=pool, checked_ok=answers[3][0], checked_gas=int(bundled["gasUsed"],16))
+            row = dict(input=a, output=b, requested=str(amount), gas_limit=gas, checked_factory=factory, checked_pool=pool, checked_ok=answers[3][0], checked_gas=int(bundled["gasUsed"],16),
+                       direct_quote_gas_estimate=direct_estimate,checked_quote_gas_estimate=checked_estimate)
             if any(r["status"] != "0x1" for r in replies[:-1]):
                 raise ValueError("funding, previous trade or approval reverted before quote")
             q = output(replies[-1],4)

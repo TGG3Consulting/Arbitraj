@@ -623,7 +623,16 @@ pub async fn state(
     }
     match (f.kind, reference) {
         (PoolKind::V2, PoolRef::Contract(a)) if f.variant == Variant::V2Create2LiveFee => {
-            super::v2_live_fee::load(ctx, f, *a, &tag).await
+            super::v2_live_fee::load(
+                ctx,
+                f,
+                super::v2_live_fee::Market {
+                    pool: *a,
+                    tokens: pair,
+                },
+                &tag,
+            )
+            .await
         }
         (PoolKind::V2, PoolRef::Contract(a)) => Ok(Loaded {
             state: load_v2v3::v2(ctx, *a, &tag).await?,

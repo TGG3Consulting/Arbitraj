@@ -62,6 +62,12 @@ def origin(name,factory,c):
 
 
 def directory(name,c,*,config=None,network="ethereum",proof=None,wrapped=WETH,stables=STABLES,funding_router=FUNDING):
+    # Distinguish an unavailable historical EVM from a failed token or swap.
+    frame,=rpc(c.endpoint,"eth_simulateV1",[{"blockStateCalls":[{"calls":[{
+        "to":wrapped,"data":"0x313ce567"}]}],"validation":False},c.selector])
+    if (frame["parentHash"]!=c.selector["blockHash"] or frame["calls"][0]["status"]!="0x1"
+            or decode(["uint8"],raw(frame["calls"][0]["returnData"]))[0]!=18):
+        raise ValueError("archive cannot simulate WETH decimals on the canonical parent")
     factory,den,fee,reason=config or FACTORIES[name]
     proof=proof or origin(name,factory,c)
     total,=c.one(factory,"allPairsLength()",returns=["uint256"])
@@ -85,12 +91,13 @@ def directory(name,c,*,config=None,network="ethereum",proof=None,wrapped=WETH,st
     for row in rows:
         if any(decode(["address"],next(checks))[0]!=row["pool"] for _ in (0,1)):
             raise ValueError("getPair failed for "+row["pool"])
+    candidates=[]
     for asset in (wrapped,*stables):
-        available=[r for r in rows if asset in r["tokens"] and min(map(int,r["reserves"]))>0]
-        if available:break
-    ordered=sorted(available,key=lambda r:-int(r["reserves"][r["tokens"].index(asset)]))
+        matching=[r for r in rows if asset in r["tokens"] and min(map(int,r["reserves"]))>0]
+        matching.sort(key=lambda r:-int(r["reserves"][r["tokens"].index(asset)]))
+        candidates.extend((asset,row) for row in matching)
     examples=[]
-    for row in ordered:
+    for asset,row in candidates:
         pool=row["pool"]
         code=rpc(c.endpoint,"eth_getCode",[pool,c.selector])
         entry=dict(network=network,dex=name,pool=pool,tokens=row["tokens"],factory=factory,
@@ -112,7 +119,7 @@ def directory(name,c,*,config=None,network="ethereum",proof=None,wrapped=WETH,st
                 raise RuntimeError("executor capture and registry refer to different blocks")
             replay=measure(entry,chain,endpoint=c.endpoint)
         except (ValueError,KeyError) as error:
-            examples.append(dict(pool=pool,reason=str(error)[:250]))
+            examples.append(dict(pool=pool,funded_asset=asset,reason=str(error)[:250]))
             continue
         examples.append(replay)
         break

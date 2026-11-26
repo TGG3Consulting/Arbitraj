@@ -178,7 +178,7 @@ async fn current_rate_simulation(
     amount: U256,
     number: u64,
 ) -> GatewayResult<(Vec<simulate::CallResult>, (U256, U256))> {
-    use super::super::pools::v2_live_fee::Rate;
+    use super::super::pools::v2_live_fee::{Market, Rate};
     #[derive(serde::Deserialize)]
     struct Parent {
         hash: B256,
@@ -193,7 +193,14 @@ async fn current_rate_simulation(
     if parent.number != U64::from(number) {
         return Err(ctx.err(ErrorCode::BadResponse, "Неверная высота блока V2"));
     }
-    let rate = Rate::configured(ctx, e.family, pair(ctx, e)?)?;
+    let rate = Rate::configured(
+        ctx,
+        e.family,
+        Market {
+            pool: pair(ctx, e)?,
+            tokens: (e.pool.token0, e.pool.token1),
+        },
+    )?;
     let (to, input) = rate.call();
     let mut fresh = e.clone();
     for _ in 0..2 {

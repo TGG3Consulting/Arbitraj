@@ -1044,11 +1044,11 @@
   {
     "network": "base",
     "dex": "rubicon-base",
-    "pool": "0xa883c11a3742f74f0b29750764146e8675306e24",
+    "pool": "0xd5263846ab79424cd329c23a9b365d3df7781f4d",
     "factory": "0xa5ca8ba2e3017e9af3bd9eda69e9e8c263abf6cd",
     "tokens": [
-      "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-      "0xb3836098d1e94ec651d74d053d4a0813316b2a2f"
+      "0x4200000000000000000000000000000000000006",
+      "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
     ],
     "match": "exact_match",
     "runtime_match": true,
@@ -1059,7 +1059,71 @@
       1000,
       3
     ],
-    "reason": "у выборочной пары нет WETH для измеряемого пополнения"
+    "verified_source_pair": "0xa883c11a3742f74f0b29750764146e8675306e24",
+    "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "reserves": [
+      "183705725869621",
+      "312100"
+    ],
+    "pips": 3000,
+    "cases": [
+      {
+        "in": "18370572586",
+        "bought": "31",
+        "returned": "18194047871",
+        "buy_return": "31",
+        "sell_return": "18194047871",
+        "observed_balances": [
+          "31",
+          "18194047871",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      },
+      {
+        "in": "367411451739",
+        "bought": "621",
+        "returned": "365162352833",
+        "buy_return": "621",
+        "sell_return": "365162352833",
+        "observed_balances": [
+          "621",
+          "365162352833",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      }
+    ],
+    "creation_code_hash": "0x79cb29831f0abd24ae48de6fa5dc9eb647f10df38618ed09b70b2044d35dfba5",
+    "factory_proof": {
+      "source": "https://sourcify.dev/server/v2/contract/8453/0xa5ca8ba2e3017e9af3bd9eda69e9e8c263abf6cd",
+      "verified": "exact_match",
+      "contract": "contracts/core/AquilaFactory.sol:AquilaFactory",
+      "runtime_hash": "0xe74ca32bf656e2ee7a8e0ba6aa59ec43d86fc7b51fb428763ba0bed09cf47aac",
+      "embedded_pair": true
+    }
   },
   {
     "network": "ethereum",

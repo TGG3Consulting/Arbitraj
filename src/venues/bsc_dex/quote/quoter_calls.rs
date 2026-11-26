@@ -44,6 +44,9 @@ pub fn request(
     token_in: Address,
     amount: U256,
 ) -> GatewayResult<(Address, Bytes)> {
+    if e.family.variant==super::super::pools::family_variant::Variant::MintClub {
+        return super::super::pools::mint_club::quote(ctx,e,token_in,amount);
+    }
     if e.family.variant==super::super::pools::family_variant::Variant::Virtuals {
         return super::super::pools::virtuals::quote(ctx,e,token_in,amount);
     }
@@ -55,9 +58,9 @@ pub fn request(
     } else {
         e.pool.token0
     };
-    if e.family.variant == super::super::pools::family_variant::Variant::Memebox {
+    if e.family.variant == super::super::pools::family_variant::Variant::Memebox || (e.family.variant==super::super::pools::family_variant::Variant::CandySwap && e.family.tradable) {
         if token_in!=e.pool.token0 && token_in!=e.pool.token1 {
-            return Err(ctx.err(ErrorCode::InvalidAddress,"Memebox: вход отсутствует в паре"));
+            return Err(ctx.err(ErrorCode::InvalidAddress,"Вход в модуль отсутствует в паре"));
         }
         return Ok((ctx.dex_addr("dex.router",e.family.id)?,super::super::pools::memebox::calldata(token_in,token_out,amount)));
     }
@@ -522,6 +525,9 @@ pub fn request(
 
 /// Выход из ответа квотера. None — ответ не по ABI.
 pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> Option<U256> {
+    if e.family.variant==super::super::pools::family_variant::Variant::MintClub {
+        return super::super::pools::mint_club::payout(e,token_in,amount,out);
+    }
     if e.family.variant==super::super::pools::family_variant::Variant::Virtuals {
         return super::super::pools::virtuals::decode(e,out,token_in);
     }
@@ -574,7 +580,7 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     if e.family.variant==super::super::pools::family_variant::Variant::BunnySwap {
         return super::super::pools::bunnyswap::decode(e,out);
     }
-    if e.family.variant == super::super::pools::family_variant::Variant::Memebox {
+    if e.family.variant == super::super::pools::family_variant::Variant::Memebox || (e.family.variant==super::super::pools::family_variant::Variant::CandySwap && e.family.tradable) {
         return super::super::pools::memebox::decode(out);
     }
     if matches!(&e.pool.state, PoolState::EtherVista(_)) {

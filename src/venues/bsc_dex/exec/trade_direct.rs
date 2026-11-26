@@ -81,6 +81,10 @@ pub async fn trade(
         usdt_dec: decs.1,
     };
     let is_native = native::is_native(ctx, &req.asset);
+    if leg.hops.iter().any(|h|q.reg.entry(&h.pool).is_some_and(|e|super::mint_club_direct::enabled(&e))) &&
+       (leg.hops.len()!=1 || route.legs.len()!=1 || route.mode!=crate::core::types::RouteMode::Direct || is_native || native::cash(ctx,&ctx.text("venue.quote_asset")?,usdt)) {
+        return Err(ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Mint Club: требуется прямая сделка ERC20 владельца"));
+    }
     let mut prep = prepare(&v, &req, leg, graph_mins.as_deref(), decs, is_native).await?;
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
@@ -135,6 +139,7 @@ pub async fn trade(
         );
         sc.vista = super::vista_direct::proof(&p);
         sc.ekubo=p.ekubo_proof();
+        if let Some(super::plan::DirectCall::MintClub(call))=p.direct_market(){ sc.mint_club=Some(super::mint_club_fact::Proof{call,bond:p.router,payer:wallet}); }
         let min_out = p.min_total();
         let d = super::settlement_swap::with_parse(&sc, send_swap(env, &slot, p, guard))
             .await
@@ -157,6 +162,9 @@ pub async fn trade(
                 .await
                 .map_err(|e| sc.attach(e.with_tx(d.chain.clone())))?;
         }
+        if let Some(proof)=&sc.mint_club && let Some(receipt)=&d.receipt && receipt.status.to::<u64>()==1 {
+            proof.included(ctx,d.chain.hash,receipt).await.map_err(|e|sc.attach(e.with_tx(d.chain.clone())))?;
+        }
         if let Some(proof)=&sc.ekubo && let Some(receipt)=&d.receipt && receipt.status.to::<u64>()==1 {
             proof.included(ctx,d.chain.hash,receipt).await.map_err(|e|sc.attach(e.with_tx(d.chain.clone())))?;
         }
@@ -168,7 +176,7 @@ pub async fn trade(
             (tin, out_token),
             decs,
             router.as_slice(),
-            sc.vista.as_ref(),sc.ekubo.as_ref(),
+            sc.vista.as_ref(),sc.ekubo.as_ref(),sc.mint_club.as_ref(),
         )
         .map_err(|e| sc.attach(e))?;
         // Решение 177: «продажа по квотеру» — в хронологию сделки (exec/result.rs by допишет её к исполнителю).
@@ -190,6 +198,10 @@ async fn build(
     wallet: alloy_primitives::Address,
 ) -> GatewayResult<(Plan, Base)> {
     let (at, now) = sim_base::head(&q.ctx, &q.heads).await?;
+    if let ([s],[hop])=(prep.steps.as_slice(),prep.path.hops.as_slice()) && super::mint_club_direct::enabled(&s.entry) {
+        let p=Box::pin(super::mint_club_direct::path_plan(&q.ctx,s,hop,wallet,at.number)).await?;
+        return Ok((p,at));
+    }
     let p = plan::build(&q.ctx, &prep.steps, wallet, now, false)
         .await?
         .with_native(prep.wrap);

@@ -177,6 +177,17 @@ pub fn shape(e: &Entry) -> Result<(ExecKind, Address, Address), String> {
 pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params, Address)> {
     let (k, pool) =
         supported(e.family, &e.pool.reference).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?;
+    if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::CandySwap {
+        let PoolState::CandySwap(s)=&e.pool.state else {return Err(ctx.err(ErrorCode::NoRoute,"CandySwap: состояние пары не установлено"));};
+        if token_in!=e.pool.token0 && token_in!=e.pool.token1 {return Err(ctx.err(ErrorCode::NoRoute,"CandySwap: неизвестный вход"));}
+        let i=usize::from(token_in!=e.pool.token0);
+        if k==ExecKind::Basin && e.family.tradable {
+            return Ok((Params::Basin,ctx.dex_addr("dex.router",e.family.id)?));
+        }
+        if k!=ExecKind::V2 || s.balances[i]>s.reserves[i] {
+            return Err(ctx.err(ErrorCode::NoRoute,"CandySwap: для избыточного входного остатка требуется модуль с учётом средств плательщика"));
+        }
+    }
     if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::RegisteredV3 {
         // Wire 17 takes a bytes32 poolId. Its destination is the factory-bound module and
         // its right-aligned id is the exact V3 pool. Balancer pool state is decoded below.

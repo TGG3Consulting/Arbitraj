@@ -38,6 +38,9 @@ pub fn swap_topics() -> [B256; 6] {
 
 /// Выпустил ли этот пул событие обмена. Ошибок нет.
 pub fn by_pool(e: &Entry, log: &SimLog) -> bool {
+    if let crate::core::types::PoolState::MintClub(state)=&e.pool.state {
+        return e.pool.reference==PoolRef::Contract(state.token) && super::super::pools::mint_club::emitted(state,log);
+    }
     if super::super::quote::ekubo_v2_pricing::enabled(e) && let PoolRef::Singleton{manager,id}=e.pool.reference {
         return manager==log.address && log.topics.is_empty() && super::super::pools::abi_ekubo::decode_swap_log(&log.data).is_some_and(|r|r.0==id);
     }

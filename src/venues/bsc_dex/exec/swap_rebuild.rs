@@ -101,7 +101,7 @@ pub fn rebuild(
             tokens,
             decs,
             &c.native_routers,
-            c.vista.as_ref(),c.ekubo.as_ref(),
+            c.vista.as_ref(),c.ekubo.as_ref(),c.mint_club.as_ref(),
         ),
     };
     // Решение 177: пометка «по квотеру» — как в пути (trade_direct.rs, executor/trade.rs: r.executor = note).

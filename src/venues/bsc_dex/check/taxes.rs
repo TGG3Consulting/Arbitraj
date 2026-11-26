@@ -181,7 +181,7 @@ async fn run(
                 Ok(None)
             )
         };
-        let source = match quote_source(ctx, reg, sources, e.usdt, exclude, amount, deep).await {
+        let source = match if super::super::exec::mint_club_direct::enabled(e){Ok(Some(wallet))}else{quote_source(ctx, reg, sources, e.usdt, exclude, amount, deep).await} {
             Ok(Some(s)) => s,
             Ok(None) => {
                 env.push(format!(

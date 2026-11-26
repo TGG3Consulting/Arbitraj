@@ -61,6 +61,7 @@ use super::verify_solidly::registry_call;
 pub enum Q {
     /// V2 и форки V2: getPair(a, b).
     V2,
+    MintClub {token:Address,reserve:Address},
     /// V3 (ABI PancakeSwap / Uniswap, форки V3): getPool(a, b, fee).
     V3(u32),
     /// Solidly: v1 = false — getPool(a, b, stable) (Velodrome), v1 = true — getPair(a, b, stable) (THENA V1).
@@ -107,6 +108,7 @@ impl Q {
     /// Имя вызова для заметок прохода. Ошибок нет.
     pub fn name(self) -> &'static str {
         match self {
+            Q::MintClub{..} => "tokenBond",
             Q::V2 => "getPair",
             Q::V3(_) => "getPool",
             Q::Solidly { v1: false, .. } => "getPool(stable)",
@@ -134,6 +136,7 @@ impl Q {
 /// Данные вызова вопроса. Принимает: вид вопроса, монету, встречный токен. Ошибок нет.
 pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
     match q {
+        Q::MintClub{token,..} => super::mint_club::IBond::tokenBondCall{token}.abi_encode().into(),
         Q::V2 => encode(coin, quote, None),
         Q::V3(fee) => encode(coin, quote, Some(fee)),
         Q::Solidly { v1, stable } => registry_call(v1, coin, quote, stable),
@@ -239,6 +242,7 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
 /// пула нет) или текст «ответ не по ABI». Ошибок нет.
 pub fn decode_q(q: Q, out: &[u8]) -> Result<Vec<Address>, String> {
     let list = match q {
+        Q::MintClub{token,reserve} => super::mint_club::listed(token,reserve,out)?,
         Q::V2 => vec![decode(None, out)?],
         Q::V3(fee) => vec![decode(Some(fee), out)?],
         // Ответ getPool и getPair(stable) — один address: разбор одинаков.

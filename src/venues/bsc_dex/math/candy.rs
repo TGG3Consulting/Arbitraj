@@ -60,7 +60,7 @@ pub(crate) fn quote(
     ))
 }
 
-/// V5 §_v2Out считает приход по балансу пары. При повторе остаток меняется на gross.
+/// Расход плательщика покрывает дефицит резерва. Чужой прежний остаток не оплачивает его обмен.
 pub(crate) fn funded(
     market: &crate::core::types::CandySwapState,
     zero_in: bool,
@@ -80,12 +80,10 @@ pub(crate) fn funded(
         let needed = quote(rin, rout, fee, market.payout_bps, false, amount)?
             .0
             .amount_in;
-        rin.checked_add(needed)?
-            .saturating_sub(market.balances[i])
-            .max(U256::ONE)
+        needed.checked_add(rin.saturating_sub(market.balances[i]))?
     };
     let new_in = market.balances[i].checked_add(wallet_in)?;
-    let credited = new_in.checked_sub(rin)?;
+    let credited = wallet_in.min(new_in.checked_sub(rin)?);
     let (mut fill, gross) = quote(rin, rout, fee, market.payout_bps, true, credited)?;
     let new_out = market.balances[o].checked_sub(gross)?;
     let max = (U256::ONE << 112) - U256::ONE;

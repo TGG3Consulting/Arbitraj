@@ -88,6 +88,7 @@ pub enum Variant {
     BunnySwap,
     /// Launch Bonding with virtual reserves and tax on the VIRTUAL side.
     Virtuals,
+    MintClub,
     /// EIP-2535 с отдельной привязкой исполняемого селектора фабрики и Router02.
     DiamondV2,
     /// Пара проверяется по фабрике CREATE и коду исполнения; общий прокси с Router02.
@@ -158,7 +159,7 @@ pub enum Variant {
 
 impl Variant {
     pub fn factory_quoter(self)->bool { matches!(self,Self::BaseNativeV3|Self::RegisteredV3) }
-    pub fn wallet_module(self)->bool { matches!(self,Self::Memebox|Self::RegisteredV3|Self::BunnySwap) }
+    pub fn wallet_module(self)->bool { matches!(self,Self::Memebox|Self::RegisteredV3|Self::BunnySwap|Self::CandySwap) }
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator)}
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
 
@@ -229,10 +230,11 @@ pub fn of(kind: &str) -> Variant {
         "v2_fork_executor_create2" => Variant::V2Create2,
         "v2_diamond_router" => Variant::DiamondV2,
         "v2_diamond_create" => Variant::KewlV2,
+        "mint_club_v2" => Variant::MintClub,
         "virtuals_bonding" | "virtuals_bonding_module" | "virtuals_unicorn" | "virtuals_unicorn_module" => Variant::Virtuals,
         "bunnyswap" | "bunnyswap_module" => Variant::BunnySwap,
         "memebox" | "memebox_v5" => Variant::Memebox,
-        "candyswap_v2" => Variant::CandySwap,
+        "candyswap_v2" | "candyswap_module" => Variant::CandySwap,
         "balancer_v2_wallet" => Variant::BalancerVaultWallet,
         "v2_fork_executor_create2_live_fee" => Variant::V2Create2LiveFee,
         "slipstream_ramses" => Variant::RamsesClV2,

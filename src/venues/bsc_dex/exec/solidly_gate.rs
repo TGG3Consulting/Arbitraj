@@ -126,6 +126,7 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
                 None => role_block.insert(super::super::pools::nami::block(ctx, "latest").await?),
             };
             super::super::pools::v2_live_fee::candy_fresh(ctx,e,at).await?;
+            if f.tradable { super::super::pools::direct_module::verify_factory(ctx,f,ctx.dex_addr("dex.router",f.id)?,at).await?; }
             continue;
         }
         if f.variant == Variant::V2DualCreate2LiveFee {

@@ -62,8 +62,7 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
         }
         (PoolState::CandySwap(s), PoolKind::V2) => {
             let i=usize::from(!zfo);
-            let rin=if s.balances[i]>s.reserves[i] {U256::ONE} else {s.reserves[i]};
-            pair(s.reserves[1-i],U256::ONE,rin,U256::ONE)
+            pair(s.reserves[1-i],U256::ONE,s.reserves[i],U256::ONE)
         }
         (PoolState::Virtuals(s),PoolKind::V2) => {
             // Один атом входа способен получить остаток округления. Физическая выплата всегда ограничена активами пары.

@@ -346,11 +346,24 @@ pub(in crate::venues::bsc_dex) async fn candy_fresh(
     let PoolState::CandySwap(state)=&e.pool.state else {return Err(bad());};
     let pool=e.pool.reference.own_contract().ok_or_else(bad)?;
     let factory=ctx.dex_addr("dex.factory",e.family.id)?;
-    let [fee,rate,receiver]=nami_batch::read(ctx,[
+    use super::super::node::abi::IERC20;
+    let reserves=IV2Pair::getReservesCall{};
+    let balance=IERC20::balanceOfCall{owner:pool};
+    let [fee,rate,receiver,saved,physical0,physical1]=nami_batch::read(ctx,[
         ("eth_call",json!([{"to":pool,"data":registry_key::selector("swapFee()")},at])),
         ("eth_call",json!([{"to":pool,"data":"0xc3595a85"},at])),
         ("eth_call",json!([{"to":factory,"data":registry_key::selector("feeTo()")},at])),
+        nami_batch::view(at,pool,reserves),
+        nami_batch::view(at,e.pool.token0,balance.clone()),
+        nami_batch::view(at,e.pool.token1,balance),
     ]).await?;
+    let saved=call::decode::<IV2Pair::getReservesCall>(&saved)?;
+    if [physical0.len(),physical1.len()]!=[32,32]{return Err(bad());}
+    for (i,(actual,book)) in [(physical0,saved.reserve0),(physical1,saved.reserve1)].into_iter().enumerate() {
+        if U256::from_be_slice(&actual).cmp(&U256::from(book))!=state.balances[i].cmp(&state.reserves[i]){
+            return Err(miss("CandySwap: баланс относительно резерва изменился, требуется свежая котировка"));
+        }
+    }
     let pips=e.pool.fee_pips.ok_or_else(bad)?;
     if fee.len()!=32 || rate.len()!=32 || receiver.len()!=32
         || U256::from_be_slice(&fee).checked_mul(U256::from(100))!=Some(U256::from(pips))

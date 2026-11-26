@@ -31,6 +31,7 @@ use super::ur;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum DirectCall {
+    MintClub(super::mint_club_wire::Call),
     EkuboV2 {key:super::super::pools::ekubo_v2::OrderKey,core:Address,wrapped:Option<Address>},
     Module {
         pool: Address,
@@ -194,6 +195,7 @@ impl Plan {
                     self.deadline,
                     rebate,
                 ),
+                DirectCall::MintClub(order)=>order.data(self.wallet),
                 DirectCall::EkuboV2{key,..}=>key.calldata(self.min_total,self.deadline),
                 DirectCall::Vault { id, input, amount } => super::vault_direct::data(
                     id, input, self.token_out, amount, self.min_total, self.wallet, self.deadline),
@@ -251,6 +253,7 @@ pub async fn build(
         return Err(ctx.err(ErrorCode::Internal, "план без шагов"));
     };
     let e = &first.entry;
+    if super::mint_club_direct::enabled(e) { return Err(ctx.err(ErrorCode::NoRoute,"Mint Club: требуется прямое поручение с собственными границами суммы")); }
     if super::super::quote::ekubo_v2_pricing::enabled(e) {return Box::pin(super::ekubo_v2_direct::plan(ctx,steps,wallet,now,all_approvals)).await;}
     if super::vault_direct::enabled(e) {
         return Box::pin(super::vault_direct::plan(ctx,steps,wallet,now,all_approvals)).await;

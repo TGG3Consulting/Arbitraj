@@ -161,6 +161,9 @@ impl PoolRef {
 /// Один ERC20 Mint Club V2 и его собственное обеспечение в общем контракте Bond.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MintClubState {
+    /// Канонически проверенный эмитент выпуска и погашения этого ERC20.
+    #[serde(default)]
+    pub bond: Address,
     pub token: Address,
     pub reserve: Address,
     pub supply: U256,

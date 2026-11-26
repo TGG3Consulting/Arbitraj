@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
-// One ERC20 input, funded by the caller. The pool's previous balances cannot enlarge the caller's credit.
+// Модуль обменивает ERC20 плательщика через проверенную пару CandySwap на Base.
+// Владелец развёртывает модуль с адресом фабрики. Кошелёк вызывает execute напрямую
+// или через шаг 29 V5 вызывает swapFrom. Выплату ограничивает собственный взнос плательщика.
 pragma solidity 0.8.37;
 
 interface ICandyRegistry {
@@ -29,6 +31,29 @@ contract CandySwapAdapter {
     constructor(ICandyRegistry registry) {
         if(address(registry).code.length==0) revert InvalidOrder();
         factory=registry;
+    }
+
+    function grossOut(uint256 ri,uint256 ro,uint256 physical,uint256 credit,uint256 fee) private pure returns(uint256) {
+        if(physical<=ri || physical>type(uint112).max || ri==0 || fee>=10_000) revert ChangedMarket();
+        if(credit>physical-ri) credit=physical-ri;
+        uint256 net=credit*(10_000-fee);
+        return net*ro/(ri*10_000+net);
+    }
+
+    function getAmountOut(address input,address output,uint256 credit) external view returns(uint256) {
+        ICandyPair p=ICandyPair(factory.getPair(input,output));
+        bool z=input==p.token0();
+        if(input==output || p.factory()!=address(factory)
+            || (z?p.token1()!=output:(p.token1()!=input || p.token0()!=output))) revert ChangedMarket();
+        (uint112 x,uint112 y,)=p.getReserves();
+        (uint256 ri,uint256 ro)=z?(x,y):(y,x);
+        if(ICandyCoin(output).balanceOf(address(p))<ro) revert ChangedMarket();
+        uint256 gross=grossOut(ri,ro,ICandyCoin(input).balanceOf(address(p))+credit,credit,p.swapFee());
+        (bool ok,bytes memory data)=address(p).staticcall(hex"c3595a85");
+        if(!ok || data.length!=32) revert ChangedMarket();
+        uint256 rate=abi.decode(data,(uint256));
+        if(rate>10_000) revert ChangedMarket();
+        return gross-gross*rate/10_000;
     }
 
     function swapFrom(address input,address output,uint256 amount,uint256 minimum,address recipient,uint256 deadline)
@@ -70,12 +95,7 @@ contract CandySwapAdapter {
             revert ChangedMarket();
         uint256 own=physical-initial;
         if(own>amount) own=amount;
-        if(physical<=ri) revert InsufficientOutput();
-        if(own>physical-ri) own=physical-ri;
-        uint256 fee=pair.swapFee();
-        if(fee>=10_000) revert ChangedMarket();
-        uint256 net=own*(10_000-fee);
-        uint256 gross=net*ro/(ri*10_000+net);
+        uint256 gross=grossOut(ri,ro,physical,own,pair.swapFee());
         if(gross==0) revert InsufficientOutput();
         pair.swap(zeroIn?0:gross,zeroIn?gross:0,recipient,"");
         received=outgoing.balanceOf(recipient)-beforeOut;

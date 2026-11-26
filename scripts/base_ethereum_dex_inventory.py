@@ -1014,6 +1014,17 @@ def tables(network, snapshots, profiles):
                    "V5 получил расчётный выход, а повышение минимума на единицу вызвало откат. "
                    "[Реестр, код и предел выплаты](../tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json).")
         out.append("")
+    mint_path=Path(f"tests/data/first_run_dex_2026-11-26/mint_club_{network}_wallets.json.gz")
+    with gzip.open(mint_path,"rt",encoding="utf8") as stream:
+        mint=json.load(stream)
+    pairs=mint["markets"]
+    trials=sum(len(p["trials"]) for p in pairs)
+    out.append(f"**Mint Club V2.** Bond зарегистрировал {mint['total']} выпусков ERC20 и ERC1155 с {mint['unique_reserve_assets']} видами обеспечения. "
+               f"На блоке {mint['height']} три проверенных ERC20 с резервом WETH прошли {trials} циклов выпуска и погашения. "
+               "Уменьшение максимальной суммы покупки и увеличение минимальной суммы погашения на одну минимальную единицу дали откат. "
+               "Для отслеживаемого токена проверяются tokenBond, байткод клона и его реализации, ступени цены и текущий выпуск. "
+               "Для погашения используются остаток собственного обеспечения рынка и фактический баланс резервного ERC20 общего Bond. "
+               f"[Кошелёк и газ](../{mint_path.as_posix()}) · [Регистрация и код](../tests/data/first_run_dex_2026-11-26/mint_club_{network}_events.json).")
     out.extend(["", f"Код каждого адреса проверен в [снимке размещений](../tests/data/first_run_dex_2026-11-26/{network}.json). "
                 "Две записи вызова Router.getAmountOut содержат исходные аргументы и ответ. "
                 "У Maverick V2 параметр dex.tick_radius задаёт оператор по глубине рынка. "

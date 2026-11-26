@@ -19,9 +19,10 @@ pub(super) async fn candidates(
     use super::{
         delta_pricing, frax_pricing, oasis_pricing, router_pricing, white_pricing, white_state,
     };
-    let mut kinds = [false; 9];
+    let mut kinds = [false; 10];
     for e in &i.entries {
         kinds[5] |= super::vista_pricing::is_vista(e) || (native && super::vista_pricing::native_router(e));
+        kinds[9] |= super::super::exec::mint_club_direct::enabled(e);
         kinds[8] |= super::ekubo_v2_pricing::enabled(e);
         if native {
             continue;
@@ -45,7 +46,7 @@ pub(super) async fn candidates(
     } else {
         None
     };
-    let (white, frax, delta, router, oasis, vista, vault, memebox, ekubo) = tokio::join!(
+    let (white, frax, delta, router, oasis, vista, vault, memebox, ekubo, mint_club) = tokio::join!(
         async {
             if kinds[0] {
                 Box::pin(white_pricing::candidates(q, i, head)).await
@@ -94,11 +95,13 @@ pub(super) async fn candidates(
         async {
             if kinds[7] { Box::pin(super::module_pricing::candidates(q,i,head)).await } else { Vec::new() }
         },
-        async { if kinds[8] { Box::pin(super::ekubo_v2_pricing::candidates(q,i,head)).await } else { Vec::new() } }
+        async { if kinds[8] { Box::pin(super::ekubo_v2_pricing::candidates(q,i,head)).await } else { Vec::new() } },
+        async { if !native && kinds[9] { Box::pin(super::mint_club_pricing::candidates(q,i,head)).await } else { Vec::new() } }
     );
     let mut all = white;
     all.extend(memebox);
     all.extend(ekubo);
+    all.extend(mint_club);
     all.extend(frax);
     all.extend(delta);
     all.extend(router);
@@ -109,6 +112,7 @@ pub(super) async fn candidates(
 }
 
 fn individual(e: &Entry, native: bool) -> bool {
+    if super::super::exec::mint_club_direct::enabled(e) {return true;}
     if native && super::ekubo_v2_pricing::enabled(e) { return true; }
     if native {
         return super::vista_pricing::native_router(e);
@@ -204,7 +208,7 @@ pub(super) fn private(
         let Some(e) = one(quote).and_then(|p| q.reg.get(p)) else {
             continue;
         };
-        if !e.family.fork || !e.family.tradable || e.family.variant.wallet_module() || super::ekubo_v2_pricing::enabled(&e) || super::oasis_pricing::is_oasis(&e) {
+        if !e.family.fork || !e.family.tradable || super::super::exec::mint_club_direct::enabled(&e) || e.family.variant.wallet_module() || super::ekubo_v2_pricing::enabled(&e) || super::oasis_pricing::is_oasis(&e) {
             continue;
         }
         let white = super::white_pricing::is_white(&e);

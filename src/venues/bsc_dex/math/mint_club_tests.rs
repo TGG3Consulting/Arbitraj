@@ -21,6 +21,7 @@ fn mint_and_burn_match_both_archived_wallets_and_invert_to_adjacent_unit() {
             let usd = m["reserve"].as_str().unwrap().parse().unwrap();
             let asset = m["token"].as_str().unwrap().parse().unwrap();
             let s = MintClubState {
+                bond: data["bond"].as_str().unwrap().parse().unwrap(),
                 token: asset,
                 reserve: usd,
                 supply: num(&m["supply"]),
@@ -84,6 +85,7 @@ fn exact_inputs_match_exhaustive_small_curve_with_free_and_royalty_steps() {
     let token = Address::repeat_byte(1);
     let reserve = Address::repeat_byte(2);
     let mut s = MintClubState {
+        bond: Address::repeat_byte(3),
         token,
         reserve,
         supply: U256::ZERO,

@@ -254,6 +254,9 @@ pub fn plan(
                     .then(|| stable_native::registry_pair(coin, quote, wrapped))
                     .flatten();
                 for (a, b) in std::iter::once((coin, quote)).chain(alt) {
+                    if f.variant == super::family_variant::Variant::MintClub {
+                        qs.clear(); qs.extend([Q::MintClub{token:a,reserve:b},Q::MintClub{token:b,reserve:a}]);
+                    }
                     if let Some(p) = &pmm {
                         if !p.pair(a, b) {
                             continue;

@@ -446,8 +446,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
         "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
-        "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
-        "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
+        "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
+        "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
         "bunnyswap" | "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
@@ -819,6 +819,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
                 list.extend(["dex.router", "dex.module_runtime_hashes"]);
             }
         }
+        Proto::V2 if f.variant == Variant::MintClub => {
+            list.extend(["dex.factory","dex.factory_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes"]);
+        }
         Proto::V2 if f.variant == Variant::Virtuals => {
             list.extend(["dex.factory","dex.factory_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes","dex.quoter","dex.bonding_roles"]);
             if f.tradable { list.extend(["dex.router","dex.module_runtime_hashes","dex.pmm_module_bindings"]); }
@@ -851,6 +854,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
                 list.extend(["dex.proxy_implementations", "dex.proxy_runtime_hashes"]);
             }
             if f.variant == Variant::V2DualCreate2LiveFee { list.extend(["dex.pair_runtime_hash","dex.factory_runtime_hash"]); }
+            if f.variant == Variant::CandySwap && f.tradable {list.push("dex.module_runtime_hashes");}
             if f.variant == Variant::KewlV2 { list.push("dex.pair_runtime_hash"); }
             if f.variant.diamond_router() {
                 list.extend(["dex.factory_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes"]);

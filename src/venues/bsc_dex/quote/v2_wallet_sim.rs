@@ -35,6 +35,7 @@ pub(in crate::venues::bsc_dex) struct V5Step {
 #[derive(Clone)]
 pub(in crate::venues::bsc_dex) enum Wire {
     Router02,
+    MintClub(super::super::exec::mint_club_wire::Call),
     EkuboV2(super::super::pools::ekubo_v2::OrderKey,Option<Address>),
     DirectModule { pool: Address },
     Vault(B256),
@@ -137,7 +138,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             o.input,
             o.target,
             U256::from_be_slice(&current),
-            o.amount,
+            match &o.wire { Wire::MintClub(c) if c.mint=>c.limit, _=>o.amount },
         )?
     };
     let mut calls = vec![balance(o.input), balance(o.output)];
@@ -194,7 +195,10 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     if boundary {
         // Тот же плательщик, исходные остатки и разрешения. Более строгий лишь минимум.
         let strict = received.checked_add(U256::ONE).ok_or_else(fail)?;
-        calls[offset + n + 2].input = calldata(&o, deadline, strict);
+        calls[offset + n + 2].input = match &o.wire {
+            Wire::MintClub(c)=>c.tighten(spent.ok_or_else(fail)?,received).ok_or_else(fail)?.data(o.payer),
+            _=>calldata(&o, deadline, strict),
+        };
         let strict_result = frame(ctx, h, &calls, values.as_slice()).await?;
         let alt = &strict_result[offset..strict_result.len() - offset];
         if (vault.is_some()
@@ -221,6 +225,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
 
 fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
     match &o.wire {
+        Wire::MintClub(c) => c.data(o.payer),
         Wire::EkuboV2(key,_) => key.calldata(minimum,deadline),
         Wire::Vault(id) => super::super::exec::vault_direct::data(
             *id, o.input, o.output, o.amount, minimum, o.payer, deadline,

@@ -6762,3 +6762,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Кейс:** При поиске площадки требуется отличить FRIEND от других токенов в паре с WETH.
 - **Что ставить:** Адрес FRIEND из профиля Base. Бот сверяет token0 пары и роутера, а token1 сверяет с dex.native_wrapped сети.
 - **Если не задана:** Поиск и проверка пула BunnySwap требуют адреса токена.
+
+#### Mint Club V2 в Base и Ethereum
+
+В `dex.kind` выберите `mint_club_v2`. В `dex.factory` укажите Bond, в `dex.factory_runtime_hash` — хеш его кода. Для выпускаемых ERC20 задайте один адрес реализации клона в `dex.proxy_implementations` и один хеш её кода в `dex.proxy_runtime_hashes`. Bond также регистрирует ERC1155. Адрес рынка берётся из выпуска ERC20, а валюта обеспечения — из `tokenBond(token)`. На одном каноническом блоке сверяются кривая, курс выпуска и погашения, комиссия и доступное обеспечение. Включение DEX на каждой сети настраивается отдельно. [Регистрация в Base](../tests/data/first_run_dex_2026-11-26/mint_club_base_events.json) · [Регистрация в Ethereum](../tests/data/first_run_dex_2026-11-26/mint_club_ethereum_events.json).

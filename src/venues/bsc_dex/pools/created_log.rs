@@ -65,6 +65,7 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // Nomiswap Stable (решение 284): PairCreated фабрики — та же подпись, что у UniswapV2Factory (L1216).
             // SmarDex (решение 288): PairCreated(token0, token1, pair, uint) — та же подпись (ISmardexFactory.sol L12).
             // Camelot V2 (решение 443): PairCreated(token0 indexed, token1 indexed, pair, uint) — CamelotFactory.sol L23.
+            Proto::V2 if f.variant == super::family_variant::Variant::MintClub => ("dex.factory",super::mint_club::IBond::TokenCreated::SIGNATURE_HASH,false),
             Proto::V2 if f.variant == super::family_variant::Variant::BunnySwap => continue,
             Proto::V2 | Proto::NomiStable | Proto::Smardex | Proto::CamelotV2 => (
                 "dex.factory",
@@ -412,6 +413,10 @@ fn remember(p: &Pools, w: &Watch, c: &Candidate) {
 /// встречном поле не тот токен.
 pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candidate, String> {
     let (t0, t1, pool) = match f.proto {
+        _ if f.variant == super::family_variant::Variant::MintClub => {
+            let e=super::mint_club::IBond::TokenCreated::decode_log_data(&log.inner.data).map_err(|e|e.to_string())?;
+            (e.token,e.reserveToken,e.token)
+        }
         _ if f.variant == super::family_variant::Variant::SolidlyCl => {
             let event =
                 super::solidly_v3::ISolidlyV3::PoolCreated::decode_log_data(&log.inner.data)

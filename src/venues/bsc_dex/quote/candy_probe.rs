@@ -123,7 +123,7 @@ mod tests {
         };
         for (balance, out) in [
             (base, 996_007),
-            (base + 100_000, 1_095_499),
+            (base + 100_000, 996_007),
             (base - 100_000, 896_497),
         ] {
             let raw = leg([base; 2], [balance, base], 15);
@@ -139,9 +139,9 @@ mod tests {
             30,
         );
         let dx = U256::from(400_000);
-        let gross = U256::from(450_000u64) * U256::from(9985) * U256::from(1_001_100_000u64)
+        let gross = dx * U256::from(9985) * U256::from(1_001_100_000u64)
             / (U256::from(998_902_856u64) * U256::from(10_000)
-                + U256::from(450_000u64) * U256::from(9985));
+                + dx * U256::from(9985));
         assert_eq!(
             expected(&second, 1500, receiver, false, dx),
             Some(gross - gross * U256::from(30) / U256::from(10_000))

@@ -3612,5 +3612,39 @@
       "dex.v2_fee_denominator": 10000,
       "dex.v2_fee_rule_hash": "0xe4664df61026d2e8d16e31a3a20359506df9d7ac24216906d2672dca054e62ef"
     }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "mint-club-base",
+    "source": "https://github.com/Steemhunt/mint.club-v2-contract/tree/10ce4adc1c8cf2b33df1936ddea50fd433913c46 · mint_club_base_events.json",
+    "settings": {
+      "dex.kind": "mint_club_v2",
+      "dex.factory": "0xc5a076cad94176c2996b32d8466be1ce757faa27",
+      "dex.factory_runtime_hash": "0xdd4f11b3651371f72233223557a47b279c9aa7be6dbc415da7a9cd9dc858285c",
+      "dex.proxy_implementations": [
+        "0xaa70bc79fd1cb4a6fba717018351f0c3c64b79df"
+      ],
+      "dex.proxy_runtime_hashes": [
+        "0xf5b45d177423e2bfdd96aa07e25bbae482ea773490b3b2ce82579d0693b4f68b"
+      ]
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "mint-club-ethereum",
+    "source": "https://github.com/Steemhunt/mint.club-v2-contract/tree/10ce4adc1c8cf2b33df1936ddea50fd433913c46 · mint_club_ethereum_events.json",
+    "settings": {
+      "dex.kind": "mint_club_v2",
+      "dex.factory": "0xc5a076cad94176c2996b32d8466be1ce757faa27",
+      "dex.factory_runtime_hash": "0xdd4f11b3651371f72233223557a47b279c9aa7be6dbc415da7a9cd9dc858285c",
+      "dex.proxy_implementations": [
+        "0xaa70bc79fd1cb4a6fba717018351f0c3c64b79df"
+      ],
+      "dex.proxy_runtime_hashes": [
+        "0xf5b45d177423e2bfdd96aa07e25bbae482ea773490b3b2ce82579d0693b4f68b"
+      ]
+    }
   }
 ]

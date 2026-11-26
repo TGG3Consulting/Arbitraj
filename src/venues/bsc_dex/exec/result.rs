@@ -75,6 +75,7 @@ pub fn result(
         native_routers,
         None,
         None,
+        None,
     )
 }
 
@@ -89,6 +90,7 @@ pub(super) fn with_native_fact(
     native_routers: &[Address],
     vista: Option<&super::vista_fact::Proof>,
     ekubo:Option<&super::ekubo_v2_fact::Proof>,
+    mint_club:Option<&super::mint_club_fact::Proof>,
 ) -> GatewayResult<TradeResult> {
     let r = match (d.chain.outcome, &d.receipt) {
         (TxOutcome::Included, Some(r)) => r.clone(),
@@ -129,7 +131,9 @@ pub(super) fn with_native_fact(
                 .with_tx(d.chain));
         }
     };
-    let (spent, got) = if let Some(proof)=ekubo {
+    let (spent, got) = if let Some(proof)=mint_club {
+        proof.amounts(&r.logs,wallet,tin,tout).ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"Mint Club: расчёт по исходному поручению Bond не подтверждён").with_tx(d.chain.clone()))?
+    }else if let Some(proof)=ekubo {
         proof.amounts(&r.logs,wallet,tin,tout).ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"Ekubo V2: лог Core не подтвердил выплату кошельку").with_tx(d.chain.clone()))?
     }else if let Some(proof) = vista {
         proof.amounts(&r.logs, wallet, tin, tout).ok_or_else(|| {

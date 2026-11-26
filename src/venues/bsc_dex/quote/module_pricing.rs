@@ -34,6 +34,8 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         if let Some(h) = head {
             let check = if e.family.variant == Variant::BunnySwap {
                 super::super::pools::bunnyswap::fresh(ctx,&e,&h.selector()).await
+            } else if e.family.variant == Variant::CandySwap {
+                super::super::pools::v2_live_fee::candy_fresh(ctx,&e,&h.selector()).await
             } else if e.family.variant == Variant::RegisteredV3 {
                 registered_v3::fresh(ctx, &e, &h.selector()).await
             } else {

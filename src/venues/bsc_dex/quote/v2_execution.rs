@@ -183,7 +183,7 @@ pub(super) async fn option(
             head,
             o,
             super::oasis_pricing::is_oasis(&c.entry) || super::vista_pricing::is_vista(&c.entry)
-                || super::super::exec::vault_direct::enabled(&c.entry) || super::module_pricing::enabled(&c.entry) || vista_value.is_some() || super::ekubo_v2_pricing::enabled(&c.entry),
+                || super::super::exec::vault_direct::enabled(&c.entry) || super::module_pricing::enabled(&c.entry) || vista_value.is_some() || super::ekubo_v2_pricing::enabled(&c.entry) || super::super::exec::mint_club_direct::enabled(&c.entry),
         )
         .await?;
         if let Some(value) = vista_value {

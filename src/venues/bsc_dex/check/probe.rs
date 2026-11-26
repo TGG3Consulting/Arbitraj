@@ -116,13 +116,21 @@ pub async fn run(
     } else {
         None
     };
+    let own_bond = if super::super::exec::mint_club_direct::enabled(e) {
+        let head=super::super::quote::white_state::head(ctx,&format!("{:#x}",at.number)).await?;
+        let mut market=Box::new(e.clone());
+        let state=super::super::exec::mint_club_direct::state(ctx,e,head).await?;
+        super::super::exec::mint_club_direct::funded(ctx,wallet,e.usdt,usdt_amount,head).await?;
+        market.pool.state=crate::core::types::PoolState::MintClub(Box::new(state));
+        Some((head,market))
+    }else{None};
     let verified = vista.as_ref().map(|p| {
         let mut v = Box::new(e.clone());
         v.pool.state = p.state();
         v.pool.block = at.number;
         v
     });
-    let e = verified.as_deref().unwrap_or(e);
+    let e = own_bond.as_ref().map(|(_,e)|e.as_ref()).or(verified.as_deref()).unwrap_or(e);
     let (buy_aps, buy_router, buy_data) = part(
         ctx,
         e,
@@ -142,7 +150,7 @@ pub async fn run(
     let way = probe_quote::Way::of(ctx, e);
     let over = way.overrides(ctx)?;
     let (qto, qdata) = way.request(ctx, e, usdt, usdt_amount)?;
-    let mut list = vec![pc::transfer(source, usdt, wallet, usdt_amount)];
+    let mut list = if own_bond.is_some(){Vec::new()}else{vec![pc::transfer(source, usdt, wallet, usdt_amount)]};
     if let Some(seed) = vista
         .as_ref()
         .and_then(|v| v.fund(wallet, usdt, usdt_amount))
@@ -172,7 +180,7 @@ pub async fn run(
             list[h.after] = b;
         }
     }
-    let hash = vista.as_ref().map(|v| v.head.hash);
+    let hash = own_bond.as_ref().map(|(h,_)|h.hash).or_else(||vista.as_ref().map(|v| v.head.hash));
     let first = simulate::run_anchored(ctx, &list, &values, &over, at, hash).await?;
     let (q, x) = (h.quote, h.buy);
     if let Some((i, r)) = first.iter().enumerate().find(|(_, r)| !r.ok()) {
@@ -212,6 +220,8 @@ pub async fn run(
     // как balanceOf − резерв). Остаток — тот же, что раньше, газ продажи сравним с прежними замерами.
     let (half, quarter) = (bought / U256::from(2u8), bought / U256::from(4u8));
     let rest = bought - half - quarter;
+    let post=super::super::exec::mint_club_direct::after_probe(ctx,e,usdt,usdt_amount,bought)?;
+    let e=post.as_deref().unwrap_or(e);
     let (sell_aps, sell_router, sell_data) = part(
         ctx,
         e,
@@ -322,6 +332,7 @@ async fn part(
     // Slipstream, форки V3, StableSwap, Maverick) пробу не собрать ни через Universal Router (чужой пул он не найдёт), ни
     // через classic V2 Router форка (у V3-форка его нет). Путь сделки для них — шаг контракта-исполнителя: тем же
     // вызовом execute идёт и проба (check/probe_exec.rs); нет шага / не задан адрес — точная причина оттуда.
+    if super::super::exec::mint_club_direct::enabled(e){return super::super::exec::mint_club_direct::probe(ctx,e,&order,wallet);}
     if super::super::quote::ekubo_v2_pricing::enabled(e){return super::super::exec::ekubo_v2_direct::probe(ctx,e,&order,now);}
     if super::super::exec::vault_direct::enabled(e) && super::super::exec::executor::address(ctx)?.is_none() {
         return Box::pin(super::super::exec::vault_direct::probe(ctx,e,order,wallet,now)).await;

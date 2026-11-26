@@ -84,6 +84,7 @@ pub mod discover_v4;
 pub mod ekubo_accept;
 pub mod ekubo_ext;
 pub mod ekubo_hub;
+pub mod mint_club;
 pub mod ekubo_v2;
 pub(super) mod ekubo_v2_deployment;
 pub mod ekubo_keys;

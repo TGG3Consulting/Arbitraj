@@ -166,11 +166,19 @@ async fn fill(
     // Решение 437 (2): у eip1559_l1 газ симуляции (обмен и разрешения) — газ L2, часть L1 — по данным вызова
     // исполнителя (gasEstimateComponents); часть L1 транзакций разрешений отдельно не считается (docs/TASKS.md,
     // «Решение 437»). Бандл и legacy — без разбиения.
+    let mut fee_quote = q.clone();
+    fee_quote.gas = q.gas.for_quote(ctx, &q.heads).await?;
     let bill = match call {
-        Some(c) => cycle_gas::priced(q, wallet, c).await?,
+        Some(c) => cycle_gas::priced(&fee_quote, wallet, c).await?,
         None => cycle_gas::flat(q, 0).await?,
     };
-    let bill = cycle_gas::simulated(q, bill, sim.gas_swap, sim.approvals, sim.gas_approve)?;
+    let bill = cycle_gas::simulated(
+        &fee_quote,
+        bill,
+        sim.gas_swap,
+        sim.approvals,
+        sim.gas_approve,
+    )?;
     let net = net_check(
         ctx,
         (out, req.input),

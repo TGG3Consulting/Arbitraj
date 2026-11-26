@@ -60,10 +60,11 @@ pub async fn cost(
             format!("{}: газ перевода не измерен", asset.ticker),
         )
     })?;
-    let price = env.gas.wei(ctx, &env.heads).await?;
+    let fees = env.gas.for_quote(ctx, &env.heads).await?;
+    let price = fees.wei(ctx, &env.heads).await?;
     let wei = price
         .saturating_mul(U256::from(gas))
-        .saturating_add(env.gas.extra(ctx, gas, 1)?);
+        .saturating_add(fees.extra(ctx, gas, 1)?);
     let bnb = num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,

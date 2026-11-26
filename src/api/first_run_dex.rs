@@ -17,7 +17,31 @@ struct Profile {
     network: String,
     id: String,
     source: String,
-    settings: BTreeMap<String, String>,
+    settings: BTreeMap<String, Parameter>,
+}
+
+/// Строковое поле, перечень адресов или сетевые ключи дочерних фабрик (dex.sub_dex).
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Parameter {
+    Text(String),
+    List(Vec<String>),
+}
+
+impl Parameter {
+    /// Формат редактора списков — элементы через запятую. Для дочернего ключа применяется
+    /// тот же суффикс площадки, что и к родительскому ID (settings/dex_key.rs).
+    fn display(&self, name: &str, suffix: &str) -> String {
+        match self {
+            Self::Text(text) => text.clone(),
+            Self::List(items) if name == "dex.sub_dex" => items
+                .iter()
+                .map(|id| format!("{id}{suffix}"))
+                .collect::<Vec<_>>()
+                .join(", "),
+            Self::List(items) => items.join(", "),
+        }
+    }
 }
 
 /// Загружает закреплённый справочник один раз. Ошибка означает порчу данных сборки.
@@ -61,7 +85,7 @@ pub async fn sections(st: &AppState) -> Result<Vec<Section>, ApiError> {
                 name: name.clone(),
                 area: format!("{} · {}", p.network, p.id),
                 unit: None,
-                value: Some(value.clone()),
+                value: Some(value.display(name, suffix.map(String::as_str).unwrap_or(""))),
                 method: None,
                 source: Some(p.source.clone()),
                 rationale: format!("Параметр размещения {} в сети {}.", p.id, p.chain_id),
@@ -107,15 +131,29 @@ mod tests {
             let scope = Scope::Dex(format!("{}@{}", p.id, p.network));
             for (k, v) in &p.settings {
                 let def = catalog::find(k).expect("настройка профиля должна быть в схеме");
-                validate(def, &scope, &Value::String(v.clone()))
-                    .unwrap_or_else(|e| panic!("{} {k}: {e}", p.id));
-                if v.starts_with("0x") {
-                    assert!(
-                        snapshot["contracts"][v.to_ascii_lowercase()]["bytes"]
-                            .as_u64()
-                            .unwrap()
-                            > 0
-                    );
+                let values = match v {
+                    Parameter::Text(text) => vec![text],
+                    Parameter::List(items) => items.iter().collect(),
+                };
+                let input = match v {
+                    Parameter::Text(t) => Value::String(t.clone()),
+                    Parameter::List(xs) => serde_json::json!(xs),
+                };
+                validate(def, &scope, &input).unwrap_or_else(|e| panic!("{} {k}: {e}", p.id));
+                for text in values {
+                    if text.starts_with("0x") {
+                        assert!(
+                            snapshot["contracts"][text.to_ascii_lowercase()]["bytes"]
+                                .as_u64()
+                                .unwrap()
+                                > 0
+                        );
+                    } else if k == "dex.sub_dex" {
+                        assert!(
+                            all.iter()
+                                .any(|child| child.network == p.network && &child.id == text)
+                        );
+                    }
                 }
             }
         }

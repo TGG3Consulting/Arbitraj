@@ -21,6 +21,7 @@ struct Capture {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Pool {
+    pool: String,
     factory: String,
     quoter: String,
     spacing: i32,
@@ -50,6 +51,12 @@ fn decode<C: SolCall>(raw: &str) -> C::Return {
 fn local_output_matches_each_deployed_quoter_in_both_directions() {
     let data: Capture =
         serde_json::from_str(include_str!("data/base_slipstream_2026-11-26/quotes.json")).unwrap();
+    let execution: serde_json::Value = serde_json::from_str(include_str!(
+        "data/base_slipstream_2026-11-26/executor.json"
+    ))
+    .unwrap();
+    let cases = execution["cases"].as_array().unwrap();
+    assert_eq!(cases.len(), 16);
     let profiles: Vec<serde_json::Value> =
         serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
     assert_eq!(data.pools.len(), 3);
@@ -114,6 +121,55 @@ fn local_output_matches_each_deployed_quoter_in_both_directions() {
             p.quotes.iter().map(|q| q.zero_for_one).collect::<Vec<_>>(),
             [true, false]
         );
+        // Реальные ответы последовательной eth_simulateV1: обе стороны, два или три размера.
+        // Сопоставляем расчёт с квотером в том же блоке, фактической оплатой входа и полученным выходом.
+        let measured: Vec<_> = cases.iter().filter(|c| c["pool"] == p.pool).collect();
+        for direction in [false, true] {
+            assert!(
+                measured
+                    .iter()
+                    .filter(|c| c["forward"] == direction)
+                    .count()
+                    >= 2
+            );
+        }
+        for c in measured {
+            let results = &c["results"];
+            assert!(
+                results
+                    .as_object()
+                    .unwrap()
+                    .values()
+                    .all(|r| r["status"] == "0x1")
+            );
+            let amount = U256::from_str_radix(c["amount"].as_str().unwrap(), 10).unwrap();
+            let n = |k: &str| {
+                U256::from_str_radix(
+                    results[k]["returnData"]
+                        .as_str()
+                        .unwrap()
+                        .trim_start_matches("0x"),
+                    16,
+                )
+                .unwrap()
+            };
+            let observed = decode::<ISlipstreamQuoterV2::quoteExactInputSingleCall>(
+                results["quote"]["returnData"].as_str().unwrap(),
+            );
+            let model = swap(&state, c["forward"].as_bool().unwrap(), true, amount).unwrap();
+            assert!(model.complete);
+            assert_eq!(model.amount_out, observed.amountOut);
+            assert_eq!(n("owner_in_before") - n("owner_in_after"), amount);
+            assert_eq!(
+                n("owner_out_after") - n("owner_out_before"),
+                observed.amountOut
+            );
+            assert_eq!(n("execute"), observed.amountOut);
+            assert_eq!(
+                (n("executor_input"), n("executor_output")),
+                (U256::ZERO, U256::ZERO)
+            );
+        }
         for q in p.quotes {
             let input = U256::from_str_radix(&q.amount_in, 10).unwrap();
             let observed = decode::<ISlipstreamQuoterV2::quoteExactInputSingleCall>(&q.raw);

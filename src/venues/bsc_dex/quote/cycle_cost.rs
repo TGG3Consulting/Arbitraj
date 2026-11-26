@@ -91,8 +91,8 @@ pub async fn quote(
     let ctx = &q.ctx;
     let form = cycle_gate::form(ctx, legs)?;
     let path = cycle::eval(ctx, legs, input)?;
-    let wei = q
-        .gas
+    let fees = q.gas.for_quote(ctx, &q.heads).await?;
+    let wei = fees
         .wei(ctx, &q.heads)
         .await?
         .max(send::planned_floor(ctx)?);
@@ -101,9 +101,7 @@ pub async fn quote(
     let swap_units: u64 = path.hops.iter().map(|h| h.usable.gas).sum();
     let approve_units = approve_units(q, legs, form, base, input).await?;
     let all_units = swap_units.saturating_add(approve_units);
-    let extra = q
-        .gas
-        .extra(ctx, all_units, 1 + usize::from(approve_units != 0))?;
+    let extra = fees.extra(ctx, all_units, 1 + usize::from(approve_units != 0))?;
     let gas = wei
         .saturating_mul(U256::from(all_units))
         .saturating_add(extra);

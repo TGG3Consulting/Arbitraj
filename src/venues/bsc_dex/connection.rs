@@ -73,7 +73,7 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
         ("Кошелёк", wallet(ctx).await),
     ];
     let ok = parts.iter().all(|(_, r)| r.is_ok());
-    let details = parts
+    let mut details = parts
         .iter()
         .map(|(name, r)| match r {
             Ok(s) => format!("{name}: {s}"),
@@ -81,6 +81,10 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
         })
         .collect::<Vec<_>>()
         .join("; ");
+    if let Some(result) = super::hashflow::connection(ctx).await {
+        details.push_str("; Hashflow RFQ: ");
+        details.push_str(&result.unwrap_or_else(|e| e));
+    }
     ConnectionCheck {
         ok,
         details: if ok {

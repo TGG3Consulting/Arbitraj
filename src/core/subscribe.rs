@@ -65,7 +65,13 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
         // Котируемая монета (USDT) сама в справочник не входит, а адаптер DEX ищет пулы «монета — USDT»
         // и берёт адрес USDT из этого списка (venues/bsc_dex/tokens.rs). Адрес — из API бирж (registry::usdt_address).
         if let Some(q) = super::subscribe_assets::dex_quote(core, venue) {
+            if q.chain.as_ref().is_some_and(|c| c.as_str() == "base") {
+                out.retain(|asset| asset.ticker != q.ticker);
+            }
             out.push(q);
+        } else if super::chain::chain_at(&core.inner.deps.settings, venue).is_ok_and(|c| c.as_str() == "base") {
+            // Без канонического адреса расчётной монеты неоднозначный тикер нельзя передать адаптеру.
+            return vec![];
         }
         // Промежуточные монеты (решение 52) — их пулы с USDT нужны маршруту «USDT → промежуточная → монета»;
         // тикер промежуточной адаптер берёт из этого же списка (venues/bsc_dex/pools/mids.rs).

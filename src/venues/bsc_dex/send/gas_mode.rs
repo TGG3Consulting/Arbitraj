@@ -1,17 +1,7 @@
 //! Файл: venues/bsc_dex/send/gas_mode.rs
-//! Что делает: решение 433 (шаг 5 двух сетей) — модель газа сети площадки DEX, настройка dex.gas_mode:
-//! `legacy` — BSC как сейчас: одна цена gasPrice, legacy-транзакция (send/tx.rs; база газа BSC всегда 0);
-//! `eip1559_l1` — Arbitrum One: транзакция EIP-1559 (тип 2, send/tx_1559.rs), газ с частью L1 (NodeInterface —
-//! node/arb_gas.rs), стоимость = газ × min(maxFeePerGas, baseFee + чаевые).
-//! Отправка и котировка пока читают только legacy (BSC без изменений); переключение отправки, отмены, перевода и
-//! котировки по режиму — задача 433-д (docs/TASKS.md, «Решение 433»). Сейчас режим читает «Проверить подключение»
-//! (connection_gas.rs).
-//! Кто вызывает: connection_gas.rs.
-//! От чего зависит: ctx.rs; варианты — settings/catalog/dex.rs GAS_MODES (тест сверяет оба списка).
-//! Настройки: dex.gas_mode [площадка DEX].
-//!
-//! Тип 2 — https://eips.ethereum.org/EIPS/eip-1559 ; газ Arbitrum — https://docs.arbitrum.io/how-arbitrum-works/gas-fees .
-
+//! Модель газа задаётся для каждой площадки. Котировка, подключение, расходы цикла и отправка читают одну настройку.
+//! BSC — legacy; Arbitrum — type-2 с NodeInterface; Ethereum — type-2; Base — type-2 с GasPriceOracle.
+//! https://eips.ethereum.org/EIPS/eip-1559 и https://docs.optimism.io/op-stack/transactions/fees
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;

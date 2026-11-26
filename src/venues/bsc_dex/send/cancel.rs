@@ -35,6 +35,42 @@ pub fn price(ctx: &Ctx, prev: TxPrice, cfg: &SendCfg, ready: &[Ready]) -> Gatewa
     prev.bumped(ctx, cfg.bump_pct, super::gas_floor(ready))
 }
 
+/// Для geth и OP-geth оба поля замены строго больше исходных, даже при нулевых чаевых.
+/// Свежая baseFee проверяется до установленного лимита send.cancel_max_gas_gwei.
+/// https://github.com/ethereum/go-ethereum/blob/master/core/txpool/legacypool/list.go
+pub async fn at(w: &Watch, previous: TxPrice, block: u64) -> GatewayResult<TxPrice> {
+    let candidate = price(&w.ctx, previous, &w.cfg, &w.ready)?;
+    if !matches!(w.ctx.place.id, "eth_dex" | "base_dex") {
+        return Ok(candidate);
+    }
+    let (TxPrice::Eip1559(old, _), TxPrice::Eip1559(bumped, _)) = (previous, candidate) else {
+        return Err(w.ctx.err(
+            crate::gateway::errors::ErrorCode::BadResponse,
+            "для замены Ethereum/Base требуется type-2",
+        ));
+    };
+    let base = super::super::quote::gas_base::fetch(&w.ctx, block).await?;
+    let f = strict(old, bumped, base, super::gas_floor(&w.ready)).ok_or_else(|| {
+        w.ctx.err(
+            crate::gateway::errors::ErrorCode::BadResponse,
+            "невозможно повысить оба поля комиссии type-2 для замены",
+        )
+    })?;
+    Ok(TxPrice::Eip1559(f, base))
+}
+
+/// Строгое увеличение обоих полей, достаточная эффективная ставка и покрытие текущей базы.
+fn strict(
+    old: super::tx_1559::Fees,
+    mut bumped: super::tx_1559::Fees,
+    base: U256,
+    floor: U256,
+) -> Option<super::tx_1559::Fees> {
+    bumped.tip = bumped.tip.max(old.tip.checked_add(1)?);
+    bumped.max_fee = bumped.max_fee.max(old.max_fee.checked_add(1)?);
+    super::tx_price::floored(bumped, floor, base)
+}
+
 /// Отправляет отмену. Принимает: что отслеживается (каналы, счётчики, кошелёк, nonce, настройки, подписант — всё из
 /// Watch, прочитано до отправки исходной), цену газа, текущий блок.
 /// Возвращает: хеш отмены (принята хотя бы одним каналом или ответ канала не дошёл — она может быть в пуле).
@@ -67,4 +103,28 @@ pub async fn send(w: &Watch, price: TxPrice, head: u64) -> GatewayResult<B256> {
     let terms = super::sequencer_cond::Terms::default();
     super::dispatch(ctx, &w.stats, &w.ready, &signed.raw, None, max_block, terms).await?;
     Ok(signed.hash)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::tx_1559::Fees;
+    use super::*;
+    /// Первая записанная транзакция Ethereum имеет нулевые чаевые. Для замены их требуется поднять минимум на wei.
+    #[test]
+    fn recorded_zero_tip_can_be_replaced() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/data/base_ethereum_gas_2026-11-26/ethereum-type2.json"
+        ))
+        .unwrap();
+        let row = &fixture["txs"][0];
+        let n = |key: &str| row[key].as_u64().unwrap();
+        let old = Fees {
+            tip: n("max_priority_fee_per_gas_wei").into(),
+            max_fee: n("max_fee_per_gas_wei").into(),
+        };
+        assert_eq!(old.tip, 0);
+        let next = strict(old, old, U256::from(n("base_fee_wei")), U256::ZERO).unwrap();
+        assert_eq!(next.tip, 1);
+        assert!(next.max_fee > old.max_fee);
+    }
 }

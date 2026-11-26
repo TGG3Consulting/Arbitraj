@@ -1,0 +1,134 @@
+{
+  "observed_utc": "2026-11-26T15:18:29.944095+00:00",
+  "sources": {
+    "pair": "https://api.gateio.ws/api/v4/spot/currency_pairs/USDC_USDT",
+    "book": "https://api.gateio.ws/api/v4/spot/order_book?currency_pair=USDC_USDT&limit=10",
+    "network": "https://api.gateio.ws/api/v4/spot/currencies/USDC"
+  },
+  "pair": {
+    "id": "USDC_USDT",
+    "base": "USDC",
+    "base_name": "USDCoin",
+    "quote": "USDT",
+    "quote_name": "Tether",
+    "trade_quotes": [],
+    "fee": "0.1",
+    "min_base_amount": "1",
+    "min_quote_amount": "3",
+    "max_base_amount": "5000000",
+    "max_quote_amount": "5000000",
+    "amount_precision": 2,
+    "precision": 5,
+    "trade_status": "tradable",
+    "sell_start": 0,
+    "buy_start": 1678593600,
+    "type": "normal",
+    "trade_url": "https://www.gate.com/trade/USDC_USDT",
+    "st_tag": false,
+    "up_rate": "0.08",
+    "down_rate": "0.08",
+    "slippage": "0.03",
+    "market_order_max_stock": "4994257",
+    "market_order_max_money": "5000000"
+  },
+  "book": {
+    "current": 1795706297645,
+    "update": 1795706297445,
+    "asks": [
+      [
+        "1.00106",
+        "111.26"
+      ],
+      [
+        "1.00107",
+        "5286.4"
+      ],
+      [
+        "1.00108",
+        "85675.45"
+      ],
+      [
+        "1.00109",
+        "69924.47"
+      ],
+      [
+        "1.0011",
+        "72700.31"
+      ],
+      [
+        "1.00111",
+        "21012.19"
+      ],
+      [
+        "1.00112",
+        "19986.62"
+      ],
+      [
+        "1.00113",
+        "5037.45"
+      ],
+      [
+        "1.00115",
+        "40"
+      ],
+      [
+        "1.00116",
+        "80.03"
+      ]
+    ],
+    "bids": [
+      [
+        "1.00105",
+        "53867.9"
+      ],
+      [
+        "1.00102",
+        "21712.42"
+      ],
+      [
+        "1.00101",
+        "9"
+      ],
+      [
+        "1.001",
+        "30000"
+      ],
+      [
+        "1.00099",
+        "27"
+      ],
+      [
+        "1.00098",
+        "100000"
+      ],
+      [
+        "1.00082",
+        "1090.18"
+      ],
+      [
+        "1.00079",
+        "100021.28"
+      ],
+      [
+        "1.00078",
+        "1974002"
+      ],
+      [
+        "1.00068",
+        "1848000"
+      ]
+    ]
+  },
+  "network": {
+    "currency": "USDC",
+    "chains": [
+      {
+        "name": "BASEEVM",
+        "addr": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "withdraw_disabled": false,
+        "withdraw_delayed": false,
+        "deposit_disabled": false
+      }
+    ]
+  }
+}

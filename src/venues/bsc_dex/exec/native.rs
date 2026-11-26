@@ -150,16 +150,17 @@ pub async fn reserve_ok(
         .settings
         .decimal("risk.min_bnb_balance", At::default())
         .map_err(|e| ctx.tag(e))?;
-    let price = env
-        .gas
-        .wei(ctx, &env.heads)
-        .await?
-        .max(send::planned_floor(ctx)?);
     let (price, unit) = if matches!(ctx.place.id, "eth_dex" | "base_dex") {
         let ready = send::select(ctx, &env.stats)?;
         (super::tx_fee::price(env, &ready, None).await?.cap(), "ETH")
     } else {
-        (price, "BNB")
+        (
+            env.gas
+                .wei(ctx, &env.heads)
+                .await?
+                .max(send::planned_floor(ctx)?),
+            "BNB",
+        )
     };
     let gas = tx::limit(ctx, wallet, to, data, value).await?;
     let wei = value
@@ -168,7 +169,7 @@ pub async fn reserve_ok(
     let spend = num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,
-            format!("{wei} wei не переводится в BNB"),
+            format!("{wei} wei не переводится в {unit}"),
         )
     })?;
     let have = balances::bnb(ctx, wallet).await?;

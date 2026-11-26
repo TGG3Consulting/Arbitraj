@@ -66,6 +66,10 @@ pub async fn plan(core: &Core, c: &DexCycle, budget: Option<Decimal>) -> Result<
         coin: None,
     };
     let dec = |n: &str, a: At| s.decimal(n, a).map_err(|e| e.message);
+    if super::chain::chain_at(s, v).is_ok_and(|c| c.as_str() == "base") {
+        let quote = s.text("venue.quote_asset", at).map_err(|e| e.message)?;
+        super::settlement::require_usdt(&quote, "USDT")?;
+    }
     let min_usd = dec("dex_dex.min_profit_usd", at)?;
     let step = dec("dex_dex.size_step_base", at)?;
     let slip = dec("exec.dex_slippage_pct", at)?;

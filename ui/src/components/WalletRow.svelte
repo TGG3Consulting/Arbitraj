@@ -25,6 +25,7 @@
   import { flight } from '../lib/flight.js';
   import { executorFeatures } from '../lib/walletExecutor.js';
   import CheckConnection from './CheckConnection.svelte';
+  import HashflowQuote from './HashflowQuote.svelte';
   import ExecutorDeploy from './ExecutorDeploy.svelte';
   import CopyAddr from './CopyAddr.svelte';
   import ErrorText from './ErrorText.svelte';
@@ -104,6 +105,7 @@
       <button onclick={balances}>Обновить</button></p>
   {/if}
   <CheckConnection url={`/api/check/wallet/${seg(w.id)}`} />
+  {#if w.address && dex}<HashflowQuote venue={dex} trader={w.address} />{/if}
 
   <h4>Исполнитель ArbExecutor</h4>
   <p>{#if w.executor}<code>{w.executor}</code> <button onclick={() => setExec(null)}>Снять</button>{:else}не развёрнут{/if}</p>

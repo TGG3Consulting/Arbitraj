@@ -65,6 +65,11 @@ pub fn route_asset(core: &Core, venue: &VenueId, to: &VenueId) -> Result<Asset, 
     } else {
         None
     };
+    // Этот путь проводит USDT. Вернуть USDC можно лишь с отдельным подтверждённым обменом.
+    if tag.as_ref().is_some_and(|c| c.as_str() == "base") {
+        let other = core.inner.deps.settings.text("venue.quote_asset", At { venue: Some(&to.0), coin: None }).map_err(|e| e.message)?;
+        super::settlement::require_usdt(&ticker, &other)?;
+    }
     let addr = super::net_ready::usdt_of(core, network, tag.as_ref())?;
     Ok(Asset {
         chain: tag,

@@ -28,6 +28,7 @@ pub mod rules_codes;
 pub mod rules_meta;
 pub mod secrets;
 pub mod server;
+pub mod settlement;
 pub mod settings;
 pub mod settings_io;
 pub mod settings_io_fmt;

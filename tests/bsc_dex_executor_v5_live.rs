@@ -29,6 +29,7 @@ use arb::venues::bsc_dex::exec::executor::live_rule::{self, Class, Hook};
 use arb::venues::bsc_dex::exec::executor::{deploy_gate, live_proof, live_record};
 use arb::venues::bsc_dex::pools::exec_kind::ExecKind;
 
+mod executor_v5_base_eth;
 mod executor_v5_bsc_record;
 
 const DIR: &str = "tests/data/executor_v5_live_2026-11-21";
@@ -143,7 +144,7 @@ fn verdict_v5_arbitrum_by_rule() {
         deploy_gate::refusal_at(ARB).is_none(),
         "запись v5 × 42161 приняла хотя бы один класс"
     );
-    for chain in [Some(1), None] {
+    for chain in [Some(11155111), None] {
         let why = deploy_gate::refusal_at(chain)
             .expect("записи v5 для этой сети нет — развёртывание закрыто");
         assert!(why.contains("v5"), "{why}");
@@ -188,4 +189,19 @@ fn unjudged_kinds_sell_matches_quoter_after_a() {
         n += 1;
     }
     assert_eq!(n, 10);
+}
+
+/// Сборка V5: независимые сетевые записи двух no-hook V4 пулов в каждой сети.
+/// Другие классы не получают допуск по факту регистрации сети.
+#[test]
+fn base_and_ethereum_only_accept_measured_v4_class() {
+    for chain in [8453, 1] {
+        let v = live_proof::verdicts_of(Version::V5, Some(chain))
+            .as_ref()
+            .unwrap();
+        let accepted: Vec<_> = v.iter().filter(|x| x.accepted).collect();
+        assert_eq!(accepted.len(), 1);
+        assert_eq!(accepted[0].class, class(19, Hook::Without));
+        assert_eq!((accepted[0].proven, accepted[0].pools), (2, 2));
+    }
 }

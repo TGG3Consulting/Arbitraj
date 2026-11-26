@@ -1,0 +1,26 @@
+{
+  "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": {
+    "balance": {
+      "kind": "sol",
+      "index": 9,
+      "slot": "0x77401d90169fb046beabb166d42235ca28393e5b0d3f86dba64cd9cdf73ddd77"
+    },
+    "allowance": {
+      "kind": "sol",
+      "index": 10,
+      "slot": "0x2992029c1459f5e1cc155b37b1461a059ee09c9172b39183f3e8a0516b7dc419"
+    }
+  },
+  "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2": {
+    "balance": {
+      "kind": "sol",
+      "index": 0,
+      "slot": "0xa93fdf6b67dd70ca8a968e86e480cd6b60d34e0cca76b6cdd019143d3d8d4ba8"
+    },
+    "allowance": {
+      "kind": "sol",
+      "index": 1,
+      "slot": "0x6c3d49beb8a270523a3a9102d69d964b005941fd2295a5c113d867a31bd549ef"
+    }
+  }
+}

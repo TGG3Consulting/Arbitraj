@@ -172,7 +172,8 @@ pub async fn send_tipped(
     // Решение 247, п. З: BNB на газ (value + газ + чаевые с газом их перевода) — до отправки, с понятной причиной;
     // решение 435: по потолку цены (EIP-1559 — gas_limit × maxFeePerGas).
     let need = super::gas_fund::need_wei(value, price.cap(), gas, tip_cost);
-    super::gas_fund::ensure(ctx, from, need.saturating_add(extra)).await?;
+    let need = super::gas_fund::add_native_reserve(ctx, value, need.saturating_add(extra))?;
+    super::gas_fund::ensure(ctx, from, need).await?;
     let head = env.heads.fresh(ctx)?;
     // Решение 436 (А): время головы для условия секвенсора Arbitrum — до отправки (решение 398); каналов с окном
     // channel.cond_time_window_s нет — None, узел не спрашивается.

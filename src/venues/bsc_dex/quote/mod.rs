@@ -280,8 +280,8 @@ impl Quoting {
         tm.add(Part::Decimals, t);
         // Цена газа — как при отправке: eth_gasPrice с надбавкой, не ниже минимума готовых каналов (exec/txs.rs).
         let t = tm.now();
-        let gas = self
-            .gas
+        let fees = self.gas.for_quote(ctx, &self.heads).await?;
+        let gas = fees
             .wei(ctx, &self.heads)
             .await?
             .max(super::send::planned_floor(ctx)?);
@@ -307,6 +307,7 @@ impl Quoting {
         // Ревью 273: пулы Solidly с пределом цены газа фабрики ниже этой цены газа исключаются при выборе пулов
         // (quote/select.rs по plan_gas) — маршрут считается без них.
         let mut pick = self.clone();
+        pick.gas = fees.clone();
         pick.plan_gas = Some(gas);
         // Решение 300: признаки задачи tokio — здесь (счёт маршрута уходит в другой поток, quote/cpu.rs их не переносит).
         pick.exec_quote =
@@ -344,7 +345,7 @@ impl Quoting {
         if let Some((units, count)) = approve_gas::details(self, &q, coin_dec, usdt_dec).await? {
             let wei = gas
                 .saturating_mul(U256::from(units))
-                .saturating_add(self.gas.extra(ctx, units, count)?);
+                .saturating_add(fees.extra(ctx, units, count)?);
             let bnb = num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
                 ctx.err(
                     ErrorCode::BadResponse,
@@ -368,7 +369,7 @@ impl Quoting {
             }
         }
         if let Some(r) = &q.route {
-            let extra = self.gas.extra(ctx, r.gas_units, 1)?;
+            let extra = fees.extra(ctx, r.gas_units, 1)?;
             if !extra.is_zero() {
                 let native_fee = num::to_decimal(extra, num::BNB_DECIMALS).ok_or_else(|| {
                     ctx.err(

@@ -48,6 +48,20 @@ def tables(network, snapshots, profiles):
     for id, row in configured.items():
         params = "<br>".join(f"`{k} = {v}`" for k, v in row["settings"].items())
         out.append(f"| `{id}` | {params} | {row['source']} |")
+    from_dir = f"../tests/data/executor_v5_{network}_2026-11-26"
+    out.extend(["", f"Uniswap V4 · два пула USDT/USDC, hook 0. Для каждого выполнены симуляции "
+                f"покупки в размере 1 и 100 USDT и обратной продажи полученного USDC. На всех восьми шагах сети "
+                f"ArbExecutor V5 вернул сумму квотера и кредита события Swap с нулевыми остатками обоих токенов. "
+                f"В отдельной проверке значение minOut = квота прошло для каждой стороны и размера, а квота + 1 дала откат. "
+                f"[Граница minOut]({from_dir}/min_out.json). Для обычного кошелька нужен его собственный исполнитель. [Запись V5]({from_dir}/README.md) · "
+                f"[Суммы и результаты]({from_dir}/summary.json)."])
+    if base:
+        out.extend(["", "Aerodrome Slipstream · 3 разных пула WETH/USDC, по одному у каждой фабрики. "
+                    "16 операций ArbExecutor.execute в eth_simulateV1, два направления и два размера у каждой фабрики, "
+                    "ещё один размер у второго и третьего поколений. Размер до 0,01 WETH или 10 USDC. "
+                    "Адреса источника и получателя, calldata и балансы до и после — в записи. "
+                    "[Данные исполнения](../tests/data/base_slipstream_2026-11-26/executor.json) · "
+                    "[Квотеры и тики](../tests/data/base_slipstream_2026-11-26/quotes.json)."])
     out.extend(["", f"Код каждого адреса проверен в [снимке размещений](../tests/data/first_run_dex_2026-11-26/{network}.json). "
                 "Две записи вызова Router.getAmountOut содержат исходные аргументы и ответ. "
                 "У Maverick V2 параметр dex.tick_radius задаёт оператор по глубине рынка. "

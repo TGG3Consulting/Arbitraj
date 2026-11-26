@@ -472,14 +472,15 @@ impl Venue for BscDex {
             return Ok(Vec::new());
         }
         // Цена газа — как при котировке и отправке: eth_gasPrice с надбавкой, не ниже минимума готовых каналов.
-        let gas = q
-            .gas
+        let fees = q.gas.for_quote(&q.ctx, &q.heads).await?;
+        let gas = fees
             .wei(&q.ctx, &q.heads)
             .await?
             .max(send::planned_floor(&q.ctx)?);
         // Решение 131: поиск циклов — счёт CPU, вне рабочих потоков tokio (quote/cpu.rs).
         // Ревью 273: пулы Solidly с пределом цены газа фабрики ниже этой цены — не в циклы (quote/select.rs plan_gas).
         let mut qc = q.clone();
+        qc.gas = fees;
         qc.plan_gas = Some(gas);
         // Решение 301 (дополнение — стек): работа — в кучу (quote/cpu.rs run принимает только Pin<Box<F>>).
         let found = quote::cpu::run(

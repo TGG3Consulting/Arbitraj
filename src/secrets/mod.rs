@@ -30,6 +30,7 @@ pub const TELEGRAM_DAILY_TOKEN: &str = "telegram.daily_bot_token";
 /// Известные секреты: имя, к чему относится (площадка или «система»), описание — для интерфейса.
 /// Новая площадка или сервис добавляет сюда свои секреты.
 pub static KNOWN: &[(&str, &str, &str)] = &[
+    ("hashflow.taker_key", "hashflow", "Ключ доступа Hashflow Taker API v3 для нескольких кошельков"),
     (TELEGRAM_DUTY_TOKEN, "telegram", "Токен бота для дежурного"),
     (TELEGRAM_DAILY_TOKEN, "telegram", "Токен бота суточных автоотчётов"),
     (

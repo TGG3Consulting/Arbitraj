@@ -274,5 +274,55 @@
       "dex.quoter": "0xb40AfdB85a07f37aE217E7D6462e609900dD8D7A",
       "dex.pool_lens": "0x6A9EB38DE5D349Fe751E0aDb4c0D9D391f94cc8D"
     }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "sushiswap-v2-base",
+    "source": "https://github.com/sushi-labs/sushi/blob/76d9cd5c1159804449e305339a00ff73331068b5/src/evm/config/features/sushiswap-v2.ts",
+    "settings": {
+      "dex.kind": "v2_fork",
+      "dex.factory": "0x71524b4f93c58fcbf659783284e38825f0622859",
+      "dex.router": "0x6bded42c6da8fbf0d2ba55b2fa120c5e0c8d7891",
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "sushiswap-v3-base",
+    "source": "https://github.com/sushi-labs/sushi/blob/76d9cd5c1159804449e305339a00ff73331068b5/src/evm/config/features/sushiswap-v3.ts",
+    "settings": {
+      "dex.kind": "v3_fork",
+      "dex.factory": "0xc35dadb65012ec5796536bd9864ed8773abc74c4",
+      "dex.tick_lens": "0xf4d73326c13a4fc5fd7a064217e12780e9bd62c3",
+      "dex.quoter": "0xb1e835dc2785b52265711e17fccb0fd018226a6e"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "sushiswap",
+    "source": "https://github.com/sushi-labs/sushi/blob/76d9cd5c1159804449e305339a00ff73331068b5/src/evm/config/features/sushiswap-v2.ts",
+    "settings": {
+      "dex.kind": "v2_fork",
+      "dex.factory": "0xc0aee478e3658e2610c5f7a4a2e1777ce9e4f2ac",
+      "dex.router": "0xd9e1ce17f2641f24ae83637ab66a2cca9c378b9f",
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "sushiswap-v3-ethereum",
+    "source": "https://github.com/sushi-labs/sushi/blob/76d9cd5c1159804449e305339a00ff73331068b5/src/evm/config/features/sushiswap-v3.ts",
+    "settings": {
+      "dex.kind": "v3_fork",
+      "dex.factory": "0xbaceb8ec6b9355dfc0269c18bac9d6e2bdc29c4f",
+      "dex.tick_lens": "0xfb70ad5a200d784e7901230e6875d91d5fa6b68c",
+      "dex.quoter": "0x64e8802fe490fa7cc61d3463958199161bb608a7"
+    }
   }
 ]

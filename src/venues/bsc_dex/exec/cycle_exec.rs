@@ -101,15 +101,17 @@ pub async fn trade(
         rebuilt_notice(env, &tr, at.0);
     }
     // Решение 437 (2): цена газа (у eip1559_l1 — с частью L1 этой транзакции, NodeInterface) — одновременно с пробой.
+    let mut fee_quote = q.clone();
+    fee_quote.gas = q.gas.for_quote(ctx,&q.heads).await?;
     let call = (executor, c.data());
     let ((got, gas), bill) = tokio::try_join!(
         probe(ctx, &c, wallet, at),
-        cycle_gas::priced(q, wallet, call)
+        cycle_gas::priced(&fee_quote, wallet, call)
     )?;
     let out = super::super::num::to_decimal(got, dec)
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "выход пробы не в Decimal"))?;
     // Решение 437 (3): profit_share — чаевые сделки от прибыли цикла (exec/tip_cycle.rs), до проверки порога.
-    let mut bill = cycle_gas::simulated(q, bill, gas, 0, 0)?;
+    let mut bill = cycle_gas::simulated(&fee_quote, bill, gas, 0, 0)?;
     if let (cycle_gas::Bill::Type2 { extra, .. }, Some(paid)) = (&mut bill, approved) {
         let paid = super::super::num::to_units(paid,super::super::num::BNB_DECIMALS)
             .ok_or_else(|| ctx.err(ErrorCode::BadResponse,"комиссия подтверждённых approve не помещается в wei"))?;

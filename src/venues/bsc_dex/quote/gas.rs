@@ -71,6 +71,15 @@ impl GasPrice {
         }
     }
 
+    /// Для Base закрепляет базовую цену, L1 и оператора в одном снимке перед расчётом вариантов сделки.
+    pub async fn for_quote(&self, ctx: &Ctx, heads: &Heads) -> GatewayResult<Self> {
+        if ctx.place.id == "base_dex" && !self.pinned {
+            self.base(ctx, heads).await?;
+            return Ok(self.pinned());
+        }
+        Ok(self.clone())
+    }
+
     /// Решение 352: цена газа в памяти — (блок, цена без надбавки); None — ещё не запрашивалась. Котировка на голове с
     /// этим номером берёт ровно её (hit в wei). Ошибок нет.
     pub fn known(&self) -> Option<(u64, U256)> {

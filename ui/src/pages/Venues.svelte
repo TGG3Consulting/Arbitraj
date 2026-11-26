@@ -23,6 +23,7 @@
   import { store, shownAtVenue } from '../lib/settings.svelte.js';
   import { secrets, TELEGRAM_TOKEN } from '../lib/secrets.svelte.js';
   import { dex } from '../lib/dex.svelte.js';
+  import BaseConversion from '../components/BaseConversion.svelte';
   import CheckConnection from '../components/CheckConnection.svelte';
   import SecretRow from '../components/SecretRow.svelte';
   import SettingEditor from '../components/SettingEditor.svelte';
@@ -83,6 +84,8 @@
   <section class="card venue">
     <h2>{id}</h2>
     <CheckConnection url={`/api/check/venue/${encodeURIComponent(id)}`} />
+
+    {#if id === 'base_dex'}<BaseConversion />{/if}
 
     <h3>Итог дня и лимит дня</h3>
     <DayVenues only={id} />

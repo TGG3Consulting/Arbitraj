@@ -38,7 +38,7 @@ struct Source {
     chain_doc: &'static str,
 }
 
-const SOURCES: [Source; 4] = [
+const SOURCES: [Source; 6] = [
     Source {
         version: Version::V3,
         dir: "tests/data/executor_v3_live_2026-11-17",
@@ -117,6 +117,46 @@ const SOURCES: [Source; 4] = [
         chain_doc: include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/data/executor_v5_bsc_live_2026-11-23/README.md"
+        )),
+    },
+    Source {
+        version: Version::V5,
+        dir: "tests/data/executor_v5_base_2026-11-26",
+        readme: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v5_base_2026-11-26/README.md"
+        )),
+        summary: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v5_base_2026-11-26/summary.json"
+        )),
+        reject: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v5_base_2026-11-26/hooks_reject.json"
+        )),
+        chain_doc: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v5_base_2026-11-26/README.md"
+        )),
+    },
+    Source {
+        version: Version::V5,
+        dir: "tests/data/executor_v5_ethereum_2026-11-26",
+        readme: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v5_ethereum_2026-11-26/README.md"
+        )),
+        summary: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v5_ethereum_2026-11-26/summary.json"
+        )),
+        reject: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v5_ethereum_2026-11-26/hooks_reject.json"
+        )),
+        chain_doc: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v5_ethereum_2026-11-26/README.md"
         )),
     },
 ];

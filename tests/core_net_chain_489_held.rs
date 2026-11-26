@@ -142,3 +142,56 @@ async fn mirror_held_bsc_dex_no_leak() {
     assert!(!sub.is_empty(), "набор arb_dex есть");
     assert!(sub.iter().all(|c| c.asset.chain == Some(a.clone())));
 }
+
+/// Реальное хранилище настроек и ядро: любую из четырёх сетей можно
+/// выключить без смены сети старых записей. Учитывает как карту in_play,
+/// так и группы, поступающие в сборщик рабочего справочника монет.
+#[tokio::test]
+async fn four_networks_have_sixteen_independent_activation_states() {
+    use arb::core::{chain, chain_play, registry_chains};
+    use arb::gateway::contract::VenueKind;
+    let core = start("base-eth-four-networks-live-flags", true, false).await;
+    let venues = [
+        ("bsc_dex", "bsc"),
+        ("arb_dex", "arbitrum"),
+        ("base_dex", "base"),
+        ("eth_dex", "ethereum"),
+    ];
+    for (name, network) in &venues[2..] {
+        let id = v(name);
+        core.inner.kinds.write().unwrap().push((id, VenueKind::Dex));
+        t489_common::set(
+            &core,
+            "dex.chain",
+            Scope::Venue((*name).into()),
+            json!(network),
+        )
+        .await;
+    }
+    for mask in 0_u8..16 {
+        for (i, (name, _)) in venues.iter().enumerate() {
+            t489_common::set(
+                &core,
+                "venue.enabled",
+                Scope::Venue((*name).into()),
+                json!(mask & (1 << i) != 0),
+            )
+            .await;
+        }
+        let expected: Vec<_> = venues
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| mask & (1 << i) != 0)
+            .map(|(_, (name, _))| v(name))
+            .collect();
+        let active = chain_play::active_dexes(&core);
+        assert_eq!(active, expected, "маска {mask:04b}");
+        let groups = registry_chains::groups(&core, &chain::dexes(&core));
+        let registered: Vec<_> = groups.into_iter().flat_map(|g| g.dex).collect();
+        assert_eq!(registered, expected, "группы {mask:04b}");
+        for (name, network) in &venues {
+            let chain = chain::tag_of_dex(&core, &v(name)).unwrap().map(|c| c.0);
+            assert_eq!(chain.as_deref(), (*network != "bsc").then_some(*network));
+        }
+    }
+}

@@ -5,9 +5,9 @@ use super::{Prepared, market};
 use crate::core::types::{
     Asset, Cost, CostKind, DexRoute, Quote, RouteMode, Side, TradeRequest, TradeResult,
 };
+use super::model::Request;
 use crate::gateway::{
     errors::{ErrorCode, GatewayResult},
-    hashflow::Request,
 };
 use alloy_primitives::{Address, B256};
 use chrono::Utc;

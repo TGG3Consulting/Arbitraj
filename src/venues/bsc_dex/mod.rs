@@ -16,6 +16,8 @@ pub mod coins;
 pub mod connection;
 pub mod hashflow;
 pub mod hanji;
+mod source_quote;
+mod fermi;
 pub mod connection_events;
 pub mod connection_extra;
 pub mod connection_gas;

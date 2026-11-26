@@ -20,7 +20,8 @@
     busy = true;
     try {
       submitted = { input, output, amount };
-      result = await post(`/api/venues/${seg(venue)}/hashflow/quote`, { trader, input, output, amount_tokens: amount });
+      const quote = await post(`/api/venues/${seg(venue)}/sources/hashflow/quote`, { trader, input, output, amount_tokens: amount });
+      result = quote.details;
     } catch (e) {
       error = e.message;
     } finally {

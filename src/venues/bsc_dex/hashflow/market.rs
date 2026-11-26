@@ -1,7 +1,7 @@
 //! Рынок Hashflow Taker API v3. Уровни каждого maker заданы порциями, первый объём задаёт минимум.
 //! https://docs.hashflow.com/hashflow/taker/getting-started-api-v3
 use super::{Ctx, wire::Chain};
-use crate::gateway::hashflow::Request;
+use super::model::Request;
 use crate::gateway::http;
 use alloy_primitives::Address;
 use reqwest::{

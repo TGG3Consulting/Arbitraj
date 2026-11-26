@@ -1,6 +1,6 @@
 //! Проверка подписанной структуры и calldata по официальному ABI Hashflow.
 //! https://github.com/hashflownetwork/x-protocol/blob/main/evm/abi/IHashflowRouter.json
-use crate::gateway::hashflow::Request;
+use super::model::Request;
 use alloy::sol;
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, B256, Bytes, U256};

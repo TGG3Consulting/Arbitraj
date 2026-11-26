@@ -1,6 +1,6 @@
 //! Контроль подписанной calldata и оплаченных сумм на четырёх реально проведённых прямых обменах.
 use super::{amount, router, sim, units, wire};
-use crate::gateway::hashflow::Request;
+use super::model::Request;
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, B256, Bytes, U256};
 use serde::Deserialize;

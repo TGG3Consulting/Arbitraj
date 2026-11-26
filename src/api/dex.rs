@@ -23,32 +23,32 @@ use crate::gateway::contract::DexFamily;
 
 use super::state::{ApiError, AppState};
 
-/// Проверка подписанной котировки через зарегистрированную DEX, без отправки транзакции.
-pub async fn hashflow(
+/// Ручная диагностика источника через общий контракт площадки.
+pub async fn source_quote(
     State(st): State<AppState>,
-    Path(id): Path<String>,
-    Json(req): Json<crate::gateway::hashflow::Request>,
-) -> Result<Json<crate::gateway::hashflow::Preview>, ApiError> {
+    Path((id, source)): Path<(String, String)>,
+    Json(req): Json<crate::gateway::source_quote::Request>,
+) -> Result<Json<crate::gateway::source_quote::Preview>, ApiError> {
     let venue = st
         .registry
         .get(&VenueId(id))
         .await
         .map_err(ApiError::gateway)?;
     venue
-        .hashflow_quote(req)
+        .source_quote(&source, req)
         .await
         .map(Json)
         .map_err(ApiError::gateway)
 }
 
-/// Ручная котировка по доступным уровням Hanji на одном каноническом блоке.
-pub async fn hanji(
-    State(st): State<AppState>,
-    Path(id): Path<String>,
-    Json(req): Json<crate::gateway::hanji::Request>,
-) -> Result<Json<crate::gateway::hanji::Preview>, ApiError> {
-    let venue = st.registry.get(&VenueId(id)).await.map_err(ApiError::gateway)?;
-    venue.hanji_quote(req).await.map(Json).map_err(ApiError::gateway)
+/// Совместимость с прежними адресами ручной проверки в этой ветке.
+pub async fn legacy_source_quote(
+    st: State<AppState>,
+    Path((id, source)): Path<(String, String)>,
+    req: Json<crate::gateway::source_quote::Request>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let Json(quote) = source_quote(st, Path((id, source)), req).await?;
+    Ok(Json(quote.details))
 }
 
 /// Канал отправки для интерфейса: описание от адаптера и последняя статистика от ядра.

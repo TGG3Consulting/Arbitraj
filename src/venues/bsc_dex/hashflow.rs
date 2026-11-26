@@ -8,15 +8,16 @@ pub(super) mod routing;
 pub(in crate::venues::bsc_dex) use execute::{ReceiptProof, failed, marker, record, reserve};
 #[cfg(test)]
 mod recovery_tests;
+pub(super) mod model;
 mod sim;
 #[cfg(test)]
 mod tests;
 mod wire;
 
 use super::{ctx::Ctx, node::chain_id};
+use model::{Preview, Request};
 use crate::gateway::{
     errors::{ErrorCode, GatewayResult},
-    hashflow::{Preview, Request},
 };
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, U256, keccak256};

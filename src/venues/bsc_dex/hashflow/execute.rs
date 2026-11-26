@@ -2,10 +2,10 @@
 use super::super::{ctx::Ctx, exec, parts::Parts, send, wallet};
 use super::{routing, sim, wire};
 use crate::core::types::{RouteMode, SendMethod, Side, TradeRequest, TradeResult, TxOutcome};
+use super::model::Request;
 use crate::gateway::{
     errors::{ErrorCode, GatewayResult},
     events::MarketEvent,
-    hashflow::Request,
     pending::PendingRef,
     settlement_intent as intent,
 };

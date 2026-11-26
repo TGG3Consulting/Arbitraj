@@ -5,15 +5,17 @@
 //! Настройки: используются HTTP-лимиты и узел выбранной DEX-площадки.
 //! Сверка цены из интерфейса. Запрашивается официальный реестр, затем токены,
 //! масштабы лота, комиссия и уровни одной стороны книги на одном хеше Base.
-use super::{Level, Side, Units};
+use super::{
+    Level, Side, Units,
+    model::{Preview, Request},
+};
 use crate::gateway::{
     errors::{ErrorCode, GatewayResult},
-    hanji::{Preview, Request},
     http,
 };
 use crate::venues::bsc_dex::{ctx::Ctx, node::rpc};
+use alloy::{sol, sol_types::SolCall};
 use alloy_primitives::{Address, B256, Bytes, U64, U256, address};
-use alloy_sol_types::{SolCall, sol};
 use serde::Deserialize;
 use serde_json::json;
 

@@ -147,6 +147,19 @@ def tables(network, snapshots, profiles):
                     "буфер подписки dex.ekubo_hub_buffer и доступ к отправке выбирает оператор. "
                     f"[Ключи, тики, квоты и события](../{ekubo}) · "
                     "[Размещения Ekubo](https://docs.ekubo.org/reference/contracts/evm-v3/)."])
+    fermi = Path("tests/data/first_run_dex_2026-11-26/fermi_ethereum.json")
+    if not base and fermi.exists():
+        data_fermi = read(fermi)
+        rows = sum(len(v["cases"]) for v in data_fermi["simulations"].values())
+        out.extend(["", f"FermiSwap · три версии подтверждены квитанциями Ethereum и переводами токенов. "
+                    f"На блоках 26 494 352–26 494 988 все 131 наблюдение относятся к "
+                    f"\x60{data_fermi['router']}\x60. В слоте 15 740 677 реальные кадры Titan и BuilderNet "
+                    f"дали {rows} проверенных исполнений WETH ↔ USDT с точным минимумом и откатом при минимуме "
+                    "на единицу выше. Без обновления оракула и в следующем блоке котировки вернули SP. "
+                    "Сумма зависит от выбранного строителя блока. Для торговли требуются отдельный канал "
+                    "этого строителя на точный блок, проверка остаточного времени и восстановление исходного намерения. "
+                    f"[Блоки, котировки, движения токенов](../{fermi.as_posix()}) · "
+                    "[Адреса и порядок исполнения Titan](https://docs.titanbuilder.xyz/propamms)."])
     pancake = "tests/data/first_run_dex_2026-11-26/pancake_stable_ethereum.json"
     if not base and Path(pancake).exists():
         out.extend(["", "PancakeSwap StableSwap · два пула из официального API составляют полный реестр Ethereum "
@@ -296,8 +309,13 @@ def tables(network, snapshots, profiles):
     for row in sorted(llama["rows"], key=lambda row: -volumes.get(row["id"], -1)):
         r = adapters[row["id"]]
         ref = r.get("link") or r.get("source")
+        candidates = r.get("addresses_from_chain_stanza", [])
+        task = f"`T-SOURCE-{network}-{row['id']}`"
+        if not base and str(row["id"]) == "7979" and fermi.exists():
+            candidates = [p["router"] for p in data_fermi["historical"]]
+            task = "FERMI-01 · проверены два строителя, шлюз исполнения в разработке"
         out.append(f"| {row['id']} | {cell(row['name'])} | {volumes.get(row['id'], 'нет данных')} | [{cell(row['module'])}]({ref}) "
-                   f"| {addresses(r.get('addresses_from_chain_stanza', []))} | `T-SOURCE-{network}-{row['id']}` |")
+                   f"| {addresses(candidates)} | {task} |")
     out.extend(["", "#### Конфигурации Velora", "", "Проверены обозначения сети в исходном файле адаптера маршрутизации. "
                 "Тип каждой реализации и возможность прямого спотового исполнения требуют проверки.",
                 "", "| Адаптер | Ключ | Сетевой раздел | Адреса-кандидаты |", "|---|---|---|---|"])

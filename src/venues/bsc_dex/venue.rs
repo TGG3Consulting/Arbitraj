@@ -34,16 +34,12 @@ impl Venue for BscDex {
         self.p.ctx.venue().0 == "base_dex"
     }
 
-    async fn hanji_quote(&self, req: crate::gateway::hanji::Request)
-        -> GatewayResult<crate::gateway::hanji::Preview> {
-        super::hanji::live::preview(&self.p.ctx, req).await
-    }
-
-    async fn hashflow_quote(
+    async fn source_quote(
         &self,
-        request: crate::gateway::hashflow::Request,
-    ) -> GatewayResult<crate::gateway::hashflow::Preview> {
-        super::hashflow::preview(&self.p.ctx, request).await
+        source: &str,
+        req: crate::gateway::source_quote::Request,
+    ) -> GatewayResult<crate::gateway::source_quote::Preview> {
+        super::source_quote::preview(&self.p.ctx, source, req).await
     }
 
     /// Идентификатор площадки (`bsc_dex`). Ошибок нет.

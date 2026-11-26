@@ -4,7 +4,7 @@ use super::{
     Ctx,
     wire::{Firm, Trade},
 };
-use crate::gateway::hashflow::Request;
+use super::model::Request;
 use alloy::sol_types::SolEvent;
 use alloy_primitives::{Address, B256, Bytes, U64, U256, keccak256};
 use serde::Deserialize;

@@ -865,21 +865,16 @@ pub trait Venue: Send + Sync {
         Vec::new()
     }
 
-    /// Цена книги Hanji на указанную сумму в минимальных единицах входного токена.
-    async fn hanji_quote(&self, _req: crate::gateway::hanji::Request)
-        -> GatewayResult<crate::gateway::hanji::Preview> {
-        Err(GatewayError::new(ErrorCode::NotApplicable, Some(self.id()), "У площадки нет Hanji"))
-    }
-
-    /// Подписанная односетевая RFQ с симуляцией от публичного адреса трейдера.
-    async fn hashflow_quote(
+    /// Ручная котировка источника ликвидности. Дополнительные параметры проверяет адаптер.
+    async fn source_quote(
         &self,
-        _request: crate::gateway::hashflow::Request,
-    ) -> GatewayResult<crate::gateway::hashflow::Preview> {
+        _source: &str,
+        _req: crate::gateway::source_quote::Request,
+    ) -> GatewayResult<crate::gateway::source_quote::Preview> {
         Err(GatewayError::new(
             ErrorCode::NotApplicable,
             Some(self.id()),
-            "У площадки нет Hashflow RFQ",
+            "У площадки нет такого источника котировки",
         ))
     }
 

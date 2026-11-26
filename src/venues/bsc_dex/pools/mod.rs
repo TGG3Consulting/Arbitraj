@@ -309,6 +309,7 @@ pub mod reload;
 pub mod reload_many;
 pub mod revive;
 pub mod ring;
+pub(super) mod ring_proof;
 pub mod scan;
 pub mod session;
 pub mod session_lanes;

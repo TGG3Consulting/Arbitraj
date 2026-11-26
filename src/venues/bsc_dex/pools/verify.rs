@@ -103,9 +103,11 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut shell = Vec::new();
     let mut ekubo = Vec::new();
     let mut wombat = Vec::new();
+    let mut ring = Vec::new();
     let mut v2v3 = Vec::new();
     for (i, c) in cands.iter().enumerate() {
         match c.family.proto {
+            _ if c.family.variant == Variant::RingFew => ring.push(i),
             Proto::InfinityCl | Proto::InfinityBin | Proto::UniswapV4 => v4.push(i),
             p if p.is_dodo() => dodo.push(i),
             Proto::Algebra | Proto::AlgebraIntegral | Proto::AlgebraDirFee => algebra.push(i),
@@ -338,6 +340,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     {
         out[i] = Some(r);
     }
+    super::ring_proof::verify(ctx, cands, &ring, &mut out).await;
     let list: Vec<Candidate> = v2v3.iter().map(|i| cands[*i].clone()).collect();
     for (i, r) in v2v3.into_iter().zip(contracts(ctx, &list, size).await) {
         out[i] = Some(r);
@@ -464,22 +467,11 @@ fn found(
     if let Some(k) = key {
         super::registry_key::remember(ctx.place.id, pool, k);
     }
-    let (token0, token1) = if c.family.variant == Variant::RingFew {
-        if !super::ring::check_pool(pool, r.token0, r.token1) {
-            return Err("Ring: адрес не совпал с CREATE2 пары".into());
-        }
-        (
-            super::ring::underlying(r.token0).ok_or("Ring: неизвестен token0")?,
-            super::ring::underlying(r.token1).ok_or("Ring: неизвестен token1")?,
-        )
-    } else {
-        (r.token0, r.token1)
-    };
     Ok(Found {
         family: c.family,
         reference: PoolRef::Contract(pool),
-        token0,
-        token1,
+        token0: r.token0,
+        token1: r.token1,
         coin: c.coin,
         fee_pips,
         tick_spacing: r.spacing,

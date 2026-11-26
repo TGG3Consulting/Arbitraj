@@ -38,16 +38,21 @@ def allow(token, amount):
     ]
 
 
-def exchange(path, out_asset, amount, bound, deadline, native_input=False, native_output=False, check=None, legacy=False):
+def exchange(path, out_asset, amount, bound, deadline, native_input=False, native_output=False, check=None, legacy=False, input_asset=None):
     receiver = ADDRESS_THIS if native_output else OWNER
     commands = [0x23]
     inputs = [encode(["address", "uint256", "uint256", "address[]", "bool", "bool"],
                      [receiver, amount, bound, path, not native_input, True])]
-    if path[0] == "0xef87f4608e601e8564800265aee1c1ffadf73283" and not legacy:
-        pool = "0x147d15e009a63ebed5196ea029679329204f98fd"
+    if input_asset is None:
+        input_asset = ASSETS[1] if path[0] == "0xef87f4608e601e8564800265aee1c1ffadf73283" else WETH
+    if input_asset not in [WETH,*ASSETS[2:]] and not legacy:
+        fw0,fw1=sorted(path)
+        salt=keccak(bytes.fromhex(fw0[2:]+fw1[2:]))
+        init=bytes.fromhex("a7ae6a5ec37f0c21bbdac560794258c4089b8ae3ffa6e3909b53c6091764a676")
+        pool="0x"+keccak(b"\xff"+bytes.fromhex(FACTORY[2:])+salt+init)[-20:].hex()
         sub = [
-            encode(["address", "address", "uint160"], [ASSETS[1], ADDRESS_THIS, amount]),
-            encode(["address", "address", "uint256"], [ASSETS[1], pool, amount]),
+            encode(["address", "address", "uint160"], [input_asset, ADDRESS_THIS, amount]),
+            encode(["address", "address", "uint256"], [input_asset, pool, amount]),
             encode(["address", "uint256", "uint256", "address[]", "bool", "bool"], [receiver, 0, bound, path, False, True]),
         ]
         commands = [0x21]

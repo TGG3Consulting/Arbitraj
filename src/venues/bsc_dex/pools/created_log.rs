@@ -313,6 +313,26 @@ async fn one(p: &Pools, w: &Watch, log: &Log, v4: bool, f: &'static Family) -> R
             coin: x.coin,
             quote: w.usdt,
         }
+    } else if f.variant == super::family_variant::Variant::RingFew {
+        let event =
+            IV2Factory::PairCreated::decode_log_data(&log.inner.data).map_err(|e| e.to_string())?;
+        let wq = super::ring::wrapped(w.usdt);
+        let other = if event.token0 == wq {
+            event.token1
+        } else if event.token1 == wq {
+            event.token0
+        } else {
+            return Ok(());
+        };
+        let Some(&coin) = w.coins.keys().find(|a| super::ring::wrapped(**a) == other) else {
+            return Ok(());
+        };
+        Candidate {
+            family: f,
+            pool: format!("{:#x}", event.pair),
+            coin,
+            quote: w.usdt,
+        }
     } else if f.proto == Proto::BalancerV3 {
         // Решение 452: токены пула Balancer V3 — в tokenConfig события (пул может быть многотокенным).
         match events_balancer_v3::registered(f, log, w.usdt, &w.coins)? {
@@ -491,14 +511,6 @@ pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candid
                 .map_err(|e| format!("PoolCreated не по ABI: {e}"))?;
             (e.token0, e.token1, e.pool)
         }
-    };
-    let (t0, t1) = if f.variant == super::family_variant::Variant::RingFew {
-        let a = super::ring::underlying(t0).ok_or("Ring: неизвестен underlying token0")?;
-        let b = super::ring::underlying(t1).ok_or("Ring: неизвестен underlying token1")?;
-        super::ring::path(a, b).ok_or("Ring: пара вне проверенного набора")?;
-        (a, b)
-    } else {
-        (t0, t1)
     };
     let coin = if t0 == quote {
         t1

@@ -203,6 +203,7 @@ pub fn bundle_result(
         block_number: U64::from(block.unwrap_or_default()),
         gas_used: U64::from(gas_used),
         effective_gas_price: U256::ZERO,
+        rollup: Default::default(),
         logs,
         transaction_index: None,
     });

@@ -22,7 +22,11 @@ use super::ctx::Ctx;
 use super::networks_parse::{Parsed, parse_with};
 
 /// Имена цепи в /v2/assets/info для других сетей — в том же порядке, что own_nets::OTHER.
-const OTHER_INFO: [&str; 1] = ["venue.arbitrum_contract_chain"];
+const OTHER_INFO: [&str; own_nets::OTHER.len()] = [
+    "venue.arbitrum_contract_chain",
+    "venue.base_contract_chain",
+    "venue.ethereum_contract_chain",
+];
 
 /// Свои сети CoinEx и «минимум депозита неизвестен — 0».
 #[derive(Debug, Clone)]

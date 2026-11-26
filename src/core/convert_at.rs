@@ -40,28 +40,64 @@ pub fn plan(
     }
     // Решение 416: тикер газа — dex.gas_ticker площадок DEX (не задана — валюта как любая другая). Решение 430: газ любой
     // сети площадок DEX (одна DEX — её тикер, как раньше).
-    let gas = super::gas_ticker::all(core).iter().any(|g| ticker == g)
-        && (addr.is_none()
-            || super::native::is_native(
-                core,
-                &Asset {
-                    chain: None,
-                    ticker: ticker.to_string(),
-                    contract: addr,
-                },
-            ));
-    let addr = match addr {
-        Some(a) => Some(a),
-        None => super::venue_ticker::asset_by_venue_ticker(core, origin, ticker)
-            .and_then(|a| a.contract),
+    let dex_chain = if !cex.contains(origin) {
+        match super::chain::tag_of_dex(core, origin) {
+            Ok(chain) => Some(chain),
+            Err(_) => return out,
+        }
+    } else {
+        None
     };
     let idx = rd(&core.inner.tickers);
+    let asset = match (addr, dex_chain) {
+        (Some(address), Some(chain)) => Some(Asset {
+            chain,
+            contract: Some(address),
+            ticker: ticker.to_owned(),
+        }),
+        (Some(address), None) => {
+            let mut matching = idx
+                .book_assets(origin, ticker)
+                .filter(|a| a.contract == Some(address));
+            match (matching.next(), matching.next()) {
+                (Some(a), None) => Some(a),
+                (None, None) => match idx.by_token.get(&address).map(Vec::as_slice) {
+                    Some([unique]) => Some(unique.clone()),
+                    None => Some(Asset {
+                        chain: None,
+                        contract: Some(address),
+                        ticker: ticker.to_owned(),
+                    }),
+                    _ => None,
+                },
+                _ => None,
+            }
+        }
+        (None, _) => {
+            let mut matching = idx.book_assets(origin, ticker);
+            matching.next().filter(|_| matching.next().is_none())
+        }
+    };
+    let gas = super::gas_ticker::all(core).iter().any(|g| ticker == g)
+        && (addr.is_none()
+            || asset.as_ref().is_some_and(|a| {
+                super::native::is_native(
+                    core,
+                    &Asset {
+                        ticker: ticker.to_owned(),
+                        ..a.clone()
+                    },
+                )
+            }));
     for v in cex.iter().filter(|v| *v != origin) {
         if gas {
             out.push((v.clone(), ticker.to_string()));
             continue;
         }
-        if let Some(t) = addr.and_then(|a| idx.venue_ticker.get(&(v.clone(), a))) {
+        if let Some(t) = asset
+            .as_ref()
+            .and_then(|a| idx.venue_ticker.get(&(v.clone(), a.clone())))
+        {
             out.push((v.clone(), t.clone()));
         }
     }

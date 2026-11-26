@@ -20,9 +20,9 @@ impl TickerIndex {
     /// Тикер монеты на площадке. Принимает: монету (ядра или площадки), площадку. Возвращает: тикер площадки; монета
     /// без адреса или без присутствия на площадке — её собственный тикер. Ошибок нет.
     pub fn ticker_on(&self, asset: &Asset, venue: &VenueId) -> String {
-        asset
-            .contract
-            .and_then(|a| self.venue_ticker.get(&(venue.clone(), a)).cloned())
+        self.venue_ticker
+            .get(&(venue.clone(), asset.clone()))
+            .cloned()
             .unwrap_or_else(|| asset.ticker.clone())
     }
 
@@ -69,11 +69,23 @@ pub fn balance_key(core: &Core, asset: &Asset, venue: &VenueId) -> String {
 /// с адресом USDT ядра (тот же, что в ожиданиях перегона USDT, usdt_return.rs; второе ревью 211, п.1); иначе как есть
 /// (BNB, монета вне справочника). Ошибок нет.
 pub fn asset_back(core: &Core, venue: &VenueId, asset: Asset) -> Asset {
-    if let Some(c) = asset_by_venue_ticker(core, venue, &asset.ticker)
-        && (asset.contract.is_none() || asset.contract == c.contract)
-    {
-        return c;
+    let idx = rd(&core.inner.tickers);
+    let mut matches = idx.book_assets(venue, &asset.ticker).filter(|known| {
+        asset
+            .contract
+            .is_none_or(|addr| known.contract == Some(addr))
+            && asset
+                .chain
+                .as_ref()
+                .is_none_or(|chain| known.chain.as_ref() == Some(chain))
+    });
+    let first = matches.next();
+    // Биржевое событие без сети может относиться к нескольким контрактам.
+    // Сохраняем исходную идентичность до получения однозначной привязки.
+    if let Some(c) = first {
+        return if matches.next().is_none() { c } else { asset };
     }
+    drop(idx);
     if asset.contract.is_none()
         && is_quote(core, venue, &asset.ticker)
         && let Ok(a) = super::registry_chains::usdt_of(core, asset.chain.as_ref())

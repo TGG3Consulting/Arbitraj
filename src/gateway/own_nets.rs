@@ -21,7 +21,11 @@ pub const BSC: &str = "venue.bsc_network";
 
 /// Имена сетей других сетей ядра у биржи — по правилу `venue.<id сети>_network` (setting_of). Каждое имя — запись
 /// каталога настроек (тест в этом файле). Новая сеть = новая строка здесь и в каталоге.
-pub const OTHER: [&str; 1] = ["venue.arbitrum_network"];
+pub const OTHER: [&str; 3] = [
+    "venue.arbitrum_network",
+    "venue.base_network",
+    "venue.ethereum_network",
+];
 
 /// Что делает: имя настройки «имя сети у биржи» для сети ядра. Принимает: сеть в каноническом виде (None — сеть по
 /// умолчанию). Возвращает: venue.bsc_network или venue.<id>_network. Ошибок нет.

@@ -30,6 +30,8 @@ pub struct Receipt {
     pub gas_used: U64,
     pub effective_gas_price: U256,
     pub logs: Vec<Log>,
+    #[serde(flatten)]
+    pub rollup: RollupFees,
     /// Решение 437 (3): место транзакции в блоке — для разбора проигрыша по чаевым (exec/tip_judge.rs: кто изменил наш
     /// пул раньше нас). execution-apis src/schemas/receipt.yaml (transactionIndex); Option — запись без поля не ломает
     /// разбор.
@@ -37,14 +39,40 @@ pub struct Receipt {
     pub transaction_index: Option<U64>,
 }
 
+/// Дополнительные поля RPC-квитанции OP Stack. Обычная Ethereum/BSC-квитанция
+/// и Nitro (L1 уже в gasUsed) обходятся без этих полей.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RollupFees {
+    l1_fee: Option<U256>,
+    operator_fee_scalar: Option<U64>,
+    operator_fee_constant: Option<U64>,
+    da_footprint_gas_scalar: Option<U64>,
+}
+
 impl Receipt {
-    /// Газ транзакции в BNB. None — не помещается в Decimal.
+    /// Фактическая комиссия в нативной монете. Основание — receipt, включая
+    /// https://specs.optimism.io/protocol/jovian/exec-engine.html#operator-fee
     pub fn gas_bnb(&self) -> Option<Decimal> {
-        num::to_decimal(
-            self.effective_gas_price
-                .saturating_mul(U256::from(self.gas_used)),
-            num::BNB_DECIMALS,
-        )
+        let used = U256::from(self.gas_used);
+        let mut wei = self.effective_gas_price.checked_mul(used)?;
+        if let Some(data_fee) = self.rollup.l1_fee {
+            let scaled = used.checked_mul(U256::from(
+                self.rollup.operator_fee_scalar.unwrap_or_default(),
+            ))?;
+            let operator = if self.rollup.da_footprint_gas_scalar.is_some() {
+                scaled.checked_mul(U256::from(100))?
+            } else {
+                scaled / U256::from(1_000_000)
+            };
+            wei = wei
+                .checked_add(data_fee)?
+                .checked_add(operator)?
+                .checked_add(U256::from(
+                    self.rollup.operator_fee_constant.unwrap_or_default(),
+                ))?;
+        }
+        num::to_decimal(wei, num::BNB_DECIMALS)
     }
 }
 
@@ -75,4 +103,31 @@ pub async fn in_block(ctx: &Ctx, ours: &[B256]) -> GatewayResult<bool> {
         }
     }
     Ok(false)
+}
+
+#[cfg(test)]
+mod fee_tests {
+    use super::*;
+    /// Поля eth_getTransactionReceipt из блоков Base 62262756 и Ethereum 26494988.
+    /// События обмена в расчёте комиссии не участвуют.
+    #[test]
+    fn finalized_fees_match_base_and_ethereum_receipts() {
+        let cases: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/data/base_ethereum_fee_receipts.json"
+        ))
+        .unwrap();
+        for (chain, wei) in [
+            ("base", 394_995_829_903_i128),
+            ("ethereum", 94_527_990_541_229_i128),
+        ] {
+            let mut row = cases[chain].clone();
+            row["logs"] = serde_json::json!([]);
+            let receipt: Receipt = serde_json::from_value(row).unwrap();
+            assert_eq!(
+                receipt.gas_bnb(),
+                Some(Decimal::from_i128_with_scale(wei, 18)),
+                "{chain}"
+            );
+        }
+    }
 }

@@ -214,9 +214,29 @@ pub fn register(
 /// адрес только у одного — разные активы (событие площадки без адреса уже переведено в монету ядра —
 /// credit_event::on_change, venue_ticker::asset_back). Ошибок нет.
 pub fn same_asset(a: &Asset, b: &Asset) -> bool {
-    match (a.contract, b.contract) {
-        (Some(x), Some(y)) => x == y,
-        (None, None) => a.ticker == b.ticker,
-        _ => false,
+    a == b
+}
+
+#[cfg(test)]
+mod chain_identity_tests {
+    use super::*;
+    use crate::core::types::ChainId;
+
+    /// Coinbase publishes this identical address on Base, Ethereum and Arbitrum:
+    /// https://www.coinbase.com/cbbtc . Each network has its own transfers.
+    #[test]
+    fn same_cbbtc_address_does_not_credit_another_network() {
+        let asset = |network: &str| Asset {
+            chain: Some(ChainId(network.into())),
+            ticker: "cbBTC".into(),
+            contract: Some(alloy_primitives::address!(
+                "cbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"
+            )),
+        };
+        for chain in ["base", "ethereum", "arbitrum"] {
+            for other in ["base", "ethereum", "arbitrum"] {
+                assert_eq!(same_asset(&asset(chain), &asset(other)), chain == other);
+            }
+        }
     }
 }

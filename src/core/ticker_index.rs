@@ -27,8 +27,8 @@ pub struct TickerIndex {
     /// Другие сети той же биржевой пары. Только для доставки тика стакана: один баланс
     /// или вывод площадки по-прежнему разрешается отдельно через get.
     book_networks: HashMap<(VenueId, String), Vec<Asset>>,
-    /// Решение 211: (площадка, адрес) → тикер этой площадки (core/venue_ticker.rs).
-    pub venue_ticker: HashMap<(VenueId, Address), String>,
+    /// Решение 211: (площадка, сеть и адрес) → тикер этой площадки (core/venue_ticker.rs).
+    pub(super) venue_ticker: HashMap<(VenueId, Asset), String>,
     /// Адрес контракта → монеты справочника с этим адресом (решение 129: событие пула находит монеты своих токенов
     /// без прохода всего справочника — у MEXC тысячи монет на каждое событие пула).
     pub by_token: HashMap<Address, Vec<Asset>>,
@@ -182,7 +182,7 @@ pub fn index_of(coins: &[CoinEntry]) -> TickerIndex {
                 }
             }
             idx.venue_ticker
-                .entry((p.venue.clone(), addr))
+                .entry((p.venue.clone(), c.asset.clone()))
                 .or_insert_with(|| p.ticker.clone());
             for e in &p.excluded {
                 if let super::registry::Exclusion::TickerConflict(t) = e {

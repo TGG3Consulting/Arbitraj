@@ -1,0 +1,22 @@
+{
+  "base": {
+    "transactionHash": "0xcf866d690c8c6c5e5c500d0401262eb8d2b02fb1ce41906e20440d4c171187d9",
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "blockNumber": "0x3b60de4",
+    "type": "0x2",
+    "status": "0x1",
+    "gasUsed": "0x8c03",
+    "effectiveGasPrice": "0xa7d8c1",
+    "l1Fee": "0x2b14f64c",
+    "daFootprintGasScalar": "0x94"
+  },
+  "ethereum": {
+    "transactionHash": "0xcf770c3e46f2e3c809adfde06be05abcb2ee00ab9aad87408cd48ab935895d28",
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "blockNumber": "0x194480c",
+    "type": "0x2",
+    "status": "0x1",
+    "gasUsed": "0xb411",
+    "effectiveGasPrice": "0x7a3a29dd"
+  }
+}

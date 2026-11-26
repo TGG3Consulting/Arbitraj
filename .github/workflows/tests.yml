@@ -21,6 +21,10 @@ on:
         description: Replay the CI-built executor against the two recorded Ethereum builder frames
         type: boolean
         default: false
+      ethervista_archive_replay:
+        description: Measure EtherVista native fees, payouts and rollback on Base and Ethereum
+        type: boolean
+        default: false
       oasis_archive_replay:
         description: Compare the OasisSwap router and the compiled V5 adapter on one canonical Base block
         type: boolean
@@ -400,6 +404,24 @@ jobs:
         with:
           name: ethereum-v2-${{ matrix.market }}
           path: ${{ runner.temp }}/ethereum-v2.json
+  ethervista-archive:
+    if: inputs.ethervista_archive_replay
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        network: [base, ethereum]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0
+      - run: python scripts/record_ethervista_wallets.py "${{ matrix.network }}" "$RUNNER_TEMP/ethervista.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ethervista-wallets-${{ matrix.network }}
+          path: ${{ runner.temp }}/ethervista.json
   deltaswap-base-archive:
     if: inputs.base_factory_directory
     runs-on: ubuntu-latest

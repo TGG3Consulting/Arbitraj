@@ -17,6 +17,10 @@ on:
         description: Replay the CI-built executor against the two recorded Ethereum builder frames
         type: boolean
         default: false
+      base_factory_directory:
+        description: Reconstruct every pool created by the three Base fork deployers
+        type: boolean
+        default: false
       native_v3_only:
         description: Run only the read-only replay of the three Base fork routers
         type: boolean
@@ -120,6 +124,20 @@ jobs:
         with:
           name: communityv3-ethereum-depth
           path: ${{ runner.temp }}/communityv3-depth.json
+  base-v3-factory-directory:
+    if: inputs.base_factory_directory
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0
+      - run: python scripts/record_base_native_v3_directory.py "$RUNNER_TEMP/base-v3-directory.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: base-v3-factory-directory
+          path: ${{ runner.temp }}/base-v3-directory.json
   base-native-v3:
     if: inputs.native_v3_only || inputs.derpdex_archive_replay
     runs-on: ubuntu-latest

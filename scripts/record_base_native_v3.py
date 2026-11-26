@@ -7,7 +7,7 @@ import requests
 from eth_abi import decode
 from eth_utils import keccak
 
-from record_base_slipstream_executor import EXEC, ROOT, calldata, rpc
+from record_base_slipstream_executor import EXEC, ROOT, RUNTIME, STEP, calldata, rpc
 from record_v2_chain_pools import view as read_call
 from record_solidly_v3 import HOLDERS
 
@@ -26,6 +26,9 @@ MARKETS = {
 }
 ORDER = "(address,address,uint24,address,uint256,uint256,uint256,uint160)"
 QUOTE = "(address,address,uint256,uint24,uint160)"
+OMNI_FUNDING_FACTORY = "0x5e7bb104d84c7cb9b682aac2f3d509f5f406809a"
+OMNI_FUNDING_POOL = "0xd3d9f0f7d0d477e0a19222965b59233ad7f6bc6b"
+FUNDING_EXEC = "0x"+keccak(text="isolated Omni archive frxUSD funding")[-20:].hex()
 
 
 def verified(address, chain_code):
@@ -50,10 +53,14 @@ def collect(snapshot, endpoint, module_code=None):
         data = calldata(signature, args, vals)
         raw = read_call(endpoint,selector,target,data)
         return decode([rtype], raw)[0]
+    extra_overrides = {}
     def simulate(calls):
         frame = {"calls":calls}
+        overrides = extra_overrides.copy()
         if module_code:
-            frame["stateOverrides"] = {EXEC: {"code":"0x"+module_code}}
+            overrides[EXEC] = {"code":"0x"+module_code}
+        if overrides:
+            frame["stateOverrides"]=overrides
         stage, = rpc(endpoint, "eth_simulateV1", [{"blockStateCalls": [frame], "validation": False}, selector])
         if stage["parentHash"] != selector["blockHash"] or len(stage["calls"]) != len(calls):
             raise ValueError("mismatched simulation frame")
@@ -80,8 +87,9 @@ def collect(snapshot, endpoint, module_code=None):
         markets[name] = market
         deadline = int(header["timestamp"],16)+120
         quote_method = "quoteExactInputSingleV3" if name == "throne-v3-base" else "quoteExactInputSingle"
+        gas = 2_000_000
         def tx(to, data):
-            return {"from":holder, "to":to, "gas":hex(2_000_000), "data":data}
+            return {"from":holder, "to":to, "gas":hex(gas if to in (router,quoter,EXEC) else 2_000_000), "data":data}
         def balance(token):
             return tx(token,calldata("balanceOf(address)",["address"],[holder]))
         def approve(token, x, spender=router):
@@ -100,7 +108,7 @@ def collect(snapshot, endpoint, module_code=None):
         def leg(prefix,a,b,amount):
             prepared = prefix+[balance(a),balance(b),approve(a,0),approve(a,amount)]
             replies = simulate(prepared+[price(a,b,amount)])
-            row = dict(input=a, output=b, requested=str(amount))
+            row = dict(input=a, output=b, requested=str(amount), gas_limit=gas)
             if any(r["status"] != "0x1" for r in replies[:-1]):
                 raise ValueError("funding, previous trade or approval reverted before quote")
             q = output(replies[-1],4)
@@ -148,12 +156,45 @@ def collect(snapshot, endpoint, module_code=None):
                     row["module"]={"net":str(received),"gas":int(full[initial+2]["gasUsed"],16),
                                    "minimum_plus_one":full[initial].get("error"),"expired":full[initial+1].get("error")}
             return row,prepared+[order],received
-        for amount in ((10**12,10**14,10**16) if cash==WETH else (10_000,1_000_000,10_000_000)):
-            buy,prefix,received=leg([],cash,other,amount)
+        def roundtrip(a,b,amount,funding=()):
+            buy,prefix,received=leg(list(funding),a,b,amount)
             case={"buy":buy}
             if received:
-                case["sell"],_,_=leg(prefix,other,cash,received)
-            market["cases"].append(case)
+                case["sell"],_,_=leg(prefix,b,a,received)
+            return case
+        for amount in ((10**12,10**14,10**16) if cash==WETH else (10_000,1_000_000,10_000_000)):
+            market["cases"].append(roundtrip(cash,other,amount))
+        if name == "omni-exchange-v3-base":
+            # Keep the original two low-gas failures. Re-run the identical sizes with the per-transaction maximum.
+            amounts = (50_000,100_000,1_000_000,10_000_000)
+            gas = 16_777_216
+            market["extended_cash"] = [roundtrip(cash,other,n) for n in amounts]
+            # Independently acquire frxUSD outside the target pool; reverse-side depth starts at the original price.
+            funding_pool = view(OMNI_FUNDING_FACTORY,"getPool(address,address,int24)","address",
+                                ["address","address","int24"],[cash,other,1])
+            if funding_pool!=OMNI_FUNDING_POOL or rpc(endpoint,"eth_getCode",[FUNDING_EXEC,selector])!="0x":
+                raise ValueError("invalid independent frxUSD funding market")
+            unit=10**view(other,"decimals()","uint8")
+            word=lambda n:"0x"+format(n,"064x")
+            code=RUNTIME.read_text().strip().removeprefix("0x")
+            extra_overrides[FUNDING_EXEC]={"code":"0x"+code,"stateDiff":{
+                word(0):word(int(holder,16)),word(1):word(int(WETH,16))}}
+            cash_in = 20_000_000
+            data=calldata("execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
+                          ["address","uint256","address","uint256","uint256",STEP+"[]"],
+                          [cash,cash_in,other,10*unit,deadline,[(1,funding_pool,cash,other,10000,b"")]])
+            funding=[balance(cash),balance(other),approve(cash,0,FUNDING_EXEC),
+                     approve(cash,cash_in,FUNDING_EXEC),tx(FUNDING_EXEC,data),balance(cash),balance(other)]
+            outcome=simulate(funding)
+            if any(r["status"]!="0x1" for r in outcome):
+                raise ValueError(f"independent frxUSD funding failed {[(i,r.get('error')) for i,r in enumerate(outcome) if r['status']!='0x1']}")
+            acquired=output(outcome[-1])-output(outcome[1])
+            if output(outcome[0])-output(outcome[-2])!=cash_in or acquired<10*unit:
+                raise ValueError("funding wallet balances did not reconcile")
+            market["reverse_funding"]={"factory":OMNI_FUNDING_FACTORY,"pool":funding_pool,"payer":holder,
+                "spent_usdc":str(cash_in),"received_frxusd":str(acquired),"executor_runtime":"0x"+keccak(bytes.fromhex(code)).hex()}
+            market["extended_frxusd"]=[roundtrip(other,cash,unit*n//10**6,funding) for n in amounts]
+            extra_overrides.clear()
     return dict(chain_id=8453,selector=selector,block=snapshot["block"],state_root=header["stateRoot"],markets=markets,
                 module_runtime=("0x"+keccak(bytes.fromhex(module_code)).hex()) if module_code else None)
 

@@ -42,7 +42,10 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route("/api/balances", get(balances::list))
         .route("/api/balances/{id}", get(balances::venue))
         .route("/api/venues/kinds", get(venues::kinds))
-        .route("/api/venues/{id}/base-usdc-conversion", get(super::settlement::quote))
+        .route(
+            "/api/venues/{id}/base-usdc-conversion",
+            get(super::settlement::quote),
+        )
         .route("/api/venues/{id}/dex-families", get(dex::families))
         .route("/api/venues/{id}/pool-directory", get(dex::directory))
         .route("/api/venues/{id}/dex-cycles", get(dex::cycles))
@@ -62,6 +65,7 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
             "/api/venues/{id}/pool-cond-stat/reset",
             post(pool_cond_stat::reset),
         )
+        .route("/api/venues/{id}/hashflow/quote", post(dex::hashflow))
         .route("/api/dex/dry-swap", post(dex_dry::dry_swap))
         .route("/api/dex/dry-cycle", post(dex_dry::dry_cycle))
         .route("/api/venues/{id}/executor/quote", get(dex_executor::quote))

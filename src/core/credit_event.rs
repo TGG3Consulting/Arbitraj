@@ -41,7 +41,37 @@ pub async fn on_change(core: &Core, mut b: BalanceChange) {
     .then(|| b.asset.ticker.clone());
     // Решение 211: монета события — тикер площадки; в монету ядра (адрес, показное имя) — до сверки с ожиданиями.
     // Настройки монеты — по адресу (не нашёлся адрес — тикер, как раньше).
-    b.asset = super::venue_ticker::asset_back(core, &b.venue, b.asset);
+    // У CEX событие может содержать только локальный тикер и хеш. Даже
+    // если тикер есть в нескольких сетях, совпадение с известным выводом
+    // позволяет восстановить сеть без ожидания следующего REST-опроса.
+    let from_hash =
+        if b.kind == BalanceKind::Deposit && b.account.is_none() && b.asset.contract.is_none() {
+            b.tx_hash.as_deref().and_then(|hash| {
+                let hash = norm(hash);
+                if hash.is_empty() {
+                    return None;
+                }
+                let st = lock(core);
+                let mut assets = st
+                    .list
+                    .values()
+                    .filter(|e| {
+                        e.to == b.venue
+                            && e.tx.as_ref() == Some(&hash)
+                            && e.recipient_ticker.eq_ignore_ascii_case(&b.asset.ticker)
+                            && b.asset
+                                .chain
+                                .as_ref()
+                                .is_none_or(|c| e.asset.chain.as_ref() == Some(c))
+                    })
+                    .map(|e| &e.asset);
+                let first = assets.next()?;
+                assets.all(|a| a == first).then(|| first.clone())
+            })
+        } else {
+            None
+        };
+    b.asset = from_hash.unwrap_or_else(|| super::venue_ticker::asset_back(core, &b.venue, b.asset));
     let coin = super::coin_key::scope_id(&b.asset);
     let at = At {
         venue: Some(&b.venue.0),

@@ -324,5 +324,581 @@
       "dex.tick_lens": "0xfb70ad5a200d784e7901230e6875d91d5fa6b68c",
       "dex.quoter": "0x64e8802fe490fa7cc61d3463958199161bb608a7"
     }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "balancer-v2-base",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/base.json · 20230320-weighted-pool-v4",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x4C32a8a8fDa4E24139B51b456B42290f51d6A1c4",
+      "dex.balancer_math": "v2",
+      "dex.sub_dex": [
+        "bal-v2-0c6052254551",
+        "bal-v2-161f4014c277",
+        "bal-v2-44d33798dddc",
+        "bal-v2-687b8c9b41e0",
+        "bal-v2-9a62c91626d3",
+        "bal-v2-8df317a729fc",
+        "bal-v2-956ccab09898"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "bal-v2-0c6052254551",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/base.json · 20211202-no-protocol-fee-lbp · NoProtocolFeeLiquidityBootstrappingPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x0c6052254551EAe3ECac77B01DFcf1025418828f",
+      "dex.balancer_pool": "lbp"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "bal-v2-161f4014c277",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/base.json · 20230409-erc4626-linear-pool-v4 · ERC4626LinearPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x161f4014C27773840ccb4EC1957113e6DD028846",
+      "dex.balancer_pool": "linear"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "bal-v2-44d33798dddc",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/base.json · 20230409-yearn-linear-pool-v2 · YearnLinearPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x44d33798dddCdAbc93Fe6a40C80588033Dc502d3",
+      "dex.balancer_pool": "linear"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "bal-v2-687b8c9b41e0",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/base.json · 20230410-aave-linear-pool-v5 · AaveLinearPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x687b8C9b41E01Be8B591725fac5d5f52D0564d79",
+      "dex.balancer_pool": "linear"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "bal-v2-9a62c91626d3",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/base.json · 20230411-managed-pool-v2 · ManagedPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x9a62C91626d39D0216b3959112f9D4678E20134d",
+      "dex.balancer_pool": "managed"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "bal-v2-8df317a729fc",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/base.json · 20230711-composable-stable-pool-v5 · ComposableStablePoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x8df317a729fcaA260306d7de28888932cb579b88",
+      "dex.balancer_pool": "composable_stable"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "bal-v2-956ccab09898",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/base.json · 20240223-composable-stable-pool-v6 · ComposableStablePoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x956CCab09898C0AF2aCa5e6C229c3aD4E93d9288",
+      "dex.balancer_pool": "composable_stable"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "balancer-v3-base",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/base.json · V3 · фабрики по выпускам",
+    "settings": {
+      "dex.kind": "balancer_v3",
+      "dex.vault": "0xbA1333333333a1BA1108E8412f11850A5C319bA9",
+      "dex.quoter": "0x3f170631ed9821Ca51A59D996aB095162438DC10",
+      "dex.bv3_batch_router": "0x85a80afee867aDf27B50BdB7b76DA70f1E853062",
+      "dex.bv3_weighted_factories": [
+        "0x5cF4928a3205728bd12830E1840F7DB85c62a4B9"
+      ],
+      "dex.bv3_weighted_min_factories": [
+        "0xBDbADc891BB95DEE80eBC491699228EF0f7D6fF1"
+      ],
+      "dex.bv3_stable_factories": [
+        "0xb9F8AB3ED3F3aCBa64Bc6cd2DcA74B7F38fD7B88"
+      ],
+      "dex.bv3_stable_open_factories": [
+        "0xC49Ca921c4CD1117162eAEEc0ee969649997950c",
+        "0x4fb47126Fa83A8734991E41B942Ac29A3266C968",
+        "0x8e3fEaAB11b7B351e3EA1E01247Ab6ccc847dD52"
+      ],
+      "dex.bv3_stable_guard_factories": [
+        "0xFc2986feAB34713E659da84F3B1FA32c1da95832",
+        "0x6623d1CEEaB236ae93aCAfB285dDFB77336B6981"
+      ],
+      "dex.bv3_gyro_2clp_factories": [
+        "0xf5CDdF6feD9C589f1Be04899F48f9738531daD59",
+        "0x312600bc7645E47a4926dc658827398AF070D431"
+      ],
+      "dex.bv3_gyro_eclp_factories": [
+        "0x5F6848976C2914403B425F18B589A65772F082E3",
+        "0x86a0E97eC0D5dB8DAE106D3067358d41968fD12c"
+      ],
+      "dex.bv3_reclamm_factories": [
+        "0x3BEb058DE1A25dd24223fd9e1796df8589429AcE",
+        "0x201efd508c8DfE9DE1a13c2452863A78CB2a86Cc"
+      ],
+      "dex.bv3_reclamm_v3_factories": [
+        "0x3ccD78683efFffdDc1A16f5553C896ac6D3ab7FF"
+      ],
+      "dex.bv3_lbp_v1_factories": [
+        "0x662112B8CB18889e81459b92CA0f894a2ef2c1B8"
+      ],
+      "dex.bv3_lbp_v2_factories": [
+        "0x0b11209B8c5E821b18dED147583b8978c3E63911"
+      ],
+      "dex.bv3_lbp_v3_factories": [
+        "0x6eE18fbb1BBcC5CF700cD75ea1aef2bb21e3cB3F"
+      ],
+      "dex.bv3_lbp_v4_factories": [
+        "0x6642863979e66d995717A2B836A121700595069A"
+      ],
+      "dex.bv3_fixed_lbp_factories": [
+        "0xb96524227c4B5Ab908FC3d42005FE3B07abA40E9"
+      ],
+      "dex.bv3_stable_surge_hooks": [
+        "0xb2007B8B7E0260042517f635CFd8E6dD2Dd7f007",
+        "0xDB8d758BCb971e482B2C45f7F8a7740283A1bd3A"
+      ],
+      "dex.bv3_mev_capture_hooks": [],
+      "dex.bv3_quantamm_factories": []
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "balancer_ethereum",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20210418-weighted-pool",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x8E9aa87E45e92bad84D5F8DD1bff34Fb92637dE9",
+      "dex.balancer_stable_factory": "0xc66Ba2B6595D3613CCab350C886aCE23866EDe24",
+      "dex.sub_dex": [
+        "bal-v2-a5bf2ddf098b",
+        "bal-v2-751a0bc0e3f7",
+        "bal-v2-67d27634e447",
+        "bal-v2-48767f9f868a",
+        "bal-v2-0f3e0c4218b7",
+        "bal-v2-d7fad3bd59d6",
+        "bal-v2-b08e16cfc07c",
+        "bal-v2-e061bf85648e",
+        "bal-v2-9588c26142e3",
+        "bal-v2-6a0ac04f5c2a",
+        "bal-v2-f9ac7b9df2b3",
+        "bal-v2-cc508a455f5b",
+        "bal-v2-9ac3e70db606",
+        "bal-v2-85a80afee867",
+        "bal-v2-b9f8ab3ed3f3",
+        "bal-v2-5dd94da3644d",
+        "bal-v2-8b7854708c0c",
+        "bal-v2-fada0f4547ab",
+        "bal-v2-897888115ada",
+        "bal-v2-813ee7a840ce",
+        "bal-v2-5f5222ffa40f",
+        "bal-v2-0b576c1245f4",
+        "bal-v2-bf904f9f3407",
+        "bal-v2-db8d758bcb97",
+        "bal-v2-5b42ec6d40f7"
+      ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-a5bf2ddf098b",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20210418-weighted-pool · WeightedPool2TokensFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0xA5bf2ddF098bb0Ef6d120C98217dD6B141c74EE0"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-751a0bc0e3f7",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20210721-liquidity-bootstrapping-pool · LiquidityBootstrappingPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x751A0bC0e3f75b38e01Cf25bFCE7fF36DE1C87DE",
+      "dex.balancer_pool": "lbp"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-67d27634e447",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20210727-meta-stable-pool · MetaStablePoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x67d27634E44793fE63c467035E31ea8635117cd4",
+      "dex.balancer_pool": "meta_stable"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-48767f9f868a",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20210907-investment-pool · InvestmentPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x48767F9F868a4A7b86A90736632F6E44C2df7fa9",
+      "dex.balancer_pool": "investment"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-0f3e0c4218b7",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20211202-no-protocol-fee-lbp · NoProtocolFeeLiquidityBootstrappingPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x0F3e0c4218b7b0108a3643cFe9D3ec0d4F57c54e",
+      "dex.balancer_pool": "lbp"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-d7fad3bd59d6",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20211208-aave-linear-pool · AaveLinearPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0xD7FAD3bd59D6477cbe1BE7f646F7f1BA25b230f8",
+      "dex.balancer_pool": "linear_v1"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-b08e16cfc07c",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20211208-stable-phantom-pool · StablePhantomPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0xb08E16cFc07C684dAA2f93C70323BAdb2A6CBFd2",
+      "dex.balancer_pool": "stable_phantom"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-e061bf85648e",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20220404-erc4626-linear-pool-v2 · ERC4626LinearPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0xE061bF85648e9FA7b59394668CfEef980aEc4c66",
+      "dex.balancer_pool": "linear_v1"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-9588c26142e3",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20220425-unbutton-aave-linear-pool · UnbuttonAaveLinearPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x9588c26142e345f1A0d005CfC0C6DF29A8Fa010C",
+      "dex.balancer_pool": "linear_v1"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-6a0ac04f5c2a",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20220817-aave-rebalanced-linear-pool · AaveLinearPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x6A0AC04f5C2A10297D5FA79FA6358837a8770041",
+      "dex.balancer_pool": "linear"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-f9ac7b9df2b3",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20220906-composable-stable-pool · ComposableStablePoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0xf9ac7B9dF2b3454E841110CcE5550bD5AC6f875F",
+      "dex.balancer_pool": "composable_stable"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-cc508a455f5b",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20220908-weighted-pool-v2 · WeightedPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0xcC508a455F5b0073973107Db6a878DdBDab957bC",
+      "dex.balancer_math": "v2",
+      "dex.balancer_stable_factory": "0x8df6EfEc5547e31B0eb7d1291B511FF8a2bf987c"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-9ac3e70db606",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20221021-managed-pool · ManagedPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x9Ac3E70dB606659Bf32D4BdFbb687AD193FD1F5B",
+      "dex.balancer_pool": "managed"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-85a80afee867",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20221122-composable-stable-pool-v2 · ComposableStablePoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x85a80afee867aDf27B50BdB7b76DA70f1E853062",
+      "dex.balancer_pool": "composable_stable"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-b9f8ab3ed3f3",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20230206-aave-rebalanced-linear-pool-v4 · AaveLinearPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0xb9F8AB3ED3F3aCBa64Bc6cd2DcA74B7F38fD7B88",
+      "dex.balancer_pool": "linear"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-5dd94da3644d",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20230206-weighted-pool-v3 · WeightedPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x5Dd94Da3644DDD055fcf6B3E1aa310Bb7801EB8b",
+      "dex.balancer_math": "v2"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-8b7854708c0c",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20230213-yearn-linear-pool · YearnLinearPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x8b7854708c0C54f9D7d1FF351D4F84E6dE0E134C",
+      "dex.balancer_pool": "linear"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-fada0f4547ab",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20230320-composable-stable-pool-v4 · ComposableStablePoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0xfADa0f4547AB2de89D1304A668C39B3E09Aa7c76",
+      "dex.balancer_pool": "composable_stable"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-897888115ada",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20230320-weighted-pool-v4 · WeightedPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x897888115Ada5773E02aA29F775430BFB5F34c51",
+      "dex.balancer_math": "v2"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-813ee7a840ce",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20230409-erc4626-linear-pool-v4 · ERC4626LinearPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x813EE7a840CE909E7Fea2117A44a90b8063bd4fd",
+      "dex.balancer_pool": "linear"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-5f5222ffa40f",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20230409-yearn-linear-pool-v2 · YearnLinearPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x5F5222Ffa40F2AEd6380D022184D6ea67C776eE0",
+      "dex.balancer_pool": "linear"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-0b576c1245f4",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20230410-aave-linear-pool-v5 · AaveLinearPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x0b576c1245F479506e7C8bbc4dB4db07C1CD31F9",
+      "dex.balancer_pool": "linear"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-bf904f9f3407",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20230411-managed-pool-v2 · ManagedPoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0xBF904F9F340745B4f0c4702c7B6Ab1e808eA6b93",
+      "dex.balancer_pool": "managed"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-db8d758bcb97",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20230711-composable-stable-pool-v5 · ComposableStablePoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0xDB8d758BCb971e482B2C45f7F8a7740283A1bd3A",
+      "dex.balancer_pool": "composable_stable"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bal-v2-5b42ec6d40f7",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · 20240223-composable-stable-pool-v6 · ComposableStablePoolFactory",
+    "settings": {
+      "dex.kind": "balancer_v2",
+      "dex.vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "dex.factory": "0x5B42eC6D40f7B7965BE5308c70e2603c0281C1E9",
+      "dex.balancer_pool": "composable_stable"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "balancer-v3-ethereum",
+    "source": "https://github.com/balancer/balancer-deployments/blob/b55dc2b8a46bce8f27aed5a3b03f719f662f860a/addresses/mainnet.json · V3 · фабрики по выпускам",
+    "settings": {
+      "dex.kind": "balancer_v3",
+      "dex.vault": "0xbA1333333333a1BA1108E8412f11850A5C319bA9",
+      "dex.quoter": "0xAE563E3f8219521950555F5962419C8919758Ea2",
+      "dex.bv3_batch_router": "0x136f1EFcC3f8f88516B9E94110D56FDBfB1778d1",
+      "dex.bv3_weighted_factories": [
+        "0x201efd508c8DfE9DE1a13c2452863A78CB2a86Cc"
+      ],
+      "dex.bv3_weighted_min_factories": [
+        "0x332694Ef46D880DF6Ea9593e04CB8ABEE5F81D99"
+      ],
+      "dex.bv3_stable_factories": [
+        "0xB9d01CA61b9C181dA1051bFDd28e1097e920AB14"
+      ],
+      "dex.bv3_stable_open_factories": [
+        "0xe42C2E153BB0A8899b59C73F5Ff941f9742F1197",
+        "0xD53F5d8d926fb2a0f7Be614B16e649B8aC102D83",
+        "0x355bD33F0033066BB3DE396a6d069be57353AD95"
+      ],
+      "dex.bv3_stable_guard_factories": [
+        "0x4eFcd8bcE8AC9b94bd76648e2c85bEf6c40F3228",
+        "0x187a05fb9e4234Dd310ae74215743560D1BAA6Ac"
+      ],
+      "dex.bv3_gyro_2clp_factories": [
+        "0xb96524227c4B5Ab908FC3d42005FE3B07abA40E9",
+        "0x8902F9C211f91c84Da2076f633873F8266dCECC6"
+      ],
+      "dex.bv3_gyro_eclp_factories": [
+        "0xE9B0a3bc48178D7FE2F5453C8bc1415d73F966d0",
+        "0x04d584195a96DFfc7F8B695aA3C9D3c1606b69d1"
+      ],
+      "dex.bv3_reclamm_factories": [
+        "0x5939ab16fDf1991B0EF603c639B6b501A7841fAB",
+        "0xDaa273AeEc06e9CCb7428a77E2abb1E4659B16D2"
+      ],
+      "dex.bv3_reclamm_v3_factories": [
+        "0x3ccD78683efFffdDc1A16f5553C896ac6D3ab7FF"
+      ],
+      "dex.bv3_lbp_v1_factories": [
+        "0x4eff2d77D9fFbAeFB4b141A3e494c085b3FF4Cb5"
+      ],
+      "dex.bv3_lbp_v2_factories": [
+        "0x02916d8F0891309806FCb347Bf4191692cbDDcAF"
+      ],
+      "dex.bv3_lbp_v3_factories": [
+        "0xD5584b37D1845fFeD958C2d94bC675603DdCce68"
+      ],
+      "dex.bv3_lbp_v4_factories": [
+        "0x6642863979e66d995717A2B836A121700595069A"
+      ],
+      "dex.bv3_fixed_lbp_factories": [
+        "0xeb1AA94421aEcFB1dc17dDB1068E4609c4bE8758"
+      ],
+      "dex.bv3_stable_surge_hooks": [
+        "0xb18fA0cb5DE8cecB8899AAE6e38b1B7ed77885dA",
+        "0xBDbADc891BB95DEE80eBC491699228EF0f7D6fF1"
+      ],
+      "dex.bv3_mev_capture_hooks": [],
+      "dex.bv3_quantamm_factories": []
+    }
   }
 ]

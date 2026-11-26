@@ -23,6 +23,24 @@ use crate::gateway::contract::DexFamily;
 
 use super::state::{ApiError, AppState};
 
+/// Проверка подписанной котировки через зарегистрированную DEX, без отправки транзакции.
+pub async fn hashflow(
+    State(st): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<crate::gateway::hashflow::Request>,
+) -> Result<Json<crate::gateway::hashflow::Preview>, ApiError> {
+    let venue = st
+        .registry
+        .get(&VenueId(id))
+        .await
+        .map_err(ApiError::gateway)?;
+    venue
+        .hashflow_quote(req)
+        .await
+        .map(Json)
+        .map_err(ApiError::gateway)
+}
+
 /// Канал отправки для интерфейса: описание от адаптера и последняя статистика от ядра.
 #[derive(Serialize)]
 pub struct ChannelView {

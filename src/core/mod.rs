@@ -325,6 +325,7 @@ pub mod sell_turn_last;
 pub mod sell_unsent;
 mod settlement_history;
 pub mod settlement;
+pub mod settlement_effect;
 pub mod settlement_unit;
 pub mod shutdown;
 pub mod sieve;

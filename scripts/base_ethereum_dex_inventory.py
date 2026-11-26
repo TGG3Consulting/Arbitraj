@@ -45,8 +45,18 @@ def tables(network, snapshots, profiles):
            "#### Значения для экрана «Первый запуск»", "",
            "| ID DEX | Настройки области DEX | Основание |", "|---|---|---|"]
     configured = {r["id"]: r for r in profiles if r["network"] == network}
+    matched = set(configured).intersection(gt["rows"])
+    out[2] += (f" Из {len(gt['rows'])} строк GeckoTerminal адресные профили заданы для {len(matched)}, "
+               f"остаются открытыми {len(gt['rows']) - len(matched)}. Ещё {len(configured) - len(matched)} "
+               "внутренних ключей обозначают отдельные выпуски фабрик.")
     for id, row in configured.items():
-        params = "<br>".join(f"`{k} = {v}`" for k, v in row["settings"].items())
+        fields = []
+        for k, v in row["settings"].items():
+            if isinstance(v, list):
+                values = [f"{x}{{суффикс}}" for x in v] if k == "dex.sub_dex" else v
+                v = ", ".join(values) or "[]"
+            fields.append(f"`{k} = {v}`")
+        params = "<br>".join(fields)
         out.append(f"| `{id}` | {params} | {row['source']} |")
     from_dir = f"../tests/data/executor_v5_{network}_2026-11-26"
     out.extend(["", f"Uniswap V4 · два пула USDT/USDC, hook 0. Для каждого выполнены симуляции "
@@ -55,6 +65,24 @@ def tables(network, snapshots, profiles):
                 f"В отдельной проверке значение minOut = квота прошло для каждой стороны и размера, а квота + 1 дала откат. "
                 f"[Граница minOut]({from_dir}/min_out.json). Для обычного кошелька нужен его собственный исполнитель. [Запись V5]({from_dir}/README.md) · "
                 f"[Суммы и результаты]({from_dir}/summary.json)."])
+    market_file = f"tests/data/first_run_dex_2026-11-26/balancer_{network}.json"
+    if Path(market_file).exists():
+        snapshot = read(Path(market_file))
+        market = snapshot["market"]
+        factories = snapshot["v3_pause_scan"]["factories"]
+        total = sum(f["pool_count"] for f in factories)
+        paused = sum(f["paused"] for f in factories)
+        counts = [sum(row["version"] == v and row["status"] == "quoted" for row in market) for v in (2, 3)]
+        out.extend(["", f"Balancer · прямая и обратная котировки для {counts[0]} пулов V2 через Vault.queryBatchSwap "
+                    f"и {counts[1]} пулов V3 через Router.querySwapSingleTokenExactIn. "
+                    "У каждого установлена фабрика по isPoolFromFactory и проверены токены хранилища. "
+                    "Расчёт использует одну стотысячную от баланса входного токена в пуле. Для V3 разрешение "
+                    "MEV Capture требует оценки сетевых чаевых, QuantAMM — подтверждения размещения собственной фабрики. "
+                    f"На закреплённом блоке среди {total} пулов {len(factories)} фабрик V3 на паузе {paused}, "
+                    f"паузу не установили у {total-paused} (isPoolPaused = false); isVaultPaused = false. "
+                    "По утверждённому BIP-928 пауза Vault V3 запланирована на 30.11.2026. "
+                    f"[Вызовы и ответы](../{market_file}) · "
+                    "[Решение Balancer](https://forum.balancer.fi/t/bip-928-orderly-winddown-of-balancer-and-distribution-of-the-treasury/7107/23)."])
     if base:
         out.extend(["", "Aerodrome Slipstream · 3 разных пула WETH/USDC, по одному у каждой фабрики. "
                     "16 операций ArbExecutor.execute в eth_simulateV1, два направления и два размера у каждой фабрики, "
@@ -128,13 +156,13 @@ def main():
     lines = ["## Протоколы и размещения", "",
              "Предзаполнение DEX использует chainId, dex.chain и суффикс активной площадки. Для пустой конфигурации сначала "
              "сохраните параметры сети. Значения ниже применяются обычным сохранением полей. Оператор задаёт лимиты, "
-             "глубину, кошельки и разрешение торговли по своей политике. Приёмка каждой версии исполнителя привязана к сети.",
+             "глубину, кошельки и разрешение торговли по своей политике. В списке дочерних фабрик {суффикс} равен @base или @ethereum при нескольких сетях и недефолтной сети ключа. Для единственной или дефолтной сети суффикс пустой. Приёмка каждой версии исполнителя привязана к сети.",
              "", "Статус «профиль» означает наличие адресных параметров семейства в этом выпуске. В таблицах нет подтверждённых "
              "фактических сделок. Каждый ID без установленного профиля остаётся в списке работ по подключению.", ""]
     for network in ["base", "ethereum"]:
         lines.extend(tables(network, args.snapshots, profiles))
         lines.append("")
-    doc.write_text(front + start + "\n\n" + "\n".join(lines) + "\n" + end + tail, encoding="utf8")
+    doc.write_text(front + start + "\n\n" + "\n".join(lines) + "\n" + end + tail, encoding="utf8", newline="\n")
 
 
 if __name__ == "__main__":

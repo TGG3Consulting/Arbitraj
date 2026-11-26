@@ -1,17 +1,38 @@
-//! Проверка доступа Hashflow Taker API v3 по запросу оператора. Один multi-wallet
-//! source; API использует обычный EVM chain ID для односетевых котировок.
+//! Ручная проверка и симуляция Hashflow Taker API v3 по запросу оператора.
 //! https://docs.hashflow.com/hashflow/taker/getting-started-api-v3
-use super::ctx::Ctx;
-use crate::gateway::{errors::ErrorCode, http};
-use reqwest::header::{AUTHORIZATION, HeaderValue};
-use serde::Deserialize;
+mod market;
+mod sim;
+#[cfg(test)]
+mod tests;
+mod wire;
 
-const MARKET_MAKERS: &str = "https://api.hashflow.com/taker/v3/market-makers";
+use super::{ctx::Ctx, node::chain_id};
+use crate::gateway::{
+    errors::{ErrorCode, GatewayResult},
+    hashflow::{Preview, Request},
+};
+use alloy::sol_types::SolCall;
+use alloy_primitives::{Address, U256, keccak256};
+use chrono::Utc;
+use rust_decimal::Decimal;
+use serde::Deserialize;
+use serde_json::json;
+use std::collections::BTreeMap;
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Makers {
-    market_makers: Vec<String>,
+struct Deployments {
+    routers: BTreeMap<u64, Address>,
+}
+
+/// Каноническая цель прямой RFQT из официального реестра. На других сетях прямой API не активен.
+fn router(chain: u64) -> Result<Address, String> {
+    let d: Deployments =
+        serde_json::from_str(include_str!("../../../config/hashflow_routers.json"))
+            .map_err(|_| "Повреждён реестр роутеров Hashflow")?;
+    d.routers
+        .get(&chain)
+        .copied()
+        .ok_or_else(|| "Нет размещения Hashflow в этой сети".into())
 }
 
 pub(super) async fn connection(ctx: &Ctx) -> Option<Result<String, String>> {
@@ -22,41 +43,131 @@ pub(super) async fn connection(ctx: &Ctx) -> Option<Result<String, String>> {
         Err(e) => return Some(Err(e.message)),
     };
     let chain = ctx.chain_id()?;
-    if !matches!(chain, 1 | 56 | 8453 | 42161) {
+    if router(chain).is_err() {
         return None;
     }
-    Some(makers(ctx, &source, chain).await)
+    Some(
+        market::makers(ctx, &source, chain)
+            .await
+            .map(|m| format!("chainId {chain}: доступно маркетмейкеров {}", m.len())),
+    )
 }
 
-async fn makers(ctx: &Ctx, source: &str, chain: u64) -> Result<String, String> {
-    let key = ctx.vault.get("hashflow.taker_key").map_err(|e| e.message)?;
-    let mut auth =
-        HeaderValue::from_str(key.as_str()).map_err(|_| "неверный формат ключа Hashflow")?;
-    auth.set_sensitive(true);
-    let req = ctx
-        .http
-        .get(MARKET_MAKERS)
-        .header(AUTHORIZATION, auth)
-        .query(&[
-            ("source", source),
-            ("baseChainType", "evm"),
-            ("baseChainId", &chain.to_string()),
-        ]);
-    let (status, body) = http::exchange(req, ctx.limits().map_err(|e| e.message)?)
-        .await
-        .map_err(|_| format!("chainId {chain}: нет полного HTTP-ответа Hashflow"))?;
-    if !status.is_success() {
-        return Err(format!(
-            "chainId {chain}: HTTP {status} при запросе маркетмейкеров"
+/// Десятичный вывод сырых единиц без округления либо потери значимых цифр.
+fn units(raw: U256, dp: u8) -> String {
+    let mut s = raw.to_string();
+    if dp == 0 {
+        return s;
+    }
+    let dp = usize::from(dp);
+    if s.len() <= dp {
+        s = format!("{:0>width$}", s, width = dp + 1);
+    }
+    s.insert(s.len() - dp, '.');
+    s.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+/// Ровно одна форма ввода. Decimal для уровней должен точно представлять весь введённый объём.
+fn amount(request: &Request, dp: u8) -> Result<(U256, Decimal), String> {
+    let raw = match (&request.amount, &request.amount_tokens) {
+        (Some(s), None) => wire::raw(s)?,
+        (None, Some(s)) => {
+            let d = Decimal::from_str_exact(s).map_err(|_| "Неверная десятичная сумма токенов")?;
+            if d.normalize().scale() > u32::from(dp) {
+                return Err("Сумма содержит долю минимальной единицы токена".into());
+            }
+            super::num::to_units(d, dp).ok_or("Сумма не представима в единицах токена")?
+        }
+        _ => return Err("Укажите ровно один из amount и amount_tokens".into()),
+    };
+    if raw.is_zero() {
+        return Err("Объём RFQ должен быть положительным".into());
+    }
+    let decimal = Decimal::from_str_exact(&units(raw, dp))
+        .map_err(|_| "Точность объёма выходит за пределы расчёта уровней")?;
+    Ok((raw, decimal))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Response {
+    status: String,
+    rfq_id: Option<String>,
+    quotes: Option<Vec<wire::Firm>>,
+}
+
+/// Опрос подписанной котировки и read-only симуляция. Не сохраняет подпись и не отправляет транзакции.
+pub(super) async fn preview(ctx: &Ctx, request: Request) -> GatewayResult<Preview> {
+    let id = chain_id::chain_id(ctx)?;
+    let source = ctx.text("hashflow.source")?;
+    if source.trim().is_empty() || source.trim() == "api" {
+        return Err(ctx.not_set(
+            "hashflow.source",
+            "Нужен источник multi-wallet, выданный Hashflow",
         ));
     }
-    let result: Makers = serde_json::from_str(&body)
-        .map_err(|_| format!("chainId {chain}: ответ не содержит список marketMakers"))?;
-    let count = result
-        .market_makers
-        .into_iter()
-        .filter(|s| !s.trim().is_empty())
-        .collect::<std::collections::BTreeSet<_>>()
-        .len();
-    Ok(format!("chainId {chain}: доступно маркетмейкеров {count}"))
+    check(ctx, id, &source, request)
+        .await
+        .map_err(|e| ctx.err(ErrorCode::BadResponse, e))
+}
+
+async fn check(ctx: &Ctx, id: u64, source: &str, r: Request) -> Result<Preview, String> {
+    if r.trader.is_zero() || r.input == r.output {
+        return Err("Проверьте адрес трейдера и разные токены обмена".into());
+    }
+    let target = router(id)?;
+    let h = sim::header(ctx, id).await?;
+    let (di, do_) = tokio::try_join!(
+        sim::decimals(ctx, r.input, h.hash),
+        sim::decimals(ctx, r.output, h.hash)
+    )?;
+    let (qty, human) = amount(&r, di)?;
+    let (makers, indicative) = market::levels(ctx, source, id, &r, human).await?;
+    let chain = json!({"chainType":"evm","chainId":id});
+    let body = json!({"source":source,"baseChain":chain,"quoteChain":chain,"calldata":true,
+        "rfqs":[{"baseToken":r.input,"quoteToken":r.output,"baseTokenAmount":qty.to_string(),"trader":r.trader,
+            "effectiveTrader":r.trader,"marketMakers":makers,"options":{"doNotRetryWithOtherMakers":true}}]});
+    let resp: Response = market::read(
+        ctx,
+        ctx.http
+            .post("https://api.hashflow.com/taker/v3/rfq")
+            .json(&body),
+    )
+    .await?;
+    let rfq_id = resp
+        .rfq_id
+        .filter(|s| !s.is_empty())
+        .ok_or("Hashflow не вернул RFQ ID")?;
+    if resp.status != "success" {
+        return Err("Маркетмейкер не предоставил подписанную котировку".into());
+    }
+    let quotes = resp.quotes.unwrap_or_default();
+    let [f] = quotes.as_slice() else {
+        return Err("Ожидалась одна котировка на одну заявку".into());
+    };
+    let now = || Utc::now().timestamp().max(0) as u64;
+    let (out, value) = wire::verify(f, id, target, &r, qty, now().max(h.timestamp.to::<u64>()))?;
+    let gas = sim::run(ctx, h.hash, &r, f, qty, out, value).await?;
+    if now() >= f.quote_data.quote_expiry {
+        return Err("Срок RFQ истёк во время симуляции".into());
+    }
+    Ok(Preview {
+        rfq_id,
+        txid: format!("{:#x}", f.quote_data.txid),
+        amount_in: qty.to_string(),
+        amount_out: out.to_string(),
+        amount_out_tokens: units(out, do_),
+        indicative_out: indicative.normalize().to_string(),
+        target,
+        selector: format!(
+            "0x{}",
+            alloy_primitives::hex::encode(wire::tradeRFQTCall::SELECTOR)
+        ),
+        calldata_hash: format!("{:#x}", keccak256(&f.calldata)),
+        value: value.to_string(),
+        expires: f.quote_data.quote_expiry,
+        block_hash: format!("{:#x}", h.hash),
+        gas_used: gas.to_string(),
+        maker_count: makers.len(),
+    })
 }

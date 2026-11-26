@@ -50,9 +50,16 @@ pub(super) fn dex_quote(core: &Core, venue: &VenueId) -> Option<Asset> {
     let tag = super::chain::tag_of_dex(core, venue).ok()?;
     let addr = if tag.as_ref().is_some_and(|c| c.as_str() == "base") && ticker == "USDC" {
         let registry = super::engine::rd(&core.inner.networks);
-        let known = registry.values().any(|rows| rows.iter().any(|row| row.asset.chain == tag
-            && row.asset.ticker == "USDC" && row.asset.contract == Some(super::settlement::BASE_USDC)));
-        if !known { return None; }
+        let known = registry.values().any(|rows| {
+            rows.iter().any(|row| {
+                row.asset.chain == tag
+                    && row.asset.ticker == "USDC"
+                    && row.asset.contract == Some(super::settlement::BASE_USDC)
+            })
+        });
+        if !known {
+            return None;
+        }
         super::settlement::BASE_USDC
     } else {
         if tag.as_ref().is_some_and(|c| c.as_str() == "base") && ticker != "USDT" {

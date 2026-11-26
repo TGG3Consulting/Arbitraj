@@ -41,6 +41,11 @@ pub async fn trade(
         None => order_rules::ready(ctx, symbols, &req).await?,
     };
     let started_s = chrono::Utc::now().timestamp();
+    let pending = PendingRef {
+        sent_at_s: Some(started_s),
+        ..PendingRef::order(&p.symbol, &p.text, p.qty)
+    };
+    crate::gateway::settlement_intent::before_send(&pending).await?;
     let placed = rest::signed(
         ctx,
         Method::POST,
@@ -64,10 +69,6 @@ pub async fn trade(
         }
     });
     // Решение 231: «чем найти» — к любому «итог неизвестен» ниже (ядро выяснит исход само, outcome_resolve.rs).
-    let pending = PendingRef {
-        sent_at_s: Some(started_s),
-        ..PendingRef::order(&p.symbol, &p.text, p.qty)
-    };
     let (order_id, first) = match placed {
         Ok((id, r)) => (id, Some(r)),
         // Итог неизвестен — поиск по своему text; не найден — отмена по нему и поиск в истории (как MEXC, А-🟠4).

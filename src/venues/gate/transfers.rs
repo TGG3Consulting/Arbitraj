@@ -68,6 +68,9 @@ pub(super) async fn submit(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Tra
         "amount": req.amount.normalize().to_string(),
         "chain": req.network,
     });
+    if crate::gateway::settlement_intent::active() {
+        crate::gateway::settlement_intent::before_send(&PendingRef::withdraw(&order_id)).await?;
+    }
     let sent = rest::signed(
         ctx,
         Method::POST,

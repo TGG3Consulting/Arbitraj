@@ -128,6 +128,13 @@ impl Gate {
 
 #[async_trait]
 impl Venue for Gate {
+    fn supports_settlement_order(&self) -> bool {
+        true
+    }
+    fn supports_settlement_withdrawal(&self) -> bool {
+        true
+    }
+
     fn id(&self) -> VenueId {
         self.ctx.venue()
     }

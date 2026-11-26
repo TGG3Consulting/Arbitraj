@@ -107,6 +107,16 @@ pub trait Venue: Send + Sync {
     /// Идентификатор площадки. Не может ошибиться.
     fn id(&self) -> VenueId;
 
+    /// Сохраняет реальный ID ордера Base USDC до отправки и умеет сверить его после потери ответа.
+    fn supports_settlement_order(&self) -> bool {
+        false
+    }
+
+    /// Сохраняет реальный ID вывода Base USDC до отправки и умеет сверить его после потери ответа.
+    fn supports_settlement_withdrawal(&self) -> bool {
+        false
+    }
+
     /// Вид площадки. Не может ошибиться.
     fn kind(&self) -> VenueKind;
 
@@ -825,6 +835,18 @@ pub trait Venue: Send + Sync {
     /// со свёрткой повторов (core/cycle_scan_log.rs). Не DEX или проходов не было — пусто. Ошибок нет.
     fn dex_cycle_tally(&self) -> Vec<(String, serde_json::Value)> {
         Vec::new()
+    }
+
+    /// Подписанная односетевая RFQ с симуляцией от публичного адреса трейдера.
+    async fn hashflow_quote(
+        &self,
+        _request: crate::gateway::hashflow::Request,
+    ) -> GatewayResult<crate::gateway::hashflow::Preview> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "У площадки нет Hashflow RFQ",
+        ))
     }
 
     /// «Сухая сделка DEX» (решение 121, C4): маршрут и транзакция собираются своим сборщиком КАК ДЛЯ СДЕЛКИ и

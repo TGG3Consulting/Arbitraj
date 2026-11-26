@@ -178,6 +178,14 @@ pub async fn send_tipped(
     // Решение 436 (А): время головы для условия секвенсора Arbitrum — до отправки (решение 398); каналов с окном
     // channel.cond_time_window_s нет — None, узел не спрашивается.
     let head_time = send::sequencer_cond::head_time(ctx, &env.heads, &ready).await?;
+    if crate::gateway::settlement_intent::active() {
+        let marker = crate::gateway::pending::PendingRef {
+            nonce: Some(nonce),
+            venue_ref: Some(signed.hash.to_string()),
+            ..Default::default()
+        };
+        crate::gateway::settlement_intent::before_send(&marker).await?;
+    }
     let d = send::dispatch(
         ctx,
         &env.stats,

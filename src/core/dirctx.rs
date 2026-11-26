@@ -184,7 +184,12 @@ impl DirCtx {
         let qb = s
             .text("venue.quote_asset", at(&dir.sell_on))
             .map_err(|e| e.message)?;
-        if dir.asset.chain.as_ref().is_some_and(|c| c.as_str() == "base") {
+        if dir
+            .asset
+            .chain
+            .as_ref()
+            .is_some_and(|c| c.as_str() == "base")
+        {
             super::settlement::require_usdt(&qa, &qb)?;
         }
         // Решение 430: USDT сети направления (монеты; сеть по умолчанию — как раньше).

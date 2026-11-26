@@ -69,7 +69,9 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
                 out.retain(|asset| asset.ticker != q.ticker);
             }
             out.push(q);
-        } else if super::chain::chain_at(&core.inner.deps.settings, venue).is_ok_and(|c| c.as_str() == "base") {
+        } else if super::chain::chain_at(&core.inner.deps.settings, venue)
+            .is_ok_and(|c| c.as_str() == "base")
+        {
             // Без канонического адреса расчётной монеты неоднозначный тикер нельзя передать адаптеру.
             return vec![];
         }

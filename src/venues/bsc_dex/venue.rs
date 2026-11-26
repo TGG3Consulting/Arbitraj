@@ -30,6 +30,17 @@ use crate::gateway::urgency::{self, Urgency as Class, scope};
 
 #[async_trait]
 impl Venue for BscDex {
+    fn supports_settlement_withdrawal(&self) -> bool {
+        self.p.ctx.venue().0 == "base_dex"
+    }
+
+    async fn hashflow_quote(
+        &self,
+        request: crate::gateway::hashflow::Request,
+    ) -> GatewayResult<crate::gateway::hashflow::Preview> {
+        super::hashflow::preview(&self.p.ctx, request).await
+    }
+
     /// Идентификатор площадки (`bsc_dex`). Ошибок нет.
     fn id(&self) -> VenueId {
         self.p.ctx.venue()

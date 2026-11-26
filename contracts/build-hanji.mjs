@@ -1,4 +1,4 @@
-// Builds the standalone Hanji execution contract with the compiler in contracts/package-lock.json.
+// Builds a standalone execution contract with the compiler in contracts/package-lock.json.
 // The original ArbExecutor and its versioned artifacts use their existing independent build.
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

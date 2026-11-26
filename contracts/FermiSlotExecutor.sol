@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: MIT
+// Файл: contracts/FermiSlotExecutor.sol.
+// Исполняет одно поручение Fermi на Ethereum по разрешению кошелька плательщика.
+// Плательщик вызывает execute лично, получает выручку и неиспользованный остаток.
+// Зависимости: проверенные роутер и оракул из реестра Titan, allowance и balanceOf ERC-20.
+// Параметры: идентификатор поручения, родитель, высота, время, токены, объём и предел цены.
 pragma solidity 0.8.37;
 
-// Source of the deployed router and pricing engine: https://docs.titanbuilder.xyz/propamms
+// Реестр развёртываний роутера и оракула https://docs.titanbuilder.xyz/propamms
 interface IFermiSlotRouter {
     function fermi() external view returns (address);
     function fermiSwapWithAllowances(address,address,int256,uint256,address)
@@ -16,9 +21,8 @@ interface IFermiToken {
     function approve(address spender,uint256 amount) external returns (bool);
 }
 
-/// Ethereum mainnet Fermi swaps from the caller's own allowance, payable only to that caller.
-/// The builder envelope also specifies this slot. A copied signed transaction cannot swap
-/// in a later slot or on another parent. The same logical leg cannot fill twice for its payer.
+/// Условия слота проверяются и на цепи. Поздняя копия подписанной транзакции откатывается.
+/// Каждый плательщик имеет собственный набор исполненных поручений.
 contract FermiSlotExecutor {
     address public constant ROUTER = 0xF6d5b2FefeC7B420d9990b95790ADFD3D4c4F977;
     address public constant ENGINE = 0x10e1A2b624e14ac59426199E520320313a98b0bE;
@@ -30,8 +34,8 @@ contract FermiSlotExecutor {
         uint64 timestamp;
         address input;
         address output;
-        int256 amount;   // positive exact input, negative exact output
-        uint256 limit;   // minimum output for exact input, maximum input for exact output
+        int256 amount;   // Положительное значение задаёт точный вход, отрицательное — точный выход.
+        uint256 limit;   // Минимальный кредит при точном входе или максимальное списание при точном выходе.
     }
     mapping(address => mapping(bytes32 => bool)) public completed;
     bool private trading;

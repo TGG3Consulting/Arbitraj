@@ -10,16 +10,18 @@ from eth_utils import keccak
 
 from record_base_slipstream_executor import ROOT, calldata
 from record_metric_chains import VIRTUAL
+from v3_factory_storage import verify_directory
 
 FIXTURES = ROOT / "tests/data/first_run_dex_2026-11-26"
 GAS = 16_777_216
+RPC_BATCH_LIMIT = 3  # dRPC public endpoint rejects larger batches before executing them.
 
 
 def request_batch(session, endpoint, calls):
     # Each response has its own gas budget and state, even for two amounts in the same pool.
     collected = []
-    for start in range(0, len(calls), 12):
-        group = calls[start:start + 12]
+    for start in range(0, len(calls), RPC_BATCH_LIMIT):
+        group = calls[start:start + RPC_BATCH_LIMIT]
         payload = [dict(jsonrpc="2.0", id=i, method=method, params=params)
                    for i, (method, params) in enumerate(group)]
         for attempt in range(4):
@@ -46,6 +48,12 @@ def request_batch(session, endpoint, calls):
 
 def collect():
     evidence = json.loads((FIXTURES / "community_v3_ethereum.json").read_bytes())
+    proof = json.loads((FIXTURES / "community_v3_storage.json").read_bytes())
+    if proof["selector"] != evidence["selector"] or proof["block"] != evidence["block"]:
+        raise ValueError("storage proof and factory data refer to different blocks")
+    verify_directory({**proof, "pools": evidence["pools"],
+                      "tiers": {tier: entry["spacing"] for tier, entry in evidence["tiers"].items()}},
+                     evidence["registry"])
     selector = evidence["selector"]
     endpoint = json.loads((FIXTURES / "ethereum.json").read_bytes())["endpoint"]
     pools = evidence["pools"]
@@ -59,7 +67,8 @@ def collect():
             return request_batch(session, endpoint, calls)
         header, chain = batch([("eth_getBlockByHash", [selector["blockHash"], False]), ("eth_chainId", [])])
         if (int(chain["result"], 16) != 1 or header["result"]["hash"] != selector["blockHash"]
-                or int(header["result"]["number"], 16) != evidence["block"]):
+                or int(header["result"]["number"], 16) != evidence["block"]
+                or header["result"]["stateRoot"] != proof["state_root"]):
             raise ValueError("RPC did not return the requested Ethereum block")
         metadata = batch([("eth_call", [{"to": a, "data": calldata("decimals()")}, selector]) for a in tokens])
         decimals = {}

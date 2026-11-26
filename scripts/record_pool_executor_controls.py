@@ -11,6 +11,16 @@ from record_metric_chains import VIRTUAL
 from record_v2_chain_pools import NETWORKS
 
 
+def simulate_block(url, tag, overrides, calls):
+    blocks=rpc(url,"eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":overrides,"calls":calls}]},tag])
+    if len(blocks)!=1 or blocks[0].get("parentHash")!=tag["blockHash"]:
+        raise ValueError("eth_simulateV1 returned a different parent block")
+    values=blocks[0]["calls"]
+    if len(values)!=len(calls):
+        raise ValueError("eth_simulateV1 returned a different number of calls")
+    return values
+
+
 def record(source, owner=FIRST_OWNER):
     def call(target, data, value=0):
         return {**message(target,data,value), "from":owner}
@@ -31,7 +41,7 @@ def record(source, owner=FIRST_OWNER):
     profiles=json.loads((ROOT/"config/first_run_dex.json").read_bytes())
     router=next(r["settings"]["dex.router"] for r in profiles if r["network"]==network and r["settings"]["dex.kind"]=="uniswap_v2")
     def simulate(calls):
-        return rpc(url,"eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":overrides,"calls":calls}]},tag])[0]["calls"]
+        return simulate_block(url,tag,overrides,calls)
     def successful(calls):
         values=simulate(calls)
         for index,row in enumerate(values):
@@ -59,8 +69,9 @@ def record(source, owner=FIRST_OWNER):
             quote_details={}
             try:
                 deposit=amount if cash==weth else int(pool.get("funding_weth",10**16))
-                prefix=[call(weth,calldata("deposit()"),deposit)]
-                if cash!=weth:
+                prefunded=source.get("use_owner_tokens",False)
+                prefix=[balance(coin,owner)] if prefunded else [call(weth,calldata("deposit()"),deposit)]
+                if cash!=weth and not prefunded:
                     if alternate:=pool.get("funding_pool"):
                         data=calldata("execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],
                             [weth,deposit,cash,amount,deadline,[(1,alternate,weth,cash,10000,b"")]])
@@ -92,10 +103,12 @@ def record(source, owner=FIRST_OWNER):
                 used_sell,sold=quote(legs+[preview(1-side,bought)],bought,"sell_quote")
                 full=successful(legs+[execute(1-side,bought,sold),balance(cash,owner),balance(coin,owner),balance(coin,EXEC),balance(cash,EXEC)])
                 def val(i):return int(full[i]["returnData"],16)
-                assert val(len(prefix)+1)==bought
-                assert val(-4)==val(len(prefix)-1)-used_buy+sold and [val(-3),val(-2),val(-1)]==[bought-used_sell,0,0]
+                coin_before=val(0) if prefunded else 0
+                assert val(len(prefix)+1)==coin_before+bought
+                assert val(-4)==val(len(prefix)-1)-used_buy+sold and [val(-3),val(-2),val(-1)]==[coin_before+bought-used_sell,0,0]
                 for calls in [prefix+[execute(side,amount,bought+1)],legs+[execute(1-side,bought,sold+1)]]:
                     if int(simulate(calls)[-1]["status"],16)!=0:raise ValueError("minOut+1 passed")
+                if prefunded:quote_details["coin_before"]=str(coin_before)
                 result_row["cases"].append({**quote_details,"side":side,"input":str(amount),"bought":str(bought),"sold":str(sold),
                     "cash_before":str(val(len(prefix)-1)),"cash_after":str(val(-4)),"after_coin_owner":str(val(-3)),
                     "after_coin_executor":str(val(-2)),"after_cash_executor":str(val(-1)),

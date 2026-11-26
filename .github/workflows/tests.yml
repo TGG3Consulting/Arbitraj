@@ -97,7 +97,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0
+      - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0 rlp==4.1.0
       - run: python scripts/record_community_v3_depth.py "$RUNNER_TEMP/communityv3-depth.json"
       - uses: actions/upload-artifact@v4
         with:

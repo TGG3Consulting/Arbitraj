@@ -8,11 +8,12 @@ from concurrent.futures import ThreadPoolExecutor
 from eth_abi import decode
 from eth_utils import keccak
 from record_base_slipstream_executor import ROOT,OWNER,RUNTIME,calldata,call,rpc
-from record_pool_executor_controls import record
+from record_pool_executor_controls import record,simulate_block
 from record_metric_chains import VIRTUAL
 from record_v2_chain_pools import view
 from record_derpdex_base import FACTORY,FOLDER,WETH
 from record_rubicon_clmm import pool_address
+from record_woo_base import rpc as read_archive
 
 USDBC="0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
 REGULAR_GAS=1_200_000
@@ -41,8 +42,8 @@ def main(out):
             if header["stateRoot"]!=directory["state_root"] or int(header["number"],16)!=directory["to"]:continue
             if rpc(url,"eth_getCode",[FACTORY,tag])=="0x":continue
             base={"code":"0x"+virtual}
-            initial=rpc(url,"eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":{VIRTUAL:base},"calls":[call(WETH,calldata("decimals()"))]}]},tag])
-            if int(initial[0]["calls"][0]["returnData"],16)==18:break
+            initial=simulate_block(url,tag,{VIRTUAL:base},[call(WETH,calldata("decimals()"))])
+            if int(initial[0]["returnData"],16)==18:break
         except Exception:pass
     else:raise ValueError("Нет ответившего архивного узла с eth_simulateV1")
     def read(a,s,types=(),args=()):return view(url,tag,a,calldata(s,types,args))
@@ -63,14 +64,15 @@ def main(out):
             raise ValueError("поля не прошли проверку: "+addr)
         plan=[(i,amount) for i,a in enumerate(ts) for amount in sizes(a)]
         probes=[call(VIRTUAL,calldata("quoteExactIn(address,bool,uint256)",["address","bool","uint256"],[addr,i==0,n])) for i,n in plan]
-        resp=rpc(url,"eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":{VIRTUAL:{"code":"0x"+virtual}},"calls":probes}]},tag])[0]["calls"]
+        overrides={VIRTUAL:{"code":"0x"+virtual}}
+        resp=simulate_block(url,tag,overrides,probes)
         quotes=[]
         for (side,n),probe,r in zip(plan,probes,resp,strict=True):
             q={"side":side,"requested":str(n),**quote_result(r,n,REGULAR_GAS)}
             if "reason" in q:
                 widened={**probe,"gas":hex(UPPER_GAS)}
-                test=rpc(url,"eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":{VIRTUAL:{"code":"0x"+virtual}},"calls":[widened]}]},tag])
-                q["larger_gas"]=quote_result(test[0]["calls"][0],n,UPPER_GAS)
+                test=simulate_block(url,tag,overrides,[widened])
+                q["larger_gas"]=quote_result(test[0],n,UPPER_GAS)
             quotes.append(q)
         return {**p,"liquidity":str(num(addr,"liquidity()")),"quotes":quotes}
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -95,6 +97,19 @@ def main(out):
         if remaining:
             second=record({**source,"target_gas":UPPER_GAS,"pools":[{**prepared,"quotes":remaining}]})
             m["larger_gas_wallet"]=second["pools"][0]["cases"]
+        if not any("sold" in r for r in m["wallet"]) and any(int(q.get("out",0))>0 for q in m["quotes"]):
+            creation=read_archive({"endpoint":url},"eth_getTransactionByHash",[m["tx"]])
+            if creation["hash"]!=m["tx"] or creation["blockHash"]!=m["hash"]:
+                raise ValueError("неподтверждённое происхождение отправителя")
+            holder=creation["from"]
+            if rpc(url,"eth_getCode",[holder,tag])=="0x":
+                balances=[int.from_bytes(read(a,"balanceOf(address)",["address"],[holder]),"big") for a in ts]
+                eligible=[{"side":q["side"],"input":q["requested"]} for q in m["quotes"]
+                          if int(q.get("out",0))>0 and int(q["requested"])<=balances[q["side"]]]
+                if eligible:
+                    seeded=record({**source,"use_owner_tokens":True,"pools":[{**prepared,"quotes":eligible}]},owner=holder)
+                    m["existing_holder"]={"sender":holder,"creation_tx":m["tx"],"balances":list(map(str,balances)),
+                                          "wallet":seeded["pools"][0]["cases"]}
         return m
     with ThreadPoolExecutor(max_workers=2) as pool:
         markets=list(pool.map(wallet,enumerate(markets)))

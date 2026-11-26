@@ -28,6 +28,52 @@ use arb::venues::bsc_dex::exec::bundle::{self, BundleTx};
 use arb::venues::bsc_dex::exec::bundle_sim::{build_sim, collect, sign_txs};
 use arb::venues::bsc_dex::exec::chain::Step;
 use arb::venues::bsc_dex::exec::fork_swap;
+
+#[test]
+fn quickswap_v2_base_matches_router_calldata_and_wallet_delta() {
+    use arb::venues::bsc_dex::math::v2;
+    let data: serde_json::Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/quickswap_v2_base.json"
+    ))
+    .unwrap();
+    let number = |v: &serde_json::Value| v.as_str().unwrap().parse::<U256>().unwrap();
+    let address = |v: &serde_json::Value| v.as_str().unwrap().parse::<Address>().unwrap();
+    let fee = v2::fee_ratio(Decimal::new(3, 1)).unwrap();
+    assert_eq!(data["official_count"], 896);
+    assert_eq!(data["directory"].as_array().unwrap().len(), 20);
+    let mut count = 0;
+    for m in data["markets"].as_array().unwrap() {
+        for c in m["cases"].as_array().unwrap() {
+            let i = c["side"].as_u64().unwrap() as usize;
+            let (dx, out) = (number(&c["dx"]), number(&c["out"]));
+            let want = v2::amount_out(
+                dx,
+                number(&m["reserves"][i]),
+                number(&m["reserves"][1 - i]),
+                fee,
+            );
+            assert_eq!(want, Some(out));
+            let raw: Bytes = c["calls"][5]["data"].as_str().unwrap().parse().unwrap();
+            let call =
+                IV2Router::swapExactTokensForTokensSupportingFeeOnTransferTokensCall::abi_decode(
+                    &raw,
+                )
+                .unwrap();
+            let tokens = [address(&m["tokens"][i]), address(&m["tokens"][1 - i])];
+            assert_eq!(
+                raw,
+                fork_swap::swap_data(dx, out, &tokens, address(&c["sender"]), call.deadline)
+            );
+            let r = &c["results"];
+            let balance = |key: &str| number(&r[key]["returnData"]);
+            assert_eq!(balance("in_before") - balance("in_after"), dx);
+            assert_eq!(balance("out_after") - balance("out_before"), out);
+            assert_eq!(r["above"]["status"], "0x0");
+            count += 1;
+        }
+    }
+    assert_eq!(count, 12);
+}
 use arb::venues::bsc_dex::exec::plan::Order;
 use arb::venues::bsc_dex::node::abi_dex::IV2Router;
 use arb::venues::bsc_dex::pools::families;

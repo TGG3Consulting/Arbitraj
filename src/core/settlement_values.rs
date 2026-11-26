@@ -66,3 +66,31 @@ pub fn signal_amounts(
             .ok_or_else(error)?,
     ))
 }
+
+/// Валюта расхода определяется активом площадки, на которой он возник. Например, комиссия
+/// CEX в USDC на её счёте не уменьшает сумму USDC в DEX-кошельке.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum Charge {
+    WalletCash,
+    EntryQuote,
+    Separate,
+}
+pub(super) fn charge(
+    m: &super::settlement_market::Market,
+    d: &Direction,
+    stage: &str,
+    currency: &str,
+) -> Charge {
+    let venue = if stage == "B" || stage == super::costs_types::RETURN_STAGE {
+        &d.sell_on
+    } else {
+        &d.buy_on
+    };
+    if venue == &m.dex && currency == m.asset.ticker {
+        Charge::WalletCash
+    } else if venue == &m.cex && currency == m.quote && stage == "A" {
+        Charge::EntryQuote
+    } else {
+        Charge::Separate
+    }
+}

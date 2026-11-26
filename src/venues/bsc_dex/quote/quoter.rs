@@ -60,7 +60,7 @@ pub async fn out_at(
     let (to, data) = quoter_calls::request(ctx, e, token_in, amount)?;
     let raw: Bytes =
         rpc::call(ctx, "eth_call", json!([{ "to": to, "input": data }, block])).await?;
-    quoter_calls::decode(e, &raw).ok_or_else(|| {
+    quoter_calls::decode_input(e, &raw, token_in, amount).ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,
             format!("{}: ответ квотера не по ABI", e.family.title),

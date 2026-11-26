@@ -17,6 +17,10 @@ on:
         description: Replay the CI-built executor against the two recorded Ethereum builder frames
         type: boolean
         default: false
+      solidly_archive_replay:
+        description: Replay the CI-built Solidly V3 module on Base and Ethereum
+        type: boolean
+        default: false
 env:
   CARGO_PROFILE_DEV_DEBUG: "0"
   CARGO_INCREMENTAL: "0"
@@ -81,6 +85,11 @@ jobs:
       - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/hanji-executor"
       - id: compile_fermi
         run: node contracts/build-hanji.mjs "$RUNNER_TEMP/fermi-executor" FermiSlotExecutor
+      - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/solidly-executor" SolidlyV3Executor
+      - uses: actions/upload-artifact@v4
+        with:
+          name: solidly-v3-executor
+          path: ${{ runner.temp }}/solidly-executor/SolidlyV3Executor.json
       - uses: actions/upload-artifact@v4
         with:
           name: fermi-slot-executor
@@ -90,9 +99,23 @@ jobs:
           name: hanji-executor
           path: ${{ runner.temp }}/hanji-executor/HanjiExecutor.json
       - uses: actions/setup-python@v5
-        if: inputs.hanji_archive_replay || inputs.fermi_archive_replay
+        if: inputs.hanji_archive_replay || inputs.fermi_archive_replay || inputs.solidly_archive_replay
         with:
           python-version: '3.12'
+      - if: inputs.solidly_archive_replay
+        name: Simulate Solidly V3 module with real wallet balances
+        run: |
+          pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0 beautifulsoup4==4.13.5
+          for network in base ethereum; do
+            python scripts/record_solidly_v3_executor.py "$RUNNER_TEMP/solidly-executor/SolidlyV3Executor.json" "$network" --record-acceptance
+          done
+      - uses: actions/upload-artifact@v4
+        if: inputs.solidly_archive_replay
+        with:
+          name: solidly-v3-archive-replay
+          path: |
+            tests/data/first_run_dex_2026-11-26/solidly_v3_executor_*.json
+            config/first_run_dex.json
       - if: inputs.hanji_archive_replay
         run: |
           pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0

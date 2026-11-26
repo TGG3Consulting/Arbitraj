@@ -32,7 +32,7 @@ struct State {
 pub(in crate::venues::bsc_dex) struct Book(Arc<Mutex<State>>, super::availability::Cache);
 
 impl Book {
-    pub(super) fn populated(&self) -> bool {
+    pub(in crate::venues::bsc_dex) fn populated(&self) -> bool {
         self.0.lock().unwrap_or_else(|e| e.into_inner()).market.as_ref().is_some_and(|(_, book)| book.is_some())
     }
     pub(super) fn depth(
@@ -101,7 +101,7 @@ pub(super) fn expiry_ok(expiry: u64, min: u64) -> bool {
 }
 
 /// Полный курс в USDT с реальными затратами вне цены. Отсутствующий курс исключает сравнение.
-pub(super) async fn total(p: &Parts, quote: &Quote) -> Option<Decimal> {
+pub(in crate::venues::bsc_dex) async fn total(p: &Parts, quote: &Quote) -> Option<Decimal> {
     let mut q = p.quoting();
     q.tokens = q.tokens.pinned();
     let fee = best_of::extra::usdt(&q, quote).await?;
@@ -241,7 +241,7 @@ fn indicative(p: &Parts, asset: &Asset, side: Side, qty: Decimal) -> Option<Indi
         return None;
     }
     // Эта проверка не вызывает RPC: на холодном кэше запускается только фоновое чтение.
-    let funds = p.rfqs.1.get(p, chain, input, age)?;
+    let funds = p.rfqs.1.get(p, chain, input, super::router(chain).ok()?, age)?;
     if funds.native < num::to_units(cap, 18)? {
         return None;
     }

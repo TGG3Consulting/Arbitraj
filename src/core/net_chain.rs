@@ -73,8 +73,19 @@ pub fn tag(core: &Core, v: &VenueId, mut list: Vec<CoinNetworkInfo>) -> Vec<Coin
         coin: None,
     };
     let bsc = core.inner.deps.settings.text(own_nets::BSC, at).ok();
+    let mut seen = std::collections::HashSet::new();
+    let mut conflicts = std::collections::HashSet::new();
+    for name in bsc.iter().chain(others.iter().map(|(name, _)| name)) {
+        if !seen.insert(name.as_str()) {
+            conflicts.insert(name.as_str());
+        }
+    }
     for i in &mut list {
-        // Имя сети BSC совпало с именем другой сети (ошибка настройки) — запись остаётся сетью BSC, как раньше.
+        if conflicts.contains(i.network.as_str()) {
+            i.asset.chain = None;
+            i.asset.contract = None;
+            continue;
+        }
         if bsc.as_deref() == Some(i.network.as_str()) {
             continue;
         }

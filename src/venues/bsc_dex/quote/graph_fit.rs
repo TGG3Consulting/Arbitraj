@@ -112,6 +112,14 @@ fn subsets(ctx: &Ctx, native: bool) -> Vec<(&'static str, Rule<'_>)> {
         out.push((
             "S3 — бандл свопов, каждая доля внутри одного роутера",
             Box::new(move |l: &[Leg]| {
+                if l.len() != 1
+                    && l.iter().any(|h| {
+                        h.entry.family.variant
+                            == super::super::pools::family_variant::Variant::SolidlyCl
+                    })
+                {
+                    return false;
+                }
                 let r: Vec<_> = l
                     .iter()
                     .map(|h| graph_exec::exec_router(ctx, h.entry.family).ok())

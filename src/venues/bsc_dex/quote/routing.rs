@@ -57,7 +57,11 @@ pub struct Input {
 /// Котировка маршрута. Принимает: котировку (клон), входные данные. Возвращает: котировку без газа разрешений и
 /// чаевых (их добавляет quote/mod.rs). Ошибки: как у smart_quote / classic_direct (решение 271: NoRoute классики при
 /// dex.router_mode = graph — только если и граф не дал исполнимый маршрут).
-pub async fn run(q: Quoting, i: Input) -> GatewayResult<Quote> {
+pub fn run(q: Quoting, i: Input) -> impl std::future::Future<Output = GatewayResult<Quote>> {
+    allowed(q, i, crate::gateway::quote_stage::settlement())
+}
+/// Ограничение финансового пути переносится с вызывающей задачи в поток CPU вместе с заданием.
+async fn allowed(q: Quoting, i: Input, settlement: bool) -> GatewayResult<Quote> {
     let ctx = &q.ctx;
     let v = Via {
         q: &q,
@@ -88,7 +92,7 @@ pub async fn run(q: Quoting, i: Input) -> GatewayResult<Quote> {
         classic_direct::quote(&v, &names, asset, qty, i.entries, &i.mids, &|_| true, gas).await
     };
     quote_timing::add(Stage::Classic, t);
-    let graph_on = ctx.text("dex.router_mode").ok().as_deref() == Some("graph");
+    let graph_on = !settlement && ctx.text("dex.router_mode").ok().as_deref() == Some("graph");
     let mut out = match classic {
         Ok(c) => c,
         // Решение 271: классического пути нет (пулы монеты только на форках и т.п.), режим graph — котирует граф.

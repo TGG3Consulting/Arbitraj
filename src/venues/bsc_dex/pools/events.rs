@@ -38,7 +38,13 @@ pub enum Applied {
 
 /// topic0 событий, которые слушаются у пулов этого вида. Ошибок нет.
 pub fn topics(f: &Family) -> Vec<B256> {
+    use alloy::sol_types::SolEvent;
     match f.proto {
+        _ if f.variant == super::family_variant::Variant::SolidlyCl => {
+            let mut events = events_v3::topics(f.proto);
+            events.push(super::solidly_v3::ISolidlyV3::SetFee::SIGNATURE_HASH);
+            events
+        }
         // Решение 483: варианты Ramses — свои события (FeeAdjustment, Mint с index, Sync uint112; ramses.rs).
         _ if super::ramses::handles(f) => super::ramses::topics(f),
         Proto::V2 => events_v2::topics(),
@@ -145,7 +151,26 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
 
 /// Применяет событие к записи. Принимает: запись, лог. Возвращает: Applied. Ошибок нет (разбор не удался → Refresh).
 pub fn apply(e: &mut Entry, log: &Log) -> Applied {
+    use super::solidly_v3::ISolidlyV3::SetFee;
+    use alloy::sol_types::SolEvent;
     let r = match e.family.proto {
+        _ if e.family.variant == super::family_variant::Variant::SolidlyCl
+            && log.topics().first() == Some(&SetFee::SIGNATURE_HASH) =>
+        {
+            match SetFee::decode_log_data(&log.inner.data) {
+                Ok(change)
+                    if change.feeNew.to::<u32>() <= 100_000
+                        && e.pool.fee_pips == Some(change.feeOld.to::<u32>()) =>
+                {
+                    e.pool.fee_pips = Some(change.feeNew.to());
+                    Applied::Updated
+                }
+                _ => {
+                    e.valid = false;
+                    Applied::Refresh("Solidly V3 SetFee расходится с состоянием".into())
+                }
+            }
+        }
         _ if super::ramses::handles(e.family) => super::ramses::apply(e, log),
         Proto::V2 => events_v2::apply(e, log),
         Proto::PancakeV3 | Proto::UniswapV3 | Proto::Slipstream => events_v3::apply(e, log),

@@ -45,10 +45,13 @@ pub(super) async fn once(
         RouteMode::Direct => "прямой".to_string(),
         RouteMode::Smart => "умный".to_string(),
         RouteMode::Graph => String::new(),
-        RouteMode::Rfq(_) | RouteMode::RfqIndicative => {
+        RouteMode::Rfq(_)
+        | RouteMode::RfqIndicative
+        | RouteMode::Slot(_)
+        | RouteMode::SlotIndicative => {
             return Err(ctx.err(
                 ErrorCode::NotApplicable,
-                "RFQ проверяется с кошельком через Hashflow",
+                "Выбранная внешняя цена проверяется с кошельком в адаптере источника",
             ));
         }
     };
@@ -161,7 +164,10 @@ pub(super) async fn once(
     }
     let (at, now) = q.heads.at(ctx).await?;
     let built = match shape {
-        RouteMode::Rfq(_) | RouteMode::RfqIndicative => {
+        RouteMode::Rfq(_)
+        | RouteMode::RfqIndicative
+        | RouteMode::Slot(_)
+        | RouteMode::SlotIndicative => {
             return Err(ctx.err(ErrorCode::NotApplicable, "RFQ не является маршрутом пула"));
         }
         RouteMode::Direct => Built::One(

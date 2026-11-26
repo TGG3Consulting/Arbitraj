@@ -23,7 +23,7 @@ use arb::venues::bsc_dex::math::swap_algebra::{self, AlgebraState, NextTick};
 use algebra_integral_common::{pool_state, probe, word};
 
 #[test]
-fn hydrex_executor_quotes_and_sender_specific_fee() {
+fn integral_executor_quotes_and_sender_specific_fee() {
     use alloy::rpc::types::Log;
     use arb::venues::bsc_dex::pools::events::{self, Applied};
     use arb::venues::bsc_dex::pools::ticks::{TickData, TickMap};
@@ -31,107 +31,151 @@ fn hydrex_executor_quotes_and_sender_specific_fee() {
     use std::collections::BTreeMap;
     use std::str::FromStr;
 
-    let data: Value = serde_json::from_str(include_str!(
-        "data/first_run_dex_2026-11-26/hydrex_base.json"
-    )).unwrap();
-    let mut special = 0;
     let number = |v: &Value| U256::from_str(v.as_str().unwrap()).unwrap();
-    let markets = data["markets"].as_array().unwrap();
     let sequential: Value = serde_json::from_str(include_str!(
         "data/first_run_dex_2026-11-26/hydrex_sequential_base.json"
-    )).unwrap();
-    assert_eq!(markets.len(), 3);
-    for m in markets {
-        let mut ticks = BTreeMap::new();
-        for (index, row) in m["ticks"].as_object().unwrap() {
-            let gross = row["gross"].as_str().unwrap().parse::<u128>().unwrap();
-            if gross > 0 {
-                ticks.insert(index.parse().unwrap(), TickData {
-                    gross,
-                    net: row["net"].as_str().unwrap().parse().unwrap(),
-                });
+    ))
+    .unwrap();
+    for (kind, fixture, count) in [
+        (
+            "algebra_integral_hydrex",
+            include_str!("data/first_run_dex_2026-11-26/hydrex_base.json"),
+            6,
+        ),
+        (
+            "algebra_integral_quickswap",
+            include_str!("data/first_run_dex_2026-11-26/quickswap_base.json"),
+            2,
+        ),
+    ] {
+        let data: Value = serde_json::from_str(fixture).unwrap();
+        let markets = data["markets"].as_array().unwrap();
+        let mut special = 0;
+        assert_eq!(markets.len(), 3);
+        for m in markets {
+            if kind == "algebra_integral_quickswap" {
+                assert_ne!(
+                    data["active_plugin_factory"],
+                    data["addresses"]["PluginFactory"]
+                );
+                assert_ne!(m["plugin"], m["previous_plugin"]);
             }
-        }
-        let map = TickMap {
-            words: (m["lower_word"].as_i64().unwrap() as i16, m["upper_word"].as_i64().unwrap() as i16),
-            spacing: 1,
-            ticks: ticks.into(),
-        };
-        let state = AlgebraState {
-            sqrt_price: number(&m["price"]),
-            tick: m["tick"].as_i64().unwrap() as i32,
-            liquidity: m["liquidity"].as_str().unwrap().parse().unwrap(),
-            fee: m["current_fee"].as_u64().unwrap() as u32,
-            ticks: &map,
-            next: NextTick::Linked,
-        };
-        let cases = m["cases"].as_array().unwrap();
-        if m["pool"] == sequential["pool"] {
-            use arb::core::types::PoolState;
-            use arb::venues::bsc_dex::quote::pool_after;
-            let mut entry = native_common::entry("algebra_integral_hydrex", Some(state.fee));
-            entry.pool.state = PoolState::Algebra {
-                sqrt_price_x96: state.sqrt_price, tick: state.tick, liquidity: state.liquidity,
-                fee: state.fee, fee_otz: None,
+            let mut ticks = BTreeMap::new();
+            for (index, row) in m["ticks"].as_object().unwrap() {
+                let gross = row["gross"].as_str().unwrap().parse::<u128>().unwrap();
+                if gross > 0 {
+                    ticks.insert(
+                        index.parse().unwrap(),
+                        TickData {
+                            gross,
+                            net: row["net"].as_str().unwrap().parse().unwrap(),
+                        },
+                    );
+                }
+            }
+            let map = TickMap {
+                words: (
+                    m["lower_word"].as_i64().unwrap() as i16,
+                    m["upper_word"].as_i64().unwrap() as i16,
+                ),
+                spacing: 1,
+                ticks: ticks.into(),
             };
-            entry.ticks = Some(map.clone());
-            assert!(!pool_after::appliable(&entry));
-            let pairs = sequential["cases"].as_array().unwrap();
-            assert_eq!(pairs.len(), 4);
-            for c in pairs {
-                let logs = c["events"].as_array().unwrap();
-                let out = |after: &Value| {
-                    let next = AlgebraState {
-                        sqrt_price: number(&after["price"]),
-                        tick: after["tick"].as_i64().unwrap() as i32,
-                        liquidity: after["liquidity"].as_str().unwrap().parse().unwrap(),
-                        fee: state.fee, ticks: &map, next: NextTick::Linked,
-                    };
-                    let r = swap_algebra::swap(&next, c["zero_for_one"].as_bool().unwrap(), true, number(&c["dx"])).unwrap();
-                    assert!(r.complete);
-                    r.amount_out
+            let state = AlgebraState {
+                sqrt_price: number(&m["price"]),
+                tick: m["tick"].as_i64().unwrap() as i32,
+                liquidity: m["liquidity"].as_str().unwrap().parse().unwrap(),
+                fee: m["current_fee"].as_u64().unwrap() as u32,
+                ticks: &map,
+                next: NextTick::Linked,
+            };
+            let cases = m["cases"].as_array().unwrap();
+            if m["pool"] == sequential["pool"] {
+                use arb::core::types::PoolState;
+                use arb::venues::bsc_dex::quote::pool_after;
+                let mut entry = native_common::entry("algebra_integral_hydrex", Some(state.fee));
+                entry.pool.state = PoolState::Algebra {
+                    sqrt_price_x96: state.sqrt_price,
+                    tick: state.tick,
+                    liquidity: state.liquidity,
+                    fee: state.fee,
+                    fee_otz: None,
                 };
-                assert_eq!(logs[0]["sender"], sequential["executor"]);
-                assert_ne!(logs[1]["sender"], sequential["executor"]);
-                assert_eq!(logs[2]["sender"], sequential["executor"]);
-                let second = number(&c["output"][1]);
-                assert_ne!(out(&logs[0]), second);
-                assert_eq!(out(&logs[1]), second);
-                assert_eq!(c["results"]["above"]["status"], "0x0");
-                assert_eq!(number(&c["results"]["exact"]["returnData"]), number(&c["output"][0]) + second);
+                entry.ticks = Some(map.clone());
+                assert!(!pool_after::appliable(&entry));
+                let pairs = sequential["cases"].as_array().unwrap();
+                assert_eq!(pairs.len(), 4);
+                for c in pairs {
+                    let logs = c["events"].as_array().unwrap();
+                    let out = |after: &Value| {
+                        let next = AlgebraState {
+                            sqrt_price: number(&after["price"]),
+                            tick: after["tick"].as_i64().unwrap() as i32,
+                            liquidity: after["liquidity"].as_str().unwrap().parse().unwrap(),
+                            fee: state.fee,
+                            ticks: &map,
+                            next: NextTick::Linked,
+                        };
+                        let r = swap_algebra::swap(
+                            &next,
+                            c["zero_for_one"].as_bool().unwrap(),
+                            true,
+                            number(&c["dx"]),
+                        )
+                        .unwrap();
+                        assert!(r.complete);
+                        r.amount_out
+                    };
+                    assert_eq!(logs[0]["sender"], sequential["executor"]);
+                    assert_ne!(logs[1]["sender"], sequential["executor"]);
+                    assert_eq!(logs[2]["sender"], sequential["executor"]);
+                    let second = number(&c["output"][1]);
+                    assert_ne!(out(&logs[0]), second);
+                    assert_eq!(out(&logs[1]), second);
+                    assert_eq!(c["results"]["above"]["status"], "0x0");
+                    assert_eq!(
+                        number(&c["results"]["exact"]["returnData"]),
+                        number(&c["output"][0]) + second
+                    );
+                }
             }
-        }
-        assert_eq!(cases.len(), 4);
-        for case in cases {
-            let amount = number(&case["dx"]);
-            let quote = swap_algebra::swap(&state, case["source"] == m["tokens"][0], true, amount).unwrap();
-            assert!(quote.complete);
-            assert_eq!(quote.amount_in, amount);
-            assert_eq!(quote.amount_out, number(&case["at_block"][0]));
-            let result = &case["results"];
-            let out = number(&case["out"]);
-            let returned = |name: &str| number(&result[name]["returnData"]);
-            assert_eq!(returned("exact"), out);
-            assert_eq!(returned("out_after") - returned("out_before"), out);
-            assert_eq!(returned("in_before") - returned("in_after"), amount);
-            assert_eq!(result["above"]["status"], "0x0");
-            if case["event_fees"].as_array().unwrap().len() > 1 {
-                let discounted = case["event_fees"].as_array().unwrap().last().unwrap();
-                assert_eq!(discounted[0], 1);
-                assert_ne!(case["next_fee"], discounted[0]);
-                let mut entry = native_common::entry("algebra_integral_hydrex", None);
-                let log = result["exact"]["logs"].as_array().unwrap().iter().rev()
+            assert_eq!(cases.len(), 4);
+            for case in cases {
+                let amount = number(&case["dx"]);
+                let quote =
+                    swap_algebra::swap(&state, case["source"] == m["tokens"][0], true, amount)
+                        .unwrap();
+                assert!(quote.complete);
+                assert_eq!(quote.amount_in, amount);
+                assert_eq!(quote.amount_out, number(&case["at_block"][0]));
+                let result = &case["results"];
+                let out = number(&case["out"]);
+                let returned = |name: &str| number(&result[name]["returnData"]);
+                assert_eq!(returned("exact"), out);
+                assert_eq!(returned("out_after") - returned("out_before"), out);
+                assert_eq!(returned("in_before") - returned("in_after"), amount);
+                assert_eq!(result["above"]["status"], "0x0");
+                if case["event_fees"].as_array().unwrap().len() > 1 {
+                    let discounted = case["event_fees"].as_array().unwrap().last().unwrap();
+                    assert_eq!(discounted[0], 1);
+                    assert_ne!(case["next_fee"], discounted[0]);
+                    let mut entry = native_common::entry(kind, None);
+                    let log = result["exact"]["logs"].as_array().unwrap().iter().rev()
                     .find(|l| l["address"] == m["pool"] && l["topics"][0] ==
                           format!("{:#x}", alloy_primitives::keccak256(b"Swap(address,address,int256,int256,uint160,uint128,int24,uint24,uint24)")))
                     .unwrap();
-                let log: Log = serde_json::from_value(log.clone()).unwrap();
-                assert!(matches!(events::apply(&mut entry, &log), Applied::Refresh(_)));
-                assert!(!entry.valid);
-                special += 1;
+                    let log: Log = serde_json::from_value(log.clone()).unwrap();
+                    assert!(matches!(
+                        events::apply(&mut entry, &log),
+                        Applied::Refresh(_)
+                    ));
+                    assert!(!entry.valid);
+                    special += 1;
+                }
             }
         }
+        assert_eq!(special, count);
     }
-    assert_eq!(special, 6);
 }
 
 #[test]

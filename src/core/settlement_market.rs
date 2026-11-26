@@ -29,8 +29,20 @@ pub fn mixed(core: &Core, d: &Direction) -> bool {
     [(&d.buy_on, &d.sell_on), (&d.sell_on, &d.buy_on)]
         .into_iter()
         .any(|(dex, cex)| {
-            evm_profiles::uses_settlement_contract(s, &dex.0)
-                && matches!((ticker(core,dex),ticker(core,cex)),(Ok(a),Ok(b)) if a!=b)
+            if !evm_profiles::uses_settlement_contract(s, &dex.0) {
+                return false;
+            }
+            let (Ok(a), Ok(b)) = (ticker(core, dex), ticker(core, cex)) else {
+                return false;
+            };
+            if a != b || b != evm_profiles::LEDGER_QUOTE {
+                return true;
+            }
+            // Равные отображаемые имена допускают прямой расчёт только при совпавшем физическом ERC-20.
+            let Ok(Some(pinned)) = configured(core, dex) else {
+                return true;
+            };
+            super::registry_chains::usdt_of(core, pinned.chain.as_ref()).ok() != pinned.contract
         })
 }
 
@@ -87,18 +99,19 @@ impl Market {
             .settings
             .integer("dex.evm_chain_id", at)
             .map_err(|e| e.message)?;
+        let asset = configured(core, dex)?.ok_or("Не задан контракт расчётного токена DEX")?;
         let cex_network = crate::gateway::own_nets::name_of(
             &core.inner.deps.settings,
             At {
                 venue: Some(&cex.0),
                 coin: None,
             },
-            Some(&chain),
+            asset.chain.as_ref(),
         )
         .map_err(|e| e.message)?;
-        let asset = configured(core, dex)?.ok_or("Не задан контракт расчётного токена DEX")?;
         let rows = super::engine::rd(&core.inner.networks);
-        let row = super::settlement_network::unique(
+        let row = super::settlement_network::erc20(
+            core,
             rows.get(cex)
                 .map(|rows| rows.as_slice())
                 .unwrap_or_default(),
@@ -109,7 +122,7 @@ impl Market {
         let cex_asset_symbol = cash_alias(&asset, &row.asset);
         drop(rows);
         let quote = ticker(core, cex)?;
-        if quote == asset.ticker || cex_asset_symbol.as_deref() == Some(quote.as_str()) {
+        if quote == cex_asset_symbol.as_deref().unwrap_or(&asset.ticker) {
             return Err(
                 "Расчётные валюты сторон совпадают, отдельная конверсия не требуется".into(),
             );
@@ -148,6 +161,13 @@ impl Market {
             return Err("Сеть монеты отличается от сети расчётного токена".into());
         }
         Ok(m)
+    }
+    pub(super) fn balance_key(&self, core: &Core, asset: &Asset, venue: &VenueId) -> String {
+        if venue == &self.dex && super::native::is_native(core, asset) {
+            asset.ticker.clone()
+        } else {
+            super::venue_ticker::balance_key(core, asset, venue)
+        }
     }
     pub(super) fn cash_on(&self, venue: &VenueId) -> Asset {
         let mut on = self.asset.clone();

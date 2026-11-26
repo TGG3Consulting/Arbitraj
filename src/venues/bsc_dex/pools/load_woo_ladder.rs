@@ -33,19 +33,22 @@ pub fn usd(ctx: &Ctx, id: &str) -> GatewayResult<Vec<Decimal>> {
         Err(e) if e.code == ErrorCode::NotConfigured => return Ok(Vec::new()),
         Err(e) => return Err(e),
     };
+    parse_sizes(ctx, "dex.pmm_ladder_usd", &list)
+}
+
+pub(in crate::venues::bsc_dex) fn parse_sizes(
+    ctx: &Ctx,
+    setting: &str,
+    list: &[String],
+) -> GatewayResult<Vec<Decimal>> {
     let mut out: Vec<Decimal> = Vec::new();
-    for s in &list {
-        let v: Decimal = s.trim().parse().map_err(|_| {
-            ctx.not_set(
-                "dex.pmm_ladder_usd",
-                format!("«{s}» — не число (сумма USDT)"),
-            )
-        })?;
+    for s in list {
+        let v: Decimal = s
+            .trim()
+            .parse()
+            .map_err(|_| ctx.not_set(setting, format!("«{s}» — не число (сумма USDT)")))?;
         if v <= Decimal::ZERO || out.last().is_some_and(|l| *l >= v) {
-            return Err(ctx.not_set(
-                "dex.pmm_ladder_usd",
-                "суммы лесенки — больше нуля и по возрастанию",
-            ));
+            return Err(ctx.not_set(setting, "суммы лесенки — больше нуля и по возрастанию"));
         }
         out.push(v);
     }

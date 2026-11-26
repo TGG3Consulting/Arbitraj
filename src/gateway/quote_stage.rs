@@ -20,6 +20,7 @@ use crate::settings::store::Store;
 
 tokio::task_local! {
     static FINAL: bool;
+    static SETTLEMENT: ();
 }
 
 /// Выполняет работу как финальную котировку расчёта. Принимает: работу. Возвращает: её результат. Ошибок нет.
@@ -40,6 +41,18 @@ pub async fn final_if<F: Future>(on: bool, work: F) -> F::Output {
 /// Идёт ли сейчас финальная котировка расчёта. Не задано — нет. Ошибок нет.
 pub fn is_final() -> bool {
     FINAL.try_with(|f| *f).unwrap_or(false)
+}
+
+/// Денежный маршрут требует восстановления каждого рыночного действия по одному сохранённому ID.
+pub async fn settlement_if<F: Future>(on: bool, work: F) -> F::Output {
+    if on {
+        SETTLEMENT.scope((), work).await
+    } else {
+        work.await
+    }
+}
+pub fn settlement() -> bool {
+    SETTLEMENT.try_with(|_| ()).is_ok()
 }
 
 /// Применимость собственного лимита финальных запросов KyberSwap.

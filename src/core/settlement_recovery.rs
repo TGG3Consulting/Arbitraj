@@ -5,7 +5,6 @@
 //! Настройки: usdt.return_retry_s, usdt.return_retries_max.
 use super::{
     engine::Core,
-    settlement_path::run,
     settlement_state::{Path, Plan},
 };
 use crate::storage::db::Db;
@@ -71,10 +70,9 @@ pub async fn rows(db: &Db, deal: Option<&str>) -> Result<Vec<Path>, String> {
         .collect()
 }
 
-/// После рестарта продолжает только ранее сохранённые поручения. Сначала выполняется сверка
-/// уже отправленных операций. Перед первой отправкой следующего шага снова проверяются рынок и выключатели.
+/// Архивные отдельные пути не сохраняли идентичность биржевого счёта/кошелька. Доступны через
+/// GET архива по ID. Современные поручения с подписантом возобновляет settlement_resume::resume.
 pub async fn resume(core: &Core) {
-    use crate::gateway::urgency::{self, Urgency};
     use crate::storage::journal::Level;
     let paths = match rows(&core.inner.deps.db, None).await {
         Ok(v) => v,
@@ -87,40 +85,12 @@ pub async fn resume(core: &Core) {
         }
     };
     for path in paths.into_iter().filter(|p| !p.steps_confirmed()) {
-        if super::engine::lk(&core.inner.deals)
+        if !super::engine::lk(&core.inner.deals)
             .get(&path.plan.deal)
             .is_some_and(|d| d.plan.get(super::settlement_cycle::FIELD).is_some())
         {
-            continue;
+            core.inner.deps.log(Level::Warn, "core.settlement_pending", Some(&path.plan.cex.0),
+                format!("{}: у отдельного архивного поручения отсутствует исходная привязка счетов. Для ручной сверки доступны записи по ID сделки",path.plan.deal),None).await;
         }
-        let c = core.clone();
-        tokio::spawn(urgency::scope(Urgency::Trade, async move {
-            let mut repeats = 0;
-            loop {
-                match Box::pin(run(&c, &path.plan)).await {
-                    Ok(_) => break,
-                    Err(e) => {
-                        c.inner
-                            .deps
-                            .log(
-                                Level::Warn,
-                                "core.settlement_pending",
-                                Some(&path.plan.cex.0),
-                                &format!("{}: {e}", path.plan.deal),
-                                None,
-                            )
-                            .await
-                    }
-                }
-                let Some(retry) = super::usdt_return_retry::plan(&c, &path.plan.cex) else {
-                    break;
-                };
-                if repeats >= retry.max || retry.every.is_zero() {
-                    break;
-                }
-                tokio::time::sleep(retry.every).await;
-                repeats += 1;
-            }
-        }));
     }
 }

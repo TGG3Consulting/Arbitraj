@@ -61,11 +61,17 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         );
     }
     if t0 == P12::Swap::SIGNATURE_HASH {
-        if e.family.variant == super::family_variant::Variant::HydrexIntegral {
+        if matches!(
+            e.family.variant,
+            super::family_variant::Variant::HydrexIntegral
+                | super::family_variant::Variant::QuickswapIntegral
+        ) {
             // Hydrex может исполнить вслед за пользовательским Swap дополнительный Swap по льготной комиссии.
             // Конечную цену, карту и fee() следующего обмена читаем на блоке. Полная запись поглотит остальные логи.
             e.valid = false;
-            return Applied::Refresh("Hydrex Integral Swap: перечитать конечное состояние и комиссию".into());
+            return Applied::Refresh(
+                "Hydrex Integral Swap: перечитать конечное состояние и комиссию".into(),
+            );
         }
         return match P12::Swap::decode_log_data(&log.inner.data) {
             Ok(s) => swap12(

@@ -57,8 +57,8 @@ def map_ticks(c, pool, observed):
     return dict(ticks=states, measured_tick_steps=max(before,count), lower_word=low, upper_word=high)
 
 
-def simulate(e, pool, quoter, token0, source, target, dx, state, deadline):
-    sender = HOLDERS[source]
+def simulate(e, pool, quoter, token0, source, target, dx, state, deadline, sender=None):
+    sender = sender or HOLDERS[source]
     official = calldata("quoteExactInputSingle(" + QUOTE + ")", [QUOTE], [(source,target,ZERO,dx,0)])
     virtual = calldata("quoteExactIn(address,bool,uint256)", ["address","bool","uint256"], [pool,source==token0,dx])
     def execute(limit):

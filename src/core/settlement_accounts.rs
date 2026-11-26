@@ -69,9 +69,9 @@ pub(super) fn guard() -> impl Fn() -> Result<(), String> + Send + Sync + 'static
     let bound = ACTIVE.try_with(Clone::clone).ok();
     let entry = ENTRY.try_with(|_| ()).is_ok();
     move || {
-        let Some((accounts, core, p)) = bound.as_ref() else {
-            return Ok(());
-        };
+        let (accounts, core, p) = bound
+            .as_ref()
+            .ok_or("Для отправки требуется сохранённая привязка исходного счёта и подписанта")?;
         accounts.verify()?;
         let d = &p.direction;
         let m = &p.market;

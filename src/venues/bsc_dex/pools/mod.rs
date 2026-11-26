@@ -175,6 +175,7 @@ pub mod index;
 pub mod load_aero_basic;
 pub mod load_ramses;
 pub mod ramses;
+pub mod quickswap_plugin;
 // Ревью t251 (решение 482): есть ли у DEX справочник индексатора.
 pub mod index_pass;
 mod index_retry;
@@ -321,6 +322,7 @@ pub mod shell_sides;
 pub mod solidly_fee_read;
 pub mod solidly_gate_read;
 pub mod solidly_refresh;
+pub mod solidly_v3;
 pub mod stable_list;
 pub mod stable_native;
 pub mod stale_read;

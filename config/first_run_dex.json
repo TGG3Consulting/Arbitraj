@@ -1771,5 +1771,52 @@
       "dex.factory": "0xf6c9ffa64bd0ae8a068dd7b7d954c654a3e7f8a6",
       "dex.pool_implementation": "0xefcb1be95a933ba1918f035f90e6dba1c1d778da"
     }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "solidly-v3-base",
+    "source": "https://docs.solidly.com/resources/contract-addresses.html",
+    "settings": {
+      "dex.kind": "solidly_v3",
+      "dex.factory": "0x70fe4a44ea505cfa3a57b95cf2862d4fd5f0f687"
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "solidly-v3",
+    "source": "https://docs.solidly.com/resources/contract-addresses.html",
+    "settings": {
+      "dex.kind": "solidly_v3",
+      "dex.factory": "0x70fe4a44ea505cfa3a57b95cf2862d4fd5f0f687"
+    }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "quickswap-v4-base",
+    "source": "https://docs.quickswap.exchange/overview/contracts-and-addresses.md",
+    "settings": {
+      "dex.kind": "algebra_integral_quickswap",
+      "dex.factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "dex.quoter_virtual": true,
+      "dex.plugin_factory": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "dex.plugin_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+      "dex.plugin_implementation": "0x7a937e89018298c03b3343c7d3228f64856ea697"
+    }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "quickswap-v2-base",
+    "source": "https://docs.quickswap.exchange/overview/contracts-and-addresses.md",
+    "settings": {
+      "dex.kind": "v2_fork",
+      "dex.factory": "0xec6540261aaae13f236a032d454dc9287e52e56a",
+      "dex.router": "0x4a012af2b05616fb390ed32452641c3f04633bb5",
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
   }
 ]

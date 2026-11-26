@@ -104,7 +104,7 @@ pub(super) async fn begin(
     follow(core, deal, &mandate).await
 }
 
-async fn follow(core: &Core, mut deal: Deal, p: &Mandate) -> Result<(), String> {
+pub(super) async fn follow(core: &Core, mut deal: Deal, p: &Mandate) -> Result<(), String> {
     let mut repeats = 0;
     loop {
         let outcome = async {
@@ -168,43 +168,5 @@ async fn follow(core: &Core, mut deal: Deal, p: &Mandate) -> Result<(), String> 
                 tokio::time::sleep(retry.every).await;
             }
         }
-    }
-}
-
-pub(super) fn resume(core: &Core) {
-    let list: Vec<_> = lk(&core.inner.deals)
-        .values()
-        .filter(|d| d.is_open() && d.plan.get(FIELD).is_some())
-        .cloned()
-        .collect();
-    for d in list {
-        let c = core.clone();
-        tokio::spawn(async move {
-            let key = CoinKey::of(&d.direction.asset);
-            if !super::coin_ride::take_settlement(&c, &key) {
-                return;
-            }
-            let g = super::ride_guard::RideGuard {
-                core: c,
-                key,
-                slot: super::ride_guard::Slot {
-                    seat: super::coin_ride::Seat::Alone,
-                    boarded: None,
-                },
-            };
-            let res = match serde_json::from_value::<Mandate>(d.plan[FIELD].clone()) {
-                Ok(p) => Box::pin(follow(&g.core, d, &p)).await,
-                Err(e) => Err(format!(
-                    "Не удалось прочитать сохранённое расчётное поручение: {e}"
-                )),
-            };
-            if let Err(e) = res {
-                g.core
-                    .inner
-                    .deps
-                    .log(Level::Error, "core.settlement_pending", None, e, None)
-                    .await;
-            }
-        });
     }
 }

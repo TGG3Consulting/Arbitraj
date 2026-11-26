@@ -36,15 +36,9 @@ pub(super) fn price_assets(core: &Core, venue: &VenueId) -> Vec<Asset> {
 /// Для явно заданного контракта выбирает подтверждённый адрес в сети площадки. Для прежней
 /// расчётной валюты загружает адрес из штатного сетевого справочника.
 pub(super) fn add_dex_quote(core: &Core, venue: &VenueId, out: &mut Vec<Asset>) -> bool {
-    match super::settlement_market::configured(core, venue) {
+    match super::settlement_pool::pinned(core, venue, &rd(&core.inner.networks)) {
         Err(_) => false,
-        Ok(Some(quote)) => {
-            let known = rd(&core.inner.networks).values().any(|rows| {
-                rows.iter()
-                    .any(|row| row.asset == quote && row.asset.ticker == quote.ticker)
-            });
-            select_quote(out, Some(quote), true, known)
-        }
+        Ok(Some(quote)) => select_quote(out, Some(quote), true, true),
         Ok(None) => {
             let quote = (|| {
                 let ticker = super::settlement_market::ticker(core, venue).ok()?;
@@ -68,7 +62,7 @@ fn select_quote(out: &mut Vec<Asset>, quote: Option<Asset>, pinned: bool, confir
     }
     if let Some(q) = quote {
         if pinned {
-            out.retain(|a| a.ticker != q.ticker);
+            out.retain(|a| a.ticker != q.ticker && a.contract != q.contract);
         }
         out.push(q);
     }
@@ -78,11 +72,21 @@ fn select_quote(out: &mut Vec<Asset>, quote: Option<Asset>, pinned: bool, confir
 /// Подписывает исходную биржу на книгу конверсии, даже если расчётный токен отсутствует среди
 /// целевых кандидатов. Имя и контракт берутся из её собственного справочника сети.
 pub(super) fn settlement_books(core: &Core, venue: &VenueId) -> Vec<Asset> {
-    super::chain_play::active_dexes(core).into_iter().filter_map(|dex| {
-        let m = super::settlement_market::Market::new(core,&dex,venue).ok()?;
-        let row=m.network(core,false).or_else(|_| m.network(core,true)).ok()?;
-        Some(Asset{ticker:row.asset.ticker,chain:None,contract:None})
-    }).collect()
+    super::chain_play::active_dexes(core)
+        .into_iter()
+        .filter_map(|dex| {
+            let m = super::settlement_market::Market::new(core, &dex, venue).ok()?;
+            let row = m
+                .network(core, false)
+                .or_else(|_| m.network(core, true))
+                .ok()?;
+            Some(Asset {
+                ticker: row.asset.ticker,
+                chain: None,
+                contract: None,
+            })
+        })
+        .collect()
 }
 
 /// Промежуточные монеты площадок DEX, которые биржи знают по адресу (тикер для стакана). Принимает: ядро, биржу

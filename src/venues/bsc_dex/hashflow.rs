@@ -1,6 +1,6 @@
 //! Ручная проверка и симуляция Hashflow Taker API v3 по запросу оператора.
 //! https://docs.hashflow.com/hashflow/taker/getting-started-api-v3
-mod availability;
+pub(super) mod availability;
 mod execute;
 pub(super) mod feed;
 mod market;

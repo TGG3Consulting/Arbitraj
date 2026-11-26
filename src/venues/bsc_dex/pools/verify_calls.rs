@@ -51,6 +51,14 @@ pub fn field_calls(ctx: &Ctx, f: &Family) -> Result<Vec<Bytes>, String> {
         // Решение 470: Aero Basic — factory/token0/token1 public (metadex-public 1.1.0 Pool.sol L49-L55); комиссия и кривая
         // — с состоянием (load_aero_basic.rs), реестр — getPool(a, b) (registry_call_with).
         Proto::AeroBasic => {}
+        Proto::Slipstream if f.variant == super::family_variant::Variant::SolidlyCl => {
+            l.push(
+                super::solidly_v3::ISolidlyV3::slot0Call {}
+                    .abi_encode()
+                    .into(),
+            );
+            l.push(P::tickSpacingCall {}.abi_encode().into());
+        }
         // KyberSwap Elastic (решение 81): swapFeeUnits (uint24) и tickDistance (int24) вместо fee/tickSpacing/lmPool.
         Proto::KyberElastic => {
             l.push(Bytes::from(IElasticPool::swapFeeUnitsCall {}.abi_encode()));

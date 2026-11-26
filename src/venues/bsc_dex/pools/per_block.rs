@@ -92,6 +92,7 @@ pub fn needs(f: &Family) -> bool {
     if matches!(
         f.variant,
         super::family_variant::Variant::SlipstreamDynamicFee
+            | super::family_variant::Variant::QuickswapIntegral
             | super::family_variant::Variant::CurvePlain
             | super::family_variant::Variant::CurveMeta
             | super::family_variant::Variant::CurveOracle

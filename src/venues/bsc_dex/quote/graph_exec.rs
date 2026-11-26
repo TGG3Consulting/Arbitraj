@@ -161,6 +161,12 @@ fn collectable_families(ctx: &Ctx, legs: &[Vec<&'static Family>]) -> Result<(), 
     let max = ctx.int("dex.bundle_max_routers").map_err(|e| e.message)?;
     let mut routers: Vec<Address> = Vec::new();
     for p in legs {
+        if p.len() != 1
+            && p.iter()
+                .any(|f| f.variant == super::super::pools::family_variant::Variant::SolidlyCl)
+        {
+            return Err("Модуль Solidly V3 исполняет один пул за вызов".into());
+        }
         let mut leg_router: Option<Address> = None;
         for f in p {
             let r = exec_router(ctx, f).map_err(|e| e.message)?;

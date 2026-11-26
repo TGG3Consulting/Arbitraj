@@ -143,7 +143,7 @@ async fn estimate(
 }
 
 /// Оценка газа × (1 + запас/100), вверх до целого. Ошибки: BadResponse — не помещается в u64.
-fn with_margin(ctx: &Ctx, est: U64, margin: Decimal) -> GatewayResult<u64> {
+pub(in crate::venues::bsc_dex) fn with_margin(ctx: &Ctx, est: U64, margin: Decimal) -> GatewayResult<u64> {
     let g = Decimal::from(est.to::<u64>()) * (Decimal::ONE + margin / Decimal::ONE_HUNDRED);
     u64::try_from(g.ceil()).map_err(|_| {
         ctx.err(

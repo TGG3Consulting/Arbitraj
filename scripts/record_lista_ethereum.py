@@ -38,7 +38,7 @@ def get(url, params=None):
 
 
 def deployed(e,addr):
-    url = f"https://sourcify.dev/server/v2/contract/1/{addr}"
+    url = f"https://sourcify.dev/server/v2/contract/{e['chain_id']}/{addr}"
     obj = get(url,{"fields":"compilation,sources,runtimeBytecode.onchainBytecode"})
     if (obj["runtimeMatch"] not in ("match","exact_match") or
             code(e,addr)!="0x"+keccak(bytes.fromhex(obj["runtimeBytecode"]["onchainBytecode"][2:])).hex()):

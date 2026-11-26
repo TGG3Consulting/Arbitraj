@@ -35,7 +35,10 @@ fn builders_drop_irrelevant_overrides_and_expire_at_target() {
                 "blockNumber":format!("0x{:x}",frame["target"].as_u64().unwrap())}),
         };
         let parsed = Frame::read(builder, &result).unwrap();
-        assert_eq!(parsed.overrides(), json!({(format!("{ENGINE:#x}")):{"stateDiff":diff}}));
+        assert_eq!(
+            parsed.overrides(),
+            json!({(format!("{ENGINE:#x}")):{"stateDiff":diff}})
+        );
         let t = parsed.timestamp;
         assert!(parsed.current(parsed.target - 1, t - 12, t - 1));
         assert!(!parsed.current(parsed.target - 2, t - 12, t - 1));

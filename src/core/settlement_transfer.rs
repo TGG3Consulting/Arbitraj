@@ -194,7 +194,7 @@ pub(super) async fn move_token(
     let balance_key = if from_cex {
         from_asset.ticker.clone()
     } else {
-        super::venue_ticker::balance_key(core, token, from)
+        m.balance_key(core, token, from)
     };
     let free = super::limits::free_now(core, from, Some(wallet), &balance_key).await?;
     if amount > free {

@@ -48,6 +48,7 @@ pub const DEX_KINDS: &[&str] = &[
     "thena_fusion",
     "algebra_integral",
     "algebra_integral_hydrex",
+    "algebra_integral_quickswap",
     "algebra_dir_fee",
     "solidly_v2",
     "solidly_v1",
@@ -91,6 +92,8 @@ pub const DEX_KINDS: &[&str] = &[
     "slipstream_aero",
     "slipstream_aero_metaquoter",
     "slipstream_dynamic_fee",
+    "solidly_v3",
+    "solidly_v3_module",
     "slipstream_ramses",
     "maverick_v2",
     "pancake_infinity_stable",
@@ -134,6 +137,7 @@ pub const UR_FORMATS: &[&str] = &[
 /// Настройки DEX. Порядок — как в docs/SETTINGS.md.
 #[rustfmt::skip]
 pub static DEX: &[SettingDef] = &[
+    d("FermiSwap", "fermi.quote_sizes", K::TextList, L::None, "суммы валюты котировки", V, "Суммы встречной валюты для расчёта уровней Fermi на Ethereum. Список положительных возрастающих десятичных чисел; каждый размер проверяется для обеих сторон на выбранном кадре.").optional().dex_venue(),
     d("FermiSwap", "fermi.executor", K::Address, L::None, "адрес", V, "Адрес отдельно размещённого FermiSlotExecutor в основной сети Ethereum. Котировка исполнения требует побайтной проверки кода на родителе слота.").optional().dex_venue(),
     d("FermiSwap", "fermi.trading", K::Bool, L::None, "да/нет", V, "Разрешить выбор Fermi через настроенного строителя Ethereum по свежему кадру и проверенному исполнителю.").optional().dex_venue(),
     d("FermiSwap", "fermi.builder", K::Text, L::None, "имя", V, "Строитель Ethereum для торгового маршрута: titan или buildernet. Рыночные цены и транспорт сверяются по выбранному имени.").optional().dex_venue(),
@@ -267,6 +271,9 @@ pub static DEX: &[SettingDef] = &[
     d("Контракты DEX", "dex.aero_mev_module", K::Address, L::None, "адрес", DX, "Решение 470 (ревью t240): Aero Basic и Aero Slipstream V3 (aero_basic, slipstream_aero) — закреплённый модуль MEV-налога (Arbitrum One: volatile — 0xd724433C0C637c7e273Ac623427D806Ef396c50a, stable — 0x8173816c3638650343B0a67E688AbB966C458130 — pools-arbitrum.json; Slipstream V3 — 0xce015007D03f3E3964938f11c29F24bDB0b945aB — cl-arbitrum.json clMevTaxModule). При каждом чтении mevTaxModule() фабрики Basic / крючка сверяется с ним: другой — пул не торгуется с причиной (формула налога сверена только для PriorityFeeMevTaxModule). Не задана у DEX этих видов — DEX не подключена. Другим видам не нужна"),
     d("Контракты DEX", "dex.pmm_pool", K::Address, L::None, "адрес", DX, "Решение 122 F, 3: WooFi (woofi_v2) — общий контракт WooPPV2 этой DEX (адрес из официальной документации WooFi). Пары пула — (этот контракт, базовая монета); пул подтверждается, если quoteToken() = встречный токен, wooracle() = dex.oracle, реализация прокси = dex.pool_implementation и оракул отдаёт цену монеты. Не задан — DEX не подключена"),
     d("Контракты DEX", "dex.oracle", K::Address, L::None, "адрес", DX, "Решение 122 F, 3: WooFi (woofi_v2) — оракул WooPPV2 из официальной документации. Пул, у которого wooracle() другой, не берётся (оракул сменили — сверить и вписать новый). Не задан — DEX не подключена"),
+    d("Контракты DEX", "dex.plugin_factory", K::Address, L::None, "адрес", DX, "Действующий реестр плагинов QuickSwap V4 из AlgebraFactory.defaultPluginFactory. Для каждого пула сверяется pluginByPool."),
+    d("Контракты DEX", "dex.plugin_beacon", K::Address, L::None, "адрес", DX, "Beacon проверенных прокси плагинов QuickSwap V4. Сверяется по слоту EIP-1967 прокси."),
+    d("Контракты DEX", "dex.plugin_implementation", K::Address, L::None, "адрес", DX, "Адрес реализации плагина QuickSwap V4, проверенный в симуляции. Сверяется с beacon.implementation()."),
     d("Контракты DEX", "dex.pool_implementation", K::Address, L::None, "адрес", DX, "Решение 122 F, 3: WooFi (woofi_v2) — адрес реализации прокси WooPPV2 (слот EIP-1967 0x3608…2bbc), сверенный с проверенным исходником. Реализация на узле другая (обновили контракт) — пары не берутся и не котируются, пока адрес не сверят и не впишут заново. Не задан — DEX не подключена"),
     d("Контракты DEX", "dex.pmm_ladder_usd", K::TextList, L::None, "список сумм USDT", DX, "Решение 122 F, 3 (выбор Тиграна «Лесенка цен пула»): WooFi (woofi_v2) — суммы USDT по возрастанию, на которых на каждом блоке и по событиям пула спрашивается квотер контракта query в обе стороны (одним Multicall3). Котировка и глубина пары — по этим точкам: точно в точках, между ними — средняя цена линейно, выше последней точки — неисполнимо; откат квотера в точке — край лесенки. Своих формул WooFi нет (развёрнутый код закрыт). Не задана — пара WooFi только сигнал. Те же суммы — у Metric OMM (решение 285) и iZiSwap / Biswap V3 (решение 286): ответы самого пула через виртуальный квотер; пары с USDT, а при dex.pmm_ladder_counter = да (решение 306) — и пары не с USDT (суммы во встречный токен по курсу к USDT); не задана — пул без котировки").optional(),
     d("Контракты DEX", "dex.pmm_ladder_counter", K::Bool, L::None, "да/нет", DX, "Необязательная. Решение 306 (Тигран 15.11.2026: «все включать в такой расчёт»): лесенка цен пула (dex.pmm_ladder_usd; woofi_v2, metric_omm, iziswap, biswap_v3) и у пар этой DEX, где встречный токен X — не USDT (WBNB, USDC, FDUSD и другие промежуточные монеты dex.intermediate_tokens). Да — каждая сумма dex.pmm_ladder_usd переводится в количество X по курсу X → USDT с данных своего узла: точный вход этой суммы USDT в лучший достоверный (и не спящий) пул «X — USDT» реестра, локальная математика пула (quote/rate.rs — тот же пересчёт, что у суммы пробы и глубины); точки лесенки — ответы квотера самого пула на этих количествах X, шаг маршрута в X интерполируется по ним без пересчёта через USD. Нет курса — лесенки нет, пара без котировки, запись в журнал при смене «курс есть / нет»; ступень, на которую глубины пулов «X — USDT» не хватает, — край лесенки. Лесенка в X пересчитывается при каждом чтении пула (Metric и WooFi — каждым блоком; iZiSwap / Biswap V3 без USDT в паре при «да» тоже начинают читаться каждым блоком; и по событиям пула). Нагрузка: на блок добавляется до P_mw × 2N + P_izi × (3 + 2N) eth_call (WooFi — внутри двух Multicall3 на пару, Metric / iZiSwap / Biswap V3 — две пачки JSON-RPC квотера на пару и у iZiSwap ещё одна пачка состояния; N — число сумм dex.pmm_ladder_usd, P_mw — пары Metric / WooFi не с USDT, P_izi — пары iZiSwap / Biswap V3 не с USDT); при N = 9 — 18 на пару Metric / WooFi и 21 на пару iZiSwap / Biswap V3. Не задана / «нет» — пары не с USDT без лесенки, как раньше (решение 297)").optional(),

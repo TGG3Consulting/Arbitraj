@@ -116,3 +116,21 @@ pub(super) fn unique<'a>(
     }
     Ok(first)
 }
+
+/// Адрес, которым ядро связывает нативную монету с обёрткой для поиска пулов, не доказывает
+/// возможность ввода и вывода ERC-20 на бирже.
+pub(super) fn erc20<'a>(
+    core: &Core,
+    rows: &'a [CoinNetworkInfo],
+    venue: &super::types::VenueId,
+    network: &str,
+    token: &Asset,
+) -> Result<&'a CoinNetworkInfo, String> {
+    let row = unique(rows, venue, network, token)?;
+    if super::native::is_native(core, &row.asset) {
+        return Err(
+            "Биржа сообщила нативную монету сети, для расчёта требуется переводимый ERC-20".into(),
+        );
+    }
+    Ok(row)
+}

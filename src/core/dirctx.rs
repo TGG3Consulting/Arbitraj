@@ -255,6 +255,19 @@ impl DirCtx {
         let mode = s
             .text("usdt_return.mode", At::default())
             .map_err(|e| e.message)?;
+        if !conversion && cx_return(&mode) && dir.asset.chain.is_some() {
+            let buy_dex = super::daily_venue::is_dex(core, &dir.buy_on.0);
+            let sell_dex = super::daily_venue::is_dex(core, &dir.sell_on.0);
+            if buy_dex != sell_dex {
+                let cex = if buy_dex { &dir.sell_on } else { &dir.buy_on };
+                let cash = Asset {
+                    chain: dir.asset.chain.clone(),
+                    ticker: qa.clone(),
+                    contract: Some(usdt),
+                };
+                super::net_ready::direct_cash(core, cex, &cash, buy_dex)?;
+            }
+        }
         let transit_s = match &at_m {
             Moment::Decided { transit_s, .. } => *transit_s,
             _ => super::transit::seconds(core, dir)?,

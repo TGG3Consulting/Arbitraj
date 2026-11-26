@@ -63,6 +63,12 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
     let mut cap: Option<U256> = None;
     for e in entries.iter().copied() {
         let f = e.family;
+        if f.variant == Variant::QuickswapIntegral
+            && let PoolRef::Contract(pool) = e.pool.reference
+        {
+            super::super::pools::quickswap_plugin::check(ctx, f.id, pool, "latest").await?;
+            continue;
+        }
         // Решение 470: пул Aero Slipstream V3 — крючок, модуль и правило MEV-налога и комиссия заново (aero_fresh).
         if matches!(
             f.variant,

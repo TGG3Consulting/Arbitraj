@@ -105,7 +105,7 @@ pub(super) fn marker(
 }
 
 /// Резерв сохраняется до первого сетевого запроса даже при отмене future в send::dispatch.
-pub(super) async fn reserve(
+pub(in crate::venues::bsc_dex) async fn reserve(
     ctx: &Ctx,
     slot: &wallet::nonce::Slot,
     hash: B256,

@@ -72,11 +72,25 @@ pub fn route_asset(core: &Core, venue: &VenueId, to: &VenueId) -> Result<Asset, 
     );
     super::settlement::direct_return(&ticker, other.as_ref().and_then(|v| v.as_str()))?;
     let addr = super::net_ready::usdt_of(core, network, tag.as_ref())?;
-    Ok(Asset {
+    if (from_dex || to_dex)
+        && let Some(bound) = super::settlement_market::configured(core, network)?
+        && bound.contract != Some(addr)
+    {
+        return Err(
+            "Адрес расчётного токена DEX отличается от подтверждённого адреса прямого возврата"
+                .into(),
+        );
+    }
+    let asset = Asset {
         chain: tag,
         ticker,
         contract: Some(addr),
-    })
+    };
+    if from_dex != to_dex {
+        let cex = if from_dex { to } else { venue };
+        super::net_ready::direct_cash(core, cex, &asset, !from_dex)?;
+    }
+    Ok(asset)
 }
 
 /// Перегон USDT с from на to. Принимает: …, счёт DEX перегона (решение 132; None — DEX не участвует).

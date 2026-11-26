@@ -57,3 +57,43 @@ pub fn withdraw(core: &Core, from: &VenueId, asset: &Asset, net: &str) -> Result
         )),
     }
 }
+
+/// Для прямого возврата в дополнительной сети собственный каталог стороны CEX должен
+/// подтверждать контракт валюты учёта и выбранную сторону операции. Адрес другой биржи
+/// подтверждает существование токена в сети, но не приём или вывод у этого участника.
+pub(super) fn direct_cash(
+    core: &Core,
+    cex: &VenueId,
+    asset: &Asset,
+    withdraw: bool,
+) -> Result<(), String> {
+    let Some(chain) = asset.chain.as_ref() else {
+        return Ok(());
+    };
+    let at = crate::settings::read::At {
+        venue: Some(&cex.0),
+        coin: None,
+    };
+    let network = crate::gateway::own_nets::name_of(&core.inner.deps.settings, at, Some(chain))
+        .map_err(|e| e.message)?;
+    let all = super::engine::rd(&core.inner.networks);
+    let rows = all.get(cex).map(|v| v.as_slice()).unwrap_or_default();
+    let row = super::settlement_network::unique(rows, cex, &network, asset)?;
+    if row.asset.ticker != asset.ticker
+        || (withdraw && !row.withdraw_enabled)
+        || (!withdraw && !row.deposit_enabled)
+    {
+        return Err(format!(
+            "{}: {} {} в сети {} не подтверждён",
+            cex.0,
+            if withdraw {
+                "вывод"
+            } else {
+                "депозит"
+            },
+            asset.ticker,
+            network
+        ));
+    }
+    Ok(())
+}

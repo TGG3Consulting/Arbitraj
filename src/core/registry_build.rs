@@ -65,6 +65,9 @@ pub fn usdt_address_in(
     let mut found: Vec<(VenueId, Address)> = vec![];
     for (v, list) in networks {
         let Some(q) = quote.get(v) else { continue };
+        if q != crate::settings::evm_profiles::LEDGER_QUOTE {
+            continue;
+        }
         for i in list
             .iter()
             .filter(|i| &i.asset.ticker == q && i.asset.chain.as_ref() == tag)

@@ -500,6 +500,9 @@ pub async fn state(
             // Решение 188: у Integral тики — связным списком (load_algebra_integral.rs), состояние то же. Решение 444:
             // у направленных комиссий — свой globalState (load_algebra_dir.rs), карта — та же, что у V1.9.
             let (state, t) = if f.proto == Proto::AlgebraIntegral {
+                if f.variant == Variant::QuickswapIntegral {
+                    super::quickswap_plugin::check(ctx, f.id, *a, &tag).await?;
+                }
                 load_algebra_integral::load(ctx, *a, &tag).await?
             } else if f.proto == Proto::AlgebraDirFee {
                 load_algebra_dir::load(ctx, *a, &tag).await?
@@ -560,6 +563,23 @@ pub async fn state(
     if f.proto == Proto::Slipstream {
         if let PoolRef::Contract(a) = reference {
             let sp = spacing.ok_or_else(|| missing("tickSpacing"))?;
+            if f.variant == Variant::SolidlyCl {
+                if f.fork {
+                    super::solidly_v3::verify_executor(
+                        ctx,
+                        ctx.dex_addr("dex.router", f.id)?,
+                        &tag,
+                    )
+                    .await?;
+                }
+                let (state, ticks, fee) = super::solidly_v3::load(ctx, *a, sp, &tag).await?;
+                return Ok(Loaded {
+                    state,
+                    ticks: Some(ticks),
+                    bins: None,
+                    fee_pips: Some(fee),
+                });
+            }
             let (state, t) = load_slipstream::load(ctx, *a, sp, &tag).await?;
             // Решение 470: Aero Slipstream V3 — комиссия крючка на этом блоке и проверки (aero_cl.rs).
             let fee_pips = match f.variant {

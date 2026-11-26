@@ -654,6 +654,10 @@
     "0x86d2946bd6c807e797e8eec0d632931dc337dea3": {
       "bytes": 21400,
       "keccak256": "0xac62afe6c02d8232b3f362c76bc46e1f04d6c5cb21fa2ae2f88cde89230f6969"
+    },
+    "0x70fe4a44ea505cfa3a57b95cf2862d4fd5f0f687": {
+      "bytes": 24510,
+      "keccak256": "0x8461510a17b0facd83b961eca921a5a7b149750b3087b4cddce34635e2b7848c"
     }
   },
   "router_getAmountOut": [

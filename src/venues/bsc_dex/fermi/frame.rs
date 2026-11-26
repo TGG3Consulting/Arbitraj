@@ -9,7 +9,7 @@ pub(super) const ROUTER: Address = address!("f6d5b2fefec7b420d9990b95790adfd3d4c
 pub(super) const ENGINE: Address = address!("10e1a2b624e14ac59426199e520320313a98b0be");
 const GENESIS: u64 = 1_606_824_023;
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Builder {
     Titan,
     BuilderNet,
@@ -20,6 +20,12 @@ impl Builder {
             "titan" => Some(Self::Titan),
             "buildernet" => Some(Self::BuilderNet),
             _ => None,
+        }
+    }
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Titan => "titan",
+            Self::BuilderNet => "buildernet",
         }
     }
     pub fn data(self) -> (&'static str, &'static str) {
@@ -42,6 +48,7 @@ struct Diff {
     state_diff: BTreeMap<B256, B256>,
 }
 
+#[derive(Clone)]
 pub(super) struct Frame {
     pub target: u64,
     pub slot: u64,

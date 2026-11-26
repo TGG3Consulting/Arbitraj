@@ -333,6 +333,8 @@ pub mod settlement_model;
 pub mod settlement_market;
 mod settlement_demand;
 mod settlement_funding;
+mod settlement_pool;
+mod settlement_resume;
 mod settlement_quotes;
 mod settlement_recovery;
 mod settlement_state;

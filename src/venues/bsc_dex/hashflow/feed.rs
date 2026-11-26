@@ -11,6 +11,21 @@ use std::{
 };
 use tokio::sync::mpsc;
 
+pub(in crate::venues::bsc_dex) async fn clear(p: &Parts, out: &mpsc::Sender<MarketEvent>) {
+    if !p.rfqs.populated() {
+        return;
+    }
+    p.rfqs.install("", 0, Instant::now(), None);
+    let _ = out
+        .send(MarketEvent::RfqMarkets {
+            source: crate::gateway::events::SourceId::new("Hashflow"),
+            venue: p.ctx.venue(),
+            quote: Address::ZERO,
+            markets: Default::default(),
+            expires_ms: 0,
+        })
+        .await;
+}
 pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEvent>) {
     let ctx = &p.ctx;
     let mut changes = ctx.settings.subscribe();
@@ -82,6 +97,7 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
         if config() != current {
             continue;
         }
+        let data = data.filter(|_| ctx.vault.has_secret("hashflow.taker_key"));
         let markets = data
             .as_ref()
             .map(|book| book.markets(quote, &p.tokens))

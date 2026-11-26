@@ -100,7 +100,7 @@ pub fn map(core: &Core, venue: &VenueId, list: Vec<CoinNetworkInfo>) -> Vec<Coin
         venue: Some(&venue.0),
         coin: None,
     };
-    let bsc = s.text("venue.bsc_network", at).ok();
+    let bsc = crate::gateway::own_nets::name_of(s, at, None).ok();
     apply(list, bsc.as_deref(), &n)
 }
 

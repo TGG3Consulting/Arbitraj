@@ -36,6 +36,14 @@ use super::plan::Plan;
 use super::ur;
 use super::{bundle_native, fork_swap};
 
+struct ForkLeg {
+    router: Address,
+    path: Vec<Address>,
+    amount: U256,
+    minimum: U256,
+    module_call: Option<Bytes>,
+}
+
 /// Одна транзакция бандла с присвоенным nonce.
 #[derive(Debug, Clone)]
 pub enum BundleTx {
@@ -65,6 +73,12 @@ pub enum BundleTx {
         deadline: U256,
         nonce: u64,
     },
+    /// Однопуловый модуль. В calldata закреплены адрес пула, предел выплаты и срок.
+    PoolSwap {
+        router: Address,
+        data: Bytes,
+        nonce: u64,
+    },
 }
 
 impl BundleTx {
@@ -73,13 +87,14 @@ impl BundleTx {
         match self {
             BundleTx::Approve { nonce, .. }
             | BundleTx::Swap { nonce, .. }
+            | BundleTx::PoolSwap { nonce, .. }
             | BundleTx::ForkSwap { nonce, .. } => *nonce,
         }
     }
 
     /// Это своп (true) или разрешение (false). Ошибок нет.
     pub fn is_swap(&self) -> bool {
-        matches!(self, BundleTx::Swap { .. } | BundleTx::ForkSwap { .. })
+        !matches!(self, BundleTx::Approve { .. })
     }
 }
 
@@ -170,27 +185,53 @@ pub async fn build(
                 "нога форка с нативной монетой BNB — обёртки WBNB у роутера форка нет, бандл не собирается",
             ));
         }
-        let (router, _family) = fork_router(ctx, leg)?;
+        let (router, _) = fork_router(ctx, leg)?;
         let path = fork_swap::token_path(ctx, leg)?;
         let amount = fork_swap::amount_in(ctx, leg)?;
         let min = fork_swap::min_out(ctx, leg)?;
-        forks.push((router, path, amount, min));
+        let module_call =
+            if leg.iter().any(|s| {
+                s.entry.family.variant == super::super::pools::family_variant::Variant::SolidlyCl
+            }) {
+                let [step] = leg else {
+                    return Err(ctx.err(
+                        ErrorCode::NoRoute,
+                        "Solidly V3: модуль исполняет один конкретный пул за вызов",
+                    ));
+                };
+                super::super::pools::solidly_v3::verify_executor(ctx, router, "latest").await?;
+                let pool =
+                    step.entry.pool.reference.own_contract().ok_or_else(|| {
+                        ctx.err(ErrorCode::NoRoute, "Solidly V3: нет адреса пула")
+                    })?;
+                Some(super::super::pools::solidly_v3::execution_data(
+                    pool, path[0], path[1], amount, min, deadline,
+                ))
+            } else {
+                None
+            };
+        forks.push(ForkLeg {
+            router,
+            path,
+            amount,
+            minimum: min,
+            module_call,
+        });
     }
-    for (i, (router, path, amount, min)) in forks.iter().enumerate() {
-        let (router, token_in) = (*router, path[0]);
+    for (i, leg) in forks.iter().enumerate() {
+        let (router, token_in) = (leg.router, leg.path[0]);
         // Решение 271 (дополнение): одно разрешение на пару (токен входа, роутер форка) в бандле — перед ПЕРВОЙ ногой
         // пары, на СУММУ входов всех её ног (ERC-20 approve задаёт allowance, а не прибавляет; каждая нога списывает свой
         // вход). Раньше вторая нога пары слала свой approve по allowance до бандла — лишняя транзакция. Одна нога на
         // пару — как раньше (сумма = её вход). Котировка считает так же (quote/approve_bundle.rs).
-        let pair =
-            |(r, p, ..): &(Address, Vec<Address>, U256, U256)| (*r, p[0]) == (router, token_in);
+        let pair = |other: &ForkLeg| (other.router, other.path[0]) == (router, token_in);
         let approvals = if forks[..i].iter().any(pair) {
             Vec::new()
         } else {
             let total = forks[i..]
                 .iter()
                 .filter(|f| pair(f))
-                .fold(U256::ZERO, |a, f| a.saturating_add(f.2));
+                .fold(U256::ZERO, |a, f| a.saturating_add(f.amount));
             if all_approvals {
                 approve::fork_all(ctx, token_in, router, total)?
             } else {
@@ -201,14 +242,21 @@ pub async fn build(
             txs.push(BundleTx::Approve { to, data, nonce });
             nonce += 1;
         }
-        txs.push(BundleTx::ForkSwap {
-            router,
-            path: path.clone(),
-            amount_in: *amount,
-            min_out: *min,
-            to: wallet,
-            deadline,
-            nonce,
+        txs.push(match &leg.module_call {
+            Some(data) => BundleTx::PoolSwap {
+                router,
+                data: data.clone(),
+                nonce,
+            },
+            None => BundleTx::ForkSwap {
+                router,
+                path: leg.path.clone(),
+                amount_in: leg.amount,
+                min_out: leg.minimum,
+                to: wallet,
+                deadline,
+                nonce,
+            },
         });
         nonce += 1;
     }

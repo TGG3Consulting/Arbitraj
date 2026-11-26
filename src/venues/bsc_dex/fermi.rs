@@ -1,8 +1,20 @@
 //! Котировка FermiSwap в планируемом Ethereum-блоке выбранного строителя.
 //! https://docs.titanbuilder.xyz/propamms · https://buildernet.org/docs/api
 //! Сверяет chain/router/engine, родителя, номер и время слота до и после запроса.
-//! Только HTTP-чтение по запросу оператора через общий шлюз источников.
+//! Операторская котировка приходит из общего шлюза. Штатный выбор и порядок отправки реализованы в дочерних модулях.
 mod frame;
+pub(super) mod markets;
+pub(super) mod routing;
+pub(super) use execute::trade;
+pub(super) use recovery::reconcile;
+mod dispatch;
+mod execute;
+mod indicative;
+mod levels;
+mod missed;
+mod receipt;
+mod recovery;
+mod slot;
 #[cfg(test)]
 mod tests;
 use super::{ctx::Ctx, node::rpc};
@@ -11,7 +23,10 @@ use crate::gateway::{
     http,
     source_quote::{Preview, Request},
 };
-use alloy::{sol, sol_types::SolCall};
+use alloy::{
+    sol,
+    sol_types::{SolCall, SolValue},
+};
 use alloy_primitives::{Address, B256, Bytes, I256, U64, U256, b256, keccak256};
 use chrono::Utc;
 use frame::{Builder, ENGINE, Frame, ROUTER};
@@ -23,8 +38,10 @@ sol! {
         returns (uint256 amountIn, uint256 amountOut);
     function fermi() external view returns (address);
     function decimals() external view returns (uint8);
+    struct Pair {address asset0; address asset1;}
+    function getPairs() external view returns (Pair[]);
 }
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 struct Head {
     number: U64,
     hash: B256,
@@ -41,6 +58,7 @@ struct SimBlock {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SimCall {
+    gas_used: U64,
     status: U64,
     return_data: Bytes,
 }
@@ -66,6 +84,21 @@ async fn canonical<C: SolCall>(
             "Fermi: неверный ABI на каноническом блоке",
         )
     })
+}
+
+async fn verify_router(ctx: &Ctx, head: &Head) -> GatewayResult<()> {
+    let tag = json!({"blockHash":head.hash,"requireCanonical":true});
+    let (code, engine): (Bytes, Address) = tokio::try_join!(
+        rpc::call(ctx, "eth_getCode", json!([ROUTER, tag])),
+        canonical(ctx, head.hash, ROUTER, fermiCall {})
+    )?;
+    if keccak256(code) != RUNTIME || engine != ENGINE {
+        return Err(ctx.err(
+            ErrorCode::NotApplicable,
+            "Fermi: изменился код роутера или оракул",
+        ));
+    }
+    Ok(())
 }
 
 async fn frame(ctx: &Ctx, builder: Builder) -> GatewayResult<Frame> {
@@ -128,7 +161,9 @@ pub(super) async fn source_preview(ctx: &Ctx, req: Request) -> GatewayResult<Pre
         || req.input == req.output
         || req.input.is_zero()
         || req.output.is_zero()
-        || req.market.is_some_and(|m| m != ROUTER)
+        || req
+            .market
+            .is_some_and(|m| m != ROUTER && Some(m) != ctx.addr("fermi.executor").ok())
     {
         return Err(bad(
             "Fermi: требуется Ethereum, текущий роутер и два разных ERC-20; для ETH используйте WETH",
@@ -163,15 +198,10 @@ pub(super) async fn source_preview(ctx: &Ctx, req: Request) -> GatewayResult<Pre
     if !current() {
         return Err(stale());
     }
-    let tag = json!({"blockHash":head.hash,"requireCanonical":true});
-    let (code, engine, precision): (Bytes, Address, u8) = tokio::try_join!(
-        rpc::call(ctx, "eth_getCode", json!([ROUTER, tag])),
-        canonical(ctx, head.hash, ROUTER, fermiCall {}),
+    let (_, precision) = tokio::try_join!(
+        verify_router(ctx, &head),
         canonical(ctx, head.hash, req.input, decimalsCall {})
     )?;
-    if keccak256(&code) != RUNTIME || engine != ENGINE {
-        return Err(bad("Fermi: изменился код роутера или оракул"));
-    }
     let amount = exact_amount(
         req.amount_raw.as_deref(),
         req.amount_tokens.as_deref(),
@@ -180,35 +210,41 @@ pub(super) async fn source_preview(ctx: &Ctx, req: Request) -> GatewayResult<Pre
     .ok_or_else(|| {
         bad("Fermi: нужна одна положительная сумма, точно представимая в единицах токена и int256")
     })?;
-    let q = quoteAmountsCall {
-        tokenIn: req.input,
-        tokenOut: req.output,
-        amountSpecified: I256::from_raw(amount),
-    };
-    let body = json!({"blockStateCalls":[{"blockOverrides":{"time":U64::from(frame.timestamp)},
-        "stateOverrides":frame.overrides(),"calls":[{"from":who,"to":ROUTER,"data":Bytes::from(q.abi_encode())}]}]});
-    let blocks: Vec<SimBlock> = rpc::call(ctx, "eth_simulateV1", json!([body, tag])).await?;
-    let [b] = blocks.as_slice() else {
-        return Err(bad("Fermi: неверное число блоков симуляции"));
-    };
-    if b.parent_hash != head.hash
-        || b.number.to::<u64>() != frame.target
-        || b.timestamp.to::<u64>() != frame.timestamp
-    {
-        return Err(stale());
+    let executor = req.market.filter(|m| *m != ROUTER);
+    if let Some(address) = executor {
+        slot::verify_executor(ctx, &head, address).await?;
     }
-    let [c] = b.calls.as_slice() else {
-        return Err(bad("Fermi: неверное число вызовов симуляции"));
+    let signed = I256::from_raw(amount);
+    let (_, quoted) = slot::amounts(
+        ctx,
+        &head,
+        &frame,
+        executor.unwrap_or(who),
+        req.input,
+        req.output,
+        signed,
+    )
+    .await?;
+    let (received, gas_used) = if let Some(executor) = executor {
+        let leg = keccak256((head.hash, who, req.input, req.output, amount).abi_encode());
+        let proof = slot::Proof {
+            builder: builder.name().into(),
+            parent: head.hash,
+            target: frame.target,
+            timestamp: frame.timestamp,
+            executor,
+            payer: who,
+            input: req.input,
+            output: req.output,
+            amount: signed,
+            limit: quoted,
+            leg,
+        };
+        let (_, received, gas) = slot::simulate(ctx, &head, &frame, &proof, None).await?;
+        (received, Some(gas))
+    } else {
+        (quoted, None)
     };
-    let q = quoteAmountsCall::abi_decode_returns(&c.return_data)
-        .ok()
-        .filter(|q| c.status.to::<u64>() == 1 && q.amountIn == amount && !q.amountOut.is_zero())
-        .ok_or_else(|| {
-            ctx.err(
-                ErrorCode::NoRoute,
-                "Fermi: котировка стороны и точного объёма недоступна",
-            )
-        })?;
     let latest: Head = rpc::call(ctx, "eth_getBlockByNumber", json!(["latest", false])).await?;
     if latest.hash != head.hash || !current() {
         return Err(stale());
@@ -218,13 +254,13 @@ pub(super) async fn source_preview(ctx: &Ctx, req: Request) -> GatewayResult<Pre
         input: req.input,
         output: req.output,
         spent_raw: amount.to_string(),
-        received_raw: q.amountOut.to_string(),
+        received_raw: received.to_string(),
         unspent_raw: "0".into(),
         fee: None,
         block_hash: head.hash.to_string(),
         block: Some(head.number.to::<u64>()),
         expires: Some(frame.timestamp),
         details: json!({"router":ROUTER,"engine":ENGINE,"builder":builder_id,"trader":who,
-            "target_block":frame.target,"slot":frame.slot,"quote_only":true}),
+            "target_block":frame.target,"slot":frame.slot,"quote_only":executor.is_none(),"simulated_executor":executor,"gas_used":gas_used}),
     })
 }

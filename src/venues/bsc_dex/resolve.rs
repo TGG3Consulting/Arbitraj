@@ -74,6 +74,12 @@ pub async fn trade(
     req: TradeRequest,
     pend: &PendingRef,
 ) -> GatewayResult<Option<TradeResult>> {
+    if matches!(
+        req.route.as_ref().map(|r| r.mode),
+        Some(crate::core::types::RouteMode::Slot(_))
+    ) {
+        return super::fermi::reconcile(p, req, pend).await;
+    }
     // Решение 233: бандл — квитанции ВСЕХ его транзакций и nonce кошелька (resolve_bundle.rs), не одна по хешу.
     if let Some(c) = SwapCtx::of(pend).filter(|c| c.bundle.is_some()) {
         return super::resolve_bundle::trade(p, req, &c).await;

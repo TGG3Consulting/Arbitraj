@@ -10,31 +10,32 @@ use std::{
 };
 
 #[derive(Clone)]
-pub(super) struct Funds {
+pub(in crate::venues::bsc_dex) struct Funds {
     pub who: Address,
     pub spend: U256,
     pub decimals: u8,
     pub native: U256,
 }
-type PerWallet = HashMap<(String, u64, Address), Slot>;
+type PerWallet = HashMap<(String, u64, Address, Address), Slot>;
 #[derive(Default, Clone)]
-pub(super) struct Cache(Arc<Mutex<PerWallet>>);
+pub(in crate::venues::bsc_dex) struct Cache(Arc<Mutex<PerWallet>>);
 struct Slot {
     loading: bool,
     at: Instant,
     reading: Option<Funds>,
 }
 impl Cache {
-    pub(super) fn get(
+    pub(in crate::venues::bsc_dex) fn get(
         &self,
         p: &Parts,
         chain: u64,
         input: Address,
+        spender: Address,
         age: Duration,
     ) -> Option<Funds> {
         // Идентификатор кошелька учитывает замену секретной записи маппинга. Ключ к внешнему источнику не передаётся.
         let wallet = p.ctx.wallet().ok()?;
-        let k = (wallet.secret, chain, input);
+        let k = (wallet.secret, chain, input, spender);
         let mut slots = self.0.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(s) = slots.get(&k)
             && (s.loading || s.at.elapsed() < age)
@@ -54,7 +55,7 @@ impl Cache {
         let ctx = p.ctx.clone();
         let cache = self.clone();
         tokio::spawn(async move {
-            let result = tokio::time::timeout(age, read(&ctx, chain, input))
+            let result = tokio::time::timeout(age, read(&ctx, chain, input, spender))
                 .await
                 .ok()
                 .and_then(Result::ok);
@@ -68,9 +69,8 @@ impl Cache {
     }
 }
 
-async fn read(ctx: &Ctx, chain: u64, token: Address) -> Result<Funds, String> {
+async fn read(ctx: &Ctx, chain: u64, token: Address, spender: Address) -> Result<Funds, String> {
     let who = wallet::signer::address(ctx).map_err(|e| e.message)?;
-    let router = super::router(chain)?;
     let h = sim::header(ctx, chain).await?;
     let word = async |sig: &str, args: &[Address]| -> Result<U256, String> {
         let mut data = keccak256(sig.as_bytes())[..4].to_vec();
@@ -84,14 +84,14 @@ async fn read(ctx: &Ctx, chain: u64, token: Address) -> Result<Funds, String> {
             json!([{"to":token,"data":Bytes::from(data)},sim::tag(h.hash)]),
         )
         .await
-        .map_err(|_| "Не удалось проверить средства Hashflow")?;
+        .map_err(|_| "Не удалось проверить средства ERC-20")?;
         if r.len() != 32 {
             return Err("Некорректный ABI ERC-20".into());
         }
         Ok(U256::from_be_slice(&r))
     };
     let balance_args = [who];
-    let permit_args = [who, router];
+    let permit_args = [who, spender];
     let native = async {
         rpc::call::<U256>(ctx, "eth_getBalance", json!([who, sim::tag(h.hash)]))
             .await

@@ -25,6 +25,9 @@ pub(super) async fn point(
     d: &Direction,
     qty: Decimal,
 ) -> Result<Model, super::size::Fail> {
+    crate::gateway::quote_stage::settlement_if(true, model(core, d, qty)).await
+}
+async fn model(core: &Core, d: &Direction, qty: Decimal) -> Result<Model, super::size::Fail> {
     use super::size::Fail;
     let market = super::settlement_market::Market::direction(core, d)?;
     market.accounting()?;
@@ -83,7 +86,7 @@ pub(super) async fn point(
     }) || dex_order
         .costs
         .iter()
-        .any(|c| c.kind == CostKind::ApproveGas && !c.amount.is_zero())
+        .any(|c| c.kind == CostKind::ApproveGas)
     {
         return Err(
             "Маршрут требует отдельно подтверждаемых разрешений или другого исполнителя DEX".into(),
@@ -141,12 +144,11 @@ pub(super) async fn point(
                 "Нужен подтверждённый дебет монеты скидки или ребейта основной сделки".into(),
             );
         }
-        if cost.asset == market.asset.ticker {
-            usdc = add(usdc, cost.amount)?;
-        } else if cost.asset == market.quote && stage == "A" {
-            buy_fee = add(buy_fee, cost.amount)?;
-        } else {
-            other.push(cost);
+        use super::settlement_values::{Charge, charge};
+        match charge(&market, d, stage, &cost.asset) {
+            Charge::WalletCash => usdc = add(usdc, cost.amount)?,
+            Charge::EntryQuote => buy_fee = add(buy_fee, cost.amount)?,
+            Charge::Separate => other.push(cost),
         }
     }
     let (conversion, leg, invested, capital, final_quote) = if funding {

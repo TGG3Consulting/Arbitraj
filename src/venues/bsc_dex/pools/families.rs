@@ -474,7 +474,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "thena_fusion" => (PoolKind::Cl, Proto::Algebra, true, false, false),
         // Algebra Integral (THENA V3, DexSwap; решение 188): как thena_fusion — в графе (математика swap_algebra),
         // исполнение — шаг ALGEBRA контракта-исполнителя (тот же swap + algebraSwapCallback, exec_kind.rs).
-        "algebra_integral" | "algebra_integral_hydrex" => {
+        "algebra_integral" | "algebra_integral_hydrex" | "algebra_integral_quickswap" => {
             (PoolKind::Cl, Proto::AlgebraIntegral, true, false, false)
         }
         // Решение 444: Algebra V1.9 с направленными комиссиями (Camelot V3) — как thena_fusion: в графе (математика
@@ -600,7 +600,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         | "slipstream_aero"
         | "slipstream_aero_metaquoter"
         | "slipstream_dynamic_fee"
+        | "solidly_v3"
         | "slipstream_ramses" => (PoolKind::V3, Proto::Slipstream, true, false, false),
+        "solidly_v3_module" => (PoolKind::V3, Proto::Slipstream, true, true, true),
         // Maverick V2 (решение 122 F): в графе и сигналах (порт расчёта команды Maverick); исполнение — шаг MAVERICK
         // контракта-исполнителя (exec_kind::via_executor), своего пути через Universal Router нет.
         "maverick_v2" => (PoolKind::TickBin, Proto::Maverick, true, false, false),
@@ -684,6 +686,17 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
     if !f.graphable {
         return Err(format!(
             "DEX {id} не подключена: вид «{kind}» — только справочник, в граф маршрутов пока не берётся (решение 59)"
+        ));
+    }
+    if f.variant == Variant::SolidlyCl
+        && f.fork
+        && ctx
+            .chain_id()
+            .and_then(super::solidly_v3::accepted_runtime)
+            .is_none()
+    {
+        return Err(no(
+            "модуль Solidly V3 ещё не принят в этой сборке для сети".into()
         ));
     }
     match ctx.dex_flag("dex.pool_enabled", id) {
@@ -775,7 +788,16 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::Algebra => list.extend(["dex.factory", "dex.quoter"]),
         // Algebra Integral (решение 188): фабрика (poolByPair, событие Pool — как V1.9); квотер — виртуальный
         // (dex.quoter_virtual = да убирает dex.quoter из списка, virtual_quoter.rs); без него пул не подключается.
-        Proto::AlgebraIntegral => list.extend(["dex.factory", "dex.quoter"]),
+        Proto::AlgebraIntegral => {
+            list.extend(["dex.factory", "dex.quoter"]);
+            if f.variant == Variant::QuickswapIntegral {
+                list.extend([
+                    "dex.plugin_factory",
+                    "dex.plugin_beacon",
+                    "dex.plugin_implementation",
+                ]);
+            }
+        }
         // Решение 444: фабрика (poolByPair, событие Pool — как V1.9); квотер — виртуальный (dex.quoter_virtual = да).
         // Ревью 444: допустимые хеши кода пула (сверка версии по CREATE2 — verify_algebra_dir.rs).
         Proto::AlgebraDirFee => list.extend(["dex.factory", "dex.pool_code_hashes", "dex.quoter"]),
@@ -912,6 +934,12 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // решение 59; события создания PoolCreated) и квотер (сверка ISlipstreamQuoterV2.quoteExactInputSingle по
         // tickSpacing, решение 73). Своего читателя тиков нет — битмап читается прямо у пула (load_slipstream.rs),
         // dex.tick_lens не нужен. Роутера нет (tradable=false — исполнение отсечено выше, UR/Permit2 не добавлены).
+        Proto::Slipstream if f.variant == Variant::SolidlyCl => {
+            list.push("dex.factory");
+            if f.fork {
+                list.push("dex.router");
+            }
+        }
         Proto::Slipstream => {
             list.extend(["dex.factory", "dex.quoter"]);
             // Решение 470: Aero Slipstream V3 — ещё официальный крючок обмена (pools/aero_cl.rs) и окно первой

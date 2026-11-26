@@ -80,7 +80,7 @@ pub fn decode_any(
     if on(e) {
         quote_decode(ctx, e, raw, token_in, amount)
     } else {
-        super::quoter_calls::decode(e, raw)
+        super::quoter_calls::decode_input(e, raw, token_in, amount)
     }
 }
 

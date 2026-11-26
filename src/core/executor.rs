@@ -137,6 +137,7 @@ pub(super) async fn accepted_with_depth(
         fast.balance = None;
     }
     // Решение 338 (ревью t157 Н1): вся задача сделки (предпроверка, пересчёт, котировки) — ярус счёта «сделка».
+    let mixed = settlement.is_some();
     let work = async move {
         // Решение 394: место сделки (группа докупки) и ID сделки, перешедшей в «идущие» (coin_ride::board) — снимается
         // её запись, а не замок целиком. Ревью 3, Н5: снятие — в Drop (ride_guard.rs), в том числе при панике в run.
@@ -161,7 +162,10 @@ pub(super) async fn accepted_with_depth(
     };
     tokio::spawn(urgency::scope(
         Urgency::Trade,
-        cpu_budget::scope(Tier::Deal, work),
+        cpu_budget::scope(
+            Tier::Deal,
+            crate::gateway::quote_stage::settlement_if(mixed, work),
+        ),
     ));
     Start::Started
 }

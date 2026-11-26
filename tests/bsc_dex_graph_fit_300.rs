@@ -167,6 +167,21 @@ async fn off_is_unchanged_on_picks_executable_not_worse_than_classic() {
                     if js(&Ok(on.clone())) != base {
                         // Изменилось только там, где выиграл исполнимый граф (подпись выбора и подмножество).
                         assert_eq!(r.mode, RouteMode::Graph, "{tag}");
+                        let mixed =
+                            arb::gateway::quote_stage::settlement_if(true, full(&qe, side, qty))
+                                .await
+                                .unwrap();
+                        let route = mixed.route.as_ref().unwrap();
+                        assert!(
+                            route.executable
+                                && matches!(route.mode, RouteMode::Direct | RouteMode::Smart)
+                        );
+                        assert_eq!(
+                            (mixed.fillable_qty, mixed.avg_price),
+                            (classic.fillable_qty, classic.avg_price),
+                            "{tag}: разрешённый AMM при лучшем графе"
+                        );
+                        assert!(!arb::gateway::quote_stage::settlement());
                         let note = on.pick.clone().unwrap_or_default();
                         assert!(
                             note.contains("лучший исполнимый маршрут графа (S1"),

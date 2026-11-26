@@ -115,7 +115,20 @@ pub fn read(s: &Store, at: At) -> GatewayResult<OwnNets> {
 /// Что делает: имя сети биржи для сети монеты запроса. Принимает: хранилище, область площадки, сеть монеты
 /// (Asset.chain; None — сеть по умолчанию). Возвращает: имя. Ошибки: NotConfigured — настройка не задана.
 pub fn name_of(s: &Store, at: At, chain: Option<&ChainId>) -> GatewayResult<String> {
-    s.text(&setting_of(chain), at)
+    let key = setting_of(chain);
+    let name = s.text(&key, at)?;
+    if name.trim().is_empty()
+        || std::iter::once(BSC)
+            .chain(OTHER)
+            .any(|other| other != key && s.text(other, at).is_ok_and(|n| n == name))
+    {
+        return Err(super::errors::GatewayError::not_set(
+            at.venue.map(|v| crate::core::types::VenueId(v.into())),
+            &key,
+            format!("Имя сети {name:?} должно однозначно определять одну сеть этой биржи"),
+        ));
+    }
+    Ok(name)
 }
 
 #[cfg(test)]

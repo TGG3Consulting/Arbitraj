@@ -160,6 +160,33 @@ def tables(network, snapshots, profiles):
                     "этого строителя на точный блок, проверка остаточного времени и восстановление исходного намерения. "
                     f"[Блоки, котировки, движения токенов](../{fermi.as_posix()}) · "
                     "[Адреса и порядок исполнения Titan](https://docs.titanbuilder.xyz/propamms)."])
+        slot_receipts = fermi.with_name("fermi_slot_receipts.json")
+        if slot_receipts.exists():
+            wrapped = read(slot_receipts)
+            weth = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+            measured = wrapped["cases"]
+            fmt = lambda n: f"{n:,}".replace(",", " ")
+            prices = {int(row["receipt"]["effectiveGasPrice"], 16) for row in measured}
+            assert len(prices) == 1
+            price = prices.pop()
+            modeled = [row["swap_gas"] * price for row in measured]
+            out.extend(["", "FermiSlotExecutor · изолированная сборка GitHub, слот 15 740 677. "
+                        "Расход обмена на кадрах обоих строителей в единицах газа.", "",
+                        "| Направление | Точный вход, Titan / BuilderNet | Точный выход, Titan / BuilderNet | Первое разрешение |",
+                        "|---|---:|---:|---:|"])
+            for is_weth, title in [(True, "WETH → USDT"), (False, "USDT → WETH")]:
+                side = [r for r in measured if (r["input"] == weth) == is_weth]
+                costs = {(r["builder"], int(r["amount_specified"]) > 0): r["swap_gas"] for r in side}
+                cells = [" / ".join(fmt(costs[builder, exact_in]) for builder in ("Titan","BuilderNet"))
+                         for exact_in in (True, False)]
+                approvals = sorted({r["approval_gas"] for r in side})
+                out.append("| " + " | ".join([title, *cells, "–".join(fmt(n) for n in approvals)]) + " |")
+            eth_bounds = "–".join(f"{wei/10**18:.8f}".replace(".", ",") for wei in (min(modeled),max(modeled)))
+            out.extend(["", f"Runtime Keccak `{wrapped['runtime_keccak']}`. "
+                        f"При цене контрольной транзакции {fmt(price)} wei/gas модель обмена составила {eth_bounds} ETH. "
+                        "Для первой сделки отдельно оплачивается разрешение. Маршрут приложения использует действующее разрешение "
+                        "плательщика и проверяет параметры в карточке Ethereum. Размещение контракта и приёмка реальной сделки требуют решения владельца. "
+                        f"[Восемь квитанций симуляции](../{slot_receipts.as_posix()}) · [Параметры](SETTINGS.md)."])
         coverage_path = fermi.with_name("fermi_builder_coverage.json")
         windows_path = fermi.with_name("fermi_market_windows.json")
         if coverage_path.exists() and windows_path.exists():
@@ -211,6 +238,32 @@ def tables(network, snapshots, profiles):
                        if base else "У Classic проверены отдельные фабрики динамической и постоянной комиссии: "
                        "у каждой по два пула с четырьмя котировками getAmountsOut. ")
                     + f"[Реестры, код, тики и котировки](../{kyber})."])
+    solidly = Path(f"tests/data/first_run_dex_2026-11-26/solidly_v3_{network}.json")
+    if solidly.exists():
+        sl = read(solidly)
+        markets = sl["markets"]
+        fills = [case for m in markets for case in m["cases"] if "results" in case]
+        full = sum(c["dx"] == c["taken"] for c in fills)
+        out.extend(["", f"Solidly V3 · фабрика `{sl['factory']}`, связь getPool(token0, token1, int24 spacing) "
+                    f"подтверждена для {len(markets)} пулов. slot0() возвращает цену, тик, текущую комиссию и признак "
+                    f"разблокировки. Комиссии в миллионных долях по порядку пулов снимка: "
+                    f"{', '.join(str(m['fee']) for m in markets)}. Контракт публикует SetFee при смене комиссии. "
+                    f"В симуляциях на реальных балансах {len(fills)} обменов через swap с шестью аргументами "
+                    f"совпали с quoteSwap по обоим токенам, из них {full} списали весь запрошенный вход. "
+                    "Для каждого проверены точный minOut, отказ AL при minOut + 1, TO при истёкшем сроке и отказ "
+                    "от маршрута V5 с обратным вызовом Uniswap. Прямое разрешение пулу использовано только в симуляции. "
+                    "Вид solidly_v3 включает чтение и сигналы. Для вида solidly_v3_module владелец указывает "
+                    "свой развёрнутый адрес в dex.router и включает dex.pool_enabled. Требуется приёмочный "
+                    "хеш runtime в справочнике конкретной сборки для chainId; текущие байты проверяются при чтении "
+                    "и перед сборкой разрешений. Принятая нога бандла ограничена одним пулом, кошелёк разрешает "
+                    "списание модулю, модуль выдаёт пулу разрешение ровно на вход вызова. "
+                    f"[Фабрика и байткод, вызовы, балансы](../{solidly.as_posix()}) · "
+                    "[Адреса протокола](https://docs.solidly.com/resources/contract-addresses.html)."])
+        if not base:
+            out.extend(["", "Ethereum · у USDC/WETH из бюджета 1 WETH пул списал 0,219192077251805298 WETH "
+                        "и выплатил 204,192073 USDC. У USDC/USDT без ограничения газа quoteSwap на 10 USDT "
+                        "показал расход 8,137669 USDT и выход 8,113045 USDC. При пределе 16 777 216 gas вызов "
+                        "превысил лимит. Для DEFROGS/WETH проверены обе стороны обмена на двух размерах."])
     lista = "tests/data/first_run_dex_2026-11-26/lista_ethereum.json"
     lista_stable = "tests/data/first_run_dex_2026-11-26/lista_stable_ethereum.json"
     if not base and Path(lista).exists():
@@ -233,6 +286,34 @@ def tables(network, snapshots, profiles):
                     "и четыре защитных отказа. За 1 USDT get_dy показал 999 826 минимальных единиц USDC, "
                     "exchange перечислил 999 825. На следующем блоке зарегистрировано событие Paused. "
                     f"[Реестр, причина паузы, исходники и исторические обмены](../{lista_stable})."])
+    quickswap_v2 = Path("tests/data/first_run_dex_2026-11-26/quickswap_v2_base.json")
+    if base and quickswap_v2.exists():
+        q2 = read(quickswap_v2)
+        out.extend(["", f"QuickSwap V2 · на контрольном блоке фабрика вернула {q2['official_count']} пар. "
+                    f"Все {len(q2['directory'])} пулов первой страницы подтвердили getPair и единый байткод пары. "
+                    "Исходник вычитает 3 из 1000 от входа в обе стороны. В трёх парах Router02 исполнил "
+                    "12 обменов с полным списанием и точной выплатой по формуле V2. У каждого повышение "
+                    "минимума на единицу привело к отказу. Использован тот же метод "
+                    "swapExactTokensForTokensSupportingFeeOnTransferTokens, который формирует адаптер. "
+                    f"[Фабрика, байткод, обе стороны и балансы](../{quickswap_v2.as_posix()})."])
+    quickswap = Path("tests/data/first_run_dex_2026-11-26/quickswap_base.json")
+    if base and quickswap.exists():
+        qs = read(quickswap)
+        out.extend(["", f"QuickSwap V4 Algebra · у действующей фабрики `{qs['addresses']['AlgebraFactory']}` "
+                    f"defaultPluginFactory указал на `{qs['active_plugin_factory']}`. У всех трёх пулов реестр "
+                    "pluginByPool вернул фактический плагин. Перечисленная в документации PluginFactory "
+                    f"`{qs['addresses']['PluginFactory']}` вернула другие адреса. Прокси каждого плагина сверен "
+                    "по байткоду с immutable pool, слоту EIP-1967 и реализации beacon. Профиль проверяет "
+                    "эти привязки по одному каноническому хешу при чтении и перед отправкой. "
+                    "Между последней проверкой и включением в блок владелец beacon может изменить реализацию. "
+                    "В транзакции V5 действует минимум выручки. У USDC/USDT, WETH/USDC и USDC/cbBTC "
+                    "прочитаны комиссии 8, 750 и 705 миллионных. У QuoterV2 поле fee вернуло 500 во всех "
+                    "случаях. В 12 из 12 симуляций V5 выход обоих квотеров совпал с приращением баланса, "
+                    "точное списание входа подтверждено, повышение minOut на единицу привело к отказу. "
+                    "Два внутренних обмена плагина прошли с комиссией 1. Событие Swap инициирует чтение "
+                    "конечного состояния блока. Для захвата целых слов тиков в выборке потребовалось "
+                    "22, 2 и 1 шаг соответственно. Владелец задаёт общий dex.integral_tick_steps для нужной глубины. "
+                    f"[Реестр, размещения, обе котировки, балансы и события](../{quickswap.as_posix()})."])
     hydrex = "tests/data/first_run_dex_2026-11-26/hydrex_base.json"
     if base and Path(hydrex).exists():
         out.extend(["", "Hydrex Integral · фабрика подтвердила все 20 пулов из выборки GeckoTerminal через poolByPair. "
@@ -361,6 +442,10 @@ def tables(network, snapshots, profiles):
         pool = probe.get("pool") or next((a["address"] for a in sample.get("samples", []) if a.get("address")), None)
         factory = probe.get("reported_factory")
         roundtrip = probe.get("factory_roundtrip")
+        if base and id == "quickswap-v2-base" and quickswap_v2.exists() and pool and any(m["pool"] == pool.lower() for m in q2["directory"]):
+            factory, roundtrip = q2["factory"], "getPair(address,address)"
+        if base and id == "quickswap-v4-base" and quickswap.exists() and pool and any(m["pool"] == pool.lower() for m in qs["markets"]):
+            factory, roundtrip = qs["addresses"]["AlgebraFactory"], "poolByPair(address,address)"
         if base and id == "hydrex-integral" and Path(hydrex).exists():
             hx = read(Path(hydrex))
             if any(r["pool"] == pool.lower() and r["listed"] for r in hx["directory"]):
@@ -378,6 +463,8 @@ def tables(network, snapshots, profiles):
             else:
                 need = "восстановить перечень пулов и проверить независимый источник"
             status = f"`{task}` · {need}"
+        if id == ("solidly-v3-base" if base else "solidly-v3") and solidly.exists():
+            status = "DEX-19 · проверены исходники, комиссия и прямые обмены. Для торговли требуется проверенное размещение модуля"
         if sample.get("state") != "enumerated":
             status += ", страница не прочитана"
         elif not sample.get("rows_page1"):
@@ -399,6 +486,12 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if base and str(row["id"]) == "306" and quickswap_v2.exists() and q2["factory"] in {a.lower() for a in candidates}:
+            task = "QuickSwap V2 · фабрика из адаптера подтвердила все 20 пулов первой страницы"
+        if base and str(row["id"]) == "6576" and quickswap.exists() and qs["addresses"]["AlgebraFactory"] in {a.lower() for a in candidates}:
+            task = "QuickSwap V4 · AlgebraFactory из адаптера подтвердила три пула и текущую фабрику плагинов"
+        if str(row["id"]) == "3481" and solidly.exists() and sl["factory"] in {a.lower() for a in candidates}:
+            task = "Solidly V3 · фабрика из адаптера объёмов подтвердила три пула снимка"
         if base and str(row["id"]) == "6365" and Path(hydrex).exists():
             hx_factory = read(Path(hydrex))["addresses"]["Factory"]
             if hx_factory in {a.lower() for a in candidates}:

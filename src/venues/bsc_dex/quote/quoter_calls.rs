@@ -50,6 +50,16 @@ pub fn request(
         e.pool.token0
     };
     let zero_for_one = token_in == e.pool.token0;
+    if e.family.variant == super::super::pools::family_variant::Variant::SolidlyCl {
+        let pool = e
+            .pool
+            .reference
+            .own_contract()
+            .ok_or_else(|| ctx.err(ErrorCode::Internal, "Solidly V3: нет адреса пула"))?;
+        let data = super::super::pools::solidly_v3::quote_data(zero_for_one, amount)
+            .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Solidly V3: сумма вне диапазона int256"))?;
+        return Ok((pool, data));
+    }
     // Maverick V2 (решение 122 F): MaverickV2Quoter.calculateSwap (quote/quoter_maverick.rs).
     if e.family.proto == Proto::Maverick {
         return super::quoter_maverick::request(ctx, e, token_in, amount);
@@ -403,7 +413,22 @@ pub fn request(
 }
 
 /// Выход из ответа квотера. None — ответ не по ABI.
+pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> Option<U256> {
+    if e.family.variant == super::super::pools::family_variant::Variant::SolidlyCl {
+        return super::super::pools::solidly_v3::quote_output(
+            out,
+            token_in == e.pool.token0,
+            amount,
+        );
+    }
+    decode(e, out)
+}
+
 pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
+    if e.family.variant == super::super::pools::family_variant::Variant::SolidlyCl {
+        // Для quoteSwap обязательны направление и заявленный вход. См. decode_input.
+        return None;
+    }
     // DODO PMM (решение 86b): querySellBase/querySellQuote возвращают первым словом выход после комиссий
     // (DVM — 2 значения, DPP/DSP — 4; первое всегда receive*Amount). Читаем первое слово, число значений не важно.
     if e.family.proto.is_dodo() {

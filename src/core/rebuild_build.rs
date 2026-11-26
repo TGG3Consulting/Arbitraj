@@ -100,13 +100,19 @@ pub fn build(
                 &names_own
             }
         };
+        let mut pool_quotes = g.dex.iter().map(|v| {
+            super::settlement_pool::address(super::settlement_pool::pinned(core, v, nets_g), usdt_g)
+        });
+        let pool_quote = pool_quotes.next().unwrap_or(usdt_g);
+        let pool_quote =
+            pool_quote.filter(|address| pool_quotes.all(|other| other == Some(*address)));
         // Ревью К1 (решение 211): нативная монета и обёртка — общая настройка площадок DEX сети (native.rs).
         let native = super::native::read(s, &g.dex).ok().flatten();
         let mut part_g = super::registry_build::build_part(
             &Inputs {
                 venues: &gv,
                 networks: nets_g,
-                usdt: usdt_g,
+                usdt: pool_quote,
                 quote,
                 bsc_network: names_g,
                 pairs_fresh: &pairs_fresh,

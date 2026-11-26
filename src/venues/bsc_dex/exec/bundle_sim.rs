@@ -51,7 +51,10 @@ pub fn build_sim(bundle: &Bundle, wallet: Address) -> SimPlan {
     let mut bal = Vec::new();
     for (i, t) in bundle.txs.iter().enumerate() {
         match t {
-            BundleTx::Approve { to, data, .. } => {
+            BundleTx::Approve { to, data, .. }
+            | BundleTx::PoolSwap {
+                router: to, data, ..
+            } => {
                 calls.push(Call {
                     from: wallet,
                     to: *to,
@@ -185,7 +188,10 @@ pub fn sign_txs(
     let mut out = Vec::with_capacity(bundle.txs.len());
     for (i, (t, &gas)) in bundle.txs.iter().zip(limits).enumerate() {
         let (to, input, value) = match t {
-            BundleTx::Approve { to, data, .. } => (*to, data.clone(), U256::ZERO),
+            BundleTx::Approve { to, data, .. }
+            | BundleTx::PoolSwap {
+                router: to, data, ..
+            } => (*to, data.clone(), U256::ZERO),
             BundleTx::Swap { plan, .. } => {
                 let base = *bases.get(&i).ok_or_else(|| {
                     ctx.err(ErrorCode::Internal, "нет базы BALANCE_CHECK свопа бандла")

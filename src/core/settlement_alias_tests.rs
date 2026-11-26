@@ -61,6 +61,41 @@ fn verified_poloniex_ticker_keys_the_cash_order_subscription_and_fee() {
             .get("cex_asset_symbol")
             .is_none()
     );
+    use crate::core::{
+        settlement_values::{Charge, charge},
+        types::Direction,
+    };
+    let from_cex = Direction {
+        asset: m.asset.clone(),
+        buy_on: m.cex.clone(),
+        sell_on: m.dex.clone(),
+    };
+    let from_dex = Direction {
+        asset: m.asset.clone(),
+        buy_on: m.dex.clone(),
+        sell_on: m.cex.clone(),
+    };
+    assert_eq!(charge(&m, &from_cex, "A", &m.quote), Charge::EntryQuote);
+    assert_eq!(
+        charge(&m, &from_cex, "B", &m.asset.ticker),
+        Charge::WalletCash
+    );
+    assert_eq!(charge(&m, &from_dex, "B", m.cex_symbol()), Charge::Separate);
+    // Даже совпавшая показная надпись не меняет счёт фактического списания.
+    let mut same_label = m.clone();
+    same_label.asset.ticker = m.quote.clone();
+    assert_eq!(
+        charge(&same_label, &from_cex, "A", &m.quote),
+        Charge::EntryQuote
+    );
+    assert_eq!(
+        charge(&same_label, &from_dex, "B", &m.quote),
+        Charge::Separate
+    );
+    assert_eq!(
+        charge(&same_label, &from_dex, "A", &m.quote),
+        Charge::WalletCash
+    );
     let duplicated = [wire.clone(), wire.clone()];
     assert!(unique(&duplicated, &m.cex, net, &m.asset).is_err());
     assert!(unique(&rows, &m.cex, "", &m.asset).is_err());

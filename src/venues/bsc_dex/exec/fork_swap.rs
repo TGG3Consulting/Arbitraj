@@ -91,6 +91,22 @@ pub fn probe_swap(
     let router = ctx.dex_addr("dex.router", e.family.id)?;
     let deadline = U256::from(now + ctx.int("dex.deadline_s")?);
     let approvals = approve::fork_all(ctx, token_in, router, amount_in)?;
+    if e.family.variant == super::super::pools::family_variant::Variant::SolidlyCl {
+        let pool = e
+            .pool
+            .reference
+            .own_contract()
+            .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Solidly V3: нет адреса пула"))?;
+        let data = super::super::pools::solidly_v3::execution_data(
+            pool,
+            token_in,
+            token_out,
+            amount_in,
+            U256::ONE,
+            deadline,
+        );
+        return Ok((approvals, router, data));
+    }
     let data = swap_data(
         amount_in,
         U256::from(1u8),

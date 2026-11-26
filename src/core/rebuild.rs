@@ -33,7 +33,7 @@ pub async fn run(core: Core) {
 }
 
 /// Настройки, от которых зависит справочник: их изменение — всегда толчок пересборки.
-const REGISTRY: [&str; 12] = [
+const REGISTRY: [&str; 13] = [
     "coin.",
     "cex_cex.",
     "tax.",
@@ -47,6 +47,7 @@ const REGISTRY: [&str; 12] = [
     "venue.arbitrum_network",
     "venue.symbols_stale_s",
     "dex.intermediate_",
+    "dex.settlement_contract",
     // Решение 181: монеты для цены затрат — в подписке биржи (subscribe.rs).
     "venue.price_assets",
 ];
@@ -164,10 +165,20 @@ pub async fn rebuild(core: &Core) {
         coins.iter().flat_map(|c| c.shown_directions()).collect();
     let directions = live_dirs.len();
     let count = coins.len() + inert.len();
+    // Решение 430: USDT сетей не по умолчанию — из справочников сетей бирж этой сети (registry_chains.rs).
+    // Решение 489: группы — по площадкам DEX в игре (сеть, которую держат идущие сделки, — тоже: её USDT нужен перегону).
+    let groups = super::registry_chains::groups(core, &super::chain::dexes(core));
+    let other = super::registry_chains::usdt_other(&groups, &nets, &quote);
+    let same_other = *rd(&inner.usdt_other) == other;
+    if !same_other {
+        *wr(&inner.usdt_other) = other;
+    }
     // Решение 129: справочник не изменился (тот же список, тот же USDT) — карту тикеров, справочник и «Живой экран» не
     // трогаем; подписки всё равно сверяются (повтор неудавшейся подписки идёт по толчку пересборки).
-    let same =
-        !inert_new && *prev.live == coins && rd(&inner.usdt).as_ref().ok() == usdt.as_ref().ok();
+    let same = same_other
+        && !inert_new
+        && *prev.live == coins
+        && rd(&inner.usdt).as_ref().ok() == usdt.as_ref().ok();
     if same {
         super::subscribe::sync(core, &venues).await;
         return;
@@ -175,10 +186,6 @@ pub async fn rebuild(core: &Core) {
     // Направления, которых больше нет, уходят с «Живого экрана».
     wr(&inner.spreads).retain(|d, _| live_dirs.contains(d));
     *wr(&inner.usdt) = usdt;
-    // Решение 430: USDT сетей не по умолчанию — из справочников сетей бирж этой сети (registry_chains.rs).
-    // Решение 489: группы — по площадкам DEX в игре (сеть, которую держат идущие сделки, — тоже: её USDT нужен перегону).
-    let groups = super::registry_chains::groups(core, &super::chain::dexes(core));
-    *wr(&inner.usdt_other) = super::registry_chains::usdt_other(&groups, &nets, &quote);
     // Карта (площадка, тикер) → монета для тика (решение 118, Я-9) и журнал разных тикеров одного адреса (Я-8).
     super::ticker_index::rebuild(core, &coins).await;
     *wr(&inner.coins) = CoinBook {

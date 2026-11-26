@@ -37,7 +37,7 @@ pub(super) async fn request(
         .await
         .map_err(|e| e.to_string())?;
     if sell {
-        let asset_key = super::venue_ticker::balance_key(core, &d.asset, venue);
+        let asset_key = p.market.balance_key(core, &d.asset, venue);
         let free = super::limits::free_now(core, venue, Some(&p.wallet), &asset_key).await?;
         let required = |qty: Decimal, q: &super::types::Quote| {
             qty.checked_add(super::costs_exit::coin_fee(&q.costs, &d.asset.ticker))

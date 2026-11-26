@@ -1,0 +1,63 @@
+{
+  "ethereum": {
+    "source": "https://api.gateio.ws/api/v4/spot/currencies/USDT",
+    "utc": "2026-11-25T22:07:01.843189+00:00",
+    "row_count": 26,
+    "ethereum": [
+      {
+        "name": "ETH",
+        "addr": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+        "withdraw_disabled": false,
+        "withdraw_delayed": false,
+        "deposit_disabled": false
+      }
+    ],
+    "literal_0x_prefixed_match": true,
+    "same_20_byte_issuer_contract": true
+  },
+  "base": {
+    "source": "https://api.gateio.ws/api/v4/spot/currencies/USDT",
+    "root_keys": [
+      "currency",
+      "name",
+      "delisted",
+      "withdraw_disabled",
+      "withdraw_delayed",
+      "deposit_disabled",
+      "trade_disabled",
+      "fixed_rate",
+      "chain",
+      "chains",
+      "total_supply",
+      "market_cap",
+      "category"
+    ],
+    "code": null,
+    "top_child": {
+      "chains": 26,
+      "category": 0
+    },
+    "matching_rows": [],
+    "contains_base_text": false
+  },
+  "native": {
+    "source_snapshot": "cex_samples_2026_11_04/gate_spot_currencies.json",
+    "currency": "ETH",
+    "chains": [
+      {
+        "name": "ETH",
+        "addr": "",
+        "withdraw_disabled": false,
+        "withdraw_delayed": false,
+        "deposit_disabled": false
+      },
+      {
+        "name": "BASEEVM",
+        "addr": "",
+        "withdraw_disabled": false,
+        "withdraw_delayed": false,
+        "deposit_disabled": false
+      }
+    ]
+  }
+}

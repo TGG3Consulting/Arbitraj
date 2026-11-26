@@ -62,7 +62,7 @@ impl Subs {
 
     /// Останавливает задачи до очистки токенов и пулов. Вызывается под change, запрос к RPC не требуется.
     async fn stop(&self, p: &Parts) {
-        self.last.lock().unwrap_or_else(|x| x.into_inner()).take();
+        let last = self.last.lock().unwrap_or_else(|x| x.into_inner()).take();
         self.pools.lock().unwrap_or_else(|x| x.into_inner()).take();
         let mut tasks = std::mem::take(&mut *self.tasks.lock().unwrap_or_else(|x| x.into_inner()));
         tasks.append(&mut *self.wallet_tasks.lock().unwrap_or_else(|x| x.into_inner()));
@@ -71,6 +71,12 @@ impl Subs {
         }
         for t in tasks {
             let _ = t.await;
+        }
+        if let Some((_, out)) = last {
+            super::hashflow::feed::clear(p, &out).await;
+            if p.ctx.chain_id() == Some(1) {
+                super::fermi::markets::clear(p, &out).await;
+            }
         }
         p.registry.retain(|_| false);
         p.tokens.set(&[]);
@@ -87,16 +93,33 @@ impl Subs {
         super::node::chain_id::check_start(&p.ctx).await?;
         let pools = p.pools(out.clone());
         let mut new = pools::market::subscribe(&pools, &p.scanned, &p.wake, assets.clone()).await?;
+        // Владелец предыдущего опроса должен завершиться до запуска нового издателя в тот же канал.
+        self.wallets(p, Some(pools.clone())).await;
+        let old = std::mem::take(&mut *self.tasks.lock().unwrap_or_else(|x| x.into_inner()));
+        for task in &old {
+            task.abort();
+        }
+        for task in old {
+            let _ = task.await;
+        }
+        let last = self.last.lock().unwrap_or_else(|x| x.into_inner()).clone();
+        if let Some((_, previous)) = last {
+            super::hashflow::feed::clear(p, &previous).await;
+            if p.ctx.chain_id() == Some(1) {
+                super::fermi::markets::clear(p, &previous).await;
+            }
+        }
+        if p.ctx.chain_id() == Some(1) {
+            new.push(tokio::spawn(super::fermi::markets::run(
+                p.clone(),
+                out.clone(),
+            )));
+        }
         new.push(tokio::spawn(super::hashflow::feed::run(
             p.clone(),
             out.clone(),
         )));
-        // Решение 132: очереди и события баланса — по кошелькам (resubscribe_wallets.rs).
-        self.wallets(p, Some(pools.clone())).await;
         let mut tasks = self.tasks.lock().unwrap_or_else(|x| x.into_inner());
-        for old in tasks.drain(..) {
-            old.abort();
-        }
         *tasks = new;
         *self.last.lock().unwrap_or_else(|x| x.into_inner()) = Some((assets, out));
         Ok(())

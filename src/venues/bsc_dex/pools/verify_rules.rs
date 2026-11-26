@@ -61,6 +61,20 @@ pub fn fill(f: &Family, r: &mut Read, got: &[Result<Bytes, String>]) -> Result<(
         Proto::CamelotV2 => {}
         // Решение 470: Aero Basic — полей сверх factory/token0/token1 нет (verify_calls.rs).
         Proto::AeroBasic => {}
+        Proto::Slipstream if f.variant == super::family_variant::Variant::SolidlyCl => {
+            let head = super::solidly_v3::ISolidlyV3::slot0Call::abi_decode_returns_validate(
+                bytes(3, "slot0()")?,
+            )
+            .map_err(dec)?;
+            let spacing =
+                P::tickSpacingCall::abi_decode_returns_validate(bytes(4, "tickSpacing()")?)
+                    .map_err(dec)?;
+            if !head.unlocked || head.fee.to::<u32>() > 100_000 || spacing.as_i32() <= 0 {
+                return Err("Solidly V3: некорректные значения в заголовке пула".into());
+            }
+            r.fee = Some(head.fee.to());
+            r.spacing = Some(spacing.as_i32());
+        }
         // KyberSwap Elastic (решение 81): swapFeeUnits → fee (feeUnits), tickDistance → spacing. Нет lmPool (не V3).
         Proto::KyberElastic => {
             r.fee = Some(

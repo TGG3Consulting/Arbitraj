@@ -17,6 +17,8 @@ pub enum Variant {
     Base,
     /// Hydrex Integral Base: после Swap плагин может обменять собственные комиссии в том же пуле по отдельному тарифу.
     HydrexIntegral,
+    /// Algebra Integral с проверяемым beacon-прокси плагина QuickSwap V4.
+    QuickswapIntegral,
     /// Lista StableSwap с проверенной реализацией EIP-1967 на каждом чтении состояния.
     ListaStableProxy,
     /// Unchain X (UNX-V3-Contracts f6185ae6): slot0, Swap и callback от Uniswap V3, плюс геттер lmPool().
@@ -41,6 +43,8 @@ pub enum Variant {
     SlipstreamAeroMetaquoter,
     /// Aerodrome Base CLFactory.getSwapFee(pool), читается через CLPool.fee() на блоке.
     SlipstreamDynamicFee,
+    /// Solidly V3 Ethereum/Base, slot0 с комиссией, встроенный quoteSwap и свой ABI оплаты.
+    SolidlyCl,
     /// V2 с фиксированной реализацией пары: адрес сверяется по хешу байткода создания CREATE2.
     V2Create2,
     /// Curve StableSwap 2021 (dex.kind = curve_stableswap_plain, решение 472): протокол Proto::CurveStable (геттеры
@@ -112,11 +116,13 @@ pub fn of(kind: &str) -> Variant {
         "slipstream_aero" => Variant::SlipstreamAero,
         "slipstream_aero_metaquoter" => Variant::SlipstreamAeroMetaquoter,
         "slipstream_dynamic_fee" => Variant::SlipstreamDynamicFee,
+        "solidly_v3" | "solidly_v3_module" => Variant::SolidlyCl,
         "curve_stableswap_plain" => Variant::CurvePlain,
         "curve_stableswap_meta" => Variant::CurveMeta,
         "curve_stableswap_oracle" => Variant::CurveOracle,
         "curve_crypto2_v1" => Variant::CryptoPair,
         "algebra_integral_hydrex" => Variant::HydrexIntegral,
+        "algebra_integral_quickswap" => Variant::QuickswapIntegral,
         "lista_stableswap_proxy" => Variant::ListaStableProxy,
         "v3_fork_ramses" => Variant::RamsesCl,
         "v3_fork_uniswap_lm" => Variant::UniswapV3Lm,

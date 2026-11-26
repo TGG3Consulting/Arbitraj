@@ -12,6 +12,8 @@ pub struct Request {
 
 #[derive(Serialize)]
 pub struct Preview {
+    /// Оценка публичной книги. Вызов от другого контракта может получить другую ликвидность.
+    pub execution_checked: bool,
     pub market: Address,
     pub block: u64,
     pub hash: B256,

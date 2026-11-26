@@ -194,6 +194,7 @@ pub(in crate::venues::bsc_dex) async fn preview(ctx: &Ctx, req: Request) -> Gate
             )
         })?;
     Ok(Preview {
+        execution_checked: false,
         market: market.orderbook_address,
         block: head.number.to::<u64>(),
         hash: head.hash,

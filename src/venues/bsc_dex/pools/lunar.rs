@@ -2,17 +2,15 @@
 //! Что делает: сверяет активный proxy LunarBase, реализацию, порядок native ETH/USDC и код общего модуля.
 //! Кто вызывает: поиск, загрузка, квотер, подготовка сделки. От чего зависит: ABI и архив lunarbase.json.
 //! Настройки: dex.kind, dex.pmm_pool, dex.pool_implementation, dex.router и dex.pmm_ladder_usd.
-use super::super::{
-    ctx::Ctx,
-    node::{call, rpc},
-};
+use super::super::{ctx::Ctx, node::rpc};
 use super::{discover::Found, verify::Candidate, verify_woo};
 use crate::core::types::PoolRef;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
-use alloy::{sol, sol_types::SolCall};
+use alloy::sol;
 use alloy_primitives::{Address, B256, Bytes, address, b256, keccak256};
 use serde_json::{Value, json};
 
+use super::pmm_view::view;
 mod market;
 pub use market::{load, quote};
 
@@ -47,23 +45,6 @@ pub const USDC: Address = address!("833589fcd6edb6e08f4c7c32d4f71b54bda02913");
 
 pub fn pair(coin: Address, counter: Address) -> bool {
     coin == WETH && counter == USDC
-}
-
-async fn view<C: SolCall>(
-    ctx: &Ctx,
-    at: &Value,
-    from: Address,
-    to: Address,
-    input: C,
-) -> GatewayResult<C::Return> {
-    let bytes = Bytes::from(input.abi_encode());
-    let raw: Bytes = rpc::call(
-        ctx,
-        "eth_call",
-        json!([{"from":from,"to":to,"data":bytes},at]),
-    )
-    .await?;
-    call::decode::<C>(&raw)
 }
 
 pub(super) async fn open(ctx: &Ctx, tag: &Value, owner: Address) -> GatewayResult<bool> {

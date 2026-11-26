@@ -2174,5 +2174,58 @@
         "10000"
       ]
     }
+  },
+  {
+    "id": "baibai",
+    "network": "base",
+    "chain_id": 8453,
+    "source": "https://docs.baibai.cx/takers/deployments.md · tests/data/first_run_dex_2026-11-26/baibai_base.json",
+    "settings": {
+      "dex.kind": "baibai",
+      "dex.pmm_pool": "0x98c1d9e102eb2806d902b13186bdc7892ac4ffba",
+      "dex.pool_implementation": "0xcc61f0acb73eea94c160af15da4471b9b456f3b0",
+      "dex.oracle": "0x604d9b9eb1e1571c78661a6c1088427ec9c8c6e5",
+      "dex.vault": "0xaac48feb93c5c97e0fb3c7c57e1633922a4acda3",
+      "dex.pmm_ladder_counter": true
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "communityv3",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x00a38533c68327abe0cc265436e036066e2d6b38 · tests/data/first_run_dex_2026-11-26/community_v3_ethereum.json",
+    "settings": {
+      "dex.kind": "v3_fork",
+      "dex.factory": "0x00a38533c68327abe0cc265436e036066e2d6b38",
+      "dex.tick_lens": "0xbfd8137f7d1516D3ea5cA83523914859ec47F573",
+      "dex.quoter_virtual": true,
+      "dex.v3_fee_tiers": [
+        "100",
+        "500",
+        "1000",
+        "2000",
+        "3000",
+        "4000",
+        "5000",
+        "6000",
+        "7000",
+        "8000",
+        "9000",
+        "10000",
+        "11000",
+        "12000",
+        "13000",
+        "14000",
+        "15000",
+        "16000",
+        "17000",
+        "18000",
+        "19000",
+        "20000",
+        "30000",
+        "40000",
+        "50000"
+      ]
+    }
   }
 ]

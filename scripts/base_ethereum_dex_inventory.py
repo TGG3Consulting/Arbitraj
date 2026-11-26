@@ -276,6 +276,18 @@ def tables(network, snapshots, profiles):
                     "задаёт владелец в USDT, dex.pmm_ladder_counter переводит эти объёмы в USDC по курсу реестра. "
                     "Нативный swap сравнивает limitAmount с котировкой до transferFrom. Архивная проверка ElfomoExecutor подтвердила срок, полный вход, зачисление и возврат разрешения к нулю в 8 случаях. В режиме elfomofi_module котировка кошелька проходит через адрес адаптера. Для единственного нового размещения по решению 408 у ElfomoFi и LunarBase общий BasePmmExecutor, runtime 0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403. Старый ElfomoExecutor 0xd3abddebdd155ff956b970579304da391511f945803c0ae5f1ec8f28c10a64bb допускается только для ElfomoFi. За отдельные 24 часа эти две пары дали 2 094 922,843102 из 2 132 483,689949 USDC оборота роутера. [Расчёт стоимости и границы применения](DECISIONS.md#дополнение-к-t488-01-elfomofi-на-base-dex-23-r-22). "
                     f"[Сырые результаты](../{elfomo.as_posix()}) · [Спецификация]({el['source']})."])
+    baibai = Path("tests/data/first_run_dex_2026-11-26/baibai_base.json")
+    if base and baibai.exists():
+        bai = read(baibai)
+        out.extend(["", "BaiBai · профиль WETH/USDC сверяет три proxy, их реализации и взаимные ссылки. "
+                    "quoteFor читает чистую сумму для фактического плательщика. На контрольном блоке TTL книги составил 8 секунд. "
+                    "В четырёх архивных обменах точный минимум совпал с зачислением на кошелёк, а минимум на единицу выше привёл к отказу. "
+                    "После истечения срока при прежнем содержимом pair() все четыре котировки обнулились и обмены отклонились. "
+                    "Расход составил 149 386–151 249 gas. Размеры ступеней задаёт владелец в USDT. Профиль работает в режиме наблюдения. "
+                    "За 24 часа учтены 2 471 обмен WETH/USDC на 721 513,217973 USDC из 751 652,107616 USDC всего Entry. "
+                    "Второй базовый токен 0xb20000000000000000000078ee7ce2fe4908108c находится вне профиля WETH. "
+                    f"[Адреса, котировки и исполнение](../{baibai.as_posix()}) · "
+                    "[Оборот по событиям](../tests/data/first_run_dex_2026-11-26/baibai_volume_base.json)."])
     lunar = Path("tests/data/first_run_dex_2026-11-26/lunarbase.json")
     if base and lunar.exists():
         lb = read(lunar)
@@ -379,6 +391,12 @@ def tables(network, snapshots, profiles):
                     "с проверкой балансов через штатный V5; у третьего на этом блоке ликвидность равна нулю. "
                     "Для каждого направления учитывается фактически использованный вход. "
                     "[Архивные котировки и исполнения](../tests/data/first_run_dex_2026-11-26/squad_v3_base.json)."])
+    if not base:
+        out.extend(["", "CommunityV3 · фабрика Ethereum создала 434 пула. Все адреса проверены по CREATE2, getPool и nonce фабрики. "
+                    "Подтверждены 25 ставок комиссии. На блоке 26 494 988 у 113 пулов ненулевая ликвидность на текущем тике. "
+                    "На трёх рынках MUon/USDC и TSLAon/USDC выполнены девять полных кругов в V5, с исходным размером 0,01, 1 и 10 USDC. "
+                    "Для остальных пулов таблица содержит проверку регистрации и измерение текущей ликвидности. "
+                    "[Реестр и результаты исполнения](../tests/data/first_run_dex_2026-11-26/community_v3_ethereum.json)."])
     if not base and Path(lista).exists():
         out.extend(["", "Lista DEX V3 · три пула официальной фабрики Ethereum и семь разрешённых уровней комиссии "
                     "установлены по событиям и обратным запросам. У всех трёх пулов код 31 зависимой единицы Solidity "
@@ -639,6 +657,9 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if base and str(row["id"]) == "8934" and baibai.exists():
+            candidates = [bai["deployments"]["entry"]["address"]]
+            task = "DEX-25 · Entry подтвердил WETH/USDC, обе котировки и платежи. Оборот каждого базового токена посчитан отдельно"
         if base and str(row["id"]) == "7601" and lunar.exists():
             task = "DEX-24 · один действующий native ETH/USDC, фактические implementation и выплаты по обеим сторонам; три размещения приостановлены"
         if base and str(row["id"]) == "7260" and elfomo.exists():

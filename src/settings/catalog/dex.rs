@@ -90,6 +90,7 @@ pub const DEX_KINDS: &[&str] = &[
     "saddle_stableswap",
     "woofi_v2",
     "lunarbase",
+    "baibai",
     "lunarbase_module",
     "elfomofi",
     "elfomofi_module",

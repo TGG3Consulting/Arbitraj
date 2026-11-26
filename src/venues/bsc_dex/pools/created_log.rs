@@ -225,6 +225,7 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             | Proto::SaddleStable
             | Proto::WooPP
             | Proto::Elfomo
+            | Proto::BaiBai
             | Proto::Lunar => {
                 continue;
             }

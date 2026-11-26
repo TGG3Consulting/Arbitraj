@@ -121,6 +121,8 @@ pub enum Proto {
     Elfomo,
     /// LunarBase native ETH/USDC. Исполнение WETH требует отдельной атомарной обёртки.
     Lunar,
+    /// BaiBai на Base: книга с коротким сроком жизни и индивидуальная комиссия участника.
+    BaiBai,
     /// Maverick V2 (решение 122 F; maverickprotocol/v2-common d91e871, IMaverickV2Pool.sol): тики с резервами tokenA и
     /// tokenB, комиссия по направлению fee(bool), бины разных видов. Расчёт обмена — порт команды Maverick
     /// (math/maverick_swap.rs; Solidity-исходник закрыт), сверка — MaverickV2Quoter.calculateSwap (решение 73). Фабрика —
@@ -590,6 +592,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         ),
         // WooFi WooPPV2 (решение 122 F, 3): в графе и сигналах; своей математики нет (развёрнутый код закрыт) — котировка
         // по лесенке ответов квотера контракта (dex.pmm_ladder_usd, quote/pmm_ladder.rs); шага WOO нет до сухой сделки.
+        "baibai" => (PoolKind::OraclePmm, Proto::BaiBai, true, false, false),
         "lunarbase" => (PoolKind::OraclePmm, Proto::Lunar, true, false, false),
         "lunarbase_module" => (PoolKind::OraclePmm, Proto::Lunar, true, true, true),
         "elfomofi_module" => (PoolKind::OraclePmm, Proto::Elfomo, true, true, true),
@@ -963,7 +966,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
                 list.push("dex.router");
             }
         }
-        Proto::Elfomo => {
+        Proto::Elfomo | Proto::BaiBai => {
             list.extend([
                 "dex.pmm_pool",
                 "dex.oracle",

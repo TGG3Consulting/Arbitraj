@@ -90,6 +90,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
         | Proto::SaddleStable
         | Proto::WooPP
         | Proto::Elfomo
+        | Proto::BaiBai
         | Proto::Lunar
         | Proto::InfinityStable => events_stable_u::topics(f.proto),
         Proto::Maverick => events_maverick::topics(),
@@ -146,6 +147,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
         | Proto::SaddleStable
         | Proto::WooPP
         | Proto::Elfomo
+        | Proto::BaiBai
         | Proto::Lunar
         | Proto::InfinityStable => events_stable_u::liquidity_topics(f.proto),
         Proto::Maverick => events_maverick::liquidity_topics(),
@@ -217,6 +219,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         | Proto::SaddleStable
         | Proto::WooPP
         | Proto::Elfomo
+        | Proto::BaiBai
         | Proto::Lunar
         | Proto::InfinityStable => events_stable_u::apply(e, log),
         Proto::Maverick => events_maverick::apply(e, log),

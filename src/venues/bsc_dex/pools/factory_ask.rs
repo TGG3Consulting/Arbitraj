@@ -87,6 +87,7 @@ pub enum Q {
     Woo(Address),
     Elfomo(Address, Address, Address),
     Lunar(Address),
+    BaiBai(Address),
     /// Maverick V2: lookup(tokenA, tokenB, 0, предел) — все пулы пары (предел — dex.pair_lookup_max).
     Maverick(u32),
     /// KyberSwap Classic DMM (решение 287): getPools(a, b) — все пулы пары (с разным усилением).
@@ -117,6 +118,7 @@ impl Q {
             Q::PancakeStable { three: true } => "getThreePoolPairInfo",
             Q::ListaStable => "getPairInfos",
             Q::Woo(_) => "state(base)",
+            Q::BaiBai(_) => "quoteToken",
             Q::Lunar(_) => "Y",
             Q::Elfomo(..) => "getSupportedPairs",
             Q::Maverick(_) => "lookup(tokenA, tokenB)",
@@ -165,6 +167,7 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
         }
         .abi_encode()
         .into(),
+        Q::BaiBai(_) => super::baibai::IBai::quoteTokenCall {}.abi_encode().into(),
         Q::Lunar(_) => super::lunar::ILunar::YCall {}.abi_encode().into(),
         Q::Elfomo(..) => super::elfomo::IElfomo::getSupportedPairsCall {}
             .abi_encode()
@@ -297,6 +300,15 @@ pub fn decode_q(q: Q, out: &[u8]) -> Result<Vec<Address>, String> {
             .into_iter()
             .map(|i| i.swapContract)
             .collect(),
+        Q::BaiBai(pool) => {
+            let quote = super::baibai::IBai::quoteTokenCall::abi_decode_returns_validate(out)
+                .map_err(|e| e.to_string())?;
+            if pool == super::baibai::ENTRY && quote == super::lunar::USDC {
+                vec![pool]
+            } else {
+                Vec::new()
+            }
+        }
         Q::Lunar(pool) => {
             let quote = super::lunar::ILunar::YCall::abi_decode_returns_validate(out)
                 .map_err(|e| e.to_string())?;

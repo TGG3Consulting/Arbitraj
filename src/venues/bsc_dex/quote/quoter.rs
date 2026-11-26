@@ -55,7 +55,9 @@ pub async fn out_at(
     }
     if matches!(
         e.family.proto,
-        super::super::pools::families::Proto::Elfomo | super::super::pools::families::Proto::Lunar
+        super::super::pools::families::Proto::Elfomo
+            | super::super::pools::families::Proto::Lunar
+            | super::super::pools::families::Proto::BaiBai
     ) {
         let out = if token_in == e.pool.token0 {
             e.pool.token1
@@ -67,6 +69,17 @@ pub async fn out_at(
                 "Входной токен не принадлежит паре котировки",
             ));
         };
+        if e.family.proto == super::super::pools::families::Proto::BaiBai {
+            return super::super::pools::baibai::quote(
+                ctx,
+                e.family.id,
+                token_in,
+                out,
+                amount,
+                block,
+            )
+            .await;
+        }
         if e.family.proto == super::super::pools::families::Proto::Lunar {
             return super::super::pools::lunar::quote(
                 ctx,

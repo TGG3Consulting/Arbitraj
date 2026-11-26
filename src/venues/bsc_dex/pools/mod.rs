@@ -56,6 +56,7 @@ pub mod aero_fee_seen;
 pub mod aero_first_fee;
 pub mod aero_mev;
 pub mod attach;
+pub mod baibai;
 pub mod balancer_pool_type;
 pub mod balancer_v3_factories;
 pub mod balancer_v3_hooks;
@@ -176,6 +177,7 @@ pub mod index;
 pub mod load_aero_basic;
 pub mod load_ramses;
 pub mod lunar;
+mod pmm_view;
 pub mod quickswap_plugin;
 pub mod ramses;
 // Ревью t251 (решение 482): есть ли у DEX справочник индексатора.

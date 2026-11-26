@@ -82,7 +82,8 @@ jobs:
           node-version: '22'
       - working-directory: contracts
         run: npm ci --no-audit --no-fund
-      - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/hanji-executor"
+      - id: compile_hanji
+        run: node contracts/build-hanji.mjs "$RUNNER_TEMP/hanji-executor"
       - id: compile_fermi
         run: node contracts/build-hanji.mjs "$RUNNER_TEMP/fermi-executor" FermiSlotExecutor
       - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/solidly-executor" SolidlyV3Executor
@@ -116,12 +117,13 @@ jobs:
           path: |
             tests/data/first_run_dex_2026-11-26/solidly_v3_executor_*.json
             config/first_run_dex.json
-      - if: inputs.hanji_archive_replay
+      - id: replay_hanji
+        if: ${{ !cancelled() && inputs.hanji_archive_replay && steps.compile_hanji.outcome == 'success' }}
         run: |
           pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0
           python scripts/record_hanji_executor.py "$RUNNER_TEMP/hanji-executor/HanjiExecutor.json" "$RUNNER_TEMP/hanji-executor/base-replay.json"
       - uses: actions/upload-artifact@v4
-        if: inputs.hanji_archive_replay
+        if: ${{ !cancelled() && steps.replay_hanji.outcome == 'success' }}
         with:
           name: hanji-base-replay
           path: ${{ runner.temp }}/hanji-executor/base-replay.json

@@ -177,3 +177,37 @@ pub async fn send_swap(
     }
     txs::send(env, slot, p.router, data, p.value(), true, Some(guard)).await
 }
+
+/// Снимки именно тех пулов, из которых подготовлена отправка, и действительный минимум calldata.
+/// Форматируем только при подтверждённом отказе: обычный обмен не читает узел и не пишет журнал.
+pub(super) fn rejection_state(
+    mut error: crate::gateway::errors::GatewayError,
+    entries: &[&super::super::pools::registry::Entry],
+    probe_block: u64,
+    min_out: U256,
+) -> crate::gateway::errors::GatewayError {
+    use std::fmt::Write;
+
+    if error.code != ErrorCode::ChannelRejected {
+        return error;
+    }
+    let _ = write!(
+        error.message,
+        "; блок подготовки {probe_block}, minOut (единиц токена выхода) {min_out}, шагов {}",
+        entries.len()
+    );
+    // Несколько путей могут использовать одно состояние. Ограничиваем только размер диагностической строки.
+    for entry in entries.iter().take(4) {
+        let pool = &entry.pool;
+        let _ = write!(
+            error.message,
+            "; {} {:?} #{} получен {}",
+            pool.family,
+            pool.reference,
+            pool.block,
+            pool.received_at
+                .to_rfc3339_opts(chrono::SecondsFormat::Micros, true)
+        );
+    }
+    error
+}

@@ -89,13 +89,14 @@ pub async fn rejected_all(
     why: Vec<String>,
     txs: &[Bytes],
 ) -> GatewayResult<Dispatched> {
-    let doubt = match check(ctx, &hashes(txs)).await {
+    let hashes = hashes(txs);
+    let doubt = match check(ctx, &hashes).await {
         Verdict::Absent => {
             return Err(ctx.err(
                 ErrorCode::ChannelRejected,
                 format!(
-                    "Ни один канал не принял транзакцию: {} (проверено своим узлом: транзакции нет ни в блоке, ни в пуле)",
-                    why.join("; ")
+                    "Ни один канал не принял транзакцию: {} (проверено своим узлом: транзакции нет ни в блоке, ни в пуле); tx={}",
+                    why.join("; "), hashes.first().map(ToString::to_string).unwrap_or_default()
                 ),
             ));
         }

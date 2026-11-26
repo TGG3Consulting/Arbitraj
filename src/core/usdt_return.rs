@@ -155,26 +155,45 @@ pub(super) async fn relay_try(
         sent_q
     };
     // Решение 236: газ кошелька DEX (BNB) — в USDT по живой цене; комиссия в USDT уже в «ушло − зачислено».
-    let (fee_usd, fee_note) =
-        match super::deal_return_cost::fee_usd(core, from, &a.ticker, sent.fee.as_ref()).await {
-            Ok(v) => (v, None),
-            Err(e) => {
-                let n = format!("газ возврата не пересчитан в USDT ({e}) — в итог не вошёл");
-                deps.log(
-                    Level::Warn,
-                    "core.usdt_return",
-                    Some(&from.0),
-                    format!("{id}: {n}"),
-                    None,
-                )
-                .await;
-                (None, Some(n))
-            }
-        };
-    let text = format!(
-        "USDT {amount}: {} → {}, зачислено {}",
+    let (fee_usd, fee_note) = match super::deal_return_cost::fee_usd(
+        core,
+        from,
+        &a.ticker,
+        sent.fee.as_ref(),
+    )
+    .await
+    {
+        Ok(v) => (v, None),
+        Err(e) => {
+            let n = format!(
+                "отдельную затрату возврата не удалось оценить ({e}); удержание из отправленной суммы уже учтено по зачислению"
+            );
+            deps.log(
+                Level::Warn,
+                "core.usdt_return",
+                Some(&from.0),
+                format!("{id}: {n}"),
+                None,
+            )
+            .await;
+            (None, Some(n))
+        }
+    };
+    let mut text = format!(
+        "{id}: USDT {amount}: {} → {}, зачислено {}",
         from.0, to.0, t.amount
     );
+    if let Some(fee) = &sent.fee {
+        text.push_str(&format!(
+            "; вывод {}, история {} (сеть {}), затрата {:?} {} {}",
+            sent.venue_ref,
+            sent.asset.ticker,
+            sent.network,
+            fee.kind,
+            fee.amount.normalize(),
+            fee.asset
+        ));
+    }
     deps.log(Level::Info, "core.usdt_return", Some(&from.0), &text, None)
         .await;
     // Решение 164: текст Telegram — человеческий.

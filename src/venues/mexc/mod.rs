@@ -31,6 +31,7 @@ pub mod feed;
 pub mod fees;
 pub mod fills;
 pub mod futures_rest;
+mod history_coin;
 pub mod ip_weight;
 pub mod market;
 pub mod market_sell;
@@ -213,6 +214,13 @@ impl Venue for Mexc {
     async fn withdrawal_status(&self, venue_ref: &str) -> GatewayResult<Transfer> {
         transfers::withdrawal_status(&self.ctx, venue_ref).await
     }
+    async fn withdrawal_status_for(&self, created: &Transfer) -> GatewayResult<Transfer> {
+        let mut sent = self.withdrawal_status(&created.venue_ref).await?;
+        if let Some(history) = self.nets.history() {
+            history.withdrawal_fee(created, &mut sent);
+        }
+        Ok(sent)
+    }
 
     /// Решение 231: итог ордера с неизвестным исходом — resolve.rs.
     async fn resolve_trade(
@@ -253,7 +261,7 @@ impl Venue for Mexc {
 
     /// Решение 150: предварительно зачисленные депозиты (deposit/hisrec, статус 9) — их нельзя вывести.
     async fn withdraw_hold(&self, _quote: &str) -> GatewayResult<crate::core::types::WithdrawHold> {
-        deposit_hold::withdraw_hold(&self.ctx).await
+        deposit_hold::withdraw_hold(&self.ctx, &self.nets).await
     }
 
     /// Решение 144: панель «Балансы» — счета «Спот» и «Фьючерсы» параллельно (all_balances.rs), только чтение.

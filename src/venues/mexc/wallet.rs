@@ -33,7 +33,11 @@ use super::rest;
 use super::symbols::Symbols;
 
 /// Справочник и когда он получен.
-type Cached = (Instant, Arc<Vec<CoinNetworkInfo>>);
+type Cached = (
+    Instant,
+    Arc<Vec<CoinNetworkInfo>>,
+    Arc<super::history_coin::HistoryCoins>,
+);
 
 /// Справочник сетей в памяти. Дешёво клонируется.
 #[derive(Clone, Default)]
@@ -52,12 +56,21 @@ impl Networks {
         m.get(&(ticker.to_string(), code.to_string())).cloned()
     }
 
+    /// Только уже полученный config/getall, без сетевого вызова при удержании или повторе статуса.
+    pub(super) fn history(&self) -> Option<Arc<super::history_coin::HistoryCoins>> {
+        self.cache
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()
+            .map(|(_, _, h)| h.clone())
+    }
+
     /// Справочник из кэша, если он моложе fresh (указатель, без копии — решение 131). Ошибок нет.
     fn cached(&self, fresh: Duration) -> Option<Arc<Vec<CoinNetworkInfo>>> {
         let c = self.cache.read().unwrap_or_else(|p| p.into_inner());
         c.as_ref()
-            .filter(|(at, _)| at.elapsed() < fresh)
-            .map(|(_, l)| l.clone())
+            .filter(|(at, _, _)| at.elapsed() < fresh)
+            .map(|(_, l, _)| l.clone())
     }
 }
 
@@ -126,7 +139,8 @@ async fn shared(
         })??;
     let list = Arc::new(p.list);
     *nets.names.write().unwrap_or_else(|e| e.into_inner()) = p.names;
-    *nets.cache.write().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), list.clone()));
+    *nets.cache.write().unwrap_or_else(|e| e.into_inner()) =
+        Some((Instant::now(), list.clone(), Arc::new(p.history)));
     let (skipped, unclear) = (p.skipped.join("; "), p.unclear_step.join(", "));
     let (new_skipped, new_unclear) = {
         let mut t = nets.told.write().unwrap_or_else(|e| e.into_inner());

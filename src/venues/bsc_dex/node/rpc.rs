@@ -142,7 +142,7 @@ pub async fn post(
     headers: &[(&str, &str)],
     source: &str,
 ) -> GatewayResult<String> {
-    post_within(ctx, url, body, headers, source, None).await
+    post_within(ctx, url, body, headers, source, None, None).await
 }
 
 /// post со своим сроком (решение 437: канал секвенсора Arbitrum — channel.http_timeout_ms, ответ ждёт постановки в
@@ -155,6 +155,7 @@ pub async fn post_within(
     headers: &[(&str, &str)],
     source: &str,
     within_ms: Option<u64>,
+    started_at: Option<&mut Option<chrono::DateTime<chrono::Utc>>>,
 ) -> GatewayResult<String> {
     // Два срока (gateway/http.rs): до заголовков — http.timeout_ms, тело (пачка Multicall3 — до ~1 МБ) дочитывается,
     // пока данные идут чаще http.body_idle_ms.
@@ -171,6 +172,9 @@ pub async fn post_within(
         .json(body);
     for (k, v) in headers {
         req = req.header(*k, *v);
+    }
+    if let Some(started_at) = started_at {
+        *started_at = Some(chrono::Utc::now());
     }
     let (status, text) = http::exchange(req, lim)
         .await

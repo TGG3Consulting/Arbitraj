@@ -171,7 +171,16 @@ pub async fn rates(
     }
     let mut prices = HashMap::new();
     for (ticker, qty) in need.into_iter().filter(|(_, q)| !q.is_zero()) {
-        prices.insert(ticker.clone(), price_of(deps, cex, &ticker, qty).await?);
+        let price = price_of(deps, cex, &ticker, qty).await.map_err(|e| {
+            let sources = costs
+                .iter()
+                .filter(|c| c.asset == ticker && !c.amount.is_zero())
+                .map(|c| format!("{:?} {}", c.kind, c.amount.normalize()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{e}; валюта затрат {ticker}, строки: {sources}")
+        })?;
+        prices.insert(ticker, price);
     }
     Ok(Rates {
         quote,

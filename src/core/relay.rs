@@ -246,10 +246,28 @@ pub async fn run_as(core: &Core, mut deal: Deal, profit_first: bool) {
             return super::stuck_quote::halt_not_configured(core, deal, &e).await;
         }
         Err(e) => {
-            if return_unknown_here {
-                deal.note(format!("Продажа здесь: {}", e.message));
-                super::ledger::save(core, &deal).await;
-            }
+            let stage = if return_unknown_here {
+                "возврат USDT после продажи"
+            } else {
+                "котировка полной продажи"
+            };
+            let reason: String = e.message.chars().take(400).collect();
+            let note = format!(
+                "Продажа здесь: {stage}, {} {} на {}: {reason}",
+                deal.qty, a.ticker, deal.at.0
+            );
+            core.inner
+                .deps
+                .log(
+                    Level::Info,
+                    "core.relay",
+                    Some(&deal.at.0),
+                    format!("{}: {note}", deal.id),
+                    None,
+                )
+                .await;
+            deal.note(note);
+            super::ledger::save(core, &deal).await;
             (None, physical_avg)
         }
     };

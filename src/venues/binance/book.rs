@@ -151,8 +151,8 @@ impl Books {
             .unwrap_or_else(|p| p.into_inner())
             .get(&asset.ticker)
             .cloned();
-        let (book, alive, seen, until) =
-            entry.ok_or_else(|| stale(ctx, &asset.ticker, "стакана нет"))?;
+        let (book, alive, seen, until) = entry
+            .ok_or_else(|| stale(ctx, &asset.ticker, &self.feed.missing_book(&asset.ticker)))?;
         let silent = now_ms() - alive.load(Ordering::Relaxed);
         if silent > stale_ms {
             let why = format!("соединение молчит {silent} мс");

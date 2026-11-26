@@ -152,12 +152,14 @@ impl Ready {
         txs: &[Bytes],
         max_block: u64,
         terms: Terms<'_>,
+        started_at: &mut Option<chrono::DateTime<chrono::Utc>>,
     ) -> GatewayResult<()> {
         let cond = match (self.cond, terms.head_time) {
             (Some(w), Some(t)) => Cond::Until(t.saturating_add(w)),
             _ => Cond::Plain,
         };
-        self.post(ctx, txs, max_block, (cond, terms.known)).await
+        self.post(ctx, txs, max_block, (cond, terms.known), Some(started_at))
+            .await
     }
 
     /// «Проверить подключение» (send/check.rs): пустая транзакция тем методом, которым канал отправляет; у канала с
@@ -168,7 +170,7 @@ impl Ready {
         } else {
             Cond::Plain
         };
-        self.post(ctx, &[Bytes::new()], 0, (cond, None)).await
+        self.post(ctx, &[Bytes::new()], 0, (cond, None), None).await
     }
 
     /// Запрос в канал и разбор ответа. Принимает: транзакции, предел блока, условие и knownAccounts пулов (решение
@@ -179,6 +181,7 @@ impl Ready {
         txs: &[Bytes],
         max_block: u64,
         (cond, known): (Cond, Option<&Map<String, Value>>),
+        started_at: Option<&mut Option<chrono::DateTime<chrono::Utc>>>,
     ) -> GatewayResult<()> {
         let seq = self.ch.single == Some(Single::Sequencer);
         let conditional = seq && cond != Cond::Plain;
@@ -191,7 +194,16 @@ impl Ready {
             headers.push(("Authorization", auth.as_str()));
         }
         let lim = self.http_ms;
-        let text = rpc::post_within(ctx, &self.url, &body, &headers, self.ch.title, lim).await?;
+        let text = rpc::post_within(
+            ctx,
+            &self.url,
+            &body,
+            &headers,
+            self.ch.title,
+            lim,
+            started_at,
+        )
+        .await?;
         match jsonrpc::parse_text(&text, self.ch.title, Op::Send) {
             Ok(_) => Ok(()),
             Err(e) if e.message.to_ascii_lowercase().contains("already known") => Ok(()),

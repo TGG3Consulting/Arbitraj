@@ -136,7 +136,7 @@ impl Books {
             .get(&asset.ticker)
             .cloned();
         let (book, alive, seen, until) =
-            book.ok_or_else(|| stale(ctx, &asset.ticker, "стакана нет"))?;
+            book.ok_or_else(|| stale(ctx, &asset.ticker, &self.feed.missing_book(&asset.ticker)))?;
         let silent = now_ms() - alive.load(Ordering::Relaxed);
         if silent > stale_ms {
             return Err(stale(

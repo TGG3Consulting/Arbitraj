@@ -43,7 +43,7 @@
 
 use std::collections::HashMap;
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::core::types::{Asset, Side, VenueId};
 use crate::gateway::errors::{ErrorCode, GatewayError};
@@ -63,7 +63,7 @@ pub struct Books {
     /// Снимки REST — последний взятый на пути ордера.
     snaps: HashMap<Key, QuoteSnapshot>,
     /// Решение 238 (ревью, п. 4): последняя неудача REST — когда и почему (exec_book_fail.rs).
-    pub(super) fails: HashMap<Key, (Instant, String)>,
+    pub(super) fails: HashMap<Key, super::exec_book_fail::Failure>,
 }
 
 /// Память пути ордера под замком.
@@ -113,10 +113,12 @@ pub async fn book(core: &Core, v: &VenueId, a: &Asset, side: Side) -> Result<Boo
         Err(e) => return Err(OpError::from(&e)),
     };
     // Решение 238 (ревью, п. 4): REST недавно не ответил — без нового запроса.
-    if let Some(e) = super::exec_book_fail::recent(core, &key, &stream) {
+    let ready = x.rest_book_prerequisite(&on);
+    if let Some(e) = super::exec_book_fail::recent(core, &key, &stream, ready.is_ok()) {
         return Err(e);
     }
-    let first = match crate::gateway::patience::exec_scope(x.quote_rest(&on, side)).await {
+    let (result, local) = rest_attempt(x.as_ref(), &on, side, ready).await;
+    let first = match result {
         Ok(s) => return Ok(keep(core, key, s, &stream).await),
         Err(e) => e,
     };
@@ -125,7 +127,7 @@ pub async fn book(core: &Core, v: &VenueId, a: &Asset, side: Side) -> Result<Boo
     // ошибка с кодом NotConfigured (застрявшая монета — сразу Halted, stuck_quote.rs).
     if first.code == ErrorCode::NotConfigured {
         let message = format!(
-            "{}: {}; снимок стакана по REST не получен: {}",
+            "{}: {}; исполнимая котировка по REST не получена: {}",
             v.0, stream.message, first.message
         );
         core.inner
@@ -143,10 +145,10 @@ pub async fn book(core: &Core, v: &VenueId, a: &Asset, side: Side) -> Result<Boo
     let pause = setting(core, v, RETRY);
     let Some(ms) = pause else {
         let why = format!("{}; повтор не настроен: не задана {RETRY}", first.message);
-        return Err(failed(core, key, &stream, &why).await);
+        return Err(failed(core, key, &stream, &why, local).await);
     };
     let text = format!(
-        "{}: {}; снимок стакана по REST не получен: {} — повтор через {ms} мс",
+        "{}: {}; исполнимая котировка по REST не получена: {} — повтор через {ms} мс",
         v.0, stream.message, first.message
     );
     core.inner
@@ -154,11 +156,31 @@ pub async fn book(core: &Core, v: &VenueId, a: &Asset, side: Side) -> Result<Boo
         .log(Level::Warn, "core.exec_book", Some(&v.0), text, None)
         .await;
     tokio::time::sleep(Duration::from_millis(ms)).await;
-    match crate::gateway::patience::exec_scope(x.quote_rest(&on, side)).await {
+    let (result, local) = rest_attempt(x.as_ref(), &on, side, x.rest_book_prerequisite(&on)).await;
+    match result {
         Ok(s) => Ok(keep(core, key, s, &stream).await),
         Err(e) => {
             let why = format!("{}; повтор через {ms} мс: {}", first.message, e.message);
-            Err(failed(core, key, &stream, &why).await)
+            Err(failed(core, key, &stream, &why, local).await)
+        }
+    }
+}
+
+/// При отсутствующей локальной предпосылке HTTP не может дать котировку.
+async fn rest_attempt(
+    x: &dyn crate::gateway::contract::Venue,
+    asset: &Asset,
+    side: Side,
+    ready: crate::gateway::errors::GatewayResult<()>,
+) -> (crate::gateway::errors::GatewayResult<QuoteSnapshot>, bool) {
+    match ready {
+        Ok(()) => (
+            crate::gateway::patience::exec_scope(x.quote_rest(asset, side)).await,
+            false,
+        ),
+        Err(mut e) => {
+            e.message = format!("REST-стакан не запрошен: {}", e.message);
+            (Err(e), true)
         }
     }
 }
@@ -247,11 +269,11 @@ async fn keep(core: &Core, key: Key, s: QuoteSnapshot, stream: &GatewayError) ->
 /// причиной (sell_unsent.rs). Пишет в журнал Error; решение 238 (ревью, п. 4) — неудача запоминается
 /// (exec_book_fail::remember: при заданном окне; окна нет — в тексте сказано, что частота REST не ограничена).
 /// Принимает: ядро, ключ, ошибку потока, причину REST.
-async fn failed(core: &Core, key: Key, stream: &GatewayError, why: &str) -> OpError {
+async fn failed(core: &Core, key: Key, stream: &GatewayError, why: &str, local: bool) -> OpError {
     let v = key.0.clone();
-    let limit = super::exec_book_fail::remember(core, key, why);
+    let limit = super::exec_book_fail::remember(core, key, why, local);
     let message = format!(
-        "{}: {}; снимок стакана по REST не получен: {why}{limit}",
+        "{}: {}; исполнимая котировка по REST не получена: {why}{limit}",
         v.0, stream.message
     );
     core.inner

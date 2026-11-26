@@ -450,13 +450,17 @@ async fn run() -> Result<(), String> {
         .await
         .map_err(|e| format!("Не удалось занять адрес {}: {e}", args.listen))?;
 
-    let started = match &args.ui_dir {
+    let mut started = match &args.ui_dir {
         Some(_) => format!("Система запущена, интерфейс: http://{}", args.listen),
         None => format!(
             "Система запущена без раздачи интерфейса (--ui-dir не задан), API: http://{}",
             args.listen
         ),
     };
+    if let Some(commit) = option_env!("GITHUB_SHA") {
+        started.push_str(" · Git ");
+        started.push_str(commit);
+    }
     tracing::info!("{started}");
     let _ = journal
         .write(Level::Info, "system.started", None, started.clone(), None)

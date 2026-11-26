@@ -166,7 +166,30 @@ pub(super) fn adjust_route(
     let Some(s) = get_for(core, asset, from, to) else {
         return dir;
     };
-    model(&s, info.fee_for(s.sent), t, amount, dir)
+    let fee = info.fee_for(s.sent);
+    route_model(s, asset, fee, t, amount, dir)
+}
+
+fn route_model(
+    mut s: Seen,
+    asset: &Asset,
+    fee: Option<Decimal>,
+    t: Decimal,
+    amount: Decimal,
+    dir: Vec<Cost>,
+) -> Vec<Cost> {
+    // Факт связан с активом сети по контракту. Его старое показное имя не является валютой текущего плана.
+    // Модель в монетах отправителя неприменима к затрате, списываемой отдельно в другой валюте.
+    if s.asset != *asset
+        || dir.iter().any(|c| {
+            matches!(c.kind, CostKind::WithdrawFee | CostKind::TransferTax)
+                && (c.asset != asset.ticker || c.paid_in.is_some() || c.in_price)
+        })
+    {
+        return dir;
+    }
+    s.asset.ticker.clone_from(&asset.ticker);
+    model(&s, fee, t, amount, dir)
 }
 
 /// Что делает: разложение факта и затраты на сумму A (чистая функция, формулы — шапка). Принимает: факты, комиссию

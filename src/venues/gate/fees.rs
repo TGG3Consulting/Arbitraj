@@ -97,10 +97,21 @@ impl Rates {
 pub const FEE_COIN: &str = "coin";
 pub const FEE_GT: &str = "gt";
 
+/// Состояние текущего фонового обхода. После переподписки старый обход
+/// дописывает в собственную копию и не меняет статус новой подписки.
+#[derive(Clone, Copy)]
+enum Refresh {
+    Queued,
+    Fetching,
+    Failed(ErrorCode, i64),
+}
+type Progress = Arc<RwLock<HashMap<String, Refresh>>>;
+
 /// Ставки по символу. Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct Fees {
     cache: Arc<RwLock<HashMap<String, Rates>>>,
+    progress: Arc<RwLock<Progress>>,
     /// Баланс GT для скидки (решение 158, gt_balance.rs).
     pub gt: super::gt_balance::GtBalance,
 }
@@ -108,12 +119,41 @@ pub struct Fees {
 impl Fees {
     /// Ставка из памяти. Ошибка StaleData — ставка ещё не получена (котировки нет).
     pub fn get(&self, ctx: &Ctx, symbol: &str) -> GatewayResult<Rates> {
-        let cache = self.cache.read().unwrap_or_else(|p| p.into_inner());
-        cache.get(symbol).copied().ok_or_else(|| {
+        let rate = self
+            .cache
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .get(symbol)
+            .copied();
+        rate.ok_or_else(|| {
+            let run = self.progress.read().unwrap_or_else(|p| p.into_inner());
+            let state = run
+                .read()
+                .unwrap_or_else(|p| p.into_inner())
+                .get(symbol)
+                .copied();
+            let reason = match state {
+                None => "пара вне текущего списка обновления ставок".into(),
+                Some(Refresh::Queued) => {
+                    match ctx
+                        .int("venue.fee_cache_s")
+                        .and_then(|_| ctx.int("venue.fee_requests_per_sec"))
+                    {
+                        Err(e) => format!("обновление ждёт настройку: {}", e.message),
+                        Ok(_) => "ожидает очереди фонового обновления".into(),
+                    }
+                }
+                Some(Refresh::Fetching) => "фоновое получение ставки началось".into(),
+                Some(Refresh::Failed(code, ms)) => {
+                    format!("последняя попытка: {code:?}, Unix мс {ms} (venue.fees {symbol})")
+                }
+            };
             ctx.tag(GatewayError::new(
                 ErrorCode::StaleData,
                 None,
-                format!("Gate {symbol}: ставка комиссии ещё не получена — котировки нет"),
+                format!(
+                    "Gate {symbol}: ставка комиссии ещё не получена ({reason}) — котировки нет"
+                ),
             ))
         })
     }
@@ -121,7 +161,19 @@ impl Fees {
     /// Фоновое обновление ставок по списку символов: по кругу, не чаще venue.fee_requests_per_sec,
     /// круг — раз в venue.fee_cache_s. Работает, пока задачу не остановят (новая подписка).
     /// Ошибки пишутся в журнал; при незаданных настройках — одна запись и ожидание их задания (settings/wait.rs).
-    pub async fn refresh_loop(self, ctx: Ctx, symbols: Vec<String>) {
+    pub fn refresh_loop(self, ctx: Ctx, symbols: Vec<String>) -> impl Future<Output = ()> {
+        let run: Progress = Arc::new(RwLock::new(
+            symbols
+                .iter()
+                .cloned()
+                .map(|s| (s, Refresh::Queued))
+                .collect(),
+        ));
+        *self.progress.write().unwrap_or_else(|p| p.into_inner()) = run.clone();
+        self.refresh(ctx, symbols, run)
+    }
+
+    async fn refresh(self, ctx: Ctx, symbols: Vec<String>, run: Progress) {
         loop {
             // Не заданы — обновление ждёт настройку и продолжает само (settings/wait.rs, решение 75), а не
             // останавливается до пересборки подписки.
@@ -146,6 +198,9 @@ impl Fees {
             // venue.fee_retry_s, а не через полный venue.fee_cache_s (пары без ставки иначе стоят без котировки весь срок).
             let mut failed = false;
             for s in &symbols {
+                if let Some(state) = run.write().unwrap_or_else(|p| p.into_inner()).get_mut(s) {
+                    *state = Refresh::Fetching;
+                }
                 match fetch(&ctx, s).await {
                     Ok(r) => {
                         self.cache
@@ -155,6 +210,11 @@ impl Fees {
                     }
                     Err(e) => {
                         failed = true;
+                        if let Some(state) =
+                            run.write().unwrap_or_else(|p| p.into_inner()).get_mut(s)
+                        {
+                            *state = Refresh::Failed(e.code, chrono::Utc::now().timestamp_millis());
+                        }
                         let m = format!("Ставка комиссии {s} не получена: {}", e.message);
                         let _ = ctx
                             .journal

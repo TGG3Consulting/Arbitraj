@@ -41,7 +41,9 @@ struct Conn {
     name: String,
     alive: AtomicI64,
     started: AtomicI64,
+    ended: AtomicI64,
     pairs: Vec<Pair>,
+    idx: HashMap<String, usize>,
     tx: mpsc::UnboundedSender<Cmd>,
 }
 
@@ -55,7 +57,6 @@ pub struct FeedReg {
 #[derive(Clone)]
 pub struct ConnHandle {
     conn: Arc<Conn>,
-    idx: Arc<HashMap<String, usize>>,
 }
 
 impl FeedReg {
@@ -78,6 +79,13 @@ impl FeedReg {
             name: name.to_string(),
             alive: AtomicI64::new(0),
             started: AtomicI64::new(0),
+            ended: AtomicI64::new(0),
+            idx: tickers
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(|(i, t)| (t, i))
+                .collect(),
             pairs: tickers
                 .iter()
                 .map(|t| Pair {
@@ -90,22 +98,34 @@ impl FeedReg {
                 .collect(),
             tx,
         });
-        let idx = tickers
-            .iter()
-            .enumerate()
-            .map(|(i, t)| (t.clone(), i))
-            .collect();
         self.conns
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .push(conn.clone());
-        (
-            ConnHandle {
-                conn,
-                idx: Arc::new(idx),
-            },
-            rx,
-        )
+        (ConnHandle { conn }, rx)
+    }
+
+    /// Причина отсутствия локальной книги на пути отказа котировки. Реестр отражает
+    /// назначение пары основной WS-сессии, а не подтверждение подписки биржей.
+    pub fn missing_book(&self, ticker: &str) -> String {
+        let conns = self.conns.read().unwrap_or_else(|e| e.into_inner());
+        let Some((conn, pair)) = conns
+            .iter()
+            .find_map(|c| c.idx.get(ticker).map(|i| (c, &c.pairs[*i])))
+        else {
+            return "стакана нет: пары нет в текущем реестре подписок WS".into();
+        };
+        let ended = conn.ended.load(Ordering::Acquire);
+        let state = if ended != 0 {
+            format!("сессия не активна с {ended} (Unix мс; причина в venue.ws)")
+        } else if conn.started.load(Ordering::Relaxed) == 0 {
+            "сессия ещё не запущена".into()
+        } else if pair.last.load(Ordering::Relaxed) == 0 {
+            "первый кадр пары в текущей сессии ещё не наблюдался".into()
+        } else {
+            "кадр пары уже наблюдался, пригодная книга в памяти отсутствует".into()
+        };
+        format!("стакана нет: основной WS {}, {state}", conn.name)
     }
 
     /// Снимок свежести. Принимает: признаки площадки (по расписанию, переподписка пары, подтверждение по REST —
@@ -194,6 +214,12 @@ impl ConnHandle {
             p.id.store(NO_VER, Ordering::Relaxed);
             p.changed.store(NO_VER, Ordering::Relaxed);
         }
+        self.conn.ended.store(0, Ordering::Release);
+    }
+
+    /// Попытка подключения завершилась; текст сбоя уже пишет цикл соединения.
+    pub fn session_ended(&self) {
+        self.conn.ended.store(now_ms(), Ordering::Release);
     }
 
     /// Кадр соединения любого вида. Ошибок нет.
@@ -214,7 +240,7 @@ impl ConnHandle {
     pub fn frame_ver(&self, ticker: &str, id: Option<i64>, changed_ms: Option<i64>) {
         let now = now_ms();
         self.conn.alive.store(now, Ordering::Relaxed);
-        if let Some(&i) = self.idx.get(ticker) {
+        if let Some(&i) = self.conn.idx.get(ticker) {
             let p = &self.conn.pairs[i];
             p.last.store(now, Ordering::Relaxed);
             p.id.store(id.unwrap_or(NO_VER), Ordering::Relaxed);
@@ -225,8 +251,38 @@ impl ConnHandle {
 
     /// Пара переподписана: прогрев пары — с этого момента. Ошибок нет.
     pub fn resubscribed(&self, ticker: &str) {
-        if let Some(&i) = self.idx.get(ticker) {
+        if let Some(&i) = self.conn.idx.get(ticker) {
             self.conn.pairs[i].since.store(now_ms(), Ordering::Relaxed);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FeedReg;
+
+    #[test]
+    fn absent_book_reports_current_subscription_session_and_first_frame() {
+        let reg = FeedReg::default();
+        let (ws, _commands) = reg.register("market-2", &["ACE".into()]);
+        assert!(
+            reg.missing_book("BTC")
+                .contains("нет в текущем реестре подписок")
+        );
+        assert!(reg.missing_book("ACE").contains("сессия ещё не запущена"));
+        ws.session_started();
+        assert!(reg.missing_book("ACE").contains("первый кадр"));
+        ws.frame("ACE");
+        assert!(reg.missing_book("ACE").contains("кадр пары уже наблюдался"));
+        ws.session_ended();
+        let missing = reg.missing_book("ACE");
+        assert!(missing.contains("market-2") && missing.contains("сессия не активна"));
+        ws.session_started();
+        assert!(reg.missing_book("ACE").contains("первый кадр"));
+        reg.clear();
+        assert!(
+            reg.missing_book("ACE")
+                .contains("нет в текущем реестре подписок")
+        );
     }
 }

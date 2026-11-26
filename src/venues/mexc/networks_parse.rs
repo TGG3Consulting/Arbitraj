@@ -34,6 +34,7 @@ pub struct Parsed {
     pub list: Vec<CoinNetworkInfo>,
     /// (монета, код netWork) → отображаемое имя network.
     pub names: HashMap<(String, String), String>,
+    pub(super) history: super::history_coin::HistoryCoins,
     /// Пропущенные сети: «монета/сеть: причина (сырые поля)».
     pub skipped: Vec<String>,
     /// Сети BSC с целым withdrawIntegerMultiple (смысл не подтверждён): «монета=значение».
@@ -60,6 +61,7 @@ pub fn parse_networks(
     let mut p = Parsed {
         list: Vec::new(),
         names: HashMap::new(),
+        history: Default::default(),
         skipped: Vec::new(),
         unclear_step: Vec::new(),
     };
@@ -74,6 +76,7 @@ pub fn parse_networks(
             if code.is_empty() {
                 continue;
             }
+            p.history.insert(&ticker, &code, &display, n);
             p.names
                 .insert((ticker.clone(), code.clone()), display.clone());
             let is_bsc = own.is_bsc(&code);

@@ -216,11 +216,30 @@ impl Venue for Gate {
         Ok(std::sync::Arc::new(f))
     }
 
+    fn rest_book_prerequisite(&self, asset: &Asset) -> GatewayResult<()> {
+        self.fees.get(&self.ctx, &self.ctx.symbol(&asset.ticker)?)?;
+        Ok(())
+    }
+
     /// Решение 238: снимок стакана по REST для ордера (стакан потока устарел) — book_version.rs snapshot (GET
     /// /spot/order_book), комиссия — тот же план, что у стакана потока (book.rs frozen).
     async fn quote_rest(&self, asset: &Asset, side: Side) -> GatewayResult<QuoteSnapshot> {
-        let book = book_version::snapshot(&self.ctx, asset).await?;
-        let f = book::frozen(&self.ctx, &self.fees, asset, side, book)?;
+        let book = book_version::snapshot(&self.ctx, asset)
+            .await
+            .map_err(|mut e| {
+                e.message = format!(
+                    "REST-стакан {} не получен или не разобран: {}",
+                    asset.ticker, e.message
+                );
+                e
+            })?;
+        let f = book::frozen(&self.ctx, &self.fees, asset, side, book).map_err(|mut e| {
+            e.message = format!(
+                "REST-стакан {} получен и разобран, ошибка подготовки котировки: {}",
+                asset.ticker, e.message
+            );
+            e
+        })?;
         Ok(std::sync::Arc::new(f))
     }
 

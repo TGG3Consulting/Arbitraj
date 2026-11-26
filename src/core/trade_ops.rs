@@ -449,10 +449,29 @@ pub(super) async fn sell_quote_source(
     };
     let q = super::venue_ticker::quote_back(core, a, v, q);
     if q.fillable_qty < qty {
-        return Err(OpError::from(format!(
-            "{}: глубины хватает на {} из {qty}",
-            v.0, q.fillable_qty
-        )));
+        let mut reason = format!("{}: глубины хватает на {} из {qty}", v.0, q.fillable_qty);
+        if let Some(b) = &book {
+            let source = if b.rest {
+                "REST"
+            } else {
+                "кэш адаптера"
+            };
+            let last_bid = b
+                .snap
+                .book()
+                .filter(|_| q.fillable_qty > Decimal::ZERO)
+                .and_then(|snapshot| {
+                    crate::gateway::frozen::deepest(snapshot, Side::Sell, q.fillable_qty)
+                });
+            let price = last_bid.map_or_else(|| "нет".to_owned(), |p| p.to_string());
+            reason.push_str(&format!(
+                " {}; источник: {source}, крайняя цена доступной части: {price}; \
+                 для {} монет глубины нет, лимитная цена полной продажи не определена",
+                a.ticker,
+                qty - q.fillable_qty
+            ));
+        }
+        return Err(OpError::from(reason));
     }
     let quote = core
         .inner

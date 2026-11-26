@@ -135,6 +135,30 @@ impl Dispatched {
     }
 }
 
+struct ChannelAttempt {
+    id: &'static str,
+    method: SendMethod,
+    started_at: Option<chrono::DateTime<chrono::Utc>>,
+    result: GatewayResult<()>,
+}
+
+async fn attempt(
+    ctx: &Ctx,
+    r: &Ready,
+    txs: &[Bytes],
+    max_block: u64,
+    terms: Terms<'_>,
+) -> ChannelAttempt {
+    let mut started_at = None;
+    let result = r.send(ctx, txs, max_block, terms, &mut started_at).await;
+    ChannelAttempt {
+        id: r.ch.id,
+        method: r.method,
+        started_at,
+        result,
+    }
+}
+
 /// Отправляет во все выбранные каналы параллельно. Принимает: каналы, подписанную транзакцию, перевод чаевых
 /// (только при одном канале), предел блока бандла, условия секвенсора (решение 436: время головы,
 /// send/sequencer_cond.rs head_time; решение 438: knownAccounts пулов маршрута; Terms::default() — без условия: отмена,
@@ -157,10 +181,7 @@ pub async fn dispatch(
         if let (SendMethod::Bundle, Some(t)) = (r.method, tip_tx) {
             txs.push(t.clone());
         }
-        async move {
-            let res = r.send(ctx, &txs, max_block, terms).await;
-            (r.ch.id, r.method, res)
-        }
+        async move { attempt(ctx, r, &txs, max_block, terms).await }
     });
     let mut all = vec![tx.clone()];
     all.extend(tip_tx.cloned());
@@ -191,10 +212,9 @@ pub async fn dispatch_slice(
             ),
         ));
     }
-    let jobs = ready.iter().map(|r| async move {
-        let res = r.send(ctx, txs, max_block, Terms::default()).await;
-        (r.ch.id, r.method, res)
-    });
+    let jobs = ready
+        .iter()
+        .map(|r| attempt(ctx, r, txs, max_block, Terms::default()));
     classify(ctx, stats, join_all(jobs).await, txs, max_block).await
 }
 
@@ -205,15 +225,37 @@ pub async fn dispatch_slice(
 async fn classify(
     ctx: &Ctx,
     stats: &Stats,
-    results: Vec<(&'static str, SendMethod, GatewayResult<()>)>,
+    results: Vec<ChannelAttempt>,
     txs: &[Bytes],
     max_block: u64,
 ) -> GatewayResult<Dispatched> {
     let mut out = Dispatched::default();
     let mut why = Vec::new();
-    let ids: Vec<String> = results.iter().map(|(id, _, _)| id.to_string()).collect();
-    for (id, method, res) in results {
-        match res {
+    let ids: Vec<String> = results.iter().map(|a| a.id.to_string()).collect();
+    // Один канал мог принять ту же транзакцию. Время его запроса добавляем лишь
+    // к первому отказу; полностью успешная отправка не создаёт новых записей.
+    let mut accepted_times = String::new();
+    if results.iter().any(|a| a.result.is_err()) {
+        for a in results.iter().filter(|a| a.result.is_ok()) {
+            if let Some(start) = a.started_at {
+                use std::fmt::Write;
+                let _ = write!(
+                    accepted_times,
+                    "; принят {}, HTTP старт {}",
+                    a.id,
+                    start.to_rfc3339_opts(chrono::SecondsFormat::Micros, true)
+                );
+            }
+        }
+    }
+    for ChannelAttempt {
+        id,
+        method,
+        started_at,
+        result,
+    } in results
+    {
+        match result {
             Ok(()) => {
                 stats.update(id, |s| s.sent += 1);
                 out.accepted.push(id.to_string());
@@ -229,7 +271,18 @@ async fn classify(
                 ctx.log(
                     Level::Warn,
                     "send.channel_rejected",
-                    reject_log::line(ctx, id, &e, txs, method, max_block),
+                    format!(
+                        "{}; HTTP: {}{}",
+                        reject_log::line(ctx, id, &e, txs, method, max_block),
+                        started_at.map_or_else(
+                            || "не начат".to_owned(),
+                            |t| format!(
+                                "старт {}",
+                                t.to_rfc3339_opts(chrono::SecondsFormat::Micros, true)
+                            )
+                        ),
+                        std::mem::take(&mut accepted_times)
+                    ),
                     None,
                 )
                 .await;

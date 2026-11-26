@@ -77,6 +77,7 @@ pub async fn run(
             }
             Err(e) => End::Config(e),
         };
+        feed.session_ended();
         if matches!(end, End::Done) {
             return;
         }

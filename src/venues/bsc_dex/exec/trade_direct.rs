@@ -114,6 +114,7 @@ pub async fn trade(
                 ur_remeasure::measure(env, &req, probe, &entries, at2, &exp, (old, decs.1), orig)
                     .await?;
             p = fixed;
+            at = at2;
             prep.note = Some(
                 prep.note
                     .take()
@@ -132,9 +133,12 @@ pub async fn trade(
             None,
             prep.note.clone(),
         );
-        let d = send_swap(env, &slot, p, guard)
-            .await
-            .map_err(|e| sc.attach(e))?;
+        let min_out = p.min_total();
+        let d = send_swap(env, &slot, p, guard).await.map_err(|e| {
+            sc.attach(super::swap_send::rejection_state(
+                e, &entries, at.number, min_out,
+            ))
+        })?;
         drop(slot);
         let sc = SwapCtx {
             tip_bnb: d.tip_bnb,

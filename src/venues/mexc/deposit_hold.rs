@@ -34,7 +34,10 @@ const PRE_SUCCESS: i64 = 9;
 /// Удержания вывода сейчас: все депозиты со статусом 9 за окно API по умолчанию (последние 7 дней).
 /// Возвращает: список удержаний (пусто — предварительно зачисленных нет). Ошибки: ключ, права, связь, лимит частоты,
 /// непонятный ответ (BadResponse).
-pub async fn withdraw_hold(ctx: &Ctx) -> GatewayResult<WithdrawHold> {
+pub async fn withdraw_hold(
+    ctx: &Ctx,
+    nets: &super::wallet::Networks,
+) -> GatewayResult<WithdrawHold> {
     let data = rest::signed(
         ctx,
         Method::GET,
@@ -43,12 +46,19 @@ pub async fn withdraw_hold(ctx: &Ctx) -> GatewayResult<WithdrawHold> {
         Op::Other,
     )
     .await?;
-    parse(&data)
+    parse_with(&data, nets.history().as_deref())
 }
 
 /// Разбор ответа deposit/hisrec в удержания: только записи со status = 9. Принимает: ответ (массив записей).
 /// Возвращает: удержания. Ошибки: BadResponse — ответ не массив, у записи нет status / coin / amount или они не числа.
 pub fn parse(data: &Value) -> GatewayResult<WithdrawHold> {
+    parse_with(data, None)
+}
+
+pub(super) fn parse_with(
+    data: &Value,
+    history: Option<&super::history_coin::HistoryCoins>,
+) -> GatewayResult<WithdrawHold> {
     let list = data
         .as_array()
         .ok_or_else(|| errors::bad("история депозитов не массив", &data.to_string()))?;
@@ -57,11 +67,22 @@ pub fn parse(data: &Value) -> GatewayResult<WithdrawHold> {
         if num::int(rec, "status")? != PRE_SUCCESS {
             continue;
         }
-        let asset = num::text(rec, "coin")?;
+        let raw = num::text(rec, "coin")?;
         let amount = num::dec(rec, "amount")?;
+        let network = num::text_opt(rec, "network").unwrap_or_default();
+        let mut reason = reason(rec, &raw, amount);
+        let asset = match history {
+            Some(index) => index.hold_ticker(&network, &raw),
+            None => Some(raw.as_str()),
+        }.ok_or_else(|| {
+            errors::bad(&format!("{reason}; config/getall не подтвердил однозначный тикер для этой сети, доступно к выводу неизвестно"), "")
+        })?;
+        if asset != raw {
+            reason.push_str(&format!(", в расчёте {asset}"));
+        }
         items.push(HoldItem {
-            reason: reason(rec, &asset, amount),
-            asset,
+            reason,
+            asset: asset.to_owned(),
             amount,
         });
     }

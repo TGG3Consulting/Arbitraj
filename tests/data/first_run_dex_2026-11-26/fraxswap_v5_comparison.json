@@ -14,6 +14,7 @@
         "spent": "1000000000000000",
         "received": "587186789948",
         "status": "0x1",
+        "approval_gas": "0xb51d",
         "gas": "0x3e62e",
         "error": null,
         "floor": "587186789948"
@@ -22,6 +23,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb51d",
         "gas": "0x4bbe1",
         "error": {
           "code": 3,
@@ -33,6 +35,28 @@
       "adapter_dust": 0,
       "v5_dust": 0,
       "v5_to_adapter_allowance": 0,
+      "native_recipient": {
+        "spent": "1000000000000000",
+        "received": "587186789948",
+        "status": "0x1",
+        "approval_gas": "0xb51d",
+        "gas": "0x331c3",
+        "error": null,
+        "floor": "587186789948"
+      },
+      "native_recipient_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "approval_gas": "0xb51d",
+        "gas": "0x36d78",
+        "error": {
+          "code": 3,
+          "message": "execution reverted: FraxswapV1Router: INSUFFICIENT_OUTPUT_AMOUNT",
+          "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002c46726178737761705631526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e540000000000000000000000000000000000000000"
+        },
+        "floor": "587186789949"
+      },
       "pool": "0x31351bf3fba544863fbff44ddc27ba880916a199",
       "token_in": "0x853d955acef822db058eb8505911ed77f175b99e",
       "token_out": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
@@ -50,6 +74,7 @@
         "spent": "1000000000000000",
         "received": "587186789948",
         "status": "0x1",
+        "approval_gas": "0xb51d",
         "gas": "0x32294",
         "error": null,
         "floor": "587186789948"
@@ -58,6 +83,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb51d",
         "gas": "0xf5dc",
         "error": {
           "code": 3,
@@ -70,6 +96,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb51d",
         "gas": "0x21233",
         "error": {
           "code": 3,
@@ -84,6 +111,7 @@
         "spent": "10000000000000000",
         "received": "5871867711358",
         "status": "0x1",
+        "approval_gas": "0xb511",
         "gas": "0x3e62e",
         "error": null,
         "floor": "5871867711358"
@@ -92,6 +120,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb511",
         "gas": "0x4bbe1",
         "error": {
           "code": 3,
@@ -103,6 +132,28 @@
       "adapter_dust": 0,
       "v5_dust": 0,
       "v5_to_adapter_allowance": 0,
+      "native_recipient": {
+        "spent": "10000000000000000",
+        "received": "5871867711358",
+        "status": "0x1",
+        "approval_gas": "0xb511",
+        "gas": "0x331c3",
+        "error": null,
+        "floor": "5871867711358"
+      },
+      "native_recipient_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "approval_gas": "0xb511",
+        "gas": "0x36d78",
+        "error": {
+          "code": 3,
+          "message": "execution reverted: FraxswapV1Router: INSUFFICIENT_OUTPUT_AMOUNT",
+          "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002c46726178737761705631526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e540000000000000000000000000000000000000000"
+        },
+        "floor": "5871867711359"
+      },
       "pool": "0x31351bf3fba544863fbff44ddc27ba880916a199",
       "token_in": "0x853d955acef822db058eb8505911ed77f175b99e",
       "token_out": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
@@ -120,6 +171,7 @@
         "spent": "10000000000000000",
         "received": "5871867711358",
         "status": "0x1",
+        "approval_gas": "0xb511",
         "gas": "0x32294",
         "error": null,
         "floor": "5871867711358"
@@ -128,6 +180,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb511",
         "gas": "0xf5dc",
         "error": {
           "code": 3,
@@ -140,6 +193,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb511",
         "gas": "0x21233",
         "error": {
           "code": 3,
@@ -154,6 +208,7 @@
         "spent": "1000000000000000",
         "received": "1692822463629665436",
         "status": "0x1",
+        "approval_gas": "0xb3e4",
         "gas": "0x3d588",
         "error": null,
         "floor": "1692822463629665436"
@@ -162,6 +217,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb3e4",
         "gas": "0x4ab3b",
         "error": {
           "code": 3,
@@ -173,6 +229,28 @@
       "adapter_dust": 0,
       "v5_dust": 0,
       "v5_to_adapter_allowance": 0,
+      "native_recipient": {
+        "spent": "1000000000000000",
+        "received": "1692822463629665436",
+        "status": "0x1",
+        "approval_gas": "0xb3e4",
+        "gas": "0x32bd3",
+        "error": null,
+        "floor": "1692822463629665436"
+      },
+      "native_recipient_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "approval_gas": "0xb3e4",
+        "gas": "0x36788",
+        "error": {
+          "code": 3,
+          "message": "execution reverted: FraxswapV1Router: INSUFFICIENT_OUTPUT_AMOUNT",
+          "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002c46726178737761705631526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e540000000000000000000000000000000000000000"
+        },
+        "floor": "1692822463629665437"
+      },
       "pool": "0x31351bf3fba544863fbff44ddc27ba880916a199",
       "token_in": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
       "token_out": "0x853d955acef822db058eb8505911ed77f175b99e",
@@ -190,6 +268,7 @@
         "spent": "1000000000000000",
         "received": "1692822463629665436",
         "status": "0x1",
+        "approval_gas": "0xb3e4",
         "gas": "0x31c0c",
         "error": null,
         "floor": "1692822463629665436"
@@ -198,6 +277,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb3e4",
         "gas": "0xf611",
         "error": {
           "code": 3,
@@ -210,6 +290,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb3e4",
         "gas": "0x20b9f",
         "error": {
           "code": 3,
@@ -224,6 +305,7 @@
         "spent": "10000000000000000",
         "received": "16927303812717418143",
         "status": "0x1",
+        "approval_gas": "0xb3d8",
         "gas": "0x3d57c",
         "error": null,
         "floor": "16927303812717418143"
@@ -232,6 +314,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb3d8",
         "gas": "0x4ab2f",
         "error": {
           "code": 3,
@@ -243,6 +326,28 @@
       "adapter_dust": 0,
       "v5_dust": 0,
       "v5_to_adapter_allowance": 0,
+      "native_recipient": {
+        "spent": "10000000000000000",
+        "received": "16927303812717418143",
+        "status": "0x1",
+        "approval_gas": "0xb3d8",
+        "gas": "0x32bc7",
+        "error": null,
+        "floor": "16927303812717418143"
+      },
+      "native_recipient_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "approval_gas": "0xb3d8",
+        "gas": "0x3677c",
+        "error": {
+          "code": 3,
+          "message": "execution reverted: FraxswapV1Router: INSUFFICIENT_OUTPUT_AMOUNT",
+          "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002c46726178737761705631526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e540000000000000000000000000000000000000000"
+        },
+        "floor": "16927303812717418144"
+      },
       "pool": "0x31351bf3fba544863fbff44ddc27ba880916a199",
       "token_in": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
       "token_out": "0x853d955acef822db058eb8505911ed77f175b99e",
@@ -260,6 +365,7 @@
         "spent": "10000000000000000",
         "received": "16927303812717418143",
         "status": "0x1",
+        "approval_gas": "0xb3d8",
         "gas": "0x31c00",
         "error": null,
         "floor": "16927303812717418143"
@@ -268,6 +374,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb3d8",
         "gas": "0xf605",
         "error": {
           "code": 3,
@@ -280,6 +387,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb3d8",
         "gas": "0x20b93",
         "error": {
           "code": 3,
@@ -294,6 +402,7 @@
         "spent": "4143842270",
         "received": "12898221857315596192221538",
         "status": "0x1",
+        "approval_gas": "0xb3cc",
         "gas": "0x43c27",
         "error": null,
         "floor": "12898221857315596192221538"
@@ -302,6 +411,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb3cc",
         "gas": "0x511da",
         "error": {
           "code": 3,
@@ -313,6 +423,28 @@
       "adapter_dust": 0,
       "v5_dust": 0,
       "v5_to_adapter_allowance": 0,
+      "native_recipient": {
+        "spent": "4143842270",
+        "received": "12898221857315596192221538",
+        "status": "0x1",
+        "approval_gas": "0xb3cc",
+        "gas": "0x38e06",
+        "error": null,
+        "floor": "12898221857315596192221538"
+      },
+      "native_recipient_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "approval_gas": "0xb3cc",
+        "gas": "0x3c9bb",
+        "error": {
+          "code": 3,
+          "message": "execution reverted: FraxswapV1Router: INSUFFICIENT_OUTPUT_AMOUNT",
+          "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002c46726178737761705631526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e540000000000000000000000000000000000000000"
+        },
+        "floor": "12898221857315596192221539"
+      },
       "pool": "0xa8b3ffbfc017a88596b9983e21b9ffcfc7d27708",
       "token_in": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
       "token_out": "0x00c2999c8b2adf4abc835cc63209533973718eb1",
@@ -330,6 +462,7 @@
         "spent": "4143842270",
         "received": "12898221857315596192221538",
         "status": "0x1",
+        "approval_gas": "0xb3cc",
         "gas": "0x37c03",
         "error": null,
         "floor": "12898221857315596192221538"
@@ -338,6 +471,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb3cc",
         "gas": "0x11947",
         "error": {
           "code": 3,
@@ -350,6 +484,7 @@
         "spent": "4143842270",
         "received": "12898221857315596192221538",
         "status": "0x1",
+        "approval_gas": "0xb3cc",
         "gas": "0x3b886",
         "error": null,
         "floor": "12898221857315596192221538"
@@ -360,6 +495,7 @@
         "spent": "414384227043",
         "received": "1288550360682994181076663503",
         "status": "0x1",
+        "approval_gas": "0xb3d8",
         "gas": "0x43c3f",
         "error": null,
         "floor": "1288550360682994181076663503"
@@ -368,6 +504,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb3d8",
         "gas": "0x511f2",
         "error": {
           "code": 3,
@@ -379,6 +516,28 @@
       "adapter_dust": 0,
       "v5_dust": 0,
       "v5_to_adapter_allowance": 0,
+      "native_recipient": {
+        "spent": "414384227043",
+        "received": "1288550360682994181076663503",
+        "status": "0x1",
+        "approval_gas": "0xb3d8",
+        "gas": "0x38e1e",
+        "error": null,
+        "floor": "1288550360682994181076663503"
+      },
+      "native_recipient_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "approval_gas": "0xb3d8",
+        "gas": "0x3c9d3",
+        "error": {
+          "code": 3,
+          "message": "execution reverted: FraxswapV1Router: INSUFFICIENT_OUTPUT_AMOUNT",
+          "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002c46726178737761705631526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e540000000000000000000000000000000000000000"
+        },
+        "floor": "1288550360682994181076663504"
+      },
       "pool": "0xa8b3ffbfc017a88596b9983e21b9ffcfc7d27708",
       "token_in": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
       "token_out": "0x00c2999c8b2adf4abc835cc63209533973718eb1",
@@ -396,6 +555,7 @@
         "spent": "414384227043",
         "received": "1288550360682994181076663503",
         "status": "0x1",
+        "approval_gas": "0xb3d8",
         "gas": "0x37c1b",
         "error": null,
         "floor": "1288550360682994181076663503"
@@ -404,6 +564,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb3d8",
         "gas": "0x1195f",
         "error": {
           "code": 3,
@@ -416,6 +577,7 @@
         "spent": "414384227043",
         "received": "1288550360682994181076663503",
         "status": "0x1",
+        "approval_gas": "0xb3d8",
         "gas": "0x3b89e",
         "error": null,
         "floor": "1288550360682994181076663503"
@@ -426,6 +588,7 @@
         "spent": "1000000000000000",
         "received": "587971739956",
         "status": "0x1",
+        "approval_gas": "0xb488",
         "gas": "0x44b5c",
         "error": null,
         "floor": "587971739956"
@@ -434,6 +597,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb488",
         "gas": "0x5210f",
         "error": {
           "code": 3,
@@ -445,6 +609,28 @@
       "adapter_dust": 0,
       "v5_dust": 0,
       "v5_to_adapter_allowance": 0,
+      "native_recipient": {
+        "spent": "1000000000000000",
+        "received": "587971739956",
+        "status": "0x1",
+        "approval_gas": "0xb488",
+        "gas": "0x39484",
+        "error": null,
+        "floor": "587971739956"
+      },
+      "native_recipient_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "approval_gas": "0xb488",
+        "gas": "0x3d039",
+        "error": {
+          "code": 3,
+          "message": "execution reverted: FraxswapV1Router: INSUFFICIENT_OUTPUT_AMOUNT",
+          "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002c46726178737761705631526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e540000000000000000000000000000000000000000"
+        },
+        "floor": "587971739957"
+      },
       "pool": "0xb467d2f040944f2dbdff34c4454bd6a1fba0d828",
       "token_in": "0x579cea1889991f68acc35ff5c3dd0621ff29b0c9",
       "token_out": "0xcacd6fd266af91b8aed52accc382b4e165586e29",
@@ -462,6 +648,7 @@
         "spent": "1000000000000000",
         "received": "587971739956",
         "status": "0x1",
+        "approval_gas": "0xb488",
         "gas": "0x381ff",
         "error": null,
         "floor": "587971739956"
@@ -470,6 +657,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb488",
         "gas": "0x25876",
         "error": {
           "code": 3,
@@ -482,6 +670,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb488",
         "gas": "0x3acb4",
         "error": {
           "code": 3,
@@ -496,6 +685,7 @@
         "spent": "10000000000000000",
         "received": "5879717399538",
         "status": "0x1",
+        "approval_gas": "0xb47c",
         "gas": "0x44b5c",
         "error": null,
         "floor": "5879717399538"
@@ -504,6 +694,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb47c",
         "gas": "0x5210f",
         "error": {
           "code": 3,
@@ -515,6 +706,28 @@
       "adapter_dust": 0,
       "v5_dust": 0,
       "v5_to_adapter_allowance": 0,
+      "native_recipient": {
+        "spent": "10000000000000000",
+        "received": "5879717399538",
+        "status": "0x1",
+        "approval_gas": "0xb47c",
+        "gas": "0x39484",
+        "error": null,
+        "floor": "5879717399538"
+      },
+      "native_recipient_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "approval_gas": "0xb47c",
+        "gas": "0x3d039",
+        "error": {
+          "code": 3,
+          "message": "execution reverted: FraxswapV1Router: INSUFFICIENT_OUTPUT_AMOUNT",
+          "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002c46726178737761705631526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e540000000000000000000000000000000000000000"
+        },
+        "floor": "5879717399539"
+      },
       "pool": "0xb467d2f040944f2dbdff34c4454bd6a1fba0d828",
       "token_in": "0x579cea1889991f68acc35ff5c3dd0621ff29b0c9",
       "token_out": "0xcacd6fd266af91b8aed52accc382b4e165586e29",
@@ -532,6 +745,7 @@
         "spent": "10000000000000000",
         "received": "5879717399538",
         "status": "0x1",
+        "approval_gas": "0xb47c",
         "gas": "0x381ff",
         "error": null,
         "floor": "5879717399538"
@@ -540,6 +754,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb47c",
         "gas": "0x25876",
         "error": {
           "code": 3,
@@ -552,6 +767,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xb47c",
         "gas": "0x3acb4",
         "error": {
           "code": 3,
@@ -566,6 +782,7 @@
         "spent": "1000000000000000",
         "received": "1690572746020051036",
         "status": "0x1",
+        "approval_gas": "0xc85a",
         "gas": "0x457f1",
         "error": null,
         "floor": "1690572746020051036"
@@ -574,6 +791,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xc85a",
         "gas": "0x52da4",
         "error": {
           "code": 3,
@@ -585,6 +803,28 @@
       "adapter_dust": 0,
       "v5_dust": 0,
       "v5_to_adapter_allowance": 0,
+      "native_recipient": {
+        "spent": "1000000000000000",
+        "received": "1690572746020051036",
+        "status": "0x1",
+        "approval_gas": "0xc85a",
+        "gas": "0x3938e",
+        "error": null,
+        "floor": "1690572746020051036"
+      },
+      "native_recipient_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "approval_gas": "0xc85a",
+        "gas": "0x3cf43",
+        "error": {
+          "code": 3,
+          "message": "execution reverted: FraxswapV1Router: INSUFFICIENT_OUTPUT_AMOUNT",
+          "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002c46726178737761705631526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e540000000000000000000000000000000000000000"
+        },
+        "floor": "1690572746020051037"
+      },
       "pool": "0xb467d2f040944f2dbdff34c4454bd6a1fba0d828",
       "token_in": "0xcacd6fd266af91b8aed52accc382b4e165586e29",
       "token_out": "0x579cea1889991f68acc35ff5c3dd0621ff29b0c9",
@@ -602,6 +842,7 @@
         "spent": "1000000000000000",
         "received": "1690572746020051036",
         "status": "0x1",
+        "approval_gas": "0xc85a",
         "gas": "0x382e2",
         "error": null,
         "floor": "1690572746020051036"
@@ -610,6 +851,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xc85a",
         "gas": "0x258ab",
         "error": {
           "code": 3,
@@ -622,6 +864,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xc85a",
         "gas": "0x3ad8b",
         "error": {
           "code": 3,
@@ -636,6 +879,7 @@
         "spent": "10000000000000000",
         "received": "16905727307409126418",
         "status": "0x1",
+        "approval_gas": "0xc84e",
         "gas": "0x457e5",
         "error": null,
         "floor": "16905727307409126418"
@@ -644,6 +888,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xc84e",
         "gas": "0x52d98",
         "error": {
           "code": 3,
@@ -655,6 +900,28 @@
       "adapter_dust": 0,
       "v5_dust": 0,
       "v5_to_adapter_allowance": 0,
+      "native_recipient": {
+        "spent": "10000000000000000",
+        "received": "16905727307409126418",
+        "status": "0x1",
+        "approval_gas": "0xc84e",
+        "gas": "0x39382",
+        "error": null,
+        "floor": "16905727307409126418"
+      },
+      "native_recipient_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "approval_gas": "0xc84e",
+        "gas": "0x3cf37",
+        "error": {
+          "code": 3,
+          "message": "execution reverted: FraxswapV1Router: INSUFFICIENT_OUTPUT_AMOUNT",
+          "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002c46726178737761705631526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e540000000000000000000000000000000000000000"
+        },
+        "floor": "16905727307409126419"
+      },
       "pool": "0xb467d2f040944f2dbdff34c4454bd6a1fba0d828",
       "token_in": "0xcacd6fd266af91b8aed52accc382b4e165586e29",
       "token_out": "0x579cea1889991f68acc35ff5c3dd0621ff29b0c9",
@@ -672,6 +939,7 @@
         "spent": "10000000000000000",
         "received": "16905727307409126418",
         "status": "0x1",
+        "approval_gas": "0xc84e",
         "gas": "0x382d6",
         "error": null,
         "floor": "16905727307409126418"
@@ -680,6 +948,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xc84e",
         "gas": "0x2589f",
         "error": {
           "code": 3,
@@ -692,6 +961,7 @@
         "spent": "0",
         "received": "0",
         "status": "0x0",
+        "approval_gas": "0xc84e",
         "gas": "0x3ad7f",
         "error": {
           "code": 3,

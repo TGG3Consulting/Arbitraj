@@ -409,6 +409,24 @@ jobs:
         with:
           name: ethereum-v2-${{ matrix.market }}
           path: ${{ runner.temp }}/ethereum-v2.json
+  ethervista-volume:
+    if: inputs.ethervista_archive_replay
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        network: [base, ethereum]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0
+      - run: python scripts/record_ethervista_volume.py "tests/data/first_run_dex_2026-11-26/ethervista_${{ matrix.network }}.json" "$RUNNER_TEMP/volume.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ethervista-volume-${{ matrix.network }}
+          path: ${{ runner.temp }}/volume.json
   ethervista-archive:
     if: inputs.ethervista_archive_replay
     runs-on: ubuntu-latest

@@ -81,6 +81,26 @@ def scenario(directory, artifact, endpoint, cash):
     env = {OWNER:{"balance":hex(10**20)}, BANK:{"balance":hex(10**19)}, ADAPTER:{"code":runtime},
            EXEC:{"code":"0x"+v5,"stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(directory["weth"],16))}}}
     market = directory["observations"][0]
+    approval_proof={}
+    if directory["network"]=="ethereum":
+        original=market["token"]
+        def spender_answer(target):
+            approve=tx(original,"approve(address,uint256)",["address","uint256"],[target,100])
+            resp=simulate_block(endpoint,tag,env,[approve])[0]
+            return {"status":resp["status"],"data":resp["returnData"],"error":resp.get("error")}
+        approval_proof={"token":original,"executor":spender_answer(EXEC),"router":spender_answer(directory["router"])}
+        if approval_proof["executor"]["status"]!="0x0" or approval_proof["router"]["status"]!="0x1":
+            raise ValueError("historical VISTA allowance boundary differs")
+        # Следующий по WETH-резерву рынок EtherVista. Владельцу нужен отдельный допуск каждой монеты.
+        pair=next(p for p in directory["registry"] if p["pool"]=="0xd0a9bb124c4611ec375d93b5e9f20156c73b2004")
+        token=next(t for t in pair["tokens"] if t!=directory["weth"])
+        c=Capture(dict(endpoint=endpoint,selector=tag))
+        fees={}
+        for side in ("buy","sell"):
+            units,=c.one(pair["pool"],side+"TotalFee()",returns=["uint256"])
+            wei,=c.one(directory["router"],"usdcToEth(uint256)",["uint256"],[units],["uint256"])
+            fees[side]=dict(units=units,native_wei=wei)
+        market=dict(pool=pair["pool"],token=token,fees=fees)
     asset,weth,router = market["token"],directory["weth"],directory["router"]
     tokens,steps,fund_router=asset_path(directory,endpoint,cash)
     steps.append((29,ADAPTER,weth,asset,10000,b""))
@@ -243,7 +263,7 @@ def scenario(directory, artifact, endpoint, cash):
         raise ValueError("reserve ownership differs")
     return dict(network=directory["network"],chain=int(rpc(endpoint,"eth_chainId",[]),16),selector=tag,
                 recipient=OWNER,reserve_owner=BANK,router=router,cash=cash,path=[*tokens,asset],
-                native=native_trials,
+                native=native_trials,original_approval_proof=approval_proof,
                 pools=[s[1] for s in steps[:-1]]+[market["pool"]],reserve_wei=str(fee),owner_withdrawal=release,
                 unauthorized_withdrawal=unauthorized,module_runtime_hash="0x"+keccak(bytes.fromhex(runtime[2:])).hex(),
                 v5_runtime_hash="0x"+keccak(bytes.fromhex(v5)).hex(),cases=cases)

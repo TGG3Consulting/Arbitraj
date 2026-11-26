@@ -63,6 +63,12 @@ fn projected_reserves_match_observed_wallet_output_when_generic_v2_reverts() {
         assert_eq!(c["native"]["spent"], c["amount"]);
         assert_eq!(c["adapter"]["spent"], c["amount"]);
         assert_eq!(number(&c["adapter"]["received"]), q);
+        assert_eq!(c["native_recipient"]["status"], "0x1");
+        assert_eq!(number(&c["native_recipient"]["received"]), q);
+        assert_eq!(c["native_recipient"]["spent"], c["amount"]);
+        assert_eq!(c["native_recipient_strict"]["status"], "0x0");
+        assert_eq!(number(&c["native_recipient_strict"]["spent"]), U256::ZERO);
+        assert_eq!(number(&c["native_recipient_strict"]["received"]), U256::ZERO);
         assert_eq!(c["adapter_strict"]["status"], "0x0");
         assert_eq!(number(&c["adapter_strict"]["spent"]), U256::ZERO);
         assert_eq!(number(&c["adapter_strict"]["received"]), U256::ZERO);

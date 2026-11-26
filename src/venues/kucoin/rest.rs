@@ -116,6 +116,7 @@ pub async fn send_at(ctx: &Ctx, urls: &[String], r: Req<'_>) -> GatewayResult<Va
             .header("Content-Type", "application/json");
         if r.signed {
             let keys = ctx.keys()?;
+            crate::gateway::cash_signer::verify(&keys.key).map_err(|e| ctx.tag(e))?;
             let version = ctx.text("venue.api_key_version")?;
             let ts = chrono::Utc::now().timestamp_millis();
             let h = sign::headers(&keys, &version, ts, r.method.as_str(), &path_q, &body)

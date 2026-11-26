@@ -116,6 +116,49 @@ pub trait Venue: Send + Sync {
         ))
     }
     /// Сохраняет реальный ID ордера конверсии до отправки и умеет сверить его после потери ответа.
+    /// Биржа выдаёт native ID торгового счёта вместе со снимком. Для остальных площадок охват прежний.
+    fn supports_cash_reservation(&self) -> bool {
+        false
+    }
+
+    /// Проверка оригинального торгового accountId при восстановлении не зависит от текущих такс и стакана.
+    /// Верхний предел подготовленной покупки вместе с таксой. Использует параметры из памяти.
+    fn cash_order_cap(
+        &self,
+        _req: &TradeRequest,
+        _p: &super::pending::PendingRef,
+        _currency: &str,
+    ) -> GatewayResult<Decimal> {
+        Err(super::errors::GatewayError::new(
+            super::errors::ErrorCode::NotApplicable,
+            Some(self.id()),
+            "Нет проверенного предела покупки",
+        ))
+    }
+    async fn cash_identity(
+        &self,
+        _currency: &str,
+    ) -> GatewayResult<crate::storage::cex_funds::Bucket> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "Нет нативной идентичности торгового счёта",
+        ))
+    }
+    /// Предел дебета включает комиссию. Только нативный ответ счёта может связывать проведённый ордер с free.
+    async fn cash_balance(
+        &self,
+        _req: &TradeRequest,
+        _lookup: &super::pending::PendingRef,
+        _currency: &str,
+    ) -> GatewayResult<(crate::storage::cex_funds::Balance, rust_decimal::Decimal)> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "Нет источника баланса резерва для этого счёта",
+        ))
+    }
+
     fn supports_settlement_order(&self) -> bool {
         false
     }

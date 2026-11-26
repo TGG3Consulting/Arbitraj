@@ -81,6 +81,11 @@ pub(super) async fn order(
                 "Исходный ордер изменился при повторной проверке блока. Требуется сверка".into(),
             );
         }
+        if !dex {
+            super::cash_order::recovered(core, g.as_ref(), &key, &fresh)
+                .await
+                .map_err(|e| e.message)?;
+        }
         fresh
     } else {
         let check = m.guard(core, &token, from_cex);
@@ -90,7 +95,7 @@ pub(super) async fn order(
             if dex {
                 g.trade_settlement_swap(req, &m.asset).await
             } else {
-                g.trade(req).await
+                super::cash_order::order(core, g.clone(), req, 1, true).await
             }
         });
         log::capture(log::checked(

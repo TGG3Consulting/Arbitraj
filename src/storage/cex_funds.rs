@@ -11,6 +11,13 @@ use rust_decimal::Decimal;
 mod balance;
 pub use balance::{Balance, Booked, Funding, Holds};
 
+pub(crate) const HOLD_FILTER: &str = include_str!("cex_funds_held.sql");
+pub(super) fn index_holds(c: &Connection) -> rusqlite::Result<()> {
+    c.execute_batch(&format!(
+        "CREATE INDEX IF NOT EXISTS cex_funds_held_deals ON core_state(id) WHERE {HOLD_FILTER}"
+    ))
+}
+
 /// Идентичность торгового счёта и фактическая валюта книги балансов.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Bucket {
@@ -112,6 +119,19 @@ pub async fn admit(
     free: Balance,
     read_holds: impl FnOnce(&Connection) -> Result<Holds, String> + Send + 'static,
 ) -> Result<Admission, String> {
+    admit_recorded(db, bucket, claim, free, read_holds, |_| Ok(())).await
+}
+
+/// Дополнительная строка содержит запрос и реальный идентификатор, необходимые для восстановления.
+/// Она фиксируется той же транзакцией, которая разрешает первый внешний POST.
+pub async fn admit_recorded(
+    db: &LedgerDb,
+    bucket: &Bucket,
+    claim: Claim,
+    free: Balance,
+    read_holds: impl FnOnce(&Connection) -> Result<Holds, String> + Send + 'static,
+    record: impl FnOnce(&Connection) -> rusqlite::Result<()> + Send + 'static,
+) -> Result<Admission, String> {
     let key = bucket.key()?;
     if [&claim.action, &claim.client, &claim.deal]
         .iter()
@@ -121,6 +141,8 @@ pub async fn admit(
     {
         return Err("Неоднозначные реквизиты резерва или снимка баланса".into());
     }
+    let watch = db.cash_watch.clone();
+    let watch_venue = bucket.venue.clone();
     db.write(move |c|{
         let tx=c.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let old=tx.query_row("SELECT bucket,client,deal,funding,cap FROM cex_funds WHERE action=?1",[&claim.action],|r|Ok((r.get::<_,String>(0)?,r.get::<_,String>(1)?,r.get::<_,String>(2)?,r.get::<_,bool>(3)?,r.get::<_,String>(4)?))).optional()?;
@@ -142,8 +164,10 @@ pub async fn admit(
             Ok(true)=>{}
         }
         tx.execute("INSERT INTO cex_funds(action,bucket,client,deal,funding,cap) VALUES(?1,?2,?3,?4,?5,?6)",params![claim.action,key,claim.client,claim.deal,claim.funding,claim.cap.to_string()])?;
+        record(&tx)?;
         bump(&tx,&key)?;
         tx.commit()?;
+        watch.changed(&watch_venue,&claim.action,Some(true));
         Ok(Ok(Admission::Send))
     }).await.map_err(|e|e.to_string())?
 }
@@ -162,6 +186,8 @@ pub async fn finish(
         return Err("Неверный итог ордера".into());
     }
     let (action, client, order) = (action.to_string(), client.to_string(), order.to_string());
+    let watch = db.cash_watch.clone();
+    let watch_venue = bucket.venue.clone();
     db.write(move|c|{
         let tx=c.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let row=tx.query_row("SELECT action,bucket,client,deal,funding,cap,order_id,debit FROM cex_funds WHERE action=?1 AND bucket=?2 AND client=?3",params![action,key,client],decode).optional()?;
@@ -171,9 +197,67 @@ pub async fn finish(
         tx.execute("UPDATE cex_funds SET order_id=?1,debit=?2 WHERE action=?3",params![order,debit.to_string(),action])?;
         bump(&tx,&key)?;
         tx.commit()?;
+        watch.changed(&watch_venue,&action,Some(!debit.is_zero()));
         Ok(Ok(()))
     }).await.map_err(|e|e.to_string())?
 }
+/// Зафиксировать уже начатую в обычном режиме покупку при переходе на общий учёт.
+/// Этот вызов не даёт права отправки: исходный client ID мог исполниться до чтения остатка.
+pub(crate) async fn adopt(
+    db: &LedgerDb,
+    b: &Bucket,
+    action: String,
+    original: super::cex_funds_original::Original,
+    cap: Decimal,
+) -> Result<(), String> {
+    let key = b.key()?;
+    let client = original
+        .lookup
+        .client_id
+        .clone()
+        .filter(|id| !id.is_empty())
+        .ok_or("Нет исходного client ID обычного ордера")?;
+    if cap <= Decimal::ZERO {
+        return Err("Не подтверждён предел ранее отправленной покупки".into());
+    }
+    let venue = b.venue.clone();
+    let watch = db.cash_watch.clone();
+    db.write(move |c| {
+        let tx = c.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        if let Some((bucket, stored)) = tx
+            .query_row(
+                "SELECT bucket,client FROM cex_funds WHERE action=?1",
+                [&action],
+                |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+            )
+            .optional()?
+        {
+            return Ok(if bucket == key && stored == client {
+                Ok(())
+            } else {
+                Err("Исходная покупка принадлежит другому счёту или client ID".into())
+            });
+        }
+        tx.execute(
+            "INSERT INTO cex_funds(action,bucket,client,deal,funding,cap) VALUES(?1,?2,?3,?4,0,?5)",
+            params![
+                action,
+                key,
+                client,
+                original.request.deal_id,
+                cap.to_string()
+            ],
+        )?;
+        super::cex_funds_original::record(&tx, &action, &original)?;
+        bump(&tx, &key)?;
+        tx.commit()?;
+        watch.changed(&venue, &action, Some(true));
+        Ok(Ok(()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[cfg(test)]
 #[path = "cex_funds_tests.rs"]
 mod tests;

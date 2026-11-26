@@ -57,6 +57,7 @@ pub mod rules;
 pub mod setting_cell;
 pub mod settlement_archive;
 pub mod settlement_intent;
+pub mod cash_signer;
 pub mod settlement_proofs;
 pub mod shard_map;
 pub mod source_quote;

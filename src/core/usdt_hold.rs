@@ -62,7 +62,7 @@ struct Line {
 }
 
 /// Резерв одной сделки на площадке `venue`. Ошибок нет.
-fn of_deal(d: &Deal, venue: &VenueId) -> Vec<Line> {
+fn of_deal(d: &Deal, venue: &VenueId, initial_funding: bool) -> Vec<Line> {
     let line = |amount: Decimal, what: &str, pending: bool| Line {
         deal: d.id.clone(),
         amount,
@@ -82,7 +82,8 @@ fn of_deal(d: &Deal, venue: &VenueId) -> Vec<Line> {
     let r = super::deal_words::route(&d.direction);
     let to = |v: &VenueId| crate::notify::human::venue(&v.0);
     let mut out = vec![];
-    if d.is_open()
+    if initial_funding
+        && d.is_open()
         && let Some(v) = d.plan.get(super::settlement_cycle::FIELD)
         && v.pointer("/market/cex").and_then(|s| s.as_str()) == Some(&venue.0)
         && let Some(cap) = v
@@ -142,6 +143,18 @@ fn of_deal(d: &Deal, venue: &VenueId) -> Vec<Line> {
     out
 }
 
+/// Сумма сохраняемых резервов возврата. Первоначальный бюджет mixed-сделки участвует
+/// отдельно, чтобы учесть его общий источник с именованным ордером. Хеш, известный только
+/// из незавершённого наблюдения процесса, не заменяет сохранённое принятие вывода.
+pub(super) fn saved_returns(d: &Deal, venue: &VenueId) -> Result<Decimal, String> {
+    of_deal(d, venue, false)
+        .into_iter()
+        .try_fold(Decimal::ZERO, |sum, line| {
+            sum.checked_add(line.amount.max(Decimal::ZERO))
+                .ok_or_else(|| "Сумма отложенных возвратов вне диапазона".into())
+        })
+}
+
 /// Что делает: резерв возвратов USDT на площадке `venue` (у DEX — кошелёк `acc`). Принимает: ядро, площадку, счёт DEX
 /// (None — биржа или счёт неизвестен). Возвращает: резерв. Ошибок нет.
 pub fn held(core: &Core, venue: &VenueId, acc: Option<&DexAccountId>) -> Held {
@@ -182,7 +195,7 @@ pub fn held_except(
             let same =
                 cex || acc.is_none() || d.dex_account.is_none() || d.dex_account.as_ref() == acc;
             if same {
-                lines.extend(of_deal(d, venue));
+                lines.extend(of_deal(d, venue, true));
             }
         }
     }

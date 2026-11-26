@@ -61,6 +61,13 @@ CREATE TABLE IF NOT EXISTS cex_funds (
     UNIQUE(bucket,client), UNIQUE(bucket,order_id)
 );
 CREATE INDEX IF NOT EXISTS cex_funds_bucket ON cex_funds(bucket);
+CREATE INDEX IF NOT EXISTS cex_funds_venue ON cex_funds(json_extract(bucket,'$[0]'));
+CREATE TABLE IF NOT EXISTS cex_funds_seen (
+    action TEXT PRIMARY KEY, evidence TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS cex_funds_original (
+    action TEXT PRIMARY KEY REFERENCES cex_funds(action), body TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS cex_funds_epoch (bucket TEXT PRIMARY KEY, revision INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS deposit_log_claim (
     chain TEXT NOT NULL, token TEXT NOT NULL, wallet TEXT NOT NULL, tx TEXT NOT NULL,
@@ -112,6 +119,7 @@ impl Drop for Writer {
 /// ждёт (решение 397, Writer::drop).
 #[derive(Clone)]
 pub struct LedgerDb {
+    pub cash_watch: super::cex_funds_watch::Watch,
     /// Поток писателя (бот); None — прямой режим: запись тем же соединением, что чтение.
     writer: Option<Arc<Writer>>,
     /// Соединение чтения (в прямом режиме — единственное).
@@ -122,6 +130,17 @@ pub struct LedgerDb {
     moved: usize,
 }
 
+#[cfg(test)]
+tokio::task_local! {static TEST_CASH_IO:std::cell::Cell<(usize,usize)>;}
+#[cfg(test)]
+pub(crate) async fn count_io<T>(job: impl std::future::Future<Output = T>) -> (T, (usize, usize)) {
+    TEST_CASH_IO
+        .scope(std::cell::Cell::new((0, 0)), async {
+            let value = job.await;
+            (value, TEST_CASH_IO.with(|v| v.get()))
+        })
+        .await
+}
 impl LedgerDb {
     /// Что делает: открывает (создаёт) файл учёта: WAL, таблицы, перенос недостающего из основной базы, поток писателя
     /// и соединение чтения. Принимает: путь файла учёта, соединение основной базы (только чтение для переноса).
@@ -130,8 +149,11 @@ impl LedgerDb {
         let mut w = Connection::open(path)?;
         w.execute_batch("PRAGMA journal_mode=WAL;")?;
         w.execute_batch(SCHEMA)?;
+        super::cex_funds::index_holds(&w)?;
+        w.execute_batch("CREATE INDEX IF NOT EXISTS cash_legacy_orders ON core_state(json_extract(body,'$.direction.buy_on')) WHERE kind='deal' AND json_valid(body) AND json_extract(body,'$.plan.cash_legacy_ioc') IS NOT NULL")?;
         let sync0: i64 = w.pragma_query_value(None, "synchronous", |r| r.get(0))?;
         let moved = super::ledger_move::from_main(main, &mut w)?;
+        let cash_watch = super::cex_funds_watch::Watch::restore(&w)?;
         let read = Connection::open(path)?;
         read.execute_batch("PRAGMA query_only=ON;")?;
         let (tx, rx) = channel::<Job>();
@@ -156,6 +178,7 @@ impl LedgerDb {
                 thread: Some(thread),
             })),
             read: Arc::new(Mutex::new(read)),
+            cash_watch,
             sync0: Some(sync0),
             moved,
         })
@@ -167,6 +190,7 @@ impl LedgerDb {
     pub fn direct(conn: Arc<Mutex<Connection>>) -> Self {
         Self {
             writer: None,
+            cash_watch: Default::default(), // автономные CLI не отправляют ордера
             read: conn,
             sync0: None,
             moved: 0,
@@ -186,6 +210,11 @@ impl LedgerDb {
         T: Send + 'static,
         F: FnOnce(&mut Connection) -> Result<T, rusqlite::Error> + Send + 'static,
     {
+        #[cfg(test)]
+        let _ = TEST_CASH_IO.try_with(|v| {
+            let (r, w) = v.get();
+            v.set((r, w + 1))
+        });
         if self.writer.is_none() {
             return self.read(f).await;
         }
@@ -213,6 +242,11 @@ impl LedgerDb {
         T: Send + 'static,
         F: FnOnce(&mut Connection) -> Result<T, rusqlite::Error> + Send + 'static,
     {
+        #[cfg(test)]
+        let _ = TEST_CASH_IO.try_with(|v| {
+            let (r, w) = v.get();
+            v.set((r + 1, w))
+        });
         let conn = self.read.clone();
         tokio::task::spawn_blocking(move || {
             let mut guard = conn.lock().map_err(|_| DbError::Poisoned)?;

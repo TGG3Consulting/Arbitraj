@@ -261,3 +261,75 @@ async fn a_return_pledged_after_http_balance_is_seen_by_the_admission_transactio
     drop(db);
     std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
+
+#[tokio::test]
+async fn local_deal_return_and_mixed_budget_are_read_from_the_current_ledger_cut() {
+    use crate::core::{
+        deal::Deal,
+        types::{Asset, Direction, VenueId},
+        usdt_return_state::UsdtReturn,
+    };
+    let path = file("actual-holds");
+    let b = bucket();
+    let db = Db::open(&path).unwrap();
+    let l = db.ledger();
+    let snap = snapshot(&b, epoch(l, &b).await.unwrap(), 100);
+    let v = VenueId(b.venue.clone());
+    let other = VenueId("dex".into());
+    let mut d = Deal::new(
+        "existing".into(),
+        Direction {
+            asset: Asset {
+                ticker: "X".into(),
+                chain: None,
+                contract: None,
+            },
+            buy_on: v.clone(),
+            sell_on: other.clone(),
+        },
+        serde_json::json!({"settlement_cycle":{"market":{"cex":v,"quote":"USDT"},"quote_cap":"45"}}),
+        Decimal::ZERO,
+    );
+    d.invested = money(5);
+    d.usdt_return_parts.push(UsdtReturn::Pending {
+        amount: money(30),
+        from: v,
+        to: other,
+    });
+    crate::core::persist::save(&db, crate::core::ledger::KIND, &d.id, &d)
+        .await
+        .unwrap();
+    let key = b.clone();
+    assert_eq!(
+        admit(l, &b, claim("normal", 31, false), snap, move |c| {
+            crate::core::cash_holds::read(c, &key)
+        })
+        .await
+        .unwrap(),
+        Admission::Insufficient
+    );
+    let key = b.clone();
+    assert_eq!(
+        admit(
+            l,
+            &b,
+            claim("normal", 30, false),
+            snapshot(&b, 0, 100),
+            move |c| crate::core::cash_holds::read(c, &key)
+        )
+        .await
+        .unwrap(),
+        Admission::Send
+    );
+    let plan=l.read(move|c| {
+        c.prepare(&format!("EXPLAIN QUERY PLAN SELECT body FROM core_state INDEXED BY cex_funds_held_deals WHERE {HOLD_FILTER}"))?
+          .query_map([],|row|row.get::<_,String>(3))?.collect::<rusqlite::Result<Vec<_>>>()
+    }).await.unwrap();
+    assert!(
+        plan.iter()
+            .any(|line| line.contains("cex_funds_held_deals")),
+        "{plan:?}"
+    );
+    drop(db);
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+}

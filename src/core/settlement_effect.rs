@@ -90,11 +90,12 @@ pub async fn previous_order(
 
 /// Один ордер конверсии. Ключ определяется участниками и устойчивым ID этапа, без времени попытки.
 pub async fn order(
-    db: &Db,
+    core: &super::engine::Core,
     m: &Market,
-    gateway: &dyn Venue,
+    gateway: std::sync::Arc<dyn Venue>,
     req: TradeRequest,
 ) -> GatewayResult<log::SpotFill> {
+    let db = &core.inner.deps.db;
     let venue = gateway.id();
     if !gateway.supports_settlement_order() || req.venue != venue || !m.matches(&req.asset) {
         return Err(GatewayError::new(
@@ -137,7 +138,7 @@ pub async fn order(
             if let Some(Outcome::Order(r)) = entry.result {
                 return Ok(*r);
             }
-            log::capture(async {
+            let fill = log::capture(async {
                 gateway
                     .inspect_settlement_order(req, &entry.lookup)
                     .await?
@@ -149,9 +150,19 @@ pub async fn order(
                         .pending(entry.lookup)
                     })
             })
+            .await?;
+            super::cash_order::recovered(core, gateway.as_ref(), &key, &fill).await?;
+            fill
+        }
+        None => {
+            log::capture(log::scope(
+                db,
+                &key,
+                operation,
+                super::cash_order::order(core, gateway.clone(), req, 1, true),
+            ))
             .await?
         }
-        None => log::capture(log::scope(db, &key, operation, gateway.trade(req))).await?,
     };
     match commit(db, &key, &venue, Outcome::Order(Box::new(result))).await? {
         Outcome::Order(done) => Ok(*done),

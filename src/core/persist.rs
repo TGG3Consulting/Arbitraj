@@ -21,6 +21,58 @@ use crate::storage::db::{Db, DbError};
 /// Ошибки: база, JSON.
 pub async fn save<T: Serialize>(db: &Db, kind: &str, id: &str, v: &T) -> Result<(), DbError> {
     let body = serde_json::to_string(v).map_err(|e| DbError::Json(e.to_string()))?;
+    save_body(db, kind, id, body, None, None, None).await
+}
+/// Кэш общей валюты наблюдает тот же подтверждённый порядок изменений сделки в SQLite.
+pub async fn save_deal(db: &Db, d: &super::deal::Deal) -> Result<(), DbError> {
+    let body = serde_json::to_string(d).map_err(|e| DbError::Json(e.to_string()))?;
+    let cash = d
+        .plan
+        .get(super::settlement_cycle::FIELD)
+        .and_then(|v| v.pointer("/market/cex"))
+        .and_then(|v| v.as_str())
+        .map(|venue| (venue.to_string(), d.is_open()));
+    let opening = d.plan.get(super::cash_order::OPENING).map(|raw| {
+        let entry = if d.step == super::deal::Step::Buying {
+            serde_json::from_value(raw.clone()).ok()
+        } else {
+            None
+        };
+        (d.direction.buy_on.0.clone(), entry)
+    });
+    let archived = d
+        .plan
+        .get("cash_legacy_ioc")
+        .and_then(|v| v.as_array())
+        .map(|rows| {
+            (
+                d.direction.buy_on.0.clone(),
+                rows.iter()
+                    .filter_map(|v| v.get("action")?.as_str().map(str::to_owned))
+                    .collect::<Vec<_>>(),
+            )
+        });
+    save_body(
+        db,
+        super::ledger::KIND,
+        &d.id,
+        body,
+        cash,
+        opening,
+        archived,
+    )
+    .await
+}
+async fn save_body(
+    db: &Db,
+    kind: &str,
+    id: &str,
+    body: String,
+    cash: Option<(String, bool)>,
+    opening: Option<(String, Option<crate::storage::cex_funds_watch::Opening>)>,
+    archived: Option<(String, Vec<String>)>,
+) -> Result<(), DbError> {
+    let watch = db.ledger().cash_watch.clone();
     let (kind, id) = (kind.to_string(), id.to_string());
     // Будущее записи — в куче (Box::pin): будущие шагов сделки не растут на его размер.
     let write = db.ledger().write(move |c| {
@@ -28,8 +80,11 @@ pub async fn save<T: Serialize>(db: &Db, kind: &str, id: &str, v: &T) -> Result<
             "INSERT INTO core_state (kind, id, body, updated_at) VALUES (?1, ?2, ?3, ?4)
              ON CONFLICT(kind, id) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at",
             params![kind, id, body, Utc::now().to_rfc3339()],
-        )
-        .map(|_| ())
+        )?;
+        if let Some((venue,keys))=archived{watch.archived(&venue,&keys);}
+        if let Some((venue,entry))=opening {watch.opening(&venue,&id,entry);}
+        if let Some((venue,open))=cash {watch.mandate(&venue,&id,open);}
+        Ok(())
     });
     Box::pin(write).await
 }

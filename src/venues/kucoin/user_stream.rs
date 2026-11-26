@@ -23,7 +23,7 @@ use crate::storage::journal::Level;
 use super::ctx::Ctx;
 
 /// Работает, пока жив канал ядра. Ошибок не возвращает: всё — в журнал.
-pub async fn run(ctx: Ctx, out: mpsc::Sender<MarketEvent>) {
+pub async fn run(ctx: Ctx, out: mpsc::Sender<MarketEvent>, cash: super::cash_balance::Feed) {
     let names = ["venue.balance_events", "http.timeout_ms"];
     let mut changes = Watch::new(
         ctx.settings.subscribe(),
@@ -35,7 +35,7 @@ pub async fn run(ctx: Ctx, out: mpsc::Sender<MarketEvent>) {
             Ok(true) => match (ctx.http_timeout(), super::bullet::get(&ctx, true).await) {
                 (Ok(t), Ok(token)) => {
                     tokio::select! {
-                        why = super::user_stream_conn::session(&ctx, &out, &token, t) => match why {
+                        why = super::user_stream_conn::session(&ctx, &out, &token, t,&cash) => match why {
                             Some(w) => (w, true),
                             None => return,
                         },

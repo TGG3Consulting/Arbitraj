@@ -437,8 +437,27 @@ def tables(network, snapshots, profiles):
         out.extend(["", "CommunityV3 · фабрика Ethereum создала 434 пула. Все адреса проверены по CREATE2, getPool и nonce фабрики. "
                     "Подтверждены 25 ставок комиссии. На блоке 26 494 988 у 113 пулов ненулевая ликвидность на текущем тике. "
                     "На трёх рынках MUon/USDC и TSLAon/USDC выполнены девять полных кругов в V5, с исходным размером 0,01, 1 и 10 USDC. "
-                    "Для остальных пулов таблица содержит проверку регистрации и измерение текущей ликвидности. "
                     "[Реестр и результаты исполнения](../tests/data/first_run_dex_2026-11-26/community_v3_ethereum.json)."])
+        depth_path = Path("tests/data/first_run_dex_2026-11-26/community_v3_depth.json")
+        if depth_path.exists():
+            depth = read(depth_path)
+            markets = depth["markets"]
+            rows = [q for m in markets for q in m["quotes"]]
+            def complete(q):
+                return int(q.get("out", 0)) > 0 and q["used"] == q["input"]
+            full = sum(complete(q) for q in rows)
+            partial = sum(int(q.get("out", 0)) > 0 and not complete(q) for q in rows)
+            zero = sum(q.get("out") == "0" for q in rows)
+            reverts = sum("error" in q for q in rows)
+            sides = [len({q["side"] for q in m["quotes"] if complete(q)}) for m in markets]
+            out.extend(["", f"На том же блоке VirtualQuoter проверил все {len(rows)} отдельных заявок: "
+                        f"по 1 и 10 входных токенов в каждой стороне всех {len(markets)} пулов. "
+                        f"Положительный выход на всём входе вернули {full} котировки, на частичном входе — {partial}. "
+                        f"Нулевой выход получен в {zero} случаях, откат — в {reverts}. Полная котировка хотя бы на одном "
+                        f"из двух размеров появилась в обеих сторонах у {sides.count(2)} пулов, только в одной у "
+                        f"{sides.count(1)}, ни в одной у {sides.count(0)}. Денежная проверка V5 выше охватывает три пула. "
+                        f"[Суммы входа и выхода по адресу пула](../{depth_path.as_posix()}) · "
+                        "[Архивный прогон](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45887965733)."])
     if not base and Path(lista).exists():
         out.extend(["", "Lista DEX V3 · три пула официальной фабрики Ethereum и семь разрешённых уровней комиссии "
                     "установлены по событиям и обратным запросам. У всех трёх пулов код 31 зависимой единицы Solidity "

@@ -80,6 +80,14 @@ jobs:
         with:
           shared-key: tests
           save-if: ${{ matrix.shard == 0 }}
+      - name: Синтетический архив старой схемы учёта денежных обязательств
+        if: matrix.shard == 0
+        run: python3 scripts/measure_cash_index.py "$RUNNER_TEMP/cash-hold-index.json"
+      - uses: actions/upload-artifact@v4
+        if: matrix.shard == 0
+        with:
+          name: cash-hold-index
+          path: ${{ runner.temp }}/cash-hold-index.json
       - name: Наборы этой части
         id: pick
         run: |

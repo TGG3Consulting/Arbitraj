@@ -79,7 +79,7 @@ pub async fn save(core: &Core, deal: &Deal) {
     // Решение 405 (ревью Н3): сделка сохранена (могла уйти с пути) — ожидания ручных действий проверяют монету.
     core.inner.coin_wake.notify_waiters();
     recompute_exposure(core);
-    if let Err(e) = super::persist::save(&core.inner.deps.db, KIND, &rec.id, rec).await {
+    if let Err(e) = super::persist::save_deal(&core.inner.deps.db, rec).await {
         core.inner
             .deps
             .log(

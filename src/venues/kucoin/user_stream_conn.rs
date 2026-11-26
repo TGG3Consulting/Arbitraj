@@ -39,6 +39,7 @@ pub async fn session(
     out: &mpsc::Sender<MarketEvent>,
     t: &Token,
     timeout: Duration,
+    cash: &super::cash_balance::Feed,
 ) -> Option<String> {
     let ws = match super::ws_conn::open(t, timeout).await {
         Ok(ws) => ws,
@@ -75,7 +76,7 @@ pub async fn session(
                 match frame {
                     Message::Text(s) => {
                         ctx.raw.write(ID, NAME, &s);
-                        if !on_text(ctx, out, &s).await {
+                        if !on_text(ctx, out, &s,cash).await {
                             return None;
                         }
                     }
@@ -93,7 +94,12 @@ pub async fn session(
 }
 
 /// Текстовый кадр → журнал и событие ядру. Возвращает: false — канал ядра закрыт. Ошибок нет.
-async fn on_text(ctx: &Ctx, out: &mpsc::Sender<MarketEvent>, s: &str) -> bool {
+async fn on_text(
+    ctx: &Ctx,
+    out: &mpsc::Sender<MarketEvent>,
+    s: &str,
+    cash: &super::cash_balance::Feed,
+) -> bool {
     match depth::parse(s) {
         Msg::Error { text, .. } => {
             ctx.log(
@@ -105,6 +111,10 @@ async fn on_text(ctx: &Ctx, out: &mpsc::Sender<MarketEvent>, s: &str) -> bool {
             true
         }
         Msg::Data { topic, data, .. } if topic == TOPICS[0] => {
+            cash.observe(&data);
+            if let Err(e) = super::cash_balance::settled_event(ctx, &data).await {
+                ctx.log(Level::Warn, "venue.cash_receipt", e.message).await;
+            }
             match super::account_update::parse(&data, &ctx.venue()) {
                 Err(why) => {
                     ctx.log(

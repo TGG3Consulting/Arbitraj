@@ -44,7 +44,7 @@ impl Mandate {
 }
 
 pub(super) async fn save(core: &Core, d: &Deal) -> Result<(), String> {
-    super::persist::save(&core.inner.deps.db, super::ledger::KIND, &d.id, d)
+    super::persist::save_deal(&core.inner.deps.db, d)
         .await
         .map_err(|e| e.to_string())?;
     super::ledger::save(core, d).await;

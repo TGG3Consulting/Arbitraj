@@ -54,10 +54,14 @@ impl Accounts {
                     .into(),
             );
         }
+        let signer = self.expected.cex.clone();
         ACTIVE
             .scope(
                 (self, core.clone(), plan.clone()),
-                crate::gateway::settlement_proofs::scope(f),
+                crate::gateway::cash_signer::scope(
+                    signer,
+                    crate::gateway::settlement_proofs::scope(f),
+                ),
             )
             .await
     }

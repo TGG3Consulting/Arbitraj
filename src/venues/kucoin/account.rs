@@ -47,13 +47,15 @@ const REQUIRED: [&str; 3] = ["General", "Spot", "Transfer"];
 /// selfAccountMode). Есть — предупреждение, не сбой (решение 243).
 const FORBIDDEN: [&str; 3] = ["Margin", "Futures", "Unified"];
 
-/// Балансы торгового счёта; currency — одна монета (None — все). Ошибки: ключи, связь, ответ KuCoin.
-pub async fn balances(ctx: &Ctx, currency: Option<&str>) -> GatewayResult<Vec<Balance>> {
+pub(super) async fn trade_balances(
+    ctx: &Ctx,
+    currency: Option<&str>,
+) -> GatewayResult<serde_json::Value> {
     let mut q = vec![("type", TRADE_TYPE.to_string())];
     if let Some(c) = currency {
         q.insert(0, ("currency", c.to_string()));
     }
-    let data = rest::signed(
+    rest::signed(
         ctx,
         Method::GET,
         "/api/v1/accounts",
@@ -62,7 +64,12 @@ pub async fn balances(ctx: &Ctx, currency: Option<&str>) -> GatewayResult<Vec<Ba
         Op::Other,
         Pool::Management,
     )
-    .await?;
+    .await
+}
+
+/// Балансы торгового счёта; currency — одна монета (None — все). Ошибки: ключи, связь, ответ KuCoin.
+pub async fn balances(ctx: &Ctx, currency: Option<&str>) -> GatewayResult<Vec<Balance>> {
+    let data = trade_balances(ctx, currency).await?;
     let list = data
         .as_array()
         .ok_or_else(|| super::errors::bad("accounts: data не массив", &data.to_string()))?;

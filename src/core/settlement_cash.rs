@@ -188,7 +188,7 @@ pub async fn convert(
             }
             Ok(())
         },
-        effect::order(&deps.db, m, gw.as_ref(), req),
+        effect::order(core, m, gw.clone(), req),
     )
     .await
     .map_err(|e| e.message)?;

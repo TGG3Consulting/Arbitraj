@@ -214,7 +214,14 @@ pub async fn trade_seen(
                             };
                             crate::gateway::exit_scope::scope(Some(deal), job).await
                         } else {
-                            x.trade(req.clone()).await
+                            super::cash_order::order(
+                                core,
+                                x.clone(),
+                                req.clone(),
+                                u64::from(attempt),
+                                false,
+                            )
+                            .await
                         };
                         // Решение 238 (ревью, п. 1): ордер биржи ушёл — снимок REST стакана пары и стороны больше не
                         // факт (IOC не исполнился или съел уровни снимка): следующая попытка — по свежему стакану.

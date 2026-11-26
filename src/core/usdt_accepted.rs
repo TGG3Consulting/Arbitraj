@@ -109,7 +109,7 @@ async fn persist(core: &Core, id: &str) {
     let Some(rec) = lk(&core.inner.deals).get(id).cloned() else {
         return;
     };
-    if let Err(e) = super::persist::save(&core.inner.deps.db, super::ledger::KIND, id, &rec).await {
+    if let Err(e) = super::persist::save_deal(&core.inner.deps.db, &rec).await {
         core.inner
             .deps
             .log(

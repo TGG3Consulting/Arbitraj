@@ -8,6 +8,8 @@
 //! Настройки: нет.
 
 pub mod cex_funds;
+pub mod cex_funds_original;
+pub mod cex_funds_watch;
 pub mod db;
 pub mod episode_files;
 pub mod episodes_db;

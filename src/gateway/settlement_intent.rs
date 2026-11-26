@@ -42,6 +42,17 @@ pub fn note_gross(value: Option<rust_decimal::Decimal>) {
     let _ = GROSS.try_with(|cell| cell.set(value));
 }
 
+/// В прежней обычной покупке отсутствие поля сохраняет исходный ответ площадки.
+pub(crate) async fn capture_optional(
+    f: impl Future<Output = GatewayResult<TradeResult>>,
+) -> (GatewayResult<TradeResult>, Option<rust_decimal::Decimal>) {
+    GROSS
+        .scope(std::cell::Cell::new(None), async {
+            let r = f.await;
+            (r, GROSS.with(std::cell::Cell::get))
+        })
+        .await
+}
 /// Извлекает итог того же ответа, которым подтверждено количество и комиссия ордера.
 pub async fn capture(
     f: impl Future<Output = GatewayResult<TradeResult>>,
@@ -149,9 +160,25 @@ pub async fn before_send(lookup: &PendingRef) -> GatewayResult<()> {
     if let Ok(result) = CHECK.try_with(|guard| guard(lookup)) {
         result?;
     }
-    let Ok(action) = ACTION.try_with(Clone::clone) else {
-        return Ok(());
-    };
+    crate::core::cash_order::track_legacy(lookup)?;
+    let action = ACTION.try_with(Clone::clone).ok();
+    if crate::core::cash_order::active() {
+        super::settlement_proofs::verify().await?;
+        let prepared = action
+            .map(|a| {
+                let row = Entry {
+                    operation: a.operation,
+                    lookup: lookup.clone(),
+                    result: None,
+                };
+                serde_json::to_string(&row)
+                    .map(|body| (a.key, body))
+                    .map_err(|e| error(e.to_string()))
+            })
+            .transpose()?;
+        return crate::core::cash_order::before_send(lookup, prepared).await;
+    }
+    let Some(action) = action else { return Ok(()) };
     let body = serde_json::to_string(&Entry {
         operation: action.operation,
         lookup: lookup.clone(),
@@ -196,6 +223,36 @@ pub async fn before_send(lookup: &PendingRef) -> GatewayResult<()> {
         "Этот шаг Base уже зарегистрирован: требуется сверка сохранённого идентификатора",
     )
     .pending(prior.lookup))
+}
+
+pub(crate) async fn verify_cash_marker(lookup: &PendingRef) -> GatewayResult<()> {
+    super::settlement_proofs::verify().await?;
+    CHECK.try_with(|guard| guard(lookup)).unwrap_or(Ok(()))
+}
+pub(crate) fn remove_cash_marker(
+    c: &rusqlite::Connection,
+    key: &str,
+    body: &str,
+) -> rusqlite::Result<bool> {
+    Ok(c.execute(
+        "DELETE FROM core_state WHERE kind=?1 AND id=?2 AND body=?3",
+        params![KIND, key, body],
+    )? == 1)
+}
+
+/// Смешанный ордер и его денежная бронь пишутся в одной транзакции. Повтор старого
+/// имени журнала равносилен существующему действию.
+pub(crate) fn insert_cash_marker(
+    c: &rusqlite::Connection,
+    key: &str,
+    body: &str,
+) -> rusqlite::Result<()> {
+    let wrote=c.execute("INSERT INTO core_state(kind,id,body,updated_at) SELECT ?1,?2,?3,?4 WHERE NOT EXISTS(SELECT 1 FROM core_state WHERE kind=?5 AND id=?2)",
+        params![KIND,key,body,Utc::now().to_rfc3339(),LEGACY])?;
+    if wrote != 1 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
 }
 
 /// Записывает подтверждённый биржей/сетью итог. Сначала проверяет, что сохранён тот же подготовленный шаг.
@@ -258,7 +315,6 @@ pub fn account(
     vault: &crate::secrets::Vault,
     name: &str,
 ) -> crate::gateway::errors::GatewayResult<String> {
-    use sha2::{Digest, Sha256};
     let key = vault.get(name)?;
     if key.trim().is_empty() {
         return Err(crate::gateway::errors::GatewayError::new(
@@ -267,5 +323,5 @@ pub fn account(
             "Не задан ключ торгового счёта",
         ));
     }
-    Ok(hex::encode(Sha256::digest(key.as_bytes())))
+    Ok(super::cash_signer::fingerprint(&key))
 }

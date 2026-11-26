@@ -5,6 +5,78 @@ use serde_json::Value;
 use std::collections::BTreeSet;
 
 #[test]
+fn separately_quoted_whole_token_sizes_cover_both_sides_of_every_registered_pool() {
+    let depth: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/community_v3_depth.json"
+    ))
+    .unwrap();
+    let directory: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/community_v3_ethereum.json"
+    ))
+    .unwrap();
+    let proof: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/community_v3_storage.json"
+    ))
+    .unwrap();
+    assert_eq!(depth["state_root"], proof["state_root"]);
+    assert_eq!(depth["selector"], directory["selector"]);
+    assert_eq!(
+        depth["quoter"],
+        directory["execution"]["virtual_quoter_keccak"]
+    );
+    let markets = depth["markets"].as_array().unwrap();
+    let registered = directory["pools"].as_array().unwrap();
+    assert_eq!(markets.len(), registered.len());
+    assert!(depth["missing_decimals"].as_object().unwrap().is_empty());
+    let (mut full, mut partial, mut zero, mut reverted) = (0, 0, 0, 0);
+    let mut sides = [0usize; 3];
+    for (market, registry) in markets.iter().zip(registered) {
+        assert_eq!(market["pool"], registry["pool"]);
+        assert_eq!(market["tokens"], registry["tokens"]);
+        let quotes = market["quotes"].as_array().unwrap();
+        assert_eq!(quotes.len(), 4);
+        let mut directions = 0;
+        for side in [0, 1] {
+            let address = market["tokens"][side].as_str().unwrap();
+            let decimals = depth["decimals"][address].as_u64().unwrap();
+            let unit = U256::from(10).pow(U256::from(decimals));
+            let mut sizes = BTreeSet::new();
+            let mut whole = false;
+            for q in quotes
+                .iter()
+                .filter(|q| q["side"].as_u64() == Some(side as u64))
+            {
+                let as_units = |key: &str| q[key].as_str().unwrap().parse::<U256>().unwrap();
+                let amount = as_units("input");
+                assert!(sizes.insert(amount));
+                if q["error"].is_object() {
+                    reverted += 1;
+                    continue;
+                }
+                let used = as_units("used");
+                assert!(used <= amount);
+                if as_units("out").is_zero() {
+                    zero += 1;
+                } else {
+                    assert!(used > U256::ZERO);
+                    if used == amount {
+                        whole = true;
+                        full += 1;
+                    } else {
+                        partial += 1;
+                    }
+                }
+            }
+            assert_eq!(sizes, BTreeSet::from([unit, unit * U256::from(10)]));
+            directions += usize::from(whole);
+        }
+        sides[directions] += 1;
+    }
+    assert_eq!((full, partial, zero, reverted), (343, 169, 1222, 2));
+    assert_eq!(sides, [305, 71, 58]);
+}
+
+#[test]
 fn registered_addresses_reproduce_and_wallets_settle_through_v5() {
     let data: Value = serde_json::from_str(include_str!(
         "data/first_run_dex_2026-11-26/community_v3_ethereum.json"

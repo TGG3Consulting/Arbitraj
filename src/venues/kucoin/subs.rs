@@ -28,6 +28,7 @@ use super::symbols::Symbols;
 #[derive(Clone)]
 pub struct Parts {
     pub ctx: Ctx,
+    pub cash_feed: super::cash_balance::Feed,
     pub symbols: Symbols,
     pub books: Books,
     pub fees: Fees,
@@ -71,6 +72,7 @@ impl Subs {
                 *acc = Some(tokio::spawn(super::user_stream::run(
                     p.ctx.clone(),
                     out.clone(),
+                    p.cash_feed.clone(),
                 )));
             }
         }

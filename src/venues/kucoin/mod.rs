@@ -19,6 +19,8 @@ pub mod book;
 pub mod book_print;
 pub mod book_rest;
 pub mod bullet;
+mod cash_balance;
+pub mod cash_receipt;
 pub mod ctx;
 pub mod delist;
 pub mod delist_ann;
@@ -95,6 +97,7 @@ pub struct Kucoin {
     fees: Fees,
     nets: Networks,
     addrs: DepositAddrs,
+    cash_feed: cash_balance::Feed,
 }
 
 impl Kucoin {
@@ -108,6 +111,7 @@ impl Kucoin {
             fees: Fees::default(),
             nets: Networks::default(),
             addrs: DepositAddrs::default(),
+            cash_feed: Default::default(),
         }
     }
 
@@ -133,6 +137,33 @@ impl Venue for Kucoin {
     }
     fn settlement_account(&self) -> GatewayResult<String> {
         crate::gateway::settlement_intent::account(&self.ctx.vault, ctx::SECRET_API_KEY)
+    }
+    fn supports_cash_reservation(&self) -> bool {
+        true
+    }
+    fn cash_order_cap(
+        &self,
+        req: &TradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+        currency: &str,
+    ) -> GatewayResult<Decimal> {
+        cash_balance::cap(&self.ctx, &self.fees, req, p, currency)
+    }
+    async fn cash_identity(
+        &self,
+        currency: &str,
+    ) -> GatewayResult<crate::storage::cex_funds::Bucket> {
+        cash_balance::account_snapshot(&self.ctx, currency)
+            .await
+            .map(|(bucket, _, _)| bucket)
+    }
+    async fn cash_balance(
+        &self,
+        req: &TradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+        currency: &str,
+    ) -> GatewayResult<(crate::storage::cex_funds::Balance, rust_decimal::Decimal)> {
+        cash_balance::read(&self.ctx, &self.fees, &self.cash_feed, req, p, currency).await
     }
     fn supports_settlement_order(&self) -> bool {
         true
@@ -177,6 +208,7 @@ impl Venue for Kucoin {
     ) -> GatewayResult<()> {
         let parts = Parts {
             ctx: self.ctx.clone(),
+            cash_feed: self.cash_feed.clone(),
             symbols: self.symbols.clone(),
             books: self.books.clone(),
             fees: self.fees.clone(),

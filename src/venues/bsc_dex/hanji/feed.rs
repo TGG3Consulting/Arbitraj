@@ -92,8 +92,14 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
             if let Some(b) = b {
                 let mut markets = BTreeMap::new();
                 for (&coin, books) in &b.by_coin {
-                    let buy = books.iter().any(|v| !v.direction(cfg.cash).1.is_empty());
-                    let sell = books.iter().any(|v| !v.direction(coin).1.is_empty());
+                    let buy = books.iter().any(|v| {
+                        v.direction(cfg.cash)
+                            .is_some_and(|(_, levels)| !levels.is_empty())
+                    });
+                    let sell = books.iter().any(|v| {
+                        v.direction(coin)
+                            .is_some_and(|(_, levels)| !levels.is_empty())
+                    });
                     if buy || sell {
                         markets.insert(coin, (buy, sell));
                     }

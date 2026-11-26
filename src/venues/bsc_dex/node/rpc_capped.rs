@@ -20,12 +20,12 @@ use serde_json::Value;
 use serde_json::value::RawValue;
 
 use crate::gateway::errors::GatewayResult;
-use crate::gateway::http::{self, Fail, Limits};
+use crate::gateway::http::{Fail, Limits};
 
 use super::super::ctx::Ctx;
 use super::super::errors::{self, Op};
 use super::failover::{self, Link, Node};
-use super::rpc::{SOURCE, status_ok};
+use super::rpc::SOURCE;
 use super::{jsonrpc, pace};
 
 /// Итог запроса с пределом: ответ или превышение предела (TooBig / Total — сколько получено).
@@ -115,26 +115,7 @@ async fn to_node(ctx: &Ctx, body: &Value, lim: Limits) -> GatewayResult<Capped<S
     let n = urls.len();
     let mut last = None;
     for (i, (node, url)) in urls.into_iter().enumerate() {
-        let res = async {
-            super::chain_seen::verify_http(ctx, &url).await?;
-            match http::exchange(
-                ctx.http
-                    .post(url.as_str())
-                    .header(reqwest::header::ACCEPT_ENCODING, "identity")
-                    .json(body),
-                lim,
-            )
-            .await
-            {
-                Ok((status, text)) => status_ok(status, text, SOURCE).map(Capped::Got),
-                Err(f @ (Fail::TooBig { .. } | Fail::Total { .. })) => Ok(Capped::Over(f)),
-                Err(f) => Err(errors::from_fail(&f, &lim, SOURCE)),
-            }
-        }
-        .await;
-        if res.is_err() {
-            super::chain_seen::invalidate(ctx, &url);
-        }
+        let res = super::rpc_race::exchange(ctx, &url, body, lim, SOURCE).await;
         match res {
             Ok(t) => {
                 if node == Node::Main {

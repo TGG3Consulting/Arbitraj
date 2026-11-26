@@ -7,16 +7,18 @@ use std::{
     sync::{Arc, Mutex},
 };
 pub(super) type Endpoint = (B256, u64);
+pub(super) type Stamp = (u64, u64);
 #[derive(Default)]
 struct Entry {
     settings: u64,
     epoch: u64,
     confirmed: bool,
+    observation: u64,
 }
 #[derive(Default, Clone)]
 pub(super) struct Endpoints(Arc<Mutex<HashMap<Endpoint, Entry>>>);
 impl Endpoints {
-    pub fn check(&self, key: Endpoint, settings: u64, refresh: bool) -> Option<u64> {
+    pub fn check(&self, key: Endpoint, settings: u64, refresh: bool) -> Option<Stamp> {
         let mut entries = self.0.lock().unwrap_or_else(|p| p.into_inner());
         let e = entries.entry(key).or_default();
         if e.settings != settings {
@@ -24,7 +26,7 @@ impl Endpoints {
             e.epoch = e.epoch.wrapping_add(1);
             e.confirmed = false;
         }
-        (refresh || !e.confirmed).then_some(e.epoch)
+        (refresh || !e.confirmed).then_some((e.epoch, e.observation))
     }
     pub fn forget(&self, key: Endpoint) {
         if let Some(e) = self
@@ -37,15 +39,26 @@ impl Endpoints {
             e.epoch = e.epoch.wrapping_add(1);
         }
     }
-    pub fn confirm(&self, key: Endpoint, settings: u64, epoch: u64) -> bool {
+    pub fn failed(&self, key: Endpoint, settings: u64, stamp: Stamp) {
+        let mut entries = self.0.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(e) = entries
+            .get_mut(&key)
+            .filter(|e| e.settings == settings && (e.epoch, e.observation) == stamp)
+        {
+            e.confirmed = false;
+            e.epoch = e.epoch.wrapping_add(1);
+        }
+    }
+    pub fn confirm(&self, key: Endpoint, settings: u64, stamp: Stamp) -> bool {
         let mut entries = self.0.lock().unwrap_or_else(|p| p.into_inner());
         let Some(e) = entries
             .get_mut(&key)
-            .filter(|e| e.epoch == epoch && e.settings == settings)
+            .filter(|e| e.epoch == stamp.0 && e.settings == settings)
         else {
             return false;
         };
         e.confirmed = true;
+        e.observation = e.observation.wrapping_add(1);
         true
     }
 }
@@ -60,7 +73,13 @@ mod tests {
         assert!(c.confirm(key, 1, first));
         assert!(c.check(key, 1, false).is_none());
         assert!(c.check((key.0, 1), 1, false).is_some());
-        assert_eq!(c.check(key, 1, true), Some(first));
+        let old = c.check(key, 1, true).unwrap();
+        assert!(c.confirm(key, 1, old));
+        c.failed(key, 1, old);
+        assert!(c.check(key, 1, false).is_none());
+        let fresh = c.check(key, 1, true).unwrap();
+        c.failed(key, 1, fresh);
+        assert!(c.check(key, 1, false).is_some());
         c.forget(key);
         let after_error = c.check(key, 1, false).unwrap();
         assert!(!c.confirm(key, 1, first));

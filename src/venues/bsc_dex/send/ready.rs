@@ -183,7 +183,6 @@ impl Ready {
         };
         self.post(ctx, txs, max_block, (cond, terms.known), Some(started_at))
             .await
-            .inspect_err(|_| super::super::node::chain_seen::invalidate(ctx, &self.url))
     }
 
     /// «Проверить подключение» (send/check.rs): пустая транзакция тем методом, которым канал отправляет; у канала с
@@ -195,13 +194,7 @@ impl Ready {
             Cond::Plain
         };
         super::super::node::chain_seen::invalidate(ctx, &self.url);
-        self.post(ctx, &[Bytes::new()], 0, (cond, None), None)
-            .await
-            .inspect_err(|e| {
-                if super::super::node::failover::switchable(e) {
-                    super::super::node::chain_seen::invalidate(ctx, &self.url);
-                }
-            })
+        self.post(ctx, &[Bytes::new()], 0, (cond, None), None).await
     }
 
     /// Запрос в канал и разбор ответа. Принимает: транзакции, предел блока, условие и knownAccounts пулов (решение
@@ -238,33 +231,43 @@ impl Ready {
             headers.push(("Authorization", auth.as_str()));
         }
         let lim = self.http_ms;
-        let text = rpc::post_within(
-            ctx,
-            &self.url,
-            &body,
-            &headers,
-            self.ch.title,
-            lim,
-            started_at,
-        )
-        .await?;
-        match jsonrpc::parse_text(&text, self.ch.title, Op::Send) {
-            Ok(raw) if crate::settings::evm_profiles::profile(ctx.place.id).is_some() => {
-                let hash: alloy_primitives::B256 = jsonrpc::decode(&raw, self.ch.title)?;
-                if hash != alloy_primitives::keccak256(&txs[0]) {
-                    return Err(ctx.err(
-                        crate::gateway::errors::ErrorCode::BadResponse,
-                        "eth_sendRawTransaction вернул хеш другой транзакции",
-                    ));
+        let stamp = super::super::node::chain_seen::watch(ctx, &self.url);
+        let probe = started_at.is_none();
+        let result = async {
+            let text = rpc::post_within(
+                ctx,
+                &self.url,
+                &body,
+                &headers,
+                self.ch.title,
+                lim,
+                started_at,
+            )
+            .await?;
+            match jsonrpc::parse_text(&text, self.ch.title, Op::Send) {
+                Ok(raw) if crate::settings::evm_profiles::profile(ctx.place.id).is_some() => {
+                    let hash: alloy_primitives::B256 = jsonrpc::decode(&raw, self.ch.title)?;
+                    if hash != alloy_primitives::keccak256(&txs[0]) {
+                        return Err(ctx.err(
+                            crate::gateway::errors::ErrorCode::BadResponse,
+                            "eth_sendRawTransaction вернул хеш другой транзакции",
+                        ));
+                    }
+                    Ok(())
                 }
-                Ok(())
+                Ok(_) => Ok(()),
+                Err(e) if e.message.to_ascii_lowercase().contains("already known") => Ok(()),
+                Err(e) if conditional => Err(sequencer_cond::explain(&text, e)),
+                Err(e) if sync => Err(seq_opts::explain_sync(&text, e)),
+                Err(e) => Err(e),
             }
-            Ok(_) => Ok(()),
-            Err(e) if e.message.to_ascii_lowercase().contains("already known") => Ok(()),
-            Err(e) if conditional => Err(sequencer_cond::explain(&text, e)),
-            Err(e) if sync => Err(seq_opts::explain_sync(&text, e)),
-            Err(e) => Err(e),
         }
+        .await;
+        result.inspect_err(|e| {
+            if !probe || super::super::node::failover::switchable(e) {
+                super::super::node::chain_seen::failed(ctx, stamp);
+            }
+        })
     }
 
     /// Тело запроса в формате канала (условие и eth_sendRawTransactionSync — только у Single::Sequencer).

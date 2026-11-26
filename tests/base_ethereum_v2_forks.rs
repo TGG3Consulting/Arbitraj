@@ -105,10 +105,17 @@ fn fixed_fee_profiles_match_the_executor_and_wallet_balances() {
         admitted += 1;
     }
     for dex in [
-        "apeswap_ethereum", "elk_finance_ethereum", "orion-ethereum",
-        "saitaswap-ethereum", "sakeswap", "squadswap-base",
+        "apeswap_ethereum",
+        "elk_finance_ethereum",
+        "orion-ethereum",
+        "saitaswap-ethereum",
+        "sakeswap",
+        "squadswap-base",
     ] {
-        assert!(verified_boundaries.contains(dex), "missing pair proof for {dex}");
+        assert!(
+            verified_boundaries.contains(dex),
+            "missing pair proof for {dex}"
+        );
     }
     assert!(admitted >= 20);
 }

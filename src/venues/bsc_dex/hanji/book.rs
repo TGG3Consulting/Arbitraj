@@ -90,11 +90,13 @@ pub(super) struct MarketBook {
     pub decimals: (u8, u8),
 }
 impl MarketBook {
-    pub fn direction(&self, input: Address) -> (Side, &[Level]) {
+    pub fn direction(&self, input: Address) -> Option<(Side, &[Level])> {
         if input == self.x {
-            (Side::SellX, &self.bids)
+            Some((Side::SellX, &self.bids))
+        } else if input == self.y {
+            Some((Side::BuyX, &self.asks))
         } else {
-            (Side::BuyX, &self.asks)
+            None
         }
     }
 }

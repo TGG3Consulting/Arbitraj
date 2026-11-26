@@ -72,7 +72,7 @@ fn candidate(
     } else {
         (coin, book.config.cash)
     };
-    let (direction, levels) = m.direction(input);
+    let (direction, levels) = m.direction(input)?;
     let f = m.units.exact_quantity(levels, direction, raw, buy)?;
     let price = super::quantity::limit_price(
         f.last_price,
@@ -325,7 +325,9 @@ pub(in crate::venues::bsc_dex) fn breaks(
         for m in markets {
             let buy = side == Side::Buy;
             let coin = asset.contract.expect("проверено выше");
-            let (dir, levels) = m.direction(if buy { b.config.cash } else { coin });
+            let Some((dir, levels)) = m.direction(if buy { b.config.cash } else { coin }) else {
+                continue;
+            };
             let mut lots = U256::ZERO;
             for (i, lvl) in levels.iter().enumerate() {
                 lots = lots.saturating_add(U256::from(lvl.shares));

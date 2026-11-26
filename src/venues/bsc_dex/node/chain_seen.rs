@@ -77,7 +77,11 @@ pub async fn verify_http(ctx: &Ctx, url: &str) -> GatewayResult<()> {
     }
     Ok(())
 }
-type Check = (super::endpoint_chain::Endpoint, u64, u64);
+pub(in crate::venues::bsc_dex) type Check = (
+    super::endpoint_chain::Endpoint,
+    u64,
+    super::endpoint_chain::Stamp,
+);
 fn begin(ctx: &Ctx, url: &str, refresh: bool) -> Option<Check> {
     let key = endpoint(ctx, url)?;
     let settings = ctx.settings.generation();
@@ -92,13 +96,15 @@ pub(in crate::venues::bsc_dex) async fn node_post(
     body: &serde_json::Value,
     source: &str,
 ) -> GatewayResult<String> {
-    let res = if body.get("method").and_then(|v| v.as_str()) == Some("eth_chainId") {
-        observed(ctx, url, body, source, begin(ctx, url, true)).await
+    if body.get("method").and_then(|v| v.as_str()) == Some("eth_chainId") {
+        observed(ctx, url, body, source, watch(ctx, url)).await
     } else {
         verify_http(ctx, url).await?;
-        rpc::post(ctx, url, body, &[], source).await
-    };
-    res.inspect_err(|_| invalidate(ctx, url))
+        let stamp = watch(ctx, url);
+        rpc::post(ctx, url, body, &[], source)
+            .await
+            .inspect_err(|_| failed(ctx, stamp))
+    }
 }
 async fn observed(
     ctx: &Ctx,
@@ -107,28 +113,39 @@ async fn observed(
     source: &str,
     check: Option<Check>,
 ) -> GatewayResult<String> {
-    let text = rpc::post(ctx, url, body, &[], source).await?;
-    if let Some((key, settings, epoch)) = check {
-        let raw = jsonrpc::parse_text(&text, source, Op::Read)?;
-        let got: U64 = jsonrpc::decode(&raw, source)?;
-        if let Err(e) = chain_id::same_chain(ctx, got.to::<u64>()) {
-            ctx.chains.verified.forget(key);
-            return Err(ctx.err(ErrorCode::BadResponse, e));
+    let exchange = async {
+        let text = rpc::post(ctx, url, body, &[], source).await?;
+        if let Some((key, settings, epoch)) = check {
+            let raw = jsonrpc::parse_text(&text, source, Op::Read)?;
+            let got: U64 = jsonrpc::decode(&raw, source)?;
+            chain_id::same_chain(ctx, got.to::<u64>())
+                .map_err(|e| ctx.err(ErrorCode::BadResponse, e))?;
+            if ctx.settings.generation() != settings
+                || !ctx.chains.verified.confirm(key, settings, epoch)
+            {
+                return Err(ctx.err(
+                    ErrorCode::BadResponse,
+                    "Настройки или соединение изменились во время проверки сети HTTP",
+                ));
+            }
         }
-        if ctx.settings.generation() != settings
-            || !ctx.chains.verified.confirm(key, settings, epoch)
-        {
-            return Err(ctx.err(
-                ErrorCode::BadResponse,
-                "Настройки или соединение изменились во время проверки сети HTTP",
-            ));
-        }
-    }
-    Ok(text)
+        Ok(text)
+    };
+    exchange.await.inspect_err(|_| failed(ctx, check))
 }
 fn endpoint(ctx: &Ctx, url: &str) -> Option<super::endpoint_chain::Endpoint> {
     let expected = crate::settings::evm_profiles::profile(ctx.place.id)?.evm_chain_id;
     Some((alloy_primitives::keccak256(url.as_bytes()), expected))
+}
+/// Состояние проверки именно в момент начала запроса.
+pub(in crate::venues::bsc_dex) fn watch(ctx: &Ctx, url: &str) -> Option<Check> {
+    begin(ctx, url, true)
+}
+/// Ошибка задержавшегося запроса не снимает более свежую проверку этого адреса.
+pub(in crate::venues::bsc_dex) fn failed(ctx: &Ctx, check: Option<Check>) {
+    if let Some((key, settings, stamp)) = check {
+        ctx.chains.verified.failed(key, settings, stamp)
+    }
 }
 /// Следующая операция на этом endpoint вновь читает фактический eth_chainId.
 pub fn invalidate(ctx: &Ctx, url: &str) {

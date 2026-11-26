@@ -146,9 +146,18 @@ pub(super) async fn one(
     lim: Limits,
 ) -> GatewayResult<Capped<String>> {
     // Ошибка называет узел (только хост): 429 одного из публичных узлов ленты — видно, какого.
-    let source = host_source(url);
+    exchange(ctx, url, body, lim, &host_source(url)).await
+}
+pub(super) async fn exchange(
+    ctx: &Ctx,
+    url: &str,
+    body: &Value,
+    lim: Limits,
+    source: &str,
+) -> GatewayResult<Capped<String>> {
     super::chain_seen::verify_http(ctx, url).await?;
-    match http::exchange(
+    let stamp = super::chain_seen::watch(ctx, url);
+    let result = match http::exchange(
         ctx.http
             .post(url)
             .header(reqwest::header::ACCEPT_ENCODING, "identity")
@@ -157,9 +166,12 @@ pub(super) async fn one(
     )
     .await
     {
-        Ok((status, text)) => status_ok(status, text, &source).map(Capped::Got),
+        Ok((status, text)) => status_ok(status, text, source).map(Capped::Got),
         Err(f @ (Fail::TooBig { .. } | Fail::Total { .. })) => Ok(Capped::Over(f)),
-        Err(f) => Err(errors::from_fail(&f, &lim, &source)),
+        Err(f) => Err(errors::from_fail(&f, &lim, source)),
+    };
+    if matches!(&result, Err(_) | Ok(Capped::Over(Fail::Total { .. }))) {
+        super::chain_seen::failed(ctx, stamp);
     }
-    .inspect_err(|_| super::chain_seen::invalidate(ctx, url))
+    result
 }

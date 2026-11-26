@@ -6,6 +6,115 @@ use crate::core::types::{
 use alloy_primitives::U256;
 use rust_decimal::Decimal;
 use serde_json::Value;
+#[tokio::test]
+async fn an_outer_hanji_order_keeps_its_first_prepared_identity_across_restart() {
+    use super::{execute::Marker, wire::Proof};
+    use crate::{
+        core::types::TradeRequest,
+        gateway::{pending::PendingRef, settlement_intent as intent},
+        storage::db::Db,
+    };
+    use alloy_primitives::{U64, keccak256};
+    let v: Value = serde_json::from_str(include_str!(
+        "../../../../tests/data/first_run_dex_2026-11-26/hanji_executor_receipts.json"
+    ))
+    .unwrap();
+    let market: Value = serde_json::from_str(include_str!(
+        "../../../../tests/data/first_run_dex_2026-11-26/hanji_base.json"
+    ))
+    .unwrap();
+    let source = &v["evidence"][0];
+    let order: Proof = serde_json::from_value(source["order"].clone()).unwrap();
+    let original = &market["markets"][0]["fills"][0];
+    let key = format!(
+        "{}:{:#x}:{}:buy",
+        v["block_hash"].as_str().unwrap(),
+        order.market,
+        original["budget_y"]
+    );
+    assert_eq!(order.leg, keccak256(key.as_bytes()));
+    let req = TradeRequest {
+        venue: VenueId("base_dex".into()),
+        asset: Asset {
+            ticker: "cbBTC".into(),
+            contract: Some(order.output),
+            chain: Some(ChainId("base".into())),
+        },
+        side: Side::Buy,
+        qty: Decimal::new(original["received_x"].as_i64().unwrap(), 8),
+        worst_price: Decimal::new(original["debited_y"].as_i64().unwrap(), 6)
+            / Decimal::new(original["received_x"].as_i64().unwrap(), 8),
+        deal_id: order.leg.to_string(),
+        route: None,
+        exit_position: false,
+        remeasure: None,
+    };
+    // The replay starts OWNER at nonce zero; all preceding calls in this scenario come from OWNER.
+    let log = &source["logs"][0];
+    let nonce: U64 = serde_json::from_value(log["transactionIndex"].clone()).unwrap();
+    let marker = PendingRef {
+        nonce: Some(nonce.to()),
+        venue_ref: Some(log["transactionHash"].as_str().unwrap().into()),
+        parse: Some(
+            serde_json::to_value(Marker {
+                order: order.clone(),
+                key: key.clone(),
+                account: "base-replay".into(),
+                decs: (8, 6),
+                channels: vec![],
+                outer: true,
+            })
+            .unwrap(),
+        ),
+        ..Default::default()
+    };
+    let dir = std::env::temp_dir().join(format!(
+        "hanji-{}",
+        chrono::Utc::now().timestamp_nanos_opt().unwrap()
+    ));
+    std::fs::create_dir(&dir).unwrap();
+    let path = dir.join("state.sqlite");
+    {
+        let db = Db::open(&path).unwrap();
+        intent::scope(
+            &db,
+            &key,
+            intent::Request::Order(Box::new(req.clone())),
+            async {
+                assert_eq!(intent::current_key().as_deref(), Some(key.as_str()));
+                intent::before_send(&marker).await.unwrap();
+            },
+        )
+        .await;
+    }
+    let db = Db::open(&path).unwrap();
+    let mut competing = marker.clone();
+    competing.venue_ref = Some(
+        v["evidence"][1]["logs"][0]["transactionHash"]
+            .as_str()
+            .unwrap()
+            .into(),
+    );
+    let refusal = intent::scope(
+        &db,
+        &key,
+        intent::Request::Order(Box::new(req)),
+        intent::before_send(&competing),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        refusal.code,
+        crate::gateway::errors::ErrorCode::OutcomeUnknown
+    );
+    let loaded = intent::load(&db, &key).await.unwrap().unwrap().lookup;
+    assert_eq!(
+        (loaded.venue_ref, loaded.nonce, loaded.parse),
+        (marker.venue_ref, marker.nonce, marker.parse)
+    );
+    drop(db);
+    let _ = std::fs::remove_dir_all(dir);
+}
 #[test]
 fn archive_fill_requires_one_executor_event_and_each_actual_wallet_movement() {
     use super::{

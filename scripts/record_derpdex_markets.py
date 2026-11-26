@@ -7,7 +7,7 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from eth_abi import decode
 from eth_utils import keccak
-from record_base_slipstream_executor import ROOT,OWNER,calldata,call,rpc
+from record_base_slipstream_executor import ROOT,OWNER,RUNTIME,calldata,call,rpc
 from record_pool_executor_controls import record
 from record_metric_chains import VIRTUAL
 from record_v2_chain_pools import view
@@ -15,6 +15,19 @@ from record_derpdex_base import FACTORY,FOLDER,WETH
 from record_rubicon_clmm import pool_address
 
 USDBC="0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+REGULAR_GAS=1_200_000
+UPPER_GAS=16_777_216
+
+def quote_result(reply, requested, gas_limit):
+    value={"status": reply["status"], "returnData": reply.get("returnData"), "gas_limit":gas_limit,
+           "gas_used":int(reply["gasUsed"],16)}
+    if int(reply["status"],16)==1:
+        used,received=decode(["uint256","uint256"],bytes.fromhex(reply["returnData"][2:]))
+        if used>requested:raise ValueError("пул сообщил сверх запрошенного входа")
+        value.update(used=str(used),out=str(received),full=(used==requested and received>0))
+    else:
+        value["reason"]=reply.get("error")
+    return value
 def main(out):
     directory=json.loads((FOLDER/"derpdex_directory.json").read_bytes())
     old=json.loads((FOLDER/"derpdex_base.json").read_bytes())
@@ -24,6 +37,8 @@ def main(out):
     for url in candidates:
         try:
             if int(rpc(url,"eth_chainId",[]),16)!=8453:continue
+            header=rpc(url,"eth_getBlockByHash",[tag["blockHash"],False])
+            if header["stateRoot"]!=directory["state_root"] or int(header["number"],16)!=directory["to"]:continue
             if rpc(url,"eth_getCode",[FACTORY,tag])=="0x":continue
             base={"code":"0x"+virtual}
             initial=rpc(url,"eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":{VIRTUAL:base},"calls":[call(WETH,calldata("decimals()"))]}]},tag])
@@ -50,12 +65,12 @@ def main(out):
         probes=[call(VIRTUAL,calldata("quoteExactIn(address,bool,uint256)",["address","bool","uint256"],[addr,i==0,n])) for i,n in plan]
         resp=rpc(url,"eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":{VIRTUAL:{"code":"0x"+virtual}},"calls":probes}]},tag])[0]["calls"]
         quotes=[]
-        for (side,n),r in zip(plan,resp,strict=True):
-            q={"side":side,"requested":str(n),"status":r["status"],"returnData":r.get("returnData")}
-            if int(r["status"],16)==1:
-                used,received=decode(["uint256","uint256"],bytes.fromhex(r["returnData"][2:]))
-                q.update(used=str(used),out=str(received),full=(used==n and received>0))
-            else:q["reason"]=r.get("error")
+        for (side,n),probe,r in zip(plan,probes,resp,strict=True):
+            q={"side":side,"requested":str(n),**quote_result(r,n,REGULAR_GAS)}
+            if "reason" in q:
+                widened={**probe,"gas":hex(UPPER_GAS)}
+                test=rpc(url,"eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":{VIRTUAL:{"code":"0x"+virtual}},"calls":[widened]}]},tag])
+                q["larger_gas"]=quote_result(test[0]["calls"][0],n,UPPER_GAS)
             quotes.append(q)
         return {**p,"liquidity":str(num(addr,"liquidity()")),"quotes":quotes}
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -71,14 +86,22 @@ def main(out):
         funding=bridges.get(ts[side],{}) if ts[side]!=WETH else {}
         prepared=dict(idx=index,pool=m["pool"],tokens=ts,quotes=[{"side":side,"input":str(x)} for x in sizes(ts[side])],
                       funding_weth=10**18//4,funding_pool=funding.get("pool"))
-        replay=record(dict(kind="v3",network="base",endpoint=url,hash=tag["blockHash"],block=directory["to"],contracts={"factory":FACTORY},
-                       quoter_runtime_keccak="0x"+keccak(bytes.fromhex(virtual)).hex(),capture_partial=True,pools=[prepared]))
+        source=dict(kind="v3",network="base",endpoint=url,hash=tag["blockHash"],block=directory["to"],contracts={"factory":FACTORY},
+                    quoter_runtime_keccak="0x"+keccak(bytes.fromhex(virtual)).hex(),capture_partial=True,pools=[prepared])
+        replay=record(source)
         m["funding_pool"]=prepared["funding_pool"];m["wallet"]=replay["pools"][0]["cases"]
+        remaining=[{"side":r["side"],"input":r["input"]} for r in m["wallet"] if "sold" not in r and any(
+            q["side"]==r["side"] and q["requested"]==r["input"] and int(q.get("larger_gas",{}).get("out",0))>0 for q in m["quotes"])]
+        if remaining:
+            second=record({**source,"target_gas":UPPER_GAS,"pools":[{**prepared,"quotes":remaining}]})
+            m["larger_gas_wallet"]=second["pools"][0]["cases"]
         return m
     with ThreadPoolExecutor(max_workers=2) as pool:
         markets=list(pool.map(wallet,enumerate(markets)))
     result={"chain_id":8453,"selector":tag,"height":directory["to"],"endpoint":url,"sender":OWNER,
-            "factory":FACTORY,"decimals":decimals,"markets":markets,"index":[x["pool"] for x in directory["indexed"]]}
+            "factory":FACTORY,"decimals":decimals,"markets":markets,"index":[x["pool"] for x in directory["indexed"]],
+            "state_root":header["stateRoot"],"virtual_quoter_keccak":"0x"+keccak(bytes.fromhex(virtual)).hex(),
+            "executor_runtime_keccak":"0x"+keccak(bytes.fromhex(RUNTIME.read_text().strip().removeprefix("0x"))).hex()}
     Path(out).write_bytes((json.dumps(result,indent=2)+"\n").encode())
     if len(markets)!=13 or len(result["index"])!=6 or not all(len(m["quotes"])==8 and len(m["wallet"])==4 for m in markets):
         raise ValueError("неполная таблица рынков/размеров")

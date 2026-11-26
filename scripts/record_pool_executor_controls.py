@@ -68,10 +68,14 @@ def record(source, owner=FIRST_OWNER):
                     else:
                         prefix.extend([approve(weth,router,deposit),call(router,calldata("swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",["uint256","uint256","address[]","address","uint256"],[deposit,amount,[weth,cash],owner,deadline]))])
                 def preview(side,amount):
-                    return call(VIRTUAL,calldata(quote_fn+"(address,bool,uint256)",["address","bool","uint256"],[addr,side==0,amount]))
+                    tx=call(VIRTUAL,calldata(quote_fn+"(address,bool,uint256)",["address","bool","uint256"],[addr,side==0,amount]))
+                    if "target_gas" in source:tx["gas"]=hex(source["target_gas"])
+                    return tx
                 def execute(side,x,minimum):
                     data=calldata("execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],[tokens[side],x,tokens[1-side],minimum,deadline,[(step_kind,addr,tokens[side],tokens[1-side],10000,encode(["bool"],[side==0]) if mode=="metric" else b"")]])
-                    return call(EXEC,data)
+                    tx=call(EXEC,data)
+                    if "target_gas" in source:tx["gas"]=hex(source["target_gas"])
+                    return tx
                 def quote(calls,amount,direction):
                     raw=bytes.fromhex(successful(calls)[-1]["returnData"][2:])
                     if len(raw)!=64:raise ValueError("quoter returned nonstandard bytes")

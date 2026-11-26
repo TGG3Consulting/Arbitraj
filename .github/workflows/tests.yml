@@ -93,7 +93,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0 beautifulsoup4==4.13.5 PyYAML==6.0.3
+      - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0 beautifulsoup4==4.13.5 PyYAML==6.0.3 rlp==4.1.0
+      - run: python scripts/record_derpdex_directory.py --verify-file tests/data/first_run_dex_2026-11-26/derpdex_directory.json
       - run: python scripts/record_derpdex_markets.py "$RUNNER_TEMP/derpdex-base.json"
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}

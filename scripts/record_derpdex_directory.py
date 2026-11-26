@@ -74,6 +74,30 @@ def prove_account(header,proof):
     return storage
 
 def map_slot(k,slot):return int.from_bytes(keccak(word(k)+word(slot)),"big")
+
+def verify_directory(data):
+    """Проверяет сохранённые первичные данные без сети, включая отсутствие иных ставок и пулов."""
+    if data["factory"] != FACTORY:
+        raise ValueError("чужая фабрика в архиве")
+    root = prove_account({"stateRoot": data["state_root"]}, {
+        "accountProof": data["account_proof"], "nonce": hex(data["nonce"]), "storageHash": data["storage_root"],
+    })
+    layout = data["layout"]
+    slots = {}
+    if int(data["owner"], 16):
+        slots[layout["owner"]] = int(data["owner"], 16)
+    for fee, spacing in data["tiers"].items():
+        slots[map_slot(int(fee), layout["feeAmountTickSpacing"])] = spacing
+    for market in data["pools"]:
+        a, b = (int(token, 16) for token in market["tokens"])
+        for token_in, token_out in [(a,b), (b,a)]:
+            key = map_slot(market["fee"], map_slot(token_out, map_slot(token_in, layout["getPool"])))
+            slots[key] = int(market["pool"], 16)
+    rows = [(nibbles(keccak(word(slot))), rlp.encode(value)) for slot, value in slots.items()]
+    if keccak(rlp.encode(trie_node(rows))) != root:
+        raise ValueError("обнаруженные owner/tiers/pools не покрывают хранилище фабрики")
+    if len(slots) != data["storage_slots"] or data["nonce"] != len(data["pools"]) + 1:
+        raise ValueError("неполное множество физических слотов или адресов")
 def external_sources():
     from datetime import datetime, timezone
     gt="https://api.geckoterminal.com/api/v2/networks/base/dexes/derpdex-base/pools?page=1"
@@ -139,20 +163,15 @@ def collect():
         if len(pools)-before!=change:raise ValueError("не все CREATE2 фабрики подтверждены событием")
     source=requests.get("https://sourcify.dev/server/v2/contract/8453/"+FACTORY,params={"fields":"storageLayout"},timeout=15).json()["storageLayout"]
     layout={v["label"]:int(v["slot"]) for v in source["storage"]}
-    owner=request("eth_call",[{"to":FACTORY,"data":calldata("owner()")},tag]);slots={}
-    if int(owner,16):slots[layout["owner"]]=int(owner,16)
-    for fee,spacing in tiers.items():slots[map_slot(int(fee),layout["feeAmountTickSpacing"])]=spacing
-    for p in pools:
-        a,b=[int(t,16) for t in p["tokens"]]
-        for t,u in [(a,b),(b,a)]:
-            k=map_slot(p["fee"],map_slot(u,map_slot(t,layout["getPool"])))
-            slots[k]=int(p["pool"],16)
-    rows=[(nibbles(keccak(word(slot))),rlp.encode(value)) for slot,value in slots.items()]
-    actual=keccak(rlp.encode(trie_node(rows)))
-    if actual!=root:raise ValueError("обнаруженные owner/tiers/pools не покрывают хранилище фабрики")
-    return {**external_sources(),"chain_id":8453,"factory":FACTORY,"from":START,"to":last,"selector":tag,
+    owner=request("eth_call",[{"to":FACTORY,"data":calldata("owner()")},tag])
+    data={**external_sources(),"chain_id":8453,"factory":FACTORY,"from":START,"to":last,"selector":tag,
             "state_root":head["stateRoot"],"account_proof":proof["accountProof"],"storage_root":"0x"+root.hex(),
-            "nonce":hi,"owner":owner,"layout":layout,"storage_slots":len(slots),"fee_events":fees,
+            "nonce":hi,"owner":owner,"layout":layout,"storage_slots":2*len(pools)+len(tiers)+bool(int(owner,16)),"fee_events":fees,
             "tiers":tiers,"pools":pools}
+    verify_directory(data)
+    return data
 if __name__=="__main__":
-    Path(sys.argv[1]).write_bytes((json.dumps(collect(),indent=2)+"\n").encode())
+    if sys.argv[1]=="--verify-file":
+        verify_directory(json.loads(Path(sys.argv[2]).read_bytes()))
+    else:
+        Path(sys.argv[1]).write_bytes((json.dumps(collect(),indent=2)+"\n").encode())

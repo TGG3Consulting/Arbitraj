@@ -145,6 +145,24 @@ async fn replay(case:&Value,budget:Decimal,max_evals:u32)->Result<Value,String>{
         dex_quote:if sale{plan.sell_quote.clone()}else{plan.buy_quote.clone()},legs,sale,stable:case["stable_digits"].as_u64().ok_or("missing quote decimals")? as u8,coin:case["coin_digits"].as_u64().ok_or("missing token decimals")? as u8,
         book_depth:if sale{&book.asks}else{&book.bids}.iter().map(|l|l.qty).sum()};
     let observed=if sale{plan.sell_qty}else{plan.qty};let amounts=frozen.amounts(observed)?;
+    if case["hop_input_units"].is_array() {
+        let anchored=case["hop_input_units"].as_array().unwrap();
+        let hops=&frozen.legs[0].hops;
+        if frozen.legs.len()!=1 || anchored.len()!=hops.len(){return Err("independent hop anchors incomplete".into())}
+        let mut state=std::collections::HashMap::new();
+        let mut units=to_units(observed,frozen.coin).ok_or("observed quantity cannot be represented in token units")?;
+        if sale{
+            for (h,v) in hops.iter().zip(anchored){
+                if Some(units)!=uint(v){return Err("input of a DEX hop differs from archived pool commission".into())}
+                units=h.result(units,true,&mut state)?;
+            }
+        }else{
+            for (h,v) in hops.iter().zip(anchored).rev(){
+                units=h.result(units,false,&mut state)?;
+                if Some(units)!=uint(v){return Err("required input of a DEX hop differs from archived pool commission".into())}
+            }
+        }
+    }
     if sale {
         for (leg,amount) in case["paths"].as_array().unwrap().iter().zip(&amounts){
             if decimal(&leg["original_out"])?!=*amount{return Err("native original leg output differs from receipt/plan raw quantity".into())}

@@ -125,13 +125,23 @@ def tables(network, snapshots, profiles):
                         f"Комиссия обычного swap через V5 — {fraction}. Для пары `{sample['pool']}` "
                         "проверены оба направления на двух объёмах, остатки исполнителя и отказы при превышении выхода на одну единицу. "
                         f"[Архив](../{capture}) · [Исходник пары]({markets[id]['origin']['verified_pair']})."])
+        for dex_id, name in [("citadelswap","CitadelSwap"),("kim_v2_base","Kim V2")]:
+            file = f"tests/data/first_run_dex_2026-11-26/{dex_id}.json"
+            capture = read(Path(file))
+            pairs = capture["directory"]["markets"]
+            cases = capture["execution"]["cases"]
+            out.extend(["", f"{name} · фабрика и CREATE2 подтвердили {len(pairs)} пар, стабильных {sum(p['stable'] for p in pairs)}. "
+                        "Профиль camelot_v2 читает две комиссии из getReserves. Для каждого направления архив содержит "
+                        f"состояние перед обменом, чистый выход и отказ при превышении минимума на единицу. Полных исполнений V5 {len(cases)*2}. "
+                        + ("У пары WETH/0x7233… удержания различаются по входу: 250 и 2000 на 100 000. " if dex_id=="citadelswap" else "В единственной паре на этом блоке менее 0,18 USDC. ")
+                        + f"[Фабрика, реестр и измерения](../{file})."])
         delta_file = "tests/data/first_run_dex_2026-11-26/deltaswap_base.json"
         delta = read(Path(delta_file))
         current, historical = delta["current"], delta["historical"]
         out.extend(["", f"DeltaSwap · в реестре {len(current['pools'])} пар. Ставка обычного Router02 зависит от объёма, "
                     "резервов, двух EMA, суммы обменов внутри блока и порога фабрики. На высоте "
                     f"{current['height']} dsFeeInfo = {current['ds_fee_info']}, на {historical['height']} = {historical['ds_fee_info']}. "
-                    "В архивных обменах комиссия составила 0 и 0,3%. Реальные балансы совпали на двух объёмах в обе стороны. "
+                    "В исторической паре обменов за один блок первая комиссия составила 0, обратная — 0,3% вследствие накопления объёма. Реальные балансы совпали на двух объёмах в обе стороны. "
                     "Роутер проверил минимальную дельту получателя и откатил каждый обмен с минимумом на одну единицу выше. "
                     f"[Архив](../{delta_file}) · [Исходник роутера]({current['proof']['router']['url']})."])
     nami = read(Path(f"tests/data/first_run_dex_2026-11-26/nami_{network}.json"))

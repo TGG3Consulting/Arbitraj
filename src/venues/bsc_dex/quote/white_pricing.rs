@@ -21,18 +21,13 @@ pub(super) fn is_white(e: &Entry) -> bool {
     e.family.variant == Variant::WhiteSwap
 }
 
-pub(super) async fn candidates(q: &Quoting, i: &Input) -> Vec<OptionQuote> {
+pub(super) async fn candidates(
+    q: &Quoting,
+    i: &Input,
+    h: Option<white_state::Head>,
+) -> Vec<OptionQuote> {
     let Ok(payer) = signer::address(&q.ctx) else {
         return vec![];
-    };
-    let firm = quote_stage::is_final();
-    let h = if firm {
-        let Ok(h) = white_state::head(&q.ctx, "latest").await else {
-            return vec![];
-        };
-        Some(h)
-    } else {
-        None
     };
     let mut options = vec![];
     for entry in i.entries.iter().filter(|e| is_white(e)) {
@@ -57,7 +52,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input) -> Vec<OptionQuote> {
             e.pool.block = head.number.to();
             white_state::checked_fee(&q.ctx, &e, payer, &tag).await.ok()
         } else {
-            white_state::preliminary(q, e.family, payer)
+            white_state::preliminary(q, &e, payer)
         };
         let allow_executor = !quote_stage::settlement()
             && q.ctx.text("dex.router_mode").ok().as_deref() == Some("graph");

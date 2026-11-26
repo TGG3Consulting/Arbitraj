@@ -141,6 +141,7 @@ pub mod steps;
 pub mod tick_bin_spot;
 pub mod usable_reuse;
 pub(super) mod v2_execution;
+mod v2_fallback;
 pub mod v2_pair_calls;
 pub mod v2_pair_probe;
 pub mod v2_pair_quote;
@@ -323,29 +324,16 @@ impl Quoting {
         // Решение 301 (дополнение — стек): работа — в кучу здесь, состояние этого future держит указатель
         // (quote/cpu.rs run).
         // Решение 312: замер этапов работы — tm.run() = None (выключен): timed сразу ведёт работу без замера.
-        let mut alternatives = Vec::new();
-        if !native {
-            let mut kinds = [false; 4];
-            for entry in &input.entries {
-                kinds[0] |= white_pricing::is_white(entry);
-                kinds[1] |= frax_pricing::is_frax(entry);
-                kinds[2] |= delta_pricing::is_delta(entry);
-                kinds[3] |= router_pricing::is_native(entry);
-            }
-            if kinds[0] {
-                alternatives.extend(Box::pin(white_pricing::candidates(&pick, &input)).await);
-            }
-            if kinds[1] {
-                alternatives.extend(Box::pin(frax_pricing::candidates(&pick, &input)).await);
-            }
-            if kinds[2] {
-                alternatives.extend(Box::pin(delta_pricing::candidates(&pick, &input)).await);
-            }
-            if kinds[3] {
-                alternatives.extend(Box::pin(router_pricing::candidates(&pick, &input)).await);
-            }
+        let (mut alternatives, compare_single) = if native {
+            (Vec::new(), false)
+        } else {
+            Box::pin(v2_fallback::candidates(&pick, &input)).await
+        };
+        if compare_single && !alternatives.is_empty() {
+            v2_fallback::private(&pick, &input, &mut alternatives);
         }
-        let work = quote_timing::timed(tm.run(), routing::run(pick, input));
+        let work =
+            quote_timing::timed(tm.run(), v2_fallback::ordinary(pick, input, compare_single));
         let raw = cpu::run(ctx, Box::pin(work)).await;
         tm.back();
         let mut best = match raw {
@@ -372,7 +360,18 @@ impl Quoting {
             }
             best = Ok(match best {
                 Ok(first) => v2_execution::choose(self, first, other, usdt_dec).await,
-                Err(_) => other,
+                Err(e)
+                    if matches!(
+                        e.code,
+                        ErrorCode::NoRoute
+                            | ErrorCode::CoinNotChecked
+                            | ErrorCode::NotConfigured
+                            | ErrorCode::NotApplicable
+                    ) =>
+                {
+                    other
+                }
+                Err(e) => return Err(e),
             });
         }
         best

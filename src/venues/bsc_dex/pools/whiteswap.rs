@@ -359,7 +359,7 @@ pub async fn check(
         }
     }
     let r = call::decode::<IV2Pair::getReservesCall>(&next()?)?;
-    Ok((r.reserve0.into(), r.reserve1.into()))
+    Ok((U256::from(r.reserve0), U256::from(r.reserve1)))
 }
 
 #[cfg(test)]

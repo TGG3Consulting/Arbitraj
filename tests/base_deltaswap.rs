@@ -55,7 +55,7 @@ fn all_registered_pairs_derive_from_factory_and_two_archival_fee_regimes_settle_
     assert_eq!(p["dex.factory"], base["proof"]["factory"]["address"]);
     assert_eq!(p["dex.router"], base["proof"]["router"]["address"]);
     assert_eq!(
-        p["dex.module_runtime_hashes"][0],
+        p["dex.router_runtime_hash"],
         base["proof"]["router"]["runtime"]
     );
     assert_eq!(p["dex.pool_code_hashes"][0], base["proof"]["pair_init"]);
@@ -72,6 +72,10 @@ fn all_registered_pairs_derive_from_factory_and_two_archival_fee_regimes_settle_
         let address: Address = pool["pool"].as_str().unwrap().parse().unwrap();
         assert_eq!(address, v2_create2(factory, token(0), token(1), init));
     }
+    let crossing = &j["historical"]["wallet"][2];
+    assert_eq!(crossing[0]["invariant_fee"], 0);
+    assert_eq!(crossing[1]["invariant_fee"], 3);
+    assert_eq!(crossing[0]["trade_liquidity"], crossing[1]["trade_ema"][1]);
     for b in [base, &j["historical"]] {
         let mut rates = std::collections::BTreeSet::new();
         for group in b["wallet"].as_array().unwrap() {

@@ -33,6 +33,7 @@ use super::via::Via;
 use super::{Quoting, classic_direct, graph_fit, graph_route, smart_quote};
 
 /// Всё, что нужно выбору маршрута (владеет данными — работа уходит в другой поток).
+#[derive(Clone)]
 pub struct Input {
     pub asset: Asset,
     pub side: Side,
@@ -61,7 +62,7 @@ pub fn run(q: Quoting, i: Input) -> impl std::future::Future<Output = GatewayRes
     allowed(q, i, crate::gateway::quote_stage::settlement())
 }
 /// Ограничение финансового пути переносится с вызывающей задачи в поток CPU вместе с заданием.
-async fn allowed(q: Quoting, i: Input, settlement: bool) -> GatewayResult<Quote> {
+pub(super) async fn allowed(q: Quoting, i: Input, settlement: bool) -> GatewayResult<Quote> {
     let ctx = &q.ctx;
     let v = Via {
         q: &q,

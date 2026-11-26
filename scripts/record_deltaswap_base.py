@@ -7,37 +7,39 @@ from pathlib import Path
 import requests
 from eth_abi import decode
 
-from record_balancer_markets import Capture
+from record_balancer_markets import Capture, posts
 from record_base_slipstream_executor import ROOT, OWNER, call, calldata, rpc, simulate_block
 from record_base_v2_factories import WETH, USDC
-from record_community_v3_ethereum import posts
 from record_ethereum_v2_factories import digest, raw, registry
 
 FACTORY="0x9a9a171c69cc811dc6b59bb2f9990e34a22fc971"
 PAIR="0xe5ca910f564e7a3ee1ca7a4d9e0d83e0e5dbdd02"
 ROUTER="0x1b7655aa64b7bd54077de56b64a0f92bcba05b85"
-ENDPOINT="https://mainnet.base.org"
+ENDPOINTS=("https://mainnet.base.org","https://base.gateway.tenderly.co","https://base-rpc.publicnode.com")
+HISTORICAL_HASH="0xa0d5bc196ab72a8bedcc36cd66c3395adf38feb7a86f340275308a22aa2b6240"
+STATE_ROOTS={62262756:"0x037b0c48cd33236cb94ec9e9fc7438c120b138c2c31d39d0ebe42521ee65676b",19_000_000:"0x31c948b65417c12d9f11df676d39ce57d8c14439c20be917e948069e8b11ad07"}
+
 FOLDER=ROOT/"tests/data/first_run_dex_2026-11-26"
 FIELDS=(("getReserves()",["uint112","uint112","uint32"]),("getLiquidityEMA()",["uint112","uint32"]),
         ("getTradeLiquidityEMAParams()",["uint112","uint112","uint32"]),("gammaPool()",["address"]))
 
 
-def header(block):
+def header(endpoint,block):
     body={"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":[hex(block),False]}
-    response=requests.post(ENDPOINT,json=body,timeout=18)
+    response=requests.post(endpoint,json=body,timeout=18)
     response.raise_for_status()
     value=response.json()["result"]
-    assert int(value["number"],16)==block and int(rpc(ENDPOINT,"eth_chainId",[]),16)==8453
+    assert int(value["number"],16)==block and int(rpc(endpoint,"eth_chainId",[]),16)==8453
     return value
 
 
-def verified(address,selector,creation=False):
+def verified(endpoint,address,selector,creation=False):
     url="https://sourcify.dev/server/v2/contract/8453/"+address
     fields="compilation,deployment,runtimeBytecode.onchainBytecode"+(",creationBytecode.onchainBytecode" if creation else "")
     response=requests.get(url,params={"fields":fields},timeout=24)
     response.raise_for_status()
     j=response.json()
-    code=raw(rpc(ENDPOINT,"eth_getCode",[address,selector]))
+    code=raw(rpc(endpoint,"eth_getCode",[address,selector]))
     assert j["runtimeMatch"]=="exact_match" and code==raw(j["runtimeBytecode"]["onchainBytecode"])
     evidence=dict(address=address,url=url,contract=j["compilation"]["name"],runtime=digest(code),bytes=len(code),
                   deployment=j["deployment"]["transactionHash"])
@@ -45,7 +47,7 @@ def verified(address,selector,creation=False):
     return evidence,code,init
 
 
-def wallet_case(tag,state,fees,qty,deadline):
+def wallet_case(endpoint,tag,state,fees,qty,deadline):
     def invoke(target,sig,types=(),args=()):
         return call(target,calldata(sig,types,args))
     def quote(a,b,dx):
@@ -58,7 +60,7 @@ def wallet_case(tag,state,fees,qty,deadline):
     def balance(a):
         return invoke(a,"balanceOf(address)",["address"],[OWNER])
     def read(calls):
-        return simulate_block(ENDPOINT,tag,{OWNER:{"balance":hex(qty+10**18)}},calls)
+        return simulate_block(endpoint,tag,{OWNER:{"balance":hex(qty+10**18)}},calls)
     def word(item):
         return int(item["returnData"],16)
     def qout(before,a,b,dx):
@@ -102,13 +104,14 @@ def wallet_case(tag,state,fees,qty,deadline):
     return samples
 
 
-def capture(block,complete):
-    head=header(block)
+def capture(endpoint,block,expected_hash,complete):
+    head=header(endpoint,block)
+    assert head["hash"]==expected_hash and head["stateRoot"]==STATE_ROOTS[block],"archive header or state root changed"
     selector={"blockHash":head["hash"],"requireCanonical":True}
-    cap=Capture(dict(endpoint=ENDPOINT,selector=selector))
+    cap=Capture(dict(endpoint=endpoint,selector=selector))
     proof={}
     for role,address in (("factory",FACTORY),("router",ROUTER),("sample_pair",PAIR)):
-        row,code,init=verified(address,selector,role=="sample_pair")
+        row,code,init=verified(endpoint,address,selector,role=="sample_pair")
         proof[role]=row
         if role=="factory":factory_code=code
         if init is not None:
@@ -138,11 +141,21 @@ def capture(block,complete):
         liquidity=cap.one(PAIR,"getLiquidityEMA()",returns=FIELDS[1][1])[0]
         threshold_input=2*(liquidity*fee[1]//1000)*reserve//math.isqrt(reserve*other)
         sizes.append(threshold_input*9//10)
-    state["wallet"]=[wallet_case(selector,state,fee,amount,deadline) for amount in sizes]
+    state["wallet"]=[wallet_case(endpoint,selector,state,fee,amount,deadline) for amount in sizes]
     if fee[1]>0:
         assert {c["invariant_fee"] for group in state["wallet"] for c in group}=={0,fee[0]}
         assert [trade["invariant_fee"] for trade in state["wallet"][-1]]==[0,fee[0]]
     return state
+
+
+def canonical(block,expected_hash,complete):
+    errors=[]
+    for endpoint in ENDPOINTS:
+        try:
+            return capture(endpoint,block,expected_hash,complete)
+        except (requests.RequestException,ValueError,KeyError,AssertionError,RuntimeError) as error:
+            errors.append((endpoint,str(error)[:200]))
+    raise RuntimeError(f"No endpoint supplied the required canonical evidence: {errors}")
 
 
 if __name__=="__main__":
@@ -150,7 +163,7 @@ if __name__=="__main__":
     parser.add_argument("output",type=Path)
     args=parser.parse_args()
     snap=json.loads((FOLDER/"base.json").read_bytes())
-    current=capture(snap["block"],True)
+    current=canonical(snap["block"],snap["selector"]["blockHash"],True)
     assert current["selector"]==snap["selector"]
-    historical=capture(19_000_000,False)
+    historical=canonical(19_000_000,HISTORICAL_HASH,False)
     args.output.write_text(json.dumps(dict(current=current,historical=historical),indent=2)+"\n",encoding="utf-8",newline="\n")

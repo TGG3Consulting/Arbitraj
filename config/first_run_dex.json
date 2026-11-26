@@ -2784,12 +2784,30 @@
       "dex.kind": "v2_deltaswap_router",
       "dex.factory": "0x9a9a171c69cc811dc6b59bb2f9990e34a22fc971",
       "dex.router": "0x1b7655aa64b7bd54077de56b64a0f92bcba05b85",
-      "dex.module_runtime_hashes": [
-        "0x86b6c0e0e0d9409bcb315edc476bd18d014568f4db0aaa87874b02a30480ce70"
-      ],
       "dex.pool_code_hashes": [
         "0xa82767a5e39a2e216962a2ebff796dcc37cd05dfd6f7a149e1f8fbb6bf487658"
-      ]
+      ],
+      "dex.router_runtime_hash": "0x86b6c0e0e0d9409bcb315edc476bd18d014568f4db0aaa87874b02a30480ce70"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "citadelswap",
+    "source": "https://repo.sourcify.dev/contracts/full_match/8453/0xbe720274c24b5ec773559b8c7e28c2503dac7645/ · https://repo.sourcify.dev/contracts/full_match/8453/0x3fe49194d3cf9a7005203468073a32d764fb86b6/",
+    "settings": {
+      "dex.kind": "camelot_v2",
+      "dex.factory": "0xbe720274c24b5ec773559b8c7e28c2503dac7645"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "kim-v2-base",
+    "source": "https://repo.sourcify.dev/contracts/full_match/8453/0x14658340d7d1c112b62509bbf449be1897e8de01/ · https://repo.sourcify.dev/contracts/full_match/8453/0x4ca28220e0caea31bed133b3f22e1317dfeb79ab/",
+    "settings": {
+      "dex.kind": "camelot_v2",
+      "dex.factory": "0x14658340d7d1c112b62509bbf449be1897e8de01"
     }
   }
 ]

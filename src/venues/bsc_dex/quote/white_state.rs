@@ -118,13 +118,14 @@ pub(in crate::venues::bsc_dex) struct Cache(
 
 /// Индикативная математика остаётся локальной. При первом наблюдении кошелька
 /// фоновое чтение по его блоку прогревает скидку для следующих объёмов.
-pub(super) fn preliminary(q: &super::Quoting, f: &'static Family, payer: Address) -> Option<u32> {
+pub(super) fn preliminary(q: &super::Quoting, entry: &Entry, payer: Address) -> Option<u32> {
     let ctx = &q.ctx;
-    let token = ctx.dex_addr("dex.whiteswap_reward_token", f.id).ok()?;
+    let f = entry.family;
+    let pool = entry.pool.reference.address();
     let block = q
         .frozen_head
         .or_else(|| q.heads.latest().map(|h| h.number))?;
-    let key = (f.id, payer, token, ctx.int("dex.evm_chain_id").ok()?);
+    let key = (f.id, payer, pool, ctx.settings.generation());
     let mut cache = ctx
         .evm_chain
         .white()
@@ -141,7 +142,12 @@ pub(super) fn preliminary(q: &super::Quoting, f: &'static Family, payer: Address
     tokio::spawn(async move {
         let pips = async {
             let h = head(&ctx, &format!("{block:#x}")).await?;
-            wallet_fee(&ctx, f, payer, &h.selector()).await
+            let at = h.selector();
+            let ((), pips) = tokio::try_join!(
+                super::super::pools::whiteswap::check_router(&ctx, f, pool, &at),
+                wallet_fee(&ctx, f, payer, &at)
+            )?;
+            Ok::<_, crate::gateway::errors::GatewayError>(pips)
         }
         .await
         .ok();

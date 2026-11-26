@@ -1,5 +1,5 @@
 //! Блоковое состояние DeltaSwap и привязка нативного Router02 к выбранному пулу.
-use super::{direct_module, families::Family, load::Loaded, nami_batch as batch, registry::Entry};
+use super::{families::Family, load::Loaded, nami_batch as batch, registry::Entry};
 use crate::core::types::{PoolState, pool::DeltaFee};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::venues::bsc_dex::ctx::Ctx;
@@ -41,7 +41,8 @@ async fn load_at(
 ) -> GatewayResult<Loaded> {
     let generation = ctx.settings.generation();
     let factory = ctx.dex_addr("dex.factory", f.id)?;
-    let router = ctx.dex_addr("dex.router", f.id)?;
+    let (router, expected_hash) =
+        crate::venues::bsc_dex::quote::router_pricing::profile(ctx, f.id)?;
     let wrapped = ctx.addr("dex.native_wrapped")?;
     let invalid = || {
         ctx.err(
@@ -93,7 +94,8 @@ async fn load_at(
         ],
     )
     .await?;
-    if direct_module::matching_hash(&direct_module::configured(ctx, f.id)?, &code).is_none()
+    if code.is_empty()
+        || alloy_primitives::keccak256(&code) != expected_hash
         || batch::decode(&of_router, IDelta::factoryCall {})? != factory
         || batch::decode(&of_pool, IDelta::factoryCall {})? != factory
         || batch::decode(&wrapped_router, IDelta::WETHCall {})? != wrapped

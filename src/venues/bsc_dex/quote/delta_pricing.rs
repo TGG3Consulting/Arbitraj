@@ -15,17 +15,13 @@ pub(super) fn is_delta(e: &Entry) -> bool {
     e.family.variant == Variant::DeltaSwap
 }
 
-pub(super) async fn candidates(q: &Quoting, i: &Input) -> Vec<OptionQuote> {
+pub(super) async fn candidates(
+    q: &Quoting,
+    i: &Input,
+    head: Option<white_state::Head>,
+) -> Vec<OptionQuote> {
     let Ok(payer) = signer::address(&q.ctx) else {
         return Vec::new();
-    };
-    let head = if q.exec_quote {
-        let Ok(head) = white_state::head(&q.ctx, "latest").await else {
-            return Vec::new();
-        };
-        Some(head)
-    } else {
-        None
     };
     let mut options = Vec::new();
     for mut e in i.entries.iter().filter(|e| is_delta(e)).cloned() {

@@ -1,4 +1,4 @@
-//! Однопуловый обмен EOA через WhiteSwap с проверкой поступления на кошелёк.
+//! Однопуловый обмен EOA через Router02 с проверкой поступления на кошелёк.
 //! Штатные стадии разрешений, повторной симуляции, подписи и сверки сохраняются.
 use super::super::{ctx::Ctx, quote::white_state, wallet::approve};
 use super::{
@@ -21,12 +21,15 @@ pub(super) async fn plan(
     all: bool,
 ) -> GatewayResult<Plan> {
     let [s] = steps else {
-        return Err(ctx.err(ErrorCode::NoRoute, "WhiteSwap EOA требует один пул"));
+        return Err(ctx.err(
+            ErrorCode::NoRoute,
+            "Сделка Router02 с кошелька требует один пул",
+        ));
     };
     if !s.to_wallet || !s.from_wallet {
         return Err(ctx.err(
             ErrorCode::NoRoute,
-            "WhiteSwap: требуется ERC-20 кошелька для обеих сторон",
+            "Router02: требуется ERC-20 кошелька для обеих сторон",
         ));
     }
     let generation = ctx.settings.generation();

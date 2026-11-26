@@ -10,7 +10,7 @@ use super::{
     Quoting, quoter_calls,
     routing::Input,
     v2_execution::{self, Execution, OptionQuote},
-    white_state::{self, Head},
+    white_state::Head,
 };
 use crate::{
     core::types::RouteMode,
@@ -23,14 +23,14 @@ pub(in crate::venues::bsc_dex) fn is_native(e: &Entry) -> bool {
     e.family.variant == Variant::V2RouterCreate2
 }
 
-fn profile(ctx: &Ctx, e: &Entry) -> GatewayResult<(Address, B256)> {
-    let router = ctx.dex_addr("dex.router", e.family.id)?;
+pub(in crate::venues::bsc_dex) fn profile(ctx: &Ctx, id: &str) -> GatewayResult<(Address, B256)> {
+    let router = ctx.dex_addr("dex.router", id)?;
     let hash = ctx
-        .dex_text("dex.router_runtime_hash", e.family.id)?
+        .dex_text("dex.router_runtime_hash", id)?
         .parse::<B256>()
         .ok()
         .filter(|h| !h.is_zero() && *h != keccak256([]));
-    if router.is_zero() || !is_native(e) {
+    if router.is_zero() {
         return Err(ctx.err(ErrorCode::InvalidAddress, "Неверный прямой Router02"));
     }
     Ok((
@@ -47,8 +47,8 @@ pub(in crate::venues::bsc_dex) async fn checked(
     amount: U256,
     h: Head,
 ) -> GatewayResult<()> {
-    let (router, hash) = profile(ctx, e)?;
-    if input != e.pool.token0 && input != e.pool.token1 {
+    let (router, hash) = profile(ctx, e.family.id)?;
+    if !is_native(e) || (input != e.pool.token0 && input != e.pool.token1) {
         return Err(ctx.err(
             ErrorCode::InvalidAddress,
             "Токен входа отсутствует в паре Router02",
@@ -73,21 +73,13 @@ pub(in crate::venues::bsc_dex) async fn checked(
 }
 
 /// Индикативный расчёт использует состояние пула; финальная котировка измеряет оба баланса и газ.
-pub(super) async fn candidates(q: &Quoting, i: &Input) -> Vec<OptionQuote> {
+pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Vec<OptionQuote> {
     let Ok(payer) = signer::address(&q.ctx) else {
         return Vec::new();
     };
-    let head = if q.exec_quote {
-        let Ok(h) = white_state::head(&q.ctx, "latest").await else {
-            return Vec::new();
-        };
-        Some(h)
-    } else {
-        None
-    };
     let mut options = Vec::new();
     for e in i.entries.iter().filter(|e| is_native(e)) {
-        let Ok((target, _)) = profile(&q.ctx, e) else {
+        let Ok((target, _)) = profile(&q.ctx, e.family.id) else {
             continue;
         };
         let execution = Execution {

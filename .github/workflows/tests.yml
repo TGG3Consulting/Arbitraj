@@ -288,6 +288,11 @@ jobs:
         with:
           name: fraxswap-adapter
           path: ${{ runner.temp }}/fraxswap/FraxswapAdapter.json
+      - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/oasisswap" OasisSwapAdapter
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oasisswap-adapter
+          path: ${{ runner.temp }}/oasisswap/OasisSwapAdapter.json
       - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/elfomo-executor" ElfomoExecutor
       - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/base-pmm-executor" BasePmmExecutor
       - uses: actions/upload-artifact@v4

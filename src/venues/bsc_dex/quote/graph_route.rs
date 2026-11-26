@@ -152,6 +152,11 @@ pub async fn quote_fit(
     for legs in admitted {
         match legs {
             Ok(legs) => {
+                if let [leg] = legs.as_slice()
+                    && super::v2_fallback::excluded(&leg.entry)
+                {
+                    continue;
+                }
                 if legs.len() > 1 && super::nami_routes::contains(&legs) {
                     why.push("Составной путь включает внешний callback Nami".into());
                     continue;

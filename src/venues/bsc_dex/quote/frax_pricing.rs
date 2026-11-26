@@ -11,7 +11,7 @@ use super::{
     routing::Input,
     v2_execution::{self, Execution, OptionQuote},
     v2_wallet_sim::V5Step,
-    white_state::{self, Head},
+    white_state::Head,
 };
 use crate::{
     core::types::RouteMode,
@@ -40,18 +40,10 @@ pub(crate) async fn refresh(ctx: &Ctx, e: &mut Entry, h: Head) -> GatewayResult<
     Ok(())
 }
 
-pub(super) async fn candidates(q: &Quoting, i: &Input) -> Vec<OptionQuote> {
+pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Vec<OptionQuote> {
     let ctx = &q.ctx;
     let Ok(payer) = signer::address(ctx) else {
         return Vec::new();
-    };
-    let head = if q.exec_quote {
-        let Ok(head) = white_state::head(ctx, "latest").await else {
-            return Vec::new();
-        };
-        Some(head)
-    } else {
-        None
     };
     let graph_allowed =
         !quote_stage::settlement() && ctx.text("dex.router_mode").ok().as_deref() == Some("graph");

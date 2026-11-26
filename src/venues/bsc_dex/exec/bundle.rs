@@ -180,6 +180,18 @@ pub async fn build(
     let deadline = U256::from(now + ctx.int("dex.deadline_s")?);
     // Данные ног форка — проверки по ногам в прежнем порядке (обёртка, роутер, путь, вход, минимум).
     let mut forks = Vec::with_capacity(fork_legs.len());
+    let special = fork_legs.iter().flat_map(|l| l.iter()).any(|s| {
+        super::super::quote::router_pricing::is_native(&s.entry)
+            || s.entry.family.variant == super::super::pools::family_variant::Variant::WhiteSwap
+    });
+    let gate = if special {
+        Some((
+            ctx.settings.generation(),
+            super::super::quote::white_state::head(ctx, "latest").await?,
+        ))
+    } else {
+        None
+    };
     for &leg in &fork_legs {
         // R3 (решение 122): у роутера форка обёртки WBNB нет — нога форка с BNB не собирается (защитно).
         if bundle_native::group_wrap(ctx, &[leg])? != super::native::Wrap::None {
@@ -189,6 +201,36 @@ pub async fn build(
             ));
         }
         let (router, _) = fork_router(ctx, leg)?;
+        if let Some((generation, h)) = gate {
+            for s in leg {
+                if super::super::quote::router_pricing::is_native(&s.entry) {
+                    Box::pin(super::super::quote::router_pricing::checked(
+                        ctx,
+                        &s.entry,
+                        s.order.token_in,
+                        s.order.amount_in,
+                        h,
+                    ))
+                    .await?;
+                } else if s.entry.family.variant
+                    == super::super::pools::family_variant::Variant::WhiteSwap
+                {
+                    Box::pin(super::super::pools::whiteswap::check_router(
+                        ctx,
+                        s.entry.family,
+                        s.entry.pool.reference.address(),
+                        &h.selector(),
+                    ))
+                    .await?;
+                }
+            }
+            if generation != ctx.settings.generation() {
+                return Err(ctx.err(
+                    ErrorCode::StaleData,
+                    "При подготовке бандла изменились настройки роутера",
+                ));
+            }
+        }
         let path = fork_swap::token_path(ctx, leg)?;
         let amount = fork_swap::amount_in(ctx, leg)?;
         let min = fork_swap::min_out(ctx, leg)?;

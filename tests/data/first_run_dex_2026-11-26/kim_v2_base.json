@@ -1,0 +1,286 @@
+{
+  "directory": {
+    "chain": 8453,
+    "selector": {
+      "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "requireCanonical": true
+    },
+    "height": 62262756,
+    "timestamp": 1795642926,
+    "state_root": "0x037b0c48cd33236cb94ec9e9fc7438c120b138c2c31d39d0ebe42521ee65676b",
+    "factory": "0x14658340d7d1c112b62509bbf449be1897e8de01",
+    "pair_init_hash": "0x7b58b1fadf495e5bef34e311418b22e4f729c080a333619b4318c23bc7fb4c0a",
+    "contracts": {
+      "0x14658340d7d1c112b62509bbf449be1897e8de01": {
+        "bytes": 21429,
+        "keccak256": "0xec392af697ac7575800b7dfcdea2697ca3b256806f30595589dabaf974e7cf76"
+      },
+      "0x4ca28220e0caea31bed133b3f22e1317dfeb79ab": {
+        "bytes": 16341,
+        "keccak256": "0xfd82421ebb6b74955e4bc3e8f5a1ee2686b3ac18070e7aafa041f40a48ebbbab"
+      }
+    },
+    "settings": {},
+    "markets": [
+      {
+        "pool": "0x4ca28220e0caea31bed133b3f22e1317dfeb79ab",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+        ],
+        "stable": false,
+        "reserves": [
+          "103165369550679",
+          "173368"
+        ],
+        "fee_percent": [
+          300,
+          300
+        ]
+      }
+    ],
+    "endpoint": "https://mainnet.base.org"
+  },
+  "execution": {
+    "protocol": "kim-v2-base",
+    "chain": 8453,
+    "selector": {
+      "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "requireCanonical": true
+    },
+    "endpoint": "https://mainnet.base.org",
+    "executor_runtime": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+    "cases": [
+      {
+        "market": {
+          "pool": "0x4ca28220e0caea31bed133b3f22e1317dfeb79ab",
+          "tokens": [
+            "0x4200000000000000000000000000000000000006",
+            "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+          ],
+          "stable": false,
+          "reserves": [
+            "103165369550679",
+            "173368"
+          ],
+          "fee_percent": [
+            300,
+            300
+          ]
+        },
+        "requested": "10316536955",
+        "result": {
+          "buy": {
+            "input": "0x4200000000000000000000000000000000000006",
+            "output": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "amount": "10316536955",
+            "exact": {
+              "reserves": [
+                "103165369550679",
+                "173368",
+                "300",
+                "300"
+              ],
+              "units": [
+                "1000000000000000000",
+                "1000000"
+              ],
+              "status": "0x1",
+              "gas": "0x20e40",
+              "error": null,
+              "spent": "10316536955",
+              "received": "17",
+              "caller_quote": "17",
+              "recipient_quote": "17"
+            },
+            "plus_one": {
+              "reserves": [
+                "103165369550679",
+                "173368",
+                "300",
+                "300"
+              ],
+              "units": [
+                "1000000000000000000",
+                "1000000"
+              ],
+              "status": "0x0",
+              "gas": "0x23d8b",
+              "error": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0x"
+              },
+              "spent": "0",
+              "received": "0",
+              "caller_quote": "17",
+              "recipient_quote": "17"
+            }
+          },
+          "sell": {
+            "input": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "output": "0x4200000000000000000000000000000000000006",
+            "amount": "17",
+            "exact": {
+              "reserves": [
+                "103175686087634",
+                "173351",
+                "300",
+                "300"
+              ],
+              "units": [
+                "1000000000000000000",
+                "1000000"
+              ],
+              "status": "0x1",
+              "gas": "0x20f0c",
+              "error": null,
+              "spent": "17",
+              "received": "10086781977",
+              "caller_quote": "10086781977",
+              "recipient_quote": "10086781977"
+            },
+            "plus_one": {
+              "reserves": [
+                "103175686087634",
+                "173351",
+                "300",
+                "300"
+              ],
+              "units": [
+                "1000000000000000000",
+                "1000000"
+              ],
+              "status": "0x0",
+              "gas": "0x23e57",
+              "error": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0x"
+              },
+              "spent": "0",
+              "received": "0",
+              "caller_quote": "10086781977",
+              "recipient_quote": "10086781977"
+            }
+          }
+        }
+      },
+      {
+        "market": {
+          "pool": "0x4ca28220e0caea31bed133b3f22e1317dfeb79ab",
+          "tokens": [
+            "0x4200000000000000000000000000000000000006",
+            "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+          ],
+          "stable": false,
+          "reserves": [
+            "103165369550679",
+            "173368"
+          ],
+          "fee_percent": [
+            300,
+            300
+          ]
+        },
+        "requested": "206330739101",
+        "result": {
+          "buy": {
+            "input": "0x4200000000000000000000000000000000000006",
+            "output": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "amount": "206330739101",
+            "exact": {
+              "reserves": [
+                "103165369550679",
+                "173368",
+                "300",
+                "300"
+              ],
+              "units": [
+                "1000000000000000000",
+                "1000000"
+              ],
+              "status": "0x1",
+              "gas": "0x20e4c",
+              "error": null,
+              "spent": "206330739101",
+              "received": "345",
+              "caller_quote": "345",
+              "recipient_quote": "345"
+            },
+            "plus_one": {
+              "reserves": [
+                "103165369550679",
+                "173368",
+                "300",
+                "300"
+              ],
+              "units": [
+                "1000000000000000000",
+                "1000000"
+              ],
+              "status": "0x0",
+              "gas": "0x23d97",
+              "error": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0x"
+              },
+              "spent": "0",
+              "received": "0",
+              "caller_quote": "345",
+              "recipient_quote": "345"
+            }
+          },
+          "sell": {
+            "input": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "output": "0x4200000000000000000000000000000000000006",
+            "amount": "345",
+            "exact": {
+              "reserves": [
+                "103371700289780",
+                "173023",
+                "300",
+                "300"
+              ],
+              "units": [
+                "1000000000000000000",
+                "1000000"
+              ],
+              "status": "0x1",
+              "gas": "0x20f18",
+              "error": null,
+              "spent": "345",
+              "received": "205092399755",
+              "caller_quote": "205092399755",
+              "recipient_quote": "205092399755"
+            },
+            "plus_one": {
+              "reserves": [
+                "103371700289780",
+                "173023",
+                "300",
+                "300"
+              ],
+              "units": [
+                "1000000000000000000",
+                "1000000"
+              ],
+              "status": "0x0",
+              "gas": "0x23e63",
+              "error": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0x"
+              },
+              "spent": "0",
+              "received": "0",
+              "caller_quote": "205092399755",
+              "recipient_quote": "205092399755"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

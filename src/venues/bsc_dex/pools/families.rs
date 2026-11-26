@@ -770,7 +770,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             list.extend([
                 "dex.factory",
                 "dex.router",
-                "dex.module_runtime_hashes",
+                "dex.router_runtime_hash",
                 super::verify_algebra_dir::SETTING,
             ]);
         }

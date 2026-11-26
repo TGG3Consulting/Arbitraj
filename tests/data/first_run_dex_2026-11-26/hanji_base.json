@@ -1,0 +1,944 @@
+{
+  "chain": 8453,
+  "block": 62262756,
+  "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+  "source": "https://api-base.hanji.io/aggregators/markets",
+  "helper": "0xc032b6dfec3511a00cde9ea341d140f4733609de",
+  "helper_runtime_keccak": "0xf222ffe423a2d77dbdae2f02a260abaa81daa313e6e3a23d4d535236d4882bdc",
+  "max_levels_per_side": 16,
+  "markets": [
+    {
+      "registry": {
+        "orderbookAddress": "0x15c8cb4e336b1e478d155d813830129fb225eee3",
+        "baseToken": {
+          "contractAddress": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+          "decimals": 8,
+          "symbol": "cbBTC",
+          "isNative": false
+        },
+        "quoteToken": {
+          "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "decimals": 6,
+          "symbol": "USDC",
+          "isNative": false
+        },
+        "aggressiveFee": 0.0001
+      },
+      "runtime_keccak": "0x42f10189bc9088d8ba41b4e23756795d2e6e076255adbdf5fae19e00fad5ea34",
+      "scale": [
+        100,
+        1
+      ],
+      "fee_rates": [
+        500000000000000000,
+        100000000000000,
+        0,
+        0
+      ],
+      "bids": [
+        [
+          60224,
+          33209
+        ],
+        [
+          60222,
+          83026
+        ],
+        [
+          60220,
+          498173
+        ],
+        [
+          60217,
+          996396
+        ],
+        [
+          54799,
+          153723
+        ]
+      ],
+      "asks": [
+        [
+          60218,
+          33212
+        ],
+        [
+          60221,
+          83027
+        ],
+        [
+          60223,
+          360646
+        ],
+        [
+          60226,
+          540969
+        ],
+        [
+          65645,
+          60107
+        ]
+      ],
+      "fills": [
+        {
+          "budget_y": 1000000,
+          "buy_return": [
+            16,
+            963488,
+            97
+          ],
+          "debited_y": 963585,
+          "received_x": 1600,
+          "buy_native_delta": 0,
+          "expired_revert": true,
+          "bid_before": [
+            60224,
+            33209
+          ],
+          "bid_after": [
+            60224,
+            33209
+          ],
+          "sell_at_initial_bid": [
+            0,
+            16,
+            963584,
+            97
+          ],
+          "sell_return": [
+            0,
+            16,
+            963584,
+            97
+          ],
+          "debited_x": 1600,
+          "received_y": 963487,
+          "remaining_x": 0,
+          "sell_native_delta": 0
+        },
+        {
+          "budget_y": 3000000,
+          "buy_return": [
+            49,
+            2950682,
+            296
+          ],
+          "debited_y": 2950978,
+          "received_x": 4900,
+          "buy_native_delta": 0,
+          "expired_revert": true,
+          "bid_before": [
+            60224,
+            33209
+          ],
+          "bid_after": [
+            60224,
+            33209
+          ],
+          "sell_at_initial_bid": [
+            0,
+            49,
+            2950976,
+            296
+          ],
+          "sell_return": [
+            0,
+            49,
+            2950976,
+            296
+          ],
+          "debited_x": 4900,
+          "received_y": 2950680,
+          "remaining_x": 0,
+          "sell_native_delta": 0
+        }
+      ]
+    },
+    {
+      "registry": {
+        "orderbookAddress": "0x1ae89451919cf82a5e83580f57f3856f5508f1c8",
+        "baseToken": {
+          "contractAddress": "0xb2000000000000000000007b9fcbd005511acbd5",
+          "decimals": 8,
+          "symbol": "SPCXc",
+          "isNative": false
+        },
+        "quoteToken": {
+          "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "decimals": 6,
+          "symbol": "USDC",
+          "isNative": false
+        },
+        "aggressiveFee": 0.0001
+      },
+      "runtime_keccak": "0xa4322c06b14d12b71c87235c6f7c15c98cdfd69a8730da0179bb6924bcf614e8",
+      "scale": [
+        10000,
+        1
+      ],
+      "fee_rates": [
+        500000000000000000,
+        100000000000000,
+        0,
+        0
+      ],
+      "bids": [
+        [
+          12783,
+          2815
+        ]
+      ],
+      "asks": [
+        [
+          12799,
+          71220
+        ]
+      ],
+      "fills": [
+        {
+          "budget_y": 1000000,
+          "buy_return": [
+            78,
+            998322,
+            100
+          ],
+          "debited_y": 998422,
+          "received_x": 780000,
+          "buy_native_delta": 0,
+          "expired_revert": true,
+          "bid_before": [
+            12783,
+            2815
+          ],
+          "bid_after": [
+            12782,
+            2893
+          ],
+          "sell_at_initial_bid": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "sell_return": [
+            0,
+            78,
+            996996,
+            100
+          ],
+          "debited_x": 780000,
+          "received_y": 996896,
+          "remaining_x": 0,
+          "sell_native_delta": 0
+        },
+        {
+          "budget_y": 3000000,
+          "buy_return": [
+            234,
+            2994966,
+            300
+          ],
+          "debited_y": 2995266,
+          "received_x": 2340000,
+          "buy_native_delta": 0,
+          "expired_revert": true,
+          "bid_before": [
+            12783,
+            2815
+          ],
+          "bid_after": [
+            12782,
+            3049
+          ],
+          "sell_at_initial_bid": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "sell_return": [
+            0,
+            234,
+            2990988,
+            300
+          ],
+          "debited_x": 2340000,
+          "received_y": 2990688,
+          "remaining_x": 0,
+          "sell_native_delta": 0
+        }
+      ]
+    },
+    {
+      "registry": {
+        "orderbookAddress": "0x30bfa3b501c8f83114c1a789febb6281a0bcd751",
+        "baseToken": {
+          "contractAddress": "0xb20000000000000000000078ee7ce2fe4908108c",
+          "decimals": 8,
+          "symbol": "NVDAc",
+          "isNative": false
+        },
+        "quoteToken": {
+          "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "decimals": 6,
+          "symbol": "USDC",
+          "isNative": false
+        },
+        "aggressiveFee": 0.0001
+      },
+      "runtime_keccak": "0xa4322c06b14d12b71c87235c6f7c15c98cdfd69a8730da0179bb6924bcf614e8",
+      "scale": [
+        10000,
+        1
+      ],
+      "fee_rates": [
+        500000000000000000,
+        100000000000000,
+        0,
+        0
+      ],
+      "bids": [
+        [
+          14941,
+          19348
+        ]
+      ],
+      "asks": [
+        [
+          14960,
+          47963
+        ]
+      ],
+      "fills": [
+        {
+          "budget_y": 1000000,
+          "buy_return": [
+            66,
+            987360,
+            99
+          ],
+          "debited_y": 987459,
+          "received_x": 660000,
+          "buy_native_delta": 0,
+          "expired_revert": true,
+          "bid_before": [
+            14941,
+            19348
+          ],
+          "bid_after": [
+            14940,
+            19416
+          ],
+          "sell_at_initial_bid": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "sell_return": [
+            0,
+            66,
+            986040,
+            99
+          ],
+          "debited_x": 660000,
+          "received_y": 985941,
+          "remaining_x": 0,
+          "sell_native_delta": 0
+        },
+        {
+          "budget_y": 3000000,
+          "buy_return": [
+            200,
+            2992000,
+            300
+          ],
+          "debited_y": 2992300,
+          "received_x": 2000000,
+          "buy_native_delta": 0,
+          "expired_revert": true,
+          "bid_before": [
+            14941,
+            19348
+          ],
+          "bid_after": [
+            14940,
+            19550
+          ],
+          "sell_at_initial_bid": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "sell_return": [
+            0,
+            200,
+            2988000,
+            299
+          ],
+          "debited_x": 2000000,
+          "received_y": 2987701,
+          "remaining_x": 0,
+          "sell_native_delta": 0
+        }
+      ]
+    },
+    {
+      "registry": {
+        "orderbookAddress": "0x44330b61f492dbebc137bd2e4f6c3f19855320e9",
+        "baseToken": {
+          "contractAddress": "0xb200000000000000000000397293cb8cda9a10c5",
+          "decimals": 8,
+          "symbol": "SNDKc",
+          "isNative": false
+        },
+        "quoteToken": {
+          "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "decimals": 6,
+          "symbol": "USDC",
+          "isNative": false
+        },
+        "aggressiveFee": 0.0001
+      },
+      "runtime_keccak": "0xa4322c06b14d12b71c87235c6f7c15c98cdfd69a8730da0179bb6924bcf614e8",
+      "scale": [
+        10000,
+        1
+      ],
+      "fee_rates": [
+        500000000000000000,
+        100000000000000,
+        0,
+        0
+      ],
+      "bids": [],
+      "asks": [],
+      "fills": []
+    },
+    {
+      "registry": {
+        "orderbookAddress": "0x6a6951db3bb99f76a8ccb9f8a8399b613666298b",
+        "baseToken": {
+          "contractAddress": "0x4200000000000000000000000000000000000006",
+          "decimals": 18,
+          "symbol": "ETH",
+          "isNative": true
+        },
+        "quoteToken": {
+          "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "decimals": 6,
+          "symbol": "USDC",
+          "isNative": false
+        },
+        "aggressiveFee": 0.0001
+      },
+      "runtime_keccak": "0x42f10189bc9088d8ba41b4e23756795d2e6e076255adbdf5fae19e00fad5ea34",
+      "scale": [
+        100000000000000,
+        1
+      ],
+      "fee_rates": [
+        500000000000000000,
+        100000000000000,
+        0,
+        0
+      ],
+      "bids": [
+        [
+          168774,
+          11850
+        ],
+        [
+          168770,
+          29626
+        ],
+        [
+          168765,
+          177761
+        ],
+        [
+          168759,
+          355536
+        ],
+        [
+          153571,
+          54853
+        ]
+      ],
+      "asks": [
+        [
+          168754,
+          11851
+        ],
+        [
+          168758,
+          29628
+        ],
+        [
+          168763,
+          161292
+        ],
+        [
+          168769,
+          241939
+        ],
+        [
+          183958,
+          26882
+        ]
+      ],
+      "fills": [
+        {
+          "budget_y": 1000000,
+          "buy_return": [
+            5,
+            843770,
+            85
+          ],
+          "debited_y": 843855,
+          "received_x": 500000000000000,
+          "buy_native_delta": 500000000000000,
+          "expired_revert": true,
+          "bid_before": [
+            168774,
+            11850
+          ],
+          "bid_after": [
+            168774,
+            11850
+          ],
+          "sell_at_initial_bid": [
+            0,
+            5,
+            843870,
+            85
+          ],
+          "sell_return": [
+            0,
+            5,
+            843870,
+            85
+          ],
+          "debited_x": 500000000000000,
+          "received_y": 843785,
+          "remaining_x": 0,
+          "sell_native_delta": -500000000000000
+        },
+        {
+          "budget_y": 3000000,
+          "buy_return": [
+            17,
+            2868818,
+            287
+          ],
+          "debited_y": 2869105,
+          "received_x": 1700000000000000,
+          "buy_native_delta": 1700000000000000,
+          "expired_revert": true,
+          "bid_before": [
+            168774,
+            11850
+          ],
+          "bid_after": [
+            168774,
+            11850
+          ],
+          "sell_at_initial_bid": [
+            0,
+            17,
+            2869158,
+            287
+          ],
+          "sell_return": [
+            0,
+            17,
+            2869158,
+            287
+          ],
+          "debited_x": 1700000000000000,
+          "received_y": 2868871,
+          "remaining_x": 0,
+          "sell_native_delta": -1700000000000000
+        }
+      ]
+    },
+    {
+      "registry": {
+        "orderbookAddress": "0xb2cfad3880801012ca1beba290f095ebc0087c4b",
+        "baseToken": {
+          "contractAddress": "0xb2000000000000000000008bc8786b856e61707c",
+          "decimals": 8,
+          "symbol": "METAc",
+          "isNative": false
+        },
+        "quoteToken": {
+          "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "decimals": 6,
+          "symbol": "USDC",
+          "isNative": false
+        },
+        "aggressiveFee": 0.0001
+      },
+      "runtime_keccak": "0xa4322c06b14d12b71c87235c6f7c15c98cdfd69a8730da0179bb6924bcf614e8",
+      "scale": [
+        10000,
+        1
+      ],
+      "fee_rates": [
+        500000000000000000,
+        100000000000000,
+        0,
+        0
+      ],
+      "bids": [
+        [
+          60812,
+          6159
+        ]
+      ],
+      "asks": [
+        [
+          60877,
+          9428
+        ]
+      ],
+      "fills": [
+        {
+          "budget_y": 1000000,
+          "buy_return": [
+            16,
+            974032,
+            98
+          ],
+          "debited_y": 974130,
+          "received_x": 160000,
+          "buy_native_delta": 0,
+          "expired_revert": true,
+          "bid_before": [
+            60812,
+            6159
+          ],
+          "bid_after": [
+            60811,
+            6175
+          ],
+          "sell_at_initial_bid": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "sell_return": [
+            0,
+            16,
+            972976,
+            98
+          ],
+          "debited_x": 160000,
+          "received_y": 972878,
+          "remaining_x": 0,
+          "sell_native_delta": 0
+        },
+        {
+          "budget_y": 3000000,
+          "buy_return": [
+            49,
+            2982973,
+            299
+          ],
+          "debited_y": 2983272,
+          "received_x": 490000,
+          "buy_native_delta": 0,
+          "expired_revert": true,
+          "bid_before": [
+            60812,
+            6159
+          ],
+          "bid_after": [
+            60811,
+            6208
+          ],
+          "sell_at_initial_bid": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "sell_return": [
+            0,
+            49,
+            2979739,
+            298
+          ],
+          "debited_x": 490000,
+          "received_y": 2979441,
+          "remaining_x": 0,
+          "sell_native_delta": 0
+        }
+      ]
+    },
+    {
+      "registry": {
+        "orderbookAddress": "0xde1eb3cd7f55c71ccc312fdf257fb73a73c72d7f",
+        "baseToken": {
+          "contractAddress": "0xb2000000000000000000002d0ba3164cc74f58b7",
+          "decimals": 8,
+          "symbol": "GOOGLc",
+          "isNative": false
+        },
+        "quoteToken": {
+          "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "decimals": 6,
+          "symbol": "USDC",
+          "isNative": false
+        },
+        "aggressiveFee": 0.0001
+      },
+      "runtime_keccak": "0xa4322c06b14d12b71c87235c6f7c15c98cdfd69a8730da0179bb6924bcf614e8",
+      "scale": [
+        10000,
+        1
+      ],
+      "fee_rates": [
+        500000000000000000,
+        100000000000000,
+        0,
+        0
+      ],
+      "bids": [
+        [
+          27324,
+          26077
+        ]
+      ],
+      "asks": [
+        [
+          27355,
+          8877
+        ]
+      ],
+      "fills": [
+        {
+          "budget_y": 1000000,
+          "buy_return": [
+            36,
+            984780,
+            99
+          ],
+          "debited_y": 984879,
+          "received_x": 360000,
+          "buy_native_delta": 0,
+          "expired_revert": true,
+          "bid_before": [
+            27324,
+            26077
+          ],
+          "bid_after": [
+            27323,
+            26114
+          ],
+          "sell_at_initial_bid": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "sell_return": [
+            0,
+            36,
+            983628,
+            99
+          ],
+          "debited_x": 360000,
+          "received_y": 983529,
+          "remaining_x": 0,
+          "sell_native_delta": 0
+        },
+        {
+          "budget_y": 3000000,
+          "buy_return": [
+            109,
+            2981695,
+            299
+          ],
+          "debited_y": 2981994,
+          "received_x": 1090000,
+          "buy_native_delta": 0,
+          "expired_revert": true,
+          "bid_before": [
+            27324,
+            26077
+          ],
+          "bid_after": [
+            27323,
+            26187
+          ],
+          "sell_at_initial_bid": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "sell_return": [
+            0,
+            109,
+            2978207,
+            298
+          ],
+          "debited_x": 1090000,
+          "received_y": 2977909,
+          "remaining_x": 0,
+          "sell_native_delta": 0
+        }
+      ]
+    },
+    {
+      "registry": {
+        "orderbookAddress": "0xf455b3c0756908c6a2f44a7f7390053cfe354eea",
+        "baseToken": {
+          "contractAddress": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+          "decimals": 8,
+          "symbol": "cbBTC",
+          "isNative": false
+        },
+        "quoteToken": {
+          "contractAddress": "0x4200000000000000000000000000000000000006",
+          "decimals": 18,
+          "symbol": "ETH",
+          "isNative": true
+        },
+        "aggressiveFee": 0.0001
+      },
+      "runtime_keccak": "0x42f10189bc9088d8ba41b4e23756795d2e6e076255adbdf5fae19e00fad5ea34",
+      "scale": [
+        1,
+        1000000
+      ],
+      "fee_rates": [
+        500000000000000000,
+        100000000000000,
+        0,
+        0
+      ],
+      "bids": [
+        [
+          356849,
+          3320926
+        ],
+        [
+          356840,
+          8302525
+        ],
+        [
+          356822,
+          45202640
+        ],
+        [
+          356799,
+          67808331
+        ],
+        [
+          324755,
+          8277674
+        ]
+      ],
+      "asks": [
+        [
+          356822,
+          3321177
+        ],
+        [
+          356831,
+          8302735
+        ],
+        [
+          356849,
+          36064651
+        ],
+        [
+          356872,
+          54096977
+        ],
+        [
+          388909,
+          6010775
+        ]
+      ],
+      "fills": [
+        {
+          "budget_y": 1000000000000000,
+          "buy_return": [
+            2802,
+            999815244,
+            99982
+          ],
+          "debited_y": 999915226000000,
+          "received_x": 2802,
+          "buy_native_delta": 0,
+          "expired_revert": true,
+          "bid_before": [
+            356849,
+            3320926
+          ],
+          "bid_after": [
+            356849,
+            3320926
+          ],
+          "sell_at_initial_bid": [
+            0,
+            2802,
+            999890898,
+            99990
+          ],
+          "sell_return": [
+            0,
+            2802,
+            999890898,
+            99990
+          ],
+          "debited_x": 2802,
+          "received_y": 999790908000000,
+          "remaining_x": 0,
+          "sell_native_delta": 999790908000000
+        },
+        {
+          "budget_y": 2000000000000000,
+          "buy_return": [
+            5604,
+            1999630488,
+            199964
+          ],
+          "debited_y": 1999830452000000,
+          "received_x": 5604,
+          "buy_native_delta": 0,
+          "expired_revert": true,
+          "bid_before": [
+            356849,
+            3320926
+          ],
+          "bid_after": [
+            356849,
+            3320926
+          ],
+          "sell_at_initial_bid": [
+            0,
+            5604,
+            1999781796,
+            199979
+          ],
+          "sell_return": [
+            0,
+            5604,
+            1999781796,
+            199979
+          ],
+          "debited_x": 5604,
+          "received_y": 1999581817000000,
+          "remaining_x": 0,
+          "sell_native_delta": 1999581817000000
+        }
+      ]
+    }
+  ]
+}

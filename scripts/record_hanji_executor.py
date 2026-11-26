@@ -57,7 +57,11 @@ def capture(compiled):
             sell_id = keccak(text=f"{data['hash']}:{proxy}:{budget}:sell")
             # Discovery calls exist only in this pinned, unsigned replay. Firm controls below
             # use observed amounts and an exact price, independently of the generic helper/EOA.
-            buy = [proxy, y, x, budget, budget-1, 1, 2**72-1, 2**128-1, deadline, buy_id]
+            # Hanji rejects the ABI maximum as InvalidPriceRange. Explore around the visible
+            # market in this unsigned observation, then replay at the derived exact limit.
+            discovery_ask = (market["asks"][0][0] * 101 + 99) // 100
+            discovery_bid = max(1, market["bids"][0][0] * 99 // 100)
+            buy = [proxy, y, x, budget, budget-1, 1, discovery_ask, 2**128-1, deadline, buy_id]
             read_fill = lambda row: decode(["uint256", "uint256", "uint128"], success(row))
             probe = simulate(prefix + [order(buy)])[-1]
             if int(probe["status"], 16) == 0 and probe.get("error",{}).get("data") in ("0x7c329980","0x6838b4aa"):
@@ -71,7 +75,7 @@ def capture(compiled):
                 raise ValueError("control budget crosses multiple prices, requires marginal price discovery")
             buy[4:8] = [budget-spent, bought, ask, buy_fee]
             entry = prefix + [order(buy), balance(x), balance(y), approve(x, executor, bought)]
-            sell = [proxy, x, y, bought, 0, 1, 1, 2**128-1, deadline, sell_id]
+            sell = [proxy, x, y, bought, 0, 1, discovery_bid, 2**128-1, deadline, sell_id]
             probe = simulate(entry + [order(sell)])[-1]
             if int(probe["status"],16) == 0 and probe.get("error",{}).get("data") in ("0x7c329980","0x6838b4aa"):
                 recorded.append({"proxy":proxy,"budget_y":budget,"actual_debit_y":spent,"received_x":bought,

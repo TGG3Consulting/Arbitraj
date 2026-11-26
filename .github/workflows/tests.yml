@@ -79,7 +79,8 @@ jobs:
       - working-directory: contracts
         run: npm ci --no-audit --no-fund
       - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/hanji-executor"
-      - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/fermi-executor" FermiSlotExecutor
+      - id: compile_fermi
+        run: node contracts/build-hanji.mjs "$RUNNER_TEMP/fermi-executor" FermiSlotExecutor
       - uses: actions/upload-artifact@v4
         with:
           name: fermi-slot-executor
@@ -101,12 +102,13 @@ jobs:
         with:
           name: hanji-base-replay
           path: ${{ runner.temp }}/hanji-executor/base-replay.json
-      - if: inputs.fermi_archive_replay
+      - if: ${{ !cancelled() && inputs.fermi_archive_replay && steps.compile_fermi.outcome == 'success' }}
+        id: replay_fermi
         run: |
           pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0
           python scripts/record_fermi_executor.py "$RUNNER_TEMP/fermi-executor/FermiSlotExecutor.json" "$RUNNER_TEMP/fermi-executor/ethereum-replay.json"
       - uses: actions/upload-artifact@v4
-        if: inputs.fermi_archive_replay
+        if: ${{ !cancelled() && steps.replay_fermi.outcome == 'success' }}
         with:
           name: fermi-slot-replay
           path: ${{ runner.temp }}/fermi-executor/ethereum-replay.json

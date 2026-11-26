@@ -4,6 +4,7 @@ from pathlib import Path
 
 from eth_abi import decode
 from eth_utils import keccak
+from base_archive_endpoint import available
 
 from record_base_slipstream_executor import EXEC, calldata, rpc
 from record_solidly_v3_executor import FOLDER, ORDER, TYPES, read, write
@@ -75,7 +76,7 @@ def measure(source, code, case, deadline):
 
 
 def capture(compiled):
-    source = read(FOLDER / "elfomofi_base.json")
+    source = available(read(FOLDER / "elfomofi_base.json"))
     endpoint, tag, runtime = source["endpoint"], source["selector"], compiled["runtime"]
     if int(rpc(endpoint, "eth_chainId", []), 16) != 8453 or rpc(endpoint, "eth_getCode", [EXEC, tag]) != "0x":
         raise ValueError("Неверная сеть или адрес модуля архивного прогона занят")

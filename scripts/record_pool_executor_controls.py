@@ -55,7 +55,7 @@ def record(source, owner=FIRST_OWNER):
             cash,coin=tokens[side],tokens[1-side]
             amount=int(q["input"])
             try:
-                deposit=amount if cash==weth else 10**16
+                deposit=amount if cash==weth else int(pool.get("funding_weth",10**16))
                 prefix=[call(weth,calldata("deposit()"),deposit)]
                 if cash!=weth:
                     prefix.extend([approve(weth,router,deposit),call(router,calldata("swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",["uint256","uint256","address[]","address","uint256"],[deposit,amount,[weth,cash],owner,deadline]))])

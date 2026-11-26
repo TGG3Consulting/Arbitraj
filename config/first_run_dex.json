@@ -2142,5 +2142,23 @@
       "dex.pool_implementation": "0x88460bd8dae6f632b9124e99b09d584e0b34b80f",
       "dex.pmm_ladder_counter": true
     }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "squadswap-v3-base",
+    "source": "https://docs.squadswap.com/platform/developers/smart-contracts/base-contracts · tests/data/first_run_dex_2026-11-26/squad_v3_base.json",
+    "settings": {
+      "dex.kind": "v3_fork_pancake",
+      "dex.factory": "0xa1288b64f2378276d0cc56f08397f70becf7c0ea",
+      "dex.tick_lens": "0x5fbd88f04963c25e51ccae20951f815577a234c9",
+      "dex.quoter_virtual": true,
+      "dex.v3_fee_tiers": [
+        "100",
+        "500",
+        "2500",
+        "10000"
+      ]
+    }
   }
 ]

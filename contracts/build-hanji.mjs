@@ -10,7 +10,7 @@ const name = process.argv[3] ?? 'HanjiExecutor';
 if (!['HanjiExecutor', 'FermiSlotExecutor', 'SolidlyV3Executor', 'ElfomoExecutor', 'BasePmmExecutor'].includes(name)) throw new Error('Unknown executor');
 const file = name + '.sol';
 const root = import.meta.dirname;
-const files = name === 'BasePmmExecutor' ? [file, 'ElfomoExecutor.sol'] : [file];
+const files = name === 'BasePmmExecutor' ? [file, 'IBasePmm.sol'] : [file];
 const input = {
   language: 'Solidity',
   sources: Object.fromEntries(files.map((path) => [path, { content: readFileSync(join(root, path), 'utf8').replace(/^\uFEFF/, '') }])),

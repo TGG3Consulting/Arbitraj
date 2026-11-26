@@ -287,3 +287,51 @@ mod tests {
         assert!(wrong >= 370);
     }
 }
+
+#[test]
+fn ring_failed_amount_or_funding_is_not_a_pool_ban() {
+    use std::collections::BTreeMap;
+    let j: Value = serde_json::from_str(include_str!(
+        "../../../../tests/data/first_run_dex_2026-11-26/ring_markets.json"
+    ))
+    .unwrap();
+    let mut counts = BTreeMap::new();
+    for row in j["markets"].as_array().unwrap() {
+        for case in row["cases"].as_array().unwrap() {
+            let status = case["status"].as_str().unwrap();
+            *counts.entry(status).or_insert(0) += 1;
+            if status == "both_swaps" {
+                assert_eq!(
+                    case["minimum_controls"],
+                    json!(["0x0", "0x0", "0x0", "0x0"])
+                );
+            } else if status == "reverted" {
+                let group = case["failure_group"].as_str().unwrap();
+                *counts.entry(group).or_insert(0) += 1;
+                let backing = case["available"].as_str().unwrap().parse::<U256>().unwrap();
+                let amount = case["requested"].as_str().unwrap().parse::<U256>().unwrap();
+                assert_eq!(
+                    backing < amount,
+                    group != "transfer_refused_despite_nominal_balance"
+                );
+                assert_eq!(case["stage"] == "fund", group == "funding_backing");
+            }
+        }
+    }
+    assert_eq!(counts["both_swaps"], 115);
+    assert_eq!(counts["no_funded_positive_size"], 65);
+    assert_eq!(counts["reverted"], 14);
+    assert_eq!(counts["output_backing"], 8);
+    assert_eq!(counts["funding_backing"], 2);
+    assert_eq!(counts["transfer_refused_despite_nominal_balance"], 4);
+    let mixed = j["markets"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["index"] == 132)
+        .unwrap();
+    assert_eq!(mixed["cases"][0]["status"], "no_funded_positive_size");
+    assert_eq!(mixed["cases"][1]["status"], "both_swaps");
+    assert_eq!(mixed["cases"][1]["input_raw"], "2");
+    assert_eq!(mixed["cases"][1]["out_raw"], "1");
+}

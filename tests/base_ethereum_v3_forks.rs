@@ -226,3 +226,73 @@ fn derpdex_base_uses_the_verified_pool_and_settles_at_four_input_sizes() {
         assert_eq!(row["min_out_plus_one_sell_reverted"], true);
     }
 }
+
+#[test]
+fn squad_base_respects_partial_liquidity_and_uses_the_deployed_init_code() {
+    use alloy::sol_types::SolValue;
+    use alloy_primitives::{Address, B256};
+    let data: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/squad_v3_base.json"
+    ))
+    .unwrap();
+    let profiles: Vec<Value> =
+        serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
+    let profile = &profiles
+        .iter()
+        .find(|p| p["network"] == "base" && p["id"] == "squadswap-v3-base")
+        .unwrap()["settings"];
+    let doc = &data["official"];
+    assert_eq!(doc["SquadV3Factory"], profile["dex.factory"]);
+    assert_eq!(doc["TickLens"], profile["dex.tick_lens"]);
+    assert_eq!(profile["dex.kind"], "v3_fork_pancake");
+    assert_eq!(profile["dex.quoter_virtual"], true);
+    let addr = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
+    let num = |v: &Value| v.as_str().unwrap().parse::<U256>().unwrap();
+    let deployer = addr(&doc["SquadV3PoolDeployer"]);
+    let markets = data["markets"].as_array().unwrap();
+    assert_eq!(markets.len(), 3);
+    for m in markets {
+        let salt = keccak256(
+            (
+                addr(&m["tokens"][0]),
+                addr(&m["tokens"][1]),
+                U256::from(m["fee"].as_u64().unwrap()),
+            )
+                .abi_encode(),
+        );
+        let hash: B256 = m["code"]["init_hash"].as_str().unwrap().parse().unwrap();
+        assert_eq!(deployer.create2(salt, hash), addr(&m["pool"]));
+        assert_ne!(addr(&m["doc_init_address"]), addr(&m["pool"]));
+    }
+    let active = data["execution"]["pools"].as_array().unwrap();
+    assert_eq!(active.len(), 2);
+    for r in active {
+        let m = markets.iter().find(|p| p["pool"] == r["pool"]).unwrap();
+        assert!(
+            m["quotes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|q| q["used"].is_string())
+                .any(|q| num(&q["used"]) < num(&q["input"]))
+        );
+        let trades = r["cases"].as_array().unwrap();
+        assert_eq!(trades.len(), 4);
+        for t in trades {
+            let quote = m["quotes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|q| q["input"] == t["input"] && q["side"] == t["side"])
+                .unwrap();
+            assert_eq!(quote["used"], t["input"]);
+            assert_eq!(quote["out"], t["bought"]);
+            assert_eq!(
+                num(&t["cash_before"]) - num(&t["input"]) + num(&t["sold"]),
+                num(&t["cash_after"])
+            );
+            assert_eq!(t["min_out_plus_one_buy_reverted"], true);
+            assert_eq!(t["min_out_plus_one_sell_reverted"], true);
+        }
+    }
+}

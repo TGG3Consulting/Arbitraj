@@ -133,5 +133,42 @@ def main(out):
             required.remove(r["index"])
     if required:raise ValueError("Не прошли обе стороны проверочных рынков WBTC/USDC и WBTC/USDT: "+str(sorted(required)))
 
+def summarize(source,out):
+    j=json.loads(Path(source).read_bytes())
+    directory=json.loads((ROOT/"tests/data/first_run_dex_2026-11-26/ring_directory.json").read_bytes())
+    if j["selector"]!=directory["selector"]:raise ValueError("разные снимки")
+    pools={p["pool"]:p for p in directory["rows"]}
+    for r in j["markets"]:
+        reduced=[]
+        for c in r["cases"]:
+            x={"tier":c["tier"],"status":c["status"]}
+            if "input_raw" in c:
+                x.update({k:c[k] for k in ["input","output","input_raw","out_raw","return_raw"]})
+            if c["status"]=="both_swaps":
+                x["payer_balances"]=c["observed"]
+                x["gas"]=[c["evidence"][k]["gas"] for k in ["swap0","swap1"]]
+                x["minimum_controls"]=[c["evidence"][k]["status"] for k in ["limit0","balance_limit0","limit1","balance_limit1"]]
+            elif c["status"]=="reverted":
+                stage=c["at"]
+                if stage=="fund":
+                    fw=c["bridge"][1]
+                    amount=int(c["funded"])
+                elif stage=="swap0":
+                    fw=next(w for w in pools[r["pool"]]["wrappers"] if directory["tokens"][w]["asset"]==c["output"])
+                    amount=int(c["out_raw"])
+                else:raise ValueError("требуется отдельно установить фактическую сторону отказа: "+stage)
+                available=int(directory["tokens"][fw]["backing"])
+                x.update(stage=stage,wrapper=fw,requested=str(amount),available=str(available),
+                         reason=c["evidence"][stage]["error"]["message"],
+                         failure_group=("funding_backing" if stage=="fund" else "output_backing")
+                         if available<amount else "transfer_refused_despite_nominal_balance")
+            reduced.append(x)
+        r["cases"]=reduced
+    Path(out).write_bytes((json.dumps(j,separators=(",",":"))+"\n").encode())
+
+
 if __name__=="__main__":
-    main(sys.argv[1])
+    if len(sys.argv)==4 and sys.argv[1]=="--summary":
+        summarize(sys.argv[2],sys.argv[3])
+    else:
+        main(sys.argv[1])

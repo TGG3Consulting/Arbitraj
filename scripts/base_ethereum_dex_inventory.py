@@ -371,6 +371,14 @@ def tables(network, snapshots, profiles):
                     f"ликвидность положительна у {active} пула. Два размера на нём прошли полный круг "
                     "через V5 с проверкой конечных балансов и minOut. "
                     f"[Адреса, события, тики и происхождение пулов](../{rubicon.as_posix()})."])
+    if base:
+        out.extend(["", "SquadSwap V3 · в двух проверенных парах Base ставка комиссии задана при создании пула. "
+                    "Фабрика и TickLens совпадают с официальной таблицей. Указанный там v3InitCodeHash даёт иной адрес "
+                    "для всех трёх зарегистрированных пулов WETH/USDC и WETH/USDT. Фактический код создания "
+                    "и getPool независимо воспроизводят эти три адреса. Два пула провели восемь круглых обменов "
+                    "с проверкой балансов через штатный V5; у третьего на этом блоке ликвидность равна нулю. "
+                    "Для каждого направления учитывается фактически использованный вход. "
+                    "[Архивные котировки и исполнения](../tests/data/first_run_dex_2026-11-26/squad_v3_base.json)."])
     if not base and Path(lista).exists():
         out.extend(["", "Lista DEX V3 · три пула официальной фабрики Ethereum и семь разрешённых уровней комиссии "
                     "установлены по событиям и обратным запросам. У всех трёх пулов код 31 зависимой единицы Solidity "
@@ -542,6 +550,9 @@ def tables(network, snapshots, profiles):
         proved = [r for r in directory["rows"] if r["verified"]]
         funded = sum(all(map(int, r["reserves"])) and all(int(directory["tokens"][w]["backing"] or 0) > 0
                      for w in r["wrappers"]) for r in proved)
+        markets_path = ring_path.with_name("ring_markets.json")
+        markets = read(markets_path)["markets"]
+        successes = [sum(c["status"] == "both_swaps" for c in m["cases"]) for m in markets]
         cases = [c for pool in ring["pools"] for c in pool["cases"]]
         gas = [n for c in cases for n in c["gas"]]
         out.extend(["", f"**Ring Swap / Few, Ethereum.** На блоке {ring['block']} фабрика зарегистрировала {directory['count']} пары. "
@@ -555,8 +566,15 @@ def tables(network, snapshots, profiles):
                     f"Для всех {directory['count']} пар проверены allPairs и обе стороны. Код пула, код обеих обёрток, "
                     f"CREATE2 и встречные записи обеих фабрик совпали у {len(proved)} пар; из них {funded} имели "
                     "ненулевые резервы и некоторое обеспечение обоих underlying. Объём, доступный для погашения, "
-                    "проверяется вместе с ценой на одном блоке. Вне четырёх указанных пар приложенная проверка обоих "
-                    "объёмов кошелька учитывается отдельно. Оператор может обнаружить кошелёчную пару по двум "
+                    "проверяется вместе с ценой на одном блоке. В расширенной проверке 194 сценария начинались с ETH: "
+                    f"{sum(successes)} завершили оба обмена, {sum(x>0 for x in successes)} рынков прошли хотя бы один "
+                    f"размер, {sum(x==2 for x in successes)} — оба. В 65 проверках не найдено финансирование с "
+                    "положительным округлённым выходом. Из 14 откатов 8 пришлись на выдачу сверх обеспечения, 2 — "
+                    "на такую выдачу в отдельной паре пополнения, 4 — на отказ перевода при достаточном номинальном балансе. "
+                    "У пула 132 меньший размер не дал целой единицы, больший обменял 2 минимальных единицы на 1. "
+                    f"[Результат по каждому объёму](../{markets_path.as_posix()}) · "
+                    "[Архив рынка](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45883763601). "
+                    "Оператор может обнаружить пару по двум "
                     "адресам исходных активов; исполнитель допускает её после обычной проверки газа, налогов и выплаты. "
                     f"[Полный реестр](../{directory_path.as_posix()}) · "
                     "[Размещения](https://ringprotocol.gitbook.io/ring/docs/deployments) · "

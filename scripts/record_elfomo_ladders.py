@@ -2,6 +2,7 @@
 import sys
 from pathlib import Path
 import requests
+from base_archive_endpoint import available
 from eth_utils import keccak
 
 from record_elfomo_executor import EXEC, FOLDER, calldata, read, rpc, write
@@ -12,7 +13,7 @@ CBBTC = "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
 
 
 def capture(compiled):
-    src = read(FOLDER / "elfomofi_base.json")
+    src = available(read(FOLDER / "elfomofi_base.json"))
     accepted = read(FOLDER / "elfomo_executor_base.json")
     code = compiled["runtime"]
     if "0x" + keccak(bytes.fromhex(code)).hex() != accepted["runtime_keccak"]:
@@ -51,7 +52,7 @@ def capture(compiled):
                 elif r["status"] != "0x1" or int(r["returnData"],16)==0:
                     raise ValueError(f"Пропала независимая сторона {coin} {key}")
             rows.append(dict(coin=coin,disabled=disabled,sizes=sizes,calls=calls,results=results))
-    return dict(selector=tag,module=EXEC,runtime_keccak=accepted["runtime_keccak"],rows=rows)
+    return dict(selector=tag,endpoint=src["endpoint"],module=EXEC,runtime_keccak=accepted["runtime_keccak"],rows=rows)
 
 
 if __name__ == "__main__":

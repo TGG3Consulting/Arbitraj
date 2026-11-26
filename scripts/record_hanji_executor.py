@@ -8,6 +8,7 @@ from eth_utils import keccak
 
 from record_base_slipstream_executor import OWNER, ROOT, call, calldata, rpc
 from record_v2_chain_pools import NETWORKS
+from base_archive_endpoint import available
 
 ORDER = "(address,address,address,uint256,uint256,uint256,uint72,uint128,uint256,bytes32)"
 FIXTURE = ROOT / "tests/data/first_run_dex_2026-11-26/hanji_base.json"
@@ -17,6 +18,7 @@ def capture(compiled):
     data = json.loads(FIXTURE.read_bytes())
     url, wrapped = NETWORKS["base"]
     tag = {"blockHash": data["hash"], "requireCanonical": True}
+    url = available({"selector":tag,"endpoint":url})["endpoint"]
     header = rpc(url, "eth_getBlockByHash", [data["hash"], False])
     deadline = int(header["timestamp"], 16) + 300
     executor = "0x" + keccak(b"\xd6\x94" + bytes.fromhex(OWNER[2:]) + b"\x80")[-20:].hex()
@@ -178,7 +180,7 @@ def capture(compiled):
             print(proxy, budget, len(controls), flush=True)
     if len(recorded) != 14 or not any(r.get("reverted") for r in recorded):
         raise ValueError("missing market observations or no positive controls")
-    return {"chain_id":8453, "block":data["block"], "hash":data["hash"], "owner":OWNER,
+    return {"chain_id":8453, "endpoint":url, "block":data["block"], "hash":data["hash"], "owner":OWNER,
             "executor":executor, "runtime_keccak":"0x"+keccak(bytes.fromhex(compiled["runtime"])).hex(),
             "solc":compiled["solc"], "round_trips":recorded,"receipt_examples":receipt_examples}
 

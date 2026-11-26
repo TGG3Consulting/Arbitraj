@@ -1,0 +1,656 @@
+{
+  "source": "https://docs.squadswap.com/platform/developers/smart-contracts/base-contracts",
+  "official": {
+    "SquadV3Factory": "0xa1288b64f2378276d0cc56f08397f70becf7c0ea",
+    "SquadV3PoolDeployer": "0x53616b1baa9e224092bbaf64f2fb5da2b11dd62a",
+    "TickLens": "0x5fbd88f04963c25e51ccae20951f815577a234c9",
+    "QuoterV2": "0x84ff9b09b56c3858c38cc7aa678fabb73b9f3898",
+    "v3InitCodeHash": "0xff132c7c84e5449c9d69fc8490aba7f25fe4033e8889a13556c416128e1308cf"
+  },
+  "tiers": {
+    "100": 1,
+    "500": 10,
+    "2500": 50,
+    "10000": 200
+  },
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "block": 62262756,
+  "markets": [
+    {
+      "pool": "0x4d082f31de75a6686930f75d9a3eb3a034f33607",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2"
+      ],
+      "fee": 10000,
+      "spacing": 200,
+      "code": {
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x4d082f31de75a6686930f75d9a3eb3a034f33607",
+        "runtime_keccak": "0x7fc982adc47cd710191ba3108472622cd814c29efb72433c4ae03b117ac5b43a",
+        "init_hash": "0xf08a35894b6b71b07d95a23022375630f6cee63a27d724c703617c17c4fc387d"
+      },
+      "liquidity": "9575509815688",
+      "doc_init_address": "0x32877750f380c1eb4bdfd4d2f0941f87b32425c9",
+      "lens_word": -4,
+      "ticks": [
+        [
+          -197800,
+          -9575509815688,
+          9575509815688
+        ],
+        [
+          -199800,
+          9575509815688,
+          9575509815688
+        ]
+      ],
+      "quotes": [
+        {
+          "side": 0,
+          "input": "10000000000",
+          "used": "10000000000",
+          "out": "20"
+        },
+        {
+          "side": 0,
+          "input": "100000000000",
+          "used": "100000000000",
+          "out": "208"
+        },
+        {
+          "side": 0,
+          "input": "1000000000000",
+          "used": "159118224465",
+          "out": "331"
+        },
+        {
+          "side": 0,
+          "input": "100000000000000",
+          "used": "159118224465",
+          "out": "331"
+        },
+        {
+          "side": 0,
+          "input": "10000000000000000",
+          "used": "159118224465",
+          "out": "331"
+        },
+        {
+          "side": 1,
+          "input": "100",
+          "used": "100",
+          "out": "47033181638"
+        },
+        {
+          "side": 1,
+          "input": "1000",
+          "used": "1000",
+          "out": "470330862478"
+        },
+        {
+          "side": 1,
+          "input": "100000",
+          "used": "100000",
+          "out": "47022595686377"
+        },
+        {
+          "side": 1,
+          "input": "1000000",
+          "used": "1000000",
+          "out": "469274411613991"
+        },
+        {
+          "side": 1,
+          "input": "10000000",
+          "used": "10000000",
+          "out": "4599665672523308"
+        }
+      ]
+    },
+    {
+      "pool": "0x96d9d799d68cd6a3ebfbb95aa52346ea4c4e41f5",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "fee": 100,
+      "spacing": 1,
+      "code": {
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x96d9d799d68cd6a3ebfbb95aa52346ea4c4e41f5",
+        "runtime_keccak": "0x85de22aec093778c5e1b674208bfcbccbe89616e2e3d28d82bd81fd67f333110",
+        "init_hash": "0xf08a35894b6b71b07d95a23022375630f6cee63a27d724c703617c17c4fc387d"
+      },
+      "liquidity": "0",
+      "doc_init_address": "0x30638ca44edb459f7612ed74d53cadcbd78f13f6",
+      "lens_word": -3466,
+      "ticks": [],
+      "quotes": [
+        {
+          "side": 0,
+          "input": "10000000000",
+          "reverted": {
+            "code": 3,
+            "message": "execution reverted: SPL",
+            "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000353504c0000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        {
+          "side": 0,
+          "input": "100000000000",
+          "reverted": {
+            "code": 3,
+            "message": "execution reverted: SPL",
+            "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000353504c0000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        {
+          "side": 0,
+          "input": "1000000000000",
+          "reverted": {
+            "code": 3,
+            "message": "execution reverted: SPL",
+            "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000353504c0000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        {
+          "side": 0,
+          "input": "100000000000000",
+          "reverted": {
+            "code": 3,
+            "message": "execution reverted: SPL",
+            "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000353504c0000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        {
+          "side": 0,
+          "input": "10000000000000000",
+          "reverted": {
+            "code": 3,
+            "message": "execution reverted: SPL",
+            "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000353504c0000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        {
+          "side": 1,
+          "input": "100",
+          "reverted": {
+            "code": 3,
+            "message": "execution reverted"
+          }
+        },
+        {
+          "side": 1,
+          "input": "1000",
+          "reverted": {
+            "code": 3,
+            "message": "execution reverted"
+          }
+        },
+        {
+          "side": 1,
+          "input": "100000",
+          "reverted": {
+            "code": 3,
+            "message": "execution reverted"
+          }
+        },
+        {
+          "side": 1,
+          "input": "1000000",
+          "reverted": {
+            "code": 3,
+            "message": "execution reverted"
+          }
+        },
+        {
+          "side": 1,
+          "input": "10000000",
+          "reverted": {
+            "code": 3,
+            "message": "execution reverted"
+          }
+        }
+      ]
+    },
+    {
+      "pool": "0x3a6540f69bb9756d8e7893aceedf2f26d4f1b3a7",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "fee": 2500,
+      "spacing": 50,
+      "code": {
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x3a6540f69bb9756d8e7893aceedf2f26d4f1b3a7",
+        "runtime_keccak": "0x306df36c1ad5032931199f926b983c69096a63de292552dc7e48458f7f5f7121",
+        "init_hash": "0xf08a35894b6b71b07d95a23022375630f6cee63a27d724c703617c17c4fc387d"
+      },
+      "liquidity": "4530985666079",
+      "doc_init_address": "0xb13695ab6f1be4d43c21b6a75663b858055ee05c",
+      "lens_word": -16,
+      "ticks": [
+        [
+          -196550,
+          -4530985666079,
+          4530985666079
+        ],
+        [
+          -201050,
+          4530985666079,
+          4530985666079
+        ]
+      ],
+      "quotes": [
+        {
+          "side": 0,
+          "input": "10000000000",
+          "used": "10000000000",
+          "out": "18"
+        },
+        {
+          "side": 0,
+          "input": "100000000000",
+          "used": "100000000000",
+          "out": "185"
+        },
+        {
+          "side": 0,
+          "input": "1000000000000",
+          "used": "1000000000000",
+          "out": "1852"
+        },
+        {
+          "side": 0,
+          "input": "100000000000000",
+          "used": "1643252641044",
+          "out": "3044"
+        },
+        {
+          "side": 0,
+          "input": "10000000000000000",
+          "used": "1643252641044",
+          "out": "3044"
+        },
+        {
+          "side": 1,
+          "input": "100",
+          "used": "100",
+          "out": "53293647452"
+        },
+        {
+          "side": 1,
+          "input": "1000",
+          "used": "1000",
+          "out": "536702244271"
+        },
+        {
+          "side": 1,
+          "input": "100000",
+          "used": "100000",
+          "out": "53670000450509"
+        },
+        {
+          "side": 1,
+          "input": "1000000",
+          "used": "1000000",
+          "out": "534245284946843"
+        },
+        {
+          "side": 1,
+          "input": "10000000",
+          "used": "10000000",
+          "out": "5108790686048118"
+        }
+      ]
+    }
+  ],
+  "execution": {
+    "network": "base",
+    "block": 62262756,
+    "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "factory": "0xa1288b64f2378276d0cc56f08397f70becf7c0ea",
+    "executor_runtime_keccak": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+    "sender": "0x730a17276a9720871c98622ffce5db23f38acf99",
+    "kind": "v3",
+    "virtual_quoter_keccak": "0x56f4529fa9bf808daea21d15a6060f9941aa6da575cc8f1ddf99feaa152a39d5",
+    "pools": [
+      {
+        "idx": 0,
+        "pool": "0x4d082f31de75a6686930f75d9a3eb3a034f33607",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2"
+        ],
+        "immutables": null,
+        "prices": null,
+        "cases": [
+          {
+            "side": 0,
+            "input": "10000000000",
+            "bought": "20",
+            "sold": "9026572713",
+            "cash_before": "10000000000",
+            "cash_after": "9026572713",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          },
+          {
+            "side": 0,
+            "input": "100000000000",
+            "bought": "208",
+            "sold": "97392010670",
+            "cash_before": "100000000000",
+            "cash_after": "97392010670",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          },
+          {
+            "side": 1,
+            "input": "100",
+            "bought": "47033181638",
+            "sold": "98",
+            "cash_before": "13424296",
+            "cash_after": "13424294",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          },
+          {
+            "side": 1,
+            "input": "10000000",
+            "bought": "4599665672523308",
+            "sold": "9803160",
+            "cash_before": "13424296",
+            "cash_after": "13227456",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          }
+        ]
+      },
+      {
+        "idx": 2,
+        "pool": "0x3a6540f69bb9756d8e7893aceedf2f26d4f1b3a7",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+        ],
+        "immutables": null,
+        "prices": null,
+        "cases": [
+          {
+            "side": 0,
+            "input": "10000000000",
+            "bought": "18",
+            "sold": "9151439990",
+            "cash_before": "10000000000",
+            "cash_after": "9151439990",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          },
+          {
+            "side": 0,
+            "input": "1000000000000",
+            "bought": "1852",
+            "sold": "994286401468",
+            "cash_before": "1000000000000",
+            "cash_after": "994286401468",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          },
+          {
+            "side": 1,
+            "input": "100",
+            "bought": "53293647452",
+            "sold": "98",
+            "cash_before": "168155341",
+            "cash_after": "168155339",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          },
+          {
+            "side": 1,
+            "input": "10000000",
+            "bought": "5108790686048118",
+            "sold": "9951271",
+            "cash_before": "168155341",
+            "cash_after": "168106612",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          }
+        ]
+      }
+    ]
+  },
+  "reads": [
+    {
+      "to": "0xa1288b64f2378276d0cc56f08397f70becf7c0ea",
+      "signature": "poolDeployer()",
+      "data": "0x3119049a",
+      "response": "0x00000000000000000000000053616b1baa9e224092bbaf64f2fb5da2b11dd62a"
+    },
+    {
+      "to": "0xa1288b64f2378276d0cc56f08397f70becf7c0ea",
+      "signature": "feeAmountTickSpacing(uint24)",
+      "data": "0x22afcccb0000000000000000000000000000000000000000000000000000000000000064",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "to": "0xa1288b64f2378276d0cc56f08397f70becf7c0ea",
+      "signature": "feeAmountTickSpacing(uint24)",
+      "data": "0x22afcccb00000000000000000000000000000000000000000000000000000000000001f4",
+      "response": "0x000000000000000000000000000000000000000000000000000000000000000a"
+    },
+    {
+      "to": "0xa1288b64f2378276d0cc56f08397f70becf7c0ea",
+      "signature": "feeAmountTickSpacing(uint24)",
+      "data": "0x22afcccb00000000000000000000000000000000000000000000000000000000000009c4",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000032"
+    },
+    {
+      "to": "0xa1288b64f2378276d0cc56f08397f70becf7c0ea",
+      "signature": "feeAmountTickSpacing(uint24)",
+      "data": "0x22afcccb0000000000000000000000000000000000000000000000000000000000002710",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000c8"
+    },
+    {
+      "to": "0xa1288b64f2378276d0cc56f08397f70becf7c0ea",
+      "signature": "getPool(address,address,uint24)",
+      "data": "0x1698ee820000000000000000000000004200000000000000000000000000000000000006000000000000000000000000fde4c96c8593536e31f229ea8f37b2ada2699bb20000000000000000000000000000000000000000000000000000000000000064",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xa1288b64f2378276d0cc56f08397f70becf7c0ea",
+      "signature": "getPool(address,address,uint24)",
+      "data": "0x1698ee820000000000000000000000004200000000000000000000000000000000000006000000000000000000000000fde4c96c8593536e31f229ea8f37b2ada2699bb200000000000000000000000000000000000000000000000000000000000001f4",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xa1288b64f2378276d0cc56f08397f70becf7c0ea",
+      "signature": "getPool(address,address,uint24)",
+      "data": "0x1698ee820000000000000000000000004200000000000000000000000000000000000006000000000000000000000000fde4c96c8593536e31f229ea8f37b2ada2699bb200000000000000000000000000000000000000000000000000000000000009c4",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xa1288b64f2378276d0cc56f08397f70becf7c0ea",
+      "signature": "getPool(address,address,uint24)",
+      "data": "0x1698ee820000000000000000000000004200000000000000000000000000000000000006000000000000000000000000fde4c96c8593536e31f229ea8f37b2ada2699bb20000000000000000000000000000000000000000000000000000000000002710",
+      "response": "0x0000000000000000000000004d082f31de75a6686930f75d9a3eb3a034f33607"
+    },
+    {
+      "to": "0x4d082f31de75a6686930f75d9a3eb3a034f33607",
+      "signature": "token0()",
+      "data": "0x0dfe1681",
+      "response": "0x0000000000000000000000004200000000000000000000000000000000000006"
+    },
+    {
+      "to": "0x4d082f31de75a6686930f75d9a3eb3a034f33607",
+      "signature": "token1()",
+      "data": "0xd21220a7",
+      "response": "0x000000000000000000000000fde4c96c8593536e31f229ea8f37b2ada2699bb2"
+    },
+    {
+      "to": "0x4d082f31de75a6686930f75d9a3eb3a034f33607",
+      "signature": "fee()",
+      "data": "0xddca3f43",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000002710"
+    },
+    {
+      "to": "0x4d082f31de75a6686930f75d9a3eb3a034f33607",
+      "signature": "slot0()",
+      "data": "0x3850c7bd",
+      "response": "0x0000000000000000000000000000000000000000000301b973999cce39601185fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf388000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000001f401f400000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "to": "0x4d082f31de75a6686930f75d9a3eb3a034f33607",
+      "signature": "tickSpacing()",
+      "data": "0xd0c93a7c",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000c8"
+    },
+    {
+      "to": "0x5fbd88f04963c25e51ccae20951f815577a234c9",
+      "signature": "getPopulatedTicksInWord(address,int16)",
+      "data": "0x351fb4780000000000000000000000004d082f31de75a6686930f75d9a3eb3a034f33607fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcfb58fffffffffffffffffffffffffffffffffffffffffffffffffffff74a87238e78000000000000000000000000000000000000000000000000000008b578dc7188fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf388000000000000000000000000000000000000000000000000000008b578dc7188000000000000000000000000000000000000000000000000000008b578dc7188"
+    },
+    {
+      "to": "0x4d082f31de75a6686930f75d9a3eb3a034f33607",
+      "signature": "liquidity()",
+      "data": "0x1a686502",
+      "response": "0x000000000000000000000000000000000000000000000000000008b578dc7188"
+    },
+    {
+      "to": "0xa1288b64f2378276d0cc56f08397f70becf7c0ea",
+      "signature": "getPool(address,address,uint24)",
+      "data": "0x1698ee820000000000000000000000004200000000000000000000000000000000000006000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda029130000000000000000000000000000000000000000000000000000000000000064",
+      "response": "0x00000000000000000000000096d9d799d68cd6a3ebfbb95aa52346ea4c4e41f5"
+    },
+    {
+      "to": "0x96d9d799d68cd6a3ebfbb95aa52346ea4c4e41f5",
+      "signature": "token0()",
+      "data": "0x0dfe1681",
+      "response": "0x0000000000000000000000004200000000000000000000000000000000000006"
+    },
+    {
+      "to": "0x96d9d799d68cd6a3ebfbb95aa52346ea4c4e41f5",
+      "signature": "token1()",
+      "data": "0xd21220a7",
+      "response": "0x000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+    },
+    {
+      "to": "0x96d9d799d68cd6a3ebfbb95aa52346ea4c4e41f5",
+      "signature": "fee()",
+      "data": "0xddca3f43",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000064"
+    },
+    {
+      "to": "0x96d9d799d68cd6a3ebfbb95aa52346ea4c4e41f5",
+      "signature": "slot0()",
+      "data": "0x3850c7bd",
+      "response": "0x00000000000000000000000000000000000000000000000000000001000276a4fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff27618000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000001f401f400000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "to": "0x96d9d799d68cd6a3ebfbb95aa52346ea4c4e41f5",
+      "signature": "tickSpacing()",
+      "data": "0xd0c93a7c",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "to": "0x5fbd88f04963c25e51ccae20951f815577a234c9",
+      "signature": "getPopulatedTicksInWord(address,int16)",
+      "data": "0x351fb47800000000000000000000000096d9d799d68cd6a3ebfbb95aa52346ea4c4e41f5fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff276",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0x96d9d799d68cd6a3ebfbb95aa52346ea4c4e41f5",
+      "signature": "liquidity()",
+      "data": "0x1a686502",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xa1288b64f2378276d0cc56f08397f70becf7c0ea",
+      "signature": "getPool(address,address,uint24)",
+      "data": "0x1698ee820000000000000000000000004200000000000000000000000000000000000006000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda0291300000000000000000000000000000000000000000000000000000000000001f4",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xa1288b64f2378276d0cc56f08397f70becf7c0ea",
+      "signature": "getPool(address,address,uint24)",
+      "data": "0x1698ee820000000000000000000000004200000000000000000000000000000000000006000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda0291300000000000000000000000000000000000000000000000000000000000009c4",
+      "response": "0x0000000000000000000000003a6540f69bb9756d8e7893aceedf2f26d4f1b3a7"
+    },
+    {
+      "to": "0x3a6540f69bb9756d8e7893aceedf2f26d4f1b3a7",
+      "signature": "token0()",
+      "data": "0x0dfe1681",
+      "response": "0x0000000000000000000000004200000000000000000000000000000000000006"
+    },
+    {
+      "to": "0x3a6540f69bb9756d8e7893aceedf2f26d4f1b3a7",
+      "signature": "token1()",
+      "data": "0xd21220a7",
+      "response": "0x000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+    },
+    {
+      "to": "0x3a6540f69bb9756d8e7893aceedf2f26d4f1b3a7",
+      "signature": "fee()",
+      "data": "0xddca3f43",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000009c4"
+    },
+    {
+      "to": "0x3a6540f69bb9756d8e7893aceedf2f26d4f1b3a7",
+      "signature": "slot0()",
+      "data": "0x3850c7bd",
+      "response": "0x00000000000000000000000000000000000000000002d31a276004bdf40fe3adfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceea6000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000001f401f400000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "to": "0x3a6540f69bb9756d8e7893aceedf2f26d4f1b3a7",
+      "signature": "tickSpacing()",
+      "data": "0xd0c93a7c",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000032"
+    },
+    {
+      "to": "0x5fbd88f04963c25e51ccae20951f815577a234c9",
+      "signature": "getPopulatedTicksInWord(address,int16)",
+      "data": "0x351fb4780000000000000000000000003a6540f69bb9756d8e7893aceedf2f26d4f1b3a7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd003afffffffffffffffffffffffffffffffffffffffffffffffffffffbe10c3579e10000000000000000000000000000000000000000000000000000041ef3ca861ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceea60000000000000000000000000000000000000000000000000000041ef3ca861f0000000000000000000000000000000000000000000000000000041ef3ca861f"
+    },
+    {
+      "to": "0x3a6540f69bb9756d8e7893aceedf2f26d4f1b3a7",
+      "signature": "liquidity()",
+      "data": "0x1a686502",
+      "response": "0x0000000000000000000000000000000000000000000000000000041ef3ca861f"
+    },
+    {
+      "to": "0xa1288b64f2378276d0cc56f08397f70becf7c0ea",
+      "signature": "getPool(address,address,uint24)",
+      "data": "0x1698ee820000000000000000000000004200000000000000000000000000000000000006000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda029130000000000000000000000000000000000000000000000000000000000002710",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}

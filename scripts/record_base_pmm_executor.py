@@ -2,6 +2,7 @@
 import sys
 from pathlib import Path
 from eth_abi import decode
+from base_archive_endpoint import available
 
 from record_elfomo_executor import FOLDER, EXEC, ORDER, TYPES, calldata, capture as elfomo_capture, read, write, signature, simulate
 from record_lunarbase import MULTICALL, USDC, ZERO
@@ -51,7 +52,8 @@ def measure(source, code, case, deadline):
         raise ValueError("Остались средства или разрешение")
     topic=signature("SwapExecuted(address,bool,uint256,uint256,uint256)")
     event,=[r for r in results["execute"]["logs"] if r["address"]==market and r["topics"][0]==topic]
-    payee,side,spent,paid,_fee=decode(["address","bool","uint256","uint256","uint256"],bytes.fromhex(event["data"][2:]))
+    payee,side,amount_x,amount_y,_fee=decode(["address","bool","uint256","uint256","uint256"],bytes.fromhex(event["data"][2:]))
+    spent,paid=(amount_x,amount_y) if side else (amount_y,amount_x)
     if (payee,side,spent,paid)!=(owner if a==WETH else EXEC,a==WETH,amount,expected):
         raise ValueError("Событие пула расходится с балансами, направлением или получателем")
     return dict(owner=owner,input=a,output=b,amount=str(amount),out=str(expected),gas=int(results["execute"]["gasUsed"],16),
@@ -62,7 +64,7 @@ if __name__=="__main__":
     compiled=read(Path(sys.argv[1]))
     elfomo=elfomo_capture(compiled)
     write(FOLDER/"base_pmm_executor_elfomo.json",elfomo)
-    source=read(FOLDER/"lunarbase.json")
+    source=available(read(FOLDER/"lunarbase.json"))
     from record_base_slipstream_executor import rpc
     head=rpc(source["endpoint"],"eth_getBlockByHash",[source["selector"]["blockHash"],False])
     cases=[measure(source,compiled["runtime"],case,int(head["timestamp"],16)+90) for case in source["cases"]]

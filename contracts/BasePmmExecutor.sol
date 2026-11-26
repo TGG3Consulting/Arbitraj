@@ -5,22 +5,7 @@
 // Настройки: dex.router, dex.kind и dex.deadline_s. Отдельная архивная приёмка каждого рынка и runtime.
 pragma solidity 0.8.37;
 
-import {IElfomoRouter, IElfomoToken} from "./ElfomoExecutor.sol";
-
-interface ILunarPool {
-    struct Order { address tokenIn; address tokenOut; address recipient; uint256 amountIn; uint256 minimum; uint256 deadline; }
-    function isFresh() external view returns (bool);
-    function paused() external view returns (bool);
-    function quoteExactIn(address tokenIn, address tokenOut, uint256 amountIn) external view returns (uint256);
-    function swapExactIn(Order calldata order) external returns (uint256);
-    function swapExactInNative(address tokenOut, address recipient, uint256 minimum, uint256 deadline) external payable returns (uint256);
-}
-
-interface IBaseWrappedEther {
-    function deposit() external payable;
-    function withdraw(uint256) external;
-    function transfer(address, uint256) external returns (bool);
-}
+import {IElfomoRouter, IElfomoToken, ILunarPool, IBaseWrappedEther} from "./IBasePmm.sol";
 
 contract BasePmmExecutor {
     address private constant ELFOMO = address(bytes20(hex"f0f0f0f0fb0d738452efd03a28e8be14c76d5f73"));

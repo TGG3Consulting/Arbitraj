@@ -4,6 +4,7 @@ from pathlib import Path
 
 from eth_utils import keccak
 
+from base_archive_endpoint import available
 from record_balancer_deployments import ROOT, read, write
 from record_base_slipstream_executor import EXEC, calldata, rpc
 
@@ -16,6 +17,8 @@ TYPES = ["address","address","address","uint256","uint256","uint256"]
 def capture(compiled, net):
     source = read(FOLDER / f"solidly_v3_{net}.json")
     e = {k:source[k] for k in ("endpoint","selector")}
+    if source["chain_id"] == 8453:
+        e = available(e)
     runtime = compiled["runtime"]
     if not runtime or rpc(e["endpoint"],"eth_getCode",[EXEC,e["selector"]]) != "0x":
         raise ValueError("ошибка байткода или адрес симуляции занят")

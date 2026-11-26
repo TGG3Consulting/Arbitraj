@@ -100,6 +100,11 @@ fn mexc_bingx_kucoin_codes() {
         C::InvalidAddress,
         "списке разрешённых",
     );
+    check(
+        &mexc::errors::from_code(10212, "Withdrawal failed", w, "{}"),
+        C::InvalidAddress,
+        "Точную причину этот код не указывает",
+    );
     let msg = "Withdrawal is currently locked by withdrawal protection.";
     check(
         &mexc::errors::from_code(157005, msg, w, "{}"),

@@ -274,18 +274,18 @@ def tables(network, snapshots, profiles):
                     "при исчерпании одной стороны сохранились обе ступени встречного направления. Платёжная ликвидность ограничена остатком vault "
                     "и его allowance. Выход, достигший всего доступного остатка, отсекается. Размеры dex.pmm_ladder_usd "
                     "задаёт владелец в USDT, dex.pmm_ladder_counter переводит эти объёмы в USDC по курсу реестра. "
-                    "Нативный swap сравнивает limitAmount с котировкой до transferFrom. Архивная проверка ElfomoExecutor подтвердила срок, полный вход, зачисление и возврат разрешения к нулю в 8 случаях. В режиме elfomofi_module котировка кошелька проходит через адрес адаптера. Для единственного нового размещения по решению 408 у ElfomoFi и LunarBase общий BasePmmExecutor, runtime 0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403. Старый ElfomoExecutor 0xd3abddebdd155ff956b970579304da391511f945803c0ae5f1ec8f28c10a64bb допускается только для ElfomoFi. За отдельные 24 часа эти две пары дали 2 094 922,843102 из 2 132 483,689949 USDC оборота роутера. [Расчёт стоимости и границы применения](DECISIONS.md#дополнение-к-t488-01-elfomofi-на-base-dex-23-r-22). "
+                    "Нативный swap сравнивает limitAmount с котировкой до transferFrom. Архивная проверка ElfomoExecutor подтвердила срок, полный вход, зачисление и возврат разрешения к нулю в 8 случаях. В режиме elfomofi_module котировка кошелька проходит через адрес адаптера. Для единственного нового размещения по решению 408 у ElfomoFi и LunarBase общий BasePmmExecutor, runtime 0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24. Предыдущий двухрыночный runtime 0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403 совместим с ElfomoFi и LunarBase. Старый ElfomoExecutor 0xd3abddebdd155ff956b970579304da391511f945803c0ae5f1ec8f28c10a64bb допускается только для ElfomoFi. За отдельные 24 часа эти две пары дали 2 094 922,843102 из 2 132 483,689949 USDC оборота роутера. [Расчёт стоимости и границы применения](DECISIONS.md#дополнение-к-t488-01-elfomofi-на-base-dex-23-r-22). "
                     f"[Сырые результаты](../{elfomo.as_posix()}) · [Спецификация]({el['source']})."])
     baibai = Path("tests/data/first_run_dex_2026-11-26/baibai_base.json")
     if base and baibai.exists():
         bai = read(baibai)
-        out.extend(["", "BaiBai · профиль WETH/USDC сверяет три proxy, их реализации и взаимные ссылки. "
+        out.extend(["", "BaiBai · профиль WETH/USDC и NVDAc/USDC сверяет три proxy, их реализации и взаимные ссылки. "
                     "quoteFor читает чистую сумму для фактического плательщика. На контрольном блоке TTL книги составил 8 секунд. "
                     "В четырёх архивных обменах точный минимум совпал с зачислением на кошелёк, а минимум на единицу выше привёл к отказу. "
                     "После истечения срока при прежнем содержимом pair() все четыре котировки обнулились и обмены отклонились. "
                     "Расход составил 149 386–151 249 gas. Размеры ступеней задаёт владелец в USDT. Профиль работает в режиме наблюдения. "
                     "За 24 часа учтены 2 471 обмен WETH/USDC на 721 513,217973 USDC из 751 652,107616 USDC всего Entry. "
-                    "Второй базовый токен 0xb20000000000000000000078ee7ce2fe4908108c находится вне профиля WETH. "
+                    "Ещё 203 обмена дали 30 138,889643 USDC по NVDAc/USDC. NVDAc (8 знаков), 0xb20000000000000000000078ee7ce2fe4908108c, — сертификат NVIDIA CB от COINBASE ONCHAIN SPV LTD. У нативного B20 на этом блоке исполнителя, отправителя и получателя проверяла политика 5. Обратная продажа всей полученной суммы проверена одним публичным кошельком. Для кошелька владельца и биржевого ввода/вывода подтверждения отсутствуют. baibai_module требует отдельного допуска и общего адреса dex.router. [Эмитент, биржи и границы допуска](DECISIONS.md#дополнение-к-t488-01-рынки-baibai-wethusdc-и-nvdacusdc-на-base-dex-25-r-24). "
                     f"[Адреса, котировки и исполнение](../{baibai.as_posix()}) · "
                     "[Оборот по событиям](../tests/data/first_run_dex_2026-11-26/baibai_volume_base.json)."])
     lunar = Path("tests/data/first_run_dex_2026-11-26/lunarbase.json")
@@ -297,7 +297,7 @@ def tables(network, snapshots, profiles):
                     "Из четырёх размещений каталога три были на паузе с устаревшей ценой. В действующем пуле X — native ETH, Y — USDC. "
                     "Для четырёх обменов публичного кошелька фактические балансы совпали с quoteExactIn; minOut + 1 и просроченный deadline отклонились. "
                     "Цена зависит от вызывающего адреса. Профиль lunarbase показывает котировку прямого кошелька; в режиме lunarbase_module расчёт идёт через проверенный модуль, "
-                    "который принимает WETH и сам оборачивает либо разворачивает ETH. Один общий BasePmmExecutor прошёл 4 обмена LunarBase и 8 ElfomoFi. Размещение оценено в 1 142 963 gas. За 24 часа оборот единственного живого пула составил 1 458 887,970774 USDC. Для рабочего режима нужен допуск владельца. [Архив, стоимость и условия](DECISIONS.md#дополнение-к-t488-01-общий-модуль-basepmmexecutor-для-elfomofi-и-lunarbase-dex-24-r-23). "
+                    "который принимает WETH и сам оборачивает либо разворачивает ETH. Один общий BasePmmExecutor прошёл 4 обмена LunarBase и 8 ElfomoFi. В сборке 2f2115ff те же четыре обмена LunarBase прошли на общем runtime. Размещение обновлённого модуля оценено в 1 607 490 gas. За 24 часа оборот единственного живого пула составил 1 458 887,970774 USDC. Для рабочего режима нужен допуск владельца. [Архив, стоимость и условия](DECISIONS.md#дополнение-к-t488-01-общий-модуль-basepmmexecutor-для-elfomofi-и-lunarbase-dex-24-r-23). "
                     f"[Сырые вызовы и ответы](../{lunar.as_posix()})."])
     aero_basic = Path("tests/data/first_run_dex_2026-11-26/aero_basic_base.json")
     if base and aero_basic.exists():
@@ -365,6 +365,14 @@ def tables(network, snapshots, profiles):
                         "превысил лимит. Для DEFROGS/WETH проверены обе стороны обмена на двух размерах."])
     lista = "tests/data/first_run_dex_2026-11-26/lista_ethereum.json"
     lista_stable = "tests/data/first_run_dex_2026-11-26/lista_stable_ethereum.json"
+    if base:
+        out.extend(["", "9mm V3, Throne V3 и Omni V3 на Base. Для собственного кошелька подтверждён общий модуль 0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24. "
+                    "При настройке `dex.kind=base_native_v3_module` указывается его адрес в `dex.router`. Предустановленный режим `base_native_v3` наблюдает рынок. "
+                    "Роутер каждой фабрики оплачивает фактически потреблённый вход. Модуль сверяет полный расход и чистую выплату кошельку, включая перевод токена. "
+                    "На блоке 62 262 756 в семи из девяти сценариев прошли обе стороны. Два отказа официального квотера Omni при 1 и 10 USDC получены при пределах 2 млн газа. "
+                    "Четыре тарифа подтверждены у каждой фабрики, у Omni также подтверждён 80 (0,008%). Строки настроек приводят проверенные ставки. "
+                    "[Платежи, комиссии пулов и адреса](../tests/data/first_run_dex_2026-11-26/base_native_v3.json) · "
+                    "[Фабрики и TickLens на том же блоке](../tests/data/first_run_dex_2026-11-26/base_native_v3_profiles.json)."])
     derp_path = Path("tests/data/first_run_dex_2026-11-26/derpdex_markets.json")
     if base and derp_path.exists():
         directory_path = derp_path.with_name("derpdex_directory.json")
@@ -693,7 +701,7 @@ def tables(network, snapshots, profiles):
         task = f"`T-SOURCE-{network}-{row['id']}`"
         if base and str(row["id"]) == "8934" and baibai.exists():
             candidates = [bai["deployments"]["entry"]["address"]]
-            task = "DEX-25 · Entry подтвердил WETH/USDC, обе котировки и платежи. Оборот каждого базового токена посчитан отдельно"
+            task = "DEX-25 · Entry подтвердил выплаты и комиссии WETH/USDC и NVDAc/USDC. В обоих рынках проверено по две стороны и два объёма"
         if base and str(row["id"]) == "7601" and lunar.exists():
             task = "DEX-24 · один действующий native ETH/USDC, фактические implementation и выплаты по обеим сторонам; три размещения приостановлены"
         if base and str(row["id"]) == "7260" and elfomo.exists():

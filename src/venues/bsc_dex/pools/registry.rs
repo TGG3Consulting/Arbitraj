@@ -105,9 +105,15 @@ impl Entry {
     pub fn shared_market(&self) -> Option<PoolRef> {
         match &self.pool.reference {
             PoolRef::Member { contract, .. }
-                if self.family.proto == super::families::Proto::Elfomo =>
+                if matches!(
+                    self.family.proto,
+                    super::families::Proto::Elfomo | super::families::Proto::BaiBai
+                ) =>
             {
                 Some(PoolRef::Contract(*contract))
+            }
+            PoolRef::Contract(addr) if self.family.proto == super::families::Proto::BaiBai => {
+                Some(PoolRef::Contract(*addr))
             }
             PoolRef::Multi { .. } => Some(self.pool.reference.site()),
             _ => None,

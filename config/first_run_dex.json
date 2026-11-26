@@ -1906,11 +1906,17 @@
       "dex.pmm_ladder_counter": true
     },
     "verified_module": {
-      "runtime_keccak": "0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403",
+      "runtime_keccak": "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24",
       "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
       "full": 8,
       "markets": 2,
       "additional": [
+        {
+          "runtime_keccak": "0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403",
+          "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+          "full": 8,
+          "markets": 2
+        },
         {
           "runtime_keccak": "0xd3abddebdd155ff956b970579304da391511f945803c0ae5f1ec8f28c10a64bb",
           "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
@@ -2151,10 +2157,18 @@
       "dex.pmm_ladder_counter": true
     },
     "verified_module": {
-      "runtime_keccak": "0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403",
+      "runtime_keccak": "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24",
       "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
       "full": 4,
-      "markets": 1
+      "markets": 1,
+      "additional": [
+        {
+          "runtime_keccak": "0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403",
+          "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+          "full": 4,
+          "markets": 1
+        }
+      ]
     }
   },
   {
@@ -2186,7 +2200,14 @@
       "dex.pool_implementation": "0xcc61f0acb73eea94c160af15da4471b9b456f3b0",
       "dex.oracle": "0x604d9b9eb1e1571c78661a6c1088427ec9c8c6e5",
       "dex.vault": "0xaac48feb93c5c97e0fb3c7c57e1633922a4acda3",
-      "dex.pmm_ladder_counter": true
+      "dex.pmm_ladder_counter": true,
+      "dex.multi_pair": true
+    },
+    "verified_module": {
+      "runtime_keccak": "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24",
+      "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "full": 8,
+      "markets": 2
     }
   },
   {
@@ -2226,6 +2247,79 @@
         "40000",
         "50000"
       ]
+    }
+  },
+  {
+    "id": "9mm-v3-base",
+    "network": "base",
+    "chain_id": 8453,
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xa07d063b595168e081b51280ada5fc8e11cde52b · tests/data/first_run_dex_2026-11-26/base_native_v3.json",
+    "settings": {
+      "dex.kind": "base_native_v3",
+      "dex.factory": "0x7b72c4002ea7c276dd717b96b20f4956c5c904e7",
+      "dex.quoter": "0xf26600e17728f41adfb73d986e3deaf6df29f1c4",
+      "dex.tick_lens": "0x9a489505a00ce272eaa5e07dba6491314cae3796",
+      "dex.v3_fee_tiers": [
+        "100",
+        "500",
+        "2500",
+        "10000"
+      ]
+    },
+    "verified_module": {
+      "runtime_keccak": "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24",
+      "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "full": 6,
+      "markets": 1
+    }
+  },
+  {
+    "id": "throne-v3-base",
+    "network": "base",
+    "chain_id": 8453,
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x48e285bc3690415c3b6220c3f833ed9c303a4f46 · tests/data/first_run_dex_2026-11-26/base_native_v3.json",
+    "settings": {
+      "dex.kind": "base_native_v3",
+      "dex.factory": "0xe8839bf8175812691c6578c0fc80e721bc3e00fb",
+      "dex.quoter": "0xf2e99648bf3b788690b6091b7ae19b507220c80b",
+      "dex.tick_lens": "0x9a489505a00ce272eaa5e07dba6491314cae3796",
+      "dex.v3_fee_tiers": [
+        "100",
+        "500",
+        "2500",
+        "10000"
+      ]
+    },
+    "verified_module": {
+      "runtime_keccak": "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24",
+      "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "full": 6,
+      "markets": 1
+    }
+  },
+  {
+    "id": "omni-exchange-v3-base",
+    "network": "base",
+    "chain_id": 8453,
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x34c97b800876d9ca4658561f00512fa7abdaf315 · tests/data/first_run_dex_2026-11-26/base_native_v3.json",
+    "settings": {
+      "dex.kind": "base_native_v3",
+      "dex.factory": "0xd6ab0566e7e60b67c50ac73ddff4e3ddcb829ec2",
+      "dex.quoter": "0x134d3c90a4a4c712cf0b548fe02003c9d934baba",
+      "dex.tick_lens": "0x9a489505a00ce272eaa5e07dba6491314cae3796",
+      "dex.v3_fee_tiers": [
+        "80",
+        "100",
+        "500",
+        "2500",
+        "10000"
+      ]
+    },
+    "verified_module": {
+      "runtime_keccak": "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24",
+      "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "full": 2,
+      "markets": 1
     }
   }
 ]

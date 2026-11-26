@@ -63,8 +63,17 @@ pub fn market(ctx: &Ctx, entry: &Entry) -> GatewayResult<Address> {
         {
             Ok(*contract)
         }
+        (
+            PoolRef::Member { contract, .. } | PoolRef::Contract(contract),
+            super::families::Proto::BaiBai,
+        ) if *contract == super::baibai::ENTRY => Ok(*contract),
         (PoolRef::Contract(address), super::families::Proto::Lunar)
             if *address == super::lunar::POOL =>
+        {
+            Ok(*address)
+        }
+        (PoolRef::Contract(address), super::families::Proto::PancakeV3)
+            if entry.family.variant == super::family_variant::Variant::BaseNativeV3 =>
         {
             Ok(*address)
         }
@@ -97,6 +106,20 @@ pub async fn verify_code(ctx: &Ctx, kind: &str, addr: Address, tag: &Value) -> G
 }
 
 pub async fn verify(ctx: &Ctx, f: &Family, addr: Address, at: &str) -> GatewayResult<()> {
+    if f.variant == super::family_variant::Variant::BaseNativeV3 {
+        if !super::base_native_v3::valid(ctx, f) {
+            return Err(ctx.err(
+                ErrorCode::NoRoute,
+                "Изменена фабрика или квотер прямого V3-модуля Base",
+            ));
+        }
+        return verify_code(ctx, "base_native_v3", addr, &json!(at)).await;
+    }
+    if f.proto == super::families::Proto::BaiBai {
+        let tag = elfomo::block(ctx, at).await?;
+        super::baibai::verify_at(ctx, f.id, &tag).await?;
+        return verify_code(ctx, "baibai", addr, &tag).await;
+    }
     if f.proto == super::families::Proto::Lunar {
         let tag = elfomo::block(ctx, at).await?;
         super::lunar::verify_at(ctx, f.id, &tag).await?;

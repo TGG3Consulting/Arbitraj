@@ -1,0 +1,676 @@
+{
+  "chain_id": 8453,
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "block": 62262756,
+  "state_root": "0x037b0c48cd33236cb94ec9e9fc7438c120b138c2c31d39d0ebe42521ee65676b",
+  "markets": {
+    "9mm-v3-base": {
+      "factory": "0x7b72c4002ea7c276dd717b96b20f4956c5c904e7",
+      "pool": "0x4647ee5955f9d58f76cd86756bfb2eee543fd2b8",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "fee": 2500,
+      "owner": "0x682718efd1bd558afa17d02b1cd328bc705b5cef",
+      "router": {
+        "address": "0xa07d063b595168e081b51280ada5fc8e11cde52b",
+        "deployment": {
+          "transactionHash": "0x90190092956508ba5f929266f31aeb70dc1f9412c0423e30a5aa44173bddfa1e",
+          "blockNumber": "15786717",
+          "transactionIndex": "40",
+          "deployer": "0xEE1FBd99E7241fEBfAc2B47e6818c037CB7A6f4c"
+        },
+        "source": "https://sourcify.dev/server/v2/contract/8453/0xa07d063b595168e081b51280ada5fc8e11cde52b",
+        "compiler": "0.7.6+commit.7338295f",
+        "name": "contracts/SwapRouter.sol:SwapRouter",
+        "runtime": "0x46feaa12c694f1176f074a57a6de85b28e1086a32917c1771608ef28a1c27c27",
+        "callbacks": [
+          "nineMMV3SwapCallback"
+        ],
+        "factory": "0x7b72c4002ea7c276dd717b96b20f4956c5c904e7",
+        "deployer": "0x1ac8fabc977426ae83f5a17d9af100b5bf09a429",
+        "WETH9": "0x4200000000000000000000000000000000000006"
+      },
+      "quoter": {
+        "address": "0xf26600e17728f41adfb73d986e3deaf6df29f1c4",
+        "deployment": {
+          "transactionHash": "0x78e3e9c89062e54497528c61fe71393a85bc72b37e69c2406ab610dcf17373b4",
+          "blockNumber": "15786745",
+          "transactionIndex": "56",
+          "deployer": "0xEE1FBd99E7241fEBfAc2B47e6818c037CB7A6f4c"
+        },
+        "source": "https://sourcify.dev/server/v2/contract/8453/0xf26600e17728f41adfb73d986e3deaf6df29f1c4",
+        "compiler": "0.7.6+commit.7338295f",
+        "name": "contracts/lens/QuoterV2.sol:QuoterV2",
+        "runtime": "0x5a93ba91e0a39250d28e67d1a8c34b97c9e3046da36fbf5c2c720d72e0ba6ef4",
+        "callbacks": [
+          "nineMMV3SwapCallback"
+        ],
+        "factory": "0x7b72c4002ea7c276dd717b96b20f4956c5c904e7",
+        "deployer": "0x1ac8fabc977426ae83f5a17d9af100b5bf09a429",
+        "WETH9": "0x4200000000000000000000000000000000000006"
+      },
+      "cases": [
+        {
+          "buy": {
+            "input": "0x4200000000000000000000000000000000000006",
+            "output": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "requested": "1000000000000",
+            "quoted": "1681",
+            "minimum_plus_one": {
+              "code": 3,
+              "message": "execution reverted: Too little received",
+              "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+            },
+            "expired": {
+              "code": 3,
+              "message": "execution reverted: Transaction too old",
+              "data": "0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000135472616e73616374696f6e20746f6f206f6c6400000000000000000000000000"
+            },
+            "spent": "1000000000000",
+            "received": "1681",
+            "reported": "1681",
+            "gas": 136700,
+            "module": {
+              "net": "1681",
+              "gas": 199141,
+              "minimum_plus_one": {
+                "code": 3,
+                "message": "execution reverted: Too little received",
+                "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+              },
+              "expired": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0xaf610693"
+              }
+            }
+          },
+          "sell": {
+            "input": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "output": "0x4200000000000000000000000000000000000006",
+            "requested": "1681",
+            "quoted": "994032151080",
+            "minimum_plus_one": {
+              "code": 3,
+              "message": "execution reverted: Too little received",
+              "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+            },
+            "expired": {
+              "code": 3,
+              "message": "execution reverted: Transaction too old",
+              "data": "0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000135472616e73616374696f6e20746f6f206f6c6400000000000000000000000000"
+            },
+            "spent": "1681",
+            "received": "994032151080",
+            "reported": "994032151080",
+            "gas": 118375,
+            "module": {
+              "net": "994032151080",
+              "gas": 193746,
+              "minimum_plus_one": {
+                "code": 3,
+                "message": "execution reverted: Too little received",
+                "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+              },
+              "expired": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0xaf610693"
+              }
+            }
+          }
+        },
+        {
+          "buy": {
+            "input": "0x4200000000000000000000000000000000000006",
+            "output": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "requested": "100000000000000",
+            "quoted": "168178",
+            "minimum_plus_one": {
+              "code": 3,
+              "message": "execution reverted: Too little received",
+              "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+            },
+            "expired": {
+              "code": 3,
+              "message": "execution reverted: Transaction too old",
+              "data": "0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000135472616e73616374696f6e20746f6f206f6c6400000000000000000000000000"
+            },
+            "spent": "100000000000000",
+            "received": "168178",
+            "reported": "168178",
+            "gas": 143436,
+            "module": {
+              "net": "168178",
+              "gas": 204530,
+              "minimum_plus_one": {
+                "code": 3,
+                "message": "execution reverted: Too little received",
+                "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+              },
+              "expired": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0xaf610693"
+              }
+            }
+          },
+          "sell": {
+            "input": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "output": "0x4200000000000000000000000000000000000006",
+            "requested": "168178",
+            "quoted": "99499854699594",
+            "minimum_plus_one": {
+              "code": 3,
+              "message": "execution reverted: Too little received",
+              "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+            },
+            "expired": {
+              "code": 3,
+              "message": "execution reverted: Transaction too old",
+              "data": "0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000135472616e73616374696f6e20746f6f206f6c6400000000000000000000000000"
+            },
+            "spent": "168178",
+            "received": "99499854699594",
+            "reported": "99499854699594",
+            "gas": 121201,
+            "module": {
+              "net": "99499854699594",
+              "gas": 196007,
+              "minimum_plus_one": {
+                "code": 3,
+                "message": "execution reverted: Too little received",
+                "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+              },
+              "expired": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0xaf610693"
+              }
+            }
+          }
+        },
+        {
+          "buy": {
+            "input": "0x4200000000000000000000000000000000000006",
+            "output": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "requested": "10000000000000000",
+            "quoted": "16758682",
+            "minimum_plus_one": {
+              "code": 3,
+              "message": "execution reverted: Too little received",
+              "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+            },
+            "expired": {
+              "code": 3,
+              "message": "execution reverted: Transaction too old",
+              "data": "0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000135472616e73616374696f6e20746f6f206f6c6400000000000000000000000000"
+            },
+            "spent": "10000000000000000",
+            "received": "16758682",
+            "reported": "16758682",
+            "gas": 143480,
+            "module": {
+              "net": "16758682",
+              "gas": 204565,
+              "minimum_plus_one": {
+                "code": 3,
+                "message": "execution reverted: Too little received",
+                "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+              },
+              "expired": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0xaf610693"
+              }
+            }
+          },
+          "sell": {
+            "input": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "output": "0x4200000000000000000000000000000000000006",
+            "requested": "16758682",
+            "quoted": "9950150349834915",
+            "minimum_plus_one": {
+              "code": 3,
+              "message": "execution reverted: Too little received",
+              "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+            },
+            "expired": {
+              "code": 3,
+              "message": "execution reverted: Transaction too old",
+              "data": "0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000135472616e73616374696f6e20746f6f206f6c6400000000000000000000000000"
+            },
+            "spent": "16758682",
+            "received": "9950150349834915",
+            "reported": "9950150349834915",
+            "gas": 121213,
+            "module": {
+              "net": "9950150349834915",
+              "gas": 196016,
+              "minimum_plus_one": {
+                "code": 3,
+                "message": "execution reverted: Too little received",
+                "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+              },
+              "expired": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0xaf610693"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "throne-v3-base": {
+      "factory": "0xe8839bf8175812691c6578c0fc80e721bc3e00fb",
+      "pool": "0x56fcc093d4fa30e1eea14d9ea963b9f90b29de04",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "fee": 100,
+      "owner": "0x682718efd1bd558afa17d02b1cd328bc705b5cef",
+      "router": {
+        "address": "0x48e285bc3690415c3b6220c3f833ed9c303a4f46",
+        "deployment": {
+          "transactionHash": "0xcac82c845225dcadc3fc7ea385046e4d2c5f857c4a7ba32d87a883ec69a24711",
+          "blockNumber": "2149506",
+          "transactionIndex": "4",
+          "deployer": "0x6d14bDae774042D0AD862b8d1F23ce9F35036844"
+        },
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x48e285bc3690415c3b6220c3f833ed9c303a4f46",
+        "compiler": "0.7.6+commit.7338295f",
+        "name": "contracts/ThroneRouterV3.sol:ThroneRouterV3",
+        "runtime": "0xd3dd91a933bd0923773e792ffb278dc0942cf3082b48ef57a63a769af22c9c82",
+        "callbacks": [
+          "throneV3SwapCallback"
+        ],
+        "factory": "0xe8839bf8175812691c6578c0fc80e721bc3e00fb",
+        "deployer": "0x9b5fa2c42713f7fd4201d5f12dd49962d1a64b6b",
+        "WETH9": "0x4200000000000000000000000000000000000006"
+      },
+      "quoter": {
+        "address": "0xf2e99648bf3b788690b6091b7ae19b507220c80b",
+        "deployment": {
+          "transactionHash": "0x0918b4776051f8bc75fe237037fe1a62bf92e0702e78958b6fa67fe7370527ba",
+          "blockNumber": "2151315",
+          "transactionIndex": "13",
+          "deployer": "0x6d14bDae774042D0AD862b8d1F23ce9F35036844"
+        },
+        "source": "https://sourcify.dev/server/v2/contract/8453/0xf2e99648bf3b788690b6091b7ae19b507220c80b",
+        "compiler": "0.7.6+commit.7338295f",
+        "name": "contracts/lens/MixedRouteQuoterV1.sol:MixedRouteQuoterV1",
+        "runtime": "0x6d8d88508a88644806fb4d1c12723729c6bc90014a312361be7e6134312862e1",
+        "callbacks": [
+          "throneV3SwapCallback"
+        ],
+        "factory": "0xe8839bf8175812691c6578c0fc80e721bc3e00fb",
+        "deployer": "0x9b5fa2c42713f7fd4201d5f12dd49962d1a64b6b",
+        "WETH9": "0x4200000000000000000000000000000000000006"
+      },
+      "cases": [
+        {
+          "buy": {
+            "input": "0x4200000000000000000000000000000000000006",
+            "output": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+            "requested": "1000000000000",
+            "quoted": "1655",
+            "minimum_plus_one": {
+              "code": 3,
+              "message": "execution reverted: Too little received",
+              "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+            },
+            "expired": {
+              "code": 3,
+              "message": "execution reverted: Transaction too old",
+              "data": "0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000135472616e73616374696f6e20746f6f206f6c6400000000000000000000000000"
+            },
+            "spent": "1000000000000",
+            "received": "1655",
+            "reported": "1655",
+            "gas": 163298,
+            "module": {
+              "net": "1655",
+              "gas": 219800,
+              "minimum_plus_one": {
+                "code": 3,
+                "message": "execution reverted: Too little received",
+                "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+              },
+              "expired": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0xaf610693"
+              }
+            }
+          },
+          "sell": {
+            "input": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+            "output": "0x4200000000000000000000000000000000000006",
+            "requested": "1655",
+            "quoted": "999184981244",
+            "minimum_plus_one": {
+              "code": 3,
+              "message": "execution reverted: Too little received",
+              "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+            },
+            "expired": {
+              "code": 3,
+              "message": "execution reverted: Transaction too old",
+              "data": "0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000135472616e73616374696f6e20746f6f206f6c6400000000000000000000000000"
+            },
+            "spent": "1655",
+            "received": "999184981244",
+            "reported": "999184981244",
+            "gas": 112247,
+            "module": {
+              "net": "999184981244",
+              "gas": 187240,
+              "minimum_plus_one": {
+                "code": 3,
+                "message": "execution reverted: Too little received",
+                "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+              },
+              "expired": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0xaf610693"
+              }
+            }
+          }
+        },
+        {
+          "buy": {
+            "input": "0x4200000000000000000000000000000000000006",
+            "output": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+            "requested": "100000000000000",
+            "quoted": "165438",
+            "minimum_plus_one": {
+              "code": 3,
+              "message": "execution reverted: Too little received",
+              "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+            },
+            "expired": {
+              "code": 3,
+              "message": "execution reverted: Transaction too old",
+              "data": "0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000135472616e73616374696f6e20746f6f206f6c6400000000000000000000000000"
+            },
+            "spent": "100000000000000",
+            "received": "165438",
+            "reported": "165438",
+            "gas": 170036,
+            "module": {
+              "net": "165438",
+              "gas": 225191,
+              "minimum_plus_one": {
+                "code": 3,
+                "message": "execution reverted: Too little received",
+                "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+              },
+              "expired": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0xaf610693"
+              }
+            }
+          },
+          "sell": {
+            "input": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+            "output": "0x4200000000000000000000000000000000000006",
+            "requested": "165438",
+            "quoted": "99979242976914",
+            "minimum_plus_one": {
+              "code": 3,
+              "message": "execution reverted: Too little received",
+              "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+            },
+            "expired": {
+              "code": 3,
+              "message": "execution reverted: Transaction too old",
+              "data": "0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000135472616e73616374696f6e20746f6f206f6c6400000000000000000000000000"
+            },
+            "spent": "165438",
+            "received": "99979242976914",
+            "reported": "99979242976914",
+            "gas": 120176,
+            "module": {
+              "net": "99979242976914",
+              "gas": 193583,
+              "minimum_plus_one": {
+                "code": 3,
+                "message": "execution reverted: Too little received",
+                "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+              },
+              "expired": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0xaf610693"
+              }
+            }
+          }
+        },
+        {
+          "buy": {
+            "input": "0x4200000000000000000000000000000000000006",
+            "output": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+            "requested": "10000000000000000",
+            "quoted": "16263016",
+            "minimum_plus_one": {
+              "code": 3,
+              "message": "execution reverted: Too little received",
+              "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+            },
+            "expired": {
+              "code": 3,
+              "message": "execution reverted: Transaction too old",
+              "data": "0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000135472616e73616374696f6e20746f6f206f6c6400000000000000000000000000"
+            },
+            "spent": "10000000000000000",
+            "received": "16263016",
+            "reported": "16263016",
+            "gas": 343689,
+            "module": {
+              "net": "16263016",
+              "gas": 387841,
+              "minimum_plus_one": {
+                "code": 3,
+                "message": "execution reverted: Too little received",
+                "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+              },
+              "expired": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0xaf610693"
+              }
+            }
+          },
+          "sell": {
+            "input": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+            "output": "0x4200000000000000000000000000000000000006",
+            "requested": "16263016",
+            "quoted": "9998011688916790",
+            "minimum_plus_one": {
+              "code": 3,
+              "message": "execution reverted: Too little received",
+              "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+            },
+            "expired": {
+              "code": 3,
+              "message": "execution reverted: Transaction too old",
+              "data": "0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000135472616e73616374696f6e20746f6f206f6c6400000000000000000000000000"
+            },
+            "spent": "16263016",
+            "received": "9998011688916790",
+            "reported": "9998011688916790",
+            "gas": 298962,
+            "module": {
+              "net": "9998011688916790",
+              "gas": 348664,
+              "minimum_plus_one": {
+                "code": 3,
+                "message": "execution reverted: Too little received",
+                "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+              },
+              "expired": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0xaf610693"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "omni-exchange-v3-base": {
+      "factory": "0xd6ab0566e7e60b67c50ac73ddff4e3ddcb829ec2",
+      "pool": "0x1f4c9e2ed56a76d6297e3217bb5c2b87e5937fc0",
+      "tokens": [
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "0xe5020a6d073a794b6e7f05678707de47986fb0b6"
+      ],
+      "fee": 100,
+      "owner": "0x179c94e8cb6e30f2f74e1dd467502aa92d21298e",
+      "router": {
+        "address": "0x34c97b800876d9ca4658561f00512fa7abdaf315",
+        "deployment": {
+          "transactionHash": "0xea9a450a6c245b995e74132df879d2d4fdb503a7f11b930013aec67cb143539c",
+          "blockNumber": "32873763",
+          "transactionIndex": "20",
+          "deployer": "0x4226725DBE5D5064186FcA1cc86B951739C6b402"
+        },
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x34c97b800876d9ca4658561f00512fa7abdaf315",
+        "compiler": "0.7.6+commit.7338295f",
+        "name": "src/SwapRouter.sol:SwapRouter",
+        "runtime": "0x96b60391b9ed5ea42e04bf1f22991edbbb7983d648ca0723e579a168bdc7ecd9",
+        "callbacks": [
+          "omniV3SwapCallback"
+        ],
+        "factory": "0xd6ab0566e7e60b67c50ac73ddff4e3ddcb829ec2",
+        "deployer": "0x0270845a91984746a3677ef5931013a7c980aa78",
+        "WETH9": "0x4200000000000000000000000000000000000006"
+      },
+      "quoter": {
+        "address": "0x134d3c90a4a4c712cf0b548fe02003c9d934baba",
+        "deployment": {
+          "transactionHash": "0x2d1ecdc44ff2c88f46333017c2cdff94ad765d8f4afea9daec7a0d7fade6ce56",
+          "blockNumber": "32873763",
+          "transactionIndex": "79",
+          "deployer": "0x4226725DBE5D5064186FcA1cc86B951739C6b402"
+        },
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x134d3c90a4a4c712cf0b548fe02003c9d934baba",
+        "compiler": "0.7.6+commit.7338295f",
+        "name": "src/lens/QuoterV2.sol:QuoterV2",
+        "runtime": "0x843b883766a60d0b7a8bf474678416191afed82ea02715e4d3ed342e9527eb0d",
+        "callbacks": [
+          "omniV3SwapCallback"
+        ],
+        "factory": "0xd6ab0566e7e60b67c50ac73ddff4e3ddcb829ec2",
+        "deployer": "0x0270845a91984746a3677ef5931013a7c980aa78",
+        "WETH9": "0x4200000000000000000000000000000000000006"
+      },
+      "cases": [
+        {
+          "buy": {
+            "input": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "output": "0xe5020a6d073a794b6e7f05678707de47986fb0b6",
+            "requested": "10000",
+            "quoted": "9997517216368814",
+            "minimum_plus_one": {
+              "code": 3,
+              "message": "execution reverted: Too little received",
+              "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+            },
+            "expired": {
+              "code": 3,
+              "message": "execution reverted: Transaction too old",
+              "data": "0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000135472616e73616374696f6e20746f6f206f6c6400000000000000000000000000"
+            },
+            "spent": "10000",
+            "received": "9997517216368814",
+            "reported": "9997517216368814",
+            "gas": 153135,
+            "module": {
+              "net": "9997517216368814",
+              "gas": 220768,
+              "minimum_plus_one": {
+                "code": 3,
+                "message": "execution reverted: Too little received",
+                "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+              },
+              "expired": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0xaf610693"
+              }
+            }
+          },
+          "sell": {
+            "input": "0xe5020a6d073a794b6e7f05678707de47986fb0b6",
+            "output": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "requested": "9997517216368814",
+            "quoted": "9998",
+            "minimum_plus_one": {
+              "code": 3,
+              "message": "execution reverted: Too little received",
+              "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+            },
+            "expired": {
+              "code": 3,
+              "message": "execution reverted: Transaction too old",
+              "data": "0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000135472616e73616374696f6e20746f6f206f6c6400000000000000000000000000"
+            },
+            "spent": "9997517216368814",
+            "received": "9998",
+            "reported": "9998",
+            "gas": 137809,
+            "module": {
+              "net": "9998",
+              "gas": 216131,
+              "minimum_plus_one": {
+                "code": 3,
+                "message": "execution reverted: Too little received",
+                "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000013546f6f206c6974746c6520726563656976656400000000000000000000000000"
+              },
+              "expired": {
+                "code": 3,
+                "message": "execution reverted",
+                "data": "0xaf610693"
+              }
+            }
+          }
+        },
+        {
+          "buy": {
+            "input": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "output": "0xe5020a6d073a794b6e7f05678707de47986fb0b6",
+            "requested": "1000000",
+            "quote_error": {
+              "code": 3,
+              "message": "execution reverted: Unexpected error",
+              "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010556e6578706563746564206572726f7200000000000000000000000000000000"
+            }
+          }
+        },
+        {
+          "buy": {
+            "input": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "output": "0xe5020a6d073a794b6e7f05678707de47986fb0b6",
+            "requested": "10000000",
+            "quote_error": {
+              "code": 3,
+              "message": "execution reverted: Unexpected error",
+              "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010556e6578706563746564206572726f7200000000000000000000000000000000"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "module_runtime": "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24"
+}

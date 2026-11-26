@@ -273,6 +273,7 @@ pub mod lost_events;
 pub mod market;
 pub mod market_mids;
 // Решение 482: пулы Metric OMM перечислением фабрики (поиск по фабрикам).
+pub mod base_native_v3;
 pub mod direct_module;
 pub mod metric_list;
 pub mod mid_dex;

@@ -74,3 +74,5 @@ if __name__=="__main__":
           module=EXEC,runtime_keccak=elfomo["runtime_keccak"],compiler=compiled["solc"],cases=cases))
     from record_baibai_executor import capture as baibai_capture
     write(FOLDER/"base_pmm_executor_baibai.json",baibai_capture(compiled,int(head["timestamp"],16)+90))
+    from record_baibai_roundtrip import capture as roundtrip
+    write(FOLDER/"base_pmm_executor_baibai_roundtrip.json",dict(runtime_keccak=elfomo["runtime_keccak"],**roundtrip(compiled["runtime"])))

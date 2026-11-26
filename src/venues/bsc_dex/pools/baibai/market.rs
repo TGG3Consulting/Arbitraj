@@ -1,4 +1,4 @@
-//! Строит независимую глубину сторон WETH/USDC по чистым котировкам конкретного плательщика.
+//! Строит независимую глубину рынков WETH и NVDAc с USDC по чистым котировкам конкретного плательщика.
 use super::{BOOK, ENTRY, ENTRY_IMPL, IBai, VAULT, elfomo, lunar, verify_at, view};
 use crate::core::types::{LadderPoint, OraclePmmData, PoolState};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -16,9 +16,26 @@ struct Market<'a> {
     ctx: &'a Ctx,
     tag: &'a Value,
     payer: Address,
+    coin: Address,
 }
 
-impl Market<'_> {
+impl<'a> Market<'a> {
+    async fn new(ctx: &'a Ctx, id: &str, tag: &'a Value, coin: Address) -> GatewayResult<Self> {
+        verify_at(ctx, id, tag).await?;
+        let payer = if ctx.dex_text("dex.kind", id)? == "baibai_module" {
+            let module = ctx.dex_addr("dex.router", id)?;
+            super::super::direct_module::verify_code(ctx, "baibai", module, tag).await?;
+            module
+        } else {
+            signer::address(ctx)?
+        };
+        Ok(Self {
+            ctx,
+            tag,
+            payer,
+            coin,
+        })
+    }
     async fn reserve(&self, asset: Address) -> GatewayResult<U256> {
         view(
             self.ctx,
@@ -38,7 +55,7 @@ impl Market<'_> {
             self.payer,
             ENTRY,
             IBai::quoteForCall {
-                base: lunar::WETH,
+                base: self.coin,
                 tokenIn: asset,
                 amountIn: size,
                 taker: self.payer,
@@ -60,7 +77,7 @@ impl Market<'_> {
             let dx = if asset == lunar::USDC {
                 size
             } else {
-                // mid — сырые USDC за 10^18 WETH, только для выбора входного объёма.
+                // mid — сырые USDC за 10^18 сырых единиц базового токена, только для выбора входного объёма.
                 let Some(coins) = mul_div(size, U256::from(10u64.pow(18)), mid) else {
                     break;
                 };
@@ -96,19 +113,15 @@ pub async fn quote(
     dx: U256,
     at: &str,
 ) -> GatewayResult<U256> {
-    if !(lunar::pair(from, to) || lunar::pair(to, from)) {
+    if !(super::pair(from, to) || super::pair(to, from)) {
         return Err(ctx.err(
             ErrorCode::NoRoute,
             "Пара BaiBai не прошла архивную проверку",
         ));
     }
     let tag = elfomo::block(ctx, at).await?;
-    verify_at(ctx, id, &tag).await?;
-    let m = Market {
-        ctx,
-        tag: &tag,
-        payer: signer::address(ctx)?,
-    };
+    let coin = if from == lunar::USDC { to } else { from };
+    let m = Market::new(ctx, id, &tag, coin).await?;
     let (out, reserve) = tokio::try_join!(m.net(from, dx), m.reserve(to))?;
     if out.is_zero() || out > reserve {
         return Err(ctx.err(
@@ -129,26 +142,20 @@ pub async fn load(
     at: &str,
 ) -> GatewayResult<PoolState> {
     if reference != ENTRY
-        || !(lunar::pair(ordered.0, ordered.1) || lunar::pair(ordered.1, ordered.0))
+        || !(super::pair(ordered.0, ordered.1) || super::pair(ordered.1, ordered.0))
     {
         return Err(ctx.err(ErrorCode::NotApplicable, "Нет подтверждения пары BaiBai"));
     }
     let tag = elfomo::block(ctx, at).await?;
-    verify_at(ctx, f.id, &tag).await?;
-    let m = Market {
-        ctx,
-        tag: &tag,
-        payer: signer::address(ctx)?,
+    let coin = if ordered.0 == lunar::USDC {
+        ordered.1
+    } else {
+        ordered.0
     };
+    let m = Market::new(ctx, f.id, &tag, coin).await?;
     let (p, base, usd) = tokio::try_join!(
-        view(
-            ctx,
-            &tag,
-            m.payer,
-            BOOK,
-            IBai::pairCall { base: lunar::WETH }
-        ),
-        m.reserve(lunar::WETH),
+        view(ctx, &tag, m.payer, BOOK, IBai::pairCall { base: m.coin }),
+        m.reserve(m.coin),
         m.reserve(lunar::USDC),
     )?;
     let mid = U256::from(p.mid);
@@ -158,7 +165,7 @@ pub async fn load(
     } else {
         tokio::try_join!(
             m.side(lunar::USDC, &sizes, mid, base),
-            m.side(lunar::WETH, &sizes, mid, usd)
+            m.side(m.coin, &sizes, mid, usd)
         )?
     };
     Ok(PoolState::OraclePmm(Box::new(OraclePmmData {
@@ -168,7 +175,7 @@ pub async fn load(
         feasible: !buy.is_empty() || !sell.is_empty(),
         paused: false,
         implementation: ENTRY_IMPL,
-        base_is_token0: ordered.0 == lunar::WETH,
+        base_is_token0: ordered.0 == m.coin,
         pool_token0: None,
         ladder_quote_in: buy,
         ladder_base_in: sell,

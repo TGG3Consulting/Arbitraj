@@ -8,12 +8,17 @@ fn amount(v: &Value) -> U256 {
 }
 
 #[test]
-fn primary_module_matches_both_archives_and_settles_full_wallet_deltas() {
+fn primary_module_matches_all_markets_and_settles_full_wallet_deltas() {
     use arb::venues::bsc_dex::pools::direct_module;
     for (kind, raw, count) in [
         (
             "elfomofi",
             include_str!("data/first_run_dex_2026-11-26/base_pmm_executor_elfomo.json"),
+            8,
+        ),
+        (
+            "baibai",
+            include_str!("data/first_run_dex_2026-11-26/base_pmm_executor_baibai.json"),
             8,
         ),
         (

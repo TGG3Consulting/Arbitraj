@@ -36,8 +36,14 @@ def rpc(url, method, params):
     """Только чтение EVM. Возвращает JSON-RPC result или явную ошибку узла."""
     if method not in {"eth_chainId", "eth_getBlockByHash", "eth_getCode", "eth_simulateV1"}:
         raise ValueError("Метод вне перечня чтения")
-    response = requests.post(url, json=dict(jsonrpc="2.0", id=1, method=method, params=params),
-                             timeout=30)
+    from time import sleep
+    request = dict(jsonrpc="2.0", id=1, method=method, params=params)
+    for attempt in range(6):
+        response = requests.post(url, json=request, timeout=30)
+        if response.status_code != 429 or attempt == 5:
+            break
+        delay = response.headers.get("Retry-After", "")
+        sleep(min(30, max(1, int(delay))) if delay.isdigit() else 2 ** attempt)
     response.raise_for_status()
     payload = response.json()
     if "error" in payload:

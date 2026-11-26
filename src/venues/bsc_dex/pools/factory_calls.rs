@@ -227,7 +227,11 @@ pub fn plan(
                     .flatten();
                 for (a, b) in std::iter::once((coin, quote)).chain(alt) {
                     if matches!(f.proto, Proto::BaiBai | Proto::Lunar) {
-                        if !super::lunar::pair(a, b) {
+                        if !(if f.proto == Proto::BaiBai {
+                            super::baibai::pair(a, b)
+                        } else {
+                            super::lunar::pair(a, b)
+                        }) {
                             continue;
                         }
                         qs.clear();

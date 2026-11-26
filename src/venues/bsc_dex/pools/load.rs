@@ -444,7 +444,14 @@ pub async fn state(
             (Proto::InfinityStable, PoolRef::Contract(a)) => {
                 load_inf_stable::load(ctx, f, *a, pair, &tag).await?
             }
-            (Proto::BaiBai, PoolRef::Contract(pool)) => {
+            (Proto::BaiBai, PoolRef::Member { contract, coin })
+                if pair.0 == *coin || pair.1 == *coin =>
+            {
+                super::baibai::load(ctx, tokens, reg, f, *contract, pair, &tag).await?
+            }
+            (Proto::BaiBai, PoolRef::Contract(pool))
+                if pair.0 == super::lunar::WETH || pair.1 == super::lunar::WETH =>
+            {
                 super::baibai::load(ctx, tokens, reg, f, *pool, pair, &tag).await?
             }
             (Proto::Lunar, PoolRef::Contract(pool)) => {

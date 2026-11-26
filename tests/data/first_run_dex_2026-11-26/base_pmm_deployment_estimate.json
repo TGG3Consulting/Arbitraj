@@ -1,31 +1,39 @@
 {
-  "run": "https://github.com/TGG3Consulting/Arbitraj/actions/runs/45884849065",
+  "run": "https://github.com/TGG3Consulting/Arbitraj/actions/runs/45887561108",
   "selector": {
     "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
     "requireCanonical": true
   },
-  "compile_runtime": "0xce587f0be477a2a6a9bd8b72a5123b9474709cf99c4c958cf777e698d7284403",
-  "creation_bytes": 5018,
-  "runtime_bytes": 4992,
+  "compile_runtime": "0x6587e95f1ad53b3a542bd2fd8f9b81d6e8f2e0fdc0e0d73440e77d0e31a56f24",
+  "creation_bytes": 7151,
+  "runtime_bytes": 7125,
   "creation_sender": "0x682718efd1bd558afa17d02b1cd328bc705b5cef",
   "creation_gas": {
     "jsonrpc": "2.0",
     "id": 1,
-    "result": "0x1170b3"
+    "result": "0x188742"
   },
   "swaps_gas": [
-    481486,
-    481498,
-    470519,
-    470519,
-    531733,
-    531733,
-    505807,
-    505807,
-    206692,
-    206704,
-    246688,
-    246688
+    482200,
+    482212,
+    471157,
+    471157,
+    532462,
+    532462,
+    506460,
+    506460,
+    207377,
+    207389,
+    247266,
+    247266,
+    219747,
+    219747,
+    213591,
+    213600,
+    224906,
+    224906,
+    206011,
+    219710
   ],
   "fee_receipt_examples": [
     {
@@ -117,6 +125,42 @@
       "l1Fee": "0x18d3d2b04",
       "operatorFeeScalar": null,
       "operatorFeeConstant": null
+    },
+    {
+      "transactionHash": "0xc0c7d60a1f5f4428591eed2024a3e7f3e5485aef05ceab1f93d4d62724c8739d",
+      "blockHash": "0x8504c2f65b976befcd4d530f017b711de07f2f627300aedba8102e35c6153195",
+      "gasUsed": "0x1315c1",
+      "effectiveGasPrice": "0x5b8d80",
+      "l1Fee": "0xbbb08305",
+      "operatorFeeScalar": null,
+      "operatorFeeConstant": null
+    },
+    {
+      "transactionHash": "0x6cdca4c018646772d2918d889ab751bfdcc96a785d6fdc3a1f6b53183bc89ad3",
+      "blockHash": "0x0deb765dbd0ed0101959f210baabf9e5c99edc8f3de1aab03565640b22d9be2a",
+      "gasUsed": "0x1470b2",
+      "effectiveGasPrice": "0x7a4118",
+      "l1Fee": "0x1aa25498b",
+      "operatorFeeScalar": null,
+      "operatorFeeConstant": null
+    },
+    {
+      "transactionHash": "0x7bf7ed54fd075e950d74529dfac197843bb166f4b6e64b84f2801f597f5e5012",
+      "blockHash": "0x95de0d35818b3f9a0a4d8b99ffaa140431efe6845fed3d3bc14cb9c381a91b98",
+      "gasUsed": "0xc9351",
+      "effectiveGasPrice": "0x606f80",
+      "l1Fee": "0x35c800451",
+      "operatorFeeScalar": null,
+      "operatorFeeConstant": null
+    },
+    {
+      "transactionHash": "0x7ff2e015f75042844003a4fdbe88974d5270469294ac77c69f47be77f28e3710",
+      "blockHash": "0xea2a87f870a9a2686caa5544775fc3d963d5e724d1015ae20e7dc37c343c185b",
+      "gasUsed": "0x9af64",
+      "effectiveGasPrice": "0x5b8d80",
+      "l1Fee": "0x1caab770b",
+      "operatorFeeScalar": null,
+      "operatorFeeConstant": null
     }
   ],
   "fee_oracle": {
@@ -128,7 +172,7 @@
         "id": 1,
         "result": "0x000000000000000000000000000000000000000000000000000000006e1f822b"
       },
-      "operator_gas": 531733,
+      "operator_gas": 532462,
       "operator_fee_response": {
         "jsonrpc": "2.0",
         "id": 1,
@@ -136,14 +180,14 @@
       }
     },
     "creation": {
-      "unsigned_envelope_bytes_bound": 5146,
-      "calldata_bytes": 5018,
+      "unsigned_envelope_bytes_bound": 7279,
+      "calldata_bytes": 7151,
       "fee_response": {
         "jsonrpc": "2.0",
         "id": 1,
-        "result": "0x000000000000000000000000000000000000000000000000000000063ede4195"
+        "result": "0x00000000000000000000000000000000000000000000000000000008d1495b2b"
       },
-      "operator_gas": 1142963,
+      "operator_gas": 1607490,
       "operator_fee_response": {
         "jsonrpc": "2.0",
         "id": 1,
@@ -153,20 +197,30 @@
   },
   "gas_by_market": {
     "elfomo": [
-      481486,
-      481498,
-      470519,
-      470519,
-      531733,
-      531733,
-      505807,
-      505807
+      482200,
+      482212,
+      471157,
+      471157,
+      532462,
+      532462,
+      506460,
+      506460
     ],
     "lunarbase": [
-      206692,
-      206704,
-      246688,
-      246688
+      207377,
+      207389,
+      247266,
+      247266
+    ],
+    "baibai": [
+      219747,
+      219747,
+      213591,
+      213600,
+      224906,
+      224906,
+      206011,
+      219710
     ]
   }
 }

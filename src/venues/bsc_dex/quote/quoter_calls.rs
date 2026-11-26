@@ -374,6 +374,16 @@ pub fn request(
                 fee,
                 sqrtPriceLimitX96: U160::ZERO,
             };
+            if e.family.variant == super::super::pools::family_variant::Variant::BaseNativeV3 {
+                let target = ctx.dex_addr("dex.quoter", e.family.id)?;
+                if target == super::super::pools::base_native_v3::THRONE_QUOTER {
+                    let call =
+                        super::super::node::abi_dex::IThroneQuoter::quoteExactInputSingleV3Call {
+                            params: p,
+                        };
+                    return Ok((target, Bytes::from(call.abi_encode())));
+                }
+            }
             IQuoterV2::quoteExactInputSingleCall { params: p }.abi_encode()
         }
         (_, Some(PoolKey::Infinity(k))) => {

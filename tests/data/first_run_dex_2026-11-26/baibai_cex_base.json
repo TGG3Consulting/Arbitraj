@@ -1,0 +1,221 @@
+{
+  "observed_utc": "2026-11-26T20:00:31.976265+00:00",
+  "markets": [
+    {
+      "venue": "binance",
+      "url": "https://api.binance.com/api/v3/exchangeInfo",
+      "http": 200,
+      "sha256": "aff1315cd8ecbb1174573d08526ac293f51969cecec345de281843a02b4e8a8a",
+      "listed": 3756,
+      "parsed": 3756,
+      "exact": [],
+      "related": [
+        "NVDABUSDT"
+      ]
+    },
+    {
+      "venue": "bingx",
+      "url": "https://open-api.bingx.com/openApi/spot/v1/common/symbols",
+      "http": 200,
+      "sha256": "bbdce7aec1c46b6e61c5a55ec0984a07fe44ea331c78bd2fe268937b6122f3c5",
+      "listed": 2305,
+      "parsed": 2305,
+      "exact": [],
+      "related": [
+        "NVDAX-USDT",
+        "NVDAON-USDT"
+      ]
+    },
+    {
+      "venue": "bitget",
+      "url": "https://api.bitget.com/api/v2/spot/public/symbols",
+      "http": 200,
+      "sha256": "64634a7e9bfe669e071349eca1781944e0bc7e81ca5fd5acdae1c94ada164430",
+      "listed": 3656,
+      "parsed": 3656,
+      "exact": [],
+      "related": [
+        "RNVDAUSDT"
+      ]
+    },
+    {
+      "venue": "bybit",
+      "url": "https://api.bybit.com/v5/market/instruments-info?category=spot",
+      "http": 200,
+      "sha256": "dda0eed1299e95fdf8cc1df940695cd32cdfa25d579f6ac160161427fc4d5290",
+      "listed": 499,
+      "parsed": 499,
+      "exact": [],
+      "related": [
+        "NVDAXUSDT"
+      ]
+    },
+    {
+      "venue": "coinex",
+      "url": "https://api.coinex.com/v2/spot/market",
+      "http": 503,
+      "sha256": "258c66556e2e065b0d04f6ae39a98fcf182e3e584cd0b7bdb20d0a395796347b",
+      "unavailable": "503 Server Error: Service Temporarily Unavailable for url: https://api.coinex.com/v2/spot/market"
+    },
+    {
+      "venue": "gate",
+      "url": "https://api.gateio.ws/api/v4/spot/currency_pairs",
+      "http": 200,
+      "sha256": "9b4968ea85c3779cdbb31ae39ba9c34161b815e4b5a89bb255af2b71454dd1bf",
+      "listed": 2136,
+      "parsed": 2136,
+      "exact": [],
+      "related": [
+        "NVDA3L_USDT",
+        "NVDAX_USDT",
+        "NVDAG_USDT",
+        "AINVDA_USDT",
+        "NVDAON_USDT",
+        "NVDA3S_USDT"
+      ]
+    },
+    {
+      "venue": "htx",
+      "url": "https://api.huobi.pro/v1/common/symbols",
+      "http": 200,
+      "sha256": "e7d9cc9606d4d26e979e3e38d26272f301bcbb367043c7a957939446e1e94543",
+      "listed": 2198,
+      "parsed": 2198,
+      "exact": [],
+      "related": [
+        "ainvdausdt",
+        "nvdausdt"
+      ]
+    },
+    {
+      "venue": "kraken",
+      "url": "https://api.kraken.com/0/public/AssetPairs",
+      "http": 200,
+      "sha256": "1084c5e69b856888ffec43231c3065993084108ab859c1f9491ab203f357b93f",
+      "listed": 1436,
+      "parsed": 1436,
+      "exact": [],
+      "related": []
+    },
+    {
+      "venue": "kucoin",
+      "url": "https://api.kucoin.com/api/v2/symbols",
+      "http": 200,
+      "sha256": "98ee0a14e698e3e82de7bf61ac1bb99ecc40a61ed676de3eb890801881e4ceab",
+      "listed": 971,
+      "parsed": 971,
+      "exact": [],
+      "related": [
+        "NVDAX-USDT",
+        "NVDAON-USDT"
+      ]
+    },
+    {
+      "venue": "mexc",
+      "url": "https://api.mexc.com/api/v3/exchangeInfo",
+      "http": 200,
+      "sha256": "822bb24bd4b4a12809f39f8e43636643f53c8e7242f18bb88388729975b17334",
+      "listed": 1667,
+      "parsed": 1667,
+      "exact": [],
+      "related": [
+        "NVDAXUSDT",
+        "NVDAONUSDT"
+      ]
+    },
+    {
+      "venue": "okx",
+      "url": "https://www.okx.com/api/v5/public/instruments?instType=SPOT",
+      "http": 200,
+      "sha256": "efc6bd6ff430f2d18356f549e4c1cb497e7a721375e7ea12cbd40176adf91743",
+      "listed": 1250,
+      "parsed": 1250,
+      "exact": [],
+      "related": [
+        "XNVDA-USDT",
+        "XNVDA-USDC"
+      ]
+    },
+    {
+      "venue": "phemex",
+      "url": "https://api.phemex.com/public/products",
+      "http": 200,
+      "sha256": "e4a1df40cb7ef71c4f6c9b7dcb113baa3d0dbc6d691f625f0fc9856ddfa1887f",
+      "listed": 1019,
+      "parsed": 1019,
+      "exact": [],
+      "related": [
+        "sNVDAXUSDT",
+        "sNVDAONUSDT"
+      ]
+    },
+    {
+      "venue": "poloniex",
+      "url": "https://api.poloniex.com/markets",
+      "http": 200,
+      "sha256": "5da78c93f535022100e16d4302c3375c4d4468b5661b940d07cb6d3676122589",
+      "listed": 898,
+      "parsed": 898,
+      "exact": [],
+      "related": [
+        "AINVDA_USDT",
+        "NVDA_USDT"
+      ]
+    },
+    {
+      "venue": "xt",
+      "url": "https://sapi.xt.com/v4/public/symbol",
+      "http": 200,
+      "sha256": "3e04e6d9d6c6a44342561c3acd2ea4b5f5edabfafccc28a76d3e16e43f3d0562",
+      "listed": 1089,
+      "parsed": 1089,
+      "exact": [],
+      "related": [
+        "nvdax_usdt",
+        "nvdaon_usdt",
+        "nvda_usdt",
+        "nvda3l_usdt",
+        "nvda3s_usdt"
+      ]
+    }
+  ],
+  "similar_nvda": [
+    {
+      "venue": "htx",
+      "url": "https://api.huobi.pro/v2/reference/currencies?currency=nvda",
+      "observed": [
+        {
+          "baseChain": "BSC",
+          "contractAddress": "0x02fca66c1d1afb4e2a7884261eb00f63598a7436",
+          "depositStatus": "allowed",
+          "withdrawStatus": "prohibited"
+        }
+      ],
+      "sha256": "b2035ea6bdb5aedd55120e2d2ddaa4c842c15d54ad17bbdda9339b8f6ec27813"
+    },
+    {
+      "venue": "poloniex",
+      "url": "https://api.poloniex.com/currencies/NVDA?includeMultiChainCurrencies=true",
+      "observed": [
+        {
+          "blockchain": "BSC",
+          "walletDepositState": "ENABLED",
+          "walletWithdrawalState": "ENABLED",
+          "childChains": []
+        }
+      ],
+      "sha256": "1e00632cfcd2ccdbad1cb99030f99217f8671eb018969b539ad9ae2d076dd028"
+    },
+    {
+      "venue": "xt",
+      "url": "https://sapi.xt.com/v4/public/currencies?currency=nvda",
+      "observed": [
+        {
+          "chainId": 2403,
+          "contract": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC"
+        }
+      ],
+      "sha256": "f6ac9932ee7570b493914df433b09f99c76b633dc143b98c93822ab37d91c124"
+    }
+  ]
+}

@@ -14,6 +14,12 @@ mod market;
 pub use market::{load, quote};
 
 pub const ENTRY: Address = address!("98c1d9e102eb2806d902b13186bdc7892ac4ffba");
+pub const NVDAC: Address = address!("b20000000000000000000078ee7ce2fe4908108c");
+
+pub fn pair(base: Address, counter: Address) -> bool {
+    counter == lunar::USDC && matches!(base, lunar::WETH | NVDAC)
+}
+
 const BOOK: Address = address!("604d9b9eb1e1571c78661a6c1088427ec9c8c6e5");
 const VAULT: Address = address!("aac48feb93c5c97e0fb3c7c57e1633922a4acda3");
 const ENTRY_IMPL: Address = address!("cc61f0acb73eea94c160af15da4471b9b456f3b0");
@@ -55,7 +61,7 @@ async fn identity(
         && keccak256(impl_code) == hash)
 }
 
-async fn verify_at(ctx: &Ctx, id: &str, tag: &Value) -> GatewayResult<()> {
+pub(super) async fn verify_at(ctx: &Ctx, id: &str, tag: &Value) -> GatewayResult<()> {
     let wrong = || {
         ctx.err(
             ErrorCode::NotApplicable,
@@ -113,7 +119,7 @@ async fn verify_at(ctx: &Ctx, id: &str, tag: &Value) -> GatewayResult<()> {
 }
 
 pub async fn verify(ctx: &Ctx, c: &Candidate, address: Address) -> GatewayResult<Found> {
-    if address != ENTRY || !lunar::pair(c.coin, c.quote) {
+    if address != ENTRY || !pair(c.coin, c.quote) {
         return Err(ctx.err(
             ErrorCode::NotApplicable,
             "Нет архивной приёмки этой пары BaiBai",
@@ -121,5 +127,25 @@ pub async fn verify(ctx: &Ctx, c: &Candidate, address: Address) -> GatewayResult
     }
     let tag = elfomo::block(ctx, "latest").await?;
     verify_at(ctx, c.family.id, &tag).await?;
-    Ok(verify_woo::found(c, PoolRef::Contract(ENTRY)))
+    let book = view(
+        ctx,
+        &tag,
+        Address::ZERO,
+        BOOK,
+        IBai::pairCall { base: c.coin },
+    )
+    .await?;
+    if book.qUnit.is_zero() {
+        return Err(ctx.err(
+            ErrorCode::NotApplicable,
+            "Эта монета отсутствует в книге BaiBai",
+        ));
+    }
+    Ok(verify_woo::found(
+        c,
+        PoolRef::Member {
+            contract: ENTRY,
+            coin: c.coin,
+        },
+    ))
 }

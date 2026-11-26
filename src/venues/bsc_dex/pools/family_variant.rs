@@ -19,6 +19,8 @@ pub enum Variant {
     HydrexIntegral,
     /// Ring Few V2 на Ethereum, отдельный путь underlying через проверенные fw wrappers.
     RingFew,
+    /// 9mm, Throne и Omni на Base проверяют свои callback через роутеры фабрик.
+    BaseNativeV3,
     /// Algebra Integral с проверяемым beacon-прокси плагина QuickSwap V4.
     QuickswapIntegral,
     /// Lista StableSwap с проверенной реализацией EIP-1967 на каждом чтении состояния.
@@ -129,6 +131,7 @@ pub fn of(kind: &str) -> Variant {
         "algebra_integral_hydrex" => Variant::HydrexIntegral,
         "algebra_integral_quickswap" => Variant::QuickswapIntegral,
         "lista_stableswap_proxy" => Variant::ListaStableProxy,
+        "base_native_v3" | "base_native_v3_module" => Variant::BaseNativeV3,
         "v3_fork_ramses" => Variant::RamsesCl,
         "v3_fork_uniswap_lm" => Variant::UniswapV3Lm,
         "v2_fork_executor_create2" => Variant::V2Create2,

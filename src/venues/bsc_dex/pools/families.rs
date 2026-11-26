@@ -403,7 +403,8 @@ pub struct Family {
 
 impl Family {
     pub fn direct_module(&self) -> bool {
-        self.variant == Variant::SolidlyCl || matches!(self.proto, Proto::Elfomo | Proto::Lunar)
+        matches!(self.variant, Variant::SolidlyCl | Variant::BaseNativeV3)
+            || matches!(self.proto, Proto::Elfomo | Proto::Lunar | Proto::BaiBai)
     }
 }
 
@@ -461,6 +462,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "v3_fork" | "v3_fork_ramses" | "v3_fork_uniswap_lm" => {
             (PoolKind::V3, Proto::UniswapV3, true, false, true)
         }
+        "base_native_v3" => (PoolKind::V3, Proto::PancakeV3, true, false, false),
+        "base_native_v3_module" => (PoolKind::V3, Proto::PancakeV3, true, true, true),
         "v3_fork_pancake" => (PoolKind::V3, Proto::PancakeV3, true, false, true),
         // KyberSwap Elastic (решение 81): в графе, котируется своей математикой (math/swap_elastic). Решение 121 B2:
         // tradable=false — своего пути исполнения нет: в exec/ нет ветки Proto::KyberElastic, а нога форка собиралась
@@ -592,6 +595,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         ),
         // WooFi WooPPV2 (решение 122 F, 3): в графе и сигналах; своей математики нет (развёрнутый код закрыт) — котировка
         // по лесенке ответов квотера контракта (dex.pmm_ladder_usd, quote/pmm_ladder.rs); шага WOO нет до сухой сделки.
+        "baibai_module" => (PoolKind::OraclePmm, Proto::BaiBai, true, true, true),
         "baibai" => (PoolKind::OraclePmm, Proto::BaiBai, true, false, false),
         "lunarbase" => (PoolKind::OraclePmm, Proto::Lunar, true, false, false),
         "lunarbase_module" => (PoolKind::OraclePmm, Proto::Lunar, true, true, true),
@@ -712,10 +716,17 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
             "адреса, комиссия или сеть расходятся с проверенным профилем Ring".into(),
         ));
     }
+    if f.variant == Variant::BaseNativeV3 && !super::base_native_v3::valid(ctx, f) {
+        return Err(no(
+            "сеть, фабрика или квотер расходятся с профилем V3 Base".into()
+        ));
+    }
     if f.direct_module() && f.fork {
         let kind = match f.proto {
             Proto::Elfomo => "elfomofi",
             Proto::Lunar => "lunarbase",
+            Proto::BaiBai => "baibai",
+            _ if f.variant == Variant::BaseNativeV3 => "base_native_v3",
             _ => "solidly_v3",
         };
         if ctx
@@ -784,6 +795,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // ramsesV2SwapCallback (RamsesV2Pool.sol L1238) — без dex.v3_swap_callback исполнитель не проверить.
         Proto::UniswapV3 if f.variant == Variant::RamsesCl => {
             list.extend(["dex.factory", "dex.quoter", "dex.v3_swap_callback"])
+        }
+        Proto::PancakeV3 if f.variant == Variant::BaseNativeV3 && f.tradable => {
+            list.extend(["dex.factory", "dex.tick_lens", "dex.quoter", "dex.router"]);
         }
         Proto::PancakeV3 | Proto::UniswapV3 => {
             list.extend(["dex.factory", "dex.tick_lens", "dex.quoter"])

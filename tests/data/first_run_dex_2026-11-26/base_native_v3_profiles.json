@@ -1,0 +1,123 @@
+{
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "profiles": {
+    "9mm-v3-base": {
+      "tiers": {
+        "100": 1,
+        "500": 10,
+        "2500": 50,
+        "10000": 200
+      },
+      "sampled": [
+        {
+          "address": "0x4647ee5955f9d58f76cd86756bfb2eee543fd2b8",
+          "fee": 2500
+        },
+        {
+          "address": "0x11ef9c2ba20aec31e114ecd828d7514fdc944eae",
+          "fee": 500
+        },
+        {
+          "address": "0xc1b49090f74d784110b2129378e372d16a3a764a",
+          "fee": 10000
+        }
+      ],
+      "lens": "0x9a489505a00ce272eaa5e07dba6491314cae3796",
+      "sample_ticks": 16,
+      "codes": {
+        "0x7b72c4002ea7c276dd717b96b20f4956c5c904e7": {
+          "bytes": 5151,
+          "keccak256": "0x76f528a12a2ac66ba44b5e573fb46d0183c5e779e1729b84820ca92bf26a1880"
+        },
+        "0xf26600e17728f41adfb73d986e3deaf6df29f1c4": {
+          "bytes": 8331,
+          "keccak256": "0x5a93ba91e0a39250d28e67d1a8c34b97c9e3046da36fbf5c2c720d72e0ba6ef4"
+        },
+        "0x9a489505a00ce272eaa5e07dba6491314cae3796": {
+          "bytes": 1385,
+          "keccak256": "0xbf1bb07babb013f146395ed6e1127f8f48d598f1765bc660a91d7b164cf93ff8"
+        }
+      }
+    },
+    "throne-v3-base": {
+      "tiers": {
+        "100": 1,
+        "500": 10,
+        "2500": 50,
+        "10000": 200
+      },
+      "sampled": [
+        {
+          "address": "0x56fcc093d4fa30e1eea14d9ea963b9f90b29de04",
+          "fee": 100
+        },
+        {
+          "address": "0xfefb4b916e01b6995de918df418fbce4a14f92da",
+          "fee": 10000
+        },
+        {
+          "address": "0x27e7bb9f178b6051854f62418b2e3a8c658095ca",
+          "fee": 10000
+        }
+      ],
+      "lens": "0x9a489505a00ce272eaa5e07dba6491314cae3796",
+      "sample_ticks": 3,
+      "codes": {
+        "0xe8839bf8175812691c6578c0fc80e721bc3e00fb": {
+          "bytes": 5228,
+          "keccak256": "0x965c7b55b0f1a24194f6663ea14e10f044d715f4bc4abe8ea1f098cbfac27446"
+        },
+        "0xf2e99648bf3b788690b6091b7ae19b507220c80b": {
+          "bytes": 7772,
+          "keccak256": "0x6d8d88508a88644806fb4d1c12723729c6bc90014a312361be7e6134312862e1"
+        },
+        "0x9a489505a00ce272eaa5e07dba6491314cae3796": {
+          "bytes": 1385,
+          "keccak256": "0xbf1bb07babb013f146395ed6e1127f8f48d598f1765bc660a91d7b164cf93ff8"
+        }
+      }
+    },
+    "omni-exchange-v3-base": {
+      "tiers": {
+        "80": 50,
+        "100": 1,
+        "500": 10,
+        "2500": 50,
+        "10000": 200
+      },
+      "sampled": [
+        {
+          "address": "0x1f4c9e2ed56a76d6297e3217bb5c2b87e5937fc0",
+          "fee": 100
+        },
+        {
+          "address": "0x26256173952d07125a6adb2bf6a6a576583f0d3c",
+          "fee": 10000
+        },
+        {
+          "address": "0xd96abbad4b744cb7746adc908a3df39c5991aae0",
+          "fee": 80
+        }
+      ],
+      "lens": "0x9a489505a00ce272eaa5e07dba6491314cae3796",
+      "sample_ticks": 2,
+      "codes": {
+        "0xd6ab0566e7e60b67c50ac73ddff4e3ddcb829ec2": {
+          "bytes": 3865,
+          "keccak256": "0xcc8f8c7289e87e71089b42acb5d47d8854bf6db266dee6ffdc4f92d1abac0a58"
+        },
+        "0x134d3c90a4a4c712cf0b548fe02003c9d934baba": {
+          "bytes": 7131,
+          "keccak256": "0x843b883766a60d0b7a8bf474678416191afed82ea02715e4d3ed342e9527eb0d"
+        },
+        "0x9a489505a00ce272eaa5e07dba6491314cae3796": {
+          "bytes": 1385,
+          "keccak256": "0xbf1bb07babb013f146395ed6e1127f8f48d598f1765bc660a91d7b164cf93ff8"
+        }
+      }
+    }
+  }
+}

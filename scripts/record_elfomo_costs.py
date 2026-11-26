@@ -9,14 +9,18 @@ from record_base_slipstream_executor import calldata
 from record_elfomo_executor import FOLDER, ORDER, read, write
 
 
-def capture(compiled, run_url, combined=False):
+def capture(compiled, run_url, combined=False, baibai=False):
     files = {"elfomo":"elfomo_executor_base"} if not combined else {
         "elfomo":"base_pmm_executor_elfomo", "lunarbase":"base_pmm_executor_lunar"}
+    if baibai:
+        files["baibai"] = "base_pmm_executor_baibai"
     archives = {k:read(FOLDER / (v+".json")) for k,v in files.items()}
     replay = archives["elfomo"]
     volumes = [read(FOLDER / "elfomo_volume_base.json")]
     if combined:
         volumes.append(read(FOLDER / "lunar_volume_base.json"))
+    if baibai:
+        volumes.append(read(FOLDER / "baibai_volume_base.json"))
     runtime = "0x" + keccak(bytes.fromhex(compiled["runtime"])).hex()
     if any(runtime != a["runtime_keccak"] or a["selector"] != replay["selector"] for a in archives.values()):
         raise ValueError("Стоимость и архивная приёмка относятся к разному коду")
@@ -64,4 +68,4 @@ def capture(compiled, run_url, combined=False):
 if __name__ == "__main__":
     combined = "--base-pmm" in sys.argv[3:]
     target = "base_pmm_deployment_estimate.json" if combined else "elfomo_deployment_estimate_base.json"
-    write(FOLDER / target, capture(read(Path(sys.argv[1])), sys.argv[2], combined))
+    write(FOLDER / target, capture(read(Path(sys.argv[1])), sys.argv[2], combined, "--baibai" in sys.argv[3:]))

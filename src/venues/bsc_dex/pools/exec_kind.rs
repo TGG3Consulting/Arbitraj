@@ -410,6 +410,8 @@ mod tests {
     fn every_kind_is_decided() {
         let none = [
             "ring_few_v2",
+            "base_native_v3",
+            "base_native_v3_module",
             "solidly_v3_module",
             "solidly_v3", // отдельный модуль исполнения, без шага в ArbExecutor V5
             "kyber_elastic",
@@ -417,6 +419,7 @@ mod tests {
             "woofi_v2",
             "lunarbase",
             "baibai",
+            "baibai_module",
             "lunarbase_module",
             "elfomofi",
             "elfomofi_module",

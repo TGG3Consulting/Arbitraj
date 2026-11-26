@@ -105,7 +105,10 @@ pub(super) async fn candidates(
     (all, q.exec_quote)
 }
 
-fn individual(e: &Entry) -> bool {
+fn individual(e: &Entry, native: bool) -> bool {
+    if native {
+        return super::vista_pricing::is_vista(e);
+    }
     super::memebox_pricing::enabled(e) || super::super::exec::vault_direct::enabled(e) || super::vista_pricing::is_vista(e)
         || super::oasis_pricing::is_oasis(e)
         || super::white_pricing::is_white(e)
@@ -115,8 +118,7 @@ fn individual(e: &Entry) -> bool {
 }
 
 pub(super) fn excluded(e: &Entry) -> bool {
-    individual(e)
-        && SINGLE
+    SINGLE
             .try_with(|p| p.contains(&e.pool.reference))
             .unwrap_or(false)
 }
@@ -141,6 +143,7 @@ pub(super) fn ordinary(
     q: Quoting,
     i: routing::Input,
     enabled: bool,
+    native: bool,
 ) -> impl std::future::Future<Output = GatewayResult<Quote>> {
     let settlement = quote_stage::settlement();
     async move {
@@ -154,20 +157,20 @@ pub(super) fn ordinary(
         if !i
             .entries
             .iter()
-            .any(|e| individual(e) && &e.pool.reference == pool)
+            .any(|e| individual(e, native) && &e.pool.reference == pool)
         {
             return Ok(first);
         }
         let pools = i
             .entries
             .iter()
-            .filter(|e| individual(e))
+            .filter(|e| individual(e,native))
             .map(|e| e.pool.reference.clone())
             .collect::<Vec<_>>();
         // В графе одиночный пул мог занять место другой исполнимой площадки.
         // Для альтернативного расчёта составные пути сохраняются; общие кэши не меняются.
         let mut i = i;
-        i.entries.retain(|e| !individual(e));
+        i.entries.retain(|e| !individual(e,native));
         SINGLE
             .scope(pools, Box::pin(routing::allowed(q, i, settlement)))
             .await

@@ -63,6 +63,21 @@ def fund(tokens, pools, amount, deadline):
     return [tx(WETH, "deposit()", value=budget), approve(WETH, VAULT, budget), trade]
 
 
+def independent_funding(markets, target, token, amount, deadline):
+    for tokens, pools in funding_paths(markets, target, token):
+        yield [p["id"] for p in pools], fund(tokens, pools, amount, deadline)
+    # An unrelated canonical Base venue can supply the input when no other Sobal pool has depth.
+    swap_router = "0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24"
+    for via in ([], ["0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"],
+                    ["0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"]):
+        path = [WETH, *via, token]
+        if len(set(path)) != len(path):
+            continue
+        yield [swap_router, *path], [tx(swap_router, "swapETHForExactTokens(uint256,address[],address,uint256)",
+                                       ["uint256","address[]","address","uint256"],
+                                       [amount,path,OWNER,deadline],value=10**18)]
+
+
 def capture(directory, endpoint, shard):
     tag = directory["selector"]
     header = rpc(endpoint, "eth_getBlockByHash", [tag["blockHash"], False])
@@ -100,12 +115,11 @@ def capture(directory, endpoint, shard):
                     row["quote_errors"] = [x.get("error") for x in q]
                     continue
                 errors = []
-                for tokens, path in funding_paths(markets, m["id"], a):
-                    prefix = fund(tokens,path,n,deadline)
+                for funding_path, prefix in independent_funding(markets, m["id"], a, n, deadline):
                     # Funding may change a composable rate. Ask again after preparation.
                     res = run(prefix + [quote_call(pid,a,b,n,OWNER), quote_call(pid,a,b,n,EXEC)])
                     if all(x["status"] == "0x1" for x in res):
-                        row["funding"] = [p["id"] for p in path]
+                        row["funding"] = funding_path
                         break
                     errors.append(next(x.get("error") for x in res if x["status"] != "0x1"))
                 else:

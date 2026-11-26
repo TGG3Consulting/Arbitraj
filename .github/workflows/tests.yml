@@ -37,6 +37,10 @@ on:
         description: Replay all Base classic Solidly registries and the V5 wallet
         type: boolean
         default: false
+      base_settlement_replay:
+        description: Replay Base native router, callback and Vault wallet settlement against the common block
+        type: boolean
+        default: false
       base_factory_directory:
         description: Reconstruct every pool created by the three Base fork deployers
         type: boolean
@@ -405,7 +409,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        market: [x7-finance, x7-finance-ethereum, deltaswap-ethereum, supernova-cl]
+        market: [x7-finance, x7-finance-ethereum, 9inch-ethereum, deltaswap-ethereum, supernova-cl, supernova-amm]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -414,14 +418,20 @@ jobs:
       - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0 beautifulsoup4==4.13.5 PyYAML==6.0.3
       - if: matrix.market == 'deltaswap-ethereum'
         run: python scripts/record_deltaswap_base.py "$RUNNER_TEMP/market.json" --network ethereum
+      - if: matrix.market == 'supernova-amm'
+        run: |
+          python scripts/record_base_classic_directory.py supernova-amm "$RUNNER_TEMP/directory.json"
+          python scripts/record_base_classic_wallets.py "$RUNNER_TEMP/directory.json" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'supernova-cl'
         run: python scripts/record_supernova_ethereum.py "$RUNNER_TEMP/market.json"
-      - if: startsWith(matrix.market, 'x7-finance')
+      - if: startsWith(matrix.market, 'x7-finance') || matrix.market == '9inch-ethereum'
         run: python scripts/record_ethereum_x7.py "${{ matrix.market }}" "$RUNNER_TEMP/market.json"
       - uses: actions/upload-artifact@v4
         with:
           name: ethereum-v2-${{ matrix.market }}
-          path: ${{ runner.temp }}/market.json
+          path: |
+            ${{ runner.temp }}/market.json
+            ${{ runner.temp }}/directory.json
   ethereum-v2-registry:
     if: inputs.community_archive_replay
     runs-on: ubuntu-latest
@@ -561,7 +571,7 @@ jobs:
           name: base-algebra-${{ matrix.dex }}
           path: ${{ runner.temp }}/market.json
   sobal-base-archive:
-    if: inputs.base_classic_archive
+    if: inputs.base_classic_archive || inputs.base_settlement_replay
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -622,7 +632,41 @@ jobs:
           name: oasisswap-base-wallets
           path: ${{ runner.temp }}/oasis.json
   yumyum-base-archive:
-    if: inputs.base_factory_directory
+    if: inputs.base_factory_directory || inputs.base_settlement_replay
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dex: yumyum-base
+            module: YumyumAdapter
+          - dex: bluedex-v3-base
+            module: BluedexAdapter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0
+      - run: python scripts/record_yumyum_base.py --market "${{ matrix.dex }}" "$RUNNER_TEMP/yumyum-base.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.dex }}-wallets
+          path: ${{ runner.temp }}/yumyum-base.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix contracts --no-audit --no-fund
+      - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/yum-module" ${{ matrix.module }}
+      - run: python scripts/record_registered_v3_module.py "$RUNNER_TEMP/yumyum-base.json" "$RUNNER_TEMP/yum-module/${{ matrix.module }}.json" "$RUNNER_TEMP/yumyum-module-wallets.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.dex }}-module
+          path: |
+            ${{ runner.temp }}/yumyum-module-wallets.json
+            ${{ runner.temp }}/yum-module/${{ matrix.module }}.json
+  bunnyswap-base-archive:
+    if: inputs.base_factory_directory || inputs.base_settlement_replay
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -630,11 +674,11 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0
-      - run: python scripts/record_yumyum_base.py "$RUNNER_TEMP/yumyum-base.json"
+      - run: python scripts/record_bunnyswap_base.py "$RUNNER_TEMP/bunnyswap.json"
       - uses: actions/upload-artifact@v4
         with:
-          name: yumyum-base-wallets
-          path: ${{ runner.temp }}/yumyum-base.json
+          name: bunnyswap-native-wallets
+          path: ${{ runner.temp }}/bunnyswap.json
   memebox-base-archive:
     if: inputs.base_factory_directory
     runs-on: ubuntu-latest

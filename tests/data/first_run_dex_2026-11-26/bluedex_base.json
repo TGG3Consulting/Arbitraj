@@ -1,0 +1,235 @@
+{
+  "factory": "0x8437100ed18dbea089e0fa3caaae7f6f40e4a05c",
+  "origin": {
+    "url": "https://sourcify.dev/server/v2/contract/8453/0x8437100ed18dbea089e0fa3caaae7f6f40e4a05c",
+    "runtime": "0x568a4a4b6b12f687ed1916e64b0bcb5ec1731d22d4a215ea5c616a968e5921b2",
+    "creation_code_hash": "0xcfd11843ebb6a41346c34cac3b947806ca43340e84a192c13eb54da4ec62fb50",
+    "codecopy": [
+      1692,
+      9252
+    ],
+    "invariant": [
+      {
+        "file": "contracts/v2-contracts/v2-core/BluedexV2Pair.sol",
+        "line": "uint balance0Adjusted = balance0.mul(1000).sub(amount0In.mul(3));"
+      },
+      {
+        "file": "contracts/v2-contracts/v2-core/BluedexV2Pair.sol",
+        "line": "uint balance1Adjusted = balance1.mul(1000).sub(amount1In.mul(3));"
+      }
+    ]
+  },
+  "pools": [
+    {
+      "pool": "0x257421ef390dadffabf0a2341b23474e31e4f7ef",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x99bc73f9349e00eb07afa1555dbd7c6fdd395493"
+      ],
+      "reserves": [
+        "1",
+        "1038421"
+      ]
+    },
+    {
+      "pool": "0xbb8b06904b784e434843cad852a5bc7a330714d0",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x5d1fcc58c0a1761f42d35a8c1ac10ec1a92ab725"
+      ],
+      "reserves": [
+        "0",
+        "0"
+      ]
+    },
+    {
+      "pool": "0x17a0931ea85c18fc4f3542209ef104e12931a275",
+      "tokens": [
+        "0x142592f9e9a9cdea6c1167ffceae0fcfb3e7ea97",
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "reserves": [
+        "65198746825908261520265",
+        "8511978646532235"
+      ]
+    },
+    {
+      "pool": "0x82a08f46912e301aba1743ab609c2019544374b8",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "reserves": [
+        "23177970914499531",
+        "39103682"
+      ]
+    }
+  ],
+  "samples": [
+    {
+      "network": "base",
+      "dex": "bluedex",
+      "pool": "0x82a08f46912e301aba1743ab609c2019544374b8",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "factory": "0x8437100ed18dbea089e0fa3caaae7f6f40e4a05c",
+      "runtime_hash": "0x14ea980549a07ace7cdacf977a731eca73b11bb36f278a50ff8605056d27c2e2",
+      "creation_code_hash": "0xcfd11843ebb6a41346c34cac3b947806ca43340e84a192c13eb54da4ec62fb50",
+      "verify_pair_boundary": true,
+      "invariant_error": "BluedexV2: K",
+      "fee_fraction": [
+        1000,
+        3
+      ],
+      "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "reserves": [
+        "23177970914499531",
+        "39103682"
+      ],
+      "pips": 3000,
+      "cases": [
+        {
+          "in": "2317797091449",
+          "bought": "3898",
+          "returned": "2303765718067",
+          "buy_return": "3898",
+          "sell_return": "2303765718067",
+          "observed_balances": [
+            "3898",
+            "2303765718067",
+            "0",
+            "0",
+            "0"
+          ],
+          "strict_buy": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "strict_sell": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "pair_boundary": {
+            "buy": {
+              "max": "3898",
+              "next_revert": "BluedexV2: K"
+            },
+            "sell": {
+              "max": "2303765718067",
+              "next_revert": "BluedexV2: K"
+            }
+          }
+        },
+        {
+          "in": "46355941828999",
+          "bought": "77817",
+          "returned": "46078434703582",
+          "buy_return": "77817",
+          "sell_return": "46078434703582",
+          "observed_balances": [
+            "77817",
+            "46078434703582",
+            "0",
+            "0",
+            "0"
+          ],
+          "strict_buy": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "strict_sell": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "pair_boundary": {
+            "buy": {
+              "max": "77817",
+              "next_revert": "BluedexV2: K"
+            },
+            "sell": {
+              "max": "46078434703582",
+              "next_revert": "BluedexV2: K"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "native_router": {
+    "router": "0x1926f2bec4cd34613ccaac82911204b87cf590a2",
+    "runtime": "0xef848cb92f62c3e3f6b4daba6c909bd104e0677feebb7364e0538dc10345c2b6",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x1926f2bec4cd34613ccaac82911204b87cf590a2",
+    "samples": [
+      {
+        "pool": "0x82a08f46912e301aba1743ab609c2019544374b8",
+        "cases": [
+          {
+            "buy": {
+              "amount": "2317797091449",
+              "quoted": "3898",
+              "spent": "2317797091449",
+              "received": "3898",
+              "min_plus_one": {
+                "code": 3,
+                "message": "execution reverted: BluedexV2Router: INSUFFICIENT_OUTPUT_AMOUNT",
+                "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002b426c75656465785632526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e54000000000000000000000000000000000000000080"
+              },
+              "gas": 123316
+            },
+            "sell": {
+              "amount": "3898",
+              "quoted": "2303765718067",
+              "spent": "3898",
+              "received": "2303765718067",
+              "min_plus_one": {
+                "code": 3,
+                "message": "execution reverted: BluedexV2Router: INSUFFICIENT_OUTPUT_AMOUNT",
+                "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002b426c75656465785632526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e54000000000000000000000000000000000000000080"
+              },
+              "gas": 114167
+            }
+          },
+          {
+            "buy": {
+              "amount": "46355941828999",
+              "quoted": "77817",
+              "spent": "46355941828999",
+              "received": "77817",
+              "min_plus_one": {
+                "code": 3,
+                "message": "execution reverted: BluedexV2Router: INSUFFICIENT_OUTPUT_AMOUNT",
+                "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002b426c75656465785632526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e54000000000000000000000000000000000000000080"
+              },
+              "gas": 123328
+            },
+            "sell": {
+              "amount": "77817",
+              "quoted": "46078434703582",
+              "spent": "77817",
+              "received": "46078434703582",
+              "min_plus_one": {
+                "code": 3,
+                "message": "execution reverted: BluedexV2Router: INSUFFICIENT_OUTPUT_AMOUNT",
+                "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002b426c75656465785632526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e54000000000000000000000000000000000000000080"
+              },
+              "gas": 114179
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "height": 62262756,
+  "state_root": "0x037b0c48cd33236cb94ec9e9fc7438c120b138c2c31d39d0ebe42521ee65676b",
+  "endpoint": "https://mainnet.base.org"
+}

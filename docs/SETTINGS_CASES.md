@@ -6715,3 +6715,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 ### KEWLSwap · фабрика CREATE и Router02 по одному адресу
 
 Вид `v2_diamond_create` сверяет пару по `dex.pair_runtime_hash`, двум направлениям `getPair`, полям пары и фактическому счётчику CREATE фабрики. Режим V5 требует первую роль в `dex.proxy_implementations` и `dex.proxy_runtime_hashes`. Для родного роутера задайте вторую роль и тот же адрес в `dex.factory` и `dex.router` с соответствующими хешами прокси. Для этого вида фиксированная комиссия равна 0,3%. На блоке 62 262 756 четырём адресам пар соответствовали nonce 1–4. [Архив KEWLSwap](../tests/data/first_run_dex_2026-11-26/kewlswap_base.json).
+
+### Sobal · минимальная выплата из Vault
+
+Для вида `balancer_v2_wallet` параметр `dex.vault_exact_outputs` содержит пары `адрес токена=keccak256 runtime`. Самостоятельный вызов Vault.swap допустим для выходного токена, чей проверенный неизменяемый код зачисляет получателю всю сумму. Для остальных выходных токенов исполнитель V5 проверяет реальный прирост баланса в той же транзакции. Адрес Vault задаётся в `dex.vault`, его код сверяется с `dex.router_runtime_hash`. [Параметры по трём фабрикам Sobal](BASE_ETHEREUM_SETTINGS.md).

@@ -345,7 +345,7 @@ impl Quoting {
             v2_fallback::private(&pick, &input, &mut alternatives);
         }
         let work =
-            quote_timing::timed(tm.run(), v2_fallback::ordinary(pick, input, compare_single));
+            quote_timing::timed(tm.run(), v2_fallback::ordinary(pick, input, compare_single, native || native_cash));
         let raw = cpu::run(ctx, Box::pin(work)).await.and_then(|quote|{
             if native_cash && !vista_pricing::terminal_cash(&self.reg,quote.route.as_ref()) {
                 return Err(ctx.err(ErrorCode::NoRoute,

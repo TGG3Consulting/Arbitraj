@@ -18,7 +18,7 @@ DEPTH = 16
 PROBE = "0x" + keccak(text="Hanji read-only owner balance probe")[-20:].hex()
 
 
-def capture():
+def capture(cross_levels=False):
     url, weth = NETWORKS["base"]
     network = json.loads((ROOT / "tests/data/base_ethereum_networks.json").read_bytes())["base"]
     tag = {"blockHash": network["hash"], "requireCanonical": True}
@@ -35,7 +35,7 @@ def capture():
     def simulate(calls):
         # The probe returns BALANCE(owner). It cannot change any contract or the simulated market.
         code = "0x73" + OWNER[2:] + "3160005260206000f3"
-        state = {"stateOverrides": {OWNER: {"balance": hex(10**18)}, PROBE: {"code": code}}, "calls": calls}
+        state = {"stateOverrides": {OWNER: {"balance": hex(100*10**18)}, PROBE: {"code": code}}, "calls": calls}
         return rpc(url, "eth_simulateV1", [{"blockStateCalls": [state]}, tag])[0]["calls"]
 
     def balance(token):
@@ -62,7 +62,7 @@ def capture():
 
     def round_trip(proxy, config, bids, asks, limit):
         scale_x, scale_y, token_x, token_y = config[:4]
-        funding = 10**16
+        funding = max(limit, 10**16) if token_y == weth else (20*10**18 if cross_levels else 10**16)
         prefix = [call(weth, calldata("deposit()"), funding)]
         if token_y != weth:
             prefix += [approve(weth, router, funding), call(router, calldata(
@@ -76,7 +76,8 @@ def capture():
                             [False, limit // scale_y, price, 2**128-1, True, deadline])
             return call(proxy, data, gas=5_000_000)
         # Cross only the best ask. Save the actual debit, even when it is less than the budget.
-        entry = prefix + [buy(asks[0][0], expires)] + balances(token_x, token_y)
+        ask_limit = asks[1 if cross_levels else 0][0]
+        entry = prefix + [buy(ask_limit, expires)] + balances(token_x, token_y)
         rows = simulate(entry)
         for row in rows:
             output(row)
@@ -97,14 +98,19 @@ def capture():
         expired = simulate(prefix + [buy(asks[0][0], expires - 301)])[-1]
         if int(expired["status"], 16) != 0:
             raise ValueError("expired order accepted")
-        result = {"budget_y": limit, "buy_return": buy_result, "debited_y": cash_debit, "received_x": bought,
+        result = {"budget_y": limit, "ask_limit": ask_limit, "buy_return": buy_result, "debited_y": cash_debit, "received_x": bought,
                   "buy_native_delta": after_native - before_native, "expired_revert": True}
         if not bought:
             return result
         book_data = calldata("assembleOrderbookFromOrders(address,bool,uint24)", ["address", "bool", "uint24"],
                              [proxy, False, DEPTH])
         fresh_prices, fresh_shares = decode(["uint72[]", "uint128[]"], output(simulate(entry + [call(HELPER, book_data)])[-1]))
-        result.update(bid_before=bids[0], bid_after=[fresh_prices[0], fresh_shares[0]] if fresh_prices else None)
+        bid_index = min(1 if cross_levels else 0, len(bids)-1, len(fresh_prices)-1)
+        if bid_index < 0:
+            result["remaining_x"] = bought
+            return result
+        result.update(bid_before=bids[bid_index], bid_after=[fresh_prices[bid_index], fresh_shares[bid_index]],
+                      fresh_bids=list(zip(fresh_prices, fresh_shares)))
         def sell(price):
             return calldata("placeOrder(bool,uint128,uint72,uint128,bool,bool,bool,uint256)",
                         ["bool", "uint128", "uint72", "uint128", "bool", "bool", "bool", "uint256"],
@@ -115,11 +121,11 @@ def capture():
         exit_calls += [approve(token_x, proxy, bought)]
         def execute_sell(price):
             return simulate(entry + exit_calls + [call(proxy, sell(price), gas=5_000_000)] + balances(token_x, token_y))
-        rows = execute_sell(bids[0][0])
+        rows = execute_sell(bids[bid_index][0])
         initial = decode(["uint64", "uint128", "uint128", "uint128"], output(rows[-4]))
         result["sell_at_initial_bid"] = initial
-        if fresh_prices and fresh_prices[0] != bids[0][0]:
-            rows = execute_sell(fresh_prices[0])
+        if fresh_prices[bid_index] != bids[bid_index][0]:
+            rows = execute_sell(fresh_prices[bid_index])
         for row in rows:
             output(row)
         sell_result = decode(["uint64", "uint128", "uint128", "uint128"], output(rows[-4]))
@@ -142,9 +148,13 @@ def capture():
         bids, asks = levels(proxy, False), levels(proxy, True)
         record = {"registry": market, "runtime_keccak": "0x" + keccak(view_code(url, tag, proxy)).hex(),
                   "scale": config[:2], "fee_rates": config[8:12], "bids": bids, "asks": asks, "fills": []}
-        if bids and asks:
+        if bids and asks and (not cross_levels or min(len(bids),len(asks)) >= 2):
             unit = 10**market["quoteToken"]["decimals"]
             limits = [unit // 1000, unit // 500] if config[3] == weth else [unit, 3*unit]
+            if cross_levels:
+                top = asks[0][0] * asks[0][1]
+                second = asks[1][0] * min(asks[1][1], max(1, asks[0][1] // 4))
+                limits = [(top + second) * config[1]]
             for budget in limits:
                 try:
                     record["fills"].append(round_trip(proxy, config, bids, asks, budget))
@@ -166,5 +176,6 @@ def view_code(url, tag, address):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
-    path = parser.parse_args().output
-    path.write_text(json.dumps(capture(), indent=2) + "\n", encoding="utf8")
+    parser.add_argument("--cross-levels", action="store_true")
+    args = parser.parse_args()
+    args.output.write_text(json.dumps(capture(args.cross_levels), indent=2) + "\n", encoding="utf8")

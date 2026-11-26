@@ -1,0 +1,613 @@
+{
+  "chain": 8453,
+  "block": 62262756,
+  "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+  "source": "https://api-base.hanji.io/aggregators/markets",
+  "helper": "0xc032b6dfec3511a00cde9ea341d140f4733609de",
+  "helper_runtime_keccak": "0xf222ffe423a2d77dbdae2f02a260abaa81daa313e6e3a23d4d535236d4882bdc",
+  "max_levels_per_side": 16,
+  "markets": [
+    {
+      "registry": {
+        "orderbookAddress": "0x15c8cb4e336b1e478d155d813830129fb225eee3",
+        "baseToken": {
+          "contractAddress": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+          "decimals": 8,
+          "symbol": "cbBTC",
+          "isNative": false
+        },
+        "quoteToken": {
+          "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "decimals": 6,
+          "symbol": "USDC",
+          "isNative": false
+        },
+        "aggressiveFee": 0.0001
+      },
+      "runtime_keccak": "0x42f10189bc9088d8ba41b4e23756795d2e6e076255adbdf5fae19e00fad5ea34",
+      "scale": [
+        100,
+        1
+      ],
+      "fee_rates": [
+        500000000000000000,
+        100000000000000,
+        0,
+        0
+      ],
+      "bids": [
+        [
+          60224,
+          33209
+        ],
+        [
+          60222,
+          83026
+        ],
+        [
+          60220,
+          498173
+        ],
+        [
+          60217,
+          996396
+        ],
+        [
+          54799,
+          153723
+        ]
+      ],
+      "asks": [
+        [
+          60218,
+          33212
+        ],
+        [
+          60221,
+          83027
+        ],
+        [
+          60223,
+          360646
+        ],
+        [
+          60226,
+          540969
+        ],
+        [
+          65645,
+          60107
+        ]
+      ],
+      "fills": [
+        {
+          "budget_y": 2499975179,
+          "ask_limit": 60221,
+          "buy_return": [
+            41510,
+            2499674074,
+            249968
+          ],
+          "debited_y": 2499924042,
+          "received_x": 4151000,
+          "buy_native_delta": 0,
+          "expired_revert": true,
+          "bid_before": [
+            60222,
+            83026
+          ],
+          "bid_after": [
+            60221,
+            83027
+          ],
+          "fresh_bids": [
+            [
+              60224,
+              33209
+            ],
+            [
+              60221,
+              83027
+            ],
+            [
+              60219,
+              498181
+            ],
+            [
+              60216,
+              996412
+            ],
+            [
+              54798,
+              156007
+            ]
+          ],
+          "sell_at_initial_bid": [
+            0,
+            33209,
+            1999978816,
+            199998
+          ],
+          "sell_return": [
+            0,
+            41510,
+            2499873337,
+            249988
+          ],
+          "debited_x": 4151000,
+          "received_y": 2499623349,
+          "remaining_x": 0,
+          "sell_native_delta": 0
+        }
+      ]
+    },
+    {
+      "registry": {
+        "orderbookAddress": "0x1ae89451919cf82a5e83580f57f3856f5508f1c8",
+        "baseToken": {
+          "contractAddress": "0xb2000000000000000000007b9fcbd005511acbd5",
+          "decimals": 8,
+          "symbol": "SPCXc",
+          "isNative": false
+        },
+        "quoteToken": {
+          "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "decimals": 6,
+          "symbol": "USDC",
+          "isNative": false
+        },
+        "aggressiveFee": 0.0001
+      },
+      "runtime_keccak": "0xa4322c06b14d12b71c87235c6f7c15c98cdfd69a8730da0179bb6924bcf614e8",
+      "scale": [
+        10000,
+        1
+      ],
+      "fee_rates": [
+        500000000000000000,
+        100000000000000,
+        0,
+        0
+      ],
+      "bids": [
+        [
+          12783,
+          2815
+        ]
+      ],
+      "asks": [
+        [
+          12799,
+          71220
+        ]
+      ],
+      "fills": []
+    },
+    {
+      "registry": {
+        "orderbookAddress": "0x30bfa3b501c8f83114c1a789febb6281a0bcd751",
+        "baseToken": {
+          "contractAddress": "0xb20000000000000000000078ee7ce2fe4908108c",
+          "decimals": 8,
+          "symbol": "NVDAc",
+          "isNative": false
+        },
+        "quoteToken": {
+          "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "decimals": 6,
+          "symbol": "USDC",
+          "isNative": false
+        },
+        "aggressiveFee": 0.0001
+      },
+      "runtime_keccak": "0xa4322c06b14d12b71c87235c6f7c15c98cdfd69a8730da0179bb6924bcf614e8",
+      "scale": [
+        10000,
+        1
+      ],
+      "fee_rates": [
+        500000000000000000,
+        100000000000000,
+        0,
+        0
+      ],
+      "bids": [
+        [
+          14941,
+          19348
+        ]
+      ],
+      "asks": [
+        [
+          14960,
+          47963
+        ]
+      ],
+      "fills": []
+    },
+    {
+      "registry": {
+        "orderbookAddress": "0x44330b61f492dbebc137bd2e4f6c3f19855320e9",
+        "baseToken": {
+          "contractAddress": "0xb200000000000000000000397293cb8cda9a10c5",
+          "decimals": 8,
+          "symbol": "SNDKc",
+          "isNative": false
+        },
+        "quoteToken": {
+          "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "decimals": 6,
+          "symbol": "USDC",
+          "isNative": false
+        },
+        "aggressiveFee": 0.0001
+      },
+      "runtime_keccak": "0xa4322c06b14d12b71c87235c6f7c15c98cdfd69a8730da0179bb6924bcf614e8",
+      "scale": [
+        10000,
+        1
+      ],
+      "fee_rates": [
+        500000000000000000,
+        100000000000000,
+        0,
+        0
+      ],
+      "bids": [],
+      "asks": [],
+      "fills": []
+    },
+    {
+      "registry": {
+        "orderbookAddress": "0x6a6951db3bb99f76a8ccb9f8a8399b613666298b",
+        "baseToken": {
+          "contractAddress": "0x4200000000000000000000000000000000000006",
+          "decimals": 18,
+          "symbol": "ETH",
+          "isNative": true
+        },
+        "quoteToken": {
+          "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "decimals": 6,
+          "symbol": "USDC",
+          "isNative": false
+        },
+        "aggressiveFee": 0.0001
+      },
+      "runtime_keccak": "0x42f10189bc9088d8ba41b4e23756795d2e6e076255adbdf5fae19e00fad5ea34",
+      "scale": [
+        100000000000000,
+        1
+      ],
+      "fee_rates": [
+        500000000000000000,
+        100000000000000,
+        0,
+        0
+      ],
+      "bids": [
+        [
+          168774,
+          11850
+        ],
+        [
+          168770,
+          29626
+        ],
+        [
+          168765,
+          177761
+        ],
+        [
+          168759,
+          355536
+        ],
+        [
+          153571,
+          54853
+        ]
+      ],
+      "asks": [
+        [
+          168754,
+          11851
+        ],
+        [
+          168758,
+          29628
+        ],
+        [
+          168763,
+          161292
+        ],
+        [
+          168769,
+          241939
+        ],
+        [
+          183958,
+          26882
+        ]
+      ],
+      "fills": [
+        {
+          "budget_y": 2499764850,
+          "ask_limit": 168758,
+          "buy_return": [
+            14811,
+            2499427334,
+            249943
+          ],
+          "debited_y": 2499677277,
+          "received_x": 1481100000000000000,
+          "buy_native_delta": 1481100000000000000,
+          "expired_revert": true,
+          "bid_before": [
+            168770,
+            29626
+          ],
+          "bid_after": [
+            168770,
+            29626
+          ],
+          "fresh_bids": [
+            [
+              168774,
+              11850
+            ],
+            [
+              168770,
+              29626
+            ],
+            [
+              168765,
+              177761
+            ],
+            [
+              168759,
+              355536
+            ],
+            [
+              153571,
+              55667
+            ]
+          ],
+          "sell_at_initial_bid": [
+            0,
+            14811,
+            2499699870,
+            249970
+          ],
+          "sell_return": [
+            0,
+            14811,
+            2499699870,
+            249970
+          ],
+          "debited_x": 1481100000000000000,
+          "received_y": 2499449900,
+          "remaining_x": 0,
+          "sell_native_delta": -1481100000000000000
+        }
+      ]
+    },
+    {
+      "registry": {
+        "orderbookAddress": "0xb2cfad3880801012ca1beba290f095ebc0087c4b",
+        "baseToken": {
+          "contractAddress": "0xb2000000000000000000008bc8786b856e61707c",
+          "decimals": 8,
+          "symbol": "METAc",
+          "isNative": false
+        },
+        "quoteToken": {
+          "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "decimals": 6,
+          "symbol": "USDC",
+          "isNative": false
+        },
+        "aggressiveFee": 0.0001
+      },
+      "runtime_keccak": "0xa4322c06b14d12b71c87235c6f7c15c98cdfd69a8730da0179bb6924bcf614e8",
+      "scale": [
+        10000,
+        1
+      ],
+      "fee_rates": [
+        500000000000000000,
+        100000000000000,
+        0,
+        0
+      ],
+      "bids": [
+        [
+          60812,
+          6159
+        ]
+      ],
+      "asks": [
+        [
+          60877,
+          9428
+        ]
+      ],
+      "fills": []
+    },
+    {
+      "registry": {
+        "orderbookAddress": "0xde1eb3cd7f55c71ccc312fdf257fb73a73c72d7f",
+        "baseToken": {
+          "contractAddress": "0xb2000000000000000000002d0ba3164cc74f58b7",
+          "decimals": 8,
+          "symbol": "GOOGLc",
+          "isNative": false
+        },
+        "quoteToken": {
+          "contractAddress": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "decimals": 6,
+          "symbol": "USDC",
+          "isNative": false
+        },
+        "aggressiveFee": 0.0001
+      },
+      "runtime_keccak": "0xa4322c06b14d12b71c87235c6f7c15c98cdfd69a8730da0179bb6924bcf614e8",
+      "scale": [
+        10000,
+        1
+      ],
+      "fee_rates": [
+        500000000000000000,
+        100000000000000,
+        0,
+        0
+      ],
+      "bids": [
+        [
+          27324,
+          26077
+        ]
+      ],
+      "asks": [
+        [
+          27355,
+          8877
+        ]
+      ],
+      "fills": []
+    },
+    {
+      "registry": {
+        "orderbookAddress": "0xf455b3c0756908c6a2f44a7f7390053cfe354eea",
+        "baseToken": {
+          "contractAddress": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+          "decimals": 8,
+          "symbol": "cbBTC",
+          "isNative": false
+        },
+        "quoteToken": {
+          "contractAddress": "0x4200000000000000000000000000000000000006",
+          "decimals": 18,
+          "symbol": "ETH",
+          "isNative": true
+        },
+        "aggressiveFee": 0.0001
+      },
+      "runtime_keccak": "0x42f10189bc9088d8ba41b4e23756795d2e6e076255adbdf5fae19e00fad5ea34",
+      "scale": [
+        1,
+        1000000
+      ],
+      "fee_rates": [
+        500000000000000000,
+        100000000000000,
+        0,
+        0
+      ],
+      "bids": [
+        [
+          356849,
+          3320926
+        ],
+        [
+          356840,
+          8302525
+        ],
+        [
+          356822,
+          45202640
+        ],
+        [
+          356799,
+          67808331
+        ],
+        [
+          324755,
+          8277674
+        ]
+      ],
+      "asks": [
+        [
+          356822,
+          3321177
+        ],
+        [
+          356831,
+          8302735
+        ],
+        [
+          356849,
+          36064651
+        ],
+        [
+          356872,
+          54096977
+        ],
+        [
+          388909,
+          6010775
+        ]
+      ],
+      "fills": [
+        {
+          "budget_y": 1481343657808000000,
+          "ask_limit": 356831,
+          "buy_return": [
+            4151055,
+            1481195216112,
+            148119522
+          ],
+          "debited_y": 1481343335634000000,
+          "received_x": 4151055,
+          "buy_native_delta": 0,
+          "expired_revert": true,
+          "bid_before": [
+            356840,
+            8302525
+          ],
+          "bid_after": [
+            356833,
+            8302688
+          ],
+          "fresh_bids": [
+            [
+              356842,
+              3320991
+            ],
+            [
+              356833,
+              8302688
+            ],
+            [
+              356815,
+              46448874
+            ],
+            [
+              356792,
+              69677803
+            ],
+            [
+              324748,
+              8505905
+            ]
+          ],
+          "sell_at_initial_bid": [
+            0,
+            3320991,
+            1185069070422,
+            118506908
+          ],
+          "sell_return": [
+            0,
+            4151055,
+            1481263297734,
+            148126330
+          ],
+          "debited_x": 4151055,
+          "received_y": 1481115171404000000,
+          "remaining_x": 0,
+          "sell_native_delta": 1481115171404000000
+        }
+      ]
+    }
+  ]
+}

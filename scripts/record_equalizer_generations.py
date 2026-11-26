@@ -4,7 +4,7 @@ import re
 from eth_utils import keccak
 
 from record_balancer_markets import Capture
-from record_base_slipstream_executor import rpc
+from record_woo_base import rpc
 
 # First pools of the first two distinct CREATE2 generations in the factory's ordered registry.
 CREATION = ((0,4334766),(32,4938760))
@@ -28,13 +28,14 @@ def swap_source(files):
 def generations(endpoint, factory, pools, current, verified_source, slot):
     methods=swap_source(current)
     out=[]
+    node={"endpoint":endpoint}
     for index,height in CREATION:
-        parent=rpc(endpoint,"eth_getBlockByNumber",[hex(height),False])
+        parent=rpc(node,"eth_getBlockByNumber",[hex(height),False])
         tag={"blockHash":parent["hash"],"requireCanonical":True}
         pool=pools[index]
-        if rpc(endpoint,"eth_getCode",[pool,hex(height-1)])!="0x" or rpc(endpoint,"eth_getCode",[pool,tag])=="0x":
+        if rpc(node,"eth_getCode",[pool,hex(height-1)])!="0x" or rpc(node,"eth_getCode",[pool,tag])=="0x":
             raise ValueError("historical pair birth differs")
-        raw=rpc(endpoint,"eth_getStorageAt",[factory,slot,tag])
+        raw=rpc(node,"eth_getStorageAt",[factory,slot,tag])
         implementation="0x"+raw[-40:]
         then=Capture({"endpoint":endpoint,"selector":tag})
         src,files=verified_source(then,implementation)

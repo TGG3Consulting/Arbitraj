@@ -88,6 +88,8 @@ def capture(url):
         m["fee"]=decode(["uint16"],next(fields))[0];m["protocol_ratio"]=decode(["uint256"],next(fields))[0]
         m["fees_total"]=list(map(str,decode(["uint256","uint256"],next(fields))))
         m["balances"]=[str(decode(["uint256"],next(fields))[0]) for _ in m["tokens"]]
+    live=posts(c,[(m["pool"],"balances()",[],[]) for m in rows])
+    for m,frame in zip(rows,live,strict=True):m["accounted"]=list(map(str,decode(["uint256","uint256"],frame)))
     cases=[]
     for market in [next(m for m in rows if m["pool"]==REFERENCE),max((m for m in rows if WETH in m["tokens"]),key=lambda m:int(m["reserves"][m["tokens"].index(WETH)]))]:
         i=market["tokens"].index(WETH);rin=int(market["reserves"][i])

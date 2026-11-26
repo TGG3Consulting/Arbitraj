@@ -18,16 +18,22 @@ MARKETS = {
 }
 
 
-def round_trip(e, pool, source, target, amount, deadline, runtime, kind=26, owner=None, funding=None):
+def round_trip(e, pool, source, target, amount, deadline, runtime, kind=26, owner=None, funding=None, algebra=None):
     owner = owner or HOLDERS["base"][source]
     word = lambda n: "0x" + format(n, "064x")
     override = {EXEC: {"code": "0x"+runtime, "stateDiff": {
         word(0): word(int(owner, 16)), word(1): word(int(BASE_WETH, 16))}}}
 
+    if algebra:
+        virtual, virtual_runtime, token0=algebra
+        override[virtual]={"code":"0x"+virtual_runtime}
+
     def call(to, data, sender=owner):
         return {"to": to, "from": sender, "data": data, "gas": hex(1200000)}
 
     def quote(token, n):
+        if algebra:
+            return call(virtual,calldata("quoteExactIn(address,bool,uint256)",["address","bool","uint256"],[pool,token==token0,n]))
         method = "getAmountOut(uint256,address)" if kind == 3 else "getAmountOutWithTotalFee(uint256,address)"
         return call(pool, calldata(method,
                                    ["uint256", "address"], [n, token]), EXEC)
@@ -61,13 +67,20 @@ def round_trip(e, pool, source, target, amount, deadline, runtime, kind=26, owne
             ("approve_in", approve(source, amount)), ("quote_buy", quote(source, amount))]
     first = simulate(head)
     n = lambda results, k: int(results[k]["returnData"], 16)
-    bought = n(first, "quote_buy")
+    def quote_out(results,label,input_amount):
+        if not algebra:
+            return n(results,label)
+        data=results[label]["returnData"][2:]
+        if len(data)!=128 or int(data[:64],16)!=input_amount:
+            raise ValueError((pool,label,"incomplete exact input"))
+        return int(data[64:],16)
+    bought = quote_out(first,"quote_buy",amount)
     buy = head + [("above_buy", swap(source, target, amount, bought+1)),
                   ("buy", swap(source, target, amount, bought)),
                   ("buy_in", balance(source, owner)), ("buy_out", balance(target, owner)),
-                  ("after_reserves", call(pool, calldata("getReserves()"))),
+                  ("after_global" if algebra else "after_reserves", call(pool, calldata("globalState()" if algebra else "getReserves()"))),
                   ("quote_sell", quote(target, bought))]
-    sold = n(simulate(buy), "quote_sell")
+    sold = quote_out(simulate(buy),"quote_sell",bought)
     entries = buy + [("approve_out", approve(target, bought)), ("above_sell", swap(target, source, bought, sold+1)),
                      ("sell", swap(target, source, bought, sold)), ("sell_in", balance(target, owner)),
                      ("sell_out", balance(source, owner)), ("left_source", balance(source, EXEC)),

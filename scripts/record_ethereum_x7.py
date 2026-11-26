@@ -53,9 +53,9 @@ def verify_factory(c, factory, pair):
 
 def capture(name, endpoint, snap):
     cap = Capture(dict(snap, endpoint=endpoint))
-    head = rpc(endpoint, "eth_getBlockByNumber", [hex(snap["block"]), False])
+    head = rpc(endpoint, "eth_getBlockByHash", [cap.selector["blockHash"], False])
     if (int(rpc(endpoint, "eth_chainId", []), 16) != 1 or head["hash"] != cap.selector["blockHash"]
-            or head["stateRoot"] != ROOT_HASH):
+            or int(head["number"],16)!=snap["block"] or head["stateRoot"] != ROOT_HASH):
         raise ValueError("wrong chain or canonical header")
     factory, pair = MARKETS[name]
     proof = verify_factory(cap, factory, pair)

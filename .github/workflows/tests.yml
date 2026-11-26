@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       ethereum_open_archive:
-        description: Replay both generations of Xchange Ethereum on the pinned canonical state
+        description: Replay Ethereum Xchange generations and DeltaSwap on the pinned canonical state
         type: boolean
         default: false
       fraxswap_archive_replay:
@@ -405,18 +405,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        market: [x7-finance, x7-finance-ethereum]
+        market: [x7-finance, x7-finance-ethereum, deltaswap-ethereum]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0 beautifulsoup4==4.13.5 PyYAML==6.0.3
-      - run: python scripts/record_ethereum_x7.py "${{ matrix.market }}" "$RUNNER_TEMP/x7.json"
+      - if: matrix.market == 'deltaswap-ethereum'
+        run: python scripts/record_deltaswap_base.py "$RUNNER_TEMP/market.json" --network ethereum
+      - if: matrix.market != 'deltaswap-ethereum'
+        run: python scripts/record_ethereum_x7.py "${{ matrix.market }}" "$RUNNER_TEMP/market.json"
       - uses: actions/upload-artifact@v4
         with:
           name: ethereum-v2-${{ matrix.market }}
-          path: ${{ runner.temp }}/x7.json
+          path: ${{ runner.temp }}/market.json
   ethereum-v2-registry:
     if: inputs.community_archive_replay
     runs-on: ubuntu-latest
@@ -528,6 +531,24 @@ jobs:
         with:
           name: base-classic-wallets-${{ matrix.dex }}
           path: ${{ runner.temp }}/wallets.json
+  base-algebra-markets:
+    if: inputs.base_classic_archive
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dex: [synthswap-v3, henjin, kim-v4-base, treble-v4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0 beautifulsoup4==4.14.2 PyYAML==6.0.3
+      - run: python scripts/record_base_algebra_markets.py "${{ matrix.dex }}" "$RUNNER_TEMP/market.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: base-algebra-${{ matrix.dex }}
+          path: ${{ runner.temp }}/market.json
   oasis-base-archive:
     if: inputs.base_factory_directory || inputs.oasis_archive_replay
     runs-on: ubuntu-latest
@@ -566,7 +587,19 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0 beautifulsoup4==4.13.5 PyYAML==6.0.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix contracts --no-audit --no-fund
+      - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/memebox-module" MemeboxAdapter
       - run: python scripts/record_memebox_base.py "$RUNNER_TEMP/memebox.json"
+      - run: python scripts/record_memebox_module.py "$RUNNER_TEMP/memebox.json" "$RUNNER_TEMP/memebox-module/MemeboxAdapter.json" "$RUNNER_TEMP/memebox-wallet.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: memebox-base-module
+          path: |
+            ${{ runner.temp }}/memebox-wallet.json
+            ${{ runner.temp }}/memebox-module/MemeboxAdapter.json
       - uses: actions/upload-artifact@v4
         with:
           name: memebox-base-execution

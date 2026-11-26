@@ -1,0 +1,558 @@
+{
+  "chain": 8453,
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "vault": "0x7122e35cec2eed4a989d9b0a71998534a203972c",
+  "factories": {
+    "weighted": "0x8d88057b8cc9235d4c69db3c14fd8d4229a6ae35",
+    "composable_stable": "0x60ef61c5c0f4213c7b2c02f64a575dc4bfdbf302",
+    "managed": "0x08e3814ad06be2a555a4c0d330a20078e5344dfd"
+  },
+  "verified": "https://sourcify.dev/server/v2/contract/8453/0x7122e35cec2eed4a989d9b0a71998534a203972c",
+  "slot": 6,
+  "state_root": "0x037b0c48cd33236cb94ec9e9fc7438c120b138c2c31d39d0ebe42521ee65676b",
+  "pools": [
+    {
+      "pool": "0x9b45496fe8d0a8fcab913395e6769da36cfe1f2b",
+      "id": "0x9b45496fe8d0a8fcab913395e6769da36cfe1f2b000200000000000000000000",
+      "nonce": 0,
+      "block": 2029843,
+      "tx": "0x89fbf67339217be2afe23a4835b3730f0f172522db807ce338293264d002c5fd",
+      "hash": "0x6613f44205466b11c6a7d3b8f7deb6af11f780b5ca1744aaeea65229512acb6a",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x50c5725949a6f0c72e6c4a641f24049a917db0cb"
+      ],
+      "balances": [
+        "0",
+        "0"
+      ],
+      "last_change": 0
+    },
+    {
+      "pool": "0x1b1507bebb048355d5eefec9a5422dac88bab81b",
+      "id": "0x1b1507bebb048355d5eefec9a5422dac88bab81b000000000000000000000001",
+      "nonce": 1,
+      "block": 2029887,
+      "tx": "0xd8b56f65bc58c29399593f154dab1110ad079a4c75551eebfbdc9d8719787183",
+      "hash": "0x38c8b15958b1867bcc9c0b683bbd96fbd3145a2134a10edce6ea3823a6c6b44a",
+      "specialization": 0,
+      "families": [
+        "composable_stable"
+      ],
+      "tokens": [
+        "0x1b1507bebb048355d5eefec9a5422dac88bab81b",
+        "0x4200000000000000000000000000000000000006",
+        "0x50c5725949a6f0c72e6c4a641f24049a917db0cb"
+      ],
+      "balances": [
+        "0",
+        "0",
+        "0"
+      ],
+      "last_change": 0
+    },
+    {
+      "pool": "0x54412f161c086320421cba479004bc1000f9a13f",
+      "id": "0x54412f161c086320421cba479004bc1000f9a13f000100000000000000000002",
+      "nonce": 2,
+      "block": 2030073,
+      "tx": "0x1f301a080709086160ea9e644b36046e2d4e92a89b5fbcdfe31871353c29d837",
+      "hash": "0xa949d69bebbffe8f310665f767bffa22fd5b9af107b0d9a4e42c20b9f6637fe4",
+      "specialization": 1,
+      "families": [
+        "managed"
+      ],
+      "tokens": [
+        "0x54412f161c086320421cba479004bc1000f9a13f",
+        "0x4200000000000000000000000000000000000006",
+        "0x50c5725949a6f0c72e6c4a641f24049a917db0cb"
+      ],
+      "balances": [
+        "0",
+        "0",
+        "0"
+      ],
+      "last_change": 0
+    },
+    {
+      "pool": "0xafb45a2c365749ddc9166e6ddf845af2e9217345",
+      "id": "0xafb45a2c365749ddc9166e6ddf845af2e9217345000200000000000000000003",
+      "nonce": 3,
+      "block": 2036589,
+      "tx": "0xc3570c9aa0d56e8a315fa93c5ff9555f7391454b93270bde3350c8309db37224",
+      "hash": "0x631d47a0c0ee6ea4ce4ea66d94c0cfe52b615e4bbc35df7b83037703e1950adc",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xeb466342c4d449bc9f53a865d5cb90586f405215"
+      ],
+      "balances": [
+        "29679370276980",
+        "53598"
+      ],
+      "last_change": 59870821
+    },
+    {
+      "pool": "0x074094aac7a5e2fe9e16b5d0be9ed288c5ea6c8e",
+      "id": "0x074094aac7a5e2fe9e16b5d0be9ed288c5ea6c8e000200000000000000000004",
+      "nonce": 4,
+      "block": 2074706,
+      "tx": "0x6f95b5cd394f8f4c2a30c108589bb66abf01ddf9f2ee2dae43a806a354168b5e",
+      "hash": "0x20ab063be3669613291b7e2b737e3dca0c30906121e5268752030ba4ce1761ec",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x27d2decb4bfc9c76f0309b8e88dec3a601fe25a8",
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "balances": [
+        "146776183437873364",
+        "815183275006"
+      ],
+      "last_change": 59869050
+    },
+    {
+      "pool": "0x6e6ba6490fa58e8b8c4a45c6d02220f48ace8732",
+      "id": "0x6e6ba6490fa58e8b8c4a45c6d02220f48ace8732000200000000000000000005",
+      "nonce": 5,
+      "block": 2122897,
+      "tx": "0x237cfe157488dbd3755593b42a9d4143cabb7e96752dec41b5565e01b2152f6e",
+      "hash": "0xd26f1fa71b810772a50f3e530eeec5c533010f634a69d7f31df856fc9799ceab",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x27d2decb4bfc9c76f0309b8e88dec3a601fe25a8",
+        "0xeb466342c4d449bc9f53a865d5cb90586f405215"
+      ],
+      "balances": [
+        "9277038838001459393",
+        "91273"
+      ],
+      "last_change": 59870491
+    },
+    {
+      "pool": "0xf746c5856773feb08d043055422367e123e27254",
+      "id": "0xf746c5856773feb08d043055422367e123e27254000200000000000000000006",
+      "nonce": 6,
+      "block": 2143587,
+      "tx": "0x9244578debd703989e3e687805f20e122b13d4e886ca622acc610b49bdf60855",
+      "hash": "0xcde4d3201a665a2f6450e15fd8937fab294f4ac728c31b8033042833b9b71e72",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x8544fe9d190fd7ec52860abbf45088e81ee24a8c"
+      ],
+      "balances": [
+        "155357997656115",
+        "10566699200662872830217337"
+      ],
+      "last_change": 59871967
+    },
+    {
+      "pool": "0xa405b5750ce237012e0dce6dca3a6bf70051c10c",
+      "id": "0xa405b5750ce237012e0dce6dca3a6bf70051c10c000200000000000000000007",
+      "nonce": 7,
+      "block": 2144637,
+      "tx": "0x8938f7168255fb9082a055ebdc77bae29f4bfa633ed9e614c48c07f6d0b20d4e",
+      "hash": "0x4c6a534c73837e553cb2edef00d21e9a0513d25fd52c2a88a232e5c99a03d8df",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x8544fe9d190fd7ec52860abbf45088e81ee24a8c",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "balances": [
+        "871080737055964086058759",
+        "24954"
+      ],
+      "last_change": 59870615
+    },
+    {
+      "pool": "0x0682e6ddd63d4912bf16bd8bc163f9b2b68d87de",
+      "id": "0x0682e6ddd63d4912bf16bd8bc163f9b2b68d87de000200000000000000000008",
+      "nonce": 8,
+      "block": 2195437,
+      "tx": "0x5ab56ad934764bf07d3966debc09f3a7672c722f3635505c23f7a11574902311",
+      "hash": "0x4b3accd14db6cde60676b4feaa3e077993154063882097f620482547559eb122",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x50c5725949a6f0c72e6c4a641f24049a917db0cb",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "balances": [
+        "500028",
+        "1"
+      ],
+      "last_change": 2535958
+    },
+    {
+      "pool": "0x6372ec09dbf0c2907bb7b1529a1fc6359310f1bd",
+      "id": "0x6372ec09dbf0c2907bb7b1529a1fc6359310f1bd000000000000000000000009",
+      "nonce": 9,
+      "block": 2199729,
+      "tx": "0x640a94a1b0e689bb7ccec2077e4822366c64e30b2c548452556b971ca6a9e9e9",
+      "hash": "0x4f397d95f70c37d60fdb4abe2e9c23022ed29198d78757c02face17ecc55d107",
+      "specialization": 0,
+      "families": [
+        "composable_stable"
+      ],
+      "tokens": [
+        "0x50c5725949a6f0c72e6c4a641f24049a917db0cb",
+        "0x6372ec09dbf0c2907bb7b1529a1fc6359310f1bd",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "balances": [
+        "8518840220363886510",
+        "2596148429267715612328906042065515",
+        "1064470"
+      ],
+      "last_change": 59871072
+    },
+    {
+      "pool": "0x7a26919c527f9076d4a11bff6618949b494df661",
+      "id": "0x7a26919c527f9076d4a11bff6618949b494df66100020000000000000000000a",
+      "nonce": 10,
+      "block": 2200916,
+      "tx": "0xf053e8b4da678c0ee2948102fa13872e1ed5f849b6bc8d5eb61587dc86a84de7",
+      "hash": "0x01baf80e3da64905b957bf6d06d9dc92ffbefb0d34d29727e8adf5576a99aad7",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x6372ec09dbf0c2907bb7b1529a1fc6359310f1bd"
+      ],
+      "balances": [
+        "608549785926250",
+        "1326906827225862033"
+      ],
+      "last_change": 59870923
+    },
+    {
+      "pool": "0x2c8cdb099e751470068e29b16604e73ee7755e06",
+      "id": "0x2c8cdb099e751470068e29b16604e73ee7755e0600020000000000000000000b",
+      "nonce": 11,
+      "block": 5277679,
+      "tx": "0xb761c5206ce31736c6f2bf62521eebb562db9586b606c96baacbf9830d5ad357",
+      "hash": "0x5a5071436925297468abd532b7751313e29f9bab6a4d10c460b14ac758894fc3",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "balances": [
+        "13013205424565",
+        "30488"
+      ],
+      "last_change": 41855959
+    },
+    {
+      "pool": "0x847c82f5be6a0697d70b0b4d179f3d0c3f25f200",
+      "id": "0x847c82f5be6a0697d70b0b4d179f3d0c3f25f20000020000000000000000000c",
+      "nonce": 12,
+      "block": 5374099,
+      "tx": "0x1a2fbe857beb429de67b5d3faae89f82d1d699eca23bf5d1f93a7898cdd8c95b",
+      "hash": "0xd7815b63ef4878f548d1f7fa7b1f00bd0f7d40fe94a805e0981ea3923c953a05",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "0xeb466342c4d449bc9f53a865d5cb90586f405215"
+      ],
+      "balances": [
+        "3834",
+        "8082"
+      ],
+      "last_change": 7483427
+    },
+    {
+      "pool": "0x11ccbe15767ab24faa22a1ccd2f275ec6e0ec13c",
+      "id": "0x11ccbe15767ab24faa22a1ccd2f275ec6e0ec13c00020000000000000000000d",
+      "nonce": 13,
+      "block": 5926485,
+      "tx": "0x698ac441a649e052fdf6f05aea22b55f935ea11697d92f5e225d9ba41448efdf",
+      "hash": "0x64e9a3ffc8dd6c3a9fdd0f150a555321a961e50a80f7f57b0ca30c83ec739aa1",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "0xeb466342c4d449bc9f53a865d5cb90586f405215"
+      ],
+      "balances": [
+        "483266",
+        "489351"
+      ],
+      "last_change": 20609919
+    },
+    {
+      "pool": "0xf9b57c97aa1c78dd1599efb8ac6c9d4cdb8b81cf",
+      "id": "0xf9b57c97aa1c78dd1599efb8ac6c9d4cdb8b81cf00020000000000000000000e",
+      "nonce": 14,
+      "block": 12033567,
+      "tx": "0x65fbe303196aab81eaa4bf86b72f93dac7d4b39be7a3764cfdf6d10779d9d3c4",
+      "hash": "0x3aa9a3dee375d0cf7c5b53c78ba708479c41f6a2e25ba894159f216b3b9c04e7",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "balances": [
+        "34030",
+        "26458"
+      ],
+      "last_change": 14303955
+    },
+    {
+      "pool": "0x58b9574876f804f55ee2f680e661d9ba98caa8ea",
+      "id": "0x58b9574876f804f55ee2f680e661d9ba98caa8ea00020000000000000000000f",
+      "nonce": 15,
+      "block": 12181633,
+      "tx": "0x1aeba6f9d76cf350dde52ac31e2c37091c1f6ca62474d0cd309b0be71b9946d2",
+      "hash": "0x83dcc9834954ebc22f51a26496ade37a5ed594fc80922e68e14ffb9eb8ceb066",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x8300373ea6ab92bf7b9cc364e95d233bd37aee0b"
+      ],
+      "balances": [
+        "0",
+        "0"
+      ],
+      "last_change": 0
+    },
+    {
+      "pool": "0xb953eaceeab21db1a82082ae942d73f141fb888b",
+      "id": "0xb953eaceeab21db1a82082ae942d73f141fb888b000200000000000000000010",
+      "nonce": 16,
+      "block": 12956846,
+      "tx": "0xdf7d933f1994c4c6abd2e51e68323112ecd23e927863660ee6ba9a12e7927a2f",
+      "hash": "0xd2880509aef332b83975b9c0db51f8eb3520158d6f23bdac2797321cc31564f3",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x6372ec09dbf0c2907bb7b1529a1fc6359310f1bd",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "balances": [
+        "3989884568636092760",
+        "3223515"
+      ],
+      "last_change": 57528023
+    },
+    {
+      "pool": "0x46708fcafafdb03405dbe95b366622300701e2e7",
+      "id": "0x46708fcafafdb03405dbe95b366622300701e2e7000200000000000000000011",
+      "nonce": 17,
+      "block": 12957090,
+      "tx": "0x93c0bd392c6fc58a1ebd524b0e85ffc2ce8b57a64119bbbd23b9a5a56dbe9b2b",
+      "hash": "0xc68d0da8598ef1117b98489f5c7b7e7d87f23d16bbf49686460352e871336d61",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x6372ec09dbf0c2907bb7b1529a1fc6359310f1bd",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "balances": [
+        "1667123227484025596",
+        "1393031"
+      ],
+      "last_change": 57186003
+    },
+    {
+      "pool": "0x33f50116f921d249252950460bf035373c43cd9d",
+      "id": "0x33f50116f921d249252950460bf035373c43cd9d000200000000000000000012",
+      "nonce": 18,
+      "block": 23865554,
+      "tx": "0x5585f163df237e635805b57f4bdfee0e76465af51092176b094fe904354ba2a8",
+      "hash": "0xdedc4af8eb7e5953b0ded7575f6f11b1a7747c26bda2c3d8eb3ff3d9fa7ca257",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "balances": [
+        "10355153884",
+        "25"
+      ],
+      "last_change": 48245251
+    },
+    {
+      "pool": "0xaa3104800adc8ff21061e77b3f1f89b1b1ca6282",
+      "id": "0xaa3104800adc8ff21061e77b3f1f89b1b1ca6282000200000000000000000013",
+      "nonce": 19,
+      "block": 23866905,
+      "tx": "0xc8404acd650d1a698ebbcf2126a0adba1e657a10b12b903456beee7079c79155",
+      "hash": "0x139a2110550f6d30ca83df8ee14b08881002d8b40363864d77688c7a32b3d360",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "balances": [
+        "1148008951064652",
+        "2012361"
+      ],
+      "last_change": 59639464
+    },
+    {
+      "pool": "0x3e1bd58c0ac04513153adccfa9af902bc75d154b",
+      "id": "0x3e1bd58c0ac04513153adccfa9af902bc75d154b000200000000000000000014",
+      "nonce": 20,
+      "block": 23911328,
+      "tx": "0x7042f9de6368b900cc9c3ece2d0e1910b4ead878666701c14d2a9ba1437a007e",
+      "hash": "0x28ec736ee7c0feb308770a3cc817cff4aa4cc84fd29647ce41a06f82625cc666",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "balances": [
+        "2278334",
+        "2279608"
+      ],
+      "last_change": 29673155
+    },
+    {
+      "pool": "0xa4872638ec9ec45bc0d6942cfc69dbcc3b18e8ec",
+      "id": "0xa4872638ec9ec45bc0d6942cfc69dbcc3b18e8ec000200000000000000000015",
+      "nonce": 21,
+      "block": 23947925,
+      "tx": "0xef4036724c063750294fb7f331532aba0c6327476bc1c46029db16cd6a3a8e70",
+      "hash": "0x9b69c1953c6cfe3581cdcb34bf53a678f9cc15c86321b78e2597dc79792b5d42",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "balances": [
+        "686565819781245",
+        "1147016"
+      ],
+      "last_change": 59743996
+    },
+    {
+      "pool": "0xf49dcd799688b375d73d0863c3fa5327a585c44a",
+      "id": "0xf49dcd799688b375d73d0863c3fa5327a585c44a000200000000000000000016",
+      "nonce": 22,
+      "block": 25982532,
+      "tx": "0x08c8c17ab34f6ed128d3e6e2324749930408981222514790f699bb8bffb6408d",
+      "hash": "0xaef5c062fe7969c4eb1fbefea4d71c7b79ce6e5878e4eb01b1742a8b43d53441",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "balances": [
+        "4334236",
+        "1857274"
+      ],
+      "last_change": 25982541
+    },
+    {
+      "pool": "0xae4699763ccaedf917a857965d758786aa327205",
+      "id": "0xae4699763ccaedf917a857965d758786aa327205000200000000000000000017",
+      "nonce": 23,
+      "block": 26548142,
+      "tx": "0xc0fc499fa5c6e6dac5f4984de3c8536fe264196b72721f1ed411b9420e3bd7d0",
+      "hash": "0x3fc63231d97f849889b59922277524488994f4d5eebf8b662d41b56b8c6fd3dd",
+      "specialization": 2,
+      "families": [
+        "weighted"
+      ],
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "balances": [
+        "1230048890371984",
+        "228060"
+      ],
+      "last_change": 61056159
+    },
+    {
+      "pool": "0xb40889280aa69c885332a5618a113482a71d553a",
+      "id": "0xb40889280aa69c885332a5618a113482a71d553a000000000000000000000018",
+      "nonce": 24,
+      "block": 29759574,
+      "tx": "0x58f1b5290012d1ace7f241d70d46d4e47566c0cec4a8665d4495292533638f38",
+      "hash": "0xd573a4d0ace64535893c176da67a02962c221969d6decc3a7f9854151a981a46",
+      "specialization": 0,
+      "families": [],
+      "tokens": [],
+      "balances": [],
+      "last_change": 0
+    },
+    {
+      "pool": "0xd6c640bb372e21fcc33d030d63e6f802b2002733",
+      "id": "0xd6c640bb372e21fcc33d030d63e6f802b2002733000000000000000000000019",
+      "nonce": 25,
+      "block": 29760272,
+      "tx": "0x59db565109c4135ff937ae98c43542d7cf9321da25a14f42b387cf612487db8b",
+      "hash": "0xaaa35aedf267d69fb0db1f630da67d062a727ca0348d11e6b23d68559c226c17",
+      "specialization": 0,
+      "families": [],
+      "tokens": [
+        "0x4440000000000000000000000000000000000002"
+      ],
+      "balances": [
+        "0"
+      ],
+      "last_change": 0
+    }
+  ]
+}

@@ -64,7 +64,7 @@ pub(super) fn expected(
         return None;
     }
     let market = CandySwapState {
-        reserves: [reserves.reserve0.into(), reserves.reserve1.into()],
+        reserves: [U256::from(reserves.reserve0), U256::from(reserves.reserve1)],
         balances: [word(1)?, word(2)?],
         payout_bps: payout.to::<u16>(),
         receiver,

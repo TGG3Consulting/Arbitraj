@@ -7,6 +7,7 @@
 //! От чего зависит: rusqlite.
 //! Настройки: нет.
 
+pub mod cex_funds;
 pub mod db;
 pub mod episode_files;
 pub mod episodes_db;

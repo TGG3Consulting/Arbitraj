@@ -55,6 +55,13 @@ CREATE TABLE IF NOT EXISTS gate_withdraw_denial (
  account TEXT NOT NULL, asset TEXT NOT NULL, network TEXT NOT NULL, address TEXT NOT NULL, rejected_at INTEGER NOT NULL,
  PRIMARY KEY(account,asset,network,address)
 );
+CREATE TABLE IF NOT EXISTS cex_funds (
+    action TEXT PRIMARY KEY, bucket TEXT NOT NULL, client TEXT NOT NULL, deal TEXT NOT NULL,
+    funding INTEGER NOT NULL, cap TEXT NOT NULL, order_id TEXT, debit TEXT,
+    UNIQUE(bucket,client), UNIQUE(bucket,order_id)
+);
+CREATE INDEX IF NOT EXISTS cex_funds_bucket ON cex_funds(bucket);
+CREATE TABLE IF NOT EXISTS cex_funds_epoch (bucket TEXT PRIMARY KEY, revision INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS deposit_log_claim (
     chain TEXT NOT NULL, token TEXT NOT NULL, wallet TEXT NOT NULL, tx TEXT NOT NULL,
     log_index INTEGER NOT NULL, sender TEXT NOT NULL, withdrawal_id TEXT NOT NULL,

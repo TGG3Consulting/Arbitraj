@@ -55,25 +55,49 @@ def capture(compiled):
             prefix += [approve(y, executor, budget), balance(x), balance(y)]
             buy_id = keccak(text=f"{data['hash']}:{proxy}:{budget}:buy")
             sell_id = keccak(text=f"{data['hash']}:{proxy}:{budget}:sell")
-            buy = [proxy, y, x, budget, budget-spent, bought, market["asks"][0][0], case["buy_return"][2], deadline, buy_id]
-            sell = [proxy, x, y, bought, 0, case["received_y"], case["bid_after"][0], case["sell_return"][3], deadline, sell_id]
+            # Discovery calls exist only in this pinned, unsigned replay. Firm controls below
+            # use observed amounts and an exact price, independently of the generic helper/EOA.
+            buy = [proxy, y, x, budget, budget-1, 1, 2**72-1, 2**128-1, deadline, buy_id]
+            read_fill = lambda row: decode(["uint256", "uint256", "uint128"], success(row))
+            probe = simulate(prefix + [order(buy)])[-1]
+            if int(probe["status"], 16) == 0 and probe.get("error",{}).get("data") in ("0x7c329980","0x6838b4aa"):
+                recorded.append({"proxy":proxy, "budget_y":budget, "unavailable":"buy", "revert":probe["error"]["data"]})
+                continue
+            spent, bought, buy_fee = read_fill(probe)
+            scale_x, scale_y = market["scale"]
+            shares = bought // scale_x
+            ask, remainder = divmod(spent // scale_y - buy_fee, shares)
+            if remainder:
+                raise ValueError("control budget crosses multiple prices, requires marginal price discovery")
+            buy[4:8] = [budget-spent, bought, ask, buy_fee]
             entry = prefix + [order(buy), balance(x), balance(y), approve(x, executor, bought)]
+            sell = [proxy, x, y, bought, 0, 1, 1, 2**128-1, deadline, sell_id]
+            probe = simulate(entry + [order(sell)])[-1]
+            if int(probe["status"],16) == 0 and probe.get("error",{}).get("data") in ("0x7c329980","0x6838b4aa"):
+                recorded.append({"proxy":proxy,"budget_y":budget,"actual_debit_y":spent,"received_x":bought,
+                                 "unavailable":"sell","revert":probe["error"]["data"]})
+                continue
+            sold, credited, sell_fee = read_fill(probe)
+            if sold != bought: raise ValueError("sell did not consume the full position")
+            bid, remainder = divmod(credited // scale_y + sell_fee, shares)
+            if remainder: raise ValueError("exit spans multiple prices")
+            sell[5:8] = [credited, bid, sell_fee]
             full = simulate(entry + [order(sell), balance(x), balance(y)])
             for row in full:
                 success(row)
             val = lambda i: int.from_bytes(success(full[i]), "big")
-            assert decode(["uint256","uint256"], success(full[len(prefix)])) == (spent, bought)
-            assert decode(["uint256","uint256"], success(full[-3])) == (bought, case["received_y"])
+            assert read_fill(full[len(prefix)]) == (spent, bought, buy_fee)
+            assert read_fill(full[-3]) == (bought, credited, sell_fee)
             start_x, start_y = val(len(prefix)-2), val(len(prefix)-1)
             assert val(len(prefix)+1) == start_x + bought and val(len(prefix)+2) == start_y-spent
-            assert val(-2) == start_x and val(-1) == start_y - spent + case["received_y"]
+            assert val(-2) == start_x and val(-1) == start_y - spent + credited
             def completed(operation_id, payer=OWNER):
                 return call(executor, calldata("completed(address,bytes32)", ["address", "bytes32"], [payer, operation_id]))
             # Prove a retry cannot debit twice even if its original signature was lost.
             repeated = simulate(entry + [completed(buy_id), order(buy), completed(buy_id), balance(x), balance(y)])
             if (int.from_bytes(success(repeated[-5]), "big") != 1 or
                     int(repeated[-4]["status"], 16) != 0 or
-                    not repeated[-4]["returnData"][2:].startswith(keccak(text="AlreadyCompleted(bytes32)")[:4].hex()) or
+                    not repeated[-4].get("error",{}).get("data",repeated[-4]["returnData"])[2:].startswith(keccak(text="AlreadyCompleted(bytes32)")[:4].hex()) or
                     int.from_bytes(success(repeated[-3]), "big") != 1 or
                     int.from_bytes(success(repeated[-2]), "big") != start_x + bought or
                     int.from_bytes(success(repeated[-1]), "big") != start_y - spent):
@@ -85,13 +109,13 @@ def capture(compiled):
                 raise ValueError("unfunded account consumed another payer's operation ID")
             controls = ["duplicate_operation", "unfunded_independent_sender"]
             altered_cases = [("buy_min_out_plus_one", prefix, buy, 5, bought+1),
-                             ("sell_min_out_plus_one", entry, sell, 5, case["received_y"]+1),
-                             ("buy_commission_above_cap", prefix, buy, 7, case["buy_return"][2]-1),
+                             ("sell_min_out_plus_one", entry, sell, 5, credited+1),
+                             ("buy_commission_above_cap", prefix, buy, 7, buy_fee-1),
                              ("buy_expired", prefix, buy, 8, deadline-301)]
             if buy[4]:
                 altered_cases.append(("unspent_above_cap", prefix, buy, 4, buy[4]-1))
-            if case["bid_before"][0] != case["bid_after"][0]:
-                altered_cases.append(("stale_bid_zero_fill", entry, sell, 6, case["bid_before"][0]))
+            if case["bid_before"][0] > bid:
+                altered_cases.append(("infeasible_previous_bid", entry, sell, 6, case["bid_before"][0]))
             for label, lead, args, idx, value in altered_cases:
                 altered = list(args)
                 altered[idx] = value
@@ -105,8 +129,12 @@ def capture(compiled):
                 success(retry[-2])
                 controls.append(label)
             recorded.append({"proxy": proxy, "budget_y":budget, "actual_debit_y":spent, "received_x":bought,
-                             "sold_x":bought, "actual_credit_y":case["received_y"], "reverted":controls})
+                             "sold_x":bought, "actual_credit_y":credited, "eoa_debit_y":case["debited_y"], "eoa_credit_y":case["received_y"],
+                             "eoa_received_x":case["received_x"], "contract_ask":ask, "contract_bid":bid,
+                             "buy_fee_units":buy_fee, "sell_fee_units":sell_fee, "reverted":controls})
             print(proxy, budget, len(controls), flush=True)
+    if len(recorded) != 14 or not any(r.get("reverted") for r in recorded):
+        raise ValueError("missing market observations or no positive controls")
     return {"chain_id":8453, "block":data["block"], "hash":data["hash"], "owner":OWNER,
             "executor":executor, "runtime_keccak":"0x"+keccak(bytes.fromhex(compiled["runtime"])).hex(),
             "solc":compiled["solc"], "round_trips":recorded}

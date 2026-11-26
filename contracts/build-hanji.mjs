@@ -6,7 +6,9 @@ import solc from 'solc';
 
 const output = process.argv[2];
 if (!output) throw new Error('Expected an artifact directory');
-const file = 'HanjiExecutor.sol';
+const name = process.argv[3] ?? 'HanjiExecutor';
+if (!['HanjiExecutor', 'FermiSlotExecutor'].includes(name)) throw new Error('Unknown executor');
+const file = name + '.sol';
 const root = import.meta.dirname;
 const input = {
   language: 'Solidity',
@@ -20,11 +22,11 @@ const result = JSON.parse(solc.compile(JSON.stringify(input)));
 for (const error of (result.errors ?? [])) {
   if (error.severity === 'error') throw new Error(error.formattedMessage);
 }
-const contract = result.contracts[file].HanjiExecutor;
+const contract = result.contracts[file][name];
 if (!contract.evm.deployedBytecode.object || contract.evm.deployedBytecode.object.length / 2 > 24576)
-  throw new Error('HanjiExecutor exceeds the EVM contract size limit or is empty');
+  throw new Error(name + ' exceeds the EVM contract size limit or is empty');
 mkdirSync(output, { recursive: true });
-writeFileSync(join(output, 'HanjiExecutor.json'), JSON.stringify({
+writeFileSync(join(output, name + '.json'), JSON.stringify({
   solc: solc.version(), abi: contract.abi, creation: contract.evm.bytecode.object,
   runtime: contract.evm.deployedBytecode.object, storage: contract.storageLayout.storage,
 }));

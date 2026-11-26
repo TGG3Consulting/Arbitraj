@@ -70,7 +70,7 @@ contract HanjiExecutor {
         if (!trading) revert UnexpectedNative();
     }
 
-    function execute(Order calldata order) external returns (uint256 spent, uint256 received) {
+    function execute(Order calldata order) external returns (uint256 spent, uint256 received, uint128 feeUnits) {
         address payer = msg.sender;
         if (trading || block.timestamp > order.deadline ||
             order.operationId == bytes32(0) || order.market.code.length == 0 || order.input == order.output ||
@@ -98,9 +98,9 @@ contract HanjiExecutor {
         if (input.balanceOf(address(this)) != originalIn + order.budget) revert TransferFailed();
         checkedCall(order.input, abi.encodeCall(input.approve, (order.market, order.budget)));
         if (sell) {
-            market.placeOrder(true, lots, order.limitPrice, order.maxCommission, true, false, true, order.deadline);
+            (,,,feeUnits) = market.placeOrder(true, lots, order.limitPrice, order.maxCommission, true, false, true, order.deadline);
         } else {
-            market.placeMarketOrderWithTargetValue(false, lots, order.limitPrice, order.maxCommission, true, order.deadline);
+            (,,feeUnits) = market.placeMarketOrderWithTargetValue(false, lots, order.limitPrice, order.maxCommission, true, order.deadline);
         }
         checkedCall(order.input, abi.encodeCall(input.approve, (order.market, 0)));
         uint256 nativeOut = address(this).balance - originalEth;

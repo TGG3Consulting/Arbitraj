@@ -13,6 +13,10 @@ on:
         description: Replay the CI-built contract against the pinned Base block
         type: boolean
         default: false
+      fermi_archive_replay:
+        description: Replay the CI-built executor against the two recorded Ethereum builder frames
+        type: boolean
+        default: false
 env:
   CARGO_PROFILE_DEV_DEBUG: "0"
   CARGO_INCREMENTAL: "0"
@@ -75,12 +79,17 @@ jobs:
       - working-directory: contracts
         run: npm ci --no-audit --no-fund
       - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/hanji-executor"
+      - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/fermi-executor" FermiSlotExecutor
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fermi-slot-executor
+          path: ${{ runner.temp }}/fermi-executor/FermiSlotExecutor.json
       - uses: actions/upload-artifact@v4
         with:
           name: hanji-executor
           path: ${{ runner.temp }}/hanji-executor/HanjiExecutor.json
       - uses: actions/setup-python@v5
-        if: inputs.hanji_archive_replay
+        if: inputs.hanji_archive_replay || inputs.fermi_archive_replay
         with:
           python-version: '3.12'
       - if: inputs.hanji_archive_replay
@@ -92,3 +101,12 @@ jobs:
         with:
           name: hanji-base-replay
           path: ${{ runner.temp }}/hanji-executor/base-replay.json
+      - if: inputs.fermi_archive_replay
+        run: |
+          pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0
+          python scripts/record_fermi_executor.py "$RUNNER_TEMP/fermi-executor/FermiSlotExecutor.json" "$RUNNER_TEMP/fermi-executor/ethereum-replay.json"
+      - uses: actions/upload-artifact@v4
+        if: inputs.fermi_archive_replay
+        with:
+          name: fermi-slot-replay
+          path: ${{ runner.temp }}/fermi-executor/ethereum-replay.json

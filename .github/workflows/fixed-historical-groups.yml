@@ -1,13 +1,13 @@
-name: Historical fixed volume accounting over archived card inputs
+name: Historical earlier releases fixed volume archive
 on:
   push:
-    branches: [audit/all-fixed-points-2611]
+    branches: [audit/earlier-fixed-points-2611]
 permissions:
   contents: read
 jobs:
   replay:
     runs-on: ubuntu-latest
-    timeout-minutes: 65
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -42,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          ref="refs/heads/audit/fixed-history-envelope-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GROUP}"
+          ref="refs/heads/audit/early-fixed-envelope-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GROUP}"
           for i in $(seq 1 60); do
             if git -C harness ls-remote --exit-code origin "$ref" >/dev/null 2>&1; then break; fi
             sleep 20
@@ -64,7 +64,7 @@ jobs:
           done
           python - "$RUNNER_TEMP" <<'PY'
           import json,gzip,pathlib,sys
-          t=pathlib.Path(sys.argv[1]);d=json.loads((t/'input.json').read_bytes());(t/'return.pem').write_text(d['return_key']);results={f.stem:json.loads(f.read_bytes())for f in (t/'results').glob('*.json')};assert len(results)==4
+          t=pathlib.Path(sys.argv[1]);d=json.loads((t/'input.json').read_bytes());(t/'return.pem').write_text(d['return_key']);results={f.stem:json.loads(f.read_bytes())for f in (t/'results').glob('*.json')};assert len(results) in (6,7)
           (t/'result.gz').write_bytes(gzip.compress(json.dumps(results).encode()))
           PY
           /usr/bin/python3 "$p/market_envelope.py" seal "$RUNNER_TEMP/return.pem" "$RUNNER_TEMP/result.enc" "$RUNNER_TEMP/result.gz"

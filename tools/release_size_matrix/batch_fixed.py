@@ -13,13 +13,21 @@ getcontext().prec = 70
 src, data, results = map(Path, sys.argv[1:])
 sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, cwd=src).strip()
 test = (Path(__file__).parent / 'fixed_archive.rs').read_text()
-if 'pub fn keep_of(' not in (src/'src/core/reserve.rs').read_text():
-    start = test.index('    let keep=reserve::keep_of')
-    end = test.index('    let mut outgoing', start)
-    test = test[:start] + '''    use rust_decimal::MathematicalOps;
-    let sqrt_t=p.transit.sqrt().ok_or("missing transit")?;
-    let risk=reserve::amount(p.k,p.sigma,sqrt_t,quoted_proceeds,p.closure,p.qa[2],p.qb[2]);
-''' + test[end:]
+reserve_file=src/'src/core/reserve.rs'
+start=test.index('    let keep=reserve::keep_of')
+end=test.index('    let mut outgoing',start)
+native_costs=(src/'src/core/costs.rs').read_text()
+if reserve_file.exists():
+    assert 'let reserve = super::reserve::amount(' in native_costs
+    replacement='    let risk=reserve::amount(p.k,p.sigma,sqrt_t,quoted_proceeds,p.closure,p.qa[2],p.qb[2]);'
+else:
+    expr=re.search(r'let reserve = (cx\.k \* cx\.sigma \* sqrt_t \* proceeds);',native_costs)
+    assert expr, 'unrecognized legacy reserve calculation'
+    test=test.replace('Rates},reserve,types','Rates},types')
+    start=test.index('    let keep=reserve::keep_of')
+    end=test.index('    let mut outgoing',start)
+    replacement='    let cx=&p; let proceeds=quoted_proceeds; let risk='+expr[1]+';'
+test=test[:start]+'    use rust_decimal::MathematicalOps;\\n    let sqrt_t=p.transit.sqrt().ok_or("missing transit")?;\\n'+replacement+'\\n'+test[end:]
 (src/'tests/fixed_archive.rs').write_text(test)
 temp = Path(os.environ['RUNNER_TEMP'])
 native_output = temp/'sha-points.json'

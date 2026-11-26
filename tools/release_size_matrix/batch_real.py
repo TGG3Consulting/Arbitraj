@@ -26,9 +26,20 @@ def cargo(names,expected,output):
 with TemporaryDirectory() as temp:
  d=pathlib.Path(temp)
  # General requires pristine transformation of stored_compare; its generated Rust file is independent.
+ for lane,module in [('general','single_tick_source.rs'),('tick','full_tick_source.rs')]:
+  if not src.get(lane):continue
+  x=d/(lane+'.json');x.write_text(json.dumps(src[lane]))
+  invoke([p/'general_archive.py',target,x,module])
+  if lane=='tick':
+   srcfile=target/'tests/general_archive.rs'
+   tt=srcfile.read_text();(target/'tests/tick_archive.rs').write_text(tt.replace('general_cases.json','tick_cases.json'))
+   (target/'tests/general_cases.json').rename(target/'tests/tick_cases.json')
+  else:
+   (target/'tests/general_archive.rs').rename(d/'general.rs')
+   (target/'tests/general_cases.json').rename(d/'general.json.native')
  if src.get('general'):
-  x=d/'general.json';x.write_text(json.dumps(src['general']))
-  invoke([p/'general_archive.py',target,x])
+  (d/'general.rs').rename(target/'tests/general_archive.rs')
+  (d/'general.json.native').rename(target/'tests/general_cases.json')
  settings=json.loads((p/'control_settings.json').read_text(encoding='utf-8-sig'))
  for lane,n in [('cex','stored'),('dex','actual_v2')]:
   data=src[lane];settings.update(data['settings']);(d/(lane+'.json')).write_text(json.dumps({'cases':data['cases']}))
@@ -40,3 +51,4 @@ with TemporaryDirectory() as temp:
  invoke([hist,target])
  cargo(['core_size_stored_compare','core_size_actual_v2','core_size_actual_v3'],2*(len(src['cex']['cases'])+len(src['dex']['cases'])+1),'core')
  if src.get('general'):cargo(['general_archive'],2*len(src['general']['cases']),'general')
+ if src.get('tick'):cargo(['tick_archive'],2*len(src['tick']['cases']),'tick')

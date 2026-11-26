@@ -53,6 +53,8 @@ def stage(target, case_path):
     template = template.replace("// NATIVE_DIR_CTX", ctx_literal)
     template = template.replace("// NATIVE_EXTRA", setup).replace("// NATIVE_PARAMS", params_code)
     template = template.replace("NATIVE_ASSET_SCHEMA", normalize)
+    if normalize == "old":
+        template = template.replace("parsed.contract.expect", "parsed.bsc_contract.expect")
     template = template.replace("NATIVE_THRESHOLD_PLACEMENT", "inside_search" if "ext" in names else "after_search")
 
     source = json.loads(case_path.read_text(encoding="utf-8-sig"))["cases"]

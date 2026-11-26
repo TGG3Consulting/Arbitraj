@@ -62,7 +62,8 @@ impl Kind {
             | MarketEvent::Invalidated { .. }
             | MarketEvent::PoolCheck(_)
             | MarketEvent::SpotPairs { .. } => Kind::Money,
-            MarketEvent::Notice { .. }
+            MarketEvent::RfqMarkets { .. }
+            | MarketEvent::Notice { .. }
             | MarketEvent::SendChannel(_)
             | MarketEvent::CoinCheck(_)
             | MarketEvent::CheckPass { .. }

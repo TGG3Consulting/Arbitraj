@@ -473,7 +473,8 @@ fn found(
     })
 }
 
-/// Uniswap V2 factories salt CREATE2 with the packed, sorted 20-byte addresses.
+/// Принимает фабрику, два токена и хеш байткода создания. Возвращает адрес пары CREATE2.
+/// Соль Uniswap V2 — хеш двух отсортированных 20-байтовых адресов без дополнения. Ошибок нет.
 pub fn v2_create2(
     factory: Address,
     a: Address,

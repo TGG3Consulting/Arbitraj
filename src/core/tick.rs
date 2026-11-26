@@ -73,6 +73,22 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 }
                 schedule_book(&core, &venue, &ticker, received_at, exchange_time);
             }
+            Touched::RfqMarkets {
+                venue,
+                tokens,
+                changed,
+            } => {
+                core.inner.feed_seen.mark(&venue);
+                if changed {
+                    core.request_rebuild();
+                }
+                for token in tokens {
+                    lk(&core.inner.quote_cache).bump(&venue, token);
+                    for asset in assets_by_tokens(&core, &venue, (token, token)) {
+                        super::tick_sched::schedule(&core, asset, venue.clone());
+                    }
+                }
+            }
             Touched::Pool {
                 venue,
                 tokens,

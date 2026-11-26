@@ -28,6 +28,14 @@ pub use super::touched::Touched;
 /// Рыночное состояние в памяти.
 #[derive(Default)]
 pub struct MarketState {
+    pub(super) rfq: HashMap<
+        VenueId,
+        (
+            Address,
+            std::collections::BTreeMap<Address, (bool, bool)>,
+            i64,
+        ),
+    >,
     pub(super) books: HashMap<(VenueId, String), OrderBook>,
     /// Решение 317 (доработка): когда последний раз менялось СОДЕРЖИМОЕ стакана (по префиксам уровней, book_still.rs);
     /// кадр с тем же содержимым отметки не двигает. Ключ — как у books.
@@ -78,6 +86,27 @@ impl MarketState {
     pub fn apply(&mut self, ev: MarketEvent) -> Touched {
         match ev {
             // Стакан и пул — market_apply.rs.
+            MarketEvent::RfqMarkets {
+                venue,
+                quote,
+                markets,
+                expires_ms,
+            } => {
+                let mut tokens = markets.keys().copied().collect::<Vec<_>>();
+                let changed = self
+                    .rfq
+                    .get(&venue)
+                    .is_none_or(|(q, prev, _)| q != &quote || prev != &markets);
+                if changed && let Some((_, old, _)) = self.rfq.get(&venue) {
+                    tokens.extend(old.keys().filter(|t| !markets.contains_key(*t)).copied());
+                }
+                self.rfq.insert(venue.clone(), (quote, markets, expires_ms));
+                Touched::RfqMarkets {
+                    venue,
+                    tokens,
+                    changed,
+                }
+            }
             MarketEvent::Book(b) => self.apply_book(b),
             MarketEvent::Pool(p) => self.apply_pool(p),
             MarketEvent::Invalidated {

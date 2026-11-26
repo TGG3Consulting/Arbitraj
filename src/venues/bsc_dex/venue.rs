@@ -170,17 +170,17 @@ impl Venue for BscDex {
             let class = urgency::is_set().unwrap_or(Class::Quote);
             scope(class, self.p.quoting().quote(asset, side, qty)).await
         }
-        .await?;
-        Ok(super::hashflow::routing::consider(&self.p, asset, side, qty, baseline).await)
+        .await;
+        super::hashflow::routing::consider(&self.p, asset, side, qty, baseline).await
     }
 
     /// Решение 250: исполнимость объёма (проверка доли глубины h) — quote/fills.rs: прямой путь одного пула исполняет
     /// объём целиком — ответ без полной котировки; иначе — полная котировка, как quote. Финальная котировка через
     /// KyberSwap (решение 95) — как quote. Ошибки: как у quote.
     async fn quote_fills(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Decimal> {
-        if crate::gateway::quote_stage::is_final()
-            && (self.p.ctx.flag("exec.via_kyber").unwrap_or(false)
-                || self.p.ctx.flag("hashflow.trading").unwrap_or(false))
+        if self.p.ctx.flag("hashflow.trading").unwrap_or(false)
+            || (crate::gateway::quote_stage::is_final()
+                && self.p.ctx.flag("exec.via_kyber").unwrap_or(false))
         {
             return self.quote(asset, side, qty).await.map(|q| q.fillable_qty);
         }
@@ -200,7 +200,23 @@ impl Venue for BscDex {
         limit: u32,
     ) -> GatewayResult<Vec<Decimal>> {
         let q = self.p.quoting();
-        super::quote::breaks::breaks(&q, asset, side, route, max_qty, limit).await
+        let extra = super::hashflow::routing::breaks(&self.p, asset, side, max_qty);
+        if extra.is_empty() {
+            return super::quote::breaks::breaks(&q, asset, side, route, max_qty, limit).await;
+        }
+        let mut points = if matches!(
+            route.mode,
+            crate::core::types::RouteMode::RfqIndicative | crate::core::types::RouteMode::Rfq(_)
+        ) {
+            vec![]
+        } else {
+            super::quote::breaks::breaks(&q, asset, side, route, max_qty, limit).await?
+        };
+        points.extend(extra);
+        points.sort_unstable();
+        points.dedup();
+        points.truncate(limit as usize);
+        Ok(points)
     }
 
     /// Решение 217: снимок котировки на момент решения — `Arc` записей пулов, разрешения, блок (frozen.rs). Только
@@ -228,7 +244,7 @@ impl Venue for BscDex {
         let r = scope(Class::Trade, fact).await.map_err(resolve::attach);
         // t78: продажа выхода сделки исполнилась целиком — её налоги кошелька сделки больше не нужны (deal_taxes.rs).
         self.p.checks.forget_after_sale(&asked, &r);
-        super::hashflow::record(&self.p, r?).await
+        match r {Ok(t)=>super::hashflow::record(&self.p,t).await,Err(e)=>Err(super::hashflow::failed(&self.p,&asked,e).await)}
     }
 
     /// Перевод монеты из кошелька на адрес (ERC-20 transfer, EIP-20) — wallet/transfer.rs.
@@ -268,7 +284,8 @@ impl Venue for BscDex {
     ) -> GatewayResult<Option<TradeResult>> {
         self.p.ctx.bound()?;
         let work = async {
-            match resolve::trade(&self.p, req, p).await? {
+            let resolved=match resolve::trade(&self.p, req.clone(), p).await { Ok(r)=>r,Err(e)=>return Err(super::hashflow::failed(&self.p,&req,e).await) };
+            match resolved {
                 Some(t) => {
                     let t = exec::balance_fact::apply(&self.p.ctx, &self.p.tokens, Ok(t)).await?;
                     super::hashflow::record(&self.p, t).await.map(Some)
@@ -777,6 +794,15 @@ impl BscDex {
     async fn trade_logs(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
         // Решение 132: сделка — только кошельком счёта (Ctx::bound).
         self.p.ctx.bound()?;
+        if matches!(
+            req.route.as_ref().map(|r| r.mode),
+            Some(crate::core::types::RouteMode::RfqIndicative)
+        ) {
+            return Err(self.p.ctx.err(
+                ErrorCode::NoRoute,
+                "Для индикативного рынка Hashflow требуется финальная подписанная котировка",
+            ));
+        }
         if let Some(crate::core::types::RouteMode::Rfq(id)) = req.route.as_ref().map(|r| r.mode) {
             return super::hashflow::routing::trade(&self.p, req, id).await;
         }

@@ -177,3 +177,82 @@ impl Book {
         ))
     }
 }
+
+impl Book {
+    pub(super) fn markets(
+        &self,
+        quote: Address,
+        tokens: &super::super::tokens::Tokens,
+    ) -> BTreeMap<Address, (bool, bool)> {
+        let known: std::collections::HashSet<_> =
+            tokens.all().into_iter().map(|t| t.address).collect();
+        let mut out = BTreeMap::new();
+        for m in self.levels.values().flatten() {
+            if !m.levels.iter().any(|v| {
+                Decimal::from_str_exact(&v.q).is_ok_and(|n| n > Decimal::ZERO)
+                    && Decimal::from_str_exact(&v.p).is_ok_and(|n| n > Decimal::ZERO)
+            }) {
+                continue;
+            }
+            let (coin, buy) = if m.pair.base_token == quote {
+                (m.pair.quote_token, true)
+            } else if m.pair.quote_token == quote {
+                (m.pair.base_token, false)
+            } else {
+                continue;
+            };
+            if coin.is_zero() || coin == quote || !known.contains(&coin) {
+                continue;
+            }
+            let sides = out.entry(coin).or_insert((false, false));
+            if buy {
+                sides.0 = true;
+            } else {
+                sides.1 = true;
+            }
+        }
+        out
+    }
+
+    pub(super) fn breaks(
+        &self,
+        input: Address,
+        output: Address,
+        exact_output: bool,
+        max: Decimal,
+    ) -> Vec<Decimal> {
+        let mut sizes = BTreeSet::new();
+        for m in self
+            .levels
+            .values()
+            .flatten()
+            .filter(|m| m.pair.base_token == input && m.pair.quote_token == output)
+        {
+            let mut sum = Decimal::ZERO;
+            for lvl in &m.levels {
+                let (Ok(q), Ok(p)) = (
+                    Decimal::from_str_exact(&lvl.q),
+                    Decimal::from_str_exact(&lvl.p),
+                ) else {
+                    break;
+                };
+                let Some(step) = (if exact_output {
+                    q.checked_mul(p)
+                } else {
+                    Some(q)
+                }) else {
+                    break;
+                };
+                let Some(next) = sum.checked_add(step) else {
+                    break;
+                };
+                if next <= sum || next > max {
+                    break;
+                }
+                sum = next;
+                sizes.insert(sum);
+            }
+        }
+        sizes.into_iter().collect()
+    }
+}

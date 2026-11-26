@@ -86,7 +86,11 @@ impl Subs {
     ) -> GatewayResult<()> {
         super::node::chain_id::check_start(&p.ctx).await?;
         let pools = p.pools(out.clone());
-        let new = pools::market::subscribe(&pools, &p.scanned, &p.wake, assets.clone()).await?;
+        let mut new = pools::market::subscribe(&pools, &p.scanned, &p.wake, assets.clone()).await?;
+        new.push(tokio::spawn(super::hashflow::feed::run(
+            p.clone(),
+            out.clone(),
+        )));
         // Решение 132: очереди и события баланса — по кошелькам (resubscribe_wallets.rs).
         self.wallets(p, Some(pools.clone())).await;
         let mut tasks = self.tasks.lock().unwrap_or_else(|x| x.into_inner());

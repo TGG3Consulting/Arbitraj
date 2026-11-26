@@ -28,6 +28,8 @@ impl Directory {
         self.view_with_native(source, network, attr, None)
     }
 
+    /// Принимает источник, сеть, подпись и тикер нативной монеты. Возвращает справочник с причинами статуса.
+    /// При отсутствии тикера использует общее название валюты сети. Ошибок нет.
     pub fn view_with_native(
         &self,
         source: Option<String>,

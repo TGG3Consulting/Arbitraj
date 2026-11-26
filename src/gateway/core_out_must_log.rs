@@ -49,7 +49,8 @@ pub struct Notes {
 /// Площадка события (None — у события её нет). Ошибок нет.
 pub fn venue_of(ev: &MarketEvent) -> Option<&VenueId> {
     match ev {
-        MarketEvent::Notice { venue, .. }
+        MarketEvent::RfqMarkets { venue, .. }
+        | MarketEvent::Notice { venue, .. }
         | MarketEvent::Invalidated { venue, .. }
         | MarketEvent::SpotPairs { venue, .. }
         | MarketEvent::CheckPass { venue, .. }

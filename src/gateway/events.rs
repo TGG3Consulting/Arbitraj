@@ -25,6 +25,13 @@ use super::errors::GatewayError;
 pub enum MarketEvent {
     /// Полный актуальный стакан монеты (адаптер сам собирает его из снимка и обновлений).
     Book(OrderBook),
+    /// Снимок односетевых индикативных рынков RFQ. Адрес исходной котируемой валюты и направления подтверждены API.
+    RfqMarkets {
+        venue: VenueId,
+        quote: alloy_primitives::Address,
+        markets: std::collections::BTreeMap<alloy_primitives::Address, (bool, bool)>,
+        expires_ms: i64,
+    },
     /// Актуальное состояние пула DEX.
     Pool(Pool),
     /// Площадка сообщила, что данные по монете больше недостоверны

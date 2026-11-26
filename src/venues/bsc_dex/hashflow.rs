@@ -1,9 +1,11 @@
 //! Ручная проверка и симуляция Hashflow Taker API v3 по запросу оператора.
 //! https://docs.hashflow.com/hashflow/taker/getting-started-api-v3
+mod availability;
 mod execute;
+pub(super) mod feed;
 mod market;
 pub(super) mod routing;
-pub(in crate::venues::bsc_dex) use execute::{ReceiptProof, marker, record};
+pub(in crate::venues::bsc_dex) use execute::{ReceiptProof, marker, record, reserve,failed};
 mod sim;
 #[cfg(test)]
 mod tests;
@@ -118,6 +120,7 @@ pub(super) async fn preview(ctx: &Ctx, request: Request) -> GatewayResult<Previe
 #[derive(Clone)]
 struct Prepared {
     source: String,
+    fallback_fee:Option<Decimal>,
     preview: Preview,
     firm: wire::Firm,
     request: Request,
@@ -216,6 +219,7 @@ async fn check(
     };
     Ok(Prepared {
         source: source.to_owned(),
+        fallback_fee:None,
         preview,
         firm: f,
         request: r,

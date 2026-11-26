@@ -35,7 +35,7 @@ pub enum Variant {
     SlipstreamAero,
     /// Aerodrome Base CLFactory.getSwapFee(pool), читается через CLPool.fee() на блоке.
     SlipstreamDynamicFee,
-    /// V2 with a fixed pair implementation authenticated by its CREATE2 init code.
+    /// V2 с фиксированной реализацией пары: адрес сверяется по хешу байткода создания CREATE2.
     V2Create2,
     /// Curve StableSwap 2021 (dex.kind = curve_stableswap_plain, решение 472): протокол Proto::CurveStable (геттеры
     /// coins/balances/fee, get_dy и exchange с int128 — те же), но A — `A_precise()` (A·A_PRECISION, A_PRECISION = 100),

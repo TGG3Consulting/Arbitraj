@@ -49,7 +49,7 @@ pub fn cash(
             return Err("Некорректная комиссия исполнения".into());
         }
         match f.asset.as_str() {
-            s if s == m.asset.ticker => {
+            s if s == m.cex_symbol() => {
                 usdc = usdc
                     .checked_add(f.amount)
                     .ok_or("Комиссия расчётного актива вне диапазона")?
@@ -143,7 +143,7 @@ pub async fn convert(
                 if plan.limit_price < price_bound {
                     return Err("Цена продажи расчётного актива ниже допустимого лимита".into());
                 }
-                (m.asset.ticker.as_str(), plan.net_asset)
+                (m.cex_symbol(), plan.net_asset)
             };
             let free = super::limits::free_now(core, cex, None, ticker).await?;
             let free = if side == Side::Buy {
@@ -179,7 +179,7 @@ pub async fn convert(
     let fill = crate::gateway::settlement_intent::checked(
         move |key| {
             check(key)?;
-            if !spot.matches_settlement_order(key, &pair.asset.ticker, &pair.quote) {
+            if !spot.matches_settlement_order(key, pair.cex_symbol(), &pair.quote) {
                 return Err(crate::gateway::errors::GatewayError::new(
                     crate::gateway::errors::ErrorCode::BadResponse,
                     Some(pair.cex.clone()),

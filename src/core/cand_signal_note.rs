@@ -71,7 +71,12 @@ pub fn data(best: Option<&Calc>, st: &Start) -> Option<Value> {
         })
     });
     let calc = best.map(|c| {
-        let spread = if c.buy_avg.is_zero() {
+        let spread = if c.size.as_ref().is_some_and(|s| s.settlement.is_some()) {
+            c.proceeds
+                .checked_sub(c.invested)
+                .and_then(|n| n.checked_div(c.invested))
+                .and_then(|n| n.checked_mul(Decimal::ONE_HUNDRED))
+        } else if c.buy_avg.is_zero() {
             None
         } else {
             Some((c.sell_avg - c.buy_avg) / c.buy_avg * Decimal::ONE_HUNDRED)

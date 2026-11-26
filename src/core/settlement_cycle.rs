@@ -75,7 +75,8 @@ pub async fn advance(core: &Core, deal: &mut Deal, p: &Mandate) -> Result<(), St
         super::settlement_cycle_fund::prepare(core, deal, p, funding).await?;
     let buy = super::settlement_request::request(core, &deal.id, p, Side::Buy, p.qty, p.buy_limit)
         .await?;
-    let buy = target::order(core, m, wallet, buy, !funding).await?;
+    let buy =
+        super::settlement_accounts::entry(target::order(core, m, wallet, buy, !funding)).await?;
     let (buy_debit, bought) = target::amounts(
         &buy,
         &buy.trade.request.asset,
@@ -125,11 +126,15 @@ pub async fn advance(core: &Core, deal: &mut Deal, p: &Mandate) -> Result<(), St
     deal.qty = moving.credit.amount;
     deal.step = Step::Selling;
     save(core, deal).await?;
-    let sell_qty =
-        super::settlement_cycle_money::sell_qty(core, d, moving.credit.amount, p.sell_limit)?;
-    let sell =
-        super::settlement_request::request(core, &deal.id, p, Side::Sell, sell_qty, p.sell_limit)
-            .await?;
+    let sell = super::settlement_request::request(
+        core,
+        &deal.id,
+        p,
+        Side::Sell,
+        moving.credit.amount,
+        p.sell_limit,
+    )
+    .await?;
     let sell = target::order(core, m, wallet, sell, !funding).await?;
     let (disposed, received) = target::amounts(
         &sell,

@@ -69,7 +69,7 @@ pub(super) async fn decide(
     let cx = DirCtx::for_settlement(core, d)?;
     let market = super::settlement_market::Market::direction(core, d)?;
     let cex = &market.cex;
-    if market.asset.ticker == super::venue_ticker::ticker_on(core, &d.asset, cex) {
+    if market.cex_symbol() == super::venue_ticker::ticker_on(core, &d.asset, cex) {
         return Err("Целевой и расчётный активы имеют одинаковый тикер биржи".into());
     }
     // Лимиты сделки заданы в валюте учёта. Оценка начального размера берётся с той же биржи в её котируемой валюте.

@@ -65,11 +65,24 @@ pub async fn conversion(
     side: Side,
     quantity: Decimal,
 ) -> Result<Conversion, String> {
+    point_conversion(snap, rules, market, side, quantity)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+pub(super) async fn point_conversion(
+    snap: &QuoteSnapshot,
+    rules: &SpotPairState,
+    market: &Market,
+    side: Side,
+    quantity: Decimal,
+) -> Result<Conversion, super::size::Fail> {
+    use super::size::Fail;
     let cex = &market.cex;
     let book = snap.book().ok_or("Нет стакана спотовой конверсии")?;
     if book.venue != *cex
-        || book.asset.ticker != market.asset.ticker
-        || rules.ticker != market.asset.ticker
+        || book.asset.ticker != market.cex_symbol()
+        || rules.ticker != market.cex_symbol()
     {
         return Err(
             "Стакан или правила пары не совпадают с исходной биржей и расчётным токеном".into(),
@@ -93,17 +106,18 @@ pub async fn conversion(
             .checked_rem(rules.step_size)
             .ok_or("Невозможно округлить количество расчётного актива")?;
     if qty <= Decimal::ZERO {
-        return Err("Количество расчётного актива меньше шага пары".into());
+        return Err(Fail::TooSmall(
+            "Количество расчётного актива меньше шага пары".into(),
+        ));
     }
     let limit_price = deepest(book, side, qty)
         .filter(|p| *p > Decimal::ZERO)
-        .ok_or("Недостаточно глубины спотовой конверсии")?;
-    super::costs_quote::order_limits(&cex.0, Some(rules), qty, limit_price)
-        .map_err(|e| e.to_string())?;
+        .ok_or_else(|| Fail::TooLarge("Недостаточно глубины спотовой конверсии".into()))?;
+    super::costs_quote::order_limits(&cex.0, Some(rules), qty, limit_price)?;
     let q = snap.quote(qty).await.map_err(|e| e.message)?;
     if q.venue != *cex
         || q.side != side
-        || q.asset.ticker != market.asset.ticker
+        || q.asset.ticker != market.cex_symbol()
         || q.fillable_qty != qty
         || q.avg_price <= Decimal::ZERO
     {
@@ -122,12 +136,10 @@ pub async fn conversion(
             );
         }
         match fee.asset.as_str() {
-            s if s == market.asset.ticker => fee_asset += fee.amount,
+            s if s == market.cex_symbol() => fee_asset += fee.amount,
             s if s == market.quote => fee_quote += fee.amount,
             ticker => {
-                return Err(format!(
-                    "Неизвестна стоимость комиссии конверсии в {ticker}"
-                ));
+                return Err(format!("Неизвестна стоимость комиссии конверсии в {ticker}").into());
             }
         }
     }
@@ -159,7 +171,7 @@ pub async fn conversion(
         limit_gross - limit_fee
     };
     Ok(Conversion {
-        asset_symbol: market.asset.ticker.clone(),
+        asset_symbol: market.cex_symbol().to_string(),
         quote_symbol: market.quote.clone(),
         limit_quote,
         venue: cex.clone(),

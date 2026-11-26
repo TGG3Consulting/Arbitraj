@@ -1,0 +1,31 @@
+{
+  "source": "https://api.poloniex.com/v2/currencies/SNDK",
+  "observed_utc": "2026-11-26T17:24:55.563522+00:00",
+  "body": {
+    "id": 2678,
+    "coin": "SNDK",
+    "delisted": false,
+    "tradeEnable": true,
+    "name": "Sandisk Corporation",
+    "networkList": [
+      {
+        "id": 2678,
+        "coin": "SNDK",
+        "name": "Binance smart chain",
+        "currencyType": "address",
+        "blockchain": "BSC",
+        "withdrawalEnable": true,
+        "depositEnable": true,
+        "depositAddress": null,
+        "withdrawMin": "0.06000000",
+        "decimals": 8,
+        "withdrawFee": "0.00579909",
+        "minConfirm": 15,
+        "contractAddress": "0x3ee4df61bd4f867e349beae8bfe07bc31b4850fb"
+      }
+    ],
+    "externalTransferEnabled": true,
+    "supportCollateral": false,
+    "supportBorrow": false
+  }
+}

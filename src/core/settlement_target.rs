@@ -188,3 +188,7 @@ pub(super) fn amounts(
     };
     Ok((valid(debit)?, valid(credit)?))
 }
+
+#[cfg(test)]
+#[path = "settlement_target_tests.rs"]
+mod tests;

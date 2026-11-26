@@ -27,6 +27,8 @@ pub struct TickerIndex {
     /// Другие сети той же биржевой пары. Только для доставки тика стакана: один баланс
     /// или вывод площадки по-прежнему разрешается отдельно через get.
     book_networks: HashMap<(VenueId, String), Vec<Asset>>,
+    /// Направления других монет зависят от живой книги конверсии исходной биржи.
+    pub(super) settlement_books: HashMap<(VenueId, String), Vec<Asset>>,
     /// Решение 211: (площадка, сеть и адрес) → тикер этой площадки (core/venue_ticker.rs).
     pub(super) venue_ticker: HashMap<(VenueId, Asset), String>,
     /// Адрес контракта → монеты справочника с этим адресом (решение 129: событие пула находит монеты своих токенов
@@ -107,6 +109,7 @@ pub async fn rebuild(core: &Core, coins: &[CoinEntry]) {
         splits,
         ..
     } = index_of(coins);
+    let settlement_books = super::settlement_signals::books(core, coins);
     let conflicts: HashMap<Address, String> = splits
         .iter()
         .map(|(a, v)| {
@@ -116,6 +119,7 @@ pub async fn rebuild(core: &Core, coins: &[CoinEntry]) {
         .collect();
     let fresh: Vec<(Address, String)> = {
         let mut idx = wr(&core.inner.tickers);
+        idx.settlement_books = settlement_books;
         idx.map = map;
         idx.book_networks = book_networks;
         idx.venue_ticker = venue_ticker;

@@ -39,7 +39,11 @@ pub(super) fn schedule_book(
     received_at: chrono::DateTime<chrono::Utc>,
     exchange_time: Option<chrono::DateTime<chrono::Utc>>,
 ) {
-    let assets = rd(&core.inner.tickers).book_assets(venue, ticker);
+    let (assets,settlement)={
+        let idx=rd(&core.inner.tickers);
+        (idx.book_assets(venue,ticker),idx.settlement_books.get(&(venue.clone(),ticker.to_owned())).cloned().unwrap_or_default())
+    };
+    for asset in settlement{super::tick_sched::schedule(core,asset,venue.clone());}
     for asset in assets {
         super::window_queue_trace::book(core, &asset, venue, received_at, exchange_time);
         super::tick_sched::schedule(core, asset, venue.clone());

@@ -86,6 +86,16 @@ pub const RETRY: &str = "exec.rest_book_retry_ms";
 /// StaleData, — с их кодом; REST отказал с NotConfigured — NotConfigured, без повтора; REST не ответил после повтора —
 /// без кода (не безопасный повтор, алерт).
 pub async fn book(core: &Core, v: &VenueId, a: &Asset, side: Side) -> Result<Book, OpError> {
+    let on = super::venue_ticker::on_venue(core, a, v);
+    book_on(core, v, &on, side).await
+}
+/// Монета уже подтверждена по биржевому справочнику сети и контракта.
+pub(super) async fn book_on(
+    core: &Core,
+    v: &VenueId,
+    on: &Asset,
+    side: Side,
+) -> Result<Book, OpError> {
     let x = core
         .inner
         .deps
@@ -93,7 +103,6 @@ pub async fn book(core: &Core, v: &VenueId, a: &Asset, side: Side) -> Result<Boo
         .get(v)
         .await
         .map_err(|e| OpError::from(&e))?;
-    let on = super::venue_ticker::on_venue(core, a, v);
     let max = stale_ms(core, v)?;
     let key = (v.clone(), on.ticker.clone(), side == Side::Buy);
     if let Some(s) = cached(core, &key, max) {
@@ -102,7 +111,7 @@ pub async fn book(core: &Core, v: &VenueId, a: &Asset, side: Side) -> Result<Boo
             rest: true,
         });
     }
-    let stream = match crate::gateway::patience::exec_scope(x.quote_snapshot(&on, side)).await {
+    let stream = match crate::gateway::patience::exec_scope(x.quote_snapshot(on, side)).await {
         Ok(s) => {
             return Ok(Book {
                 snap: s,
@@ -113,11 +122,11 @@ pub async fn book(core: &Core, v: &VenueId, a: &Asset, side: Side) -> Result<Boo
         Err(e) => return Err(OpError::from(&e)),
     };
     // Решение 238 (ревью, п. 4): REST недавно не ответил — без нового запроса.
-    let ready = x.rest_book_prerequisite(&on);
+    let ready = x.rest_book_prerequisite(on);
     if let Some(e) = super::exec_book_fail::recent(core, &key, &stream, ready.as_ref().err()) {
         return Err(e);
     }
-    let (result, local) = rest_attempt(x.as_ref(), &on, side, ready).await;
+    let (result, local) = rest_attempt(x.as_ref(), on, side, ready).await;
     let first = match result {
         Ok(s) => return Ok(keep(core, key, s, &stream).await),
         Err(e) => e,
@@ -156,7 +165,7 @@ pub async fn book(core: &Core, v: &VenueId, a: &Asset, side: Side) -> Result<Boo
         .log(Level::Warn, "core.exec_book", Some(&v.0), text, None)
         .await;
     tokio::time::sleep(Duration::from_millis(ms)).await;
-    let (result, local) = rest_attempt(x.as_ref(), &on, side, x.rest_book_prerequisite(&on)).await;
+    let (result, local) = rest_attempt(x.as_ref(), on, side, x.rest_book_prerequisite(on)).await;
     match result {
         Ok(s) => Ok(keep(core, key, s, &stream).await),
         Err(e) => {

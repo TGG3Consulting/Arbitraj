@@ -118,7 +118,8 @@ async fn follow(core: &Core, mut deal: Deal, p: &Mandate) -> Result<(), String> 
             let accounts = Accounts::read(core, &p.market, &p.wallet).await?;
             accounts
                 .run(
-                    &p.accounts,
+                    core,
+                    p,
                     Box::pin(settlement_cycle::advance(core, &mut deal, p)),
                 )
                 .await
@@ -126,6 +127,9 @@ async fn follow(core: &Core, mut deal: Deal, p: &Mandate) -> Result<(), String> 
         .await;
         match outcome {
             Ok(()) => {
+                if let Some(plan) = deal.plan.as_object_mut() {
+                    plan.remove("settlement_pending");
+                }
                 super::ledger::finish(
                     core,
                     &mut deal,

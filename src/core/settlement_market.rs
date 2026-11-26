@@ -18,6 +18,9 @@ pub struct Market {
     pub cex_network: String,
     pub cex: VenueId,
     pub asset: Asset,
+    /// Отсутствие означает совпавшие символы. Старые ключи с такими символами сохраняют исходный JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cex_asset_symbol: Option<String>,
     pub quote: String,
 }
 
@@ -94,8 +97,19 @@ impl Market {
         )
         .map_err(|e| e.message)?;
         let asset = configured(core, dex)?.ok_or("Не задан контракт расчётного токена DEX")?;
+        let rows = super::engine::rd(&core.inner.networks);
+        let row = super::settlement_network::unique(
+            rows.get(cex)
+                .map(|rows| rows.as_slice())
+                .unwrap_or_default(),
+            cex,
+            &cex_network,
+            &asset,
+        )?;
+        let cex_asset_symbol = cash_alias(&asset, &row.asset);
+        drop(rows);
         let quote = ticker(core, cex)?;
-        if quote == asset.ticker {
+        if quote == asset.ticker || cex_asset_symbol.as_deref() == Some(quote.as_str()) {
             return Err(
                 "Расчётные валюты сторон совпадают, отдельная конверсия не требуется".into(),
             );
@@ -107,6 +121,7 @@ impl Market {
             cex_network,
             cex: cex.clone(),
             asset,
+            cex_asset_symbol,
             quote,
         })
     }
@@ -134,8 +149,31 @@ impl Market {
         }
         Ok(m)
     }
+    pub(super) fn cash_on(&self, venue: &VenueId) -> Asset {
+        let mut on = self.asset.clone();
+        if venue == &self.cex {
+            on.ticker = self.cex_symbol().to_string();
+        }
+        on
+    }
+    pub fn cex_symbol(&self) -> &str {
+        self.cex_asset_symbol
+            .as_deref()
+            .unwrap_or(&self.asset.ticker)
+    }
+    pub(super) fn book_key(&self) -> (VenueId, String) {
+        (self.cex.clone(), self.cex_symbol().to_string())
+    }
+    /// Биржа подтверждает символ расчётной монеты своим справочником даже если самой монеты нет среди целей.
+    pub(super) fn asset_on(&self, core: &Core, token: &Asset, venue: &VenueId) -> Asset {
+        if token == &self.asset {
+            self.cash_on(venue)
+        } else {
+            super::venue_ticker::on_venue(core, token, venue)
+        }
+    }
     pub fn matches(&self, asset: &Asset) -> bool {
-        asset == &self.asset && asset.ticker == self.asset.ticker
+        asset == &self.asset && asset.ticker == self.cex_symbol()
     }
     pub fn identical(&self, other: &Self) -> bool {
         self == other && self.asset.ticker == other.asset.ticker
@@ -148,3 +186,10 @@ impl Market {
         }
     }
 }
+
+fn cash_alias(dex: &Asset, cex: &Asset) -> Option<String> {
+    (cex.ticker != dex.ticker).then(|| cex.ticker.clone())
+}
+#[cfg(test)]
+#[path = "settlement_alias_tests.rs"]
+mod tests;

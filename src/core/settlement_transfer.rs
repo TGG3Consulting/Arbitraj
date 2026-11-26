@@ -109,8 +109,8 @@ pub(super) async fn move_token(
     let dex = m.dex.clone();
     let cex = &m.cex;
     let (from, to) = if from_cex { (cex, &dex) } else { (&dex, cex) };
-    let from_asset = super::venue_ticker::on_venue(core, token, from);
-    let to_asset = super::venue_ticker::on_venue(core, token, to);
+    let from_asset = m.asset_on(core, token, from);
+    let to_asset = m.asset_on(core, token, to);
     let deps = &core.inner.deps;
     let sender = deps
         .gw
@@ -176,7 +176,7 @@ pub(super) async fn move_token(
             .deposit_status_for(&to_asset, tx, &claim, None)
             .await
             .map_err(|e| e.message)?;
-        let net = transfers::network(core, &req.asset, to)?;
+        let net = m.transfer_network(core, &to_asset, to)?;
         return verified(
             (&from_asset, &to_asset),
             sent,
@@ -190,8 +190,12 @@ pub(super) async fn move_token(
     if !super::registry_sync::enabled(core, cex) || !super::registry_sync::enabled(core, &dex) {
         return Err("Исходная биржа или конверсии выключены".into());
     }
-    let network = m.token_network(core, token, from_cex)?;
-    let balance_key = super::venue_ticker::balance_key(core, token, from);
+    m.token_network(core, token, from_cex)?;
+    let balance_key = if from_cex {
+        from_asset.ticker.clone()
+    } else {
+        super::venue_ticker::balance_key(core, token, from)
+    };
     let free = super::limits::free_now(core, from, Some(wallet), &balance_key).await?;
     if amount > free {
         return Err(format!(
@@ -201,7 +205,7 @@ pub(super) async fn move_token(
     let (sent, credit) = transfers::send_settlement(core, id, from, to, (m, token), amount, wallet)
         .await
         .map_err(|e| e.to_string())?;
-    let net = transfers::network(core, &network.asset, to)?;
+    let net = m.transfer_network(core, &to_asset, to)?;
     let req = effect::previous_withdrawal(&deps.db, m, id, from, to, Some(wallet))
         .await
         .map_err(|e| e.message)?

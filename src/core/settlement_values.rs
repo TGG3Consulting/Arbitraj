@@ -41,3 +41,28 @@ pub(super) fn add(a: Decimal, b: Decimal) -> Result<Decimal, String> {
     a.checked_add(b)
         .ok_or_else(|| "Сумма вне диапазона Decimal".into())
 }
+
+/// Цены раннего сигнала выражаются в одной валюте исходной биржи и на одну единицу входа.
+pub fn signal_amounts(
+    qty: Decimal,
+    debit: Decimal,
+    credit: Decimal,
+    expenses: Decimal,
+) -> Result<(Decimal, Decimal, Decimal), String> {
+    if qty <= Decimal::ZERO
+        || debit <= Decimal::ZERO
+        || credit < Decimal::ZERO
+        || expenses < Decimal::ZERO
+    {
+        return Err("Нет проверенных сумм для сигнала по конверсии".into());
+    }
+    let error = || "Суммы сигнала выходят за диапазон".to_string();
+    Ok((
+        debit.checked_div(qty).ok_or_else(error)?,
+        credit.checked_div(qty).ok_or_else(error)?,
+        expenses
+            .checked_div(debit)
+            .and_then(|v| v.checked_mul(Decimal::ONE_HUNDRED))
+            .ok_or_else(error)?,
+    ))
+}

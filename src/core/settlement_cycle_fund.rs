@@ -45,7 +45,8 @@ pub(super) async fn prepare(
                 return Err("Цена или спрос изменились до финансирования".into());
             }
         }
-        let result = super::settlement_path::run(core, &plan).await;
+        let result =
+            super::settlement_accounts::entry(super::settlement_path::run(core, &plan)).await;
         let recorded = super::settlement_path::get(&core.inner.deps.db, &plan).await?;
         if let Some(path) = recorded.as_ref().filter(|v| v.permits(&plan, m))
             && let Some(fill) = &path.conversion

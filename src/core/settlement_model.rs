@@ -3,7 +3,7 @@
 //! Кто вызывает: API и выбор исполнимого маршрута.
 //! От чего зависит: снимки обеих сторон, комиссии и оценка расходов.
 //! Настройки: пара целевой сделки и расчётная пара исходной биржи.
-pub use super::settlement_values::Model;
+pub use super::settlement_values::{Model, signal_amounts};
 use super::settlement_values::{add, mul};
 use super::{
     costs_source::{Live, Source},
@@ -172,7 +172,7 @@ pub(super) async fn point(
         if net.deposit_min.is_none_or(|min| received < min) {
             return Err(Fail::TooSmall("Выручка расчётного актива не покрывает подтверждённый минимум депозита исходной биржи".into()));
         }
-        let q = settlement::sell_within(core, &market, received).await?;
+        let q = super::settlement_quotes::sell_point(core, &market, received).await?;
         let final_quote = q.net_quote;
         let leg = Leg::Return {
             available_amount: received,

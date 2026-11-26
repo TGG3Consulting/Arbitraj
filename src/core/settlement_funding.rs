@@ -5,7 +5,7 @@
 //! Настройки: venue.quote_asset и сетевые имена площадок.
 use super::{
     engine::Core,
-    settlement::{Conversion, conversion},
+    settlement::{Conversion, point_conversion},
     settlement_market::Market,
     settlement_quotes::terms,
     types::Side,
@@ -39,9 +39,17 @@ pub(super) async fn fund_for(
     core: &Core,
     market: &Market,
     required: Decimal,
-) -> Result<Conversion, String> {
+) -> Result<Conversion, super::size::Fail> {
     use rust_decimal::prelude::ToPrimitive;
     let (network, rules, book) = terms(core, market, Side::Buy).await?;
+    if network.withdraw_min.is_none()
+        || network.withdraw_fee.is_none_or(|v| v < Decimal::ZERO)
+        || network.withdraw_fee_pct.is_some_and(|v| {
+            v < Decimal::ZERO || (network.use_net_withdrawal_budget && !v.is_zero())
+        })
+    {
+        return Err("Нет подтверждённых условий удержания комиссии и минимума вывода".into());
+    }
     let snapshot = book
         .book()
         .ok_or("Нет книги финансирования расчётного актива")?;
@@ -98,7 +106,7 @@ pub(super) async fn fund_for(
             low = mid + 1;
             continue;
         }
-        let q = conversion(&book, &rules, market, Side::Buy, qty).await?;
+        let q = point_conversion(&book, &rules, market, Side::Buy, qty).await?;
         if network
             .withdraw_max
             .filter(|v| *v > Decimal::ZERO)
@@ -121,7 +129,7 @@ pub(super) async fn fund_for(
             low = mid + 1;
         }
     }
-    chosen.ok_or_else(||"Нет объёма спотовой конверсии, который после комиссии и округления вывода финансирует покупку на конверсии".into())
+    chosen.ok_or_else(||super::size::Fail::TooLarge("Нет объёма конверсии, покрывающего финансирование в доступной глубине и лимитах вывода".into()))
 }
 
 fn quantity(lots: u128, step: Decimal) -> Option<Decimal> {

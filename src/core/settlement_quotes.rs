@@ -31,9 +31,9 @@ pub(super) async fn terms(
 ) -> Result<(CoinNetworkInfo, SpotPairState, QuoteSnapshot), String> {
     let ce = &market.cex;
     let network = market.network(core, side == Side::Buy)?;
-    let rules = super::dirctx_venue::pair_rules(core, ce, &market.asset.ticker)?
+    let rules = super::dirctx_venue::pair_rules(core, ce, market.cex_symbol())?
         .ok_or("Для конверсии требуется спотовая биржа")?;
-    let book = super::exec_book::book(core, ce, &network.asset, side)
+    let book = super::exec_book::book_on(core, ce, &network.asset, side)
         .await
         .map_err(|e| e.to_string())?;
     Ok((network, rules, book.snap))
@@ -45,8 +45,18 @@ pub(super) async fn sell_within(
     market: &Market,
     available: Decimal,
 ) -> Result<Conversion, String> {
+    sell_point(core, market, available)
+        .await
+        .map_err(|e| e.to_string())
+}
+pub(super) async fn sell_point(
+    core: &Core,
+    market: &Market,
+    available: Decimal,
+) -> Result<Conversion, super::size::Fail> {
+    use super::settlement::point_conversion;
     let (_, rules, book) = terms(core, market, Side::Sell).await?;
-    let q = conversion(&book, &rules, market, Side::Sell, available).await?;
+    let q = point_conversion(&book, &rules, market, Side::Sell, available).await?;
     if q.net_asset <= available {
         return Ok(q);
     }
@@ -54,7 +64,7 @@ pub(super) async fn sell_within(
         .checked_mul(q.order_amount)
         .and_then(|v| v.checked_div(q.net_asset))
         .ok_or("Не удалось вычислить ордер с комиссией расчётного актива")?;
-    let q = conversion(&book, &rules, market, Side::Sell, qty).await?;
+    let q = point_conversion(&book, &rules, market, Side::Sell, qty).await?;
     if q.net_asset > available {
         return Err("Комиссия продажи превышает доступные расчётного актива".into());
     }

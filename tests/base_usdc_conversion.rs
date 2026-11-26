@@ -55,6 +55,7 @@ fn recorded(side: Side) -> (QuoteSnapshot, SpotPairState, Market) {
     };
     let market = Market {
         evm_chain_id: 8453,
+        cex_asset_symbol: None,
         cex_network: "BASEEVM".into(),
         dex: VenueId("base_dex".into()),
         cex: venue.clone(),
@@ -250,4 +251,69 @@ fn direct_return_keeps_legacy_destination_optional_and_rejects_mixed_quotes() {
             .contains("dex.settlement_contract")
     );
     assert!(settlement::direct_return("USDC", None).is_err());
+}
+
+/// Одна настоящая книга Gate применяется к двум независимым публичным квитанциям одной пары в Base.
+/// Рыночная оценка конверсии не служит фактом биржевого ордера.
+#[tokio::test]
+async fn both_cash_directions_reprice_the_recorded_dex_wallet_in_the_same_gate_book() {
+    use arb::venues::bsc_dex::{exec::settlement_swap, send::receipt::Receipt};
+    let buy: Value =
+        serde_json::from_str(include_str!("data/base_settlement_target_buy.json")).unwrap();
+    let swaps: Vec<Value> =
+        serde_json::from_str(include_str!("data/hashflow_direct_2026-11-26/swaps.json")).unwrap();
+    let sell = swaps.into_iter().find(|r| r["chain_id"] == 8453).unwrap();
+    let weth = "0x4200000000000000000000000000000000000006"
+        .parse()
+        .unwrap();
+    for (row, side, expected_cash, expected_target) in [
+        (
+            buy,
+            Side::Buy,
+            Decimal::new(23557526, 6),
+            Decimal::new(8851006401502124, 18),
+        ),
+        (
+            sell,
+            Side::Sell,
+            Decimal::new(26602020, 6),
+            Decimal::new(1, 2),
+        ),
+    ] {
+        let (book, rules, m) = recorded(side);
+        let receipt: Receipt = serde_json::from_value(row["receipt"].clone()).unwrap();
+        let wallet = row["from"].as_str().unwrap().parse().unwrap();
+        let opposite = if side == Side::Buy {
+            Side::Sell
+        } else {
+            Side::Buy
+        };
+        let usdc =
+            settlement_swap::amount(&receipt, wallet, m.asset.contract.unwrap(), side, 6).unwrap();
+        let target = settlement_swap::amount(&receipt, wallet, weth, opposite, 18).unwrap();
+        assert_eq!((usdc, target), (expected_cash, expected_target));
+        assert!(
+            settlement_swap::amount(&receipt, wallet, m.asset.contract.unwrap(), opposite, 6)
+                .is_none()
+        );
+        let conversion = settlement::conversion(&book, &rules, &m, side, usdc)
+            .await
+            .unwrap();
+        // Биржевая точность и комиссионная валюта применяются к фактическому объёму.
+        assert!(conversion.order_amount <= usdc);
+        let iso = if side == Side::Buy {
+            conversion.limit_quote
+        } else {
+            conversion.net_quote
+        };
+        assert_ne!(iso, usdc);
+        // Обе стороны индикативного сигнала уже имеют одну валюту. Даже при неизменной цене комиссия
+        // даёт положительный отдельный порог; он измерен по той же книге.
+        let rate = conversion.fee_quote + conversion.fee_asset * conversion.limit_price;
+        let (entry, exit, threshold) =
+            arb::core::settlement_model::signal_amounts(target, iso, iso, rate).unwrap();
+        assert_eq!(entry, exit);
+        assert!(threshold > Decimal::ZERO);
+        assert_eq!(entry, iso / target);
+    }
 }

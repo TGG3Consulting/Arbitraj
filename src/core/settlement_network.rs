@@ -42,6 +42,18 @@ impl Market {
             })
         }
     }
+    pub(super) fn transfer_network(
+        &self,
+        core: &Core,
+        asset: &Asset,
+        venue: &super::types::VenueId,
+    ) -> Result<String, String> {
+        if venue == &self.cex {
+            Ok(self.cex_network.clone())
+        } else {
+            super::transfers::network(core, asset, venue)
+        }
+    }
     pub fn network(&self, core: &Core, withdraw: bool) -> Result<CoinNetworkInfo, String> {
         self.token_network(core, &self.asset, withdraw)
     }
@@ -56,18 +68,18 @@ impl Market {
             return Err("Токен находится вне сохранённой сети".into());
         }
         let network = &self.cex_network;
-        let ticker = super::venue_ticker::ticker_on(core, token, &self.cex);
+        let ticker = self.asset_on(core, token, &self.cex).ticker;
         let all = rd(&core.inner.networks);
-        let mut rows = all
-            .get(&self.cex)
-            .into_iter()
-            .flat_map(|r| r.iter())
-            .filter(|r| r.venue == self.cex && &r.network == network && r.asset == *token);
-        let r = rows
-            .next()
-            .ok_or("Биржа не подтвердила сеть и контракт расчётного токена")?;
-        if rows.next().is_some() || r.asset.ticker != ticker {
-            return Err("Неоднозначная запись расчётного токена".into());
+        let r = unique(
+            all.get(&self.cex)
+                .map(|rows| rows.as_slice())
+                .unwrap_or_default(),
+            &self.cex,
+            network,
+            token,
+        )?;
+        if r.asset.ticker != ticker {
+            return Err("Биржевой символ расчётного контракта изменился".into());
         }
         super::dirctx_venue::fresh(core, r)?;
         if (withdraw && !r.withdraw_enabled) || (!withdraw && !r.deposit_enabled) {
@@ -84,4 +96,23 @@ impl Market {
         }
         Ok(r.clone())
     }
+}
+
+/// Физический адрес и выбранное биржей имя сети должны определять одну валюту этого счёта.
+pub(super) fn unique<'a>(
+    rows: &'a [CoinNetworkInfo],
+    venue: &super::types::VenueId,
+    network: &str,
+    token: &Asset,
+) -> Result<&'a CoinNetworkInfo, String> {
+    let mut matching = rows.iter().filter(|r| {
+        r.venue == *venue && r.network == network && r.asset == *token && token.contract.is_some()
+    });
+    let first = matching
+        .next()
+        .ok_or("Биржа не подтвердила сеть и контракт расчётного токена")?;
+    if matching.next().is_some() || first.asset.ticker.trim().is_empty() {
+        return Err("Контракт и сеть не определяют единственный биржевой тикер".into());
+    }
+    Ok(first)
 }

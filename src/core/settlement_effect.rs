@@ -122,7 +122,7 @@ pub async fn order(
         .map_err(|e| uncertain(&venue, e))?
     {
         Some(entry) => {
-            if !gateway.matches_settlement_order(&entry.lookup, &m.asset.ticker, &m.quote) {
+            if !gateway.matches_settlement_order(&entry.lookup, m.cex_symbol(), &m.quote) {
                 return Err(uncertain(
                     &venue,
                     "Сохранённая заявка относится к другой торговой паре",

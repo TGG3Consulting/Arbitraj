@@ -20,7 +20,11 @@ pub(super) struct Accounts {
     cex: Arc<dyn Venue>,
     expected: Binding,
 }
-tokio::task_local! {static ACTIVE: Accounts;}
+tokio::task_local! {static ACTIVE:(Accounts,Core,super::settlement_cycle::Mandate);}
+tokio::task_local! {static ENTRY:();}
+pub(super) async fn entry<T>(f: impl Future<Output = T>) -> T {
+    ENTRY.scope((), f).await
+}
 impl Accounts {
     pub async fn read(core: &Core, market: &Market, wallet: &DexAccountId) -> Result<Self, String> {
         let gw = &core.inner.deps.gw;
@@ -40,16 +44,17 @@ impl Accounts {
     }
     pub async fn run<T>(
         self,
-        expected: &Binding,
+        core: &Core,
+        plan: &super::settlement_cycle::Mandate,
         f: impl Future<Output = Result<T, String>>,
     ) -> Result<T, String> {
-        if &self.expected != expected {
+        if self.expected != plan.accounts {
             return Err(
                 "Изменился исходный торговый счёт или подписант. Исходные ID доступны для сверки"
                     .into(),
             );
         }
-        ACTIVE.scope(self, f).await
+        ACTIVE.scope((self, core.clone(), plan.clone()), f).await
     }
     fn verify(&self) -> Result<(), String> {
         if self.dex.settlement_account().map_err(|e| e.message)? != self.expected.wallet
@@ -62,5 +67,25 @@ impl Accounts {
 }
 pub(super) fn guard() -> impl Fn() -> Result<(), String> + Send + Sync + 'static {
     let bound = ACTIVE.try_with(Clone::clone).ok();
-    move || bound.as_ref().map_or(Ok(()), Accounts::verify)
+    let entry = ENTRY.try_with(|_| ()).is_ok();
+    move || {
+        let Some((accounts, core, p)) = bound.as_ref() else {
+            return Ok(());
+        };
+        accounts.verify()?;
+        let d = &p.direction;
+        let m = &p.market;
+        if super::dex_account::of_direction_now(core, d).as_ref() != Some(&p.wallet)
+            || super::venue_ticker::ticker_on(core, &d.asset, &m.cex) != p.target_cex
+            || super::venue_ticker::ticker_on(core, &d.asset, &m.dex) != p.target_dex
+        {
+            return Err(
+                "Изменились кошелёк или символ подтверждённого торгового направления".into(),
+            );
+        }
+        if entry {
+            super::risk::can_open(core, d)?;
+        }
+        Ok(())
+    }
 }

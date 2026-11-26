@@ -346,6 +346,7 @@ mod settlement_accounts;
 mod settlement_run;
 mod settlement_entry;
 mod settlement_values;
+mod settlement_signals;
 mod settlement_withdrawal;
 pub mod settlement_unit;
 pub mod shutdown;

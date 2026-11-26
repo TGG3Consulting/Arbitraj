@@ -222,6 +222,32 @@ async fn compare(
             qa.fillable_qty, qb.fillable_qty
         ));
     }
+    if super::settlement_market::mixed(core, dir) {
+        let model = crate::gateway::quote_purpose::scope(
+            Signal,
+            super::settlement_model::evaluate(core, dir, qty),
+        )
+        .await?;
+        super::window_dex::note(core, dir, &model.buy, &model.sell, generation);
+        let (buy, sell, fees_pct) = super::settlement_model::signal_amounts(
+            qty,
+            model.invested_quote,
+            model.proceeds_quote,
+            model.other_costs_quote + model.reserve_quote,
+        )?;
+        return Ok(Prices {
+            buy,
+            sell,
+            fees_pct,
+            qty,
+            venue_sale: Some(super::signal_types::VenueSale {
+                price: model.sell.avg_price,
+                qty: model.sell_qty,
+            }),
+            buy_at: model.buy.at,
+            sell_at: model.sell.at,
+        });
+    }
     // Запрошенный объём не влез целиком — пересчитать обе стороны на реально доступный объём, чтобы цены и спред
     // были согласованы по одному объёму (у сторон разная глубина — берём меньшую).
     let (qa, qb) = if qty < want {

@@ -353,17 +353,32 @@ async fn go(
     };
     let gw_from = deps.gw.get_as(from, acc).await.map_err(|e| e.message)?;
     let gw_to = deps.gw.get_as(to, acc).await.map_err(|e| e.message)?;
-    let net_from = network(core, asset, from)?;
+    let on_from = settlement.map_or_else(
+        || super::venue_ticker::on_venue(core, asset, from),
+        |m| m.asset_on(core, asset, from),
+    );
+    let net_from = if let Some(m) = settlement {
+        m.transfer_network(core, &on_from, from)?
+    } else {
+        network(core, asset, from)?
+    };
     // Решение 489: монета другой сети — без записи справочника сетей отправителя (точность, шаг) вывода нет.
-    super::net_ready::withdraw(core, from, asset, &net_from)?;
+    super::net_ready::withdraw(core, from, &on_from, &net_from)?;
     // Решение 316: монета и сеть адреса получателя — тот же target_on, что у предпроверки и прогрева адресов
     // (precheck_deposit.rs): ключ кэша адаптера один по построению.
     let super::precheck_deposit::Target {
         on: on_to,
         net: net_to,
-    } = super::precheck_deposit::target_on(core, asset, to)?;
+    } = if let Some(m) = settlement {
+        let on = m.asset_on(core, asset, to);
+        super::precheck_deposit::Target {
+            net: m.transfer_network(core, &on, to)?,
+            on,
+        }
+    } else {
+        super::precheck_deposit::target_on(core, asset, to)?
+    };
     // Решение 211: каждой площадке — её тикер монеты (адрес тот же).
-    let on_from = super::venue_ticker::on_venue(core, asset, from);
     // Решение 411 (переделка «по триггеру»): адрес биржи-получателя — из памяти адаптера под текущим ключом API; запрос
     // к бирже — только по триггеру (нет в памяти, пометка «спросить заново»; deposit_proof.rs address). Ошибка запроса
     // — повтор только по правилу «повторить», на выходе — без кода (to_address). DEX-получатель — как раньше.
@@ -407,7 +422,7 @@ async fn go(
         let amounts = super::withdraw_amount::amounts(qty, &info).map_err(|e| e.to_string())?;
         (amounts.debit, Some(amounts.wire), Some(info))
     } else {
-        (floored_on(core, from, asset, &net_from, qty), None, None)
+        (floored_on(core, from, &on_from, &net_from, qty), None, None)
     };
     if qty <= Decimal::ZERO {
         return Err(OpError::from(format!(

@@ -238,6 +238,22 @@ def tables(network, snapshots, profiles):
                        if base else "У Classic проверены отдельные фабрики динамической и постоянной комиссии: "
                        "у каждой по два пула с четырьмя котировками getAmountsOut. ")
                     + f"[Реестры, код, тики и котировки](../{kyber})."])
+    kipseli = Path("tests/data/first_run_dex_2026-11-26/kipseli_base.json")
+    if base and kipseli.exists():
+        k = read(kipseli)
+        calls = {r["signature"]: r for r in k["calls"]}
+        target = lambda sig: calls[sig]["params"][0]["to"]
+        address = lambda sig: "0x" + calls[sig]["response"]["result"][-40:]
+        out.extend(["", f"Kipseli PropAMM · Base {k['blockNumber']}. Router `{target('swapImpl()')}`, "
+                    f"реализация на блоке `{address('swapImpl()')}`, QuoteLens `{target('getQuoteToken()')}`, "
+                    f"валюта котировки USDC `{address('getQuoteToken()')}`. QuoteLens общедоступен. "
+                    f"Рыночные данные GET /v2/price без X-API-KEY вернули HTTP {k['public_get']['status']}. "
+                    "Для on-chain quote нужны согласованный с командой адрес подписанта EIP-712 и метка времени "
+                    "в пределах 10 секунд. Для исполнения требуется доступ к POST /v2/swap/sign и полученные "
+                    "verificationData и timestamp. Владелец запрашивает допуск через Contact Us на сайте проекта. "
+                    "Проверка реального выхода для кошелька ожидает предоставления доступа. "
+                    f"[Сырые ответы](../{kipseli.as_posix()}) · [Документация и выдача доступа]({k['docs']}) · "
+                    f"[Контакт команды]({k['contact']})."])
     solidly = Path(f"tests/data/first_run_dex_2026-11-26/solidly_v3_{network}.json")
     if solidly.exists():
         sl = read(solidly)
@@ -497,6 +513,8 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if base and str(row["id"]) == "7984" and kipseli.exists():
+            task = "DEX-21 · QuoteLens и текущая реализация подтверждены. Исторический адаптер объёма перечисляет три другие реализации. Исполнение ожидает доступа оператора"
         if base and str(row["id"]) == "306" and quickswap_v2.exists() and q2["factory"] in {a.lower() for a in candidates}:
             task = "QuickSwap V2 · фабрика из адаптера подтвердила все 20 пулов первой страницы"
         if base and str(row["id"]) == "6576" and quickswap.exists() and qs["addresses"]["AlgebraFactory"] in {a.lower() for a in candidates}:

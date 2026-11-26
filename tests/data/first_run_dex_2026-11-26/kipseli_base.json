@@ -1,0 +1,80 @@
+{
+  "at_utc": "2026-11-26T18:30:34.612441+00:00",
+  "rpc": "https://mainnet.base.org",
+  "chainId": 8453,
+  "blockNumber": 62262756,
+  "docs": "https://docs.kipseli.capital/",
+  "openapi": "https://docs.kipseli.capital/openapi.yaml",
+  "contact": "https://kipseli.capital",
+  "dex_adapter_at_observation": "https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/kipseli/index.ts",
+  "public_get": {
+    "url": "https://propamm.kipseli.win/v2/price?chainId=8453",
+    "status": 401,
+    "body": {
+      "error": {
+        "code": "UNAUTHORIZED",
+        "message": "missing or invalid API key",
+        "requestId": "123ae6be-3827-4803-978c-dce7b8631a28"
+      }
+    }
+  },
+  "calls": [
+    {
+      "method": "eth_call",
+      "params": [
+        {
+          "to": "0x71C2Ed90CC288229Be59F26b8B3EEF3C07d7ab99",
+          "data": "0xc405e442"
+        },
+        {
+          "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+          "requireCanonical": true
+        }
+      ],
+      "response": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": "0x000000000000000000000000a05de8fedaf5d47a6a8726811cc5f387bef1f816"
+      },
+      "signature": "swapImpl()"
+    },
+    {
+      "method": "eth_call",
+      "params": [
+        {
+          "to": "0x62aFF80b3d2afE0E497f1ef735a6FDc9C3ef1acF",
+          "data": "0x2ba996a5"
+        },
+        {
+          "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+          "requireCanonical": true
+        }
+      ],
+      "response": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000040000000000000000000000004200000000000000000000000000000000000006000000000000000000000000cbb7c0000ab88b473b1f5afd9ef808440eed33bf0000000000000000000000000b3e328455c4059eeb9e3f84b5543f74e24e7e1b00000000000000000000000060a3e35cc302bfa44cb288bc5a4f316fdb1adb42"
+      },
+      "signature": "getListedTokens()"
+    },
+    {
+      "method": "eth_call",
+      "params": [
+        {
+          "to": "0x62aFF80b3d2afE0E497f1ef735a6FDc9C3ef1acF",
+          "data": "0x4a64d67d"
+        },
+        {
+          "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+          "requireCanonical": true
+        }
+      ],
+      "response": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": "0x000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      },
+      "signature": "getQuoteToken()"
+    }
+  ]
+}

@@ -114,28 +114,28 @@ pub async fn raise_alert(
 
 /// Как raise_alert; решение 408 — holders: сделки-держатели монет на счёте (remain_fact.rs all_foreign) — кнопки
 /// «Открыть сделку <ID>» у записи в Telegram. Ошибок нет.
-pub async fn raise_alert_with(
+pub fn raise_alert_with(
     core: &Core,
     deal: Deal,
     loss_pct: Option<Decimal>,
     reason: String,
     error: Option<String>,
     holders: Vec<String>,
-) {
-    Box::pin(raise(core, deal, loss_pct, None, reason, error, holders)).await
+) -> impl std::future::Future<Output = ()> + '_ {
+    Box::pin(raise(core, deal, loss_pct, None, reason, error, holders))
 }
 
 /// Алерт по котировке: уже учтённую в решении чистую выручку сохраняем как итог в USDT и процент.
-pub async fn raise_quoted(
+pub fn raise_quoted(
     core: &Core,
     deal: Deal,
     net: Option<Decimal>,
     reason: String,
     error: Option<String>,
-) {
+) -> impl std::future::Future<Output = ()> + '_ {
     let pct = net.map(|v| deal.loss_pct_if(v));
     let usd = net.map(|v| -deal.result_if(v));
-    Box::pin(raise(core, deal, pct, usd, reason, error, Vec::new())).await
+    Box::pin(raise(core, deal, pct, usd, reason, error, Vec::new()))
 }
 
 async fn raise(

@@ -112,7 +112,6 @@ fn repeat_first_crosses_threshold_and_later_snapshot_keeps_first_loss() {
 #[test]
 fn failed_usdt_amount_is_not_a_loss_and_new_failed_attempt_has_its_own_key() {
     let mut d = deal();
-    d.step = Step::Closed;
     d.result_usd = Some(Decimal::ONE);
     let at = d.at.clone();
     let amount = Decimal::from(219);

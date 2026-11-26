@@ -58,24 +58,13 @@ async fn all_four_menu_reports_reach_two_recipients_with_the_same_window_and_byt
         serde_json::Value::Null,
         "0.0341".parse().unwrap(),
     );
-    deal.started_at = "2026-11-01T18:21:00Z".parse().unwrap();
-    deal.updated_at = deal.started_at + chrono::TimeDelta::seconds(4027);
-    deal.step = Step::Closed;
     deal.invested = "24.70".parse().unwrap();
     deal.proceeds = "24.44".parse().unwrap();
-    deal.result_usd = Some(deal.proceeds - deal.invested);
-    deal.timeline
-        .push((deal.updated_at, "Closed: продано".into()));
-    crate::core::persist::save(
-        &core.inner.deps.db,
-        crate::core::ledger::KIND,
-        &deal.id,
-        &deal,
-    )
-    .await
-    .unwrap();
+    crate::core::ledger::finish(&core, &mut deal, Step::Closed, "продано").await;
+    assert_eq!(deal.result_usd, Some("-0.26".parse().unwrap()));
 
-    let slot: DateTime<Utc> = "2026-11-02T08:15:00Z".parse().unwrap();
+    let slot =
+        DateTime::<Utc>::from_timestamp((deal.updated_at.timestamp() / 60 + 1) * 60, 0).unwrap();
     let w = reports::window(slot, slot);
     assert!(w.has(deal.updated_at));
     let archive = Archive::open(&core).await.unwrap();
@@ -121,12 +110,7 @@ async fn all_four_menu_reports_reach_two_recipients_with_the_same_window_and_byt
             .unwrap()
             .unwrap();
         assert!(first.name.starts_with(prefix) && first.name.ends_with(".xlsx"));
-        assert!(
-            first.caption.contains("2026-11-01 08:15:00")
-                && first.caption.contains("2026-11-02 08:15:00"),
-            "{}",
-            first.caption
-        );
+        assert!(first.caption.contains(&w.text()), "{}", first.caption);
         assert!(first.bytes.starts_with(b"PK"));
         assert!(
             first

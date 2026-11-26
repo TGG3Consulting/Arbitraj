@@ -38,11 +38,13 @@ pub async fn gather(core: &Core, _deals: &[Deal]) -> Inputs {
 
 async fn gather_with_snapshot(core: &Core, snapshot: Option<Snapshot>) -> Inputs {
     let s = &core.inner.deps.settings;
-    let mut rows = RowsCtx::default();
-    rows.dex = crate::core::chain::dexes(core)
-        .into_iter()
-        .map(|v| v.0)
-        .collect();
+    let mut rows = RowsCtx {
+        dex: crate::core::chain::dexes(core)
+            .into_iter()
+            .map(|v| v.0)
+            .collect(),
+        ..Default::default()
+    };
     // Решение 430: адрес кошелька один на все сети — читается у площадки DEX сети по умолчанию (core/chain.rs).
     let dex = crate::core::chain::default_dex(core);
     for w in s.accounts().wallets() {

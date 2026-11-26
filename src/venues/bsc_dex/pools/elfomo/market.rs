@@ -3,7 +3,7 @@
 //! Кто вызывает: pools/load, quote/quoter. От чего зависит: ElfomoFi.getAmountOut, ERC-20 balanceOf и allowance.
 //! Настройки: dex.pmm_ladder_usd и dex.pmm_ladder_counter.
 use super::{IElfomo, IMPL, ROUTER, USDC, VAULT, block, pair, verify_at};
-use crate::core::types::{LadderPoint, OraclePmmData, PoolState};
+use crate::core::types::{OraclePmmData, PoolState};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::venues::bsc_dex::{
     ctx::Ctx,
@@ -21,7 +21,7 @@ pub fn within_capacity(out: U256, capacity: U256) -> bool {
     !out.is_zero() && out < capacity
 }
 
-async fn ask(
+pub(super) async fn ask(
     ctx: &Ctx,
     from: Address,
     to: Address,
@@ -125,35 +125,23 @@ pub async fn load(
         capacity(ctx, coin, &tag).await?,
         capacity(ctx, USDC, &tag).await?,
     );
-    let mut buy: Vec<LadderPoint> = Vec::new();
-    let mut sell: Vec<LadderPoint> = Vec::new();
-    for dx in ladder_counter::amounts(ctx, tokens, reg, f.id, USDC).await? {
-        let bought = ask(ctx, USDC, coin, dx, &tag, owner, target).await?;
-        if !within_capacity(bought, coin_cap)
-            || buy.last().is_some_and(|prev| bought <= prev.amount_out)
-        {
-            break;
-        }
-        let sold = ask(ctx, coin, USDC, bought, &tag, owner, target).await?;
-        if !within_capacity(sold, quote_cap)
-            || sell.last().is_some_and(|prev| sold <= prev.amount_out)
-        {
-            break;
-        }
-        buy.push(LadderPoint {
-            amount_in: dx,
-            amount_out: bought,
-        });
-        sell.push(LadderPoint {
-            amount_in: bought,
-            amount_out: sold,
-        });
-    }
+    let sizes = ladder_counter::amounts(ctx, tokens, reg, f.id, USDC).await?;
+    let reader = super::ladder::Reader {
+        ctx,
+        tag: &tag,
+        wallet: owner,
+        target,
+        coin,
+    };
+    let (buy, sell) = tokio::try_join!(
+        reader.side(true, &sizes, coin_cap),
+        reader.side(false, &sizes, quote_cap)
+    )?;
     Ok(PoolState::OraclePmm(Box::new(OraclePmmData {
         price: U256::ZERO,
         spread: U256::ZERO,
         coeff: U256::ZERO,
-        feasible: !buy.is_empty(),
+        feasible: !buy.is_empty() || !sell.is_empty(),
         paused: false,
         implementation: IMPL,
         base_is_token0: ordered.0 == coin,

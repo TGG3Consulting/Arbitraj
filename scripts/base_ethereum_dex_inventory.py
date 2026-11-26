@@ -521,6 +521,22 @@ def tables(network, snapshots, profiles):
                     "Адреса источника и получателя, calldata и балансы до и после — в записи. "
                     "[Данные исполнения](../tests/data/base_slipstream_2026-11-26/executor.json) · "
                     "[Квотеры и тики](../tests/data/base_slipstream_2026-11-26/quotes.json)."])
+    ring_path = Path("tests/data/first_run_dex_2026-11-26/ring_ethereum.json")
+    if not base and ring_path.exists():
+        ring = read(ring_path)
+        cases = [c for pool in ring["pools"] for c in pool["cases"]]
+        gas = [n for c in cases for n in c["gas"]]
+        out.extend(["", f"**Ring Swap / Few, Ethereum.** На блоке {ring['block']} фабрика зарегистрировала 474 пары. "
+                    f"Для {len(ring['pools'])} книг WETH с USDT, USDC, WBTC и UNI получены {2*len(cases)} обмена "
+                    "через Universal Router: 0,001 и 0,01 WETH, обе стороны, оплата или получение в WETH и ETH. "
+                    f"Газ одного обмена составил {min(gas)}–{max(gas)} единиц до отдельных разрешений. "
+                    "Пара держит Few wrappers. Шаг роутера обменивает их с комиссией 0,3% и выдаёт исходную монету. "
+                    "Для входящего USDT команда WRAP_FEW_TOKEN использует имеющийся allowance. В прямом "
+                    "FEW_V2_SWAP_EXACT_IN попытка повторного approve откатилась. Нижняя граница выплаты проверена при "
+                    "обоих направлениях. Оставшиеся 470 пар требуют отдельной проверки токенов и доступного объёма. "
+                    "[Размещения](https://ringprotocol.gitbook.io/ring/docs/deployments) · "
+                    f"[Суммы и результаты](../{ring_path.as_posix()}) · "
+                    "[Архивный прогон](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45881656010)."])
     out.extend(["", f"Код каждого адреса проверен в [снимке размещений](../tests/data/first_run_dex_2026-11-26/{network}.json). "
                 "Две записи вызова Router.getAmountOut содержат исходные аргументы и ответ. "
                 "У Maverick V2 параметр dex.tick_radius задаёт оператор по глубине рынка. "
@@ -557,6 +573,8 @@ def tables(network, snapshots, profiles):
             status = f"`{task}` · {need}"
         if id == ("solidly-v3-base" if base else "solidly-v3") and solidly.exists():
             status = "DEX-19 · проверены исходники, комиссия и прямые обмены. Для торговли требуется проверенное размещение модуля"
+        if not base and id == "ring-exchange-ethereum" and ring_path.exists():
+            status = "Ring Few · 4 пары underlying через Permit2/Universal Router; расчёты и контрольные обмены выше"
         if sample.get("state") != "enumerated":
             status += ", страница не прочитана"
         elif not sample.get("rows_page1"):

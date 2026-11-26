@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 mod abi;
+mod ladder;
 mod market;
 pub use abi::IElfomo;
 pub use market::{load, quote, within_capacity};

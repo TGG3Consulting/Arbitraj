@@ -200,5 +200,25 @@ def main(output):
         "codes": codes, "wrappers": wrappers, "decimals": decimals, "pools": pools}, indent=2)+"\n")
 
 
+def summarize(source, output):
+    """Уменьшает настоящий ответ CI, сохраняя нативные суммы и исходы каждого контроля."""
+    result = json.loads(Path(source).read_bytes())
+    for pool in result["pools"]:
+        for case in pool["cases"]:
+            calls = case.pop("calls")
+            case["checks"] = {c["label"]: c["status"] for c in calls
+                              if c["label"].startswith(("nominal_plus", "balance_plus", "legacy_usdt"))}
+            case["gas"] = [int(c["gasUsed"], 16) for c in calls if c["label"] in ["swap0", "swap1"]]
+            if "swaps" in case:
+                case["swap_calldata_keccak"] = ["0x" + keccak(bytes.fromhex(c["calldata"][2:])).hex()
+                                                for c in case.pop("swaps")]
+            if "native_transfers" in case:
+                case["native_received"] = str(sum(int(log["data"], 16) for log in case.pop("native_transfers")))
+    Path(output).write_bytes((json.dumps(result, indent=2)+"\n").encode())
+
+
 if __name__ == "__main__":
-    main(sys.argv[1])
+    if len(sys.argv) == 4 and sys.argv[1] == "--summary":
+        summarize(sys.argv[2], sys.argv[3])
+    else:
+        main(sys.argv[1])

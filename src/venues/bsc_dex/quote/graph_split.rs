@@ -226,7 +226,9 @@ fn exact_single_sell(
     let sell = |q| route_calc::eval(ctx, &c.legs, Side::Sell, q, keep).ok();
     match upper.cmp(&qty) {
         std::cmp::Ordering::Less => return None,
-        std::cmp::Ordering::Greater => { sell(upper)?; }
+        std::cmp::Ordering::Greater => {
+            sell(upper)?;
+        }
         std::cmp::Ordering::Equal => {}
     }
     sell(qty)
@@ -263,7 +265,7 @@ fn partners(cands: &[Cand], i: usize) -> bool {
             && c.legs.iter().any(|a| {
                 // Решение 295: по физическому пулу (site) — пары одного многомонетного пула тоже «общий пул».
                 mine.iter()
-                    .any(|b| a.entry.pool.reference.site() == b.entry.pool.reference.site())
+                    .any(|b| a.entry.liquidity_site() == b.entry.liquidity_site())
             })
     })
 }

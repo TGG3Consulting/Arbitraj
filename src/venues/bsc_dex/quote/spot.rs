@@ -64,6 +64,13 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
             (!rc.is_zero()).then(|| mul_div(amount, ru, rc)).flatten()
         }
         // PMM от оракула (WooFi, решение 122 F, 3): своей математики нет (развёрнутый код закрыт). Лесенка цен пула: монет за `amount` встречного — по средней цене первой точки «котируемая → базовая».
+        PoolState::OraclePmm(d) if e.family.proto == super::super::pools::families::Proto::Elfomo => {
+            if let Some(p) = d.ladder_base_in.first() {
+                return mul_div(amount, p.amount_in, p.amount_out);
+            }
+            let p = d.ladder_quote_in.first()?;
+            mul_div(amount, p.amount_out, p.amount_in)
+        }
         PoolState::OraclePmm(d) => {
             let p = d.ladder_quote_in.first()?;
             (!p.amount_in.is_zero())

@@ -43,7 +43,7 @@ use super::pool_tax;
 use super::quote_timing::{self, Count};
 use super::route_calc;
 use super::route_hops::{self, Hop};
-use super::route_paths::{RoutePath, multi_site};
+use super::route_paths::RoutePath;
 
 /// Предел перебора путей (dex.route_search_max_paths). None — не задана: поведение как раньше.
 /// Ошибки: NotConfigured — задана, но не больше нуля.
@@ -122,7 +122,7 @@ impl<'a> Walk<'a> {
             if out.len() >= self.cap {
                 return;
             }
-            let multi = multi_site(&edge.entry.pool.reference);
+            let multi = edge.entry.shared_market();
             if multi.as_ref().is_some_and(|s| sites.contains(s)) {
                 continue;
             }

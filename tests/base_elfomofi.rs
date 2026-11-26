@@ -2,6 +2,8 @@
 use alloy_primitives::{Address, U256};
 use arb::venues::bsc_dex::pools::elfomo;
 use serde_json::Value;
+#[allow(dead_code)]
+mod native_common;
 
 #[test]
 fn canonical_pairs_pay_exact_amount_or_have_no_executable_quote() {
@@ -94,4 +96,51 @@ fn module_acceptance_is_base_specific_and_bound_to_actual_wallet_deltas() {
         }
     }
     assert_eq!(archive["saturated"]["status"], "0x0");
+}
+
+#[test]
+fn one_sided_depth_stays_in_the_graph_and_markets_share_one_vault() {
+    use arb::core::types::{LadderPoint, OraclePmmData, PoolRef, PoolState};
+    use arb::venues::bsc_dex::quote::{emptiness, spot};
+    let mut e = native_common::entry("elfomofi", None);
+    let contract = Address::repeat_byte(1);
+    e.pool.reference = PoolRef::Member {
+        contract,
+        coin: e.coin,
+    };
+    let site = e.liquidity_site();
+    e.pool.reference = PoolRef::Member {
+        contract,
+        coin: Address::repeat_byte(2),
+    };
+    assert_eq!(e.liquidity_site(), site);
+    assert_eq!(site, PoolRef::Contract(contract));
+    for buy in [true, false] {
+        let (mut purchases, mut sales) = (Vec::new(), Vec::new());
+        if buy {
+            purchases.push(LadderPoint {
+                amount_in: U256::from(6),
+                amount_out: U256::from(2),
+            });
+        } else {
+            sales.push(LadderPoint {
+                amount_in: U256::from(2),
+                amount_out: U256::from(6),
+            });
+        }
+        e.pool.state = PoolState::OraclePmm(Box::new(OraclePmmData {
+            price: U256::ZERO,
+            spread: U256::ZERO,
+            coeff: U256::ZERO,
+            feasible: true,
+            paused: false,
+            implementation: Address::ZERO,
+            base_is_token0: true,
+            pool_token0: None,
+            ladder_quote_in: purchases,
+            ladder_base_in: sales,
+        }));
+        assert!(!emptiness::empty(&e));
+        assert_eq!(spot::coins_for(&e, U256::from(6)), Some(U256::from(2)));
+    }
 }

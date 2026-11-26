@@ -130,7 +130,7 @@ fn dfs<'g>(
         if out.len() >= max_paths {
             return;
         }
-        let multi = multi_site(&edge.entry.pool.reference);
+        let multi = edge.entry.shared_market();
         if multi.as_ref().is_some_and(|s| sites.contains(s)) {
             continue;
         }
@@ -219,7 +219,7 @@ fn dfs_cycle<'g>(
         // Один и тот же пул в цикле не используем дважды (атомарный бандл свопа по пулу — один раз, решение 85/84).
         // Решение 295: по физическому пулу (site) — разные пары одного многомонетного пула тоже «тот же пул»; у прочих
         // ссылок site() = сама ссылка.
-        let site = edge.entry.pool.reference.site();
+        let site = edge.entry.liquidity_site();
         if used.contains(&site) {
             continue;
         }

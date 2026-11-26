@@ -40,7 +40,7 @@ pub fn shared(shares: &[&[Leg]]) -> HashSet<PoolRef> {
     let mut out = HashSet::new();
     for legs in shares {
         // Пул внутри одной доли не повторяется (путь без повторов токенов и площадок), но берём множество — на всякий случай.
-        let mine: HashSet<PoolRef> = legs.iter().map(|l| l.entry.pool.reference.site()).collect();
+        let mine: HashSet<PoolRef> = legs.iter().map(|l| l.entry.liquidity_site()).collect();
         for r in mine {
             if !seen.insert(r.clone()) {
                 out.insert(r);
@@ -54,7 +54,7 @@ pub fn shared(shares: &[&[Leg]]) -> HashSet<PoolRef> {
 /// или None. Ошибок нет.
 pub fn unsupported(shares: &[&[Leg]], common: &HashSet<PoolRef>) -> Option<String> {
     shares.iter().flat_map(|l| l.iter()).find_map(|l| {
-        (common.contains(&l.entry.pool.reference.site()) && !pool_after::appliable(&l.entry)).then(|| {
+        (common.contains(&l.entry.liquidity_site()) && !pool_after::appliable(&l.entry)).then(|| {
             format!(
                 "через пул {} {:?} идут две доли и больше, а состояние этого вида пула после обмена не считается — \
                  доли общего пула не считаются как независимые (решение 223)",
@@ -84,7 +84,7 @@ pub fn eval(
     for (legs, qty) in shares {
         if !legs
             .iter()
-            .any(|l| common.contains(&l.entry.pool.reference.site()))
+            .any(|l| common.contains(&l.entry.liquidity_site()))
         {
             let tax_keep = pool_tax::coin_keep(legs, side, t);
             out.push(route_calc::eval(ctx, legs, side, *qty, tax_keep)?);
@@ -120,7 +120,7 @@ pub fn resequence(
         .filter(|&i| {
             refs[i]
                 .iter()
-                .any(|l| common.contains(&l.entry.pool.reference.site()))
+                .any(|l| common.contains(&l.entry.liquidity_site()))
         })
         .collect();
     let input: Vec<(&[Leg], Decimal)> = idx.iter().map(|&i| (refs[i], shares[i].1)).collect();
@@ -151,7 +151,7 @@ fn on_state(legs: &[Leg], after: &HashMap<PoolRef, PoolState>) -> Vec<Leg> {
     legs.iter()
         .map(|l| {
             let mut l = l.clone();
-            if let Some(s) = after.get(&l.entry.pool.reference.site()) {
+            if let Some(s) = after.get(&l.entry.liquidity_site()) {
                 l.entry.pool.state = s.clone();
             }
             l
@@ -183,7 +183,7 @@ fn advance(
         .amount_in;
     for (i, leg) in legs.iter().enumerate() {
         // Решение 295: ключ состояния после обмена — физический пул (site; у парных — сама ссылка).
-        let r = leg.entry.pool.reference.site();
+        let r = leg.entry.liquidity_site();
         // Решение «335 (лесенка влияния)»: доля крючка — по входу этого шага.
         let pct = leg
             .usable

@@ -142,11 +142,11 @@ impl Via<'_> {
                 for (j, b) in p2.iter().enumerate() {
                     // Решение 295: обе ноги — пары одного многомонетного пула (одна площадка) — не путь: один пул —
                     // один шаг. У парных пулов P1 («mid–USDT») и P2 («монета–mid») — разные пулы всегда.
-                    if a.0.pool.reference.site() == b.0.pool.reference.site() {
+                    if a.0.liquidity_site() == b.0.liquidity_site() {
                         why.push(format!(
                             "{}: обе ноги через промежуточную — один пул {:?}",
                             a.0.family.title,
-                            a.0.pool.reference.site()
+                            a.0.liquidity_site()
                         ));
                         continue;
                     }

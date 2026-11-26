@@ -173,7 +173,7 @@ impl Walk<'_> {
                 return;
             }
             let e = g.edge(i);
-            let site = e.entry.pool.reference.site();
+            let site = e.entry.liquidity_site();
             if self.used.contains(&site) {
                 continue;
             }

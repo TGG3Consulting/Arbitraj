@@ -1,0 +1,597 @@
+{
+  "chain_id": 1,
+  "block": 26494988,
+  "selector": {
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "requireCanonical": true
+  },
+  "addresses": {
+    "quoter": "0x39d1d8fcc5e6eeaf567bce4e29b94fec956d3519",
+    "router": "0xeff87a51f5abd015f1afcd5737bbab450ea15a24",
+    "factory": "0xeb2a625b704d73e82946d8d026e1f588eed06416",
+    "few": "0x7d86394139bf1122e82fdf45bb4e3b038a4464dd",
+    "permit2": "0x000000000022d473030f116ddee9f6b43ac78ba3"
+  },
+  "codes": {
+    "0xeff87a51f5abd015f1afcd5737bbab450ea15a24": {
+      "bytes": 21744,
+      "keccak256": "0xb80c353864a3ef885b52b7e9eb2ae4c181ee96cf75ec111700fa7076d76cc69f"
+    },
+    "0x39d1d8fcc5e6eeaf567bce4e29b94fec956d3519": {
+      "bytes": 19758,
+      "keccak256": "0xd36679637b22ffaacb933f43f6f5b36f275751401fbb61300b619f7930efac8f"
+    },
+    "0xeb2a625b704d73e82946d8d026e1f588eed06416": {
+      "bytes": 13833,
+      "keccak256": "0xfeb00fc5c61aba63f63d828dfeef57ab7cbcc25053ee7abbd3467da4ebce80c8"
+    },
+    "0x7d86394139bf1122e82fdf45bb4e3b038a4464dd": {
+      "bytes": 11754,
+      "keccak256": "0x5126b02f7eec0470df7780456cdcee61bc47bf7bf574f213674c66393fd50ae9"
+    },
+    "0x000000000022d473030f116ddee9f6b43ac78ba3": {
+      "bytes": 9152,
+      "keccak256": "0xc67d1657868aa5146eaf24fb879fb1fdec3d2d493b3683a61c9c2f4fb2851131"
+    },
+    "0xa250cc729bb3323e7933022a67b52200fe354767": {
+      "bytes": 6977,
+      "keccak256": "0xbe63f68c8de6e3f7cf411d9b117b931128468c36e0753fc5878fd5359f16acf5"
+    },
+    "0xef87f4608e601e8564800265aee1c1ffadf73283": {
+      "bytes": 6977,
+      "keccak256": "0xbe63f68c8de6e3f7cf411d9b117b931128468c36e0753fc5878fd5359f16acf5"
+    },
+    "0x0492560fa7cfd6a85e50d8be3f77318994f8f429": {
+      "bytes": 6977,
+      "keccak256": "0xbe63f68c8de6e3f7cf411d9b117b931128468c36e0753fc5878fd5359f16acf5"
+    },
+    "0x2078f336fdd260f708bec4a20c82b063274e1b23": {
+      "bytes": 6977,
+      "keccak256": "0xbe63f68c8de6e3f7cf411d9b117b931128468c36e0753fc5878fd5359f16acf5"
+    },
+    "0xe8e1f50392bd61d0f8f48e8e7af51d3b8a52090a": {
+      "bytes": 6977,
+      "keccak256": "0xbe63f68c8de6e3f7cf411d9b117b931128468c36e0753fc5878fd5359f16acf5"
+    },
+    "0x147d15e009a63ebed5196ea029679329204f98fd": {
+      "bytes": 11270,
+      "keccak256": "0x330be2c0f89c41b8879b8015445a667347764915107aced846fd148cc7c03bc0"
+    },
+    "0x54222f404dcfac705322045f01d100380b871450": {
+      "bytes": 11270,
+      "keccak256": "0x330be2c0f89c41b8879b8015445a667347764915107aced846fd148cc7c03bc0"
+    },
+    "0x00b06862de00a7e67a2d6d3fbeea592a32460de0": {
+      "bytes": 11270,
+      "keccak256": "0x330be2c0f89c41b8879b8015445a667347764915107aced846fd148cc7c03bc0"
+    },
+    "0x8626be23f128f5985a5d76359b10bf3db84a7306": {
+      "bytes": 11270,
+      "keccak256": "0x330be2c0f89c41b8879b8015445a667347764915107aced846fd148cc7c03bc0"
+    }
+  },
+  "wrappers": {
+    "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": "0xa250cc729bb3323e7933022a67b52200fe354767",
+    "0xdac17f958d2ee523a2206206994597c13d831ec7": "0xef87f4608e601e8564800265aee1c1ffadf73283",
+    "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": "0x0492560fa7cfd6a85e50d8be3f77318994f8f429",
+    "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": "0x2078f336fdd260f708bec4a20c82b063274e1b23",
+    "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984": "0xe8e1f50392bd61d0f8f48e8e7af51d3b8a52090a"
+  },
+  "decimals": {
+    "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": 18,
+    "0xdac17f958d2ee523a2206206994597c13d831ec7": 6,
+    "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": 6,
+    "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": 8,
+    "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984": 18
+  },
+  "pools": [
+    {
+      "asset": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "pool": "0x147d15e009a63ebed5196ea029679329204f98fd",
+      "reserve_weth": "17127794453660900671930",
+      "reserve_other": "28915965806985",
+      "cases": [
+        {
+          "in": "1000000000000000",
+          "out": "1683183",
+          "roundtrip": "994008870032285",
+          "native": false,
+          "balances": [
+            [
+              "1000000000000000",
+              "0"
+            ],
+            [
+              "0",
+              "1683183"
+            ],
+            [
+              "994008870032285",
+              "0"
+            ]
+          ],
+          "checks": {
+            "nominal_plus_one0": "0x0",
+            "balance_plus_one0": "0x0",
+            "legacy_usdt_nonzero_approve": "0x0",
+            "nominal_plus_one1": "0x0",
+            "balance_plus_one1": "0x0"
+          },
+          "gas": [
+            204980,
+            227319
+          ]
+        },
+        {
+          "in": "10000000000000000",
+          "out": "16831823",
+          "roundtrip": "9940089805207269",
+          "native": false,
+          "balances": [
+            [
+              "10000000000000000",
+              "0"
+            ],
+            [
+              "0",
+              "16831823"
+            ],
+            [
+              "9940089805207269",
+              "0"
+            ]
+          ],
+          "checks": {
+            "nominal_plus_one0": "0x0",
+            "balance_plus_one0": "0x0",
+            "legacy_usdt_nonzero_approve": "0x0",
+            "nominal_plus_one1": "0x0",
+            "balance_plus_one1": "0x0"
+          },
+          "gas": [
+            204971,
+            227319
+          ]
+        },
+        {
+          "in": "1000000000000000",
+          "out": "1683183",
+          "roundtrip": "994008870032285",
+          "native": true,
+          "balances": [
+            [
+              "0",
+              "0"
+            ],
+            [
+              "0",
+              "1683183"
+            ],
+            [
+              "0",
+              "0"
+            ]
+          ],
+          "checks": {
+            "nominal_plus_one0": "0x0",
+            "balance_plus_one0": "0x0",
+            "legacy_usdt_nonzero_approve": "0x0",
+            "nominal_plus_one1": "0x0"
+          },
+          "gas": [
+            213865,
+            240090
+          ]
+        },
+        {
+          "in": "10000000000000000",
+          "out": "16831823",
+          "roundtrip": "9940089805207269",
+          "native": true,
+          "balances": [
+            [
+              "0",
+              "0"
+            ],
+            [
+              "0",
+              "16831823"
+            ],
+            [
+              "0",
+              "0"
+            ]
+          ],
+          "checks": {
+            "nominal_plus_one0": "0x0",
+            "balance_plus_one0": "0x0",
+            "legacy_usdt_nonzero_approve": "0x0",
+            "nominal_plus_one1": "0x0"
+          },
+          "gas": [
+            213846,
+            240090
+          ]
+        }
+      ]
+    },
+    {
+      "asset": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "pool": "0x54222f404dcfac705322045f01d100380b871450",
+      "reserve_weth": "6607983424685783712490",
+      "reserve_other": "11143876798900",
+      "cases": [
+        {
+          "in": "1000000000000000",
+          "out": "1681366",
+          "roundtrip": "994008568479771",
+          "native": false,
+          "balances": [
+            [
+              "1000000000000000",
+              "0"
+            ],
+            [
+              "0",
+              "1681366"
+            ],
+            [
+              "994008568479771",
+              "0"
+            ]
+          ],
+          "checks": {
+            "nominal_plus_one0": "0x0",
+            "balance_plus_one0": "0x0",
+            "nominal_plus_one1": "0x0",
+            "balance_plus_one1": "0x0"
+          },
+          "gas": [
+            204585,
+            200159
+          ]
+        },
+        {
+          "in": "10000000000000000",
+          "out": "16813644",
+          "roundtrip": "9940089804504842",
+          "native": false,
+          "balances": [
+            [
+              "10000000000000000",
+              "0"
+            ],
+            [
+              "0",
+              "16813644"
+            ],
+            [
+              "9940089804504842",
+              "0"
+            ]
+          ],
+          "checks": {
+            "nominal_plus_one0": "0x0",
+            "balance_plus_one0": "0x0",
+            "nominal_plus_one1": "0x0",
+            "balance_plus_one1": "0x0"
+          },
+          "gas": [
+            204576,
+            200159
+          ]
+        },
+        {
+          "in": "1000000000000000",
+          "out": "1681366",
+          "roundtrip": "994008568479771",
+          "native": true,
+          "balances": [
+            [
+              "0",
+              "0"
+            ],
+            [
+              "0",
+              "1681366"
+            ],
+            [
+              "0",
+              "0"
+            ]
+          ],
+          "checks": {
+            "nominal_plus_one0": "0x0",
+            "balance_plus_one0": "0x0",
+            "nominal_plus_one1": "0x0"
+          },
+          "gas": [
+            213470,
+            212928
+          ]
+        },
+        {
+          "in": "10000000000000000",
+          "out": "16813644",
+          "roundtrip": "9940089804504842",
+          "native": true,
+          "balances": [
+            [
+              "0",
+              "0"
+            ],
+            [
+              "0",
+              "16813644"
+            ],
+            [
+              "0",
+              "0"
+            ]
+          ],
+          "checks": {
+            "nominal_plus_one0": "0x0",
+            "balance_plus_one0": "0x0",
+            "nominal_plus_one1": "0x0"
+          },
+          "gas": [
+            213451,
+            212928
+          ]
+        }
+      ]
+    },
+    {
+      "asset": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+      "pool": "0x00b06862de00a7e67a2d6d3fbeea592a32460de0",
+      "reserve_weth": "34901103821297098949333",
+      "reserve_other": "97799619349",
+      "cases": [
+        {
+          "in": "1000000000000000",
+          "out": "2793",
+          "roundtrip": "993729321891326",
+          "native": false,
+          "balances": [
+            [
+              "1000000000000000",
+              "0"
+            ],
+            [
+              "0",
+              "2793"
+            ],
+            [
+              "993729321891326",
+              "0"
+            ]
+          ],
+          "checks": {
+            "nominal_plus_one0": "0x0",
+            "balance_plus_one0": "0x0",
+            "nominal_plus_one1": "0x0",
+            "balance_plus_one1": "0x0"
+          },
+          "gas": [
+            197852,
+            203912
+          ]
+        },
+        {
+          "in": "10000000000000000",
+          "out": "27937",
+          "roundtrip": "9939786339445538",
+          "native": false,
+          "balances": [
+            [
+              "10000000000000000",
+              "0"
+            ],
+            [
+              "0",
+              "27937"
+            ],
+            [
+              "9939786339445538",
+              "0"
+            ]
+          ],
+          "checks": {
+            "nominal_plus_one0": "0x0",
+            "balance_plus_one0": "0x0",
+            "nominal_plus_one1": "0x0",
+            "balance_plus_one1": "0x0"
+          },
+          "gas": [
+            197842,
+            203912
+          ]
+        },
+        {
+          "in": "1000000000000000",
+          "out": "2793",
+          "roundtrip": "993729321891326",
+          "native": true,
+          "balances": [
+            [
+              "0",
+              "0"
+            ],
+            [
+              "0",
+              "2793"
+            ],
+            [
+              "0",
+              "0"
+            ]
+          ],
+          "checks": {
+            "nominal_plus_one0": "0x0",
+            "balance_plus_one0": "0x0",
+            "nominal_plus_one1": "0x0"
+          },
+          "gas": [
+            206736,
+            216681
+          ]
+        },
+        {
+          "in": "10000000000000000",
+          "out": "27937",
+          "roundtrip": "9939786339445538",
+          "native": true,
+          "balances": [
+            [
+              "0",
+              "0"
+            ],
+            [
+              "0",
+              "27937"
+            ],
+            [
+              "0",
+              "0"
+            ]
+          ],
+          "checks": {
+            "nominal_plus_one0": "0x0",
+            "balance_plus_one0": "0x0",
+            "nominal_plus_one1": "0x0"
+          },
+          "gas": [
+            206717,
+            216681
+          ]
+        }
+      ]
+    },
+    {
+      "asset": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+      "pool": "0x8626be23f128f5985a5d76359b10bf3db84a7306",
+      "reserve_weth": "20443723487376537092215",
+      "reserve_other": "7282527136932150343472772",
+      "cases": [
+        {
+          "in": "1000000000000000",
+          "out": "355154441700194900",
+          "roundtrip": "994009000291292",
+          "native": false,
+          "balances": [
+            [
+              "1000000000000000",
+              "0"
+            ],
+            [
+              "0",
+              "355154441700194900"
+            ],
+            [
+              "994009000291292",
+              "0"
+            ]
+          ],
+          "checks": {
+            "nominal_plus_one0": "0x0",
+            "balance_plus_one0": "0x0",
+            "nominal_plus_one1": "0x0",
+            "balance_plus_one1": "0x0"
+          },
+          "gas": [
+            200155,
+            212338
+          ]
+        },
+        {
+          "in": "10000000000000000",
+          "out": "3551542858186475293",
+          "roundtrip": "9940090029129258",
+          "native": false,
+          "balances": [
+            [
+              "10000000000000000",
+              "0"
+            ],
+            [
+              "0",
+              "3551542858186475293"
+            ],
+            [
+              "9940090029129258",
+              "0"
+            ]
+          ],
+          "checks": {
+            "nominal_plus_one0": "0x0",
+            "balance_plus_one0": "0x0",
+            "nominal_plus_one1": "0x0",
+            "balance_plus_one1": "0x0"
+          },
+          "gas": [
+            200145,
+            212338
+          ]
+        },
+        {
+          "in": "1000000000000000",
+          "out": "355154441700194900",
+          "roundtrip": "994009000291292",
+          "native": true,
+          "balances": [
+            [
+              "0",
+              "0"
+            ],
+            [
+              "0",
+              "355154441700194900"
+            ],
+            [
+              "0",
+              "0"
+            ]
+          ],
+          "checks": {
+            "nominal_plus_one0": "0x0",
+            "balance_plus_one0": "0x0",
+            "nominal_plus_one1": "0x0"
+          },
+          "gas": [
+            209040,
+            225107
+          ]
+        },
+        {
+          "in": "10000000000000000",
+          "out": "3551542858186475293",
+          "roundtrip": "9940090029129258",
+          "native": true,
+          "balances": [
+            [
+              "0",
+              "0"
+            ],
+            [
+              "0",
+              "3551542858186475293"
+            ],
+            [
+              "0",
+              "0"
+            ]
+          ],
+          "checks": {
+            "nominal_plus_one0": "0x0",
+            "balance_plus_one0": "0x0",
+            "nominal_plus_one1": "0x0"
+          },
+          "gas": [
+            209020,
+            225107
+          ]
+        }
+      ]
+    }
+  ]
+}

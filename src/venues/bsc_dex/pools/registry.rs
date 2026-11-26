@@ -101,6 +101,24 @@ pub struct Registry {
 }
 
 impl Entry {
+    /// Разные монеты ElfomoFi используют общий vault и меняют состояние одного pricing-контракта.
+    pub fn shared_market(&self) -> Option<PoolRef> {
+        match &self.pool.reference {
+            PoolRef::Member { contract, .. }
+                if self.family.proto == super::families::Proto::Elfomo =>
+            {
+                Some(PoolRef::Contract(*contract))
+            }
+            PoolRef::Multi { .. } => Some(self.pool.reference.site()),
+            _ => None,
+        }
+    }
+
+    pub fn liquidity_site(&self) -> PoolRef {
+        self.shared_market()
+            .unwrap_or_else(|| self.pool.reference.clone())
+    }
+
     /// Учтено ли уже событие с позицией (блок, logIndex). Порядок событий — (blockNumber, logIndex)
     /// (execution-apis src/schemas/receipt.yaml, Log.logIndex — «index of the log in the block»).
     /// Ошибок нет.

@@ -187,4 +187,67 @@ mod tests {
         );
         assert_eq!(super::super::exec_kind::of("ring_few_v2"), None);
     }
+    #[test]
+    fn archived_underlying_and_native_roundtrips_match_both_reserve_directions() {
+        let j: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/data/first_run_dex_2026-11-26/ring_ethereum.json"
+        ))
+        .unwrap();
+        assert_eq!(j["chain_id"], 1);
+        assert_eq!(j["block"], 26_494_988);
+        assert_eq!(j["selector"]["requireCanonical"], true);
+        let raw = |v: &serde_json::Value| v.as_str().unwrap().parse::<U256>().unwrap();
+        let price = |a: U256, ri: U256, ro: U256| {
+            let net = a * U256::from(997);
+            net * ro / (ri * U256::from(1000) + net)
+        };
+        let (weth, fw_eth) = ASSETS[0];
+        let pools = j["pools"].as_array().unwrap();
+        assert_eq!(pools.len(), ASSETS.len() - 1);
+        for (row, (asset, fw)) in pools.iter().zip(&ASSETS[1..]) {
+            assert_eq!(row["asset"], format!("{asset:#x}"));
+            assert_eq!(j["wrappers"][format!("{asset:#x}")], format!("{fw:#x}"));
+            assert_eq!(path(weth, *asset), Some([fw_eth, *fw]));
+            let pool = row["pool"].as_str().unwrap().parse().unwrap();
+            assert!(check_pool(pool, fw_eth, *fw));
+            let ri = raw(&row["reserve_weth"]);
+            let ro = raw(&row["reserve_other"]);
+            let cases = row["cases"].as_array().unwrap();
+            assert_eq!(cases.len(), 4);
+            for (i, c) in cases.iter().enumerate() {
+                let amount = raw(&c["in"]);
+                let out = price(amount, ri, ro);
+                let back = price(out, ro - out, ri + amount);
+                assert_eq!(c["native"], i >= 2);
+                assert_eq!(amount, U256::from(10u64.pow(15 + (i % 2) as u32)));
+                assert_eq!(out, raw(&c["out"]));
+                assert_eq!(back, raw(&c["roundtrip"]));
+                let balances = &c["balances"];
+                assert_eq!(raw(&balances[1][1]), out);
+                assert_eq!(raw(&balances[2][1]), U256::ZERO);
+                assert_eq!(raw(&balances[2][0]), if i >= 2 { U256::ZERO } else { back });
+                assert!(
+                    c["gas"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .all(|v| v.as_u64().unwrap() > 21_000)
+                );
+                let controls = &c["checks"];
+                for name in [
+                    "nominal_plus_one0",
+                    "nominal_plus_one1",
+                    "balance_plus_one0",
+                ] {
+                    assert_eq!(controls[name], "0x0");
+                }
+                if i < 2 {
+                    assert_eq!(controls["balance_plus_one1"], "0x0");
+                }
+                if *asset == ASSETS[1].0 {
+                    assert_eq!(controls["legacy_usdt_nonzero_approve"], "0x0");
+                }
+            }
+        }
+    }
 }

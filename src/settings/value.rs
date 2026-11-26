@@ -38,6 +38,17 @@ pub fn validate(def: &SettingDef, scope: &Scope, value: &Value) -> Result<Value,
             k.key()
         ));
     }
+    match def.name {
+        "telegram.daily_time_utc" => {
+            let text = value.as_str().unwrap_or_default().trim();
+            super::outbound::utc_time(text).ok_or("Введите время UTC в формате ЧЧ:ММ (00:00–23:59)")?;
+            return Ok(Value::String(text.to_owned()));
+        }
+        "telegram.daily_chat_ids" | "telegram.duty_chat_ids" => {
+            return super::outbound::chat_ids(value);
+        }
+        _ => {}
+    }
     match def.kind {
         Kind::Decimal => {
             let text = match value {

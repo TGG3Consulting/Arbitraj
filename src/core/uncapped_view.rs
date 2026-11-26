@@ -24,7 +24,11 @@ use std::sync::atomic::Ordering;
 
 use serde_json::{Value, json};
 
+use super::deal::Deal;
+use crate::storage::db::Db;
 use crate::storage::uncapped_db::{self, Filter};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use super::engine::{Core, lk};
 use super::uncapped_sum::{Totals, latest_per_deal, totals};
@@ -39,31 +43,55 @@ impl Core {
         from: Option<String>,
         to: Option<String>,
     ) -> Result<(Totals, Option<String>), String> {
+        self.uncapped_totals_from(&self.inner.deps.db, None, from, to)
+            .await
+    }
+
+    /// Сводка из заданного читателя. Суточная рассылка передаёт сохранённые сделки со своего соединения.
+    pub(super) async fn uncapped_totals_from(
+        &self,
+        db: &Db,
+        archived: Option<Arc<Vec<Deal>>>,
+        from: Option<String>,
+        to: Option<String>,
+    ) -> Result<(Totals, Option<String>), String> {
         let f = Filter {
             from,
             to,
             kind: None,
             missed_only: false,
         };
-        // Решение 218: у сделки — только последняя запись (пересчёт по окну заменяет старую).
-        let rows = latest_per_deal(
-            uncapped_db::all(&self.inner.deps.db, f)
-                .await
-                .map_err(|e| e.to_string())?,
-        );
+        let rows = uncapped_db::all(db, f).await.map_err(|e| e.to_string())?;
         let (ladder, ladder_err) = match super::uncapped::ladder(self) {
             Ok(l) => (l, None),
             Err(e) => (vec![], Some(e)),
         };
-        let briefs: Vec<Brief> = rows
-            .iter()
-            .filter_map(|(_, body)| serde_json::from_str::<Brief>(body).ok())
-            .collect();
-        let facts = lk(&self.inner.deals);
-        let t = totals(briefs, &ladder, |id| {
-            facts.get(id).and_then(|d| d.result_usd)
-        });
-        drop(facts);
+        let core = self.clone();
+        let t = tokio::task::spawn_blocking(move || {
+            let briefs: Vec<Brief> = latest_per_deal(rows)
+                .into_iter()
+                .filter_map(|(_, body)| serde_json::from_str(&body).ok())
+                .collect();
+            let facts: HashMap<String, _> = match archived {
+                Some(deals) => deals
+                    .iter()
+                    .filter_map(|d| Some((d.id.clone(), d.result_usd?)))
+                    .collect(),
+                None => {
+                    let ids = briefs
+                        .iter()
+                        .filter_map(|b| b.battle.deal_id.as_ref())
+                        .collect::<Vec<_>>();
+                    let deals = lk(&core.inner.deals);
+                    ids.into_iter()
+                        .filter_map(|id| Some((id.clone(), deals.get(id)?.result_usd?)))
+                        .collect()
+                }
+            };
+            totals(briefs, &ladder, |id| facts.get(id).copied())
+        })
+        .await
+        .map_err(|e| format!("сборка итогов периода: {e}"))?;
         Ok((t, ladder_err))
     }
 

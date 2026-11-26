@@ -205,6 +205,7 @@ fn hello_cost_is_fee_not_rounding_rest() {
     let nr = UsdtReturn::NotReturned {
         amount,
         at: v("mexc"),
+        result_at_failure: None,
         why: "x".into(),
     };
     assert_eq!(rc::part_cost(&nr), None);

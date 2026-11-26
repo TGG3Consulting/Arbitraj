@@ -309,15 +309,18 @@ pub async fn sold_manually(
     ))
 }
 
+/// Критерий остановленной записи, которая ещё требует действий владельца.
+pub(crate) fn needs_review(d: &Deal) -> bool {
+    d.step == Step::Halted && (d.qty > Decimal::ZERO || d.provisional_usd.is_some())
+}
+
 impl Core {
     /// Остановленные сделки, которые ждут разбора человеком (экран «Ручное управление»): монеты ещё в сделке
     /// или в итоге дня стоит предварительный убыток. Ошибок нет.
     pub fn halted(&self) -> Vec<Deal> {
         let mut v: Vec<Deal> = lk(&self.inner.deals)
             .values()
-            .filter(|d| {
-                d.step == Step::Halted && (d.qty > Decimal::ZERO || d.provisional_usd.is_some())
-            })
+            .filter(|d| needs_review(d))
             .cloned()
             .collect();
         v.sort_by_key(|d| std::cmp::Reverse(d.updated_at));

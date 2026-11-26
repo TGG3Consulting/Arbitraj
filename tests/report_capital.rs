@@ -514,6 +514,7 @@ fn inputs() -> Inputs {
         },
         limits: vec![],
         snap: arb::report::snap::Snapshot {
+            cached: false,
             places: vec![],
             problem: Some("тест без ядра: слепок не снимается".into()),
         },

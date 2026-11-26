@@ -72,9 +72,31 @@ pub async fn results_file(
     to: Option<DateTime<Utc>>,
     now: DateTime<Utc>,
 ) -> Result<Vec<u8>, String> {
-    let deals = core.deals();
+    results_with_snapshot(core, rows_time::Window { from, to, now }, None).await
+}
+
+pub(crate) async fn results_with_snapshot(
+    core: &Core,
+    w: rows_time::Window,
+    source: Option<(&super::archive::Archive, snap::Snapshot)>,
+) -> Result<Vec<u8>, String> {
+    let deals = match &source {
+        Some((a, _)) => a.deals.clone(),
+        None => std::sync::Arc::new(core.deals()),
+    };
     let mut cx = ResultsCtx::default();
-    match core.bot_days().await {
+    let days = match &source {
+        Some((a, _)) => {
+            crate::core::daily_rows::bot_days_from(
+                &a.db,
+                w.from.map(|t| t.date_naive()),
+                w.to.map(|t| (t - chrono::Duration::nanoseconds(1)).date_naive()),
+            )
+            .await
+        }
+        None => core.bot_days().await,
+    };
+    match days {
         Ok((days, bad)) => {
             cx.bot = days;
             cx.problems.extend(bad);
@@ -88,21 +110,20 @@ pub async fn results_file(
         .into_iter()
         .map(|(id, (_, d))| (id, d))
         .collect();
-    for d in &deals {
-        for v in [&d.direction.buy_on.0, &d.direction.sell_on.0] {
-            if crate::core::daily_venue::is_dex(core, v) {
-                cx.dex.insert(v.clone());
-            }
-        }
-    }
+    cx.dex = crate::core::chain::dexes(core)
+        .into_iter()
+        .map(|v| v.0)
+        .collect();
     cx.long_deal_s = core
         .inner
         .deps
         .settings
         .integer(LONG_DEAL, crate::settings::read::At::default())
         .map_err(|e| e.message);
-    cx.snap = snap::gather(core).await;
-    let w = rows_time::Window { from, to, now };
+    cx.snap = match source {
+        Some((_, snapshot)) => snapshot,
+        None => snap::gather(core).await,
+    };
     tokio::task::spawn_blocking(move || results(&deals, w, &cx))
         .await
         .map_err(|e| format!("отчёт: задача сборки прервана: {e}"))?

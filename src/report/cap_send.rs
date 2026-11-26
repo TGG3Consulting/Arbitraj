@@ -32,16 +32,17 @@ pub struct Inputs {
 
 /// Что делает: читает у ядра всё для книги (см. шапку). Принимает: ядро, сделки (площадки DEX сделок). Возвращает:
 /// входные данные. Ошибок нет: что не прочитано — причиной в данных.
-pub async fn gather(core: &Core, deals: &[Deal]) -> Inputs {
+pub async fn gather(core: &Core, _deals: &[Deal]) -> Inputs {
+    gather_with_snapshot(core, None).await
+}
+
+async fn gather_with_snapshot(core: &Core, snapshot: Option<Snapshot>) -> Inputs {
     let s = &core.inner.deps.settings;
     let mut rows = RowsCtx::default();
-    for d in deals {
-        for v in [&d.direction.buy_on.0, &d.direction.sell_on.0] {
-            if crate::core::daily_venue::is_dex(core, v) {
-                rows.dex.insert(v.clone());
-            }
-        }
-    }
+    rows.dex = crate::core::chain::dexes(core)
+        .into_iter()
+        .map(|v| v.0)
+        .collect();
     // Решение 430: адрес кошелька один на все сети — читается у площадки DEX сети по умолчанию (core/chain.rs).
     let dex = crate::core::chain::default_dex(core);
     for w in s.accounts().wallets() {
@@ -65,7 +66,10 @@ pub async fn gather(core: &Core, deals: &[Deal]) -> Inputs {
     Inputs {
         rows,
         limits: super::cap_limits::rows(s, &kinds),
-        snap: super::snap::gather(core).await,
+        snap: match snapshot {
+            Some(s) => s,
+            None => super::snap::gather(core).await,
+        },
         keep_days: s
             .integer("uncapped.keep_days", At::default())
             .map_err(|e| e.message),
@@ -130,6 +134,21 @@ pub async fn capital_send<F, Fut>(
     w: Window,
     period: String,
     max: usize,
+    send: F,
+) -> Result<usize, String>
+where
+    F: FnMut(cap_xlsx::File) -> Fut,
+    Fut: std::future::Future<Output = Result<(), String>>,
+{
+    capital_with_snapshot(core, w, period, max, None, send).await
+}
+
+pub(crate) async fn capital_with_snapshot<F, Fut>(
+    core: &Core,
+    w: Window,
+    period: String,
+    max: usize,
+    source: Option<(&super::archive::Archive, Snapshot)>,
     mut send: F,
 ) -> Result<usize, String>
 where
@@ -137,11 +156,24 @@ where
     Fut: std::future::Future<Output = Result<(), String>>,
 {
     // Записи «без потолка» — с начала окна до выгрузки (окно to — граница своего интервала).
-    let missed = core.uncapped_report(w.from, w.to).await.map_err(|e| {
+    let (deals, missed, snapshot) = match source {
+        Some((a, snap)) => (
+            a.deals.clone(),
+            a.missed(core, w.from, w.to).await,
+            Some(snap),
+        ),
+        None => (
+            std::sync::Arc::new(core.deals()),
+            core.uncapped_report(w.from, w.to)
+                .await
+                .map(std::sync::Arc::new),
+            None,
+        ),
+    };
+    let missed = missed.map_err(|e| {
         format!("отчёт «Сделки, лимиты и капитал»: записи «без потолка» не прочитаны: {e}")
     })?;
-    let deals = core.deals();
-    let inputs = gather(core, &deals).await;
+    let inputs = gather_with_snapshot(core, snapshot).await;
     let (tx, mut rx) = tokio::sync::mpsc::channel::<cap_xlsx::File>(1);
     let job = tokio::task::spawn_blocking(move || {
         let data = capital_data(&deals, &missed, &w, &period, &inputs);

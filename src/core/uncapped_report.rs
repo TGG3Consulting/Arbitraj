@@ -14,7 +14,7 @@ use chrono::{DateTime, Utc};
 
 use crate::core::types::Asset;
 
-use super::engine::{Core, rd};
+use super::engine::Core;
 use super::uncapped_store::ts;
 use super::uncapped_sum::Totals;
 
@@ -39,14 +39,45 @@ impl Core {
         to: Option<DateTime<Utc>>,
     ) -> Result<MissedData, String> {
         let (totals, ladder_error) = self.uncapped_totals(from.map(ts), to.map(ts)).await?;
+        Ok(self.missed_data(totals, ladder_error, self.maxwin_ctx()))
+    }
+
+    /// Суточный отчёт использует отдельный читатель и сохранённые сделки всех книг этой рассылки.
+    pub(crate) async fn uncapped_report_archive(
+        &self,
+        db: &crate::storage::db::Db,
+        deals: &std::sync::Arc<Vec<super::deal::Deal>>,
+        from: Option<DateTime<Utc>>,
+        to: Option<DateTime<Utc>>,
+    ) -> Result<MissedData, String> {
+        let (totals, error) = self
+            .uncapped_totals_from(db, Some(deals.clone()), from.map(ts), to.map(ts))
+            .await?;
+        let core = self.clone();
+        let deals = deals.clone();
+        tokio::task::spawn_blocking(move || {
+            let times = super::deal_time::DealTimes::of(deals.iter());
+            core.missed_data(totals, error, core.maxwin_ctx_with_times(times))
+        })
+        .await
+        .map_err(|e| format!("данные отчёта «Упущено»: {e}"))
+    }
+
+    /// Дополняет итоги имёнами монет и условиями расчёта на момент выгрузки.
+    fn missed_data(
+        &self,
+        totals: Totals,
+        ladder_error: Option<String>,
+        maxwin: super::maxwin_view::Ctx,
+    ) -> MissedData {
         let labels = self.coin_labels(totals.items.iter().map(|i| &i.b.direction.asset));
-        Ok(MissedData {
+        MissedData {
             totals,
             ladder_error,
             off: self.uncapped_off(),
             labels,
-            maxwin: self.maxwin_ctx(),
-        })
+            maxwin,
+        }
     }
 
     /// Показные имена монет (см. шапку) одним чтением справочника. Принимает: монеты. Возвращает: монета → имя.
@@ -55,7 +86,7 @@ impl Core {
         &self,
         assets: impl Iterator<Item = &'a Asset>,
     ) -> HashMap<Asset, String> {
-        let coins = rd(&self.inner.coins);
+        let coins = self.coins();
         let mut out: HashMap<Asset, String> = HashMap::new();
         for a in assets {
             if out.contains_key(a) {

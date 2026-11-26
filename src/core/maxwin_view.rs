@@ -60,6 +60,12 @@ impl View {
 impl Core {
     /// Что делает: контекст показа (см. Ctx). Принимает: ничего. Возвращает: Ctx. Ошибок нет.
     pub fn maxwin_ctx(&self) -> Ctx {
+        let times = DealTimes::of(lk(&self.inner.deals).values());
+        self.maxwin_ctx_with_times(times)
+    }
+
+    /// Контекст показа по длительностям того же снимка, по которому строится отчёт.
+    pub(super) fn maxwin_ctx_with_times(&self, times: DealTimes) -> Ctx {
         let int = |n: &str| {
             self.inner
                 .deps
@@ -67,7 +73,6 @@ impl Core {
                 .integer(n, SAt::default())
                 .map_err(|e| e.message)
         };
-        let times = DealTimes::of(lk(&self.inner.deals).values());
         Ctx {
             now: Utc::now(),
             gap: int("uncapped.maxwin_gap_ms"),

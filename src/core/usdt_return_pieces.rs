@@ -105,6 +105,7 @@ pub fn failed(d: &mut Deal, from: &VenueId, total: Decimal, why: &str) -> Decima
         UsdtReturn::NotReturned {
             amount: rest,
             at: from.clone(),
+            result_at_failure: None,
             why: why.to_string(),
         },
     );

@@ -272,6 +272,7 @@ fn telegram_edits_returned_record_and_final_outcome() {
         },
         qty: Decimal::from_str("2434.66").unwrap(),
         loss_pct: None,
+        loss_usdt: None,
         reason: Some(format!("продажа не прошла: {MISMATCH_1}")),
         at: chrono::Utc::now(),
         error: Some(MISMATCH_1.into()),

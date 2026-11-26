@@ -134,6 +134,14 @@ pub(super) fn today_book(core: &Core) -> (NaiveDate, Book) {
 pub async fn provisional(core: &Core, deal: &mut Deal) -> Trip {
     let value = super::daily_value::value_now(core, deal).await;
     let est = super::daily_value::estimate(deal, value);
+    record_stop(core, deal, est).await
+}
+
+/// Первичная оценка при завершении пути. Последующие сверки остатка вызывают record напрямую.
+pub(super) async fn record_stop(core: &Core, deal: &mut Deal, est: Estimate) -> Trip {
+    if deal.step == super::deal::Step::Halted {
+        deal.duty_halted_pnl_usdt = est.priced.then_some(est.amount);
+    }
     record(core, deal, est).await
 }
 

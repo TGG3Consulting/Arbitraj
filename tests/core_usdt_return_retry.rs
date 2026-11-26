@@ -65,7 +65,7 @@ async fn retries_with_interval_then_record_with_two_buttons() {
         "два повтора с интервалом 1 с"
     );
     match s {
-        Some(UsdtReturn::NotReturned { amount, at, why }) => {
+        Some(UsdtReturn::NotReturned { amount, at, why, .. }) => {
             assert_eq!(amount, Decimal::new(8310, 2));
             assert_eq!(at, VenueId("mexc".into()));
             assert!(why.contains("все 2 повторов не удались"), "{why}");

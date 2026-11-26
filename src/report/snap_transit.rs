@@ -40,6 +40,16 @@ pub async fn transit(
     used: &mut [bool],
     deadline: Instant,
 ) -> Place {
+    transit_with_price(core, all, held, used, Some(deadline)).await
+}
+
+pub(crate) async fn transit_with_price(
+    core: &Core,
+    all: &[Deal],
+    held: &[&Deal],
+    used: &mut [bool],
+    deadline: Option<Instant>,
+) -> Place {
     let mut p = Place {
         name: "В пути".into(),
         at: Some(Utc::now()),
@@ -59,14 +69,18 @@ pub async fn transit(
                 .dex_account
                 .as_ref()
                 .filter(|_| crate::core::daily_venue::is_dex(core, &v.0));
-            let pr = match core.inner.deps.gw.get_as(v, acc).await {
-                Ok(gw) => match quote_of(core, v) {
-                    Ok(qa) => price(core, &gw, v, &d.direction.asset, d.qty, &qa, deadline)
-                        .await
-                        .map(|x| x.0),
-                    Err(e) => Err(e),
-                },
-                Err(e) => Err(e.message),
+            let pr = if let Some(deadline) = deadline {
+                match core.inner.deps.gw.get_as(v, acc).await {
+                    Ok(gw) => match quote_of(core, v) {
+                        Ok(qa) => price(core, &gw, v, &d.direction.asset, d.qty, &qa, deadline)
+                            .await
+                            .map(|x| x.0),
+                        Err(e) => Err(e),
+                    },
+                    Err(e) => Err(e.message),
+                }
+            } else {
+                Err("цена в локальном слепке отсутствует".to_owned())
             };
             (name(&v.0), pr)
         } else {

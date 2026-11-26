@@ -26,6 +26,27 @@
   const CONTROL = ['notify.live_refresh_s', 'notify.live_idle_s', 'notify.dialog_ttl_s', 'notify.transfer_pct'];
   const PER_EVENT = { enabled: 'notify.event.enabled', venues: 'notify.event.venues', condition: 'notify.event.condition' };
 
+  const outbound = [
+    {
+      code: 'duty', title: 'Дежурный', token: 'telegram.duty_bot_token',
+      info: 'Алерт приходит по проблемной сделке, когда достигнут хотя бы один заданный порог. Размер ордера проверяется и при отсутствии оценки убытка.',
+      fields: [
+        ['telegram.duty_chat_ids', 'ID чатов через запятую'],
+        ['telegram.duty_loss_pct', 'Порог убытка для дежурного, %'],
+        ['telegram.duty_loss_usdt', 'Порог убытка для дежурного, USDT'],
+        ['telegram.duty_order_size_usdt', 'Размер сделки для дежурного, USDT'],
+      ],
+    },
+    {
+      code: 'daily', title: 'Суточные автоотчёты', token: 'telegram.daily_bot_token',
+      info: 'В каждый выбранный чат приходят все четыре Excel-отчёта за 24 часа до указанного времени.',
+      fields: [
+        ['telegram.daily_chat_ids', 'ID чатов через запятую'],
+        ['telegram.daily_time_utc', 'Время отправки автоотчётов в UTC (ЧЧ:ММ)'],
+      ],
+    },
+  ];
+
   const groups = $derived.by(() => {
     const out = new Map();
     for (const e of store.schema?.events ?? []) {
@@ -98,6 +119,24 @@
       {@render setting(name, { kind: 'Global' }, name)}
     {/each}
   </section>
+
+  {#each outbound as channel (channel.code)}
+    <section class="card">
+      <h2>{channel.title}</h2>
+      <p>{channel.info}</p>
+      {#each channel.fields as field (field[0])}
+        {@render setting(field[0], { kind: 'Global' }, field[1])}
+      {/each}
+      <p class="row">
+        Токен бота
+        {#if entered(channel.token) === true}<span class="ok">введён</span>
+        {:else if entered(channel.token) === false}<span class="unset">не введён</span>{/if}
+        <a href={href('unlock', channel.token)}>Ввести или заменить</a>
+      </p>
+      <p class="muted">Проверка отправит {channel.code === 'daily' ? 'небольшой тестовый файл' : 'тестовое сообщение'} в каждый указанный чат.</p>
+      <CheckConnection url={`/api/check/telegram/${channel.code}`} />
+    </section>
+  {/each}
 
   <h2>События</h2>
   <p class="muted">

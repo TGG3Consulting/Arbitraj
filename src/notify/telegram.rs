@@ -50,6 +50,7 @@ pub enum TgError {
     /// Telegram ответил ok=false — причина из поля description.
     #[error("Telegram отказал: {description}{details}")]
     Api {
+        error_code: Option<i64>,
         description: String,
         details: String,
         /// parameters.retry_after — через сколько секунд можно повторить (если Telegram прислал).
@@ -194,6 +195,7 @@ async fn parse(resp: reqwest::Response) -> Result<Value, TgError> {
             .ok_or_else(|| TgError::BadResponse("нет поля result".into()))
     } else {
         Err(TgError::Api {
+            error_code: body.error_code,
             description: body.description.unwrap_or_else(|| "без описания".into()),
             details: details(body.error_code, body.parameters.as_ref()),
             retry_after: body.parameters.as_ref().and_then(|p| p.retry_after),

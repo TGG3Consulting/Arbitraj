@@ -27,33 +27,48 @@ impl Core {
     /// Что делает: итоги дней бота из daily_result (все дни, по возрастанию даты). Запись, которую не разобрать, —
     /// пропускается с причиной в списке ошибок. Возвращает: (дни, ошибки разбора). Ошибки: текст — база не прочитана.
     pub async fn bot_days(&self) -> Result<(Vec<BotDay>, Vec<String>), String> {
-        let rows = self
-            .inner
-            .deps
-            .db
-            .ledger()
-            .read(|c| {
-                let mut st = c.prepare("SELECT day, body FROM daily_result ORDER BY day")?;
-                let it =
-                    st.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
-                it.collect::<Result<Vec<_>, _>>()
-            })
-            .await
-            .map_err(|e| format!("итог дня бота (daily_result) не прочитан: {e}"))?;
-        let (mut out, mut bad) = (Vec::new(), Vec::new());
-        for (day, body) in rows {
-            match (
-                day.parse::<NaiveDate>(),
-                serde_json::from_str::<Book>(&body),
-            ) {
-                (Ok(date), Ok(b)) => out.push(BotDay {
-                    date,
-                    final_usd: b.final_usd,
-                    provisional_usd: prov_on(&b, date),
-                }),
-                _ => bad.push(format!("запись итога дня {day} не разобрана")),
-            }
-        }
-        Ok((out, bad))
+        bot_days_from(&self.inner.deps.db, None, None).await
     }
+}
+
+/// Записи включительного диапазона дней UTC через переданный читатель; пустые границы означают всю историю.
+pub(crate) async fn bot_days_from(
+    db: &crate::storage::db::Db,
+    from: Option<NaiveDate>,
+    through: Option<NaiveDate>,
+) -> Result<(Vec<BotDay>, Vec<String>), String> {
+    let rows = db
+        .ledger()
+        .read(move |c| {
+            let condition = match (from, through) {
+                (Some(_), Some(_)) => " WHERE day BETWEEN ? AND ?",
+                (Some(_), None) => " WHERE day >= ?",
+                (None, Some(_)) => " WHERE day <= ?",
+                (None, None) => "",
+            };
+            let bounds = [from, through].into_iter().flatten().map(|d| d.to_string());
+            let query = format!("SELECT day, body FROM daily_result{condition} ORDER BY day");
+            let mut st = c.prepare(&query)?;
+            let it = st.query_map(rusqlite::params_from_iter(bounds), |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+            })?;
+            it.collect::<Result<Vec<_>, _>>()
+        })
+        .await
+        .map_err(|e| format!("итог дня бота (daily_result) не прочитан: {e}"))?;
+    let (mut out, mut bad) = (Vec::new(), Vec::new());
+    for (day, body) in rows {
+        match (
+            day.parse::<NaiveDate>(),
+            serde_json::from_str::<Book>(&body),
+        ) {
+            (Ok(date), Ok(b)) => out.push(BotDay {
+                date,
+                final_usd: b.final_usd,
+                provisional_usd: prov_on(&b, date),
+            }),
+            _ => bad.push(format!("запись итога дня {day} не разобрана")),
+        }
+    }
+    Ok((out, bad))
 }

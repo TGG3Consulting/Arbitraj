@@ -120,6 +120,7 @@ fn block_without_any_price_is_no_data() {
         doubt,
     };
     let snap = Snapshot {
+        cached: false,
         places: vec![Place {
             name: "В пути".into(),
             lines: vec![line(true), line(false)],

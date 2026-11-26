@@ -48,6 +48,7 @@ fn rec(id: &str, reason: &str) -> ManualRecord {
         },
         qty: Decimal::new(1234, 2),
         loss_pct: Some(Decimal::new(-35, 1)),
+        loss_usdt: None,
         reason: Some(reason.into()),
         at: Utc::now(),
         error: None,

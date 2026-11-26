@@ -82,7 +82,7 @@ pub fn return_text(deal: &Deal) -> Option<String> {
                 hu::usd(*amount),
                 hu::venue(&from.0)
             ),
-            U::NotReturned { amount, at, why } => format!(
+            U::NotReturned { amount, at, why, .. } => format!(
                 "USDT {} на {} сами не вернутся: {why}",
                 hu::usd(*amount),
                 hu::venue(&at.0)

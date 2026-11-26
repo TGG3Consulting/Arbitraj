@@ -19,7 +19,7 @@ use super::manual_rows::{alert_record, btn, holding_record, sold};
 use super::usdt_return_state::UsdtReturn;
 
 /// Последняя запись хронологии сделки без «Предварительный убыток» и «В итог дня» — причина остановки.
-fn last_note(d: &Deal) -> String {
+pub(crate) fn last_note(d: &Deal) -> String {
     d.timeline
         .iter()
         .rev()

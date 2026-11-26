@@ -23,9 +23,15 @@ pub const TELEGRAM_FAILURES_TOKEN: &str = "telegram.failures_token";
 /// Решение 253, дополнение t85: токен бота чата «Аккаунты» (проблема аккаунта, лимит вывода).
 pub const TELEGRAM_ACCOUNTS_TOKEN: &str = "telegram.accounts_token";
 
+/// Токены двух независимых исходящих рассылок.
+pub const TELEGRAM_DUTY_TOKEN: &str = "telegram.duty_bot_token";
+pub const TELEGRAM_DAILY_TOKEN: &str = "telegram.daily_bot_token";
+
 /// Известные секреты: имя, к чему относится (площадка или «система»), описание — для интерфейса.
 /// Новая площадка или сервис добавляет сюда свои секреты.
 pub static KNOWN: &[(&str, &str, &str)] = &[
+    (TELEGRAM_DUTY_TOKEN, "telegram", "Токен бота для дежурного"),
+    (TELEGRAM_DAILY_TOKEN, "telegram", "Токен бота суточных автоотчётов"),
     (
         TELEGRAM_BOT_TOKEN,
         "telegram",

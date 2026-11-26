@@ -28,6 +28,7 @@ async fn not_returned(core: &Core, id: &str, skip: Option<&str>) {
     x.usdt_return = Some(UsdtReturn::NotReturned {
         amount: Decimal::new(8310, 2),
         at: VenueId("mexc".into()),
+        result_at_failure: None,
         why: "перегон не состоялся: MEXC, код 16021: Some pre-crediting assets are temporarily unavailable for withdrawal. Please reconfirm the quantity.".into(),
     });
     arb::core::ledger::save(core, &x).await;

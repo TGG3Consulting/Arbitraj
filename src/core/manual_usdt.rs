@@ -45,7 +45,7 @@ pub fn usdt_records(d: &Deal) -> Vec<ManualRecord> {
 /// deal_id команд — ключ части (usdt_return_parts::key: первая часть — id сделки, остальные — «<id>@<площадка>»).
 /// Принимает: сделку, часть. Возвращает: запись или None — часть не в состоянии «не вернулись». Ошибок нет.
 fn usdt_record(d: &Deal, part: &UsdtReturn) -> Option<ManualRecord> {
-    let UsdtReturn::NotReturned { amount, at, why } = part else {
+    let UsdtReturn::NotReturned { amount, at, why, .. } = part else {
         return None;
     };
     let key = super::usdt_return_parts::key(d, at);

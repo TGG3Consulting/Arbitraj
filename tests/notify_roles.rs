@@ -190,6 +190,78 @@ async fn incoming_chat_to_role_and_users() {
     assert!(!roles::is_role_chat(&s, "555"));
 }
 
+/// Два набора получателей независимы, токены остаются в Vault, права команд у рассылок отсутствуют.
+#[tokio::test]
+async fn outbound_only_channels_have_separate_destinations_and_credentials() {
+    use arb::notify::outbound::{Channel, build};
+    use arb::secrets::{TELEGRAM_DAILY_TOKEN, TELEGRAM_DUTY_TOKEN, Vault, crypto::KdfParams};
+    use zeroize::Zeroizing;
+
+    let (dir, _, _, s, _) = store("outbound").await;
+    let http = reqwest::Client::new();
+    let vault = Vault::locked(dir.join("outbound.enc"));
+    let params = KdfParams {
+        memory_kib: 64,
+        iterations: 1,
+        parallelism: 1,
+    };
+    let password = || Zeroizing::new("test-password".to_string());
+    vault.create(password(), params).await.unwrap();
+    set(
+        &s,
+        "notify.telegram_api_url",
+        json!("https://api.telegram.org"),
+    )
+    .await;
+    set(&s, "http.timeout_ms", json!(1000)).await;
+    set(&s, "notify.telegram_chat", json!("42")).await;
+    set(&s, "telegram.duty_chat_ids", json!(["-1001", "0012", "12"])).await;
+    set(&s, "telegram.daily_chat_ids", json!(["-2002"])).await;
+    set(&s, "telegram.daily_time_utc", json!("18:45")).await;
+    assert!(
+        s.set(
+            "telegram.daily_time_utc",
+            Scope::Global,
+            Some(json!("25:60")),
+            "тест"
+        )
+        .await
+        .is_err()
+    );
+    for (secret, channel) in [
+        (TELEGRAM_DUTY_TOKEN, Channel::Duty),
+        (TELEGRAM_DAILY_TOKEN, Channel::Daily),
+    ] {
+        assert!(build(&http, &s, &vault, channel).is_err());
+        vault
+            .change(
+                password(),
+                secret,
+                Some(Zeroizing::new(secret.to_owned())),
+                params,
+            )
+            .await
+            .unwrap();
+    }
+    assert_eq!(
+        build(&http, &s, &vault, Channel::Duty).unwrap().1,
+        ["-1001", "12"]
+    );
+    assert_eq!(
+        build(&http, &s, &vault, Channel::Daily).unwrap().1,
+        ["-2002"]
+    );
+    assert_eq!(roles::configured(&s), vec![Role::General]);
+    assert_eq!(roles::mirror_role(&s), Role::General);
+    assert!(!roles::is_role_chat(&s, "-1001"));
+    assert!(!roles::is_role_chat(&s, "-2002"));
+    set(&s, "telegram.daily_chat_ids", json!([])).await;
+    assert!(build(&http, &s, &vault, Channel::Daily).is_err());
+    assert!(build(&http, &s, &vault, Channel::Duty).is_ok());
+    vault.lock();
+    assert!(build(&http, &s, &vault, Channel::Duty).is_err());
+}
+
 /// Ядро без площадок: чаты «Общий» 100 и «Управление» 200.
 async fn core(name: &str) -> Core {
     let (d, db, journal, settings, changes) = store(name).await;

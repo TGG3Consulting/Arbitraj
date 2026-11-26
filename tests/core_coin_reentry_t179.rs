@@ -601,6 +601,7 @@ async fn started_returns_reserved_until_done() {
     n.usdt_return = Some(UsdtReturn::NotReturned {
         amount: d("7"),
         at: bingx.clone(),
+        result_at_failure: None,
         why: "тест".into(),
     });
     arb::core::ledger::save(&core, &n).await;
@@ -924,6 +925,7 @@ async fn accepted_withdrawal_survives_restart() {
     n.usdt_return = Some(UsdtReturn::NotReturned {
         amount: d("70"),
         at: bingx.clone(),
+        result_at_failure: None,
         why: "тест".into(),
     });
     arb::core::ledger::save(&core, &n).await;
@@ -1686,6 +1688,7 @@ fn group_return_middle_piece_fails_exact_rest() {
         Some(UsdtReturn::NotReturned {
             amount: total - p1,
             at: from.clone(),
+            result_at_failure: Some(d("1") - fee),
             why: "кусок 2 из 3 не дошёл".into()
         })
     );

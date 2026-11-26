@@ -43,6 +43,9 @@ pub struct StuckAlert {
     pub qty: Decimal,
     /// Убыток при продаже по рынку сейчас, %; None — котировки продажи нет (решение 100: продажа не прошла).
     pub loss_pct: Option<Decimal>,
+    /// Тот же снимок продажи, убыток в USDT до округления процента. Старые записи хранят только процент.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loss_usdt: Option<Decimal>,
     /// Почему ждём человека: «убыток выше порога» или «продажа не прошла: …» (решение 100).
     #[serde(default)]
     pub reason: Option<String>,

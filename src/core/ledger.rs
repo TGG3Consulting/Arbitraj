@@ -28,7 +28,7 @@ use super::limits::Exposure;
 use super::view::CoreEvent;
 
 /// Вид записи в учёте ядра.
-pub(super) const KIND: &str = "deal";
+pub(crate) const KIND: &str = "deal";
 
 /// Пересчитывает деньги в открытых сделках по всем сделкам в памяти.
 pub(super) fn recompute_exposure(core: &Core) {
@@ -88,6 +88,7 @@ pub async fn save(core: &Core, deal: &Deal) {
     if let Ok(v) = serde_json::to_value(rec) {
         core.inner.live.send(CoreEvent::Deal(v));
     }
+    core.inner.duty.saved(core, rec);
     super::feed_hold::on_saved(core, rec); // Решение 196: сделка закрылась — снять поток выключенной площадки.
     // Решение 489: сеть выключенной площадки DEX захвачена этой сделкой или отпущена — один толчок (net_hold.rs).
     super::net_hold::on_saved(core, rec);

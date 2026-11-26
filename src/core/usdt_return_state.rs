@@ -49,6 +49,9 @@ pub enum UsdtReturn {
     },
     /// Не вернулись и бот сам не вернёт: сумма, где лежат, почему. Нужен перегон человеком.
     NotReturned {
+        /// Фактический итог сделки на момент отказа этой части. Старые записи не содержат снимка.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        result_at_failure: Option<Decimal>,
         amount: Decimal,
         at: VenueId,
         why: String,
@@ -166,6 +169,7 @@ pub async fn mark_not_returned(core: &Core, deal: &str, amount: Decimal, at: &Ve
     let state = UsdtReturn::NotReturned {
         amount,
         at: at.clone(),
+        result_at_failure: None,
         why: why.to_string(),
     };
     set(core, deal, state, &text).await;
@@ -189,6 +193,7 @@ pub async fn on_restart(core: &Core, d: &mut Deal) -> bool {
         let state = UsdtReturn::NotReturned {
             amount: *amount,
             at: from.clone(),
+            result_at_failure: None,
             why: why.to_string(),
         };
         super::usdt_return_parts::put(d, state);

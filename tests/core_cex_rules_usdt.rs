@@ -141,6 +141,7 @@ async fn manual_retry_rechecks_rule() {
     x.usdt_return = Some(UsdtReturn::NotReturned {
         amount: Decimal::new(8310, 2),
         at: VenueId("mexc".into()),
+        result_at_failure: None,
         why: "перегон не состоялся".into(),
     });
     arb::core::ledger::save(&core, &x).await;

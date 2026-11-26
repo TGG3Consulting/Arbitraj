@@ -60,6 +60,8 @@ pub struct Place {
 /// Слепок: площадки; problem — слепок не снят (причина).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Snapshot {
+    /// Для автоотчёта — последние ответы панели, с временем каждого измерения.
+    pub cached: bool,
     pub places: Vec<Place>,
     pub problem: Option<String>,
 }
@@ -116,6 +118,7 @@ pub async fn gather(core: &Core) -> Snapshot {
         Ok(v) => v,
         Err(e) => {
             return Snapshot {
+                cached: false,
                 places: vec![],
                 problem: Some(format!("слепок не снят: {}", e.message)),
             };
@@ -142,6 +145,7 @@ pub async fn gather(core: &Core) -> Snapshot {
     out.push(super::snap_transit::transit(core, &all, &held, &mut used, deadline).await);
     out.extend(super::snap_transit::orphans(&held, &used));
     Snapshot {
+        cached: false,
         places: out,
         problem: None,
     }

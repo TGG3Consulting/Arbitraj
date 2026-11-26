@@ -219,6 +219,7 @@ pub(super) async fn not_returned(
     let state = UsdtReturn::NotReturned {
         amount,
         at: from.clone(),
+        result_at_failure: None,
         why: why.to_string(),
     };
     super::usdt_return_parts::put(deal, state);

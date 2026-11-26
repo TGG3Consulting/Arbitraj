@@ -157,6 +157,7 @@ fn foreign(holders: Vec<String>) -> StuckAlert {
         },
         qty: Decimal::new(1234, 2),
         loss_pct: None,
+        loss_usdt: None,
         reason: Some("Своих монет на счёте не видно".into()),
         at: Utc::now(),
         error: None,

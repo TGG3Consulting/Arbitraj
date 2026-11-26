@@ -21,6 +21,7 @@
 //! missed_xlsx.rs, missed_total.rs, sig_*.rs, core/signals_src.rs, cap_*.rs.
 //! Настройки: нет (решение 256: потолки uncapped.ladder_usdt — через Core::uncapped_report).
 
+pub(crate) mod archive;
 pub mod cap_addr;
 pub mod cap_capital;
 pub mod cap_deals;
@@ -69,6 +70,7 @@ pub mod sig_stream;
 pub mod sig_summary;
 pub mod sig_xlsx;
 pub mod snap;
+pub(crate) mod snap_cached;
 pub mod snap_cex;
 pub mod snap_dex;
 pub mod snap_price;
@@ -129,6 +131,28 @@ pub async fn missed_file(
         .uncapped_report(from, to)
         .await
         .map_err(|e| format!("отчёт «Упущено»: записи не прочитаны: {e}"))?;
+    missed_bytes(std::sync::Arc::new(data), from, to, now).await
+}
+
+/// Сборка «Упущено» из общего архива суточной серии.
+pub(crate) async fn missed_file_archive(
+    core: &Core,
+    archive: &archive::Archive,
+    from: Option<DateTime<Utc>>,
+    to: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> Result<Vec<u8>, String> {
+    let data = archive.missed(core, from, to).await?;
+    missed_bytes(data, from, to, now).await
+}
+
+/// Записывает книгу на отдельном потоке по готовым данным периода.
+async fn missed_bytes(
+    data: std::sync::Arc<MissedData>,
+    from: Option<DateTime<Utc>>,
+    to: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> Result<Vec<u8>, String> {
     tokio::task::spawn_blocking(move || missed(&data, from, to, now))
         .await
         .map_err(|e| format!("отчёт: задача сборки прервана: {e}"))?
@@ -148,7 +172,7 @@ pub async fn signals_send<F, Fut>(
     period: String,
     now: DateTime<Utc>,
     max: usize,
-    mut send: F,
+    send: F,
 ) -> Result<usize, String>
 where
     F: FnMut(sig_parts::File) -> Fut,
@@ -158,6 +182,45 @@ where
         .signals_src(now)
         .await
         .map_err(|e| format!("отчёт «Сигналы и сделки»: {e}"))?;
+    signals_from_src(src, from, to, period, now, max, send).await
+}
+
+/// Сигналы из отдельного читателя SQLite и сохранённых сделок суточной серии.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn signals_send_archive<F, Fut>(
+    core: &Core,
+    archive: &archive::Archive,
+    from: Option<DateTime<Utc>>,
+    to: Option<DateTime<Utc>>,
+    period: String,
+    now: DateTime<Utc>,
+    max: usize,
+    send: F,
+) -> Result<usize, String>
+where
+    F: FnMut(sig_parts::File) -> Fut,
+    Fut: std::future::Future<Output = Result<(), String>>,
+{
+    let src = core
+        .signals_src_archive(&archive.db, archive.deals.clone(), from, to, now)
+        .await?;
+    signals_from_src(src, from, to, period, now, max, send).await
+}
+
+/// Потоковая сборка и передача книг из готовых исходных строк.
+async fn signals_from_src<F, Fut>(
+    src: crate::core::signals_src::SignalsSrc,
+    from: Option<DateTime<Utc>>,
+    to: Option<DateTime<Utc>>,
+    period: String,
+    now: DateTime<Utc>,
+    max: usize,
+    mut send: F,
+) -> Result<usize, String>
+where
+    F: FnMut(sig_parts::File) -> Fut,
+    Fut: std::future::Future<Output = Result<(), String>>,
+{
     let (tx, mut rx) = tokio::sync::mpsc::channel::<sig_parts::File>(1);
     let job = tokio::task::spawn_blocking(move || {
         let notes = sig_notes::notes(&src, &period);

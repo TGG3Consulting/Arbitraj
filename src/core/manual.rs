@@ -116,8 +116,33 @@ pub async fn raise_alert(
 /// «Открыть сделку <ID>» у записи в Telegram. Ошибок нет.
 pub async fn raise_alert_with(
     core: &Core,
+    deal: Deal,
+    loss_pct: Option<Decimal>,
+    reason: String,
+    error: Option<String>,
+    holders: Vec<String>,
+) {
+    Box::pin(raise(core, deal, loss_pct, None, reason, error, holders)).await
+}
+
+/// Алерт по котировке: уже учтённую в решении чистую выручку сохраняем как итог в USDT и процент.
+pub async fn raise_quoted(
+    core: &Core,
+    deal: Deal,
+    net: Option<Decimal>,
+    reason: String,
+    error: Option<String>,
+) {
+    let pct = net.map(|v| deal.loss_pct_if(v));
+    let usd = net.map(|v| -deal.result_if(v));
+    Box::pin(raise(core, deal, pct, usd, reason, error, Vec::new())).await
+}
+
+async fn raise(
+    core: &Core,
     mut deal: Deal,
     loss_pct: Option<Decimal>,
+    loss_usdt: Option<Decimal>,
     reason: String,
     error: Option<String>,
     holders: Vec<String>,
@@ -140,6 +165,7 @@ pub async fn raise_alert_with(
         asset: deal.direction.asset.clone(),
         qty: deal.qty,
         loss_pct,
+        loss_usdt,
         reason: Some(reason.clone()),
         at: prev.as_ref().map_or_else(Utc::now, |p| p.at),
         error,
@@ -164,6 +190,7 @@ pub async fn raise_alert_with(
         ));
     }
     super::ledger::save(core, &deal).await;
+    core.inner.duty.alert(core, &alert, &deal);
     if prev.is_some() {
         // Решение 177: запись та же — экран и сообщение Telegram обновятся по ней (notify/mirror*.rs), без дубля.
         lk(&core.inner.alerts).insert(alert.id.clone(), (alert, deal));

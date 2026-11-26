@@ -64,7 +64,7 @@ pub async fn load(core: &Core) {
             // задержала запуск — оценка сразу «цены нет».
             let est =
                 super::daily_value::estimate(&d, Err("перезапуск: рыночных данных ещё нет".into()));
-            let trip = super::daily::record(core, &mut d, est).await;
+            let trip = super::daily::record_stop(core, &mut d, est).await;
             super::daily_commit::announce(core, &trip).await;
             deps.log(Level::Warn, "core.ledger", Some(&d.at.0), &text, None)
                 .await;

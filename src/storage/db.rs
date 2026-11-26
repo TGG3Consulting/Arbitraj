@@ -12,7 +12,7 @@
 //! Миграции: новые столбцы старых таблиц — ADDED_COLUMNS (добавляются при открытии, если их нет).
 //! Настройки: путь к папке данных — аргумент запуска --data-dir (до старта настроек его взять негде).
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 
 use rusqlite::Connection;
@@ -130,6 +130,15 @@ CREATE TABLE IF NOT EXISTS dex_wallet_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS notify_duty_pending (
+    incident TEXT PRIMARY KEY,
+    body TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS notify_duty_sent (
+    incident TEXT NOT NULL,
+    chat TEXT NOT NULL,
+    PRIMARY KEY (incident, chat)
+);
 CREATE TABLE IF NOT EXISTS notify_mirror (
     key  TEXT PRIMARY KEY,
     body TEXT NOT NULL,
@@ -200,6 +209,7 @@ pub(super) type Rules = Arc<RwLock<Option<Vec<Rule>>>>;
 
 /// Содержимое Db: соединение основной базы и учёт ядра.
 struct Inner {
+    path: PathBuf,
     conn: Arc<Mutex<Connection>>,
     /// Решение 353: учёт ядра — свой файл и свой писатель (storage/ledger_db.rs).
     ledger: LedgerDb,
@@ -229,6 +239,7 @@ impl Db {
         let rules = Arc::new(RwLock::new(super::rules::read_all(&conn).ok()));
         Ok(Self {
             inner: Arc::new(Inner {
+                path: path.to_owned(),
                 conn: Arc::new(Mutex::new(conn)),
                 ledger,
                 rules,
@@ -273,12 +284,21 @@ impl Db {
         };
         Ok(Self {
             inner: Arc::new(Inner {
+                path: path.to_owned(),
                 conn,
                 ledger,
                 rules: Rules::default(),
                 journal: Arc::default(),
             }),
         })
+    }
+
+    /// Отдельные соединения чтения архива и учёта для фонового отчёта. Ошибки открытия передаются отчёту.
+    pub(crate) async fn report_reader(&self) -> Result<Self, DbError> {
+        let path = self.inner.path.clone();
+        tokio::task::spawn_blocking(move || Self::open_existing(&path, false))
+            .await
+            .map_err(|e| DbError::Join(e.to_string()))?
     }
 
     /// Очередь записи журнала базы (решение 341, storage/journal_queue.rs). Ошибок нет.

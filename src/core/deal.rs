@@ -106,6 +106,10 @@ pub struct Deal {
     /// None — не учитывался или уже заменён фактом.
     #[serde(default)]
     pub provisional_usd: Option<Decimal>,
+    /// Подтверждённый котировкой PnL при остановке. Повторная оценка дневного риска его не меняет.
+    /// None — исходная цена неизвестна или это запись до введения снимка.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duty_halted_pnl_usdt: Option<Decimal>,
     /// Решение 132: счёт (кошелёк) DEX сделки — по маппингу на момент открытия; все шаги сделки идут им, даже если
     /// маппинг потом поменяли. None — без DEX (биржа ↔ биржа) или сделка до решения 132 (тогда — кошелёк переноса).
     #[serde(default)]
@@ -215,6 +219,7 @@ impl Deal {
             return_cost_usd: None,
             closed_notice: None,
             provisional_usd: None,
+            duty_halted_pnl_usdt: None,
             dex_account: None,
             usdt_return: None,
             usdt_return_parts: vec![],

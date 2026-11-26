@@ -138,7 +138,7 @@ async fn relay_sold_here_close_starts_return_and_failure_alarms() {
     );
     // Площадок в реестре нет — перегон не состоялся: «не вернулись», где лежат и сколько.
     match wait_not_returned(&core, "t1TWT").await {
-        Some(UsdtReturn::NotReturned { amount, at, why }) => {
+        Some(UsdtReturn::NotReturned { amount, at, why, .. }) => {
             assert_eq!(amount, Decimal::new(2469, 2));
             assert_eq!(at, VenueId("bsc_dex".into()));
             assert!(why.contains("перегон не состоялся"), "{why}");
@@ -177,7 +177,7 @@ async fn sold_manually_elsewhere_alarms_without_relay() {
     let d = core.deals().into_iter().find(|d| d.id == "t2WKC").unwrap();
     assert_eq!(d.step, Step::Closed);
     match d.usdt_return {
-        Some(UsdtReturn::NotReturned { amount, at, why }) => {
+        Some(UsdtReturn::NotReturned { amount, at, why, .. }) => {
             assert_eq!(amount, Decimal::new(4474, 2));
             assert_eq!(at, VenueId("mexc".into()));
             assert!(why.contains("решение 100"), "{why}");

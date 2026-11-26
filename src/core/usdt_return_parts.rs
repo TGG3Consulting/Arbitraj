@@ -63,7 +63,21 @@ pub fn get<'a>(d: &'a Deal, at: Option<&VenueId>) -> Option<&'a UsdtReturn> {
 
 /// Ставит состояние части (по её площадке): заменяет часть с той же площадкой, иначе — первой (если её нет) или
 /// новой остальной. Принимает: сделку, состояние. Ошибок нет.
-pub fn put(d: &mut Deal, state: UsdtReturn) {
+pub fn put(d: &mut Deal, mut state: UsdtReturn) {
+    // Переход части в ручной разбор. Позднейшие комиссии других частей изменят итог сделки.
+    if let UsdtReturn::NotReturned {
+        at,
+        result_at_failure,
+        ..
+    } = &mut state
+    {
+        *result_at_failure = d.result_usd.map(|result| {
+            // При составном возврате уже дошедшие куски могут ждать применения к result_usd.
+            let old_cost = get(d, Some(at)).and_then(super::deal_return_cost::part_cost);
+            let known = super::deal_return_cost::known(d) - old_cost.unwrap_or_default();
+            result - (known - d.return_cost_usd.unwrap_or_default())
+        });
+    }
     let v = state.venue().clone();
     match &d.usdt_return {
         None => d.usdt_return = Some(state),

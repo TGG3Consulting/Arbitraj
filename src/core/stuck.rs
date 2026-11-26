@@ -250,14 +250,14 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
                     }
                     HereOk::Sold | HereOk::Gone => return,
                 };
-            let (loss, why) = over_max(&d, Some(v), max);
-            return Box::pin(super::manual::raise_alert(core, d, loss, why, None)).await;
+            let (_, why) = over_max(&d, Some(v), max);
+            return Box::pin(super::manual::raise_quoted(core, d, Some(v), why, None)).await;
         }
         let why = h::loss_vs_max(loss, max, false);
-        return Box::pin(super::manual::raise_alert(
+        return Box::pin(super::manual::raise_quoted(
             core,
             deal,
-            Some(loss),
+            Some(value),
             why,
             None,
         ))

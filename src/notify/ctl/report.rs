@@ -31,7 +31,7 @@ use super::super::tg_buttons::{CallbackQuery, CbMessage};
 use super::kb::{Screen, btn};
 
 /// Отчёты: код, название, префикс файла.
-const REPORTS: [(&str, &str, &str); 4] = [
+pub(crate) const REPORTS: [(&str, &str, &str); 4] = [
     ("res", "Итоги сделок", "arb_results"),
     ("mis", "Упущено", "arb_missed"),
     // Решение 255: свои периоды и ввод своего интервала — report_sig.rs.

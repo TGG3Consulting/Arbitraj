@@ -114,7 +114,9 @@ fn of_deal(d: &Deal, venue: &VenueId) -> Vec<Line> {
                 let w = format!("{r}: перегон выручки на {} ждёт повтора ({why})", to(t));
                 out.push(line(*amount, &w, false));
             }
-            UsdtReturn::NotReturned { amount, at, why } if at == venue => {
+            UsdtReturn::NotReturned {
+                amount, at, why, ..
+            } if at == venue => {
                 let w = format!(
                     "{r}: выручка не вернулась на {} ({why}) — ждёт кнопки «Перегнать» или «Перегнано вручную»",
                     to(&d.direction.buy_on)

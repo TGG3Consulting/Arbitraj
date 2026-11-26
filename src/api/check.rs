@@ -38,6 +38,14 @@ pub async fn telegram_role(
 ) -> Json<ConnectionCheck> {
     let res = match notify::roles::Role::from_code(&role) {
         Some(r) => notify::check::role(&st.http, &st.settings, &st.vault, r, true).await,
+        None if matches!(role.as_str(), "duty" | "daily") => {
+            let channel = if role == "duty" {
+                notify::outbound::Channel::Duty
+            } else {
+                notify::outbound::Channel::Daily
+            };
+            notify::outbound::check(&st.http, &st.settings, &st.vault, channel).await
+        }
         None => ConnectionCheck {
             ok: false,
             details: format!("Неизвестная роль чата «{role}»"),

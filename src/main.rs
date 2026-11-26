@@ -412,6 +412,12 @@ async fn run() -> Result<(), String> {
                 .collect(),
         ),
     ));
+    tokio::spawn(arb::notify::duty::run(core.clone(), notifier.clone()));
+    tokio::spawn(arb::notify::daily::run(
+        core.clone(),
+        http.clone(),
+        vault.clone(),
+    ));
     tokio::spawn(arb::notify::updates::run(
         arb::notify::updates::Updates {
             http: http.clone(),

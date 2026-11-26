@@ -85,6 +85,7 @@ pub fn part(kind: &str, from: &str, to: &str) -> UsdtReturn {
         "not_returned" => UsdtReturn::NotReturned {
             amount,
             at: from,
+            result_at_failure: None,
             why: "тест".into(),
         },
         _ => panic!("состояние части {kind}"),

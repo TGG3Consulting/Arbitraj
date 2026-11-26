@@ -36,6 +36,7 @@ pub struct Inner {
     pub deps: Deps,
     pub settlement: super::settlement_unit::Book,
     pub live: Live,
+    pub(crate) duty: crate::notify::duty::Bus,
     pub market: RwLock<MarketState>,
     /// Справочник сетей каждой биржи (последний успешный coin_networks).
     pub networks: RwLock<super::registry_build::Networks>,
@@ -256,6 +257,7 @@ impl Inner {
         Inner {
             settlement: Default::default(),
             live: Live::new(deps.buffer),
+            duty: Default::default(),
             busy_calc: super::busy_calc::State::new(deps.buffer),
             cand_wait: Default::default(),
             deps,

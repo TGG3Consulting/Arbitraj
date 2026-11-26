@@ -108,6 +108,7 @@ fn stuck_after_sell_refusal() {
         asset: pig().direction.asset,
         qty: d("7065220091"),
         loss_pct: Some(d("-2.03")),
+        loss_usdt: None,
         reason: Some(format!("продажа не прошла: {PIG_ERR}")),
         at: Utc.with_ymd_and_hms(2026, 11, 9, 20, 40, 0).unwrap(),
         error: Some(PIG_ERR.into()),

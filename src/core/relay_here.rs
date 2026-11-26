@@ -142,6 +142,7 @@ pub async fn sell_here_as(core: &Core, deal: Deal, why: &str, profit_first: bool
                 }
             }
         }
+        let net = value.as_ref().ok().copied();
         match (decide(&deal, why, max.clone(), value), cap) {
             // «417 (ожидание)»: порог перепроверяется на котировке под ходом очереди (sell_here_ok.rs); выше порога
             // или котировки нет — алерт с убытком по котировке под ходом (stuck::over_max).
@@ -162,16 +163,16 @@ pub async fn sell_here_as(core: &Core, deal: Deal, why: &str, profit_first: bool
                     HereOk::NotNow(d, v) => (*d, v.map(|x| x.0)),
                     HereOk::Sold | HereOk::Gone => return,
                 };
-                let (loss, w) = super::stuck::over_max(&d, v, m);
+                let (_, w) = super::stuck::over_max(&d, v, m);
                 let why = format!("{why}; {w} ({SETTING})");
-                return Box::pin(super::manual::raise_alert(core, d, loss, why, None)).await;
+                return Box::pin(super::manual::raise_quoted(core, d, v, why, None)).await;
             }
             // Market без порога decide не возвращает (Market — только при заданном пороге); ветка — для полноты.
             (Here::Market(text), None) => {
                 return Box::pin(super::stuck::sold_by_market(core, deal, &text, Guard::Off)).await;
             }
-            (Here::Alert { loss, why }, _) => {
-                return Box::pin(super::manual::raise_alert(core, deal, loss, why, None)).await;
+            (Here::Alert { why, .. }, _) => {
+                return Box::pin(super::manual::raise_quoted(core, deal, net, why, None)).await;
             }
         }
     }

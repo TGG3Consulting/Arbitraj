@@ -11,6 +11,7 @@ pub mod dex_key;
 pub mod hint;
 pub mod history;
 pub mod live;
+pub mod outbound;
 pub mod pinned;
 pub mod read;
 pub mod read_scope;

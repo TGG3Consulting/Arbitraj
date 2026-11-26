@@ -167,8 +167,8 @@ pub async fn retry(core: &Core, mut deal: Deal, e: &OpError, why: &str, rule: Ru
                     super::sell_here_ok::HereOk::NotNow(d, v) => (*d, v.map(|x| x.0)),
                     _ => return,
                 };
-            let (loss, w) = super::stuck::over_max(&d, v, m);
-            Box::pin(super::manual::raise_alert(core, d, loss, w, None)).await
+            let (_, w) = super::stuck::over_max(&d, v, m);
+            Box::pin(super::manual::raise_quoted(core, d, v, w, None)).await
         }
         Rule::NoThreshold => {
             Box::pin(super::sell::market_guarded(core, deal, why, Guard::Off)).await

@@ -58,6 +58,21 @@ impl Core {
             .map(Duration::from_millis)
     }
 
+    /// Последний ответ панели без обновления и обращения к бирже.
+    pub(crate) fn cached_venue_balances(&self, venue: &VenueId) -> Option<VenueView> {
+        lk(&self.inner.bal_cache.venues).get(&venue.0).cloned()
+    }
+
+    pub(crate) fn cached_wallet_balances(
+        &self,
+        venue: &VenueId,
+        wallet: &str,
+    ) -> Option<WalletView> {
+        lk(&self.inner.bal_cache.wallets)
+            .get(&(venue.clone(), wallet.to_owned()))
+            .cloned()
+    }
+
     /// Балансы всех счетов биржи: из памяти, если ответу не больше max_age, иначе — запрос к бирже (и в память).
     /// Принимает: биржу, допустимый возраст (None — всегда запрос). Возвращает: ответ (сбой биржи — в поле error).
     /// Ошибки: площадки нет или это не биржа.

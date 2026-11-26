@@ -20,7 +20,7 @@ use crate::core::deal::Deal;
 use crate::core::types::{TapDecoded, VenueId};
 use crate::gateway::contract::{Venue, VenueKind};
 use crate::gateway::tap::{TapData, TapStream};
-use crate::storage::{episodes_db, windows_db};
+use crate::storage::{db::Db, episodes_db, signals_archive, windows_db};
 
 use super::engine::{Core, lk, rd};
 use super::episode::EpisodeInfo;
@@ -54,40 +54,125 @@ pub struct SignalsSrc {
     pub now: DateTime<Utc>,
 }
 
+/// Читатель и границы автоматической выгрузки, включая учёт для привязки сделок к окнам.
+struct ArchivePeriod<'a> {
+    db: &'a Db,
+    deals: Arc<Vec<Deal>>,
+    from: Option<DateTime<Utc>>,
+    to: Option<DateTime<Utc>>,
+}
+
 impl Core {
-    /// Что делает: собирает исходные данные отчёта «Сигналы и сделки» (см. шапку). Принимает: время выгрузки.
-    /// Возвращает: SignalsSrc. Ошибки: текст — база не прочитана.
+    /// Общий источник ручного отчёта; старые и открытые сводки читаются по прежним правилам.
     pub async fn signals_src(&self, now: DateTime<Utc>) -> Result<SignalsSrc, String> {
+        self.signals_from(now, None).await
+    }
+
+    /// Суточная выборка сохраняет окна привязки сделок по обе стороны полуночи и эпизоды до фактического конца окна.
+    pub(crate) async fn signals_src_archive(
+        &self,
+        db: &Db,
+        deals: Arc<Vec<Deal>>,
+        from: Option<DateTime<Utc>>,
+        to: Option<DateTime<Utc>>,
+        now: DateTime<Utc>,
+    ) -> Result<SignalsSrc, String> {
+        self.signals_from(
+            now,
+            Some(ArchivePeriod {
+                db,
+                deals,
+                from,
+                to,
+            }),
+        )
+        .await
+    }
+
+    /// Общее наложение открытых сводок. Разбор архива выполняется в блокирующем потоке.
+    async fn signals_from(
+        &self,
+        now: DateTime<Utc>,
+        archive: Option<ArchivePeriod<'_>>,
+    ) -> Result<SignalsSrc, String> {
         let db = &self.inner.deps.db;
-        let wrows = windows_db::oldest_first(db)
-            .await
-            .map_err(|e| format!("окна: {e}"))?;
-        let erows = episodes_db::oldest_first(db)
-            .await
-            .map_err(|e| format!("эпизоды: {e}"))?;
+        let wrows = match &archive {
+            Some(a) => signals_archive::windows(a.db, a.from, a.to).await,
+            None => windows_db::oldest_first(db).await,
+        }
+        .map_err(|e| format!("окна: {e}"))?;
         let open_w = lk(&self.inner.windows).list();
         let open_e = lk(&self.inner.episodes).list();
-        let windows: Vec<WindowInfo> = wrows
-            .iter()
-            .filter_map(|b| serde_json::from_str::<WindowInfo>(b).ok())
-            .map(|w| match open_w.iter().find(|o| o.id == w.id) {
-                // Открытое: направления, площадки и прибыль — из памяти (сводка в базе — с последнего сохранения).
-                Some(o) => WindowInfo {
-                    directions: o.directions.clone(),
-                    venues: o.venues.clone(),
-                    queue_traces: o.queue_traces.clone(),
-                    max_profit: o.max_profit,
-                    dex_points: o.dex_points.max(w.dex_points),
-                    ..w
-                },
-                None => w,
-            })
-            .collect();
-        let episodes: Vec<EpisodeInfo> = erows
-            .iter()
-            .filter_map(|b| serde_json::from_str::<EpisodeInfo>(b).ok())
-            .map(|e| open_e.iter().find(|o| o.id == e.id).cloned().unwrap_or(e))
-            .collect();
+        let windows = tokio::task::spawn_blocking(move || {
+            wrows
+                .into_iter()
+                .filter_map(|b| serde_json::from_str::<WindowInfo>(&b).ok())
+                .map(|w| match open_w.iter().find(|o| o.id == w.id) {
+                    Some(o) => WindowInfo {
+                        directions: o.directions.clone(),
+                        venues: o.venues.clone(),
+                        queue_traces: o.queue_traces.clone(),
+                        max_profit: o.max_profit,
+                        dex_points: o.dex_points.max(w.dex_points),
+                        ..w
+                    },
+                    None => w,
+                })
+                .collect::<Vec<_>>()
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+        let from = archive.as_ref().and_then(|a| a.from);
+        let mut through = archive.as_ref().and_then(|a| a.to).unwrap_or(now);
+        let mut explicit = std::collections::HashSet::new();
+        let erows = match &archive {
+            Some(a) => {
+                let mut span: Option<(DateTime<Utc>, DateTime<Utc>)> = None;
+                for w in &windows {
+                    if from.is_none_or(|f| w.started_at >= f)
+                        && a.to.is_none_or(|t| w.started_at < t)
+                    {
+                        let end = w.ended_at.unwrap_or(now);
+                        span = Some(span.map_or((w.started_at, end), |(a, b)| {
+                            (a.min(w.started_at), b.max(end))
+                        }));
+                        explicit.extend(w.deals.iter().map(|d| d.id.clone()));
+                    }
+                }
+                match span {
+                    Some((first, last)) => {
+                        through = through.max(last);
+                        signals_archive::episodes(a.db, first, last).await
+                    }
+                    None => Ok(vec![]),
+                }
+            }
+            None => episodes_db::oldest_first(db).await,
+        }
+        .map_err(|e| format!("эпизоды: {e}"))?;
+        let archived = archive.map(|a| a.deals);
+        let core = self.clone();
+        let (episodes, deals) = tokio::task::spawn_blocking(move || {
+            let episodes = erows
+                .into_iter()
+                .filter_map(|b| serde_json::from_str::<EpisodeInfo>(&b).ok())
+                .map(|e| open_e.iter().find(|o| o.id == e.id).cloned().unwrap_or(e))
+                .collect();
+            let deals = match archived {
+                Some(deals) => deals
+                    .iter()
+                    .filter(|d| {
+                        explicit.contains(&d.id)
+                            || (from.is_none_or(|f| d.started_at >= f) && d.started_at <= through)
+                    })
+                    .cloned()
+                    .collect(),
+                None => core.deals(),
+            };
+            (episodes, deals)
+        })
+        .await
+        .map_err(|e| e.to_string())?;
         let kinds: HashMap<String, VenueKind> = rd(&self.inner.kinds)
             .iter()
             .map(|(v, k)| (v.0.clone(), *k))
@@ -113,7 +198,7 @@ impl Core {
         Ok(SignalsSrc {
             windows,
             episodes,
-            deals: self.deals(),
+            deals,
             kinds,
             decode: decoder(venues),
             window_dir: dir_of(&self.inner.window_files.path("x")),

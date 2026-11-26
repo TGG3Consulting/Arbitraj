@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT
+// Исполнение покупки и продажи на кривой Virtuals с проверкой привязки пары и роли роутера.
+// Библиотеку вызывает BasePmmExecutor. Экземпляр исполнителя развёртывает владелец кошелька.
 pragma solidity 0.8.37;
 
 interface IVirtualPair {
@@ -36,13 +38,18 @@ library BaseVirtuals {
     function open(address entry,address pool,address token) private view returns(bool) {
         // Verified tokenInfo getter on all three entry contracts. Only the fixed return prefix is needed.
         (bool ok,bytes memory out)=entry.staticcall(abi.encodeWithSignature("tokenInfo(address)",token));
-        if (!ok || out.length<416) return false;
+        if (!ok || out.length < (entry == BOND ? 416 : 544)) return false;
         address registered;address pair;uint256 trading;uint256 graduated;
         assembly ("memory-safe") {
             registered := mload(add(out,64))
             pair := mload(add(out,96))
             trading := mload(add(out,384))
             graduated := mload(add(out,416))
+        }
+        if (entry != BOND) {
+            uint256 launched;
+            assembly ("memory-safe") { launched := mload(add(out,544)) }
+            if (launched != 1) return false;
         }
         return registered==token && pair==pool && trading==1 && graduated==0;
     }

@@ -88,7 +88,8 @@ contract BasePmmExecutor {
             BaseVirtuals.swap(bonding,market,a,b,amount,minimum,deadline);
             uint256 paid=output.balanceOf(address(this))-heldOut;
             if(paid<minimum) revert InsufficientOutput();
-            checked(b,abi.encodeCall(output.transfer,(msg.sender,paid)));
+            promised = paid;
+            checked(b,abi.encodeCall(IBaseWrappedEther.transfer,(msg.sender,paid)));
         } else if (nativeV3) {
             BaseNativeV3.swap(spender, fee, a, b, amount, minimum, deadline, msg.sender);
         } else if (market == ELFOMO) {

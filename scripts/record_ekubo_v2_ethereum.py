@@ -64,6 +64,37 @@ def swap(event):
             "delta0":str(signed(d[52:68])), "delta1":str(signed(d[68:84]))}
 
 
+def tick_window(pid, state, spacing, tag):
+    """Actual Solidity V2 mappings are keyed first by PoolId and then by word/tick."""
+    def subtree(mapping):
+        return keccak(raw(pid)+mapping.to_bytes(32,"big"))
+    def hashed(value, tree):
+        return keccak((value % (1<<256)).to_bytes(32,"big")+tree)
+    def load(keys):
+        if not keys: return []
+        if len(keys)>40:
+            return sum((load(keys[i:i+40]) for i in range(0,len(keys),40)),[])
+        call="0x"+(keccak(text="sload()")[:4]+b"".join(keys)).hex()
+        try:
+            reply=raw(rpc(ARCHIVE,"eth_call",[{"to":CORE,"data":call},tag]))
+        except RuntimeError:
+            reply=b"".join(raw(rpc(ARCHIVE,"eth_getStorageAt",[CORE,"0x"+key.hex(),tag])) for key in keys)
+        if len(reply)!=32*len(keys):raise ValueError("invalid multi-slot response")
+        return [reply[i:i+32] for i in range(0,len(reply),32)]
+    if not spacing:return None
+    tick=signed(raw(state)[16:20])
+    word=lambda t:(t//spacing+89421695)//256
+    start=max(word(-88722835),word(tick)-3)
+    end=min(word(88722835),word(tick)+3)
+    words=list(range(start,end+1))
+    masks=load([hashed(w,subtree(7)) for w in words])
+    ticks=[(256*w+bit-89421695)*spacing for w,val in zip(words,masks) for bit in range(256)
+           if int.from_bytes(val)>>bit&1]
+    values=load([hashed(t,subtree(5)) for t in ticks])
+    return dict(range=[start,end], masks=["0x"+v.hex() for v in masks],
+                ticks=[[t,"0x"+v.hex()] for t,v in zip(ticks,values)])
+
+
 def market(pid, height, tag, sample):
     slot = "0x" + keccak(raw(pid)+(2).to_bytes(32, "big")).hex()
     state = rpc(ARCHIVE, "eth_getStorageAt", [CORE, slot, tag])
@@ -109,7 +140,8 @@ def market(pid, height, tag, sample):
             quotes.append(dict(direction=direction, amount=str(size),delta0=str(d0),delta1=str(d1),
                                full=(d1 if direction else d0)==size and (d0 if direction else d1)<0))
     return dict(id=pid, key=key, slot=slot, state=state, liquidity=str(int(state,16)>>128),
-                registration=event, quotes=quotes, swaps=len(sample))
+                registration=event, quotes=quotes, swaps=len(sample),
+                tick_window=tick_window(pid,state,key["tick_spacing"],tag))
 
 
 def collect():

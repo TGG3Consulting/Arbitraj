@@ -22,7 +22,7 @@ use std::str::FromStr;
 use alloy_primitives::{Address, Bytes};
 
 use crate::core::types::PoolRef;
-use crate::gateway::errors::GatewayResult;
+use crate::gateway::errors::{GatewayResult,ErrorCode};
 
 use super::super::ctx::Ctx;
 use super::super::node::call::{self, Piece};
@@ -398,8 +398,9 @@ async fn contracts(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> 
     probes.settle(&regs.split_off(n));
     let mut regs = regs.into_iter();
     let mut out = Vec::new();
+    let mut create_block=None;
     for (c, r) in cands.iter().zip(first) {
-        out.push(match r {
+        let mut verdict=match r {
             Err(v) => v,
             Ok((a, read, key)) => match regs.next() {
                 None => Verdict::Failed("нет ответа реестра".into()),
@@ -415,7 +416,21 @@ async fn contracts(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> 
                     },
                 },
             },
-        });
+        };
+        if c.family.variant==Variant::KewlV2 && let Verdict::Taken(f)=&verdict {
+            let block=match &create_block {
+                Some(at)=>at,
+                None=>create_block.insert(super::nami::block(ctx,"latest").await),
+            };
+            let checked=match block {
+                Ok(at)=>super::kewl::pair(ctx,c.family.id,f.reference.address(),(f.token0,f.token1),at).await,
+                Err(e)=>Err(e.clone()),
+            };
+            if let Err(e)=checked{
+                verdict=if e.code==ErrorCode::NotApplicable {Verdict::Rejected(e.message)} else {Verdict::Failed(e.message)};
+            }
+        }
+        out.push(verdict);
     }
     out
 }

@@ -153,7 +153,9 @@ pub(super) async fn option(
                 U256::from(1),
             ),
         };
-        if mode==RouteMode::Direct && super::router_pricing::is_native(&c.entry) {
+        if matches!(&execution.wire, super::v2_wallet_sim::Wire::Router02)
+            && super::router_pricing::is_native(&c.entry)
+        {
             super::router_pricing::checked(ctx, &c.entry, input, amount, head).await?;
         }
         let vista_value = if super::vista_pricing::is_vista(&c.entry) {
@@ -182,7 +184,7 @@ pub(super) async fn option(
         )
         .await?;
         if let Some(value) = vista_value {
-            Box::pin(super::vista_pricing::funded(
+            Box::pin(super::vista_cash::funded(
                 q, head, payer, value, &fill, i.gas,
             ))
             .await?;

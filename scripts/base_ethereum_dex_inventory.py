@@ -6,6 +6,7 @@
 import argparse
 import hashlib
 import gzip
+import gzip
 import json
 from pathlib import Path
 
@@ -136,6 +137,16 @@ def tables(network, snapshots, profiles):
                         f"состояние перед обменом, чистый выход и отказ при превышении минимума на единицу. Полных исполнений V5 {len(cases)*2}. "
                         + ("У пары WETH/0x7233… удержания различаются по входу: 250 и 2000 на 100 000. " if dex_id=="citadelswap" else "В единственной паре на этом блоке менее 0,18 USDC. ")
                         + f"[Фабрика, реестр и измерения](../{file})."])
+        kewl_file = "tests/data/first_run_dex_2026-11-26/kewlswap_base.json"
+        kewl = read(Path(kewl_file))
+        markets = kewl["execution"]["markets"]
+        done = sum(len(m.get("legs", [])) * 2 for m in markets)
+        out.extend(["", f"KEWLSwap · все {len(kewl['pools'])} зарегистрированные пары совпали с CREATE-адресами фабрики "
+                    f"для nonce от 1 до {kewl['origin']['account_nonce']-1}. Штатный роутер и фабрика находятся на одном прокси "
+                    "с разными обработчиками. На трёх парах V5 и роутер дали одинаковую выплату на двух объёмах в обе стороны. "
+                    f"Всего {done} измеренных ног, V5 дешевле роутера по газу для этих объёмов. Пара WETH/USDT имеет всего 1 микро-USDT "
+                    "в резерве, при покупке USDT выход округляется до нуля для любого конечного входа. "
+                    f"[Создание, роли, проверки кошелька и расход газа](../{kewl_file})."])
         diamond = "tests/data/first_run_dex_2026-11-26/diamondswap_base.json"
         proof = read(Path(diamond))
         liquid = sum(min(map(int, row["balances"])) > 0 for row in proof["markets"])
@@ -161,6 +172,33 @@ def tables(network, snapshots, profiles):
                     "обмена отдали меньше формулы из-за перевода токена: допуск использует штатную пробу и налог стороны пула. "
                     "У двух пар с крупными сохранёнными резервами V5 откатился на обоих объёмах. "
                     f"[Каталог и балансы](../tests/data/first_run_dex_2026-11-26/leetswap_base_directory.json.gz) · [Дельты и отказы](../{leet})."])
+        out.extend(["", "Классические пары Solidly используют проверенную математику Solidly V1 и шаг 3 исполнителя V5. "
+                    "Резервы, ERC-20 балансы пары, источник ставки, код фабрики и для прокси её активная реализация проверяются на одной канонической высоте. "
+                    "У пары с расхождением балансов обычная котировка от выделенного ей входа требует отдельного подтверждения. "
+                    "Таблица показывает число зарегистрированных пар, совпадение с текущим хешем создания и измеренные исполнения.",
+                    "", "| Профиль | Реестр / CREATE2 текущего шаблона / балансы = резервы | Ставка пары | Архив исполнения V5 |",
+                    "|---|---:|---|---|"])
+        for classic_id in ("hydrex-classic","velocimeter-base","baso-finance","archly-base","archly-v1-base","equalizer-base","infusion"):
+            directory_file = Path(f"tests/data/first_run_dex_2026-11-26/base_classic_registry_{classic_id}.json.gz")
+            wallets_file = Path(f"tests/data/first_run_dex_2026-11-26/base_classic_wallets_{classic_id}.json.gz")
+            with gzip.open(directory_file,"rt",encoding="utf8") as fh:
+                directory = json.load(fh)
+            with gzip.open(wallets_file,"rt",encoding="utf8") as fh:
+                wallets = json.load(fh)
+            registered=directory["markets"]
+            old=sum(not m["current_init"] for m in registered)
+            aligned=sum(m["balances"]==m["reserves"] for m in registered)
+            owner="пара" if directory["fee_source"]=="pool" else "фабрика"
+            curves=", ".join("stable" if m["stable"] else "volatile" for m in wallets["markets"])
+            fills=2*sum(len(m["cases"]) for m in wallets["markets"])
+            out.append(f"| {classic_id} | {len(registered)} / {len(registered)-old} / {aligned} | {owner} `{directory['fee_method']}`, "
+                       f"делитель {directory['denominator']} | {curves}, {fills} обменов и столько же отказов при minOut + 1. "
+                       f"[Реестр](../{directory_file.as_posix()}) · [Кошельки](../{wallets_file.as_posix()}) |")
+        out.extend(["", "На Base Archly v1 и v2 имеют отдельные фабрики. Справочник индексатора выбрал пару из v2, "
+                    "обе версии включены через родителя archly-base. Источник Hydrex Classic — getFee() самой пары, "
+                    "индивидуальная ненулевая ставка имеет приоритет над общим тарифом фабрики. У Equalizer ставки могут иметь 18 знаков после запятой. "
+                    "Адреса прошлых поколений без подтверждённого шаблона и пары с активным внешним менеджером комиссии требуют отдельной приёмки. "
+                    "[Размещения Archly](https://docs.archly.fi/security) · [Архивы GitHub](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45901979616)."])
         oasis_file = "tests/data/first_run_dex_2026-11-26/oasisswap_base.json"
         oasis_v5_file = "tests/data/first_run_dex_2026-11-26/oasisswap_v5_base.json"
         oasis, oasis_v5 = read(Path(oasis_file)), read(Path(oasis_v5_file))

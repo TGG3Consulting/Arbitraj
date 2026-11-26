@@ -123,6 +123,10 @@ pub async fn out_at(
     amount: U256,
     block: &str,
 ) -> GatewayResult<U256> {
+    if let crate::core::types::PoolState::CandySwap(state)=&e.pool.state
+        && state.reserves!=state.balances {
+        return Box::pin(super::candy_wallet::quote(ctx,e,state,token_in,amount,block)).await;
+    }
     let limit = ctx.dec("dex.quoter_max_diff_pct")?;
     let number = match block.strip_prefix("0x") {
         Some(h) => u64::from_str_radix(h, 16)
@@ -145,13 +149,6 @@ pub async fn out_at(
     let (code, why) = match judge(&r, token_in == e.pool.token0, amount, ratio, limit) {
         Sim::Ok { remote, .. } => {
             if let crate::core::types::PoolState::CandySwap(state)=&e.pool.state {
-                // У тестового финансирования sync() убирает излишек баланса; восстанавливаем
-                // реальный вход по резервам первоначального, неизменённого блока.
-                let i=usize::from(token_in!=e.pool.token0);
-                if state.balances[i]!=state.reserves[i] {
-                    return super::super::math::candy::funded(state,i==0,ratio,true,amount)
-                        .map(|(v,_)|v.amount_out).ok_or_else(||ctx.err(ErrorCode::NoRoute,"CandySwap: остаток пары и объём не обеспечивают выплату"));
-                }
                 return super::super::math::candy::net(remote,state.payout_bps)
                     .filter(|v|!v.is_zero()).ok_or_else(||ctx.err(ErrorCode::NoRoute,"CandySwap: вся выплата удержана"));
             }

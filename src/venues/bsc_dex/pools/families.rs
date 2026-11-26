@@ -448,7 +448,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
-        "v2_fork" | "v2_diamond_router" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_whiteswap" => {
+        "v2_fork" | "v2_diamond_router" | "v2_diamond_create" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_whiteswap" => {
             (PoolKind::V2, Proto::V2, true, true, true)
         }
         // V2-форк без известного роутера (решение 280): в графе и сигналах как v2_fork (V2-математика, своя комиссия
@@ -818,7 +818,8 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             if f.variant == Variant::WhiteSwap {
                 list.extend(["dex.proxy_implementations", "dex.proxy_runtime_hashes"]);
             }
-            if f.variant == Variant::DiamondV2 {
+            if f.variant == Variant::KewlV2 { list.push("dex.pair_runtime_hash"); }
+            if f.variant.diamond_router() {
                 list.extend(["dex.factory_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes"]);
             }
             if f.variant.live_v2_fee() {
@@ -827,7 +828,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             // Роутер — только у вида со своим путём исполнения (PancakeSwap/Uniswap V2, v2_fork: сверка getAmountsOut и
             // обмен роутером форка). v2_fork_executor (решение 280, tradable=false) роутера не имеет: сверка и обмен —
             // через контракт-исполнитель (quote/v2_pair_quote.rs).
-            if f.tradable && !matches!(f.variant, Variant::WhiteSwap | Variant::DiamondV2) {
+            if f.tradable && !matches!(f.variant, Variant::WhiteSwap | Variant::DiamondV2 | Variant::KewlV2) {
                 list.push("dex.router");
             }
             match ctx.dex_text("dex.v2_fee_source", f.id).as_deref() {

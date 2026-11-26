@@ -2300,7 +2300,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Появилась:** 2026-11-14, коммит a14d5711.
 - **Кейс:** DECISIONS 273 (2026-11-14): «… Факт цепи:** у usdfi, veplus, magicfox (вид solidly_v1: getPair(a,b,bool), PairCreated, Sync/Swap, математика THENA V1 — совместимы) фабрики откатывают getFee(bool) и getFee(address,bool) — пулы не читались. **Решено:** новые настройки [DEX] — `dex.solidly_fee_source` (factory_pool / factory_stable / pool / factory_by_type; НЕОБЯЗАТЕЛЬНАЯ: не задана — источник по виду пула и …»
 - **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (вид пула или DEX); каталог src/settings/catalog/dex.rs:195.
-- **Что ставить:** совета нет, решает Тигран
+- **Что ставить:** совета нет, решает Тигран На Base у Hydrex Classic 100000, у Equalizer 1000000000000000000, у Baso, обеих Archly, Infusion и Velocimeter 10000. Бот хранит и применяет обе части дроби как u64 с целочисленным округлением при вычитании комиссии.
 - **Если не задана:** в каталоге без .optional() — интерфейс показывает её как «не задано»; чтение без значения — ошибка «Не задана настройка … — задайте её в интерфейсе» (src/settings/read.rs:24-29). По коду: нужна только при dex.solidly_fee_source и правиле numerator: тогда DEX «не подключена: не задана dex.solidly_fee_denominator» (src/venues/bsc_dex/pools/families.rs:571-576, 478-485); источник не задан — делитель из fee_denominator(), как до решения 273 (pools/solidly_fee_read.rs:118-122)
 - **Влияет на торговлю:** да — расчёт: комиссия пулов Solidly (pools/solidly_fee_read.rs).
 - **Связанные ключи:** dex.solidly_fee_rule.
@@ -2312,7 +2312,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Появилась:** 2026-11-14, коммит a14d5711.
 - **Кейс:** DECISIONS 273 (2026-11-14): «… Факт цепи:** у usdfi, veplus, magicfox (вид solidly_v1: getPair(a,b,bool), PairCreated, Sync/Swap, математика THENA V1 — совместимы) фабрики откатывают getFee(bool) и getFee(address,bool) — пулы не читались. **Решено:** новые настройки [DEX] — `dex.solidly_fee_source` (factory_pool / factory_stable / pool / factory_by_type; НЕОБЯЗАТЕЛЬНАЯ: не задана — источник по виду пула и …»
 - **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (вид пула или DEX); каталог src/settings/catalog/dex.rs:191.
-- **Что ставить:** совета нет, решает Тигран
+- **Что ставить:** совета нет, решает Тигран Base: Hydrex Classic — getFee(); Velocimeter — getFee(address); Equalizer — getRealFee(address). В режиме factory_address единственный аргумент — проверенная пара.
 - **Если не задана:** в каталоге без .optional() — интерфейс показывает её как «не задано»; чтение без значения — ошибка «Не задана настройка … — задайте её в интерфейсе» (src/settings/read.rs:24-29). По коду: нужна только при dex.solidly_fee_source = pool: тогда DEX «не подключена: не задана dex.solidly_fee_method» (src/venues/bsc_dex/pools/families.rs:564, 478-485)
 - **Влияет на торговлю:** да — расчёт: комиссия пулов Solidly (pools/solidly_fee_read.rs).
 - **Связанные ключи:** dex.solidly_fee_source.
@@ -2360,7 +2360,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Появилась:** 2026-11-14, коммит a14d5711.
 - **Кейс:** DECISIONS 273 (2026-11-14): «… Факт цепи:** у usdfi, veplus, magicfox (вид solidly_v1: getPair(a,b,bool), PairCreated, Sync/Swap, математика THENA V1 — совместимы) фабрики откатывают getFee(bool) и getFee(address,bool) — пулы не читались. **Решено:** новые настройки [DEX] — `dex.solidly_fee_source` (factory_pool / factory_stable / pool / factory_by_type; НЕОБЯЗАТЕЛЬНАЯ: не задана — источник по виду пула и …»
 - **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (вид пула или DEX); каталог src/settings/catalog/dex.rs:190.
-- **Что ставить:** совета нет, решает Тигран
+- **Что ставить:** совета нет, решает Тигран В профилях Base выбран источник из кода пары. Hydrex Classic читает pool, Baso, обе Archly и Infusion — factory_stable, Velocimeter и Equalizer — factory_address. В последнем режиме аргументом фабрики является адрес фактической пары.
 - **Если не задана:** необязательная (src/settings/schema.rs:137-139: не задана — функция работает, отключается только описанное). Описание каталога (src/settings/catalog/dex.rs:190): «Не задано — как раньше по виду пула (THENA V1 — getFee(stable), Topaz — getFee(pool, stable); правило — числитель над 10000)»
 - **Влияет на торговлю:** да — расчёт: откуда комиссия пула Solidly (pools/solidly_fee_read.rs).
 - **Связанные ключи:** dex.solidly_fee_method, dex.solidly_fee_method_stable.
@@ -6645,13 +6645,13 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 ### `dex.proxy_implementations`
 
 - **Кейс:** У WhiteSwap фабрика, роутер и каждая пара работают через обновляемые прокси. У каждой роли отдельная реализация.
-- **Что ставить:** Три адреса реализаций в порядке фабрика, роутер, пара. Проверка читает слоты EIP-1967 на том же блоке, что и резервы.
+- **Что ставить:** Три адреса реализаций в порядке фабрика, роутер, пара. Проверка читает слоты EIP-1967 на том же блоке, что и резервы. У профилей Base Solidly V1 с прокси фабрики список содержит один адрес активной реализации и проверяется по EIP-1967.
 - **Если не задана:** Котировка и исполнение этого рынка недоступны.
 
 ### `dex.proxy_runtime_hashes`
 
 - **Кейс:** Сверка отличает принятые реализации WhiteSwap от другого кода по тому же набору ABI.
-- **Что ставить:** Шесть keccak256 в порядке фабрика-прокси, реализация фабрики, роутер-прокси, реализация роутера, пара-прокси, реализация пары.
+- **Что ставить:** Шесть keccak256 в порядке фабрика-прокси, реализация фабрики, роутер-прокси, реализация роутера, пара-прокси, реализация пары. У профилей Base Solidly V1 список содержит один хеш реализации фабрики, хеш самого прокси отдельно задан dex.factory_runtime_hash.
 - **Если не задана:** Площадка не допускается к расчёту по этим формулам.
 
 ### `dex.whiteswap_reward_offset`
@@ -6697,3 +6697,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 ### DiamondSwap · независимые настройки фабрики и Router02
 
 Для вида `v2_diamond_router` первые элементы `dex.proxy_implementations` и `dex.proxy_runtime_hashes` задают адрес и хеш кода обработчика фабрики. При наличии `dex.factory_runtime_hash`, проверенной пары CREATE2, настроенного V5 и правила `dex.v2_fee_*` доступен обмен через пару. Прямой Router02 требует вторых элементов этих списков, адреса `dex.router`, хеша `dex.router_runtime_hash` и `dex.multicall3`. При котировке каждого пути проверяется обработчик его функций на одном каноническом блоке. Первые значения для Base сохранены в экране «Первый запуск». [Архив сетевых измерений](../tests/data/first_run_dex_2026-11-26/diamondswap_base.json).
+
+### KEWLSwap · фабрика CREATE и Router02 по одному адресу
+
+Вид `v2_diamond_create` сверяет пару по `dex.pair_runtime_hash`, двум направлениям `getPair`, полям пары и фактическому счётчику CREATE фабрики. Режим V5 требует первую роль в `dex.proxy_implementations` и `dex.proxy_runtime_hashes`. Для родного роутера задайте вторую роль и тот же адрес в `dex.factory` и `dex.router` с соответствующими хешами прокси. Для этого вида фиксированная комиссия равна 0,3%. На блоке 62 262 756 четырём адресам пар соответствовали nonce 1–4. [Архив KEWLSwap](../tests/data/first_run_dex_2026-11-26/kewlswap_base.json).

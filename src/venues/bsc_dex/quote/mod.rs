@@ -147,6 +147,7 @@ pub mod v2_pair_calls;
 pub mod v2_pair_probe;
 pub mod v2_pair_quote;
 pub mod v2_pair_sim;
+mod candy_wallet;
 pub(super) mod v2_wallet_sim;
 pub mod vault_depth;
 pub mod verify;
@@ -154,6 +155,7 @@ pub mod verify_decide;
 pub mod via;
 pub mod via_pools;
 pub mod virtual_quoter;
+mod vista_cash;
 pub(super) mod vista_pricing;
 pub mod warm;
 mod white_pricing;
@@ -339,14 +341,13 @@ impl Quoting {
         }
         let work =
             quote_timing::timed(tm.run(), v2_fallback::ordinary(pick, input, compare_single));
-        let raw = if native_cash {
-            Err(ctx.err(
-                ErrorCode::NoRoute,
-                "Для нативной расчётной валюты требуется выплата ETH на кошелёк",
-            ))
-        } else {
-            cpu::run(ctx, Box::pin(work)).await
-        };
+        let raw = cpu::run(ctx, Box::pin(work)).await.and_then(|quote|{
+            if native_cash && !vista_pricing::terminal_cash(&self.reg,quote.route.as_ref()) {
+                return Err(ctx.err(ErrorCode::NoRoute,
+                    "Выбранная форма исполнения не подтверждает списание или выплату нативной расчётной валюты"));
+            }
+            Ok(quote)
+        });
         tm.back();
         let mut best = match raw {
             Ok(q) => {

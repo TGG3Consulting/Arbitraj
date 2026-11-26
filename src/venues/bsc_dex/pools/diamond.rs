@@ -49,14 +49,23 @@ fn confirmed(
 }
 
 pub(crate) async fn check(ctx: &Ctx, id: &str, router: bool, at: &Value) -> GatewayResult<()> {
-    observe(ctx, id, router, at, None).await
+    observe(
+        ctx,
+        id,
+        router,
+        at,
+        if router { ROUTER } else { FACTORY },
+        None,
+    )
+    .await
 }
 
-async fn observe(
+pub(super) async fn observe(
     ctx: &Ctx,
     id: &str,
     router: bool,
     at: &Value,
+    signatures: &[&str],
     rate: Option<(super::v2_live_fee::Rate, u32)>,
 ) -> GatewayResult<()> {
     let bad = || {
@@ -89,7 +98,6 @@ async fn observe(
     if facet.is_zero() || proxy.is_zero() || facet == proxy {
         return Err(bad());
     }
-    let signatures = if router { ROUTER } else { FACTORY };
     let mut ops = vec![
         ("eth_getCode", json!([proxy, at])),
         ("eth_getCode", json!([facet, at])),
@@ -150,7 +158,7 @@ pub(crate) async fn fresh(ctx: &Ctx, entry: &Entry, at: &Value) -> GatewayResult
             tokens: (entry.pool.token0, entry.pool.token1),
         },
     )?;
-    observe(ctx, id, false, at, Some((rule, value))).await?;
+    observe(ctx, id, false, at, FACTORY, Some((rule, value))).await?;
     if generation != ctx.settings.generation() {
         return Err(ctx.err(ErrorCode::StaleData, "Изменён профиль Diamond"));
     }

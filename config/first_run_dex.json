@@ -3090,5 +3090,29 @@
       "dex.solidly_fee_method": "getFee(address)",
       "dex.solidly_pause_method": "isPaused()"
     }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "kewlswap-base",
+    "source": "https://basescan.org/address/0x5636a64b835f4e3821c798fda16e0ba106357646#code · tests/data/first_run_dex_2026-11-26/kewlswap_base.json",
+    "settings": {
+      "dex.kind": "v2_diamond_create",
+      "dex.factory": "0x5636a64b835f4e3821c798fda16e0ba106357646",
+      "dex.router": "0x5636a64b835f4e3821c798fda16e0ba106357646",
+      "dex.factory_runtime_hash": "0x053316c7b8665ddee5a60c45af871dfb62e43105ff9b06dce828ce46050f2104",
+      "dex.router_runtime_hash": "0x053316c7b8665ddee5a60c45af871dfb62e43105ff9b06dce828ce46050f2104",
+      "dex.proxy_implementations": [
+        "0x8dbca30eac999d14835ffd88424a70a9d24865d6",
+        "0x90d619b5ea0584f211f4d5f6b5fdc956eda77e0e"
+      ],
+      "dex.proxy_runtime_hashes": [
+        "0xe40853f78f1b01fc86fa3d372f8e6582c52d10d301ed877bdf222016b5ed46a2",
+        "0xa1b74f6eb26ca4e56cb2044a203de7b6ca2cb5eb0dd0acee15a62c70cf797c12"
+      ],
+      "dex.pair_runtime_hash": "0x6ef14f3e39ed31a2874c82f036261a213f3b0455ce3fa47c18c5e8b0d55b1dd9",
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
   }
 ]

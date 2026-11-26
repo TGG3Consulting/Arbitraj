@@ -209,6 +209,7 @@ pub mod lb20_head;
 pub mod lb_head;
 pub mod lb_hooks;
 pub(crate) mod diamond;
+pub(crate) mod kewl;
 pub(crate) mod leetswap;
 pub mod link;
 pub mod listen;

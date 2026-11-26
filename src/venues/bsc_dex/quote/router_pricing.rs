@@ -22,7 +22,7 @@ use serde_json::{Value, json};
 pub(in crate::venues::bsc_dex) fn is_native(e: &Entry) -> bool {
     matches!(
         e.family.variant,
-        Variant::V2RouterCreate2 | Variant::DiamondV2
+        Variant::V2RouterCreate2 | Variant::DiamondV2 | Variant::KewlV2
     )
 }
 
@@ -49,6 +49,9 @@ async fn approved(
     hash: B256,
     at: &Value,
 ) -> GatewayResult<()> {
+    if e.family.variant == Variant::KewlV2 {
+        return super::super::pools::kewl::checked(ctx, e, true, at).await;
+    }
     if e.family.variant == Variant::DiamondV2 {
         tokio::try_join!(
             super::super::pools::diamond::fresh(ctx, e, at),
@@ -104,6 +107,9 @@ pub(in crate::venues::bsc_dex) async fn registered(
     use super::super::pools::{abi_check::IPoolImmutables, abi_v2v3::IV2Factory, base_native_v3};
     use alloy::sol_types::SolCall;
     let (router, hash) = profile(ctx, e.family.id)?;
+    if e.family.variant == Variant::KewlV2 {
+        return super::super::pools::kewl::checked(ctx, e, true, &h.selector()).await;
+    }
     let registry = IV2Factory::getPairCall {
         tokenA: e.pool.token0,
         tokenB: e.pool.token1,
@@ -148,24 +154,32 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 options.push(option);
             }
         }
-        if e.family.variant != Variant::DiamondV2
+        if !e.family.variant.diamond_router()
             || crate::gateway::quote_stage::settlement()
             || q.ctx.text("dex.router_mode").ok().as_deref() != Some("graph")
         {
             continue;
         }
-        let (Ok(Some(target)), Some(pips)) = (
-            super::super::exec::executor::address(&q.ctx),
-            e.pool.fee_pips,
-        ) else {
+        let Ok(Some(target)) = super::super::exec::executor::address(&q.ctx) else {
             continue;
         };
-        if let Some(h) = head
-            && super::super::pools::diamond::fresh(&q.ctx, e, &h.selector())
-                .await
-                .is_err()
-        {
+        let pips = if e.family.variant == Variant::KewlV2 {
+            super::super::pools::kewl::PIPS
+        } else if let Some(pips) = e.pool.fee_pips {
+            pips
+        } else {
             continue;
+        };
+        if let Some(h) = head {
+            let at = h.selector();
+            let ok = if e.family.variant == Variant::KewlV2 {
+                super::super::pools::kewl::checked(&q.ctx, e, false, &at).await
+            } else {
+                super::super::pools::diamond::fresh(&q.ctx, e, &at).await
+            };
+            if ok.is_err() {
+                continue;
+            }
         }
         use alloy::sol_types::SolValue;
         let step = super::v2_wallet_sim::V5Step {

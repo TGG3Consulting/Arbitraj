@@ -189,7 +189,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         | "v2_whiteswap"
         | "v2_fork_executor"
         | "v2_fork_executor_create2"
-        | "v2_diamond_router"
+        | "v2_diamond_router" | "v2_diamond_create"
         | "v2_fork_executor_create2_live_fee" | "candyswap_v2" => ExecKind::V2,
         // Решение 483: Ramses CL — swap(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data) как у V3
         // (RamsesV2Pool.sol L944), обратный вызов ramsesV2SwapCallback (L1238) — проверка dex.v3_swap_callback

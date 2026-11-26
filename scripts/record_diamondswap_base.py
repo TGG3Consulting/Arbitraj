@@ -40,7 +40,7 @@ def facets(c,proxy,signatures):
     return dict(address=proxy,runtime=digest(root),selectors=selected,implementations=implementations,loupe=loupe,bytes=len(root),implementation_bytes=lengths)
 
 
-def direct_wallet(c, market, sizes, timestamp, fee_pips, router):
+def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None):
     token=next(t for t in market["tokens"] if t!=WETH)
     deadline=timestamp+120
     word=lambda n:"0x"+format(n,"064x")
@@ -74,6 +74,10 @@ def direct_wallet(c, market, sizes, timestamp, fee_pips, router):
     trials=[]
     for size in sizes:
         for mode in ("v5","router"):
+            if fund_sale is not None:
+                sell,_=leg([fund_sale(size)],token,WETH,size,mode)
+                trials.append(dict(mode=mode,size=str(size),sell=sell))
+                continue
             fund=tx(WETH,"deposit()",value=size)
             buy,next_prefix=leg([fund],WETH,token,size,mode)
             sell,_=leg(next_prefix,token,WETH,int(buy["exact"]["received"]),mode)

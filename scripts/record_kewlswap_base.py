@@ -2,6 +2,8 @@
 from eth_utils import keccak
 from record_base_slipstream_executor import rpc
 from record_diamondswap_base import WETH, direct_wallet, facets
+from record_ethervista_wallets import tx
+from record_base_slipstream_executor import OWNER
 
 
 def create_address(factory, nonce):
@@ -41,6 +43,20 @@ def wallet(c, directory, header):
             row["legs"]=direct_wallet(c,p,sizes,int(header["timestamp"],16),3000,proxy)
         except ValueError as err:
             row["reason"]=str(err)[:240]
+        token=p["tokens"][1-p["tokens"].index(WETH)]
+        other=int(p["reserves"][p["tokens"].index(token)])
+        if other==1:
+            # Для конечного dx при одном wei выхода xy=k даёт целую выплату ноль.
+            usdc="0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+            funding="0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24"
+            path=[WETH,usdc,token]
+            deadline=int(header["timestamp"],16)+120
+            def fund_sale(size):
+                return tx(funding,"swapETHForExactTokens(uint256,address[],address,uint256)",
+                          ["uint256","address[]","address","uint256"],[size,path,OWNER,deadline],value=10**16)
+            row["unavailable_buy"]={"reserve_out":"1","reason":"integer output zero for all finite positive exact inputs"}
+            row["funding"]={"router":funding,"path":path}
+            row["one_way"]=direct_wallet(c,p,[1,2],int(header["timestamp"],16),3000,proxy,fund_sale)
         cases.append(row)
     if not any(len(k.get("legs",[]))==4 for k in cases):
         raise ValueError("no market with full KEWL wallet controls "+str(cases)[:300])

@@ -503,6 +503,13 @@ pub fn request(
 
 /// Выход из ответа квотера. None — ответ не по ABI.
 pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> Option<U256> {
+    if e.family.variant == super::super::pools::family_variant::Variant::KewlV2 {
+        let values=IV2Router::getAmountsOutCall::abi_decode_returns(out).ok()?;
+        return match values.as_slice() {
+            [input,output] if *input==amount=>Some(*output),
+            _=>None,
+        };
+    }
     if let PoolState::EtherVista(state) = &e.pool.state {
         let expected_input = super::super::math::ethervista::credited(state,token_in,token_in==e.pool.token0,amount)?;
         let data = super::super::pools::base_native_v3::checked_data(e.pool.reference.own_contract()?,out).ok()?;

@@ -69,6 +69,8 @@ pub enum Variant {
     CandySwap,
     /// EIP-2535 с отдельной привязкой исполняемого селектора фабрики и Router02.
     DiamondV2,
+    /// Пара проверяется по фабрике CREATE и коду исполнения; общий прокси с Router02.
+    KewlV2,
     /// Fraxswap V2 исполняет долгосрочные ордера к timestamp блока перед обменом.
     FraxTwamm,
     /// Одиночное исполнение официальным роутером с проверкой выхода получателя.
@@ -134,6 +136,8 @@ pub enum Variant {
 }
 
 impl Variant {
+    pub(crate) fn diamond_router(self)->bool {matches!(self,Self::DiamondV2 | Self::KewlV2)}
+
     pub(crate) fn live_v2_fee(self) -> bool {
         matches!(self, Self::V2Create2LiveFee | Self::CandySwap | Self::DiamondV2)
     }
@@ -185,6 +189,7 @@ pub fn of(kind: &str) -> Variant {
         "v2_whiteswap" => Variant::WhiteSwap,
         "v2_fork_executor_create2" => Variant::V2Create2,
         "v2_diamond_router" => Variant::DiamondV2,
+        "v2_diamond_create" => Variant::KewlV2,
         "candyswap_v2" => Variant::CandySwap,
         "v2_fork_executor_create2_live_fee" => Variant::V2Create2LiveFee,
         "slipstream_ramses" => Variant::RamsesClV2,

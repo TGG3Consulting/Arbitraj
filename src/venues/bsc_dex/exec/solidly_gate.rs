@@ -83,12 +83,16 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             super::super::pools::v2_live_fee::candy_fresh(ctx,e,at).await?;
             continue;
         }
-        if f.variant == Variant::DiamondV2 {
+        if f.variant.diamond_router() {
             let at = match &role_block {
                 Some(at) => at,
                 None => role_block.insert(super::super::pools::nami::block(ctx, "latest").await?),
             };
-            super::super::pools::diamond::fresh(ctx,e,at).await?;
+            if f.variant==Variant::KewlV2 {
+                super::super::pools::kewl::checked(ctx,e,false,at).await?;
+            } else {
+                super::super::pools::diamond::fresh(ctx,e,at).await?;
+            }
             continue;
         }
         if f.variant == Variant::LeetSwap {

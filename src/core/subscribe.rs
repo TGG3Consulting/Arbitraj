@@ -75,6 +75,7 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
         ));
     }
     if kind == VenueKind::Cex && !out.is_empty() {
+        out.extend(super::subscribe_assets::settlement_books(core,venue));
         // Цена газа в USDT — из живого стакана BNB биржи (решение 35, convert.rs).
         // Решение 416: тикер газа — dex.gas_ticker площадок DEX; не задана — стакана газа нет (затраты газа не
         // переводятся в USDT — «нет живой цены», сделки нет), причина — в «Проверить подключение» DEX и в настройках.

@@ -13,6 +13,7 @@ use std::{
 pub(in crate::venues::bsc_dex) struct Funds {
     pub who: Address,
     pub spend: U256,
+    pub allowance: U256,
     pub decimals: u8,
     pub native: U256,
 }
@@ -107,6 +108,7 @@ async fn read(ctx: &Ctx, chain: u64, token: Address, spender: Address) -> Result
         who,
         decimals,
         spend: bal.min(allow),
+        allowance: allow,
         native,
     })
 }

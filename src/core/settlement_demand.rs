@@ -28,7 +28,7 @@ pub(super) async fn demand(
     )
     .await
     .map_err(|e| e.to_string())?;
-    if !super::settlement_model::supports(&a, true) {
+    if !crate::gateway::quote_stage::settlement_quote_supported(&a, true) {
         return Err("Финансирование требует исполнимого маршрута целевой покупки".into());
     }
     if target <= Decimal::ZERO

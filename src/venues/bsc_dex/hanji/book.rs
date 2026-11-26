@@ -70,7 +70,12 @@ impl Config {
             timeout: Duration::from_millis(c.int("hanji.quote_budget_ms").ok().filter(|v| *v > 0)?),
             age: Duration::from_millis(c.int("feed.stale_after_ms").ok().filter(|v| *v > 0)?),
             deadline: c.int("dex.deadline_s").ok().filter(|v| *v > 0)?,
-            slip: crate::venues::bsc_dex::num::to_units(c.dec("exec.dex_slippage_pct").ok()?.checked_div(Decimal::ONE_HUNDRED)?,18)?,
+            slip: crate::venues::bsc_dex::num::to_units(
+                c.dec("exec.dex_slippage_pct")
+                    .ok()?
+                    .checked_div(Decimal::ONE_HUNDRED)?,
+                18,
+            )?,
             allowed,
         })
     }
@@ -100,48 +105,83 @@ pub(super) struct Books {
     pub expires: i64,
     pub revision: u64,
 }
-async fn depth(ctx: &Ctx, market: Address, asks: bool, h: B256) -> GatewayResult<Vec<Level>> {
-    let book = live::canonical(
-        ctx,
-        live::HELPER,
-        IHanji::assembleOrderbookFromOrdersCall {
-            market,
-            asks,
-            maxLevels: live::DEPTH.try_into().expect("глубина помещается в uint24"),
-        },
-        h,
-    )
-    .await?;
-    if book.prices.len() != book.shares.len() || book.prices.len() > live::DEPTH as usize {
-        return Err(ctx.err(ErrorCode::BadResponse, "Hanji: неполная книга"));
-    }
-    Ok(book
-        .prices
-        .into_iter()
-        .zip(book.shares)
-        .map(|(p, shares)| Level {
-            price: p.to(),
-            shares,
-        })
-        .collect())
-}
 async fn read(
     p: &Parts,
     m: &Market,
     cash: Address,
     h: B256,
 ) -> GatewayResult<(Address, MarketBook)> {
+    use crate::venues::bsc_dex::node::multicall;
+    use alloy::sol_types::SolCall;
+    use alloy_primitives::Bytes;
     let ctx = &p.ctx;
     let x = m.base_token.contract_address;
     let y = m.quote_token.contract_address;
     let market = m.orderbook_address;
-    let (cfg, asks, bids, dx, dy) = tokio::try_join!(
-        live::canonical(ctx, market, IHanji::getConfigCall {}, h),
-        depth(ctx, market, true, h),
-        depth(ctx, market, false, h),
-        live::canonical(ctx, x, decimalsCall {}, h),
-        live::canonical(ctx, y, decimalsCall {}, h)
-    )?;
+    let levels = |asks| IHanji::assembleOrderbookFromOrdersCall {
+        market,
+        asks,
+        maxLevels: live::DEPTH.try_into().expect("uint24"),
+    };
+    let calls = [
+        (market, Bytes::from(IHanji::getConfigCall {}.abi_encode())),
+        (live::HELPER, Bytes::from(levels(true).abi_encode())),
+        (live::HELPER, Bytes::from(levels(false).abi_encode())),
+        (x, Bytes::from(decimalsCall {}.abi_encode())),
+        (y, Bytes::from(decimalsCall {}.abi_encode())),
+    ];
+    let tag = json!({"blockHash":h,"requireCanonical":true});
+    let invalid = || {
+        ctx.err(
+            ErrorCode::BadResponse,
+            "Hanji: неполный пакет данных уровня, масштаба или комиссии",
+        )
+    };
+    let values: Vec<Bytes> = if let Some(addr) = multicall::address(ctx) {
+        let out: Bytes = rpc::call(
+            ctx,
+            "eth_call",
+            json!([{"to":addr,"data":multicall::encode(&calls)},tag]),
+        )
+        .await?;
+        multicall::decode(&out, calls.len())?
+            .into_iter()
+            .collect::<Result<_, _>>()
+            .map_err(|_| invalid())?
+    } else {
+        let batch = calls
+            .iter()
+            .map(|(to, data)| ("eth_call", json!([{"to":to,"data":data},tag])))
+            .collect::<Vec<_>>();
+        rpc::batch(ctx, &batch)
+            .await?
+            .into_iter()
+            .map(|v| serde_json::from_str(v?.get()).map_err(|_| invalid()))
+            .collect::<GatewayResult<_>>()?
+    };
+    let [conf, ask, bid, dx, dy] = values.as_slice() else {
+        return Err(invalid());
+    };
+    let cfg = IHanji::getConfigCall::abi_decode_returns(conf).map_err(|_| invalid())?;
+    let decode_levels = |raw: &Bytes| -> GatewayResult<Vec<Level>> {
+        let b = IHanji::assembleOrderbookFromOrdersCall::abi_decode_returns(raw)
+            .map_err(|_| invalid())?;
+        if b.prices.len() != b.shares.len() || b.prices.len() > live::DEPTH as usize {
+            return Err(invalid());
+        }
+        Ok(b.prices
+            .into_iter()
+            .zip(b.shares)
+            .map(|(p, shares)| Level {
+                price: p.to(),
+                shares,
+            })
+            .collect())
+    };
+    let asks = decode_levels(ask)?;
+    let bids = decode_levels(bid)?;
+    let dx = decimalsCall::abi_decode_returns(dx).map_err(|_| invalid())?;
+    let dy = decimalsCall::abi_decode_returns(dy).map_err(|_| invalid())?;
     if cfg.x != x || cfg.y != y || x == y || x.is_zero() || y.is_zero() {
         return Err(ctx.err(
             ErrorCode::BadResponse,

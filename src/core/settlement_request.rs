@@ -59,7 +59,8 @@ pub(super) async fn request(
             return Err("Полученных монет сделки или свободного баланса недостаточно для продажи с комиссией".into());
         }
     }
-    if venue == &p.market.dex && !super::settlement_model::supports(&q, true) {
+    if venue == &p.market.dex && !crate::gateway::quote_stage::settlement_quote_supported(&q, true)
+    {
         return Err("Нет подтверждённого однотранзакционного маршрута для этого ордера".into());
     }
     let worst = super::costs_quote::worst(core, venue, &d.asset, side, qty, q.avg_price, None)

@@ -855,6 +855,13 @@ impl BscDex {
         // Решение 132: сделка — только кошельком счёта (Ctx::bound).
         self.p.ctx.bound()?;
         let mut req = req;
+        if !matches!(
+            req.route.as_ref().map(|r| r.mode),
+            Some(crate::core::types::RouteMode::Orderbook(_))
+        ) && let Some(done) = super::hanji::execute::prior(&self.p, &req).await?
+        {
+            return Ok(done);
+        }
         if matches!(
             req.route.as_ref().map(|r| r.mode),
             Some(

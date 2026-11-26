@@ -67,3 +67,13 @@ pub fn kyber_final(settings: &Store, venue: &VenueId) -> bool {
         )
         .unwrap_or(false)
 }
+
+/// Проверяет, что исполнитель может восстановить ровно одно действие денежного маршрута.
+pub fn settlement_quote_supported(q: &crate::core::types::Quote, firm: bool) -> bool {
+    use crate::core::types::{CostKind, RouteMode};
+    q.route.as_ref().is_some_and(|r| match r.mode {
+        RouteMode::Direct | RouteMode::Smart | RouteMode::Orderbook(_) => r.executable,
+        RouteMode::OrderbookIndicative => !firm,
+        _ => false,
+    }) && !q.costs.iter().any(|c| c.kind == CostKind::ApproveGas)
+}

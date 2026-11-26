@@ -47,6 +47,12 @@ pub(in crate::venues::bsc_dex) fn active(p: &Parts) -> bool {
         && p.ctx.flag("hanji.trading").unwrap_or(false)
         && p.hanji.current(p).is_some()
 }
+pub(super) fn eligible_baseline(q: &Quote, qty: Decimal, firm: bool, mixed: bool) -> bool {
+    q.qty == qty
+        && q.fillable_qty == qty
+        && (!firm || q.route.as_ref().is_none_or(|r| r.executable))
+        && (!mixed || crate::gateway::quote_stage::settlement_quote_supported(q, firm))
+}
 fn candidate(
     p: &Parts,
     book: &Arc<Books>,
@@ -68,7 +74,11 @@ fn candidate(
     };
     let (direction, levels) = m.direction(input);
     let f = m.units.exact_quantity(levels, direction, raw, buy)?;
-    let price=super::quantity::limit_price(f.last_price,book.config.slip,direction==super::Side::BuyX)?;
+    let price = super::quantity::limit_price(
+        f.last_price,
+        book.config.slip,
+        direction == super::Side::BuyX,
+    )?;
     let amount = if buy { f.spent } else { f.received };
     let cash = num::to_decimal(amount, m.decimals.1)?;
     let mut budget = f.spent;
@@ -84,17 +94,35 @@ fn candidate(
         commission = fee.try_into().ok()?;
     } else if !buy && input == m.x {
         let lots = raw / m.units.x;
-        let scale=U256::from(super::RATE_SCALE);
-        let value=lots.checked_mul(U256::from(price))?;
-        minimum=value.checked_sub(value.checked_mul(U256::from(m.units.fee_rate))?.div_ceil(scale))?.checked_mul(m.units.y)?;
-        let highest=super::quantity::limit_price(levels.first()?.price,book.config.slip,true)?;
-        commission=lots.checked_mul(U256::from(highest))?.checked_mul(U256::from(m.units.fee_rate))?.div_ceil(scale).try_into().ok()?;
+        let scale = U256::from(super::RATE_SCALE);
+        let value = lots.checked_mul(U256::from(price))?;
+        minimum = value
+            .checked_sub(
+                value
+                    .checked_mul(U256::from(m.units.fee_rate))?
+                    .div_ceil(scale),
+            )?
+            .checked_mul(m.units.y)?;
+        let highest = super::quantity::limit_price(levels.first()?.price, book.config.slip, true)?;
+        commission = lots
+            .checked_mul(U256::from(highest))?
+            .checked_mul(U256::from(m.units.fee_rate))?
+            .div_ceil(scale)
+            .try_into()
+            .ok()?;
     }
     let who = p
         .hanji
         .funds
         .get(p, 8453, input, book.config.executor, book.config.age)?;
-    if who.spend < budget || who.native < num::to_units(book.config.gas, 18)? {
+    let planned_credit =
+        crate::gateway::quote_stage::settlement() && !crate::gateway::quote_stage::is_final();
+    let spend = if planned_credit {
+        who.allowance
+    } else {
+        who.spend
+    };
+    if spend < budget || who.native < num::to_units(book.config.gas, 18)? {
         return None;
     }
     let mut seed = Vec::from(book.head.hash.as_slice());
@@ -174,8 +202,12 @@ async fn firm(p: &Parts, mut q: Quote, mut t: Ticket) -> Option<(Quote, Ticket)>
         return None;
     }
     let fees = exec::tx_fee::price(&env, &channels, None).await.ok()?;
-    let gas =
-        send::tx::with_margin(ctx, alloy_primitives::U64::from(used), ctx.dec("send.gas_limit_margin_pct").ok()?).ok()?;
+    let gas = send::tx::with_margin(
+        ctx,
+        alloy_primitives::U64::from(used),
+        ctx.dec("send.gas_limit_margin_pct").ok()?,
+    )
+    .ok()?;
     let l1 = Oracle::read(ctx)
         .ok()?
         .planned(ctx, h.number.to(), gas)
@@ -222,17 +254,16 @@ pub(in crate::venues::bsc_dex) async fn consider(
         return baseline;
     };
     let final_stage = crate::gateway::quote_stage::is_final();
+    let mixed = crate::gateway::quote_stage::settlement();
     let mut score = None;
     let mut best = None;
     if let Ok(q) = &baseline
-        && q.qty == qty
-        && q.fillable_qty == qty
-        && (!final_stage || q.route.as_ref().is_none_or(|r| r.executable))
+        && eligible_baseline(q, qty, final_stage, mixed)
     {
-        let Some(cost) = hashflow::routing::total(p, q).await else {
+        score = hashflow::routing::total(p, q).await;
+        if score.is_none() && !mixed {
             return baseline;
-        };
-        score = Some(cost);
+        }
     }
     let options = markets
         .iter()

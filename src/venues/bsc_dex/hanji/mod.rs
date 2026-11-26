@@ -15,6 +15,8 @@ pub(super) mod model;
 mod quantity;
 pub(super) mod recovery;
 pub(super) mod routing;
+#[cfg(test)]
+mod tests;
 mod wire;
 use alloy_primitives::U256;
 

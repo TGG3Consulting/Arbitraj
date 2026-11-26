@@ -15,16 +15,6 @@ use crate::core::{
     types::{Cost, CostKind, Direction, Side},
 };
 use rust_decimal::Decimal;
-/// Проверяет, что исполнитель может восстановить ровно одно действие денежного маршрута.
-pub(super) fn supports(q: &super::types::Quote, firm: bool) -> bool {
-    use super::types::RouteMode;
-    q.route.as_ref().is_some_and(|r| match r.mode {
-        RouteMode::Direct | RouteMode::Smart | RouteMode::Orderbook(_) => r.executable,
-        RouteMode::OrderbookIndicative => !firm,
-        _ => false,
-    }) && !q.costs.iter().any(|c| c.kind == CostKind::ApproveGas)
-}
-
 /// Строит обе стороны на текущих данных. Учитывает встречные заявки других сделок через Live,
 pub async fn evaluate(core: &Core, d: &Direction, qty: Decimal) -> Result<Model, String> {
     point(core, d, qty).await.map_err(|e| e.to_string())
@@ -87,7 +77,10 @@ async fn model(core: &Core, d: &Direction, qty: Decimal) -> Result<Model, super:
     let lines = qa.costs.iter().cloned().map(|c| (c, "A")).collect();
     let exit = super::costs_exit::quantities(&cx, &src, held, lines, None).await?;
     let dex_order = if funding { &qa } else { &exit.qb };
-    if !supports(dex_order, crate::gateway::quote_stage::is_final()) {
+    if !crate::gateway::quote_stage::settlement_quote_supported(
+        dex_order,
+        crate::gateway::quote_stage::is_final(),
+    ) {
         return Err(
             "Маршрут требует отдельно подтверждаемых разрешений или другого исполнителя DEX".into(),
         );

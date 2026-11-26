@@ -186,10 +186,8 @@ fn check_route_gate(
     quote: rust_decimal::Decimal,
     handle: alloy_primitives::B256,
 ) {
-    use crate::core::{
-        settlement_model::supports,
-        types::{Cost, CostKind, DexRoute, Quote, RouteMode},
-    };
+    use crate::core::types::{Cost, CostKind, DexRoute, Quote, RouteMode};
+    use crate::gateway::quote_stage::settlement_quote_supported as supports;
     let mut q = Quote {
         venue: venue.clone(),
         asset: token.clone(),

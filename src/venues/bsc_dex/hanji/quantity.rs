@@ -16,7 +16,11 @@ pub(super) fn limit_price(price: u128, slip: U256, buy_x: bool) -> Option<u128> 
     };
     let value = u128::try_from(widened).ok()?.max(1);
     let quantum = 10u128.pow(value.ilog10().saturating_sub(5));
-    let rounded = if buy_x {value / quantum * quantum} else {value.div_ceil(quantum) * quantum};
+    let rounded = if buy_x {
+        value / quantum * quantum
+    } else {
+        value.div_ceil(quantum) * quantum
+    };
     (rounded > 0 && rounded < 1u128 << 72).then_some(rounded)
 }
 

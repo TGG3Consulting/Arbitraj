@@ -2,12 +2,12 @@
 //! Транспорт: https://docs.titanbuilder.xyz/api/eth_sendbundle и https://buildernet.org/docs/api .
 use super::{Ctx, Frame, Head, SimBlock, SimCall, frame::ROUTER, quoteAmountsCall, rpc};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
-use alloy::sol_types::{SolCall, sol};
+use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, B256, Bytes, I256, U64, U256};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-sol! {
+alloy::sol! {
     struct Order {
         bytes32 leg; bytes32 parent; uint64 target; uint64 timestamp;
         address input; address output; int256 amount; uint256 limit;

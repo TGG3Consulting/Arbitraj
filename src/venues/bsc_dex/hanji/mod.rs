@@ -9,6 +9,7 @@
 //! проверяется выручка после комиссии. Остаток входа хранится отдельно.
 pub(super) mod live;
 pub(super) mod model;
+mod quantity;
 use alloy_primitives::U256;
 
 /// Знаменатель ставки комиссии в разделе Simulation документации Hanji.

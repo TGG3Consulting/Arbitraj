@@ -63,6 +63,10 @@ fn hanji_base_quotes_and_net_cash_match_simulated_balances() {
                 .fill(&asks, Side::BuyX, U256::from(n(&f["budget_y"])))
                 .unwrap();
             assert_eq!(buy.spent, U256::from(n(&f["debited_y"])));
+            let exact = units
+                .exact_quantity(&asks, Side::BuyX, buy.received, true)
+                .unwrap();
+            assert_eq!((exact.spent, exact.received), (buy.spent, buy.received));
             assert_eq!(buy.received, U256::from(n(&f["received_x"])));
             let fresh_bid = Level {
                 price: n(&f["bid_after"][0]),
@@ -128,6 +132,10 @@ fn hanji_crosses_two_price_levels_and_reconciles_both_fees() {
             assert_eq!(sell.last_price, n(&f["fresh_bids"][1][0]));
             assert_eq!(sell.received, U256::from(n(&f["received_y"])));
             assert_eq!(sell.spent, buy.received);
+            let recovered = units
+                .exact_quantity(&levels(&f["fresh_bids"]), Side::SellX, sell.received, true)
+                .unwrap();
+            assert_eq!((recovered.spent, recovered.received), (sell.spent, sell.received));
             assert_eq!(sell.unspent, U256::ZERO);
             paths += 1;
         }

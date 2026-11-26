@@ -9,6 +9,7 @@ from eth_utils import keccak
 
 from record_balancer_markets import Capture, posts
 from record_base_slipstream_executor import ROOT, rpc
+from record_equalizer_generations import generations
 
 # The released contract source and PairCreated receipt identify these factories. Archly publishes both generations.
 DEPLOYMENTS = {
@@ -70,13 +71,19 @@ def capture(endpoint, key):
     count,=c.one(fac,"allPairsLength()",returns=["uint256"])
     pools=[decode(["address"],r)[0] for r in posts(c,[(fac,"allPairs(uint256)",["uint256"],[i]) for i in range(count)])]
     if len(set(pools))!=count: raise ValueError("duplicate factory market")
+    historical=generations(endpoint,fac,pools,texts,source,SLOT) if key=="equalizer-base" else []
+    templates=[init]+[bytes.fromhex(g["init"][2:]) for g in historical]
     markets=[]
     fee_calls=[]
     checks=[]
     for pool,raw in zip(pools,posts(c,[(p,"metadata()",[],[]) for p in pools]),strict=True):
         d0,d1,r0,r1,stable,a,b=decode(ABI,raw)
         packed=bytes.fromhex(a[2:]+b[2:])+bytes([stable])
-        expected="0x"+keccak(b"\xff"+bytes.fromhex(fac[2:])+keccak(packed)+init)[-20:].hex()
+        prefix=b"\xff"+bytes.fromhex(fac[2:])+keccak(packed)
+        matches=[h for h in templates if "0x"+keccak(prefix+h)[-20:].hex()==pool]
+        if len(matches)!=1:
+            raise ValueError("no unique confirmed CREATE2 template for "+pool)
+        matched=matches[0]
         if a>=b: raise ValueError(f"{key}: tokens are unsorted at {pool}")
         checks.extend([(fac,"getPair(address,address,bool)",["address","address","bool"],[a,b,stable]),
                        (a,"balanceOf(address)",["address"],[pool]),(b,"balanceOf(address)",["address"],[pool])])
@@ -84,7 +91,7 @@ def capture(endpoint, key):
         elif source_kind=="pool": fee=(pool,"getFee()",[],[])
         else: fee=(fac,"getRealFee(address)" if key=="equalizer-base" else "getFee(address)",["address"],[pool])
         fee_calls.append(fee)
-        markets.append(dict(pool=pool,current_init=expected==pool,tokens=[a,b],scales=[str(d0),str(d1)],reserves=[str(r0),str(r1)],stable=stable))
+        markets.append(dict(pool=pool,current_init=matched==init,init="0x"+matched.hex(),tokens=[a,b],scales=[str(d0),str(d1)],reserves=[str(r0),str(r1)],stable=stable))
     results=iter(optional(c,checks))
     for m,fee in zip(markets,optional(c,fee_calls),strict=True):
         listed,left,right=next(results),next(results),next(results)
@@ -100,7 +107,7 @@ def capture(endpoint, key):
             m["fee_manager"]=manager
     paused,=c.one(fac,"isPaused()",returns=["bool"])
     return dict(id=key,chain_id=8453,block=base["block"],selector=c.selector,state_root=head["stateRoot"],
-                factory=factory,pair_sources=contract_sources,init="0x"+init.hex(),fee_source=source_kind,
+                factory=factory,pair_sources=contract_sources,historical=historical,init="0x"+init.hex(),fee_source=source_kind,
                 fee_method=fee_calls[0][1] if fee_calls else None,denominator=str(denom),factory_paused=paused,markets=markets)
 
 

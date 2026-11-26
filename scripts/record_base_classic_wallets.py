@@ -24,7 +24,7 @@ def capture(directory, endpoint):
     potential=[]
     for market in directory["markets"]:
         if market.get("fixed_fee")=="0" and int(market.get("fee_manager","0"),16): continue
-        if not market["current_init"] or market["balances"]!=market["reserves"] or not all(map(int,market["reserves"])) or market["fee"] is None: continue
+        if not market.get("init",directory["init"] if market["current_init"] else None) or market["balances"]!=market["reserves"] or not all(map(int,market["reserves"])) or market["fee"] is None: continue
         for i, token in enumerate(market["tokens"]):
             if token not in holders: continue
             scale=int(market["scales"][i])
@@ -41,8 +41,9 @@ def capture(directory, endpoint):
     tested=[]
     failures=[]
     signers={}
-    for stable in (False,True):
-        ranked=sorted((p for p in potential if p[1]["stable"]==stable),key=lambda p:-p[0])
+    groups=[(init,stable) for init in [directory["init"]]+[g["init"] for g in directory.get("historical",[])] for stable in (False,True)]
+    for init,stable in groups:
+        ranked=sorted((p for p in potential if p[1]["stable"]==stable and p[1].get("init",directory["init"])==init),key=lambda p:-p[0])
         for _,m,i,sizes in ranked[:12]:
             a,b=m["tokens"][i],m["tokens"][1-i]
             signer=holders[a]
@@ -54,17 +55,22 @@ def capture(directory, endpoint):
                 cases=[round_trip(e,m["pool"],a,b,qty,deadline,runtime,kind=3,owner=signer) for qty in sizes]
                 if a=="0x174d6d746503d897acec6e65dc57c024dd6ad4b7":
                     # Fund an unconnected signer through ERC20.transfer; its own approve and two swaps follow.
-                    if rpc(endpoint,"eth_getCode",[OWNER,tag])!="0x" or c.one(a,"balanceOf(address)",["address"],[OWNER],["uint256"])!=(0,) or c.one(a,"allowance(address,address)",["address","address"],[OWNER,EXEC],["uint256"])!=(0,):
+                    probe_start=len(c.calls)
+                    initial_code=rpc(endpoint,"eth_getCode",[OWNER,tag])
+                    balance,=c.one(a,"balanceOf(address)",["address"],[OWNER],["uint256"])
+                    allowance,=c.one(a,"allowance(address,address)",["address","address"],[OWNER,EXEC],["uint256"])
+                    if initial_code!="0x" or balance!=0 or allowance!=0:
                         raise ValueError("unconnected wallet does not start with verified empty token balance and approval")
                     for case,qty in zip(cases,sizes,strict=True):
                         witness=round_trip(e,m["pool"],a,b,qty,deadline,runtime,kind=3,owner=OWNER,funding=signer)
                         if (case["bought"],case["sold"])!=(witness["bought"],witness["sold"]):
                             raise ValueError("wTV historical and unconnected payer wallets receive different amounts")
+                        witness["initial"]={"code":initial_code,"checks":c.calls[probe_start:]}
                         case["unconnected_wallet"]=witness
             except ValueError as err:
                 failures.append(dict(pool=m["pool"],stable=stable,token_in=a,reason=str(err)[:380]))
                 continue
-            tested.append(dict(pool=m["pool"],stable=stable,token_in=a,token_out=b,cases=cases))
+            tested.append(dict(pool=m["pool"],init=init,stable=stable,token_in=a,token_out=b,cases=cases))
             break
     if not tested and potential and not directory["factory_paused"]:
         raise ValueError(f"no complete round trip; {str(failures)[:580]}")

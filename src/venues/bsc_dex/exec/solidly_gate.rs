@@ -72,7 +72,8 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
                 Some(at) => at,
                 None => role_block.insert(super::super::pools::nami::block(ctx, "latest").await?),
             };
-            super::super::pools::solidly_classic::fresh(ctx,e,at).await?;
+            let gate = super::super::pools::solidly_classic::fresh(ctx,e,at).await?;
+            cap = merged_cap(ctx, f.id, gate, cap)?;
             continue;
         }
         if f.variant == Variant::CandySwap {
@@ -181,17 +182,19 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
         let factory = ctx.dex_addr("dex.factory", f.id)?;
         let g = solidly_fee_read::gate(ctx, f, factory, "latest").await?;
         remember(&q.reg, entries, f.id, g);
-        if let Some(w) = solidly_fee::blocked(&g, None) {
-            return Err(ctx.err(
-                ErrorCode::NoRoute,
-                format!("{}: {w} — своп не отправлен", f.id),
-            ));
-        }
-        if let Some(m) = g.max_gas_price.map(U256::from) {
-            cap = Some(cap.map_or(m, |c| c.min(m)));
-        }
+        cap = merged_cap(ctx, f.id, g, cap)?;
     }
     Ok(cap)
+}
+
+fn merged_cap(ctx: &Ctx, id: &str, gate: SolidlyGate, cap: Option<U256>) -> GatewayResult<Option<U256>> {
+    if let Some(why) = solidly_fee::blocked(&gate, None) {
+        return Err(ctx.err(ErrorCode::NoRoute, format!("{id}: {why} — своп не отправлен")));
+    }
+    Ok(match gate.max_gas_price.map(U256::from) {
+        Some(limit) => Some(cap.map_or(limit, |c| c.min(limit))),
+        None => cap,
+    })
 }
 
 /// Решение 470 (ревью t240): пул Aero Slipstream V3 перед отправкой — комиссия на последнем блоке (aero_cl::fee_latest:

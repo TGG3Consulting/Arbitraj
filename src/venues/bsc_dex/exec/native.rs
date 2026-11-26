@@ -63,9 +63,14 @@ pub fn wrapped(ctx: &Ctx) -> Option<(String, Address)> {
     ))
 }
 
+/// Настроенный тикер денежной стороны. Даже при неполной настройке обёртки выплате
+/// потребуется доказательство перевода нативной валюты.
+pub fn cash_ticker(ctx:&Ctx,ticker:&str)->bool{
+    !ticker.trim().is_empty() && ctx.text("dex.native_ticker").is_ok_and(|t|t==ticker)
+}
 /// Настроенная нативная денежная сторона должна совпасть по тикеру и контракту обёртки.
 pub fn cash(ctx: &Ctx, ticker: &str, token: Address) -> bool {
-    wrapped(ctx).is_some_and(|(t, w)| t == ticker && w == token)
+    !token.is_zero() && wrapped(ctx).is_some_and(|(t, w)| t == ticker && w == token)
 }
 /// Нативная ли монета: адрес = dex.native_wrapped и тикер = dex.native_ticker (монета биржи без адреса, которой ядро
 /// дало адрес обёртки). Токен WBNB, который биржа сама перечисляет с адресом под другим тикером, — обычный токен.

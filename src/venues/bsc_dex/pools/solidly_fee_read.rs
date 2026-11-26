@@ -130,9 +130,15 @@ pub fn rule(ctx: &Ctx, f: &Family, src: Option<&str>) -> GatewayResult<FeeRule> 
     let set = optional(ctx, name, f.id)?
         .ok_or_else(|| ctx.not_set(name, format!("{}: не задана {name}", f.id)))?;
     match set.as_str() {
-        "numerator" => Ok(FeeRule::Numerator {
-            denominator: ctx.dex_int("dex.solidly_fee_denominator", f.id)?,
-        }),
+        "numerator" => {
+            let denominator = ctx.dex_int("dex.solidly_fee_denominator", f.id)?;
+            if f.variant != super::family_variant::Variant::SolidlyClassic
+                && denominator > u64::from(u32::MAX)
+            {
+                return Err(ctx.not_set("dex.solidly_fee_denominator", "делитель не помещается"));
+            }
+            Ok(FeeRule::Numerator { denominator })
+        }
         "divisor" => Ok(FeeRule::Divisor),
         other => {
             let why = format!("{}: dex.solidly_fee_rule = «{other}» неизвестно", f.id);
@@ -149,7 +155,7 @@ pub fn word(ctx: &Ctx, to: Address, out: &[u8]) -> GatewayResult<U256> {
     })
 }
 
-/// Число комиссии в u32 и проверка по правилу: числитель — меньше делителя; делитель — больше 1 (1 — комиссия 100%,
+/// Число комиссии в u64 и проверка по правилу: числитель — меньше делителя; делитель — больше 1 (1 — комиссия 100%,
 /// 0 — деление на ноль в контракте). Ошибка BadResponse — иначе.
 pub fn checked(ctx: &Ctx, raw: U256, rule: FeeRule) -> GatewayResult<SolidlyFee> {
     let bad = |w: String| ctx.err(ErrorCode::BadResponse, w);

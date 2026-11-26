@@ -6,7 +6,6 @@
 import argparse
 import hashlib
 import gzip
-import gzip
 import json
 from pathlib import Path
 

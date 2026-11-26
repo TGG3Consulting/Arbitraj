@@ -48,7 +48,7 @@ pub(super) fn expected(
     amount: U256,
 ) -> Option<U256> {
     let parts = multicall::decode(raw, 6).ok()?;
-    let data = |i: usize| -> Option<&[u8]> { Some(parts.get(i)?.as_ref().ok()?.as_ref()) };
+    let data = |i: usize| -> Option<&[u8]> { parts.get(i)?.as_ref().ok().map(AsRef::as_ref) };
     let word = |i| {
         let b = data(i)?;
         (b.len() == 32).then(|| U256::from_be_slice(b))

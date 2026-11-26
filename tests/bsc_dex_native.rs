@@ -278,9 +278,27 @@ async fn native_settlement_requires_operator_ticker_and_matching_chain_wrapper()
                 .await
                 .unwrap();
             let configured = c.text("venue.quote_asset").unwrap();
+            assert_eq!(native::cash_ticker(&c,&configured),expected);
             assert_eq!(native::cash(&c, &configured, wrapped), expected);
+            assert!(!native::cash(&c,&configured,Address::ZERO));
             assert!(!native::cash(&c, &configured, other));
         }
+    }
+}
+
+/// USDT остаётся ERC-20 на прежних сетях даже до настройки обёртки.
+#[tokio::test]
+async fn stable_cash_keeps_its_original_path_on_bsc_and_arbitrum() {
+    use arb::settings::scope::Scope;
+    use arb::venues::bsc_dex::ctx::Place;
+    let mut c = ctx("stable-cash-old-networks").await;
+    for (venue, native_symbol) in [("bsc_dex", "BNB"), ("arb_dex", "ETH")] {
+        c.place = Place { id: venue, all: &["bsc_dex", "arb_dex", "base_dex", "eth_dex"] };
+        let scope = Scope::Venue(venue.into());
+        for (key, value) in [("dex.native_ticker", native_symbol), ("venue.quote_asset", "USDT")] {
+            c.settings.set(key, scope.clone(), Some(serde_json::json!(value)), "test").await.unwrap();
+        }
+        assert!(!native::cash_ticker(&c, &c.text("venue.quote_asset").unwrap()));
     }
 }
 

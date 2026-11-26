@@ -178,7 +178,7 @@ impl Venue for BscDex {
     /// Котировка на объём по пулам (локальная математика по официальным библиотекам — quote/, math/).
     /// Ошибки: StaleData, CoinNotChecked / CoinCheckFailed, NoRoute, NotConfigured, узел.
     async fn quote(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {
-        if super::quote::vista_pricing::cash_market(&self.p, asset) {
+        if super::quote::vista_pricing::cash_market(&self.p) {
             return scope(
                 urgency::is_set().unwrap_or(Class::Quote),
                 self.p.quoting().quote(asset, side, qty),
@@ -228,7 +228,7 @@ impl Venue for BscDex {
     /// объём целиком — ответ без полной котировки; иначе — полная котировка, как quote. Финальная котировка через
     /// KyberSwap (решение 95) — как quote. Ошибки: как у quote.
     async fn quote_fills(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Decimal> {
-        if super::quote::vista_pricing::cash_market(&self.p, asset) {
+        if super::quote::vista_pricing::cash_market(&self.p) {
             return self.quote(asset, side, qty).await.map(|q| q.fillable_qty);
         }
         if crate::gateway::quote_stage::settlement() {
@@ -933,7 +933,7 @@ impl BscDex {
                 )
             })
         });
-        let cash_market = super::quote::vista_pricing::cash_market(&self.p, &req.asset);
+        let cash_market = super::quote::vista_pricing::cash_market(&self.p);
         let path = if cash_market || marked {
             let selected =
                 super::quote::vista_pricing::terminal_cash(&self.p.registry, req.route.as_ref());

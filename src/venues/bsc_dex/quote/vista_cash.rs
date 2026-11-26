@@ -8,22 +8,10 @@ use crate::{
 use alloy_primitives::Address;
 
 pub(in crate::venues::bsc_dex) use super::super::exec::native::cash;
-pub(in crate::venues::bsc_dex) fn cash_market(
-    p: &super::super::parts::Parts,
-    asset: &crate::core::types::Asset,
-) -> bool {
-    let Some(coin) = asset.contract else {
-        return false;
-    };
-    let Ok(ticker) = p.ctx.text("venue.quote_asset") else {
-        return false;
-    };
-    if !p.ctx.text("dex.native_ticker").is_ok_and(|v| v == ticker) {
-        return false;
-    }
-    p.tokens.usdt(&p.ctx).is_ok_and(|token| {
-        cash(&p.ctx, &ticker, token) && p.registry.by_pair(coin, token).iter().any(is_vista)
-    })
+/// Валюта расчёта определяется настройкой площадки, в том числе у токенов без прямого пула EtherVista.
+pub(in crate::venues::bsc_dex) fn cash_market(p: &super::super::parts::Parts)->bool {
+    let Ok(ticker)=p.ctx.text("venue.quote_asset") else {return false};
+    super::super::exec::native::cash_ticker(&p.ctx,&ticker)
 }
 /// Подтверждённый механизм перевода именно нативной расчётной валюты на одной или другой стороне сделки.
 pub(in crate::venues::bsc_dex) fn terminal_cash(

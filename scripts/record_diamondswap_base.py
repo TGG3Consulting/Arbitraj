@@ -3,6 +3,7 @@ import argparse
 import json
 from pathlib import Path
 
+import requests
 from eth_abi import decode
 from eth_utils import keccak
 from record_balancer_markets import Capture, posts
@@ -165,6 +166,17 @@ def capture(endpoint):
 
 if __name__=="__main__":
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument("output",type=Path)
-    ap.add_argument("--endpoint",default="https://mainnet.base.org")
+    ap.add_argument("--endpoint", action="append", help="Archive RPC, repeat to specify fallback order")
     a=ap.parse_args()
-    a.output.write_text(json.dumps(capture(a.endpoint),indent=2)+"\n",encoding="utf8")
+    failures=[]
+    for url in a.endpoint or ("https://mainnet.base.org","https://base.gateway.tenderly.co","https://base-rpc.publicnode.com"):
+        try:
+            evidence=capture(url)
+        except (requests.RequestException, ValueError, KeyError, RuntimeError) as err:
+            failures.append((url,str(err)[:160]))
+            continue
+        evidence["endpoint"]=url
+        a.output.write_text(json.dumps(evidence,indent=2)+"\n",encoding="utf8")
+        break
+    else:
+        raise RuntimeError(f"No endpoint completed the pinned DiamondSwap replay: {failures}")

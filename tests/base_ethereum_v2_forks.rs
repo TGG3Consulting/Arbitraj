@@ -199,7 +199,7 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
         assert_eq!(sample["block_hash"], market["selector"]["blockHash"]);
         captures.push(sample.clone());
     }
-    assert_eq!(pool_count, 1039);
+    assert_eq!(pool_count, 1203);
     let profiles: Vec<Value> =
         serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
     let mut admitted = 0;
@@ -359,6 +359,8 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
         "9mm-v2-base",
         "moonbase",
         "x7-finance-base",
+        "x7-finance",
+        "x7-finance-ethereum",
         "cbswap",
         "cloudbase",
         "pixelswap-base",

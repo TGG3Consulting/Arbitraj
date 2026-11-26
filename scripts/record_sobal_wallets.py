@@ -37,7 +37,7 @@ def funding_paths(markets, target, source):
                 continue
             for a, b in edges(pool):
                 if a == tokens[-1] and b not in tokens:
-                    todo.append((tokens + [b], pools + [pool])))
+                    todo.append((tokens + [b], pools + [pool]))
 
 
 def quote_call(pid, a, b, amount, wallet):

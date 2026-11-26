@@ -91,12 +91,27 @@ fn factory_ownership_fee_and_both_wallet_directions_match_the_v1_curve() {
             .parse::<Address>()
             .unwrap();
         let init = dir["init"].as_str().unwrap().parse::<B256>().unwrap();
+        let accepted = profile["dex.pool_code_hashes"].as_array().unwrap();
+        let mut population = vec![0usize; accepted.len()];
         for row in rows {
             let mut salt = Vec::with_capacity(41);
             for t in row["tokens"].as_array().unwrap() {
                 salt.extend_from_slice(t.as_str().unwrap().parse::<Address>().unwrap().as_slice());
             }
             salt.push(u8::from(row["stable"].as_bool().unwrap()));
+            let actual = row["pool"].as_str().unwrap().parse::<Address>().unwrap();
+            let found: Vec<_> = accepted
+                .iter()
+                .enumerate()
+                .filter(|(_, hash)| {
+                    factory.create2(
+                        keccak256(&salt),
+                        hash.as_str().unwrap().parse::<B256>().unwrap(),
+                    ) == actual
+                })
+                .collect();
+            assert_eq!(found.len(), 1);
+            population[found[0].0] += 1;
             assert_eq!(
                 factory.create2(keccak256(&salt), init)
                     == row["pool"].as_str().unwrap().parse::<Address>().unwrap(),
@@ -104,6 +119,18 @@ fn factory_ownership_fee_and_both_wallet_directions_match_the_v1_curve() {
             );
         }
         let measured = wallets["markets"].as_array().unwrap();
+        if id == "equalizer-base" {
+            assert_eq!(population, [252, 32, 100]);
+            for hash in accepted {
+                for stable in [false, true] {
+                    assert!(
+                        measured
+                            .iter()
+                            .any(|m| m["init"] == *hash && m["stable"] == stable)
+                    );
+                }
+            }
+        }
         for stable in [false, true] {
             assert!(
                 measured.iter().any(|m| m["stable"] == stable),
@@ -112,7 +139,10 @@ fn factory_ownership_fee_and_both_wallet_directions_match_the_v1_curve() {
         }
         for market in measured {
             let m = rows.iter().find(|r| r["pool"] == market["pool"]).unwrap();
-            assert_eq!(m["current_init"], true);
+            if m["current_init"] != true {
+                assert_eq!(m["init"], market["init"]);
+                assert!(accepted.contains(&m["init"]));
+            }
             assert_eq!(m["balances"], m["reserves"]);
             let i = usize::from(m["tokens"][0] != market["token_in"]);
             let fee = SolidlyFee {
@@ -149,7 +179,7 @@ fn factory_ownership_fee_and_both_wallet_directions_match_the_v1_curve() {
         }
     }
     assert_eq!(pools, 1169);
-    assert_eq!((fills, fresh_fills), (56, 4));
+    assert_eq!((fills, fresh_fills), (72, 4));
 }
 
 #[test]

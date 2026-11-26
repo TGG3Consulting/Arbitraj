@@ -77,10 +77,23 @@ fn all_registered_pairs_derive_from_factory_and_two_archival_fee_regimes_settle_
     assert_eq!(crossing[1]["invariant_fee"], 3);
     assert_eq!(crossing[0]["trade_liquidity"], crossing[1]["trade_ema"][1]);
     for b in [base, &j["historical"]] {
+        let rates=wallet_rates(b,b["wallet"].as_array().unwrap());
+        let expected = if b["ds_fee_info"][1] == 0 {
+            vec![3]
+        } else {
+            vec![0, 3]
+        };
+        assert_eq!(rates.into_iter().collect::<Vec<_>>(), expected);
+    }
+}
+
+
+fn wallet_rates(b:&Value, groups:&[Value])->std::collections::BTreeSet<u64>{
         let mut rates = std::collections::BTreeSet::new();
-        for group in b["wallet"].as_array().unwrap() {
+        for group in groups {
             let mut expected = None;
-            for (i, x) in group.as_array().unwrap().iter().enumerate() {
+            for x in group.as_array().unwrap() {
+                let forward=x["input"].as_str().unwrap()<x["output"].as_str().unwrap();
                 let (r0, r1, f) = state(b, x);
                 if let Some(prior) = expected.take() {
                     assert_eq!(
@@ -104,25 +117,44 @@ fn all_registered_pairs_derive_from_factory_and_two_archival_fee_regimes_settle_
                         .ends_with("INSUFFICIENT_OUTPUT_AMOUNT")
                 );
                 assert_ne!(x["gamma_pool"], b["proof"]["router"]["address"]);
-                let (trade, next) = after(r0, r1, &f, i == 0, dx).unwrap();
+                let (trade, next) = after(r0, r1, &f, forward, dx).unwrap();
                 assert_eq!((trade.amount_in, trade.amount_out), (dx, dy));
-                let inverse = quote(r0, r1, &f, i == 0, false, dy).unwrap().amount_in;
+                let inverse = quote(r0, r1, &f, forward, false, dy).unwrap().amount_in;
                 assert!(
                     inverse <= dx
-                        && quote(r0, r1, &f, i == 0, true, inverse).unwrap().amount_out >= dy
+                        && quote(r0, r1, &f, forward, true, inverse).unwrap().amount_out >= dy
                 );
-                if let Some(less) = quote(r0, r1, &f, i == 0, true, inverse - U256::ONE) {
+                if let Some(less) = quote(r0, r1, &f, forward, true, inverse - U256::ONE) {
                     assert!(less.amount_out < dy);
                 }
                 rates.insert(x["invariant_fee"].as_u64().unwrap());
                 expected = Some(next);
             }
         }
-        let expected = if b["ds_fee_info"][1] == 0 {
-            vec![3]
-        } else {
-            vec![0, 3]
-        };
-        assert_eq!(rates.into_iter().collect::<Vec<_>>(), expected);
+    rates
+}
+
+#[test]
+fn ethereum_orders_use_physical_token_order_and_compare_wallet_amounts(){
+    let j:Value=serde_json::from_str(include_str!("data/first_run_dex_2026-11-26/deltaswap_ethereum.json")).unwrap();
+    let b=&j["current"];
+    let factory=b["proof"]["factory"]["address"].as_str().unwrap().parse().unwrap();
+    let init=b["proof"]["pair_init"].as_str().unwrap().parse().unwrap();
+    assert_eq!(b["pools"].as_array().unwrap().len(),17);
+    for row in b["pools"].as_array().unwrap(){
+        let addr=|v:&Value|v.as_str().unwrap().parse::<Address>().unwrap();
+        assert_eq!(v2_create2(factory,addr(&row["tokens"][0]),addr(&row["tokens"][1]),init),addr(&row["pool"]));
     }
+    let rates=wallet_rates(b,b["wallet"].as_array().unwrap());
+    assert_eq!(rates.into_iter().collect::<Vec<_>>(),[3]);
+    let mut checks=0;
+    for row in b["other_wallets"].as_array().unwrap(){
+        for r in row["samples"].as_array().unwrap(){
+            if r["trades"].is_array(){
+                wallet_rates(b,std::slice::from_ref(&r["trades"]));
+                checks+=1;
+            }else{assert!(r["error"].is_string());}
+        }
+    }
+    assert_eq!(checks,4);
 }

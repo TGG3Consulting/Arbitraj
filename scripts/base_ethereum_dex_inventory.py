@@ -40,6 +40,9 @@ def tables(network, snapshots, profiles):
     extra_path = Path("tests/data/first_run_dex_2026-11-26/catalog_recheck.json")
     refresh = read(extra_path).get(network, {}) if extra_path.exists() else {}
     refreshed = refresh.get("pages", {})
+    open_index=Path("tests/data/first_run_dex_2026-11-26/ethereum_open_index.json")
+    if not base and open_index.exists():
+        refreshed={**refreshed,**read(open_index)["pages"]}
     volume = refresh.get("volume", {})
     title = "Base" if base else "Ethereum"
     out = [f"### {title} · DEX", "",
@@ -210,7 +213,7 @@ def tables(network, snapshots, profiles):
         out.extend(["", "На Base Archly v1 и v2 имеют отдельные фабрики. Справочник индексатора выбрал пару из v2, "
                     "обе версии включены через родителя archly-base. Для пула wTV/TV версии v1 второй независимый адрес получил wTV обычным ERC-20 переводом из архивного баланса и выдал своё разрешение. При входах 500000000000000 и 5000000000000000 raw wTV он получил те же 502276010429030 и 5019824065979758 raw TV, а при обратном обмене — 499700055383695 и 4997001430051607 raw wTV. В четырёх случаях порог на единицу выше откатил обмен. Источник Hydrex Classic — getFee() самой пары, "
                     "индивидуальная ненулевая ставка имеет приоритет над общим тарифом фабрики. У Equalizer ставки могут иметь 18 знаков после запятой. "
-                    "Адреса прошлых поколений без подтверждённого шаблона и пары с активным внешним менеджером комиссии требуют отдельной приёмки. "
+                    "У Equalizer сверены 32 пары первого поколения, 100 второго и 252 текущего, по два размера и обоим направлениям stable и volatile каждого. Начальные блоки исторических поколений 4334766 и 4938760, при них pairCodeHash() и EIP-1967 реализации связаны с регистрациями CREATE2. Две пары с активным внешним менеджером комиссии требуют отдельной приёмки. [Исторические реализации и кошельки](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45905243473). "
                     "[Размещения Archly](https://docs.archly.fi/security) · [Архивы GitHub](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45903513687)."])
         oasis_file = "tests/data/first_run_dex_2026-11-26/oasisswap_base.json"
         oasis_v5_file = "tests/data/first_run_dex_2026-11-26/oasisswap_v5_base.json"
@@ -872,6 +875,22 @@ def tables(network, snapshots, profiles):
                     "[Размещения](https://ringprotocol.gitbook.io/ring/docs/deployments) · "
                     f"[Суммы и результаты](../{ring_path.as_posix()}) · "
                     "[Архивный прогон](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45881656010)."])
+    if not base:
+        dx=read(Path("tests/data/first_run_dex_2026-11-26/deltaswap_ethereum.json"))["current"]
+        x7=read(Path("tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json"))
+        for key in ("x7-finance","x7-finance-ethereum"):
+            row=x7[key]; sample=next(x for x in row["samples"] if "cases" in x)
+            out.append(f"**{key}.** Фабрика `{row['factory']}` подтвердила {len(row['pools'])} пар. Обычный V5 swap в "
+                       f"`{sample['pool']}` подтвердил расход и выплату в двух направлениях на двух объёмах. "
+                       f"Ставка этого entrypoint составляет 0,2%. Для маршрута со скидкой через отдельный роутер нужна проверка ставки самого плательщика. "
+                       f"Из проверенных перед этим пулом кандидатов {sum('reason' in z for z in row['samples'])} не прошли по состоянию балансов или результату обмена. "
+                       "[Реестр, исходники и обмены](../tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json).")
+        checks=sum(len(t.get("trades",[])) for p in dx["other_wallets"] for t in p["samples"])+sum(len(t) for t in dx["wallet"])
+        out.append(f"**DeltaSwap Ethereum.** В реестре {len(dx['pools'])} пар. Официальный Router02 подтвердил {checks} обменов "
+                   "по обеим сторонам трёх рынков с точным списанием и порогом на 1 raw выше выплаты. "
+                   "На этом блоке параметры фабрики равны [3, 0], комиссия обычного кошелька составляет 0,3%. "
+                   "[Реестр и денежные результаты](../tests/data/first_run_dex_2026-11-26/deltaswap_ethereum.json).")
+        out.append("")
     out.extend(["", f"Код каждого адреса проверен в [снимке размещений](../tests/data/first_run_dex_2026-11-26/{network}.json). "
                 "Две записи вызова Router.getAmountOut содержат исходные аргументы и ответ. "
                 "У Maverick V2 параметр dex.tick_radius задаёт оператор по глубине рынка. "
@@ -885,6 +904,11 @@ def tables(network, snapshots, profiles):
         pool = probe.get("pool") or next((a["address"] for a in sample.get("samples", []) if a.get("address")), None)
         factory = probe.get("reported_factory")
         roundtrip = probe.get("factory_roundtrip")
+        if not base and id in {"x7-finance","x7-finance-ethereum","deltaswap-ethereum","supernova-cl"} and sample.get("samples"):
+            selected=sample["samples"][0]
+            pool,factory=selected["address"],selected["reported_factory"]
+            if id in {"x7-finance","x7-finance-ethereum","deltaswap-ethereum"}:
+                roundtrip="getPair(address,address)"
         if base and id == "quickswap-v2-base" and quickswap_v2.exists() and pool and any(m["pool"] == pool.lower() for m in q2["directory"]):
             factory, roundtrip = q2["factory"], "getPair(address,address)"
         if base and id == "quickswap-v4-base" and quickswap.exists() and pool and any(m["pool"] == pool.lower() for m in qs["markets"]):

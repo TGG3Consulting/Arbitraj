@@ -1,0 +1,759 @@
+{
+  "current": {
+    "height": 26494988,
+    "selector": {
+      "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "requireCanonical": true
+    },
+    "state_root": "0xbd73f03df514c4d550c21a6d567e25a4190f646acbb94b8e8c2462d7c9b17db7",
+    "proof": {
+      "factory": {
+        "address": "0x5fbe219e88f6c6f214ce6f5b1fcaa0294f31ae1b",
+        "url": "https://sourcify.dev/server/v2/contract/1/0x5fbe219e88f6c6f214ce6f5b1fcaa0294f31ae1b",
+        "contract": "DeltaSwapFactory",
+        "runtime": "0x91adb1005bf6ffc6e32c43f90082f6334d0a5466b943996d1b74401c3afd2172",
+        "bytes": 15207,
+        "deployment": "0xca23b9a3ab5857f92aaeb74d831db3eecaa41595e694d89e24ec204b4c0ad5e3"
+      },
+      "router": {
+        "address": "0xcf2b6bc8c0e0a1292db7f0ae89410670796350c8",
+        "url": "https://sourcify.dev/server/v2/contract/1/0xcf2b6bc8c0e0a1292db7f0ae89410670796350c8",
+        "contract": "DeltaSwapRouter02",
+        "runtime": "0x1987bff7bb1c5e195f55827197a8dd22806f79465588a300bd3c115e79123b25",
+        "bytes": 17055,
+        "deployment": "0x214d3535c41ebc3e09ee89e983bfec39c87dd4e4120b8731ce289945f5de8d15"
+      },
+      "sample_pair": {
+        "address": "0x1321228815fcf38b75356760db800c7becc7731f",
+        "url": "https://sourcify.dev/server/v2/contract/1/0x1321228815fcf38b75356760db800c7becc7731f",
+        "contract": "DeltaSwapPair",
+        "runtime": "0x64301eb7f6d2cdafe4e6ac25c15ed2b034a0960d4fa039e498c608c410a7f536",
+        "bytes": 10426,
+        "deployment": "0xde0215477509e566b96d9feb7bc91e3d81ce05566fb42f19489c934334374b16"
+      },
+      "pair_init": "0xa82767a5e39a2e216962a2ebff796dcc37cd05dfd6f7a149e1f8fbb6bf487658",
+      "codecopy": [
+        4462,
+        10692
+      ]
+    },
+    "ds_fee_info": [
+      3,
+      0
+    ],
+    "gs_fee": 3,
+    "pools": [
+      {
+        "pool": "0x1321228815fcf38b75356760db800c7becc7731f",
+        "tokens": [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "8112174",
+          "4822627095817896"
+        ],
+        "liquidity_ema": [
+          "197792795971",
+          "26465613"
+        ],
+        "trade_ema": [
+          "2084541239",
+          "2084541239",
+          "26465613"
+        ],
+        "gamma_pool": "0x1f2fadc02e0e37b4c33a4bfbd544ffd4ad3da59a"
+      },
+      {
+        "pool": "0x150dde5dba6fb19cb0b9fe555b27315760d50202",
+        "tokens": [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xcd5fe23c85820f7b72d0926fc9b05b43e359b7ee"
+        ],
+        "reserves": [
+          "1",
+          "32494666"
+        ],
+        "liquidity_ema": [
+          "2320620157546",
+          "21566545"
+        ],
+        "trade_ema": [
+          "82873123390",
+          "82873123390",
+          "21264351"
+        ],
+        "gamma_pool": "0xd873238e67bf6119b813cc83a87d23d87b668adc"
+      },
+      {
+        "pool": "0xb26fcef356b9281bc42fa9d508d1b902f7fe738d",
+        "tokens": [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xfae103dc9cf190ed75350761e95403b7b8afa6c0"
+        ],
+        "reserves": [
+          "1",
+          "42114206"
+        ],
+        "liquidity_ema": [
+          "3548233973890",
+          "21049365"
+        ],
+        "trade_ema": [
+          "145546550220",
+          "145546550220",
+          "20694663"
+        ],
+        "gamma_pool": "0x0e36bac32a896c74d3ebe64f1cb79b8e111833c4"
+      },
+      {
+        "pool": "0x162fe615ac0df166fc690356716c171bf8256047",
+        "tokens": [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xd9a442856c234a39a81a089c06451ebaa4306a72"
+        ],
+        "reserves": [
+          "1",
+          "34140693"
+        ],
+        "liquidity_ema": [
+          "2700214599197",
+          "21566472"
+        ],
+        "trade_ema": [
+          "251470762014",
+          "251470762014",
+          "21262692"
+        ],
+        "gamma_pool": "0x4f4603f9f43bf30f22af877e4b6b58e54dc8032d"
+      },
+      {
+        "pool": "0xdc80dc0ed03648e1c64d186b5eb4f08b737c4198",
+        "tokens": [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xf951e335afb289353dc249e82926178eac7ded78"
+        ],
+        "reserves": [
+          "1",
+          "32005937"
+        ],
+        "liquidity_ema": [
+          "1081066428708",
+          "23025847"
+        ],
+        "trade_ema": [
+          "57379854996",
+          "57379854996",
+          "22951886"
+        ],
+        "gamma_pool": "0x5fb30e5faf4e5be77f3cf9b00510ffa3e583a651"
+      },
+      {
+        "pool": "0xcad7eec55b91550b9f6c1c26ce3b9ecc9eacc000",
+        "tokens": [
+          "0x32bd822d615a3658a68b6fdd30c2fcb2c996d678",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        "reserves": [
+          "38033715",
+          "1"
+        ],
+        "liquidity_ema": [
+          "1215402877631",
+          "21049377"
+        ],
+        "trade_ema": [
+          "94432294683",
+          "94432294683",
+          "20474928"
+        ],
+        "gamma_pool": "0x26afa50815c4495bf7ee1dc5e70ec44d925be077"
+      },
+      {
+        "pool": "0xdbb1c91b7fe7a47ae4375a984e03ab7f0f5ccf9e",
+        "tokens": [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xcd5fe23c85820f7b72d0926fc9b05b43e359b7ee"
+        ],
+        "reserves": [
+          "2079",
+          "1927"
+        ],
+        "liquidity_ema": [
+          "4906205288199753117",
+          "23778094"
+        ],
+        "trade_ema": [
+          "5514343248858328",
+          "5514343248858328",
+          "23676170"
+        ],
+        "gamma_pool": "0xccaab6d7bee6d60bceeec0924f2ea188efa3d39f"
+      },
+      {
+        "pool": "0x77d41314b4bf615ad51d60d9df3a45a0ef44407e",
+        "tokens": [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xfae103dc9cf190ed75350761e95403b7b8afa6c0"
+        ],
+        "reserves": [
+          "13823137227396209",
+          "12953239564091678"
+        ],
+        "liquidity_ema": [
+          "13381121329461784",
+          "26312152"
+        ],
+        "trade_ema": [
+          "143326212034443",
+          "143326212034443",
+          "26312152"
+        ],
+        "gamma_pool": "0x49f937483318813b312841b8cf6b9878c67c4893"
+      },
+      {
+        "pool": "0x338c6807b433a95b2e2347e0cffacd92b97fe8e2",
+        "tokens": [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xd9a442856c234a39a81a089c06451ebaa4306a72"
+        ],
+        "reserves": [
+          "177925948657772936",
+          "164317189926504748"
+        ],
+        "liquidity_ema": [
+          "170986233067030306",
+          "26197213"
+        ],
+        "trade_ema": [
+          "101375872492249",
+          "101375872492249",
+          "26197213"
+        ],
+        "gamma_pool": "0x1a33b9be3fe58c1bde4325a68c09c1f7fa8aa1e5"
+      },
+      {
+        "pool": "0x7fd925f0f8f6eabe21f8a2783ab9a0ef44b1ba06",
+        "tokens": [
+          "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+          "0xfae103dc9cf190ed75350761e95403b7b8afa6c0"
+        ],
+        "reserves": [
+          "1850",
+          "2163"
+        ],
+        "liquidity_ema": [
+          "18477814098774294",
+          "23025857"
+        ],
+        "trade_ema": [
+          "0",
+          "0",
+          "0"
+        ],
+        "gamma_pool": "0xc3aed750cb7b2ac1627f0880d05f64acb3ef527b"
+      },
+      {
+        "pool": "0x1bdf50d9e00288dcc24af74f38af141bf56ad9dd",
+        "tokens": [
+          "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+          "0xd9a442856c234a39a81a089c06451ebaa4306a72"
+        ],
+        "reserves": [
+          "1857",
+          "2155"
+        ],
+        "liquidity_ema": [
+          "8809372070365721",
+          "23025868"
+        ],
+        "trade_ema": [
+          "97386074470850",
+          "97386074470850",
+          "21975099"
+        ],
+        "gamma_pool": "0xd173bb47253eb0c51ecea6a32c51bdee5f691a13"
+      },
+      {
+        "pool": "0x1465d42a074ce3763acb4bbd9594741aa7548bf4",
+        "tokens": [
+          "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+          "0xcd5fe23c85820f7b72d0926fc9b05b43e359b7ee"
+        ],
+        "reserves": [
+          "1886",
+          "2122"
+        ],
+        "liquidity_ema": [
+          "9426133884048114",
+          "21568240"
+        ],
+        "trade_ema": [
+          "0",
+          "0",
+          "0"
+        ],
+        "gamma_pool": "0x09d219b6a90c6c8ec5949b8a48dbdc5ee1f31c15"
+      },
+      {
+        "pool": "0x64eb7394f24ae9c40a759a1173bd7ee5f700c7c9",
+        "tokens": [
+          "0x0bb9ab78aaf7179b7515e6753d89822b91e670c4",
+          "0xf02c96dbbb92dc0325ad52b3f9f2b951f972bf00"
+        ],
+        "reserves": [
+          "346622939706161226",
+          "106222721360138"
+        ],
+        "liquidity_ema": [
+          "6067885294024556",
+          "24712230"
+        ],
+        "trade_ema": [
+          "482310462317816",
+          "482310462317816",
+          "24712230"
+        ],
+        "gamma_pool": "0x11fad0d3072fb24038c23e010df1950b4acbde46"
+      },
+      {
+        "pool": "0x876f50ab3245dd3df25a64644bb49fcc0550baab",
+        "tokens": [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xf02c96dbbb92dc0325ad52b3f9f2b951f972bf00"
+        ],
+        "reserves": [
+          "76514",
+          "19191440424928"
+        ],
+        "liquidity_ema": [
+          "1211781280",
+          "25729058"
+        ],
+        "trade_ema": [
+          "212864222",
+          "212864222",
+          "25729058"
+        ],
+        "gamma_pool": "0x7f941ad25279f94a8011f50b5dda6f6b0b9a9102"
+      },
+      {
+        "pool": "0x785e6359316c1bacd0d8659f66e2d61f6993f06e",
+        "tokens": [
+          "0x0bb9ab78aaf7179b7515e6753d89822b91e670c4",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        "reserves": [
+          "1948949164763933843",
+          "148534093048183"
+        ],
+        "liquidity_ema": [
+          "17014270380631215",
+          "26020451"
+        ],
+        "trade_ema": [
+          "8893807437398953",
+          "8893807437398953",
+          "26020451"
+        ],
+        "gamma_pool": "0xa3eb73cc786d9d3ebf7219bdc823adeb93f4439e"
+      },
+      {
+        "pool": "0x28701515aa3630ad5be5cd457956552c05efb1f2",
+        "tokens": [
+          "0x507cb8958599b416b6084c99a78d3d00dd307ce5",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        "reserves": [
+          "2261731945119360258",
+          "22169327"
+        ],
+        "liquidity_ema": [
+          "7081036299701",
+          "24645551"
+        ],
+        "trade_ema": [
+          "73949384711",
+          "73949384711",
+          "24645551"
+        ],
+        "gamma_pool": "0xd32015a4f8789d90d31503c3a4ce41f24449a544"
+      },
+      {
+        "pool": "0x5715635052d23694a1dcad885fc62f31b8bb95de",
+        "tokens": [
+          "0x0aa7880903e5ab3752739cde323dfd2265defb46",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        "reserves": [
+          "1268778671649421475026",
+          "39600"
+        ],
+        "liquidity_ema": [
+          "7088274500703",
+          "22211020"
+        ],
+        "trade_ema": [
+          "41967970909915",
+          "41967970909915",
+          "22211020"
+        ],
+        "gamma_pool": "0x4a7050111304b623befe29e4b347489287486563"
+      }
+    ],
+    "wallet": [
+      [
+        {
+          "input": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "output": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "amount": "482262709581",
+          "out": "808",
+          "amount_spent": "482262709581",
+          "amount_received": "808",
+          "invariant_fee": 3,
+          "trade_liquidity": "9882216",
+          "reserves": [
+            "8112174",
+            "4822627095817896"
+          ],
+          "liquidity_ema": [
+            "197792795971",
+            "26465613"
+          ],
+          "trade_ema": [
+            "2084541239",
+            "2084541239",
+            "26465613"
+          ],
+          "gamma_pool": "0x1f2fadc02e0e37b4c33a4bfbd544ffd4ad3da59a",
+          "next_revert": "DeltaSwapRouter: INSUFFICIENT_OUTPUT_AMOUNT",
+          "gas": 179008
+        },
+        {
+          "input": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "output": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "amount": "808",
+          "out": "478956973259",
+          "amount_spent": "808",
+          "amount_received": "478956973259",
+          "invariant_fee": 3,
+          "trade_liquidity": "9851399",
+          "reserves": [
+            "8111366",
+            "4823109358527477"
+          ],
+          "liquidity_ema": [
+            "197792834210",
+            "26494989"
+          ],
+          "trade_ema": [
+            "9882216",
+            "9882216",
+            "26494989"
+          ],
+          "gamma_pool": "0x1f2fadc02e0e37b4c33a4bfbd544ffd4ad3da59a",
+          "next_revert": "DeltaSwapRouter: INSUFFICIENT_OUTPUT_AMOUNT",
+          "gas": 158947
+        }
+      ],
+      [
+        {
+          "input": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "output": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "amount": "482262709581789",
+          "out": "735458",
+          "amount_spent": "482262709581789",
+          "amount_received": "735458",
+          "invariant_fee": 3,
+          "trade_liquidity": "9889631264",
+          "reserves": [
+            "8112174",
+            "4822627095817896"
+          ],
+          "liquidity_ema": [
+            "197792795971",
+            "26465613"
+          ],
+          "trade_ema": [
+            "2084541239",
+            "2084541239",
+            "26465613"
+          ],
+          "gamma_pool": "0x1f2fadc02e0e37b4c33a4bfbd544ffd4ad3da59a",
+          "next_revert": "DeltaSwapRouter: INSUFFICIENT_OUTPUT_AMOUNT",
+          "gas": 184064
+        },
+        {
+          "input": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "output": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "amount": "735458",
+          "out": "479634353050886",
+          "amount_spent": "735458",
+          "amount_received": "479634353050886",
+          "invariant_fee": 3,
+          "trade_liquidity": "9861308204",
+          "reserves": [
+            "7376716",
+            "5304889805399685"
+          ],
+          "liquidity_ema": [
+            "197819780370",
+            "26494989"
+          ],
+          "trade_ema": [
+            "9889631264",
+            "9889631264",
+            "26494989"
+          ],
+          "gamma_pool": "0x1f2fadc02e0e37b4c33a4bfbd544ffd4ad3da59a",
+          "next_revert": "DeltaSwapRouter: INSUFFICIENT_OUTPUT_AMOUNT",
+          "gas": 164003
+        }
+      ]
+    ],
+    "other_wallets": [
+      {
+        "pool": "0x338c6807b433a95b2e2347e0cffacd92b97fe8e2",
+        "token": "0xd9a442856c234a39a81a089c06451ebaa4306a72",
+        "wrapped_reserve": "177925948657772936",
+        "samples": [
+          {
+            "input": "17792594865777",
+            "trades": [
+              {
+                "input": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                "output": "0xd9a442856c234a39a81a089c06451ebaa4306a72",
+                "amount": "17792594865777",
+                "out": "16380790670842",
+                "amount_spent": "17792594865777",
+                "amount_received": "16380790670842",
+                "invariant_fee": 3,
+                "trade_liquidity": "8549311653350",
+                "reserves": [
+                  "177925948657772936",
+                  "164317189926504748"
+                ],
+                "liquidity_ema": [
+                  "170986233067030306",
+                  "26197213"
+                ],
+                "trade_ema": [
+                  "101375872492249",
+                  "101375872492249",
+                  "26197213"
+                ],
+                "gamma_pool": "0x1a33b9be3fe58c1bde4325a68c09c1f7fa8aa1e5",
+                "next_revert": "DeltaSwapRouter: INSUFFICIENT_OUTPUT_AMOUNT",
+                "gas": 187670
+              },
+              {
+                "input": "0xd9a442856c234a39a81a089c06451ebaa4306a72",
+                "output": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                "amount": "16380790670842",
+                "out": "17686010024564",
+                "amount_spent": "16380790670842",
+                "amount_received": "17686010024564",
+                "invariant_fee": 3,
+                "trade_liquidity": "8523664996812",
+                "reserves": [
+                  "177943741252638713",
+                  "164300809135833906"
+                ],
+                "liquidity_ema": [
+                  "170986258712406498",
+                  "26494989"
+                ],
+                "trade_ema": [
+                  "8549311653350",
+                  "8549311653350",
+                  "26494989"
+                ],
+                "gamma_pool": "0x1a33b9be3fe58c1bde4325a68c09c1f7fa8aa1e5",
+                "next_revert": "DeltaSwapRouter: INSUFFICIENT_OUTPUT_AMOUNT",
+                "gas": 160776
+              }
+            ]
+          },
+          {
+            "input": "17792594865777293",
+            "trades": [
+              {
+                "input": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                "output": "0xd9a442856c234a39a81a089c06451ebaa4306a72",
+                "amount": "17792594865777293",
+                "out": "14897175443914270",
+                "amount_spent": "17792594865777293",
+                "amount_received": "14897175443914270",
+                "invariant_fee": 3,
+                "trade_liquidity": "8549311653351514",
+                "reserves": [
+                  "177925948657772936",
+                  "164317189926504748"
+                ],
+                "liquidity_ema": [
+                  "170986233067030306",
+                  "26197213"
+                ],
+                "trade_ema": [
+                  "101375872492249",
+                  "101375872492249",
+                  "26197213"
+                ],
+                "gamma_pool": "0x1a33b9be3fe58c1bde4325a68c09c1f7fa8aa1e5",
+                "next_revert": "DeltaSwapRouter: INSUFFICIENT_OUTPUT_AMOUNT",
+                "gas": 193216
+              },
+              {
+                "input": "0xd9a442856c234a39a81a089c06451ebaa4306a72",
+                "output": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                "amount": "14897175443914270",
+                "out": "17695637117388264",
+                "amount_spent": "14897175443914270",
+                "amount_received": "17695637117388264",
+                "invariant_fee": 3,
+                "trade_liquidity": "8524826273972105",
+                "reserves": [
+                  "195718543523550229",
+                  "149420014482590478"
+                ],
+                "liquidity_ema": [
+                  "171009554141867728",
+                  "26494989"
+                ],
+                "trade_ema": [
+                  "8549311653351514",
+                  "8549311653351514",
+                  "26494989"
+                ],
+                "gamma_pool": "0x1a33b9be3fe58c1bde4325a68c09c1f7fa8aa1e5",
+                "next_revert": "DeltaSwapRouter: INSUFFICIENT_OUTPUT_AMOUNT",
+                "gas": 166322
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "pool": "0x77d41314b4bf615ad51d60d9df3a45a0ef44407e",
+        "token": "0xfae103dc9cf190ed75350761e95403b7b8afa6c0",
+        "wrapped_reserve": "13823137227396209",
+        "samples": [
+          {
+            "input": "1382313722739",
+            "trades": [
+              {
+                "input": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                "output": "0xfae103dc9cf190ed75350761e95403b7b8afa6c0",
+                "amount": "1382313722739",
+                "out": "1291309241008",
+                "amount_spent": "1382313722739",
+                "amount_received": "1291309241008",
+                "invariant_fee": 3,
+                "trade_liquidity": "669056066471",
+                "reserves": [
+                  "13823137227396209",
+                  "12953239564091678"
+                ],
+                "liquidity_ema": [
+                  "13381121329461784",
+                  "26312152"
+                ],
+                "trade_ema": [
+                  "143326212034443",
+                  "143326212034443",
+                  "26312152"
+                ],
+                "gamma_pool": "0x49f937483318813b312841b8cf6b9878c67c4893",
+                "next_revert": "DeltaSwapRouter: INSUFFICIENT_OUTPUT_AMOUNT",
+                "gas": 188466
+              },
+              {
+                "input": "0xfae103dc9cf190ed75350761e95403b7b8afa6c0",
+                "output": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                "amount": "1291309241008",
+                "out": "1374033104326",
+                "amount_spent": "1291309241008",
+                "amount_received": "1374033104326",
+                "invariant_fee": 3,
+                "trade_liquidity": "667048998320",
+                "reserves": [
+                  "13824519541118948",
+                  "12951948254850670"
+                ],
+                "liquidity_ema": [
+                  "13381123336429738",
+                  "26494989"
+                ],
+                "trade_ema": [
+                  "669056066471",
+                  "669056066471",
+                  "26494989"
+                ],
+                "gamma_pool": "0x49f937483318813b312841b8cf6b9878c67c4893",
+                "next_revert": "DeltaSwapRouter: INSUFFICIENT_OUTPUT_AMOUNT",
+                "gas": 163967
+              }
+            ]
+          },
+          {
+            "input": "1382313722739620",
+            "trades": [
+              {
+                "input": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                "output": "0xfae103dc9cf190ed75350761e95403b7b8afa6c0",
+                "amount": "1382313722739620",
+                "out": "1174354809984486",
+                "amount_spent": "1382313722739620",
+                "amount_received": "1174354809984486",
+                "invariant_fee": 3,
+                "trade_liquidity": "669056066473088",
+                "reserves": [
+                  "13823137227396209",
+                  "12953239564091678"
+                ],
+                "liquidity_ema": [
+                  "13381121329461784",
+                  "26312152"
+                ],
+                "trade_ema": [
+                  "143326212034443",
+                  "143326212034443",
+                  "26312152"
+                ],
+                "gamma_pool": "0x49f937483318813b312841b8cf6b9878c67c4893",
+                "next_revert": "DeltaSwapRouter: INSUFFICIENT_OUTPUT_AMOUNT",
+                "gas": 193510
+              },
+              {
+                "input": "0xfae103dc9cf190ed75350761e95403b7b8afa6c0",
+                "output": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                "amount": "1174354809984486",
+                "out": "1374781036971459",
+                "amount_spent": "1174354809984486",
+                "amount_received": "1374781036971459",
+                "invariant_fee": 3,
+                "trade_liquidity": "667139878097002",
+                "reserves": [
+                  "15205450950135829",
+                  "11778884754107192"
+                ],
+                "liquidity_ema": [
+                  "13382946401143495",
+                  "26494989"
+                ],
+                "trade_ema": [
+                  "669056066473088",
+                  "669056066473088",
+                  "26494989"
+                ],
+                "gamma_pool": "0x49f937483318813b312841b8cf6b9878c67c4893",
+                "next_revert": "DeltaSwapRouter: INSUFFICIENT_OUTPUT_AMOUNT",
+                "gas": 169011
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

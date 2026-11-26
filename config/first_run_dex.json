@@ -3015,7 +3015,9 @@
       "dex.factory": "0xed8db60acc29e14bc867a497d94ca6e3ceb5ec04",
       "dex.factory_runtime_hash": "0x52b0ab45a1e836e6f8e01d08324b6fa68f86e7d7a782c59a4939fb8218635af2",
       "dex.pool_code_hashes": [
-        "0x4cdedbff4479e31f12e0987605ccd3ee0d795540f8f9939af2bf9cd9e9fb3823"
+        "0x4cdedbff4479e31f12e0987605ccd3ee0d795540f8f9939af2bf9cd9e9fb3823",
+        "0x7ba31a081e879b8e7f06d4e8bf5ee26b5c2680669c5701f4cdbdcde51727b275",
+        "0x1557974237ae49ab431fe64093fa317c802f430134bdad22d995969df5c9e8eb"
       ],
       "dex.solidly_fee_source": "factory_address",
       "dex.solidly_fee_rule": "numerator",
@@ -3113,6 +3115,51 @@
       "dex.pair_runtime_hash": "0x6ef14f3e39ed31a2874c82f036261a213f3b0455ce3fa47c18c5e8b0d55b1dd9",
       "dex.v2_fee_source": "fixed",
       "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "x7-finance",
+    "source": "https://sourcify.dev/server/v2/contract/1/0x7de800467afce442019884f51a4a1b9143a34fac · https://sourcify.dev/server/v2/contract/1/0x4badcb6ad8352875290cb5e356f1de61450f9609 · tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x7de800467afce442019884f51a4a1b9143a34fac",
+      "dex.pool_code_hashes": [
+        "0x8ef3e731dfb0265c5b89d4d1ef69c1d448b1335eb48d76cb6df26c198f75bc68"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.2"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "x7-finance-ethereum",
+    "source": "https://sourcify.dev/server/v2/contract/1/0x8b76c05676d205563ffc1cbd11c0a6e3d83929c5 · https://sourcify.dev/server/v2/contract/1/0xbd7908e528341bb69006f9d9524f94b65385d891 · tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x8b76c05676d205563ffc1cbd11c0a6e3d83929c5",
+      "dex.pool_code_hashes": [
+        "0xd75846df8bac2f946ea9ee78caa53b6812e7514197698275b8322d75e1543193"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.2"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "deltaswap-ethereum",
+    "source": "https://sourcify.dev/server/v2/contract/1/0x5fbe219e88f6c6f214ce6f5b1fcaa0294f31ae1b · https://sourcify.dev/server/v2/contract/1/0xcf2b6bc8c0e0a1292db7f0ae89410670796350c8 · tests/data/first_run_dex_2026-11-26/deltaswap_ethereum.json",
+    "settings": {
+      "dex.kind": "v2_deltaswap_router",
+      "dex.factory": "0x5fbe219e88f6c6f214ce6f5b1fcaa0294f31ae1b",
+      "dex.router": "0xcf2b6bc8c0e0a1292db7f0ae89410670796350c8",
+      "dex.pool_code_hashes": [
+        "0xa82767a5e39a2e216962a2ebff796dcc37cd05dfd6f7a149e1f8fbb6bf487658"
+      ],
+      "dex.router_runtime_hash": "0x1987bff7bb1c5e195f55827197a8dd22806f79465588a300bd3c115e79123b25"
     }
   }
 ]

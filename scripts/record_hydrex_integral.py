@@ -57,7 +57,7 @@ def map_ticks(c, pool, observed):
     return dict(ticks=states, measured_tick_steps=max(before,count), lower_word=low, upper_word=high)
 
 
-def simulate(e, pool, quoter, token0, source, target, dx, state, deadline, sender=None, flat_quoter=False, wrapped=WETH):
+def simulate(e, pool, quoter, token0, source, target, dx, state, deadline, sender=None, flat_quoter=False, wrapped=WETH, funding=None):
     sender = sender or HOLDERS[source]
     if flat_quoter:
         official = calldata("quoteExactInputSingle(address,address,address,uint256,uint160)",
@@ -76,11 +76,17 @@ def simulate(e, pool, quoter, token0, source, target, dx, state, deadline, sende
                  VIRTUAL:{"code":state[VIRTUAL]}}
     def run(items):
         calls = [{"from":sender,"to":to,"data":data} for _,to,data in items]
+        if funding:
+            calls.insert(0,{"from":funding,"to":source,"data":calldata("transfer(address,uint256)",["address","uint256"],[sender,dx])})
         obj, = rpc(e, "eth_simulateV1", [{"blockStateCalls":[{"stateOverrides":overrides,"calls":calls}],
                                         "validation":False},e["selector"]])
         if obj["parentHash"] != e["selector"]["blockHash"]:
             raise ValueError("другой родительский блок")
-        results = {label:row for (label,_,_),row in zip(items,obj["calls"],strict=True)}
+        receipts=obj["calls"]
+        if funding and (len(receipts)!=len(calls) or receipts[0]["status"]!="0x1"):
+            raise ValueError("isolated owner funding transfer failed")
+        results = {label:row for (label,_,_),row in zip(items,receipts[int(bool(funding)):],strict=True)}
+        if funding:results["fund"]=receipts[0]
         for label, row in results.items():
             if row["status"] != ("0x0" if label=="above" else "0x1"):
                 raise ValueError(f"{pool} {label} {row.get('error')}")

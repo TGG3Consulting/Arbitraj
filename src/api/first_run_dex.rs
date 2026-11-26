@@ -276,7 +276,9 @@ mod tests {
                         let input=flate2::read::GzDecoder::new(std::fs::File::open(path).unwrap());
                         let data:Value=serde_json::from_reader(input).unwrap();
                         assert_eq!(data["selector"], snapshot["selector"]);
-                        assert_eq!(data["init"].as_str(), Some(text.as_str()));
+                        assert!(data["init"].as_str()==Some(text.as_str()) || data["historical"].as_array()
+                            .is_some_and(|rows| rows.iter().any(|r| r["init"].as_str()==Some(text.as_str())
+                                && r["selector"]["requireCanonical"]==true && r["implementation"]["runtime_hash"].is_string())));
                     } else if k == "dex.pool_code_hashes" && matches!(p.id.as_str(),"ethervista"|"ethervista-base") {
                         let raw=if p.network=="base" {include_str!("../../tests/data/first_run_dex_2026-11-26/ethervista_base.json")}else{include_str!("../../tests/data/first_run_dex_2026-11-26/ethervista_ethereum.json")};
                         let archive:Value=serde_json::from_str(raw).unwrap();
@@ -286,11 +288,13 @@ mod tests {
                         let archive:Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/oasisswap_base.json")).unwrap();
                         assert_eq!(archive["selector"],snapshot["selector"]);
                         assert_eq!(archive["init"].as_str(),Some(text.as_str()));
-                    } else if k == "dex.pool_code_hashes" && p.id == "deltaswap-base" {
-                        let archive: Value = serde_json::from_str(include_str!(
-                            "../../tests/data/first_run_dex_2026-11-26/deltaswap_base.json"
-                        ))
-                        .unwrap();
+                    } else if k == "dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"),Some(Parameter::Text(kind)) if kind=="v2_deltaswap_router") {
+                        let capture = match p.chain_id {
+                            1 => include_str!("../../tests/data/first_run_dex_2026-11-26/deltaswap_ethereum.json"),
+                            8453 => include_str!("../../tests/data/first_run_dex_2026-11-26/deltaswap_base.json"),
+                            id => panic!("нет записи DeltaSwap для chainId {id}"),
+                        };
+                        let archive:Value=serde_json::from_str(capture).unwrap();
                         assert_eq!(archive["current"]["selector"], snapshot["selector"]);
                         assert_eq!(
                             archive["current"]["proof"]["pair_init"].as_str(),

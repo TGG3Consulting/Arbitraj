@@ -17,6 +17,10 @@ on:
         description: Replay the CI-built executor against the two recorded Ethereum builder frames
         type: boolean
         default: false
+      community_archive_replay:
+        description: Quote both sides of all registered Ethereum CommunityV3 pools at the pinned block
+        type: boolean
+        default: false
       derpdex_archive_replay:
         description: Replay all verified DerpDEX Base pools on the archived factory block
         type: boolean
@@ -85,6 +89,20 @@ jobs:
       - name: Doc-тесты
         if: matrix.shard == 0
         run: cargo test --locked --doc
+  community-archive:
+    if: inputs.community_archive_replay
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0
+      - run: python scripts/record_community_v3_depth.py "$RUNNER_TEMP/communityv3-depth.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: communityv3-ethereum-depth
+          path: ${{ runner.temp }}/communityv3-depth.json
   derpdex-archive:
     if: inputs.derpdex_archive_replay
     runs-on: ubuntu-latest

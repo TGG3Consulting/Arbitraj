@@ -71,7 +71,19 @@ mod tests {
                 limit: U256::from_str_radix(strval("limit"), 10).unwrap(),
                 leg: strval("leg").parse().unwrap(),
             };
-            let r: send::receipt::Receipt = serde_json::from_value(c["receipt"].clone()).unwrap();
+            // eth_simulateV1 returns event payloads without mined-log metadata.
+            // Parse the archived payload first, then attach its recorded enclosing block.
+            let mut raw = c["receipt"].clone();
+            let events = std::mem::replace(&mut raw["logs"], serde_json::json!([]));
+            let mut r: send::receipt::Receipt = serde_json::from_value(raw).unwrap();
+            for event in events.as_array().unwrap() {
+                let inner = serde_json::from_value(event.clone()).unwrap();
+                r.logs.push(alloy::rpc::types::Log {
+                    inner,
+                    block_number: Some(r.block_number.to()),
+                    ..Default::default()
+                });
+            }
             assert_eq!(r.gas_used.to::<u64>(), c["swap_gas"].as_u64().unwrap());
             let spent = U256::from_str_radix(strval("spent"), 10).unwrap();
             let received = U256::from_str_radix(strval("received"), 10).unwrap();

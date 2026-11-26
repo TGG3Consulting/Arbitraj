@@ -1,7 +1,7 @@
 name: Encrypted historical market comparison
 on:
   push:
-    branches: [audit/private-cex-history-2511]
+    branches: [audit/replay-market-acb361126]
 permissions:
   contents: read
 jobs:
@@ -29,11 +29,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: release
-          ref: 2925a361bb88edff0ee1aab3e18bdd3e6ff5b843
+          ref: acb36e580ad19b6a63b1330bcb4f15b3040e0e12
       - uses: actions/checkout@v4
         with:
           path: base
-          ref: 15095ea3c6b4bd27291d026e857f14f6556a1e49
+          ref: 2925a361bb88edff0ee1aab3e18bdd3e6ff5b843
+      - uses: actions/checkout@v4
+        with:
+          path: previous
+          ref: 3ca92702e0fd45be2148af3e1bc8b81c3d8c852b
       - uses: dtolnay/rust-toolchain@1.97.0
       - uses: Swatinem/rust-cache@v2
         with:
@@ -60,7 +64,7 @@ jobs:
           temp,p=map(pathlib.Path,sys.argv[1:]);data=json.loads((temp/'data.json').read_bytes());(temp/'return.pem').write_text(data['return_key']);(p/'control_settings.json').write_text(json.dumps(data['settings']))
           PY
           export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/release/target"
-          for tree in base release; do
+          for tree in base previous release; do
             python "$p/stored_compare.py" "$tree" "$RUNNER_TEMP/cases.json"
             python - "$p" "$tree" <<'PY'
           import pathlib,sys
@@ -76,7 +80,7 @@ jobs:
           done
           python - "$RUNNER_TEMP" <<'PY'
           import pathlib,sys,gzip,json
-          p=pathlib.Path(sys.argv[1]);d={k:[json.loads(x)for x in (p/(k+'.jsonl')).read_text().splitlines()] for k in ('base','release')}
+          p=pathlib.Path(sys.argv[1]);d={k:[json.loads(x)for x in (p/(k+'.jsonl')).read_text().splitlines()] for k in ('base','previous','release')}
           n=len(json.loads((p/'cases.json').read_text())['cases']);assert all(len(v)==2*n and all('unavailable' not in x['result'] for x in v) for v in d.values());(p/'results.gz').write_bytes(gzip.compress(json.dumps(d).encode()))
           PY
           /usr/bin/python3 "$env" seal "$RUNNER_TEMP/return.pem" "$RUNNER_TEMP/result.enc" "$RUNNER_TEMP/results.gz"

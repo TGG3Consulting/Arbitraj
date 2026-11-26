@@ -1,0 +1,1501 @@
+{
+  "base": {
+    "pages": {
+      "bluedex": {
+        "at": "2026-11-26T15:55:10+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/bluedex/pools?page=1",
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 1,
+        "samples": [
+          {
+            "id": "base_0x82a08f46912e301aba1743ab609c2019544374b8",
+            "name": "WETH / USDC",
+            "address": "0x82a08f46912e301aba1743ab609c2019544374b8",
+            "dex": "bluedex"
+          }
+        ]
+      },
+      "hydrex-integral": {
+        "at": "2026-11-26T15:55:13+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/hydrex-integral/pools?page=1",
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 20,
+        "samples": [
+          {
+            "id": "base_0xc3f617c8a3da6d286c8f97af946a8f293632c852",
+            "name": "DEXTF / WETH 0.05%",
+            "address": "0xc3f617c8a3da6d286c8f97af946a8f293632c852",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0x82dbe18346a8656dbb5e76f74bf3ae279cc16b29",
+            "name": "WETH / USDC 0.05%",
+            "address": "0x82dbe18346a8656dbb5e76f74bf3ae279cc16b29",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0x0ba69825c4c033e72309f6ac0bde0023b15cc97c",
+            "name": "USDC / cbBTC 0.05%",
+            "address": "0x0ba69825c4c033e72309f6ac0bde0023b15cc97c",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0x3f9b863ef4b295d6ba370215bcca3785fcc44f44",
+            "name": "WETH / cbBTC 0.05%",
+            "address": "0x3f9b863ef4b295d6ba370215bcca3785fcc44f44",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0x02107bab40bba06ae979a15f67b5ad3853c5e116",
+            "name": "VVV / USDC 0.05%",
+            "address": "0x02107bab40bba06ae979a15f67b5ad3853c5e116",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0xb20f018dde5a6fe7f93c31da05a5da9efbc52772",
+            "name": "EURC / WETH 0.05%",
+            "address": "0xb20f018dde5a6fe7f93c31da05a5da9efbc52772",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0xb1383dc47d9971fc999c3a9088f79e744b376e97",
+            "name": "cbETH / WETH 0.05%",
+            "address": "0xb1383dc47d9971fc999c3a9088f79e744b376e97",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0x680581725840958141bb328666d8fc185ac4fa49",
+            "name": "BNKR / WETH 0.05%",
+            "address": "0x680581725840958141bb328666d8fc185ac4fa49",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0x2df4af05f8c4aff0d3fbfc327595dbb7fc6498bf",
+            "name": "REPPO / WETH 0.05%",
+            "address": "0x2df4af05f8c4aff0d3fbfc327595dbb7fc6498bf",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0x721bcd563603a559616dc9fb886a1732186995a4",
+            "name": "AVNT / USDC 0.05%",
+            "address": "0x721bcd563603a559616dc9fb886a1732186995a4",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0xe539b14a87d3db4a2945ac99b29a69de61531592",
+            "name": "chubal / USDC 0.05%",
+            "address": "0xe539b14a87d3db4a2945ac99b29a69de61531592",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0x3e8126a4a5df68dd9cca675e8dc925b5fed70ca9",
+            "name": "NVDAc / wtNVDA 0.05%",
+            "address": "0x3e8126a4a5df68dd9cca675e8dc925b5fed70ca9",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0x51f0b932855986b0e621c9d4db6eee1f4644d3d2",
+            "name": "HYDX / USDC 0.05%",
+            "address": "0x51f0b932855986b0e621c9d4db6eee1f4644d3d2",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0xb3f0828eb3375b609b49e9fb959472a29cd6e49a",
+            "name": "TIBBIR / WETH 0.05%",
+            "address": "0xb3f0828eb3375b609b49e9fb959472a29cd6e49a",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0x37077d100b369ab48c9e6b7b21c15eee4fdf9923",
+            "name": "wtMSTR / cbBTC 0.05%",
+            "address": "0x37077d100b369ab48c9e6b7b21c15eee4fdf9923",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0x2d8caf2d736b59b764208ad521669ae1dfcdd9d2",
+            "name": "wtNVDA / USDC 0.05%",
+            "address": "0x2d8caf2d736b59b764208ad521669ae1dfcdd9d2",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0x467a8846e7b54eac5d4d1cb2fdc9b8752212ff0e",
+            "name": "NOCK / WETH 0.05%",
+            "address": "0x467a8846e7b54eac5d4d1cb2fdc9b8752212ff0e",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0x7323d5ff1ac3d07a800a89dc1e2d6c7baca9c720",
+            "name": "MSTRc / wtMSTR 0.05%",
+            "address": "0x7323d5ff1ac3d07a800a89dc1e2d6c7baca9c720",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0x95fe59cdcbbc619ace31cf1b69691692e77401f8",
+            "name": "ZORA / WETH 0.05%",
+            "address": "0x95fe59cdcbbc619ace31cf1b69691692e77401f8",
+            "dex": "hydrex-integral"
+          },
+          {
+            "id": "base_0xcd280042f629fa2384179911f9cb1f932b9f26c8",
+            "name": "KIBBLE / USDC 0.05%",
+            "address": "0xcd280042f629fa2384179911f9cb1f932b9f26c8",
+            "dex": "hydrex-integral"
+          }
+        ]
+      },
+      "quickswap-v2-base": {
+        "at": "2026-11-26T15:55:16+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/quickswap-v2-base/pools?page=1",
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 20,
+        "samples": [
+          {
+            "id": "base_0x3099a7c284610897baaa43cbdc06469e44a06ce1",
+            "name": "WETH / USDC",
+            "address": "0x3099a7c284610897baaa43cbdc06469e44a06ce1",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0x7fb812f9c50e6dba27fb37857d85b85e8cf9bc24",
+            "name": "BASED / WETH",
+            "address": "0x7fb812f9c50e6dba27fb37857d85b85e8cf9bc24",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0xdeb6079c5a7fcc7afa5b5eb2786b700bab670d57",
+            "name": "C01NBASED / WETH",
+            "address": "0xdeb6079c5a7fcc7afa5b5eb2786b700bab670d57",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0x9f4ac60525b6cdd064e9df0c1e13a5b04c742d90",
+            "name": "C01NBASED / BASED",
+            "address": "0x9f4ac60525b6cdd064e9df0c1e13a5b04c742d90",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0x1ec9ab3986efdac4d31ecb325e39a4a6a2974e6b",
+            "name": "AIX / WETH",
+            "address": "0x1ec9ab3986efdac4d31ecb325e39a4a6a2974e6b",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0xfbbf22b3acd3641179f8d01edd7cbecc30630c75",
+            "name": "C01NBASED / MATIC",
+            "address": "0xfbbf22b3acd3641179f8d01edd7cbecc30630c75",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0xafb8d385af179eac8df83412879638600e665d9f",
+            "name": "BG / WETH",
+            "address": "0xafb8d385af179eac8df83412879638600e665d9f",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0x4524d9009eb09a3d0dc39e42e980525758e8f382",
+            "name": "MATIC / WETH",
+            "address": "0x4524d9009eb09a3d0dc39e42e980525758e8f382",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0xc4984f058e9675ec606957d328d08a07d93fe9fe",
+            "name": "BTC / WETH",
+            "address": "0xc4984f058e9675ec606957d328d08a07d93fe9fe",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0xa25bee90534f7caa1b981864fab7ec51af9ad194",
+            "name": "TOKEN / USDC",
+            "address": "0xa25bee90534f7caa1b981864fab7ec51af9ad194",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0x2274d79d3f24576b1af442ad394fd9dff1c384ea",
+            "name": "EDEN / WETH",
+            "address": "0x2274d79d3f24576b1af442ad394fd9dff1c384ea",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0xfd1df6ee6953a554d97bd7827985a5eaae4eaed9",
+            "name": "WETH / USDT",
+            "address": "0xfd1df6ee6953a554d97bd7827985a5eaae4eaed9",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0x97c436dd2a88d8595b38bd439ddb1da3ab0fc17d",
+            "name": "cbBTC / WETH",
+            "address": "0x97c436dd2a88d8595b38bd439ddb1da3ab0fc17d",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0x6ea85c9b4c3b5ef517f3fbd1ba8c9b02cd395a9e",
+            "name": "BTCBR / WETH",
+            "address": "0x6ea85c9b4c3b5ef517f3fbd1ba8c9b02cd395a9e",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0x96d2c8c57f0699ddcedabf32baca434f45015f5a",
+            "name": "fBOMB / USDC",
+            "address": "0x96d2c8c57f0699ddcedabf32baca434f45015f5a",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0x80df5a8361543ba73e7d6e48d7aa0791fe404613",
+            "name": "EVT🚀 / USDC",
+            "address": "0x80df5a8361543ba73e7d6e48d7aa0791fe404613",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0xf04be291360f3a2ec47e19ac2690554dd45089d9",
+            "name": "GUEDDY🌹♱ / WETH",
+            "address": "0xf04be291360f3a2ec47e19ac2690554dd45089d9",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0x1bf1a3c502ba37205b7d83dadd555121b76aae69",
+            "name": "WETH / cbBTC",
+            "address": "0x1bf1a3c502ba37205b7d83dadd555121b76aae69",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0xe7b683059c9b375238dc7ef17b481ff1c0abd765",
+            "name": "btcbr / WETH",
+            "address": "0xe7b683059c9b375238dc7ef17b481ff1c0abd765",
+            "dex": "quickswap-v2-base"
+          },
+          {
+            "id": "base_0xb7b2812ef8018f2d6e9bf8100ec32da912a8bccb",
+            "name": "QUICK / WETH",
+            "address": "0xb7b2812ef8018f2d6e9bf8100ec32da912a8bccb",
+            "dex": "quickswap-v2-base"
+          }
+        ]
+      },
+      "omni-exchange-v2-base": {
+        "at": "2026-11-26T15:55:19+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/omni-exchange-v2-base/pools?page=1",
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 9,
+        "samples": [
+          {
+            "id": "base_0xc4acee3094733115bdbd10d08de79f1a3d4e797d",
+            "name": "ALTITUDE / cbBTC",
+            "address": "0xc4acee3094733115bdbd10d08de79f1a3d4e797d",
+            "dex": "omni-exchange-v2-base"
+          },
+          {
+            "id": "base_0x1891692c1d7e1cf834ccaaa62cb7c17fc898ffd5",
+            "name": "WETH / USDC",
+            "address": "0x1891692c1d7e1cf834ccaaa62cb7c17fc898ffd5",
+            "dex": "omni-exchange-v2-base"
+          },
+          {
+            "id": "base_0x8c495eb7b81ccdd62a88b6d2f18469ad01694a24",
+            "name": "WUT / USDC",
+            "address": "0x8c495eb7b81ccdd62a88b6d2f18469ad01694a24",
+            "dex": "omni-exchange-v2-base"
+          },
+          {
+            "id": "base_0xeba7c2fe538d80f148206d860675d2c9c5e031bf",
+            "name": "USDT / WETH",
+            "address": "0xeba7c2fe538d80f148206d860675d2c9c5e031bf",
+            "dex": "omni-exchange-v2-base"
+          },
+          {
+            "id": "base_0x176282e5b238b8df87108c81474de4352c63879e",
+            "name": "OMNI / WETH",
+            "address": "0x176282e5b238b8df87108c81474de4352c63879e",
+            "dex": "omni-exchange-v2-base"
+          },
+          {
+            "id": "base_0x8da33dcaca94ecb81d4ee266e9cd09eadc5503af",
+            "name": "fBOMB / WETH",
+            "address": "0x8da33dcaca94ecb81d4ee266e9cd09eadc5503af",
+            "dex": "omni-exchange-v2-base"
+          },
+          {
+            "id": "base_0xbdaf30646c6829b580a21dc8d7010b123702a059",
+            "name": "BSWAP / WETH",
+            "address": "0xbdaf30646c6829b580a21dc8d7010b123702a059",
+            "dex": "omni-exchange-v2-base"
+          },
+          {
+            "id": "base_0x835d373c168a5196743925db3bb5c4244be3fe8b",
+            "name": "OMNI / USDC",
+            "address": "0x835d373c168a5196743925db3bb5c4244be3fe8b",
+            "dex": "omni-exchange-v2-base"
+          },
+          {
+            "id": "base_0x8bcf4158489853620749e1ec929c76e20dc9b29b",
+            "name": "KTA / USDC",
+            "address": "0x8bcf4158489853620749e1ec929c76e20dc9b29b",
+            "dex": "omni-exchange-v2-base"
+          }
+        ]
+      },
+      "omni-exchange-v4-base": {
+        "at": "2026-11-26T15:55:21+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/omni-exchange-v4-base/pools?page=1",
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 0,
+        "samples": []
+      },
+      "balancer-v3-base": {
+        "at": "2026-11-26T15:55:24+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/balancer-v3-base/pools?page=1",
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 5,
+        "samples": [
+          {
+            "id": "base_0x19e3e19945e7fd2a7856824c595981c7fe450bb5",
+            "name": "PRL / WETH 1%",
+            "address": "0x19e3e19945e7fd2a7856824c595981c7fe450bb5",
+            "dex": "balancer-v3-base"
+          },
+          {
+            "id": "base_0xb7b8b3afc010169779c5c2385ec0eb0477fe3347",
+            "name": "waBasWETH / rETH 0.04%",
+            "address": "0xb7b8b3afc010169779c5c2385ec0eb0477fe3347",
+            "dex": "balancer-v3-base"
+          },
+          {
+            "id": "base_0xb4161aea25bd6c5c8590ad50deb4ca752532f05d",
+            "name": "AERO / WETH / USDC / cbBTC 0.3%",
+            "address": "0xb4161aea25bd6c5c8590ad50deb4ca752532f05d",
+            "dex": "balancer-v3-base"
+          },
+          {
+            "id": "base_0xee57cd1561b85d4ebfd42f613015920892b8e995",
+            "name": "WETH / USDC 0.1%",
+            "address": "0xee57cd1561b85d4ebfd42f613015920892b8e995",
+            "dex": "balancer-v3-base"
+          },
+          {
+            "id": "base_0xff3b04ca06b45e1e28a1c64cc968d343abcdd84c",
+            "name": "sr-hBTC / cbBTC 0.1%",
+            "address": "0xff3b04ca06b45e1e28a1c64cc968d343abcdd84c",
+            "dex": "balancer-v3-base"
+          }
+        ]
+      },
+      "thirdfy": {
+        "at": "2026-11-26T15:55:27+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/thirdfy/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "fluid-base": {
+        "at": "2026-11-26T15:55:30+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/fluid-base/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "mint-club-base": {
+        "at": "2026-11-26T15:55:33+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/mint-club-base/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "deli-swap": {
+        "at": "2026-11-26T15:55:36+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/deli-swap/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "sectorone-base": {
+        "at": "2026-11-26T15:55:39+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/sectorone-base/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "pancakeswap-infinity-lbamm-base": {
+        "at": "2026-11-26T15:55:42+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/pancakeswap-infinity-lbamm-base/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "hydrex-classic": {
+        "at": "2026-11-26T15:55:45+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/hydrex-classic/pools?page=1",
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 20,
+        "samples": [
+          {
+            "id": "base_0xe54b191427d50034294dd1d7ad8baab772db7ab5",
+            "name": "O / chubal",
+            "address": "0xe54b191427d50034294dd1d7ad8baab772db7ab5",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0x605abd1873737ca9a9ec1cfa52cdfc8ef62c2e1d",
+            "name": "HYDX / USDC",
+            "address": "0x605abd1873737ca9a9ec1cfa52cdfc8ef62c2e1d",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0x443d60c2f5cc88a955bee631fc7fad08df7db3a0",
+            "name": "EVRGROW / USDC",
+            "address": "0x443d60c2f5cc88a955bee631fc7fad08df7db3a0",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0x7c556b0efe03456a7f0a52ba44f565fa23977b87",
+            "name": "HYDX / EVRGROW",
+            "address": "0x7c556b0efe03456a7f0a52ba44f565fa23977b87",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0x07bdda4ab33c2163510284fe15b46187ad840ff9",
+            "name": "ZFI / WETH",
+            "address": "0x07bdda4ab33c2163510284fe15b46187ad840ff9",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0x3e5d77a94f7629abb637b241d20a44fde3c4c38f",
+            "name": "kVCM / USDC",
+            "address": "0x3e5d77a94f7629abb637b241d20a44fde3c4c38f",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0x85c6730394731877efb44c8ba8ff6be150f47c4e",
+            "name": "zoratv / chubal",
+            "address": "0x85c6730394731877efb44c8ba8ff6be150f47c4e",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0xa13e3f675794fcb15413ef0fb120db22d4b9ec27",
+            "name": "AISTR / USDC",
+            "address": "0xa13e3f675794fcb15413ef0fb120db22d4b9ec27",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0xcf8324597147a1daed32b6b3d4c08dd3d61c8aa1",
+            "name": "AISTR / WETH",
+            "address": "0xcf8324597147a1daed32b6b3d4c08dd3d61c8aa1",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0x856dc1caa010e9bece88181a4c9b0818bd4a37d4",
+            "name": "HYDX / KIBBLE",
+            "address": "0x856dc1caa010e9bece88181a4c9b0818bd4a37d4",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0x4f0a58b2f561cd23e3059e76526125c85e281821",
+            "name": "axlREGEN / WETH",
+            "address": "0x4f0a58b2f561cd23e3059e76526125c85e281821",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0xe16aa5f00900893c42ceb6d7d0f1c2acc572bb98",
+            "name": "KIBBLE / USDC",
+            "address": "0xe16aa5f00900893c42ceb6d7d0f1c2acc572bb98",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0xbfdee8d6c37e3173ef808f884f99c0ba35892aa7",
+            "name": "fBOMB / USDC",
+            "address": "0xbfdee8d6c37e3173ef808f884f99c0ba35892aa7",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0x66352585bad83da857a020f739f1f7ca93209a1b",
+            "name": "FUEGO / WETH",
+            "address": "0x66352585bad83da857a020f739f1f7ca93209a1b",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0x6cbec790403f2c3a4a892fa64c65a1026764ee1e",
+            "name": "BG / WETH",
+            "address": "0x6cbec790403f2c3a4a892fa64c65a1026764ee1e",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0xca4528cb4aa93560c0e3eec08e33edce52823c42",
+            "name": "FACY / USDC",
+            "address": "0xca4528cb4aa93560c0e3eec08e33edce52823c42",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0x022bf06c184db272db95eca8e5846041ed4d74b2",
+            "name": "NOCK / USDC",
+            "address": "0x022bf06c184db272db95eca8e5846041ed4d74b2",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0xc78c6921967132eb2a2047259de066719d766315",
+            "name": "HYDX / cbBTC",
+            "address": "0xc78c6921967132eb2a2047259de066719d766315",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0x46a8454648a0da0959833e5b5538c363f9e3378d",
+            "name": "SUMUD / WETH",
+            "address": "0x46a8454648a0da0959833e5b5538c363f9e3378d",
+            "dex": "hydrex-classic"
+          },
+          {
+            "id": "base_0xecee642e6a8e869bb21331d3c5aebb1d172dc151",
+            "name": "USDVE / USDC",
+            "address": "0xecee642e6a8e869bb21331d3c5aebb1d172dc151",
+            "dex": "hydrex-classic"
+          }
+        ]
+      },
+      "baseline-base": {
+        "at": "2026-11-26T15:55:48+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/baseline-base/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "umbrae-damm": {
+        "at": "2026-11-26T15:55:51+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/umbrae-damm/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "rubicon-clmm-base": {
+        "at": "2026-11-26T15:55:54+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/rubicon-clmm-base/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "aero-slipstream-base": {
+        "at": "2026-11-26T15:55:57+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/aero-slipstream-base/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "ryze": {
+        "at": "2026-11-26T15:56:00+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/ryze/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "aero-stable-base": {
+        "at": "2026-11-26T15:56:03+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/aero-stable-base/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "nami": {
+        "at": "2026-11-26T15:56:06+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/nami/pools?page=1",
+        "status": 429,
+        "state": "http"
+      }
+    },
+    "volume": {
+      "at": "2026-11-26T15:55:10+00:00",
+      "url": "https://api.llama.fi/overview/dexs/Base?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyVolume",
+      "by_id": {
+        "3": 196299,
+        "119": 2208,
+        "146": 166,
+        "194": 48192,
+        "306": 278,
+        "382": 5709,
+        "420": 9.64,
+        "534": 72546,
+        "622": 0,
+        "693": 2425,
+        "799": 33766,
+        "1447": 0,
+        "1461": 844875,
+        "1664": 845,
+        "1700": 0,
+        "1883": 642,
+        "1892": 0,
+        "2116": 177888,
+        "2197": 184802,
+        "2198": 239133652,
+        "2589": 362,
+        "2611": 5594,
+        "2644": 18859,
+        "2695": 40.16,
+        "2769": 108802348,
+        "2776": 537478,
+        "2803": 17735,
+        "2837": 0.05,
+        "2926": 858,
+        "3095": 0,
+        "3234": 61.72,
+        "3246": 0,
+        "3255": 2027,
+        "3308": 107593,
+        "3314": 508,
+        "3328": 1670,
+        "3333": 2200,
+        "3336": 0,
+        "3345": 3068,
+        "3361": 47566,
+        "3370": 0,
+        "3377": 102,
+        "3382": 0,
+        "3409": 1166,
+        "3450": 5006447,
+        "3481": 2404728,
+        "3507": 2387,
+        "3515": 1.28,
+        "3533": 0,
+        "3534": 0.11,
+        "3575": 1875,
+        "3620": 0,
+        "3664": 0,
+        "3714": 5473,
+        "3792": 0,
+        "3878": 958,
+        "3888": 148573,
+        "3940": 0,
+        "4062": 4035,
+        "4086": 0,
+        "4196": 53561,
+        "4294": 12088,
+        "4505": 0,
+        "4524": 95324533,
+        "4530": 0,
+        "4584": 0,
+        "4605": 0,
+        "4725": 60328,
+        "4752": 340756,
+        "4764": 0,
+        "4834": 0,
+        "4983": 562,
+        "5005": 0,
+        "5065": 0,
+        "5181": 12473,
+        "5221": 24689,
+        "5251": 1920,
+        "5309": 0,
+        "5317": 680960,
+        "5408": 171595,
+        "5416": 0,
+        "5417": 745,
+        "5423": 0,
+        "5458": 20,
+        "5491": 1103,
+        "5531": 4.23,
+        "5575": 827,
+        "5659": 3319,
+        "5662": 9.95,
+        "5690": 20199511,
+        "5734": 0,
+        "5806": 1323,
+        "5919": 13763985,
+        "6049": 18663,
+        "6060": 0,
+        "6069": 1272,
+        "6075": 0,
+        "6133": 68142,
+        "6229": 0,
+        "6365": 714805,
+        "6390": 39635,
+        "6506": 0,
+        "6539": 0,
+        "6557": 0,
+        "6576": 422706,
+        "6616": 0,
+        "6620": 552,
+        "6625": 120236,
+        "6675": 464717,
+        "6947": 57414,
+        "7077": 8225,
+        "7133": 0,
+        "7214": 88881,
+        "7260": 4466620,
+        "7304": 97413,
+        "7363": 22559,
+        "7377": 0,
+        "7378": 3218,
+        "7436": 0,
+        "7447": 0.01,
+        "7506": 0,
+        "7508": 0,
+        "7519": 129945,
+        "7520": 0,
+        "7521": 405,
+        "7522": 0,
+        "7523": 27017,
+        "7526": 0,
+        "7574": 0,
+        "7575": 4910,
+        "7587": 3330,
+        "7601": 1465852,
+        "7607": 0,
+        "7626": 28053,
+        "7644": 0,
+        "7665": 0,
+        "7767": 101653,
+        "7768": 0,
+        "7822": 0,
+        "7834": 0,
+        "7882": 13321,
+        "7902": 25155,
+        "7918": 0,
+        "7935": 0,
+        "7945": 102735,
+        "7955": 0,
+        "7962": 0,
+        "7984": 7411559,
+        "7986": 0,
+        "8053": 17575,
+        "8064": 1308,
+        "8067": 0,
+        "8099": 417,
+        "8126": 0,
+        "8131": 0,
+        "8179": 71242,
+        "8180": 1938503,
+        "8209": 3531,
+        "8298": 0,
+        "8306": 7381567,
+        "8322": 8097,
+        "8337": 0,
+        "8440": 0,
+        "8512": 0,
+        "8513": 71379,
+        "8530": 19831,
+        "8582": 1343,
+        "8619": 0,
+        "8621": 8115,
+        "8640": 0,
+        "8664": 122,
+        "8691": 656261004,
+        "8811": 0,
+        "8823": 0,
+        "8849": 758330,
+        "8860": 0,
+        "8865": 0,
+        "8881": 879,
+        "8934": 978176,
+        "9090": 0,
+        "9091": 0,
+        "9146": 88987,
+        "9153": 82340,
+        "9154": 220807,
+        "9172": 5432210,
+        "9205": 0,
+        "9222": 0,
+        "9267": 13523,
+        "9325": 0.94,
+        "9327": 23559,
+        "9400": 0,
+        "9461": 538
+      }
+    }
+  },
+  "ethereum": {
+    "pages": {
+      "swapr_ethereum": {
+        "at": "2026-11-26T15:56:09+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/swapr_ethereum/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "unicly": {
+        "at": "2026-11-26T15:56:12+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/unicly/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "smardex-ethereum": {
+        "at": "2026-11-26T15:56:15+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/smardex-ethereum/pools?page=1",
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 19,
+        "samples": [
+          {
+            "id": "eth_0x9fcf8f5bd54db123470c96620441ca5c342a8bd4",
+            "name": "WETH / USDT",
+            "address": "0x9fcf8f5bd54db123470c96620441ca5c342a8bd4",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0xf3a4b8efe3e3049f6bc71b47ccb7ce6665420179",
+            "name": "SDEX / WETH",
+            "address": "0xf3a4b8efe3e3049f6bc71b47ccb7ce6665420179",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0xd2bf378cea07fe117ffdfd3f5b7e53c2b0b78c05",
+            "name": "SDEX / USDT",
+            "address": "0xd2bf378cea07fe117ffdfd3f5b7e53c2b0b78c05",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0x66860accb28000dfd65781713fe544e65a293e9d",
+            "name": "USDC / WETH",
+            "address": "0x66860accb28000dfd65781713fe544e65a293e9d",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0x755d7187fc082a0318df2a4087899e9b28b4b44d",
+            "name": "SDEX / USDC",
+            "address": "0x755d7187fc082a0318df2a4087899e9b28b4b44d",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0x163bfbd7f757a1eb159fbd50ca2f9a574014b0bd",
+            "name": "WBTC / USDT",
+            "address": "0x163bfbd7f757a1eb159fbd50ca2f9a574014b0bd",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0x819f60922ef49b4b612b4a13f45a57a4fae49562",
+            "name": "SDEX / DAI",
+            "address": "0x819f60922ef49b4b612b4a13f45a57a4fae49562",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0x757ddd6e2d7a060edc44df690c4c4c6cdd0e6091",
+            "name": "SAND / USDT",
+            "address": "0x757ddd6e2d7a060edc44df690c4c4c6cdd0e6091",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0x11443f5b134c37903705e64129befc20e35a3725",
+            "name": "SDEX / WUSDN",
+            "address": "0x11443f5b134c37903705e64129befc20e35a3725",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0xd13a3fc98f0f55f4af58862f20a8d533ad124273",
+            "name": "LINK / USDT",
+            "address": "0xd13a3fc98f0f55f4af58862f20a8d533ad124273",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0x5724373030c355716e9f05338fd3ca2c5b78cd87",
+            "name": "$PAAL / WETH",
+            "address": "0x5724373030c355716e9f05338fd3ca2c5b78cd87",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0x39073e3c291b57af4539b23cc9d685139a38c43d",
+            "name": "USDC / USDT",
+            "address": "0x39073e3c291b57af4539b23cc9d685139a38c43d",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0x6ab2e9cf6868502bb1903bb04c8cf529fd97e0ac",
+            "name": "cbBTC / EV",
+            "address": "0x6ab2e9cf6868502bb1903bb04c8cf529fd97e0ac",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0x4e4d8ac75018ac2938818e566808a8947e02c032",
+            "name": "RVF / SDEX",
+            "address": "0x4e4d8ac75018ac2938818e566808a8947e02c032",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0x8481dd200372aeefb74ad8da8da8a2790269f161",
+            "name": "GMT / USDT",
+            "address": "0x8481dd200372aeefb74ad8da8da8a2790269f161",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0xff06590395165ff67b63020a2a2fcff43a4995df",
+            "name": "MATIC / USDT",
+            "address": "0xff06590395165ff67b63020a2a2fcff43a4995df",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0x5282e1ee8ce3a04fffa6e9f920d60eedda81bf38",
+            "name": "SHIB / USDT",
+            "address": "0x5282e1ee8ce3a04fffa6e9f920d60eedda81bf38",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0xc1830b5aa686a0b3430d2c2ab59e753c89bdb789",
+            "name": "LENDS / SDEX",
+            "address": "0xc1830b5aa686a0b3430d2c2ab59e753c89bdb789",
+            "dex": "smardex-ethereum"
+          },
+          {
+            "id": "eth_0xd2df60073c0a9c0b607ca6ac809acecc0d9250bd",
+            "name": "SDEX / TET",
+            "address": "0xd2df60073c0a9c0b607ca6ac809acecc0d9250bd",
+            "dex": "smardex-ethereum"
+          }
+        ]
+      },
+      "surge-protocol-eth": {
+        "at": "2026-11-26T15:56:18+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/surge-protocol-eth/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "sashimiswap": {
+        "at": "2026-11-26T15:56:21+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/sashimiswap/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "x7-finance": {
+        "at": "2026-11-26T15:56:24+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/x7-finance/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "hopeswap": {
+        "at": "2026-11-26T15:56:27+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/hopeswap/pools?page=1",
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 0,
+        "samples": []
+      },
+      "sushiswap-v3-ethereum": {
+        "at": "2026-11-26T15:56:30+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/sushiswap-v3-ethereum/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "9inch-ethereum": {
+        "at": "2026-11-26T15:56:33+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/9inch-ethereum/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "wagmi-ethereum": {
+        "at": "2026-11-26T15:56:36+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/wagmi-ethereum/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "lif3-ethereum": {
+        "at": "2026-11-26T15:56:39+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/lif3-ethereum/pools?page=1",
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 5,
+        "samples": [
+          {
+            "id": "eth_0xa70e93c5eb55a88b191a732e14189ad3d2df38f2",
+            "name": "USDC / WETH 0.3%",
+            "address": "0xa70e93c5eb55a88b191a732e14189ad3d2df38f2",
+            "dex": "lif3-ethereum"
+          },
+          {
+            "id": "eth_0x458aefc59c74c4cdb73a2c043600dd0a272dc53d",
+            "name": "WETH / USDT 0.3%",
+            "address": "0x458aefc59c74c4cdb73a2c043600dd0a272dc53d",
+            "dex": "lif3-ethereum"
+          },
+          {
+            "id": "eth_0x84348b059fb42f4fad3fec70db82629b9ce495c4",
+            "name": "WBTC / WETH 0.3%",
+            "address": "0x84348b059fb42f4fad3fec70db82629b9ce495c4",
+            "dex": "lif3-ethereum"
+          },
+          {
+            "id": "eth_0xb5761dbce0b6dad590c46b6e95839d60f0b888e8",
+            "name": "LIF3 / WETH 0.3%",
+            "address": "0xb5761dbce0b6dad590c46b6e95839d60f0b888e8",
+            "dex": "lif3-ethereum"
+          },
+          {
+            "id": "eth_0xd6897889d5d7e4327da8d1c315fc98f3b40dca4c",
+            "name": "LSHARE / WETH 0.3%",
+            "address": "0xd6897889d5d7e4327da8d1c315fc98f3b40dca4c",
+            "dex": "lif3-ethereum"
+          }
+        ]
+      },
+      "blueprint": {
+        "at": "2026-11-26T15:56:42+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/blueprint/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "vvs-v3-ethereum": {
+        "at": "2026-11-26T15:56:45+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/vvs-v3-ethereum/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "archly-ethereum": {
+        "at": "2026-11-26T15:56:48+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/archly-ethereum/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "ethervista": {
+        "at": "2026-11-26T15:56:51+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/ethervista/pools?page=1",
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 20,
+        "samples": [
+          {
+            "id": "eth_0xfdd05552f1377aa488afed744c8024358af02041",
+            "name": "VISTA / WETH",
+            "address": "0xfdd05552f1377aa488afed744c8024358af02041",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0x1ed0ea117572febc06d73f9c62e15ffcb8f64c12",
+            "name": "Hulezhi / WETH",
+            "address": "0x1ed0ea117572febc06d73f9c62e15ffcb8f64c12",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0xd426817f86f318f625deb1adf6c553f5f7cf6d8d",
+            "name": "VISTADOG / WETH",
+            "address": "0xd426817f86f318f625deb1adf6c553f5f7cf6d8d",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0x363ecd78af267fecb79b6097163435462de47639",
+            "name": "vistapepe / WETH",
+            "address": "0x363ecd78af267fecb79b6097163435462de47639",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0xbe5998770b206cbdff66849779892e908e15ad47",
+            "name": "XP / WETH",
+            "address": "0xbe5998770b206cbdff66849779892e908e15ad47",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0xa93e2005a3ea50195fbfacbcc12296ee7b36f942",
+            "name": "VBULL / WETH",
+            "address": "0xa93e2005a3ea50195fbfacbcc12296ee7b36f942",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0xe3e47a23c2626cbfc66326a3ceef17a95d64329a",
+            "name": "TRUMP / WETH",
+            "address": "0xe3e47a23c2626cbfc66326a3ceef17a95d64329a",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0xd97f0579027d7d216c078abc4d9358b89b473578",
+            "name": "EXP / WETH",
+            "address": "0xd97f0579027d7d216c078abc4d9358b89b473578",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0xca0e53a2fe01d77e933254475c8bc9dc2379633c",
+            "name": "VJESUS / WETH",
+            "address": "0xca0e53a2fe01d77e933254475c8bc9dc2379633c",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0x4b7990e743a0237fb5c2f0cf4083e7b15c43a09f",
+            "name": "MCAFEE / WETH",
+            "address": "0x4b7990e743a0237fb5c2f0cf4083e7b15c43a09f",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0x5f12001c712b3efe89e027b14f74ae708b8ed2ff",
+            "name": "OREO / WETH",
+            "address": "0x5f12001c712b3efe89e027b14f74ae708b8ed2ff",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0x64ad70b217b98fd5fa0430fa134c54f9dfd69b9a",
+            "name": "WINDO / WETH",
+            "address": "0x64ad70b217b98fd5fa0430fa134c54f9dfd69b9a",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0x7506674546c9220e36c169528ea2ccc2a53cba37",
+            "name": "BONZIFUN / WETH",
+            "address": "0x7506674546c9220e36c169528ea2ccc2a53cba37",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0x15a1dda1e30bd518472d701e2106201f8a8f2552",
+            "name": "100x / WETH",
+            "address": "0x15a1dda1e30bd518472d701e2106201f8a8f2552",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0x11bce9d0b40acdc1bd0e06d1a00fb1825e8e2201",
+            "name": "VISTASHIB / WETH",
+            "address": "0x11bce9d0b40acdc1bd0e06d1a00fb1825e8e2201",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0xabcb60d94efede4f81c087a40e17142ced1efc8e",
+            "name": "FLASH / WETH",
+            "address": "0xabcb60d94efede4f81c087a40e17142ced1efc8e",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0xaf075507f9b503b9c5860f6510b157a3682df9df",
+            "name": "VistaPepe / WETH",
+            "address": "0xaf075507f9b503b9c5860f6510b157a3682df9df",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0x53228c4875b711ee6d489eef81c50b661c4ad486",
+            "name": "WDOGE / WETH",
+            "address": "0x53228c4875b711ee6d489eef81c50b661c4ad486",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0x2f3b3895942113c50e88ac92099f68a13fc32491",
+            "name": "Peedy / WETH",
+            "address": "0x2f3b3895942113c50e88ac92099f68a13fc32491",
+            "dex": "ethervista"
+          },
+          {
+            "id": "eth_0xe4eb6e3a75c6a51c79aad84fa7c8eb062f33d33e",
+            "name": "CKY / WETH",
+            "address": "0xe4eb6e3a75c6a51c79aad84fa7c8eb062f33d33e",
+            "dex": "ethervista"
+          }
+        ]
+      },
+      "x7-finance-ethereum": {
+        "at": "2026-11-26T15:56:54+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/x7-finance-ethereum/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "uniswap-v4-ethereum": {
+        "at": "2026-11-26T15:56:57+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/uniswap-v4-ethereum/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "deltaswap-ethereum": {
+        "at": "2026-11-26T15:57:00+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/deltaswap-ethereum/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "balancer-v3-ethereum": {
+        "at": "2026-11-26T15:57:03+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/balancer-v3-ethereum/pools?page=1",
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 5,
+        "samples": [
+          {
+            "id": "eth_0x57c23c58b1d8c3292c15becf07c62c5c52457a42",
+            "name": "waEthWETH / osETH 0.002%",
+            "address": "0x57c23c58b1d8c3292c15becf07c62c5c52457a42",
+            "dex": "balancer-v3-ethereum"
+          },
+          {
+            "id": "eth_0x1846c6cbe0d433e152fa358e5ff27968e18bce7c",
+            "name": "PRL / WETH 1%",
+            "address": "0x1846c6cbe0d433e152fa358e5ff27968e18bce7c",
+            "dex": "balancer-v3-ethereum"
+          },
+          {
+            "id": "eth_0x38aad8f0f15a66b1642bbf2c7db9ae87cc383d09",
+            "name": "sINV / sDOLA 0.5%",
+            "address": "0x38aad8f0f15a66b1642bbf2c7db9ae87cc383d09",
+            "dex": "balancer-v3-ethereum"
+          },
+          {
+            "id": "eth_0x1ea5870f7c037930ce1d5d8d9317c670e89e13e3",
+            "name": "waEthWETH / rETH 0.04%",
+            "address": "0x1ea5870f7c037930ce1d5d8d9317c670e89e13e3",
+            "dex": "balancer-v3-ethereum"
+          },
+          {
+            "id": "eth_0x9ed5175aecb6653c1bdaa19793c16fd74fbeeb37",
+            "name": "waEthLidowstETH / tETH 0.04%",
+            "address": "0x9ed5175aecb6653c1bdaa19793c16fd74fbeeb37",
+            "dex": "balancer-v3-ethereum"
+          }
+        ]
+      },
+      "bundles-swap": {
+        "at": "2026-11-26T15:57:06+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/bundles-swap/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "cypher": {
+        "at": "2026-11-26T15:57:09+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/cypher/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "ekubo-v3-ethereum": {
+        "at": "2026-11-26T15:57:12+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/ekubo-v3-ethereum/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "ekubo-v2-ethereum": {
+        "at": "2026-11-26T15:57:15+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/ekubo-v2-ethereum/pools?page=1",
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 6,
+        "samples": [
+          {
+            "id": "eth_0xe0e0e08a6a4b9dc7bd67bcb7aade5cf48157d444-0xca5b3ef9770bb95940bd4e0bff5ead70a5973d904a8b370b52147820e61a2ff6",
+            "name": "USDC / USDT",
+            "address": "0xe0e0e08a6a4b9dc7bd67bcb7aade5cf48157d444-0xca5b3ef9770bb95940bd4e0bff5ead70a5973d904a8b370b52147820e61a2ff6",
+            "dex": "ekubo-v2-ethereum"
+          },
+          {
+            "id": "eth_0xe0e0e08a6a4b9dc7bd67bcb7aade5cf48157d444-0x07617b0d7a350aa806467b9a5d9384d947354e487761272aa23c2ad384fcbc53",
+            "name": "ETH / LINK 0.2%",
+            "address": "0xe0e0e08a6a4b9dc7bd67bcb7aade5cf48157d444-0x07617b0d7a350aa806467b9a5d9384d947354e487761272aa23c2ad384fcbc53",
+            "dex": "ekubo-v2-ethereum"
+          },
+          {
+            "id": "eth_0xe0e0e08a6a4b9dc7bd67bcb7aade5cf48157d444-0x7dea903c6d867e0a0f5f54edbb626e1224dc831e207c8d4dfb4a0d88575dd744",
+            "name": "BOLD / USDC 0.01%",
+            "address": "0xe0e0e08a6a4b9dc7bd67bcb7aade5cf48157d444-0x7dea903c6d867e0a0f5f54edbb626e1224dc831e207c8d4dfb4a0d88575dd744",
+            "dex": "ekubo-v2-ethereum"
+          },
+          {
+            "id": "eth_0xe0e0e08a6a4b9dc7bd67bcb7aade5cf48157d444-0x37ab43836f4caaec8dfed913e6aa06d287c651ad8545e53bbd3c66d22d93cd42",
+            "name": "cbBTC / WBTC 0.005%",
+            "address": "0xe0e0e08a6a4b9dc7bd67bcb7aade5cf48157d444-0x37ab43836f4caaec8dfed913e6aa06d287c651ad8545e53bbd3c66d22d93cd42",
+            "dex": "ekubo-v2-ethereum"
+          },
+          {
+            "id": "eth_0xe0e0e08a6a4b9dc7bd67bcb7aade5cf48157d444-0x7bc09681ee7056bc1fbf1ef479a99f1e89c106a4e20e2214f56bcc36ccc911bd",
+            "name": "USDC / ETH 0.05%",
+            "address": "0xe0e0e08a6a4b9dc7bd67bcb7aade5cf48157d444-0x7bc09681ee7056bc1fbf1ef479a99f1e89c106a4e20e2214f56bcc36ccc911bd",
+            "dex": "ekubo-v2-ethereum"
+          },
+          {
+            "id": "eth_0xe0e0e08a6a4b9dc7bd67bcb7aade5cf48157d444-0xc32b6bd8237ac36f6d266b5a2098e00a5f0d2ce40a35a9f7d8a789f62c3f901a",
+            "name": "cbBTC / WBTC 0.004%",
+            "address": "0xe0e0e08a6a4b9dc7bd67bcb7aade5cf48157d444-0xc32b6bd8237ac36f6d266b5a2098e00a5f0d2ce40a35a9f7d8a789f62c3f901a",
+            "dex": "ekubo-v2-ethereum"
+          }
+        ]
+      },
+      "supernova-amm": {
+        "at": "2026-11-26T15:57:18+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/supernova-amm/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "sectorone-v2.0-ethereum": {
+        "at": "2026-11-26T15:57:21+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/sectorone-v2.0-ethereum/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "baseline-ethereum": {
+        "at": "2026-11-26T15:57:24+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/baseline-ethereum/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "dagrow": {
+        "at": "2026-11-26T15:57:27+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/dagrow/pools?page=1",
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 0,
+        "samples": []
+      },
+      "toonswap": {
+        "at": "2026-11-26T15:57:30+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/toonswap/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "aero-slipstream-ethereum": {
+        "at": "2026-11-26T15:57:33+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/aero-slipstream-ethereum/pools?page=1",
+        "status": 429,
+        "state": "http"
+      },
+      "metric-ethereum": {
+        "at": "2026-11-26T15:57:36+00:00",
+        "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/metric-ethereum/pools?page=1",
+        "status": 429,
+        "state": "http"
+      }
+    },
+    "volume": {
+      "at": "2026-11-26T15:56:09+00:00",
+      "url": "https://api.llama.fi/overview/dexs/Ethereum?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyVolume",
+      "by_id": {
+        "3": 110588639,
+        "116": 51506,
+        "119": 263361,
+        "146": 104665,
+        "162": 102690,
+        "194": 217902,
+        "199": 0,
+        "202": 0,
+        "221": 46391,
+        "291": 0,
+        "292": 0,
+        "324": 3.8,
+        "327": 4540,
+        "364": 0,
+        "382": 20832242,
+        "397": 73792,
+        "398": 0,
+        "404": 1.02,
+        "405": 2850246,
+        "420": 291,
+        "483": 0,
+        "577": 0,
+        "595": 16904,
+        "622": 0,
+        "693": 21223,
+        "707": 346,
+        "728": 341,
+        "799": 829,
+        "812": 4.12,
+        "863": 0,
+        "911": 1187,
+        "1053": 3279,
+        "1447": 1447613,
+        "1664": 1773,
+        "1700": 0,
+        "1732": 1946,
+        "1824": 0,
+        "1896": 167,
+        "1995": 21945,
+        "2116": 5452218,
+        "2121": 126644,
+        "2196": 41152,
+        "2197": 11707979,
+        "2198": 261930156,
+        "2400": 799,
+        "2414": 0,
+        "2504": 0,
+        "2529": 0,
+        "2611": 129189,
+        "2644": 6408,
+        "2695": 1616,
+        "2769": 1682532,
+        "2776": 3069099,
+        "2782": 115810,
+        "2803": 15988091,
+        "2837": 0,
+        "2890": 706,
+        "2906": 0,
+        "2954": 0,
+        "3095": 0,
+        "3104": 34321,
+        "3106": 0,
+        "3308": 36501,
+        "3336": 0,
+        "3370": 0,
+        "3481": 364,
+        "3499": 5456180,
+        "3664": 0,
+        "3940": 0,
+        "4062": 0,
+        "4086": 0,
+        "4196": 118,
+        "4197": 0,
+        "4222": 10671270,
+        "4321": 966617,
+        "4505": 0,
+        "4605": 0,
+        "4703": 1.16,
+        "4725": 23,
+        "4752": 239549,
+        "4834": 0,
+        "4944": 2310873,
+        "5005": 0.12,
+        "5065": 0,
+        "5195": 0,
+        "5221": 0,
+        "5245": 0,
+        "5317": 149951630,
+        "5408": 221307,
+        "5491": 168789,
+        "5690": 403415180,
+        "5734": 0,
+        "5806": 16,
+        "5875": 0,
+        "6049": 35668,
+        "6060": 0,
+        "6238": 190,
+        "6358": 0,
+        "6396": 0,
+        "6483": 79763,
+        "6586": 0,
+        "6650": 12917349,
+        "6771": 1180118,
+        "6784": 0,
+        "6815": 179,
+        "7037": 7.14,
+        "7038": 498,
+        "7077": 5.51,
+        "7133": 0,
+        "7214": 0,
+        "7230": 1295,
+        "7304": 0,
+        "7350": 0,
+        "7377": 0,
+        "7381": 1939,
+        "7382": 747422,
+        "7447": 0,
+        "7462": 0,
+        "7501": 0,
+        "7508": 271622,
+        "7519": 2302282,
+        "7520": 0,
+        "7521": 5628,
+        "7522": 2499700,
+        "7523": 39728,
+        "7599": 14496845,
+        "7626": 33522,
+        "7768": 0,
+        "7822": 0,
+        "7882": 0,
+        "7918": 168,
+        "7935": 0,
+        "7955": 0,
+        "7979": 44565265,
+        "7982": 121272,
+        "7984": 11417455,
+        "7986": 0,
+        "8034": 7104,
+        "8067": 0,
+        "8126": 0,
+        "8131": 0,
+        "8209": 56280,
+        "8278": 5781,
+        "8292": 0,
+        "8306": 111089319,
+        "8322": 0,
+        "8440": 0,
+        "8449": 1428,
+        "8464": 0,
+        "8531": 8269320,
+        "8691": 108180564,
+        "8762": 13.89,
+        "8767": 29066,
+        "8811": 0,
+        "8823": 37082,
+        "8838": 0,
+        "8858": 251,
+        "8881": 0,
+        "9154": 28229,
+        "9157": 6286851,
+        "9172": 8.34,
+        "9267": 14169,
+        "9287": 0,
+        "9325": 0,
+        "9435": 13323690,
+        "9436": 29873142,
+        "9437": 2045,
+        "9514": 312
+      }
+    }
+  }
+}

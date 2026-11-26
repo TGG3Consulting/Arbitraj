@@ -1070,7 +1070,8 @@
       ],
       "dex.sub_dex": [
         "curve-base-twocrypto-ng",
-        "curve-base-tricrypto-ng"
+        "curve-base-tricrypto-ng",
+        "curve-base-plain"
       ]
     }
   },
@@ -1123,7 +1124,8 @@
       ],
       "dex.sub_dex": [
         "curve-twocrypto-ng",
-        "curve-tricrypto-ng"
+        "curve-tricrypto-ng",
+        "curve-plain"
       ]
     }
   },
@@ -1262,6 +1264,73 @@
       "dex.kind": "smardex_exact_equality",
       "dex.factory": "0xB878DC600550367e14220d4916Ff678fB284214F",
       "dex.quoter_virtual": true
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "curve-base-plain",
+    "source": "https://raw.githubusercontent.com/curvefi/curve-js/ab3f1c244e5686ff7cc6fa9f0d4bfe53b8e6e374/src/constants/factory/stable.ts",
+    "settings": {
+      "dex.kind": "curve_stableswap_plain",
+      "dex.factory": "0x3093f9B57A428F3EB6285a589cb35bEA6e78c336",
+      "dex.stable_pools": [],
+      "dex.curve_plain_implementations": [
+        "0xd166eedf272b860e991d331b71041799379185d5",
+        "0x5c627d6925e448ae418bc8a45d56b31fe5009bea",
+        "0x22d710931f01c1681ca1570ff016ed42eb7b7c2a",
+        "0xa50d9a424a14af0b9e7e9243dc1597d977f6cb09",
+        "0xed49979026dc44dc7e83b1471794ec9b2a365ea2",
+        "0x0cc51c9786f3777a6d50961cebb2bb6e69ec5e07",
+        "0x1086f023146f9026a9bb22983ce866813c59518a",
+        "0x1621e58d36eb5ef26f9768ebe9db77181b1f5a02",
+        "0x2fddedf2d842f23da2b81b9144e75cecb691bf19"
+      ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "curve-plain",
+    "source": "https://raw.githubusercontent.com/curvefi/curve-js/ab3f1c244e5686ff7cc6fa9f0d4bfe53b8e6e374/src/constants/factory/stable.ts",
+    "settings": {
+      "dex.kind": "curve_stableswap_plain",
+      "dex.factory": "0xb9fc157394af804a3578134a6585c0dc9cc990d4",
+      "dex.stable_pools": [],
+      "dex.curve_plain_implementations": [
+        "0x6523ac15ec152cb70a334230f6c5d62c5bd963f1",
+        "0x24d937143d3f5cf04c72ba112735151a8cae2262",
+        "0x6326debbaa15bcfe603d831e7d75f4fc10d9b43e",
+        "0x4a4d7868390ef5cac51cda262888f34bd3025c3f",
+        "0xc629a01ec23ab04e1050500a3717a2a5c0701497",
+        "0x9b52f13df69d79ec5aab6d1ace3157d29b409cc3",
+        "0x50b085f2e5958c4a87baf93a8ab79f6bec068494",
+        "0x8c1ab78601c259e1b43f19816923609dc7d7de9b",
+        "0xe5f4b89e0a16578b3e0e7581327bdb4c712e44de",
+        "0x5bd47ea4494e0f8de6e3ca10f1c05f55b72466b8",
+        "0xd35b58386705ce75ce6d09842e38e9be9cde5bf6",
+        "0x88855cdf2b0a8413d470b86952e726684de915be",
+        "0xad4753d045d3aed5c1a6606dfb6a7d7ad67c1ad7"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "iziswap-base",
+    "source": "https://raw.githubusercontent.com/izumiFinance/izumi-docs/652b26927370cf963be361fd36d87c762db8c848/docs/source/iZiSwap/deployed_contracts/mainnet.rst",
+    "settings": {
+      "dex.kind": "iziswap",
+      "dex.factory": "0x8c7d3063579BdB0b90997e18A770eaE32E1eBb08",
+      "dex.quoter_virtual": true,
+      "dex.v3_fee_tiers": [
+        "100",
+        "400",
+        "2000",
+        "10000",
+        "500",
+        "3000"
+      ]
     }
   }
 ]

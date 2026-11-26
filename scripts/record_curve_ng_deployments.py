@@ -196,7 +196,18 @@ def main():
     for path,value in collected:
         write(path,value)
     ids = {(r["network"],r["id"]) for r in new}
-    write(target,[r for r in read(target) if (r["network"],r["id"]) not in ids]+new)
+    current=read(target)
+    kept=[r for r in current if (r["network"],r["id"]) not in ids]
+    retained_ids={(r["network"],r["id"]) for r in kept}
+    for row in new:
+        children=row["settings"].get("dex.sub_dex")
+        if children is None:
+            continue
+        old=next((r for r in current if r["network"]==row["network"] and r["id"]==row["id"]),None)
+        if old:
+            children.extend(child for child in old["settings"].get("dex.sub_dex",[])
+                            if (row["network"], child) in retained_ids and child not in children)
+    write(target,kept+new)
 
 
 if __name__=="__main__":

@@ -36,6 +36,10 @@ def tables(network, snapshots, profiles):
     llama = data["volumes"]
     va = data["velora"]
     block = data["family-coverage-review"]
+    extra_path = Path("tests/data/first_run_dex_2026-11-26/catalog_recheck.json")
+    refresh = read(extra_path).get(network, {}) if extra_path.exists() else {}
+    refreshed = refresh.get("pages", {})
+    volume = refresh.get("volume", {})
     title = "Base" if base else "Ethereum"
     out = [f"### {title} · DEX", "",
            f"Снимок GeckoTerminal от {gt['download_utc']}, {len(gt['rows'])} идентификаторов. "
@@ -96,8 +100,17 @@ def tables(network, snapshots, profiles):
                     + ("Tricrypto использует тот же байткод математики, что проверялся на Arbitrum. "
                        if base else "У Tricrypto математика скомпилирована Vyper 0.3.9. Текст исходника "
                        "в Sourcify совпал с проверенной версией после трёх директив компилятора в эталоне. ")
-                    + "Исторические пулы Curve и метапулы StableSwap-NG требуют отдельного профиля. "
+                    + "Метапулы StableSwap-NG требуют отдельного профиля. "
                     + f"[Пулы, вызовы, квоты и сверка кода](../{curve_file})."])
+    legacy = f"tests/data/first_run_dex_2026-11-26/curve_plain_{network}.json"
+    if Path(legacy).exists():
+        info = read(Path(legacy))
+        proven = sum(r["status"] != "unproven" for r in info["templates"])
+        out.extend(["", f"Curve StableSwap Plain · {proven} из {len(info['templates'])} реализаций "
+                    "из справочника Curve SDK прошли сверку по байткоду или исходникам get_dy, exchange, "
+                    "вызываемым ими функциям и числовым константам. Четыре действующих пула проверены "
+                    "по фабрике и двум размерам get_dy в обоих направлениях. "
+                    f"[Реализации, основания и результаты](../{legacy})."])
     dodo_file = f"tests/data/first_run_dex_2026-11-26/dodo_{network}.json"
     if Path(dodo_file).exists():
         data_dodo = read(Path(dodo_file))
@@ -130,12 +143,24 @@ def tables(network, snapshots, profiles):
                 "", "#### GeckoTerminal", "",
                 "| ID | Название | Страница пулов (HTTP, число строк) | Выбранный пул | Фабрика по пулу / обратный запрос | Статус |", "|---|---|---|---|---|---|"])
     for id, name in gt["rows"].items():
-        sample = data["sample-pools"][id]
+        sample = refreshed.get(id, data["sample-pools"][id])
         probe = data["factory-probes"]["rows"].get(id, {})
         url = sample["url"]
         pool = probe.get("pool") or next((a["address"] for a in sample.get("samples", []) if a.get("address")), None)
         factory = probe.get("reported_factory")
-        status = "профиль, см. параметры выше" if id in configured else "профиль не установлен"
+        if id in configured:
+            status = "профиль, см. параметры выше"
+        else:
+            task = f"T-DEX-{network}-{id}"
+            if probe.get("factory_roundtrip"):
+                need = "проверить код, комиссию, обе стороны и исполнение через фабрику"
+            elif pool:
+                need = "установить реализацию пула, привязку к протоколу и способ исполнения"
+            elif sample.get("state") == "enumerated":
+                need = "найти активный пул по развёртыванию и событиям сети"
+            else:
+                need = "восстановить перечень пулов и проверить независимый источник"
+            status = f"`{task}` · {need}"
         if sample.get("state") != "enumerated":
             status += ", страница не прочитана"
         elif not sample.get("rows_page1"):
@@ -146,13 +171,17 @@ def tables(network, snapshots, profiles):
     out.extend(["", "#### DefiLlama", "",
                 "Адреса извлечены из секции нужной сети в коде адаптера объёмов. Их роль, реализация и исполнение требуют проверки. "
                 "Для строк с несколькими версиями или общей базовой ликвидностью соответствие торговому профилю устанавливается по контракту.",
-                "", "| ID | Площадка | Адаптер объёмов | Адреса-кандидаты |", "|---|---|---|---|"])
+                "", f"Приоритет — опубликованный оборот этой сети за предыдущие 24 часа в USD, "
+                f"срез {volume.get('at', 'не получен')}. Карты, агрегаторы и общую ликвидность разных "
+                "протоколов необходимо сопоставлять по контрактам. Оборот не является доходом бота.",
+                "", "| ID | Площадка | 24 ч, USD | Адаптер объёмов | Адреса-кандидаты | Задача привязки |", "|---|---|---:|---|---|---|"])
     adapters = {r["id"]: r for r in data["llama-adapters"]["rows"]}
-    for row in llama["rows"]:
+    volumes = volume.get("by_id", {})
+    for row in sorted(llama["rows"], key=lambda row: -volumes.get(row["id"], -1)):
         r = adapters[row["id"]]
         ref = r.get("link") or r.get("source")
-        out.append(f"| {row['id']} | {cell(row['name'])} | [{cell(row['module'])}]({ref}) "
-                   f"| {addresses(r.get('addresses_from_chain_stanza', []))} |")
+        out.append(f"| {row['id']} | {cell(row['name'])} | {volumes.get(row['id'], 'нет данных')} | [{cell(row['module'])}]({ref}) "
+                   f"| {addresses(r.get('addresses_from_chain_stanza', []))} | `T-SOURCE-{network}-{row['id']}` |")
     out.extend(["", "#### Конфигурации Velora", "", "Проверены обозначения сети в исходном файле адаптера маршрутизации. "
                 "Тип каждой реализации и возможность прямого спотового исполнения требуют проверки.",
                 "", "| Адаптер | Ключ | Сетевой раздел | Адреса-кандидаты |", "|---|---|---|---|"])

@@ -67,6 +67,14 @@ async fn ctx(tag: &str) -> Ctx {
             )
             .await
             .unwrap();
+        // Исторический снимок был сделан на BSC, где валюта пула — BNB.
+        set(
+            &c,
+            "dex.native_ticker",
+            Scope::Venue("bsc_dex".into()),
+            json!("BNB"),
+        )
+        .await;
         c
     }
 }

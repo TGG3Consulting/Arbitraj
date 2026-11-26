@@ -5,7 +5,9 @@ mod execute;
 pub(super) mod feed;
 mod market;
 pub(super) mod routing;
-pub(in crate::venues::bsc_dex) use execute::{ReceiptProof, marker, record, reserve,failed};
+pub(in crate::venues::bsc_dex) use execute::{ReceiptProof, failed, marker, record, reserve};
+#[cfg(test)]
+mod recovery_tests;
 mod sim;
 #[cfg(test)]
 mod tests;
@@ -120,7 +122,7 @@ pub(super) async fn preview(ctx: &Ctx, request: Request) -> GatewayResult<Previe
 #[derive(Clone)]
 struct Prepared {
     source: String,
-    fallback_fee:Option<Decimal>,
+    fallback_fee: Option<Decimal>,
     preview: Preview,
     firm: wire::Firm,
     request: Request,
@@ -186,7 +188,10 @@ async fn check(
     };
     let now = || Utc::now().timestamp().max(0) as u64;
     let qty = if exact_output {
-        wire::raw(&f.quote_data.base_token_amount)?
+        wire::tradeRFQTCall::abi_decode_validate(&f.calldata)
+            .map_err(|_| "Неверный ABI tradeRFQT")?
+            .quote
+            .effectiveBaseTokenAmount
     } else {
         desired
     };
@@ -219,7 +224,7 @@ async fn check(
     };
     Ok(Prepared {
         source: source.to_owned(),
-        fallback_fee:None,
+        fallback_fee: None,
         preview,
         firm: f,
         request: r,

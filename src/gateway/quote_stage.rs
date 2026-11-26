@@ -50,6 +50,18 @@ pub fn final_external(settings: &Store, venue: &VenueId) -> bool {
         venue: Some(&venue.0),
         coin: None,
     };
-    settings.flag("exec.via_kyber", at).unwrap_or(false)
-        || settings.flag("hashflow.trading", at).unwrap_or(false)
+    kyber_final(settings, venue) || settings.flag("hashflow.trading", at).unwrap_or(false)
+}
+
+/// Применимость собственного лимита финальных запросов KyberSwap.
+pub fn kyber_final(settings: &Store, venue: &VenueId) -> bool {
+    settings
+        .flag(
+            "exec.via_kyber",
+            At {
+                venue: Some(&venue.0),
+                coin: None,
+            },
+        )
+        .unwrap_or(false)
 }

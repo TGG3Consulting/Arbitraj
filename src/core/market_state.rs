@@ -25,17 +25,16 @@ use crate::gateway::events::{MarketEvent, SpotPairState};
 
 pub use super::touched::Touched;
 
+type RfqSnapshot = (
+    Address,
+    std::collections::BTreeMap<Address, (bool, bool)>,
+    i64,
+);
+
 /// Рыночное состояние в памяти.
 #[derive(Default)]
 pub struct MarketState {
-    pub(super) rfq: HashMap<
-        VenueId,
-        (
-            Address,
-            std::collections::BTreeMap<Address, (bool, bool)>,
-            i64,
-        ),
-    >,
+    pub(super) rfq: HashMap<VenueId, RfqSnapshot>,
     pub(super) books: HashMap<(VenueId, String), OrderBook>,
     /// Решение 317 (доработка): когда последний раз менялось СОДЕРЖИМОЕ стакана (по префиксам уровней, book_still.rs);
     /// кадр с тем же содержимым отметки не двигает. Ключ — как у books.
@@ -100,11 +99,13 @@ impl MarketState {
                 if changed && let Some((_, old, _)) = self.rfq.get(&venue) {
                     tokens.extend(old.keys().filter(|t| !markets.contains_key(*t)).copied());
                 }
+                let expiration = (!markets.is_empty()).then_some(expires_ms);
                 self.rfq.insert(venue.clone(), (quote, markets, expires_ms));
                 Touched::RfqMarkets {
                     venue,
                     tokens,
                     changed,
+                    expires_ms: expiration,
                 }
             }
             MarketEvent::Book(b) => self.apply_book(b),

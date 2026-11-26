@@ -154,7 +154,7 @@ async fn quote(
     let v = super::dex_account::venue_of(core, deal, &e.venue).await?;
     let a = &deal.direction.asset;
     let on = super::venue_ticker::on_venue(core, a, &e.venue);
-    let kyber = quote_stage::final_external(&core.inner.deps.settings, &e.venue);
+    let kyber = quote_stage::kyber_final(&core.inner.deps.settings, &e.venue);
     let fin = use_final(kyber, no_limit);
     // Решение 348: назначение «окно» (замер «кто вызвал котировку»).
     let work = quote_stage::final_if(fin, v.quote(&on, e.side, qty));

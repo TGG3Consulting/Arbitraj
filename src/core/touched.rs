@@ -28,6 +28,7 @@ pub enum Touched {
         venue: VenueId,
         tokens: Vec<Address>,
         changed: bool,
+        expires_ms: Option<i64>,
     },
     Pool {
         venue: VenueId,

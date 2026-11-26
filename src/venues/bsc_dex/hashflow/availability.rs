@@ -16,8 +16,9 @@ pub(super) struct Funds {
     pub decimals: u8,
     pub native: U256,
 }
+type PerWallet = HashMap<(String, u64, Address), Slot>;
 #[derive(Default, Clone)]
-pub(super) struct Cache(Arc<Mutex<HashMap<(String, u64, Address), Slot>>>);
+pub(super) struct Cache(Arc<Mutex<PerWallet>>);
 struct Slot {
     loading: bool,
     at: Instant,

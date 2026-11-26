@@ -256,3 +256,24 @@ impl Book {
         sizes.into_iter().collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    /// Опубликованный пример из раздела 3 Hashflow Taker API v3 (0.5, 1.5, 5 ETH), без секретов и торгового запроса.
+    #[test]
+    fn published_depth_example_respects_minimum_and_exact_output() {
+        let levels: Vec<Level> = serde_json::from_str(
+            r#"[{"q":"0.5","p":"3000"},{"q":"1.5","p":"3000"},{"q":"5","p":"2999"}]"#,
+        )
+        .unwrap();
+        let sold = Decimal::from(3u8);
+        let proceeds = Decimal::from(8999u16);
+        assert_eq!(amount_at(&levels, sold, false), Some(proceeds));
+        assert_eq!(amount_at(&levels, proceeds, true), Some(sold));
+        assert!(amount_at(&levels, Decimal::new(4999, 4), false).is_none());
+        assert!(amount_at(&levels, Decimal::from(1499u16), true).is_none());
+        assert!(amount_at(&levels, Decimal::new(7001, 3), false).is_none());
+        assert!(amount_at(&levels, Decimal::from(20996u16), true).is_none());
+    }
+}

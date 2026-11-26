@@ -58,6 +58,12 @@ impl Venue for BscDex {
 
     /// Решение 372: строгий верх курса стороны DEX без котировок (quote/bound.rs). Ошибок нет.
     fn rate_bound(&self, asset: &Asset, side: Side) -> crate::gateway::rate_bound::RateBound {
+        if self.p.ctx.flag("hashflow.trading").unwrap_or(false) {
+            return crate::gateway::rate_bound::RateBound::na(
+                "rfq",
+                "Индикативные уровни RFQ не доказывают верх цены подписанной котировки",
+            );
+        }
         super::quote::bound::rate_bound(&self.p, asset, side)
     }
 
@@ -244,7 +250,10 @@ impl Venue for BscDex {
         let r = scope(Class::Trade, fact).await.map_err(resolve::attach);
         // t78: продажа выхода сделки исполнилась целиком — её налоги кошелька сделки больше не нужны (deal_taxes.rs).
         self.p.checks.forget_after_sale(&asked, &r);
-        match r {Ok(t)=>super::hashflow::record(&self.p,t).await,Err(e)=>Err(super::hashflow::failed(&self.p,&asked,e).await)}
+        match r {
+            Ok(t) => super::hashflow::record(&self.p, t).await,
+            Err(e) => Err(super::hashflow::failed(&self.p, &asked, e).await),
+        }
     }
 
     /// Перевод монеты из кошелька на адрес (ERC-20 transfer, EIP-20) — wallet/transfer.rs.
@@ -284,7 +293,10 @@ impl Venue for BscDex {
     ) -> GatewayResult<Option<TradeResult>> {
         self.p.ctx.bound()?;
         let work = async {
-            let resolved=match resolve::trade(&self.p, req.clone(), p).await { Ok(r)=>r,Err(e)=>return Err(super::hashflow::failed(&self.p,&req,e).await) };
+            let resolved = match resolve::trade(&self.p, req.clone(), p).await {
+                Ok(r) => r,
+                Err(e) => return Err(super::hashflow::failed(&self.p, &req, e).await),
+            };
             match resolved {
                 Some(t) => {
                     let t = exec::balance_fact::apply(&self.p.ctx, &self.p.tokens, Ok(t)).await?;

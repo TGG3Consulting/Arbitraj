@@ -15,6 +15,7 @@ struct Row {
     status: U256,
     block_timestamp: u64,
     trade_logs: Vec<Log>,
+    receipt: super::super::send::receipt::Receipt,
 }
 #[derive(Deserialize)]
 struct Log {
@@ -65,6 +66,11 @@ fn mined_swaps_match_the_same_router_abi_and_amounts() {
         };
         assert_eq!(log.address, q.pool);
         assert_eq!(log.topics, [wire::Trade::SIGNATURE_HASH]);
+        let proof:super::ReceiptProof=serde_json::from_value(serde_json::json!({"pool":q.pool,"trader":r.from,"input":q.baseToken,"output":q.quoteToken,"txid":q.txid,"amount":q.effectiveBaseTokenAmount,"proceeds":output})).unwrap();
+        assert!(proof.matches(&r.receipt));
+        let mut missing = r.receipt.clone();
+        missing.logs.retain(|l| l.address() != q.baseToken);
+        assert!(!proof.matches(&missing));
         assert!(sim::event_matches(
             &log.data,
             &req,

@@ -367,7 +367,7 @@ async fn candidate(
             net.normalize()
         ),
     });
-    prepared.fallback_fee=Some((net-gross).abs());
+    prepared.fallback_fee = Some((net - gross).abs());
     p.rfqs.save(prepared);
     Some(result)
 }

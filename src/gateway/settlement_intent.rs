@@ -14,7 +14,8 @@ use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 
-const KIND: &str = "base_settlement_action";
+const KIND: &str = "settlement_action";
+const LEGACY: &str = "base_settlement_action";
 
 /// Действительный запрос к площадке, отдельный для ордера и вывода.
 #[derive(Clone, Serialize, Deserialize)]
@@ -110,8 +111,8 @@ pub async fn load(db: &Db, key: &str) -> Result<Option<Entry>, String> {
         .ledger()
         .read(move |c| {
             c.query_row(
-                "SELECT body FROM core_state WHERE kind=?1 AND id=?2",
-                params![KIND, id],
+                "SELECT body FROM core_state WHERE kind IN (?1,?3) AND id=?2",
+                params![KIND, id, LEGACY],
                 |row| row.get::<_, String>(0),
             )
             .optional()
@@ -138,8 +139,8 @@ pub async fn before_send(lookup: &PendingRef) -> GatewayResult<()> {
     let db = action.db;
     let key = id.clone();
     let inserted = db.ledger().write(move |c| {
-        c.execute("INSERT INTO core_state(kind,id,body,updated_at) VALUES(?1,?2,?3,?4) ON CONFLICT(kind,id) DO NOTHING",
-            params![KIND,key,body,Utc::now().to_rfc3339()])
+        c.execute("INSERT INTO core_state(kind,id,body,updated_at) SELECT ?1,?2,?3,?4 WHERE NOT EXISTS(SELECT 1 FROM core_state WHERE kind=?5 AND id=?2) ON CONFLICT(kind,id) DO NOTHING",
+            params![KIND,key,body,Utc::now().to_rfc3339(),LEGACY])
     }).await.map_err(|e| error(e.to_string()))?;
     if inserted == 1 {
         return Ok(());
@@ -163,15 +164,15 @@ pub async fn confirm(db: &Db, key: &str, original: &Entry, outcome: Outcome) -> 
     entry.result = Some(outcome);
     let body = serde_json::to_string(&entry).map_err(|e| e.to_string())?;
     let key = key.to_string();
-    let count =
-        db.ledger()
-            .write(move |c| {
-                c.execute(
-        "UPDATE core_state SET body=?1,updated_at=?2 WHERE kind=?3 AND id=?4 AND body=?5",
-        params![body,Utc::now().to_rfc3339(),KIND,key,expected])
-            })
-            .await
-            .map_err(|e| e.to_string())?;
+    let count = db
+        .ledger()
+        .write(move |c| {
+            c.execute(
+        "UPDATE core_state SET body=?1,updated_at=?2 WHERE kind IN (?3,?6) AND id=?4 AND body=?5",
+        params![body,Utc::now().to_rfc3339(),KIND,key,expected,LEGACY])
+        })
+        .await
+        .map_err(|e| e.to_string())?;
     if count == 1 {
         Ok(())
     } else {
@@ -180,13 +181,34 @@ pub async fn confirm(db: &Db, key: &str, original: &Entry, outcome: Outcome) -> 
 }
 
 /// Сохраняет завершённую без исполнения попытку под её хешем. Сравнение полного прежнего состояния исключает гонку с восстановлением.
-pub async fn archive_attempt(db:&Db, key:&str, original:&Entry, reason:&str)->Result<(),String>{
-    let hash=original.lookup.venue_ref.as_deref().ok_or("Нет идентификатора подготовленной попытки")?;
-    let prior=serde_json::to_string(original).map_err(|e|e.to_string())?;
-    let after=serde_json::to_string(&serde_json::json!({"attempt":original,"closed":reason})).map_err(|e|e.to_string())?;
-    let dst=format!("{key}/closed/{hash}");let key=key.to_owned();
-    let n=db.ledger().write(move |c|c.execute(
-        "UPDATE core_state SET id=?1,body=?2,updated_at=?3 WHERE kind=?4 AND id=?5 AND body=?6",
-        params![dst,after,Utc::now().to_rfc3339(),KIND,key,prior])).await.map_err(|e|e.to_string())?;
-    if n==1 {Ok(())}else{Err("Подготовленная попытка уже изменилась".into())}
+pub async fn archive_attempt(
+    db: &Db,
+    key: &str,
+    original: &Entry,
+    reason: &str,
+) -> Result<(), String> {
+    let hash = original
+        .lookup
+        .venue_ref
+        .as_deref()
+        .ok_or("Нет идентификатора подготовленной попытки")?;
+    let prior = serde_json::to_string(original).map_err(|e| e.to_string())?;
+    let after = serde_json::to_string(&serde_json::json!({"attempt":original,"closed":reason}))
+        .map_err(|e| e.to_string())?;
+    let dst = format!("{key}/closed/{hash}");
+    let key = key.to_owned();
+    let n = db
+        .ledger()
+        .write(move |c| {
+            c.execute(
+        "UPDATE core_state SET id=?1,body=?2,updated_at=?3 WHERE kind IN (?4,?7) AND id=?5 AND body=?6",
+        params![dst,after,Utc::now().to_rfc3339(),KIND,key,prior,LEGACY])
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    if n == 1 {
+        Ok(())
+    } else {
+        Err("Подготовленная попытка уже изменилась".into())
+    }
 }

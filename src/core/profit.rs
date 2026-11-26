@@ -407,7 +407,12 @@ pub(super) async fn final_standard(
 /// ядро адаптеры не знает). Свой сборщик — запросов к агрегатору нет, фильтр не нужен. None — 0, не задан, DEX нет
 /// или внешнего исполнителя нет. Ошибок нет.
 fn final_gate(core: &Core, d: &Direction) -> Option<Decimal> {
-    if !final_external(core, d) {
+    let settings = &core.inner.deps.settings;
+    if !rd(&core.inner.kinds).iter().any(|(v, k)| {
+        (v == &d.buy_on || v == &d.sell_on)
+            && *k == crate::gateway::contract::VenueKind::Dex
+            && crate::gateway::quote_stage::kyber_final(settings, v)
+    }) {
         return None;
     }
     core.inner

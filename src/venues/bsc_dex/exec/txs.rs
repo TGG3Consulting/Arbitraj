@@ -186,7 +186,7 @@ pub async fn send_tipped(
                 ..Default::default()
             });
         crate::gateway::settlement_intent::before_send(&marker).await?;
-        super::super::hashflow::reserve(ctx,slot,&marker).await?;
+        super::super::hashflow::reserve(ctx, slot, &marker).await?;
     }
     let d = send::dispatch(
         ctx,

@@ -1,7 +1,7 @@
 name: Encrypted historical market comparison
 on:
   push:
-    branches: [audit/bsc-v2-point-261126]
+    branches: [audit/bsc-v2-ride-261126]
 permissions:
   contents: read
 jobs:

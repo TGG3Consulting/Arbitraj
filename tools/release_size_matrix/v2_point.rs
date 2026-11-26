@@ -27,7 +27,13 @@ fn quote_on_original_reserves() {
             }
             amounts.push(value.to_string());
         }
-        results.push(json!({"k": case["k"], "raw_usdt": amounts}));
+        let qty = Decimal::from_str(case["group_qty"].as_str().unwrap()).unwrap();
+        let off = Decimal::from_str(case["group_ahead"].as_str().unwrap()).unwrap();
+        let gross = |x: &str| Decimal::from_i128_with_scale(x.parse::<i128>().unwrap(),18);
+        let full = gross(&amounts[0]) / (qty+off);
+        let ahead = gross(&amounts[1]) / off;
+        let marginal = ((full * (qty+off)) - (ahead * off)) / qty;
+        results.push(json!({"k": case["k"], "raw_usdt": amounts,"marginal":marginal.to_string()}));
     }
     fs::write(env::var("V2_OUT").unwrap(),serde_json::to_vec(&results).unwrap()).unwrap();
 }

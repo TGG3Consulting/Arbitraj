@@ -1,4 +1,8 @@
-//! Зачисление того же вывода native Base USDC на выбранном кошельке либо исходной бирже.
+//! Файл: core/settlement_transfer.rs.
+//! Что делает: связывает подтверждение вывода и кредит получателя.
+//! Кто вызывает: исполнитель поручения.
+//! От чего зависит: шлюзы выбранной сети и привязанный кошелёк.
+//! Настройки: пределы вывода и маппинг кошельков.
 use super::settlement_effect as effect;
 use crate::core::{
     engine::Core,
@@ -15,6 +19,7 @@ pub struct Movement {
 }
 
 fn verified(
+    m: &super::settlement_market::Market,
     sent: Transfer,
     credit: Transfer,
     to: &VenueId,
@@ -25,11 +30,11 @@ fn verified(
         .tx_hash
         .as_deref()
         .filter(|v| !v.is_empty())
-        .ok_or("У вывода Base нет хеша")?;
+        .ok_or("У вывода конверсии нет хеша")?;
     if credit.status != TransferStatus::Credited
         || credit.venue != *to
         || credit.amount <= Decimal::ZERO
-        || credit.asset.ticker != "USDC"
+        || credit.asset.ticker != m.asset.ticker
         || credit.network != network
         || credit.amount > budget
         || !credit
@@ -37,23 +42,27 @@ fn verified(
             .as_deref()
             .is_some_and(|s| crate::gateway::tx_hash::same(s, tx))
     {
-        return Err("Нет зачисления USDC по хешу вывода на указанном получателе".into());
+        return Err(
+            "Нет зачисления расчётного актива по хешу вывода на указанном получателе".into(),
+        );
     }
     Ok(Movement { sent, credit })
 }
 
 /// После перезапуска сначала проверяет исход исходного вывода. Новый баланс и новый адрес депозита
 /// для поиска уже принятого вывода не нужны. При ещё не подтверждённом хеше оставляет шаг открытым.
-pub async fn move_usdc(
+pub async fn move_asset(
     core: &Core,
     id: &str,
-    cex: &VenueId,
+    m: &super::settlement_market::Market,
     wallet: &DexAccountId,
     funding: bool,
     amount: Decimal,
 ) -> Result<Movement, String> {
-    use super::{settlement, transfers};
-    let dex = VenueId("base_dex".into());
+    use super::transfers;
+    m.ensure(core)?;
+    let dex = m.dex.clone();
+    let cex = &m.cex;
     let (from, to) = if funding { (cex, &dex) } else { (&dex, cex) };
     let deps = &core.inner.deps;
     let sender = deps
@@ -62,16 +71,16 @@ pub async fn move_usdc(
         .await
         .map_err(|e| e.message)?;
     if !sender.supports_settlement_withdrawal() || id.is_empty() || amount <= Decimal::ZERO {
-        return Err("Нет исполнимого вывода Base USDC".into());
+        return Err("Нет исполнимого вывода расчётного токена".into());
     }
-    if let Some(req) = effect::previous_withdrawal(&deps.db, id, from, to, Some(wallet))
+    if let Some(req) = effect::previous_withdrawal(&deps.db, m, id, from, to, Some(wallet))
         .await
         .map_err(|e| e.message)?
     {
-        if req.amount > amount || !effect::base_usdc(&req.asset) {
+        if req.amount > amount || !m.matches(&req.asset) {
             return Err("Ранее отправленный вывод не совпадает с бюджетом и активом этапа".into());
         }
-        let created = effect::withdraw(&deps.db, sender.as_ref(), &req, to, Some(wallet), None)
+        let created = effect::withdraw(&deps.db, m, sender.as_ref(), &req, to, Some(wallet), None)
             .await
             .map_err(|e| e.message)?;
         let sent = sender
@@ -88,7 +97,7 @@ pub async fn move_usdc(
             .tx_hash
             .as_deref()
             .filter(|s| !s.is_empty())
-            .ok_or("Биржа ещё не сообщила хеш вывода Base")?;
+            .ok_or("Биржа ещё не сообщила хеш вывода конверсии")?;
         let recipient = deps
             .gw
             .get_as(to, Some(wallet))
@@ -105,31 +114,22 @@ pub async fn move_usdc(
             .await
             .map_err(|e| e.message)?;
         let net = transfers::network(core, &req.asset, to)?;
-        return verified(sent, credit, to, &net, amount);
+        return verified(m, sent, credit, to, &net, amount);
     }
     super::executor::buy_gate(core)?;
     if !super::registry_sync::enabled(core, cex) || !super::registry_sync::enabled(core, &dex) {
-        return Err("Исходная биржа или Base выключены".into());
+        return Err("Исходная биржа или конверсии выключены".into());
     }
-    let network = settlement::usdc_network(core, cex, funding)?;
-    let free = super::limits::free_now(core, from, Some(wallet), "USDC").await?;
+    let network = m.network(core, funding)?;
+    let free = super::limits::free_now(core, from, Some(wallet), &m.asset.ticker).await?;
     if amount > free {
         return Err(format!(
-            "Для вывода требуется {amount} USDC, свободно {free}"
+            "Для вывода требуется {amount} расчётного актива, свободно {free}"
         ));
     }
-    let (sent, credit) = transfers::send_as(
-        core,
-        id,
-        from,
-        to,
-        &network.asset,
-        amount,
-        Some(wallet),
-        &mut vec![],
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    let (sent, credit) = transfers::send_settlement(core, id, from, to, m, amount, wallet)
+        .await
+        .map_err(|e| e.to_string())?;
     let net = transfers::network(core, &network.asset, to)?;
-    verified(sent, credit, to, &net, amount)
+    verified(m, sent, credit, to, &net, amount)
 }

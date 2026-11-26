@@ -17,6 +17,7 @@ use crate::core::{
 pub struct Request {
     side: Side,
     quantity: Decimal,
+    dex: Option<String>,
 }
 
 /// Сначала сверяет направление, сеть и монету, затем получает стакан и комиссию аккаунта.
@@ -24,20 +25,25 @@ pub async fn quote(
     State(st): State<AppState>,
     Path(id): Path<String>,
     Query(q): Query<Request>,
-) -> Result<Json<Conversion>, ApiError> {
+) -> Result<Json<serde_json::Value>, ApiError> {
     if q.quantity <= Decimal::ZERO {
         return Err(ApiError::bad("Количество USDC должно быть положительным"));
     }
-    settlement::preview(&st.core, &VenueId(id), q.side, q.quantity)
+    let market = market(&st, q.dex, &id)?;
+    let v = settlement::preview(&st.core, &market, q.side, q.quantity)
         .await
-        .map(Json)
-        .map_err(ApiError::no_data)
+        .map_err(ApiError::no_data)?;
+    Ok(Json(
+        serde_json::json!({"venue":v.venue,"side":v.side,"order_usdc":v.order_amount,"net_usdc":v.net_asset,
+        "net_usdt":v.net_quote,"fee_usdc":v.fee_asset,"fee_usdt":v.fee_quote,"limit_price":v.limit_price,"limit_usdt":v.limit_quote}),
+    ))
 }
 
 #[derive(Deserialize)]
 pub struct Lookup {
     deal: String,
     side: Side,
+    dex: Option<String>,
 }
 
 /// Точный ответ по одному этапу. Частично исполненный ордер и комиссия в третьей монете
@@ -47,8 +53,9 @@ pub async fn order(
     Path(venue): Path<String>,
     Query(q): Query<Lookup>,
 ) -> Result<Json<crate::gateway::settlement_intent::Entry>, ApiError> {
+    let market = market(&st, q.dex, &venue)?;
     let row =
-        crate::core::settlement_effect::order_record(&st.db, &q.deal, &VenueId(venue), q.side)
+        crate::core::settlement_effect::order_record(&st.db, &market, &q.deal, &market.cex, q.side)
             .await
             .map_err(|e| ApiError::no_data(e.message))?
             .ok_or_else(|| ApiError::no_data("Сохранённого ордера Base с этими реквизитами нет"))?;
@@ -74,6 +81,7 @@ pub struct CircleRequest {
     pub token: alloy_primitives::Address,
     /// Сторона Base: Buy — финансирование на бирже перед целевой покупкой, Sell — возврат выручки на биржу.
     pub base_side: Side,
+    pub dex: Option<String>,
     pub quantity: Decimal,
 }
 /// Модель полного маршрута на заданном количестве с реальными наблюдаемыми условиями.
@@ -83,18 +91,16 @@ pub async fn circle(
     Query(q): Query<CircleRequest>,
 ) -> Result<Json<crate::core::settlement_model::Model>, ApiError> {
     use crate::core::types::Direction;
+    let m = market(&st, q.dex, &venue)?;
     let asset = st
         .core
         .coins()
         .all()
-        .find(|c| {
-            c.asset.chain.as_ref().is_some_and(|n| n.as_str() == "base")
-                && c.asset.contract == Some(q.token)
-        })
+        .find(|c| c.asset.chain == m.asset.chain && c.asset.contract == Some(q.token))
         .map(|c| c.asset.clone())
-        .ok_or_else(|| ApiError::no_data("Контракта Base нет в справочнике монет"))?;
-    let cex = VenueId(venue);
-    let dex = VenueId("base_dex".into());
+        .ok_or_else(|| ApiError::no_data("Контракта нет в справочнике выбранной сети"))?;
+    let cex = m.cex;
+    let dex = m.dex;
     let (buy_on, sell_on) = if q.base_side == Side::Buy {
         (dex, cex)
     } else {
@@ -112,4 +118,27 @@ pub async fn circle(
     .await
     .map(Json)
     .map_err(ApiError::no_data)
+}
+
+fn market(
+    st: &AppState,
+    dex: Option<String>,
+    cex: &str,
+) -> Result<crate::core::settlement_market::Market, ApiError> {
+    let dex = VenueId(dex.unwrap_or_else(|| "base_dex".into()));
+    crate::core::settlement_market::Market::new(&st.core, &dex, &VenueId(cex.into()))
+        .map_err(ApiError::no_data)
+}
+
+/// Котировка для явно запрошенной пары площадок. В ответе присутствуют оба фактических тикера.
+pub async fn market_quote(
+    State(st): State<AppState>,
+    Path((venue, dex)): Path<(String, String)>,
+    Query(q): Query<Request>,
+) -> Result<Json<Conversion>, ApiError> {
+    let m = market(&st, Some(dex), &venue)?;
+    settlement::preview(&st.core, &m, q.side, q.quantity)
+        .await
+        .map(Json)
+        .map_err(ApiError::no_data)
 }

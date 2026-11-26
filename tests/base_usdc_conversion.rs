@@ -1,7 +1,8 @@
 //! Регрессия Base USDC: снимок Gate /spot/order_book, /spot/currency_pairs/USDC_USDT и /spot/currencies/USDC.
 //! Публичная комиссия здесь обозначает модель; боевой путь получает план комиссии аккаунта от адаптера.
 use arb::core::{
-    settlement::{self, BASE_USDC},
+    settlement,
+    settlement_market::Market,
     types::{Asset, ChainId, OrderBook, PriceLevel, Side, VenueId},
 };
 use arb::gateway::{
@@ -15,7 +16,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 /// Декодирует зафиксированный снимок Gate. Время и уровни берутся из записи ответа.
-fn recorded(side: Side) -> (QuoteSnapshot, SpotPairState, VenueId) {
+fn recorded(side: Side) -> (QuoteSnapshot, SpotPairState, Market) {
     let v: Value = serde_json::from_str(include_str!("data/base_usdc_gate_market.json")).unwrap();
     let now = DateTime::from_timestamp_millis(v["book"]["current"].as_i64().unwrap()).unwrap();
     let parsed = arb::venues::gate::symbols_parse::parse_list(
@@ -46,11 +47,19 @@ fn recorded(side: Side) -> (QuoteSnapshot, SpotPairState, VenueId) {
         .unwrap()
         .parse()
         .unwrap();
-    assert_eq!(BASE_USDC, address);
+    assert_eq!(arb::settings::evm_profiles::LEGACY_CASH_TOKEN, address);
     let asset = Asset {
         ticker: "USDC".into(),
         chain: Some(ChainId("base".into())),
         contract: Some(address),
+    };
+    let market = Market {
+        evm_chain_id:8453,cex_network:"BASEEVM".into(),
+        dex: VenueId("base_dex".into()),
+        cex: venue.clone(),
+        chain: ChainId("base".into()),
+        asset: asset.clone(),
+        quote: "USDT".into(),
     };
     let levels = |s: &str| {
         v["book"][s]
@@ -83,7 +92,7 @@ fn recorded(side: Side) -> (QuoteSnapshot, SpotPairState, VenueId) {
             taken_at: now,
         }),
         pair,
-        venue,
+        market,
     )
 }
 
@@ -94,18 +103,18 @@ async fn buy_and_sell_use_different_liquidity_and_round_down() {
     let buy = settlement::conversion(&buy_book, &rules, &venue, Side::Buy, qty)
         .await
         .unwrap();
-    assert_eq!(buy.order_usdc, Decimal::from(200));
-    assert_eq!(buy.net_usdc, Decimal::from_str("199.8").unwrap());
+    assert_eq!(buy.order_amount, Decimal::from(200));
+    assert_eq!(buy.net_asset, Decimal::from_str("199.8").unwrap());
     // Запрос пересекает первую ask на 111.26 USDC.
     assert!(buy.limit_price > buy_book.book().unwrap().asks[0].price);
-    assert!(buy.limit_usdt >= buy.net_usdt);
+    assert!(buy.limit_quote >= buy.net_quote);
     let (sell_book, rules, venue) = recorded(Side::Sell);
     let sell = settlement::conversion(&sell_book, &rules, &venue, Side::Sell, qty)
         .await
         .unwrap();
     assert_eq!(sell.limit_price, sell_book.book().unwrap().bids[0].price);
-    assert!(sell.net_usdt < buy.net_usdt);
-    assert!(sell.fee_usdt > Decimal::ZERO);
+    assert!(sell.net_quote < buy.net_quote);
+    assert!(sell.fee_quote > Decimal::ZERO);
     assert!(
         settlement::conversion(&sell_book, &rules, &venue, Side::Sell, Decimal::ONE)
             .await
@@ -123,5 +132,5 @@ async fn buy_and_sell_use_different_liquidity_and_round_down() {
             .await
             .is_err()
     );
-    assert!(settlement::require_usdt("USDC", "USDT").is_err());
+    assert!(settlement::require_same("USDC", "USDT").is_err());
 }

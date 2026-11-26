@@ -81,6 +81,12 @@ struct Action {
 
 tokio::task_local! { static ACTION: Action; }
 
+tokio::task_local! { static CHECK: std::sync::Arc<dyn Fn()->GatewayResult<()> + Send + Sync>; }
+
+/// Поздняя сверка снимка маршрута перед записью первичного идентификатора и внешней отправкой.
+pub async fn checked<T>(guard:impl Fn()->GatewayResult<()>+Send+Sync+'static,f:impl Future<Output=T>)->T {
+    CHECK.scope(std::sync::Arc::new(guard),f).await
+}
 /// Требуется ли этой операции сохранение идентификатора до отправки.
 pub fn active() -> bool {
     ACTION.try_with(|_| ()).is_ok()
@@ -126,6 +132,7 @@ pub async fn load(db: &Db, key: &str) -> Result<Option<Entry>, String> {
 
 /// Непосредственно перед внешней отправкой сохраняет реальный prepared ID. Только выигравший INSERT может отправить.
 pub async fn before_send(lookup: &PendingRef) -> GatewayResult<()> {
+    if let Ok(result)=CHECK.try_with(|guard|guard()) {result?;}
     let Ok(action) = ACTION.try_with(Clone::clone) else {
         return Ok(());
     };

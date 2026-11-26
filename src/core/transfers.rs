@@ -143,7 +143,18 @@ pub async fn send_trade(
     gas: &mut Vec<Wasted>,
 ) -> Result<(Transfer, Transfer, Option<String>), OpError> {
     let acc = super::dex_account::of_deal(core, deal)?;
-    go(core, deal, (from, to), asset, qty, acc.as_ref(), true, gas).await
+    go(
+        core,
+        deal,
+        (from, to),
+        asset,
+        qty,
+        acc.as_ref(),
+        true,
+        gas,
+        None,
+    )
+    .await
 }
 
 /// Перевод со счётом DEX, заданным явно (перегон USDT — кошелёк сделки или строка маппинга биржи, решение 132).
@@ -160,8 +171,33 @@ pub async fn send_as(
     acc: Option<&crate::core::types::DexAccountId>,
     gas: &mut Vec<Wasted>,
 ) -> Result<(Transfer, Transfer), OpError> {
-    let (sent, credited, _) = go(core, deal, (from, to), asset, qty, acc, false, gas).await?;
+    let (sent, credited, _) = go(core, deal, (from, to), asset, qty, acc, false, gas, None).await?;
     Ok((sent, credited))
+}
+
+/// Перевод по подтверждённому рынку конверсии. Контракт и сеть передаются подготовщику реального ID.
+pub(super) async fn send_settlement(
+    core: &Core,
+    id: &str,
+    from: &VenueId,
+    to: &VenueId,
+    market: &super::settlement_market::Market,
+    amount: Decimal,
+    wallet: &crate::core::types::DexAccountId,
+) -> Result<(Transfer, Transfer), OpError> {
+    let (sent, credit, _) = go(
+        core,
+        id,
+        (from, to),
+        &market.asset,
+        amount,
+        Some(wallet),
+        false,
+        &mut vec![],
+        Some(market),
+    )
+    .await?;
+    Ok((sent, credit))
 }
 
 /// Решение 236, дополнение (техлид 09.11): газ неудачного перевода из кошелька DEX (откат, отмена, занявшая nonce) —
@@ -305,6 +341,7 @@ async fn go(
     acc: Option<&crate::core::types::DexAccountId>,
     chain: bool,
     gas: &mut Vec<Wasted>,
+    settlement: Option<&super::settlement_market::Market>,
 ) -> Result<(Transfer, Transfer, Option<String>), OpError> {
     let deps = &core.inner.deps;
     // Решение 413 (t198, ревью С1): посторонние монеты на бирже-получателе (credit_base.rs) — чтение параллельно
@@ -423,18 +460,16 @@ async fn go(
         attempt += 1;
         // Решение 180: лимит выводов биржи-отправителя (withdraw_limit.rs; не задан — сразу, как раньше).
         super::withdraw_limit::take(core, deal, from, &on_from.ticker).await;
-        let result = if super::settlement_effect::base_usdc(asset)
-            && (from.0 == "base_dex" || to.0 == "base_dex")
-            && gw_from.supports_settlement_withdrawal()
-        {
-            super::settlement_effect::withdraw(
+        let result = if let Some(market) = settlement {
+            crate::gateway::settlement_intent::checked(market.guard(core),super::settlement_effect::withdraw(
                 &deps.db,
+                market,
                 gw_from.as_ref(),
                 &req,
                 to,
                 acc,
                 prepared_network.as_ref(),
-            )
+            ))
             .await
         } else {
             match &prepared_network {

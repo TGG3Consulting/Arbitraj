@@ -48,23 +48,18 @@ pub(super) fn dex_quote(core: &Core, venue: &VenueId) -> Option<Asset> {
         .ok()?;
     // Решение 430: USDT сети этой площадки DEX (сеть по умолчанию — адрес из справочника бирж, как раньше).
     let tag = super::chain::tag_of_dex(core, venue).ok()?;
-    let addr = if tag.as_ref().is_some_and(|c| c.as_str() == "base") && ticker == "USDC" {
-        let registry = super::engine::rd(&core.inner.networks);
-        let known = registry.values().any(|rows| {
-            rows.iter().any(|row| {
-                row.asset.chain == tag
-                    && row.asset.ticker == "USDC"
-                    && row.asset.contract == Some(super::settlement::BASE_USDC)
-            })
-        });
+    let addr = if let Some(asset) = super::settlement_market::configured(core, venue).ok()? {
+        let known = super::engine::rd(&core.inner.networks)
+            .values()
+            .any(|rows| {
+                rows.iter()
+                    .any(|row| row.asset == asset && row.asset.ticker == asset.ticker)
+            });
         if !known {
             return None;
         }
-        super::settlement::BASE_USDC
+        asset.contract?
     } else {
-        if tag.as_ref().is_some_and(|c| c.as_str() == "base") && ticker != "USDT" {
-            return None;
-        }
         super::registry_chains::usdt_of(core, tag.as_ref()).ok()?
     };
     Some(Asset {

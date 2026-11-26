@@ -1,67 +1,37 @@
-//! Исполнимый объём основной сделки и отдельная книга USDC/USDT исходной биржи.
+//! Файл: core/settlement_model.rs.
+//! Что делает: считает прибыль полного маршрута в валюте учёта.
+//! Кто вызывает: API и выбор исполнимого маршрута.
+//! От чего зависит: снимки обеих сторон, комиссии и оценка расходов.
+//! Настройки: пара целевой сделки и расчётная пара исходной биржи.
 use super::{
     costs_source::{Live, Source},
-    settlement::{self, Conversion},
+    settlement,
     settlement_path::Leg,
 };
 use crate::core::{
     engine::Core,
-    types::{Cost, CostKind, DexAccountId, Direction, Quote, Side, VenueId},
+    types::{Cost, CostKind, Direction, Side},
 };
 use rust_decimal::Decimal;
-use serde::Serialize;
 
-/// Стоимость/прибыль моделируются в USDT. Оценки USDC, лимиты ордеров и объёмы токена явно разделены.
-#[derive(Serialize)]
-pub struct Model {
-    pub direction: Direction,
-    pub source: VenueId,
-    pub wallet: DexAccountId,
-    pub buy: Quote,
-    pub sell: Quote,
-    pub buy_limit: Decimal,
-    pub sell_limit: Decimal,
-    pub sell_qty: Decimal,
-    pub withdrawal_qty: Decimal,
-    pub credited_target: Decimal,
-    pub conversion: Conversion,
-    pub leg: Leg,
-    pub invested_usdt: Decimal,
-    pub capital_usdt: Decimal,
-    pub proceeds_usdt: Decimal,
-    pub other_costs_usdt: Decimal,
-    pub reserve_usdt: Decimal,
-    pub profit_usdt: Decimal,
-}
-fn mul(a: Decimal, b: Decimal) -> Result<Decimal, String> {
-    a.checked_mul(b)
-        .ok_or_else(|| "Сумма вне диапазона Decimal".into())
-}
-fn add(a: Decimal, b: Decimal) -> Result<Decimal, String> {
-    a.checked_add(b)
-        .ok_or_else(|| "Сумма вне диапазона Decimal".into())
-}
+pub use super::settlement_values::Model;
+use super::settlement_values::{add, mul};
 
 /// Строит обе стороны на текущих данных. Учитывает встречные заявки других сделок через Live,
 /// проверенные пределы и удержания перевода токена через общий расчёт quantities.
 pub async fn evaluate(core: &Core, d: &Direction, qty: Decimal) -> Result<Model, String> {
-    let dex = VenueId("base_dex".into());
+    let market = super::settlement_market::Market::direction(core, d)?;
+    let dex = market.dex.clone();
+    let cex = &market.cex;
     let funding = d.buy_on == dex;
     if qty <= Decimal::ZERO
-        || !(if funding {
-            d.sell_on != dex
-        } else {
-            d.sell_on == dex
-        })
-        || !d.asset.chain.as_ref().is_some_and(|c| c.as_str() == "base")
         || d.asset.contract.is_none()
-        || d.asset.contract == Some(settlement::BASE_USDC)
+        || d.asset.contract == market.asset.contract
     {
-        return Err("Нужна отличная от расчётного USDC монета Base и одна спотовая биржа".into());
+        return Err("Нужны положительный объём и токен, отличный от расчётного".into());
     }
-    let cex = if funding { &d.sell_on } else { &d.buy_on };
     let wallet = super::dex_account::of_direction_now(core, d)
-        .ok_or("Нет привязанного кошелька этого направления Base")?;
+        .ok_or("Нет привязанного кошелька этого направления конверсии")?;
     let gw = core
         .inner
         .deps
@@ -72,7 +42,7 @@ pub async fn evaluate(core: &Core, d: &Direction, qty: Decimal) -> Result<Model,
     if !gw.supports_settlement_order() || (funding && !gw.supports_settlement_withdrawal()) {
         return Err("Для биржи отсутствует восстанавливаемая конверсия/вывод".into());
     }
-    let cx = super::dirctx::DirCtx::base_usdc(core, d)?;
+    let cx = super::dirctx::DirCtx::for_settlement(core, d)?;
     let src = Live { core, src: None };
     let qa = src.quote(d, false, qty).await.map_err(|e| e.to_string())?;
     if qa.fillable_qty < qty {
@@ -93,7 +63,7 @@ pub async fn evaluate(core: &Core, d: &Direction, qty: Decimal) -> Result<Model,
     let worst_b = src
         .worst(d, true, exit.sell_qty, exit.qb.avg_price)
         .map_err(|e| e.to_string())?;
-    let net = settlement::usdc_network(core, cex, funding)?;
+    let net = market.network(core, funding)?;
     let principal = mul(qty, qa.avg_price)?;
     let budget = mul(qty, worst)?;
     let proceeds = mul(exit.sell_qty, exit.qb.avg_price)?;
@@ -128,24 +98,24 @@ pub async fn evaluate(core: &Core, d: &Direction, qty: Decimal) -> Result<Model,
                 "Нужен подтверждённый дебет монеты скидки или ребейта основной сделки".into(),
             );
         }
-        if cost.asset == "USDC" {
+        if cost.asset == market.asset.ticker {
             usdc = add(usdc, cost.amount)?;
-        } else if cost.asset == "USDT" && stage == "A" {
+        } else if cost.asset == market.quote && stage == "A" {
             buy_fee = add(buy_fee, cost.amount)?;
         } else {
             other.push(cost);
         }
     }
-    let (conversion, leg, invested, capital, final_usdt) = if funding {
+    let (conversion, leg, invested, capital, final_quote) = if funding {
         let required = add(budget, usdc)?;
-        let q = settlement::fund_for(core, cex, required).await?;
-        let invested = add(q.net_usdt, buy_fee)?;
-        let capital = add(q.limit_usdt, buy_fee)?;
+        let q = settlement::fund_for(core, &market, required).await?;
+        let invested = add(q.net_quote, buy_fee)?;
+        let capital = add(q.limit_quote, buy_fee)?;
         let leg = Leg::Fund {
-            budget_usdt: q.limit_usdt,
-            buy_usdc: q.order_usdc,
+            quote_budget: q.limit_quote,
+            buy_amount: q.order_amount,
             maximum_price: q.limit_price,
-            required_wallet_usdc: required,
+            required_wallet_amount: required,
             target_qty: qty,
             sell_qty: exit.sell_qty,
             minimum_target_bid: worst_b,
@@ -155,16 +125,16 @@ pub async fn evaluate(core: &Core, d: &Direction, qty: Decimal) -> Result<Model,
         let received = proceeds
             .checked_sub(usdc)
             .filter(|x| *x > Decimal::ZERO)
-            .ok_or("Расходы превышают выручку USDC")?;
+            .ok_or("Расходы превышают выручку расчётного актива")?;
         if net.deposit_min.is_none_or(|min| received < min) {
             return Err(
-                "Выручка USDC не покрывает подтверждённый минимум депозита исходной биржи".into(),
+                "Выручка расчётного актива не покрывает подтверждённый минимум депозита исходной биржи".into(),
             );
         }
-        let q = settlement::sell_within(core, cex, received).await?;
-        let final_usdt = q.net_usdt;
+        let q = settlement::sell_within(core, &market, received).await?;
+        let final_quote = q.net_quote;
         let leg = Leg::Return {
-            available_usdc: received,
+            available_amount: received,
             minimum_price: q.limit_price,
         };
         (
@@ -172,19 +142,19 @@ pub async fn evaluate(core: &Core, d: &Direction, qty: Decimal) -> Result<Model,
             leg,
             add(principal, buy_fee)?,
             add(budget, buy_fee)?,
-            final_usdt,
+            final_quote,
         )
     };
     let buy_unit = invested
         .checked_div(qty)
-        .ok_or("Нет цены фактических единиц A в USDT")?;
-    let sell_unit = final_usdt
+        .ok_or("Нет цены фактических единиц A в валюты учёта")?;
+    let sell_unit = final_quote
         .checked_div(exit.sell_qty)
-        .ok_or("Нет цены фактических единиц B в USDT")?;
+        .ok_or("Нет цены фактических единиц B в валюты учёта")?;
     let rates = super::convert::rates(
         &core.inner.deps,
         std::slice::from_ref(cex),
-        vec!["USDT".into()],
+        vec![market.quote.clone()],
         &d.asset.ticker,
         buy_unit,
         &other,
@@ -200,14 +170,14 @@ pub async fn evaluate(core: &Core, d: &Direction, qty: Decimal) -> Result<Model,
     })?;
     let reserve = super::reserve::amount(
         cx.keep.ok_or("Нет горизонта перехода")?,
-        final_usdt,
+        final_quote,
         cx.closure_share,
         cx.units_b_per_a
             .to_buy(buy_unit)
             .map_err(|e| e.to_string())?,
         sell_unit,
     );
-    let profit = final_usdt - invested - costs - reserve;
+    let profit = final_quote - invested - costs - reserve;
     Ok(Model {
         direction: d.clone(),
         source: cex.clone(),
@@ -221,11 +191,11 @@ pub async fn evaluate(core: &Core, d: &Direction, qty: Decimal) -> Result<Model,
         credited_target: exit.arrive,
         conversion,
         leg,
-        invested_usdt: invested,
-        capital_usdt: capital,
-        proceeds_usdt: final_usdt,
-        other_costs_usdt: costs,
-        reserve_usdt: reserve,
-        profit_usdt: profit,
+        invested_quote: invested,
+        capital_quote: capital,
+        proceeds_quote: final_quote,
+        other_costs_quote: costs,
+        reserve_quote: reserve,
+        profit_quote: profit,
     })
 }

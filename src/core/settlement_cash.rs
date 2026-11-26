@@ -1,5 +1,8 @@
-//! Денежная часть IOC-конверсии на исходной спотовой бирже.
-//! Расчёт и итог различены: точное заполнение и списания берутся из ответа исполненного ордера.
+//! Файл: core/settlement_cash.rs.
+//! Что делает: вычисляет фактические дебет и кредит, ставит либо сверяет IOC.
+//! Кто вызывает: исполнитель поручения.
+//! От чего зависит: результат биржи, комиссия и баланс.
+//! Настройки: выключатели, резервы, dry.enabled.
 use super::{settlement, settlement_effect as effect};
 use crate::core::{
     engine::Core,
@@ -20,11 +23,15 @@ pub struct CashFill {
     pub unspent: Decimal,
 }
 
-/// Для Buy дебет/остаток — USDT, кредит — USDC. Для Sell дебет/остаток — USDC, кредит — USDT.
-pub fn cash(fill: &SpotFill, budget: Decimal) -> Result<CashFill, String> {
+/// Для Buy дебет/остаток — валюты учёта, кредит — расчётного актива. Для Sell дебет/остаток — расчётного актива, кредит — валюты учёта.
+pub fn cash(
+    m: &super::settlement_market::Market,
+    fill: &SpotFill,
+    budget: Decimal,
+) -> Result<CashFill, String> {
     let trade = &fill.trade;
     let req = &trade.request;
-    if !effect::base_usdc(&req.asset)
+    if !m.matches(&req.asset)
         || trade.venue_ref.is_empty()
         || trade.chain.is_some()
         || trade.filled_qty > req.qty
@@ -42,15 +49,15 @@ pub fn cash(fill: &SpotFill, budget: Decimal) -> Result<CashFill, String> {
             return Err("Некорректная комиссия исполнения".into());
         }
         match f.asset.as_str() {
-            "USDC" => {
+            s if s == m.asset.ticker => {
                 usdc = usdc
                     .checked_add(f.amount)
-                    .ok_or("Комиссия USDC вне диапазона")?
+                    .ok_or("Комиссия расчётного актива вне диапазона")?
             }
-            "USDT" => {
+            s if s == m.quote => {
                 usdt = usdt
                     .checked_add(f.amount)
-                    .ok_or("Комиссия USDT вне диапазона")?
+                    .ok_or("Комиссия валюты учёта вне диапазона")?
             }
             _ if f.amount.is_zero() => {}
             _ => {
@@ -91,16 +98,17 @@ pub fn cash(fill: &SpotFill, budget: Decimal) -> Result<CashFill, String> {
 
 /// Первая отправка проверяет текущий стакан, счёт, лимит и политику торгов.
 /// После перезапуска сверяется только ранее отправленный запрос, даже если книга или баланс изменились.
-/// quantity — желаемое количество USDC; budget — максимум списания в валюте стороны.
+/// quantity — желаемое количество расчётного актива; budget — максимум списания в валюте стороны.
 pub async fn convert(
     core: &Core,
     deal: &str,
-    cex: &VenueId,
+    m: &super::settlement_market::Market,
     side: Side,
     quantity: Decimal,
     budget: Decimal,
     price_bound: Decimal,
 ) -> Result<CashFill, String> {
+    let cex = &m.cex;
     let deps = &core.inner.deps;
     let gw = deps.gw.get_as(cex, None).await.map_err(|e| e.message)?;
     if !gw.supports_settlement_order()
@@ -108,9 +116,9 @@ pub async fn convert(
         || budget <= Decimal::ZERO
         || price_bound <= Decimal::ZERO
     {
-        return Err("Нет условий исполнимого денежного шага Base".into());
+        return Err("Нет условий исполнимого денежного шага конверсии".into());
     }
-    let req = match effect::previous_order(&deps.db, deal, cex, side)
+    let req = match effect::previous_order(&deps.db, m, deal, cex, side)
         .await
         .map_err(|e| e.message)?
     {
@@ -120,22 +128,22 @@ pub async fn convert(
             if !super::registry_sync::enabled(core, cex) {
                 return Err("Исходная биржа выключена".into());
             }
-            let row = settlement::usdc_network(core, cex, side == Side::Buy)?;
+            let row = m.network(core, side == Side::Buy)?;
             let plan = if side == Side::Sell {
-                settlement::sell_within(core, cex, quantity.min(budget)).await?
+                settlement::sell_within(core, m, quantity.min(budget)).await?
             } else {
-                settlement::preview(core, cex, side, quantity).await?
+                settlement::preview(core, m, side, quantity).await?
             };
             let (ticker, required) = if side == Side::Buy {
                 if plan.limit_price > price_bound {
-                    return Err("Цена покупки USDC превысила допустимый лимит".into());
+                    return Err("Цена покупки расчётного актива превысила допустимый лимит".into());
                 }
-                ("USDT", plan.limit_usdt)
+                (m.quote.as_str(), plan.limit_quote)
             } else {
                 if plan.limit_price < price_bound {
-                    return Err("Цена продажи USDC ниже допустимого лимита".into());
+                    return Err("Цена продажи расчётного актива ниже допустимого лимита".into());
                 }
-                ("USDC", plan.net_usdc)
+                (m.asset.ticker.as_str(), plan.net_asset)
             };
             let free = super::limits::free_now(core, cex, None, ticker).await?;
             let free = if side == Side::Buy {
@@ -152,7 +160,7 @@ pub async fn convert(
                 venue: cex.clone(),
                 asset: row.asset,
                 side,
-                qty: plan.order_usdc,
+                qty: plan.order_amount,
                 worst_price: plan.limit_price,
                 deal_id: deal.into(),
                 route: None,
@@ -161,8 +169,7 @@ pub async fn convert(
             }
         }
     };
-    let fill = effect::order(&deps.db, gw.as_ref(), req)
-        .await
-        .map_err(|e| e.message)?;
-    cash(&fill, budget)
+    m.ensure(core)?;
+    let fill=crate::gateway::settlement_intent::checked(m.guard(core),effect::order(&deps.db,m,gw.as_ref(),req)).await.map_err(|e|e.message)?;
+    cash(m, &fill, budget)
 }

@@ -141,7 +141,7 @@ impl DirCtx {
     }
 
     /// Сборка контекста на момент `at_m` (см. Moment). Ошибки: как у build.
-    pub(super) fn base_usdc(core: &Core, dir: &Direction) -> Result<DirCtx, String> {
+    pub(super) fn for_settlement(core: &Core, dir: &Direction) -> Result<DirCtx, String> {
         Self::build_with(core, dir, Moment::Entry, true)
     }
 
@@ -194,30 +194,17 @@ impl DirCtx {
         let qb = s
             .text("venue.quote_asset", at(&dir.sell_on))
             .map_err(|e| e.message)?;
-        if dir
-            .asset
-            .chain
-            .as_ref()
-            .is_some_and(|c| c.as_str() == "base")
-        {
-            if conversion {
-                let valid = if dir.buy_on.0 == "base_dex" {
-                    qa == "USDC" && qb == "USDT"
-                } else {
-                    dir.sell_on.0 == "base_dex" && qa == "USDT" && qb == "USDC"
-                };
-                if !valid {
-                    return Err("Для Base требуются USDC на DEX и USDT на исходной бирже".into());
-                }
-            } else {
-                super::settlement::require_usdt(&qa, &qb)?;
-            }
-        }
-        // Решение 430: USDT сети направления (монеты; сеть по умолчанию — как раньше).
-        let usdt = if conversion {
-            super::settlement::BASE_USDC
+        let settlement = if conversion {
+            Some(super::settlement_market::Market::direction(core, dir)?.asset)
         } else {
-            super::registry_chains::usdt_of(core, dir.asset.chain.as_ref())?
+            super::settlement::require_same(&qa, &qb)?;
+            None
+        };
+        let usdt = match &settlement {
+            Some(asset) => asset
+                .contract
+                .ok_or("Не задан контракт расчётного токена")?,
+            None => super::registry_chains::usdt_of(core, dir.asset.chain.as_ref())?,
         };
         let cex: Vec<VenueId> = rd(&core.inner.kinds)
             .iter()
@@ -332,7 +319,7 @@ impl DirCtx {
             quote: vec![qa.clone(), qb],
             usdt: Asset {
                 chain: dir.asset.chain.clone(),
-                ticker: if conversion { "USDC".into() } else { qa },
+                ticker: settlement.map_or(qa, |a| a.ticker),
                 contract: Some(usdt),
             },
             cex,

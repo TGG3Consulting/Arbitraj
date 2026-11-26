@@ -331,3 +331,21 @@ jobs:
         with:
           name: fermi-slot-replay
           path: ${{ runner.temp }}/fermi-executor/ethereum-replay.json
+  ethereum-v2-registry:
+    if: inputs.community_archive_replay
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        market: [dooar_ethereum, standard_ethereum, justmoney-ethereum, verse, spice_trade_ethereum]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0 beautifulsoup4==4.13.5 PyYAML==6.0.3
+      - run: python scripts/record_ethereum_v2_factories.py "${{ matrix.market }}" "$RUNNER_TEMP/ethereum-v2.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ethereum-v2-${{ matrix.market }}
+          path: ${{ runner.temp }}/ethereum-v2.json

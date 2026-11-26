@@ -42,7 +42,7 @@ pub async fn trade(
     let path = "/api/v1/hf/orders/sync";
     let pending = PendingRef::order(&p.symbol, &p.client_oid, p.qty);
     crate::gateway::settlement_intent::before_send(&pending).await?;
-    let placed = rest::signed(
+    let placed = crate::gateway::cash_signer::send_order(rest::signed(
         ctx,
         Method::POST,
         path,
@@ -50,7 +50,7 @@ pub async fn trade(
         Some(p.body),
         Op::Trade,
         Pool::Spot,
-    )
+    ))
     .await;
     let placed = placed.and_then(|r| {
         num::text_opt(&r, "orderId").ok_or_else(|| {

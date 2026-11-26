@@ -123,6 +123,15 @@ pub trait Venue: Send + Sync {
 
     /// Проверка оригинального торгового accountId при восстановлении не зависит от текущих такс и стакана.
     /// Верхний предел подготовленной покупки вместе с таксой. Использует параметры из памяти.
+    fn cash_opening_cap(
+        &self,
+        _ticker: &str,
+        _currency: &str,
+        _qty: Decimal,
+        _worst: Decimal,
+    ) -> Option<Decimal> {
+        None
+    }
     fn cash_order_cap(
         &self,
         _req: &TradeRequest,

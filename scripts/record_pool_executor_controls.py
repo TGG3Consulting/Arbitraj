@@ -6,19 +6,9 @@ from pathlib import Path
 from eth_abi import encode
 from eth_utils import keccak
 
-from record_base_slipstream_executor import EXEC, OWNER as FIRST_OWNER, ROOT, RUNTIME, STEP, call as message, calldata, rpc
+from record_base_slipstream_executor import EXEC, OWNER as FIRST_OWNER, ROOT, RUNTIME, STEP, call as message, calldata, rpc, simulate_block
 from record_metric_chains import VIRTUAL
 from record_v2_chain_pools import NETWORKS
-
-
-def simulate_block(url, tag, overrides, calls):
-    blocks=rpc(url,"eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":overrides,"calls":calls}]},tag])
-    if not isinstance(blocks,list) or len(blocks)!=1 or blocks[0].get("parentHash")!=tag["blockHash"]:
-        raise RuntimeError("eth_simulateV1 returned a different parent block")
-    values=blocks[0].get("calls")
-    if not isinstance(values,list) or len(values)!=len(calls):
-        raise RuntimeError("eth_simulateV1 returned a different number of calls")
-    return values
 
 
 def record(source, owner=FIRST_OWNER):

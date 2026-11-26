@@ -23,22 +23,32 @@ use rust_decimal::Decimal;
 use std::sync::Arc;
 pub(crate) const OPENING: &str = "cash_buy_origin";
 /// Добавляет привязку к уже существующей записи открытия сделки. В этой точке нет HTTP/SQL.
-pub(crate) async fn opening(core: &Core, d: &mut super::deal::Deal, plan: &super::costs::Calc) {
-    if let Ok(v) = core.inner.deps.gw.get(&d.direction.buy_on).await
-        && v.supports_cash_reservation()
-    {
-        let bound = plan.size.as_ref().map(|s| s.budget);
-        if let (Some(cap), Ok(owner), Ok(currency)) = (
-            bound,
-            v.settlement_account(),
-            super::settlement_market::ticker(core, &d.direction.buy_on),
-        ) {
-            d.plan[OPENING] = serde_json::json!(crate::storage::cex_funds_watch::Opening {
-                cap,
-                owner,
-                currency
-            });
-        }
+pub(crate) async fn opening(
+    core: &Core,
+    d: &mut super::deal::Deal,
+    qty: Decimal,
+    worst: Decimal,
+    plan_spend: Decimal,
+) {
+    let Ok(v) = core.inner.deps.gw.get(&d.direction.buy_on).await else {
+        return;
+    };
+    if !v.supports_cash_reservation() {
+        return;
+    }
+    if let (Ok(owner), Ok(currency)) = (
+        v.settlement_account(),
+        super::settlement_market::ticker(core, &d.direction.buy_on),
+    ) {
+        let ticker = super::venue_ticker::ticker_on(core, &d.direction.asset, &d.direction.buy_on);
+        let cap = v
+            .cash_opening_cap(&ticker, &currency, qty, worst)
+            .unwrap_or(plan_spend);
+        d.plan[OPENING] = serde_json::json!(crate::storage::cex_funds_watch::Opening {
+            cap,
+            owner,
+            currency
+        });
     }
 }
 pub(crate) fn remember(core: &Core, d: &mut super::deal::Deal) {
@@ -62,29 +72,63 @@ struct Active {
     currency: String,
     funding: bool,
     credentials: String,
+    owned: Arc<std::sync::Mutex<Option<Owned>>>,
+}
+struct Owned {
+    bucket: Bucket,
+    client: String,
+    marker: Option<(String, String)>,
 }
 tokio::task_local! {static ACTIVE: Active;}
-tokio::task_local! {static LEGACY: (Arc<crate::storage::cex_funds_watch::Legacy>,Arc<dyn Venue>,TradeRequest,Option<String>,Option<crate::storage::cex_funds_watch::Opening>);}
-pub(crate) fn track_legacy(p: &PendingRef) -> GatewayResult<()> {
-    LEGACY
-        .try_with(|(r, v, q, c, opening)| {
-            let cap = c
+struct Previous {
+    record: Arc<crate::storage::cex_funds_watch::Legacy>,
+    venue: Arc<dyn Venue>,
+    request: TradeRequest,
+    currency: Option<String>,
+    opening: Option<crate::storage::cex_funds_watch::Opening>,
+    key: String,
+    db: crate::storage::db::Db,
+}
+tokio::task_local! {static LEGACY:Previous;}
+pub(crate) async fn track_legacy(p: &PendingRef) -> GatewayResult<()> {
+    let work = LEGACY
+        .try_with(|x| {
+            let cap = x.currency.as_ref().and_then(|c| {
+                x.venue
+                    .cash_order_cap(&x.request, p, c)
+                    .ok()
+                    .map(|n| (c.clone(), n))
+            });
+            let currency = x
+                .currency
                 .as_ref()
-                .and_then(|c| v.cash_order_cap(q, p, c).ok().map(|n| (c.clone(), n)));
-            if let Some(opening) = opening
-                && cap
-                    .as_ref()
-                    .is_none_or(|(c, n)| c != &opening.currency || *n > opening.cap)
-            {
-                return Err(
-                    "Предел подготовленной покупки превышает сохранённый первоначальный бюджет"
-                        .into(),
-                );
-            }
-            r.prepare(p, cap)
+                .filter(|c| {
+                    x.venue
+                        .matches_settlement_order(p, &x.request.asset.ticker, c)
+                })
+                .cloned();
+            let adjustment = x.opening.as_ref().is_some_and(|o| {
+                cap.as_ref()
+                    .is_none_or(|(c, n)| c != &o.currency || *n > o.cap)
+            });
+            x.record
+                .prepare(p, currency, cap)
+                .map_err(|e| err(ErrorCode::StaleData, &x.request, e))?;
+            Ok::<_, GatewayError>(if adjustment {
+                x.record
+                    .snapshot(&x.key, false)
+                    .map(|prior| (x.db.clone(), prior))
+            } else {
+                None
+            })
         })
-        .unwrap_or(Ok(()))
-        .map_err(|e| GatewayError::new(ErrorCode::StaleData, None, e))
+        .unwrap_or(Ok(None))?;
+    if let Some((db, prior)) = work {
+        cold::save_adjustment(&db, &prior)
+            .await
+            .map_err(|e| err(ErrorCode::Internal, &prior.request, e))?;
+    }
+    Ok(())
 }
 fn err(code: ErrorCode, req: &TradeRequest, s: impl Into<String>) -> GatewayError {
     GatewayError::new(code, Some(req.venue.clone()), s)
@@ -158,7 +202,15 @@ pub async fn order(
         }
         let (result, gross) = LEGACY
             .scope(
-                (prior.clone(), venue.clone(), req.clone(), currency, opening),
+                Previous {
+                    record: prior.clone(),
+                    venue: venue.clone(),
+                    request: req.clone(),
+                    currency,
+                    opening,
+                    key: key.clone(),
+                    db: core.inner.deps.db.clone(),
+                },
                 crate::gateway::cash_signer::scope(
                     cred,
                     intent::capture_optional(venue.trade(req)),
@@ -174,6 +226,8 @@ pub async fn order(
         });
         return result;
     }
+    let currency = super::settlement_market::ticker(core, &req.venue)
+        .map_err(|e| err(ErrorCode::NotConfigured, &req, e))?;
     let mut candidates = cold::unadopted(db, &req.venue)
         .await
         .map_err(|e| err(ErrorCode::Internal, &req, e))?;
@@ -182,6 +236,14 @@ pub async fn order(
     }
     let mut accounts = std::collections::HashMap::new();
     for prior in candidates.into_values() {
+        let original_currency = prior
+            .limit
+            .as_ref()
+            .map(|(c, _)| c)
+            .or(prior.currency.as_ref());
+        if prior.action != key && original_currency.is_some_and(|c| c != &currency) {
+            continue;
+        }
         cold::adopt(core, venue.as_ref(), &cred, &prior, &mut accounts).await?;
     }
     let old = if lease.known {
@@ -191,9 +253,14 @@ pub async fn order(
     } else {
         None
     };
-    let currency = super::settlement_market::ticker(core, &req.venue)
-        .map_err(|e| err(ErrorCode::NotConfigured, &req, e))?;
-    crate::gateway::cash_signer::scope(cred.clone(), async {
+    if lease.known && old.is_none() {
+        return Err(err(
+            ErrorCode::OutcomeUnknown,
+            &req,
+            "Сохранённый исходный ID покупки требует сверки",
+        ));
+    }
+    let protected = crate::gateway::cash_signer::scope(cred.clone(), async {
         let fill = if let Some(o) = old {
             let bucket = venue.cash_identity(&o.currency).await?;
             if !original::binding(&o, &bucket)
@@ -232,6 +299,7 @@ pub async fn order(
                 currency,
                 funding,
                 credentials: cred.clone(),
+                owned: Default::default(),
             };
             ACTIVE
                 .scope(active, intent::capture(venue.trade(req.clone())))
@@ -251,16 +319,30 @@ pub async fn order(
         intent::note_gross(Some(fill.gross_quote));
         Ok(fill.trade)
     })
-    .await
+    .await;
+    match protected {
+        Err(mut cause) if cause.code == ErrorCode::OutcomeUnknown => {
+            if let Some(p) = &mut cause.pending {
+                p.cash_action = Some(key);
+            } else if let Ok(Some(o)) = original::load(db, &key).await {
+                let mut p = o.lookup;
+                p.cash_action = Some(key);
+                cause = cause.pending(p);
+            }
+            Err(cause)
+        }
+        other => other,
+    }
 }
 #[path = "cash_order_finish.rs"]
 mod close;
 #[path = "cash_order_cold.rs"]
 mod cold;
 use close::finish;
-pub(crate) use close::recovered;
+pub(crate) use close::{recovered, resolve};
 #[path = "cash_order_prepare.rs"]
 mod prepare;
+pub(crate) use prepare::not_dispatched;
 pub use prepare::{active, before_send};
 
 #[cfg(test)]

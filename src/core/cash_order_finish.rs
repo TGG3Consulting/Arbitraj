@@ -72,3 +72,83 @@ pub(super) async fn finish(
         .map_err(|e| err(ErrorCode::OutcomeUnknown, req, e))?;
     Ok(())
 }
+
+/// Штатный poll после потерянного ответа. При смене аккаунта отправка/отмена не выполняется.
+pub(crate) async fn resolve(
+    core: &Core,
+    venue: &dyn Venue,
+    req: &TradeRequest,
+    p: &PendingRef,
+    action: &str,
+) -> GatewayResult<Option<TradeResult>> {
+    let db = &core.inner.deps.db;
+    let o = original::load(db.ledger(), action)
+        .await
+        .map_err(|e| err(ErrorCode::Internal, req, e))?
+        .ok_or_else(|| {
+            err(
+                ErrorCode::OutcomeUnknown,
+                req,
+                "Нет исходной записи покупки",
+            )
+        })?;
+    if o.request.deal_id != req.deal_id
+        || o.request.side != req.side
+        || o.request.venue != req.venue
+        || o.lookup.client_id != p.client_id
+    {
+        return Err(err(
+            ErrorCode::OutcomeUnknown,
+            req,
+            "Исходный клиентский ID и параметры покупки не совпадают",
+        ));
+    }
+    let signer = venue.settlement_account()?;
+    crate::gateway::cash_signer::scope(signer, async {
+        let b = venue.cash_identity(&o.currency).await?;
+        if !original::binding(&o, &b) {
+            return Err(err(
+                ErrorCode::OutcomeUnknown,
+                req,
+                "Изменился нативный счёт исходного ордера",
+            ));
+        }
+        let mut lookup = o.lookup.clone();
+        if let Some(id) = &p.venue_ref {
+            if lookup.venue_ref.as_ref().is_some_and(|known| known != id) {
+                return Err(err(
+                    ErrorCode::OutcomeUnknown,
+                    req,
+                    "Изменился биржевой ID исходного ордера",
+                ));
+            }
+            lookup.venue_ref = Some(id.clone());
+        }
+        let mut seen = false;
+        let result = intent::capture(async {
+            let r = venue
+                .inspect_settlement_order(o.request.clone(), &lookup)
+                .await?;
+            if r.is_some() {
+                seen = true;
+            }
+            r.ok_or_else(|| {
+                err(
+                    ErrorCode::OutcomeUnknown,
+                    req,
+                    "Исходный IOC ещё не подтверждён",
+                )
+            })
+        })
+        .await;
+        match result {
+            Ok(fill) => {
+                finish(db, action, req, &o, &fill).await?;
+                Ok(Some(fill.trade))
+            }
+            Err(e) if !seen && e.code == ErrorCode::OutcomeUnknown => Ok(None),
+            Err(e) => Err(e),
+        }
+    })
+    .await
+}

@@ -12,7 +12,7 @@ import requests
 from eth_abi import decode, encode
 from eth_utils import keccak
 
-from record_base_slipstream_executor import OWNER, EXEC, RUNTIME, STEP, call, calldata, rpc
+from record_base_slipstream_executor import OWNER, EXEC, RUNTIME, STEP, call, calldata, rpc, simulate_block
 
 ROOT = Path(__file__).resolve().parents[1]
 NETWORKS = {
@@ -40,7 +40,7 @@ def swap(pool, token_in, token_out, amount, out, deadline, pips):
         ["address", "uint256", "address", "uint256", "uint256", STEP + "[]"], args))
 
 
-def pair_boundary(simulate, pool, weth, other, weth_index, amount, bought, sold, expected_error=None):
+def pair_boundary(simulate, pool, weth, other, weth_index, amount, bought, sold, expected_error=None, fund=None):
     """Ask the pair itself for its maximum output, independent of the executor fee input."""
     def transfer(token, qty):
         return call(token, calldata("transfer(address,uint256)", ["address", "uint256"], [pool, qty]))
@@ -51,7 +51,7 @@ def pair_boundary(simulate, pool, weth, other, weth_index, amount, bought, sold,
         return call(pool, calldata("swap(uint256,uint256,address,bytes)",
                     ["uint256", "uint256", "address", "bytes"], [*outputs, OWNER, b""]))
 
-    funding = [call(weth, calldata("deposit()"), amount), transfer(weth, amount)]
+    funding = [fund(amount) if fund else call(weth, calldata("deposit()"), amount), transfer(weth, amount)]
     buy = pair_swap(weth_index, bought)
     selling = funding + [buy, transfer(other, bought)]
     results = {}
@@ -68,6 +68,9 @@ def pair_boundary(simulate, pool, weth, other, weth_index, amount, bought, sold,
                 raise ValueError("pair maximum differs from formula: " + direction)
             if extra:
                 data = last.get("error", {}).get("data") or last.get("returnData", "")
+                if expected_error == "empty-revert" and data in ("0x", "") and last.get("error", {}).get("code") == 3:
+                    results[direction] = {"max": str(out), "next_revert": "empty-revert"}
+                    continue
                 if not data.startswith("0x08c379a0"):
                     raise ValueError("missing invariant revert: " + direction)
                 reason, = decode(["string"], bytes.fromhex(data[10:]))
@@ -78,8 +81,11 @@ def pair_boundary(simulate, pool, weth, other, weth_index, amount, bought, sold,
     return results
 
 
-def measure(row, chain):
+def measure(row, chain, endpoint=None):
     url, weth = NETWORKS[row["network"]]
+    url = endpoint or url
+    wrapped = weth
+    weth = row.get("funded_asset", wrapped)
     tokens = row["tokens"]
     if weth not in tokens:
         raise ValueError("у выборочной пары нет WETH для измеряемого пополнения")
@@ -108,7 +114,9 @@ def measure(row, chain):
         target = row["fee_target"]
         if target not in (pool, row["factory"]):
             raise ValueError("неизвестный источник комиссии")
-        observed_fee, = decode(["uint256"], view(url, tag, target, calldata(row["fee_getter"])))
+        getter = row["fee_getter"]
+        data = calldata(getter, ["address"], [pool]) if getter == "getFeeForPair(address)" else calldata(getter)
+        observed_fee, = decode(["uint256"], view(url, tag, target, data))
         if fee != observed_fee:
             raise ValueError("комиссия в ответе контракта не совпала со снимком")
     if fee * 1_000_000 % denominator:
@@ -118,22 +126,34 @@ def measure(row, chain):
     runtime=RUNTIME.read_text().strip().removeprefix("0x")
     word=lambda value: "0x"+format(value,"064x")
     overrides={OWNER:{"balance":hex(100*10**18)},EXEC:{"code":"0x"+runtime,"stateDiff":{
-        word(0):word(int(OWNER,16)),word(1):word(int(weth,16))}}}
+        word(0):word(int(OWNER,16)),word(1):word(int(wrapped,16))}}}
     approve=lambda token,amount:call(token,calldata("approve(address,uint256)",["address","uint256"],[EXEC,amount]))
     results=[]
-    amounts=sorted(set(min(ceiling, r[index]//depth) for ceiling,depth in [(10**15,10000),(10**16,500)]))
+    if weth == wrapped:
+        ceilings = [10**15,10**16]
+        def fund(qty):
+            return call(wrapped,calldata("deposit()"),qty)
+    else:
+        router = row["funding_router"]
+        decimals, = decode(["uint8"], view(url,tag,weth,calldata("decimals()")))
+        ceilings = [10**decimals,10*10**decimals]
+        def fund(qty):
+            payload=calldata("swapETHForExactTokens(uint256,address[],address,uint256)",
+                ["uint256","address[]","address","uint256"],[qty,[wrapped,weth],OWNER,deadline])
+            return call(router,payload,10**18)
+    amounts=sorted(set(min(ceiling, r[index]//depth) for ceiling,depth in zip(ceilings,(10000,500))))
     if len(amounts)!=2 or amounts[0]<=0:raise ValueError("недостаточно резервов для двух размеров")
     for amount in amounts:
         bought=minimum(amount,r[index],r[1-index],pips)
         sold=minimum(bought,r[1-index]-bought,r[index]+amount,pips)
         if not bought or not sold:raise ValueError("округление выхода до нуля")
-        prefix=[call(weth,calldata("deposit()"),amount),approve(weth,amount)]
+        prefix=[fund(amount),approve(weth,amount)]
         buy=swap(pool,weth,other,amount,bought,deadline,pips)
         sell=swap(pool,other,weth,bought,sold,deadline,pips)
         mk=lambda inc:swap(pool,weth,other,amount,bought+inc,deadline,pips)
         positive=prefix+[buy,call(other,balance(OWNER)),approve(other,bought),sell,call(weth,balance(OWNER)),call(other,balance(OWNER)),call(other,balance(EXEC)),call(weth,balance(EXEC))]
         def simulate(calls):
-            return rpc(url,"eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":overrides,"calls":calls}]},tag])[0]["calls"]
+            return simulate_block(url,tag,overrides,calls)
         pos=simulate(positive)
         if not all(int(c["status"],16)==1 for c in pos):
             raise ValueError("не прошёл полный круг: "+str(next(c.get("error") for c in pos if int(c["status"],16)!=1))[:100])
@@ -146,7 +166,7 @@ def measure(row, chain):
             "observed_balances":[str(int(pos[i]["returnData"],16)) for i in (3,6,7,8,9)],
             "strict_buy":strict[0].get("error"),"strict_sell":strict[1].get("error")})
         if row.get("verify_pair_boundary"):
-            results[-1]["pair_boundary"] = pair_boundary(simulate, pool, weth, other, index, amount, bought, sold, row.get("invariant_error"))
+            results[-1]["pair_boundary"] = pair_boundary(simulate, pool, weth, other, index, amount, bought, sold, row.get("invariant_error"), fund)
     return dict(row, block_hash=chain["hash"], reserves=[str(v) for v in r], pips=pips, cases=results)
 
 

@@ -160,7 +160,7 @@ pub async fn before_send(lookup: &PendingRef) -> GatewayResult<()> {
     if let Ok(result) = CHECK.try_with(|guard| guard(lookup)) {
         result?;
     }
-    crate::core::cash_order::track_legacy(lookup)?;
+    crate::core::cash_order::track_legacy(lookup).await?;
     let action = ACTION.try_with(Clone::clone).ok();
     if crate::core::cash_order::active() {
         super::settlement_proofs::verify().await?;

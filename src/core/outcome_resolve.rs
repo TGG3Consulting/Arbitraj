@@ -78,7 +78,14 @@ pub async fn trade(
     e: &GatewayError,
 ) -> Option<GatewayResult<TradeResult>> {
     let p = e.pending.as_deref()?.clone();
-    let found = poll(core, op, deal, v, e, || x.resolve_trade(req.clone(), &p)).await?;
+    let found = poll(core, op, deal, v, e, || async {
+        if let Some(action) = p.cash_action.as_deref() {
+            super::cash_order::resolve(core, x.as_ref(), req, &p, action).await
+        } else {
+            x.resolve_trade(req.clone(), &p).await
+        }
+    })
+    .await?;
     let line = match &found {
         Ok(r) => format!(
             "{:?}: исполнено {} по {}, ID {}",

@@ -46,16 +46,33 @@ pub fn cap(
             "Расчётная валюта или пара подготовленного ордера KuCoin изменилась",
         ));
     }
-    let fee = fees.get(ctx, symbol)?.taker;
-    if fee < Decimal::ZERO {
-        return Err(bad("Отрицательная ставка taker KuCoin"));
-    }
-    let cap = p
+    let qty = p
         .sent_qty
-        .and_then(|qty| qty.checked_mul(req.worst_price))
-        .and_then(|q| q.checked_mul(Decimal::ONE.checked_add(fee)?))
-        .ok_or_else(|| bad("Предел списания KuCoin вне диапазона"))?;
-    Ok(cap)
+        .ok_or_else(|| bad("Нет округлённого количества ордера KuCoin"))?;
+    projected(ctx, fees, symbol, qty, req.worst_price)
+}
+pub fn projected(
+    ctx: &Ctx,
+    fees: &Fees,
+    symbol: &str,
+    qty: Decimal,
+    worst: Decimal,
+) -> GatewayResult<Decimal> {
+    let fee = fees.get(ctx, symbol)?.taker;
+    upper(qty, worst, fee).ok_or_else(|| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::BadResponse,
+            None,
+            "Неверная ставка или предел списания KuCoin",
+        ))
+    })
+}
+pub(crate) fn upper(qty: Decimal, worst: Decimal, fee: Decimal) -> Option<Decimal> {
+    if qty <= Decimal::ZERO || worst <= Decimal::ZERO || fee < Decimal::ZERO {
+        return None;
+    }
+    qty.checked_mul(worst)?
+        .checked_mul(Decimal::ONE.checked_add(fee)?)
 }
 pub async fn read(
     ctx: &Ctx,

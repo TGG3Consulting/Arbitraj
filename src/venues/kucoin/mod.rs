@@ -20,6 +20,8 @@ pub mod book_print;
 pub mod book_rest;
 pub mod bullet;
 mod cash_balance;
+#[cfg(test)]
+pub(crate) use cash_balance::upper as test_cash_upper;
 pub mod cash_receipt;
 pub mod ctx;
 pub mod delist;
@@ -140,6 +142,22 @@ impl Venue for Kucoin {
     }
     fn supports_cash_reservation(&self) -> bool {
         true
+    }
+    fn cash_opening_cap(
+        &self,
+        ticker: &str,
+        currency: &str,
+        qty: Decimal,
+        worst: Decimal,
+    ) -> Option<Decimal> {
+        cash_balance::projected(
+            &self.ctx,
+            &self.fees,
+            &format!("{ticker}-{currency}"),
+            qty,
+            worst,
+        )
+        .ok()
     }
     fn cash_order_cap(
         &self,

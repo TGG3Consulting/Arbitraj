@@ -32,6 +32,9 @@ pub struct PendingRef {
     /// Свой ID операции: ордера (clientOrderId и аналоги) или вывода (withdrawOrderId и аналоги).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_id: Option<String>,
+    /// Ключ именованной денежной покупки. Повторный опрос использует первоначальный счёт и только чтение.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cash_action: Option<String>,
     /// ID площадки, если уже известен: ID ордера биржи, ID вывода, хеш транзакции DEX.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub venue_ref: Option<String>,

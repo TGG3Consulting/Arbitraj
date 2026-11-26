@@ -131,6 +131,7 @@ pub async fn send_at(ctx: &Ctx, urls: &[String], r: Req<'_>) -> GatewayResult<Va
         if !body.is_empty() {
             req = req.body(body.clone());
         }
+        crate::gateway::cash_signer::dispatching();
         match crate::gateway::http::exchange_full(req, lim).await {
             Ok(reply) => {
                 let parsed = if r.heavy {

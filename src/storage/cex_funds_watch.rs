@@ -77,7 +77,7 @@ impl Watch {
             let observed = r.get::<_, Option<String>>(3)?.is_some();
             out.changed(&venue, &action, Some(active && !observed));
         }
-        let mut q=c.prepare("SELECT json_extract(d.body,'$.direction.buy_on'),json_extract(j.value,'$.action') FROM core_state d INDEXED BY cash_legacy_orders JOIN json_each(d.body,'$.plan.cash_legacy_ioc') j WHERE d.kind='deal' AND json_valid(d.body) AND json_extract(d.body,'$.plan.cash_legacy_ioc') IS NOT NULL")?;
+        let mut q=c.prepare("SELECT json_extract(body,'$.request.venue'),id FROM core_state WHERE kind='cash_legacy_adjust' UNION ALL SELECT json_extract(d.body,'$.direction.buy_on'),json_extract(j.value,'$.action') FROM core_state d INDEXED BY cash_legacy_orders JOIN json_each(d.body,'$.plan.cash_legacy_ioc') j WHERE d.kind='deal' AND json_valid(d.body) AND json_extract(d.body,'$.plan.cash_legacy_ioc') IS NOT NULL")?;
         let mut archived = q.query([])?;
         while let Some(r) = archived.next()? {
             let venue: String = r.get(0)?;
@@ -115,6 +115,13 @@ impl Watch {
             .filter_map(|(k, r)| r.snapshot(k, false))
             .filter(|r| r.request.deal_id == deal)
             .collect()
+    }
+    pub(crate) fn remember_key(&self, venue: &str, key: &str) {
+        self.venue(venue)
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .known
+            .insert(Sha256::digest(key.as_bytes()).into());
     }
     pub(crate) fn archived(&self, venue: &str, keys: &[String]) {
         let state = self.venue(venue);

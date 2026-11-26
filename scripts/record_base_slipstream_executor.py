@@ -51,6 +51,16 @@ def rpc(url, method, params):
     return payload["result"]
 
 
+def simulate_block(url, tag, overrides, calls):
+    blocks=rpc(url,"eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":overrides,"calls":calls}]},tag])
+    if not isinstance(blocks,list) or len(blocks)!=1 or blocks[0].get("parentHash")!=tag["blockHash"]:
+        raise RuntimeError("eth_simulateV1 returned a different parent block")
+    values=blocks[0].get("calls")
+    if not isinstance(values,list) or len(values)!=len(calls):
+        raise RuntimeError("eth_simulateV1 returned a different number of calls")
+    return values
+
+
 def make_calls(pool, weth, usdc, router, amount, forward, deadline, minimum):
     """Подготовка входа отдельно от испытуемого пула, квотер, баланс, execute и сверка обеих сторон."""
     source, target = (weth, usdc) if forward else (usdc, weth)

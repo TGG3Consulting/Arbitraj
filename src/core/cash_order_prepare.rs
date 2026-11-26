@@ -93,6 +93,11 @@ pub async fn before_send(
                     .map_err(|e| err(ErrorCode::Internal, &a.req, e))?;
                 return Err(reason);
             }
+            *a.owned.lock().unwrap_or_else(|e| e.into_inner()) = Some(Owned {
+                bucket,
+                client: client_for_abort,
+                marker,
+            });
             Ok(())
         }
         Admission::Recheck => Err(err(
@@ -111,4 +116,23 @@ pub async fn before_send(
             "Исходная покупка уже зарегистрирована для этого денежного шага",
         )),
     }
+}
+
+/// Единственный исполнитель проверил, что транспорт не пытался отправить POST даже на первый URL.
+pub(crate) async fn not_dispatched() -> GatewayResult<()> {
+    if let Ok(a) = ACTIVE.try_with(Clone::clone) {
+        let held = a.owned.lock().unwrap_or_else(|e| e.into_inner()).take();
+        if let Some(held) = held {
+            original::abort(
+                a.core.inner.deps.db.ledger(),
+                &held.bucket,
+                &a.key,
+                &held.client,
+                held.marker,
+            )
+            .await
+            .map_err(|e| err(ErrorCode::Internal, &a.req, e))?;
+        }
+    }
+    Ok(())
 }

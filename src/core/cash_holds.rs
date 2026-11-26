@@ -55,17 +55,16 @@ pub(super) fn read_for(
                 ));
             };
             if row.currency == bucket.currency {
-                if Some(row.owner.as_str()) != signer || row.cap <= Decimal::ZERO {
-                    return Err(format!(
-                        "Не подтверждены владелец и верхний предел покупки {}",
-                        d.id
-                    ));
-                }
-                let key =
-                    serde_json::to_string(&(&bucket.venue, &bucket.account, &bucket.currency))
-                        .map_err(|e| e.to_string())?;
-                let named=c.query_row("SELECT EXISTS(SELECT 1 FROM cex_funds WHERE bucket=?1 AND deal=?2 AND (debit IS NULL OR CAST(debit AS REAL)>0))",rusqlite::params![key,d.id],|r|r.get::<_,bool>(0)).map_err(|e|e.to_string())?;
+                // Именованная запись уже удерживает эту покупку на её физическом счёте.
+                // Ротация ключа сама по себе не доказывает перенос денег.
+                let named=c.query_row("SELECT EXISTS(SELECT 1 FROM cex_funds WHERE json_extract(bucket,'$[0]')=?1 AND json_extract(bucket,'$[2]')=?2 AND deal=?3 AND (debit IS NULL OR CAST(debit AS REAL)>0))",rusqlite::params![bucket.venue,bucket.currency,d.id],|r|r.get::<_,bool>(0)).map_err(|e|e.to_string())?;
                 if !named {
+                    if Some(row.owner.as_str()) != signer || row.cap <= Decimal::ZERO {
+                        return Err(format!(
+                            "Не подтверждены владелец и верхний предел покупки {}",
+                            d.id
+                        ));
+                    }
                     holds.other = holds
                         .other
                         .checked_add(row.cap)

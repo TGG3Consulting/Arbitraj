@@ -375,7 +375,7 @@ async fn run(
     for l in lines {
         deal.note(l);
     }
-    super::cash_order::opening(core, &mut deal, &plan).await;
+    super::cash_order::opening(core, &mut deal, plan.qty, plan.buy_worst, plan.spend_max).await;
     super::ledger::save(core, &deal).await;
     ts.mark(at, || "открытие сделки в учёте".into());
     // Решение 66: покупка только с бюджетом подбора объёма — без него предела списания нет, сделки нет.
@@ -471,7 +471,7 @@ async fn run(
                     plan.profit_usd,
                 ));
                 deal.plan = serde_json::to_value(&p).unwrap_or_default();
-                super::cash_order::opening(core, &mut deal, &p).await;
+                super::cash_order::opening(core, &mut deal, p.qty, p.buy_worst, p.spend_max).await;
                 deal.plan_profit_usd = p.profit_usd;
                 super::ledger::save(core, &deal).await;
                 p
@@ -548,7 +548,7 @@ async fn run(
                 // Будущие уведомления и снимка — в куче (стек будущего сделки, tests/core_dry_mode.rs).
                 Box::pin(super::buy_replan::notify(core, &d, &deal.id, &e, &plan, &p)).await;
                 deal.plan = serde_json::to_value(&*p).unwrap_or_default();
-                super::cash_order::opening(core, &mut deal, &p).await;
+                super::cash_order::opening(core, &mut deal, p.qty, p.buy_worst, p.spend_max).await;
                 deal.plan_profit_usd = p.profit_usd;
                 plan = *p;
                 super::ledger::save(core, &deal).await;

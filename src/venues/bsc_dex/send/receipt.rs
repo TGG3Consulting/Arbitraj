@@ -81,12 +81,13 @@ impl Receipt {
 /// Узлы Base должны возвращать отдельную плату за публикацию. Неполный
 /// ответ оставляет собственный хеш на сверке, не подтверждая нулевую плату.
 pub async fn read(ctx: &Ctx, hash: B256) -> GatewayResult<Option<Receipt>> {
+    let op_fee = super::gas_mode::receipt_needs_l1(ctx);
     let receipt: Option<Receipt> =
         rpc::call(ctx, "eth_getTransactionReceipt", json!([hash])).await?;
-    if ctx.chain_id() == Some(8453) && receipt.as_ref().is_some_and(|r| r.rollup.l1_fee.is_none()) {
+    if op_fee && receipt.as_ref().is_some_and(|r| r.rollup.l1_fee.is_none()) {
         return Err(ctx.err(
             crate::gateway::errors::ErrorCode::BadResponse,
-            format!("Base: квитанция {hash} не содержит l1Fee, полная комиссия неизвестна"),
+            format!("OP Stack: квитанция {hash} не содержит l1Fee, полная комиссия неизвестна"),
         ));
     }
     if let Some(r) = &receipt

@@ -65,8 +65,7 @@ pub fn wrapped(ctx: &Ctx) -> Option<(String, Address)> {
 
 /// Настроенная нативная денежная сторона должна совпасть по тикеру и контракту обёртки.
 pub fn cash(ctx: &Ctx, ticker: &str, token: Address) -> bool {
-    matches!(ctx.place.id, "base_dex" | "eth_dex")
-        && wrapped(ctx).is_some_and(|(t, w)| t == ticker && w == token)
+    wrapped(ctx).is_some_and(|(t, w)| t == ticker && w == token)
 }
 /// Нативная ли монета: адрес = dex.native_wrapped и тикер = dex.native_ticker (монета биржи без адреса, которой ядро
 /// дало адрес обёртки). Токен WBNB, который биржа сама перечисляет с адресом под другим тикером, — обычный токен.
@@ -155,17 +154,15 @@ pub async fn reserve_ok(
         .settings
         .decimal("risk.min_bnb_balance", At::default())
         .map_err(|e| ctx.tag(e))?;
-    let (price, unit) = if matches!(ctx.place.id, "eth_dex" | "base_dex") {
+    let unit = super::super::gas_ticker::read(ctx)?;
+    let price = if super::super::send::gas_mode::read(ctx)?.strict_type2() {
         let ready = send::select(ctx, &env.stats)?;
-        (super::tx_fee::price(env, &ready, None).await?.cap(), "ETH")
+        super::tx_fee::price(env, &ready, None).await?.cap()
     } else {
-        (
-            env.gas
-                .wei(ctx, &env.heads)
-                .await?
-                .max(send::planned_floor(ctx)?),
-            "BNB",
-        )
+        env.gas
+            .wei(ctx, &env.heads)
+            .await?
+            .max(send::planned_floor(ctx)?)
     };
     let gas = tx::limit(ctx, wallet, to, data, value).await?;
     let wei = value

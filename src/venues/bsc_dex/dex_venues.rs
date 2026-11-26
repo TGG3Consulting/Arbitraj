@@ -41,8 +41,8 @@ pub fn extra(s: &Store) -> (Vec<String>, Vec<String>) {
             errors.push(format!("{SETTING}: недопустимый id «{id}»"));
         } else if id == BSC_ID || out.iter().any(|existing| existing == id) {
             errors.push(format!("{SETTING}: повтор площадки «{id}»"));
-        } else if let Some(p) = crate::settings::evm_profiles::profile(id)
-            && let Err(why) = p.ready(s)
+        } else if let Some(p) = crate::settings::evm_profiles::configured(s, id)
+            && let Err(why) = p.ready_as(s, id)
         {
             errors.push(why);
         } else {

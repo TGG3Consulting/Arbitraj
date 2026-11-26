@@ -59,26 +59,23 @@ pub struct Ready {
 
 /// Готов ли канал. Возвращает: Ready или состояние, почему нет (Disabled, NoKey, NotConfigured с причиной).
 pub fn prepare(ctx: &Ctx, ch: &'static Channel) -> Result<Ready, ChannelState> {
-    let endpoint_config = crate::settings::evm_profiles::profile(ctx.place.id).map(|_| {
+    let endpoint_config = super::gas_mode::endpoint_chain(ctx).map(|_| {
         (
             ctx.settings.generation(),
             crate::secrets::vault::generation(),
         )
     });
-    if !super::channels::compatible(ctx.place.id, ch) {
+    if !super::channels::compatible_ctx(ctx, ch) {
         return Err(ChannelState::NotConfigured {
             reason: format!("Канал {} не принадлежит площадке {}", ch.id, ctx.place.id),
         });
     }
     let s = Scope::Channel(ch.id.to_string());
-    if let Some(p) = crate::settings::evm_profiles::profile(ctx.place.id)
-        && !ctx
-            .settings
-            .text_in("channel.chain", &s)
-            .is_ok_and(|chain| chain == p.chain)
+    if endpoint_config.is_some()
+        && !matches!((ctx.text("dex.chain"),ctx.settings.text_in("channel.chain",&s)),(Ok(network),Ok(channel)) if !network.is_empty() && network==channel)
     {
         return Err(ChannelState::NotConfigured {
-            reason: format!("Задайте channel.chain = {} у {}", p.chain, ch.id),
+            reason: format!("Задайте сеть площадки в channel.chain у {}", ch.id),
         });
     }
     let st = &ctx.settings;
@@ -245,7 +242,7 @@ impl Ready {
             )
             .await?;
             match jsonrpc::parse_text(&text, self.ch.title, Op::Send) {
-                Ok(raw) if crate::settings::evm_profiles::profile(ctx.place.id).is_some() => {
+                Ok(raw) if self.endpoint_config.is_some() => {
                     let hash: alloy_primitives::B256 = jsonrpc::decode(&raw, self.ch.title)?;
                     if hash != alloy_primitives::keccak256(&txs[0]) {
                         return Err(ctx.err(

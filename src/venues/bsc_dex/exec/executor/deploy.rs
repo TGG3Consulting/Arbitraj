@@ -75,7 +75,9 @@ pub async fn quote(q: &Quoting, env: &Env) -> GatewayResult<ExecutorDeployQuote>
         .wei(ctx, &env.heads)
         .await?
         .max(send::gas_floor(&ready));
-    let extra = if ctx.place.id == "base_dex" {
+    let extra = if crate::venues::bsc_dex::send::gas_mode::read(ctx)?
+        == crate::venues::bsc_dex::send::gas_mode::GasMode::OpStack
+    {
         let oracle = super::super::super::node::op_fees::Oracle::read(ctx)?;
         let p = super::super::tx_fee::price(env, &ready, None).await?;
         let chain = super::super::super::node::chain_seen::ensure(ctx).await?;

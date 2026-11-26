@@ -117,7 +117,7 @@ impl Conn {
             task,
             timeout,
         };
-        if crate::settings::evm_profiles::profile(ctx.place.id).is_some() {
+        if super::super::send::gas_mode::endpoint_chain(ctx).is_some() {
             let got: alloy_primitives::U64 =
                 conn.request("eth_chainId", serde_json::json!([])).await?;
             super::chain_id::same_chain(ctx, got.to::<u64>())

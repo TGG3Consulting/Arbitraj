@@ -39,6 +39,43 @@ pub fn profile(venue: &str) -> Option<&'static ChainMeta> {
     PROFILES.iter().find(|p| p.venue == venue)
 }
 
+/// Проверенная идентичность физической сети сохраняется при другом имени площадки.
+pub fn by_chain_id(id: u64) -> Option<&'static ChainMeta> {
+    PROFILES.iter().find(|p| p.evm_chain_id == id)
+}
+
+/// Модели подтверждённых сетей прежнего адаптера. Источники записанных RPC — tests/data/base_ethereum_networks.json,
+/// tests/arbitrum_sub_dex_live.rs и tests/data/native_2026-10-25. Области настроек этих площадок исторически свободны.
+pub fn legacy_network_mode(id: u64) -> Option<&'static str> {
+    match id {
+        56 => Some("legacy"),
+        42161 => Some("eip1559_l1"),
+        _ => None,
+    }
+}
+/// Строгие модели требуют отдельного адреса узла, независимо от имени площадки.
+pub fn isolated_transport(s: &Store, venue: &str) -> bool {
+    if profile(venue).is_some() {
+        return true;
+    }
+    let scope = Scope::Venue(venue.into());
+    s.get_exact("dex.evm_chain_id", &scope)
+        .and_then(|v| v.as_u64())
+        .and_then(by_chain_id)
+        .is_some()
+        || s.get_exact("dex.gas_mode", &scope)
+            .is_some_and(|v| matches!(v.as_str(), Some("op_stack_eip1559" | "ethereum_eip1559")))
+}
+
+/// Идентичность площадки по её сохранённой физической сети либо по защищённому имени профиля.
+pub fn configured(s: &Store, venue: &str) -> Option<&'static ChainMeta> {
+    profile(venue).or_else(|| {
+        s.get_exact("dex.evm_chain_id", &Scope::Venue(venue.into()))
+            .and_then(|n| n.as_u64())
+            .and_then(by_chain_id)
+    })
+}
+
 /// Настройки конкретной сети с исторически допустимой общей областью BSC.
 pub fn local_only(name: &str) -> bool {
     matches!(
@@ -90,7 +127,11 @@ impl ChainMeta {
 
     /// Перед регистрацией требует явные идентификаторы и историческую BSC для записей без сети.
     pub fn ready(&self, s: &Store) -> Result<(), String> {
-        let scope = Scope::Venue(self.venue.into());
+        self.ready_as(s, self.venue)
+    }
+
+    pub fn ready_as(&self, s: &Store, venue: &str) -> Result<(), String> {
+        let scope = Scope::Venue(venue.into());
         for name in [
             "dex.chain",
             "dex.evm_chain_id",

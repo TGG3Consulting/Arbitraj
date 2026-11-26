@@ -36,9 +36,41 @@ pub struct Seen {
     /// Проверенные HTTP-точки новых сетей, включая резерв и список узлов квитанций.
     /// Ключ охватывает эффективный URL (включая смену секрета), в памяти остаётся только его хеш.
     verified: super::endpoint_chain::Endpoints,
+    transport: Arc<arc_swap::ArcSwapOption<Transport>>,
+}
+
+struct Transport {
+    venue: &'static str,
+    store: crate::settings::store::Store,
+    generation: u64,
+    chain: Option<u64>,
 }
 
 impl Seen {
+    /// На обычном горячем пути только чтение памяти. При смене хранилища или поколения
+    /// выбор читается из текущих значений до проверки конкретного endpoint.
+    pub(in crate::venues::bsc_dex) fn transport(&self, ctx: &Ctx) -> Option<u64> {
+        loop {
+            let generation = ctx.settings.generation();
+            if let Some(saved) = self.transport.load().as_ref()
+                && saved.venue == ctx.place.id
+                && saved.generation == generation
+                && saved.store.same(&ctx.settings)
+            {
+                return saved.chain;
+            }
+            let chain = super::super::send::gas_mode::configured_endpoint(ctx);
+            if generation == ctx.settings.generation() {
+                self.transport.store(Some(Arc::new(Transport {
+                    venue: ctx.place.id,
+                    store: ctx.settings.clone(),
+                    generation,
+                    chain,
+                })));
+                return chain;
+            }
+        }
+    }
     /// Что делает: запоминает тикер газа, прочитанный из настроек. Принимает: тикер. Ошибок нет.
     pub fn note_gas(&self, t: &str) {
         *self.gas.lock().unwrap_or_else(|p| p.into_inner()) = Some(t.to_string());
@@ -118,6 +150,12 @@ async fn observed(
         if let Some((key, settings, epoch)) = check {
             let raw = jsonrpc::parse_text(&text, source, Op::Read)?;
             let got: U64 = jsonrpc::decode(&raw, source)?;
+            if got.to::<u64>() != key.1 {
+                return Err(ctx.err(
+                    ErrorCode::BadResponse,
+                    format!("Узел вернул chainId {got}, ожидается {}", key.1),
+                ));
+            }
             chain_id::same_chain(ctx, got.to::<u64>())
                 .map_err(|e| ctx.err(ErrorCode::BadResponse, e))?;
             if ctx.settings.generation() != settings
@@ -134,7 +172,7 @@ async fn observed(
     exchange.await.inspect_err(|_| failed(ctx, check))
 }
 fn endpoint(ctx: &Ctx, url: &str) -> Option<super::endpoint_chain::Endpoint> {
-    let expected = crate::settings::evm_profiles::profile(ctx.place.id)?.evm_chain_id;
+    let expected = super::super::send::gas_mode::endpoint_chain(ctx)?;
     Some((alloy_primitives::keccak256(url.as_bytes()), expected))
 }
 /// Состояние проверки именно в момент начала запроса.

@@ -122,7 +122,7 @@ pub async fn resolve(w: Watch) -> Tracked {
                     format!("цена газа следующей отмены {p} wei выше send.cancel_max_gas_gwei");
                 return Tracked::bare(TxOutcome::Pending, Some(why));
             }
-            Err(e) if matches!(w.ctx.place.id, "eth_dex" | "base_dex") => {
+            Err(e) if w.strict_replacement() => {
                 quiet
                     .warn(
                         "cancel_price",

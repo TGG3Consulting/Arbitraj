@@ -283,3 +283,101 @@ async fn native_settlement_requires_operator_ticker_and_matching_chain_wrapper()
         }
     }
 }
+
+/// Публичные идентификаторы сетей из снимков. У переименованных узлов выбор канала, тарифа и RPC остаётся привязан к сети.
+#[tokio::test]
+async fn network_fees_and_transports_follow_physical_network() {
+    use arb::settings::scope::Scope;
+    use arb::venues::bsc_dex::{
+        ctx::Place,
+        send::{
+            channels,
+            gas_mode::{self, GasMode},
+        },
+    };
+    let mut c = ctx("network-properties").await;
+    c.settings
+        .set(
+            "bsc.node_http_url",
+            Scope::Global,
+            Some(serde_json::json!("https://bsc-rpc.publicnode.com")),
+            "тест",
+        )
+        .await
+        .unwrap();
+    for (venue, network, id, mode, public, isolated) in [
+        ("bsc_dex", "bsc", 56, GasMode::Legacy, "public", false),
+        (
+            "arb_dex",
+            "arbitrum",
+            42161,
+            GasMode::Eip1559L1,
+            "sequencer",
+            false,
+        ),
+        (
+            "op_archive",
+            "base",
+            8453,
+            GasMode::OpStack,
+            "base_public",
+            true,
+        ),
+        (
+            "l1_archive",
+            "ethereum",
+            1,
+            GasMode::Ethereum,
+            "ethereum_public",
+            true,
+        ),
+    ] {
+        c.place = Place {
+            id: venue,
+            all: &["bsc_dex", "arb_dex", "op_archive", "l1_archive"],
+        };
+        let scope = Scope::Venue(venue.into());
+        for (name, value) in [
+            ("dex.chain", serde_json::json!(network)),
+            ("dex.evm_chain_id", serde_json::json!(id)),
+            ("dex.gas_mode", serde_json::json!(mode.as_str())),
+        ] {
+            c.settings
+                .set(name, scope.clone(), Some(value), "тест")
+                .await
+                .unwrap();
+        }
+        assert_eq!(gas_mode::read(&c).unwrap(), mode);
+        assert_eq!(
+            c.settings
+                .resolve("bsc.node_http_url", Some(venue), None)
+                .is_none(),
+            isolated
+        );
+        assert!(channels::compatible_ctx(
+            &c,
+            channels::find(public).unwrap()
+        ));
+        if isolated {
+            assert!(!channels::compatible_ctx(
+                &c,
+                channels::find("public").unwrap()
+            ));
+        }
+        let wrong = if matches!(mode, GasMode::Legacy | GasMode::Eip1559L1) {
+            GasMode::Ethereum
+        } else {
+            GasMode::Legacy
+        };
+        c.settings
+            .set(
+                "dex.gas_mode",
+                scope,
+                Some(serde_json::json!(wrong.as_str())),
+                "тест",
+            )
+            .await
+            .unwrap();
+        assert!(gas_mode::read(&c).is_err());
+    }
+}

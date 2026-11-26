@@ -152,7 +152,8 @@ pub async fn send_tipped(
     let sign = |nonce: u64, gas: u64, call: (TxKind, U256, Bytes)| {
         price.sign(ctx, &key, "Подпись транзакции", chain, nonce, gas, call)
     };
-    let oracle = (ctx.place.id == "base_dex")
+    let oracle = (super::super::send::gas_mode::read(ctx)?
+        == super::super::send::gas_mode::GasMode::OpStack)
         .then(|| super::super::node::op_fees::Oracle::read(ctx))
         .transpose()?;
     let extra = if let Some(oracle) = oracle {

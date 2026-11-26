@@ -55,7 +55,7 @@ pub fn compatible(venue: &str, ch: &Channel) -> bool {
 /// по умолчанию). Принимает: окружение, канал. Возвращает: да/нет; нет и при незаданной dex.chain площадки (у канала
 /// с сетью) или незаданной dex.default_chain при нескольких площадках DEX (у канала без сети). Ошибок нет.
 pub fn serves(ctx: &Ctx, ch: &Channel) -> bool {
-    if !compatible(ctx.place.id, ch) {
+    if !compatible_ctx(ctx, ch) {
         return false;
     }
     match ctx
@@ -65,8 +65,19 @@ pub fn serves(ctx: &Ctx, ch: &Channel) -> bool {
         Ok(chain) => ctx
             .text("dex.chain")
             .is_ok_and(|own| own.trim() == chain.trim()),
-        Err(_) => ctx.default_chain().unwrap_or(false),
+        Err(_) => {
+            super::gas_mode::endpoint_chain(ctx).is_none() && ctx.default_chain().unwrap_or(false)
+        }
     }
+}
+
+/// Учитывает физическую сеть переименованной площадки вместо применения набора каналов BSC.
+pub fn compatible_ctx(ctx: &Ctx, ch: &Channel) -> bool {
+    if let Some(id) = super::gas_mode::endpoint_chain(ctx) {
+        return crate::settings::evm_profiles::by_chain_id(id)
+            .map_or(ch.id == public::CHANNEL.id, |p| p.public_channel == ch.id);
+    }
+    compatible(ctx.place.id, ch)
 }
 
 /// Каналы этой площадки DEX (serves) по порядку ALL. Принимает: окружение. Ошибок нет.

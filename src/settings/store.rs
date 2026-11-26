@@ -154,7 +154,7 @@ impl Store {
     pub fn resolve(&self, name: &str, venue: Option<&str>, coin: Option<&str>) -> Option<Value> {
         if let Some(id) = venue
             && super::evm_profiles::local_only(name)
-            && super::evm_profiles::profile(id).is_some()
+            && super::evm_profiles::isolated_transport(self, id)
         {
             return self.get_exact(name, &Scope::Venue(id.to_string()));
         }
@@ -237,7 +237,12 @@ impl Store {
             check_new_dex_id_len(id, max, known).map_err(SetError::Invalid)?;
         }
         if let Scope::Venue(id) = &scope
-            && let Some(p) = super::evm_profiles::profile(id)
+            && let Some(p) = super::evm_profiles::profile(id).or_else(|| {
+                self.venue_kinds
+                    .has_dex(id)
+                    .then(|| super::evm_profiles::configured(self, id))
+                    .flatten()
+            })
             && (new.is_some() || self.venue_kinds.has_dex(id))
         {
             p.check(name, new.as_ref()).map_err(SetError::Invalid)?;

@@ -3,26 +3,34 @@
   import { get } from '../lib/api.js';
   import { store } from '../lib/settings.svelte.js';
   let venue = $state('');
+  let dex = $state('');
   let side = $state('Sell');
   let amount = $state('');
   let result = $state(null);
   let error = $state('');
   let busy = $state(false);
   const exchanges = $derived(store.venueKinds.filter((v) => v.kind === 'Cex'));
+  const dexes = $derived(store.venueKinds.filter((v) => v.kind === 'Dex'));
   function clear() { result = null; error = ''; }
   async function quote() {
     clear();
     busy = true;
     try {
-      result = await get(`/api/venues/${encodeURIComponent(venue)}/base-usdc-conversion?${new URLSearchParams({ side, quantity: amount })}`);
+      result = await get(`/api/venues/${encodeURIComponent(venue)}/base-usdc-conversion?${new URLSearchParams({ dex, side, quantity: amount })}`);
     } catch (e) { error = e.message; }
     finally { busy = false; }
   }
 </script>
 
 <details>
-  <summary>Конверсия Base USDC на бирже</summary>
+  <summary>Конверсия USDC на бирже</summary>
   <fieldset disabled={busy}>
+    <label>Площадка DEX
+      <select bind:value={dex} onchange={clear}>
+        <option value="">Выберите DEX</option>
+        {#each dexes as v (v.id)}<option value={v.id}>{v.id}</option>{/each}
+      </select>
+    </label>
     <label>Биржа
       <select bind:value={venue} onchange={clear}>
         <option value="">Выберите биржу</option>
@@ -36,7 +44,7 @@
       </select>
     </label>
     <label>Объём ордера, USDC <input bind:value={amount} oninput={clear} inputmode="decimal" /></label>
-    <button disabled={!venue || !amount || busy} onclick={quote}>Рассчитать по стакану</button>
+    <button disabled={!venue || !dex || !amount || busy} onclick={quote}>Рассчитать по стакану</button>
   </fieldset>
   {#if error}<p role="alert">{error}</p>{/if}
   {#if result}

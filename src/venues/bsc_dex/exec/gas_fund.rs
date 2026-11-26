@@ -34,7 +34,9 @@ pub fn need_wei(value: U256, price: U256, gas: u64, tip: Option<(U256, u64)>) ->
 
 /// Перевод или продажа нативного ETH сохраняют настроенный остаток и при последней перепроверке перед отправкой.
 pub fn add_native_reserve(ctx: &Ctx, value: U256, need: U256) -> GatewayResult<U256> {
-    if value == U256::ZERO || !matches!(ctx.place.id, "base_dex" | "eth_dex") {
+    if value == U256::ZERO
+        || !super::super::send::gas_mode::optional(ctx)?.is_some_and(|m| m.strict_type2())
+    {
         return Ok(need);
     }
     let min = ctx
@@ -49,10 +51,7 @@ pub fn add_native_reserve(ctx: &Ctx, value: U256, need: U256) -> GatewayResult<U
 /// BNB кошелька хватает на транзакцию. Принимает: окружение, кошелёк, нужно wei (need_wei). Ошибки:
 /// InsufficientBalance (не хватает), BadResponse (число), узел.
 pub async fn ensure(ctx: &Ctx, wallet: Address, need: U256) -> GatewayResult<()> {
-    let ticker = match ctx.place.id {
-        "base_dex" | "eth_dex" => "ETH",
-        _ => "BNB",
-    };
+    let ticker = super::super::gas_ticker::sent(ctx)?;
     let need_bnb = num::to_decimal(need, num::BNB_DECIMALS).ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,

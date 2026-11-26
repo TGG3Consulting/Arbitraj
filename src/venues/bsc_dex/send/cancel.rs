@@ -40,7 +40,7 @@ pub fn price(ctx: &Ctx, prev: TxPrice, cfg: &SendCfg, ready: &[Ready]) -> Gatewa
 /// https://github.com/ethereum/go-ethereum/blob/master/core/txpool/legacypool/list.go
 pub async fn at(w: &Watch, previous: TxPrice, block: u64) -> GatewayResult<TxPrice> {
     let candidate = price(&w.ctx, previous, &w.cfg, &w.ready)?;
-    if !matches!(w.ctx.place.id, "eth_dex" | "base_dex") {
+    if !w.strict_replacement() {
         return Ok(candidate);
     }
     let (TxPrice::Eip1559(old, _), TxPrice::Eip1559(bumped, _)) = (previous, candidate) else {

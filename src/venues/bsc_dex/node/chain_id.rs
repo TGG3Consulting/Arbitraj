@@ -26,6 +26,7 @@ use super::rpc;
 pub fn chain_id(ctx: &Ctx) -> GatewayResult<u64> {
     let id = ctx.int("dex.evm_chain_id")?;
     if let Some(p) = crate::settings::evm_profiles::profile(ctx.place.id)
+        .or_else(|| crate::settings::evm_profiles::by_chain_id(id))
         && (p.evm_chain_id != id || ctx.text("dex.chain")? != p.chain)
     {
         return Err(ctx.not_set(
@@ -84,7 +85,7 @@ pub async fn check_start(ctx: &Ctx) -> GatewayResult<()> {
             ErrorCode::BadResponse,
             format!("узел другой сети: chainId {got}, у площадки {want} (dex.evm_chain_id) — подписки на рынок нет"),
         )),
-        Err(e) if crate::settings::evm_profiles::profile(ctx.place.id).is_some() => Err(e),
+        Err(e) if super::super::send::gas_mode::endpoint_chain(ctx).is_some() => Err(e),
         Err(e) => {
             let m = format!(
                 "сеть узла не сверена перед подпиской (eth_chainId): {} — подписка идёт, сверка — в «Проверить подключение»",

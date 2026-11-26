@@ -84,6 +84,13 @@ pub struct Watch {
     pub op_oracle: Option<super::super::node::op_fees::Oracle>,
 }
 
+impl Watch {
+    /// Тариф и политика исходной транзакции закреплены до подписи, включая режим без отмен секвенсора.
+    pub(super) fn strict_replacement(&self) -> bool {
+        matches!(self.price, super::tx_price::TxPrice::Eip1559(..)) && self.cfg.drop_wait.is_none()
+    }
+}
+
 /// Итог по найденной квитанции (индекс 0 — исходная, больше — отмена). Ошибок нет.
 pub fn landed(w: &Watch, ours: &[B256], i: usize, r: Receipt) -> Tracked {
     if i > 0 {

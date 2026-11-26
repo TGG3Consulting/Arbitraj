@@ -1,5 +1,5 @@
 //! Проверка исполнимой конверсии USDC/USDT на выбранной исходной бирже (Base).
-//! GET /api/venues/{id}/base-usdc-conversion?side=Buy|Sell&quantity=<USDC>. Ордер не создаётся.
+//! GET /api/venues/{id}/base-usdc-conversion?dex=<DEX>&side=Buy|Sell&quantity=<USDC>. Ордер не создаётся.
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -17,6 +17,7 @@ use crate::core::{
 pub struct Request {
     side: Side,
     quantity: Decimal,
+    dex: Option<String>,
 }
 
 /// Сначала сверяет направление, сеть и монету, затем получает стакан и комиссию аккаунта.
@@ -28,7 +29,7 @@ pub async fn quote(
     if q.quantity <= Decimal::ZERO {
         return Err(ApiError::bad("Количество USDC должно быть положительным"));
     }
-    let market = market(&st, None, &id)?;
+    let market = market(&st, q.dex, &id)?;
     if market.asset.ticker != "USDC" || market.quote != "USDT" {
         return Err(ApiError::bad("Маршрут требует рынка USDC/USDT"));
     }
@@ -127,9 +128,15 @@ fn market(
     dex: Option<String>,
     cex: &str,
 ) -> Result<crate::core::settlement_market::Market, ApiError> {
-    let dex = VenueId(dex.unwrap_or_else(|| "base_dex".into()));
+    let dex = explicit_dex(dex)?;
     crate::core::settlement_market::Market::new(&st.core, &dex, &VenueId(cex.into()))
         .map_err(ApiError::no_data)
+}
+
+fn explicit_dex(dex: Option<String>) -> Result<VenueId, ApiError> {
+    dex.filter(|v| !v.trim().is_empty())
+        .map(VenueId)
+        .ok_or_else(|| ApiError::bad("Выберите площадку DEX: требуется параметр dex"))
 }
 
 /// Котировка для явно запрошенной пары площадок. В ответе присутствуют оба фактических тикера.
@@ -138,6 +145,11 @@ pub async fn market_quote(
     Path((venue, dex)): Path<(String, String)>,
     Query(q): Query<Request>,
 ) -> Result<Json<Conversion>, ApiError> {
+    if q.dex.as_ref().is_some_and(|query| query != &dex) {
+        return Err(ApiError::bad(
+            "Площадка DEX в пути и параметре запроса расходится",
+        ));
+    }
     let m = market(&st, Some(dex), &venue)?;
     settlement::preview(&st.core, &m, q.side, q.quantity)
         .await
@@ -154,4 +166,16 @@ pub async fn intents(
         .await
         .map(Json)
         .map_err(ApiError::no_data)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn conversion_requires_explicit_dex() {
+        for input in [None, Some(String::new()), Some(" ".into())] {
+            assert!(explicit_dex(input).is_err());
+        }
+        assert!(explicit_dex(Some("token_market".into())).is_ok_and(|v| v.0 == "token_market"));
+    }
 }

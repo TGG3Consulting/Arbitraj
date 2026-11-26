@@ -46,6 +46,9 @@ pub async fn send_approvals(
     let mut seen: Vec<super::approve_seen::Seen> = Vec::new();
     for (to, data) in approvals {
         // Решение 231 (дополнение): исход разрешения неизвестен — отметка approve в «чем найти» (обмен не отправлялся).
+        let strict_fee = super::super::send::gas_mode::read(&env.ctx)
+            .map_err(|e| e.with_approve_gas(gas))?
+            .strict_type2();
         let d = txs::send(env, slot, *to, data.clone(), U256::ZERO, false, None)
             .await
             .map_err(super::swap_ctx::approve)
@@ -76,12 +79,12 @@ pub async fn send_approvals(
                 .with_approve_gas(gas));
         }
         // Квитанция в блоке — газ по ней (gasUsed × effectiveGasPrice, exec/chain_tx.rs).
-        if matches!(env.ctx.place.id, "eth_dex" | "base_dex") && d.chain.gas_bnb.is_none() {
+        if strict_fee && d.chain.gas_bnb.is_none() {
             return Err(env
                 .ctx
                 .err(
                     ErrorCode::BadResponse,
-                    "approve подтверждён, но полная комиссия в ETH неизвестна",
+                    "approve подтверждён, но полная комиссия в валюте газа неизвестна",
                 )
                 .with_tx(d.chain)
                 .with_approve_gas(gas));

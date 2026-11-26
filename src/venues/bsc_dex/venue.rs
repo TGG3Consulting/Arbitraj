@@ -43,7 +43,20 @@ impl Venue for BscDex {
     }
 
     fn supports_settlement_withdrawal(&self) -> bool {
-        self.p.ctx.venue().0 == "base_dex"
+        let ctx = &self.p.ctx;
+        let (Ok(chain), Ok(ticker)) = (ctx.text("dex.chain"), ctx.text("venue.quote_asset")) else {
+            return false;
+        };
+        !chain.trim().is_empty()
+            && !ticker.trim().is_empty()
+            && super::node::chain_id::chain_id(ctx).is_ok_and(|id| id != 0)
+            && crate::settings::evm_profiles::settlement_contract(
+                &ctx.settings,
+                ctx.place.id,
+                &chain,
+                &ticker,
+            )
+            .is_ok_and(|v| v.is_some())
     }
 
     async fn source_quote(
@@ -846,7 +859,7 @@ impl Venue for BscDex {
     async fn send_channels(&self) -> GatewayResult<Vec<SendChannelInfo>> {
         Ok(send::channels::ALL
             .iter()
-            .filter(|ch| send::channels::compatible(self.p.ctx.place.id, ch))
+            .filter(|ch| send::channels::compatible_ctx(&self.p.ctx, ch))
             .map(|c| c.info())
             .collect())
     }
@@ -922,16 +935,8 @@ impl BscDex {
         });
         let cash_market = super::quote::vista_pricing::cash_market(&self.p, &req.asset);
         let path = if cash_market || marked {
-            let selected = req.route.as_ref().is_some_and(|r| {
-                matches!(r.mode, crate::core::types::RouteMode::Direct)
-                    && r.legs.len() == 1
-                    && r.legs[0].hops.len() == 1
-                    && self
-                        .p
-                        .registry
-                        .entry(&r.legs[0].hops[0].pool)
-                        .is_some_and(|e| super::quote::vista_pricing::is_vista(&e))
-            });
+            let selected =
+                super::quote::vista_pricing::terminal_cash(&self.p.registry, req.route.as_ref());
             if !selected || !cash_market || !marked {
                 return Err(self.p.ctx.err(
                     ErrorCode::NoRoute,

@@ -3,6 +3,7 @@
 //! BSC — legacy; Arbitrum — type-2 с NodeInterface; Ethereum — type-2; Base — type-2 с GasPriceOracle.
 //! https://eips.ethereum.org/EIPS/eip-1559 и https://docs.optimism.io/op-stack/transactions/fees
 use crate::gateway::errors::GatewayResult;
+use crate::settings::evm_profiles;
 
 use super::super::ctx::Ctx;
 
@@ -31,6 +32,10 @@ impl GasMode {
         }
     }
 
+    pub(crate) fn strict_type2(self) -> bool {
+        matches!(self, Self::Ethereum | Self::OpStack)
+    }
+
     /// Текст варианта (как в настройке). Ошибок нет.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -52,18 +57,84 @@ pub fn read(ctx: &Ctx) -> GatewayResult<GasMode> {
             format!("dex.gas_mode = «{s}»: неизвестная модель газа"),
         )
     })?;
-    let compatible = match (ctx.place.id, mode) {
-        ("base_dex", GasMode::OpStack) | ("eth_dex", GasMode::Ethereum) => true,
-        ("base_dex" | "eth_dex", _) | (_, GasMode::Ethereum | GasMode::OpStack) => false,
-        _ => true,
-    };
-    if !compatible {
+    let id = ctx.int("dex.evm_chain_id").ok();
+    if let Some(known) = id.and_then(evm_profiles::legacy_network_mode)
+        && mode.as_str() != known
+    {
         return Err(ctx.not_set(
             "dex.gas_mode",
-            format!("модель {s} не подходит площадке {}", ctx.place.id),
+            format!("У этой физической сети модель газа {known}"),
         ));
     }
+    if let Some(p) =
+        evm_profiles::profile(ctx.place.id).or_else(|| id.and_then(evm_profiles::by_chain_id))
+    {
+        if id != Some(p.evm_chain_id)
+            || ctx.text("dex.chain")? != p.chain
+            || mode.as_str() != p.gas_mode
+        {
+            return Err(ctx.not_set(
+                "dex.gas_mode",
+                "Модель газа, идентификатор EVM и выбранная сеть расходятся",
+            ));
+        }
+    } else if mode.strict_type2() {
+        let chain = ctx.text("dex.chain")?;
+        if id.is_none_or(|v| v == 0)
+            || chain.trim().is_empty()
+            || evm_profiles::PROFILES.iter().any(|p| p.chain == chain)
+        {
+            return Err(ctx.not_set(
+                "dex.gas_mode",
+                "Для этой модели нужна согласованная идентичность физической сети",
+            ));
+        }
+    }
     Ok(mode)
+}
+
+/// Проверка каждого контактного адреса при первом использовании и после изменений.
+pub(in crate::venues::bsc_dex) fn endpoint_chain(ctx: &Ctx) -> Option<u64> {
+    ctx.chains.transport(ctx)
+}
+
+pub(in crate::venues::bsc_dex) fn configured_endpoint(ctx: &Ctx) -> Option<u64> {
+    if let Some(p) = evm_profiles::profile(ctx.place.id) {
+        return Some(p.evm_chain_id);
+    }
+    let id = ctx.int("dex.evm_chain_id").ok()?;
+    if evm_profiles::by_chain_id(id).is_some() {
+        return Some(id);
+    }
+    ctx.text("dex.gas_mode")
+        .ok()
+        .and_then(|s| GasMode::parse(&s))
+        .filter(|m| m.strict_type2())
+        .map(|_| id)
+}
+
+/// Известная физическая сеть определяет обязательные поля уже переданной транзакции,
+/// даже если настройку газа впоследствии очистили. У других сетей действует их сохранённая модель.
+pub(in crate::venues::bsc_dex) fn receipt_needs_l1(ctx: &Ctx) -> bool {
+    let Some(id) = endpoint_chain(ctx) else {
+        return false;
+    };
+    if let Some(profile) = evm_profiles::by_chain_id(id) {
+        return GasMode::parse(profile.gas_mode) == Some(GasMode::OpStack);
+    }
+    ctx.text("dex.gas_mode")
+        .is_ok_and(|mode| GasMode::parse(&mode) == Some(GasMode::OpStack))
+}
+
+/// Старые снимки обычных площадок могли не содержать настройки газа. Вспомогательный
+/// расчёт только надбавки в этом случае сохраняет ноль. Для подписи нужен read().
+pub(in crate::venues::bsc_dex) fn optional(ctx: &Ctx) -> GatewayResult<Option<GasMode>> {
+    if ctx.text("dex.gas_mode").is_err()
+        && !evm_profiles::isolated_transport(&ctx.settings, ctx.place.id)
+    {
+        return Ok(None);
+    }
+    read(ctx).map(Some)
 }
 
 #[cfg(test)]

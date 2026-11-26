@@ -1,0 +1,73 @@
+{
+  "rubicon-clmm-ethereum": {
+    "pool": {
+      "hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "source": "https://sourcify.dev/server/v2/contract/1/0x3b725d9017526f8e349d1613c7e3b530c5b865c2",
+      "source_digest": "800c8ae0d992cf2b3cea5e9b9f5f9eb03c15a1a9252e3f07b36a83c3026a4be9",
+      "code_hash": "0x5ac432658638bde9652b6349100fdf43af5a588e1c407d9fc54edb901aab0609",
+      "pool": "0x3b725d9017526f8e349d1613c7e3b530c5b865c2",
+      "factory": "0xdf62d9e51d7c08360dcd41931a2e6b97ff8c73e8",
+      "fee": 3000,
+      "tokens": [
+        "0x736609d310b5f925531b5ad895925cb0586f6241",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "block": 26494988,
+      "reference_pool": "0xe0554a476a092703abdb3ef35c80e0d76d32939f",
+      "reference": "uniswap_v3",
+      "execution": {
+        "network": "ethereum",
+        "block": 26494988,
+        "hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+        "factory": "0xdf62d9e51d7c08360dcd41931a2e6b97ff8c73e8",
+        "executor_runtime_keccak": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+        "sender": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "kind": "v3",
+        "virtual_quoter_keccak": "0x56f4529fa9bf808daea21d15a6060f9941aa6da575cc8f1ddf99feaa152a39d5",
+        "pools": [
+          {
+            "idx": 0,
+            "pool": "0x3b725d9017526f8e349d1613c7e3b530c5b865c2",
+            "tokens": [
+              "0x736609d310b5f925531b5ad895925cb0586f6241",
+              "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+            ],
+            "immutables": null,
+            "prices": null,
+            "cases": [
+              {
+                "side": 1,
+                "input": "1000000000000",
+                "bought": "14997788713677661",
+                "sold": "994009000103",
+                "cash_before": "1000000000000",
+                "cash_after": "994009000103",
+                "after_coin_owner": "0",
+                "after_coin_executor": "0",
+                "after_cash_executor": "0",
+                "min_out_plus_one_buy_reverted": true,
+                "min_out_plus_one_sell_reverted": true
+              },
+              {
+                "side": 1,
+                "input": "100000000000000",
+                "bought": "1499773727451445364",
+                "sold": "99400901033101",
+                "cash_before": "100000000000000",
+                "cash_after": "99400901033101",
+                "after_coin_owner": "0",
+                "after_coin_executor": "0",
+                "after_cash_executor": "0",
+                "min_out_plus_one_buy_reverted": true,
+                "min_out_plus_one_sell_reverted": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "deployment": {
+      "reason": "404 Client Error: Not Found for url: https://sourcify.dev/server/v2/contract/1/0xdf62d9e51d7c08360dcd41931a2e6b97ff8c73e8?fields=compilation%2Csources%2CruntimeBytecode.onchainByte"
+    }
+  }
+}

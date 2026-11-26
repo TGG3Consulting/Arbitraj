@@ -1,0 +1,713 @@
+{
+  "sushiswap-v3-base": {
+    "pool": {
+      "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x57713f7716e0b0f65ec116912f834e49805480d2",
+      "source_digest": "800c8ae0d992cf2b3cea5e9b9f5f9eb03c15a1a9252e3f07b36a83c3026a4be9",
+      "code_hash": "0xaa4c0c2e399ae036043d5b0a47741aca268d8297b962ab895fe8309539c56cf1",
+      "pool": "0x57713f7716e0b0f65ec116912f834e49805480d2",
+      "factory": "0xc35dadb65012ec5796536bd9864ed8773abc74c4",
+      "fee": 500,
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "block": 62262756,
+      "reference_pool": "0xb4cb800910b228ed3d0834cf79d697127bbb00e5",
+      "reference": "uniswap-v3-base",
+      "execution": {
+        "network": "base",
+        "block": 62262756,
+        "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+        "factory": "0xc35dadb65012ec5796536bd9864ed8773abc74c4",
+        "executor_runtime_keccak": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+        "sender": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "kind": "v3",
+        "virtual_quoter_keccak": "0x56f4529fa9bf808daea21d15a6060f9941aa6da575cc8f1ddf99feaa152a39d5",
+        "pools": [
+          {
+            "idx": 0,
+            "pool": "0x57713f7716e0b0f65ec116912f834e49805480d2",
+            "tokens": [
+              "0x4200000000000000000000000000000000000006",
+              "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+            ],
+            "immutables": null,
+            "prices": null,
+            "cases": [
+              {
+                "side": 0,
+                "input": "1000000000000",
+                "bought": "1687",
+                "sold": "998695073252",
+                "cash_before": "1000000000000",
+                "cash_after": "998695073252",
+                "after_coin_owner": "0",
+                "after_coin_executor": "0",
+                "after_cash_executor": "0",
+                "min_out_plus_one_buy_reverted": true,
+                "min_out_plus_one_sell_reverted": true
+              },
+              {
+                "side": 0,
+                "input": "100000000000000",
+                "bought": "168735",
+                "sold": "99899207780605",
+                "cash_before": "100000000000000",
+                "cash_after": "99899207780605",
+                "after_coin_owner": "0",
+                "after_coin_executor": "0",
+                "after_cash_executor": "0",
+                "min_out_plus_one_buy_reverted": true,
+                "min_out_plus_one_sell_reverted": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "deployment": {
+      "factory": {
+        "address": "0xc35dadb65012ec5796536bd9864ed8773abc74c4",
+        "contract": "contracts/UniswapV3Factory.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0xc35dadb65012ec5796536bd9864ed8773abc74c4",
+        "digest": "757e27e7585c603aef3a55cf5f5608be6067d9e327f1fddb38e852f076052b07",
+        "keccak": "0x27f02f64ebc07a827736bca0d743298bdcea9bdafe858c9fbf3f5a42c53cb374",
+        "bytes": 24535
+      },
+      "reference_factory": {
+        "address": "0x33128a8fc17869897dce68ed026d694621f6fdfd",
+        "contract": "contracts/UniswapV3Factory.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x33128a8fc17869897dce68ed026d694621f6fdfd",
+        "digest": "757e27e7585c603aef3a55cf5f5608be6067d9e327f1fddb38e852f076052b07",
+        "keccak": "0x95707a4ac71f20181a63ef7d180e3c625be5d20fc8f6f980befa966bad568132",
+        "bytes": 24535
+      },
+      "lens": "0x0CdeE061c75D43c82520eD998C23ac2991c9ac6d",
+      "lens_word": -79,
+      "lens_result": "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000008dfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf3d800000000000000000000000000000000000000000000000000000011b8674dba00000000000000000000000000000000000000000000000000000011b8674dbafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf3880000000000000000000000000000000000000000000000000000000221a417d20000000000000000000000000000000000000000000000000000000221a417d2fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf374000000000000000000000000000000000000000000000000000000da2ef9c4eb000000000000000000000000000000000000000000000000000000da2ef9c4ebfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf36a0000000000000000000000000000000000000000000000000000001573e4efcc0000000000000000000000000000000000000000000000000000001573e4efccfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf3420000000000000000000000000000000000000000000000000000010095e7e0330000000000000000000000000000000000000000000000000000010095e7e033fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf338fffffffffffffffffffffffffffffffffffffffffffffffffffffef108360c7e0000000000000000000000000000000000000000000000000000010ef7c9f382fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf32effffffffffffffffffffffffffffffffffffffffffffffffffff23bb6d467c880000000000000000000000000000000000000000000000000000dc4492b98378fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf324ffffffffffffffffffffffffffffffffffffffffffffffffffffba3e6e85e7be000000000000000000000000000000000000000000000000000045c1917a1842fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf31a0000000000000000000000000000000000000000000000000000dc4492b983780000000000000000000000000000000000000000000000000000dc4492b98378fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf310000000000000000000000000000000000000000000000000000045c1917a1842000000000000000000000000000000000000000000000000000045c1917a1842fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf2fcffffffffffffffffffffffffffffffffffffffffffffffffffffef21d410b15a000000000000000000000000000000000000000000000000000010de2bef4ea6fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf2e800000000000000000000000000000000000000000000000000000cb29d5a24d80000000000000000000000000000000000000000000000000000150bcede14e0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf2d4ffffffffffffffffffffffffffffffffffffffffffffffffffff6c5b2da5790600000000000000000000000000000000000000000000000000009bfe03de7702fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf2c0000000000000000000000000000000000000000000000000000094df8e9c3ffb00000000000000000000000000000000000000000000000000009acef7dd6b4ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf2b6ffffffffffffffffffffffffffffffffffffffffffffffffffffee5f2ba394f0000000000000000000000000000000000000000000000000000011a0d45c6b10fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf2ac00000000000000000000000000000000000000000000000000000200c0fc16dd000000000000000000000000000000000000000000000000000003eea8451477fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf2a2000000000000000000000000000000000000000000000000000011bf003ab0a5000000000000000000000000000000000000000000000000000011bf003ab0a5fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf298000000000000000000000000000000000000000000000000000000f6f3a47ecd000000000000000000000000000000000000000000000000000000f6f3a47ecdfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf270ffffffffffffffffffffffffffffffffffffffffffffffffffffff48f30c6ee8000000000000000000000000000000000000000000000000000000b70cf39118fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf25c000000000000000000000000000000000000000000000000000000126bf3addd0000000000000000000000000000000000000000000000000000015badf37453fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf248000000000000000000000000000000000000000000000000000000a4a0ffe33b000000000000000000000000000000000000000000000000000000a4a0ffe33bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf22afffffffffffffffffffffffffffffffffffffffffffffffffffff93dc29b81cb000000000000000000000000000000000000000000000000000006c23d647e35fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf216000000000000000000000000000000000000000000000000000006c23d647e35000000000000000000000000000000000000000000000000000006c23d647e35fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf202fffffffffffffffffffffffffffffffffffffffffffffffffffff6a38cb93af90000000000000000000000000000000000000000000000000000095c7346c507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf1f8fffffffffffffffffffffffffffffffffffffffffffffffffffffecf9ced410d000000000000000000000000000000000000000000000000000001306312bef3fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf1ee00000000000000000000000000000000000000000000000000000644d695698700000000000000000000000000000000000000000000000000000c70125513e7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf1e4ffffffffffffffffffffffffffffffffffffffffffffffffffffed011e8b7f840000000000000000000000000000000000000000000000000000155fa799fe62fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf1da00000000000000000000000000000000000000000000000000009a5d25d804a400000000000000000000000000000000000000000000000000009a5d25d804a4fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf1d00000000000000000000000000000000000000000000000000000153e3c5132f10000000000000000000000000000000000000000000000000000153e3c5132f1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf1bcffffffffffffffffffffffffffffffffffffffffffffffffffffe55bc8d39eba00000000000000000000000000000000000000000000000000001aa4372c6146fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf18a00000000000000000000000000000000000000000000000000001a6b166b4ef40000000000000000000000000000000000000000000000000000370a273d0916fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf17600000000000000000000000000000000000000000000000000000e4f8868dd1100000000000000000000000000000000000000000000000000000e4f8868dd11fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf16c00000000000000000000000000000000000000000000000000000ad1902e835600000000000000000000000000000000000000000000000000000ad1902e8356fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf0f4fffffffffffffffffffffffffffffffffffffffffffffffffffffffe3c77a91700000000000000000000000000000000000000000000000000000001c38856e9fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf0e000000000000000000000000000000000000000000000000000000001c38856e900000000000000000000000000000000000000000000000000000001c38856e9fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf05efffffffffffffffffffffffffffffffffffffffffffffffffffffaa5c0e44bd7000000000000000000000000000000000000000000000000000028fad3415533fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf04a000000000000000000000000000000000000000000000000000016e305b139f1000000000000000000000000000000000000000000000000000017720cabcf6bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf040ffffffffffffffffffffffffffffffffffffffffffffffffffffff8a27bbe5a500000000000000000000000000000000000000000000000000000075d8441a5bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf036fffffffffffffffffffffffffffffffffffffffffffffffffffffa6ae53fd8a80000000000000000000000000000000000000000000000000000062421babcd2fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf02c00000000000000000000000000000000000000000000000000000055cf456dd000000000000000000000000000000000000000000000000000000095e142c6e6fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf022fffffffffffffffffffffffffffffffffffffffffffffffffffffa4dee1e02830000000000000000000000000000000000000000000000000000116b4e5ce1a7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf0180000000000000000000000000000000000000000000000000000002008feac8b0000000000000000000000000000000000000000000000000000002008feac8bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf00e00000000000000000000000000000000000000000000000000000b3931c2b56700000000000000000000000000000000000000000000000000000be42e7c29bdfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf004ffffffffffffffffffffffffffffffffffffffffffffffffffffff5aba5178c6000000000000000000000000000000000000000000000000000000a545ae873afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceffafffffffffffffffffffffffffffffffffffffffffffffffffffffd28790f55390000000000000000000000000000000000000000000000000000038283aa1f1dfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceff0fffffffffffffffffffffffffffffffffffffffffffffffffffff0c96cd33d5c000000000000000000000000000000000000000000000000000010811e89d118fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcefe6fffffffffffffffffffffffffffffffffffffffffffffffffffffb50864cd76100000000000000000000000000000000000000000000000000000b09844df283fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcefdc00000000000000000000000000000000000000000000000000000fdbd8db49de00000000000000000000000000000000000000000000000000000fdbd8db49defffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcefd2fffffffffffffffffffffffffffffffffffffffffffffffffffffb415efc43e20000000000000000000000000000000000000000000000000000149509915086fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcefc8ffffffffffffffffffffffffffffffffffffffffffffffffffff928a790e34c300000000000000000000000000000000000000000000000000006d7586f1cb3dfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcefbe00000000000000000000000000000000000000000000000000000ca9d54a865200000000000000000000000000000000000000000000000000000ca9d54a8652fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcefb400000000000000000000000000000000000000000000000000009ee069b29dc30000000000000000000000000000000000000000000000000000ae9bf2c55833fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcefaaffffffffffffffffffffffffffffffffffffffffffffffffffffff70af5d97510000000000000000000000000000000000000000000000000000008f50a268affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcefa0000000000000000000000000000000000000000000000000000007ddc4895d38000000000000000000000000000000000000000000000000000007ddc4895d38fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef96fffffffffffffffffffffffffffffffffffffffffffffffffff1de660257547b000000000000000000000000000000000000000000000000000e22b89eed7ce3fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef8c00000000000000000000000000000000000000000000000000000073a1b3cfcb000000000000000000000000000000000000000000000000000002b450153195fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef82fffffffffffffffffffffffffffffffffffffffffffffffffffff8d57a25e0300000000000000000000000000000000000000000000000000000072a85da1fd0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef78000000000000000000000000000000000000000000000000000001205730b0e5000000000000000000000000000000000000000000000000000001205730b0e5fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef6e00000000000000000000000000000000000000000000000000000748c315c1950000000000000000000000000000000000000000000000000000080caf855e0bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef64fffffffffffffffffffffffffffffffffffffffffffffffffffffbaa704049d4000000000000000000000000000000000000000000000000000004558fbfb62cfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef5afffffffffffffffffffffffffffffffffffffffffffffffffffff5317004ccaa00000000000000000000000000000000000000000000000000000b927c6acfccfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef50fffffffffffffffffffffffffffffffffffffffffffffffffffff9fe9ad3db9600000000000000000000000000000000000000000000000000000ea16b96ff7afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef460000000000000000000000000000000000000000000000000000030e9c6902b0000000000000000000000000000000000000000000000000000013526ffd0072fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef3c00000000000000000000000000000000000000000000000000000a40fcbafa4200000000000000000000000000000000000000000000000000000a6a39f3afdefffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef3200000000000000000000000000000000000000000000000000000304615a651500000000000000000000000000000000000000000000000000000d3f723998adfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef28000000000000000000000000000000000000000000000000000000149e9c5ace000000000000000000000000000000000000000000000000000000149e9c5acefffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef1e0000000000000000000000000000000000000000000000000000051d886f99cc0000000000000000000000000000000000000000000000000000051d886f99ccfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef14fffffffffffffffffffffffffffffffffffffffffffffffffffffea9370628e800000000000000000000000000000000000000000000000000000156c8f9d718fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef0afffffffffffffffffffffffffffffffffffffffffffffffffffffeef3c8e7a0100000000000000000000000000000000000000000000000000000110c37185fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef0000000000000000000000000000000000000000000000000000000155996d7b5900000000000000000000000000000000000000000000000000000157f88632d7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceef6000000000000000000000000000000000000000000000000000003f532f0b55b000000000000000000000000000000000000000000000000000003f532f0b55bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceeec000000000000000000000000000000000000000000000000000000012f8c5bbf000000000000000000000000000000000000000000000000000000012f8c5bbffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceee2fffffffffffffffffffffffffffffffffffffffffffffffffffffe0ac8e07d37000000000000000000000000000000000000000000000000000001f5371f82c9fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceec4fffffffffffffffffffffffffffffffffffffffffffffffffffffcb9d68a7f6c0000000000000000000000000000000000000000000000000000034629758094fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceeb0000000000000000000000000000000000000000000000000000003c036294d14000000000000000000000000000000000000000000000000000003c036294d14fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceea6ffffffffffffffffffffffffffffffffffffffffffffffffffffff467e3e8315000000000000000000000000000000000000000000000000000000b981c17cebfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee92000000000000000000000000000000000000000000000000000000ac0bc4415c000000000000000000000000000000000000000000000000000000ac0bc4415cfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee7effffffffffffffffffffffffffffffffffffffffffffffffffff8e65b421cdf10000000000000000000000000000000000000000000000000000719a4bde320ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee74ffffffffffffffffffffffffffffffffffffffffffffffffffffffc55e4b06a00000000000000000000000000000000000000000000000000000003aa1b4f960fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee6a000000000000000000000000000000000000000000000000000000006dffc1a1000000000000000000000000000000000000000000000000000000006dffc1a1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee4c00000000000000000000000000000000000000000000000000002c5ae72c7b2f00000000000000000000000000000000000000000000000000002e4129e065f5fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee380000000000000000000000000000000000000000000000000000012dc30eeec30000000000000000000000000000000000000000000000000000012dc30eeec3fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee2effffffffffffffffffffffffffffffffffffffffffffffffffff5ff2012106b60000000000000000000000000000000000000000000000000000a00dfedef94afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee1a0000000000000000000000000000000000000000000000000000a00dfedef94a0000000000000000000000000000000000000000000000000000a00dfedef94afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee06fffffffffffffffffffffffffffffffffffffffffffffffffffffcaa11930abb00000000000000000000000000000000000000000000000000000355ee6cf545fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcedfcffffffffffffffffffffffffffffffffffffffffffffffffffff377faef4faff0000000000000000000000000000000000000000000000000000c880510b0501fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcedf2fffffffffffffffffffffffffffffffffffffffffffffffffffffd00c4525194000000000000000000000000000000000000000000000000000009ab188798f6fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcede8ffffffffffffffffffffffffffffffffffffffffffffffffffffed1d0f519d2c000000000000000000000000000000000000000000000000000012e82eec287cfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceddefffffffffffffffffffffffffffffffffffffffffffffffffffffd279244d8fa00000000000000000000000000000000000000000000000000000f82c1f06e68fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcedd4fffffffffffffffffffffffffffffffffffffffffffffffffffff80e1dbd96a900000000000000000000000000000000000000000000000000002dbd01dcf4a7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcedca0000000000000000000000000000000000000000000000000000092d97d5cab70000000000000000000000000000000000000000000000000000092d97d5cab7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcedc000000000000000000000000000000000000000000000000000001ad7720faeff00000000000000000000000000000000000000000000000000001ad7720faefffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcedb6fffffffffffffffffffffffffffffffffffffffffffffffffffffb8ad5d8422f000000000000000000000000000000000000000000000000000004752a27bdd1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcedacfffffffffffffffffffffffffffffffffffffffffffffffffffff19c049e532a00000000000000000000000000000000000000000000000000000e63fb61acd6fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceda2fffffffffffffffffffffffffffffffffffffffffffffffffffffc99db59b1a600000000000000000000000000000000000000000000000000000c5078f5c9fcfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced98ffffffffffffffffffffffffffffffffffffffffffffffffffffef7663699cbb00000000000000000000000000000000000000000000000000002d519359bcf1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced8e000000000000000000000000000000000000000000000000000002334f55fb5f00000000000000000000000000000000000000000000000000000c3534b22447fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced8400000000000000000000000000000000000000000000000000001c490bc297f000000000000000000000000000000000000000000000000000002192242d8846fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced7a00000000000000000000000000000000000000000000000000000500f2ae147400000000000000000000000000000000000000000000000000000500f2ae1474fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced70000000000000000000000000000000000000000000000000000029a87ad37d86000000000000000000000000000000000000000000000000000029a87ad37d86fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced66000000000000000000000000000000000000000000000000000000c189aae297000000000000000000000000000000000000000000000000000000c189aae297fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced5cfffffffffffffffffffffffffffffffffffffffffffffffffffff86879370e990000000000000000000000000000000000000000000000000000079786c8f167fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced52fffffffffffffffffffffffffffffffffffffffffffffffffffff44f45fedc3700000000000000000000000000000000000000000000000000000bb0ba0123c9fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced48000000000000000000000000000000000000000000000000000003e2e55c83e300000000000000000000000000000000000000000000000000000b4c28355eebfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced3e00000000000000000000000000000000000000000000000000000bbab779725800000000000000000000000000000000000000000000000000000bbab7797258fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced34000000000000000000000000000000000000000000000000000003b82fbfe96b000000000000000000000000000000000000000000000000000003b82fbfe96bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced2affffffffffffffffffffffffffffffffffffffffffffffffffff712c4b4cce7e00000000000000000000000000000000000000000000000000008ed3b4b33182fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced1600000000000000000000000000000000000000000000000000008ed3b4b3318200000000000000000000000000000000000000000000000000008ed3b4b33182fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcece4fffffffffffffffffffffffffffffffffffffffffffffffffffffb82054d42040000000000000000000000000000000000000000000000000000047dfab2bdfcfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcecdaffffffffffffffffffffffffffffffffffffffffffffffffffff9443ed94871100000000000000000000000000000000000000000000000000006bbc126b78effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcecd00000000000000000000000000000000000000000000000000000047dfab2bdfc0000000000000000000000000000000000000000000000000000047dfab2bdfcfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcecc600000000000000000000000000000000000000000000000000006e541e4ed1c200000000000000000000000000000000000000000000000000006e541e4ed1c2fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcecbcffffffffffffffffffffffffffffffffffffffffffffffffffff86d54ebe70c10000000000000000000000000000000000000000000000000000792ab1418f3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcecb2ffffffffffffffffffffffffffffffffffffffffffffffffffffe142674dd93f00000000000000000000000000000000000000000000000000001ebd98b226c1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceca80000000000000000000000000000000000000000000000000000792ab1418f3f0000000000000000000000000000000000000000000000000000792ab1418f3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcec9e00000000000000000000000000000000000000000000000000001ebd98b226c100000000000000000000000000000000000000000000000000001ebd98b226c1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcec94ffffffffffffffffffffffffffffffffffffffffffffffffffffa2e59ae91e7200000000000000000000000000000000000000000000000000005d1a6516e18efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcec8afffffffffffffffffffffffffffffffffffffffffffffffffffffd3fbe5fd1ef000000000000000000000000000000000000000000000000000002c5a1dee6e1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcec8000000000000000000000000000000000000000000000000000005d1a6516e18e00000000000000000000000000000000000000000000000000005d1a6516e18efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcec76000000000000000000000000000000000000000000000000000002c3bf9c991c000000000000000000000000000000000000000000000000000002c3bf9c991cfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcec6c0000000000000000000000000000000000000000000000000000022a88b3b1130000000000000000000000000000000000000000000000000000022a88b3b113fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcec3a00000000000000000000000000000000000000000000000000000c38a5a884cb00000000000000000000000000000000000000000000000000000c38a5a884cbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcec30000000000000000000000000000000000000000000000000000000027d56bd09000000000000000000000000000000000000000000000000000000027d56bd09fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcec120000000000000000000000000000000000000000000000000000000561f18d8f0000000000000000000000000000000000000000000000000000000561f18d8ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcebea00000000000000000000000000000000000000000000000000000000448ccc6700000000000000000000000000000000000000000000000000000000448ccc67fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcebe0ffffffffffffffffffffffffffffffffffffffffffffffffffffb887f4fdf7e9000000000000000000000000000000000000000000000000000047780b020817fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcebcc000000000000000000000000000000000000000000000000000047780b020817000000000000000000000000000000000000000000000000000047780b020817fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcebaeffffffffffffffffffffffffffffffffffffffffffffffffffff5315718e60ab0000000000000000000000000000000000000000000000000000acea8e719f55fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceba400000000000000000000000000000000000000000000000000000001fed1865000000000000000000000000000000000000000000000000000000001fed18650fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceb7c000000000000000000000000000000000000000000000000000000058c8a48a4000000000000000000000000000000000000000000000000000000058c8a48a4fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceb5400000000000000000000000000000000000000000000000000000001115ab39300000000000000000000000000000000000000000000000000000001115ab393fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceb4a00000000000000000000000000000000000000000000000000000001fdfa22c600000000000000000000000000000000000000000000000000000001fdfa22c6fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceb4000000000000000000000000000000000000000000000000000000000686a059300000000000000000000000000000000000000000000000000000000686a0593fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceb2cffffffffffffffffffffffffffffffffffffffffffffffffffffff63eb1c480c0000000000000000000000000000000000000000000000000000009c31846664fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceb0e000000000000000000000000000000000000000000000000000003f321e5d313000000000000000000000000000000000000000000000000000003f321e5d313fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceafa0000000000000000000000000000000000000000000000000000000290a4312e0000000000000000000000000000000000000000000000000000000290a4312efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceac8ffffffffffffffffffffffffffffffffffffffffffffffffffffffa0236b6dda0000000000000000000000000000000000000000000000000000005fdc949226fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea9600000000000000000000000000000000000000000000000000000c18d34e0fa100000000000000000000000000000000000000000000000000000c18d34e0fa1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea280000000000000000000000000000000000000000000000000000086f79b6d7eb0000000000000000000000000000000000000000000000000000086f79b6d7ebfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea1e000000000000000000000000000000000000000000000000000000002bf6f8cd000000000000000000000000000000000000000000000000000000002bf6f8cdfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea000000000000000000000000000000000000000000000000000000000349873cc10000000000000000000000000000000000000000000000000000000349873cc1",
+      "fee_tiers": {
+        "100": 1,
+        "500": 10,
+        "3000": 60,
+        "10000": 200
+      },
+      "admitted": true
+    }
+  },
+  "crescentswap-base": {
+    "pool": {
+      "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x809568656c4874850d931570d0b5cd5bb1b0e3b9",
+      "source_digest": "800c8ae0d992cf2b3cea5e9b9f5f9eb03c15a1a9252e3f07b36a83c3026a4be9",
+      "code_hash": "0x8e9ee92ee7652eeefc2a1f8142f6a3c2d767177685bb0c1eba9bcf305d29d999",
+      "pool": "0x809568656c4874850d931570d0b5cd5bb1b0e3b9",
+      "factory": "0x3539da2adb3f8311d203d334f25f7bee604a5c50",
+      "fee": 500,
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xeb466342c4d449bc9f53a865d5cb90586f405215"
+      ],
+      "block": 62262756,
+      "reference_pool": "0xb4cb800910b228ed3d0834cf79d697127bbb00e5",
+      "reference": "uniswap-v3-base",
+      "execution": {
+        "network": "base",
+        "block": 62262756,
+        "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+        "factory": "0x3539da2adb3f8311d203d334f25f7bee604a5c50",
+        "executor_runtime_keccak": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+        "sender": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "kind": "v3",
+        "virtual_quoter_keccak": "0x56f4529fa9bf808daea21d15a6060f9941aa6da575cc8f1ddf99feaa152a39d5",
+        "pools": [
+          {
+            "idx": 0,
+            "pool": "0x809568656c4874850d931570d0b5cd5bb1b0e3b9",
+            "tokens": [
+              "0x4200000000000000000000000000000000000006",
+              "0xeb466342c4d449bc9f53a865d5cb90586f405215"
+            ],
+            "immutables": null,
+            "prices": null,
+            "cases": [
+              {
+                "side": 0,
+                "input": "1000000000000",
+                "bought": "1676",
+                "sold": "998735406638",
+                "cash_before": "1000000000000",
+                "cash_after": "998735406638",
+                "after_coin_owner": "0",
+                "after_coin_executor": "0",
+                "after_cash_executor": "0",
+                "min_out_plus_one_buy_reverted": true,
+                "min_out_plus_one_sell_reverted": true
+              },
+              {
+                "side": 0,
+                "input": "100000000000000",
+                "bought": "166868",
+                "sold": "99899892900080",
+                "cash_before": "100000000000000",
+                "cash_after": "99899892900080",
+                "after_coin_owner": "0",
+                "after_coin_executor": "0",
+                "after_cash_executor": "0",
+                "min_out_plus_one_buy_reverted": true,
+                "min_out_plus_one_sell_reverted": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "deployment": {
+      "factory": {
+        "address": "0x3539da2adb3f8311d203d334f25f7bee604a5c50",
+        "contract": "contracts/UniswapV3Factory.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x3539da2adb3f8311d203d334f25f7bee604a5c50",
+        "digest": "757e27e7585c603aef3a55cf5f5608be6067d9e327f1fddb38e852f076052b07",
+        "keccak": "0x5d6b80d9e438b30c4a0f8fcc741758ca16357f99910ef0e34a381a96d3b0a04f",
+        "bytes": 24535
+      },
+      "reference_factory": {
+        "address": "0x33128a8fc17869897dce68ed026d694621f6fdfd",
+        "contract": "contracts/UniswapV3Factory.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x33128a8fc17869897dce68ed026d694621f6fdfd",
+        "digest": "757e27e7585c603aef3a55cf5f5608be6067d9e327f1fddb38e852f076052b07",
+        "keccak": "0x95707a4ac71f20181a63ef7d180e3c625be5d20fc8f6f980befa966bad568132",
+        "bytes": 24535
+      },
+      "lens": "0x0CdeE061c75D43c82520eD998C23ac2991c9ac6d",
+      "lens_word": -79,
+      "lens_result": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000",
+      "fee_tiers": {
+        "100": 1,
+        "500": 10,
+        "3000": 60,
+        "10000": 200
+      },
+      "admitted": true
+    }
+  },
+  "dackieswap-v3-base": {
+    "pool": {
+      "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x17d7b7bd4fc771555d8cccfe90d2efcf3c7106dd",
+      "source_digest": "f8d330ce5cf6155aa7c14b4c1a99e26074ce8ab9887e595f8d0a3d62ce1155fd",
+      "code_hash": "0x5382daf20fc2f71e0e0db7dab6502c72b3895cabd888749b711ebfea79e1410c",
+      "pool": "0x17d7b7bd4fc771555d8cccfe90d2efcf3c7106dd",
+      "factory": "0x3d237ac6d2f425d2e890cc99198818cc1fa48870",
+      "fee": 500,
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "block": 62262756,
+      "reference_pool": "0x72ab388e2e2f6facef59e3c3fa2c4e29011c2d38",
+      "reference": "pancakeswap-v3-base",
+      "execution": {
+        "network": "base",
+        "block": 62262756,
+        "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+        "factory": "0x3d237ac6d2f425d2e890cc99198818cc1fa48870",
+        "executor_runtime_keccak": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+        "sender": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "kind": "v3",
+        "virtual_quoter_keccak": "0x56f4529fa9bf808daea21d15a6060f9941aa6da575cc8f1ddf99feaa152a39d5",
+        "pools": [
+          {
+            "idx": 0,
+            "pool": "0x17d7b7bd4fc771555d8cccfe90d2efcf3c7106dd",
+            "tokens": [
+              "0x4200000000000000000000000000000000000006",
+              "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+            ],
+            "immutables": null,
+            "prices": null,
+            "cases": [
+              {
+                "side": 0,
+                "input": "1000000000000",
+                "bought": "1690",
+                "sold": "998751104590",
+                "cash_before": "1000000000000",
+                "cash_after": "998751104590",
+                "after_coin_owner": "0",
+                "after_coin_executor": "0",
+                "after_cash_executor": "0",
+                "min_out_plus_one_buy_reverted": true,
+                "min_out_plus_one_sell_reverted": true
+              },
+              {
+                "side": 0,
+                "input": "100000000000000",
+                "bought": "168997",
+                "sold": "99897963317659",
+                "cash_before": "100000000000000",
+                "cash_after": "99897963317659",
+                "after_coin_owner": "0",
+                "after_coin_executor": "0",
+                "after_cash_executor": "0",
+                "min_out_plus_one_buy_reverted": true,
+                "min_out_plus_one_sell_reverted": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "deployment": {
+      "factory": {
+        "address": "0x3d237ac6d2f425d2e890cc99198818cc1fa48870",
+        "contract": "contracts/PlunderV3Factory.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x3d237ac6d2f425d2e890cc99198818cc1fa48870",
+        "digest": "9228ca28800c40a511599367bbbc5c10dd933914507e3abf84d4559f4dfbe0e5",
+        "keccak": "0xe6b2e2a06e39fd9bc30fd6147147d6a2eae6ce0e199910cce0bc9dff12aad420",
+        "bytes": 5151
+      },
+      "reference_factory": {
+        "address": "0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865",
+        "contract": "contracts/PlunderV3Factory.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865",
+        "digest": "9228ca28800c40a511599367bbbc5c10dd933914507e3abf84d4559f4dfbe0e5",
+        "keccak": "0x8191d3ab1d55d3da9822199f28865415c99566b6f1aee4a4b16713f57930678c",
+        "bytes": 5151
+      },
+      "reference_deployer": {
+        "address": "0x41ff9aa7e16b8b1a8a8dc4f0efacd93d02d071c9",
+        "contract": "contracts/PancakeV3PoolDeployer.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x41ff9aa7e16b8b1a8a8dc4f0efacd93d02d071c9",
+        "digest": "30678ab0cd240d2a7eac420448dc1d5a419adbdb2861208e45eca565468cf676",
+        "keccak": "0xedd527f11646c1912dfc51b57ffa0ee27972f8798bcaf7bc68ae6ad054b6022b",
+        "bytes": 24556
+      },
+      "deployer": {
+        "address": "0x4f205d69834f9b101b9289f7affac9b77b3ff9b7",
+        "contract": "contracts/PancakeV3PoolDeployer.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x41ff9aa7e16b8b1a8a8dc4f0efacd93d02d071c9",
+        "digest": "30678ab0cd240d2a7eac420448dc1d5a419adbdb2861208e45eca565468cf676",
+        "keccak": "0xedd527f11646c1912dfc51b57ffa0ee27972f8798bcaf7bc68ae6ad054b6022b",
+        "bytes": 24556,
+        "runtime_equals": "0x41ff9aa7e16b8b1a8a8dc4f0efacd93d02d071c9"
+      },
+      "lens": "0x9a489505a00cE272eAa5e07Dba6491314CaE3796",
+      "lens_word": -79,
+      "lens_result": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000079fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf3ba000000000000000000000000000000000000000000000000000000c57f683929000000000000000000000000000000000000000000000000000000c57f683929fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf374ffffffffffffffffffffffffffffffffffffffffffffffffffffff16a1cdd104000000000000000000000000000000000000000000000000000002483bfce7d0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf2e8ffffffffffffffffffffffffffffffffffffffffffffffffffffff09bfe4ee79000000000000000000000000000000000000000000000000000000f6401b1187fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf2d4000000000000000000000000000000000000000000000000000000bd99c797bb000000000000000000000000000000000000000000000000000000bd99c797bbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf2b6ffffffffffffffffffffffffffffffffffffffffffffffffffffac7b2190f6c600000000000000000000000000000000000000000000000000005384de6f093afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf2a200000000000000000000000000000000000000000000000000005384de6f093a00000000000000000000000000000000000000000000000000005384de6f093afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf28efffffffffffffffffffffffffffffffffffffffffffffffffffffbdeba6c7e3b00000000000000000000000000000000000000000000000000000421459381c5fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf27a00000000000000000000000000000000000000000000000000000421459381c500000000000000000000000000000000000000000000000000000421459381c5fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf270ffffffffffffffffffffffffffffffffffffffffffffffffffffffe51c63324c0000000000000000000000000000000000000000000000000000001ae39ccdb4fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf252ffffffffffffffffffffffffffffffffffffffffffffffffffffbafe171fddbb00000000000000000000000000000000000000000000000000004501e8e02245fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf24800000000000000000000000000000000000000000000000000004501e8e0224500000000000000000000000000000000000000000000000000004501e8e02245fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf220ffffffffffffffffffffffffffffffffffffffffffffffffffffffdc704c422a000000000000000000000000000000000000000000000000000000238fb3bdd6fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf1dafffffffffffffffffffffffffffffffffffffffffffffffffffffb1ea3318bb1000000000000000000000000000000000000000000000000000004e15cce744ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf1c6000000000000000000000000000000000000000000000000000004e15cce744f000000000000000000000000000000000000000000000000000004e15cce744ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf19effffffffffffffffffffffffffffffffffffffffffffffffffffaeb33c7eef450000000000000000000000000000000000000000000000000000514cc38110bbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf18a0000000000000000000000000000000000000000000000000000552961014f180000000000000000000000000000000000000000000000000000552961014f18fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf162ffffffffffffffffffffffffffffffffffffffffffffffffffffffff54f95a1900000000000000000000000000000000000000000000000000000000ab06a5e7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf07cfffffffffffffffffffffffffffffffffffffffffffffffffffffea2cf3e78070000000000000000000000000000000000000000000000000000015d30c187f9fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf068fffffffffffffffffffffffffffffffffffffffffffffffffffffffb671134450000000000000000000000000000000000000000000000000000000498eecbbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf054ffffffffffffffffffffffffffffffffffffffffffffffffffffffe8b8ec0a19000000000000000000000000000000000000000000000000000000174713f5e7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf040ffffffffffffffffffffffffffffffffffffffffffffffffffffff8dbff81b85000000000000000000000000000000000000000000000000000000724007e47bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf018ffffffffffffffffffffffffffffffffffffffffffffffffffffffcecd3410d50000000000000000000000000000000000000000000000000000003132cbef2bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceff0ffffffffffffffffffffffffffffffffffffffffffffffffffffff5bfdd62501000000000000000000000000000000000000000000000000000000a40229dafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcefdc000000000000000000000000000000000000000000000000000000a40229daff000000000000000000000000000000000000000000000000000000a40229dafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef8cffffffffffffffffffffffffffffffffffffffffffffffffffffe9ca2cca5bc700000000000000000000000000000000000000000000000000001635d335a439fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef7800000000000000000000000000000000000000000000000000001635d335a43900000000000000000000000000000000000000000000000000001635d335a439fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcef4600000000000000000000000000000000000000000000000000000255cb95fbe300000000000000000000000000000000000000000000000000000255cb95fbe3fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceed8000000000000000000000000000000000000000000000000000000f6401b1187000000000000000000000000000000000000000000000000000000f6401b1187fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceeceffffffffffffffffffffffffffffffffffffffffffffffffffffdb7f16a2b53a00000000000000000000000000000000000000000000000000002480e95d4ac6fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceeba00000000000000000000000000000000000000000000000000002480e95d4ac600000000000000000000000000000000000000000000000000002480e95d4ac6fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee92fffffffffffffffffffffffffffffffffffffffffffffffffffffe85433438780000000000000000000000000000000000000000000000000000017abccbc788fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee88ffffffffffffffffffffffffffffffffffffffffffffffffffffcfa4eaca37b60000000000000000000000000000000000000000000000000000305b1535c84afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee7efffffffffffffffffffffffffffffffffffffffffffffffffffb0f578a4b7f550000000000000000000000000000000000000000000000000004f39def4c0fbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee74fffffffffffffffffffffffffffffffffffffffffffffffffffd66f8a9e437630000000000000000000000000000000000000000000000000002f9bd80875931fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee6a0000000000000000000000000000000000000000000000000003cdfe1f20da380000000000000000000000000000000000000000000000000006164845dfb62efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee600000000000000000000000000000000000000000000000000002e8ec15e8c861000000000000000000000000000000000000000000000000000324a7fd436439fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee56ffffffffffffffffffffffffffffffffffffffffffffffffffff93f67087e71a0000000000000000000000000000000000000000000000000002398479adea10fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee4cffffffffffffffffffffffffffffffffffffffffffffffffffffd23487ca403e000000000000000000000000000000000000000000000000000069875f905b9afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee420000000000000000000000000000000000000000000000000000fabb6edfe3aa0000000000000000000000000000000000000000000000000001ad69b415b652fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee3800000000000000000000000000000000000000000000000000004ba96be30dae00000000000000000000000000000000000000000000000000004ba96be30daefffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee2e00000000000000000000000000000000000000000000000000004bd7853347bd000000000000000000000000000000000000000000000000000066d6c0028aebfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee24fffffffffffffffffffffffffffffffffffffffffffffffffffff827a956ab9c000000000000000000000000000000000000000000000000000007d856a95464fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee1a00000000000000000000000000000000000000000000000000000c01c2f96f4b00000000000000000000000000000000000000000000000000000efd77d5d3e3fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee10fffffffffffffffffffffffffffffffffffffffffffffffffffff4e0fba40cdb00000000000000000000000000000000000000000000000000001acfb1ae9bedfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcee060000000000000000000000000000000000000000000000000000017dda6e324c0000000000000000000000000000000000000000000000000000017dda6e324cfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcedfc000000000000000000000000000000000000000000000000000012f75b054789000000000000000000000000000000000000000000000000000012f75b054789fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcedf2ffffffffffffffffffffffffffffffffffffffffffffffffffffdffd8d91253d000000000000000000000000000000000000000000000000000023340c9df18ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcede8ffffffffffffffffffffffffffffffffffffffffffffffffffffff22088d3531000000000000000000000000000000000000000000000000000000ddf772cacffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcedde00000000000000000000000000000000000000000000000000000482b1264d2a00000000000000000000000000000000000000000000000000000c95b23118d0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcedd4000000000000000000000000000000000000000000000000000013bf341fc2280000000000000000000000000000000000000000000000000000201ad67b39cefffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcedcafffffffffffffffffffffffffffffffffffffffffffffffffffffbcbc48bd44a00000000000000000000000000000000000000000000000000000c473c7ef75cfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcedc00000000000000000000000000000000000000000000000000000094eb2895c420000000000000000000000000000000000000000000000000000094eb2895c42fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcedb60000000000000000000000000000000000000000000000000000051cda9df11a0000000000000000000000000000000000000000000000000000051cda9df11afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcedacfffffffffffffffffffffffffffffffffffffffffffffffffffffa1444b14f9a000000000000000000000000000000000000000000000000000005ebbb4eb066fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceda2ffffffffffffffffffffffffffffffffffffffffffffffffffffe48f6abc945000000000000000000000000000000000000000000000000000001b7095436bb0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced98000000000000000000000000000000000000000000000000000005ebbb4eb066000000000000000000000000000000000000000000000000000005ebbb4eb066fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced8e00000000000000000000000000000000000000000000000000001b7095436bb000000000000000000000000000000000000000000000000000001b7095436bb0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced70fffffffffffffffffffffffffffffffffffffffffffffffffffff90a64482ce7000000000000000000000000000000000000000000000000000006f9d2e8c80ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced5c000000000000000000000000000000000000000000000000000006f7b7504d94000000000000000000000000000000000000000000000000000006f7b7504d94fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced52ffffffffffffffffffffffffffffffffffffffffffffffffffffeade9d154f520000000000000000000000000000000000000000000000000000152162eab0aefffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced48fffffffffffffffffffffffffffffffffffffffffffffffffffff732cbfbb64d000000000000000000000000000000000000000000000000000008cd340449b3fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced3efffffffffffffffffffffffffffffffffffffffffffffffffffe6b973f5010c70000000000000000000000000000000000000000000000000001beb4d9c9d5d7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced34000000000000000000000000000000000000000000000000000008cd340449b3000000000000000000000000000000000000000000000000000008cd340449b3fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced2a00000000000000000000000000000000000000000000000000014273d5b92913000000000000000000000000000000000000000000000000000210a9c4c09bfdfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced20000000000000000000000000000000000000000000000000000057d44157ae590000000000000000000000000000000000000000000000000000714636563ecdfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced1600000000000000000000000000000000000000000000000000000376fa0c9c1900000000000000000000000000000000000000000000000000000ccb2e5d1251fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced0c000000000000000000000000000000000000000000000000000000373fe2437e00000000000000000000000000000000000000000000000000000e14040c2450fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffced02fffffffffffffffffffffffffffffffffffffffffffffffffffff3c05e2c7cc300000000000000000000000000000000000000000000000000001593d623f975fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcecf800000000000000000000000000000000000000000000000000000f3dd94c4d380000000000000000000000000000000000000000000000000000127f9629777cfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceceeffffffffffffffffffffffffffffffffffffffffffffffffffffffd1761ef22500000000000000000000000000000000000000000000000000000051a6ff45b7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcece4000000000000000000000000000000000000000000000000000001a0de6e9522000000000000000000000000000000000000000000000000000001a0de6e9522fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcecda00000000000000000000000000000000000000000000000000000001a7e9813b0000000000000000000000000000000000000000000000000000007e88f6d257fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcecd0fffffffffffffffffffffffffffffffffffffffffffffffffffffb084f54ad08000000000000000000000000000000000000000000000000000004f7b0ab52f8fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcecc60000000000000000000000000000000000000000000000000000003e7086a88e0000000000000000000000000000000000000000000000000000003e7086a88efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcecbc000000000000000000000000000000000000000000000000000003f465fdb649000000000000000000000000000000000000000000000000000005fafb58efa7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcecb2fffffffffffffffffffffffffffffffffffffffffffffffffffff59a4c768b1400000000000000000000000000000000000000000000000000000a65b38974ecfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceca8000000000000000000000000000000000000000000000000000001034aad9caf000000000000000000000000000000000000000000000000000001034aad9caffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcec9e00000000000000000000000000000000000000000000000000000a65b38974ec00000000000000000000000000000000000000000000000000000a65b38974ecfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcec8afffffffffffffffffffffffffffffffffffffffffffffffffffffffc457a284100000000000000000000000000000000000000000000000000000003ba85d7bffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcec76fffffffffffffffffffffffffffffffffffffffffffffffffffffffc445d6da900000000000000000000000000000000000000000000000000000003bba29257fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcec6cfffffffffffffffffffffffffffffffffffffffffffffffffffffffc960f915d000000000000000000000000000000000000000000000000000000042748d2e9fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcec580000000000000000000000000000000000000000000000000000000498eecbbb0000000000000000000000000000000000000000000000000000000498eecbbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcec44000000000000000000000000000000000000000000000000000000174713f5e7000000000000000000000000000000000000000000000000000000174713f5e7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcec30000000000000000000000000000000000000000000000000000000724007e47b000000000000000000000000000000000000000000000000000000724007e47bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcec080000000000000000000000000000000000000000000000000000003132cbef2b0000000000000000000000000000000000000000000000000000003132cbef2bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcebfeffffffffffffffffffffffffffffffffffffffffffffffffffffb16d6a6a6d7c00000000000000000000000000000000000000000000000000004e9295959284fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcebea00000000000000000000000000000000000000000000000000004e929595928400000000000000000000000000000000000000000000000000004e9295959284fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcebccffffffffffffffffffffffffffffffffffffffffffffffffffffffe6a39256b0000000000000000000000000000000000000000000000000000000195c6da950fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcebc2ffffffffffffffffffffffffffffffffffffffffffffffffffffffe93965c99800000000000000000000000000000000000000000000000000000016c69a3668fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcebb8fffffffffffffffffffffffffffffffffffffffffffffffffffffff8ba7172e400000000000000000000000000000000000000000000000000000007458e8d1cfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceba4fffffffffffffffffffffffffffffffffffffffffffffffffffffffaee5ba97f0000000000000000000000000000000000000000000000000000000511a45681fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceb9afffffffffffffffffffffffffffffffffffffffffffffffffffffef089978dce0000000000000000000000000000000000000000000000000000010f76687232fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceb90fffffffffffffffffffffffffffffffffffffffffffffffffffff604dbcd7555000000000000000000000000000000000000000000000000000009fb24328aabfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceb54ffffffffffffffffffffffffffffffffffffffffffffffffffffffe991e83f33000000000000000000000000000000000000000000000000000000166e17c0cdfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceb4affffffffffffffffffffffffffffffffffffffffffffffffffffffd2108c88c40000000000000000000000000000000000000000000000000000002def73773cfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceb2cfffffffffffffffffffffffffffffffffffffffffffffffffffffffe7d6300cb00000000000000000000000000000000000000000000000000000001829cff35fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceb22ffffffffffffffffffffffffffffffffffffffffffffffffffffffe94d85308b00000000000000000000000000000000000000000000000000000016b27acf75fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceb0effffffffffffffffffffffffffffffffffffffffffffffffffffff8f68a3e10a00000000000000000000000000000000000000000000000000000070975c1ef6fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceafa00000000000000000000000000000000000000000000000000000070975c1ef600000000000000000000000000000000000000000000000000000070975c1ef6fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceaf0fffffffffffffffffffffffffffffffffffffffffffffffffffffaacef3281aa0000000000000000000000000000000000000000000000000000055310cd7e56fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceadc000000000000000000000000000000000000000000000000000000621c7619b000000000000000000000000000000000000000000000000000000a440524e2fcfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcead2ffffffffffffffffffffffffffffffffffffffffffffffffffffee2997fa2b64000000000000000000000000000000000000000000000000000011d66805d49cfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceac8fffffffffffffffffffffffffffffffffffffffffffffffffffff4a9ff8fc06200000000000000000000000000000000000000000000000000001537e91f08eafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceabe00000000000000000000000000000000000000000000000000000eb00cb6ddfd000000000000000000000000000000000000000000000000000014fcc354cb3bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceab400000000000000000000000000000000000000000000000000000c45e107c20c000000000000000000000000000000000000000000000000000014480887867cfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceaaa00000000000000000000000000000000000000000000000000000313e4ef89a800000000000000000000000000000000000000000000000000000338d1ae6396fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceaa0000000000000000000000000000000000000000000000000000003713b95b0c800000000000000000000000000000000000000000000000000000490ebea13a8fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea9600000000000000000000000000000000000000000000000000000012765f6cf700000000000000000000000000000000000000000000000000000012765f6cf7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea8cfffffffffffffffffffffffffffffffffffffffffffffffffffffb49458fce52000000000000000000000000000000000000000000000000000005d66ac4948efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea82ffffffffffffffffffffffffffffffffffffffffffffffffffff957b446869b700000000000000000000000000000000000000000000000000006a84bb979649fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea7800000000000000000000000000000000000000000000000000000546929a631e00000000000000000000000000000000000000000000000000000546929a631efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea6e00000000000000000000000000000000000000000000000000006a340fdad5fb00000000000000000000000000000000000000000000000000006acdcc512281fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea64fffffffffffffffffffffffffffffffffffffffffffffffffffffcde550c803900000000000000000000000000000000000000000000000000000321aaf37fc7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea5a00000000000000000000000000000000000000000000000000000019ae241883000000000000000000000000000000000000000000000000000000800e523403fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea5000000000000000000000000000000000000000000000000000000321aaf37fc700000000000000000000000000000000000000000000000000000321aaf37fc7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea46ffffffffffffffffffffffffffffffffffffffffffffffffffffffb8e5a251cf000000000000000000000000000000000000000000000000000000471a5dae31fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea3cffffffffffffffffffffffffffffffffffffffffffffffffffff2f0cb1bfd3b60000000000000000000000000000000000000000000000000000d1291579c7b2fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea32ffffffffffffffffffffffffffffffffffffffffffffffffffffda1282f640fa000000000000000000000000000000000000000000000000000025ed7d09bf06fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea280000000000000000000000000000000000000000000000000000e6c1d6e8a8940000000000000000000000000000000000000000000000000001073586e4c974fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea0a00000000000000000000000000000000000000000000000000001039d7fe107000000000000000000000000000000000000000000000000000001039d7fe1070fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea00fffffffffffffffffffffffffffffffffffffffffffffffffffff7d4d942fa680000000000000000000000000000000000000000000000000000082b26bd0598",
+      "fee_tiers": {
+        "100": 1,
+        "500": 10,
+        "2500": 50,
+        "10000": 200
+      },
+      "admitted": true
+    }
+  },
+  "basex": {
+    "pool": {
+      "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x0abe1765039d980da385501544afe9c4bb84b2da",
+      "source_digest": "800c8ae0d992cf2b3cea5e9b9f5f9eb03c15a1a9252e3f07b36a83c3026a4be9",
+      "code_hash": "0x4ae8f7c3c1aaf1cdb9e99d28129b1b94fcad69433e6eec13b2dee49c93cb8bc1",
+      "pool": "0x0abe1765039d980da385501544afe9c4bb84b2da",
+      "factory": "0xdc323d16c451819890805737997f4ede96b95e3e",
+      "fee": 3000,
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "block": 62262756,
+      "reference_pool": "0xb4cb800910b228ed3d0834cf79d697127bbb00e5",
+      "reference": "uniswap-v3-base",
+      "execution": {
+        "network": "base",
+        "block": 62262756,
+        "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+        "factory": "0xdc323d16c451819890805737997f4ede96b95e3e",
+        "executor_runtime_keccak": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+        "sender": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "kind": "v3",
+        "virtual_quoter_keccak": "0x56f4529fa9bf808daea21d15a6060f9941aa6da575cc8f1ddf99feaa152a39d5",
+        "pools": [
+          {
+            "idx": 0,
+            "pool": "0x0abe1765039d980da385501544afe9c4bb84b2da",
+            "tokens": [
+              "0x4200000000000000000000000000000000000006",
+              "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+            ],
+            "immutables": null,
+            "prices": null,
+            "cases": [
+              {
+                "side": 0,
+                "input": "1000000000000",
+                "bought": "1679",
+                "sold": "993303898841",
+                "cash_before": "1000000000000",
+                "cash_after": "993303898841",
+                "after_coin_owner": "0",
+                "after_coin_executor": "0",
+                "after_cash_executor": "0",
+                "min_out_plus_one_buy_reverted": true,
+                "min_out_plus_one_sell_reverted": true
+              },
+              {
+                "side": 0,
+                "input": "100000000000000",
+                "bought": "167780",
+                "sold": "99400551594359",
+                "cash_before": "100000000000000",
+                "cash_after": "99400551594359",
+                "after_coin_owner": "0",
+                "after_coin_executor": "0",
+                "after_cash_executor": "0",
+                "min_out_plus_one_buy_reverted": true,
+                "min_out_plus_one_sell_reverted": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "deployment": {
+      "factory": {
+        "address": "0xdc323d16c451819890805737997f4ede96b95e3e",
+        "contract": "contracts/UniswapV3Factory.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0xdc323d16c451819890805737997f4ede96b95e3e",
+        "digest": "757e27e7585c603aef3a55cf5f5608be6067d9e327f1fddb38e852f076052b07",
+        "keccak": "0x8caba0f0327cc62a992cfe2c1ab262cd911f527cd54c8103bcba2c5443973da6",
+        "bytes": 24535
+      },
+      "reference_factory": {
+        "address": "0x33128a8fc17869897dce68ed026d694621f6fdfd",
+        "contract": "contracts/UniswapV3Factory.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x33128a8fc17869897dce68ed026d694621f6fdfd",
+        "digest": "757e27e7585c603aef3a55cf5f5608be6067d9e327f1fddb38e852f076052b07",
+        "keccak": "0x95707a4ac71f20181a63ef7d180e3c625be5d20fc8f6f980befa966bad568132",
+        "bytes": 24535
+      },
+      "lens": "0x0CdeE061c75D43c82520eD998C23ac2991c9ac6d",
+      "lens_word": -14,
+      "lens_result": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffceb5400000000000000000000000000000000000000000000000000000025f66891ee00000000000000000000000000000000000000000000000000000025f66891eefffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea2800000000000000000000000000000000000000000000000000000052fc0a5b9200000000000000000000000000000000000000000000000000000052fc0a5b92fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce97400000000000000000000000000000000000000000000000000000049711c7c4d00000000000000000000000000000000000000000000000000000049711c7c4dfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce6e000000000000000000000000000000000000000000000000000000033fac3793500000000000000000000000000000000000000000000000000000033fac37935fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce2e400000000000000000000000000000000000000000000000000000003a089929300000000000000000000000000000000000000000000000000000003a0899293fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce0140000000000000000000000000000000000000000000000000000001e1ea0230c0000000000000000000000000000000000000000000000000000001e1ea0230cfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcdd08000000000000000000000000000000000000000000000000000000028f206b87000000000000000000000000000000000000000000000000000000028f206b87fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcdba00000000000000000000000000000000000000000000000000000005355a6fc1d0000000000000000000000000000000000000000000000000000005355a6fc1dfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcdb280000000000000000000000000000000000000000000000000000004674b44f9b0000000000000000000000000000000000000000000000000000004674b44f9bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcdab0000000000000000000000000000000000000000000000000000000024d4865bb000000000000000000000000000000000000000000000000000000024d4865bbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcd9fc000000000000000000000000000000000000000000000000000000165b972dba000000000000000000000000000000000000000000000000000000165b972dbafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcd8d00000000000000000000000000000000000000000000000000000002ab23cff740000000000000000000000000000000000000000000000000000002ab23cff74fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcd8940000000000000000000000000000000000000000000000000000001528a2cd190000000000000000000000000000000000000000000000000000001528a2cd19fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcd60000000000000000000000000000000000000000000000000000000001ee496a1500000000000000000000000000000000000000000000000000000001ee496a15fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcd5880000000000000000000000000000000000000000000000000000001302f79df40000000000000000000000000000000000000000000000000000001302f79df4fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcd18c00000000000000000000000000000000000000000000000000000005f3115d5900000000000000000000000000000000000000000000000000000005f3115d59",
+      "fee_tiers": {
+        "500": 10,
+        "3000": 60,
+        "10000": 200
+      },
+      "admitted": true
+    }
+  },
+  "swapbased-v3": {
+    "pool": {
+      "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "source": "https://sourcify.dev/server/v2/contract/8453/0xf6062550e8711dd6a38ca87299b14dcd6d45d783",
+      "source_digest": "f8d330ce5cf6155aa7c14b4c1a99e26074ce8ab9887e595f8d0a3d62ce1155fd",
+      "code_hash": "0x23a2b07df960772e4add833d7d450a17a9c0bde428ab3e292f4f53c8bfe80d21",
+      "pool": "0xf6062550e8711dd6a38ca87299b14dcd6d45d783",
+      "factory": "0xb5620f90e803c7f957a9ef351b8db3c746021bea",
+      "fee": 35,
+      "tokens": [
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+      ],
+      "block": 62262756,
+      "reference_pool": "0x72ab388e2e2f6facef59e3c3fa2c4e29011c2d38",
+      "reference": "pancakeswap-v3-base",
+      "execution": {
+        "network": "base",
+        "block": 62262756,
+        "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+        "factory": "0xb5620f90e803c7f957a9ef351b8db3c746021bea",
+        "executor_runtime_keccak": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+        "sender": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "kind": "v3",
+        "virtual_quoter_keccak": "0x56f4529fa9bf808daea21d15a6060f9941aa6da575cc8f1ddf99feaa152a39d5",
+        "pools": [
+          {
+            "idx": 0,
+            "pool": "0xf6062550e8711dd6a38ca87299b14dcd6d45d783",
+            "tokens": [
+              "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+              "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+            ],
+            "immutables": null,
+            "prices": null,
+            "cases": [
+              {
+                "side": 0,
+                "input": "10000",
+                "bought": "9998",
+                "sold": "9997",
+                "cash_before": "16820752",
+                "cash_after": "16820749",
+                "after_coin_owner": "0",
+                "after_coin_executor": "0",
+                "after_cash_executor": "0",
+                "min_out_plus_one_buy_reverted": true,
+                "min_out_plus_one_sell_reverted": true
+              },
+              {
+                "side": 0,
+                "input": "1000000",
+                "bought": "999904",
+                "sold": "999929",
+                "cash_before": "16820752",
+                "cash_after": "16820681",
+                "after_coin_owner": "0",
+                "after_coin_executor": "0",
+                "after_cash_executor": "0",
+                "min_out_plus_one_buy_reverted": true,
+                "min_out_plus_one_sell_reverted": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "deployment": {
+      "factory": {
+        "address": "0xb5620f90e803c7f957a9ef351b8db3c746021bea",
+        "contract": "contracts/PlunderV3Factory.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0xb5620f90e803c7f957a9ef351b8db3c746021bea",
+        "digest": "9228ca28800c40a511599367bbbc5c10dd933914507e3abf84d4559f4dfbe0e5",
+        "keccak": "0x6151fda1e37f9fc1003bce1c214d903128c8936028fecfab6f495792baee2557",
+        "bytes": 5151
+      },
+      "reference_factory": {
+        "address": "0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865",
+        "contract": "contracts/PlunderV3Factory.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865",
+        "digest": "9228ca28800c40a511599367bbbc5c10dd933914507e3abf84d4559f4dfbe0e5",
+        "keccak": "0x8191d3ab1d55d3da9822199f28865415c99566b6f1aee4a4b16713f57930678c",
+        "bytes": 5151
+      },
+      "reference_deployer": {
+        "address": "0x41ff9aa7e16b8b1a8a8dc4f0efacd93d02d071c9",
+        "contract": "contracts/PancakeV3PoolDeployer.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x41ff9aa7e16b8b1a8a8dc4f0efacd93d02d071c9",
+        "digest": "30678ab0cd240d2a7eac420448dc1d5a419adbdb2861208e45eca565468cf676",
+        "keccak": "0xedd527f11646c1912dfc51b57ffa0ee27972f8798bcaf7bc68ae6ad054b6022b",
+        "bytes": 24556
+      },
+      "deployer": {
+        "address": "0x905a650133147012390c42624eeba4d3313bec6c",
+        "contract": "contracts/PancakeV3PoolDeployer.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x41ff9aa7e16b8b1a8a8dc4f0efacd93d02d071c9",
+        "digest": "30678ab0cd240d2a7eac420448dc1d5a419adbdb2861208e45eca565468cf676",
+        "keccak": "0xedd527f11646c1912dfc51b57ffa0ee27972f8798bcaf7bc68ae6ad054b6022b",
+        "bytes": 24556,
+        "runtime_equals": "0x41ff9aa7e16b8b1a8a8dc4f0efacd93d02d071c9"
+      },
+      "lens": "0x9a489505a00cE272eAa5e07Dba6491314CaE3796",
+      "lens_word": -1,
+      "lens_result": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000005ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff000000000000000000000000000000000000000000000000000000ae0ce78817000000000000000000000000000000000000000000000000000001cdfcbe3b6bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe00000000000000000000000000000000000000000000000000000035641df812000000000000000000000000000000000000000000000000000000eea04d1078fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc0000000000000000000000000000000000000000000000000000006b376f5ed70000000000000000000000000000000000000000000000000000006b376f5ed7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7000000000000000000000000000000000000000000000000000000117570e057000000000000000000000000000000000000000000000000000000117570e057ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf00000000000000000000000000000000000000000000000000000000178a6fd000000000000000000000000000000000000000000000000000000000178a6fd0",
+      "fee_tiers": {
+        "35": 1,
+        "100": 1,
+        "500": 10,
+        "2500": 50,
+        "10000": 200
+      },
+      "admitted": true
+    }
+  },
+  "baseswap-v3": {
+    "pool": {
+      "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "source": "https://sourcify.dev/server/v2/contract/8453/0xa3c2fb43c7445d8ff8bd93dac53d98bde7444020",
+      "source_digest": "800c8ae0d992cf2b3cea5e9b9f5f9eb03c15a1a9252e3f07b36a83c3026a4be9",
+      "code_hash": "0x6f4ebf2f267ebed835434aeb4372fabe6e42ec1e25cdca190a4fb95bc7c45aff",
+      "pool": "0xa3c2fb43c7445d8ff8bd93dac53d98bde7444020",
+      "factory": "0x38015d05f4fec8afe15d7cc0386a126574e8077b",
+      "fee": 70,
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "block": 62262756,
+      "reference_pool": "0xb4cb800910b228ed3d0834cf79d697127bbb00e5",
+      "reference": "uniswap-v3-base",
+      "execution": {
+        "network": "base",
+        "block": 62262756,
+        "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+        "factory": "0x38015d05f4fec8afe15d7cc0386a126574e8077b",
+        "executor_runtime_keccak": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+        "sender": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "kind": "v3",
+        "virtual_quoter_keccak": "0x56f4529fa9bf808daea21d15a6060f9941aa6da575cc8f1ddf99feaa152a39d5",
+        "pools": [
+          {
+            "idx": 0,
+            "pool": "0xa3c2fb43c7445d8ff8bd93dac53d98bde7444020",
+            "tokens": [
+              "0x4200000000000000000000000000000000000006",
+              "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+            ],
+            "immutables": null,
+            "prices": null,
+            "cases": [
+              {
+                "side": 0,
+                "input": "1000000000000",
+                "bought": "1685",
+                "sold": "998825547547",
+                "cash_before": "1000000000000",
+                "cash_after": "998825547547",
+                "after_coin_owner": "0",
+                "after_coin_executor": "0",
+                "after_cash_executor": "0",
+                "min_out_plus_one_buy_reverted": true,
+                "min_out_plus_one_sell_reverted": true
+              },
+              {
+                "side": 0,
+                "input": "100000000000000",
+                "bought": "168518",
+                "sold": "99985673204198",
+                "cash_before": "100000000000000",
+                "cash_after": "99985673204198",
+                "after_coin_owner": "0",
+                "after_coin_executor": "0",
+                "after_cash_executor": "0",
+                "min_out_plus_one_buy_reverted": true,
+                "min_out_plus_one_sell_reverted": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "deployment": {
+      "factory": {
+        "address": "0x38015d05f4fec8afe15d7cc0386a126574e8077b",
+        "contract": "contracts/UniswapV3Factory.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x38015d05f4fec8afe15d7cc0386a126574e8077b",
+        "digest": "757e27e7585c603aef3a55cf5f5608be6067d9e327f1fddb38e852f076052b07",
+        "keccak": "0x8efca63e2311bd8237c8d652e4a57c5e752fea7f65dd0db9cf608a70d524c0ca",
+        "bytes": 24535
+      },
+      "reference_factory": {
+        "address": "0x33128a8fc17869897dce68ed026d694621f6fdfd",
+        "contract": "contracts/UniswapV3Factory.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x33128a8fc17869897dce68ed026d694621f6fdfd",
+        "digest": "757e27e7585c603aef3a55cf5f5608be6067d9e327f1fddb38e852f076052b07",
+        "keccak": "0x95707a4ac71f20181a63ef7d180e3c625be5d20fc8f6f980befa966bad568132",
+        "bytes": 24535
+      },
+      "lens": "0x0CdeE061c75D43c82520eD998C23ac2991c9ac6d",
+      "lens_word": -8,
+      "lens_result": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd132cffffffffffffffffffffffffffffffffffffffffffffffffffffffe15cc99cef0000000000000000000000000000000000000000000000000000001ea3366311fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd0b5c0000000000000000000000000000000000000000000000000000001ea33663110000000000000000000000000000000000000000000000000000001ea3366311fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd0134ffffffffffffffffffffffffffffffffffffffffffffffffffffe275c4ea074b00000000000000000000000000000000000000000000000000001d8a3b15f8b5fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcffa4fffffffffffffffffffffffffffffffffffffffffffffffffffff3ba087a6c8500000000000000000000000000000000000000000000000000000c45f785937bfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcfaf4ffffffffffffffffffffffffffffffffffffffffffffffffffffffed97ff0646000000000000000000000000000000000000000000000000000000126800f9bafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf7d4000000000000000000000000000000000000000000000000000029d0329b8c30000000000000000000000000000000000000000000000000000029d0329b8c30fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf70c000000000000000000000000000000000000000000000000000000126800f9ba000000000000000000000000000000000000000000000000000000126800f9bafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf194fffffffffffffffffffffffffffffffffffffffffffffffffffffffd92716a0f000000000000000000000000000000000000000000000000000000026d8e95f1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf130fffffffffffffffffffffffffffffffffffffffffffffffffffff72f8732965c000000000000000000000000000000000000000000000000000008d078cd69a4fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcf0ccffffffffffffffffffffffffffffffffffffffffffffffffffffffa5584cfb010000000000000000000000000000000000000000000000000000005aa7b304fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcece4ffffffffffffffffffffffffffffffffffffffffffffffffffffffff3c4274fe00000000000000000000000000000000000000000000000000000000c3bd8b02fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcea8cfffffffffffffffffffffffffffffffffffffffffffffffffffffffb2c1d18c900000000000000000000000000000000000000000000000000000004d3e2e737fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce9c40000000000000000000000000000000000000000000000000000000741717d280000000000000000000000000000000000000000000000000000000741717d28fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce960000000000000000000000000000000000000000000000000000008d078cd69a4000000000000000000000000000000000000000000000000000008d078cd69a4fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce8fc0000000000000000000000000000000000000000000000000000005aa7b304ff0000000000000000000000000000000000000000000000000000005aa7b304fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce51400000000000000000000000000000000000000000000000000000000c3bd8b0200000000000000000000000000000000000000000000000000000000c3bd8b02",
+      "fee_tiers": {
+        "1": 1,
+        "50": 1,
+        "70": 100,
+        "2000": 1,
+        "2500": 60,
+        "10000": 200,
+        "20000": 1
+      },
+      "admitted": true
+    }
+  },
+  "alien-base-v3": {
+    "pool": {
+      "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x7682d268f34e86accadff56db9668eb6a449ff07",
+      "source_digest": "800c8ae0d992cf2b3cea5e9b9f5f9eb03c15a1a9252e3f07b36a83c3026a4be9",
+      "code_hash": "0x7cef40a9f9d8d1839375904a1eb4faeff1b4ac0841b39006cec3e023b5267185",
+      "pool": "0x7682d268f34e86accadff56db9668eb6a449ff07",
+      "factory": "0x0fd83557b2be93617c9c1c1b6fd549401c74558c",
+      "fee": 200,
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42"
+      ],
+      "block": 62262756,
+      "reference_pool": "0xb4cb800910b228ed3d0834cf79d697127bbb00e5",
+      "reference": "uniswap-v3-base",
+      "execution": {
+        "network": "base",
+        "block": 62262756,
+        "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+        "factory": "0x0fd83557b2be93617c9c1c1b6fd549401c74558c",
+        "executor_runtime_keccak": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+        "sender": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "kind": "v3",
+        "virtual_quoter_keccak": "0x56f4529fa9bf808daea21d15a6060f9941aa6da575cc8f1ddf99feaa152a39d5",
+        "pools": [
+          {
+            "idx": 0,
+            "pool": "0x7682d268f34e86accadff56db9668eb6a449ff07",
+            "tokens": [
+              "0x4200000000000000000000000000000000000006",
+              "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42"
+            ],
+            "immutables": null,
+            "prices": null,
+            "cases": [
+              {
+                "side": 0,
+                "input": "1000000000000",
+                "bought": "1537",
+                "sold": "998666027865",
+                "cash_before": "1000000000000",
+                "cash_after": "998666027865",
+                "after_coin_owner": "0",
+                "after_coin_executor": "0",
+                "after_cash_executor": "0",
+                "min_out_plus_one_buy_reverted": true,
+                "min_out_plus_one_sell_reverted": true
+              },
+              {
+                "side": 0,
+                "input": "100000000000000",
+                "bought": "153774",
+                "sold": "99959729509575",
+                "cash_before": "100000000000000",
+                "cash_after": "99959729509575",
+                "after_coin_owner": "0",
+                "after_coin_executor": "0",
+                "after_cash_executor": "0",
+                "min_out_plus_one_buy_reverted": true,
+                "min_out_plus_one_sell_reverted": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "deployment": {
+      "factory": {
+        "address": "0x0fd83557b2be93617c9c1c1b6fd549401c74558c",
+        "contract": "contracts/UniswapV3Factory.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x0fd83557b2be93617c9c1c1b6fd549401c74558c",
+        "digest": "757e27e7585c603aef3a55cf5f5608be6067d9e327f1fddb38e852f076052b07",
+        "keccak": "0x1d2c8595a1967e08d844bac2aeff2a2016dd933b7ceb6685c0a20bf9af455bc2",
+        "bytes": 24535
+      },
+      "reference_factory": {
+        "address": "0x33128a8fc17869897dce68ed026d694621f6fdfd",
+        "contract": "contracts/UniswapV3Factory.sol",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x33128a8fc17869897dce68ed026d694621f6fdfd",
+        "digest": "757e27e7585c603aef3a55cf5f5608be6067d9e327f1fddb38e852f076052b07",
+        "keccak": "0x95707a4ac71f20181a63ef7d180e3c625be5d20fc8f6f980befa966bad568132",
+        "bytes": 24535
+      },
+      "lens": "0x0CdeE061c75D43c82520eD998C23ac2991c9ac6d",
+      "lens_word": -199,
+      "lens_result": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce4f80000000000000000000000000000000000000000000000000009126d7cf33a7a0000000000000000000000000000000000000000000000000009126d7cf33a7a",
+      "fee_tiers": {
+        "100": 2,
+        "200": 4,
+        "300": 6,
+        "400": 8,
+        "3000": 60,
+        "10000": 200
+      },
+      "admitted": true
+    }
+  }
+}

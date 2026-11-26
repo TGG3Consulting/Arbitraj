@@ -181,6 +181,9 @@ def record_pool(rpc, pid, args, tag):
         rec["mev_state"] = "0x" + sload(rpc, args.mev, [int(pid, 16)], tag)[0]
     dec = []
     for t in (t0, t1):
+        if int(t, 16) == 0:
+            dec.append(18)  # Нативный ETH: единица входа — wei.
+            continue
         try:
             dec.append(int(rpc.eth_call(t, SEL_DECIMALS, tag), 16))
         except Exception as e:  # откат или не токен — записываем текст

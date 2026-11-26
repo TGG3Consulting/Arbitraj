@@ -1392,5 +1392,142 @@
       "dex.kind": "pancake_stableswap",
       "dex.factory": "0xd173bf0851d2803177cc3928cf52f7b6bd29d054"
     }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "ekubo-v3-base",
+    "source": "https://docs.ekubo.org/reference/contracts/evm-v3/",
+    "settings": {
+      "dex.kind": "ekubo",
+      "dex.ekubo_core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+      "dex.ekubo_key_index": "0x898956fc2aed01d5f81f556ff5dcb10534285718",
+      "dex.quoter": "0xd26f20001a72a18c002b00e6710000d68700ce00"
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "ekubo-v3-ethereum",
+    "source": "https://docs.ekubo.org/reference/contracts/evm-v3/",
+    "settings": {
+      "dex.kind": "ekubo",
+      "dex.ekubo_core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+      "dex.ekubo_key_index": "0x898956fc2aed01d5f81f556ff5dcb10534285718",
+      "dex.quoter": "0xd26f20001a72a18c002b00e6710000d68700ce00"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "crescentswap-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x3539da2adb3f8311d203d334f25f7bee604a5c50 · https://sourcify.dev/server/v2/contract/8453/0x809568656c4874850d931570d0b5cd5bb1b0e3b9 · tests/data/first_run_dex_2026-11-26/verified_v3_base.json",
+    "settings": {
+      "dex.kind": "v3_fork",
+      "dex.factory": "0x3539da2adb3f8311d203d334f25f7bee604a5c50",
+      "dex.tick_lens": "0x0CdeE061c75D43c82520eD998C23ac2991c9ac6d",
+      "dex.quoter_virtual": true,
+      "dex.v3_fee_tiers": [
+        "100",
+        "500",
+        "3000",
+        "10000"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "dackieswap-v3-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x3d237ac6d2f425d2e890cc99198818cc1fa48870 · https://sourcify.dev/server/v2/contract/8453/0x17d7b7bd4fc771555d8cccfe90d2efcf3c7106dd · tests/data/first_run_dex_2026-11-26/verified_v3_base.json",
+    "settings": {
+      "dex.kind": "v3_fork_pancake",
+      "dex.factory": "0x3d237ac6d2f425d2e890cc99198818cc1fa48870",
+      "dex.tick_lens": "0x9a489505a00cE272eAa5e07Dba6491314CaE3796",
+      "dex.quoter_virtual": true,
+      "dex.v3_fee_tiers": [
+        "100",
+        "500",
+        "2500",
+        "10000"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "basex",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xdc323d16c451819890805737997f4ede96b95e3e · https://sourcify.dev/server/v2/contract/8453/0x0abe1765039d980da385501544afe9c4bb84b2da · tests/data/first_run_dex_2026-11-26/verified_v3_base.json",
+    "settings": {
+      "dex.kind": "v3_fork",
+      "dex.factory": "0xdc323d16c451819890805737997f4ede96b95e3e",
+      "dex.tick_lens": "0x0CdeE061c75D43c82520eD998C23ac2991c9ac6d",
+      "dex.quoter_virtual": true,
+      "dex.v3_fee_tiers": [
+        "500",
+        "3000",
+        "10000"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "swapbased-v3",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xb5620f90e803c7f957a9ef351b8db3c746021bea · https://sourcify.dev/server/v2/contract/8453/0xf6062550e8711dd6a38ca87299b14dcd6d45d783 · tests/data/first_run_dex_2026-11-26/verified_v3_base.json",
+    "settings": {
+      "dex.kind": "v3_fork_pancake",
+      "dex.factory": "0xb5620f90e803c7f957a9ef351b8db3c746021bea",
+      "dex.tick_lens": "0x9a489505a00cE272eAa5e07Dba6491314CaE3796",
+      "dex.quoter_virtual": true,
+      "dex.v3_fee_tiers": [
+        "35",
+        "100",
+        "500",
+        "2500",
+        "10000"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "baseswap-v3",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x38015d05f4fec8afe15d7cc0386a126574e8077b · https://sourcify.dev/server/v2/contract/8453/0xa3c2fb43c7445d8ff8bd93dac53d98bde7444020 · tests/data/first_run_dex_2026-11-26/verified_v3_base.json",
+    "settings": {
+      "dex.kind": "v3_fork",
+      "dex.factory": "0x38015d05f4fec8afe15d7cc0386a126574e8077b",
+      "dex.tick_lens": "0x0CdeE061c75D43c82520eD998C23ac2991c9ac6d",
+      "dex.quoter_virtual": true,
+      "dex.v3_fee_tiers": [
+        "1",
+        "50",
+        "70",
+        "2000",
+        "2500",
+        "10000",
+        "20000"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "alien-base-v3",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x0fd83557b2be93617c9c1c1b6fd549401c74558c · https://sourcify.dev/server/v2/contract/8453/0x7682d268f34e86accadff56db9668eb6a449ff07 · tests/data/first_run_dex_2026-11-26/verified_v3_base.json",
+    "settings": {
+      "dex.kind": "v3_fork",
+      "dex.factory": "0x0fd83557b2be93617c9c1c1b6fd549401c74558c",
+      "dex.tick_lens": "0x0CdeE061c75D43c82520eD998C23ac2991c9ac6d",
+      "dex.quoter_virtual": true,
+      "dex.v3_fee_tiers": [
+        "100",
+        "200",
+        "300",
+        "400",
+        "3000",
+        "10000"
+      ]
+    }
   }
 ]

@@ -119,6 +119,17 @@ def tables(network, snapshots, profiles):
                     "вызываемым ими функциям и числовым константам. Четыре действующих пула проверены "
                     "по фабрике и двум размерам get_dy в обоих направлениях. "
                     f"[Реализации, основания и результаты](../{legacy})."])
+    ekubo = f"tests/data/first_run_dex_2026-11-26/ekubo_{network}.json"
+    if Path(ekubo).exists():
+        out.extend(["", "Ekubo V3 · у двух пулов без расширений ключ установлен по событию PoolInitialized ядра. "
+                    "Восемь Router.quote подтверждают полное списание в обе стороны для нативной пары и пары ERC-20. "
+                    + ("У проверенного ETH/USDC лимит в сторону ETH → USDC на этом блоке составил всего "
+                       "20 921 872 214 wei. Более крупные пробы сохранены с частично принятым входом. "
+                       if base else "")
+                    + "Область профиля ограничена пулами без расширений. Размер окна dex.ekubo_bitmap_words, "
+                    "буфер подписки dex.ekubo_hub_buffer и доступ к отправке выбирает оператор. "
+                    f"[Ключи, тики, квоты и события](../{ekubo}) · "
+                    "[Размещения Ekubo](https://docs.ekubo.org/reference/contracts/evm-v3/)."])
     pancake = "tests/data/first_run_dex_2026-11-26/pancake_stable_ethereum.json"
     if not base and Path(pancake).exists():
         out.extend(["", "PancakeSwap StableSwap · два пула из официального API составляют полный реестр Ethereum "

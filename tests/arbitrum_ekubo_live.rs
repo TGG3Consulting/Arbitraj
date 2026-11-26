@@ -206,6 +206,45 @@ fn math_equals_router_quote() {
     assert!(compared > 0, "ни одного полного расчёта для сверки");
 }
 
+/// Два пула без расширений на каждой сети: ключ из ядра, полное списание, две стороны и два размера.
+#[test]
+fn base_ethereum_full_inputs_match_ekubo_router() {
+    for snapshot in [
+        include_str!("data/first_run_dex_2026-11-26/ekubo_base.json"),
+        include_str!("data/first_run_dex_2026-11-26/ekubo_ethereum.json"),
+    ] {
+        let record: Value = serde_json::from_str(snapshot).unwrap();
+        let pools = record["pools"].as_array().unwrap();
+        assert_eq!(pools.len(), 2);
+        for pool in pools {
+            let (token0, token1, config) = key(pool).unwrap();
+            assert_eq!(abi_ekubo::pool_id(token0, token1, config), word(&pool["pool_id"]));
+            assert_eq!(ekubo_config::extension(&config), Address::ZERO);
+            let d = state(pool, config, record["timestamp"].as_u64().unwrap());
+            let mut amounts = [Vec::new(), Vec::new()];
+            for quote in pool["quotes"].as_array().unwrap() {
+                let token1_in = quote["is_token1"].as_bool().unwrap();
+                let amount: u128 = quote["amount"].as_str().unwrap().parse().unwrap();
+                let out = hex(&quote["out"]);
+                let (d0, d1) = abi_ekubo::decode_balance(&B256::from_slice(&out[..32]));
+                let (input, output) = if token1_in { (d1, d0) } else { (d0, d1) };
+                assert_eq!(u128::try_from(input).unwrap(), amount);
+                assert!(output < 0);
+                let ours = ekubo_swap::exact_in(&d, token1_in, amount).unwrap();
+                assert!(ours.complete);
+                assert_eq!(ours.amount_in, amount);
+                assert_eq!(ours.amount_out, output.unsigned_abs());
+                amounts[usize::from(token1_in)].push(amount);
+            }
+            for mut sizes in amounts {
+                sizes.sort_unstable();
+                sizes.dedup();
+                assert_eq!(sizes.len(), 2);
+            }
+        }
+    }
+}
+
 #[test]
 fn core_logs_route() {
     let all = json("core_logs.json");

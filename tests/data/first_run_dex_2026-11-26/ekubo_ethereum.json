@@ -1,0 +1,181 @@
+{
+  "source": "https://docs.ekubo.org/reference/contracts/evm-v3/",
+  "key_index_broadcast": "https://raw.githubusercontent.com/EkuboProtocol/evm-contracts/58eef0a/broadcast/DeployAll.s.sol/8453/run-1785724365212.json",
+  "chain_id": 1,
+  "selector": {
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "requireCanonical": true
+  },
+  "endpoint": "https://eth.drpc.org",
+  "history_endpoint": "https://eth.drpc.org",
+  "timestamp": 1795643351,
+  "catalog": "https://prod-api.ekubo.org/poolKeys/1/0x00000000000014aA86C5d3c41765bb24e11bd701?limit=100",
+  "catalog_page_count": 100,
+  "catalog_has_more": true,
+  "runtime": {
+    "dex.ekubo_core": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
+    "dex.ekubo_key_index": "0x11edb5891c12aa2f614d5a5734831d39d99c8fc54a492d4e5a30482ce6e87c87",
+    "dex.quoter": "0xaa0ea1ad3d9ee38ce2a892211aa7fc0022cf7707779b92ef59ff2d4023481026"
+  },
+  "pools": [
+    {
+      "pool_id": "0x030e0b8733ded50b144ffc7fb17c94528d5bafcabb76d3a36f214cce4b710826",
+      "poolKeyById": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "key_source": "PoolInitialized ядра (pool_initialized.json)",
+      "key_event": {
+        "address": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+        "topics": [
+          "0x5e4688b340694b7c7fd30047fd082117dc46e32acfbf81a44bb1fac0ae65154d"
+        ],
+        "data": "0x030e0b8733ded50b144ffc7fb17c94528d5bafcabb76d3a36f214cce4b71082600000000000000000000000000000000000000000000000000000000000000000000000000000000000000002260fac5e5542a773aa44fbcfedf7c193bc2c5990000000000000000000000000000000000000000004189374bc6a7f0800003e8fffffffffffffffffffffffffffffffffffffffffffffffffffffffffe6d32a90000000000000000000000000000000000000000400007c507c23bc87cc53cbb",
+        "blockHash": "0xf0dcc77fb7d78a57d16e26d88e1e66b7d4e478c20543f7a5f8c9d581039ab1d7",
+        "blockNumber": "0x1718fd8",
+        "blockTimestamp": "0x696516e3",
+        "transactionHash": "0xf833c7f245695aa99ed4d21eaa0658234d2ae6d785f5ee2380baecb4f18b6de2",
+        "transactionIndex": "0x2a",
+        "logIndex": "0x1e8",
+        "removed": false
+      },
+      "key": {
+        "token0": "0x0000000000000000000000000000000000000000",
+        "token1": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "config": "0x0000000000000000000000000000000000000000004189374bc6a7f0800003e8"
+      },
+      "state": "0x40000704bf5c7b2e85270177fe6a185e0000000000000000000019e9b6020625",
+      "words": [
+        349196,
+        349202
+      ],
+      "bitmap": [
+        {
+          "word": 349199,
+          "bits": "0x0000000000208000000080000000000000000000001000000000000000001000"
+        },
+        {
+          "word": 349200,
+          "bits": "0x0000000000000000000000000000000400000000000000100088000000020000"
+        }
+      ],
+      "ticks": [
+        {
+          "tick": -26739000,
+          "info": "0x000000000000000000001986df3c345b000000000000000000001986df3c345b"
+        },
+        {
+          "tick": -26667000,
+          "info": "0x000000000000000000000062d6c5d1ca000000000000000000000062d6c5d1ca"
+        },
+        {
+          "tick": -26576000,
+          "info": "0x00000000000000000000000cb3e449fd00000000000000000000000cb3e449fd"
+        },
+        {
+          "tick": -26544000,
+          "info": "0x00000000000000000000000cb3e449fdfffffffffffffffffffffff34c1bb603"
+        },
+        {
+          "tick": -26538000,
+          "info": "0x0000000000000000000004e3933560a40000000000000000000004e3933560a4"
+        },
+        {
+          "tick": -26478000,
+          "info": "0x0000000000000000000003e4d5e74abe0000000000000000000003e4d5e74abe"
+        },
+        {
+          "tick": -26444000,
+          "info": "0x0000000000000000000004e3933560a4fffffffffffffffffffffb1c6cca9f5c"
+        },
+        {
+          "tick": -26440000,
+          "info": "0x000000000000000000000062d6c5d1caffffffffffffffffffffff9d293a2e36"
+        },
+        {
+          "tick": -26427000,
+          "info": "0x000000000000000000001986df3c345bffffffffffffffffffffe67920c3cba5"
+        },
+        {
+          "tick": -26365000,
+          "info": "0x0000000000000000000003e4d5e74abefffffffffffffffffffffc1b2a18b542"
+        }
+      ],
+      "decimals": [
+        18,
+        8
+      ],
+      "quotes": [
+        {
+          "is_token1": false,
+          "amount": "1000000000000000",
+          "out": "0x000000000000000000038d7ea4c68000fffffffffffffffffffffffffffff51340000704a460139cb0591aacfe6a17e90000000000000000000019e9b6020625"
+        },
+        {
+          "is_token1": false,
+          "amount": "10000000000000000",
+          "out": "0x0000000000000000002386f26fc10000ffffffffffffffffffffffffffff92cc40000703b1a4e4ecf7ee3b1bfe6a13c90000000000000000000019e9b6020625"
+        },
+        {
+          "is_token1": true,
+          "amount": "100000",
+          "out": "0xffffffffffffffffff8183ebc4bf6818000000000000000000000000000186a0400007088327f1d9c3255c91fe6a28b80000000000000000000019e9b6020625"
+        },
+        {
+          "is_token1": true,
+          "amount": "1000000",
+          "out": "0xfffffffffffffffffb267f9897ba4ba1000000000000000000000000000f42404000072a5e32c345a3a58276fe6aba420000000000000000000019f669e65022"
+        }
+      ]
+    },
+    {
+      "pool_id": "0x0a7c24b9a60cf8bbcce78fc88275e03e82418d9f717507cc97e74c0df1c0d1d1",
+      "poolKeyById": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "key_source": "PoolInitialized ядра (pool_initialized.json)",
+      "key_event": {
+        "address": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+        "topics": [
+          "0x5e4688b340694b7c7fd30047fd082117dc46e32acfbf81a44bb1fac0ae65154d"
+        ],
+        "data": "0x0a7c24b9a60cf8bbcce78fc88275e03e82418d9f717507cc97e74c0df1c0d1d100000000000000000000000018084fba666a33d37592fa2633fd49a74dd93a880000000000000000000000002260fac5e5542a773aa44fbcfedf7c193bc2c599000000000000000000000000000000000000000000c49ba5e353f7ce00000000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffea0ae770000000000000000000000000000000000000000400029fb5f99f1f7fa17a034",
+        "blockHash": "0xa8f99862a7306b8813694c61429fdf7d22720b4dda7884b058802a3f934f7545",
+        "blockNumber": "0x178a9f9",
+        "blockTimestamp": "0x69baba6b",
+        "transactionHash": "0x19a5b37cf031557240770f472ebc833658774c72608f7a1f43910588e1713942",
+        "transactionIndex": "0x35",
+        "logIndex": "0x18c",
+        "removed": false
+      },
+      "key": {
+        "token0": "0x18084fba666a33d37592fa2633fd49a74dd93a88",
+        "token1": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "config": "0x000000000000000000000000000000000000000000c49ba5e353f7ce00000000"
+      },
+      "state": "0x400029c2bfe48dfd5b5ed2effea0853100000000000000000000005f0f4664d4",
+      "decimals": [
+        18,
+        8
+      ],
+      "quotes": [
+        {
+          "is_token1": false,
+          "amount": "1000000000000000",
+          "out": "0x000000000000000000038d7ea4c68000fffffffffffffffffffffffffffe8717400028c4fd6c8916e6489ee8fe9fc98400000000000000000000005f0f4664d4"
+        },
+        {
+          "is_token1": false,
+          "amount": "10000000000000000",
+          "out": "0x0000000000000000002386f26fc10000fffffffffffffffffffffffffff3de5840002197d4a691e9c3c8a9abfe99e0e900000000000000000000005f0f4664d4"
+        },
+        {
+          "is_token1": true,
+          "amount": "100000",
+          "out": "0xfffffffffffffffffffc833269933c83000000000000000000000000000186a040002ac8f40c8e5253975287fea1427e00000000000000000000005f0f4664d4"
+        },
+        {
+          "is_token1": true,
+          "amount": "1000000",
+          "out": "0xffffffffffffffffffe34e8ed99b1279000000000000000000000000000f424040003400c974914f0d93cee8fea736d600000000000000000000005f0f4664d4"
+        }
+      ]
+    }
+  ],
+  "incomplete": []
+}

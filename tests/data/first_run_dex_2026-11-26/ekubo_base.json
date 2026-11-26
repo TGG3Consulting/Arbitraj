@@ -1,0 +1,179 @@
+{
+  "source": "https://docs.ekubo.org/reference/contracts/evm-v3/",
+  "key_index_broadcast": "https://raw.githubusercontent.com/EkuboProtocol/evm-contracts/58eef0a/broadcast/DeployAll.s.sol/8453/run-1785724365212.json",
+  "chain_id": 8453,
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "endpoint": "https://base-rpc.publicnode.com",
+  "history_endpoint": "https://base.drpc.org",
+  "timestamp": 1795642926,
+  "catalog": "https://prod-api.ekubo.org/poolKeys/8453/0x00000000000014aA86C5d3c41765bb24e11bd701?limit=100",
+  "catalog_page_count": 27,
+  "catalog_has_more": false,
+  "runtime": {
+    "dex.ekubo_core": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
+    "dex.ekubo_key_index": "0x11edb5891c12aa2f614d5a5734831d39d99c8fc54a492d4e5a30482ce6e87c87",
+    "dex.quoter": "0xaa0ea1ad3d9ee38ce2a892211aa7fc0022cf7707779b92ef59ff2d4023481026"
+  },
+  "pools": [
+    {
+      "pool_id": "0x1ecab4787d2728e8a420fa08f182b596ce84f8052f4410ba4c8826c9508f0ad5",
+      "poolKeyById": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "key_source": "PoolInitialized ядра (pool_initialized.json)",
+      "key_event": {
+        "address": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+        "topics": [
+          "0x5e4688b340694b7c7fd30047fd082117dc46e32acfbf81a44bb1fac0ae65154d"
+        ],
+        "data": "0x1ecab4787d2728e8a420fa08f182b596ce84f8052f4410ba4c8826c9508f0ad50000000000000000000000000000000000000000000000000000000000000000000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda0291300000000000000000000000000000000000000000020c49ba5e353f7800003e8fffffffffffffffffffffffffffffffffffffffffffffffffffffffffed0296600000000000000000000000000000000000000004000c6f409352c0a5a11d659",
+        "blockHash": "0x3be188ef50cfb3a60ecd3677bf4d8a71c5b5e48d5ab1706d528580a3a4f02a03",
+        "blockNumber": "0x2be605e",
+        "blockTimestamp": "0x6a071d9f",
+        "transactionHash": "0x959ac3a17bc64152a678572778d97e8ba7a5fa55dc5aa565607d7a19d80f3ac2",
+        "transactionIndex": "0x43",
+        "logIndex": "0x149",
+        "removed": false
+      },
+      "key": {
+        "token0": "0x0000000000000000000000000000000000000000",
+        "token1": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "config": "0x00000000000000000000000000000000000000000020c49ba5e353f7800003e8"
+      },
+      "state": "0x4000c0b892be0283c40ad287fecf30c100000000000000000000015cda1b2dd2",
+      "words": [
+        349222,
+        349228
+      ],
+      "bitmap": [
+        {
+          "word": 349225,
+          "bits": "0x0080000000000000000000000000000010900000000000000000000000000000"
+        }
+      ],
+      "ticks": [
+        {
+          "tick": -19979000,
+          "info": "0x00000000000000000000000006f51b0700000000000000000000000006f51b07"
+        },
+        {
+          "tick": -19976000,
+          "info": "0x00000000000000000000015cd32612cb00000000000000000000015cd32612cb"
+        },
+        {
+          "tick": -19971000,
+          "info": "0x00000000000000000000000006f51b07fffffffffffffffffffffffff90ae4f9"
+        },
+        {
+          "tick": -19848000,
+          "info": "0x00000000000000000000015cd32612cbfffffffffffffffffffffea32cd9ed35"
+        }
+      ],
+      "decimals": [
+        18,
+        6
+      ],
+      "quotes": [
+        {
+          "is_token1": false,
+          "amount": "2092187221",
+          "out": "0x0000000000000000000000007cb43e55fffffffffffffffffffffffffffffffc4000c0b891eea95f89465ae7fecf30c000000000000000000000015cda1b2dd2"
+        },
+        {
+          "is_token1": false,
+          "amount": "5230468053",
+          "out": "0x00000000000000000000000137c29bd5fffffffffffffffffffffffffffffff54000c0b890b7a3ac725e14effecf30c000000000000000000000015cda1b2dd2"
+        },
+        {
+          "is_token1": true,
+          "amount": "1000",
+          "out": "0xffffffffffffffffffffff91d4a03cd3000000000000000000000000000003e84000c0b94a0485d26fc0eeaefecf30de00000000000000000000015cda1b2dd2"
+        },
+        {
+          "is_token1": true,
+          "amount": "10000",
+          "out": "0xfffffffffffffffffffffbb1e5f7cdaa000000000000000000000000000027104000c0bfbc69f7666f40aa56fecf31e300000000000000000000015cda1b2dd2"
+        }
+      ]
+    },
+    {
+      "pool_id": "0xd0ed4562e07d388449ea8fae1d5d7fcfd8e2bfca084e14c019b74f63438abb01",
+      "poolKeyById": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "key_source": "PoolInitialized ядра (pool_initialized.json)",
+      "key_event": {
+        "address": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+        "topics": [
+          "0x5e4688b340694b7c7fd30047fd082117dc46e32acfbf81a44bb1fac0ae65154d"
+        ],
+        "data": "0xd0ed4562e07d388449ea8fae1d5d7fcfd8e2bfca084e14c019b74f63438abb01000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913000000000000000000000000fde4c96c8593536e31f229ea8f37b2ada2699bb200000000000000000000000000000000000000000020c49ba5e353f70000000000000000000000000000000000000000000000000000000000000000000004b30000000000000000000000000000000000000000800000004009dba1aa00701a",
+        "blockHash": "0x279de26d91a8652eb35b3e364102e70423e8cf489c095aecedab82d01857ee2c",
+        "blockNumber": "0x2ea7bc6",
+        "blockTimestamp": "0x6a5f546f",
+        "transactionHash": "0x6d7dbb63b7d392879775a551435dc3b7e95da9ef5919766f8f0b24aa0ffe05e6",
+        "transactionIndex": "0x98",
+        "logIndex": "0x1c5",
+        "removed": false
+      },
+      "key": {
+        "token0": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "token1": "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+        "config": "0x00000000000000000000000000000000000000000020c49ba5e353f700000000"
+      },
+      "state": "0x800000004009dba1aa00701a000004b300000000000000000000000003941202",
+      "decimals": [
+        6,
+        6
+      ],
+      "quotes": [
+        {
+          "is_token1": false,
+          "amount": "1000",
+          "out": "0x000000000000000000000000000003e8fffffffffffffffffffffffffffffc1980000000400995c9b0f2649f0000049100000000000000000000000003941202"
+        },
+        {
+          "is_token1": false,
+          "amount": "10000",
+          "out": "0x00000000000000000000000000002710ffffffffffffffffffffffffffffd8ec80000000400720a743984d190000036500000000000000000000000003941202"
+        },
+        {
+          "is_token1": true,
+          "amount": "1000",
+          "out": "0xfffffffffffffffffffffffffffffc1b000000000000000000000000000003e880000000400a216cde4f7495000004d400000000000000000000000003941202"
+        },
+        {
+          "is_token1": true,
+          "amount": "10000",
+          "out": "0xffffffffffffffffffffffffffffd9030000000000000000000000000000271080000000400c95eb2200b6d2000005ff00000000000000000000000003941202"
+        }
+      ]
+    }
+  ],
+  "incomplete": [
+    {
+      "pool_id": "0x1ecab4787d2728e8a420fa08f182b596ce84f8052f4410ba4c8826c9508f0ad5",
+      "quotes": [
+        {
+          "is_token1": false,
+          "amount": "1000000000000000",
+          "out": "0x000000000000000000000004df0a6f56ffffffffffffffffffffffffffffffd400000000400065a8177fae27fab6326c00000000000000000000000000000000"
+        },
+        {
+          "is_token1": false,
+          "amount": "10000000000000000",
+          "out": "0x000000000000000000000004df0a6f56ffffffffffffffffffffffffffffffd400000000400065a8177fae27fab6326c00000000000000000000000000000000"
+        },
+        {
+          "is_token1": true,
+          "amount": "1000",
+          "out": "0xffffffffffffffffffffff91d4a03cd3000000000000000000000000000003e84000c0b94a0485d26fc0eeaefecf30de00000000000000000000015cda1b2dd2"
+        },
+        {
+          "is_token1": true,
+          "amount": "10000",
+          "out": "0xfffffffffffffffffffffbb1e5f7cdaa000000000000000000000000000027104000c0bfbc69f7666f40aa56fecf31e300000000000000000000015cda1b2dd2"
+        }
+      ]
+    }
+  ]
+}

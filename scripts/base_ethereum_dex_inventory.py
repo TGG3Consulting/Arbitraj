@@ -160,6 +160,34 @@ def tables(network, snapshots, profiles):
                     "этого строителя на точный блок, проверка остаточного времени и восстановление исходного намерения. "
                     f"[Блоки, котировки, движения токенов](../{fermi.as_posix()}) · "
                     "[Адреса и порядок исполнения Titan](https://docs.titanbuilder.xyz/propamms)."])
+        coverage_path = fermi.with_name("fermi_builder_coverage.json")
+        windows_path = fermi.with_name("fermi_market_windows.json")
+        if coverage_path.exists() and windows_path.exists():
+            coverage = read(coverage_path)
+            windows = read(windows_path)
+            stats = coverage["summary"]
+            out.extend(["", "В коротком окне 25.11 с 19:41:23 до 21:49:11 UTC проверены хеши и родство "
+                        f"всех {coverage['canonical_blocks']} блоков Ethereum. Среди доставленных payloads "
+                        f"{stats['Titan']['blocks']} блока атрибутированы Titan, {stats['BuilderNet']['blocks']} BuilderNet, "
+                        f"{stats['other']['blocks']} другим строителям. Для {stats['ambiguous']['blocks']} блоков "
+                        f"реле сообщили ключи разных групп, для {stats['unattributed']['blocks']} в ответах нет совпадения. "
+                        "Из 131 события FermiSwap на два подтверждённых источника пришлись 65 и 22. "
+                        f"[Канонические хеши и отчёты семи реле](../{coverage_path.as_posix()}).", "",
+                        "| Окно Relayscan | Блоки в таблице строителей | Titan | BuilderNet |",
+                        "|---|---:|---:|---:|"])
+            for label,k in [("24 часа","24h"),("7 дней","7d")]:
+                report = windows["builders"][k]
+                row = report["selected"]
+                titan, buildernet = row["Titan (titanbuilder.xyz)"], row["BuilderNet"]
+                out.append(f"| {label} | {report['table_blocks']} | {titan['blocks']} ({titan['percent']}) | "
+                           f"{buildernet['blocks']} ({buildernet['percent']}) |")
+            out.extend(["", "Relayscan группирует блоки своей выборки по меткам extra_data. Окна заканчиваются "
+                        f"на слоте {windows['builders']['7d']['as_of_slot']}. По опубликованным рядам DefiLlama "
+                        "за закрытые сутки 25.11 объём Fermi составил 61,91 млн USD из 1,395 млрд USD на Ethereum "
+                        "(4,44%), за 19–25.11 — 378,33 млн USD из 11,472 млрд USD (3,30%). "
+                        "Для оценки прибыли нужны исполнимый объём и цены обеих сторон сделки, допуск к слоту, "
+                        "вероятность включения, газ и комиссии. "
+                        f"[Счётчики строителей и дневные объёмы](../{windows_path.as_posix()})."])
     pancake = "tests/data/first_run_dex_2026-11-26/pancake_stable_ethereum.json"
     if not base and Path(pancake).exists():
         out.extend(["", "PancakeSwap StableSwap · два пула из официального API составляют полный реестр Ethereum "

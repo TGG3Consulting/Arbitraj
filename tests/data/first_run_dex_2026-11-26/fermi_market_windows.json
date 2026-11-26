@@ -1,0 +1,295 @@
+{
+  "retrieved_utc": "2026-11-26T17:19:52.264967+00:00",
+  "builders": {
+    "24h": {
+      "source": "https://www.relayscan.io/overview?t=24h",
+      "as_of_slot": 15740767,
+      "as_of_utc": "2026-11-26T17:13:47+00:00",
+      "methodology": "builder table grouped by attributed extra_data, not unique relay reports or all network slots",
+      "table_blocks": 6623,
+      "selected": {
+        "Titan (titanbuilder.xyz)": {
+          "label": "Titan (titanbuilder.xyz)",
+          "blocks": 3493,
+          "percent": "52.74 %"
+        },
+        "BuilderNet": {
+          "label": "BuilderNet",
+          "blocks": 657,
+          "percent": "9.92 %"
+        }
+      },
+      "all_rows": [
+        {
+          "label": "Titan (titanbuilder.xyz)",
+          "blocks": 3493,
+          "percent": "52.74 %"
+        },
+        {
+          "label": "Quasar (quasar.win)",
+          "blocks": 1393,
+          "percent": "21.03 %"
+        },
+        {
+          "label": "BuilderNet",
+          "blocks": 657,
+          "percent": "9.92 %"
+        },
+        {
+          "label": "Eureka (eurekabuilder.xyz)",
+          "blocks": 514,
+          "percent": "7.76 %"
+        },
+        {
+          "label": "Builder+ www.btcs.com/builder",
+          "blocks": 214,
+          "percent": "3.23 %"
+        },
+        {
+          "label": "bombora.build",
+          "blocks": 168,
+          "percent": "2.54 %"
+        },
+        {
+          "label": "bobTheBuilder.xyz",
+          "blocks": 80,
+          "percent": "1.21 %"
+        },
+        {
+          "label": "ethgas-fast-rpc docs.ethgas.com",
+          "blocks": 47,
+          "percent": "0.71 %"
+        },
+        {
+          "label": "builder.ultrasound.money",
+          "blocks": 31,
+          "percent": "0.47 %"
+        },
+        {
+          "label": "Schwan",
+          "blocks": 10,
+          "percent": "0.15 %"
+        },
+        {
+          "label": "Powered by bloXroute",
+          "blocks": 5,
+          "percent": "0.08 %"
+        },
+        {
+          "label": "boba-builder.com",
+          "blocks": 4,
+          "percent": "0.06 %"
+        },
+        {
+          "label": "ZEAM",
+          "blocks": 3,
+          "percent": "0.05 %"
+        },
+        {
+          "label": "Decipher (debuilder.wtf)",
+          "blocks": 2,
+          "percent": "0.03 %"
+        },
+        {
+          "label": "bepick-ladder",
+          "blocks": 1,
+          "percent": "0.02 %"
+        },
+        {
+          "label": "NightShift BB",
+          "blocks": 1,
+          "percent": "0.02 %"
+        }
+      ]
+    },
+    "7d": {
+      "source": "https://www.relayscan.io/overview?t=7d",
+      "as_of_slot": 15740767,
+      "as_of_utc": "2026-11-26T17:13:47+00:00",
+      "methodology": "builder table grouped by attributed extra_data, not unique relay reports or all network slots",
+      "table_blocks": 46617,
+      "selected": {
+        "Titan (titanbuilder.xyz)": {
+          "label": "Titan (titanbuilder.xyz)",
+          "blocks": 25845,
+          "percent": "55.44 %"
+        },
+        "BuilderNet": {
+          "label": "BuilderNet",
+          "blocks": 4125,
+          "percent": "8.85 %"
+        }
+      },
+      "all_rows": [
+        {
+          "label": "Titan (titanbuilder.xyz)",
+          "blocks": 25845,
+          "percent": "55.44 %"
+        },
+        {
+          "label": "Quasar (quasar.win)",
+          "blocks": 9217,
+          "percent": "19.77 %"
+        },
+        {
+          "label": "BuilderNet",
+          "blocks": 4125,
+          "percent": "8.85 %"
+        },
+        {
+          "label": "Eureka (eurekabuilder.xyz)",
+          "blocks": 3457,
+          "percent": "7.42 %"
+        },
+        {
+          "label": "bombora.build",
+          "blocks": 1834,
+          "percent": "3.93 %"
+        },
+        {
+          "label": "Builder+ www.btcs.com/builder",
+          "blocks": 741,
+          "percent": "1.59 %"
+        },
+        {
+          "label": "builder.ultrasound.money",
+          "blocks": 581,
+          "percent": "1.25 %"
+        },
+        {
+          "label": "bobTheBuilder.xyz",
+          "blocks": 395,
+          "percent": "0.85 %"
+        },
+        {
+          "label": "ethgas-fast-rpc docs.ethgas.com",
+          "blocks": 299,
+          "percent": "0.64 %"
+        },
+        {
+          "label": "Powered by bloXroute",
+          "blocks": 26,
+          "percent": "0.06 %"
+        },
+        {
+          "label": "boba-builder.com",
+          "blocks": 17,
+          "percent": "0.04 %"
+        },
+        {
+          "label": "beaverbuild.org",
+          "blocks": 16,
+          "percent": "0.03 %"
+        },
+        {
+          "label": "Schwan",
+          "blocks": 10,
+          "percent": "0.02 %"
+        },
+        {
+          "label": "ZEAM",
+          "blocks": 10,
+          "percent": "0.02 %"
+        },
+        {
+          "label": "bepick-ladder",
+          "blocks": 9,
+          "percent": "0.02 %"
+        },
+        {
+          "label": "bepick-ladder",
+          "blocks": 9,
+          "percent": "0.02 %"
+        },
+        {
+          "label": "Decipher (debuilder.wtf)",
+          "blocks": 6,
+          "percent": "0.01 %"
+        },
+        {
+          "label": "bananabuild.org",
+          "blocks": 6,
+          "percent": "0.01 %"
+        },
+        {
+          "label": "Arrr!",
+          "blocks": 5,
+          "percent": "0.01 %"
+        },
+        {
+          "label": "cluck",
+          "blocks": 3,
+          "percent": "0.01 %"
+        },
+        {
+          "label": "meow",
+          "blocks": 3,
+          "percent": "0.01 %"
+        },
+        {
+          "label": "",
+          "blocks": 2,
+          "percent": "0.00 %"
+        },
+        {
+          "label": "NightShift BB",
+          "blocks": 1,
+          "percent": "0.00 %"
+        }
+      ]
+    }
+  },
+  "volume_sources": {
+    "ethereum": "https://api.llama.fi/overview/dexs/Ethereum?excludeTotalDataChart=false&excludeTotalDataChartBreakdown=true",
+    "fermi": "https://api.llama.fi/summary/dexs/fermiswap?excludeTotalDataChart=false&excludeTotalDataChartBreakdown=true"
+  },
+  "volume_days": [
+    {
+      "utc": "2026-11-19",
+      "ethereum_usd": 1666124619.74,
+      "fermi_usd": 36183758
+    },
+    {
+      "utc": "2026-11-20",
+      "ethereum_usd": 2617514585.4199996,
+      "fermi_usd": 72303104
+    },
+    {
+      "utc": "2026-11-21",
+      "ethereum_usd": 1747925729.06,
+      "fermi_usd": 70150679
+    },
+    {
+      "utc": "2026-11-22",
+      "ethereum_usd": 908567828.3399999,
+      "fermi_usd": 31761815
+    },
+    {
+      "utc": "2026-11-23",
+      "ethereum_usd": 1758414653.2,
+      "fermi_usd": 55709380
+    },
+    {
+      "utc": "2026-11-24",
+      "ethereum_usd": 1379020884.44,
+      "fermi_usd": 50303304
+    },
+    {
+      "utc": "2026-11-25",
+      "ethereum_usd": 1394923112.95,
+      "fermi_usd": 61913053
+    }
+  ],
+  "volume": {
+    "1_closed_utc_day": {
+      "ethereum_usd": 1394923112.95,
+      "fermi_usd": 61913053,
+      "percent": 4.438456315277874
+    },
+    "7_closed_utc_days": {
+      "ethereum_usd": 11472491413.15,
+      "fermi_usd": 378325093,
+      "percent": 3.2976716161788207
+    }
+  }
+}

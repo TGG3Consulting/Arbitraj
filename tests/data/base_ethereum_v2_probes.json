@@ -1,0 +1,1235 @@
+[
+  {
+    "network": "base",
+    "dex": "rocketswap",
+    "pool": "0x86cd8533b0166bdcf5d366a3bb0c3465e56d3ad5",
+    "factory": "0x1b8128c3a1b7d20053d10763ff02466ca7ff99fc",
+    "tokens": [
+      "0x4200000000000000000000000000000000000006",
+      "0xeb466342c4d449bc9f53a865d5cb90586f405215"
+    ],
+    "match": "match",
+    "runtime_match": true,
+    "runtime_hash": "0x6f3ac606014c629e1c963bdc54ab7686b14f8120f056d25d6ccbd0aed6be13b1",
+    "source_url": "https://sourcify.dev/server/v2/contract/8453/0x86cd8533b0166bdcf5d366a3bb0c3465e56d3ad5",
+    "contract": "UniswapV2Pair.sol:UniswapV2Pair",
+    "fee_fraction": [
+      1000,
+      3
+    ],
+    "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "reserves": [
+      "488423179280234380",
+      "824192166"
+    ],
+    "pips": 3000,
+    "cases": [
+      {
+        "in": "48842317928023",
+        "bought": "82163",
+        "returned": "48549279340397",
+        "buy_return": "82163",
+        "sell_return": "48549279340397",
+        "observed_balances": [
+          "82163",
+          "48549279340397",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      },
+      {
+        "in": "976846358560468",
+        "bought": "1640168",
+        "returned": "971005279251265",
+        "buy_return": "1640168",
+        "sell_return": "971005279251265",
+        "observed_balances": [
+          "1640168",
+          "971005279251265",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      }
+    ],
+    "factory_proof": {
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x1b8128c3a1b7d20053d10763ff02466ca7ff99fc",
+      "verified": "match",
+      "runtime_hash": "0x1237ca6bd755849ddba17d15cb078d4ea7a287187441606b0780f5e1fb0a80b7",
+      "contract": "UniswapV2Factory.sol:UniswapV2Factory",
+      "map_writers": [
+        "createPair",
+        "createPair"
+      ],
+      "embedded_pair": true
+    }
+  },
+  {
+    "network": "base",
+    "dex": "synthswap",
+    "pool": "0x3458ffdc3b2cc274a9d8aa8d9b0b934558b7a498",
+    "factory": "0x4bd16d59a5e1e0db903f724aa9d721a31d7d720d",
+    "tokens": [
+      "0x4200000000000000000000000000000000000006",
+      "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+    ],
+    "match": "exact_match",
+    "runtime_match": true,
+    "runtime_hash": "0x722cb519790c139ddd15ec2d550e1dee986d35facf29f38d0073df15fbe715e3",
+    "source_url": "https://sourcify.dev/server/v2/contract/8453/0x3458ffdc3b2cc274a9d8aa8d9b0b934558b7a498",
+    "contract": "contracts/dex/SynthPair.sol:SynthPair",
+    "fee_fraction": [
+      10000,
+      25
+    ],
+    "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "reserves": [
+      "408059589684734569",
+      "687885054"
+    ],
+    "pips": 2500,
+    "cases": [
+      {
+        "in": "40805958968473",
+        "bought": "68609",
+        "returned": "40601795963324",
+        "buy_return": "68609",
+        "sell_return": "40601795963324",
+        "observed_balances": [
+          "68609",
+          "40601795963324",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      },
+      {
+        "in": "816119179369469",
+        "bought": "1369598",
+        "returned": "812051580330800",
+        "buy_return": "1369598",
+        "sell_return": "812051580330800",
+        "observed_balances": [
+          "1369598",
+          "812051580330800",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      }
+    ],
+    "factory_proof": {
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x4bd16d59a5e1e0db903f724aa9d721a31d7d720d",
+      "verified": "exact_match",
+      "runtime_hash": "0x03b10d9d104643a90607418e84687dc1b475b49105641f3ee8e20072d46459b4",
+      "contract": "contracts/dex/SynthFactory.sol:SynthFactory",
+      "map_writers": [
+        "createPair",
+        "createPair"
+      ],
+      "embedded_pair": true
+    }
+  },
+  {
+    "network": "base",
+    "dex": "swapbased",
+    "pool": "0x86cd030822547105bd7952af4ba48534640a3824",
+    "factory": "0x04c9f118d21e8b767d2e50c946f0cc9f6c367300",
+    "tokens": [
+      "0x4200000000000000000000000000000000000006",
+      "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+    ],
+    "match": "exact_match",
+    "runtime_match": true,
+    "runtime_hash": "0x6705262d98606ce4d2466ebe78996a636d69be3cc05111d610c8a45637c1f715",
+    "source_url": "https://sourcify.dev/server/v2/contract/8453/0x86cd030822547105bd7952af4ba48534640a3824",
+    "contract": "contracts/UniswapV2Factory.sol:UniswapV2Pair",
+    "fee_fraction": [
+      1000,
+      3
+    ],
+    "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "reserves": [
+      "3656020865037205208",
+      "6160413796"
+    ],
+    "pips": 3000,
+    "cases": [
+      {
+        "in": "365602086503720",
+        "bought": "614132",
+        "returned": "363411966421563",
+        "buy_return": "614132",
+        "sell_return": "363411966421563",
+        "observed_balances": [
+          "614132",
+          "363411966421563",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      },
+      {
+        "in": "7312041730074410",
+        "bought": "12259419",
+        "returned": "7268321713503011",
+        "buy_return": "12259419",
+        "sell_return": "7268321713503011",
+        "observed_balances": [
+          "12259419",
+          "7268321713503011",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      }
+    ],
+    "factory_proof": {
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x04c9f118d21e8b767d2e50c946f0cc9f6c367300",
+      "verified": "exact_match",
+      "runtime_hash": "0xd4380251b828419f87600e83d5e3b1f49e208828bd2d919c7926e481bed33457",
+      "contract": "contracts/UniswapV2Factory.sol:UniswapV2Factory",
+      "map_writers": [
+        "createPair",
+        "createPair"
+      ],
+      "embedded_pair": true
+    }
+  },
+  {
+    "network": "base",
+    "dex": "baseswap",
+    "pool": "0xab067c01c7f5734da168c699ae9d23a4512c9fdb",
+    "factory": "0xfda619b6d20975be80a10332cd39b9a4b0faa8bb",
+    "tokens": [
+      "0x4200000000000000000000000000000000000006",
+      "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+    ],
+    "match": "match",
+    "runtime_match": true,
+    "runtime_hash": "0x867dd73021f3f1a8ca27ac0446d7bfd5cf28045880c728401e21fcc898bc3143",
+    "source_url": "https://sourcify.dev/server/v2/contract/8453/0xab067c01c7f5734da168c699ae9d23a4512c9fdb",
+    "contract": "PancakePair.sol:PancakePair",
+    "fee_fraction": [
+      10000,
+      25
+    ],
+    "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "reserves": [
+      "5275660354357148296",
+      "8901105190"
+    ],
+    "pips": 2500,
+    "cases": [
+      {
+        "in": "527566035435714",
+        "bought": "887796",
+        "returned": "524931359644489",
+        "buy_return": "887796",
+        "sell_return": "524931359644489",
+        "observed_balances": [
+          "887796",
+          "524931359644489",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      },
+      {
+        "in": "10000000000000000",
+        "bought": "16798079",
+        "returned": "9950156055613239",
+        "buy_return": "16798079",
+        "sell_return": "9950156055613239",
+        "observed_balances": [
+          "16798079",
+          "9950156055613239",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      }
+    ]
+  },
+  {
+    "network": "base",
+    "dex": "kokonutswap-base",
+    "pool": "0x888a09048c0eebdef0c8d4647a3da34e24375797",
+    "factory": "0x4cf1284dcf30345232d5bfd8a8aad6734b6941c4",
+    "tokens": [
+      "0x4200000000000000000000000000000000000006",
+      "0xeb466342c4d449bc9f53a865d5cb90586f405215"
+    ],
+    "match": "exact_match",
+    "runtime_match": true,
+    "runtime_hash": "0x24377e9ec87b6d218ad7a448c1c6e8d7f9e507e131b61d5e4baeb830ce8b05bd",
+    "source_url": "https://sourcify.dev/server/v2/contract/8453/0x888a09048c0eebdef0c8d4647a3da34e24375797",
+    "contract": "contracts/UniswapV2Pair.sol:UniswapV2Pair",
+    "fee_fraction": [
+      1000,
+      3
+    ],
+    "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "reserves": [
+      "10754346262820949",
+      "18029650"
+    ],
+    "pips": 3000,
+    "cases": [
+      {
+        "in": "1075434626282",
+        "bought": "1797",
+        "returned": "1068768172076",
+        "buy_return": "1797",
+        "sell_return": "1068768172076",
+        "observed_balances": [
+          "1797",
+          "1068768172076",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      },
+      {
+        "in": "21508692525641",
+        "bought": "35879",
+        "returned": "21379745058538",
+        "buy_return": "35879",
+        "sell_return": "21379745058538",
+        "observed_balances": [
+          "35879",
+          "21379745058538",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      }
+    ],
+    "factory_proof": {
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x4cf1284dcf30345232d5bfd8a8aad6734b6941c4",
+      "verified": "exact_match",
+      "runtime_hash": "0x460b4643876adc496f1b75f76d6c516a3a3cc4d709a6fbdb2985911fa69d0425",
+      "contract": "contracts/UniswapV2Factory.sol:UniswapV2Factory",
+      "map_writers": [
+        "createPair",
+        "createPair"
+      ],
+      "embedded_pair": true
+    }
+  },
+  {
+    "network": "base",
+    "dex": "alien-base",
+    "pool": "0x4c1453376952f899365d295c716aaa1010b8feaa",
+    "factory": "0x3e84d913803b02a4a7f027165e8ca42c14c0fde7",
+    "tokens": [
+      "0x4200000000000000000000000000000000000006",
+      "0xb3b32f9f8827d4634fe7d973fa1034ec9fddb3b3"
+    ],
+    "match": "exact_match",
+    "runtime_match": true,
+    "runtime_hash": "0x8973137177be3496b7ca1f9a9111b1f015b00b91a1ae16bb63d7ad4d334454c5",
+    "source_url": "https://sourcify.dev/server/v2/contract/8453/0x4c1453376952f899365d295c716aaa1010b8feaa",
+    "contract": "contracts/uniswapv2/UniswapV2Pair.sol:UniswapV2Pair",
+    "fee_fraction": [
+      10000,
+      16
+    ],
+    "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "reserves": [
+      "2818477369206792686",
+      "10724220680619756834699201"
+    ],
+    "pips": 1600,
+    "cases": [
+      {
+        "in": "281847736920679",
+        "bought": "1070599304118552305836",
+        "returned": "280946635514758",
+        "buy_return": "1070599304118552305836",
+        "sell_return": "280946635514758",
+        "observed_balances": [
+          "1070599304118552305836",
+          "280946635514758",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      },
+      {
+        "in": "5636954738413585",
+        "bought": "21371449345009414238807",
+        "returned": "5618966774751247",
+        "buy_return": "21371449345009414238807",
+        "sell_return": "5618966774751247",
+        "observed_balances": [
+          "21371449345009414238807",
+          "5618966774751247",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      }
+    ],
+    "factory_proof": {
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x3e84d913803b02a4a7f027165e8ca42c14c0fde7",
+      "verified": "exact_match",
+      "runtime_hash": "0xdcbdc28e4687b42b45f582e8316bd0ba85298d00387f8ccac300851d09281a2d",
+      "contract": "contracts/uniswapv2/UniswapV2Factory.sol:UniswapV2Factory",
+      "map_writers": [
+        "createPair",
+        "createPair"
+      ],
+      "embedded_pair": true
+    }
+  },
+  {
+    "network": "base",
+    "dex": "bakeryswap-base",
+    "pool": "0x0351f5efd5fb8ef36856d2c7e2aa5356528f47b9",
+    "factory": "0xad376065d4fa9abb6dda0ded0eadd911fe6e0f92",
+    "tokens": [
+      "0x28ed8909de1b3881400413ea970cce377a004cca",
+      "0x4200000000000000000000000000000000000006"
+    ],
+    "match": "exact_match",
+    "runtime_match": true,
+    "runtime_hash": "0xbdf9bd0cbf9aa4ff6e2dd4291ee5b4d5c4561c814d5fbb36baf1cc9e75881886",
+    "source_url": "https://sourcify.dev/server/v2/contract/8453/0x0351f5efd5fb8ef36856d2c7e2aa5356528f47b9",
+    "contract": "contracts/core/SwapPair.sol:SwapPair",
+    "fee_fraction": [
+      1000,
+      3
+    ],
+    "reason": "не прошёл полный круг: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+  },
+  {
+    "network": "base",
+    "dex": "throne-v2-base",
+    "pool": "0x723854239cd0726d85b6eff24b4fd21e5053e19e",
+    "factory": "0xe4806bdd8e010828324928d25587721f6b58bea2",
+    "tokens": [
+      "0x4200000000000000000000000000000000000006",
+      "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+    ],
+    "match": "match",
+    "runtime_match": true,
+    "runtime_hash": "0xfcd8398c2383adb88623e56ceaeb33d6bb141f49249d4dd8e7f4b11f29cf21c8",
+    "source_url": "https://sourcify.dev/server/v2/contract/8453/0x723854239cd0726d85b6eff24b4fd21e5053e19e",
+    "contract": "contracts/ThroneV2Pair.sol:ThroneV2Pair",
+    "fee_fraction": [
+      10000,
+      25
+    ],
+    "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "reserves": [
+      "15028375860096041",
+      "25427568"
+    ],
+    "pips": 2500,
+    "cases": [
+      {
+        "in": "1502837586009",
+        "bought": "2536",
+        "returned": "1495246907853",
+        "buy_return": "2536",
+        "sell_return": "1495246907853",
+        "observed_balances": [
+          "2536",
+          "1495246907853",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      },
+      {
+        "in": "30056751720192",
+        "bought": "50626",
+        "returned": "29906364776267",
+        "buy_return": "50626",
+        "sell_return": "29906364776267",
+        "observed_balances": [
+          "50626",
+          "29906364776267",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      }
+    ],
+    "factory_proof": {
+      "source": "https://sourcify.dev/server/v2/contract/8453/0xe4806bdd8e010828324928d25587721f6b58bea2",
+      "verified": "exact_match",
+      "runtime_hash": "0xa906607d1686e05a40800f1a36626798c39d126e277ef8519d3c33e915c1f50f",
+      "contract": "contracts/ThroneV2Factory.sol:ThroneV2Factory",
+      "map_writers": [
+        "createPair",
+        "createPair"
+      ],
+      "embedded_pair": true
+    }
+  },
+  {
+    "network": "base",
+    "dex": "soswap",
+    "pool": "0x3b190783a47db6acb11c0899ecf31f47896f3a17",
+    "factory": "0x539db2b4fe8016db2594d7cfbeab4d2b730b723e",
+    "tokens": [
+      "0x4200000000000000000000000000000000000006",
+      "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+    ],
+    "match": "exact_match",
+    "runtime_match": true,
+    "runtime_hash": "0xec2beb8ddd7652018ae3ce751535d1d56359acbde26a025789de2e28ebb65b54",
+    "source_url": "https://sourcify.dev/server/v2/contract/8453/0x3b190783a47db6acb11c0899ecf31f47896f3a17",
+    "contract": "contracts/RaiPair.sol:RaiPair",
+    "fee_fraction": [
+      1000,
+      3
+    ],
+    "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "reserves": [
+      "92738285906741978",
+      "156339469"
+    ],
+    "pips": 3000,
+    "cases": [
+      {
+        "in": "9273828590674",
+        "bought": "15585",
+        "returned": "9217984086325",
+        "buy_return": "15585",
+        "sell_return": "9217984086325",
+        "observed_balances": [
+          "15585",
+          "9217984086325",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      },
+      {
+        "in": "185476571813483",
+        "bought": "311120",
+        "returned": "184367274142527",
+        "buy_return": "311120",
+        "sell_return": "184367274142527",
+        "observed_balances": [
+          "311120",
+          "184367274142527",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      }
+    ],
+    "factory_proof": {
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x539db2b4fe8016db2594d7cfbeab4d2b730b723e",
+      "verified": "exact_match",
+      "runtime_hash": "0x03701486154ac6677e82ec767e82286dadbfa822efac6ed07d459ebf4201714d",
+      "contract": "contracts/RaiFactory.sol:RaiFactory",
+      "map_writers": [
+        "createPair",
+        "createPair"
+      ],
+      "embedded_pair": true
+    }
+  },
+  {
+    "network": "base",
+    "dex": "dackieswap-v2-base",
+    "pool": "0x6bee1580471f38000951abd788a9c060a4ad3ac3",
+    "factory": "0x591f122d1df761e616c13d265006fcbf4c6d6551",
+    "tokens": [
+      "0x4200000000000000000000000000000000000006",
+      "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+    ],
+    "match": "exact_match",
+    "runtime_match": true,
+    "runtime_hash": "0x2cfedfbf5f8c1881571e68f53dcf3aad8ddf714162bd5fafdf5fa6b4c02c74ab",
+    "source_url": "https://sourcify.dev/server/v2/contract/8453/0x6bee1580471f38000951abd788a9c060a4ad3ac3",
+    "contract": "contracts/DackiePair.sol:DackiePair",
+    "fee_fraction": [
+      10000,
+      25
+    ],
+    "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "reserves": [
+      "6795864093779558",
+      "11387045"
+    ],
+    "pips": 2500,
+    "cases": [
+      {
+        "in": "679586409377",
+        "bought": "1135",
+        "returned": "675749836920",
+        "buy_return": "1135",
+        "sell_return": "675749836920",
+        "observed_balances": [
+          "1135",
+          "675749836920",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      },
+      {
+        "in": "13591728187559",
+        "bought": "22671",
+        "returned": "13523437949188",
+        "buy_return": "22671",
+        "sell_return": "13523437949188",
+        "observed_balances": [
+          "22671",
+          "13523437949188",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      }
+    ],
+    "factory_proof": {
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x591f122d1df761e616c13d265006fcbf4c6d6551",
+      "verified": "exact_match",
+      "runtime_hash": "0xa27393d0a56b16716423aafc88e0e9705d6dec37fde49883bc42bedba44f96a7",
+      "contract": "contracts/DackieFactory.sol:DackieFactory",
+      "map_writers": [
+        "createPair",
+        "createPair"
+      ],
+      "embedded_pair": true
+    }
+  },
+  {
+    "network": "base",
+    "dex": "plantbaseswap",
+    "pool": "0x09dda12b6c612f1f016da5ea5041bb3973af53b5",
+    "factory": "0xa081ce40f079a381b59893b4dc0abf8b1817af70",
+    "tokens": [
+      "0x4200000000000000000000000000000000000006",
+      "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+    ],
+    "match": "exact_match",
+    "runtime_match": true,
+    "runtime_hash": "0x3b5b9bb39b51c6204ad25617f683f6ddab9841dc810207c45eefc61956fb810e",
+    "source_url": "https://sourcify.dev/server/v2/contract/8453/0x09dda12b6c612f1f016da5ea5041bb3973af53b5",
+    "contract": "contracts/uniswapv2/UniswapV2Pair.sol:UniswapV2Pair",
+    "fee_fraction": [
+      1000,
+      3
+    ],
+    "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "reserves": [
+      "1606662387190612",
+      "2618206"
+    ],
+    "pips": 3000,
+    "cases": [
+      {
+        "in": "160666238719",
+        "bought": "261",
+        "returned": "159698205388",
+        "buy_return": "261",
+        "sell_return": "159698205388",
+        "observed_balances": [
+          "261",
+          "159698205388",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      },
+      {
+        "in": "3213324774381",
+        "bought": "5210",
+        "returned": "3193919814913",
+        "buy_return": "5210",
+        "sell_return": "3193919814913",
+        "observed_balances": [
+          "5210",
+          "3193919814913",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      }
+    ],
+    "factory_proof": {
+      "source": "https://sourcify.dev/server/v2/contract/8453/0xa081ce40f079a381b59893b4dc0abf8b1817af70",
+      "verified": "exact_match",
+      "runtime_hash": "0xb5ef8db23d277fcdf5e96da2de9f63a0a1951117234ec2cf5baed3c9d1caa11c",
+      "contract": "contracts/uniswapv2/UniswapV2Factory.sol:UniswapV2Factory",
+      "map_writers": [
+        "createPair",
+        "createPair"
+      ],
+      "embedded_pair": true
+    }
+  },
+  {
+    "network": "base",
+    "dex": "area-51-alien-base",
+    "pool": "0xbad04cdb100fe1d36362fec958e77b50fa291665",
+    "factory": "0x2d5dd5fa7b8a1bfbdbb0916b42280208ee6de51e",
+    "tokens": [
+      "0x4200000000000000000000000000000000000006",
+      "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+    ],
+    "match": "exact_match",
+    "runtime_match": true,
+    "runtime_hash": "0x89be4181c3fea4f3cf9b66ff69762fb097aa72b716918c6bd71ae318f74a8704",
+    "source_url": "https://sourcify.dev/server/v2/contract/8453/0xbad04cdb100fe1d36362fec958e77b50fa291665",
+    "contract": "contracts/uniswapv2/UniswapV2Pair.sol:UniswapV2Pair",
+    "fee_fraction": [
+      10000,
+      100
+    ],
+    "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "reserves": [
+      "12747043100450577",
+      "21348681"
+    ],
+    "pips": 10000,
+    "cases": [
+      {
+        "in": "1274704310045",
+        "bought": "2113",
+        "returned": "1249156796193",
+        "buy_return": "2113",
+        "sell_return": "1249156796193",
+        "observed_balances": [
+          "2113",
+          "1249156796193",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      },
+      {
+        "in": "25494086200901",
+        "bought": "42186",
+        "returned": "24987237962604",
+        "buy_return": "42186",
+        "sell_return": "24987237962604",
+        "observed_balances": [
+          "42186",
+          "24987237962604",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      }
+    ],
+    "factory_proof": {
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x2d5dd5fa7b8a1bfbdbb0916b42280208ee6de51e",
+      "verified": "exact_match",
+      "runtime_hash": "0xdc2a9b61e3e1a951aafa7d53b7d8bbe74ca139e56adc53e885fc1e3d573428e0",
+      "contract": "contracts/uniswapv2/UniswapV2Factory.sol:UniswapV2Factory",
+      "map_writers": [
+        "createPair",
+        "createPair"
+      ],
+      "embedded_pair": true
+    }
+  },
+  {
+    "network": "base",
+    "dex": "sharkswap-base",
+    "pool": "0xae45f7eb428eb6403f2567c3a3ec47e9230bc823",
+    "factory": "0x57592d44eb60011500961ef177bff8d8691d5a8b",
+    "tokens": [
+      "0x4200000000000000000000000000000000000006",
+      "0x50c5725949a6f0c72e6c4a641f24049a917db0cb"
+    ],
+    "match": "match",
+    "runtime_match": true,
+    "runtime_hash": "0x31e4c4eb1ac0258c8230cbc58d3752021f3f49c34e34eed42e81bfc90008c7a9",
+    "source_url": "https://sourcify.dev/server/v2/contract/8453/0xae45f7eb428eb6403f2567c3a3ec47e9230bc823",
+    "contract": "SharkswapPair.sol:SharkswapPair",
+    "fee_fraction": [
+      1000,
+      3
+    ],
+    "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "reserves": [
+      "15399214036140166035",
+      "26004737222166146964573"
+    ],
+    "pips": 3000,
+    "cases": [
+      {
+        "in": "1000000000000000",
+        "bought": "1683530371736892524",
+        "returned": "994009386690095",
+        "buy_return": "1683530371736892524",
+        "sell_return": "994009386690095",
+        "observed_balances": [
+          "1683530371736892524",
+          "994009386690095",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      },
+      {
+        "in": "10000000000000000",
+        "bought": "16825500266394386100",
+        "returned": "9940128646559507",
+        "buy_return": "16825500266394386100",
+        "sell_return": "9940128646559507",
+        "observed_balances": [
+          "16825500266394386100",
+          "9940128646559507",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      }
+    ],
+    "factory_proof": {
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x57592d44eb60011500961ef177bff8d8691d5a8b",
+      "verified": "match",
+      "runtime_hash": "0x10c669c9b86c3adf83d8a6b872ed3feec9a6d78856076bf539024d923bab7179",
+      "contract": "SharkswapFactory.sol:SharkswapFactory",
+      "map_writers": [
+        "createPair",
+        "createPair"
+      ],
+      "embedded_pair": true
+    }
+  },
+  {
+    "network": "base",
+    "dex": "rubicon-base",
+    "pool": "0xa883c11a3742f74f0b29750764146e8675306e24",
+    "factory": "0xa5ca8ba2e3017e9af3bd9eda69e9e8c263abf6cd",
+    "tokens": [
+      "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "0xb3836098d1e94ec651d74d053d4a0813316b2a2f"
+    ],
+    "match": "exact_match",
+    "runtime_match": true,
+    "runtime_hash": "0xab65c61d2206cc4a10dc22a391a344b66b9499f514a7cd1bfcff0e176e5b5bdf",
+    "source_url": "https://sourcify.dev/server/v2/contract/8453/0xa883c11a3742f74f0b29750764146e8675306e24",
+    "contract": "contracts/core/AquilaPair.sol:AquilaPair",
+    "fee_fraction": [
+      1000,
+      3
+    ],
+    "reason": "у выборочной пары нет WETH для измеряемого пополнения"
+  },
+  {
+    "network": "ethereum",
+    "dex": "pepedex",
+    "pool": "0x54c4c936911dcd4755f6007987c50b4cdb448174",
+    "factory": "0x460b2005b3318982feada99f7ebf13e1d6f6effe",
+    "tokens": [
+      "0xa9e8acf069c58aec8825542845fd754e41a9489a",
+      "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+    ],
+    "match": "match",
+    "runtime_match": true,
+    "runtime_hash": "0x2d77086e6d9382618bb332dd3fcd18467527e647cd8eca69bfd9889820dfe436",
+    "source_url": "https://sourcify.dev/server/v2/contract/1/0x54c4c936911dcd4755f6007987c50b4cdb448174",
+    "contract": "PepFactory&Router/PepeDexFactoryETHV1.sol:PepeDexPair",
+    "fee_fraction": [
+      10000,
+      25
+    ],
+    "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "reserves": [
+      "20423978878815565620427",
+      "795597204578015438"
+    ],
+    "pips": 2500,
+    "cases": [
+      {
+        "in": "79559720457801",
+        "bought": "2037088693564655672",
+        "returned": "79162458631564",
+        "buy_return": "2037088693564655672",
+        "sell_return": "79162458631564",
+        "observed_balances": [
+          "2037088693564655672",
+          "79162458631564",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      },
+      {
+        "in": "1591194409156030",
+        "bought": "40664711763269308754",
+        "returned": "1583264163363562",
+        "buy_return": "40664711763269308754",
+        "sell_return": "1583264163363562",
+        "observed_balances": [
+          "40664711763269308754",
+          "1583264163363562",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      }
+    ],
+    "factory_proof": {
+      "source": "https://sourcify.dev/server/v2/contract/1/0x460b2005b3318982feada99f7ebf13e1d6f6effe",
+      "verified": "exact_match",
+      "runtime_hash": "0x8f29cb5ba18e420f966475dbd38e36bd1c5d9ff0d88c59ac9213ff7373c38dbd",
+      "contract": "PepFactory&Router/PepeDexFactory.sol:PepeDexFactory",
+      "map_writers": [
+        "createPair",
+        "createPair"
+      ],
+      "embedded_pair": true
+    }
+  },
+  {
+    "network": "ethereum",
+    "dex": "convergence-finance-v2",
+    "pool": "0x3af7a58d54cf014675af2b7ebc222c3166bf5692",
+    "factory": "0x4eef5746ed22a2fd368629c1852365bf5dcb79f1",
+    "tokens": [
+      "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "0xdac17f958d2ee523a2206206994597c13d831ec7"
+    ],
+    "match": "exact_match",
+    "runtime_match": true,
+    "runtime_hash": "0x1605cc130942dd7f9bc0f97be5a3bdb6c1edb000894d3c6a854246ca2412d64c",
+    "source_url": "https://sourcify.dev/server/v2/contract/1/0x3af7a58d54cf014675af2b7ebc222c3166bf5692",
+    "contract": "contracts/swap/SwapPair.sol:SwapPair",
+    "fee_fraction": [
+      1000,
+      3
+    ],
+    "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "reserves": [
+      "94899797402204079795",
+      "160133620068"
+    ],
+    "pips": 3000,
+    "cases": [
+      {
+        "in": "1000000000000000",
+        "bought": "1682316",
+        "returned": "994008475184382",
+        "buy_return": "1682316",
+        "sell_return": "994008475184382",
+        "observed_balances": [
+          "1682316",
+          "994008475184382",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      },
+      {
+        "in": "10000000000000000",
+        "bought": "16821579",
+        "returned": "9940096013934798",
+        "buy_return": "16821579",
+        "sell_return": "9940096013934798",
+        "observed_balances": [
+          "16821579",
+          "9940096013934798",
+          "0",
+          "0",
+          "0"
+        ],
+        "strict_buy": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "strict_sell": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        }
+      }
+    ],
+    "factory_proof": {
+      "source": "https://sourcify.dev/server/v2/contract/1/0x4eef5746ed22a2fd368629c1852365bf5dcb79f1",
+      "verified": "exact_match",
+      "runtime_hash": "0xc95712339f70057223de6f057bf3cac4251268616a7f16ba2b2627fa2bb92e2a",
+      "contract": "contracts/swap/SwapFactory.sol:SwapFactory",
+      "map_writers": [
+        "createPair",
+        "createPair"
+      ],
+      "embedded_pair": true
+    }
+  }
+]

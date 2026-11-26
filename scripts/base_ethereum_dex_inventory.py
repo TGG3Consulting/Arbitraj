@@ -48,7 +48,7 @@ def tables(network, snapshots, profiles):
     matched = set(configured).intersection(gt["rows"])
     out[2] += (f" Из {len(gt['rows'])} строк GeckoTerminal адресные профили заданы для {len(matched)}, "
                f"остаются открытыми {len(gt['rows']) - len(matched)}. Ещё {len(configured) - len(matched)} "
-               "внутренних ключей обозначают отдельные выпуски фабрик.")
+               "внутренних ключей обозначают отдельные фабрики и семейства.")
     for id, row in configured.items():
         fields = []
         for k, v in row["settings"].items():
@@ -83,6 +83,28 @@ def tables(network, snapshots, profiles):
                     "По утверждённому BIP-928 пауза Vault V3 запланирована на 30.11.2026. "
                     f"[Вызовы и ответы](../{market_file}) · "
                     "[Решение Balancer](https://forum.balancer.fi/t/bip-928-orderly-winddown-of-balancer-and-distribution-of-the-treasury/7107/23)."])
+    curve_file = f"tests/data/first_run_dex_2026-11-26/curve_{network}.json"
+    if Path(curve_file).exists():
+        groups = read(Path(curve_file))["families"]
+        quoted = {k: sum(p["status"] == "quoted" for p in f["pools"]) for k, f in groups.items()}
+        out.extend(["", f"Curve · по двум направлениям и двум размерам записаны get_dy для "
+                    f"{quoted['stable-ng']} пулов StableSwap-NG, {quoted['twocrypto']} Twocrypto-NG "
+                    f"и {quoted['tricrypto']} Tricrypto-NG. Фабрика подтвердила монеты, каждый пул сообщил "
+                    "версию. Для Twocrypto две версии математики совпадают по байткоду с ранее проверенными. "
+                    + ("Tricrypto использует тот же байткод математики, что проверялся на Arbitrum. "
+                       if base else "У Tricrypto математика скомпилирована Vyper 0.3.9. Текст исходника "
+                       "в Sourcify совпал с проверенной версией после трёх директив компилятора в эталоне. ")
+                    + "Исторические пулы Curve и метапулы StableSwap-NG требуют отдельного профиля. "
+                    + f"[Пулы, вызовы, квоты и сверка кода](../{curve_file})."])
+    dodo_file = f"tests/data/first_run_dex_2026-11-26/dodo_{network}.json"
+    if Path(dodo_file).exists():
+        data_dodo = read(Path(dodo_file))
+        counts = [sum(p["status"] == "quoted" for p in data_dodo["families"][kind]["pools"]) for kind in ("DVM","DPP","DSP")]
+        out.extend(["", f"DODO V2 · getDODOPoolBidirection и токены пула подтвердили {counts[0]} пула DVM, "
+                    f"{counts[1]} DPP и {counts[2]} DSP в выборке с положительными котировками. Каждый из них "
+                    "дал выход querySellBase и querySellQuote на двух объёмах. Комиссии LP и MT приведены "
+                    "для нулевого адреса, который использует загрузчик PMM. Фабрики позволяют находить пулы "
+                    f"при включении поиска по фабрике. [Реестры, состояние PMM и котировки](../{dodo_file})."])
     if base:
         out.extend(["", "Aerodrome Slipstream · 3 разных пула WETH/USDC, по одному у каждой фабрики. "
                     "16 операций ArbExecutor.execute в eth_simulateV1, два направления и два размера у каждой фабрики, "

@@ -140,7 +140,18 @@ fn verdict_v4_arbitrum_by_rule() {
         deploy_gate::refusal_at(ARB).is_none(),
         "запись v5 × 42161 принята"
     );
-    for chain in [Some(1), None] {
+    for chain in [Some(1), Some(8453)] {
+        assert!(
+            deploy_gate::refusal_at(chain).is_none(),
+            "запись v5 × {chain:?} принята"
+        );
+        assert!(
+            !v4(chain, ExecKind::UniV4),
+            "приёмка v5 не переносится на v4"
+        );
+        assert!(!v4(chain, ExecKind::BalancerV3));
+    }
+    for chain in [Some(11155111), None] {
         let why = deploy_gate::refusal_at(chain)
             .expect("записи v5 для этой сети нет — развёртывание закрыто");
         assert!(why.contains("v5"), "{why}");

@@ -1,6 +1,7 @@
-use alloy_primitives::{I256, U256};
+use alloy_primitives::U256;
+use arb::venues::bsc_dex::{math::swap_cl::{self,ClState,Version,After},pools::ticks::{TickMap,TickData}};
 use arb::core::{convert::Rates, costs_source::Source, size::Fail, types::{Cost, Quote}, uncapped_replay_plan::dex_quote};
-use arb::venues::bsc_dex::{math::{swap_step::{step_v3, step_v4}, swap_dodo::{PmmState,RState,sell_base_token,sell_quote_token},v2},num::{to_decimal,to_units},pools::load_dodo::net_after_fees,quote::pool_quote::swap_fee};
+use arb::venues::bsc_dex::{math::{ swap_dodo::{PmmState,RState,sell_base_token,sell_quote_token},v2},num::{to_decimal,to_units},pools::load_dodo::net_after_fees,quote::pool_quote::swap_fee};
 fn uint(x:&Value)->Option<U256>{
     let string=x.as_str().map(str::to_owned).unwrap_or_else(||x.to_string());
     let (n,base)=string.strip_prefix("0x").map_or((string.as_str(),10),|hex|(hex,16));
@@ -8,7 +9,7 @@ fn uint(x:&Value)->Option<U256>{
 }
 enum Hop {
     Pair {res_in:U256,res_out:U256,fee:u32},
-    Tick {id:String,v4:bool,sqrt:U256,boundary:U256,liq:u128,fee:u32},
+    Tick {id:String,v4:bool,zin:bool,sqrt:U256,tick:i32,liq:u128,fee:u32,map:TickMap},
     Pmm {state:PmmState,base_input:bool,lp:U256,mt:U256},
 }
 impl Hop {
@@ -18,8 +19,12 @@ impl Hop {
             "v2"=>Self::Pair{res_in:uint(&h["r_in"])?,res_out:uint(&h["r_out"])?,fee:fee(&h["fee"])?},
             "v3"|"cl"=>{
                 let v4=h["k"]=="cl";let raw_fee=fee(&h["fee"])?;
-                Self::Tick{id:h["pool_id"].as_str()?.into(),v4,sqrt:uint(&h["sqrt"])?,boundary:uint(&h["boundary"])?,
-                    liq:u128::try_from(uint(&h["liq"])?).ok()?,
+                let mut ticks=std::collections::BTreeMap::new();
+                for r in h["ticks"].as_array()? {
+                    ticks.insert(r[0].as_i64()? as i32,TickData{gross:r[1].as_str()?.parse().ok()?,net:r[2].as_str()?.parse().ok()?});
+                }
+                Self::Tick{id:h["pool_id"].as_str()?.into(),v4,zin:h["zin"].as_bool()?,sqrt:uint(&h["sqrt"])?,tick:h["tick"].as_i64()? as i32,
+                    liq:u128::try_from(uint(&h["liq"])?).ok()?,map:TickMap{spacing:h["spacing"].as_i64()? as i32,ticks:ticks.into(),words:(h["lo"].as_i64()? as i16,h["hi"].as_i64()? as i16)},
                     fee:if v4{swap_fee(fee(&h["protocol"])?,raw_fee,h["zin"].as_bool()?)}else{raw_fee}}
             }
             "pmm"=>{
@@ -30,27 +35,25 @@ impl Hop {
             _=>return None,
         })
     }
-    fn result(&self, amount:U256,exact_in:bool,after:&mut std::collections::HashMap<String,U256>)->Result<U256,&'static str>{
+    fn result(&self, amount:U256,exact_in:bool,after:&mut std::collections::HashMap<String,After>)->Result<U256,&'static str>{
         match self {
             Self::Pair{res_in,res_out,fee}=>{
                 let keep=1_000_000u32.checked_sub(*fee).ok_or("invalid V2 fee")?;
                 let scale=(U256::from(keep),U256::from(1_000_000u32));
                 (if exact_in{v2::amount_out}else{v2::amount_in})(amount,*res_in,*res_out,scale).ok_or("V2 reserve exhausted")
             }
-            Self::Tick{id,v4,sqrt,boundary,liq,fee}=>{
-                let adjusted=after.get(id).copied().unwrap_or(*sqrt);let sqrt=&adjusted;
-                let positive=I256::try_from(amount).map_err(|_|"signed amount overflow")?;
-                let signed=if exact_in != *v4{positive}else{-positive};
-                let (next,input,output,charge)=(if *v4{step_v4}else{step_v3})(*sqrt,*boundary,*liq,signed,*fee).ok_or("invalid or missing tick state")?;
-                if next<=*sqrt.min(boundary) || next>=*sqrt.max(boundary){return Err("next initialized tick and liquidity are not recorded")}
-                let spent=input.checked_add(charge).ok_or("fee overflow")?;
-                let advanced=if exact_in {next} else {
-                    let sent=I256::try_from(spent).map_err(|_|"shared pool advance overflow")?;
-                    let (post,_,_,_)=(if *v4{step_v4}else{step_v3})(*sqrt,*boundary,*liq,if *v4{-sent}else{sent},*fee).ok_or("shared pool advance failed")?;
+            Self::Tick{id,v4,zin,sqrt,tick,liq,fee,map}=>{
+                let current=after.get(id).copied().unwrap_or(After{sqrt_price:*sqrt,tick:*tick,liquidity:*liq});
+                let state=ClState{sqrt_price:current.sqrt_price,tick:current.tick,liquidity:current.liquidity,fee:*fee,ticks:map,version:if *v4{Version::V4}else{Version::V3}};
+                let (swap,post)=swap_cl::swap_final(&state,*zin,exact_in,amount)?;
+                if !swap.complete {return Err("outside archive tick words")}
+                let advanced=if exact_in {post} else {
+                    let (forward,post)=swap_cl::swap_final(&state,*zin,true,swap.amount_in)?;
+                    if !forward.complete{return Err("shared pool forward step outside archive words")}
                     post
                 };
                 after.insert(id.clone(),advanced);
-                if exact_in && spent==amount{Ok(output)}else if !exact_in && output==amount{Ok(spent)}else{Err("incomplete pool fill")}
+                if exact_in && swap.amount_in==amount {Ok(swap.amount_out)}else if !exact_in && swap.amount_out==amount {Ok(swap.amount_in)}else{Err("incomplete pool fill")}
             }
             Self::Pmm{state,base_input,lp,mt}=>{
                 if !exact_in{return Err("native DODO exact-output not supported")}

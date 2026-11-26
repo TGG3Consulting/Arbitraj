@@ -175,7 +175,7 @@ async fn firm(p: &Parts, mut q: Quote, mut t: Ticket) -> Option<(Quote, Ticket)>
     }
     let fees = exec::tx_fee::price(&env, &channels, None).await.ok()?;
     let gas =
-        send::tx::with_margin(ctx, used.into(), ctx.dec("send.gas_limit_margin_pct").ok()?).ok()?;
+        send::tx::with_margin(ctx, alloy_primitives::U64::from(used), ctx.dec("send.gas_limit_margin_pct").ok()?).ok()?;
     let l1 = Oracle::read(ctx)
         .ok()?
         .planned(ctx, h.number.to(), gas)

@@ -404,6 +404,7 @@ mod tests {
     #[test]
     fn every_kind_is_decided() {
         let none = [
+            "solidly_v3_module",
             "solidly_v3", // отдельный модуль исполнения, без шага в ArbExecutor V5
             "kyber_elastic",
             "kyber_elastic_v1",

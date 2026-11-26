@@ -189,27 +189,22 @@ pub async fn build(
         let path = fork_swap::token_path(ctx, leg)?;
         let amount = fork_swap::amount_in(ctx, leg)?;
         let min = fork_swap::min_out(ctx, leg)?;
-        let module_call =
-            if leg.iter().any(|s| {
-                s.entry.family.variant == super::super::pools::family_variant::Variant::SolidlyCl
-            }) {
-                let [step] = leg else {
-                    return Err(ctx.err(
-                        ErrorCode::NoRoute,
-                        "Solidly V3: модуль исполняет один конкретный пул за вызов",
-                    ));
-                };
-                super::super::pools::solidly_v3::verify_executor(ctx, router, "latest").await?;
-                let pool =
-                    step.entry.pool.reference.own_contract().ok_or_else(|| {
-                        ctx.err(ErrorCode::NoRoute, "Solidly V3: нет адреса пула")
-                    })?;
-                Some(super::super::pools::solidly_v3::execution_data(
-                    pool, path[0], path[1], amount, min, deadline,
-                ))
-            } else {
-                None
+        let module_call = if leg.iter().any(|s| s.entry.family.direct_module()) {
+            let [step] = leg else {
+                return Err(ctx.err(
+                    ErrorCode::NoRoute,
+                    "Прямой модуль исполняет один конкретный рынок за вызов",
+                ));
             };
+            super::super::pools::direct_module::verify(ctx, step.entry.family, router, "latest")
+                .await?;
+            let pool = super::super::pools::direct_module::market(ctx, &step.entry)?;
+            Some(super::super::pools::solidly_v3::execution_data(
+                pool, path[0], path[1], amount, min, deadline,
+            ))
+        } else {
+            None
+        };
         forks.push(ForkLeg {
             router,
             path,

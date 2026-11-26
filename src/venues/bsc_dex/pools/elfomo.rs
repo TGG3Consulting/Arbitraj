@@ -6,24 +6,17 @@ use super::super::{ctx::Ctx, node::rpc};
 use super::{discover::Found, verify::Candidate, verify_woo};
 use crate::core::types::PoolRef;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
-use alloy::sol;
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, B256, Bytes, address, b256, keccak256};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+mod abi;
 mod market;
+pub use abi::IElfomo;
 pub use market::{load, quote, within_capacity};
 
-sol! {
-    interface IElfomo {
-        struct TokenPair { address tokenA; address tokenB; }
-        function getSupportedPairs() external view returns (TokenPair[]);
-        function getAmountOut(address fromToken,address toToken,uint256 fromAmount) external view returns (uint256);
-        event ElfomoTrade(uint256 indexed quoteId,uint256 indexed partnerId,address executor,address receiver,address fromToken,address toToken,uint256 fromAmount,uint256 toAmount);
-    }
-}
-const ROUTER: Address = address!("f0f0f0f0fb0d738452efd03a28e8be14c76d5f73");
+pub(super) const ROUTER: Address = address!("f0f0f0f0fb0d738452efd03a28e8be14c76d5f73");
 const PRICING: Address = address!("ffffffbb2d432b8acb4c57d556c0c721a431d038");
 const VAULT: Address = address!("bb1b19f138db3925883a96ff7a304277460e0c99");
 const USDC: Address = address!("833589fcd6edb6e08f4c7c32d4f71b54bda02913");
@@ -43,7 +36,7 @@ pub fn listed(raw: &[u8], coin: Address, counter: Address) -> Result<bool, Strin
         }))
 }
 
-async fn block(ctx: &Ctx, tag: &str) -> GatewayResult<Value> {
+pub(super) async fn block(ctx: &Ctx, tag: &str) -> GatewayResult<Value> {
     #[derive(Deserialize)]
     struct Header {
         hash: B256,
@@ -53,7 +46,12 @@ async fn block(ctx: &Ctx, tag: &str) -> GatewayResult<Value> {
 }
 
 /// Проверяет фиксированные ссылки из конструктора, код роутера и текущую реализацию pricing.
-async fn verify_at(ctx: &Ctx, id: &str, router: Address, tag: &Value) -> GatewayResult<()> {
+pub(super) async fn verify_at(
+    ctx: &Ctx,
+    id: &str,
+    router: Address,
+    tag: &Value,
+) -> GatewayResult<()> {
     let wrong = || {
         ctx.err(
             ErrorCode::NotApplicable,

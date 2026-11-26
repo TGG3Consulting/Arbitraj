@@ -435,7 +435,10 @@ fn found(
     r: &Read,
     key: Option<u32>,
 ) -> Result<Found, String> {
-    if c.family.variant == Variant::V2Create2 {
+    if matches!(
+        c.family.variant,
+        Variant::V2Create2 | Variant::V2Create2LiveFee
+    ) {
         let hashes = super::verify_algebra_dir::hashes(ctx, c)?;
         if !hashes
             .into_iter()
@@ -461,11 +464,22 @@ fn found(
     if let Some(k) = key {
         super::registry_key::remember(ctx.place.id, pool, k);
     }
+    let (token0, token1) = if c.family.variant == Variant::RingFew {
+        if !super::ring::check_pool(pool, r.token0, r.token1) {
+            return Err("Ring: адрес не совпал с CREATE2 пары".into());
+        }
+        (
+            super::ring::underlying(r.token0).ok_or("Ring: неизвестен token0")?,
+            super::ring::underlying(r.token1).ok_or("Ring: неизвестен token1")?,
+        )
+    } else {
+        (r.token0, r.token1)
+    };
     Ok(Found {
         family: c.family,
         reference: PoolRef::Contract(pool),
-        token0: r.token0,
-        token1: r.token1,
+        token0,
+        token1,
         coin: c.coin,
         fee_pips,
         tick_spacing: r.spacing,

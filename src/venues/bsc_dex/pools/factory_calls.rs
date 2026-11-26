@@ -233,6 +233,14 @@ pub fn plan(
                         qs.clear();
                         qs.push(Q::Elfomo(factory, a, b));
                     }
+                    let (a, b) = if f.variant == super::family_variant::Variant::RingFew {
+                        let Some([x, y]) = super::ring::path(a, b) else {
+                            continue;
+                        };
+                        (x, y)
+                    } else {
+                        (a, b)
+                    };
                     for &q in &qs {
                         out.calls.push((factory, encode_q(q, a, b)));
                         out.asks.push(Ask {

@@ -75,6 +75,8 @@ pub enum Format {
     PancakeV3,
     /// Uniswap Universal Router 2.0 (без minHopPriceX36).
     Uniswap20,
+    /// Ring Universal Router с командой FEW_V2_SWAP_EXACT_IN.
+    RingFew,
     /// Uniswap Universal Router 2.1.1 и 2.1.2 (с minHopPriceX36).
     Uniswap211,
 }
@@ -84,6 +86,7 @@ pub fn format(ctx: &Ctx, e: &Entry) -> GatewayResult<Format> {
     match ctx.dex_text("dex.universal_router_version", e.family.id)?.trim() {
         "pancakeswap_infinity" => Ok(Format::Pancake),
         "pancakeswap_v3" => Ok(Format::PancakeV3),
+        "ring_few" if e.family.variant == super::super::pools::family_variant::Variant::RingFew => Ok(Format::RingFew),
         "2.0" => Ok(Format::Uniswap20),
         "2.1.1" | "2.1.2" => Ok(Format::Uniswap211),
         v => Err(ctx.not_set(

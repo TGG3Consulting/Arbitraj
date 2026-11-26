@@ -123,6 +123,16 @@ def tables(network, snapshots, profiles):
                     "На двух размерах в обоих направлениях пул отдал расчётный выход; запрос ещё одной минимальной "
                     "единицы отвергнут инвариантом самого пула. Исполнитель отдельно подтвердил движения кошелька. "
                     f"[Блоки, пулы, объёмы и причины отката](../{v2_probes.as_posix()})."])
+    variable_path = Path("tests/data/base_ethereum_v2_variable_fees.json")
+    variable = [r for r in read(variable_path) if r["network"] == network]
+    if variable:
+        out.extend(["", "Изменяемая комиссия V2 читается на блоке резервов, в том числе перед обменом. "
+                    "На архивном блоке контракты вернули " +
+                    ", ".join(f"{r['dex']} {r['fee_fraction'][1]}/{r['fee_fraction'][0]} "
+                              f"({r['fee_getter']})" for r in variable) +
+                    ". Для каждой фабрики проверены два размера в обоих направлениях, "
+                    "включая прямой отказ пула при увеличении максимального выхода на единицу. "
+                    f"[Вызовы и движения средств](../{variable_path.as_posix()})."])
     curve_file = f"tests/data/first_run_dex_2026-11-26/curve_{network}.json"
     if Path(curve_file).exists():
         groups = read(Path(curve_file))["families"]
@@ -262,7 +272,7 @@ def tables(network, snapshots, profiles):
                     "передаёт фактический адрес кошелька с partnerId=0, платёжная ликвидность ограничена остатком vault "
                     "и его allowance. Выход, достигший всего доступного остатка, отсекается. Размеры dex.pmm_ladder_usd "
                     "задаёт владелец в USDT, dex.pmm_ladder_counter переводит эти объёмы в USDC по курсу реестра. "
-                    "Торговый путь требует доказанного механизма срока заявки: у нативного swap отсутствует deadline. "
+                    "Нативный swap сравнивает limitAmount с котировкой до transferFrom. Для торгового допуска по решению 40 адаптер должен за один вызов проверить срок заявки и прирост баланса получателя, а котировка должна учитывать адрес этого адаптера. "
                     f"[Сырые результаты](../{elfomo.as_posix()}) · [Спецификация]({el['source']})."])
     aero_basic = Path("tests/data/first_run_dex_2026-11-26/aero_basic_base.json")
     if base and aero_basic.exists():

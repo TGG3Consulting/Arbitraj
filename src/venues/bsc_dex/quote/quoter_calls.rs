@@ -338,9 +338,17 @@ pub fn request(
     }
     let data = match (e.pool.kind, &e.key) {
         (PoolKind::V2, _) => {
+            let path = if e.family.variant == super::super::pools::family_variant::Variant::RingFew
+            {
+                super::super::pools::ring::path(token_in, token_out)
+                    .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Ring: отсутствует путь Few"))?
+                    .to_vec()
+            } else {
+                vec![token_in, token_out]
+            };
             let c = IV2Router::getAmountsOutCall {
                 amountIn: amount,
-                path: vec![token_in, token_out],
+                path,
             };
             return Ok((
                 ctx.dex_addr("dex.router", e.family.id)?,

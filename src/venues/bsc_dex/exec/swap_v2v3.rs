@@ -40,6 +40,18 @@ pub fn command(
     let min_hop = f == Format::Uniswap211;
     let empty: Vec<U256> = Vec::new();
     match e.pool.kind {
+        PoolKind::V2
+            if e.family.variant == super::super::pools::family_variant::Variant::RingFew =>
+        {
+            if f != Format::RingFew || !super::super::pools::ring::profile(ctx, e.family) {
+                return Err(ctx.err(
+                    crate::gateway::errors::ErrorCode::NoRoute,
+                    "Ring: изменён профиль роутера",
+                ));
+            }
+            super::super::pools::ring::exact_input(tin, tout, to, amount_in, min_out, payer_user)
+                .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Ring: нет проверенной пары underlying"))
+        }
         PoolKind::V2 => {
             let path = vec![tin, tout];
             let input = if min_hop {

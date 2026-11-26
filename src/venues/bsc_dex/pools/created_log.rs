@@ -492,6 +492,14 @@ pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candid
             (e.token0, e.token1, e.pool)
         }
     };
+    let (t0, t1) = if f.variant == super::family_variant::Variant::RingFew {
+        let a = super::ring::underlying(t0).ok_or("Ring: неизвестен underlying token0")?;
+        let b = super::ring::underlying(t1).ok_or("Ring: неизвестен underlying token1")?;
+        super::ring::path(a, b).ok_or("Ring: пара вне проверенного набора")?;
+        (a, b)
+    } else {
+        (t0, t1)
+    };
     let coin = if t0 == quote {
         t1
     } else if t1 == quote {

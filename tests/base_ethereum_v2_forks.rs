@@ -8,24 +8,32 @@ fn uint(value: &Value) -> U256 {
 }
 
 #[test]
-fn fixed_fee_profiles_match_the_executor_and_wallet_balances() {
-    let captures: Vec<Value> =
+fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
+    let mut captures: Vec<Value> =
         serde_json::from_str(include_str!("data/base_ethereum_v2_probes.json")).unwrap();
+    captures.extend(
+        serde_json::from_str::<Vec<Value>>(include_str!(
+            "data/base_ethereum_v2_variable_fees.json"
+        ))
+        .unwrap(),
+    );
     let profiles: Vec<Value> =
         serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
     let mut admitted = 0;
     let mut verified_boundaries = std::collections::BTreeSet::new();
     for profile in profiles.iter().filter(|p| {
-        p["source"]
-            .as_str()
-            .is_some_and(|s| s.contains("base_ethereum_v2_probes.json"))
+        p["source"].as_str().is_some_and(|s| {
+            s.contains("base_ethereum_v2_probes.json")
+                || s.contains("base_ethereum_v2_variable_fees.json")
+        })
     }) {
         let capture = captures
             .iter()
             .find(|row| row["dex"] == profile["id"] && row["network"] == profile["network"])
             .unwrap();
         assert_eq!(profile["settings"]["dex.factory"], capture["factory"]);
-        if profile["settings"]["dex.kind"] == "v2_fork_executor_create2" {
+        let live = profile["settings"]["dex.kind"] == "v2_fork_executor_create2_live_fee";
+        if live || profile["settings"]["dex.kind"] == "v2_fork_executor_create2" {
             use alloy_primitives::{Address, B256};
             use arb::venues::bsc_dex::pools::verify::v2_create2;
             let parse = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
@@ -48,12 +56,29 @@ fn fixed_fee_profiles_match_the_executor_and_wallet_balances() {
             assert_eq!(capture["factory_proof"]["embedded_pair"], true);
         }
         assert_eq!(capture["runtime_match"], true);
-        assert_eq!(profile["settings"]["dex.v2_fee_source"], "fixed");
-        let pct: Decimal = profile["settings"]["dex.v2_fee_pct"]
-            .as_str()
-            .unwrap()
-            .parse()
-            .unwrap();
+        let settings = &profile["settings"];
+        let pct: Decimal = if live {
+            use arb::venues::bsc_dex::pools::verify::v2_fee_pips;
+            assert_eq!(capture["fee_getter"], settings["dex.v2_fee_method"]);
+            let source = settings["dex.v2_fee_source"].as_str().unwrap();
+            assert_eq!(capture["fee_target"], capture[source]);
+            assert_eq!(
+                settings["dex.v2_fee_denominator"],
+                capture["fee_fraction"][0]
+            );
+            let denominator = capture["fee_fraction"][0].as_u64().unwrap();
+            let value = capture["fee_fraction"][1].as_u64().unwrap();
+            let pips = v2_fee_pips(U256::from(value), denominator).unwrap();
+            assert_eq!(capture["pips"], pips);
+            Decimal::new(i64::from(pips), 4)
+        } else {
+            assert_eq!(settings["dex.v2_fee_source"], "fixed");
+            settings["dex.v2_fee_pct"]
+                .as_str()
+                .unwrap()
+                .parse()
+                .unwrap()
+        };
         let fee = fee_ratio(pct).unwrap();
         let weth = match profile["chain_id"].as_u64().unwrap() {
             8453 => "0x4200000000000000000000000000000000000006",
@@ -92,7 +117,11 @@ fn fixed_fee_profiles_match_the_executor_and_wallet_balances() {
                 for (direction, expected) in [("buy", bought), ("sell", returned)] {
                     let observed = &trade["pair_boundary"][direction];
                     assert_eq!(uint(&observed["max"]), expected);
-                    assert!(observed["next_revert"].as_str().unwrap().ends_with(": K"));
+                    let rejection = observed["next_revert"].as_str().unwrap();
+                    match capture["invariant_error"].as_str() {
+                        Some(expected) => assert_eq!(rejection, expected),
+                        None => assert!(rejection.ends_with(": K")),
+                    }
                 }
             }
             for key in ["strict_buy", "strict_sell"] {
@@ -111,11 +140,16 @@ fn fixed_fee_profiles_match_the_executor_and_wallet_balances() {
         "saitaswap-ethereum",
         "sakeswap",
         "squadswap-base",
+        "degenbrains-base",
+        "defi_swap",
+        "fwx-base",
+        "shibaswap",
+        "torus",
     ] {
         assert!(
             verified_boundaries.contains(dex),
             "missing pair proof for {dex}"
         );
     }
-    assert!(admitted >= 20);
+    assert!(admitted >= 25);
 }

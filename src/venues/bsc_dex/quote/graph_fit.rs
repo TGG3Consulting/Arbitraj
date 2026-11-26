@@ -96,6 +96,14 @@ fn subsets(ctx: &Ctx, native: bool) -> Vec<(&'static str, Rule<'_>)> {
                 .all(|h| !h.entry.family.fork && smart_ok(ctx, h.entry.family))
         }),
     )];
+    if !native {
+        out.push((
+            "Прямой вызов модуля одного рынка",
+            Box::new(|leg: &[Leg]| {
+                matches!(leg, [hop] if hop.entry.family.tradable && hop.entry.family.direct_module())
+            }),
+        ));
+    }
     if !native || executor::native_capable(ctx) {
         out.push((
             "S2 — через исполнитель кошелька (одна транзакция)",
@@ -112,12 +120,7 @@ fn subsets(ctx: &Ctx, native: bool) -> Vec<(&'static str, Rule<'_>)> {
         out.push((
             "S3 — бандл свопов, каждая доля внутри одного роутера",
             Box::new(move |l: &[Leg]| {
-                if l.len() != 1
-                    && l.iter().any(|h| {
-                        h.entry.family.variant
-                            == super::super::pools::family_variant::Variant::SolidlyCl
-                    })
-                {
+                if l.len() != 1 && l.iter().any(|h| h.entry.family.direct_module()) {
                     return false;
                 }
                 let r: Vec<_> = l

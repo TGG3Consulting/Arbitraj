@@ -1,9 +1,9 @@
 //! Файл: venues/bsc_dex/exec/solidly_direct.rs.
-//! Что делает: строит один вызов Solidly V3 и сохраняет резерв перед первой публикацией подписанного обмена.
+//! Что делает: строит один вызов проверенного модуля и сохраняет резерв перед первой публикацией подписанного обмена.
 //! Кто вызывает: plan, swap_send, txs и bundle_send. От чего зависит: nonce, queue_store и ABI проверенного модуля.
 //! Настройки: dex.router, dex.deadline_s, dex.approve_unlimited и кошелёк площадки.
 use super::super::ctx::Ctx;
-use super::super::pools::solidly_v3;
+use super::super::pools::direct_module;
 use super::super::wallet::{approve, nonce::Slot, queue_store};
 use super::{chain::Step, plan::Plan};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -20,22 +20,20 @@ pub(super) async fn plan(
     all: bool,
 ) -> GatewayResult<Plan> {
     let [step] = steps else {
-        return Err(ctx.err(ErrorCode::NoRoute, "Solidly V3 исполняет один пул за вызов"));
+        return Err(ctx.err(
+            ErrorCode::NoRoute,
+            "Прямой модуль исполняет один рынок за вызов",
+        ));
     };
     if !step.entry.family.tradable || !step.from_wallet || !step.to_wallet {
         return Err(ctx.err(
             ErrorCode::NoRoute,
-            "Модулю Solidly V3 требуется полный шаг ERC-20 кошелька",
+            "Прямому модулю требуется полный шаг ERC-20 кошелька",
         ));
     }
-    let pool = step
-        .entry
-        .pool
-        .reference
-        .own_contract()
-        .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Нет адреса пула Solidly V3"))?;
+    let pool = direct_module::market(ctx, &step.entry)?;
     let router = ctx.dex_addr("dex.router", step.entry.family.id)?;
-    solidly_v3::verify_executor(ctx, router, "latest").await?;
+    direct_module::verify(ctx, step.entry.family, router, "latest").await?;
     let order = &step.order;
     let approvals = if all {
         approve::fork_all(ctx, order.token_in, router, order.amount_in)?
@@ -51,7 +49,7 @@ pub(super) async fn plan(
         order.min_out,
         deadline,
     )?;
-    plan.solidly = Some((pool, order.token_in, order.amount_in));
+    plan.direct_market = Some((pool, order.token_in, order.amount_in));
     Ok(plan)
 }
 
@@ -65,7 +63,7 @@ pub async fn dispatch<T>(
 ) -> GatewayResult<T> {
     let hold = slot.hold();
     let state = hold.halt(
-        "Подписан обмен Solidly V3, ожидается исход передачи".into(),
+        "Подписан обмен через прямой модуль, ожидается исход передачи".into(),
         nonce,
         hash,
     );

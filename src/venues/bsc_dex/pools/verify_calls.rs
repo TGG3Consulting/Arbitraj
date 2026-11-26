@@ -82,6 +82,10 @@ pub fn field_calls(ctx: &Ctx, f: &Family) -> Result<Vec<Bytes>, String> {
 
 /// Метод своей комиссии пары V2: Some(сигнатура) при dex.v2_fee_source = pool, иначе None. Ошибка — не задано.
 pub fn fee_method(ctx: &Ctx, f: &Family) -> Result<Option<String>, String> {
+    // Эта реализация связывает ставку с блоком резервов в load, включая повтор после отказа.
+    if f.variant == super::family_variant::Variant::V2Create2LiveFee {
+        return Ok(None);
+    }
     let source = ctx
         .dex_text("dex.v2_fee_source", f.id)
         .map_err(|e| e.message)?;
@@ -92,6 +96,9 @@ pub fn fee_method(ctx: &Ctx, f: &Family) -> Result<Option<String>, String> {
                 .trim()
                 .to_string(),
         )),
+        "factory" => {
+            Err("Чтение комиссии фабрики требует v2_fork_executor_create2_live_fee".into())
+        }
         _ => Ok(None),
     }
 }

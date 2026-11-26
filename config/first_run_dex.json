@@ -1995,5 +1995,101 @@
       "dex.v2_fee_source": "fixed",
       "dex.v2_fee_pct": "0.2"
     }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "defi_swap",
+    "source": "https://sourcify.dev/server/v2/contract/1/0x3aa370aacf4cb08c7e1e7aa8e8ff9418d73c7e0f · tests/data/base_ethereum_v2_variable_fees.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2_live_fee",
+      "dex.factory": "0x9deb29c9a4c7a88a3c0257393b7f3335338d9a9d",
+      "dex.pool_code_hashes": [
+        "0x69d637e77615df9f235f642acebbdad8963ef35c5523142078c9b8f9d0ceba7e"
+      ],
+      "dex.v2_fee_source": "factory",
+      "dex.v2_fee_method": "totalFeeBasisPoint()",
+      "dex.v2_fee_denominator": 10000
+    }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "degenbrains-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xdcd326eca7a941719d27bb95858456b5695d3f43 · tests/data/base_ethereum_v2_variable_fees.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2_live_fee",
+      "dex.factory": "0x945cdb0e9733c5da1ef24582f101d354fa20abd2",
+      "dex.pool_code_hashes": [
+        "0xcb7955fc6b6bb9724a74a91322fc48721e446070bae8115c090d87123aa11609"
+      ],
+      "dex.v2_fee_source": "pool",
+      "dex.v2_fee_method": "swapFee()",
+      "dex.v2_fee_denominator": 10000
+    }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "fwx-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xf85a8d1cef91ecc4c12d3968bdbe78966f9fe157 · tests/data/base_ethereum_v2_variable_fees.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2_live_fee",
+      "dex.factory": "0x3512da8f30d9ae6528e8e0787663c14fe263fbea",
+      "dex.pool_code_hashes": [
+        "0x981e8ec9ea119974c9b3f8ff4087062204a004e9d9840a8d1db58d96b0852553"
+      ],
+      "dex.v2_fee_source": "pool",
+      "dex.v2_fee_method": "fee()",
+      "dex.v2_fee_denominator": 10000
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "shibaswap",
+    "source": "https://sourcify.dev/server/v2/contract/1/0xcf6daab95c476106eca715d48de4b13287ffdeaa · tests/data/base_ethereum_v2_variable_fees.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2_live_fee",
+      "dex.factory": "0x115934131916c8b277dd010ee02de363c09d037c",
+      "dex.pool_code_hashes": [
+        "0x65d1a3b1e46c6e4f1be1ad5f99ef14dc488ae0549dc97db9b30afe2241ce1c7a"
+      ],
+      "dex.v2_fee_source": "pool",
+      "dex.v2_fee_method": "totalFee()",
+      "dex.v2_fee_denominator": 1000
+    }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "torus",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x675c406186ef55ac35bc5f1c0112a05517bd642a · tests/data/base_ethereum_v2_variable_fees.json",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2_live_fee",
+      "dex.factory": "0x259b3217a01878ea9d64b45ee48231e660863ee7",
+      "dex.pool_code_hashes": [
+        "0x584e5534dc0b62ac447da6e0ea626dd6352c04ddd6c979d400a62baa6e302fe8"
+      ],
+      "dex.v2_fee_source": "pool",
+      "dex.v2_fee_method": "swapFee()",
+      "dex.v2_fee_denominator": 10000
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "ring-exchange-ethereum",
+    "source": "https://ringprotocol.gitbook.io/ring/docs/deployments · https://sourcify.dev/server/v2/contract/1/0xEff87A51f5Abd015F1AFCD5737BBab450eA15A24 · scripts/record_ring_ethereum.py",
+    "settings": {
+      "dex.kind": "ring_few_v2",
+      "dex.universal_router": "0xeff87a51f5abd015f1afcd5737bbab450ea15a24",
+      "dex.universal_router_version": "ring_few",
+      "dex.permit2": "0x000000000022d473030f116ddee9f6b43ac78ba3",
+      "dex.factory": "0xeb2a625b704d73e82946d8d026e1f588eed06416",
+      "dex.router": "0x39d1d8fcc5e6eeaf567bce4e29b94fec956d3519",
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
   }
 ]

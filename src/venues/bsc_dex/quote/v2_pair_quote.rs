@@ -123,7 +123,6 @@ pub async fn out_at(
     block: &str,
 ) -> GatewayResult<U256> {
     let limit = ctx.dec("dex.quoter_max_diff_pct")?;
-    let (list, over, ratio) = calls(ctx, e, token_in, amount)?;
     let number = match block.strip_prefix("0x") {
         Some(h) => u64::from_str_radix(h, 16)
             .map_err(|_| ctx.err(ErrorCode::Internal, "номер блока не hex"))?,
@@ -131,7 +130,16 @@ pub async fn out_at(
             .await?
             .to::<u64>(),
     };
-    let r = simulate::run_with(ctx, &list, &[], &[over], number).await?;
+    let (r, ratio) =
+        if e.family.variant == super::super::pools::family_variant::Variant::V2Create2LiveFee {
+            current_rate_simulation(ctx, e, token_in, amount, number).await?
+        } else {
+            let (list, over, ratio) = calls(ctx, e, token_in, amount)?;
+            (
+                simulate::run_with(ctx, &list, &[], &[over], number).await?,
+                ratio,
+            )
+        };
     let t = e.family.title;
     let (code, why) = match judge(&r, token_in == e.pool.token0, amount, ratio, limit) {
         Sim::Ok { remote, .. } => return Ok(remote),
@@ -159,4 +167,60 @@ pub async fn out_at(
         ),
     };
     Err(ctx.err(code, format!("{t}: {why} (решение 280)")))
+}
+
+/// Fee и getReserves фиксируются внутри одного запуска EVM. При изменении ставки
+/// повторяем только этот пул, сохраняя канонический хеш и штатную проверку исполнения.
+async fn current_rate_simulation(
+    ctx: &Ctx,
+    e: &Entry,
+    token_in: Address,
+    amount: U256,
+    number: u64,
+) -> GatewayResult<(Vec<simulate::CallResult>, (U256, U256))> {
+    use super::super::pools::v2_live_fee::Rate;
+    #[derive(serde::Deserialize)]
+    struct Parent {
+        hash: B256,
+        number: U64,
+    }
+    let parent: Parent = rpc::call(
+        ctx,
+        "eth_getBlockByNumber",
+        json!([U64::from(number), false]),
+    )
+    .await?;
+    if parent.number != U64::from(number) {
+        return Err(ctx.err(ErrorCode::BadResponse, "Неверная высота блока V2"));
+    }
+    let rate = Rate::configured(ctx, e.family, pair(ctx, e)?)?;
+    let (to, input) = rate.call();
+    let mut fresh = e.clone();
+    for _ in 0..2 {
+        let (mut list, over, ratio) = calls(ctx, &fresh, token_in, amount)?;
+        list.insert(
+            0,
+            Call {
+                from: owner(),
+                to,
+                input: input.clone(),
+            },
+        );
+        let mut results =
+            simulate::run_anchored(ctx, &list, &[], &[over], number.into(), Some(parent.hash))
+                .await?;
+        let observed = results.remove(0);
+        if observed.status != U64::from(1) {
+            return Err(ctx.err(ErrorCode::BadResponse, "Вызов ставки V2 отклонён"));
+        }
+        let pips = rate.decode(&observed.return_data)?;
+        if fresh.pool.fee_pips == Some(pips) {
+            return Ok((results, ratio));
+        }
+        fresh.pool.fee_pips = Some(pips);
+    }
+    Err(ctx.err(
+        ErrorCode::BadResponse,
+        "Ставка V2 не воспроизвелась на одном каноническом блоке",
+    ))
 }

@@ -17,6 +17,8 @@ pub enum Variant {
     Base,
     /// Hydrex Integral Base: после Swap плагин может обменять собственные комиссии в том же пуле по отдельному тарифу.
     HydrexIntegral,
+    /// Ring Few V2 на Ethereum, отдельный путь underlying через проверенные fw wrappers.
+    RingFew,
     /// Algebra Integral с проверяемым beacon-прокси плагина QuickSwap V4.
     QuickswapIntegral,
     /// Lista StableSwap с проверенной реализацией EIP-1967 на каждом чтении состояния.
@@ -47,6 +49,8 @@ pub enum Variant {
     SolidlyCl,
     /// V2 с фиксированной реализацией пары: адрес сверяется по хешу байткода создания CREATE2.
     V2Create2,
+    /// Пара CREATE2 с изменяемой ставкой. Резервы и комиссия сверяются вместе.
+    V2Create2LiveFee,
     /// Curve StableSwap 2021 (dex.kind = curve_stableswap_plain, решение 472): протокол Proto::CurveStable (геттеры
     /// coins/balances/fee, get_dy и exchange с int128 — те же), но A — `A_precise()` (A·A_PRECISION, A_PRECISION = 100),
     /// несходимость D/y — откат (`raise`), у пула из двух монет D_P — одной строкой `D·D/x0·D/x1/4`. Исходники: 2pool
@@ -110,6 +114,7 @@ pub enum Variant {
 /// Вариант по значению dex.kind. Принимает: значение dex.kind. Возвращает: вариант (неизвестное — Base). Ошибок нет.
 pub fn of(kind: &str) -> Variant {
     match kind {
+        "ring_few_v2" => Variant::RingFew,
         "lb_v21_clone" => Variant::LbV21Clone,
         "smardex_exact_equality" => Variant::SmardexExactEquality,
         "kyber_elastic_v1" => Variant::ElasticV1,
@@ -127,6 +132,7 @@ pub fn of(kind: &str) -> Variant {
         "v3_fork_ramses" => Variant::RamsesCl,
         "v3_fork_uniswap_lm" => Variant::UniswapV3Lm,
         "v2_fork_executor_create2" => Variant::V2Create2,
+        "v2_fork_executor_create2_live_fee" => Variant::V2Create2LiveFee,
         "slipstream_ramses" => Variant::RamsesClV2,
         "solidly_v1_ramses" => Variant::RamsesLegacy,
         _ => Variant::Base,

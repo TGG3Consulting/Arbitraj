@@ -186,7 +186,7 @@ pub async fn send_swap(
         native::reserve_ok(env, p.wallet, (p.router, &data), p.value()).await?;
     }
     let outgoing = txs::send(env, slot, p.router, data, p.value(), true, Some(guard));
-    if p.solidly.is_some() {
+    if p.direct_market.is_some() {
         super::solidly_direct::SENDING.scope((), outgoing).await
     } else {
         outgoing.await

@@ -28,6 +28,7 @@ async fn ask(
     dx: U256,
     tag: &Value,
     owner: Address,
+    target: Address,
 ) -> GatewayResult<U256> {
     let data = Bytes::from(
         IElfomo::getAmountOutCall {
@@ -40,7 +41,7 @@ async fn ask(
     let raw: Bytes = rpc::call(
         ctx,
         "eth_call",
-        json!([{"from":owner,"to":ROUTER,"data":data},tag]),
+        json!([{"from":owner,"to":target,"data":data},tag]),
     )
     .await?;
     call::decode::<IElfomo::getAmountOutCall>(&raw)
@@ -69,6 +70,15 @@ async fn capacity(ctx: &Ctx, token: Address, tag: &Value) -> GatewayResult<U256>
         .min(call::decode::<IERC20::allowanceCall>(&allow)?))
 }
 
+async fn target(ctx: &Ctx, id: &str, tag: &Value) -> GatewayResult<Address> {
+    if ctx.dex_text("dex.kind", id)? == "elfomofi_module" {
+        let module = ctx.dex_addr("dex.router", id)?;
+        super::super::direct_module::verify_code(ctx, "elfomofi", module, tag).await?;
+        return Ok(module);
+    }
+    Ok(ROUTER)
+}
+
 pub async fn quote(
     ctx: &Ctx,
     id: &str,
@@ -82,7 +92,8 @@ pub async fn quote(
     }
     let tag = block(ctx, at).await?;
     verify_at(ctx, id, ROUTER, &tag).await?;
-    let out = ask(ctx, from, to, dx, &tag, signer::address(ctx)?).await?;
+    let target = target(ctx, id, &tag).await?;
+    let out = ask(ctx, from, to, dx, &tag, signer::address(ctx)?, target).await?;
     if !within_capacity(out, capacity(ctx, to, &tag).await?) {
         return Err(ctx.err(
             ErrorCode::NoRoute,
@@ -109,6 +120,7 @@ pub async fn load(
         return Err(ctx.err(ErrorCode::NoRoute, "Недопустимая пара ElfomoFi"));
     }
     let owner = signer::address(ctx)?;
+    let target = target(ctx, f.id, &tag).await?;
     let (coin_cap, quote_cap) = (
         capacity(ctx, coin, &tag).await?,
         capacity(ctx, USDC, &tag).await?,
@@ -116,13 +128,13 @@ pub async fn load(
     let mut buy: Vec<LadderPoint> = Vec::new();
     let mut sell: Vec<LadderPoint> = Vec::new();
     for dx in ladder_counter::amounts(ctx, tokens, reg, f.id, USDC).await? {
-        let bought = ask(ctx, USDC, coin, dx, &tag, owner).await?;
+        let bought = ask(ctx, USDC, coin, dx, &tag, owner, target).await?;
         if !within_capacity(bought, coin_cap)
             || buy.last().is_some_and(|prev| bought <= prev.amount_out)
         {
             break;
         }
-        let sold = ask(ctx, coin, USDC, bought, &tag, owner).await?;
+        let sold = ask(ctx, coin, USDC, bought, &tag, owner, target).await?;
         if !within_capacity(sold, quote_cap)
             || sell.last().is_some_and(|prev| sold <= prev.amount_out)
         {

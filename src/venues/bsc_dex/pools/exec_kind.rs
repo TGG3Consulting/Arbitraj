@@ -187,7 +187,8 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         | "uniswap_v2"
         | "v2_fork"
         | "v2_fork_executor"
-        | "v2_fork_executor_create2" => ExecKind::V2,
+        | "v2_fork_executor_create2"
+        | "v2_fork_executor_create2_live_fee" => ExecKind::V2,
         // Решение 483: Ramses CL — swap(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data) как у V3
         // (RamsesV2Pool.sol L944), обратный вызов ramsesV2SwapCallback (L1238) — проверка dex.v3_swap_callback
         // (exec_callback.rs); Ramses CL V2 — тот же swap и uniswapV3SwapCallback (RamsesV3Pool.sol L436-L442, L662).
@@ -205,7 +206,9 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "thena_fusion" => ExecKind::Algebra,
         // Решение 188: swap(recipient, zeroToOne, amountRequired, limitSqrtPrice, data) и algebraSwapCallback у
         // Integral — те же (integral-core 1.2.10 AlgebraPool.sol L246-L252, IAlgebraSwapCallback).
-        "algebra_integral" | "algebra_integral_hydrex" | "algebra_integral_quickswap" => ExecKind::Algebra,
+        "algebra_integral" | "algebra_integral_hydrex" | "algebra_integral_quickswap" => {
+            ExecKind::Algebra
+        }
         // Решение 444: Algebra V1.9 с направленными комиссиями (Camelot V3) — swap(recipient, zeroToOne,
         // amountRequired, limitSqrtPrice, data) и algebraSwapCallback(int256, int256, bytes) те же (cryptoalgebra/
         // AlgebraV1.9 a45417ed AlgebraPool.sol:604-610, IAlgebraSwapCallback.sol:18-22) — шаг ALGEBRA, исполнитель тот же.
@@ -238,7 +241,9 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         | "curve_stableswap_meta"
         | "curve_stableswap_oracle" => ExecKind::Curve,
         "maverick_v2" => ExecKind::Maverick,
-        "pancake_stableswap" | "lista_stableswap" | "lista_stableswap_proxy" => ExecKind::StableU256,
+        "pancake_stableswap" | "lista_stableswap" | "lista_stableswap_proxy" => {
+            ExecKind::StableU256
+        }
         // Решение 442: Curve Twocrypto-NG / Tricrypto-NG — exchange(uint256 i, uint256 j, dx, min_dy) с receiver =
         // msg.sender по умолчанию; вход — transferFrom(msg.sender) (twocrypto-ng 89c8dfb CurveTwocryptoOptimized.vy
         // L364-L404, L286-L335; tricrypto-ng ecaa816 CurveTricryptoOptimizedWETH.vy L410-L442, L313-L379 — use_eth =
@@ -404,11 +409,14 @@ mod tests {
     #[test]
     fn every_kind_is_decided() {
         let none = [
+            "ring_few_v2",
             "solidly_v3_module",
             "solidly_v3", // отдельный модуль исполнения, без шага в ArbExecutor V5
             "kyber_elastic",
             "kyber_elastic_v1",
             "woofi_v2",
+            "elfomofi",
+            "elfomofi_module",
             "unsupported",
         ];
         for k in DEX_KINDS {

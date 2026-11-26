@@ -156,6 +156,11 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
     use super::solidly_v3::ISolidlyV3::SetFee;
     use alloy::sol_types::SolEvent;
     let r = match e.family.proto {
+        // Sync содержит только резервы. Setter платы может пройти в том же блоке без события.
+        Proto::V2 if e.family.variant == super::family_variant::Variant::V2Create2LiveFee => {
+            e.valid = false;
+            Applied::Refresh("Резервы и изменяемая комиссия V2 требуют одного блока".into())
+        }
         _ if e.family.variant == super::family_variant::Variant::SolidlyCl
             && log.topics().first() == Some(&SetFee::SIGNATURE_HASH) =>
         {

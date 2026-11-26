@@ -89,7 +89,7 @@ pub fn executable(ctx: &Ctx, legs: &[Path], native: bool) -> Result<(), String> 
     if !native
         && let [path] = legs
         && let [hop] = path.hops.as_slice()
-        && hop.entry.family.variant == super::super::pools::family_variant::Variant::SolidlyCl
+        && hop.entry.family.direct_module()
     {
         return Ok(());
     }
@@ -168,11 +168,8 @@ fn collectable_families(ctx: &Ctx, legs: &[Vec<&'static Family>]) -> Result<(), 
     let max = ctx.int("dex.bundle_max_routers").map_err(|e| e.message)?;
     let mut routers: Vec<Address> = Vec::new();
     for p in legs {
-        if p.len() != 1
-            && p.iter()
-                .any(|f| f.variant == super::super::pools::family_variant::Variant::SolidlyCl)
-        {
-            return Err("Модуль Solidly V3 исполняет один пул за вызов".into());
+        if p.len() != 1 && p.iter().any(|f| f.direct_module()) {
+            return Err("Прямой модуль исполняет один рынок за вызов".into());
         }
         let mut leg_router: Option<Address> = None;
         for f in p {
@@ -217,9 +214,7 @@ pub enum GraphForm {
 pub fn graph_form(ctx: &Ctx, route: &DexRoute) -> GraphForm {
     if let [leg] = route.legs.as_slice()
         && let [hop] = leg.hops.as_slice()
-        && families::classify(ctx, &hop.family).is_ok_and(|f| {
-            f.tradable && f.variant == super::super::pools::family_variant::Variant::SolidlyCl
-        })
+        && families::classify(ctx, &hop.family).is_ok_and(|f| f.tradable && f.direct_module())
     {
         return GraphForm::Direct;
     }

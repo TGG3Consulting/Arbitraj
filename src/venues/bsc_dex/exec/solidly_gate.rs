@@ -63,6 +63,11 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
     let mut cap: Option<U256> = None;
     for e in entries.iter().copied() {
         let f = e.family;
+        if f.proto == Proto::Elfomo && f.tradable {
+            let module = ctx.dex_addr("dex.router", f.id)?;
+            super::super::pools::direct_module::verify(ctx, f, module, "latest").await?;
+            continue;
+        }
         if f.variant == Variant::QuickswapIntegral
             && let PoolRef::Contract(pool) = e.pool.reference
         {

@@ -397,6 +397,12 @@ pub struct Family {
     pub event: super::event_flags::EventFlags,
 }
 
+impl Family {
+    pub fn direct_module(&self) -> bool {
+        self.variant == Variant::SolidlyCl || self.proto == Proto::Elfomo
+    }
+}
+
 impl std::fmt::Debug for Family {
     /// Что делает: тот же вывод, что дал бы #[derive(Debug)] без поля `event` (те же имена и порядок полей).
     /// Ошибок нет (кроме ошибки форматтера).
@@ -425,7 +431,9 @@ impl std::fmt::Debug for Family {
 pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
     //                                    graphable, tradable, fork
     Some(match kind {
-        "pancakeswap_v2" | "uniswap_v2" => (PoolKind::V2, Proto::V2, true, true, false),
+        "pancakeswap_v2" | "uniswap_v2" | "ring_few_v2" => {
+            (PoolKind::V2, Proto::V2, true, true, false)
+        }
         "pancakeswap_v3" => (PoolKind::V3, Proto::PancakeV3, true, true, false),
         "uniswap_v3" => (PoolKind::V3, Proto::UniswapV3, true, true, false),
         "pancakeswap_infinity_cl" => (PoolKind::Cl, Proto::InfinityCl, true, true, false),
@@ -437,7 +445,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // dex.v2_fee_pct), но tradable=false — своего роутера нет; исполнение — шаг V2 контракта-исполнителя (обмен
         // прямо в паре, exec_kind::via_executor). fork=true — как у v3_fork: не в классический прямой путь и без UR.
         // Сверка расчёта — обмен через код исполнителя в симуляции (quote/v2_pair_quote.rs), а не getAmountsOut роутера.
-        "v2_fork_executor" | "v2_fork_executor_create2" => {
+        "v2_fork_executor" | "v2_fork_executor_create2" | "v2_fork_executor_create2_live_fee" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
         // V3-форк (решение 122 F): в графе и сигналах — чтение, события, проверка и математика как у V3 своего ABI
@@ -580,6 +588,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         ),
         // WooFi WooPPV2 (решение 122 F, 3): в графе и сигналах; своей математики нет (развёрнутый код закрыт) — котировка
         // по лесенке ответов квотера контракта (dex.pmm_ladder_usd, quote/pmm_ladder.rs); шага WOO нет до сухой сделки.
+        "elfomofi_module" => (PoolKind::OraclePmm, Proto::Elfomo, true, true, true),
         "elfomofi" => (PoolKind::OraclePmm, Proto::Elfomo, true, false, false),
         "woofi_v2" => (PoolKind::OraclePmm, Proto::WooPP, true, false, false),
         // Решение 484: Wombat Exchange — в графе и сигналах (порт CoreV2 + haircut + высокое покрытие); исполнение — шаг
@@ -691,16 +700,26 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
             "DEX {id} не подключена: вид «{kind}» — только справочник, в граф маршрутов пока не берётся (решение 59)"
         ));
     }
-    if f.variant == Variant::SolidlyCl
-        && f.fork
-        && ctx
-            .chain_id()
-            .and_then(super::solidly_v3::accepted_runtime)
-            .is_none()
-    {
+    if f.variant == Variant::RingFew && !super::ring::profile(ctx, f) {
         return Err(no(
-            "модуль Solidly V3 ещё не принят в этой сборке для сети".into()
+            "адреса, комиссия или сеть расходятся с проверенным профилем Ring".into(),
         ));
+    }
+    if f.direct_module() && f.fork {
+        let kind = if f.proto == Proto::Elfomo {
+            "elfomofi"
+        } else {
+            "solidly_v3"
+        };
+        if ctx
+            .chain_id()
+            .and_then(|c| super::direct_module::accepted(c, kind))
+            .is_none()
+        {
+            return Err(no(format!(
+                "модуль {kind} ещё не принят в этой сборке для сети"
+            )));
+        }
     }
     match ctx.dex_flag("dex.pool_enabled", id) {
         Ok(true) => {}
@@ -737,7 +756,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
     match f.proto {
         Proto::V2 => {
             list.push("dex.factory");
-            if f.variant == Variant::V2Create2 {
+            if matches!(f.variant, Variant::V2Create2 | Variant::V2Create2LiveFee) {
                 list.push(super::verify_algebra_dir::SETTING);
             }
             // Роутер — только у вида со своим путём исполнения (PancakeSwap/Uniswap V2, v2_fork: сверка getAmountsOut и
@@ -747,7 +766,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
                 list.push("dex.router");
             }
             match ctx.dex_text("dex.v2_fee_source", f.id).as_deref() {
-                Ok("pool") => list.extend(["dex.v2_fee_method", "dex.v2_fee_denominator"]),
+                Ok("pool" | "factory") => {
+                    list.extend(["dex.v2_fee_method", "dex.v2_fee_denominator"])
+                }
                 Ok(_) => list.push("dex.v2_fee_pct"),
                 Err(_) => list.push("dex.v2_fee_source"),
             }
@@ -932,12 +953,17 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // читаются).
         Proto::Wombat => list.extend(["dex.stable_pools", "dex.wombat_implementations"]),
         // WooFi: общий контракт, оракул и закреплённая реализация прокси (сменилась — семейство стоит до сверки).
-        Proto::Elfomo => list.extend([
-            "dex.pmm_pool",
-            "dex.oracle",
-            "dex.pool_implementation",
-            "dex.vault",
-        ]),
+        Proto::Elfomo => {
+            list.extend([
+                "dex.pmm_pool",
+                "dex.oracle",
+                "dex.pool_implementation",
+                "dex.vault",
+            ]);
+            if f.fork {
+                list.push("dex.router");
+            }
+        }
         Proto::WooPP => list.extend(["dex.pmm_pool", "dex.oracle", "dex.pool_implementation"]),
         // Slipstream (Topaz v3; решения 80, 85): фабрика (проверка пула getPool(coin, quote, int24 tickSpacing),
         // решение 59; события создания PoolCreated) и квотер (сверка ISlipstreamQuoterV2.quoteExactInputSingle по

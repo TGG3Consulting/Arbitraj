@@ -142,48 +142,9 @@ pub fn execution_data(
 /// Хеш попадает в справочник выпуска после канонических симуляций собранного модуля на этой сети.
 /// Проверенная сборка и адрес, заданный владельцем, сверяются независимо.
 pub fn accepted_runtime(chain: u64) -> Option<alloy_primitives::B256> {
-    use alloy_primitives::B256;
-    use std::collections::BTreeMap;
-    use std::sync::OnceLock;
-    static ACCEPTED: OnceLock<BTreeMap<u64, B256>> = OnceLock::new();
-    ACCEPTED
-        .get_or_init(|| {
-            let Ok(rows) = serde_json::from_str::<Vec<serde_json::Value>>(include_str!(
-                "../../../../config/first_run_dex.json"
-            )) else {
-                return BTreeMap::new();
-            };
-            rows.iter()
-                .filter(|row| row["settings"]["dex.kind"] == "solidly_v3")
-                .filter_map(|row| {
-                    Some((
-                        row["chain_id"].as_u64()?,
-                        row["verified_module"]["runtime_keccak"]
-                            .as_str()?
-                            .parse()
-                            .ok()?,
-                    ))
-                })
-                .collect()
-        })
-        .get(&chain)
-        .copied()
+    super::direct_module::accepted(chain, "solidly_v3")
 }
 
 pub async fn verify_executor(ctx: &Ctx, router: Address, tag: &str) -> GatewayResult<()> {
-    let expected = ctx.chain_id().and_then(accepted_runtime).ok_or_else(|| {
-        ctx.err(
-            ErrorCode::NotApplicable,
-            "Solidly V3: отсутствует приёмка модуля этой сети в сборке",
-        )
-    })?;
-    let code: Bytes =
-        super::super::node::rpc::call(ctx, "eth_getCode", serde_json::json!([router, tag])).await?;
-    if alloy_primitives::keccak256(code) != expected {
-        return Err(ctx.err(
-            ErrorCode::InvalidAddress,
-            "Solidly V3: код по адресу модуля отличается от приёмочной сборки",
-        ));
-    }
-    Ok(())
+    super::direct_module::verify_code(ctx, "solidly_v3", router, &serde_json::json!(tag)).await
 }

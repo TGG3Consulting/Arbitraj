@@ -568,12 +568,8 @@ pub async fn state(
             let sp = spacing.ok_or_else(|| missing("tickSpacing"))?;
             if f.variant == Variant::SolidlyCl {
                 if f.fork {
-                    super::solidly_v3::verify_executor(
-                        ctx,
-                        ctx.dex_addr("dex.router", f.id)?,
-                        &tag,
-                    )
-                    .await?;
+                    super::direct_module::verify(ctx, f, ctx.dex_addr("dex.router", f.id)?, &tag)
+                        .await?;
                 }
                 let (state, ticks, fee) = super::solidly_v3::load(ctx, *a, sp, &tag).await?;
                 return Ok(Loaded {
@@ -607,6 +603,9 @@ pub async fn state(
         ));
     }
     match (f.kind, reference) {
+        (PoolKind::V2, PoolRef::Contract(a)) if f.variant == Variant::V2Create2LiveFee => {
+            super::v2_live_fee::load(ctx, f, *a, &tag).await
+        }
         (PoolKind::V2, PoolRef::Contract(a)) => Ok(Loaded {
             state: load_v2v3::v2(ctx, *a, &tag).await?,
             ticks: None,

@@ -135,7 +135,18 @@ pub async fn run_with(
     overrides: &[Override],
     base: impl Into<Base>,
 ) -> GatewayResult<Vec<CallResult>> {
-    let base = base.into();
+    run_anchored(ctx, calls, values, overrides, base.into(), None).await
+}
+
+/// Верификация, которая сравнивает несколько вычислений на неизменном состоянии родителя.
+pub async fn run_anchored(
+    ctx: &Ctx,
+    calls: &[Call],
+    values: &[(usize, U256)],
+    overrides: &[Override],
+    base: Base,
+    canonical: Option<B256>,
+) -> GatewayResult<Vec<CallResult>> {
     if let Some(d) = overrides
         .iter()
         .enumerate()
@@ -149,12 +160,11 @@ pub async fn run_with(
             ),
         ));
     }
-    let blocks: Vec<BlockResult> = rpc::call(
-        ctx,
-        "eth_simulateV1",
-        params(calls, values, overrides, base),
-    )
-    .await?;
+    let mut request = params(calls, values, overrides, base);
+    if let Some(hash) = canonical {
+        request[1] = json!({"blockHash":hash,"requireCanonical":true});
+    }
+    let blocks: Vec<BlockResult> = rpc::call(ctx, "eth_simulateV1", request).await?;
     let out = blocks
         .into_iter()
         .next()

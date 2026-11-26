@@ -92,6 +92,7 @@ pub fn needs(f: &Family) -> bool {
     if matches!(
         f.variant,
         super::family_variant::Variant::SlipstreamDynamicFee
+            | Variant::V2Create2LiveFee
             | super::family_variant::Variant::QuickswapIntegral
             | super::family_variant::Variant::CurvePlain
             | super::family_variant::Variant::CurveMeta
@@ -172,6 +173,7 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
 /// Виды «каждым блоком» без THENA Fusion (см. on_head). Ошибки: End — ядро закрыло канал.
 async fn others(p: &Pools, pools: &[(Found, String)], block: u64) -> Result<(), End> {
     let usdt = p.tokens.usdt(&p.ctx).ok();
+    let mut variable_v2 = Vec::new();
     let mut balancer = Vec::new();
     let mut lb = Vec::new();
     // Решение 295: пары многомонетного пула (PoolRef::Multi) прочих видов — одно чтение на контракт (sites).
@@ -201,6 +203,12 @@ async fn others(p: &Pools, pools: &[(Found, String)], block: u64) -> Result<(), 
         if p.reg.get(&f.reference).is_none() {
             continue;
         }
+        if f.family.variant == Variant::V2Create2LiveFee {
+            if !p.holds.pending(&f.reference) {
+                variable_v2.push((f, t.as_str()));
+            }
+            continue;
+        }
         if matches!(f.reference, PoolRef::Multi { .. }) && f.family.proto != Proto::BalancerV2 {
             let site = f.reference.site();
             match sites.iter_mut().find(|(s, _)| *s == site) {
@@ -227,6 +235,14 @@ async fn others(p: &Pools, pools: &[(Found, String)], block: u64) -> Result<(), 
         }
         if let Err(why) = reload::load_one_block(p, f, t, block).await? {
             pool_fail::block_failed(p, f, &why).await;
+        }
+    }
+    if !variable_v2.is_empty() {
+        let results = reload_many::load_group_block(p, &variable_v2, block, par).await?;
+        for ((found, _), result) in variable_v2.into_iter().zip(results) {
+            if let Err(why) = result {
+                pool_fail::block_failed(p, found, &why).await;
+            }
         }
     }
     if let Some(n) = par {

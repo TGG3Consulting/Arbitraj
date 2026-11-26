@@ -72,7 +72,10 @@ pub(super) async fn watch(
 
 /// Комиссия пар V2 из проверки — в реестр: своя у пары или None (одна на DEX, dex.v2_fee_pct). Ошибок нет.
 fn fees(p: &Pools, found: &[Found]) {
-    for f in found.iter().filter(|f| f.family.proto == Proto::V2) {
+    for f in found.iter().filter(|f| {
+        f.family.proto == Proto::V2
+            && f.family.variant != super::family_variant::Variant::V2Create2LiveFee
+    }) {
         p.reg.update(&f.reference, |e| e.pool.fee_pips = f.fee_pips);
     }
 }
@@ -83,7 +86,9 @@ pub async fn refresh_fees(p: &Pools) {
     let mut cands = Vec::new();
     for r in p.reg.refs() {
         let Some(e) = p.reg.get(&r) else { continue };
-        if e.family.proto != Proto::V2 {
+        if e.family.proto != Proto::V2
+            || e.family.variant == super::family_variant::Variant::V2Create2LiveFee
+        {
             continue;
         }
         if verify::fee_method(&p.ctx, e.family)

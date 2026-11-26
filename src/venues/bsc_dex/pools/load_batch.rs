@@ -124,15 +124,32 @@ pub async fn states(
     }
     // Ступень 1: головы. Добавки V3 (swapFee 274, fee() 281) — один раз на пул: тот же признак и в разбор (ревью 281).
     let extras: Vec<Extras> = wants.iter().map(|w| Extras::of(ctx, w.family)).collect();
+    let mut live_rates = std::collections::BTreeMap::new();
     let first: Stage = wants
         .iter()
         .enumerate()
-        .map(|(i, w)| match out[i] {
-            Some(_) => Vec::new(),
-            None => head(ctx, w, extras[i]).unwrap_or_else(|why| {
-                out[i] = Some(Err(why));
+        .map(|(i, w)| {
+            if out[i].is_some() {
                 Vec::new()
-            }),
+            } else {
+                head(ctx, w, extras[i])
+                    .and_then(|mut calls| {
+                        if w.family.variant == super::family_variant::Variant::V2Create2LiveFee {
+                            let PoolRef::Contract(pool) = w.reference else {
+                                return Err(miss("Нет адреса пары V2"));
+                            };
+                            let configured =
+                                super::v2_live_fee::Rate::configured(ctx, w.family, *pool)?;
+                            calls.push(configured.call());
+                            live_rates.insert(i, configured);
+                        }
+                        Ok(calls)
+                    })
+                    .unwrap_or_else(|why| {
+                        out[i] = Some(Err(why));
+                        Vec::new()
+                    })
+            }
         })
         .collect();
     let heads = run(ctx, &first, &tag, size).await;
@@ -147,7 +164,15 @@ pub async fn states(
         let head = heads[i]
             .as_ref()
             .map_err(|t| miss(t.clone()))
-            .and_then(|b| fee_fresh::split(extras[i].fresh, b))
+            .and_then(|b| match live_rates.get(&i) {
+                Some(rate) => {
+                    let (fee, reserves) = b
+                        .split_last()
+                        .ok_or_else(|| miss("Нет ответа комиссии V2"))?;
+                    Ok((reserves, Some(rate.decode(fee)?)))
+                }
+                None => fee_fresh::split(extras[i].fresh, b),
+            })
             .and_then(|(b, fee)| {
                 fees[i] = fee;
                 parse_head(w, b)
@@ -158,7 +183,7 @@ pub async fn states(
                     state,
                     ticks: None,
                     bins: None,
-                    fee_pips: None,
+                    fee_pips: fees[i],
                 }))
             }
             Ok(PoolStateTick::Ticked(s, tick)) => match w.spacing {

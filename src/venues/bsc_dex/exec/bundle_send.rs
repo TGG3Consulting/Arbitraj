@@ -137,10 +137,7 @@ pub async fn send(
     let max_block = head.number + cfg.bundle_max;
     let raw: Vec<Bytes> = signed.iter().map(|t| t.raw.clone()).collect();
     let outgoing = send::dispatch_slice(ctx, &env.stats, &ready, &raw, max_block);
-    let dispatched = if entries
-        .iter()
-        .any(|e| e.family.variant == super::super::pools::family_variant::Variant::SolidlyCl)
-    {
+    let dispatched = if entries.iter().any(|e| e.family.direct_module()) {
         let last = signed
             .last()
             .ok_or_else(|| ctx.err(ErrorCode::Internal, "Пустой подписанный бандл"))?;

@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 import requests
-from eth_abi import encode
+from eth_abi import decode, encode
 from eth_utils import keccak
 
 from record_base_slipstream_executor import OWNER, EXEC, RUNTIME, STEP, call, calldata, rpc
@@ -40,7 +40,7 @@ def swap(pool, token_in, token_out, amount, out, deadline, pips):
         ["address", "uint256", "address", "uint256", "uint256", STEP + "[]"], args))
 
 
-def pair_boundary(simulate, pool, weth, other, weth_index, amount, bought, sold):
+def pair_boundary(simulate, pool, weth, other, weth_index, amount, bought, sold, expected_error=None):
     """Ask the pair itself for its maximum output, independent of the executor fee input."""
     def transfer(token, qty):
         return call(token, calldata("transfer(address,uint256)", ["address", "uint256"], [pool, qty]))
@@ -67,12 +67,12 @@ def pair_boundary(simulate, pool, weth, other, weth_index, amount, bought, sold)
             if status != int(extra == 0):
                 raise ValueError("pair maximum differs from formula: " + direction)
             if extra:
-                from eth_abi import decode
                 data = last.get("error", {}).get("data") or last.get("returnData", "")
                 if not data.startswith("0x08c379a0"):
                     raise ValueError("missing invariant revert: " + direction)
                 reason, = decode(["string"], bytes.fromhex(data[10:]))
-                if not reason.endswith(": K"):
+                matches = reason == expected_error if expected_error else reason.endswith(": K")
+                if not matches:
                     raise ValueError("unexpected pair rejection: " + reason)
                 results[direction] = {"max": str(out), "next_revert": reason}
     return results
@@ -104,6 +104,13 @@ def measure(row, chain):
         if int.from_bytes(view(url,tag,token,balance(pool)),"big") != expected:
             raise ValueError("balanceOf(pool) отличается от резерва")
     denominator, fee = row["fee_fraction"]
+    if "fee_getter" in row:
+        target = row["fee_target"]
+        if target not in (pool, row["factory"]):
+            raise ValueError("неизвестный источник комиссии")
+        observed_fee, = decode(["uint256"], view(url, tag, target, calldata(row["fee_getter"])))
+        if fee != observed_fee:
+            raise ValueError("комиссия в ответе контракта не совпала со снимком")
     if fee * 1_000_000 % denominator:
         raise ValueError("комиссия не представима в pips")
     pips = fee * 1_000_000 // denominator
@@ -139,7 +146,7 @@ def measure(row, chain):
             "observed_balances":[str(int(pos[i]["returnData"],16)) for i in (3,6,7,8,9)],
             "strict_buy":strict[0].get("error"),"strict_sell":strict[1].get("error")})
         if row.get("verify_pair_boundary"):
-            results[-1]["pair_boundary"] = pair_boundary(simulate, pool, weth, other, index, amount, bought, sold)
+            results[-1]["pair_boundary"] = pair_boundary(simulate, pool, weth, other, index, amount, bought, sold, row.get("invariant_error"))
     return dict(row, block_hash=chain["hash"], reserves=[str(v) for v in r], pips=pips, cases=results)
 
 

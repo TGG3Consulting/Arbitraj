@@ -57,7 +57,13 @@ def capture(market, artifact, endpoint):
             buy,prefix=leg([tx(WETH,"deposit()",value=qty)],mode,pool,p["buy"],WETH,token)
             sell,_=leg(prefix,mode,pool,p["sell"],token,WETH)
             cases.append(dict(mode=mode,pool=pool,buy=buy,sell=sell))
-    return dict(chain=8453,selector=tag,factory=FACTORY,adapter=ADAPTER,
+    imbalanced=[]
+    for p in market["imbalanced"]:
+        pool=p["pool"]; a=p["leg"]["input_token"];b=next(t for t in bypool[pool]["tokens"] if t!=a)
+        for mode in ("module","v5"):
+            fill,_=leg(p["funding"],mode,pool,p["leg"],a,b)
+            imbalanced.append(dict(scenario=p["scenario"],mode=mode,leg=fill))
+    return dict(imbalanced=imbalanced,chain=8453,selector=tag,factory=FACTORY,adapter=ADAPTER,
                 module_hash="0x"+keccak(bytes.fromhex(runtime)).hex(),v5_hash="0x"+keccak(bytes.fromhex(v5)).hex(),cases=cases)
 
 

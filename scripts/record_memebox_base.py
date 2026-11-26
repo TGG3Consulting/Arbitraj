@@ -51,6 +51,11 @@ def legs(c, market, funding, token_in, amount):
     # A fixed search on the actual EVM, with speculative candidate values only to shorten the bracket.
     lo=0;hi=rout
     guesses=set()
+    live_in=funded["balances"][i];live_out=funded["balances"][1-i]
+    if live_in>rin:
+        adjusted=live_in-(live_in-rin)*market["fee"]//10000
+        model=min(rout-1,live_out-(rin*rout+adjusted-1)//adjusted)
+        guesses.update((model,model+1))
     for den in (1000,10000,100000,1000000):
         fee=market["fee"]
         net=paid*(den-fee)
@@ -97,7 +102,22 @@ def capture(url):
             buy,fund=legs(c,market,[tx(WETH,"deposit()",value=size)],WETH,size)
             sell,_=legs(c,market,fund,market["tokens"][1-i],int(buy["net"]))
             cases.append(dict(pool=market["pool"],buy=buy,sell=sell))
-    return dict(factory=FACTORY,creation_hash="0x"+init.hex(),selector=c.selector,chain=8453,markets=rows,cases=cases)
+    # Исходные WETH и ZRO принадлежат кошельку после первого обычного обмена.
+    ref=next(m for m in rows if m["pool"]==REFERENCE)
+    i=ref["tokens"].index(WETH);token=ref["tokens"][1-i]
+    seed=cases[0]["buy"];seed_in=int(seed["input"]);seed_out=int(seed["net"])
+    outputs=[0,0];outputs[1-i]=int(seed["gross"])
+    coin=tx(WETH,"deposit()",value=seed_in*4)
+    seed_calls=[coin,tx(WETH,"transfer(address,uint256)",["address","uint256"],[REFERENCE,seed_in]),
+                tx(REFERENCE,"swap(uint256,uint256,address,bytes)",["uint256","uint256","address","bytes"],[*outputs,OWNER,b""])]
+    imbalanced=[]
+    for label,a,amount,donation in [("input",WETH,seed_in,seed_in//10),("output",WETH,seed_in,seed_out//10),
+                                    ("reverse_input",token,seed_out//2,seed_out//10),("reverse_output",token,seed_out//2,seed_in//10)]:
+        source=a if label.endswith("input") else next(t for t in ref["tokens"] if t!=a)
+        funding=seed_calls+[tx(source,"transfer(address,uint256)",["address","uint256"],[REFERENCE,donation])]
+        witness,_=legs(c,ref,funding,a,amount)
+        imbalanced.append(dict(scenario=label,pool=REFERENCE,donation_token=source,donation=str(donation),funding=funding,leg=witness))
+    return dict(imbalanced=imbalanced,factory=FACTORY,creation_hash="0x"+init.hex(),selector=c.selector,chain=8453,markets=rows,cases=cases)
 
 
 if __name__=="__main__":

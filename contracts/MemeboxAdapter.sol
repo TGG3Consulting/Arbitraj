@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Обмен ERC-20 от плательщика через зарегистрированную пару Memebox по её доступным резервам.
+// Развёртывание и разрешение модуля выполняет владелец кошелька на выбранной сети.
 pragma solidity 0.8.37;
 
 interface IMemeboxFactory {
@@ -49,7 +50,7 @@ contract MemeboxAdapter {
     }
 
     function quote(uint256 rin,uint256 rout,uint256 paidIn,uint256 liveOut,uint256 fee) private pure returns (uint256) {
-        require(rin!=0 && rout>1 && fee<=10_000 && paidIn>rin,"reserves");
+        require(rin!=0 && rout>1 && fee<=10_000 && paidIn>=rin,"reserves");
         uint256 input=paidIn-rin;
         uint256 debit=input/10_000*fee+(input%10_000)*fee/10_000;
         uint256 adjusted=paidIn-debit;

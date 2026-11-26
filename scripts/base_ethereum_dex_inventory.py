@@ -65,6 +65,19 @@ def tables(network, snapshots, profiles):
             fields.append(f"`{k} = {v}`")
         params = "<br>".join(fields)
         out.append(f"| `{id}` | {params} | {row['source']} |")
+    if base:
+        sobal_path = Path("tests/data/first_run_dex_2026-11-26/sobal_base_directory.json")
+        if sobal_path.exists():
+            directory = read(sobal_path)
+            pools = directory["pools"]
+            by_family = {k: sum(k in p["families"] for p in pools) for k in directory["factories"]}
+            out.extend(["", f"Sobal · Vault `{directory['vault']}`. По событиям регистрации восстановлены все {len(pools)} "
+                        f"пулов блока 62 262 756. Взвешенных {by_family['weighted']}, композитных стабильных "
+                        f"{by_family['composable_stable']}, управляемых {by_family['managed']}. Ещё две регистрации "
+                        "не принадлежат этим фабрикам, у них соответственно ноль и один записанный токен. "
+                        f"[Номера регистраций, фабрики, токены и резервы](../{sobal_path.as_posix()})."])
+        out.extend(["", "Memebox · развёртывание и разрешение расчётного модуля выполняет владелец кошелька. "
+                    "Адрес для боевой сети в поставке не задан. Архивные проверки используют изолированный адрес симуляции."])
     metric_path = Path(f"tests/data/first_run_dex_2026-11-26/metric_{network}.json")
     if metric_path.exists():
         metric = read(metric_path)

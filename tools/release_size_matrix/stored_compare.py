@@ -56,7 +56,7 @@ def stage(target, case_path):
     template = template.replace("NATIVE_THRESHOLD_PLACEMENT", "inside_search" if "ext" in names else "after_search")
 
     source = json.loads(case_path.read_text(encoding="utf-8-sig"))["cases"]
-    cases = [case for case in source if case["basis"] == "cex_window_books"]
+    cases = [case for case in source if case["basis"] in {"cex_window_books", "exact_saved_cex_quote_stamps", "exact_saved_cex_quote_stamps_limited_depth"}]
     if not cases:
         return {"status": "unavailable", "reason": "no pairs with both saved CEX ladders"}
     tests = target / "tests"

@@ -81,6 +81,7 @@ const CHOICE = {
   basin_well: 'Basin (скважины Beanstalk: ConstantProduct2 / Stable2, без комиссии; решение 485)',
   shell_proteus: 'Shell Protocol Proteus (кусочная гипербола, учёт Ocean)',
   lb_v21: 'Liquidity Book V2.1 (LFJ / Trader Joe: бины, изменчивая комиссия)',
+  lb_v21_clone: 'Liquidity Book V2.1 (проверенный шаблон пары)',
   lb_v20: 'Liquidity Book v2.0 (LFJ V2 / Trader Joe V2: бины, изменчивая комиссия; решение 445)',
   lb_v22: 'Liquidity Book V2.2 (LFJ: бины, изменчивая комиссия, крючки пула)',
   ekubo: 'Ekubo (синглтон-ядро, тики 1e-6, расширение MEVCapture)',

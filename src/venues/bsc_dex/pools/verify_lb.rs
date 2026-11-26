@@ -74,6 +74,9 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
                 None => Verdict::Failed("нет ответа фабрики".into()),
                 Some(Err(node)) => Verdict::Failed(node),
                 Some(Ok(a)) => match decide(c, p, f, &a) {
+                    Ok(found) if c.family.variant == super::family_variant::Variant::LbV21Clone => {
+                        verify_clone(ctx, found, p.0).await
+                    }
                     Ok(found) => Verdict::Taken(Box::new(found)),
                     Err(w) => Verdict::Rejected(w),
                 },
@@ -81,6 +84,35 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
         });
     }
     out
+}
+
+/// LFJ ImmutableClone (v2.1.0): фиксированный код делегирования, за ним tokenX, tokenY, binStep и размер аргументов.
+pub fn clone_implementation(code: &[u8]) -> Option<Address> {
+    const PREFIX: [u8; 20] = alloy_primitives::hex!("363d3d373d3d3d3d61002c806035363936013d73");
+    const SUFFIX: [u8; 13] = alloy_primitives::hex!("5af43d3d93803e603357fd5bf3");
+    if code.len() != 97 || code[..20] != PREFIX || code[40..53] != SUFFIX || code[95..] != [0, 44] {
+        return None;
+    }
+    Some(Address::from_slice(&code[20..40]))
+}
+
+async fn verify_clone(ctx: &Ctx, found: Found, pool: Address) -> Verdict {
+    let implementations = match super::verify_lb22::settings(ctx, &found.family) {
+        Ok(items) => items,
+        Err(w) => return Verdict::Rejected(w),
+    };
+    let reply: Result<Bytes, _> =
+        super::super::node::rpc::call(ctx, "eth_getCode", serde_json::json!([pool, "latest"]))
+            .await;
+    match reply {
+        Err(e) => Verdict::Failed(e.message),
+        Ok(code) if clone_implementation(&code).is_some_and(|a| implementations.contains(&a)) => {
+            Verdict::Taken(Box::new(found))
+        }
+        Ok(_) => Verdict::Rejected(format!(
+            "шаблон клона LB {pool:#x} не подтверждён dex.lb_implementations"
+        )),
+    }
 }
 
 /// Вызовов первого прохода на пул (getFactory, getTokenX, getTokenY, getBinStep).

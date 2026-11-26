@@ -64,6 +64,14 @@ def tables(network, snapshots, profiles):
             fields.append(f"`{k} = {v}`")
         params = "<br>".join(fields)
         out.append(f"| `{id}` | {params} | {row['source']} |")
+    metric_path = Path(f"tests/data/first_run_dex_2026-11-26/metric_{network}.json")
+    if metric_path.exists():
+        metric = read(metric_path)
+        out.extend(["", f"Metric OMM · проверено {metric['registered_samples_read']} регистраций на закреплённом блоке "
+                    f"{metric['block']}. Для трёх пулов котировка повторена штатным кодом V5 при двух объёмах "
+                    "и двух внешних отправителях. Проверены обе стороны, зачисление на кошелёк, остатки на "
+                    "исполнителе и отказ minOut + 1. Пригодность оракула, расширений и реального кошелька "
+                    f"повторно проверяется перед обменом. [Снимок и результаты](../{metric_path.as_posix()})."])
     from_dir = f"../tests/data/executor_v5_{network}_2026-11-26"
     out.extend(["", f"Uniswap V4 · два пула USDT/USDC, hook 0. Для каждого выполнены симуляции "
                 f"покупки в размере 1 и 100 USDT и обратной продажи полученного USDC. На всех восьми шагах сети "
@@ -111,6 +119,12 @@ def tables(network, snapshots, profiles):
                     "вызываемым ими функциям и числовым константам. Четыре действующих пула проверены "
                     "по фабрике и двум размерам get_dy в обоих направлениях. "
                     f"[Реализации, основания и результаты](../{legacy})."])
+    pancake = "tests/data/first_run_dex_2026-11-26/pancake_stable_ethereum.json"
+    if not base and Path(pancake).exists():
+        out.extend(["", "PancakeSwap StableSwap · два пула из официального API составляют полный реестр Ethereum "
+                    "на контрольном блоке. Фабрика установлена по событию создания каждой пары и ответу getPairInfo. "
+                    "Хеш Keccak-256 исходника PancakeStableSwapTwoPool.sol совпал с эталоном решения 471 у обоих пулов, is_killed = false. "
+                    f"Проверены восемь get_dy. [Реестр, события и котировки](../{pancake})."])
     dodo_file = f"tests/data/first_run_dex_2026-11-26/dodo_{network}.json"
     if Path(dodo_file).exists():
         data_dodo = read(Path(dodo_file))
@@ -120,6 +134,17 @@ def tables(network, snapshots, profiles):
                     "дал выход querySellBase и querySellQuote на двух объёмах. Комиссии LP и MT приведены "
                     "для нулевого адреса, который использует загрузчик PMM. Фабрики позволяют находить пулы "
                     f"при включении поиска по фабрике. [Реестры, состояние PMM и котировки](../{dodo_file})."])
+    lbfile = f"tests/data/first_run_dex_2026-11-26/liquidity_book_{network}.json"
+    if Path(lbfile).exists():
+        lb = read(Path(lbfile))
+        count = sum(p["status"]=="quoted" for p in lb["rows"])
+        out.extend(["", f"Liquidity Book · фабрика сообщает {lb['pairs']} зарегистрированных пар. Для {count} "
+                    "проверены обе стороны на двух размерах с нулевым остатком входа getSwapOut. "
+                    + ("В Base Swapline использует V2.2. Проверены собственные реализации и нулевые флаги расширений. "
+                       if base else "У Ethereum ID индексатора с названием Trader Joe ведёт к размещению V2.1. "
+                       "Адрес реализации закреплён по коду клона. В его исходнике есть отдельное изменение "
+                       "удаления бина при burn. Код swap, getSwapOut и поиска следующего бина сверен с релизом V2.1. ")
+                    + f"[Реестр, исходники и результаты](../{lbfile})."])
     smardex = f"tests/data/first_run_dex_2026-11-26/smardex_{network}.json"
     if Path(smardex).exists():
         info = read(Path(smardex))
@@ -130,6 +155,15 @@ def tables(network, snapshots, profiles):
                     "минимальных единиц. Проверка учитывает округление при равных отношениях цен и версию библиотеки. "
                     f"[Фабрика, исходник, пары и котировки](../{smardex})."])
     if base:
+        izi_file = "tests/data/first_run_dex_2026-11-26/iziswap_base.json"
+        if Path(izi_file).exists():
+            izi = read(Path(izi_file))
+            quoted = sum(q["matched"] for p in izi["pools"] for q in p["quotes"])
+            out.extend(["", f"iZiSwap · {quoted} сверок на трёх парах. Официальный quoter.swapAmount "
+                        "и VirtualQuoter бота вернули одинаковый выход с использованием всего запрошенного входа. "
+                        "Уровни 500 и 3000 проверены по реальным пулам дополнительно к четырём уровням конструктора. "
+                        "Лестницу dex.pmm_ladder_usd задаёт оператор. "
+                        f"[Фабрика, модули, уровни и оба квотера](../{izi_file})."])
         out.extend(["", "Aerodrome Slipstream · 3 разных пула WETH/USDC, по одному у каждой фабрики. "
                     "16 операций ArbExecutor.execute в eth_simulateV1, два направления и два размера у каждой фабрики, "
                     "ещё один размер у второго и третьего поколений. Размер до 0,01 WETH или 10 USDC. "

@@ -1,4 +1,4 @@
-//! Сопоставляет целочисленную формулу Curve Plain с закреплёнными get_dy двух сетей.
+//! Сопоставляет формулы Curve Plain и PancakeSwap StableSwap с закреплёнными get_dy двух сетей.
 use alloy_primitives::U256;
 use arb::venues::bsc_dex::math::stableswap_v1::{Template, exchange_out_t};
 use serde_json::Value;
@@ -10,13 +10,25 @@ fn integer(value: &Value) -> U256 {
 
 #[test]
 fn plain_factory_markets_match_dy() {
-    for src in [
-        include_str!("data/first_run_dex_2026-11-26/curve_plain_base.json"),
-        include_str!("data/first_run_dex_2026-11-26/curve_plain_ethereum.json"),
+    for (src, plain) in [
+        (
+            include_str!("data/first_run_dex_2026-11-26/curve_plain_base.json"),
+            true,
+        ),
+        (
+            include_str!("data/first_run_dex_2026-11-26/curve_plain_ethereum.json"),
+            true,
+        ),
+        (
+            include_str!("data/first_run_dex_2026-11-26/pancake_stable_ethereum.json"),
+            false,
+        ),
     ] {
         let doc: Value = serde_json::from_str(src).unwrap();
-        let pools = doc["pools"].as_array().unwrap();
-        assert_eq!(pools.len(), 4);
+        let pools = doc[if plain { "pools" } else { "markets" }]
+            .as_array()
+            .unwrap();
+        assert_eq!(pools.len(), if plain { 4 } else { 2 });
         for p in pools {
             let balances: Vec<_> = p["balances"]
                 .as_array()
@@ -31,10 +43,10 @@ fn plain_factory_markets_match_dy() {
                 .map(|d| U256::from(10u8).pow(U256::from(36 - d.as_u64().unwrap())))
                 .collect();
             let t = Template {
-                amp_precision: U256::from(100u8),
+                amp_precision: U256::from(if plain { 100u8 } else { 1u8 }),
                 max_rounds: 255,
-                strict: true,
-                pair_d: balances.len() == 2,
+                strict: plain,
+                pair_d: plain && balances.len() == 2,
             };
             for q in p["quotes"].as_array().unwrap() {
                 let out = exchange_out_t(

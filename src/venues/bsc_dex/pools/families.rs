@@ -520,7 +520,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // Balancer V3 (решение 441): в графе и сигналах (расчёт хранилища V3); исполнение — шаг BALANCER_V3 (с v4).
         "balancer_v3" => (PoolKind::VaultPool, Proto::BalancerV3, true, false, false),
         // Liquidity Book V2.1 (решение 290): в графе и сигналах (порт getSwapOut); исполнение — шаг LB (только v2).
-        "lb_v21" => (PoolKind::LbBin, Proto::LbV21, true, false, false),
+        "lb_v21" | "lb_v21_clone" => (PoolKind::LbBin, Proto::LbV21, true, false, false),
         // Curve Twocrypto-NG / Tricrypto-NG (решение 442): в графе и сигналах (порт get_y и комиссии пула); исполнение —
         // шаг STABLE_U256 контракта-исполнителя (exchange с индексами uint256).
         "curve_twocrypto_ng" => (PoolKind::Crypto, Proto::CurveTwocrypto, true, false, false),
@@ -839,7 +839,12 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         }
         // Liquidity Book V2.1 (решение 290): фабрика (getFactory пула и реестр getLBPairInformation). Квотер сверки — сам
         // пул getSwapOut (адрес не нужен).
-        Proto::LbV21 => list.push("dex.factory"),
+        Proto::LbV21 => {
+            list.push("dex.factory");
+            if f.variant == Variant::LbV21Clone {
+                list.push("dex.lb_implementations");
+            }
+        }
         // Fluid DEX T1 (решение 440): фабрика (isDex) и резолвер FluidDexReservesResolver в dex.quoter — им читается
         // состояние (getPoolReservesAdjusted) и сверяется выход (estimateSwapIn).
         Proto::FluidT1 => list.extend(["dex.factory", "dex.quoter"]),

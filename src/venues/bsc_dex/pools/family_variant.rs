@@ -93,11 +93,14 @@ pub enum Variant {
     RamsesLegacy,
     /// Ethereum SmardexFactory 0xB878…214F: approxEq(x,x) возвращает true и при округлении допуска до нуля.
     SmardexExactEquality,
+    /// LB V2.1 с проверкой неизменяемого шаблона клона по коду пары.
+    LbV21Clone,
 }
 
 /// Вариант по значению dex.kind. Принимает: значение dex.kind. Возвращает: вариант (неизвестное — Base). Ошибок нет.
 pub fn of(kind: &str) -> Variant {
     match kind {
+        "lb_v21_clone" => Variant::LbV21Clone,
         "smardex_exact_equality" => Variant::SmardexExactEquality,
         "kyber_elastic_v1" => Variant::ElasticV1,
         "slipstream_aero" => Variant::SlipstreamAero,

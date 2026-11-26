@@ -1,0 +1,1174 @@
+{
+  "block": 62262756,
+  "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+  "network": "base",
+  "factory": "0x2a53833cc95548cf52c7b159110e22d3a9018f32",
+  "next_pool_idx": 179,
+  "registered_samples_read": 152,
+  "registry_sdk": "https://registry.npmjs.org/@nradko/metric-omm-sdk-v1/-/metric-omm-sdk-v1-0.4.5.tgz",
+  "registry_sdk_sha256": "513e110fbc478739ea5824fbfc505f382ffb3d06a5785e16977aa3f30ea62184",
+  "executor_probes": [
+    {
+      "network": "base",
+      "block": 62262756,
+      "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "factory": "0x2a53833cc95548cf52c7b159110e22d3a9018f32",
+      "executor_runtime_keccak": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+      "virtual_quoter_keccak": "0x56f4529fa9bf808daea21d15a6060f9941aa6da575cc8f1ddf99feaa152a39d5",
+      "pools": [
+        {
+          "idx": 96,
+          "pool": "0x4ad849516d23cb9768a756270ed0819202932105",
+          "tokens": [
+            "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2"
+          ],
+          "immutables": "0x0000000000000000000000002a53833cc95548cf52c7b159110e22d3a9018f32000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913000000000000000000000000fde4c96c8593536e31f229ea8f37b2ada2699bb2000000000000000000000000000000000000000000000000000000e8d4a51000000000000000000000000000000000000000000000000000000000e8d4a510000000000000000000000000000000000000000000000000003e7458b4430646a30000000000000000000000000000000000000000000000003e8ba97865a2568f00000000000000000000000000000000000000000000000000000000000363fe000000000000000000000000c731fc602e063ff5aa82de09fc60f5c99eb02cf8ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec0000000000000000000000000000000000000000000000000000000000000013000000000000000000000000e4038fa09f0bb9963068afaf97be0c045155090d000000000000000000000000ebc53e61078976118e384f110c262a263decb84b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001",
+          "prices": "0x00000000000000000000000000000000000000000000000100595bc166234352000000000000000000000000000000000000000000000001005a32cc831da246",
+          "cases": [
+            {
+              "side": 0,
+              "input": "1000000",
+              "bought": "1001363",
+              "sold": "999986",
+              "cash_before": "16820752",
+              "cash_after": "16820738",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            },
+            {
+              "side": 0,
+              "input": "100000",
+              "bought": "100136",
+              "sold": "99998",
+              "cash_before": "16820752",
+              "cash_after": "16820750",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            }
+          ]
+        },
+        {
+          "idx": 100,
+          "pool": "0x931cf242f16e00f05ca4e513b40769b263269d4e",
+          "tokens": [
+            "0x07b3d902783c3c12b077508c3b5c00113d1291d0",
+            "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+          ],
+          "immutables": "0x0000000000000000000000002a53833cc95548cf52c7b159110e22d3a9018f3200000000000000000000000007b3d902783c3c12b077508c3b5c00113d1291d0000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda029130000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000e8d4a5100000000000000000000000000000000000000000000000000198ee8cb322bbc5f2000000000000000000000000000000000000000000000000098d6534a4bc8d9c0000000000000000000000000000000000000000000000000000000000162b110000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec0000000000000000000000000000000000000000000000000000000000000013000000000000000000000000e4038fa09f0bb9963068afaf97be0c045155090d000000000000000000000000ebc53e61078976118e384f110c262a263decb84b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001",
+          "prices": "0x00000000000000000000000000000000000000000000000003774770b76f626d00000000000000000000000000000000000000000000000003777752169367c2",
+          "cases": [
+            {
+              "side": 1,
+              "input": "1000000",
+              "bought": "73846200088292195793",
+              "sold": "999789",
+              "cash_before": "16820752",
+              "cash_after": "16820541",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            },
+            {
+              "side": 1,
+              "input": "100000",
+              "bought": "7384620118339217949",
+              "sold": "99978",
+              "cash_before": "16820752",
+              "cash_after": "16820730",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            }
+          ]
+        },
+        {
+          "idx": 152,
+          "pool": "0xf66bc7812f6257199c6840ac0e91c2f499ad9e75",
+          "tokens": [
+            "0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf",
+            "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+          ],
+          "immutables": "0x0000000000000000000000002a53833cc95548cf52c7b159110e22d3a9018f32000000000000000000000000acfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda029130000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000e8d4a51000000000000000000000000000000000000000000000000000009cc25cf1ece1340000000000000000000000000000000000000000000000000de0b6b3a764000000000000000000000000000000000000000000000000000000000746a52880000000000000000000000000009e22cdfdb42551af9817b22e3b3e9694d35f2287ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec0000000000000000000000000000000000000000000000000000000000000013000000000000000000000000e4038fa09f0bb9963068afaf97be0c045155090d000000000000000000000000ebc53e61078976118e384f110c262a263decb84b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001",
+          "prices": "0x00000000000000000000000000000000000000000000001c9fa9c18d5a8043cc00000000000000000000000000000000000000000000001cac64740caf27c1d6",
+          "cases": [
+            {
+              "side": 1,
+              "input": "1000000",
+              "bought": "34875518051066590",
+              "sold": "998265",
+              "cash_before": "16820752",
+              "cash_after": "16819017",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            },
+            {
+              "side": 1,
+              "input": "100000",
+              "bought": "3487551958358621",
+              "sold": "99826",
+              "cash_before": "16820752",
+              "cash_after": "16820578",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            }
+          ]
+        }
+      ],
+      "sender": "0x730a17276a9720871c98622ffce5db23f38acf99"
+    },
+    {
+      "network": "base",
+      "block": 62262756,
+      "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "factory": "0x2a53833cc95548cf52c7b159110e22d3a9018f32",
+      "executor_runtime_keccak": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+      "sender": "0x5813e75a69cc0142fdd726e8242e83fb7a4f3389",
+      "kind": "metric",
+      "virtual_quoter_keccak": "0x56f4529fa9bf808daea21d15a6060f9941aa6da575cc8f1ddf99feaa152a39d5",
+      "pools": [
+        {
+          "idx": 96,
+          "pool": "0x4ad849516d23cb9768a756270ed0819202932105",
+          "tokens": [
+            "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2"
+          ],
+          "immutables": "0x0000000000000000000000002a53833cc95548cf52c7b159110e22d3a9018f32000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913000000000000000000000000fde4c96c8593536e31f229ea8f37b2ada2699bb2000000000000000000000000000000000000000000000000000000e8d4a51000000000000000000000000000000000000000000000000000000000e8d4a510000000000000000000000000000000000000000000000000003e7458b4430646a30000000000000000000000000000000000000000000000003e8ba97865a2568f00000000000000000000000000000000000000000000000000000000000363fe000000000000000000000000c731fc602e063ff5aa82de09fc60f5c99eb02cf8ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec0000000000000000000000000000000000000000000000000000000000000013000000000000000000000000e4038fa09f0bb9963068afaf97be0c045155090d000000000000000000000000ebc53e61078976118e384f110c262a263decb84b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001",
+          "prices": "0x00000000000000000000000000000000000000000000000100595bc166234352000000000000000000000000000000000000000000000001005a32cc831da246",
+          "cases": [
+            {
+              "side": 0,
+              "input": "1000000",
+              "bought": "1001363",
+              "sold": "999986",
+              "cash_before": "16820752",
+              "cash_after": "16820738",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            },
+            {
+              "side": 0,
+              "input": "100000",
+              "bought": "100136",
+              "sold": "99998",
+              "cash_before": "16820752",
+              "cash_after": "16820750",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            }
+          ]
+        },
+        {
+          "idx": 100,
+          "pool": "0x931cf242f16e00f05ca4e513b40769b263269d4e",
+          "tokens": [
+            "0x07b3d902783c3c12b077508c3b5c00113d1291d0",
+            "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+          ],
+          "immutables": "0x0000000000000000000000002a53833cc95548cf52c7b159110e22d3a9018f3200000000000000000000000007b3d902783c3c12b077508c3b5c00113d1291d0000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda029130000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000e8d4a5100000000000000000000000000000000000000000000000000198ee8cb322bbc5f2000000000000000000000000000000000000000000000000098d6534a4bc8d9c0000000000000000000000000000000000000000000000000000000000162b110000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec0000000000000000000000000000000000000000000000000000000000000013000000000000000000000000e4038fa09f0bb9963068afaf97be0c045155090d000000000000000000000000ebc53e61078976118e384f110c262a263decb84b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001",
+          "prices": "0x00000000000000000000000000000000000000000000000003774770b76f626d00000000000000000000000000000000000000000000000003777752169367c2",
+          "cases": [
+            {
+              "side": 1,
+              "input": "1000000",
+              "bought": "73846200088292195793",
+              "sold": "999789",
+              "cash_before": "16820752",
+              "cash_after": "16820541",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            },
+            {
+              "side": 1,
+              "input": "100000",
+              "bought": "7384620118339217949",
+              "sold": "99978",
+              "cash_before": "16820752",
+              "cash_after": "16820730",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            }
+          ]
+        },
+        {
+          "idx": 152,
+          "pool": "0xf66bc7812f6257199c6840ac0e91c2f499ad9e75",
+          "tokens": [
+            "0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf",
+            "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+          ],
+          "immutables": "0x0000000000000000000000002a53833cc95548cf52c7b159110e22d3a9018f32000000000000000000000000acfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda029130000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000e8d4a51000000000000000000000000000000000000000000000000000009cc25cf1ece1340000000000000000000000000000000000000000000000000de0b6b3a764000000000000000000000000000000000000000000000000000000000746a52880000000000000000000000000009e22cdfdb42551af9817b22e3b3e9694d35f2287ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec0000000000000000000000000000000000000000000000000000000000000013000000000000000000000000e4038fa09f0bb9963068afaf97be0c045155090d000000000000000000000000ebc53e61078976118e384f110c262a263decb84b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001",
+          "prices": "0x00000000000000000000000000000000000000000000001c9fa9c18d5a8043cc00000000000000000000000000000000000000000000001cac64740caf27c1d6",
+          "cases": [
+            {
+              "side": 1,
+              "input": "1000000",
+              "bought": "34875518051066590",
+              "sold": "998265",
+              "cash_before": "16820752",
+              "cash_after": "16819017",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            },
+            {
+              "side": 1,
+              "input": "100000",
+              "bought": "3487551958358621",
+              "sold": "99826",
+              "cash_before": "16820752",
+              "cash_after": "16820578",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "screened_samples": [
+    {
+      "idx": 1,
+      "pool": "0x258be4ea05f674e0b26aa71dfc08e0c87c499fb0",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 2,
+      "pool": "0x3c2ceb48b4f4ea67ea14b89e3bb4c196ec62033a",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 3,
+      "pool": "0xf08edd9bd2749b58c8a4e8e65da3aee8a89789be",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 4,
+      "pool": "0xd15f8389b7d5a7adccdcddf98d55538f719549a1",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 5,
+      "pool": "0xc997ad0fa691ffbd6eed1d5ae7792e84bcb8101e",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 6,
+      "pool": "0x628d572083c86747dfb9c2abfa285162f3f68e6c",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 7,
+      "pool": "0x41cba8b75f5cff21feade99a608654adc2c210ef",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 8,
+      "pool": "0x2751af69bad600db0189eece1054ed5deca7a9bd",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 9,
+      "pool": "0x5555f6f94bb6eea482c342faf2f0cfcb7af85b56",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 10,
+      "pool": "0xdadc446911557d4d0258480fcadd48081e7b130a",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 11,
+      "pool": "0x7bcf518e7a6e0c58eb599f3f4ff0d5c540249e4e",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 12,
+      "pool": "0x94830148ad369ba10704922a473d8f3503f4f49c",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 13,
+      "pool": "0xc40cd544b49d34db77a3d8d099f3c315be925514",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 14,
+      "pool": "0xbbd2ed2646137923dde99c968dcf0c94a460d8aa",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 15,
+      "pool": "0x70b7e7765b28907b66c60f929fe0c259ab842c7f",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 16,
+      "pool": "0xef9063fa4c873b31d0a0f7d74a74eb65962b28ba",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 17,
+      "pool": "0x6be9de37f8dc1202686aa62b54372227834638ab",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted: \u007f\u0004<v"
+    },
+    {
+      "idx": 18,
+      "pool": "0x0f0b499b5fde52d1203a37c7fc0578aff3fc1004",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted: \u007f\u0004<v"
+    },
+    {
+      "idx": 19,
+      "pool": "0xb829ac123cdc34107c6d464520c739fc797f9668",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 20,
+      "pool": "0xaf8b355db8487f2155c41b3c58ee3a2c7fd09d2b",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 21,
+      "pool": "0x6cfd6523386b4fbfff360fe2afc8661b1a247886",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 22,
+      "pool": "0xa89ac05cc095f17ce88683459785a47c02d9fce4",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 23,
+      "pool": "0x821251dac85f3de79bfbb2ff38a096e9f3b2c285",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 24,
+      "pool": "0x4b2ae56f61664a44c98cfcf8652ae5cf8ca1d8d8",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 25,
+      "pool": "0xa7d522022416a8d395240be388417a300e227c54",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 26,
+      "pool": "0xecab479dd3158050d3ee86d6b18dcfa9e11b9d2d",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 27,
+      "pool": "0x9867e17b9ddeadacb8f3482ba5dab386b40e4feb",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 28,
+      "pool": "0xca5929dd66ce22a73c635faf69162bd778aec22e",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 29,
+      "pool": "0xac1c65dd4b64acd337948c6a3325c8aee7bacdd3",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 30,
+      "pool": "0xca69c5a01fe47e7eff18114451a57d624583cd83",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 31,
+      "pool": "0x57a4f32a4f4a4d535f29a02974d4698ff15b0af3",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 32,
+      "pool": "0x7da7dbb0ccb99e5a699f8e41bedb634311971275",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 33,
+      "pool": "0x12bb10c16a031c4b1e04282df2e02518dc7d2114",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 34,
+      "pool": "0x88f304cddf09666a19b013993cca567f0bb743fe",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted: \u007f\u0004<v"
+    },
+    {
+      "idx": 35,
+      "pool": "0x22656f72170d271265a2830dafaedf019275ee23",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 36,
+      "pool": "0xf7939abf4ccfb1f48e4cff4fccda01fe53234ac6",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted: \u007f\u0004<v"
+    },
+    {
+      "idx": 37,
+      "pool": "0xa389385c5a4d9f4ab57ad4a1764106758c90a513",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 38,
+      "pool": "0xf8c6048ad5bc66e43fda4e0ab417da1aeff4b426",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 39,
+      "pool": "0xef9ffefafe497f455291b7152fda0b71717c96a6",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 40,
+      "pool": "0x65f2a1653ed6ad160bacaa9d12bba75baf4ba6a5",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 41,
+      "pool": "0x2b82812733c41e01ab18e9dee3dd74b58be3095d",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 42,
+      "pool": "0xea6bfc0c70dcc29f087c4d5530dc6ce93136c43e",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 43,
+      "pool": "0x274d77901aeb397cf39049615482b81a2bf65d11",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 44,
+      "pool": "0x1f982c71620502b8877fc0fd0524c72987ccf909",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 45,
+      "pool": "0x86e73b807d270ea254dd3359b76cfa9641feb0db",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 46,
+      "pool": "0xe3a705518f36281b9e2009d864fbe4124e0135e2",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 47,
+      "pool": "0x54214a5c9b008a137c20cd565cfe749a39a476cc",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 48,
+      "pool": "0x8896396ce86cc404fc9cc585dfa423111326ea3b",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 49,
+      "pool": "0x831741bf86e9921a5a6adb0746e0742de5de1aff",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 50,
+      "pool": "0x7bdc1c8475744824d539d4eee4f80c5e749fb6c9",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 51,
+      "pool": "0xf9c5e4e5999d1f3827bbc965220b48d1dcbb6ef5",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 52,
+      "pool": "0xe79dc529ede20d450512c546edf68648afffe8b9",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 53,
+      "pool": "0x4307c68f271b8eb6d9108d846af3def435ced489",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 54,
+      "pool": "0x26c1faf4f0d4d3380a6ab752db9588285258d2a7",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 55,
+      "pool": "0x0e9ad4c174923fa9361f025f6eb931168c45188f",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 56,
+      "pool": "0xac4b70d1a2bfd504f1c4980f387f9c9d9650c0b1",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 57,
+      "pool": "0xc464c6e17cc6ca2ed6477f83b328f804aebbb89d",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 58,
+      "pool": "0x33b553c40623f56e39c7ec052a41df1e98fbb153",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 59,
+      "pool": "0xf7feaf0338ce51c645eeb557ce965bc48e266a01",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 60,
+      "pool": "0x9ff88307e48ca750dc95018321cdcb4f80e7772f",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 61,
+      "pool": "0x04043cfa214f051ce01a044edef4a25e8da0f7d8",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 62,
+      "pool": "0x19077d6c41496a2c78e8c87707e6373e113ec89a",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 63,
+      "pool": "0xb0501aab2f80732e93567d32714c41a1a3d96e7b",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 64,
+      "pool": "0x9e29d4909aee2f259c8ad8b06a68154e79325f14",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 65,
+      "pool": "0x081b2fecef42e97f1c2845be8a004ee18c849c02",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 66,
+      "pool": "0xe661b604a7aff1f43db42a5823ba6a7a29f2cd18",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 67,
+      "pool": "0xde91623eb5ff8716db1be5172ff24c4f9d8271b8",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 68,
+      "pool": "0x60f28916086ae9e9fb108a94819ec5887bc4886c",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 69,
+      "pool": "0x9907a76217e87e94f9003d949656c8f1a93fc977",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 70,
+      "pool": "0x2c25df5117e7f2eaf87171521b705707689be70e",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 71,
+      "pool": "0x310e57882c4c289fa7c1cf4b59fa4b40f6aef5af",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 72,
+      "pool": "0x53e0e482d5204e417b809b13616e4ec96f3019e7",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 73,
+      "pool": "0xc8550a8d3b3e57f842f05eb8918c3469a85f9ab0",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 74,
+      "pool": "0xee6cc731ea6176c5edf866df1427b2daaed4f233",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 75,
+      "pool": "0xd4c2aac818c0168c94b433c38757d9f301016413",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 76,
+      "pool": "0x8d51a18b70e464d104ce52c45841529686b451f9",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 77,
+      "pool": "0xb9fbcf44b7213094508abdeb2ea53d734b85083c",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 78,
+      "pool": "0x82a97c7f09fef1ef086bd21cddc99f2c95a2a34f",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 79,
+      "pool": "0xa79709411a00695a45bc2ebbbd6fb5c187b28a76",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 80,
+      "pool": "0xac061d7a4db6bb15cd172b3fdf0f381614c18153",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 81,
+      "pool": "0xe11f469ece621c308822b5b260e88c3fa95e0f88",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 82,
+      "pool": "0x6e40541f984819b5a9f21bcf2e8efd58b8ba60b0",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 83,
+      "pool": "0xafa40b310014706ec0e07591950616f7f8e6f942",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 84,
+      "pool": "0x0b8de312884f0132f5b8d84e92b6e9025933953d",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 85,
+      "pool": "0x55bab6bfb0bc632d311e4665a4597ea977d593a8",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 86,
+      "pool": "0x535e1ff12d8da0714c2bb9ef10aae25b624ab14f",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 87,
+      "pool": "0x2a79054135ca5b7653ed926039a963d56cebb1c6",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 88,
+      "pool": "0xf8e2b175f1a9b86845f62ffb8858b6f0072d5fd9",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 89,
+      "pool": "0xb121b603720aab211ddb26a6e4628f483d2ced7a",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 90,
+      "pool": "0xefbc3ef7df95a1d3540f77667625f5ed4b361815",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 91,
+      "pool": "0x34f882f0fc2a688f85e8ba6767249534377d4a92",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 92,
+      "pool": "0xb030150465b706f81eecc453ba5e9bae7b06e50d",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 93,
+      "pool": "0xfb7e02560afa4426ebea2726ea1eeedc7b06a051",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 94,
+      "pool": "0x1b5c3ddfe4d68421ead0f4637031dd3688d3fbad",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 95,
+      "pool": "0xf20b03a847f795bc7803bde984e333559fe19765",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 96,
+      "pool": "0x4ad849516d23cb9768a756270ed0819202932105",
+      "full_positive_quotes": 4
+    },
+    {
+      "idx": 97,
+      "pool": "0x8810ced90fb0c040c6e5a475e9e8fd23bf5fab52",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 98,
+      "pool": "0xf7830028c8d1001a86684d80eba3e477cb21cef6",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 99,
+      "pool": "0xef5cf7bc8d08f0f54e7a1196e3126ac3ba9f5a47",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 100,
+      "pool": "0x931cf242f16e00f05ca4e513b40769b263269d4e",
+      "full_positive_quotes": 4
+    },
+    {
+      "idx": 101,
+      "pool": "0x908725fd217032a7b450441290db901db9784f8d",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 102,
+      "pool": "0x6d8ba0e8c6223aefcac9d5bc3bdf64fe34bfcebb",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 103,
+      "pool": "0x427c9a84e9f9730ee0078c464346159a40dbc949",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 104,
+      "pool": "0x38ef8a31451a8085c81b2961238a24c2b38f93ec",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 105,
+      "pool": "0x738d5b3c566a5461671843e7c81b7ad2a3b126f7",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 106,
+      "pool": "0xe472ebf59a89cb135635bad7c72c667ffe11d05d",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 107,
+      "pool": "0x36ca1bca7e2c0698ba1f28e11ff6ea5c277c0a84",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 108,
+      "pool": "0xdbf0701685d7159375d09eac4b2ddc4b69078c59",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 109,
+      "pool": "0xbe91f536011169c48b45f05f74978023787a7eea",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 110,
+      "pool": "0xeb97ca84203302b623ff7fff73ae15f3e57d9bd4",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 111,
+      "pool": "0x612bd296d3754eeb3d9368fd745e985abbc85317",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 112,
+      "pool": "0xf6b9e14e3eeb6f3bffac0ce2c9d6b43a0c9b3e36",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 113,
+      "pool": "0x725826ed820c1424de0f7b18eadb945a6cdf37b7",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 114,
+      "pool": "0xa930906f5db59dd625271b0d31e8b5f897329241",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 115,
+      "pool": "0xa42b3ba631524c02e9ca9f59eb5393b935f720fc",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 116,
+      "pool": "0x3d6383cb7d0d149b8cb832bf0d19caef02bae68a",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 117,
+      "pool": "0x5ab765426c95d1f7a7b50f976e40acb166abba23",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 118,
+      "pool": "0xbd11c42f8752148542d8ce22c78324341cdb70c3",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 119,
+      "pool": "0xed210d14378d2469ecdb9a5332285bc35f8ebde1",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 120,
+      "pool": "0x0c62b24f59f91c33f29338efaff92ac8757c2909",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 121,
+      "pool": "0x250264d925ec7b93397ae636d14c2c088080519b",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 122,
+      "pool": "0x27749437d4d0fb52b1f063f61da9b6dfad7fc488",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 123,
+      "pool": "0x43657e9eb0075b91ed5a920a747e76cb80c69055",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 124,
+      "pool": "0xaa628c21d457e07184d0b61b74789c11cd39ab03",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 125,
+      "pool": "0x2b1034cc57b6bf7b836bc28d4a80e3842bf4917b",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 126,
+      "pool": "0x2e7a19e45e5283d8e2197bef81b54214eafe705f",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 127,
+      "pool": "0xab932f38d7de18fbc15e9d489ee6335676f3432e",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 128,
+      "pool": "0x44ba0dc2f902152d7b9fd591244d40787ceca605",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 129,
+      "pool": "0x7d2f68ed26fef5bd4f354e25c2af70a4c88ddce0",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 130,
+      "pool": "0x764352a3a744fd6ab73fdf705326c3f865ca6409",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 131,
+      "pool": "0x95ef2e12938b780d92dd8012085feed954adfe97",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 132,
+      "pool": "0xa3822e17f6ffc3d791fb91e5173c21a97c4bf4c0",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 133,
+      "pool": "0x749f424a5a14aad0d51cbb38eba57f690d71ba19",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 134,
+      "pool": "0x5cc24bfd60c0cf655e968cc0b3c623107481cc5d",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 135,
+      "pool": "0x16386325559de16076be4edf07a554b321c931f8",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 136,
+      "pool": "0x00fbd3068aa6d1ef916ff0ed68aaa0ba7cad2c8a",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 137,
+      "pool": "0xa78e6f3477c500db55a3af09e5fc5462c0b74d9c",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 138,
+      "pool": "0x367a1a576cd454ef3c6aacf0d9ae14190ae1de34",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 139,
+      "pool": "0x3a4d76933e4b3135dc3bdf6778c6430aa65a3003",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 140,
+      "pool": "0xf55c3846235f768bc56e9f9ff2643f411ede5034",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 141,
+      "pool": "0xad4c87feedad39597281b898f0ae8ee2e3ab4781",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 142,
+      "pool": "0x9fc528c6856fdd1d6fb3633c6071ff5e86203951",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 143,
+      "pool": "0x3bfd6ed6c918260073d4ffea1e39e4e1e32e1e4d",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 144,
+      "pool": "0xd5d6cf31a112c674ead3b52de68444e428bc878d",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 145,
+      "pool": "0x52bc3eb04b88a3f0d3ac57b6aed642e4d0d80038",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 146,
+      "pool": "0xe9c6a8e2a629bf6f190bfa2fb1a5ea81b878b1b0",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 147,
+      "pool": "0x03c15cd06c821a423f2e31498ce52b7c1122c2b4",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 148,
+      "pool": "0x8742fdd65df4a846dd6620488aef6fb29b8568fd",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 149,
+      "pool": "0x972b645804e14f5a19a6ef33e8fcf049b09a02ef",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 150,
+      "pool": "0xe7af163bd67c46b9a76b4088e9d0ff448e7e8d62",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 151,
+      "pool": "0x243006d1bdeb91b34aab608ee4d7fde781b599fc",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 152,
+      "pool": "0xf66bc7812f6257199c6840ac0e91c2f499ad9e75",
+      "full_positive_quotes": 4
+    }
+  ]
+}

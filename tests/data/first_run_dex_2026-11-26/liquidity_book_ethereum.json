@@ -1,0 +1,1028 @@
+{
+  "chain_id": 1,
+  "endpoint": "https://eth.drpc.org",
+  "selector": {
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "requireCanonical": true
+  },
+  "factory": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+  "implementation": "0x7f89d5e94d6bd0351426e113fde9ef9ea678c186",
+  "pairs": 15,
+  "release": {
+    "source": "https://sourcify.dev/server/v2/contract/1/0x7f89d5e94d6bd0351426e113fde9ef9ea678c186?fields=sources,compilation,runtimeBytecode.onchainBytecode",
+    "upstream": "https://codeload.github.com/lfj-gg/joe-v2/tar.gz/8eeb42d73b5fe473f5b65d544d27827065a83e32",
+    "compiler": "0.8.10+commit.fc410830",
+    "runtime": "0xbc7c8c866ff13fb8a13096bd48947a03d3d9101c58940428cef62837593fdb64",
+    "files": [
+      {
+        "path": "src/libraries/math/SafeCast.sol",
+        "status": "match",
+        "deployed_sha256": "72ac1a82bcf8fdafdc78900ef1395bf76e8c7e09ad92aea1d89b2eb636f5d466",
+        "upstream_sha256": "72ac1a82bcf8fdafdc78900ef1395bf76e8c7e09ad92aea1d89b2eb636f5d466"
+      },
+      {
+        "path": "src/libraries/math/Uint256x256Math.sol",
+        "status": "match",
+        "deployed_sha256": "5f73d5ac42bab9a2b9721a848ff37b419552824197fa104e5696501a4e0d743e",
+        "upstream_sha256": "5f73d5ac42bab9a2b9721a848ff37b419552824197fa104e5696501a4e0d743e"
+      },
+      {
+        "path": "src/libraries/math/BitMath.sol",
+        "status": "match",
+        "deployed_sha256": "b1114a67a3c5daead910c33572d8095be198f979f94e654f9a668ff33afb808d",
+        "upstream_sha256": "b1114a67a3c5daead910c33572d8095be198f979f94e654f9a668ff33afb808d"
+      },
+      {
+        "path": "src/libraries/FeeHelper.sol",
+        "status": "match",
+        "deployed_sha256": "947663ec657e4f25b68ea63477fbe1d71df7d315ba8ea2c27445c91caa9295be",
+        "upstream_sha256": "947663ec657e4f25b68ea63477fbe1d71df7d315ba8ea2c27445c91caa9295be"
+      },
+      {
+        "path": "src/interfaces/IPendingOwnable.sol",
+        "status": "match",
+        "deployed_sha256": "db5fca8b3dd3c09e51013a40c9f86d44059cc1e1dfaa75dcb317eb6fc7e63191",
+        "upstream_sha256": "db5fca8b3dd3c09e51013a40c9f86d44059cc1e1dfaa75dcb317eb6fc7e63191"
+      },
+      {
+        "path": "src/libraries/math/SampleMath.sol",
+        "status": "match",
+        "deployed_sha256": "8a5f7cbe41fd606cbc1d0bca2f1d778ed7b37518f5450f531e55d248b40c5e14",
+        "upstream_sha256": "8a5f7cbe41fd606cbc1d0bca2f1d778ed7b37518f5450f531e55d248b40c5e14"
+      },
+      {
+        "path": "src/libraries/TokenHelper.sol",
+        "status": "match",
+        "deployed_sha256": "ce2caeceeeea59d7c7853dfecdf49a819d7f1179bf004dc18a127711e7ad0aee",
+        "upstream_sha256": "ce2caeceeeea59d7c7853dfecdf49a819d7f1179bf004dc18a127711e7ad0aee"
+      },
+      {
+        "path": "src/libraries/AddressHelper.sol",
+        "status": "match",
+        "deployed_sha256": "f507d62022d19dfc0a7acdd42129c5af4bea6ad43bb3ea68fe45cb412d39d03d",
+        "upstream_sha256": "f507d62022d19dfc0a7acdd42129c5af4bea6ad43bb3ea68fe45cb412d39d03d"
+      },
+      {
+        "path": "src/libraries/Clone.sol",
+        "status": "match",
+        "deployed_sha256": "6ed6b2bfbd7468fc3b5516f6332807f3fea48ddeb2782f544ae061fe649b00b1",
+        "upstream_sha256": "6ed6b2bfbd7468fc3b5516f6332807f3fea48ddeb2782f544ae061fe649b00b1"
+      },
+      {
+        "path": "src/interfaces/ILBFlashLoanCallback.sol",
+        "status": "match",
+        "deployed_sha256": "a6ec4002d5a486a2987005808fd4ed38d81d915adc4eb4d55a308b3364fc6500",
+        "upstream_sha256": "a6ec4002d5a486a2987005808fd4ed38d81d915adc4eb4d55a308b3364fc6500"
+      },
+      {
+        "path": "src/libraries/PriceHelper.sol",
+        "status": "match",
+        "deployed_sha256": "2a798593351c18a166929016065e6b6831c293cb34fd4ac6d2cb4086f7d82518",
+        "upstream_sha256": "2a798593351c18a166929016065e6b6831c293cb34fd4ac6d2cb4086f7d82518"
+      },
+      {
+        "path": "src/libraries/math/PackedUint128Math.sol",
+        "status": "match",
+        "deployed_sha256": "761eec2d2f5592ef2d9f036ca61a5b21c743454650344c1cb0b8b393daaa97ac",
+        "upstream_sha256": "761eec2d2f5592ef2d9f036ca61a5b21c743454650344c1cb0b8b393daaa97ac"
+      },
+      {
+        "path": "src/LBPair.sol",
+        "status": "match",
+        "deployed_sha256": "0508025a2f71ef455762938bd69d83d0804a34a84faa6d75f59271d778da965e",
+        "upstream_sha256": "0508025a2f71ef455762938bd69d83d0804a34a84faa6d75f59271d778da965e"
+      },
+      {
+        "path": "src/libraries/math/LiquidityConfigurations.sol",
+        "status": "match",
+        "deployed_sha256": "28504f85b322e99ec68d034a50cea5e61efbc17e11e0c4466e9c1b4b63575836",
+        "upstream_sha256": "28504f85b322e99ec68d034a50cea5e61efbc17e11e0c4466e9c1b4b63575836"
+      },
+      {
+        "path": "src/libraries/OracleHelper.sol",
+        "status": "match",
+        "deployed_sha256": "c70cca7e3291754c022a458f72019f84a9679b540755a6fc3565d062a1bd5f1d",
+        "upstream_sha256": "c70cca7e3291754c022a458f72019f84a9679b540755a6fc3565d062a1bd5f1d"
+      },
+      {
+        "path": "src/libraries/Constants.sol",
+        "status": "match",
+        "deployed_sha256": "459c5c78ccd4a317420dba6bd9ea7b01c1186be771c3b622bbb754f5e8d97b35",
+        "upstream_sha256": "459c5c78ccd4a317420dba6bd9ea7b01c1186be771c3b622bbb754f5e8d97b35"
+      },
+      {
+        "path": "src/LBToken.sol",
+        "status": "match",
+        "deployed_sha256": "ed4d42ff3a99f6e48f3745e5d56426bdd30479c9ca577a660881f675e74147cf",
+        "upstream_sha256": "ed4d42ff3a99f6e48f3745e5d56426bdd30479c9ca577a660881f675e74147cf"
+      },
+      {
+        "path": "src/libraries/ReentrancyGuard.sol",
+        "status": "match",
+        "deployed_sha256": "e2307f0debe748a3c8b814496eec1853d819055c80a2b24fb6948f57a03eeba4",
+        "upstream_sha256": "e2307f0debe748a3c8b814496eec1853d819055c80a2b24fb6948f57a03eeba4"
+      },
+      {
+        "path": "src/interfaces/ILBPair.sol",
+        "status": "match",
+        "deployed_sha256": "d6e55b3ffc44befbd4d9f752243d9e8fa7ab396be62a9d113f1088376bb369e4",
+        "upstream_sha256": "d6e55b3ffc44befbd4d9f752243d9e8fa7ab396be62a9d113f1088376bb369e4"
+      },
+      {
+        "path": "src/libraries/PairParameterHelper.sol",
+        "status": "match",
+        "deployed_sha256": "f78d2f133801e787043a5c6b9381dcc0477670d279b941cf93646860c0f66022",
+        "upstream_sha256": "f78d2f133801e787043a5c6b9381dcc0477670d279b941cf93646860c0f66022"
+      },
+      {
+        "path": "src/libraries/math/TreeMath.sol",
+        "status": "different_remove_on_burn",
+        "deployed_sha256": "7b879a8c5e596a5a34aebecf7bab58cca5d92a6ed73738ad30de9e904458ffb5",
+        "upstream_sha256": "593c7d86e49935edfdef560d799d2eb917589afb73c43f23187f5c8d170d4628"
+      },
+      {
+        "path": "src/interfaces/ILBToken.sol",
+        "status": "match",
+        "deployed_sha256": "bcfe447bda86c883719f92338dbb07a15c327abd4327f456ae2f926e63be684f",
+        "upstream_sha256": "bcfe447bda86c883719f92338dbb07a15c327abd4327f456ae2f926e63be684f"
+      },
+      {
+        "path": "src/libraries/BinHelper.sol",
+        "status": "match",
+        "deployed_sha256": "5f9664ba999ac606ffdd6e9a9a5069d5675fe7165bae3be63097828bee793b92",
+        "upstream_sha256": "5f9664ba999ac606ffdd6e9a9a5069d5675fe7165bae3be63097828bee793b92"
+      },
+      {
+        "path": "src/interfaces/ILBFactory.sol",
+        "status": "match",
+        "deployed_sha256": "036a1bf087204fa805a5488246cdac07b57a38d37838367e10ef7c16d98ab406",
+        "upstream_sha256": "036a1bf087204fa805a5488246cdac07b57a38d37838367e10ef7c16d98ab406"
+      },
+      {
+        "path": "src/libraries/math/Encoded.sol",
+        "status": "match",
+        "deployed_sha256": "a6be1229a013dabb2de7e7c3f8e8f642aa2ad9df1e7e5246de7c0359da150f62",
+        "upstream_sha256": "a6be1229a013dabb2de7e7c3f8e8f642aa2ad9df1e7e5246de7c0359da150f62"
+      },
+      {
+        "path": "src/libraries/math/Uint128x128Math.sol",
+        "status": "match",
+        "deployed_sha256": "46fe200ee3b46dc05960c1d05fae99fdbaf6a1506805952c2ab5dd912f841e42",
+        "upstream_sha256": "46fe200ee3b46dc05960c1d05fae99fdbaf6a1506805952c2ab5dd912f841e42"
+      }
+    ]
+  },
+  "rows": [
+    {
+      "pool": "0x47b1cec2d2370e11b049c73ab6732f03e920c71a",
+      "x": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "y": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "step": 1,
+      "clone": "0x363d3d373d3d3d3d61002c806035363936013d737f89d5e94d6bd0351426e113fde9ef9ea678c1865af43d3d93803e603357fd5bf3dac17f958d2ee523a2206206994597c13d831ec7a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480001002c",
+      "reserves": [
+        "565766268",
+        "2350069"
+      ],
+      "ignored_for_routing": false,
+      "quotes": [
+        {
+          "swap_for_y": true,
+          "amount_in": "56576",
+          "amount_left": "0",
+          "amount_out": "56510",
+          "fee": "3"
+        },
+        {
+          "swap_for_y": true,
+          "amount_in": "5657662",
+          "amount_left": "3304675",
+          "amount_out": "2350069",
+          "fee": "123"
+        },
+        {
+          "swap_for_y": false,
+          "amount_in": "235",
+          "amount_left": "0",
+          "amount_out": "234",
+          "fee": "1"
+        },
+        {
+          "swap_for_y": false,
+          "amount_in": "23500",
+          "amount_left": "0",
+          "amount_out": "23523",
+          "fee": "2"
+        }
+      ],
+      "status": "incomplete_fill"
+    },
+    {
+      "pool": "0xae4c7ddef4360d0cb5156b2c1435761525ff3997",
+      "x": "0x6b175474e89094c44da98b954eedeac495271d0f",
+      "y": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "step": 1,
+      "clone": "0x363d3d373d3d3d3d61002c806035363936013d737f89d5e94d6bd0351426e113fde9ef9ea678c1865af43d3d93803e603357fd5bf36b175474e89094c44da98b954eedeac495271d0fa0b86991c6218b36c1d19d4a2e9eb0ce3606eb480001002c",
+      "reserves": [
+        "195722378972435535",
+        "204602"
+      ],
+      "ignored_for_routing": false,
+      "quotes": [
+        {
+          "swap_for_y": true,
+          "amount_in": "19572237897243",
+          "amount_left": "0",
+          "amount_out": "19",
+          "fee": "978611895"
+        },
+        {
+          "swap_for_y": true,
+          "amount_in": "1957223789724355",
+          "amount_left": "0",
+          "amount_out": "1957",
+          "fee": "97861189487"
+        },
+        {
+          "swap_for_y": false,
+          "amount_in": "20",
+          "amount_left": "0",
+          "amount_out": "18999949767344",
+          "fee": "1"
+        },
+        {
+          "swap_for_y": false,
+          "amount_in": "2046",
+          "amount_left": "0",
+          "amount_out": "2044994593380000",
+          "fee": "1"
+        }
+      ],
+      "status": "quoted"
+    },
+    {
+      "pool": "0xa3b2b212529b953fc482fe5e3faf81e30b075b2d",
+      "x": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "y": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "step": 100,
+      "clone": "0x363d3d373d3d3d3d61002c806035363936013d737f89d5e94d6bd0351426e113fde9ef9ea678c1865af43d3d93803e603357fd5bf3c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480064002c",
+      "reserves": [
+        "0",
+        "0"
+      ],
+      "ignored_for_routing": false,
+      "quotes": [],
+      "status": "empty_side"
+    },
+    {
+      "pool": "0xae0b131a59df576fd2056187242a2c3ff5f6036f",
+      "x": "0x046eee2cc3188071c02bfc1745a6b17c656e3f3d",
+      "y": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "step": 100,
+      "clone": "0x363d3d373d3d3d3d61002c806035363936013d737f89d5e94d6bd0351426e113fde9ef9ea678c1865af43d3d93803e603357fd5bf3046eee2cc3188071c02bfc1745a6b17c656e3f3dc02aaa39b223fe8d0a0e5c4f27ead9083c756cc20064002c",
+      "reserves": [
+        "10116094224180950784",
+        "1344799460103"
+      ],
+      "ignored_for_routing": false,
+      "quotes": [
+        {
+          "swap_for_y": true,
+          "amount_in": "1011609422418095",
+          "amount_left": "870281683625058",
+          "amount_out": "1344799460103",
+          "fee": "1130621910345"
+        },
+        {
+          "swap_for_y": true,
+          "amount_in": "101160942241809507",
+          "amount_left": "101019614503016470",
+          "amount_out": "1344799460103",
+          "fee": "1130621910345"
+        },
+        {
+          "swap_for_y": false,
+          "amount_in": "134479946",
+          "amount_left": "0",
+          "amount_out": "13907553948",
+          "fee": "1075840"
+        },
+        {
+          "swap_for_y": false,
+          "amount_in": "13447994601",
+          "amount_left": "0",
+          "amount_out": "1390755399453",
+          "fee": "107583957"
+        }
+      ],
+      "status": "incomplete_fill"
+    },
+    {
+      "pool": "0x9fa62ecaeddb5a925deaf981d91d1450044177f8",
+      "x": "0x046eee2cc3188071c02bfc1745a6b17c656e3f3d",
+      "y": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "step": 25,
+      "clone": "0x363d3d373d3d3d3d61002c806035363936013d737f89d5e94d6bd0351426e113fde9ef9ea678c1865af43d3d93803e603357fd5bf3046eee2cc3188071c02bfc1745a6b17c656e3f3da0b86991c6218b36c1d19d4a2e9eb0ce3606eb480019002c",
+      "reserves": [
+        "0",
+        "0"
+      ],
+      "ignored_for_routing": false,
+      "quotes": [],
+      "status": "empty_side"
+    },
+    {
+      "pool": "0x25c9e8f78befa9fbea09ee32aab484dda0fc9f69",
+      "x": "0xaf5191b0de278c7286d6c7cc6ab6bb8a73ba2cd6",
+      "y": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "step": 25,
+      "clone": "0x363d3d373d3d3d3d61002c806035363936013d737f89d5e94d6bd0351426e113fde9ef9ea678c1865af43d3d93803e603357fd5bf3af5191b0de278c7286d6c7cc6ab6bb8a73ba2cd6a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480019002c",
+      "reserves": [
+        "0",
+        "0"
+      ],
+      "ignored_for_routing": false,
+      "quotes": [],
+      "status": "empty_side"
+    },
+    {
+      "pool": "0xf9972a27e7c87a904a7dc93d52929dd02fdaad93",
+      "x": "0x31e4efe290973ebe91b3a875a7994f650942d28f",
+      "y": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "step": 100,
+      "clone": "0x363d3d373d3d3d3d61002c806035363936013d737f89d5e94d6bd0351426e113fde9ef9ea678c1865af43d3d93803e603357fd5bf331e4efe290973ebe91b3a875a7994f650942d28fa0b86991c6218b36c1d19d4a2e9eb0ce3606eb480064002c",
+      "reserves": [
+        "0",
+        "0"
+      ],
+      "ignored_for_routing": false,
+      "quotes": [],
+      "status": "empty_side"
+    },
+    {
+      "pool": "0x9d2a707a7f65c5761b8caae0e922b66901064a4b",
+      "x": "0x46a9459d34eaeeab4e792e5238298d4e15261ca1",
+      "y": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "step": 100,
+      "clone": "0x363d3d373d3d3d3d61002c806035363936013d737f89d5e94d6bd0351426e113fde9ef9ea678c1865af43d3d93803e603357fd5bf346a9459d34eaeeab4e792e5238298d4e15261ca1a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480064002c",
+      "reserves": [
+        "0",
+        "0"
+      ],
+      "ignored_for_routing": false,
+      "quotes": [],
+      "status": "empty_side"
+    },
+    {
+      "pool": "0xd44d7c4815250651d2ee49c43c3e6e3e23d62f33",
+      "x": "0xa21af1050f7b26e0cff45ee51548254c41ed6b5c",
+      "y": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "step": 100,
+      "clone": "0x363d3d373d3d3d3d61002c806035363936013d737f89d5e94d6bd0351426e113fde9ef9ea678c1865af43d3d93803e603357fd5bf3a21af1050f7b26e0cff45ee51548254c41ed6b5cc02aaa39b223fe8d0a0e5c4f27ead9083c756cc20064002c",
+      "reserves": [
+        "0",
+        "0"
+      ],
+      "ignored_for_routing": false,
+      "quotes": [],
+      "status": "empty_side"
+    },
+    {
+      "pool": "0x9ad62ad334b122b810eab6153aa7ab3b0b4aea64",
+      "x": "0xd084944d3c05cd115c09d072b9f44ba3e0e45921",
+      "y": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "step": 100,
+      "clone": "0x363d3d373d3d3d3d61002c806035363936013d737f89d5e94d6bd0351426e113fde9ef9ea678c1865af43d3d93803e603357fd5bf3d084944d3c05cd115c09d072b9f44ba3e0e45921a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480064002c",
+      "reserves": [
+        "0",
+        "0"
+      ],
+      "ignored_for_routing": false,
+      "quotes": [],
+      "status": "empty_side"
+    },
+    {
+      "pool": "0x3decbe00b6caf3cbc81f99e29c820ba008a60237",
+      "x": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "y": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "step": 50,
+      "clone": "0x363d3d373d3d3d3d61002c806035363936013d737f89d5e94d6bd0351426e113fde9ef9ea678c1865af43d3d93803e603357fd5bf3dac17f958d2ee523a2206206994597c13d831ec7c02aaa39b223fe8d0a0e5c4f27ead9083c756cc20032002c",
+      "reserves": [
+        "0",
+        "0"
+      ],
+      "ignored_for_routing": false,
+      "quotes": [],
+      "status": "empty_side"
+    },
+    {
+      "pool": "0xb35375d88c2974877619e3b16184ee9fec096707",
+      "x": "0x1f961bceaef8edf6fb2797c0293ffbde3e994614",
+      "y": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "step": 100,
+      "clone": "0x363d3d373d3d3d3d61002c806035363936013d737f89d5e94d6bd0351426e113fde9ef9ea678c1865af43d3d93803e603357fd5bf31f961bceaef8edf6fb2797c0293ffbde3e994614c02aaa39b223fe8d0a0e5c4f27ead9083c756cc20064002c",
+      "reserves": [
+        "0",
+        "0"
+      ],
+      "ignored_for_routing": false,
+      "quotes": [],
+      "status": "empty_side"
+    }
+  ],
+  "calls": [
+    {
+      "to": "0x47b1cec2d2370e11b049c73ab6732f03e920c71a",
+      "signature": "getFactory()",
+      "data": "0x88cc58e4",
+      "response": "0x000000000000000000000000dc8d77b69155c7e68a95a4fb0f06a71ff90b943a"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairImplementation()",
+      "data": "0xaf371065",
+      "response": "0x0000000000000000000000007f89d5e94d6bd0351426e113fde9ef9ea678c186"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getNumberOfLBPairs()",
+      "data": "0x4e937c3a",
+      "response": "0x000000000000000000000000000000000000000000000000000000000000000f"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairAtIndex(uint256)",
+      "data": "0x7daf5d660000000000000000000000000000000000000000000000000000000000000000",
+      "response": "0x00000000000000000000000047b1cec2d2370e11b049c73ab6732f03e920c71a"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairAtIndex(uint256)",
+      "data": "0x7daf5d660000000000000000000000000000000000000000000000000000000000000001",
+      "response": "0x000000000000000000000000ae4c7ddef4360d0cb5156b2c1435761525ff3997"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairAtIndex(uint256)",
+      "data": "0x7daf5d660000000000000000000000000000000000000000000000000000000000000002",
+      "response": "0x000000000000000000000000a3b2b212529b953fc482fe5e3faf81e30b075b2d"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairAtIndex(uint256)",
+      "data": "0x7daf5d660000000000000000000000000000000000000000000000000000000000000003",
+      "response": "0x000000000000000000000000ae0b131a59df576fd2056187242a2c3ff5f6036f"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairAtIndex(uint256)",
+      "data": "0x7daf5d660000000000000000000000000000000000000000000000000000000000000004",
+      "response": "0x0000000000000000000000009fa62ecaeddb5a925deaf981d91d1450044177f8"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairAtIndex(uint256)",
+      "data": "0x7daf5d660000000000000000000000000000000000000000000000000000000000000005",
+      "response": "0x00000000000000000000000025c9e8f78befa9fbea09ee32aab484dda0fc9f69"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairAtIndex(uint256)",
+      "data": "0x7daf5d660000000000000000000000000000000000000000000000000000000000000006",
+      "response": "0x000000000000000000000000f9972a27e7c87a904a7dc93d52929dd02fdaad93"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairAtIndex(uint256)",
+      "data": "0x7daf5d660000000000000000000000000000000000000000000000000000000000000007",
+      "response": "0x0000000000000000000000009d2a707a7f65c5761b8caae0e922b66901064a4b"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairAtIndex(uint256)",
+      "data": "0x7daf5d660000000000000000000000000000000000000000000000000000000000000008",
+      "response": "0x000000000000000000000000d44d7c4815250651d2ee49c43c3e6e3e23d62f33"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairAtIndex(uint256)",
+      "data": "0x7daf5d660000000000000000000000000000000000000000000000000000000000000009",
+      "response": "0x0000000000000000000000009ad62ad334b122b810eab6153aa7ab3b0b4aea64"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairAtIndex(uint256)",
+      "data": "0x7daf5d66000000000000000000000000000000000000000000000000000000000000000a",
+      "response": "0x0000000000000000000000003decbe00b6caf3cbc81f99e29c820ba008a60237"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairAtIndex(uint256)",
+      "data": "0x7daf5d66000000000000000000000000000000000000000000000000000000000000000b",
+      "response": "0x000000000000000000000000b35375d88c2974877619e3b16184ee9fec096707"
+    },
+    {
+      "to": "0x47b1cec2d2370e11b049c73ab6732f03e920c71a",
+      "signature": "getTokenX()",
+      "data": "0x05e8746d",
+      "response": "0x000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7"
+    },
+    {
+      "to": "0x47b1cec2d2370e11b049c73ab6732f03e920c71a",
+      "signature": "getTokenY()",
+      "data": "0xda10610c",
+      "response": "0x000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+    },
+    {
+      "to": "0x47b1cec2d2370e11b049c73ab6732f03e920c71a",
+      "signature": "getBinStep()",
+      "data": "0x17f11ecc",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairInformation(address,address,uint256)",
+      "data": "0x704037bd000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480000000000000000000000000000000000000000000000000000000000000001",
+      "response": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000047b1cec2d2370e11b049c73ab6732f03e920c71a00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0x47b1cec2d2370e11b049c73ab6732f03e920c71a",
+      "signature": "getFactory()",
+      "data": "0x88cc58e4",
+      "response": "0x000000000000000000000000dc8d77b69155c7e68a95a4fb0f06a71ff90b943a"
+    },
+    {
+      "to": "0x47b1cec2d2370e11b049c73ab6732f03e920c71a",
+      "signature": "getReserves()",
+      "data": "0x0902f1ac",
+      "response": "0x0000000000000000000000000000000000000000000000000000000021b8e87c000000000000000000000000000000000000000000000000000000000023dbf5"
+    },
+    {
+      "to": "0x47b1cec2d2370e11b049c73ab6732f03e920c71a",
+      "signature": "getSwapOut(uint128,bool)",
+      "data": "0xe77366f8000000000000000000000000000000000000000000000000000000000000dd000000000000000000000000000000000000000000000000000000000000000001",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000dcbe0000000000000000000000000000000000000000000000000000000000000003"
+    },
+    {
+      "to": "0x47b1cec2d2370e11b049c73ab6732f03e920c71a",
+      "signature": "getSwapOut(uint128,bool)",
+      "data": "0xe77366f8000000000000000000000000000000000000000000000000000000000056543e0000000000000000000000000000000000000000000000000000000000000001",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000326ce3000000000000000000000000000000000000000000000000000000000023dbf5000000000000000000000000000000000000000000000000000000000000007b"
+    },
+    {
+      "to": "0x47b1cec2d2370e11b049c73ab6732f03e920c71a",
+      "signature": "getSwapOut(uint128,bool)",
+      "data": "0xe77366f800000000000000000000000000000000000000000000000000000000000000eb0000000000000000000000000000000000000000000000000000000000000000",
+      "response": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ea0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "to": "0x47b1cec2d2370e11b049c73ab6732f03e920c71a",
+      "signature": "getSwapOut(uint128,bool)",
+      "data": "0xe77366f80000000000000000000000000000000000000000000000000000000000005bcc0000000000000000000000000000000000000000000000000000000000000000",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005be30000000000000000000000000000000000000000000000000000000000000002"
+    },
+    {
+      "to": "0xae4c7ddef4360d0cb5156b2c1435761525ff3997",
+      "signature": "getTokenX()",
+      "data": "0x05e8746d",
+      "response": "0x0000000000000000000000006b175474e89094c44da98b954eedeac495271d0f"
+    },
+    {
+      "to": "0xae4c7ddef4360d0cb5156b2c1435761525ff3997",
+      "signature": "getTokenY()",
+      "data": "0xda10610c",
+      "response": "0x000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+    },
+    {
+      "to": "0xae4c7ddef4360d0cb5156b2c1435761525ff3997",
+      "signature": "getBinStep()",
+      "data": "0x17f11ecc",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairInformation(address,address,uint256)",
+      "data": "0x704037bd0000000000000000000000006b175474e89094c44da98b954eedeac495271d0f000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480000000000000000000000000000000000000000000000000000000000000001",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000ae4c7ddef4360d0cb5156b2c1435761525ff399700000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xae4c7ddef4360d0cb5156b2c1435761525ff3997",
+      "signature": "getFactory()",
+      "data": "0x88cc58e4",
+      "response": "0x000000000000000000000000dc8d77b69155c7e68a95a4fb0f06a71ff90b943a"
+    },
+    {
+      "to": "0xae4c7ddef4360d0cb5156b2c1435761525ff3997",
+      "signature": "getReserves()",
+      "data": "0x0902f1ac",
+      "response": "0x00000000000000000000000000000000000000000000000002b75877793f144f0000000000000000000000000000000000000000000000000000000000031f3a"
+    },
+    {
+      "to": "0xae4c7ddef4360d0cb5156b2c1435761525ff3997",
+      "signature": "getSwapOut(uint128,bool)",
+      "data": "0xe77366f8000000000000000000000000000000000000000000000000000011cd04498e1b0000000000000000000000000000000000000000000000000000000000000001",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000013000000000000000000000000000000000000000000000000000000003a546eb7"
+    },
+    {
+      "to": "0xae4c7ddef4360d0cb5156b2c1435761525ff3997",
+      "signature": "getSwapOut(uint128,bool)",
+      "data": "0xe77366f80000000000000000000000000000000000000000000000000006f415acbb82c30000000000000000000000000000000000000000000000000000000000000001",
+      "response": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007a500000000000000000000000000000000000000000000000000000016c8fb3f6f"
+    },
+    {
+      "to": "0xae4c7ddef4360d0cb5156b2c1435761525ff3997",
+      "signature": "getSwapOut(uint128,bool)",
+      "data": "0xe77366f800000000000000000000000000000000000000000000000000000000000000140000000000000000000000000000000000000000000000000000000000000000",
+      "response": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001147c541b2b00000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "to": "0xae4c7ddef4360d0cb5156b2c1435761525ff3997",
+      "signature": "getSwapOut(uint128,bool)",
+      "data": "0xe77366f800000000000000000000000000000000000000000000000000000000000007fe0000000000000000000000000000000000000000000000000000000000000000",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000743e9684e56a00000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "to": "0xa3b2b212529b953fc482fe5e3faf81e30b075b2d",
+      "signature": "getTokenX()",
+      "data": "0x05e8746d",
+      "response": "0x000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+    },
+    {
+      "to": "0xa3b2b212529b953fc482fe5e3faf81e30b075b2d",
+      "signature": "getTokenY()",
+      "data": "0xda10610c",
+      "response": "0x000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+    },
+    {
+      "to": "0xa3b2b212529b953fc482fe5e3faf81e30b075b2d",
+      "signature": "getBinStep()",
+      "data": "0x17f11ecc",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000064"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairInformation(address,address,uint256)",
+      "data": "0x704037bd000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480000000000000000000000000000000000000000000000000000000000000064",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000064000000000000000000000000a3b2b212529b953fc482fe5e3faf81e30b075b2d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xa3b2b212529b953fc482fe5e3faf81e30b075b2d",
+      "signature": "getFactory()",
+      "data": "0x88cc58e4",
+      "response": "0x000000000000000000000000dc8d77b69155c7e68a95a4fb0f06a71ff90b943a"
+    },
+    {
+      "to": "0xa3b2b212529b953fc482fe5e3faf81e30b075b2d",
+      "signature": "getReserves()",
+      "data": "0x0902f1ac",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xae0b131a59df576fd2056187242a2c3ff5f6036f",
+      "signature": "getTokenX()",
+      "data": "0x05e8746d",
+      "response": "0x000000000000000000000000046eee2cc3188071c02bfc1745a6b17c656e3f3d"
+    },
+    {
+      "to": "0xae0b131a59df576fd2056187242a2c3ff5f6036f",
+      "signature": "getTokenY()",
+      "data": "0xda10610c",
+      "response": "0x000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+    },
+    {
+      "to": "0xae0b131a59df576fd2056187242a2c3ff5f6036f",
+      "signature": "getBinStep()",
+      "data": "0x17f11ecc",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000064"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairInformation(address,address,uint256)",
+      "data": "0x704037bd000000000000000000000000046eee2cc3188071c02bfc1745a6b17c656e3f3d000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000000000000000000000000000000000000000000000000000000000000064",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000064000000000000000000000000ae0b131a59df576fd2056187242a2c3ff5f6036f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xae0b131a59df576fd2056187242a2c3ff5f6036f",
+      "signature": "getFactory()",
+      "data": "0x88cc58e4",
+      "response": "0x000000000000000000000000dc8d77b69155c7e68a95a4fb0f06a71ff90b943a"
+    },
+    {
+      "to": "0xae0b131a59df576fd2056187242a2c3ff5f6036f",
+      "signature": "getReserves()",
+      "data": "0x0902f1ac",
+      "response": "0x0000000000000000000000000000000000000000000000008c6396197aafb700000000000000000000000000000000000000000000000000000001391c4b4b07"
+    },
+    {
+      "to": "0xae0b131a59df576fd2056187242a2c3ff5f6036f",
+      "signature": "getSwapOut(uint128,bool)",
+      "data": "0xe77366f80000000000000000000000000000000000000000000000000003980dac4650af0000000000000000000000000000000000000000000000000000000000000001",
+      "response": "0x000000000000000000000000000000000000000000000000000317843e9b6462000000000000000000000000000000000000000000000000000001391c4b4b07000000000000000000000000000000000000000000000000000001073e513d49"
+    },
+    {
+      "to": "0xae0b131a59df576fd2056187242a2c3ff5f6036f",
+      "signature": "getSwapOut(uint128,bool)",
+      "data": "0xe77366f8000000000000000000000000000000000000000000000000016765574b7784630000000000000000000000000000000000000000000000000000000000000001",
+      "response": "0x0000000000000000000000000000000000000000000000000166e4cdddcc9816000000000000000000000000000000000000000000000000000001391c4b4b07000000000000000000000000000000000000000000000000000001073e513d49"
+    },
+    {
+      "to": "0xae0b131a59df576fd2056187242a2c3ff5f6036f",
+      "signature": "getSwapOut(uint128,bool)",
+      "data": "0xe77366f8000000000000000000000000000000000000000000000000000000000804004a0000000000000000000000000000000000000000000000000000000000000000",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000033cf46e9c0000000000000000000000000000000000000000000000000000000000106a80"
+    },
+    {
+      "to": "0xae0b131a59df576fd2056187242a2c3ff5f6036f",
+      "signature": "getSwapOut(uint128,bool)",
+      "data": "0xe77366f80000000000000000000000000000000000000000000000000000000321901ce90000000000000000000000000000000000000000000000000000000000000000",
+      "response": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000143cf7b471d00000000000000000000000000000000000000000000000000000000066999d5"
+    },
+    {
+      "to": "0x9fa62ecaeddb5a925deaf981d91d1450044177f8",
+      "signature": "getTokenX()",
+      "data": "0x05e8746d",
+      "response": "0x000000000000000000000000046eee2cc3188071c02bfc1745a6b17c656e3f3d"
+    },
+    {
+      "to": "0x9fa62ecaeddb5a925deaf981d91d1450044177f8",
+      "signature": "getTokenY()",
+      "data": "0xda10610c",
+      "response": "0x000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+    },
+    {
+      "to": "0x9fa62ecaeddb5a925deaf981d91d1450044177f8",
+      "signature": "getBinStep()",
+      "data": "0x17f11ecc",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000019"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairInformation(address,address,uint256)",
+      "data": "0x704037bd000000000000000000000000046eee2cc3188071c02bfc1745a6b17c656e3f3d000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480000000000000000000000000000000000000000000000000000000000000019",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000190000000000000000000000009fa62ecaeddb5a925deaf981d91d1450044177f800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0x9fa62ecaeddb5a925deaf981d91d1450044177f8",
+      "signature": "getFactory()",
+      "data": "0x88cc58e4",
+      "response": "0x000000000000000000000000dc8d77b69155c7e68a95a4fb0f06a71ff90b943a"
+    },
+    {
+      "to": "0x9fa62ecaeddb5a925deaf981d91d1450044177f8",
+      "signature": "getReserves()",
+      "data": "0x0902f1ac",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0x25c9e8f78befa9fbea09ee32aab484dda0fc9f69",
+      "signature": "getTokenX()",
+      "data": "0x05e8746d",
+      "response": "0x000000000000000000000000af5191b0de278c7286d6c7cc6ab6bb8a73ba2cd6"
+    },
+    {
+      "to": "0x25c9e8f78befa9fbea09ee32aab484dda0fc9f69",
+      "signature": "getTokenY()",
+      "data": "0xda10610c",
+      "response": "0x000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+    },
+    {
+      "to": "0x25c9e8f78befa9fbea09ee32aab484dda0fc9f69",
+      "signature": "getBinStep()",
+      "data": "0x17f11ecc",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000019"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairInformation(address,address,uint256)",
+      "data": "0x704037bd000000000000000000000000af5191b0de278c7286d6c7cc6ab6bb8a73ba2cd6000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480000000000000000000000000000000000000000000000000000000000000019",
+      "response": "0x000000000000000000000000000000000000000000000000000000000000001900000000000000000000000025c9e8f78befa9fbea09ee32aab484dda0fc9f6900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0x25c9e8f78befa9fbea09ee32aab484dda0fc9f69",
+      "signature": "getFactory()",
+      "data": "0x88cc58e4",
+      "response": "0x000000000000000000000000dc8d77b69155c7e68a95a4fb0f06a71ff90b943a"
+    },
+    {
+      "to": "0x25c9e8f78befa9fbea09ee32aab484dda0fc9f69",
+      "signature": "getReserves()",
+      "data": "0x0902f1ac",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xf9972a27e7c87a904a7dc93d52929dd02fdaad93",
+      "signature": "getTokenX()",
+      "data": "0x05e8746d",
+      "response": "0x00000000000000000000000031e4efe290973ebe91b3a875a7994f650942d28f"
+    },
+    {
+      "to": "0xf9972a27e7c87a904a7dc93d52929dd02fdaad93",
+      "signature": "getTokenY()",
+      "data": "0xda10610c",
+      "response": "0x000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+    },
+    {
+      "to": "0xf9972a27e7c87a904a7dc93d52929dd02fdaad93",
+      "signature": "getBinStep()",
+      "data": "0x17f11ecc",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000064"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairInformation(address,address,uint256)",
+      "data": "0x704037bd00000000000000000000000031e4efe290973ebe91b3a875a7994f650942d28f000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480000000000000000000000000000000000000000000000000000000000000064",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000064000000000000000000000000f9972a27e7c87a904a7dc93d52929dd02fdaad9300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xf9972a27e7c87a904a7dc93d52929dd02fdaad93",
+      "signature": "getFactory()",
+      "data": "0x88cc58e4",
+      "response": "0x000000000000000000000000dc8d77b69155c7e68a95a4fb0f06a71ff90b943a"
+    },
+    {
+      "to": "0xf9972a27e7c87a904a7dc93d52929dd02fdaad93",
+      "signature": "getReserves()",
+      "data": "0x0902f1ac",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0x9d2a707a7f65c5761b8caae0e922b66901064a4b",
+      "signature": "getTokenX()",
+      "data": "0x05e8746d",
+      "response": "0x00000000000000000000000046a9459d34eaeeab4e792e5238298d4e15261ca1"
+    },
+    {
+      "to": "0x9d2a707a7f65c5761b8caae0e922b66901064a4b",
+      "signature": "getTokenY()",
+      "data": "0xda10610c",
+      "response": "0x000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+    },
+    {
+      "to": "0x9d2a707a7f65c5761b8caae0e922b66901064a4b",
+      "signature": "getBinStep()",
+      "data": "0x17f11ecc",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000064"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairInformation(address,address,uint256)",
+      "data": "0x704037bd00000000000000000000000046a9459d34eaeeab4e792e5238298d4e15261ca1000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480000000000000000000000000000000000000000000000000000000000000064",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000640000000000000000000000009d2a707a7f65c5761b8caae0e922b66901064a4b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0x9d2a707a7f65c5761b8caae0e922b66901064a4b",
+      "signature": "getFactory()",
+      "data": "0x88cc58e4",
+      "response": "0x000000000000000000000000dc8d77b69155c7e68a95a4fb0f06a71ff90b943a"
+    },
+    {
+      "to": "0x9d2a707a7f65c5761b8caae0e922b66901064a4b",
+      "signature": "getReserves()",
+      "data": "0x0902f1ac",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xd44d7c4815250651d2ee49c43c3e6e3e23d62f33",
+      "signature": "getTokenX()",
+      "data": "0x05e8746d",
+      "response": "0x000000000000000000000000a21af1050f7b26e0cff45ee51548254c41ed6b5c"
+    },
+    {
+      "to": "0xd44d7c4815250651d2ee49c43c3e6e3e23d62f33",
+      "signature": "getTokenY()",
+      "data": "0xda10610c",
+      "response": "0x000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+    },
+    {
+      "to": "0xd44d7c4815250651d2ee49c43c3e6e3e23d62f33",
+      "signature": "getBinStep()",
+      "data": "0x17f11ecc",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000064"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairInformation(address,address,uint256)",
+      "data": "0x704037bd000000000000000000000000a21af1050f7b26e0cff45ee51548254c41ed6b5c000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000000000000000000000000000000000000000000000000000000000000064",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000064000000000000000000000000d44d7c4815250651d2ee49c43c3e6e3e23d62f3300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xd44d7c4815250651d2ee49c43c3e6e3e23d62f33",
+      "signature": "getFactory()",
+      "data": "0x88cc58e4",
+      "response": "0x000000000000000000000000dc8d77b69155c7e68a95a4fb0f06a71ff90b943a"
+    },
+    {
+      "to": "0xd44d7c4815250651d2ee49c43c3e6e3e23d62f33",
+      "signature": "getReserves()",
+      "data": "0x0902f1ac",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0x9ad62ad334b122b810eab6153aa7ab3b0b4aea64",
+      "signature": "getTokenX()",
+      "data": "0x05e8746d",
+      "response": "0x000000000000000000000000d084944d3c05cd115c09d072b9f44ba3e0e45921"
+    },
+    {
+      "to": "0x9ad62ad334b122b810eab6153aa7ab3b0b4aea64",
+      "signature": "getTokenY()",
+      "data": "0xda10610c",
+      "response": "0x000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+    },
+    {
+      "to": "0x9ad62ad334b122b810eab6153aa7ab3b0b4aea64",
+      "signature": "getBinStep()",
+      "data": "0x17f11ecc",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000064"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairInformation(address,address,uint256)",
+      "data": "0x704037bd000000000000000000000000d084944d3c05cd115c09d072b9f44ba3e0e45921000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480000000000000000000000000000000000000000000000000000000000000064",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000640000000000000000000000009ad62ad334b122b810eab6153aa7ab3b0b4aea6400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0x9ad62ad334b122b810eab6153aa7ab3b0b4aea64",
+      "signature": "getFactory()",
+      "data": "0x88cc58e4",
+      "response": "0x000000000000000000000000dc8d77b69155c7e68a95a4fb0f06a71ff90b943a"
+    },
+    {
+      "to": "0x9ad62ad334b122b810eab6153aa7ab3b0b4aea64",
+      "signature": "getReserves()",
+      "data": "0x0902f1ac",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0x3decbe00b6caf3cbc81f99e29c820ba008a60237",
+      "signature": "getTokenX()",
+      "data": "0x05e8746d",
+      "response": "0x000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7"
+    },
+    {
+      "to": "0x3decbe00b6caf3cbc81f99e29c820ba008a60237",
+      "signature": "getTokenY()",
+      "data": "0xda10610c",
+      "response": "0x000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+    },
+    {
+      "to": "0x3decbe00b6caf3cbc81f99e29c820ba008a60237",
+      "signature": "getBinStep()",
+      "data": "0x17f11ecc",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000032"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairInformation(address,address,uint256)",
+      "data": "0x704037bd000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000000000000000000000000000000000000000000000000000000000000032",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000320000000000000000000000003decbe00b6caf3cbc81f99e29c820ba008a6023700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0x3decbe00b6caf3cbc81f99e29c820ba008a60237",
+      "signature": "getFactory()",
+      "data": "0x88cc58e4",
+      "response": "0x000000000000000000000000dc8d77b69155c7e68a95a4fb0f06a71ff90b943a"
+    },
+    {
+      "to": "0x3decbe00b6caf3cbc81f99e29c820ba008a60237",
+      "signature": "getReserves()",
+      "data": "0x0902f1ac",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xb35375d88c2974877619e3b16184ee9fec096707",
+      "signature": "getTokenX()",
+      "data": "0x05e8746d",
+      "response": "0x0000000000000000000000001f961bceaef8edf6fb2797c0293ffbde3e994614"
+    },
+    {
+      "to": "0xb35375d88c2974877619e3b16184ee9fec096707",
+      "signature": "getTokenY()",
+      "data": "0xda10610c",
+      "response": "0x000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+    },
+    {
+      "to": "0xb35375d88c2974877619e3b16184ee9fec096707",
+      "signature": "getBinStep()",
+      "data": "0x17f11ecc",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000064"
+    },
+    {
+      "to": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "signature": "getLBPairInformation(address,address,uint256)",
+      "data": "0x704037bd0000000000000000000000001f961bceaef8edf6fb2797c0293ffbde3e994614000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000000000000000000000000000000000000000000000000000000000000064",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000064000000000000000000000000b35375d88c2974877619e3b16184ee9fec09670700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xb35375d88c2974877619e3b16184ee9fec096707",
+      "signature": "getFactory()",
+      "data": "0x88cc58e4",
+      "response": "0x000000000000000000000000dc8d77b69155c7e68a95a4fb0f06a71ff90b943a"
+    },
+    {
+      "to": "0xb35375d88c2974877619e3b16184ee9fec096707",
+      "signature": "getReserves()",
+      "data": "0x0902f1ac",
+      "response": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}

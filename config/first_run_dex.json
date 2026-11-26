@@ -1332,5 +1332,65 @@
         "3000"
       ]
     }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "swapline-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x9882a2fbb0a4393302482bb5258c2f9ff8887479?fields=sources,compilation,runtimeBytecode.onchainBytecode",
+    "settings": {
+      "dex.kind": "lb_v22",
+      "dex.factory": "0x20918f4ba70439c58d070d4746f3aa303a7595d8",
+      "dex.lb_implementations": [
+        "0x9882a2fbb0a4393302482bb5258c2f9ff8887479"
+      ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "traderjoe-v2-1-ethereum",
+    "source": "https://sourcify.dev/server/v2/contract/1/0x7f89d5e94d6bd0351426e113fde9ef9ea678c186?fields=sources,compilation,runtimeBytecode.onchainBytecode",
+    "settings": {
+      "dex.kind": "lb_v21_clone",
+      "dex.factory": "0xdc8d77b69155c7e68a95a4fb0f06a71ff90b943a",
+      "dex.lb_implementations": [
+        "0x7f89d5e94d6bd0351426e113fde9ef9ea678c186"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "metric-base",
+    "source": "https://registry.npmjs.org/@nradko/metric-omm-sdk-v1/-/metric-omm-sdk-v1-0.4.5.tgz · tests/data/first_run_dex_2026-11-26/metric_base.json",
+    "settings": {
+      "dex.kind": "metric_omm",
+      "dex.factory": "0x2a53833cc95548cf52c7b159110e22d3a9018f32",
+      "dex.quoter_virtual": true,
+      "dex.pmm_ladder_counter": true
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "metric-ethereum",
+    "source": "https://registry.npmjs.org/@nradko/metric-omm-sdk-v1/-/metric-omm-sdk-v1-0.4.5.tgz · tests/data/first_run_dex_2026-11-26/metric_ethereum.json",
+    "settings": {
+      "dex.kind": "metric_omm",
+      "dex.factory": "0x2a53833cc95548cf52c7b159110e22d3a9018f32",
+      "dex.quoter_virtual": true,
+      "dex.pmm_ladder_counter": true
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "pancakeswap-stableswap-ethereum",
+    "source": "https://configs.pancakeswap.com/api/data/cached/stableswaps?chainId=1",
+    "settings": {
+      "dex.kind": "pancake_stableswap",
+      "dex.factory": "0xd173bf0851d2803177cc3928cf52f7b6bd29d054"
+    }
   }
 ]

@@ -1,0 +1,796 @@
+{
+  "block": 26494988,
+  "hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+  "network": "ethereum",
+  "factory": "0x2a53833cc95548cf52c7b159110e22d3a9018f32",
+  "next_pool_idx": 267,
+  "registered_samples_read": 89,
+  "registry_sdk": "https://registry.npmjs.org/@nradko/metric-omm-sdk-v1/-/metric-omm-sdk-v1-0.4.5.tgz",
+  "registry_sdk_sha256": "513e110fbc478739ea5824fbfc505f382ffb3d06a5785e16977aa3f30ea62184",
+  "executor_probes": [
+    {
+      "network": "ethereum",
+      "block": 26494988,
+      "hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "factory": "0x2a53833cc95548cf52c7b159110e22d3a9018f32",
+      "executor_runtime_keccak": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+      "virtual_quoter_keccak": "0x56f4529fa9bf808daea21d15a6060f9941aa6da575cc8f1ddf99feaa152a39d5",
+      "pools": [
+        {
+          "idx": 56,
+          "pool": "0xa6d464dbb383bcbc2660662885f85ee23862f5ef",
+          "tokens": [
+            "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+            "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+          ],
+          "immutables": "0x0000000000000000000000002a53833cc95548cf52c7b159110e22d3a9018f320000000000000000000000007f39c581f595b53c5cb19bd0b3f8da6c935e2ca0000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000380080413490354a00000000000000000000000000000000000000000000000045c084d22ae83414000000000000000000000000000000000000000000000000000000000003c800000000000000000000000000144586380a2e54fff0ba03a36f3c3f29eac93e34ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec0000000000000000000000000000000000000000000000000000000000000013000000000000000000000000e4038fa09f0bb9963068afaf97be0c045155090d000000000000000000000000ebc53e61078976118e384f110c262a263decb84b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001",
+          "prices": "0x0000000000000000000000000000000000000000000000013fcf8506879bfa1500000000000000000000000000000000000000000000000140070f9439fe421f",
+          "cases": [
+            {
+              "side": 1,
+              "input": "1000000000000000",
+              "bought": "799929260393592",
+              "sold": "999322065601353",
+              "cash_before": "1000000000000000",
+              "cash_after": "999322065601353",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            },
+            {
+              "side": 1,
+              "input": "100000000000000",
+              "bought": "79993087308675",
+              "sold": "99932206501133",
+              "cash_before": "100000000000000",
+              "cash_after": "99932206501133",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            }
+          ]
+        },
+        {
+          "idx": 65,
+          "pool": "0xb1bfdb9a7fd37d1afe932b98ae2449a1b42480a2",
+          "tokens": [
+            "0xdc035d45d973e3ec169d2276ddab16f1e407384f",
+            "0xdac17f958d2ee523a2206206994597c13d831ec7"
+          ],
+          "immutables": "0x0000000000000000000000002a53833cc95548cf52c7b159110e22d3a9018f32000000000000000000000000dc035d45d973e3ec169d2276ddab16f1e407384f000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec70000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000e8d4a510000000000000000000000000000000000000000000000000003e7b0e833859c1370000000000000000000000000000000000000000000000003e84f1e0e6e728e400000000000000000000000000000000000000000000000000000000000363a10000000000000000000000002f59b8f9d429e209bf12a45f8648e93a4ac31cf2ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec0000000000000000000000000000000000000000000000000000000000000013000000000000000000000000e4038fa09f0bb9963068afaf97be0c045155090d000000000000000000000000ebc53e61078976118e384f110c262a263decb84b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001",
+          "prices": "0x00000000000000000000000000000000000000000000000100445d749eb329c80000000000000000000000000000000000000000000000010044ea883d88e467",
+          "cases": [
+            {
+              "side": 1,
+              "input": "1000000",
+              "bought": "998949526977628603",
+              "sold": "999991",
+              "cash_before": "16837451",
+              "cash_after": "16837442",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            },
+            {
+              "side": 1,
+              "input": "100000",
+              "bought": "99894952770715523",
+              "sold": "99999",
+              "cash_before": "16837451",
+              "cash_after": "16837450",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            }
+          ]
+        },
+        {
+          "idx": 89,
+          "pool": "0xaef2ad7abb651945e6d24276715f25bded0ad41e",
+          "tokens": [
+            "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "0xdac17f958d2ee523a2206206994597c13d831ec7"
+          ],
+          "immutables": "0x0000000000000000000000002a53833cc95548cf52c7b159110e22d3a9018f32000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7000000000000000000000000000000000000000000000000000000e8d4a51000000000000000000000000000000000000000000000000000000000e8d4a510000000000000000000000000000000000000000000000000000ddca792e9cd4b1e0000000000000000000000000000000000000000000000000de0b6b3a764000000000000000000000000000000000000000000000000000000000000000f46b800000000000000000000000075b04979cb769c36b3dcfe795c37bef008b538a2ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec0000000000000000000000000000000000000000000000000000000000000013000000000000000000000000e4038fa09f0bb9963068afaf97be0c045155090d000000000000000000000000ebc53e61078976118e384f110c262a263decb84b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001",
+          "prices": "0x00000000000000000000000000000000000000000000000100452c586de1d91600000000000000000000000000000000000000000000000100490b6f7fca7e2d",
+          "cases": [
+            {
+              "side": 0,
+              "input": "1000000",
+              "bought": "1001055",
+              "sold": "999940",
+              "cash_before": "16823179",
+              "cash_after": "16823119",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            },
+            {
+              "side": 0,
+              "input": "100000",
+              "bought": "100105",
+              "sold": "99993",
+              "cash_before": "16823179",
+              "cash_after": "16823172",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            }
+          ]
+        }
+      ],
+      "sender": "0x730a17276a9720871c98622ffce5db23f38acf99"
+    },
+    {
+      "network": "ethereum",
+      "block": 26494988,
+      "hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "factory": "0x2a53833cc95548cf52c7b159110e22d3a9018f32",
+      "executor_runtime_keccak": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+      "sender": "0x5813e75a69cc0142fdd726e8242e83fb7a4f3389",
+      "kind": "metric",
+      "virtual_quoter_keccak": "0x56f4529fa9bf808daea21d15a6060f9941aa6da575cc8f1ddf99feaa152a39d5",
+      "pools": [
+        {
+          "idx": 56,
+          "pool": "0xa6d464dbb383bcbc2660662885f85ee23862f5ef",
+          "tokens": [
+            "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+            "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+          ],
+          "immutables": "0x0000000000000000000000002a53833cc95548cf52c7b159110e22d3a9018f320000000000000000000000007f39c581f595b53c5cb19bd0b3f8da6c935e2ca0000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000380080413490354a00000000000000000000000000000000000000000000000045c084d22ae83414000000000000000000000000000000000000000000000000000000000003c800000000000000000000000000144586380a2e54fff0ba03a36f3c3f29eac93e34ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec0000000000000000000000000000000000000000000000000000000000000013000000000000000000000000e4038fa09f0bb9963068afaf97be0c045155090d000000000000000000000000ebc53e61078976118e384f110c262a263decb84b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001",
+          "prices": "0x0000000000000000000000000000000000000000000000013fcf8506879bfa1500000000000000000000000000000000000000000000000140070f9439fe421f",
+          "cases": [
+            {
+              "side": 1,
+              "input": "1000000000000000",
+              "bought": "799929260393592",
+              "sold": "999322065601353",
+              "cash_before": "1000000000000000",
+              "cash_after": "999322065601353",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            },
+            {
+              "side": 1,
+              "input": "100000000000000",
+              "bought": "79993087308675",
+              "sold": "99932206501133",
+              "cash_before": "100000000000000",
+              "cash_after": "99932206501133",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            }
+          ]
+        },
+        {
+          "idx": 65,
+          "pool": "0xb1bfdb9a7fd37d1afe932b98ae2449a1b42480a2",
+          "tokens": [
+            "0xdc035d45d973e3ec169d2276ddab16f1e407384f",
+            "0xdac17f958d2ee523a2206206994597c13d831ec7"
+          ],
+          "immutables": "0x0000000000000000000000002a53833cc95548cf52c7b159110e22d3a9018f32000000000000000000000000dc035d45d973e3ec169d2276ddab16f1e407384f000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec70000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000e8d4a510000000000000000000000000000000000000000000000000003e7b0e833859c1370000000000000000000000000000000000000000000000003e84f1e0e6e728e400000000000000000000000000000000000000000000000000000000000363a10000000000000000000000002f59b8f9d429e209bf12a45f8648e93a4ac31cf2ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec0000000000000000000000000000000000000000000000000000000000000013000000000000000000000000e4038fa09f0bb9963068afaf97be0c045155090d000000000000000000000000ebc53e61078976118e384f110c262a263decb84b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001",
+          "prices": "0x00000000000000000000000000000000000000000000000100445d749eb329c80000000000000000000000000000000000000000000000010044ea883d88e467",
+          "cases": [
+            {
+              "side": 1,
+              "input": "1000000",
+              "bought": "998949526977628603",
+              "sold": "999991",
+              "cash_before": "16837451",
+              "cash_after": "16837442",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            },
+            {
+              "side": 1,
+              "input": "100000",
+              "bought": "99894952770715523",
+              "sold": "99999",
+              "cash_before": "16837451",
+              "cash_after": "16837450",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            }
+          ]
+        },
+        {
+          "idx": 89,
+          "pool": "0xaef2ad7abb651945e6d24276715f25bded0ad41e",
+          "tokens": [
+            "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "0xdac17f958d2ee523a2206206994597c13d831ec7"
+          ],
+          "immutables": "0x0000000000000000000000002a53833cc95548cf52c7b159110e22d3a9018f32000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7000000000000000000000000000000000000000000000000000000e8d4a51000000000000000000000000000000000000000000000000000000000e8d4a510000000000000000000000000000000000000000000000000000ddca792e9cd4b1e0000000000000000000000000000000000000000000000000de0b6b3a764000000000000000000000000000000000000000000000000000000000000000f46b800000000000000000000000075b04979cb769c36b3dcfe795c37bef008b538a2ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec0000000000000000000000000000000000000000000000000000000000000013000000000000000000000000e4038fa09f0bb9963068afaf97be0c045155090d000000000000000000000000ebc53e61078976118e384f110c262a263decb84b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001",
+          "prices": "0x00000000000000000000000000000000000000000000000100452c586de1d91600000000000000000000000000000000000000000000000100490b6f7fca7e2d",
+          "cases": [
+            {
+              "side": 0,
+              "input": "1000000",
+              "bought": "1001055",
+              "sold": "999940",
+              "cash_before": "16823179",
+              "cash_after": "16823119",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            },
+            {
+              "side": 0,
+              "input": "100000",
+              "bought": "100105",
+              "sold": "99993",
+              "cash_before": "16823179",
+              "cash_after": "16823172",
+              "after_coin_owner": "0",
+              "after_coin_executor": "0",
+              "after_cash_executor": "0",
+              "min_out_plus_one_buy_reverted": true,
+              "min_out_plus_one_sell_reverted": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "screened_samples": [
+    {
+      "idx": 1,
+      "pool": "0xf85afbadecc7f23dd173ed706f07d9c7e2473e24",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 2,
+      "pool": "0x8e3b457c4287898ae560299459c1495a6a46f497",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 3,
+      "pool": "0xfe9c904997f34567b2da5b3408744e2fba227bdc",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 4,
+      "pool": "0x14cb6787ff4dd5cf8659375af176e5e9d1eae684",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 5,
+      "pool": "0x293d0c69066d1ff382448aee8831ee6687120bc0",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 6,
+      "pool": "0xb0efd84cc686a0e29512dee87bed25bae358e40e",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 7,
+      "pool": "0x43e7dc7f36e64429bd4ef039624bb35ec2a6409a",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 8,
+      "pool": "0x1c730580c7a145fa1a68273b77193e20ad3bdcc9",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 9,
+      "pool": "0x2d797d214724672c59ce31711d27d525ff1311a9",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 10,
+      "pool": "0x5edc90fac3f7b3ab48a7629fc249615f01e50fdb",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 11,
+      "pool": "0xa06034908beb8b9604231cd7c53dae60cdd069ac",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 12,
+      "pool": "0xff0ba5c2b86a26522c221a1cd28e7f58fa6f6896",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 13,
+      "pool": "0xa6b08fd89bd226688b4e17b0f4a63b79e0abf707",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 14,
+      "pool": "0xe00b148d06863747d3623cabd488ba30e24788f1",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 15,
+      "pool": "0x94f43a9b8127e5b13852409998e166d0b6cba2a5",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 16,
+      "pool": "0xa5cf485c023c32c44d36dd4aabda1defc55d439a",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 17,
+      "pool": "0xc30247c9c851b4e06f2854043bde769b874c8671",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 18,
+      "pool": "0x0e1e43c1381a944020133d54b3ed4cb84bd3bb2f",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 19,
+      "pool": "0x344e9956f45d45c578fc65619726aec4d0337cb0",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 20,
+      "pool": "0x9b136069667680204cf0f1ba1f9319423a9c770a",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 21,
+      "pool": "0x4b0f21eb2f9648ecb40611c07cee36d26bd41820",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 22,
+      "pool": "0x17a165edc6ff8e06cc815ffa70b4d401c18c333d",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 23,
+      "pool": "0xf0404b60b93f7b08d42871b8c15b7c8b991c6d8d",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 24,
+      "pool": "0xe64f8b560a079e55d31acb2d30ce24d68869c1b0",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 25,
+      "pool": "0x0be4bda6976728fb452c0075d67f1bd13dbca4e2",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 26,
+      "pool": "0x36c6cbb3f91db07fd6c70f33aeffdfcd24e4fd83",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 27,
+      "pool": "0x563eeaedcf4c53e922a1fca257316e2d65417f34",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 28,
+      "pool": "0xa00bf822e4fcf37e2dc384f2cb2c62caad9f3514",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 29,
+      "pool": "0x809427702b9f6cbe334849035ddc4b028df41efb",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 30,
+      "pool": "0xf4dc018785bcdd54546a1c17259052e3fc3bfcbf",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 31,
+      "pool": "0x3493c3966898a659bdc60bb6a9063efcb8400998",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 32,
+      "pool": "0xe24c52b1b74ab4880ea7ee8587a838fefc0e42b4",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 33,
+      "pool": "0xfe484cbc4cf7cf8820e820a92c86dbce5c4b709d",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 34,
+      "pool": "0xe8bd94467fd8e618ea6bf5ca7d7d682ed95ac17b",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 35,
+      "pool": "0x63b0a664b2cdb708f190bf6b71867dd3aaa0220c",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 36,
+      "pool": "0x76cc7c2b05f503929103d830f4dfd8f1f2528441",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 37,
+      "pool": "0x570fb30ad027d636bdb416ecaf14c7ac573c72b7",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 38,
+      "pool": "0x74593cdd831862f9e3f1e3e00473c09dece28c18",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 39,
+      "pool": "0x606cd6b51279627d4b85f12fc25bc7738631fcab",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 40,
+      "pool": "0x121d4d77d598f72c1c19f57489d312e80788765c",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 41,
+      "pool": "0xc38307f9fe3bd23be288b90cc3a470e945b2bcba",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 42,
+      "pool": "0x96c6b473f278a8a8c92f4df15f4d1d8dadc992bd",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 43,
+      "pool": "0x28ca8c94370fde5ce79cce3c5456cc0bcdfcecfd",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 44,
+      "pool": "0x6d9deaa58513b2aebd8122e6a15501058323fb80",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 45,
+      "pool": "0x88aad0244c0d94566f3a62ff80a5a1aa2af692eb",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 46,
+      "pool": "0x71fd7a75df0f58af8f045d827485eeda5d1cadeb",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 47,
+      "pool": "0x363a84e21a9361b5ead8bc50bddc0ec428bffc74",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 48,
+      "pool": "0x6e5daade8f4df5e0394ce65829d1b4e9ce28c745",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 49,
+      "pool": "0x1a86b16366bcff1c0d99bf8e0031708cbd3c8a94",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 50,
+      "pool": "0xec42d1f39972eda2602f1afd2a9b28d947eae2b4",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 51,
+      "pool": "0x5e0694f3dc5d7167ac43effa5062c806a6f9e0e9",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 52,
+      "pool": "0x8a3437a90eda6d258322ee6e133efce3d34cf13a",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 53,
+      "pool": "0x3fd71ac2b67c040fdf077d3b3901d5718c42ea0a",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 54,
+      "pool": "0xc1f5e3479d6a35effe659d6154807a8d0312530d",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 55,
+      "pool": "0x1dae4726e4fe31d90894cc25c2ab8715cd67bab5",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 56,
+      "pool": "0xa6d464dbb383bcbc2660662885f85ee23862f5ef",
+      "full_positive_quotes": 4
+    },
+    {
+      "idx": 57,
+      "pool": "0xdd964208bdfa3f24f357d1f67fd0b0cb3a6387d2",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 58,
+      "pool": "0x1f8fc3d2e316c29f8694c98c46db54f1992841f4",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 59,
+      "pool": "0x6615439eb9e86cd8ac6d4ee15b83e805f67b3bda",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 60,
+      "pool": "0xfe192ac3acabcfa80dabce86919099e72173a270",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 61,
+      "pool": "0x7999f329be5dd7cea803e38ffecdb8ed9a8f2f64",
+      "full_positive_quotes": 0,
+      "reason": "no configured funding asset in this sample"
+    },
+    {
+      "idx": 62,
+      "pool": "0xbc0ed2af039708bff5b19a94b74a2998ec665253",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 63,
+      "pool": "0x87112dbd472bfc9837f06b0a09e26e76d8667101",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 64,
+      "pool": "0x02670e3bae152f5c6cbc43c8981573ecfb543fe6",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 65,
+      "pool": "0xb1bfdb9a7fd37d1afe932b98ae2449a1b42480a2",
+      "full_positive_quotes": 4
+    },
+    {
+      "idx": 66,
+      "pool": "0x2fca69d39ce89b3c8cfbec13c39d188c000a0b45",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 67,
+      "pool": "0x7961fa9ef8c96af30580c9081ffc0da61a4556ab",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 68,
+      "pool": "0x59807fe13fc68872688d75564fe47d92acb2b5e4",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 69,
+      "pool": "0x2bea1c236d43f9011ec7cf0282ad25a35f7e87c0",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 70,
+      "pool": "0x6c453897502868163f9f0a8a30bb1676c410b513",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 71,
+      "pool": "0x8713bac372728b2a202b5405bcda7690d8e9c156",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 72,
+      "pool": "0x80e291217eeb1cde3179ddea59567118684b9e48",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 73,
+      "pool": "0x856552391d33e598ea125d401ecd2cd58e65f2f3",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 74,
+      "pool": "0xc66493eb31cbcc93e88918a3368170fb6f3182d5",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 75,
+      "pool": "0x08063762508133ecc3c1fdd6d6143bfb62e1406c",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 76,
+      "pool": "0x7712a9536211077284a93762d5c4c5dc672951f3",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 77,
+      "pool": "0xa5ff9033f0a2b56f7875ff9092a427be9d0a4af9",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 78,
+      "pool": "0xb23baeb0563551db4cf344dff5d96159f44ac535",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 79,
+      "pool": "0x151d4d9741e9e9c6bfba5d1c7e729280a929af18",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 80,
+      "pool": "0x9c8a3ad2d3c95f77ee3db4616b9ca6af5ca5314a",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 81,
+      "pool": "0x71275e573b92e0e1c87bff42b49a006add8106db",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 82,
+      "pool": "0xe369b5a9be63843ac50214f673a4c6f569f412a3",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 83,
+      "pool": "0xa936ec6a1efbaec5b68b025cfa684c0c0400c141",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 84,
+      "pool": "0x759b1ac900e49a72c647a1172ed6539888f9173a",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 85,
+      "pool": "0xff0ca2e6371eb5c3277b54f7361f069c6f464db8",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 86,
+      "pool": "0xc19d1e03ec8c3fc80694a088bf4bd8d01d38be8a",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 87,
+      "pool": "0x82f883f64c22228ad41ac3ca6a149eddeea753e6",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 88,
+      "pool": "0xbe339d5a4597366b95a72744acd84a5075738cda",
+      "full_positive_quotes": 0,
+      "reason": "execution reverted"
+    },
+    {
+      "idx": 89,
+      "pool": "0xaef2ad7abb651945e6d24276715f25bded0ad41e",
+      "full_positive_quotes": 4
+    }
+  ]
+}

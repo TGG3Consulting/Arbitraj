@@ -72,3 +72,5 @@ if __name__=="__main__":
         raise ValueError("Неполная матрица LunarBase")
     write(FOLDER/"base_pmm_executor_lunar.json",dict(chain_id=8453,selector=source["selector"],endpoint=source["endpoint"],
           module=EXEC,runtime_keccak=elfomo["runtime_keccak"],compiler=compiled["solc"],cases=cases))
+    from record_baibai_executor import capture as baibai_capture
+    write(FOLDER/"base_pmm_executor_baibai.json",baibai_capture(compiled,int(head["timestamp"],16)+90))

@@ -25,13 +25,21 @@ def simulate(source, code, owner, entries):
     return calls, dict(zip((name for name, _, _ in entries), stage["calls"], strict=True))
 
 
-def measure(source, code, case, deadline):
+def elfomo_event(logs, router, owner, a, b, amount, expected):
+    topic = signature("ElfomoTrade(uint256,uint256,address,address,address,address,uint256,uint256)")
+    trade, = [log for log in logs if log["address"] == router and log["topics"][0] == topic]
+    event = decode(["address"] * 4 + ["uint256"] * 2, bytes.fromhex(trade["data"][2:]))
+    if int(trade["topics"][2], 16) != 0 or event != (EXEC, owner, a, b, amount, expected):
+        raise ValueError("Не совпали плательщик модуля, кошелёк, partnerId или суммы в событии")
+
+
+def measure(source, code, case, deadline, quote_method="getAmountOut", verify_event=elfomo_event):
     owner, a, b = case["owner"], case["token_in"], case["token_out"]
     amount, router, vault = int(case["amount"]), source["router"], source["vault"]
     balance = lambda account: calldata("balanceOf(address)", ["address"], [account])
     approval = lambda n: calldata("approve(address,uint256)", ["address", "uint256"], [EXEC, n])
     allowance = lambda payer, spender: calldata("allowance(address,address)", ["address"] * 2, [payer, spender])
-    quote = calldata("getAmountOut(address,address,uint256)", ["address", "address", "uint256"], [a, b, amount])
+    quote = calldata(quote_method + "(address,address,uint256)", ["address", "address", "uint256"], [a, b, amount])
     order = lambda market, out, minimum, expiry: calldata(ORDER, TYPES, [market, a, out, amount, minimum, expiry])
     before = [("wallet_in", a, balance(owner)), ("wallet_out", b, balance(owner)), ("vault_in", a, balance(vault)),
               ("vault_out", b, balance(vault)), ("reset", a, approval(0)), ("approve", a, approval(amount)),
@@ -66,11 +74,7 @@ def measure(source, code, case, deadline):
         raise ValueError("Остаток кошелька или vault расходится с фактической сделкой")
     if any(n(key) for key in ("module_allow_after_reject", "module_allowance", "wallet_allowance", "module_in", "module_out")):
         raise ValueError("Остались средства или разрешение")
-    topic = signature("ElfomoTrade(uint256,uint256,address,address,address,address,uint256,uint256)")
-    trade, = [log for log in results["execute"]["logs"] if log["address"] == router and log["topics"][0] == topic]
-    event = decode(["address"] * 4 + ["uint256"] * 2, bytes.fromhex(trade["data"][2:]))
-    if int(trade["topics"][2], 16) != 0 or event != (EXEC, owner, a, b, amount, expected):
-        raise ValueError("Не совпали плательщик модуля, кошелёк, partnerId или суммы в событии")
+    verify_event(results["execute"]["logs"],router,owner,a,b,amount,expected)
     return dict(token_in=a, token_out=b, owner=owner, amount=str(amount), out=str(expected),
                 gas=int(results["execute"]["gasUsed"], 16), calls=calls, results=results)
 

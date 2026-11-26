@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: MIT
 // Файл: contracts/BasePmmExecutor.sol.
-// Что делает: исполняет один обмен ElfomoFi или LunarBase, проверяя полный вход и зачисление на кошелёк.
+// Что делает: исполняет один обмен ElfomoFi, LunarBase или BaiBai, проверяя полный вход и зачисление на кошелёк.
 // Кто вызывает: кошелёк, проверки исполнения в GitHub Actions. От чего зависит: канонические адреса Base и ABI рынков.
 // Настройки: dex.router, dex.kind и dex.deadline_s. Отдельная архивная приёмка каждого рынка и runtime.
 pragma solidity 0.8.37;
 
-import {IElfomoRouter, IElfomoToken, ILunarPool, IBaseWrappedEther} from "./IBasePmm.sol";
+import {IElfomoRouter, IElfomoToken, ILunarPool, IBaseWrappedEther, IBaiEntry} from "./IBasePmm.sol";
 
 contract BasePmmExecutor {
     address private constant ELFOMO = address(bytes20(hex"f0f0f0f0fb0d738452efd03a28e8be14c76d5f73"));
     address private constant VAULT = address(bytes20(hex"bb1b19f138db3925883a96ff7a304277460e0c99"));
     address private constant LUNAR = address(bytes20(hex"0000efc4ec03a7c47d3a38a9be7ff1d52dd01b99"));
+    address private constant BAI = address(bytes20(hex"98c1d9e102eb2806d902b13186bdc7892ac4ffba"));
+    address private constant BAI_VAULT = address(bytes20(hex"aac48feb93c5c97e0fb3c7c57e1633922a4acda3"));
+    address private constant NVDAC = address(bytes20(hex"b20000000000000000000078ee7ce2fe4908108c"));
     address private constant USDC = address(bytes20(hex"833589fcd6edb6e08f4c7c32d4f71b54bda02913"));
     address private constant WETH = address(bytes20(hex"4200000000000000000000000000000000000006"));
     address private constant CBBTC = address(bytes20(hex"cbb7c0000ab88b473b1f5afd9ef808440eed33bf"));
@@ -29,7 +32,7 @@ contract BasePmmExecutor {
 
     function supported(address market, address a, address b) private pure returns (bool) {
         address other = a == USDC ? b : (b == USDC ? a : address(0));
-        return other == WETH || (market == ELFOMO && other == CBBTC);
+        return other == WETH || (market == ELFOMO && other == CBBTC) || (market == BAI && other == NVDAC);
     }
 
     function getAmountOut(address a, address b, uint256 amount) public view returns (uint256 out) {
@@ -45,9 +48,15 @@ contract BasePmmExecutor {
         return pool.quoteExactIn(a == WETH ? address(0) : a, b == WETH ? address(0) : b, amount);
     }
 
+    function quoteBai(address a, address b, uint256 amount) public view returns (uint256 out) {
+        if (block.chainid != 8453 || !supported(BAI,a,b)) revert UnsupportedToken();
+        (out,) = IBaiEntry(BAI).quoteFor(a == USDC ? b : a, a, amount, address(this));
+        if (out == 0 || out > IElfomoToken(b).balanceOf(BAI_VAULT)) revert ClosedMarket();
+    }
+
     function execute(address market, address a, address b, uint256 amount, uint256 minimum,
                      uint256 deadline) external returns (uint256 received) {
-        if (block.chainid != 8453 || (market != ELFOMO && market != LUNAR) || trading || deadline < block.timestamp ||
+        if (block.chainid != 8453 || (market != ELFOMO && market != LUNAR && market != BAI) || trading || deadline < block.timestamp ||
             minimum == 0 || amount == 0 || amount > uint256(type(int256).max)) revert InvalidOrder();
         if (!supported(market, a, b)) revert UnsupportedToken();
         trading = true;
@@ -61,12 +70,15 @@ contract BasePmmExecutor {
         if (input.allowance(address(this), market) != 0) revert UnsupportedToken();
         checked(a, abi.encodeCall(input.transferFrom, (msg.sender, address(this), amount)));
         if (input.balanceOf(address(this)) != heldIn + amount) revert PartialFill();
-        bool approve = market == ELFOMO || a != WETH;
+        bool approve = market != LUNAR || a != WETH;
         if (approve) checked(a, abi.encodeCall(input.approve, (market, amount)));
         uint256 promised;
         if (market == ELFOMO) {
             if (getAmountOut(a, b, amount) < minimum) revert InsufficientOutput();
             IElfomoRouter(ELFOMO).swap(a, b, int256(amount), minimum, msg.sender, 0);
+        } else if (market == BAI) {
+            if (quoteBai(a,b,amount) < minimum) revert InsufficientOutput();
+            promised = IBaiEntry(BAI).swapExactAmountIn(a == USDC ? b : a, a, amount, minimum, msg.sender);
         } else {
             if (quoteLunar(a, b, amount) < minimum) revert InsufficientOutput();
             promised = lunarSwap(a, amount, minimum, deadline, nativeBefore);
@@ -76,7 +88,7 @@ contract BasePmmExecutor {
         if (input.balanceOf(address(this)) != heldIn || output.balanceOf(address(this)) != heldOut ||
             address(this).balance != nativeBefore || beforeIn - input.balanceOf(msg.sender) != amount) revert PartialFill();
         received = output.balanceOf(msg.sender) - beforeOut;
-        if (received < minimum || (market == LUNAR && received != promised)) revert InsufficientOutput();
+        if (received < minimum || (market != ELFOMO && received != promised)) revert InsufficientOutput();
         trading = false;
     }
 

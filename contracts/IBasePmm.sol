@@ -28,3 +28,10 @@ interface IBaseWrappedEther {
     function withdraw(uint256) external;
     function transfer(address, uint256) external returns (bool);
 }
+
+interface IBaiEntry {
+    function quoteFor(address base, address tokenIn, uint256 amountIn, address taker)
+        external view returns (uint256 amountOut, uint256 fee);
+    function swapExactAmountIn(address base, address tokenIn, uint256 amountIn, uint256 minimum, address recipient)
+        external returns (uint256 amountOut);
+}

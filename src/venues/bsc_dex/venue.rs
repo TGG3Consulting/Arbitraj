@@ -122,12 +122,11 @@ impl Venue for BscDex {
                 "подписка на рынок — у адаптера DEX без привязки к кошельку",
             ));
         }
-        // Решение 416: сеть площадки задана (dex.chain, dex.evm_chain_id) и узел — той же сети; иначе подписки нет.
-        super::node::chain_id::check_start(&self.p.ctx).await?;
         // Исполнению через KyberSwap (exec.via_kyber) нужен тот же набор монет (адрес USDT и монет) — отдаём его
         // контексту KS. KyberSwap как площадку-цены не подписываем: цены и сигналы идут с bsc_dex.
-        self.kyber.set_assets(assets.clone());
-        self.subs.subscribe(&self.p, assets, out).await
+        self.subs.subscribe(&self.p, assets.clone(), out).await?;
+        self.kyber.set_assets(assets);
+        Ok(())
     }
 
     /// Котировка на объём по пулам (локальная математика по официальным библиотекам — quote/, math/).
@@ -730,7 +729,9 @@ impl Venue for BscDex {
 
     /// Каналы отправки (id области «канал») — send/channels.rs. Ошибок нет.
     async fn send_channels(&self) -> GatewayResult<Vec<SendChannelInfo>> {
-        Ok(send::channels::ALL.iter().map(|c| c.info()).collect())
+        Ok(send::channels::ALL.iter()
+            .filter(|ch| send::channels::compatible(self.p.ctx.place.id, ch))
+            .map(|c| c.info()).collect())
     }
 
     /// «Проверить подключение» канала: пустая транзакция — канал отвечает ошибкой JSON-RPC (send/check.rs; документация

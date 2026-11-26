@@ -7,7 +7,6 @@
 //! От чего зависит: settings (store, read), ctx_place.rs (BSC_ID).
 //! Настройки: dex.venues (вся система).
 
-use crate::settings::read::At;
 use crate::settings::scope::Scope;
 use crate::settings::store::Store;
 
@@ -16,41 +15,56 @@ use super::ctx_place::BSC_ID;
 /// Имя настройки списка площадок DEX.
 pub const SETTING: &str = "dex.venues";
 
-/// Что делает: id площадок DEX сверх bsc_dex из dex.venues. Принимает: хранилище настроек.
-/// Возвращает: id по порядку (не задана — пусто). Ошибка — текст: не список строк; пустой id; символ не из строчной
-/// латиницы, цифр и «_»; id = bsc_dex; повтор.
-pub fn extra(s: &Store) -> Result<Vec<String>, String> {
-    if s.get_exact(SETTING, &Scope::Global).is_none() {
-        return Ok(Vec::new());
-    }
-    let list = s
-        .list(SETTING, At::default())
-        .map_err(|e| format!("{SETTING}: {}", e.message))?;
-    let mut out: Vec<String> = Vec::with_capacity(list.len());
-    for id in list {
-        let id = id.trim().to_string();
-        if id.is_empty() {
-            return Err(format!("{SETTING}: пустой id площадки"));
-        }
-        if let Some(c) = id
-            .chars()
-            .find(|c| !(c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '_'))
+/// Возвращает пригодные идентификаторы и причины отказов по отдельным записям.
+pub fn extra(s: &Store) -> (Vec<String>, Vec<String>) {
+    let Some(value) = s.get_exact(SETTING, &Scope::Global) else {
+        return (vec![], vec![]);
+    };
+    let Some(list) = value.as_array() else {
+        return (vec![], vec![format!("{SETTING}: ожидается список id площадок DEX")]);
+    };
+    let mut out = Vec::new();
+    let mut errors = Vec::new();
+    for v in list {
+        let Some(id) = v.as_str().map(str::trim) else {
+            errors.push(format!("{SETTING}: id площадки должен быть строкой"));
+            continue;
+        };
+        if id.is_empty() || !id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_') {
+            errors.push(format!("{SETTING}: недопустимый id «{id}»"));
+        } else if id == BSC_ID || out.iter().any(|existing| existing == id) {
+            errors.push(format!("{SETTING}: повтор площадки «{id}»"));
+        } else if let Some(p) = crate::settings::evm_profiles::profile(id)
+            && let Err(why) = p.ready(s)
         {
-            return Err(format!(
-                "{SETTING}: id «{id}» — недопустимый символ «{c}» (строчная латиница, цифры, «_»)"
-            ));
+            errors.push(why);
+        } else {
+            out.push(id.to_string());
         }
-        if id == BSC_ID {
-            return Err(format!(
-                "{SETTING}: {BSC_ID} есть всегда — в списке только другие площадки DEX"
-            ));
-        }
-        if out.contains(&id) {
-            return Err(format!("{SETTING}: id «{id}» повторяется"));
-        }
-        out.push(id);
     }
-    Ok(out)
+    (out, errors)
+}
+
+/// Прежняя площадка с данными учёта сохраняет своё имя при конфликте сети или chainId с новым профилем.
+pub fn unique_profiles(s: &Store, ids: &mut Vec<String>) -> Vec<String> {
+    let mut errors = Vec::new();
+    let mut conflicts = Vec::new();
+    for p in crate::settings::evm_profiles::PROFILES {
+        if !ids.iter().any(|id| id == p.venue) {
+            continue;
+        }
+        for id in std::iter::once(BSC_ID).chain(ids.iter().map(String::as_str)) {
+            if id == p.venue { continue; }
+            let scope = Scope::Venue(id.to_string());
+            if ["dex.chain", "dex.evm_chain_id"].iter().any(|name| p.overlaps(name, s.get_exact(name, &scope).as_ref())) {
+                errors.push(format!("{}: сеть {} или chainId {} уже принадлежит {id}", p.venue, p.chain, p.evm_chain_id));
+                conflicts.push(p.venue);
+                break;
+            }
+        }
+    }
+    ids.retain(|id| !conflicts.contains(&id.as_str()));
+    errors
 }
 
 /// Что делает: id всех площадок DEX процесса — bsc_dex первой, затем `extra`; строки живут весь процесс (Box::leak —

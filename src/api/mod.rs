@@ -18,6 +18,7 @@ pub mod dex_graph;
 pub mod dex_key;
 pub mod episodes;
 pub mod first_run;
+mod first_run_dex;
 pub mod guard;
 pub mod journal;
 pub mod pool_cond_stat;

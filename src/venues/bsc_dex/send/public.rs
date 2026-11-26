@@ -11,6 +11,10 @@
 
 use super::channel::{Auth, Channel, Single};
 
+/// Независимые настройки открытого JSON-RPC каждой сети. Обе принимают только одну подписанную транзакцию.
+pub const BASE: Channel = Channel { id: "base_public", title: "Base · открытая отправка", ..CHANNEL };
+pub const ETHEREUM: Channel = Channel { id: "ethereum_public", title: "Ethereum · открытая отправка", ..CHANNEL };
+
 /// Канал открытой отправки.
 pub const CHANNEL: Channel = Channel {
     id: "public",

@@ -152,6 +152,12 @@ impl Store {
     /// тикеру неоднозначно и НЕ применяется — дальше площадка и вся система, одна запись в журнал на настройку и тикер.
     /// Принимает: имя, площадку и монету (если применимо). Возвращает: значение или None.
     pub fn resolve(&self, name: &str, venue: Option<&str>, coin: Option<&str>) -> Option<Value> {
+        if let Some(id) = venue
+            && super::evm_profiles::local_only(name)
+            && super::evm_profiles::profile(id).is_some()
+        {
+            return self.get_exact(name, &Scope::Venue(id.to_string()));
+        }
         if let Some(c) = coin {
             if let Some(v) = self.get_exact(name, &Scope::Coin(c.to_string())) {
                 return Some(v);
@@ -229,6 +235,26 @@ impl Store {
                 .and_then(|v| v.as_u64());
             let known = self.cache.load().has_scope(&scope);
             check_new_dex_id_len(id, max, known).map_err(SetError::Invalid)?;
+        }
+        if let Scope::Venue(id) = &scope
+            && let Some(p) = super::evm_profiles::profile(id)
+            && (new.is_some() || self.venue_kinds.has_dex(id))
+        {
+            p.check(name, new.as_ref()).map_err(SetError::Invalid)?;
+        }
+        for p in super::evm_profiles::PROFILES.iter().filter(|p| self.venue_kinds.has_dex(p.venue)) {
+            if let Scope::Venue(id) = &scope
+                && id != p.venue
+                && self.venue_kinds.has_dex(id)
+                && p.overlaps(name, new.as_ref())
+            {
+                return Err(SetError::Invalid(format!("Сеть {} уже зарегистрирована у {}", p.chain, p.venue)));
+            }
+            let legacy_default = name == "dex.default_chain" && scope == Scope::Global
+                || name == "dex.chain" && scope == Scope::Venue("bsc_dex".into());
+            if legacy_default && new.as_ref().and_then(Value::as_str) != Some("bsc") {
+                return Err(SetError::Invalid("Исторические записи без сети принадлежат bsc".into()));
+            }
         }
         let old = self.get_exact(name, &scope);
         if old == new {

@@ -1,0 +1,14 @@
+{
+  "base": {
+    "url": "https://mainnet.base.org",
+    "chain": 8453,
+    "block": 62262756,
+    "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715"
+  },
+  "ethereum": {
+    "url": "https://ethereum-rpc.publicnode.com",
+    "chain": 1,
+    "block": 26494988,
+    "hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a"
+  }
+}

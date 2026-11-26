@@ -11,10 +11,10 @@
 
 use std::sync::OnceLock;
 
-use axum::Json;
+use axum::{Json, extract::State};
 use serde::{Deserialize, Serialize};
 
-use super::state::ApiError;
+use super::state::{ApiError, AppState};
 
 /// Справочник встроен в бинарник: всегда доступен и совпадает с версией сборки (путь — от каталога этого файла).
 const FIRST_RUN_TOML: &str = include_str!("../../config/first_run.toml");
@@ -73,11 +73,14 @@ fn parsed() -> &'static Result<FirstRun, String> {
 }
 
 /// Таблица первого запуска. Ошибки: 500 — встроенный config/first_run.toml не разобрался (порча сборки).
-pub async fn table() -> Result<Json<&'static FirstRun>, ApiError> {
-    match parsed() {
-        Ok(fr) => Ok(Json(fr)),
-        Err(e) => Err(ApiError::internal(format!("config/first_run.toml: {e}"))),
-    }
+pub async fn table(State(st): State<AppState>) -> Result<Json<FirstRun>, ApiError> {
+    let mut fr = parsed()
+        .as_ref()
+        .map_err(|e| ApiError::internal(format!("config/first_run.toml: {e}")))?
+        .clone();
+    fr.section
+        .extend(super::first_run_dex::sections(&st).await?);
+    Ok(Json(fr))
 }
 
 #[cfg(test)]

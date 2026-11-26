@@ -8,6 +8,7 @@ pub mod accounts;
 pub mod catalog;
 pub mod coin_alias;
 pub mod dex_key;
+pub mod evm_profiles;
 pub mod hint;
 pub mod history;
 pub mod live;

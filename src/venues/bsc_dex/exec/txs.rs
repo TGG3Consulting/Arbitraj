@@ -146,6 +146,12 @@ pub async fn send_tipped(
     let sign = |nonce: u64, gas: u64, call: (TxKind, U256, Bytes)| {
         price.sign(ctx, &key, "Подпись транзакции", chain, nonce, gas, call)
     };
+    let oracle = (ctx.place.id == "base_dex").then(|| super::super::node::op_fees::Oracle::read(ctx)).transpose()?;
+    let extra = if let Some(oracle) = oracle {
+        let unsigned = price.unsigned(ctx, chain, nonce, gas, (to, value, data.clone()))?;
+        let block = env.heads.fresh(ctx)?.number;
+        oracle.for_tx(ctx, block, gas, unsigned).await?
+    } else { U256::ZERO };
     let signed = sign(nonce, gas, (to, value, data))?;
     let mut tip_cost = None;
     let tip = match send::tip(&ready).filter(|_| with_tip) {
@@ -160,7 +166,7 @@ pub async fn send_tipped(
     // Решение 247, п. З: BNB на газ (value + газ + чаевые с газом их перевода) — до отправки, с понятной причиной;
     // решение 435: по потолку цены (EIP-1559 — gas_limit × maxFeePerGas).
     let need = super::gas_fund::need_wei(value, price.cap(), gas, tip_cost);
-    super::gas_fund::ensure(ctx, from, need).await?;
+    super::gas_fund::ensure(ctx, from, need.saturating_add(extra)).await?;
     let head = env.heads.fresh(ctx)?;
     // Решение 436 (А): время головы для условия секвенсора Arbitrum — до отправки (решение 398); каналов с окном
     // channel.cond_time_window_s нет — None, узел не спрашивается.
@@ -197,6 +203,7 @@ pub async fn send_tipped(
         cancels: cancel_log.clone(),
         key,
         chain_id: chain,
+        op_oracle: oracle,
     };
     let hold = slot.hold();
     let after = After {

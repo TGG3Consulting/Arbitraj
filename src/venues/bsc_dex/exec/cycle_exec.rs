@@ -109,7 +109,7 @@ pub async fn trade(
     let out = super::super::num::to_decimal(got, dec)
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "выход пробы не в Decimal"))?;
     // Решение 437 (3): profit_share — чаевые сделки от прибыли цикла (exec/tip_cycle.rs), до проверки порога.
-    let bill = bill.with_units(gas);
+    let bill = cycle_gas::simulated(q, bill, gas, 0, 0).await?;
     // Решение 438: knownAccounts — только непустые; ревью 439 (4) — по ним же фильтр разбора проигрыша (tip_cycle).
     let known = conds.as_ref().map(|k| &k.known).filter(|k| !k.is_empty());
     let (bill, tips) = tip_cycle::choose(q, bill, (out, req.input), &r, &legs, known).await?;

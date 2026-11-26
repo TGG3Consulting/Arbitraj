@@ -84,9 +84,9 @@ impl GasPrice {
     /// Возвращает: (цены, база блока). Ошибки: как wei; NotConfigured — модель площадки не eip1559_l1 или нет запаса.
     pub async fn fees(&self, ctx: &Ctx, heads: &Heads) -> GatewayResult<(Fees, U256)> {
         let (mode, base) = self.base(ctx, heads).await?;
-        if mode != GasMode::Eip1559L1 {
+        if mode == GasMode::Legacy {
             let why = format!(
-                "цены типа 2 — только при dex.gas_mode = eip1559_l1 (сейчас {})",
+                "цены типа 2 — только для модели EIP-1559 (сейчас {})",
                 mode.as_str()
             );
             return Err(ctx.not_set("dex.gas_mode", why));
@@ -147,7 +147,7 @@ impl GasPrice {
     /// Принимает: окружение, модель, цену узла в wei. Возвращает: wei.
     /// Ошибки: NotConfigured (надбавка, чаевые), BadResponse (не считается).
     fn marked(&self, ctx: &Ctx, mode: GasMode, base: U256) -> GatewayResult<U256> {
-        if mode == GasMode::Eip1559L1 {
+        if mode != GasMode::Legacy {
             return gas_base::planned(ctx, base);
         }
         let markup = ctx.dec("send.gas_price_markup_pct")?;
@@ -169,6 +169,7 @@ impl GasPrice {
     async fn fetch(&self, ctx: &Ctx, block: u64, mode: GasMode) -> GatewayResult<U256> {
         let p: U256 = match mode {
             GasMode::Legacy => rpc::call(ctx, "eth_gasPrice", json!([])).await?,
+            GasMode::Ethereum | GasMode::OpStack => gas_base::fetch(ctx, block).await?,
             GasMode::Eip1559L1 => {
                 // Решение 436 (Б): минимум цены газа сети (ArbGasInfo) — с узла, вместе с baseFee того же блока.
                 let (p, ()) = tokio::try_join!(

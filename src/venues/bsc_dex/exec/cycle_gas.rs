@@ -33,6 +33,8 @@ use super::cycle_steps;
 pub enum Bill {
     /// legacy: единицы газа × одна цена (wei).
     Flat { units: u64, wei: U256 },
+    /// Type-2 Ethereum/Base: базовая цена, чаевые, разовая комиссия публикации и оператора Base.
+    Type2 { units: u64, base: U256, tip: u128, extra: U256 },
     /// eip1559_l1: газ L2 и газ L1 (единицы), базовая цена блока и чаевые за газ (wei).
     Split {
         l2: u64,
@@ -46,6 +48,7 @@ impl Bill {
     /// Стоимость газа, wei: Flat — units × wei; Split — l2 × (base + tip) + l1 × base. Ошибок нет (насыщение).
     pub fn wei(&self) -> U256 {
         match *self {
+            Self::Type2 { units, base, tip, extra } => base.saturating_add(U256::from(tip)).saturating_mul(U256::from(units)).saturating_add(extra),
             Self::Flat { units, wei } => wei.saturating_mul(U256::from(units)),
             Self::Split { l2, l1, base, tip } => {
                 let l2_price = base.saturating_add(U256::from(tip));
@@ -60,14 +63,14 @@ impl Bill {
     pub fn price(&self) -> U256 {
         match *self {
             Self::Flat { wei, .. } => wei,
-            Self::Split { base, tip, .. } => base.saturating_add(U256::from(tip)),
+            Self::Type2 { base, tip, .. } | Self::Split { base, tip, .. } => base.saturating_add(U256::from(tip)),
         }
     }
 
     /// Все единицы газа (для текста). Ошибок нет.
     pub fn units(&self) -> u64 {
         match *self {
-            Self::Flat { units, .. } => units,
+            Self::Type2 { units, .. } | Self::Flat { units, .. } => units,
             Self::Split { l2, l1, .. } => l2.saturating_add(l1),
         }
     }
@@ -75,6 +78,7 @@ impl Bill {
     /// Та же цена с другим газом симуляции (у Split — газ L2). Ошибок нет.
     pub fn with_units(self, u: u64) -> Self {
         match self {
+            Self::Type2 { base, tip, extra, .. } => Self::Type2 { units: u, base, tip, extra },
             Self::Flat { wei, .. } => Self::Flat { units: u, wei },
             Self::Split { l1, base, tip, .. } => Self::Split {
                 l2: u,
@@ -88,6 +92,7 @@ impl Bill {
     /// Та же цена с другими чаевыми (решение 437 (3), profit_share); у Flat — без изменений. Ошибок нет.
     pub fn with_tip(self, t: u128) -> Self {
         match self {
+            Self::Type2 { units, base, extra, .. } => Self::Type2 { units, base, tip: t, extra },
             Self::Split { l2, l1, base, .. } => Self::Split {
                 l2,
                 l1,
@@ -109,11 +114,18 @@ pub async fn priced(
     (to, data): (Address, Bytes),
 ) -> GatewayResult<Bill> {
     let ctx = &q.ctx;
-    if gas_mode::read(ctx)? == GasMode::Legacy {
+    let mode = gas_mode::read(ctx)?;
+    if mode == GasMode::Legacy {
         let wei = cycle_steps::wei(q).await?;
         return Ok(Bill::Flat { units: 0, wei });
     }
     let floor = send::planned_floor(ctx)?;
+    if matches!(mode, GasMode::Ethereum | GasMode::OpStack) {
+        let (f, base) = q.gas.fees(ctx, &q.heads).await?;
+        let f = tx_price::floored(f, floor, base)
+            .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "цена газа не помещается в u128"))?;
+        return Ok(Bill::Type2 { units: 0, base, tip: f.tip, extra: U256::ZERO });
+    }
     let ((f, base), c) = tokio::try_join!(
         q.gas.fees(ctx, &q.heads),
         arb_gas::components(ctx, from, to, false, data)
@@ -126,6 +138,20 @@ pub async fn priced(
         base,
         tip: f.tip,
     })
+}
+
+/// Добавляет измеренный газ исполнения и OP fee каждой транзакции. У DEX цикла одна транзакция обмена.
+pub async fn simulated(q: &Quoting, bill: Bill, swap: u64, approvals: usize, approve_gas: u64) -> GatewayResult<Bill> {
+    let bill = bill.with_units(swap.saturating_add(approve_gas));
+    if let Bill::Type2 { units, base, tip, .. } = bill {
+        let extra = super::super::node::op_fees::planned(&q.ctx, &q.gas, swap).await?;
+        let approve = if approvals == 0 { U256::ZERO } else {
+            // Общий газ разрешений — верхняя оценка для каждого отдельного вызова.
+            super::super::node::op_fees::planned(&q.ctx, &q.gas, approve_gas).await?.saturating_mul(U256::from(approvals))
+        };
+        return Ok(Bill::Type2 { units, base, tip, extra: extra.saturating_add(approve) });
+    }
+    Ok(bill)
 }
 
 /// Газ без разбиения (бандл — только legacy, exec/bundle_send.rs): единицы × цена плана. Принимает: котировку,

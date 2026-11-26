@@ -57,6 +57,7 @@ const CHOICE = {
   v3_fork_pancake: 'форк V3 (ABI PancakeSwap)',
   v3_fork_ramses: 'Ramses CL (форк V3: currentFee, FeeAdjustment, ramsesV2SwapCallback; решение 483)',
   solidly_v1: 'Solidly V1 (THENA V1)',
+  slipstream_dynamic_fee: 'Aerodrome Slipstream (Base, комиссия пула на блоке)',
   slipstream_ramses: 'Ramses CL V2 (Slipstream: свои slot0 / ticks / Mint, FeeAdjustment; решение 483)',
   solidly_v1_ramses: 'Ramses Legacy V2 (Solidly V1: getAmountOut − 1, комиссия fee() / 1e6; решение 483)',
   curve_stableswap: 'StableSwap (Curve 2020, Ellipsis)',

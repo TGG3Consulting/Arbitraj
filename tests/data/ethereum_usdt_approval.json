@@ -1,0 +1,42 @@
+{
+  "when_utc": "2026-11-25T22:08:02.875406+00:00",
+  "method": "READ ONLY eth_call (no signature or submission)",
+  "rpc": "https://ethereum-rpc.publicnode.com",
+  "block": 26494988,
+  "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+  "source_approval_tx": "0x48683a125b71ac1160eab4a1861ce3db69ebb733cb966f7d13fb6b9bf119be01",
+  "source_approval_log_index": "0xf5",
+  "contract": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+  "owner_public_from_approval_event": "0xceefea9d55c076dfad488f552fb6f4802063dbc0",
+  "spender_public_from_approval_event": "0x394546c8dcdb81d41870c122118833fbc78aaf17",
+  "read_canonical": {
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "requireCanonical": true
+  },
+  "current_units": "238687899",
+  "replacement_units": "238687900",
+  "allowance": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": "0x000000000000000000000000000000000000000000000000000000000e3a169b"
+  },
+  "approve_increase": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "error": {
+      "code": 3,
+      "message": "execution reverted",
+      "data": "0x"
+    }
+  },
+  "approve_zero": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": "0x"
+  },
+  "transfer_zero_to_self": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": "0x"
+  }
+}

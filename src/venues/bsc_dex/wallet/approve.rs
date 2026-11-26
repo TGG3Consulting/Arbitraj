@@ -110,11 +110,14 @@ pub fn lacking(
     let expiration = now + ctx.int("dex.permit2_expiration_s")?;
     let mut out = Vec::new();
     if r.erc20 < amount {
-        out.push(erc20_approve(
+        out.extend(erc20_changes(
+            ctx,
             token,
             permit2,
-            if unlimited { U256::MAX } else { amount },
-        ));
+            Some(r.erc20),
+            amount,
+            unlimited,
+        )?);
     }
     if r.permit2 < amount || r.expiration <= now {
         out.push(permit2_approve(
@@ -135,10 +138,11 @@ pub fn all(
 ) -> GatewayResult<Vec<Approval>> {
     let unlimited = ctx.flag("dex.approve_unlimited")?;
     let expiration = now + ctx.int("dex.permit2_expiration_s")?;
-    Ok(vec![
-        erc20_approve(token, permit2, if unlimited { U256::MAX } else { amount }),
-        permit2_approve(ctx, token, permit2, ur, amount, unlimited, expiration)?,
-    ])
+    let mut out = erc20_changes(ctx, token, permit2, None, amount, unlimited)?;
+    out.push(permit2_approve(
+        ctx, token, permit2, ur, amount, unlimited, expiration,
+    )?);
+    Ok(out)
 }
 
 /// Все разрешения форка сразу (для сборки/симуляции, без узла): прямой ERC-20 approve(router, сумма/∞) — БЕЗ Permit2
@@ -150,11 +154,7 @@ pub fn fork_all(
     amount: U256,
 ) -> GatewayResult<Vec<Approval>> {
     let unlimited = ctx.flag("dex.approve_unlimited")?;
-    Ok(vec![erc20_approve(
-        token,
-        router,
-        if unlimited { U256::MAX } else { amount },
-    )])
+    erc20_changes(ctx, token, router, None, amount, unlimited)
 }
 
 /// Каких разрешений форка не хватает для списания `amount` токена роутером форка (читает ERC-20 allowance(кошелёк,
@@ -179,7 +179,43 @@ pub async fn fork_missing(
     if have >= amount {
         return Ok(Vec::new());
     }
-    fork_all(ctx, token, router, amount)
+    erc20_changes(
+        ctx,
+        token,
+        router,
+        Some(have),
+        amount,
+        ctx.flag("dex.approve_unlimited")?,
+    )
+}
+
+/// При симуляции без текущего allowance включаем обе операции в стоимость и в
+/// последовательность вызовов. При отправке после сброса и при повторе читаем
+/// фактический allowance: подтверждённый сброс повторно не отправляется.
+fn erc20_changes(
+    ctx: &Ctx,
+    token: Address,
+    spender: Address,
+    current: Option<U256>,
+    amount: U256,
+    unlimited: bool,
+) -> GatewayResult<Vec<Approval>> {
+    let reset = if current == Some(U256::ZERO) {
+        false
+    } else {
+        match ctx.settings.addresses("dex.approve_reset_tokens", ctx.at()) {
+            Ok(tokens) => tokens.contains(&token),
+            Err(e) if e.code == ErrorCode::NotConfigured => false,
+            Err(e) => return Err(ctx.tag(e)),
+        }
+    };
+    let value = if unlimited { U256::MAX } else { amount };
+    let mut out = Vec::with_capacity(if reset { 2 } else { 1 });
+    if reset && !value.is_zero() {
+        out.push(erc20_approve(token, spender, U256::ZERO));
+    }
+    out.push(erc20_approve(token, spender, value));
+    Ok(out)
 }
 
 /// ERC-20 approve. Ошибок нет.

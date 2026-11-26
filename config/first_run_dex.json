@@ -1,0 +1,278 @@
+[
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "uniswap-v2-base",
+    "source": "https://developers.uniswap.org/deployments.json (Uniswap/contracts@3b872969fff4f5d807db916564f79843d722af36) · https://github.com/Uniswap/v2-core/blob/v1.0.1/contracts/UniswapV2Pair.sol",
+    "settings": {
+      "dex.kind": "uniswap_v2",
+      "dex.universal_router": "0xd6145b2D3F379919E8CdEda7B97e37c4b2Ca9c40",
+      "dex.universal_router_version": "2.1.2",
+      "dex.permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      "dex.factory": "0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6",
+      "dex.router": "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24",
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "uniswap-v3-base",
+    "source": "https://developers.uniswap.org/deployments.json (Uniswap/contracts@3b872969fff4f5d807db916564f79843d722af36)",
+    "settings": {
+      "dex.kind": "uniswap_v3",
+      "dex.universal_router": "0xd6145b2D3F379919E8CdEda7B97e37c4b2Ca9c40",
+      "dex.universal_router_version": "2.1.2",
+      "dex.permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      "dex.factory": "0x33128a8fC17869897dcE68Ed026d694621f6FDfD",
+      "dex.quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+      "dex.tick_lens": "0x0CdeE061c75D43c82520eD998C23ac2991c9ac6d"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "uniswap-v4-base",
+    "source": "https://developers.uniswap.org/deployments.json (Uniswap/contracts@3b872969fff4f5d807db916564f79843d722af36)",
+    "settings": {
+      "dex.kind": "uniswap_v4",
+      "dex.universal_router": "0xd6145b2D3F379919E8CdEda7B97e37c4b2Ca9c40",
+      "dex.universal_router_version": "2.1.2",
+      "dex.permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      "dex.pool_manager": "0x498581fF718922c3f8e6A244956aF099B2652b2b",
+      "dex.position_manager": "0x7C5f5A4bBd8fD63184577525326123B519429bDc",
+      "dex.state_view": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "dex.quoter": "0xE1A6C5803e3c44368b171BD680c7D32dfc92CA47"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "pancakeswap-v2-base",
+    "source": "https://github.com/pancakeswap/pancake-developer/tree/c7a9ae547c0ddaa15b439172291d51594a384e78/docs/pages/contracts",
+    "settings": {
+      "dex.kind": "pancakeswap_v2",
+      "dex.universal_router": "0xd9C500DfF816a1Da21A48A732d3498Bf09dc9AEB",
+      "dex.universal_router_version": "pancakeswap_infinity",
+      "dex.permit2": "0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615c768",
+      "dex.factory": "0x02a84c1b3BBD7401a5f7fa98a384EBC70bB5749E",
+      "dex.router": "0x8cFe327CEc66d1C090Dd72bd0FF11d690C33a2Eb",
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.25"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "pancakeswap-v3-base",
+    "source": "https://github.com/pancakeswap/pancake-developer/tree/c7a9ae547c0ddaa15b439172291d51594a384e78/docs/pages/contracts",
+    "settings": {
+      "dex.kind": "pancakeswap_v3",
+      "dex.universal_router": "0xd9C500DfF816a1Da21A48A732d3498Bf09dc9AEB",
+      "dex.universal_router_version": "pancakeswap_infinity",
+      "dex.permit2": "0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615c768",
+      "dex.factory": "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865",
+      "dex.tick_lens": "0x9a489505a00cE272eAa5e07Dba6491314CaE3796",
+      "dex.quoter": "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "pancakeswap-infinity-clmm-base",
+    "source": "https://github.com/pancakeswap/pancake-developer/tree/c7a9ae547c0ddaa15b439172291d51594a384e78/docs/pages/contracts",
+    "settings": {
+      "dex.kind": "pancakeswap_infinity_cl",
+      "dex.universal_router": "0xd9C500DfF816a1Da21A48A732d3498Bf09dc9AEB",
+      "dex.universal_router_version": "pancakeswap_infinity",
+      "dex.permit2": "0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615c768",
+      "dex.vault": "0x238a358808379702088667322f80aC48bAd5e6c4",
+      "dex.pool_manager": "0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b",
+      "dex.quoter": "0xd0737C9762912dD34c3271197E362Aa736Df0926"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "pancakeswap-infinity-lbamm-base",
+    "source": "https://github.com/pancakeswap/pancake-developer/tree/c7a9ae547c0ddaa15b439172291d51594a384e78/docs/pages/contracts",
+    "settings": {
+      "dex.kind": "pancakeswap_infinity_bin",
+      "dex.universal_router": "0xd9C500DfF816a1Da21A48A732d3498Bf09dc9AEB",
+      "dex.universal_router_version": "pancakeswap_infinity",
+      "dex.permit2": "0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615c768",
+      "dex.vault": "0x238a358808379702088667322f80aC48bAd5e6c4",
+      "dex.pool_manager": "0xC697d2898e0D09264376196696c51D7aBbbAA4a9",
+      "dex.quoter": "0xC631f4B0Fc2Dd68AD45f74B2942628db117dD359"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "aerodrome-base",
+    "source": "https://github.com/aerodrome-finance/contracts#contracts",
+    "settings": {
+      "dex.kind": "solidly_v2",
+      "dex.factory": "0x420DD381b31aEf6683db6B902084cB0FFECe40Da",
+      "dex.solidly_pause_method": "isPaused()"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "aerodrome-slipstream",
+    "source": "https://github.com/aerodrome-finance/slipstream#deployments",
+    "settings": {
+      "dex.kind": "slipstream_dynamic_fee",
+      "dex.factory": "0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A",
+      "dex.quoter": "0x254cF9E1E6e233aa1AC962CB9B05b2cfeAaE15b0"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "aerodrome-slipstream-2",
+    "source": "https://github.com/aerodrome-finance/slipstream#deployments",
+    "settings": {
+      "dex.kind": "slipstream_dynamic_fee",
+      "dex.factory": "0xaDe65c38CD4849aDBA595a4323a8C7DdfE89716a",
+      "dex.quoter": "0x3d4C22254F86f64B7eC90ab8F7aeC1FBFD271c6C"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "aerodrome-slipstream-3",
+    "source": "https://github.com/aerodrome-finance/slipstream#deployments",
+    "settings": {
+      "dex.kind": "slipstream_dynamic_fee",
+      "dex.factory": "0xf8f2eB4940CFE7d13603DDDD87f123820Fc061Ef",
+      "dex.quoter": "0x514c8B5f54112481E28028F1166Bd78501089259"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "fluid-base",
+    "source": "https://github.com/Instadapp/fluid-contracts-public/tree/main/deployments/base",
+    "settings": {
+      "dex.kind": "fluid_t1",
+      "dex.factory": "0x91716C4EDA1Fb55e84Bf8b4c7085f84285c19085",
+      "dex.quoter": "0x05Bd8269A20C472b148246De20E6852091BF16Ff"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "maverick-v2-base",
+    "source": "https://github.com/maverickprotocol/maverick-v2-examples/tree/68e4d2fe5b03a62738d47c39e241c78c072ec605",
+    "settings": {
+      "dex.kind": "maverick_v2",
+      "dex.factory": "0x0A7e848Aca42d879EF06507Fca0E7b33A0a63c1e",
+      "dex.quoter": "0xb40AfdB85a07f37aE217E7D6462e609900dD8D7A",
+      "dex.pool_lens": "0x6A9EB38DE5D349Fe751E0aDb4c0D9D391f94cc8D"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "uniswap_v2",
+    "source": "https://developers.uniswap.org/deployments.json (Uniswap/contracts@3b872969fff4f5d807db916564f79843d722af36) · https://github.com/Uniswap/v2-core/blob/v1.0.1/contracts/UniswapV2Pair.sol",
+    "settings": {
+      "dex.kind": "uniswap_v2",
+      "dex.universal_router": "0x23617e59A5925b2A4Bf75d73ff6711cD0b29De85",
+      "dex.universal_router_version": "2.1.2",
+      "dex.permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      "dex.factory": "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
+      "dex.router": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "uniswap_v3",
+    "source": "https://developers.uniswap.org/deployments.json (Uniswap/contracts@3b872969fff4f5d807db916564f79843d722af36)",
+    "settings": {
+      "dex.kind": "uniswap_v3",
+      "dex.universal_router": "0x23617e59A5925b2A4Bf75d73ff6711cD0b29De85",
+      "dex.universal_router_version": "2.1.2",
+      "dex.permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      "dex.factory": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
+      "dex.quoter": "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+      "dex.tick_lens": "0xbfd8137f7d1516D3ea5cA83523914859ec47F573"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "uniswap-v4-ethereum",
+    "source": "https://developers.uniswap.org/deployments.json (Uniswap/contracts@3b872969fff4f5d807db916564f79843d722af36)",
+    "settings": {
+      "dex.kind": "uniswap_v4",
+      "dex.universal_router": "0x23617e59A5925b2A4Bf75d73ff6711cD0b29De85",
+      "dex.universal_router_version": "2.1.2",
+      "dex.permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      "dex.pool_manager": "0x000000000004444c5dc75cB358380D2e3dE08A90",
+      "dex.position_manager": "0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e",
+      "dex.state_view": "0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227",
+      "dex.quoter": "0x99bd42B2B22e531f283b7F8a86dFf631EB16A9D1"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "pancakeswap_ethereum",
+    "source": "https://github.com/pancakeswap/pancake-developer/tree/c7a9ae547c0ddaa15b439172291d51594a384e78/docs/pages/contracts",
+    "settings": {
+      "dex.kind": "pancakeswap_v2",
+      "dex.universal_router": "0x65b382653f7C31bC0Af67f188122035461ec9C76",
+      "dex.universal_router_version": "pancakeswap_v3",
+      "dex.permit2": "0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615c768",
+      "dex.factory": "0x1097053Fd2ea711dad45caCcc45EfF7548fCB362",
+      "dex.router": "0xEfF92A263d31888d860bD50809A8D171709b7b1c",
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.25"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "pancakeswap-v3-ethereum",
+    "source": "https://github.com/pancakeswap/pancake-developer/tree/c7a9ae547c0ddaa15b439172291d51594a384e78/docs/pages/contracts",
+    "settings": {
+      "dex.kind": "pancakeswap_v3",
+      "dex.universal_router": "0x65b382653f7C31bC0Af67f188122035461ec9C76",
+      "dex.universal_router_version": "pancakeswap_v3",
+      "dex.permit2": "0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615c768",
+      "dex.factory": "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865",
+      "dex.tick_lens": "0x9a489505a00cE272eAa5e07Dba6491314CaE3796",
+      "dex.quoter": "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "fluid-ethereum",
+    "source": "https://github.com/Instadapp/fluid-contracts-public/tree/main/deployments/mainnet",
+    "settings": {
+      "dex.kind": "fluid_t1",
+      "dex.factory": "0x91716C4EDA1Fb55e84Bf8b4c7085f84285c19085",
+      "dex.quoter": "0x05Bd8269A20C472b148246De20E6852091BF16Ff"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "maverick-v2-eth",
+    "source": "https://github.com/maverickprotocol/maverick-v2-examples/tree/68e4d2fe5b03a62738d47c39e241c78c072ec605",
+    "settings": {
+      "dex.kind": "maverick_v2",
+      "dex.factory": "0x0A7e848Aca42d879EF06507Fca0E7b33A0a63c1e",
+      "dex.quoter": "0xb40AfdB85a07f37aE217E7D6462e609900dD8D7A",
+      "dex.pool_lens": "0x6A9EB38DE5D349Fe751E0aDb4c0D9D391f94cc8D"
+    }
+  }
+]

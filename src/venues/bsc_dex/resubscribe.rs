@@ -35,6 +35,8 @@ type Last = Option<(Vec<Asset>, mpsc::Sender<MarketEvent>)>;
 /// Состояние подписки. Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct Subs {
+    /// Сериализует замену лент, горячую пересборку и остановку по пустому списку.
+    change: Arc<tokio::sync::Mutex<()>>,
     tasks: Arc<Mutex<Vec<JoinHandle<()>>>>,
     last: Arc<Mutex<Last>>,
     /// Задачи кошельков (события баланса, решение 132) и окружение слушателей, из которого они собраны.
@@ -50,6 +52,34 @@ impl Subs {
         assets: Vec<Asset>,
         out: mpsc::Sender<MarketEvent>,
     ) -> GatewayResult<()> {
+        let _change = self.change.lock().await;
+        if assets.is_empty() {
+            self.stop(p).await;
+            return Ok(());
+        }
+        self.subscribe_locked(p, assets, out).await
+    }
+
+    /// Останавливает задачи до очистки токенов и пулов. Вызывается под change, запрос к RPC не требуется.
+    async fn stop(&self, p: &Parts) {
+        self.last.lock().unwrap_or_else(|x| x.into_inner()).take();
+        self.pools.lock().unwrap_or_else(|x| x.into_inner()).take();
+        let mut tasks = std::mem::take(&mut *self.tasks.lock().unwrap_or_else(|x| x.into_inner()));
+        tasks.append(&mut *self.wallet_tasks.lock().unwrap_or_else(|x| x.into_inner()));
+        for t in &tasks {
+            t.abort();
+        }
+        for t in tasks {
+            let _ = t.await;
+        }
+        p.registry.retain(|_| false);
+        p.tokens.set(&[]);
+        p.mids.set(vec![]);
+    }
+
+    /// Запускает подписку при удержанном change. Проверка сети предшествует первому рыночному запросу.
+    async fn subscribe_locked(&self, p: &Parts, assets: Vec<Asset>, out: mpsc::Sender<MarketEvent>) -> GatewayResult<()> {
+        super::node::chain_id::check_start(&p.ctx).await?;
         let pools = p.pools(out.clone());
         let new = pools::market::subscribe(&pools, &p.scanned, &p.wake, assets.clone()).await?;
         // Решение 132: очереди и события баланса — по кошелькам (resubscribe_wallets.rs).
@@ -92,6 +122,7 @@ impl Subs {
                     },
                     r = acc.changed() => match r {
                         Ok(()) => {
+                            let _change = me.change.lock().await;
                             me.wallets(&p, None).await;
                             continue;
                         }
@@ -102,9 +133,10 @@ impl Subs {
                 if !rebuild_on(&p.ctx, &name) {
                     continue;
                 }
+                let _change = me.change.lock().await;
                 let last = me.last.lock().unwrap_or_else(|x| x.into_inner()).clone();
                 let Some((assets, out)) = last else { continue };
-                let msg = match me.subscribe(&p, assets, out).await {
+                let msg = match me.subscribe_locked(&p, assets, out).await {
                     Ok(()) => (
                         Level::Info,
                         format!("{name} изменена — подписка DEX пересобрана"),

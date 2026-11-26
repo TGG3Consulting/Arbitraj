@@ -48,6 +48,12 @@
   let coinError = $state('');
   let eventInput = $state('');
 
+  // Профили доступны для настройки до первой регистрации адаптера.
+  const venueSettings = $derived(uniq([
+    ...store.venues,
+    ...(store.schema?.dex_profiles ?? []).map((p) => p.venue),
+  ]));
+
   /** Идентификаторы областей вида kind, для которых значение уже задано, плюс добавленные вручную. */
   function idsOf(kind) {
     const prefix = `${def.name}|${kind}|`;
@@ -122,7 +128,7 @@
     <p class="muted">Задаётся кнопкой «Настроить список» в карточке venue.cex_cex (у каждой биржи).</p>
   {:else if def.scopes.includes('Venue')}
     <!-- Решение 283: у настройки venue_for «Dex» строки бирж не показываются (shownAtVenue); значения не трогаются. -->
-    {#each uniq(store.venues).filter((v) => shownAtVenue(def, v)) as v (v)}
+    {#each venueSettings.filter((v) => shownAtVenue(def, v)) as v (v)}
       <SettingEditor {def} scope={{ kind: 'Venue', id: v }} label={venueScopeLabel(def, v)} />
       {#if def.name === 'venue.cex_cex' && store.venueKinds.find((x) => x.id === v)?.kind === 'Cex'}
         <CexCexDeny venue={v} />

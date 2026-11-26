@@ -147,6 +147,7 @@ pub(super) async fn one(
 ) -> GatewayResult<Capped<String>> {
     // Ошибка называет узел (только хост): 429 одного из публичных узлов ленты — видно, какого.
     let source = host_source(url);
+    super::chain_seen::verify_http(ctx, url).await?;
     match http::exchange(
         ctx.http
             .post(url)

@@ -89,6 +89,7 @@ impl Registry {
     /// Принимает: снимок, закреплённые пути (ключ кэша и скелеты) или None. Возвращает: реестр. Ошибок нет.
     pub fn frozen_from(snap: &Snap, pinned: Option<(PathsKey, Arc<Vec<Skeleton>>)>) -> Registry {
         Registry {
+            venue: None,
             inner: Arc::new(std::sync::RwLock::new(Pools::from_arcs(
                 snap.entries.clone(),
             ))),

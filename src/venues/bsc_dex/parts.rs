@@ -58,6 +58,7 @@ pub struct Parts {
 impl Parts {
     /// Пустое состояние. Ошибок нет.
     pub fn new(ctx: Ctx) -> Self {
+        let registry = Registry::for_venue(ctx.place.id);
         Self {
             ctx,
             heads: Heads::default(),
@@ -65,7 +66,7 @@ impl Parts {
             scaled_units: Default::default(),
             nonces: Nonces::default(),
             inflows: Inflows::default(),
-            registry: Registry::default(),
+            registry,
             mids: Mids::default(),
             scanned: Scanned::default(),
             checks: Checks::default(),

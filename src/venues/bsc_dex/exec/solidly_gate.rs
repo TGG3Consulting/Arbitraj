@@ -64,8 +64,10 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
     for e in entries.iter().copied() {
         let f = e.family;
         // Решение 470: пул Aero Slipstream V3 — крючок, модуль и правило MEV-налога и комиссия заново (aero_fresh).
-        if f.variant == Variant::SlipstreamAero
-            && let PoolRef::Contract(pool) = e.pool.reference
+        if matches!(
+            f.variant,
+            Variant::SlipstreamAero | Variant::SlipstreamDynamicFee
+        ) && let PoolRef::Contract(pool) = e.pool.reference
         {
             aero_fresh(q, e, pool).await?;
             continue;
@@ -115,7 +117,11 @@ async fn aero_fresh(q: &Quoting, e: &Entry, pool: Address) -> GatewayResult<()> 
         );
         return Err(ctx.err(ErrorCode::NoRoute, why));
     };
-    let now = aero_cl::fee_latest(ctx, f, pool, spacing).await?;
+    let now = if f.variant == Variant::SlipstreamDynamicFee {
+        super::super::pools::fee_fresh::read(ctx, pool, "latest").await?
+    } else {
+        aero_cl::fee_latest(ctx, f, pool, spacing).await?
+    };
     if now <= was {
         return Ok(());
     }

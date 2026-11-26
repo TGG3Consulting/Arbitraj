@@ -278,16 +278,11 @@ async fn run() -> Result<(), String> {
     // математики пулов. Исполнение свопа по настройке exec.via_kyber [bsc_dex] делегируется агрегатору KyberSwap
     // (внутри bsc_dex), иначе — собственный сборщик. Код исполнения kyberswap как площадка-цены не регистрируется.
     // Решение 435 (433-к): площадки DEX процесса — bsc_dex и dex.venues (например arb_dex — сеть Arbitrum тем же кодом
-    // адаптера); не задана — только bsc_dex, как раньше. Список неверен — запись в журнал, только bsc_dex.
-    let dex_extra = match arb::venues::bsc_dex::dex_venues::extra(&settings) {
-        Ok(extra) => extra,
-        Err(why) => {
-            let _ = journal
-                .write(Level::Error, "venue.dex_venues", None, why, None)
-                .await;
-            Vec::new()
-        }
-    };
+    // адаптера); не задана — только bsc_dex, как раньше. Ошибочная запись пропускается с отдельной причиной в журнале.
+    let (dex_extra, rejected) = arb::venues::bsc_dex::dex_venues::extra(&settings);
+    for why in rejected {
+        let _ = journal.write(Level::Error, "venue.dex_venues", None, why, None).await;
+    }
     // Решение 435 (ревью, правки): id, уже занятый площадкой шлюза (биржи зарегистрированы выше), — не площадка DEX:
     // запись в журнал и в Place.all не входит. Иначе у bsc_dex alone() = false и каналы, виды DEX и справочник BSC
     // читали бы dex.default_chain (ctx_place.rs default_chain).
@@ -302,6 +297,9 @@ async fn run() -> Result<(), String> {
             continue;
         }
         dex_free.push(id);
+    }
+    for why in arb::venues::bsc_dex::dex_venues::unique_profiles(&settings, &mut dex_free) {
+        let _ = journal.write(Level::Error, "venue.dex_venues", None, why, None).await;
     }
     let dex_ids = arb::venues::bsc_dex::dex_venues::all(dex_free);
     let dex_ctx = arb::venues::bsc_dex::ctx::Ctx {

@@ -44,6 +44,12 @@ pub async fn send(w: &Watch, price: TxPrice, head: u64) -> GatewayResult<B256> {
     let margin = w.cfg.gas_margin_pct;
     let gas = tx::limit_by(ctx, margin, w.from, w.from, &Bytes::new(), U256::ZERO).await?;
     let call = (TxKind::Call(w.from), U256::ZERO, Bytes::new());
+    if let Some(oracle) = w.op_oracle {
+        let unsigned = price.unsigned(ctx, w.chain_id, w.nonce, gas, call.clone())?;
+        let extra = oracle.for_tx(ctx, head, gas, unsigned).await?;
+        let need = price.cap().saturating_mul(U256::from(gas)).saturating_add(extra);
+        super::super::exec::gas_fund::ensure(ctx, w.from, need).await?;
+    }
     let signed = price.sign(
         ctx,
         &w.key,

@@ -24,7 +24,13 @@ use super::rpc;
 
 /// Что делает: номер цепи EVM площадки. Возвращает: chainId. Ошибки: NotConfigured — dex.evm_chain_id не задана.
 pub fn chain_id(ctx: &Ctx) -> GatewayResult<u64> {
-    ctx.int("dex.evm_chain_id")
+    let id = ctx.int("dex.evm_chain_id")?;
+    if let Some(p) = crate::settings::evm_profiles::profile(ctx.place.id)
+        && (p.evm_chain_id != id || ctx.text("dex.chain")? != p.chain)
+    {
+        return Err(ctx.not_set("dex.evm_chain_id", format!("{}: ожидается {} (chainId {})", p.venue, p.chain, p.evm_chain_id)));
+    }
+    Ok(id)
 }
 
 /// Что делает: сверка ответа eth_chainId узла с dex.evm_chain_id. Принимает: окружение, chainId узла.
@@ -72,6 +78,7 @@ pub async fn check_start(ctx: &Ctx) -> GatewayResult<()> {
             ErrorCode::BadResponse,
             format!("узел другой сети: chainId {got}, у площадки {want} (dex.evm_chain_id) — подписки на рынок нет"),
         )),
+        Err(e) if crate::settings::evm_profiles::profile(ctx.place.id).is_some() => Err(e),
         Err(e) => {
             let m = format!(
                 "сеть узла не сверена перед подпиской (eth_chainId): {} — подписка идёт, сверка — в «Проверить подключение»",

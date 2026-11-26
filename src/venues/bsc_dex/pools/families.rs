@@ -588,7 +588,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // Решение 470: Aero Slipstream V3 — тот же CLPool (вариант SlipstreamAero: комиссия крючка, pools/aero_cl.rs).
         // Решение 483: Ramses CL V2 — тот же протокол (вариант RamsesClV2: свои slot0 / ticks / Mint / PoolCreated и
         // FeeAdjustment; pools/ramses.rs, load_ramses.rs).
-        "slipstream" | "slipstream_aero" | "slipstream_ramses" => {
+        "slipstream" | "slipstream_aero" | "slipstream_dynamic_fee" | "slipstream_ramses" => {
             (PoolKind::V3, Proto::Slipstream, true, false, false)
         }
         // Maverick V2 (решение 122 F): в графе и сигналах (порт расчёта команды Maverick); исполнение — шаг MAVERICK

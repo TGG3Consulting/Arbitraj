@@ -34,6 +34,12 @@ impl VenueKinds {
         *self.map.write().unwrap_or_else(|p| p.into_inner()) = Some(kinds.into_iter().collect());
     }
 
+    /// Зарегистрирован ли работающий адаптер DEX этой площадки.
+    pub fn has_dex(&self, id: &str) -> bool {
+        self.map.read().unwrap_or_else(|p| p.into_inner())
+            .as_ref().and_then(|m| m.get(id)) == Some(&VenueKind::Dex)
+    }
+
     /// Что делает: id бирж (CEX) шлюза — решение 261: адаптер DEX ищет наибольший money.max_per_trade_usd среди
     /// направлений с DEX (check/quoter_amount.rs). Возвращает: список или None — виды не сообщены. Ошибок нет.
     pub fn cexes(&self) -> Option<Vec<String>> {

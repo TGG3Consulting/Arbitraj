@@ -75,6 +75,8 @@ pub struct Entry {
 /// Реестр пулов. Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct Registry {
+    /// Площадка живого реестра для очистки сетевых кэшей. У снимка отсутствует.
+    pub(super) venue: Option<&'static str>,
     /// Записи за `Arc` и индексы по паре и тикеру (registry_index.rs, решение 129).
     pub(super) inner: Arc<RwLock<Pools>>,
     /// Глубина пулов по направлениям (решение 73, depth_book.rs).
@@ -109,6 +111,11 @@ impl Entry {
 }
 
 impl Registry {
+    /// Живой реестр нового адаптера. Кэши других сетей при отписке сохраняются.
+    pub fn for_venue(venue: &'static str) -> Self {
+        Self { venue: Some(venue), ..Self::default() }
+    }
+
     /// Глубина пулов по направлениям (решение 73). Ошибок нет.
     pub fn depth(&self) -> &super::depth_book::Book {
         &self.depth
@@ -301,11 +308,12 @@ impl Registry {
         self.version.fetch_add(1, Ordering::AcqRel);
         drop(m);
         // Ревью 325 (Н8): вызовы прошлого чтения снятых пулов не держатся в памяти (prefetch_memo.rs).
-        super::prefetch_memo::forget(&gone);
+        if let Some(venue) = self.venue {
+            super::prefetch_memo::forget(venue, &gone);
+            super::fusion_book::forget(venue, &gone);
+        }
         // Ревью t153 (Н6): отметки неудач чтения удалённых пулов (pool_fail.rs) — тоже долой.
         self.fails.forget(&gone);
-        // Решение 463 (ревью t236): и данные оракула THENA Fusion (fusion_book.rs).
-        super::fusion_book::forget(&gone);
         // Решение 357 (ревью слияния, Н4): и отметки «в обновлении» удалённых пулов.
         self.holds.forget_all(&gone);
         // Решение 403: пулы удалены — построителю отбора мелких пулов полный проход (quote/shallow_build.rs).

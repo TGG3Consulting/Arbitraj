@@ -19,6 +19,8 @@ use super::{jetbuilder, mev_guard, nodereal, nodereal_api, public, sequencer};
 /// Все каналы — порядок как в ARCHITECTURE.md.
 pub static ALL: &[&Channel] = &[
     &public::CHANNEL,
+    &public::BASE,
+    &public::ETHEREUM,
     &mev_guard::CHANNEL,
     &club48::CHANNEL,
     &blockrazor::CHANNEL,
@@ -40,10 +42,22 @@ pub fn find(id: &str) -> Option<&'static Channel> {
     ALL.iter().copied().find(|c| c.id == id)
 }
 
+/// Каналы, протокол которых реализован для данной площадки. Возвращает список для настройки до задания channel.chain.
+pub fn compatible(venue: &str, ch: &Channel) -> bool {
+    use crate::settings::evm_profiles::{PROFILES, profile};
+    match profile(venue) {
+        Some(p) => ch.id == p.public_channel,
+        None => !PROFILES.iter().any(|p| p.public_channel == ch.id),
+    }
+}
+
 /// Решение 435 (433-е): канал отправляет транзакции этой площадки DEX (сеть канала — channel.chain; не задана — сеть
 /// по умолчанию). Принимает: окружение, канал. Возвращает: да/нет; нет и при незаданной dex.chain площадки (у канала
 /// с сетью) или незаданной dex.default_chain при нескольких площадках DEX (у канала без сети). Ошибок нет.
 pub fn serves(ctx: &Ctx, ch: &Channel) -> bool {
+    if !compatible(ctx.place.id, ch) {
+        return false;
+    }
     match ctx
         .settings
         .text_in("channel.chain", &Scope::Channel(ch.id.to_string()))

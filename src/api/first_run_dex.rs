@@ -1,0 +1,123 @@
+//! Справочник развёртываний Base и Ethereum для экрана «Первый запуск».
+//! Значения идут в форму через first_run::table. Суффикс области тот же, что в адаптере DEX.
+//! Источники и версии контрактов хранятся с данными в config/first_run_dex.json.
+use std::collections::BTreeMap;
+use std::sync::OnceLock;
+
+use serde::Deserialize;
+
+use super::dex_key::dex_ids;
+use super::first_run::{Prefill, Rec, Section};
+use super::state::{ApiError, AppState};
+use crate::settings::{dex_key::venue_suffix, read::At};
+
+#[derive(Deserialize)]
+struct Profile {
+    chain_id: u64,
+    network: String,
+    id: String,
+    source: String,
+    settings: BTreeMap<String, String>,
+}
+
+/// Загружает закреплённый справочник один раз. Ошибка означает порчу данных сборки.
+fn profiles() -> Result<&'static [Profile], ApiError> {
+    static PROFILES: OnceLock<Result<Vec<Profile>, String>> = OnceLock::new();
+    PROFILES
+        .get_or_init(|| {
+            serde_json::from_str(include_str!("../../config/first_run_dex.json"))
+                .map_err(|e| e.to_string())
+        })
+        .as_deref()
+        .map_err(ApiError::internal)
+}
+
+/// Подсказки видны и до регистрации сети. Предзаполнение доступно после однозначного выбора её области.
+/// Ошибка — только при повреждении встроенного справочника. Настройки не записываются.
+pub async fn sections(st: &AppState) -> Result<Vec<Section>, ApiError> {
+    let ids = dex_ids(st).await;
+    let mut scopes = BTreeMap::new();
+    for id in &ids {
+        let at = At {
+            venue: Some(id),
+            coin: None,
+        };
+        let (Ok(chain_id), Ok(network), Ok(suffix)) = (
+            st.settings.integer("dex.evm_chain_id", at),
+            st.settings.text("dex.chain", at),
+            venue_suffix(&st.settings, id, ids.len() == 1),
+        ) else {
+            continue;
+        };
+        scopes.insert((chain_id, network), suffix.unwrap_or_default());
+    }
+    let mut sections = Vec::new();
+    for p in profiles()? {
+        let suffix = scopes.get(&(p.chain_id, p.network.clone()));
+        let rec = p
+            .settings
+            .iter()
+            .map(|(name, value)| Rec {
+                name: name.clone(),
+                area: format!("{} · {}", p.network, p.id),
+                unit: None,
+                value: Some(value.clone()),
+                method: None,
+                source: Some(p.source.clone()),
+                rationale: format!("Параметр размещения {} в сети {}.", p.id, p.chain_id),
+                prefill: suffix.map(|s| Prefill {
+                    kind: "Dex".into(),
+                    id: Some(format!("{}{s}", p.id)),
+                }),
+            })
+            .collect();
+        sections.push(Section {
+            title: format!("{} · {}", p.network, p.id),
+            intro: format!("Сеть {}. Результаты проверки пулов и квотеров приведены в docs/BASE_ETHEREUM_SETTINGS.md.", p.chain_id),
+            rec,
+        });
+    }
+    Ok(sections)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::settings::{catalog, scope::Scope, value::validate};
+    use serde_json::Value;
+
+    /// Каждое предложенное значение принимает обычный редактор. Каждому адресу соответствует
+    /// непустой runtime на том же chainId и контрольном блоке.
+    #[test]
+    fn deployments_match_settings_schema_and_recorded_code() {
+        let base: Value = serde_json::from_str(include_str!(
+            "../../tests/data/first_run_dex_2026-11-26/base.json"
+        ))
+        .unwrap();
+        let eth: Value = serde_json::from_str(include_str!(
+            "../../tests/data/first_run_dex_2026-11-26/ethereum.json"
+        ))
+        .unwrap();
+        let all = profiles().unwrap_or_else(|_| panic!("профили DEX повреждены"));
+        for p in all {
+            let snapshot = [&base, &eth]
+                .into_iter()
+                .find(|s| s["chain_id"] == p.chain_id)
+                .unwrap();
+            let scope = Scope::Dex(format!("{}@{}", p.id, p.network));
+            for (k, v) in &p.settings {
+                let def = catalog::find(k).expect("настройка профиля должна быть в схеме");
+                validate(def, &scope, &Value::String(v.clone()))
+                    .unwrap_or_else(|e| panic!("{} {k}: {e}", p.id));
+                if v.starts_with("0x") {
+                    assert!(
+                        snapshot["contracts"][v.to_ascii_lowercase()]["bytes"]
+                            .as_u64()
+                            .unwrap()
+                            > 0
+                    );
+                }
+            }
+        }
+    }
+}

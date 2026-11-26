@@ -115,3 +115,24 @@ async fn recorded_direction_of_stopped_chain_is_refused() {
     apply(&mut r, &two(), &c("bsc"), true, "тест").unwrap();
     assert!(refusal(&r, chain::of(&s, &dex, &d.asset)).is_none());
 }
+
+/// Проверяет 16 состояний четырёх сетей и каждый отдельный переход из каждого состояния.
+#[test]
+fn independent_control_for_bsc_arbitrum_base_and_ethereum() {
+    let all = [c("bsc"), c("arbitrum"), c("base"), c("ethereum")];
+    for mask in 0..16_u8 {
+        for changed in 0..all.len() {
+            let mut risk = Risk::default();
+            for (i, chain) in all.iter().enumerate().filter(|(i, _)| mask & (1 << i) != 0) {
+                apply(&mut risk, &all, chain, true, "оператор").unwrap();
+                assert!(view(&risk, &all)[i].running);
+            }
+            let mask_after = mask ^ (1 << changed);
+            apply(&mut risk, &all, &all[changed], mask_after & (1 << changed) != 0, "оператор").unwrap();
+            for (i, chain) in view(&risk, &all).iter().enumerate() {
+                assert_eq!(chain.running, mask_after & (1 << i) != 0);
+            }
+            assert_eq!(risk.mode == Mode::Running, mask_after != 0);
+        }
+    }
+}

@@ -170,10 +170,11 @@ async fn fill(
         Some(c) => cycle_gas::priced(q, wallet, c).await?,
         None => cycle_gas::flat(q, 0).await?,
     };
+    let bill = cycle_gas::simulated(q, bill, sim.gas_swap, sim.approvals, sim.gas_approve).await?;
     let net = net_check(
         ctx,
         (out, req.input),
-        &bill.with_units(gas),
+        &bill,
         &rates,
         // Как у сделки: исполнитель шлёт чаевые, бандл — нет (Тигран 09.11: согласовано, план = факт).
         !matches!(form, Some(Form::Bundle)),

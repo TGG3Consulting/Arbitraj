@@ -33,6 +33,8 @@ pub enum Variant {
     /// PoolCreated, Swap, цикл обмена), но комиссия обмена — от крючка (DynamicSwapFeeHook): меняется по блокам без
     /// событий пула — комиссия читается каждым блоком, крючок пула и правило MEV-налога проверяются (pools/aero_cl.rs).
     SlipstreamAero,
+    /// Aerodrome Base CLFactory.getSwapFee(pool), читается через CLPool.fee() на блоке.
+    SlipstreamDynamicFee,
     /// Curve StableSwap 2021 (dex.kind = curve_stableswap_plain, решение 472): протокол Proto::CurveStable (геттеры
     /// coins/balances/fee, get_dy и exchange с int128 — те же), но A — `A_precise()` (A·A_PRECISION, A_PRECISION = 100),
     /// несходимость D/y — откат (`raise`), у пула из двух монет D_P — одной строкой `D·D/x0·D/x1/4`. Исходники: 2pool
@@ -94,6 +96,7 @@ pub fn of(kind: &str) -> Variant {
     match kind {
         "kyber_elastic_v1" => Variant::ElasticV1,
         "slipstream_aero" => Variant::SlipstreamAero,
+        "slipstream_dynamic_fee" => Variant::SlipstreamDynamicFee,
         "curve_stableswap_plain" => Variant::CurvePlain,
         "curve_stableswap_meta" => Variant::CurveMeta,
         "curve_stableswap_oracle" => Variant::CurveOracle,

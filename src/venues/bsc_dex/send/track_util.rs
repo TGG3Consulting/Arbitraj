@@ -80,6 +80,8 @@ pub struct Watch {
     pub key: PrivateKeySigner,
     /// Решение 416: chainId сети (dex.evm_chain_id), прочитан до отправки исходной — им подписываются отмены.
     pub chain_id: u64,
+    /// Подтверждённый GasPriceOracle Base для всех замен исходной транзакции.
+    pub op_oracle: Option<super::super::node::op_fees::Oracle>,
 }
 
 /// Итог по найденной квитанции (индекс 0 — исходная, больше — отмена). Ошибок нет.

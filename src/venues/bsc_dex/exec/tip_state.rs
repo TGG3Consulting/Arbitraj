@@ -33,7 +33,7 @@ use super::tip_state_store::{change, get};
 /// Ошибки: NotApplicable (400 в API) — модель газа другая или не читается (с причиной).
 pub fn applies(ctx: &Ctx) -> GatewayResult<()> {
     let why = match gas_mode::read(ctx) {
-        Ok(GasMode::Eip1559L1) => return Ok(()),
+        Ok(GasMode::Eip1559L1 | GasMode::Ethereum | GasMode::OpStack) => return Ok(()),
         Ok(_) => "доля чаевых (PGA) — только у площадки с dex.gas_mode = eip1559_l1".to_string(),
         Err(e) => format!(
             "доля чаевых (PGA): модель газа не прочитана — {}",

@@ -22,6 +22,7 @@ pub mod heads;
 pub mod jsonrpc;
 pub mod log_filter;
 pub mod multicall;
+pub mod op_fees;
 pub mod pace;
 pub mod prefetch;
 pub mod queue;

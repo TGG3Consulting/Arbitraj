@@ -58,7 +58,15 @@ pub struct Ready {
 
 /// Готов ли канал. Возвращает: Ready или состояние, почему нет (Disabled, NoKey, NotConfigured с причиной).
 pub fn prepare(ctx: &Ctx, ch: &'static Channel) -> Result<Ready, ChannelState> {
+    if !super::channels::compatible(ctx.place.id, ch) {
+        return Err(ChannelState::NotConfigured { reason: format!("Канал {} не принадлежит площадке {}", ch.id, ctx.place.id) });
+    }
     let s = Scope::Channel(ch.id.to_string());
+    if let Some(p) = crate::settings::evm_profiles::profile(ctx.place.id)
+        && !ctx.settings.text_in("channel.chain", &s).is_ok_and(|chain| chain == p.chain)
+    {
+        return Err(ChannelState::NotConfigured { reason: format!("Задайте channel.chain = {} у {}", p.chain, ch.id) });
+    }
     let st = &ctx.settings;
     let nc = |e: GatewayError| ChannelState::NotConfigured { reason: e.message };
     if !st.flag_in("channel.enabled", &s).map_err(nc)? {
@@ -183,6 +191,8 @@ impl Ready {
         (cond, known): (Cond, Option<&Map<String, Value>>),
         started_at: Option<&mut Option<chrono::DateTime<chrono::Utc>>>,
     ) -> GatewayResult<()> {
+        // Проверяется именно endpoint отправки: channel.url может отличаться от узла рыночных данных.
+        super::super::node::chain_seen::verify_http(ctx, &self.url).await?;
         let seq = self.ch.single == Some(Single::Sequencer);
         let conditional = seq && cond != Cond::Plain;
         let sync = seq && !conditional && matches!(self.submit, Submit::Sync(_));
@@ -205,6 +215,14 @@ impl Ready {
         )
         .await?;
         match jsonrpc::parse_text(&text, self.ch.title, Op::Send) {
+            Ok(raw) if crate::settings::evm_profiles::profile(ctx.place.id).is_some() => {
+                let hash: alloy_primitives::B256 = jsonrpc::decode(&raw, self.ch.title)?;
+                if hash != alloy_primitives::keccak256(&txs[0]) {
+                    return Err(ctx.err(crate::gateway::errors::ErrorCode::BadResponse,
+                        "eth_sendRawTransaction вернул хеш другой транзакции"));
+                }
+                Ok(())
+            }
             Ok(_) => Ok(()),
             Err(e) if e.message.to_ascii_lowercase().contains("already known") => Ok(()),
             Err(e) if conditional => Err(sequencer_cond::explain(&text, e)),

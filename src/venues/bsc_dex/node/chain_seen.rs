@@ -33,6 +33,9 @@ use super::{chain_id, jsonrpc, rpc};
 pub struct Seen {
     nodes: Arc<Mutex<HashMap<String, (u64, u64)>>>,
     gas: Arc<Mutex<Option<String>>>,
+    /// Проверенные HTTP-точки новых сетей, включая резерв и список узлов квитанций.
+    /// Ключ охватывает эффективный URL (включая смену секрета), в памяти остаётся только его хеш.
+    verified: Arc<Mutex<std::collections::HashSet<(alloy_primitives::B256, u64)>>>,
 }
 
 impl Seen {
@@ -64,6 +67,24 @@ impl Seen {
             .filter(|(_, w)| *w == want)
             .map(|(g, _)| *g)
     }
+}
+
+/// Проверяет eth_chainId у того URL, которому непосредственно уйдёт запрос. Проверки разных URL независимы.
+pub async fn verify_http(ctx: &Ctx, url: &str) -> GatewayResult<()> {
+    let Some(p) = crate::settings::evm_profiles::profile(ctx.place.id) else {
+        return Ok(());
+    };
+    let key = (alloy_primitives::keccak256(url.as_bytes()), p.evm_chain_id);
+    if ctx.chains.verified.lock().unwrap_or_else(|p| p.into_inner()).contains(&key) {
+        return Ok(());
+    }
+    let body = jsonrpc::request(1, "eth_chainId", &json!([]));
+    let text = rpc::post(ctx, url, &body, &[], rpc::SOURCE).await?;
+    let raw = jsonrpc::parse_text(&text, rpc::SOURCE, Op::Read)?;
+    let got: U64 = jsonrpc::decode(&raw, rpc::SOURCE)?;
+    chain_id::same_chain(ctx, got.to::<u64>()).map_err(|e| ctx.err(ErrorCode::BadResponse, e))?;
+    ctx.chains.verified.lock().unwrap_or_else(|p| p.into_inner()).insert(key);
+    Ok(())
 }
 
 /// Что делает: вердикт по узлу. Принимает: кто (основной/резервный), адрес, chainId узла, dex.evm_chain_id.

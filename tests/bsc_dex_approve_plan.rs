@@ -194,3 +194,56 @@ async fn same_fork_router_one_approval_on_sum() {
     assert_eq!(call.spender, BISWAP.1, "роутеру форка");
     assert_eq!(call.value, e18(1500), "на сумму входов обеих долей");
 }
+
+/// На блоке Ethereum 26494988 увеличение ненулевого разрешения Tether
+/// вернуло revert. При повторе после уже включённого approve(0) нужен только
+/// следующий вызов. Данные RPC и исходная транзакция записаны в fixture.
+#[tokio::test]
+async fn ethereum_usdt_reset_and_retry_use_observed_allowance() {
+    use arb::venues::bsc_dex::wallet::approve::{Read, lacking};
+    let capture: serde_json::Value =
+        serde_json::from_str(include_str!("data/ethereum_usdt_approval.json")).unwrap();
+    let token: Address = capture["contract"].as_str().unwrap().parse().unwrap();
+    let spender: Address = capture["spender_public_from_approval_event"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let needed = U256::from_str_radix(capture["replacement_units"].as_str().unwrap(), 10).unwrap();
+    let previous = U256::from_str_radix(capture["current_units"].as_str().unwrap(), 10).unwrap();
+    assert_eq!(capture["approve_increase"]["error"]["code"], 3);
+    let p = scene().await;
+    p.ctx
+        .settings
+        .set(
+            "dex.approve_reset_tokens",
+            Scope::Venue("bsc_dex".into()),
+            Some(json!([token])),
+            "тест",
+        )
+        .await
+        .unwrap();
+    for (erc20, expected) in [
+        (previous, vec![U256::ZERO, needed]),
+        (U256::ZERO, vec![needed]),
+        (needed, vec![]),
+    ] {
+        let read = Read {
+            erc20,
+            permit2: needed,
+            expiration: 3600,
+        };
+        let calls = lacking(&p.ctx, &read, (token, spender, spender), needed, 10).unwrap();
+        let amounts: Vec<U256> = calls
+            .into_iter()
+            .map(|(to, data)| {
+                assert_eq!(to, token);
+                let a = arb::venues::bsc_dex::node::abi::IERC20::approveCall::abi_decode(&data)
+                    .unwrap();
+                assert_eq!(a.spender, spender);
+                a.value
+            })
+            .collect();
+        assert_eq!(amounts, expected);
+    }
+}

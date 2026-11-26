@@ -91,7 +91,8 @@ pub fn needs(f: &Family) -> bool {
     // Решение 481: пул с курсом оракула (ETH/wstETH) — latestAnswer() оракула меняется без событий пула.
     if matches!(
         f.variant,
-        super::family_variant::Variant::CurvePlain
+        super::family_variant::Variant::SlipstreamDynamicFee
+            | super::family_variant::Variant::CurvePlain
             | super::family_variant::Variant::CurveMeta
             | super::family_variant::Variant::CurveOracle
     ) {

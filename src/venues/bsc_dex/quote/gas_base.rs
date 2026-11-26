@@ -56,7 +56,7 @@ pub async fn fetch(ctx: &Ctx, block: u64) -> GatewayResult<U256> {
         ctx.err(
             ErrorCode::BadResponse,
             format!(
-                "у блока {block} нет baseFeePerGas — узел не EIP-1559, а dex.gas_mode = eip1559_l1"
+                "у блока {block} нет baseFeePerGas — узел не вернул обязательное поле EIP-1559"
             ),
         )
     })

@@ -46,6 +46,14 @@ pub fn chain_at(s: &Store, v: &VenueId) -> Result<ChainId, String> {
 /// Ошибки: текст — площадок DEX нет; dex.chain не задана; площадки в разных сетях, а dex.default_chain не задана или
 /// не сеть ни одной площадки DEX.
 pub fn dex_chain(s: &Store, dex: &[VenueId]) -> Result<ChainId, String> {
+    // Явно заданная домашняя сеть подтверждается собственной площадкой. Неподготовленная
+    // соседняя площадка не меняет сеть старых записей и не останавливает профили с известной сетью.
+    if dex.len() > 1
+        && let Ok(d) = s.text(DEFAULT, At::default())
+        && dex.iter().any(|v| chain_at(s, v).is_ok_and(|c| c.0 == d))
+    {
+        return Ok(ChainId(d));
+    }
     let mut found: Vec<(VenueId, ChainId)> = vec![];
     for v in dex {
         found.push((v.clone(), chain_at(s, v)?));

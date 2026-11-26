@@ -28,7 +28,7 @@ pub async fn price(env: &Env, ready: &[Ready], tip: Option<u128>) -> GatewayResu
         GasMode::Legacy => Ok(TxPrice::Legacy(
             env.gas.wei(ctx, &env.heads).await?.max(floor),
         )),
-        GasMode::Eip1559L1 => {
+        GasMode::Eip1559L1 | GasMode::Ethereum | GasMode::OpStack => {
             let (f, base) = env.gas.fees(ctx, &env.heads).await?;
             let f = match tip {
                 Some(t) => gas_base::fees_with(ctx, base, t)?,

@@ -1,0 +1,127 @@
+"""Восстанавливает раздел DEX общего справочника из снимков исследования 26.11.2026 и профилей сборки.
+
+Запуск из корня репозитория: python scripts/base_ethereum_dex_inventory.py ../outputs
+Использует только файлы. Другие разделы документа сохраняются.
+"""
+import argparse
+import hashlib
+import json
+from pathlib import Path
+
+
+def read(path):
+    """Возвращает данные JSON в UTF-8. Неполный или повреждённый снимок прерывает генерацию."""
+    return json.loads(path.read_text(encoding="utf8"))
+
+
+def cell(value):
+    """Экранирует разделители столбцов и переносы строки из внешнего каталога."""
+    return str(value).replace("|", "\\|").replace("\n", " ")
+
+
+def addresses(items):
+    """Формат списка адресов или явная пометка при отсутствии значения."""
+    return " ".join(f"`{x}`" for x in items) or "не установлены"
+
+
+def tables(network, snapshots, profiles):
+    """Строит таблицы одной сети. Сохраняет исходные идентификаторы каждой площадки и наблюдения."""
+    base = network == "base"
+    p = snapshots / f"{network}-integration-2026-11-26" / "sources"
+    evidence = "base-contract-evidence" if base else "dex-contract-evidence"
+    names = ["index", "sample-pools", "factory-probes", "volumes", "llama-adapters",
+             "velora", "family-coverage-review", evidence]
+    data = {name: read(p / (name + ".json")) for name in names}
+    gt = data["index"]
+    llama = data["volumes"]
+    va = data["velora"]
+    block = data["family-coverage-review"]
+    title = "Base" if base else "Ethereum"
+    out = [f"### {title} · DEX", "",
+           f"Снимок GeckoTerminal от {gt['download_utc']}, {len(gt['rows'])} идентификаторов. "
+           f"DefiLlama от {llama['download_utc']}, {len(llama['rows'])} строк. "
+           f"Сетевые разделы Velora — {len(va['rows'])}. Строки разных источников могут относиться к одному пулу. "
+           f"Контрольный блок {block['block']}, `{block['hash']}`.", "",
+           "#### Значения для экрана «Первый запуск»", "",
+           "| ID DEX | Настройки области DEX | Основание |", "|---|---|---|"]
+    configured = {r["id"]: r for r in profiles if r["network"] == network}
+    for id, row in configured.items():
+        params = "<br>".join(f"`{k} = {v}`" for k, v in row["settings"].items())
+        out.append(f"| `{id}` | {params} | {row['source']} |")
+    out.extend(["", f"Код каждого адреса проверен в [снимке размещений](../tests/data/first_run_dex_2026-11-26/{network}.json). "
+                "Две записи вызова Router.getAmountOut содержат исходные аргументы и ответ. "
+                "У Maverick V2 параметр dex.tick_radius задаёт оператор по глубине рынка. "
+                "Значение dex.pool_enabled, доверенный исполнитель кошелька и допуск его классов задаются отдельно.",
+                "", "#### GeckoTerminal", "",
+                "| ID | Название | Страница пулов (HTTP, число строк) | Выбранный пул | Фабрика по пулу / обратный запрос | Статус |", "|---|---|---|---|---|---|"])
+    for id, name in gt["rows"].items():
+        sample = data["sample-pools"][id]
+        probe = data["factory-probes"]["rows"].get(id, {})
+        url = sample["url"]
+        pool = probe.get("pool") or next((a["address"] for a in sample.get("samples", []) if a.get("address")), None)
+        factory = probe.get("reported_factory")
+        status = "профиль, см. параметры выше" if id in configured else "профиль не установлен"
+        if sample.get("state") != "enumerated":
+            status += ", страница не прочитана"
+        elif not sample.get("rows_page1"):
+            status += ", пустая страница снимка"
+        out.append(f"| `{id}` | {cell(name)} | [{sample.get('status')}, {sample.get('rows_page1', 'нет данных')}]({url}) "
+                   f"| {addresses([pool] if pool else [])} | {addresses([factory] if factory else [])}, "
+                   f"{probe.get('factory_roundtrip') or 'сверка не подтверждена'} | {status} |")
+    out.extend(["", "#### DefiLlama", "",
+                "Адреса извлечены из секции нужной сети в коде адаптера объёмов. Их роль, реализация и исполнение требуют проверки. "
+                "Для строк с несколькими версиями или общей базовой ликвидностью соответствие торговому профилю устанавливается по контракту.",
+                "", "| ID | Площадка | Адаптер объёмов | Адреса-кандидаты |", "|---|---|---|---|"])
+    adapters = {r["id"]: r for r in data["llama-adapters"]["rows"]}
+    for row in llama["rows"]:
+        r = adapters[row["id"]]
+        ref = r.get("link") or r.get("source")
+        out.append(f"| {row['id']} | {cell(row['name'])} | [{cell(row['module'])}]({ref}) "
+                   f"| {addresses(r.get('addresses_from_chain_stanza', []))} |")
+    out.extend(["", "#### Конфигурации Velora", "", "Проверены обозначения сети в исходном файле адаптера маршрутизации. "
+                "Тип каждой реализации и возможность прямого спотового исполнения требуют проверки.",
+                "", "| Адаптер | Ключ | Сетевой раздел | Адреса-кандидаты |", "|---|---|---|---|"])
+    for row in va["rows"]:
+        out.append(f"| {cell(row['adapter'])} | {cell(row['config_key'])} | [строка {row['line']}]({row['url']}) "
+                   f"| {addresses(row['addresses'])} |")
+    out.extend(["", "#### Контракты из манифестов и проверок протоколов", "",
+                "Запись runtime подтверждает наличие кода на указанном блоке. Для адресов вне профилей остаётся открытой "
+                "привязка ABI к конкретному сценарию исполнения. Адреса ERC-20 и отдельных пулов приведены как контрольные.",
+                "", "| Назначение | Адрес | Байт runtime | Keccak-256 |", "|---|---|---|---|"])
+    for r in data[evidence]["contracts"] + block["runtime"]:
+        out.append(f"| {cell(r.get('contract') or r.get('name') or r.get('label'))} | `{r['address']}` "
+                   f"| {r.get('bytes', r.get('runtime_bytes'))} | `{r.get('keccak256') or r.get('runtime_keccak')}` |")
+    out.extend(["", "Исходные JSON исследования, SHA-256", ""])
+    for n in names:
+        digest = hashlib.sha256((p / (n + ".json")).read_bytes()).hexdigest()
+        out.append(f"- `{n}.json` · `{digest}`")
+    return out
+
+
+def main():
+    """Заменяет только секцию DEX, сохраняя соседние ручные разделы."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("snapshots", type=Path)
+    args = parser.parse_args()
+    profiles = read(Path("config/first_run_dex.json"))
+    doc = Path("docs/BASE_ETHEREUM_SETTINGS.md")
+    old = doc.read_text(encoding="utf8")
+    start = "<!-- DEX -->"
+    end = "<!-- /DEX -->"
+    front, tail = old.split(start, 1)
+    if end in tail:
+        _, tail = tail.split(end, 1)
+    lines = ["## Протоколы и размещения", "",
+             "Предзаполнение DEX использует chainId, dex.chain и суффикс активной площадки. Для пустой конфигурации сначала "
+             "сохраните параметры сети. Значения ниже применяются обычным сохранением полей. Оператор задаёт лимиты, "
+             "глубину, кошельки и разрешение торговли по своей политике. Приёмка каждой версии исполнителя привязана к сети.",
+             "", "Статус «профиль» означает наличие адресных параметров семейства в этом выпуске. В таблицах нет подтверждённых "
+             "фактических сделок. Каждый ID без установленного профиля остаётся в списке работ по подключению.", ""]
+    for network in ["base", "ethereum"]:
+        lines.extend(tables(network, args.snapshots, profiles))
+        lines.append("")
+    doc.write_text(front + start + "\n\n" + "\n".join(lines) + "\n" + end + tail, encoding="utf8")
+
+
+if __name__ == "__main__":
+    main()

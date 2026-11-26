@@ -126,8 +126,8 @@ pub fn same_block(e: &mut Entry, own: Option<&Held>, block: u64) -> Result<(), S
     }
 }
 
-/// Пулы `gone` сняты из реестра — их данные долой (по адресу, у всех площадок: реестр площадки не знает). Ошибок нет.
-pub fn forget(gone: &[PoolRef]) {
+/// Пулы `gone` сняты из реестра — их данные долой (только у переданной площадки). Ошибок нет.
+pub fn forget(venue: &str, gone: &[PoolRef]) {
     let gone: std::collections::HashSet<Address> = gone
         .iter()
         .filter_map(|r| match r {
@@ -138,7 +138,7 @@ pub fn forget(gone: &[PoolRef]) {
     if gone.is_empty() {
         return;
     }
-    book().retain(|(_, a), _| !gone.contains(a));
+    book().retain(|(v, a), _| *v != venue || !gone.contains(a));
 }
 
 /// Лог пула с removed (реорг) на блоке `block`: данные, прочитанные на нём или позже, долой. Принимает: площадку

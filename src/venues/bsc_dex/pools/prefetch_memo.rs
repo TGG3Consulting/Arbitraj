@@ -45,9 +45,9 @@ pub fn put(venue: &VenueId, r: &PoolRef, calls: Vec<Call>) {
     }
 }
 
-/// Ревью 325 (Н8): забывает вызовы снятых пулов (по ссылке, любой площадки — подсказка, итог не меняет). Пустой список —
+/// Ревью 325 (Н8): забывает вызовы снятых пулов (по ссылке и площадке). Пустой список —
 /// без замка. Принимает: ссылки снятых пулов. Ошибок нет.
-pub fn forget(gone: &[PoolRef]) {
+pub fn forget(venue: &str, gone: &[PoolRef]) {
     if gone.is_empty() {
         return;
     }
@@ -56,5 +56,5 @@ pub fn forget(gone: &[PoolRef]) {
         return;
     }
     let gone: std::collections::HashSet<&PoolRef> = gone.iter().collect();
-    g.retain(|(_, r), _| !gone.contains(r));
+    g.retain(|(v, r), _| v.0 != venue || !gone.contains(r));
 }

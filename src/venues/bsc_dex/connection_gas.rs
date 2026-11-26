@@ -36,6 +36,22 @@ pub async fn check(ctx: &Ctx) -> Result<String, String> {
                 "{}: одна цена gasPrice, legacy-транзакция",
                 GasMode::Legacy.as_str()
             )),
+            mode @ (GasMode::Ethereum | GasMode::OpStack) => {
+                let block: alloy_primitives::U64 = super::node::rpc::call(ctx, "eth_blockNumber", serde_json::json!([])).await?;
+                let block = block.to::<u64>();
+                let base = gas_base::fetch(ctx, block).await?;
+                let f = gas_base::fees(ctx, base)?;
+                let extra = if mode == GasMode::OpStack {
+                    let oracle = super::node::op_fees::Oracle::read(ctx)?;
+                    let me = signer::address(ctx)?;
+                    let gas: alloy_primitives::U64 = super::node::rpc::call(ctx, "eth_estimateGas", serde_json::json!([{"from":me,"to":me},format!("{block:#x}")])).await?;
+                    let amount = oracle.planned(ctx, block, gas.to()).await?;
+                    format!(", L1 и operator fee перевода при лимите длины {amount} wei")
+                } else {
+                    String::new()
+                };
+                Ok(format!("{}: блок {block}, baseFee {base} wei, maxFee {} wei, priority fee {} wei{extra}", mode.as_str(), f.max_fee, f.tip))
+            }
             GasMode::Eip1559L1 => {
                 // Перевод 0 с кошелька пробы на себя — обычная транзакция без данных.
                 let me = signer::address(ctx)?;

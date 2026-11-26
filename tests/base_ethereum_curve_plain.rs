@@ -1,6 +1,6 @@
 //! Сопоставляет формулы Curve Plain и PancakeSwap StableSwap с закреплёнными get_dy двух сетей.
 use alloy_primitives::U256;
-use arb::venues::bsc_dex::math::stableswap_v1::{Template, exchange_out_t};
+use arb::venues::bsc_dex::math::stableswap_v1::{Template, exchange_out_t, fee_denominator};
 use serde_json::Value;
 use std::str::FromStr;
 
@@ -10,6 +10,9 @@ fn integer(value: &Value) -> U256 {
 
 #[test]
 fn plain_factory_markets_match_dy() {
+    let exchanges: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/pancake_stable_exchange_ethereum.json"
+    )).unwrap();
     for (src, plain) in [
         (
             include_str!("data/first_run_dex_2026-11-26/curve_plain_base.json"),
@@ -49,17 +52,35 @@ fn plain_factory_markets_match_dy() {
                 pair_d: plain && balances.len() == 2,
             };
             for q in p["quotes"].as_array().unwrap() {
-                let out = exchange_out_t(
+                let quote_with_fee = |fee| exchange_out_t(
                     q["i"].as_u64().unwrap() as usize,
                     q["j"].as_u64().unwrap() as usize,
                     integer(&q["dx"]),
                     &balances,
                     &rates,
                     integer(&p["a"]),
-                    integer(&p["fee"]),
+                    fee,
                     &t,
                 );
-                assert_eq!(out, Some(integer(&q["dy"])), "{}", p["pool"]);
+                let fee = integer(&p["fee"]);
+                let expected = if plain {
+                    integer(&q["dy"])
+                } else {
+                    // Pancake get_dy: перевод gross в единицы токена до комиссии.
+                    let gross = quote_with_fee(U256::ZERO).unwrap();
+                    assert_eq!(gross - gross * fee / fee_denominator(), integer(&q["dy"]));
+                    // exchange: комиссия до перевода в единицы токена. Источник — дельта balanceOf.
+                    let case = exchanges["cases"].as_array().unwrap().iter().find(|c| {
+                        c["pool"] == p["pool"] && c["i"] == q["i"] && c["dx"] == q["dx"]
+                    }).unwrap();
+                    assert_eq!(case["calls"][4]["status"], "0x0");
+                    assert_eq!(case["calls"][5]["status"], "0x1");
+                    let raw = |i: usize| integer(&case["calls"][i]["returnData"]);
+                    assert_eq!(raw(2) - raw(6), integer(&q["dx"]));
+                    assert_eq!(raw(7) - raw(3), integer(&case["exchange_out"]));
+                    raw(7) - raw(3)
+                };
+                assert_eq!(quote_with_fee(fee), Some(expected), "{}", p["pool"]);
             }
         }
     }

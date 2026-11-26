@@ -135,7 +135,13 @@ def tables(network, snapshots, profiles):
         out.extend(["", "PancakeSwap StableSwap · два пула из официального API составляют полный реестр Ethereum "
                     "на контрольном блоке. Фабрика установлена по событию создания каждой пары и ответу getPairInfo. "
                     "Хеш Keccak-256 исходника PancakeStableSwapTwoPool.sol совпал с эталоном решения 471 у обоих пулов, is_killed = false. "
-                    f"Проверены восемь get_dy. [Реестр, события и котировки](../{pancake})."])
+                    "Для восьми входов отдельно проверены get_dy и фактическая дельта balanceOf после exchange "
+                    "в eth_simulateV1 с реальными балансами. При входе 4449 минимальных единиц WBTC get_dy "
+                    "вернул 4456, exchange перевёл 4455 минимальных единиц mBTC: контракт округляет комиссию "
+                    "до перевода в единицы монеты при обмене и после перевода в get_dy. У всех восьми обменов "
+                    "min_dy на единицу выше выплаты дал защитный откат. "
+                    f"[Реестр и котировки](../{pancake}) · "
+                    "[Исторические обмены](../tests/data/first_run_dex_2026-11-26/pancake_stable_exchange_ethereum.json)."])
     dodo_file = f"tests/data/first_run_dex_2026-11-26/dodo_{network}.json"
     if Path(dodo_file).exists():
         data_dodo = read(Path(dodo_file))

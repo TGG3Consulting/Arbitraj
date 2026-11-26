@@ -97,7 +97,7 @@ pub fn clone_implementation(code: &[u8]) -> Option<Address> {
 }
 
 async fn verify_clone(ctx: &Ctx, found: Found, pool: Address) -> Verdict {
-    let implementations = match super::verify_lb22::settings(ctx, &found.family) {
+    let implementations = match super::verify_lb22::settings(ctx, found.family) {
         Ok(items) => items,
         Err(w) => return Verdict::Rejected(w),
     };

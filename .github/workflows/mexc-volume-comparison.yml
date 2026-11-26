@@ -1,0 +1,42 @@
+name: Compare volume selection against complete grids
+on:
+  push:
+    branches: [audit/acb-search-20261126]
+permissions:
+  contents: read
+jobs:
+  grid:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: [2925a361bb88edff0ee1aab3e18bdd3e6ff5b843,3ca92702e0fd45be2148af3e1bc8b81c3d8c852b,acb36e580ad19b6a63b1330bcb4f15b3040e0e12]
+    env:
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.revision }}
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: tests
+      - name: Compare native search to all feasible grid steps
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ matrix.revision }}"
+          for spec in "core_size_t159 recorded_size_replay" "core_size_cost_replay full_cost_volume_replay"; do
+            read -r suite testname <<< "$spec"
+            file="$RUNNER_TEMP/$suite.log"
+            if ! cargo test --locked --test "$suite" "$testname" -- --exact --ignored --nocapture >"$file" 2>&1; then
+              grep -E 'error(\[E[0-9]+\])?:|panicked at|FAILED|assertion' -A4 "$file" | head -n 76 || true
+              exit 1
+            fi
+            sed -n -E 's/^(test [^ ]+ \.\.\. )?SIZE_REPLAY //p' "$file" > "$suite.jsonl"
+            test -s "$suite.jsonl"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: volume-oracle-${{ matrix.revision }}
+          path: '*.jsonl'

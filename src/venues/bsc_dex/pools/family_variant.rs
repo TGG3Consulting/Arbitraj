@@ -42,6 +42,7 @@ pub enum Variant {
     /// цикл Pool.swap, _getInitialSwapData, _updateLiquidityAndCrossTick, раскладка PoolStorage) — то же. Отличия вне
     /// расчёта сумм: тик после неполного шага (у v1 нет startSqrtP), MIN_LIQUIDITY, длина массива TicksFeesReader.
     ElasticV1,
+    ElasticV5,
     /// Решение 470 (T451-01): Aero «Slipstream V3» (dex.kind = slipstream_aero; Dromos-Labs/metadex-slipstream-public
     /// 1.1.0, развёртывание Arbitrum cl-arbitrum.json): тот же CLPool, что у вида slipstream (slot0, ticks, getPool(int24),
     /// PoolCreated, Swap, цикл обмена), но комиссия обмена — от крючка (DynamicSwapFeeHook): меняется по блокам без
@@ -65,6 +66,7 @@ pub enum Variant {
     /// Solidly V1 Base: привязка CREATE2 и наблюдаемое обеспечение на каноническом блоке.
     SolidlyClassic,
     BasePluginV1,
+    TrebleIntegral,
     /// Три обновляемые прокси WhiteSwap с комиссией прямого обмена и скидкой роутера.
     WhiteSwap,
     /// Пара CREATE2 с изменяемой ставкой. Резервы и комиссия сверяются вместе.
@@ -173,6 +175,7 @@ pub fn of(kind: &str) -> Variant {
         "lb_v21_clone" => Variant::LbV21Clone,
         "smardex_exact_equality" => Variant::SmardexExactEquality,
         "kyber_elastic_v1" => Variant::ElasticV1,
+        "kyber_elastic_v5" => Variant::ElasticV5,
         "slipstream_aero" => Variant::SlipstreamAero,
         "slipstream_aero_metaquoter" => Variant::SlipstreamAeroMetaquoter,
         "slipstream_dynamic_fee" => Variant::SlipstreamDynamicFee,
@@ -181,6 +184,7 @@ pub fn of(kind: &str) -> Variant {
         "curve_stableswap_meta" => Variant::CurveMeta,
         "curve_stableswap_oracle" => Variant::CurveOracle,
         "curve_crypto2_v1" => Variant::CryptoPair,
+        "algebra_integral_treble" => Variant::TrebleIntegral,
         "algebra_integral_base_plugin_v1" => Variant::BasePluginV1,
         "algebra_integral_hydrex" => Variant::HydrexIntegral,
         "algebra_integral_nami" => Variant::NamiIntegral,

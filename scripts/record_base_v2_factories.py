@@ -11,6 +11,7 @@ from record_base_slipstream_executor import ROOT,rpc
 from record_ethereum_v2_factories import directory,digest,raw
 
 MARKETS={
+    "bluedex":("0x8437100ed18dbea089e0fa3caaae7f6f40e4a05c",1000,3,"BluedexV2: K",1692,9252),
     "kewlswap-base":("0x5636a64b835f4e3821c798fda16e0ba106357646",1000,3,"KEWL: K",8127,8707),
     "pixelswap-base":("0xd07739a9e9c46d3deded97c0edc49cea8bab1bb9",1000,3,"SwapV2: K",1742,9133),
     "satori-base":("0x4858c605862a91a34d83c19a9704f837f64fa405",1000,3,"K",2171,11561),
@@ -97,6 +98,14 @@ if __name__=="__main__":
             if args.market=="candyswap":
                 from record_candyswap_base import capture
                 result["net_payouts"]=capture(cap,result,head)
+            if args.market=="bluedex":
+                expected,=cap.one(row[0],"INIT_CODE_HASH()",returns=["bytes32"])
+                if "0x"+expected.hex()!=proof["creation_code_hash"]:
+                    raise ValueError("factory getter disagrees with the deployed CREATE2 code")
+                from record_bakeryswap_base import inspect
+                result["native_router"]=inspect(cap,result,head,router="0x1926f2bec4cd34613ccaac82911204b87cf590a2")
+                if not any(len(p.get("cases", [])) == 2 for p in result["native_router"]["samples"]):
+                    raise ValueError("no funded BlueDex router control in both directions")
             if args.market=="bakeryswap-base":
                 from record_bakeryswap_base import inspect
                 result["native_router"]=inspect(cap,result,head)

@@ -71,7 +71,7 @@ pub async fn out_at(
             ));
         };
         if e.family.variant == super::super::pools::family_variant::Variant::SupernovaIntegral {
-            return super::super::pools::supernova::quote(ctx,e.family.id,token_in,to,amount,block).await;
+            return super::super::pools::supernova::quote(ctx,e,token_in,to,amount,block).await;
         }
         return super::super::pools::nami::quote(ctx, e.family.id, token_in, to, amount, block)
             .await;

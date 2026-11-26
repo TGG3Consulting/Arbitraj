@@ -85,7 +85,10 @@ def tables(network, snapshots, profiles):
                     "Вид `memebox_v5` требует от владельца развернуть MemeboxAdapter с адресом этой фабрики и задать "
                     "`dex.router` и `dex.module_runtime_hashes`. Кошелёк сравнивает прямой вызов и шаг 29 V5 по чистой выплате и полным расходам, "
                     "включая разрешение. Выход ограничен обеспечением пары и фактическим приходом собственного входа. "
-                    "[Реестр и границы выплат](../tests/data/first_run_dex_2026-11-26/memebox_base.json)."])
+                    "На исходном блоке подтверждены 16 исполнений на двух рынках и 8 при внесённом ранее дополнительном остатке. "
+                    "Обе оболочки выплатили только сумму за вход плательщика, а повышение минимума на единицу отменило весь обмен. "
+                    "[Реестр и границы пары](../tests/data/first_run_dex_2026-11-26/memebox_base.json) · "
+                    "[Фактические выплаты, газ и разрешения](../tests/data/first_run_dex_2026-11-26/memebox_base_module.json)."])
     metric_path = Path(f"tests/data/first_run_dex_2026-11-26/metric_{network}.json")
     if metric_path.exists():
         metric = read(metric_path)
@@ -233,8 +236,9 @@ def tables(network, snapshots, profiles):
                 verdict="Профиль требует pluginByPool и обратную ссылку, режим 0xc1, нулевой incentive и подтверждённый код обеих фабрик."
             elif dex=="synthswap-v3":
                 verdict="Активен внешний farming incentive. Измерено исполнение данного пула, приёмка учёта оракула и программы продолжается."
-            else: verdict="Активен limitOrderManager. Для автономного маршрута требуется проверка внешнего исполнения."
+            else: verdict="В 4 случаях SwapFee сообщил 201 миллионную и нулевую плату плагина при lastFee=500. Подтверждены фабрика плагина, LimitOrderManager и SecurityRegistry, разрешающий обмен. При активной внешней ферме, ребалансировщике или непринятом коде пул закрывается. После пересечения ордера менеджер может сжечь ликвидность того же пула, для повторного использования требуется новое состояние."
             out.append(f"| {dex} | {scope} | {rate}, пул `{pool}` | {verdict} [Вызовы и ответы](../{path.as_posix()}) |")
+        out.extend(["", "HorizonDEX на Base. Kyber Elastic V2, 132 границы в прочитанном списке, порция чтения 32, шаг цены 8, комиссия 40/100000. На блоке 62 262 756 официальный роутер и штатный V5 (шаг 8) дали одинаковые поступления. За 10¹² и 10¹³ wei WETH получены 1688 и 16888 raw USDbC, обратные продажи дали 998650431964 и 9991255908839 wei WETH. Все восемь обменов использовали полный вход. Порог выше на одну единицу и истёкший срок откатили каждый вариант. Штатный путь использует V5 с проверкой выплаты получателю. [Архив котировок, тиков и выплат](../tests/data/first_run_dex_2026-11-26/horizondex_base.json.gz)"])
         oasis_file = "tests/data/first_run_dex_2026-11-26/oasisswap_base.json"
         oasis_v5_file = "tests/data/first_run_dex_2026-11-26/oasisswap_v5_base.json"
         oasis, oasis_v5 = read(Path(oasis_file)), read(Path(oasis_v5_file))
@@ -896,6 +900,12 @@ def tables(network, snapshots, profiles):
                     f"[Суммы и результаты](../{ring_path.as_posix()}) · "
                     "[Архивный прогон](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45881656010)."])
     if not base:
+        sn=read(Path("tests/data/first_run_dex_2026-11-26/supernova_ethereum_directory.json"))
+        out.append(f"**Supernova CL.** На блоке {sn['block']} подтверждены {len(sn['markets'])} пулов "
+                   f"четырёх реестров customDeployer. Адаптер проверяет CREATE2, код плагина и комиссию "
+                   "с учётом скидки плательщика. Внешний вызов Reflex может изменить другой рынок, "
+                   "поэтому одиночный пул сравнивается с обычным маршрутом отдельно. "
+                   "[Пулы и источники комиссии](../tests/data/first_run_dex_2026-11-26/supernova_ethereum_directory.json).")
         dx=read(Path("tests/data/first_run_dex_2026-11-26/deltaswap_ethereum.json"))["current"]
         x7=read(Path("tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json"))
         for key in ("x7-finance","x7-finance-ethereum"):
@@ -929,6 +939,8 @@ def tables(network, snapshots, profiles):
             pool,factory=selected["address"],selected["reported_factory"]
             if id in {"x7-finance","x7-finance-ethereum","deltaswap-ethereum"}:
                 roundtrip="getPair(address,address)"
+            elif id=="supernova-cl" and any(m["pool"]==pool.lower() and m["registered"] for m in sn["markets"]):
+                roundtrip="customPoolByPair(customDeployer,token0,token1)"
         if base and id == "quickswap-v2-base" and quickswap_v2.exists() and pool and any(m["pool"] == pool.lower() for m in q2["directory"]):
             factory, roundtrip = q2["factory"], "getPair(address,address)"
         if base and id == "quickswap-v4-base" and quickswap.exists() and pool and any(m["pool"] == pool.lower() for m in qs["markets"]):
@@ -975,6 +987,9 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if not base and str(row["id"])=="7382":
+            candidates=[sn["factory"]]
+            task=f"Supernova CL · {len(sn['markets'])} рынков в четырёх реестрах customDeployer по CREATE2"
         if not base and str(row["id"])=="4062":
             candidates=[dx["proof"]["factory"]["address"]]
             task="DeltaSwap Ethereum · сверены 17 рынков фабрики и выплаты официального Router02"

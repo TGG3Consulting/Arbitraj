@@ -481,6 +481,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // квотер — свои (не как Infinity/V4). Вид ядра — Cl, ссылка на пул — отдельный контракт (как V3).
         // Решение 451: kyber_elastic_v1 — тот же вид для развёртываний Elastic v1 (Arbitrum), отличие — правило шага
         // SwapMath (pools/family_variant.rs Variant::ElasticV1).
+        "kyber_elastic_v5" => (PoolKind::Cl, Proto::KyberElastic, true, false, false),
         "kyber_elastic" | "kyber_elastic_v1" => {
             (PoolKind::Cl, Proto::KyberElastic, true, false, true)
         }
@@ -499,6 +500,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // Algebra Integral (THENA V3, DexSwap; решение 188): как thena_fusion — в графе (математика swap_algebra),
         // исполнение — шаг ALGEBRA контракта-исполнителя (тот же swap + algebraSwapCallback, exec_kind.rs).
         "algebra_integral"
+        | "algebra_integral_treble"
         | "algebra_integral_base_plugin_v1"
         | "algebra_integral_hydrex"
         | "algebra_integral_quickswap"
@@ -769,6 +771,9 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
 /// роутера (v2_fork_executor, решение 280) роутер не нужен: сверка — обмен через исполнитель в симуляции. Ошибок нет.
 pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
     let mut list = Vec::new();
+    if f.variant == super::family_variant::Variant::ElasticV5 {
+        list.extend(["dex.factory_runtime_hash", "dex.router_runtime_hash", "dex.quoter_runtime_hash", "dex.tick_reader_runtime_hash"]);
+    }
     // Universal Router и Permit2 — только у НЕ-форка (поддержанного DEX): форк исполняется своим роутером (dex.router)
     // с прямым ERC-20 approve, UR/Permit2 ему не нужны (решения 59, 82).
     if f.tradable && !f.fork {
@@ -899,7 +904,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // (dex.quoter_virtual = да убирает dex.quoter из списка, virtual_quoter.rs); без него пул не подключается.
         Proto::AlgebraIntegral => {
             list.extend(["dex.factory", "dex.quoter"]);
-            if matches!(f.variant,Variant::BasePluginV1 | Variant::SupernovaIntegral) {
+            if matches!(f.variant,Variant::BasePluginV1 | Variant::TrebleIntegral | Variant::SupernovaIntegral) {
                 list.extend(["dex.factory_runtime_hash","dex.plugin_factory","dex.plugin_runtime_hashes",super::verify_algebra_dir::SETTING]);
             }
             if matches!(

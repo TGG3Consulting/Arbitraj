@@ -267,7 +267,7 @@ pub fn since(k: ExecKind) -> Version {
         // Решение 456: EKUBO = 25 — с v4 (в ветке t230 — с v3 по EKUBO_MARK; метка кода остаётся второй проверкой).
         ExecKind::Ekubo => Version::V4,
         // Решение 470 (T470-06): AERO_BASIC = 26 — только v5 (сборка v5 — contracts/out/, решение 488; развёртывание и запись приёмки — T488-02).
-        ExecKind::AeroBasic => Version::V5,
+        ExecKind::AeroBasic | ExecKind::Elastic => Version::V5,
         // Решение 472 (T472-08): CURVE_ETH = 28 — только v5 (сборка v5 — contracts/out/, решение 488; развёртывание и запись приёмки — T488-02).
         ExecKind::CurveEth => Version::V5,
         // Решение 484: WOMBAT = 30 — только v5 (сборка v5 — contracts/out/, решение 488; развёртывание и запись приёмки — T488-02).

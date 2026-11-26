@@ -220,6 +220,7 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         },
         ExecKind::V3 => Params::V3,
         ExecKind::Algebra => Params::Algebra,
+        ExecKind::Elastic => Params::Elastic,
         // Решение 273: фабрика пары на паузе — обмен откатился бы, шаг не строится.
         ExecKind::Solidly => match &e.pool.state {
             PoolState::Solidly { gate, .. } if gate.paused => {

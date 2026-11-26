@@ -82,6 +82,28 @@ fn base_plugins_create_the_configured_pool_and_match_real_wallet_deltas() {
             assert_eq!(word(r, "left_source"), U256::ZERO);
             assert_eq!(r["above_buy"]["status"], "0x0");
             assert_eq!(r["above_sell"]["status"], "0x0");
+            if id == "treble-v4" {
+                let topic = format!(
+                    "{:#x}",
+                    keccak256("SwapFee(address,uint24,uint24)".as_bytes())
+                );
+                for side in ["buy", "sell"] {
+                    let logs = r[side]["logs"].as_array().unwrap();
+                    let log = logs
+                        .iter()
+                        .find(|l| {
+                            l["address"] == data["roles"]["pool"]["address"]
+                                && l["topics"][0] == topic
+                        })
+                        .unwrap();
+                    let data = log["data"].as_str().unwrap();
+                    assert_eq!(
+                        U256::from_str_radix(&data[2..66], 16).unwrap(),
+                        U256::from(201)
+                    );
+                    assert_eq!(U256::from_str_radix(&data[66..], 16).unwrap(), U256::ZERO);
+                }
+            }
             if id == "henjin" || id == "kim-v4-base" {
                 let encoded = r["after_global"]["returnData"].as_str().unwrap();
                 let actual = U256::from_str_radix(&encoded[130..194], 16).unwrap();
@@ -96,4 +118,53 @@ fn base_plugins_create_the_configured_pool_and_match_real_wallet_deltas() {
             }
         }
     }
+}
+
+#[test]
+fn treble_security_and_limit_order_roles_match_the_profile() {
+    let raw = include_bytes!("data/first_run_dex_2026-11-26/treble_modules_base.json.gz");
+    let modules: Value = serde_json::from_reader(GzDecoder::new(raw.as_slice())).unwrap();
+    let cfg: Vec<Value> =
+        serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
+    let f = &cfg
+        .iter()
+        .find(|r| r["id"] == "treble-v4" && r["chain_id"] == 8453)
+        .unwrap()["settings"];
+    let d = load("treble-v4");
+    assert_eq!(f["dex.kind"], "algebra_integral_treble");
+    assert_eq!(d["selector"], modules["selector"]);
+    assert_eq!(d["global_state"][3], 215);
+    assert_eq!(d["global_state"][2], 500);
+    assert_eq!(
+        f["dex.plugin_runtime_hashes"][0],
+        d["roles"]["plugin_factory"]["keccak"]
+    );
+    for (i, k) in [(1, "limit_code"), (2, "security_code")] {
+        let code = modules[k]
+            .as_str()
+            .unwrap()
+            .parse::<alloy_primitives::Bytes>()
+            .unwrap();
+        assert_eq!(
+            f["dex.plugin_runtime_hashes"][i],
+            format!("{:#x}", keccak256(code))
+        );
+    }
+    let responses = modules["responses"].as_array().unwrap();
+    for (index, role) in [
+        (0, "factory"),
+        (1, "deployer"),
+        (2, "plugin_factory"),
+        (3, "factory"),
+    ] {
+        let raw = responses[index]["result"].as_str().unwrap();
+        assert_eq!(
+            &raw[26..],
+            &d["roles"][role]["address"].as_str().unwrap()[2..]
+        );
+    }
+    assert_eq!(
+        U256::from_str_radix(&responses[4]["result"].as_str().unwrap()[2..], 16).unwrap(),
+        U256::ZERO
+    );
 }

@@ -3207,6 +3207,9 @@
     "source": "https://basescan.org/address/0x079463f811e6eb2e226908e79144cddb59a7fb71 · tests/data/first_run_dex_2026-11-26/memebox_base.json",
     "settings": {
       "dex.kind": "memebox",
+      "dex.module_runtime_hashes": [
+        "0x515038f6a596bc36752d8bec6ad30a4cfc42c5fbaba6588372296adab6fd9549"
+      ],
       "dex.factory": "0x079463f811e6eb2e226908e79144cddb59a7fb71",
       "dex.factory_runtime_hash": "0x79400483ef4dce944cc734280f7f34f55180b72720d26cfe8bca6733405870d1",
       "dex.pool_code_hashes": [
@@ -3282,6 +3285,74 @@
       ],
       "dex.factory": "0x08e3814ad06be2a555a4c0d330a20078e5344dfd",
       "dex.balancer_pool": "managed"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "treble-v4",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xd66402f2dbd42d5becc884e6c453b78985a411f7 · https://sourcify.dev/server/v2/contract/8453/0xeb298183c0fa007e2e5c362cdd6c95f77782668f · tests/data/first_run_dex_2026-11-26/base_algebra_treble-v4.json.gz · treble_modules_base.json.gz",
+    "settings": {
+      "dex.kind": "algebra_integral_treble",
+      "dex.factory": "0x6e606cf94a4ddc01aeed2fce16d1b4f5b33e0a31",
+      "dex.factory_runtime_hash": "0x8b62bf8c6c9fdf83f74a3a3dd5a159082fd0b978fbddf121b374751f0df64614",
+      "dex.pool_code_hashes": [
+        "0x62441ebe4e4315cf3d49d5957f94d66b253dbabe7006f34ad7f70947e60bf15c"
+      ],
+      "dex.plugin_factory": "0xd66402f2dbd42d5becc884e6c453b78985a411f7",
+      "dex.plugin_runtime_hashes": [
+        "0x3c50d7177c1258d85f6df7b40d86af22dbb077adcd1be733e53b23e9472a5804",
+        "0x7732178362e16a9f7831d6ae673afbcc26a7b51292ff180fe44aec97c3dc02be",
+        "0x0120f76eb59802060447ae86f36019ea24c6f2aaec47a4d4d653105ecab12e3f"
+      ],
+      "dex.quoter_virtual": true
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "supernova-cl",
+    "source": "https://repo.sourcify.dev/contracts/full_match/1/0x44b7fbd4d87149efa5347c451e74b9fd18e89c55 · https://eth.blockscout.com/tx/0x6bf95079eb3c0a95a6f4e16877819cfd85ffdd1551ecfebd3966051686a6fc41 · tests/data/first_run_dex_2026-11-26/supernova_ethereum_directory.json",
+    "settings": {
+      "dex.kind": "algebra_integral_supernova",
+      "dex.factory": "0x44b7fbd4d87149efa5347c451e74b9fd18e89c55",
+      "dex.factory_runtime_hash": "0x502e5730b9eb2b3afa6c7b8453c61c842dccac09c1a4cf4147ebb151e5184f3e",
+      "dex.pool_code_hashes": [
+        "0xeaa3eea3233916c82fe1281a51bd9cde844b7c4673c0714ca0028a57f5634752"
+      ],
+      "dex.quoter": "0xf9439cd803dcb11fa574bcc8421207f89b529e41",
+      "dex.plugin_factory": "0xdbfd67d12cadb8925c1417ff3638693f2bf99b97",
+      "dex.custom_deployers": [
+        "0x1c798614ef4c6a8f8a1aab25785714933e59e963",
+        "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+        "0x44acd9579650d300ebbeac2e483b97fdcacdddc0",
+        "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8"
+      ],
+      "dex.plugin_runtime_hashes": [
+        "0x3b3047c9258b78b52c9e98e1726db676ac3c56632abe35b9552d05a3dd7e2306",
+        "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+        "0xdb838705901d2efbc63fe05f4625e7cce34aa6be9549a29008020d3e9341012b",
+        "0x9e94ff4d8e8a4d7322fd0fb42c4711370511da93109e5f34076fb49fc8f8c022",
+        "0x8ac05b56ecceed762068938b7ed1e564f708e24935e0216e06dece9772159c5c"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "horizondex-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x07aced5690e09935b1c0e6e88b772d9440f64718 · tests/data/first_run_dex_2026-11-26/horizondex_base.json.gz",
+    "settings": {
+      "dex.kind": "kyber_elastic_v5",
+      "dex.elastic_ticks_chunk": 32,
+      "dex.factory": "0x07aced5690e09935b1c0e6e88b772d9440f64718",
+      "dex.factory_runtime_hash": "0x35b396cfd2ea9a2219d1bd777502fee60ffe41e68521dce15237250db3b12adb",
+      "dex.router": "0x99aec509174cbf06f8f7e15ddeeb7bcc32363827",
+      "dex.router_runtime_hash": "0x5f9fd919961cf199da2f502e9e895a1b318906b0443ec7b5706097d730dc5dbf",
+      "dex.quoter": "0x94ddde405a00180891ed79dc1147f0d841c30d73",
+      "dex.quoter_runtime_hash": "0x5faa19a79ab9d8f2a97c3d31f17d976ecedb1db2486e71eb1a59efde666dc343",
+      "dex.tick_reader": "0x2e1cba4a9f6e69d27e65046fc93b873b05f79a39",
+      "dex.tick_reader_runtime_hash": "0x2d2f528bb488dfcc239adf96beb1a10a987f7669dcd41d24eb287e21894a9650"
     }
   }
 ]

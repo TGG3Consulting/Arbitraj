@@ -4,11 +4,11 @@ import json
 from pathlib import Path
 
 import requests
-from eth_abi import decode
+from eth_abi import decode, encode
 from eth_utils import keccak
 from record_balancer_markets import Capture, posts
 from record_base_slipstream_executor import OWNER
-from record_hydrex_integral import EXEC, FOLDER, RUNTIME, VIRTUAL, VIRTUAL_FILE, read, rpc, simulate
+from record_hydrex_integral import EXEC, FOLDER, RUNTIME, VIRTUAL, VIRTUAL_FILE, map_ticks, read, rpc, simulate
 from record_solidly_v3 import ETH_WETH, HOLDERS
 from record_ethereum_x7 import ENDPOINTS, ROOT_HASH
 
@@ -47,21 +47,34 @@ def capture(e):
     for pool in rows:
         t0,t1,gs,plugin,liq=(decode(abi,next(results)) for _,abi in methods)
         markets.append(dict(pool=pool,tokens=[t0[0],t1[0]],state=list(map(str,gs)),plugin=plugin[0],liquidity=str(liq[0])))
+    # Перечень из событий создания, привязан к исчерпывающему индексу allPairs.
+    logs=rpc(e,"eth_getLogs",[dict(fromBlock=hex(24390427),toBlock=hex(e["block"]),address=FACTORY,
+                topics=[digest(b"CustomPool(address,address,address,address)")])])
+    roles={"0x"+r["data"][-40:]: {"deployer":"0x"+r["topics"][1][-40:],"tx":r["transactionHash"],
+            "block_hash":r["blockHash"]} for r in logs if not r.get("removed",False)}
     lookups=[]
     for m in markets:
-        a,b=m["tokens"]; pool=m["pool"]
-        lookups.extend([(FACTORY,"poolByPair(address,address)",["address","address"],[a,b]),
-                        (FACTORY,"poolByPair(address,address)",["address","address"],[b,a]),
-                        (REGISTRY,"pluginByPool(address)",["address"],[pool])])
+        a,b=m["tokens"];pool=m["pool"];custom=roles.get(pool,{}).get("deployer")
+        if custom:
+            methods=[(FACTORY,"customPoolByPair(address,address,address)",["address"]*3,[custom,*t]) for t in ((a,b),(b,a))]
+        else:
+            methods=[(FACTORY,"poolByPair(address,address)",["address"]*2,list(t)) for t in ((a,b),(b,a))]
+        lookups.extend(methods+[(REGISTRY,"pluginByPool(address)",["address"],[pool])])
+        preimage=[custom,a,b] if custom else [a,b]
+        salt=keccak(encode(["address"]*len(preimage),preimage))
+        derived="0x"+keccak(bytes([255])+bytes.fromhex(DEPLOYER[2:])+salt+init)[-20:].hex()
+        m.update(creation=roles.get(pool),create2=(derived==pool))
     results=iter(posts(c,lookups))
     for m in markets:
-        m["standard"]=all([decode(["address"],next(results))[0]==v for v in (m["pool"],m["pool"],m["plugin"])])
+        m["registered"]=all([decode(["address"],next(results))[0]==v for v in (m["pool"],m["pool"],m["plugin"])])
+    if len(set(rows))!=count or any(not m["create2"] or not m["registered"] for m in markets):
+        raise ValueError("incomplete or conflicting factory, CREATE2 or plugin directory")
     state={EXEC:"0x"+RUNTIME.read_text().strip(),VIRTUAL:"0x"+VIRTUAL_FILE.read_text().strip()}
     if any(code(a) for a in [OWNER,EXEC,VIRTUAL]):raise ValueError("simulation address contains deployed code")
     deadline=int(head["timestamp"],16)+180
     evidence={}
     for m in markets:
-        if not m["standard"] or not set(m["tokens"])<={ETH_WETH,USDT,USDC}:continue
+        if not m["registered"] or not m["create2"] or not set(m["tokens"])<={ETH_WETH,USDT,USDC}:continue
         pool,pl=m["pool"],m["plugin"]
         url="https://eth.blockscout.com/api/v2/smart-contracts/"+pl
         res=requests.get(url,timeout=24);res.raise_for_status();record=res.json()
@@ -75,12 +88,22 @@ def capture(e):
         m.update(reflex=c.one(pl,"isReflexEnabled()",returns=["bool"])[0], security=security,discount_registry=discounts,
                  pool_status=c.one(security,"getPoolStatus(address)",["address"],[pool],["uint8"])[0],
                  plugin_fee=c.one(pl,"getCurrentFee()",returns=["uint16"])[0],wallet=[])
+        reference=c.one(discounts,"feeDiscounts(address,address)",["address","address"],[pool,pool],["uint16"])[0]
+        discount=c.one(discounts,"feeDiscounts(address,address)",["address","address"],[OWNER,pool],["uint16"])[0]
+        signature="beforeSwap(address,address,bool,int256,uint160,bool,bytes)"
+        payload=keccak(text=signature)[:4]+encode(["address","address","bool","int256","uint160","bool","bytes"],[EXEC,OWNER,True,0,0,False,b""])
+        raw=rpc(e,"eth_call",[{"from":pool,"to":pl,"data":"0x"+payload.hex()},tag])
+        sel,fee,add=decode(["bytes4","uint24","uint24"],bytes.fromhex(raw[2:]))
+        if sel!=keccak(text=signature)[:4] or add or m["pool_status"]!=0:
+            raise ValueError("beforeSwap rejected the canonical pool")
+        m.update(discount=discount,pool_discount=reference,hook_fee=fee,roles={
+            security:digest(code(security)),discounts:digest(code(discounts))})
         for n,a in enumerate(m["tokens"]):
             b=m["tokens"][1-n]; funding=HOLDERS["ethereum"][a]
             for dx in ((10**14,10**15) if a==ETH_WETH else (10**6,10**7)):
-                discount=c.one(discounts,"feeDiscounts(address,address)",["address","address"],[OWNER,pool],["uint16"])[0]
-                r=simulate(e,pool,QUOTER,m["tokens"][0],a,b,dx,state,deadline,OWNER,True,ETH_WETH,funding)
+                r=simulate(e,pool,QUOTER,m["tokens"][0],a,b,dx,state,deadline,OWNER,True,ETH_WETH,funding,(m["creation"] or {}).get("deployer"))
                 r["discount"]=discount;m["wallet"].append(r)
+        m["tick_window"]=map_ticks(c,pool,[int(m["state"][1])]+[r["tick_after"] for r in m["wallet"]])
     if not evidence:raise ValueError("no on-chain registered stablecoin / wrapped ETH markets")
     return dict(selector=tag,block=e["block"],state_root=ROOT_HASH,endpoint=e["endpoint"],factory=FACTORY,
                 quoter=QUOTER,router=ROUTER,plugin_factory=REGISTRY,pool_deployer=DEPLOYER,

@@ -55,6 +55,9 @@ pub fn request(
         }
         return Ok((ctx.dex_addr("dex.router",e.family.id)?,super::super::pools::memebox::calldata(token_in,token_out,amount)));
     }
+    if e.family.variant==super::super::pools::family_variant::Variant::SupernovaIntegral {
+        return Err(ctx.err(ErrorCode::NotApplicable,"Supernova: требуется канонический customDeployer и отправитель котировки"));
+    }
     if e.family.variant.external_algebra_swap() {
         if token_in != e.pool.token0 && token_in != e.pool.token1 {
             return Err(ctx.err(ErrorCode::InvalidAddress, "Вход не входит в пару Nami"));
@@ -509,6 +512,10 @@ pub fn request(
 
 /// Выход из ответа квотера. None — ответ не по ABI.
 pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> Option<U256> {
+    if e.family.variant == super::super::pools::family_variant::Variant::ElasticV5 {
+        let r=IElasticQuoterV2::quoteExactInputSingleCall::abi_decode_returns(out).ok()?;
+        return (r.usedAmount==amount).then_some(r.returnedAmount);
+    }
     if e.family.variant == super::super::pools::family_variant::Variant::KewlV2 {
         let values=IV2Router::getAmountsOutCall::abi_decode_returns(out).ok()?;
         return match values.as_slice() {

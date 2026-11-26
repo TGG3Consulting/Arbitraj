@@ -59,6 +59,49 @@ class CanonicalReads:
         return results
 
 
+def directory(read,e,deployer,factory,deployment,total):
+    # Constructor leaves the deployer at nonce 1; each successful CREATE2 emits one event in the factory.
+    ranges=[(deployment,e["block"],1,total+1)]
+    leaves=[]
+    while ranges:
+        bisect=[]
+        for left,right,before,after in ranges:
+            if after==before:continue
+            if right-left+1<=LOG_RANGE:leaves.append((left,right,before,after));continue
+            bisect.append((left,right,before,after,(left+right)//2))
+        mids=read.read([("eth_getTransactionCount",[deployer,hex(mid)]) for *_,mid in bisect])
+        ranges=[]
+        for (left,right,before,after,mid),raw in zip(bisect,mids,strict=True):
+            n=int(raw,16)
+            if not before<=n<=after:raise ValueError("nonmonotonic deployment nonce")
+            ranges.extend([(left,mid,before,n),(mid+1,right,n,after)])
+    windows=read.read([("eth_getLogs",[{"fromBlock":hex(left),"toBlock":hex(right),
+                                        "address":factory,"topics":[CREATED]}]) for left,right,_,_ in leaves],limit=4)
+    pools=[]
+    for (_,_,before,after),events in zip(leaves,windows,strict=True):
+        if len(events)!=after-before:raise ValueError("deployment nonce differs from window receipt count")
+        for event in events:
+            t0,t1=["0x"+t[-40:] for t in event["topics"][1:3]]
+            fee=int(event["topics"][3],16)
+            spacing,pool=decode(["int24","address"],bytes.fromhex(event["data"][2:]))
+            pools.append(dict(pool=pool,tokens=[t0,t1],fee=fee,spacing=spacing,tx=event["transactionHash"],
+                              block=int(event["blockNumber"],16),hash=event["blockHash"],index=int(event["logIndex"],16)))
+    if len({p["pool"] for p in pools})!=len(pools) or len(pools)!=total:
+        raise ValueError("incomplete factory")
+    checks=[]
+    for p in pools:
+        call=calldata("getPool(address,address,uint24)",["address","address","uint24"],[*p["tokens"],p["fee"]])
+        checks.append((factory,False,bytes.fromhex(call[2:])))
+    for start in range(0,len(checks),60):
+        group=checks[start:start+60]
+        payload=calldata("aggregate3((address,bool,bytes)[])",["(address,bool,bytes)[]"],[group])
+        raw,=read.read([("eth_call",[{"to":MULTICALL,"data":payload},e["selector"]])])
+        results,=decode(["(bool,bytes)[]"],bytes.fromhex(raw[2:]))
+        for p,(ok,value) in zip(pools[start:start+60],results,strict=True):
+            if not ok or decode(["address"],value)[0]!=p["pool"]:raise ValueError("wrong pool address")
+    return pools
+
+
 def record():
     e=json.loads((SOURCES/"base_native_v3.json").read_bytes())
     read=CanonicalReads(e)
@@ -70,45 +113,7 @@ def record():
         total=int(actual[0],16)-1
         if decode(["address"],bytes.fromhex(actual[1][2:]))[0]!=factory:
             raise ValueError("deployer points at another factory")
-        # Constructor leaves the deployer at nonce 1; each successful CREATE2 emits one event in the factory.
-        ranges=[(DEPLOYMENT[name],e["block"],1,total+1)]
-        leaves=[]
-        while ranges:
-            bisect=[]
-            for left,right,before,after in ranges:
-                if after==before:continue
-                if right-left+1<=LOG_RANGE:leaves.append((left,right,before,after));continue
-                bisect.append((left,right,before,after,(left+right)//2))
-            mids=read.read([("eth_getTransactionCount",[deployer,hex(mid)]) for *_,mid in bisect])
-            ranges=[]
-            for (left,right,before,after,mid),raw in zip(bisect,mids,strict=True):
-                n=int(raw,16)
-                if not before<=n<=after:raise ValueError("nonmonotonic deployment nonce")
-                ranges.extend([(left,mid,before,n),(mid+1,right,n,after)])
-        windows=read.read([("eth_getLogs",[{"fromBlock":hex(left),"toBlock":hex(right),
-                                            "address":factory,"topics":[CREATED]}]) for left,right,_,_ in leaves],limit=4)
-        pools=[]
-        for (_,_,before,after),events in zip(leaves,windows,strict=True):
-            if len(events)!=after-before:raise ValueError("deployment nonce differs from window receipt count")
-            for event in events:
-                t0,t1=["0x"+t[-40:] for t in event["topics"][1:3]]
-                fee=int(event["topics"][3],16)
-                spacing,pool=decode(["int24","address"],bytes.fromhex(event["data"][2:]))
-                pools.append(dict(pool=pool,tokens=[t0,t1],fee=fee,spacing=spacing,tx=event["transactionHash"],
-                                  block=int(event["blockNumber"],16),hash=event["blockHash"],index=int(event["logIndex"],16)))
-        if len({p["pool"] for p in pools})!=len(pools) or len(pools)!=total:
-            raise ValueError("incomplete factory")
-        checks=[]
-        for p in pools:
-            call=calldata("getPool(address,address,uint24)",["address","address","uint24"],[*p["tokens"],p["fee"]])
-            checks.append((factory,False,bytes.fromhex(call[2:])))
-        for start in range(0,len(checks),60):
-            group=checks[start:start+60]
-            payload=calldata("aggregate3((address,bool,bytes)[])",["(address,bool,bytes)[]"],[group])
-            raw,=read.read([("eth_call",[{"to":MULTICALL,"data":payload},e["selector"]])])
-            results,=decode(["(bool,bytes)[]"],bytes.fromhex(raw[2:]))
-            for p,(ok,value) in zip(pools[start:start+60],results,strict=True):
-                if not ok or decode(["address"],value)[0]!=p["pool"]:raise ValueError("wrong pool address")
+        pools=directory(read,e,deployer,factory,DEPLOYMENT[name],total)
         markets[name]=dict(factory=factory,deployer=deployer,nonce=total+1,
                            used_tiers=sorted({p["fee"] for p in pools}),pools=sorted(pools,key=lambda p:(p["block"],p["index"])))
     return dict(selector=e["selector"],height=e["block"],state_root=e["state_root"],markets=markets)

@@ -67,7 +67,12 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
     let mut role_block = None;
     for e in entries.iter().copied() {
         let f = e.family;
-        if f.variant==Variant::BasePluginV1 {
+        if f.variant == Variant::ElasticV5 {
+            let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            Box::pin(super::super::pools::elastic_binding::check(ctx,f,e.pool.reference.address(),at)).await?;
+            continue;
+        }
+        if matches!(f.variant,Variant::BasePluginV1|Variant::TrebleIntegral) {
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             let fee=Box::pin(super::super::pools::base_plugin_v1::check(ctx,f,e.pool.reference.address(),at)).await?;
             if !matches!(&e.pool.state,PoolState::Algebra{fee:old,..} if *old==u32::from(fee)) {

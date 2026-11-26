@@ -103,7 +103,7 @@ pub fn needs(f: &Family) -> bool {
             | Variant::DeltaSwap
             | Variant::FraxTwamm
             | Variant::FraxTwammRouter
-            | Variant::BasePluginV1
+            | Variant::BasePluginV1 | Variant::TrebleIntegral
             | Variant::NamiIntegral | Variant::SupernovaIntegral
             | super::family_variant::Variant::QuickswapIntegral
             | super::family_variant::Variant::CurvePlain

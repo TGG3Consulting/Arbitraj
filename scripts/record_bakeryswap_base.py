@@ -10,26 +10,26 @@ ROUTER = "0x10cc46af6964fba2b7266ddf2cd8a8585b71a210"
 WETH = "0x4200000000000000000000000000000000000006"
 
 
-def inspect(cap, directory, header):
+def inspect(cap, directory, header, router=ROUTER):
     factory=directory["factory"]
-    target=f"https://sourcify.dev/server/v2/contract/8453/{ROUTER}"
+    target=f"https://sourcify.dev/server/v2/contract/8453/{router}"
     src=requests.get(target,params={"fields":"compilation,sources,runtimeBytecode.onchainBytecode"},timeout=25)
     src.raise_for_status()
-    code=rpc(cap.endpoint,"eth_getCode",[ROUTER,cap.selector])
+    code=rpc(cap.endpoint,"eth_getCode",[router,cap.selector])
     if src.json()["runtimeBytecode"]["onchainBytecode"].lower()!=code.lower():
         raise ValueError("archive router differs from verified source")
-    if cap.one(ROUTER,"factory()",returns=["address"])!=(factory,) or cap.one(ROUTER,"WETH()",returns=["address"])!=(WETH,):
+    if cap.one(router,"factory()",returns=["address"])!=(factory,) or cap.one(router,"WETH()",returns=["address"])!=(WETH,):
         raise ValueError("router factory or wrapped token differs from settings")
     deadline=int(header["timestamp"],16)+120
     def tx(target,signature,types=(),args=()):
         return call(target,calldata(signature,types,args))
     def payout(a,b,n,m):
-        return tx(ROUTER,"swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
+        return tx(router,"swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
                   ["uint256","uint256","address[]","address","uint256"],[n,m,[a,b],OWNER,deadline])
     def simulate(calls):
         return simulate_block(cap.endpoint,cap.selector,{OWNER:{"balance":hex(100*10**18)}},calls)
     def balance(token,who=OWNER):return tx(token,"balanceOf(address)",["address"],[who])
-    def approve(token,n):return tx(token,"approve(address,uint256)",["address","uint256"],[ROUTER,n])
+    def approve(token,n):return tx(token,"approve(address,uint256)",["address","uint256"],[router,n])
     def check(calls):
         for i,r in enumerate(calls):
             if r["status"]!="0x1":
@@ -37,10 +37,10 @@ def inspect(cap, directory, header):
     def val(reply):return decode(["uint256"],bytes.fromhex(reply["returnData"][2:]))[0]
     def leg(prefix,a,b,amount,expected):
         prep=prefix+[approve(a,amount),balance(a),balance(b)]
-        q=tx(ROUTER,"getAmountsOut(uint256,address[])",["uint256","address[]"],[amount,[a,b]])
+        q=tx(router,"getAmountsOut(uint256,address[])",["uint256","address[]"],[amount,[a,b]])
         order=payout(a,b,amount,expected)
         calls=simulate(prep+[q,payout(a,b,amount,expected+1),order,balance(a),balance(b),
-                  tx(a,"allowance(address,address)",["address","address"],[OWNER,ROUTER])])
+                  tx(a,"allowance(address,address)",["address","address"],[OWNER,router])])
         j=len(prep);check(calls[:j+1]);check(calls[j+2:])
         quoted,=decode(["uint256[]"],bytes.fromhex(calls[j]["returnData"][2:]))
         paid=val(calls[j-2])-val(calls[j+3]);received=val(calls[j+4])-val(calls[j-1])
@@ -69,4 +69,4 @@ def inspect(cap, directory, header):
             continue
         tested.append({"pool":pool["pool"],"cases":samples})
         break
-    return {"router":ROUTER,"runtime":"0x"+keccak(bytes.fromhex(code[2:])).hex(),"source":target,"samples":tested}
+    return {"router":router,"runtime":"0x"+keccak(bytes.fromhex(code[2:])).hex(),"source":target,"samples":tested}

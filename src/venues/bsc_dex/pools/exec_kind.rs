@@ -34,6 +34,8 @@ pub enum ExecKind {
     V3,
     /// Algebra (THENA Fusion): `pool.swap(...)` + `algebraSwapCallback`.
     Algebra,
+    /// Kyber Elastic V2 с прямым swapCallback и выплатой V5.
+    Elastic,
     /// Solidly (THENA V1, Topaz v2; volatile и stable): `pair.getAmountOut` в контракте, перевод, `pair.swap`.
     Solidly,
     /// Curve StableSwap — только Ellipsis (плоский пул Curve): `approve` пулу + `exchange(int128 i, int128 j, dx, 0)`.
@@ -137,6 +139,7 @@ impl ExecKind {
             ExecKind::V2 => "V2",
             ExecKind::V3 => "V3",
             ExecKind::Algebra => "ALGEBRA",
+            ExecKind::Elastic => "ELASTIC",
             ExecKind::Solidly => "SOLIDLY",
             ExecKind::Curve => "CURVE",
             ExecKind::Dodo => "DODO",
@@ -205,10 +208,12 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         | "v3_fork_ramses"
         | "slipstream_ramses"
         | "v3_fork_uniswap_lm" => ExecKind::V3,
+        "kyber_elastic_v5" => ExecKind::Elastic,
         "thena_fusion" => ExecKind::Algebra,
         // Решение 188: swap(recipient, zeroToOne, amountRequired, limitSqrtPrice, data) и algebraSwapCallback у
         // Integral — те же (integral-core 1.2.10 AlgebraPool.sol L246-L252, IAlgebraSwapCallback).
         "algebra_integral"
+        | "algebra_integral_treble"
         | "algebra_integral_base_plugin_v1"
         | "algebra_integral_hydrex"
         | "algebra_integral_quickswap"
@@ -414,6 +419,7 @@ mod tests {
     #[test]
     fn every_kind_is_decided() {
         let none = [
+            "balancer_v2_wallet",
             "memebox",
             "ring_few_v2",
             "fraxswap_twamm",

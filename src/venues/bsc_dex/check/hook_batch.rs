@@ -71,11 +71,17 @@ pub async fn measure(
     let mut calls: Vec<(Address, Bytes)> = Vec::new();
     for (i, (mem, plan)) in pools.iter().enumerate() {
         let base = fresh.map_or(mem, |f| &f.pools[&mem.pool.reference]);
-        let asks = match hooks_probe::requests(ctx, mem, plan) {
-            Ok(a) => a,
-            Err(err) => {
-                out[i] = Some(Err(err));
-                continue;
+        let asks = if mem.family.variant
+            == super::super::pools::family_variant::Variant::SupernovaIntegral
+        {
+            Vec::new()
+        } else {
+            match hooks_probe::requests(ctx, mem, plan) {
+                Ok(a) => a,
+                Err(err) => {
+                    out[i] = Some(Err(err));
+                    continue;
+                }
             }
         };
         let read = if hooks_probe::individual(ctx, mem) {

@@ -177,6 +177,42 @@ mod tests {
     }
 
     #[test]
+    fn protected_wallet_results_match_the_first_run_module() {
+        let wallet: Value = serde_json::from_str(include_str!(
+            "../../../../tests/data/first_run_dex_2026-11-26/memebox_base_module.json"
+        ))
+        .unwrap();
+        let first: Value =
+            serde_json::from_str(include_str!("../../../../config/first_run_dex.json")).unwrap();
+        let profile = &first
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|x| x["id"] == "memebox-base")
+            .unwrap()["settings"];
+        assert_eq!(
+            profile["dex.module_runtime_hashes"][0],
+            wallet["module_hash"]
+        );
+        assert!(profile["dex.router"].is_null());
+        let pairs = wallet["cases"].as_array().unwrap();
+        assert_eq!(pairs.len(), 8);
+        for leg in pairs.iter().flat_map(|x| [&x["buy"], &x["sell"]]) {
+            assert_eq!(n(&leg["paid"]), n(&leg["gross"]));
+            assert_eq!(n(&leg["pair_limit"]), n(&leg["gross"]));
+            assert!(leg["above"].is_object());
+        }
+        let donated = wallet["imbalanced"].as_array().unwrap();
+        assert_eq!(donated.len(), 8);
+        for row in donated {
+            let leg = &row["leg"];
+            assert!(n(&leg["gross"]) < n(&leg["pair_limit"]));
+            assert_eq!(n(&leg["paid"]), n(&leg["gross"]));
+            assert!(leg["above"].is_object());
+        }
+    }
+
+    #[test]
     fn available_deficit_reduces_payout_in_both_directions() {
         let mut s = MemeboxState {
             reserves: [U256::from(1000); 2],

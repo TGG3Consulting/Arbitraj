@@ -89,6 +89,7 @@ pub mod ekubo_native;
 pub mod ekubo_route;
 pub mod ekubo_shallow;
 pub mod elastic_ticks;
+pub(super) mod elastic_binding;
 pub mod elfomo;
 pub mod emit_pool;
 pub mod event_flags;

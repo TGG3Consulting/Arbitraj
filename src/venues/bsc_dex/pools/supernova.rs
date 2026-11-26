@@ -86,6 +86,44 @@ fn projected(observed: u32, reference: u16, actual: u16) -> Option<u16> {
     u16::try_from(low).ok()
 }
 
+fn role(
+    ctx: &Ctx,
+    id: &str,
+    physical: Address,
+    pool: Address,
+    a: Address,
+    b: Address,
+) -> GatewayResult<Address> {
+    let invalid = || {
+        ctx.err(
+            ErrorCode::NotApplicable,
+            "Supernova: рынок не соответствует настроенным CREATE2 и customDeployer",
+        )
+    };
+    let hashes = super::verify_algebra_dir::hashes_for(ctx, id).map_err(|_| invalid())?;
+    if hashes
+        .iter()
+        .any(|h| super::verify_algebra_dir::pool_address(physical, a, b, *h) == pool)
+    {
+        return Ok(Address::ZERO);
+    }
+    for raw in ctx.dex_list("dex.custom_deployers", id)? {
+        let d = raw.parse::<Address>().map_err(|_| invalid())?;
+        if d.is_zero() {
+            return Err(invalid());
+        }
+        let mut enc = [0u8; 96];
+        enc[12..32].copy_from_slice(d.as_slice());
+        enc[44..64].copy_from_slice(a.as_slice());
+        enc[76..96].copy_from_slice(b.as_slice());
+        let salt = keccak256(enc);
+        if hashes.iter().any(|h| physical.create2(salt, *h) == pool) {
+            return Ok(d);
+        }
+    }
+    Err(invalid())
+}
+
 pub(in crate::venues::bsc_dex) async fn check(
     ctx: &Ctx,
     f: &Family,
@@ -122,27 +160,44 @@ pub(in crate::venues::bsc_dex) async fn check(
         super::solidly_classic_factory::plain(ctx, registry, *registry_hash, tag),
         super::solidly_classic_factory::plain(ctx, quoter, *quoter_hash, tag)
     )?;
-    let init = super::verify_algebra_dir::hashes_for(ctx, f.id).map_err(|_| bad())?;
     views!(ctx,tag; factory_of:pool=>Supernova::factoryCall{}, linked:factory=>Supernova::defaultPluginFactoryCall{},
         back:registry=>Supernova::algebraFactoryCall{}, deployer:factory=>Supernova::poolDeployerCall{},
         q_factory:quoter=>Supernova::factoryCall{}, q_deployer:quoter=>Supernova::poolDeployerCall{},
         a:pool=>Supernova::token0Call{}, b:pool=>Supernova::token1Call{}, plugin:pool=>Supernova::pluginCall{},
         registered:registry=>Supernova::pluginByPoolCall{p:pool},gs:pool=>Pool::globalStateCall{});
-    if (factory_of, linked, back, q_factory, q_deployer)
-        != (factory, registry, factory, factory, deployer)
+    if (factory_of, back, q_factory, q_deployer) != (factory, factory, factory, deployer)
         || plugin.is_zero()
         || plugin != registered
         || a.is_zero()
         || a >= b
         || !gs.unlocked
         || !matches!(gs.pluginConfig, 87 | 215)
-        || !init
-            .iter()
-            .any(|h| super::verify_algebra_dir::pool_address(deployer, a, b, *h) == pool)
     {
         return Err(bad());
     }
-    views!(ctx,tag; pair:factory=>Supernova::poolByPairCall{a,b}, owner:plugin=>Supernova::poolCall{},
+    let custom = role(ctx, f.id, deployer, pool, a, b)?;
+    let anchor = super::integral_block::At::Canonical(tag);
+    let pair = if custom.is_zero() {
+        if linked != registry {
+            return Err(bad());
+        }
+        anchor
+            .view(ctx, factory, &Supernova::poolByPairCall { a, b })
+            .await?
+    } else {
+        anchor
+            .view(
+                ctx,
+                factory,
+                &super::abi_algebra_integral::IAlgebraIntegralFactory::customPoolByPairCall {
+                    customDeployer: custom,
+                    tokenA: a,
+                    tokenB: b,
+                },
+            )
+            .await?
+    };
+    views!(ctx,tag; owner:plugin=>Supernova::poolCall{},
         reflex:plugin=>Supernova::getRouterCall{}, security:plugin=>Supernova::getSecurityRegistryCall{},
         discount:plugin=>Supernova::feeDiscountRegistryCall{});
     let origin = signer::address(ctx)?;
@@ -223,7 +278,7 @@ pub(in crate::venues::bsc_dex) async fn check(
 
 pub(in crate::venues::bsc_dex) async fn quote(
     ctx: &Ctx,
-    id: &str,
+    e: &super::registry::Entry,
     input: Address,
     output: Address,
     amount: alloy_primitives::U256,
@@ -231,8 +286,21 @@ pub(in crate::venues::bsc_dex) async fn quote(
 ) -> GatewayResult<alloy_primitives::U256> {
     let hash = super::elfomo::block(ctx, at).await?;
     let payer = signer::address(ctx)?;
+    let id = e.family.id;
     let target = ctx.dex_addr("dex.quoter", id)?;
-    let data = super::nami::calldata(input, output, amount);
+    let factory = ctx.dex_addr("dex.factory", id)?;
+    let physical = super::integral_block::At::Canonical(&hash)
+        .view(ctx, factory, &Supernova::poolDeployerCall {})
+        .await?;
+    let custom = role(
+        ctx,
+        id,
+        physical,
+        e.pool.reference.address(),
+        e.pool.token0,
+        e.pool.token1,
+    )?;
+    let data = super::nami::custom_calldata(input, output, amount, custom);
     let raw: Bytes = rpc::call(
         ctx,
         "eth_call",
@@ -241,4 +309,20 @@ pub(in crate::venues::bsc_dex) async fn quote(
     .await?;
     super::nami::decoded(&raw)
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "Supernova: ответ квотера не по ABI"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::projected;
+    #[test]
+    fn origin_discount_and_ambiguous_oracle_rounding() {
+        assert_eq!(projected(400, 0, 125), Some(350));
+        assert_eq!(projected(400, 0, 1000), Some(0));
+        assert_eq!(projected(300, 250, 250), Some(300));
+        // Скидка пула могла округлить как ставку 400, так и 401 до 300.
+        assert_eq!(projected(300, 250, 0), None);
+        assert_eq!(projected(65535, 999, 0), None);
+        assert_eq!(projected(0, 1000, 0), None);
+        assert_eq!(projected(0, 1001, 1000), None);
+    }
 }

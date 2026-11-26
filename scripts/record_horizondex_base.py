@@ -86,6 +86,7 @@ def capture(endpoint):
         used,out,*_=decode(["uint256","uint256","uint160","uint32","uint256"],bytes.fromhex(raw["returnData"][2:]))
         if not out or used!=amount:raise ValueError("partial pool quote")
         effects=[("above",order(out+1,deadline)),("expired",order(out,0)),("exact",order(out,deadline)),("end_in",balance(x)),("end_out",balance(y))]
+        effects += [("pool_state",tx(POOL,"getPoolState()")),("liquidity",tx(POOL,"getLiquidityState()"))]
         if executor:
             effects.extend((name,tx(token,"balanceOf(address)",["address"],[EXEC])) for name,token in [("left_in",x),("left_out",y)])
         steps=prepare+[(side+k,v) for k,v in effects];results=simulate(steps,executor)

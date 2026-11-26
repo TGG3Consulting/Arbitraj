@@ -38,13 +38,23 @@ def capture(dex,endpoint):
         plug=roles["plugin"]
         if addr(plug,"pool()")!=pool:raise ValueError("foreign plugin")
         rr=[(roles["plugin_factory"],"pluginByPool(address)",["address"],[pool])]
-        rr.extend((plug,m,[],[]) for m in ["getCurrentFee()","defaultPluginConfig()","incentive()","rebalanceManager()","limitOrderManager()"])
+        rr.extend((plug,m,[],[]) for m in ["getCurrentFee()","defaultPluginConfig()","incentive()","rebalanceManager()","limitOrderManager()","getSecurityRegistry()"])
         rr.append((fac,"POOL_INIT_CODE_HASH()",[],[]))
     else:
         roles.update(operator=addr(pool,"dataStorageOperator()"),quoter="0x9c8f11c113f1fe7959c838a5f6b43e5e6223320c")
         rr=[(pool,"activeIncentive()",[],[]),(roles["operator"],"feeConfig()",[],[]),(roles["quoter"],"factory()",[],[])]
     for row,bits in zip(rr,c.batch(rr),strict=True):
         reads[row[1]]=None if bits is None else "0x"+bits.hex()
+    if dex=="treble-v4":
+        for role,signature in [("limit_order_manager","limitOrderManager()"),("security_registry","getSecurityRegistry()")]:
+            val=reads[signature]
+            if val and int(val,16):
+                roles[role]="0x"+val[-40:]
+        if "security_registry" in roles:
+            status,=c.one(roles["security_registry"],"getPoolStatus(address)",["address"],[pool],["uint8"])
+            reads["security_status"]=status
+    if dex=="synthswap-v3" and int(reads["activeIncentive()"],16):
+        roles["incentive"]="0x"+reads["activeIncentive()"][-40:]
     verified={}
     for name,address in roles.items():
         code=rpc(endpoint,"eth_getCode",[address,tag])

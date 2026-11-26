@@ -167,6 +167,10 @@ pub fn calldata(from: Address, to: Address, amount: U256) -> Bytes {
     single(from, to, amount).abi_encode().into()
 }
 
+pub(super) fn custom_calldata(from:Address,to:Address,amount:U256,deployer:Address)->Bytes {
+    INami::quoteExactInputSingleCall{deployer,..single(from,to,amount)}.abi_encode().into()
+}
+
 pub fn decoded(raw: &[u8]) -> Option<U256> {
     Some(
         INami::quoteExactInputSingleCall::abi_decode_returns_validate(raw)

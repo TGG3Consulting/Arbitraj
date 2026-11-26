@@ -514,7 +514,15 @@ pub async fn state(
     if f.proto == Proto::KyberElastic {
         if let PoolRef::Contract(a) = reference {
             let sp = spacing.ok_or_else(|| missing("tickDistance"))?;
+            let at = if f.variant == Variant::ElasticV5 {
+                let at = super::elfomo::block(ctx,&tag).await?;
+                Box::pin(super::elastic_binding::check(ctx,f,*a,&at)).await?;
+                Some(at)
+            } else { None };
             let (state, t) = load_elastic::load(ctx, f, *a, sp, &tag).await?;
+            if let Some(at)=at && super::elfomo::block(ctx,&tag).await? != at {
+                return Err(ctx.err(ErrorCode::StaleData,"Elastic: блок изменился при чтении тиков"));
+            }
             return Ok(Loaded {
                 state,
                 ticks: Some(t),
@@ -545,10 +553,10 @@ pub async fn state(
                 let hash = super::elfomo::block(ctx, &tag).await?;
                 let fee = Box::pin(super::nami::check(ctx, f.id, *a, &hash)).await?;
                 Box::pin(load_algebra_integral::canonical(ctx, *a, &hash, fee, super::nami::PLUGIN_FLAGS)).await?
-            } else if f.variant==Variant::BasePluginV1 {
+            } else if matches!(f.variant,Variant::BasePluginV1|Variant::TrebleIntegral) {
                 let hash=super::elfomo::block(ctx,&tag).await?;
                 let fee=Box::pin(super::base_plugin_v1::check(ctx,f,*a,&hash)).await?;
-                Box::pin(load_algebra_integral::canonical(ctx,*a,&hash,fee,super::base_plugin_v1::FLAGS)).await?
+                Box::pin(load_algebra_integral::canonical(ctx,*a,&hash,fee,super::base_plugin_v1::flags(f.variant))).await?
             } else if f.proto == Proto::AlgebraIntegral {
                 if f.variant == Variant::QuickswapIntegral {
                     super::quickswap_plugin::check(ctx, f.id, *a, &tag).await?;

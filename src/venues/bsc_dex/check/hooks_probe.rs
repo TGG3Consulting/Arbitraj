@@ -154,8 +154,9 @@ pub fn requests(ctx: &Ctx, e: &Entry, plan: &Plan) -> GatewayResult<Vec<(Address
     buy.chain(sell).collect()
 }
 
-pub(super) fn individual(ctx: &Ctx,e: &Entry)->bool {
-    e.family.variant==super::super::pools::family_variant::Variant::SupernovaIntegral || virtual_quoter::on(ctx,e.family.id,e.family.proto)
+pub(super) fn individual(ctx: &Ctx, e: &Entry) -> bool {
+    e.family.variant == super::super::pools::family_variant::Variant::SupernovaIntegral
+        || virtual_quoter::on(ctx, e.family.id, e.family.proto)
 }
 
 /// Что делает: проба плана на блоке `tag` по состоянию `e` на этом блоке (см. шапку). Возвращает: Measured.

@@ -1,0 +1,1463 @@
+{
+  "selector": {
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "requireCanonical": true
+  },
+  "state_root": "0xbd73f03df514c4d550c21a6d567e25a4190f646acbb94b8e8c2462d7c9b17db7",
+  "markets": [
+    {
+      "pool": "0xea829640baade56e4894f142371f1cbb9250cfbf",
+      "tokens": [
+        "0x1abaea1f7c830bd89acc67ec4af516284b1bc33c",
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+      ],
+      "fee": 500,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0xa665fc4b0c307652cc7a546ffdc77ef06fb30660",
+      "liquidity": "1525838670530",
+      "custom": "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x527f138c01f6134546252c37a402b3fcd01c9a399427c8a791da63f279280de6",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0xa65637601a767e247b6e24613ab40f78ad559e71",
+      "tokens": [
+        "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "0xe53ec727dbdeb9e2d5456c3be40cff031ab40a55"
+      ],
+      "fee": 3000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0xe1f29198c5196545ab4aa47da45acbb10d30e6e5",
+      "liquidity": "78606855036712536",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0xda651b1f189ff3458bc19246fa669b924c48e2d7a8eb2179cd5fdf4652c5f9fe",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x40ab23e8f571bf19a85605b9638e50cc25a256ec",
+      "tokens": [
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 0,
+      "flags": 215,
+      "community_fee": 1000,
+      "plugin": "0x6906ac6fb556903edcfc9ee0f5f397fd20b0a259",
+      "liquidity": "1849087008",
+      "custom": "0x1c798614ef4c6a8f8a1aab25785714933e59e963",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        100,
+        400,
+        300,
+        2200,
+        25,
+        300,
+        400
+      ],
+      "plugin_hash": "0xe60d502edb411fe0d546aba9a38a0b96d9d32e1070a874c5167041364dac1e5a",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x2beb35e78c9427899353c41c96bcc96c5647ec63",
+      "tokens": [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 10,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x5d1255ef1acd06da4d7b42ea7da544d47360b023",
+      "liquidity": "201737557705098",
+      "custom": "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x07785220995f2fc677a61d61f425ef2682c9657f0c53cb51e01f4af9c16f3c09",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x3750c1fcd35eae956c7a57e773d1496c41d2759a",
+      "tokens": [
+        "0x6b175474e89094c44da98b954eedeac495271d0f",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 100,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x769617b0be5ead6fa3432e8e69309de8b736f9b1",
+      "liquidity": "1284126057410863",
+      "custom": "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x0ed829ea343e01625ae69b8a345027806486c56aae69c90d7654b4ada77dda58",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x69a66b6885d04d6724fd85feb6c77c09263ab52b",
+      "tokens": [
+        "0x40d16fc0246ad3160ccc09b8d0d3a2cd28ae6c2f",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 1000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x7964481e3107c8f807605487017527cbfbfc0542",
+      "liquidity": "99000000000000",
+      "custom": "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x627078d01b0f4877ad2d349c61b73fa4a185b9b6703dcf98b72c77afa28b0b64",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x648c39735cdafe5864aa9027faa47dc0df19430e",
+      "tokens": [
+        "0x9d39a5de30e57443bff2a8307a4256c8797a3497",
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+      ],
+      "fee": 250,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0xe04b9145a8a64536469affd4722e6afe801fa0e5",
+      "liquidity": "15126318784845744918",
+      "custom": "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0xac3fb58dd415dcc8cf444a22454e58b29301f3d75ec4f7ed5eeccd3a3184a4e6",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0xde758db54c1b4a87b06b34b30ef0a710dc35388f",
+      "tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 0,
+      "flags": 215,
+      "community_fee": 1000,
+      "plugin": "0xcbe3fefdc43cdb24869097ebd55f881ce2b82065",
+      "liquidity": "6517225253584704",
+      "custom": "0x1c798614ef4c6a8f8a1aab25785714933e59e963",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        600,
+        2000,
+        766,
+        7000,
+        45,
+        670,
+        400
+      ],
+      "plugin_hash": "0xc95c1597d6859861349d2f59a114d7dad51879feade84bb71e78c96df0e8d055",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0xed1050e2fe96f7327dc659613c79e41458e9cf05",
+      "tokens": [
+        "0x68749665ff8d2d112fa859aa293f07a622782f38",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 0,
+      "flags": 215,
+      "community_fee": 1000,
+      "plugin": "0x1d6ad60a07f670c48569cb232d1847132e5cb618",
+      "liquidity": "34615330764",
+      "custom": "0x1c798614ef4c6a8f8a1aab25785714933e59e963",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        100,
+        500,
+        200,
+        2500,
+        20,
+        100,
+        400
+      ],
+      "plugin_hash": "0x99a82b7db4894f59a09aedc361374c0813b6902f32e557f39ae5f6215b898adf",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x55347b4ab701ab54ee394f20020175bb385ca725",
+      "tokens": [
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 0,
+      "flags": 215,
+      "community_fee": 1000,
+      "plugin": "0xae8be68169c18cc6b35b3c62fbfeb372ea25c97d",
+      "liquidity": "392537462271386",
+      "custom": "0x1c798614ef4c6a8f8a1aab25785714933e59e963",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        100,
+        400,
+        200,
+        1200,
+        15,
+        100,
+        400
+      ],
+      "plugin_hash": "0x46a77c8c511f0d2be15a6d747fb300fc9e50ab4d3fedd559cac997379ae2d02f",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x06008a785bb761476bc5ade0c3da3e4af62ef5b1",
+      "tokens": [
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "0x68749665ff8d2d112fa859aa293f07a622782f38"
+      ],
+      "fee": 0,
+      "flags": 215,
+      "community_fee": 1000,
+      "plugin": "0x972100d0766742d80e40311527ba2e9c05ed3bd9",
+      "liquidity": "53590",
+      "custom": "0x44acd9579650d300ebbeac2e483b97fdcacdddc0",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        500,
+        4000,
+        200,
+        4000,
+        20,
+        250,
+        500
+      ],
+      "plugin_hash": "0xc650137e42f1c34f0aba51acf376e2fe412c8a583182b18fc19198ed7b5121ec",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0xe9930ea69fcd58e73261be38e1c5c13c290b391b",
+      "tokens": [
+        "0x68749665ff8d2d112fa859aa293f07a622782f38",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 0,
+      "flags": 215,
+      "community_fee": 1000,
+      "plugin": "0x22020841bf6611f2581d96b61a413ddc51d308b3",
+      "liquidity": "72676823695768",
+      "custom": "0x44acd9579650d300ebbeac2e483b97fdcacdddc0",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        200,
+        4000,
+        166,
+        6000,
+        20,
+        600,
+        800
+      ],
+      "plugin_hash": "0xc5edba424fdd96bbe093bf3a9acbb55f879593b6f7c7ba538147944cfe7cff91",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x059ff12b18e628af46c5ab83e0318a6f22c6ea4e",
+      "tokens": [
+        "0x514910771af9ca656af840dff83e8264ecf986ca",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 3000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0xf324cfed6ce3a0211919a37ac11ba0defba69b05",
+      "liquidity": "96295951196323272556",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x08065f33775ee9b32a07432ffef1301f50be146b88df8fecb08963ecb096bf18",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x2110275cae57a63d661626742bf0a459a7f43d44",
+      "tokens": [
+        "0x45804880de22913dafe09f4980848ece6ecbaf78",
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+      ],
+      "fee": 0,
+      "flags": 215,
+      "community_fee": 1000,
+      "plugin": "0xbc2a9cef1b451956561a30d354254c70ea0d1dd5",
+      "liquidity": "157916273452563",
+      "custom": "0x1c798614ef4c6a8f8a1aab25785714933e59e963",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        100,
+        500,
+        200,
+        2500,
+        20,
+        100,
+        400
+      ],
+      "plugin_hash": "0x3f85e68bc3c87dde4dd52eecec38879941aadb94b50b493f62493e45c705154e",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x948f5d52713fa7fef212703678546b903895d807",
+      "tokens": [
+        "0x6418c0dd099a9fda397c766304cdd918233e8847",
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0xf2121a5f4ab7568fb5d8ce11d375abb2c202ed32",
+      "liquidity": "438208918963456229",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x0bbf9c7f20af032a5ea36e4efe45fa14e8b59402d54caec636e152bd7995133c",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0xe2cd94c812aed174b2e09750ff146f45d845d668",
+      "tokens": [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 0,
+      "flags": 215,
+      "community_fee": 1000,
+      "plugin": "0xf6ffc4c0d5305b5a750ae4d1cb801d3b54e56e6b",
+      "liquidity": "6208824243330006",
+      "custom": "0x1c798614ef4c6a8f8a1aab25785714933e59e963",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        600,
+        2000,
+        766,
+        7000,
+        45,
+        670,
+        400
+      ],
+      "plugin_hash": "0xb33729820d51f9a0a7037836fef80851f80057a467b86ae15ced397f901c3006",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0xfc6b05f3e5fcdd27995d6c17a71cf8e7a8f966d2",
+      "tokens": [
+        "0xa27ec0006e59f245217ff08cd52a7e8b169e62d2",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0xf6efa8a05457465a120c49efb250902749e9c256",
+      "liquidity": "3188775569394215",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0xc99b14df1780aeec0de773494b732849353a1da661fffc1536fc435264c1f889",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x8a02454ca2565d25f65531111b6dcac1e5f1d671",
+      "tokens": [
+        "0xa12cc123ba206d4031d1c7f6223d1c2ec249f4f3",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x57f286a2b9e6b302336d7fcfa87301be187fac6f",
+      "liquidity": "53584661744047368",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x399532a690f6ab78a7788fee35943c878bbbf4051f8644a45853d0299e4133d5",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0xa2e0f89d32abf062c39f2205b17a72fa70353bd2",
+      "tokens": [
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "0x8236a87084f8b84306f72007f36f2618a5634494"
+      ],
+      "fee": 100,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x2ba555409d37dbd85875665f8249280b1005a473",
+      "liquidity": "290000",
+      "custom": "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x577ef72bff87fc32e6de1689719a090c0afbebc15209eb0d35ca601051148ab8",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0xab850984c05bd5581f4f6e4bbff9d8cc3d8273d9",
+      "tokens": [
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+      ],
+      "fee": 100,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x29aff148aeadab985b3d13dc0d9a965aa106ae5e",
+      "liquidity": "2269935631",
+      "custom": "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x4a5a74f259cd1d0493e39835d9c5e660a288ed7596c4c313160b9ad6a303dd82",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x5996451816d3789ade9456dd27512895e1312003",
+      "tokens": [
+        "0x0fd4a527a4422aca27f48cd79e4093867544a616",
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0xcec7cc97d5b379cc8c58470e6bc505c366459471",
+      "liquidity": "62791373724",
+      "custom": "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x1ce9326d8c7c87784fa54bed8ba5c8620ef82f07dfa04fb4182e09831aa84d69",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x5c00b1b9b6357f782cc01910b54d96f4690d1eb5",
+      "tokens": [
+        "0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 3000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x1fed37933c7c91f8fc6a11132ee8985aba56bc2c",
+      "liquidity": "144162785325336941",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x97e9d73e0748c5141fe9a2177b1998d96995632a4a747dc031668b87c37d63e2",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x694736a70d63241884e891fd0416b1ada7ff2bdb",
+      "tokens": [
+        "0x6982508145454ce325ddbe47a25d4ec3d2311933",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 3000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x127887cfb25e68e0034cd82c4897a77b426d491e",
+      "liquidity": "755801713209415550001",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0xb155e7a2b018e05e3778355dea73efc6662bfdf8199ec8384d5119efff55b2e1",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x8817d938ea8168b64cec828a6371d5fcd6c1961e",
+      "tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0xe0f63a424a4439cbe457d80e4f4b51ad25b2c56c"
+      ],
+      "fee": 3000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x9186cc5a2969f555866e26e11804d48856a634e4",
+      "liquidity": "34422441634740",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x177fea7aae3291a442d0317fe411484618707e3be1affbd2897166232932e879",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0xee5ec31ca426135281c661500bb2f1639be81f88",
+      "tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0xcb1592591996765ec0efc1f92599a19767ee5ffa"
+      ],
+      "fee": 3000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0xc6083e2844b0a0dde1f32c9b5b1d59e7710f8950",
+      "liquidity": "142302055258415674769",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0xcb788aaed8c43f74e240b3cb2c10fa0e2a030c33f542adf521603b947f6a70f5",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x20f1e9b44fc066191ec08d98517390674b25ffb9",
+      "tokens": [
+        "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "0xdc035d45d973e3ec169d2276ddab16f1e407384f"
+      ],
+      "fee": 100,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x50beef416da666a2bc0aa6df1950dea3b9a2cd10",
+      "liquidity": "2308725480281007",
+      "custom": "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x7b62000cd652f8b2794d6415cd3956f82d7e3a8c3073884d470072414206a19e",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x63671a5625b4923eba647df340a01dcf9db943f5",
+      "tokens": [
+        "0x6c3ea9036406852006290770bedfcaba0e23a0e8",
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+      ],
+      "fee": 100,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0xed99ee2b65aa2e26b9c3ae68fafe80cfdf7e6127",
+      "liquidity": "612035483223",
+      "custom": "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0xa02441a7cf4c32942ff2892b53f422130963286fd94e87ea9198e4a674e97411",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x6ac7f10cdb07c564d2fe95e9b4a586780c5a0278",
+      "tokens": [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xdc035d45d973e3ec169d2276ddab16f1e407384f"
+      ],
+      "fee": 100,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0xdff30b42dc38b06a6f73915113b0915fac9babae",
+      "liquidity": "50000000000000",
+      "custom": "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0xd7b8eee802c91b0f60c32eae5002d9f5af7682a0ead409a64bbccd936a79c5a2",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x4908d3c000a602529b1b21fcb37ddbaa8ef21216",
+      "tokens": [
+        "0x4c9edd5852cd905f086c759e8383e09bff1e68b3",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 100,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x031ee6d4f78b9b8e23a236efc639742c646057e7",
+      "liquidity": "10914309517322093",
+      "custom": "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x8c74053661d5e5e20eda7019a47be29d75ad62bd173e44cd9f6712f51ba53d0f",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0xa6bb68ff426a57029ec06162cb1a9f7aadde5354",
+      "tokens": [
+        "0x5086bf358635b81d8c47c66d1c8b9e567db70c72",
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+      ],
+      "fee": 500,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x6ee455f83753a30c9eeb949cce9b79b57a310ce0",
+      "liquidity": "97731073496346",
+      "custom": "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0xa9ec4e1578ee8bdd90b2822a1075f601858bc945c1a564c7ca6106fc80c923dd",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x073ae4eb8aad32756eae3e33902e5b94ed22610a",
+      "tokens": [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xddc0f880ff6e4e22e4b74632fbb43ce4df6ccc5a"
+      ],
+      "fee": 500,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x8ea190668c1866538b0828020e5c88eddf1d396d",
+      "liquidity": "88114240568874",
+      "custom": "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x097fc3feecd0e379cb7cece7b8182b8802c03d3f6dd3dac6401ba62346f6a511",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x46dea87820524348182415f153cc6178888f79be",
+      "tokens": [
+        "0x45804880de22913dafe09f4980848ece6ecbaf78",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 0,
+      "flags": 215,
+      "community_fee": 1000,
+      "plugin": "0x5b5f408c7ed4384362572217faa49961a440c7fe",
+      "liquidity": "11652075579054574",
+      "custom": "0x44acd9579650d300ebbeac2e483b97fdcacdddc0",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        200,
+        4000,
+        166,
+        6000,
+        20,
+        600,
+        800
+      ],
+      "plugin_hash": "0xa4d09b013fafd24ac643c925365ca4eb4c3c5c510582fcb345c11eb6219660b6",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0xdc7c280063812eef49bfba36c16c629b42b49609",
+      "tokens": [
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "0x45804880de22913dafe09f4980848ece6ecbaf78"
+      ],
+      "fee": 0,
+      "flags": 215,
+      "community_fee": 1000,
+      "plugin": "0x7a5ca4b78ec1994eb067a25fd6ae066cc2ba9652",
+      "liquidity": "279127512176",
+      "custom": "0x44acd9579650d300ebbeac2e483b97fdcacdddc0",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        500,
+        4000,
+        200,
+        4000,
+        20,
+        300,
+        500
+      ],
+      "plugin_hash": "0xb543d85fcf9df2790af1f8ba80f6aff9b7637a523d406d3caecb9b98bf1cd3f8",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x68a4cb4c6b12f598509cfb32919d1951e63aa9b6",
+      "tokens": [
+        "0x45804880de22913dafe09f4980848ece6ecbaf78",
+        "0x68749665ff8d2d112fa859aa293f07a622782f38"
+      ],
+      "fee": 1000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x7453751b2c9dd3286156a808a8ce64adca158099",
+      "liquidity": "1039117119161375",
+      "custom": "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x986ef1fef064e4c128fb98484aee1bb5eb67f0302dd338edee41b7e34da6f635",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0xfab14835af1fb73d42ee64501529145db1345f54",
+      "tokens": [
+        "0x00da8466b296e382e5da2bf20962d0cb87200c78",
+        "0x68749665ff8d2d112fa859aa293f07a622782f38"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x5cafd76d58e1f7ce05b10212f62b19793bb6c144",
+      "liquidity": "54844243459170",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x9791aadd7b4a8caf5a171bde61aeb1f25b36c02aec80da963079061e238e65ee",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x7ec5e050baaa8422d2a1fdd7a81f4650a7551738",
+      "tokens": [
+        "0x00da8466b296e382e5da2bf20962d0cb87200c78",
+        "0x1abaea1f7c830bd89acc67ec4af516284b1bc33c"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0xd2447ad56767c550bb471c2b7c51f89b55e4bcdb",
+      "liquidity": "121413086534085",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x2aa934d603bb893bafb8f797a94fafef1b60c01dd67aca0cf75023a01d592a8a",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x233ab72c3a6e03aa3a2e896ab9ec1866dc0a9448",
+      "tokens": [
+        "0x00da8466b296e382e5da2bf20962d0cb87200c78",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0xe4e29e302b9bb15060102764229c46d0dcafb3a6",
+      "liquidity": "178452857419526684",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x7ecfa160733e1fac5c092688f6e2284b01ceeadadcf793c1f45fc492ce2f7250",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x874cb6fbfae84918683aedf67f22ee8fc87c9689",
+      "tokens": [
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "0x514910771af9ca656af840dff83e8264ecf986ca"
+      ],
+      "fee": 3000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x3f097c5224812e78799d237fb5ecb5cf7dd6631c",
+      "liquidity": "435438284949",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x2aa7bc32a095d7e58235328e6383ee70ff2974b06c8d3b1480dd44ae4e81ddb6",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0xc1658f33c7f036adddccef6a52159b591a3c3957",
+      "tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+      ],
+      "fee": 500,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x5f2346c13ab2238a350f3287f7d2024c872ae723",
+      "liquidity": "29922474074",
+      "custom": "0x1c798614ef4c6a8f8a1aab25785714933e59e963",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0xba41dd58c1120c0c72c73efbb2be99538809846a8e35d03e08a89fd15fe092a1",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x1d7e5a75ad951761898ff04c65c95289881320ec",
+      "tokens": [
+        "0x856c4efb76c1d1ae02e20ceb03a2a6a08b0b8dc3",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0xb43fd3be81d6efd7f1ba94871071bfe86b052389",
+      "liquidity": "25098069133329850",
+      "custom": "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x51596ec6a5383ddef5033982c175c2aa175f8e8638ad65f04b0eefb424b1caaf",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x16f63f60bf4889a1792d9d639193b4c2fb683a11",
+      "tokens": [
+        "0xa9e8acf069c58aec8825542845fd754e41a9489a",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0xd02c8d0c05250e3a50dc45b10e686e880e4d47e9",
+      "liquidity": "2272986858738958923",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0xd026ccf88f0043c4b43264d047519aaf4968c47bfec21c6b4dde6c8ce6874b27",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x5f9946fd12cb85ca24f906b200ccf4c62d780305",
+      "tokens": [
+        "0x50327c6c5a14dcade707abad2e27eb517df87ab5",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x3c9110af8e23ca07d16d3b402e42f3fd83cc20a2",
+      "liquidity": "5997954932197",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x218fde26bac8d86f9c3421409576c727cd43c268afd1c011d8d99b0133916464",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x9646684b5a2be6dc024ed60b8383be3650e56f4e",
+      "tokens": [
+        "0x163f8c2467924be0ae7b5347228cabf260318753",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0xd088367429f2450cb0b0b0d806ee5c728090d391",
+      "liquidity": "58478274861426827868",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x842db72525c0eb7c134ecb7632cf2317079413973102c928c6084b790a3fd1d8",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0xa429a6c5b5ef08391d96e5f1d386e2e2909b7604",
+      "tokens": [
+        "0xaea46a60368a7bd060eec7df8cba43b7ef41ad85",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x98aeb5c12ed3946d13f973c293b9ca07c51664e4",
+      "liquidity": "1004134529301162396628",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x489e890b199c97c3b4c5a46a494ba45bc024f1a239951b9b4b333dd97fb9b892",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x47bf885a7a8655b1b77923d5df7628db7c48791b",
+      "tokens": [
+        "0x6f40d4a6237c257fff2db00fa0510deeecd303eb",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x7fcef3149f93897893f95344fa8b7504315e629b",
+      "liquidity": "533072434419454875",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x755378e1428aba81f2a48cfa0bed0ffd0842b27424c62338d3c6abeb33fe378a",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x82925cfd63373f882f76514a3757a257d81d50a2",
+      "tokens": [
+        "0x643c4e15d7d62ad0abec4a9bd4b001aa3ef52d66",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x76b00494c7f4e3b3514c7a6242e4eec3e6c0caee",
+      "liquidity": "1668829930457868605",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0xb409b2041d148123dbe699707ea3439e7ee337ecf97f8791592d281037dec939",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x88954671e7525fc8f844cffe41a65e40c4b20a4d",
+      "tokens": [
+        "0x58d97b57bb95320f9a05dc918aef65434969c2b2",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x3c38079889ff776e39655261680559a050ccdbd4",
+      "liquidity": "554546474822456754",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x9e0a94a7d5e1ef15ed9f310624382bf5ae219da82ecf03eae6a9a36de9028cbe",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x0400e42dd46a7f1ee1d665d38a4b33e4cf791f41",
+      "tokens": [
+        "0xbc396689893d065f41bc2c6ecbee5e0085233447",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x6085575cd02bf65942ad29384731c1f20e79297f",
+      "liquidity": "33843367162081918325",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0xaa4513471dc2ddf5524375ae37f8183a1423a224cbe5636391489459d8cef8d1",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x348d7093308f71a19ba75ad37fb9d50ee081fc5d",
+      "tokens": [
+        "0x5a98fcbea516cf06857215779fd812ca3bef1b32",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0xa2e9ed8b92ed8385885f8b27c5641449c2e48f6e",
+      "liquidity": "1459980303693753341",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x2106541e6eb18bea5e855c27b12df1f49bfa3765be4cb0051cda38142bf42b39",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0x255db00c2a497596a9f32ee1bf556c9cdbf4dbbc",
+      "tokens": [
+        "0x8ed97a637a790be1feff5e888d43629dc05408f6",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0xe57e482e33e352f4befe2035c32d55686b137cc2",
+      "liquidity": "8905071676905490201",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0xaad83694a22d22a36bdd982bcacf059c2d295997b03222029f12e899ef3c8912",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0xf0c7bd388578bbf21cda8de92c856c008dd91606",
+      "tokens": [
+        "0x57e114b691db790c35207b2e685d4a43181e6061",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x4a1c8e7c51f2ce96ccf97e45a363ebc0a57626d1",
+      "liquidity": "91009575361718654855",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0x6e1e58b78d69c875327b99b9e18c448375c2e5319f2df4a48b0d4df76115baa2",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    },
+    {
+      "pool": "0xd0a0fe9487059ac2f29443490d38d4e073e2d515",
+      "tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0xfccd6fbca272b4cc11069402f4123b070b7838f9"
+      ],
+      "fee": 5000,
+      "flags": 87,
+      "community_fee": 1000,
+      "plugin": "0x2db94b45b11412d328e182aebb9bfe97f2896174",
+      "liquidity": "342507634398430527",
+      "custom": "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+      "create2": true,
+      "registered": true,
+      "fee_config": [
+        0,
+        0,
+        0,
+        0,
+        10,
+        10,
+        0
+      ],
+      "plugin_hash": "0xb07d51d68ed02d130493aee699d7a16d0f5d719d8a45e505b7e99e30b2998656",
+      "template": "0x094eecbf8fca5a8a8b2eabef7b360d23ebaf79fe9363364ec1ed2eb5e95f451f",
+      "slots": 9
+    }
+  ],
+  "chain_id": 1,
+  "block": 26494988,
+  "factory": "0x44b7fbd4d87149efa5347c451e74b9fd18e89c55",
+  "deployer": "0x45bc0f9855a626743d57d37d989f3b9462deba45",
+  "quoter": "0xf9439cd803dcb11fa574bcc8421207f89b529e41",
+  "registry": "0xdbfd67d12cadb8925c1417ff3638693f2bf99b97",
+  "init": "0xeaa3eea3233916c82fe1281a51bd9cde844b7c4673c0714ca0028a57f5634752",
+  "roles": {
+    "factory": {
+      "address": "0x44b7fbd4d87149efa5347c451e74b9fd18e89c55",
+      "hash": "0x502e5730b9eb2b3afa6c7b8453c61c842dccac09c1a4cf4147ebb151e5184f3e",
+      "slot": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "quoter": {
+      "address": "0xf9439cd803dcb11fa574bcc8421207f89b529e41",
+      "hash": "0xdb838705901d2efbc63fe05f4625e7cce34aa6be9549a29008020d3e9341012b",
+      "slot": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "router": {
+      "address": "0x72d63a5b080e1b89cc93f9b9f50cbfa5e291c8ac",
+      "hash": "0x80efe13c06f5658a48ccc44d51f79d051e55a9fcd1ef286ebdc949b4cc6cb672",
+      "slot": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "plugin_factory": {
+      "address": "0xdbfd67d12cadb8925c1417ff3638693f2bf99b97",
+      "hash": "0x3b3047c9258b78b52c9e98e1726db676ac3c56632abe35b9552d05a3dd7e2306",
+      "slot": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "deployer": {
+      "address": "0x45bc0f9855a626743d57d37d989f3b9462deba45",
+      "hash": "0xe78a5534810521f457262c4c2f7e286262dc17c597e19ced2e9b79688255a58d",
+      "slot": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "security": {
+      "address": "0x454e62e725ad5a47931043f7e6369cfbb879bdfd",
+      "hash": "0x9e94ff4d8e8a4d7322fd0fb42c4711370511da93109e5f34076fb49fc8f8c022",
+      "slot": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "discount": {
+      "address": "0x31eda5529b8f219243e8248eff368bc36a3f5975",
+      "hash": "0x8ac05b56ecceed762068938b7ed1e564f708e24935e0216e06dece9772159c5c",
+      "slot": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "custom_deployers": [
+    "0x1c798614ef4c6a8f8a1aab25785714933e59e963",
+    "0x42f5ecd6497d42e093de05bec73e33ceb82493da",
+    "0x44acd9579650d300ebbeac2e483b97fdcacdddc0",
+    "0xc815b4e0abae3155f8f4f9e404f17c9fa6928eb8"
+  ]
+}

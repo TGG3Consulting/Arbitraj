@@ -139,7 +139,7 @@ fn no_route(ctx: &Ctx, e: &Entry, why: &str) -> GatewayError {
 /// исключён (как раньше, check/probe.rs); NoRoute — через исполнитель событие пула не найдено (не настройка и не
 /// вердикт по монете: «не проверено», пул не исключается).
 pub async fn emitter(ctx: &Ctx, e: &Entry, logs: &[SimLog]) -> GatewayResult<()> {
-    if e.family.tradable {
+    if e.family.tradable || super::super::quote::frax_pricing::is_frax(e) {
         return emitter::check(ctx, &[e], logs)
             .await
             .map_err(|why| ctx.err(ErrorCode::NotConfigured, why));

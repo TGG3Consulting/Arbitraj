@@ -49,6 +49,13 @@ pub async fn out_at(
     amount: U256,
     block: &str,
 ) -> GatewayResult<U256> {
+    if super::super::exec::white_direct::selected()
+        && e.family.variant == super::super::pools::family_variant::Variant::WhiteSwap
+    {
+        let mut entry = e.clone();
+        Box::pin(super::white_state::refresh(ctx, &mut entry, block)).await?;
+        return super::pool_quote::swap(ctx, &entry, token_in, true, amount).map(|x| x.amount_out);
+    }
     if e.family.variant == super::super::pools::family_variant::Variant::NamiIntegral {
         let to = if token_in == e.pool.token0 {
             e.pool.token1

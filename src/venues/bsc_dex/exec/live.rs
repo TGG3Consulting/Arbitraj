@@ -79,7 +79,37 @@ async fn eval(
 ) -> GatewayResult<Path> {
     let (q, ctx) = (v.q, &v.q.ctx);
     let mut entries = Vec::with_capacity(found.len());
-    for e in found.iter().cloned() {
+    for mut e in found.iter().cloned() {
+        if direct_mode
+            && found.len() == 1
+            && super::white_direct::selected()
+            && e.family.variant == super::super::pools::family_variant::Variant::WhiteSwap
+        {
+            let at = super::quoter_refetch::block(q)
+                .map(|b| format!("{b:#x}"))
+                .unwrap_or_else(|| "latest".into());
+            Box::pin(super::super::quote::white_state::refresh(ctx, &mut e, &at)).await?;
+        }
+        if direct_mode
+            && found.len() == 1
+            && e.family.variant == super::super::pools::family_variant::Variant::DeltaSwap
+        {
+            let at = super::quoter_refetch::block(q)
+                .map(|b| format!("{b:#x}"))
+                .unwrap_or_else(|| "latest".into());
+            let head = super::super::quote::white_state::head(ctx, &at).await?;
+            Box::pin(super::super::pools::deltaswap::refresh(ctx, &mut e, head)).await?;
+        }
+        if found.len() == 1
+            && super::frax_direct::selected()
+            && super::super::quote::frax_pricing::is_frax(&e)
+        {
+            let at = super::quoter_refetch::block(q)
+                .map(|b| format!("{b:#x}"))
+                .unwrap_or_else(|| "latest".into());
+            let h = super::super::quote::white_state::head(ctx, &at).await?;
+            Box::pin(super::super::quote::frax_pricing::refresh(ctx, &mut e, h)).await?;
+        }
         let mut u = select::usable(q, &e, v.side, v.usdt_dec)
             .map_err(|why| ctx.err(ErrorCode::NoRoute, format!("{}: {why}", e.family.title)))?;
         th.apply(&e.pool.reference, v.side, quoter_amount::hooked(&e), &mut u);

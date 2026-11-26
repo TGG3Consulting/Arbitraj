@@ -176,6 +176,17 @@ pub async fn fork_missing(
         "latest",
     )
     .await?;
+    fork_known(ctx, token, router, have, amount)
+}
+
+/// Те же разрешения при известном allowance зафиксированного блока.
+pub(in crate::venues::bsc_dex) fn fork_known(
+    ctx: &Ctx,
+    token: Address,
+    router: Address,
+    have: U256,
+    amount: U256,
+) -> GatewayResult<Vec<Approval>> {
     if have >= amount {
         return Ok(Vec::new());
     }

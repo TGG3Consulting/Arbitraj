@@ -442,7 +442,11 @@ fn found(
 ) -> Result<Found, String> {
     if matches!(
         c.family.variant,
-        Variant::V2Create2 | Variant::V2Create2LiveFee
+        Variant::V2Create2
+            | Variant::V2Create2LiveFee
+            | Variant::DeltaSwap
+            | Variant::V2RouterCreate2
+            | Variant::WhiteSwap
     ) {
         let hashes = super::verify_algebra_dir::hashes(ctx, c)?;
         if !hashes

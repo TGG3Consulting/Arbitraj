@@ -151,6 +151,15 @@ fn by_quote(ctx: &Ctx, e: &Edge, token_in: Address) -> Option<Option<Decimal>> {
         }
     };
     let bal_in = match &e.entry.pool.state {
+        PoolState::DeltaSwap {
+            reserve0, reserve1, ..
+        } => {
+            if zfo {
+                Some(*reserve0)
+            } else {
+                Some(*reserve1)
+            }
+        }
         PoolState::Solidly {
             reserve0,
             reserve1,

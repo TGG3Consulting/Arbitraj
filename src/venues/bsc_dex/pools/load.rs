@@ -66,6 +66,19 @@ pub async fn state(
 ) -> GatewayResult<Loaded> {
     let token1 = pair.1;
     let tag = block_tag(block);
+    if f.variant == Variant::WhiteSwap
+        && let PoolRef::Contract(pool) = reference
+    {
+        let hash = super::elfomo::block(ctx, &tag).await?;
+        let (reserve0, reserve1) =
+            Box::pin(super::whiteswap::check(ctx, f, *pool, pair, &hash)).await?;
+        return Ok(Loaded {
+            state: PoolState::V2 { reserve0, reserve1 },
+            ticks: None,
+            bins: None,
+            fee_pips: Some(3_000),
+        });
+    }
     let missing = |what: &str| {
         ctx.err(
             ErrorCode::BadResponse,
@@ -626,7 +639,10 @@ pub async fn state(
         ));
     }
     match (f.kind, reference) {
-        (PoolKind::V2, PoolRef::Contract(a)) if f.variant == Variant::FraxTwamm => {
+        (PoolKind::V2, PoolRef::Contract(a)) if f.variant == Variant::DeltaSwap => {
+            Box::pin(super::deltaswap::load(ctx, f, *a, pair, block)).await
+        }
+        (PoolKind::V2, PoolRef::Contract(a)) if f.variant.frax_twamm() => {
             Box::pin(super::fraxswap::load(ctx, f, *a, pair, &tag)).await
         }
         (PoolKind::V2, PoolRef::Contract(a)) if f.variant == Variant::V2Create2LiveFee => {

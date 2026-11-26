@@ -49,6 +49,19 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
         return Err(format!("{}: пул с крючком", e.family.title));
     }
     match (&e.pool.state, e.pool.kind) {
+        (
+            PoolState::DeltaSwap {
+                reserve0, reserve1, ..
+            },
+            PoolKind::V2,
+        ) => {
+            let (rin, rout) = if zfo {
+                (*reserve0, *reserve1)
+            } else {
+                (*reserve1, *reserve0)
+            };
+            pair(rout, U256::ONE, rin, U256::ONE)
+        }
         (PoolState::V2 { reserve0, reserve1 }, PoolKind::V2) => {
             let (r_in, r_out) = if zfo {
                 (*reserve0, *reserve1)

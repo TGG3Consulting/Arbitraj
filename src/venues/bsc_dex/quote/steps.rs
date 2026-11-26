@@ -102,7 +102,10 @@ pub fn path_costs(
         add(
             &mut out,
             CostKind::PoolFee,
-            pct(h.pool_in, fee_pct(ctx, &h.entry, h.token_in)?),
+            pct(
+                h.pool_in,
+                fee_for_input(ctx, &h.entry, h.token_in, h.swapped.amount_in)?,
+            ),
             &from,
             true,
         );
@@ -150,6 +153,34 @@ fn gas_bnb(ctx: &Ctx, gas_wei: U256, h: &Hop) -> GatewayResult<Decimal> {
 }
 
 /// Полная комиссия пула в процентах для направления «токен входа → другой». Ошибки: NotConfigured (V2), BadResponse.
+pub fn fee_for_input(
+    ctx: &Ctx,
+    e: &Entry,
+    token_in: Address,
+    input: U256,
+) -> GatewayResult<Decimal> {
+    if let PoolState::DeltaSwap {
+        reserve0,
+        reserve1,
+        fee,
+    } = &e.pool.state
+    {
+        let (rin, rout) = if token_in == e.pool.token0 {
+            (*reserve0, *reserve1)
+        } else {
+            (*reserve1, *reserve0)
+        };
+        let rate = super::super::math::deltaswap::rate(fee, rin, rout, input).ok_or_else(|| {
+            ctx.err(
+                ErrorCode::NoRoute,
+                "DeltaSwap: объём не даёт торгуемую ликвидность",
+            )
+        })?;
+        return Ok(Decimal::from(rate) / Decimal::TEN);
+    }
+    fee_pct(ctx, e, token_in)
+}
+
 pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal> {
     let pips = |p: u32| Decimal::from(p) / Decimal::from(10_000u32);
     let zero_for_one = token_in == e.pool.token0;

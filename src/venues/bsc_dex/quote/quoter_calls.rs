@@ -59,7 +59,7 @@ pub fn request(
         ));
     }
     let zero_for_one = token_in == e.pool.token0;
-    if e.family.variant == super::super::pools::family_variant::Variant::FraxTwamm {
+    if e.family.variant.frax_twamm() {
         let q = super::super::pools::fraxswap::IFrax::getAmountsOutWithTwammCall {
             amountIn: amount,
             path: vec![token_in, token_out],
@@ -370,10 +370,21 @@ pub fn request(
                 amountIn: amount,
                 path,
             };
-            return Ok((
-                ctx.dex_addr("dex.router", e.family.id)?,
-                Bytes::from(c.abi_encode()),
-            ));
+            let router = super::super::pools::deltaswap::router(ctx, e)?;
+            if e.family.variant.registered_v2_router() {
+                let registry = super::super::pools::abi_v2v3::IV2Factory::getPairCall {
+                    tokenA: e.pool.token0,
+                    tokenB: e.pool.token1,
+                };
+                return super::super::pools::base_native_v3::bound(
+                    ctx,
+                    e,
+                    router,
+                    registry.abi_encode().into(),
+                    c.abi_encode().into(),
+                );
+            }
+            return Ok((router, c.abi_encode().into()));
         }
         (PoolKind::V3, _) => {
             // QuoterV2 ищет пул через фабрику по параметру fee: обычно это fee_pips пула; у DEX с
@@ -461,6 +472,17 @@ pub fn request(
 
 /// Выход из ответа квотера. None — ответ не по ABI.
 pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> Option<U256> {
+    if e.family.variant.registered_v2_router() {
+        let PoolRef::Contract(pool) = e.pool.reference else {
+            return None;
+        };
+        let data = super::super::pools::base_native_v3::checked_data(pool, out).ok()?;
+        let amounts = IV2Router::getAmountsOutCall::abi_decode_returns(&data).ok()?;
+        return match amounts.as_slice() {
+            [input, output] if *input == amount => Some(*output),
+            _ => None,
+        };
+    }
     if e.family.variant == super::super::pools::family_variant::Variant::SolidlyCl {
         return super::super::pools::solidly_v3::quote_output(
             out,
@@ -472,6 +494,17 @@ pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> O
 }
 
 pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
+    if e.family.variant.registered_v2_router() {
+        let PoolRef::Contract(pool) = e.pool.reference else {
+            return None;
+        };
+        let data = super::super::pools::base_native_v3::checked_data(pool, out).ok()?;
+        let amounts = IV2Router::getAmountsOutCall::abi_decode_returns(&data).ok()?;
+        return match amounts.as_slice() {
+            [_, output] => Some(*output),
+            _ => None,
+        };
+    }
     if e.family.variant == super::super::pools::family_variant::Variant::NamiIntegral {
         return super::super::pools::nami::decoded(out);
     }

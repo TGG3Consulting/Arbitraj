@@ -53,6 +53,7 @@ pub mod cycle_rate;
 pub mod cycle_scan;
 pub mod cycle_tally;
 pub mod cycle_view;
+mod delta_pricing;
 pub mod depth_band;
 pub mod depth_band_algebra;
 pub mod depth_ekubo;
@@ -62,6 +63,7 @@ pub mod ekubo_trade_state;
 pub mod emptiness;
 pub mod fills;
 pub mod fluid_depth;
+pub(crate) mod frax_pricing;
 pub mod gas;
 pub mod gas_base;
 pub mod graph_exec;
@@ -72,12 +74,12 @@ pub mod graph_reuse;
 pub mod graph_route;
 pub mod graph_seq;
 pub mod graph_split;
-mod nami_routes;
 pub mod hook_curve;
 pub mod hook_rule;
 pub mod hook_settle;
 pub mod mixed_quoter;
 pub mod mixed_quoter_calls;
+mod nami_routes;
 pub mod native_gas;
 pub mod par;
 pub mod par_pool;
@@ -119,6 +121,7 @@ pub mod route_fit;
 pub mod route_gas;
 pub mod route_hops;
 pub mod route_paths;
+pub(super) mod router_pricing;
 pub mod routing;
 pub mod select;
 pub mod shallow_build;
@@ -137,10 +140,12 @@ pub mod stable_depth;
 pub mod steps;
 pub mod tick_bin_spot;
 pub mod usable_reuse;
+pub(super) mod v2_execution;
 pub mod v2_pair_calls;
 pub mod v2_pair_probe;
 pub mod v2_pair_quote;
 pub mod v2_pair_sim;
+pub(super) mod v2_wallet_sim;
 pub mod vault_depth;
 pub mod verify;
 pub mod verify_decide;
@@ -148,6 +153,8 @@ pub mod via;
 pub mod via_pools;
 pub mod virtual_quoter;
 pub mod warm;
+mod white_pricing;
+pub(super) mod white_state;
 pub mod wombat_depth;
 
 use rust_decimal::Decimal;
@@ -316,10 +323,73 @@ impl Quoting {
         // Решение 301 (дополнение — стек): работа — в кучу здесь, состояние этого future держит указатель
         // (quote/cpu.rs run).
         // Решение 312: замер этапов работы — tm.run() = None (выключен): timed сразу ведёт работу без замера.
+        let mut alternatives = Vec::new();
+        if !native {
+            let mut kinds = [false; 4];
+            for entry in &input.entries {
+                kinds[0] |= white_pricing::is_white(entry);
+                kinds[1] |= frax_pricing::is_frax(entry);
+                kinds[2] |= delta_pricing::is_delta(entry);
+                kinds[3] |= router_pricing::is_native(entry);
+            }
+            if kinds[0] {
+                alternatives.extend(Box::pin(white_pricing::candidates(&pick, &input)).await);
+            }
+            if kinds[1] {
+                alternatives.extend(Box::pin(frax_pricing::candidates(&pick, &input)).await);
+            }
+            if kinds[2] {
+                alternatives.extend(Box::pin(delta_pricing::candidates(&pick, &input)).await);
+            }
+            if kinds[3] {
+                alternatives.extend(Box::pin(router_pricing::candidates(&pick, &input)).await);
+            }
+        }
         let work = quote_timing::timed(tm.run(), routing::run(pick, input));
-        let q = cpu::run(ctx, Box::pin(work)).await;
+        let raw = cpu::run(ctx, Box::pin(work)).await;
         tm.back();
-        let mut q = q?;
+        let mut best = match raw {
+            Ok(q) => {
+                self.finish(q, (coin_dec, usdt_dec), gas, &fees, native, None, tm)
+                    .await
+            }
+            Err(e) => Err(e),
+        };
+        for (quote, approval) in alternatives {
+            let Ok(other) = self
+                .finish(quote, (coin_dec, usdt_dec), gas, &fees, false, approval, tm)
+                .await
+            else {
+                continue;
+            };
+            if crate::gateway::quote_stage::settlement()
+                && !crate::gateway::quote_stage::settlement_quote_supported(
+                    &other,
+                    crate::gateway::quote_stage::is_final(),
+                )
+            {
+                continue;
+            }
+            best = Ok(match best {
+                Ok(first) => v2_execution::choose(self, first, other, usdt_dec).await,
+                Err(_) => other,
+            });
+        }
+        best
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn finish(
+        &self,
+        mut q: Quote,
+        (coin_dec, usdt_dec): (u8, u8),
+        gas: U256,
+        fees: &GasPrice,
+        native: bool,
+        measured_approval: Option<(u64, usize)>,
+        tm: &mut Outer,
+    ) -> GatewayResult<Quote> {
+        let ctx = &self.ctx;
         // Решение 273: пул Solidly маршрута на паузе фабрики или цена газа выше его maxGasPrice — маршрут неисполним
         // (сигнал с причиной; exec/trade.rs не исполняет executable = нет). После отбора по plan_gas — страховка.
         if let Some(r) = q.route.as_mut() {
@@ -343,7 +413,12 @@ impl Quoting {
             None => c,
         };
         let t = tm.now();
-        if let Some((units, count)) = approve_gas::details(self, &q, coin_dec, usdt_dec).await? {
+        let approvals = match measured_approval {
+            Some((0, 0)) => None,
+            Some(v) => Some(v),
+            None => approve_gas::details(self, &q, coin_dec, usdt_dec).await?,
+        };
+        if let Some((units, count)) = approvals {
             let wei = gas
                 .saturating_mul(U256::from(units))
                 .saturating_add(fees.extra(ctx, units, count)?);

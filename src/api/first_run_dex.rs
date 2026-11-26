@@ -160,10 +160,29 @@ mod tests {
             include_str!("../../tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json"),
             include_str!("../../tests/data/first_run_dex_2026-11-26/base_v2_factories.json"),
         ];
+        let white: Value = serde_json::from_str(include_str!(
+            "../../tests/data/first_run_dex_2026-11-26/whiteswap_directory.json"
+        ))
+        .unwrap();
+        pairs.extend(
+            white["samples"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|s| s["cases"].is_array())
+                .cloned(),
+        );
         for raw in markets {
             let registered: std::collections::BTreeMap<String, Value> =
                 serde_json::from_str(raw).unwrap();
-            for record in registered.values() {
+            for (id, record) in &registered {
+                if let Some(native) = record["native_router"]["samples"].as_array()
+                    && native
+                        .iter()
+                        .any(|s| s["cases"].as_array().is_some_and(|cases| cases.len() == 2))
+                {
+                    pairs.push(serde_json::json!({"dex":id, "network":"base", "creation_code_hash":record["origin"]["creation_code_hash"]}));
+                }
                 pairs.extend(
                     record["samples"]
                         .as_array()
@@ -240,6 +259,16 @@ mod tests {
                             "{} / {} / {k}: нет записи о коде адреса {text}",
                             p.network,
                             p.id
+                        );
+                    } else if k == "dex.pool_code_hashes" && p.id == "deltaswap-base" {
+                        let archive: Value = serde_json::from_str(include_str!(
+                            "../../tests/data/first_run_dex_2026-11-26/deltaswap_base.json"
+                        ))
+                        .unwrap();
+                        assert_eq!(archive["current"]["selector"], snapshot["selector"]);
+                        assert_eq!(
+                            archive["current"]["proof"]["pair_init"].as_str(),
+                            Some(text.as_str())
                         );
                     } else if k == "dex.pool_code_hashes" && p.id == "ring-exchange-ethereum" {
                         let directory: serde_json::Value = serde_json::from_str(include_str!(

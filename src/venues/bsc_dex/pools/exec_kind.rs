@@ -186,6 +186,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "pancakeswap_v2"
         | "uniswap_v2"
         | "v2_fork"
+        | "v2_whiteswap"
         | "v2_fork_executor"
         | "v2_fork_executor_create2"
         | "v2_fork_executor_create2_live_fee" => ExecKind::V2,
@@ -412,6 +413,9 @@ mod tests {
     fn every_kind_is_decided() {
         let none = [
             "ring_few_v2",
+            "fraxswap_twamm",
+            "v2_fork_router_create2",
+            "v2_deltaswap_router",
             "base_native_v3",
             "base_native_v3_module",
             "solidly_v3_module",

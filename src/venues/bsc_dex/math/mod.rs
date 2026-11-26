@@ -44,6 +44,7 @@ pub mod crypto_v1_3;
 pub mod crypto_y2;
 pub mod crypto_y3;
 pub mod curve_math;
+pub mod deltaswap;
 pub mod dmm;
 pub mod dodo_math;
 pub mod ekubo_bitmap;

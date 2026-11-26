@@ -164,7 +164,13 @@ fn side(
 ) -> Result<(U256, bool), String> {
     let pick = |amount_in: U256, amount_out: U256| if buy { amount_in } else { amount_out };
     match (&e.pool.state, e.pool.kind) {
-        (PoolState::V2 { reserve0, reserve1 }, PoolKind::V2) => {
+        (
+            PoolState::V2 { reserve0, reserve1 }
+            | PoolState::DeltaSwap {
+                reserve0, reserve1, ..
+            },
+            PoolKind::V2,
+        ) => {
             let (r_in, r_out) = if zfo {
                 (*reserve0, *reserve1)
             } else {

@@ -61,6 +61,14 @@ fn projected_reserves_match_observed_wallet_output_when_generic_v2_reverts() {
             v2::amount_out(number(&c["amount"]), number(&r[i]), number(&r[1 - i]), fee).unwrap();
         assert_eq!(number(&c["native"]["received"]), q);
         assert_eq!(c["native"]["spent"], c["amount"]);
+        assert_eq!(c["adapter"]["spent"], c["amount"]);
+        assert_eq!(number(&c["adapter"]["received"]), q);
+        assert_eq!(c["adapter_strict"]["status"], "0x0");
+        assert_eq!(number(&c["adapter_strict"]["spent"]), U256::ZERO);
+        assert_eq!(number(&c["adapter_strict"]["received"]), U256::ZERO);
+        assert_eq!(c["adapter_dust"], 0);
+        assert_eq!(c["v5_dust"], 0);
+        assert_eq!(c["v5_to_adapter_allowance"], 0);
         assert_eq!(c["strict"]["status"], "0x0");
         assert_eq!(number(&c["strict"]["spent"]), U256::ZERO);
         if c["v5"]["status"] == "0x1" {
@@ -79,4 +87,8 @@ fn projected_reserves_match_observed_wallet_output_when_generic_v2_reverts() {
     assert!(per_block::needs(observe) && per_block::needs(active));
     assert_eq!(observe.executor_kind, None);
     assert_eq!(active.executor_kind, Some(ExecKind::Basin));
+    let router = families::make("market@ethereum", "fraxswap_twamm_router").unwrap();
+    assert!(per_block::needs(router));
+    assert_eq!(router.executor_kind, None);
+    assert_ne!(router.variant, observe.variant);
 }

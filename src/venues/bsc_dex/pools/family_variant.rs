@@ -53,10 +53,17 @@ pub enum Variant {
     SolidlyCl,
     /// V2 с фиксированной реализацией пары: адрес сверяется по хешу байткода создания CREATE2.
     V2Create2,
+    /// Пара исполняется родным роутером, обычный 4-аргументный swap V5 недоступен.
+    V2RouterCreate2,
+    DeltaSwap,
+    /// Три обновляемые прокси WhiteSwap с комиссией прямого обмена и скидкой роутера.
+    WhiteSwap,
     /// Пара CREATE2 с изменяемой ставкой. Резервы и комиссия сверяются вместе.
     V2Create2LiveFee,
     /// Fraxswap V2 исполняет долгосрочные ордера к timestamp блока перед обменом.
     FraxTwamm,
+    /// Одиночное исполнение официальным роутером с проверкой выхода получателя.
+    FraxTwammRouter,
     /// Curve StableSwap 2021 (dex.kind = curve_stableswap_plain, решение 472): протокол Proto::CurveStable (геттеры
     /// coins/balances/fee, get_dy и exchange с int128 — те же), но A — `A_precise()` (A·A_PRECISION, A_PRECISION = 100),
     /// несходимость D/y — откат (`raise`), у пула из двух монет D_P — одной строкой `D·D/x0·D/x1/4`. Исходники: 2pool
@@ -118,9 +125,19 @@ pub enum Variant {
 }
 
 impl Variant {
+    pub fn frax_twamm(self) -> bool {
+        matches!(self, Self::FraxTwamm | Self::FraxTwammRouter)
+    }
+    pub fn registered_v2_router(self) -> bool {
+        matches!(self, Self::V2RouterCreate2 | Self::DeltaSwap)
+    }
+
     /// Резервы и комиссия этих V2-пар должны обновляться одним чтением состояния блока.
     pub fn v2_block_state(self) -> bool {
-        matches!(self, Self::V2Create2LiveFee | Self::FraxTwamm)
+        matches!(
+            self,
+            Self::V2Create2LiveFee | Self::FraxTwamm | Self::FraxTwammRouter | Self::DeltaSwap
+        )
     }
 }
 
@@ -146,7 +163,11 @@ pub fn of(kind: &str) -> Variant {
         "base_native_v3" | "base_native_v3_module" => Variant::BaseNativeV3,
         "v3_fork_ramses" => Variant::RamsesCl,
         "v3_fork_uniswap_lm" => Variant::UniswapV3Lm,
+        "fraxswap_twamm_router" => Variant::FraxTwammRouter,
         "fraxswap_twamm" | "fraxswap_twamm_v5" => Variant::FraxTwamm,
+        "v2_deltaswap_router" => Variant::DeltaSwap,
+        "v2_fork_router_create2" => Variant::V2RouterCreate2,
+        "v2_whiteswap" => Variant::WhiteSwap,
         "v2_fork_executor_create2" => Variant::V2Create2,
         "v2_fork_executor_create2_live_fee" => Variant::V2Create2LiveFee,
         "slipstream_ramses" => Variant::RamsesClV2,

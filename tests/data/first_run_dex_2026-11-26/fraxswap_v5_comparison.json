@@ -7,8 +7,32 @@
   "endpoint": "https://eth.drpc.org",
   "module_hash": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
   "router": "0xc14d550632db8592d1243edc8b95b0ad06703867",
+  "adapter_runtime": "0xeefc2b1675d449826fe53a2e19a3ac5cb27a7708466843b2ad3d661eb3a66087",
   "cases": [
     {
+      "adapter": {
+        "spent": "1000000000000000",
+        "received": "587186789948",
+        "status": "0x1",
+        "gas": "0x3e62e",
+        "error": null,
+        "floor": "587186789948"
+      },
+      "adapter_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "gas": "0x4bbe1",
+        "error": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "floor": "587186789949"
+      },
+      "adapter_dust": 0,
+      "v5_dust": 0,
+      "v5_to_adapter_allowance": 0,
       "pool": "0x31351bf3fba544863fbff44ddc27ba880916a199",
       "token_in": "0x853d955acef822db058eb8505911ed77f175b99e",
       "token_out": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
@@ -56,6 +80,29 @@
       }
     },
     {
+      "adapter": {
+        "spent": "10000000000000000",
+        "received": "5871867711358",
+        "status": "0x1",
+        "gas": "0x3e62e",
+        "error": null,
+        "floor": "5871867711358"
+      },
+      "adapter_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "gas": "0x4bbe1",
+        "error": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "floor": "5871867711359"
+      },
+      "adapter_dust": 0,
+      "v5_dust": 0,
+      "v5_to_adapter_allowance": 0,
       "pool": "0x31351bf3fba544863fbff44ddc27ba880916a199",
       "token_in": "0x853d955acef822db058eb8505911ed77f175b99e",
       "token_out": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
@@ -103,6 +150,29 @@
       }
     },
     {
+      "adapter": {
+        "spent": "1000000000000000",
+        "received": "1692822463629665436",
+        "status": "0x1",
+        "gas": "0x3d588",
+        "error": null,
+        "floor": "1692822463629665436"
+      },
+      "adapter_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "gas": "0x4ab3b",
+        "error": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "floor": "1692822463629665437"
+      },
+      "adapter_dust": 0,
+      "v5_dust": 0,
+      "v5_to_adapter_allowance": 0,
       "pool": "0x31351bf3fba544863fbff44ddc27ba880916a199",
       "token_in": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
       "token_out": "0x853d955acef822db058eb8505911ed77f175b99e",
@@ -150,6 +220,29 @@
       }
     },
     {
+      "adapter": {
+        "spent": "10000000000000000",
+        "received": "16927303812717418143",
+        "status": "0x1",
+        "gas": "0x3d57c",
+        "error": null,
+        "floor": "16927303812717418143"
+      },
+      "adapter_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "gas": "0x4ab2f",
+        "error": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "floor": "16927303812717418144"
+      },
+      "adapter_dust": 0,
+      "v5_dust": 0,
+      "v5_to_adapter_allowance": 0,
       "pool": "0x31351bf3fba544863fbff44ddc27ba880916a199",
       "token_in": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
       "token_out": "0x853d955acef822db058eb8505911ed77f175b99e",
@@ -197,6 +290,29 @@
       }
     },
     {
+      "adapter": {
+        "spent": "4143842270",
+        "received": "12898221857315596192221538",
+        "status": "0x1",
+        "gas": "0x43c27",
+        "error": null,
+        "floor": "12898221857315596192221538"
+      },
+      "adapter_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "gas": "0x511da",
+        "error": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "floor": "12898221857315596192221539"
+      },
+      "adapter_dust": 0,
+      "v5_dust": 0,
+      "v5_to_adapter_allowance": 0,
       "pool": "0xa8b3ffbfc017a88596b9983e21b9ffcfc7d27708",
       "token_in": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
       "token_out": "0x00c2999c8b2adf4abc835cc63209533973718eb1",
@@ -240,6 +356,29 @@
       }
     },
     {
+      "adapter": {
+        "spent": "414384227043",
+        "received": "1288550360682994181076663503",
+        "status": "0x1",
+        "gas": "0x43c3f",
+        "error": null,
+        "floor": "1288550360682994181076663503"
+      },
+      "adapter_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "gas": "0x511f2",
+        "error": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "floor": "1288550360682994181076663504"
+      },
+      "adapter_dust": 0,
+      "v5_dust": 0,
+      "v5_to_adapter_allowance": 0,
       "pool": "0xa8b3ffbfc017a88596b9983e21b9ffcfc7d27708",
       "token_in": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
       "token_out": "0x00c2999c8b2adf4abc835cc63209533973718eb1",
@@ -283,6 +422,29 @@
       }
     },
     {
+      "adapter": {
+        "spent": "1000000000000000",
+        "received": "587971739956",
+        "status": "0x1",
+        "gas": "0x44b5c",
+        "error": null,
+        "floor": "587971739956"
+      },
+      "adapter_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "gas": "0x5210f",
+        "error": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "floor": "587971739957"
+      },
+      "adapter_dust": 0,
+      "v5_dust": 0,
+      "v5_to_adapter_allowance": 0,
       "pool": "0xb467d2f040944f2dbdff34c4454bd6a1fba0d828",
       "token_in": "0x579cea1889991f68acc35ff5c3dd0621ff29b0c9",
       "token_out": "0xcacd6fd266af91b8aed52accc382b4e165586e29",
@@ -330,6 +492,29 @@
       }
     },
     {
+      "adapter": {
+        "spent": "10000000000000000",
+        "received": "5879717399538",
+        "status": "0x1",
+        "gas": "0x44b5c",
+        "error": null,
+        "floor": "5879717399538"
+      },
+      "adapter_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "gas": "0x5210f",
+        "error": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "floor": "5879717399539"
+      },
+      "adapter_dust": 0,
+      "v5_dust": 0,
+      "v5_to_adapter_allowance": 0,
       "pool": "0xb467d2f040944f2dbdff34c4454bd6a1fba0d828",
       "token_in": "0x579cea1889991f68acc35ff5c3dd0621ff29b0c9",
       "token_out": "0xcacd6fd266af91b8aed52accc382b4e165586e29",
@@ -377,6 +562,29 @@
       }
     },
     {
+      "adapter": {
+        "spent": "1000000000000000",
+        "received": "1690572746020051036",
+        "status": "0x1",
+        "gas": "0x457f1",
+        "error": null,
+        "floor": "1690572746020051036"
+      },
+      "adapter_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "gas": "0x52da4",
+        "error": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "floor": "1690572746020051037"
+      },
+      "adapter_dust": 0,
+      "v5_dust": 0,
+      "v5_to_adapter_allowance": 0,
       "pool": "0xb467d2f040944f2dbdff34c4454bd6a1fba0d828",
       "token_in": "0xcacd6fd266af91b8aed52accc382b4e165586e29",
       "token_out": "0x579cea1889991f68acc35ff5c3dd0621ff29b0c9",
@@ -424,6 +632,29 @@
       }
     },
     {
+      "adapter": {
+        "spent": "10000000000000000",
+        "received": "16905727307409126418",
+        "status": "0x1",
+        "gas": "0x457e5",
+        "error": null,
+        "floor": "16905727307409126418"
+      },
+      "adapter_strict": {
+        "spent": "0",
+        "received": "0",
+        "status": "0x0",
+        "gas": "0x52d98",
+        "error": {
+          "code": 3,
+          "message": "execution reverted",
+          "data": "0x"
+        },
+        "floor": "16905727307409126419"
+      },
+      "adapter_dust": 0,
+      "v5_dust": 0,
+      "v5_to_adapter_allowance": 0,
       "pool": "0xb467d2f040944f2dbdff34c4454bd6a1fba0d828",
       "token_in": "0xcacd6fd266af91b8aed52accc382b4e165586e29",
       "token_out": "0x579cea1889991f68acc35ff5c3dd0621ff29b0c9",

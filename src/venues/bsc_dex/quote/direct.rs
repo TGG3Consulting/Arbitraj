@@ -24,6 +24,7 @@ use super::pool_quote;
 use super::select::{self, Usable};
 
 /// Расчёт по одному пулу.
+#[derive(Clone)]
 pub struct Candidate {
     pub entry: Entry,
     pub usable: Usable,

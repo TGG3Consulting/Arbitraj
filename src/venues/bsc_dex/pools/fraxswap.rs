@@ -38,6 +38,32 @@ pub(crate) fn unchanged(ctx: &Ctx, generation: Option<u64>) -> GatewayResult<()>
     Ok(())
 }
 
+/// Подтверждает исполняемый адрес по принятому владельцем коду роутера.
+pub(crate) async fn native(ctx: &Ctx, f: &Family, tag: &Value) -> GatewayResult<Address> {
+    let generation = ctx.settings.generation();
+    let addr = ctx.dex_addr("dex.quoter", f.id)?;
+    let hash = ctx
+        .dex_text("dex.fraxswap_router_hash", f.id)?
+        .parse::<B256>()
+        .ok()
+        .filter(|h| *h != B256::ZERO && *h != alloy_primitives::keccak256([]))
+        .ok_or_else(|| {
+            ctx.not_set(
+                "dex.fraxswap_router_hash",
+                "Fraxswap: нужен хеш кода роутера",
+            )
+        })?;
+    let code: Bytes = rpc::call(ctx, "eth_getCode", json!([addr, tag])).await?;
+    if code.is_empty() || alloy_primitives::keccak256(code) != hash {
+        return Err(ctx.err(
+            ErrorCode::InvalidAddress,
+            "Fraxswap: runtime официального роутера не принят",
+        ));
+    }
+    unchanged(ctx, Some(generation))?;
+    Ok(addr)
+}
+
 #[derive(Deserialize)]
 struct Header {
     hash: B256,
@@ -59,7 +85,7 @@ async fn read<C: SolCall>(
     call::decode::<C>(&result)
 }
 
-pub(super) async fn validate(
+pub(crate) async fn validate(
     ctx: &Ctx,
     f: &Family,
     pool: Address,
@@ -97,13 +123,23 @@ pub(crate) async fn check_adapter(
     tokens: (Address, Address),
     block: &str,
 ) -> GatewayResult<()> {
-    let generation = ctx.settings.generation();
     let tag = super::elfomo::block(ctx, block).await?;
+    adapter_at(ctx, f, pool, tokens, &tag).await
+}
+
+pub(crate) async fn adapter_at(
+    ctx: &Ctx,
+    f: &Family,
+    pool: Address,
+    tokens: (Address, Address),
+    tag: &Value,
+) -> GatewayResult<()> {
+    let generation = ctx.settings.generation();
     let router = ctx.dex_addr("dex.router", f.id)?;
     let ((), (), actual) = tokio::try_join!(
-        validate(ctx, f, pool, tokens, &tag),
-        super::direct_module::verify_code(ctx, f.id, router, &tag),
-        read(ctx, router, IFrax::factoryCall {}, &tag)
+        validate(ctx, f, pool, tokens, tag),
+        super::direct_module::verify_code(ctx, f.id, router, tag),
+        read(ctx, router, IFrax::factoryCall {}, tag)
     )?;
     if actual != ctx.dex_addr("dex.factory", f.id)? || generation != ctx.settings.generation() {
         return Err(ctx.err(
@@ -123,10 +159,21 @@ pub(super) async fn load(
 ) -> GatewayResult<Loaded> {
     let header: Header = rpc::call(ctx, "eth_getBlockByNumber", json!([block, false])).await?;
     let tag = json!({"blockHash":header.hash,"requireCanonical":true});
+    at(ctx, f, pool, tokens, &tag, header.timestamp).await
+}
+
+pub(crate) async fn at(
+    ctx: &Ctx,
+    f: &Family,
+    pool: Address,
+    tokens: (Address, Address),
+    tag: &Value,
+    timestamp: U64,
+) -> GatewayResult<Loaded> {
     let ((), stored, paused) = tokio::try_join!(
-        validate(ctx, f, pool, tokens, &tag),
-        read(ctx, pool, IFrax::getTwammReservesCall {}, &tag),
-        read(ctx, pool, IFrax::newSwapsPausedCall {}, &tag)
+        validate(ctx, f, pool, tokens, tag),
+        read(ctx, pool, IFrax::getTwammReservesCall {}, tag),
+        read(ctx, pool, IFrax::newSwapsPausedCall {}, tag)
     )?;
     let (r0, r1) = if paused {
         (stored.r0, stored.r1)
@@ -135,9 +182,9 @@ pub(super) async fn load(
             ctx,
             pool,
             IFrax::getReserveAfterTwammCall {
-                timestamp: U256::from(header.timestamp),
+                timestamp: U256::from(timestamp),
             },
-            &tag,
+            tag,
         )
         .await?;
         (projection.r0, projection.r1)

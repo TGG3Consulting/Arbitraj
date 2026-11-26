@@ -27,12 +27,12 @@ pub(super) async fn read<const N: usize>(
         out.push(serde_json::from_str(raw.get()).map_err(|e| {
             ctx.err(
                 ErrorCode::BadResponse,
-                format!("Ответ Nami не является байтами: {e}"),
+                format!("Элемент пачки RPC не является байтами: {e}"),
             )
         })?);
     }
     out.try_into()
-        .map_err(|_| ctx.err(ErrorCode::BadResponse, "Неполная пачка Nami"))
+        .map_err(|_| ctx.err(ErrorCode::BadResponse, "Неполная пачка RPC"))
 }
 
 pub(super) fn decode<C: SolCall>(raw: &Bytes, _call: C) -> GatewayResult<C::Return> {

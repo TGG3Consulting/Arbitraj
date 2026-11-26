@@ -1,0 +1,560 @@
+{
+  "factory": "0x69bd16ae6f507bd3fc9ecc984d50b04f029ef677",
+  "origin": {
+    "url": "https://eth.blockscout.com/api/v2/smart-contracts/0xfbacbc64e684c0c5bf572fc6d42458c3e3fd1d1d",
+    "runtime": "0x2529783d3ad703006b2dcde598c6dd4157083b3a357de1a1fe0c1fb54fc72934",
+    "creation_code_hash": "0xfad2a9a251fff38151d87d2aa4e39e75ad40feabd873069329d3c31ab9afe018",
+    "codecopy": [
+      3364,
+      2529
+    ],
+    "sources": {
+      "factory": {
+        "proxy": "0x69bd16ae6f507bd3fc9ecc984d50b04f029ef677",
+        "implementation": "0xfbacbc64e684c0c5bf572fc6d42458c3e3fd1d1d",
+        "source": "https://eth.blockscout.com/address/0xfbacbc64e684c0c5bf572fc6d42458c3e3fd1d1d?tab=contract"
+      },
+      "pool": {
+        "proxy": "0xa47caceff117ae0a889b13a920e1e9cd2279bae0",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "source": "https://eth.blockscout.com/address/0x524818cb8081941b618613c6f990c17bb3da0866?tab=contract"
+      },
+      "router": {
+        "proxy": "0x463672ffded540f7613d3e8248e3a8a51baf7217",
+        "implementation": "0x56ac92422be3b85f2559e5f415cba1cfb4601ac6",
+        "source": "https://eth.blockscout.com/address/0x56ac92422be3b85f2559e5f415cba1cfb4601ac6?tab=contract"
+      }
+    },
+    "code_hashes": {
+      "0x69bd16ae6f507bd3fc9ecc984d50b04f029ef677": "0x2529783d3ad703006b2dcde598c6dd4157083b3a357de1a1fe0c1fb54fc72934",
+      "0xfbacbc64e684c0c5bf572fc6d42458c3e3fd1d1d": "0xcec64bd4c2e1bc7a1bea452562de5ef097364fbe7a5a12cb9cff36139be6da4c",
+      "0xa47caceff117ae0a889b13a920e1e9cd2279bae0": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+      "0x524818cb8081941b618613c6f990c17bb3da0866": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+      "0x463672ffded540f7613d3e8248e3a8a51baf7217": "0x0eb63e5b194208f378abb0ef6650180c755f9d9710ca48e6e4a0096fd77b9b4d",
+      "0x56ac92422be3b85f2559e5f415cba1cfb4601ac6": "0x1ea625d6ddca323cc84dabedaab6ac7a8649afd1e072293c5625a124dd49fa20"
+    }
+  },
+  "pools": [
+    {
+      "pool": "0xa029a744b4e44e22f68a1bb9a848caafbf6bb233",
+      "tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "reserves": [
+        "175426633362052884",
+        "296357392"
+      ]
+    },
+    {
+      "pool": "0x87fb8dfa3f2a9ca6b5eb5965928cc6a3214eee18",
+      "tokens": [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "reserves": [
+        "2023045",
+        "2022084"
+      ]
+    },
+    {
+      "pool": "0x0882de41d9119d422faf021b84c4747a303930fc",
+      "tokens": [
+        "0x0000000000085d4780b73119b644ae5ecd22b376",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "reserves": [
+        "10502803599897348775",
+        "10490541"
+      ]
+    },
+    {
+      "pool": "0x54778bf8d012682661b991ff8e4451129e7e49e1",
+      "tokens": [
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "reserves": [
+        "1",
+        "533056319"
+      ]
+    },
+    {
+      "pool": "0xfbc24cd5dea5570f1d65022009f7ad9f7d3f8ade",
+      "tokens": [
+        "0x6b175474e89094c44da98b954eedeac495271d0f",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "reserves": [
+        "49494411160306489117",
+        "29867194004557607"
+      ]
+    },
+    {
+      "pool": "0xac3b98cb04a320c71a9929dffefe558daf217a79",
+      "tokens": [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "reserves": [
+        "51647466",
+        "31166044322160875"
+      ]
+    },
+    {
+      "pool": "0x01089e8e7796cf16789440f8998fc18413ef53c4",
+      "tokens": [
+        "0x514910771af9ca656af840dff83e8264ecf986ca",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "reserves": [
+        "75261735894",
+        "180"
+      ]
+    },
+    {
+      "pool": "0x4a6c1cf4fd170d34816f23ce4d8cfebe8d5527c7",
+      "tokens": [
+        "0x0bc529c00c6401aef6d220be8c6ea1667f6ad93e",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "reserves": [
+        "1473406866970876",
+        "1448127535830517"
+      ]
+    },
+    {
+      "pool": "0xbb28baca3757fd08f607357d83d225ec43f77282",
+      "tokens": [
+        "0x62359ed7505efc61ff1d56fef82158ccaffa23d7",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "reserves": [
+        "203766611651071",
+        "500921125344561"
+      ]
+    },
+    {
+      "pool": "0x089d22168dcf837f47b042fe4c8d079f2561bec6",
+      "tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0xdc5864ede28bd4405aa04d93e05a0531797d9d59"
+      ],
+      "reserves": [
+        "47368",
+        "22"
+      ]
+    },
+    {
+      "pool": "0x0d67ea2c79ce97633d3aa2b1e4c65793ff1cfa87",
+      "tokens": [
+        "0x80fb784b7ed66730e8b1dbd9820afd29931aab03",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "reserves": [
+        "26808",
+        "39"
+      ]
+    },
+    {
+      "pool": "0xefa7ab167d53157cd848b5e827c79ab7bd6e13cd",
+      "tokens": [
+        "0x77b8ae2e83c7d044d159878445841e2a9777af38",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "reserves": [
+        "36970077913006759330881459",
+        "338865723088933701"
+      ]
+    },
+    {
+      "pool": "0x3b29f82cadc1185372fc8b15503691bc0d0cb168",
+      "tokens": [
+        "0x6b175474e89094c44da98b954eedeac495271d0f",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "reserves": [
+        "489847785677871593",
+        "490827"
+      ]
+    },
+    {
+      "pool": "0x47ae2e110aab81a23ed93842b5a8d96cd93ab93c",
+      "tokens": [
+        "0x6b175474e89094c44da98b954eedeac495271d0f",
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+      ],
+      "reserves": [
+        "31237675026",
+        "1"
+      ]
+    },
+    {
+      "pool": "0x8b40ca14faf036125bea70fdbd59601115b2e597",
+      "tokens": [
+        "0x0423d7c27d1dde7eb4aae02dae6b651c7225e6f9",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "reserves": [
+        "133118769894512653710",
+        "212247"
+      ]
+    },
+    {
+      "pool": "0xa47caceff117ae0a889b13a920e1e9cd2279bae0",
+      "tokens": [
+        "0x925206b8a707096ed26ae47c84747fe0bb734f59",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "reserves": [
+        "608613582122",
+        "354173092673"
+      ]
+    },
+    {
+      "pool": "0x5ed935496f3c159bc07f0b408f9f301272132cbe",
+      "tokens": [
+        "0x05881a188159c2f2556b17467f6c5fb5fd0839b5",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "reserves": [
+        "25855",
+        "40"
+      ]
+    },
+    {
+      "pool": "0xbcab2c6e93bef176079ae2053f9c031e9e17bcfd",
+      "tokens": [
+        "0x05881a188159c2f2556b17467f6c5fb5fd0839b5",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "reserves": [
+        "524220827",
+        "1"
+      ]
+    },
+    {
+      "pool": "0x3a7ee37bdd9dc788eb1410a45b0350a0cf70328a",
+      "tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0xeda43fa2f35ea174a7e9b73658b18a7da00adf38"
+      ],
+      "reserves": [
+        "39",
+        "26169"
+      ]
+    },
+    {
+      "pool": "0x085f8fe687875d99442277d9056fcc3185e1fedf",
+      "tokens": [
+        "0x925206b8a707096ed26ae47c84747fe0bb734f59",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "reserves": [
+        "12450139",
+        "4171398954837697"
+      ]
+    },
+    {
+      "pool": "0x90a08a5bd4b33dd1cb673ba188e72f22d047740e",
+      "tokens": [
+        "0x0423d7c27d1dde7eb4aae02dae6b651c7225e6f9",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "reserves": [
+        "719903",
+        "2"
+      ]
+    }
+  ],
+  "samples": [
+    {
+      "network": "ethereum",
+      "dex": "whiteswap",
+      "pool": "0xefa7ab167d53157cd848b5e827c79ab7bd6e13cd",
+      "tokens": [
+        "0x77b8ae2e83c7d044d159878445841e2a9777af38",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "factory": "0x69bd16ae6f507bd3fc9ecc984d50b04f029ef677",
+      "runtime_hash": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+      "creation_code_hash": "0xfad2a9a251fff38151d87d2aa4e39e75ad40feabd873069329d3c31ab9afe018",
+      "verify_pair_boundary": true,
+      "invariant_error": "WSwap: K",
+      "fee_fraction": [
+        10000,
+        30
+      ],
+      "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "reserves": [
+        "36970077913006759330881459",
+        "338865723088933701"
+      ],
+      "pips": 3000,
+      "cases": [
+        {
+          "in": "33886572308893",
+          "bought": "3685549318659663284284",
+          "returned": "33683578032004",
+          "buy_return": "3685549318659663284284",
+          "sell_return": "33683578032004",
+          "observed_balances": [
+            "3685549318659663284284",
+            "33683578032004",
+            "0",
+            "0",
+            "0"
+          ],
+          "strict_buy": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "strict_sell": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "pair_boundary": {
+            "buy": {
+              "max": "3685549318659663284284",
+              "next_revert": "WSwap: K"
+            },
+            "sell": {
+              "max": "33683578032004",
+              "next_revert": "WSwap: K"
+            }
+          }
+        },
+        {
+          "in": "677731446177867",
+          "bought": "73571633521293974281655",
+          "returned": "673679212996320",
+          "buy_return": "73571633521293974281655",
+          "sell_return": "673679212996320",
+          "observed_balances": [
+            "73571633521293974281655",
+            "673679212996320",
+            "0",
+            "0",
+            "0"
+          ],
+          "strict_buy": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "strict_sell": {
+            "code": 3,
+            "message": "execution reverted",
+            "data": "0x"
+          },
+          "pair_boundary": {
+            "buy": {
+              "max": "73571633521293974281655",
+              "next_revert": "WSwap: K"
+            },
+            "sell": {
+              "max": "673679212996320",
+              "next_revert": "WSwap: K"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "selector": {
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "requireCanonical": true
+  },
+  "height": 26494988,
+  "state_root": "0xbd73f03df514c4d550c21a6d567e25a4190f646acbb94b8e8c2462d7c9b17db7",
+  "proxies": {
+    "factory": {
+      "pool": "0x69bd16ae6f507bd3fc9ecc984d50b04f029ef677",
+      "implementation": "0xfbacbc64e684c0c5bf572fc6d42458c3e3fd1d1d",
+      "runtime": "0x2529783d3ad703006b2dcde598c6dd4157083b3a357de1a1fe0c1fb54fc72934",
+      "implementation_hash": "0xcec64bd4c2e1bc7a1bea452562de5ef097364fbe7a5a12cb9cff36139be6da4c",
+      "slot_canonical": true,
+      "matches_reference": true
+    },
+    "router": {
+      "pool": "0x463672ffded540f7613d3e8248e3a8a51baf7217",
+      "implementation": "0x56ac92422be3b85f2559e5f415cba1cfb4601ac6",
+      "runtime": "0x0eb63e5b194208f378abb0ef6650180c755f9d9710ca48e6e4a0096fd77b9b4d",
+      "implementation_hash": "0x1ea625d6ddca323cc84dabedaab6ac7a8649afd1e072293c5625a124dd49fa20",
+      "slot_canonical": true,
+      "matches_reference": true
+    },
+    "pairs": [
+      {
+        "pool": "0xa029a744b4e44e22f68a1bb9a848caafbf6bb233",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0x87fb8dfa3f2a9ca6b5eb5965928cc6a3214eee18",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0x0882de41d9119d422faf021b84c4747a303930fc",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0x54778bf8d012682661b991ff8e4451129e7e49e1",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0xfbc24cd5dea5570f1d65022009f7ad9f7d3f8ade",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0xac3b98cb04a320c71a9929dffefe558daf217a79",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0x01089e8e7796cf16789440f8998fc18413ef53c4",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0x4a6c1cf4fd170d34816f23ce4d8cfebe8d5527c7",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0xbb28baca3757fd08f607357d83d225ec43f77282",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0x089d22168dcf837f47b042fe4c8d079f2561bec6",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0x0d67ea2c79ce97633d3aa2b1e4c65793ff1cfa87",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0xefa7ab167d53157cd848b5e827c79ab7bd6e13cd",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0x3b29f82cadc1185372fc8b15503691bc0d0cb168",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0x47ae2e110aab81a23ed93842b5a8d96cd93ab93c",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0x8b40ca14faf036125bea70fdbd59601115b2e597",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0xa47caceff117ae0a889b13a920e1e9cd2279bae0",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0x5ed935496f3c159bc07f0b408f9f301272132cbe",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0xbcab2c6e93bef176079ae2053f9c031e9e17bcfd",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0x3a7ee37bdd9dc788eb1410a45b0350a0cf70328a",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0x085f8fe687875d99442277d9056fcc3185e1fedf",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      },
+      {
+        "pool": "0x90a08a5bd4b33dd1cb673ba188e72f22d047740e",
+        "implementation": "0x524818cb8081941b618613c6f990c17bb3da0866",
+        "runtime": "0x50eb8f5da118f8a842e73262c7aeaef7fb72db5d1ca1ba836733ef54879904d7",
+        "implementation_hash": "0x11cf64d81ed4515bf26a34432d008b0cc936c0fc735f7a070742472dc8bfbb2b",
+        "slot_canonical": true,
+        "matches_reference": true
+      }
+    ]
+  }
+}

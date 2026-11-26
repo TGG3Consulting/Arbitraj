@@ -205,7 +205,7 @@ pub fn build_signal_with_fees(
             pool: h.entry.pool.reference.clone(),
             token_in: h.token_in,
             token_out: h.token_out,
-            fee_pct: steps::fee_pct(ctx, &h.entry, h.token_in)?,
+            fee_pct: steps::fee_for_input(ctx, &h.entry, h.token_in, h.swapped.amount_in)?,
             hook_pct: h.usable.hook_pct,
             gas_units: h.usable.gas,
         });

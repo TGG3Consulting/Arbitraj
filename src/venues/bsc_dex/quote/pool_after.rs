@@ -33,7 +33,7 @@ use super::pool_quote;
 /// Считается ли состояние пула после обмена (V2 и V3, см. шапку). Ошибок нет.
 pub fn appliable(e: &Entry) -> bool {
     match (&e.pool.state, e.pool.kind) {
-        (PoolState::V2 { .. }, PoolKind::V2) => true,
+        (PoolState::V2 { .. } | PoolState::DeltaSwap { .. }, PoolKind::V2) => true,
         (PoolState::V3 { .. }, PoolKind::V3) => e.ticks.is_some() && e.pool.fee_pips.is_some(),
         _ => false,
     }
@@ -57,6 +57,17 @@ pub fn apply(
     };
     let zero_for_one = token_in == e.pool.token0;
     match (&e.pool.state, e.pool.kind) {
+        (
+            PoolState::DeltaSwap {
+                reserve0,
+                reserve1,
+                fee,
+            },
+            PoolKind::V2,
+        ) => super::super::math::deltaswap::after(*reserve0, *reserve1, fee, zero_for_one, amount)
+            .ok_or_else(|| {
+                no("DeltaSwap: невозможно воспроизвести комиссии и состояние после обмена")
+            }),
         (PoolState::V2 { reserve0, reserve1 }, PoolKind::V2) => {
             // Выход — та же формула и комиссия, что у котировки (pool_quote, getAmountOut).
             let s = pool_quote::swap(ctx, e, token_in, true, amount)?;

@@ -114,6 +114,26 @@ def tables(network, snapshots, profiles):
                     "По утверждённому BIP-928 пауза Vault V3 запланирована на 30.11.2026. "
                     f"[Вызовы и ответы](../{market_file}) · "
                     "[Решение Balancer](https://forum.balancer.fi/t/bip-928-orderly-winddown-of-balancer-and-distribution-of-the-treasury/7107/23)."])
+    if base:
+        capture = "tests/data/first_run_dex_2026-11-26/base_v2_factories.json"
+        markets = read(Path(capture))
+        for id, label, fraction in (("moonbase", "Moonbase", "30/10000"), ("x7-finance-base", "X7 Finance", "200/100000")):
+            pools = markets[id]["pools"]
+            funded = sum(all(map(int, pool["reserves"])) for pool in pools)
+            sample = next(row for row in markets[id]["samples"] if row.get("cases"))
+            out.extend(["", f"{label} · {len(pools)} пар подтверждены фабрикой и CREATE2, у {funded} оба резерва положительны. "
+                        f"Комиссия обычного swap через V5 — {fraction}. Для пары `{sample['pool']}` "
+                        "проверены оба направления на двух объёмах, остатки исполнителя и отказы при превышении выхода на одну единицу. "
+                        f"[Архив](../{capture}) · [Исходник пары]({markets[id]['origin']['verified_pair']})."])
+        delta_file = "tests/data/first_run_dex_2026-11-26/deltaswap_base.json"
+        delta = read(Path(delta_file))
+        current, historical = delta["current"], delta["historical"]
+        out.extend(["", f"DeltaSwap · в реестре {len(current['pools'])} пар. Ставка обычного Router02 зависит от объёма, "
+                    "резервов, двух EMA, суммы обменов внутри блока и порога фабрики. На высоте "
+                    f"{current['height']} dsFeeInfo = {current['ds_fee_info']}, на {historical['height']} = {historical['ds_fee_info']}. "
+                    "В архивных обменах комиссия составила 0 и 0,3%. Реальные балансы совпали на двух объёмах в обе стороны. "
+                    "Роутер проверил минимальную дельту получателя и откатил каждый обмен с минимумом на одну единицу выше. "
+                    f"[Архив](../{delta_file}) · [Исходник роутера]({current['proof']['router']['url']})."])
     nami = read(Path(f"tests/data/first_run_dex_2026-11-26/nami_{network}.json"))
     samples = ", ".join(f"`{m['pool']}` — {m['tick_window']['measured_tick_steps']}" for m in nami["markets"])
     out.extend(["", f"Nami · фактический executor V5 выплатил полный результат {sum(len(m['cases']) for m in nami['markets'])} архивных обменов. "

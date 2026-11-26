@@ -37,8 +37,12 @@ pub struct ChainCell(Arc<Local>);
 struct Local {
     id: OnceLock<Slot>,
     ring: super::pools::ring_acceptance::Book,
+    white: super::quote::white_state::Cache,
 }
 impl ChainCell {
+    pub(super) fn white(&self) -> &super::quote::white_state::Cache {
+        &self.0.white
+    }
     pub(super) fn ring_proofs(&self) -> &super::pools::ring_acceptance::Book {
         &self.0.ring
     }

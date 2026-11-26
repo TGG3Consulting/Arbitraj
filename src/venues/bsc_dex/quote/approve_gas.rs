@@ -95,6 +95,25 @@ pub async fn details(
     // форка на токен входа (exec/bundle.rs, wallet/approve.rs::fork_missing — тот же allowance(кошелёк, роутер)).
     // Решение 280: первый хоп — V2-форк без роутера (без исполнителя маршрут — сигнал): роутера нет, разрешение пошло
     // бы исполнителю — газ, измеренный пробой (dex.router не читается).
+    if route.mode == RouteMode::Direct
+        && (super::frax_pricing::is_frax(&e)
+            || super::white_pricing::is_white(&e)
+            || super::router_pricing::is_native(&e)
+            || super::delta_pricing::is_delta(&e))
+    {
+        let router = if super::frax_pricing::is_frax(&e) {
+            ctx.dex_addr("dex.quoter", e.family.id)?
+        } else {
+            super::super::pools::deltaswap::router(ctx, &e)?
+        };
+        let wallet = signer::address(ctx)?;
+        let current = q.allow.erc20(ctx, token, wallet, router).await?;
+        let count = approve::fork_known(ctx, token, router, current, amount)?.len();
+        if count == 0 {
+            return Ok(None);
+        }
+        return Ok(measured(q, &e.pool.reference, quote.side)?.map(|units| (units, count)));
+    }
     if super::v2_pair_quote::on(&e) {
         return Ok(measured(q, &e.pool.reference, quote.side)?.map(|u| (u, 1)));
     }

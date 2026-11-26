@@ -176,6 +176,30 @@ async fn run(
             return Err(ctx.err(ErrorCode::NoRoute, "Прямой маршрут должен быть одной долей"));
         }
     };
+    if route.mode == RouteMode::Direct
+        && let [hop] = leg.hops.as_slice()
+        && q.reg
+            .get(&hop.pool)
+            .is_some_and(|e| super::super::quote::frax_pricing::is_frax(&e))
+    {
+        return Box::pin(super::frax_direct::SCOPE.scope(
+            (),
+            trade_direct::trade(q, env, nonces, req, &route, &leg, graph_mins),
+        ))
+        .await;
+    }
+    if route.mode == RouteMode::Direct
+        && let [h] = leg.hops.as_slice()
+        && q.reg.get(&h.pool).is_some_and(|e| {
+            e.family.variant == super::super::pools::family_variant::Variant::WhiteSwap
+        })
+    {
+        return Box::pin(super::white_direct::SCOPE.scope(
+            (),
+            trade_direct::trade(q, env, nonces, req, &route, &leg, graph_mins),
+        ))
+        .await;
+    }
     trade_direct::trade(q, env, nonces, req, &route, &leg, graph_mins).await
 }
 

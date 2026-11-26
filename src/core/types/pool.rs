@@ -158,6 +158,21 @@ impl PoolRef {
     }
 }
 
+/// Состояние DeltaSwapPair для ordinary caller. У gammaPool отдельная ставка.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeltaFee {
+    pub router: Address,
+    pub generation: u64,
+    pub block: u64,
+    pub liquidity: U256,
+    pub liquidity_block: u32,
+    pub traded: U256,
+    pub sum: U256,
+    pub trade_block: u32,
+    pub rate: u8,
+    pub threshold: u8,
+}
+
 /// Верхнее состояние пула: то, что меняется событиями и нужно, чтобы видеть цену и комиссию.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PoolState {
@@ -292,6 +307,12 @@ pub enum PoolState {
     /// формула полезности, делитель комиссии вывода. Боксируется, как Pmm. Поля — в ProteusData
     /// (core/types/pool_proteus.rs).
     Proteus(Box<ProteusData>),
+    /// Резервы DeltaSwap и входы формулы комиссии протокола на одном блоке.
+    DeltaSwap {
+        reserve0: U256,
+        reserve1: U256,
+        fee: Box<DeltaFee>,
+    },
 }
 
 /// Состояние пары PMM от оракула (решение 122 F, 3) — боксируется в `PoolState::OraclePmm`. Только то, что читается

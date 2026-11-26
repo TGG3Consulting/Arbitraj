@@ -445,8 +445,12 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
         "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
-        "fraxswap_twamm" | "fraxswap_twamm_v5" => (PoolKind::V2, Proto::V2, true, false, true),
-        "v2_fork" => (PoolKind::V2, Proto::V2, true, true, true),
+        "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
+            (PoolKind::V2, Proto::V2, true, false, true)
+        }
+        "v2_fork" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_whiteswap" => {
+            (PoolKind::V2, Proto::V2, true, true, true)
+        }
         // V2-форк без известного роутера (решение 280): в графе и сигналах как v2_fork (V2-математика, своя комиссия
         // dex.v2_fee_pct), но tradable=false — своего роутера нет; исполнение — шаг V2 контракта-исполнителя (обмен
         // прямо в паре, exec_kind::via_executor). fork=true — как у v3_fork: не в классический прямой путь и без UR.
@@ -716,6 +720,9 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
     if f.variant == Variant::RingFew {
         super::ring::active(ctx, f.id).map_err(|e| no(e.message))?;
     }
+    if f.variant.registered_v2_router() {
+        ctx.addr("dex.multicall3").map_err(|e| no(e.message))?;
+    }
     if f.variant == Variant::BaseNativeV3 && !super::base_native_v3::valid(ctx, f) {
         return Err(no(
             "сеть, фабрика или квотер расходятся с профилем V3 Base".into()
@@ -759,16 +766,36 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         ]);
     }
     match f.proto {
-        Proto::V2 if f.variant == Variant::FraxTwamm => {
+        Proto::V2 if f.variant == Variant::DeltaSwap => {
+            list.extend([
+                "dex.factory",
+                "dex.router",
+                "dex.module_runtime_hashes",
+                super::verify_algebra_dir::SETTING,
+            ]);
+        }
+        Proto::V2 if f.variant.frax_twamm() => {
             list.extend(["dex.factory", "dex.quoter"]);
+            if f.variant == Variant::FraxTwammRouter {
+                list.push("dex.fraxswap_router_hash");
+            }
             if f.executor_kind.is_some() {
                 list.extend(["dex.router", "dex.module_runtime_hashes"]);
             }
         }
         Proto::V2 => {
             list.push("dex.factory");
-            if matches!(f.variant, Variant::V2Create2 | Variant::V2Create2LiveFee) {
+            if matches!(
+                f.variant,
+                Variant::V2Create2
+                    | Variant::V2Create2LiveFee
+                    | Variant::V2RouterCreate2
+                    | Variant::WhiteSwap
+            ) {
                 list.push(super::verify_algebra_dir::SETTING);
+            }
+            if f.variant == Variant::WhiteSwap {
+                list.extend(["dex.proxy_implementations", "dex.proxy_runtime_hashes"]);
             }
             if f.variant == Variant::V2Create2LiveFee {
                 list.push("dex.v2_fee_rule_hash");
@@ -776,7 +803,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             // Роутер — только у вида со своим путём исполнения (PancakeSwap/Uniswap V2, v2_fork: сверка getAmountsOut и
             // обмен роутером форка). v2_fork_executor (решение 280, tradable=false) роутера не имеет: сверка и обмен —
             // через контракт-исполнитель (quote/v2_pair_quote.rs).
-            if f.tradable {
+            if f.tradable && f.variant != Variant::WhiteSwap {
                 list.push("dex.router");
             }
             match ctx.dex_text("dex.v2_fee_source", f.id).as_deref() {

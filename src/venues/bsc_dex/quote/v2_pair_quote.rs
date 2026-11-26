@@ -38,9 +38,7 @@ use super::v2_pair_sim::{Sim, judge};
 
 /// Вид без своего роутера: протокол V2 и нет своего пути исполнения (v2_fork_executor). Ошибок нет.
 pub fn kind_on(f: &Family) -> bool {
-    f.proto == Proto::V2
-        && !f.tradable
-        && f.variant != super::super::pools::family_variant::Variant::FraxTwamm
+    f.proto == Proto::V2 && !f.tradable && !f.variant.frax_twamm()
 }
 
 /// Пул такого вида. Ошибок нет.

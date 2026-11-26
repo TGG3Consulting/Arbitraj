@@ -32,14 +32,15 @@ pub const SETTING: &str = "dex.pool_code_hashes";
 /// Допустимые хеши кода пула DEX кандидата. Принимает: окружение, кандидата. Возвращает: список хешей.
 /// Ошибки (текст причины): настройка не задана, пуста или элемент не 32-байтовый hex.
 pub fn hashes(ctx: &Ctx, c: &Candidate) -> Result<Vec<B256>, String> {
+    hashes_for(ctx, c.family.id)
+}
+
+pub(super) fn hashes_for(ctx: &Ctx, id: &str) -> Result<Vec<B256>, String> {
     let list = ctx
-        .dex_list(SETTING, c.family.id)
+        .dex_list(SETTING, id)
         .map_err(|e| format!("{}: версия кода пула не сверяется", e.message))?;
     if list.is_empty() {
-        return Err(format!(
-            "{SETTING} [dex:{}] пуста — пулы вида не берутся",
-            c.family.id
-        ));
+        return Err(format!("{SETTING} [dex:{id}] пуста — пулы вида не берутся"));
     }
     let parse = |h: &String| {
         B256::from_str(h.trim()).map_err(|_| format!("{SETTING}: «{h}» — не хеш (0x + 64 hex)"))

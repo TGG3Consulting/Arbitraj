@@ -93,7 +93,9 @@ pub fn needs(f: &Family) -> bool {
         f.variant,
         super::family_variant::Variant::SlipstreamDynamicFee
             | Variant::V2Create2LiveFee
+            | Variant::DeltaSwap
             | Variant::FraxTwamm
+            | Variant::FraxTwammRouter
             | Variant::NamiIntegral
             | super::family_variant::Variant::QuickswapIntegral
             | super::family_variant::Variant::CurvePlain

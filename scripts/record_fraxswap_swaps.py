@@ -77,7 +77,8 @@ def run(m, timestamp, capture, url, index, amount, artifact=None):
             spender = EXEC
         else:
             spender = ROUTER
-            trade = call(ROUTER,calldata("swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
+            name = "swapExactTokensForTokensSupportingFeeOnTransferTokens" if path=="recipient" else "swapExactTokensForTokens"
+            trade = call(ROUTER,calldata(name+"(uint256,uint256,address[],address,uint256)",
                          ["uint256","uint256","address[]","address","uint256"],
                          [amount,floor,[tin,tout],OWNER,timestamp+120]))
         approve = call(tin,calldata("approve(address,uint256)",["address","uint256"],[spender,amount]))
@@ -100,11 +101,16 @@ def run(m, timestamp, capture, url, index, amount, artifact=None):
                 or any(value(i)!=0 for i in range(7,12)) or value(12)!=int(capture["factory"],16)):
             raise ValueError("unexpected adapter factory, residue or allowance")
         return dict(spent=str(value(2)-value(5)),received=str(value(6)-value(3)),status=actual[4]["status"],
-                    gas=actual[4]["gasUsed"],error=actual[4].get("error"),floor=str(floor))
+                    approval_gas=actual[1]["gasUsed"],gas=actual[4]["gasUsed"],error=actual[4].get("error"),floor=str(floor))
     native = execute("router",expected)
     strict = execute("router",expected+1)
     if (native["spent"],native["received"],strict["status"],strict["spent"],strict["received"]) != (str(amount),str(expected),"0x0","0","0"):
         raise ValueError(f"router payout or strict floor differed: {native} {strict}")
+    recipient=execute("recipient",expected)
+    recipient_strict=execute("recipient",expected+1)
+    if (recipient["status"],recipient["spent"],recipient["received"],recipient_strict["status"],
+        recipient_strict["spent"],recipient_strict["received"]) != ("0x1",str(amount),str(expected),"0x0","0","0"):
+        raise ValueError(f"recipient-checked native route differs: {recipient} {recipient_strict}")
     measured = {}
     if artifact:
         passed = execute("adapter",expected)
@@ -113,7 +119,7 @@ def run(m, timestamp, capture, url, index, amount, artifact=None):
             rejected["spent"],rejected["received"]) != ("0x1",str(amount),str(expected),"0x0","0","0"):
             raise ValueError(f"V5 adapter differs from the official router: {passed} {rejected}")
         measured = dict(adapter=passed,adapter_strict=rejected,adapter_dust=0,v5_dust=0,v5_to_adapter_allowance=0)
-    return dict(**measured,pool=pool,token_in=tin,token_out=tout,source=source,amount=str(amount),projection=projection,
+    return dict(**measured,native_recipient=recipient,native_recipient_strict=recipient_strict,pool=pool,token_in=tin,token_out=tout,source=source,amount=str(amount),projection=projection,
                 predicted=str(expected),native=native,strict=strict,v5=execute("v5",expected))
 
 

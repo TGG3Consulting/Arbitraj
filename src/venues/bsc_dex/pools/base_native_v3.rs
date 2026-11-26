@@ -43,34 +43,42 @@ pub fn request(
     fee: U24,
     data: Bytes,
 ) -> GatewayResult<(Address, Bytes)> {
-    let PoolRef::Contract(pool) = e.pool.reference else {
-        return Err(ctx.err(
-            ErrorCode::InvalidAddress,
-            "Для квотера V3 нужен контракт пула",
-        ));
-    };
-    let factory = ctx.dex_addr("dex.factory", e.family.id)?;
-    let read_factory = Bytes::from(IPoolImmutables::factoryCall {}.abi_encode());
     let registry = IV3Factory::getPoolCall {
         tokenA: e.pool.token0,
         tokenB: e.pool.token1,
         fee,
     };
+    bound(ctx, e, quoter, registry.abi_encode().into(), data)
+}
+
+/// Проверяет принадлежность котировки тому же пулу без второго запроса узла.
+pub(in crate::venues::bsc_dex) fn bound(
+    ctx: &Ctx,
+    e: &Entry,
+    quoter: Address,
+    registry: Bytes,
+    data: Bytes,
+) -> GatewayResult<(Address, Bytes)> {
+    let PoolRef::Contract(pool) = e.pool.reference else {
+        return Err(ctx.err(ErrorCode::InvalidAddress, "Для квотера нужен контракт пула"));
+    };
+    let factory = ctx.dex_addr("dex.factory", e.family.id)?;
+    let read_factory = Bytes::from(IPoolImmutables::factoryCall {}.abi_encode());
     let calls = [
         (quoter, read_factory.clone()),
         (pool, read_factory),
-        (factory, Bytes::from(registry.abi_encode())),
+        (factory, registry),
         (quoter, data),
     ];
     Ok((ctx.addr("dex.multicall3")?, multicall::encode(&calls)))
 }
 
-pub fn checked(pool: Address, out: &[u8]) -> Result<U256, String> {
+pub(in crate::venues::bsc_dex) fn checked_data(pool: Address, out: &[u8]) -> Result<Bytes, String> {
     let values = multicall::decode(out, 4).map_err(|e| e.message)?;
     let [q_factory, p_factory, registered, quote]: [Result<Bytes, String>; 4] =
         values
             .try_into()
-            .map_err(|_| "Неполный ответ фабрики и квотера V3")?;
+            .map_err(|_| "Неполный ответ фабрики и квотера")?;
     let address = |r: Result<Bytes, String>| -> Result<Address, String> {
         IPoolImmutables::factoryCall::abi_decode_returns(&r?)
             .map_err(|_| "Ответ об адресе фабрики или пула не по ABI".to_owned())
@@ -78,10 +86,14 @@ pub fn checked(pool: Address, out: &[u8]) -> Result<U256, String> {
     let factory = address(q_factory)?;
     if factory.is_zero() || address(p_factory)? != factory || address(registered)? != pool {
         return Err(
-            "Квотер и пул относятся к разным фабрикам или getPool вернул другой адрес".into(),
+            "Квотер и пул относятся к разным фабрикам или реестр вернул другой адрес".into(),
         );
     }
-    IQuoterV2::quoteExactInputSingleCall::abi_decode_returns(&quote?)
+    quote
+}
+
+pub fn checked(pool: Address, out: &[u8]) -> Result<U256, String> {
+    IQuoterV2::quoteExactInputSingleCall::abi_decode_returns(&checked_data(pool, out)?)
         .map(|result| result.amountOut)
         .map_err(|_| "Ответ квотера V3 не по ABI".into())
 }

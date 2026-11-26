@@ -65,6 +65,22 @@ pub fn swap(
         )
     };
     match (&e.pool.state, e.pool.kind) {
+        (
+            PoolState::DeltaSwap {
+                reserve0,
+                reserve1,
+                fee,
+            },
+            PoolKind::V2,
+        ) => super::super::math::deltaswap::quote(
+            *reserve0,
+            *reserve1,
+            fee,
+            zero_for_one,
+            exact_in,
+            amount,
+        )
+        .ok_or_else(none),
         (PoolState::V2 { reserve0, reserve1 }, PoolKind::V2) => {
             let fee = v2::fee_ratio(v2_fee_pct(ctx, e)?)
                 .ok_or_else(|| ctx.not_set("dex.v2_fee_pct", "комиссия пары V2 вне 0–100%"))?;

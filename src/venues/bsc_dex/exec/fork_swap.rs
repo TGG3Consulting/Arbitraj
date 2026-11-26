@@ -88,7 +88,7 @@ pub fn probe_swap(
     wallet: Address,
     now: u64,
 ) -> GatewayResult<(Vec<Approval>, Address, Bytes)> {
-    let router = ctx.dex_addr("dex.router", e.family.id)?;
+    let router = super::super::pools::deltaswap::router(ctx, e)?;
     let deadline = U256::from(now + ctx.int("dex.deadline_s")?);
     let approvals = approve::fork_all(ctx, token_in, router, amount_in)?;
     if e.family.direct_module() {

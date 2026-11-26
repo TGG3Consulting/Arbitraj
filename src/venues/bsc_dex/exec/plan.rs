@@ -29,6 +29,19 @@ use super::chain::{self, Step};
 use super::native::Wrap;
 use super::ur;
 
+#[derive(Debug, Clone, Copy)]
+pub(super) enum DirectCall {
+    Module {
+        pool: Address,
+        input: Address,
+        amount: U256,
+    },
+    V2SupportingFee {
+        input: Address,
+        amount: U256,
+    },
+}
+
 /// План обмена.
 #[derive(Debug, Clone)]
 pub struct Plan {
@@ -42,7 +55,7 @@ pub struct Plan {
     /// Команды обмена (без проверки баланса).
     steps: Vec<(u8, Bytes)>,
     /// Аргументы прямого модуля; он сам измеряет выход на кошельке в том же вызове.
-    pub(super) direct_market: Option<(Address, Address, U256)>,
+    pub(super) direct_market: Option<DirectCall>,
     /// Сумма минимумов выхода (не 0).
     min_total: U256,
     deadline: U256,
@@ -118,15 +131,28 @@ impl Plan {
     /// Нативная монета: WRAP_ETH(роутер, сумма) первой командой; покупка — UNWRAP_WETH(кошелёк, сумма минимумов)
     /// последней вместо BALANCE_CHECK_ERC20 (база тогда не нужна).
     pub fn data(&self, base: U256) -> Bytes {
-        if let Some((pool, token_in, amount)) = self.direct_market {
-            return super::super::pools::solidly_v3::execution_data(
-                pool,
-                token_in,
-                self.token_out,
-                amount,
-                self.min_total,
-                self.deadline,
-            );
+        if let Some(direct) = self.direct_market {
+            return match direct {
+                DirectCall::Module {
+                    pool,
+                    input,
+                    amount,
+                } => super::super::pools::solidly_v3::execution_data(
+                    pool,
+                    input,
+                    self.token_out,
+                    amount,
+                    self.min_total,
+                    self.deadline,
+                ),
+                DirectCall::V2SupportingFee { input, amount } => super::fork_swap::swap_data(
+                    amount,
+                    self.min_total,
+                    &[input, self.token_out],
+                    self.wallet,
+                    self.deadline,
+                ),
+            };
         }
         let mut steps = Vec::with_capacity(self.steps.len() + 2);
         if let Wrap::Wrap(v) = self.native {
@@ -173,6 +199,38 @@ pub async fn build(
         return Err(ctx.err(ErrorCode::Internal, "план без шагов"));
     };
     let e = &first.entry;
+    if super::super::quote::frax_pricing::is_frax(e) {
+        return Box::pin(super::frax_direct::plan(
+            ctx,
+            steps,
+            wallet,
+            now,
+            all_approvals,
+        ))
+        .await;
+    }
+    if e.family.variant == super::super::pools::family_variant::Variant::DeltaSwap {
+        return Box::pin(super::delta_direct::plan(
+            ctx,
+            steps,
+            wallet,
+            now,
+            all_approvals,
+        ))
+        .await;
+    }
+    if e.family.variant == super::super::pools::family_variant::Variant::WhiteSwap
+        || super::super::quote::router_pricing::is_native(e)
+    {
+        return Box::pin(super::white_direct::plan(
+            ctx,
+            steps,
+            wallet,
+            now,
+            all_approvals,
+        ))
+        .await;
+    }
     if e.family.direct_module() {
         return super::solidly_direct::plan(ctx, steps, wallet, now, all_approvals).await;
     }

@@ -157,13 +157,49 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
                     .iter()
                     .all(|s| s["reason"].is_string())
             );
+            let router = &market["native_router"];
+            let admitted = router["samples"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|s| s["cases"].is_array())
+                .unwrap();
+            let pair = market["pools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|p| p["pool"] == admitted["pool"])
+                .unwrap();
+            let w = pair["tokens"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .position(|t| t == "0x4200000000000000000000000000000000000006")
+                .unwrap();
+            let (r0, r1) = (uint(&pair["reserves"][w]), uint(&pair["reserves"][1 - w]));
+            let fee = fee_ratio(Decimal::new(3, 1)).unwrap();
+            let cases = admitted["cases"].as_array().unwrap();
+            assert_eq!(cases.len(), 2);
+            for c in cases {
+                let input = uint(&c["buy"]["spent"]);
+                let bought = amount_out(input, r0, r1, fee).unwrap();
+                assert_eq!(bought, uint(&c["buy"]["received"]));
+                assert_eq!(bought, uint(&c["sell"]["spent"]));
+                assert_eq!(
+                    amount_out(bought, r1 - bought, r0 + input, fee).unwrap(),
+                    uint(&c["sell"]["received"])
+                );
+                for side in ["buy", "sell"] {
+                    assert_eq!(c[side]["min_plus_one"]["code"], 3);
+                }
+            }
             continue;
         };
         assert_eq!(sample["dex"], id.as_str());
         assert_eq!(sample["block_hash"], market["selector"]["blockHash"]);
         captures.push(sample.clone());
     }
-    assert_eq!(pool_count, 781);
+    assert_eq!(pool_count, 1024);
     let profiles: Vec<Value> =
         serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
     let mut admitted = 0;
@@ -176,6 +212,24 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
                 || s.contains("base_v2_factories.json")
         })
     }) {
+        if profile["settings"]["dex.kind"] == "v2_fork_router_create2" {
+            let row = &factories[profile["id"].as_str().unwrap()];
+            assert_eq!(
+                profile["settings"]["dex.router"],
+                row["native_router"]["router"]
+            );
+            assert_eq!(profile["settings"]["dex.factory"], row["factory"]);
+            assert_eq!(
+                profile["settings"]["dex.pool_code_hashes"][0],
+                row["origin"]["creation_code_hash"]
+            );
+            assert_eq!(profile["settings"]["dex.v2_fee_pct"], "0.3");
+            assert_eq!(
+                arb::venues::bsc_dex::pools::exec_kind::of("v2_fork_router_create2"),
+                None
+            );
+            continue;
+        }
         let capture = captures
             .iter()
             .find(|row| row["dex"] == profile["id"] && row["network"] == profile["network"])
@@ -303,6 +357,8 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
         "verse",
         "spice_trade_ethereum",
         "9mm-v2-base",
+        "moonbase",
+        "x7-finance-base",
         "cbswap",
         "cloudbase",
         "icecreamswap-base",

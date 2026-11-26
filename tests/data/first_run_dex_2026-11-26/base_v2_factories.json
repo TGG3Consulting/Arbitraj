@@ -4354,49 +4354,138 @@
     "samples": [
       {
         "pool": "0x0351f5efd5fb8ef36856d2c7e2aa5356528f47b9",
-        "reason": "не прошёл полный круг: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        "funded_asset": "0x4200000000000000000000000000000000000006",
+        "reason": "buy input=1000000000000000, simulated error {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
       },
       {
         "pool": "0xf9d74e92a6db723a6042d6992d283893c1fcebb3",
-        "reason": "не прошёл полный круг: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        "funded_asset": "0x4200000000000000000000000000000000000006",
+        "reason": "buy input=820652697106, simulated error {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
       },
       {
         "pool": "0x6df629d3fe7217d1469f1f550f0b2857d651be76",
-        "reason": "не прошёл полный круг: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        "funded_asset": "0x4200000000000000000000000000000000000006",
+        "reason": "buy input=59819851078, simulated error {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
       },
       {
         "pool": "0xb379d911fe8604ca539bf5ec81f911dbfbccefed",
-        "reason": "не прошёл полный круг: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        "funded_asset": "0x4200000000000000000000000000000000000006",
+        "reason": "buy input=50000000000, simulated error {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
       },
       {
         "pool": "0xb0185641627be2907cb2152cce4fd5b525c04875",
-        "reason": "не прошёл полный круг: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        "funded_asset": "0x4200000000000000000000000000000000000006",
+        "reason": "buy input=10000000000, simulated error {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
       },
       {
         "pool": "0x12825cd33f43d1cb93f9241fa0c99ee88b01387c",
-        "reason": "не прошёл полный круг: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        "funded_asset": "0x4200000000000000000000000000000000000006",
+        "reason": "buy input=3927687634, simulated error {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
       },
       {
         "pool": "0x9057c7bbe769b697e63f4adf1c35b6ec122ad77f",
-        "reason": "не прошёл полный круг: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        "funded_asset": "0x4200000000000000000000000000000000000006",
+        "reason": "buy input=2479268382, simulated error {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
       },
       {
         "pool": "0x0a444f7c451ef0df0bb6bac46b3ea147e64493da",
-        "reason": "не прошёл полный круг: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        "funded_asset": "0x4200000000000000000000000000000000000006",
+        "reason": "buy input=328755774, simulated error {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
       },
       {
         "pool": "0x26bd0ea5cfea22498e94922f92054eba1bde2eb3",
-        "reason": "не прошёл полный круг: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        "funded_asset": "0x4200000000000000000000000000000000000006",
+        "reason": "buy input=89073390, simulated error {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
       },
       {
         "pool": "0x1e05a827a291f9a816c8f9c31380e0202cc04412",
-        "reason": "не прошёл полный круг: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        "funded_asset": "0x4200000000000000000000000000000000000006",
+        "reason": "buy input=16193577, simulated error {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
       },
       {
         "pool": "0x5297c057744b392c59264f24cd982a505e9c6b26",
-        "reason": "не прошёл полный круг: {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+        "funded_asset": "0x4200000000000000000000000000000000000006",
+        "reason": "buy input=7507484, simulated error {'code': 3, 'message': 'execution reverted', 'data': '0x'}"
+      },
+      {
+        "pool": "0xf8ba3f458959160c93bfc691f6a55a8a1a9580c8",
+        "funded_asset": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "reason": "недостаточно резервов для двух размеров"
+      },
+      {
+        "pool": "0xfa32e224d7cf9d255a5ed7363fd9a6b3f8559268",
+        "funded_asset": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+        "reason": "недостаточно резервов для двух размеров"
       }
     ],
+    "native_router": {
+      "router": "0x10cc46af6964fba2b7266ddf2cd8a8585b71a210",
+      "runtime": "0x274b7828dd25f1fe6c51421b55b5ee6fc18227059f46457b6a6f2cfbcee3b045",
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x10cc46af6964fba2b7266ddf2cd8a8585b71a210",
+      "samples": [
+        {
+          "pool": "0x0351f5efd5fb8ef36856d2c7e2aa5356528f47b9",
+          "error": "call 0 {'code': 3, 'message': 'execution reverted: SwapRouter: INSUFFICIENT_OUTPUT_AMOUNT', 'data': '0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000"
+        },
+        {
+          "pool": "0xf9d74e92a6db723a6042d6992d283893c1fcebb3",
+          "cases": [
+            {
+              "buy": {
+                "amount": "820652697106",
+                "quoted": "985385571453986252462074",
+                "spent": "820652697106",
+                "received": "985385571453986252462074",
+                "min_plus_one": {
+                  "code": 3,
+                  "message": "execution reverted: SwapRouter: INSUFFICIENT_OUTPUT_AMOUNT",
+                  "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002653776170526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e540000000000000000000000000000000000000000000000000000"
+                },
+                "gas": 114652
+              },
+              "sell": {
+                "amount": "985385571453986252462074",
+                "quoted": "815736655456",
+                "spent": "985385571453986252462074",
+                "received": "815736655456",
+                "min_plus_one": {
+                  "code": 3,
+                  "message": "execution reverted: SwapRouter: INSUFFICIENT_OUTPUT_AMOUNT",
+                  "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002653776170526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e540000000000000000000000000000000000000000000000000000"
+                },
+                "gas": 105465
+              }
+            },
+            {
+              "buy": {
+                "amount": "16413053942121",
+                "quoted": "19670453403823181961092778",
+                "spent": "16413053942121",
+                "received": "19670453403823181961092778",
+                "min_plus_one": {
+                  "code": 3,
+                  "message": "execution reverted: SwapRouter: INSUFFICIENT_OUTPUT_AMOUNT",
+                  "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002653776170526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e540000000000000000000000000000000000000000000000000000"
+                },
+                "gas": 114676
+              },
+              "sell": {
+                "amount": "19670453403823181961092778",
+                "quoted": "16314918431116",
+                "spent": "19670453403823181961092778",
+                "received": "16314918431116",
+                "min_plus_one": {
+                  "code": 3,
+                  "message": "execution reverted: SwapRouter: INSUFFICIENT_OUTPUT_AMOUNT",
+                  "data": "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002653776170526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e540000000000000000000000000000000000000000000000000000"
+                },
+                "gas": 105489
+              }
+            }
+          ]
+        }
+      ]
+    },
     "selector": {
       "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
       "requireCanonical": true
@@ -8765,6 +8854,2945 @@
               "sell": {
                 "max": "235022430656",
                 "next_revert": "Swap: K"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "selector": {
+      "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "requireCanonical": true
+    },
+    "height": 62262756,
+    "state_root": "0x037b0c48cd33236cb94ec9e9fc7438c120b138c2c31d39d0ebe42521ee65676b",
+    "endpoint": "https://mainnet.base.org"
+  },
+  "moonbase": {
+    "factory": "0xe396465a85dedb00fa8774162b106833de51ea41",
+    "origin": {
+      "url": "https://sourcify.dev/server/v2/contract/8453/0xe396465a85dedb00fa8774162b106833de51ea41",
+      "runtime": "0x4eb04a8426edb40f7cf69bb0d4ded5f7a6746675e2dd080fefb95787b919fa52",
+      "creation_code_hash": "0x51c27a581c3451ed45f508aa0170e4a1fd719ff3f960293f7b1089eb5c49ae31",
+      "codecopy": [
+        1760,
+        9300
+      ],
+      "invariant": [
+        {
+          "file": "contracts/zyberswap/UniswapV2Pair.sol",
+          "line": "uint balance0Adjusted = balance0.mul(10000).sub("
+        },
+        {
+          "file": "contracts/zyberswap/UniswapV2Pair.sol",
+          "line": "uint balance1Adjusted = balance1.mul(10000).sub("
+        }
+      ],
+      "verified_pair": "https://sourcify.dev/server/v2/contract/8453/0xf429af2d7805bb1bed1ada3cacf2bbbed87294c8",
+      "standard_swap_fee": {
+        "entry": "swap(uint256,uint256,address,bytes)",
+        "numerator": 30,
+        "denominator": 10000
+      }
+    },
+    "pools": [
+      {
+        "pool": "0xc7e6e3f63fe342ef873f4d1a4e6012412e3f36ea",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xef0b2ccb53a683fa48799245f376d6a60929f003"
+        ],
+        "reserves": [
+          "41987634793356841",
+          "32691215637230365374112331"
+        ]
+      },
+      {
+        "pool": "0xf031135194cb2f974e882dfb706000f0769a2ce9",
+        "tokens": [
+          "0x50c5725949a6f0c72e6c4a641f24049a917db0cb",
+          "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+        ],
+        "reserves": [
+          "8590666578951428243",
+          "8680546"
+        ]
+      },
+      {
+        "pool": "0xf429af2d7805bb1bed1ada3cacf2bbbed87294c8",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+        ],
+        "reserves": [
+          "13015500368563725",
+          "21944022"
+        ]
+      },
+      {
+        "pool": "0x4268e47f0a2260c15bb1fd8a4c5bf8dcc33862fa",
+        "tokens": [
+          "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "15147637638886672",
+          "17276875327615387"
+        ]
+      },
+      {
+        "pool": "0x3c47df9823d9c1a93488e3233a737524058ea893",
+        "tokens": [
+          "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",
+          "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+        ],
+        "reserves": [
+          "156021305",
+          "1"
+        ]
+      },
+      {
+        "pool": "0x989b21613d13ddb599565ad0c63e4db21daa03f1",
+        "tokens": [
+          "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+          "0xef0b2ccb53a683fa48799245f376d6a60929f003"
+        ],
+        "reserves": [
+          "15833807",
+          "7393095898351593452151577"
+        ]
+      },
+      {
+        "pool": "0x95355f0764c6b26d13c1452dc89ab175320f489f",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x50c5725949a6f0c72e6c4a641f24049a917db0cb"
+        ],
+        "reserves": [
+          "132913359794629",
+          "217036576217282966"
+        ]
+      },
+      {
+        "pool": "0xb2ed81175a0371d52499e6881cea697dcc1baa11",
+        "tokens": [
+          "0x65a2508c429a6078a7bc2f7df81ab575bd9d9275",
+          "0xb79dd08ea68a908a97220c76d19a6aa9cbde4376"
+        ],
+        "reserves": [
+          "815886854631919178",
+          "812623"
+        ]
+      },
+      {
+        "pool": "0x804aa907121f5bc68ce43a2df31c9d1f4bfef33d",
+        "tokens": [
+          "0xb79dd08ea68a908a97220c76d19a6aa9cbde4376",
+          "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+        ],
+        "reserves": [
+          "525796",
+          "523671"
+        ]
+      },
+      {
+        "pool": "0x98c4ce522afa08c3a9871bd71ccd3041f0a3c404",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xd260115030b9fb6849da169a01ed80b6496d1e99"
+        ],
+        "reserves": [
+          "1143",
+          "876"
+        ]
+      },
+      {
+        "pool": "0x662e38af7b84b55fbc74618b66b0e8aedef4e098",
+        "tokens": [
+          "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+          "0xe396465a85dedb00fa8774162b106833de51ea41"
+        ],
+        "reserves": [
+          "0",
+          "0"
+        ]
+      },
+      {
+        "pool": "0xf091a6eb6ff1f9370c3d488919012370f3817c7f",
+        "tokens": [
+          "0x2259ba575f7c66cf10d59a1fe2f7ba77c5685770",
+          "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca"
+        ],
+        "reserves": [
+          "883241036548585115",
+          "779741"
+        ]
+      },
+      {
+        "pool": "0x6564a53e4aa4cd0ac5affe591e05ada6334d59fa",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xb79dd08ea68a908a97220c76d19a6aa9cbde4376"
+        ],
+        "reserves": [
+          "7371000487372",
+          "17359"
+        ]
+      }
+    ],
+    "samples": [
+      {
+        "network": "base",
+        "dex": "moonbase",
+        "pool": "0xc7e6e3f63fe342ef873f4d1a4e6012412e3f36ea",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xef0b2ccb53a683fa48799245f376d6a60929f003"
+        ],
+        "factory": "0xe396465a85dedb00fa8774162b106833de51ea41",
+        "runtime_hash": "0x51d5e9c8010aa9f973c59259ff258fd9125961984b8ccecbad1e7e5de89e5995",
+        "creation_code_hash": "0x51c27a581c3451ed45f508aa0170e4a1fd719ff3f960293f7b1089eb5c49ae31",
+        "verify_pair_boundary": true,
+        "invariant_error": "UniswapV2: K",
+        "fee_fraction": [
+          10000,
+          30
+        ],
+        "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+        "reserves": [
+          "41987634793356841",
+          "32691215637230365374112331"
+        ],
+        "pips": 3000,
+        "cases": [
+          {
+            "in": "4198763479335",
+            "bought": "3258989277800339750321",
+            "returned": "4173611187490",
+            "buy_return": "3258989277800339750321",
+            "sell_return": "4173611187490",
+            "observed_balances": [
+              "3258989277800339750321",
+              "4173611187490",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "3258989277800339750321",
+                "next_revert": "UniswapV2: K"
+              },
+              "sell": {
+                "max": "4173611187490",
+                "next_revert": "UniswapV2: K"
+              }
+            }
+          },
+          {
+            "in": "83975269586713",
+            "bought": "65056561197608788279280",
+            "returned": "83473171925806",
+            "buy_return": "65056561197608788279280",
+            "sell_return": "83473171925806",
+            "observed_balances": [
+              "65056561197608788279280",
+              "83473171925806",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "65056561197608788279280",
+                "next_revert": "UniswapV2: K"
+              },
+              "sell": {
+                "max": "83473171925806",
+                "next_revert": "UniswapV2: K"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "selector": {
+      "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "requireCanonical": true
+    },
+    "height": 62262756,
+    "state_root": "0x037b0c48cd33236cb94ec9e9fc7438c120b138c2c31d39d0ebe42521ee65676b",
+    "endpoint": "https://mainnet.base.org"
+  },
+  "x7-finance-base": {
+    "factory": "0x8b76c05676d205563ffc1cbd11c0a6e3d83929c5",
+    "origin": {
+      "url": "https://sourcify.dev/server/v2/contract/8453/0x8b76c05676d205563ffc1cbd11c0a6e3d83929c5",
+      "runtime": "0x79e1ee6a27f2957ec42ffe759cc3234e68a958f940ac47c49b59b696e9c5376e",
+      "creation_code_hash": "0xd75846df8bac2f946ea9ee78caa53b6812e7514197698275b8322d75e1543193",
+      "codecopy": [
+        2738,
+        14062
+      ],
+      "invariant": [
+        {
+          "file": "contracts/XchangeFactory.sol",
+          "line": "uint balance0Adjusted = (balances[0] * 100000) - (amount0In * feeAmount);"
+        },
+        {
+          "file": "contracts/XchangeFactory.sol",
+          "line": "uint balance1Adjusted = (balances[1] * 100000) - (amount1In * feeAmount);"
+        }
+      ],
+      "verified_pair": "https://sourcify.dev/server/v2/contract/8453/0x9c38075ddee473e28a063cec3ae556c2ac0daa8f",
+      "standard_swap_fee": {
+        "entry": "swap(uint256,uint256,address,bytes)",
+        "numerator": 200,
+        "denominator": 100000
+      }
+    },
+    "pools": [
+      {
+        "pool": "0x5a6ce7f5220dce873f11dcc50834edbf2472fbbb",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x9618076dbd37f9c0d9c4722694ff7a8c5ceeadb3"
+        ],
+        "reserves": [
+          "0",
+          "0"
+        ]
+      },
+      {
+        "pool": "0xee24db176bb45e7e365ae7508eb9c81a85c496ec",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xd064c53f043d5aee2ac9503b13ee012bf2def1d0"
+        ],
+        "reserves": [
+          "1045043828084",
+          "35925324784362032126"
+        ]
+      },
+      {
+        "pool": "0xe8c88f9412b95a27213e7468fabb596ac0ed6dd2",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x47b464edb8dc9bc67b5cd4c9310bb87b773845bd"
+        ],
+        "reserves": [
+          "708618724201413",
+          "14252642516713"
+        ]
+      },
+      {
+        "pool": "0x94fd203005ee56f5443aabe6e22b237c9b4f42b3",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xbeb0fd48c2ba0f1aacad2814605f09e08a96b94e"
+        ],
+        "reserves": [
+          "45056",
+          "23"
+        ]
+      },
+      {
+        "pool": "0xd977af8a81122a24a1a86767e07d548d84fa1a8a",
+        "tokens": [
+          "0x26f1bb40ea88b46ceb21557dc0ffac7b7c0ad40f",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "161286696",
+          "1"
+        ]
+      },
+      {
+        "pool": "0xabb92a4b1bad04729b45f0d9a7465a73a1b2898a",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xe29290dcbc878dd70ba62bea9e8f4bb707206e2d"
+        ],
+        "reserves": [
+          "1773456471599",
+          "919892096925554726441556"
+        ]
+      },
+      {
+        "pool": "0xd500d8e7f7de724410319801481226ad391288a9",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xebff2db643cf955247339c8c6bcd8406308ca437"
+        ],
+        "reserves": [
+          "112771",
+          "1980969985"
+        ]
+      },
+      {
+        "pool": "0xd74d8445f10ce5fff68f666167881f9388897018",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xae7db3f790e5f8dd1313a4edebf52699cf8888e8"
+        ],
+        "reserves": [
+          "1",
+          "90073363"
+        ]
+      },
+      {
+        "pool": "0xc99e76e1c9f1cea083024e56b9a286b03ab04e27",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xff0c532fdb8cd566ae169c1cb157ff2bdc83e105"
+        ],
+        "reserves": [
+          "29",
+          "36990"
+        ]
+      },
+      {
+        "pool": "0x6976a92df28e3687839222e3989480acf05d9d68",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xb1a03eda10342529bbf8eb700a06c60441fef25d"
+        ],
+        "reserves": [
+          "25712",
+          "2523919825"
+        ]
+      },
+      {
+        "pool": "0xce4cff1359dcee4c411ebb1dc096eab429798fb2",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xf6e932ca12afa26665dc4dde7e27be02a7c02e50"
+        ],
+        "reserves": [
+          "12670289693789508",
+          "45317093495398116716507882"
+        ]
+      },
+      {
+        "pool": "0xb65c2937571fbbcc03c658817148e3ada56bfd3d",
+        "tokens": [
+          "0x32e0f9d26d1e33625742a52620cc76c1130efde6",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "38449137",
+          "1"
+        ]
+      },
+      {
+        "pool": "0xfef83d6a72e5dc26e9d1eb93d323189eaea6ad1d",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x50c5725949a6f0c72e6c4a641f24049a917db0cb"
+        ],
+        "reserves": [
+          "18",
+          "56359"
+        ]
+      },
+      {
+        "pool": "0xfc5309ae01555157502cde4ba3752d02920c7b5b",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+        ],
+        "reserves": [
+          "18265739",
+          "1"
+        ]
+      },
+      {
+        "pool": "0xd41e727e5493b9ff15ae06da45022d82340cb051",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x940181a94a35a4569e4529a3cdfb74e38fd98631"
+        ],
+        "reserves": [
+          "4311673166",
+          "49313"
+        ]
+      },
+      {
+        "pool": "0x1436544b4157c8077aee05ffe787848112bea705",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xbfbec6fbdbbce09df89fc4270e8eb80773feda7a"
+        ],
+        "reserves": [
+          "308849999999994",
+          "1170203820102935977385984"
+        ]
+      },
+      {
+        "pool": "0x3c3aaf65e13e4b8f6943ed4e322d5fdfbcf5dfcc",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x532f27101965dd16442e59d40670faf5ebb142e4"
+        ],
+        "reserves": [
+          "7",
+          "165824"
+        ]
+      },
+      {
+        "pool": "0xa6922df28cc53a288b9e98f33f73b1e3ce4ad2b2",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x96419929d7949d6a801a6909c145c8eef6a40431"
+        ],
+        "reserves": [
+          "55",
+          "18684"
+        ]
+      },
+      {
+        "pool": "0x27152985b90f257664d9d2b4a9a2331bcc0fb6c0",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x55027a5b06f4340cc4c82dcc74c90ca93dcb173e"
+        ],
+        "reserves": [
+          "2",
+          "1780093"
+        ]
+      },
+      {
+        "pool": "0x891e871fab2c42ea654efda84d41dc767a9e656c",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x79707e0ce46f83b1e62e737804f38ccb4e6f920c"
+        ],
+        "reserves": [
+          "2",
+          "4104558939"
+        ]
+      },
+      {
+        "pool": "0xeea7962bee33ec9f4b57b19d0265aa21b113e5a5",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xefea5ef8e33a2799a9a8a8b3f50d99ac82c29fcf"
+        ],
+        "reserves": [
+          "21003",
+          "23971424390440"
+        ]
+      },
+      {
+        "pool": "0x963850cf7159fb240266bbbce71db48027869a1c",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x74b929ed297343b59368486e2b58063af0440ac6"
+        ],
+        "reserves": [
+          "1",
+          "52583956"
+        ]
+      },
+      {
+        "pool": "0xdb9393130d3b1d883971a7859fef1c981f4f6f7c",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xf9b738c2e7adc4f299c57afd0890b925a5efea6f"
+        ],
+        "reserves": [
+          "1",
+          "23139922"
+        ]
+      },
+      {
+        "pool": "0x4655e5b14567e9d8e5843bf7712888b03f067ac7",
+        "tokens": [
+          "0x41a5189f62e71c75824e6f7ff033e29b44cfe2d3",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "106477711688644550",
+          "310221116055"
+        ]
+      },
+      {
+        "pool": "0xb91ad05c8b55f8a43cdfa3bc29c9abf1af9fd082",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x8c9037d1ef5c6d1f6816278c7aaf5491d24cd527"
+        ],
+        "reserves": [
+          "13572334642",
+          "423111934165538939"
+        ]
+      },
+      {
+        "pool": "0x8f13404c8294b5ef58f67390741621ad201a28e4",
+        "tokens": [
+          "0x3c2d006a4cb0b0c6e3acd039400edf56a704164c",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "27677266",
+          "1"
+        ]
+      },
+      {
+        "pool": "0x31a9938866d6fc9707c690b85e35a12299a4259a",
+        "tokens": [
+          "0x3efd97aeb3d2451bbec0e4dfebc8b66ebb33f552",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "8037036",
+          "1"
+        ]
+      },
+      {
+        "pool": "0x0888c42e243620fd5ab5af55bf9de1235f1b5e68",
+        "tokens": [
+          "0x3620a764dd686c4b80edb971aef043a7b45fc069",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "2733391447300330317823",
+          "1157979112252168"
+        ]
+      },
+      {
+        "pool": "0xfada4dc9ebd45087996662ac98ee26cf84dd973f",
+        "tokens": [
+          "0x3419875b4d3bca7f3fdda2db7a476a79fd31b4fe",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "1808832",
+          "1"
+        ]
+      },
+      {
+        "pool": "0x4c3f61957ab9310ddb6b410e6b422f94dc8a9040",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xca8e8d244f0d219a6fc9e4793c635cea98d0399c"
+        ],
+        "reserves": [
+          "2",
+          "5614317"
+        ]
+      },
+      {
+        "pool": "0xdd0b3a65ace83d1b9110ceddb54e3f04f437c869",
+        "tokens": [
+          "0x174c7f0e725f04bc6415b775d7d79c2732571f67",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "31836531",
+          "1"
+        ]
+      },
+      {
+        "pool": "0x3c42ac893dc21af2fc22f18bc974948e16c1c828",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xdb08ca267e824fb29eb455b7e06fe73fb0370895"
+        ],
+        "reserves": [
+          "2",
+          "18601632"
+        ]
+      },
+      {
+        "pool": "0x2e515aac8f67ea72cb4fc7a3e10f29e6be1b650b",
+        "tokens": [
+          "0x2e1d332893dc16124194e598a29866d2d5e8786b",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "1575855",
+          "1"
+        ]
+      },
+      {
+        "pool": "0x298b0d581d793d25e6ca9f3767b1553f5bf78934",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xb8918754aa8e5291403097d44b85d3de78cde456"
+        ],
+        "reserves": [
+          "1",
+          "3632017"
+        ]
+      },
+      {
+        "pool": "0x73d785e99aeb5ca377dff13495ed7c22690b9cee",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xdb173587d459ddb1b9b0f2d6d88febef039304a2"
+        ],
+        "reserves": [
+          "9",
+          "123453"
+        ]
+      },
+      {
+        "pool": "0x130e3f8139f77f1d84555f437231318b2193e67b",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xa1a6fa79027004819cfd3a2a70ebff4e1e7e3a1b"
+        ],
+        "reserves": [
+          "87669104125435105",
+          "37976236278564189119161737"
+        ]
+      },
+      {
+        "pool": "0xab60b239bdc089794fa2474ebf3a2e9e03734c9b",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xed899bfdb28c8ad65307fa40f4acab113ae2e14c"
+        ],
+        "reserves": [
+          "1",
+          "1082788"
+        ]
+      },
+      {
+        "pool": "0xb024476429ea0c912c1576fe56562bcfa78b93bf",
+        "tokens": [
+          "0x27b18aea384f57139304f7255a1738f6348663b3",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "33752638",
+          "1"
+        ]
+      },
+      {
+        "pool": "0xe22ba515f13ffa522005fccc125c1bf4f8ff7343",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xb8d98a102b0079b69ffbc760c8d857a31653e56e"
+        ],
+        "reserves": [
+          "526060672198",
+          "122437018806764400108844"
+        ]
+      },
+      {
+        "pool": "0x5d475568d4c13952e90b13f99aa0b327365ef2e4",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xe3086852a4b125803c815a158249ae468a3254ca"
+        ],
+        "reserves": [
+          "4",
+          "332150"
+        ]
+      },
+      {
+        "pool": "0x7df5eb7c93406a3c65864cadbd7afad412a2bbbe",
+        "tokens": [
+          "0x2d9bb9b20c8012adeb0c1d4f7cf532a0df765994",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "2322778810079111813931",
+          "439940041722765"
+        ]
+      },
+      {
+        "pool": "0x4854df91d1b3f1a4fda8da6d954d54f635588215",
+        "tokens": [
+          "0x3ecced5b416e58664f04a39dd18935eb71d33b15",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "2654018",
+          "1"
+        ]
+      },
+      {
+        "pool": "0x98dd11e09ab0557f9b3d6d1dae5137fe7ba9559d",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "60706586555461228820009",
+          "868498953287227976"
+        ]
+      },
+      {
+        "pool": "0x9c38075ddee473e28a063cec3ae556c2ac0daa8f",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x50c5725949a6f0c72e6c4a641f24049a917db0cb"
+        ],
+        "reserves": [
+          "70764303215424185304698",
+          "1699616409411235470932"
+        ]
+      },
+      {
+        "pool": "0xfd51d363c44dfaaa31018978f921fb401b341537",
+        "tokens": [
+          "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "761495321635571760",
+          "60843548369767063136382"
+        ]
+      },
+      {
+        "pool": "0xdf7380fbba216f9b76a45e1a129da1fc998cfb88",
+        "tokens": [
+          "0x236aa50979d5f3de3bd1eeb40e81137f22ab794b",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "28061674526151380",
+          "69441499677251457606530"
+        ]
+      },
+      {
+        "pool": "0xc8c87880636c614e5f4c8ad3589dcd0c1d2dccbd",
+        "tokens": [
+          "0x21eceaf3bf88ef0797e3927d855ca5bb569a47fc",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "6910406690497821460918444",
+          "1473273838102042397815"
+        ]
+      },
+      {
+        "pool": "0x60060b2bc2b1240d94feb0a24eb56a4b831142b9",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x6985884c4392d348587b19cb9eaaf157f13271cd"
+        ],
+        "reserves": [
+          "35667920680093807253629",
+          "843797213359874111359"
+        ]
+      },
+      {
+        "pool": "0x91d8558f371ae0486c6c66a25d3604195eed7495",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0xb8d98a102b0079b69ffbc760c8d857a31653e56e"
+        ],
+        "reserves": [
+          "20488186774604217143",
+          "281902901957174760098302682"
+        ]
+      },
+      {
+        "pool": "0xf8433dadb99b859570d66a91c724a62026715fc0",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0xdb173587d459ddb1b9b0f2d6d88febef039304a2"
+        ],
+        "reserves": [
+          "36162462659296149997",
+          "89740477197440918987"
+        ]
+      },
+      {
+        "pool": "0x47a70f504349ef18a039dc1910fd9a5b62ca03e2",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0xed899bfdb28c8ad65307fa40f4acab113ae2e14c"
+        ],
+        "reserves": [
+          "25325841736404734",
+          "1994850844220613755"
+        ]
+      },
+      {
+        "pool": "0xce7b3bcf5d11094df3c5e21051d3ab8c49295e38",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0xba0dda8762c24da9487f5fa026a9b64b695a07ea"
+        ],
+        "reserves": [
+          "25934590294328910",
+          "6677258933844488481"
+        ]
+      },
+      {
+        "pool": "0x9befdd1e8e34795e84d54b8c39b8cd356500d620",
+        "tokens": [
+          "0x2d9bb9b20c8012adeb0c1d4f7cf532a0df765994",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "1187031931684264443615",
+          "15633346605794932693"
+        ]
+      },
+      {
+        "pool": "0x336b19fd8cf375de4d4968e1c6df2a99726a633f",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0xf9b738c2e7adc4f299c57afd0890b925a5efea6f"
+        ],
+        "reserves": [
+          "110875451355559786",
+          "695734207117592657687"
+        ]
+      },
+      {
+        "pool": "0x29bf68b9d97d92b173a691df9ef052a5fc28e6c8",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xde7c4a98859afe37154f14644be06c7ae122fc1d"
+        ],
+        "reserves": [
+          "1",
+          "35581816"
+        ]
+      },
+      {
+        "pool": "0x5bf29f3ce43cf74c13995decf9da3373e5407637",
+        "tokens": [
+          "0x1b6a569dd61edce3c383f6d565e2f79ec3a12980",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "2290103005777293803650",
+          "20692324080594631728"
+        ]
+      },
+      {
+        "pool": "0x10127cf3af747e1e93b22bc1710523637a938b14",
+        "tokens": [
+          "0x21eceaf3bf88ef0797e3927d855ca5bb569a47fc",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "17204081756680407220221",
+          "49196530815258"
+        ]
+      },
+      {
+        "pool": "0x4a0620928f4a5e301161b0fa452715d92fe03e76",
+        "tokens": [
+          "0x3f14920c99beb920afa163031c4e47a3e03b3e4a",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "9",
+          "135582653155632277"
+        ]
+      },
+      {
+        "pool": "0x666d830c13bb58500851daf20fc95644a0ab1718",
+        "tokens": [
+          "0x0402c5dc2eeb114af93bf730f857c24a97dfef49",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "0",
+          "0"
+        ]
+      },
+      {
+        "pool": "0x0fe9c761b2fadab60302cafea104bf65a1955233",
+        "tokens": [
+          "0x0a14ef61afb32e5ca672e021784f71705ac14908",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "138570436029014926",
+          "13199463281722182237"
+        ]
+      },
+      {
+        "pool": "0x9152f292bdd15c53bfb414df89d81bfbfb227f34",
+        "tokens": [
+          "0x3c345e1db778ca361ea31bb7686d9ed72bc036a9",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "434163243500942515",
+          "30816554412747587"
+        ]
+      },
+      {
+        "pool": "0x4696cc3febd093a857c0a63d7ab9552554ee2399",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x7e4fd0eb3c4a77965ecd914b7478f861785e54bc"
+        ],
+        "reserves": [
+          "0",
+          "0"
+        ]
+      },
+      {
+        "pool": "0x82c557a6f332b381bc43d637709ce4b66e6b4811",
+        "tokens": [
+          "0x1010c1fb2b181e932c0a3b896dd520b4246d4367",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "0",
+          "0"
+        ]
+      },
+      {
+        "pool": "0xe3d67aa0997d638d7947c80277214e7c28348a46",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0xe652e7448b3beb0e952c9d9493f8899edae058d3"
+        ],
+        "reserves": [
+          "215665487058108027",
+          "1237517157664180339492"
+        ]
+      },
+      {
+        "pool": "0xc39cd86d1e9180e62979195c9362ae82a2ecea68",
+        "tokens": [
+          "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "7998299115347565282",
+          "115934271824640626795"
+        ]
+      },
+      {
+        "pool": "0xf51b3ec2a90b95e67c1c9f4b77e1fb89d1ef60dc",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0xa1a6fa79027004819cfd3a2a70ebff4e1e7e3a1b"
+        ],
+        "reserves": [
+          "65972983180468909000",
+          "402693214667141196168366"
+        ]
+      },
+      {
+        "pool": "0x39b57ec51b31fe6b91ca22ef6db24599100de3bf",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x5babfc2f240bc5de90eb7e19d789412db1dec402"
+        ],
+        "reserves": [
+          "33660344432895173",
+          "1002807786774088"
+        ]
+      },
+      {
+        "pool": "0x1ef18306c3b78e86db4bfde9f83f485e7442ab3c",
+        "tokens": [
+          "0x3c345e1db778ca361ea31bb7686d9ed72bc036a9",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "1033658074055071083",
+          "986154000522"
+        ]
+      },
+      {
+        "pool": "0x06c62964c7f1ad911a9149a96b5d7a7c7290fa9b",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x98f2f2927f1d7009715f2829ec1ca35fc122adce"
+        ],
+        "reserves": [
+          "1",
+          "7318966"
+        ]
+      },
+      {
+        "pool": "0xacc364a4cc42142581d58c3a6fb439131b5bb5e3",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x98f2f2927f1d7009715f2829ec1ca35fc122adce"
+        ],
+        "reserves": [
+          "298286611465237690",
+          "3920607373633458826209"
+        ]
+      },
+      {
+        "pool": "0x52c583e3ce47a1472ea9496ee676ac0384970088",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x55cd6469f597452b5a7536e2cd98fde4c1247ee4"
+        ],
+        "reserves": [
+          "585952787925700586",
+          "3244767567528476048"
+        ]
+      },
+      {
+        "pool": "0x61af7d9f648aba13de1f1c456b303a69fefe753b",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x4ed4e862860bed51a9570b96d89af5e1b0efefed"
+        ],
+        "reserves": [
+          "43519869741414891486",
+          "1460625708815030688736"
+        ]
+      },
+      {
+        "pool": "0x7539d418cc034a80845b783705f7146a7cb089ec",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xf6cecd691fa5f2e0e117e92510db3975d941c33d"
+        ],
+        "reserves": [
+          "6040070394498655",
+          "98824086333141157291428653"
+        ]
+      },
+      {
+        "pool": "0xca12d4e9ec8c51eaa2e822136e02d6a394601a44",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xae2b0c3a60525db50e7a889a225fae0c9f30e249"
+        ],
+        "reserves": [
+          "5081715079030198",
+          "99011861621022198459375434"
+        ]
+      },
+      {
+        "pool": "0xa704e97a524e0e41e54263c7808f7272d7cc5a6b",
+        "tokens": [
+          "0x36912b5cf63e509f18e53ac98b3012fa79e77bf5",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "621305125022277179831",
+          "17266788142514925842"
+        ]
+      },
+      {
+        "pool": "0x1da40d53bdefc764f81bac7045965f3e979cdba8",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0xe881f1fb21b4add26940b771b32878aafd6a582c"
+        ],
+        "reserves": [
+          "407149072895137232",
+          "9689400610301893096"
+        ]
+      },
+      {
+        "pool": "0x2127ca9f12019c466adb2dc9528d469f0bec2b1e",
+        "tokens": [
+          "0x21eceaf3bf88ef0797e3927d855ca5bb569a47fc",
+          "0x36912b5cf63e509f18e53ac98b3012fa79e77bf5"
+        ],
+        "reserves": [
+          "91023494144365950989",
+          "4116546940894729389"
+        ]
+      },
+      {
+        "pool": "0x9a0e176aa070bcea7d81e4a9a55c9e9cfa84a347",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x940181a94a35a4569e4529a3cdfb74e38fd98631"
+        ],
+        "reserves": [
+          "29974377678119247867",
+          "1839889910616461852"
+        ]
+      },
+      {
+        "pool": "0xcd6dfef915657144f9c517356ae8d2dab64cbc56",
+        "tokens": [
+          "0x21eceaf3bf88ef0797e3927d855ca5bb569a47fc",
+          "0x6d22d3ed82c947be8860a86a69c4b0cb0f65589e"
+        ],
+        "reserves": [
+          "354859855553909053",
+          "1107522228861216425276"
+        ]
+      },
+      {
+        "pool": "0x7d8dd27b1cabb45df74fde19d3eecbd0c7df247b",
+        "tokens": [
+          "0x0a14ef61afb32e5ca672e021784f71705ac14908",
+          "0x21eceaf3bf88ef0797e3927d855ca5bb569a47fc"
+        ],
+        "reserves": [
+          "12837975064995",
+          "540119396147448580"
+        ]
+      },
+      {
+        "pool": "0x6947a6a1ed448d918172ca82e1a5dae1059182ca",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0xd064c53f043d5aee2ac9503b13ee012bf2def1d0"
+        ],
+        "reserves": [
+          "2211224315038670278",
+          "575918168242761809097025"
+        ]
+      },
+      {
+        "pool": "0x186022e87e664d8e92eb0d7a75612d41a949c111",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0xb488fcb23333e7baa28d1dfd7b69a5d3a8bfeb3a"
+        ],
+        "reserves": [
+          "6645074206909940525",
+          "3664627744785046005099"
+        ]
+      },
+      {
+        "pool": "0xd65121ab21cb75b5ad9205c472294b6f8c6369b0",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x5cbc213691e0b5b7572d86c5127db845112cffb9"
+        ],
+        "reserves": [
+          "1269112175915822850",
+          "631006622958294069734830219"
+        ]
+      },
+      {
+        "pool": "0xb95b36947a88255110e153682a8827dc89f604fa",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x5cbc213691e0b5b7572d86c5127db845112cffb9"
+        ],
+        "reserves": [
+          "68005708147189964516",
+          "479948610410487531667193"
+        ]
+      },
+      {
+        "pool": "0xac94c9c873665afbc49cbd19881f7f55d129985d",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0xc31170a7d95700d9fdd3337a3371ea741dbb937b"
+        ],
+        "reserves": [
+          "14156119363930460043",
+          "661760567087586893133"
+        ]
+      },
+      {
+        "pool": "0x5c2c13b205f70f055eea5c2dd87134d1dfde5d9a",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xd0158747b9a89d98d67d4050e9d141b17ab2799a"
+        ],
+        "reserves": [
+          "13990658703172",
+          "349673289792311993970"
+        ]
+      },
+      {
+        "pool": "0x11f6e29fd8f26d0aab0b4bb7e92a04b90af9a343",
+        "tokens": [
+          "0x0e39c6dcb775a3bd10125c0d3d29b6d060658f86",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "293224609670304002627319",
+          "344810192844824"
+        ]
+      },
+      {
+        "pool": "0x448c39fe71f7498c416a7ae59efa7de3d5dd9362",
+        "tokens": [
+          "0x0e39c6dcb775a3bd10125c0d3d29b6d060658f86",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "1259331520609761623792638",
+          "121614133224928316165"
+        ]
+      },
+      {
+        "pool": "0xeed83afc569b434d7c509b9218b50c0c1d47124f",
+        "tokens": [
+          "0x21eceaf3bf88ef0797e3927d855ca5bb569a47fc",
+          "0xc31170a7d95700d9fdd3337a3371ea741dbb937b"
+        ],
+        "reserves": [
+          "291136923180682617699",
+          "1551407098892186541"
+        ]
+      },
+      {
+        "pool": "0x56c206e5be5bc44eb4f0e8adb5b307d3b46d4a92",
+        "tokens": [
+          "0x2bf5b823b8705fe4afe32ce6fd211510294ee792",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "362302292203978843306",
+          "506546385050908363"
+        ]
+      },
+      {
+        "pool": "0xc901ebbde151188af66174c1e5050896f7a794bb",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xf2d7395199659d230e7d43fa8dfa2925dbdc45ed"
+        ],
+        "reserves": [
+          "1",
+          "4227621"
+        ]
+      },
+      {
+        "pool": "0x56edba3a074752ed184af812ae3a8679b66e827c",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x67defcf51b2ae0ae8a2236b79ff2b80cf51bf92a"
+        ],
+        "reserves": [
+          "100000000000000",
+          "84983088365415282358810597"
+        ]
+      },
+      {
+        "pool": "0x8201b17c25cc8559aeb3ab7c6f5b6cce91246db8",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xac0f85660562b9597cb5d42d97103c182eaf26a7"
+        ],
+        "reserves": [
+          "2100000000000000",
+          "796661202426838928645313671"
+        ]
+      },
+      {
+        "pool": "0xce857d6a3e49a57092569eb23fa62624c589a7f0",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x731814e491571a2e9ee3c5b1f7f3b962ee8f4870"
+        ],
+        "reserves": [
+          "83221765563886975566",
+          "3423063957356617540786"
+        ]
+      },
+      {
+        "pool": "0xe4fbad59ef8210dc27feeeb77b3c2f6e74a4b5d9",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xa65a6d613bcfe5e29ce0de33d0870f68ca175be5"
+        ],
+        "reserves": [
+          "81262285541135531",
+          "919714204726442772912637364"
+        ]
+      },
+      {
+        "pool": "0xe9b8f170fccfe4be335b067ed4befc2946ace7a0",
+        "tokens": [
+          "0x20d704099b62ada091028bcfc44445041ed16f09",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "542456867774351553754051",
+          "52419204996074673530"
+        ]
+      },
+      {
+        "pool": "0xbfcb1715f4172b6565560df6a2ae362d47b5d298",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0xa65a6d613bcfe5e29ce0de33d0870f68ca175be5"
+        ],
+        "reserves": [
+          "55526902706643776455",
+          "8851221807881056371027034"
+        ]
+      },
+      {
+        "pool": "0x86cf96b20db8dc07892ac9f7d234ddb759d01081",
+        "tokens": [
+          "0x2949c3b7ac961f0ed715f49826dc216eb861bb71",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "739469436015082299446464768",
+          "171338180293743902"
+        ]
+      },
+      {
+        "pool": "0x3a79df56145be9c229b9bc73f7dfc2f100fabb10",
+        "tokens": [
+          "0x2949c3b7ac961f0ed715f49826dc216eb861bb71",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "4285776355415584691576",
+          "85933023746833909"
+        ]
+      },
+      {
+        "pool": "0x1408adea4f892b19711672531404d39517fc9412",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xb967af6730c1971f1c5a093866e57627bdd08a11"
+        ],
+        "reserves": [
+          "4985074893977797",
+          "998019851009549819670401666"
+        ]
+      },
+      {
+        "pool": "0x025c137c0c356be9dca49e0fcc4601b7592aa237",
+        "tokens": [
+          "0x39963436e95a28fd3ce63a24dd185b941f5ddba2",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "999009927227070710846969406",
+          "4484351939523202"
+        ]
+      },
+      {
+        "pool": "0xd64e6f3a167a0e90d01ba2af18a257d9708f650b",
+        "tokens": [
+          "0x0344b5f1b4beeafff3da9acfaa7a793dda8fba3a",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "31559784",
+          "1"
+        ]
+      },
+      {
+        "pool": "0x30f89d65d5b068192bf226d02167fd9ccc59a6f1",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xc09b26a24f4b9ffaffedc68c5045b6bfc30c429d"
+        ],
+        "reserves": [
+          "1",
+          "31559784"
+        ]
+      },
+      {
+        "pool": "0x8790723162d049e7318b7e15b910206425162093",
+        "tokens": [
+          "0x3f41f04274dca455f16e91b3d77a8eab3d3c3569",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "6885153",
+          "1"
+        ]
+      },
+      {
+        "pool": "0x79fc18323a71baf6cb6903f32a078ae0b2fb7a4f",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xdef8558935008e37787dd89641ff4fc79c98f3b4"
+        ],
+        "reserves": [
+          "253865477109903626",
+          "782488975562027037238879978"
+        ]
+      },
+      {
+        "pool": "0x55e09b198067481800eb11392c994a464197672a",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0xdef8558935008e37787dd89641ff4fc79c98f3b4"
+        ],
+        "reserves": [
+          "426354536753220013",
+          "13639514135860555239181"
+        ]
+      },
+      {
+        "pool": "0xc9fa2d5fe607ec4e8d214f912f2d25a9ba7d9ddb",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xeb266959192eec1b286581e27dc411a201411d4d"
+        ],
+        "reserves": [
+          "6973054200403567",
+          "76233024332003687650141813"
+        ]
+      },
+      {
+        "pool": "0x307d16024fd628936097620f76eb6b74613d7b5a",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xcd70cc8d661811885861422dc12543e8e2256b74"
+        ],
+        "reserves": [
+          "1",
+          "7707688"
+        ]
+      },
+      {
+        "pool": "0x24d669b62f7eba84a7ca9368c29f779ab6d92ab1",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0xcd70cc8d661811885861422dc12543e8e2256b74"
+        ],
+        "reserves": [
+          "10928512486785190988",
+          "368603323762813543717018"
+        ]
+      },
+      {
+        "pool": "0x4ca5d0f43df9d46d25c49f9b06e5c95762cf2dc7",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xc500c03a39d7b39a96368bb4f273c23cc56a9950"
+        ],
+        "reserves": [
+          "99149022184730",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x2cb3e260d14d1fe802a1ba209f5172261433e8fe",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xac81b2155e8d577efa97fb2f3b3a09e988e3ce0e"
+        ],
+        "reserves": [
+          "1",
+          "7036820"
+        ]
+      },
+      {
+        "pool": "0x2c1c92751b6d8e72c8f03f0eab0c25e2be9737c7",
+        "tokens": [
+          "0x1027b2b75bc31b2ad674e46bdfa8e1ed31af58f5",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "8161354",
+          "1"
+        ]
+      },
+      {
+        "pool": "0x6ad3f581cee8a13b4e155c97358d35310e46b620",
+        "tokens": [
+          "0x2853ab8d62ca22e8fd750abf90ce22ab10e3aeaf",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "996023880605006712157535770",
+          "4000000000000000"
+        ]
+      },
+      {
+        "pool": "0x7bdc49c68bd87a4de35a1963a7e83370e3d853c6",
+        "tokens": [
+          "0x09a0b943cc7e4736865cc6b8da83fdf981020154",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "1000000000000000000000000000",
+          "77119882328543"
+        ]
+      },
+      {
+        "pool": "0xb3d77526abe9bd9189e2eef0727069ba17f9e7b7",
+        "tokens": [
+          "0x30457a1ab7cd796d6e55e4e5ba12e09f2283e856",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "25104807209365509722450",
+          "39366193320982708470"
+        ]
+      },
+      {
+        "pool": "0x837efdab277e56c8e61adaa1fddaff32e3f418c8",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x6dd2bde473885247328888ccf277ea95b6003c6b"
+        ],
+        "reserves": [
+          "77124014141879",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xbc0885bc1428f67dc87c52b2be2d160b16ec40fc",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x9141178f4bc8b0f9fa2c54bb950f3249b30fcdd4"
+        ],
+        "reserves": [
+          "5560273496557526899",
+          "539449791295608974663924"
+        ]
+      },
+      {
+        "pool": "0x516b150171469312077f137bccc652ec2f645fda",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x5e8bddcf94df27282a916d04364206b4f09b01eb"
+        ],
+        "reserves": [
+          "829671238",
+          "1"
+        ]
+      },
+      {
+        "pool": "0x6b24c4f413c2d3df5c1b7356abd35c3c31fc487e",
+        "tokens": [
+          "0x1c555eee8018fee4fbca4bb657c5f175601e3ed7",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "757227972376465541",
+          "26454596901355787"
+        ]
+      },
+      {
+        "pool": "0x5bef751c36da021102422d4e92262e1021956b96",
+        "tokens": [
+          "0x26dbfd31777478beb733bb2944c98a87848ea109",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "50071546448468901992650",
+          "11394037622147780320"
+        ]
+      },
+      {
+        "pool": "0x78ff0d7dd01f5c88a226161bcbc4e1ee04e6cc58",
+        "tokens": [
+          "0x1185cb5122edad199bdbc0cbd7a0457e448f23c7",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "12352806396450932944893",
+          "21003853000593008082"
+        ]
+      },
+      {
+        "pool": "0xce1b24ddc8a17fb4ee1d4e58ce6362daf86c8f18",
+        "tokens": [
+          "0x12f3ea93f0d923b9059d621891b35c282203c246",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "987005623886477067428623152",
+          "6655707432519643"
+        ]
+      },
+      {
+        "pool": "0xa01b4691e101acf44d02130cc9658c1d12d78050",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x54eaf6bb665565bb8897f9d7ad5b3818ded143b4"
+        ],
+        "reserves": [
+          "124845665934938584",
+          "142972458656419755109"
+        ]
+      },
+      {
+        "pool": "0x8c2a0c4f5d41223ec2fe1bbc916bec56d2b18689",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x44e1c6bc3a4d2058ee3f290bcb27c4da8c5b2e3e"
+        ],
+        "reserves": [
+          "8088460559640957748",
+          "38399275930371667050898"
+        ]
+      },
+      {
+        "pool": "0x802fb0401e0042d8b2229438c7e89ae220e7bf0d",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xb01cf1be9568f09449382a47cd5bf58e2a9d5922"
+        ],
+        "reserves": [
+          "241309217",
+          "3895045711503074"
+        ]
+      },
+      {
+        "pool": "0xd9dca394ac95cbf6be43f49d5fa1754c20255bd6",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x4f81837c2f4a189a0b69370027cc2627d93785b4"
+        ],
+        "reserves": [
+          "4010066841587833885",
+          "3476167706892780216339"
+        ]
+      },
+      {
+        "pool": "0xf0d59052050a8283809ea54236cb19af28c617d0",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0xf7b0dd0b642a6ccc2fc4d8ffe2bffb0cac8c43c8"
+        ],
+        "reserves": [
+          "3647608196480424915",
+          "2230905889724224621068"
+        ]
+      },
+      {
+        "pool": "0x28daad35e92a013cdf5b726cb1ff377642a10a0a",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x54eaf6bb665565bb8897f9d7ad5b3818ded143b4"
+        ],
+        "reserves": [
+          "1472545781680",
+          "125723306302821404345"
+        ]
+      },
+      {
+        "pool": "0x1475a8d17e2a0b6122b0cc140f7d67d2076a84a5",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x44e1c6bc3a4d2058ee3f290bcb27c4da8c5b2e3e"
+        ],
+        "reserves": [
+          "123848813436195",
+          "37931714867919455546170"
+        ]
+      },
+      {
+        "pool": "0x9b08bf1d26324766cbda81d37d473ea210a243dd",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x5f6a682a58854c7fbe228712aeeffccde0008ac0"
+        ],
+        "reserves": [
+          "120205228538667",
+          "9953399484415947361215"
+        ]
+      },
+      {
+        "pool": "0x7d6ceff043f5ab9787ec6e9174238a6e5af802ee",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x5f6a682a58854c7fbe228712aeeffccde0008ac0"
+        ],
+        "reserves": [
+          "13883628947739353597",
+          "13389654949452176160288"
+        ]
+      },
+      {
+        "pool": "0x156cf150addf37de1cea57f61b66c8dc2aba8c95",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xee3cf5966ed9a3aa58e65f8c0fc2767172205795"
+        ],
+        "reserves": [
+          "1",
+          "8148863"
+        ]
+      },
+      {
+        "pool": "0x8b709b60588dfecac0e8f91ac5f3b11d830ef2f7",
+        "tokens": [
+          "0x0b7685a9ad07dc423c2009367d4aa274ae6f7d57",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "996023880605006712157535770",
+          "2061968791576561"
+        ]
+      },
+      {
+        "pool": "0x46e29f19b8ac61ecbc3efc27a62191f7dd6af7a6",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0xb462ac0e0a7fa3f8d7c129cd8398fc1258cfefb2"
+        ],
+        "reserves": [
+          "442983398452981628",
+          "368716201411241502341"
+        ]
+      },
+      {
+        "pool": "0x339722438c8737fce7ca205ca417ff68a8e16084",
+        "tokens": [
+          "0x1a3e429d2d22149cc61e0f539b112a227c844aa3",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "885695645313010844127",
+          "1684872787401420435"
+        ]
+      },
+      {
+        "pool": "0x9ad388aeae0e63df3064667ea7431700cb43ec2d",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x815269d17c10f0f3df7249370e0c1b9efe781aa8"
+        ],
+        "reserves": [
+          "4154119633016645124",
+          "638378993105837838066"
+        ]
+      },
+      {
+        "pool": "0xb0d0c2c75bf270c014f2e23da0ddc4cf99fc00bb",
+        "tokens": [
+          "0x1371ef6153a681e4d2c8d9e20deab629aa06a8dd",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "39980188445701020206135",
+          "31082606386814178630"
+        ]
+      },
+      {
+        "pool": "0x58fa7f85aee035e41fd41c1bc5df9de811e2efa2",
+        "tokens": [
+          "0x12e377989a87da0f9b9166f0f875c9069eaa776c",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "65792930993121771887147024",
+          "113256866317403984812"
+        ]
+      },
+      {
+        "pool": "0x35cd6106b2f188a1fb8dc9f3a558e08191e8665a",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x511ef9ad5e645e533d15df605b4628e3d0d0ff53"
+        ],
+        "reserves": [
+          "4651032159927325544",
+          "1202460301039284472346"
+        ]
+      },
+      {
+        "pool": "0xce1a56354cdad40e2287132a8e5c795bb9830358",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x4f9fd6be4a90f2620860d680c0d4d5fb53d1a825"
+        ],
+        "reserves": [
+          "9722664175965189203",
+          "16710888711184949147"
+        ]
+      },
+      {
+        "pool": "0x873586c3b6df5cbb15d6bf966dea2afe3d23627d",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x76c71f1703fbf19ffdcf3051e1e684cb9934510f"
+        ],
+        "reserves": [
+          "3070341125042755029",
+          "3790753319807141585348"
+        ]
+      },
+      {
+        "pool": "0x50146fab5102eb5751c5aa229068ce8ffd7e4bb5",
+        "tokens": [
+          "0x38df2c0357242fc99c0dd0356fa8bb004ba0211a",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "3222",
+          "314"
+        ]
+      },
+      {
+        "pool": "0x3c8ff0f0fff7c7038f8c368ce4127a87247b65e0",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x4d4c4585c7ccc0b2ad16799ca50ade5cbae00d01"
+        ],
+        "reserves": [
+          "1940213894184268",
+          "99626593935226230108423362"
+        ]
+      },
+      {
+        "pool": "0x19bcea32ac77b120a4b0aeabb787a429457c9692",
+        "tokens": [
+          "0x2d2c25e2f302e98a85fce925d08b440e2d1ac7c9",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "344428822390313290673",
+          "154920224574189931"
+        ]
+      },
+      {
+        "pool": "0x3b59e661e5d478b97ce6bb27719124936e50c137",
+        "tokens": [
+          "0x2efb2110f352fc98cd39dc041887c41766dbb301",
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4"
+        ],
+        "reserves": [
+          "232286409378850141311",
+          "414324067458415956"
+        ]
+      },
+      {
+        "pool": "0x2f71c62e861bdf0b8dc5746112e683efbda46cfe",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0xf6c26b7aa2ab5a9fa85c11e5d4af2c43da4ddab4"
+        ],
+        "reserves": [
+          "4453978016780615",
+          "9546217726633837909"
+        ]
+      },
+      {
+        "pool": "0x6947b972c05b7086b9a56f96b2944c0bce34725e",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x95b6a69806fbfc27259164aae723e5a3bd50ea45"
+        ],
+        "reserves": [
+          "2150000000000000",
+          "995727843579389187120448678"
+        ]
+      },
+      {
+        "pool": "0xa30a5208f33ad316aa9114611fcd1af8a297c76f",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x54c5eb70c4cf9fd3ff4758f88d5cdc0a3fa6d229"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x18d28d437b58d24efaa5787b6cde4b15a8be9484",
+        "tokens": [
+          "0x255cac3f149ef7b7e053e4e2646f9afc207c6ea8",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "1000000000000000000000000000",
+          "0"
+        ]
+      },
+      {
+        "pool": "0x945a1aca2d3f98458e9d200c441f89f6a5068187",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xa575384c3cb0dbd90ca6e1e45f13e263724559fe"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xcad04f698c4195adc8327a6555f73539c48b1dd4",
+        "tokens": [
+          "0x05db98fbe508cc4c79a50706519e93ec420540c8",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "999701589075660915216807783",
+          "150000000000000"
+        ]
+      },
+      {
+        "pool": "0x81bdb599dc2e974eb248ff2b0244959f7d47adba",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xc9da05e231bc518ddf590ba2b3d0f4327a666cb5"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x4ee04108545005802bc71574d656cc893f36a40c",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x45ba82cc280d976c00d92f16039e49870bb91b52"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x8bea2e9c41dac07abbe7f3fbeb879e12de49f44f",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xc502090675908fa8f81b663958abbdcba16b19bd"
+        ],
+        "reserves": [
+          "10000000000000000",
+          "980430605121769481156123770"
+        ]
+      },
+      {
+        "pool": "0x2eaebbc3e9543ff08252a88f8b537601996c3429",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xa49bad3744fb94162f66c4fd5dd6fb83806365a8"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x85c37fb3718322b03c70423ee1a2bb479067fa94",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xa0dfe95969a76769a490c89bd61f5b4d34efce11"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x99316a4013733c71e34c205075d464727582fc18",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xed4b22c6aa902b5ee30a61f9477db493dc377286"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x158513fedc593850dab02c95fee6fdf0f3f5affe",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xbcb77207dee71d0866163510e4456b1f3cc600db"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x98542696b375955c7fe2239c4c63f80ae5365c22",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x69fc573171d675284fde66715b582c768ebd7802"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xf7532459a54872271a88820750e70257ea4a5150",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x7aa57ea6c4403608402c39426e114e95b2798aa4"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x822c4ff81e1a4bfba17d9c88a80c0bc4e283a5ee",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x4350f160a4858e39f27aef2af3abaf96b2f538d4"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x78b560094c46320e91c7efb684b0afb01bfe74c0",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x7814daa971e3d32718e60274b3e3aeb05fb61931"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x95103301cd7b6733990d9ff923d58c8cc0fbedc1",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x467ed55bcd2bbcb6517a8516ed9bed23debe471f"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x57583715920992caa1e82e32bde3f2e9d90da700",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x9323ebb11a0fb94fbe0ce8b3d69981348dc32713"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x9800f9214cf7e102aeada829522d1f57203481ee",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x69e011df82426efc6c0fc4bee3c120ea155ab567"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x3ffa36bde87e9a4bc4831fb0a9878e65c00cac34",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x6d8bb60bc3f878300880ceece690fbc4914b81d4"
+        ],
+        "reserves": [
+          "713538303225",
+          "98543428940066236898907000"
+        ]
+      },
+      {
+        "pool": "0xb875170af16513b1a00208b3653988ee23c30300",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xd735084f8cfa2e1dd75a7625c01a646e99378b45"
+        ],
+        "reserves": [
+          "1117826650811148",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xba411dc6f5df4fb60c6b8db60564e36e4399a504",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x591ca066cd845c39c196ad42c96dd68ff2bb50f2"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x364cca542d697b39d117f11be84745d9e779768f",
+        "tokens": [
+          "0x2f20cf3466f80a5f7f532fca553c8cbc9727fef6",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "1436623364245663584357",
+          "164927230691"
+        ]
+      },
+      {
+        "pool": "0x591f92c15b04b88fd8dec48909e83dc4bee556f5",
+        "tokens": [
+          "0x27f220e66aca73c7d770880356360ed3dbef473b",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "821997610701490655",
+          "3253509370915"
+        ]
+      },
+      {
+        "pool": "0xd3be2e432b392e1ea780b30a7abe9c6f0e199454",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x6ba2f5ede82b467b12e5f13ff90b8ff97e8ab520"
+        ],
+        "reserves": [
+          "435800680840347",
+          "99959476773559929143706633"
+        ]
+      },
+      {
+        "pool": "0x65c3022d7a83406cf49b24f177c7a7975369ace1",
+        "tokens": [
+          "0x32b1a539600cef1a1e6b2164a7e572bcd3ffdf39",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "23557323246159127975750131",
+          "44509757766470393"
+        ]
+      },
+      {
+        "pool": "0x874ce4193ae3c2892b1f96d88df01e171116d992",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x7b60c0c9658c0a9dfffdff977f0adc9d272afe9f"
+        ],
+        "reserves": [
+          "700000000000000",
+          "998604749444076735984482482"
+        ]
+      },
+      {
+        "pool": "0x777ef202d58ab70b75693cbef905aeadd44dae3d",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xe833f5a9833fd7c221e5ec1bf743da54f450c8c9"
+        ],
+        "reserves": [
+          "265179890571439",
+          "94985948691249596195468999"
+        ]
+      },
+      {
+        "pool": "0x1b2cdb3de1c3f509a7dcd11e3e01764f65ae197c",
+        "tokens": [
+          "0x3a85d52f6803a5bbd4856885a083b08a3d200dc7",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "995034776465437467039473030",
+          "2500000000000000"
+        ]
+      },
+      {
+        "pool": "0x67db1be9133cc7d7fd164dc9284bb65f45405747",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xa47ae276434b34713f1f70da220a0d0866ed6840"
+        ],
+        "reserves": [
+          "4851493878794001",
+          "74638701993211136484165502"
+        ]
+      },
+      {
+        "pool": "0xcbdc4c4c4c6607dd7013d5fdead6ce88ab60b978",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x940c92d42c2b53818fee9cc181b52da5acea9133"
+        ],
+        "reserves": [
+          "250000000000000",
+          "799801049548600987396667"
+        ]
+      },
+      {
+        "pool": "0x14f1adac6c55406de94fdf7e713b35389f6e4b5c",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x689ac1500dfa9d402cc176abe1a91622d792107a"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xaf747b17e3db50d028cacec7058352ea2cc064c4",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xb94658ad4c527e74f8f53380946cddd6dea79ba7"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x95c0029ffb43ce545888cb7d555bdc9d4fa0c3f9",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xa4a45faa021828aa880ba65086ad0a6181d4875c"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x56ae1c5724e6354cfe3e12e72713d7235101e740",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x58add238beeff8dc56abc06e083ab23d8979f3ff"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x7e3f523cfdecbd3ec41fda53510c2eada09739ea",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x4255e6a9325a0194e8588152a153eb35cbe14b28"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x668da0f38feea20b72e8c4a139ab223a36d6451a",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xf4c7d540e538548bb6634e9c3751c759044f519b"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x51b796a5fc7b800117c6e229bfc7d381efb370a1",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x528031efd36e0955d1493a1a95de3e27618d2a6f"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x9a4b713fe34cbc538394dbf3428b9e75ca4d6d6c",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x8d75871519924c7894a0fff5644a734b6035d59a"
+        ],
+        "reserves": [
+          "0",
+          "95000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x4c58fd59f561365bb5404339ca4efd39d94fa507",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xc84b7934c9503a7e989e96f3a4d5ff792218f629"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xeeafd7266adf6666c5b27bfae3af32c5f13270de",
+        "tokens": [
+          "0x3e1491385cd7708a51be5f90b517932d6934a769",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "95000000000000000000000000",
+          "0"
+        ]
+      },
+      {
+        "pool": "0x3f11d361bd4b83e342d3a2b594554395d0b3d7d1",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xcbebb7f4040eedd66134a61d066318ec84e6ac4c"
+        ],
+        "reserves": [
+          "0",
+          "95000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xe234b9b13ff03bc84cba57435cc63e730918f34f",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xdd7ffb130bd16974238e0b6fa90fae1f5da5d8c7"
+        ],
+        "reserves": [
+          "0",
+          "95000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x29955e213a1a6f394da69d5101744fc5592ebe69",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x5d61f0f68f757e9ad62d470c6d3cfb776c384246"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xe4ef8cdeb11ca4a8b9ba80d798fb55db6021e627",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xae20e71d451c10ab878aa9af3633e92cae51a377"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x6cf508c19ec47fa6bafb301bad736998edcb3d99",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x95c1425b8650714da9a527ba26678abfeab25f8b"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xd203c5d673e84a8e666e660d5e3a6915e0e35bf3",
+        "tokens": [
+          "0x0ec9443ce7411a21ef9b7c948229fc0ec7e68bd2",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "100000000000000000000000000",
+          "0"
+        ]
+      },
+      {
+        "pool": "0x060cab103f8042bb97a00960073ff5a10bfacac0",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xb81f0290c5529fd4343b26d27037625eb5bce160"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xe2a4fe3a87bdcd84b0e603c3265aa951dc92214d",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x4a12bb509e4d30f50cf8b4353f356e6b5abecb43"
+        ],
+        "reserves": [
+          "3000000000000000",
+          "994047642715420064652858683"
+        ]
+      },
+      {
+        "pool": "0x34d513ce3b0166182175571e5dbfee6e073949be",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xd864e63b8ff8a12ec71fa5b2c58122a6f77dfdf0"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x6de07320cda75e61699af50ad0255712f489fcb3",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x82308e4dc3a9e622547aa1bd058994d34ff8faf3"
+        ],
+        "reserves": [
+          "71668802372213234",
+          "933252603106080013435802"
+        ]
+      },
+      {
+        "pool": "0x522d7ff1362e6492c6e591462258311c7b8645f7",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xe4bd191dd8702357bd49d2ca5969a1c745245f5e"
+        ],
+        "reserves": [
+          "0",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x7668856f087fe5050751e784dc028f95224614e3",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xa621a438df7c37afbd5ae9c6667f6a0bf85834b0"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x2bead1edf165a7eca1052ff35beb1b9a3eee3e70",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x71628c6bf92ab2ebc7306f8216de84a3646afdc5"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xce7c79c636b07ac2a2a517eb941cba8edf1b7414",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x98be72ac84a17a89fe0505fedcde3b894706debb"
+        ],
+        "reserves": [
+          "16643949501653",
+          "100000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x75b391a78e4485de7d4aba574f21408d5712b4ce",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xa34ba3ea7f805cb73f9573584bbebfc2ab3d7fdd"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x01f636ef2e1b92183370ad594db2aaa864660b49",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xc7ee503b2cbf7b6e10964128acc02917a2b746b0"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xcd602b3d643509b7fd75d144d127927e64155910",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xb14fa4538ddf0be535c44b3fa62780a19e07244a"
+        ],
+        "reserves": [
+          "13889164357205",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x063f87722bcd12b0dee5e5335fb7e8b559e9b1e9",
+        "tokens": [
+          "0x2db15953cd4cb9f9fa4d93955b6c8564d048dc6b",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "1000000000000000000000000000",
+          "0"
+        ]
+      },
+      {
+        "pool": "0x34bb6223d563141a71782239258a2422174f2559",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x89fcbb1ffbd5b6c635d150a793e1bc3e338d1e50"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x2f6d0f57b4c2bdb00199b9644b878fd40f455cdd",
+        "tokens": [
+          "0x369faadc5450384165c03fbc53cd0d04e0188626",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "1000000000000000000000000000",
+          "0"
+        ]
+      },
+      {
+        "pool": "0x7f64b07b726432326702bccbcb8d90122b42fde0",
+        "tokens": [
+          "0x3f9ce84562936bb1e9c6064a37fda3663e5cbcf4",
+          "0x7300b37dfdfab110d83290a29dfb31b1740219fe"
+        ],
+        "reserves": [
+          "79167999114599679703",
+          "427298146848037702622"
+        ]
+      },
+      {
+        "pool": "0x56e4bda0f49a3d16c9cdc0a70e0c7e37bcafbbce",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xfbe766d2c671f3364bdca7e4102b5a6db7c832c1"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x71d064ddedbf29b017d545e298cbce08f89c5923",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x8efdfb7aaf2e51d8967ef8ae490d0af257026e5c"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xd11660027e4c5a521ab79ebe8baaaa9344e3ac23",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xda16bce7055570f66fa01543f727647de5bf3b18"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xd2e33628f50d3c21781b6ca9208e9cfb91c0bc85",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x4e7cef997497bbb0377511342bd29a4c45a90ace"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xf348318319e35daea823272b0982fec16feed99f",
+        "tokens": [
+          "0x3f89383902ad31c4eb6d1f4801a824d1ecf0f3ff",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "1000000000000000000000000000",
+          "0"
+        ]
+      },
+      {
+        "pool": "0x8abce4fa8486a6e6e4cd284559774f41282c5abf",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x6154bebba0aae52bdd323ceea30bebc7efc4fb8a"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x074b33ce0892f99e16d599ce250fb83a77486123",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x5daac7194487386136cc18fd77c61b4d3790f692"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xc4b03e92ac40604ba5edf7f7fc806f0b99ea329d",
+        "tokens": [
+          "0x2ff8528bf5bbc1c92f81cc3abe96356089baa58b",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "1000000000000000000000000000",
+          "0"
+        ]
+      },
+      {
+        "pool": "0x6cdc48894a3b88742aa6dbf747fe193a4db95c1b",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xe227d2db4b63fe74fc3a556bbff6e34a5f1c0daa"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xc8b84122ac38b454bfa0cd1f786f67ab07785a94",
+        "tokens": [
+          "0x1e2dc6143b46c6ee474a0197025470f1aa405954",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "12503933586787430279",
+          "1334287256"
+        ]
+      },
+      {
+        "pool": "0x5f68414c08b679fab404f37cd1dcf73ccbaf1f54",
+        "tokens": [
+          "0x124ecf97908f7b02043bbcea2b474222eb74d293",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "1000000000000000000000000000",
+          "0"
+        ]
+      },
+      {
+        "pool": "0xcb39e07332323315adf20bd704db4bd8d25b9925",
+        "tokens": [
+          "0x278ae4761186daf9d7ad40f8f019cda161a8019a",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "reserves": [
+          "25000000000000000000000",
+          "10049500000000"
+        ]
+      },
+      {
+        "pool": "0x0c053dd7f750cc95e824a845bc15c83fdd12f882",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x88feed29c6adb4ec30dfabcfe0fc1ee6da436519"
+        ],
+        "reserves": [
+          "0",
+          "95000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x280913effb036ed86787103cbac5123b68a44059",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x7b03019087a944e3b1afdacb1dcecc58230fd008"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x9e0c5aa2dd9f2d6206dd62781703c64da49b2a82",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x6c996981095715a4f43999fce5af0704ef5edc07"
+        ],
+        "reserves": [
+          "200000000000000",
+          "999600959297048618191617907"
+        ]
+      },
+      {
+        "pool": "0x6af5b688077da5327f3e838f9134f22c5933106c",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x8bc4f9aea703a86e24ebecc1eb6dd4aa0263d418"
+        ],
+        "reserves": [
+          "3000000000000000",
+          "994047642715420064652858683"
+        ]
+      },
+      {
+        "pool": "0xaf08cb8a11950620a09c42db5d3083b16907620a",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x8c51297fc2bccd733ef122dfbc4e96aa3bddc06a"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x1e5b94bd438841bbe10fac77f2aa993ef7d6a9b0",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x8f18f4e6dde35e41e04e0b496604f2455a05b8b2"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x3664d04283b9ca9b3d170ad5366f728d9f68e5c8",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xf605855459c2c5ffccbbb6307394135110aaafe4"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0xcfd551e524f0c7926cc2c992bc2e7535756e10e8",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xb606b1c6559ce7dd268e65d1ad390fd7674e5069"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x60cba2f2939e3dd071d56ae99ca3942a6deb0cb6",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xfa692750850b5846a95c9b4da868825cd8213313"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      },
+      {
+        "pool": "0x50c4c524b4e4bc2d922bcf24cdedde915c493e30",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x48b6a0b808b1f7322b2ffe3e6e3d275c65ea3c6f"
+        ],
+        "reserves": [
+          "0",
+          "1000000000000000000000000000"
+        ]
+      }
+    ],
+    "samples": [
+      {
+        "network": "base",
+        "dex": "x7-finance-base",
+        "pool": "0xd65121ab21cb75b5ad9205c472294b6f8c6369b0",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x5cbc213691e0b5b7572d86c5127db845112cffb9"
+        ],
+        "factory": "0x8b76c05676d205563ffc1cbd11c0a6e3d83929c5",
+        "runtime_hash": "0x2fe579dee2a707202c1dade2cf5f59ff950b5d862b7be3e4f1c4f7d742a11c84",
+        "creation_code_hash": "0xd75846df8bac2f946ea9ee78caa53b6812e7514197698275b8322d75e1543193",
+        "verify_pair_boundary": true,
+        "invariant_error": "Xchange: K",
+        "fee_fraction": [
+          100000,
+          200
+        ],
+        "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+        "reserves": [
+          "1269112175915822850",
+          "631006622958294069734830219"
+        ],
+        "pips": 2000,
+        "cases": [
+          {
+            "in": "126911217591582",
+            "bought": "62968176747198236370155",
+            "returned": "126404130872126",
+            "buy_return": "62968176747198236370155",
+            "sell_return": "126404130872126",
+            "observed_balances": [
+              "62968176747198236370155",
+              "126404130872126",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "62968176747198236370155",
+                "next_revert": "Xchange: K"
+              },
+              "sell": {
+                "max": "126404130872126",
+                "next_revert": "Xchange: K"
+              }
+            }
+          },
+          {
+            "in": "2538224351831645",
+            "bought": "1256980286772356991980500",
+            "returned": "2528101771582562",
+            "buy_return": "1256980286772356991980500",
+            "sell_return": "2528101771582562",
+            "observed_balances": [
+              "1256980286772356991980500",
+              "2528101771582562",
+              "0",
+              "0",
+              "0"
+            ],
+            "strict_buy": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "strict_sell": {
+              "code": 3,
+              "message": "execution reverted",
+              "data": "0x"
+            },
+            "pair_boundary": {
+              "buy": {
+                "max": "1256980286772356991980500",
+                "next_revert": "Xchange: K"
+              },
+              "sell": {
+                "max": "2528101771582562",
+                "next_revert": "Xchange: K"
               }
             }
           }

@@ -285,7 +285,7 @@ fn fork_router(ctx: &Ctx, leg: &[Step]) -> GatewayResult<(Address, &'static Fami
             ),
         ));
     }
-    let router = ctx.dex_addr("dex.router", family.id)?;
+    let router = super::super::pools::deltaswap::router(ctx, &first.entry)?;
     for s in leg {
         if !s.entry.family.fork {
             return Err(ctx.err(
@@ -293,7 +293,7 @@ fn fork_router(ctx: &Ctx, leg: &[Step]) -> GatewayResult<(Address, &'static Fami
                 "нога смешивает форк и не-форк — бандл такую ногу одним вызовом не собирает",
             ));
         }
-        if ctx.dex_addr("dex.router", s.entry.family.id)? != router {
+        if super::super::pools::deltaswap::router(ctx, &s.entry)? != router {
             return Err(ctx.err(
                 ErrorCode::NoRoute,
                 "нога форка пересекает роутеры — один вызов swapExactTokens… её не исполнит",

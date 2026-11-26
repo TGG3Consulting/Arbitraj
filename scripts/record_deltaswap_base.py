@@ -130,8 +130,18 @@ def capture(block,complete):
     state=dict(height=block,selector=selector,state_root=head["stateRoot"],proof=proof,ds_fee_info=fee,gs_fee=gs,pools=rows)
     reserve=cap.one(PAIR,"getReserves()",returns=FIELDS[0][1])[0]
     deadline=int(head["timestamp"],16)+120
-    state["wallet"]=[wallet_case(selector,state,fee,amount,deadline) for amount in [reserve//10000,reserve//10]]
-    if fee[1]>0:assert {c["invariant_fee"] for group in state["wallet"] for c in group}=={0,fee[0]}
+    sizes=[reserve//10000,reserve//10]
+    if fee[1]>0:
+        # On this historical parent, the first leg is just below the fee boundary.
+        # The reverse leg has both inputs in tradeLiquiditySum at the same EVM block.
+        other=cap.one(PAIR,"getReserves()",returns=FIELDS[0][1])[1]
+        liquidity=cap.one(PAIR,"getLiquidityEMA()",returns=FIELDS[1][1])[0]
+        threshold_input=2*(liquidity*fee[1]//1000)*reserve//math.isqrt(reserve*other)
+        sizes.append(threshold_input*9//10)
+    state["wallet"]=[wallet_case(selector,state,fee,amount,deadline) for amount in sizes]
+    if fee[1]>0:
+        assert {c["invariant_fee"] for group in state["wallet"] for c in group}=={0,fee[0]}
+        assert [trade["invariant_fee"] for trade in state["wallet"][-1]]==[0,fee[0]]
     return state
 
 

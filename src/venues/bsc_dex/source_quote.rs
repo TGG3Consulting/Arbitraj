@@ -25,13 +25,11 @@ pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayRes
     } = req;
     match source {
         "hanji" => {
-            if builder.is_some() || amount_tokens.is_some() {
+            if builder.is_some() {
                 return Err(bad(
                     "Для книги Hanji укажите amount_raw, два токена и при необходимости адрес рынка",
                 ));
             }
-            let amount_raw =
-                amount_raw.ok_or_else(|| bad("Не указан amount_raw для книги Hanji"))?;
             let quote = hanji::live::preview(
                 ctx,
                 hanji::model::Request {
@@ -39,6 +37,8 @@ pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayRes
                     output,
                     market,
                     amount_raw,
+                    amount_tokens,
+                    trader,
                 },
             )
             .await?;
@@ -58,7 +58,7 @@ pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayRes
                 }),
                 block_hash: format!("{:#x}", quote.hash),
                 block: Some(quote.block),
-                expires: None,
+                expires: quote.deadline,
                 details,
             })
         }

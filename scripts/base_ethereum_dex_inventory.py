@@ -239,6 +239,31 @@ def tables(network, snapshots, profiles):
                        "у каждой по два пула с четырьмя котировками getAmountsOut. ")
                     + f"[Реестры, код, тики и котировки](../{kyber})."])
     kipseli = Path("tests/data/first_run_dex_2026-11-26/kipseli_base.json")
+    elfomo = Path("tests/data/first_run_dex_2026-11-26/elfomofi_base.json")
+    if base and elfomo.exists():
+        el = read(elfomo)
+        ok = sum(c["status"] == "filled" for c in el["cases"])
+        zero = sum(c["status"] == "zero_quote" for c in el["cases"])
+        out.extend(["", f"ElfomoFi · router `{el['router']}`, vault `{el['vault']}`. У pricing "
+                    f"`{el['pricing']}` на этом блоке реализация `{el['pricing_implementation']}`. "
+                    f"getSupportedPairs вернул {len(el['pairs'])} пар. У WETH/USDC и cbBTC/USDC {ok} исполнений "
+                    "с partnerId=0 дали полные встречные дельты на плательщике и vault. Контракт вернул пустые байты. "
+                    f"У USDT/USDC {zero} нулевых котировок. Для остальных пар двусторонняя проверка отсутствует. "
+                    "Для заявки требуются котировка от фактического плательщика, точный minOut, сверка реализации и доступного "
+                    "объёма. Подключение штатного маршрута ожидает проверки адаптера. "
+                    f"[Сырые результаты](../{elfomo.as_posix()}) · [Спецификация]({el['source']})."])
+    aero_basic = Path("tests/data/first_run_dex_2026-11-26/aero_basic_base.json")
+    if base and aero_basic.exists():
+        ab = read(aero_basic)
+        for f in ab["factories"]:
+            markets = f["markets"]
+            trials = sum(len(m["cases"]) for m in markets)
+            out.extend(["", f"Aero Basic {f['curve']} · {f['count']} пулов в allPools() фабрики. "
+                        f"У {len(markets)} проверенных пулов getPool вернул адрес клона реализации `{f['implementation']}`. "
+                        f"Комиссии в единицах 1/10000 по порядку снимка: {', '.join(str(m['base_fee']) for m in markets)}. "
+                        f"У получателя сошлись списания и выплаты на {trials * 2} обменах типа AERO_BASIC (26), "
+                        "включая обратные обмены в том же блоке. minOut на единицу выше отвергнут в обоих направлениях. "
+                        f"[Код, реестры, комиссии и вызовы V5](../{aero_basic.as_posix()}) · [Адреса фабрик]({ab['source']})."])
     if base and kipseli.exists():
         k = read(kipseli)
         calls = {r["signature"]: r for r in k["calls"]}
@@ -293,6 +318,14 @@ def tables(network, snapshots, profiles):
                         "превысил лимит. Для DEFROGS/WETH проверены обе стороны обмена на двух размерах."])
     lista = "tests/data/first_run_dex_2026-11-26/lista_ethereum.json"
     lista_stable = "tests/data/first_run_dex_2026-11-26/lista_stable_ethereum.json"
+    rubicon_base = Path("tests/data/first_run_dex_2026-11-26/rubicon_clmm_base.json")
+    if base and rubicon_base.exists():
+        registry = read(rubicon_base)
+        out.extend(["", f"Rubicon CLMM · из {registry['registry_pairs']} пар публичного каталога Rubicon "
+                    f"на четырёх проверенных уровнях комиссии найдены {len(registry['pools'])} пулов Base. "
+                    "Для каждого подтверждён адрес CREATE2. Через V5 на трёх пулах прошли шесть полных "
+                    "кругов, по два разных объёма на пул. Это охват рынка из реестра tickers по этим ставкам. "
+                    f"[Реестр, тики, балансы и контроль minOut](../{rubicon_base.as_posix()})."])
     rubicon = Path("tests/data/first_run_dex_2026-11-26/rubicon_clmm_ethereum.json")
     if not base and rubicon.exists():
         rubicon_registry = read(rubicon)
@@ -523,6 +556,11 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if base and str(row["id"]) == "7260" and elfomo.exists():
+            task = "DEX-23 · 12 пар в реестре ElfomoFi. Подтверждены прямые выплаты WETH/USDC и cbBTC/USDC, нулевые котировки USDT/USDC"
+        if base and str(row["id"]) == "9172" and aero_basic.exists():
+            candidates = [f["factory"] for f in ab["factories"]]
+            task = "DEX-22 · обе фабрики из POOL_FACTORIES в адаптере объёма сверены с официальным размещением и реестрами Base"
         if base and str(row["id"]) == "7984" and kipseli.exists():
             task = "DEX-21 · QuoteLens и текущая реализация подтверждены. Исторический адаптер объёма перечисляет три другие реализации. Исполнение ожидает доступа оператора"
         if base and str(row["id"]) == "306" and quickswap_v2.exists() and q2["factory"] in {a.lower() for a in candidates}:

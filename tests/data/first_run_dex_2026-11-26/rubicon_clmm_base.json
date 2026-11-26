@@ -1,0 +1,503 @@
+{
+  "chain_id": 8453,
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "deployment_source": "https://docs.rubicon.finance/developers/deployments",
+  "ticker_source": "https://coingecko.rubicon.finance/8453/tickers",
+  "registry_pairs": 47,
+  "tiers": {
+    "100": 1,
+    "500": 10,
+    "3000": 60,
+    "10000": 200
+  },
+  "creation_hash": "0xd3e7f58b9af034cfa7a0597e539bae7c6b393817a47a6fc1e1503cd6eaffe22a",
+  "factory": "0xb5e5a9e628fef819150a6e5127ab481cee5d6ca9",
+  "tick_lens": "0xd3d67e0338c466b33f292a174ca8fd939babab34",
+  "quoter": "0xff53aa370d66459bf7672014eb3a279d342c5a8f",
+  "contracts": {
+    "0xb5e5a9e628fef819150a6e5127ab481cee5d6ca9": {
+      "bytes": 24116,
+      "keccak256": "0xa0277cd5cb3b6ff6eed0356f8e3ce2148f27ab002231595bb090a9db29d6f43f"
+    },
+    "0xd3d67e0338c466b33f292a174ca8fd939babab34": {
+      "bytes": 1385,
+      "keccak256": "0xbf1bb07babb013f146395ed6e1127f8f48d598f1765bc660a91d7b164cf93ff8"
+    },
+    "0xff53aa370d66459bf7672014eb3a279d342c5a8f": {
+      "bytes": 8273,
+      "keccak256": "0x43b6318c0d0cf01bb5e455172cf0884d3e208b81dc82126f00eebeb3a07d6510"
+    }
+  },
+  "pools": [
+    {
+      "pool": "0x56bce4571a7d13975a5f3d2f2262467f28fd5d6e",
+      "tokens": [
+        "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "fee": 500,
+      "spacing": 10,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x9dbea192ed73543c04318f8868df09c0427fd016",
+      "tokens": [
+        "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",
+        "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+      ],
+      "fee": 500,
+      "spacing": 10,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x22ebe8f75ff18a2eb1d40528a2baac288080ceb5",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x5f980dcfc4c0fa3911554cf5ab288ed0eb13dba3"
+      ],
+      "fee": 10000,
+      "spacing": 200,
+      "liquidity": "29067299004605639143"
+    },
+    {
+      "pool": "0x47e66a90e38d080cec076d1aef184673ea1b1f07",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42"
+      ],
+      "fee": 500,
+      "spacing": 10,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0xede270dd6334c926bec5238c842ee266f12b9ca9",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x693bad964f815f32fabe0b9d4911865bffc30172"
+      ],
+      "fee": 10000,
+      "spacing": 200,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x22daf0ba063eff055ecbf3cbb351eba9c4d4f947",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x7787548c57031023c031304f274beda304da734f"
+      ],
+      "fee": 100,
+      "spacing": 1,
+      "liquidity": "9193370123833158523"
+    },
+    {
+      "pool": "0xccc50a01779a19487feb365e9a1f5d7a445c70c7",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x7787548c57031023c031304f274beda304da734f"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "liquidity": "9222613149395201867"
+    },
+    {
+      "pool": "0x9fe25092412979695aa14ec6df14d679c449b475",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x7afe438411ee3959c7de6f7fb76bf9c769320ba3"
+      ],
+      "fee": 10000,
+      "spacing": 200,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x604721a075977a3311f53ea72229a54913b43280",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x7ba6f01772924a82d9626c126347a28299e98c98"
+      ],
+      "fee": 500,
+      "spacing": 10,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x2dca4ce76d38d2c14486932d0a07ec594f447f26",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "fee": 100,
+      "spacing": 1,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x002ce7bb4c5d130ed79c908217ae565f537148cf",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "fee": 500,
+      "spacing": 10,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0xa606d0bd0d1547faa740e2cee62a2dfa58de62d1",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0xf34c8ac1ff95dbf4410881ee676c00e4eca65b42",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x940181a94a35a4569e4529a3cdfb74e38fd98631"
+      ],
+      "fee": 10000,
+      "spacing": 200,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0xe91a58e346968c3405775d046e960201f7253378",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xa4a2e2ca3fbfe21aed83471d28b6f65a233c6e00"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x52430b5c47fb4fc6b336d45ee3aaabfbab39bdee",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xb3836098d1e94ec651d74d053d4a0813316b2a2f"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "liquidity": "82183765012141601888770"
+    },
+    {
+      "pool": "0xff37be987ad92c7103a9551bc5bd204828d243d7",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xc1cba3fcea344f92d9239c08c0568f6f2f0ee452"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x5167b7278aaa33b606371d5d2cd055778f181e9b",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xc52aedec3374422d7510e294cfaa90799595cba3"
+      ],
+      "fee": 10000,
+      "spacing": 200,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x2e95713f63b93a5934034d462169f1f0c4b3a712",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+      ],
+      "fee": 100,
+      "spacing": 1,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0xffcc108fe7e6d21e4944ac5acd976755c53bf8a7",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+      ],
+      "fee": 500,
+      "spacing": 10,
+      "liquidity": "1546441385149880"
+    },
+    {
+      "pool": "0x902e988a0ebf2642504aba2889e98b6ee4b5a6a7",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x2ce191225a8cec697d1cae6f272df8e56fb3b575",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xd7bc6a05a56655fb2052f742b012d1dfd66e1ba3"
+      ],
+      "fee": 10000,
+      "spacing": 200,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x8bab7c87120bc87dbf8d2b0a0fd6a17ba40294e1",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2"
+      ],
+      "fee": 500,
+      "spacing": 10,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x0ba8ffab522342bd76f094d48415a850dcf976bf",
+      "tokens": [
+        "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "fee": 100,
+      "spacing": 1,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x58f0d527ce2696693e4bf5da1242c92ae647eeea",
+      "tokens": [
+        "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "fee": 500,
+      "spacing": 10,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x8a85cc9cfa7ca03e2a5a27211d71322759f76c1f",
+      "tokens": [
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "0xb3836098d1e94ec651d74d053d4a0813316b2a2f"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "liquidity": "1695368800137600078"
+    },
+    {
+      "pool": "0xa505d8c28443fd56accd8675c5a5809adcf5ff0f",
+      "tokens": [
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+      ],
+      "fee": 100,
+      "spacing": 1,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x1d265c8c84cf21ee435e067588bdbdea514110a4",
+      "tokens": [
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+      ],
+      "fee": 500,
+      "spacing": 10,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x6eeabe5038ef192d615d743b8bd67368749a95d5",
+      "tokens": [
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x554644e713252401e6b5b18c9db17f4dd21ed5b5",
+      "tokens": [
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+      ],
+      "fee": 10000,
+      "spacing": 200,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x66b2a16b47ab18d339ca60bcb1e6f6cb7b9ff134",
+      "tokens": [
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2"
+      ],
+      "fee": 100,
+      "spacing": 1,
+      "liquidity": "0"
+    },
+    {
+      "pool": "0x7907c015b362f12cebfebcc6410fff1165504a89",
+      "tokens": [
+        "0x8e2445a7b8c4415edf7f810681701531324179c8",
+        "0xb2000000000000000000001e800a7f5189430cd0"
+      ],
+      "fee": 10000,
+      "spacing": 200,
+      "liquidity": "822268551099459529"
+    },
+    {
+      "pool": "0xf363bba0a54a7edb35280604df5fc5ec03ee7b34",
+      "tokens": [
+        "0xb2000000000000000000002d0ba3164cc74f58b7",
+        "0xfa9b01d768455bf40a846a0c02eec7ae9cf1bf9a"
+      ],
+      "fee": 10000,
+      "spacing": 200,
+      "liquidity": "847309085727969995"
+    }
+  ],
+  "execution": {
+    "network": "base",
+    "block": 62262756,
+    "hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "factory": "0xb5e5a9e628fef819150a6e5127ab481cee5d6ca9",
+    "executor_runtime_keccak": "0x48813d051521a9f58644bab81e0f0cdcd5bed120787e83d84796ec5147c38125",
+    "sender": "0x730a17276a9720871c98622ffce5db23f38acf99",
+    "kind": "v3",
+    "virtual_quoter_keccak": "0x56f4529fa9bf808daea21d15a6060f9941aa6da575cc8f1ddf99feaa152a39d5",
+    "pools": [
+      {
+        "idx": 0,
+        "pool": "0x52430b5c47fb4fc6b336d45ee3aaabfbab39bdee",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xb3836098d1e94ec651d74d053d4a0813316b2a2f"
+        ],
+        "immutables": null,
+        "prices": null,
+        "cases": [
+          {
+            "side": 0,
+            "input": "10000000000000",
+            "bought": "133865951922835509989",
+            "sold": "9940090013255",
+            "cash_before": "10000000000000",
+            "cash_after": "9940090013255",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          },
+          {
+            "side": 0,
+            "input": "1000000000000000",
+            "bought": "13386006100822265476005",
+            "sold": "994009132552838",
+            "cash_before": "1000000000000000",
+            "cash_after": "994009132552838",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          }
+        ]
+      },
+      {
+        "idx": 1,
+        "pool": "0xffcc108fe7e6d21e4944ac5acd976755c53bf8a7",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+        ],
+        "immutables": null,
+        "prices": null,
+        "cases": [
+          {
+            "side": 0,
+            "input": "10000000000000",
+            "bought": "28",
+            "sold": "9637983109840",
+            "cash_before": "10000000000000",
+            "cash_after": "9637983109840",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          },
+          {
+            "side": 0,
+            "input": "1000000000000000",
+            "bought": "2800",
+            "sold": "998781690094263",
+            "cash_before": "1000000000000000",
+            "cash_after": "998781690094263",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          }
+        ]
+      },
+      {
+        "idx": 2,
+        "pool": "0x22ebe8f75ff18a2eb1d40528a2baac288080ceb5",
+        "tokens": [
+          "0x4200000000000000000000000000000000000006",
+          "0x5f980dcfc4c0fa3911554cf5ab288ed0eb13dba3"
+        ],
+        "immutables": null,
+        "prices": null,
+        "cases": [
+          {
+            "side": 0,
+            "input": "10000000000000",
+            "bought": "1132805955624406423522",
+            "sold": "9801356439429",
+            "cash_before": "10000000000000",
+            "cash_after": "9801356439429",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          },
+          {
+            "side": 0,
+            "input": "1000000000000000",
+            "bought": "83766657468752401521803",
+            "sold": "982686284455951",
+            "cash_before": "1000000000000000",
+            "cash_after": "982686284455951",
+            "after_coin_owner": "0",
+            "after_coin_executor": "0",
+            "after_cash_executor": "0",
+            "min_out_plus_one_buy_reverted": true,
+            "min_out_plus_one_sell_reverted": true
+          }
+        ]
+      }
+    ]
+  },
+  "lens_sample": {
+    "pool": "0x52430b5c47fb4fc6b336d45ee3aaabfbab39bdee",
+    "word": 10,
+    "ticks": [
+      [
+        167700,
+        "-983216890070037833",
+        "983216890070037833"
+      ],
+      [
+        167100,
+        "-82182781795251531850937",
+        "82182781795251531850937"
+      ],
+      [
+        162600,
+        "983216890070037833",
+        "983216890070037833"
+      ]
+    ]
+  }
+}

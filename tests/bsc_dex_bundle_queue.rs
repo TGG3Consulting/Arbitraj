@@ -31,6 +31,53 @@ use arb::venues::bsc_dex::send::tx::SendCfg;
 use arb::venues::bsc_dex::wallet::nonce::Nonces;
 use arb::venues::bsc_dex::wallet::queue_store;
 
+#[tokio::test]
+async fn solidly_dispatch_interrupted_after_delivery_keeps_original_hash() {
+    use arb::gateway::errors::{ErrorCode, GatewayResult};
+    use arb::venues::bsc_dex::exec::solidly_direct::dispatch;
+    let c = ctx("solidly-delivered").await;
+    let nonces = Nonces::default();
+    let hash = B256::repeat_byte(0x66);
+    let slot = nonces.acquire(&c).await.unwrap();
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    {
+        let outgoing = async {
+            assert!(
+                matches!(queue_store::load(&c).await.unwrap(), Some(WalletQueueState::Halted { nonce: Some(LAST_NONCE), hash: Some(h), .. }) if h == hash)
+            );
+            tx.send(()).unwrap();
+            std::future::pending::<GatewayResult<()>>().await
+        };
+        tokio::select! {
+            _ = dispatch(&c, &slot, hash, LAST_NONCE, outgoing) => panic!("исход ещё не известен"),
+            _ = rx => {}
+        }
+    }
+    drop(slot);
+    let reboot = Nonces::default();
+    reboot.restore(&c).await;
+    assert!(matches!(reboot.acquire(&c).await, Err(e) if e.code == ErrorCode::QueueHalted));
+}
+
+#[tokio::test]
+async fn solidly_definitive_rejection_releases_the_reservation() {
+    use arb::gateway::errors::{ErrorCode, GatewayResult};
+    use arb::venues::bsc_dex::exec::solidly_direct::dispatch;
+    let c = ctx("solidly-rejected").await;
+    let nonces = Nonces::default();
+    let slot = nonces.acquire(&c).await.unwrap();
+    let result: GatewayResult<()> =
+        dispatch(&c, &slot, B256::repeat_byte(0x77), LAST_NONCE, async {
+            Err(c.err(ErrorCode::ChannelRejected, "Каналы подтвердили отказ"))
+        })
+        .await;
+    assert!(matches!(result, Err(e) if e.code == ErrorCode::ChannelRejected));
+    assert_eq!(
+        queue_store::load(&c).await.unwrap(),
+        Some(WalletQueueState::Free)
+    );
+}
+
 /// Параметры Argon2id маленькие ради скорости (как tests/secrets_vault.rs).
 const KDF: KdfParams = KdfParams {
     memory_kib: 64,

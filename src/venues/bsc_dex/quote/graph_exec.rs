@@ -86,6 +86,13 @@ pub fn executable(ctx: &Ctx, legs: &[Path], native: bool) -> Result<(), String> 
         .iter()
         .flat_map(|p| p.hops.iter())
         .any(|h| h.entry.family.fork);
+    if !native
+        && let [path] = legs
+        && let [hop] = path.hops.as_slice()
+        && hop.entry.family.variant == super::super::pools::family_variant::Variant::SolidlyCl
+    {
+        return Ok(());
+    }
     if !has_fork {
         if legs.len() == 1 && legs[0].hops.len() == 1 {
             return Ok(());
@@ -208,6 +215,14 @@ pub enum GraphForm {
 /// Форма исполнимого графового маршрута. Принимает: маршрут из котировки. Возвращает: форму. Ошибок нет
 /// (вызывается только для уже исполнимого маршрута, DexRoute.executable = true).
 pub fn graph_form(ctx: &Ctx, route: &DexRoute) -> GraphForm {
+    if let [leg] = route.legs.as_slice()
+        && let [hop] = leg.hops.as_slice()
+        && families::classify(ctx, &hop.family).is_ok_and(|f| {
+            f.tradable && f.variant == super::super::pools::family_variant::Variant::SolidlyCl
+        })
+    {
+        return GraphForm::Direct;
+    }
     // Форк исполняется только своим роутером бандлом (решения 59, 82): проверяем до прямой формы.
     let has_fork = route
         .legs

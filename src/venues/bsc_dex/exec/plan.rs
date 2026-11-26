@@ -41,6 +41,8 @@ pub struct Plan {
     pub token_out: Address,
     /// Команды обмена (без проверки баланса).
     steps: Vec<(u8, Bytes)>,
+    /// Аргументы прямого модуля; он сам измеряет выход на кошельке в том же вызове.
+    pub(super) solidly: Option<(Address, Address, U256)>,
     /// Сумма минимумов выхода (не 0).
     min_total: U256,
     deadline: U256,
@@ -71,6 +73,7 @@ impl Plan {
             wallet,
             token_out,
             steps,
+            solidly: None,
             min_total,
             deadline,
             native: Wrap::None,
@@ -115,6 +118,16 @@ impl Plan {
     /// Нативная монета: WRAP_ETH(роутер, сумма) первой командой; покупка — UNWRAP_WETH(кошелёк, сумма минимумов)
     /// последней вместо BALANCE_CHECK_ERC20 (база тогда не нужна).
     pub fn data(&self, base: U256) -> Bytes {
+        if let Some((pool, token_in, amount)) = self.solidly {
+            return super::super::pools::solidly_v3::execution_data(
+                pool,
+                token_in,
+                self.token_out,
+                amount,
+                self.min_total,
+                self.deadline,
+            );
+        }
         let mut steps = Vec::with_capacity(self.steps.len() + 2);
         if let Wrap::Wrap(v) = self.native {
             steps.push((ur::WRAP_ETH, ur::native(ur::ADDRESS_THIS, v)));
@@ -160,6 +173,9 @@ pub async fn build(
         return Err(ctx.err(ErrorCode::Internal, "план без шагов"));
     };
     let e = &first.entry;
+    if e.family.variant == super::super::pools::family_variant::Variant::SolidlyCl {
+        return super::solidly_direct::plan(ctx, steps, wallet, now, all_approvals).await;
+    }
     let router = ctx.dex_addr("dex.universal_router", e.family.id)?;
     let permit2 = ctx.dex_addr("dex.permit2", e.family.id)?;
     let deadline = U256::from(now + ctx.int("dex.deadline_s")?);

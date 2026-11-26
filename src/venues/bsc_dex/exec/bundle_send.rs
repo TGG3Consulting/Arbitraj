@@ -136,7 +136,25 @@ pub async fn send(
     let head = env.heads.fresh(ctx)?;
     let max_block = head.number + cfg.bundle_max;
     let raw: Vec<Bytes> = signed.iter().map(|t| t.raw.clone()).collect();
-    let dispatched = send::dispatch_slice(ctx, &env.stats, &ready, &raw, max_block).await?;
+    let outgoing = send::dispatch_slice(ctx, &env.stats, &ready, &raw, max_block);
+    let dispatched = if entries
+        .iter()
+        .any(|e| e.family.variant == super::super::pools::family_variant::Variant::SolidlyCl)
+    {
+        let last = signed
+            .last()
+            .ok_or_else(|| ctx.err(ErrorCode::Internal, "Пустой подписанный бандл"))?;
+        super::solidly_direct::dispatch(
+            ctx,
+            slot,
+            last.hash,
+            bundle.first_nonce + signed.len() as u64 - 1,
+            outgoing,
+        )
+        .await?
+    } else {
+        outgoing.await?
+    };
     if !picked.skipped.is_empty() {
         let text = format!(
             "бандл отправлен только в бандловые каналы ({}); одиночные исключены (send.bundle_skip_single): {}",

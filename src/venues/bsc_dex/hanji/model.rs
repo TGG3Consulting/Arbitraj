@@ -7,7 +7,9 @@ pub struct Request {
     pub market: Option<Address>,
     pub input: Address,
     pub output: Address,
-    pub amount_raw: String,
+    pub amount_raw: Option<String>,
+    pub amount_tokens: Option<String>,
+    pub trader: Option<Address>,
 }
 
 #[derive(Serialize)]
@@ -25,4 +27,8 @@ pub struct Preview {
     pub fee_asset: Address,
     pub fee_raw: String,
     pub last_price: String,
+    pub payer: Option<Address>,
+    pub executor: Option<Address>,
+    pub gas_used: Option<u64>,
+    pub deadline: Option<u64>,
 }

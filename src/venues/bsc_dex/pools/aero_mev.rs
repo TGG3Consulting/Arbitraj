@@ -136,6 +136,17 @@ pub fn basic_bps(tax: u32, base: u32) -> u32 {
 /// фабрику, исполнит ли шаг налог (exec_kind::for_wallet = AERO_BASIC). Ошибки: NoRoute — пауза (Pool.sol L144) или
 /// налог при SOLIDLY; NotApplicable — модуль не закреплённый (pinned); как tax.
 pub async fn fresh(ctx: &Ctx, id: &str, factory: Address, taxed_ok: bool) -> GatewayResult<()> {
+    let fee_module =
+        call::view(ctx, factory, &IAeroBasicFactory::feeModuleCall {}, "latest").await?;
+    let setting = super::load_aero_basic::FEE_MODULE;
+    if fee_module != ctx.dex_addr(setting, id)? {
+        return Err(ctx.err(
+            ErrorCode::NotApplicable,
+            format!(
+                "{id}: изменился модуль комиссии фабрики {factory}: {fee_module}, сверить {setting}"
+            ),
+        ));
+    }
     if call::view(ctx, factory, &IAeroBasicFactory::isPausedCall {}, "latest").await? {
         return Err(ctx.err(
             ErrorCode::NoRoute,

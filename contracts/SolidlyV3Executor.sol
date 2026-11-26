@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: MIT
-// Однопуловый обмен Solidly V3 на Ethereum и Base. Вход и выручка принадлежат вызывающему.
+// Файл: contracts/SolidlyV3Executor.sol.
+// Что делает: исполняет одну полную покупку или продажу Solidly V3, сверяет вход и выход по балансам плательщика.
+// Кто вызывает: кошелёк через exec/bundle.rs; exec/fork_swap.rs строит пробу того же вызова.
+// От чего зависит: каноническая фабрика Solidly V3 на Ethereum и Base, шестипараметрический swap пула и ERC-20.
+// Настройки: dex.kind=solidly_v3_module, dex.router, dex.pool_enabled; хеш runtime сверяет pools/solidly_v3.rs.
 pragma solidity 0.8.37;
 
 interface ISolidlyV3Factory {

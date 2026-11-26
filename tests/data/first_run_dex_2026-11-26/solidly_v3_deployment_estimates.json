@@ -1,0 +1,30 @@
+{
+  "base": {
+    "chain_id": 8453,
+    "selector": {
+      "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "requireCanonical": true
+    },
+    "endpoint": "https://base-rpc.publicnode.com",
+    "from_address": "0x682718efd1bd558afa17d02b1cd328bc705b5cef",
+    "gas": "0xa19b7",
+    "base_fee": "0x4c4b40",
+    "calldata_keccak": "0x2030c85c73d63e50866278e8b1aa16acf824f4fb2d4383f290adbd448df8948f",
+    "creation_bytes": 2811,
+    "runtime_keccak": "0x0538a91b6cf9f37efc80d7a242de902548ee9b473e3f9eab0b6e582629f23a2f"
+  },
+  "ethereum": {
+    "chain_id": 1,
+    "selector": {
+      "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "requireCanonical": true
+    },
+    "endpoint": "https://eth.drpc.org",
+    "from_address": "0xf977814e90da44bfa03b6295a0616a897441acec",
+    "gas": "0xa19b7",
+    "base_fee": "0x30495dd",
+    "calldata_keccak": "0x2030c85c73d63e50866278e8b1aa16acf824f4fb2d4383f290adbd448df8948f",
+    "creation_bytes": 2811,
+    "runtime_keccak": "0x0538a91b6cf9f37efc80d7a242de902548ee9b473e3f9eab0b6e582629f23a2f"
+  }
+}

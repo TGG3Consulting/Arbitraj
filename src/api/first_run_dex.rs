@@ -152,18 +152,36 @@ mod tests {
                 };
                 validate(def, &scope, &input).unwrap_or_else(|e| panic!("{} {k}: {e}", p.id));
                 for text in values {
-                    // Нулевой адрес означает явно выключенный модуль. Крючок подтверждает его на том же блоке.
+                    // Нулевой адрес означает выключенный модуль у конкретной фабрики или крючка этой сети.
                     if k == "dex.aero_mev_module"
                         && text == "0x0000000000000000000000000000000000000000"
                     {
-                        let actual: Value = serde_json::from_str(include_str!(
-                            "../../tests/data/first_run_dex_2026-11-26/metadex_ethereum.json"
-                        ))
-                        .unwrap();
+                        let (raw, setting) = if matches!(p.settings.get("dex.kind"), Some(Parameter::Text(s)) if s == "aero_basic")
+                        {
+                            (
+                                include_str!(
+                                    "../../tests/data/first_run_dex_2026-11-26/aero_basic_base.json"
+                                ),
+                                "dex.factory",
+                            )
+                        } else {
+                            (
+                                include_str!(
+                                    "../../tests/data/first_run_dex_2026-11-26/metadex_ethereum.json"
+                                ),
+                                "dex.cl_swap_hook",
+                            )
+                        };
+                        let actual: Value = serde_json::from_str(raw).unwrap();
+                        let Some(Parameter::Text(target)) = p.settings.get(setting) else {
+                            panic!("{} отсутствует {setting}", p.id);
+                        };
                         assert_eq!(actual["chain_id"], p.chain_id);
                         assert_eq!(actual["selector"], snapshot["selector"]);
                         assert!(actual["reads"].as_array().unwrap().iter().any(|r| {
-                            r["to"] == actual["hook"]
+                            r["to"]
+                                .as_str()
+                                .is_some_and(|a| a.eq_ignore_ascii_case(target))
                                 && r["signature"] == "mevTaxModule()"
                                 && r["response"]
                                     .as_str()

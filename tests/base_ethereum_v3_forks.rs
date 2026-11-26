@@ -117,3 +117,48 @@ fn rubicon_registered_pools_reproduce_the_verified_creation_address() {
             .any(|p| p["address"] == market["pool"] && p["liquidity"] != "0")
     );
 }
+
+#[test]
+fn rubicon_base_replay_uses_the_profiled_factory_and_public_book() {
+    let registry: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/rubicon_clmm_base.json"
+    ))
+    .unwrap();
+    let profiles: Vec<Value> =
+        serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
+    let settings = &profiles
+        .iter()
+        .find(|p| p["id"] == "rubicon-clmm-base")
+        .unwrap()["settings"];
+    assert_eq!(settings["dex.factory"], registry["factory"]);
+    assert_eq!(settings["dex.tick_lens"], registry["tick_lens"]);
+    assert_eq!(settings["dex.quoter_virtual"], true);
+    let execution = &registry["execution"];
+    assert_eq!(registry["selector"]["blockHash"], execution["hash"]);
+    assert_eq!(registry["registry_pairs"], 47);
+    assert_eq!(registry["pools"].as_array().unwrap().len(), 32);
+    let witnessed = execution["pools"].as_array().unwrap();
+    assert_eq!(witnessed.len(), 3);
+    for market in witnessed {
+        assert!(
+            registry["pools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|p| p["pool"] == market["pool"])
+        );
+        let trades = market["cases"].as_array().unwrap();
+        assert_eq!(trades.len(), 2);
+        for trade in trades {
+            let uint = |k: &str| trade[k].as_str().unwrap().parse::<U256>().unwrap();
+            assert_eq!(
+                uint("cash_after"),
+                uint("cash_before") - uint("input") + uint("sold")
+            );
+            assert_eq!(uint("after_coin_executor"), U256::ZERO);
+            assert_eq!(uint("after_cash_executor"), U256::ZERO);
+            assert_eq!(trade["min_out_plus_one_buy_reverted"], true);
+            assert_eq!(trade["min_out_plus_one_sell_reverted"], true);
+        }
+    }
+}

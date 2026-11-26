@@ -185,7 +185,12 @@ pub async fn send_swap(
     if !p.value().is_zero() {
         native::reserve_ok(env, p.wallet, (p.router, &data), p.value()).await?;
     }
-    txs::send(env, slot, p.router, data, p.value(), true, Some(guard)).await
+    let outgoing = txs::send(env, slot, p.router, data, p.value(), true, Some(guard));
+    if p.solidly.is_some() {
+        super::solidly_direct::SENDING.scope((), outgoing).await
+    } else {
+        outgoing.await
+    }
 }
 
 /// Снимки именно тех пулов, из которых подготовлена отправка, и действительный минимум calldata.

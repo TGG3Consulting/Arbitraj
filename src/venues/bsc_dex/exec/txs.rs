@@ -204,11 +204,12 @@ pub async fn send_tipped(
         crate::gateway::settlement_intent::before_send(&marker).await?;
         if other {
             super::settlement_swap::reserve(ctx, slot, signed.hash, nonce).await?;
+            super::super::hanji::execute::release_unsent(ctx,slot,&marker,&ready,need).await?;
         } else {
             super::super::hashflow::reserve(ctx, slot, &marker).await?;
         }
     }
-    let d = send::dispatch(
+    let dispatch = send::dispatch(
         ctx,
         &env.stats,
         &ready,
@@ -216,8 +217,14 @@ pub async fn send_tipped(
         tip.as_ref().map(|t| &t.0.raw),
         head.number + cfg.bundle_max,
         Terms { head_time, known },
-    )
-    .await?;
+    );
+    let d = if super::solidly_direct::SENDING.try_with(|_| ()).is_ok()
+        && !crate::gateway::settlement_intent::active()
+    {
+        super::solidly_direct::dispatch(ctx, slot, signed.hash, nonce, dispatch).await?
+    } else {
+        dispatch.await?
+    };
     let method = if ready.iter().all(|r| r.method == SendMethod::Bundle) {
         SendMethod::Bundle
     } else {

@@ -131,28 +131,7 @@ async fn frame(ctx: &Ctx, builder: Builder) -> GatewayResult<Frame> {
 }
 
 fn exact_amount(raw: Option<&str>, tokens: Option<&str>, precision: u8) -> Option<U256> {
-    let digits = match (raw, tokens) {
-        (Some(v), None) => v.to_owned(),
-        (None, Some(v)) => {
-            let (whole, fraction) = v.split_once('.').unwrap_or((v, ""));
-            if whole.is_empty()
-                || !whole.bytes().all(|b| b.is_ascii_digit())
-                || !fraction.bytes().all(|b| b.is_ascii_digit())
-            {
-                return None;
-            }
-            let fraction = fraction.trim_end_matches('0');
-            let pad = usize::from(precision).checked_sub(fraction.len())?;
-            format!("{whole}{fraction}{}", "0".repeat(pad))
-        }
-        _ => return None,
-    };
-    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
-        return None;
-    }
-    U256::from_str_radix(&digits, 10)
-        .ok()
-        .filter(|v| !v.is_zero() && v.bit_len() <= 255)
+    super::num::exact_amount(raw, tokens, precision).filter(|v| v.bit_len() <= 255)
 }
 
 pub(super) async fn source_preview(ctx: &Ctx, req: Request) -> GatewayResult<Preview> {

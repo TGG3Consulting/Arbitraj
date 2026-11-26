@@ -18,16 +18,21 @@ use super::super::ctx::Ctx;
 
 /// Сохраняет состояние. Сбой базы — в журнал (ошибка): после перезапуска состояние может быть старым. Ошибок нет.
 pub async fn save(ctx: &Ctx, state: &WalletQueueState) {
-    let res = match (serde_json::to_string(state), ctx.wallet()) {
+    let res = save_checked(ctx, state).await;
+    if let Err(e) = res {
+        let msg = format!("Состояние очереди кошелька не сохранено в SQLite: {e}");
+        ctx.log(Level::Error, "send.queue_store", msg, None).await;
+    }
+}
+
+/// Запись с подтверждением SQLite перед публикацией денежной операции.
+pub async fn save_checked(ctx: &Ctx, state: &WalletQueueState) -> Result<(), String> {
+    match (serde_json::to_string(state), ctx.wallet()) {
         (Ok(body), Ok(w)) => wallet_queue::save(ctx.journal.db(), &w.queue_key, body)
             .await
             .map_err(|e| e.to_string()),
         (Err(e), _) => Err(e.to_string()),
         (_, Err(e)) => Err(e.message),
-    };
-    if let Err(e) = res {
-        let msg = format!("Состояние очереди кошелька не сохранено в SQLite: {e}");
-        ctx.log(Level::Error, "send.queue_store", msg, None).await;
     }
 }
 

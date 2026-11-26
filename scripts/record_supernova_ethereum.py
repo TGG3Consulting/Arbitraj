@@ -21,6 +21,9 @@ USDT="0xdac17f958d2ee523a2206206994597c13d831ec7"
 USDC="0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
 LINK="0x514910771af9ca656af840dff83e8264ecf986ca"
 XAUT="0x68749665ff8d2d112fa859aa293f07a622782f38"
+# FeeDiscount(user,pool,1000) from the verified registry on Ethereum block 24546941.
+DISCOUNT_EOA="0x62500df60073e22c5ff833ae855f7922bb4c0a88"
+DISCOUNT_TX="0x86cdb96c35a99c2c8b981148b3fe30775fa10fd94a6696a2bf36c2d6c8be63b0"
 SIZES={USDC:(10**6,10**7),USDT:(10**6,10**7),ETH_WETH:(10**14,10**15),
        LINK:(10**16,10**17),XAUT:(100,1000)}
 WALLETS={**HOLDERS["ethereum"],LINK:HOLDERS["ethereum"][ETH_WETH],XAUT:HOLDERS["ethereum"][ETH_WETH]}
@@ -113,7 +116,19 @@ def capture(e):
             for dx in SIZES[a]:
                 r=simulate(e,pool,QUOTER,m["tokens"][0],a,b,dx,state,deadline,OWNER,True,ETH_WETH,funding,m["custom"],read_rpc=rpc)
                 r["discount"]=discount;m["wallet"].append(r)
-        m["tick_window"]=map_ticks(c,pool,[int(m["state"][1])]+[r["tick_after"] for r in m["wallet"]])
+        m["discounted_wallet"]=[]
+        if set(m["tokens"])=={ETH_WETH,USDT}:
+            verified=c.one(discounts,"feeDiscounts(address,address)",["address","address"],[DISCOUNT_EOA,pool],["uint16"])[0]
+            if verified!=1000 or code(DISCOUNT_EOA):
+                raise ValueError("historically discounted externally owned wallet differs")
+            for n,a in enumerate(m["tokens"]):
+                b=m["tokens"][1-n]
+                trial=simulate(e,pool,QUOTER,m["tokens"][0],a,b,SIZES[a][0],state,deadline,DISCOUNT_EOA,
+                               True,ETH_WETH,WALLETS[a],m["custom"],read_rpc=rpc)
+                if trial["override_fee"]!=0 or trial["plugin_fee"]!=0:
+                    raise ValueError("discounted payer was charged an override")
+                trial.update(discount=verified,discount_tx=DISCOUNT_TX);m["discounted_wallet"].append(trial)
+        m["tick_window"]=map_ticks(c,pool,[int(m["state"][1])]+[r["tick_after"] for r in m["wallet"]+m["discounted_wallet"]])
     if {m["custom"] for m in markets if len(m["wallet"])==4}!=set(directory["custom_deployers"]):
         raise ValueError("incomplete V5 settlement across the four deployers")
     return dict(selector=tag,block=e["block"],state_root=ROOT_HASH,verified_endpoints=reader.urls,completed_reads=reader.counts,factory=FACTORY,

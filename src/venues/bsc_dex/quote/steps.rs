@@ -104,6 +104,11 @@ pub fn path_costs(
             let amount = num::to_decimal(fee, num::BNB_DECIMALS)
                 .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "EtherVista: плата в ETH не помещается в Decimal"))?;
             add(&mut out, CostKind::PoolFee, amount, names.gas, true);
+        } else if let PoolState::Memebox(state)=&h.entry.pool.state {
+            let fee=super::super::math::memebox::charged(state,h.token_in==h.entry.pool.token0,h.swapped.amount_in)
+                .and_then(|raw|num::to_decimal(raw,h.dec_in))
+                .ok_or_else(||ctx.err(ErrorCode::BadResponse,"Memebox: не подтверждена комиссия собственного входа"))?;
+            add(&mut out,CostKind::PoolFee,fee,&from,true);
         } else {
             add(
                 &mut out,

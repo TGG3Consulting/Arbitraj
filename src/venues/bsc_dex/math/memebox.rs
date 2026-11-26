@@ -5,6 +5,26 @@ use alloy_primitives::U256;
 
 const BPS: u64 = 10_000;
 
+fn fee(amount: U256, bps: u16) -> Option<U256> {
+    if u64::from(bps) > BPS {
+        return None;
+    }
+    let denominator = U256::from(BPS);
+    let rate = U256::from(bps);
+    Some((amount / denominator) * rate + ((amount % denominator) * rate) / denominator)
+}
+
+/// Сколько комиссии добавляет собственное зачисление. Удержание с ранее внесённого
+/// остатка уже принадлежит пулу; доля протокола входит в ту же сумму.
+pub(crate) fn charged(s: &MemeboxState, zero_in: bool, own: U256) -> Option<U256> {
+    let i = usize::from(!zero_in);
+    let prior = s.available[i].saturating_sub(s.reserves[i]);
+    let total = s.available[i]
+        .checked_add(own)?
+        .checked_sub(s.reserves[i])?;
+    fee(total, s.fee_bps)?.checked_sub(fee(prior, s.fee_bps)?)
+}
+
 fn forward(s: &MemeboxState, i: usize, amount: U256) -> Option<(Swapped, MemeboxState)> {
     let o = 1 - i;
     let (ri, ro) = (s.reserves[i], s.reserves[o]);
@@ -24,15 +44,12 @@ fn forward(s: &MemeboxState, i: usize, amount: U256) -> Option<(Swapped, Memebox
     }
     let paid = bi.checked_add(amount)?;
     let credited = paid.checked_sub(ri)?;
-    let divider = U256::from(BPS);
-    let rate = U256::from(s.fee_bps);
-    let fee = (credited / divider) * rate + ((credited % divider) * rate) / divider;
-    let adjusted = paid.checked_sub(fee)?;
+    let adjusted = paid.checked_sub(fee(credited, s.fee_bps)?)?;
     if adjusted > max {
         return None;
     }
     let keep = (ri * ro).div_ceil(adjusted);
-    let own_fee = (amount / divider) * rate + ((amount % divider) * rate) / divider;
+    let own_fee = fee(amount, s.fee_bps)?;
     let own_adjusted = ri.checked_add(amount - own_fee)?;
     let own = ro - (ri * ro).div_ceil(own_adjusted);
     let gross = bo.checked_sub(keep)?.min(own);
@@ -232,6 +249,11 @@ mod tests {
                     .all(|(a, b)| *a <= b)
             );
         }
+        s.available = s.reserves;
+        assert_eq!(charged(&s, true, U256::from(99)), Some(U256::ZERO));
+        assert_eq!(charged(&s, true, U256::from(100)), Some(U256::ONE));
+        s.available[0] += U256::from(70);
+        assert_eq!(charged(&s, true, U256::from(30)), Some(U256::ONE));
         s.available = s.reserves;
         assert_eq!(
             quote(&s, true, true, U256::from(99)).unwrap().0.amount_out,

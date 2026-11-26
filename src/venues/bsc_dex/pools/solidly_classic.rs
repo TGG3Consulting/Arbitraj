@@ -140,7 +140,7 @@ pub(crate) async fn state(
         )
     };
     let physical = if f.variant == super::family_variant::Variant::SolidlyGenerator {
-        generator(ctx, f, factory, pool, &accepted, tag).await?
+        Box::pin(generator(ctx, f, factory, pool, &accepted, tag)).await?
     } else {
         factory
     };

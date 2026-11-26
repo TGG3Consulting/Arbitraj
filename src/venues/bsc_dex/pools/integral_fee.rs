@@ -114,8 +114,8 @@ pub async fn apply(
     let tag = block_tag(block);
     // Решение 463: THENA Fusion — комиссия следующего блока по оракулу пула (fusion_fee.rs); Integral — как раньше.
     let fee = if family.proto == Proto::Algebra {
-        let step=super::synth_farming::step(&p.ctx,family)?;
-        super::fusion_fee::read_fee(&p.ctx, *pool, &tag,step).await?
+        let step = super::synth_farming::step(&p.ctx, family)?;
+        super::fusion_fee::read_fee(&p.ctx, *pool, &tag, step).await?
     } else {
         read(&p.ctx, *pool, &tag).await?
     };
@@ -127,7 +127,7 @@ pub async fn apply(
         )),
         _ => {
             // Решение 463 (повторное ревью t236): комиссия следующего блока записана — «в обновлении» снято.
-            if proto == Proto::Algebra {
+            if family.proto == Proto::Algebra {
                 p.holds.fee_written(&p.reg, r);
             }
             Ok(())

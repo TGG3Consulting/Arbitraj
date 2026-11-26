@@ -25,7 +25,8 @@ def verified(c, address, name):
     response.raise_for_status()
     record = response.json()
     code = raw(rpc(c.endpoint, "eth_getCode", [address, c.selector]))
-    if record["compilation"]["name"] != name or not code or code != raw(record["runtimeBytecode"]["onchainBytecode"]):
+    if (record.get("runtimeMatch") not in ("match","exact_match") or record["compilation"]["name"] != name
+            or not code or code != raw(record["runtimeBytecode"]["onchainBytecode"])):
         raise ValueError(f"deployed {name} differs from the verified code on the selected block")
     return url, record, code
 

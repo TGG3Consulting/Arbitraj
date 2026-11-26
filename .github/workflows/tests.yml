@@ -679,6 +679,18 @@ jobs:
         with:
           name: bunnyswap-native-wallets
           path: ${{ runner.temp }}/bunnyswap.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix contracts --no-audit --no-fund
+      - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/bunny-module" BunnySwapAdapter
+      - run: python scripts/record_registered_v3_module.py --bunny "$RUNNER_TEMP/bunnyswap.json" "$RUNNER_TEMP/bunny-module/BunnySwapAdapter.json" "$RUNNER_TEMP/bunnyswap-module.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bunnyswap-module-wallets
+          path: |
+            ${{ runner.temp }}/bunnyswap-module.json
+            ${{ runner.temp }}/bunny-module/BunnySwapAdapter.json
   memebox-base-archive:
     if: inputs.base_factory_directory
     runs-on: ubuntu-latest

@@ -172,3 +172,69 @@ fn supernova_four_custom_registries_bind_every_pool_and_plugin() {
     assert_eq!(groups, [4, 7, 16, 25]);
     assert_eq!(flags, BTreeMap::from([(87, 42), (215, 10)]));
 }
+
+#[test]
+fn supernova_origin_fee_linked_ticks_and_terminal_wallet_match_at_both_sizes() {
+    let archive: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+        &include_bytes!("data/first_run_dex_2026-11-26/supernova_ethereum_wallets.json.gz")[..],
+    ))
+    .unwrap();
+    let mut count = 0;
+    for m in archive["markets"].as_array().unwrap() {
+        let ticks = map(m);
+        let normal = m["wallet"].as_array().unwrap();
+        assert_eq!(normal.len(), 4);
+        for c in normal
+            .iter()
+            .chain(m["discounted_wallet"].as_array().into_iter().flatten())
+        {
+            let override_fee = c["override_fee"].as_u64().unwrap();
+            let oracle = m["hook_fee"].as_u64().unwrap();
+            let discount = c["discount"].as_u64().unwrap();
+            assert_eq!(m["pool_discount"], 0);
+            assert_eq!(override_fee, oracle * (1000 - discount) / 1000);
+            let fee = if override_fee == 0 {
+                m["state"][2].as_str().unwrap().parse().unwrap()
+            } else {
+                override_fee as u32
+            };
+            let state = AlgebraState {
+                sqrt_price: number(&m["state"][0]),
+                tick: m["state"][1].as_str().unwrap().parse().unwrap(),
+                liquidity: m["liquidity"].as_str().unwrap().parse().unwrap(),
+                fee,
+                ticks: &ticks,
+                next: NextTick::Linked,
+            };
+            let dx = number(&c["dx"]);
+            let out = number(&c["out"]);
+            let zfo = c["source"] == m["tokens"][0];
+            let local = swap_algebra::swap(&state, zfo, true, dx).unwrap();
+            assert!(local.complete);
+            assert_eq!((local.amount_in, local.amount_out), (dx, out));
+            let r = &c["results"];
+            let n = |k: &str| number(&r[k]["returnData"]);
+            assert_eq!(r["fund"]["status"], "0x1");
+            assert_eq!(r["above"]["status"], "0x0");
+            assert_eq!(r["exact"]["status"], "0x1");
+            assert_eq!(
+                (
+                    n("in_before") - n("in_after"),
+                    n("out_after") - n("out_before")
+                ),
+                (dx, out)
+            );
+            assert!(n("executor_in").is_zero() && n("executor_out").is_zero());
+            if discount > 0 {
+                let other = normal
+                    .iter()
+                    .find(|other| other["source"] == c["source"] && other["dx"] == c["dx"])
+                    .unwrap();
+                assert_ne!(c["sender"], other["sender"]);
+                assert!(out > number(&other["out"]));
+            }
+        }
+        count += normal.len();
+    }
+    assert_eq!(count, 20);
+}

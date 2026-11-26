@@ -79,6 +79,24 @@ def tables(network, snapshots, profiles):
                         f"{by_family['composable_stable']}, управляемых {by_family['managed']}. Ещё две регистрации "
                         "не принадлежат этим фабрикам, у них соответственно ноль и один записанный токен. "
                         f"[Номера регистраций, фабрики, токены и резервы](../{sobal_path.as_posix()})."])
+        for title, stem in [("Yum Yum Swap","yumyum"),("Bluedex V3","bluedex_v3")]:
+            root=Path("tests/data/first_run_dex_2026-11-26")
+            native_path=root/(stem+"_base.json")
+            module_path=root/(stem+"_base_module.json")
+            native, module=read(native_path),read(module_path)
+            active=sum(int(m["liquidity"])>0 for m in native["markets"])
+            fills=2*len(module["cases"])
+            out.extend(["",f"{title} · фабрика подтвердила {len(native['markets'])} V3-пулов, из них с активной ликвидностью {active}. "
+                        f"Для всех {active} на блоке 62 262 756 проверены два размера и оба направления. Два официальных роутера "
+                        f"выполнили {fills} отдельных обменов, прямой вызов модуля и байткод V5 — ещё {fills}. "
+                        "Первый запуск использует `registered_v3`: опрашивает фабрику, immutable fee пула, квотер и TickLens. "
+                        "Для `registered_v3_module` владелец развёртывает соответствующий контракт с immutable фабрикой, "
+                        "задаёт его адрес в `dex.router` и хеш в `dex.module_runtime_hashes`. "
+                        "Модуль сверяет списание собственного входа и реальное получение минимума. Прямое исполнение сравнивается "
+                        "с V5 по выплате и полным затратам, включая разрешения. Шаг 17 V5 передаёт точный адрес пула для выбранного fee tier. "
+                        "Официальные exactInputSingle возвращают расчётный выход и допускают частичный вход у предела цены. "
+                        f"[Фабрика, кошельки и штатные роутеры](../{native_path.as_posix()}) · "
+                        f"[Выплаты, минимумы, сроки и остатки разрешений](../{module_path.as_posix()})."])
         out.extend(["", "Memebox · на блоке 62 262 756 фабрика подтвердила 43 CREATE2-пары. В профиле первого запуска "
                     "вид `memebox` читает доступные остатки, физические балансы и тариф с одного блока. У всех 43 пар "
                     "комиссия на вход составила 100 из 10 000, доля протокола — 3000 из 10 000 уже удержанной комиссии. "
@@ -916,10 +934,15 @@ def tables(network, snapshots, profiles):
                     "[Архивный прогон](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45881656010)."])
     if not base:
         sn=read(Path("tests/data/first_run_dex_2026-11-26/supernova_ethereum_directory.json"))
+        with gzip.open(Path("tests/data/first_run_dex_2026-11-26/supernova_ethereum_wallets.json.gz"),"rt",encoding="utf8") as stream:
+            swaps=json.load(stream)["markets"]
         out.append(f"**Supernova CL.** На блоке {sn['block']} подтверждены {len(sn['markets'])} пулов "
                    f"четырёх реестров customDeployer. Адаптер проверяет CREATE2, код плагина и комиссию "
                    "с учётом скидки плательщика. Внешний вызов Reflex может изменить другой рынок, "
                    "поэтому одиночный пул сравнивается с обычным маршрутом отдельно. "
+                   f"V5 подтвердил {sum(len(m['wallet']) for m in swaps)} полных обменов пяти пар на двух размерах "
+                   "в обе стороны и столько же откатов при повышении минимума на единицу. "
+                   "[Выплаты кошелька](../tests/data/first_run_dex_2026-11-26/supernova_ethereum_wallets.json.gz). "
                    "[Пулы и источники комиссии](../tests/data/first_run_dex_2026-11-26/supernova_ethereum_directory.json).")
         dx=read(Path("tests/data/first_run_dex_2026-11-26/deltaswap_ethereum.json"))["current"]
         x7=read(Path("tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json"))

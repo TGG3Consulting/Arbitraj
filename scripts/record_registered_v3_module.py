@@ -14,12 +14,12 @@ from requests import RequestException
 WETH="0x4200000000000000000000000000000000000006"
 ADAPTER="0x"+keccak(text="isolated registered V3 module")[-20:].hex()
 
-def record(market,artifact,url):
-    tag=market["selector"];factory=market["factory"]
+def record(market,artifact,url,*,bunny=False):
+    tag=market["selector"];authority=market["router"] if bunny else market["factory"]
     head=rpc(url,"eth_getBlockByHash",[tag["blockHash"],False])
     if head["stateRoot"]!=market["state_root"] or int(rpc(url,"eth_chainId",[]),16)!=8453:raise ValueError("unexpected parent")
     if any(rpc(url,"eth_getCode",[a,tag])!="0x" for a in (EXEC,ADAPTER)):raise ValueError("isolated module address occupied")
-    runtime=bound_runtime(artifact,factory,url,tag)
+    runtime=bound_runtime(artifact,authority,url,tag)
     code=RUNTIME.read_text().strip().removeprefix("0x"); deadline=int(head["timestamp"],16)+120
     completed=[]
     for pool in market["markets"]:
@@ -40,6 +40,10 @@ def record(market,artifact,url):
                 def leg(prefix,token,out,reference):
                     qty=int(reference["amount"]);net=int(reference["received"])
                     def order(floor,end):
+                        if bunny and mode=="v5":
+                            return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
+                                      ["address","uint256","address","uint256","uint256",STEP+"[]"],
+                                      [token,qty,out,floor,end,[(29,ADAPTER,token,out,10000,b"")]])
                         if mode=="direct":
                             return tx(ADAPTER,"execute(address,address,address,uint256,uint256,uint256)",
                                       ["address","address","address","uint256","uint256","uint256"],[pool["pool"],token,out,qty,floor,end])
@@ -63,15 +67,20 @@ def record(market,artifact,url):
                 buy,fund=leg(fund,a,b,ref["buy"]);sell,_=leg(fund,b,a,ref["sell"])
                 completed.append(dict(pool=pool["pool"],mode=mode,owner=owner,input=a,buy=buy,sell=sell))
     if not completed:raise ValueError("no funded direct/V5 comparison")
-    return dict(factory=factory,selector=tag,endpoint=url,module_hash="0x"+keccak(bytes.fromhex(runtime)).hex(),
+    return dict(**({"router":authority} if bunny else {"factory":authority}),selector=tag,endpoint=url,module_hash="0x"+keccak(bytes.fromhex(runtime)).hex(),
                 executor_hash="0x"+keccak(bytes.fromhex(code)).hex(),cases=completed)
 
 if __name__=="__main__":
     ap=argparse.ArgumentParser(description=__doc__)
     for k in ("market","module","output"):ap.add_argument(k,type=Path)
+    ap.add_argument("--bunny",action="store_true")
     a=ap.parse_args();m=json.loads(a.market.read_bytes());b=json.loads(a.module.read_bytes());errors=[]
+    if a.bunny:
+        from record_bunnyswap_base import FRIEND, OWNER
+        m["markets"]=[dict(pool=m["pair"],tokens=[WETH,FRIEND],
+                           cases=[dict(owner=OWNER,input=WETH,buy=c["buy"],sell=c["sell"]) for c in m["cases"]])]
     for url in dict.fromkeys([m["endpoint"],*ENDPOINTS]):
-        try:j=record(m,b,url)
+        try:j=record(m,b,url,bunny=a.bunny)
         except (RequestException,ValueError,RuntimeError,KeyError) as err:errors.append((url,str(err)[:180]));continue
         a.output.write_text(json.dumps(j,separators=(",",":"))+"\n",encoding="utf8");break
     else:raise RuntimeError(f"Registered V3 archive failed: {errors}")

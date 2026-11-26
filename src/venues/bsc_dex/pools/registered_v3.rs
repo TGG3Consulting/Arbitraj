@@ -142,6 +142,77 @@ mod tests {
     use serde_json::Value;
 
     #[test]
+    fn native_and_module_legs_close_the_same_wallet_amounts() {
+        let settings: Value =
+            serde_json::from_str(include_str!("../../../../config/first_run_dex.json")).unwrap();
+        let load = |s: &str| serde_json::from_str::<Value>(s).unwrap();
+        for (site, native, wallet, active) in [
+            (
+                "yum-yum-swap",
+                include_str!("../../../../tests/data/first_run_dex_2026-11-26/yumyum_base.json"),
+                include_str!(
+                    "../../../../tests/data/first_run_dex_2026-11-26/yumyum_base_module.json"
+                ),
+                7,
+            ),
+            (
+                "bluedex-v3-base",
+                include_str!(
+                    "../../../../tests/data/first_run_dex_2026-11-26/bluedex_v3_base.json"
+                ),
+                include_str!(
+                    "../../../../tests/data/first_run_dex_2026-11-26/bluedex_v3_base_module.json"
+                ),
+                1,
+            ),
+        ] {
+            let reference = load(native);
+            let replay = load(wallet);
+            assert_eq!(reference["factory"], replay["factory"]);
+            assert_eq!(reference["selector"], replay["selector"]);
+            let cfg = &settings
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["id"] == site)
+                .unwrap()["settings"];
+            assert_eq!(cfg["dex.module_runtime_hashes"][0], replay["module_hash"]);
+            assert!(cfg["dex.router"].is_null());
+            let measured = replay["cases"].as_array().unwrap();
+            assert_eq!(measured.len(), active * 4);
+            for case in measured {
+                let registered = reference["markets"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|m| m["pool"] == case["pool"])
+                    .unwrap();
+                let native = registered["cases"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|m| {
+                        m["owner"] == case["owner"]
+                            && m["input"] == case["input"]
+                            && m["buy"]["amount"] == case["buy"]["amount"]
+                    })
+                    .unwrap();
+                for side in ["buy", "sell"] {
+                    let leg = &case[side];
+                    assert_eq!(leg["amount"], native[side]["amount"]);
+                    assert_eq!(leg["received"], native[side]["received"]);
+                    assert!(leg["strict"].is_object() && leg["expired"].is_object());
+                    assert!(
+                        leg["after"].as_array().unwrap()[2..]
+                            .iter()
+                            .all(|b| b == "0")
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn both_factories_and_all_registered_fee_tiers_reproduce_the_archive() {
         let data: Value = serde_json::from_str(include_str!(
             "../../../../tests/data/first_run_dex_2026-11-26/registered_v3_base_profiles.json"

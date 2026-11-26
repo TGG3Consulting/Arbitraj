@@ -6587,6 +6587,8 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 
 ### `dex.module_runtime_hashes`
 
+В режимах `registered_v3` и `registered_v3_module` у Yum Yum Swap и BlueDex V3 `dex.factory` и `dex.factory_runtime_hash` связывают рыночный реестр с сетью. `dex.pool_code_hashes` задаёт проверенный CREATE2 init, `dex.quoter` и `dex.quoter_runtime_hash` — отдельный официальный QuoterV2. Выбор `registered_v3_module` требует развёрнутого владельцем модуля с этой immutable фабрикой, его адреса в `dex.router` и разрешённого хеша в `dex.module_runtime_hashes`. Модуль сверяет изменение балансов входа и выхода. Режим наблюдения читает активные уровни без разрешений.
+
 У Memebox профиль `memebox` читает рынки без исполнителя. Владелец может выбрать `memebox_v5` и задать адрес собственной установки в `dex.router` и хеш её кода в `dex.module_runtime_hashes`. Поле `dex.pool_code_hashes` связывает пару CREATE2 с фабрикой, а независимый `dex.factory_runtime_hash` закрепляет код фабрики. Ставки `poolFee()` и `protocolRatio()` читаются с каждого рынка на одном каноническом блоке.
 
 - **Кейс:** На адресе dex.router должен находиться проверенный модуль исполнения для выбранного DEX.

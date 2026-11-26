@@ -125,12 +125,19 @@ fn step(
     let PoolState::Algebra { tick, fee, .. } = &e.pool.state else {
         return Step::Skip;
     };
-    super::fusion_book::with(venue, addr, |h| judge(h, (synced, ts), (*tick, *fee)))
+    super::fusion_book::with(venue, addr, |h| {
+        judge(h, (synced, ts), (*tick, *fee), delay)
+    })
 }
 
 /// Комиссия по данным книги `h` на время головы. Принимает: данные книги, (synced_block записи, время головы),
 /// (тик, комиссия записи). Возвращает: итог шага. Ошибок нет.
-fn judge(h: Option<&Held>, (synced, ts): (u64, u32), (tick, fee): (i32, u32)) -> Step {
+fn judge(
+    h: Option<&Held>,
+    (synced, ts): (u64, u32),
+    (tick, fee): (i32, u32),
+    delay: Option<u32>,
+) -> Step {
     let Some(h) = h else {
         return Step::Dark("данных оракула нет".into());
     };

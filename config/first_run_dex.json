@@ -2766,6 +2766,7 @@
     "id": "bluedex",
     "source": "https://sourcify.dev/server/v2/contract/8453/0x8437100ed18dbea089e0fa3caaae7f6f40e4a05c · https://sourcify.dev/server/v2/contract/8453/0x1926f2bec4cd34613ccaac82911204b87cf590a2",
     "settings": {
+      "dex.sub_dex": ["bluedex-v3-base"],
       "dex.kind": "v2_fork_dual_create2",
       "dex.factory": "0x8437100ed18dbea089e0fa3caaae7f6f40e4a05c",
       "dex.pool_code_hashes": [
@@ -3379,6 +3380,9 @@
     "source": "https://sourcify.dev/server/v2/contract/8453/0xac714a42bf2c9f8596ecf21bddabe8459dfb313e?fields=sources · tests/data/first_run_dex_2026-11-26/registered_v3_base_profiles.json",
     "settings": {
       "dex.kind": "registered_v3",
+      "dex.module_runtime_hashes": [
+        "0xcf54dd049e72da941a81cd6eb9ef4653f47a16bdf9b1a76e7b97b2d4c45f4559"
+      ],
       "dex.factory": "0xf6c96ac4251905572c7083b1804825850b9bc9e6",
       "dex.factory_runtime_hash": "0xfbed4db6712c34c5a0479b022bece46d6ac67a0b96367dc9ca2a058ebde73627",
       "dex.quoter": "0xac714a42bf2c9f8596ecf21bddabe8459dfb313e",
@@ -3403,6 +3407,9 @@
     "source": "https://sourcify.dev/server/v2/contract/8453/0x2f657b1002c3938d99a6adf706ef393b1fdb1a44?fields=sources · tests/data/first_run_dex_2026-11-26/registered_v3_base_profiles.json",
     "settings": {
       "dex.kind": "registered_v3",
+      "dex.module_runtime_hashes": [
+        "0xde0441c1e3bda51ca65b3a63934cc17b6f590fcf2f4935ac3e46e0c4993e2103"
+      ],
       "dex.factory": "0x20fe0178e262be17260668716ba7922cf66b2d3f",
       "dex.factory_runtime_hash": "0x5b142ebc57e4f801999d81872bac3086a5eac4501cb4ebb7509e7bf9f32b1afa",
       "dex.quoter": "0x2f657b1002c3938d99a6adf706ef393b1fdb1a44",

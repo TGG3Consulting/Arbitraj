@@ -18,7 +18,7 @@ MARKETS = {
 }
 
 
-def round_trip(e, pool, source, target, amount, deadline, runtime, kind=26, owner=None, funding=None, algebra=None, time=None):
+def round_trip(e, pool, source, target, amount, deadline, runtime, kind=26, owner=None, funding=None, algebra=None, time=None, wrapped=BASE_WETH):
     owner = owner or HOLDERS["base"][source]
     word = lambda n: "0x" + format(n, "064x")
     override = {EXEC: {"code": "0x"+runtime, "stateDiff": {

@@ -37,16 +37,5 @@ def stage_hops(lane,module):
  (base/'general_cases.json').rename(base/(lane+'_cases.json')) if lane!='general' else None
  cargo([name],2*len(data['cases']),lane)
 with TemporaryDirectory() as temp:
- d=pathlib.Path(temp); early=sha in json.loads((p/'legacy_rate_string.json').read_bytes())
- if early:
-  settings=json.loads((p/'control_settings.json').read_text(encoding='utf-8-sig'))
-  for lane,n in [('cex','stored'),('dex','actual_v2')]:
-   data=src[lane];settings.update(data['settings']);(d/(lane+'.json')).write_text(json.dumps({'cases':data['cases']}))
-  invoke([p/'stored_compare.py',target,d/'cex.json'])
-  invoke([p/'actual_v2.py','stage',target,d/'dex.json'])
-  invoke([p/'actual_v3.py','stage',target,p/'actual_v3_cases.json'])
-  hist=d/'with_history.py';hist.write_bytes((p/'with_history.py').read_bytes());(d/'control_settings.json').write_text(json.dumps(settings));invoke([hist,target])
-  cargo(['core_size_stored_compare','core_size_actual_v2','core_size_actual_v3'],2*(len(src['cex']['cases'])+len(src['dex']['cases'])+1),'core')
-  stage_hops('general','single_tick_source.rs');stage_hops('tick','full_tick_source.rs')
-  stage_hops('reconcile','reconcile_source.rs')
- stage_hops('last','reconcile_source.rs')
+ d=pathlib.Path(temp)
+ stage_hops('intrablock','reconcile_source.rs')

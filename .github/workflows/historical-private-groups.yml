@@ -1,7 +1,7 @@
-name: Final archive and historical quote adaptation
+name: Recovered intra-block evidence across available releases
 on:
   push:
-    branches: [audit/legacy-and-final-route-replay-2611]
+    branches: [audit/verified-intrablock-all-history-2611]
 permissions:
   contents: read
 jobs:
@@ -71,7 +71,7 @@ jobs:
           done
           python - "$RUNNER_TEMP" <<'PY'
           import json,gzip,pathlib,sys
-          t=pathlib.Path(sys.argv[1]);d=json.loads((t/'input.json').read_bytes());(t/'return.pem').write_text(d['return_key']);results={f.stem:json.loads(f.read_bytes())for f in (t/'results').glob('*.json')};g=json.loads(pathlib.Path('harness/tools/release_size_matrix/linux_groups.json').read_bytes())[int(__import__("os").environ["GROUP"])];fix=json.loads(pathlib.Path('harness/tools/release_size_matrix/legacy_rate_string.json').read_bytes());assert len(results)==sum(5 if sha in fix else 1 for sha in g)
+          t=pathlib.Path(sys.argv[1]);d=json.loads((t/'input.json').read_bytes());(t/'return.pem').write_text(d['return_key']);results={f.stem:json.loads(f.read_bytes())for f in (t/'results').glob('*.json')};g=json.loads(pathlib.Path('harness/tools/release_size_matrix/linux_groups.json').read_bytes())[int(__import__("os").environ["GROUP"])];fix=json.loads(pathlib.Path('harness/tools/release_size_matrix/legacy_rate_string.json').read_bytes());assert len(results)==len(g)
           (t/'result.gz').write_bytes(gzip.compress(json.dumps(results).encode()))
           PY
           /usr/bin/python3 "$p/market_envelope.py" seal "$RUNNER_TEMP/return.pem" "$RUNNER_TEMP/result.enc" "$RUNNER_TEMP/result.gz"

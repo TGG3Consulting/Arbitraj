@@ -434,7 +434,133 @@
       },
       {
         "pool": "0x5c972c206470b4975c95ab7272d3d57077e74c37",
-        "reason": "could not settle v5: {'code': 3, 'message': 'execution reverted: KEWL: INSUFFICIENT_OUTPUT_AMOUNT', 'data': '0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000"
+        "reason": "could not settle v5: {'code': 3, 'message': 'execution reverted: KEWL: INSUFFICIENT_OUTPUT_AMOUNT', 'data': '0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000",
+        "unavailable_buy": {
+          "reserve_out": "1",
+          "reason": "integer output zero for all finite positive exact inputs"
+        },
+        "funding": {
+          "router": "0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24",
+          "path": [
+            "0x4200000000000000000000000000000000000006",
+            "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2"
+          ]
+        },
+        "one_way": [
+          {
+            "mode": "v5",
+            "size": "1",
+            "sell": {
+              "input": "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+              "output": "0x4200000000000000000000000000000000000006",
+              "exact": {
+                "status": "0x1",
+                "spent": "1",
+                "received": "9098765",
+                "gas": "0x1fb0f",
+                "approval_gas": "0xb509",
+                "error": null
+              },
+              "above": {
+                "status": "0x0",
+                "spent": "0",
+                "received": "0",
+                "gas": "0x22a5a",
+                "approval_gas": "0xb509",
+                "error": {
+                  "code": 3,
+                  "message": "execution reverted",
+                  "data": "0x"
+                }
+              }
+            }
+          },
+          {
+            "mode": "router",
+            "size": "1",
+            "sell": {
+              "input": "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+              "output": "0x4200000000000000000000000000000000000006",
+              "exact": {
+                "status": "0x1",
+                "spent": "1",
+                "received": "9098765",
+                "gas": "0x2663f",
+                "approval_gas": "0xb509",
+                "error": null
+              },
+              "above": {
+                "status": "0x0",
+                "spent": "0",
+                "received": "0",
+                "gas": "0x29735",
+                "approval_gas": "0xb509",
+                "error": {
+                  "code": 3,
+                  "message": "execution reverted: Router: INSUFFICIENT_OUTPUT_AMOUNT",
+                  "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000022526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e54000000000000000000000000000000000000000000000000000000000000"
+                }
+              }
+            }
+          },
+          {
+            "mode": "v5",
+            "size": "2",
+            "sell": {
+              "input": "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+              "output": "0x4200000000000000000000000000000000000006",
+              "exact": {
+                "status": "0x1",
+                "spent": "2",
+                "received": "12137765",
+                "gas": "0x1fb0f",
+                "approval_gas": "0xb509",
+                "error": null
+              },
+              "above": {
+                "status": "0x0",
+                "spent": "0",
+                "received": "0",
+                "gas": "0x22a5a",
+                "approval_gas": "0xb509",
+                "error": {
+                  "code": 3,
+                  "message": "execution reverted",
+                  "data": "0x"
+                }
+              }
+            }
+          },
+          {
+            "mode": "router",
+            "size": "2",
+            "sell": {
+              "input": "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+              "output": "0x4200000000000000000000000000000000000006",
+              "exact": {
+                "status": "0x1",
+                "spent": "2",
+                "received": "12137765",
+                "gas": "0x2663f",
+                "approval_gas": "0xb509",
+                "error": null
+              },
+              "above": {
+                "status": "0x0",
+                "spent": "0",
+                "received": "0",
+                "gas": "0x29735",
+                "approval_gas": "0xb509",
+                "error": {
+                  "code": 3,
+                  "message": "execution reverted: Router: INSUFFICIENT_OUTPUT_AMOUNT",
+                  "data": "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000022526f757465723a20494e53554646494349454e545f4f55545055545f414d4f554e54000000000000000000000000000000000000000000000000000000000000"
+                }
+              }
+            }
+          }
+        ]
       },
       {
         "pool": "0xc2e57e98d531914729f8f3a183aa35011e42f9f1",

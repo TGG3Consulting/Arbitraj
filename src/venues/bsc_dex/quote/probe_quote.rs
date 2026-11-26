@@ -88,6 +88,9 @@ impl Way {
     ) -> Option<Result<U256, &'static str>> {
         if self.virt {
             virtual_quoter::decode(raw, amount)
+        } else if e.family.variant == super::super::pools::family_variant::Variant::CandySwap {
+            Some(v2_pair_probe::decode_any(ctx, e, raw, token_in, amount)
+                .ok_or("CandySwap: резервы, остатки или условия выплаты этой ноги не позволяют измерить налог"))
         } else {
             v2_pair_probe::decode_any(ctx, e, raw, token_in, amount).map(Ok)
         }

@@ -145,7 +145,8 @@ def tables(network, snapshots, profiles):
                     f"для nonce от 1 до {kewl['origin']['account_nonce']-1}. Штатный роутер и фабрика находятся на одном прокси "
                     "с разными обработчиками. На трёх парах V5 и роутер дали одинаковую выплату на двух объёмах в обе стороны. "
                     f"Всего {done} измеренных ног, V5 дешевле роутера по газу для этих объёмов. Пара WETH/USDT имеет всего 1 микро-USDT "
-                    "в резерве, при покупке USDT выход округляется до нуля для любого конечного входа. "
+                    "в резерве, поэтому купить USDT нельзя. После отдельного получения USDT через Uniswap V2 "
+                    "V5 и штатный роутер продали 1 и 2 микро-USDT за 9 098 765 и 12 137 765 wei WETH соответственно. "
                     f"[Создание, роли, проверки кошелька и расход газа](../{kewl_file})."])
         diamond = "tests/data/first_run_dex_2026-11-26/diamondswap_base.json"
         proof = read(Path(diamond))
@@ -195,10 +196,10 @@ def tables(network, snapshots, profiles):
                        f"делитель {directory['denominator']} | {curves}, {fills} обменов и столько же отказов при minOut + 1. "
                        f"[Реестр](../{directory_file.as_posix()}) · [Кошельки](../{wallets_file.as_posix()}) |")
         out.extend(["", "На Base Archly v1 и v2 имеют отдельные фабрики. Справочник индексатора выбрал пару из v2, "
-                    "обе версии включены через родителя archly-base. Источник Hydrex Classic — getFee() самой пары, "
+                    "обе версии включены через родителя archly-base. Для пула wTV/TV версии v1 второй независимый адрес получил wTV обычным ERC-20 переводом из архивного баланса и выдал своё разрешение. При входах 500000000000000 и 5000000000000000 raw wTV он получил те же 502276010429030 и 5019824065979758 raw TV, а при обратном обмене — 499700055383695 и 4997001430051607 raw wTV. В четырёх случаях порог на единицу выше откатил обмен. Источник Hydrex Classic — getFee() самой пары, "
                     "индивидуальная ненулевая ставка имеет приоритет над общим тарифом фабрики. У Equalizer ставки могут иметь 18 знаков после запятой. "
                     "Адреса прошлых поколений без подтверждённого шаблона и пары с активным внешним менеджером комиссии требуют отдельной приёмки. "
-                    "[Размещения Archly](https://docs.archly.fi/security) · [Архивы GitHub](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45901979616)."])
+                    "[Размещения Archly](https://docs.archly.fi/security) · [Архивы GitHub](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45903513687)."])
         oasis_file = "tests/data/first_run_dex_2026-11-26/oasisswap_base.json"
         oasis_v5_file = "tests/data/first_run_dex_2026-11-26/oasisswap_v5_base.json"
         oasis, oasis_v5 = read(Path(oasis_file)), read(Path(oasis_v5_file))

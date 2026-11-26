@@ -101,3 +101,41 @@ fn native_and_v5_match_at_wallet_and_both_revert_one_unit_above() {
     }
     assert_eq!(legs, 24);
 }
+
+#[test]
+fn last_unit_of_usdt_blocks_buys_but_funded_sales_still_settle() {
+    let j: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/kewlswap_base.json"
+    ))
+    .unwrap();
+    let markets = j["execution"]["markets"].as_array().unwrap();
+    let row = markets.iter().find(|m| m["one_way"].is_array()).unwrap();
+    let pool = j["pools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["pool"] == row["pool"])
+        .unwrap();
+    assert_eq!(pool["reserves"][1], "1");
+    assert_eq!(row["unavailable_buy"]["reserve_out"], "1");
+    assert_eq!(
+        row["funding"]["path"].as_array().unwrap().last(),
+        Some(&pool["tokens"][1])
+    );
+    let rows = row["one_way"].as_array().unwrap();
+    assert_eq!(rows.len(), 4);
+    for (i, leg) in rows.iter().enumerate() {
+        let (size, net) = if i < 2 {
+            ("1", "9098765")
+        } else {
+            ("2", "12137765")
+        };
+        assert_eq!(leg["mode"], if i % 2 == 0 { "v5" } else { "router" });
+        assert_eq!(leg["size"], size);
+        assert_eq!(leg["sell"]["exact"]["spent"], size);
+        assert_eq!(leg["sell"]["exact"]["received"], net);
+        assert_eq!(leg["sell"]["above"]["status"], "0x0");
+        assert_eq!(leg["sell"]["above"]["spent"], "0");
+        assert_eq!(leg["sell"]["above"]["received"], "0");
+    }
+}

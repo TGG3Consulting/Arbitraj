@@ -144,6 +144,7 @@ pub mod usable_reuse;
 pub(super) mod v2_execution;
 mod v2_fallback;
 pub mod v2_pair_calls;
+mod candy_probe;
 pub mod v2_pair_probe;
 pub mod v2_pair_quote;
 pub mod v2_pair_sim;
@@ -328,8 +329,10 @@ impl Quoting {
         // Решение 301 (дополнение — стек): работа — в кучу здесь, состояние этого future держит указатель
         // (quote/cpu.rs run).
         // Решение 312: замер этапов работы — tm.run() = None (выключен): timed сразу ведёт работу без замера.
-        let native_cash = input.entries.iter().any(vista_pricing::is_vista)
-            && vista_pricing::cash(ctx, &input.usdt_ticker, input.usdt);
+        let native_cash = super::exec::native::cash_ticker(ctx,&input.usdt_ticker);
+        if native_cash && !vista_pricing::cash(ctx,&input.usdt_ticker,input.usdt) {
+            return Err(ctx.not_set("dex.native_wrapped","У расчётной нативной монеты другой адрес обёртки"));
+        }
         let (mut alternatives, compare_single) = Box::pin(v2_fallback::candidates(
             &pick,
             &input,

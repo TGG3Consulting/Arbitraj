@@ -9,11 +9,14 @@
 //! Кто вызывает: quote/probe_quote.rs (request_any, decode_any — проба check/probe.rs, решение 388), check/probe.rs
 //! (buy_unmeasured), exec/dry_surplus_tail.rs.
 //! От чего зависит: quote/{quoter_calls, v2_pair_quote, v2_pair_sim}.rs, math/v2.rs, pools/abi_v2v3.rs, check/{simulate, probe_calls}.rs.
-//! Настройки: через v2_pair_quote::fee — dex.v2_fee_pct [DEX].
+//! Для CandySwap каждый запрос читает Multicall3 перед обменом: резервы, оба баланса, комиссию и получателя.
+//! Настройки: через v2_pair_quote::fee — dex.v2_fee_pct [DEX], для CandySwap — dex.multicall3 [сеть].
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
 
+use super::super::pools::family_variant::Variant;
+use crate::core::types::PoolState;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::check::probe_calls;
@@ -29,10 +32,11 @@ use super::v2_pair_sim;
 /// заранее, чтобы разбор не молчал), Internal (пул не контракт).
 pub fn quote_request(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Address, Bytes)> {
     fee(ctx, e, token_in)?;
-    Ok((
-        pair(ctx, e)?,
-        Bytes::from(IV2Pair::getReservesCall {}.abi_encode()),
-    ))
+    let pool = pair(ctx, e)?;
+    if e.family.variant == Variant::CandySwap {
+        return super::candy_probe::request(ctx, e, pool);
+    }
+    Ok((pool, Bytes::from(IV2Pair::getReservesCall {}.abi_encode())))
 }
 
 /// Разбор ответа quote_request: формула V2 с нашей комиссией. Принимает: ответ, токен входа, сумму. Возвращает: выход;
@@ -44,6 +48,19 @@ pub fn quote_decode(
     token_in: Address,
     amount: U256,
 ) -> Option<U256> {
+    let (pips, ratio) = fee(ctx, e, token_in).ok()?;
+    if e.family.variant == Variant::CandySwap {
+        let PoolState::CandySwap(state) = &e.pool.state else {
+            return None;
+        };
+        return super::candy_probe::expected(
+            raw,
+            pips,
+            state.receiver,
+            token_in == e.pool.token0,
+            amount,
+        );
+    }
     let x = IV2Pair::getReservesCall::abi_decode_returns(raw).ok()?;
     let (a, b) = (U256::from(x.reserve0), U256::from(x.reserve1));
     let (ri, ro) = if token_in == e.pool.token0 {
@@ -51,12 +68,6 @@ pub fn quote_decode(
     } else {
         (b, a)
     };
-    let ratio=fee(ctx,e,token_in).ok()?.1;
-    if let crate::core::types::PoolState::CandySwap(state)=&e.pool.state {
-        // Резервы ответа учитывают предыдущие обмены в этом же симулируемом блоке.
-        let gross = v2::amount_out(amount,ri,ro,ratio)?;
-        return super::super::math::candy::net(gross,state.payout_bps);
-    }
     v2::amount_out(amount, ri, ro, ratio)
 }
 

@@ -17,6 +17,10 @@ on:
         description: Replay the CI-built executor against the two recorded Ethereum builder frames
         type: boolean
         default: false
+      ring_archive_replay:
+        description: Replay Ring Few underlying swaps at the pinned Ethereum block
+        type: boolean
+        default: false
       solidly_archive_replay:
         description: Replay the CI-built Solidly V3 module on Base and Ethereum
         type: boolean
@@ -73,6 +77,20 @@ jobs:
       - name: Doc-тесты
         if: matrix.shard == 0
         run: cargo test --locked --doc
+  ring-archive:
+    if: inputs.ring_archive_replay
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install requests eth-utils eth-abi
+      - run: python scripts/record_ring_ethereum.py "$RUNNER_TEMP/ring-ethereum.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ring-ethereum-replay
+          path: ${{ runner.temp }}/ring-ethereum.json
   hanji-executor:
     runs-on: ubuntu-latest
     steps:

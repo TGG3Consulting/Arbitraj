@@ -17,12 +17,16 @@ on:
         description: Replay the CI-built executor against the two recorded Ethereum builder frames
         type: boolean
         default: false
+      native_v3_only:
+        description: Run only the read-only replay of the three Base fork routers
+        type: boolean
+        default: false
       community_archive_replay:
         description: Quote both sides of all registered Ethereum CommunityV3 pools at the pinned block
         type: boolean
         default: false
       derpdex_archive_replay:
-        description: Replay all verified DerpDEX Base pools on the archived factory block
+        description: Replay Base concentrated-liquidity markets and their native routers on the archived block
         type: boolean
         default: false
       ring_archive_replay:
@@ -43,6 +47,7 @@ env:
   SHARDS: "8"
 jobs:
   clippy:
+    if: ${{ !inputs.native_v3_only }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -54,6 +59,7 @@ jobs:
           shared-key: clippy
       - run: cargo clippy --all-targets --locked -- -D warnings
   tests:
+    if: ${{ !inputs.native_v3_only }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -103,6 +109,20 @@ jobs:
         with:
           name: communityv3-ethereum-depth
           path: ${{ runner.temp }}/communityv3-depth.json
+  base-native-v3:
+    if: inputs.native_v3_only || inputs.derpdex_archive_replay
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0 beautifulsoup4==4.13.5 PyYAML==6.0.3
+      - run: python scripts/record_base_native_v3.py "$RUNNER_TEMP/base-native-v3.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: base-native-v3-replay
+          path: ${{ runner.temp }}/base-native-v3.json
   derpdex-archive:
     if: inputs.derpdex_archive_replay
     runs-on: ubuntu-latest
@@ -140,6 +160,7 @@ jobs:
           name: ring-registered-markets
           path: ${{ runner.temp }}/ring-markets.json
   hanji-executor:
+    if: ${{ !inputs.native_v3_only }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

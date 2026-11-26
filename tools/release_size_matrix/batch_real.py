@@ -15,7 +15,7 @@ def cargo(names,expected,output):
  text=log.read_text(errors='replace')
  if res.returncode:
   capture=[l[:260]for l in text.splitlines() if re.search(r'error(\[E[0-9]+\])?:|panicked at|FAILED|assertion',l)][:10]
-  if output=='core':raise RuntimeError(capture)
+  raise RuntimeError(capture)
   artifact.write_text(json.dumps({'compatibility_error':capture}));return
  records=[]
  for line in text.splitlines():
@@ -40,15 +40,5 @@ with TemporaryDirectory() as temp:
  if src.get('general'):
   (d/'general.rs').rename(target/'tests/general_archive.rs')
   (d/'general.json.native').rename(target/'tests/general_cases.json')
- settings=json.loads((p/'control_settings.json').read_text(encoding='utf-8-sig'))
- for lane,n in [('cex','stored'),('dex','actual_v2')]:
-  data=src[lane];settings.update(data['settings']);(d/(lane+'.json')).write_text(json.dumps({'cases':data['cases']}))
- invoke([p/'stored_compare.py',target,d/'cex.json'])
- invoke([p/'actual_v2.py','stage',target,d/'dex.json'])
- invoke([p/'actual_v3.py','stage',target,p/'actual_v3_cases.json'])
- # This helper reads its own directory for settings, so run an identical private copy.
- hist=d/'with_history.py';hist.write_bytes((p/'with_history.py').read_bytes());(d/'control_settings.json').write_text(json.dumps(settings))
- invoke([hist,target])
- cargo(['core_size_stored_compare','core_size_actual_v2','core_size_actual_v3'],2*(len(src['cex']['cases'])+len(src['dex']['cases'])+1),'core')
- if src.get('general'):cargo(['general_archive'],2*len(src['general']['cases']),'general')
- if src.get('tick'):cargo(['tick_archive'],2*len(src['tick']['cases']),'tick')
+ if not src.get('tick'):raise ValueError("Missing route tick inputs")
+ cargo(['tick_archive'],2*len(src['tick']['cases']),'tick')

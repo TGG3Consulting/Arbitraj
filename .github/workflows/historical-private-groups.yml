@@ -1,7 +1,7 @@
-name: Historical same-market decisions on enlarged archive
+name: Historical BingX delta on original releases
 on:
   push:
-    branches: [audit/all-expanded-markets-history-2611]
+    branches: [audit/all-bingx-delta-history-2611]
 permissions:
   contents: read
 jobs:
@@ -71,7 +71,7 @@ jobs:
           done
           python - "$RUNNER_TEMP" <<'PY'
           import json,gzip,pathlib,sys
-          t=pathlib.Path(sys.argv[1]);d=json.loads((t/'input.json').read_bytes());(t/'return.pem').write_text(d['return_key']);results={f.stem:json.loads(f.read_bytes())for f in (t/'results').glob('*.json')};assert len(results)==12
+          t=pathlib.Path(sys.argv[1]);d=json.loads((t/'input.json').read_bytes());(t/'return.pem').write_text(d['return_key']);results={f.stem:json.loads(f.read_bytes())for f in (t/'results').glob('*.json')};assert len(results)==len(json.loads((pathlib.Path("harness")/"tools/release_size_matrix/linux_groups.json").read_bytes())[int(__import__("os").environ["GROUP"])])
           (t/'result.gz').write_bytes(gzip.compress(json.dumps(results).encode()))
           PY
           /usr/bin/python3 "$p/market_envelope.py" seal "$RUNNER_TEMP/return.pem" "$RUNNER_TEMP/result.enc" "$RUNNER_TEMP/result.gz"

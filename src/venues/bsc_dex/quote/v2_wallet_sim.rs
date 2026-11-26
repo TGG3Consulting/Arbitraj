@@ -35,6 +35,8 @@ pub(super) struct V5Step {
 #[derive(Clone)]
 pub(super) enum Wire {
     Router02,
+    DirectModule { pool: Address },
+    Vault(B256),
     Vista(super::super::exec::vista_wire::Call),
     Oasis { rebate: bool },
     V5(V5Step),
@@ -143,14 +145,41 @@ pub(super) async fn measure(ctx: &Ctx, h: Head, o: Order, boundary: bool) -> Gat
     );
     let data = calldata(&o, deadline, o.minimum);
     calls.extend([tx(o.target, data), balance(o.input), balance(o.output)]);
-    let values = (!value.is_zero()).then_some((approvals.len() + 2, value));
-    let r = frame(ctx, h, &calls, values.as_slice()).await?;
-    if r.iter().any(|x| !x.ok()) {
+    // Vault settles nominal ERC-20 inputs. Confirm that its inventory actually received the charged amount.
+    let vault = match &o.wire {
+        Wire::Vault(_) => Some(o.target),
+        Wire::V5(step) if step.kind == 17 => Some(step.pool),
+        _ => None,
+    };
+    if let Some(holder) = vault {
+        let read = || {
+            tx(
+                o.input,
+                Bytes::from(IMoney::balanceOfCall { owner: holder }.abi_encode()),
+            )
+        };
+        calls.insert(0, read());
+        calls.push(read());
+    }
+    let offset = usize::from(vault.is_some());
+    let values = (!value.is_zero()).then_some((offset + approvals.len() + 2, value));
+    let result = frame(ctx, h, &calls, values.as_slice()).await?;
+    if result.iter().any(|x| !x.ok()) {
         return Err(fail());
     }
     let n = approvals.len();
     let word =
         |v: &CallResult| (v.return_data.len() == 32).then(|| U256::from_be_slice(&v.return_data));
+    let r = &result[offset..result.len() - offset];
+    if vault.is_some()
+        && result
+            .last()
+            .and_then(word)
+            .and_then(|after| after.checked_sub(word(&result[0])?))
+            != Some(o.amount)
+    {
+        return Err(fail());
+    }
     let spent = word(&r[0]).and_then(|old| old.checked_sub(word(&r[n + 3])?));
     let received = word(&r[n + 4])
         .and_then(|after| after.checked_sub(word(&r[1])?))
@@ -161,9 +190,13 @@ pub(super) async fn measure(ctx: &Ctx, h: Head, o: Order, boundary: bool) -> Gat
     if boundary {
         // Тот же плательщик, исходные остатки и разрешения. Более строгий лишь минимум.
         let strict = received.checked_add(U256::ONE).ok_or_else(fail)?;
-        calls[n + 2].input = calldata(&o, deadline, strict);
-        let alt = frame(ctx, h, &calls, values.as_slice()).await?;
-        if alt[n + 2].ok()
+        calls[offset + n + 2].input = calldata(&o, deadline, strict);
+        let strict_result = frame(ctx, h, &calls, values.as_slice()).await?;
+        let alt = &strict_result[offset..strict_result.len() - offset];
+        if (vault.is_some()
+            && (word(&strict_result[0]) != word(&result[0])
+                || strict_result.last().and_then(word) != word(&result[0])))
+            || alt[n + 2].ok()
             || alt[n + 2].error.is_none()
             || alt.iter().enumerate().any(|(j, v)| j != n + 2 && !v.ok())
             || word(&alt[0]) != word(&r[0])
@@ -184,6 +217,9 @@ pub(super) async fn measure(ctx: &Ctx, h: Head, o: Order, boundary: bool) -> Gat
 
 fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
     match &o.wire {
+        Wire::Vault(id) => super::super::exec::vault_direct::data(
+            *id, o.input, o.output, o.amount, minimum, o.payer, deadline,
+        ),
         Wire::Vista(v) => v.data(o.input, o.output, o.amount, minimum, o.payer, deadline),
         Wire::V5(v5) => {
             let step = ArbExecutor::Step {
@@ -207,6 +243,9 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
             }
             .data()
         }
+        Wire::DirectModule { pool } => super::super::pools::solidly_v3::execution_data(
+            *pool, o.input, o.output, o.amount, minimum, deadline,
+        ),
         Wire::Oasis { rebate } => super::super::exec::oasis_direct::swap_data(
             o.input, o.output, o.amount, minimum, o.payer, deadline, *rebate,
         ),

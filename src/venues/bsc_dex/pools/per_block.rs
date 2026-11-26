@@ -92,6 +92,7 @@ pub fn needs(f: &Family) -> bool {
     if matches!(
         f.variant,
         super::family_variant::Variant::SlipstreamDynamicFee
+            | Variant::Memebox
             | Variant::CandySwap
             | Variant::V2Create2LiveFee
             | Variant::DiamondV2
@@ -102,7 +103,8 @@ pub fn needs(f: &Family) -> bool {
             | Variant::DeltaSwap
             | Variant::FraxTwamm
             | Variant::FraxTwammRouter
-            | Variant::NamiIntegral
+            | Variant::BasePluginV1
+            | Variant::NamiIntegral | Variant::SupernovaIntegral
             | super::family_variant::Variant::QuickswapIntegral
             | super::family_variant::Variant::CurvePlain
             | super::family_variant::Variant::CurveMeta

@@ -46,6 +46,7 @@ pub(super) enum DirectCall {
         amount: U256,
         rebate: bool,
     },
+    Vault { id: alloy_primitives::B256, input: Address, amount: U256 },
     V2SupportingFee {
         input: Address,
         amount: U256,
@@ -183,6 +184,8 @@ impl Plan {
                     self.deadline,
                     rebate,
                 ),
+                DirectCall::Vault { id, input, amount } => super::vault_direct::data(
+                    id, input, self.token_out, amount, self.min_total, self.wallet, self.deadline),
                 DirectCall::V2SupportingFee { input, amount } => super::fork_swap::swap_data(
                     amount,
                     self.min_total,
@@ -237,6 +240,9 @@ pub async fn build(
         return Err(ctx.err(ErrorCode::Internal, "план без шагов"));
     };
     let e = &first.entry;
+    if super::vault_direct::enabled(e) {
+        return Box::pin(super::vault_direct::plan(ctx,steps,wallet,now,all_approvals)).await;
+    }
     if super::super::quote::vista_pricing::is_vista(e) {
         return Box::pin(super::vista_direct::plan(
             ctx,

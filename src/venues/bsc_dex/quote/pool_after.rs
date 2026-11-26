@@ -34,7 +34,7 @@ use super::pool_quote;
 pub fn appliable(e: &Entry) -> bool {
     match (&e.pool.state, e.pool.kind) {
         (PoolState::Oasis { repeatable, .. }, PoolKind::V2) => *repeatable,
-        (PoolState::V2 { .. } | PoolState::DeltaSwap { .. } | PoolState::CandySwap(_) | PoolState::EtherVista(_), PoolKind::V2) => true,
+        (PoolState::V2 { .. } | PoolState::DeltaSwap { .. } | PoolState::Memebox(_) | PoolState::CandySwap(_) | PoolState::EtherVista(_), PoolKind::V2) => true,
         (PoolState::V3 { .. }, PoolKind::V3) => e.ticks.is_some() && e.pool.fee_pips.is_some(),
         _ => false,
     }
@@ -58,6 +58,9 @@ pub fn apply(
     };
     let zero_for_one = token_in == e.pool.token0;
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::Memebox(s),PoolKind::V2) => super::super::math::memebox::quote(s,zero_for_one,true,amount)
+            .map(|(fill,next)|(fill,PoolState::Memebox(Box::new(next))))
+            .ok_or_else(||no("Memebox: объём не обеспечен")),
         (PoolState::CandySwap(s), PoolKind::V2) => {
             let fee = super::super::math::v2::fee_ratio(pool_quote::v2_fee_pct(ctx,e)?)
                 .ok_or_else(||no("CandySwap: комиссия вне диапазона"))?;

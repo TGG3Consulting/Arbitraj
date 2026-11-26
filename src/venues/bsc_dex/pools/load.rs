@@ -66,6 +66,9 @@ pub async fn state(
 ) -> GatewayResult<Loaded> {
     let token1 = pair.1;
     let tag = block_tag(block);
+    if f.variant == Variant::Memebox && let PoolRef::Contract(pool) = reference {
+        return Box::pin(super::memebox::load(ctx,f,*pool,pair,&tag)).await;
+    }
     if f.variant == Variant::WhiteSwap
         && let PoolRef::Contract(pool) = reference
     {
@@ -534,10 +537,18 @@ pub async fn state(
         if let PoolRef::Contract(a) = reference {
             // Решение 188: у Integral тики — связным списком (load_algebra_integral.rs), состояние то же. Решение 444:
             // у направленных комиссий — свой globalState (load_algebra_dir.rs), карта — та же, что у V1.9.
-            let (state, t) = if f.variant == Variant::NamiIntegral {
+            let (state, t) = if f.variant == Variant::SupernovaIntegral {
+                let hash=super::elfomo::block(ctx,&tag).await?;
+                let (fee,flags)=Box::pin(super::supernova::check(ctx,f,*a,&hash)).await?;
+                Box::pin(load_algebra_integral::canonical(ctx,*a,&hash,fee,flags)).await?
+            } else if f.variant == Variant::NamiIntegral {
                 let hash = super::elfomo::block(ctx, &tag).await?;
                 let fee = Box::pin(super::nami::check(ctx, f.id, *a, &hash)).await?;
-                Box::pin(load_algebra_integral::canonical(ctx, *a, &hash, fee)).await?
+                Box::pin(load_algebra_integral::canonical(ctx, *a, &hash, fee, super::nami::PLUGIN_FLAGS)).await?
+            } else if f.variant==Variant::BasePluginV1 {
+                let hash=super::elfomo::block(ctx,&tag).await?;
+                let fee=Box::pin(super::base_plugin_v1::check(ctx,f,*a,&hash)).await?;
+                Box::pin(load_algebra_integral::canonical(ctx,*a,&hash,fee,super::base_plugin_v1::FLAGS)).await?
             } else if f.proto == Proto::AlgebraIntegral {
                 if f.variant == Variant::QuickswapIntegral {
                     super::quickswap_plugin::check(ctx, f.id, *a, &tag).await?;

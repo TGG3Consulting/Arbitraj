@@ -100,7 +100,7 @@ fn subsets(ctx: &Ctx, native: bool) -> Vec<(&'static str, Rule<'_>)> {
         out.push((
             "Прямой вызов модуля одного рынка",
             Box::new(|leg: &[Leg]| {
-                matches!(leg, [hop] if hop.entry.family.tradable && hop.entry.family.direct_module())
+                matches!(leg, [hop] if hop.entry.family.tradable && hop.entry.family.direct_module() && hop.entry.family.variant != super::super::pools::family_variant::Variant::Memebox)
             }),
         ));
     }

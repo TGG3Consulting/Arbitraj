@@ -24,7 +24,22 @@ def capture(market, artifact, endpoint):
     def run(calls):
         return simulate_block(endpoint,tag,env,calls)
     def leg(prefix,mode,pool,snapshot,a,b):
-        amount=int(snapshot["input"]);net=int(snapshot["net"]);gross=int(snapshot["gross"])
+        amount=int(snapshot["input"]);pair_limit=int(snapshot["gross"])
+        token_index=bypool[pool]["tokens"].index(a)
+        rin,rout=[int(snapshot["before"]["reserves"][idx]) for idx in (token_index,1-token_index)]
+        credit=min(amount,int(snapshot["pair_input"]))
+        credited=credit-credit*bypool[pool]["fee"]//10000
+        gross=min(pair_limit,rout*credited//(rin+credited))
+        if gross==pair_limit:
+            net=int(snapshot["net"])
+        else:
+            # Независимая проверка поступления ровно за собственный вход в том же состоянии.
+            pref=prefix+[tx(a,"transfer(address,uint256)",["address","uint256"],[pool,amount])]
+            direct=tx(pool,"swap(uint256,uint256,address,bytes)",["uint256","uint256","address","bytes"],
+                      [gross if token_index else 0,0 if token_index else gross,OWNER,b""])
+            ref=run(pref+[balance(b,OWNER),direct,balance(b,OWNER)])
+            if any(call["status"]!="0x1" for call in ref):raise ValueError("own-credit reference payout reverted")
+            net=scalar(ref[-1])-scalar(ref[-3])
         target=EXEC if mode=="v5" else ADAPTER
         approve=tx(a,"approve(address,uint256)",["address","uint256"],[target,amount])
         inputs=[balance(a,OWNER),balance(b,OWNER),balance(a,EXEC),balance(b,EXEC),
@@ -45,7 +60,7 @@ def capture(market, artifact, endpoint):
         if (scalar(q),rejected["status"],unchanged,scalar(done),before[0]-after[0],after[1]-before[1])!=(gross,"0x0",before,net,amount,net):
             raise ValueError("bound module quote, wallet debit, receipt or floor differs")
         if any(before[2:6]+after[2:6]):raise ValueError("module or executor holds tokens")
-        return dict(input=a,output=b,amount=str(amount),paid=str(net),gross=str(gross),gas=int(done["gasUsed"],16),
+        return dict(input=a,output=b,amount=str(amount),paid=str(net),gross=str(gross),pair_limit=str(pair_limit),gas=int(done["gasUsed"],16),
                     approval_gas=int(res[i-1]["gasUsed"],16),above=rejected.get("error"),balances_before=list(map(str,before)),
                     balances_after=list(map(str,after))),prefix+[trade(net)]
     cases=[]

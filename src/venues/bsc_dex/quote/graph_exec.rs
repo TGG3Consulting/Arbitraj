@@ -95,6 +95,7 @@ pub fn executable(ctx: &Ctx, legs: &[Path], native: bool) -> Result<(), String> 
         && let [path] = legs
         && let [hop] = path.hops.as_slice()
         && hop.entry.family.direct_module()
+        && hop.entry.family.variant != super::super::pools::family_variant::Variant::Memebox
     {
         return Ok(());
     }
@@ -219,7 +220,7 @@ pub enum GraphForm {
 pub fn graph_form(ctx: &Ctx, route: &DexRoute) -> GraphForm {
     if let [leg] = route.legs.as_slice()
         && let [hop] = leg.hops.as_slice()
-        && families::classify(ctx, &hop.family).is_ok_and(|f| f.tradable && f.direct_module())
+        && families::classify(ctx, &hop.family).is_ok_and(|f| f.tradable && f.direct_module() && f.variant != super::super::pools::family_variant::Variant::Memebox)
     {
         return GraphForm::Direct;
     }

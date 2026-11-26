@@ -154,12 +154,16 @@ pub fn requests(ctx: &Ctx, e: &Entry, plan: &Plan) -> GatewayResult<Vec<(Address
     buy.chain(sell).collect()
 }
 
+pub(super) fn individual(ctx: &Ctx,e: &Entry)->bool {
+    e.family.variant==super::super::pools::family_variant::Variant::SupernovaIntegral || virtual_quoter::on(ctx,e.family.id,e.family.proto)
+}
+
 /// Что делает: проба плана на блоке `tag` по состоянию `e` на этом блоке (см. шапку). Возвращает: Measured.
 /// Ошибки: узел, настройки, откат квотера (кроме «не хватает ликвидности»).
 pub async fn measure_plan(ctx: &Ctx, e: &Entry, plan: &Plan, tag: &str) -> Measured {
     let n = plan.buy.len() + plan.sell.len();
     let mut remote = Vec::with_capacity(n);
-    if virtual_quoter::on(ctx, e.family.id, e.family.proto) {
+    if individual(ctx, e) {
         let ins = plan.buy.iter().map(|p| (e.usdt, p.amount_in));
         for (token_in, amount) in ins.chain(plan.sell.iter().map(|p| (e.coin, p.amount_in))) {
             remote.push(match quoter::out_at(ctx, e, token_in, amount, tag).await {

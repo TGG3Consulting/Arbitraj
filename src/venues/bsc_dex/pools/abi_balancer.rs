@@ -39,6 +39,8 @@ alloy::sol! {
             address recipient;
             bool toInternalBalance;
         }
+        struct SingleSwap { bytes32 poolId; uint8 kind; address assetIn; address assetOut; uint256 amount; bytes userData; }
+        function swap(SingleSwap singleSwap, FundManagement funds, uint256 limit, uint256 deadline) external payable returns (uint256);
         function getPool(bytes32 poolId) external view returns (address, uint8);
         function getPoolTokens(bytes32 poolId) external view returns (address[] memory tokens, uint256[] memory balances, uint256 lastChangeBlock);
         function queryBatchSwap(uint8 kind, BatchSwapStep[] memory swaps, address[] memory assets, FundManagement memory funds) external returns (int256[] memory assetDeltas);

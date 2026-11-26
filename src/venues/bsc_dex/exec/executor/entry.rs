@@ -196,6 +196,12 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         }
         return Ok((Params::Basin, ctx.dex_addr("dex.router", e.family.id)?));
     }
+    if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::Memebox {
+        if k != ExecKind::Basin || !matches!(e.pool.state,PoolState::Memebox(_)) {
+            return Err(ctx.err(ErrorCode::NoRoute,"Memebox: отсутствует подтверждённый шаг модуля"));
+        }
+        return Ok((Params::Basin,ctx.dex_addr("dex.router",e.family.id)?));
+    }
     if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::FraxTwamm {
         if k != ExecKind::Basin
             || !matches!(e.pool.state, PoolState::V2 { .. })

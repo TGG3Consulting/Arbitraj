@@ -64,13 +64,26 @@ contract MemeboxAdapter {
         return out;
     }
 
+    // Верхняя граница выплаты за собственный подтверждённый приход. Предыдущие
+    // несинхронизированные переводы в пару не дают плательщику дополнительного выхода.
+    function payout(uint256 i,uint256 o,uint256 afterIn,uint256 afterOut,uint256 credit,uint256 fee)
+        private pure returns(uint256) {
+        uint256 available=quote(i,o,afterIn,afterOut,fee);
+        uint256 charge=credit/10_000*fee+(credit%10_000)*fee/10_000;
+        uint256 funded=i+(credit-charge);
+        uint256 own=o-((i*o-1)/funded+1);
+        uint256 paid=own<available?own:available;
+        require(paid!=0 && afterOut-paid<=type(uint112).max,"payout");
+        return paid;
+    }
+
     // Сумма здесь — чистый приход на пару после возможного налога входного токена.
     function getAmountOut(address a,address b,uint256 credit) external view returns (uint256) {
         (IMemeboxPair p,bool z)=market(a,b);
         (uint256 i,uint256 o)=reserves(p,z);
         (uint256 liveIn,uint256 liveOut)=accounted(p,z);
         require(p.protocolRatio()<=10_000,"ratio");
-        return quote(i,o,liveIn+credit,liveOut,p.poolFee());
+        return payout(i,o,liveIn+credit,liveOut,credit,p.poolFee());
     }
 
     function swapFrom(address a,address b,uint256 amount,uint256 minimum,address recipient,uint256 deadline)
@@ -104,7 +117,7 @@ contract MemeboxAdapter {
         (uint256 afterIn,uint256 afterOut)=accounted(p,z);
         (uint256 nextI,uint256 nextO)=reserves(p,z);
         require(i==nextI && o==nextO && afterIn==liveIn+credit && afterOut==liveOut,"changed");
-        uint256 gross=quote(i,o,afterIn,afterOut,p.poolFee());
+        uint256 gross=payout(i,o,afterIn,afterOut,credit<amount?credit:amount,p.poolFee());
         require(gross!=0,"empty");
         p.swap(z?0:gross,z?gross:0,recipient,"");
         received=IMemeboxToken(b).balanceOf(recipient)-beforeOut;

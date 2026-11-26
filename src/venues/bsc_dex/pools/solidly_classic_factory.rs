@@ -102,6 +102,32 @@ pub(super) async fn at(ctx: &Ctx, f: &Family, tag: &Value) -> GatewayResult<Addr
         }
         _ => return Err(bad()),
     };
+    bind(ctx, address, runtime, proxy, tag).await?;
+    Ok(address)
+}
+
+pub(super) async fn plain(
+    ctx: &Ctx,
+    address: Address,
+    runtime: B256,
+    tag: &Value,
+) -> GatewayResult<()> {
+    bind(ctx, address, runtime, None, tag).await
+}
+
+async fn bind(
+    ctx: &Ctx,
+    address: Address,
+    runtime: B256,
+    proxy: Option<(Address, B256)>,
+    tag: &Value,
+) -> GatewayResult<()> {
+    let bad = || {
+        ctx.err(
+            ErrorCode::NotConfigured,
+            "Нужны проверенный адрес, хеш runtime и канонический блок",
+        )
+    };
     let at = tag["blockHash"]
         .as_str()
         .and_then(|x| x.parse().ok())
@@ -122,5 +148,5 @@ pub(super) async fn at(ctx: &Ctx, f: &Family, tag: &Value) -> GatewayResult<Addr
     cached(key)
         .get_or_try_init(|| verify(ctx, key, tag))
         .await?;
-    Ok(address)
+    Ok(())
 }

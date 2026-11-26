@@ -126,22 +126,29 @@ def capture(directory, endpoint, shard):
                                   [a,n,b,floor,deadline,[(17,VAULT,a,b,10000,encode(["bytes32"],[pid]))]])
                     reads = [balance(a,OWNER), balance(b,OWNER), balance(a,EXEC), balance(b,EXEC),
                              allowance(a,OWNER,dest), allowance(a,EXEC,VAULT)]
-                    seq = prefix+[approve(a,dest,n)]+reads+[trade(settled_quote+1)]+reads+[trade(settled_quote)]+reads
+                    seq = prefix+[balance(a,VAULT)]+reads[4:]+[approve(a,dest,n)]+reads+[trade(settled_quote+1)]+reads+[trade(settled_quote)]+reads+[balance(a,VAULT)]
                     result = run(seq)
-                    at=len(prefix)+1
+                    initial_grants=list(map(scalar,result[len(prefix)+1:len(prefix)+3]))
+                    at=len(prefix)+4
                     before=list(map(scalar,result[at:at+6]))
                     over=result[at+6]
                     unchanged=list(map(scalar,result[at+7:at+13]))
                     fill=result[at+13]
-                    after=list(map(scalar,result[at+14:]))
+                    after=list(map(scalar,result[at+14:-1]))
+                    vault_credit=scalar(result[-1])-scalar(result[len(prefix)])
                     if any(x["status"]!="0x1" for x in result[:at]) or unchanged!=before or over["status"]!="0x0":
                         raise ValueError(f"{m['pool']} {mode}: rejected limit failed to restore wallet")
                     if fill["status"]!="0x1":
                         row[mode] = dict(rejected=fill.get("error"),minimum=str(settled_quote))
                         continue
-                    if (before[0]-after[0],after[1]-before[1],before[2:4],after[2:4],after[4:]) != (n,settled_quote,[0,0],[0,0],[0,0]):
-                        raise ValueError(f"{m['pool']} {mode}: incomplete wallet payout or approval")
-                    row[mode]=dict(output=str(settled_quote),gas=int(fill["gasUsed"],16),rejected_plus_one=over.get("error"))
+                    persistent_vault = ((1<<256)-1)
+                    for spender, start, end in zip((dest,VAULT),initial_grants,after[4:],strict=True):
+                        # BalancerPoolToken grants its own Vault unlimited effective allowance intrinsically.
+                        if end and not (spender==VAULT and start==end==persistent_vault):
+                            raise ValueError((m["pool"],a,mode,"unexpected approval",start,end))
+                    if (vault_credit,before[0]-after[0],after[1]-before[1],before[2:4],after[2:4]) != (n,n,settled_quote,[0,0],[0,0]):
+                        raise ValueError((m["pool"],a,b,mode,n,settled_quote,"wallet",before,after))
+                    row[mode]=dict(output=str(settled_quote),credited_to_vault=str(vault_credit),initial_allowances=list(map(str,initial_grants)),final_allowances=list(map(str,after[4:])),gas=int(fill["gasUsed"],16),rejected_plus_one=over.get("error"))
     if not any(r.get("v5",{}).get("output") and r.get("vault",{}).get("output") for r in rows):
         raise ValueError("no paid wallet control in this group")
     return dict(selector=tag, chain=8453, state_root=header["stateRoot"], executor="0x"+keccak(hexstr=runtime).hex(), rows=rows)

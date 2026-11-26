@@ -35,7 +35,6 @@ use super::super::node::call;
 use super::super::pools::load_batch::{self, Want};
 use super::super::pools::registry::{Entry, Registry};
 use super::super::pools::{fusion_book, load};
-use super::super::quote::virtual_quoter;
 use super::super::tokens::Tokens;
 use super::hook_batch_read::{Read, cl_parse, cl_plan, quoted, want};
 use super::hooks_probe::{self, Measured, Plan};
@@ -79,7 +78,7 @@ pub async fn measure(
                 continue;
             }
         };
-        let read = if virtual_quoter::on(ctx, mem.family.id, mem.family.proto) {
+        let read = if hooks_probe::individual(ctx, mem) {
             // Виртуальный квотер (решение 186) — не eth_call квотера: состояние в пакете не читается, проба по одному.
             match fresh {
                 Some(_) => Read::Have(Box::new(base.clone())),
@@ -92,7 +91,7 @@ pub async fn measure(
             }
         };
         plans.push((i, read, calls.len()));
-        if !virtual_quoter::on(ctx, mem.family.id, mem.family.proto) {
+        if !hooks_probe::individual(ctx, mem) {
             calls.extend(asks);
         }
     }
@@ -143,7 +142,7 @@ pub async fn measure(
             continue;
         };
         let (e, plan) = &pools[*i];
-        let r = if virtual_quoter::on(ctx, e.family.id, e.family.proto) {
+        let r = if hooks_probe::individual(ctx, e) {
             hooks_probe::measure_plan(ctx, st, plan, &tag).await
         } else {
             let n = plan.buy.len() + plan.sell.len();

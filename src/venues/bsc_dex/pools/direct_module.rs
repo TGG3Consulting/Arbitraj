@@ -54,6 +54,8 @@ pub fn market(ctx: &Ctx, entry: &Entry) -> GatewayResult<Address> {
         {
             Ok(*address)
         }
+        (PoolRef::Contract(address), super::families::Proto::V2)
+            if entry.family.variant == super::family_variant::Variant::Memebox => Ok(*address),
         (PoolRef::Contract(address), super::families::Proto::Slipstream) => Ok(*address),
         _ => Err(ctx.err(
             ErrorCode::NoRoute,
@@ -98,6 +100,10 @@ pub async fn verify_code(ctx: &Ctx, id: &str, addr: Address, tag: &Value) -> Gat
 }
 
 pub async fn verify(ctx: &Ctx, f: &Family, addr: Address, at: &str) -> GatewayResult<()> {
+    if f.variant == super::family_variant::Variant::Memebox {
+        let at = super::elfomo::block(ctx,at).await?;
+        return super::memebox::module(ctx,f,addr,&at).await;
+    }
     if f.variant == super::family_variant::Variant::BaseNativeV3 {
         if !super::base_native_v3::valid(ctx, f) {
             return Err(ctx.err(

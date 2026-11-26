@@ -170,6 +170,16 @@ pub struct EtherVistaState {
     pub sell_fee: U256,
 }
 
+/// Состояние пары Memebox. Резервы и доступный остаток исключают начисленные, но ещё не выведенные комиссии.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MemeboxState {
+    pub reserves: [U256; 2],
+    pub available: [U256; 2],
+    pub physical: [U256; 2],
+    pub fee_bps: u16,
+    pub protocol_bps: u16,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CandySwapState {
     pub reserves: [U256; 2],
@@ -339,6 +349,7 @@ pub enum PoolState {
     EtherVista(Box<EtherVistaState>),
     /// Сумма, списанная с CandySwap, включает независимое удержание из выплаты получателю.
     CandySwap(Box<CandySwapState>),
+    Memebox(Box<MemeboxState>),
 }
 
 /// Состояние пары PMM от оракула (решение 122 F, 3) — боксируется в `PoolState::OraclePmm`. Только то, что читается

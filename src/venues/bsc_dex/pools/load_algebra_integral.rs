@@ -45,24 +45,25 @@ pub(super) async fn canonical(
     pool: Address,
     tag: &Value,
     fee: u16,
+    flags: u8,
 ) -> GatewayResult<(PoolState, TickMap)> {
-    read(ctx, pool, At::Canonical(tag), Some(fee)).await
+    read(ctx, pool, At::Canonical(tag), Some((fee, flags))).await
 }
 
 async fn read(
     ctx: &Ctx,
     pool: Address,
     tag: At<'_>,
-    confirmed_fee: Option<u16>,
+    confirmed_fee: Option<(u16, u8)>,
 ) -> GatewayResult<(PoolState, TickMap)> {
     let steps = ctx.int("dex.integral_tick_steps")?;
     let gs = tag.view(ctx, pool, &P::globalStateCall {}).await?;
     let liquidity = tag.view(ctx, pool, &P::liquidityCall {}).await?;
-    let fee = if let Some(fee) = confirmed_fee {
-        if !gs.unlocked || gs.pluginConfig != super::nami::PLUGIN_FLAGS {
+    let fee = if let Some((fee, flags)) = confirmed_fee {
+        if !gs.unlocked || gs.pluginConfig != flags {
             return Err(ctx.err(
                 ErrorCode::NoRoute,
-                "Флаги или блокировка пула Nami изменились",
+                "Флаги или блокировка пула Algebra изменились",
             ));
         }
         fee

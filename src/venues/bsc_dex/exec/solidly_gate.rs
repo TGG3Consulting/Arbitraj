@@ -67,6 +67,14 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
     let mut role_block = None;
     for e in entries.iter().copied() {
         let f = e.family;
+        if f.variant==Variant::BasePluginV1 {
+            let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            let fee=Box::pin(super::super::pools::base_plugin_v1::check(ctx,f,e.pool.reference.address(),at)).await?;
+            if !matches!(&e.pool.state,PoolState::Algebra{fee:old,..} if *old==u32::from(fee)) {
+                return Err(ctx.err(ErrorCode::NoRoute,"Algebra BasePluginV1: ставка изменилась после котировки"));
+            }
+            continue;
+        }
         if f.variant == Variant::SolidlyClassic {
             let at = match &role_block {
                 Some(at) => at,
@@ -74,6 +82,14 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             };
             let gate = super::super::pools::solidly_classic::fresh(ctx,e,at).await?;
             cap = merged_cap(ctx, f.id, gate, cap)?;
+            continue;
+        }
+        if f.variant == Variant::Memebox {
+            let at=match &role_block {
+                Some(at)=>at,
+                None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?),
+            };
+            Box::pin(super::super::pools::memebox::fresh(ctx,e,at)).await?;
             continue;
         }
         if f.variant == Variant::CandySwap {
@@ -137,14 +153,16 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             super::super::pools::direct_module::verify(ctx, f, module, "latest").await?;
             continue;
         }
-        if f.variant == Variant::NamiIntegral
+        if f.variant.external_algebra_swap()
             && let PoolRef::Contract(pool) = e.pool.reference
         {
             let hash = super::super::pools::nami::block(ctx, "latest").await?;
-            let fee = Box::pin(super::super::pools::nami::check(ctx, f.id, pool, &hash)).await?;
+            let fee = if f.variant==Variant::SupernovaIntegral {
+                Box::pin(super::super::pools::supernova::check(ctx,f,pool,&hash)).await?.0
+            } else { Box::pin(super::super::pools::nami::check(ctx, f.id, pool, &hash)).await? };
             if !matches!(&e.pool.state,crate::core::types::PoolState::Algebra {fee:quoted, ..} if *quoted==u32::from(fee))
             {
-                return Err(ctx.err(ErrorCode::StaleData, "Изменилась комиссия отправителя Nami"));
+                return Err(ctx.err(ErrorCode::StaleData, "Изменилась комиссия отправителя Algebra Integral"));
             }
             continue;
         }

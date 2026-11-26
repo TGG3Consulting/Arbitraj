@@ -19,12 +19,14 @@ pub(super) async fn candidates(
     use super::{
         delta_pricing, frax_pricing, oasis_pricing, router_pricing, white_pricing, white_state,
     };
-    let mut kinds = [false; 6];
+    let mut kinds = [false; 8];
     for e in &i.entries {
         kinds[5] |= super::vista_pricing::is_vista(e);
         if native {
             continue;
         }
+        kinds[7] |= super::memebox_pricing::enabled(e);
+        kinds[6] |= super::super::exec::vault_direct::enabled(e);
         kinds[4] |= oasis_pricing::is_oasis(e);
         kinds[0] |= white_pricing::is_white(e);
         kinds[1] |= frax_pricing::is_frax(e);
@@ -42,7 +44,7 @@ pub(super) async fn candidates(
     } else {
         None
     };
-    let (white, frax, delta, router, oasis, vista) = tokio::join!(
+    let (white, frax, delta, router, oasis, vista, vault, memebox) = tokio::join!(
         async {
             if kinds[0] {
                 Box::pin(white_pricing::candidates(q, i, head)).await
@@ -84,19 +86,27 @@ pub(super) async fn candidates(
             } else {
                 Vec::new()
             }
+        },
+        async {
+            if kinds[6] { Box::pin(super::vault_pricing::candidates(q,i,head)).await } else { Vec::new() }
+        },
+        async {
+            if kinds[7] { Box::pin(super::memebox_pricing::candidates(q,i,head)).await } else { Vec::new() }
         }
     );
     let mut all = white;
+    all.extend(memebox);
     all.extend(frax);
     all.extend(delta);
     all.extend(router);
     all.extend(oasis);
     all.extend(vista);
+    all.extend(vault);
     (all, q.exec_quote)
 }
 
 fn individual(e: &Entry) -> bool {
-    super::vista_pricing::is_vista(e)
+    super::memebox_pricing::enabled(e) || super::super::exec::vault_direct::enabled(e) || super::vista_pricing::is_vista(e)
         || super::oasis_pricing::is_oasis(e)
         || super::white_pricing::is_white(e)
         || super::frax_pricing::is_frax(e)

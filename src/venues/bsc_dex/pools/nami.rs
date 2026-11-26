@@ -183,7 +183,7 @@ pub(in crate::venues::bsc_dex) fn path_ok<'a>(
     let mut external = false;
     for e in entries {
         n += 1;
-        external |= e.family.variant == super::family_variant::Variant::NamiIntegral;
+        external |= e.family.variant.external_algebra_swap();
         if external && n > 1 {
             return false;
         }

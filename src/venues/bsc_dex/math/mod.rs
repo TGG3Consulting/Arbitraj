@@ -104,6 +104,7 @@ pub mod swap_step;
 pub mod ten;
 pub mod tick_math;
 pub(crate) mod candy;
+pub(crate) mod memebox;
 pub(crate) mod ethervista;
 pub mod v2;
 pub mod wombat;

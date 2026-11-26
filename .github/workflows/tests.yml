@@ -405,7 +405,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        market: [x7-finance, x7-finance-ethereum, deltaswap-ethereum]
+        market: [x7-finance, x7-finance-ethereum, deltaswap-ethereum, supernova-cl]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -414,7 +414,9 @@ jobs:
       - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0 beautifulsoup4==4.13.5 PyYAML==6.0.3
       - if: matrix.market == 'deltaswap-ethereum'
         run: python scripts/record_deltaswap_base.py "$RUNNER_TEMP/market.json" --network ethereum
-      - if: matrix.market != 'deltaswap-ethereum'
+      - if: matrix.market == 'supernova-cl'
+        run: python scripts/record_supernova_ethereum.py "$RUNNER_TEMP/market.json"
+      - if: startsWith(matrix.market, 'x7-finance')
         run: python scripts/record_ethereum_x7.py "${{ matrix.market }}" "$RUNNER_TEMP/market.json"
       - uses: actions/upload-artifact@v4
         with:

@@ -269,6 +269,12 @@ mod tests {
                             p.network,
                             p.id
                         );
+                    } else if k == "dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"),Some(Parameter::Text(kind)) if kind=="algebra_integral_base_plugin_v1") {
+                        let path=std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("tests/data/first_run_dex_2026-11-26/base_algebra_{}.json.gz",p.id));
+                        let file=std::fs::File::open(path).unwrap();
+                        let data:Value=serde_json::from_reader(flate2::read::GzDecoder::new(file)).unwrap();
+                        assert_eq!(data["selector"],snapshot["selector"]);
+                        assert_eq!(data["reads"]["POOL_INIT_CODE_HASH()"].as_str(),Some(text.as_str()));
                     } else if k == "dex.pool_code_hashes" && p.chain_id == 8453
                         && matches!(p.settings.get("dex.kind"), Some(Parameter::Text(kind)) if kind == "solidly_v1") {
                         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

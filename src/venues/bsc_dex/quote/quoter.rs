@@ -49,6 +49,9 @@ pub async fn out_at(
     amount: U256,
     block: &str,
 ) -> GatewayResult<U256> {
+    if e.family.variant == super::super::pools::family_variant::Variant::Memebox {
+        return super::super::pools::memebox::quote(ctx,e,token_in,amount,block).await;
+    }
     if super::super::exec::white_direct::selected()
         && e.family.variant == super::super::pools::family_variant::Variant::WhiteSwap
     {
@@ -56,7 +59,7 @@ pub async fn out_at(
         Box::pin(super::white_state::refresh(ctx, &mut entry, block)).await?;
         return super::pool_quote::swap(ctx, &entry, token_in, true, amount).map(|x| x.amount_out);
     }
-    if e.family.variant == super::super::pools::family_variant::Variant::NamiIntegral {
+    if e.family.variant.external_algebra_swap() {
         let to = if token_in == e.pool.token0 {
             e.pool.token1
         } else if token_in == e.pool.token1 {
@@ -67,6 +70,9 @@ pub async fn out_at(
                 "Пара Nami не содержит входной токен",
             ));
         };
+        if e.family.variant == super::super::pools::family_variant::Variant::SupernovaIntegral {
+            return super::super::pools::supernova::quote(ctx,e.family.id,token_in,to,amount,block).await;
+        }
         return super::super::pools::nami::quote(ctx, e.family.id, token_in, to, amount, block)
             .await;
     }

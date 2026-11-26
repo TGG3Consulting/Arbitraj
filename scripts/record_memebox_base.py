@@ -63,7 +63,7 @@ def legs(c, market, funding, token_in, amount):
         for value in (net*rout//(rin*den+net), (paid-paid*fee//den)*rout//(rin+paid-paid*fee//den)):
             if 0<value<rout:guesses.update((value,value+1))
     # Reverts preceding the first success leave the simulated pair untouched.
-    ordered=sorted((g for g in guesses if g<rout),reverse=True)
+    ordered=sorted((g for g in guesses if 0<g<rout),reverse=True)
     trials=batch(prefix+[exact(q) for q in ordered])[-len(ordered):] if ordered else []
     for q,row in zip(ordered,trials):
         if row["status"]=="0x1":lo=q;break

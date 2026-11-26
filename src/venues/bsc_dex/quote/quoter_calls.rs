@@ -49,7 +49,13 @@ pub fn request(
     } else {
         e.pool.token0
     };
-    if e.family.variant == super::super::pools::family_variant::Variant::NamiIntegral {
+    if e.family.variant == super::super::pools::family_variant::Variant::Memebox {
+        if token_in!=e.pool.token0 && token_in!=e.pool.token1 {
+            return Err(ctx.err(ErrorCode::InvalidAddress,"Memebox: вход отсутствует в паре"));
+        }
+        return Ok((ctx.dex_addr("dex.router",e.family.id)?,super::super::pools::memebox::calldata(token_in,token_out,amount)));
+    }
+    if e.family.variant.external_algebra_swap() {
         if token_in != e.pool.token0 && token_in != e.pool.token1 {
             return Err(ctx.err(ErrorCode::InvalidAddress, "Вход не входит в пару Nami"));
         }
@@ -542,6 +548,9 @@ pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> O
 }
 
 pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
+    if e.family.variant == super::super::pools::family_variant::Variant::Memebox {
+        return super::super::pools::memebox::decode(out);
+    }
     if matches!(&e.pool.state, PoolState::EtherVista(_)) {
         // Без направления нельзя определить, с какой стороны фиксированная плата в ETH.
         return None;
@@ -557,7 +566,7 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
             _ => None,
         };
     }
-    if e.family.variant == super::super::pools::family_variant::Variant::NamiIntegral {
+    if e.family.variant.external_algebra_swap() {
         return super::super::pools::nami::decoded(out);
     }
     if e.family.variant == super::super::pools::family_variant::Variant::BaseNativeV3 {

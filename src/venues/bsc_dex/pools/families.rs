@@ -403,7 +403,8 @@ pub struct Family {
 
 impl Family {
     pub fn direct_module(&self) -> bool {
-        matches!(self.variant, Variant::SolidlyCl | Variant::BaseNativeV3)
+        (self.variant == Variant::Memebox && self.tradable)
+            || matches!(self.variant, Variant::SolidlyCl | Variant::BaseNativeV3)
             || matches!(self.proto, Proto::Elfomo | Proto::Lunar | Proto::BaiBai)
     }
 }
@@ -445,7 +446,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
         "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
-        "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
+        "memebox_v5" => (PoolKind::V2, Proto::V2, true, true, true),
+        "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
         "v2_fork" | "v2_diamond_router" | "v2_diamond_create" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_whiteswap" => {
@@ -497,9 +499,10 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // Algebra Integral (THENA V3, DexSwap; решение 188): как thena_fusion — в графе (математика swap_algebra),
         // исполнение — шаг ALGEBRA контракта-исполнителя (тот же swap + algebraSwapCallback, exec_kind.rs).
         "algebra_integral"
+        | "algebra_integral_base_plugin_v1"
         | "algebra_integral_hydrex"
         | "algebra_integral_quickswap"
-        | "algebra_integral_nami" => (PoolKind::Cl, Proto::AlgebraIntegral, true, false, false),
+        | "algebra_integral_nami" | "algebra_integral_supernova" => (PoolKind::Cl, Proto::AlgebraIntegral, true, false, false),
         // Решение 444: Algebra V1.9 с направленными комиссиями (Camelot V3) — как thena_fusion: в графе (математика
         // swap_algebra, комиссия стороны), исполнение — шаг ALGEBRA исполнителя (exec_kind.rs).
         "algebra_dir_fee" => (PoolKind::Cl, Proto::AlgebraDirFee, true, false, false),
@@ -541,7 +544,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
             (PoolKind::Fictive, Proto::Smardex, true, false, false)
         }
         // Balancer V2 (решение 289): в графе и сигналах (формулы пулов); исполнение — шаг BALANCER (только v2).
-        "balancer_v2" => (PoolKind::VaultPool, Proto::BalancerV2, true, false, false),
+        "balancer_v2" | "balancer_v2_wallet" => (PoolKind::VaultPool, Proto::BalancerV2, true, false, false),
         // Balancer V3 (решение 441): в графе и сигналах (расчёт хранилища V3); исполнение — шаг BALANCER_V3 (с v4).
         "balancer_v3" => (PoolKind::VaultPool, Proto::BalancerV3, true, false, false),
         // Liquidity Book V2.1 (решение 290): в графе и сигналах (порт getSwapOut); исполнение — шаг LB (только v2).
@@ -802,6 +805,11 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
                 list.extend(["dex.router", "dex.module_runtime_hashes"]);
             }
         }
+        Proto::V2 if f.variant == Variant::Memebox => {
+            list.extend(["dex.factory", "dex.factory_runtime_hash", "dex.pool_code_hashes",
+                "dex.v2_fee_source", "dex.v2_fee_method", "dex.v2_fee_denominator"]);
+            if f.tradable { list.extend(["dex.router","dex.module_runtime_hashes"]); }
+        }
         Proto::V2 => {
             list.push("dex.factory");
             if matches!(
@@ -891,6 +899,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // (dex.quoter_virtual = да убирает dex.quoter из списка, virtual_quoter.rs); без него пул не подключается.
         Proto::AlgebraIntegral => {
             list.extend(["dex.factory", "dex.quoter"]);
+            if matches!(f.variant,Variant::BasePluginV1 | Variant::SupernovaIntegral) {
+                list.extend(["dex.factory_runtime_hash","dex.plugin_factory","dex.plugin_runtime_hashes",super::verify_algebra_dir::SETTING]);
+            }
             if matches!(
                 f.variant,
                 Variant::QuickswapIntegral | Variant::NamiIntegral
@@ -971,7 +982,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // Balancer V2 (решение 289): хранилище (getPool / getPoolTokens, обмен и квотер queryBatchSwap) и фабрика весовых
         // пулов (isPoolFromFactory). Фабрика стейблсвапов dex.balancer_stable_factory — по желанию (не задана — только
         // весовые пулы).
-        Proto::BalancerV2 => list.extend(["dex.vault", "dex.factory"]),
+        Proto::BalancerV2 => {
+            list.extend(["dex.vault", "dex.factory"]);
+            if f.variant == Variant::BalancerVaultWallet { list.push("dex.router_runtime_hash"); }
+        }
         // Balancer V3 (решение 441): хранилище (состояние, обмен), роутер V3 — квотер сверки querySwapSingleTokenExactIn
         // (dex.quoter), списки фабрик по выпускам (пустой список — у DEX нет фабрик этого выпуска).
         Proto::BalancerV3 => {
@@ -1121,7 +1135,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         ]),
     }
     // Решение 186: виртуальный квотер — квотер DEX не нужен (quote/virtual_quoter.rs).
-    if f.variant != Variant::NamiIntegral
+    if !f.variant.external_algebra_swap()
         && super::super::quote::virtual_quoter::on(ctx, f.id, f.proto)
     {
         list.retain(|n| *n != "dex.quoter");

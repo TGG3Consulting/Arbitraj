@@ -19,6 +19,8 @@ pub enum Variant {
     HydrexIntegral,
     /// Nami v4: обновляемый plugin может исполнить дополнительный обмен в стороннем пуле.
     NamiIntegral,
+    /// Supernova AlgebraBasePluginV3: скидка tx.origin и внешнее исполнение Reflex.
+    SupernovaIntegral,
     /// Ring Few V2 на Ethereum, отдельный путь underlying через проверенные fw wrappers.
     RingFew,
     /// 9mm, Throne и Omni на Base проверяют свои callback через роутеры фабрик.
@@ -62,11 +64,15 @@ pub enum Variant {
     LeetSwap,
     /// Solidly V1 Base: привязка CREATE2 и наблюдаемое обеспечение на каноническом блоке.
     SolidlyClassic,
+    BasePluginV1,
     /// Три обновляемые прокси WhiteSwap с комиссией прямого обмена и скидкой роутера.
     WhiteSwap,
     /// Пара CREATE2 с изменяемой ставкой. Резервы и комиссия сверяются вместе.
     V2Create2LiveFee,
     CandySwap,
+    /// Direct Vault.swap with wallet debit and payout checked on the approval and signing path.
+    BalancerVaultWallet,
+    Memebox,
     /// EIP-2535 с отдельной привязкой исполняемого селектора фабрики и Router02.
     DiamondV2,
     /// Пара проверяется по фабрике CREATE и коду исполнения; общий прокси с Router02.
@@ -136,6 +142,8 @@ pub enum Variant {
 }
 
 impl Variant {
+    pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
+
     pub(crate) fn diamond_router(self)->bool {matches!(self,Self::DiamondV2 | Self::KewlV2)}
 
     pub(crate) fn live_v2_fee(self) -> bool {
@@ -153,7 +161,7 @@ impl Variant {
     pub fn v2_block_state(self) -> bool {
         matches!(
             self,
-            Self::V2Create2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::DeltaSwap | Self::Oasis | Self::EtherVista
+            Self::V2Create2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::Memebox | Self::DeltaSwap | Self::Oasis | Self::EtherVista
         )
     }
 }
@@ -173,8 +181,10 @@ pub fn of(kind: &str) -> Variant {
         "curve_stableswap_meta" => Variant::CurveMeta,
         "curve_stableswap_oracle" => Variant::CurveOracle,
         "curve_crypto2_v1" => Variant::CryptoPair,
+        "algebra_integral_base_plugin_v1" => Variant::BasePluginV1,
         "algebra_integral_hydrex" => Variant::HydrexIntegral,
         "algebra_integral_nami" => Variant::NamiIntegral,
+        "algebra_integral_supernova" => Variant::SupernovaIntegral,
         "algebra_integral_quickswap" => Variant::QuickswapIntegral,
         "lista_stableswap_proxy" => Variant::ListaStableProxy,
         "base_native_v3" | "base_native_v3_module" => Variant::BaseNativeV3,
@@ -190,7 +200,9 @@ pub fn of(kind: &str) -> Variant {
         "v2_fork_executor_create2" => Variant::V2Create2,
         "v2_diamond_router" => Variant::DiamondV2,
         "v2_diamond_create" => Variant::KewlV2,
+        "memebox" | "memebox_v5" => Variant::Memebox,
         "candyswap_v2" => Variant::CandySwap,
+        "balancer_v2_wallet" => Variant::BalancerVaultWallet,
         "v2_fork_executor_create2_live_fee" => Variant::V2Create2LiveFee,
         "slipstream_ramses" => Variant::RamsesClV2,
         "leetswap_v2" => Variant::LeetSwap,

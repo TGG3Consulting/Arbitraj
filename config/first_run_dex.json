@@ -3161,5 +3161,127 @@
       ],
       "dex.router_runtime_hash": "0x1987bff7bb1c5e195f55827197a8dd22806f79465588a300bd3c115e79123b25"
     }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "henjin",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x07bc9a408b385c7aa8de2783795759512fe24356 · tests/data/first_run_dex_2026-11-26/base_algebra_henjin.json.gz",
+    "settings": {
+      "dex.kind": "algebra_integral_base_plugin_v1",
+      "dex.factory": "0x4963818c35d5793d771bf8091c750b5a71ed101b",
+      "dex.factory_runtime_hash": "0x33c77b98829c916aa09f304a8ab5fde12eb9258cd1b0333673ccc1c0f7a1fbe4",
+      "dex.pool_code_hashes": [
+        "0x4b9e4a8044ce5695e06fce9421a63b6f5c3db8a561eebb30ea4c775469e36eaf"
+      ],
+      "dex.plugin_factory": "0x07bc9a408b385c7aa8de2783795759512fe24356",
+      "dex.plugin_runtime_hashes": [
+        "0x4d9ea70c9a468ad187fca6a92aeeb1114af2361b43db80bba14e573949125701"
+      ],
+      "dex.quoter_virtual": true
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "kim-v4-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x7d79844bafcbc1e39ff26928a7dc134a1f9496d6 · tests/data/first_run_dex_2026-11-26/base_algebra_kim-v4-base.json.gz",
+    "settings": {
+      "dex.kind": "algebra_integral_base_plugin_v1",
+      "dex.factory": "0x2f0d41f94d5d1550b79a83d2fe85c82d68c5a3ca",
+      "dex.factory_runtime_hash": "0x4616377cdbf34ac5f79a114fdfdcd76eee5cd52dfc197d4f0dcd82183f771e4f",
+      "dex.pool_code_hashes": [
+        "0xf96d2474815c32e070cd63233f06af5413efc5dcb430aee4ff18cc29007c562d"
+      ],
+      "dex.plugin_factory": "0x7d79844bafcbc1e39ff26928a7dc134a1f9496d6",
+      "dex.plugin_runtime_hashes": [
+        "0x45b046745ec8725ae1b21ee91ea1a787ce7ddb14f29851d6dd535f521c4720d4"
+      ],
+      "dex.quoter_virtual": true
+    }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "memebox-base",
+    "source": "https://basescan.org/address/0x079463f811e6eb2e226908e79144cddb59a7fb71 · tests/data/first_run_dex_2026-11-26/memebox_base.json",
+    "settings": {
+      "dex.kind": "memebox",
+      "dex.factory": "0x079463f811e6eb2e226908e79144cddb59a7fb71",
+      "dex.factory_runtime_hash": "0x79400483ef4dce944cc734280f7f34f55180b72720d26cfe8bca6733405870d1",
+      "dex.pool_code_hashes": [
+        "0xa0304a4619a74f72f13db990ccb089a45069252a05f570da5e9b0247167a0e51"
+      ],
+      "dex.v2_fee_source": "pool",
+      "dex.v2_fee_method": "poolFee()",
+      "dex.v2_fee_denominator": 10000
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "sobal-base",
+    "source": "https://github.com/Sobal/developer-documentation/blob/f7264ec28204e15fa15c1700cf10f3ec0f794cd2/deployments/base.md",
+    "settings": {
+      "dex.kind": "balancer_v2_wallet",
+      "dex.vault": "0x7122e35cec2eed4a989d9b0a71998534a203972c",
+      "dex.router_runtime_hash": "0x4a1bb34d1cc586d321ae7e0c28f66e835f02e4d701bea236a64ab3dde1ea6bad",
+      "dex.vault_exact_outputs": [
+        "0x27d2decb4bfc9c76f0309b8e88dec3a601fe25a8=0xbe79292f0826744aa2b831d98e946a220636b98eee43062c7d415379b7fc85e9",
+        "0x4200000000000000000000000000000000000006=0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",
+        "0x50c5725949a6f0c72e6c4a641f24049a917db0cb=0x1e46e35ba09d34326c25ed69598cfa5872647304d08a0f62ef10c8b25864bb34",
+        "0x6372ec09dbf0c2907bb7b1529a1fc6359310f1bd=0x1ed1f39c555f5dc15f20be1a690589309e3602a831e7f2228a990ad82e391b38",
+        "0x8544fe9d190fd7ec52860abbf45088e81ee24a8c=0x5101ea92e9f4afbce0eaecb4d94348ec49d2a3e30fc26d859c7d12ef6a447e01",
+        "0xeb466342c4d449bc9f53a865d5cb90586f405215=0xb4e4b9bf4f87fcb953a1feea2a1005e1573643a87161febef625695fbcc8a07c"
+      ],
+      "dex.factory": "0x8d88057b8cc9235d4c69db3c14fd8d4229a6ae35",
+      "dex.balancer_math": "v2",
+      "dex.sub_dex": [
+        "sobal-stable",
+        "sobal-managed"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "sobal-stable",
+    "source": "https://github.com/Sobal/developer-documentation/blob/f7264ec28204e15fa15c1700cf10f3ec0f794cd2/deployments/base.md",
+    "settings": {
+      "dex.kind": "balancer_v2_wallet",
+      "dex.vault": "0x7122e35cec2eed4a989d9b0a71998534a203972c",
+      "dex.router_runtime_hash": "0x4a1bb34d1cc586d321ae7e0c28f66e835f02e4d701bea236a64ab3dde1ea6bad",
+      "dex.vault_exact_outputs": [
+        "0x27d2decb4bfc9c76f0309b8e88dec3a601fe25a8=0xbe79292f0826744aa2b831d98e946a220636b98eee43062c7d415379b7fc85e9",
+        "0x4200000000000000000000000000000000000006=0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",
+        "0x50c5725949a6f0c72e6c4a641f24049a917db0cb=0x1e46e35ba09d34326c25ed69598cfa5872647304d08a0f62ef10c8b25864bb34",
+        "0x6372ec09dbf0c2907bb7b1529a1fc6359310f1bd=0x1ed1f39c555f5dc15f20be1a690589309e3602a831e7f2228a990ad82e391b38",
+        "0x8544fe9d190fd7ec52860abbf45088e81ee24a8c=0x5101ea92e9f4afbce0eaecb4d94348ec49d2a3e30fc26d859c7d12ef6a447e01",
+        "0xeb466342c4d449bc9f53a865d5cb90586f405215=0xb4e4b9bf4f87fcb953a1feea2a1005e1573643a87161febef625695fbcc8a07c"
+      ],
+      "dex.factory": "0x60ef61c5c0f4213c7b2c02f64a575dc4bfdbf302",
+      "dex.balancer_pool": "composable_stable"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "sobal-managed",
+    "source": "https://github.com/Sobal/developer-documentation/blob/f7264ec28204e15fa15c1700cf10f3ec0f794cd2/deployments/base.md",
+    "settings": {
+      "dex.kind": "balancer_v2_wallet",
+      "dex.vault": "0x7122e35cec2eed4a989d9b0a71998534a203972c",
+      "dex.router_runtime_hash": "0x4a1bb34d1cc586d321ae7e0c28f66e835f02e4d701bea236a64ab3dde1ea6bad",
+      "dex.vault_exact_outputs": [
+        "0x27d2decb4bfc9c76f0309b8e88dec3a601fe25a8=0xbe79292f0826744aa2b831d98e946a220636b98eee43062c7d415379b7fc85e9",
+        "0x4200000000000000000000000000000000000006=0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",
+        "0x50c5725949a6f0c72e6c4a641f24049a917db0cb=0x1e46e35ba09d34326c25ed69598cfa5872647304d08a0f62ef10c8b25864bb34",
+        "0x6372ec09dbf0c2907bb7b1529a1fc6359310f1bd=0x1ed1f39c555f5dc15f20be1a690589309e3602a831e7f2228a990ad82e391b38",
+        "0x8544fe9d190fd7ec52860abbf45088e81ee24a8c=0x5101ea92e9f4afbce0eaecb4d94348ec49d2a3e30fc26d859c7d12ef6a447e01",
+        "0xeb466342c4d449bc9f53a865d5cb90586f405215=0xb4e4b9bf4f87fcb953a1feea2a1005e1573643a87161febef625695fbcc8a07c"
+      ],
+      "dex.factory": "0x08e3814ad06be2a555a4c0d330a20078e5344dfd",
+      "dex.balancer_pool": "managed"
+    }
   }
 ]

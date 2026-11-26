@@ -1,5 +1,5 @@
 //! Сравнивает одиночный Nami с обычным сплитом. Его afterSwap может сам выбрать сторонние пулы.
-use super::super::{ctx::Ctx, pools::family_variant::Variant};
+use super::super::ctx::Ctx;
 use super::{
     graph_split::{self, Cand},
     path::Path,
@@ -14,7 +14,7 @@ use rust_decimal::Decimal;
 
 pub(super) fn contains(legs: &[Leg]) -> bool {
     legs.iter()
-        .any(|h| h.entry.family.variant == Variant::NamiIntegral)
+        .any(|h| h.entry.family.variant.external_algebra_swap())
 }
 pub(super) fn solo(legs: &[Leg]) -> bool {
     legs.len() == 1 && contains(legs)

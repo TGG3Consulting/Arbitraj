@@ -164,6 +164,10 @@ fn side(
 ) -> Result<(U256, bool), String> {
     let pick = |amount_in: U256, amount_out: U256| if buy { amount_in } else { amount_out };
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::Memebox(s), PoolKind::V2) => {
+            let i=usize::from(!zfo);
+            xy_band(s.reserves[i],s.reserves[1-i],b,buy)
+        }
         (PoolState::CandySwap(s), PoolKind::V2) => {
             let i=usize::from(!zfo);
             xy_band(s.reserves[i],s.reserves[1-i],b,buy)

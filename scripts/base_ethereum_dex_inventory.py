@@ -79,8 +79,13 @@ def tables(network, snapshots, profiles):
                         f"{by_family['composable_stable']}, управляемых {by_family['managed']}. Ещё две регистрации "
                         "не принадлежат этим фабрикам, у них соответственно ноль и один записанный токен. "
                         f"[Номера регистраций, фабрики, токены и резервы](../{sobal_path.as_posix()})."])
-        out.extend(["", "Memebox · развёртывание и разрешение расчётного модуля выполняет владелец кошелька. "
-                    "Адрес для боевой сети в поставке не задан. Архивные проверки используют изолированный адрес симуляции."])
+        out.extend(["", "Memebox · на блоке 62 262 756 фабрика подтвердила 43 CREATE2-пары. В профиле первого запуска "
+                    "вид `memebox` читает доступные остатки, физические балансы и тариф с одного блока. У всех 43 пар "
+                    "комиссия на вход составила 100 из 10 000, доля протокола — 3000 из 10 000 уже удержанной комиссии. "
+                    "Вид `memebox_v5` требует от владельца развернуть MemeboxAdapter с адресом этой фабрики и задать "
+                    "`dex.router` и `dex.module_runtime_hashes`. Кошелёк сравнивает прямой вызов и шаг 29 V5 по чистой выплате и полным расходам, "
+                    "включая разрешение. Выход ограничен обеспечением пары и фактическим приходом собственного входа. "
+                    "[Реестр и границы выплат](../tests/data/first_run_dex_2026-11-26/memebox_base.json)."])
     metric_path = Path(f"tests/data/first_run_dex_2026-11-26/metric_{network}.json")
     if metric_path.exists():
         metric = read(metric_path)
@@ -215,6 +220,21 @@ def tables(network, snapshots, profiles):
                     "индивидуальная ненулевая ставка имеет приоритет над общим тарифом фабрики. У Equalizer ставки могут иметь 18 знаков после запятой. "
                     "У Equalizer сверены 32 пары первого поколения, 100 второго и 252 текущего, по два размера и обоим направлениям stable и volatile каждого. Начальные блоки исторических поколений 4334766 и 4938760, при них pairCodeHash() и EIP-1967 реализации связаны с регистрациями CREATE2. Две пары с активным внешним менеджером комиссии требуют отдельной приёмки. [Исторические реализации и кошельки](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45905243473). "
                     "[Размещения Archly](https://docs.archly.fi/security) · [Архивы GitHub](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45903513687)."])
+        out.extend(["", "Algebra на Base проверена на четырёх реальных рынках через виртуальный квотер и исполнение V5. В каждом случае измерены два размера покупки и обратная продажа, фактические остатки и отказ при minOut + 1.",
+                    "", "| Площадка | Реестр и источник комиссии | Состояние на контрольном блоке | Приёмка |", "|---|---|---|---|"])
+        for dex,scope in [("henjin","BasePluginV1, фабрика создаёт плагин каждой пары"),("kim-v4-base","BasePluginV1, фабрика создаёт плагин каждой пары"),("synthswap-v3","Algebra V1.9, одна ставка и несжатый tickTable"),("treble-v4","Algebra Integral с лимитными заявками и условным ребалансированием")]:
+            path=Path(f"tests/data/first_run_dex_2026-11-26/base_algebra_{dex}.json.gz")
+            with gzip.open(path,"rt",encoding="utf8") as fh: reg=json.load(fh)
+            pool=reg["roles"]["pool"]["address"]
+            fee=reg["global_state"][2]
+            control=reg["reads"].get("getCurrentFee()")
+            rate=f"globalState {fee} пипс" + (f", getCurrentFee {int(control,16)}" if control else "")
+            if dex in ("henjin","kim-v4-base"):
+                verdict="Профиль требует pluginByPool и обратную ссылку, режим 0xc1, нулевой incentive и подтверждённый код обеих фабрик."
+            elif dex=="synthswap-v3":
+                verdict="Активен внешний farming incentive. Измерено исполнение данного пула, приёмка учёта оракула и программы продолжается."
+            else: verdict="Активен limitOrderManager. Для автономного маршрута требуется проверка внешнего исполнения."
+            out.append(f"| {dex} | {scope} | {rate}, пул `{pool}` | {verdict} [Вызовы и ответы](../{path.as_posix()}) |")
         oasis_file = "tests/data/first_run_dex_2026-11-26/oasisswap_base.json"
         oasis_v5_file = "tests/data/first_run_dex_2026-11-26/oasisswap_v5_base.json"
         oasis, oasis_v5 = read(Path(oasis_file)), read(Path(oasis_v5_file))
@@ -955,6 +975,9 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if not base and str(row["id"])=="4062":
+            candidates=[dx["proof"]["factory"]["address"]]
+            task="DeltaSwap Ethereum · сверены 17 рынков фабрики и выплаты официального Router02"
         if base and str(row["id"]) == "8934" and baibai.exists():
             candidates = [bai["deployments"]["entry"]["address"]]
             task = "DEX-25 · Entry подтвердил выплаты и комиссии WETH/USDC и NVDAc/USDC. В обоих рынках проверено по две стороны и два объёма"

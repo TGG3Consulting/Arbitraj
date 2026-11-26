@@ -209,9 +209,10 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // Решение 188: swap(recipient, zeroToOne, amountRequired, limitSqrtPrice, data) и algebraSwapCallback у
         // Integral — те же (integral-core 1.2.10 AlgebraPool.sol L246-L252, IAlgebraSwapCallback).
         "algebra_integral"
+        | "algebra_integral_base_plugin_v1"
         | "algebra_integral_hydrex"
         | "algebra_integral_quickswap"
-        | "algebra_integral_nami" => ExecKind::Algebra,
+        | "algebra_integral_nami" | "algebra_integral_supernova" => ExecKind::Algebra,
         // Решение 444: Algebra V1.9 с направленными комиссиями (Camelot V3) — swap(recipient, zeroToOne,
         // amountRequired, limitSqrtPrice, data) и algebraSwapCallback(int256, int256, bytes) те же (cryptoalgebra/
         // AlgebraV1.9 a45417ed AlgebraPool.sol:604-610, IAlgebraSwapCallback.sol:18-22) — шаг ALGEBRA, исполнитель тот же.
@@ -306,7 +307,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "wombat" => ExecKind::Wombat,
         // Решение 485: swapFrom скважины без белого списка вызывающих (Well.sol L207-L217: nonReentrant и срок — общие).
         // Адаптер Fraxswap реализует тот же wire ABI swapFrom. Адрес шага выбирает executor/entry.
-        "basin_well" | "fraxswap_twamm_v5" | "oasisswap_v2_v5" | "ethervista_v5" => ExecKind::Basin,
+        "memebox_v5" | "basin_well" | "fraxswap_twamm_v5" | "oasisswap_v2_v5" | "ethervista_v5" => ExecKind::Basin,
         // Решение 486: Ocean.doMultipleInteractions — вызывающий = пользователь, без белого списка (Ocean.sol aaa0ccf
         // L271-L297, v3 Sourcify 0x96B4f4E4… L190-L201); computeOutputAmount пула — только от Ocean (onlyOcean), учёт
         // передаёт адрес пользователя (LiquidityPool.sol L135). Шаг 31, только исполнитель v5.
@@ -413,6 +414,7 @@ mod tests {
     #[test]
     fn every_kind_is_decided() {
         let none = [
+            "memebox",
             "ring_few_v2",
             "fraxswap_twamm",
             "fraxswap_twamm_router",

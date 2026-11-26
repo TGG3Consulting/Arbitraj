@@ -7,7 +7,7 @@ from eth_abi import decode
 from eth_utils import keccak
 from record_balancer_markets import Capture, posts
 from record_base_classic_directory import ENDPOINTS
-from record_base_slipstream_executor import ROOT, calldata, rpc
+from record_base_slipstream_executor import ROOT, EXEC, RUNTIME, STEP, calldata, rpc
 from record_solidly_v3 import BASE_WETH, HOLDERS
 
 FACTORY="0x07aced5690e09935b1c0e6e88b772d9440f64718"
@@ -59,38 +59,56 @@ def capture(endpoint):
     sender=HOLDERS["base"][a]
     def tx(to,method,types=(),args=()):
         return {"from":sender,"to":to,"data":calldata(method,types,args),"gas":"0x300000"}
-    def simulate(items):
-        stage,=rpc(endpoint,"eth_simulateV1",[{"blockStateCalls":[{"calls":[v for _,v in items]}],"validation":False},tag])
+    word=lambda v:"0x"+format(v,"064x")
+    runtime=RUNTIME.read_text().strip().removeprefix("0x")
+    override={EXEC:{"code":"0x"+runtime,"stateDiff":{word(0):word(int(sender,16)),word(1):word(int(a,16))}}}
+    def simulate(items,executor):
+        frame={"calls":[v for _,v in items]}
+        if executor:frame["stateOverrides"]=override
+        stage,=rpc(endpoint,"eth_simulateV1",[{"blockStateCalls":[frame],"validation":False},tag])
         if stage["parentHash"]!=tag["blockHash"]:raise ValueError("changed parent")
         return dict(zip([k for k,_ in items],stage["calls"],strict=True))
-    def leg(prefix,side,x,y,amount):
+    def leg(prefix,side,x,y,amount,executor):
         def order(floor,end):
+            if executor:
+                return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
+                    ["address","uint256","address","uint256","uint256",STEP+"[]"],
+                    [x,amount,y,floor,end,[(8,POOL,x,y,10000,b"")]])
             return tx(ROUTER,"swapExactInputSingle("+ORDER+")",[ORDER],[(x,y,fee,sender,end,amount,floor,0)])
         balance=lambda token:tx(token,"balanceOf(address)",["address"],[sender])
-        inp=[("allow",tx(x,"approve(address,uint256)",["address","uint256"],[ROUTER,amount])),
+        inp=[("allow",tx(x,"approve(address,uint256)",["address","uint256"],[EXEC if executor else ROUTER,amount])),
              ("quote",tx(QUOTER,"quoteExactInputSingle("+QUERY+")",[QUERY],[(x,y,amount,fee,0)])),
              ("start_in",balance(x)),("start_out",balance(y))]
         prepare=prefix+[(side+k,v) for k,v in inp]
-        before=simulate(prepare)
+        before=simulate(prepare,executor)
         raw=before[side+"quote"]
         if raw["status"]!="0x1":raise ValueError(raw.get("error"))
         used,out,*_=decode(["uint256","uint256","uint160","uint32","uint256"],bytes.fromhex(raw["returnData"][2:]))
         if not out or used!=amount:raise ValueError("partial pool quote")
         effects=[("above",order(out+1,deadline)),("expired",order(out,0)),("exact",order(out,deadline)),("end_in",balance(x)),("end_out",balance(y))]
-        steps=prepare+[(side+k,v) for k,v in effects];results=simulate(steps)
+        if executor:
+            effects.extend((name,tx(token,"balanceOf(address)",["address"],[EXEC])) for name,token in [("left_in",x),("left_out",y)])
+        steps=prepare+[(side+k,v) for k,v in effects];results=simulate(steps,executor)
         for label,item in results.items():
             if item["status"]!=("0x0" if label.endswith(("above","expired")) else "0x1"):raise ValueError((label,item.get("error")))
         n=lambda label:int(results[side+label]["returnData"],16)
         if (n("start_in")-n("end_in"),n("end_out")-n("start_out"),n("exact"))!=(used,out,out):
             raise ValueError("payer delta or recipient net payout differs")
+        if executor and (n("left_in") or n("left_out")):raise ValueError("V5 retained a token")
         return steps,out,dict(amount=str(amount),received=str(out),calls=[v for _,v in steps],results=results)
     trials=[]
     for amount in [10**12,10**13]:
-        steps,bought,buy=leg([],"buy",a,b,amount)
-        _,_,sell=leg(steps,"sell",b,a,bought)
-        trials.append({"buy":buy,"sell":sell})
+        case={}
+        for executor in (False,True):
+            steps,bought,buy=leg([],"buy",a,b,amount,executor)
+            _,_,sell=leg(steps,"sell",b,a,bought,executor)
+            if executor:case["v5"]={"buy":buy,"sell":sell}
+            else:case.update(buy=buy,sell=sell)
+        for side in ("buy","sell"):
+            if case[side]["received"]!=case["v5"][side]["received"]:raise ValueError("native/V5 mismatch")
+        trials.append(case)
     return dict(chain_id=8453,selector=tag,state_root=head["stateRoot"],roles=hashes,tokens=[a,b],fee=fee,spacing=tick_distance,
-                state=info,liquidity=liquid,tick_reader_chunk=chunk,ticks=points,raw=c.calls,cases=trials)
+                state=info,liquidity=liquid,tick_reader_chunk=chunk,ticks=points,raw=c.calls,cases=trials,v5="0x"+keccak(hexstr=runtime).hex())
 
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__);p.add_argument("output",type=Path);args=p.parse_args()

@@ -89,7 +89,7 @@ pub fn guard_ur(ctx: &Ctx, leg: &Leg) -> GatewayResult<()> {
 pub fn form(ctx: &Ctx, legs: &[Leg]) -> GatewayResult<Form> {
     if legs.len() > 1
         && legs.iter().any(|leg| {
-            leg.entry.family.variant == super::super::pools::family_variant::Variant::NamiIntegral
+            leg.entry.family.variant.external_algebra_swap()
         })
     {
         return Err(ctx.err(

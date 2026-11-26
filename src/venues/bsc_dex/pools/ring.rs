@@ -91,6 +91,31 @@ pub fn exact_input(
     payer_user: bool,
 ) -> Option<(u8, Bytes)> {
     let path = path(token_in, token_out)?.to_vec();
+    if token_in == ASSETS[1].0 {
+        // USDT запрещает approve(nonzero) поверх прежнего разрешения. Команда 0x27
+        // использует существующий allowance UR → fwUSDT, как Payments.wrapFewToken.
+        let mut commands = Vec::new();
+        let mut inputs = Vec::new();
+        if payer_user {
+            if amount.bit_len() > 160 {
+                return None;
+            }
+            commands.push(0x02u8);
+            inputs.push(Bytes::from(
+                (token_in, Address::with_last_byte(2), amount).abi_encode_params(),
+            ));
+        }
+        let pool = super::verify::v2_create2(FACTORY, path[0], path[1], INIT);
+        commands.extend([0x27, 0x23]);
+        inputs.push(Bytes::from((token_in, pool, amount).abi_encode_params()));
+        inputs.push(Bytes::from(
+            (recipient, U256::ZERO, minimum, path, false, true).abi_encode_params(),
+        ));
+        return Some((
+            0x21,
+            Bytes::from((Bytes::from(commands), inputs).abi_encode_params()),
+        ));
+    }
     Some((
         0x23,
         Bytes::from((recipient, amount, minimum, path, payer_user, true).abi_encode_params()),
@@ -118,7 +143,7 @@ mod tests {
         assert_eq!(path(w_eth, usdt), None);
         assert_eq!(path(wbtc, uni), None);
         let (command, data) =
-            exact_input(usdt, eth, eth, U256::from(7), U256::from(4), true).unwrap();
+            exact_input(eth, usdt, eth, U256::from(7), U256::from(4), true).unwrap();
         let args =
             <(Address, U256, U256, Vec<Address>, bool, bool)>::abi_decode_params(&data).unwrap();
         assert_eq!(command, 0x23);
@@ -128,8 +153,35 @@ mod tests {
                 eth,
                 U256::from(7),
                 U256::from(4),
-                vec![w_usdt, w_eth],
+                vec![w_eth, w_usdt],
                 true,
+                true
+            )
+        );
+        let (nested, bytes) =
+            exact_input(usdt, eth, eth, U256::from(7), U256::from(4), true).unwrap();
+        let (commands, inputs) = <(Bytes, Vec<Bytes>)>::abi_decode_params(&bytes).unwrap();
+        assert_eq!(nested, 0x21);
+        assert_eq!(commands.as_ref(), &[0x02, 0x27, 0x23]);
+        let (asset, pool, raw) = <(Address, Address, U256)>::abi_decode_params(&inputs[1]).unwrap();
+        assert_eq!(
+            (asset, pool, raw),
+            (
+                usdt,
+                address!("147d15e009a63ebed5196ea029679329204f98fd"),
+                U256::from(7)
+            )
+        );
+        let args = <(Address, U256, U256, Vec<Address>, bool, bool)>::abi_decode_params(&inputs[2])
+            .unwrap();
+        assert_eq!(
+            args,
+            (
+                eth,
+                U256::ZERO,
+                U256::from(4),
+                vec![w_usdt, w_eth],
+                false,
                 true
             )
         );

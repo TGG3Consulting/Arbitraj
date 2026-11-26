@@ -38,11 +38,20 @@ def allow(token, amount):
     ]
 
 
-def exchange(path, out_asset, amount, bound, deadline, native_input=False, native_output=False, check=None):
+def exchange(path, out_asset, amount, bound, deadline, native_input=False, native_output=False, check=None, legacy=False):
     receiver = ADDRESS_THIS if native_output else OWNER
     commands = [0x23]
     inputs = [encode(["address", "uint256", "uint256", "address[]", "bool", "bool"],
                      [receiver, amount, bound, path, not native_input, True])]
+    if path[0] == "0xef87f4608e601e8564800265aee1c1ffadf73283" and not legacy:
+        pool = "0x147d15e009a63ebed5196ea029679329204f98fd"
+        sub = [
+            encode(["address", "address", "uint160"], [ASSETS[1], ADDRESS_THIS, amount]),
+            encode(["address", "address", "uint256"], [ASSETS[1], pool, amount]),
+            encode(["address", "uint256", "uint256", "address[]", "bool", "bool"], [receiver, 0, bound, path, False, True]),
+        ]
+        commands = [0x21]
+        inputs = [encode(["bytes", "bytes[]"], [bytes([0x02, 0x27, 0x23]), sub])]
     if native_input:
         commands.insert(0, 0x0b)
         inputs.insert(0, encode(["address", "uint256"], [ADDRESS_THIS, amount]))
@@ -94,6 +103,9 @@ def measure(endpoint, tag, deadline, asset, wrappers, reserves, amount, native):
                                                            ["uint256", "address[]"], [input_size, p])))
         def swap(bound, check=None):
             return exchange(p, token_out, input_size, bound, deadline, native and buy, native and not buy, check)
+        if not buy and asset == ASSETS[1]:
+            add("legacy_usdt_nonzero_approve", exchange(p, token_out, input_size, output_min, deadline,
+                native_output=native, legacy=True), True)
         add("nominal_plus_one" + str(direction), swap(output_min + 1), True)
         if buy or not native:
             add("balance_plus_one" + str(direction), swap(output_min, output_min + 1), True)
@@ -105,6 +117,10 @@ def measure(endpoint, tag, deadline, asset, wrappers, reserves, amount, native):
     for label, row in got.items():
         if int(row["status"], 16) != int(label not in fails):
             raise ValueError(f"{asset} {amount} native={native} {label}: unexpected result {row.get('error')}")
+    if asset == ASSETS[1]:
+        error = got["legacy_usdt_nonzero_approve"]["error"].get("data", "")
+        if not error.startswith("0x08c379a0") or decode(["string"], bytes.fromhex(error[10:]))[0] != "APPROVE_FAILED":
+            raise ValueError("не подтверждена причина отказа прежнего пути USDT")
     def value(label):
         return int(got[label]["returnData"], 16)
     for d, expected in enumerate([[amount, quoted], [quoted, returned]]):

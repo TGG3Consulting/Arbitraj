@@ -82,8 +82,9 @@ def capture(endpoint,art,kipseli=False,market_name=None,price_slot=False):
         heads=[(26487846,market,USDC),(26494988,market,USDC)]
         ANCHORS[26487846]='0x3238e9c17c5ae484f27f9e2cab7a749b243cce3cd250db16d0909d026e52ad47'
     for height,venue,stable in heads:
-        from record_prop_price_slot import FRAMES,frame
-        if price_slot and height not in FRAMES:continue
+        if price_slot:
+            from record_prop_price_slot import FRAMES,frame
+            if height not in FRAMES:continue
         c=Capture({"endpoint":endpoint,"selector":{"blockHash":ANCHORS[height],"requireCanonical":True}})
         header=rpc(c,"eth_getBlockByNumber",[hex(height),False])["result"]
         if header["hash"]!=ANCHORS[height] or rpc(c,"eth_chainId",[])["result"]!="0x1":raise ValueError("unexpected chain or head")

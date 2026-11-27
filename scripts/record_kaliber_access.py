@@ -8,6 +8,7 @@ from pathlib import Path
 from eth_abi import decode
 from record_e3_base import OWNER, USDC, WETH, UNI, tx, ok, result
 from record_kaliber_base import EVENT, VAULTS, Reader
+from record_eulerswap_directory import DATA
 
 AAPL="0xb200000000000000000000c2e324d24d7eecd1fb"
 WITNESS="0x3fa51d338eaef69d0f94593fc4b6cbec9553dd221d18993aeb18de02c5c33220"
@@ -42,11 +43,12 @@ def days(r):
                 rows=[dict(date=k[0],cash=k[1],pair=k[2],src=k[3],dst=k[4],trader=k[5],count=n,usdc=stable[k],sample=examples[k[1:5]]) for k,n in counts.items()])
 
 
-def cash_frames(node):
+def cash_frames(node,committed=True):
+    committed=committed and not node.get("error")
     if node.get("to","").lower() in VAULTS:
-        yield dict(sender=node["from"],cash=node["to"],input=node["input"],output=node.get("output"),error=node.get("error"))
+        yield dict(sender=node["from"],cash=node["to"],input=node["input"],output=node.get("output"),committed=committed)
     for child in node.get("calls",[]):
-        yield from cash_frames(child)
+        yield from cash_frames(child,committed)
 
 
 def own(r,tag,vault,pair):
@@ -85,7 +87,16 @@ def capture():
     else:trace_error=None
     hist={"blockHash":rec["blockHash"],"requireCanonical":True}
     reference=tx(VAULTS[0],SWAP,TYPES,[bytes.fromhex(pair[2:]),USDC,AAPL,10**6,1,1])["data"][:10]
-    verified=[f for f in frames if f["input"].startswith(reference) and not f["error"]]
+    if not frames:
+        archived=json.loads((DATA/"kaliber_base_trace.json").read_bytes())
+        assert archived["transaction"]==WITNESS
+        frames=archived["frames"]
+    verified=[f for f in frames if f["input"].startswith(reference) and f["committed"]]
+    proved,=verified
+    src,dst,paid,received,_=decode(["address","address","uint256","uint256","uint256"],bytes.fromhex(swap["data"][2:]))
+    args=decode(TYPES,bytes.fromhex(proved["input"][10:]))
+    assert proved["cash"].lower()==swap["address"] and proved["sender"].lower()=="0x"+swap["topics"][2][-40:]
+    assert ("0x"+args[0].hex(),*args[1:4])==(pair,src,dst,paid) and int(proved["output"],16)==received
     methods=r.many([(AAPL,"symbol()",(),"string"),(AAPL,"decimals()",(),"uint8")])
     signed_inputs=[]
     samples={WITNESS}|{row["sample"] for row in report["rows"]}

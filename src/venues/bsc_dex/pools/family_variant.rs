@@ -89,6 +89,7 @@ pub enum Variant {
     /// Launch Bonding with virtual reserves and tax on the VIRTUAL side.
     Virtuals,
     MintClub,
+    Carbon,
     /// EIP-2535 с отдельной привязкой исполняемого селектора фабрики и Router02.
     DiamondV2,
     /// Пара проверяется по фабрике CREATE и коду исполнения; общий прокси с Router02.
@@ -230,6 +231,7 @@ pub fn of(kind: &str) -> Variant {
         "v2_fork_executor_create2" => Variant::V2Create2,
         "v2_diamond_router" => Variant::DiamondV2,
         "v2_diamond_create" => Variant::KewlV2,
+        "carbon_v1" => Variant::Carbon,
         "mint_club_v2" => Variant::MintClub,
         "virtuals_bonding" | "virtuals_bonding_module" | "virtuals_unicorn" | "virtuals_unicorn_module" => Variant::Virtuals,
         "bunnyswap" | "bunnyswap_module" => Variant::BunnySwap,

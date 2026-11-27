@@ -8,6 +8,7 @@ import hashlib
 import gzip
 import json
 from pathlib import Path
+from base_eth_omni_mars_deli import paragraphs as omni_mars_deli
 
 
 def read(path):
@@ -68,6 +69,7 @@ def tables(network, snapshots, profiles):
             fields.append(f"`{k} = {v}`")
         params = "<br>".join(fields)
         out.append(f"| `{id}` | {params} | {row['source']} |")
+    out.extend(omni_mars_deli(network))
     if base:
         sobal_path = Path("tests/data/first_run_dex_2026-11-26/sobal_base_directory.json")
         if sobal_path.exists():
@@ -1027,6 +1029,7 @@ def tables(network, snapshots, profiles):
     with gzip.open(mint_path,"rt",encoding="utf8") as stream:
         mint=json.load(stream)
     reserves=len({row["reserve"] for row in mint["directory"]})
+    registry=read(Path(f"tests/data/first_run_dex_2026-11-26/mint_club_{network}_events.json"))
     reserve_count=len({t["reserve"] for t in mint["directory"]})
     pairs=mint["markets"]
     trials=sum(len(p["trials"]) for p in pairs)
@@ -1035,6 +1038,7 @@ def tables(network, snapshots, profiles):
                "Уменьшение максимальной суммы покупки и увеличение минимальной суммы погашения на одну минимальную единицу дали откат. "
                "Для отслеживаемого токена проверяются tokenBond, байткод клона и его реализации, ступени цены и текущий выпуск. "
                "Для погашения используются остаток собственного обеспечения рынка и фактический баланс резервного ERC20 общего Bond. "
+               f"С блока {registry['window']['from']} по {registry['window']['to']} Bond выпустил {sum(registry['window']['counts'])} событий Mint и Burn. "
                f"[Кошелёк и газ](../{mint_path.as_posix()}) · [Регистрация и код](../tests/data/first_run_dex_2026-11-26/mint_club_{network}_events.json).")
     out.extend(["", f"Код каждого адреса проверен в [снимке размещений](../tests/data/first_run_dex_2026-11-26/{network}.json). "
                 "Две записи вызова Router.getAmountOut содержат исходные аргументы и ответ. "

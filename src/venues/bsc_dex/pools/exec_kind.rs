@@ -421,6 +421,7 @@ mod tests {
     #[test]
     fn every_kind_is_decided() {
         let none = [
+            "carbon_v1", // официальный Controller, без шага в ArbExecutor
             "mint_club_v2", // native Bond mint/burn
             "ekubo_v2_router", // официальный multicall, ABI V2
             "registered_v3",

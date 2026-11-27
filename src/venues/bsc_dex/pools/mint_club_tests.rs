@@ -56,6 +56,7 @@ fn configured_market_is_a_registered_erc20_and_native_logs_distinguish_each_toke
                 (log.address, event.token, event.reserveToken),
                 (bond, issued, reserve)
             );
+            assert_eq!(event.name, m["name"].as_str().unwrap());
             assert_eq!(event.symbol, m["symbol"].as_str().unwrap());
             assert!(clone_of(&bytes(&m["clone_code"]), implementation));
             let terms = bytes(&m["terms_raw"]);
@@ -88,6 +89,10 @@ fn configured_market_is_a_registered_erc20_and_native_logs_distinguish_each_toke
                 bonded: num(&m["bonded"]),
                 available: num(&m["available"]),
             };
+            for raw in primary["historical_swaps"].as_array().unwrap() {
+                let log: SimLog = serde_json::from_value(raw.clone()).unwrap();
+                assert_eq!(emitted(&state, &log), log.topics[1] == issued.into_word());
+            }
             for q in m["quotes"].as_array().unwrap() {
                 let qty = num(&q["size"]);
                 let fill = super::super::super::math::mint_club::fill(&state, reserve, false, qty)

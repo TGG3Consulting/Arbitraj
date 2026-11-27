@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Выпуск и погашение ERC20 Mint Club за счёт отправителя с атомарными пределами кошелька и проверкой резерва Bond.
+// Владелец развёртывает модуль на выбранной сети с адресами проверенных Bond и реализации ERC20.
 pragma solidity 0.8.37;
 
 interface IMintClubBond {

@@ -192,6 +192,10 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     if spent != Some(o.amount) || received.is_zero() || received < o.minimum {
         return Err(fail());
     }
+    if let Wire::MintClub(c)=&o.wire {
+        let proof=super::super::exec::mint_club_fact::Proof{call:*c,bond:c.protection.map_or(o.target,|v|v.bond),payer:o.payer};
+        if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
+    }
     if boundary {
         // Тот же плательщик, исходные остатки и разрешения. Более строгий лишь минимум.
         let strict = received.checked_add(U256::ONE).ok_or_else(fail)?;

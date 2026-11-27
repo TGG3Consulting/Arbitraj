@@ -113,7 +113,7 @@ pub async fn details(
             || super::super::exec::mint_club_direct::enabled(&e) || super::ekubo_v2_pricing::enabled(&e) || super::super::exec::vault_direct::enabled(&e)
             || super::delta_pricing::is_delta(&e))
     {
-        let router = if super::super::exec::mint_club_direct::enabled(&e) {ctx.dex_addr("dex.factory",e.family.id)?} else if super::ekubo_v2_pricing::enabled(&e) {ctx.dex_addr("dex.quoter",e.family.id)?} else if super::super::exec::vault_direct::enabled(&e) {ctx.dex_addr("dex.vault",e.family.id)?} else if matches!(
+        let router = if super::super::exec::mint_club_direct::enabled(&e) {match hop.fee_mode {Some(crate::core::types::RouterFeeMode::ProtectedWallet{target})=>target,_=>ctx.dex_addr("dex.factory",e.family.id)?}} else if super::ekubo_v2_pricing::enabled(&e) {ctx.dex_addr("dex.quoter",e.family.id)?} else if super::super::exec::vault_direct::enabled(&e) {ctx.dex_addr("dex.vault",e.family.id)?} else if matches!(
             hop.fee_mode,
             Some(
                 crate::core::types::RouterFeeMode::NativeGrossMinimum

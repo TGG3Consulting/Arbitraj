@@ -121,8 +121,10 @@ pub async fn run(
         let mut market=Box::new(e.clone());
         let state=super::super::exec::mint_club_direct::state(ctx,e,head).await?;
         super::super::exec::mint_club_direct::funded(ctx,wallet,e.usdt,usdt_amount,head).await?;
+        let protection=if super::super::exec::mint_club_binding::nominal(ctx,e,state.reserve,head).await.is_ok(){None}
+        else{Some(super::super::exec::mint_club_binding::module(ctx,e,ctx.dex_addr("dex.router",e.family.id)?,head).await?)};
         market.pool.state=crate::core::types::PoolState::MintClub(Box::new(state));
-        Some((head,market))
+        Some((head,market,protection))
     }else{None};
     let verified = vista.as_ref().map(|p| {
         let mut v = Box::new(e.clone());
@@ -130,7 +132,7 @@ pub async fn run(
         v.pool.block = at.number;
         v
     });
-    let e = own_bond.as_ref().map(|(_,e)|e.as_ref()).or(verified.as_deref()).unwrap_or(e);
+    let e = own_bond.as_ref().map(|(_,e,_)|e.as_ref()).or(verified.as_deref()).unwrap_or(e);
     let (buy_aps, buy_router, buy_data) = part(
         ctx,
         e,
@@ -142,7 +144,7 @@ pub async fn run(
         },
         wallet,
         now,
-        vista.as_deref(),
+        (vista.as_deref(),own_bond.as_ref().and_then(|(_,_,p)|*p)),
     )
     .await?;
     // Решение 388 (t174): «ожидалось без налога» — у DEX с виртуальным квотером его вызов с подменой кода в этих же
@@ -180,7 +182,7 @@ pub async fn run(
             list[h.after] = b;
         }
     }
-    let hash = own_bond.as_ref().map(|(h,_)|h.hash).or_else(||vista.as_ref().map(|v| v.head.hash));
+    let hash = own_bond.as_ref().map(|(h,_,_)|h.hash).or_else(||vista.as_ref().map(|v| v.head.hash));
     let first = simulate::run_anchored(ctx, &list, &values, &over, at, hash).await?;
     let (q, x) = (h.quote, h.buy);
     if let Some((i, r)) = first.iter().enumerate().find(|(_, r)| !r.ok()) {
@@ -233,7 +235,7 @@ pub async fn run(
         },
         wallet,
         now,
-        vista.as_deref(),
+        (vista.as_deref(),own_bond.as_ref().and_then(|(_,_,p)|*p)),
     )
     .await?;
     // Решение 252: продажа — СРАЗУ после покупки, пробный перевод четверти — ПОСЛЕ продажи (порядок — pc::sell_tail).
@@ -323,7 +325,7 @@ async fn part(
     order: Order,
     wallet: Address,
     now: u64,
-    vista: Option<&super::vista_probe::Probe>,
+    (vista,protection): (Option<&super::vista_probe::Probe>,Option<super::super::exec::mint_club_wire::Protection>),
 ) -> GatewayResult<(Vec<Approval>, Address, Bytes)> {
     if let Some(v) = vista {
         return v.leg(ctx, e, &order, wallet, now);
@@ -332,7 +334,7 @@ async fn part(
     // Slipstream, форки V3, StableSwap, Maverick) пробу не собрать ни через Universal Router (чужой пул он не найдёт), ни
     // через classic V2 Router форка (у V3-форка его нет). Путь сделки для них — шаг контракта-исполнителя: тем же
     // вызовом execute идёт и проба (check/probe_exec.rs); нет шага / не задан адрес — точная причина оттуда.
-    if super::super::exec::mint_club_direct::enabled(e){return super::super::exec::mint_club_direct::probe(ctx,e,&order,wallet);}
+    if super::super::exec::mint_club_direct::enabled(e){return super::super::exec::mint_club_direct::probe(ctx,e,&order,wallet,protection);}
     if super::super::quote::ekubo_v2_pricing::enabled(e){return super::super::exec::ekubo_v2_direct::probe(ctx,e,&order,now);}
     if super::super::exec::vault_direct::enabled(e) && super::super::exec::executor::address(ctx)?.is_none() {
         return Box::pin(super::super::exec::vault_direct::probe(ctx,e,order,wallet,now)).await;

@@ -44,6 +44,7 @@ use super::verify_woo;
 pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> {
     let mut out = Vec::new();
     for c in cands {
+        if c.family.variant==super::family_variant::Variant::Carbon {out.push(Box::pin(super::carbon_directory::verify(ctx,c)).await);continue;}
         out.push(match one(ctx, c, size).await {
             Ok(Ok(f)) => Verdict::Taken(Box::new(f)),
             Ok(Err(why)) => Verdict::Rejected(why),

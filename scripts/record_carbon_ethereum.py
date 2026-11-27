@@ -104,6 +104,9 @@ def capture(url):
                     trial=wallet(c,row,source,target,qty,mode,end)
                     if trial:controls.append(trial)
     if {r["by_target"] for r in controls}!={True,False} or {r["source"]==NATIVE for r in controls}!={True,False}:raise ValueError("incomplete two-sided wallet coverage")
+    for row in rows:
+        row["orders"]=[[str(sid),owner,tokens,[[str(v) for v in order] for order in orders]]
+                       for sid,owner,tokens,orders in row["orders"]]
     return dict(source_revision=REV,chain_id=1,selector=tag,height=int(header["number"],16),state_root=ROOT_HASH,roles=[CTRL,IMPL],hashes=hashes,version=6,directory=rows,controls=controls)
 
 if __name__=="__main__":

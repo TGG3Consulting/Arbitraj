@@ -150,6 +150,8 @@ pub enum RouterFeeMode {
     Rebate,
     /// Официальный роутер проверяет валовую выплату ETH; аванс прибавлен к подписанному минимуму.
     NativeGrossMinimum,
+    /// Защитный модуль ERC20 выбран по чистой выплате и закреплён до подписи.
+    ProtectedWallet { target: alloy_primitives::Address },
     /// Нативная расчётная валюта; фиксируется вид минимума выбранного публичного ABI.
     NativeSettlement {
         gross_minimum: bool,

@@ -47,13 +47,15 @@ def wallet(c,head,row,permit,sample):
                      tx(permit,"approve(address,address,uint160,uint48)",["address","address","uint160","uint48"],[x,ROUTER,amount,deadline])]
             def order(minimum,when):
                 payload=encode(["address","uint256","uint256","address[]","bool"],[payer,amount,minimum,[x,y],True])
-                return tx(ROUTER,"execute(bytes,bytes[],uint256)",["bytes","bytes[]","uint256"],[b"\x08",[payload],when])
+                check=encode(["address","address","uint256"],[payer,y,base_balance+minimum])
+                return tx(ROUTER,"execute(bytes,bytes[],uint256)",["bytes","bytes[]","uint256"],[bytes([8,14]),[payload,check],when])
         else:
             approve=[tx(x,"approve(address,uint256)",["address","uint256"],[EXEC,amount])]
             def order(minimum,when):
                 return {**swap(row["pool"],x,y,amount,minimum,when,2500),"from":payer}
         before=[tx(z,"balanceOf(address)",["address"],[payer]) for z in (x,y)]
         prefix=prefix+approve+before
+        base_balance=int(run(prefix,mode)[-1]["returnData"],16) if mode=="native" else 0
         calls=prefix+[order(out+1,deadline),order(out,0),order(out,deadline)]+before
         result=run(calls,mode);a,b,c0,p,q=[result[i] for i in range(len(prefix),len(calls))]
         if a["status"]!="0x0" or b["status"]!="0x0" or c0["status"]!="0x1" or any(r["status"]!="0x1" for r in result[len(prefix)-4:len(prefix)] if mode=="native"):
@@ -85,6 +87,15 @@ def capture(endpoint):
     permit,wrapped,origin=decode(["address"]*3,words[:96]);init="0x"+words[160:192].hex()
     stated,=c.one(FACTORY,"INIT_CODE_PAIR_HASH()",returns=["bytes32"])
     if wrapped!=WETH or origin!=FACTORY or init!="0x"+stated.hex():raise ValueError("wrong router constructor")
+    _,per=role(c,permit)
+    refs=router["runtimeBytecode"]["immutableReferences"]
+    code=raw(router["runtimeBytecode"]["onchainBytecode"])
+    bindings={}
+    for key,value in (("permit2",permit),("factory",FACTORY),("init",init)):
+        word=raw(value).rjust(32,b"\0")
+        indexes=next((a for a in refs.values() if all(code[i["start"]:i["start"]+i["length"]]==word for i in a)),None)
+        if not indexes: raise ValueError("отсутствует неизменяемая привязка Omni")
+        bindings[key]=[x["start"] for x in indexes]
     markets=registry(c,FACTORY,init);examples=[]
     for row in sorted((r for r in markets if WETH in r["tokens"]),key=lambda r:-int(r["reserves"][r["tokens"].index(WETH)])):
         code=rpc(endpoint,"eth_getCode",[row["pool"],c.selector])
@@ -97,7 +108,7 @@ def capture(endpoint):
         examples.append(dict(pool=row["pool"],measured=measured,wallet=direct));break
     if not any("wallet" in r for r in examples):raise ValueError(str(examples[:3])[:560])
     return dict(id="omni-exchange-v2-base",chain_id=8453,selector=c.selector,height=snap["block"],state_root=head["stateRoot"],
-                factory=fac,router=rt,init_hash=init,markets=markets,examples=examples)
+                factory=fac,router=rt,permit2=per,bindings=bindings,init_hash=init,markets=markets,examples=examples)
 
 if __name__=="__main__":
     args=argparse.ArgumentParser(description=__doc__);args.add_argument("output",type=Path);args=args.parse_args()

@@ -42,7 +42,7 @@ impl Proof {
             t.hash == hash
                 && t.block_hash == r.block_hash
                 && t.from == self.payer
-                && t.to == Some(self.bond)
+                && t.to == Some(self.call.protection.map_or(self.bond, |p| p.module))
                 && t.value.is_zero()
                 && t.input == self.call.data(self.payer)
         }) {
@@ -50,6 +50,22 @@ impl Proof {
         } else {
             Err(fail())
         }
+    }
+    pub(in crate::venues::bsc_dex) fn measured(
+        &self,
+        rows: &[super::super::check::simulate::SimLog],
+    ) -> Option<(U256, U256)> {
+        let logs = rows
+            .iter()
+            .map(|r| {
+                Some(Log {
+                    inner: alloy_primitives::Log::new(r.address, r.topics.clone(), r.data.clone())?,
+                    ..Default::default()
+                })
+            })
+            .collect::<Option<Vec<_>>>()?;
+        let (input, output) = self.call.pair();
+        self.amounts(&logs, self.payer, input, output)
     }
     pub(super) fn amounts(
         &self,
@@ -95,10 +111,20 @@ impl Proof {
                 e.refundAmount,
             )
         };
-        if (token, user, receiver, qty, reserve) != (c.token, wallet, wallet, c.qty, c.reserve)
+        if (token, user, receiver, qty, reserve)
+            != (
+                c.token,
+                c.protection.map_or(wallet, |p| p.module),
+                wallet,
+                c.qty,
+                c.reserve,
+            )
             || cash.is_zero()
         {
             return None;
+        }
+        if let Some(p) = c.protection {
+            return self.protected_amounts(logs, p, cash);
         }
         let (debit, credit, from, to) = if c.mint {
             if cash > c.limit {
@@ -136,6 +162,68 @@ impl Proof {
     }
 }
 
+impl Proof {
+    fn protected_amounts(
+        &self,
+        logs: &[Log],
+        p: super::mint_club_wire::Protection,
+        cash: U256,
+    ) -> Option<(U256, U256)> {
+        use super::mint_club_wire::IBondFlow;
+        let c = self.call;
+        let w = self.payer;
+        if self.bond != p.bond
+            || p.module == w
+            || p.module == p.bond
+            || p.module.is_zero()
+            || p.deadline.is_zero()
+        {
+            return None;
+        }
+        let mut rows = logs.iter().filter(|l| {
+            l.address() == p.module && l.topic0() == Some(&IBondFlow::Settled::SIGNATURE_HASH)
+        });
+        let e = IBondFlow::Settled::decode_log_data(&rows.next()?.inner.data).ok()?;
+        if rows.next().is_some()
+            || (e.payer, e.token, e.reserve, e.mint, e.qty)
+                != (w, c.token, c.reserve, c.mint, c.qty)
+            || e.debit.is_zero()
+            || e.credit.is_zero()
+        {
+            return None;
+        }
+        let moved = |a, f, t| fill::moved_logs(logs, a, f, t);
+        let net = |a, who, inc| {
+            let plus = moved(a, None, Some(who));
+            let minus = moved(a, Some(who), None);
+            if inc {
+                plus.checked_sub(minus)
+            } else {
+                minus.checked_sub(plus)
+            }
+        };
+        let (input, output) = c.pair();
+        if net(input, w, false) != Some(e.debit)
+            || net(output, w, true) != Some(e.credit)
+            || net(input, p.module, true) != Some(U256::ZERO)
+            || net(c.reserve, self.bond, c.mint) != Some(cash)
+        {
+            return None;
+        }
+        let correct = if c.mint {
+            e.debit <= c.limit
+                && e.credit == c.qty
+                && cash <= c.limit
+                && moved(c.token, Some(Address::ZERO), Some(w)) == c.qty
+        } else {
+            e.debit == c.qty
+                && e.credit >= c.limit
+                && cash >= c.limit
+                && moved(c.token, Some(p.module), Some(Address::ZERO)) == c.qty
+        };
+        correct.then_some((e.debit, e.credit))
+    }
+}
 #[cfg(test)]
 #[path = "mint_club_fact_tests.rs"]
 mod tests;

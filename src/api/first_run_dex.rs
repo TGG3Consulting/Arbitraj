@@ -161,6 +161,12 @@ mod tests {
         )).unwrap();
         assert_eq!(omni["selector"], base["selector"]);
         pairs.extend(omni["examples"].as_array().unwrap().iter().filter_map(|v| v.get("measured")).cloned());
+        let mars: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+            include_bytes!("../../tests/data/first_run_dex_2026-11-26/marswap-ethereum.json.gz").as_slice(),
+        )).unwrap();
+        assert_eq!(mars["selector"], eth["selector"]);
+        assert_eq!(mars["complete_round_trips"], 12);
+        pairs.push(serde_json::json!({"network":"ethereum","dex":mars["id"],"creation_code_hash":mars["init_hash"]}));
         let markets = [
             include_str!("../../tests/data/first_run_dex_2026-11-26/ethereum_v2_factories.json"),
             include_str!("../../tests/data/first_run_dex_2026-11-26/base_v2_factories.json"),

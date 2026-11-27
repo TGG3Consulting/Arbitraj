@@ -1,8 +1,9 @@
 //! Родной Bond как самостоятельная прямая котировка. В финале сравниваются тот же выпуск, фактический дебет и газ владельца.
 use super::super::{
-    exec::{mint_club_direct as direct, native},
-    math::mint_club as math,
-    num,
+    exec::{
+        mint_club_binding as binding, mint_club_direct as direct, mint_club_wire::Protection,
+        native,
+    },
     wallet::signer,
 };
 use super::{
@@ -23,16 +24,9 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         return options;
     };
     let generation = q.ctx.settings.generation();
-    let (input, amount) = match i.side {
-        Side::Buy => (i.usdt, super::direct::ceil_units(i.qty, i.coin_dec)),
-        Side::Sell => (i.coin, num::to_units(i.qty, i.coin_dec)),
-    };
-    let Some(amount) = amount else { return options };
+    let input = if i.side == Side::Buy { i.usdt } else { i.coin };
     for e in &i.entries {
-        let PoolState::MintClub(cached) = &e.pool.state else {
-            continue;
-        };
-        if q.ctx.addr("dex.native_wrapped").ok() != Some(cached.reserve) {
+        if !direct::enabled(e) {
             continue;
         }
         let mut e = e.clone();
@@ -45,21 +39,36 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         let PoolState::MintClub(s) = &e.pool.state else {
             continue;
         };
-        let Some(f) = math::fill(s, input, i.side == Side::Sell, amount) else {
+        let Ok((candidate, _)) = super::direct::best(
+            q,
+            &i.asset,
+            i.side,
+            i.qty,
+            vec![e.clone()],
+            i.coin_dec,
+            i.usdt_dec,
+        ) else {
             continue;
         };
-        if !f.swapped.complete {
+        if candidate.coins != i.qty {
             continue;
         }
+        let swap = candidate.swapped;
         let mint = input == s.reserve;
         let qty = if mint {
-            f.swapped.amount_out
+            swap.amount_out
         } else {
-            f.swapped.amount_in
+            swap.amount_in
         };
-        let Some((call, exact)) =
-            direct::call(s, input, qty, f.swapped.amount_in, f.swapped.amount_out)
-        else {
+        let minimum = if i.side == Side::Buy {
+            let Some(m) = super::direct::ceil_units(i.qty, i.coin_dec) else {
+                continue;
+            };
+            m
+        } else {
+            alloy_primitives::U256::ONE
+        };
+        let Some((call, exact)) = direct::call(s, input, qty, swap.amount_in, minimum) else {
             continue;
         };
         let Ok(bond) = q.ctx.dex_addr("dex.factory", e.family.id) else {
@@ -70,13 +79,58 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         {
             continue;
         }
-        let execution = Execution {
-            mode: RouteMode::Direct,
-            target: bond,
-            wire: Wire::MintClub(call),
+        let native = match head {
+            Some(h) => binding::nominal(&q.ctx, &e, s.reserve, h).await.is_ok(),
+            None => {
+                q.ctx.addr("dex.native_wrapped").ok() == Some(s.reserve)
+                    && q.ctx
+                        .dex_list("dex.mint_nominal_reserve_hashes", e.family.id)
+                        .is_ok_and(|v| !v.is_empty())
+            }
         };
-        if let Ok(choice) = Box::pin(v2_execution::option(q, i, e, payer, execution, head)).await {
-            options.push(choice);
+        let mut routes = Vec::new();
+        if native {
+            routes.push((bond, call));
+        }
+        if let Ok(module) = q.ctx.dex_addr("dex.router", e.family.id) {
+            let protection = match head {
+                Some(h) => binding::module(&q.ctx, &e, module, h).await.ok(),
+                None if super::super::pools::direct_module::configured(&q.ctx, e.family.id)
+                    .is_ok() =>
+                {
+                    Some(Protection {
+                        bond,
+                        module,
+                        deadline: alloy_primitives::U256::ZERO,
+                    })
+                }
+                None => None,
+            };
+            if protection.is_some() {
+                routes.push((
+                    module,
+                    super::super::exec::mint_club_wire::Call { protection, ..call },
+                ));
+            }
+        }
+        for (target, order) in routes {
+            let execution = Execution {
+                mode: RouteMode::Direct,
+                target,
+                wire: Wire::MintClub(order),
+            };
+            if let Ok(choice) = Box::pin(v2_execution::option(
+                q,
+                i,
+                e.clone(),
+                payer,
+                execution,
+                head,
+            ))
+            .await
+            {
+                options.push(choice);
+            }
         }
     }
     if q.ctx.settings.generation() != generation {

@@ -66,6 +66,11 @@ pub async fn state(
 ) -> GatewayResult<Loaded> {
     let token1 = pair.1;
     let tag = block_tag(block);
+    if f.variant==Variant::Carbon && let PoolRef::Singleton{manager,id}=reference {
+        let at=super::nami::block(ctx,&tag).await?;
+        let state=Box::pin(super::carbon::market(ctx,f,*manager,*id,pair,&at)).await?;
+        return Ok(Loaded{state:PoolState::Carbon(Box::new(state)),ticks:None,bins:None,fee_pips:None});
+    }
     if f.variant == Variant::MintClub && let PoolRef::Contract(token)=reference {
         let at=super::nami::block(ctx,&tag).await?;
         let state=Box::pin(super::mint_club::market(ctx,f,*token,pair,&at)).await?;

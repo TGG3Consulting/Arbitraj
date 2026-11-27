@@ -123,7 +123,7 @@ pub(super) async fn once(
         let ([s],[h])=(steps.as_slice(),path.hops.as_slice())else{return Err(ctx.err(ErrorCode::NoRoute,"Mint Club: требуется один рынок"));};
         if mode!=DryMode::AsTrade || route.mode!=RouteMode::Direct || is_native || native::cash(ctx,&ctx.text("venue.quote_asset")?,usdt){return Err(ctx.err(ErrorCode::NoRoute,"Mint Club: требуется прямое поручение ERC20"));}
         let (height,time)=q.heads.at(ctx).await?;
-        let p=Box::pin(super::mint_club_direct::path_plan(ctx,s,h,wallet,height)).await?;
+        let p=Box::pin(super::mint_club_direct::path_plan(ctx,s,h,wallet,height,super::mint_club_direct::selected(&route.legs[0]))).await?;
         return Ok(Ready{built:Built::One(p),legs,coins,usdt:paid,form,by_quoter,at:Base::timed(height,time)});
     }
     let deployed = executor::address(ctx)?;

@@ -298,6 +298,7 @@ jobs:
           node-version: '22'
       - working-directory: contracts
         run: npm ci --no-audit --no-fund
+      - run: node contracts/evmtest/mint_club.mjs
       - id: compile_hanji
         run: node contracts/build-hanji.mjs "$RUNNER_TEMP/hanji-executor"
       - id: compile_fermi

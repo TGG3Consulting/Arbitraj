@@ -158,6 +158,31 @@ impl PoolRef {
     }
 }
 
+/// Две заявки одного владельца Carbon. Поля A и B хранятся в исходном сжатом формате.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CarbonOrder {
+    pub y: u128,
+    pub z: u128,
+    pub a: u64,
+    pub b: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CarbonStrategy {
+    pub id: U256,
+    pub orders: [CarbonOrder; 2],
+}
+
+/// Заявки приведены к порядку tokens. Нативный ETH и WETH имеют разные ID пар.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CarbonState {
+    pub controller: Address,
+    pub tokens: [Address; 2],
+    pub native_side: Option<usize>,
+    pub fee_ppm: u32,
+    pub strategies: Vec<CarbonStrategy>,
+}
+
 /// Один ERC20 Mint Club V2 и его собственное обеспечение в общем контракте Bond.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MintClubState {
@@ -382,6 +407,7 @@ pub enum PoolState {
     EtherVista(Box<EtherVistaState>),
     Virtuals(Box<VirtualsState>),
     MintClub(Box<MintClubState>),
+    Carbon(Box<CarbonState>),
     /// Сумма, списанная с CandySwap, включает независимое удержание из выплаты получателю.
     CandySwap(Box<CandySwapState>),
     Memebox(Box<MemeboxState>),

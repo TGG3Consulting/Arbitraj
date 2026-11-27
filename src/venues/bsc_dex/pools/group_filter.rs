@@ -43,6 +43,7 @@ pub fn filter(pools: &[&Found], topics: Topics) -> Value {
         Topics::Full => events::topics(first.family),
         Topics::Liquidity => events::liquidity_topics(first.family),
     };
+    if first.family.variant==super::family_variant::Variant::Carbon && let PoolRef::Singleton{manager,..}=first.reference {return subs::by_address(&[manager],&topic0);}
     match first.reference {
         // Пара общего контракта (PMM от оракула, решение 122 F, 3) — по адресу общего контракта (события у него).
         // Решение 295: пары многомонетного пула — по адресу его контракта (одна строка адреса на все пары).

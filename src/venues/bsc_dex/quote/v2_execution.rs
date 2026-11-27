@@ -75,6 +75,7 @@ pub(super) async fn option(
     use crate::{core::types::RouteMode, gateway::errors::ErrorCode};
     use alloy_primitives::U256;
     let fee_mode = match &execution.wire {
+        super::v2_wallet_sim::Wire::MintClub(c) if c.protection.is_some()=>c.protection.map(|p|RouterFeeMode::ProtectedWallet{target:p.module}),
         super::v2_wallet_sim::Wire::EkuboV2(_,Some(_)) if super::vista_pricing::cash(&q.ctx,&i.usdt_ticker,i.usdt)=>Some(RouterFeeMode::NativeSettlement{gross_minimum:false}),
         super::v2_wallet_sim::Wire::Vista(v)
             if super::vista_pricing::cash(&q.ctx, &i.usdt_ticker, i.usdt) =>

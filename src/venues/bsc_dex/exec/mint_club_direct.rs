@@ -9,14 +9,14 @@ use super::super::{
 };
 use super::{
     chain::Step,
-    mint_club_wire::Call,
+    mint_club_wire::{Call, Protection},
     plan::{DirectCall, Order, Plan},
 };
 use crate::{
     core::types::{MintClubState, PoolState},
     gateway::errors::{ErrorCode, GatewayResult},
 };
-use alloy_primitives::{Address, B256, Bytes, U256, b256, keccak256};
+use alloy_primitives::{Address, Bytes, U256};
 use serde_json::json;
 pub(in crate::venues::bsc_dex) fn enabled(e: &Entry) -> bool {
     matches!(e.pool.state, PoolState::MintClub(_))
@@ -28,40 +28,19 @@ fn fail(ctx: &Ctx) -> crate::gateway::errors::GatewayError {
     )
 }
 
-// Обе проверенные реализации WETH переносят ровно номинал. Bond проверяет сумму до ERC20.transfer.
-fn pays_nominal(hash: B256) -> bool {
-    [
-        b256!("8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c"),
-        b256!("d0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23"),
-    ]
-    .contains(&hash)
-}
 pub(in crate::venues::bsc_dex) async fn state(
     ctx: &Ctx,
     e: &Entry,
     h: Head,
 ) -> GatewayResult<MintClubState> {
-    let PoolState::MintClub(s) = &e.pool.state else {
-        return Err(fail(ctx));
-    };
-    if ctx.addr("dex.native_wrapped")? != s.reserve {
-        return Err(fail(ctx));
-    }
-    let at = h.selector();
-    let (state, code) = tokio::try_join!(
-        mint_club::market(
-            ctx,
-            e.family,
-            e.pool.reference.address(),
-            (e.coin, e.usdt),
-            &at
-        ),
-        rpc::call::<Bytes>(ctx, "eth_getCode", json!([s.reserve, at]))
-    )?;
-    if state.reserve != s.reserve || !pays_nominal(keccak256(code)) {
-        return Err(fail(ctx));
-    }
-    Ok(state)
+    mint_club::market(
+        ctx,
+        e.family,
+        e.pool.reference.address(),
+        (e.coin, e.usdt),
+        &h.selector(),
+    )
+    .await
 }
 pub(in crate::venues::bsc_dex) fn call(
     s: &MintClubState,
@@ -85,6 +64,7 @@ pub(in crate::venues::bsc_dex) fn call(
     }
     Some((
         Call {
+            protection: None,
             token: s.token,
             reserve: s.reserve,
             mint,
@@ -118,6 +98,7 @@ pub(in crate::venues::bsc_dex) fn probe(
     e: &Entry,
     o: &Order,
     payer: Address,
+    protection: Option<Protection>,
 ) -> GatewayResult<(Vec<approve::Approval>, Address, Bytes)> {
     let PoolState::MintClub(s) = &e.pool.state else {
         return Err(fail(ctx));
@@ -128,11 +109,13 @@ pub(in crate::venues::bsc_dex) fn probe(
     } else {
         f.swapped.amount_in
     };
-    let (c, _) = call(s, o.token_in, qty, o.amount_in, o.min_out).ok_or_else(|| fail(ctx))?;
+    let (mut c, _) = call(s, o.token_in, qty, o.amount_in, o.min_out).ok_or_else(|| fail(ctx))?;
     let bond = ctx.dex_addr("dex.factory", e.family.id)?;
+    c.protection = protection;
+    let target = protection.map_or(bond, |p| p.module);
     Ok((
-        approve::fork_all(ctx, o.token_in, bond, o.amount_in)?,
-        bond,
+        approve::fork_all(ctx, o.token_in, target, o.amount_in)?,
+        target,
         c.data(payer),
     ))
 }
@@ -142,6 +125,7 @@ pub(super) async fn plan(
     qty: U256,
     payer: Address,
     h: Head,
+    selected: Option<Address>,
 ) -> GatewayResult<Plan> {
     if !step.from_wallet || !step.to_wallet {
         return Err(fail(ctx));
@@ -150,14 +134,21 @@ pub(super) async fn plan(
     let s = state(ctx, &step.entry, h).await?;
     let bond = ctx.dex_addr("dex.factory", step.entry.family.id)?;
     let o = &step.order;
-    let (c, f) = call(&s, o.token_in, qty, o.amount_in, o.min_out).ok_or_else(|| fail(ctx))?;
+    let (mut c, f) = call(&s, o.token_in, qty, o.amount_in, o.min_out).ok_or_else(|| fail(ctx))?;
     if c.pair() != (o.token_in, o.token_out) {
         return Err(fail(ctx));
     }
+    let target = if let Some(selected) = selected {
+        c.protection = Some(super::mint_club_binding::module(ctx, &step.entry, selected, h).await?);
+        selected
+    } else {
+        super::mint_club_binding::nominal(ctx, &step.entry, s.reserve, h).await?;
+        bond
+    };
     check(ctx, bond, c, &f, h).await?;
     let measure = v2_wallet_sim::Order {
         payer,
-        target: bond,
+        target,
         input: o.token_in,
         output: o.token_out,
         amount: f.swapped.amount_in,
@@ -165,21 +156,21 @@ pub(super) async fn plan(
         wire: v2_wallet_sim::Wire::MintClub(c),
     };
     let fill = v2_wallet_sim::measure(ctx, h, measure, true).await?;
-    if fill.received != f.swapped.amount_out {
+    if (c.mint || c.protection.is_none()) && fill.received != f.swapped.amount_out {
         return Err(fail(ctx));
     }
-    let approvals = approve::fork_missing(ctx, o.token_in, payer, bond, o.amount_in).await?;
+    let approvals = approve::fork_missing(ctx, o.token_in, payer, target, o.amount_in).await?;
     if ctx.settings.generation() != generation {
         return Err(fail(ctx));
     }
     // Родной ABI имеет границы цены, но не имеет срока включения.
     let mut p = Plan::new(
         ctx,
-        (approvals, bond, payer),
+        (approvals, target, payer),
         o.token_out,
         vec![],
         o.min_out,
-        U256::ZERO,
+        c.protection.map_or(U256::ZERO, |p| p.deadline),
     )?;
     p.set_direct_market(DirectCall::MintClub(c));
     Ok(p)
@@ -232,6 +223,7 @@ pub(super) async fn path_plan(
     hop: &super::super::quote::path::Hop,
     wallet: Address,
     height: u64,
+    selected: Option<Address>,
 ) -> GatewayResult<Plan> {
     let PoolState::MintClub(state) = &step.entry.pool.state else {
         return Err(fail(ctx));
@@ -242,5 +234,15 @@ pub(super) async fn path_plan(
         hop.swapped.amount_in
     };
     let h = super::super::quote::white_state::head(ctx, &format!("{height:#x}")).await?;
-    Box::pin(plan(ctx, step, qty, wallet, h)).await
+    Box::pin(plan(ctx, step, qty, wallet, h, selected)).await
+}
+
+pub(in crate::venues::bsc_dex) fn selected(leg: &crate::core::types::RouteLeg) -> Option<Address> {
+    if let [h] = leg.hops.as_slice()
+        && let Some(crate::core::types::RouterFeeMode::ProtectedWallet { target }) = h.fee_mode
+    {
+        Some(target)
+    } else {
+        None
+    }
 }

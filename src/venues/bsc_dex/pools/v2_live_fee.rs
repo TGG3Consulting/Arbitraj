@@ -70,6 +70,7 @@ pub(in crate::venues::bsc_dex) struct Rate {
     target: Address,
     selector: Bytes,
     denominator: u64,
+    mars_info: bool,
 }
 
 struct FeeRule {
@@ -135,6 +136,7 @@ impl FeeRule {
                 miss("Метод комиссии должен принимать (), (address пары) или (address token0, address token1)")
             })?,
             denominator: self.denominator,
+            mars_info: self.factory_source && self.getter == "lpInfo()",
         })
     }
 }
@@ -148,10 +150,14 @@ impl Rate {
     }
 
     pub fn decode(&self, bytes: &[u8]) -> GatewayResult<u32> {
-        if bytes.len() != 32 {
-            return Err(miss("Ответ метода комиссии V2 не равен одному слову ABI"));
-        }
-        let value = U256::from_be_slice(bytes);
+        let value = if self.mars_info {
+            mars_percentage(bytes, self.denominator)?
+        } else {
+            if bytes.len() != 32 {
+                return Err(miss("Ответ метода комиссии V2 не равен одному слову ABI"));
+            }
+            U256::from_be_slice(bytes)
+        };
         if value >= U256::from(self.denominator) {
             return Err(miss("Комиссия V2 должна быть меньше 100%"));
         }
@@ -162,6 +168,22 @@ impl Rate {
         }
         verify_rules::v2_fee_pips(value, self.denominator).map_err(miss)
     }
+}
+
+/// MarSwap Router02 и V5 при нулевом msg.value. lpInfo() отдаёт treasury, LP bps,
+/// Mars bps и стоимость фиксированной оплаты в wei. Адрес treasury не является ставкой.
+fn mars_percentage(bytes: &[u8], denominator: u64) -> GatewayResult<U256> {
+    if denominator != 10_000 || bytes.len() != 128 || bytes[..12] != [0;12] {
+        return Err(miss("MarSwap: неверная структура lpInfo() или знаменатель"));
+    }
+    let lp = U256::from_be_slice(&bytes[32..64]);
+    let platform = U256::from_be_slice(&bytes[64..96]);
+    let total = lp.checked_add(platform).filter(|x| *x < U256::from(denominator))
+        .ok_or_else(|| miss("MarSwap: недопустимая сумма двух ставок"))?;
+    if bytes[96..].iter().all(|x| *x == 0) {
+        return Err(miss("MarSwap: льготный режим с нулевой фиксированной платой требует отдельной проверки пары"));
+    }
+    Ok(total)
 }
 
 async fn parent(ctx: &Ctx, tag: &str) -> GatewayResult<alloy_primitives::B256> {
@@ -427,6 +449,17 @@ mod tests {
             ..rate
         };
         assert!(inexact.decode(&U256::from(1).abi_encode()).is_err());
+    }
+
+    #[test]
+    fn mars_terms_sum_only_the_variable_components() {
+        use alloy::sol_types::SolValue;
+        let t = |lp, fee, flat| (Address::repeat_byte(9), U256::from(lp), U256::from(fee), U256::from(flat)).abi_encode_params();
+        assert_eq!(mars_percentage(&t(10u64, 10u64, 180_000_000_000_000u64), 10_000).unwrap(), U256::from(20));
+        assert_eq!(mars_percentage(&t(999, 0, 1), 10_000).unwrap(), U256::from(999));
+        assert!(mars_percentage(&t(9999, 1, 1), 10_000).is_err());
+        assert!(mars_percentage(&t(10, 10, 0), 10_000).is_err());
+        assert!(mars_percentage(&[0;32], 10_000).is_err());
     }
 
     #[test]

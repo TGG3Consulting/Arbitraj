@@ -64,6 +64,7 @@ fn both_networks_match_authorized_quantity_and_actual_transfers_after_restart() 
                         })
                         .collect();
                     let c = Call {
+                        protection: None,
                         qty,
                         mint,
                         reserve,
@@ -145,4 +146,88 @@ fn both_networks_match_authorized_quantity_and_actual_transfers_after_restart() 
         }
     }
     assert_eq!(n, 34);
+}
+
+#[test]
+fn protected_wallet_binds_issuer_module_and_receives_each_asset_before_and_after_recovery() {
+    use super::super::mint_club_wire::Protection;
+    for bytes in [
+        include_bytes!(
+            "../../../../tests/data/first_run_dex_2026-11-26/mint_club_base_protected.json.gz"
+        )
+        .as_slice(),
+        include_bytes!(
+            "../../../../tests/data/first_run_dex_2026-11-26/mint_club_ethereum_protected.json.gz"
+        )
+        .as_slice(),
+    ] {
+        let raw: Value = serde_json::from_reader(GzDecoder::new(bytes)).unwrap();
+        let module = address(&raw["module"]);
+        let bond = address(&raw["bond"]);
+        let wallet = address(&raw["owner"]);
+        let cases = raw["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .chain(raw["cash_cases"].as_array().into_iter().flatten());
+        for row in cases {
+            let reserve = row
+                .get("reserve")
+                .map(address)
+                .unwrap_or_else(|| address(&raw["reserve"]));
+            let qty = number(&row["qty"]);
+            let token = address(&row["token"]);
+            for mint in [true, false] {
+                let (limit, v) = if mint {
+                    (number(&row["cost"]), &row["buy"])
+                } else {
+                    (number(&row["refund"]), &row["sell"])
+                };
+                let call = Call {
+                    token,
+                    reserve,
+                    qty,
+                    mint,
+                    limit,
+                    protection: Some(Protection {
+                        bond,
+                        module,
+                        deadline: U256::from(1u8),
+                    }),
+                };
+                let p = Proof {
+                    call,
+                    bond,
+                    payer: wallet,
+                };
+                let (input, output) = call.pair();
+                let logs: Vec<Log> = v["logs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| Log {
+                        inner: serde_json::from_value(v.clone()).unwrap(),
+                        ..Default::default()
+                    })
+                    .collect();
+                let (debit, credit) = if mint { (limit, qty) } else { (qty, limit) };
+                assert_eq!(
+                    p.amounts(&logs, wallet, input, output),
+                    Some((debit, credit))
+                );
+                assert_eq!(v["refused"].as_array().unwrap().len(), 4);
+                let mut altered = p.clone();
+                altered.call.protection.as_mut().unwrap().module = bond;
+                assert!(altered.amounts(&logs, wallet, input, output).is_none());
+                let mut altered = p.clone();
+                altered.call.protection = None;
+                assert!(altered.amounts(&logs, wallet, input, output).is_none());
+                let data = IBondFlow::executeCall::abi_decode_validate(&call.data(wallet)).unwrap();
+                assert_eq!(
+                    (data.maxDebit, data.minCredit, data.qty, data.mint),
+                    (debit, credit, qty, mint)
+                );
+            }
+        }
+    }
 }

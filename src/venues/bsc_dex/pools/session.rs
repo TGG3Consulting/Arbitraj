@@ -278,7 +278,7 @@ async fn on_log(
     (lanes, raw): (&mut EventLanes, Box<RawValue>),
 ) -> Result<(), End> {
     // Решение 455: ERC-20 Transfer на адрес crypto-пула Curve пачки — отметка, чтение пула на голове (transfer_in.rs).
-    if super::transfer_in::on_log(p, &m.pools, log) {
+    if super::carbon_events::invalidated(p,&m.pools,log) || super::transfer_in::on_log(p, &m.pools, log) {
         return Ok(());
     }
     let single = log.topics().get(1).map(|id| PoolRef::Singleton {
@@ -286,7 +286,7 @@ async fn on_log(
         id: *id,
     });
     // Решение 447: пул Ekubo — PoolId в данных лога ядра (ekubo_route.rs), не в topics[1].
-    let ekubo = super::ekubo_route::singleton(log);
+    let ekubo = super::carbon_events::singleton(log).or_else(||super::ekubo_route::singleton(log));
     let found = single
         .and_then(|r| index.get(&r))
         .or_else(|| index.get(&PoolRef::Contract(log.address())))
@@ -350,7 +350,7 @@ fn deep_log(m: &Members, index: &HashMap<PoolRef, usize>, log: &Log) -> bool {
         manager: log.address(),
         id: *id,
     });
-    let ekubo = super::ekubo_route::singleton(log);
+    let ekubo = super::carbon_events::singleton(log).or_else(||super::ekubo_route::singleton(log));
     single
         .and_then(|r| index.get(&r))
         .or_else(|| index.get(&PoolRef::Contract(log.address())))

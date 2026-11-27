@@ -40,6 +40,7 @@ pub enum Applied {
 pub fn topics(f: &Family) -> Vec<B256> {
     use alloy::sol_types::SolEvent;
     match f.proto {
+        _ if f.variant==super::family_variant::Variant::Carbon=>super::carbon_events::topics(),
         _ if f.variant==super::family_variant::Variant::MintClub => vec![super::mint_club::IBond::Transfer::SIGNATURE_HASH],
         _ if f.variant == super::family_variant::Variant::SolidlyCl => {
             let mut events = events_v3::topics(f.proto);
@@ -110,6 +111,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
     use super::abi_v4::{IInfinityBin, IInfinityCl, IUniswapV4};
     use alloy::sol_types::SolEvent;
     match f.proto {
+        _ if f.variant==super::family_variant::Variant::Carbon => super::carbon_events::topics(),
         _ if f.variant==super::family_variant::Variant::MintClub => vec![super::mint_club::IBond::Transfer::SIGNATURE_HASH],
         _ if super::ramses::handles(f) => super::ramses::liquidity_topics(f),
         Proto::V2 => vec![IV2Pair::Mint::SIGNATURE_HASH],
@@ -164,6 +166,8 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
     use super::solidly_v3::ISolidlyV3::SetFee;
     use alloy::sol_types::SolEvent;
     let r = match e.family.proto {
+        _ if e.family.variant==super::family_variant::Variant::Carbon => {e.valid=false;Applied::Refresh("Заявки или плата Carbon изменились".into())}
+
         _ if e.family.variant==super::family_variant::Variant::MintClub => {
             match super::mint_club::IBond::Transfer::decode_log_data(&log.inner.data) {
                 Ok(t) if !t.from.is_zero() && !t.to.is_zero() => Applied::Ignored,

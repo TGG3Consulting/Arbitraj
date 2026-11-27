@@ -37,6 +37,7 @@ pub(super) mod ekubo_v2_fact;
 pub(super) mod mint_club_wire;
 pub(super) mod mint_club_fact;
 pub(super) mod mint_club_direct;
+pub(super) mod mint_club_binding;
 pub mod dry_build;
 pub mod dry_build_once;
 pub mod dry_checks;

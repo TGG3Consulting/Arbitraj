@@ -5,13 +5,25 @@ use serde::{Deserialize, Serialize};
 
 sol! {
     interface IBondFlow {
+        function execute(address token,address reserve,bool mint,uint256 qty,uint256 maxDebit,uint256 minCredit,uint256 deadline) external returns(uint256 debit,uint256 credit);
+        function bond() external view returns(address);
+        function cloneHash() external view returns(bytes32);
+        event Settled(address indexed payer,address indexed token,address indexed reserve,bool mint,uint256 qty,uint256 debit,uint256 credit);
         function mint(address token,uint256 tokensToMint,uint256 maxReserveAmount,address receiver) external returns(uint256);
         function burn(address token,uint256 tokensToBurn,uint256 minRefund,address receiver) external returns(uint256);
     }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct Protection {
+    pub module: Address,
+    pub bond: Address,
+    pub deadline: U256,
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Call {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub protection: Option<Protection>,
     pub token: Address,
     pub reserve: Address,
     pub mint: bool,
@@ -21,6 +33,19 @@ pub struct Call {
 }
 impl Call {
     pub fn data(self, wallet: Address) -> Bytes {
+        if let Some(p) = self.protection {
+            return IBondFlow::executeCall {
+                token: self.token,
+                reserve: self.reserve,
+                mint: self.mint,
+                qty: self.qty,
+                maxDebit: if self.mint { self.limit } else { self.qty },
+                minCredit: if self.mint { self.qty } else { self.limit },
+                deadline: p.deadline,
+            }
+            .abi_encode()
+            .into();
+        }
         if self.mint {
             IBondFlow::mintCall {
                 token: self.token,

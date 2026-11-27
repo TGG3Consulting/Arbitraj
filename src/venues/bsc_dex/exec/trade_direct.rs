@@ -88,7 +88,8 @@ pub async fn trade(
     let mut prep = prepare(&v, &req, leg, graph_mins.as_deref(), decs, is_native).await?;
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
-    let (mut p, mut at) = build(q, &prep, wallet).await?;
+    let selected=super::mint_club_direct::selected(leg);
+    let (mut p, mut at) = build(q, &prep, wallet,selected).await?;
     let approved = send_approvals(env, &slot, &p.approvals).await?;
     // Решение 236, дополнение (техлид 09.11): газ разрешений — в итог обмена и в любую ошибку после них (swap_send.rs).
     let out: GatewayResult<TradeResult> = async {
@@ -100,7 +101,7 @@ pub async fn trade(
                 None => None,
             };
             prep = prepare(&v, &req, leg, mins.as_deref(), decs, is_native).await?;
-            (p, at) = build(q, &prep, wallet).await?;
+            (p, at) = build(q, &prep, wallet,selected).await?;
             no_new_approvals(ctx, &p)?;
             rebuilt_notice(env, &req, at.number);
         }
@@ -112,7 +113,7 @@ pub async fn trade(
             let exp = [(expected(&prep.path, req.side), coin_tax(&v, &prep.path))];
             let old = p.min_total();
             ur_remeasure::unit_mins(prep.steps.iter_mut());
-            let (probe, at2) = build(q, &prep, wallet).await?;
+            let (probe, at2) = build(q, &prep, wallet,selected).await?;
             no_new_approvals(ctx, &probe)?;
             let (fixed, line) =
                 ur_remeasure::measure(env, &req, probe, &entries, at2, &exp, (old, decs.1), orig)
@@ -139,7 +140,7 @@ pub async fn trade(
         );
         sc.vista = super::vista_direct::proof(&p);
         sc.ekubo=p.ekubo_proof();
-        if let Some(super::plan::DirectCall::MintClub(call))=p.direct_market(){ sc.mint_club=Some(super::mint_club_fact::Proof{call,bond:p.router,payer:wallet}); }
+        if let Some(super::plan::DirectCall::MintClub(call))=p.direct_market(){ sc.mint_club=Some(super::mint_club_fact::Proof{call,bond:call.protection.map_or(p.router,|v|v.bond),payer:wallet}); }
         let min_out = p.min_total();
         let d = super::settlement_swap::with_parse(&sc, send_swap(env, &slot, p, guard))
             .await
@@ -196,10 +197,11 @@ async fn build(
     q: &Quoting,
     prep: &Prep,
     wallet: alloy_primitives::Address,
+    selected:Option<alloy_primitives::Address>,
 ) -> GatewayResult<(Plan, Base)> {
     let (at, now) = sim_base::head(&q.ctx, &q.heads).await?;
     if let ([s],[hop])=(prep.steps.as_slice(),prep.path.hops.as_slice()) && super::mint_club_direct::enabled(&s.entry) {
-        let p=Box::pin(super::mint_club_direct::path_plan(&q.ctx,s,hop,wallet,at.number)).await?;
+        let p=Box::pin(super::mint_club_direct::path_plan(&q.ctx,s,hop,wallet,at.number,selected)).await?;
         return Ok((p,at));
     }
     let p = plan::build(&q.ctx, &prep.steps, wallet, now, false)

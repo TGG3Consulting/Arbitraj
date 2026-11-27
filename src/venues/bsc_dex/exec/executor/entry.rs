@@ -51,7 +51,7 @@ use super::super::super::quote::pool_quote;
 use super::code::Version;
 use super::kind::{FluidStep, InfKey, Params, STABLE_NATIVE, ShellStep, V4Key};
 
-fn yield_basis_target(ctx:&Ctx,e:&Entry)->Option<Address>{
+fn pinned_module_target(ctx:&Ctx,e:&Entry)->Option<Address>{
     let addr=ctx.dex_addr("dex.router",e.family.id).ok()?;
     (!addr.is_zero() && super::super::super::pools::direct_module::configured(ctx,e.family.id).is_ok_and(|v|v.len()==1)).then_some(addr)
 }
@@ -59,7 +59,7 @@ fn yield_basis_target(ctx:&Ctx,e:&Entry)->Option<Address>{
 /// A stored route carries its market reference; market-specific steps also need
 /// the registered token pair, physical deployment and currently configured target.
 pub fn route_fits(ctx:&Ctx,reg:&super::super::super::pools::registry::Registry,f:&Family,r:&PoolRef)->bool{
-    if f.variant == super::super::super::pools::family_variant::Variant::YieldBasis{
+    if matches!(f.variant,super::super::super::pools::family_variant::Variant::YieldBasis | super::super::super::pools::family_variant::Variant::BancorLegacy){
         return reg.entry(r).is_some_and(|e|e.family.id==f.id && e.family.variant==f.variant && fits_ok(ctx,&e));
     }
     if f.executor_kind.is_some_and(|k|k.singleton()){
@@ -118,8 +118,8 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
 /// supported. Ошибок иных нет.
 pub fn fits(ctx: &Ctx, e: &Entry) -> Result<(ExecKind, Address), String> {
     let (k, a, hooks) = shape(e)?;
-    if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis{
-        return yield_basis_target(ctx,e).map(|t|(k,t)).ok_or_else(||"YieldBasis: не настроен модуль исполнения".into());
+    if matches!(e.family.variant,crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis | crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy){
+        return pinned_module_target(ctx,e).map(|t|(k,t)).ok_or_else(||format!("{}: не настроен модуль исполнения", e.family.id));
     }
 
     // Решение 441 (ревью, п. 2): шаг BALANCER_V3 — тоже только по записи о приёмке на живых пулах (pool_gate.rs).
@@ -143,7 +143,10 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
     let Some(k) = e.family.executor_kind else {
         return false;
     };
-    if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis{return k==ExecKind::Balancer && super::super::super::pools::yield_basis_quotes::shape(e).is_some() && yield_basis_target(ctx,e).is_some();}
+    if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy {
+        return k==ExecKind::Balancer && super::super::bancor_legacy_plan::state(e).is_some() && pinned_module_target(ctx,e).is_some();
+    }
+    if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis{return k==ExecKind::Balancer && super::super::super::pools::yield_basis_quotes::shape(e).is_some() && pinned_module_target(ctx,e).is_some();}
     if !k.singleton() {
         // Решение 441 (ревью, п. 2): BALANCER_V3 — то же правило, что в fits.
         if k == ExecKind::BalancerV3 && !super::pool_gate::admitted(ctx, e, k, Address::ZERO) {
@@ -181,6 +184,10 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
 /// пула, крючок ключа (у шагов не менеджера — нулевой). Ошибок иных нет.
 pub fn shape(e: &Entry) -> Result<(ExecKind, Address, Address), String> {
     let (k, a) = supported(e.family, &e.pool.reference)?;
+    if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy &&
+        (k!=ExecKind::Balancer || super::super::bancor_legacy_plan::state(e).is_none()) {
+        return Err("Bancor V2.1: конвертер или валюты не совпадают с реестром".into());
+    }
     if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis && super::super::super::pools::yield_basis_quotes::shape(e).is_none(){return Err("YieldBasis: состояние не соответствует зарегистрированному рынку и валютам".into());}
     if !k.singleton() {
         return Ok((k, a, Address::ZERO));
@@ -207,10 +214,16 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
     }
     let (k, pool) =
         supported(e.family, &e.pool.reference).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?;
+    if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy {
+        let pool_id=super::super::bancor_legacy_plan::step_id(e,token_in)
+            .ok_or_else(||ctx.err(ErrorCode::NoRoute,"Bancor V2.1: конвертер, якорь или вход изменились"))?;
+        let target=pinned_module_target(ctx,e).ok_or_else(||ctx.err(ErrorCode::NotConfigured,"Bancor V2.1: отсутствует модуль шага"))?;
+        return Ok((Params::Balancer{pool_id},target));
+    }
     if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis{
         let (pool_id,_)=super::super::super::pools::yield_basis_quotes::shape(e)
             .filter(|_|[e.pool.token0,e.pool.token1].contains(&token_in)).ok_or_else(||ctx.err(ErrorCode::NoRoute,"YieldBasis: ID, состояние или вход изменились"))?;
-        let target=yield_basis_target(ctx,e).ok_or_else(||ctx.err(ErrorCode::NotConfigured,"YieldBasis: отсутствует модуль шага"))?;
+        let target=pinned_module_target(ctx,e).ok_or_else(||ctx.err(ErrorCode::NotConfigured,"YieldBasis: отсутствует модуль шага"))?;
         return Ok((Params::Balancer{pool_id},target));
     }
     if let PoolState::BalancerV1(state)=&e.pool.state {

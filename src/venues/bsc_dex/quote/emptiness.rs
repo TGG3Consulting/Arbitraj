@@ -48,6 +48,7 @@ pub fn empty(e: &Entry) -> bool {
         PoolState::Antfarm(s) => s.market.lp_supply<=U256::from(1000) || s.market.reserves.contains(&U256::ZERO),
         PoolState::Temple(s) => s.reserves.contains(&U256::ZERO) || ((!s.amm_authorized || (e.coin!=s.stable && e.usdt!=s.stable))
             && (s.defense_balance.is_zero() || s.ratio.is_none_or(|r|r.contains(&U256::ZERO)))),
+        PoolState::BancorLegacy(s)=>s.levels.iter().all(Vec::is_empty),
         PoolState::YieldBasisPool(s)=>s.levels.iter().all(Vec::is_empty),
         PoolState::YieldBasisLev(s)=>s.killed || s.collateral.is_zero() || s.cash.iter().all(U256::is_zero),
         PoolState::BalancerV1(s)=>!s.public_swap || s.assets.iter().filter(|a|!a.recorded.is_zero() && !a.physical.is_zero()).count()<2,

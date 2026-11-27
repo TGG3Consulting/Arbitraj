@@ -9,6 +9,7 @@
   const stabullPlan = {file:'stabull-base',key:'stabull-create:8453',name:'StabullAdapter на Base',load:()=>import('../assets/stabull-base.json')};
   const deployments = {
     uniswap_v1:{file:'uniswap-v1-ethereum',key:'uniswap-v1-create:1',name:'UniswapV1Adapter в Ethereum',load:()=>import('../assets/uniswap-v1-ethereum.json')},
+    bancor_legacy:{file:'bancor-v21-ethereum',key:'bancor-v21-create:1',name:'BancorLegacyAdapter в Ethereum',load:()=>import('../assets/bancor-v21-ethereum.json')},
     bancor_v3:{file:'bancor-v3-ethereum',key:'bancor-v3-create:1',name:'BancorV3Adapter в Ethereum',load:()=>import('../assets/bancor-v3-ethereum.json')},
     yield_basis:{file:'yield-basis-ethereum',key:'yield-basis-create:1',name:'YieldBasisAdapter в Ethereum',load:()=>import('../assets/yield-basis-ethereum.json')},
     balancer_v1:{file:'balancer-v1-ethereum',key:'balancer-v1-create:1',name:'BalancerV1Adapter в Ethereum',load:()=>import('../assets/balancer-v1-ethereum.json')},
@@ -30,7 +31,7 @@
   const current = () => ({chainId:atVenue('dex.evm_chain_id'), wrapped:atVenue('dex.native_wrapped'),
     factoryHash:value('dex.factory_runtime_hash'), template:value('dex.v1_template'),
     templateHash:value('dex.v1_template_runtime_hash'), cloneHash:value('dex.pair_runtime_hash'), kind:value('dex.kind'), market:value('dex.factory'),
-    quoter:value('dex.quoter'), vault:value('dex.vault'), native:value('dex.bancor_native_token'), roles:value('dex.bancor_roles'),
+    quoter:value('dex.quoter'), quoterHash:value('dex.quoter_runtime_hash'), vault:value('dex.vault'), native:value('dex.bancor_native_token'), roles:value('dex.bancor_roles'),
     hashes:value('dex.module_runtime_hashes'), implementations:value('dex.proxy_implementations'),implementationHashes:value('dex.proxy_runtime_hashes')});
   let mounted = true;
   onDestroy(() => { mounted = false; });
@@ -173,6 +174,8 @@
       <p>Контроллер Carbon <code>{manifest.market}</code>. Реализация <code>{manifest.implementation}</code>. Сумма перевода при создании — 0 ETH.</p>
     {:else if deployment === stabullPlan}
       <p>Конструктор принимает адрес фабрики <code>{manifest.market}</code>. Сумма перевода при создании — 0 ETH.</p>
+    {:else if kind === 'bancor_legacy'}
+      <p>Реестр конвертеров <code>{manifest.factory}</code>, BancorNetwork <code>{manifest.network}</code>, WETH <code>{manifest.wrapped}</code>. При создании кошелёк отправляет 0 ETH.</p>
     {:else if kind === 'bancor_v3'}
       <p>Конструктор Bancor V3 в Ethereum. Перевод ETH при создании — 0.</p>
       {#each ['BancorNetwork','BancorNetworkInfo','MasterVault','WETH','Нативный ETH'] as label, i}

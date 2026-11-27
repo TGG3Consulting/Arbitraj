@@ -8,7 +8,7 @@ use super::{
     white_state::Head,
 };
 use crate::{
-    core::types::{Side, yield_basis::Preview},
+    core::types::{Side, PoolState},
     gateway::{
         errors::{ErrorCode, GatewayResult},
         quote_stage,
@@ -38,7 +38,6 @@ pub(super) async fn paid(
     q: &Quoting,
     i: &Input,
     e: &Entry,
-    s: &Preview,
     payer: Address,
     execution: &Execution,
     h: Head,
@@ -47,7 +46,7 @@ pub(super) async fn paid(
     let fail = || {
         ctx.err(
             ErrorCode::NoRoute,
-            "YieldBasis: бюджет или фактическая выплата не покрывают объём",
+            "Котировка кошелька: бюджет или фактическая выплата не покрывают объём",
         )
     };
     let buy = i.side == Side::Buy;
@@ -84,6 +83,7 @@ pub(super) async fn paid(
     }
     let at = h.selector();
     let native = match &execution.wire {
+        v2_wallet_sim::Wire::BancorLegacy(t) => !t.value(input,U256::ONE).is_zero(),
         v2_wallet_sim::Wire::YieldBasis(t) => !t.value(input, U256::ONE).is_zero(),
         v2_wallet_sim::Wire::V5(v)
         | v2_wallet_sim::Wire::V5Funded(v, _)
@@ -104,7 +104,11 @@ pub(super) async fn paid(
     if cap.is_zero() {
         return Err(fail());
     }
-    let points = s.points(input).ok_or_else(fail)?;
+    let points = match &e.pool.state {
+        PoolState::YieldBasisPool(s) => s.points(input),
+        PoolState::BancorLegacy(s) => s.points(input),
+        _ => None,
+    }.ok_or_else(fail)?;
     // A larger request can use the last sample as an initial slope, but no
     // output beyond a measured amount enters a firm quote.
     let seed = points
@@ -118,7 +122,9 @@ pub(super) async fn paid(
             let unit = num::to_units(Decimal::ONE, i.usdt_dec)
                 .ok_or_else(fail)?
                 .min(cap);
-            let nominal = yield_basis_quotes::official(ctx, e, input, unit, &at).await?;
+            let nominal = if matches!(e.pool.state,PoolState::BancorLegacy(_)) {
+                super::super::exec::bancor_legacy_plan::official(ctx,e,input,unit,&at).await?
+            } else {yield_basis_quotes::official(ctx, e, input, unit, &at).await?};
             mul_div_up(unit, want, nominal).ok_or_else(fail)?.min(cap)
         }
     };

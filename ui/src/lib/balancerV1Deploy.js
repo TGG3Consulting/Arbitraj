@@ -5,7 +5,7 @@ const digest = /^0x[0-9a-f]{64}$/;
 const same = (a,b) => typeof a === 'string' && a.toLowerCase() === b;
 const argument = a => a.slice(2).padStart(64,'0');
 
-const factories = new Map([['balancer_v1','Balancer V1'],['yield_basis','YieldBasis']]);
+const factories = new Map([['balancer_v1','Balancer V1'],['yield_basis','YieldBasis'],['bancor_legacy','Bancor V2.1']]);
 
 export const supportsFactoryWallet = kind => factories.has(kind);
 
@@ -19,14 +19,21 @@ export async function loadFactoryWallet(settings, plan, hashCode) {
       !same(settings.factoryHash,plan.factoryHash) || !same(settings.wrapped,plan.wrapped) ||
       !settings.hashes?.some(h => same(h,plan.runtimeKeccak)))
     throw Error('Сеть, фабрика, WETH или допустимый код отличаются от профиля '+label+'.');
-  if (await hashCode(plan.data) !== plan.creationSha256 || !plan.data.endsWith(argument(plan.factory)+argument(plan.wrapped)))
+  const legacy = plan.kind==='bancor_legacy';
+  if (legacy && (!address.test(plan.network) || /^0x0+$/.test(plan.network) || [plan.factory,plan.wrapped].includes(plan.network) ||
+      !digest.test(plan.networkHash) || !same(settings.quoter,plan.network) || !same(settings.quoterHash,plan.networkHash)))
+    throw Error('Сеть Bancor и её проверенный код отличаются от профиля.');
+  const args=legacy ? [plan.factory,plan.network,plan.wrapped] : [plan.factory,plan.wrapped];
+  if (await hashCode(plan.data) !== plan.creationSha256 || !plan.data.endsWith(args.map(argument).join('')))
     throw Error('Код создания или параметры конструктора '+label+' изменились.');
   return plan;
 }
 
 export async function checkFactoryWallet(provider, p, at) {
   if (at?.requireCanonical !== true || !digest.test(at.blockHash)) throw Error('Требуется канонический блок Ethereum.');
-  for (const [role,addr,hash] of [['Фабрика '+factories.get(p.kind),p.factory,p.factoryHash],['WETH',p.wrapped,p.wrappedHash]]) {
+  const roles=[['Фабрика '+factories.get(p.kind),p.factory,p.factoryHash],['WETH',p.wrapped,p.wrappedHash]];
+  if (p.kind==='bancor_legacy') roles.push(['BancorNetwork',p.network,p.networkHash]);
+  for (const [role,addr,hash] of roles) {
     const code = await provider.request({method:'eth_getCode',params:[addr,at]});
     if (runtimeKeccak(code) !== hash) throw Error('Код '+role+' отличается от проверенного на Ethereum.');
   }

@@ -164,6 +164,11 @@ pub enum RouterFeeMode {
         #[serde(default,skip_serializing_if="Option::is_none")]
         v5:Option<alloy_primitives::Address>,
     },
+    /// Signed Bancor v2.1 source path with its wallet currency and original raw debit.
+    BancorLegacy {
+        target:alloy_primitives::Address,native:bool,native_cash:bool,
+        principal:Option<alloy_primitives::U256>,v5:Option<alloy_primitives::Address>,
+    },
     /// Protected BPool with explicit exact-output budget and native/WETH settlement mode.
     BalancerV1 {target:alloy_primitives::Address, native:bool, native_cash:bool, desired:Option<alloy_primitives::U256>},
     /// Original Bancor amount mode and the fee class verified for the actual caller.

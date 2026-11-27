@@ -487,6 +487,12 @@ fn side(
         // Лесенка цен пула (quote/pmm_ladder.rs): покупка — вход котируемой, средняя цена (выход за вход) не ниже цены
         // первой точки /(1 + b); продажа — вход базовой, не ниже ×(1 − b). Ответы квотера — с комиссией пула (глубина
         // чуть занижена против «чистого объёма»). Лесенка кончилась раньше полосы — full = false.
+        (PoolState::BancorLegacy(s),PoolKind::V2)=>{
+            let points=s.points(token_in).ok_or("Bancor V2.1: чужая валюта")?;
+            let factor=if buy{1.0/(1.0+b)}else{1.0-b};
+            let (i,o,full)=super::pmm_ladder::depth(points,U256::from((factor*1e18) as u128)).ok_or("Bancor V2.1: недоступны измеренные ступени")?;
+            Ok((pick(i,o),full))
+        }
         (PoolState::YieldBasisPool(s),PoolKind::V2)=>{
             let points=s.points(token_in).ok_or("YieldBasis: чужая валюта")?;
             let factor=if buy{1.0/(1.0+b)}else{1.0-b};

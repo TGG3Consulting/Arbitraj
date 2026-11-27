@@ -17,11 +17,12 @@ enum Spender {
 fn selected(mode: Option<RouterFeeMode>) -> Spender {
     use RouterFeeMode::*;
     match mode {
-        Some(YieldBasis{v5:Some(executor),..})=>Spender::Selected(executor),
+        Some(YieldBasis{v5:Some(executor),..}|BancorLegacy{v5:Some(executor),..})=>Spender::Selected(executor),
         Some(
             NativeWallet { target, .. }
             | ProtectedWallet { target }
             | NativeFlat {target,..}
+            | BancorLegacy {target,..}
             | YieldBasis {target,..}
             | BalancerV1 {target,..}
             | BancorV3 {target,..}
@@ -49,7 +50,7 @@ impl Market {
                 Some(ProtectedWallet { target }) => Spender::Selected(target),
                 _ => Spender::Factory,
             },
-            Market::YieldBasis | Market::BalancerV1 | Market::BancorV3 | Market::UniswapV1 | Market::Rubicon | Market::NativeFlat=>selected(mode),
+            Market::BancorLegacy | Market::YieldBasis | Market::BalancerV1 | Market::BancorV3 | Market::UniswapV1 | Market::Rubicon | Market::NativeFlat=>selected(mode),
             Market::Prop=>match mode {Some(VenueFallback{target,..})=>Spender::Selected(target),_=>Spender::Missing},
             Market::Ranges | Market::SafeSwap | Market::Pendle => match mode {
                 Some(ProtectedWallet { target }) => Spender::Selected(target),

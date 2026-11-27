@@ -44,6 +44,9 @@ pub fn request(
     token_in: Address,
     amount: U256,
 ) -> GatewayResult<(Address, Bytes)> {
+    if e.family.variant==super::super::pools::family_variant::Variant::BancorLegacy {
+        return super::super::exec::bancor_legacy_plan::request(ctx,e,token_in,amount);
+    }
     if e.family.variant==super::super::pools::family_variant::Variant::YieldBasis {return super::super::pools::yield_basis_quotes::request(ctx,e,token_in,amount);}
     if let PoolState::BalancerV1(s)=&e.pool.state {let output=if token_in==e.pool.token0{e.pool.token1}else{e.pool.token0};return super::super::pools::balancer_v1::request(ctx,s,token_in,output,amount,true);}
     if let PoolState::BancorV3(s)=&e.pool.state{return super::super::pools::bancor_v3::request(ctx,s,token_in,true,amount);}
@@ -542,7 +545,7 @@ pub fn request(
 /// Выход из ответа квотера. None — ответ не по ABI.
 pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> Option<U256> {
     if e.family.variant==super::super::pools::family_variant::Variant::MaverickTwoRouter {return super::quoter_maverick::full(out,amount);}
-    if e.family.variant==super::super::pools::family_variant::Variant::YieldBasis {return (out.len()==32).then(||U256::from_be_slice(out)).filter(|q|!q.is_zero());}
+    if matches!(e.family.variant,super::super::pools::family_variant::Variant::BancorLegacy | super::super::pools::family_variant::Variant::YieldBasis) {return (out.len()==32).then(||U256::from_be_slice(out)).filter(|q|!q.is_zero());}
     if let PoolState::BalancerV1(s)=&e.pool.state {let output=if token_in==e.pool.token0{e.pool.token1}else{e.pool.token0};return super::super::pools::balancer_v1::checked_quote(s,[token_in,output],amount,true,out);}
     if matches!(e.pool.state,PoolState::BancorV3(_)){return super::super::pools::bancor_v3::decode(out);}
     if e.family.variant==super::super::pools::family_variant::Variant::UniswapV1{return super::super::pools::uniswap_v1_quotes::decode(e,out,token_in,amount);}

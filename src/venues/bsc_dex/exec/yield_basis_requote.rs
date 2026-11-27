@@ -27,26 +27,23 @@ pub(in crate::venues::bsc_dex) struct OrderInput {
     native: bool,
     amount: U256,
     via_v5: Option<Address>,
+    bancor_legacy: bool,
 }
 pub(in crate::venues::bsc_dex) fn selected(hops: &[RouteHop]) -> Option<OrderInput> {
     let [hop] = hops else {
         return None;
     };
-    let Some(RouterFeeMode::YieldBasis {
-        target,
-        native,
-        principal: Some(amount),
-        v5,
-        ..
-    }) = hop.fee_mode
-    else {
-        return None;
+    let (target,native,amount,v5,bancor_legacy)=match hop.fee_mode? {
+        RouterFeeMode::YieldBasis { target,native,principal:Some(amount),v5,.. }=>(target,native,amount,v5,false),
+        RouterFeeMode::BancorLegacy { target,native,principal:Some(amount),v5,.. }=>(target,native,amount,v5,true),
+        _=>return None,
     };
     Some(OrderInput {
         target,
         native,
         amount,
         via_v5: v5,
+        bancor_legacy,
     })
 }
 pub(in crate::venues::bsc_dex) async fn path(
@@ -59,6 +56,7 @@ pub(in crate::venues::bsc_dex) async fn path(
         native,
         amount,
         via_v5,
+        bancor_legacy,
     }: OrderInput,
     block: Option<u64>,
 ) -> GatewayResult<Path> {
@@ -67,13 +65,12 @@ pub(in crate::venues::bsc_dex) async fn path(
     let bad = || {
         ctx.err(
             ErrorCode::QuoteMismatch,
-            "YieldBasis: источник, выплата или получатель расходятся с исходным поручением",
+            "Котировка кошелька: источник, выплата или получатель расходятся с исходным поручением",
         )
     };
     if direct_mode != via_v5.is_none() || amount.is_zero() {
         return Err(bad());
     }
-    let t = yield_basis_plan::terms(ctx, e, target, native)?;
     let payer = signer::address(ctx)?;
     let tag = block
         .or_else(|| super::quoter_refetch::block(q))
@@ -81,6 +78,19 @@ pub(in crate::venues::bsc_dex) async fn path(
         .unwrap_or_else(|| "latest".to_owned());
     let h = white_state::head(ctx, &tag).await?;
     let at = h.selector();
+    let buy = v.side == Side::Buy;
+    let (input, output) = if buy {
+        (v.usdt, v.coin)
+    } else {
+        (v.coin, v.usdt)
+    };
+    let (wire,market_key)=if bancor_legacy {
+        let t=super::bancor_legacy_plan::terms(ctx,e,target,native)?;
+        super::bancor_legacy_plan::verify(ctx,e,input,t,&at).await?;
+        if !t.normalized.contains(&input) || !t.normalized.contains(&output){return Err(bad());}
+        (Wire::BancorLegacy(t),super::bancor_legacy_plan::step_id(e,input).ok_or_else(bad)?)
+    } else {
+        let t=yield_basis_plan::terms(ctx,e,target,native)?;
     let (market, ()) = tokio::try_join!(
         yield_basis_quotes::bound(
             ctx,
@@ -91,17 +101,12 @@ pub(in crate::venues::bsc_dex) async fn path(
         ),
         yield_basis_plan::check_module(ctx, e, t, &at)
     )?;
-    let buy = v.side == Side::Buy;
-    let (input, output) = if buy {
-        (v.usdt, v.coin)
-    } else {
-        (v.coin, v.usdt)
+        if !market.coins().contains(&input) || !market.coins().contains(&output){return Err(bad());}
+        (Wire::YieldBasis(t),t.market)
     };
     let wanted = direct::ceil_units(qty, v.coin_dec).ok_or_else(bad)?;
     if wanted.is_zero()
         || (!buy && amount != wanted)
-        || !market.coins().contains(&input)
-        || !market.coins().contains(&output)
         || input == output
     {
         return Err(bad());
@@ -116,11 +121,11 @@ pub(in crate::venues::bsc_dex) async fn path(
                 native: None,
                 kind: 17,
                 pool: target,
-                data: Bytes::copy_from_slice(t.market.as_slice()),
+                data: Bytes::copy_from_slice(market_key.as_slice()),
             }),
         )
     } else {
-        (target, Wire::YieldBasis(t))
+        (target, wire)
     };
     let mut usable =
         select::usable(q, e, v.side, v.usdt_dec).map_err(|why| ctx.err(ErrorCode::NoRoute, why))?;

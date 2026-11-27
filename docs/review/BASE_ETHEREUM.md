@@ -27,7 +27,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    каждое расхождение с причиной. Релиз готов только при нуле необъяснённых расхождений и закрытых пунктах R-*.
 >    Я проверяю прогон и только после этого сообщаю владельцу «релиз готов».
 
-Последний просмотренный коммит: `ed43c12c` (27.11.2026).
+Последний просмотренный коммит: `3b84b54b` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -1492,7 +1492,7 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 - Новые `ranges_wallet.rs`, `safeswap_wallet.rs`, `safeswap_quotes.rs`, `safeswap_trade.rs` — зашитых адресов и чисел нет.
   - 💡 `safeswap_trade.rs:138`: слот хранилища прокси `0xb2101b…` — константа из исходника `OptimizedTransparentUpgradeableProxy`, допустимо (как EIP-1967). Но в комментарий нужна ссылка на верифицированный исходник (Etherscan, адрес и строка), по правилу «ссылка на источник у каждой функции адаптера».
 - Все новые ветки закрыты `Variant::SafeSwapTrade` / `PuzzleRanges` → для BSC поведение то же.
-- **R-51 (R-42).** Дрейф продолжается:
+- ✅ **R-51 (R-42) — закрыт в 3b84b54b по сути, см. блокер ниже.** Дрейф продолжается:
   - `exec/plan.rs` — 401 строка (на прошлой проверке 378, в main 296): добавлены `DirectCall::Ranges/SafeSwap`. Обработку `data()` / `minimum` для прямых вызовов рынков вынести в `market_plan.rs`, чтобы `plan.rs` не рос с каждым DEX.
   - `quote/quoter_calls.rs` и `quote/v2_pair_quote.rs` получили ранние `if variant==SafeSwapTrade { return safeswap_quotes::… }` — то же через диспетчер рынка (`quote/market_selection` или `Market`), а не через if в общем V2-пути.
 
@@ -1507,3 +1507,24 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 - `pools/umia.rs`: адресов нет, роли читаются на одном каноническом хэше.
   - 💡 `launch_keys.rs`: `(flags & 0x3fff) == 0x3a80` и `1..1_000_000`. Это константы протокола: младшие 14 бит адреса крючка Uniswap v4 — разрешения, `1_000_000` — потолок комиссии v4 в pips. Допустимо, но нужен комментарий: какие именно разрешения дают `0x3a80` и ссылка на исходник крючка Umia.
 - R-51 по-прежнему открыт (`exec/plan.rs` 401, ранние `if SafeSwapTrade` в `quoter_calls` / `v2_pair_quote`).
+
+### 3b84b54b — проверено
+
+- **R-51 по сути закрыт.**
+  - `DirectCall` переехал в `exec/market_call.rs`, `exec/plan.rs` уменьшился с 401 до 289 строк. Сверил построчно:
+    - `set_remeasured_minimum` — те же 5 видов (Ranges, FluxEth, Bundles, Dagrow, RegisteredV3);
+    - `native_value` — те же 4 (FluxEth, Carbon, EkuboV2, Vista);
+    - `data()` — те же ветки, аргументы `token_out / min_total / wallet / deadline` в прежнем порядке.
+
+    Эквивалентно, BSC не задет. ✅
+  - Ранние `if SafeSwapTrade / Pendle` в `quoter_calls.rs` заменены диспетчером `market_selection::wallet_quoter` (запрос и декодер выбираются парой). ✅
+- 🔴 **Блокер сборки:** `fn wallet_ladder` удалена из `pools/family_variant.rs`, но вызов остался в `check/probe_exec.rs:142` (`e.family.variant.wallet_ladder()`). Определения нигде нет (`git grep "fn wallet_ladder"` пуст) — коммит не соберётся. Заменить на `market_selection::wallet_quoter(..).is_some()` или вернуть признак. CI 45941708240 на этом SHA ещё в очереди.
+- ❓ `quote/v2_pair_quote::kind_on`: условие `wallet_quoter(..).is_none()` теперь исключает из V2-пути без роутера и Pendle (раньше в списке исключений был только SafeSwapTrade). Для Pendle (OraclePmm на Proto::V2) это выглядит правильным, но это изменение поведения. Подтверди одной строкой, что Pendle и раньше сюда не попадал или что это исправление.
+- 💡 из ed43c12c (Umia `0x3a80`) и 35426952 (слот прокси SafeSwap) — закрыты, источники указаны. ✅
+- CI 45940521024 (35426952) падал:
+  - сторож настроек: `dex.safeswap_spender` без записи — запись уже есть в 3b84b54b;
+  - clippy: `wallet/approve.rs:104`, `exec/safeswap_wallet.rs:25`, `exec/ranges_wallet.rs:42`;
+  - `safeswap-protected-ethereum`: 429 от публичного узла;
+  - `umia-source`: «не воспроизвёлся эталон Sourcify».
+
+  Проверю на свежем прогоне, что всё зелёное.

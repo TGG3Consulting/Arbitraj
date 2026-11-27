@@ -60,3 +60,58 @@ fn recorded_prices_count_in_both_directions_without_changing_native_depth() {
         cex.fillable_qty / shares
     );
 }
+
+#[test]
+fn native_protocol_payment_is_priced_once_in_signal_plan_and_settlement() {
+    use crate::core::{
+        convert, fills,
+        types::{Cost, CostKind, Fee},
+    };
+    use std::str::FromStr;
+    let row: Market = serde_json::from_str(include_str!(
+        "../../tests/data/bsc_units_2026_11_24/signal_quotes.json"
+    ))
+    .unwrap();
+    let mut quote = row.sell_quote;
+    // Из архивного lpInfo() Ethereum, отдельно от условных курса ETH и сетевого газа.
+    let fee = Decimal::from_str("0.00018").unwrap();
+    let gas = Decimal::from_str("0.00005").unwrap();
+    let rate = Decimal::from(3000);
+    let rates = convert::Rates {
+        quote: vec!["USDT".into()],
+        coin: quote.asset.ticker.clone(),
+        coin_price: quote.avg_price,
+        prices: [("ETH".into(), rate)].into_iter().collect(),
+    };
+    let flat = Cost::new(CostKind::ProtocolFee, fee, "ETH", false);
+    let network = Cost::new(CostKind::Gas, gas, "ETH", false);
+    quote.costs = vec![flat.clone(), network];
+    quote.costs.push(Cost {
+        in_price: true,
+        ..flat
+    });
+    let signal: Decimal = protocol_payments(&quote)
+        .map(|c| convert::to_usdt(c, &rates).unwrap())
+        .sum();
+    let plan: Decimal = quote
+        .costs
+        .iter()
+        .filter(|c| !c.in_price)
+        .map(|c| convert::to_usdt(c, &rates).unwrap())
+        .sum();
+    assert_eq!(signal, fee * rate);
+    assert_eq!(plan, signal + gas * rate);
+    let mut actual = Fee::single(gas, "ETH");
+    Fee::add_protocol(&mut actual, "ETH", fee);
+    let actual: Vec<Fee> = serde_json::from_value(serde_json::to_value(actual).unwrap()).unwrap();
+    assert_eq!(actual.len(), 2);
+    let kinds: Vec<_> = actual.iter().map(|f| fills::fee_kind(true, f)).collect();
+    assert_eq!(kinds, [CostKind::Gas, CostKind::ProtocolFee]);
+    let spent: Decimal = actual
+        .iter()
+        .zip(kinds)
+        .map(|(f, k)| convert::to_usdt(&Cost::new(k, f.amount, &f.asset, false), &rates).unwrap())
+        .sum();
+    assert_eq!(plan, spent);
+    assert!(!convert::in_coin(&quote.costs[0], "ETH"));
+}

@@ -118,3 +118,19 @@ fn zero_factory_flat_keeps_four_variable_v5_fills() {
     }
     assert_eq!(counts, [4, 4, 4]);
 }
+
+#[test]
+fn first_output_atom_can_survive_only_in_the_fixed_branch() {
+    use crate::venues::bsc_dex::math::v2::{amount_in, amount_out};
+    let d = fixture(include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/marswap-ethereum.json.gz"
+    ));
+    let rs = &d["markets"][0]["reserves"];
+    let (rin, rout) = (n(&rs[1]), n(&rs[0])); // ERC20 → WETH
+    let den = U256::from(10_000);
+    let keep = den - n(&d["terms"][1]) - n(&d["terms"][2]);
+    let x = amount_in(U256::ONE, rin, rout, (den, den)).unwrap();
+    assert_eq!(amount_out(x, rin, rout, (keep, den)), Some(U256::ZERO));
+    assert_eq!(amount_out(x, rin, rout, (den, den)), Some(U256::ONE));
+    assert!(n(&d["terms"][3]) > rout);
+}

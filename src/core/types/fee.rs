@@ -24,9 +24,23 @@ pub struct Fee {
     /// как есть (core/fills.rs). None — пересчёт по живой цене (core/convert.rs), как раньше. Старые записи — None.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usd: Option<Decimal>,
+    /// Отдельная плата протоколу из нативного кошелька, подтверждённая подписанным value.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub protocol: bool,
 }
 
 impl Fee {
+    /// Отдельный расход нативной валюты подтверждённого исполнения. Газ остаётся своей строкой.
+    pub fn add_protocol(list: &mut Vec<Self>, asset: &str, amount: Decimal) {
+        if amount > Decimal::ZERO {
+            list.push(Self {
+                asset: asset.to_owned(),
+                amount,
+                usd: None,
+                protocol: true,
+            });
+        }
+    }
     /// Что делает: список из одной части комиссии (у площадки, что сообщает одну монету). Ноль — пустой список.
     /// Принимает: сумму, монету. Возвращает: Vec<Fee>. Ошибок нет.
     pub fn single(amount: Decimal, asset: impl Into<String>) -> Vec<Fee> {
@@ -37,6 +51,7 @@ impl Fee {
             asset: asset.into(),
             amount,
             usd: None,
+            protocol: false,
         }]
     }
 
@@ -47,12 +62,13 @@ impl Fee {
         if amount.is_zero() {
             return;
         }
-        match list.iter_mut().find(|f| f.asset == asset) {
+        match list.iter_mut().find(|f| f.asset == asset && !f.protocol) {
             Some(f) => f.amount += amount,
             None => list.push(Fee {
                 asset: asset.to_string(),
                 amount,
                 usd: None,
+                protocol: false,
             }),
         }
     }
@@ -64,7 +80,7 @@ impl Fee {
         if amount.is_zero() {
             return;
         }
-        match list.iter_mut().find(|f| f.asset == asset) {
+        match list.iter_mut().find(|f| f.asset == asset && !f.protocol) {
             Some(f) => {
                 f.amount += amount;
                 f.usd = Some(f.usd.unwrap_or_default() + usd);
@@ -73,6 +89,7 @@ impl Fee {
                 asset: asset.to_string(),
                 amount,
                 usd: Some(usd),
+                protocol: false,
             }),
         }
     }

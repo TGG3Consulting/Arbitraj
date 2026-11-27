@@ -75,6 +75,7 @@ pub(super) async fn fees(
                 asset: c.asset.clone(),
                 amount: c.amount,
                 usd: None,
+                protocol: false,
             });
         }
     }

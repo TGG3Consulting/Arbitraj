@@ -185,7 +185,7 @@ pub(super) fn with_native_fact(
     let mut fees=Fee::single(fee,&gas_t);
     if let Some(p)=proofs.and_then(|c|c.native_flat.as_deref()){
         let cost=num::to_decimal(p.market.wei,18).ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"MarSwap: подписанная плата не представима в ETH").with_tx(d.chain.clone()))?;
-        Fee::add(&mut fees,&gas_t,cost);
+        Fee::add_protocol(&mut fees,&gas_t,cost);
     }
     Ok(TradeResult {
         status,

@@ -34,6 +34,7 @@ pub fn is_gas(k: CostKind) -> bool {
     matches!(
         k,
         CostKind::Gas
+            | CostKind::ProtocolFee
             | CostKind::ApproveGas
             | CostKind::TransferGas
             | CostKind::WrapGas

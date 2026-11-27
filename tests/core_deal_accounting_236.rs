@@ -62,6 +62,7 @@ fn dex_sell(qty: &str, avg: &str, gas_bnb: &str) -> TradeResult {
             asset: "BNB".into(),
             amount: d(gas_bnb),
             usd: None,
+            protocol: false,
         }],
         venue_ref: "0x".into(),
         chain: None,

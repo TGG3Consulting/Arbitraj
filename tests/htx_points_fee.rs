@@ -53,16 +53,19 @@ fn hbpoint_part_has_usdt_value() {
                 asset: "HBPOINT".into(),
                 amount: d("0.0200"),
                 usd: Some(d("0.0200")),
+                protocol: false,
             },
             Fee {
                 asset: "HT".into(),
                 amount: d("0.001"),
                 usd: None,
+                protocol: false,
             },
             Fee {
                 asset: "CAKE".into(),
                 amount: d("0.1"),
                 usd: None,
+                protocol: false,
             },
         ]
     );
@@ -83,6 +86,7 @@ fn fee_record_compat() {
         asset: "HBPOINT".into(),
         amount: d("0.05"),
         usd: Some(d("0.05")),
+        protocol: false,
     };
     let back: Fee = serde_json::from_value(serde_json::to_value(&p).unwrap()).unwrap();
     assert_eq!(back, p);

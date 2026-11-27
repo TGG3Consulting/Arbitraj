@@ -256,7 +256,12 @@ async fn compare(
         (qa, qb)
     };
     super::window_dex::note(core, dir, &qa, &qb, generation);
-    let fees = fee_usdt(deps, &qa)? + fee_usdt(deps, &qb)?;
+    let mut fees = fee_usdt(deps, &qa)? + fee_usdt(deps, &qb)?;
+    for quote in [&qa,&qb] {
+        for fee in protocol_payments(quote){
+            fees+=super::fills::usdt(core,&quote.venue,&quote.asset.ticker,quote.avg_price,fee).await?;
+        }
+    }
     quoted_prices(&qa, &qb, qty, fees, units)
 }
 
@@ -294,6 +299,10 @@ fn quoted_prices(
         buy_at: qa.at,
         sell_at: qb.at,
     })
+}
+
+fn protocol_payments(q:&Quote)->impl Iterator<Item=&crate::core::types::Cost>{
+    q.costs.iter().filter(|c|c.kind==CostKind::ProtocolFee && !c.in_price)
 }
 
 /// Процентные комиссии котировки, которых нет в цене (торговая комиссия, комиссия пула), в USDT.

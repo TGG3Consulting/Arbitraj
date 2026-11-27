@@ -225,7 +225,9 @@ pub(super) fn private(
         let Some(r) = quote.route.as_ref() else {
             continue;
         };
-        if r.mode != RouteMode::Direct {
+        // Фиксированная плата подписывается только для публичного Router02.
+        // У V5 свои calldata и процентная ставка; его котировка уже измерена отдельно.
+        if r.mode != RouteMode::Direct || r.legs.iter().flat_map(|l|&l.hops).any(|h|matches!(h.fee_mode,Some(crate::core::types::RouterFeeMode::NativeFlat{..}))) {
             continue;
         }
         let Some(e) = one(quote).and_then(|p| q.reg.get(p)) else {

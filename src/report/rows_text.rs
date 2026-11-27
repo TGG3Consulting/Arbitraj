@@ -124,6 +124,7 @@ pub fn plan_parts(plan: &Value) -> Option<(Decimal, Decimal)> {
 /// Подпись вида затраты для колонки разбивки. Ошибок нет.
 pub fn cost_label(k: CostKind) -> &'static str {
     match k {
+        CostKind::ProtocolFee => "Фиксированная плата протоколу, USDT",
         CostKind::TradeFee => "Торговые комиссии, USDT",
         CostKind::PoolFee => "Комиссия пула, USDT",
         CostKind::StepRemainder => "Остаток шага, USDT",

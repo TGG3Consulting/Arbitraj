@@ -101,8 +101,8 @@ async fn charge(core: &Core, deal: &mut Deal, venue: &VenueId, price: Decimal, c
 /// Решение 236, дополнение п. 8 (техлид 09.11 по поручению Тиграна): раньше газ шёл видом TradeFee — у сделки с BNB
 /// convert::in_coin принимал его за комиссию в монете: количество уменьшалось, в spent газа не было (продажа BNB на DEX —
 /// количество уходило в −газ, газ пропадал из итога). Принимает: итог. Возвращает: вид. Ошибок нет.
-fn fee_kind(r: &TradeResult) -> CostKind {
-    if r.chain.is_some() {
+pub(super) fn fee_kind(chain:bool, f:&crate::core::types::Fee) -> CostKind {
+    if f.protocol {CostKind::ProtocolFee} else if chain {
         CostKind::Gas
     } else {
         CostKind::TradeFee
@@ -127,12 +127,13 @@ pub async fn trade(core: &Core, deal: &mut Deal, r: &TradeResult) {
     // Решение 219: комиссия — по каждой монете отдельно (монета сделки уменьшает количество, остальное — в spent).
     // Газ обмена DEX — всегда в spent, и у сделки с BNB (fee_kind, решение 236, дополнение п. 8).
     for f in &r.fees {
+        let kind=fee_kind(r.chain.is_some(),f);
         // Стоимость в USDT задана документацией площадки (Fee.usd: баллы HTX, рынка нет) — в затраты как есть.
         if let Some(u) = f.usd {
-            super::deal_book::spend(deal, fee_kind(r), u);
+            super::deal_book::spend(deal, kind, u);
             continue;
         }
-        let fee = Cost::new(fee_kind(r), f.amount, f.asset.clone(), false);
+        let fee = Cost::new(kind, f.amount, f.asset.clone(), false);
         charge(core, deal, &v, r.avg_price, fee).await;
     }
     // Решение 121 B7: кто исполнил своп DEX (свой сборщик: прямой / умный / бандл или KyberSwap) — в хронологию сделки.

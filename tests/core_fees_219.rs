@@ -98,11 +98,13 @@ fn bitget_two_coins_live_xter() {
                 asset: "BGB".into(),
                 amount: d("0.0000197"),
                 usd: None,
+                protocol: false,
             },
             Fee {
                 asset: "XTER".into(),
                 amount: d("5.32956"),
                 usd: None,
+                protocol: false,
             },
         ]
     );
@@ -123,6 +125,7 @@ fn gate_fee_parts() {
             asset: "GT".into(),
             amount: d("0.0003"),
             usd: None,
+            protocol: false,
         }]
     );
     let pts = json!({"fee": "0", "fee_currency": "CAKE", "gt_fee": "0", "point_fee": "0.1"});

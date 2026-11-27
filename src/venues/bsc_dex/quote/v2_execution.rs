@@ -260,7 +260,7 @@ pub(super) async fn option(
     }
     let mut quote = build(c)?;
     if let Some(RouterFeeMode::NativeFlat{wei,..})=fee_mode && !wei.is_zero(){
-        quote.costs.push(crate::core::types::Cost::new(crate::core::types::CostKind::TradeFee,num::to_decimal(wei,18).ok_or_else(bad)?,gas_t.clone(),false));
+        quote.costs.push(crate::core::types::Cost::new(crate::core::types::CostKind::ProtocolFee,num::to_decimal(wei,18).ok_or_else(bad)?,gas_t.clone(),false));
     }
     if let Some(fee)=carbon_fee && let Some(row)=quote.costs.iter_mut().find(|c|c.kind==crate::core::types::CostKind::PoolFee){row.amount=fee;}
     if fee_mode.is_some() {

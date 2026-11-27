@@ -170,6 +170,7 @@ fn poloniex_two_coins_is_list() {
             asset: "TRX".into(),
             amount: d("0.05"),
             usd: None,
+            protocol: false,
         }
     );
 }
@@ -192,11 +193,13 @@ fn htx_two_coins_is_list() {
                 asset: "HT".into(),
                 amount: d("0.0123"),
                 usd: None,
+                protocol: false,
             },
             Fee {
                 asset: "CAKE".into(),
                 amount: d("0.1"),
                 usd: None,
+                protocol: false,
             }
         ]
     );

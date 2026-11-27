@@ -32,16 +32,13 @@ pub(super) async fn request<T: DeserializeOwned>(
     }
     let endpoint = Endpoint::available(&url, ctx)
         .ok_or_else(|| fail(ctx, "Dexalot: недоступна сеть или действует Retry-After"))?;
-    let original = url.as_str().trim_end_matches('/') == "https://api.dexalot.com/api/rfq";
-    if firm.is_some() && (!original || !ctx.vault.has_secret("dexalot.api_key")) {
-        return Err(fail(ctx, "Dexalot: заявка требует ключ и официальный API"));
-    }
-    url.path_segments_mut()
-        .map_err(|_| fail(ctx, "Dexalot: недоступный путь API"))?
-        .pop_if_empty()
-        .push(method);
-    url.query_pairs_mut()
-        .extend_pairs(params.iter().map(|(k, v)| (*k, v.as_str())));
+    let has_key = key_allowed(
+        &url,
+        firm.is_some() || method == super::channel::PRICES,
+        ctx.vault.has_secret("dexalot.api_key"),
+    )
+    .map_err(|why| fail(ctx, why))?;
+    append_path(&mut url, method, params).map_err(|why| fail(ctx, why))?;
     static CLIENT: OnceLock<Result<Client, reqwest::Error>> = OnceLock::new();
     let client = CLIENT
         .get_or_init(|| {
@@ -57,8 +54,11 @@ pub(super) async fn request<T: DeserializeOwned>(
     } else {
         client.get(url)
     };
-    if original && ctx.vault.has_secret("dexalot.api_key") {
-        let key = ctx.vault.get("dexalot.api_key").map_err(|e| ctx.tag(e))?;
+    if has_key {
+        let key = ctx
+            .vault
+            .get("dexalot.api_key")
+            .map_err(|_| fail(ctx, "Dexalot: ключ канала недоступен"))?;
         let mut header = HeaderValue::from_str(key.trim())
             .map_err(|_| fail(ctx, "Dexalot: неверный формат ключа API"))?;
         header.set_sensitive(true);
@@ -69,25 +69,73 @@ pub(super) async fn request<T: DeserializeOwned>(
         .map_err(|_| fail(ctx, "Dexalot: полный ответ не получен"))?;
     let status = reply.status;
     endpoint.record(&reply);
-    let body = reply.text;
-    let data: Value = serde_json::from_str(&body).map_err(|_| {
-        fail(
-            ctx,
-            &format!("Dexalot: HTTP {}, отсутствует JSON", status.as_u16()),
-        )
-    })?;
-    if !status.is_success() || data.get("success") == Some(&Value::Bool(false)) {
-        let code = data
-            .get("reasonCode")
-            .or_else(|| data.get("code"))
-            .and_then(Value::as_str)
-            .filter(|c| c.len() <= 32 && c.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
-            .unwrap_or("API");
-        return Err(fail(
-            ctx,
-            &format!("Dexalot: HTTP {}, {}", status.as_u16(), code),
-        ));
-    }
-    serde_json::from_value(data)
-        .map_err(|_| fail(ctx, "Dexalot: отсутствуют обязательные поля ответа"))
+    decode(status, &reply.text).map_err(|why| fail(ctx, &why))
 }
+
+/// Собирает адрес одного метода с экранированием сегмента и параметров.
+fn append_path(url: &mut Url, method: &str, params: &[(&str, String)]) -> Result<(), &'static str> {
+    url.path_segments_mut()
+        .map_err(|_| "Dexalot: недоступный путь API")?
+        .pop_if_empty()
+        .push(method);
+    url.query_pairs_mut()
+        .extend_pairs(params.iter().map(|(k, v)| (*k, v.as_str())));
+    Ok(())
+}
+
+/// Только официальный endpoint может получить ключ. Проверка и резервирование требуют его обязательно.
+fn key_allowed(url: &Url, required: bool, present: bool) -> Result<bool, &'static str> {
+    let send = present && trusted(url);
+    if required && !send {
+        return Err("Dexalot: требуется сохранённый ключ и официальный HTTPS API");
+    }
+    Ok(send)
+}
+
+/// Доверенный адрес определяется поставляемой рекомендацией, без доступа к редактируемым настройкам.
+fn trusted(url: &Url) -> bool {
+    static ORIGINAL: OnceLock<Option<Url>> = OnceLock::new();
+    ORIGINAL
+        .get_or_init(|| {
+            Url::parse(crate::settings::recommendations::venue_value(
+                "dexalot.base_url",
+                "base_dex",
+            )?)
+            .ok()
+        })
+        .as_ref()
+        .is_some_and(|original| {
+            url.scheme() == "https"
+                && url.as_str().strip_suffix('/').unwrap_or(url.as_str()) == original.as_str()
+        })
+}
+
+/// Возвращает полезные поля при успехе. В диагностику выходит только статус и известные коды.
+pub(super) fn decode<T: DeserializeOwned>(
+    status: reqwest::StatusCode,
+    body: &str,
+) -> Result<T, String> {
+    let data: Value = serde_json::from_str(body)
+        .map_err(|_| format!("Dexalot: HTTP {}, отсутствует JSON", status.as_u16()))?;
+    if !status.is_success()
+        || ["Success", "success"]
+            .iter()
+            .any(|key| data.get(*key) == Some(&Value::Bool(false)))
+    {
+        let reason = ["ReasonCode", "reasonCode", "code"]
+            .iter()
+            .find_map(|key| data.get(*key).and_then(Value::as_str));
+        let message = match reason {
+            Some("FQR-001") => "FQR-001, ключ канала не принят",
+            Some("SQ-003") => "SQ-003, для указанного объёма недоступна котировка",
+            Some("SQ-005") => "SQ-005, недостаточно ликвидности у maker",
+            _ => "запрос отклонён",
+        };
+        return Err(format!("Dexalot: HTTP {}, {}", status.as_u16(), message));
+    }
+    serde_json::from_value(data).map_err(|_| "Dexalot: отсутствуют обязательные поля ответа".into())
+}
+
+#[cfg(test)]
+#[path = "client_tests.rs"]
+mod tests;

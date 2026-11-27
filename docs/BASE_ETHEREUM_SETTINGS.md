@@ -2296,7 +2296,7 @@ V5 обменял одинаковые суммы между WETH и натив�
 |---|---|
 | `dexalot.base_url` | `https://api.dexalot.com/api/rfq` |
 | `dexalot.roles` | `router 0xf00240e5256e72771b46d095666594e0f40d085c 0x3d5dbcfd7e42229dd54f3899c48f3eec425eee6dd75b5256f2866819adf9f0a0 0x5bc2e65214869873bd57b70a081588282a395778 0x159af046c141676a8770839e8910667e819c7c2e01c7e079dc5c5b049a49b302`<br>`maker 0x1fd108cf42a59c635bd4703b8dbc8a741ff834be 0x4d9be648c5bf39973670d9f8b481d5d0b971e6a2db2deccc6b98cde21c5dd83e 0x64ae65f4a4208da851b3fdd9f45078c573de4f96 0x2aef3079f2bc71fd8991b8108224d0e53f6004bce41f5597a9ce51b45b82530b`<br>`maker 0xbea416887bc7c89e3f33e096bbe763862e8932eb 0x8ed2aa963c4abe1a4b950ad0664edf55be80d8d592d6b36ab9bcef82fdc76666`<br>`maker 0xfb5f69e9834f75345a4b660e2f564c8a9ace7063 0x7ac95ae84c3a58eacbeb1ec0ea84c50e285b744b9b20b0fcb3f20e595756989f` |
-| `dexalot.api_key` | Секрет. Ключ канала Dexalot для заголовка x-apikey. |
+| `dexalot.api_key` | Секрет. Ключ канала Dexalot для заголовка x-apikey. Доступ к ценам проверьте кнопкой «Проверить подключение» рядом с ключом Base. |
 | `dexalot.trading` | По умолчанию выключено. Включает участие подписанных заявок в выборе маршрута. |
 | `dexalot.min_validity_ms` | Положительный остаток срока заявки в миллисекундах. Величину задаёт владелец. |
 | `dexalot.gas_budget_native` | Положительный лимит расходов в ETH на один обмен. Величину задаёт владелец. |

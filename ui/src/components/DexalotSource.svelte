@@ -1,4 +1,5 @@
 <script>
+  import {DEXALOT_CHAIN_ID} from '../lib/dexalotNetwork.js';
   import {store} from '../lib/settings.svelte.js';
   import SourcePrice from './SourcePrice.svelte';
   import SourceWalletModule from './SourceWalletModule.svelte';
@@ -9,7 +10,7 @@
   const rows=$derived(store.values['dexalot.roles|Venue|'+venue] ?? []);
   const rolesReady=$derived(rows.some(r=>/^router\s/i.test(r)) && rows.some(r=>/^maker\s/i.test(r)));
 </script>
-{#if chain===8453 && url}
+{#if chain===DEXALOT_CHAIN_ID && url}
   <SourcePrice {venue} {trader} {wallet} source="dexalot" label="Dexalot"/>
   {#if rolesReady}
     <SourceWalletModule {venue} wallet={trader} {chain} source="dexalot" setting="dexalot.roles" kind="dexalot_rfq"

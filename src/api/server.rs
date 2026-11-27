@@ -85,6 +85,7 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
             "/api/venues/{id}/pool-cond-stat/reset",
             post(pool_cond_stat::reset),
         )
+        .route("/api/venues/{id}/dexalot/check-key", post(dex::dexalot_check_key))
         .route("/api/venues/{id}/sources/{source}/quote", post(dex::source_quote))
         .route("/api/venues/{id}/{source}/quote", post(dex::legacy_source_quote))
         .route("/api/dex/dry-swap", post(dex_dry::dry_swap))

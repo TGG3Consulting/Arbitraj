@@ -59,6 +59,13 @@ impl Venue for BscDex {
             .is_ok_and(|v| v.is_some())
     }
 
+    async fn check_source_key(&self, source: &str) -> GatewayResult<ConnectionCheck> {
+        if source != "dexalot" {
+            return Err(self.p.ctx.err(ErrorCode::NotApplicable, "Неизвестный источник цен"));
+        }
+        super::dexalot::check_key(&self.p.ctx).await
+    }
+
     async fn source_quote(
         &self,
         source: &str,

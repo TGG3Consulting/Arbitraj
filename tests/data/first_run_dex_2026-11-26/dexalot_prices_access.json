@@ -1,0 +1,48 @@
+{
+  "method": "GET",
+  "url": "https://api.dexalot.com/api/rfq/prices?chainid=8453",
+  "retrieved_utc": "2026-11-27T20:42:13.766023+00:00",
+  "status": 400,
+  "body": {
+    "Success": false,
+    "ReasonCode": "FQR-001",
+    "Reason": "No api key provided..."
+  },
+  "documented_example": {
+    "source": "https://raw.githubusercontent.com/Dexalot/dexalot-docs/a2a1ec62007cc2513a9099a8cec59a7da5487712/docs/en/apiv2/SimpleSwap.md",
+    "body": {
+      "prices": {
+        "AVAX/USDC": {
+          "bids": [
+            [
+              "9.778706198423064067",
+              "1.000000"
+            ],
+            [
+              "9.778705050924842728",
+              "9.778705"
+            ],
+            [
+              "9.778694723440850672",
+              "97.786947"
+            ]
+          ],
+          "asks": [
+            [
+              "9.782618067277720067",
+              "1.000000"
+            ],
+            [
+              "9.782619214775941407",
+              "9.782619"
+            ],
+            [
+              "9.782629542259933463",
+              "97.826295"
+            ]
+          ]
+        }
+      }
+    }
+  }
+}

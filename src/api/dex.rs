@@ -23,6 +23,15 @@ use crate::gateway::contract::DexFamily;
 
 use super::state::{ApiError, AppState};
 
+/// Ручная проверка сохранённого ключа. Тело запроса и кошелёк не нужны.
+pub async fn dexalot_check_key(
+    State(st): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<crate::gateway::contract::ConnectionCheck>, ApiError> {
+    let venue = st.registry.get(&VenueId(id)).await.map_err(ApiError::gateway)?;
+    venue.check_source_key("dexalot").await.map(Json).map_err(ApiError::gateway)
+}
+
 /// Ручная диагностика источника через общий контракт площадки.
 pub async fn source_quote(
     State(st): State<AppState>,

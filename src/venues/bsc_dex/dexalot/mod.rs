@@ -1,11 +1,17 @@
 //! Same-chain Dexalot orders. The public reference price may use ETH as the WETH price source.
 mod automatic;
+mod channel;
+pub(super) use channel::check_key;
+mod automatic_feed;
 mod client;
 mod firm;
+mod firm_option;
 mod price;
 mod profile;
+mod profile_order;
 pub(super) mod receipt;
 pub(super) mod routing;
+mod routing_book;
 #[cfg(test)]
 mod tests;
 mod trade;

@@ -9,68 +9,11 @@
 //!
 //! GET /api/first-run — {advisory, note, source_note, section: [{title, intro, rec: [Rec]}]}
 
-use std::sync::OnceLock;
-
 use axum::{Json, extract::State};
-use serde::{Deserialize, Serialize};
 
 use super::state::{ApiError, AppState};
-
-/// Справочник встроен в бинарник: всегда доступен и совпадает с версией сборки (путь — от каталога этого файла).
-const FIRST_RUN_TOML: &str = include_str!("../../config/first_run.toml");
-
-/// Куда интерфейс может ПРЕДзаполнить значение на экране «Настройки» (только подсказка форме; записи нет).
-/// kind — область значения («Global» / «Venue»); id — для «Venue» (например «bsc_dex», «bingx»).
-#[derive(Deserialize, Serialize, Clone)]
-pub struct Prefill {
-    pub kind: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-}
-
-/// Одна строка таблицы. value — готовое советуемое значение (текст); method — метод/формула, когда готового числа
-/// быть не должно (капитал-зависимые money.*/risk.* — подбирает Тигран). source — чем обосновано (док/решение).
-#[derive(Deserialize, Serialize, Clone)]
-pub struct Rec {
-    pub name: String,
-    pub area: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub unit: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub value: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub method: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<String>,
-    pub rationale: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub prefill: Option<Prefill>,
-}
-
-/// Раздел таблицы (поле rec — строки раздела).
-#[derive(Deserialize, Serialize, Clone)]
-pub struct Section {
-    pub title: String,
-    pub intro: String,
-    #[serde(default)]
-    pub rec: Vec<Rec>,
-}
-
-/// Вся таблица. advisory всегда true — значения советуемые, сохраняет их Тигран сам.
-#[derive(Deserialize, Serialize, Clone)]
-pub struct FirstRun {
-    pub advisory: bool,
-    pub note: String,
-    pub source_note: String,
-    #[serde(default)]
-    pub section: Vec<Section>,
-}
-
-/// Разбирает встроенный справочник один раз (ошибка разбора — только при порче файла в сборке).
-fn parsed() -> &'static Result<FirstRun, String> {
-    static PARSED: OnceLock<Result<FirstRun, String>> = OnceLock::new();
-    PARSED.get_or_init(|| toml::from_str::<FirstRun>(FIRST_RUN_TOML).map_err(|e| e.to_string()))
-}
+use crate::settings::recommendations::parsed;
+pub use crate::settings::recommendations::{FirstRun, Prefill, Rec, Section};
 
 /// Таблица первого запуска. Ошибки: 500 — встроенный config/first_run.toml не разобрался (порча сборки).
 pub async fn table(State(st): State<AppState>) -> Result<Json<FirstRun>, ApiError> {

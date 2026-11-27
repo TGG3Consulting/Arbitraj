@@ -24,7 +24,7 @@ def settings():
     for key in ("dexalot.base_url", "dexalot.roles"):
         values = "<br>".join(f"`{v}`" for v in defaults[key].split(","))
         lines.append(f"| `{key}` | {values} |")
-    lines.extend(["| `dexalot.api_key` | Секрет. Ключ канала Dexalot для заголовка x-apikey. |",
+    lines.extend(["| `dexalot.api_key` | Секрет. Ключ канала Dexalot для заголовка x-apikey. Доступ к ценам проверьте кнопкой «Проверить подключение» рядом с ключом Base. |",
                   "| `dexalot.trading` | По умолчанию выключено. Включает участие подписанных заявок в выборе маршрута. |",
                   "| `dexalot.min_validity_ms` | Положительный остаток срока заявки в миллисекундах. Величину задаёт владелец. |",
                   "| `dexalot.gas_budget_native` | Положительный лимит расходов в ETH на один обмен. Величину задаёт владелец. |", "",

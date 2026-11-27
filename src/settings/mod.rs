@@ -16,6 +16,7 @@ pub mod history;
 pub mod live;
 pub mod outbound;
 pub mod pinned;
+pub(crate) mod recommendations;
 pub mod read;
 pub mod read_scope;
 pub mod schema;

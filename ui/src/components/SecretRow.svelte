@@ -11,15 +11,22 @@
 <script>
   import { put, del, seg } from '../lib/api.js';
   import { secrets, refresh } from '../lib/secrets.svelte.js';
+  import { store } from '../lib/settings.svelte.js';
+  import { DEXALOT_KEY, dexalotVenues } from '../lib/dexalotNetwork.js';
+  import CheckConnection from './CheckConnection.svelte';
   import ErrorText from './ErrorText.svelte';
 
   /** item — {name, scope, description}; highlight — выделить (переход по ссылке). */
-  let { item, highlight = false } = $props();
+  let { item, highlight = false, checkVenue = null } = $props();
   let value = $state('');
   let password = $state('');
   let error = $state('');
   let done = $state('');
   let busy = $state(false);
+  let revision = $state(0);
+  const checkVenues = $derived(item.name === DEXALOT_KEY
+    ? dexalotVenues(store.venueKinds, store.values).filter((id) => !checkVenue || checkVenue === id)
+    : []);
 
   const status = $derived(secrets.status);
   const entered = $derived(status?.unlocked ? status.names.includes(item.name) : null);
@@ -32,6 +39,7 @@
     try {
       await action();
       done = okText;
+      revision += 1;
     } catch (e) {
       error = e.message;
     }
@@ -60,5 +68,15 @@
     <button type="button" class="quiet" disabled={busy || !password} onclick={remove}>Удалить</button>
     {#if done}<span class="ok">{done}</span>{/if}
   </form>
+  {#if item.name === DEXALOT_KEY && entered}
+    {#each checkVenues as id (id)}
+      {#if checkVenues.length > 1}<span>{id}</span>{/if}
+      {#key revision + '|' + (store.values['dexalot.base_url|Venue|' + id] ?? '')}
+        <CheckConnection url={'/api/venues/' + seg(id) + '/dexalot/check-key'} />
+      {/key}
+    {:else}
+      <p class="muted">Для проверки ключа укажите сеть Base в настройке dex.evm_chain_id на экране «Площадки».</p>
+    {/each}
+  {/if}
   <ErrorText text={error} />
 </div>

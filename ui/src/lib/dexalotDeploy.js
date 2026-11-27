@@ -1,3 +1,4 @@
+import {DEXALOT_CHAIN_ID} from './dexalotNetwork.js';
 import sha3 from 'js-sha3';
 import {runtimeKeccak} from './uniswapV1Deploy.js';
 import {findWalletModule} from './registeredWalletModule.js';
@@ -14,7 +15,7 @@ function roleMatches(item,row){
 
 export async function loadDexalot(s,p,sha) {
   const rows=(s.rows??[]).map(fields),wallet=s.wallet?.toLowerCase();
-  if(s.kind!=='dexalot_rfq' || p.kind!==s.kind || p.chainId!==8453 || Number(s.chainId)!==8453 ||
+  if(s.kind!=='dexalot_rfq' || p.kind!==s.kind || p.chainId!==DEXALOT_CHAIN_ID || Number(s.chainId)!==DEXALOT_CHAIN_ID ||
      !addr.test(wallet) || /^0x0+$/.test(wallet) || !addr.test(p.router) || !addr.test(p.wrapped) ||
      !digest.test(p.sourceBlock) || !digest.test(p.runtimeKeccak) || !/^[0-9a-f]{64}$/.test(p.runtimeSha256) ||
      !p.data.endsWith(word(p.router)+word(p.wrapped)) || await sha(p.data)!==p.creationSha256 ||

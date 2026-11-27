@@ -944,6 +944,15 @@ pub trait Venue: Send + Sync {
         Vec::new()
     }
 
+    /// Проверяет сохранённый ключ источника чтением данных канала по запросу оператора.
+    async fn check_source_key(&self, _source: &str) -> GatewayResult<ConnectionCheck> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "У площадки нет такой проверки ключа источника",
+        ))
+    }
+
     /// Ручная котировка источника ликвидности. Дополнительные параметры проверяет адаптер.
     async fn source_quote(
         &self,

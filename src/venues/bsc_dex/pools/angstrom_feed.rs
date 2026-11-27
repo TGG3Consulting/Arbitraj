@@ -12,6 +12,9 @@ use std::{
 use tokio::{sync::watch, task::JoinHandle, time::timeout};
 use tokio_tungstenite::tungstenite::Message;
 
+// UnlockHook.beforeSwap делит data на address(bytes20(data[:20])) и произвольные bytes data[20:].
+// https://github.com/SorellaLabs/angstrom/blob/462a7f2a84dfbe34b61d88d4eb2dadeeae0ce94c/contracts/src/modules/UnlockHook.sol
+const NODE_ADDRESS_BYTES: usize = 20;
 const METHOD: &str = "consensus_subscribeEmptyBlockAttestations";
 struct Feed {
     endpoint: String,
@@ -108,6 +111,19 @@ pub(in crate::venues::bsc_dex) fn for_child(
     *f.demand.lock().ok()? = Instant::now();
     let saved = f.latest.borrow();
     let (announced, data) = saved.as_ref()?;
-    ((*announced == parent || Some(*announced) == parent.checked_add(1)) && data.len() > 20)
-        .then(|| data.clone())
+    candidate(*announced,parent,data).then(|| data.clone())
+}
+
+fn candidate(announced:u64,parent:u64,data:&[u8])->bool {
+    (announced==parent || Some(announced)==parent.checked_add(1)) && data.len()>=NODE_ADDRESS_BYTES
+}
+
+#[cfg(test)]
+mod tests {
+    use super::candidate;
+    #[test]
+    fn node_address_is_a_prefix_and_the_contract_checks_the_signature() {
+        for len in [0,19] {assert!(!candidate(9,9,&vec![1;len]));}
+        for len in [20,21,85] {let data=vec![1;len]; assert!(candidate(9,9,&data) && candidate(10,9,&data)); assert!(!candidate(8,9,&data));}
+    }
 }

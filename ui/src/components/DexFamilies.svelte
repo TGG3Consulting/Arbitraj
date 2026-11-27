@@ -129,7 +129,7 @@
         <td>
           <details>
             <summary>Адреса и настройки DEX</summary>
-            {#if ['rubicon_classic','uniswap_v1','bancor_legacy','bancor_v3','balancer_v1','yield_basis','carbon_v1','stabull','stabull_module'].includes(store.values['dex.kind|Dex|'+r.id])}
+            {#if ['angstrom_l1','rubicon_classic','uniswap_v1','bancor_legacy','bancor_v3','balancer_v1','yield_basis','carbon_v1','stabull','stabull_module'].includes(store.values['dex.kind|Dex|'+r.id])}
               {#key JSON.stringify([venue, r.id, store.values['dex.evm_chain_id|Venue|'+venue], store.values['dex.kind|Dex|'+r.id]])}
                 <MarketModuleDeploy id={r.id} {venue} kind={store.values['dex.kind|Dex|'+r.id]}/>
               {/key}

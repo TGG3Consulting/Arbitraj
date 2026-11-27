@@ -16,6 +16,7 @@ MARKETS={
     "synthswap-v3":("0xa37359e63d1aa44c0acb2a4605d3b45785c97ee3","0xe0712c087ecb8a0dd20914626152ebf4890708c2"),
     "henjin":("0x4963818c35d5793d771bf8091c750b5a71ed101b","0xe301ca0e15446d7f2eea46e8d158c5bda1f760f2"),
     "kim-v4-base":("0x2f0d41f94d5d1550b79a83d2fe85c82d68c5a3ca","0xbbd7d3f242fe8f4eb318c96b2fac0c459ecca908"),
+    "treble-spot":("0xac900f12fb25d514e3ccfe8572b153a9991ca4e7","0x82e4c6da2d953f074329481ca3c770ba74a8961a"),
     "treble-v4":("0x6e606cf94a4ddc01aeed2fce16d1b4f5b33e0a31","0x09f3805c6743d9d0548ffe5657a985a057f82a7b"),
 }
 ZERO="0x"+"00"*20
@@ -46,7 +47,7 @@ def capture(dex,endpoint,market=None,holders=None,keep_refusals=False):
         rr=[(pool,"activeIncentive()",[],[]),(roles["operator"],"feeConfig()",[],[]),(roles["quoter"],"factory()",[],[])]
     for row,bits in zip(rr,c.batch(rr),strict=True):
         reads[row[1]]=None if bits is None else "0x"+bits.hex()
-    if dex=="treble-v4":
+    if dex in ("treble-v4","treble-spot"):
         for role,signature in [("limit_order_manager","limitOrderManager()"),("security_registry","getSecurityRegistry()")]:
             val=reads[signature]
             if val and int(val,16):

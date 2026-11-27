@@ -214,12 +214,19 @@ async fn candidate(
             }
             (wanted, offer.quote(ctx, &profile, wanted, h).await.ok()?)
         } else {
-            let q = curve
-                .sell(wanted, min, cap, async |q| {
-                    offer.quote(ctx, &profile, q, h).await.ok()
-                })
-                .await?;
-            (q, wanted)
+            let mut search = curve.sell(wanted, min, cap);
+            loop {
+                let q = search.quantity()?;
+                let debit = if q < search.minimum {
+                    U256::ZERO
+                } else {
+                    offer.quote(ctx, &profile, q, h).await.ok()?
+                };
+                if debit == wanted {
+                    break (q, debit);
+                }
+                search.advance(q, debit)?;
+            }
         };
         if debit > funds.spend {
             return None;

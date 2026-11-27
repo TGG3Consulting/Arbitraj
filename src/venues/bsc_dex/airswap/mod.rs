@@ -1,26 +1,27 @@
 //! AirSwap RFQ. Obtain signed terms only from selected makers and replay the actual payer's call.
+mod book;
 mod client;
 mod indicative;
+mod offers;
 mod profile;
+mod ranking;
 pub(super) mod receipt;
 pub(super) mod routing;
+mod signed;
 #[cfg(test)]
 mod tests;
 mod trade;
 mod wire;
-pub(super) use routing::Book;
+pub(super) use book::Book;
 pub(super) use trade::trade;
 pub(super) const LABEL: &str = "AirSwap RFQ";
-use super::{
-    ctx::Ctx, exec::signed_call::Erc20Call, node::call, num, parts::Parts,
-    pools::exact_wallet_tokens, quote::white_state, wallet,
-};
+use super::{ctx::Ctx, num, parts::Parts, quote::white_state, wallet};
 use crate::gateway::{
     errors::{ErrorCode, GatewayError, GatewayResult},
     source_quote::{Preview, Request},
 };
-use alloy_primitives::{Address, U256, keccak256};
-use client::{Maker, Query};
+use alloy_primitives::U256;
+use client::Query;
 use serde_json::json;
 fn no(ctx: &Ctx, m: &str) -> GatewayError {
     ctx.err(ErrorCode::NoRoute, m)
@@ -41,244 +42,6 @@ pub(super) fn timely(ctx: &Ctx, exp: u64) -> bool {
 struct Limits {
     minimum: U256,
     maximum: U256,
-}
-async fn options(
-    p: &Parts,
-    q: Query,
-    limits: Limits,
-    who: Address,
-    head: white_state::Head,
-) -> GatewayResult<Vec<routing::Ticket>> {
-    let c = &p.ctx;
-    let profiles = profile::Profile::candidates(c);
-    let peers = Maker::endpoints(c);
-    if peers.is_empty() {
-        return Err(no(c, "AirSwap: не указан HTTPS-сервер maker"));
-    }
-    let generation = c.settings.generation();
-    let mut out = Vec::new();
-    let (di, dout) = tokio::try_join!(
-        p.tokens.decimals(c, q.input),
-        p.tokens.decimals(c, q.output)
-    )?;
-    let ms = c.int("airswap.min_validity_ms")?;
-    use futures_util::{StreamExt, stream};
-    let deadline = tokio::time::Instant::now() + c.timeout()?;
-    let mut jobs = Vec::new();
-    for scope in profiles {
-        for maker in &peers {
-            jobs.push(option(
-                c,
-                q,
-                limits,
-                head,
-                (di, dout),
-                scope,
-                maker,
-                (generation, who, ms),
-            ));
-        }
-    }
-    let mut jobs = stream::iter(jobs).buffer_unordered(4);
-    let mut last = None;
-    while let Ok(Some(result)) = tokio::time::timeout_at(deadline, jobs.next()).await {
-        match result {
-            Ok(mut rows) => out.append(&mut rows),
-            Err(e) => last = Some(e),
-        }
-    }
-    if c.settings.generation() != generation {
-        return Err(no(c, "AirSwap: настройки изменились"));
-    }
-    if out.is_empty() {
-        return Err(last.unwrap_or_else(|| {
-            no(
-                c,
-                "AirSwap: нет оплачиваемой заявки в этих пределах и сроке",
-            )
-        }));
-    }
-    Ok(out)
-}
-#[allow(clippy::too_many_arguments)]
-async fn option(
-    c: &Ctx,
-    q: Query,
-    limits: Limits,
-    head: white_state::Head,
-    (di, dout): (u8, u8),
-    scope: profile::Profile,
-    maker: &Maker,
-    (generation, who, ms): (u64, Address, u64),
-) -> GatewayResult<Vec<routing::Ticket>> {
-    let Some(prepared) = prepare(c, q, scope, maker, who, head, None).await? else {
-        return Ok(vec![]);
-    };
-    signed(
-        c,
-        q,
-        limits,
-        head,
-        (di, dout),
-        scope,
-        maker,
-        (generation, who, ms),
-        prepared,
-    )
-    .await
-}
-async fn prepare(
-    c: &Ctx,
-    q: Query,
-    scope: profile::Profile,
-    maker: &Maker,
-    who: Address,
-    head: white_state::Head,
-    required: Option<U256>,
-) -> GatewayResult<Option<(alloy_primitives::B256, U256)>> {
-    if scope.module.is_none() {
-        exact_wallet_tokens::check(c, "airswap", q.input, q.output, &head.selector()).await?;
-    }
-    let terms = scope.check(c, head, who).await?;
-    if let Some(spend) = required {
-        use super::pools::dagrow;
-        let at = head.selector();
-        let (balance, grant) = tokio::try_join!(
-            dagrow::balance(c, q.input, who, &at),
-            dagrow::allowance(c, q.input, who, scope.target(), &at)
-        )?;
-        if spend.is_zero() || spend > balance || spend > grant {
-            return Ok(None);
-        }
-    }
-    if !maker.supports(c, q, scope).await? {
-        return Ok(None);
-    }
-    Ok(Some(terms))
-}
-#[allow(clippy::too_many_arguments)]
-async fn signed(
-    c: &Ctx,
-    q: Query,
-    limits: Limits,
-    head: white_state::Head,
-    (di, dout): (u8, u8),
-    scope: profile::Profile,
-    maker: &Maker,
-    (generation, who, ms): (u64, Address, u64),
-    (domain, fee): (alloy_primitives::B256, U256),
-) -> GatewayResult<Vec<routing::Ticket>> {
-    let mut out = Vec::new();
-    let sender = scope.sender(who);
-    let order = maker.order(c, q, scope, sender, ms).await?;
-    if !timely(c, order.expiry)
-        || order.amount > limits.maximum
-        || order.fee != fee
-        || order.maker == who
-        || order.maker == sender
-        || order.maker == scope.exchange.address
-    {
-        return Ok(out);
-    }
-    let at = head.selector();
-    let Ok(authorized) = call::canonical(
-        c,
-        &at,
-        scope.exchange.address,
-        wire::ISwap::authorizedCall {
-            signerWallet: order.maker,
-        },
-    )
-    .await
-    else {
-        return Ok(out);
-    };
-    let signatory = if authorized.is_zero() {
-        order.maker
-    } else {
-        authorized
-    };
-    if !matches!(
-        call::canonical(
-            c,
-            &at,
-            scope.exchange.address,
-            wire::ISwap::nonceUsedCall {
-                signatory,
-                nonce: order.nonce
-            }
-        )
-        .await,
-        Ok(false)
-    ) {
-        return Ok(out);
-    }
-    for any in [false, true] {
-        let signed_for = if any { Address::ZERO } else { sender };
-        if order.sender.is_some_and(|s| s != signed_for)
-            || (scope.module.is_none() && order.quoted < limits.minimum)
-        {
-            continue;
-        }
-        let minimum = if scope.module.is_none() {
-            order.quoted
-        } else {
-            limits.minimum
-        };
-        let mut data = order.data(who, scope.module.is_some(), any, minimum);
-        let mut proof = receipt::Saved {
-            call: Erc20Call {
-                chain: scope.chain,
-                payer: who,
-                module: scope.target(),
-                calldata: keccak256(&data),
-            },
-            profile: scope,
-            maker: order.maker,
-            nonce: order.nonce,
-            digest: order.digest(domain, signed_for),
-            expiry: order.expiry,
-            input: q.input,
-            output: q.output,
-            amount: order.amount,
-            quoted: order.quoted,
-            fee,
-            minimum,
-        };
-        if let Ok((spent, received, gas)) = proof.measure(c, head, &data).await
-            && spent <= limits.maximum
-            && received >= limits.minimum
-            && timely(c, proof.expiry)
-        {
-            let gas = if scope.module.is_some() && received > minimum {
-                proof.minimum = received;
-                data = order.data(who, true, any, received);
-                proof.call.calldata = keccak256(&data);
-                let Ok((paid, credit, g)) = proof.measure(c, head, &data).await else {
-                    continue;
-                };
-                if (paid, credit) != (spent, received) {
-                    continue;
-                }
-                g
-            } else {
-                gas
-            };
-            out.push(routing::Ticket {
-                signatory,
-                proof,
-                data,
-                spent,
-                received,
-                gas,
-                generation,
-                di,
-                dout,
-            });
-        }
-    }
-
-    Ok(out)
 }
 pub(super) async fn request(p: &Parts, r: Request) -> GatewayResult<Preview> {
     let c = &p.ctx;
@@ -354,7 +117,7 @@ pub(super) async fn request(p: &Parts, r: Request) -> GatewayResult<Preview> {
             maximum,
         };
         let head = white_state::head(c, "latest").await?;
-        let tickets = options(&account, q, limits, owner, head).await?;
+        let tickets = offers::options(&account, q, limits, owner, head).await?;
         // Report the best measured cash amounts; route selection also prices the gas of every form.
         let best = tickets
             .iter()

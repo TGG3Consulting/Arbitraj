@@ -38,6 +38,11 @@ pub fn swap_topics() -> [B256; 6] {
 
 /// Выпустил ли этот пул событие обмена. Ошибок нет.
 pub fn by_pool(e: &Entry, log: &SimLog) -> bool {
+    if e.family.variant.ammalgam() {
+        return log.address==e.pool.reference.address() && IV2Pair::Swap::decode_raw_log(log.topics.iter().copied(),&log.data).is_ok_and(|s|
+            (!s.amount0In.is_zero() && s.amount1In.is_zero() && s.amount0Out.is_zero() && !s.amount1Out.is_zero()) ||
+            (!s.amount1In.is_zero() && s.amount0In.is_zero() && s.amount1Out.is_zero() && !s.amount0Out.is_zero()));
+    }
     if let crate::core::types::PoolState::DefiPlaza(s)=&e.pool.state{
         use super::super::pools::defiplaza::IPlaza;
         if log.address!=s.pool{return false;}

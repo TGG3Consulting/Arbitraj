@@ -15,6 +15,8 @@ use serde_json::{Value, json};
 
 alloy::sol! {interface IAmmalgam {
     function computeExpectedSwapAmountOut(uint256 input,uint256 reserveIn,uint256 referenceIn,uint256 reserveOut,uint256 missingIn,uint256 missingOut) external pure returns(uint256);
+    function factory() external view returns(address);
+    function helper() external view returns(address);
     function getPair(address a,address b) external view returns(address);
     function pairBeacon() external view returns(address);
     function implementation() external view returns(address);
@@ -42,6 +44,9 @@ pub(crate) async fn market(
     pair: (Address, Address),
     at: &Value,
 ) -> GatewayResult<[Address; 2]> {
+    if ctx.chain_id() != Some(crate::settings::evm_profiles::ETHEREUM_MAINNET) {
+        return Err(bad(ctx));
+    }
     let gen_at_start = ctx.settings.generation();
     let id = f.id;
     let factory = ctx.dex_addr("dex.factory", id)?;
@@ -235,4 +240,53 @@ pub(crate) fn request(
 }
 pub(crate) fn payout(_: &super::registry::Entry, _: Address, _: U256, raw: &[u8]) -> Option<U256> {
     IAmmalgam::computeExpectedSwapAmountOutCall::abi_decode_returns_validate(raw).ok()
+}
+
+pub(crate) fn graph_target(ctx: &Ctx, e: &super::registry::Entry) -> Option<Address> {
+    if !e.family.variant.ammalgam()
+        || !matches!(e.pool.state, crate::core::types::PoolState::Ammalgam(_))
+        || !matches!(&e.pool.reference,PoolRef::Contract(p) if !p.is_zero())
+        || e.family.executor_kind != Some(super::exec_kind::ExecKind::Basin)
+        || ctx.chain_id() != Some(crate::settings::evm_profiles::ETHEREUM_MAINNET)
+    {
+        return None;
+    }
+    let module = ctx.dex_addr("dex.router", e.family.id).ok()?;
+    (!module.is_zero()
+        && super::direct_module::configured(ctx, e.family.id).is_ok_and(|h| h.len() == 1))
+    .then_some(module)
+}
+pub(crate) async fn check_step(
+    ctx: &Ctx,
+    e: &super::registry::Entry,
+    input: Address,
+    at: &Value,
+) -> GatewayResult<()> {
+    let module = graph_target(ctx, e)
+        .filter(|_| [e.pool.token0, e.pool.token1].contains(&input))
+        .ok_or_else(|| bad(ctx))?;
+    let id = e.family.id;
+    let generation = ctx.settings.generation();
+    let q = [
+        batch::view(at, module, IAmmalgam::factoryCall {}),
+        batch::view(at, module, IAmmalgam::helperCall {}),
+    ];
+    let (_, (), [factory, helper]) = tokio::try_join!(
+        market(
+            ctx,
+            e.family,
+            e.pool.reference.address(),
+            (e.pool.token0, e.pool.token1),
+            at
+        ),
+        super::direct_module::verify_code(ctx, id, module, at),
+        batch::read(ctx, q)
+    )?;
+    if batch::decode(&factory, IAmmalgam::factoryCall {})? != ctx.dex_addr("dex.factory", id)?
+        || batch::decode(&helper, IAmmalgam::helperCall {})? != ctx.dex_addr("dex.quoter", id)?
+        || generation != ctx.settings.generation()
+    {
+        return Err(bad(ctx));
+    }
+    Ok(())
 }

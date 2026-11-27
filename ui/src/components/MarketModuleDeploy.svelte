@@ -12,6 +12,7 @@
     algebra_integral_theorem:{file:'theorem-ethereum',key:'algebra-router-wallet:theorem:1',name:'AlgebraRouterWallet в Ethereum',load:()=>import('../assets/theorem-ethereum.json')},
     defiplaza_multi:{file:'defiplaza-multi',key:'defiplaza-multi:1',name:'DefiPlazaWallet для MultiPlaza',load:()=>import('../assets/defiplaza-multi-create.json')},
     defiplaza_stable:{file:'defiplaza-stable',key:'defiplaza-stable:1',name:'DefiPlazaWallet для StablePlaza',load:()=>import('../assets/defiplaza-stable-create.json')},
+    ammalgam_dlex:{file:'ammalgam-ethereum',key:'ammalgam-ethereum:1',name:'AmmalgamWallet в Ethereum',load:()=>import('../assets/ammalgam-ethereum-create.json')},
     mooniswap_v1:{file:'mooniswap-original',key:'mooniswap-original:1',name:'MooniswapWallet для Mooniswap',load:()=>import('../assets/mooniswap-original-create.json')},
     mooniswap_v2:{file:'mooniswap-successor',key:'mooniswap-successor:1',name:'MooniswapWallet для 1inch Liquidity Protocol',load:()=>import('../assets/mooniswap-successor-create.json')},
     shibaswap_v2_module:{file:'shibaswap-v2-ethereum',key:'shibaswap-v2-create:1',name:'ShibaswapV2Adapter в Ethereum',load:()=>import('../assets/shibaswap-v2-ethereum.json')},

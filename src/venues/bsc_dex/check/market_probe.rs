@@ -53,7 +53,7 @@ pub(super) struct Leg {
 }
 impl Market {
     pub fn wallet_funded(ctx: &Ctx, e: &Entry) -> bool {
-        matches!(e.pool.state,PoolState::Mooniswap(_)|PoolState::DefiPlaza(_)) || e.family.variant.issuer_shares() || e.family.variant==super::super::pools::family_variant::Variant::PropVenue || e.family.variant.protected_router_wallet() || matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
+        matches!(e.pool.state,PoolState::Ammalgam(_)|PoolState::Mooniswap(_)|PoolState::DefiPlaza(_)) || e.family.variant.issuer_shares() || e.family.variant==super::super::pools::family_variant::Variant::PropVenue || e.family.variant.protected_router_wallet() || matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
             || mint_club_direct::enabled(e) || carbon_direct::enabled(e)
             || (super::registered_v3::configured(ctx,e) && super::super::exec::executor::address(ctx).ok().flatten().is_none())
     }
@@ -73,6 +73,12 @@ impl Market {
         let mut vista = None;
         let venue = if e.family.variant == super::super::pools::family_variant::Variant::Surge {
             Venue::FollowingBlock(white_state::head(ctx, &format!("{number:#x}")).await?)
+        } else if e.family.variant.ammalgam(){
+            let head=white_state::head(ctx,&format!("{number:#x}")).await?;
+            Box::pin(super::super::pools::ammalgam::check_step(ctx,e,e.usdt,&head.selector())).await?;
+            Box::pin(mint_club_direct::funded(ctx,wallet,e.usdt,amount,head)).await?;
+            anchor=Some((head,Box::new(e.clone())));
+            Venue::FundedExecutor
         } else if let PoolState::DefiPlaza(s)=&e.pool.state{
             let head=white_state::head(ctx,&format!("{number:#x}")).await?;
             let fresh=Box::pin(super::super::pools::defiplaza::state(ctx,e.family,s.pool,(e.pool.token0,e.pool.token1),&head.selector())).await?;

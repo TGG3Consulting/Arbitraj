@@ -2268,8 +2268,11 @@ def tables(network, snapshots, profiles):
             task = (f"Ammalgam · {len(book['pools'])} зарегистрированных пар. Подтверждены отдельно обе записи proxy "
                     f"и текущая реализация маяка. На WETH/USDC и USDC/USDT проверены выплаты штатного helper ({paid['helper']}), "
                     f"модуля с ограничением срока ({paid['wallet']}) и V5 ({paid['v5']}). Полный ввод измерялся по балансу "
-                    f"кошелька, выручка — по приросту выходного баланса. Для расчёта цены в графе требуется модель "
-                    f"квадратичной комиссии и недостающих активов после займа. [Пулы, роли, хеши и выплаты](../{fixture.as_posix()}).")
+                    f"кошелька, выручка — по приросту выходного баланса. Локальная кривая проверена на 185 ценах обоих направлений всех 10 пулов. "
+                    f"В профиле `ammalgam` задаются `dex.kind = ammalgam_dlex`, фабрика `{book['factory']}`, квотер `{book['helper']}`, "
+                    f"и хеши фабрики, квотера и пары. В списки `dex.proxy_implementations` и `dex.proxy_runtime_hashes` входят маяк и затем реализация. "
+                    f"Интерфейс готовит CREATE исходного модуля; в `dex.router` сохраняется подтверждённый адрес развёрнутого модуля, "
+                    f"`dex.module_runtime_hashes = {book['module']['runtime']}`. [Пулы, роли, хеши и выплаты](../{fixture.as_posix()}).")
         if not base and str(row["id"]) == "812":
             fixture = data_dir / "llama_eth_v2_wallets.json.gz"
             with gzip.open(fixture, "rt", encoding="utf8") as stream:

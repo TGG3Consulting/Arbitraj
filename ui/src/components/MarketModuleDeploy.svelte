@@ -23,6 +23,7 @@
     '8453':{file:'alien-carbon-base',key:'carbon-create:8453',name:'CarbonWallet на Base',load:()=>import('../assets/alien-carbon-base.json')},
   };
   const communityPlans = {
+    'goblins-base':{file:'goblins-community-base',key:'goblins-community-create:8453',name:'CommunityV3Adapter для Goblins',load:()=>import('../assets/goblins-community-base.json')},
     'wagmi-base':{file:'wagmi-community-base',key:'wagmi-community-create:8453',name:'CommunityV3Adapter для WAGMI',load:()=>import('../assets/wagmi-community-base.json')},
     'thick-base':{file:'thick-community-base',key:'thick-community-create:8453',name:'CommunityV3Adapter для Thick',load:()=>import('../assets/thick-community-base.json')},
   };

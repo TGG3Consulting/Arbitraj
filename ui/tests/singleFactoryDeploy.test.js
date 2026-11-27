@@ -8,7 +8,7 @@ const read=file=>JSON.parse(readFileSync(new URL(file,import.meta.url)));
 const rows=read('../../config/first_run_dex.json');
 for(const [id,file,chain] of [
   ['empire-module-ethereum','empire-ethereum',1],['wagmi-base','wagmi-community-base',8453],
-  ['thick-base','thick-community-base',8453],
+  ['thick-base','thick-community-base',8453],['goblins-base','goblins-community-base',8453],
 ]){
   const plan=read('../src/assets/'+file+'.json');
   const row=rows.find(r=>r.id===id).settings;

@@ -66,7 +66,8 @@ pub(super) async fn read(
         super::solidly_classic_factory::plain(ctx, factory, f_hash, at),
         batch::read(ctx, ops)
     )?;
-    if tokens.0 >= tokens.1
+    if ctx.chain_id() != Some(1)
+        || tokens.0 >= tokens.1
         || batch::decode(&listed, lookup)? != pool
         || batch::decode(&creator, owner)? != factory
         || ctx.dex_text("dex.v2_fee_source", id)? != "fixed"
@@ -90,6 +91,9 @@ pub(super) async fn read(
             .is_ok();
     if gen_at_start != ctx.settings.generation() {
         return Err(failure());
+    }
+    if f.variant == Variant::EmpireNominal && !exact_tokens {
+        return Err(ctx.err(ErrorCode::NotApplicable, "Empire: номинальная выплата требует точных переводов обоих токенов"));
     }
     let rs = batch::decode(&rs, reserves)?;
     Ok(EmpireState {

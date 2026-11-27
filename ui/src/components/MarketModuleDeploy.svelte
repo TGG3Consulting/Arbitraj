@@ -8,6 +8,7 @@
   let {id, kind, venue} = $props();
   const stabullPlan = {file:'stabull-base',key:'stabull-create:8453',name:'StabullAdapter на Base',load:()=>import('../assets/stabull-base.json')};
   const deployments = {
+    empire_module:{file:'empire-ethereum',key:'empire-create:1',name:'EmpireWallet в Ethereum',load:()=>import('../assets/empire-ethereum.json')},
     angstrom_l1:{file:'angstrom-ethereum',key:'angstrom-create:1',name:'AngstromWallet в Ethereum',load:()=>import('../assets/angstrom-ethereum.json')},
     uniswap_v1:{file:'uniswap-v1-ethereum',key:'uniswap-v1-create:1',name:'UniswapV1Adapter в Ethereum',load:()=>import('../assets/uniswap-v1-ethereum.json')},
     bancor_legacy:{file:'bancor-v21-ethereum',key:'bancor-v21-create:1',name:'BancorLegacyAdapter в Ethereum',load:()=>import('../assets/bancor-v21-ethereum.json')},
@@ -21,7 +22,14 @@
     '1':{file:'carbon-ethereum',key:'carbon-create:1',name:'CarbonWallet в Ethereum',load:()=>import('../assets/carbon-ethereum.json')},
     '8453':{file:'alien-carbon-base',key:'carbon-create:8453',name:'CarbonWallet на Base',load:()=>import('../assets/alien-carbon-base.json')},
   };
-  const deployment = $derived(kind==='carbon_v1' ? carbonByChain[String(store.values['dex.evm_chain_id|Venue|'+venue])] : deployments[kind]);
+  const communityPlans = {
+    'wagmi-base':{file:'wagmi-community-base',key:'wagmi-community-create:8453',name:'CommunityV3Adapter для WAGMI',load:()=>import('../assets/wagmi-community-base.json')},
+    'thick-base':{file:'thick-community-base',key:'thick-community-create:8453',name:'CommunityV3Adapter для Thick',load:()=>import('../assets/thick-community-base.json')},
+  };
+  const target = $derived(kind==='registered_uni_v3' ? 'dex.v3_wallet_module' : 'dex.router');
+  const deployment = $derived(kind==='registered_uni_v3'
+    ? (String(store.values['dex.evm_chain_id|Venue|'+venue])==='8453' && value('dex.module_runtime_hashes')?.length ? communityPlans[id.split('@')[0]] : null)
+    : kind==='carbon_v1' ? carbonByChain[String(store.values['dex.evm_chain_id|Venue|'+venue])] : deployments[kind]);
   const recoverable = $derived(!!deployment?.load);
   const file = $derived(deployment?.file);
   let manifest = $state(null), estimateSeen = $state(null), pending = $state(null), txHash = $state('');
@@ -39,7 +47,7 @@
   onDestroy(() => { mounted = false; });
   function scope() {
     return deploymentScope(localStorage, () => mounted && {
-      id, venue, kind, key, settings:current(), router:value('dex.router'),
+      id, venue, kind, key, settings:current(), router:value(target),
     });
   }
   function refreshPending(action) {
@@ -92,7 +100,7 @@
     await navigator.locks.request(action.key, {ifAvailable:true}, async (lock) => {
       action.check();
       refreshPending(action);
-      if (!lock || pending || value('dex.router')) throw new Error('Есть ранее начатое размещение или настроенный модуль.');
+      if (!lock || pending || value(target)) throw new Error('Есть ранее начатое размещение или настроенный модуль.');
       await loadPlan(action.settings, plan);
       action.check();
       try {
@@ -159,7 +167,7 @@
       action.save(null);
       if (!action.active()) return;
       refreshPending(action);
-      result=kind === 'stabull' ? 'Адрес сохранён. Для защищённых обменов выберите вид stabull_module и сохраните настройки DEX.' : 'Подтверждённый адрес сохранён в dex.router.';
+      result=kind === 'stabull' ? 'Адрес сохранён. Для защищённых обменов выберите вид stabull_module и сохраните настройки DEX.' : 'Подтверждённый адрес сохранён в '+target+'.';
     });
   }
 
@@ -172,6 +180,10 @@
   {#if manifest}
     {#if kind === 'balancer_v1' || kind === 'yield_basis'}
       <p>Фабрика {kind === 'yield_basis' ? 'YieldBasis' : 'BPool'} <code>{manifest.factory}</code>, WETH <code>{manifest.wrapped}</code>. При создании кошелёк отправляет 0 ETH.</p>
+    {:else if kind === 'registered_uni_v3'}
+      <p>Фабрика Base <code>{manifest.factory}</code>. Подтверждённый адрес будет сохранён в <code>dex.v3_wallet_module</code>.</p>
+    {:else if kind === 'empire_module'}
+      <p>Фабрика Ethereum <code>{manifest.factory}</code>. При создании кошелёк отправляет 0 ETH.</p>
     {:else if kind === 'angstrom_l1'}
       <p>Конструктор принимает адаптер, хук и PoolManager Ethereum. Сумма перевода при создании — 0 ETH.</p>
       {#each ['adapter','hook','manager'] as role}<div>{role} <code>{manifest.roles[role].address}</code></div>{/each}
@@ -193,7 +205,7 @@
     {/if}
     <p>Хеш проверенного runtime <code>{manifest.runtimeKeccak}</code>.</p>
     <button class="quiet" disabled={busy} onclick={() => run(download)}>Скачать неподписанный CREATE</button>
-    {#if !pending && !value('dex.router')}
+    {#if !pending && !value(target)}
       <button class="quiet" disabled={busy} onclick={() => run(price)}>Оценить газ в кошельке</button>
       {#if estimateSeen}
         <p>Плательщик <code>{estimateSeen.from}</code>. Оценка {manifest.chainId === 1 ? "Ethereum" : "L2"} — {estimateSeen.gas} ед. газа, {estimateSeen.fee} wei. Кошелёк покажет условия отправки и сетевую комиссию.</p>
@@ -205,7 +217,7 @@
     <button class="quiet" disabled={busy || !txHash.trim()} onclick={() => run(verify)}>Проверить размещение</button>
     {#if readyAddress}
       <p>Адрес модуля <code>{readyAddress}</code></p>
-      <button disabled={busy || !!value('dex.router')} onclick={() => run(useAddress)}>Сохранить адрес модуля</button>
+      <button disabled={busy || !!value(target)} onclick={() => run(useAddress)}>Сохранить адрес модуля</button>
     {/if}
   {/if}
   {#if result}<p>{result}</p>{/if}

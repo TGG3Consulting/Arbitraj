@@ -35,7 +35,8 @@ export function deploymentScope(storage, selected) {
   }
   function install(address, setValue) {
     available();
-    return setValue('dex.router', {kind:'Dex', id}, address);
+    const target = kind === 'registered_uni_v3' ? 'dex.v3_wallet_module' : 'dex.router';
+    return setValue(target, {kind:'Dex', id}, address);
   }
   return {key, settings:JSON.parse(settingsJson), active, check, read, save, beforeOrAfterSend, install};
 }

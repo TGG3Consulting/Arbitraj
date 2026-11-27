@@ -59,7 +59,7 @@ def leg(sim, prefix, pool, tokens, amount, mode, deadline):
         r = calls[n+len(views)]
         if r["status"] != "0x1" and before != after:
             raise ValueError("reverted operation moved funds")
-        return dict(status=r["status"],error=r.get("error"),gas=r["gasUsed"],calldata=trade["data"],
+        return dict(status=r["status"],error=r.get("error"),gas=r["gasUsed"],approval_gas=calls[n-1]["gasUsed"],calldata=trade["data"],
                     before=before,after=after,paid=paid,received=received,logs=r.get("logs",[])),trade
     loose,_ = trial(1,deadline)
     if loose["status"] != "0x1" or loose["received"] <= 0:
@@ -84,7 +84,7 @@ def capture(endpoint, doc, artifact):
             raise ValueError("official router "+role+" differs")
     deadline = int(h["timestamp"],16)+900
     word=lambda n:"0x"+format(n,"064x")
-    env={OWNER:{"balance":hex(10**19)},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
+    env={OWNER:{"balance":hex(10**20)},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
          "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
     sim=lambda calls:simulate_block(endpoint,c.selector,env,calls)
     modes=("nominal","fot","v5")
@@ -126,6 +126,14 @@ def capture(endpoint, doc, artifact):
                 prefix,amount=purchases[origin]
                 result,_=leg(sim,prefix,pool,[other,WETH],amount,mode,deadline)
                 row["samples"].append(dict(side="sell",input=amount,seed=size,funding=origin,mode=mode,result=result))
+        # Обе границы входа измеряются с новым собственным WETH, без обращения к функции владельца sweep/unsweep.
+        row["debt_boundary"]=[]
+        if initial["debt"] and sweepable==WETH:
+            for size in (initial["debt"]-1,initial["debt"]+10**12):
+                for mode in modes:
+                    funds=[*prefix,tx(WETH,"deposit()",value=size)]
+                    result,_=leg(sim,funds,pool,[WETH,other],size,mode,deadline)
+                    row["debt_boundary"].append(dict(input=size,mode=mode,result=result))
         rows.append(row)
     if not any(s["result"].get("net_guard") for row in rows for s in row["samples"]):
         raise ValueError("no historical payment with a terminal floor")

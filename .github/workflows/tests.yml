@@ -919,6 +919,10 @@ jobs:
           python scripts/record_surge_protected.py "$RUNNER_TEMP/surge/SurgeAdapter.json" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'surge-ethereum'
         run: python scripts/record_surge_ethereum.py "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'shibaswap-v2-directory'
+        run: |
+          python -m pip install --quiet rlp==4.1.0
+          python scripts/record_ethereum_v3_registries.py shibaswap-v2 "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'blueprint-ethereum'
         run: python scripts/record_wagmi_ethereum.py "$RUNNER_TEMP/market.json" --venue blueprint
       - if: matrix.market == 'community-v3-router-ethereum'

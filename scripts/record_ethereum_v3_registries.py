@@ -11,6 +11,12 @@ from record_base_slipstream_executor import ROOT, calldata
 from record_ethereum_x7 import ROOT_HASH
 
 FACTORIES = {
+    "shibaswap-v2": {
+        "factory": "0xd9ce49caf7299daf18fffcb2b84a44fd33412509",
+        "router": "0xb2ecc25c0b3af0039d4d9dddfcec19e958618963",
+        "quoter": "0x486dd4ff6abd5b2f728192cda291d2ffb611cbd1",
+        "lens": "0xbfd8137f7d1516d3ea5ca83523914859ec47f573",
+    },
     "blueprint": {
         "factory": "0xe777c3da43ec554ec845649323215afaa34d6c23",
         "router": "0x269ae88aa04e7b9b81f2d89263fbcd2cef1c58fc",
@@ -108,6 +114,10 @@ def capture(name, endpoint):
     for value,(_,_,_,_,expected) in zip(views([r[:4] for r in bound]),bound,strict=True):
         if decode(["address"],value)[0]!=expected: raise ValueError(("wrong getter",expected))
 
+    if name == "shibaswap-v2":
+        creation,collector = views([(factory,"poolPairHash()",[],[]), (factory,"feeCollector()",[],[])])
+        assert "0x"+creation.hex() == init
+        collector, = decode(["address"],collector)
     logs=rpc("eth_getLogs",[dict(address=factory,fromBlock=hex(roles["factory"]["created"]),toBlock=head["number"],topics=[TOPICS])])
     markets=[];tiers={};seen=set()
     for row in logs:
@@ -146,6 +156,16 @@ def capture(name, endpoint):
         row.update(liquidity=str(int.from_bytes(vals0["liquidity"],"big")),slot0="0x"+vals0["slot0"].hex(),balances=[str(int.from_bytes(next(vals),"big")) for _ in range(2)])
         if name=="vvs":row["lm_pool"]=addr(vals0["lmPool"])
     extra={}
+    if name == "shibaswap-v2":
+        from v3_factory_storage import verify_directory
+        proof = rpc("eth_getProof", [factory, [], tag])
+        owner, = decode(["address"],views([(factory,"owner()",[],[])])[0])
+        extra["directory_proof"] = dict(factory=factory,state_root=head["stateRoot"],nonce=nonce,
+            storage_root=proof["storageHash"],account_proof=proof["accountProof"],owner=owner,
+            pool_pair_hash=init,fee_collector=collector,layout=dict(owner=3,poolPairHash=4,feeCollector=5,
+            feeAmountTickSpacing=6,getPool=7),tiers=tiers,storage_slots=2*len(markets)+len(tiers)+1+
+            int(int(owner,16)>0)+int(int(collector,16)>0))
+        verify_directory(dict(extra["directory_proof"],pools=markets),factory)
     if name=="vvs":
         extra["rewards"]=reward_roles(name,markets,tag,rpc)
         exact="0x839e71613f9aa06e5701cf6de63e303616b0dde3"

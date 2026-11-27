@@ -67,6 +67,10 @@ def verify_directory(data,factory):
         for token_in, token_out in [(a,b), (b,a)]:
             key = map_slot(market["fee"], map_slot(token_out, map_slot(token_in, layout["getPool"])))
             slots[key] = int(market["pool"], 16)
+    if "poolPairHash" in layout:
+        slots[layout["poolPairHash"]] = int(data["pool_pair_hash"], 16)
+    if "feeCollector" in layout and int(data["fee_collector"], 16):
+        slots[layout["feeCollector"]] = int(data["fee_collector"], 16)
     if "allPairs" in layout:
         ordered = data["all_pairs"]
         if len(ordered) != len(data["pools"]) or set(ordered) != {m["pool"] for m in data["pools"]}:

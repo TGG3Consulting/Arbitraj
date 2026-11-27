@@ -7,6 +7,7 @@
   let result = $state(null), error = $state(''), busy = $state(false);
   let buyExact = $state(false), maxSpend = $state(''), allowTrade = $state(false);
   let builder = $state('buildernet');
+  const signedMaker = $derived(source === 'textile' || source === 'airswap');
   const address = /^0x[0-9a-fA-F]{40}$/;
   const valid = $derived(address.test(input) && address.test(output) && input.toLowerCase() !== output.toLowerCase() && /^[1-9]\d*$/.test(amount) && (!firm || (/^[1-9]\d*$/.test(minimum) && (source !== 'kipseli' || (/^\d{1,5}$/.test(fee))))));
   async function quote(event) {
@@ -16,7 +17,7 @@
     error = '';
     result = null;
     try {
-      const terms = firm ? {wallet, minimum_raw: minimum, ...(source === 'textile' ? {allow_trade:allowTrade, ...(buyExact ? {maximum_raw:maxSpend} : {})} : {}), fee_tenths_bps: source === 'kipseli' ? Number(fee) : null} : undefined;
+      const terms = firm ? {wallet, minimum_raw: minimum, ...(signedMaker ? {allow_trade:allowTrade, ...(buyExact ? {maximum_raw:maxSpend} : {})} : {}), ...(source === 'kipseli' ? {fee_tenths_bps:Number(fee)} : {})} : undefined;
       result = await post(`/api/venues/${seg(venue)}/sources/${seg(source)}/quote`, { input, output, trader, ...(buyExact ? {buy_amount_raw:amount} : {amount_raw:amount}), firm: terms, ...(source === 'bopamm' ? {builder} : {}) });
     } catch (e) {
       error = e.message;
@@ -30,16 +31,16 @@
   <form onsubmit={quote}>
     <label>Адрес продаваемого токена <input bind:value={input} disabled={busy} placeholder="0x…" /></label>
     <label>Адрес получаемого токена <input bind:value={output} disabled={busy} placeholder="0x…" /></label>
-    {#if source === 'textile'}<label><input type="checkbox" bind:checked={buyExact} disabled={busy} /> Указать точный выход</label>{/if}
+    {#if signedMaker}<label><input type="checkbox" bind:checked={buyExact} disabled={busy} /> Указать точный выход</label>{/if}
     <label>Сумма в минимальных единицах {buyExact ? 'выходного' : 'входного'} токена <input bind:value={amount} disabled={busy} inputmode="numeric" /></label>
     {#if source === 'bopamm'}
       <label>Строитель Ethereum <select bind:value={builder} disabled={busy}><option value="buildernet">BuilderNet</option><option value="titan">Titan</option></select></label>
     {/if}
     {#if source !== 'fynd' && wallet}
-      <label><input type="checkbox" bind:checked={firm} disabled={busy} /> {source === 'textile' ? 'Зарезервировать объём у маркетмейкера и проверить расчёт для этого кошелька' : source === 'bopamm' ? 'Проверить обмен через модуль этого кошелька в слоте строителя' : 'Запросить индивидуальные условия для этого кошелька и проверить обмен в симуляции'}</label>
+      <label><input type="checkbox" bind:checked={firm} disabled={busy} /> {signedMaker ? 'Зарезервировать объём у маркетмейкера и проверить расчёт для этого кошелька' : source === 'bopamm' ? 'Проверить обмен через модуль этого кошелька в слоте строителя' : 'Запросить индивидуальные условия для этого кошелька и проверить обмен в симуляции'}</label>
       {#if firm}
         <label>Минимальная выплата в единицах контракта <input bind:value={minimum} disabled={busy} inputmode="numeric" /></label>
-        {#if source === 'textile'}
+        {#if signedMaker}
           {#if buyExact}<label>Максимальный расход в единицах контракта <input bind:value={maxSpend} disabled={busy} inputmode="numeric" /></label>{/if}
           <label><input type="checkbox" bind:checked={allowTrade} disabled={busy} /> Разрешить боту использовать эту заявку до истечения срока</label>
         {/if}
@@ -49,14 +50,15 @@
     <button disabled={!valid || busy} type="submit">{busy ? 'Запрос…' : 'Запросить расчёт'}</button>
   </form>
   {#if error}<p class="err" role="status">{error}</p>{/if}
+  {#if result && source === 'airswap' && result.details.allow_trade}<p>Проверенная заявка доступна торговому ядру до {new Date(result.expires * 1000).toLocaleTimeString()}.</p>{/if}
   {#if result && source === 'textile'}
     <p>Комиссия включена в расход и составляет {result.fee?.amount_raw} единиц входного токена.</p>
     {#if result.details.owner_admitted}<p>Заявка доступна торговому ядру до {new Date(result.expires * 1000).toLocaleTimeString()}.</p>{/if}
   {/if}
   {#if result && source !== 'fynd'}
     <p role="status">{result.block == null ? 'Оценка по опубликованным уровням.' : 'Расчёт на блоке ' + result.block + '.'} Расход {result.spent_raw} минимальных единиц {result.input}, выход {result.received_raw} минимальных единиц {result.output}, остаток входа {result.unspent_raw}.</p>
-    {#if result.details.type === 'wallet_simulation'}<p>Кошелёк выполнил обмен в симуляции. Газ — {result.details.gas_used} ед. Минимальная выплата владельца — {result.details.owner_minimum_raw}.</p>{/if}
-    {#if source === 'zeroex'}<p>Шаги 0x RFQ в расчёте агрегатора: {result.details.rfq_legs} из {result.details.legs.length}. Минимум API — {result.details.minimum_raw}.</p>{:else if source === 'bopamm'}<p>Строитель {result.details.builder}, блок {result.details.target_block}, слот {result.details.slot}. Срок кадра {new Date(result.expires * 1000).toISOString()}.</p>{:else if result.details.type !== 'wallet_simulation'}<p>Глубина книги до индивидуальной комиссии за подпись.</p>{/if}
+    {#if result.details.type === 'wallet_simulation'}<p>Кошелёк выполнил обмен в симуляции. Газ — {result.details.gas_used} ед. {#if result.details.owner_minimum_raw != null}Минимальная выплата владельца — {result.details.owner_minimum_raw}.{/if}</p>{/if}
+    {#if source === 'zeroex'}<p>Шаги 0x RFQ в расчёте агрегатора: {result.details.rfq_legs} из {result.details.legs.length}. Минимум API — {result.details.minimum_raw}.</p>{:else if source === 'bopamm'}<p>Строитель {result.details.builder}, блок {result.details.target_block}, слот {result.details.slot}. Срок кадра {new Date(result.expires * 1000).toISOString()}.</p>{:else if source === 'airswap' && result.details.type === 'indicative'}<p>Индикативная цена маркетмейкера. Для проверки выплаты запросите подписанную заявку.</p>{:else if result.details.type !== 'wallet_simulation'}<p>Глубина книги до индивидуальной комиссии за подпись.</p>{/if}
   {:else if result}
     <p role="status">Расчёт на блоке {result.block}. Отставание в момент проверки — {result.details.age_blocks} блоков. За {result.spent_raw} минимальных единиц {result.input} выход до удержания комиссий составил {result.received_raw} минимальных единиц {result.output}. Шагов агрегатора через подтверждённые пулы Fynd AMM — {result.details.recognized_fynd_swaps} из {result.details.swaps}.</p>
     {#if result.details.minimum_received_raw != null}<p>Минимум по данным Fynd — {result.details.minimum_received_raw}. Комиссия роутера — {result.details.router_fee_raw}, клиента — {result.details.client_fee_raw}. Все суммы в минимальных единицах выходного токена.</p>{/if}

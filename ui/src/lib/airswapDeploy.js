@@ -26,9 +26,33 @@ export async function checkExchange(provider,p,at) {
   if (runtimeKeccak(code)!==p.exchangeHash) throw Error('Код обменного контракта AirSwap изменился.');
 }
 
-export async function checkAirSwapOwner(provider,p,target,at) {
+// Every wallet can register its own module for the same settlement contract.
+export async function registeredOwnerModule(provider,p,rows) {
+  const candidates = rows.map(fields).filter(row =>
+    matches(p,row) && row.length===6 && address.test(row[4]) && row[5]===p.runtimeKeccak);
+  if (!candidates.length) return null;
+  const chain = await provider.request({method:'eth_chainId',params:[]});
+  if (BigInt(chain)!==BigInt(p.chainId)) throw Error('Выберите сеть модуля AirSwap в кошельке.');
+  const head=await provider.request({method:'eth_getBlockByNumber',params:['latest',false]});
+  if (!digest.test(head?.hash)) throw Error('Не удалось проверить блок размещения AirSwap.');
+  const at={blockHash:head.hash,requireCanonical:true};
+  for (const target of new Set(candidates.map(row=>row[4]))) {
+    const code=await provider.request({method:'eth_getCode',params:[target,at]});
+    if (code==='0x' || runtimeKeccak(code)!==p.runtimeKeccak) continue;
+    const owner=await readAirSwapOwner(provider,target,at);
+    if (owner===p.wallet) return target;
+  }
+  return null;
+}
+
+async function readAirSwapOwner(provider,target,at) {
   const result=await provider.request({method:'eth_call',params:[{to:target,data:'0x8da5cb5b'},at]});
-  if (result?.toLowerCase()!=='0x'+p.wallet.slice(2).padStart(64,'0')) throw Error('У этого модуля другой владелец.');
+  if (!/^0x0{24}[0-9a-f]{40}$/i.test(result)) throw Error('Не удалось проверить владельца модуля AirSwap.');
+  return '0x'+result.slice(-40).toLowerCase();
+}
+
+export async function checkAirSwapOwner(provider,p,target,at) {
+  if (await readAirSwapOwner(provider,target,at)!==p.wallet) throw Error('У этого модуля другой владелец.');
 }
 
 export function addModule(rows,p,mod) {

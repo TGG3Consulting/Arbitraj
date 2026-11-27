@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
 import {loadPlan,unsigned} from '../src/lib/walletDeployment.js';
-import {addModule,checkAirSwapOwner} from '../src/lib/airswapDeploy.js';
+import {addModule,checkAirSwapOwner,registeredOwnerModule} from '../src/lib/airswapDeploy.js';
+
+import {runtimeKeccak} from '../src/lib/uniswapV1Deploy.js';
 
 const wallet='0x'+'12'.repeat(20);
 const first='0x'+'23'.repeat(20);
@@ -33,3 +35,23 @@ for (const form of ['base-v5','ethereum-v4','ethereum-v5']) {
     await assert.rejects(checkAirSwapOwner({request},{...plan,wallet:second},first,at));
   });
 }
+
+test('Only an existing module for this owner and this generation suppresses a second CREATE',async()=>{
+  const sample=JSON.parse(readFileSync(new URL('../src/assets/airswap-ethereum-v5-create.json',import.meta.url)));
+  const code='0x6060',p={...sample,wallet,runtimeKeccak:runtimeKeccak(code)};
+  const base=[String(p.chainId),'v5',p.exchange,p.exchangeHash].join(' ');
+  const rows=addModule(addModule([base],p,first),p,second);
+  const at={blockHash:p.sourceBlock,requireCanonical:true};
+  const request=async ({method,params})=>{
+    if(method==='eth_chainId') return '0x1';
+    if(method==='eth_getBlockByNumber') return {hash:p.sourceBlock};
+    assert.deepEqual(params[1],at);
+    if(method==='eth_getCode') return code;
+    assert.equal(method,'eth_call');
+    return '0x'+(params[0].to===first?second:wallet).slice(2).padStart(64,'0');
+  };
+  assert.equal(await registeredOwnerModule({request},p,rows),second);
+  assert.equal(await registeredOwnerModule({request},p,rows.slice(0,2)),null);
+  await assert.rejects(registeredOwnerModule({request:async q=>q.method==='eth_chainId'?'0x2105':request(q)},p,rows));
+  await assert.rejects(registeredOwnerModule({request:async q=>{if(q.method==='eth_call') throw Error('reorg');return request(q);}},p,rows),/reorg/);
+});

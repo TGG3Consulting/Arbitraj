@@ -4,7 +4,7 @@
   import {deploymentScope} from '../lib/deploymentScope.js';
   import {setValue,store} from '../lib/settings.svelte.js';
   import {loadPlan,estimate,send,deployed} from '../lib/walletDeployment.js';
-  import {addModule} from '../lib/airswapDeploy.js';
+  import {addModule,registeredOwnerModule} from '../lib/airswapDeploy.js';
 
   let {venue,wallet,chain,version,load}=$props();
   const scope={kind:'Venue',get id(){return venue;}};
@@ -35,9 +35,16 @@
     const record=pending();
     if (record?.hash) hash=record.hash;
   }
+  async function alreadyRegistered(a,p){
+    const existing=await registeredOwnerModule(provider(),p,a.settings.rows);
+    a.check();
+    if (existing){priced=null;message='Для этого кошелька уже зарегистрирован модуль '+existing+'.';}
+    return Boolean(existing);
+  }
   async function price(){
     const {a,p}=await context();
     if (a.read()) throw Error('Уже есть отправка. Проверьте исходный хеш или замену с тем же nonce.');
+    if (await alreadyRegistered(a,p)) return;
     const value=await estimate(provider(),p);a.check();priced=value;
   }
   async function submit(){
@@ -46,6 +53,7 @@
     await navigator.locks.request(a.key,{ifAvailable:true},async lock=>{
       a.check();
       if (!lock || a.read()) throw Error('Размещение уже начато.');
+      if (await alreadyRegistered(a,p)) return;
       const h=await send(provider(),p,budget,a.beforeOrAfterSend);
       if(a.active()){hash=h;priced=null;message='Транзакция отправлена. После финализации проверьте хеш.';}
     });

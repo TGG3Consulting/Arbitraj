@@ -23,6 +23,7 @@ def wallets(reader,book):
         "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
     def rpc(_url,method,params):
         assert method=="eth_simulateV1" and params[-1]==tag
+        params[0]["blockStateCalls"][0]["blockOverrides"]={"time":hex(int(reader.header["timestamp"],16)+12)}
         return reader.one(method,params)
     def run(calls):
         return simulate_block(None,tag,env,calls,read_rpc=rpc)
@@ -55,13 +56,21 @@ def wallets(reader,book):
         before=values(trials[at-4:at]);after=values(trials[at+1:]);spent=before[0]-after[0];received=after[1]-before[1]
         assert 0<spent<=size and 0<received and before[2:]==after[2:]==[0,0]
         paid=swap(received,deadline)
-        checks=run(base+[swap(received+1,deadline),swap(received,1),*reads,paid,*reads])
-        exact=checks[at+6]
-        assert checks[at]["status"]==checks[at+1]["status"]=="0x0" and exact["status"]=="0x1"
-        assert values(checks[at+2:at+6])==before and values(checks[-4:])==after
+        checks=[run(base+[action,*reads]) for action in (swap(received+1,deadline),swap(received,1),paid)]
+        above,late,exact=[r[at] for r in checks]
+        outcomes=[]
+        for scenario in checks:
+            assert values(scenario[at-4:at])==before
+            final=values(scenario[-4:])
+            outcomes.append(dict(status=scenario[at]["status"],spent=str(before[0]-final[0]),
+                                 received=str(final[1]-before[1]),error=scenario[at].get("error")))
+            if scenario[at]["status"]=="0x0": assert final==before
+        if [v["status"] for v in outcomes]!=["0x0","0x0","0x1"] or values(checks[-1][-4:])!=after:
+            return dict(refusal="wallet minimum or deadline differs",requested=str(size),loose_received=str(received),
+                        input=a,output=b,quote=quoted,controls=outcomes),None
         return dict(input=a,output=b,requested=str(size),spent=str(spent),received=str(received),
-                    gas=int(exact["gasUsed"],16),approval_gas=int(checks[len(prefix)]["gasUsed"],16),
-                    upper=checks[at]["error"],expired=checks[at+1]["error"],transaction=paid,logs=exact["logs"],quote=quoted),prefix+[permit,paid]
+                    gas=int(exact["gasUsed"],16),approval_gas=int(checks[-1][len(prefix)]["gasUsed"],16),
+                    upper=above["error"],expired=late["error"],transaction=paid,logs=exact["logs"],quote=quoted),prefix+[permit,paid]
     rows=[]
     for m in book["markets"]:
         cash=next((a for a in [WETH,*STABLES] if a in m["tokens"]),None)

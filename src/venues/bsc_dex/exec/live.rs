@@ -76,6 +76,10 @@ pub async fn share(
         let [hop]=p.hops.as_mut_slice() else{return Err(ctx.err(ErrorCode::NoRoute,"MarSwap: ожидался прямой путь"))};
         hop.entry=e.clone();return Ok(p);
     }
+    if let ([h],[e])=(hops,found.as_slice())
+        && let Some(crate::core::types::RouterFeeMode::YieldBasis{target,native,principal:Some(amount),v5,..})=h.fee_mode {
+        return Box::pin(super::yield_basis_requote::path(v,e,qty,direct_mode,(target,native,amount,v5))).await;
+    }
     let mut p=eval(v, &found, qty, direct_mode, th).await?;
     if let [e]=found.as_slice() && super::carbon_direct::enabled(e){
         Box::pin(super::carbon_direct::adjust(ctx,&mut p,hops,v.side==crate::core::types::Side::Buy)).await?;

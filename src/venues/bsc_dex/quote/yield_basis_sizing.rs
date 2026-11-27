@@ -17,7 +17,7 @@ use crate::{
         math::full_math::mul_div_up,
         node::rpc,
         num,
-        pools::{dagrow, registry::Entry, yield_basis, yield_basis_quotes},
+        pools::{dagrow, registry::Entry, yield_basis_quotes},
     },
 };
 use alloy_primitives::{Address, U256};
@@ -122,7 +122,7 @@ pub(super) async fn paid(
             mul_div_up(unit, want, nominal).ok_or_else(fail)?.min(cap)
         }
     };
-    let mut amount = seed.max(U256::ONE);
+    let amount = seed.max(U256::ONE);
     // Without client currency-scoped principal, a wallet balance cannot be
     // treated as permission to raise the source amount. Limit any correction
     // to the quote's configured slippage on the initial source estimate.
@@ -136,28 +136,51 @@ pub(super) async fn paid(
             .ok_or_else(fail)?;
         num::to_units(budget, i.usdt_dec).ok_or_else(fail)?.min(cap)
     };
+    choose_funded(want, amount, cap, |amount| measure(amount, false), fail).await
+}
+
+async fn choose_funded<F, Fut>(
+    want: U256,
+    mut amount: U256,
+    cap: U256,
+    measure: F,
+    fail: impl Fn() -> crate::gateway::errors::GatewayError,
+) -> GatewayResult<Fill>
+where
+    F: Fn(U256) -> Fut,
+    Fut: std::future::Future<Output = GatewayResult<Fill>>,
+{
     let mut best = None;
     // Bound RPC work independently of decimals. Keep the cheapest sufficient
     // sampled debit even if a smaller candidate fails a debt/policy limit.
     let mut attempted = [U256::ZERO; 4];
     for n in 0..attempted.len() {
+        // A nonlinear curve can remain below target after several proportional
+        // updates even when an authorized, funded amount would meet it.
+        if n + 1 == attempted.len() && best.is_none() {
+            amount = cap;
+        }
         if amount.is_zero() || amount > cap || attempted[..n].contains(&amount) {
             break;
         }
         attempted[n] = amount;
-        let fill = match measure(amount, false).await {
+        let fill = match measure(amount).await {
             Ok(f) => f,
-            Err(e)
-                if best.is_some()
-                    && matches!(e.code, ErrorCode::SwapReverted | ErrorCode::QuoteMismatch) =>
-            {
-                break;
+            Err(e) if matches!(e.code, ErrorCode::SwapReverted | ErrorCode::QuoteMismatch) => {
+                if best.is_some() {
+                    break;
+                }
+                if amount == cap || attempted[..=n].contains(&cap) {
+                    return Err(e);
+                }
+                amount = cap;
+                continue;
             }
             Err(e) => return Err(e),
         };
         let got = fill.received;
         if fill.charged != amount {
-            return Err(yield_basis::bad(ctx));
+            return Err(fail());
         }
         if got >= want
             && best
@@ -180,6 +203,32 @@ pub(super) async fn paid(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn an_executable_client_cap_is_tested_for_a_strongly_curved_market() {
+        let want = U256::from(39u64);
+        let cap = U256::from(1560u64);
+        let measure = |amount| {
+            std::future::ready(Ok(Fill {
+                charged: amount,
+                received: amount * U256::from(40u64) / (U256::from(40u64) + amount),
+                swap_gas: 1,
+                approval: (0, 0),
+            }))
+        };
+        let fill = choose_funded(want, U256::from(40u64), cap, measure, || {
+            panic!("known funded curve")
+        })
+        .await
+        .unwrap();
+        assert_eq!((fill.charged, fill.received), (cap, want));
+        let smaller = cap - U256::ONE;
+        let err = || crate::gateway::errors::GatewayError::new(ErrorCode::NoRoute, None, "cap");
+        assert!(
+            choose_funded(want, U256::from(40u64), smaller, measure, err)
+                .await
+                .is_err()
+        );
+    }
     #[test]
     fn funded_amount_correction_is_capped_and_rounds_towards_sufficient_input() {
         let u = U256::from;

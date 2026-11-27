@@ -124,7 +124,9 @@ pub(super) async fn option(
         super::v2_wallet_sim::Wire::AntfarmOutput(t)=>Some(RouterFeeMode::AntfarmProceeds{target:t.module,tier:t.funding,loan:t.use_loan}),
         super::v2_wallet_sim::Wire::Antfarm(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.module}),
         super::v2_wallet_sim::Wire::Bundles(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.target}),
-        super::v2_wallet_sim::Wire::YieldBasis(t)=>Some(RouterFeeMode::YieldBasis{target:t.target,native:t.native,native_cash:t.native && super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt)}),
+        super::v2_wallet_sim::Wire::YieldBasis(t)=>Some(RouterFeeMode::YieldBasis{target:t.target,native:t.native,native_cash:t.native && super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt),principal:measured.as_ref().map(|f|f.charged),v5:None}),
+        super::v2_wallet_sim::Wire::V5(step) if measured.is_some() && c.entry.family.variant==super::super::pools::family_variant::Variant::YieldBasis =>
+            Some(RouterFeeMode::YieldBasis{target:step.pool,native:false,native_cash:false,principal:measured.as_ref().map(|f|f.charged),v5:Some(execution.target)}),
         super::v2_wallet_sim::Wire::BalancerV1(t)=>Some(RouterFeeMode::BalancerV1{
             target:t.target,native:t.native,native_cash:t.native && super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt),desired:t.desired}),
         super::v2_wallet_sim::Wire::BancorV3(t)=>Some(RouterFeeMode::BancorV3{target:t.contract,module:t.module_hash.is_some(),exempt:t.exemption,desired:t.desired,native:t.native_wallet,native_cash:t.native_wallet && super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt)}),

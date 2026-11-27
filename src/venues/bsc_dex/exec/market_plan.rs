@@ -296,7 +296,12 @@ pub(super) fn router_shape(
         if direct && route.legs.len()==1 && (native_asset || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)) && q.reg.entry(&hop.pool).is_some_and(|e|e.family.variant.flux_native()) {return Ok(());}
         return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Omni Flux: поручение требует физический ETH и один рынок"));
     }
-    if let [hop]=leg.hops.as_slice() && let Some(crate::core::types::RouterFeeMode::YieldBasis{native,..})=hop.fee_mode {
+    if let [hop]=leg.hops.as_slice() && let Some(crate::core::types::RouterFeeMode::YieldBasis{native,v5,..})=hop.fee_mode {
+        if let Some(expected)=v5 {
+            if !direct && !native && route.mode==crate::core::types::RouteMode::Graph && route.legs.len()==1
+                && super::executor::takes(&q.ctx,&q.reg,route,native_asset)?==Some(expected) {return Ok(());}
+            return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"YieldBasis: изменился выбранный исполнитель V5"));
+        }
         if direct && route.legs.len()==1 && native==(native_asset || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash))
             && q.reg.entry(&hop.pool).is_some_and(|e|e.family.variant==Variant::YieldBasis){return Ok(());}
         return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"YieldBasis: изменилась валюта кошелька"));

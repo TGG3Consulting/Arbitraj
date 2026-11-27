@@ -114,12 +114,10 @@ pub(super) async fn landed(
     let queue = release_if_ours(p, hash, nonce, false).await;
     match SwapCtx::of(pend).filter(SwapCtx::complete) {
         Some(c) => {
-            if let Some(proof)=&c.antfarm && r.status.to::<u64>()==1{proof.included(&p.ctx,hash,&r).await.map_err(|e|{let e=match &c.chain {Some(chain)=>e.with_tx(chain.clone()),None=>e};c.attach(e)})?;}
-            if let Some(proof)=&c.temple && r.status.to::<u64>()==1{proof.included(&p.ctx,hash,&r).await.map_err(|e|{let e=match &c.chain {Some(chain)=>e.with_tx(chain.clone()),None=>e};c.attach(e)})?;}
-            if let Some(proof)=&c.carbon && r.status.to::<u64>()==1 {proof.included(&p.ctx,hash,&r).await.map_err(|e|{let e=match &c.chain {Some(chain)=>e.with_tx(chain.clone()),None=>e};c.attach(e)})?;}
-            if let Some(proof)=&c.mint_club && r.status.to::<u64>()==1 {proof.included(&p.ctx,hash,&r).await.map_err(|e|{let e=match &c.chain {Some(chain)=>e.with_tx(chain.clone()),None=>e};c.attach(e)})?;}
-            if let Some(proof)=&c.ekubo && r.status.to::<u64>()==1 {proof.included(&p.ctx,hash,&r).await.map_err(|e|{let e=match &c.chain {Some(chain)=>e.with_tx(chain.clone()),None=>e};c.attach(e)})?;}
-            if let Some(proof)=&c.vista && r.status.to::<u64>()==1 {proof.included(&p.ctx,hash,&r).await.map_err(|e| { let error = match &c.chain {Some(chain) => e.with_tx(chain.clone()),None => e}; c.attach(error) })?;}
+            super::exec::market_receipt::included(&c,&p.ctx,hash,&r).await.map_err(|e|{
+                let error=match &c.chain {Some(chain)=>e.with_tx(chain.clone()),None=>e};
+                c.attach(error)
+            })?;
             let out = swap_rebuild::rebuild(&p.ctx, req, &c, hash, r);
             tip_gas(p, c.chain.as_ref().and_then(|t| t.tip_hash), out).await
         }

@@ -151,12 +151,7 @@ pub async fn trade(
             None,
             prep.note.clone(),
         );
-        sc.vista = super::vista_direct::proof(&p);
-        sc.ekubo=p.ekubo_proof();
-        if let Some(super::plan::DirectCall::Antfarm(a))=p.direct_market(){sc.antfarm=Some(Box::new((*a).clone()));}
-        if let Some(super::plan::DirectCall::Temple(t))=p.direct_market(){sc.temple=Some(Box::new((*t).clone()));}
-        if let Some(super::plan::DirectCall::Carbon(c))=p.direct_market(){sc.carbon=Some(super::carbon_fact::Proof{call:(*c).clone(),payer:wallet});}
-        if let Some(super::plan::DirectCall::MintClub(call))=p.direct_market(){ sc.mint_club=Some(super::mint_club_fact::Proof{call,bond:call.protection.map_or(p.router,|v|v.bond),payer:wallet}); }
+        super::market_receipt::capture(&mut sc,&p,wallet);
         let min_out = p.min_total();
         let d = super::settlement_swap::with_parse(&sc, send_swap(env, &slot, p, guard))
             .await
@@ -170,23 +165,9 @@ pub async fn trade(
             tip_bnb: d.tip_bnb,
             ..sc
         };
-        if let Some(proof) = &sc.vista
-            && let Some(receipt) = &d.receipt
-            && receipt.status.to::<u64>() == 1
-        {
-            proof
-                .included(ctx, d.chain.hash, receipt)
-                .await
-                .map_err(|e| sc.attach(e.with_tx(d.chain.clone())))?;
-        }
-        if let Some(proof)=&sc.antfarm && let Some(r)=&d.receipt && r.status.to::<u64>()==1{proof.included(ctx,d.chain.hash,r).await.map_err(|e|sc.attach(e.with_tx(d.chain.clone())))?;}
-        if let Some(proof)=&sc.temple && let Some(r)=&d.receipt && r.status.to::<u64>()==1{proof.included(ctx,d.chain.hash,r).await.map_err(|e|sc.attach(e.with_tx(d.chain.clone())))?;}
-        if let Some(proof)=&sc.carbon && let Some(r)=&d.receipt && r.status.to::<u64>()==1{proof.included(ctx,d.chain.hash,r).await.map_err(|e|sc.attach(e.with_tx(d.chain.clone())))?;}
-        if let Some(proof)=&sc.mint_club && let Some(receipt)=&d.receipt && receipt.status.to::<u64>()==1 {
-            proof.included(ctx,d.chain.hash,receipt).await.map_err(|e|sc.attach(e.with_tx(d.chain.clone())))?;
-        }
-        if let Some(proof)=&sc.ekubo && let Some(receipt)=&d.receipt && receipt.status.to::<u64>()==1 {
-            proof.included(ctx,d.chain.hash,receipt).await.map_err(|e|sc.attach(e.with_tx(d.chain.clone())))?;
+        if let Some(receipt)=&d.receipt {
+            super::market_receipt::included(&sc,ctx,d.chain.hash,receipt).await
+                .map_err(|e|sc.attach(e.with_tx(d.chain.clone())))?;
         }
         let mut r = result::with_native_fact(
             ctx,

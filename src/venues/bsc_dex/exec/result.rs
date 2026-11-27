@@ -127,27 +127,8 @@ pub(super) fn with_native_fact(
                 .with_tx(d.chain));
         }
     };
-    let vista=proofs.and_then(|p|p.vista.as_ref());
-    let ekubo=proofs.and_then(|p|p.ekubo.as_ref());
-    let carbon=proofs.and_then(|p|p.carbon.as_ref());
-    let (spent, got) = if let Some(proof)=proofs.and_then(|p|p.antfarm.as_ref()){
-        proof.amounts(&r.logs,wallet,tin,tout).ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"Antfarm: выплата или списание по исходному поручению не подтверждены").with_tx(d.chain.clone()))?
-    }else if let Some(proof)=proofs.and_then(|p|p.temple.as_ref()){
-        proof.amounts(&r.logs,wallet,tin,tout).ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"TempleDAO: квитанция не подтвердила чистое списание и выплату исходной валюты").with_tx(d.chain.clone()))?
-    }else if let Some(proof)=carbon{
-        proof.amounts(&r.logs,wallet,tin,tout).ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"Carbon: не подтверждены исходные стратегии и чистая выплата").with_tx(d.chain.clone()))?
-    }else if let Some(proof)=proofs.and_then(|p|p.mint_club.as_ref()) {
-        proof.amounts(&r.logs,wallet,tin,tout).ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"Mint Club: расчёт по исходному поручению Bond не подтверждён").with_tx(d.chain.clone()))?
-    }else if let Some(proof)=ekubo {
-        proof.amounts(&r.logs,wallet,tin,tout).ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"Ekubo V2: лог Core не подтвердил выплату кошельку").with_tx(d.chain.clone()))?
-    }else if let Some(proof) = vista {
-        proof.amounts(&r.logs, wallet, tin, tout).ok_or_else(|| {
-            ctx.err(
-                ErrorCode::OutcomeUnknown,
-                "Квитанция EtherVista не подтверждает чистую выплату",
-            )
-            .with_tx(d.chain.clone())
-        })?
+    let (spent,got)=if let Some(saved)=proofs.and_then(super::market_receipt::first) {
+        saved.amounts(&r,wallet,tin,tout).map_err(|why|ctx.err(ErrorCode::OutcomeUnknown,why).with_tx(d.chain.clone()))?
     } else {
         (
             fill::moved(&r, tin, Some(wallet), None),
@@ -160,7 +141,7 @@ pub(super) fn with_native_fact(
         (spent, got)
     };
     // Нативная BNB: на кошелёк приходит (или уходит с value) нативный BNB — событий Transfer кошелька нет.
-    let coins_u = if native_routers.is_empty() || vista.is_some() || ekubo.is_some() || carbon.is_some() {
+    let coins_u = if native_routers.is_empty() || proofs.is_some_and(|p|p.vista.is_some() || p.ekubo.is_some() || p.carbon.is_some()) {
         coins_u
     } else {
         let wbnb = if req.side == Side::Buy { tout } else { tin };
@@ -185,7 +166,7 @@ pub(super) fn with_native_fact(
     };
     if crate::gateway::settlement_intent::capturing() {
         let quote_token = if req.side == Side::Buy { tin } else { tout };
-        let cash=if carbon.is_some(){
+        let cash=if proofs.is_some_and(|p|p.carbon.is_some()){
             // Подтверждённая сумма Carbon берётся из подписанного поручения и фактического расчёта, включая нативный ETH.
             Some(usdt)
         }else{super::settlement_swap::amount(&r,wallet,quote_token,req.side,usdt_dec)};

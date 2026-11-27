@@ -1,0 +1,107 @@
+//! Разбор исполненного прямого обмена, в том числе после восстановления.
+//! Семейство задаётся сохранённым поручением кошелька, а не текущими настройками.
+use super::super::{ctx::Ctx, send::track::Receipt};
+use super::{
+    plan::{DirectCall, Plan},
+    swap_ctx::SwapCtx,
+};
+use crate::gateway::errors::GatewayResult;
+use alloy_primitives::{Address, B256, U256};
+
+pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
+    c.vista = super::vista_direct::proof(p);
+    c.ekubo = p.ekubo_proof();
+    match p.direct_market() {
+        Some(DirectCall::Antfarm(a)) => c.antfarm = Some(Box::new((*a).clone())),
+        Some(DirectCall::Temple(t)) => c.temple = Some(Box::new((*t).clone())),
+        Some(DirectCall::Carbon(a)) => {
+            c.carbon = Some(super::carbon_fact::Proof {
+                call: (*a).clone(),
+                payer: wallet,
+            })
+        }
+        Some(DirectCall::MintClub(call)) => {
+            c.mint_club = Some(super::mint_club_fact::Proof {
+                call,
+                bond: call.protection.map_or(p.router, |v| v.bond),
+                payer: wallet,
+            })
+        }
+        _ => {}
+    }
+}
+#[derive(Clone, Copy)]
+pub(super) enum Saved<'a> {
+    Antfarm(&'a super::antfarm_wallet::Proof),
+    Temple(&'a super::temple_wallet::Proof),
+    Carbon(&'a super::carbon_fact::Proof),
+    MintClub(&'a super::mint_club_fact::Proof),
+    Ekubo(&'a super::ekubo_v2_fact::Proof),
+    Vista(&'a super::vista_fact::Proof),
+}
+fn entries(c: &SwapCtx) -> impl Iterator<Item = Saved<'_>> {
+    [
+        c.antfarm.as_deref().map(Saved::Antfarm),
+        c.temple.as_deref().map(Saved::Temple),
+        c.carbon.as_ref().map(Saved::Carbon),
+        c.mint_club.as_ref().map(Saved::MintClub),
+        c.ekubo.as_ref().map(Saved::Ekubo),
+        c.vista.as_ref().map(Saved::Vista),
+    ]
+    .into_iter()
+    .flatten()
+}
+pub(super) fn first(c: &SwapCtx) -> Option<Saved<'_>> {
+    entries(c).next()
+}
+pub(in crate::venues::bsc_dex) async fn included(
+    c: &SwapCtx,
+    ctx: &Ctx,
+    hash: B256,
+    receipt: &Receipt,
+) -> GatewayResult<()> {
+    if receipt.status.to::<u64>() != 1 {
+        return Ok(());
+    }
+    for saved in entries(c) {
+        match saved {
+            Saved::Antfarm(p) => p.included(ctx, hash, receipt).await?,
+            Saved::Temple(p) => p.included(ctx, hash, receipt).await?,
+            Saved::Carbon(p) => p.included(ctx, hash, receipt).await?,
+            Saved::MintClub(p) => p.included(ctx, hash, receipt).await?,
+            Saved::Ekubo(p) => p.included(ctx, hash, receipt).await?,
+            Saved::Vista(p) => p.included(ctx, hash, receipt).await?,
+        }
+    }
+    Ok(())
+}
+impl Saved<'_> {
+    pub(super) fn amounts(
+        self,
+        r: &Receipt,
+        wallet: Address,
+        input: Address,
+        output: Address,
+    ) -> Result<(U256, U256), &'static str> {
+        match self {
+            Self::Antfarm(p) => p
+                .amounts(&r.logs, wallet, input, output)
+                .ok_or("Antfarm: выплата или списание по исходному поручению не подтверждены"),
+            Self::Temple(p) => p.amounts(&r.logs, wallet, input, output).ok_or(
+                "TempleDAO: квитанция не подтвердила чистое списание и выплату исходной валюты",
+            ),
+            Self::Carbon(p) => p
+                .amounts(&r.logs, wallet, input, output)
+                .ok_or("Carbon: не подтверждены исходные стратегии и чистая выплата"),
+            Self::MintClub(p) => p
+                .amounts(&r.logs, wallet, input, output)
+                .ok_or("Mint Club: расчёт по исходному поручению Bond не подтверждён"),
+            Self::Ekubo(p) => p
+                .amounts(&r.logs, wallet, input, output)
+                .ok_or("Ekubo V2: лог Core не подтвердил выплату кошельку"),
+            Self::Vista(p) => p
+                .amounts(&r.logs, wallet, input, output)
+                .ok_or("Квитанция EtherVista не подтверждает чистую выплату"),
+        }
+    }
+}

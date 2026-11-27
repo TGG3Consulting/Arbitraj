@@ -27,7 +27,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    каждое расхождение с причиной. Релиз готов только при нуле необъяснённых расхождений и закрытых пунктах R-*.
 >    Я проверяю прогон и только после этого сообщаю владельцу «релиз готов».
 
-Последний просмотренный коммит: `6dbbc3b6` (27.11.2026).
+Последний просмотренный коммит: `38f97d71` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -2254,3 +2254,46 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
   - Константы (`UNIT`, `PRECISION`, `MAX_IN_RATIO`, `MAX_OUT_RATIO`) названы и снабжены ссылкой на исходник `balancer-core` (BNum / BMath / BPool, конкретный коммит). Это константы протокола, допустимо.
   - В торговый путь пока не подключён (используется только в тестах).
 - Плюс скрипты записи. BSC не затронут. ✅
+
+### 26d57688 … 38f97d71 (64 коммита) — проверено одним разбором
+
+Сторож с 12:05 до 13:47 не работал по моей ошибке (запуск, который система закрывает после ответа). Коммиты разобраны суммарным диффом. Новые DEX: Balancer V1, Bancor V2.1 / legacy, YieldBasis, Raindex (V3–V7, денежные ордера), Epsilon, Angstrom, Maverick V2, Alien / Carbon на Base, iZiSwap / Kyber Elastic (реестры комиссий), SharkSwap.
+
+**Ядро и шлюз (касается BSC):**
+- `core/profit.rs` + `gateway/quote_stage.rs`: финальный расчёт выполняется внутри `with_buy_budget(venue, USDT, budget)` (task-local). Единственный читатель `buy_budget` — `quote/yield_basis_sizing.rs`, так что на BSC значение не используется. ✅
+- Новые варианты `PoolState` (`YieldBasisLev`, `YieldBasisPool`, `BalancerV1`, `BancorLegacy`) и `RouterFeeMode` (`YieldBasis`, `BalancerV1`) — дописывание, старые записи читаются. ✅
+
+**Общие файлы BSC — проверены на эквивалентность:**
+- **`pools/load.rs`** (1025 → 1390 строк): особые случаи семейств вынесены из `read` в диспетчер `state` (у каждого своя boxed future — экономия стека, продолжение c8112510). Сравнил нормализованные строки старого `read` и нового `state + read`. Отличаются только обёртки `Box::pin(async move { … })`, перенос `let tag` и новые семейства. Общий путь V2 / V3 / Algebra и `known_spacing` (THENA) — без изменений. ✅
+- `quote/route_paths.rs`, `route_best.rs`: добавлен `route_hops::physical_overlap`.
+  - Его первая часть — `sites.contains(edge.pool.reference)`. `sites` содержит только `Multi`-ссылки многомонетных пулов, и для них это уже покрывалось `shared_market`.
+  - Вторая часть закрыта `Variant::YieldBasis`.
+
+  На BSC маршруты те же. ✅
+- `quote/verify.rs` / `verify_decide.rs`: выделен `judge`. `decide` вызывает его с той же свежей котировкой. Ветка «измеренной» выплаты — только для `yield_basis_requote::selected`. ✅
+- `quote/direct.rs`: новые `BuyWire::BalancerTarget` / `Measured` используются только новыми Wire. `Forward` прежний. ✅
+- `exec/executor/mod.rs`: `fits` → `entry::route_fits`. Для не-YieldBasis — тот же код (singleton → `fits_ok`, иначе `supported`). ✅
+- `exec/registered_v3_wallet.rs`, `quote/registered_v3_pricing.rs`, `check/registered_v3.rs`: Maverick V2 через путь `RegisteredV3`.
+  - При `maverick = false` (BSC `RegisteredUniV3` / `VvsV3`): topics `[sig, router, wallet]` прежние, `parties = true`, комиссия из `fee_pips`.
+  - `prepaid = true`.
+  - Ветки отмены и подтверждения (`trade_direct` `cancel_hash`, `resolve` `verify_before_release`, `market_receipt` с nonce) закрыты `proof.market.maverick`.
+
+  ✅
+- **`hashflow/*` (BSC):** Raindex и Epsilon добавлены в общий путь RFQ. Ветка Hashflow `(Some, None, None, None, None)` и её `Gate` прежние. Новые «смешанные» билеты (`mixed`) — только для Raindex / Epsilon. ✅
+- `exec/settlement_swap.rs`, `venue.rs`, `resolve*.rs`: ранние ветки по `mixed_ticket` Raindex / Epsilon. Без билета — прежний путь. ✅
+- `pools/created*.rs`, `factory_scan.rs`, `families.rs`, `family_variant.rs`, `launch_*`, `per_block.rs`, `steps.rs`, `pool_quote.rs`, `depth_band.rs`, `v2_*`, `vista_*`, `module_pricing.rs`: ветки по новым вариантам и состояниям. `launch()` дополнен `Angstrom`, `exact_router()` — `MaverickTwoRouter`. Для BSC — без изменений. ✅
+
+**Хардкоды:** в новых модулях адресов нет. Две строки WETH в `balancer_v1_wallet.rs` / `yield_basis_wallet.rs` — внутри `#[cfg(test)]`. URL Raindex — из `raindex.books` (только https, без учётных данных). Все 14 новых настроек имеют разделы в SETTINGS_CASES. ✅
+
+**Новые контракты** (`BancorLegacyAdapter`, `EpsilonWallet`, `RaindexCashWallet`, `YieldBasisAdapter`) — разобраны:
+- роли закреплены реестром или хэшем кода, сверка и в конструкторе, и при каждом вызове;
+- деньги списываются только у вызывающего;
+- проверяется зачисление ровно `amount` / `cap`;
+- разрешения обнуляются;
+- сдача возвращается;
+- проверяются приход ≥ минимума и равенство расхода плательщика;
+- на контракте нет остатков;
+- защита от повторного входа;
+- ETH принимается только от WETH.
+
+Способа увести деньги не нашёл. ✅

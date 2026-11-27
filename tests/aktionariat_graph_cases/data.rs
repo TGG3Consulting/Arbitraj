@@ -12,6 +12,7 @@ pub(super) fn market(broker: Address, d: &Value, curve: &Value) -> Entry {
     let cash = addr(d, "cash");
     let share = addr(d, "share");
     let mut e = pair(broker, share, cash, 1, 1);
+    e.pool.venue = arb::core::types::VenueId("eth_dex".into());
     e.family = families::make("aktionariat-ethereum", "aktionariat").unwrap();
     e.pool.family = e.family.id.into();
     let config: Vec<_> = curve["setting"]
@@ -42,6 +43,7 @@ pub(super) fn market(broker: Address, d: &Value, curve: &Value) -> Entry {
 }
 pub(super) fn bridge_pool(reference: Address, coin: Address, counter: Address, r: &Value) -> Entry {
     let mut e = pair(reference, coin, counter, 1, 1);
+    e.pool.venue = arb::core::types::VenueId("eth_dex".into());
     e.family = families::make("uniswap_v3", "uniswap_v3").unwrap();
     e.pool.family = e.family.id.into();
     e.pool.kind = e.family.kind;

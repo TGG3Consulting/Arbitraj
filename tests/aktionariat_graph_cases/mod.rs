@@ -82,7 +82,7 @@ async fn three_hop_graph_matches_both_whole_share_payments_and_original_executor
     }
     let p = Parts::new(ctx);
     p.tokens.set(&[Asset {
-        chain: Some("ethereum".into()),
+        chain: Some(arb::core::types::ChainId("ethereum".into())),
         ticker: "USDT".into(),
         contract: Some(usd),
     }]);

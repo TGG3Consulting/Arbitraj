@@ -101,7 +101,7 @@ pub async fn trade(
         coin_dec: decs.0,
         usdt_dec: decs.1,
     };
-    let (legs, mut note, exp, mut favour) =
+    let (mut legs, mut note, exp, mut favour) =
         prep_refetch::prepare(&v, &req, route, &verified.amount_out_min, decs).await?;
     if !super::super::super::pools::nami::path_ok(legs.iter().flatten().map(|s| &s.entry)) {
         return Err(ctx.err(
@@ -163,7 +163,8 @@ pub async fn trade(
     if approved.is_some() {
         // Решение 121 B1: разрешение ждало блока — доли, минимумы и вызов устарели: свежая верификация и сборка.
         let mins = verify_gate::gate(q, env, &req, route).await?.amount_out_min;
-        let (legs, fresh, exp, fav) = prep_refetch::prepare(&v, &req, route, &mins, decs).await?;
+        let (fresh_legs, fresh, exp, fav) = prep_refetch::prepare(&v, &req, route, &mins, decs).await?;
+        legs = fresh_legs;
         note = fresh;
         favour = fav;
         diag = sim::legs_text(&legs, &exp, &req, decs);

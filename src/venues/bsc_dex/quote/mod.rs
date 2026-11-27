@@ -344,8 +344,8 @@ impl Quoting {
         let usdt_ticker = ctx.text("venue.quote_asset")?;
         // Выбор маршрута — счёт CPU: вне рабочих потоков tokio (quote/cpu.rs, решение 129 часть 2), срок расчёта
         // ядра срабатывает вовремя. Логика выбора — quote/routing.rs (перенесена без изменений).
-        let input = routing::Input {
         let ambient_stamp=self.heads.ambient_stamp();
+        let input = routing::Input {
             asset: asset.clone(),
             side,
             qty,

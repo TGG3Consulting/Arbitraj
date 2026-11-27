@@ -198,37 +198,5 @@ impl Proof {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::Value;
-    #[test]
-    fn canonical_wire_and_terminal_transfers_match_both_generations_and_currencies() {
-        let wrapped = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
-            .parse()
-            .unwrap();
-        for (bytes,stable) in [(include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/defiplaza_multi_protected_ethereum.json.gz").as_slice(),false),
-            (include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/defiplaza_stable_protected_ethereum.json.gz").as_slice(),true)]{
-            let book:Value=serde_json::from_reader(flate2::read::GzDecoder::new(bytes)).unwrap();
-            let addr=|v:&Value|v.as_str().unwrap().parse::<Address>().unwrap();
-            let payer=addr(&book["payer"]);
-            let mut count=0;
-            for row in book["fills"].as_array().unwrap().iter().filter(|r|r["mode"]!="v5"){
-                let data:Bytes=row["action"]["data"].as_str().unwrap().parse().unwrap();
-                let wire=abi::IModule::executeCall::abi_decode_validate(&data).unwrap();
-                let normalized=|a:Address|if a.is_zero(){wrapped}else{a};
-                let proof=Proof{terms:Terms{pool:addr(&book["pool"]),target:addr(&book["module"]),wrapped,native:row["mode"]=="native",stable,
-                    module_hash:book["runtime"].as_str().unwrap().parse().unwrap()},payer,input:normalized(wire.input),output:normalized(wire.output),
-                    maximum:wire.amount,minimum:wire.minimum,deadline:wire.deadline};
-                assert_eq!(proof.data(),data);
-                let logs:Vec<Log>=serde_json::from_value(row["logs"].clone()).unwrap();
-                assert_eq!(proof.amounts(&logs,payer,proof.input,proof.output),Some((proof.maximum,proof.minimum)));
-                assert!(proof.amounts(&logs,Address::ZERO,proof.input,proof.output).is_none());
-                let mut duplicate=logs.clone();duplicate.extend_from_slice(&logs);
-                assert!(proof.amounts(&duplicate,payer,proof.input,proof.output).is_none());
-                assert!(row["zero_min"].is_object() && row["plus_one"].is_object() && row["expiry"].is_object());
-                count+=1;
-            }
-            assert_eq!(count,12);
-        }
-    }
-}
+#[path = "defiplaza_wallet_tests.rs"]
+mod tests;

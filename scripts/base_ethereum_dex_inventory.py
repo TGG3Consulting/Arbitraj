@@ -2098,6 +2098,12 @@ def tables(network, snapshots, profiles):
                     "Покупки на 1 и на 10 USDC дали по 147 raw USDT. В StablePlaza доступны TUSD, DAI, USDC и USDT. "
                     "Комиссия из SPconfig равна 10 б.п. У 12 выплат проверены обе стороны кошелька, газ и откат при повышении "
                     "минимума на 1 raw. 1 USDC дал 1,000520 USDT до расходов на газ. "
+                    "При продаже 1 USDT кошелёк получил 0,997478 USDC. После размещения модуля владельцем доступны прямой вызов и шаг V5. "
+                    "На тех же суммах 8 прямых ERC20 обменов Multi потребовали на 63 137–69 651 gas меньше V5, "
+                    "12 Stable — на 66 074–72 964 gas меньше V5. Одобрение учитывается отдельно. "
+                    "Ещё 4 прямые выплаты Multi прошли с исходным или конечным ETH. "
+                    "[Защищённые вызовы Multi](../tests/data/first_run_dex_2026-11-26/defiplaza_multi_protected_ethereum.json.gz) · "
+                    "[Защищённые вызовы Stable](../tests/data/first_run_dex_2026-11-26/defiplaza_stable_protected_ethereum.json.gz) · "
                     "[MultiPlaza](../tests/data/first_run_dex_2026-11-26/defiplaza_multi_ethereum.json.gz) · "
                     "[StablePlaza](../tests/data/first_run_dex_2026-11-26/defiplaza_stable_ethereum.json.gz).")
         if str(row["id"]) == "8322":

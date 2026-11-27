@@ -28,6 +28,14 @@ pub(crate) fn graph_target(ctx: &Ctx, e: &Entry) -> Option<Address> {
     };
     if !matches!(&e.pool.reference,crate::core::types::PoolRef::Multi{contract,token0,token1} if *contract==s.pool && [*token0,*token1]==s.tokens && s.tokens==[e.pool.token0,e.pool.token1])
         || !e.family.variant.defiplaza()
+        || e.family.variant.defiplaza_stable()
+            != matches!(
+                s.curve,
+                crate::core::types::defiplaza::DefiPlazaCurve::Stable { .. }
+            )
+        || !direct_module::configured(ctx, e.family.id)
+            .ok()?
+            .contains(&s.module_hash)
         || ctx.dex_addr("dex.factory", e.family.id).ok()? != s.pool
         || ctx.dex_addr("dex.router", e.family.id).ok()? != s.module
         || s.module.is_zero()
@@ -51,9 +59,7 @@ pub(crate) fn terms(
         crate::core::types::defiplaza::DefiPlazaCurve::Stable { .. }
     );
     let wrapped = ctx.addr("dex.native_wrapped")?;
-    let allowed = direct_module::configured(ctx, e.family.id)?;
-    if !allowed.contains(&s.module_hash)
-        || graph_target(ctx, e) != Some(target)
+    if graph_target(ctx, e) != Some(target)
         || !s.tokens.contains(&input)
         || native && (stable || !s.tokens.contains(&wrapped))
     {

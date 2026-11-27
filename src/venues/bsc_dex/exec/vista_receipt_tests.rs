@@ -197,3 +197,91 @@ fn rabbit_receipts_recover_the_payers_eth_and_friend_without_counting_router_inv
         }
     }
 }
+
+#[test]
+fn surge_native_recovers_raw_ether_and_token_payments_from_the_signed_market() {
+    use alloy::sol_types::SolCall;
+    let d: Value = serde_json::from_reader(GzDecoder::new(
+        &include_bytes!(
+            "../../../../tests/data/first_run_dex_2026-11-26/surge_ethereum_wallets.json.gz"
+        )[..],
+    ))
+    .unwrap();
+    let token = addr(&d["address"]);
+    let payer = addr(&d["sender"]);
+    let weth = Address::repeat_byte(2);
+    for row in d["cases"].as_array().unwrap() {
+        for (side, form, input, output, amount, paid) in [
+            (
+                "buy",
+                Form::SurgeEthIn,
+                weth,
+                token,
+                number(&row["input"]),
+                number(&row["bought"]),
+            ),
+            (
+                "sell",
+                Form::SurgeEthOut,
+                token,
+                weth,
+                number(&row["bought"]),
+                number(&row["received"]),
+            ),
+        ] {
+            let raw = &row[side];
+            let data: Bytes = serde_json::from_value(raw["calldata"]["data"].clone()).unwrap();
+            // The historical seller specified a gross minimum. Construct the smallest guaranteed
+            // wallet floor which encodes that exact signed minimum under the audited 90% bound.
+            let minimum = if side == "buy" {
+                paid
+            } else {
+                let gross = super::vista_wire::IVistaFlow::_sellCall::abi_decode(&data)
+                    .unwrap()
+                    .grossMinimum;
+                // Some gross values cannot be emitted by the conservative floor. The receipt still proves its original net.
+                (gross * U256::from(90)).div_ceil(U256::from(100))
+            };
+            let p = Proof {
+                call: Call {
+                    form,
+                    wrapped: weth,
+                    fee: U256::ZERO,
+                },
+                target: token,
+                wallet: payer,
+                input,
+                output,
+                amount,
+                minimum,
+                data_hash: keccak256(&data),
+            };
+            let logs: Vec<_> = raw["logs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|l| alloy::rpc::types::Log {
+                    inner: serde_json::from_value(l.clone()).unwrap(),
+                    ..Default::default()
+                })
+                .collect();
+            assert_eq!(p.amounts(&logs, payer, input, output), Some((amount, paid)));
+            assert_eq!(p.amounts(&logs, token, input, output), None);
+            let d = super::vista_wire::IVistaFlow::_sellCall::abi_decode(&data)
+                .map(|a| a.deadline)
+                .or_else(|_| {
+                    super::vista_wire::IVistaFlow::_buyCall::abi_decode(&data).map(|a| a.deadline)
+                })
+                .unwrap();
+            let signed = p.call.data(input, output, amount, p.minimum, payer, d);
+            let mut restored: Proof =
+                serde_json::from_value(serde_json::to_value(&p).unwrap()).unwrap();
+            restored.data_hash = keccak256(&signed);
+            assert!(restored.signed_data(&signed));
+            assert_eq!(
+                restored.amounts(&logs, payer, input, output),
+                Some((amount, paid))
+            );
+        }
+    }
+}

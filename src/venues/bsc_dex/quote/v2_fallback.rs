@@ -21,7 +21,7 @@ pub(super) async fn candidates(
     };
     let mut kinds = [false; 14];
     for e in &i.entries {
-        kinds[5] |= super::vista_pricing::is_vista(e) || (native && super::vista_pricing::native_router(e));
+        kinds[5] |= e.family.variant==super::super::pools::family_variant::Variant::Surge || super::vista_pricing::is_vista(e) || (native && super::vista_pricing::native_router(e));
         kinds[10] |= super::super::exec::carbon_direct::enabled(e);
         kinds[9] |= super::super::exec::mint_club_direct::enabled(e);
         kinds[8] |= super::ekubo_v2_pricing::enabled(e);
@@ -125,6 +125,7 @@ pub(super) async fn candidates(
 
 fn individual(e: &Entry, native: bool) -> bool {
     if super::super::exec::mint_club_direct::enabled(e) || super::super::exec::carbon_direct::enabled(e) {return true;}
+    if e.family.variant==super::super::pools::family_variant::Variant::Surge {return true;}
     if native && super::ekubo_v2_pricing::enabled(e) { return true; }
     if native {
         return super::vista_pricing::native_router(e);

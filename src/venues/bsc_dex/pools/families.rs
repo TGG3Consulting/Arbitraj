@@ -840,7 +840,8 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         }
         Proto::V2 if f.variant == Variant::Bundles => {
             list.extend(["dex.factory","dex.quoter","dex.factory_runtime_hash","dex.router_runtime_hash","dex.pool_code_hashes","dex.bundles_pair_runtime_hashes"]);
-            if f.executor_kind.is_some(){list.extend(["dex.router","dex.module_runtime_hashes"]);}
+            let direct=ctx.dex_list("dex.router_exact_tokens",f.id).is_ok_and(|rows|rows.len()>=2);
+            if !direct && f.executor_kind.is_some(){list.extend(["dex.router","dex.module_runtime_hashes"]);}
         }
         Proto::V2 if f.variant == Variant::Antfarm => list.extend(["dex.factory","dex.quoter","dex.factory_runtime_hash","dex.router_runtime_hash","dex.antfarm_fee_token","dex.pool_code_hashes","dex.antfarm_pair_runtime_hashes"]),
         Proto::V2 if f.variant==Variant::Surge=>{
@@ -945,7 +946,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         }
         Proto::InfinityCl | Proto::InfinityBin => {
             list.extend(["dex.pool_manager", "dex.vault", "dex.quoter"]);
-            if f.variant.flux_native() { list.extend(["dex.router","dex.module_runtime_hashes","dex.infinity_runtime_hashes"]); }
+            if f.variant.flux_native() { list.extend(["dex.universal_router","dex.permit2","dex.router_runtime_hash","dex.permit2_runtime_hash","dex.infinity_runtime_hashes"]); }
         }
         Proto::UniswapV4 if f.variant.launch() => {
             list.extend(["dex.pool_manager","dex.quoter","dex.state_view","dex.launch_roles","dex.launch_pool_keys"]);

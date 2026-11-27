@@ -1,7 +1,7 @@
 //! Виртуальные резервы кривой Surge и доступные средства на одной высоте Ethereum.
-use alloy_primitives::{Address,U256};
-use serde::{Deserialize,Serialize};
-#[derive(Clone,Debug,PartialEq,Eq,Serialize,Deserialize)]
+use alloy_primitives::{Address, U256};
+use serde::{Deserialize, Serialize};
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SurgeState {
     pub token: Address,
     pub wrapped: Address,

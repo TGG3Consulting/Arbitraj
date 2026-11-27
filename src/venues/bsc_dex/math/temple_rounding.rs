@@ -120,7 +120,12 @@ mod tests {
                     for len in [1, 2, 7, 17, 40] {
                         let minimum = (0..len).map(|k| (a * k + b) % m).min().unwrap();
                         assert_eq!(
-                            min_residue(a.into(), b.into(), m.into(), len.into()),
+                            min_residue(
+                                U256::from(a),
+                                U256::from(b),
+                                U256::from(m),
+                                U256::from(len)
+                            ),
                             U256::from(minimum)
                         );
                     }

@@ -62,7 +62,12 @@ fn both_wallets_match_the_fee_and_initialized_ticks() {
                 .collect::<std::collections::BTreeMap<_, _>>()
                 .into(),
         };
-        for case in m["cases"].as_array().unwrap() {
+        for case in m["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .chain(m["independent_usdc"].as_array().into_iter().flatten())
+        {
             let mut liquidity = value(&row["liquidity"]).to::<u128>();
             for side in ["buy", "sell"] {
                 let Some(order) = case.get(side) else {
@@ -110,5 +115,5 @@ fn both_wallets_match_the_fee_and_initialized_ticks() {
             }
         }
     }
-    assert_eq!(count, 24);
+    assert_eq!(count, 28);
 }

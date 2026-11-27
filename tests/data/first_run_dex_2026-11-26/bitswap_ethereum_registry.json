@@ -1,0 +1,365 @@
+{
+  "markets": [
+    {
+      "pool": "0x9a7bcc8b96e67f406c5e9fb4244fcfa66ba4f5e4",
+      "tokens": [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 3000,
+      "step": 60,
+      "block": 18817934,
+      "active_liquidity": "3548674971",
+      "balances": [
+        "42487455",
+        "298923591673628640"
+      ],
+      "created_tx": "0xa318a5785bf3d2a8f8aaa32e98784f512705ebd25d600582d9c39585adfeceed",
+      "created_log_index": 87
+    },
+    {
+      "pool": "0xda30860783c85c78bd36502ef66fdbc58a8fe842",
+      "tokens": [
+        "0x1981e32c2154936741ab6541a737b87c68f13ce1",
+        "0xa9b1eb5908cfc3cdf91f9b8b3a74108598009096"
+      ],
+      "fee": 3000,
+      "step": 60,
+      "block": 18839665,
+      "active_liquidity": "4000686333229",
+      "balances": [
+        "9510271331450972970659",
+        "14485498504048044384572"
+      ],
+      "created_tx": "0x1297f5908499cca43bea357b5092857809db6ec0af816e556489f5fc6561c585",
+      "created_log_index": 168
+    },
+    {
+      "pool": "0xa04c316af15720eea72a5c3c54a1391c4502b4d1",
+      "tokens": [
+        "0x1981e32c2154936741ab6541a737b87c68f13ce1",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 3000,
+      "step": 60,
+      "block": 18839688,
+      "active_liquidity": "317576785975253",
+      "balances": [
+        "224480250426645191501831",
+        "9020021246"
+      ],
+      "created_tx": "0x929e3bc9f1deecfe0e7e6ed6f34ca412cbfb1fa2902901504540a8f33b0357df",
+      "created_log_index": 165
+    },
+    {
+      "pool": "0xb6d8ed4a7dacd8b10aa91220902873e92b296f4c",
+      "tokens": [
+        "0x1981e32c2154936741ab6541a737b87c68f13ce1",
+        "0x38e382f74dfb84608f3c1f10187f6bef5951de93"
+      ],
+      "fee": 3000,
+      "step": 60,
+      "block": 18839992,
+      "active_liquidity": "0",
+      "balances": [
+        "754541293135997056231",
+        "334554262496064906290477"
+      ],
+      "created_tx": "0x28eebfbca30134a7d492ade8d72ce74f4061b6f4e145470cb2dc141a3a4c1ecb",
+      "created_log_index": 173
+    },
+    {
+      "pool": "0x63907cf49cee634088ca15f2e7e39ec69dd7e94b",
+      "tokens": [
+        "0x1981e32c2154936741ab6541a737b87c68f13ce1",
+        "0xda31d0d1bc934fc34f7189e38a413ca0a5e8b44f"
+      ],
+      "fee": 3000,
+      "step": 60,
+      "block": 18840012,
+      "active_liquidity": "0",
+      "balances": [
+        "1804537564763815248596",
+        "18241879446435713184656"
+      ],
+      "created_tx": "0xc71c5d598cf8c22e9ada5e3df5d1205452b4d674e5affb1031b039f16a37f92c",
+      "created_log_index": 323
+    },
+    {
+      "pool": "0x1dc7c54b904602d525d2bff1e7ecddbc4a3a95cd",
+      "tokens": [
+        "0x1981e32c2154936741ab6541a737b87c68f13ce1",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 3000,
+      "step": 60,
+      "block": 18840044,
+      "active_liquidity": "0",
+      "balances": [
+        "586887494296424651853",
+        "233101890297801627"
+      ],
+      "created_tx": "0x3b182ec7ad99421df82a4f23074dda716b4617e79b528694959b9cbd5a566e5a",
+      "created_log_index": 353
+    },
+    {
+      "pool": "0xc85e14b9ccd5720e535b304d817e27a374a257ec",
+      "tokens": [
+        "0x1981e32c2154936741ab6541a737b87c68f13ce1",
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+      ],
+      "fee": 500,
+      "step": 10,
+      "block": 18840492,
+      "active_liquidity": "0",
+      "balances": [
+        "6574722027181769212",
+        "6710075"
+      ],
+      "created_tx": "0x786a2e7e8c3bdaaaef1823b8336532b00ed708756e11a0eaeb489efd01dbedd2",
+      "created_log_index": 63
+    },
+    {
+      "pool": "0x78559f0371c38e39196c1678d691f8cadd6c3655",
+      "tokens": [
+        "0x1981e32c2154936741ab6541a737b87c68f13ce1",
+        "0xe2ae1a99bbd2efab0a5c38f2146b7ace61abc5ce"
+      ],
+      "fee": 3000,
+      "step": 60,
+      "block": 18846864,
+      "active_liquidity": "0",
+      "balances": [
+        "143497833786970370",
+        "3480826314061307"
+      ],
+      "created_tx": "0x4424cf1db9b06871758271ecf52ed0de8bbff2e5b251802e354b04fc7c07c70a",
+      "created_log_index": 871
+    },
+    {
+      "pool": "0xb2d4a524f93a3b44bfff1adfbc0a1ebe99601356",
+      "tokens": [
+        "0x5016878159e84dadb05bb04135f3eac339ae201f",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 10000,
+      "step": 200,
+      "block": 18847665,
+      "active_liquidity": "0",
+      "balances": [
+        "1",
+        "2"
+      ],
+      "created_tx": "0xc74d0830302a24e9f4da8c2a66528f9c792cccf514f06d4dfe7c72122e8d3405",
+      "created_log_index": 38
+    },
+    {
+      "pool": "0xb4fb2027066f1897493b2c97cff6dab7702df2f6",
+      "tokens": [
+        "0x1981e32c2154936741ab6541a737b87c68f13ce1",
+        "0x5016878159e84dadb05bb04135f3eac339ae201f"
+      ],
+      "fee": 3000,
+      "step": 60,
+      "block": 18849491,
+      "active_liquidity": "7948139302718285102",
+      "balances": [
+        "2530115399596515988748",
+        "17925430475761096051143974"
+      ],
+      "created_tx": "0x88eeda1bfbb2ba350f3a5040936040d642798d7e868aaa500efed8ba218371db",
+      "created_log_index": 254
+    },
+    {
+      "pool": "0xd018119c1cd057c2c94f17610e9bb477bdc90f0a",
+      "tokens": [
+        "0xa9b1eb5908cfc3cdf91f9b8b3a74108598009096",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 3000,
+      "step": 60,
+      "block": 18852879,
+      "active_liquidity": "0",
+      "balances": [
+        "6630069511245221361",
+        "138457820"
+      ],
+      "created_tx": "0x783455bbb4b070f2e9dbcca9803ab273cbaaaf0316404751f66c967660d40d72",
+      "created_log_index": 46
+    },
+    {
+      "pool": "0xc20ec9dd208440ff7d2745111527368ea403d2b3",
+      "tokens": [
+        "0x1981e32c2154936741ab6541a737b87c68f13ce1",
+        "0x8b065a68d746e5ef4529546762b100f39a835228"
+      ],
+      "fee": 10000,
+      "step": 200,
+      "block": 18855717,
+      "active_liquidity": "0",
+      "balances": [
+        "0",
+        "1"
+      ],
+      "created_tx": "0x976b14fdfd20c7d4de3d7e4ce40e2df88681b3391592b1073b9178c547c479f9",
+      "created_log_index": 237
+    },
+    {
+      "pool": "0xdb57a7ce7806d8de54fcba1ec2df230757c3bf67",
+      "tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 3000,
+      "step": 60,
+      "block": 18861030,
+      "active_liquidity": "8756145174",
+      "balances": [
+        "1846848162333425226",
+        "1480741256"
+      ],
+      "created_tx": "0x2f92d79f1277ab88dacecc00cf25c9d3e4e7019f12e3927eafd1601f3a56ac11",
+      "created_log_index": 50
+    },
+    {
+      "pool": "0x1de16b196d8c44b93eea13a789126be0ff3c4576",
+      "tokens": [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 500,
+      "step": 10,
+      "block": 18861059,
+      "active_liquidity": "0",
+      "balances": [
+        "9118348",
+        "9120405"
+      ],
+      "created_tx": "0xa86594db47dacfaee51b81ae2d7d8fefac2f8143b610cd2bfab5215ce625cf26",
+      "created_log_index": 139
+    },
+    {
+      "pool": "0xd5bedb0cb184669f4bfeba81ecd1b7222804ffea",
+      "tokens": [
+        "0x1981e32c2154936741ab6541a737b87c68f13ce1",
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"
+      ],
+      "fee": 3000,
+      "step": 60,
+      "block": 18861071,
+      "active_liquidity": "0",
+      "balances": [
+        "13113768064506464083",
+        "22336"
+      ],
+      "created_tx": "0x5ab2cf3dc04436e4a92240704f157c19463772e2a1936758873c45b0b86e936d",
+      "created_log_index": 164
+    },
+    {
+      "pool": "0xb1be26e5516b95d14232f3c09b41683fee754d33",
+      "tokens": [
+        "0x1981e32c2154936741ab6541a737b87c68f13ce1",
+        "0xaaee1a9723aadb7afa2810263653a34ba2c21c7a"
+      ],
+      "fee": 3000,
+      "step": 60,
+      "block": 18874425,
+      "active_liquidity": "0",
+      "balances": [
+        "0",
+        "0"
+      ],
+      "created_tx": "0xd64bfc629d8bf6d996dc09c8dcd3bdf13e3dd107392cea2f9d08b3f607f2c3c6",
+      "created_log_index": 97
+    },
+    {
+      "pool": "0xd73bf187ef802898c415d9e1a669ef7a6ab85728",
+      "tokens": [
+        "0x1981e32c2154936741ab6541a737b87c68f13ce1",
+        "0xaaee1a9723aadb7afa2810263653a34ba2c21c7a"
+      ],
+      "fee": 10000,
+      "step": 200,
+      "block": 18874573,
+      "active_liquidity": "0",
+      "balances": [
+        "407",
+        "66440506"
+      ],
+      "created_tx": "0x9c9bb5aeca2e57cd329cfac8ca61e8e86a2de9d58d9d0e8e51373278c16b8fec",
+      "created_log_index": 106
+    },
+    {
+      "pool": "0x041e9f0842955f8ec11e37a76ac6357eb9ff239f",
+      "tokens": [
+        "0xa9b1eb5908cfc3cdf91f9b8b3a74108598009096",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 3000,
+      "step": 60,
+      "block": 18876111,
+      "active_liquidity": "0",
+      "balances": [
+        "21415733844701522527",
+        "130230156697039482"
+      ],
+      "created_tx": "0xb56bca58537f0fb9d61ba62f587d6bf91c08907b3c3d760b989d6d605d55ff4e",
+      "created_log_index": 222
+    },
+    {
+      "pool": "0xa8f081ba8483ccef4259438f77f7fb8e71150236",
+      "tokens": [
+        "0x1981e32c2154936741ab6541a737b87c68f13ce1",
+        "0xc881255e4d639b42e326158c7b8ccb7f33459261"
+      ],
+      "fee": 10000,
+      "step": 200,
+      "block": 18881211,
+      "active_liquidity": "1595483362123816",
+      "balances": [
+        "1209374605269981976930",
+        "2103990129244292348251973"
+      ],
+      "created_tx": "0xc500e5a4aa3d306da20d8b979b3842ed2d2e56f7dfaf69aa73703181833823c2",
+      "created_log_index": 42
+    }
+  ],
+  "modules": {
+    "swapX2YModule": "0x7fc805b9773a22c091fe548380e2de61a07478e5",
+    "swapY2XModule": "0x178be577715cc0e83b33467d9b4a009f1cd7b052",
+    "liquidityModule": "0x07f389e36f76a2c0af7d109fec739571c96473e4",
+    "limitOrderModule": "0xf887baadd85c630e8e6f211d72c69400870eac31",
+    "flashModule": "0xf8f1cd5943396c5c49eb278a171ad9aa6a2013e5"
+  },
+  "factory": "0xc78fd8021fb191501e6be7c1da4beafb1b81cf8c",
+  "init": "0x08323a03d28906bb1d5afd36f3ad56302878af9d1bc6344eb250127b1894d20d",
+  "height": 26494988,
+  "chain": 1,
+  "block_hash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+  "factory_hash": "0xb34a982f81682df1621b404095a9437d6d767ef12b3cf1a375fa8d81cf6c14b4",
+  "pool_hash": "0xad93f2a421eb9c70d2adf0a4af1dc7b7b98979ffb14ded96ed3db6c2ffc40491",
+  "swap_hashes": [
+    "0x5e6a527d85fc4d990ed25ecac5b97f6941d0242385404245ab826871e173de00",
+    "0x65eee566e0175cbef5cf92b76a4a97adcb3776fa5b9ec2458532a0723af008e0"
+  ],
+  "module_slots": [
+    65554,
+    65555,
+    65556,
+    65557,
+    65558
+  ],
+  "sources": {
+    "factory": "https://eth.blockscout.com/api/v2/smart-contracts/0xc78fd8021fb191501e6be7c1da4beafb1b81cf8c",
+    "pool": "https://sourcify.dev/server/v2/contract/1/0xdb57A7ce7806d8De54FCba1Ec2dF230757C3BF67",
+    "x2y": "https://eth.blockscout.com/api/v2/smart-contracts/0x7fc805b9773a22c091fe548380e2de61a07478e5",
+    "y2x": "https://eth.blockscout.com/api/v2/smart-contracts/0x178be577715cc0e83b33467d9b4a009f1cd7b052"
+  },
+  "module_hashes": [
+    "0x5e6a527d85fc4d990ed25ecac5b97f6941d0242385404245ab826871e173de00",
+    "0x65eee566e0175cbef5cf92b76a4a97adcb3776fa5b9ec2458532a0723af008e0",
+    "0x67626ff117e876f471a119c35f4007fa411e567d4978d9bf1adb9e8b1da351a1",
+    "0xc4e90304cbced020d66f751203b2609c526e7ab78a7607f5af569b432b1709c0",
+    "0xc8879a48c917473927747574c8dcc7b2865cabbaf1fd8cdd6918cf8432e78fe2"
+  ]
+}

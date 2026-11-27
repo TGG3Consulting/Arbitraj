@@ -7,9 +7,9 @@ fn market(r0: u128, r1: u128, n: u128, d: u128) -> TempleState {
         temple: Address::repeat_byte(1),
         stable: Address::repeat_byte(2),
         defend: Address::repeat_byte(3),
-        reserves: [r0.into(), r1.into()],
-        balances: [r0.into(), r1.into()],
-        ratio: Some([n.into(), d.into()]),
+        reserves: [U256::from(r0), U256::from(r1)],
+        balances: [U256::from(r0), U256::from(r1)],
+        ratio: Some([U256::from(n), U256::from(d)]),
         defense_balance: U256::from(1_000_000),
         amm_authorized: true,
     }

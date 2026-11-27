@@ -127,11 +127,23 @@ mod tests {
     fn fee_rounds_up_separately_in_both_currencies() {
         let q = U256::ONE << 96;
         assert_eq!(
-            charge(U256::ONE, 3000, q * 3 / 2, false, true),
+            charge(
+                U256::ONE,
+                3000,
+                q * U256::from(3) / U256::from(2),
+                false,
+                true
+            ),
             Some(U256::from(3))
         );
         assert_eq!(
-            charge(U256::ONE, 3000, q * 3 / 2, false, false),
+            charge(
+                U256::ONE,
+                3000,
+                q * U256::from(3) / U256::from(2),
+                false,
+                false
+            ),
             Some(U256::ONE)
         );
         assert_eq!(

@@ -41,11 +41,15 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         }
         let native=super::super::exec::native::is_native(ctx,&i.asset) || super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt);
         if super::super::exec::o1_wallet::enabled(e) && native {
-            if e.family.variant.flux_native() && let Ok(m)=super::super::exec::flux_eth::Market::read(ctx,e) &&
-                super::super::pools::exact_wallet_tokens::eligible_input(ctx,e.family.id,m.token) &&
-                (match head {Some(h)=>super::super::exec::flux_eth_plan::checked(ctx,e,&h.selector()).await.is_ok(),None=>true}) {
-                let execution=Execution{mode:RouteMode::Direct,target:m.router,wire:Wire::FluxEth(m)};
-                if let Ok(option)=v2_execution::option(q,i,e.clone(),payer,execution,head).await {quotes.push(option);}
+            if e.family.variant.flux_native() {
+                for module in [false,true] {
+                    let Ok(m)=super::super::exec::flux_eth::Market::read(ctx,e,module) else {continue};
+                    if !module && !super::super::pools::exact_wallet_tokens::eligible_input(ctx,e.family.id,m.token) {continue;}
+                    if module && ctx.dex_text("dex.infinity_native_module_hash",e.family.id).ok().and_then(|h|h.parse::<alloy_primitives::B256>().ok()).is_none(){continue;}
+                    if let Some(h)=head && super::super::exec::flux_eth_plan::checked(ctx,e,&h.selector(),module).await.is_err(){continue;}
+                    let execution=Execution{mode:RouteMode::Direct,target:m.router,wire:Wire::FluxEth(m)};
+                    if let Ok(option)=v2_execution::option(q,i,e.clone(),payer,execution,head).await {quotes.push(option);}
+                }
             }
             continue;
         }

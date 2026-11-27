@@ -38,7 +38,7 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
     runtime="0x"+RUNTIME.read_text().strip().removeprefix("0x")
     def simulate(payer,calls,mode):
         frame=dict(calls=calls)
-        if mode in ("wrapped","wrapped_v5"):
+        if mode in ("wrapped","wrapped_v5","native_module"):
             address,code=wrapped_module
             frame["stateOverrides"]={address:dict(code=code)}
         if mode in ("v5","wrapped_v5"):
@@ -56,7 +56,7 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
             return tx(MC,"getEthBalance(address)",["address"],[owner]) if asset==ZERO else tx(asset,"balanceOf(address)",["address"],[owner])
         approvals=[]
         if x!=ZERO:
-            spender=EXEC if mode in ("v5","wrapped_v5") else (wrapped_module[0] if mode=="wrapped" else permit)
+            spender=EXEC if mode in ("v5","wrapped_v5") else (wrapped_module[0] if mode in ("wrapped","native_module") else permit)
             allowance=tx(x,"allowance(address,address)",["address","address"],[owner,spender])
             checked=simulate(owner,prefix+[allowance],mode)[-1]
             if checked["status"]!="0x1":return None,dict(input=str(qty),stage="allowance",call=allowance,result=checked)
@@ -65,6 +65,10 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
             if mode in ("router","router_exact"):approvals.append(tx(permit,"approve(address,address,uint160,uint48)",["address","address","uint160","uint48"],[x,router,qty,end]))
         def trade(minimum,deadline,settle_qty=None,pool_id=None):
             signed_id=pool_id or keccak(encode([key_type],[k]))
+            if mode=="native_module":
+                order=tx(wrapped_module[0],"executeNative(bytes32,address,bool,uint256,uint256,uint256)",["bytes32","address","bool","uint256","uint256","uint256"],[signed_id,y if x==ZERO else x,x==ZERO,qty,minimum,deadline])
+                if x==ZERO:order["value"]=hex(qty)
+                return order
             if mode=="wrapped":
                 return tx(wrapped_module[0],"execute(bytes32,address,address,uint256,uint256,uint256)",["bytes32","address","address","uint256","uint256","uint256"],[signed_id,x,y,qty,minimum,deadline])
             if mode in ("v5","wrapped_v5"):
@@ -99,6 +103,11 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
             failed=simulate(owner,prefix+approvals+[invalid],mode)[-1]
             if failed["status"]!="0x0":raise ValueError("принят посторонний PoolId")
             measured["wrong_pool"]={"call":invalid,"result":failed}
+        if mode=="native_module" and good:
+            invalid=trade(gross,end);invalid["value"]=hex(qty-1 if x==ZERO else 1)
+            failed=simulate(owner,prefix+approvals+[invalid],mode)[-1]
+            if failed["status"]!="0x0":raise ValueError("модуль принял другую физическую сумму ETH")
+            measured["wrong_value"]={"call":invalid,"result":failed}
         if mode=="router_exact" and good and qty>1:
             mismatch=trade(gross,end,qty-1)
             failed=simulate(owner,prefix+approvals+[mismatch],mode)[-1]
@@ -126,6 +135,7 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
         wire_key=(*key[:-1],bytes.fromhex(key[-1][2:])) if flux else key
         for qty in row.get("sizes",sizes):
             modes=["wrapped","wrapped_v5"] if wrapped_module else (["router"] if ZERO in key[:2] else ["router","v5"])
+            if wrapped_module and flux:modes.append("native_module")
             if d.get("native_direct"):
                 if ZERO not in key[:2]:continue
                 modes=["router_exact"]

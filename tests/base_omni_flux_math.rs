@@ -82,6 +82,7 @@ fn bin_math_matches_actual_debit_and_payout_in_the_preceding_wallet_state() {
     let archive: Value = serde_json::from_reader(flate2::read::GzDecoder::new(&raw[..])).unwrap();
     let mut by_mode = BTreeMap::new();
     let mut one_way = false;
+    let mut skipped_positive_reserves = false;
     for m in archive["markets"].as_array().unwrap() {
         let params: U256 = num(&m["key"][5]);
         let step = ((params >> 16u32) & U256::from(0xffffu32)).to::<u32>();
@@ -109,6 +110,21 @@ fn bin_math_matches_actual_debit_and_payout_in_the_preceding_wallet_state() {
                     .iter()
                     .map(|r| (r[0].as_u64().unwrap() as u32, (num(&r[1]), num(&r[2]))))
                     .collect();
+                let links = s["successors"].as_array().unwrap();
+                let mut next = active;
+                for edge in links {
+                    assert_eq!(edge[0].as_u64(), Some(u64::from(next)));
+                    next = edge[1].as_u64().unwrap() as u32;
+                    assert!(bins.contains_key(&next));
+                }
+                assert_eq!(next, last);
+                for row in s["skipped_reserves"].as_array().unwrap() {
+                    let id = row[0].as_u64().unwrap() as u32;
+                    assert!(!bins.contains_key(&id));
+                    if num::<U256>(&row[1]) > U256::ZERO || num::<U256>(&row[2]) > U256::ZERO {
+                        skipped_positive_reserves = true;
+                    }
+                }
                 let map = BinMap {
                     step,
                     reserves: bins.into(),
@@ -126,4 +142,5 @@ fn bin_math_matches_actual_debit_and_payout_in_the_preceding_wallet_state() {
     }
     assert!(by_mode["router"] >= 21 && by_mode["v5"] >= 15);
     assert!(one_way);
+    assert!(skipped_positive_reserves);
 }

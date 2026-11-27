@@ -34,6 +34,7 @@ pub(super) struct Selection {
     carbon: Option<B256>,
     dagrow:Option<(Address,Option<alloy_primitives::U256>)>,
     proceeds: Option<(u16, bool)>,
+    flux_eth:bool,
 }
 impl Selection {
     pub(super) fn for_leg(leg: &crate::core::types::RouteLeg) -> Self {
@@ -46,6 +47,7 @@ impl Selection {
                 carbon: None,
                 dagrow:None,
                 proceeds: Some((tier, loan)),
+                flux_eth:false,
             };
         }
         Self {
@@ -53,6 +55,7 @@ impl Selection {
             carbon: super::carbon_direct::selected(leg).1,
             dagrow:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::Dagrow{target,desired})=>Some((target,desired)),_=>None},_=>None},
             proceeds: None,
+            flux_eth:matches!(leg.hops.as_slice(),[hop] if matches!(hop.fee_mode,Some(crate::core::types::RouterFeeMode::FluxEth{..}))),
         }
     }
 }
@@ -124,7 +127,7 @@ impl Market {
         match self {
             Self::SolidlyRouter => Box::pin(super::solidly_router_wallet::plan(ctx,s,wallet,height,selected.target)).await,
             Self::RegisteredV3 => Box::pin(super::registered_v3_wallet::plan(ctx,s,wallet,height,selected.target)).await,
-            Self::O1 if s.entry.family.variant.flux_native() && selected.target==ctx.dex_addr("dex.universal_router",s.entry.family.id).ok()=> Box::pin(super::flux_eth_plan::plan(ctx,s,wallet,height,selected.target)).await,
+            Self::O1 if s.entry.family.variant.flux_native() && selected.flux_eth=> Box::pin(super::flux_eth_plan::plan(ctx,s,wallet,height,selected.target)).await,
             Self::O1 => Box::pin(super::o1_plan::plan(ctx,s,wallet,height,selected.target)).await,
             Self::Umbrae => {
                 Box::pin(super::umbrae::plan(

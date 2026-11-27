@@ -41,6 +41,57 @@ impl Book {
             .checked_add(U256::ONE)
     }
 
+    // The router rounds its WETH budget twice. Its nominal quote can be positive before
+    // the fee pool receives enough WETH to preserve its invariant. Skip only budgets that
+    // cannot fix the shortage, up to the next discontinuity of the router's cost.
+    fn next_refill_budget(&self, i: usize, debit: U256, cost: U256) -> Option<U256> {
+        let m = &self.market;
+        let f = &self.fee_pair;
+        let unit = U256::from(1000);
+        let t = U256::from(f.tier);
+        let principal = debit
+            .checked_mul(debit)?
+            .checked_div(debit.checked_add(cost)?)?;
+        let nominal = m.price(i, principal, false)?;
+        let final_fee = m.ceiling_fee(i, principal, nominal, false)?;
+        let physical = f.balances[0].checked_sub(f.fee_reserve)?;
+        let residual = physical.saturating_sub(f.reserves[0]);
+        let internal = (residual.checked_mul(t)? / (unit + t))
+            .checked_add(final_fee.checked_mul(t)? / unit)?;
+        if internal < unit || final_fee > self.router_balance {
+            return None;
+        }
+        let liquid = physical.checked_sub(final_fee)?.checked_sub(internal)?;
+        let payment =
+            mul_div_up(f.reserves[0], f.reserves[1], liquid)?.saturating_sub(f.balances[1]);
+        if payment <= debit.checked_sub(principal)? {
+            return None;
+        }
+        let old = payment - U256::ONE;
+        // If cost stays constant, ceil(n*cost/(n+cost)) must reach payment.
+        let fixed = cost
+            .checked_sub(old)
+            .filter(|d| !d.is_zero())
+            .and_then(|divisor| {
+                old.checked_mul(cost)?
+                    .checked_div(divisor)?
+                    .checked_add(U256::ONE)
+            });
+        // First nominal debit where floor(rW*raw/(rB-raw))+1 increases.
+        let raw = mul_div_up(cost, f.reserves[0], f.reserves[1].checked_add(cost)?)?;
+        let need_fee = mul_div_up(raw, unit, unit + t)?;
+        let (side, rate) = m.oracle?;
+        let scaled = mul_div_up(need_fee, U256::ONE << 112, rate)?;
+        let tier = U256::from(m.tier);
+        let next_cost = if side == i {
+            mul_div_up(scaled, unit, tier)
+        } else {
+            m.minimum_principal(i, mul_div_up(scaled, unit + tier, tier)?, false)
+        };
+        let next = fixed.into_iter().chain(next_cost).min()?;
+        (next > debit).then_some(next)
+    }
+
     pub fn swap(&self, source: Address, exact_in: bool, amount: U256) -> Option<(Swapped, Fill)> {
         if amount.is_zero() {
             return None;
@@ -110,10 +161,15 @@ impl Book {
                         m.minimum_principal(i, amount.checked_add(cost)?, false)?
                             .max(principal)
                     };
-                    if lower <= debit {
-                        break;
+                    if lower > debit {
+                        debit = lower;
+                        continue;
                     }
-                    debit = lower;
+                    if source == self.weth && self.exact_in(source, debit, false).is_none() {
+                        debit = self.next_refill_budget(i, debit, cost)?;
+                        continue;
+                    }
+                    break;
                 }
             }
         }

@@ -9,7 +9,8 @@ use super::{
     ur,
 };
 use crate::gateway::errors::{ErrorCode, GatewayResult};
-use alloy::sol_types::SolValue;
+use alloy::sol_types::{SolCall, SolValue};
+alloy::sol! {interface IFluxCash {function executeNative(bytes32 id,address token,bool buy,uint256 amount,uint256 minimum,uint256 deadline) external payable returns(uint256);}}
 use alloy_primitives::{Address, B256, Bytes, U256, aliases::U24};
 #[path = "flux_eth_receipt.rs"]
 mod receipt;
@@ -24,11 +25,17 @@ pub struct Market {
     pub manager: Address,
     pub id: B256,
     pub bin: bool,
+    #[serde(default)]
+    pub module: bool,
     pub fee: u32,
     pub parameters: B256,
 }
 impl Market {
-    pub(in crate::venues::bsc_dex) fn read(ctx: &Ctx, e: &Entry) -> GatewayResult<Self> {
+    pub(in crate::venues::bsc_dex) fn read(
+        ctx: &Ctx,
+        e: &Entry,
+        module: bool,
+    ) -> GatewayResult<Self> {
         let bad = || {
             ctx.err(
                 ErrorCode::NoRoute,
@@ -55,8 +62,19 @@ impl Market {
             return Err(bad());
         }
         Ok(Self {
-            router: ctx.dex_addr("dex.universal_router", e.family.id)?,
-            permit: ctx.dex_addr("dex.permit2", e.family.id)?,
+            router: ctx.dex_addr(
+                if module {
+                    "dex.router"
+                } else {
+                    "dex.universal_router"
+                },
+                e.family.id,
+            )?,
+            permit: ctx.dex_addr(
+                if module { "dex.router" } else { "dex.permit2" },
+                e.family.id,
+            )?,
+            module,
             wrapped,
             token: k.currency1,
             manager,
@@ -104,6 +122,18 @@ impl Proof {
     pub(in crate::venues::bsc_dex) fn data(&self) -> Bytes {
         let m = self.market;
         let buy = self.input == m.wrapped;
+        if m.module {
+            return IFluxCash::executeNativeCall {
+                id: m.id,
+                token: m.token,
+                buy,
+                amount: self.amount,
+                minimum: self.minimum,
+                deadline: self.deadline,
+            }
+            .abi_encode()
+            .into();
+        }
         let Ok(amount) = u128::try_from(self.amount) else {
             return Bytes::new();
         };

@@ -56,6 +56,8 @@ pub(super) mod temple_wallet;
 pub(super) mod o1_wallet;
 pub(super) mod flux_eth;
 pub(super) mod flux_eth_plan;
+#[cfg(test)]
+mod flux_eth_tests;
 mod o1_plan;
 #[cfg(test)]
 mod o1_wallet_tests;

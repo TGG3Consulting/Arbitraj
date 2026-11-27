@@ -99,6 +99,7 @@ pub fn needs(f: &Family) -> bool {
             | Variant::Bundles
             | Variant::Antfarm
             | Variant::Surge
+            | Variant::Pendle
             | Variant::Dagrow
             | Variant::Temple
             | Variant::Carbon

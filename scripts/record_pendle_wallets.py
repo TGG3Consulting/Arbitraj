@@ -81,7 +81,7 @@ def capture(url,mode,artifact=None):
                     reads.append(tx(token_in,"allowance(address,address)",["address","address"],[MODULE,ROUTER]))
                 def probe(minimum,expiry=directory["timestamp"]+240):
                     inventory=[balance(t,ROUTER) for t in (pt,syaddr)]
-                    op=route(mode,m,token_in,token_out,amount,minimum,expiry,syaddr);rs=run(base+inventory+reads+[op]+reads+inventory);idx=len(base)+2+len(reads)
+                    op=route(mode,m,token_in,token_out,amount,minimum,expiry,syaddr);op["gas"]=hex(6_000_000);rs=run(base+inventory+reads+[op]+reads+inventory);idx=len(base)+2+len(reads)
                     if any(x["status"]!="0x1" for j,x in enumerate(rs) if j!=idx):raise ValueError("funds, approvals or reads failed")
                     vals=lambda a:[int(x["returnData"],16) for x in a]
                     if minimum==1 and expiry>1:

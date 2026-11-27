@@ -430,6 +430,7 @@ mod tests {
             "bundles_swap",
             "antfarm", // Signed router and separate ATF budget.
             "surge_native",
+            "pendle_market", // котировки до задания защищённого модуля
             "dagrow", // SSP с кошелька
             "temple", // официальный view, без шага V5
             "carbon_v1", // официальный Controller, без шага в ArbExecutor

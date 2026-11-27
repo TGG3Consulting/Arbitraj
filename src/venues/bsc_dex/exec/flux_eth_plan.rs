@@ -2,8 +2,7 @@
 //! код получателя разрешения, адреса менеджера/Vault, исходный PoolId и исполнимую сумму.
 use super::super::{
     ctx::Ctx,
-    node::{abi::IERC20, call, rpc},
-    pools::{exact_wallet_tokens, flux_native, registry::Entry},
+    node::abi::IERC20,
     quote::{
         v2_wallet_sim::{self, Order, Wire},
         white_state::{self, Head},
@@ -15,78 +14,12 @@ use super::{
     flux_eth::Market,
     plan::{DirectCall, Plan},
 };
-use crate::gateway::errors::{ErrorCode, GatewayResult};
-use alloy::sol_types::SolCall;
-use alloy_primitives::{Address, B256, Bytes, U256, keccak256};
-use serde_json::{Value, json};
-alloy::sol! {interface IRouter {
-    function clPoolManager() external view returns(address);
-    function binPoolManager() external view returns(address);
-    function vault() external view returns(address);
-    function paused() external view returns(bool);
-}}
-fn bad(ctx: &Ctx) -> crate::gateway::errors::GatewayError {
-    ctx.err(
-        ErrorCode::NoRoute,
-        "Omni Flux: нативное поручение, код или разрешение не подтверждены",
-    )
-}
-async fn view<C: SolCall>(
-    ctx: &Ctx,
-    at: &Value,
-    target: Address,
-    c: C,
-) -> GatewayResult<C::Return> {
-    let bytes: Bytes = rpc::call(
-        ctx,
-        "eth_call",
-        json!([{"to":target,"data":Bytes::from(c.abi_encode())},at]),
-    )
-    .await?;
-    call::decode::<C>(&bytes)
-}
-async fn code(ctx: &Ctx, id: &str, target: Address, key: &str, at: &Value) -> GatewayResult<()> {
-    let hash: B256 = ctx.dex_text(key, id)?.parse().map_err(|_| bad(ctx))?;
-    let raw: Bytes = rpc::call(ctx, "eth_getCode", json!([target, at])).await?;
-    if raw.is_empty() || keccak256(raw) != hash {
-        return Err(bad(ctx));
-    }
-    Ok(())
-}
-pub(in crate::venues::bsc_dex) async fn checked(
-    ctx: &Ctx,
-    e: &Entry,
-    at: &Value,
-) -> GatewayResult<Market> {
-    let generation = ctx.settings.generation();
-    let m = Market::read(ctx, e)?;
-    let f = e.family;
-    let check_manager = async {
-        if m.bin {
-            view(ctx, at, m.router, IRouter::binPoolManagerCall {}).await
-        } else {
-            view(ctx, at, m.router, IRouter::clPoolManagerCall {}).await
-        }
-    };
-    let (found, (), (), (), manager, vault, paused) = tokio::try_join!(
-        flux_native::market(ctx, f, m.manager, m.id, (m.wrapped, m.token), at),
-        exact_wallet_tokens::check_input(ctx, f.id, m.token, at),
-        code(ctx, f.id, m.router, "dex.router_runtime_hash", at),
-        code(ctx, f.id, m.permit, "dex.permit2_runtime_hash", at),
-        check_manager,
-        view(ctx, at, m.router, IRouter::vaultCall {}),
-        view(ctx, at, m.router, IRouter::pausedCall {})
-    )?;
-    if found.key != e.key
-        || manager != m.manager
-        || vault != ctx.dex_addr("dex.vault", f.id)?
-        || paused
-        || ctx.settings.generation() != generation
-    {
-        return Err(bad(ctx));
-    }
-    Ok(m)
-}
+use crate::gateway::errors::GatewayResult;
+use alloy_primitives::{Address, U256};
+#[path = "flux_eth_roles.rs"]
+mod roles;
+pub(in crate::venues::bsc_dex) use roles::checked;
+use roles::{bad, view};
 pub(in crate::venues::bsc_dex) async fn approvals(
     ctx: &Ctx,
     h: Head,
@@ -103,6 +36,19 @@ pub(in crate::venues::bsc_dex) async fn approvals(
         return Err(bad(ctx));
     }
     let at = h.selector();
+    if m.module {
+        let current = view(
+            ctx,
+            &at,
+            m.token,
+            IERC20::allowanceCall {
+                owner: o.payer,
+                spender: m.router,
+            },
+        )
+        .await?;
+        return approve::fork_known(ctx, m.token, m.router, current, o.amount);
+    }
     let (erc20, p) = tokio::try_join!(
         view(
             ctx,
@@ -149,7 +95,8 @@ pub(super) async fn plan(
     }
     let generation = ctx.settings.generation();
     let h = white_state::head(ctx, &format!("{height:#x}")).await?;
-    let m = checked(ctx, &s.entry, &h.selector()).await?;
+    let public = ctx.dex_addr("dex.universal_router", s.entry.family.id)?;
+    let m = checked(ctx, &s.entry, &h.selector(), selected != Some(public)).await?;
     if selected != Some(m.router) {
         return Err(bad(ctx));
     }

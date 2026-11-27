@@ -80,6 +80,30 @@ impl Proof {
         let (paid, received) = (U256::from(i.unsigned_abs()), U256::from(o as u128));
         let charged = fill::moved_logs(logs, m.token, Some(wallet), None);
         let credited = fill::moved_logs(logs, m.token, None, Some(wallet));
+        let received = if m.module {
+            use crate::venues::bsc_dex::exec::o1_wallet::IWallet;
+            let mut fills = logs.iter().filter(|l| {
+                l.address() == m.router && l.topic0() == Some(&IWallet::Filled::SIGNATURE_HASH)
+            });
+            let fill = IWallet::Filled::decode_log_data(&fills.next()?.inner.data).ok()?;
+            let pair = if buy {
+                (Address::ZERO, m.token)
+            } else {
+                (m.token, Address::ZERO)
+            };
+            if fills.next().is_some()
+                || (fill.payer, fill.recipient, fill.poolId) != (wallet, wallet, m.id)
+                || (fill.tokenIn, fill.tokenOut) != pair
+                || fill.paid != paid
+                || fill.received.is_zero()
+                || (!buy && fill.received != received)
+            {
+                return None;
+            }
+            fill.received
+        } else {
+            received
+        };
         let exact = if buy {
             credited.checked_sub(charged)? == received
         } else {

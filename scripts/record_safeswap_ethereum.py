@@ -19,29 +19,56 @@ DEPLOYMENTS=[
     ("proxy-2","0x7f09d4be6bbf4b0ff0c97ca5c486a166198aeaee","0x0a654cb371fbc3c49ccb176984d64e86fc931eea"),
 ]
 
-def roles(c,factory,router):
+IMPLEMENTATION_SLOT="0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc"
+
+def verified(c,addr,pair_fee):
+    code=rpc(c.endpoint,"eth_getCode",[addr,c.selector])
+    src="https://sourcify.dev/server/v2/contract/1/"+addr
+    response=c.session.get(src,params={"fields":"compilation,runtimeBytecode.onchainBytecode,sources,deployment"},timeout=25)
+    response.raise_for_status()
+    contract=response.json()
+    if not raw(code) or code.lower()!=contract["runtimeBytecode"]["onchainBytecode"].lower() or contract.get("runtimeMatch") not in ("match","exact_match"):
+        raise ValueError("different runtime for "+addr)
+    result=dict(address=addr,runtime=digest(raw(code)),name=contract["compilation"]["name"],source=src,
+                creation=contract["deployment"]["transactionHash"],deployer=contract["deployment"]["deployer"])
+    if contract["compilation"]["name"]=="SafeswapFactory" and pair_fee:
+        text="".join("".join(re.sub(r"/\*.*?\*/|//[^\n]*","",v["content"],flags=re.S).split()) for v in contract["sources"].values())
+        if not all(x in text for x in ("balance0.mul(1000).sub(amount0In.mul(2))","balance1.mul(1000).sub(amount1In.mul(2))",
+                                     "_takeFee(_token0,amount0Out", "_safeTransfer(_token0,to,amount0Out)","_safeTransfer(_token1,to,amount1Out)")):
+            raise ValueError("different pair invariant or payout")
+    if contract["compilation"]["name"]=="SafeswapRouter":
+        text="".join("".join(re.sub(r"/\*.*?\*/|//[^\n]*","",v["content"],flags=re.S).split()) for v in contract["sources"].values())
+        ratios=[(n,d) for n,d in ((9975,10000),(998,1000)) if f"amountInWithFee=amountIn.mul({n})" in text and f"denominator=reserveIn.mul({d}).add(amountInWithFee)" in text]
+        if len(ratios)!=1 or "balanceOf(to).sub(balanceBefore)>=amountOutMin" not in text:raise ValueError("different router fee or wallet floor")
+        numerator,denominator=ratios[0]
+        result["fee_pips"]=1_000_000*(denominator-numerator)//denominator
+    return result,raw(code)
+
+def initcode(factory,expected):
+    # Solidity CODECOPY: PUSH2 size, DUP1, PUSH2 offset, DUP4, CODECOPY.
+    copies=[]
+    for match in re.finditer(rb"\x61(..)\x80\x61(..)\x83\x39",factory,re.S):
+        size,offset=(int.from_bytes(v,"big") for v in match.groups())
+        if size and offset+size<=len(factory) and digest(factory[offset:offset+size])==expected:
+            copies.append({"start":offset,"size":size,"hash":expected})
+    if len(copies)!=1:raise ValueError("pair creation code not uniquely bound to factory runtime")
+    return copies[0]
+
+def roles(c,factory,router,proxy,pair_fee):
     if c.one(router,"factory()",returns=["address"])!=(factory,) or c.one(router,"WETH()",returns=["address"])!=(WETH,):
         raise ValueError("router binding differs")
-    out={}
-    for key,addr in (("factory",factory),("router",router)):
-        code=rpc(c.endpoint,"eth_getCode",[addr,c.selector]);src="https://sourcify.dev/server/v2/contract/1/"+addr
-        response=c.session.get(src,params={"fields":"compilation,runtimeBytecode.onchainBytecode,sources,deployment"},timeout=25)
-        response.raise_for_status();contract=response.json()
-        if not raw(code) or code.lower()!=contract["runtimeBytecode"]["onchainBytecode"].lower() or contract.get("runtimeMatch") not in ("match","exact_match"):
-            raise ValueError("different "+key)
-        out[key]=dict(address=addr,runtime=digest(raw(code)),name=contract["compilation"]["name"],source=src,creation=contract["deployment"]["transactionHash"],deployer=contract["deployment"]["deployer"])
-        if contract["compilation"]["name"]=="SafeswapFactory":
-            text="".join("".join(re.sub(r"/\*.*?\*/|//[^\n]*","",v["content"],flags=re.S).split()) for v in contract["sources"].values())
-            if not all(x in text for x in ("balance0.mul(1000).sub(amount0In.mul(2))","balance1.mul(1000).sub(amount1In.mul(2))",
-                                         "_takeFee(_token0,amount0Out", "_safeTransfer(_token0,to,amount0Out)","_safeTransfer(_token1,to,amount1Out)")):
-                raise ValueError("different pair invariant or payout")
-        if contract["compilation"]["name"]=="SafeswapRouter":
-            text="".join("".join(re.sub(r"/\*.*?\*/|//[^\n]*","",v["content"],flags=re.S).split()) for v in contract["sources"].values())
-            ratios=[(n,d) for n,d in ((9975,10000),(998,1000)) if f"amountInWithFee=amountIn.mul({n})" in text and f"denominator=reserveIn.mul({d}).add(amountInWithFee)" in text]
-            if len(ratios)!=1 or "balanceOf(to).sub(balanceBefore)>=amountOutMin" not in text:raise ValueError("different router fee or wallet floor")
-            numerator,denominator=ratios[0]
-            out[key]["fee_pips"]=1_000_000*(denominator-numerator)//denominator
-    return out
+    out,implementation={},{}
+    for key,address in (("factory",factory),("router",router)):
+        out[key],body=verified(c,address,pair_fee)
+        if proxy:
+            reply=c.session.post(c.endpoint,json={"jsonrpc":"2.0","id":1,"method":"eth_getStorageAt",
+                                                  "params":[address,IMPLEMENTATION_SLOT,c.selector]},timeout=25)
+            reply.raise_for_status()
+            word=raw(reply.json()["result"])
+            if len(word)!=32 or any(word[:12]) or not any(word[12:]):raise ValueError("invalid implementation slot")
+            implementation[key],body=verified(c,"0x"+word[12:].hex(),pair_fee)
+        if key=="factory":factory_code=body
+    return out,implementation,factory_code
 
 def capture(endpoint,wallet):
     snapshot=json.loads((ROOT/"tests/data/first_run_dex_2026-11-26/ethereum.json").read_bytes())
@@ -49,7 +76,7 @@ def capture(endpoint,wallet):
     if h["hash"]!=c.selector["blockHash"] or h["stateRoot"]!=ROOT_HASH or rpc(endpoint,"eth_chainId",[])!="0x1":raise ValueError("wrong header")
     result=[]
     for name,f,router in DEPLOYMENTS:
-        binding=roles(c,f,router)
+        binding,impl,factory_code=roles(c,f,router,name.startswith("proxy-"),name!="proxy-2")
         init=c.one(f,"INIT_CODE_PAIR_HASH()",returns=["bytes32"])[0]
         markets=registry(c,f,"0x"+init.hex())
         tokens=[(token,"balanceOf(address)",["address"],[m["pool"]]) for m in markets for token in m["tokens"]]
@@ -59,11 +86,13 @@ def capture(endpoint,wallet):
             m["balances"]=[str(int.from_bytes(v,"big")) if v else None for v in (next(balances),next(balances))]
             m["runtime"]=digest(raw(rpc(endpoint,"eth_getCode",[m["pool"],c.selector])))
         row=dict(id=name,roles=binding,init="0x"+init.hex(),markets=markets)
+        row["creation_code"]=initcode(factory_code,row["init"])
+        if impl:row["implementations"]=impl
         result.append(row)
-        if name not in ("original","v2"):continue
-        if binding["factory"]["deployer"].lower()!=binding["router"]["deployer"].lower():raise ValueError("unrelated factory and router deployments")
+        if name=="proxy-2":continue
+        if not impl and binding["factory"]["deployer"].lower()!=binding["router"]["deployer"].lower():raise ValueError("unrelated factory and router deployments")
         if len({m["runtime"] for m in markets})!=1:raise ValueError("multiple pair runtime versions")
-        row["pair_pips"]=2000;row["router_pips"]=binding["router"]["fee_pips"]
+        row["pair_pips"]=2000;row["router_pips"]=(impl or binding)["router"]["fee_pips"]
         if not wallet:continue
         for m in markets:
             money=next((x for x in [WETH,*STABLES] if x in m["tokens"]),None)
@@ -80,7 +109,7 @@ def capture(endpoint,wallet):
                         rounds=direct_wallet(c,m,[size],stamp,2000,router,wrapped=WETH,modes=(mode,),cash=money,funding=None if native else fund,audit=True,keep_partial=True)
                         m["rounds"].extend(rounds)
                     except (KeyError,ValueError) as error:m["unavailable"].append(dict(mode=mode,size=str(size),cause=str(error)[:220]))
-        if not all(any(t["mode"]==mode and "sell" in t for m in markets for t in m.get("rounds",[]))for mode in ("v5","router")):raise ValueError("missing execution mode for "+name)
+        if name!="proxy-1" and not all(any(t["mode"]==mode and "sell" in t for m in markets for t in m.get("rounds",[]))for mode in ("v5","router")):raise ValueError("missing execution mode for "+name)
     return dict(selector=c.selector,state_root=h["stateRoot"],chain=1,height=int(h["number"],16),deployments=result)
 
 if __name__=="__main__":

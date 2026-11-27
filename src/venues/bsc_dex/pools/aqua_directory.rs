@@ -3,7 +3,6 @@ use super::{
     aqua::{self, Program, Roles},
     aqua_book::{self, Book, Offer},
     families::{self, Family},
-    family_variant::Variant,
     stable_list::{self, Extra},
     verify::{Candidate, Verdict},
 };
@@ -110,7 +109,7 @@ pub(super) fn scan(ctx: &Ctx, coins: &HashMap<Address, String>, quotes: &[Addres
     let mut out = Extra::default();
     for f in families::all(ctx)
         .into_iter()
-        .filter(|f| f.variant == Variant::Aqua && families::classify(ctx, f.id).is_ok())
+        .filter(|f| f.variant.aqua() && families::classify(ctx, f.id).is_ok())
     {
         let Ok((chain, roles)) = scope(ctx, f) else {
             continue;

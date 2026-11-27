@@ -63,7 +63,7 @@ impl Market<'_> {
         let mut reqs = Vec::new();
         let first = self.offer.first;
         // Срок реальной сделки выбирается заново перед подписью.
-        let deadline = (1u64 << 40) - 1;
+        let deadline = aqua::MAX_DEADLINE;
         let taker =
             aqua::traits(U256::ONE, self.payer, deadline, first).ok_or_else(|| aqua::bad(ctx))?;
         let mut jobs = Vec::new();

@@ -99,7 +99,7 @@ pub(super) async fn paid(
     let mut taker = aqua::traits(
         cap.unwrap_or(U256::MAX),
         payer,
-        (1u64 << 40) - 1,
+        aqua::MAX_DEADLINE,
         offer.first,
     )
     .ok_or_else(fail)?

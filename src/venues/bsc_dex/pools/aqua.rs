@@ -13,6 +13,11 @@ use alloy_primitives::{Address, B256, Bytes, U256, keccak256};
 use serde_json::Value;
 
 // Арность generated событий следует опубликованному ABI.
+// https://github.com/1inch/swap-vm/blob/32c687c2b73101fc26549e48fa1ff8a4d73afbac/src/libs/MakerTraits.sol#L30
+const USE_AQUA_INSTEAD_OF_SIGNATURE: usize = 254;
+// https://github.com/1inch/swap-vm/blob/32c687c2b73101fc26549e48fa1ff8a4d73afbac/src/libs/TakerTraits.sol#L129-L147
+pub(in crate::venues::bsc_dex) const MAX_DEADLINE: u64 = (1u64 << 40) - 1;
+
 #[allow(clippy::too_many_arguments)]
 mod abi {
     alloy::sol! {
@@ -57,7 +62,7 @@ pub(in crate::venues::bsc_dex) fn program(maker: Address, h: B256, raw: &[u8]) -
     let p = Program::abi_decode_validate(raw).ok()?;
     (!maker.is_zero()
         && p.maker == maker
-        && p.traits.bit(254)
+        && p.traits.bit(USE_AQUA_INSTEAD_OF_SIGNATURE)
         && keccak256(raw) == h
         && p.abi_encode() == raw)
         .then_some(p)
@@ -150,7 +155,7 @@ pub(in crate::venues::bsc_dex) fn traits(
     deadline: u64,
     first: bool,
 ) -> Option<Bytes> {
-    if deadline >= (1u64 << 40) || recipient.is_zero() {
+    if deadline > MAX_DEADLINE || recipient.is_zero() {
         return None;
     }
     let mut b = Vec::with_capacity(79);
@@ -179,6 +184,24 @@ fn registered(a: u8, b: u8) -> bool {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn recorded_order_uses_aqua_and_encodes_the_last_uint40_deadline() {
+        use super::*;
+        let record: serde_json::Value = serde_json::from_slice(include_bytes!(
+            "../../../../tests/data/first_run_dex_2026-11-26/aqua_base_public_order.json"
+        ))
+        .unwrap();
+        let order = Program {
+            maker: record["maker"].as_str().unwrap().parse().unwrap(),
+            traits: record["traits"].as_str().unwrap().parse().unwrap(),
+            data: record["data"].as_str().unwrap().parse().unwrap(),
+        };
+        let hash = record["order_hash"].as_str().unwrap().parse().unwrap();
+        assert!(program(order.maker, hash, &order.abi_encode()).is_some());
+        let bytes = traits(U256::ONE, order.maker, MAX_DEADLINE, true).unwrap();
+        assert_eq!(&bytes[bytes.len() - 5..], &[0xff; 5]);
+        assert!(traits(U256::ONE, order.maker, MAX_DEADLINE + 1, true).is_none());
+    }
     #[test]
     fn each_asset_has_its_own_registration_count() {
         for pair in [(2, 3), (254, 1), (1, 1)] {

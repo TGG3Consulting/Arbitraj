@@ -474,3 +474,5 @@ impl Quoting {
         Ok(q)
     }
 }
+
+mod brokerbot_depth;

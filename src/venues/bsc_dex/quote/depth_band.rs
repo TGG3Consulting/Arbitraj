@@ -94,6 +94,11 @@ pub fn band_from_units(
     (buy, sell, full): (U256, U256, bool),
 ) -> Result<Band, String> {
     let usdt = tokens.usdt(ctx).map_err(|e| e.message)?;
+    if e.family.variant.issuer_shares() && let Some(wrapped)=rate::wrapped_bridge(ctx,usdt,e.usdt) {
+        let bridge=crate::venues::bsc_dex::pools::depth_key::Bridge{wrapped,
+            to_wrapped:rate::bridge_pools(reg,e.usdt,wrapped),to_usdt:rate::bridge_pools(reg,wrapped,usdt)};
+        return super::brokerbot_depth::band(ctx,e.usdt,usdt_dec,(buy,sell,full),&reg.pair_arcs(e.usdt,usdt),&bridge);
+    }
     let to = |a: U256| -> Result<Decimal, String> {
         if a.is_zero() && e.family.variant.issuer_shares(){return Ok(Decimal::ZERO);}
         let u = rate::to_usdt(ctx, reg, usdt, e.usdt, a).map_err(|e| e.message)?;
@@ -126,6 +131,9 @@ pub fn band_from_rate(
     let usdt = tokens.usdt(ctx).map_err(|e| e.message)?;
     if e.usdt == usdt {
         return band_from_units(ctx, reg, tokens, e, usdt_dec, units);
+    }
+    if e.family.variant.issuer_shares() && let Some(bridge) = pools.bridge.as_deref() {
+        return super::brokerbot_depth::band(ctx, e.usdt, usdt_dec, units, pools.pools.as_slice(), bridge);
     }
     let (buy, sell, full) = units;
     let to = |a: U256| -> Result<Decimal, String> {

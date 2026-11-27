@@ -108,6 +108,20 @@ async fn three_hop_graph_matches_both_whole_share_payments_and_original_executor
             markets.push(e);
         }
         markets.push(shares);
+        assert_eq!(p.tokens.usdt(&p.ctx).unwrap(), usd);
+        for e in &markets {
+            let d = p
+                .registry
+                .depth()
+                .depth(&p.ctx, &p.registry, &p.tokens, e, 6);
+            assert!(
+                d.as_ref().is_ok_and(|x| x.deep_buy || x.deep_sell),
+                "ожидалось ребро {:?}, глубина {:?}, chain {:?}",
+                e.pool.reference,
+                d,
+                p.ctx.chain_id()
+            );
+        }
         let g = graph::build(&p.ctx, &p.registry, &p.tokens, 6).unwrap();
         let path = route_paths::enumerate(&g, usd, stock, &allowed, 3, 20)
             .into_iter()

@@ -7,7 +7,7 @@ import requests
 from eth_abi import decode
 from eth_utils import keccak
 
-from record_gladius_fills import FILL, TRANSFER, ZERO, IMPL_SLOT, Reader, addr, canonical, hashed
+from record_gladius_fills import FILL, TRANSFER, ZERO, IMPL_SLOT, Reader, addr, call_data, canonical, hashed
 
 HOST = "https://x.pancakeswap.com/order-handler/orders"
 PCS = "0x88815caf0b12208585832b693841c9da19c91687"
@@ -50,7 +50,8 @@ def native(tx, block, index, wallet):
             if row["type"] == "call" and row["success"] and int(row["value"] or 0):
                 payments.append({"index": row["index"], "from": row["from"]["hash"].lower(),
                                  "to": row["to"]["hash"].lower(), "amount": row["value"]})
-        params = page.get("next_page_params")
+        params = {k: str(v).lower() if isinstance(v, bool) else v
+                  for k, v in (page.get("next_page_params") or {}).items()}
         if not params:
             return [x for x in payments if wallet in (x["from"], x["to"])]
 
@@ -108,6 +109,14 @@ def run(net):
         impl = addr(r.rpc("eth_getStorageAt", [address, IMPL_SLOT, at]))
         roles[address] = {"runtime": hashed(code) if code else None, "implementation": impl,
                           "implementation_runtime": hashed(bytes.fromhex(r.rpc("eth_getCode", [impl, at])[2:])) if impl != ZERO else None}
+        if address == PCS:
+            bound = {}
+            for getter in ("permit2()", "exclusiveDutchReactor()", "v3DutchReactor()", "v4DutchReactor()"):
+                a = addr(r.view(address, call_data(getter), at))
+                bytecode = bytes.fromhex(r.rpc("eth_getCode", [a, at])[2:])
+                assert a != ZERO and bytecode
+                bound[getter] = {"address": a, "runtime": hashed(bytecode)}
+            roles[address]["facets_and_permit"] = bound
     return {"network": net, "head": header(h), "roles": roles, "open_page": live(chain),
             "history": [inspect(r, chain, reactors, tx) for tx in samples]}
 

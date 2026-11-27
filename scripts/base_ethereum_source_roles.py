@@ -75,6 +75,25 @@ def describe(network,source_id,adapter,configured,candidates):
     path = adapter.get("path")
     revision="be9967c3f0d3ccd06c871bab0d16beb3304de719"
     repository=f"https://github.com/DefiLlama/dimension-adapters/blob/{revision}/"
+    # Each entry explains what the cited adapter actually counts on this chain.
+    # A terminal's or card programme's turnover is not a second claim on its suppliers' reserves.
+    dimensions = {
+        "fees/collector-crypt/index.ts": (113, "Collector Crypt считает оплату наборов коллекционных карт в USDC и обратные выкупы. Оплата пакета не задаёт пару двух взаимозаменяемых токенов."),
+        "fees/central-city.ts": (65, "События FeeCharged за услуги агентов x402. В оборот входит gross по включённому типу платежа. Услуга не образует вторую валюту обмена."),
+        "dexs/topmarket/index.ts": (271, "Top.Market суммирует USDC за открытие наборов карт, в том числе позже возвращённые платежи. Сумма покупок пакетов не задаёт исполнимый курс токена."),
+        "dexs/thales/index.ts": (321, "Overtime учитывает билеты спортивных ставок, позиции Speed Markets и деятельность казино. Встречная выплата зависит от исхода события."),
+        "fees/dyli/index.ts": (401, "DYLI объединяет оплату физических коллекционных карт, наборов, услуг и операции маркетплейса, включая Stripe. Эта метрика не определяет котировку пары ERC20."),
+        "dexs/coinlotto/index.ts": (111, "CoinLotto считает цену лотерейного билета, умноженную на количество. Покупатель получает участие в розыгрыше."),
+        "fees/azuro/index.ts": (90, "Azuro суммирует поставленные средства по рассчитанным ставкам трёх версий. Требуемый спотовой паре встречный актив в этом измерении отсутствует."),
+        "dexs/sudoswap-v2/index.ts": (16, "Sudoswap V2 использует сделки NFT. Предмет определяется контрактом коллекции и tokenId; объём NFT не является глубиной взаимозаменяемого токена."),
+        "dexs/o1-exchange/index.ts": (150, "Оборот терминала o1 вычислен по комиссии, умноженной на 100. Запись не задаёт адрес пула, резерв или firm quote. Цену может подтвердить только фактический источник обмена."),
+        "dexs/bloom.ts": (73, "Bloom сопоставляет сделки нижележащих DEX с адресами роутеров терминала. Один и тот же обмен нельзя прибавить как отдельный остаток Bloom."),
+        "dexs/axiom.ts": (125, "Axiom считает сделки нижележащих площадок через контракты терминала. В этой строке нет отдельной кассы Axiom."),
+        "dexs/aveai/index.ts": (162, "Ave.ai измеряет обмены через нижележащие DEX, включая исполненные лимитные заявки. Для глубины учитывается источник фактической оплаты каждой ноги."),
+    }
+    if path in dimensions:
+        line, reason=dimensions[path]
+        return f"{reason} [Методика]({repository}{path}#L{line})."
     basin={
         ("base","5458","dexs/pinto/index.ts"):("pinto-exchange-base","pinto_base"),
         ("ethereum","4703","dexs/basin/index.ts"):("basin-wells-ethereum","basin_ethereum"),

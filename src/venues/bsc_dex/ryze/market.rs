@@ -22,6 +22,8 @@ use rust_decimal::Decimal;
 pub struct Ticket {
     pub config: Config,
     pub usd_fee: U256,
+    /// Полное списание и выдача последнего exact-input ответа Router, до усиления минимума.
+    pub measured: (U256, U256),
     pub order: SwapIntent,
     pub at: DateTime<Utc>,
     pub decimals: (u8, u8),
@@ -66,6 +68,7 @@ impl Snapshot {
         asset: Address,
         side: Side,
         qty: Decimal,
+        previous_cap: Option<U256>,
     ) -> Option<(Ticket, Decimal)> {
         let c = &self.config;
         let buy = side == Side::Buy;
@@ -115,6 +118,15 @@ impl Snapshot {
         if units.is_zero() || num::to_decimal(units, decs.0) != Some(qty) {
             return None;
         }
+        let mut buy_cap = balance.min(allow);
+        if buy {
+            if let Some(limit) = crate::gateway::quote_stage::buy_budget(ctx.place.id, input) {
+                buy_cap = buy_cap.min(num::to_units(limit, id)?);
+            }
+            if let Some(limit) = previous_cap {
+                buy_cap = buy_cap.min(limit);
+            }
+        }
         let m = price::Market {
             wallet: self.wallet,
             input,
@@ -122,6 +134,7 @@ impl Snapshot {
             decimals: (id, od),
             pools: &self.markets,
             slippage_bps: c.slippage,
+            buy_cap,
             max_age_ms: c.max_age_ms,
         };
         let Quoted {
@@ -166,7 +179,8 @@ impl Snapshot {
             deadline: U256::from(deadline),
             path,
         };
-        if !order.matches(self.wallet, &self.markets, self.h.timestamp.to())
+        if !order.accepts_payment(gross, expected)
+            || !order.matches(self.wallet, &self.markets, self.h.timestamp.to())
             || !canonical(
                 ctx,
                 &at,
@@ -184,6 +198,7 @@ impl Snapshot {
         let ticket = Ticket {
             config: c.clone(),
             usd_fee: self.fee,
+            measured: (gross, expected),
             order,
             at: quoted_at,
             decimals: decs,

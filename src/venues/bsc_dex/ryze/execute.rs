@@ -1,6 +1,7 @@
 //! Штатный выбор подписывает только проверенные цены и путь. Перед единственным POST журнал содержит исходные EIP‑712 поля и digest.
 use super::super::{num, parts::Parts, quote::white_state, wallet::signer};
 use super::{
+    declined::declined,
     deployment::Config,
     http,
     ledger::{self, Marker},
@@ -61,7 +62,7 @@ fn bounds(r: &TradeRequest, old: &Ticket, new: &Ticket, cash: Decimal) -> Option
             return None;
         }
     }
-    Some(o)
+    o.accepts_payment(new.measured.0, new.measured.1).then_some(o)
 }
 
 pub(in crate::venues::bsc_dex) async fn trade(
@@ -92,8 +93,14 @@ pub(in crate::venues::bsc_dex) async fn trade(
     let s = Snapshot::read(p, old.config.clone())
         .await
         .ok_or_else(bad)?;
+    let cap = if r.side == Side::Buy {
+        let worst_cash = r.qty.checked_mul(r.worst_price).ok_or_else(bad)?;
+        Some(old.order.amountIn.min(num::to_units(worst_cash, old.decimals.1).ok_or_else(bad)?))
+    } else {
+        None
+    };
     let (new, cash) = s
-        .measure(p, r.asset.contract.ok_or_else(bad)?, r.side, r.qty)
+        .measure(p, r.asset.contract.ok_or_else(bad)?, r.side, r.qty, cap)
         .await
         .ok_or_else(bad)?;
     let order = bounds(&r, &old, &new, cash).ok_or_else(bad)?;
@@ -186,58 +193,4 @@ pub(in crate::venues::bsc_dex) async fn trade(
     recovery::reconcile(p, r, &pending)
         .await?
         .ok_or_else(unknown)
-}
-
-/// Сохраняет нулевой результат для однозначного отказа первого POST или до сетевого вызова.
-/// Принимает исходный маркер и причину для карточки и журнала. Конфликт исхода оставляет OutcomeUnknown.
-pub(super) async fn declined(
-    p: &Parts,
-    mut r: TradeRequest,
-    m: &Marker,
-    reason: Option<&str>,
-) -> GatewayResult<TradeResult> {
-    let ctx = &p.ctx;
-    let db = ctx.journal.db();
-    let pending = m.pending();
-    let unknown = || {
-        ctx.err(
-            ErrorCode::OutcomeUnknown,
-            "Ryze: требуется сверка записи отказа по исходному digest",
-        )
-        .pending(pending.clone())
-    };
-    let entry = intent::load(db, &m.key)
-        .await
-        .map_err(|_| unknown())?
-        .ok_or_else(unknown)?;
-    if entry.lookup != pending || entry.result.is_some() {
-        return Err(unknown());
-    }
-    if let (Some(route), Some(reason)) = (&mut r.route, reason) {
-        route.exec_note = Some(reason.to_owned());
-    }
-    let done = super::result::empty(r, m.digest);
-    intent::confirm(
-        db,
-        &m.key,
-        &entry,
-        intent::Outcome::Order(Box::new(done.clone())),
-    )
-    .await
-    .map_err(|_| unknown())?;
-    if let Some(reason) = reason {
-        let _ = ctx
-            .journal
-            .write(
-                crate::storage::journal::Level::Warn,
-                "ryze.relayer_declined",
-                Some(ctx.place.id),
-                reason,
-                Some(serde_json::json!({"digest":m.digest,"deal_id":done.trade.request.deal_id})),
-            )
-            .await;
-    }
-    m.release(db).await.map_err(|_| unknown())?;
-    intent::note_gross(Some(done.gross_quote));
-    Ok(done.trade)
 }

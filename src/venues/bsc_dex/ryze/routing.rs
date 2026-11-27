@@ -40,7 +40,7 @@ pub(in crate::venues::bsc_dex) async fn consider(
     let read = async {
         if firm {
             let s = Snapshot::read(p, c.clone()).await?;
-            s.measure(p, coin, side, qty).await
+            s.measure(p, coin, side, qty, None).await
         } else {
             p.ryze.indicative(&c, coin, side, qty)
         }
@@ -88,6 +88,12 @@ pub fn quote(
     gross: Decimal,
     id: Option<B256>,
 ) -> Option<Quote> {
+    if t.side == Side::Buy
+        && crate::gateway::quote_stage::buy_budget(p.ctx.place.id, t.order.tokenIn)
+            .is_some_and(|limit| gross > limit)
+    {
+        return None;
+    }
     Some(Quote {
         venue: p.ctx.venue(),
         asset: asset.clone(),

@@ -26,6 +26,12 @@ alloy::sol! {
 }
 
 impl SwapIntent {
+    /// Суммы этой ноги: полный вход до отдельного возврата и чистая выдача указанному получателю.
+    pub(super) fn accepts_payment(&self, gross: U256, received: U256) -> bool {
+        !gross.is_zero() && gross == self.amountIn
+            && !self.minAmountOut.is_zero() && received >= self.minAmountOut
+    }
+
     pub fn digest(&self, chain: u64, router: Address) -> B256 {
         self.eip712_signing_hash(&eip712_domain! {
             name: "MultiHopRouter", version: "1", chain_id: chain, verifying_contract: router,

@@ -41,8 +41,6 @@ pub fn confirmed(order: &SwapIntent, router: Address, receipt: &Receipt) -> Opti
         if found.is_some()
             || (ev.tokenIn, ev.tokenOut, ev.recipient)
                 != (order.tokenIn, order.tokenOut, order.recipient)
-            || ev.amountIn != order.amountIn
-            || ev.amountOut < order.minAmountOut
             || ev.fee >= ev.amountIn
         {
             return None;
@@ -51,7 +49,8 @@ pub fn confirmed(order: &SwapIntent, router: Address, receipt: &Receipt) -> Opti
         let wallet = Some(order.user);
         let paid = moved(order.tokenIn, wallet, Some(router));
         let obtained = moved(order.tokenOut, Some(router), wallet);
-        if paid != ev.amountIn
+        if !order.accepts_payment(paid, obtained)
+            || paid != ev.amountIn
             || obtained != ev.amountOut
             || moved(order.tokenIn, wallet, None) != paid
             || !moved(order.tokenOut, wallet, None).is_zero()

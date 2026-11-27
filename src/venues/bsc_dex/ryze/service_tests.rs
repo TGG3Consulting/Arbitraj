@@ -1,6 +1,6 @@
 //! О-35: архив ответов Router и Relayer, разный смысл 429 отправки и статуса, восстановление без новой подписи.
 use super::{
-    budget, http, ledger::Marker, price::Market, relay_tests::limits, wire::executeSwapIntentsCall,
+    budget, http, ledger::Marker, relay_tests::limits, wire::executeSwapIntentsCall,
 };
 use crate::{
     core::types::{Asset, DexRoute, RouteMode, Side, TradeRequest, TradeStatus},
@@ -9,7 +9,7 @@ use crate::{
     venues::bsc_dex::hashflow::recovery_tests::{directory, parts},
 };
 use alloy::{
-    primitives::{Address, B256, Bytes, U256},
+    primitives::{B256, Bytes},
     sol_types::SolCall,
 };
 use axum::{
@@ -19,89 +19,11 @@ use axum::{
 };
 use rust_decimal::Decimal;
 use serde_json::{Value, json};
-use std::{
-    collections::VecDeque,
-    sync::{Arc, Mutex},
-};
 fn source() -> Value {
     serde_json::from_str(include_str!(
         "../../../../tests/data/first_run_dex_2026-11-26/ryze_service_responses.json"
     ))
     .unwrap()
-}
-
-#[tokio::test]
-async fn router_book_stops_when_recorded_input_or_buy_minimum_disagrees() {
-    let data = source();
-    for example in data["router_quotes"].as_array().unwrap() {
-        let calls = example["calls"].as_array().unwrap();
-        let seen = Arc::new(Mutex::new(VecDeque::from(calls.clone())));
-        let seq = seen.clone();
-        let req = &calls[0]["request"];
-        let body = &calls[0]["body"];
-        let address = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
-        let a = address(&req["tokenIn"]);
-        let b = address(&req["tokenOut"]);
-        let pools: Vec<_> = data["settings_pools"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|v| (address(&v[0]), address(&v[1]), address(&v[2])))
-            .collect();
-        let m = Market {
-            wallet: address(&req["userAddress"]),
-            input: a,
-            output: b,
-            decimals: (
-                body["input"]["decimals"].as_u64().unwrap() as u8,
-                body["output"]["decimals"].as_u64().unwrap() as u8,
-            ),
-            pools: &pools,
-            slippage_bps: req["slippageTolerance"].as_u64().unwrap() as u16,
-            max_age_ms: u64::MAX,
-        };
-        let endpoint = Router::new().route(
-            "/quote",
-            post(move |Json(got): Json<Value>| {
-                let r = seq.lock().unwrap().pop_front().unwrap();
-                async move {
-                    assert_eq!(got, r["request"]);
-                    Json(r["body"].clone())
-                }
-            }),
-        );
-        let sock = tokio::net::TcpListener::bind(("127.0.0.1", 0))
-            .await
-            .unwrap();
-        let addr = sock.local_addr().unwrap();
-        let run = tokio::spawn(async move { axum::serve(sock, endpoint).await.unwrap() });
-        let buy = example["buy"].as_bool().unwrap();
-        let qty = req[if buy { "amountOut" } else { "amountIn" }]
-            .as_str()
-            .unwrap()
-            .parse::<U256>()
-            .unwrap();
-        let fee = data["fee_reference"]["usd_wad"]
-            .as_str()
-            .unwrap()
-            .parse::<U256>()
-            .unwrap();
-        let measured = m
-            .measure(
-                format!("http://{addr}/quote").parse().unwrap(),
-                limits(),
-                fee,
-                qty,
-                buy,
-            )
-            .await;
-        // У SELL уже первый steps[0].amountIn меньше input.amount. Для BUY второй exact-input
-        // ответ даёт меньше подписываемого минимального выхода. В обоих случаях ордера нет.
-        assert!(measured.is_none());
-        let sent = calls.len() - seen.lock().unwrap().len();
-        assert_eq!(sent, if buy { 2 } else { 1 });
-        run.abort();
-    }
 }
 
 #[tokio::test]

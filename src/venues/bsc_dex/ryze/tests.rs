@@ -56,6 +56,11 @@ fn mined_batch_binds_signer_nonce_router_path_and_wallet_deltas() {
         let f = fill::confirmed(&order, tx.to, &case.receipt).unwrap();
         assert_eq!(f.input_to_router, U256::from(spent));
         assert_eq!(f.output_from_router, U256::from(received));
+        // Пределы исходного поручения сверяем с наблюдёнными переводами, до отдельного возврата пула.
+        assert!(order.accepts_payment(f.input_to_router, f.output_from_router));
+        assert!(!order.accepts_payment(f.input_to_router + U256::ONE, f.output_from_router));
+        assert!(!order.accepts_payment(f.input_to_router, order.minAmountOut - U256::ONE));
+        assert_eq!(f.input_to_router - f.input_from_path, U256::from(spent - path_credit));
         assert_eq!(f.fee_in_input, U256::from(fee));
         assert_eq!(f.input_from_path, U256::from(path_credit));
         case.receipt.logs.extend(case.receipt.logs.clone());

@@ -163,7 +163,7 @@ pub(in crate::venues::bsc_dex) async fn run(
                     continue;
                 }
                 for side in [Side::Buy, Side::Sell] {
-                    if let Some((t, v)) = s.measure(&p, a, side, q).await {
+                    if let Some((t, v)) = s.measure(&p, a, side, q, None).await {
                         levels.push((t, v, a));
                     }
                 }

@@ -1,0 +1,376 @@
+{
+  "quoteEndpoint": "https://mainnet.router.ryze.pro/quote",
+  "description": "Последовательные ответы публичного Router на покупку 0,001 WETH за USDC, сеть Base. Отправка поручения не выполнялась.",
+  "target": "1000000000000000",
+  "buy": true,
+  "calls": [
+    {
+      "url": "https://mainnet.router.ryze.pro/quote",
+      "request": {
+        "userAddress": "0xc343799cf487626526566c55e8ff39dc14b098bf",
+        "tokenIn": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "tokenOut": "0x4200000000000000000000000000000000000006",
+        "slippageTolerance": 30,
+        "maxHops": 2,
+        "amountOut": "1000000000000000"
+      },
+      "status": 200,
+      "body": {
+        "routeId": "route-1795820997060229906",
+        "type": "single_hop",
+        "input": {
+          "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "amount": "1658725",
+          "decimals": 6
+        },
+        "output": {
+          "token": "0x4200000000000000000000000000000000000006",
+          "amount": "1000000000000000",
+          "decimals": 18
+        },
+        "path": [
+          "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "steps": [
+          {
+            "pool": "0x22f902cEfcF8b0bEc6489Cb8ac11FdDa9B2aF125",
+            "tokenIn": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "tokenOut": "0x4200000000000000000000000000000000000006",
+            "amountIn": "1658725",
+            "amountOut": "1000000000000000",
+            "priceImpact": "0.00099949",
+            "fees": {
+              "swapFee": "82",
+              "swapFeePct": "49435560445522",
+              "takerFee": "82",
+              "takerFeePct": "49435560445522",
+              "slippageFee": "1656",
+              "slippagePct": "999487581547865",
+              "wbfFee": "51",
+              "wbfFeePct": "30746507106361",
+              "wbrReward": "0",
+              "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+            }
+          }
+        ],
+        "totalFees": {
+          "swapFee": "82",
+          "swapFeePct": "49435560445522",
+          "takerFee": "82",
+          "takerFeePct": "49435560445522",
+          "slippageFee": "1656",
+          "slippagePct": "999487581547865",
+          "wbfFee": "51",
+          "wbfFeePct": "30746507106361",
+          "wbrReward": "0",
+          "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+        },
+        "incentive": {
+          "maxBps": 0,
+          "displayPct": "0.000%",
+          "tokenOut": "0x4200000000000000000000000000000000000006",
+          "isImproving": false
+        },
+        "priceImpact": "0.00113041",
+        "spotPrice": "0.000603555",
+        "executionPrice": "0.0006028727",
+        "confidence": 1,
+        "timestamp": "2026-11-27T23:09:57.061139685Z",
+        "prices": [
+          {
+            "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "pythPrice": "999902410000000000",
+            "cexPrice": "1000024167500000100",
+            "blendFactor": "1000000000000000000",
+            "blendedPrice": "1000024167500000100"
+          },
+          {
+            "token": "0x4200000000000000000000000000000000000006",
+            "pythPrice": "1657461921470000000000",
+            "cexPrice": "1656890000000000000000",
+            "blendFactor": "1000000000000000000",
+            "blendedPrice": "1656890000000000000000"
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://mainnet.router.ryze.pro/quote",
+      "request": {
+        "userAddress": "0xc343799cf487626526566c55e8ff39dc14b098bf",
+        "tokenIn": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "tokenOut": "0x4200000000000000000000000000000000000006",
+        "slippageTolerance": 30,
+        "maxHops": 2,
+        "amountIn": "1668725"
+      },
+      "status": 200,
+      "body": {
+        "routeId": "route-1795820997435414271",
+        "type": "single_hop",
+        "input": {
+          "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "amount": "1668725",
+          "decimals": 6
+        },
+        "output": {
+          "token": "0x4200000000000000000000000000000000000006",
+          "amount": "999999247984922",
+          "decimals": 18
+        },
+        "path": [
+          "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "steps": [
+          {
+            "pool": "0x22f902cEfcF8b0bEc6489Cb8ac11FdDa9B2aF125",
+            "tokenIn": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "tokenOut": "0x4200000000000000000000000000000000000006",
+            "amountIn": "1658725",
+            "amountOut": "999999247984922",
+            "priceImpact": "0.001",
+            "fees": {
+              "swapFee": "82",
+              "swapFeePct": "49435560445522",
+              "takerFee": "82",
+              "takerFeePct": "49435560445522",
+              "slippageFee": "1658",
+              "slippagePct": "999999999999669",
+              "wbfFee": "51",
+              "wbfFeePct": "30746507106361",
+              "wbrReward": "0",
+              "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+            }
+          }
+        ],
+        "totalFees": {
+          "swapFee": "82",
+          "swapFeePct": "49435560445522",
+          "takerFee": "82",
+          "takerFeePct": "49435560445522",
+          "slippageFee": "1658",
+          "slippagePct": "999999999999669",
+          "wbfFee": "51",
+          "wbfFeePct": "30746507106361",
+          "wbrReward": "0",
+          "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+        },
+        "incentive": {
+          "maxBps": 0,
+          "displayPct": "0.000%",
+          "tokenOut": "0x4200000000000000000000000000000000000006",
+          "isImproving": false
+        },
+        "priceImpact": "0.00711698",
+        "spotPrice": "0.000603555",
+        "executionPrice": "0.0005992595",
+        "confidence": 1,
+        "timestamp": "2026-11-27T23:09:57.49837462Z",
+        "prices": [
+          {
+            "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "pythPrice": "999901900000000000",
+            "cexPrice": "1000024167500000100",
+            "blendFactor": "1000000000000000000",
+            "blendedPrice": "1000024167500000100"
+          },
+          {
+            "token": "0x4200000000000000000000000000000000000006",
+            "pythPrice": "1657464445890000000000",
+            "cexPrice": "1656890000000000000000",
+            "blendFactor": "1000000000000000000",
+            "blendedPrice": "1656890000000000000000"
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://mainnet.router.ryze.pro/quote",
+      "request": {
+        "userAddress": "0xc343799cf487626526566c55e8ff39dc14b098bf",
+        "tokenIn": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "tokenOut": "0x4200000000000000000000000000000000000006",
+        "slippageTolerance": 30,
+        "maxHops": 2,
+        "amountIn": "1668727"
+      },
+      "status": 200,
+      "body": {
+        "routeId": "route-1795820997854787861",
+        "type": "single_hop",
+        "input": {
+          "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "amount": "1668727",
+          "decimals": 6
+        },
+        "output": {
+          "token": "0x4200000000000000000000000000000000000006",
+          "amount": "999979342252956",
+          "decimals": 18
+        },
+        "path": [
+          "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "steps": [
+          {
+            "pool": "0x22f902cEfcF8b0bEc6489Cb8ac11FdDa9B2aF125",
+            "tokenIn": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "tokenOut": "0x4200000000000000000000000000000000000006",
+            "amountIn": "1658727",
+            "amountOut": "999979342252956",
+            "priceImpact": "0.001",
+            "fees": {
+              "swapFee": "82",
+              "swapFeePct": "49435500838896",
+              "takerFee": "82",
+              "takerFeePct": "49435500838896",
+              "slippageFee": "1658",
+              "slippagePct": "999999999999156",
+              "wbfFee": "51",
+              "wbfFeePct": "30746470033947",
+              "wbrReward": "0",
+              "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+            }
+          }
+        ],
+        "totalFees": {
+          "swapFee": "82",
+          "swapFeePct": "49435500838896",
+          "takerFee": "82",
+          "takerFeePct": "49435500838896",
+          "slippageFee": "1658",
+          "slippagePct": "999999999999156",
+          "wbfFee": "51",
+          "wbfFeePct": "30746470033947",
+          "wbrReward": "0",
+          "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+        },
+        "incentive": {
+          "maxBps": 0,
+          "displayPct": "0.000%",
+          "tokenOut": "0x4200000000000000000000000000000000000006",
+          "isImproving": false
+        },
+        "priceImpact": "0.00711696",
+        "spotPrice": "0.0006035422",
+        "executionPrice": "0.0005992468",
+        "confidence": 1,
+        "timestamp": "2026-11-27T23:09:57.892596291Z",
+        "prices": [
+          {
+            "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "pythPrice": "999901210000000000",
+            "cexPrice": "1000024167500000100",
+            "blendFactor": "1000000000000000000",
+            "blendedPrice": "1000024167500000100"
+          },
+          {
+            "token": "0x4200000000000000000000000000000000000006",
+            "pythPrice": "1657463808950000000000",
+            "cexPrice": "1656925000000000000000",
+            "blendFactor": "1000000000000000000",
+            "blendedPrice": "1656925000000000000000"
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://mainnet.router.ryze.pro/quote",
+      "request": {
+        "userAddress": "0xc343799cf487626526566c55e8ff39dc14b098bf",
+        "tokenIn": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "tokenOut": "0x4200000000000000000000000000000000000006",
+        "slippageTolerance": 30,
+        "maxHops": 2,
+        "amountIn": "1673732"
+      },
+      "status": 200,
+      "body": {
+        "routeId": "route-1795820998235697115",
+        "type": "single_hop",
+        "input": {
+          "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "amount": "1673732",
+          "decimals": 6
+        },
+        "output": {
+          "token": "0x4200000000000000000000000000000000000006",
+          "amount": "1002996653943068",
+          "decimals": 18
+        },
+        "path": [
+          "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "0x4200000000000000000000000000000000000006"
+        ],
+        "steps": [
+          {
+            "pool": "0x22f902cEfcF8b0bEc6489Cb8ac11FdDa9B2aF125",
+            "tokenIn": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "tokenOut": "0x4200000000000000000000000000000000000006",
+            "amountIn": "1663732",
+            "amountOut": "1002996653943068",
+            "priceImpact": "0.001",
+            "fees": {
+              "swapFee": "83",
+              "swapFeePct": "49887842513097",
+              "takerFee": "83",
+              "takerFeePct": "49887842513097",
+              "slippageFee": "1663",
+              "slippagePct": "999999999999701",
+              "wbfFee": "51",
+              "wbfFeePct": "30653975520095",
+              "wbrReward": "0",
+              "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+            }
+          }
+        ],
+        "totalFees": {
+          "swapFee": "83",
+          "swapFeePct": "49887842513097",
+          "takerFee": "83",
+          "takerFeePct": "49887842513097",
+          "slippageFee": "1663",
+          "slippagePct": "999999999999701",
+          "wbfFee": "51",
+          "wbfFeePct": "30653975520095",
+          "wbrReward": "0",
+          "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+        },
+        "incentive": {
+          "maxBps": 0,
+          "displayPct": "0.000%",
+          "tokenOut": "0x4200000000000000000000000000000000000006",
+          "isImproving": false
+        },
+        "priceImpact": "0.00712004",
+        "spotPrice": "0.000603555",
+        "executionPrice": "0.0005992576",
+        "confidence": 1,
+        "timestamp": "2026-11-27T23:09:58.341074319Z",
+        "prices": [
+          {
+            "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "pythPrice": "999901210000000000",
+            "cexPrice": "1000024167500000100",
+            "blendFactor": "1000000000000000000",
+            "blendedPrice": "1000024167500000100"
+          },
+          {
+            "token": "0x4200000000000000000000000000000000000006",
+            "pythPrice": "1657460442310000000000",
+            "cexPrice": "1656890000000000000000",
+            "blendFactor": "1000000000000000000",
+            "blendedPrice": "1656890000000000000000"
+          }
+        ]
+      }
+    }
+  ],
+  "usd_fee_reference": {
+    "usd_wad": "10000000000000000",
+    "transaction": "0x377511e15584e680120c4375b5d10343ac98d805ee5616906438e9d4bdb25881"
+  }
+}

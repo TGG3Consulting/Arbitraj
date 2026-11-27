@@ -47,7 +47,7 @@ fn three_historical_fees_match_the_scheduled_usd_and_price_supplied_to_the_route
     }
 }
 #[tokio::test]
-async fn nonlinear_pool_is_requoted_at_net_input_after_rounding_the_flat_fee_per_hop() {
+async fn nonlinear_pool_receives_net_and_wallet_is_quoted_once_at_gross() {
     use super::price::{Market, input_fee};
     assert_eq!(
         input_fee(U256::from(3), U256::from(2), 0, 2),
@@ -65,9 +65,10 @@ async fn nonlinear_pool_is_requoted_at_net_input_after_rounding_the_flat_fee_per
     let mock=Router::new().route("/quote",post(move|State(seen):State<Arc<std::sync::Mutex<Vec<u64>>>>,Json(req):Json<Value>|async move{
         assert_eq!(req["userAddress"],json!(owner));
         let n=req["amountIn"].as_str().unwrap().parse::<u64>().unwrap();seen.lock().unwrap().push(n);
-        let output=n*1000/(100+n);
+        let pool_input=n-10;
+        let output=pool_input*1000/(100+pool_input);
         Json(json!({"input":{"token":a,"decimals":0,"amount":n.to_string()},"output":{"token":b,"decimals":0,"amount":output.to_string()},
-            "path":[a,b],"steps":[{"pool":p,"tokenIn":a,"tokenOut":b,"amountIn":n.to_string(),"amountOut":output.to_string()}],
+            "path":[a,b],"steps":[{"pool":p,"tokenIn":a,"tokenOut":b,"amountIn":pool_input.to_string(),"amountOut":output.to_string()}],
             "prices":[{"token":a,"blendedPrice":"1"}],"timestamp":chrono::Utc::now()}))
     })).with_state(observed);
     let socket = tokio::net::TcpListener::bind(("127.0.0.1", 0))
@@ -83,6 +84,7 @@ async fn nonlinear_pool_is_requoted_at_net_input_after_rounding_the_flat_fee_per
         decimals: (0, 0),
         pools: &pools,
         slippage_bps: 20,
+        buy_cap: U256::MAX,
         max_age_ms: 5000,
     };
     let q = m
@@ -95,7 +97,7 @@ async fn nonlinear_pool_is_requoted_at_net_input_after_rounding_the_flat_fee_per
         )
         .await
         .unwrap();
-    assert_eq!(calls.lock().unwrap().as_slice(), [100, 90]);
+    assert_eq!(calls.lock().unwrap().as_slice(), [100]);
     assert_eq!(
         (q.gross, q.net, q.expected, q.fee),
         (

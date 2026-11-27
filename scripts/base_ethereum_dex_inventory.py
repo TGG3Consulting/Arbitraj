@@ -2031,6 +2031,14 @@ def tables(network, snapshots, profiles):
                 task = (f"SharkSwap Router02 и V5 · {scope['registered']} CREATE2-пары; на двух рынках {scope['paid_legs']} "
                         "платежей исходного и обратного направления, точный вход, min+1 и истечение срока. "
                         "Штатный путь сравнивает ERC20, включая WETH. Форма выплаты ETH использует весь WETH роутера и в эти измерения не входит. DefiLlama учитывает только объём, историческое распределение комиссии не установлено")
+        if not base and str(row["id"]) == "7077":
+            book = base_launch_inventory.evidence("stabull_ethereum_directory.json.gz")
+            assert book["factory"]["address"] in [addr.lower() for addr in candidates]
+            offered = [p["pool_name"] for p in book["pools"] if all(q["received"] for q in p["quotes"])]
+            task = (f"Stabull Ethereum · {len(book['pools'])} Curve подтверждены CREATE и getCurve. "
+                    f"По 1 и 10 целых единиц положительные котировки в обе стороны: {', '.join(offered)}. "
+                    "Один рынок заморожен. Семь базовых валют рассчитаны против USDC; фабрика и штатный Router закреплены в настройках. "
+                    "Для нового модуля ещё требуется архив с фактическими выплатами на Ethereum.")
         if base and str(row["id"]) == "7077":
             curve = base_launch_inventory.evidence("stabull_base_directory.json.gz")
             assert curve["factory"]["address"] in [addr.lower() for addr in candidates]

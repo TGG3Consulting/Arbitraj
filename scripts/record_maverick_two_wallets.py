@@ -15,6 +15,22 @@ from maverick_two_target import targets
 DATA=ROOT/"tests/data/first_run_dex_2026-11-26"
 
 
+def orders(pool,a,quoter,router):
+    def build(x,y,amount,floor,deadline,mode):
+        if mode=="v5":
+            step=(7,pool,x,y,10000,b"")
+            return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
+                      ["address","uint256","address","uint256","uint256",STEP+"[]"],[x,amount,y,floor,deadline,[step]])
+        orders=[calldata("checkDeadline(uint256)",["uint256"],[deadline]),
+                calldata("exactInputSingle(address,address,bool,uint256,uint256)",["address","address","bool","uint256","uint256"],
+                         [OWNER,pool,x==a,amount,floor])]
+        return tx(router,"multicall(bytes[])",["bytes[]"],[[bytes.fromhex(s[2:]) for s in orders]])
+    def quote(x,y,amount):
+        return tx(quoter,"calculateSwap(address,uint128,bool,bool,int32)",["address","uint128","bool","bool","int32"],
+                  [pool,amount,x==a,False,(2**31-1) if x==a else -2**31])
+    return build,quote
+
+
 def capture(network,endpoint,source):
     c=Capture({"endpoint":endpoint,"selector":source["selector"]})
     header=rpc(endpoint,"eth_getBlockByHash",[c.selector["blockHash"],False])
@@ -31,18 +47,7 @@ def capture(network,endpoint,source):
     for pool,m in rows:
         a,b=m["tokens"];opposite=b if a==wrapped else a
         if opposite in assets:continue
-        def build(x,y,amount,floor,deadline,mode):
-            if mode=="v5":
-                step=(7,pool,x,y,10000,b"")
-                return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
-                          ["address","uint256","address","uint256","uint256",STEP+"[]"],[x,amount,y,floor,deadline,[step]])
-            orders=[calldata("checkDeadline(uint256)",["uint256"],[deadline]),
-                    calldata("exactInputSingle(address,address,bool,uint256,uint256)",["address","address","bool","uint256","uint256"],
-                             [OWNER,pool,x==a,amount,floor])]
-            return tx(router,"multicall(bytes[])",["bytes[]"],[[bytes.fromhex(s[2:]) for s in orders]])
-        def quote(x,y,amount):
-            return tx(quoter,"calculateSwap(address,uint128,bool,bool,int32)",["address","uint128","bool","bool","int32"],
-                      [pool,amount,x==a,False,(2**31-1) if x==a else -2**31])
+        build,quote=orders(pool,a,quoter,router)
         try:
             cases=direct_wallet(c,dict(m,pool=pool),[10**15,10**16],int(header["timestamp"],16),0,router,
                                wrapped=wrapped,audit=True,build_action=build,quote_call=quote)
@@ -58,7 +63,10 @@ def capture(network,endpoint,source):
         samples.append(dict(pool=pool,cases=cases,exact_out=exact_out));assets.add(opposite)
         if len(assets)==2:break
     if len(assets)!=2:raise ValueError([(r['pool'],r.get('reason')) for r in samples[:5]])
-    return dict(chain_id=source["chain_id"],selector=c.selector,state_root=source["state_root"],roles=roles,samples=samples)
+    from maverick_two_independent import independent
+    separate=independent(c,source,samples,int(header["timestamp"],16),orders)
+    return dict(chain_id=source["chain_id"],selector=c.selector,state_root=source["state_root"],roles=roles,
+                samples=samples,independent=separate)
 
 
 if __name__=="__main__":

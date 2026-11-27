@@ -44,7 +44,7 @@ def snapshot(network):
     birth=query("eth_getTransactionReceipt",[creation])
     if header["hash"]!=head["hash"] or int(birth["blockNumber"],16)!=first or birth["status"]!="0x1":
         raise ValueError("directory endpoints")
-    wanted=[h for h,n in TOPICS.items() if n in ("Shipped","Docked")]
+    wanted=[h for h,n in TOPICS.items() if n in ("Shipped","Docked","Pushed")]
     def logs(blocks):
         lo,hi=blocks
         for url in nodes:
@@ -64,31 +64,28 @@ def snapshot(network):
         records=[log for interval in workers.map(logs,spans) for log in interval]
     counts=Counter()
     shipped=[]
+    pushes={}
     for log in sorted(records,key=lambda v:(int(v["blockNumber"],16),int(v["logIndex"],16))):
         name,values=unpack(log)
         maker,app,h=values[:3]
         counts[(app,name)]+=1
         if app==ROUTER and name=="Shipped":shipped.append((maker,h,log,values[3]))
-    pushed=next(k for k,v in TOPICS.items() if v=="Pushed")
+        if app==ROUTER and name=="Pushed":
+            pushes[(log["blockHash"],log["transactionHash"],int(log["logIndex"],16))]=values
     def registration(item):
         maker,h,log,data=item
         try: rec=order_record(decode([ORDER],bytes.fromhex(data[2:]))[0])
         except (DecodingError,ValueError,OverflowError):rec=None
         row=dict(maker=maker,order=h,tx=log["transactionHash"],block=log["blockNumber"],blockHash=log["blockHash"])
         if not rec or rec[0]!=h or rec[1]["maker"]!=maker:return dict(**row,unsupported=True)
-        receipt=query("eth_getTransactionReceipt",[row["tx"]])
-        if receipt["blockHash"]!=row["blockHash"] or receipt["status"]!="0x1":
-            raise ValueError("changed registration receipt")
         pos=int(log["logIndex"],16)
         assets=[]
-        for event in sorted(receipt["logs"],key=lambda x:int(x["logIndex"],16)):
-            if int(event["logIndex"],16)<=pos:continue
-            if event["address"].lower()!=REGISTRY or event["topics"][:1]!=[pushed]:break
-            _,v=unpack(event)
+        while (v:=pushes.get((row["blockHash"],row["tx"],pos+1))) is not None:
             if tuple(v[:3])!=(maker,ROUTER,h):break
             assets.append(v[3])
+            pos+=1
         return dict(**row,traits=rec[1]["traits"],data=rec[1]["data"],assets=assets)
-    with ThreadPoolExecutor(max_workers=3) as workers:history=list(workers.map(registration,shipped))
+    history=list(map(registration,shipped))
     programs={}
     for row in history:
         if row.get("unsupported"):continue

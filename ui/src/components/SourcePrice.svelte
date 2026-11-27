@@ -34,7 +34,7 @@
       <label>Строитель Ethereum <select bind:value={builder} disabled={busy}><option value="buildernet">BuilderNet</option><option value="titan">Titan</option></select></label>
     {/if}
     {#if source !== 'fynd' && wallet}
-      <label><input type="checkbox" bind:checked={firm} disabled={busy} /> Запросить индивидуальные условия для этого кошелька и проверить обмен в симуляции</label>
+      <label><input type="checkbox" bind:checked={firm} disabled={busy} /> {source === 'bopamm' ? 'Проверить обмен через модуль этого кошелька в слоте строителя' : 'Запросить индивидуальные условия для этого кошелька и проверить обмен в симуляции'}</label>
       {#if firm}
         <label>Минимальная выплата в единицах контракта <input bind:value={minimum} disabled={busy} inputmode="numeric" /></label>
         {#if source === 'kipseli'}<label>Согласованная комиссия Kipseli в десятых долях базисного пункта <input bind:value={fee} disabled={busy} inputmode="numeric" /></label>{/if}

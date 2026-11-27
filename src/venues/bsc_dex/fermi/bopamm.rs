@@ -9,7 +9,7 @@ use crate::{
     settings::scope::Scope,
 };
 use alloy::{
-    primitives::{Address, B256, Bytes, U64, U256, keccak256},
+    primitives::{Address, B256, Bytes, U64, keccak256},
     sol_types::{SolCall, SolValue},
 };
 use chrono::Utc;

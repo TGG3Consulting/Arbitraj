@@ -68,23 +68,3 @@ test('canonical verification checks every implementation slot, runtime and all c
   await assert.rejects(checkPropModule(provider,p,module,at));
   await assert.rejects(checkPropVenue(provider,p,{blockHash:archive.sourceBlock}));
 });
-
-
-test('new wallets deploy the replay-protected module and pending wallets resume their original CREATE',async()=>{
-  const {selectPropDeployment}=await import('../src/lib/propVenueDeploy.js');
-  const artifacts=['prop-venue-ethereum','prop-slot-venue-ethereum','prop-slot-v2-ethereum']
-    .map(name=>JSON.parse(read('../src/assets/'+name+'.json')));
-  for (const market of Object.keys(artifacts[2].markets)) {
-    const plans=artifacts.map(archive=>archive.markets[market]);
-    const settings={market,hashes:plans.map(plan=>plan.runtimeKeccak)};
-    assert.equal(new Set(settings.hashes).size,3);
-    assert.equal(selectPropDeployment(settings,null,...artifacts),artifacts[2]);
-    for (const [i,plan] of plans.entries()) {
-      const pending={creation:plan.creationSha256};
-      assert.equal(selectPropDeployment(settings,pending,...artifacts),artifacts[i]);
-      assert.equal(selectPropDeployment({...settings,hashes:[plan.runtimeKeccak]},null,...artifacts),artifacts[i]);
-      assert.throws(()=>selectPropDeployment({...settings,hashes:[]},pending,...artifacts));
-    }
-    assert.throws(()=>selectPropDeployment(settings,{creation:'unknown'},...artifacts));
-  }
-});

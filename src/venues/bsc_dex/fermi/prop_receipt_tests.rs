@@ -31,7 +31,7 @@ fn both_builders_recover_the_complete_wallet_payout_from_the_original_slot() {
     ))
     .unwrap();
     let manifest: Value = serde_json::from_str(include_str!(
-        "../../../../ui/src/assets/prop-slot-v2-ethereum.json"
+        "../../../../ui/src/assets/prop-slot-v2-ethereum-previous.json"
     ))
     .unwrap();
     let venues = [

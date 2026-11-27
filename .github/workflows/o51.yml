@@ -14,6 +14,10 @@ jobs:
       - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/propslot" PropSlotVenueAdapter
       - run: python -m pip install requests eth-abi eth-utils pycryptodome
       - run: python scripts/verify_prop_slot_creation.py "$RUNNER_TEMP/propslot/PropSlotVenueAdapter.json" artifacts
+      - name: Recreate checked first-run slot card from the ordinary recorder
+        run: |
+          python scripts/record_prop_creates.py "$RUNNER_TEMP/propslot/PropSlotVenueAdapter.json" "$RUNNER_TEMP/from-recorder.json" --bound
+          python -c "import json,os; from pathlib import Path; a=json.loads(Path('ui/src/assets/prop-slot-v2-ethereum.json').read_bytes()); b=json.loads((Path(os.environ['RUNNER_TEMP'])/'from-recorder.json').read_bytes()); assert a == b"
       - uses: actions/upload-artifact@v4
         with:
           name: prop-slot-creation

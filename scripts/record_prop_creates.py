@@ -54,7 +54,18 @@ def capture(endpoint, compiled, bound=False):
             name=next(key for key,case in CASES.items() if case[0]==venue)
             archive=Path("tests/data/first_run_dex_2026-11-26")/(name+"_ethereum_bound_v2.json.gz")
             expected={r["runtime"] for r in json.loads(gzip.decompress(archive.read_bytes()))["builders"]}
-            if expected!={runtime_hash}:raise ValueError("slot wallet differs from the funded replay")
+            if expected != {runtime_hash}:
+                # A later metadata-only build has a distinct full digest. Match both actual runtimes.
+                from verify_wallet_creation import executable
+                path = archive.with_name("prop_slot_creation_v2.json.gz")
+                proof = json.loads(gzip.decompress(path.read_bytes()))
+                if proof["verification"]["sourceBlock"] != block:
+                    raise ValueError("slot runtime proof belongs to a different block")
+                versions = proof["markets"][venue]
+                old = bytes.fromhex(versions["previousRuntime"][2:])
+                new = bytes.fromhex(versions["currentRuntime"][2:])
+                if expected != {"0x"+keccak(old).hex()} or runtime != new or executable(old) != executable(new):
+                    raise ValueError("slot wallet differs from the funded replay")
         if accepted and runtime_hash not in accepted:
             raise ValueError("constructor differs from accepted wallet runtime for "+venue)
         data=bytes.fromhex(compiled["creation"])+encode(types,values)

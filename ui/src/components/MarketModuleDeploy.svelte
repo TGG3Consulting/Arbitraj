@@ -3,7 +3,7 @@
   import {fluidCard} from '../lib/fluidLiteDeploy.js';
   import {unsignedCache} from '../lib/aquaDeploy.js';
   import {onDestroy} from 'svelte';
-  import {selectPropDeployment} from '../lib/propVenueDeploy.js';
+  import {propCard} from '../lib/propVenueDeploy.js';
   import {deploymentScope} from '../lib/deploymentScope.js';
   import {store, setValue} from '../lib/settings.svelte.js';
   import {loadPlan, unsigned, estimate, send, deployed} from '../lib/walletDeployment.js';
@@ -57,7 +57,7 @@
   };
   const target = $derived(['registered_uni_v3','algebra_integral_theorem'].includes(kind) ? 'dex.v3_wallet_module' : 'dex.router');
   const deployment = $derived(kind==='lambda_propamm'
-    ? (String(store.values['dex.evm_chain_id|Venue|'+venue])==='1' ? {file:'prop-venue-'+id,key:'prop-venue-create:1:'+venue+':'+id,name:'PropVenueAdapter в Ethereum',load:async(settings,intent)=>{const [ordinary,slot,protectedSlot]=await Promise.all([import('../assets/prop-venue-ethereum.json'),import('../assets/prop-slot-venue-ethereum.json'),import('../assets/prop-slot-v2-ethereum.json')]);return {default:selectPropDeployment(settings,intent,ordinary.default,slot.default,protectedSlot.default)}}} : null)
+    ? (String(store.values['dex.evm_chain_id|Venue|'+venue])==='1' ? {file:'prop-venue-'+id,key:'prop-venue-create:1:'+venue+':'+id,name:'PropVenueAdapter в Ethereum',load:propCard} : null)
     : kind==='registered_uni_v3'
     ? (String(store.values['dex.evm_chain_id|Venue|'+venue])==='8453' && value('dex.module_runtime_hashes')?.length ? communityPlans[id.split('@')[0]] : null)
     : /^eulerswap_v[12](?:_module)?$/.test(kind) ? eulerByChain[String(store.values['dex.evm_chain_id|Venue|'+venue])]
@@ -183,7 +183,8 @@
     refreshPending(action);
     const original=pending;
     readyAddress='';
-    if (plan.kind === 'fluid_dex_lite') {
+    if (plan.kind === 'fluid_dex_lite' || plan.kind === 'lambda_propamm') {
+      const loadCard = deployment.load;
       let input;
       if (!original && /^0x[a-fA-F0-9]{64}$/.test(supplied)) {
         const transaction = await provider().request({method:'eth_getTransactionByHash', params:[supplied]});
@@ -191,9 +192,9 @@
         if (typeof transaction.input !== 'string') throw Error('В ответе узла отсутствуют данные CREATE.');
         input = transaction.input;
       }
-      plan = (await fluidCard(action.settings, original, input)).default;
+      plan = (await loadCard(action.settings, original, input)).default;
     }
-    await loadPlan(action.settings, plan);
+    plan = await loadPlan(action.settings, plan);
     action.check();
     const fact = await deployed(provider(), plan, supplied, original);
     await reconcile(action,original,async()=>{

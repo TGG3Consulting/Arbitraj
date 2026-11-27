@@ -29,6 +29,11 @@ function parseRoles(rows) {
   return roles;
 }
 
+// Три адреса и три хеша конструктор принимает в порядке router, venue, vault.
+function creationData(artifact, addresses, shells) {
+  return artifact.creation + [...addresses.map(word), ...shells].map(value=>value.slice(2)).join('');
+}
+
 export async function loadPropVenue(settings,source,digest) {
   need(settings.kind==='lambda_propamm' && source.kind===settings.kind && source.chainId===1 && String(settings.chainId)==='1'
     && hash.test(source.sourceBlock),'Требуется архив PropVenueAdapter для Ethereum.');
@@ -48,7 +53,7 @@ export async function loadPropVenue(settings,source,digest) {
     && record?.shells?.length===3 && shells.every((v,i)=>v===record.shells[i])
     && hash.test(record.runtimeKeccak) && sha.test(record.runtimeSha256)
     && settings.hashes?.some(h=>h.toLowerCase()===record.runtimeKeccak),'Выберите подтверждённую кассу, площадку, роутер и runtime модуля.');
-  const data=source.creation+[...addresses.map(word),...shells].map(x=>x.slice(2)).join('');
+  const data=creationData(source,addresses,shells);
   need(/^0x(?:[0-9a-f]{2})+$/.test(source.creation) && await digest(data)===record.creationSha256 && (!source.data || source.data===data),
     'Код CREATE или один из шести аргументов PropVenueAdapter изменился.');
   return {...source,...record,market,roles,data};
@@ -85,14 +90,26 @@ export async function checkPropModule(provider,p,target,at) {
 }
 
 
-export function selectPropDeployment(settings, pending, ordinary, slot, protectedSlot) {
+/** Первой идёт текущая карточка. При восстановлении сверяем исходный CREATE выбранного рынка. */
+export function selectPropDeployment(settings, pending, input, cards) {
   const market=settings.market?.toLowerCase();
   const allowed=new Set((settings.hashes??[]).map(value=>value.toLowerCase()));
-  for (const artifact of [protectedSlot,slot,ordinary]) {
-    const plan=artifact?.markets?.[market];
-    if (plan && allowed.has(plan.runtimeKeccak) && (!pending || plan.creationSha256===pending.creation)) {
-      return artifact;
-    }
+  for (const card of cards) {
+    const record=card.markets[market];
+    if (!record || !allowed.has(record.runtimeKeccak) || String(settings.chainId)!==String(card.chainId)) continue;
+    if (pending && (pending.chain!==card.chainId || record.creationSha256!==pending.creation)) continue;
+    if (input!==undefined && input?.toLowerCase()!==creationData(card,record.addresses,record.shells)) continue;
+    return card;
   }
   throw Error('Для этой кассы и исходного CREATE нет принятого архива размещения.');
+}
+
+export async function propCard(settings, pending, input) {
+  const cards=await Promise.all([
+    import('../assets/prop-slot-v2-ethereum.json'),
+    import('../assets/prop-slot-v2-ethereum-previous.json'),
+    import('../assets/prop-slot-venue-ethereum.json'),
+    import('../assets/prop-venue-ethereum.json'),
+  ]);
+  return {default:selectPropDeployment(settings,pending,input,cards.map(card=>card.default))};
 }

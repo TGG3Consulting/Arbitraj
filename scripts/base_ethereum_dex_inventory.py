@@ -1778,6 +1778,14 @@ def tables(network, snapshots, profiles):
                         "(../tests/data/first_run_dex_2026-11-26/alien_base_750.json.gz)")
             else:
                 task = "Alien Base V2 · секция alienbase для Base указывает фабрику профиля и 0,16% на обмен"
+        if not base and str(row["id"])=="162":
+            fixture = Path("tests/data/first_run_dex_2026-11-26/bancor_v21_ethereum.json.gz")
+            original = json.loads(gzip.decompress(fixture.read_bytes()))
+            candidates = [original["roles"][key]["address"] for key in ("BancorConverterRegistry","BancorNetwork")]
+            paid = sum("received" in case for case in original["controls"])
+            task = (f"Bancor V2.1 · {len(original['markets'])} якорей с владельцами-конвертерами в исходном реестре. "
+                    f"{paid} выплат при прямых и составных обменах во внешнем архиве "
+                    f"[на блоке {original['block']}](../{fixture.as_posix()}).")
         if not base and str(row["id"])=="6771":
             fixture=Path("tests/data/first_run_dex_2026-11-26/yield_basis_ethereum.json.gz")
             original=json.loads(gzip.decompress(fixture.read_bytes()))

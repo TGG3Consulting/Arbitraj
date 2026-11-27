@@ -35,6 +35,7 @@ pub enum Variant {
     UmbraeDlmm,
     HelloV3,
     VvsV3,
+    ShibaswapV2,
     RegisteredV3,
     RegisteredUniV3,
     /// Фабрика V3 с постоянным шагом в CREATE2 и отдельной изменяемой ставкой каждого пула.
@@ -229,16 +230,18 @@ impl Variant {
     pub fn pool_address_step(self)->bool{self.registered_module() || matches!(self,Self::Stabull | Self::MaverickOne)}
     /// Величина платы меняется по tx.origin и может измениться между двумя шагами в одном пуле.
     pub fn origin_fee(self)->bool{self==Self::TopazCl}
-    pub fn registered_module(self) -> bool { matches!(self, Self::RegisteredV3 | Self::VvsV3) }
+    /// These native routers and their callback modules have separate configured addresses.
+    pub(crate) fn separate_v3_router(self) -> bool { matches!(self, Self::VvsV3 | Self::ShibaswapV2) }
+    pub fn registered_module(self) -> bool { self == Self::RegisteredV3 || self.separate_v3_router() }
     pub(crate) fn spacing_keyed(self) -> bool { self == Self::RegisteredSpacingV3 }
-    pub fn registered_v3(self) -> bool { matches!(self, Self::RegisteredV3 | Self::RegisteredUniV3 | Self::HelloV3 | Self::VvsV3) }
+    pub fn registered_v3(self) -> bool { matches!(self, Self::RegisteredV3 | Self::RegisteredUniV3 | Self::HelloV3 | Self::VvsV3 | Self::ShibaswapV2) }
     pub fn factory_quoter(self)->bool { self == Self::BaseNativeV3 || self.registered_v3() }
     pub fn umbrae(self)->bool { matches!(self,Self::UmbraeDamm|Self::UmbraeDlmm) }
     pub(crate) fn empire_module(self)->bool {matches!(self,Self::EmpireModule)}
     pub(crate) fn empire_nominal(self)->bool {matches!(self,Self::EmpireNominal)}
     pub(crate) fn empire(self)->bool {matches!(self,Self::EmpireRaw|Self::EmpireModule|Self::EmpireNominal)}
-    pub fn wallet_module(self)->bool { matches!(self,Self::EmpireModule|Self::Stabull|Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::BunnySwap|Self::CandySwap) }
-    pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredSpacingV3|Self::MaverickTwoRouter|Self::SlipstreamUniversal|Self::CypherIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter|Self::EmpireNominal)}
+    pub fn wallet_module(self)->bool { matches!(self,Self::EmpireModule|Self::Stabull|Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::ShibaswapV2|Self::BunnySwap|Self::CandySwap) }
+    pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredSpacingV3|Self::MaverickTwoRouter|Self::SlipstreamUniversal|Self::CypherIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::ShibaswapV2|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter|Self::EmpireNominal)}
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator | Self::SolidlyProxy | Self::SolidlyPairOverride)}
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
 
@@ -301,6 +304,7 @@ pub fn of(kind: &str) -> Variant {
         "umbrae_dlmm" | "umbrae_dlmm_module" => Variant::UmbraeDlmm,
         "umbrae_damm" | "umbrae_damm_module" => Variant::UmbraeDamm,
         "vvs_v3" | "vvs_v3_module" => Variant::VvsV3,
+        "shibaswap_v2" | "shibaswap_v2_module" => Variant::ShibaswapV2,
         "hello_v3" => Variant::HelloV3,
         "registered_spacing_v3" => Variant::RegisteredSpacingV3,
         "registered_uni_v3" => Variant::RegisteredUniV3,

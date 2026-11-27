@@ -139,7 +139,7 @@ pub(crate) async fn fresh(ctx: &Ctx, e: &Entry, at: &Value) -> GatewayResult<()>
         at,
     )
     .await?;
-    if !e.family.variant.registered_module() || (e.family.variant == super::family_variant::Variant::VvsV3 && !e.family.tradable) { return Ok(()); }
+    if !e.family.variant.registered_module() || (e.family.variant.separate_v3_router() && !e.family.tradable) { return Ok(()); }
     super::direct_module::verify_factory(
         ctx,
         e.family,

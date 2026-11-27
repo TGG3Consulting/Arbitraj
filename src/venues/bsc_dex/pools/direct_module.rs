@@ -55,7 +55,7 @@ pub fn market(ctx: &Ctx, entry: &Entry) -> GatewayResult<Address> {
             Ok(*address)
         }
         (PoolRef::Contract(address), super::families::Proto::UniswapV3)
-            if entry.family.variant == super::family_variant::Variant::RegisteredV3 => Ok(*address),
+            if matches!(entry.family.variant, super::family_variant::Variant::RegisteredV3 | super::family_variant::Variant::ShibaswapV2) => Ok(*address),
         (PoolRef::Contract(address), super::families::Proto::V2)
             if matches!(entry.family.variant,super::family_variant::Variant::Stabull | super::family_variant::Variant::MaverickOne) || entry.family.variant.umbrae() || matches!(entry.family.variant,super::family_variant::Variant::Virtuals | super::family_variant::Variant::EmpireModule | super::family_variant::Variant::CandySwap | super::family_variant::Variant::Memebox | super::family_variant::Variant::BunnySwap) => Ok(*address),
         (PoolRef::Contract(address),super::families::Proto::KyberElastic)
@@ -128,6 +128,7 @@ pub async fn verify_factory(ctx: &Ctx, f: &Family, addr: Address, at: &Value) ->
         super::family_variant::Variant::Memebox => "memebox_v5",
         super::family_variant::Variant::RegisteredV3 => "registered_v3_module",
         super::family_variant::Variant::VvsV3 => "vvs_v3_module",
+        super::family_variant::Variant::ShibaswapV2 => "shibaswap_v2_module",
         _ => return Err(ctx.err(ErrorCode::NotApplicable,"Для этого протокола нет модуля с привязкой к фабрике")),
     };
     if kind!=expected || !f.tradable {

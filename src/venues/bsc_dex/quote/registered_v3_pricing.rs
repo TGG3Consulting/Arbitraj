@@ -91,7 +91,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             let order=Execution{mode:RouteMode::Direct,target,wire:Wire::RegisteredV3(m)};
             if let Ok(option)=v2_execution::option(q,i,e.clone(),payer,order,head).await{options.push(option)}
         }
-        if let Some(target) = executor && !matches!(e.family.variant,Variant::VvsV3|Variant::EmpireNominal) {
+        if let Some(target) = executor && !e.family.variant.separate_v3_router() && !e.family.variant.empire_nominal() {
             let (kind,data)=if plain {
                 use alloy::sol_types::SolValue;
                 let Some(fee)=e.pool.fee_pips else {continue};

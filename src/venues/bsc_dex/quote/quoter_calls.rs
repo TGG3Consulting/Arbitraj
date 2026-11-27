@@ -484,7 +484,11 @@ pub fn request(
             if e.family.variant.factory_quoter() {
                 let (target, mixed) =
                     super::super::pools::base_native_v3::mixed_quoter(ctx, e.family)?;
-                let call = if mixed {
+                let call = if e.family.variant == super::super::pools::family_variant::Variant::ShibaswapV2 {
+                    super::super::node::abi_dex::IQuoterV1::quoteExactInputSingleCall {
+                        tokenIn: token_in, tokenOut: token_out, fee, amountIn: amount, sqrtPriceLimitX96: U160::ZERO,
+                    }.abi_encode()
+                } else if mixed {
                     super::super::node::abi_dex::IThroneQuoter::quoteExactInputSingleV3Call {
                         params: p,
                     }
@@ -648,6 +652,11 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
         let PoolRef::Contract(pool) = e.pool.reference else {
             return None;
         };
+        if e.family.variant == super::super::pools::family_variant::Variant::ShibaswapV2 {
+            let answer = super::super::pools::base_native_v3::checked_data(pool,out).ok()?;
+            if answer.len() != 32 { return None; }
+            return super::super::node::abi_dex::IQuoterV1::quoteExactInputSingleCall::abi_decode_returns(&answer).ok();
+        }
         return super::super::pools::base_native_v3::checked(pool, out).ok();
     }
     if e.family.variant == super::super::pools::family_variant::Variant::SolidlyCl {

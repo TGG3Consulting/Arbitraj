@@ -28,7 +28,7 @@ pub(crate) async fn checked_module(ctx:&Ctx,e:&Entry,at:&Value)->GatewayResult<A
     Ok(module)
 }
 pub(crate) fn target(ctx: &Ctx, e: &Entry) -> GatewayResult<Address> {
-    let key = if e.family.variant == super::family_variant::Variant::SlipstreamUniversal { "dex.universal_router" } else if e.family.variant == super::family_variant::Variant::VvsV3 { "dex.v3_native_router" } else { "dex.router" };
+    let key = if e.family.variant == super::family_variant::Variant::SlipstreamUniversal { "dex.universal_router" } else if e.family.variant.separate_v3_router() { "dex.v3_native_router" } else { "dex.router" };
     ctx.dex_addr(key,e.family.id)
 }
 pub(crate) async fn checked(
@@ -49,7 +49,7 @@ pub(crate) async fn checked(
     use super::family_variant::Variant;
     if e.family.variant == Variant::MaverickTwoRouter {return Box::pin(super::maverick_two_router::checked(ctx,e,input,output,at)).await;}
     if e.family.variant == Variant::SlipstreamUniversal {return Box::pin(super::slipstream_ur::checked(ctx,e,input,output,at)).await;}
-    if !matches!(e.family.variant, Variant::EmpireNominal | Variant::CypherIntegral | Variant::V2ExactRouter | Variant::RegisteredUniV3 | Variant::RegisteredSpacingV3 | Variant::VvsV3)
+    if !matches!(e.family.variant, Variant::EmpireNominal | Variant::CypherIntegral | Variant::V2ExactRouter | Variant::RegisteredUniV3 | Variant::RegisteredSpacingV3 | Variant::VvsV3 | Variant::ShibaswapV2)
         || !((input, output) == (e.pool.token0, e.pool.token1)
             || (output, input) == (e.pool.token0, e.pool.token1))
     {
@@ -63,7 +63,7 @@ pub(crate) async fn checked(
     tokio::try_join!(
         async {
             if e.family.variant==Variant::CypherIntegral{return Box::pin(super::cypher::router(ctx,e,router,at)).await;}
-            if e.family.variant == Variant::VvsV3 {
+            if e.family.variant.separate_v3_router() {
                 return registered_v3::market(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),e.pool.fee_pips,at).await;
             }
             if e.family.variant.spacing_keyed() && ctx.dex_text("dex.v3_wallet_router_abi",id).ok().as_deref()!=Some("router02_spacing") {return Err(bad())}

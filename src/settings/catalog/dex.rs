@@ -94,6 +94,8 @@ pub const DEX_KINDS: &[&str] = &[
     "registered_spacing_v3",
     "vvs_v3",
     "vvs_v3_module",
+    "shibaswap_v2",
+    "shibaswap_v2_module",
     "registered_v3",
     "umbrae_damm", "umbrae_dlmm", "umbrae_damm_module", "umbrae_dlmm_module",
     "registered_v3_module",

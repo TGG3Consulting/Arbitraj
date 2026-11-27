@@ -259,7 +259,7 @@ pub(super) async fn plan(
     let e = &s.entry;
     let o = &s.order;
     let head = white_state::head(ctx, &format!("{height:#x}")).await?;
-    if e.family.variant == super::super::pools::family_variant::Variant::VvsV3
+    if e.family.variant.separate_v3_router()
         && e.family.tradable && selected.is_some() && ctx.dex_addr("dex.router",e.family.id).ok()==selected {
         super::super::pools::registered_v3::fresh(ctx,e,&head.selector()).await?;
         let plan=Box::pin(super::solidly_direct::plan(ctx,std::slice::from_ref(s),wallet,head.timestamp.to::<u64>(),false)).await?;

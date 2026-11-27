@@ -27,7 +27,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    каждое расхождение с причиной. Релиз готов только при нуле необъяснённых расхождений и закрытых пунктах R-*.
 >    Я проверяю прогон и только после этого сообщаю владельцу «релиз готов».
 
-Последний просмотренный коммит: `62abfc49` (27.11.2026).
+Последний просмотренный коммит: `2c327d32` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -1329,7 +1329,7 @@ R-46 закрыт; в O1NativeAdapter теперь подписывается т
 Antfarm: 0 зашитых адресов/хешей в `pools/antfarm.rs`, `exec/antfarm_output_wallet.rs`, `exec/antfarm_wallet.rs`, новом
 `pools/antfarm_profile.rs` — размещение и оба ABI в профиле площадки (записи в SETTINGS_CASES есть).
 
-## R-47 · 💡 · Убрать «наследие» Antfarm: `config/legacy_antfarm_receipt_runtimes.json` и `legacy_runtime`
+## R-47 · ✅ (2c327d32) · Убрать «наследие» Antfarm: `config/legacy_antfarm_receipt_runtimes.json` и `legacy_runtime`
 `antfarm_profile::legacy_runtime` встраивает (`include_str!`) два хеша runtime для восстановления «ранее подписанных поручений
 старого формата». Но Antfarm никогда не был развёрнут и ветка не слита — подписанных поручений старого формата нет нигде, кроме
 архивных тестов. Это лишний код и ещё один встроенный список. Предлагаю удалить ветку `(None, None) => legacy_runtime(..)` и файл;
@@ -1339,3 +1339,9 @@ Antfarm: 0 зашитых адресов/хешей в `pools/antfarm.rs`, `exec
 ### 62abfc49 — проверено
 o1 нативные пулы: идентичность пула от обнаружения до исполнения с кошелька; в `executor/entry.rs` и `discover_v4.rs` ветки только
 для `Variant::LaunchO1Wrapped`. BSC без изменений. R-47 ещё не сделан (`legacy_antfarm_receipt_runtimes.json` на месте).
+
+
+### 305d41d3, 2c327d32 — проверено; R-47 закрыт
+`config/legacy_antfarm_receipt_runtimes.json` и `legacy_runtime` удалены; восстановление поручения Antfarm — только по сохранённому
+runtime, calldata исходной транзакции и `feeToken()` на блоке квитанции, неполная запись → `OutcomeUnknown` с хешем — правильно.
+Остальное — Thirdfy/HopeSwap/Archly (записи). BSC без изменений.

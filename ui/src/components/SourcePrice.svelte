@@ -7,7 +7,7 @@
   let result = $state(null), error = $state(''), busy = $state(false);
   let buyExact = $state(false), maxSpend = $state(''), allowTrade = $state(false);
   let builder = $state('buildernet');
-  const signedMaker = $derived(source === 'textile' || source === 'airswap');
+  const signedMaker = $derived(['textile','airswap','dexalot'].includes(source));
   const address = /^0x[0-9a-fA-F]{40}$/;
   const valid = $derived(address.test(input) && address.test(output) && input.toLowerCase() !== output.toLowerCase() && /^[1-9]\d*$/.test(amount) && (!firm || (/^[1-9]\d*$/.test(minimum) && (source !== 'kipseli' || (/^\d{1,5}$/.test(fee))))));
   async function quote(event) {
@@ -58,7 +58,7 @@
   {#if result && source !== 'fynd'}
     <p role="status">{result.block == null ? 'Оценка по опубликованным уровням.' : 'Расчёт на блоке ' + result.block + '.'} Расход {result.spent_raw} минимальных единиц {result.input}, выход {result.received_raw} минимальных единиц {result.output}, остаток входа {result.unspent_raw}.</p>
     {#if result.details.type === 'wallet_simulation'}<p>Кошелёк выполнил обмен в симуляции. Газ — {result.details.gas_used} ед. {#if result.details.owner_minimum_raw != null}Минимальная выплата владельца — {result.details.owner_minimum_raw}.{/if}</p>{/if}
-    {#if source === 'zeroex'}<p>Шаги 0x RFQ в расчёте агрегатора: {result.details.rfq_legs} из {result.details.legs.length}. Минимум API — {result.details.minimum_raw}.</p>{:else if source === 'bopamm'}<p>Строитель {result.details.builder}, блок {result.details.target_block}, слот {result.details.slot}. Срок кадра {new Date(result.expires * 1000).toISOString()}.</p>{:else if source === 'airswap' && result.details.type === 'indicative'}<p>Индикативная цена маркетмейкера. Для проверки выплаты запросите подписанную заявку.</p>{:else if result.details.type !== 'wallet_simulation'}<p>Глубина книги до индивидуальной комиссии за подпись.</p>{/if}
+    {#if source === 'zeroex'}<p>Шаги 0x RFQ в расчёте агрегатора: {result.details.rfq_legs} из {result.details.legs.length}. Минимум API — {result.details.minimum_raw}.</p>{:else if source === 'bopamm'}<p>Строитель {result.details.builder}, блок {result.details.target_block}, слот {result.details.slot}. Срок кадра {new Date(result.expires * 1000).toISOString()}.</p>{:else if source === 'dexalot' && result.details.type === 'indicative'}<p>Запрошена пара {result.details.requested_pair}. Dexalot рассчитал ориентир по {result.details.price_source_pair}. {result.details.physical_alias ? 'Физические активы этих пар различаются.' : ''}</p>{:else if source === 'airswap' && result.details.type === 'indicative'}<p>Индикативная цена маркетмейкера. Для проверки выплаты запросите подписанную заявку.</p>{:else if result.details.type !== 'wallet_simulation'}<p>Глубина книги до индивидуальной комиссии за подпись.</p>{/if}
   {:else if result}
     <p role="status">Расчёт на блоке {result.block}. Отставание в момент проверки — {result.details.age_blocks} блоков. За {result.spent_raw} минимальных единиц {result.input} выход до удержания комиссий составил {result.received_raw} минимальных единиц {result.output}. Шагов агрегатора через подтверждённые пулы Fynd AMM — {result.details.recognized_fynd_swaps} из {result.details.swaps}.</p>
     {#if result.details.minimum_received_raw != null}<p>Минимум по данным Fynd — {result.details.minimum_received_raw}. Комиссия роутера — {result.details.router_fee_raw}, клиента — {result.details.client_fee_raw}. Все суммы в минимальных единицах выходного токена.</p>{/if}

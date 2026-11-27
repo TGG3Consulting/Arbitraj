@@ -1,20 +1,19 @@
-<!-- Размещение модуля, привязанного к одному кошельку и поколению AirSwap. -->
+<!-- Размещение модуля, для выбранной сети и владельца. -->
 <script>
   import {onDestroy} from 'svelte';
   import {deploymentScope} from '../lib/deploymentScope.js';
   import {setValue,store} from '../lib/settings.svelte.js';
   import {loadPlan,estimate,send,deployed} from '../lib/walletDeployment.js';
-  import {addModule,registeredOwnerModule} from '../lib/airswapDeploy.js';
 
-  let {venue,wallet,chain,version,load}=$props();
+  let {venue,wallet,chain,version,kind,source,label,setting,load,addModule,registeredOwnerModule}=$props();
   const scope={kind:'Venue',get id(){return venue;}};
-  const rows=$derived(store.values['airswap.contracts|Venue|'+venue] ?? []);
-  const storageKey=$derived(['airswap-create',venue,chain,version,wallet.toLowerCase()].join(':'));
+  const rows=$derived(store.values[setting+'|Venue|'+venue] ?? []);
+  const storageKey=$derived([source+'-create',venue,chain,version,wallet.toLowerCase()].join(':'));
   let busy=$state(false),error=$state(''),message=$state(''),priced=$state(null),hash=$state('');
   let mounted=true;
   onDestroy(()=>{mounted=false;});
-  const current=()=>mounted && {id:wallet.toLowerCase(),venue,kind:'airswap_'+version,key:storageKey,
-    settings:{kind:'airswap_'+version,wallet,chainId:chain,rows},router:null};
+  const current=()=>mounted && {id:wallet.toLowerCase(),venue,kind,key:storageKey,
+    settings:{kind,wallet,chainId:chain,rows},router:null};
   const action=()=>deploymentScope(localStorage,current);
   const provider=()=>{
     if (!window.ethereum?.request) throw Error('Подключите кошелёк в браузере.');
@@ -70,14 +69,14 @@
         return;
       }
       const next=addModule(a.settings.rows,p,fact.address);
-      if (next!==a.settings.rows) await setValue('airswap.contracts',scope,next,a.settings.rows);
+      if (next!==a.settings.rows) await setValue(setting,scope,next,a.settings.rows);
       a.save(null);priced=null;message='Модуль '+fact.address+' сохранён для '+p.wallet+'.';
     };
     if(navigator.locks) await navigator.locks.request(a.key,install); else await install();
   }
 </script>
 <details ontoggle={(e)=>{if(e.currentTarget.open) reopen();}}>
-  <summary>Модуль AirSwap {version.toUpperCase()}</summary>
+  <summary>Модуль {label}</summary>
   <p>Плательщик и получатель <code>{wallet}</code>. Сеть {chain}. Модуль проверяет фактическую выплату по подписанной цене.</p>
   <button disabled={busy} onclick={()=>run(price)}>Оценить газ</button>
   {#if priced}

@@ -102,8 +102,23 @@ def acquire():
         events.extend(logs)
     assert rr("eth_getBlockByNumber",[hex(cfg["block"]),False])["hash"]==at["blockHash"]
     start_ts,end_ts=map(lambda h:int(h["timestamp"],16),(start,header))
+    samples=[]
+    for ev in events:
+        txid=ev["transactionHash"]
+        rec=rr("eth_getTransactionReceipt",[txid])
+        bh=rr("eth_getBlockByNumber",[ev["blockNumber"],False])
+        assert rec["blockHash"]==ev["blockHash"]==bh["hash"] and int(rec["status"],16)==1
+        assert bh["transactions"][int(rec["transactionIndex"],16)]==txid
+        same=[entry for entry in rec["logs"] if int(entry["logIndex"],16)==int(ev["logIndex"],16)]
+        assert len(same)==1 and same[0]["topics"]==ev["topics"] and same[0]["data"]==ev["data"] and same[0]["address"]==ev["address"]
+        taker,payee,dest_chain,src,dst,paid,out=decode(["address","bytes32","uint32","address","bytes32","uint256","uint256"],bytes.fromhex(ev["data"][2:]))
+        samples.append(dict(tx=txid,block=int(ev["blockNumber"],16),hash=bh["hash"],index=int(ev["logIndex"],16),
+                            maker=ev["address"],taker=taker,payee="0x"+payee.hex(),dest_chain=dest_chain,
+                            source=src,target="0x"+dst.hex(),input=str(paid),output=str(out),
+                            tx_target=rec["to"],nonce=ev["topics"][1],
+                            same_chain=(dest_chain==cfg["chain"])))
     return dict(head=at,height=cfg["block"],roles=roles,router=ROUTER,members=members,
-                interval=dict(first=first,last=cfg["block"],start_time=start_ts,end_time=end_ts,swap_events=len(events),observed_members=sorted(venues),membership_changes=transitions),
+                interval=dict(first=first,last=cfg["block"],start_time=start_ts,end_time=end_ts,swap_events=len(events),cash_events=samples,observed_members=sorted(venues),membership_changes=transitions),
                 witness=payment(rr))
 
 

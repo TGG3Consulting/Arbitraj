@@ -143,11 +143,12 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             )
         }
     };
+    let exact_approval=matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target);
     let allowed=|token:Address,amount:U256| async move {
         let encoded=Bytes::from(IMoney::allowanceCall{owner:o.payer,spender:o.target}.abi_encode());
         let current:Bytes=rpc::call(ctx,"eth_call",json!([{"to":token,"data":encoded},h.selector()])).await?;
         if current.len()!=32{return Err(fail());}
-        if matches!(o.wire, Wire::Dagrow(t) if t.pool==t.target){
+        if exact_approval {
             approve::fork_exact(ctx,token,o.target,Some(U256::from_be_slice(&current)),amount)
         } else {approve::fork_known(ctx,token,o.target,U256::from_be_slice(&current),amount)}
     };

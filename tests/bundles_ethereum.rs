@@ -70,6 +70,18 @@ fn both_payment_methods_match_the_wallet_and_every_affected_pool() {
             .exact_in(input, qty(&row["amount"]), row["mode"] == "separate")
             .unwrap();
         assert_eq!(fill.credit, qty(&row["quote"]));
+        if row["mode"] != "separate" || book.market.tokens.contains(&book.bun) {
+            let (least, _) = book
+                .swap(input, false, fill.credit)
+                .expect("executable archive output");
+            assert!(least.amount_in <= qty(&row["amount"]));
+            assert!(least.amount_out >= fill.credit);
+            assert!(
+                book.exact_in(input, least.amount_in - U256::ONE, false)
+                    .is_none_or(|smaller| smaller.credit < fill.credit)
+            );
+        }
+
         assert_eq!(fill.credit, qty(&row["delta"][format!("{out:#x}")]));
         if !book.market.tokens.contains(&book.bun) {
             let debit = row["delta"][format!("{:#x}", book.bun)]

@@ -33,7 +33,11 @@ def capture(endpoint, artifact):
         raise ValueError("different market code")
     tokens = [TOKEN, WETH, OWNER, EXEC]
     init = "0x" + artifact["creation"] + encode(["address"]*4, tokens).hex()
-    deployed = rpc(endpoint, "eth_call", [{"from":OWNER,"data":init}, tag])
+    # Выполняем только конструктор в eth_call без создания контракта в сети.
+    response=c.session.post(endpoint,json={"jsonrpc":"2.0","id":1,"method":"eth_call",
+                            "params":[{"from":OWNER,"data":init},tag]},timeout=30)
+    response.raise_for_status()
+    deployed=response.json()["result"]
     template = bytes.fromhex(artifact["runtime"])
     code = bytearray.fromhex(deployed[2:])
     roles = set()

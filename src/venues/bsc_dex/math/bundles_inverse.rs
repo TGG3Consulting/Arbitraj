@@ -55,11 +55,16 @@ impl Book {
             // Pair requires at least 1000 raw BUN. Include that floor in the inverse.
             // Surplus in either token can also satisfy part of the minimum fee.
             let mut principal = m.minimum_principal(i, amount, embedded)?;
-            if embedded && m.balances[0].checked_sub(m.fee_reserve)? == m.reserves[0] {
+            if embedded {
+                let physical = m.balances[0].checked_sub(m.fee_reserve)?;
+                let surplus = physical.saturating_sub(m.reserves[0]);
                 let minimum = if i == 0 {
-                    mul_div_up(unit, unit + tier, tier)?
+                    m.reserves[0]
+                        .checked_add(mul_div_up(unit, unit + tier, tier)?)?
+                        .saturating_sub(physical)
                 } else {
-                    m.minimum_principal(i, mul_div_up(unit, unit, tier)?, true)?
+                    let fee_left = unit.saturating_sub(surplus.checked_mul(tier)? / (unit + tier));
+                    m.minimum_principal(i, mul_div_up(fee_left, unit, tier)?, true)?
                 };
                 principal = principal.max(minimum);
             }
@@ -74,10 +79,13 @@ impl Book {
                     return None;
                 }
                 // This bound uses only fee units the two contracts actually require.
-                let mut min_fee = unit;
-                if fee_pair.balances[0].checked_sub(fee_pair.fee_reserve)? == fee_pair.reserves[0] {
-                    min_fee = mul_div_up(unit, unit, U256::from(10))?;
-                }
+                let fee_tier = U256::from(fee_pair.tier);
+                let surplus = fee_pair.balances[0]
+                    .checked_sub(fee_pair.fee_reserve)?
+                    .saturating_sub(fee_pair.reserves[0]);
+                let fee_left =
+                    unit.saturating_sub(surplus.checked_mul(fee_tier)? / (unit + fee_tier));
+                let min_fee = mul_div_up(fee_left, unit, fee_tier)?.max(U256::ONE);
                 let fee_basis = mul_div_up(min_fee, U256::ONE << 112, rate)?;
                 let needed = if side == i {
                     mul_div_up(fee_basis, unit, tier)?

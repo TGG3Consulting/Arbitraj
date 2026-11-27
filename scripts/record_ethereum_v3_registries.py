@@ -118,8 +118,31 @@ def capture(name, endpoint):
         creation,collector = views([(factory,"poolPairHash()",[],[]), (factory,"feeCollector()",[],[])])
         assert "0x"+creation.hex() == init
         collector, = decode(["address"],collector)
-    logs=rpc("eth_getLogs",[dict(address=factory,fromBlock=hex(roles["factory"]["created"]),toBlock=head["number"],topics=[TOPICS])])
-    markets=[];tiers={};seen=set()
+    tiers={}
+    if name == "shibaswap-v2":
+        from fork_fee_rpc import Reader, pool_blocks
+        from record_v3_fee_registry import candidate_fees
+        reader = Reader("ethereum",snapshot)
+        created = roles["factory"]["created"]
+        total = int(reader.one("eth_getTransactionCount",[factory,tag]),16)
+        changed = pool_blocks(reader,factory,created-1,snapshot["block"],0,total)
+        headers = reader.many(("eth_getBlockByNumber",[hex(h),False]) for h in changed)
+        batches = reader.many(("eth_getLogs",[dict(address=factory,blockHash=h["hash"],topics=[TOPICS])]) for h in headers)
+        logs = []
+        for (height,difference),header,events in zip(changed.items(),headers,batches,strict=True):
+            assert int(header["number"],16)==height
+            assert sum(row["topics"][0]==TOPICS[0] for row in events) == difference-int(height==created)
+            assert all(row["blockHash"]==header["hash"] and not row.get("removed") for row in events)
+            logs.extend(events)
+        fixtures = ROOT / "tests/data/first_run_dex_2026-11-26"
+        fees = candidate_fees(json.loads((ROOT/"config/first_run_dex.json").read_bytes()),fixtures)
+        fees.update(int(row["topics"][3],16) for row in logs if row["topics"][0]==TOPICS[0])
+        fees = sorted(fees)
+        entries = views([(factory,"feeAmountTickSpacing(uint24)",["uint24"],[fee]) for fee in fees])
+        tiers = {fee:spacing for fee,data in zip(fees,entries,strict=True) if (spacing:=decode(["int24"],data)[0])>0}
+    else:
+        logs=rpc("eth_getLogs",[dict(address=factory,fromBlock=hex(roles["factory"]["created"]),toBlock=head["number"],topics=[TOPICS])])
+    markets=[];seen=set();fee_events=set()
     for row in logs:
         key=(row["blockHash"],int(row["logIndex"],16))
         if row.get("removed") or row["address"].lower()!=factory or key in seen:raise ValueError("orphan, emitter or duplicate")
@@ -127,7 +150,8 @@ def capture(name, endpoint):
         topics=row["topics"]
         if topics[0]==TOPICS[1]:
             fee=int(topics[1],16);spacing=decode(["int24"],bytes.fromhex(topics[2][2:]))[0]
-            if fee in tiers: raise ValueError("duplicate tier")
+            if fee in fee_events or tiers.get(fee,spacing)!=spacing: raise ValueError("duplicate or changed tier")
+            fee_events.add(fee)
             tiers[fee]=spacing
         else:
             a,b=["0x"+t[-40:] for t in topics[1:3]];fee=int(topics[3],16);spacing,pool=decode(["int24","address"],bytes.fromhex(row["data"][2:]))

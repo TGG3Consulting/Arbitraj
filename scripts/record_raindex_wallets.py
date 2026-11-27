@@ -43,7 +43,7 @@ def capture(network,url,artifact):
         addr="0x"+keccak(text="Raindex protected isolated wallet "+book)[-20:].hex()
         if rpc(url,"eth_getCode",[addr,tag])!="0x":raise ValueError("occupied module")
         args=encode(["address","bytes32","bytes4"],[book,bytes.fromhex(b["runtime"][2:]),bytes.fromhex(SELECTORS[b["version"]])])
-        creation=artifact["bytecode"].removeprefix("0x")+args.hex()
+        creation=artifact["creation"].removeprefix("0x")+args.hex()
         # Получаем точный runtime с constructor immutables при исходном коде настоящей книги.
         r=requests.post(url,json={"id":1,"jsonrpc":"2.0","method":"eth_call","params":[{"from":OWNER,"data":"0x"+creation},tag]},timeout=18)
         r.raise_for_status();raw=bytes.fromhex(r.json()["result"][2:]);blank=bytes.fromhex(artifact["runtime"].removeprefix("0x"));masked=bytearray(raw);words=set()
@@ -64,9 +64,9 @@ def capture(network,url,artifact):
     def bal(token,owner=OWNER):return tx(token,"balanceOf",["address"],[owner])
     def approve(token,to,v):return tx(token,"approve",["address","uint256"],[to,v])
     def units(row):return int(row["returnData"],16)
-    def money(prefix,b,o,l,cap,size,receive_fixed,di,do):
+    def money(prefix,b,o,l,cap,size,receive_fixed,di,do,partial=False):
         source,target=l["pay"],l["receive"];book=b["book"];version=b["version"];where=module(b) if artifact else book
-        action=take(version,o["order"],l["i"],l["j"],size,size,do if receive_fixed else di,receive_fixed)
+        action=take(version,o["order"],l["i"],l["j"],1 if partial else size,size,do if receive_fixed else di,receive_fixed)
         setup=prefix+[approve(source,where,cap)]
         checks=[bal(source),bal(target)];held=[]
         if artifact:held=[bal(source,where),bal(target,where),tx(source,"allowance",["address","address"],[where,book])]
@@ -80,7 +80,7 @@ def capture(network,url,artifact):
             return payment,op,before,after
         payment,op,be,af=play(1,cap,1,end)
         base={"book":book,"version":version,"order":o["hash"],"i":l["i"],"j":l["j"],"pay":source,"receive":target,
-              "fixed_receive":receive_fixed,"size":str(size),"cap":str(cap)}
+              "fixed_receive":receive_fixed,"partial":partial,"size":str(size),"cap":str(cap)}
         if not GOOD(op):return None,dict(base,stage="revert",error=op.get("error"))
         paid=be[0]-af[0];net=af[1]-be[1]
         if net<=0 or paid<=0 or paid>cap or be[2:]!=af[2:]:return None,dict(base,stage="incomplete",before=be,after=af)
@@ -107,13 +107,17 @@ def capture(network,url,artifact):
     for b,o,l in legs:
         pay,out=l["pay"],l["receive"]
         if pay not in (stable,weth):continue
-        if any(row["pay"]==pay and row["receive"]==out for row in pairs):continue
+
         record={"pay":pay,"receive":out,"cases":[]};pairs.append(record)
-        for scale in (1,5):
+        for scale in (1,100,500):
             df,dt=dec(pay),dec(out);both=b["version"]>=6
             # Older books receive the requested asset; signed maximum capital still comes from this payer.
             budget=scale*(10_000 if df==6 else 10**15)
             fixed_size=max(1,scale*10**dt//100)
+            if both:
+                ratio=decimal(l["ratio"])
+                possible=int(Decimal(budget).scaleb(-df)/ratio*Decimal(10**dt)) if ratio>0 else 0
+                fixed_size=max(1,min(possible*9//10,int(decimal(l["cap"])*Decimal(10**dt))))
             case={"scale":scale};record["cases"].append(case)
             for buy_output in ([False,True] if both else [True]):
                 size=fixed_size if buy_output else budget
@@ -124,9 +128,10 @@ def capture(network,url,artifact):
                     # Only the purchased quantity is available for this reverse order.
                     cap=int(buy["net"]);mode=rb["version"]<6
                     want=max(1,int(buy["paid"])//10) if mode else cap
-                    _,sell=money(funded,rb,ro,rl,cap,want,mode,dt,df)
+                    _,sell=money(funded,rb,ro,rl,cap,want,mode,dt,df,partial=True)
                     if sell["stage"]=="paid":
                         case[key+"_reverse"]=sell;break
+                    case.setdefault(key+"_reverse_attempts",[]).append({f:sell[f] for f in ("order","stage","error") if f in sell})
     return {"chain":chain,"selector":tag,"height":int(head["number"],16),"stamp":stamp,"payer":OWNER,"seed":seed,"modules":identities,"pairs":pairs}
 
 

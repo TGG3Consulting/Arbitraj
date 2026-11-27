@@ -2,6 +2,7 @@
 <script>
   import {unsignedCache} from '../lib/aquaDeploy.js';
   import {onDestroy} from 'svelte';
+  import {selectPropDeployment} from '../lib/propVenueDeploy.js';
   import {deploymentScope} from '../lib/deploymentScope.js';
   import {store, setValue} from '../lib/settings.svelte.js';
   import {loadPlan, unsigned, estimate, send, deployed} from '../lib/walletDeployment.js';
@@ -54,7 +55,7 @@
   };
   const target = $derived(['registered_uni_v3','algebra_integral_theorem'].includes(kind) ? 'dex.v3_wallet_module' : 'dex.router');
   const deployment = $derived(kind==='lambda_propamm'
-    ? (String(store.values['dex.evm_chain_id|Venue|'+venue])==='1' ? {file:'prop-venue-'+id,key:'prop-venue-create:1:'+venue+':'+id,name:'PropVenueAdapter в Ethereum',load:()=>import('../assets/prop-venue-ethereum.json')} : null)
+    ? (String(store.values['dex.evm_chain_id|Venue|'+venue])==='1' ? {file:'prop-venue-'+id,key:'prop-venue-create:1:'+venue+':'+id,name:'PropVenueAdapter в Ethereum',load:async(settings,intent)=>{const [ordinary,slot]=await Promise.all([import('../assets/prop-venue-ethereum.json'),import('../assets/prop-slot-venue-ethereum.json')]);return {default:selectPropDeployment(settings,intent,ordinary.default,slot.default)}}} : null)
     : kind==='registered_uni_v3'
     ? (String(store.values['dex.evm_chain_id|Venue|'+venue])==='8453' && value('dex.module_runtime_hashes')?.length ? communityPlans[id.split('@')[0]] : null)
     : /^eulerswap_v[12](?:_module)?$/.test(kind) ? eulerByChain[String(store.values['dex.evm_chain_id|Venue|'+venue])]
@@ -102,7 +103,7 @@
     refreshPending(action);
     let artifact;
     if (plan.load) {
-      artifact = (await plan.load(action.settings)).default;
+      artifact = (await plan.load(action.settings,pending)).default;
     } else {
       const response = await fetch(import.meta.env.BASE_URL+plan.file+'.json');
       if (!response.ok) throw new Error('Архив размещения отсутствует в этой сборке.');

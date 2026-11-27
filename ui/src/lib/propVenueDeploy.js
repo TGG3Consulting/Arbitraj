@@ -84,3 +84,15 @@ export async function checkPropModule(provider,p,target,at) {
   await Promise.all(getters.map((selector,i)=>getter(provider,at,target,selector,expected[i])));
 }
 
+
+export function selectPropDeployment(settings, pending, ordinary, slot) {
+  const market=settings.market?.toLowerCase();
+  const allowed=new Set((settings.hashes??[]).map(value=>value.toLowerCase()));
+  for (const artifact of [slot,ordinary]) {
+    const plan=artifact?.markets?.[market];
+    if (plan && allowed.has(plan.runtimeKeccak) && (!pending || plan.creationSha256===pending.creation)) {
+      return artifact;
+    }
+  }
+  throw Error('Для этой кассы и исходного CREATE нет принятого архива размещения.');
+}

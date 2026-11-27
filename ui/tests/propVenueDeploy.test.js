@@ -69,3 +69,17 @@ test('canonical verification checks every implementation slot, runtime and all c
   await assert.rejects(checkPropVenue(provider,p,{blockHash:archive.sourceBlock}));
 });
 
+
+test('slot-enabled markets select the accepted CREATE and resume an existing ordinary deployment',async()=>{
+  const {selectPropDeployment}=await import('../src/lib/propVenueDeploy.js');
+  const base=JSON.parse(read('../src/assets/prop-venue-ethereum.json'));
+  const slot=JSON.parse(read('../src/assets/prop-slot-venue-ethereum.json'));
+  for (const [market,next] of Object.entries(slot.markets)) {
+    const legacy=base.markets[market];
+    const settings={market,hashes:[legacy.runtimeKeccak,next.runtimeKeccak]};
+    assert.equal(selectPropDeployment(settings,null,base,slot),slot);
+    assert.equal(selectPropDeployment(settings,{creation:legacy.creationSha256},base,slot),base);
+    assert.equal(selectPropDeployment({...settings,hashes:[legacy.runtimeKeccak]},null,base,slot),base);
+    assert.throws(()=>selectPropDeployment(settings,{creation:'unknown'},base,slot));
+  }
+});

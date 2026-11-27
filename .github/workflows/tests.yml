@@ -156,7 +156,7 @@ jobs:
           name: ammalgam-inverse-evaluations
           path: ${{ runner.temp }}/ammalgam-inverse.json
           if-no-files-found: error
-      - if: matrix.shard == 0
+      - if: ${{ !cancelled() && matrix.shard == 0 }}
         uses: actions/upload-artifact@v4
         with:
           name: mooniswap-inverse-evaluations

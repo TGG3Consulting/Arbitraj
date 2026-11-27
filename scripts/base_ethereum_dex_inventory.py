@@ -14,6 +14,9 @@ import base_launch_inventory
 from base_ethereum_source_roles import card_reference, classify_source, describe, verified_coverage_profiles
 
 
+# Сетевые ID, явно отложенные владельцем при суточном обороте менее 5 000 USD.
+DEFERRED_BY_NETWORK = {"base": {"2589", "622", "1447", "7508", "5458", "1700"}, "ethereum": {"4703", "1700"}}
+
 def read(path):
     """Возвращает данные JSON в UTF-8. Неполный или повреждённый снимок прерывает генерацию."""
     return json.loads(path.read_text(encoding="utf8"))
@@ -2556,7 +2559,11 @@ def tables(network, snapshots, profiles):
         kind, profile, status = classify_source(network, r, checked_profiles)
         coverage_counts[kind] += 1
         coverage_counts["profile"] += int(profile is not None)
-        if kind == "nonspot":
+        # Решение 7 и шаг 0. Состояние профилей для счётчиков выше независимо от решения о доработке.
+        turnover = volumes.get(row["id"])
+        if str(row["id"]) in DEFERRED_BY_NETWORK[network] and turnover is not None and 0 <= turnover < 5000:
+            task = "спот · оборот < 5 000 USD, отложено"
+        elif kind == "nonspot":
             task = status
         else:
             pending = f"`T-SOURCE-{network}-{row['id']}`"
@@ -2743,8 +2750,8 @@ def main():
              "Предзаполнение DEX использует chainId, dex.chain и суффикс активной площадки. Для пустой конфигурации сначала "
              "сохраните параметры сети. Значения ниже применяются обычным сохранением полей. Оператор задаёт лимиты, "
              "глубину, кошельки и разрешение торговли по своей политике. В списке дочерних фабрик {суффикс} равен @base или @ethereum при нескольких сетях и недефолтной сети ключа. Для единственной или дефолтной сети суффикс пустой. Приёмка каждой версии исполнителя привязана к сети.",
-             "", "Статус «профиль» означает наличие адресных параметров семейства в этом выпуске. В таблицах нет подтверждённых "
-             "фактических сделок. Каждый ID без установленного профиля остаётся в списке работ по подключению.", ""]
+             "", "Статус «профиль» указывает на запись первого запуска. Оборот источника и архивный обмен относятся к указанной сети. "
+             "В [таблице решения 7](review/BASE_ETHEREUM_ANSWERS.md#o61-inventory) для 34 приоритетных строк отдельно приведены платёжные проверки и условия допуска.", ""]
     for network in ["base", "ethereum"]:
         lines.extend(tables(network, args.snapshots, profiles))
         lines.append("")

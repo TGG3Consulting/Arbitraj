@@ -49,7 +49,36 @@ fn coverage_preserves_each_catalog_row_and_distinguishes_missing_from_zero_volum
                         .iter()
                         .any(|p| p["network"] == key && p["id"] == profile));
                     with_profile += 1;
+                } else if key == "base" && id == "1700" {
+                    // Остановка работ по Wombat не отменяет прежнюю запись этой сети.
+                    let physical: Value = serde_json::from_str(include_str!(
+                        "data/first_run_dex_2026-11-26/wombat_base.json"
+                    ))
+                    .unwrap();
+                    let profile = profiles.iter().find(|p| {
+                        p["network"] == key
+                            && p["chain_id"] == physical["chain_id"]
+                            && p["source"] == physical["url"]
+                            && p["settings"]["dex.kind"] == "wombat"
+                    });
+                    let pools = profile.unwrap()["settings"]["dex.stable_pools"]
+                        .as_array()
+                        .unwrap();
+                    assert!(pools.iter().any(|pool| {
+                        let addr = pool.as_str().unwrap();
+                        physical["documented"].get(addr).is_some()
+                            && row.to_ascii_lowercase().contains(addr)
+                    }));
+                    with_profile += 1;
                 }
+            }
+            if matches!(
+                (key, id),
+                ("base", "2589" | "622" | "1447" | "7508" | "5458" | "1700")
+                    | ("ethereum", "4703" | "1700")
+            ) {
+                assert_eq!(decision, "спот · оборот < 5 000 USD, отложено");
+                assert!(volumes[id].as_f64().is_some_and(|v| (0.0..5000.0).contains(&v)));
             }
             if decision.starts_with("нет спота") {
                 nonspot += 1;
@@ -142,3 +171,6 @@ fn catalog_factory_sample_counts_only_confirmed_pairs_and_matching_profile_domai
         assert!(document.contains(archive[net]["source_sha256"].as_str().unwrap()));
     }
 }
+
+#[path = "base_ethereum_catalog_coverage/decision_seven.rs"]
+mod decision_seven;

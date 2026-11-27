@@ -129,7 +129,7 @@
         <td>
           <details>
             <summary>Адреса и настройки DEX</summary>
-            {#if ['rubicon_classic','uniswap_v1'].includes(store.values['dex.kind|Dex|'+r.id])}
+            {#if ['rubicon_classic','uniswap_v1','bancor_v3'].includes(store.values['dex.kind|Dex|'+r.id])}
               {#key store.values['dex.kind|Dex|'+r.id]}<MarketModuleDeploy id={r.id} {venue} kind={store.values['dex.kind|Dex|'+r.id]}/>{/key}
             {/if}
             {#each rest as def (def.name)}

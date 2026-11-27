@@ -1,5 +1,6 @@
 // Проверка неподписанного CREATE и канонического результата по принятому архиву модуля.
 import {loadV1, checkV1, runtimeKeccak} from "./uniswapV1Deploy.js";
+import {loadBancor, checkBancor} from "./bancorDeploy.js";
 const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc';
 const address = /^0x[\da-f]{40}$/i;
 const digest = /^0x[\da-f]{64}$/i;
@@ -16,6 +17,7 @@ export async function hashCode(hex) {
 }
 
 export async function loadPlan(settings, plan) {
+  if (settings.kind === "bancor_v3" || plan.kind === "bancor_v3") return loadBancor(settings,plan,hashCode);
   if (settings.kind === "uniswap_v1" || plan.kind === "uniswap_v1") return loadV1(settings,plan,hashCode);
   requireFact(plan.chainId === 8453 && address.test(plan.market) && address.test(plan.implementation)
     && digest.test(plan.runtimeKeccak), 'Формат архивного размещения не распознан.');
@@ -36,6 +38,7 @@ async function checkChain(provider, p) {
 
 export async function checkMarket(provider, p, at) {
   await checkChain(provider, p);
+  if (p.kind === "bancor_v3") return checkBancor(provider,p,at);
   if (p.kind === "uniswap_v1") return checkV1(provider,p,at,hashCode);
   const [proxy, slot, code] = await Promise.all([
     call(provider, 'eth_getCode', [p.market, at]),
@@ -48,7 +51,7 @@ export async function checkMarket(provider, p, at) {
 }
 
 async function sameRuntime(code, p) {
-  return await hashCode(code) === p.runtimeSha256 && (p.kind !== 'uniswap_v1' || runtimeKeccak(code) === p.runtimeKeccak);
+  return await hashCode(code) === p.runtimeSha256 && (!['uniswap_v1','bancor_v3'].includes(p.kind) || runtimeKeccak(code) === p.runtimeKeccak);
 }
 
 export function unsigned(p) {
@@ -98,26 +101,41 @@ export async function deployed(provider, p, hash, pending) {
     call(provider, 'eth_getTransactionByHash', [hash]), call(provider, 'eth_getTransactionReceipt', [hash]),
   ]);
   requireFact(tx && r && r.transactionHash?.toLowerCase()===hash.toLowerCase(), 'Каноническая квитанция пока не найдена.');
-  requireFact(tx.hash.toLowerCase() === hash.toLowerCase() && tx.to == null && BigInt(tx.value) === 0n
-    && tx.input.toLowerCase() === p.data.toLowerCase() && tx.blockHash === r.blockHash, 'Транзакция не создаёт этот модуль.');
+  const ethereum = ['uniswap_v1','bancor_v3'].includes(p.kind);
+  const requested = tx.to == null && BigInt(tx.value) === 0n && tx.input?.toLowerCase() === p.data.toLowerCase();
+  requireFact(tx.hash.toLowerCase() === hash.toLowerCase() && tx.blockHash === r.blockHash &&
+    (requested || (ethereum && pending)), 'Транзакция не создаёт этот модуль.');
   if (tx.chainId != null) requireFact(BigInt(tx.chainId) === BigInt(p.chainId), 'Транзакция принадлежит другой сети.');
-  if (pending) requireFact(tx.from.toLowerCase() === pending.from && BigInt(tx.nonce) === BigInt(pending.nonce)
-    && pending.creation === p.creationSha256 && pending.chain === p.chainId, 'Плательщик, nonce или исходное поручение отличаются.');
-  if (p.kind === 'uniswap_v1') {
+  if (pending) requireFact(tx.from.toLowerCase() === pending.from && BigInt(tx.nonce) === BigInt(pending.nonce) &&
+    pending.chain === p.chainId && (ethereum || pending.creation === p.creationSha256),
+    'Плательщик, nonce или исходное поручение отличаются.');
+  if (ethereum) {
     const who = pending?.from ?? (await call(provider, 'eth_requestAccounts'))?.[0];
     requireFact(address.test(who) && who.toLowerCase() === tx.from.toLowerCase(), 'Плательщик канонического CREATE отличается от кошелька.');
-    requireFact(!pending?.hash || pending.hash.toLowerCase() === hash.toLowerCase(), 'Хеш отличается от исходной отправки.');
   }
   const final = await call(provider, 'eth_getBlockByNumber', ['finalized', false]);
   const canonical = await call(provider, 'eth_getBlockByNumber', [r.blockNumber, false]);
   requireFact(final && canonical?.hash === r.blockHash && BigInt(final.number) >= BigInt(r.blockNumber),
     'Транзакция ожидает финализированного блока.');
+  const changed = ethereum && pending && (pending.creation !== p.creationSha256 || !requested ||
+    (pending.hash && pending.hash.toLowerCase() !== hash.toLowerCase()));
+  if (changed) {
+    requireFact([0n,1n].includes(BigInt(r.status)) && /^[a-f0-9]{64}$/i.test(pending.creation) &&
+      canonical.transactions?.some(h => typeof h === 'string' && h.toLowerCase() === hash.toLowerCase()),
+      'Канонический блок не подтверждает включение замены с исходным nonce.');
+    if (!requested || pending.creation !== p.creationSha256) {
+      const earlier = tx.to == null && BigInt(tx.value) === 0n && /^0x(?:[0-9a-f]{2})+$/i.test(tx.input) &&
+        await hashCode(tx.input) === pending.creation;
+      return {consumed:true, earlierCreation:earlier, succeeded:BigInt(r.status)===1n, hash,
+        originalHash:pending.hash ?? null, blockHash:r.blockHash, from:pending.from, nonce:pending.nonce};
+    }
+  }
   if (BigInt(r.status) === 0n) return {reverted:true};
   requireFact(BigInt(r.status) === 1n && address.test(r.contractAddress), 'Квитанция не подтверждает создание контракта.');
   const at = {blockHash:final.hash, requireCanonical:true};
   await checkMarket(provider, p, at);
-  if (p.kind === 'uniswap_v1') await checkMarket(provider, p, {blockHash:r.blockHash,requireCanonical:true});
+  if (['uniswap_v1','bancor_v3'].includes(p.kind)) await checkMarket(provider, p, {blockHash:r.blockHash,requireCanonical:true});
   const code = await call(provider, 'eth_getCode', [r.contractAddress, at]);
   requireFact(await sameRuntime(code,p), 'Размещённый runtime отличается от проверенного кода.');
-  return {address:r.contractAddress.toLowerCase()};
+  return changed ? {address:r.contractAddress.toLowerCase(),replacementHash:hash} : {address:r.contractAddress.toLowerCase()};
 }

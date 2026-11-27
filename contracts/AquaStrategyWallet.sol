@@ -37,7 +37,11 @@ contract AquaStrategyWallet {
     uint160 private constant DEADLINE_END = RECIPIENT_END + 5;
     uint256 private constant OFFSET_BITS = 16;
     uint256 private constant DEADLINE_INDEX = 2;
-    uint256 private constant OFFSET_COUNT = 10;
+    // В uint160 помещаются десять uint16. Частное содержит единицу в каждом поле.
+    // Сдвиг оставляет DEADLINE_END в полях 2..9; поля 0 и 1 заполняются отдельно.
+    uint160 private constant ONE_PER_OFFSET = type(uint160).max / type(uint16).max;
+    uint160 private constant TAKER_STOPS = THRESHOLD_END | (RECIPIENT_END << OFFSET_BITS)
+        | ((ONE_PER_OFFSET * DEADLINE_END) << (DEADLINE_INDEX * OFFSET_BITS));
 
     struct Terms { address input; address output; uint256 amount; uint256 minimum; uint256 deadline; bool inputFirst; }
     struct SingleSwap { bytes32 poolId; uint8 kind; address assetIn; address assetOut; uint256 amount; bytes userData; }
@@ -79,14 +83,10 @@ contract AquaStrategyWallet {
     }
 
     function _traits(Terms memory t,address recipient) private pure returns(bytes memory) {
-        uint160 stops = THRESHOLD_END | (RECIPIENT_END << OFFSET_BITS);
-        for (uint256 i = DEADLINE_INDEX; i < OFFSET_COUNT; ++i) {
-            stops |= DEADLINE_END << (OFFSET_BITS * i);
-        }
         uint16 flags = t.inputFirst
             ? (EXACT_IN | TRANSFER_FROM_AND_AQUA_PUSH | FIRST_TRANSFER_FROM_TAKER)
             : (EXACT_IN | TRANSFER_FROM_AND_AQUA_PUSH);
-        return abi.encodePacked(stops,flags,t.minimum,recipient,uint40(t.deadline));
+        return abi.encodePacked(TAKER_STOPS,flags,t.minimum,recipient,uint40(t.deadline));
     }
     // В вызове от кошелька SwapVM видит тот же tx.origin и того же taker, что при оплате модулем.
     function preview(IAquaEngine.Order calldata order,Terms calldata t,address recipient) external view returns(uint256 net) {

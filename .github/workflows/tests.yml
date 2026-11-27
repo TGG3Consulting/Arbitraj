@@ -568,6 +568,8 @@ jobs:
         env:
           MARKET: ${{ matrix.market }}
         run: python scripts/record_base_launch_wallets.py "${MARKET#launch-}" "$RUNNER_TEMP/market.json"
+      - if: startsWith(matrix.market, 'aqua-strategies-')
+        run: python scripts/record_aqua_strategies.py "${MATRIX_MARKET#aqua-strategies-}" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'ammalgam-ethereum-quotes'
         run: python scripts/record_ammalgam_quotes.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'ammalgam-ethereum-wallet'

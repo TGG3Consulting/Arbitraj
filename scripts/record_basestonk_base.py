@@ -5,6 +5,8 @@ import json
 from collections import Counter
 from pathlib import Path
 
+import requests
+
 from eth_abi import decode, encode
 from eth_utils import keccak
 from record_eulerswap_directory import DATA, Reader
@@ -25,7 +27,7 @@ def multi(r,calls):
     return [b if ok else b"" for ok,b in decode(["(bool,bytes)[]"],bytes.fromhex(raw[2:]))[0]]
 
 
-def capture():
+def capture(fee_logs):
     r=Reader("base");src=json.loads(gzip.decompress((DATA/"basestonk_base_listed.json.gz").read_bytes()))
     hooks=src["addresses"]; roles={}
     for hook in hooks:
@@ -34,9 +36,13 @@ def capture():
         roles[hook]=dict(runtime=r.code_hash(hook),launcher=factory)
     assert r.many([(ROUTER,"poolManager()",(),"address")])==[MANAGER]
     first=61830757
-    events=[]
-    for a in range(first,r.height+1,10000):
-        events.extend(r.rpc("eth_getLogs",[dict(fromBlock=hex(a),toBlock=hex(min(a+9999,r.height)),address=hooks,topics=[FEES])]))
+    events=[];window_error=None if fee_logs else "not_requested"
+    try:
+        for a in range(first,r.height+1,10000) if fee_logs else []:
+            events.extend(r.rpc("eth_getLogs",[dict(fromBlock=hex(a),toBlock=hex(min(a+9999,r.height)),address=hooks,topics=[FEES])]))
+    except requests.HTTPError as err:
+        if err.response.status_code not in (403,429):raise
+        events=[];window_error=err.response.status_code
     counts=Counter((e["address"],e["topics"][1]) for e in events)
     markets=[];skipped=[]
     for start in range(0,len(src["launches"]),36):
@@ -56,14 +62,15 @@ def capture():
             cfg=[int.from_bytes(config[j:j+32]) for j in range(0,len(config),32)]
             ident="0x"+pid.hex()
             markets.append(dict(id=ident,token=token,pair=pair,hook=hook,gen=gen,key=key,sqrt=str(sqrt),tick=tick,lp=fee,protocol=protocol,
-                                liquidity=str(int.from_bytes(liquidity)),config=cfg,fee_events=counts.get((hook,ident),0)))
+                                liquidity=str(int.from_bytes(liquidity)),config=cfg,fee_events=None if window_error else counts.get((hook,ident),0)))
     identified={m["id"] for m in markets}
     unknown=[(a,i,c) for (a,i),c in counts.items() if i not in identified]
     return dict(tag=r.tag,height=r.height,source=src["source"],manager=MANAGER,router=ROUTER,router_hash=r.code_hash(ROUTER),roles=roles,
-                fee_event_window=[first,r.height],fee_events=len(events),unmatched_fee_events=unknown,markets=markets,skipped=skipped)
+                fee_event_window=[first,r.height],fee_events=None if window_error else len(events),window_error=window_error,unmatched_fee_events=unknown,markets=markets,skipped=skipped)
 
 
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__);p.add_argument("output",type=Path)
-    p.parse_args().output.write_text(json.dumps(capture(),separators=(",",":")),encoding="utf8")
+    p.add_argument("--fee-logs",action="store_true",help="Требует RPC, предоставляющего исторический журнал указанных hooks")
+    args=p.parse_args();args.output.write_text(json.dumps(capture(args.fee_logs),separators=(",",":")),encoding="utf8")
 

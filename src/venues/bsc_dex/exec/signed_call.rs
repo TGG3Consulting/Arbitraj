@@ -65,6 +65,12 @@ pub(in crate::venues::bsc_dex) fn logs(rows: &[SimLog]) -> Option<Vec<Log>> {
 #[derive(Clone,Copy,Debug,Serialize,Deserialize)]
 pub(crate) struct Erc20Call {pub chain:u64,pub payer:Address,pub module:Address,pub calldata:B256}
 impl Erc20Call {
+    pub(in crate::venues::bsc_dex) async fn cancelled(mut self,ctx:&Ctx,original:B256,cancel:B256,nonce:u64,r:&Receipt)->GatewayResult<()> {
+        if cancel==original {return Err(ctx.err(ErrorCode::OutcomeUnknown,"Один хеш заявлен для сделки и отмены"));}
+        self.module=self.payer;
+        self.calldata=keccak256([]);
+        self.included(ctx,cancel,nonce,r).await
+    }
     pub(in crate::venues::bsc_dex) async fn included(&self,ctx:&Ctx,hash:B256,nonce:u64,r:&Receipt)->GatewayResult<()> {
         #[derive(Deserialize)]
         #[serde(rename_all = "camelCase")]

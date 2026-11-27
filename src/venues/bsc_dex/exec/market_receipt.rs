@@ -28,6 +28,7 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
         Some(DirectCall::Rubicon(t))=>c.rubicon=Some(Box::new((*t).clone())),
         Some(DirectCall::NativeFlat(t))=>c.native_flat=Some(Box::new((*t).clone())),
         Some(DirectCall::Prop(t))=>c.prop=Some(Box::new((*t).clone())),
+        Some(DirectCall::Shiba(t))=>c.shiba=Some(Box::new((*t).clone())),
         Some(DirectCall::Empire(t))=>c.empire=Some(Box::new((*t).clone())),
         Some(DirectCall::Angstrom(t))=>c.angstrom=Some(Box::new((*t).clone())),
         Some(DirectCall::Stabull(t))=>c.stabull=Some(Box::new((*t).clone())),
@@ -73,6 +74,7 @@ pub(super) enum Saved<'a> {
     Rubicon(&'a super::rubicon_wallet::Proof),
     NativeFlat(&'a super::mars_wallet::Proof),
     Prop(&'a super::prop_wallet::Proof),
+    Shiba(&'a super::shiba_payment::Proof),
     Empire(&'a super::empire_wallet::Proof),
     Angstrom(&'a super::angstrom_wallet::Proof),
     Stabull(&'a super::stabull_wallet::Proof),
@@ -107,6 +109,7 @@ fn entries(c: &SwapCtx) -> impl Iterator<Item = Saved<'_>> {
         c.rubicon.as_deref().map(Saved::Rubicon),
         c.native_flat.as_deref().map(Saved::NativeFlat),
         c.prop.as_deref().map(Saved::Prop),
+        c.shiba.as_deref().map(Saved::Shiba),
         c.empire.as_deref().map(Saved::Empire),
         c.angstrom.as_deref().map(Saved::Angstrom),
         c.stabull.as_deref().map(Saved::Stabull),
@@ -127,12 +130,18 @@ pub(super) fn first(c: &SwapCtx) -> Option<Saved<'_>> {
     entries(c).next()
 }
 pub(in crate::venues::bsc_dex) async fn included(
-    c: &SwapCtx,
+    c: &mut SwapCtx,
     ctx: &Ctx,
     hash: B256,
     nonce: Option<u64>,
     receipt: &Receipt,
 ) -> GatewayResult<()> {
+    if let Some(p)=c.shiba.as_deref_mut() {
+        let bad=||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"ShibaSwap: нет исходного хеша или nonce");
+        let nonce=nonce.or_else(||c.chain.as_ref().map(|v|v.nonce)).ok_or_else(bad)?;
+        if c.chain.as_ref().is_some_and(|v|(v.hash,v.nonce)!=(hash,nonce)){return Err(bad());}
+        return p.included(ctx,hash,nonce,receipt).await;
+    }
     if let Some(p)=c.empire.as_deref() {
         let bad=||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Empire: нет исходного хеша или nonce");
         let nonce=nonce.or_else(||c.chain.as_ref().map(|v|v.nonce)).ok_or_else(bad)?;
@@ -194,6 +203,7 @@ pub(in crate::venues::bsc_dex) async fn included(
             Saved::Rubicon(p)=>p.included(ctx,hash,receipt).await?,
             Saved::NativeFlat(p)=>p.included(ctx,hash,receipt).await?,
             Saved::Prop(p)=>p.included(ctx,hash,receipt).await?,
+            Saved::Shiba(_)=>return Err(ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"ShibaSwap: нет исходного подтверждённого поручения")),
             Saved::Empire(_)=>return Err(ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Empire: нет исходного подтверждённого поручения")),
             Saved::Angstrom(_)=>return Err(ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Angstrom: нет исходного хеша для сверки подписанта")),
             Saved::Stabull(p)=>p.included(ctx,hash,receipt).await?,
@@ -242,6 +252,7 @@ impl Saved<'_> {
             Self::Rubicon(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Rubicon Classic: заявки или выплата кошельку не совпали"),
             Self::NativeFlat(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("MarSwap: подписанная пара или движение средств не совпали"),
             Self::Prop(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("LambdaClass: фактический источник и движение средств не подтвердили условия"),
+            Self::Shiba(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("ShibaSwap: исходная выплата кошельку не установлена"),
             Self::Empire(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Empire: исходный рынок, участники или выплата расходятся с измерением модуля"),
             Self::Angstrom(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Angstrom: фактическая оплата или PoolId расходятся с подписанным поручением"),
             Self::Stabull(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Stabull: поручение, Curve Trade и дельты кошелька не совпадают"),

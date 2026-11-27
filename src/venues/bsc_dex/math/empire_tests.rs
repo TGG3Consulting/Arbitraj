@@ -14,7 +14,7 @@ fn words(log: &Value) -> Vec<U256> {
         .map(|i| U256::from_str_radix(&h[i..i + 64], 16).unwrap())
         .collect()
 }
-fn logs<'a>(j: &'a Value, topic: B256) -> impl Iterator<Item = &'a Value> {
+fn logs(j: &Value, topic: B256) -> impl Iterator<Item = &Value> {
     j["logs"].as_array().unwrap().iter().filter(move |l| {
         l["topics"][0].as_str().and_then(|h| h.parse::<B256>().ok()) == Some(topic)
     })

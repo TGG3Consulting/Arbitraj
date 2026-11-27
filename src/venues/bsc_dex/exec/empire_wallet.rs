@@ -31,7 +31,7 @@ impl Proof {
             self.deadline,
         )
     }
-    pub(super) fn signed(&self) -> Erc20Call {
+    pub(in crate::venues::bsc_dex) fn signed(&self) -> Erc20Call {
         Erc20Call {
             chain: 1,
             payer: self.payer,

@@ -36,7 +36,7 @@ struct Profiles {
 thread_local! {
     static PROFILES:std::cell::RefCell<Option<Profiles>>=const {std::cell::RefCell::new(None)};
 }
-fn pair(ctx: &Ctx, id: &'static str, input: Address, output: Address) -> Option<(B256, B256)> {
+pub(in crate::venues::bsc_dex) fn pair(ctx: &Ctx, id: &'static str, input: Address, output: Address) -> Option<(B256, B256)> {
     ctx.chain_id()?;
     PROFILES.with_borrow_mut(|slot| {
         let generation = ctx.settings.generation();

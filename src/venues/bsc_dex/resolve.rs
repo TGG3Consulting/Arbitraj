@@ -121,11 +121,11 @@ pub(super) async fn landed(
     r: Receipt,
 ) -> GatewayResult<TradeResult> {
     let saved = SwapCtx::of(pend).filter(SwapCtx::complete);
-    let verify_before_release=saved.as_ref().is_some_and(|c|c.registered_v3.as_deref().is_some_and(|proof|proof.market.maverick));
+    let verify_before_release=saved.as_ref().is_some_and(|c|c.shiba.is_some() || c.empire.is_some() || c.registered_v3.as_deref().is_some_and(|proof|proof.market.maverick));
     let queue = if verify_before_release {String::new()} else {release_if_ours(p, hash, nonce, false).await};
     match saved {
-        Some(c) => {
-            super::exec::market_receipt::included(&c,&p.ctx,hash,nonce,&r).await.map_err(|e|{
+        Some(mut c) => {
+            super::exec::market_receipt::included(&mut c,&p.ctx,hash,nonce,&r).await.map_err(|e|{
                 let error=match &c.chain {Some(chain)=>e.with_tx(chain.clone()),None=>e};
                 c.attach(error)
             })?;

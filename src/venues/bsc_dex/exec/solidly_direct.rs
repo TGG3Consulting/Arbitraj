@@ -39,7 +39,8 @@ pub(super) async fn plan(
             super::super::pools::empire::fresh(ctx, &step.entry, &at),
             direct_module::verify_factory(ctx, step.entry.family, router, &at)
         )?;
-    } else {
+    } else if step.entry.family.variant != super::super::pools::family_variant::Variant::ShibaswapV2
+    {
         direct_module::verify(ctx, step.entry.family, router, "latest").await?;
     }
     let order = &step.order;
@@ -70,6 +71,24 @@ pub(super) async fn plan(
                 deadline,
             },
         )));
+        return Ok(plan);
+    }
+    if step.entry.family.variant == super::super::pools::family_variant::Variant::ShibaswapV2 {
+        let mut proof = super::shiba_payment::Proof {
+            module: router,
+            pool,
+            payer: wallet,
+            input: order.token_in,
+            output: order.token_out,
+            amount: order.amount_in,
+            minimum: order.min_out,
+            deadline,
+            module_hash: B256::ZERO,
+            exact_codes: None,
+            verified: None,
+        };
+        super::shiba_payment::Proof::bind(ctx, step.entry.family, &mut proof).await?;
+        plan.set_direct_market(super::plan::DirectCall::Shiba(std::sync::Arc::new(proof)));
         return Ok(plan);
     }
     plan.set_direct_market(super::plan::DirectCall::Module {

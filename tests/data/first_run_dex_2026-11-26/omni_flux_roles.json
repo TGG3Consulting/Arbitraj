@@ -1,0 +1,129 @@
+{
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "roles": {
+    "permit2": "0x72f857d13c5363fa89da61020d53a1ea26fddb8b",
+    "wrapped": "0x4200000000000000000000000000000000000006",
+    "router": "0x423fae8ee58833f283e8845479bd705514110ec3",
+    "clPoolManager": "0xaa74c0492db7661d6ca52145205534061f8470cb",
+    "binPoolManager": "0xbf7927161c04a80e533fe8d03b8c511ac310fd28",
+    "FLUX_CL_POSITION_MANAGER": "0x44db79d0eb3c031ad4e3f081bf5d3b40a1e06c65",
+    "FLUX_BIN_POSITION_MANAGER": "0xbe5f9346f8a939a127728dba8e489935374ce067",
+    "vault": "0xdd179d5bf71b884793f1c213ffbdd702f399ecaa",
+    "CLQuoter": "0xd68db83ac3a42483c5d1d15db30f11bcae044a47",
+    "BinQuoter": "0xe6f9b38ce5e30e52b86d014ea346c959f80fce8d"
+  },
+  "calls": [
+    {
+      "contract": "0xd68db83ac3a42483c5d1d15db30f11bcae044a47",
+      "data": "0xdc4c90d3",
+      "sig": "poolManager()",
+      "result": "0x000000000000000000000000aa74c0492db7661d6ca52145205534061f8470cb"
+    },
+    {
+      "contract": "0xd68db83ac3a42483c5d1d15db30f11bcae044a47",
+      "data": "0xfbfa77cf",
+      "sig": "vault()",
+      "result": "0x000000000000000000000000dd179d5bf71b884793f1c213ffbdd702f399ecaa"
+    },
+    {
+      "contract": "0xe6f9b38ce5e30e52b86d014ea346c959f80fce8d",
+      "data": "0xdc4c90d3",
+      "sig": "poolManager()",
+      "result": "0x000000000000000000000000bf7927161c04a80e533fe8d03b8c511ac310fd28"
+    },
+    {
+      "contract": "0xe6f9b38ce5e30e52b86d014ea346c959f80fce8d",
+      "data": "0xfbfa77cf",
+      "sig": "vault()",
+      "result": "0x000000000000000000000000dd179d5bf71b884793f1c213ffbdd702f399ecaa"
+    }
+  ],
+  "code": {
+    "0x72f857d13c5363fa89da61020d53a1ea26fddb8b": {
+      "bytes": 9152,
+      "keccak256": "0x2956e7281f89ef5cf1bf3a53d4eaa430a1a593a64bc5e78f95d765f968872a28"
+    },
+    "0x4200000000000000000000000000000000000006": {
+      "bytes": 2041,
+      "keccak256": "0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c"
+    },
+    "0x423fae8ee58833f283e8845479bd705514110ec3": {
+      "bytes": 21717,
+      "keccak256": "0xac1df303e15821b5682718ca9e1d8907263d42eb1826ccbbf948ab6af6895a64"
+    },
+    "0xaa74c0492db7661d6ca52145205534061f8470cb": {
+      "bytes": 20885,
+      "keccak256": "0xe699a61f8e287a62c7b9657c7a134f4215136c53e452edeb6feb6478fb2fd1ad"
+    },
+    "0xbf7927161c04a80e533fe8d03b8c511ac310fd28": {
+      "bytes": 23821,
+      "keccak256": "0x2e40bf0f6ae0c3a5e59e234914240ffe68de865da747f23f4dc14d4a080f9847"
+    },
+    "0x44db79d0eb3c031ad4e3f081bf5d3b40a1e06c65": {
+      "bytes": 24004,
+      "keccak256": "0xdef9da6a49e717bc2932388622d7f513c6270701247ad9a7f6fe5c57ef88b733"
+    },
+    "0xbe5f9346f8a939a127728dba8e489935374ce067": {
+      "bytes": 15154,
+      "keccak256": "0xbc4fc81c5fecfae8335819d8a09ad101b53e0f8c5c200b29b1eacfc464f7e0d3"
+    },
+    "0xdd179d5bf71b884793f1c213ffbdd702f399ecaa": {
+      "bytes": 8347,
+      "keccak256": "0x678bab6ace02b3fc508054b194f3f70190a0621f51bcae69be33cc5416031908"
+    },
+    "0xd68db83ac3a42483c5d1d15db30f11bcae044a47": {
+      "bytes": 6458,
+      "keccak256": "0xc8926f38a1e38a6a3a2f65a3e31676208b9ec9cc84efbec7fac379b22682bb5e"
+    },
+    "0xe6f9b38ce5e30e52b86d014ea346c959f80fce8d": {
+      "bytes": 6299,
+      "keccak256": "0x917ead9697be2e82357af490d22e2a82683447518527d900720312d893cae086"
+    }
+  },
+  "indexer": {
+    "0xf1aa233ad68e1ee63364b06dfa76b6e189185d56eb32095c6310c7d6ae6faf04": "omni-exchange-v4-base",
+    "0x548b7df3eded1c69d9d02f29eefac719900b35ff3e4a9855aaabb7d5d4c8da2a": "omni-exchange-v4-base",
+    "0x6e3bccf6999519dfdefd53aab0e9c721fa859eaa844ebfe9128d9fb64625adbd": "omni-exchange-v4-base",
+    "0xe72244fab58c0129eeac9e4926e6fd1a840d0a6503393aff385f852d2ca635a6": "omni-exchange-v4-base",
+    "0x44cc9de8e43b544cc07ae46b8e192aa9ce33c136f672702ac4bcbd1c6de240b3": "omni-exchange-v4-base",
+    "0x589140822a3b0cbd05a06f3f8ddc5e64101186cc57b28fd0f9b5f46a9bf4cf8e": "omni-exchange-v4-base",
+    "0xd84f7bcaa27c05277bdfb5eb3ebe5a7af63a12c6d634b866653ee7d28e37cd93": "omni-exchange-v4-base",
+    "0xfe6f020a8b666b57dacbad874f812f0f1fe60777cd5f96a543351a8949837918": "omni-exchange-v4-base",
+    "0x6ff91186db3072a4b38aad053d534620346bc52864c4b8761b651526802827c9": "omni-exchange-v4-base",
+    "0xe33674b48a396f55e065d396042f6fb754b97cc3f63013805688028a6e3957b2": "omni-exchange-v4-base",
+    "0xcc5772a76969d02611dcb9f58df6e2f24cec30c6bb54a7966928cf87d2bb8acb": "omni-exchange-v4-base",
+    "0x167a9a24b0442db21ee243c7bfaf34abd1fe1d05f51213ea0ac87ddc05925e22": "omni-exchange-v4-base",
+    "0x0c83be68225ee4937d929d05646fb16b85aa7d8dbcd6da0984742c7c295f414c": "omni-exchange-v4-base",
+    "0xc79e3f834607e0b3b2e1dc979452488a7124cc04fcead8c25e39cd0680306fc9": "omni-exchange-v4-base",
+    "0xa95d3d07c2ec7d35096d79ae821209ea63ca297c847069678a960aa9e8854c15": "omni-exchange-v4-base",
+    "0x77f2a66e457c3b95ae255fff53ddf1641e497cfad67fb684e8fac98a8a53a7e7": "omni-exchange-v4-base",
+    "0xd210f5bc61205bc6005203389cd1aebbba6118e86f42d7bd98e3f06ffb26b2f3": "omni-exchange-v4-base",
+    "0xedc63db73ff72a2c7bd1444cd5338db0da21431d424cb912a1e52adf5db58d83": "omni-exchange-v4-base",
+    "0x2d992e84aa25dad223e1875517c57077ed57280213fef48ec258df7f662c0405": "omni-exchange-v4-base",
+    "0x04c9765c30c5d6f59dd66aecce2e9aee6b7cd211cd8d9cc549d33703e82eb2d0": "omni-exchange-v4-base",
+    "0x491bea288ac03d53cc7bacb34c046c758d1f80d8ee5112ebd32a9e689721311a": "omni-exchange-v4-base",
+    "0x06e9e7a076dc90d72d9004c142234a482e41e87e17f6c8570433b0e2af29d970": "omni-exchange-v4-base",
+    "0xa4bce32bac0549514aeae4a5db659243ddcf685ff785366a9833bba90d122154": "omni-exchange-v4-base",
+    "0x679fd94341754b32b4ba6e5ff6ed7d1825a349d09bd161a802edf7c00b9bc08c": "omni-exchange-v4-base",
+    "0xa1daed917aabd1dfd9dbf1a7881e397ebc7613e2b9d50e06bf273efbed9e2e3a": "omni-exchange-v4-base",
+    "0x45260d731639fba620314962cce2860e5986c06debd63f9770ac722e3d15c213": "omni-exchange-v4-base",
+    "0x821950e305d3fb94c5b78bea9765bb5582a8ae7d7c963a89b6f3f2121cbdb700": "omni-exchange-v4-base",
+    "0xc947da6c8f960a54cb5714fedb1d73784d52d66f4aebcd9728c65958a72517d8": "omni-exchange-v4-base",
+    "0x0f9edf5d447f008b768d63a97fbc4372e5bcffb192f72ae00f5c6898f456f3b6": "omni-exchange-v4-base",
+    "0xd424ee82b40b66c1f186cac875b8820d3edfbe0485a85a18b2dee13f19980872": "omni-exchange-v4-base",
+    "0xd9d0ec210216c58ca1e5a1182aa97feaf7ad2c3f99b9dfbca66d6fcd1678cd7e": "omni-exchange-v4-base",
+    "0x201e90e59e6e1e523aa29156e8100915528de5e4b35bfd4e7d2878e29c21b870": "omni-exchange-v4-base",
+    "0xb9e95105c6d5b0ead4463f29c4a43c462d5d0883227dd8f26552bd15fe80477e": "omni-exchange-v4-base",
+    "0x06c0e7ef5fe9837c94596f90cd080f0c1041128089e47fe239eb1b0a0ab68114": "omni-exchange-v4-base",
+    "0x0d1cb71f261eaa81af4bca7e2407754a7bd785a58d470f2fecdb9c27ab38d7bf": "omni-exchange-v4-base",
+    "0xac6615fbc952e23fb7b14cde7dbaf7999913b8d238576d9396d11e67839b3e7c": "omni-exchange-v4-base",
+    "0x838961ea660c7ce98a87d2fe18dd4f37574ab956710cff2a3cb00e01a286a759": "omni-exchange-v4-base",
+    "0x52ddf6cb1ef42000b475fa87f8c97c2275c9416c53977ffc77d441dc6b5bd979": "omni-exchange-v4-base"
+  },
+  "router_constructor": "0x00000000000000000000000072f857d13c5363fa89da61020d53a1ea26fddb8b00000000000000000000000042000000000000000000000000000000000000060000000000000000000000007d9d51267f7e9e6b46a48e0a75c0086f46777087000000000000000000000000d6ab0566e7e60b67c50ac73ddff4e3ddcb829ec20000000000000000000000000270845a91984746a3677ef5931013a7c980aa786ea5d2f9a28cd0f6ba538d5423bc3a6f7bf6d8c32d7699524b144ce72d5d6ebfd81a5a509cbbd340e6ce51e5005484df599c630af2458f9e6d04b784729c6d59000000000000000000000000dd179d5bf71b884793f1c213ffbdd702f399ecaa000000000000000000000000aa74c0492db7661d6ca52145205534061f8470cb000000000000000000000000bf7927161c04a80e533fe8d03b8c511ac310fd280000000000000000000000009475d90bcaffdad562c2146fc88cbe39d3aad09400000000000000000000000044db79d0eb3c031ad4e3f081bf5d3b40a1e06c65000000000000000000000000be5f9346f8a939a127728dba8e489935374ce067",
+  "position_source": "https://github.com/omni-exchange/smart-contracts-public/tree/9e046fa9dc37/projects/flux-periphery",
+  "cl_quoter_source": "https://basescan.org/address/0xd68db83ac3a42483c5d1d15db30f11bcae044a47#code"
+}

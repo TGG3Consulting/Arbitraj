@@ -114,7 +114,7 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             Box::pin(super::super::pools::temple::market(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
             continue;
         }
-        if f.variant == Variant::RegisteredV3 {
+        if matches!(f.variant, Variant::RegisteredV3 | Variant::HelloV3) {
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             Box::pin(super::super::pools::registered_v3::fresh(ctx,e,at)).await?;
             continue;

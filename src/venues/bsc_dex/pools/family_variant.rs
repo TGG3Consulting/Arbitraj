@@ -28,6 +28,7 @@ pub enum Variant {
     /// 9mm, Throne и Omni на Base проверяют свои callback через роутеры фабрик.
     BaseNativeV3,
     IziModules,
+    HelloV3,
     RegisteredV3,
     /// Algebra Integral с проверяемым beacon-прокси плагина QuickSwap V4.
     QuickswapIntegral,
@@ -100,6 +101,7 @@ pub enum Variant {
     MintClub,
     Carbon,
     Temple,
+    Antfarm,
     /// EIP-2535 с отдельной привязкой исполняемого селектора фабрики и Router02.
     DiamondV2,
     /// Пара проверяется по фабрике CREATE и коду исполнения; общий прокси с Router02.
@@ -170,7 +172,7 @@ pub enum Variant {
 
 impl Variant {
     pub fn deli(self)->bool{matches!(self,Self::DeliConstant|Self::DeliCl)}
-    pub fn factory_quoter(self)->bool { matches!(self,Self::BaseNativeV3|Self::RegisteredV3) }
+    pub fn factory_quoter(self)->bool { matches!(self,Self::BaseNativeV3|Self::RegisteredV3|Self::HelloV3) }
     pub fn wallet_module(self)->bool { matches!(self,Self::Memebox|Self::RegisteredV3|Self::BunnySwap|Self::CandySwap) }
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator)}
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
@@ -227,6 +229,7 @@ pub fn of(kind: &str) -> Variant {
         "algebra_integral_quickswap" => Variant::QuickswapIntegral,
         "lista_stableswap_proxy" => Variant::ListaStableProxy,
         "izi_static_modules" => Variant::IziModules,
+        "hello_v3" => Variant::HelloV3,
         "registered_v3" | "registered_v3_module" => Variant::RegisteredV3,
         "base_native_v3" | "base_native_v3_module" => Variant::BaseNativeV3,
         "v3_fork_ramses" => Variant::RamsesCl,
@@ -247,6 +250,7 @@ pub fn of(kind: &str) -> Variant {
         "v2_fork_executor_create2" => Variant::V2Create2,
         "v2_diamond_router" => Variant::DiamondV2,
         "v2_diamond_create" => Variant::KewlV2,
+        "antfarm" => Variant::Antfarm,
         "temple" | "temple_v5" => Variant::Temple,
         "carbon_v1" => Variant::Carbon,
         "mint_club_v2" => Variant::MintClub,

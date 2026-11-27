@@ -68,6 +68,9 @@ pub(crate) async fn market(
     .await?;
     let fee = batch::decode(&r, rate)?;
     let space = batch::decode(&step, sp)?;
+    let deployer = if f.variant == super::family_variant::Variant::HelloV3 {
+        super::hello_v3::creator(ctx, f, factory, quoter, pool, at).await?
+    } else { factory };
     if a >= b
         || a.is_zero()
         || space.as_i32() <= 0
@@ -79,7 +82,7 @@ pub(crate) async fn market(
         || batch::decode(&second, t1)? != b
         || !init
             .iter()
-            .any(|h| address(factory, (a, b), fee, *h) == pool)
+            .any(|h| address(deployer, (a, b), fee, *h) == pool)
     {
         return Err(bad());
     }
@@ -123,6 +126,7 @@ pub(crate) async fn fresh(ctx: &Ctx, e: &Entry, at: &Value) -> GatewayResult<()>
         at,
     )
     .await?;
+    if e.family.variant == super::family_variant::Variant::HelloV3 { return Ok(()); }
     super::direct_module::verify_factory(
         ctx,
         e.family,

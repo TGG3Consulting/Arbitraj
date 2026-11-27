@@ -3804,7 +3804,7 @@
   {
     "chain_id": 8453,
     "network": "base",
-    "id": "sectorone-v2.0-base",
+    "id": "sectorone-v2-0-base",
     "source": "https://docs.sectorone.xyz/info/smart-contracts.md · tests/data/first_run_dex_2026-11-26/sectorone-20-base.json.gz",
     "settings": {
       "dex.kind": "sectorone_lb_v20",
@@ -3835,7 +3835,7 @@
   {
     "chain_id": 1,
     "network": "ethereum",
-    "id": "sectorone-v2.0-ethereum",
+    "id": "sectorone-v2-0-ethereum",
     "source": "https://docs.sectorone.xyz/info/smart-contracts.md · tests/data/first_run_dex_2026-11-26/sectorone-20-ethereum.json.gz",
     "settings": {
       "dex.kind": "sectorone_lb_v20",
@@ -3851,7 +3851,7 @@
   {
     "chain_id": 1,
     "network": "ethereum",
-    "id": "sectorone-v2.2-ethereum",
+    "id": "sectorone-v2-2-ethereum",
     "source": "https://docs.sectorone.xyz/info/smart-contracts.md · tests/data/first_run_dex_2026-11-26/sectorone-22-ethereum.json.gz",
     "settings": {
       "dex.kind": "sectorone_lb_v22",
@@ -3861,6 +3861,95 @@
       "dex.lb_implementations": [
         "0xca3fe461f0041662826697916c33c8af5cbdb7f1"
       ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "hello-dex-ethereum",
+    "source": "https://sourcify.dev/server/v2/contract/1/0xeac47f49eeabdcea711aa3e4f3e0b137a011fdfe · tests/data/first_run_dex_2026-11-26/hello_ethereum_directory.json · tests/data/first_run_dex_2026-11-26/hello_ethereum_swaps.json",
+    "settings": {
+      "dex.kind": "hello_v3",
+      "dex.factory": "0x26aaa70d55fd0988eb9528884c5cd90c95ae0fdf",
+      "dex.factory_runtime_hash": "0x507973db2ec52a685d876e1336fe01c39ec3eb26edaf6a7e1776e09254452540",
+      "dex.quoter": "0x88b0adeb37ed1ad06bc67faeea02d6a76338a0e6",
+      "dex.quoter_runtime_hash": "0xee2386dd7623a2854a343502d064ff8b21cf272e50d3f29143588bc3064baabe",
+      "dex.tick_lens": "0x99f4389285021ffaa2d0bd58031629c2f8da60d6",
+      "dex.v3_quoter_method": "quoteExactInputSingle",
+      "dex.quoter_virtual": false,
+      "dex.v3_fee_tiers": [
+        "100",
+        "500",
+        "2500",
+        "3000",
+        "10000",
+        "25000"
+      ],
+      "dex.pool_code_hashes": [
+        "0xc299b2720f76863662b74be14b4c308f9990ac87f819c0d986758b65eb60e794"
+      ],
+      "dex.v3_swap_callback": "pancakeV3SwapCallback(int256,int256,bytes)"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bitswap",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0xc78fd8021fb191501e6be7c1da4beafb1b81cf8c · tests/data/first_run_dex_2026-11-26/bitswap_ethereum_directory_wallets.json.gz",
+    "settings": {
+      "dex.kind": "izi_static_modules",
+      "dex.factory": "0xc78fd8021fb191501e6be7c1da4beafb1b81cf8c",
+      "dex.factory_runtime_hash": "0xb34a982f81682df1621b404095a9437d6d767ef12b3cf1a375fa8d81cf6c14b4",
+      "dex.pair_runtime_hash": "0xad93f2a421eb9c70d2adf0a4af1dc7b7b98979ffb14ded96ed3db6c2ffc40491",
+      "dex.pool_code_hashes": [
+        "0x08323a03d28906bb1d5afd36f3ad56302878af9d1bc6344eb250127b1894d20d"
+      ],
+      "dex.izi_module_bindings": [
+        "0x7fc805b9773a22c091fe548380e2de61a07478e5 0x5e6a527d85fc4d990ed25ecac5b97f6941d0242385404245ab826871e173de00",
+        "0x178be577715cc0e83b33467d9b4a009f1cd7b052 0x65eee566e0175cbef5cf92b76a4a97adcb3776fa5b9ec2458532a0723af008e0",
+        "0x07f389e36f76a2c0af7d109fec739571c96473e4 0x67626ff117e876f471a119c35f4007fa411e567d4978d9bf1adb9e8b1da351a1",
+        "0xf887baadd85c630e8e6f211d72c69400870eac31 0xc4e90304cbced020d66f751203b2609c526e7ab78a7607f5af569b432b1709c0",
+        "0xf8f1cd5943396c5c49eb278a171ad9aa6a2013e5 0xc8879a48c917473927747574c8dcc7b2865cabbaf1fd8cdd6918cf8432e78fe2"
+      ],
+      "dex.v3_fee_tiers": [
+        "500",
+        "3000",
+        "10000"
+      ],
+      "dex.quoter_virtual": true,
+      "dex.pmm_ladder_usd": [
+        "1",
+        "5"
+      ],
+      "dex.pmm_ladder_counter": true
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "hello-dex-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x044963d0ea07accf3c4349a72811a42acc2369d1 · tests/data/first_run_dex_2026-11-26/hello_base_directory.json",
+    "settings": {
+      "dex.kind": "hello_v3",
+      "dex.factory": "0x044963d0ea07accf3c4349a72811a42acc2369d1",
+      "dex.factory_runtime_hash": "0x799be0f7f4242a4811f357a017488a647087048270c9a91034f3216dccb97f0d",
+      "dex.quoter": "0xe1210b50d8c4b880adcb8a32ee70a181229aacf6",
+      "dex.quoter_runtime_hash": "0x130c932da20b07b7af112ff27fbc39cf5c6d810d647857aa6403b1b6aaeee352",
+      "dex.tick_lens": "0x7b94131fca32a7c0fc78518ec7508f7a303007d9",
+      "dex.v3_quoter_method": "quoteExactInputSingle",
+      "dex.quoter_virtual": false,
+      "dex.v3_fee_tiers": [
+        "100",
+        "500",
+        "2500",
+        "3000",
+        "10000",
+        "25000"
+      ],
+      "dex.pool_code_hashes": [
+        "0xc299b2720f76863662b74be14b4c308f9990ac87f819c0d986758b65eb60e794"
+      ],
+      "dex.v3_swap_callback": "pancakeV3SwapCallback(int256,int256,bytes)"
     }
   }
 ]

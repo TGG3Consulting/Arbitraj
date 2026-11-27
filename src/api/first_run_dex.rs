@@ -310,6 +310,12 @@ mod tests {
                         let archive:Value=serde_json::from_str(raw).unwrap();
                         assert_eq!(archive["selector"],snapshot["selector"]);
                         assert_eq!(archive["init"].as_str(),Some(text.as_str()));
+                    } else if k=="dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"),Some(Parameter::Text(kind)) if kind=="hello_v3") {
+                        let raw=if p.network=="base" {include_str!("../../tests/data/first_run_dex_2026-11-26/hello_base_directory.json")} else {include_str!("../../tests/data/first_run_dex_2026-11-26/hello_ethereum_directory.json")};
+                        let archive:Value=serde_json::from_str(raw).unwrap();
+                        assert_eq!(archive["selector"],snapshot["selector"]);
+                        assert_eq!(archive["init_hash"].as_str(),Some(text.as_str()));
+                        assert_eq!(archive["nonce"].as_u64().unwrap(),archive["markets"].as_array().unwrap().len() as u64+1);
                     } else if k=="dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"),Some(Parameter::Text(kind)) if kind=="registered_v3") {
                         let evidence: Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/registered_v3_base_profiles.json")).unwrap();
                         assert_eq!(evidence["selector"],snapshot["selector"]);

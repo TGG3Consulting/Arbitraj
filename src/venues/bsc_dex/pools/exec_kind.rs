@@ -200,7 +200,8 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // Решение 483: Ramses CL — swap(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data) как у V3
         // (RamsesV2Pool.sol L944), обратный вызов ramsesV2SwapCallback (L1238) — проверка dex.v3_swap_callback
         // (exec_callback.rs); Ramses CL V2 — тот же swap и uniswapV3SwapCallback (RamsesV3Pool.sol L436-L442, L662).
-        "pancakeswap_v3"
+        "hello_v3"
+        | "pancakeswap_v3"
         | "uniswap_v3"
         | "v3_fork"
         | "v3_fork_pancake"
@@ -274,7 +275,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // пулов; пул с белым списком откатит и квотер — лесенки и котировки у него не будет). Шаг 13, только v2.
         "metric_omm" => ExecKind::Metric,
         // Решение 286: swap любым контрактом (проба на цепи — три фабрики, tests/data/izi_2026-11-15). Шаг 14, только v2.
-        "iziswap" | "biswap_v3" => ExecKind::Izi,
+        "iziswap" | "izi_static_modules" | "biswap_v3" => ExecKind::Izi,
         // Решение 287: swap пула — подпись V2 без белого списка (DMMPool.sol L162-L210: проверок вызывающего нет); шаг 15, только v2.
         "kyber_dmm" => ExecKind::KyberDmm,
         // Решение 288: swap пары без белого списка (SmardexPair.sol L155-L319: только lock и «to» не токен пары); шаг 16, v2.
@@ -422,6 +423,7 @@ mod tests {
     #[test]
     fn every_kind_is_decided() {
         let none = [
+            "antfarm", // Signed router and separate ATF budget.
             "temple", // официальный view, без шага V5
             "carbon_v1", // официальный Controller, без шага в ArbExecutor
             "mint_club_v2", // native Bond mint/burn

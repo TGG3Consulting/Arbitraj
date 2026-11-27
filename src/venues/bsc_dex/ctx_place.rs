@@ -99,8 +99,30 @@ impl Ctx {
     }
 }
 
+/// Внешние ID с точкой не являются допустимыми ключами настроек. Исходный ID остаётся в справочнике и запросах GeckoTerminal.
+pub(crate) fn index_scope(raw: &str) -> std::borrow::Cow<'_, str> {
+    use std::{borrow::Cow, collections::BTreeMap, sync::OnceLock};
+    static ALIASES: OnceLock<BTreeMap<String, String>> = OnceLock::new();
+    let (name, suffix) = raw
+        .split_once('@')
+        .map_or((raw, None), |(n, s)| (n, Some(s)));
+    if !name.contains('.') {
+        return Cow::Borrowed(raw);
+    }
+    let aliases = ALIASES.get_or_init(|| {
+        serde_json::from_str(include_str!("../../../config/dex_indexer_aliases.json"))
+            .expect("справочник внешних ID DEX")
+    });
+    match (aliases.get(name), suffix) {
+        (Some(alias), Some(s)) => Cow::Owned(format!("{alias}@{s}")),
+        (Some(alias), None) => Cow::Borrowed(alias),
+        (None, _) => Cow::Borrowed(raw),
+    }
+}
+
 /// Ключ области «DEX» по id индексатора и суффиксу площадки (None — сеть по умолчанию). Ошибок нет.
 pub fn key_of(raw: &str, suffix: Option<&str>) -> String {
+    let raw = index_scope(raw);
     match suffix {
         None => raw.to_string(),
         Some(s) => format!("{raw}{s}"),
@@ -124,6 +146,15 @@ mod tests {
     #[test]
     fn dex_keys_split_networks() {
         assert_eq!(key_of("camelot", None), "camelot");
+        assert_eq!(
+            key_of("sectorone-v2.0-base", Some("@base")),
+            "sectorone-v2-0-base@base"
+        );
+        assert_eq!(
+            index_scope("sectorone-v2.2-ethereum@ethereum"),
+            "sectorone-v2-2-ethereum@ethereum"
+        );
+        assert_eq!(index_scope("sectorone-base@base"), "sectorone-base@base");
         assert_eq!(key_of("camelot", Some("@arbitrum")), "camelot@arbitrum");
         assert!(own_dex("pancakeswap_v2", None));
         assert!(!own_dex("camelot@arbitrum", None));

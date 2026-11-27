@@ -54,7 +54,8 @@ def tables(network, snapshots, profiles):
            "#### Значения для экрана «Первый запуск»", "",
            "| ID DEX | Настройки области DEX | Основание |", "|---|---|---|"]
     configured = {r["id"]: r for r in profiles if r["network"] == network}
-    matched = set(configured).intersection(gt["rows"])
+    aliases = read(Path("config/dex_indexer_aliases.json"))
+    matched = {id for id in gt["rows"] if aliases.get(id,id) in configured}
     out[2] += (f" Из {len(gt['rows'])} строк GeckoTerminal адресные профили заданы для {len(matched)}, "
                f"остаются открытыми {len(gt['rows']) - len(matched)}. Ещё {len(configured) - len(matched)} "
                "внутренних ключей обозначают отдельные фабрики и семейства.")
@@ -70,6 +71,33 @@ def tables(network, snapshots, profiles):
         params = "<br>".join(fields)
         out.append(f"| `{id}` | {params} | {row['source']} |")
     out.extend(omni_mars_deli(network))
+    if not base and "bitswap" in configured:
+        bs=read(Path("tests/data/first_run_dex_2026-11-26/bitswap_ethereum_registry.json"))
+        directory_path=Path("tests/data/first_run_dex_2026-11-26/bitswap_ethereum_directory_wallets.json.gz")
+        with gzip.open(directory_path,"rt",encoding="utf8") as stream:
+            wallets=json.load(stream)
+        fills=wallets["cases"]
+        pools=len({r["pool"] for r in fills})
+        edges=sum(int(r["quote"][0])<int(r["authorized"]) for r in fills)
+        change=sum(int(r["spent"])<int(r["quote"][0]) for r in fills)
+        same=sum(any(hop[2]==r["pool"] for hop in r["funding"]) for r in fills)
+        out.extend(["", f"BitSwap Ethereum · По NewPool, CREATE2 и pool(x,y,fee) проверены {len(bs['markets'])} пулов и пять "
+                    f"делегированных реализаций. Кошелёк исполнил {len(fills)} обмена в {pools} пулах, в обе стороны по два размера. "
+                    f"Газ шага вместе с расчётом кошелька {min(r['gas'] for r in fills):,}–{max(r['gas'] for r in fills):,}. "
+                    f"В {same} опытах покупка исходного токена изменила проверяемый пул до измерения. "
+                    f"В {edges} опытах достигнута граница ликвидности, ещё в {change} вернулась сдача округления. "
+                    f"Каждый успешный обмен сверяет выплату, срок и откат при увеличении минимума на единицу. "
+                    f"Для работы требуются собственный кошелёк с привязанным проверенным ArbExecutor V5 и котировка на текущем блоке. "
+                    f"[Реестр и события](../tests/data/first_run_dex_2026-11-26/bitswap_ethereum_registry.json) · "
+                    f"[Баланс, газ и отказы](../{directory_path.as_posix()})."])
+        direct_path=directory_path.with_name("bitswap_ethereum_wallets.json.gz")
+        with gzip.open(direct_path,"rt",encoding="utf8") as stream:
+            controls=json.load(stream)["cases"]
+        cuts=sum(int(r["quote_used"])<int(r["authorized"]) for r in controls)
+        out.append(f"На рынках WETH/USDT и WETH/USDC выполнены ещё {len(controls)} контрольных обменов при "
+                   f"входах 1, 10 и 2000 единиц стейблкойна или 0,001, 0,01 и 3 WETH. В {cuts} случаях порученный размер "
+                   f"достиг края ликвидности. Такой объём исключается из исполнимой лесенки. Остаток входа возвращён кошельку. "
+                   f"[Суммы и Transfer в пул](../{direct_path.as_posix()}).")
     if base:
         sobal_path = Path("tests/data/first_run_dex_2026-11-26/sobal_base_directory.json")
         if sobal_path.exists():
@@ -989,6 +1017,16 @@ def tables(network, snapshots, profiles):
                    "Ставка читается для конкретного пула через factory.getFee(pool,stable). "
                    "[Реестр и ставки](../tests/data/first_run_dex_2026-11-26/ethereum_classic_registry_supernova-amm.json.gz) · "
                    "[Суммы и остатки](../tests/data/first_run_dex_2026-11-26/ethereum_classic_wallets_supernova-amm.json.gz).")
+        hello_dir_path=Path("tests/data/first_run_dex_2026-11-26/hello_ethereum_directory.json")
+        hello=read(hello_dir_path)
+        hello_logs_path=hello_dir_path.with_name("hello_ethereum_swaps.json")
+        hello_logs=read(hello_logs_path)
+        usdt="0xdac17f958d2ee523a2206206994597c13d831ec7"
+        cash=sum(int(hello_logs["markets"][m["pool"]]["volume_raw"][m["tokens"].index(usdt)]) for m in hello["markets"] if usdt in m["tokens"] and m["pool"] in hello_logs["markets"])
+        out.append(f"**HELLO V3.** На блоке {hello['height']} база содержит {len(hello['markets'])} зарегистрированных пулов. У {sum(int(m['liquidity'])>0 for m in hello['markets'])} была ликвидность на текущем тике. "
+                   f"За последние 24 часа {hello_logs['swap_count']} событий Swap пришли из {len(hello_logs['markets'])} пулов. Оборот по двум сторонам пар с USDT составил {cash//10**6}.{cash%10**6:06d} USDT. "
+                   f"Отдельно в этих транзакциях зафиксировано {len(hello_logs['protocol_transfers'])} переводов накопленной комиссии получателю протокола. "
+                   f"[Реестр и CREATE2](../{hello_dir_path.as_posix()}) · [События, получатель комиссии и квотеры](../{hello_logs_path.as_posix()}).")
         temple_registry_path=Path("tests/data/first_run_dex_2026-11-26/temple_registry_ethereum.json")
         tr=read(temple_registry_path)
         temple_wallet_path=temple_registry_path.with_name("temple_ethereum_wallets.json.gz")
@@ -1097,12 +1135,15 @@ def tables(network, snapshots, profiles):
         if base and id == "quickswap-v4-base" and quickswap.exists() and pool and any(m["pool"] == pool.lower() for m in qs["markets"]):
             factory, roundtrip = qs["addresses"]["AlgebraFactory"], "poolByPair(address,address)"
         if not base and id=="antfarm-ethereum" and pool:
-            import gzip
             with gzip.open("tests/data/first_run_dex_2026-11-26/antfarm_ethereum_registry.json.gz","rt",encoding="utf8") as archive:
                 antfarm=json.load(archive)
             if any(m["pair"]==pool.lower() for m in antfarm["pairs"]):
                 factory=antfarm["contracts"]["AntfarmFactory"]["address"]
                 roundtrip="CREATE2 и getPair(token0,token1,fee) в обоих порядках"
+        if not base and id=="hello-dex-ethereum" and pool and any(m["pool"]==pool.lower() for m in hello["markets"]):
+            factory,roundtrip=hello["factory"],"getPool(token0,token1,fee) в обе стороны и CREATE2 от отдельного deployer"
+        if not base and id=="bitswap" and id in configured and pool and any(m["pool"]==pool.lower() for m in bs["markets"]):
+            factory,roundtrip=bs["factory"],"NewPool, CREATE2 и pool(x,y,fee) в обоих порядках"
         if not base and id=="templedao" and pool:
             tr=read(Path("tests/data/first_run_dex_2026-11-26/temple_registry_ethereum.json"))
             if pool.lower()==tr["pair"]:
@@ -1118,7 +1159,7 @@ def tables(network, snapshots, profiles):
             hx = read(Path(hydrex))
             if any(r["pool"] == pool.lower() and r["listed"] for r in hx["directory"]):
                 factory, roundtrip = hx["addresses"]["Factory"], "poolByPair(address,address)"
-        if id in configured:
+        if aliases.get(id,id) in configured:
             status = "профиль, см. параметры выше"
         else:
             task = f"T-DEX-{network}-{id}"

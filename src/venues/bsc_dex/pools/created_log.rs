@@ -170,6 +170,11 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             Proto::MetricOmm => continue,
             // iZiSwap / Biswap V3 (решение 286): подписка на NewPool фабрики не подключена (техдолг, docs/ROADMAP.md) —
             // новые пулы приходят из справочника индексатора.
+            Proto::IziSwap if f.variant == super::family_variant::Variant::IziModules => (
+                "dex.factory",
+                super::abi_izi::IIziFactory::NewPool::SIGNATURE_HASH,
+                false,
+            ),
             Proto::IziSwap | Proto::BiswapV3 => continue,
             // Balancer V2 (решение 289): пул регистрирует хранилище (PoolRegistered — от адреса Vault, токены — отдельным
             // TokensRegistered, IVault.sol L235, L273); подписка на них не подключена (техдолг, docs/ROADMAP.md) — новые
@@ -417,6 +422,11 @@ fn remember(p: &Pools, w: &Watch, c: &Candidate) {
 /// встречном поле не тот токен.
 pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candidate, String> {
     let (t0, t1, pool) = match f.proto {
+        Proto::IziSwap if f.variant == super::family_variant::Variant::IziModules => {
+            let event = super::abi_izi::IIziFactory::NewPool::decode_log_data(&log.inner.data)
+                .map_err(|err| format!("iZiSwap NewPool не по ABI: {err}"))?;
+            (event.tokenX, event.tokenY, event.pool)
+        }
         _ if f.variant == super::family_variant::Variant::MintClub => {
             let e=super::mint_club::IBond::TokenCreated::decode_log_data(&log.inner.data).map_err(|e|e.to_string())?;
             (e.token,e.reserveToken,e.token)

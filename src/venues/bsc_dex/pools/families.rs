@@ -446,7 +446,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
         "deli_v4_constant" | "deli_v4_cl" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
-        "temple" | "temple_v5" | "carbon_v1" | "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
+        "antfarm" | "temple" | "temple_v5" | "carbon_v1" | "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
         "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
         "bunnyswap" | "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
@@ -470,6 +470,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "v3_fork" | "v3_fork_ramses" | "v3_fork_uniswap_lm" => {
             (PoolKind::V3, Proto::UniswapV3, true, false, true)
         }
+        "hello_v3" => (PoolKind::V3,Proto::PancakeV3,true,false,true),
         "registered_v3" => (PoolKind::V3,Proto::UniswapV3,true,false,true),
         "registered_v3_module" => (PoolKind::V3,Proto::UniswapV3,true,true,true),
         "base_native_v3" => (PoolKind::V3, Proto::PancakeV3, true, false, false),
@@ -823,6 +824,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
                 list.extend(["dex.router", "dex.module_runtime_hashes"]);
             }
         }
+        Proto::V2 if f.variant == Variant::Antfarm => list.extend(["dex.factory","dex.quoter"]),
         Proto::V2 if f.variant == Variant::Temple => {
             list.extend(["dex.quoter","dex.router_runtime_hash","dex.pair_runtime_hash"]);
             if f.executor_kind.is_some(){list.extend(["dex.router","dex.module_runtime_hashes"]);}
@@ -889,8 +891,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::UniswapV3 if f.variant == Variant::RamsesCl => {
             list.extend(["dex.factory", "dex.quoter", "dex.v3_swap_callback"])
         }
-        Proto::UniswapV3 if f.variant == Variant::RegisteredV3 => {
+        Proto::UniswapV3 | Proto::PancakeV3 if matches!(f.variant, Variant::RegisteredV3 | Variant::HelloV3) => {
             list.extend(["dex.factory","dex.factory_runtime_hash","dex.pool_code_hashes","dex.tick_lens","dex.quoter","dex.quoter_runtime_hash","dex.v3_quoter_method"]);
+            if f.variant == Variant::HelloV3 { list.push("dex.v3_swap_callback"); }
             if f.tradable {list.extend(["dex.router","dex.module_runtime_hashes"]);}
         }
         Proto::PancakeV3 if f.variant == Variant::BaseNativeV3 => {

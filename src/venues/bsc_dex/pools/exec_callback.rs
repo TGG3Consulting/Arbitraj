@@ -169,11 +169,27 @@ fn wallet_version(ctx: &Ctx, what: &str) -> Result<Option<Version>, String> {
     })
 }
 
+fn profile_version(f: &Family, version: Option<Version>) -> bool {
+    f.variant != super::family_variant::Variant::IziModules || version == Some(Version::V5)
+}
+
+pub(in crate::venues::bsc_dex) fn profile_missing(ctx: &Ctx, f: &Family) -> Option<&'static str> {
+    if f.variant != super::family_variant::Variant::IziModules {
+        return None;
+    }
+    (!profile_version(f, ctx.exec_info().and_then(|(_, version)| version))).then_some(
+        "Для этого профиля iZiSwap нужен привязанный к кошельку и сверенный ArbExecutor V5",
+    )
+}
+
 /// Решение 401 (ревью t186, Н1): то же, что `missing(ctx, f).is_none()` при заданном исполнителе, — для горячего пути
 /// котировки (exec_kind.rs via_executor): без чтения записи кошелька и без строк; версия — из снимка (Ctx::exec_info).
 /// Вид шага с v2 / v3 — нужна сверенная версия не ниже since(вид); задана dex.v3_swap_callback — её селектор в коде
 /// сверенной версии (память SEEN). Принимает: окружение, вид, сверенную версию (None — не сверена). Ошибок нет.
 pub fn usable(ctx: &Ctx, f: &Family, ver: Option<Version>) -> bool {
+    if !profile_version(f, ver) {
+        return false;
+    }
     if let Some(k) = f.executor_kind.filter(|k| since(*k) > Version::V1)
         && !ver.is_some_and(|v| v >= since(k))
     {
@@ -221,6 +237,9 @@ fn seen_with<R>(v: Version, sig: &str, f: impl FnOnce(&Option<String>) -> R) -> 
 /// Возвращает: None — настройка не задана, у кошелька нет исполнителя или вызов есть в коде сверенной версии;
 /// Some — причина (вызова нет в этой версии / версия не сверена). Ошибок нет.
 pub fn missing(ctx: &Ctx, f: &Family) -> Option<String> {
+    if let Some(why) = profile_missing(ctx, f) {
+        return Some(why.into());
+    }
     // Решение 284: вид шага, которого нет у исполнителя v1, — та же причина «без пути исполнения».
     if let Some(why) = step_missing(ctx, f) {
         return Some(why);
@@ -353,6 +372,26 @@ pub fn step_missing(ctx: &Ctx, f: &Family) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bitswap_requires_the_measured_executor_for_this_wallet() {
+        let bitswap =
+            super::super::families::make("test-measured-izi", "izi_static_modules").unwrap();
+        let classic = super::super::families::make("test-ordinary-izi", "iziswap").unwrap();
+        assert_eq!(bitswap.executor_kind, Some(ExecKind::Izi));
+        assert!(!bitswap.tradable);
+        for version in [
+            None,
+            Some(Version::V1),
+            Some(Version::V2),
+            Some(Version::V3),
+            Some(Version::V4),
+        ] {
+            assert!(!profile_version(bitswap, version));
+        }
+        assert!(profile_version(bitswap, Some(Version::V5)));
+        assert!(profile_version(classic, Some(Version::V2)));
+    }
 
     /// Решение 472 (T472-08): шаг CURVE_ETH — только v5; у v1–v4 — причина «нужен исполнитель v5» (need_v5); у v5
     /// шаг есть. Решение 488: v5 собрана (contracts/out/) — check сверяет селектор по её коду (v5 ⊇ v4: селектор

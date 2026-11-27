@@ -69,17 +69,50 @@ def directory(url):
         funded[key] = (prefix, amount)
         return funded[key]
 
+    def outside(token):
+        key = (token, "public-router")
+        if key in funded:
+            return funded[key]
+        # Exact-input public route bounds the actual ETH spent. Read the payer change
+        # across the funding call, so a pre-existing token balance cannot fund the test.
+        for bridge in (None,*STABLES):
+            path = [WETH,token] if bridge is None else [WETH,bridge,token]
+            transfer = tx(FUNDING,"swapExactETHForTokens(uint256,address[],address,uint256)",
+                          ["uint256","address[]","address","uint256"],[1,path,OWNER,deadline],10**16)
+            before, action, after = run([balance(token,OWNER),transfer,balance(token,OWNER)])
+            if all(v["status"]=="0x1" for v in (before,action,after)):
+                acquired=int(after["returnData"],16)-int(before["returnData"],16)
+                if acquired >= 2:
+                    funded[key]=(([transfer],acquired),[(a,b,FUNDING) for a,b in zip(path,path[1:])])
+                    return funded[key]
+        funded[key]=None
+        return None
+
     cases, unavailable = [], []
     for m in markets:
         for a in m["tokens"]:
             b = next(t for t in m["tokens"] if t != a)
             candidates = funding_paths(markets,a,m["pool"])
+            account = None
             for path in candidates:
+                if any(pool==m["pool"] for _,_,pool in path):
+                    break
                 account = prepare(a,path)
                 if account is not None:
                     break
-            else:
-                unavailable.append(dict(pool=m["pool"],source=a,phase="funding",routes_tested=len(candidates)))
+            if account is None:
+                external = outside(a)
+                if external is not None:
+                    account, path = external
+                else:
+                    for path in candidates:
+                        if any(pool==m["pool"] for _,_,pool in path):
+                            account = prepare(a,path)
+                            if account is not None:
+                                break
+            if account is None:
+                unavailable.append(dict(pool=m["pool"],source=a,phase="funding",routes_tested=len(candidates),
+                                        external_router=FUNDING,external_bridges=[WETH,*STABLES]))
                 continue
             prefix, wallet = account
             for amount in sorted({wallet//10, wallet//2} - {0}):

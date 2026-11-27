@@ -183,6 +183,27 @@ pub struct CarbonState {
     pub strategies: Vec<CarbonStrategy>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AntfarmMarket {
+    pub tokens: [Address; 2],
+    pub atf: Address,
+    pub tier: u16,
+    pub reserves: [U256; 2],
+    /// Actual token0, token1 and ATF balances at the pair.
+    pub balances: [U256; 3],
+    pub dividends: U256,
+    pub lp_supply: U256,
+    /// Index of the asset priced in ATF and oracle rate in UQ112x112.
+    pub oracle: Option<(usize, U256)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AntfarmBook {
+    pub market: AntfarmMarket,
+    /// ATF can be acquired with either token. A linked hourly oracle can reprice the primary fee in the same transaction.
+    pub funding: Vec<(AntfarmMarket, Option<U256>)>,
+}
+
 /// TempleStableAMMRouter. Порядок резервов — TEMPLE, зарегистрированный стейбл.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TempleState {
@@ -424,6 +445,7 @@ pub enum PoolState {
     MintClub(Box<MintClubState>),
     Carbon(Box<CarbonState>),
     Temple(Box<TempleState>),
+    Antfarm(Box<AntfarmBook>),
     /// Сумма, списанная с CandySwap, включает независимое удержание из выплаты получателю.
     CandySwap(Box<CandySwapState>),
     Memebox(Box<MemeboxState>),

@@ -175,6 +175,9 @@ pub fn shape(e: &Entry) -> Result<(ExecKind, Address, Address), String> {
 /// менеджера-синглтона, у CURVE нет состояния StableSwap или токен входа не из пары пула; NotConfigured — комиссия V2
 /// не задана или не в целых долях 1e-6. `token_in` — токен входа шага (нужен виду CURVE для порядка i → j).
 pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params, Address)> {
+    if let Some(why) = exec_callback::profile_missing(ctx,e.family) {
+        return Err(ctx.err(ErrorCode::NoRoute,why));
+    }
     let (k, pool) =
         supported(e.family, &e.pool.reference).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?;
     if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::Temple {

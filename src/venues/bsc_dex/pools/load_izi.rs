@@ -40,10 +40,42 @@ pub async fn load(
     counter: Address,
     tag: &str,
 ) -> GatewayResult<PoolState> {
-    if f.variant==super::family_variant::Variant::IziModules{
-        let at=super::nami::block(ctx,tag).await?;
-        Box::pin(super::izi_modules::at(ctx,f,pool,pair,&at)).await?;
-    }
+    let (at, sqrt) = if f.variant == super::family_variant::Variant::IziModules {
+        let at = super::nami::block(ctx, tag).await?;
+        let roles = Box::pin(super::izi_modules::at(ctx, f, pool, pair, &at));
+        let price =
+            super::nami_batch::read(ctx, [super::nami_batch::view(&at, pool, S::stateCall {})]);
+        let ((), [raw]) = tokio::try_join!(roles, price)?;
+        let price = super::nami_batch::decode(&raw, S::stateCall {})?;
+        (at, U256::from(price))
+    } else {
+        (
+            serde_json::json!(tag),
+            legacy_price(ctx, pool, pair, tag).await?,
+        )
+    };
+    let coin = if pair.0 == counter { pair.1 } else { pair.0 };
+    let quote = if pair.0 == coin { pair.1 } else { pair.0 };
+    let q = Quoter {
+        name: "iZiSwap",
+        func: "quoteIzi",
+        data: virtual_quoter::data_izi,
+    };
+    let (ladder_quote_in, ladder_base_in) = if sqrt.is_zero() {
+        (Vec::new(), Vec::new())
+    } else {
+        load_metric_ladder::read_with(ctx, tokens, reg, f.id, pool, coin, quote, pair.0, &at, q)
+            .await?
+    };
+    Ok(state(pair, coin, sqrt, ladder_quote_in, ladder_base_in))
+}
+
+async fn legacy_price(
+    ctx: &Ctx,
+    pool: Address,
+    pair: (Address, Address),
+    tag: &str,
+) -> GatewayResult<U256> {
     let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("iZiSwap {pool}: {what}"));
     let calls: Vec<(Address, Bytes)> = vec![
         (pool, P::tokenXCall {}.abi_encode().into()),
@@ -65,19 +97,7 @@ pub async fn load(
     if (x, y) != pair {
         return Err(bad(format!("токены пула {x:#x} / {y:#x} — не пара записи")));
     }
-    let coin = if pair.0 == counter { pair.1 } else { pair.0 };
-    let quote = if pair.0 == coin { pair.1 } else { pair.0 };
-    let q = Quoter {
-        name: "iZiSwap",
-        func: "quoteIzi",
-        data: virtual_quoter::data_izi,
-    };
-    let (ladder_quote_in, ladder_base_in) = if sqrt.is_zero() {
-        (Vec::new(), Vec::new())
-    } else {
-        load_metric_ladder::read_with(ctx, tokens, reg, f.id, pool, coin, quote, x, tag, q).await?
-    };
-    Ok(state(pair, coin, sqrt, ladder_quote_in, ladder_base_in))
+    Ok(sqrt)
 }
 
 /// Сборка состояния (без сети; её же зовут тесты). Принимает: пару записи (tokenX, tokenY), монету, sqrtPrice_96 пула,

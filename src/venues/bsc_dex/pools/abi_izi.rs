@@ -37,6 +37,7 @@ alloy::sol! {
     }
 
     interface IIziFactory {
+        event NewPool(address indexed tokenX, address indexed tokenY, uint24 indexed fee, uint24 pointDelta, address pool);
         function pool(address tokenX, address tokenY, uint24 fee) external view returns (address);
     }
 

@@ -74,6 +74,11 @@ pub async fn state(
         let (key,reserve0,reserve1)=Box::pin(super::deli::market(ctx,f,*manager,*id,pair,&at)).await?;
         return Ok(Loaded{state:PoolState::V2{reserve0,reserve1},ticks:None,bins:None,fee_pips:Some(key.fee())});
     }
+    if f.variant==Variant::Antfarm {
+        let at=super::nami::block(ctx,&tag).await?;
+        let s=Box::pin(super::antfarm_book::read(ctx,f,reference.address(),pair,&at)).await?;
+        return Ok(Loaded{state:PoolState::Antfarm(Box::new(s)),ticks:None,bins:None,fee_pips:None});
+    }
     if f.variant==Variant::Temple {
         let PoolRef::Multi{contract,..}=reference else{return Err(ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"TempleDAO: нужна пара с указанным активом выплаты"));};
         let at=super::nami::block(ctx,&tag).await?;
@@ -95,7 +100,7 @@ pub async fn state(
         let state=Box::pin(super::virtuals::market(ctx,f,*pool,pair,&at)).await?;
         return Ok(Loaded{state:PoolState::Virtuals(Box::new(state)),ticks:None,bins:None,fee_pips:None});
     }
-    if f.variant == Variant::RegisteredV3 && let PoolRef::Contract(pool)=reference {
+    if matches!(f.variant, Variant::RegisteredV3 | Variant::HelloV3) && let PoolRef::Contract(pool)=reference {
         let at=super::nami::block(ctx,&tag).await?;
         Box::pin(super::registered_v3::market(ctx,f,*pool,pair,None,&at)).await?;
     }

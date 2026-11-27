@@ -1,24 +1,10 @@
 //! Antfarm single-hop ERC20 settlement. All fee fields are in raw ATF, independent of the output currency.
+pub use crate::core::types::AntfarmMarket as Market;
 use alloy_primitives::{Address, U256};
-use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 #[path = "antfarm_tests.rs"]
 mod tests;
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Market {
-    pub tokens: [Address; 2],
-    pub atf: Address,
-    pub tier: u16,
-    pub reserves: [U256; 2],
-    /// Actual token0, token1 and ATF balances at the pair.
-    pub balances: [U256; 3],
-    pub dividends: U256,
-    pub lp_supply: U256,
-    /// Index of the asset priced in ATF and oracle rate in UQ112x112.
-    pub oracle: Option<(usize, U256)>,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fill {
@@ -56,12 +42,39 @@ impl Market {
     /// Standard-transfer model. Ingress/egress taxes require an independently measured wallet quote.
     /// No nominal quote can reuse dividend ATF or pay the third-token fee from the user's output.
     pub fn settle(&self, source: Address, budget: U256, supporting: bool) -> Option<Fill> {
+        self.execute(source, budget, supporting, None)
+    }
+
+    /// Official single-hop swapTokensForExactTokens with ATF as target. Its inverse
+    /// floors the gross ATF amount first, then adds one raw input even for an exact quotient.
+    pub fn acquire_fee(&self, source: Address, amount: U256) -> Option<Fill> {
+        if self.tokens != [self.atf, source] || self.tier >= 1000 || amount.is_zero() {
+            return None;
+        }
+        let thousand = U256::from(1000);
+        let raw = amount.checked_mul(thousand)? / (thousand - U256::from(self.tier));
+        let remaining = self.reserves[0].checked_sub(raw)?;
+        let cost = self.reserves[1]
+            .checked_mul(raw)?
+            .checked_div(remaining)?
+            .checked_add(U256::ONE)?;
+        self.execute(source, cost, false, Some(amount))
+    }
+
+    fn execute(
+        &self,
+        source: Address,
+        budget: U256,
+        supporting: bool,
+        exact_atf: Option<U256>,
+    ) -> Option<Fill> {
         let i = self.tokens.iter().position(|a| *a == source)?;
         let j = 1 - i;
         let thousand = U256::from(1000);
         let t = U256::from(self.tier);
         if t.is_zero()
-            || t >= thousand
+            || t > thousand
+            || (t == thousand && self.tokens[0] == self.atf)
             || self.lp_supply <= thousand
             || self.reserves.contains(&U256::ZERO)
         {
@@ -91,7 +104,9 @@ impl Market {
         };
         let nominal =
             self.reserves[j].checked_mul(effective)? / self.reserves[i].checked_add(effective)?;
-        let out = if embedded && j == 0 {
+        let out = if let Some(target) = exact_atf {
+            target
+        } else if embedded && j == 0 {
             nominal.checked_mul(thousand - t)? / thousand
         } else {
             nominal

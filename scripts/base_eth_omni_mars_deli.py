@@ -18,10 +18,14 @@ def sectorone(network):
             "[Адреса проекта](https://docs.sectorone.xyz/info/smart-contracts.md).", "",
             "| Версия | Зарегистрировано / с двумя резервами | Проверенный пул | Вход → выплата → возврат, в атомах | Газ Router / V5, покупка и продажа |",
             "|---|---:|---|---|---|"]
+    aliases=json.loads(Path("config/dex_indexer_aliases.json").read_bytes())
     for v in ("2.0","2.2"):
         file=f"sectorone-{v.replace('.','')}-{network}.json.gz"
         archive=snapshot(file)
         d,receipt=archive["directory"],archive["settlement"]
+        indexer="sectorone-base" if network=="base" and v=="2.2" else f"sectorone-v{v}-{network}"
+        scope=aliases.get(indexer,indexer)
+        output.append(f"| Индексатор `{indexer}` | Ключ настройки `{scope}` | | | |")
         markets=d["markets"]
         count=sum(all(map(int,r["reserves"])) for r in markets)
         direct=[x for x in receipt["cases"] if x["mode"]=="router"]

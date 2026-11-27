@@ -91,6 +91,7 @@ pub fn plan(
             // Nomiswap Stable (решение 284): реестр фабрики getPair(a, b) — как у V2.
             // SmarDex (решение 288): getPair(a, b) — как V2 (SmardexFactory.sol L20).
             // Camelot V2 (решение 443): getPair(a, b) — как V2 (CamelotFactory.sol L19).
+            Proto::V2 if f.variant==super::family_variant::Variant::Antfarm => [10,50,100,150,250,500,750,1000].into_iter().map(Q::Antfarm).collect(),
             Proto::V2 | Proto::NomiStable | Proto::Smardex | Proto::CamelotV2 => vec![Q::V2],
             // Решение 470: Aero Basic — getPool(a, b) фабрики своей кривой.
             Proto::AeroBasic => vec![Q::AeroBasic],

@@ -134,6 +134,10 @@ pub(in crate::venues::bsc_dex) async fn at(
 }
 
 #[cfg(test)]
+#[path = "izi_wallet_tests.rs"]
+mod wallet_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     #[test]
@@ -171,6 +175,28 @@ mod tests {
         let addr = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
         let rows = j["markets"].as_array().unwrap();
         assert_eq!(rows.len(), 19);
+        use alloy::sol_types::SolEvent;
+        let log = &j["first_log"];
+        let topics = log["topics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap().parse::<B256>().unwrap());
+        let data = log["data"].as_str().unwrap().parse::<Bytes>().unwrap();
+        let event = IIziFactory::NewPool::decode_raw_log(topics, &data).unwrap();
+        assert_eq!(
+            (event.tokenX, event.tokenY, event.pool),
+            (
+                addr(&rows[0]["tokens"][0]),
+                addr(&rows[0]["tokens"][1]),
+                addr(&rows[0]["pool"])
+            )
+        );
+        assert_eq!(event.fee, U24::from(rows[0]["fee"].as_u64().unwrap()));
+        assert_eq!(
+            event.pointDelta,
+            U24::from(rows[0]["step"].as_u64().unwrap())
+        );
         for m in rows {
             let pair = (addr(&m["tokens"][0]), addr(&m["tokens"][1]));
             let fee = U24::from(m["fee"].as_u64().unwrap());

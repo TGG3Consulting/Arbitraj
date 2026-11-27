@@ -32,6 +32,7 @@ fn q96() -> U256 {
 pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
     let coin0 = e.coin == e.pool.token0;
     match &e.pool.state {
+        PoolState::Antfarm(book) => { let s=&book.market; let i=usize::from(e.coin==s.tokens[1]); mul_div(amount,s.reserves[i],s.reserves[1-i]) }
         PoolState::Temple(s) => {
             if e.coin==s.stable || e.usdt==s.stable {
                 let i=usize::from(e.coin==s.stable);

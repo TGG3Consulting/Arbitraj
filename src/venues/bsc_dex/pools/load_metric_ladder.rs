@@ -48,7 +48,19 @@ pub async fn read(
         func: "quoteMetric",
         data: virtual_quoter::data_metric,
     };
-    read_with(ctx, tokens, reg, id, pool, coin, quote, pool_token0, tag, q).await
+    read_with(
+        ctx,
+        tokens,
+        reg,
+        id,
+        pool,
+        coin,
+        quote,
+        pool_token0,
+        &json!(tag),
+        q,
+    )
+    .await
 }
 
 /// Вызов виртуального квотера для прохода лесенки: имя вида (в тексте ошибок) и вход вызова (пул, zeroForOne в
@@ -73,7 +85,7 @@ pub async fn read_with(
     coin: Address,
     quote: Address,
     pool_token0: Address,
-    tag: &str,
+    tag: &Value,
     q: Quoter,
 ) -> GatewayResult<(Vec<LadderPoint>, Vec<LadderPoint>)> {
     let amounts = ladder_counter::amounts(ctx, tokens, reg, id, quote).await?;
@@ -94,7 +106,7 @@ async fn pass(
     pool: Address,
     zero_for_one: bool,
     amounts: &[U256],
-    tag: &str,
+    tag: &Value,
     q: Quoter,
 ) -> GatewayResult<Vec<LadderPoint>> {
     if amounts.is_empty() {

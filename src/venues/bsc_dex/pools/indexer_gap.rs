@@ -21,8 +21,13 @@ pub fn indexer_id(key: &str) -> &str {
 /// ещё не получен (источник не включается: не знаем — не меняем поведение). Ошибок нет.
 pub fn outside(ctx: &Ctx, key: &str) -> Option<bool> {
     let id = indexer_id(key);
-    ctx.index
-        .with(|s| s.dexes_at.map(|_| !s.dexes.iter().any(|d| d.id == id)))
+    ctx.index.with(|s| {
+        s.dexes_at.map(|_| {
+            !s.dexes
+                .iter()
+                .any(|d| d.id == id || super::super::ctx_place::index_scope(&d.id) == key)
+        })
+    })
 }
 
 /// Текст заметки, почему источник решения 482 у DEX не включён. Принимает: ключ DEX, итог outside. Ошибок нет.

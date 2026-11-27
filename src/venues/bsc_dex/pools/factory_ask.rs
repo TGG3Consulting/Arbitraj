@@ -61,6 +61,7 @@ use super::verify_solidly::registry_call;
 pub enum Q {
     /// V2 и форки V2: getPair(a, b).
     V2,
+    Antfarm(u16),
     MintClub {token:Address,reserve:Address},
     /// V3 (ABI PancakeSwap / Uniswap, форки V3): getPool(a, b, fee).
     V3(u32),
@@ -110,6 +111,7 @@ impl Q {
         match self {
             Q::MintClub{..} => "tokenBond",
             Q::V2 => "getPair",
+            Q::Antfarm(_) => "getPair(tokenA,tokenB,fee)",
             Q::V3(_) => "getPool",
             Q::Solidly { v1: false, .. } => "getPool(stable)",
             Q::Solidly { v1: true, .. } => "getPair(stable)",
@@ -138,6 +140,7 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
     match q {
         Q::MintClub{token,..} => super::mint_club::IBond::tokenBondCall{token}.abi_encode().into(),
         Q::V2 => encode(coin, quote, None),
+        Q::Antfarm(fee) => super::antfarm::IFarm::getPairCall{a:coin,b:quote,fee}.abi_encode().into(),
         Q::V3(fee) => encode(coin, quote, Some(fee)),
         Q::Solidly { v1, stable } => registry_call(v1, coin, quote, stable),
         Q::Algebra => IAlgebraFactory::poolByPairCall {
@@ -243,7 +246,7 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
 pub fn decode_q(q: Q, out: &[u8]) -> Result<Vec<Address>, String> {
     let list = match q {
         Q::MintClub{token,reserve} => super::mint_club::listed(token,reserve,out)?,
-        Q::V2 => vec![decode(None, out)?],
+        Q::V2 | Q::Antfarm(_) => vec![decode(None, out)?],
         Q::V3(fee) => vec![decode(Some(fee), out)?],
         // Ответ getPool и getPair(stable) — один address: разбор одинаков.
         Q::Solidly { .. } => vec![

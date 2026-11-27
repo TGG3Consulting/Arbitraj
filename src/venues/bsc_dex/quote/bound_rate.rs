@@ -49,6 +49,11 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
         return Err(format!("{}: пул с крючком", e.family.title));
     }
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::Antfarm(book),PoolKind::V2) => {
+            let s=&book.market; let i=usize::from(token_in==s.tokens[1]);
+            if s.balances[i]>s.reserves[i] {return Err("Antfarm: баланс требует отдельной оценки лучшего курса".into());}
+            pair(s.reserves[1-i],U256::ONE,s.reserves[i],U256::ONE)
+        }
         (PoolState::Temple(s),PoolKind::V2) => {
             let output=if zfo {e.pool.token1} else {e.pool.token0};
             if token_in==s.stable && output==s.temple && s.amm_authorized {

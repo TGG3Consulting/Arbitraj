@@ -34,7 +34,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    «необязательное». Релиз не готов, пока в списке «Открытые правки» ниже есть хоть одна строка. Список ведёт Claude:
 >    закрытые пункты вычёркиваются с SHA исправления.
 
-Последний просмотренный коммит: `77ae6287` (27.11.2026).
+Последний просмотренный коммит: `86302866` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -2967,8 +2967,8 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 | ~~О-19~~ ✅ 1f137911 | документация | `contracts/MooniswapWallet.sol` — в шапке указать, что `receive()` открыт для `WETH.withdraw`, а случайно присланный ETH вывести нельзя. |
 | ~~О-20~~ ✅ 781a221b | контракт | `contracts/DefiPlazaWallet.sol`: (1) `i>=4` — число токенов StablePlaza записано голым числом, назвать константу со ссылкой на исходник; (2) единственная точка входа `swapFrom` принимает `minimum = 0`. В отличие от Empire и Ammalgam, нет `execute` с обязательным минимумом. Добавь `execute` с `minimum > 0` для прямого вызова из кошелька или подтверди, что бот при прямом вызове всегда передаёт минимум больше нуля, и покрой это тестом. |
 | ~~О-21~~ ✅ 0575dbcf | R-42 | Числа закрыты в 12a80965: `VIRTUAL_BALANCE_BITS = 216` со ссылкой, цикл `0..128` заменён точным расчётом. Предикат `mooniswap()` введён и применён в `factory_calls`, `load`, `quoter`. Осталось прямое `== Variant::Mooniswap` в `exec/executor/entry.rs:79, 128, 163, 242`, `quote/module_pricing.rs:39`, `exec/vista_gate.rs:40` — заменить на `mooniswap()`. |
-| О-22 | хардкод | `contracts/DefiPlazaWallet.sol` `quote()` (781a221b): `state != 3` (состояние «токен в списке» MultiPlaza) и сдвиг `<< 64` (формат `keep`) — голые числа. Назвать константы со ссылкой на исходник DefiPlaza. После правки пересобрать артефакт и обновить хеш, если он закреплён в совете. | **31421dc8: имена даны (`LISTED`, `Q64_FRACTION_BITS`). Нет ссылки на источник:** строка или файл MultiPlaza, где состояние 3 — «в листинге», а доля в Q64. Нужна ссылка над константами. |
-| О-23 | хардкод, R-42 | DefiPlaza в боте (801f2247): (1) `pools/defiplaza.rs:245` — `chunks(48)`, размер пачки RPC без имени и без настройки; (2) `math/defiplaza.rs:10` — `U256::ONE << 64` (формат `keep`) без имени, та же константа, что в О-22; (3) `pools/defiplaza.rs:111, 229` — прямые `== Variant::DefiPlazaStable`, нужен предикат. | **7c743f64: сравнения с `Variant::DefiPlazaStable` и `<< 64` закрыты (`defiplaza_stable()`, `MULTI_FEE_SCALE` с источником).** Осталось два пункта. (1) `REGISTRY_BATCH = 48` — это не константа протокола, а размер пакета RPC. По CLAUDE.md размер пакета задаётся настройкой: брать существующую `dex.verify_batch` или `dex.load_batch`. (2) У `LISTED = 3` в `pools/defiplaza.rs` нет ссылки на источник: строка MultiPlaza, где задан статус Listed. |
+| ~~О-22~~ ✅ 86302866 | хардкод | `contracts/DefiPlazaWallet.sol` `quote()` (781a221b): `state != 3` (состояние «токен в списке» MultiPlaza) и сдвиг `<< 64` (формат `keep`) — голые числа. Назвать константы со ссылкой на исходник DefiPlaza. После правки пересобрать артефакт и обновить хеш, если он закреплён в совете. | **31421dc8: имена даны (`LISTED`, `Q64_FRACTION_BITS`). Нет ссылки на источник:** строка или файл MultiPlaza, где состояние 3 — «в листинге», а доля в Q64. Нужна ссылка над константами. |
+| О-23 | хардкод, R-42 | DefiPlaza в боте (801f2247): (1) `pools/defiplaza.rs:245` — `chunks(48)`, размер пачки RPC без имени и без настройки; (2) `math/defiplaza.rs:10` — `U256::ONE << 64` (формат `keep`) без имени, та же константа, что в О-22; (3) `pools/defiplaza.rs:111, 229` — прямые `== Variant::DefiPlazaStable`, нужен предикат. | **7c743f64: сравнения с `Variant::DefiPlazaStable` и `<< 64` закрыты (`defiplaza_stable()`, `MULTI_FEE_SCALE` с источником).** Осталось два пункта. (1) `REGISTRY_BATCH = 48` — это не константа протокола, а размер пакета RPC. По CLAUDE.md размер пакета задаётся настройкой: брать существующую `dex.verify_batch` или `dex.load_batch`. (2) У `LISTED = 3` в `pools/defiplaza.rs` нет ссылки на источник: строка MultiPlaza, где задан статус Listed. | **86302866: у `LISTED` есть ссылка на источник (DeFiPlaza.sol:20). Остался только `REGISTRY_BATCH = 48`: заменить на `dex.verify_batch` или `dex.load_batch`.** |
 | ~~О-24~~ ✅ 9d47ae9d | 5a37bce3 | `pools/ammalgam.rs`: у `BEACON_SLOT` (0xa3f0…3d50) нет имени источника. Нужна ссылка на EIP-1967, слот beacon. У `SWAP_INTEREST_PERIOD` нет ссылки на исходник TokenController. Файл 238 строк, ориентир — 200: разделить. | **95d04d2e: файл вырос до 292 строк, источники по-прежнему не указаны.** |
 | ~~О-25~~ ✅ 25d6dba7 | 7c743f64 | `exec/defiplaza_wallet.rs` — 234 строки, ориентир 200: разделить. |
 | ~~О-26~~ ✅ bd4bf3b4 | 583e3260 | `contracts/AmmalgamWallet.sol` изменён (прямой `pair.swap` вместо `swapHelper`), но карточка `ui/src/assets/ammalgam-ethereum-create.json` и закреплённый хеш `0xcf7d5d61…` в `config/first_run_dex.json:6719` остались от сборки 95d04d2e. Кнопка в UI разместит старый контракт, а закрепление примет старый runtime. Нужно пересобрать в CI, обновить карточку и хеш и сверить их с новым байткодом. |
@@ -2976,6 +2976,7 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 | О-28 | fc0433a1 | `math/ammalgam.rs` — 414 строк, из них 249 строк кода до `#[cfg(test)]`, ориентир 200. Вынести глубину `band`/`marginal` в отдельный файл, а тесты — в `ammalgam_tests.rs`, как в `defiplaza_wallet_tests.rs`. | **98e596bd: уже 437 строк.** |
 | О-29 | 19e1d1e8 | R-42: прямые `== Variant::TrebleSpot` в общих файлах `pools/families.rs:1037` и `pools/registered_router.rs:75`. Нужен предикат, например `treble_spot()`, или выбор внутри `treble_spot.rs`. |
 | О-30 | 36ff66ab | Регрессия BSC. `exec/executor/sim.rs` `llamma_debit` вызывается для каждой сделки и не ограничен семейством LLAMMA. Отбор идёт только по `kind == 9` (StableU256) и topic0 события `TokenExchange(address,uint256,uint256,uint256,uint256)`. На BSC шаг 9 у `pancake_stableswap`, `lista_stableswap` и `lista_stableswap_proxy` (`exec_kind.rs:269-270`). Их событие `abi_stable_u.rs:31` имеет ту же сигнатуру, значит тот же topic0. Ветка срабатывает на сделках BSC. Сейчас результат не меняется: нет возврата от исполнителя, функция возвращает `None`. Но правило проверки цены зависит от формы логов чужого семейства. Нужно ограничить семейством LLAMMA (признак в плане или шаге) и добавить тест на записанной сделке Pancake StableSwap. |
+| О-31 | 86302866 | В `contracts/DefiPlazaWallet.sol` добавлены комментарии. `build-hanji.mjs` не отключает метаданные solc, поэтому runtime-байткод изменился. Карточки `ui/src/assets/defiplaza-{multi,stable}-create.json` и закреплённые хеши остались от 1909f50f, как было в О-26. Нужно пересобрать в CI, обновить карточки и `dex.module_runtime_hashes` и сверить с новым байткодом. |
 
 ### 650ce364, e0d22d6e — проверено
 
@@ -3542,3 +3543,11 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 - Замечаний к коду нет.
 
 Открыто: О-22, О-23, О-27, О-28, О-29, О-30.
+
+### 86302866 — DefiPlaza: ссылки на источник
+
+- О-22 закрыт: в контракте ссылка на DeFiPlaza.sol:20 (enum State) и :31 (oneMinusTradingFee), Sourcify.
+- О-23: у `LISTED` в боте ссылка теперь есть, `REGISTRY_BATCH = 48` по-прежнему хардкод.
+- **Ошибка: О-31.** Комментарий в контракте меняет метаданные и runtime-хеш. Карточки развёртывания DefiPlaza не пересобраны.
+
+Открыто: О-23, О-27, О-28, О-29, О-30, О-31.

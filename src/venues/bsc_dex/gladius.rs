@@ -13,6 +13,7 @@ pub(super) mod settlement;
 mod simulate;
 #[cfg(test)]
 mod tests;
+mod witness;
 
 pub(super) const LABEL: &str = "Rubicon Gladius";
 pub(super) fn enabled(ctx: &Ctx) -> bool {

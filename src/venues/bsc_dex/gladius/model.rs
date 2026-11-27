@@ -36,7 +36,8 @@ impl Offer {
             return None;
         };
         let expiry = u64::try_from(order.info.deadline).ok()?;
-        if order.abi_encode() != api.encoded_order.as_ref()
+        if super::witness::hash(&order) != api.order_hash
+            || order.abi_encode() != api.encoded_order.as_ref()
             || expiry <= stamp
             || order.info.reactor != profile.reactor.address
             || order.info.swapper.is_zero()

@@ -49,6 +49,20 @@ fn archived_owners_full_and_partial_signed_orders_match_both_facts_and_terminal_
             assert!(Offer::parse(closed, &p, deadline - 1).is_none());
             assert!(Offer::parse(raw.clone(), &p, deadline).is_none());
             let offer = Offer::parse(raw, &p, deadline - 1).unwrap();
+            let permit = "0x000000000022d473030f116ddee9f6b43ac78ba3"
+                .parse::<Address>()
+                .unwrap();
+            let d = witness::digest(&offer, witness::Domain::separator(p.chain, permit));
+            assert_eq!(
+                witness::eoa(d, &offer.api.signature),
+                Some(offer.order.info.swapper)
+            );
+            let wrong = witness::digest(&offer, witness::Domain::separator(p.chain + 1, permit));
+            assert_ne!(
+                witness::eoa(wrong, &offer.api.signature),
+                Some(offer.order.info.swapper)
+            );
+
             let owner = from_value(row["owner"].clone()).unwrap();
             let amount = |k: &str| row[k].as_str().unwrap().parse::<U256>().unwrap();
             let (q, d, cap) = (amount("quantity"), amount("spent"), amount("cap"));

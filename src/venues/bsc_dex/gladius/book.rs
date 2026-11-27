@@ -98,6 +98,7 @@ async fn read(p: &Parts, profile: &Profile, quote: Address) -> Option<Orders> {
     }
     let h = white_state::head(ctx, "latest").await.ok()?;
     profile.verify(ctx, h).await.ok()?;
+    let domain = super::witness::Domain::read(ctx, profile, h).await?;
     let mut result = Vec::new();
     let mut hashes = HashSet::new();
     for raw in orders {
@@ -119,6 +120,9 @@ async fn read(p: &Parts, profile: &Profile, quote: Address) -> Option<Orders> {
     use futures_util::{StreamExt, stream};
     let entries = stream::iter(result)
         .map(|mut offer| async move {
+            if !domain.authentic(ctx, &offer, h).await {
+                return None;
+            }
             offer.debit = offer.quote(ctx, profile, offer.quantity, h).await.ok()?;
             Some(Arc::new(offer))
         })

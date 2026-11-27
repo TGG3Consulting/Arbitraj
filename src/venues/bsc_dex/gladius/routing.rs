@@ -121,13 +121,14 @@ pub(in crate::venues::bsc_dex) async fn consider(
     };
     let end = tokio::time::Instant::now() + Duration::from_millis(ms);
     use futures_util::{StreamExt, stream};
-    let candidates = stream::iter(
-        rows.iter()
-            .filter(|v| v.pair() == pair && timely(ctx, v.expiry))
-            .cloned(),
-    )
-    .map(|offer| candidate(p, a, s, qty, profile, offer))
-    .buffer_unordered(4);
+    let offers: Vec<_> = rows
+        .iter()
+        .filter(|v| v.pair() == pair && timely(ctx, v.expiry))
+        .cloned()
+        .collect();
+    let candidates = stream::iter(offers)
+        .map(|offer| candidate(p, a, s, qty, profile, offer))
+        .buffer_unordered(4);
     tokio::pin!(candidates);
     while let Ok(Some(row)) = tokio::time::timeout_at(end, candidates.next()).await {
         let Some((q, t, total)) = row else {

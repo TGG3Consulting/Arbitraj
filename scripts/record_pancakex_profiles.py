@@ -4,8 +4,9 @@ import gzip
 import json
 from pathlib import Path
 
+from eth_abi import encode
 from eth_utils import keccak
-from record_gladius_fills import Reader, addr, canonical, hashed, runtime
+from record_gladius_fills import Reader, addr, call_data, canonical, hashed, runtime
 from record_pancakex_history import NETS, PCS
 
 DATA = Path(__file__).resolve().parents[1] / "tests/data/first_run_dex_2026-11-26"
@@ -27,6 +28,16 @@ def profile(net):
     for kind, name in [("permit", "permit2()"), ("v1", "exclusiveDutchReactor()"), ("v3", "v3DutchReactor()")]:
         role = roles["facets_and_permit"][name]
         contracts.append(f"{chain} {kind} {role['address']} {role['runtime']}")
+    permit = roles["facets_and_permit"]["permit2()"]["address"]
+    domain = reader.view(permit, call_data("DOMAIN_SEPARATOR()"), at)
+    assert domain == hashed(encode(["bytes32", "bytes32", "uint256", "address"],
+                                   [keccak(text="EIP712Domain(string name,uint256 chainId,address verifyingContract)"),
+                                    keccak(text="Permit2"), chain, permit]))
+    subject = next(x for x in quotes if x["status"] == 200 and x["body"]["tokenInChainId"] == chain)
+    remote = subject["response"]["message"]["bestOrder"]["order"]
+    owner, order_hash = remote["orderInfo"]["swapper"], remote["orderHash"]
+    cancelled = reader.view(PCS, call_data("cancelledOrders(address,bytes32)", ["address", "bytes32"],
+                                          [owner, bytes.fromhex(order_hash[2:])]), at)
     coins = {r["body"][k] for r in quotes if r["status"] == 200 and r["body"]["tokenInChainId"] == chain
              for k in ["tokenIn", "tokenOut"]}
     if chain == 1:
@@ -46,11 +57,11 @@ def profile(net):
         else:
             kind = "tether-input" if token.startswith("0xdac17f") else "exact"
             tokens.append(f"{chain} {kind} {token} {code}")
-    return {"block": height, "selector": at, "contracts": contracts, "tokens": tokens}
+    return {"block": height, "selector": at, "contracts": contracts, "tokens": tokens, "permit_domain": domain, "cancellation_read": {"owner": owner, "order": order_hash, "cancelled": int(cancelled, 16)}}
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True, type=Path)
     path = parser.parse_args().out
-    path.write_text(json.dumps({n: profile(n) for n in NETS}, ensure_ascii=False, indent=2) + "\n", encoding="utf8")
+    path.write_text(json.dumps({n: profile(n) for n in NETS}, ensure_ascii=False, indent=2) + "\n", encoding="utf8", newline="\n")

@@ -9,11 +9,14 @@ use crate::{
         quote::white_state::Head,
     },
 };
+use alloy::sol_types::eip712_domain;
 use alloy_primitives::{Address, B256, U256};
 use serde::{Deserialize, Serialize};
 
 alloy::sol! {
     function permit2() view returns(address);
+    function DOMAIN_SEPARATOR() view returns(bytes32);
+    function cancelledOrders(address owner,bytes32 orderHash) view returns(bool);
     function exclusiveDutchReactor() view returns(address);
     function v3DutchReactor() view returns(address);
     function nonceBitmap(address owner,uint256 wordPos) view returns(uint256);
@@ -113,7 +116,7 @@ impl Profile {
             ),
             _ => return Err(bad()),
         };
-        let (_, _, _, related) = tokio::try_join!(
+        let (_, _, _, related, separator) = tokio::try_join!(
             bind(
                 ctx,
                 self.router.address,
@@ -123,9 +126,14 @@ impl Profile {
             ),
             plain(ctx, self.permit.address, self.permit.runtime, &at),
             plain(ctx, facet.address, facet.runtime, &at),
-            canonical(ctx, &at, self.router.address, permit2Call {})
+            canonical(ctx, &at, self.router.address, permit2Call {}),
+            canonical(ctx, &at, self.permit.address, DOMAIN_SEPARATORCall {})
         )?;
-        if advertised != facet.address || related != self.permit.address {
+        let domain = eip712_domain! {name:"Permit2",chain_id:self.chain,verifying_contract:self.permit.address,};
+        if advertised != facet.address
+            || related != self.permit.address
+            || separator != domain.separator()
+        {
             return Err(bad());
         }
         Ok(())

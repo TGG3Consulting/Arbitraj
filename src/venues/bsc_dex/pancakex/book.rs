@@ -7,12 +7,17 @@ use super::{
 };
 use crate::{
     core::types::Side,
-    venues::bsc_dex::{ctx::Ctx, quote::white_state::Head},
+    venues::bsc_dex::{
+        ctx::Ctx,
+        node::{call::canonical, rpc},
+        quote::white_state::Head,
+    },
 };
-use alloy_primitives::{Address, B256};
+use alloy_primitives::{Address, B256, Bytes};
 use chrono::Utc;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -77,10 +82,20 @@ impl Ticket {
         let p = &self.cfg.p;
         let terms = self.offer.terms(p, q)?;
         let at = h.selector();
-        let (_, funds, unused, _, _) = tokio::try_join!(
+        let (_, funds, unused, cancelled, code, _, _) = tokio::try_join!(
             p.check(ctx, h, &self.offer.version),
             p.funds(ctx, h, q.input, q.owner),
             p.unused(ctx, h, q.owner, terms.nonce),
+            canonical(
+                ctx,
+                &at,
+                p.router.address,
+                super::profile::cancelledOrdersCall {
+                    owner: q.owner,
+                    orderHash: terms.order_hash
+                }
+            ),
+            rpc::call::<Bytes>(ctx, "eth_getCode", json!([q.owner, at])),
             self.cfg
                 .input
                 .verify(ctx, &at, q.owner, self.offer.filler, p.permit.address),
@@ -91,6 +106,8 @@ impl Ticket {
         .ok()?;
         (funds >= terms.maximum_input
             && unused
+            && !cancelled
+            && code.is_empty()
             && self.timely(h.timestamp.to())
             && self.timely(Utc::now().timestamp().max(0) as u64))
         .then_some(())

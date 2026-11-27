@@ -1,0 +1,35 @@
+{
+  "source": "https://docs.sectorone.xyz/info/smart-contracts.md",
+  "base": {
+    "chain": 8453,
+    "selector": {
+      "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "requireCanonical": true
+    },
+    "factory": "0xcf0685f37a139de56afc4a89aa343849358c05cb",
+    "router": "0xddf9025cf1fc3a7945ea54a53d856c81b9284c38",
+    "wrapped": "0x4200000000000000000000000000000000000006",
+    "0xcf0685f37a139de56afc4a89aa343849358c05cb": {
+      "hash": "0xcae1a0b1b3cd8bd8519a805cd93dba36177520fec46f44e96e03b990c8b1b87d"
+    },
+    "0xddf9025cf1fc3a7945ea54a53d856c81b9284c38": {
+      "hash": "0x8b2ea62344584db9621d9b8def07278ad7f1aab9c63a219d4a0a6702b30ef358"
+    }
+  },
+  "ethereum": {
+    "chain": 1,
+    "selector": {
+      "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "requireCanonical": true
+    },
+    "factory": "0x96559af835e5a3e9bb68c17eba8520295370698f",
+    "router": "0xf5e5eae03c5ccde623a19117c8b7f788c8812667",
+    "wrapped": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    "0x96559af835e5a3e9bb68c17eba8520295370698f": {
+      "hash": "0xe09a71f3bd9bcb1186976477cdbd776d4d399fedb5f8c41874e3bb6da3965182"
+    },
+    "0xf5e5eae03c5ccde623a19117c8b7f788c8812667": {
+      "hash": "0xe485033c01fb563d5322c763f9c7fc96d5216013b984daf67dc16d6b01539121"
+    }
+  }
+}

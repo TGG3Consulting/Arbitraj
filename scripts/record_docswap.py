@@ -1,4 +1,4 @@
-"""Fund a pair on an archived, empty DOCSwap or MarSwap factory in an isolated EVM block."""
+"""Fund a pair on an archived, empty verified V2 factory in an isolated EVM block."""
 import argparse
 import json
 import gzip
@@ -20,7 +20,7 @@ LAB = "0x" + keccak(text="arb docswap empty factory laboratory wrapper")[-20:].h
 # Read EXTCODEHASH for a nested CREATE2 while the isolated block is still in scope.
 CODEHASH = "0x"+keccak(text="arb simulation code hash reader")[-20:].hex()
 
-def capture(url, network, mars=False, zero_flat=False):
+def capture(url, network, mars=False, zero_flat=False, sector=False, changed_fee=False):
     if mars:
         from types import SimpleNamespace
         from record_omni_v2_base import role
@@ -37,7 +37,8 @@ def capture(url, network, mars=False, zero_flat=False):
                  "wrapped":"0x4200000000000000000000000000000000000006",factory:{"hash":directory["factory_code_hash"]},
                  router:{"hash":binding["runtime"]}}
     else:
-        roles=json.loads(DATA.read_bytes())[network]
+        directory_file = DATA.with_name("sectorone_v2_directories.json") if sector else DATA
+        roles=json.loads(directory_file.read_bytes())[network]
     at=roles["selector"]
     chain,factory,router=roles["chain"],roles["factory"],roles["router"]
     wrapped="0x"+roles["wrapped"][-40:]
@@ -76,6 +77,9 @@ def capture(url, network, mars=False, zero_flat=False):
             check=decode(["address","uint256","uint256","uint256"],values([tx(factory,"lpInfo()")])[0])
             if check!=(*terms[:3],0) or integer(values([tx(factory,"flatFee()")])[0])!=0:raise ValueError("override changed other terms")
             flat=0
+    elif sector:
+        # The per-pair rate becomes available after the isolated createPair below.
+        fee,den=0,integer(values([tx(factory,"FEE_DENOMINATOR()")])[0])
     else:
         fee,den=map(integer,values([tx(factory,"totalFee()"),tx(factory,"MAX_TOTAL_FEE_PERCENT()")]))
     if count!=0 or not 0<=fee<den: raise ValueError("unexpected original supply")
@@ -92,6 +96,16 @@ def capture(url, network, mars=False, zero_flat=False):
             tx(router,"addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
                ["address","address","uint256","uint256","uint256","uint256","address","uint256"],
                [wrapped,LAB,reserve,reserve,reserve,reserve,OWNER,end])]
+    if sector:
+        if changed_fee:
+            setter,=decode(["address"],values([tx(factory,"feeToSetter()")])[0])
+            change=tx(pair,"setFeeAmount(uint256)",["uint256"],[400])
+            unauthorized=run(prefix+[change])[-1]
+            if unauthorized["status"]!="0x0":raise ValueError("unrestricted change of pair fee")
+            prefix.append(dict(change,**{"from":setter}))
+        fee,pool_den=map(integer,values(prefix+[tx(pair,"feeAmount()"),tx(pair,"FEE_DENOMINATOR()")])[-2:])
+        if pool_den!=den or not 0<=fee<den or (changed_fee and fee!=400):
+            raise ValueError("invalid registered pair fee")
     views=[tx(factory,"getPair(address,address)",["address","address"],[t1,t0]),tx(factory,"allPairs(uint256)",["uint256"],[0]),
            tx(pair,"getReserves()"),tx(pair,"factory()"),tx(pair,"token0()"),tx(pair,"token1()"),
            call(CODEHASH,"0x"+encode(["address"],[pair]).hex())]
@@ -147,10 +161,11 @@ def capture(url, network, mars=False, zero_flat=False):
 
 
 if __name__=="__main__":
-    cli=argparse.ArgumentParser(description=__doc__);cli.add_argument("network",choices=("ethereum","base"));cli.add_argument("out",type=Path);cli.add_argument("--mars", action="store_true");args=cli.parse_args()
+    cli=argparse.ArgumentParser(description=__doc__);cli.add_argument("network",choices=("ethereum","base"));cli.add_argument("out",type=Path);cli.add_argument("--mars", action="store_true");cli.add_argument("--sector", action="store_true");args=cli.parse_args()
     for url in BASE_ENDPOINTS if args.network=="base" else (ENDPOINT,"https://ethereum-rpc.publicnode.com"):
         try:
-            record=capture(url,args.network,args.mars)
+            record=capture(url,args.network,args.mars,sector=args.sector)
+            if args.sector:record["changed_fee"]=capture(url,args.network,sector=True,changed_fee=True)
             if args.mars:record["synthetic_zero_flat"]=capture(url,args.network,True,True)
             break
         except (RuntimeError,OSError) as err: print(str(err)[:180])

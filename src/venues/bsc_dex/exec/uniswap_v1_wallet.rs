@@ -172,6 +172,6 @@ mod tests {
             }
             cases+=1;
         }
-        assert!(cases>=36);
+        assert_eq!(cases,44);
     }
 }

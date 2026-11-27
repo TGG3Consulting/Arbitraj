@@ -1072,7 +1072,7 @@ def tables(network, snapshots, profiles):
                     f"В архиве проверены {len(v1['markets'])} биржи, {paid} обменов с выплатой. "
                     "В исходном пуле USDT на этом блоке нулевой резерв ETH. "
                     "Без модуля кошелёк использует физический ETH или два проверенных ERC20. "
-                    "Для защищённого расчёта в WETH и шага V5 укажите в dex.router адрес UniswapV1Adapter, "
+                    "Для защищённого расчёта в ETH, WETH и шага V5 укажите в dex.router адрес UniswapV1Adapter, "
                     "развёрнутого с dex.factory и dex.native_wrapped. "
                     f"[Баланс до и после каждой операции](../{archive.as_posix()})."])
     classic_path = Path("tests/data/first_run_dex_2026-11-26/rubicon_classic_base.json.gz")

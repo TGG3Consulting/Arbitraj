@@ -52,7 +52,7 @@ def capture(endpoint, compiled, bound=False):
         if bound:
             import gzip
             name=next(key for key,case in CASES.items() if case[0]==venue)
-            archive=Path("tests/data/first_run_dex_2026-11-26")/(name+"_ethereum_bound_wallet.json.gz")
+            archive=Path("tests/data/first_run_dex_2026-11-26")/(name+"_ethereum_bound_v2.json.gz")
             expected={r["runtime"] for r in json.loads(gzip.decompress(archive.read_bytes()))["builders"]}
             if expected!={runtime_hash}:raise ValueError("slot wallet differs from the funded replay")
         if accepted and runtime_hash not in accepted:

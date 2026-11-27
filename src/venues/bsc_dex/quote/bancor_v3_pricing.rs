@@ -116,7 +116,7 @@ pub(super) async fn options(
                 && exempt == eligible
                 && let Ok(Some(executor)) = executor::address(ctx)
             {
-                let form = terms.form() & 3;
+                let Some(form) = state.v5_form(&e.pool.reference, input, terms.eth) else { continue };
                 let step = V5Step {
                     native: None,
                     kind: 17,

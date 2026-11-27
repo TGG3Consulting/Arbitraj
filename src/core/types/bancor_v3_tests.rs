@@ -200,3 +200,27 @@ fn vault_covers_exact_target_while_minimal_forward_input_overpays() {
         (U256::from(11), U256::from(52))
     );
 }
+
+#[test]
+fn v5_step_matches_physical_directory_and_normalized_input_for_all_paid_pairs() {
+    let (d, l) = archive();
+    let native = Address::repeat_byte(0xee);
+    let mut forms = std::collections::BTreeSet::new();
+    for row in d["cases"].as_array().unwrap() {
+        let a = addr(&row["source"]);
+        let b = addr(&row["target"]);
+        let s = state(&d, &l, a, b);
+        let mut tokens = [a, b];
+        tokens.sort_unstable();
+        let make = |pair: [Address; 2]| crate::core::types::PoolRef::Multi {
+            contract: s.network, token0: pair[0], token1: pair[1],
+        };
+        let form = s.v5_form(&make(tokens),param(&s,a),native).unwrap();
+        assert_eq!(form,u8::from(a == native) + 2*u8::from(b == native));
+        forms.insert(form);
+        if tokens.contains(&native) {
+            assert!(s.v5_form(&make(s.tokens),param(&s,a),native).is_none());
+        }
+    }
+    assert_eq!(forms.into_iter().collect::<Vec<_>>(),vec![0,1,2]);
+}

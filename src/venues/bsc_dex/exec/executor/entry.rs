@@ -181,13 +181,10 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
     let (k, pool) =
         supported(e.family, &e.pool.reference).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?;
     if let PoolState::BancorV3(state) = &e.pool.state {
-        let side = state.side(token_in).ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Bancor V3: токен отсутствует в паре"))?;
-        if k != ExecKind::Balancer || pool != state.network || !matches!(&e.pool.reference,
-            PoolRef::Multi { token0, token1, .. } if [*token0, *token1] == state.tokens) {
-            return Err(ctx.err(ErrorCode::NoRoute, "Bancor V3: исходная сеть или пара рынка изменились"));
-        }
-        let eth = ctx.dex_addr("dex.bancor_native_token", e.family.id)?;
-        let form = u8::from(state.physical[side] == eth) + 2 * u8::from(state.physical[1-side] == eth);
+        let native = ctx.dex_addr("dex.bancor_native_token", e.family.id)?;
+        let form = state.v5_form(&e.pool.reference, token_in, native)
+            .filter(|_| k == ExecKind::Balancer && pool == state.network)
+            .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Bancor V3: сеть, пара или валюта шага изменились"))?;
         let pool_id = alloy_primitives::B256::from(alloy_primitives::U256::from(form).to_be_bytes::<32>());
         return Ok((Params::Balancer { pool_id }, ctx.dex_addr("dex.router", e.family.id)?));
     }

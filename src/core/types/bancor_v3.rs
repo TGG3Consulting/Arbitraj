@@ -106,6 +106,18 @@ impl BancorMarket {
     }
 }
 impl BancorState {
+    /// The directory keys native ETH by its original sentinel; the graph keys that same side by WETH.
+    pub fn v5_form(&self, reference: &super::PoolRef, input: Address, native: Address) -> Option<u8> {
+        let super::PoolRef::Multi { contract, token0, token1 } = reference else { return None };
+        let mut original = self.physical;
+        original.sort_unstable();
+        if *contract != self.network || original != [*token0, *token1] || token0 == token1 {
+            return None;
+        }
+        let side = self.side(input)?;
+        Some(u8::from(self.physical[side] == native) + 2 * u8::from(self.physical[1-side] == native))
+    }
+
     pub fn side(&self, t: Address) -> Option<usize> {
         self.tokens.iter().position(|v| *v == t)
     }

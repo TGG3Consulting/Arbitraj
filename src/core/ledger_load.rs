@@ -49,6 +49,7 @@ pub async fn load(core: &Core) {
         .flat_map(|(x, s)| s.deals.iter().map(move |id| (id.clone(), x.id.clone())))
         .collect();
     for mut d in deals {
+        super::cycle_plan::restore_chain(&mut d);
         // Ждущие решения человека остаются ждать (алерты загружает manual.rs).
         if d.is_open()
             && d.step != Step::WaitingHuman

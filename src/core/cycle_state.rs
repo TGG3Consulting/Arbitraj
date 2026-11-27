@@ -12,13 +12,14 @@ use std::sync::Mutex;
 
 use tokio::sync::Notify;
 
-use crate::core::types::DexCycle;
+use crate::core::types::{DexCycle, VenueId};
+use crate::gateway::contract::VenueKind;
 
 /// Состояние исполнения циклов.
 #[derive(Default)]
 pub struct CycleState {
     /// Толчок поиска циклов (новые состояния пулов).
-    pub kick: Notify,
+    venues: HashMap<VenueId, Notify>,
     /// Ключ цикла → последняя записанная в журнал причина / итог.
     told: Mutex<HashMap<String, String>>,
 }
@@ -37,6 +38,27 @@ pub fn venue_key(v: &crate::core::types::VenueId, what: &str) -> String {
 }
 
 impl CycleState {
+    pub fn registered(kinds: &[(VenueId, VenueKind)]) -> Self {
+        Self {
+            venues: kinds
+                .iter()
+                .filter(|(_, k)| *k == VenueKind::Dex)
+                .map(|(v, _)| (v.clone(), Notify::new()))
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    pub(super) fn lane(&self, v: &VenueId) -> Option<&Notify> {
+        self.venues.get(v)
+    }
+
+    pub fn changed(&self, v: &VenueId) {
+        if let Some(lane) = self.lane(v) {
+            lane.notify_one();
+        }
+    }
+
     /// Новый текст по циклу? true — запомнен, писать в журнал; false — тот же, что в прошлый раз. Ошибок нет.
     pub fn fresh(&self, key: &str, text: &str) -> bool {
         let mut m = self.told.lock().unwrap_or_else(|p| p.into_inner());

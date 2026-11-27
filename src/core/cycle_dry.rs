@@ -31,7 +31,7 @@ impl Core {
             .inner
             .deps
             .gw
-            .get(&cycle.venue)
+            .get_as(&cycle.venue, Some(&plan.account))
             .await
             .map_err(|e| e.message)?;
         let mut r = v

@@ -30,6 +30,7 @@ use super::size::{Params, SizeChoice};
 #[derive(Debug, Clone, Serialize)]
 pub struct CyclePlan {
     pub cycle: DexCycle,
+    pub account: crate::core::types::DexAccountId,
     /// Вход (базовая) и расчёт на нём.
     pub input: Decimal,
     pub quote: CycleQuote,
@@ -44,15 +45,39 @@ pub struct CyclePlan {
 }
 
 /// Направление сделки цикла в учёте ядра: базовая монета, покупка и продажа — на одной площадке DEX. Ошибок нет.
-pub fn direction(c: &DexCycle) -> Direction {
-    Direction {
+pub fn direction(core: &Core, c: &DexCycle) -> Result<Direction, String> {
+    Ok(Direction {
         asset: Asset {
-            chain: None,
+            chain: super::chain::tag_of_dex(core, &c.venue)?,
             ticker: c.base_ticker.clone(),
             contract: Some(c.base),
         },
         buy_on: c.venue.clone(),
         sell_on: c.venue.clone(),
+    })
+}
+
+/// Восстанавливает сеть незакрытого цикла из двух совпадающих площадок направления и плана.
+pub(super) fn restore_chain(d: &mut super::deal::Deal) {
+    use super::deal::Step;
+    if d.direction.asset.chain.is_some()
+        || matches!(d.step, Step::Closed | Step::TakenOver)
+        || d.direction.buy_on != d.direction.sell_on
+    {
+        return;
+    }
+    let Some(p) = crate::settings::evm_profiles::profile(&d.direction.buy_on.0) else {
+        return;
+    };
+    let Some(c) = d.plan.get("cycle") else { return };
+    if c.get("venue").and_then(serde_json::Value::as_str) == Some(p.venue)
+        && let Some(token) = c
+            .get("base")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|s| s.parse::<alloy_primitives::Address>().ok())
+        && d.direction.asset.contract == Some(token)
+    {
+        d.direction.asset.chain = Some(crate::core::types::ChainId(p.chain.into()));
     }
 }
 
@@ -78,7 +103,17 @@ pub async fn plan(core: &Core, c: &DexCycle, budget: Option<Decimal>) -> Result<
         None => limits(core, c, v)?,
     };
     // Решение 132: кошелёк — строки «DEX ↔ DEX» маппинга; нет строки — цикл не исполняется (NO_WALLET).
-    let venue = super::dex_account::venue_dir(&core.inner.deps, &direction(c), v).await?;
+    let d = direction(core, c)?;
+    let account = super::dex_account::of_direction(&core.inner.deps, &d)
+        .await?
+        .ok_or_else(|| super::dex_account::NO_WALLET.to_string())?;
+    let venue = core
+        .inner
+        .deps
+        .gw
+        .get_as(v, Some(&account))
+        .await
+        .map_err(|e| e.message)?;
     // Один запрос с кошельком: курсы, форма исполнения, свободная базовая (потолок входа).
     let probe = venue
         .dex_cycle_quote(c, c.input, true)
@@ -167,6 +202,7 @@ pub async fn plan(core: &Core, c: &DexCycle, budget: Option<Decimal>) -> Result<
         q.net_base, c.base_ticker, q.input
     );
     Ok(CyclePlan {
+        account,
         cycle: c.clone(),
         input: q.input,
         min_out: by_profit.max(by_slip),
@@ -187,7 +223,7 @@ fn limits(core: &Core, c: &DexCycle, v: &VenueId) -> Result<Decimal, String> {
         s.decimal_dir(n, vd, At { venue, coin: None })
             .map_err(|e| e.message)
     };
-    let dir = direction(c);
+    let dir = direction(core, c)?;
     let per_trade = g(
         "money.max_per_trade_usd",
         Some(&v.0),

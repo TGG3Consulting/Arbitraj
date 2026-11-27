@@ -47,30 +47,61 @@ pub enum Outcome {
 
 /// Ведёт сделку цикла. Принимает: ядро, план. Возвращает: Outcome. Ошибок нет.
 pub async fn run(core: &Core, plan: CyclePlan) -> Outcome {
-    let d = cycle_plan::direction(&plan.cycle);
+    let d = match cycle_plan::direction(core, &plan.cycle) {
+        Ok(d) => d,
+        Err(why) => return Outcome::Refused(why),
+    };
     let key = super::coin_key::CoinKey::of(&d.asset);
     if !super::coin_ride::take(core, &key) {
         return Outcome::Busy;
     }
-    let out = deal(core, plan).await;
+    let out = deal(core, plan, d).await;
     super::coin_ride::free_active(core, &key);
     out
 }
 
-/// Тело run (под замком монеты).
-async fn deal(core: &Core, plan: CyclePlan) -> Outcome {
-    if let Err(why) = super::executor::buy_gate(core) {
-        return Outcome::Refused(why);
+pub fn submission_ok(
+    core: &Core,
+    dir: &crate::core::types::Direction,
+    account: &crate::core::types::DexAccountId,
+) -> Result<(), String> {
+    if !super::cycle_watch::enabled(core, &dir.buy_on) {
+        return Err("Исполнение циклов площадки выключено".to_string());
     }
-    let d = cycle_plan::direction(&plan.cycle);
+    super::risk::can_open(core, dir)?;
+    super::executor::buy_gate(core)?;
+    if super::dex_account::of_direction_now(core, dir).as_ref() != Some(account) {
+        return Err("Кошелёк цикла изменился после расчёта".to_string());
+    }
+    Ok(())
+}
+
+/// Тело run (под замком монеты).
+async fn deal(core: &Core, plan: CyclePlan, d: crate::core::types::Direction) -> Outcome {
     let v = d.buy_on.clone();
-    // Решение 132: цикл — кошельком строки «DEX ↔ DEX»; нет строки — цикл не исполняется.
-    let acc = match super::dex_account::of_direction(&core.inner.deps, &d).await {
-        Ok(a) => a,
-        Err(why) => return Outcome::Refused(why),
+    let guard_core = core.clone();
+    let guard_dir = d.clone();
+    let account = plan.account.clone();
+    let check = move || {
+        submission_ok(&guard_core, &guard_dir, &account).map_err(|why| {
+            GatewayError::new(
+                ErrorCode::NotConfigured,
+                Some(guard_dir.buy_on.clone()),
+                why,
+            )
+        })
     };
+    if let Err(e) = check() {
+        return Outcome::Refused(e.message);
+    }
     let plan_json = serde_json::to_value(&plan).unwrap_or_default();
-    let mut deal = super::ledger::open(core, &d, plan_json, plan.profit_usd, acc);
+    let mut deal = super::ledger::open(
+        core,
+        &d,
+        plan_json,
+        plan.profit_usd,
+        Some(plan.account.clone()),
+    );
     deal.note(format!(
         "План цикла DEX ↔ DEX: вход {} {t}, ожидаемо {} {t}, граница {} {t}, чистая {} {t} (≈ {} USDT), {}",
         plan.input,
@@ -95,7 +126,7 @@ async fn deal(core: &Core, plan: CyclePlan) -> Outcome {
             return Outcome::Refused(why);
         }
     };
-    match x.dex_cycle_trade(req.clone()).await {
+    match crate::gateway::cycle_guard::scope(check, x.dex_cycle_trade(req.clone())).await {
         Ok(r) => {
             super::risk::on_ok(core, &v);
             super::cycle_fact::filled(core, &mut deal, r).await;

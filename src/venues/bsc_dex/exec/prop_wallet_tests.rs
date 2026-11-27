@@ -121,4 +121,44 @@ fn signed_named_payment_and_actual_uniswap_are_recovered_from_original_logs() {
         );
     }
     assert_eq!(count, [13, 4, 16]);
+    let mut guarded = 0;
+    let mut strict = 0;
+    for row in separate["rows"].as_array().unwrap() {
+        if row["form"] == "strict" {
+            assert_eq!(row["status"], "reverted");
+            assert_eq!(row["paid"], 0);
+            assert_eq!(row["net"], 0);
+            strict += 1;
+            continue;
+        }
+        if row["form"] != "guarded-fallback" {
+            continue;
+        }
+        let raw: Bytes = row["order"]["data"].as_str().unwrap().parse().unwrap();
+        let a = IStrict::executeWithFallbackCall::abi_decode_validate(&raw).unwrap();
+        let owner = address(&separate["owner"]);
+        let mut proof = make(
+            &IProp::swapViaVenueV1Call {
+                venue: a.venue,
+                tokenIn: a.input,
+                tokenOut: a.output,
+                amountIn: a.amount,
+                minOut: a.minimum,
+                recipient: owner,
+                deadline: a.deadline,
+            },
+            owner,
+            &named,
+        );
+        proof.terms.target = address(&separate["module"]);
+        assert_eq!(a.fallbackRouter, proof.terms.fallback);
+        assert_eq!(proof.data(), raw);
+        let sim: Vec<SimLog> = serde_json::from_value(row["logs"].clone()).unwrap();
+        let received = U256::from_str_radix(&row["net"].to_string(), 10).unwrap();
+        assert_eq!(proof.measured(&sim), Some((a.amount, received)));
+        proof.terms.fallback_allowed = false;
+        assert!(proof.measured(&sim).is_none());
+        guarded += 1;
+    }
+    assert_eq!((strict, guarded), (16, 16));
 }

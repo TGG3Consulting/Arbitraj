@@ -427,7 +427,7 @@ async fn core_closes_cycle_by_found_outcome() {
     let (_, normal, e) = bundle(&c);
     let landed = normal.expect("обычный путь");
     let rq = req(USDT, "USDT", 1);
-    let d = cycle_plan::direction(&rq.cycle);
+    let d = cycle_plan::direction(&core, &rq.cycle).unwrap();
     let bnb = rates().bnb_usdt;
 
     // «В блоке» — как исполненный цикл: учёт по факту, Closed.

@@ -195,3 +195,137 @@ async fn four_networks_have_sixteen_independent_activation_states() {
         }
     }
 }
+
+/// Один маппинг кошелька для двух физических сетей. Stop одной отделён от второй,
+/// одинаковый адрес токена не объединяет деньги; незакрытые старые планы восстанавливают исходный DEX.
+#[tokio::test]
+async fn cycles_share_mapping_but_keep_network_stop_locks_and_recovery_separate() {
+    use arb::core::types::{ChainId, DexCycle};
+    use arb::core::{
+        chain, chain_run,
+        coin_key::CoinKey,
+        coin_ride, cycle_plan,
+        deal::{Deal, Step},
+        dex_account, ledger, persist,
+    };
+    use arb::gateway::contract::VenueKind;
+    use arb::settings::accounts::ROW_DEX_DEX;
+    use rust_decimal::Decimal;
+
+    let core = start("cycles-network-stop", true, false).await;
+    let accounts = core.inner.deps.settings.accounts();
+    accounts
+        .add("same", "Общий", "ref", "test-queue", "тест")
+        .await
+        .unwrap();
+    accounts
+        .map_set(ROW_DEX_DEX, Some("same"), "тест")
+        .await
+        .unwrap();
+    let h: serde_json::Value =
+        serde_json::from_str(include_str!("data/base_ethereum_networks.json")).unwrap();
+    for (name, val) in [
+        ("money.min_profit_usd", "0.1"),
+        ("money.min_profit_pct", "0.1"),
+        ("money.max_per_trade_usd", "50"),
+        ("money.max_per_coin_usd", "100"),
+        ("money.max_in_transit_usd", "200"),
+        ("risk.min_bnb_balance", "0.01"),
+        ("risk.max_daily_loss_usd", "15"),
+    ] {
+        t489_common::set(&core, name, Scope::Global, json!(val)).await;
+    }
+    let mut dirs = Vec::new();
+    for (name, network) in [("base_dex", "base"), ("eth_dex", "ethereum")] {
+        core.inner
+            .kinds
+            .write()
+            .unwrap()
+            .push((v(name), VenueKind::Dex));
+        t489_common::set(
+            &core,
+            "dex.chain",
+            Scope::Venue(name.into()),
+            json!(network),
+        )
+        .await;
+        for (key, value) in [
+            ("venue.enabled", json!(true)),
+            ("dex_dex.execute", json!(true)),
+            ("risk.max_errors_in_row", json!(3)),
+        ] {
+            t489_common::set(&core, key, Scope::Venue(name.into()), value).await;
+        }
+        let cycle: DexCycle = serde_json::from_value(json!({
+            "venue": name, "block": h[network]["block"], "base": "0x4200000000000000000000000000000000000006",
+            "base_ticker":"BASE","input":"1","output":"1","gross_profit":"0","gas_units":0,
+            "gas_bnb":"0","tip_bnb":"0","bnb_cost":"0","hops":[],"executable":true
+        })).unwrap();
+        let direction = cycle_plan::direction(&core, &cycle).unwrap();
+        assert_eq!(direction.asset.chain, Some(ChainId(network.into())));
+        assert_eq!(
+            dex_account::of_direction_now(&core, &direction).unwrap().0,
+            "same"
+        );
+        let mut old = direction.clone();
+        old.asset.chain = None;
+        assert_eq!(chain::of_dir(&core, &old).unwrap().0, network);
+        let mut deal = Deal::new(name.into(), old, json!({"cycle":cycle}), Decimal::ZERO);
+        deal.step = Step::Halted;
+        deal.dex_account = dex_account::of_direction_now(&core, &direction);
+        persist::save_deal(&core.inner.deps.db, &deal)
+            .await
+            .unwrap();
+        dirs.push(direction);
+    }
+    ledger::load(&core).await;
+    for d in &dirs {
+        let restored = core
+            .deals()
+            .into_iter()
+            .find(|x| x.id == d.buy_on.0)
+            .unwrap();
+        assert_eq!(restored.direction, *d);
+        assert_eq!(restored.step, Step::Halted);
+        assert_eq!(restored.dex_account.unwrap().0, "same");
+        assert!(coin_ride::take(&core, &CoinKey::of(&d.asset)));
+        assert!(!coin_ride::take(&core, &CoinKey::of(&d.asset)));
+    }
+    for (on, off) in [(0, 1), (1, 0)] {
+        let a = dirs[on].asset.chain.as_ref().unwrap();
+        let b = dirs[off].asset.chain.as_ref().unwrap();
+        chain_run::set(&core, &a.0, true, "тест").unwrap();
+        chain_run::set(&core, &b.0, false, "тест").unwrap();
+        let checked = |d: &Direction| {
+            let c = chain_run::gate_input(&core, d).unwrap();
+            chain_run::refusal(&core.inner.risk.lock().unwrap(), c)
+        };
+        assert!(checked(&dirs[on]).is_none());
+        assert!(checked(&dirs[off]).unwrap().contains(&b.0));
+        // Вызов собран при включённой сети; пока он ждёт узел, оператор остановил именно её.
+        // На том же задании первый POST уже подтверждён, поэтому его учёт вне запрета новой отправки.
+        let guard_core = core.clone();
+        let guard_dir = dirs[on].clone();
+        let guard = move || {
+            arb::core::cycle_deal::submission_ok(
+                &guard_core,
+                &guard_dir,
+                &arb::core::types::DexAccountId("same".into()),
+            )
+            .map_err(|why| {
+                arb::gateway::errors::GatewayError::new(
+                    arb::gateway::errors::ErrorCode::NotConfigured,
+                    None,
+                    why,
+                )
+            })
+        };
+        arb::gateway::cycle_guard::scope(guard, async {
+            assert!(arb::gateway::cycle_guard::before_post().is_ok());
+            chain_run::set(&core, &a.0, false, "во время подготовки").unwrap();
+            assert!(arb::gateway::cycle_guard::before_post().is_err());
+        })
+        .await;
+        assert!(arb::gateway::cycle_guard::before_post().is_ok());
+    }
+}

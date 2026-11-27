@@ -40,6 +40,7 @@ fn wallet(w: &str) -> End {
 
 fn src(end: End, usdt: Option<&str>) -> Source {
     Source {
+        accepts_usdt: true,
         label: end.key(),
         end,
         usdt: usdt.map(d),
@@ -270,4 +271,19 @@ fn screens_and_codes() {
         Some("https://t.me/c/1234567890/55")
     );
     assert_eq!(arb::notify::ctl::screens::message_link(-4567, 55), None);
+}
+
+#[test]
+fn wallet_whose_cash_is_usdc_is_not_offered_for_a_usdt_transfer() {
+    let mut base = src(wallet("base"), None);
+    base.accepts_usdt = false;
+    let all = [
+        src(cex("mexc"), Some("100")),
+        base,
+        src(wallet("eth"), None),
+    ];
+    assert_eq!(from_list(&all).len(), 1);
+    let to = to_list(&all, &cex("mexc"));
+    assert_eq!(to.len(), 1);
+    assert_eq!(to[0].end, wallet("eth"));
 }

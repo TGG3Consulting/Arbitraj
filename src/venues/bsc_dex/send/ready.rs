@@ -230,6 +230,9 @@ impl Ready {
         let lim = self.http_ms;
         let stamp = super::super::node::chain_seen::watch(ctx, &self.url);
         let probe = started_at.is_none();
+        if !probe {
+            crate::gateway::cycle_guard::before_post()?;
+        }
         let result = async {
             let text = rpc::post_within(
                 ctx,

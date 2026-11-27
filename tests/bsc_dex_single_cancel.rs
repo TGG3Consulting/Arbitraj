@@ -388,7 +388,7 @@ async fn core_closes_cycle_with_cancel_gas() {
     let gas = found.tx.as_deref().unwrap().cancel_gas_bnb.unwrap();
     assert!(gas > Decimal::ZERO);
     let rq = req();
-    let d = cycle_plan::direction(&rq.cycle);
+    let d = cycle_plan::direction(&core, &rq.cycle).unwrap();
     let bnb = rates().bnb_usdt;
     let mut deal = ledger::open(&core, &d, json!({}), Decimal::ZERO, None);
     cycle_deal::settle_unknown(&core, &mut deal, bnb, &e, Some(Err(found))).await;

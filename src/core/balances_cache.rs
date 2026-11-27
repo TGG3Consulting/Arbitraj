@@ -164,10 +164,15 @@ impl Core {
         wallet: &str,
         max_age: Option<Duration>,
     ) -> Result<WalletView, String> {
+        let at = At {
+            venue: Some(&dex.0),
+            coin: None,
+        };
+        let quote = self.inner.deps.settings.text("venue.quote_asset", at).ok();
         let key = (dex.clone(), wallet.to_string());
         if let Some(w) = lk(&self.inner.bal_cache.wallets)
             .get(&key)
-            .filter(|w| fresh(w.got, max_age))
+            .filter(|w| fresh(w.got, max_age) && w.quote == quote)
         {
             return Ok(w.clone());
         }
@@ -183,11 +188,6 @@ impl Core {
             .get_as(&dex, Some(&acc))
             .await
             .map_err(|e| e.message)?;
-        let at = At {
-            venue: Some(&dex.0),
-            coin: None,
-        };
-        let quote = self.inner.deps.settings.text("venue.quote_asset", at).ok();
         let mut errs = Vec::new();
         // Решение 416: тикер газа — dex.gas_ticker площадки DEX; не задана — причина в ошибке кошелька.
         let bnb = match super::gas_ticker::at(&self.inner.deps.settings, &dex) {

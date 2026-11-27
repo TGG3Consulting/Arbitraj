@@ -167,6 +167,15 @@ pub fn tag_of_dex(core: &Core, v: &VenueId) -> Result<Option<ChainId>, String> {
 /// Что делает: сеть направления (решение 430) — сеть его монеты: биржа ↔ DEX — сеть DEX, биржа ↔ биржа — сеть перевода.
 /// Принимает: ядро, направление. Возвращает: id сети. Ошибки: как у dex_chain.
 pub fn of_dir(core: &Core, d: &Direction) -> Result<ChainId, String> {
+    // До раздельных задач циклы сохраняли None даже у другой сети.
+    if d.buy_on == d.sell_on && d.asset.chain.is_none() {
+        if let Some(p) = crate::settings::evm_profiles::profile(&d.buy_on.0) {
+            return Ok(ChainId(p.chain.to_owned()));
+        }
+        if dexes(core).contains(&d.buy_on) {
+            return chain_at(&core.inner.deps.settings, &d.buy_on);
+        }
+    }
     of_core(core, &d.asset)
 }
 

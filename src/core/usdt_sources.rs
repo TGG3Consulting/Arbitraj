@@ -14,8 +14,9 @@ use std::time::Duration;
 use rust_decimal::Decimal;
 use serde_json::{Value, json};
 
-use crate::core::types::DexAccountId;
+use crate::core::types::{DexAccountId, VenueId};
 use crate::settings::read::At;
+use crate::settings::{evm_profiles::LEDGER_QUOTE, scope::Scope};
 
 use super::engine::Core;
 use super::usdt_transfer_check::End;
@@ -28,6 +29,7 @@ pub struct Source {
     pub label: String,
     /// Свободно USDT; None — не прочитано (причина в error).
     pub usdt: Option<Decimal>,
+    pub accepts_usdt: bool,
     pub error: Option<String>,
 }
 
@@ -35,12 +37,27 @@ impl Source {
     /// JSON для интерфейса. Ошибок нет.
     pub fn to_json(&self) -> Value {
         json!({ "venue": self.end.venue.0, "wallet": self.end.wallet.as_ref().map(|w| w.0.clone()),
-            "key": self.end.key(), "label": self.label, "usdt": self.usdt, "error": self.error })
+            "accepts_usdt": self.accepts_usdt, "key": self.end.key(), "label": self.label, "usdt": self.usdt, "error": self.error })
     }
 }
 
-/// Все площадки перевода с балансом USDT. Принимает: ядро, допустимый возраст ответа (None — запрос сейчас).
+/// Совместимость получателя с прямым возвратом USDT по явно заданной валюте площадки.
+fn accepts(core: &Core, v: &VenueId) -> bool {
+    let quote = core
+        .inner
+        .deps
+        .settings
+        .get_exact("venue.quote_asset", &Scope::Venue(v.0.clone()));
+    super::settlement::direct_return(LEDGER_QUOTE, quote.as_ref().and_then(Value::as_str)).is_ok()
+}
+
+fn transfer_currency(ticker: &str) -> Result<(), String> {
+    super::settlement::direct_return(ticker,None)
+        .map_err(|_|format!("Расчётная валюта площадки — {ticker}. Ручной перевод USDT доступен для площадок с расчётной валютой USDT."))
+}
+
 /// Возвращает: биржи по id, затем кошельки по имени. Ошибок нет: сбой — в Source::error.
+/// Все источники и получатели ручного перевода; USDT берётся только из снимка соответствующей валюты.
 pub async fn all(core: &Core, max_age: Option<Duration>) -> Vec<Source> {
     let mut out = Vec::new();
     for v in core.cex_ids() {
@@ -49,17 +66,23 @@ pub async fn all(core: &Core, max_age: Option<Duration>) -> Vec<Source> {
             coin: None,
         };
         let quote = core.inner.deps.settings.text("venue.quote_asset", at);
-        let (usdt, error) = match (core.venue_balances(&v, max_age).await, quote) {
-            (Err(e), _) => (None, Some(e)),
-            (_, Err(e)) => (None, Some(e.message)),
-            (Ok(b), Ok(q)) => match (b.trading_free(&q), b.error) {
-                (Some(x), _) => (Some(x), None),
-                (None, e) => (
-                    None,
-                    Some(e.unwrap_or_else(|| "торговый счёт не прочитан".into())),
-                ),
+        let (usdt, error) = match quote
+            .map_err(|e| e.message)
+            .and_then(|q| transfer_currency(&q))
+        {
+            Err(e) => (None, Some(e)),
+            Ok(()) => match core.venue_balances(&v, max_age).await {
+                Err(e) => (None, Some(e)),
+                Ok(b) => match (b.trading_free(LEDGER_QUOTE), b.error) {
+                    (Some(x), _) => (Some(x), None),
+                    (None, e) => (
+                        None,
+                        Some(e.unwrap_or_else(|| "торговый счёт не прочитан".into())),
+                    ),
+                },
             },
         };
+        let accepts_usdt = accepts(core, &v);
         let label = crate::notify::human::venue(&v.0);
         out.push(Source {
             end: End {
@@ -67,6 +90,7 @@ pub async fn all(core: &Core, max_age: Option<Duration>) -> Vec<Source> {
                 wallet: None,
             },
             label,
+            accepts_usdt,
             usdt,
             error,
         });
@@ -79,6 +103,20 @@ pub async fn all(core: &Core, max_age: Option<Duration>) -> Vec<Source> {
     let mut wallets = accounts.wallets();
     wallets.sort_by(|a, b| a.name.cmp(&b.name));
     for dex in dexes {
+        let accepts_usdt = accepts(core, &dex);
+        let configured = core
+            .inner
+            .deps
+            .settings
+            .text(
+                "venue.quote_asset",
+                At {
+                    venue: Some(&dex.0),
+                    coin: None,
+                },
+            )
+            .map_err(|e| e.message)
+            .and_then(|q| transfer_currency(&q));
         let net = if many {
             match super::chain::chain_at(&core.inner.deps.settings, &dex) {
                 Ok(c) => format!(", сеть {c}"),
@@ -94,9 +132,16 @@ pub async fn all(core: &Core, max_age: Option<Duration>) -> Vec<Source> {
             } else {
                 format!("Кошелёк DEX «{}» ({rows}){net}", w.name)
             };
-            let (usdt, error) = match core.wallet_balances_on(&dex, &w.id, max_age).await {
-                Ok(b) => (b.usdt, b.error),
-                Err(e) => (None, Some(e)),
+            let (usdt, error) = match &configured {
+                Err(e) => (None, Some(e.clone())),
+                Ok(()) => match core.wallet_balances_on(&dex, &w.id, max_age).await {
+                    Ok(b) if b.quote.as_deref() == Some(LEDGER_QUOTE) => (b.usdt, b.error),
+                    Ok(_) => (
+                        None,
+                        Some("Валюта снимка баланса изменилась, обновите список".into()),
+                    ),
+                    Err(e) => (None, Some(e)),
+                },
             };
             let end = End {
                 venue: dex.clone(),
@@ -104,6 +149,7 @@ pub async fn all(core: &Core, max_age: Option<Duration>) -> Vec<Source> {
             };
             out.push(Source {
                 end,
+                accepts_usdt,
                 label,
                 usdt,
                 error,
@@ -123,7 +169,9 @@ pub fn from_list(all: &[Source]) -> Vec<&Source> {
 /// «Куда»: все, кроме «откуда»; от кошелька — только биржи. Принимает: все площадки, «откуда». Ошибок нет.
 pub fn to_list<'a>(all: &'a [Source], from: &End) -> Vec<&'a Source> {
     all.iter()
-        .filter(|s| s.end != *from && (from.wallet.is_none() || s.end.wallet.is_none()))
+        .filter(|s| {
+            s.accepts_usdt && s.end != *from && (from.wallet.is_none() || s.end.wallet.is_none())
+        })
         .collect()
 }
 
@@ -138,4 +186,17 @@ pub fn label_of(all: &[Source], end: &End) -> String {
 /// Площадка по ключу End::key (из короткого номера кнопки Telegram или из интерфейса). Ошибок нет.
 pub fn by_key<'a>(all: &'a [Source], key: &str) -> Option<&'a Source> {
     all.iter().find(|s| s.end.key() == key)
+}
+
+#[cfg(test)]
+mod denomination_tests {
+    use super::*;
+    #[test]
+    fn manual_transfer_uses_the_same_currency_rule_as_the_money_path() {
+        for symbol in ["USDC", "USDT0", "WETH"] {
+            assert!(transfer_currency(symbol).unwrap_err().contains(symbol));
+            assert!(super::super::settlement::direct_return("USDT", Some(symbol)).is_err());
+        }
+        assert!(transfer_currency("USDT").is_ok());
+    }
 }

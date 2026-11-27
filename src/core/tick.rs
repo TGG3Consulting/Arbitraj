@@ -129,7 +129,7 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                     core.request_rebuild();
                 }
                 // Решение 124: новые состояния пулов — толчок поиска циклов DEX ↔ DEX для исполнения (cycle_watch.rs).
-                core.inner.cycles.kick.notify_one();
+                core.inner.cycles.changed(&venue);
                 for a in assets_by_tokens(&core, &venue, tokens) {
                     super::window_queue_trace::pool(&core, &a, &venue, (mark.at, mark.block));
                     super::tick_sched::schedule_pool(&core, a, venue.clone(), mark);

@@ -1,6 +1,6 @@
 //! Файл: core/cycle_watch.rs
-//! Что делает: исполнение направления DEX ↔ DEX (решение 124; направление — 85, гейт — 86). Одна фоновая задача ядра:
-//! ждёт толчка (новые состояния пулов — tick.rs; толчки во время поиска сливаются в один повтор), для каждой площадки
+//! Что делает: исполнение направления DEX ↔ DEX (решение 124; направление — 85, гейт — 86). Одна задача на зарегистрированную площадку:
+//! ждёт толчка (новые состояния пулов — tick.rs; толчки во время поиска сливаются в один повтор), для своей площадки
 //! DEX с dex_dex.execute = да берёт сигналы циклов (Venue::dex_cycles — тот же граф пулов решения 80, оба обхода цикла —
 //! отдельные сигналы, считаются независимо; вход сигнала — оптимальный в пределах dex_dex.probe_input_base), отбирает
 //! кандидатов (исполним как есть, чистая прибыль > 0; лучший первым; порог dex_dex.min_profit_usd — в плане) и по
@@ -30,46 +30,71 @@ use std::time::{Duration, Instant};
 use rust_decimal::Decimal;
 
 use crate::core::types::{CycleTradeRequest, DexCycle, VenueId};
-use crate::gateway::contract::VenueKind;
 use crate::settings::read::At;
 use crate::storage::journal::Level;
+use std::future::Future;
 
 use super::cycle_deal::{self, Outcome};
 use super::cycle_plan::{self, CyclePlan};
 use super::cycle_state::{key, venue_key};
-use super::engine::{Core, rd};
+use super::engine::Core;
 
-/// Задача исполнения циклов. Работает, пока жив процесс.
-pub async fn run(core: Core) {
-    loop {
-        core.inner.cycles.kick.notified().await;
-        let started = Instant::now();
-        // Решение 489 (как 196): выключенная площадка DEX новых циклов не исполняет, даже если её держат сделки.
-        let dexes: Vec<VenueId> = rd(&core.inner.kinds)
-            .iter()
-            .filter(|(v, k)| *k == VenueKind::Dex && super::registry_sync::enabled(&core, v))
-            .map(|(v, _)| v.clone())
-            .collect();
-        let mut gap = None;
-        for v in dexes {
-            let at = At {
-                venue: Some(&v.0),
-                coin: None,
-            };
-            let s = &core.inner.deps.settings;
-            if !s.flag("dex_dex.execute", at).unwrap_or(false) {
-                continue;
-            }
-            if let Ok(ms) = s.integer("dex_dex.scan_min_interval_ms", at) {
-                gap = gap.max(Some(Duration::from_millis(ms)));
-            }
-            pass(&core, &v).await;
+/// Пул будит только свою площадку. Один проход и один объединённый повтор на площадку.
+pub async fn run(core: Core, venue: VenueId) {
+    let Some(lane) = core.inner.cycles.lane(&venue) else {
+        return;
+    };
+    passes(lane, || async {
+        if !enabled(&core, &venue) {
+            return None;
         }
-        if let Some(min) = gap {
-            let spent = started.elapsed();
-            if spent < min {
-                tokio::time::sleep(min - spent).await;
-            }
+        let gap = core
+            .inner
+            .deps
+            .settings
+            .integer(
+                "dex_dex.scan_min_interval_ms",
+                At {
+                    venue: Some(&venue.0),
+                    coin: None,
+                },
+            )
+            .ok()
+            .map(Duration::from_millis);
+        pass(&core, &venue).await;
+        gap
+    })
+    .await;
+}
+
+pub(super) fn enabled(core: &Core, v: &VenueId) -> bool {
+    super::registry_sync::enabled(core, v)
+        && core
+            .inner
+            .deps
+            .settings
+            .flag(
+                "dex_dex.execute",
+                At {
+                    venue: Some(&v.0),
+                    coin: None,
+                },
+            )
+            .unwrap_or(false)
+}
+
+async fn passes<F: Future<Output = Option<Duration>>>(
+    wake: &tokio::sync::Notify,
+    mut pass: impl FnMut() -> F,
+) {
+    loop {
+        wake.notified().await;
+        let started = Instant::now();
+        if let Some(left) = pass()
+            .await
+            .and_then(|gap| gap.checked_sub(started.elapsed()))
+        {
+            tokio::time::sleep(left).await;
         }
     }
 }
@@ -95,24 +120,32 @@ async fn pass(core: &Core, v: &VenueId) {
     super::cycle_scan_log::note(core, v, tally, &list, scan_ms).await;
     let cands: Vec<DexCycle> = list
         .into_iter()
-        .filter(|c| c.executable && c.net_profit.is_some_and(|p| p > Decimal::ZERO))
+        .filter(|c| {
+            c.venue == *v && c.executable && c.net_profit.is_some_and(|p| p > Decimal::ZERO)
+        })
         .collect();
     let alive: HashSet<String> = cands.iter().map(key).collect();
     core.inner.cycles.retain(&v.0, &alive);
     // Решение 139: причина на всю площадку (нет кошелька «DEX ↔ DEX» в маппинге) — одна запись на смену причины, а не
     // по записи на каждый цикл каждого блока (ключи циклов меняются вместе с сигналами).
-    if let Some(c) = cands.first() {
+    if !cands.is_empty() {
         let wk = venue_key(v, "wallet");
-        match super::dex_account::of_direction(deps, &cycle_plan::direction(c)).await {
-            Ok(_) => {
-                core.inner.cycles.fresh(&wk, "");
-            }
-            Err(why) => return say(core, v, &wk, &why).await,
+        if deps
+            .settings
+            .accounts()
+            .row(crate::settings::accounts::ROW_DEX_DEX)
+            .is_none()
+        {
+            return say(core, v, &wk, super::dex_account::NO_WALLET).await;
         }
+        core.inner.cycles.fresh(&wk, "");
     }
     for c in cands {
         let k = key(&c);
-        let d = cycle_plan::direction(&c);
+        let d = match cycle_plan::direction(core, &c) {
+            Ok(d) => d,
+            Err(why) => return say(core, v, &k, &why).await,
+        };
         if let Err(why) = super::risk::can_open(core, &d) {
             return say(core, v, &k, &why).await;
         }
@@ -144,7 +177,7 @@ async fn dry(core: &Core, k: &str, plan: CyclePlan) {
     let deps = &core.inner.deps;
     let v = plan.cycle.venue.clone();
     let req = request(&plan, "dry-cycle");
-    let r = match deps.gw.get(&v).await {
+    let r = match deps.gw.get_as(&v, Some(&plan.account)).await {
         Ok(x) => x.dex_dry_cycle(req, false).await,
         Err(e) => Err(e),
     };
@@ -201,5 +234,56 @@ async fn say(core: &Core, v: &VenueId, k: &str, why: &str) {
             .deps
             .log(Level::Info, "core.cycle", Some(&v.0), text, None)
             .await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::cycle_state::CycleState;
+    use crate::gateway::contract::VenueKind;
+    use futures_util::FutureExt;
+    use std::cell::Cell;
+    use tokio::sync::Notify;
+
+    #[tokio::test]
+    async fn other_chain_processes_blocks_while_peer_is_waiting_and_wakes_once() {
+        let base = VenueId("base_dex".into());
+        let eth = VenueId("eth_dex".into());
+        for (slow, fast) in [(&base, &eth), (&eth, &base)] {
+            let lanes = CycleState::registered(&[
+                (slow.clone(), VenueKind::Dex),
+                (fast.clone(), VenueKind::Dex),
+            ]);
+            let release = Notify::new();
+            let blocked = Cell::new(0);
+            let healthy = Cell::new(0);
+            let mut slow_pass = std::pin::pin!(passes(lanes.lane(slow).unwrap(), || async {
+                blocked.set(blocked.get() + 1);
+                release.notified().await;
+                None
+            }));
+            let mut fast_pass = std::pin::pin!(passes(lanes.lane(fast).unwrap(), || async {
+                healthy.set(healthy.get() + 1);
+                None
+            }));
+            lanes.changed(slow);
+            assert!(slow_pass.as_mut().now_or_never().is_none());
+            assert!(fast_pass.as_mut().now_or_never().is_none());
+            assert_eq!((blocked.get(), healthy.get()), (1, 0));
+            for _ in 0..8 {
+                lanes.changed(slow);
+            }
+            for expected in 1..=3 {
+                lanes.changed(fast);
+                assert!(fast_pass.as_mut().now_or_never().is_none());
+                assert_eq!((blocked.get(), healthy.get()), (1, expected));
+            }
+            release.notify_one();
+            assert!(slow_pass.as_mut().now_or_never().is_none());
+            release.notify_one();
+            assert!(slow_pass.as_mut().now_or_never().is_none());
+            assert_eq!((blocked.get(), healthy.get()), (2, 3));
+        }
     }
 }

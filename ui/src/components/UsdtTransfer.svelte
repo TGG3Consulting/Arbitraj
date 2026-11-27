@@ -30,7 +30,7 @@
   const tos = $derived.by(() => {
     const f = byKey(from);
     if (!f) return [];
-    return sources.filter((s) => s.key !== f.key && (f.wallet == null || s.wallet == null));
+    return sources.filter((s) => s.accepts_usdt !== false && s.key !== f.key && (f.wallet == null || s.wallet == null));
   });
 
   /** Загружает площадки с USDT. Ошибка — в error. */

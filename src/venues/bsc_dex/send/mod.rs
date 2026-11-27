@@ -230,6 +230,14 @@ async fn classify(
     txs: &[Bytes],
     max_block: u64,
 ) -> GatewayResult<Dispatched> {
+    // Площадки могли ждать chainId после подписания. Ни один POST не начинался:
+    // отказ локального допуска окончателен. После начала хотя бы одного POST действуют штатные правила сверки.
+    if crate::gateway::cycle_guard::active()
+        && results.iter().all(|r| r.started_at.is_none())
+        && let Some(e) = results.iter().find_map(|r| r.result.as_ref().err())
+    {
+        return Err(e.clone());
+    }
     let mut out = Dispatched::default();
     let mut why = Vec::new();
     let ids: Vec<String> = results.iter().map(|a| a.id.to_string()).collect();

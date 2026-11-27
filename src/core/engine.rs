@@ -116,8 +116,6 @@ impl Core {
         tokio::spawn(super::quote_count_log::run(core.clone()));
         // Решение 349 (ревью Б2): рассылка пробуждений промежуточным пулом — своя задача, поток тика только отмечает.
         tokio::spawn(super::mid_wake::run(core.clone()));
-        // Решение 124: исполнение циклов DEX ↔ DEX — одна задача, толчки событий пулов сливаются.
-        tokio::spawn(super::cycle_watch::run(core.clone()));
         // Решение 316: прогрев адресов депозита бирж (venue.deposit_warm) — первая сделка после перезапуска без запроса.
         tokio::spawn(super::deposit_warm::run(core.clone()));
         for (id, kind) in kinds {
@@ -127,6 +125,8 @@ impl Core {
                 tokio::spawn(super::feed_watch::run(core.clone(), id.clone()));
                 // Решение 175: делистинги биржи — фоном, delist.refresh_s.
                 tokio::spawn(super::delist::run(core.clone(), id));
+            } else if kind == VenueKind::Dex {
+                tokio::spawn(super::cycle_watch::run(core.clone(), id));
             }
         }
         core

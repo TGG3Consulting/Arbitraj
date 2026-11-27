@@ -254,6 +254,7 @@ impl Inner {
             deps.data_dir.join("windows"),
             "windows",
         );
+        let cycles = super::cycle_state::CycleState::registered(&kinds);
         Inner {
             settlement: Default::default(),
             live: Live::new(deps.buffer),
@@ -345,7 +346,7 @@ impl Inner {
             window_kick: Notify::new(),
             window_deals: Default::default(),
             card_jobs: Mutex::default(),
-            cycles: Default::default(),
+            cycles,
             uncapped: Default::default(),
             delist: Default::default(),
             withdraw_limit: Default::default(),

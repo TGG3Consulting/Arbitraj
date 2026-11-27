@@ -58,6 +58,10 @@ class Guard:
         return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
                   ["address","uint256","address","uint256","uint256",STEP+"[]"],[src,amount,dst,minimum,deadline,[step]])
 
+    def quote(self,src,dst,amount,minimum,deadline,flags):
+        return tx(self.module,"preview("+ORDER+","+TERMS+",address)",[ORDER,TERMS,"address"],
+                  [self.order,(src,dst,amount,minimum,deadline,flags==0x61),OWNER])
+
     def marks(self,src,dst):
         return [balance(t,a) for a in (self.module,EXEC) for t in (src,dst)]+[
             tx(src,"allowance(address,address)",["address","address"],[a,b]) for a,b in

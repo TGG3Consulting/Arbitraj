@@ -49,8 +49,9 @@ def measure_order(url, book, cash, stock, sizes, fund, compiled=None, mode="orig
                 if src == stock:
                     prep += [approve(stock, endpoint, now_qty)]
                 def wire(name, limit, expiry=end):
-                    if guard and name=="swap":
-                        return guard.wire(src,dst,now_qty,limit,expiry,flags)
+                    if guard:
+                        action=guard.wire if name=="swap" else guard.quote
+                        return action(src,dst,now_qty,limit,expiry,flags)
                     return tx(ROUTER, name+"("+",".join(INPUTS)+")", INPUTS,
                               [order, src, dst, now_qty, traits(flags, limit, expiry)])
                 probes = [balance(src, OWNER), balance(dst, OWNER)]
@@ -70,8 +71,11 @@ def measure_order(url, book, cash, stock, sizes, fund, compiled=None, mode="orig
                 assert paid == now_qty and got > 0
                 amt = None
                 if trial[2]["status"] == "0x1":
-                    quoted, amt, h = decode(["uint256","uint256","bytes32"], bytes.fromhex(trial[2]["returnData"][2:]))
-                    assert quoted == paid and "0x"+h.hex() == book["order_hash"]
+                    if guard:
+                        amt,=decode(["uint256"],bytes.fromhex(trial[2]["returnData"][2:]))
+                    else:
+                        quoted, amt, h = decode(["uint256","uint256","bytes32"], bytes.fromhex(trial[2]["returnData"][2:]))
+                        assert quoted == paid and "0x"+h.hex() == book["order_hash"]
                 elif not guard:
                     raise ValueError("original swap succeeded despite a rejected original quote")
 

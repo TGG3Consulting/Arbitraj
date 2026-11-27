@@ -8,6 +8,8 @@ pragma solidity ^0.8.24;
 interface IAquaEngine {
     struct Order { address maker; uint256 traits; bytes data; }
     function AQUA() external view returns (address);
+    function quote(Order calldata order,address tokenIn,address tokenOut,uint256 amount,bytes calldata taker)
+        external view returns(uint256,uint256,bytes32);
     function swap(Order calldata order,address tokenIn,address tokenOut,uint256 amount,bytes calldata taker)
         external returns(uint256,uint256,bytes32);
 }
@@ -58,6 +60,21 @@ contract AquaStrategyWallet {
         return keccak256(abi.encode(order));
     }
 
+    function _traits(Terms memory t,address recipient) private pure returns(bytes memory) {
+        // threshold[32], recipient[20], deadline[5], empty callbacks/args/signature.
+        uint160 stops=32 | (uint160(52)<<16);
+        for(uint256 i=2;i<10;++i) stops |= uint160(57)<<(16*i);
+        uint16 flags=t.inputFirst?0x61:0x41;
+        return abi.encodePacked(stops,flags,t.minimum,recipient,uint40(t.deadline));
+    }
+    // В вызове от кошелька SwapVM видит тот же tx.origin и того же taker, что при оплате модулем.
+    function preview(IAquaEngine.Order calldata order,Terms calldata t,address recipient) external view returns(uint256 net) {
+        if(recipient==address(0) || t.deadline<block.timestamp || t.deadline>type(uint40).max
+            || address(engine).codehash!=engineCode || engine.AQUA()!=registry) revert Invalid();
+        (uint256 paid,uint256 out,bytes32 h)=engine.quote(order,t.input,t.output,t.amount,_traits(t,recipient));
+        if(paid!=t.amount || h!=orderHash(order)) revert Invalid();
+        return out;
+    }
     function execute(IAquaEngine.Order calldata order,Terms calldata terms) external returns(uint256) {
         return _settle(order,terms,msg.sender);
     }
@@ -86,11 +103,7 @@ contract AquaStrategyWallet {
         checked(t.input,abi.encodeCall(IAquaAsset.transferFrom,(msg.sender,address(this),t.amount)));
         if(src.balanceOf(address(this))!=startIn+t.amount || src.allowance(address(this),address(engine))!=0) revert Invalid();
         checked(t.input,abi.encodeCall(IAquaAsset.approve,(address(engine),t.amount)));
-        // threshold[32], recipient[20], deadline[5], empty callbacks/args/signature.
-        uint160 stops=32 | (uint160(52)<<16);
-        for(uint256 i=2;i<10;++i) stops |= uint160(57)<<(16*i);
-        uint16 flags=t.inputFirst?0x61:0x41;
-        bytes memory taker=abi.encodePacked(stops,flags,t.minimum,recipient,uint40(t.deadline));
+        bytes memory taker=_traits(t,recipient);
         (uint256 paid,,bytes32 actual)=engine.swap(order,t.input,t.output,t.amount,taker);
         if(src.allowance(address(this),address(engine))!=0) checked(t.input,abi.encodeCall(IAquaAsset.approve,(address(engine),0)));
         got=dst.balanceOf(recipient)-ownerOut;

@@ -931,6 +931,11 @@ jobs:
           npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
           node contracts/build-hanji.mjs "$RUNNER_TEMP/shiba" ShibaswapV2Adapter
           python scripts/record_wagmi_ethereum.py "$RUNNER_TEMP/market.json" --venue shibaswap-v2 --module "$RUNNER_TEMP/shiba/ShibaswapV2Adapter.json"
+      - if: matrix.market == 'aktionariat-ethereum-protected'
+        run: |
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/aktionariat" AktionariatWallet
+          python scripts/record_aktionariat_protected.py "$RUNNER_TEMP/aktionariat/AktionariatWallet.json" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'aktionariat-ethereum-wallet'
         run: python scripts/record_aktionariat_wallet.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'aktionariat-ethereum-directory'

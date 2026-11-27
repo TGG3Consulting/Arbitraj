@@ -138,7 +138,7 @@ pub(super) fn ordinary(
             "smart.split_step_pct должен быть в (0; 100], smart.max_splits — больше нуля",
         ));
     }
-    let unit = qty * step_pct / Decimal::ONE_HUNDRED;
+    let unit = super::brokerbot_size::split_unit(cands,side,qty * step_pct / Decimal::ONE_HUNDRED,qty);
     // Решение 336: потоков на шаг сплита (не задана — один, как раньше).
     let want = super::par::want(ctx, "dex.quote_threads");
     let mut left = qty;

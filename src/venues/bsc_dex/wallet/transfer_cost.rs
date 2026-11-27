@@ -38,6 +38,7 @@ pub async fn cost(
     })?;
     let pct = match checks.coin(&token).map(|c| c.taxes) {
         Some(CheckState::Known(t)) => t.transfer_pct,
+        Some(CheckState::OneShare(t)) if amount == Decimal::ONE => t.transfer_pct,
         Some(CheckState::Failed { reason }) => {
             return Err(ctx.err(ErrorCode::CoinCheckFailed, reason));
         }

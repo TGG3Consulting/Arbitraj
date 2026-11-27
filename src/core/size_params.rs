@@ -73,6 +73,10 @@ pub fn params(
         }
     };
     let mut p = search_params(s, step, budget, price, buy_breaks, sell_breaks)?;
+    if src.is_none() && let Some(qty)=super::signal_probe::measured_share(core,d,cx.units_b_per_a)? {
+        p.guess=qty;
+        p.buy_breaks.push(qty);
+    }
     p.ext.sell_grid = sell_grid;
     if src.is_none()
         && cx.pair_a.is_none()

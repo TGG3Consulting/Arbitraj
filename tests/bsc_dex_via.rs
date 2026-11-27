@@ -247,6 +247,7 @@ async fn buy_and_sell_through_wbnb() {
             f.quoter.buy = Some(Ok(()));
             f.quoter.sell = Some(Ok(()));
             f.taxes = Some(arb::venues::bsc_dex::check::state::PoolTaxes {
+                one_share_only:false,
                 buy_pct: Decimal::ZERO,
                 sell_pct: Some(Decimal::ZERO),
                 transfer_pct: Decimal::ZERO,

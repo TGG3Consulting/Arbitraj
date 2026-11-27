@@ -114,6 +114,7 @@ pub async fn verify(
     let a = match &top {
         Some(t) => quoter_amount::Amount {
             usd: t.usd,
+            physical_input:None,
             source: format!("верхняя точка лесенки влияния крючка ({} USDT)", t.usd),
         },
         None => match quoter_amount::side_usd(p, e, usdt_dec, side) {
@@ -121,9 +122,10 @@ pub async fn verify(
             Err(f) => return Verdict::Fail(f),
         },
     };
-    let amount = match &top {
-        Some(t) => t.amount_in,
-        None => match counter(p, e, usdt_dec, a.usd) {
+    let amount = match (&top,a.physical_input) {
+        (Some(t),_) => t.amount_in,
+        (None,Some(input)) => input,
+        (None,None) => match counter(p, e, usdt_dec, a.usd) {
             Ok(v) => v,
             Err(f) => return Verdict::Fail(f),
         },
@@ -146,7 +148,7 @@ pub async fn verify(
     let (token_in, amount) = match side {
         Side::Buy => (fresh.usdt, amount),
         // Верхняя точка лесенки продажи — уже монеты (вход пула продажи).
-        Side::Sell if top.is_some() => (fresh.coin, amount),
+        Side::Sell if top.is_some() || a.physical_input.is_some() => (fresh.coin, amount),
         // Продажа — монеты на ту же сумму по цене пула на H, без обмена на стороне покупки (решение 73): у пула с
         // ликвидностью только с одной стороны цены покупка невозможна, а продажа глубокая — стороны независимы.
         Side::Sell => match super::super::quote::spot::coins_for(fresh, amount) {

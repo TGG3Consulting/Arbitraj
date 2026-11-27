@@ -28,6 +28,7 @@ use super::taxes_util::pct;
 /// продажи — None, если продажа не измерена (Measured.sell = Err) или ответ квотера на продажу 0. Ошибок нет.
 pub fn percent(m: &Measured, coin_dec: u8, counter_dec: u8) -> Option<PoolTaxes> {
     Some(PoolTaxes {
+        one_share_only:false,
         buy_pct: pct(m.buy_expected, m.buy_got, coin_dec)?,
         sell_pct: m
             .sell

@@ -66,7 +66,7 @@ impl BuyWire{
 }
 pub(super) fn best_with(q:&Quoting,asset:&Asset,side:Side,qty:Decimal,entries:Vec<Entry>,decimals:(u8,u8),buy:BuyWire)->GatewayResult<(Candidate,TokenTaxes)>{
     let ctx = &q.ctx;
-    let taxes = taxes(q, asset)?;
+    let taxes = taxes_at(q, asset, Some(qty))?;
     let mut best: Option<Candidate> = None;
     let mut reasons = Vec::new();
     for e in entries {
@@ -104,9 +104,14 @@ pub(super) fn best_with(q:&Quoting,asset:&Asset,side:Side,qty:Decimal,entries:Ve
 
 /// Налоги монеты из проверки. Ошибки: CoinNotChecked, CoinCheckFailed.
 pub fn taxes(q: &Quoting, asset: &Asset) -> GatewayResult<TokenTaxes> {
+    taxes_at(q,asset,None)
+}
+pub(crate) fn taxes_at(q:&Quoting,asset:&Asset,qty:Option<Decimal>) -> GatewayResult<TokenTaxes> {
     // Решение 211: налоги — по адресу контракта монеты.
     match q.checks.coin_of(asset).map(|c| c.taxes) {
         Some(CheckState::Known(t)) => Ok(t),
+        Some(CheckState::OneShare(t)) if qty == Some(Decimal::ONE) => Ok(t),
+        Some(CheckState::OneShare(_)) => Err(q.ctx.err(ErrorCode::CoinNotChecked,"Aktionariat: измерен налог ровно одной акции")),
         // Решение 247, п. В: продажа выхода (монета уже куплена) — проверка «не прошла» не закрывает продажу: модель
         // без налога, реальный выход меряет проба перед отправкой (откат — ошибка с числами; у исполнителя —
         // пере-замер). Честного отказа продажи (ханипот) проба не пропустит.
@@ -158,6 +163,9 @@ pub fn calc_u(
     calc_for(ctx,e,u,side,qty,(coin_dec,usdt_dec),BuyWire::Forward)
 }
 fn calc_for(ctx:&Ctx,e:&Entry,u:&Usable,side:Side,qty:Decimal,(coin_dec,usdt_dec):(u8,u8),buy:BuyWire)->GatewayResult<(Swapped,Decimal,Decimal,Usable)>{
+    if u.one_share_only && qty!=Decimal::ONE {
+        return Err(ctx.err(ErrorCode::NoRoute,"Aktionariat: в этом пуле измерена одна акция"));
+    }
     let keep = |pct: Decimal| Decimal::ONE - pct / Decimal::ONE_HUNDRED;
     let bad = || {
         ctx.err(

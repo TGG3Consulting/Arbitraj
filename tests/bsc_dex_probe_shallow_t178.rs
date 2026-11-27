@@ -272,6 +272,7 @@ fn doubt_drops_known_pure_logic() {
     });
     // Проба: покупка в глубоком пуле прошла, продажа откатилась (вердикт по пулу); у мелкого — помеха узла.
     let bought = [PoolTaxes {
+        one_share_only:false,
         buy_pct: Decimal::ZERO,
         sell_pct: None,
         transfer_pct: Decimal::ZERO,

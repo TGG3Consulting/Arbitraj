@@ -207,6 +207,12 @@ async fn compare(
             super::signal_probe::qty(usd, Some(p), ref_price, floor)
         }
     };
+    let want = if let Some(qty)=super::signal_probe::measured_share(core,dir,units)? {
+        if qty>want || qty<super::signal_probe::floor_of(core,dir,ref_price,units)? {
+            return Err("Одна измеренная акция выходит за бюджет или минимум направления".into());
+        }
+        qty
+    } else { want };
     // Решение 241: поколение пулов монеты — до котировки (событие пула во время котировки не потеряется).
     let generation = super::window_dex::generation(core, dir);
     // Решение 348: котировки сигнала помечены назначением (замер «кто вызвал»; на расчёт не влияет).

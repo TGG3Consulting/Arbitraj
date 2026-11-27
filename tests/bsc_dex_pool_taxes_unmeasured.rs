@@ -45,6 +45,7 @@ async fn reasons() -> (String, String) {
 /// Налоги пула с удачной покупкой и неизмеренной продажей.
 fn bought_only() -> PoolTaxes {
     PoolTaxes {
+        one_share_only:false,
         buy_pct: Decimal::ZERO,
         sell_pct: None,
         transfer_pct: Decimal::ZERO,

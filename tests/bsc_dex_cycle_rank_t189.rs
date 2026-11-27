@@ -529,6 +529,7 @@ async fn lost_reason_is_written() {
         .map(|s| Leg {
             entry: s.edge.entry.clone(),
             usable: Usable {
+                one_share_only:false,
                 gas: 150_000,
                 hook_pct: Decimal::ZERO,
                 tax_pct: Decimal::ZERO,

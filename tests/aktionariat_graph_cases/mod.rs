@@ -15,6 +15,7 @@ use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
 
 mod data;
+mod sizes;
 use data::*;
 
 #[tokio::test]
@@ -58,7 +59,12 @@ async fn three_hop_graph_matches_both_whole_share_payments_and_original_executor
         ("dex.intermediate_tokens", json!(allowed)),
         ("dex.native_wrapped", json!(w)),
         ("dex.depth_band_pct", json!(1)),
-        ("dex.min_pool_liquidity_usd", json!(1)),
+        ("dex.min_pool_liquidity_usd", json!(10)),
+        ("check.probe_usdt", json!(20)),
+        ("dex.quoter_max_diff_pct", json!(0.11)),
+        ("dex.shallow_pools_per_pair", json!(15)),
+        ("smart.max_splits", json!(2)),
+        ("smart.split_step_pct", json!(25)),
         ("dex.depth_hysteresis_pct", json!(0)),
         ("dex.route_max_pools_per_edge", json!(4)),
         ("dex.deadline_s", json!(900)),
@@ -129,6 +135,7 @@ async fn three_hop_graph_matches_both_whole_share_payments_and_original_executor
             .find(|p| p.hops() == 3)
             .expect("зарегистрированы три хопа");
         assert!(route_paths::enumerate(&g, usd, stock, &HashSet::from([w]), 3, 20).is_empty());
+        sizes::verify(&p, &markets, r, usd, w, chf, stock);
         let mut qty = units;
         for h in path.steps.iter().rev() {
             let fill = pool_quote::swap(&p.ctx, &h.edge.entry, h.token_in, false, qty).unwrap();

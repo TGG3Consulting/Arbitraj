@@ -54,7 +54,7 @@ pub async fn gate(
 ) -> GatewayResult<Verified> {
     let ctx = &q.ctx;
     let (coin, usdt, decs) = super::trade::sides(q, req).await?;
-    let taxes = direct::taxes(q, &req.asset)?;
+    let taxes = direct::taxes_at(q, &req.asset, Some(req.qty))?;
     // Допуск проскальзывания — через ? (конвенция боевого пути exec/order.rs): не задан → NotConfigured, ордера нет.
     let slip_pct = ctx.dec("exec.dex_slippage_pct")?;
     let plan = plan_quote(ctx, req, route, slip_pct)?;

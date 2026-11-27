@@ -192,7 +192,10 @@ pub(super) async fn run(
     ) else {
         return Ok(Err("ответ квотера или баланса не по ABI".into()));
     };
+    let one_share=buy_expected==U256::ONE && bought==U256::ONE
+        && super::super::quote::brokerbot_size::trip(e,usdt_amount).is_some_and(|t|t.amount==usdt_amount);
     if let Some(min) = min
+        && !one_share
         && let Some(err) = probe_tiny::buy(ctx, e, buy_expected, min)
     {
         return Err(err);

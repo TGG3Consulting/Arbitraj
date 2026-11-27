@@ -20,6 +20,7 @@
   function taxShort(t) {
     const s = taxState(t);
     if (s === 'known') return { text: `${t.Known.buy_pct} / ${t.Known.sell_pct} / ${t.Known.transfer_pct} %`, cls: '' };
+    if (s === 'one_share') return { text: `1 акция: ${t.OneShare.buy_pct} / ${t.OneShare.sell_pct} / ${t.OneShare.transfer_pct} %`, cls: '' };
     if (s === 'failed') return { text: 'ошибка', cls: 'err' };
     return { text: 'не проверено', cls: 'unset' };
   }

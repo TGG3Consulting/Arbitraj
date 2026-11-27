@@ -75,6 +75,7 @@ async fn sides_are_independent() {
         f.quoter.set(Side::Sell, Some(Ok(())));
         // Решение 146: налоги монеты в этом пуле измерены пробой (нулевые) — допуск по налогу не мешает глубине.
         f.taxes = Some(arb::venues::bsc_dex::check::state::PoolTaxes {
+            one_share_only:false,
             buy_pct: rust_decimal::Decimal::ZERO,
             sell_pct: Some(rust_decimal::Decimal::ZERO),
             transfer_pct: rust_decimal::Decimal::ZERO,

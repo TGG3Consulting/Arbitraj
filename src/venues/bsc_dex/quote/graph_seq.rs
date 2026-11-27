@@ -71,6 +71,9 @@ pub fn shared(shares: &[&[Leg]]) -> HashSet<PoolRef> {
 /// Общий пул, для вида которого состояние после обмена не считается (pool_after::appliable). Возвращает: текст причины
 /// или None. Ошибок нет.
 pub fn unsupported(shares: &[&[Leg]], common: &HashSet<PoolRef>) -> Option<String> {
+    if shares.iter().flat_map(|legs| legs.iter()).any(|leg|leg.usable.one_share_only && common.contains(&leg.entry.pool.reference)) {
+        return Some("Aktionariat: повтор той же пробы одной акции не подтверждает суммарный размер".into());
+    }
     if shares.iter().any(|legs| super::nami_routes::contains(legs))
         && !(shares.len() == 1 && shares[0].len() == 1)
     {

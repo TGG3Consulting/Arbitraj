@@ -352,6 +352,7 @@ fn leg_of(step: &route_paths::Step, gas: u64) -> Leg {
     Leg {
         entry: step.edge.entry.clone(),
         usable: Usable {
+            one_share_only:false,
             gas,
             hook_pct: Decimal::ZERO,
             tax_pct: Decimal::ZERO,

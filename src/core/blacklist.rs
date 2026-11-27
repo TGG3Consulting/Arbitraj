@@ -99,7 +99,7 @@ pub fn reason(
                     reason: reason.clone(),
                 }));
             }
-            Some(CheckState::Known(t)) => t,
+            Some(CheckState::Known(t) | CheckState::OneShare(t)) => t,
         };
         let l = limits.as_ref().map_err(Clone::clone)?;
         let over = [

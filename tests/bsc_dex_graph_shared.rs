@@ -258,6 +258,7 @@ async fn shared_pool_without_after_state_refused() {
         token_out: e.pool.token1,
         entry: e,
         usable: Usable {
+            one_share_only:false,
             gas: 0,
             hook_pct: Decimal::ZERO,
             tax_pct: Decimal::ZERO,

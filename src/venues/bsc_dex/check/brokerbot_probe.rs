@@ -39,3 +39,36 @@ pub(super) fn after(
     next.cash_balance = probe_calls::u256(balance.filter(|r| r.ok())?)?;
     Some(next)
 }
+
+pub(super) fn one_paid(m: &super::probe::Measured) -> bool {
+    m.buy_expected == U256::ONE
+        && m.buy_got == U256::ONE
+        && m.transfer_sent == U256::ONE
+        && m.transfer_got == U256::ONE
+        && matches!(&m.sell,Ok((expected,net)) if !expected.is_zero() && expected==net)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn one_share_requires_the_exact_sale_and_transfer() {
+        let mut m = super::super::probe::Measured {
+            buy_expected: U256::ONE,
+            buy_got: U256::ONE,
+            sell: Ok((U256::from(99), U256::from(99))),
+            transfer_sent: U256::ONE,
+            transfer_got: U256::ONE,
+            gas_buy: 1,
+            gas_approve_buy: 1,
+            gas_transfer: 1,
+            gas_sell: None,
+        };
+        assert!(one_paid(&m));
+        m.sell = Ok((U256::from(99), U256::from(98)));
+        assert!(!one_paid(&m));
+        m.sell = Ok((U256::from(99), U256::from(99)));
+        m.transfer_got = U256::ZERO;
+        assert!(!one_paid(&m));
+    }
+}

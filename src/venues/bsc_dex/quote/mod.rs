@@ -297,7 +297,7 @@ impl Quoting {
         let ctx = &self.ctx;
         let mode = self.swap_mode()?;
         // Налоги — до любого запроса к узлу (decimals, цена газа, разрешения): не проверены — сразу отказ.
-        let taxes = direct::taxes(self, asset)?;
+        let taxes = direct::taxes_at(self, asset, Some(qty))?;
         let usdt = self.tokens.usdt(ctx)?;
         let coin = asset.contract.ok_or_else(|| {
             ctx.err(
@@ -476,3 +476,4 @@ impl Quoting {
 }
 
 mod brokerbot_depth;
+pub(crate) mod brokerbot_size;

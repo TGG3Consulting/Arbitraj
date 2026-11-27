@@ -179,7 +179,7 @@ fn trip(
     let usdt = tokens.usdt(ctx).map_err(|x| x.message)?;
     let cap = side_fit::cap(ctx, reg, usdt, usdt_dec, e).map_err(|x| x.message)?;
     let min = side_fit::min_units(ctx).map_err(|x| x.message)?;
-    side_fit::round_trip(ctx, e, cap, min).ok_or_else(|| {
+    side_fit::round_trip(ctx, e, cap, min).or_else(||super::super::quote::brokerbot_size::trip(e,cap)).ok_or_else(|| {
         format!(
             "пробный круг на check.probe_usdt и меньших суммах (до выхода {min} единиц) по расчёту пула не проходит"
         )
@@ -226,7 +226,7 @@ pub fn keeps(
     use crate::core::types::CheckState;
     match prev {
         Some(CheckState::Failed { .. }) => true,
-        Some(CheckState::Known(_)) => !doubt,
+        Some(CheckState::Known(_) | CheckState::OneShare(_)) => !doubt,
         _ => false,
     }
 }
@@ -242,7 +242,7 @@ pub async fn note_wait_doubt(
         return;
     }
     // Был итог «прошла», снимается — причина могла совпасть с прошлой «не проверено» (её не было: был итог).
-    let replacing = matches!(prev, Some(crate::core::types::CheckState::Known(_)));
+    let replacing = matches!(prev, Some(crate::core::types::CheckState::Known(_) | crate::core::types::CheckState::OneShare(_)));
     let old = p.checks.coin_of(&c.asset).and_then(|x| x.wait);
     if old == c.wait && !replacing {
         return;

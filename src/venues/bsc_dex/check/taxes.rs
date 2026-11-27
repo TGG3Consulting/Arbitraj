@@ -44,6 +44,7 @@ pub const SOURCE: &str = "eth_simulateV1";
 pub enum Outcome {
     /// Налоги измерены.
     Known(TokenTaxes),
+    OneShare(TokenTaxes),
     /// Пробный обмен выполнен и откатился (или выход 0) — проверка не прошла: чёрный список у ядра.
     Failed(String),
     /// Проверить пока нельзя: нет достоверного пула, нет источника пробы, узел не ответил — «не проверено»,
@@ -83,6 +84,7 @@ pub async fn check_coin(
     };
     let (taxes, checked_at) = match &out {
         Outcome::Known(t) => (CheckState::Known(t.clone()), Some(Utc::now())),
+        Outcome::OneShare(t) => (CheckState::OneShare(t.clone()), Some(Utc::now())),
         Outcome::Failed(reason) => (
             CheckState::Failed {
                 reason: reason.clone(),
@@ -154,6 +156,7 @@ async fn run(
     // Решение 280 (ревью): пулы вида без роутера, где пара отклонила пробную покупку, — «налоги пула не измерены»: это
     // свойство пула, не помеха окружения (pool_taxes::outcome их помехой не считает).
     let mut unmeasured = Vec::new();
+    let mut single = Vec::new();
     for (e, fit) in &pools {
         let exclude = match e.pool.reference {
             PoolRef::Contract(a) => Some(a),
@@ -207,11 +210,17 @@ async fn run(
             },
             None => None,
         };
+        let single_share = super::super::quote::brokerbot_size::trip(e,amount).is_some_and(|p|p.amount==amount);
         let funding=super::brokerbot_funding::Funding{source,reg,usdt,budget:probe};
         match probe::run(ctx, e, funding, wallet, amount, heads, min).await {
             Ok(Ok(m)) => {
                 let dec = (tokens.decimals(ctx, e.coin), tokens.decimals(ctx, e.usdt));
-                let pt = pool_taxes::percent(&m, dec.0.await?, dec.1.await?);
+                let coin_dec=dec.0.await?;
+                let mut pt = pool_taxes::percent(&m, coin_dec, dec.1.await?);
+                if single_share {
+                    if coin_dec!=0 || !super::brokerbot_probe::one_paid(&m) {pt=None;}
+                    if let Some(t)=pt.as_mut(){t.one_share_only=true;}
+                }
                 checks.update_pool(&e.pool.reference, |f| {
                     f.gas_buy = Some(m.gas_buy);
                     f.gas_approve_buy = Some(m.gas_approve_buy);
@@ -227,7 +236,7 @@ async fn run(
                         if t.sell_pct.is_none() {
                             misses.push(pool_taxes::miss(&m, e.family.title));
                         }
-                        measured.push(t);
+                        if single_share { single.push(t); } else { measured.push(t); }
                     }
                     None => zero = true,
                 }
@@ -248,6 +257,9 @@ async fn run(
             }
             Err(err) => env.push(format!("{}: {}", e.family.title, err.message)),
         }
+    }
+    if pool_taxes::coin(&measured).is_none() && let Some(t)=pool_taxes::coin(&single) {
+        return Ok(Outcome::OneShare(t));
     }
     Ok(pool_taxes::outcome(
         &measured,

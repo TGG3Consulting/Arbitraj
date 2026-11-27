@@ -151,7 +151,7 @@ pub async fn check(
         .await;
         let prev = p.checks.coin(addr).map(|c| c.taxes);
         match out {
-            Outcome::Known(_) => {
+            Outcome::Known(_) | Outcome::OneShare(_) => {
                 pass.ok += 1;
                 pass.done.push((*addr, Res::Ok));
                 if !first && matches!(prev, Some(CheckState::Failed { .. })) {

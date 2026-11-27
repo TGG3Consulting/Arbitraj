@@ -51,7 +51,7 @@ pub async fn deal_check(
     .await;
     log(&ctx, &by.deal, ticker, &out).await;
     let res = match out {
-        Outcome::Known(_) => Res::Ok,
+        Outcome::Known(_) | Outcome::OneShare(_) => Res::Ok,
         Outcome::Failed(_) => Res::Failed,
         Outcome::Wait(_) | Outcome::Doubt(_) => Res::Wait,
         Outcome::Config(..) => Res::Config,
@@ -99,6 +99,7 @@ pub fn wait_more(
 /// сделки, тикер, итог. Ошибок нет.
 pub async fn log(ctx: &Ctx, deal: &str, ticker: &str, out: &Outcome) {
     let what = match out {
+        Outcome::OneShare(_) => "оплата, продажа и перевод проверены ровно для одной целой акции".to_string(),
         Outcome::Known(t) => format!(
             "налог покупки {}%, продажи {}%, перевода {}%",
             t.buy_pct.round_dp(4).normalize(),

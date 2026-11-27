@@ -126,3 +126,17 @@ pub(super) fn floor_of(
         .max(units.to_buy(min_qty_b)?)
         .max(notional_b / ref_price))
 }
+
+/// Количество на стороне покупки, соответствующее единственной измеренной целой акции.
+pub(super) fn measured_share(core:&Core, dir:&Direction, units:UnitRatio)->Result<Option<Decimal>,String>{
+    let Some(token)=dir.asset.contract else{return Ok(None)};
+    let market=rd(&core.inner.market);
+    let limited=|v| market.coin_check(v,token).is_some_and(|c| matches!(c.taxes,crate::core::types::CheckState::OneShare(_)));
+    let buy=limited(&dir.buy_on);
+    if limited(&dir.sell_on) {
+        let qty=units.to_buy(Decimal::ONE)?;
+        if units.to_sell(qty)?!=Decimal::ONE || (buy && qty!=Decimal::ONE) {return Err("Единицы сторон не совпадают с измеренной одной акцией".into())}
+        return Ok(Some(qty));
+    }
+    Ok(buy.then_some(Decimal::ONE))
+}

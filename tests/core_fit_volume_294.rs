@@ -133,6 +133,7 @@ async fn v2_reserve_limit_keeps_no_route() {
     };
     let qty = arb::venues::bsc_dex::num::to_decimal(reserve_wbnb, 18).unwrap();
     let usable = Usable {
+        one_share_only:false,
         gas: 120_000,
         hook_pct: Decimal::ZERO,
         tax_pct: Decimal::ZERO,

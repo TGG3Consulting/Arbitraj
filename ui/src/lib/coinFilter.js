@@ -88,7 +88,7 @@ export function reasons(c) {
 }
 
 /** Состояние налогов коротко: 'known' | 'not_checked' | 'failed'. Принимает: CheckState. */
-export const taxState = (t) => (t?.Known !== undefined ? 'known' : t?.Failed ? 'failed' : 'not_checked');
+export const taxState = (t) => (t?.Known !== undefined ? 'known' : t?.OneShare !== undefined ? 'one_share' : t?.Failed ? 'failed' : 'not_checked');
 
 /**
  * Значения для списков фильтров — только из данных. Принимает: монеты.

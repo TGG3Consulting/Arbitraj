@@ -181,7 +181,7 @@ pub fn best(
             "smart.split_step_pct должен быть в (0; 100]",
         ));
     }
-    let unit = qty * step_pct / Decimal::ONE_HUNDRED;
+    let unit = super::brokerbot_size::split_unit(&cands,side,qty * step_pct / Decimal::ONE_HUNDRED,qty);
     // Чистый результат пути на объём: USDT пути ± газ пути (газ = 0, если учёт газа выключен).
     let net = |c: &Cand, q: Decimal| -> Option<Decimal> {
         let tax_keep = pool_tax::coin_keep(&c.legs, side, t);

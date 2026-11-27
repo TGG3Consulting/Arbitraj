@@ -184,7 +184,7 @@ pub fn side_usd(
     let usdt = tokens.usdt(ctx).ok()?;
     let cap = cap(ctx, reg, usdt, usdt_dec, e).ok()?;
     let min = min_units(ctx).ok()?;
-    let a = side(ctx, e, s, cap, min)?;
+    let a = side(ctx, e, s, cap, min).or_else(|| super::brokerbot_size::one(e,s,cap))?;
     // Доля суммы пробы: a — cap, сдвинутая вправо, или взятое пулом; в USDT — пропорцией (курс тот же, что у cap).
     let probe = ctx.dec("check.probe_usdt").ok()?;
     let (an, cn) = (num::to_decimal(a, 0)?, num::to_decimal(cap, 0)?);

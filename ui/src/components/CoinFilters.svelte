@@ -38,6 +38,7 @@
   <select bind:value={f.tax} aria-label="налоги">
     <option value="">налоги: все</option>
     <option value="known">проверено</option>
+    <option value="one_share">проверено на одной акции</option>
     <option value="not_checked">не проверено</option>
     <option value="failed">ошибка проверки</option>
   </select>

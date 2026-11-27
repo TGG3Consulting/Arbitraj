@@ -198,6 +198,7 @@ pub fn prepare(p: &Parts, pools: &[&Entry], usdt: Address, coin: Address) {
             f.quoter.buy = Some(Ok(()));
             f.quoter.sell = Some(Ok(()));
             f.taxes = Some(PoolTaxes {
+                one_share_only:false,
                 buy_pct: Decimal::ZERO,
                 sell_pct: Some(Decimal::ZERO),
                 transfer_pct: Decimal::ZERO,

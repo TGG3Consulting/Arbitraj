@@ -42,6 +42,8 @@ use super::hook_curve::HookCurve;
 /// Что известно о допущенном пуле для котировки.
 #[derive(Debug, Clone)]
 pub struct Usable {
+    /// Ограничение налога объёмом отдельной пробы акции.
+    pub one_share_only:bool,
     /// Газ обмена этой стороны (единиц).
     pub gas: u64,
     /// Влияние крючка на эту сторону, % (0 — крючка B/C нет). Решение «335 (лесенка влияния)»: у Usable из select —
@@ -145,6 +147,7 @@ pub fn usable_with(
     .ok_or("газ обмена не измерен пробным обменом")?;
     let tax_pct = super::pool_tax::usable(ctx, &facts, side)?;
     Ok(Usable {
+        one_share_only:facts.taxes.as_ref().is_some_and(|t|t.one_share_only),
         gas,
         hook_pct,
         tax_pct,

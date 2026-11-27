@@ -468,6 +468,7 @@ pub async fn parts_from(dir: &str) -> Parts {
 #[allow(dead_code)]
 pub fn clean_taxes() -> arb::venues::bsc_dex::check::state::PoolTaxes {
     arb::venues::bsc_dex::check::state::PoolTaxes {
+        one_share_only:false,
         buy_pct: Decimal::ZERO,
         sell_pct: Some(Decimal::ZERO),
         transfer_pct: Decimal::ZERO,

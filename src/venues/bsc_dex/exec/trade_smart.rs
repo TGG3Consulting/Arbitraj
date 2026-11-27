@@ -61,7 +61,7 @@ pub async fn trade(
 ) -> GatewayResult<TradeResult> {
     let ctx = &q.ctx;
     worst_positive(ctx, &req)?;
-    let taxes = direct::taxes(q, &req.asset)?;
+    let taxes = direct::taxes_at(q, &req.asset, Some(req.qty))?;
     let (coin, usdt, decs) = sides(q, &req).await?;
     let out_token = if req.side == Side::Buy { coin } else { usdt };
     let notice = |text: String| {

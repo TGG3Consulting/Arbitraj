@@ -43,6 +43,7 @@ fn d(s: &str) -> Decimal {
 
 fn pool(buy: &str, sell: Option<&str>, transfer: &str) -> PoolTaxes {
     PoolTaxes {
+        one_share_only:false,
         buy_pct: d(buy),
         sell_pct: sell.map(d),
         transfer_pct: d(transfer),

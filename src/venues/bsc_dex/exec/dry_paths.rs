@@ -82,7 +82,7 @@ pub async fn verified(
 ) -> GatewayResult<Vec<Decimal>> {
     let ctx = &q.ctx;
     let (coin, usdt, decs) = sides(q, req).await?;
-    let taxes = direct::taxes(q, &req.asset)?;
+    let taxes = direct::taxes_at(q, &req.asset, Some(req.qty))?;
     let slip_pct = ctx.dec("exec.dex_slippage_pct")?;
     let plan = verify_gate::plan_quote(ctx, req, route, slip_pct)?;
     let gas = q

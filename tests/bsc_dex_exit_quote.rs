@@ -159,6 +159,7 @@ fn req(side: Side, worst: &str, exit: bool) -> TradeRequest {
 /// Живой путь продажи по локальному расчёту: 2434.66 GAIB → 42.559024903490846447 USDT.
 fn sell_path(c: &Ctx) -> Path {
     let usable = Usable {
+        one_share_only:false,
         gas: 0,
         hook_pct: Decimal::ZERO,
         tax_pct: Decimal::ZERO,

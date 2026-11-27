@@ -41,7 +41,7 @@ pub fn pool_admission(pool: &Pool, check: Option<&PoolCheck>, s: &Store) -> Resu
     };
     let max = s.decimal(name, At::default()).map_err(|e| e.message)?;
     match check.map(|c| &c.impact) {
-        None | Some(CheckState::NotChecked) => Err("влияние крючка ещё не проверено".into()),
+        None | Some(CheckState::NotChecked | CheckState::OneShare(_)) => Err("влияние крючка ещё не проверено".into()),
         Some(CheckState::Failed { reason }) => Err(format!("проверка крючка не прошла: {reason}")),
         // Решение «335 (лесенка влияния)»: влияние — функция суммы; допуск — к влиянию на сумме сделки (его применяет
         // котировка DEX). Здесь пул закрыт, только если допуск превышен уже на наименьшей измеренной сумме стороны.

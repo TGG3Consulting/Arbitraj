@@ -118,6 +118,7 @@ fn leg(e: &Entry, token_in: Address, token_out: Address) -> Leg {
     Leg {
         entry: e.clone(),
         usable: Usable {
+            one_share_only:false,
             gas: 100_000,
             hook_pct: Decimal::ZERO,
             tax_pct: Decimal::ZERO,

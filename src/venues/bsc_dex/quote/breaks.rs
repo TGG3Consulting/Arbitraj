@@ -48,6 +48,9 @@ pub async fn breaks(
             format!("{}: нет адреса контракта в BSC", asset.ticker),
         )
     })?;
+    if q.checks.coin(&coin).is_some_and(|c|matches!(c.taxes,crate::core::types::CheckState::OneShare(_))) {
+        return Ok(if limit>0 && max_qty>=Decimal::ONE {vec![Decimal::ONE]} else {Vec::new()});
+    }
     let dec = q.tokens.decimals(ctx, coin).await?;
     let usdt = q.tokens.usdt(ctx)?;
     let usdt_dec = q.tokens.decimals(ctx, usdt).await?;

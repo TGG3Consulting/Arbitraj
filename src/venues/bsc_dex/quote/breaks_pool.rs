@@ -37,6 +37,10 @@ pub fn pool(e: &Entry, coin: Address, sell: bool, max: U256, n: u32) -> Vec<U256
     let zfo = if sell { coin0 } else { !coin0 };
     let n = n as usize;
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::Brokerbot(state),_) if coin==state.share => {
+            let lots=state.max_units(!sell).unwrap_or_default().min(max).min(U256::from(n));
+            (1..=lots.to::<usize>()).map(U256::from).collect()
+        }
         (
             PoolState::V3 {
                 sqrt_price_x96,

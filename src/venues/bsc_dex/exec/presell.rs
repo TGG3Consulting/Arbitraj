@@ -111,7 +111,7 @@ pub async fn run(q: &Quoting, req: TradeRequest) -> GatewayResult<PresellOutcome
         }
     }
     // Пополнение входа — с наибольшим налогом покупки среди пулов монеты (как сухая сделка, решение 146).
-    let taxes = direct::taxes(q, &req.asset).ok().map(|mut t| {
+    let taxes = direct::taxes_at(q, &req.asset, Some(req.qty)).ok().map(|mut t| {
         t.buy_pct = t.buy_pct.max(pool_tax::max_buy(q, &coin));
         t
     });

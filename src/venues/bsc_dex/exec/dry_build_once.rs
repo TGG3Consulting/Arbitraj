@@ -77,7 +77,7 @@ pub(super) async fn once(
         return Err(ctx.err(ErrorCode::NoRoute, "Прямой маршрут должен быть одной долей"));
     }
     let (coin, usdt, decs) = sides(q, req).await?;
-    let taxes = direct::taxes(q, &req.asset)?;
+    let taxes = direct::taxes_at(q, &req.asset, Some(req.qty))?;
     let v = Via {
         q,
         coin,

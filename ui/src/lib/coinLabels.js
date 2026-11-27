@@ -23,6 +23,7 @@ export function assetLabel(a) {
  */
 export function checkState(s, show) {
   if (s === 'NotChecked') return { text: 'не проверено — торговли нет', cls: 'unset' };
+  if (s?.OneShare !== undefined) return { text: `Только для одной акции: ${show(s.OneShare)}`, cls: '' };
   if (s?.Known !== undefined) return { text: show(s.Known), cls: '' };
   if (s?.Failed) return { text: `проверка не прошла: ${s.Failed.reason}`, cls: 'err' };
   return { text: JSON.stringify(s), cls: '' };

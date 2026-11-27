@@ -86,7 +86,7 @@ async fn fast_at(
 ) -> GatewayResult<bool> {
     let ctx = &q.ctx;
     // Предварительные шаги priced — те же и в том же порядке (их ошибки — ошибки полной котировки).
-    direct::taxes(q, asset)?;
+    direct::taxes_at(q, asset, Some(qty))?;
     let usdt = q.tokens.usdt(ctx)?;
     let coin = asset.contract.ok_or_else(|| {
         ctx.err(

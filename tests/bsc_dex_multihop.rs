@@ -274,6 +274,7 @@ async fn taxed_coin_multihop_v3_not_executable_in_quote() {
     ] {
         p.checks.update_pool(&PoolRef::Contract(a), |f| {
             f.taxes = Some(arb::venues::bsc_dex::check::state::PoolTaxes {
+                one_share_only:false,
                 buy_pct: Decimal::ONE,
                 sell_pct: Some(Decimal::ZERO),
                 transfer_pct: Decimal::ZERO,

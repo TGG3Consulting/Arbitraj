@@ -45,6 +45,7 @@ pub type Fail = (String, Option<String>);
 pub struct Amount {
     pub usd: Decimal,
     pub source: String,
+    pub physical_input: Option<alloy_primitives::U256>,
 }
 
 /// Наибольший money.max_per_trade_usd среди направлений с DEX (см. шапку). Принимает: хранилище, id DEX, биржи
@@ -145,11 +146,13 @@ pub fn pick(max: Decimal, depth: Decimal) -> Amount {
     if depth < max {
         Amount {
             usd: depth,
+            physical_input: None,
             source: format!("ликвидность стороны в полосе {depth} USDT < максимума {max} ({MAX})"),
         }
     } else {
         Amount {
             usd: max,
+            physical_input: None,
             source: format!("наш максимум {max} USDT ({MAX}), ликвидность стороны {depth} USDT"),
         }
     }
@@ -173,6 +176,7 @@ pub fn side_usd(p: &Pools, e: &Entry, usdt_dec: u8, side: Side) -> Result<Amount
             .map_err(|e| (e.message, e.setting))?;
         return Ok(Amount {
             usd: v,
+            physical_input: None,
             source: format!("check.probe_usdt {v} USDT (пул с крючком B/C)"),
         });
     }
@@ -195,11 +199,22 @@ pub fn side_usd(p: &Pools, e: &Entry, usdt_dec: u8, side: Side) -> Result<Amount
     // целиком (check.probe_usdt или её доля, quote/side_fit.rs), не больше нашего максимума: глубина в полосе у неё
     // бывает почти 0 (цена в «дыре» между позициями), а котировка берёт её по всей кривой.
     if !deep
-        && let Some((_, usd)) =
+        && let Some((raw, usd)) =
             super::super::quote::side_fit::side_usd(&p.ctx, &p.reg, &p.tokens, usdt_dec, e, side)
     {
+        if let crate::core::types::PoolState::Brokerbot(s) = &e.pool.state {
+            let usdt = p.tokens.usdt(&p.ctx).map_err(|e|(e.message,e.setting))?;
+            let ceiling = max.min(p.ctx.dec("check.probe_usdt").map_err(|e|(e.message,e.setting))?);
+            let units = super::super::num::to_units(ceiling,usdt_dec).ok_or_else(||("неверная сумма сверки Aktionariat".into(),None))?;
+            let cap=super::super::quote::rate::from_usdt(&p.ctx,&p.reg,usdt,s.cash,units).map_err(|e|(e.message,e.setting))?;
+            if super::super::quote::brokerbot_size::one(e,side,cap)==Some(raw) {
+                let input=if side==Side::Buy {raw} else {alloy_primitives::U256::ONE};
+                return Ok(Amount {usd:ceiling,physical_input:Some(input),source:format!("предел для сверки одной целой акции, вход {input} атомов")});
+            }
+        }
         return Ok(Amount {
             usd: usd.min(max),
+            physical_input: None,
             source: format!(
                 "мелкая сторона (в полосе {depth} USDT): сумма пробы, которую сторона пропускает целиком, {usd} USDT (решение 393)"
             ),

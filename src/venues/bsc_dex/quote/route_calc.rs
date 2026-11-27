@@ -97,6 +97,9 @@ pub(super) fn buy_step(
     tax: Decimal,
 ) -> GatewayResult<First> {
     let no = |why: String| ctx.err(ErrorCode::NoRoute, why);
+    if leg.usable.one_share_only && leg.token_out==leg.entry.coin && need_out!=Decimal::ONE {
+        return Err(no("Aktionariat: в этом пуле измерена одна акция".into()));
+    }
     leg.usable.hook.settle(
         leg.usable.hook_pct,
         |pct| {
@@ -106,6 +109,7 @@ pub(super) fn buy_step(
             }
             let pool_out = ceil_units(need_out / k, leg.dec_out).ok_or_else(|| bad(ctx))?;
             let s = pool_quote::swap(ctx, &leg.entry, leg.token_in, false, pool_out)?;
+            super::brokerbot_size::check(ctx,leg,&s)?;
             Ok((s.amount_in, s))
         },
         no,
@@ -125,10 +129,9 @@ pub(super) fn sell_step(
         .hook
         .pct_at(leg.usable.hook_pct, amount)
         .map_err(|why| ctx.err(ErrorCode::NoRoute, why))?;
-    Ok((
-        pct,
-        pool_quote::swap(ctx, &leg.entry, leg.token_in, true, amount)?,
-    ))
+    let swapped=pool_quote::swap(ctx,&leg.entry,leg.token_in,true,amount)?;
+    super::brokerbot_size::check(ctx,leg,&swapped)?;
+    Ok((pct,swapped))
 }
 
 /// Покупка «с конца»: от нужного количества монеты назад к USDT, каждый пул — точный выход; доля крючка шага — по его

@@ -70,6 +70,7 @@ fn check(sell: &str) -> CoinCheck {
 
 fn pool_taxes(sell: &str) -> PoolTaxes {
     PoolTaxes {
+        one_share_only:false,
         buy_pct: d(sell),
         sell_pct: Some(d(sell)),
         transfer_pct: d(sell),

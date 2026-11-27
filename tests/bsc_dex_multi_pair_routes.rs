@@ -189,6 +189,7 @@ async fn scene(tag: &str) -> (Parts, Address, Address, Address, Address) {
             f.quoter.buy = Some(Ok(()));
             f.quoter.sell = Some(Ok(()));
             f.taxes = Some(PoolTaxes {
+                one_share_only:false,
                 buy_pct: Decimal::ZERO,
                 sell_pct: Some(Decimal::ZERO),
                 transfer_pct: Decimal::ZERO,
@@ -233,6 +234,7 @@ async fn shared_pool_across_shares_and_via() {
     let (p, pool, busd, usdc, usdt) = scene("routes-shared").await;
     let reg = |a: Address, b: Address| p.registry.by_pair(a, b).remove(0);
     let usable = Usable {
+        one_share_only:false,
         gas: 120_000,
         hook_pct: Decimal::ZERO,
         tax_pct: Decimal::ZERO,

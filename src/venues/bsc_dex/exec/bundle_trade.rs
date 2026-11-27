@@ -73,7 +73,7 @@ pub async fn trade(
     }
     let (coin, usdt, decs) = sides(q, &req).await?;
     let out_token = if req.side == Side::Buy { coin } else { usdt };
-    let taxes = direct::taxes(q, &req.asset)?;
+    let taxes = direct::taxes_at(q, &req.asset, Some(req.qty))?;
     let v = Via {
         q,
         coin,

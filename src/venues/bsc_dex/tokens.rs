@@ -36,9 +36,11 @@ struct Subscription {
     quote: Option<(&'static str, u64, Address)>,
 }
 
+type VerifiedCash = Arc<tokio::sync::Mutex<Option<(u64,crate::settings::cycle_cash::Profile)>>>;
 /// Список токенов и кэш decimals. Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct Tokens {
+    pub(super) cycle_cash: VerifiedCash,
     list: Arc<RwLock<Subscription>>,
     decimals: Arc<RwLock<HashMap<Address, u8>>>,
     /// Решение 239: копия на момент снимка — decimals только из памяти, без узла.
@@ -158,6 +160,7 @@ impl Tokens {
     /// память, узел не спрашивается. Возвращает: Tokens. Ошибок нет.
     pub fn pinned(&self) -> Tokens {
         Tokens {
+            cycle_cash: self.cycle_cash.clone(),
             list: Arc::new(RwLock::new(Subscription {
                 tokens: self.all(),
                 quote: None,

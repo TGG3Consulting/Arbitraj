@@ -11,6 +11,9 @@ use crate::gateway::{
 
 pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayResult<Preview> {
     let bad = |message| ctx.err(ErrorCode::NotApplicable, message);
+    if matches!(source, "kipseli" | "zeroex") {
+        return super::keyed_price::preview(ctx, source, req).await;
+    }
     if source == "native_rfq" {
         return super::native_rfq::preview(ctx, req).await;
     }

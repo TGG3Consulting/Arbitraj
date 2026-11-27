@@ -19,7 +19,7 @@
   import { executorFeatures } from '../lib/walletExecutor.js';
   import CheckConnection from './CheckConnection.svelte';
   import HashflowQuote from './HashflowQuote.svelte';
-  import FyndQuote from './FyndQuote.svelte';
+  import SourcePrice from './SourcePrice.svelte';
   import ExecutorDeploy from './ExecutorDeploy.svelte';
   import ErrorText from './ErrorText.svelte';
 
@@ -68,7 +68,9 @@
   {/if}
   <CheckConnection url={`/api/check/wallet/${seg(w.id)}${q}`} />
   {#if w.address && c.venue}<HashflowQuote venue={c.venue} trader={w.address} />{/if}
-  {#if w.address && c.venue && c.fynd}<FyndQuote venue={c.venue} trader={w.address} />{/if}
+  {#if w.address && c.venue && c.fynd}<SourcePrice venue={c.venue} trader={w.address} />{/if}
+  {#if w.address && c.venue && (c.chain === 'ethereum' || c.chain === 'base')}<SourcePrice venue={c.venue} trader={w.address} source="zeroex" label="0x" />{/if}
+  {#if w.address && c.venue && c.chain === 'base'}<SourcePrice venue={c.venue} trader={w.address} source="kipseli" label="Kipseli" />{/if}
   <p>Исполнитель: {#if c.executor}<code>{c.executor}</code> <button onclick={() => setExec(null)}>Снять</button>{:else}не развёрнут в этой сети{/if}</p>
   {#if c.executor}
     <p class={features.nativeOk ? 'ok' : 'warn-text'}>Версия: {#if features.nativeOk}{c.executor_version} — нативная монета идёт через исполнитель (обёртка <code>{c.executor_wrapped}</code>){:else if features.native}{c.executor_version}, но обёртка <code>{c.executor_wrapped ?? 'не прочитана'}</code> ≠ dex.native_wrapped <code>{c.native_wrapped ?? 'не задана'}</code>{:else if c.executor_version === 'v1'}v1 — переразверните{:else}не сверена — нажмите «Проверить подключение» исполнителя{/if}</p>

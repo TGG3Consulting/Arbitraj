@@ -175,3 +175,10 @@ pub(super) async fn verify(ctx: &Ctx, c: &Candidate) -> Verdict {
         Err(e) => Verdict::Failed(e.message),
     }
 }
+
+pub(super) fn topics()->Vec<alloy_primitives::B256>{
+    ["emitOffer(bytes32,bytes32,address,address,address,uint128,uint128)",
+     "emitCancel(bytes32,bytes32,address,address,address,uint128,uint128)",
+     "emitDelete(bytes32,bytes32,address)",
+     "emitTake(bytes32,bytes32,address,address,address,address,uint128,uint128)"].map(alloy_primitives::keccak256).to_vec()
+}

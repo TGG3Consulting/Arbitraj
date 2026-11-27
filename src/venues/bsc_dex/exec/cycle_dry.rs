@@ -26,7 +26,7 @@ use super::super::quote::{Quoting, cycle_cost, cycle_legs};
 use super::super::wallet::signer;
 use super::cycle_gas;
 use super::cycle_gate::{self, Form};
-use super::cycle_steps::{exec_steps, net_check, units};
+use super::cycle_steps::{exec_steps, funded_net, units};
 use super::dry_build::{Built, Ready};
 use super::dry_sim::{self, Io};
 use super::dry_surplus_cut;
@@ -179,11 +179,11 @@ async fn fill(
         sim.approvals,
         sim.gas_approve,
     )?;
-    let net = net_check(
-        ctx,
+    let (net,rates,_) = funded_net(
+        q,base,
         (out, req.input),
         &bill,
-        &rates,
+        rates,
         // Как у сделки: исполнитель шлёт чаевые, бандл — нет (Тигран 09.11: согласовано, план = факт).
         !matches!(form, Some(Form::Bundle)),
     )

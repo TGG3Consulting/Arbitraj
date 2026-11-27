@@ -30,6 +30,8 @@ use super::size::{Params, SizeChoice};
 #[derive(Debug, Clone, Serialize)]
 pub struct CyclePlan {
     pub cycle: DexCycle,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub physical_cash: Option<crate::settings::cycle_cash::Profile>,
     pub account: crate::core::types::DexAccountId,
     /// Вход (базовая) и расчёт на нём.
     pub input: Decimal,
@@ -91,9 +93,14 @@ pub async fn plan(core: &Core, c: &DexCycle, budget: Option<Decimal>) -> Result<
         coin: None,
     };
     let dec = |n: &str, a: At| s.decimal(n, a).map_err(|e| e.message);
+    let physical_cash = crate::settings::cycle_cash::read(s, &v.0)?.filter(|p| p.token == c.base);
     if super::settlement_market::configured(core, v)?.is_some() {
         let quote = s.text("venue.quote_asset", at).map_err(|e| e.message)?;
-        super::settlement::require_same(&quote, crate::settings::evm_profiles::LEDGER_QUOTE)?;
+        if !quote.eq_ignore_ascii_case(crate::settings::evm_profiles::LEDGER_QUOTE)
+            && physical_cash.is_none()
+        {
+            super::settlement::require_same(&quote, crate::settings::evm_profiles::LEDGER_QUOTE)?;
+        }
     }
     let min_usd = dec("dex_dex.min_profit_usd", at)?;
     let step = dec("dex_dex.size_step_base", at)?;
@@ -202,6 +209,7 @@ pub async fn plan(core: &Core, c: &DexCycle, budget: Option<Decimal>) -> Result<
         q.net_base, c.base_ticker, q.input
     );
     Ok(CyclePlan {
+        physical_cash,
         account,
         cycle: c.clone(),
         input: q.input,

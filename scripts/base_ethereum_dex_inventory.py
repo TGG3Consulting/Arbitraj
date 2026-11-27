@@ -1034,6 +1034,17 @@ def tables(network, snapshots, profiles):
                        "исторического отправителя. Пополнение этих токенов из WETH в данном опыте не подтверждено. "
                        if existing else "")
                     + f"[Исходные запросы по размерам, котировки и балансы](../{derp_path.as_posix()})."])
+    classic_path = Path("tests/data/first_run_dex_2026-11-26/rubicon_classic_base.json.gz")
+    if base and classic_path.exists():
+        with gzip.open(classic_path, "rt", encoding="utf8") as stream:
+            classic = json.load(stream)
+        controls = classic["controls"]
+        out.extend(["", f"Rubicon Classic, Base · на блоке 62 262 756 прочитано {classic['read_offers']} ID, "
+            f"открыты {len(classic['active'])} заявки. В изолированном повторе получены {len(controls)} выплат. "
+            "Квотер сверяет выбранные ID по исходной книге и вызывает calculateFees для каждой покупки. "
+            "Кошелёк проверяет фактическое списание, чистое зачисление и срок. Для исполнения в dex.router "
+            "указывается развёрнутый RubiconClassicWallet с указанным в профиле хешем. "
+            f"[Ордера, выплаты и ограничения](../{classic_path.as_posix()})."])
     rubicon_base = Path("tests/data/first_run_dex_2026-11-26/rubicon_clmm_base.json")
     if base and rubicon_base.exists():
         registry = read(rubicon_base)
@@ -1248,6 +1259,15 @@ def tables(network, snapshots, profiles):
                     "Адреса источника и получателя, calldata и балансы до и после — в записи. "
                     "[Данные исполнения](../tests/data/base_slipstream_2026-11-26/executor.json) · "
                     "[Квотеры и тики](../tests/data/base_slipstream_2026-11-26/quotes.json)."])
+        early_path=Path("tests/data/first_run_dex_2026-11-26/early_slipstream_wallets.json.gz")
+        early=json.loads(gzip.decompress(early_path.read_bytes()))["cases"]
+        partial=[x for x in early if int(x["spent"])<int(x["amount"])]
+        out.extend(["", f"Ранняя фабрика Aerodrome Slipstream. На двух рынках WETH/BRETT и WETH/TOSHI "
+                    f"получено {len(early)} архивных выплат через ArbExecutor и Universal Router, "
+                    f"из них {len(partial)} частичных. При продаже 1 или 100 TOSHI списано "
+                    f"{partial[0]['spent']} raw TOSHI и получено {partial[0]['received']} wei WETH. "
+                    "Остаток входного токена сохраняется у плательщика. "
+                    f"[Суммы, разрешения, газ и события](../{early_path.as_posix()})."])
     ring_path = Path("tests/data/first_run_dex_2026-11-26/ring_ethereum.json")
     if not base and ring_path.exists():
         ring = read(ring_path)

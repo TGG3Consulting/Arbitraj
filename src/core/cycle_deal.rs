@@ -82,8 +82,18 @@ async fn deal(core: &Core, plan: CyclePlan, d: crate::core::types::Direction) ->
     let guard_core = core.clone();
     let guard_dir = d.clone();
     let account = plan.account.clone();
+    let pinned_cash = plan.physical_cash;
+    let base = plan.cycle.base;
     let check = move || {
-        submission_ok(&guard_core, &guard_dir, &account).map_err(|why| {
+        let cash =
+            crate::settings::cycle_cash::read(&guard_core.inner.deps.settings, &guard_dir.buy_on.0);
+        cash.and_then(|p| {
+            if p.filter(|p| p.token == base) != pinned_cash {
+                return Err("Расчётная валюта цикла изменилась после подбора суммы".into());
+            }
+            submission_ok(&guard_core, &guard_dir, &account)
+        })
+        .map_err(|why| {
             GatewayError::new(
                 ErrorCode::NotConfigured,
                 Some(guard_dir.buy_on.clone()),

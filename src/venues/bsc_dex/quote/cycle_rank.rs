@@ -70,6 +70,7 @@ struct Cand {
 
 /// Состояние перебора одной базовой монеты.
 struct Walk<'a> {
+    settlement: Option<Address>,
     ctx: &'a Ctx,
     g: &'a Graph,
     rates: &'a mut Rates,
@@ -100,6 +101,19 @@ pub fn top(
     top_n: usize,
     cap: Option<u64>,
 ) -> Ranked {
+    top_settlement(ctx, g, rates, base, max_len, top_n, cap, None)
+}
+#[allow(clippy::too_many_arguments)]
+pub fn top_settlement(
+    ctx: &Ctx,
+    g: &Graph,
+    rates: &mut Rates,
+    base: Address,
+    max_len: usize,
+    top_n: usize,
+    cap: Option<u64>,
+    settlement: Option<Address>,
+) -> Ranked {
     let out = Ranked {
         paths: Vec::new(),
         rates: Vec::new(),
@@ -120,6 +134,7 @@ pub fn top(
         closers.entry(g.edge(i).other(base)).or_default().push(i);
     }
     let mut w = Walk {
+        settlement,
         ctx,
         g,
         rates,
@@ -182,6 +197,32 @@ impl Walk<'_> {
                 if !self.hops.is_empty() {
                     self.hops.push((i, node));
                     self.close();
+                    self.hops.pop();
+                }
+            } else if !last
+                && self.settlement == Some(next)
+                && self.visited.get(1) == Some(&next)
+                && self.hops.len() >= 2
+            {
+                // Внутренний простой цикл вернулся к кассе. Теперь допустим только последний обмен в USDT.
+                let first = &g.edge(self.hops[0].0).entry;
+                for &exit in closers.get(&next).into_iter().flatten() {
+                    if self.out.capped {
+                        return;
+                    }
+                    let close = &g.edge(exit).entry;
+                    let terminal = close.liquidity_site();
+                    if terminal == site
+                        || (self.used.contains(&terminal)
+                            && (first.pool.reference != close.pool.reference
+                                || !super::cycle_reuse::supported(first)))
+                    {
+                        continue;
+                    }
+                    self.hops.push((i, node));
+                    self.hops.push((exit, next));
+                    self.close();
+                    self.hops.pop();
                     self.hops.pop();
                 }
             } else if !last && !self.visited.contains(&next) {

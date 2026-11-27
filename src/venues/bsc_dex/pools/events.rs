@@ -41,6 +41,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
     use alloy::sol_types::SolEvent;
     match f.proto {
         _ if f.variant.umbrae()=>super::umbrae::topics(f.variant),
+        _ if f.variant==super::family_variant::Variant::RubiconClassic=>super::rubicon::topics(),
         _ if f.variant==super::family_variant::Variant::Carbon=>super::carbon_events::topics(),
         _ if f.variant==super::family_variant::Variant::MintClub => vec![super::mint_club::IBond::Transfer::SIGNATURE_HASH],
         _ if f.variant == super::family_variant::Variant::SolidlyCl => {
@@ -113,6 +114,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
     use alloy::sol_types::SolEvent;
     match f.proto {
         _ if f.variant.umbrae()=>super::umbrae::topics(f.variant),
+        _ if f.variant==super::family_variant::Variant::RubiconClassic=>super::rubicon::topics(),
         _ if f.variant==super::family_variant::Variant::Carbon => super::carbon_events::topics(),
         _ if f.variant==super::family_variant::Variant::MintClub => vec![super::mint_club::IBond::Transfer::SIGNATURE_HASH],
         _ if super::ramses::handles(f) => super::ramses::liquidity_topics(f),
@@ -181,6 +183,13 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         _ if e.family.variant==super::family_variant::Variant::Pendle=>{e.valid=false;Applied::Refresh("Изменилось состояние рынка Pendle".into())}
         _ if e.family.variant==super::family_variant::Variant::Dagrow=>{ e.valid=false;Applied::Refresh("Обновилось состояние DAGrow SSP".into()) }
         _ if e.family.variant==super::family_variant::Variant::Temple => {e.valid=false;Applied::Refresh("Изменились резервы TempleDAO".into())}
+        _ if e.family.variant==super::family_variant::Variant::RubiconClassic => {
+            let pair=log.topics().get(2);
+            let a=e.pool.token0;let b=e.pool.token1;
+            if [alloy_primitives::keccak256([a.as_slice(),b.as_slice()].concat()),alloy_primitives::keccak256([b.as_slice(),a.as_slice()].concat())].iter().any(|key|Some(key)==pair){
+                e.valid=false;Applied::Refresh("Изменились заявки Rubicon Classic".into())
+            } else {Applied::Ignored}
+        }
         _ if e.family.variant==super::family_variant::Variant::Carbon => {e.valid=false;Applied::Refresh("Заявки или плата Carbon изменились".into())}
 
         _ if e.family.variant==super::family_variant::Variant::MintClub => {

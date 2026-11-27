@@ -46,6 +46,8 @@ pub mod cpu_local;
 pub mod crypto_depth;
 pub mod cycle;
 pub mod cycle_audit;
+mod cycle_cash;
+mod cycle_reuse;
 pub mod cycle_cost;
 pub mod cycle_legs;
 pub mod cycle_opt;

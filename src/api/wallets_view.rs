@@ -94,6 +94,7 @@ pub async fn view(st: &AppState) -> Value {
         wallets.push(json!({
             "id": w.id,
             "fynd": single_fynd,
+            "chain": nets.iter().find(|(id,_)| Some(id.0.as_str()) == dex.as_deref()).and_then(|(_, chain)|chain.as_deref()),
             "name": w.name,
             "secret": w.secret,
             "executor": w.executor,

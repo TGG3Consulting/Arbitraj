@@ -18,6 +18,7 @@ use super::route_calc::Leg;
 /// деления, quote/cycle_opt.rs). Принимает: окружение, ноги цикла. Возвращает: ρ цикла (выход ≤ ρ·вход); Err — нога без
 /// строгого r_e (метод не действует, цикл считается как раньше).
 pub fn cycle_rho(ctx: &Ctx, legs: &[Leg]) -> Result<Decimal, String> {
+    if super::cycle_reuse::repeated(legs){return Err("общий конвертор меняет цену последней ноги".into());}
     let mut rho = Decimal::ONE;
     for l in legs {
         let r =

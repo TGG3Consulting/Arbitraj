@@ -563,3 +563,47 @@ async fn lost_reason_is_written() {
     assert!(text.contains("кандидатов в план 0"), "{text}");
     assert_eq!(data["not_executable_example"], json!(sig.exec_note));
 }
+
+/// Граф ранее записанных пулов: CAKE выступает промежуточной кассой, USDT — кошельком.
+#[tokio::test]
+async fn funding_cycle_can_revisit_the_working_cash_only_at_the_closing_converter() {
+    let (g, p) = graph_and_parts(false).await;
+    let mut rates = Rates::new(&g, p.registry.depth());
+    let ranked =
+        cycle_rank::top_settlement(&p.ctx, &g, &mut rates, USDT, 5, 10_000, None, Some(CAKE));
+    let nested: Vec<_> = ranked
+        .paths
+        .iter()
+        .filter(|path| {
+            path.steps.len() == 5
+                && path.steps[0].token_out == CAKE
+                && path.steps[3].token_out == CAKE
+        })
+        .collect();
+    assert!(
+        nested
+            .iter()
+            .any(|path| path.steps[0].edge.entry.pool.reference
+                == path.steps[4].edge.entry.pool.reference)
+    );
+    assert!(
+        nested
+            .iter()
+            .any(|path| path.steps[0].edge.entry.pool.reference
+                != path.steps[4].edge.entry.pool.reference)
+    );
+    assert!(
+        nested
+            .iter()
+            .all(|path| path.steps[1].edge.entry.pool.reference
+                != path.steps[2].edge.entry.pool.reference)
+    );
+    let limited =
+        cycle_rank::top_settlement(&p.ctx, &g, &mut rates, USDT, 4, 10, Some(1), Some(CAKE));
+    assert_eq!(limited.seen, 1);
+    assert!(limited.capped);
+    let legacy = top(&g, &p, 10_000, None);
+    assert!(!legacy.paths.iter().any(|path| path.steps.len() == 5
+        && path.steps[0].token_out == CAKE
+        && path.steps[3].token_out == CAKE));
+}

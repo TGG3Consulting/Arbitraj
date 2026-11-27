@@ -158,6 +158,10 @@ async fn legs(q: &Quoting, c: &DexCycle, entries: Vec<Entry>) -> GatewayResult<V
     let usdt_dec = q.tokens.decimals(ctx, usdt).await?;
     let mut out = Vec::with_capacity(entries.len());
     for (h, entry) in c.hops.iter().zip(entries) {
+        if !((entry.pool.token0==h.token_in && entry.pool.token1==h.token_out) ||
+             (entry.pool.token1==h.token_in && entry.pool.token0==h.token_out)) {
+            return Err(ctx.err(ErrorCode::NoRoute,"Реальные валюты пула отличаются от поручения цикла"));
+        }
         let side = hop_side(&entry, h.token_in)
             .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "пул шага не соединяет токены шага"))?;
         let usable = select::usable(q, &entry, side, usdt_dec).map_err(|w| {

@@ -106,7 +106,7 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
     let min_profit = ctx.dec("dex_dex.min_profit_base").unwrap_or(Decimal::ZERO);
     let usdt = q.tokens.usdt(ctx)?;
     let usdt_dec = q.tokens.decimals(ctx, usdt).await?;
-    let bases = ctx
+    let mut bases = ctx
         .settings
         .addresses("dex_dex.base_tokens", ctx.at())
         .map_err(|e| ctx.tag(e))?;
@@ -115,6 +115,21 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
             "dex_dex.base_tokens",
             "dex_dex.enabled = да, а список dex_dex.base_tokens пуст",
         ));
+    }
+    let cash = match super::cycle_cash::configured(q) {
+        Ok(Some(p)) if p.token != usdt => super::cycle_cash::checked(q, p.token)
+            .await
+            .ok()
+            .flatten()
+            .map(|_| p),
+        _ => None,
+    };
+    if let Some(c) = cash
+        && c.token != usdt
+        && bases.contains(&usdt)
+        && !bases.contains(&c.token)
+    {
+        bases.push(c.token);
     }
     // Решение 131: граф — тот же кэш на состояние реестра, что у котировки (pools/graph.rs cached), а не новое
     // построение на каждый толчок поиска (каждое событие пула). Решение 301 (е): блок в ключ графа не входит.
@@ -137,12 +152,30 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
     let mut tallies: Vec<Tally> = Vec::new();
     for base in bases {
         let started = std::time::Instant::now();
-        let ranked = cycle_rank::top(ctx, &g, &mut rates, base, max_len, max_cycles, cap);
+        let physical = cash.is_some_and(|p| p.token == base) && usdt != base;
+        let ranked = if physical {
+            cycle_rank::top_settlement(
+                ctx,
+                &g,
+                &mut rates,
+                base,
+                max_len,
+                max_cycles,
+                cap,
+                Some(usdt),
+            )
+        } else {
+            cycle_rank::top(ctx, &g, &mut rates, base, max_len, max_cycles, cap)
+        };
         let rank_ms = started.elapsed().as_millis() as u64;
-        let base_ticker = tickers
-            .get(&base)
-            .cloned()
-            .unwrap_or_else(|| base.to_string());
+        let base_ticker = if physical {
+            "USDT".to_owned()
+        } else {
+            tickers
+                .get(&base)
+                .cloned()
+                .unwrap_or_else(|| base.to_string())
+        };
         let ti = tallies.len();
         tallies.push(Tally::new(&base_ticker, &ranked, rank_ms));
         let cycles = ranked.paths;
@@ -156,7 +189,11 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
         } else {
             cycles
         };
-        let rate_to_base = bnb_in_base(ctx, &q.reg, base, usdt, wbnb, usdt_dec);
+        let rate_to_base = if physical {
+            None
+        } else {
+            bnb_in_base(ctx, &q.reg, base, usdt, wbnb, usdt_dec)
+        };
         for path in cycles {
             // Через налоговые токены цикл не строим (quote/via.rs): все НЕбазовые токены должны быть без налогов.
             if let Err(why) = tax_free(q, &tickers, &base, usdt, &path) {
@@ -171,7 +208,12 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
                 }
             };
             if want <= 1 {
-                let b = (base, base_ticker.as_str(), rate_to_base);
+                let b = (
+                    base,
+                    base_ticker.as_str(),
+                    rate_to_base,
+                    physical.then_some(usdt),
+                );
                 let r = signal(q, &audit, b, &path, &dec, usdt_dec, input, gas, tip);
                 take(&mut tallies[ti], &mut out, r);
                 continue;
@@ -181,6 +223,7 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
                 base,
                 base_ticker: base_ticker.clone(),
                 rate_to_base,
+                physical_cash: physical.then_some(usdt),
                 path,
                 dec,
             });
@@ -188,7 +231,12 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
     }
     if want > 1 {
         let one = |j: &Job| {
-            let b = (j.base, j.base_ticker.as_str(), j.rate_to_base);
+            let b = (
+                j.base,
+                j.base_ticker.as_str(),
+                j.rate_to_base,
+                j.physical_cash,
+            );
             signal(q, &audit, b, &j.path, &j.dec, usdt_dec, input, gas, tip)
         };
         let alive = || !super::abandon::is_set();
@@ -230,6 +278,7 @@ struct Job {
     base: Address,
     base_ticker: String,
     rate_to_base: Option<Decimal>,
+    physical_cash: Option<Address>,
     path: route_paths::RoutePath,
     dec: HashMap<Address, u8>,
 }
@@ -243,7 +292,7 @@ struct Job {
 fn signal(
     q: &Quoting,
     audit: &Audit,
-    (base, base_ticker, rate_to_base): (Address, &str, Option<Decimal>),
+    (base, base_ticker, rate_to_base, working): (Address, &str, Option<Decimal>, Option<Address>),
     path: &route_paths::RoutePath,
     dec: &HashMap<Address, u8>,
     usdt_dec: u8,
@@ -274,7 +323,7 @@ fn signal(
         .gas
         .extra(ctx, units, 1)
         .map_err(|e| Lost::Build(e.message))?;
-    let sig = cycle::build_signal_with_fees(
+    let mut sig = cycle::build_signal_with_fees(
         ctx,
         base,
         base_ticker,
@@ -286,6 +335,12 @@ fn signal(
         rate_to_base,
     )
     .map_err(|e| Lost::Build(e.message))?;
+    if let Some(working) = working {
+        let wei = super::direct::ceil_units(sig.bnb_cost, super::super::num::BNB_DECIMALS);
+        sig.bnb_cost_in_base =
+            wei.and_then(|w| super::cycle_cash::replacement(q, base, working, w).ok());
+        sig.net_profit = sig.bnb_cost_in_base.map(|cost| sig.gross_profit - cost);
+    }
     if let Some(r) = rho {
         audit.verify(r, &sig, &legs);
     }

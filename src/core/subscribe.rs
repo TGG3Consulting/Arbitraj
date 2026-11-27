@@ -61,11 +61,24 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
             Err(_) => vec![],
         },
     };
-    if kind == VenueKind::Dex && !out.is_empty() {
+    let physical=if kind==VenueKind::Dex && core.inner.deps.settings.flag("dex_dex.enabled",
+        crate::settings::read::At{venue:Some(&venue.0),coin:None}).unwrap_or(false) {
+        crate::settings::cycle_cash::read(&core.inner.deps.settings,&venue.0).ok().flatten()
+    } else {None};
+    if kind == VenueKind::Dex && (!out.is_empty() || physical.is_some()) {
         // Котируемая монета (USDT) сама в справочник не входит, а адаптер DEX ищет пулы «монета — USDT»
         // и берёт адрес USDT из этого списка (venues/bsc_dex/tokens.rs). Адрес — из API бирж (registry::usdt_address).
         if !super::subscribe_assets::add_dex_quote(core, venue, &mut out) {
-            return vec![];
+            // Биржевые сети нужны для перевода. Отдельный цикл проходит только через кошелёк этой DEX.
+            let Some(cash)=physical else{return vec![];};
+            let Ok(Some(working))=super::settlement_market::configured(core,venue) else{return vec![];};
+            if working.contract==Some(cash.token){return vec![];}
+            out=vec![working];
+        }
+        if let Some(cash)=physical
+            && !out.iter().any(|a|a.contract==Some(cash.token))
+            && let Ok(chain)=super::chain::tag_of_dex(core,venue) {
+            out.push(Asset{ticker:"USDT".into(),chain,contract:Some(cash.token)});
         }
         // Решение 430: промежуточные монеты только этой площадки DEX (своей сети).
         out.extend(super::subscribe_assets::intermediate_assets(

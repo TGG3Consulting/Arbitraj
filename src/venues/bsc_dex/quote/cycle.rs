@@ -134,6 +134,10 @@ pub fn legs_for_cycle(
 /// монеты, tax_keep = 1 (через налоговые токены цикл не строим — quote/cycle_scan.rs). Возвращает путь: hops в порядке
 /// исполнения, coins = вход базовой, usdt = выход базовой. Ошибки: NoRoute (пусто, шаг не исполним целиком), BadResponse.
 pub fn eval(ctx: &Ctx, legs: &[Leg], input: Decimal) -> GatewayResult<Path> {
+    if super::cycle_reuse::repeated(legs){
+        let updated=super::cycle_reuse::after(ctx,legs,input)?;
+        return route_calc::eval(ctx,&updated,Side::Sell,input,Decimal::ONE);
+    }
     route_calc::eval(ctx, legs, Side::Sell, input, Decimal::ONE)
 }
 

@@ -19,6 +19,7 @@ pub mod ryze;
 mod native_rfq;
 pub mod hanji;
 mod source_quote;
+mod keyed_price;
 mod fermi;
 mod fynd;
 pub mod connection_events;

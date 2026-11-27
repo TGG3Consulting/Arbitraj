@@ -88,9 +88,9 @@ pub fn guard_ur(ctx: &Ctx, leg: &Leg) -> GatewayResult<()> {
 /// не годятся — причины обеих), Internal (адрес исполнителя кошелька не читается).
 pub fn form(ctx: &Ctx, legs: &[Leg]) -> GatewayResult<Form> {
     if legs.len() > 1
-        && legs.iter().any(|leg| {
-            leg.entry.family.variant.external_algebra_swap()
-        })
+        && legs
+            .iter()
+            .any(|leg| leg.entry.family.variant.external_algebra_swap())
     {
         return Err(ctx.err(
             ErrorCode::NoRoute,
@@ -106,7 +106,13 @@ pub fn form(ctx: &Ctx, legs: &[Leg]) -> GatewayResult<Form> {
     let singleton = legs
         .iter()
         .any(|l| l.entry.family.executor_kind.is_some_and(|k| k.singleton()));
-    if singleton && bundle().is_ok() {
+    let atomic = legs.first().is_some_and(|l| {
+        crate::settings::cycle_cash::read(&ctx.settings, ctx.place.id)
+            .ok()
+            .flatten()
+            .is_some_and(|p| p.token == l.token_in)
+    });
+    if !atomic && singleton && bundle().is_ok() {
         return Ok(Form::Bundle);
     }
     let exec_why = match executor::address(ctx)? {
@@ -119,6 +125,12 @@ pub fn form(ctx: &Ctx, legs: &[Leg]) -> GatewayResult<Form> {
             Some(w) => w,
         },
     };
+    if atomic {
+        return Err(ctx.err(
+            ErrorCode::NoRoute,
+            format!("Для расчётного USDT нужен атомарный исполнитель: {exec_why}"),
+        ));
+    }
     let bundle_why = match bundle() {
         Ok(()) => return Ok(Form::Bundle),
         Err(w) => w,

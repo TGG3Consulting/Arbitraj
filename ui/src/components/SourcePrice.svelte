@@ -1,7 +1,7 @@
 <!-- Ручная проверка ответа авторизованного источника. -->
 <script>
   import { post, seg } from '../lib/api.js';
-  let { venue, trader } = $props();
+  let { venue, trader, source = 'fynd', label = 'Fynd' } = $props();
   let input = $state(''), output = $state(''), amount = $state('');
   let result = $state(null), error = $state(''), busy = $state(false);
   const address = /^0x[0-9a-fA-F]{40}$/;
@@ -13,7 +13,7 @@
     error = '';
     result = null;
     try {
-      result = await post(`/api/venues/${seg(venue)}/sources/fynd/quote`, { input, output, trader, amount_raw: amount });
+      result = await post(`/api/venues/${seg(venue)}/sources/${seg(source)}/quote`, { input, output, trader, amount_raw: amount });
     } catch (e) {
       error = e.message;
     } finally {
@@ -22,7 +22,7 @@
   }
 </script>
 <details>
-  <summary>Проверить цену Fynd</summary>
+  <summary>Проверить цену {label}</summary>
   <form onsubmit={quote}>
     <label>Адрес продаваемого токена <input bind:value={input} disabled={busy} placeholder="0x…" /></label>
     <label>Адрес получаемого токена <input bind:value={output} disabled={busy} placeholder="0x…" /></label>
@@ -30,7 +30,10 @@
     <button disabled={!valid || busy} type="submit">{busy ? 'Запрос…' : 'Запросить расчёт'}</button>
   </form>
   {#if error}<p class="err" role="status">{error}</p>{/if}
-  {#if result}
+  {#if result && source !== 'fynd'}
+    <p role="status">Оценка на блоке {result.block}. Расход {result.spent_raw} минимальных единиц {result.input}, выход {result.received_raw} минимальных единиц {result.output}, остаток входа {result.unspent_raw}.</p>
+    {#if source === 'zeroex'}<p>Шаги 0x RFQ в расчёте агрегатора: {result.details.rfq_legs} из {result.details.legs.length}. Минимум API — {result.details.minimum_raw}.</p>{:else}<p>Глубина книги до индивидуальной комиссии за подпись.</p>{/if}
+  {:else if result}
     <p role="status">Расчёт на блоке {result.block}. Отставание в момент проверки — {result.details.age_blocks} блоков. За {result.spent_raw} минимальных единиц {result.input} выход до удержания комиссий составил {result.received_raw} минимальных единиц {result.output}. Шагов агрегатора через подтверждённые пулы Fynd AMM — {result.details.recognized_fynd_swaps} из {result.details.swaps}.</p>
     {#if result.details.minimum_received_raw != null}<p>Минимум по данным Fynd — {result.details.minimum_received_raw}. Комиссия роутера — {result.details.router_fee_raw}, клиента — {result.details.client_fee_raw}. Все суммы в минимальных единицах выходного токена.</p>{/if}
     {#if result.details.amount_out_net_gas_raw != null}<p>Оценка выхода за вычетом газа по данным Fynd — {result.details.amount_out_net_gas_raw}.</p>{/if}

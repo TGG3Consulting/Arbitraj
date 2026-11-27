@@ -35,6 +35,9 @@
     "network": "base",
     "id": "uniswap-v4-base",
     "source": "https://developers.uniswap.org/deployments.json (Uniswap/contracts@3b872969fff4f5d807db916564f79843d722af36)",
+    "venue_settings": {
+      "dex_dex.bridged_usdt": "8453 0xfde4c96c8593536e31f229ea8f37b2ada2699bb2 0xdac17f958d2ee523a2206206994597c13d831ec7 0x4200000000000000000000000000000000000010 0x478746a8e4b17181c4efbeb2069d86f22ec395788099ed65c9442ca44df265bc"
+    },
     "settings": {
       "dex.sub_dex": [
         "deli-swap",
@@ -5720,8 +5723,6 @@
       "dex.v2_fee_source": "fixed",
       "dex.v2_fee_pct": "0.3"
     }
-  }
-]
   },
   {
     "chain_id": 1,
@@ -5758,3 +5759,25 @@
         "10"
       ]
     }
+  },
+  {
+    "network": "base",
+    "id": "rubicon-classic-base",
+    "chain_id": 8453,
+    "source": "https://docs.rubicon.finance/developers/protocol/order-book/rubicon-market · tests/data/first_run_dex_2026-11-26/rubicon_classic_base.json.gz",
+    "settings": {
+      "dex.kind": "rubicon_classic",
+      "dex.factory": "0x9a5215e96e1185d4e6002c95c3cc0ab6eead354f",
+      "dex.factory_runtime_hash": "0x5966ca6d9160b906f0dac6d66f0ffacf0f46610a2193935eee4fe61e454701c0",
+      "dex.proxy_implementations": [
+        "0x78f8ac461b4602083d652410f74a2b6f2b69323a"
+      ],
+      "dex.proxy_runtime_hashes": [
+        "0xc83b0c38dfc6cc3b51d468795d74c35adbb5d5f1ff364b68da4f1a1ca0991988"
+      ],
+      "dex.module_runtime_hashes": [
+        "0xb6a8542bbe67ac3b47b202654277f7ce2c39cc76f44ed51f9740f6c591b1657a"
+      ]
+    }
+  }
+]

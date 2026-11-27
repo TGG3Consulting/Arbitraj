@@ -47,7 +47,18 @@ pub struct Rates {
 /// (нет пула базовая–USDT или WBNB–USDT), BadResponse (числа), узел (decimals).
 pub async fn rates(q: &Quoting, base: Address) -> GatewayResult<Rates> {
     let ctx = &q.ctx;
-    let usdt = q.tokens.usdt(ctx)?;
+    let cash = q.tokens.usdt(ctx)?;
+    if let Some(physical) = super::cycle_cash::checked(q, base).await?
+        && physical != cash
+    {
+        let price = super::cycle_cash::native_usdt(q, physical, cash)?;
+        return Ok(Rates {
+            base_usdt: Decimal::ONE,
+            bnb_usdt: price,
+            bnb_in_base: price,
+        });
+    }
+    let usdt = cash;
     let wbnb = ctx.addr("dex.native_wrapped")?;
     let usdt_dec = q.tokens.decimals(ctx, usdt).await?;
     let bad = || ctx.err(ErrorCode::BadResponse, "курс цикла не переводится в число");
@@ -75,6 +86,42 @@ pub async fn rates(q: &Quoting, base: Address) -> GatewayResult<Rates> {
         base_usdt,
         bnb_usdt,
         bnb_in_base,
+    })
+}
+
+/// Для отдельной кассы оцениваем стоимость пополнения всего оплачиваемого газа на конкретный размер.
+pub(crate) fn paid_rates(
+    q: &Quoting,
+    base: Address,
+    native: Decimal,
+    r: Rates,
+) -> GatewayResult<Rates> {
+    if native <= Decimal::ZERO
+        || !super::cycle_cash::configured(q)?.is_some_and(|p| p.token == base)
+    {
+        return Ok(r);
+    }
+    let cash = q.tokens.usdt(&q.ctx)?;
+    if base == cash {
+        return Ok(r);
+    }
+    let wei = super::direct::ceil_units(native, num::BNB_DECIMALS).ok_or_else(|| {
+        q.ctx.err(
+            ErrorCode::BadResponse,
+            "Стоимость газа цикла вне пределов wei",
+        )
+    })?;
+    let total = super::cycle_cash::replacement(q, base, cash, wei)?;
+    let rate = total.checked_div(native).ok_or_else(|| {
+        q.ctx.err(
+            ErrorCode::BadResponse,
+            "Стоимость ETH для цикла вне пределов Decimal",
+        )
+    })?;
+    Ok(Rates {
+        base_usdt: Decimal::ONE,
+        bnb_usdt: rate,
+        bnb_in_base: rate,
     })
 }
 
@@ -111,6 +158,7 @@ pub async fn quote(
     let with_tip = matches!(form, Form::Executor(_));
     let (tip, tip_gas) = cycle_steps::plan_tip(ctx, wei, with_tip).await?;
     let cost_bnb = num::to_decimal(gas, num::BNB_DECIMALS).ok_or_else(bad)? + tip + tip_gas;
+    let r = paid_rates(q, base, cost_bnb, r)?;
     let cost_base = cost_bnb * r.bnb_in_base;
     let wallet_base = if with_wallet {
         let w = signer::address(ctx)?;

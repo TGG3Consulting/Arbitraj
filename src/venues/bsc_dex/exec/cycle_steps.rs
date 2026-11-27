@@ -146,12 +146,21 @@ pub async fn net_check(
     r: &Rates,
     with_tip: bool,
 ) -> GatewayResult<Decimal> {
-    // Порог — в USDT (решение 124): одна настройка для любой базовой монеты, в базовую — по курсу пулов.
-    let min_usd = ctx.dec("dex_dex.min_profit_usd")?;
-    let min_profit = min_usd / r.base_usdt;
     let (tip, tip_gas) = plan_tip(ctx, bill.price(), with_tip).await?;
     let gas = num::to_decimal(bill.wei(), num::BNB_DECIMALS)
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "газ симуляции не в Decimal"))?;
+    net_amount(ctx, (output, input), bill, r, (gas, tip, tip_gas))
+}
+
+fn net_amount(
+    ctx: &Ctx,
+    (output, input): (Decimal, Decimal),
+    bill: &Bill,
+    r: &Rates,
+    (gas, tip, tip_gas): (Decimal, Decimal, Decimal),
+) -> GatewayResult<Decimal> {
+    let min_usd = ctx.dec("dex_dex.min_profit_usd")?;
+    let min_profit = min_usd / r.base_usdt;
     let gas_units = bill.units();
     let net = output - input - (gas + tip + tip_gas) * r.bnb_in_base;
     if net < min_profit {
@@ -163,6 +172,25 @@ pub async fn net_check(
         return Err(ctx.err(ErrorCode::QuoteMismatch, why));
     }
     Ok(net)
+}
+
+/// Точный курс пополнения ETH и минимальный выход после симуляции, включая разрешения и чаевые.
+pub(super) async fn funded_net(
+    q: &Quoting,
+    base: Address,
+    amounts: (Decimal, Decimal),
+    bill: &Bill,
+    r: Rates,
+    with_tip: bool,
+) -> GatewayResult<(Decimal, Rates, Decimal)> {
+    let ctx = &q.ctx;
+    let (tip, tip_gas) = plan_tip(ctx, bill.price(), with_tip).await?;
+    let gas = num::to_decimal(bill.wei(), num::BNB_DECIMALS)
+        .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "газ симуляции не в Decimal"))?;
+    let r = super::super::quote::cycle_cost::paid_rates(q, base, gas + tip + tip_gas, r)?;
+    let net = net_amount(ctx, amounts, bill, &r, (gas, tip, tip_gas))?;
+    let floor = amounts.0 - net + ctx.dec("dex_dex.min_profit_usd")? / r.base_usdt;
+    Ok((net, r, floor))
 }
 
 /// Итог сделки цикла из итога свопа (сторона Sell: qty = вход, avg_price = выход / вход). Ошибок нет.

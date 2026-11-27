@@ -42,7 +42,7 @@ use super::super::wallet::approve_executor;
 use super::super::wallet::nonce::Nonces;
 use super::cycle_gas;
 use super::cycle_ref;
-use super::cycle_steps::{self, exec_steps, net_check};
+use super::cycle_steps::{self, exec_steps};
 use super::executor::call::{self, ExecCall};
 use super::executor::{onchain, pool_pass, sim};
 use super::pool_cond_read;
@@ -126,7 +126,13 @@ pub async fn trade(
     let known = conds.as_ref().map(|k| &k.known).filter(|k| !k.is_empty());
     let (bill, tips) = tip_cycle::choose(q, bill, (out, req.input), &r, &legs, known).await?;
     // Исполнитель — одна транзакция с чаевыми (txs::send ниже): чаевые и газ их перевода — в проверке.
-    net_check(ctx, (out, req.input), &bill, &r, true).await?;
+    let (_,r,floor)=cycle_steps::funded_net(q,base,(out,req.input),&bill,r,true).await?;
+    if crate::settings::cycle_cash::read(&ctx.settings,ctx.place.id).map_err(|why|ctx.err(ErrorCode::NotConfigured,why))?
+        .is_some_and(|p|p.token==base && Some(base)!=q.tokens.usdt(ctx).ok()) {
+        let minimum=super::super::quote::direct::ceil_units(floor,dec).ok_or_else(||ctx.err(ErrorCode::BadResponse,"Минимальная выплата USDT вне пределов"))?;
+        c.min_out=c.min_out.max(minimum);
+        if got<c.min_out{return Err(ctx.err(ErrorCode::QuoteMismatch,"Результат симуляции ниже окончательного minOut с газом"));}
+    }
     // Решение 233 (дополнение, п. 4): исход неизвестен — «чем найти» цикла (контекст свопа «базовая → базовая» и курсы
     // сделки), позднее выяснение своим узлом теми же функциями (resolve_cycle.rs). Разрешения выше — без него: их
     // «исход неизвестен» несёт отметку approve (exec/swap_send.rs), обмен после них не отправлялся.

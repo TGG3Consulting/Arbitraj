@@ -30,6 +30,8 @@ pub const TELEGRAM_DAILY_TOKEN: &str = "telegram.daily_bot_token";
 /// Известные секреты: имя, к чему относится (площадка или «система»), описание — для интерфейса.
 /// Новая площадка или сервис добавляет сюда свои секреты.
 pub static KNOWN: &[(&str, &str, &str)] = &[
+    ("kipseli.api_key", "kipseli", "Ключ официального Kipseli PropAMM API для Base"),
+    ("zeroex.api_key", "zeroex", "Ключ 0x Swap API v2 для Base и Ethereum"),
     ("fynd.api_key", "fynd", "Ключ Fynd Hosted API для ручной проверки цены Base и Ethereum"),
     ("hashflow.taker_key", "hashflow", "Ключ доступа Hashflow Taker API v3 для нескольких кошельков"),
     (TELEGRAM_DUTY_TOKEN, "telegram", "Токен бота для дежурного"),

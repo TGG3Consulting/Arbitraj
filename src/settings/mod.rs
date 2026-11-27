@@ -7,6 +7,7 @@
 pub mod accounts;
 pub mod catalog;
 pub mod coin_alias;
+pub mod cycle_cash;
 pub mod dex_key;
 pub(crate) mod indexer_id;
 pub mod evm_profiles;

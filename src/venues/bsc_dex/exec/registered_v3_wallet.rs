@@ -43,6 +43,9 @@ impl Market {
 }
 pub trait RouterMarket: Copy {
     fn pool(self) -> Address;
+    fn topics(self, actual: &[B256], signature: B256, target:Address, payer:Address, _input:Address, _output:Address) -> bool {
+        actual == [signature, target.into_word(), payer.into_word()]
+    }
     fn event(self) -> (&'static str, usize);
     fn matches(self, data: &[u8], side: usize, spent: U256, received: U256, budget: U256) -> bool;
     fn order(
@@ -168,7 +171,7 @@ impl<M: RouterMarket> Proof<M> {
             .filter(|l| l.address() == self.market.pool() && l.topics().first() == Some(&swap));
         let event = hits.next()?;
         if hits.next().is_some()
-            || event.topics() != [swap, self.target.into_word(), wallet.into_word()]
+            || !self.market.topics(event.topics(),swap,self.target,wallet,input,output)
             || event.data().data.len() != bytes
         {
             return None;

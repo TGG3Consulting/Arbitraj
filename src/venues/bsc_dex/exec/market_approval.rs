@@ -42,7 +42,7 @@ impl Market {
                 Some(ProtectedWallet { target }) => Spender::Selected(target),
                 _ => Spender::Factory,
             },
-            Market::Pendle => match mode {
+            Market::Ranges | Market::SafeSwap | Market::Pendle => match mode {
                 Some(ProtectedWallet { target }) => Spender::Selected(target),
                 _ => Spender::Missing,
             },

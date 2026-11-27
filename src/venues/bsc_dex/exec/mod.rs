@@ -53,9 +53,11 @@ pub(super) mod bundles_plan;
 #[cfg(test)]
 mod dagrow_wallet_tests;
 pub(super) mod temple_wallet;
+pub(super) mod safeswap_wallet;
 pub(super) mod pendle_wallet;
 pub(super) mod o1_wallet;
 pub(super) mod flux_eth;
+pub(super) mod ranges_wallet;
 pub(super) mod flux_eth_plan;
 #[cfg(test)]
 mod flux_eth_tests;

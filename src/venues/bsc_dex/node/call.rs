@@ -20,6 +20,21 @@ use super::super::ctx::Ctx;
 use super::super::errors;
 use super::rpc::{self, SOURCE};
 
+/// Read a typed call on an EIP-1898 block shared with the other participant checks.
+pub(crate) async fn canonical<C: SolCall>(
+    ctx: &Ctx,
+    at: &serde_json::Value,
+    target: Address,
+    c: C,
+) -> GatewayResult<C::Return> {
+    let bytes: Bytes = rpc::call(
+        ctx,
+        "eth_call",
+        json!([{"to":target,"data":Bytes::from(c.abi_encode())},at]),
+    )
+    .await?;
+    decode::<C>(&bytes)
+}
 /// Вызов view-функции контракта.
 /// Принимает: адрес контракта, вызов (тип sol!), блок («latest» или номер в hex).
 /// Возвращает: разобранный ответ функции.

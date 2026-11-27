@@ -217,6 +217,12 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
             return Err(ctx.err(ErrorCode::NoRoute,"CandySwap: для избыточного входного остатка требуется модуль с учётом средств плательщика"));
         }
     }
+    if e.family.variant==super::super::super::pools::family_variant::Variant::SafeSwapTrade {
+        if k!=ExecKind::Basin || !matches!(&e.pool.state,PoolState::OraclePmm(_)) || (token_in!=e.pool.token0 && token_in!=e.pool.token1){
+            return Err(ctx.err(ErrorCode::NoRoute,"SafeSwap Trade: требуется подтверждённый рынок и его входной токен"));
+        }
+        return Ok((Params::Basin,ctx.dex_addr("dex.router",e.family.id)?));
+    }
     if e.family.variant==super::super::super::pools::family_variant::Variant::Pendle {
         if k!=ExecKind::Balancer || !matches!(e.pool.state,PoolState::OraclePmm(_)) || (token_in!=e.pool.token0 && token_in!=e.pool.token1){return Err(ctx.err(ErrorCode::NoRoute,"Pendle: требуется подтверждённая сторона рынка"));}
         return Ok((Params::Balancer{pool_id:pool.into_word()},ctx.dex_addr("dex.router",e.family.id)?));

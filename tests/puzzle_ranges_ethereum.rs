@@ -244,7 +244,31 @@ fn smallest_exact_input_reaches_each_historical_target_and_one_less_does_not() {
             vectors.insert(pool, rows);
         }
     }
-    assert!(checked >= 800);
+    assert_eq!(checked, 870);
+    let chain = archive(include_bytes!(
+        "data/first_run_dex_2026-11-26/ranges_ethereum_debits.json.gz"
+    ));
+    assert_eq!(chain["selector"], directory["selector"]);
+    let mut matched = 0usize;
+    for (pool, calls) in &vectors {
+        for (call, logged) in calls
+            .iter()
+            .zip(chain["markets"][*pool].as_array().unwrap())
+        {
+            assert_eq!(call[0], logged[0]);
+            assert_eq!(call[1], logged[1]);
+            assert_eq!(logged[2], "In");
+            assert_eq!(call[2].as_str().unwrap(), qty(&logged[3]).to_string());
+            let wallet = logged[4].is_number().then(|| qty(&logged[4]).to_string());
+            assert_eq!(call[3].as_str(), wallet.as_deref());
+            matched += 1;
+        }
+        assert_eq!(
+            calls.len(),
+            chain["markets"][*pool].as_array().unwrap().len()
+        );
+    }
+    assert_eq!(matched, 1561);
     if let Some(path) = std::env::var_os("ARB_RANGES_BOUNDARIES") {
         std::fs::write(
             path,

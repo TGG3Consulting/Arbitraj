@@ -4,11 +4,10 @@ use crate::{
     venues::bsc_dex::{
         ctx::Ctx,
         exec::flux_eth::Market,
-        node::{call, rpc},
+        node::rpc,
         pools::{exact_wallet_tokens, flux_native, registry::Entry},
     },
 };
-use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, B256, Bytes, keccak256};
 use serde_json::{Value, json};
 alloy::sol! {interface IRouter {
@@ -23,20 +22,7 @@ pub(super) fn bad(ctx: &Ctx) -> crate::gateway::errors::GatewayError {
         "Omni Flux: нативное поручение, код или разрешение не подтверждены",
     )
 }
-pub(super) async fn view<C: SolCall>(
-    ctx: &Ctx,
-    at: &Value,
-    target: Address,
-    c: C,
-) -> GatewayResult<C::Return> {
-    let bytes: Bytes = rpc::call(
-        ctx,
-        "eth_call",
-        json!([{"to":target,"data":Bytes::from(c.abi_encode())},at]),
-    )
-    .await?;
-    call::decode::<C>(&bytes)
-}
+pub(super) use crate::venues::bsc_dex::node::call::canonical as view;
 async fn code(ctx: &Ctx, id: &str, target: Address, key: &str, at: &Value) -> GatewayResult<()> {
     let hash: B256 = ctx.dex_text(key, id)?.parse().map_err(|_| bad(ctx))?;
     let raw: Bytes = rpc::call(ctx, "eth_getCode", json!([target, at])).await?;

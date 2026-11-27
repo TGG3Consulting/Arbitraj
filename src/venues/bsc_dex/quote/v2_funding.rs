@@ -18,6 +18,7 @@ pub(super) struct Inventory<'a> {
 impl<'a> Inventory<'a> {
     pub(super) fn for_order(o: &'a Order) -> Option<Self> {
         let (holders, burn): (Cow<'a, [Address]>, Option<&BurnFunding>) = match &o.wire {
+            Wire::Ranges(m) => (Cow::Borrowed(std::slice::from_ref(&m.vault)), None),
             Wire::Vault(_) => (Cow::Borrowed(std::slice::from_ref(&o.target)), None),
             Wire::V5Funded(_, v) if !v.is_empty() => (Cow::Borrowed(v), None),
             Wire::V5Funded(_, _) => return None,

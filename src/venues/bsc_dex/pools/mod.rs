@@ -107,6 +107,8 @@ mod antfarm_oracle;
 pub(crate) mod antfarm_capacity;
 mod temple_directory;
 pub(crate) mod safeswap;
+pub(crate) mod safeswap_trade;
+pub(crate) mod safeswap_quotes;
 pub(in crate::venues::bsc_dex) mod surge;
 pub(in crate::venues::bsc_dex) mod dagrow;
 pub(crate) mod pendle;

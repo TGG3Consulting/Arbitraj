@@ -32,7 +32,7 @@ pub(super) async fn candidates(
         kinds[12] |= e.family.variant.umbrae();
         kinds[11] |= super::super::pools::sectorone::enabled(e);
         kinds[7] |= super::module_pricing::enabled(e);
-        kinds[6] |= super::super::exec::vault_direct::enabled(e);
+        kinds[6] |= super::vault_pricing::enabled(e);
         kinds[4] |= oasis_pricing::is_oasis(e);
         kinds[0] |= white_pricing::is_white(e);
         kinds[1] |= frax_pricing::is_frax(e);

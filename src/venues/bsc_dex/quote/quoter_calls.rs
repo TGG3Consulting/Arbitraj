@@ -44,6 +44,7 @@ pub fn request(
     token_in: Address,
     amount: U256,
 ) -> GatewayResult<(Address, Bytes)> {
+    if e.family.variant==super::super::pools::family_variant::Variant::SafeSwapTrade{return super::super::pools::safeswap_quotes::request(ctx,e,token_in,amount);}
     if e.family.variant==super::super::pools::family_variant::Variant::Pendle{return super::super::pools::pendle_quotes::request(ctx,e,token_in,amount);}
     if e.family.variant.umbrae(){return super::super::pools::umbrae_quotes::request(ctx,e,token_in,amount);}
     if let PoolState::Dagrow(s)=&e.pool.state {
@@ -537,6 +538,7 @@ pub fn request(
 
 /// Выход из ответа квотера. None — ответ не по ABI.
 pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> Option<U256> {
+    if e.family.variant==super::super::pools::family_variant::Variant::SafeSwapTrade{return super::super::pools::safeswap_quotes::payout(out);}
     if e.family.variant==super::super::pools::family_variant::Variant::Pendle{return super::super::pools::pendle_quotes::payout(out);}
     if e.family.variant.umbrae(){return super::super::pools::umbrae_quotes::payout(e.family.variant,out,amount);}
     if let PoolState::Dagrow(_)=&e.pool.state {

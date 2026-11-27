@@ -88,6 +88,7 @@ pub enum Variant {
     V2DualCreate2,
     SafeSwapV2,
     SafeSwapProxy,
+    SafeSwapTrade,
     ToonSwap,
     V2ExactRouter,
     /// Зарегистрированные Router02 и V5 с изменяемой комиссией пары и проверкой обоих runtime.
@@ -230,7 +231,7 @@ impl Variant {
     pub fn v2_block_state(self) -> bool {
         matches!(
             self,
-            Self::Gemswap | Self::ToonSwap | Self::V2Create2LiveFee | Self::V2DualCreate2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::Memebox | Self::DeltaSwap | Self::Oasis | Self::EtherVista
+            Self::SafeSwapTrade | Self::Gemswap | Self::ToonSwap | Self::V2Create2LiveFee | Self::V2DualCreate2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::Memebox | Self::DeltaSwap | Self::Oasis | Self::EtherVista
         )
     }
 }
@@ -280,6 +281,7 @@ pub fn of(kind: &str) -> Variant {
         "v2_fork_router_create2" => Variant::V2RouterCreate2,
         "toonswap" => Variant::ToonSwap,
         "safeswap_v2" => Variant::SafeSwapV2,
+        "safeswap_trade_module" => Variant::SafeSwapTrade,
         "safeswap_proxy_v5" => Variant::SafeSwapProxy,
         "v2_fork_dual_create2" => Variant::V2DualCreate2,
         "v2_fork_dual_router01" => Variant::V2ExactRouter,

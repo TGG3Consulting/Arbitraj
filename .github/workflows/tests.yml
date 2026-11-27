@@ -471,7 +471,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        market: ${{ fromJSON(inputs.ethereum_open_subset || '["x7-finance","x7-finance-ethereum","9inch-ethereum","deltaswap-ethereum","supernova-cl","supernova-amm","ekubo-v2-ethereum","stelaxis-ethereum","swapr-ethereum","templedao-ethereum","bitswap-ethereum","bitswap-directory-ethereum","concave-ethereum","wagmi-ethereum","lif3-ethereum","antfarm-ethereum","carbon-ethereum","mint-club-base","mint-club-ethereum","omni-v2-base","omni-flux-base","omni-flux-bin-base","spectra-base","umia-base","marswap-base","marswap-ethereum","deliswap-base","deliswap-cl-base","sectorone-20-base","sectorone-22-base","sectorone-20-ethereum","sectorone-22-ethereum","hello-base","hello-ethereum","umbrae-dlmm","umbrae-damm","launch-bankr","launch-bankr-index-base","launch-o1-launchpad","o1-wrapped-base","base-native-o1","base-native-cl","base-native-bin","recovered-thirdfy","recovered-baseline","integral-size-ethereum","solidly-v2-ethereum","sashimiswap-ethereum","unicly-ethereum","hopeswap-ethereum","archly-ethereum","toonswap-ethereum","dagrow-ethereum","dagrow-protected-ethereum","ranges-ethereum-0","ranges-ethereum-1","ranges-ethereum-2","ranges-ethereum-3","pendle-registry-ethereum","community-v3-router-ethereum","pendle-wallets-ethereum","pendle-protected-ethereum","bundles-swap-ethereum","bundles-protected-ethereum","antfarm-output-ethereum","blueprint-ethereum","vvs-v3-ethereum","safeswap-ethereum","safeswap-protected-ethereum","surge-ethereum","surge-protected-ethereum"]') }}
+        market: ${{ fromJSON(inputs.ethereum_open_subset || '["x7-finance","x7-finance-ethereum","9inch-ethereum","deltaswap-ethereum","supernova-cl","supernova-amm","ekubo-v2-ethereum","stelaxis-ethereum","goliath-ethereum","swapr-ethereum","templedao-ethereum","bitswap-ethereum","bitswap-directory-ethereum","concave-ethereum","wagmi-ethereum","lif3-ethereum","antfarm-ethereum","carbon-ethereum","mint-club-base","mint-club-ethereum","omni-v2-base","omni-flux-base","omni-flux-bin-base","spectra-base","umia-base","umia-source","marswap-base","marswap-ethereum","deliswap-base","deliswap-cl-base","sectorone-20-base","sectorone-22-base","sectorone-20-ethereum","sectorone-22-ethereum","hello-base","hello-ethereum","umbrae-dlmm","umbrae-damm","launch-bankr","launch-bankr-index-base","launch-o1-launchpad","o1-wrapped-base","base-native-o1","base-native-cl","base-native-bin","recovered-thirdfy","recovered-baseline","integral-size-ethereum","solidly-v2-ethereum","sashimiswap-ethereum","unicly-ethereum","hopeswap-ethereum","archly-ethereum","toonswap-ethereum","dagrow-ethereum","dagrow-protected-ethereum","ranges-ethereum-0","ranges-ethereum-1","ranges-ethereum-2","ranges-ethereum-3","pendle-registry-ethereum","community-v3-router-ethereum","pendle-wallets-ethereum","pendle-protected-ethereum","bundles-swap-ethereum","bundles-protected-ethereum","antfarm-output-ethereum","blueprint-ethereum","vvs-v3-ethereum","safeswap-ethereum","safeswap-protected-ethereum","surge-ethereum","surge-protected-ethereum"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -501,6 +501,12 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/native" BaseNativeMarkets
           python scripts/record_o1_wrapped.py "$RUNNER_TEMP/native/BaseNativeMarkets.json" "$RUNNER_TEMP/market.json" --combined "${MARKET#base-native-}"
+      - if: matrix.market == 'umia-source'
+        run: |
+          python scripts/record_umia_source.py prepare "$RUNNER_TEMP/umia-input.json"
+          npm install --prefix "$RUNNER_TEMP/umia-solc" --no-audit --no-fund --ignore-scripts solc@0.8.26
+          "$RUNNER_TEMP/umia-solc/node_modules/.bin/solcjs" --standard-json < "$RUNNER_TEMP/umia-input.json" > "$RUNNER_TEMP/umia-compiled.json"
+          python scripts/record_umia_source.py verify "$RUNNER_TEMP/umia-compiled.json" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'umia-base'
         run: python scripts/record_umia_base.py wallets "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'spectra-base'
@@ -587,6 +593,8 @@ jobs:
           python scripts/record_carbon_ethereum.py "$RUNNER_TEMP/market.json"
           node contracts/build-hanji.mjs "$RUNNER_TEMP/carbon" CarbonWallet
           python scripts/record_carbon_wallet.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/carbon/CarbonWallet.json" "$RUNNER_TEMP/carbon-protected.json"
+      - if: matrix.market == 'goliath-ethereum'
+        run: python scripts/record_goliath_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'pendle-protected-ethereum'
         uses: actions/setup-node@v4
         with:

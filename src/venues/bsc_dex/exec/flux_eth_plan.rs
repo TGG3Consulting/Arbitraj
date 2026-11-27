@@ -7,7 +7,7 @@ use super::super::{
         v2_wallet_sim::{self, Order, Wire},
         white_state::{self, Head},
     },
-    wallet::approve::{self, Approval, IPermit2},
+    wallet::approve::{self, Approval},
 };
 use super::{
     chain::Step,
@@ -49,39 +49,7 @@ pub(in crate::venues::bsc_dex) async fn approvals(
         .await?;
         return approve::fork_known(ctx, m.token, m.router, current, o.amount);
     }
-    let (erc20, p) = tokio::try_join!(
-        view(
-            ctx,
-            &at,
-            m.token,
-            IERC20::allowanceCall {
-                owner: o.payer,
-                spender: m.permit
-            }
-        ),
-        view(
-            ctx,
-            &at,
-            m.permit,
-            IPermit2::allowanceCall {
-                user: o.payer,
-                token: m.token,
-                spender: m.router
-            }
-        )
-    )?;
-    let r = approve::Read {
-        erc20,
-        permit2: U256::from(p.amount),
-        expiration: p.expiration.to(),
-    };
-    approve::lacking(
-        ctx,
-        &r,
-        (m.token, m.permit, m.router),
-        o.amount,
-        h.timestamp.to(),
-    )
+    approve::at_block(ctx,m.token,o.payer,m.permit,m.router,o.amount,h).await
 }
 pub(super) async fn plan(
     ctx: &Ctx,

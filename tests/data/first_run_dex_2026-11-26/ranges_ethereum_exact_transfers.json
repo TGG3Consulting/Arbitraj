@@ -1,0 +1,98 @@
+{
+  "selector": {
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "requireCanonical": true
+  },
+  "tokens": [
+    {
+      "address": "0x111111111117dc0aa78b770fa6a738034120c302",
+      "contract": "OneInch",
+      "keccak256": "0xb7c08937c4a4fe377b4411a424aa96fb8efc9388cf5c4b64f0aea5f7b0b8f940",
+      "bytes": 7038,
+      "source": "https://sourcify.dev/server/v2/contract/1/0x111111111117dc0aa78b770fa6a738034120c302",
+      "sources": {
+        "OneInch.sol": "b454ace29f11650ad7a52b077b0571986abe2b52c14f93bd8a468b1d9e533997"
+      }
+    },
+    {
+      "address": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+      "contract": "Uni",
+      "keccak256": "0xdeba17f16fdba566b45d8019575e068625403cc6986fa17ceadd6edf08aa0868",
+      "bytes": 12567,
+      "source": "https://sourcify.dev/server/v2/contract/1/0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+      "sources": {
+        "Uni.sol": "2450fb36635204a678c214a2f2570951d48bc53fba8335575dcb2cd256a2e163"
+      }
+    },
+    {
+      "address": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+      "contract": "WBTC",
+      "keccak256": "0x131ff5c755b710d543ea70fede2eb38e5d15b1456df0ae932ba12e2786f7e5df",
+      "bytes": 4582,
+      "source": "https://sourcify.dev/server/v2/contract/1/0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+      "sources": {
+        "WBTC.sol": "3a7881e198c8ea01899e60baf497b25b8bccecd1ac41f2e0ba2f988dbe623293"
+      }
+    },
+    {
+      "address": "0x2bd1f344a2398340c2b1119da98816ea723f5f0f",
+      "contract": "WrappedToken",
+      "keccak256": "0x45611ae7a95c6f0e759d871a50d712c9fb9aed8145cce246e74271e7bf63893b",
+      "bytes": 7979,
+      "source": "https://sourcify.dev/server/v2/contract/1/0x2bd1f344a2398340c2b1119da98816ea723f5f0f",
+      "sources": {
+        "WrappedToken.sol": "d02d29ac7e69417af2184cbf09ec9a127e8fbc7640cc93233bafbff34f1e00ef"
+      }
+    },
+    {
+      "address": "0x37f3ed0186aadf2966bd75cf702ad0f31ab13318",
+      "contract": "WrappedToken",
+      "keccak256": "0x192a45c7f88279276ba6e08e628a14eabcbe0a7ff2db30fcb620b3ac469abdfa",
+      "bytes": 7240,
+      "source": "https://sourcify.dev/server/v2/contract/1/0x37f3ed0186aadf2966bd75cf702ad0f31ab13318",
+      "sources": {
+        "WrappedToken.sol": "cc01c80bc3160d255ff75922a628545fb5d03a23859e1fdde803e11fcc8109a0"
+      }
+    },
+    {
+      "address": "0x514910771af9ca656af840dff83e8264ecf986ca",
+      "contract": "LinkToken",
+      "keccak256": "0x77c633ba07c8cb94cd4864092fd8b31e31cf9d065f6fb6acf617298bc0008785",
+      "bytes": 3153,
+      "source": "https://sourcify.dev/server/v2/contract/1/0x514910771af9ca656af840dff83e8264ecf986ca",
+      "sources": {
+        "LinkToken.sol": "18d961958d71cf5c7f70d2892d80bf6011f5920a498bf269a3707cf4acde2b0e"
+      }
+    },
+    {
+      "address": "0x6982508145454ce325ddbe47a25d4ec3d2311933",
+      "contract": "PepeToken",
+      "keccak256": "0x4bcc3abefd723de3cac53e7c37894ae0cad2f6065e92c8901b0a086ae3386ab6",
+      "bytes": 4517,
+      "source": "https://sourcify.dev/server/v2/contract/1/0x6982508145454ce325ddbe47a25d4ec3d2311933",
+      "sources": {
+        "PepeToken.sol": "786ec3c3267f11252340bbf05a4883ddf0b2d95a9191eddde6cd8b906435c8e7"
+      }
+    },
+    {
+      "address": "0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce",
+      "contract": "TokenMintERC20Token",
+      "keccak256": "0xd0caa0f9bc744c523933d44e6d8d07f868803d10bf16c8129e12f670296175ad",
+      "bytes": 4852,
+      "source": "https://sourcify.dev/server/v2/contract/1/0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce",
+      "sources": {
+        "TokenMintERC20Token.sol": "bbb4839ed97ca7189f416fab4f05f258e6caba4adc0a6487f19af6662288e9d4"
+      }
+    },
+    {
+      "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "contract": "WETH9",
+      "keccak256": "0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
+      "bytes": 3124,
+      "source": "https://sourcify.dev/server/v2/contract/1/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "sources": {
+        "WETH9.sol": "4a4205fff097f9364ebba3c8a32670a63fccffb39baddc0046a6da1ba398c767"
+      }
+    }
+  ]
+}

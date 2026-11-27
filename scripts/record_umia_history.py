@@ -17,9 +17,18 @@ TOPICS=["0x"+keccak(text=s).hex() for s in SIGS]
 
 def logs(start,end):
     p={"fromBlock":hex(start),"toBlock":hex(end),"address":HUB,"topics":[TOPICS]}
-    for attempt in range(4):
+    cache=Path("../outputs/base-ethereum-v2-20261126/base-post-spectra/umia-log-pages")
+    cache.mkdir(exist_ok=True,parents=True)
+    file=cache/f"{start}-{end}.json"
+    if file.is_file():return json.loads(file.read_bytes())
+    for attempt in range(6):
         r=requests.post(ENDPOINT,json={"jsonrpc":"2.0","id":1,"method":"eth_getLogs","params":[p]},timeout=25)
-        if r.ok and "result" in r.json():return r.json()["result"]
+        if r.ok and "result" in r.json():
+            rows=r.json()["result"];file.write_text(json.dumps(rows),encoding="utf8");return rows
+        if r.ok and "range" in r.text.lower() and end-start>=1000:
+            mid=(start+end)//2
+            rows=logs(start,mid)+logs(mid+1,end)
+            file.write_text(json.dumps(rows),encoding="utf8");return rows
         sleep(1+attempt)
     raise ValueError(f"нет подтверждённой страницы {start}-{end}")
 
@@ -32,7 +41,7 @@ def capture():
         if read("eth_getCode",[HUB,hex(mid)])!="0x":hi=mid
         else:lo=mid
     starts=list(range(hi,BLOCK+1,100000))
-    with ThreadPoolExecutor(4) as ex:raw=[l for page in ex.map(lambda a:logs(a,min(a+99999,BLOCK)),starts) for l in page]
+    with ThreadPoolExecutor(2) as ex:raw=[l for page in ex.map(lambda a:logs(a,min(a+99999,BLOCK)),starts) for l in page]
     historic=set()
     for l in raw:
         if read("eth_getBlockByNumber",[l["blockNumber"],False])["hash"]!=l["blockHash"]:raise ValueError("событие вне канона")

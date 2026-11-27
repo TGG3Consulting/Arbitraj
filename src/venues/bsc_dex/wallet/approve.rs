@@ -81,6 +81,45 @@ pub async fn read(
     })
 }
 
+/// Профиль ERC20 → Permit2 → роутер на одном каноническом блоке измерения кошелька.
+pub(in crate::venues::bsc_dex) async fn at_block(ctx:&Ctx, token:Address, owner:Address, permit:Address, router:Address,
+    amount:U256, h:super::super::quote::white_state::Head) -> GatewayResult<Vec<Approval>> {
+    let at=h.selector();
+    let (erc20, p) = tokio::try_join!(
+        call::canonical(
+            ctx,
+            &at,
+            token,
+            IERC20::allowanceCall {
+                owner,
+                spender: permit
+            }
+        ),
+        call::canonical(
+            ctx,
+            &at,
+            permit,
+            IPermit2::allowanceCall {
+                user: owner,
+                token: token,
+                spender: router
+            }
+        )
+    )?;
+    let r = Read {
+        erc20,
+        permit2: U256::from(p.amount),
+        expiration: p.expiration.to(),
+    };
+    lacking(
+        ctx,
+        &r,
+        (token, permit, router),
+        amount,
+        h.timestamp.to(),
+    )
+}
+
 /// Каких разрешений не хватает для списания amount токена Universal Router'ом через Permit2 (читает с узла).
 /// Принимает: токен, кошелёк, Permit2, Universal Router, сумму, время блока (секунды).
 /// Возвращает: вызовы по порядку (пусто — хватает). Ошибки: NotConfigured (настройки), узел.

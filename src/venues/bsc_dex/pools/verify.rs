@@ -427,12 +427,13 @@ async fn contracts(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> 
                 },
             },
         };
-        if matches!(c.family.variant,Variant::KewlV2 | Variant::V2ExactRouter | Variant::SafeSwapV2 | Variant::SafeSwapProxy | Variant::V2DualCreate2LiveFee) && let Verdict::Taken(f)=&verdict {
+        if matches!(c.family.variant,Variant::KewlV2 | Variant::V2ExactRouter | Variant::SafeSwapV2 | Variant::SafeSwapProxy | Variant::SafeSwapTrade | Variant::V2DualCreate2LiveFee) && let Verdict::Taken(f)=&verdict {
             let block=match &create_block {
                 Some(at)=>at,
                 None=>create_block.insert(super::nami::block(ctx,"latest").await),
             };
             let checked=match block {
+                Ok(at) if c.family.variant==Variant::SafeSwapTrade => Box::pin(super::safeswap_trade::market(ctx,c.family,f.reference.address(),(f.token0,f.token1),at)).await.map(|_|()),
                 Ok(at) if c.family.variant==Variant::SafeSwapProxy => Box::pin(super::safeswap::pair(ctx,c.family,f.reference.address(),(f.token0,f.token1),at)).await,
                 Ok(at) if matches!(c.family.variant,Variant::V2ExactRouter|Variant::SafeSwapV2|Variant::V2DualCreate2LiveFee) => super::v2_pair_binding::code(ctx,c.family.id,f.reference.address(),at).await,
                 Ok(at)=>super::kewl::pair(ctx,c.family.id,f.reference.address(),(f.token0,f.token1),at).await,
@@ -482,6 +483,7 @@ fn found(
             | Variant::V2DualCreate2
             | Variant::SafeSwapV2
             | Variant::SafeSwapProxy
+            | Variant::SafeSwapTrade
             | Variant::ToonSwap
             | Variant::V2ExactRouter
             | Variant::V2DualCreate2LiveFee

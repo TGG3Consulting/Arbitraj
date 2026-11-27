@@ -25,6 +25,8 @@ fn both_wallet_assets_and_strict_controls_match_in_live_and_matured_markets() {
         serde_json::from_reader(flate2::read::GzDecoder::new(bytes.as_slice())).unwrap();
     let mut v5 = 0;
     let mut direct = 0;
+    let mut router = 0;
+    let mut templates = BTreeSet::new();
     let mut markets = BTreeSet::new();
     let mut matured = BTreeSet::new();
     for m in archive["markets"].as_array().unwrap() {
@@ -62,7 +64,10 @@ fn both_wallet_assets_and_strict_controls_match_in_live_and_matured_markets() {
                     v5 += 1;
                 } else if mode == "pool" {
                     direct += 1;
+                } else if mode == "router" {
+                    router += 1;
                 }
+                templates.insert(m["template"].as_str().unwrap());
                 markets.insert(m["pool"].as_str().unwrap());
                 if m["maturity"].as_u64().unwrap() <= 1_795_642_926 {
                     matured.insert(m["pool"].as_str().unwrap());
@@ -71,10 +76,12 @@ fn both_wallet_assets_and_strict_controls_match_in_live_and_matured_markets() {
         }
     }
     assert!(
-        v5 >= 48
-            && direct >= 48
-            && markets.len() >= 12
-            && matured.len() >= 10
+        v5 >= 96
+            && direct >= 96
+            && router >= 96
+            && templates.len() == 4
+            && markets.len() >= 24
+            && matured.len() >= 18
             && markets.len() > matured.len()
     );
 }

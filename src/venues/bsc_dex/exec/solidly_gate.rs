@@ -194,6 +194,11 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             Box::pin(super::super::pools::concave::checked(ctx,e,false,at)).await?;
             continue;
         }
+        if f.variant == Variant::SafeSwapTrade {
+            let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            Box::pin(super::super::pools::safeswap_trade::market(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
+            continue;
+        }
         if f.variant == Variant::SafeSwapProxy {
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             Box::pin(super::super::pools::safeswap::pair(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;

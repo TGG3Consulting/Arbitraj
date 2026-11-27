@@ -58,3 +58,22 @@ pub(super) fn spender(
     }
     deltaswap::router(ctx, e).map(Some)
 }
+
+pub(super) fn permit_router(
+    ctx: &Ctx,
+    e: &Entry,
+    mode: crate::core::types::RouteMode,
+    fees: Option<RouterFeeMode>,
+) -> GatewayResult<Option<(Address, Address)>> {
+    if mode != crate::core::types::RouteMode::Direct || e.family.variant != Variant::PuzzleRanges {
+        return Ok(None);
+    }
+    let (market, router) = super::super::exec::ranges_wallet::Market::read(ctx, e)?;
+    if !matches!(fees,Some(RouterFeeMode::ProtectedWallet{target}) if target==router) {
+        return Err(ctx.err(
+            crate::gateway::errors::ErrorCode::BadResponse,
+            "Ranges: для Permit2 не подтверждён выбранный роутер",
+        ));
+    }
+    Ok(Some((router, market.permit)))
+}

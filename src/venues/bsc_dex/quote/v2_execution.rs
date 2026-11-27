@@ -106,10 +106,10 @@ pub(super) async fn option(
         }
     }
     let fee_mode = match &execution.wire {
-        super::v2_wallet_sim::Wire::RegisteredV3(_) | super::v2_wallet_sim::Wire::SolidlyRouter(_) => Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
+        super::v2_wallet_sim::Wire::Ranges(_) | super::v2_wallet_sim::Wire::RegisteredV3(_) | super::v2_wallet_sim::Wire::SolidlyRouter(_) => Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::Umbrae(_) | super::v2_wallet_sim::Wire::DirectModule{..} if c.entry.family.variant.umbrae() || c.entry.family.variant==super::super::pools::family_variant::Variant::VvsV3=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::FluxEth(m)=>Some(RouterFeeMode::FluxEth{target:m.router,native_cash:super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt)}),
-        super::v2_wallet_sim::Wire::Pendle(_)|super::v2_wallet_sim::Wire::O1(_)=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
+        super::v2_wallet_sim::Wire::SafeSwap(_)|super::v2_wallet_sim::Wire::Pendle(_)|super::v2_wallet_sim::Wire::O1(_)=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::AntfarmOutput(t)=>Some(RouterFeeMode::AntfarmProceeds{target:t.module,tier:t.funding,loan:t.use_loan}),
         super::v2_wallet_sim::Wire::Antfarm(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.module}),
         super::v2_wallet_sim::Wire::Bundles(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.target}),
@@ -233,7 +233,7 @@ pub(super) async fn option(
             head,
             o,
             super::oasis_pricing::is_oasis(&c.entry) || super::vista_pricing::is_vista(&c.entry)
-                || super::super::exec::vault_direct::enabled(&c.entry) || super::module_pricing::enabled(&c.entry) || vista_value.is_some() || c.entry.family.variant.exact_router() || c.entry.family.variant==super::super::pools::family_variant::Variant::SafeSwapV2 || super::ekubo_v2_pricing::enabled(&c.entry) || super::super::exec::mint_club_direct::enabled(&c.entry),
+                || super::vault_pricing::enabled(&c.entry) || super::module_pricing::enabled(&c.entry) || vista_value.is_some() || c.entry.family.variant.exact_router() || c.entry.family.variant==super::super::pools::family_variant::Variant::SafeSwapV2 || super::ekubo_v2_pricing::enabled(&c.entry) || super::super::exec::mint_club_direct::enabled(&c.entry),
         )
         .await?;
         if let Some(value) = vista_value {

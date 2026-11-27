@@ -32,12 +32,14 @@ use super::ur;
 #[derive(Debug, Clone)]
 pub(super) enum DirectCall {
     SolidlyRouter(std::sync::Arc<super::solidly_router_wallet::Proof>),
+    Ranges(std::sync::Arc<super::ranges_wallet::Proof>),
     RegisteredV3(std::sync::Arc<super::registered_v3_wallet::Proof>),
     Carbon(std::sync::Arc<super::carbon_wire::Call>),
     O1(std::sync::Arc<super::o1_wallet::Proof>),
     FluxEth(std::sync::Arc<super::flux_eth::Proof>),
     Bundles(std::sync::Arc<super::bundles_wallet::Proof>),
     Dagrow(std::sync::Arc<super::dagrow_wallet::Proof>),
+    SafeSwap(std::sync::Arc<super::safeswap_wallet::Proof>),
     Pendle(std::sync::Arc<super::pendle_wallet::Proof>),
     Temple(std::sync::Arc<super::temple_wallet::Proof>),
     Antfarm(std::sync::Arc<super::antfarm_wallet::Proof>),
@@ -142,6 +144,7 @@ impl Plan {
                 "минимум выхода 0 — обмен без минимума не отправляется",
             ));
         }
+        if let Some(DirectCall::Ranges(proof))=self.direct_market.as_deref_mut(){std::sync::Arc::make_mut(proof).minimum=m;}
         if let Some(DirectCall::FluxEth(proof))=self.direct_market.as_deref_mut(){std::sync::Arc::make_mut(proof).minimum=m;}
         if let Some(DirectCall::Bundles(proof))=self.direct_market.as_deref_mut(){std::sync::Arc::make_mut(proof).minimum=m;}
         if let Some(DirectCall::Dagrow(proof))=self.direct_market.as_deref_mut(){
@@ -223,6 +226,7 @@ impl Plan {
                 DirectCall::O1(t)=>t.data(),
                 DirectCall::Bundles(t)=>t.data(),
                 DirectCall::Dagrow(t)=>t.data(),
+                DirectCall::SafeSwap(t)=>t.data(),
                 DirectCall::Pendle(t)=>t.data(),
                 DirectCall::Temple(t)=>t.data(),
                 DirectCall::Antfarm(a)=>a.data(),
@@ -232,6 +236,7 @@ impl Plan {
                 DirectCall::Vault { id, input, amount } => super::vault_direct::data(
                     id, input, self.token_out, amount, self.min_total, self.wallet, self.deadline),
                 DirectCall::SolidlyRouter(proof) => proof.data(),
+                DirectCall::Ranges(proof) => proof.data(),
                 DirectCall::RegisteredV3(proof) => proof.data(),
                 DirectCall::Umbrae{path,input,amount}=>path.data(input,self.token_out,amount,self.min_total,self.wallet,self.deadline),
                 DirectCall::SectorLb{path,input,amount}=>path.data(input,self.token_out,amount,self.min_total,self.wallet,self.deadline),

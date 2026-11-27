@@ -4562,7 +4562,8 @@
       "dex.v2_router_fee_pips": 2500,
       "dex.sub_dex": [
         "safemoonswap-v2-ethereum",
-        "safemoonswap-proxy-1-ethereum"
+        "safemoonswap-proxy-1-ethereum",
+        "safemoonswap-trade-ethereum"
       ]
     }
   },
@@ -4990,7 +4991,21 @@
       "dex.quoter": "0x8726019313cd59d2e33dbe643aac94a59d5518df",
       "dex.vault": "0x955244edc797a1c1b04134b600f819ac23c76081",
       "dex.factory": "0x5d6d1dc0d045a8de284c7ab5fe83acd7bdc5d4e0",
-      "dex.ranges_hook": "0xf31e1f37e1f9c2c531e6bc3ad89ffc9206ce85d9"
+      "dex.ranges_hook": "0xf31e1f37e1f9c2c531e6bc3ad89ffc9206ce85d9",
+      "dex.permit2": "0x000000000022d473030f116ddee9f6b43ac78ba3",
+      "dex.router_runtime_hash": "0xb5adfb6b8af19d9c732439001d5fb98bb7a1c7e6a7f747186042d7d7c001f0c8",
+      "dex.permit2_runtime_hash": "0xc67d1657868aa5146eaf24fb879fb1fdec3d2d493b3683a61c9c2f4fb2851131",
+      "dex.router_exact_tokens": [
+        "0x111111111117dc0aa78b770fa6a738034120c302 0xb7c08937c4a4fe377b4411a424aa96fb8efc9388cf5c4b64f0aea5f7b0b8f940",
+        "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984 0xdeba17f16fdba566b45d8019575e068625403cc6986fa17ceadd6edf08aa0868",
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599 0x131ff5c755b710d543ea70fede2eb38e5d15b1456df0ae932ba12e2786f7e5df",
+        "0x2bd1f344a2398340c2b1119da98816ea723f5f0f 0x45611ae7a95c6f0e759d871a50d712c9fb9aed8145cce246e74271e7bf63893b",
+        "0x37f3ed0186aadf2966bd75cf702ad0f31ab13318 0x192a45c7f88279276ba6e08e628a14eabcbe0a7ff2db30fcb620b3ac469abdfa",
+        "0x514910771af9ca656af840dff83e8264ecf986ca 0x77c633ba07c8cb94cd4864092fd8b31e31cf9d065f6fb6acf617298bc0008785",
+        "0x6982508145454ce325ddbe47a25d4ec3d2311933 0x4bcc3abefd723de3cac53e7c37894ae0cad2f6065e92c8901b0a086ae3386ab6",
+        "0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce 0xd0caa0f9bc744c523933d44e6d8d07f868803d10bf16c8129e12f670296175ad",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23"
+      ]
     }
   },
   {
@@ -5044,6 +5059,40 @@
         "spectra-v2-base-legacy-1",
         "spectra-v2-base-legacy-2"
       ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "safemoonswap-trade-ethereum",
+    "source": "https://sourcify.dev/server/v2/contract/1/0xe8bee580028d5ee2b6fa7b5e0758442eb12fa78b · tests/data/first_run_dex_2026-11-26/safeswap_ethereum_wallets.json.gz",
+    "settings": {
+      "dex.kind": "safeswap_trade_module",
+      "dex.factory": "0x7f09d4be6bbf4b0ff0c97ca5c486a166198aeaee",
+      "dex.factory_runtime_hash": "0x90306f9a003e61294f4833527bfd3f8465ef7030e257f3bafb01d3ecc6098cf9",
+      "dex.quoter": "0x3816016d0855a2b35b90dddcae4a2e9ad690947d",
+      "dex.quoter_runtime_hash": "0x90306f9a003e61294f4833527bfd3f8465ef7030e257f3bafb01d3ecc6098cf9",
+      "dex.safeswap_spender": "0x0a654cb371fbc3c49ccb176984d64e86fc931eea",
+      "dex.router_runtime_hash": "0x90306f9a003e61294f4833527bfd3f8465ef7030e257f3bafb01d3ecc6098cf9",
+      "dex.proxy_implementations": [
+        "0x511406a39a074782b8e4ec6d4a77ac6466970b14",
+        "0x4f509aa4f9d1cd14192cde38fdf850e2d8519455",
+        "0xe8bee580028d5ee2b6fa7b5e0758442eb12fa78b",
+        "0x331357b501ce05cfe7f8c0852a226ea41c2e35b0",
+        "0xeeb5ba4c5be36e41afb778c30b80975a1bdc2da5"
+      ],
+      "dex.proxy_runtime_hashes": [
+        "0x608115f02c9307fa234782550f1dd00ad39fb8be2909fb76fff294d00a85ed5e",
+        "0x89dff49431023f4f0cd87798887dc488c517ff1ce995613a65d7eb6f34cc5311",
+        "0xed97adb3007d5889a0a3cd8322479dd1f20d82ca225f18e80ddc70eb905a25b9",
+        "0xc3a9d72ad33655d44dac343b8623dd893a3b8903b9e0e119be956a1cd8bef4f5",
+        "0xdf8c440f3e53efafa2b4c743b9e3ebb67036615669fc3fe0714312896ed06de2"
+      ],
+      "dex.pool_code_hashes": [
+        "0xaf22d00bd30ebd0976c262e993c9d8df7423973a794d1d429c2322f0dc80e3ed"
+      ],
+      "dex.pair_runtime_hash": "0xa6acf8c48357d38f614b1379cfb818e2a54c9b4658f823e73ec0cdc3dd6e5aa0",
+      "dex.pmm_ladder_counter": true
     }
   }
 ]

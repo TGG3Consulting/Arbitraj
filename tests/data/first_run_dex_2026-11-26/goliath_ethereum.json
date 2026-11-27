@@ -1,0 +1,49 @@
+{
+  "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x4367985a63063fc970b009c6e599e9225181f551",
+  "venue": "0x4367985a63063fc970b009c6e599e9225181f551",
+  "runtime": "0xe3dfb475308cc6f75387b72e95be6eb958849ca79ac6df51ba0f49f6455b3b7c",
+  "markets": [
+    {
+      "tokens": [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "vault": "0x93bf01ce743579f928d30d05695824886bd5f37a",
+      "runtime": "0x6ebb800cea5aabdd95935c1045899a656d02f21090bd9ff774853596432e6f61",
+      "runtime_bytes": 4579
+    },
+    {
+      "tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "vault": "0x0251960c811980893bae0ae4a144cfd7c509c569",
+      "runtime": "0xffa0f1d262e51565ca39faf358d626ef03a7b053cb3a42af832c34fe61c58a3e",
+      "runtime_bytes": 4579
+    }
+  ],
+  "heads": [
+    {
+      "height": 26494988,
+      "selector": {
+        "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+        "requireCanonical": true
+      }
+    },
+    {
+      "height": 26494977,
+      "selector": {
+        "blockHash": "0xe5e1ef6ab0b5d1ac1ddee143dc246365a87c452330c2d6b0b60eb7efbf1ae8a0",
+        "requireCanonical": true
+      }
+    }
+  ],
+  "public_router": {
+    "router": "0x4ddf368080cd7946db5b459ad591c350158175e1",
+    "runtime": "0x14d841456cb8f422abd2cda024e6cc2c50e08831e4a28564966ed5fabdbc1b9c",
+    "implementation": "0x9b59064685ecfe130ac5d02b401e973c9a065858",
+    "implementation_runtime": "0x63e571f4ab251fe9ee0a4d344a7f7f2ec9e9aeafd652e39f09dd23cdb20cbdaa",
+    "fallback": "0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45",
+    "source": "https://github.com/lambdaclass/propamm-router-contracts/blob/d6e41d3d6f3bf9f8ec78dfea5957f81b7bed467b/src/PropAMMRouter.sol"
+  }
+}

@@ -13,6 +13,7 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
     c.ekubo = p.ekubo_proof();
     match p.direct_market() {
         Some(DirectCall::SolidlyRouter(a)) => c.solidly_router = Some(Box::new((*a).clone())),
+        Some(DirectCall::Ranges(a))=>c.ranges=Some(Box::new((*a).clone())),
         Some(DirectCall::RegisteredV3(a)) => c.registered_v3 = Some(Box::new((*a).clone())),
         Some(DirectCall::AntfarmOutput(a)) => c.antfarm_output = Some(Box::new((*a).clone())),
         Some(DirectCall::Antfarm(a)) => c.antfarm = Some(Box::new((*a).clone())),
@@ -20,6 +21,7 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
         Some(DirectCall::O1(t)) => c.o1 = Some(Box::new((*t).clone())),
         Some(DirectCall::Bundles(t))=>c.bundles=Some(Box::new((*t).clone())),
         Some(DirectCall::Dagrow(t)) => c.dagrow=Some(Box::new((*t).clone())),
+        Some(DirectCall::SafeSwap(t)) => c.safeswap=Some(Box::new((*t).clone())),
         Some(DirectCall::Pendle(t)) => c.pendle = Some(Box::new((*t).clone())),
         Some(DirectCall::Temple(t)) => c.temple = Some(Box::new((*t).clone())),
         Some(DirectCall::Carbon(a)) => {
@@ -41,6 +43,7 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
 #[derive(Clone, Copy)]
 pub(super) enum Saved<'a> {
     SolidlyRouter(&'a super::solidly_router_wallet::Proof),
+    Ranges(&'a super::ranges_wallet::Proof),
     RegisteredV3(&'a super::registered_v3_wallet::Proof),
     AntfarmOutput(&'a super::antfarm_output_wallet::Proof),
     Antfarm(&'a super::antfarm_wallet::Proof),
@@ -48,6 +51,7 @@ pub(super) enum Saved<'a> {
     FluxEth(&'a super::flux_eth::Proof),
     Bundles(&'a super::bundles_wallet::Proof),
     Dagrow(&'a super::dagrow_wallet::Proof),
+    SafeSwap(&'a super::safeswap_wallet::Proof),
     Pendle(&'a super::pendle_wallet::Proof),
     Temple(&'a super::temple_wallet::Proof),
     Carbon(&'a super::carbon_fact::Proof),
@@ -58,6 +62,7 @@ pub(super) enum Saved<'a> {
 fn entries(c: &SwapCtx) -> impl Iterator<Item = Saved<'_>> {
     [
         c.solidly_router.as_deref().map(Saved::SolidlyRouter),
+        c.ranges.as_deref().map(Saved::Ranges),
         c.registered_v3.as_deref().map(Saved::RegisteredV3),
         c.antfarm_output.as_deref().map(Saved::AntfarmOutput),
         c.antfarm.as_deref().map(Saved::Antfarm),
@@ -66,6 +71,7 @@ fn entries(c: &SwapCtx) -> impl Iterator<Item = Saved<'_>> {
         c.bundles.as_deref().map(Saved::Bundles),
         c.dagrow.as_deref().map(Saved::Dagrow),
         c.pendle.as_deref().map(Saved::Pendle),
+        c.safeswap.as_deref().map(Saved::SafeSwap),
         c.temple.as_deref().map(Saved::Temple),
         c.carbon.as_ref().map(Saved::Carbon),
         c.mint_club.as_ref().map(Saved::MintClub),
@@ -90,6 +96,7 @@ pub(in crate::venues::bsc_dex) async fn included(
     for saved in entries(c) {
         match saved {
             Saved::SolidlyRouter(p) => p.included(ctx, hash, receipt).await?,
+            Saved::Ranges(p)=>p.included(ctx,hash,receipt).await?,
             Saved::RegisteredV3(p) => p.included(ctx, hash, receipt).await?,
             Saved::AntfarmOutput(p) => p.included(ctx, hash, receipt).await?,
             Saved::Antfarm(p) => p.included(ctx, hash, receipt).await?,
@@ -97,6 +104,7 @@ pub(in crate::venues::bsc_dex) async fn included(
             Saved::O1(p) => p.included(ctx, hash, receipt).await?,
             Saved::Bundles(p)=>p.included(ctx,hash,receipt).await?,
             Saved::Dagrow(p)=>p.included(ctx,hash,receipt).await?,
+            Saved::SafeSwap(p)=>p.included(ctx,hash,receipt).await?,
             Saved::Pendle(p) => p.included(ctx, hash, receipt).await?,
             Saved::Temple(p) => p.included(ctx, hash, receipt).await?,
             Saved::Carbon(p) => p.included(ctx, hash, receipt).await?,
@@ -117,6 +125,7 @@ impl Saved<'_> {
     ) -> Result<(U256, U256), &'static str> {
         match self {
             Self::SolidlyRouter(p) => p.amounts(&r.logs,wallet,input,output).ok_or("Solidly Router01: не подтверждены расходы, получатель или выплата по исходному поручению"),
+            Self::Ranges(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Ranges: событие Vault и чистые движения кошелька расходятся с подписанным поручением"),
             Self::RegisteredV3(p) => p.amounts(&r.logs,wallet,input,output).ok_or("V3 Router: не подтверждены расходы, получатель или выплата по исходному поручению"),
             Self::AntfarmOutput(p) => p
                 .amounts(&r.logs, wallet, input, output)
@@ -128,6 +137,7 @@ impl Saved<'_> {
             Self::O1(p) => p.amounts(&r.logs, wallet, input, output).ok_or("o1: ключ, списание или выплата расходятся с подписанным поручением"),
             Self::Bundles(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Bundles Swap: подписанное поручение и движения денег расходятся"),
             Self::Dagrow(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("DAGrow: исходные границы, получатель или движения кошелька не подтверждены"),
+            Self::SafeSwap(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("SafeSwap: фактические выплаты пула и кошелька расходятся с исходным поручением"),
             Self::Pendle(p) => p.amounts(&r.logs,wallet,input,output).ok_or("Pendle: рынок, плательщик или переданные активы расходятся с поручением"),
             Self::Temple(p) => p.amounts(&r.logs, wallet, input, output).ok_or(
                 "TempleDAO: квитанция не подтвердила чистое списание и выплату исходной валюты",

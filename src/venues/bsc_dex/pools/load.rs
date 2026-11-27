@@ -105,6 +105,11 @@ pub async fn state(
         let state=Box::pin(super::surge::market(ctx,f,reference.address(),pair,&at)).await?;
         return Ok(Loaded{state:PoolState::Surge(Box::new(state)),ticks:None,bins:None,fee_pips:None});
     }
+    if f.variant==Variant::SafeSwapTrade {
+        let at=super::nami::block(ctx,&tag).await?;
+        let state=Box::pin(super::safeswap_quotes::load(ctx,tokens,reg,f,reference.address(),pair,usdt,&at)).await?;
+        return Ok(Loaded{state,ticks:None,bins:None,fee_pips:None});
+    }
     if f.variant==Variant::Pendle {
         let h=super::super::quote::white_state::head(ctx,&tag).await?;
         let state=Box::pin(super::pendle_quotes::load(ctx,tokens,reg,f,reference.address(),pair,usdt,h)).await?;

@@ -53,6 +53,8 @@ pub struct SwapCtx {
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub pendle:Option<Box<super::pendle_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
+    pub safeswap:Option<Box<super::safeswap_wallet::Proof>>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
     pub o1:Option<Box<super::o1_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub flux_eth:Option<Box<super::flux_eth::Proof>>,
@@ -60,6 +62,8 @@ pub struct SwapCtx {
     pub antfarm:Option<Box<super::antfarm_wallet::Proof>>,
     #[serde(default)]
     pub antfarm_output:Option<Box<super::antfarm_output_wallet::Proof>>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub ranges:Option<Box<super::ranges_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub registered_v3:Option<Box<super::registered_v3_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]

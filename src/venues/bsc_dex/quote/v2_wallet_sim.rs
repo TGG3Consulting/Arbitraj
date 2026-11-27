@@ -50,6 +50,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     EkuboV2(super::super::pools::ekubo_v2::OrderKey,Option<Address>),
     DirectModule { pool: Address },
     Bundles(super::super::exec::bundles_wallet::Terms),
+    SafeSwap(Address),
     Pendle(Address),
     Dagrow(super::super::exec::dagrow_wallet::Terms),
     Temple(std::sync::Arc<super::super::exec::temple_wallet::Key>),
@@ -57,6 +58,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     Antfarm(std::sync::Arc<super::super::exec::antfarm_wallet::Terms>),
     Vault(B256),
     O1(B256),
+    Ranges(super::super::exec::ranges_wallet::Market),
     FluxEth(super::super::exec::flux_eth::Market),
     Vista(super::super::exec::vista_wire::Call),
     Oasis { rebate: bool },
@@ -156,7 +158,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             approve::fork_exact(ctx,token,o.target,Some(U256::from_be_slice(&current)),amount)
         } else {approve::fork_known(ctx,token,o.target,U256::from_be_slice(&current),amount)}
     };
-    let mut approvals=if let Wire::FluxEth(m)=&o.wire {super::super::exec::flux_eth_plan::approvals(ctx,h,*m,&o).await?}else if wrapped==Some(o.input) || matches!(&o.wire,Wire::Vista(v) if v.form==super::super::exec::vista_wire::Form::SurgeEthOut){Vec::new()}else{
+    let mut approvals=if let Wire::Ranges(m)=&o.wire {super::super::exec::ranges_wallet::permissions(ctx,h,*m,&o).await?}else if let Wire::FluxEth(m)=&o.wire {super::super::exec::flux_eth_plan::approvals(ctx,h,*m,&o).await?}else if wrapped==Some(o.input) || matches!(&o.wire,Wire::Vista(v) if v.form==super::super::exec::vista_wire::Form::SurgeEthOut){Vec::new()}else{
         let cap=match &o.wire {Wire::Carbon(c)=>c.cap(),Wire::MintClub(c) if c.mint=>c.limit,_=>o.amount};
         allowed(o.input,cap).await?
     };
@@ -202,6 +204,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         let proof=super::super::exec::solidly_router_wallet::Proof{market:*market,target:o.target,payer:o.payer,input:o.input,output:o.output,budget:o.amount,minimum:o.minimum,deadline};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
     }
+    if let Wire::Ranges(m)=&o.wire && m.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::RegisteredV3(market)=&o.wire {
         let proof=super::super::exec::registered_v3_wallet::Proof{market:*market,target:o.target,payer:o.payer,input:o.input,output:o.output,budget:o.amount,minimum:o.minimum,deadline};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
@@ -223,6 +226,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         let proof=super::super::exec::o1_wallet::Proof{id:*id,module:o.target,payer:o.payer,input:o.input,output:o.output,amount:o.amount,minimum:o.minimum,deadline};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
     }
+    if let Wire::SafeSwap(m)=&o.wire && super::super::exec::safeswap_wallet::Proof::order(*m,&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::Pendle(m)=&o.wire && super::super::exec::pendle_wallet::Proof::order(*m,&o,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::Temple(key)=&o.wire {
         let proof=super::super::exec::temple_wallet::Proof{key:**key,payer:o.payer,input:o.input,output:o.output,amount:o.amount,minimum:o.minimum,deadline};
@@ -277,6 +281,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::Antfarm(t)=>t.data(minimum,deadline),
         Wire::Bundles(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Dagrow(t)=>t.proof(o,minimum,deadline).data(),
+        Wire::SafeSwap(m)=>super::super::exec::safeswap_wallet::Proof::order(*m,o,minimum,deadline).data(),
         Wire::Pendle(m)=>super::super::exec::pendle_wallet::data(*m,o.input,o.output,o.amount,minimum,deadline),
         Wire::Temple(k)=>k.data(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::EkuboV2(key,_) => key.calldata(minimum,deadline),
@@ -315,6 +320,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
             o.input, o.output, o.amount, minimum, o.payer, deadline, *rebate,
         ),
         Wire::SolidlyRouter(market) => market.order(o.input,o.output,o.amount,minimum,o.payer,deadline),
+        Wire::Ranges(m)=>m.order(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::RegisteredV3(market) => market.order(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::Umbrae(path) => path.data(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::SectorLb(path) => path.data(o.input,o.output,o.amount,minimum,o.payer,deadline),

@@ -117,32 +117,9 @@ contract SafeSwapAdapter {
         require(msg.sender==payer || msg.sender==executor,"payer");
         return _settle(Order(input,output,amount,minimum,recipient,deadline),false);
     }
-    function _settle(Order memory o,bool separate) private returns(uint256 credit) {
-        require(!entered && o.amount!=0 && block.timestamp<=o.deadline && o.recipient!=address(0) &&
-                o.recipient!=address(this) && o.recipient!=address(router) && o.recipient!=address(trade),"order");
-        entered=true;
-        address[] memory path=_assets(o.input,o.output);
-        require(o.recipient!=factory.getPair(o.input,o.output),"recipient");
-        (uint256 principal,uint256 fee)=_terms(path,o.amount,separate);
-        bool buy=o.input==address(wrapped);
-        require(msg.value==(separate?fee:0),"fee value");
-        uint256 publicBefore=address(trade)==address(0)?0:address(trade).balance;
-        // Only native exact-input explicitly pays feeJar(dexFee) and forwards precisely
-        // principal to the internal router. Token-input selectors forward the entire ETH balance.
-        bool nativeInput=publicBefore!=0;
-        require(!nativeInput || buy,"fee balance");
-        ISafeAsset src=ISafeAsset(o.input);ISafeAsset dst=ISafeAsset(o.output);
-        uint256 initial=address(this).balance-msg.value;
-        uint256 srcBase=src.balanceOf(address(this));uint256 dstBase=dst.balanceOf(address(this));
-        uint256 payerBase=src.balanceOf(msg.sender);uint256 recipientBase=dst.balanceOf(o.recipient);
-        uint256 spendable=src.allowance(address(this),address(router));
-        require(spendable==0,"previous allowance");
-        _move(src,abi.encodeCall(src.transferFrom,(msg.sender,address(this),o.amount)));
-        require(src.balanceOf(address(this))-srcBase==o.amount,"funding");
-        if(!separate && buy && fee!=0) wrapped.withdraw(fee);
-        if(!nativeInput) _move(src,abi.encodeCall(src.approve,(address(router),principal)));
-        bool repay=!separate && !buy && fee!=0;
-        address destination=repay?address(this):o.recipient;
+    struct Opening {uint256 etherBase; uint256 src; uint256 dst; uint256 payerIn; uint256 recipientOut; uint256 publicETH;}
+    function _swap(Order memory o,address[] memory path,uint256 principal,uint256 fee,
+                   address destination,bool nativeInput,bool repay) private {
         if(address(trade)==address(0)) {
             router.swapExactTokensForTokensSupportingFeeOnTransferTokens(principal,o.minimum,path,destination,o.deadline);
         } else if(nativeInput) {
@@ -152,17 +129,45 @@ contract SafeSwapAdapter {
         } else {
             trade.swapExactTokensForTokensWithFeeAmount{value:fee}(ISafeTrade.Trade(principal,o.minimum+(repay?fee:0),path,destination,o.deadline));
         }
+    }
+    function _settle(Order memory o,bool separate) private returns(uint256 credit) {
+        require(!entered && o.amount!=0 && block.timestamp<=o.deadline && o.recipient!=address(0) &&
+                o.recipient!=address(this) && o.recipient!=address(router) && o.recipient!=address(trade),"order");
+        entered=true;
+        address[] memory path=_assets(o.input,o.output);
+        require(o.recipient!=factory.getPair(o.input,o.output),"recipient");
+        (uint256 principal,uint256 fee)=_terms(path,o.amount,separate);
+        bool buy=o.input==address(wrapped);
+        require(msg.value==(separate?fee:0),"fee value");
+        Opening memory initial;
+        initial.publicETH=address(trade)==address(0)?0:address(trade).balance;
+        // Only native exact-input explicitly pays feeJar(dexFee) and forwards precisely
+        // principal to the internal router. Token-input selectors forward the entire ETH balance.
+        bool nativeInput=initial.publicETH!=0;
+        require(!nativeInput || buy,"fee balance");
+        ISafeAsset src=ISafeAsset(o.input);ISafeAsset dst=ISafeAsset(o.output);
+        initial.etherBase=address(this).balance-msg.value;
+        initial.src=src.balanceOf(address(this));initial.dst=dst.balanceOf(address(this));
+        initial.payerIn=src.balanceOf(msg.sender);initial.recipientOut=dst.balanceOf(o.recipient);
+        require(src.allowance(address(this),address(router))==0,"previous allowance");
+        _move(src,abi.encodeCall(src.transferFrom,(msg.sender,address(this),o.amount)));
+        require(src.balanceOf(address(this))-initial.src==o.amount,"funding");
+        if(!separate && buy && fee!=0) wrapped.withdraw(fee);
+        if(!nativeInput) _move(src,abi.encodeCall(src.approve,(address(router),principal)));
+        bool repay=!separate && !buy && fee!=0;
+        address destination=repay?address(this):o.recipient;
+        _swap(o,path,principal,fee,destination,nativeInput,repay);
         if(src.allowance(address(this),address(router))!=0) _move(src,abi.encodeCall(src.approve,(address(router),0)));
         if(repay) {
-            uint256 gross=dst.balanceOf(address(this))-dstBase;
+            uint256 gross=dst.balanceOf(address(this))-initial.dst;
             require(gross>fee,"reimbursement");
             wrapped.withdraw(fee);
             _move(dst,abi.encodeCall(dst.transfer,(o.recipient,gross-fee)));
         }
-        credit=dst.balanceOf(o.recipient)-recipientBase;
-        require(credit!=0 && credit>=o.minimum && payerBase-src.balanceOf(msg.sender)==o.amount,"net");
-        require(src.balanceOf(address(this))==srcBase && dst.balanceOf(address(this))==dstBase &&
-                address(this).balance==initial && (address(trade)==address(0) || address(trade).balance==publicBefore) && src.allowance(address(this),address(router))==0,"residual");
+        credit=dst.balanceOf(o.recipient)-initial.recipientOut;
+        require(credit!=0 && credit>=o.minimum && initial.payerIn-src.balanceOf(msg.sender)==o.amount,"net");
+        require(src.balanceOf(address(this))==initial.src && dst.balanceOf(address(this))==initial.dst &&
+                address(this).balance==initial.etherBase && (address(trade)==address(0) || address(trade).balance==initial.publicETH) && src.allowance(address(this),address(router))==0,"residual");
         emit Filled(msg.sender,o.recipient,o.input,o.output,o.amount,credit,fee,separate);
         entered=false;
     }

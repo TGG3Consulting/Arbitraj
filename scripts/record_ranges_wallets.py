@@ -114,6 +114,8 @@ def run(endpoint, number):
         if (amount_in,amount_out)!=(paid,credit):raise ValueError(("Vault and actual wallet differ",pool,source,target))
         return [*prefix,*approval,checked[0]],dict(stage="paid",debit=paid,credit=credit,
              state=checked[5],swap_fee_rate=rate,swap_fee_raw=charge,
+             signed={k:checked[0][k] for k in ("from","to","data")},
+             logs=[{"address":l["address"],"topics":l["topics"],"data":l["data"]} for l in result["logs"]],
              quote=int(quote["returnData"],16) if quote["status"]=="0x1" else quote.get("error"),
              gas=int(result["gasUsed"],16),min_plus_one="reverted",expired="reverted")
     # All four shards cover each initialized pool with funded cash. Exercise every nonempty target for one cash.

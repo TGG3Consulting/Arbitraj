@@ -117,7 +117,8 @@ pub async fn details(
     // форка на токен входа (exec/bundle.rs, wallet/approve.rs::fork_missing — тот же allowance(кошелёк, роутер)).
     // Решение 280: первый хоп — V2-форк без роутера (без исполнителя маршрут — сигнал): роутера нет, разрешение пошло
     // бы исполнителю — газ, измеренный пробой (dex.router не читается).
-    if route.mode == RouteMode::Direct
+    let permit_market = super::direct_allowance::permit_router(ctx,&e,route.mode,hop.fee_mode)?;
+    if permit_market.is_none() && route.mode == RouteMode::Direct
         && let Some(router) = super::direct_allowance::spender(ctx, &e, hop.fee_mode, native)?
     {
         let wallet = signer::address(ctx)?;
@@ -139,7 +140,7 @@ pub async fn details(
         }
         return Ok(measured(q, &e.pool.reference, quote.side)?.map(|u| (u, 1)));
     }
-    let (ur, permit2) = if route.mode == RouteMode::Smart {
+    let (ur, permit2) = if let Some(pair)=permit_market {pair} else if route.mode == RouteMode::Smart {
         (
             ctx.addr("smart.universal_router")?,
             ctx.addr("smart.permit2")?,

@@ -292,6 +292,16 @@ mod tests {
                             p.network,
                             p.id
                         );
+                    } else if k=="dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"),Some(Parameter::Text(kind)) if kind=="safeswap_trade_module") {
+                        let bytes=include_bytes!("../../tests/data/first_run_dex_2026-11-26/safeswap_ethereum_wallets.json.gz");
+                        let archive:Value=serde_json::from_reader(flate2::read::GzDecoder::new(bytes.as_slice())).unwrap();
+                        let dep=&archive["deployments"][3];
+                        assert_eq!(archive["selector"],snapshot["selector"]);
+                        assert_eq!(dep["creation_code"]["hash"],text.as_str());
+                        for (key,role) in [("dex.quoter",&dep["access"]["trade"]),("dex.safeswap_spender",&dep["roles"]["router"]),
+                                            ("dex.factory",&dep["roles"]["factory"])] {
+                            assert!(matches!(p.settings.get(key),Some(Parameter::Text(a)) if role["address"]==a.as_str()));
+                        }
                      } else if k=="dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"),Some(Parameter::Text(kind)) if kind=="safeswap_proxy_v5") {
                         let bytes=include_bytes!("../../tests/data/first_run_dex_2026-11-26/safeswap_ethereum_wallets.json.gz");
                         let archive:Value=serde_json::from_reader(flate2::read::GzDecoder::new(bytes.as_slice())).unwrap();

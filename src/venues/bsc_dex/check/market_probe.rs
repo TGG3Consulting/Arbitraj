@@ -28,6 +28,7 @@ enum Venue {
     FollowingBlock(Head),
     WalletRouter(Address),
     FundedExecutor,
+    SafeSwap,
     Pendle,
     Dagrow,
     Bundles,
@@ -47,7 +48,7 @@ pub(super) struct Leg {
 }
 impl Market {
     pub fn wallet_funded(ctx: &Ctx, e: &Entry) -> bool {
-        matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
+        e.family.variant==super::super::pools::family_variant::Variant::SafeSwapTrade || matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
             || mint_club_direct::enabled(e) || carbon_direct::enabled(e)
             || (super::registered_v3::configured(ctx,e) && super::super::exec::executor::address(ctx).ok().flatten().is_none())
     }
@@ -106,6 +107,13 @@ impl Market {
                     }
                 }
             }
+        } else if e.family.variant==super::super::pools::family_variant::Variant::SafeSwapTrade {
+            let head=white_state::head(ctx,&format!("{number:#x}")).await?;
+            let at=head.selector();
+            Box::pin(super::super::pools::safeswap_trade::market(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),&at)).await?;
+            super::registered_v3::funded(ctx,e,wallet,amount,head).await?;
+            anchor=Some((head,Box::new(e.clone())));
+            Venue::SafeSwap
         } else if e.family.variant==super::super::pools::family_variant::Variant::Pendle {
             let head=white_state::head(ctx,&format!("{number:#x}")).await?;
             if e.family.executor_kind.is_none(){return Err(super::super::pools::pendle::bad(ctx))}
@@ -190,7 +198,7 @@ impl Market {
     pub fn funding(&self, e: &Entry, source: Address, wallet: Address, amount: U256) -> Vec<Call> {
         if matches!(
             self.venue,
-            Venue::FollowingBlock(_) | Venue::Bundles | Venue::Pendle | Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::FundedExecutor
+            Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Pendle | Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::FundedExecutor
         ) || self.self_funded(e, source)
         {
             Vec::new()
@@ -311,7 +319,7 @@ impl Market {
                 bought,
                 (wallet, p, &buy.logs),
             ),
-            Venue::FollowingBlock(_) | Venue::Bundles | Venue::Pendle | Venue::Dagrow | Venue::Regular | Venue::WalletRouter(_) | Venue::FundedExecutor => Ok(None),
+            Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Pendle | Venue::Dagrow | Venue::Regular | Venue::WalletRouter(_) | Venue::FundedExecutor => Ok(None),
         }
     }
 }

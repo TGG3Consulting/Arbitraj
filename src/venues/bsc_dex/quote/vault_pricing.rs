@@ -42,38 +42,94 @@ pub(in crate::venues::bsc_dex) async fn confirm(
     Ok(())
 }
 
+pub(super) fn enabled(e: &Entry) -> bool {
+    vault_direct::enabled(e)
+        || e.family.variant == super::super::pools::family_variant::Variant::PuzzleRanges
+}
+
+async fn forms(
+    q: &Quoting,
+    i: &Input,
+    e: &Entry,
+    h: Option<Head>,
+) -> Option<(Address, V5Step, Option<Execution>)> {
+    use super::super::{
+        exec::ranges_wallet,
+        pools::{exact_wallet_tokens, family_variant::Variant},
+    };
+    let args = if i.side == crate::core::types::Side::Buy {
+        (i.usdt, i.coin)
+    } else {
+        (i.coin, i.usdt)
+    };
+    if e.family.variant == Variant::PuzzleRanges {
+        let (m, router) = ranges_wallet::Market::read(&q.ctx, e).ok()?;
+        let direct = if exact_wallet_tokens::eligible(&q.ctx, e.family.id, args.0, args.1)
+            && match h {
+                Some(h) => m
+                    .checked(&q.ctx, e, router, args, &h.selector())
+                    .await
+                    .is_ok(),
+                None => true,
+            } {
+            Some(Execution {
+                mode: RouteMode::Direct,
+                target: router,
+                wire: Wire::Ranges(m),
+            })
+        } else {
+            None
+        };
+        return Some((
+            m.vault,
+            V5Step {
+                native: None,
+                kind: 23,
+                pool: m.vault,
+                data: m.pool.abi_encode().into(),
+            },
+            direct,
+        ));
+    }
+    let (vault, id) = vault_direct::market(&q.ctx, e).ok()?;
+    if let Some(head) = h {
+        vault_direct::checked(&q.ctx, e, head).await.ok()?;
+    }
+    let direct = vault_direct::exact_output(&q.ctx, e, args.1, h)
+        .await
+        .is_ok()
+        .then_some(Execution {
+            mode: RouteMode::Direct,
+            target: vault,
+            wire: Wire::Vault(id),
+        });
+    Some((
+        vault,
+        V5Step {
+            native: None,
+            kind: 17,
+            pool: vault,
+            data: id.abi_encode().into(),
+        },
+        direct,
+    ))
+}
+
 pub(super) async fn candidates(q: &Quoting, i: &Input, h: Option<Head>) -> Vec<OptionQuote> {
     let Ok(payer) = signer::address(&q.ctx) else {
         return Vec::new();
     };
     let mut result = Vec::new();
-    for e in i.entries.iter().filter(|e| vault_direct::enabled(e)) {
-        let Ok((vault, id)) = vault_direct::market(&q.ctx, e) else {
+    for e in i.entries.iter().filter(|e| enabled(e)) {
+        let Some((vault, step, direct)) = forms(q, i, e, h).await else {
             continue;
         };
-        if let Some(head) = h
-            && vault_direct::checked(&q.ctx, e, head).await.is_err()
-        {
-            continue;
-        }
-        let direct = Execution {
-            mode: RouteMode::Direct,
-            target: vault,
-            wire: Wire::Vault(id),
-        };
-        let output = if i.side == crate::core::types::Side::Buy {
-            i.coin
-        } else {
-            i.usdt
-        };
-        if vault_direct::exact_output(&q.ctx, e, output, h)
-            .await
-            .is_ok()
-            && let Ok(opt) = Box::pin(v2_execution::option(q, i, e.clone(), payer, direct, h)).await
+        if let Some(form) = direct
+            && let Ok(opt) = Box::pin(v2_execution::option(q, i, e.clone(), payer, form, h)).await
         {
             result.push(opt);
         }
-        if crate::gateway::quote_stage::settlement()
+        if (crate::gateway::quote_stage::settlement() && vault_direct::enabled(e))
             || q.ctx.text("dex.router_mode").ok().as_deref() != Some("graph")
         {
             continue;
@@ -81,16 +137,10 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, h: Option<Head>) -> Vec<O
         let Ok(Some(target)) = executor::address(&q.ctx) else {
             continue;
         };
-        let step = V5Step {
-            native: None,
-            kind: 17,
-            pool: vault,
-            data: id.abi_encode().into(),
-        };
         let graph = Execution {
             mode: RouteMode::Graph,
             target,
-            wire: Wire::V5Funded(step,vec![vault]),
+            wire: Wire::V5Funded(step, vec![vault]),
         };
         if let Ok(opt) = Box::pin(v2_execution::option(q, i, e.clone(), payer, graph, h)).await {
             result.push(opt);

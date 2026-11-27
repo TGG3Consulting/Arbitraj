@@ -41,8 +41,10 @@ def facets(c,proxy,signatures):
     return dict(address=proxy,runtime=digest(root),selectors=selected,implementations=implementations,loupe=loupe,bytes=len(root),implementation_bytes=lengths)
 
 
-def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None, wrapped=WETH, router_method="swapExactTokensForTokensSupportingFeeOnTransferTokens", modes=("v5","router")):
-    token=next(t for t in market["tokens"] if t!=wrapped)
+def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None, wrapped=WETH, router_method="swapExactTokensForTokensSupportingFeeOnTransferTokens", modes=("v5","router"),cash=None,funding=None,audit=False):
+    cash = cash or wrapped
+    if cash != wrapped and funding is None:raise ValueError("independent funding required")
+    token=next(t for t in market["tokens"] if t!=cash)
     deadline=timestamp+120
     word=lambda n:"0x"+format(n,"064x")
     env={OWNER:{"balance":hex(10**19)},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
@@ -63,7 +65,7 @@ def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None,
             if any(before[2:]+after[2:]):raise ValueError("executor residue")
             data=dict(status=result["status"],spent=str(before[0]-after[0]),received=str(after[1]-before[1]),
                       gas=result["gasUsed"],approval_gas=answers[start-1]["gasUsed"],error=result.get("error"))
-            if router_method == "swapExactTokensForTokens" and result["status"]=="0x1":
+            if (audit or router_method == "swapExactTokensForTokens") and result["status"]=="0x1":
                 data.update(calldata=action["data"],logs=result["logs"],payer=OWNER)
             return data,action
         loose,_=trial(1)
@@ -74,7 +76,7 @@ def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None,
         if (exact["status"],exact["spent"],exact["received"],above["status"],above["spent"],above["received"])!=("0x1",str(size),str(net),"0x0","0","0"):
             raise ValueError("recipient floor or wallet debit differs")
         expired={}
-        if router_method=="swapExactTokensForTokens":
+        if audit or router_method=="swapExactTokensForTokens":
             expired,_=trial(net,1)
             if (expired["status"],expired["spent"],expired["received"])!=("0x0","0","0"):
                 raise ValueError("expired transaction changed wallet balances")
@@ -83,12 +85,12 @@ def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None,
     for size in sizes:
         for mode in modes:
             if fund_sale is not None:
-                sell,_=leg([fund_sale(size)],token,wrapped,size,mode)
+                sell,_=leg([fund_sale(size)],token,cash,size,mode)
                 trials.append(dict(mode=mode,size=str(size),sell=sell))
                 continue
-            fund=tx(wrapped,"deposit()",value=size)
-            buy,next_prefix=leg([fund],wrapped,token,size,mode)
-            sell,_=leg(next_prefix,token,wrapped,int(buy["exact"]["received"]),mode)
+            fund=funding(size) if funding else tx(wrapped,"deposit()",value=size)
+            buy,next_prefix=leg([fund],cash,token,size,mode)
+            sell,_=leg(next_prefix,token,cash,int(buy["exact"]["received"]),mode)
             trials.append(dict(mode=mode,size=str(size),buy=buy,sell=sell))
     return trials
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Обменивает собственные средства плательщика через DAGrow SSP. Ограничивает окончательное списание
+// Модуль развёртывает владелец в Ethereum. Обменивает собственные средства плательщика через DAGrow SSP. Ограничивает окончательное списание
 // и фактический приход адресату в той же транзакции. Тариф пула относится к адресу этого модуля.
 pragma solidity 0.8.37;
 
@@ -22,7 +22,7 @@ contract DagrowAdapter {
     IDagrowPool public immutable pool;
     address public immutable stable;
     address public immutable dagr;
-    bool private busy;
+    bool transient private busy;
     error InvalidOrder();
     error WalletAmount();
     event Settled(address indexed payer, address indexed recipient, address indexed input, address output,

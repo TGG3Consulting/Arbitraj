@@ -13,6 +13,7 @@ pub(super) use recovery::reconcile;
 mod dispatch;
 mod execute;
 mod indicative;
+mod prop_slot;
 mod levels;
 mod missed;
 mod receipt;

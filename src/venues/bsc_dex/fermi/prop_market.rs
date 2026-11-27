@@ -5,26 +5,25 @@ use super::{
 };
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::venues::bsc_dex::{
-    exec::prop_abi::{IProp, IStrict},
+    exec::prop_abi::IProp,
     pools::{families, prop_venue},
 };
-use alloy::sol_types::SolCall;
+use alloy::sol_types::{SolCall, SolValue};
 use alloy_primitives::{Address, B256, Bytes, U64, U256, keccak256};
 use chrono::Utc;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
-alloy::sol! { function balanceOf(address owner) external view returns(uint256); }
-
-struct Oracle {
-    market: Address,
-    address: Address,
-    hash: B256,
+#[derive(Clone, PartialEq, Eq)]
+pub(super) struct Oracle {
+    pub(super) market: Address,
+    pub(super) address: Address,
+    pub(super) hash: B256,
     slots: BTreeSet<B256>,
 }
 
 impl Oracle {
-    fn parse(market: Address, rows: &[String]) -> Option<Self> {
+    pub(super) fn parse(market: Address, rows: &[String]) -> Option<Self> {
         let [row] = rows else { return None };
         let mut fields = row.split_whitespace();
         let address: Address = fields.next()?.parse().ok()?;
@@ -52,7 +51,7 @@ impl Oracle {
         })
     }
 
-    fn frame(&self, builder: Builder, snapshot: &Value) -> Option<Frame> {
+    pub(super) fn frame(&self, builder: Builder, snapshot: &Value) -> Option<Frame> {
         let (row, number, slot) = match builder {
             Builder::Titan => {
                 let mut rows = snapshot["venues"].as_array()?.iter().filter(|r| {
@@ -198,7 +197,6 @@ pub(in crate::venues::bsc_dex) async fn preview(
     .filter(|v| !v.is_zero())
     .ok_or_else(|| bad("Недопустимый размер входа"))?;
     let call = |to: Address, data: Vec<u8>| json!({"from":payer,"to":to,"data":Bytes::from(data)});
-    let balance = balanceOfCall { owner: payer }.abi_encode();
     let decoded = || {
         ctx.err(
             ErrorCode::BadResponse,
@@ -207,47 +205,22 @@ pub(in crate::venues::bsc_dex) async fn preview(
     };
     let (net, gas) = if let Some(minimum) = floor {
         let module = ctx.dex_addr("dex.router", family.id)?;
-        prop_venue::module(ctx, family, &roles, module, &at).await?;
-        let order = IStrict::executeCall {
-            venue: market,
-            input: r.input,
-            output: r.output,
-            amount,
+        let terms = super::prop_slot::terms(ctx, family, &roles, module, &h).await?;
+        let amount_signed = alloy_primitives::I256::try_from(amount).map_err(|_| decoded())?;
+        let leg =
+            keccak256((h.hash, payer, market, r.input, r.output, amount, minimum).abi_encode());
+        let order = super::prop_slot::Order {
+            terms,
+            payer,
+            tokens: (r.input, r.output),
+            specified: amount_signed,
+            paid: amount,
             minimum,
-            deadline: U256::from(f.timestamp),
-        };
-        let before = call(r.input, balance.clone());
-        let after = call(r.output, balance.clone());
-        let steps = slot::run(
-            ctx,
-            &h,
-            &f,
-            json!([
-                before,
-                after,
-                call(module, order.abi_encode()),
-                before,
-                after
-            ]),
-        )
-        .await?;
-        let [a, b, paid, c, d] = steps.as_slice() else {
-            return Err(decoded());
-        };
-        if steps.iter().any(|x| x.status != U64::from(1)) || paid.gas_used.is_zero() {
-            return Err(decoded());
+            leg,
         }
-        let read = |x: &super::SimCall| {
-            balanceOfCall::abi_decode_returns(&x.return_data).map_err(|_| decoded())
-        };
-        let credit = read(d)?.checked_sub(read(b)?).ok_or_else(decoded)?;
-        if read(a)?.checked_sub(read(c)?) != Some(amount)
-            || credit < minimum
-            || IStrict::executeCall::abi_decode_returns(&paid.return_data).ok() != Some(credit)
-        {
-            return Err(decoded());
-        }
-        (credit, Some(paid.gas_used.to::<u64>()))
+        .proof(&h, &f, builder);
+        let (_, credit, gas) = super::prop_slot::simulate(ctx, &h, &f, &order, None).await?;
+        (credit, Some(gas))
     } else {
         let q = IProp::quoteVenueV1Call {
             venue: market,

@@ -370,7 +370,11 @@ impl Quoting {
         // Решение 301 (дополнение — стек): работа — в кучу здесь, состояние этого future держит указатель
         // (quote/cpu.rs run).
         // Решение 312: замер этапов работы — tm.run() = None (выключен): timed сразу ведёт работу без замера.
-        self.market_routes(pick,input,&fees,native,tm).await
+        let q = self.market_routes(pick,input,&fees,native,tm).await?;
+        if q.route.as_ref().is_some_and(|r|!self.reg.route_was_current(r,ambient_stamp.as_ref())) {
+            return Err(ctx.err(ErrorCode::StaleData,"Ambient: каноническая голова сменилась за время расчёта"));
+        }
+        Ok(q)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -480,9 +484,6 @@ impl Quoting {
         }
         tm.add(Part::Tip, t);
         Ok(q)
-        if q.route.as_ref().is_some_and(|r|!self.reg.route_was_current(r,ambient_stamp.as_ref())) {
-            return Err(ctx.err(ErrorCode::StaleData,"Ambient: каноническая голова сменилась за время расчёта"));
-        }
     }
 }
 

@@ -27,7 +27,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    каждое расхождение с причиной. Релиз готов только при нуле необъяснённых расхождений и закрытых пунктах R-*.
 >    Я проверяю прогон и только после этого сообщаю владельцу «релиз готов».
 
-Последний просмотренный коммит: `2cf81894` (27.11.2026).
+Последний просмотренный коммит: `d524fc59` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -1282,3 +1282,21 @@ BSC: `next_time(Some(56), ..)` = прежние +1 с — без изменен�
 - Исполнение RegisteredUniV3 — через `market_plan`/`market_receipt` (хорошо), но в `exec/trade_direct.rs` снова добавлена прямая
   проверка «если RegisteredUniV3 — одна нога ERC-20» (+5 строк). По R-42: такие ограничения формы — в `Market` (`dry`/`currency`),
   как у Antfarm/Temple/Carbon. Мелочь, но держим курс: общие файлы сейчас 378 / 378 / 217 / 200 / 455 / 394 строк — не растить.
+
+
+### d524fc59 — проверено (Sashimi, Solidly router, router_shape)
+`market_plan::router_shape` собрал ограничения формы для V3/Solidly/Umbrae/SectorOne — по R-42 хорошо. Для BSC `needs_wallet = false` →
+`Ok(())`. `check/taxes.rs`: `registered_v3::configured` для BSC сразу `false` (`exact_router()` ложно). BSC без изменений.
+
+## R-45 · 🔴 · Снова зашитые адреса и хеши кода в рабочем коде адаптера (класс R-26)
+Факт (d524fc59, вне `#[cfg(test)]`, на main в этих файлах 0):
+- `pools/exact_wallet_tokens.rs` — список из 4 токенов Ethereum (WETH, WBTC, DAI, LUSD) с хешами кода: «кому верим, что перевод
+  зачисляет полную сумму». Зашитый список.
+- `pools/antfarm.rs` — `FACTORY`, `ROUTER`, `ATF`, `FACTORY_CODE`, `ROUTER_CODE`, `PAIR_CODE[2]`, `INIT[2]`.
+- `exec/antfarm_output_wallet.rs` — `VAULT`, `VAULT_RUNTIME`, `RUNTIME`.
+- `fermi/frame.rs` — `ROUTER`, `ENGINE` (Fermi/Titan) — пропустил раньше, признаю.
+- `pools/quickswap_plugin.rs` — `PROXY_TEMPLATE` (хеш шаблона прокси). (`BEACON_SLOT` — стандартный слот EIP-1967, это константа протокола, ок.)
+Почему 🔴: ровно то, что мы закрыли в R-26/R-28 (CLAUDE.md: ни одного зашитого адреса/списка; меняется из интерфейса).
+Для большинства уже есть настройки: `dex.factory`, `dex.router`, `dex.router_runtime_hash`, `dex.pool_code_hashes`, `dex.vault`,
+`dex.module_runtime_hashes`. Список «точных» токенов — настройка площадки (адрес + хеш кода), с записью в SETTINGS_CASES и
+значениями в `first_run_dex.json` как советом. Закреплённые адреса внутри Solidity-контрактов — по-прежнему ок (R-26).

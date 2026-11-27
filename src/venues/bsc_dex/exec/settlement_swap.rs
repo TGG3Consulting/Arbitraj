@@ -37,12 +37,14 @@ pub async fn trade(p: &Parts, req: TradeRequest, quote: &Asset) -> GatewayResult
             r.executable
                 && matches!(
                     r.mode,
-                    RouteMode::Direct | RouteMode::Smart | RouteMode::Orderbook(_)
+                    RouteMode::Direct | RouteMode::Smart | RouteMode::Orderbook(_) | RouteMode::Relay(_)
                 )
         })
     {
         return Err(ctx.err(ErrorCode::NoRoute,"Для денежного свопа требуется закреплённый расчётный актив и однотранзакционный маршрут AMM"));
     }
+    if let Some(done)=super::super::ryze::recovery::prior(p,&req).await? {return Ok(done);}
+    if let Some(RouteMode::Relay(id))=req.route.as_ref().map(|r|r.mode){return super::super::ryze::execute::trade(p,req,id).await;}
     if let Some(RouteMode::Orderbook(id)) = req.route.as_ref().map(|r| r.mode) {
         return super::super::hanji::execute::trade(p, req, id).await;
     }

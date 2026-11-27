@@ -1,0 +1,95 @@
+{
+  "chain": 8453,
+  "height": 62262756,
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "state_root": "0x037b0c48cd33236cb94ec9e9fc7438c120b138c2c31d39d0ebe42521ee65676b",
+  "slots": {
+    "implementation": "0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3",
+    "admin": "0x10d6a54a4754c8869d6886b5f5d7fbfa5b4522237ea5c60d11bc4e7a1ff9390b"
+  },
+  "tokens": {
+    "WETH": {
+      "address": "0x4200000000000000000000000000000000000006",
+      "runtime": "0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x4200000000000000000000000000000000000006",
+      "name": "WETH9.sol:WETH9",
+      "files": {
+        "WETH9.sol": "0x4d1f8ddf0285893ea96fd28a698c1f54ec3b92fefe00f3e477381a1a47db5e5a"
+      },
+      "storage": {
+        "implementation": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "admin": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "USDC": {
+      "address": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "runtime": "0xa6705a10bb756b5dea144591118be77d7af0c3eee3bf2dfe2583dcb0364fefab",
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "name": "/Users/lnguyen/circle/centre-tokens/contracts/v1/FiatTokenProxy.sol:FiatTokenProxy",
+      "files": {
+        "/Users/lnguyen/circle/centre-tokens/contracts/v1/FiatTokenProxy.sol": "0x7e640892ac0fd6efafe4a9dc08cbc7ba5e825dafe8a6a8ebf717e7026b8fb69f",
+        "/Users/lnguyen/circle/centre-tokens/contracts/upgradeability/Proxy.sol": "0x6cc252e2b80c8ecaf6d29b950ba3591e4366caf06c3ccba89a8f9cbd2ee807e3",
+        "/Users/lnguyen/circle/centre-tokens/contracts/upgradeability/UpgradeabilityProxy.sol": "0xcd7d32b7a63b1803d2487434ec98a2ace4c41f087cc55057c3dc9f61628ce03a",
+        "/Users/lnguyen/circle/centre-tokens/contracts/upgradeability/AdminUpgradeabilityProxy.sol": "0xc93cb352d8b777ea96e743124af5386eeee32a9fdef0b2fbd89623988e66caad"
+      },
+      "storage": {
+        "implementation": "0x0000000000000000000000002ce6311ddae708829bc0784c967b7d77d19fd779",
+        "admin": "0x0000000000000000000000004fc7850364958d97b4d3f5a08f79db2493f8ca44"
+      },
+      "implementation": {
+        "address": "0x2ce6311ddae708829bc0784c967b7d77d19fd779",
+        "runtime": "0x11b75a237997ab8328f65b2d5a55c10f0346d0a175741ed42ddf4f2c66b9e873",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x2ce6311ddae708829bc0784c967b7d77d19fd779",
+        "name": "/Users/aloysius.chan/Repositories/circlefin/stablecoin-evm-private-usdc-mainnet-base/contracts/v2/FiatTokenV2_2.sol:FiatTokenV2_2",
+        "files": {
+          "/Users/aloysius.chan/Repositories/circlefin/stablecoin-evm-private-usdc-mainnet-base/contracts/v1/Pausable.sol": "0xa1112323b001871746d971f9dd2c61d094ea856146071537dc9d92e18e8cc829",
+          "/Users/aloysius.chan/Repositories/circlefin/stablecoin-evm-private-usdc-mainnet-base/contracts/v1/FiatTokenV1.sol": "0xd7d4cb362789154d93f826ada42dc65f0a1a1efa4864c0376c416452b4c4f434",
+          "/Users/aloysius.chan/Repositories/circlefin/stablecoin-evm-private-usdc-mainnet-base/contracts/v2/FiatTokenV2.sol": "0x4a17f2abc9d792b97ccd25ce3656be52cc9912ca080931a2af91620c085d2710",
+          "/Users/aloysius.chan/Repositories/circlefin/stablecoin-evm-private-usdc-mainnet-base/contracts/v1/Blacklistable.sol": "0x5222ed7885c2765f59841b92d912acd4b2fdec3b064a033c67b706b1b873a7a2",
+          "/Users/aloysius.chan/Repositories/circlefin/stablecoin-evm-private-usdc-mainnet-base/contracts/v2/FiatTokenV2_1.sol": "0x98ad86a34c485a54eb89e1ad52bd18b5bedf80cef350761102c542c4efa5e899",
+          "/Users/aloysius.chan/Repositories/circlefin/stablecoin-evm-private-usdc-mainnet-base/contracts/v2/FiatTokenV2_2.sol": "0xd277ba6a963efe6b837050efa4dd9da2c6e3736ac494d2098d099dd8411ffd27",
+          "/Users/aloysius.chan/Repositories/circlefin/stablecoin-evm-private-usdc-mainnet-base/contracts/v1.1/FiatTokenV1_1.sol": "0xf7fb808b12e8463014ccf9c2ef4bb9b190beda510549cb5475c30f3d04853375",
+          "/Users/aloysius.chan/Repositories/circlefin/stablecoin-evm-private-usdc-mainnet-base/contracts/v1/AbstractFiatTokenV1.sol": "0x71fb175b396fe43da0d05d9c51bee3b5be36e3beae202a609b39967de1ffccb3",
+          "/Users/aloysius.chan/Repositories/circlefin/stablecoin-evm-private-usdc-mainnet-base/contracts/v2/AbstractFiatTokenV2.sol": "0x3b29dd64caae65ba89374034f03753232aa20fbdfe28f209c904cd575e3a1e90"
+        }
+      },
+      "admin": "0x4fc7850364958d97b4d3f5a08f79db2493f8ca44"
+    },
+    "cbBTC": {
+      "address": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+      "runtime": "0x91149353e08445ba77a52bf7e4cef919054027f4ad42812b4314bbaf2abd8b71",
+      "source": "https://sourcify.dev/server/v2/contract/8453/0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+      "name": "lib/stablecoin-evm/contracts/v1/FiatTokenProxy.sol:FiatTokenProxy",
+      "files": {
+        "lib/stablecoin-evm/contracts/v1/FiatTokenProxy.sol": "0x7e640892ac0fd6efafe4a9dc08cbc7ba5e825dafe8a6a8ebf717e7026b8fb69f",
+        "lib/stablecoin-evm/contracts/upgradeability/Proxy.sol": "0x6cc252e2b80c8ecaf6d29b950ba3591e4366caf06c3ccba89a8f9cbd2ee807e3",
+        "lib/stablecoin-evm/contracts/upgradeability/UpgradeabilityProxy.sol": "0xcd7d32b7a63b1803d2487434ec98a2ace4c41f087cc55057c3dc9f61628ce03a",
+        "lib/stablecoin-evm/contracts/upgradeability/AdminUpgradeabilityProxy.sol": "0xc93cb352d8b777ea96e743124af5386eeee32a9fdef0b2fbd89623988e66caad"
+      },
+      "storage": {
+        "implementation": "0x0000000000000000000000007458bfdc30034eb860b265e6068121d18fa5aa72",
+        "admin": "0x00000000000000000000000042d90b3faf2287475cdc863706bd7cc3e938c2af"
+      },
+      "implementation": {
+        "address": "0x7458bfdc30034eb860b265e6068121d18fa5aa72",
+        "runtime": "0xe0aec0f6e7056bff3d64782ea95ddf88ec9beb40b65b0c854a698b248a6ca547",
+        "source": "https://sourcify.dev/server/v2/contract/8453/0x7458bfdc30034eb860b265e6068121d18fa5aa72",
+        "name": "lib/stablecoin-evm/contracts/v2/FiatTokenV2_1.sol:FiatTokenV2_1",
+        "files": {
+          "lib/stablecoin-evm/contracts/v2/FiatTokenV2_1.sol": "0x6328091a86a3ab02471fba7ff3bf44200f6daf9f0ff3b61fe4043ee14cc1a4f0",
+          "lib/stablecoin-evm/contracts/v2/FiatTokenV2.sol": "0x59654e02023dd9d712bb160545854eae6cba80d707a547f6abfaadcd830af2e7",
+          "lib/stablecoin-evm/contracts/v1.1/FiatTokenV1_1.sol": "0xa5f8fc4b5e739ddcafe52dd76ebb7605e09eb9d52a5c1d77e48dd88e83106308",
+          "lib/stablecoin-evm/contracts/v2/AbstractFiatTokenV2.sol": "0x5d393663d48e4bbb730630c117c2b703dd3c9968833e66dbbb18c92eab207afe",
+          "lib/stablecoin-evm/contracts/v1/FiatTokenV1.sol": "0x2778a1232f403718a084302e5d94a88ac336c3e47117a465d4055920c7d4f764",
+          "lib/stablecoin-evm/contracts/v1/AbstractFiatTokenV1.sol": "0x40be3ca7ed54e13ad0476a99ddea8ad4e08bcb4c4b43aac067d6b6ffd3d48680",
+          "lib/stablecoin-evm/contracts/v1/Pausable.sol": "0x873ce4f17eb8694cd0420ef6682c2da54290fe6e243f21ead37e90f211ac91b6",
+          "lib/stablecoin-evm/contracts/v1/Blacklistable.sol": "0xc4ff3bfe34c8ecf9f2c333f8373c111fdd4640ed15677c4891bb9cf3cbff9554"
+        }
+      },
+      "admin": "0x42d90b3faf2287475cdc863706bd7cc3e938c2af"
+    }
+  }
+}

@@ -74,6 +74,7 @@ pub async fn trade(
     req: TradeRequest,
     pend: &PendingRef,
 ) -> GatewayResult<Option<TradeResult>> {
+    if super::ryze::ledger::Marker::read(pend).is_some() {return super::ryze::recovery::reconcile(p,req,pend).await;}
     if matches!(
         req.route.as_ref().map(|r| r.mode),
         Some(crate::core::types::RouteMode::Orderbook(_))

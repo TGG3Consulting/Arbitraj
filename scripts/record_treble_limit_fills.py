@@ -59,10 +59,13 @@ def capture():
         hi=BOUNDARIES[epoch["id"]]
         header=rpc("eth_getBlockByNumber",[hex(hi),False])
         if hi > head:raise ValueError("fill after inventory")
-        def filled(block_hash):
+        def state(block_hash):
             raw=rpc("eth_call",[call,{"blockHash":block_hash,"requireCanonical":True}])
-            return raw!="0x" and decode(["bool"],bytes.fromhex(raw[2:]))[0]
-        if filled(header["parentHash"]) or not filled(header["hash"]):raise ValueError("epoch boundary")
+            return decode(["bool","int24","int24","uint128","address","address","address","uint128","uint128"],bytes.fromhex(raw[2:]))
+        before,after=state(header["parentHash"]),state(header["hash"])
+        identity=(epoch["tick_lower"],epoch["tick_upper"],market["x"],market["y"],market["deployer"])
+        if before[0] or not after[0] or any((*s[1:3],*s[4:7])!=identity for s in (before,after)):
+            raise ValueError("epoch boundary or pool identity")
         logs=rpc("eth_getLogs",[{"blockHash":header["hash"],"address":manager,
                       "topics":[topic("Fill(uint232,int24,bool)"),"0x"+encode(["uint232"],[epoch["id"]]).hex()]}])
         if len(logs)!=1:raise ValueError((epoch["id"],hi,"Fill count",len(logs)))
@@ -77,10 +80,18 @@ def capture():
                and int.from_bytes(bytes.fromhex(e["topics"][2][2:]),signed=True)==epoch["tick_lower"]
                and int.from_bytes(bytes.fromhex(e["topics"][3][2:]),signed=True)==epoch["tick_upper"]]
         swaps=[e for e in pool_logs if e["topics"][0]==swap]
-        if receipt["blockHash"]!=header["hash"] or receipt["status"]!="0x1" or fill_tick!=epoch["tick_lower"] or not burns or not swaps:
+        delta=[after[i]-before[i] for i in (7,8)]
+        amounts=[decode(["uint128","uint256","uint256"],bytes.fromhex(b["data"][2:])) for b in burns]
+        if before[3]==0 and not burns and before[3]==after[3] and delta==[0,0]:
+            outcome="crossed_empty_epoch"
+        elif (len(amounts)==1 and before[3]>0 and amounts[0][0]==before[3] and list(amounts[0][1:])==delta and max(delta)>0):
+            outcome="funded_order_filled"
+        else:
+            raise ValueError((epoch["id"],"unreconciled burn",before[3],delta,amounts))
+        if receipt["blockHash"]!=header["hash"] or receipt["status"]!="0x1" or fill_tick!=epoch["tick_lower"] or not swaps:
             raise ValueError((epoch["id"],hi,"pool/manager attribution",len(burns),len(swaps),[e["topics"][0] for e in pool_logs]))
         row["settlement"]=dict(epoch=epoch["id"],block=hi,parent=header["parentHash"],block_hash=header["hash"],
-                state_root=header["stateRoot"],tx=receipt["transactionHash"],direction=direction,fill=event,burns=burns,swaps=swaps)
+                outcome=outcome,liquidity_before=str(before[3]),amounts_credited=list(map(str,delta)),state_root=header["stateRoot"],tx=receipt["transactionHash"],direction=direction,fill=event,burns=burns,swaps=swaps)
     return {"chain":8453,"factory":inventory["factory"],"manager":manager,"selector":inventory["selector"],"markets":result}
 
 

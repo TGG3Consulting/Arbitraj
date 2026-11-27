@@ -72,8 +72,8 @@ pub fn kyber_final(settings: &Store, venue: &VenueId) -> bool {
 pub fn settlement_quote_supported(q: &crate::core::types::Quote, firm: bool) -> bool {
     use crate::core::types::{CostKind, RouteMode};
     q.route.as_ref().is_some_and(|r| match r.mode {
-        RouteMode::Direct | RouteMode::Smart | RouteMode::Orderbook(_) => r.executable,
-        RouteMode::OrderbookIndicative => !firm,
+        RouteMode::Direct | RouteMode::Smart | RouteMode::Orderbook(_) | RouteMode::Relay(_) => r.executable,
+        RouteMode::OrderbookIndicative | RouteMode::RelayIndicative => !firm,
         _ => false,
     }) && !q.costs.iter().any(|c| c.kind == CostKind::ApproveGas)
 }

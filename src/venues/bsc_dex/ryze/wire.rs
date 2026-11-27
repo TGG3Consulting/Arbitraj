@@ -19,6 +19,7 @@ alloy::sol! {
     function executeSwapIntents(SignedSwap[] signedIntents, bytes[] pythUpdateData, Price[] cexPriceData);
     function swapNonces(address user) external view returns(uint256);
     function validatePath(Hop[] path) external view returns(bool);
+    function feeCollector() external view returns(address);
     function intentFee() external view returns(uint256);
     event IntentSwapExecuted(address indexed user,address indexed tokenIn,address indexed tokenOut,
         uint256 amountIn,uint256 amountOut,address recipient,uint256 nonce,uint256 fee);

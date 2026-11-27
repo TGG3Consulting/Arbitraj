@@ -76,6 +76,7 @@ impl Subs {
             super::hashflow::feed::clear(p, &out).await;
             super::native_rfq::book::clear(p, &out).await;
             if p.ctx.chain_id() == Some(8453) {
+                super::ryze::book::clear(p, &out).await;
                 super::hanji::feed::clear(p, &out).await;
             }
             if p.ctx.chain_id() == Some(1) {
@@ -111,6 +112,7 @@ impl Subs {
             super::hashflow::feed::clear(p, &previous).await;
             super::native_rfq::book::clear(p, &previous).await;
             if p.ctx.chain_id() == Some(8453) {
+                super::ryze::book::clear(p, &previous).await;
                 super::hanji::feed::clear(p, &previous).await;
             }
             if p.ctx.chain_id() == Some(1) {
@@ -124,6 +126,7 @@ impl Subs {
             )));
         }
         if p.ctx.chain_id() == Some(8453) {
+            new.push(tokio::spawn(super::ryze::book::run(p.clone(),assets.clone(),out.clone())));
             new.push(tokio::spawn(super::hanji::feed::run(
                 p.clone(),
                 out.clone(),

@@ -23,35 +23,43 @@ fn samples() -> Vec<(Sample, SwapIntent)> {
     let raw = include_bytes!(
         "../../../../tests/data/first_run_dex_2026-11-26/ryze_base_historical_receipts.json.gz"
     );
-    let cases: Vec<Sample> = serde_json::from_reader(flate2::read::GzDecoder::new(&raw[..])).unwrap();
-    cases.into_iter().map(|case| { let batch = executeSwapIntentsCall::abi_decode_validate(&case.transaction.input).unwrap();
-    (case, batch.signedIntents.into_iter().next().unwrap().intent) }).collect()
+    let cases: Vec<Sample> =
+        serde_json::from_reader(flate2::read::GzDecoder::new(&raw[..])).unwrap();
+    cases
+        .into_iter()
+        .map(|case| {
+            let batch =
+                executeSwapIntentsCall::abi_decode_validate(&case.transaction.input).unwrap();
+            (case, batch.signedIntents.into_iter().next().unwrap().intent)
+        })
+        .collect()
 }
 
 #[test]
 fn mined_batch_binds_signer_nonce_router_path_and_wallet_deltas() {
-    let cases=samples();
-    let expected=[
-        (638_852_115u64,379_929_577_043_376_464u64,10_000u64,0u64),
-        (379_929_577_043_376_464,638_870_441,5_944_578_692_847,0),
-        (3476,2_053_827,17,1),
+    let cases = samples();
+    let expected = [
+        (638_852_115u64, 379_929_577_043_376_464u64, 10_000u64, 0u64),
+        (379_929_577_043_376_464, 638_870_441, 5_944_578_692_847, 0),
+        (3476, 2_053_827, 17, 1),
     ];
-    assert_eq!(cases.len(),expected.len());
-    for ((mut case,order),(spent,received,fee,path_credit)) in cases.into_iter().zip(expected) {
-    let tx = &case.transaction;
-    assert!(order.present_in(tx.to, &tx.input));
-    assert!(!order.present_in(Address::repeat_byte(2), &tx.input));
-    let mut wrong = order.clone();
-    wrong.nonce += U256::ONE;
-    assert!(!wrong.present_in(tx.to, &tx.input));
-    assert!(fill::confirmed(&wrong, tx.to, &case.receipt).is_none());
-    let f = fill::confirmed(&order, tx.to, &case.receipt).unwrap();
-    assert_eq!(f.input_to_router, U256::from(spent));
-    assert_eq!(f.output_from_router, U256::from(received));
-    assert_eq!(f.fee_in_input, U256::from(fee));
-    assert_eq!(f.input_from_path, U256::from(path_credit));
-    case.receipt.logs.extend(case.receipt.logs.clone());
-    assert!(fill::confirmed(&order, tx.to, &case.receipt).is_none());
+    assert_eq!(cases.len(), expected.len());
+    for ((mut case, order), (spent, received, fee, path_credit)) in cases.into_iter().zip(expected)
+    {
+        let tx = &case.transaction;
+        assert!(order.present_in(tx.to, &tx.input));
+        assert!(!order.present_in(Address::repeat_byte(2), &tx.input));
+        let mut wrong = order.clone();
+        wrong.nonce += U256::ONE;
+        assert!(!wrong.present_in(tx.to, &tx.input));
+        assert!(fill::confirmed(&wrong, tx.to, &case.receipt).is_none());
+        let f = fill::confirmed(&order, tx.to, &case.receipt).unwrap();
+        assert_eq!(f.input_to_router, U256::from(spent));
+        assert_eq!(f.output_from_router, U256::from(received));
+        assert_eq!(f.fee_in_input, U256::from(fee));
+        assert_eq!(f.input_from_path, U256::from(path_credit));
+        case.receipt.logs.extend(case.receipt.logs.clone());
+        assert!(fill::confirmed(&order, tx.to, &case.receipt).is_none());
     }
 }
 

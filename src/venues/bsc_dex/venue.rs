@@ -86,6 +86,7 @@ impl Venue for BscDex {
     fn rate_bound(&self, asset: &Asset, side: Side) -> crate::gateway::rate_bound::RateBound {
         if super::hashflow::enabled(&self.p.ctx) || super::native_rfq::routing::available(&self.p,asset,side)
             || super::hanji::routing::active(&self.p)
+            || super::ryze::routing::active(&self.p)
             || super::fermi::routing::active(&self.p)
         {
             return crate::gateway::rate_bound::RateBound::na(
@@ -188,6 +189,7 @@ impl Venue for BscDex {
         if crate::gateway::quote_stage::settlement() {
             let class = urgency::is_set().unwrap_or(Class::Quote);
             let baseline = scope(class, self.p.quoting().quote(asset, side, qty)).await;
+            let baseline=super::ryze::routing::consider(&self.p,asset,side,qty,baseline).await;
             return super::hanji::routing::consider(&self.p, asset, side, qty, baseline).await;
         }
         let baseline = async {
@@ -221,6 +223,7 @@ impl Venue for BscDex {
         let baseline =
             super::hashflow::routing::consider(&self.p, asset, side, qty, baseline).await;
         let baseline=super::native_rfq::routing::consider(&self.p,asset,side,qty,baseline).await;
+        let baseline=super::ryze::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline = super::fermi::routing::consider(&self.p, asset, side, qty, baseline).await;
         super::hanji::routing::consider(&self.p, asset, side, qty, baseline).await
     }
@@ -237,6 +240,7 @@ impl Venue for BscDex {
         }
         if super::hashflow::enabled(&self.p.ctx) || super::native_rfq::routing::available(&self.p,asset,side)
             || super::hanji::routing::active(&self.p)
+            || super::ryze::routing::active(&self.p)
             || super::fermi::routing::active(&self.p)
             || (crate::gateway::quote_stage::is_final()
                 && self.p.ctx.flag("exec.via_kyber").unwrap_or(false))
@@ -260,6 +264,7 @@ impl Venue for BscDex {
     ) -> GatewayResult<Vec<Decimal>> {
         let q = self.p.quoting();
         let mut extra = super::hanji::routing::breaks(&self.p, asset, side, max_qty);
+        extra.extend(self.p.ryze.breaks(&self.p,asset,side,max_qty));
         if !crate::gateway::quote_stage::settlement() {
             extra.extend(super::hashflow::routing::breaks(
                 &self.p, asset, side, max_qty,
@@ -273,6 +278,8 @@ impl Venue for BscDex {
         let mut points = if matches!(
             route.mode,
             crate::core::types::RouteMode::RfqIndicative
+                | crate::core::types::RouteMode::Relay(_)
+                | crate::core::types::RouteMode::RelayIndicative
                 | crate::core::types::RouteMode::Rfq(_)
                 | crate::core::types::RouteMode::Orderbook(_)
                 | crate::core::types::RouteMode::Slot(_)
@@ -880,6 +887,7 @@ impl BscDex {
         // Решение 132: сделка — только кошельком счёта (Ctx::bound).
         self.p.ctx.bound()?;
         let mut req = req;
+        if let Some(done)=super::ryze::recovery::prior(&self.p,&req).await? {return Ok(done);}
         if !matches!(
             req.route.as_ref().map(|r| r.mode),
             Some(crate::core::types::RouteMode::Orderbook(_))
@@ -891,6 +899,7 @@ impl BscDex {
             req.route.as_ref().map(|r| r.mode),
             Some(
                 crate::core::types::RouteMode::RfqIndicative
+                    | crate::core::types::RouteMode::RelayIndicative
                     | crate::core::types::RouteMode::OrderbookIndicative
                     | crate::core::types::RouteMode::SlotIndicative
             )
@@ -913,6 +922,7 @@ impl BscDex {
         {
             return super::hanji::execute::trade(&self.p, req, id).await;
         }
+        if let Some(crate::core::types::RouteMode::Relay(id))=req.route.as_ref().map(|r|r.mode) {return super::ryze::execute::trade(&self.p,req,id).await;}
         if let Some(crate::core::types::RouteMode::Slot(id)) = req.route.as_ref().map(|r| r.mode) {
             return super::fermi::trade(&self.p, req, id).await;
         }

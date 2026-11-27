@@ -1,5 +1,16 @@
 //! Спотовый AMM Ryze. EIP‑712 и выплаты собственному кошельку сверяются с исполненной заявкой в batch.
+pub(crate) mod book;
+pub(crate) mod chain;
+pub(crate) mod deployment;
+pub(crate) mod execute;
 pub mod fill;
+pub mod http;
+pub mod ledger;
+pub(crate) mod market;
+pub mod price;
+pub(crate) mod recovery;
+pub(crate) mod routing;
 #[cfg(test)]
 mod tests;
+pub(crate) mod tokens;
 pub mod wire;

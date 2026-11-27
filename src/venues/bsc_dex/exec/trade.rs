@@ -102,6 +102,7 @@ fn by_whom(ctx: &Ctx, reg: &Registry, route: &DexRoute, native: bool) -> &'stati
             }
         }
         RouteMode::Slot(_) | RouteMode::SlotIndicative => "FermiSwap",
+        RouteMode::Relay(_) | RouteMode::RelayIndicative => "Ryze",
         RouteMode::Orderbook(_) | RouteMode::OrderbookIndicative => "Hanji",
         RouteMode::Smart => result::BY_SMART,
         RouteMode::Graph => match graph_route::graph_form(ctx, route) {

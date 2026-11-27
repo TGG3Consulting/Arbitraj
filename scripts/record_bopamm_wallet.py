@@ -6,7 +6,7 @@ from pathlib import Path
 
 from eth_abi import decode, encode
 from eth_utils import keccak
-from record_bopamm_ethereum import (AMM, DATA, FILL, FUNDING, MARKET_EVENT, OWNER, PAMM, REGISTRY,
+from record_bopamm_ethereum import (AMM, DATA, FILL, FUNDING, MARKET_EVENT, OWNER, PAMM, REGISTRY, ROUTER, USDT,
                                     USDC, WETH, approval, balance, raw, signed_update, tx)
 from record_base_slipstream_executor import simulate_block
 from record_kewlswap_base import create_address
@@ -32,15 +32,26 @@ def maker_fills(logs, a, b, receiver, requested, paid):
     transfers = [(x["address"],address(x["topics"][1]),address(x["topics"][2]),int(x["data"],16))
                  for x in logs if len(x["topics"]) == 3 and x["topics"][0] == TRANSFER]
     fills = []
+    direct = USDC in (a,b)
+    totals = {}
     for x in market:
         if x["topics"][0] != FILL:
             continue
-        assert [address(v) for v in x["topics"][2:]] == [a,b]
+        leg_in,leg_out = [address(v) for v in x["topics"][2:]]
+        assert (leg_in,leg_out) in ([(a,b)] if direct else [(a,USDC),(USDC,b)])
+        target = receiver if leg_out == b else AMM
         size, value = decode(["uint256","uint256"],raw(x["data"]))
-        maker, = [to for asset,origin,to,qty in transfers if (asset,origin,qty) == (a,AMM,size)]
-        assert transfers.count((b,maker,receiver,value)) == 1
-        fills.append(dict(id=int(x["topics"][1],16),maker=maker,spent=str(size),received=str(value)))
-    assert sum(int(f["spent"]) for f in fills) == requested and sum(int(f["received"]) for f in fills) == paid
+        maker, = [to for asset,origin,to,qty in transfers if (asset,origin,qty) == (leg_in,AMM,size)]
+        assert transfers.count((leg_out,maker,target,value)) == 1
+        key = leg_in,leg_out
+        spent,net = totals.get(key,(0,0))
+        totals[key] = spent+size,net+value
+        fills.append(dict(id=int(x["topics"][1],16),maker=maker,input=leg_in,output=leg_out,spent=str(size),received=str(value)))
+    if direct:
+        assert totals[(a,b)] == (requested,paid)
+    else:
+        assert totals[(a,USDC)][0] == requested and totals[(USDC,b)][1] == paid
+        assert totals[(a,USDC)][1] == totals[(USDC,b)][0]
     return fills
 
 def capture(reader, artifact, price, historical):
@@ -84,6 +95,8 @@ def wallet_trials(reader,artifact,tag,height,timestamp,block,amounts,update=None
             FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",
             ["uint256","address[]","address","uint256"],[2*size,[WETH,a],OWNER,timestamp],value=10**18)
         reads = [balance(t,who) for who in [OWNER,AMM,module] for t in [a,b]]
+        if USDC not in (a,b):
+            reads.append(balance(USDC,AMM))
         prefix = [deposited,approval(a,module,2*size),*reads]
         def settled(calls,updated=True):
             runtime, values = run(prefix+calls+reads,updated)
@@ -101,9 +114,44 @@ def wallet_trials(reader,artifact,tag,height,timestamp,block,amounts,update=None
             assert spent == size and net > 0
             return dict(status="0x1",spent=str(spent),net=str(net),runtime=runtime)
         before, after = once(False), once(True)
+        comparison = {}
+        if published:
+            def public(floor):
+                return tx(ROUTER,"swapViaVenueV1(address,address,address,uint256,uint256,address,uint256)",
+                    ["address","address","address","uint256","uint256","address","uint256"],[AMM,a,b,size,floor,OWNER,timestamp])
+            def measure(floor):
+                _, entries=run([deposited,approval(a,ROUTER,size),*reads,public(floor),*reads])
+                n=2+len(reads)
+                assert all(v["status"]=="0x1" for v in entries[:n]+entries[n+1:])
+                prior=[int(v["returnData"],16) for v in entries[2:n]]
+                final=[int(v["returnData"],16) for v in entries[n+1:]]
+                row=entries[n]
+                if row["status"]=="0x0":
+                    assert prior==final
+                    return dict(status="0x0",error=row.get("error"))
+                payout,venue=decode(["uint256","address"],raw(row["returnData"]))
+                dx=prior[0]-final[0];dy=final[1]-prior[1]
+                assert dx==size and dy==payout and dy>=floor and prior[2:]==final[2:]
+                proof=maker_fills(row["logs"],a,b,OWNER.lower(),dx,dy) if venue==AMM else []
+                assert (venue==AMM)==any(x["address"]==AMM and x["topics"][:1]==[MARKET_EVENT] for x in row["logs"])
+                return dict(status="0x1",venue=venue,spent=str(dx),net=str(dy),gas=int(row["gasUsed"],16),
+                            approval_gas=int(entries[1]["gasUsed"],16),maker_fills=proof,transaction=public(floor),logs=row["logs"])
+            measured=measure(1)
+            if measured["status"]=="0x1":
+                floor=int(measured["net"])
+                exact=measure(floor)
+                assert measured["net"]==exact["net"] and measured["venue"]==exact["venue"]
+                measured=exact
+                upper=measure(floor+1)
+                assert upper["status"]=="0x0" or int(upper["net"])>=floor+1
+                measured["upper"]={"status":upper["status"],"venue":upper.get("venue"),"net":upper.get("net")}
+            comparison["public_router"]=measured
         if after["status"] == "0x0":
-            return dict(input=a,output=b,amount=str(size),before=before,after=after)
+            return dict(input=a,output=b,amount=str(size),before=before,after=after,**comparison)
         net = int(after["net"])
+        _,grants = run([deposited,approval(a,module,2*size)])
+        assert all(v["status"]=="0x1" for v in grants)
+        after["approval_gas"] = int(grants[-1]["gasUsed"],16)
         invalid = [order(net+1),order(net,number=height+1),order(net,slot=timestamp+12),order(net,parent=bytes(32))]
         executed = order(net)
         runtime, spent, value, results = settled(invalid+[executed,executed])
@@ -116,7 +164,7 @@ def wallet_trials(reader,artifact,tag,height,timestamp,block,amounts,update=None
         assert decode(["address","uint256","uint256"],raw(own["data"])) == (b,size,net)
         after.update(fills=maker_fills(x["logs"],a,b,OWNER.lower(),size,net),gas=int(x["gasUsed"],16),
                      transaction=executed,logs=x["logs"],controls=[r.get("error") for r in results if r["status"] == "0x0"])
-        return dict(input=a,output=b,amount=str(size),before=before,after=after)
+        return dict(input=a,output=b,amount=str(size),before=before,after=after,**comparison)
     return module, [trial(a,b,n) for a,b,n in amounts]
 
 def published_frames(reader,artifact,observations):
@@ -139,7 +187,8 @@ def published_frames(reader,artifact,observations):
             patch=sample["stateDiff"]
             assert 0<len(patch)<=128 and all(len(raw(k))==32 for d in patch.items() for k in d)
             module,legs=wallet_trials(reader,artifact,tag,sample["target"],slot_time,{"time":hex(slot_time)},
-                [(WETH,USDC,10**15),(USDC,WETH,10**6)],published=patch)
+                [(WETH,USDC,10**15),(USDC,WETH,10**6),(WETH,USDT,10**15),(USDT,WETH,10**6),
+                 (USDC,USDT,10**6),(USDT,USDC,10**6)],published=patch)
             cases.append({"target":sample["target"],"slot":sample["slot"],"parent":sample["parent"],
                           "frame_observed_ns":sample["observed_ns"],"module":module,"cases":legs,
                           "source_quotes":sample["quotes"]})

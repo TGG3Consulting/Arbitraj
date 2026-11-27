@@ -97,7 +97,7 @@ fn first_funded_input_matches_exhaustive_small_reserves_at_both_sides_of_price_p
     for fee in [0, 3_000_000_000_000_000u64] {
         for slip in [
             0,
-            75_000_000_000_000_000,
+            75_000_000_000_000_000u64,
             828_830_973_208_080_598,
             1_000_000_000_000_000_000,
         ] {

@@ -9,53 +9,8 @@ fn scale() -> U256 {
 
 // У обеих библиотек VirtualBalance.Data поле balance — uint216.
 const VIRTUAL_BALANCE_BITS: usize = 216;
-type Wide = alloy_primitives::Uint<768, 12>;
-
-/// Огибающая по целому gross. При g=floor(t*y/(x+t)) доля t/(x+t) >= g/y,
-/// поэтому g*(y*D-slippage*g) >= target*y*D необходимо для любой выплаты.
-fn interval(y: U256, want: U256, slippage: U256) -> Option<(U256, U256)> {
-    let last = y.checked_sub(U256::ONE)?;
-    if want > last || slippage > scale() {
-        return None;
-    }
-    if slippage.is_zero() {
-        return Some((want, last));
-    }
-    let yd = Wide::from(y) * Wide::from(scale());
-    let threshold = Wide::from(want) * yd;
-    let value = |g: U256| Wide::from(g) * (yd - Wide::from(slippage) * Wide::from(g));
-    let mut peak = if slippage <= scale() / U256::from(2) {
-        last
-    } else {
-        super::full_math::mul_div(y, scale(), slippage * U256::from(2))?.min(last)
-    };
-    if peak < last && value(peak + U256::ONE) > value(peak) {
-        peak += U256::ONE
-    }
-    if value(peak) < threshold {
-        return None;
-    }
-    let (mut lo, mut hi) = (U256::ZERO, peak);
-    while lo < hi {
-        let m = lo + ((hi - lo) >> 1);
-        if value(m) >= threshold {
-            hi = m
-        } else {
-            lo = m + U256::ONE
-        }
-    }
-    let start = lo;
-    (lo, hi) = (peak, last);
-    while lo < hi {
-        let m = hi - ((hi - lo) >> 1);
-        if value(m) >= threshold {
-            lo = m
-        } else {
-            hi = m - U256::ONE
-        }
-    }
-    Some((start, hi))
-}
+#[path = "mooniswap_inverse.rs"]
+mod inverse;
 
 impl MooniswapState {
     fn current(&self, (value, updated): (U256, u64), real: U256) -> Option<U256> {
@@ -102,33 +57,7 @@ impl MooniswapState {
                 complete: true,
             });
         }
-        let (mut gross, last) = interval(y, amount, self.slippage_fee)?;
-        while gross <= last {
-            let taxed = super::full_math::mul_div_up(gross, x, y - gross)?;
-            let dx = super::full_math::mul_div(
-                taxed.checked_sub(U256::ONE)?,
-                scale(),
-                scale() - self.fee,
-            )?
-            .checked_add(U256::ONE)?;
-            let (out, num, den) = self.forward(x, y, dx)?;
-            if out >= amount {
-                return Some(Swapped {
-                    amount_in: dx,
-                    amount_out: out,
-                    complete: true,
-                });
-            }
-            if num.is_zero() {
-                return None;
-            }
-            let next = super::full_math::mul_div_up(amount, den, num)?;
-            if next <= gross {
-                return None;
-            }
-            gross = next;
-        }
-        None
+        inverse::first(self, x, y, amount, || {})
     }
     /// Обновление виртуальных направлений после полностью оплаченного входа с нулевым referral.
     pub fn after(&self, input: Address, paid: U256, out: U256) -> Option<Self> {

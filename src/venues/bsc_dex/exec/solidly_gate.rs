@@ -319,7 +319,7 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             f.variant,
             Variant::SlipstreamAero
                 | Variant::SlipstreamAeroMetaquoter
-                | Variant::SlipstreamDynamicFee | Variant::SlipstreamUniversal | Variant::TopazCl
+                | Variant::SlipstreamDynamicFee | Variant::SlipstreamUniversal | Variant::TopazCl | Variant::RegisteredSlipstream
         ) && let PoolRef::Contract(pool) = e.pool.reference
         {
             aero_fresh(q, e, pool).await?;
@@ -372,7 +372,7 @@ async fn aero_fresh(q: &Quoting, e: &Entry, pool: Address) -> GatewayResult<()> 
         );
         return Err(ctx.err(ErrorCode::NoRoute, why));
     };
-    let now=if f.variant.origin_fee() {let at=super::super::pools::nami::block(ctx,"latest").await?;Box::pin(super::super::pools::topaz::fee(ctx,f,pool,(e.pool.token0,e.pool.token1),spacing,&at)).await?} else if matches!(f.variant,Variant::SlipstreamDynamicFee | Variant::SlipstreamUniversal) {
+    let now=if f.variant.checked_slipstream_fee() {let at=super::super::pools::nami::block(ctx,"latest").await?;Box::pin(super::super::pools::topaz::fee(ctx,f,pool,(e.pool.token0,e.pool.token1),spacing,&at)).await?} else if matches!(f.variant,Variant::SlipstreamDynamicFee | Variant::SlipstreamUniversal) {
         super::super::pools::fee_fresh::read(ctx, pool, "latest").await?
     } else {
         aero_cl::fee_latest(ctx, f, pool, spacing).await?

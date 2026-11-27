@@ -244,9 +244,12 @@ fn both_router02_keys_reproduce_paid_calldata_and_receipts_after_restart() {
     let books: Value = serde_json::from_reader(GzDecoder::new(fixture.as_slice())).unwrap();
     let addr = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
     let units = |v: &Value| v.as_str().unwrap().parse::<U256>().unwrap();
+    let virtus = include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/virtus_cl_base.json.gz");
+    let mut books=books;
+    books["virtus"] = serde_json::from_reader(GzDecoder::new(virtus.as_slice())).unwrap();
     let guarded = include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/wagmi_thick_modules.json.gz");
     let modules: Value = serde_json::from_reader(GzDecoder::new(guarded.as_slice())).unwrap();
-    for (name, wire, count) in [("wagmi","router02",16), ("thick","router02",16), ("2thick","router02",12),
+    for (name, wire, count) in [("wagmi","router02",16), ("thick","router02",16), ("2thick","router02",12), ("virtus","slipstream",36),
                                 ("wagmi","module",16), ("thick","module",16)] {
         let book = &books[name];
         let mut verified = 0;
@@ -255,7 +258,7 @@ fn both_router02_keys_reproduce_paid_calldata_and_receipts_after_restart() {
         assert_eq!(original["selector"],book["selector"]);
         for row in original["cases"].as_array().unwrap().iter().filter(|r| r["wire"] == wire) {
             let market = book["markets"].as_array().unwrap().iter().find(|m| m["pool"] == row["pool"]).unwrap();
-            let key = if name == "2thick" { Key::Spacing(I24::try_from(market["spacing"].as_i64().unwrap()).unwrap()) } else { Key::Fee };
+            let key = if name=="virtus" {Key::InlineSpacing(I24::try_from(market["spacing"].as_i64().unwrap()).unwrap())} else if name == "2thick" { Key::Spacing(I24::try_from(market["spacing"].as_i64().unwrap()).unwrap()) } else { Key::Fee };
             let tx = &row["tx"];
             let signed: Bytes = tx["data"].as_str().unwrap().parse().unwrap();
             let proof = Proof {
@@ -266,7 +269,7 @@ fn both_router02_keys_reproduce_paid_calldata_and_receipts_after_restart() {
                 },
                 target:addr(&tx["to"]), payer:addr(&tx["from"]), input:addr(&row["input"]),
                 output:addr(&row["output"]), budget:units(&row["spent"]), minimum:units(&row["received"]),
-                deadline:U256::from_be_slice(if module { &signed[signed.len()-32..] } else { &signed[4..36] }),
+                deadline:U256::from_be_slice(if module { &signed[signed.len()-32..] } else if name=="virtus" { &signed[4+4*32..4+5*32] } else { &signed[4..36] }),
             };
             let restored: Proof = serde_json::from_value(serde_json::to_value(proof).unwrap()).unwrap();
             let logs: Vec<Log> = serde_json::from_value(row["logs"].clone()).unwrap();

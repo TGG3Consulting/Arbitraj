@@ -69,6 +69,7 @@ pub enum Variant {
     SlipstreamDynamicFee,
     SlipstreamUniversal,
     TopazCl,
+    RegisteredSlipstream,
     /// Solidly V3 Ethereum/Base, slot0 с комиссией, встроенный quoteSwap и свой ABI оплаты.
     SolidlyCl,
     /// V2 с фиксированной реализацией пары: адрес сверяется по хешу байткода создания CREATE2.
@@ -229,6 +230,7 @@ impl Variant {
     /// У шага 17 адрес отдельного рынка закодирован как poolId, а назначение — модуль фабрики.
     pub fn pool_address_step(self)->bool{self.registered_module() || matches!(self,Self::Stabull | Self::MaverickOne)}
     /// Величина платы меняется по tx.origin и может измениться между двумя шагами в одном пуле.
+    pub(crate) fn checked_slipstream_fee(self) -> bool { matches!(self, Self::TopazCl | Self::RegisteredSlipstream) }
     pub fn origin_fee(self)->bool{self==Self::TopazCl}
     /// These native routers and their callback modules have separate configured addresses.
     pub(crate) fn separate_v3_router(self) -> bool { matches!(self, Self::VvsV3 | Self::ShibaswapV2) }
@@ -241,7 +243,7 @@ impl Variant {
     pub(crate) fn empire_nominal(self)->bool {matches!(self,Self::EmpireNominal)}
     pub(crate) fn empire(self)->bool {matches!(self,Self::EmpireRaw|Self::EmpireModule|Self::EmpireNominal)}
     pub fn wallet_module(self)->bool { matches!(self,Self::EmpireModule|Self::Stabull|Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::ShibaswapV2|Self::BunnySwap|Self::CandySwap) }
-    pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredSpacingV3|Self::MaverickTwoRouter|Self::SlipstreamUniversal|Self::CypherIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::ShibaswapV2|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter|Self::EmpireNominal)}
+    pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredSlipstream|Self::RegisteredSpacingV3|Self::MaverickTwoRouter|Self::SlipstreamUniversal|Self::CypherIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::ShibaswapV2|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter|Self::EmpireNominal)}
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator | Self::SolidlyProxy | Self::SolidlyPairOverride)}
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
 
@@ -282,6 +284,7 @@ pub fn of(kind: &str) -> Variant {
         "kyber_elastic_v5" | "kyber_elastic_module" => Variant::ElasticV5,
         "slipstream_aero" => Variant::SlipstreamAero,
         "slipstream_aero_metaquoter" => Variant::SlipstreamAeroMetaquoter,
+        "registered_slipstream" => Variant::RegisteredSlipstream,
         "topaz_cl" => Variant::TopazCl,
         "slipstream_dynamic_fee" => Variant::SlipstreamDynamicFee,
         "slipstream_dynamic_ur" => Variant::SlipstreamUniversal,

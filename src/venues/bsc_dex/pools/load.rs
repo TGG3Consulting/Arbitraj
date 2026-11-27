@@ -1182,7 +1182,7 @@ async fn read(
                 }
                 // CLPool.fee() делегирует фабрике getSwapFee(pool), в том числе модулю комиссии.
                 // https://github.com/aerodrome-finance/slipstream/blob/main/contracts/core/CLPool.sol
-                Variant::TopazCl => {let at=super::nami::block(ctx,&tag).await?;Some(Box::pin(super::topaz::fee(ctx,f,*a,pair,sp,&at)).await?)},
+                v if v.checked_slipstream_fee() => {let at=super::nami::block(ctx,&tag).await?;Some(Box::pin(super::topaz::fee(ctx,f,*a,pair,sp,&at)).await?)},
                 Variant::SlipstreamDynamicFee | Variant::SlipstreamUniversal => Some(fee_fresh::read(ctx, *a, &tag).await?),
                 _ => None,
             };

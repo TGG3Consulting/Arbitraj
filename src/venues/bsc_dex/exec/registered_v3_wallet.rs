@@ -58,7 +58,9 @@ impl Market {
             (Some("router02_fee"), Variant::RegisteredUniV3) => Some(super::v3_router02::Key::Fee),
             (Some("router02_spacing"), Variant::RegisteredSpacingV3) => Some(super::v3_router02::Key::Spacing(
                 alloy_primitives::aliases::I24::try_from(e.pool.tick_spacing.filter(|s| *s>0)?).ok()?)),
-            (Some("classic") | None, variant) if variant != Variant::RegisteredSpacingV3 => None,
+            (Some("classic_spacing"), Variant::RegisteredSlipstream) => Some(super::v3_router02::Key::InlineSpacing(
+                alloy_primitives::aliases::I24::try_from(e.pool.tick_spacing.filter(|s| *s>0)?).ok()?)),
+            (Some("classic") | None, variant) if !matches!(variant, Variant::RegisteredSpacingV3 | Variant::RegisteredSlipstream) => None,
             _ => return None,
         };
         Some(Self {

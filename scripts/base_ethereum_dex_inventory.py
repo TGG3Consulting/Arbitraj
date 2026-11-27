@@ -2225,8 +2225,9 @@ def main():
     lines.extend(angstrom_markets())
     from base_epsilon_markets import epsilon_markets
     lines.extend(epsilon_markets())
-    from base_spacing_markets import spacing_markets
+    from base_spacing_markets import spacing_markets, virtus_cl_markets
     lines.extend(spacing_markets())
+    lines.extend(virtus_cl_markets())
     from base_raindex_markets import raindex_markets
     lines.extend(raindex_markets())
     lines.extend(alien_alternative_fees())

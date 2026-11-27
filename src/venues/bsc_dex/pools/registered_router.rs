@@ -49,7 +49,7 @@ pub(crate) async fn checked(
     use super::family_variant::Variant;
     if e.family.variant == Variant::MaverickTwoRouter {return Box::pin(super::maverick_two_router::checked(ctx,e,input,output,at)).await;}
     if e.family.variant == Variant::SlipstreamUniversal {return Box::pin(super::slipstream_ur::checked(ctx,e,input,output,at)).await;}
-    if !matches!(e.family.variant, Variant::EmpireNominal | Variant::CypherIntegral | Variant::V2ExactRouter | Variant::RegisteredUniV3 | Variant::RegisteredSpacingV3 | Variant::VvsV3 | Variant::ShibaswapV2)
+    if !matches!(e.family.variant, Variant::EmpireNominal | Variant::CypherIntegral | Variant::V2ExactRouter | Variant::RegisteredUniV3 | Variant::RegisteredSlipstream | Variant::RegisteredSpacingV3 | Variant::VvsV3 | Variant::ShibaswapV2)
         || !((input, output) == (e.pool.token0, e.pool.token1)
             || (output, input) == (e.pool.token0, e.pool.token1))
     {
@@ -65,6 +65,11 @@ pub(crate) async fn checked(
             if e.family.variant==Variant::CypherIntegral{return Box::pin(super::cypher::router(ctx,e,router,at)).await;}
             if e.family.variant.separate_v3_router() {
                 return registered_v3::market(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),e.pool.fee_pips,at).await;
+            }
+            if e.family.variant==Variant::RegisteredSlipstream {
+                if ctx.dex_text("dex.v3_wallet_router_abi",id).ok().as_deref()!=Some("classic_spacing"){return Err(bad())}
+                let now=Box::pin(super::topaz::fee(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),e.pool.tick_spacing.ok_or_else(bad)?,at)).await?;
+                return (Some(now)==e.pool.fee_pips).then_some(()).ok_or_else(bad);
             }
             if e.family.variant.spacing_keyed() && ctx.dex_text("dex.v3_wallet_router_abi",id).ok().as_deref()!=Some("router02_spacing") {return Err(bad())}
             if matches!(e.family.variant, Variant::RegisteredUniV3|Variant::RegisteredSpacingV3) {

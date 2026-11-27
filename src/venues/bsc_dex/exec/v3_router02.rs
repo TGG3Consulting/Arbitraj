@@ -9,6 +9,10 @@ sol! {
         function exactInputSingle(Order params) external payable returns (uint256);
         function multicall(uint256 deadline, bytes[] data) external payable returns (bytes[]);
     }
+    interface ClassicSpacingRouter {
+        struct Order {address tokenIn;address tokenOut;int24 tickSpacing;address recipient;uint256 deadline;uint256 amountIn;uint256 amountOutMinimum;uint160 sqrtPriceLimitX96;}
+        function exactInputSingle(Order params) external payable returns (uint256);
+    }
     interface SpacingRouter {
         struct Order {address tokenIn;address tokenOut;int24 tickSpacing;address recipient;uint256 amountIn;uint256 amountOutMinimum;uint160 sqrtPriceLimitX96;}
         function exactInputSingle(Order params) external payable returns (uint256);
@@ -19,6 +23,7 @@ sol! {
 pub enum Key {
     Fee,
     Spacing(I24),
+    InlineSpacing(I24),
 }
 
 impl Key {
@@ -29,6 +34,10 @@ impl Key {
                 tokenIn:input, tokenOut:output, fee, recipient:wallet, amountIn:amount,
                 amountOutMinimum:minimum, sqrtPriceLimitX96:Default::default(),
             }}.abi_encode(),
+            Self::InlineSpacing(tick_spacing) => return ClassicSpacingRouter::exactInputSingleCall {params:ClassicSpacingRouter::Order {
+                tokenIn:input, tokenOut:output,tickSpacing:tick_spacing,recipient:wallet,deadline,amountIn:amount,
+                amountOutMinimum:minimum, sqrtPriceLimitX96:Default::default(),
+            }}.abi_encode().into(),
             Self::Spacing(tick_spacing) => SpacingRouter::exactInputSingleCall {params:SpacingRouter::Order {
                 tokenIn:input, tokenOut:output, tickSpacing:tick_spacing, recipient:wallet, amountIn:amount,
                 amountOutMinimum:minimum, sqrtPriceLimitX96:Default::default(),

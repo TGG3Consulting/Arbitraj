@@ -1,4 +1,4 @@
-//! Комиссия Topaz CL зависит от tx.origin и откатившегося либо успешного вызова swapFeeModule.
+//! Проверка фабрики CL, реализации клона, квотера и действующего модуля комиссии. Topaz учитывает tx.origin.
 use super::{
     abi_slipstream::{ICLFactory, ICLPool},
     families::Family,
@@ -8,7 +8,7 @@ use crate::{
     gateway::errors::{ErrorCode, GatewayResult},
     venues::bsc_dex::{ctx::Ctx, node::rpc, wallet::signer},
 };
-use alloy::sol_types::SolCall;
+use alloy::sol_types::{SolCall,SolValue};
 use alloy_primitives::{Address, B256, Bytes};
 use serde_json::{Value, json};
 alloy::sol! { interface ITopaz{
@@ -31,7 +31,7 @@ pub(crate) async fn fee(
     let wrong = || {
         ctx.err(
             ErrorCode::NotApplicable,
-            "Topaz CL: изменились рынок, модуль платы или размещение квотера",
+            "Изменились рынок CL, модуль платы или размещение квотера",
         )
     };
     let rev = ctx.settings.generation();
@@ -56,6 +56,8 @@ pub(crate) async fn fee(
         ctx,
         [
             batch::view(at, factory, key.clone()),
+            batch::view(at, factory, ICLFactory::getPoolCall{ tokenA:pair.1, tokenB:pair.0, tickSpacing:key.tickSpacing }),
+            batch::view(at, pool, ITopaz::factoryCall{}),
             batch::view(at, factory, ITopaz::poolImplementationCall {}),
             batch::view(at, factory, ITopaz::swapFeeModuleCall {}),
             batch::view(at, module, ITopaz::factoryCall {}),
@@ -63,10 +65,12 @@ pub(crate) async fn fee(
             ("eth_getCode", json!([pool, at])),
         ],
     );
+    let mut request=json!({"to":pool,"data":Bytes::from(ICLPool::feeCall{}.abi_encode())});
+    if f.variant.origin_fee() { request["from"]=json!(sender(ctx)?); }
     let fee = rpc::call::<Bytes>(
         ctx,
         "eth_call",
-        json!([{"from":sender(ctx)?,"to":pool,"data":Bytes::from(ICLPool::feeCall{}.abi_encode())},at]),
+        json!([request,at]),
     );
     let (
         (),
@@ -74,6 +78,8 @@ pub(crate) async fn fee(
         (),
         [
             market,
+            reverse,
+            parent,
             impl_,
             fee_module,
             module_factory,
@@ -91,6 +97,14 @@ pub(crate) async fn fee(
     let implementation = batch::decode(&impl_, ITopaz::poolImplementationCall {})?;
     if implementation.is_zero()
         || super::verify_crypto_v1::proxy_target(&code) != Some(implementation)
+        || batch::decode(&parent, ITopaz::factoryCall{})? != factory
+        || batch::decode(&reverse,key.clone())? !=pool
+        || (f.variant == super::family_variant::Variant::RegisteredSlipstream && {
+            let mut init=alloy_primitives::hex!("3d602d80600a3d3981f3").to_vec();
+            init.extend_from_slice(&code);
+            let salt=alloy_primitives::keccak256((pair.0.min(pair.1),pair.0.max(pair.1),key.tickSpacing).abi_encode());
+            factory.create2(salt,alloy_primitives::keccak256(init))!=pool
+        })
         || batch::decode(&market, key)? != pool
         || batch::decode(&fee_module, ITopaz::swapFeeModuleCall {})? != module
         || batch::decode(&module_factory, ITopaz::factoryCall {})? != factory
@@ -100,7 +114,7 @@ pub(crate) async fn fee(
     }
     binding::plain(ctx, implementation, ih, at).await?;
     let rate = batch::decode(&rate, ICLPool::feeCall {})?.to::<u32>();
-    if rev != ctx.settings.generation() || rate >= 1_000_000 {
+    if rev != ctx.settings.generation() || rate >= super::super::math::swap_step::MAX_FEE {
         return Err(wrong());
     }
     Ok(rate)

@@ -6828,8 +6828,8 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 ### `dex.v3_wallet_router_abi`
 
 - **Кейс:** После перезапуска бот должен распознать подписанную продажу через тот же пул и проверить выплату кошельку.
-- **Что ставить:** Для штатных SwapRouter02 WAGMI и THICK укажите `router02_fee`, для 2THICK — `router02_spacing`. Первый формат выбирает пул по комиссии, второй — по шагу тика. Оба передают срок во внешнем `multicall(uint256,bytes[])`.
-- **Если не задана:** Для обычного SwapRouter применяется `classic`. Для пула 2THICK прямой вызов SwapRouter02 требует явного `router02_spacing`.
+- **Что ставить:** Для штатных SwapRouter02 WAGMI и THICK укажите `router02_fee`, для 2THICK — `router02_spacing`. Первый формат выбирает пул по комиссии, второй — по шагу тика. Оба передают срок во внешнем `multicall(uint256,bytes[])`. У штатного Virtus CL на Base укажите `classic_spacing`: он принимает шаг тика и срок непосредственно в `exactInputSingle`.
+- **Если не задана:** Для обычного SwapRouter применяется `classic`. Для Virtus CL остаётся путь V5. Для пула 2THICK прямой вызов SwapRouter02 требует явного `router02_spacing`.
 
 ### `dex.v3_quoter_method`
 

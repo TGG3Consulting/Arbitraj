@@ -67,3 +67,24 @@ fn spacing_is_the_registry_key_and_current_fee_is_observed_without_an_event() {
         assert!(leg["gas"].as_u64().unwrap() > peer["gas"].as_u64().unwrap());
     }
 }
+
+#[test]
+fn registered_slipstream_clones_use_observed_pool_fee_and_the_existing_v5() {
+    let raw=include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/virtus_cl_base.json.gz");
+    let book:Value=serde_json::from_reader(GzDecoder::new(raw.as_slice())).unwrap();
+    let f=families::make("custom", "registered_slipstream").unwrap();
+    assert!(f.variant.checked_slipstream_fee() && f.variant.exact_router() && per_block::light(f));
+    assert!(!f.variant.origin_fee() && !f.variant.spacing_keyed());
+    assert_eq!(f.executor_kind,Some(ExecKind::V3));
+    let address=|v:&Value| v.as_str().unwrap().parse::<Address>().unwrap();
+    let markets=book["markets"].as_array().unwrap();
+    let init=book["init"].as_str().unwrap().parse::<B256>().unwrap();
+    let factory=address(&book["roles"]["factory"]["address"]);
+    assert_eq!(markets.len(),9);
+    for m in markets {
+        let tokens=(address(&m["tokens"][0]),address(&m["tokens"][1]));
+        let step=I24::try_from(m["spacing"].as_i64().unwrap()).unwrap();
+        assert_eq!(spacing_address(factory,tokens,step,init),address(&m["pool"]));
+    }
+    assert_eq!(markets.iter().filter(|m|m["current_fee"]!=m["base_fee"]).count(),3);
+}

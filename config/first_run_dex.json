@@ -6474,5 +6474,35 @@
         "0xde27deb7f8c8d7921d485f3ae74f60727e28c6f7ad655e3cddd741639f0094e0"
       ]
     }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "virtus-cl-base",
+    "source": "https://liquidity.virtus-protocol.com/ · tests/data/first_run_dex_2026-11-26/virtus_cl_base.json.gz",
+    "settings": {
+      "dex.kind": "registered_slipstream",
+      "dex.cl_tick_spacings": [
+        "1",
+        "50",
+        "100"
+      ],
+      "dex.quoter_virtual": false,
+      "dex.v3_wallet_router_abi": "classic_spacing",
+      "dex.v3_swap_callback": "uniswapV3SwapCallback(int256,int256,bytes)",
+      "dex.router_exact_tokens": [
+        "0x4200000000000000000000000000000000000006 0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",
+        "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2 0x478746a8e4b17181c4efbeb2069d86f22ec395788099ed65c9442ca44df265bc"
+      ],
+      "dex.factory": "0x0e5ab24bebda7e5bb3961f7e9b3532a83ae86b48",
+      "dex.factory_runtime_hash": "0x794c5850f7626c013bc62069193ec46f9016c7d686947d61340020c69140ab6d",
+      "dex.router": "0xab08ee1f3dc8cbbdb1b781484ecae8d87ecb6ee7",
+      "dex.router_runtime_hash": "0x06b21afee00a9988b9d8d20a42a769eb82e887d38cb559bc5fb125b293c07f75",
+      "dex.quoter": "0x390f37392923dc61af96d332cf61611d2e5bd997",
+      "dex.quoter_runtime_hash": "0xce358dce8efb44aba2fe6d6f995c7f2046ee7cbab89a1432d432a3e88258166c",
+      "dex.cl_fee_module": "0xd9f77f8b00d42e2a49d82f8115cd5db380550750",
+      "dex.cl_fee_module_hash": "0x019b3d8ec15246efccb5ab46d85d7703ce56ebb541adca2812cd6cba5d1c3077",
+      "dex.pair_runtime_hash": "0xa2cf7f366f3d8d11e611acecf7916a27308ba041bf1e161bddbd4ecbb9402b6a"
+    }
   }
 ]

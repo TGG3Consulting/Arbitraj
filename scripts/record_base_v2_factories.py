@@ -11,6 +11,9 @@ from record_base_slipstream_executor import ROOT,rpc
 from record_ethereum_v2_factories import directory,digest,raw
 
 MARKETS={
+    "elk-base":("0xfbb4e52fecc90924c79f980eb24a9794ae4affa4",1000,3,"Elk: K",1683,9326),
+    "kinetix-v2-base":("0x8ad3d3e6b1b7b65138bd508e48330b544539b2c3",1000,3,"UniswapV2: K",1860,9347),
+    "velox-base":("0xa28dbae4d926067f4c343aa8071e833b04c8b99e",10000,1,"UniswapV2: K",1620,8622),
     "bluedex":("0x8437100ed18dbea089e0fa3caaae7f6f40e4a05c",1000,3,"BluedexV2: K",1692,9252),
     "kewlswap-base":("0x5636a64b835f4e3821c798fda16e0ba106357646",1000,3,"KEWL: K",8127,8707),
     "pixelswap-base":("0xd07739a9e9c46d3deded97c0edc49cea8bab1bb9",1000,3,"SwapV2: K",1742,9133),
@@ -54,7 +57,8 @@ def source(cap,row):
 
 def standard_swap_origin(market,cap,row,proof):
     """Bind the ordinary swap fee to the exact pair creation bytes produced by its factory."""
-    samples={"moonbase":"0xf429af2d7805bb1bed1ada3cacf2bbbed87294c8",
+    samples={"elk-base":"0x739316014baa1e79fba74b22cc0d63a4e8339a12",
+             "moonbase":"0xf429af2d7805bb1bed1ada3cacf2bbbed87294c8",
              "x7-finance-base":"0x9c38075ddee473e28a063cec3ae556c2ac0daa8f"}
     if market not in samples:return
     sample=samples[market]
@@ -86,6 +90,10 @@ if __name__=="__main__":
             from base_v2_bytecode import PAIR_CODE, check_deployments, proof as bytecode_proof
             proof=bytecode_proof(args.market,cap,row) if args.market in PAIR_CODE else source(cap,row)
             standard_swap_origin(args.market,cap,row,proof)
+            if args.market=="kinetix-v2-base":
+                init,=cap.one(row[0],"pairCodeHash()",returns=["bytes32"])
+                if "0x"+init.hex()!=proof["creation_code_hash"]:
+                    raise ValueError("Kinetix factory getter and embedded pair creation differ")
             if row[2] is None:proof.setdefault("fee_getter","getFeeForPair(address,address)")
             created=None
             if args.market=="kewlswap-base":

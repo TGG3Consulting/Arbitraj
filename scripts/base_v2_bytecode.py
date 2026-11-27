@@ -5,6 +5,9 @@ from record_base_slipstream_executor import rpc
 
 # Адрес пары, хеши реально исполняемого кода фабрики и пары, начало runtime и PUSH2 знаменателя в swap.
 PAIR_CODE = {
+    "velox-base": ("0x07597448e67374d5f4dcc63ca3703f44369be112",
+        "81630b06574e12f451c23700e5f4a537824bf3a885320c53c72e0dc886a981d7",
+        "d7cff5f2b7a285d428e58dff661fdfb8a0a8a05162bb3677c3585c29d6f89104",1890,0x861),
     "kewlswap-base": ("0xf64810a744b3863f81e33112d8b8f4914fe50069",
         "053316c7b8665ddee5a60c45af871dfb62e43105ff9b06dce828ce46050f2104",
         "6ef14f3e39ed31a2874c82f036261a213f3b0455ce3fa47c18c5e8b0d55b1dd9",9038,0x723),
@@ -50,6 +53,15 @@ def proof(name,c,row):
         # Обе ноги заходят в общий блок mul(balance,1000)-mul(amountIn,3).
         if any(pair_code[pos:pos+7]!=bytes.fromhex("84600361134156") for pos in (0x717,0x73b)):
             raise ValueError("KEWL fee or shared multiplier changed")
+    elif name=="velox-base":
+        # Each side subtracts amountIn directly from balance * 10000. Both call
+        # the same checked Solidity multiplication/subtraction implementations.
+        one="86612710611f36565b"
+        two="9190611f23565b9050"
+        if (fee!=1 or den!=10000 or pair_code.count(bytes.fromhex(one))!=2 or
+                pair_code.count(bytes.fromhex(two))!=2 or pair_code[0x1f23:0x1f27].hex()!="5b818103" or
+                pair_code[0x1f36:0x1f3a].hex()!="5b808202" or bytes.fromhex("6305f5e100611f36") not in pair_code[0x890:0x8bd]):
+            raise ValueError("Velox balance invariant differs")
     elif fee is not None and (pair_code[pc-17:pc-15]!=bytes([0x60,fee]) or
                               bytes([0x84,0x60,fee]) not in pair_code[pc+3:pc+53]):
         raise ValueError("one of the two swap input fee multipliers differs")
@@ -63,7 +75,8 @@ def proof(name,c,row):
     if facet:
         result.update(creator_facet=facet,creator_runtime="0x"+keccak(creator_code).hex())
     if name not in ("satori-base","kewlswap-base"):
-        if c.one(factory,"INIT_CODE_PAIR_HASH()",returns=["bytes32"])!=(init,):
+        getter="pairCodeHash()" if name=="velox-base" else "INIT_CODE_PAIR_HASH()"
+        if c.one(factory,getter,returns=["bytes32"])!=(init,):
             raise ValueError("factory's public getter differs from the extracted creation code")
     if fee is None:
         result.update(fee_getter="swapFee()",fee_target="pool",fee_slot=13)

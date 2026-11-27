@@ -1,0 +1,73 @@
+{
+  "url": "https://api.llama.fi/summary/dexs/kaliber?excludeTotalDataChart=false&excludeTotalDataChartBreakdown=false&dataType=dailyVolume",
+  "base_positive_days": [
+    [
+      "2026-09-28",
+      837
+    ],
+    [
+      "2026-09-29",
+      500
+    ],
+    [
+      "2026-09-30",
+      4999
+    ],
+    [
+      "2026-10-01",
+      0.43
+    ],
+    [
+      "2026-10-02",
+      1671
+    ],
+    [
+      "2026-10-03",
+      1623
+    ],
+    [
+      "2026-10-04",
+      168
+    ],
+    [
+      "2026-10-05",
+      3612
+    ],
+    [
+      "2026-10-06",
+      1989
+    ],
+    [
+      "2026-10-07",
+      9249
+    ],
+    [
+      "2026-10-08",
+      2402
+    ]
+  ],
+  "breakdown24h": null,
+  "totalAllTime": 177675340,
+  "public_quote": {
+    "url": "https://aggregator-api.kyberswap.com/base/api/v1/routes?tokenIn=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&tokenOut=0xb200000000000000000000c2e324d24d7eecd1fb&amountIn=1000000",
+    "token_in": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+    "token_out": "0xb200000000000000000000c2e324d24d7eecd1fb",
+    "amount": "1000000",
+    "quoted": "278929",
+    "timestamp": 1795798364,
+    "roles": [
+      {
+        "exchange": "aerodrome-cl-3",
+        "pool": "0xa3b1e3f9747065e2073722ff4c9027d3ea4994f0",
+        "type": "slipstream"
+      }
+    ],
+    "target": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5"
+  },
+  "scoped": {
+    "url": "https://aggregator-api.kyberswap.com/base/api/v1/routes?tokenIn=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&tokenOut=0xb200000000000000000000c2e324d24d7eecd1fb&amountIn=1000000&includedSources=kaliber",
+    "status": 400,
+    "code": 40011,
+    "message": "filtered liquidity sources"
+  }
+}

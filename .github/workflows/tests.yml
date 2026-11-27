@@ -812,6 +812,8 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/motoswap" MotoswapWallet
           python scripts/record_motoswap_wallet.py "$RUNNER_TEMP/motoswap/MotoswapWallet.json" "$RUNNER_TEMP/market.json" --paths
+      - if: matrix.market == 'zeroex-base-rfq'
+        run: python scripts/record_base_zeroex_rfq.py "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'basin-wallet-')
         env:
           MARKET: ${{ matrix.market }}

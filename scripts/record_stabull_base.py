@@ -136,18 +136,14 @@ def capture(network="base"):
             high=middle
     first=high
     logs=[]
-    log_span=80000 if network=="base" else 1000
-    activity_status="complete"
-    for h in range(first,height+1,log_span):
-        try:
-            logs.extend(read("eth_getLogs",[{"address":addresses,"topics":[TRADE],"fromBlock":hex(h),"toBlock":hex(min(h+log_span-1,height))}]))
-        except ValueError as error:
-            if network!="ethereum" or "Archive requests require a personal token" not in str(error):
-                raise
-            # Без подтверждённого окна нельзя представить пустую выборку как отсутствие сделок.
-            activity_status="historical event access requires an authorized account"
-            logs.clear()
-            break
+    pages=[]
+    if network=="ethereum":
+        from stabull_activity import PORTAL, trades
+        logs,pages=trades(S,first,height,anchor["hash"],addresses,TRADE)
+        activity_status=PORTAL
+    else:
+        for h in range(first,height+1,80000):
+            logs.extend(read("eth_getLogs",[{"address":addresses,"topics":[TRADE],"fromBlock":hex(h),"toBlock":hex(min(h+79999,height))}]))
     samples={}
     for log in logs:
         pool=log["address"].lower()
@@ -170,7 +166,7 @@ def capture(network="base"):
                          "receipt":receipt})
     assert block(height)["hash"]==anchor["hash"]
     return {"chain":chain,"anchor":at,"height":height,"start":first,"start_utc":cutoff,"end_utc":int(anchor["timestamp"],16),
-            "source":SOURCE,"factory":factory,"pools":list(pairs.values()),"events":len(logs) if activity_status=="complete" else None,"event_coverage":activity_status,"receipts":receipts}
+            "source":SOURCE,"factory":factory,"pools":list(pairs.values()),"events":len(logs),"event_coverage":activity_status,"event_pages":pages,"receipts":receipts}
 
 
 if __name__=="__main__":

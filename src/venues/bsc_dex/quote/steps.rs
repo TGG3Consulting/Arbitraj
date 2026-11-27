@@ -99,7 +99,13 @@ pub fn path_costs(
             names.gas,
             false,
         );
-        if let PoolState::Carbon(state)=&h.entry.pool.state {
+        if let PoolState::Rubicon(book)=&h.entry.pool.state {
+            let exact_in=side==Side::Sell;
+            let p=book.plan(h.token_in,exact_in,if exact_in{h.swapped.amount_in}else{h.swapped.amount_out}).filter(|p|p.spent==h.swapped.amount_in && p.received==h.swapped.amount_out)
+                .ok_or_else(||ctx.err(ErrorCode::BadResponse,"Rubicon Classic: нет подтверждения комиссии выбранных заявок"))?;
+            let fee=num::to_decimal(p.fees,h.dec_in).ok_or_else(||ctx.err(ErrorCode::BadResponse,"Rubicon Classic: переполнение комиссии"))?;
+            add(&mut out,CostKind::PoolFee,fee,&from,true);
+        } else if let PoolState::Carbon(state)=&h.entry.pool.state {
             let target=side==Side::Buy;
             let size=if target {h.swapped.amount_out} else {h.swapped.amount_in};
             let (decimals,symbol)=if target {(h.dec_in,&from)}else{(h.dec_out,&to)};

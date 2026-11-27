@@ -3,6 +3,7 @@ pragma solidity 0.8.37;
 
 interface IRubiconOrders {
     function getOffer(uint256 id) external view returns (uint256, address, uint256, address);
+    function calculateFees(uint256 principal, bool isPay) external view returns (uint256);
     function buy(uint256 id, uint256 quantity) external returns (bool);
 }
 
@@ -37,6 +38,22 @@ contract RubiconClassicWallet {
     function tokenCall(IRubiconCash token, bytes memory payload) private {
         (bool ok, bytes memory result) = address(token).call(payload);
         require(ok && (result.length == 0 || abi.decode(result, (bool))), "token transfer");
+    }
+
+    /// Reprice precisely the selected orders using the live market's own fee calculation.
+    function quote(address source, address target, Take[] calldata actions, uint256 maximum)
+        external view returns (uint256 spent, uint256 nominal) {
+        require(address(market).codehash == marketCodeHash && source != target && actions.length > 0, "market");
+        for (uint256 i; i < actions.length; ++i) {
+            Take calldata action = actions[i];
+            (uint256 available, address sellToken, uint256 requested, address buyToken) = market.getOffer(action.id);
+            require(sellToken == target && buyToken == source && action.quantity > 0 && action.quantity <= available, "order changed");
+            uint256 principal = uint256(action.quantity) * requested / available;
+            require(principal > 0, "zero principal");
+            spent += market.calculateFees(principal, true);
+            nominal += action.quantity;
+        }
+        require(spent <= maximum, "input bound");
     }
 
     function execute(IRubiconCash source, IRubiconCash target, Take[] calldata actions,

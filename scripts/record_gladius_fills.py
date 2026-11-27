@@ -2,6 +2,7 @@
 import argparse
 import gzip
 import json
+import time
 from pathlib import Path
 
 import requests
@@ -40,18 +41,43 @@ def hashed(blob):
     return "0x" + keccak(blob).hex()
 
 
+RPCS={
+    "ethereum":("https://eth.drpc.org","https://mainnet.gateway.tenderly.co","https://ethereum-rpc.publicnode.com"),
+    "base":("https://base.drpc.org","https://base.gateway.tenderly.co","https://mainnet.base.org"),
+}
+
+
 class Reader:
     def __init__(self, url):
-        self.url = url
-        self.http = requests.Session()
+        self.urls=(url,) if isinstance(url,str) else tuple(url)
+        self.preferred={}
+        self.http=requests.Session()
 
     def rpc(self, method, params):
-        response = self.http.post(self.url, json={"jsonrpc":"2.0","id":1,"method":method,"params":params}, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        if "error" in data:
-            raise RuntimeError(f"{method}: {str(data['error'])[:220]}")
-        return data["result"]
+        payload={"jsonrpc":"2.0","id":1,"method":method,"params":params}
+        start=self.preferred.get(method,0)
+        errors=[]
+        for attempt in range(3):
+            for offset in range(len(self.urls)):
+                idx=(start+offset)%len(self.urls)
+                try:
+                    response=self.http.post(self.urls[idx],json=payload,timeout=25)
+                    response.raise_for_status()
+                    result=response.json()
+                except (requests.RequestException,ValueError) as err:
+                    errors.append(str(err)[:125])
+                    continue
+                if "error" in result:
+                    msg=str(result["error"])
+                    if result["error"].get("code")==3 or "execution reverted" in msg.lower():
+                        raise RuntimeError(f"{method}: {msg[:180]}")
+                    errors.append(msg[:125])
+                    continue
+                self.preferred[method]=idx
+                return result["result"]
+            if attempt<2:
+                time.sleep(2**attempt)
+        raise RuntimeError(f"{method}: RPC unavailable ({'; '.join(errors[-4:])})")
 
     def view(self, addr, data, at):
         return self.rpc("eth_call", [{"to":addr,"data":data},at])
@@ -137,6 +163,8 @@ def extract(r, block, event, tip):
         assert candidate[0]==info and candidate[-1]==resolved[-1]
         quote.update(amount=str(candidate[1][1]),outputs=[[t,str(q),d] for t,q,d in candidate[2]])
     except RuntimeError as err:
+        if "RPC unavailable" in str(err):
+            raise
         quote["revert"]=str(err)[:200]
     return dict(height=int(block["number"],16),block=block["hash"],timestamp=stamp,index=ix,hash=tx_hash,
                 transaction_sender=tx["from"],filler=filler,outer_selector=tx["input"][:10],reactor_selector=ex,
@@ -147,7 +175,7 @@ def extract(r, block, event, tip):
 
 
 def record(network,url=None):
-    chain,h,default,fee,heights=NETWORKS[network];r=Reader(url or default)
+    chain,h,_,fee,heights=NETWORKS[network];r=Reader(url or RPCS[network])
     assert int(r.rpc("eth_chainId",[]),16)==chain
     head=r.rpc("eth_getBlockByNumber",[hex(h),False]);tip=canonical(head)
     out=dict(chain=chain,height=h,selector=tip,state_root=head["stateRoot"],roles=roles(r,head,fee),samples=[])

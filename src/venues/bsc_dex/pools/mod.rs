@@ -117,6 +117,7 @@ pub(in crate::venues::bsc_dex) mod surge;
 pub(in crate::venues::bsc_dex) mod dagrow;
 pub(crate) mod pendle;
 pub(crate) mod mars_fee;
+pub(crate) mod rubicon;
 pub(crate) mod prop_venue;
 pub(crate) mod prop_quotes;
 pub(crate) mod integral_size;

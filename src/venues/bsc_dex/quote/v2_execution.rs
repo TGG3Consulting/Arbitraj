@@ -115,6 +115,7 @@ pub(super) async fn option(
         super::v2_wallet_sim::Wire::AntfarmOutput(t)=>Some(RouterFeeMode::AntfarmProceeds{target:t.module,tier:t.funding,loan:t.use_loan}),
         super::v2_wallet_sim::Wire::Antfarm(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.module}),
         super::v2_wallet_sim::Wire::Bundles(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.target}),
+        super::v2_wallet_sim::Wire::Rubicon(t)=>Some(RouterFeeMode::WalletBounds{target:t.target,desired:t.desired}),
         super::v2_wallet_sim::Wire::NativeFlat(t)=>Some(RouterFeeMode::NativeFlat{target:t.router,wei:t.wei}),
         super::v2_wallet_sim::Wire::Prop(t)=>Some(RouterFeeMode::VenueFallback{target:t.target,allowed:t.fallback_allowed}),
         super::v2_wallet_sim::Wire::Integral(t)=>Some(RouterFeeMode::WalletBounds{target:t.target,desired:t.desired}),

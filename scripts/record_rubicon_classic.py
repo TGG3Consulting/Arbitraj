@@ -93,11 +93,11 @@ def capture(url, artifact):
             def op(a):return dict(a,**{"from":wallet})
             approve=op(tx(source,"approve(address,uint256)",["address","uint256"],[MODULE,budget]))
             before=[op(balance(t,w)) for w in (wallet,MODULE) for t in (source,target)]
-            def trade(minimum,deadline):
+            def trade(minimum,deadline,maximum=budget):
                 return op(tx(MODULE,"execute(address,address,(uint256,uint128)[],uint256,uint256,uint256)",
-                    ["address","address",ACTION,"uint256","uint256","uint256"],[source,target,actions,budget,minimum,deadline]))
-            def attempt(minimum,deadline):
-                return simulate_block(url,at,{MODULE:{"code":runtime}},[approve,*before,trade(minimum,deadline),*before],read_rpc=lambda _,m,p:rpc(m,p))
+                    ["address","address",ACTION,"uint256","uint256","uint256"],[source,target,actions,maximum,minimum,deadline]))
+            def attempt(minimum,deadline,maximum=budget):
+                return simulate_block(url,at,{MODULE:{"code":runtime}},[approve,*before,trade(minimum,deadline,maximum),*before],read_rpc=lambda _,m,p:rpc(m,p))
             end=int(head["timestamp"],16)+300
             trial=attempt(1,end)
             if any(r["status"]!="0x1" for r in trial[:5]+trial[-4:]):raise ValueError("allowance/balance")
@@ -109,12 +109,24 @@ def capture(url, artifact):
             old,new=([int(x["returnData"],16) for x in side] for side in (trial[1:5],trial[-4:]))
             spent,received=old[0]-new[0],new[1]-old[1]
             if spent!=debits or not 0 < received <= nominal or old[2:]!=new[2:]:raise ValueError("wallet/fee calculation")
-            for limit,deadline in ((received+1,end),(received,0)):
-                rejected=attempt(limit,deadline)
+            quote=op(tx(MODULE,"quote(address,address,(uint256,uint128)[],uint256)",
+                        ["address","address",ACTION,"uint256"],[source,target,actions,budget]))
+            quoted,=simulate_block(url,at,{MODULE:{"code":runtime}},[quote],read_rpc=lambda _,m,p:rpc(m,p))
+            if quoted["status"]!="0x1" or decode(["uint256","uint256"],bytes.fromhex(quoted["returnData"][2:]))!=(debits,nominal):
+                raise ValueError("official fee and order quote")
+            for limit,deadline,maximum in ((received+1,end,budget),(received,0,budget),(received,end,debits-1)):
+                rejected=attempt(limit,deadline,maximum)
                 if rejected[-5]["status"]!="0x0" or [r["returnData"] for r in rejected[1:5]]!=[r["returnData"] for r in rejected[-4:]]:
                     raise ValueError("wallet guard failed")
             controls.append(dict(source=source,target=target,wallet=wallet,reverse=reverse,actions=actions,spent=spent,
                 received=received,nominal=nominal,deadline=end,budget=budget,gas=int(result["gasUsed"],16),logs=result["logs"]))
+    for o in offers:
+        for key in ("quantity","price"):
+            o[key]=str(o[key])
+    for row in controls:
+        row["actions"]=[[i,str(q)] for i,q in row["actions"]]
+        for key in ("spent","received","nominal","budget"):
+            if key in row:row[key]=str(row[key])
     return dict(selector=at,state_root=head["stateRoot"],market=market,router=router,read_offers=total,active=offers,fees=fees,
                 module=MODULE,module_hash="0x"+keccak(hexstr=runtime).hex(),controls=controls)
 

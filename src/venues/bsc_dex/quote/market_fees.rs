@@ -53,6 +53,7 @@ pub(super) fn rate(ctx: &Ctx, e: &Entry) -> Option<GatewayResult<Decimal>> {
         | PoolState::Surge(_)
         | PoolState::Dagrow(_)
         | PoolState::Temple(_)
+        | PoolState::Rubicon(_)
         | PoolState::Carbon(_)
         | PoolState::MintClub(_)
         | PoolState::Virtuals(_)

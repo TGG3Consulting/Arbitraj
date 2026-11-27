@@ -510,6 +510,7 @@ pub enum PoolState {
     MintClub(Box<MintClubState>),
     UmbraeDamm(Box<UmbraeDammState>),
     Carbon(Box<CarbonState>),
+    Rubicon(Box<super::rubicon::Book>),
     Temple(Box<TempleState>),
     Dagrow(Box<DagrowState>),
     Surge(Box<super::surge::SurgeState>),

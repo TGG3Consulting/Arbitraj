@@ -78,7 +78,7 @@ pub const DEX_KINDS: &[&str] = &[
     "bundles_swap_v5",
     "antfarm",
     "temple_v5",
-    "carbon_v1", "mint_club_v2",
+    "rubicon_classic", "carbon_v1", "mint_club_v2",
     "virtuals_bonding", "virtuals_unicorn", "virtuals_bonding_module", "virtuals_unicorn_module",
     "memebox",
     "memebox_v5",

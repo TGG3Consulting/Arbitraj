@@ -440,6 +440,7 @@ mod tests {
             "pendle_market", // котировки до задания защищённого модуля
             "dagrow", // SSP с кошелька
             "temple", // официальный view, без шага V5
+            "rubicon_classic", // адресованные заявки через кошелёк
             "carbon_v1", // официальный Controller, без шага в ArbExecutor
             "mint_club_v2", // native Bond mint/burn
             "ekubo_v2_router", // официальный multicall, ABI V2

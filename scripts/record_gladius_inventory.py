@@ -8,9 +8,8 @@ from pathlib import Path
 from eth_abi import decode, encode
 from eth_account import Account
 from eth_account.messages import encode_typed_data
-from eth_utils import keccak
 
-from record_gladius_fills import FILL, INFO, NETWORKS, ORDER, PERMIT, QUOTER, REACTOR, RESOLVED, ZERO, Reader, addr, call_data, canonical, hashed, roles
+from record_gladius_fills import FILL, NETWORKS, ORDER, PERMIT, QUOTER, REACTOR, RESOLVED, ZERO, Reader, addr, call_data, canonical, roles
 
 TOKENS = {
     "ethereum": ("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
@@ -19,7 +18,8 @@ TOKENS = {
              "0x2626664c2603336e57b271c5c0b26f421741e481"),
 }
 FUND = 10**17
-SWAPS = {"ethereum":"https://eth-mainnet.public.blastapi.io","base":"https://mainnet.base.org"}
+SWAPS = {"ethereum":("https://mainnet.gateway.tenderly.co","https://eth.drpc.org","https://ethereum-rpc.publicnode.com"),
+         "base":("https://mainnet.base.org","https://base.gateway.tenderly.co","https://base.drpc.org")}
 
 
 def fields(s):
@@ -127,7 +127,7 @@ def example(reader,head,chain,coins,collector,maker,filler,nonce,direction,part)
 
 
 def record(network,endpoint):
-    chain,h,default,ctrl=NETWORKS[network][:4];r=Reader(endpoint)
+    chain,h,_,ctrl=NETWORKS[network][:4];r=Reader(endpoint)
     assert int(r.rpc("eth_chainId",[]),16)==chain
     block=r.rpc("eth_getBlockByNumber",[hex(h),False]);at=canonical(block)
     maker=Account.create(secrets.token_bytes(32));filler=Account.create(secrets.token_bytes(32)).address

@@ -55,6 +55,13 @@ pub fn request(
     if let PoolState::Bundles(book)=&e.pool.state{return super::super::pools::bundles::quote_request(ctx,e,book,token_in,amount);}
     if matches!(e.pool.state, PoolState::Antfarm(_)) {return super::super::pools::antfarm_probe::request(ctx,e);}
     if e.family.variant==super::super::pools::family_variant::Variant::Temple {return super::super::pools::temple::request(ctx,e,token_in,amount);}
+    if let PoolState::Rubicon(book) = &e.pool.state {
+        use super::super::exec::rubicon_wallet::IBookWallet;
+        let quote = book.plan(token_in,true,amount).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Rubicon Classic: нет исполнимых заявок"))?;
+        let target=if token_in==book.tokens[0] {book.tokens[1]} else {book.tokens[0]};
+        let actions = quote.actions.into_iter().map(|(id,quantity)|IBookWallet::Take{id,quantity}).collect();
+        return Ok((ctx.dex_addr("dex.router", e.family.id)?,IBookWallet::quoteCall{source:token_in,target,actions,maximum:amount}.abi_encode().into()));
+    }
     if e.family.variant==super::super::pools::family_variant::Variant::Carbon {
         return super::super::pools::carbon_quote::request(ctx,e,token_in,amount);
     }
@@ -548,6 +555,12 @@ pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> O
     if let PoolState::Bundles(book)=&e.pool.state{return super::super::pools::bundles::quote_result(book,out,amount);}
     if let PoolState::Antfarm(book)=&e.pool.state {return super::super::pools::antfarm_probe::expected(book,out,token_in,amount);}
     if e.family.variant==super::super::pools::family_variant::Variant::Temple {return super::super::pools::temple::payout(e,token_in,amount,out);}
+    if let PoolState::Rubicon(book) = &e.pool.state {
+        use super::super::exec::rubicon_wallet::IBookWallet;
+        let local=book.plan(token_in,true,amount)?;
+        let official=IBookWallet::quoteCall::abi_decode_returns_validate(out).ok()?;
+        return (local.spent==official.spent && official.nominal==local.received).then_some(official.nominal);
+    }
     if e.family.variant==super::super::pools::family_variant::Variant::Carbon {
         return super::super::pools::carbon_quote::payout(e,token_in,amount,out);
     }

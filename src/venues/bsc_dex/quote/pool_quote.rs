@@ -76,6 +76,10 @@ pub fn swap(
             super::super::math::temple::quote(s,token_in,out,exact_in,amount)
                 .ok_or_else(||why("TempleDAO: объём, фактическая валюта выплаты или обеспечение не подходят для этой стороны"))
         }
+        (PoolState::Rubicon(book),PoolKind::V2) => {
+            let fill=book.plan(token_in,exact_in,amount).ok_or_else(none)?;
+            Ok(Swapped{amount_in:fill.spent,amount_out:fill.received,complete:fill.complete})
+        }
         (PoolState::Carbon(s),PoolKind::V2) => {
             let size=u128::try_from(amount).map_err(|_|why("Carbon: размер превышает uint128"))?;
             let p=super::super::math::carbon_match::plan(s,token_in,!exact_in,size).ok_or_else(none)?;

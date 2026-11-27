@@ -53,6 +53,8 @@ pub struct SwapCtx {
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub prop:Option<Box<super::prop_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
+    pub rubicon:Option<Box<super::rubicon_wallet::Proof>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub native_flat:Option<Box<super::mars_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub dagrow:Option<Box<super::dagrow_wallet::Proof>>,

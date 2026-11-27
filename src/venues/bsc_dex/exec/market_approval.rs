@@ -44,7 +44,7 @@ impl Market {
                 Some(ProtectedWallet { target }) => Spender::Selected(target),
                 _ => Spender::Factory,
             },
-            Market::NativeFlat=>selected(mode),
+            Market::Rubicon | Market::NativeFlat=>selected(mode),
             Market::Prop=>match mode {Some(VenueFallback{target,..})=>Spender::Selected(target),_=>Spender::Missing},
             Market::Ranges | Market::SafeSwap | Market::Pendle => match mode {
                 Some(ProtectedWallet { target }) => Spender::Selected(target),

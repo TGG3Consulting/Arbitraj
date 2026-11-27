@@ -73,6 +73,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
         if c.family.variant==super::family_variant::Variant::Pendle {out.push(Box::pin(super::pendle::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Dagrow {out.push(Box::pin(super::dagrow::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Temple {out.push(Box::pin(super::temple_directory::verify(ctx,c)).await);continue;}
+        if c.family.variant==super::family_variant::Variant::RubiconClassic {out.push(Box::pin(super::rubicon::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Carbon {out.push(Box::pin(super::carbon_directory::verify(ctx,c)).await);continue;}
         out.push(match one(ctx, c, size).await {
             Ok(Ok(f)) => Verdict::Taken(Box::new(f)),

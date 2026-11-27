@@ -42,6 +42,11 @@ pub fn by_pool(e: &Entry, log: &SimLog) -> bool {
     if let crate::core::types::PoolState::Temple(s)=&e.pool.state {
         return log.address==s.pair && log.topics.first()==Some(&IV2Pair::Swap::SIGNATURE_HASH);
     }
+    if let crate::core::types::PoolState::Rubicon(book)=&e.pool.state {
+        use super::super::exec::rubicon_wallet::IBookWallet;
+        return log.address==book.market && log.topics.first()==Some(&IBookWallet::emitTake::SIGNATURE_HASH) &&
+            book.tokens.iter().enumerate().any(|(i,sell)| log.topics.get(2)==Some(&alloy_primitives::keccak256([sell.as_slice(),book.tokens[1-i].as_slice()].concat())));
+    }
     if let crate::core::types::PoolState::Carbon(s)=&e.pool.state {return super::carbon_probe::emitted(s,&e.pool.reference,log);}
     if let crate::core::types::PoolState::MintClub(state)=&e.pool.state {
         return e.pool.reference==PoolRef::Contract(state.token) && super::super::pools::mint_club::emitted(state,log);

@@ -83,6 +83,11 @@ pub fn apply(
                 .map(|(fill,next)|(fill,PoolState::Temple(Box::new(next))))
                 .ok_or_else(||no("TempleDAO: нет выплаты в указанной валюте"))
         }
+        (PoolState::Rubicon(book),PoolKind::V2) => {
+            let p=book.plan(token_in,true,amount).ok_or_else(||no("Rubicon Classic: недостаточно открытых заявок"))?;
+            let next=book.after(token_in,&p).ok_or_else(||no("Rubicon Classic: недостоверный остаток заявки"))?;
+            Ok((Swapped{amount_in:p.spent,amount_out:p.received,complete:p.complete}, PoolState::Rubicon(Box::new(next))))
+        }
         (PoolState::Carbon(s),PoolKind::V2) => {
             let p=u128::try_from(amount).ok().and_then(|x|super::super::math::carbon_match::plan(s,token_in,false,x))
                 .ok_or_else(||no("Carbon: нет покрытия полного входа"))?;

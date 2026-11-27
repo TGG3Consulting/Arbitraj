@@ -78,6 +78,12 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
             }
             ratio.ok_or_else(||"TempleDAO: нет обеспеченного курса для выбранной валюты".into())
         }
+        (PoolState::Rubicon(book),PoolKind::V2) => {
+            let i=usize::from(!zfo);
+            // A nonzero taker debit costs at least one raw atom; floors can improve on the nominal maker rate.
+            let total=book.offers[i].iter().try_fold(U256::ZERO,|v,o|v.checked_add(U256::from(o.available))).ok_or("Rubicon Classic: переполнение суммарного объёма")?;
+            pair(total,U256::ONE,U256::ONE,U256::ONE)
+        }
         (PoolState::Carbon(s),PoolKind::V2) => {
             let r=super::super::math::carbon_depth::best(s,token_in).ok_or("Carbon: нет обеспеченной заявки")?;
             pair(r,r,U256::from(1u64<<48),U256::from(1u64<<48))

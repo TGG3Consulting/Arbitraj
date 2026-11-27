@@ -82,7 +82,7 @@ pub const DEX_KINDS: &[&str] = &[
     "bundles_swap",
     "bundles_swap_v5",
     "antfarm",
-    "aqua_swapvm", "temple_v5", "aktionariat", "ammalgam_dlex", "ambient_ethereum", "mooniswap_v1", "mooniswap_v2",
+    "aqua_swapvm", "temple_v5", "aktionariat", "ammalgam_dlex", "fluid_dex_lite", "ambient_ethereum", "mooniswap_v1", "mooniswap_v2",
     "llamma_lending", "llamma_mint", "llamma_v2", "yield_basis", "balancer_v1", "bancor_legacy", "bancor_v3", "uniswap_v1", "rubicon_classic", "carbon_v1", "mint_club_v2",
     "virtuals_bonding", "virtuals_unicorn", "virtuals_bonding_module", "virtuals_unicorn_module",
     "memebox",

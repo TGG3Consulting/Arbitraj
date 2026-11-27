@@ -7187,5 +7187,28 @@
         "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23"
       ]
     }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "fluid-dex-lite-ethereum",
+    "source": "https://docs.fluid.instadapp.io/integrate/dex-lite-swaps.html · https://github.com/Instadapp/fluid-contracts-public/tree/404d73f91e6806f881f8dabeb30494f93f9e99b7/deployments/mainnet · tests/data/first_run_dex_2026-11-26/fluid_dex_lite_wallet.json.gz",
+    "settings": {
+      "dex.kind": "fluid_dex_lite",
+      "dex.factory": "0xbbcb91440523216e2b87052a99f69c604a7b6e00",
+      "dex.factory_runtime_hash": "0x6c04cbb7cde88c10097bab652ed345558625e2e1810da002c94d402690c4b252",
+      "dex.quoter": "0x99b19a93ba0f516b173eef53d07b3253fbcfd564",
+      "dex.quoter_runtime_hash": "0x08eda2176802b7da6700bfd22f802bef1ec3d86edf260e79c0fe6e963e5ae068",
+      "dex.pmm_ladder_usd": [
+        "1",
+        "10",
+        "100",
+        "1000"
+      ],
+      "dex.pmm_ladder_counter": true,
+      "dex.module_runtime_hashes": [
+        "0xd69663d10c59f075bdbca5302ead1e4a2886355fd5fb061acd1323dab562e739"
+      ]
+    }
   }
 ]

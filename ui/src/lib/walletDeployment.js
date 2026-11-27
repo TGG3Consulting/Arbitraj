@@ -15,12 +15,13 @@ import {loadCarbon,checkCarbon} from './carbonDeploy.js';
 import {loadFactoryWallet, checkFactoryWallet, supportsFactoryWallet} from './balancerV1Deploy.js';
 import {singleFactory, loadSingleFactory, checkSingleFactory} from "./singleFactoryDeploy.js";
 import {loadAngstrom, checkAngstrom} from "./angstromDeploy.js";
+import {loadFluidLite,checkFluidLite} from './fluidLiteDeploy.js';
 import {eulerSwap,loadEulerSwap,checkEulerSwap} from './eulerSwapDeploy.js';
 import {loadStabull, checkStabull} from './stabullDeploy.js';
 import {loadBancor, checkBancor} from "./bancorDeploy.js";
 const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc';
 const ownedModule = kind => isAirSwap(kind) || kind==='dexalot_rfq';
-const bindsWallet = kind => kind==='eulerswap' || kind==='aqua_swapvm' || ownedModule(kind) || isLlamma(kind) || kind==='ambient_ethereum' || kind==='ammalgam_dlex' || defiPlaza(kind) || mooniswap(kind) || singleFactory(kind) || supportsFactoryWallet(kind) || ['aktionariat','algebra_integral_theorem','angstrom_l1','uniswap_v1','bancor_v3','stabull','carbon_v1'].includes(kind);
+const bindsWallet = kind => kind==='fluid_dex_lite' || kind==='eulerswap' || kind==='aqua_swapvm' || ownedModule(kind) || isLlamma(kind) || kind==='ambient_ethereum' || kind==='ammalgam_dlex' || defiPlaza(kind) || mooniswap(kind) || singleFactory(kind) || supportsFactoryWallet(kind) || ['aktionariat','algebra_integral_theorem','angstrom_l1','uniswap_v1','bancor_v3','stabull','carbon_v1'].includes(kind);
 const address = /^0x[\da-f]{40}$/i;
 const digest = /^0x[\da-f]{64}$/i;
 
@@ -41,6 +42,7 @@ export async function loadPlan(settings, plan) {
   if (settings.kind==='dexalot_rfq' || plan.kind==='dexalot_rfq') return loadDexalot(settings,plan,hashCode);
   if (isAirSwap(settings.kind) || isAirSwap(plan.kind)) return loadAirSwap(settings,plan,hashCode);
   if (isLlamma(settings.kind) || isLlamma(plan.kind)) return loadLlamma(settings,plan,hashCode);
+  if (settings.kind==='fluid_dex_lite' || plan.kind==='fluid_dex_lite') return loadFluidLite(settings,plan,hashCode);
   if (settings.kind==='ambient_ethereum' || plan.kind==='ambient_ethereum') return loadAmbient(settings,plan,hashCode);
   if (settings.kind==='ammalgam_dlex' || plan.kind==='ammalgam_dlex') return loadAmmalgam(settings,plan,hashCode);
   if (defiPlaza(settings.kind) || defiPlaza(plan.kind)) return loadDefiPlaza(settings,plan,hashCode);
@@ -77,6 +79,7 @@ export async function checkMarket(provider, p, at) {
   if (p.kind==='dexalot_rfq') return checkDexalot(provider,p,at);
   if (isAirSwap(p.kind)) return checkExchange(provider,p,at);
   if (isLlamma(p.kind)) return checkLlamma(provider,p,at);
+  if (p.kind==='fluid_dex_lite') return checkFluidLite(provider,p,at);
   if (p.kind==='ambient_ethereum') return checkAmbient(provider,p,at);
   if (p.kind==='ammalgam_dlex') return checkAmmalgam(provider,p,at);
   if (mooniswap(p.kind) || defiPlaza(p.kind)) return checkCashRoles(provider,p,at);

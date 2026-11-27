@@ -2034,6 +2034,12 @@ def tables(network, snapshots, profiles):
                     f"до и после транзакции и исходные остатки обоих токенов исполнителя. Недоступность этих данных оставляет "
                     f"операцию на сверке. [Суммы, расходы и квитанции](../{wallets.as_posix()}) · "
                     f"[Канонические балансы по индексу транзакции](../{(data_dir / 'shibaswap_historical_returns.json').as_posix()})")
+        if not base and str(row["id"]) == "6586":
+            fluid = json.loads(gzip.decompress((data_dir / "fluid_dex_lite_ethereum.json.gz").read_bytes()))
+            candidates = list(fluid["reference"]["roles"])
+            task = ("Профиль `fluid-dex-lite-ethereum`. Три каталога совпали с двумя ключами в самой кассе. "
+                    "На блоке 26 494 988 у обоих пулов нулевые резервы. На блоке 25 928 919 получены "
+                    "восемь выплат исходного контракта. См. раздел Fluid DEX Lite.")
         if base and str(row["id"]) == "2589":
             index = json.loads(gzip.decompress((data_dir / "dexalot_base_registry.json.gz").read_bytes()))
             candidates = [index["router"], *index["members"]]
@@ -2648,12 +2654,31 @@ def main():
     lines.extend(hashflow_market_observation())
     from base_dexalot_markets import settings as dexalot_settings
     lines.extend(dexalot_settings())
+    fluid_profile = next(r["settings"] for r in profiles if r["id"]=="fluid-dex-lite-ethereum")
+    lines.extend(["### Fluid DEX Lite на Ethereum", "",
+        "Профиль `fluid-dex-lite-ethereum`, сеть 1. Реестр хранит адреса обоих токенов и соль каждого пула "
+        "в исходном контракте. Проверены USDC/USDT и USDe/USDT. Три контракта чтения вернули те же ключи.", "",
+        "| Настройка | Значение |", "|---|---|"])
+    for key,value in fluid_profile.items():
+        display = ", ".join(value) if isinstance(value,list) else str(value).lower()
+        lines.append(f"| `{key}` | `{display}` |")
+    lines.extend(["| `dex.router` | Адрес модуля после подтверждённого размещения через карточку DEX. |", "",
+        "На блоке 26 494 988 оба пула имели нулевые учётные резервы по обоим токенам. Квотер отклонил все "
+        "восемь запросов. При наличии денег у плательщика исходный контракт также отклонил все восемь обменов. "
+        "На блоке 25 928 919 в тех же пулах прошли восемь обменов через исходный контракт, восемь через "
+        "модуль напрямую и четыре через V5. За 1 USDC получено 1,000079 USDT. За 1 USDe получено 0,999872 USDT. "
+        "Это выплаты в архивной симуляции. Газ и стоимость исходного актива учитываются отдельно при расчёте прибыли.", "",
+        "В режиме точного выхода сумма списания ограничена бюджетом. Размер выплаты проверяется по изменению "
+        "баланса получателя. До повторного ввода ликвидности пустой пул не даёт исполнимого размера. "
+        "[Исходные суммы и отказы](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46032290072) · "
+        "[Модуль и V5](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46032522844) · "
+        "[Описание протокола](https://docs.fluid.instadapp.io/integrate/dex-lite-swaps.html).", ""])
     ambient = json.loads(gzip.decompress(Path("tests/data/first_run_dex_2026-11-26/ambient_ethereum_wallet.json.gz").read_bytes()))
     preset = next(r["settings"] for r in profiles if r["id"] == "ambient-ethereum" and r["chain_id"] == 1)
     lines.extend(["### Ambient на Ethereum", "",
         "Профиль `ambient-ethereum` работает с физическими адресами токенов и полным индексом uint256. "
         "В паре с нативным ETH исходный контракт принимает или отдаёт ETH. Защищённый модуль преобразует его в WETH для кошелька. "
-        "Пул с нативным ETH и пул с токеном WETH имеют разные ключи.", "",
+        "Пул с нативным ETH и пул с токеном WETH имеют разные ключи. На блоке 26 492 699 кошелёк получил 813 541 атом USDC за 0,0005 ETH. Контракт обмена не испустил события. Для 1 ETH котировка снизилась с 1 613 303 444 до 1 613 289 705 атомов USDC, а для соседнего пула USDC/USDT сохранилась. При смене номера или хеша блока граф ждёт отдельного обновления каждого пула. [Транзакция, квитанция и котировки двух блоков](../tests/data/first_run_dex_2026-11-26/ambient_ethereum_silent_swap.json.gz).", "",
         "| Настройка | Значение |", "|---|---|"])
     for field, value in preset.items():
         display = "<br>".join(f"`{v}`" for v in value) if isinstance(value,list) else f"`{str(value).lower()}`"

@@ -27,6 +27,7 @@
     llamma_lending:{file:'llamma-oneway',key:'llamma-oneway:1',name:'Curve LLAMMA lending в Ethereum',load:()=>import('../assets/llamma-oneway-create.json')},
     llamma_mint:{file:'llamma-mint',key:'llamma-mint:1',name:'Curve LLAMMA mint в Ethereum',load:()=>import('../assets/llamma-mint-create.json')},
     llamma_v2:{file:'llamma-v2',key:'llamma-v2:1',name:'Curve LLAMMA v2 в Ethereum',load:()=>import('../assets/llamma-v2-create.json')},
+    fluid_dex_lite:{file:'fluid-dex-lite-ethereum',key:'fluid-lite-wallet:1',name:'FluidDexLiteWallet в Ethereum',load:()=>import('../assets/fluid-dex-lite-ethereum.json')},
     ambient_ethereum:{file:'ambient-ethereum',key:'ambient-wallet:1',name:'AmbientWallet в Ethereum',load:()=>import('../assets/ambient-ethereum-create.json')},
     ammalgam_dlex:{file:'ammalgam-ethereum',key:'ammalgam-ethereum:1',name:'AmmalgamWallet в Ethereum',load:()=>import('../assets/ammalgam-ethereum-create.json')},
     mooniswap_v1:{file:'mooniswap-original',key:'mooniswap-original:1',name:'MooniswapWallet для Mooniswap',load:()=>import('../assets/mooniswap-original-create.json')},
@@ -255,6 +256,8 @@
           <button class="quiet" disabled={busy} onclick={()=>run(()=>cacheFile(entry))}>Скачать неподписанное поручение cache</button>
         {/each}
       {/if}
+    {:else if kind==='fluid_dex_lite'}
+      <p>Модуль проверяет пул и сумму зачисления. После размещения адрес сохраняется в настройке dex.router.</p>
     {:else if kind==='ambient_ethereum'}
       <p>Контракт обмена <code>{manifest.exchange}</code>, данные пула <code>{manifest.query}</code>, WETH <code>{manifest.wrapped}</code>. После финализации модуль сохраняется в <code>dex.router</code>.</p>
     {:else if ['llamma_lending','llamma_mint','llamma_v2','ammalgam_dlex'].includes(kind)}

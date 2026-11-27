@@ -1,0 +1,22 @@
+{
+  "adapter": "https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/factory/uniV2.ts#L2045-L2045",
+  "subgraph": "4GX8RE9TzEWormbkayeGj4NQmmhYE46izVVUvXv8WPDh",
+  "network": 42161,
+  "gns": "0xec9a7fb6cbc2e41926127929c2dce6e9c5d33bec",
+  "block": 218782149,
+  "blockHash": "0xc0616e313ea8fa843c3b3ad73e116a4616ec86258aac05d8a48a04a5a2b17fb1",
+  "transaction": "0xa58a0c6a58564094294f67a6b7669f82cff61e46d44618983237248f0cb300d4",
+  "event_signature": "SubgraphVersionUpdated(uint256,bytes32,bytes32)",
+  "log": {
+    "topics": [
+      "0x71d6df5ad69625753de8b2afc150d9b8acb2d12befb0f4709a75a18e3f7bd4bc",
+      "0x308cd6b07e80134e4cf6e99c982d2314dfb76388c6208d53f925329c411c3310",
+      "0x92007b78bd031670adb92ee89ae544b7ddfe5afe6f5ad5813695275cb1c3e61d"
+    ],
+    "data": "0x2a12b9dc9d0389fe7a62a05f2c28357a31e3e3f54a477d1705af0e4e21dd49b0",
+    "index": 190
+  },
+  "cid": "QmYAafEPam85rVLcDRZqGXUmwrfj34GfZ91WK751LsphrC",
+  "url": "https://ipfs.thegraph.com/ipfs/QmYAafEPam85rVLcDRZqGXUmwrfj34GfZ91WK751LsphrC",
+  "manifest": "dataSources:\n  - kind: ethereum/contract\n    mapping:\n      abis:\n        - file:\n            /: /ipfs/QmYVCmSGsnmJAcqEnem38MshtuCz2HdxHBJV8Qqp7xzusg\n          name: Factory\n        - file:\n            /: /ipfs/QmXuTbDkNrN27VydxbS2huvKRk62PMgUTdPDWkxcr2w7j2\n          name: ERC20\n        - file:\n            /: /ipfs/QmbHnhUFZa6qqqRyubUYhXntox1TCBxqryaBM1iNGqVJzT\n          name: ERC20SymbolBytes\n        - file:\n            /: /ipfs/QmQCP6Pdp1MqpwRv2qoPHuUTwZGy7Q3eDHg4w5kzwE9mBj\n          name: ERC20NameBytes\n      apiVersion: 0.0.3\n      entities:\n        - Pair\n        - Token\n      eventHandlers:\n        - event: 'PairCreated(indexed address,indexed address,bool,address,uint256)'\n          handler: handleNewPair\n      file:\n        /: /ipfs/QmXdv45qphvZ4jovguXJ2mU5XrBLsYrMZMNgVAWNiVsoET\n      kind: ethereum/events\n      language: wasm/assemblyscript\n    name: Factory\n    network: mainnet\n    source:\n      abi: Factory\n      address: '0x777de5Fe8117cAAA7B44f396E93a401Cf5c9D4d6'\n      startBlock: 16303990\ndescription: Solidly is a decentralized protocol for automated token exchange on Ethereum.\nrepository: 'https://github.com/SolidlyFoundation/solidly-subgraph'\nschema:\n  file:\n    /: /ipfs/QmcJDrTwcMnygSMCSb6E3EUJqMDMu62Fk6bw7xSj9iVFYF\nspecVersion: 0.0.2\ntemplates:\n  - kind: ethereum/contract\n    mapping:\n      abis:\n        - file:\n            /: /ipfs/QmWXa22qqEG6kCKFxVVSks8ieES4f6BH2WPCVQvs8tjMrN\n          name: Pair\n        - file:\n            /: /ipfs/QmYVCmSGsnmJAcqEnem38MshtuCz2HdxHBJV8Qqp7xzusg\n          name: Factory\n      apiVersion: 0.0.3\n      entities:\n        - Pair\n        - Token\n      eventHandlers:\n        - event: 'Mint(indexed address,uint256,uint256)'\n          handler: handleMint\n        - event: 'Burn(indexed address,uint256,uint256,indexed address)'\n          handler: handleBurn\n        - event: >-\n            Swap(indexed address,uint256,uint256,uint256,uint256,indexed\n            address)\n          handler: handleSwap\n        - event: 'Transfer(indexed address,indexed address,uint256)'\n          handler: handleTransfer\n        - event: 'Sync(uint256,uint256)'\n          handler: handleSync\n      file:\n        /: /ipfs/QmUQ1p5eAmtUVbpbzZEH8CW5R3L4dVtcJw1VkEY3iHpZJc\n      kind: ethereum/events\n      language: wasm/assemblyscript\n    name: Pair\n    network: mainnet\n    source:\n      abi: Pair\n"
+}

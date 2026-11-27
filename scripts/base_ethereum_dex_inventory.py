@@ -1949,6 +1949,25 @@ def tables(network, snapshots, profiles):
                     task += " · установлена фабрика этого протокола и сети; торговый профиль требует проверки"
                 if kind == "fee_factory":
                     task += " · адрес взят из реестра комиссий источника"
+            elif kind == "subgraph" and network == "ethereum" and str(row["id"]) == "2400":
+                proof_file = data_dir / "solidly_subgraph_source.json"
+                proof = read(proof_file)
+                directory = json.loads(gzip.decompress((data_dir / "solidly_v2_ethereum.json.gz").read_bytes()))
+                wallets = json.loads(gzip.decompress((data_dir / "solidly_v2_ethereum_wallets.json.gz").read_bytes()))
+                factory = directory["factory"]
+                assert f"address: '{factory}'" in proof["manifest"].lower()
+                assert "network: mainnet" in proof["manifest"] and proof["adapter"] == ref
+                assert configured[directory["id"]]["settings"]["dex.factory"].lower() == factory
+                assert wallets["selector"] == directory["selector"]
+                candidates = [factory]
+                paid = sum(case["results"][leg]["status"] == "0x1"
+                           for m in wallets["markets"] for case in m["cases"]
+                           for leg in ("buy", "sell"))
+                task = (f"Профиль `{directory['id']}`. Опубликованный в The Graph подграф следит за PairCreated этой фабрики "
+                        f"с блока 16 303 990. На блоке {directory['height']} в реестре {len(directory['markets'])} пар. "
+                        f"На {len(wallets['markets'])} парах V5 подтвердил {paid} зачислений. "
+                        f"[Манифест]({proof['url']}) · [Публикация подграфа](../{proof_file.as_posix()}) · "
+                        "[Выплаты V5 и Router01](../tests/data/first_run_dex_2026-11-26/solidly_v2_ethereum_wallets.json.gz).")
             elif kind == "subgraph":
                 task += " · конкретный источник использует подграф; адрес его физической фабрики здесь отсутствует"
             elif kind == "absent":

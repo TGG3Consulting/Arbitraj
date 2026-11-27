@@ -64,6 +64,7 @@ impl Venue for BscDex {
         source: &str,
         req: crate::gateway::source_quote::Request,
     ) -> GatewayResult<crate::gateway::source_quote::Preview> {
+        if source == "dexalot" {return super::dexalot::preview(&self.p,req).await;}
         if source == "airswap" {return super::airswap::request(&self.p,req).await;}
         if source == "textile" {
             return super::textile::request(&self.p,req).await;

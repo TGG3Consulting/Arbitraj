@@ -24,6 +24,7 @@ pub mod hanji;
 mod source_quote;
 mod textile;
 mod airswap;
+mod dexalot;
 mod keyed_price;
 mod fermi;
 mod clipper;

@@ -1,0 +1,231 @@
+{
+  "observed_utc": "2026-11-27T15:51:10.326741+00:00",
+  "url": "https://api.dexalot.com/api/rfq",
+  "chain": 8453,
+  "pairs": {
+    "ETH/USDC": {
+      "base": "ETH",
+      "quote": "USDC",
+      "liquidityUSD": "7617.81",
+      "baseAddress": "0x0000000000000000000000000000000000000000",
+      "quoteAddress": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "baseDecimals": 18,
+      "quoteDecimals": 6
+    },
+    "EURC/USDC": {
+      "base": "EURC",
+      "quote": "USDC",
+      "liquidityUSD": "3143.00",
+      "baseAddress": "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42",
+      "quoteAddress": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "baseDecimals": 6,
+      "quoteDecimals": 6
+    },
+    "WETH/USDC": {
+      "base": "WETH",
+      "quote": "USDC",
+      "liquidityUSD": "7617.81",
+      "baseAddress": "0x4200000000000000000000000000000000000006",
+      "quoteAddress": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "baseDecimals": 18,
+      "quoteDecimals": 6
+    }
+  },
+  "prices": [
+    {
+      "params": {
+        "chainid": "8453",
+        "pair": "ETH/USDC",
+        "amount": "1",
+        "side": "0",
+        "isbase": "0"
+      },
+      "answer": {
+        "success": false,
+        "reasonCode": "SQ-005",
+        "reason": "Not enough liquidity in mainnet rfq contract for the given quantity"
+      }
+    },
+    {
+      "params": {
+        "chainid": "8453",
+        "pair": "ETH/USDC",
+        "amount": "0.001",
+        "side": "0",
+        "isbase": "1"
+      },
+      "answer": {
+        "success": false,
+        "reasonCode": "SQ-005",
+        "reason": "Not enough liquidity in mainnet rfq contract for the given quantity"
+      }
+    },
+    {
+      "params": {
+        "chainid": "8453",
+        "pair": "ETH/USDC",
+        "amount": "1",
+        "side": "1",
+        "isbase": "0"
+      },
+      "answer": {
+        "success": true,
+        "pair": "ETH/USDC",
+        "side": 1,
+        "price": "1667.93163",
+        "baseAmount": "0.000599544958566438",
+        "quoteAmount": "1"
+      }
+    },
+    {
+      "params": {
+        "chainid": "8453",
+        "pair": "ETH/USDC",
+        "amount": "0.001",
+        "side": "1",
+        "isbase": "1"
+      },
+      "answer": {
+        "success": true,
+        "pair": "ETH/USDC",
+        "side": 1,
+        "price": "1667.93163",
+        "baseAmount": "0.001",
+        "quoteAmount": "1.667931"
+      }
+    },
+    {
+      "params": {
+        "chainid": "8453",
+        "pair": "EURC/USDC",
+        "amount": "1",
+        "side": "0",
+        "isbase": "0"
+      },
+      "answer": {
+        "success": true,
+        "pair": "EURC/USDC",
+        "side": 0,
+        "price": "1.0936",
+        "baseAmount": "0.914411",
+        "quoteAmount": "1"
+      }
+    },
+    {
+      "params": {
+        "chainid": "8453",
+        "pair": "EURC/USDC",
+        "amount": "1",
+        "side": "0",
+        "isbase": "1"
+      },
+      "answer": {
+        "success": true,
+        "pair": "EURC/USDC",
+        "side": 0,
+        "price": "1.0936",
+        "baseAmount": "1",
+        "quoteAmount": "1.0936"
+      }
+    },
+    {
+      "params": {
+        "chainid": "8453",
+        "pair": "EURC/USDC",
+        "amount": "1",
+        "side": "1",
+        "isbase": "0"
+      },
+      "answer": {
+        "success": true,
+        "pair": "EURC/USDC",
+        "side": 1,
+        "price": "1.0924",
+        "baseAmount": "0.915416",
+        "quoteAmount": "1"
+      }
+    },
+    {
+      "params": {
+        "chainid": "8453",
+        "pair": "EURC/USDC",
+        "amount": "1",
+        "side": "1",
+        "isbase": "1"
+      },
+      "answer": {
+        "diagnostic": "ReadTimeout"
+      },
+      "retry": {
+        "success": true,
+        "pair": "EURC/USDC",
+        "side": 1,
+        "price": "1.0924",
+        "baseAmount": "1",
+        "quoteAmount": "1.0924"
+      }
+    },
+    {
+      "params": {
+        "chainid": "8453",
+        "pair": "WETH/USDC",
+        "amount": "1",
+        "side": "0",
+        "isbase": "0"
+      },
+      "answer": {
+        "success": false,
+        "reasonCode": "SQ-005",
+        "reason": "Not enough liquidity in mainnet rfq contract for the given quantity"
+      }
+    },
+    {
+      "params": {
+        "chainid": "8453",
+        "pair": "WETH/USDC",
+        "amount": "0.001",
+        "side": "0",
+        "isbase": "1"
+      },
+      "answer": {
+        "success": false,
+        "reasonCode": "SQ-005",
+        "reason": "Not enough liquidity in mainnet rfq contract for the given quantity"
+      }
+    },
+    {
+      "params": {
+        "chainid": "8453",
+        "pair": "WETH/USDC",
+        "amount": "1",
+        "side": "1",
+        "isbase": "0"
+      },
+      "answer": {
+        "success": true,
+        "pair": "ETH/USDC",
+        "side": 1,
+        "price": "1667.93163",
+        "baseAmount": "0.000599544958566438",
+        "quoteAmount": "1"
+      }
+    },
+    {
+      "params": {
+        "chainid": "8453",
+        "pair": "WETH/USDC",
+        "amount": "0.001",
+        "side": "1",
+        "isbase": "1"
+      },
+      "answer": {
+        "success": true,
+        "pair": "ETH/USDC",
+        "side": 1,
+        "price": "1667.93163",
+        "baseAmount": "0.001",
+        "quoteAmount": "1.667931"
+      }
+    }
+  ]
+}

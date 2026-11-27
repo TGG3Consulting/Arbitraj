@@ -31,6 +31,7 @@
     fluid_dex_lite:{file:'fluid-dex-lite-ethereum',key:'fluid-lite-wallet:1',name:'FluidDexLiteWallet в Ethereum',load:()=>import('../assets/fluid-dex-lite-ethereum.json')},
     ambient_ethereum:{file:'ambient-ethereum',key:'ambient-wallet:1',name:'AmbientWallet в Ethereum',load:()=>import('../assets/ambient-ethereum-create.json')},
     ammalgam_dlex:{file:'ammalgam-ethereum',key:'ammalgam-ethereum:1',name:'AmmalgamWallet в Ethereum',load:()=>import('../assets/ammalgam-ethereum-create.json')},
+    motoswap_v2:{file:'motoswap-ethereum',key:'motoswap-wallet:1',name:'MotoswapWallet в Ethereum',load:()=>import('../assets/motoswap-ethereum.json')},
     mooniswap_v1:{file:'mooniswap-original',key:'mooniswap-original:1',name:'MooniswapWallet для Mooniswap',load:()=>import('../assets/mooniswap-original-create.json')},
     mooniswap_v2:{file:'mooniswap-successor',key:'mooniswap-successor:1',name:'MooniswapWallet для 1inch Liquidity Protocol',load:()=>import('../assets/mooniswap-successor-create.json')},
     shibaswap_v2_module:{file:'shibaswap-v2-ethereum',key:'shibaswap-v2-create:1',name:'ShibaswapV2Adapter в Ethereum',load:()=>import('../assets/shibaswap-v2-ethereum.json')},
@@ -55,7 +56,7 @@
   };
   const target = $derived(['registered_uni_v3','algebra_integral_theorem'].includes(kind) ? 'dex.v3_wallet_module' : 'dex.router');
   const deployment = $derived(kind==='lambda_propamm'
-    ? (String(store.values['dex.evm_chain_id|Venue|'+venue])==='1' ? {file:'prop-venue-'+id,key:'prop-venue-create:1:'+venue+':'+id,name:'PropVenueAdapter в Ethereum',load:async(settings,intent)=>{const [ordinary,slot]=await Promise.all([import('../assets/prop-venue-ethereum.json'),import('../assets/prop-slot-venue-ethereum.json')]);return {default:selectPropDeployment(settings,intent,ordinary.default,slot.default)}}} : null)
+    ? (String(store.values['dex.evm_chain_id|Venue|'+venue])==='1' ? {file:'prop-venue-'+id,key:'prop-venue-create:1:'+venue+':'+id,name:'PropVenueAdapter в Ethereum',load:async(settings,intent)=>{const [ordinary,slot,protectedSlot]=await Promise.all([import('../assets/prop-venue-ethereum.json'),import('../assets/prop-slot-venue-ethereum.json'),import('../assets/prop-slot-v2-ethereum.json')]);return {default:selectPropDeployment(settings,intent,ordinary.default,slot.default,protectedSlot.default)}}} : null)
     : kind==='registered_uni_v3'
     ? (String(store.values['dex.evm_chain_id|Venue|'+venue])==='8453' && value('dex.module_runtime_hashes')?.length ? communityPlans[id.split('@')[0]] : null)
     : /^eulerswap_v[12](?:_module)?$/.test(kind) ? eulerByChain[String(store.values['dex.evm_chain_id|Venue|'+venue])]
@@ -74,7 +75,7 @@
     officialRouter:value('dex.router'), routerHash:value('dex.router_runtime_hash'),deployer:value('dex.algebra_pool_deployer'),
     factoryHash:value('dex.factory_runtime_hash'), template:value('dex.v1_template'),
     templateHash:value('dex.v1_template_runtime_hash'), cloneHash:value('dex.pair_runtime_hash'), kind:value('dex.kind'), market:value('dex.factory'),
-    propRoles:value('dex.propamm_roles'),ambientRoles:value('dex.ambient_roles'),ambientQuery:value('dex.ambient_query'),
+    motoRoles:value('dex.motoswap_roles'),propRoles:value('dex.propamm_roles'),ambientRoles:value('dex.ambient_roles'),ambientQuery:value('dex.ambient_query'),
     brokerMarkets:value('dex.broker_markets'),poolManager:value('dex.pool_manager'),launchRoles:value('dex.launch_roles'),
     quoter:value('dex.quoter'), quoterHash:value('dex.quoter_runtime_hash'), vault:value('dex.vault'), native:value('dex.bancor_native_token'), roles:value('dex.bancor_roles'),
     hashes:value('dex.module_runtime_hashes'), implementations:value('dex.proxy_implementations'),implementationHashes:value('dex.proxy_runtime_hashes')});

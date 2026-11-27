@@ -70,16 +70,21 @@ test('canonical verification checks every implementation slot, runtime and all c
 });
 
 
-test('slot-enabled markets select the accepted CREATE and resume an existing ordinary deployment',async()=>{
+test('new wallets deploy the replay-protected module and pending wallets resume their original CREATE',async()=>{
   const {selectPropDeployment}=await import('../src/lib/propVenueDeploy.js');
-  const base=JSON.parse(read('../src/assets/prop-venue-ethereum.json'));
-  const slot=JSON.parse(read('../src/assets/prop-slot-venue-ethereum.json'));
-  for (const [market,next] of Object.entries(slot.markets)) {
-    const legacy=base.markets[market];
-    const settings={market,hashes:[legacy.runtimeKeccak,next.runtimeKeccak]};
-    assert.equal(selectPropDeployment(settings,null,base,slot),slot);
-    assert.equal(selectPropDeployment(settings,{creation:legacy.creationSha256},base,slot),base);
-    assert.equal(selectPropDeployment({...settings,hashes:[legacy.runtimeKeccak]},null,base,slot),base);
-    assert.throws(()=>selectPropDeployment(settings,{creation:'unknown'},base,slot));
+  const artifacts=['prop-venue-ethereum','prop-slot-venue-ethereum','prop-slot-v2-ethereum']
+    .map(name=>JSON.parse(read('../src/assets/'+name+'.json')));
+  for (const market of Object.keys(artifacts[2].markets)) {
+    const plans=artifacts.map(archive=>archive.markets[market]);
+    const settings={market,hashes:plans.map(plan=>plan.runtimeKeccak)};
+    assert.equal(new Set(settings.hashes).size,3);
+    assert.equal(selectPropDeployment(settings,null,...artifacts),artifacts[2]);
+    for (const [i,plan] of plans.entries()) {
+      const pending={creation:plan.creationSha256};
+      assert.equal(selectPropDeployment(settings,pending,...artifacts),artifacts[i]);
+      assert.equal(selectPropDeployment({...settings,hashes:[plan.runtimeKeccak]},null,...artifacts),artifacts[i]);
+      assert.throws(()=>selectPropDeployment({...settings,hashes:[]},pending,...artifacts));
+    }
+    assert.throws(()=>selectPropDeployment(settings,{creation:'unknown'},...artifacts));
   }
 });

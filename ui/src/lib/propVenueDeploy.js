@@ -85,10 +85,10 @@ export async function checkPropModule(provider,p,target,at) {
 }
 
 
-export function selectPropDeployment(settings, pending, ordinary, slot) {
+export function selectPropDeployment(settings, pending, ordinary, slot, protectedSlot) {
   const market=settings.market?.toLowerCase();
   const allowed=new Set((settings.hashes??[]).map(value=>value.toLowerCase()));
-  for (const artifact of [slot,ordinary]) {
+  for (const artifact of [protectedSlot,slot,ordinary]) {
     const plan=artifact?.markets?.[market];
     if (plan && allowed.has(plan.runtimeKeccak) && (!pending || plan.creationSha256===pending.creation)) {
       return artifact;

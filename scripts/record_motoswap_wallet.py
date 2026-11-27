@@ -85,7 +85,7 @@ def capture(artifact):
                                  failed_minimum=high.get("error"),expired=expired.get("error"),calldata=trade["data"],logs=paid["logs"]))
     return dict(selector=reader.tag,root=reader.header["stateRoot"],owner=OWNER,module=MODULE,executor=EXEC,
                 payments=payments,manifest=dict(chain=1,factory=FACTORY,fee_router=FEE,creation=artifact["creation"],
-                creation_sha256=sha256(bytes.fromhex(creation[2:])).hexdigest(),runtime="0x"+keccak(hexstr=runtime).hex()))
+                creation_sha256=sha256(bytes.fromhex(creation[2:])).hexdigest(),runtime_sha256=sha256(bytes.fromhex(runtime[2:])).hexdigest(),runtime="0x"+keccak(hexstr=runtime).hex()))
 
 
 if __name__=="__main__":

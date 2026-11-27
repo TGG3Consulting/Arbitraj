@@ -272,10 +272,13 @@ if __name__=="__main__":
     a=ap.parse_args();snap=json.loads((ROOT/"tests/data/first_run_dex_2026-11-26/base.json").read_bytes()); reader=Reader("base",snap)
     cap=CanonicalCalls(reader)
     if a.module:
-        archive = ROOT / "tests/data/first_run_dex_2026-11-26/wagmi_thick_base.json.gz"
-        book = json.loads(gzip.decompress(archive.read_bytes()))[a.name]
+        directory = ROOT / "tests/data/first_run_dex_2026-11-26"
+        if a.name == "kinetix":
+            book = json.loads(gzip.decompress((directory / "kinetix_v3_base.json.gz").read_bytes()))
+        else:
+            book = json.loads(gzip.decompress((directory / "wagmi_thick_base.json.gz").read_bytes()))[a.name]
         assert book["selector"] == cap.selector and book["state_root"] == reader.header["stateRoot"]
-        native = {(c["pool"],c["input"],c["spent"]): c for c in book["cases"] if c["wire"] == "router02"}
+        native = {(c["pool"],c["input"],c["spent"]): c for c in book["cases"] if c["wire"] == book.get("native_wire", "router02")}
         book = wallet(reader,cap,book,json.loads(a.module.read_bytes()))
         checked = {(c["pool"],c["input"],c["spent"]): c for c in book["cases"]}
         assert native and checked.keys() == native.keys()

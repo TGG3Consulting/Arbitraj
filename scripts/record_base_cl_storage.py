@@ -19,8 +19,11 @@ from v3_factory_storage import verify_directory
 def directory(name):
     fixtures = ROOT / "tests/data/first_run_dex_2026-11-26"
     head = json.loads((fixtures / "base.json").read_bytes())
-    books = json.loads(gzip.decompress((fixtures / "wagmi_thick_base.json.gz").read_bytes()))
-    book = books[name]
+    if name == "kinetix":
+        book = json.loads(gzip.decompress((fixtures / "kinetix_v3_base.json.gz").read_bytes()))
+    else:
+        books = json.loads(gzip.decompress((fixtures / "wagmi_thick_base.json.gz").read_bytes()))
+        book = books[name]
     factory = book["roles"]["factory"]["address"]
     reader = Reader("base", head)
     cap = CanonicalCalls(reader)
@@ -28,7 +31,7 @@ def directory(name):
     assert book["selector"] == reader.tag and proof["codeHash"] == book["roles"]["factory"]["runtime"]
 
     url = f"https://sourcify.dev/server/v2/contract/8453/{factory}"
-    res = requests.get(url, params={"fields": "storageLayout,sources,runtimeBytecode.onchainBytecode"}, timeout=30)
+    res = requests.get(url, params={"fields": "storageLayout,sources,compilation,runtimeBytecode.onchainBytecode"}, timeout=30)
     res.raise_for_status()
     compiled = res.json()
     assert compiled["runtimeBytecode"]["onchainBytecode"].lower() == reader.one("eth_getCode", [factory, reader.tag])
@@ -36,7 +39,8 @@ def directory(name):
     assert all(row["offset"] == 0 for row in compiled["storageLayout"]["storage"])
     assert set(layout) == ({"parameters", "owner", "feeAmountTickSpacing", "getPool"} |
                            ({"allPairs", "feeProtocol"} if name == "thick" else set()))
-    source, = [v["content"] for path, v in compiled["sources"].items() if path.endswith("/UniswapV3Factory.sol")]
+    source_path = compiled["compilation"]["fullyQualifiedName"].rsplit(":", 1)[0]
+    source = compiled["sources"][source_path]["content"]
     initial = set(map(int, re.findall(r"feeAmountTickSpacing\[(\d+)\]\s*=", source)))
     catalog = json.loads((ROOT / "config/first_run_dex.json").read_bytes())
     fees = sorted(initial | candidate_fees(catalog, fixtures) | {m["key"] for m in book["markets"]})
@@ -65,7 +69,7 @@ def directory(name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("name", choices=["wagmi", "thick"])
+    parser.add_argument("name", choices=["wagmi", "thick", "kinetix"])
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
     args.output.write_bytes(json.dumps(directory(args.name), separators=(",", ":")).encode())

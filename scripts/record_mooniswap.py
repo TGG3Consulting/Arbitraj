@@ -6,6 +6,7 @@ from pathlib import Path
 
 from eth_abi import decode, encode
 from eth_utils import keccak
+from mooniswap_observe import frame, decode_frame
 from fork_fee_rpc import Reader
 from record_base_slipstream_executor import OWNER, ROOT, simulate_block
 from record_bitswap_ethereum import tx
@@ -94,12 +95,13 @@ def trials(reader, generation, pool, source, target, amount):
     def simulate(minimum):
         trade = tx(pool, "swap(address,address,uint256,uint256,address)", ["address", "address", "uint256", "uint256", "address"],
                    [source, target, amount, minimum, ZERO], value=amount if source == ZERO else 0)
-        ops = prepare + [quote] + marks + [trade] + marks
+        observers=frame(pool,[source,target],generation=="successor",MULTI) if minimum==1 else []
+        ops = prepare + observers + [quote] + marks + [trade] + marks + observers
         rows = simulate_block(None, reader.tag, {OWNER: {"balance": hex(100 * 10**18)}}, ops,
                               read_rpc=lambda _, method, params: reader.one(method, params))
         if any(row["status"] != "0x1" for row in rows[:len(prepare)]):
             return dict(status="funding_refused")
-        head = len(prepare)
+        head = len(prepare)+len(observers)
         if any(rows[i]["status"] != "0x1" for i in (*range(head+1, head+5), *range(head+6, head+10))):
             return dict(status="balance_unreadable")
         if rows[head]["status"] == "0x1":
@@ -126,6 +128,9 @@ def trials(reader, generation, pool, source, target, amount):
         if int(op["returnData"], 16) != received or after[2] - before[2] != amount or before[3] - after[3] != received:
             raise ValueError("unexpected wallet or pool cash")
         out.update(logs=op["logs"], trade=trade)
+        if observers:
+            out["state_before"]=decode_frame(rows[len(prepare):head],generation=="successor")
+            out["state_after"]=decode_frame(rows[-len(observers):],generation=="successor")
         return out
 
     result = dict(input=source, output=target, amount=str(amount))
@@ -136,7 +141,7 @@ def trials(reader, generation, pool, source, target, amount):
     exact, high = simulate(net), simulate(net + 1)
     if exact["status"] != "0x1" or exact["received"] != str(net) or high["status"] != "0x0":
         raise ValueError("wallet boundary")
-    return dict(result, exact=exact, plus_one=high)
+    return dict(result, exact=exact, plus_one=high, frame_before=probe["state_before"],frame_after=probe["state_after"])
 
 
 def activity(reader, registry, generation):

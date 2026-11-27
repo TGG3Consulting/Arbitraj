@@ -1,7 +1,7 @@
 //! Исполнение RFQT через существующую очередь nonce и разбор квитанций DEX.
 #[path="proof_chain.rs"]
 mod proof_chain;
-use super::super::{exec, parts::Parts, send, wallet};
+use super::super::{exec, num, parts::Parts, send, wallet};
 use super::{routing, sim, wire,dispatch::{Dispatch,Gate}};
 use crate::core::types::{RouteMode, Side, TradeRequest, TradeResult, TxOutcome};
 use super::model::Request;
@@ -183,8 +183,9 @@ pub(super) async fn prior(p: &Parts, r: &TradeRequest) -> GatewayResult<Option<T
             if !proof_chain::same_fill(tx,&receipt){return Err(unknown());}
             proof.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|unknown())?;
             let (d,c)=proof.amounts(&receipt.logs).ok_or_else(unknown)?;
-            let (_,dec)=saved.as_ref().and_then(|s|s.decs).ok_or_else(unknown)?;
-            if crate::venues::bsc_dex::num::to_decimal(if r.side==Side::Buy{d}else{c},dec)!=Some(x.gross_quote){return Err(unknown());}
+            let (asset_dec,cash_dec)=saved.as_ref().and_then(|s|s.decs).ok_or_else(unknown)?;
+            let (asset,cash)=if r.side==Side::Buy{(c,d)}else{(d,c)};
+            if num::to_decimal(asset,asset_dec)!=Some(x.trade.filled_qty)||num::to_decimal(cash,cash_dec)!=Some(x.gross_quote){return Err(unknown());}
         }
         if let Some(proof)=saved.as_ref().and_then(|c|c.textile.as_ref()){
             let unknown=||p.ctx.err(ErrorCode::OutcomeUnknown,"Textile: требуется каноническая квитанция исходного платежа").pending(entry.lookup.clone());

@@ -78,7 +78,9 @@ contract MotoswapWallet {
         emit Paid(pool,msg.sender,recipient,input,output,amount,net);
     }
 
-    function pathVersion() external pure returns(uint256){return 1;}
+    // Версия ABI executePath, которую проверяет IMoto.pathVersion в pools/motoswap_frame.rs.
+    uint256 private constant PATH_VERSION = 1;
+    function pathVersion() external pure returns(uint256){return PATH_VERSION;}
 
     function executePath(address[] calldata pools,address[] calldata path,uint256 amount,uint256 minimum,uint256 deadline)
         external returns(uint256 net) {

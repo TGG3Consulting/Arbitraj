@@ -1,11 +1,12 @@
 <!-- Ручная проверка ответа авторизованного источника. -->
 <script>
   import { post, seg } from '../lib/api.js';
-  let { venue, trader, source = 'fynd', label = 'Fynd' } = $props();
+  let { venue, trader, wallet, source = 'fynd', label = 'Fynd' } = $props();
   let input = $state(''), output = $state(''), amount = $state('');
+  let firm = $state(false), minimum = $state(''), fee = $state('');
   let result = $state(null), error = $state(''), busy = $state(false);
   const address = /^0x[0-9a-fA-F]{40}$/;
-  const valid = $derived(address.test(input) && address.test(output) && input.toLowerCase() !== output.toLowerCase() && /^[1-9]\d*$/.test(amount));
+  const valid = $derived(address.test(input) && address.test(output) && input.toLowerCase() !== output.toLowerCase() && /^[1-9]\d*$/.test(amount) && (!firm || (/^[1-9]\d*$/.test(minimum) && (source !== 'kipseli' || (/^\d{1,5}$/.test(fee))))));
   async function quote(event) {
     event.preventDefault();
     if (!valid || busy) return;
@@ -13,7 +14,8 @@
     error = '';
     result = null;
     try {
-      result = await post(`/api/venues/${seg(venue)}/sources/${seg(source)}/quote`, { input, output, trader, amount_raw: amount });
+      const terms = firm ? {wallet, minimum_raw: minimum, fee_tenths_bps: source === 'kipseli' ? Number(fee) : null} : undefined;
+      result = await post(`/api/venues/${seg(venue)}/sources/${seg(source)}/quote`, { input, output, trader, amount_raw: amount, firm: terms });
     } catch (e) {
       error = e.message;
     } finally {
@@ -27,12 +29,20 @@
     <label>Адрес продаваемого токена <input bind:value={input} disabled={busy} placeholder="0x…" /></label>
     <label>Адрес получаемого токена <input bind:value={output} disabled={busy} placeholder="0x…" /></label>
     <label>Сумма в минимальных единицах входного токена <input bind:value={amount} disabled={busy} inputmode="numeric" /></label>
+    {#if source !== 'fynd' && wallet}
+      <label><input type="checkbox" bind:checked={firm} disabled={busy} /> Запросить индивидуальные условия для этого кошелька и проверить обмен в симуляции</label>
+      {#if firm}
+        <label>Минимальная выплата в единицах контракта <input bind:value={minimum} disabled={busy} inputmode="numeric" /></label>
+        {#if source === 'kipseli'}<label>Согласованная комиссия Kipseli в десятых долях базисного пункта <input bind:value={fee} disabled={busy} inputmode="numeric" /></label>{/if}
+      {/if}
+    {/if}
     <button disabled={!valid || busy} type="submit">{busy ? 'Запрос…' : 'Запросить расчёт'}</button>
   </form>
   {#if error}<p class="err" role="status">{error}</p>{/if}
   {#if result && source !== 'fynd'}
     <p role="status">Оценка на блоке {result.block}. Расход {result.spent_raw} минимальных единиц {result.input}, выход {result.received_raw} минимальных единиц {result.output}, остаток входа {result.unspent_raw}.</p>
-    {#if source === 'zeroex'}<p>Шаги 0x RFQ в расчёте агрегатора: {result.details.rfq_legs} из {result.details.legs.length}. Минимум API — {result.details.minimum_raw}.</p>{:else}<p>Глубина книги до индивидуальной комиссии за подпись.</p>{/if}
+    {#if result.details.type === 'wallet_simulation'}<p>Кошелёк выполнил обмен в симуляции. Газ — {result.details.gas_used} ед. Минимальная выплата владельца — {result.details.owner_minimum_raw}.</p>{/if}
+    {#if source === 'zeroex'}<p>Шаги 0x RFQ в расчёте агрегатора: {result.details.rfq_legs} из {result.details.legs.length}. Минимум API — {result.details.minimum_raw}.</p>{:else if result.details.type !== 'wallet_simulation'}<p>Глубина книги до индивидуальной комиссии за подпись.</p>{/if}
   {:else if result}
     <p role="status">Расчёт на блоке {result.block}. Отставание в момент проверки — {result.details.age_blocks} блоков. За {result.spent_raw} минимальных единиц {result.input} выход до удержания комиссий составил {result.received_raw} минимальных единиц {result.output}. Шагов агрегатора через подтверждённые пулы Fynd AMM — {result.details.recognized_fynd_swaps} из {result.details.swaps}.</p>
     {#if result.details.minimum_received_raw != null}<p>Минимум по данным Fynd — {result.details.minimum_received_raw}. Комиссия роутера — {result.details.router_fee_raw}, клиента — {result.details.client_fee_raw}. Все суммы в минимальных единицах выходного токена.</p>{/if}

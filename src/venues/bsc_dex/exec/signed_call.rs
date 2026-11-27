@@ -50,7 +50,7 @@ pub(super) async fn included(
     }
 }
 
-pub(super) fn logs(rows: &[SimLog]) -> Option<Vec<Log>> {
+pub(in crate::venues::bsc_dex) fn logs(rows: &[SimLog]) -> Option<Vec<Log>> {
     rows.iter()
         .map(|r| {
             Some(Log {

@@ -83,6 +83,15 @@ def tables(network, snapshots, profiles):
     out.extend(["", "#### Ручные цены источников", "", "На этой площадке `zeroex.base_url = https://api.0x.org` включает ручную оценку маршрута. Ключ `zeroex.api_key` выдаётся в [кабинете 0x](https://dashboard.0x.org/). Доли RFQ и остальных поставщиков отображаются по шагам цены. Для согласованного обмена требуется отдельная действующая фирменная котировка для своего плательщика."])
     if network=="base":
         out.extend(["", "Для книги Kipseli задайте `kipseli.base_url = https://propamm.kipseli.win` и ключ владельца `kipseli.api_key`. Для индивидуальной on-chain цены нужен зарегистрированный signer. Коммерческий доступ к подписи обмена предоставляет Kipseli. [Условия доступа](https://docs.kipseli.capital/) · [Касса и использованная подпись](../tests/data/first_run_dex_2026-11-26/kipseli_base_settled.json.gz)."])
+    cfg=read(Path("tests/data/first_run_dex_2026-11-26/keyed_quote_endpoints.json"))[network]["roles"]
+    targets={"zeroex.firm_target":[("allowance_holder","address"),("allowance_holder","runtime")],
+             "zeroex.settler_registry":[("settler_registry",k) for k in ("address","runtime","implementation","implementation_hash")]}
+    if network=="base":
+        targets["kipseli.firm_target"]=[("kipseli_router","address"),("kipseli_router","runtime")]
+        targets["kipseli.firm_path"]=[(role,k) for role in ("source","forward","cash") for k in ("address","runtime")]
+    for key,parts in targets.items():
+        out.append(f"- `{key}` = `{' '.join(cfg[role][k] for role,k in parts)}`.")
+    out.extend(["", "В индивидуальном запросе владелец указывает выбранный кошелёк и свой минимальный чистый выход; для Kipseli также согласованную ставку в десятых долях базисного пункта. Бот проверяет полный долг входа и чистую выплату в дочернем блоке, с действующими балансами и разрешениями. Для 0x сверяются AllowanceHolder, Settler, две валюты, получатель и минимум в calldata. Смешанный маршрут отображает каждую ногу по ответу API. [Исходные состоявшиеся вызовы](../tests/data/first_run_dex_2026-11-26/kipseli_zeroex_settled_traces.json.gz)."])
     out.extend(["", "Пустой URL скрывает цену в кошельке выбранной площадки. Официальный секрет зашифрован, запрос собственного HTTPS-сервера отправляется без него."])
     out.extend(base_launch_inventory.spoke(network))
     if base and "umbrae-dlmm" in configured:

@@ -14,6 +14,15 @@ pub struct Request {
     pub trader: Option<Address>,
     pub market: Option<Address>,
     pub builder: Option<String>,
+    pub firm: Option<FirmTerms>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FirmTerms {
+    pub wallet: String,
+    pub minimum_raw: String,
+    pub fee_tenths_bps: Option<u32>,
 }
 
 #[derive(Serialize)]

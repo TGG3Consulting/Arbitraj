@@ -14,6 +14,11 @@ pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayRes
     if matches!(source, "kipseli" | "zeroex") {
         return super::keyed_price::preview(ctx, source, req).await;
     }
+    if req.firm.is_some() {
+        return Err(bad(
+            "У этого источника собственная форма проверки котировки",
+        ));
+    }
     if source == "native_rfq" {
         return super::native_rfq::preview(ctx, req).await;
     }
@@ -31,6 +36,7 @@ pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayRes
         trader,
         market,
         builder,
+        firm: _,
     } = req;
     match source {
         "hanji" => {

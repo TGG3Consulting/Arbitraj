@@ -225,8 +225,10 @@ pub const UR_FORMATS: &[&str] = &[
 /// Настройки DEX. Порядок — как в docs/SETTINGS.md.
 #[rustfmt::skip]
 pub static DEX: &[SettingDef] = &[
+    d("Kipseli", "kipseli.firm_path", K::Text, L::None, "контракты и хеши", V, "Адрес и хеш кода каждого получателя фактического входа Kipseli в порядке swapImpl, промежуточный контракт, касса.").optional().dex_venue(),
     d("Kipseli", "kipseli.firm_target", K::Text, L::None, "адрес и хеш", V, "Адрес и keccak256 кода конечного контракта индивидуальной заявки. Обе величины проверяются перед симуляцией.").optional().dex_venue(),
     d("Kipseli", "kipseli.base_url", K::Url, L::None, "URL", V, "Корневой HTTPS адрес API Kipseli для ручной цены данной площадки. Секрет получает только официальный сервер.").optional().dex_venue(),
+    d("0x", "zeroex.settler_registry", K::Text, L::None, "контракты и хеши", V, "Прокси и хеш кода реестра 0x, адрес и хеш реализации EIP-1967. Проверяются текущий и предыдущий Settler функции 2.").optional().dex_venue(),
     d("0x", "zeroex.firm_target", K::Text, L::None, "адрес и хеш", V, "Адрес и keccak256 кода конечного контракта индивидуальной заявки. Обе величины проверяются перед симуляцией.").optional().dex_venue(),
     d("0x", "zeroex.base_url", K::Url, L::None, "URL", V, "Корневой HTTPS адрес API 0x для ручной цены данной площадки. Секрет получает только официальный сервер.").optional().dex_venue(),
     d("Fynd", "fynd.base_url", K::Url, L::None, "URL", V, "Корневой HTTPS адрес Fynd Hosted с версией API. Ключ Hosted передаётся только официальному серверу.").optional().dex_venue(),

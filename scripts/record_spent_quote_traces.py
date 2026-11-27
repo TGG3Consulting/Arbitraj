@@ -20,6 +20,9 @@ def build():
     matches=[r for r in calls if r['action']['to']==base['router'] and r['action']['from']==base['user'] and r['action']['input']==base['settled_action']]
     if len(matches)!=1 or int(matches[0]['result']['output'],16)!=int(base['received']):raise ValueError('Different Kipseli execution')
     calls=trace('ethereum',maker['transaction']['hash'],maker['receipt'])
+    holder='0x0000000000001ff3684f28c67538d4d072c22734'
+    outer=[r for r in calls if r['action']['to']==holder and r['action']['input'].startswith(sig('exec(address,address,uint256,address,bytes)')[:10])]
+    if len(outer)!=1:raise ValueError('Different AllowanceHolder entry')
     rfq='RFQ(address,((address,uint256),uint256,uint256),address,bytes,address,uint256)'
     types=['address','((address,uint256),uint256,uint256)','address','bytes','address','uint256']
     sel=bytes.fromhex(sig(rfq)[2:10])
@@ -37,7 +40,7 @@ def build():
     digest,signed=decode(['bytes32','bytes'],bytes.fromhex(checks[0]['action']['input'][10:]))
     paid=int(maker['maker_input']['data'],16);got=int(maker['maker_output']['data'],16)
     if signature!=signed or not (0<paid<=maximum and 0<got<=output_limit):raise ValueError('Signed amounts or signature differ')
-    return dict(kipseli={'frame':matches[0]},zeroex=dict(entry=actions[0],signature_check=checks[0],digest='0x'+digest.hex(),nonce=str(nonce),
+    return dict(kipseli={'frame':matches[0]},zeroex=dict(holder=outer[0],entry=actions[0],signature_check=checks[0],digest='0x'+digest.hex(),nonce=str(nonce),
                 expiry=deadline,signed_input_limit=str(maximum),signed_output_limit=str(output_limit),paid=str(paid),received=str(got),
                 settled_action='0x'+(sel+encode(types,[recipient,permit,signer,signature,token,maximum])).hex()))
 if __name__=='__main__':

@@ -1,5 +1,6 @@
 //! Ручная оценка официальных API Kipseli и 0x для указанного размера.
 //! Служебный ключ передаётся только исходному HTTPS-адресу соответствующего API.
+mod firm;
 mod kipseli;
 use super::{
     ctx::Ctx,
@@ -58,6 +59,15 @@ pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayRes
         _ => return Err(ctx.err(ErrorCode::NotApplicable, "Неизвестный источник")),
     };
     let base = ctx.text(setting)?;
+    let path = if req.firm.is_some() {
+        if source == "kipseli" {
+            "v2/swap/sign"
+        } else {
+            "swap/allowance-holder/quote"
+        }
+    } else {
+        path
+    };
     let (mut url, official) = endpoint(&base, origin, path)
         .ok_or_else(|| invalid("Для источника нужен корректный адрес HTTPS"))?;
     if req.input == req.output
@@ -104,21 +114,33 @@ pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayRes
         dec_in,
     )
     .ok_or_else(|| invalid("Укажите положительную сумму с точностью токена"))?;
-    url.query_pairs_mut()
-        .append_pair("chainId", &chain.to_string());
-    if source == "zeroex" {
-        let trader = req
-            .trader
-            .filter(|a| !a.is_zero())
-            .ok_or_else(|| invalid("Укажите публичный адрес плательщика 0x"))?;
-        url.query_pairs_mut().extend_pairs([
-            ("sellToken", req.input.to_string()),
-            ("buyToken", req.output.to_string()),
-            ("sellAmount", amount.to_string()),
-            ("taker", trader.to_string()),
-        ]);
-    }
-    let mut wire = client.get(url);
+    let mut wire = if let Some(terms) = req.firm.as_ref() {
+        let ticket = firm::Ticket::new(ctx, source, &req, terms, amount)?;
+        let config = firm::RequestApi {
+            client,
+            auth,
+            header,
+            url,
+            chain,
+        };
+        return ticket.preview(ctx, config).await;
+    } else {
+        url.query_pairs_mut()
+            .append_pair("chainId", &chain.to_string());
+        if source == "zeroex" {
+            let trader = req
+                .trader
+                .filter(|a| !a.is_zero())
+                .ok_or_else(|| invalid("Укажите публичный адрес плательщика 0x"))?;
+            url.query_pairs_mut().extend_pairs([
+                ("sellToken", req.input.to_string()),
+                ("buyToken", req.output.to_string()),
+                ("sellAmount", amount.to_string()),
+                ("taker", trader.to_string()),
+            ]);
+        }
+        client.get(url)
+    };
     if let Some(auth) = auth {
         wire = wire.header(header, auth);
     }

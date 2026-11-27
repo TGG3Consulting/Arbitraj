@@ -15,6 +15,30 @@
         "address": "0x71c2ed90cc288229be59f26b8b3eef3c07d7ab99",
         "bytes": 3402,
         "runtime": "0x66533a884fbfadbd32297de6dbc1de6beebc3905b1ddd9b0354dd23daa6c5239"
+      },
+      "settler_registry": {
+        "address": "0x00000000000004533fe15556b1e086bb1a72ceae",
+        "bytes": 58,
+        "runtime": "0x66139d772b392067ed16463c9a9f0c57c9332f9efaa80c6732917a66143942da",
+        "ownerOf(uint256)": "0x7130a552999c7e2cae6b38f9336e90c457abd47d",
+        "prev(uint128)": "0x103502909141f7025a94b7b99a276dcd128e21a8",
+        "implementation": "0x0e992c001e375785846eeb9cd69411b53f30f24b",
+        "implementation_hash": "0xe7879b4fe90d1a1061858d8e8a5f6a3b02c177a53747f4496ba368dceea6d26d"
+      },
+      "source": {
+        "address": "0xa05de8fedaf5d47a6a8726811cc5f387bef1f816",
+        "bytes": 4285,
+        "runtime": "0x9c3224b09b52807f7888373d704734230a9f2faf6cb4c6a5affffdf7872eed73"
+      },
+      "forward": {
+        "address": "0xc2be7b94d5498b1aceb914f3a1dec4ce502d235f",
+        "bytes": 4957,
+        "runtime": "0xc4a945f2f87e2c27e958695bb76ccefde1f11a942296935855e40be7f06d45b4"
+      },
+      "cash": {
+        "address": "0xbee3211ab312a8d065c4fef0247448e17a8da000",
+        "bytes": 2008,
+        "runtime": "0x810fd808ddd2ce693a4351fafed4115d68467c214ea6c1b2d1dd8c99f90c4e0d"
       }
     }
   },
@@ -29,6 +53,15 @@
         "address": "0x0000000000001ff3684f28c67538d4d072c22734",
         "bytes": 1009,
         "runtime": "0x99f5e8edaceacfdd183eb5f1da8a7757b322495b80cf7928db289a1b1a09f799"
+      },
+      "settler_registry": {
+        "address": "0x00000000000004533fe15556b1e086bb1a72ceae",
+        "bytes": 58,
+        "runtime": "0x66139d772b392067ed16463c9a9f0c57c9332f9efaa80c6732917a66143942da",
+        "ownerOf(uint256)": "0xd2666ef1f105e504034cf87af517a121c59f46f4",
+        "prev(uint128)": "0xaddc26a3854feabfd20d6bf658254088d83a425a",
+        "implementation": "0xc07920cde8d4914302605deee32d744e6328ff9e",
+        "implementation_hash": "0xb7aab223f329013414eceae549574307326dfed15bc3570faf7ba3774d00c783"
       }
     }
   }

@@ -108,8 +108,8 @@
   <CheckConnection url={`/api/check/wallet/${seg(w.id)}`} />
   {#if w.address && dex}<HashflowQuote venue={dex} trader={w.address} />{/if}
   {#if w.address && dex && w.fynd}<SourcePrice venue={dex} trader={w.address} />{/if}
-  {#if w.address && dex && w.zeroex}<SourcePrice venue={dex} trader={w.address} source="zeroex" label="0x" />{/if}
-  {#if w.address && dex && w.kipseli}<SourcePrice venue={dex} trader={w.address} source="kipseli" label="Kipseli" />{/if}
+  {#if w.address && dex && w.zeroex}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="zeroex" label="0x" />{/if}
+  {#if w.address && dex && w.kipseli}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="kipseli" label="Kipseli" />{/if}
 
   <h4>Исполнитель ArbExecutor</h4>
   <p>{#if w.executor}<code>{w.executor}</code> <button onclick={() => setExec(null)}>Снять</button>{:else}не развёрнут{/if}</p>

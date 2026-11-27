@@ -60,6 +60,8 @@ def capture(fee_logs):
             if not sqrt:
                 skipped.append(dict(token=token,id="0x"+pid.hex(),reason="uninitialized"));continue
             cfg=[int.from_bytes(config[j:j+32]) for j in range(0,len(config),32)]
+            if len(cfg) not in (4,9) or cfg[3 if len(cfg)==4 else 5]!=1:
+                skipped.append(dict(token=token,id="0x"+pid.hex(),reason="unknown_config",config=cfg));continue
             ident="0x"+pid.hex()
             markets.append(dict(id=ident,token=token,pair=pair,hook=hook,gen=gen,key=key,sqrt=str(sqrt),tick=tick,lp=fee,protocol=protocol,
                                 liquidity=str(int.from_bytes(liquidity)),config=cfg,fee_events=None if window_error else counts.get((hook,ident),0)))

@@ -228,6 +228,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // Integral — те же (integral-core 1.2.10 AlgebraPool.sol L246-L252, IAlgebraSwapCallback).
         "algebra_integral"
         | "algebra_integral_treble"
+        | "algebra_integral_treble_spot"
         | "algebra_integral_base_plugin_v1"
         | "algebra_integral_hydrex"
         | "algebra_integral_quickswap"

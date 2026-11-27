@@ -3605,6 +3605,37 @@
     }
   },
   {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "treble-spot",
+    "source": "https://ipfs.network.thegraph.com/ipfs/QmVnzA9qydbobhWe62qZhvBdy9G3j7VU9hkVqb98dLjG3R · https://docs.algebra.finance/algebra-integral-documentation/overview-faq/partners/integral-1.2/trebleswap · tests/data/first_run_dex_2026-11-26/base_algebra_treble-spot.json.gz",
+    "settings": {
+      "dex.kind": "algebra_integral_treble_spot",
+      "dex.factory": "0xac900f12fb25d514e3ccfe8572b153a9991ca4e7",
+      "dex.factory_runtime_hash": "0x55da91a2773c870a6eb25c8cc4366191eb922b5636ccffcd5d83372c32a6a941",
+      "dex.pool_code_hashes": [
+        "0xb3fc09be5eb433d99b1ec89fd8435aaf5ffea75c1879e19028aa2414a14b3c85"
+      ],
+      "dex.algebra_pool_deployer": "0x19652b0d7ccddd35e9cc4acf418556c3dd0fd31f",
+      "dex.plugin_factory": "0xb9e9447885e1a432c1b99c0e8f81e4dd86370e77",
+      "dex.plugin_runtime_hashes": [
+        "0x66b364a53ce71b3773749cbb7071d369103c6c7c22da7c159036bc5d634920ef",
+        "0x8cb73b7cc9740bb34873e5878914a8c922f6277e130748a092c14a8a58615cf7",
+        "0xcaf3819254743349ee04bf30a38a19cbd7b42eba19c0672efbdeeb3d055ce1d7",
+        "0x2af8a21d7e1c13861b2b0b9f6572aef9006ec196b44abbfba4e3b75f7faf442d",
+        "0x1127d09e4edd5c03cb784f157986e30db2420c6c796a8c14aeea0491cf51b5d5"
+      ],
+      "dex.quoter_virtual": true,
+      "dex.router": "0x347539d82a14c0a3a89769f1024774a545a151ac",
+      "dex.router_runtime_hash": "0x59de6336a81ef93f020efa9883abdca39bf60a9897612c7f0115ac30bee6229f",
+      "dex.router_exact_tokens": [
+        "0x4200000000000000000000000000000000000006 0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",
+        "0x4ed4e862860bed51a9570b96d89af5e1b0efefed 0x0fc7067f83de437662a064d75d34700c97224082189a9ef1ccd5ed5a7dd601f6",
+        "0x940181a94a35a4569e4529a3cdfb74e38fd98631 0x6e2d6a09208d3bbad8885809c4db6a91be93d78c0cabc06ded4dc6fa38a1b458"
+      ]
+    }
+  },
+  {
     "chain_id": 1,
     "network": "ethereum",
     "id": "supernova-cl",

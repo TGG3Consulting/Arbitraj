@@ -35,7 +35,7 @@ sol! {
 }
 
 pub(super) fn flags(variant: Variant) -> u8 {
-    if variant == Variant::TrebleIntegral {
+    if matches!(variant, Variant::TrebleIntegral | Variant::TrebleSpot) {
         0xd7
     } else {
         0xc1
@@ -66,6 +66,10 @@ pub(in crate::venues::bsc_dex) async fn check(
         .iter()
         .map(|h| h.parse::<B256>().map_err(|_| bad()))
         .collect::<GatewayResult<Vec<_>>>()?;
+    if f.variant == Variant::TrebleSpot {
+        let fee = Box::pin(super::treble_spot::fee(ctx,f,pool,tag,(factory,registry),&hashes)).await?;
+        return (ctx.settings.generation()==generation).then_some(fee).ok_or_else(bad);
+    }
     let (expected, treble) = match (f.variant, hashes.as_slice()) {
         (Variant::BasePluginV1, [factory]) => (*factory, None),
         (Variant::TrebleIntegral, [factory, limit, security])

@@ -2089,6 +2089,21 @@ def tables(network, snapshots, profiles):
                     "16 выплат через V5 и 16 через пул. У WETH/cbETH в резерв входят native ETH, у двух проверенных "
                     "размеров пятого рынка первая операция откатилась. Для торговли используется V5 шаг 9 с общим сроком "
                     "и чистым минимумом. Сетевой оборот отдельно по фабрикам не распределялся.")
+        if base and str(row["id"]) in ("7587","5659"):
+            spot=str(row["id"])=="5659"
+            manifest="QmVnzA9qydbobhWe62qZhvBdy9G3j7VU9hkVqb98dLjG3R" if spot else "QmdkprafsPH2jahhaacyVdqUGuGTxvQ2jnDE9cQUVHAgCK"
+            archive="base_algebra_treble-spot.json.gz" if spot else "base_algebra_treble-v4.json.gz"
+            market=json.loads(gzip.decompress((data_dir/archive).read_bytes()))
+            candidates=[market["roles"]["factory"]["address"]]
+            task=("Профиль treble-spot. Из опубликованного подграфа фабрика действует с блока 25 118 579. "
+                  "WETH/USDC на блоке 62 262 756 имел сохранённую ставку 250 и действующую 800 ppm. "
+                  "Две суммы WETH дали 1688 и 16 884 raw USDC через оригинальный Router и через V5. "
+                  "Обратные продажи дали 997 748 186 327 и 9 983 412 296 931 wei. Router потребовал на 22 454 gas меньше для покупки "
+                  "и на 21 995 для продажи, до расходов на разрешения. Кошелёк с V5 проверяет чистый приход, прямой вариант учитывается для проверенных валют. "
+                  if spot else "Профиль treble-v4. Опубликованный подграф считает события Algebra начиная с блока 39 029 383. "
+                  "Отдельный профиль treble-v2 использует другую фабрику 0x6ae1…cd8f и постоянную V2-комиссию. "
+                  "В справочнике эти две строки относят к конкретным фабрикам по манифесту подграфа. ")
+            task+=f"[Манифест фабрики](https://ipfs.network.thegraph.com/ipfs/{manifest}) · [Проверки кошелька](../tests/data/first_run_dex_2026-11-26/{archive})."
         if not base and str(row["id"]) == "728":
             deployments = [json.loads(gzip.decompress((data_dir / f"defiplaza_{kind}_ethereum.json.gz").read_bytes()))
                            for kind in ("multi", "stable")]
@@ -2276,6 +2291,8 @@ def tables(network, snapshots, profiles):
                     f"модуля с ограничением срока ({paid['wallet']}) и V5 ({paid['v5']}). Полный ввод измерялся по балансу "
                     f"кошелька, выручка — по приросту выходного баланса. Локальная кривая проверена на 185 ценах обоих направлений всех 10 пулов. "
                     f"При входе 2374,295732 USDC на следующем блоке исходный helper выплатил 1434,722496 USDT, модуль и V5 — 1435,216790 USDT. "
+                    f"Через два разных пула V5 обменял 0,001 WETH на {int(book['paths'][0]['received'])/10**6:.6f} USDT "
+                    f"и 1 USDT на {book['paths'][1]['received']} wei WETH. Каждый промежуточный остаток USDC сохранился. "
                     f"Модуль рассчитывает долг на период swap и подтверждает реальное поступление в пару. "
                     f"В профиле `ammalgam` задаются `dex.kind = ammalgam_dlex`, фабрика `{book['factory']}`, квотер `{book['helper']}`, "
                     f"и хеши фабрики, квотера и пары. В списки `dex.proxy_implementations` и `dex.proxy_runtime_hashes` входят маяк и затем реализация. "

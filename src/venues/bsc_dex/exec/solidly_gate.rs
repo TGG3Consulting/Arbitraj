@@ -107,7 +107,7 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             if f.tradable {super::super::pools::direct_module::verify_code(ctx,f.id,ctx.dex_addr("dex.router",f.id)?,at).await?;}
             continue;
         }
-        if matches!(f.variant,Variant::BasePluginV1|Variant::TrebleIntegral) {
+        if f.variant.base_plugin_v1() {
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             let fee=Box::pin(super::super::pools::base_plugin_v1::check(ctx,f,e.pool.reference.address(),at)).await?;
             if !matches!(&e.pool.state,PoolState::Algebra{fee:old,..} if *old==u32::from(fee)) {

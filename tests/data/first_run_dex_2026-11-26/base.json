@@ -7,6 +7,54 @@
   },
   "endpoint": "https://base-rpc.publicnode.com",
   "contracts": {
+    "0xb9e9447885e1a432c1b99c0e8f81e4dd86370e77": {
+      "bytes": 21667,
+      "keccak256": "0x66b364a53ce71b3773749cbb7071d369103c6c7c22da7c159036bc5d634920ef"
+    },
+    "0x06d634c0edfc6787ec71acb99191225d5b4fe7b4": {
+      "bytes": 24305,
+      "keccak256": "0x2af8a21d7e1c13861b2b0b9f6572aef9006ec196b44abbfba4e3b75f7faf442d"
+    },
+    "0xa95ba79ed0c7eb5834486e78a3819ec8688fc17e": {
+      "bytes": 9739,
+      "keccak256": "0x1127d09e4edd5c03cb784f157986e30db2420c6c796a8c14aeea0491cf51b5d5"
+    },
+    "0x156233ea65a221d50e400af240d976b86652df18": {
+      "bytes": 8443,
+      "keccak256": "0xf71788b0940c1af930c99a31187a30a706a264f8aff5f5f8e230cc0789272426"
+    },
+    "0x347539d82a14c0a3a89769f1024774a545a151ac": {
+      "bytes": 12561,
+      "keccak256": "0x59de6336a81ef93f020efa9883abdca39bf60a9897612c7f0115ac30bee6229f"
+    },
+    "0xac900f12fb25d514e3ccfe8572b153a9991ca4e7": {
+      "bytes": 10699,
+      "keccak256": "0x55da91a2773c870a6eb25c8cc4366191eb922b5636ccffcd5d83372c32a6a941"
+    },
+    "0x82e4c6da2d953f074329481ca3c770ba74a8961a": {
+      "bytes": 22435,
+      "keccak256": "0x10e5a9907387fd7a09257c6a9b3a577f1aeb601a1505821d6cd919b3cd62188b"
+    },
+    "0x19652b0d7ccddd35e9cc4acf418556c3dd0fd31f": {
+      "bytes": 24079,
+      "keccak256": "0xd2622bd23711891df2cf88860aecde6fcc740e368e1f91fc41855eed6329f25c"
+    },
+    "0x9a9214930c6c4fcfc5df70a9c83d2bfa6a2bf69d": {
+      "bytes": 15342,
+      "keccak256": "0x78b8aeec90d44fbf009f9eeb46c87a0b5adce165304048ddfd999c21cfef36b9"
+    },
+    "0xf170b16f27cf5bafe4bb95985c2bd029a718e293": {
+      "bytes": 22124,
+      "keccak256": "0x7fc6c3a0828cb9fbde26425a03456a6ef30185c2c4c6dd2df04bb779e480effe"
+    },
+    "0xf05bd4f8d61a3c0ba2b1ee6ed47f2d9b0e4edee1": {
+      "bytes": 12050,
+      "keccak256": "0x8cb73b7cc9740bb34873e5878914a8c922f6277e130748a092c14a8a58615cf7"
+    },
+    "0xe718fd975ef9a3d90ce7f5182108f6a9be331083": {
+      "bytes": 2846,
+      "keccak256": "0xcaf3819254743349ee04bf30a38a19cbd7b42eba19c0672efbdeeb3d055ce1d7"
+    },
     "0xe82fa4d4ff25bad8b07c4d1ebd50e83180dd5eb8": {
       "bytes": 24535,
       "keccak256": "0x21d26d7693977f7f12e9f8ba60eb551fc6d07b7e436dc8748df702bbbb53b212"

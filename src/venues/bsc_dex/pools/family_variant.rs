@@ -120,6 +120,7 @@ pub enum Variant {
     BasePluginV1,
     AlgebraSingleV19,
     TrebleIntegral,
+    TrebleSpot,
     /// Три обновляемые прокси WhiteSwap с комиссией прямого обмена и скидкой роутера.
     WhiteSwap,
     /// Пара CREATE2 с изменяемой ставкой. Резервы и комиссия сверяются вместе.
@@ -233,6 +234,8 @@ impl Variant {
     pub(crate) fn llamma(self)->bool{matches!(self,Self::Llamma(_))}
     pub(crate) fn defiplaza_stable(self)->bool {self==Self::DefiPlazaStable}
     pub(crate) fn defiplaza(self)->bool { matches!(self,Self::DefiPlazaMulti|Self::DefiPlazaStable) }
+    pub(crate) fn base_plugin_v1(self) -> bool { matches!(self,Self::BasePluginV1|Self::TrebleIntegral|Self::TrebleSpot) }
+    pub(crate) fn algebra_router(self) -> bool { self.caller_algebra() || self==Self::TrebleSpot }
     pub(crate) fn caller_algebra(self) -> bool { matches!(self,Self::CypherIntegral | Self::TheoremIntegral) }
     pub(crate) fn protected_router_wallet(self)->bool{matches!(self,Self::SafeSwapTrade|Self::DegenSwap)}
     pub fn launch(self)->bool {matches!(self,Self::Angstrom|Self::LaunchUmia|Self::LaunchBaseline|Self::LaunchDoppler|Self::LaunchIndex|Self::LaunchO1|Self::LaunchO1Wrapped)}
@@ -259,7 +262,7 @@ impl Variant {
     pub(crate) fn empire_nominal(self)->bool {matches!(self,Self::EmpireNominal)}
     pub(crate) fn empire(self)->bool {matches!(self,Self::EmpireRaw|Self::EmpireModule|Self::EmpireNominal)}
     pub fn wallet_module(self)->bool { matches!(self,Self::Ammalgam|Self::EmpireModule|Self::Stabull|Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::ShibaswapV2|Self::BunnySwap|Self::CandySwap) }
-    pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredSlipstream|Self::RegisteredSpacingV3|Self::MaverickTwoRouter|Self::SlipstreamUniversal|Self::CypherIntegral|Self::TheoremIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::ShibaswapV2|Self::SolidlyClone|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter|Self::EmpireNominal)}
+    pub(crate) fn exact_router(self)->bool {self==Self::TrebleSpot || matches!(self,Self::RegisteredSlipstream|Self::RegisteredSpacingV3|Self::MaverickTwoRouter|Self::SlipstreamUniversal|Self::CypherIntegral|Self::TheoremIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::ShibaswapV2|Self::SolidlyClone|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter|Self::EmpireNominal)}
     /// Площадка торгует целыми акциями эмитента с отдельными правилами оплаты и выдачи.
     pub(crate) fn issuer_shares(self)->bool { self==Self::Brokerbot }
     pub(crate) fn solidly_clone(self)->bool { self==Self::SolidlyClone }
@@ -318,6 +321,7 @@ pub fn of(kind: &str) -> Variant {
         "curve_stableswap_oracle" => Variant::CurveOracle,
         "curve_crypto2_v1" => Variant::CryptoPair,
         "algebra_integral_treble" => Variant::TrebleIntegral,
+        "algebra_integral_treble_spot" => Variant::TrebleSpot,
         "algebra_v19_single" => Variant::AlgebraSingleV19,
         "algebra_integral_base_plugin_v1" => Variant::BasePluginV1,
         "algebra_integral_hydrex" => Variant::HydrexIntegral,

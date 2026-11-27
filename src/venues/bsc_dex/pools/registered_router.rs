@@ -72,6 +72,7 @@ pub(crate) async fn checked(
         .map_err(|_| bad())?;
     tokio::try_join!(
         async {
+            if e.family.variant==Variant::TrebleSpot {return Box::pin(super::treble_spot::router(ctx,e,router,at)).await;}
             if e.family.variant.caller_algebra(){return Box::pin(super::cypher::router(ctx,e,router,at)).await;}
             if e.family.variant.separate_v3_router() {
                 return registered_v3::market(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),e.pool.fee_pips,at).await;

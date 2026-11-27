@@ -362,3 +362,32 @@ fn theorem_short_swap_event_recovers_the_signed_wallet_order() {
     }
     assert_eq!((matched, violated), (4, 2));
 }
+
+#[test]
+fn treble_spot_router_recovers_both_terminal_assets_and_rejects_other_floors() {
+    let bytes=include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/base_algebra_treble-spot.json.gz");
+    let book:Value=serde_json::from_reader(GzDecoder::new(bytes.as_slice())).unwrap();
+    let address=|v:&Value| v.as_str().unwrap().parse::<Address>().unwrap();
+    let market=Market{pool:address(&book["roles"]["pool"]["address"]),fee:U24::ZERO,
+        maverick_chain:None,maverick:false,algebra_wallet:None,algebra_short_event:false,
+        algebra_deployer:Some(Address::ZERO),fee_event:false,router02:None,slipstream:None,wallet_module:false};
+    for row in book["cases"].as_array().unwrap(){
+        let official=&row["official"];
+        let payer=address(&official["owner"]);
+        let calls=official["calls"].as_array().unwrap();
+        for (side,index) in [("buy",5),("sell",12)] {
+            let value=&calls[index];
+            let data:Bytes=value["data"].as_str().unwrap().parse().unwrap();
+            let order=ICypherRouter::exactInputSingleCall::abi_decode_validate(&data).unwrap().args;
+            assert_eq!(order.recipient,payer);
+            let proof=Proof{market,target:address(&value["to"]),payer,input:order.tokenIn,output:order.tokenOut,
+                budget:order.amountIn,minimum:order.minimum,deadline:order.deadline};
+            let restored:Proof=serde_json::from_value(serde_json::to_value(proof).unwrap()).unwrap();
+            assert_eq!(restored.data(),data);
+            let logs:Vec<SimLog>=serde_json::from_value(official["results"][side]["logs"].clone()).unwrap();
+            assert_eq!(restored.measured(&logs),Some((restored.budget,restored.minimum)));
+            assert_eq!(official["results"][format!("{side}_plus_one")]["status"],"0x0");
+            assert_eq!(official["results"][format!("{side}_expired")]["status"],"0x0");
+        }
+    }
+}

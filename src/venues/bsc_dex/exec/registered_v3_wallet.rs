@@ -53,7 +53,7 @@ pub struct Market {
 fn standard_event(extended: &bool) -> bool { !extended }
 impl Market {
     pub(in crate::venues::bsc_dex) fn from_entry(ctx:&Ctx,e: &super::super::pools::registry::Entry) -> Option<Self> {
-        let algebra=e.family.variant.caller_algebra();
+        let algebra=e.family.variant.algebra_router();
         let maverick=e.family.variant==super::super::pools::family_variant::Variant::MaverickTwoRouter;
         let deployer=if algebra{Some(super::super::pools::cypher::deployment(ctx,e).ok()?)}else{None};
         use super::super::pools::family_variant::Variant;

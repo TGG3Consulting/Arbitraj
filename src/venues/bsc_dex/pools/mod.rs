@@ -457,6 +457,7 @@ pub(super) mod solidly_classic_factory;
 pub(in crate::venues::bsc_dex) mod solidly_proxy;
 pub(in crate::venues::bsc_dex) mod exact_wallet_tokens;
 pub(in crate::venues::bsc_dex) mod base_plugin_v1;
+pub(crate) mod treble_spot;
 pub mod solidly_gate_read;
 pub mod solidly_refresh;
 pub mod solidly_v3;

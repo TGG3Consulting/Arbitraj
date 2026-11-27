@@ -6303,6 +6303,8 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Что ставить:** Для вида algebra_integral_base_plugin_v1 укажите один keccak256 runtime фабрики плагинов, создающей BasePluginV1. Для `algebra_v19_single` укажите хеши полного runtime AlgebraEternalFarming и FarmingCenter именно этого размещения. Для `algebra_integral_treble` укажите три хеша полного runtime в порядке фабрика плагинов, LimitOrderManager, SecurityRegistry. Контракты привязаны к фабрике DEX, проверяется статус конкретного пула. Для Supernova CL укажите в порядке полный runtime фабрики плагинов, нормализованный код плагина с обнулёнными операндами PUSH32 адреса собственного пула, полный код официального Quoter, SecurityRegistry и FeeDiscountRegistry. Для Nami укажите три keccak256 по порядку. Сначала шаблон плагина с нулевыми 32 байтами immutable pool, затем полный runtime реализации и расширения. Сам адрес pool проверяется перед занулением.
 - **Если не задана:** Профиль Nami не подключается. Несовпадение нового кода закрывает доступ к конкретному пулу.
 
+Для Treble Spot задаются хеши фактической фабрики плагина, LimitOrderManager, SecurityRegistry, EternalFarming и FarmingCenter. Помимо кода проверяются встречные ссылки фабрики, пула и подключённой программы. Для Treble V4 с отдельной фабрикой действуют три исходные роли.
+
 Для QuickSwap V4 Base нужен один хеш шаблона прокси. Его вычисляют после проверки и обнуления 32 байт адреса пула.
 
 ### `dex.plugin_pool_offset`

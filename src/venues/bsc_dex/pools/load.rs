@@ -1113,7 +1113,7 @@ async fn read(
                 let hash = super::elfomo::block(ctx, &tag).await?;
                 let fee = Box::pin(super::nami::check(ctx, f.id, *a, &hash)).await?;
                 Box::pin(load_algebra_integral::canonical(ctx, *a, &hash, fee, super::nami::PLUGIN_FLAGS)).await?
-            } else if matches!(f.variant,Variant::BasePluginV1|Variant::TrebleIntegral) {
+            } else if f.variant.base_plugin_v1() {
                 let hash=super::elfomo::block(ctx,&tag).await?;
                 let fee=Box::pin(super::base_plugin_v1::check(ctx,f,*a,&hash)).await?;
                 Box::pin(load_algebra_integral::canonical(ctx,*a,&hash,fee,super::base_plugin_v1::flags(f.variant))).await?

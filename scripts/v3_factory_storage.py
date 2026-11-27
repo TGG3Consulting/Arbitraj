@@ -67,6 +67,17 @@ def verify_directory(data,factory):
         for token_in, token_out in [(a,b), (b,a)]:
             key = map_slot(market["fee"], map_slot(token_out, map_slot(token_in, layout["getPool"])))
             slots[key] = int(market["pool"], 16)
+    if "allPairs" in layout:
+        ordered = data["all_pairs"]
+        if len(ordered) != len(data["pools"]) or set(ordered) != {m["pool"] for m in data["pools"]}:
+            raise ValueError("allPairs does not contain the proven pool set")
+        slot = layout["allPairs"]
+        slots[slot] = len(ordered)
+        first = int.from_bytes(keccak(word(slot)), "big")
+        for index, address in enumerate(ordered):
+            slots[(first + index) % (1 << 256)] = int(address, 16)
+    if "feeProtocol" in layout and data["fee_protocol"]:
+        slots[layout["feeProtocol"]] = data["fee_protocol"]
     rows = [(nibbles(keccak(word(slot))), rlp.encode(value)) for slot, value in slots.items()]
     if keccak(rlp.encode(trie_node(rows))) != root:
         raise ValueError("обнаруженные owner/tiers/pools не покрывают хранилище фабрики")

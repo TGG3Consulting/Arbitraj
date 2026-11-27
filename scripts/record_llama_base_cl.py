@@ -119,6 +119,29 @@ def registry(reader, cap, name, head):
                 sources=origins,roles=bindings,init="0x"+init.hex(),key_type=keytype,markets=sorted(records,key=lambda row:row["pool"]))
 
 
+VVV = "0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf"
+DIEM = "0xf4d97f2da56e8c3098f3a8d538db630a2606a024"
+
+
+def fund_venice(cap, run, seed, deadline):
+    # The taker buys VVV using its own wrapped ETH before entering the VVV/DIEM market.
+    factory = "0x33128a8fc17869897dce68ed026d694621f6fdfd"
+    pool, = cap.one(factory,"getPool(address,address,uint24)",["address","address","uint24"],[WETH,VVV,500],["address"])
+    assert cap.one(pool,"factory()",returns=["address"]) == (factory,)
+    prefix = [tx(WETH,"deposit()",value=seed), approval(WETH,EXEC,seed)]
+    step=(1,pool,WETH,VVV,10000,b"")
+    swap=tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
+            ["address","uint256","address","uint256","uint256",STEP+"[]"],[WETH,seed,VVV,1,deadline,[step]])
+    balances=[balance(t,OWNER) for t in (WETH,VVV)]
+    rows=run(prefix+balances+[swap]+balances)
+    assert all(row["status"]=="0x1" for row in rows)
+    before=[int(r["returnData"],16) for r in rows[2:4]]
+    after=[int(r["returnData"],16) for r in rows[5:]]
+    assert before[0]-after[0]==seed and after[1]>before[1]
+    received=after[1]-before[1]
+    return prefix+[swap],received,dict(source=pool,spent=str(seed),received=str(received),gas=int(rows[4]["gasUsed"],16))
+
+
 def wallet(reader,cap,book):
     assert reader.many(("eth_getCode",[a,cap.selector]) for a in (EXEC,OWNER)) == ["0x","0x"]
     word=lambda x:"0x"+format(x,"064x")
@@ -136,13 +159,21 @@ def wallet(reader,cap,book):
     funded=sorted((m for m in book["markets"] if WETH in m["tokens"] and m["liquidity"]>0),
                   key=lambda m:-int(m["balances"][m["tokens"].index(WETH)]))
     results=[]; rejected=[]
-    for market in funded[:4]:
-        a,b=market["tokens"];other=b if a==WETH else a
+    targets=[(m,WETH) for m in funded[:4]]
+    if book["name"]=="2thick":
+        targets.extend((m,VVV) for m in book["markets"] if set(m["tokens"])=={VVV,DIEM} and m["liquidity"]>0)
+    for market,base_token in targets:
+        other=next(t for t in market["tokens"] if t!=base_token)
         for seed in (10**12,10**14):
+            if base_token==WETH:
+                initial=[tx(WETH,"deposit()",value=seed)];available=seed
+            else:
+                initial,available,funding=fund_venice(cap,run,seed,deadline)
+                book.setdefault("funding",[]).append(funding)
             for wire in ("router02","v5"):
                 target=router if wire=="router02" else EXEC
-                prefix=[tx(WETH,"deposit()",value=seed)]; amount=seed
-                for a,b in ((WETH,other),(other,WETH)):
+                prefix=initial.copy();amount=available
+                for a,b in ((base_token,other),(other,base_token)):
                     quotesig="(address,address,uint256,"+kind+",uint160)"
                     quote=tx(quoter,"quoteExactInputSingle("+quotesig+")",[quotesig],[(a,b,amount,market["key"],0)])
                     def order(minimum,expiry):

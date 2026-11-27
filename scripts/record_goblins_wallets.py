@@ -49,7 +49,8 @@ def capture(artifact, cash):
     protected = wallet(reader, cap, book.copy(), artifact, **options)
     native["cases"].extend(protected["cases"])
     native["unavailable"].extend(protected["unavailable"])
-    native["module_hash"] = protected["module_hash"]
+    for key in ("module_hash", "deployment", "deployment_gas"):
+        native[key] = protected[key]
     return native
 
 

@@ -41,7 +41,7 @@ def facets(c,proxy,signatures):
     return dict(address=proxy,runtime=digest(root),selectors=selected,implementations=implementations,loupe=loupe,bytes=len(root),implementation_bytes=lengths)
 
 
-def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None, wrapped=WETH, router_method="swapExactTokensForTokensSupportingFeeOnTransferTokens", modes=("v5","router"),cash=None,funding=None,audit=False,keep_partial=False):
+def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None, wrapped=WETH, router_method="swapExactTokensForTokensSupportingFeeOnTransferTokens", modes=("v5","router"),cash=None,funding=None,audit=False,keep_partial=False,build_action=None,quote_call=None):
     cash = cash or wrapped
     if cash != wrapped and funding is None:raise ValueError("independent funding required")
     token=next(t for t in market["tokens"] if t!=cash)
@@ -53,7 +53,7 @@ def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None,
         target=EXEC if mode=="v5" else router
         approve=tx(input_token,"approve(address,uint256)",["address","uint256"],[target,size])
         def trial(minimum,expiry=deadline):
-            action=(swap(market["pool"],input_token,output_token,size,minimum,expiry,fee_pips) if mode=="v5"
+            action=(build_action(input_token,output_token,size,minimum,expiry,mode) if build_action else swap(market["pool"],input_token,output_token,size,minimum,expiry,fee_pips) if mode=="v5"
                     else tx(router,router_method+"(uint256,uint256,address[],address,uint256)",
                             ["uint256","uint256","address[]","address","uint256"],[size,minimum,[input_token,output_token],OWNER,expiry]))
             reads=[tx(t,"balanceOf(address)",["address"],[who]) for who in (OWNER,EXEC) for t in (input_token,output_token)]
@@ -68,6 +68,13 @@ def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None,
             if (audit or router_method == "swapExactTokensForTokens") and result["status"]=="0x1":
                 data.update(calldata=action["data"],logs=result["logs"],payer=OWNER)
             return data,action
+        quote=None
+        if quote_call is not None:
+            request=quote_call(input_token,output_token,size)
+            # Isolate a possibly state-changing quoter from the actual settlement transaction.
+            views=simulate_block(c.endpoint,c.selector,env,[*prefix,approve,request])
+            if any(r["status"]!="0x1" for r in views[:-1]):raise ValueError("failed quote funding or allowance")
+            response=views[-1];quote=dict(call=request,status=response["status"],response=response["returnData"],error=response.get("error"))
         loose,_=trial(1)
         if loose["status"]!="0x1":raise ValueError(f"could not settle {mode}: {loose['error']}")
         net=int(loose["received"])
@@ -80,7 +87,9 @@ def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None,
             expired,_=trial(net,1)
             if (expired["status"],expired["spent"],expired["received"])!=("0x0","0","0"):
                 raise ValueError("expired transaction changed wallet balances")
-        return dict(input=input_token,output=output_token,exact=exact,above=above,expired=expired),[*prefix,approve,action]
+        leg=dict(input=input_token,output=output_token,exact=exact,above=above,expired=expired)
+        if quote is not None:leg["official_quote"]=quote
+        return leg,[*prefix,approve,action]
     trials=[]
     for size in sizes:
         for mode in modes:

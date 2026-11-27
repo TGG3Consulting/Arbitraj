@@ -132,3 +132,40 @@ fn earlier_weth_usdt_fills_pay_the_user_atomically_and_replenish_the_relayer_lat
     assert!(scalar(&settlement["blockNumber"]) > scalar(&swap["blockNumber"]));
     assert!(old["lag_seconds"].as_u64().unwrap() >= d["delay_seconds"].as_u64().unwrap());
 }
+
+#[test]
+fn protected_integral_orders_spend_within_authority_and_settle_before_delay() {
+    let evidence = read(include_bytes!("data/first_run_dex_2026-11-26/integral_size_ethereum_protected.json.gz"));
+    let original = read(WALLETS);
+    assert_eq!(evidence["selector"], original["historical"]["selector"]);
+    let mut modes = std::collections::BTreeMap::new();
+    for row in evidence["cases"].as_array().unwrap() {
+        let mode = row["mode"].as_str().unwrap();
+        *modes.entry(mode).or_insert(0) += 1;
+        let old = original["historical"]["cases"].as_array().unwrap().iter().find(|old|
+            old["side"] == if mode == "module-buy" { "buy" } else { "sell" } &&
+            ["payer","input","output","net","paid"].into_iter().zip(["payer","input","output","received","spent"])
+                .all(|(a,b)| old[a] == row[b])).unwrap();
+        assert_eq!(old["order"], row["order"]);
+        let calls = row["results"].as_array().unwrap();
+        for bad in &calls[9..11] {
+            assert_eq!(bad["status"], "0x0");
+            assert!(bad["logs"].as_array().unwrap().is_empty());
+        }
+        assert_eq!(balance(&calls[2]) - balance(&calls[12]), scalar(&row["spent"]));
+        assert_eq!(balance(&calls[13]) - balance(&calls[3]), scalar(&row["received"]));
+        for i in 4..9 { assert_eq!(balance(&calls[i]), balance(&calls[i+10])); }
+        assert_eq!(balance(&calls[18]), U256::ZERO);
+        let module = &evidence["module"];
+        let filled = keccak256(b"Filled(address,address,address,address,address,uint256,uint256,uint256,bool)");
+        let events: Vec<_> = calls[11]["logs"].as_array().unwrap().iter().filter(|log|
+            &log["address"] == module && bytes(&log["topics"][0]).as_ref() == filled.as_slice()).collect();
+        assert_eq!(events.len(), 1);
+        let data = bytes(&events[0]["data"]);
+        assert_eq!(data.len(), 6 * 32);
+        assert_eq!(U256::from_be_slice(&data[64..96]), scalar(&row["spent"]));
+        assert_eq!(U256::from_be_slice(&data[96..128]), scalar(&row["received"]));
+        assert_eq!(U256::from_be_slice(&data[128..160]), U256::from(row["order"].as_u64().unwrap()));
+    }
+    assert_eq!(modes, [("module-buy",4),("module-sell",4),("v5",4)].into_iter().collect());
+}

@@ -2,6 +2,7 @@
 import argparse
 import gzip
 import json
+import time
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
@@ -64,6 +65,7 @@ def capture(url, artifact, network):
         overrides[MODULE]={"code":deployed}
         overrides[EXEC]={"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),"stateDiff":{WORD(0):WORD(int(OWNER,16)),WORD(1):WORD(int(wrapped,16))}}
     def run(calls):
+        if network=="ethereum":time.sleep(1.5)
         block={"blockOverrides":{"time":hex(stamp)},"stateOverrides":overrides,"calls":calls}
         [child]=rpc(url,"eth_simulateV1",[{"blockStateCalls":[block]},tag])
         if child["parentHash"]!=tag["blockHash"] or len(child["calls"])!=len(calls):raise ValueError("incomplete child")
@@ -110,18 +112,28 @@ def capture(url, artifact, network):
         if (want and (paid>cap or net<amount)) or (not want and paid!=amount) or net<=0 or a[2:]!=b[2:]:
             return None,dict(**base,stage="wallet differs",paid=str(paid),net=str(net))
         tight=paid if want else net
-        payment,out,before,after,auth_gas=play(tight,expiry)
-        if not OK(out) or before!=b or after!=a:return None,dict(**base,stage="strict boundary unavailable",paid=str(paid),net=str(net))
-        _,fail,bf,af,_=play(tight-1 if want else tight+1,expiry)
-        if mode=="v5":
-            _,equal,eb,ea,_=play(tight,stamp)
-            if not OK(equal) or eb!=before or ea!=after:raise ValueError((pool,"V5 outer deadline equality"))
-            base["deadline_equality_gas"]=int(equal["gasUsed"],16)
-        _,late,bl,al,_=play(tight,stamp-1 if mode=="v5" else stamp)
-        if OK(fail) or OK(late) or bf!=af or bl!=al:raise ValueError((pool,mode,"boundary rollback"))
+        # Отказы и платёж видят одинаковое состояние пула. Неуспешные top-level вызовы откатываются.
+        deadline=stamp if mode=="v5" else expiry
+        fail_tx=order(tight-1 if want else tight+1,expiry)
+        late_tx=order(tight,stamp-1 if mode=="v5" else stamp)
+        payment=order(tight,deadline)
+        calls=setup+reads+[fail_tx,late_tx]+reads+[payment]+reads
+        outcomes=run(calls)
+        pos=len(setup)+len(reads)
+        failed,late=outcomes[pos:pos+2]
+        out=outcomes[pos+2+len(reads)]
+        for offset,expected in [(len(setup),b),(pos+2,b),(pos+3+len(reads),a if OK(out) else b)]:
+            checks=outcomes[offset:offset+len(reads)]
+            if not all(map(OK,checks)) or [int(row["returnData"],16) for row in checks]!=expected:
+                raise ValueError((pool,mode,"cash boundary mismatch"))
+        if OK(failed) or OK(late) or not all(map(OK,outcomes[:len(setup)])):
+            raise ValueError((pool,mode,"boundary rollback"))
+        if not OK(out):return None,dict(**base,stage="strict boundary unavailable",paid=str(paid),net=str(net))
+        if mode=="v5":base["deadline_equality_gas"]=int(out["gasUsed"],16)
+        before,after,auth_gas=b,a,int(outcomes[len(prefix)]["gasUsed"],16)
         return setup+[payment],dict(**base,stage="paid",paid=str(paid),net=str(net),gas=int(out["gasUsed"],16),logs=out["logs"],calldata=payment,
                                     wallet_and_module_before=list(map(str,before)),wallet_and_module_after=list(map(str,after)),
-                                    approval_gas=auth_gas,min_or_cap_error=fail.get("error"),deadline_error=late.get("error"))
+                                    approval_gas=auth_gas,min_or_cap_error=failed.get("error"),deadline_error=late.get("error"))
     modes=["module","v5"] if artifact else ["pool","router"]
     def cycle(row):
         pool=row["address"];token=row["token0"]
@@ -138,7 +150,7 @@ def capture(url, artifact, network):
                         if sell.get("stage")=="paid":
                             _,target=probe(pool,mode,token,cash,max(1,int(sell["net"])//2),prefix,True);c["sell_target"]=target
         return {"pool":pool,"token":token,"cases":cases}
-    with ThreadPoolExecutor(max_workers=2) as ex:records=list(ex.map(cycle,d["pools"]))
+    with ThreadPoolExecutor(max_workers=1 if network=="ethereum" else 2) as ex:records=list(ex.map(cycle,d["pools"]))
     return {"chain":chain,"selector":tag,"state_root":head["stateRoot"],"simulated_at":stamp,"payer":OWNER,"module":identity,
             "funding":preparation,"records":records}
 

@@ -242,8 +242,47 @@ jobs:
           path: |
             ${{ runner.temp }}/pancakex-futures.json
             ${{ runner.temp }}/pancakex-recovery.json
+  shard-zero-diagnostic:
+    if: inputs.stack_check_only && inputs.stack_check_target == 'shard0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: tests
+          save-if: false
+      - name: Identify the test binary and long-running cases on the ordinary shard
+        env:
+          ARB_PANCAKEX_FUTURE_SIZES: ${{ runner.temp }}/pancakex-futures.json
+          ARB_AMMALGAM_INVERSE_EXPORT: ${{ runner.temp }}/ammalgam-inverse.json
+          ARB_RANGES_BOUNDARIES: ${{ runner.temp }}/ranges-boundaries.json
+          ARB_CARBON_ALLOCATION_EXPORT: ${{ runner.temp }}/carbon-order-vectors.json
+        run: |
+          args=(--lib --bins)
+          mapfile -t suites < <(ls tests/*.rs | sort)
+          for ((i=0; i<${#suites[@]}; i+=SHARDS)); do
+            args+=(--test "$(basename "${suites[i]}" .rs)")
+          done
+          cargo test --locked --no-run "${args[@]}" > "$RUNNER_TEMP/compile.txt" 2>&1 || {
+            grep -E 'error(\[E[0-9]+\])?:|--> ' -A5 "$RUNNER_TEMP/compile.txt" | head -80
+            exit 1
+          }
+          status=0
+          timeout -k 10s 6m cargo test --locked --no-fail-fast "${args[@]}" > "$RUNNER_TEMP/shard.txt" 2>&1 || status=$?
+          {
+            echo "exit=$status"
+            grep -E 'Running (tests|unittests)|has been running for over|panicked at|\.\.\. FAILED|^test result:' "$RUNNER_TEMP/shard.txt" | tail -55
+          } > "$RUNNER_TEMP/shard-status.txt"
+          exit "$status"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shard-zero-status
+          path: ${{ runner.temp }}/shard-status.txt
   bsc-startup-stack:
-    if: inputs.stack_check_only && inputs.stack_check_target != 'pancakex'
+    if: inputs.stack_check_only && inputs.stack_check_target != 'pancakex' && inputs.stack_check_target != 'shard0'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

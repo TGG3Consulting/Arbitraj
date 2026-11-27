@@ -18,6 +18,7 @@
     llamma_lending:{file:'llamma-oneway',key:'llamma-oneway:1',name:'Curve LLAMMA lending в Ethereum',load:()=>import('../assets/llamma-oneway-create.json')},
     llamma_mint:{file:'llamma-mint',key:'llamma-mint:1',name:'Curve LLAMMA mint в Ethereum',load:()=>import('../assets/llamma-mint-create.json')},
     llamma_v2:{file:'llamma-v2',key:'llamma-v2:1',name:'Curve LLAMMA v2 в Ethereum',load:()=>import('../assets/llamma-v2-create.json')},
+    ambient_ethereum:{file:'ambient-ethereum',key:'ambient-wallet:1',name:'AmbientWallet в Ethereum',load:()=>import('../assets/ambient-ethereum-create.json')},
     ammalgam_dlex:{file:'ammalgam-ethereum',key:'ammalgam-ethereum:1',name:'AmmalgamWallet в Ethereum',load:()=>import('../assets/ammalgam-ethereum-create.json')},
     mooniswap_v1:{file:'mooniswap-original',key:'mooniswap-original:1',name:'MooniswapWallet для Mooniswap',load:()=>import('../assets/mooniswap-original-create.json')},
     mooniswap_v2:{file:'mooniswap-successor',key:'mooniswap-successor:1',name:'MooniswapWallet для 1inch Liquidity Protocol',load:()=>import('../assets/mooniswap-successor-create.json')},
@@ -58,6 +59,7 @@
     officialRouter:value('dex.router'), routerHash:value('dex.router_runtime_hash'),deployer:value('dex.algebra_pool_deployer'),
     factoryHash:value('dex.factory_runtime_hash'), template:value('dex.v1_template'),
     templateHash:value('dex.v1_template_runtime_hash'), cloneHash:value('dex.pair_runtime_hash'), kind:value('dex.kind'), market:value('dex.factory'),
+    ambientRoles:value('dex.ambient_roles'),ambientQuery:value('dex.ambient_query'),
     brokerMarkets:value('dex.broker_markets'),poolManager:value('dex.pool_manager'),launchRoles:value('dex.launch_roles'),
     quoter:value('dex.quoter'), quoterHash:value('dex.quoter_runtime_hash'), vault:value('dex.vault'), native:value('dex.bancor_native_token'), roles:value('dex.bancor_roles'),
     hashes:value('dex.module_runtime_hashes'), implementations:value('dex.proxy_implementations'),implementationHashes:value('dex.proxy_runtime_hashes')});
@@ -220,6 +222,8 @@
       {#each ['BancorNetwork','BancorNetworkInfo','MasterVault','WETH','Нативный ETH'] as label, i}
         <div>{label} <code>{manifest.arguments[i]}</code></div>
       {/each}
+    {:else if kind==='ambient_ethereum'}
+      <p>Контракт обмена <code>{manifest.exchange}</code>, данные пула <code>{manifest.query}</code>, WETH <code>{manifest.wrapped}</code>. После финализации модуль сохраняется в <code>dex.router</code>.</p>
     {:else if ['llamma_lending','llamma_mint','llamma_v2','ammalgam_dlex'].includes(kind)}
       <p>Фабрика Ethereum <code>{manifest.roles.factory.address}</code>. После финализации адрес модуля сохраняется в <code>dex.router</code>.</p>
     {:else if kind==='defiplaza_multi' || kind==='defiplaza_stable'}

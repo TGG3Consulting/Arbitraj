@@ -1990,6 +1990,10 @@ def tables(network, snapshots, profiles):
                     "Вторичный рынок с заявками и подписями учитывается отдельно от публичных Brokerbot. "
                     "[Реестр](../tests/data/first_run_dex_2026-11-26/aktionariat_ethereum_directory.json.gz) · "
                     "[Оплаченные входы и отказы](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45998983838).")
+        if not base and str(row["id"]) == "3104":
+            task = ("Физический контракт Ambient Ethereum и его путь userCmd(1) подтверждены. Исходный индексатор объёма "
+                    "запрашивает индекс 420. На архивном блоке 127 пар публичного каталога имели цену и ликвидность, "
+                    "проверены выплаты ETH/USDC и USDC/USDT. См. раздел Ambient ниже.")
         if not base and str(row["id"]) == "2954":
             task = ("Источник считает события SwapERC20 оригинальной кассы V4 Ethereum. На Ethereum проверены V4 и V5, "
                     "на Base подтверждён V5. Подписанные заявки, проверка оплаты и настройки описаны в разделе AirSwap ниже.")
@@ -2600,6 +2604,30 @@ def main():
         "[Архив кошелька, строгих границ и V5](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46023325745)", ""
     ])
     lines.extend(hashflow_market_observation())
+    ambient = json.loads(gzip.decompress(Path("tests/data/first_run_dex_2026-11-26/ambient_ethereum_wallet.json.gz").read_bytes()))
+    preset = next(r["settings"] for r in profiles if r["id"] == "ambient-ethereum" and r["chain_id"] == 1)
+    lines.extend(["### Ambient на Ethereum", "",
+        "Профиль `ambient-ethereum` работает с физическими адресами токенов и полным индексом uint256. "
+        "В паре с нативным ETH исходный контракт принимает или отдаёт ETH. Защищённый модуль преобразует его в WETH для кошелька. "
+        "Пул с нативным ETH и пул с токеном WETH имеют разные ключи.", "",
+        "| Настройка | Значение |", "|---|---|"])
+    for field, value in preset.items():
+        display = "<br>".join(f"`{v}`" for v in value) if isinstance(value,list) else f"`{str(value).lower()}`"
+        lines.append(f"| `{field}` | {display} |")
+    lines.extend(["| `dex.router` | Адрес своего модуля, полученный после канонического CREATE в интерфейсе. |", "",
+        "Публичный каталог перечислил 127 пар Ethereum. Для каждой на блоке 26 494 988 прочитаны цена, параметры и текущая "
+        "ликвидность. Проверенные выплаты относятся к ETH/USDC и USDC/USDT. На одном состоянии сверены 8 обменов через "
+        "исходный контракт, 8 через модуль напрямую и 4 через действующий V5. "
+        "Отдельный прогон дал 32 котировки ETH/USDC, ETH/USDT и USDC/USDT на 1, 10, 100 и 1 000 единиц выбранного стейблкоина. "
+        "[Архив размеров и направлений](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46025778985). "
+        f"Создание модуля в архивной симуляции потребовало {ambient['manifest']['gas']:,} gas.", "",
+        "При достижении предельной цены исходный контракт принял запрос на 1 USDC и выдал 0,499995 USDC. "
+        "Защищённая покупка с требованием 1 USDC откатилась и сохранила оба остатка. "
+        "В обмене с заданным входом 0,001 WETH при достаточном минимуме выплата составила 0,840983 USDC. "
+        "Списано 0,000499998664154955 WETH, весь остаток входа остался у владельца. "
+        "Расход газа учитывается отдельно при выборе маршрута. "
+        "[Архив исходного контракта](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46024129999) · "
+        "[Модуль, V5 и частичный объём](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46025208847).", ""])
     lines.extend(["### AirSwap на Base и Ethereum", "",
         "В Первом запуске сохраните строки `airswap.contracts` для площадки нужной сети. "
         "Поля строки — chainId, поколение, исходный обменный контракт и хеш кода. "

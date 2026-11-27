@@ -6936,5 +6936,38 @@
         "0x67d697e887db2a08da841f4d86cd90a96edf5f5ad340375b34336c443f9586e2"
       ]
     }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "ambient-ethereum",
+    "source": "https://docs.ambient.finance/developers/deployed-contracts · https://docs.ambient.finance/developers/dex-contract-interface/swaps/hot-path-swap-migration/directly-calling-crocswapdex · tests/data/first_run_dex_2026-11-26/ambient_ethereum_wallet.json.gz",
+    "settings": {
+      "dex.kind": "ambient_ethereum",
+      "dex.factory": "0xaaaaaaaaa24eeeb8d57d431224f73832bc34f688",
+      "dex.quoter": "0x3e3edd3ed7621891e574e5d7f47b1f30a994c0d0",
+      "dex.ambient_query": "0xca00926b6190c2c59336e73f02569c356d7b6b56",
+      "dex.ambient_roles": [
+        "dex 0xaaaaaaaaa24eeeb8d57d431224f73832bc34f688 0x274430895364498b33f9f20202fb806c990eb51ddcc471de37f15660ff65500e",
+        "query 0xca00926b6190c2c59336e73f02569c356d7b6b56 0x984460f442aafc5fdae56a908500d8258bbb983ce404eaa270c36dbadd5f90b3",
+        "impact 0x3e3edd3ed7621891e574e5d7f47b1f30a994c0d0 0x94d08a22684d3136c6009163baf22476cdf6231c488a04b2714cccd8b89adbb0",
+        "hot 0xe0f605a43cceb3472ce9854e823d35cc742f8f64 0xccfe112b80374605a97ed818f6bd86cd8119620e9e0e915f4eb689ad72570a0b",
+        "knockout 0x519dc71b2aa630f2d8bdee4c5a693520a582e175 0x4e2871b3722a93636516f24d596e0acc821871b8be79d3f0c805612bab233f0f"
+      ],
+      "dex.ambient_pool_indices": [
+        "420"
+      ],
+      "dex.ambient_index_url": "https://ambindexer.net/gcgo/",
+      "dex.pmm_ladder_usd": [
+        "1",
+        "10",
+        "100",
+        "1000"
+      ],
+      "dex.pmm_ladder_counter": true,
+      "dex.module_runtime_hashes": [
+        "0xbc38499e670c13ea8dd937cb7aad684fd3fea603e39392ca310ce0bc0b84e434"
+      ]
+    }
   }
 ]

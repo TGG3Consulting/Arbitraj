@@ -1111,6 +1111,8 @@ jobs:
             flags=(--module "$RUNNER_TEMP/raindex/RaindexWallet.json")
           fi
           python scripts/record_raindex_wallets.py "${MARKET##*-}" "$RUNNER_TEMP/market.json" "${flags[@]}"
+      - if: matrix.market == 'zora-base-directory'
+        run: python scripts/record_zora_base.py "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'basestonk-protected-')
         shell: bash
         env:

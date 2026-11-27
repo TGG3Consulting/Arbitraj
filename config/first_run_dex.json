@@ -7357,6 +7357,7 @@
     "source": "https://docs.motoswap.org/dev/addresses · tests/data/first_run_dex_2026-11-26/motoswap_ethereum.json.gz · tests/data/first_run_dex_2026-11-26/motoswap_ethereum_wallets.json.gz",
     "settings": {
       "dex.kind": "motoswap_v2",
+      "dex.motoswap_cache_entries": 16,
       "dex.factory": "0x81c9cbc47d700da1777abd831d8da3f526dfae24",
       "dex.quoter": "0x9f846ef584fd44d075b5e8df00ddb4416da61a80",
       "dex.pair_runtime_hash": "0x14044459af17bc4f0f5aa2f658cb692add77d1302c29fe2aebab005eea9d1162",

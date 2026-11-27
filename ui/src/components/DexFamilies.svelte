@@ -136,10 +136,12 @@
               {/key}
             {/if}
             {#each rest as def (def.name)}
-              <div class="setting-line">
-                <code>{def.name}</code> <span class="muted">{def.description}</span>
-                <SettingEditor {def} scope={{ kind: 'Dex', id: r.id }} />
-              </div>
+              {#if def.name !== 'dex.motoswap_cache_entries' || store.values['dex.kind|Dex|'+r.id] === 'motoswap_v2'}
+                <div class="setting-line">
+                  <code>{def.name}</code> <span class="muted">{def.description}</span>
+                  <SettingEditor {def} scope={{ kind: 'Dex', id: r.id }} />
+                </div>
+              {/if}
             {/each}
             <div class="setting-line">
               Скопировать незаданные настройки из

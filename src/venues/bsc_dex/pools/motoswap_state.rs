@@ -53,7 +53,7 @@ pub(crate) async fn state(
         init,
     };
     let (frame, ()) = tokio::try_join!(
-        frame::read(ctx, roles, at),
+        frame::read(ctx, f, roles, at),
         code::runtime(ctx, pool, shell, at)
     )?;
     let fac = factory.address;

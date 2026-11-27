@@ -1,12 +1,14 @@
-//! Router topology and fees are common to every pair at a canonical block.
-use super::{Address, B256, Ctx, GatewayResult, IMoto, Pair, Role, U256, Value, bad, batch};
-use std::{
-    collections::VecDeque,
-    sync::{Arc, LazyLock, Mutex},
-};
-use tokio::sync::OnceCell;
+//! Общие для пар Motoswap роли, комиссии и версия модуля на каноническом блоке.
+//! Загрузчик состояния пары вызывает read и path_module. Они проверяют контракты через
+//! EIP-1898 и используют кэш этой площадки и области DEX из motoswap_cache.rs.
+//! Адреса и тарифы FeeRouter: https://docs.motoswap.org/dev/guides/swap-via-fee-router
+use super::{Address, B256, Ctx, Family, GatewayResult, IMoto, Pair, Role, U256, Value, bad, batch};
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[path = "motoswap_cache.rs"]
+mod cache;
+pub(crate) use cache::Book;
+
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub(super) struct Roles {
     pub factory: Role,
     pub fee: Role,
@@ -28,31 +30,19 @@ pub(super) struct Frame {
     pub frozen: bool,
 }
 
-type Cell = Arc<OnceCell<Frame>>;
-type Frames = VecDeque<((B256, Roles), Cell)>;
-static FRAMES: LazyLock<Mutex<Frames>> = LazyLock::new(Mutex::default);
-
-pub(super) async fn read(ctx: &Ctx, r: Roles, at: &Value) -> GatewayResult<Frame> {
+/// Принимает роли профиля и канонический селектор блока. Возвращает проверенные комиссии
+/// и признак неизменности роутера. Ошибки селектора, RPC и проверки ролей передаются загрузчику.
+pub(super) async fn read(ctx: &Ctx, f: &Family, r: Roles, at: &Value) -> GatewayResult<Frame> {
     let hash = at["blockHash"]
         .as_str()
         .and_then(|h| h.parse::<B256>().ok())
         .filter(|_| at["requireCanonical"] == true)
         .ok_or_else(|| bad(ctx))?;
-    let cell = {
-        let mut cache = FRAMES.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some((_, found)) = cache.iter().find(|(k, _)| *k == (hash, r)) {
-            found.clone()
-        } else {
-            if cache.len() >= 16 {
-                cache.pop_front();
-            }
-            let cell = Cell::default();
-            cache.push_back(((hash, r), cell.clone()));
-            cell
-        }
-    };
+    let cell = ctx.evm_chain.motoswap().frame(ctx, f.id, hash, r);
     Ok(*cell.get_or_try_init(|| load(ctx, r, at)).await?)
 }
+/// Принимает полный набор ролей и блок. Возвращает кадр после сверки кода, связей,
+/// разрешений и ставок. При несовпадении или ошибке узла результат не сохраняется.
 async fn load(ctx: &Ctx, r: Roles, at: &Value) -> GatewayResult<Frame> {
     let Roles {
         factory,
@@ -157,10 +147,8 @@ async fn load(ctx: &Ctx, r: Roles, at: &Value) -> GatewayResult<Frame> {
     })
 }
 
-type VersionCells = VecDeque<((B256, Address, Vec<B256>), Arc<OnceCell<bool>>)>;
-static VERSIONS: LazyLock<Mutex<VersionCells>> = LazyLock::new(Mutex::default);
-
-/// Keep the original single-swap module available when the optional method is absent.
+/// Принимает модуль, профиль и блок. Возвращает адрес при подтверждённом коде и pathVersion.
+/// При ошибке возвращает None: обычный обмен через одну пару остаётся доступным.
 pub(super) async fn path_module(
     ctx: &Ctx,
     f: &super::Family,
@@ -169,20 +157,7 @@ pub(super) async fn path_module(
 ) -> Option<Address> {
     let hash = at["blockHash"].as_str()?.parse::<B256>().ok()?;
     let allowed = crate::venues::bsc_dex::pools::direct_module::configured(ctx, f.id).ok()?;
-    let key = (hash, module, allowed);
-    let cell = {
-        let mut cache = VERSIONS.lock().unwrap_or_else(|p| p.into_inner());
-        if let Some((_, c)) = cache.iter().find(|(k, _)| *k == key) {
-            c.clone()
-        } else {
-            if cache.len() >= 16 {
-                cache.pop_front();
-            }
-            let c = Arc::<OnceCell<bool>>::default();
-            cache.push_back((key, c.clone()));
-            c
-        }
-    };
+    let cell = ctx.evm_chain.motoswap().version(ctx, f.id, hash, module, allowed);
     let supported = cell
         .get_or_try_init(|| async {
             crate::venues::bsc_dex::pools::direct_module::verified_hash(ctx, f.id, module, at)

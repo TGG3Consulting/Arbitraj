@@ -40,9 +40,15 @@ struct Local {
     ekubo_v2: super::pools::deployment_at_head::Cache,
     mint_club: super::pools::deployment_at_head::Cache,
     ring: super::pools::ring_acceptance::Book,
+    motoswap: OnceLock<super::pools::motoswap::Cache>,
     white: super::quote::white_state::Cache,
 }
 impl ChainCell {
+    /// Кэш Motoswap создаётся по первому запросу этой площадки. Ошибок нет.
+    pub(super) fn motoswap(&self) -> &super::pools::motoswap::Cache {
+        self.0.motoswap.get_or_init(Default::default)
+    }
+
     pub(super) fn presell(&self) -> &super::exec::presell_warm::Cache {
         &self.0.presell
     }

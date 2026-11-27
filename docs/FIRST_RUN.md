@@ -1365,3 +1365,7 @@ id Basin у GeckoTerminal НЕ сверен (api.geckoterminal.com из сред
 | dex.basin_stable2_lut | DEX Basin (arb_dex) | `0xBA51055dAD14d3920e1798D2e8A152d91CaDb461` (список; порядок — как dex.basin_stable2) | Таблица Stable2, A = 1 (getAParameter() = 100) | docs.basin.exchange; Sourcify exact_match |
 | dex.stable_pools | DEX Basin (arb_dex) | `0xBeA00Aa8130aCaD047E137ec68693C005f8736Ce`, `0xBEa00BbE8b5da39a3F57824a1a13Ec2a8848D74F`, `0xBeA00Cc9F93E9a8aC0DFdfF2D64Ba38eb9C2e48c`, `0xBea00DDe4b34ACDcB1a30442bD2B39CA8Be1b09c`, `0xBea00ee04D8289aEd04f92EA122a96dC76A91bd7`, `0xbEA00fF437ca7E8354B174339643B4d1814bED33` | Скважины Beanstalk (прокси ERC-1967 — событием BoreWell не приходят); источник — при index.factory_scan = да | docs.basin.exchange «Whitelisted Beanstalk Wells» |
 | dex.pool_enabled | DEX Basin (arb_dex) | `да` — после записи tools/arbitrum_record/basin.py и снятия #[ignore] с tests/arbitrum_basin_live.rs | Математика сверяется с getSwapOut и симуляцией swapFrom только по записи | Решение 485 |
+
+## Motoswap в Ethereum
+
+В профиле `motoswap-ethereum` рекомендовано `dex.motoswap_cache_entries = 16`. Адаптер сохраняет до 16 результатов проверки ролей и ставок и до 16 результатов проверки версии модуля. Ноль или пустое поле отключают хранение после завершения запроса. Одновременные чтения того же ключа по-прежнему используют общий запрос. Значение меняется в интерфейсе в настройках этого DEX.

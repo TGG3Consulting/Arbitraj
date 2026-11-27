@@ -1002,3 +1002,5 @@ DEX (id области «DEX», решение 58) — id DEX у индекса�
 ### О-45. Расчёт и исполнение Fluid DEX Lite
 
 Общий код DEX распознаёт семейство через `Variant::fluid_lite()`. `pools/fluid_dex_lite.rs` проверяет контракты и идентичность рынка. `pools/fluid_lite_quotes.rs` и `fluid_lite_levels.rs` рассчитывают котировки и наполняют уровни. `quote/fluid_hop_paths.rs` перечисляет доступные пути через несколько рынков. Подготовка вызова и проверка результата находятся в `exec/fluid_plan_build.rs` и `exec/fluid_lite_fill.rs`. Пути Fluid и Motoswap читают прежний общий индекс через `pools/registry_market_paths.rs`.
+
+Для Motoswap `pools/motoswap_state.rs` запрашивает роли, тарифы и версию модуля через `pools/motoswap_frame.rs`. Площадка создаёт `pools/motoswap_cache.rs` при первом чтении Motoswap. Кадры привязаны к хешу блока и ролям, версии — к хешу блока, адресу модуля и разрешённым хешам кода. Лимит `dex.motoswap_cache_entries` устанавливается для каждой области DEX и действует отдельно на обе очереди. Вытеснение сохраняет возможность дождаться уже начатого чтения.

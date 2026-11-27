@@ -41,7 +41,7 @@ alloy::sol! {interface IMoto {
     function feeOnOutput(address[] path) external view returns(bool);
     function balanceOf(address owner) external view returns(uint256);
 }}
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
 struct Role {
     address: Address,
     hash: B256,
@@ -91,6 +91,7 @@ impl Role {
 }
 #[path = "motoswap_frame.rs"]
 mod frame;
+pub(crate) use frame::Book as Cache;
 
 pub(crate) fn routing(
     ctx: &Ctx,

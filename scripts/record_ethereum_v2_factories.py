@@ -12,6 +12,14 @@ from record_base_slipstream_executor import ROOT, rpc
 from record_v2_chain_pools import measure
 
 FACTORIES = {
+    "youswap-ethereum": ("0xa7028337d3da1f04d638cc3b4dd09411486b49ea",1000,3,"YouSwap: K"),
+    "bxh-ethereum": ("0x8d0fca60fdf50cfe65e3e667a37ff3010d6d1e8d",10000,25,"UniswapV2: K"),
+    "wswap-ethereum": ("0x46b0b17bb1f637ccffa9fcc34bd591e3a0ff58f9",1000,3,"K"),
+    "yoshi-ethereum": ("0x773cadc167deafa46f603d96172fa45686c4fa58",1000,3,"UniswapV2: K"),
+    "swapsicle-ethereum": ("0x2f0c7c98462651bb2102f6cd05acdad333e031b0",1000,3,"Sicle: K"),
+    "luaswap-ethereum": ("0x0388c1e0f210abae597b7de712b9510c6c36c857",1000,None,"UniswapV2: K"),
+    "sumswap-ethereum": ("0x96ff042f8c6757fce515d171f194b5816cafee11",1000,3,"SumswapV2: K"),
+    "empire-ethereum": ("0xd674b01e778cf43d3e6544985f893355f46a74a5",1000,3,"Empire: K"),
     "dooar_ethereum": ("0x1e895bfe59e3a5103e8b7da3897d1f2391476f3c",100,1,"DooarSwapV2: K"),
     "standard_ethereum": ("0x53ac1d1fa4f9f6c604b8b198ce29a50d28cba893",1000,3,"LTR: K"),
     "justmoney-ethereum": ("0xd36aba9ec96523b0a89886c76065852adfe2eb39",1000,3,"Pair: Bad Swap (K)"),
@@ -53,11 +61,29 @@ def origin(name,factory,c):
     elif name=="verse":
         target,=c.one(factory,"cloneTarget()",returns=["address"])
         init=digest(bytes.fromhex("3d602d80600a3d3981f3363d3d373d3d3d363d73")+raw(target)+bytes.fromhex("5af43d82803e903d91602b57fd5bf3"))
+    elif name in ("sumswap-ethereum","empire-ethereum"):
+        # The original factories expose no pair init-code getter. Bind the creation
+        # bytes to a real registered pair and to the verified factory runtime.
+        pair,=c.one(factory,"allPairs(uint256)",["uint256"],[0],["address"])
+        original=requests.get("https://eth.blockscout.com/api/v2/smart-contracts/"+pair,timeout=30)
+        original.raise_for_status()
+        sample=original.json()
+        creation=raw(sample["creation_bytecode"])
+        if (not creation or creation not in raw(code) or sample["deployed_bytecode"].lower()
+                !=rpc(c.endpoint,"eth_getCode",[pair,c.selector]).lower()):
+            raise ValueError("pair creation bytes differ from canonical factory or deployed pair")
+        init=digest(creation)
     else:
-        getter="INIT_CODE_PAIR_HASH()" if name=="justmoney-ethereum" else "pairCodeHash()"
+        getter={"justmoney-ethereum":"INIT_CODE_PAIR_HASH()", "wswap-ethereum":"INIT_CODE_HASH()",
+                "youswap-ethereum":"initCodeHash()"}.get(name,"pairCodeHash()")
         result,=c.one(factory,getter,returns=["bytes32"])
         init="0x"+result.hex()
-    return dict(url=url,runtime=digest(raw(code)),creation_code_hash=init,invariant=lines)
+    proof=dict(url=url,runtime=digest(raw(code)),creation_code_hash=init,invariant=lines)
+    if name=="luaswap-ethereum":
+        if not any("uint fee = IUniswapV2Factory(factory).swapFee();" in file for file in sources):
+            raise ValueError("LuaSwap factory fee source changed")
+        proof.update(fee_getter="swapFee()",fee_target="factory")
+    return proof
 
 
 def registry(c,factory,init_hash,created=None):

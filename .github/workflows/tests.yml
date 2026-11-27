@@ -667,6 +667,10 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/bancor-legacy" BancorLegacyAdapter
           python scripts/record_bancor_v21_wallet.py "$RUNNER_TEMP/bancor-legacy/BancorLegacyAdapter.json" "$RUNNER_TEMP/market.json"
+      - if: startsWith(matrix.market, 'llama-v2-')
+        env:
+          MARKET: ${{ matrix.market }}
+        run: python scripts/record_ethereum_v2_factories.py "${MARKET#llama-v2-}-ethereum" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'bancor-v21-ethereum'
         run: python scripts/record_bancor_v21.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'bancor-v3-wallet'

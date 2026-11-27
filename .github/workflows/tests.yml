@@ -698,6 +698,8 @@ jobs:
           python scripts/record_alien_carbon.py "$RUNNER_TEMP/alien-carbon/CarbonWallet.json" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'alien-fee-base'
         run: python scripts/record_alien_base_tier.py "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'empire-wallet-ethereum'
+        run: python scripts/record_empire_wallets.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'angstrom-ethereum'
         run: |
           npm ci --prefix contracts --ignore-scripts --no-audit --no-fund

@@ -27,7 +27,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    каждое расхождение с причиной. Релиз готов только при нуле необъяснённых расхождений и закрытых пунктах R-*.
 >    Я проверяю прогон и только после этого сообщаю владельцу «релиз готов».
 
-Последний просмотренный коммит: `f5a3af72` (27.11.2026).
+Последний просмотренный коммит: `2852689d` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -1639,7 +1639,7 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 - Все новые ветки закрыты вариантами `MaverickOne`, `TopazCl`, `DegenSwap` и признаком `protected_router_wallet()`. Поведение `SafeSwapTrade` сохранено: признак его включает.
 - `factory_scan.rs` вызывает `maverick_one_directory::scan` всегда, но тот сразу отбирает только семейства `MaverickOne`. На BSC без них пусто — ни запросов, ни заметок. Регрессии BSC нет. ✅
 - Новые `degenswap*.rs`, `maverick_one*.rs`, `topaz.rs`: адреса только в ссылках на Etherscan в шапках, в коде их нет. ✅
-- **R-54 (R-42, повтор паттерна R-51).** `quote/quoter_calls.rs` снова получил ранние `if variant == MaverickOne { return … }` для запроса и декодирования котировки. Это ровно то, что в 3b84b54b убрали в диспетчер `market_selection::wallet_quoter`. DegenSwap туда добавлен правильно, а Maverick V1 — мимо. Также новые `if MaverickOne` / `TopazCl` появились в:
+- ✅ **R-54 (R-42, повтор паттерна R-51) — закрыт в 2852689d.** `quote/quoter_calls.rs` снова получил ранние `if variant == MaverickOne { return … }` для запроса и декодирования котировки. Это ровно то, что в 3b84b54b убрали в диспетчер `market_selection::wallet_quoter`. DegenSwap туда добавлен правильно, а Maverick V1 — мимо. Также новые `if MaverickOne` / `TopazCl` появились в:
   - `module_pricing.rs` (выбор `kind` и `wire`);
   - `quoter.rs` (`from` для Topaz);
   - `pool_after.rs`;
@@ -1658,3 +1658,25 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 
 - Только скрипты записи (`record_ryze_intents.py`, `record_cypher_degen_v2.py`, `record_diamondswap_base.py`), данные и CI. Код бота не менялся. Секретов в скриптах нет: публичные RPC и ABI из документации Ryze. ✅
 - R-54 и 💡 Topaz — без ответа.
+
+### 2852689d — проверено
+
+- **R-54 закрыт.**
+  - `quoter_calls.rs`: ранние `if MaverickOne` удалены, Maverick V1 и Integral SIZE идут через `market_selection::wallet_quoter`, тест покрывает оба профиля Maverick.
+  - `module_pricing.rs`: вместо `MaverickOne || registered_module()` — признак `pool_address_step()`. Его определение — ровно `registered_module() || MaverickOne`, так что для BSC эквивалентно.
+  - `quoter.rs` и `pool_after.rs`: вместо `TopazCl` — признак `origin_fee()`.
+
+  ✅
+- 💡 Topaz закрыт: `topaz::sender` теперь `GatewayResult`. Без разблокированного кошелька — ошибка хранилища ключей, а не нулевой адрес. ✅
+- `core/types/cost.rs`: новый вариант `RouterFeeMode::WalletBounds` (Integral SIZE). Добавление варианта не ломает чтение старых записей журнала. В `v2_execution.rs` / `v2_wallet_sim.rs` новые ветки закрыты `Wire::Integral` / `DegenRouter` / `DegenModule`, на BSC их нет. ✅
+- `factory_scan.rs`: `integral_directory::scan` — по образцу Maverick, пустой без семейств `IntegralSize`. ✅
+- `contracts/DegenSwapAdapter.sol` разобран целиком, способа увести деньги не нашёл:
+  - вызывать может только `payer` или `executor`;
+  - пара сверяется через `getPair`, `factory()` пары и `token0/token1`;
+  - роутер получает ровно зачисленную сумму (`credited`) — так обрабатывается налог токена;
+  - разрешение после обмена обнуляется;
+  - с кошелька списывается ровно `amount`, проверяются `net >= minimum` и отсутствие остатков на контракте;
+  - защита от повторного входа;
+  - адресов в коде нет, `chainid==1` — константа (R-26).
+
+  ✅

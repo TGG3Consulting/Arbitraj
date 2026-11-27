@@ -75,7 +75,7 @@ contract AmbientWallet {
     function common(address a,address b) private pure returns(Market memory) {
         return a<b ? Market(a,b,420) : Market(b,a,420);
     }
-    function resolve(bytes32 id,address src,address dst) private view returns(Market memory m) {
+    function resolve(bytes32 id,address src,address dst) public view returns(Market memory m) {
         m=common(src,dst);
         if(key(m)==id) return m;
         if(src==address(wrapped) || dst==address(wrapped)){

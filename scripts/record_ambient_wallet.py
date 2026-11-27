@@ -5,11 +5,12 @@ import json
 import sys
 from pathlib import Path
 
-from eth_abi import encode
+from eth_abi import decode, encode
 from eth_utils import keccak
 import requests
 
-from record_ambient_ethereum import DEX, QUERY, WETH, ZERO, FUND, SWAP, approve, balance, tx
+from record_ambient_ethereum import DEX, QUERY, IMPACT, MULTI, QUOTE, PAIR, WETH, ZERO, FUND, SWAP, approve, balance, tx, name
+from record_balancer_markets import Capture
 from record_base_slipstream_executor import EXEC, OWNER, ROOT, RUNTIME, STEP, rpc, simulate_block
 
 UINT="uint256"
@@ -84,7 +85,48 @@ def run(url,compiled):
             fills.append(dict(mode=mode,input=src,output=dst,market=market,pool_key="0x"+key.hex(),target=target,
                               budget=str(budget),spent=str(cap),received=str(want),gas=int(res[paid]["gasUsed"],16),
                               strict=failed[0][1],expired=failed[1][1],refusals=[e for _,e in failed],call=calls[paid],logs=res[paid]["logs"]))
-    return dict(head=tag,manifest=manifest,owner=OWNER,module=module,payments=fills)
+    partial=[]
+    c=Capture(dict(endpoint=url,selector=tag))
+    for leg in original["payments"]:
+        if leg["source"]==ZERO:
+            partial.append(limited(c,env,deploy,module,leg,end))
+    return dict(head=tag,manifest=manifest,owner=OWNER,module=module,payments=fills,limited=partial)
+
+
+def limited(c,env,deploy,module,leg,end):
+    # Same native->USDC pool; the midpoint limit hits before the original exact quantity in both modes.
+    pair=[leg["source"],leg["target"],420]
+    native=leg["source"]; out=leg["target"]
+    before=c.one(QUERY,name("queryPrice",PAIR),PAIR,pair,["uint128"])[0]
+    middle=(before+int(leg["price_after"]))//2
+    target=not leg["exact_input"]
+    args=pair+[True,not target,int(leg["requested"]),0,middle]
+    debit,credit,_=c.one(IMPACT,name("calcImpact",QUOTE),QUOTE,args,["int128","int128","uint128"])
+    spend,net=debit,-credit
+    budget=int(leg["spent"])
+    assert 0<spend<budget and 0<net<int(leg["received"])
+    limit=budget if target else net
+    command=encode(QUOTE+["uint128","uint8"],args+[limit,0])
+    cash=tx(DEX,"userCmd(uint16,bytes)",["uint16","bytes"],[1,command],budget)
+    def module_call(floor):
+        return tx(module,name("execute",FUN),FUN,[pair,WETH,out,budget,floor,target,middle,end])
+    b=[tx(MULTI,"getEthBalance(address)",["address"],[OWNER]),balance(WETH,OWNER),balance(out,OWNER)]
+    prep=[deploy,tx(WETH,"deposit()",value=budget),approve(WETH,module,budget)]
+    # Run original and guarded on independent identical copies of market state.
+    original=simulate_block(c.endpoint,c.selector,env,prep+b+[cash]+b)
+    guard=simulate_block(c.endpoint,c.selector,env,prep+b+[module_call(int(leg["received"]) if target else net)]+b)
+    k=len(prep)+len(b)
+    assert all(x["status"]=="0x1" for x in original)
+    data=decode(["bytes"],bytes.fromhex(original[k]["returnData"][2:]))[0]
+    assert decode(["int128","int128"],data)==(spend,-net)
+    def deltas(rows):
+        return [int(rows[k+1+i]["returnData"],16)-int(rows[len(prep)+i]["returnData"],16) for i in range(len(b))]
+    assert deltas(original)==[-spend,0,net]
+    assert [i for i,x in enumerate(guard) if x["status"]!="0x1"]==([k] if target else [])
+    assert deltas(guard)==([0,0,0] if target else [0,-spend,net])
+    return dict(input=native,output=out,target=target,requested=leg["requested"],limit_price=str(middle),
+                original_spent=str(spend),original_net=str(net),protected=guard[k]["status"],
+                protected_deltas=deltas(guard),original_gas=int(original[k]["gasUsed"],16))
 
 
 if __name__=="__main__":

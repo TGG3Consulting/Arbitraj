@@ -685,7 +685,10 @@ jobs:
       - if: matrix.market == 'alien-fee-base'
         run: python scripts/record_alien_base_tier.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'angstrom-ethereum'
-        run: python scripts/record_angstrom_wallets.py "$RUNNER_TEMP/market.json"
+        run: |
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/angstrom" AngstromWallet
+          python scripts/record_angstrom_wallets.py "$RUNNER_TEMP/market.json" --module "$RUNNER_TEMP/angstrom/AngstromWallet.json"
       - if: matrix.market == 'alien-fee-comparison-base'
         run: python scripts/record_alien_fee_comparison.py "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'fork-fees-')

@@ -27,7 +27,7 @@ def v5(source, target, quantity, minimum, end, step):
               [source,quantity,target,minimum,end,[step]])
 
 
-def record(url):
+def record(url, artifact=None):
     directory=json.loads(gzip.decompress((DIRECTORY/"angstrom_ethereum_directory.json.gz").read_bytes()))
     witness=json.loads((DIRECTORY/"angstrom_public_attestation.json").read_bytes())
     message=next(m for m in witness["messages"] if len(m["data"])==172)
@@ -70,6 +70,11 @@ def record(url):
     word=lambda x:"0x"+format(x,"064x")
     overrides={OWNER:{"balance":hex(10**19)}, EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
                "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
+    protected = None
+    if artifact is not None:
+        from record_angstrom_protected import payments as pay_protected, settlement
+        target, creation, protected = settlement(artifact, url, at)
+        protected.update(payments=[], controls=[])
     for pool, market in directory["directory"].items():
         k=market["key"]
         key=(k["currency0"],k["currency1"],int(k["fee"],0),int(k["tickSpacing"]),k["hooks"])
@@ -114,21 +119,26 @@ def record(url):
                 except ValueError as error:
                     if not str(error).startswith("could not settle router:"):raise
                     a["reverted"]=str(error)[:260]
+        if protected is not None:
+            legs, cleanup = pay_protected(c,overrides,target,creation,dict(tokens=key[:2],pool=pool),key,height,data,stamp,WETH,fund_sale,[a for a in payments if a["pool"]==pool])
+            protected["payments"].extend(legs)
+            protected["controls"].append(cleanup)
     if not all(any(a["pool"]==p and ("buy" in a or "sell" in a) for a in payments) for p in directory["directory"]):
         raise ValueError("Missing genuine taker payment on a registered market")
     return dict(chain=1,parent=at,block=height,canonical_hash=head["hash"],public_source=witness["url"],signer=node,
-                wire_block=announced,eip712=recovered,source_data=message["data"],owner=OWNER,executor=EXEC,adapter=ADAPTER,controls=controls,payments=payments)
+                wire_block=announced,eip712=recovered,source_data=message["data"],owner=OWNER,executor=EXEC,adapter=ADAPTER,controls=controls,payments=payments,protected=protected)
 
 
 if __name__=="__main__":
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument("output",type=Path)
     ap.add_argument("--endpoint")
+    ap.add_argument("--module",type=Path)
     args=ap.parse_args()
     failures=[]
     for endpoint in ([args.endpoint] if args.endpoint else ["https://eth.drpc.org",GATEWAY,"https://rpc.mevblocker.io"]):
         try:
-            result=record(endpoint)
+            result=record(endpoint,json.loads(args.module.read_bytes()) if args.module else None)
             break
         except (requests.RequestException,RuntimeError,ValueError,KeyError) as error:
             failures.append([endpoint,str(error)[:350]])

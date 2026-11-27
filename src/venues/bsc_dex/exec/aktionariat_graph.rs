@@ -126,8 +126,9 @@ mod tests {
                     minimum: tx.minOut, deadline: tx.deadline, issuer_steps: vec![step],
                     v5: Some(Erc20Call {chain:1,payer,module:executor,calldata:keccak256(data)}) };
                 let logs: Vec<Log> = serde_json::from_value(row["logs"][index].clone()).unwrap();
-                let expected = if index == 0 { (units(&row["budget"]),units(&row["units"])) }
-                               else { (units(&row["units"]),units(&row["returned"])) };
+                let shares = U256::from(row["units"].as_u64().unwrap());
+                let expected = if index == 0 { (units(&row["budget"]),shares) }
+                               else { (shares,units(&row["returned"])) };
                 assert_eq!(amounts(&proof,&logs),Some(expected));
                 let mut missing = logs.clone();
                 missing.retain(|l| l.address()!=module || l.topic0()!=Some(&IAktionariatWallet::Paid::SIGNATURE_HASH));

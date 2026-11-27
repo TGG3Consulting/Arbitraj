@@ -47,6 +47,16 @@ pub type Measured = GatewayResult<Result<HookImpact, String>>;
 /// Ответ квотера по точке: выход или причина «не хватает ликвидности»; ошибка — откат или узел.
 pub type Quoted = GatewayResult<Result<U256, String>>;
 
+fn classify_point(result: GatewayResult<U256>) -> Quoted {
+    match result {
+        Ok(value) => Ok(Ok(value)),
+        Err(error) => match quoter_revert::short_pool(&error) {
+            Some(id) => Ok(Err(short(id))),
+            None => Err(error),
+        }
+    }
+}
+
 /// Точка плана: вход в пул (минимальные единицы токена входа стороны) и сумма в USDT (0 — не считалась).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Point {
@@ -168,16 +178,15 @@ pub async fn measure_plan(ctx: &Ctx, e: &Entry, plan: &Plan, tag: &str) -> Measu
         let calls=requests(ctx,e,plan)?;
         let answers=call::independent(ctx,&calls,tag).await?;
         remote.extend((0..n).map(|i| quoted(ctx,e,answers.get(i))));
+    } else if e.family.variant.caller_algebra() {
+        let points:Vec<_>=plan.buy.iter().map(|p|(e.usdt,e.coin,p.amount_in))
+            .chain(plan.sell.iter().map(|p|(e.coin,e.usdt,p.amount_in))).collect();
+        let results=Box::pin(super::super::pools::cypher_quotes::probes(ctx,e,&points,tag)).await?;
+        remote.extend(results.into_iter().map(classify_point));
     } else if individual(ctx, e) {
         let ins = plan.buy.iter().map(|p| (e.usdt, p.amount_in));
         for (token_in, amount) in ins.chain(plan.sell.iter().map(|p| (e.coin, p.amount_in))) {
-            remote.push(match quoter::out_at(ctx, e, token_in, amount, tag).await {
-                Ok(v) => Ok(Ok(v)),
-                Err(err) => match quoter_revert::short_pool(&err) {
-                    Some(id) => Ok(Err(short(id))),
-                    None => Err(err),
-                },
-            });
+            remote.push(classify_point(quoter::out_at(ctx, e, token_in, amount, tag).await));
         }
     } else {
         let calls = requests(ctx, e, plan)?;

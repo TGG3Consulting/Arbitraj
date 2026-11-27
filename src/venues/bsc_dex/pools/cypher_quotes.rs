@@ -40,43 +40,50 @@ impl Pricing {
     fn output(&self, raw: &[u8], amount: U256) -> Option<U256> {
         if self.tuple {super::theorem::output(raw,amount)} else {nami::decoded(raw)}
     }
-    async fn levels(
-        &self,
-        ctx: &Ctx,
-        a: Address,
-        b: Address,
-        sizes: &[U256],
-        at: &Value,
-    ) -> GatewayResult<Vec<LadderPoint>> {
-        if sizes.is_empty() {
-            return Ok(Vec::new());
+    async fn answers(&self, ctx: &Ctx, points: &[(Address, Address, U256)], at: &Value)
+        -> GatewayResult<Vec<GatewayResult<Option<U256>>>> {
+        if points.is_empty() { return Ok(Vec::new()); }
+        let requests: Vec<_> = points.iter().map(|&(a,b,n)|
+            ("eth_call", self.params(a,b,n,at))).collect();
+        let results = rpc::batch(ctx, &requests).await?;
+        if results.len() != points.len() {
+            return Err(ctx.err(ErrorCode::BadResponse, "Algebra: неполный ответ квотера"));
         }
-        let requests: Vec<_> = sizes
-            .iter()
-            .map(|&n| ("eth_call", self.params(a, b, n, at)))
-            .collect();
-        let result = rpc::batch(ctx, &requests).await?;
-        if result.len() != sizes.len() {
-            return Err(ctx.err(ErrorCode::BadResponse, "Cypher: неполный ответ квотера"));
-        }
-        let mut out = Vec::new();
-        for (&n, r) in sizes.iter().zip(result) {
-            let raw = match r {
-                Ok(r) => r,
-                Err(err) if err.code == ErrorCode::SwapReverted => continue,
-                Err(err) => return Err(err),
-            };
-            let raw: Bytes = serde_json::from_str(raw.get())
+        Ok(results.into_iter().zip(points).map(|(reply, &(_,_,n))| {
+            let raw: Bytes = serde_json::from_str(reply?.get())
                 .map_err(|e| ctx.err(ErrorCode::BadResponse, e.to_string()))?;
-            if let Some(got) = self.output(&raw,n).filter(|v| !v.is_zero()) {
-                out.push(LadderPoint {
-                    amount_in: n,
-                    amount_out: got,
-                })
+            Ok(self.output(&raw, n))
+        }).collect())
+    }
+    async fn levels(&self,ctx:&Ctx,a:Address,b:Address,sizes:&[U256],at:&Value)
+        -> GatewayResult<Vec<LadderPoint>> {
+        let points: Vec<_> = sizes.iter().map(|&n| (a,b,n)).collect();
+        let mut out = Vec::new();
+        for (&n, reply) in sizes.iter().zip(self.answers(ctx, &points, at).await?) {
+            match reply {
+                Ok(Some(got)) if !got.is_zero() => out.push(LadderPoint{amount_in:n,amount_out:got}),
+                Err(error) if error.code != ErrorCode::SwapReverted => return Err(error),
+                _ => {}
             }
         }
         Ok(out)
     }
+}
+/// Каждая точка видит своего реального плательщика и один и тот же снимок пула и плагина.
+pub(in crate::venues::bsc_dex) async fn probes(
+    ctx:&Ctx,e:&Entry,points:&[(Address,Address,U256)],tag:&str
+) -> GatewayResult<Vec<GatewayResult<U256>>> {
+    if points.is_empty() { return Ok(Vec::new()); }
+    let pair=(e.pool.token0,e.pool.token1);
+    if points.iter().any(|&(a,b,_)| (a,b)!=pair && (b,a)!=pair) {
+        return Err(ctx.err(ErrorCode::InvalidAddress, "Пара Algebra не содержит запрошенную сторону"));
+    }
+    let at=super::elfomo::block(ctx,tag).await?;
+    let frame=Pricing::new(ctx,e.family,e.pool.reference.address(),pair,&at).await?;
+    Ok(frame.answers(ctx,points,&at).await?.into_iter().map(|reply|
+        reply.and_then(|value| value.ok_or_else(||
+            ctx.err(ErrorCode::BadResponse,"Algebra: неполный расход или неверное представление котировки")))
+    ).collect())
 }
 pub(in crate::venues::bsc_dex) async fn out(
     ctx: &Ctx,

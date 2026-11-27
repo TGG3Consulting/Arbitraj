@@ -176,3 +176,20 @@ fn external_ethereum_ids_bind_to_one_profile_and_cypher_page_to_the_matching_fac
         );
     }
 }
+
+
+mod native_common;
+
+/// Проверяет именно штатную точку входа. Без отдельной диспетчеризации обе площадки
+/// попадали в построитель обычного Algebra-квотера и не доходили до проверки валют.
+#[tokio::test]
+async fn caller_bound_algebra_uses_its_own_quoter_before_generic_dispatch() {
+    use alloy_primitives::{Address,U256};
+    use arb::{gateway::errors::ErrorCode, venues::bsc_dex::quote::quoter};
+    let ctx=native_common::ctx("caller-bound-algebra").await;
+    for kind in ["algebra_integral_cypher","algebra_integral_theorem"] {
+        let entry=native_common::entry(kind,None);
+        let error=quoter::out_at(&ctx,&entry,Address::ZERO,U256::ONE,"latest").await.unwrap_err();
+        assert_eq!(error.code,ErrorCode::InvalidAddress);
+    }
+}

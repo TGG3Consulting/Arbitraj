@@ -1280,7 +1280,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         list.extend(["dex.router", "dex.router_exact_tokens", "dex.factory_runtime_hash", "dex.router_runtime_hash"]);
     }
     // Решение 186: виртуальный квотер — квотер DEX не нужен (quote/virtual_quoter.rs).
-    if !f.variant.external_algebra_swap()
+    if !f.variant.external_algebra_quoter()
         && super::super::quote::virtual_quoter::on(ctx, f.id, f.proto)
     {
         list.retain(|n| *n != "dex.quoter");

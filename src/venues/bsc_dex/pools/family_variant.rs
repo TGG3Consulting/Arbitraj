@@ -247,6 +247,7 @@ impl Variant {
     pub fn wallet_module(self)->bool { matches!(self,Self::EmpireModule|Self::Stabull|Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::ShibaswapV2|Self::BunnySwap|Self::CandySwap) }
     pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredSlipstream|Self::RegisteredSpacingV3|Self::MaverickTwoRouter|Self::SlipstreamUniversal|Self::CypherIntegral|Self::TheoremIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::ShibaswapV2|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter|Self::EmpireNominal)}
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator | Self::SolidlyProxy | Self::SolidlyPairOverride)}
+    pub(crate) fn external_algebra_quoter(self) -> bool { self.external_algebra_swap() || self.caller_algebra() }
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
 
     pub(crate) fn diamond_router(self)->bool {matches!(self,Self::DiamondV2 | Self::KewlV2)}

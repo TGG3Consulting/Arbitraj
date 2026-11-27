@@ -82,7 +82,7 @@ pub async fn out_at(
         Box::pin(super::white_state::refresh(ctx, &mut entry, block)).await?;
         return super::pool_quote::swap(ctx, &entry, token_in, true, amount).map(|x| x.amount_out);
     }
-    if e.family.variant.external_algebra_swap() {
+    if e.family.variant.external_algebra_quoter() {
         let to = if token_in == e.pool.token0 {
             e.pool.token1
         } else if token_in == e.pool.token1 {
@@ -90,7 +90,7 @@ pub async fn out_at(
         } else {
             return Err(ctx.err(
                 ErrorCode::InvalidAddress,
-                "Пара Nami не содержит входной токен",
+                "Пара Algebra не содержит входной токен",
             ));
         };
         if e.family.variant.caller_algebra() {

@@ -35,10 +35,9 @@ impl Config {
     }
     fn read(p: &Parts) -> Option<Vec<Self>> {
         let ctx = &p.ctx;
-        if ctx.chain_id() != Some(1) || !ctx.flag("fermi.trading").ok()? {
+        if ctx.chain_id() != Some(1) {
             return None;
         }
-        let builder = Builder::parse(&ctx.text("fermi.builder").ok()?)?;
         let positive = |key| ctx.int(key).ok().filter(|v| *v > 0);
         let interval = positive("fermi.books_interval_ms")?;
         let timeout = positive("fermi.quote_budget_ms")?;
@@ -56,7 +55,7 @@ impl Config {
         if ladder.is_empty() {
             return None;
         }
-        let build = |deployment, executor, source| Self {
+        let build = |builder, deployment, executor, source| Self {
             deployment,
             executor,
             source,
@@ -68,16 +67,27 @@ impl Config {
             ladder: ladder.clone(),
         };
         let mut out = Vec::new();
-        if let (Ok(d), Ok(executor), Ok(runtime)) = (
-            Deployment::read(ctx),
-            ctx.addr("fermi.executor"),
-            super::deployment::runtime(ctx, "fermi.executor_runtime_hash"),
-        ) && !executor.is_zero()
+        if ctx.flag("fermi.trading").unwrap_or(false)
+            && let Ok(name) = ctx.text("fermi.builder")
+            && let Some(builder) = Builder::parse(&name)
+            && let (Ok(d), Ok(executor), Ok(runtime)) = (
+                Deployment::read(ctx),
+                ctx.addr("fermi.executor"),
+                super::deployment::runtime(ctx, "fermi.executor_runtime_hash"),
+            )
+            && !executor.is_zero()
         {
-            out.push(build(d, executor, Source::Fermi { runtime }));
+            out.push(build(builder, d, executor, Source::Fermi { runtime }));
         }
         for f in families::all(ctx) {
             if f.variant != Variant::PropVenue || families::classify(ctx, f.id).is_err() {
+                continue;
+            }
+            let permitted = builders(
+                ctx.dex_list("dex.propamm_slot_builders", f.id)
+                    .unwrap_or_default(),
+            );
+            if permitted.is_empty() {
                 continue;
             }
             let profile = || {
@@ -117,7 +127,7 @@ impl Config {
                     engine: oracle.address,
                     runtime: oracle.hash,
                 };
-                Some(build(
+                Some((
                     d,
                     executor,
                     Source::Prop {
@@ -127,12 +137,49 @@ impl Config {
                     },
                 ))
             };
-            out.extend(profile());
+            if let Some((deployment, executor, source)) = profile() {
+                out.extend(
+                    permitted
+                        .into_iter()
+                        .map(|builder| build(builder, deployment, executor, source.clone())),
+                );
+            }
         }
         Some(out)
     }
 }
 
+pub(super) fn builders(rows: Vec<String>) -> Vec<Builder> {
+    let mut out = Vec::new();
+    for row in rows {
+        let Some(b) = Builder::parse(row.trim()) else {
+            return Vec::new();
+        };
+        if out.contains(&b) {
+            return Vec::new();
+        }
+        out.push(b);
+    }
+    out
+}
+impl Config {
+    pub(super) fn permitted(&self, ctx: &super::Ctx) -> bool {
+        match &self.source {
+            Source::Fermi { .. } => {
+                ctx.flag("fermi.trading").unwrap_or(false)
+                    && ctx.text("fermi.builder").as_deref().ok() == Some(self.builder.name())
+            }
+            Source::Prop { id, .. } => {
+                ctx.dex_flag("dex.pool_enabled", id).unwrap_or(false)
+                    && builders(
+                        ctx.dex_list("dex.propamm_slot_builders", id)
+                            .unwrap_or_default(),
+                    )
+                    .contains(&self.builder)
+            }
+        }
+    }
+}
 pub(super) fn timely(p: &Parts, b: &super::markets::Books) -> bool {
     p.ctx.settings.generation() == b.revision
         && b.current()

@@ -84,3 +84,16 @@ fn refreshed_slot_rejects_another_oracle_or_second_price_with_the_same_time() {
     new.deployment.engine = Address::repeat_byte(7);
     assert!(!same_frame(&f, &new));
 }
+
+#[test]
+fn builder_names_authorize_only_one_venue_and_require_an_unambiguous_choice() {
+    use super::super::{Builder, slot_config::builders};
+    assert!(builders(Vec::new()).is_empty());
+    assert_eq!(builders(vec!["titan".into()]), vec![Builder::Titan]);
+    assert_eq!(
+        builders(vec!["buildernet".into()]),
+        vec![Builder::BuilderNet]
+    );
+    assert!(builders(vec!["old".into(), "titan".into()]).is_empty());
+    assert!(builders(vec!["titan".into(), "titan".into()]).is_empty());
+}

@@ -53,9 +53,7 @@ impl Tickets {
     }
 }
 pub(in crate::venues::bsc_dex) fn active(p: &Parts) -> bool {
-    p.ctx.chain_id() == Some(1)
-        && p.ctx.flag("fermi.trading").unwrap_or(false)
-        && !p.slot_markets.current(p).is_empty()
+    p.ctx.chain_id() == Some(1) && !p.slot_markets.current(p).is_empty()
 }
 pub(in crate::venues::bsc_dex) fn breaks(
     p: &Parts,
@@ -92,7 +90,6 @@ pub(in crate::venues::bsc_dex) async fn consider(
     baseline: GatewayResult<Quote>,
 ) -> GatewayResult<Quote> {
     if p.ctx.chain_id() != Some(1)
-        || !p.ctx.flag("fermi.trading").unwrap_or(false)
         || baseline
             .as_ref()
             .is_err_and(|e| e.code != ErrorCode::NoRoute)
@@ -127,6 +124,29 @@ pub(in crate::venues::bsc_dex) async fn consider(
     }
     let options = futures_util::future::join_all(candidates.into_iter().map(|c| async move {
         if final_quote {
+            if let Some(base) = old {
+                let buy = side == Side::Buy;
+                let coin = if buy { c.output } else { c.input };
+                // An actual measured level in this exact frame fixes the quoted gross for this amount.
+                // A zero gas allowance for this comparison is already maximally favourable to the candidate.
+                if c.book.sides.get(&(coin, buy)).is_some_and(|levels| {
+                    levels
+                        .0
+                        .iter()
+                        .any(|(size, gross)| *size == qty && !improves(side, *gross, Some(base)))
+                }) {
+                    return None;
+                }
+                if c.book.prop.is_none()
+                    && !improves(
+                        side,
+                        hashflow::routing::total(p, &c.quote).await?,
+                        Some(base),
+                    )
+                {
+                    return None;
+                }
+            }
             let timeout = Duration::from_millis(c.book.config.timeout);
             let (p, q) = tokio::time::timeout(timeout, firm(p, c)).await.ok()??;
             Some((Some(p), q))

@@ -114,34 +114,70 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
             }
             continue;
         };
-        let (cash, builder, interval, timeout) =
-            (first.cash, first.builder, first.interval, first.timeout);
+        let (cash, interval, timeout) = (first.cash, first.interval, first.timeout);
         let ctx = &p.ctx;
-        let snapshot = tokio::try_join!(
-            super::rpc::call::<alloy_primitives::U64>(ctx, "eth_chainId", serde_json::json!([])),
-            super::rpc::call::<Head>(
-                ctx,
-                "eth_getBlockByNumber",
-                serde_json::json!(["latest", false])
-            ),
-            super::builder_snapshot(ctx, builder)
-        );
-        let mut books = Vec::new();
-        if let Ok((chain, h, snap)) = snapshot
+        let mut books: Vec<Arc<Books>> = Vec::new();
+        // One public snapshot for each selected builder; a slow or disabled publisher never supplies another venue's price.
+        let read = async {
+            let (chain, h) = tokio::try_join!(
+                super::rpc::call::<alloy_primitives::U64>(
+                    ctx,
+                    "eth_chainId",
+                    serde_json::json!([])
+                ),
+                super::rpc::call::<Head>(
+                    ctx,
+                    "eth_getBlockByNumber",
+                    serde_json::json!(["latest", false])
+                )
+            )?;
+            Ok::<_, crate::gateway::errors::GatewayError>((chain, h))
+        };
+        if let Ok(Ok((chain, h))) = tokio::time::timeout(Duration::from_millis(timeout), read).await
             && chain == alloy_primitives::U64::from(1)
         {
-            let get = |cfg| {
-                tokio::time::timeout(
-                    Duration::from_millis(timeout),
-                    levels(&p, cfg, &h, &snap, rev),
-                )
-            };
-            books = futures_util::future::join_all(configs.into_iter().map(get))
+            let groups = [super::Builder::Titan, super::Builder::BuilderNet]
+                .into_iter()
+                .filter_map(|builder| {
+                    let targets: Vec<_> = configs
+                        .iter()
+                        .filter(|c| c.builder == builder && c.permitted(ctx))
+                        .cloned()
+                        .collect();
+                    if targets.is_empty() {
+                        return None;
+                    }
+                    let p = &p;
+                    let h = &h;
+                    Some(async move {
+                        let task = async {
+                            let snap = super::builder_snapshot(ctx, builder).await.ok()?;
+                            let active = targets
+                                .into_iter()
+                                .filter(|c| c.permitted(ctx) && rev == ctx.settings.generation());
+                            let got = futures_util::future::join_all(
+                                active.map(|c| levels(p, c, h, &snap, rev)),
+                            )
+                            .await;
+                            Some(
+                                got.into_iter()
+                                    .filter_map(Result::ok)
+                                    .filter(|b| b.current() && !b.sides.is_empty())
+                                    .map(Arc::new)
+                                    .collect::<Vec<_>>(),
+                            )
+                        };
+                        tokio::time::timeout(Duration::from_millis(timeout), task)
+                            .await
+                            .ok()
+                            .flatten()
+                            .unwrap_or_default()
+                    })
+                });
+            books = futures_util::future::join_all(groups)
                 .await
                 .into_iter()
-                .filter_map(|x| x.ok()?.ok())
-                .filter(|b| b.current() && !b.sides.is_empty())
-                .map(Arc::new)
+                .flatten()
                 .collect();
         }
         if rev != ctx.settings.generation() {

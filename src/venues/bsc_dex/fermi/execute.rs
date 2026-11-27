@@ -226,7 +226,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
     }
     let sent = dispatch::send(
         ctx,
-        q.book.config.builder,
+        &q.book.config,
         &signer,
         &tx.raw,
         q.proof.target,

@@ -807,6 +807,13 @@ def tables(network, snapshots, profiles):
                     "этого строителя на точный блок, проверка остаточного времени и восстановление исходного намерения. "
                     f"[Блоки, котировки, движения токенов](../{fermi.as_posix()}) · "
                     "[Адреса и порядок исполнения Titan](https://docs.titanbuilder.xyz/propamms)."])
+        out.extend(["", "Для автоматических обменов Kaliber и Taurus владелец размещает отдельный PropSlotVenueAdapter версии 2 и записывает его адрес в `dex.router` своего профиля. "
+                    "В `dex.propamm_slot_builders` по умолчанию нет строителей. Для Kaliber подтверждён `titan`, для Taurus подтверждены `titan` и `buildernet`, по одному разрешённому имени в строке. "
+                    "Параметры площадки `fermi.books_interval_ms`, `fermi.quote_budget_ms`, `fermi.quote_sizes` и `fermi.gas_budget_native` задают интервал, предельное время сравнения, размеры в валюте расчёта и резерв ETH. "
+                    "Включение `fermi.trading` применимо только к FermiSwap. Обмен требует средств и allowance выбранного кошелька, актуального кадра и минимальной чистой выплаты. "
+                    "На продаже 0,01 WETH за USDC в одном кадре Titan Kaliber выплатил 16,697557 USDC за 298 636 gas, Taurus выплатил 16,687650 USDC за 246 814 gas. "
+                    "Отдельная котировка WETH/USDT доступна у Taurus. Расход газа пересчитывается в физическую валюту выбранной кассы. "
+                    "[Архив обоих рынков](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46041077020)."])
         slot_receipts = fermi.with_name("fermi_slot_receipts.json")
         if slot_receipts.exists():
             wrapped = read(slot_receipts)

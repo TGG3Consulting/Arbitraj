@@ -26,7 +26,7 @@ fn envelope(builder: Builder, raw: &Bytes, target: u64, timestamp: u64, engine: 
 }
 pub(super) async fn send(
     ctx: &Ctx,
-    builder: Builder,
+    config: &super::markets::Config,
     key: &PrivateKeySigner,
     raw: &Bytes,
     target: u64,
@@ -48,6 +48,7 @@ pub(super) async fn send(
                 "Fermi: клиент приватной отправки недоступен",
             )
         })?;
+    let builder = config.builder;
     let body = envelope(builder, raw, target, timestamp, engine).to_string();
     let url = match builder {
         Builder::Titan => "https://rpc.titanbuilder.xyz",
@@ -76,10 +77,7 @@ pub(super) async fn send(
     let remaining = timestamp
         .saturating_mul(1000)
         .saturating_sub(chrono::Utc::now().timestamp_millis().max(0) as u64);
-    if ctx.chain_id() != Some(1)
-        || !ctx.flag("fermi.trading").unwrap_or(false)
-        || ctx.text("fermi.builder").as_deref().ok() != Some(builder.name())
-    {
+    if ctx.chain_id() != Some(1) || !config.permitted(ctx) {
         return Err(ctx.err(
             ErrorCode::NotApplicable,
             "Fermi: разрешение или строитель изменились перед передачей бандла",

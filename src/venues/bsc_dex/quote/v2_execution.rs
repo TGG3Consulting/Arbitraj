@@ -149,6 +149,7 @@ pub(super) async fn option(
         super::v2_wallet_sim::Wire::Prop(t)=>Some(RouterFeeMode::VenueFallback{target:t.target,allowed:t.fallback_allowed}),
         super::v2_wallet_sim::Wire::Aktionariat(m)=>Some(RouterFeeMode::ProtectedWallet{target:m.module}),
         super::v2_wallet_sim::Wire::Aqua(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.target}),
+        super::v2_wallet_sim::Wire::BaseStonk(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.module}),
         super::v2_wallet_sim::Wire::Angstrom(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.module}),
         super::v2_wallet_sim::Wire::FluidDexLite(t)=>Some(RouterFeeMode::WalletBounds{target:t.target,desired:t.desired}),
         super::v2_wallet_sim::Wire::Ambient(t)=>Some(RouterFeeMode::WalletBounds{target:t.target,desired:t.desired}),

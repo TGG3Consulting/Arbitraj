@@ -72,6 +72,7 @@ impl Market {
             | Market::Umbrae
             | Market::O1
             | Market::Antfarm
+            | Market::BaseStonk
             | Market::Angstrom
             | Market::EulerSwap | Market::Stabull
             | Market::Integral

@@ -65,6 +65,9 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             continue;
         }
         if e.family.variant==Variant::BaseStonk {
+            if let Some(h)=head && let Ok(target)=ctx.dex_addr("dex.router",e.family.id)
+                && let Ok(t)=Box::pin(super::super::exec::basestonk_plan::checked(ctx,e,h,target)).await
+                && let Ok(row)=Box::pin(v2_execution::option(q,i,e.clone(),payer,Execution{mode:RouteMode::Direct,target,wire:Wire::BaseStonk(std::sync::Arc::new(t))},Some(h))).await {quotes.push(row);}
             if graph && let Some(key)=&e.key
                 && let crate::core::types::PoolRef::Singleton{manager,id}=e.pool.reference
                 && key.id()==id && let Ok(Some(target))=executor::address(ctx) {

@@ -102,6 +102,8 @@ mod aqua_graph;
 pub(super) mod aqua_plan;
 pub(super) mod angstrom_wallet;
 pub(super) mod angstrom_plan;
+pub(super) mod basestonk_plan;
+pub(super) mod basestonk_wallet;
 pub(super) mod stabull_plan;
 pub(super) mod integral_wallet;
 pub(super) mod integral_plan;

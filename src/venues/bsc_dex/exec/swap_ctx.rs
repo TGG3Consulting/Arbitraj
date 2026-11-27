@@ -71,6 +71,8 @@ pub struct SwapCtx {
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub angstrom:Option<Box<super::angstrom_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
+    pub basestonk:Option<Box<super::basestonk_wallet::Proof>>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
     pub stabull:Option<Box<super::stabull_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub integral:Option<Box<super::integral_wallet::Proof>>,

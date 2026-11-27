@@ -73,6 +73,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     NativeFlat(super::super::exec::mars_wallet::Terms),
     Prop(Box<super::super::exec::prop_wallet::Terms>),
     Aqua(std::sync::Arc<super::super::exec::aqua_wallet::Terms>),
+    BaseStonk(std::sync::Arc<super::super::exec::basestonk_wallet::Terms>),
     Angstrom(std::sync::Arc<super::super::exec::angstrom_wallet::Terms>),
     Stabull(super::super::exec::stabull_wallet::Terms),
     Integral(super::super::exec::integral_wallet::Terms),
@@ -185,7 +186,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             )
         }
     };
-    let exact_approval=matches!(&o.wire,Wire::Motoswap(_)|Wire::MotoswapPath(..)|Wire::FluidHop(..)|Wire::FluidDexLite(_)|Wire::Ambient(_)|Wire::Llamma(_)|Wire::Stabull(_)|Wire::Aqua(_)|Wire::Angstrom(_))||matches!(&o.wire,Wire::Aktionariat(_)|Wire::NativeFlat(_)|Wire::BancorLegacy(_)|Wire::Mooniswap(_)|Wire::DefiPlaza(_)|Wire::YieldBasis(_)|Wire::BalancerV1(_)|Wire::BancorV3(_)|Wire::UniswapV1(_)|Wire::Rubicon(_))||matches!(&o.wire,Wire::Prop(t) if t.target==t.router)||matches!(&o.wire, Wire::Integral(t) if t.target==t.relay) || matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
+    let exact_approval=matches!(&o.wire,Wire::Motoswap(_)|Wire::MotoswapPath(..)|Wire::FluidHop(..)|Wire::FluidDexLite(_)|Wire::Ambient(_)|Wire::Llamma(_)|Wire::Stabull(_)|Wire::Aqua(_)|Wire::BaseStonk(_)|Wire::Angstrom(_))||matches!(&o.wire,Wire::Aktionariat(_)|Wire::NativeFlat(_)|Wire::BancorLegacy(_)|Wire::Mooniswap(_)|Wire::DefiPlaza(_)|Wire::YieldBasis(_)|Wire::BalancerV1(_)|Wire::BancorV3(_)|Wire::UniswapV1(_)|Wire::Rubicon(_))||matches!(&o.wire,Wire::Prop(t) if t.target==t.router)||matches!(&o.wire, Wire::Integral(t) if t.target==t.relay) || matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
     let allowed=|token:Address,amount:U256| async move {
         let encoded=Bytes::from(IMoney::allowanceCall{owner:o.payer,spender:o.target}.abi_encode());
         let current:Bytes=rpc::call(ctx,"eth_call",json!([{"to":token,"data":encoded},h.selector()])).await?;
@@ -272,6 +273,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     if let Wire::NativeFlat(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::Prop(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::Aqua(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
+    if let Wire::BaseStonk(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::Angstrom(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::Stabull(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::Integral(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
@@ -391,6 +393,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::NativeFlat(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Prop(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Aqua(t)=>t.proof(o,minimum,deadline).data(),
+        Wire::BaseStonk(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Angstrom(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Stabull(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Integral(t)=>t.proof(o,minimum,deadline).data(),

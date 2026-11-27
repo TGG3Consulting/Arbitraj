@@ -167,3 +167,17 @@ pub(super) async fn read(
     };
     Ok((token, buy, true))
 }
+
+pub(in crate::venues::bsc_dex) fn original(
+    ctx: &Ctx,
+    f: &Family,
+) -> GatewayResult<(Address, B256)> {
+    let mut roles = super::launch_keys::roles(ctx, f)?
+        .into_iter()
+        .filter(|r| r.kind == "adapter");
+    let r = roles.next().ok_or_else(|| invalid(ctx))?;
+    if roles.next().is_some() {
+        return Err(invalid(ctx));
+    }
+    Ok((r.address, r.hash))
+}

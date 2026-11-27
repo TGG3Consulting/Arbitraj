@@ -5,18 +5,19 @@
   let input = $state(''), output = $state(''), amount = $state('');
   let firm = $state(false), minimum = $state(''), fee = $state('');
   let result = $state(null), error = $state(''), busy = $state(false);
+  let buyExact = $state(false), maxSpend = $state(''), allowTrade = $state(false);
   let builder = $state('buildernet');
   const address = /^0x[0-9a-fA-F]{40}$/;
   const valid = $derived(address.test(input) && address.test(output) && input.toLowerCase() !== output.toLowerCase() && /^[1-9]\d*$/.test(amount) && (!firm || (/^[1-9]\d*$/.test(minimum) && (source !== 'kipseli' || (/^\d{1,5}$/.test(fee))))));
   async function quote(event) {
     event.preventDefault();
-    if (!valid || busy) return;
+    if (!valid || busy || (firm && buyExact && !/^[1-9]\d*$/.test(maxSpend))) return;
     busy = true;
     error = '';
     result = null;
     try {
-      const terms = firm ? {wallet, minimum_raw: minimum, fee_tenths_bps: source === 'kipseli' ? Number(fee) : null} : undefined;
-      result = await post(`/api/venues/${seg(venue)}/sources/${seg(source)}/quote`, { input, output, trader, amount_raw: amount, firm: terms, ...(source === 'bopamm' ? {builder} : {}) });
+      const terms = firm ? {wallet, minimum_raw: minimum, ...(source === 'textile' ? {allow_trade:allowTrade, ...(buyExact ? {maximum_raw:maxSpend} : {})} : {}), fee_tenths_bps: source === 'kipseli' ? Number(fee) : null} : undefined;
+      result = await post(`/api/venues/${seg(venue)}/sources/${seg(source)}/quote`, { input, output, trader, ...(buyExact ? {buy_amount_raw:amount} : {amount_raw:amount}), firm: terms, ...(source === 'bopamm' ? {builder} : {}) });
     } catch (e) {
       error = e.message;
     } finally {
@@ -29,22 +30,31 @@
   <form onsubmit={quote}>
     <label>Адрес продаваемого токена <input bind:value={input} disabled={busy} placeholder="0x…" /></label>
     <label>Адрес получаемого токена <input bind:value={output} disabled={busy} placeholder="0x…" /></label>
-    <label>Сумма в минимальных единицах входного токена <input bind:value={amount} disabled={busy} inputmode="numeric" /></label>
+    {#if source === 'textile'}<label><input type="checkbox" bind:checked={buyExact} disabled={busy} /> Указать точный выход</label>{/if}
+    <label>Сумма в минимальных единицах {buyExact ? 'выходного' : 'входного'} токена <input bind:value={amount} disabled={busy} inputmode="numeric" /></label>
     {#if source === 'bopamm'}
       <label>Строитель Ethereum <select bind:value={builder} disabled={busy}><option value="buildernet">BuilderNet</option><option value="titan">Titan</option></select></label>
     {/if}
     {#if source !== 'fynd' && wallet}
-      <label><input type="checkbox" bind:checked={firm} disabled={busy} /> {source === 'bopamm' ? 'Проверить обмен через модуль этого кошелька в слоте строителя' : 'Запросить индивидуальные условия для этого кошелька и проверить обмен в симуляции'}</label>
+      <label><input type="checkbox" bind:checked={firm} disabled={busy} /> {source === 'textile' ? 'Зарезервировать объём у маркетмейкера и проверить расчёт для этого кошелька' : source === 'bopamm' ? 'Проверить обмен через модуль этого кошелька в слоте строителя' : 'Запросить индивидуальные условия для этого кошелька и проверить обмен в симуляции'}</label>
       {#if firm}
         <label>Минимальная выплата в единицах контракта <input bind:value={minimum} disabled={busy} inputmode="numeric" /></label>
+        {#if source === 'textile'}
+          {#if buyExact}<label>Максимальный расход в единицах контракта <input bind:value={maxSpend} disabled={busy} inputmode="numeric" /></label>{/if}
+          <label><input type="checkbox" bind:checked={allowTrade} disabled={busy} /> Разрешить боту использовать эту заявку до истечения срока</label>
+        {/if}
         {#if source === 'kipseli'}<label>Согласованная комиссия Kipseli в десятых долях базисного пункта <input bind:value={fee} disabled={busy} inputmode="numeric" /></label>{/if}
       {/if}
     {/if}
     <button disabled={!valid || busy} type="submit">{busy ? 'Запрос…' : 'Запросить расчёт'}</button>
   </form>
   {#if error}<p class="err" role="status">{error}</p>{/if}
+  {#if result && source === 'textile'}
+    <p>Комиссия включена в расход и составляет {result.fee?.amount_raw} единиц входного токена.</p>
+    {#if result.details.owner_admitted}<p>Заявка доступна торговому ядру до {new Date(result.expires * 1000).toLocaleTimeString()}.</p>{/if}
+  {/if}
   {#if result && source !== 'fynd'}
-    <p role="status">Оценка на блоке {result.block}. Расход {result.spent_raw} минимальных единиц {result.input}, выход {result.received_raw} минимальных единиц {result.output}, остаток входа {result.unspent_raw}.</p>
+    <p role="status">{result.block == null ? 'Оценка по опубликованным уровням.' : 'Расчёт на блоке ' + result.block + '.'} Расход {result.spent_raw} минимальных единиц {result.input}, выход {result.received_raw} минимальных единиц {result.output}, остаток входа {result.unspent_raw}.</p>
     {#if result.details.type === 'wallet_simulation'}<p>Кошелёк выполнил обмен в симуляции. Газ — {result.details.gas_used} ед. Минимальная выплата владельца — {result.details.owner_minimum_raw}.</p>{/if}
     {#if source === 'zeroex'}<p>Шаги 0x RFQ в расчёте агрегатора: {result.details.rfq_legs} из {result.details.legs.length}. Минимум API — {result.details.minimum_raw}.</p>{:else if source === 'bopamm'}<p>Строитель {result.details.builder}, блок {result.details.target_block}, слот {result.details.slot}. Срок кадра {new Date(result.expires * 1000).toISOString()}.</p>{:else if result.details.type !== 'wallet_simulation'}<p>Глубина книги до индивидуальной комиссии за подпись.</p>{/if}
   {:else if result}

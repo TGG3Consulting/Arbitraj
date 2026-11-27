@@ -43,6 +43,8 @@ pub struct SwapCtx {
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub raindex: Option<Box<super::super::raindex::settlement::Saved>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
+    pub(in crate::venues::bsc_dex) textile: Option<Box<super::super::textile::receipt::Saved>>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
     pub(in crate::venues::bsc_dex) epsilon: Option<Box<super::super::epsilon::wire::Saved>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vista: Option<super::vista_fact::Proof>,

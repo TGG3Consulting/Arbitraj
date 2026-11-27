@@ -22,6 +22,7 @@ mod raindex;
 mod epsilon;
 pub mod hanji;
 mod source_quote;
+mod textile;
 mod keyed_price;
 mod fermi;
 mod fynd;

@@ -82,7 +82,7 @@ pub(in crate::venues::bsc_dex) async fn failed(
         return e;
     };
     let Some(c)=exec::swap_ctx::SwapCtx::of(&entry.lookup) else{return e;};
-    if [c.rfq.is_some(),c.gladius.is_some(),c.raindex.is_some(),c.epsilon.is_some(),c.native_rfq.is_some()].into_iter().filter(|v|*v).count()!=1{return e;}
+    if [c.rfq.is_some(),c.textile.is_some(),c.gladius.is_some(),c.raindex.is_some(),c.epsilon.is_some(),c.native_rfq.is_some()].into_iter().filter(|v|*v).count()!=1{return e;}
     if let Some(proof)=c.rfq{
         let Some(original)=c.chain else{return e;};
         if original.hash!=tx.hash || original.nonce!=tx.nonce || entry.lookup.nonce!=Some(tx.nonce) {return e;}
@@ -95,6 +95,11 @@ pub(in crate::venues::bsc_dex) async fn failed(
         if !verified{return e;}
     }
     if let Some(g)=c.gladius{
+        if tx.outcome!=TxOutcome::Reverted{return e;}
+        let Ok(Some(receipt))=send::receipt::read(&p.ctx,tx.hash).await else{return e;};
+        if receipt.status.to::<u64>()!=0 || g.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.is_err(){return e;}
+    }
+    if let Some(g)=c.textile{
         if tx.outcome!=TxOutcome::Reverted{return e;}
         let Ok(Some(receipt))=send::receipt::read(&p.ctx,tx.hash).await else{return e;};
         if receipt.status.to::<u64>()!=0 || g.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.is_err(){return e;}
@@ -153,7 +158,7 @@ pub(super) async fn prior(p: &Parts, r: &TradeRequest) -> GatewayResult<Option<T
     else {
         return Ok(None);
     };
-    if exec::swap_ctx::SwapCtx::of(&entry.lookup).is_some_and(|c| c.native_rfq.is_some_and(|n|!n.wallet(&p.ctx)) || c.epsilon.is_some_and(|g|!g.wallet(&p.ctx)) || c.raindex.is_some_and(|g|!g.wallet(&p.ctx)) || c.gladius.is_some_and(|g|!g.wallet(&p.ctx))){
+    if exec::swap_ctx::SwapCtx::of(&entry.lookup).is_some_and(|c| c.textile.is_some_and(|n|!n.wallet(&p.ctx)) || c.native_rfq.is_some_and(|n|!n.wallet(&p.ctx)) || c.epsilon.is_some_and(|g|!g.wallet(&p.ctx)) || c.raindex.is_some_and(|g|!g.wallet(&p.ctx)) || c.gladius.is_some_and(|g|!g.wallet(&p.ctx))){
         return Err(p.ctx.err(ErrorCode::OutcomeUnknown,"Сначала требуется сверить первоначальный счёт и сеть Native RFQ").pending(entry.lookup));
     }
     if let Some(intent::Outcome::Order(x)) = entry.result {
@@ -164,6 +169,16 @@ pub(super) async fn prior(p: &Parts, r: &TradeRequest) -> GatewayResult<Option<T
             let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|unknown())?.ok_or_else(unknown)?;
             if !proof_chain::same_fill(tx,&receipt){return Err(unknown());}
             proof.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|unknown())?;
+        }
+        if let Some(c)=exec::swap_ctx::SwapCtx::of(&entry.lookup) && let Some(proof)=c.textile{
+            let unknown=||p.ctx.err(ErrorCode::OutcomeUnknown,"Textile: требуется каноническая квитанция исходного платежа").pending(entry.lookup.clone());
+            let tx=x.trade.chain.as_ref().ok_or_else(unknown)?;
+            let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|unknown())?.ok_or_else(unknown)?;
+            if !proof_chain::same_fill(tx,&receipt){return Err(unknown());}
+            proof.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|unknown())?;
+            let (d,c)=proof.amounts(&receipt.logs).ok_or_else(unknown)?;
+            let (_,dec)=exec::swap_ctx::SwapCtx::of(&entry.lookup).and_then(|s|s.decs).ok_or_else(unknown)?;
+            if crate::venues::bsc_dex::num::to_decimal(if r.side==Side::Buy{d}else{c},dec)!=Some(x.gross_quote){return Err(unknown());}
         }
         if let Some(c)=exec::swap_ctx::SwapCtx::of(&entry.lookup) && let Some(proof)=c.epsilon{
             let unknown=||p.ctx.err(ErrorCode::OutcomeUnknown,"Epsilon: требуется каноническая квитанция исходного платежа").pending(entry.lookup.clone());
@@ -256,6 +271,12 @@ pub(in crate::venues::bsc_dex) async fn record(
         g.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|err(String::new()))?;
         let (debit,credit)=g.amounts(&receipt.logs).ok_or_else(||err(String::new()))?;
         if t.request.side==Side::Buy{debit}else{credit}
+    }else if let Some(g)=parse.textile{
+        let tx=t.chain.as_ref().ok_or_else(||err(String::new()))?;
+        let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|err(String::new()))?.ok_or_else(||err(String::new()))?;
+        g.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|err(String::new()))?;
+        let (debit,credit)=g.amounts(&receipt.logs).ok_or_else(||err(String::new()))?;
+        if t.request.side==Side::Buy{debit}else{credit}
     }else if let Some(g)=parse.epsilon{
         let tx=t.chain.as_ref().ok_or_else(||err(String::new()))?;
         let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|err(String::new()))?.ok_or_else(||err(String::new()))?;
@@ -305,6 +326,10 @@ pub(super) async fn trade(p: &Parts, req: TradeRequest, id: B256) -> GatewayResu
     let ctx = &p.ctx;
     ctx.bound()?;
     let who = wallet::signer::address(ctx)?;
+    if req.route.as_ref().and_then(|r|r.exec_note.as_deref())==Some(super::super::textile::LABEL) {
+        let ticket=p.textile.take(who,id).ok_or_else(||routing::no(p,"Требуется новая подтверждённая заявка Textile"))?;
+        return super::super::textile::trade(p,req,&ticket).await;
+    }
     let old=p.rfqs.take(who,id);
     let native=p.native_quotes.take(who,id);
     let gladius=p.gladius.take(who,id);

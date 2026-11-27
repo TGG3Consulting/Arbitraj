@@ -2040,6 +2040,19 @@ def tables(network, snapshots, profiles):
                     "16 выплат через V5 и 16 через пул. У WETH/cbETH в резерв входят native ETH, у двух проверенных "
                     "размеров пятого рынка первая операция откатилась. Для торговли используется V5 шаг 9 с общим сроком "
                     "и чистым минимумом. Сетевой оборот отдельно по фабрикам не распределялся.")
+        if str(row["id"]) == "8322":
+            fx=json.loads(gzip.decompress((data_dir/"textile_fx.json.gz").read_bytes()))
+            chain=fx["chains"][network]
+            candidates=[chain["roles"]["reactor"]["address"]]
+            task=(f"Textile FX · в {chain['window'][1]-chain['window'][0]+1} блоках зарегистрировано {chain['fills']} Fill. "
+                  "Комиссия 2 б.п. включена во вход и округляется по каждой заявке maker. "
+                  "Preview использует опубликованные уровни без блокировки средств. Индивидуальный запрос владельца резервирует объём. "
+                  "В отдельном контроле на действующих Reactor и Permit2 выполнены восемь выплат на сеть: два направления, один или два maker, "
+                  "прямой кошелёк и защищённый TextileWallet. Контрольные подписи истекли. "
+                  "Торговый выбор получает только подтверждённый объём и срок явно разрешённой владельцем заявки. "
+                  "Для защищённого модуля нужен согласованный агрегаторский доступ. Из иных форм расчёта Aave и отложенный GMX требуют своих проверок. "
+                  "[API Textile](https://api.textilecredit.com/v2/openapi.json) · "
+                  f"[Проверки платежа](../tests/data/first_run_dex_2026-11-26/textile_{network}_wallets.json.gz).")
         if base and str(row["id"]) == "6625":
             snapshot = json.loads(gzip.decompress((data_dir / "sportfun_base_players.json.gz").read_bytes()))
             candidates = [p["address"] for p in snapshot["pairs"]]

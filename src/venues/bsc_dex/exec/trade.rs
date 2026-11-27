@@ -97,6 +97,7 @@ fn by_whom(ctx: &Ctx, reg: &Registry, route: &DexRoute, native: bool) -> &'stati
             // У первых маршрутов Hashflow отсутствовал маркер источника. Для отправленного
             // обмена восстановление берёт первоначальное имя исполнителя из SwapCtx.who.
             match route.exec_note.as_deref() {
+                Some(super::super::textile::LABEL) => super::super::textile::LABEL,
                 Some(super::super::epsilon::DIRECT) => super::super::epsilon::DIRECT,
                 Some(super::super::epsilon::LABEL) => super::super::epsilon::LABEL,
                 Some(super::super::raindex::LABEL) => super::super::raindex::LABEL,

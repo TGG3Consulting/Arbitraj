@@ -30,6 +30,7 @@ pub const TELEGRAM_DAILY_TOKEN: &str = "telegram.daily_bot_token";
 /// Известные секреты: имя, к чему относится (площадка или «система»), описание — для интерфейса.
 /// Новая площадка или сервис добавляет сюда свои секреты.
 pub static KNOWN: &[(&str, &str, &str)] = &[
+    ("textile.api_key", "textile", "Партнёрский ключ Textile trades:write. Для маршрута через свой модуль укажите согласованный доступ rfq:aggregator"),
     ("kipseli.api_key", "kipseli", "Ключ официального Kipseli PropAMM API для Base"),
     ("zeroex.api_key", "zeroex", "Ключ 0x Swap API v2 для Base и Ethereum"),
     ("fynd.api_key", "fynd", "Ключ Fynd Hosted API для ручной проверки цены Base и Ethereum"),

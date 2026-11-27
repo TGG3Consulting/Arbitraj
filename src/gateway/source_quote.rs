@@ -11,6 +11,8 @@ pub struct Request {
     #[serde(alias = "amount")]
     pub amount_raw: Option<String>,
     pub amount_tokens: Option<String>,
+    /// Для Textile можно запросить точный выход вместо количества на входе.
+    pub buy_amount_raw: Option<String>,
     pub trader: Option<Address>,
     pub market: Option<Address>,
     pub builder: Option<String>,
@@ -22,6 +24,11 @@ pub struct Request {
 pub struct FirmTerms {
     pub wallet: String,
     pub minimum_raw: String,
+    /// Максимальный расход для запроса Textile по точному выходу.
+    pub maximum_raw: Option<String>,
+    /// Сохранить проверенную заявку для обычного выбора торговым ядром по net.
+    #[serde(default)]
+    pub allow_trade: bool,
     pub fee_tenths_bps: Option<u32>,
 }
 

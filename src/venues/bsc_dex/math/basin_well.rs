@@ -185,3 +185,7 @@ pub fn swap_out(d: &BasinWellData, token_in: Address, amount: U256) -> Option<U2
     let new_j = calc_reserve(d, r, j, d.supply)?;
     r[j].checked_sub(new_j)
 }
+
+#[cfg(test)]
+#[path = "basin_archive_tests.rs"]
+mod archive_tests;

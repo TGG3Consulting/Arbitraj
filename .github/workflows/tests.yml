@@ -698,6 +698,11 @@ jobs:
           python scripts/record_alien_carbon.py "$RUNNER_TEMP/alien-carbon/CarbonWallet.json" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'alien-fee-base'
         run: python scripts/record_alien_base_tier.py "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'empire-module-ethereum'
+        run: |
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/empire" EmpireWallet
+          python scripts/record_empire_wallets.py "$RUNNER_TEMP/market.json" --module "$RUNNER_TEMP/empire/EmpireWallet.json"
       - if: matrix.market == 'empire-wallet-ethereum'
         run: python scripts/record_empire_wallets.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'angstrom-ethereum'
@@ -937,6 +942,7 @@ jobs:
             ${{ runner.temp }}/yield-basis-create.json
             ${{ runner.temp }}/yield-basis-usdt.json
             ${{ runner.temp }}/angstrom/AngstromWallet.json
+            ${{ runner.temp }}/empire/EmpireWallet.json
             ${{ runner.temp }}/stabull-create.json
             ${{ runner.temp }}/mint-club-protected.json
             ${{ runner.temp }}/carbon-protected.json

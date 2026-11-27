@@ -8,6 +8,7 @@ import requests
 from eth_abi import decode
 
 from record_balancer_markets import Capture
+from record_empire_module import MODULE, deployment, exchange
 from record_base_slipstream_executor import EXEC, OWNER, ROOT, RUNTIME, rpc, simulate_block
 from record_ethereum_v2_factories import WETH, digest, raw
 from record_ethervista_wallets import integer, provenance, tx
@@ -32,6 +33,8 @@ def state(rows):
 
 
 def action(mode, pool, tokens, amount, minimum, deadline):
+    if mode in ("module","v5module"):
+        return exchange(mode,pool,tokens,amount,minimum,deadline)
     if mode == "v5":
         return swap(pool, *tokens, amount, minimum, deadline, 3000)
     sig = "swapExactTokensForTokens" + ("SupportingFeeOnTransferTokens" if mode == "fot" else "")
@@ -41,7 +44,7 @@ def action(mode, pool, tokens, amount, minimum, deadline):
 
 
 def leg(sim, prefix, pool, tokens, amount, mode, deadline):
-    target = EXEC if mode == "v5" else ROUTER
+    target = EXEC if mode in ("v5","v5module") else MODULE if mode=="module" else ROUTER
     approval = tx(tokens[0],"approve(address,uint256)",["address","uint256"],[target,amount])
     views = observations(pool,tokens)
     def trial(minimum, expiry):
@@ -70,7 +73,7 @@ def leg(sim, prefix, pool, tokens, amount, mode, deadline):
     return dict(exact=strict,above=above,expired=expired,net_guard=above["status"]=="0x0"),[*prefix,approval,trade]
 
 
-def capture(endpoint, doc):
+def capture(endpoint, doc, artifact):
     c = Capture(dict(endpoint=endpoint,selector=doc["selector"]))
     h = rpc(endpoint,"eth_getBlockByHash",[c.selector["blockHash"],False])
     if h["stateRoot"]!=doc["state_root"] or int(rpc(endpoint,"eth_chainId",[]),16)!=1:
@@ -84,6 +87,16 @@ def capture(endpoint, doc):
     env={OWNER:{"balance":hex(10**19)},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
          "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
     sim=lambda calls:simulate_block(endpoint,c.selector,env,calls)
+    modes=("nominal","fot","v5")
+    prefix=[]
+    identity=None
+    if artifact:
+        create,identity=deployment(endpoint,c.selector,doc["factory"],artifact)
+        [created]=sim([create])
+        if created["status"]!="0x1":raise ValueError("CREATE failed")
+        identity["creation_gas"]=int(created["gasUsed"],16)
+        prefix=[create]
+        modes=("module","v5module")
     rows=[]
     for record in doc["pools"]:
         pool,tokens=record["pool"],record["tokens"]
@@ -97,17 +110,17 @@ def capture(endpoint, doc):
         surplus={t for i,t in enumerate(tokens) if initial["physical"][i]>initial["reserves"][i]}
         row=dict(pool=pool,tokens=tokens,sweepable=sweepable,initial=initial,samples=[])
         for size in (10**12,10**15):
-            deposit=[tx(WETH,"deposit()",value=size)]
+            deposit=[*prefix,tx(WETH,"deposit()",value=size)]
             purchases={}
-            for mode in ("nominal","fot","v5"):
-                if WETH in surplus and mode!="nominal":
+            for mode in modes:
+                if WETH in surplus and mode in ("v5","fot"):
                     continue
                 result,next_prefix=leg(sim,deposit,pool,[WETH,other],size,mode,deadline)
                 row["samples"].append(dict(side="buy",input=size,mode=mode,result=result))
                 if next_prefix:
                     purchases[mode]=(next_prefix,result["exact"]["received"])
-            for mode in ("nominal","fot","v5"):
-                if not purchases or (other in surplus and mode!="nominal"):
+            for mode in modes:
+                if not purchases or (other in surplus and mode in ("v5","fot")):
                     continue
                 origin=mode if mode in purchases else next(iter(purchases))
                 prefix,amount=purchases[origin]
@@ -117,18 +130,19 @@ def capture(endpoint, doc):
     if not any(s["result"].get("net_guard") for row in rows for s in row["samples"]):
         raise ValueError("no historical payment with a terminal floor")
     return dict(selector=c.selector,state_root=h["stateRoot"],factory=doc["factory"],router=ROUTER,
-                router_proof=router,executor_hash=digest(raw(env[EXEC]["code"])),owner=OWNER,pools=rows)
+                module=identity,router_proof=router,executor_hash=digest(raw(env[EXEC]["code"])),owner=OWNER,pools=rows)
 
 
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("output",type=Path)
+    p.add_argument("--module",type=Path)
     args=p.parse_args()
     with gzip.open(SOURCE) as f:
         doc=json.load(f)["empire"]
-    for endpoint in dict.fromkeys((doc["endpoint"],"https://ethereum.gateway.tenderly.co","https://eth.drpc.org")):
+    for endpoint in dict.fromkeys((doc["endpoint"],"https://mainnet.gateway.tenderly.co","https://eth.drpc.org")):
         try:
-            result=capture(endpoint,doc)
+            result=capture(endpoint,doc,json.loads(args.module.read_bytes()) if args.module else None)
             args.output.write_text(json.dumps(result)+"\n",encoding="utf8")
             break
         except (requests.RequestException,ValueError,KeyError) as e:

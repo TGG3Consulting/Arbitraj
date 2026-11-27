@@ -111,6 +111,14 @@ impl Proof {
             self.data(),
         )
         .await?;
+        self.verify_roles_at_fill(ctx, hash, r).await
+    }
+    pub(in crate::venues::bsc_dex) async fn verify_roles_at_fill(
+        &self,
+        ctx: &Ctx,
+        hash: B256,
+        r: &Receipt,
+    ) -> GatewayResult<()> {
         if let Some(accepted) = self.terms.module_hash {
             let block = r.block_hash.ok_or_else(|| {
                 ctx.err(
@@ -169,7 +177,10 @@ impl Proof {
         let (_, paid, received) = self.outcome(logs)?;
         Some((paid, received))
     }
-    pub(super) fn outcome(&self, logs: &[Log]) -> Option<(Address, U256, U256)> {
+    pub(in crate::venues::bsc_dex) fn outcome(
+        &self,
+        logs: &[Log],
+    ) -> Option<(Address, U256, U256)> {
         let t = self.terms;
         let protected = t.target != t.router;
         let owner = self.payer;
@@ -242,14 +253,14 @@ impl Proof {
         }
         if s.marketMaker == t.venue {
             let forwarded = |a, b| moved(self.input, Some(a), Some(b)) == s.amountIn;
-            let path_matches = match t.via {
-                Some([pool, logic]) => {
-                    let mut emitted = logs.iter().filter(|l| {
-                        l.address() == t.venue
-                            && l.topic0() == Some(&IWrappedProp::Swapped::SIGNATURE_HASH)
-                    });
-                    let fill =
-                        IWrappedProp::Swapped::decode_log_data(&emitted.next()?.inner.data).ok()?;
+            let venue_swap = || -> Option<bool> {
+                let mut emitted = logs.iter().filter(|l| {
+                    l.address() == t.venue
+                        && l.topic0() == Some(&IWrappedProp::Swapped::SIGNATURE_HASH)
+                });
+                let fill =
+                    IWrappedProp::Swapped::decode_log_data(&emitted.next()?.inner.data).ok()?;
+                Some(
                     emitted.next().is_none()
                         && (
                             fill.sender,
@@ -258,17 +269,31 @@ impl Proof {
                             fill.amountIn,
                             fill.amountOut,
                             fill.recipient,
-                        ) == (t.router, self.input, self.output, s.amountIn, credit, owner)
+                        ) == (t.router, self.input, self.output, s.amountIn, credit, owner),
+                )
+            };
+            let path_matches = match t.via {
+                Some([pool, logic]) => {
+                    venue_swap() == Some(true)
                         && forwarded(t.venue, pool)
                         && forwarded(pool, logic)
                         && forwarded(logic, t.vault)
                 }
                 None => t.venue == t.vault || forwarded(t.venue, t.vault),
             };
-            if !forwarded(sender, t.venue)
-                || !path_matches
-                || moved(self.output, Some(t.vault), Some(owner)) != credit
-            {
+            let direct = moved(self.output, Some(t.vault), Some(owner)) == credit;
+            // Kaliber and Taurus may pay through their market. Both physical transfers,
+            // the market's own settlement and its zero net flow must identify the same output.
+            let relayed = !direct
+                && t.via.is_none()
+                && t.venue != t.vault
+                && t.venue != owner
+                && venue_swap() == Some(true)
+                && moved(self.output, Some(t.vault), Some(t.venue)) == credit
+                && moved(self.output, Some(t.venue), Some(owner)) == credit
+                && moved(self.output, None, Some(t.venue)) == credit
+                && moved(self.output, Some(t.venue), None) == credit;
+            if !forwarded(sender, t.venue) || !path_matches || !(direct || relayed) {
                 return None;
             }
         } else if s.marketMaker == t.fallback && t.fallback_allowed {

@@ -20,8 +20,6 @@ use serde_json::json;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Inclusion {
-    transaction_hash: B256,
-    block_hash: B256,
     from: Address,
     to: Address,
     #[serde(flatten)]
@@ -83,7 +81,9 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
     {
         return Err(unknown());
     }
-    if let Some(intent::Outcome::Order(out)) = &entry.result {
+    if o.prop.is_none()
+        && let Some(intent::Outcome::Order(out)) = &entry.result
+    {
         resolve::release_if_ours(p, hash, Some(nonce), false).await;
         intent::note_gross(Some(out.gross_quote));
         return Ok(Some(out.trade.clone()));
@@ -96,6 +96,9 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
         return Err(unknown());
     }
     let Some(r) = r else {
+        if entry.result.is_some() {
+            return Err(unknown());
+        }
         return missed(p, &parse, &entry, hash, nonce, marker).await;
     };
     let (head, tx): (Header, Option<Original>) = tokio::try_join!(
@@ -107,8 +110,9 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
         super::rpc::call(ctx, "eth_getTransactionByHash", json!([hash]))
     )?;
     let t = tx.ok_or_else(unknown)?;
-    if (head.hash, t.hash, t.block_hash, r.transaction_hash)
-        != (r.block_hash, hash, r.block_hash, hash)
+    let block = r.receipt.block_hash.ok_or_else(unknown)?;
+    if (head.hash, t.hash, t.block_hash, r.receipt.transaction_hash)
+        != (block, hash, block, Some(hash))
         || head.number != r.receipt.block_number
         || t.nonce != U64::from(nonce)
         || (t.from, t.to) != (o.payer, o.executor)
@@ -118,7 +122,32 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
     {
         return Err(unknown());
     }
+    if o.prop.is_some() {
+        send::canonical_receipt::verify(ctx, hash, &r.receipt)
+            .await
+            .map_err(|_| unknown())?;
+    }
     let ok = r.receipt.status == U64::from(1);
+    if o.prop.is_some() {
+        let filled = super::canonical(
+            ctx,
+            block,
+            o.executor,
+            super::slot::completedCall {
+                payer: o.payer,
+                leg: o.leg,
+            },
+        )
+        .await
+        .map_err(|_| unknown())?;
+        // On a revert, a prior successful transaction could already have consumed this intent.
+        if filled != ok {
+            return Err(unknown());
+        }
+    }
+    if !ok && entry.result.is_some() {
+        return Err(unknown());
+    }
     let outcome = if ok {
         TxOutcome::Included
     } else {
@@ -163,12 +192,17 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
     // в том же каноническом блоке, что и квитанция, независимо от текущего профиля.
     let router = match o.router {
         Some(address) => address,
-        None => super::deployment::executor_router(ctx, r.block_hash, o.executor)
+        None => super::deployment::executor_router(ctx, block, o.executor)
             .await
             .map_err(|_| unknown())?,
     };
     if router.is_zero() {
         return Err(unknown());
+    }
+    if let Some(q) = &o.prop {
+        q.verify_roles_at_fill(ctx, hash, &r.receipt)
+            .await
+            .map_err(|_| unknown())?;
     }
     let (spent, received) = fill(o, &r.receipt, router).ok_or_else(unknown)?;
     let (coins, cash) = if req.side == Side::Buy {
@@ -178,10 +212,33 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
     };
     let coins = num::to_decimal(coins, parse.decs.0).ok_or_else(unknown)?;
     let gross = num::to_decimal(cash, parse.decs.1).ok_or_else(unknown)?;
-    if coins != req.qty {
+    // A bounded exact-input purchase can return extra coins at the very same approved cash spend.
+    // The whole chain fill is credited to the deal. Fermi and every sale still require exact quantity.
+    if coins != req.qty && !(o.prop.is_some() && req.side == Side::Buy && coins > req.qty) {
         return Err(unknown());
     }
     let fee = chain.gas_bnb.ok_or_else(unknown)?;
+    if let Some(intent::Outcome::Order(out)) = &entry.result {
+        if out.trade.filled_qty != coins
+            || out.gross_quote != gross
+            || out.trade.venue_ref != hash.to_string()
+            || out.trade.chain.as_ref().is_none_or(|c| {
+                (c.hash, c.nonce, c.block, c.gas_used, c.gas_bnb)
+                    != (
+                        chain.hash,
+                        chain.nonce,
+                        chain.block,
+                        chain.gas_used,
+                        chain.gas_bnb,
+                    )
+            })
+        {
+            return Err(unknown());
+        }
+        resolve::release_if_ours(p, hash, Some(nonce), false).await;
+        intent::note_gross(Some(gross));
+        return Ok(Some(out.trade.clone()));
+    }
     let trade = TradeResult {
         status: TradeStatus::Filled,
         filled_qty: coins,
@@ -190,7 +247,10 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
         venue_ref: hash.to_string(),
         chain: Some(chain),
         finished_at: Utc::now(),
-        executor: Some(format!("FermiSwap ({})", o.builder)),
+        executor: Some(match &o.prop {
+            Some(q) => format!("PropAMM {} ({})", q.terms.venue, o.builder),
+            None => format!("FermiSwap ({})", o.builder),
+        }),
         request: req,
     };
     let spot = intent::SpotFill {
@@ -208,4 +268,25 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
     resolve::release_if_ours(p, hash, Some(nonce), false).await;
     intent::note_gross(Some(gross));
     Ok(Some(trade))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn rpc_inclusion_preserves_identity_for_canonical_position_checks() {
+        let tx = B256::with_last_byte(1);
+        let block = B256::with_last_byte(2);
+        let raw = json!({"from":Address::ZERO,"to":Address::ZERO,"transactionHash":tx,"blockHash":block,"transactionIndex":"0x3",
+            "blockNumber":"0x5","gasUsed":"0x5208","effectiveGasPrice":"0x1","status":"0x1","logs":[]});
+        let r: Inclusion = serde_json::from_value(raw).unwrap();
+        assert_eq!(
+            (
+                r.receipt.transaction_hash,
+                r.receipt.block_hash,
+                r.receipt.transaction_index
+            ),
+            (Some(tx), Some(block), Some(U64::from(3)))
+        );
+    }
 }

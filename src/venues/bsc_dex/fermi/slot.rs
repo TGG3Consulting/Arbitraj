@@ -13,6 +13,10 @@ alloy::sol! {
         address input; address output; int256 amount; uint256 limit;
     }
     function execute(Order o) external returns (uint256 spent,uint256 received);
+    struct PropOrder { bytes32 leg; bytes32 parent; uint64 height; uint64 timestamp; address tokenIn; address tokenOut; uint256 amount; uint256 minimum; }
+    function executeAtSlot(PropOrder order) external returns(uint256 spent,uint256 received);
+    function slotVersion() external view returns(uint256);
+    event SlotFilled(bytes32 indexed leg,address indexed payer,address indexed venue,uint256 spent,uint256 received);
     function completed(address payer, bytes32 leg) external view returns (bool);
     event Filled(address indexed payer, bytes32 indexed leg, address indexed input, address output, uint256 spent, uint256 received);
     event Swapped(address indexed sender, address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 amountOut, address recipient);
@@ -27,6 +31,8 @@ pub(crate) struct Proof {
     pub executor: Address,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub router: Option<Address>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prop: Option<Box<super::super::exec::prop_wallet::Proof>>,
     pub payer: Address,
     pub input: Address,
     pub output: Address,
@@ -36,6 +42,22 @@ pub(crate) struct Proof {
 }
 impl Proof {
     pub fn calldata(&self) -> Bytes {
+        if let Some(quote) = &self.prop {
+            return executeAtSlotCall {
+                order: PropOrder {
+                    leg: self.leg,
+                    parent: self.parent,
+                    height: self.target,
+                    timestamp: self.timestamp,
+                    tokenIn: quote.input,
+                    tokenOut: quote.output,
+                    amount: quote.amount,
+                    minimum: quote.minimum,
+                },
+            }
+            .abi_encode()
+            .into();
+        }
         Bytes::from(
             executeCall {
                 o: Order {
@@ -57,6 +79,25 @@ impl Proof {
             return false;
         }
         let specified = self.amount.unsigned_abs();
+        if let Some(q) = &self.prop {
+            if q.payer != self.payer
+                || q.terms.target != self.executor
+                || q.terms.fallback_allowed
+                || self.router != Some(q.terms.router)
+                || q.terms.module_hash.is_none()
+                || (q.input, q.output) != (self.input, self.output)
+                || q.deadline != U256::from(self.timestamp)
+                || spent != q.amount
+                || received < q.minimum
+            {
+                return false;
+            }
+            return if self.amount.is_negative() {
+                q.minimum == specified && spent <= self.limit
+            } else {
+                spent == specified && q.minimum == self.limit
+            };
+        }
         if self.amount.is_negative() {
             received == specified && spent <= self.limit
         } else {

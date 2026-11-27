@@ -19,6 +19,22 @@ pub(super) fn fill(
             Some(first)
         }
     };
+    if let Some(q) = &proof.prop {
+        use super::slot::SlotFilled;
+        if router != q.terms.router {
+            return None;
+        }
+        let mark = SlotFilled::decode_log_data(
+            &one(proof.executor, SlotFilled::SIGNATURE_HASH)?.inner.data,
+        )
+        .ok()?;
+        let (source, spent, received) = q.outcome(&receipt.logs)?;
+        return ((mark.leg, mark.payer, mark.venue, mark.spent, mark.received)
+            == (proof.leg, proof.payer, q.terms.venue, spent, received)
+            && source == q.terms.venue
+            && proof.crossed(spent, received))
+        .then_some((spent, received));
+    }
     let f =
         Filled::decode_log_data(&one(proof.executor, Filled::SIGNATURE_HASH)?.inner.data).ok()?;
     let s = Swapped::decode_log_data(&one(router, Swapped::SIGNATURE_HASH)?.inner.data).ok()?;
@@ -66,6 +82,7 @@ mod tests {
         for c in cases {
             let strval = |k: &str| c[k].as_str().unwrap();
             let proof = Proof {
+                prop: None,
                 builder: strval("builder").into(),
                 parent: strval("parent").parse().unwrap(),
                 target: c["target"].as_u64().unwrap(),
@@ -120,3 +137,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "prop_receipt_tests.rs"]
+mod prop_receipt_tests;

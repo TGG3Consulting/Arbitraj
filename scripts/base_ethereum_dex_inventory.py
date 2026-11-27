@@ -1938,6 +1938,26 @@ def tables(network, snapshots, profiles):
                         "(../tests/data/first_run_dex_2026-11-26/alien_base_750.json.gz)")
             else:
                 task = "Alien Base V2 · секция alienbase для Base указывает фабрику профиля и 0,16% на обмен"
+        if not base and str(row["id"]) == "7982":
+            directory = base_launch_inventory.evidence("bopamm_ethereum.json.gz")
+            frames = base_launch_inventory.evidence("bopamm_ethereum_wallets.json.gz")
+            registry = directory["directory"]
+            market = registry["logs"][0]["address"]
+            candidates = [market, registry["roles"][market]["pricing"]]
+            trials = [c for frame in frames for c in frame["cases"]]
+            paid = [c["after"] for c in trials if c["after"]["status"] == "0x1"]
+            before = sum(c["before"]["status"] == "0x1" for c in trials)
+            split = sum(len({f["maker"] for f in c["fills"]}) > 1 for c in paid)
+            task = (f"bopAMM · {len(registry['roles'][market]['pairs'])} пар текущего рынка. "
+                    f"На блоках {registry['start']}–{registry['height']} записано {len(registry['logs'])} обменов. "
+                    f"Собственный кошелёк получил WETH или USDC в {len(paid)}/{len(trials)} симуляциях "
+                    f"после исходного подписанного обновления и в {before}/{len(trials)} до него. "
+                    f"В {split} случаях за одну сделку заплатили два маркетмейкера. "
+                    f"Расход защищённого вызова {min(x['gas'] for x in paid)}–{max(x['gas'] for x in paid)} gas. "
+                    "LambdaClass также может направить платёж через Uniswap V3. Для котировки bopAMM нужен "
+                    "свежий кадр конкретного строителя на следующем каноническом блоке. "
+                    "[Реестр и контроль Uniswap](../tests/data/first_run_dex_2026-11-26/bopamm_ethereum.json.gz) · "
+                    "[Оплаты и границы слота](../tests/data/first_run_dex_2026-11-26/bopamm_ethereum_wallets.json.gz).")
         if not base and str(row["id"]) == "405":
             fixture = Path("tests/data/first_run_dex_2026-11-26/tokenlon_ethereum.json")
             tokenlon = read(fixture)

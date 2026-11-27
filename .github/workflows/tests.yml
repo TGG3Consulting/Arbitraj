@@ -639,6 +639,7 @@ jobs:
           python -m pip install --quiet eth-account==0.13.7
           python scripts/record_bopamm_ethereum.py "$RUNNER_TEMP/market.json"
           npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          python scripts/record_bopamm_frames.py "$RUNNER_TEMP/bopamm-frames.json" --trials 14
           node contracts/build-hanji.mjs "$RUNNER_TEMP/bopamm" BopAmmWallet
           python scripts/record_bopamm_wallet.py "$RUNNER_TEMP/bopamm-protected.json" "$RUNNER_TEMP/bopamm/BopAmmWallet.json"
       - if: matrix.market == 'theorem-ethereum'
@@ -1014,6 +1015,7 @@ jobs:
             ${{ runner.temp }}/empire/EmpireWallet.json
             ${{ runner.temp }}/stabull-create.json
             ${{ runner.temp }}/mint-club-protected.json
+            ${{ runner.temp }}/bopamm-frames.json
             ${{ runner.temp }}/bopamm-protected.json
             ${{ runner.temp }}/carbon-protected.json
             ${{ runner.temp }}/antfarm-protected.json

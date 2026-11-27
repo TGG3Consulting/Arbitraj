@@ -172,12 +172,87 @@ fn ranges_depth_can_exceed_thirty_percent_of_real_input_balance() {
     let directory = archive(include_bytes!(
         "data/first_run_dex_2026-11-26/ranges_ethereum_directory.json.gz"
     ));
-    let pool = directory["pools"].as_array().unwrap().iter()
-        .find(|p| p["pool"] == "0xca5fa9ba99a57729d3a6b5b8e84c8417e7632314").unwrap();
+    let pool = directory["pools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["pool"] == "0xca5fa9ba99a57729d3a6b5b8e84c8417e7632314")
+        .unwrap();
     let d = market(pool);
     let (depth, _) = vault_depth::side(&d, 1, 0, 0.90, true).unwrap();
     assert!(depth > d.balances[1] * U256::from(3) / U256::from(10));
     let mut free = d;
     free.fee = U256::ZERO;
     assert!(balancer_math::amount_out(&free, 1, 0, depth).is_some());
+}
+
+#[test]
+fn smallest_exact_input_reaches_each_historical_target_and_one_less_does_not() {
+    use std::collections::BTreeMap;
+    let directory = archive(include_bytes!(
+        "data/first_run_dex_2026-11-26/ranges_ethereum_directory.json.gz"
+    ));
+    let quotes = archive(include_bytes!(
+        "data/first_run_dex_2026-11-26/ranges_ethereum_quotes.json.gz"
+    ));
+    let mut vectors = BTreeMap::new();
+    let mut checked = 0usize;
+    for p in directory["pools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["initialized"] == true)
+    {
+        let d = market(p);
+        let pool = p["pool"].as_str().unwrap();
+        let mut calls = BTreeMap::new();
+        for q in quotes["markets"][pool]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|q| q[4].is_number())
+        {
+            let i = q[0].as_u64().unwrap() as usize;
+            let j = q[1].as_u64().unwrap() as usize;
+            let target = if q[2] == "In" { qty(&q[4]) } else { qty(&q[3]) };
+            if target.is_zero() {
+                continue;
+            }
+            let (n, out) = balancer_math::for_output(&d, i, j, target)
+                .unwrap_or_else(|| panic!("{pool} {i}->{j} unreachable {target} from {q}"));
+            assert!(out >= target);
+            if q[2] == "In" {
+                assert!(n <= qty(&q[3]), "{pool} {i}->{j} paid more on {q}");
+            }
+            let prior = n.checked_sub(U256::ONE).unwrap();
+            let less = balancer_math::amount_out(&d, i, j, prior);
+            assert!(
+                less.is_none_or(|v| v < target),
+                "{pool} {i}->{j} cheaper than {n} for {target}"
+            );
+            calls.insert((i, j, n), Some(out));
+            calls.insert((i, j, prior), less);
+            checked += 1;
+        }
+        if !calls.is_empty() {
+            let rows: Vec<_> = calls
+                .into_iter()
+                .map(|((i, j, n), v)| {
+                    serde_json::json!([i, j, n.to_string(), v.map(|credit| credit.to_string())])
+                })
+                .collect();
+            vectors.insert(pool, rows);
+        }
+    }
+    assert!(checked >= 800);
+    if let Some(path) = std::env::var_os("ARB_RANGES_BOUNDARIES") {
+        std::fs::write(
+            path,
+            serde_json::to_vec(&serde_json::json!({
+                "selector": directory["selector"], "markets": vectors, "targets": checked
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    }
 }

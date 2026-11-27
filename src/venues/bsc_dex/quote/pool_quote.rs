@@ -593,7 +593,7 @@ pub fn swap(
             let r = if exact_in {
                 balancer_math::amount_out(d, i.into(), j.into(), amount).map(|o| (amount, o))
             } else {
-                balancer_math::amount_in(d, i.into(), j.into(), amount).map(|x| (x, amount))
+                balancer_math::for_output(d, i.into(), j.into(), amount)
             };
             r.map(|(amount_in, amount_out)| Swapped {
                 amount_in,

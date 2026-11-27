@@ -133,11 +133,23 @@ jobs:
           echo "HEAD $(git rev-parse HEAD); всего наборов $i"
       - name: Тесты части
         env:
+          ARB_RANGES_BOUNDARIES: ${{ runner.temp }}/ranges-boundaries.json
           ARB_CARBON_ALLOCATION_EXPORT: ${{ runner.temp }}/carbon-order-vectors.json
         run: |
           extra=""
           if [ "${{ matrix.shard }}" = "0" ]; then extra="--lib --bins"; fi
           cargo test --locked --no-fail-fast $extra ${{ steps.pick.outputs.args }}
+      - name: Compare minimum exact-input debits and their predecessors with the official Ranges Router
+        if: inputs.ethereum_open_archive && contains(steps.pick.outputs.args, '--test puzzle_ranges_ethereum')
+        run: |
+          python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0
+          python scripts/record_ranges_quotes.py "$RUNNER_TEMP/ranges-boundaries.json.gz" --requests "$RUNNER_TEMP/ranges-boundaries.json"
+      - uses: actions/upload-artifact@v4
+        if: inputs.ethereum_open_archive && contains(steps.pick.outputs.args, '--test puzzle_ranges_ethereum')
+        with:
+          name: ranges-ethereum-debit-boundaries
+          path: ${{ runner.temp }}/ranges-boundaries.json*
+          if-no-files-found: error
       - if: matrix.shard == 0 && inputs.ethereum_open_archive
         uses: actions/upload-artifact@v4
         with:

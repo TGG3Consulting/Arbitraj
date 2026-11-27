@@ -41,7 +41,7 @@ use super::balancer_v3_pool::on_swap;
 use super::balancer_v3_weighted::{complement, mul_div_up};
 
 /// Курс с округлением вверх (computeRateRoundUp, ScalingHelpers.sol L212-L220). Ошибок нет.
-fn rate_up(r: U256) -> U256 {
+pub(super) fn rate_up(r: U256) -> U256 {
     if (r / one()) * one() == r {
         r
     } else {

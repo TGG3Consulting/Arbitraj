@@ -214,6 +214,15 @@ pub fn amount_in(d: &VaultPoolData, i: usize, j: usize, amount_out: U256) -> Opt
     div_up(down, complement(d.fee))
 }
 
+/// Debit and payout of the settlement path when the route planner requests a target output.
+pub fn for_output(d: &VaultPoolData, i: usize, j: usize, target: U256) -> Option<(U256, U256)> {
+    if super::puzzle_ranges::active(d) {
+        super::puzzle_ranges::first_debit(d, i, j, target)
+    } else {
+        amount_in(d, i, j, target).map(|input| (input, target))
+    }
+}
+
 /// Балансы пула × множители точности (18 знаков). None — переполнение или длины не совпали.
 fn upscaled(d: &VaultPoolData) -> Option<Vec<U256>> {
     if d.balances.len() != d.scaling.len() {

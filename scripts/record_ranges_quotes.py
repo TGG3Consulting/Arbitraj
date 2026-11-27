@@ -33,12 +33,23 @@ def grid(p):
                     yield [i,j,exact,n],(sig,ARGS,[p["pool"],a,b,n,OWNER,b""])
 
 
-def quotes(endpoint):
+def quotes(endpoint, expected=None):
     directory=json.loads(gzip.decompress(DIRECTORY.read_bytes()))
+    if expected is not None and expected["selector"] != directory["selector"]:
+        raise ValueError("wallet boundaries use another block")
     router=directory["roles"]["router"]
     def capture(p):
         c=Capture(dict(endpoint=endpoint,selector=AT))
-        rows=[];cases=list(grid(p))
+        rows=[]
+        if expected is None:
+            cases=list(grid(p))
+        else:
+            cases=[]
+            for i,j,n,_ in expected["markets"].get(p["pool"],[]):
+                n=int(n)
+                op=("querySwapSingleTokenExactIn(address,address,address,uint256,address,bytes)",
+                    ARGS,[p["pool"],p["tokens"][i],p["tokens"][j],n,OWNER,b""])
+                cases.append(([i,j,"In",n],op))
         for k in range(0,len(cases),8):
             group=cases[k:k+8]
             # Vault.quote writes ephemeral virtual balances. Every row starts from the same parent.
@@ -63,6 +74,11 @@ def quotes(endpoint):
                     if not isinstance(error,dict) or error.get("code")!=3 or len(error.get("data",""))<10:
                         raise ValueError(("unconfirmed pool revert",p["pool"],key,error))
                     rows.append([*key,error["data"][:10]])
+        if expected is not None:
+            for row, (_,_,_,value) in zip(rows,expected["markets"].get(p["pool"],[]),strict=True):
+                actual=row[4] if isinstance(row[4],int) else None
+                if actual != (None if value is None else int(value)):
+                    raise ValueError(("wallet boundary differs from Router",p["pool"],row,value))
         return p["pool"],rows
     with ThreadPoolExecutor(max_workers=2) as workers:
         rows=dict(workers.map(capture,[p for p in directory["pools"] if p["initialized"]]))
@@ -71,7 +87,7 @@ def quotes(endpoint):
 
 if __name__=="__main__":
     a=argparse.ArgumentParser(description=__doc__);a.add_argument("out",type=Path)
-    a.add_argument("--endpoint",default=ENDPOINT);args=a.parse_args()
-    data=quotes(args.endpoint)
+    a.add_argument("--requests",type=Path);a.add_argument("--endpoint",default=ENDPOINT);args=a.parse_args()
+    data=quotes(args.endpoint,json.loads(args.requests.read_text()) if args.requests else None)
     args.out.write_bytes(gzip.compress(json.dumps(data,separators=(",",":")).encode(),mtime=0))
     print("Recorded",sum(map(len,data["markets"].values())),"on-chain quotes")

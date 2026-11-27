@@ -17,6 +17,7 @@ interface ISafePair {function factory() external view returns(address); function
 interface ISafeNativeRouter {
     function factory() external view returns(address);
     function WETH() external view returns(address);
+    function getAmountsOut(uint256,address[] calldata) external view returns(uint256[] memory);
     function swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[] calldata,address,uint256) external;
 }
 interface ISafeTrade {
@@ -72,6 +73,35 @@ contract SafeSwapAdapter {
                 trade.swapRouter()==address(router)),"roles");
         path=new address[](2);path[0]=input;path[1]=output;
     }
+    function _terms(address[] memory path,uint256 amount,bool separate) private view returns(uint256 principal,uint256 fee) {
+        fee=_fee(path,amount);
+        principal=amount;
+        bool buy=path[0]==address(wrapped);
+        if(!separate && fee!=0) {
+            if(buy) {
+                // fee(n)=floor(n*rate/den). Some isolated one-wei budgets have no exact split.
+                // An EOA may still send the separately quoted fee for those orders.
+                uint256 rate=trade.feePercent();
+                uint256 den=trade.percent();
+                principal=amount-amount*rate/(den+rate);
+                fee=_fee(path,principal);
+                if(principal+fee>amount) {--principal;fee=_fee(path,principal);}
+                require(principal!=0 && principal+fee==amount,"split");
+            } else require(path[1]==address(wrapped) && feeReserve>=fee,"fee advance");
+        }
+    }
+
+    // Amounts for the indicated module account. The included transaction still
+    // checks the actual terminal minimum and can decline a halted or restricted pair.
+    function quote(address input,address output,uint256 amount,bool separate) external view returns(uint256 net,uint256 fee) {
+        address[] memory path=_assets(input,output);
+        (uint256 principal,uint256 charged)=_terms(path,amount,separate);
+        uint256[] memory gross=router.getAmountsOut(principal,path);
+        require(gross.length==2 && gross[0]==principal && (address(trade)==address(0) || address(trade).balance==0),"quote");
+        net=gross[1];
+        if(!separate && input!=address(wrapped)) net-=charged;
+        return (net,charged);
+    }
     function _move(ISafeAsset token,bytes memory data) private {
         (bool ok,bytes memory result)=address(token).call(data);
         require(ok && (result.length==0 || abi.decode(result,(bool))),"asset");
@@ -92,21 +122,8 @@ contract SafeSwapAdapter {
         entered=true;
         address[] memory path=_assets(o.input,o.output);
         require(o.recipient!=factory.getPair(o.input,o.output),"recipient");
-        uint256 fee=_fee(path,o.amount);
-        uint256 principal=o.amount;
+        (uint256 principal,uint256 fee)=_terms(path,o.amount,separate);
         bool buy=o.input==address(wrapped);
-        if(!separate && fee!=0) {
-            if(buy) {
-                // fee(n)=floor(n*rate/den). Some isolated one-wei budgets have no exact split.
-                // An EOA may still send the separately quoted fee for those orders.
-                uint256 rate=trade.feePercent();
-                uint256 den=trade.percent();
-                principal=o.amount-o.amount*rate/(den+rate);
-                fee=_fee(path,principal);
-                if(principal+fee>o.amount) {--principal;fee=_fee(path,principal);}
-                require(principal!=0 && principal+fee==o.amount,"split");
-            } else require(o.output==address(wrapped) && feeReserve>=fee,"fee advance");
-        }
         require(msg.value==(separate?fee:0),"fee value");
         if(address(trade)!=address(0)) require(address(trade).balance==0,"fee balance");
         ISafeAsset src=ISafeAsset(o.input);ISafeAsset dst=ISafeAsset(o.output);

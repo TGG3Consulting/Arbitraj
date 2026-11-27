@@ -1,0 +1,957 @@
+{
+  "revision": "be9967c3f0d3ccd06c871bab0d16beb3304de719",
+  "networks": {
+    "base": {
+      "captured": "2026-11-26T15:55:10+00:00",
+      "rows": [
+        {
+          "rank": 1,
+          "id": "8691",
+          "name": "Aero Slipstream",
+          "usd24h": 656261004,
+          "path": "dexs/aero-lite/index.ts",
+          "source_sha256": "75674bb248540bd84a21ad3768898574d267767b554748815729a76fbd5a609a",
+          "line_ranges": "29,39-40,46-50,100-122,176-179",
+          "kind": "factory",
+          "profiles": [
+            "aero-slipstream-base"
+          ],
+          "domains": [
+            {
+              "profile": "aero-slipstream-base",
+              "setting": "dex.factory",
+              "address": "0x9cb220581b91b0c83223012fe69688b92ad07a76",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "MetaDEX регистрирует пары через PoolCreated и учитывает их Swap. Старый Lite в этой методике применяется исключительно на Arc.",
+          "evidence": "metadex_base.json"
+        },
+        {
+          "rank": 2,
+          "id": "2198",
+          "name": "Uniswap V3",
+          "usd24h": 239133652,
+          "path": "dexs/uniswap-v3.ts",
+          "source_sha256": "b86a055f3aa881b175523d68a281784f5f3035469f6b34907b12bcddebcccb33",
+          "line_ranges": "76-91,161-177,195-208,329",
+          "kind": "dataset",
+          "profiles": [
+            "uniswap-v3-base"
+          ],
+          "domains": [
+            {
+              "profile": "uniswap-v3-base",
+              "setting": "dex.factory",
+              "address": "0x33128a8fc17869897dce68ed026d694621f6fdfd",
+              "literal_in_adapter": false
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Dune dex.trades отбирает project=uniswap/version=3 по сети. У контрольного эмитента фабрика и обратная регистрация совпадают. Строки полного суточного расчёта Dune отдельно не выгружены.",
+          "evidence": "llama_top_contracts.json.gz"
+        },
+        {
+          "rank": 3,
+          "id": "2769",
+          "name": "PancakeSwap AMM V3",
+          "usd24h": 108802348,
+          "path": "dexs/pancakeswap-v3.ts",
+          "source_sha256": "cb5c662ce8d4a62398515bc30b89c7c5d832aedbf9c823381b9fcff99b610401",
+          "line_ranges": "53-56,106-114,138-148,199-205,265-270",
+          "kind": "factory",
+          "profiles": [
+            "pancakeswap-v3-base"
+          ],
+          "domains": [
+            {
+              "profile": "pancakeswap-v3-base",
+              "setting": "dex.factory",
+              "address": "0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Фабрика регистрирует V3-пулы. В topic Swap Pancake включены обе protocolFees; у контрольного пула проверена обратная регистрация.",
+          "evidence": "llama_top_contracts.json.gz"
+        },
+        {
+          "rank": 4,
+          "id": "4524",
+          "name": "Aerodrome Slipstream",
+          "usd24h": 95324533,
+          "path": "dexs/aerodrome-slipstream/index.ts",
+          "source_sha256": "df2ab5e324bee0ca1d83502339997c04e8eecde45440ae79283f89f8def3340a",
+          "line_ranges": "17-38,50-52",
+          "kind": "partial",
+          "profiles": [
+            "aerodrome-slipstream",
+            "aerodrome-slipstream-2",
+            "aerodrome-slipstream-3"
+          ],
+          "domains": [
+            {
+              "profile": "aerodrome-slipstream",
+              "setting": "dex.factory",
+              "address": "0x5e7bb104d84c7cb9b682aac2f3d509f5f406809a",
+              "literal_in_adapter": true
+            },
+            {
+              "profile": "aerodrome-slipstream-2",
+              "setting": "dex.factory",
+              "address": "0xade65c38cd4849adba595a4323a8c7ddfe89716a",
+              "literal_in_adapter": true
+            },
+            {
+              "profile": "aerodrome-slipstream-3",
+              "setting": "dex.factory",
+              "address": "0xf8f2eb4940cfe7d13603dddd87f123820fc061ef",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [
+            "0x9592cd9b267748cbfbde90ac9f7df3c437a6d51b"
+          ],
+          "description": "Суточный расчёт включает четыре фабрики. У трёх есть отдельные торговые профили. Ранняя 0x9592… имеет 22 зарегистрированные пары и собственный реестр.",
+          "evidence": "llama_top_contracts.json.gz"
+        },
+        {
+          "rank": 5,
+          "id": "5690",
+          "name": "Uniswap V4",
+          "usd24h": 20199511,
+          "path": "dexs/uniswap-v4.ts",
+          "source_sha256": "3c8aefb5c17337ed126202af7f1f64415a9739ec4698b6520fd44ca2160f2726",
+          "line_ranges": "116-120,86-88,369-395",
+          "kind": "manager",
+          "profiles": [
+            "uniswap-v4-base"
+          ],
+          "domains": [
+            {
+              "profile": "uniswap-v4-base",
+              "setting": "dex.pool_manager",
+              "address": "0x498581ff718922c3f8e6a244956af099b2652b2b",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Swap и ModifyLiquidity общего PoolManager. Поручение выбирает конкретный PoolId и разрешённый hook; общий оборот включает и другие ключи.",
+          "evidence": "llama_top_contracts.json.gz"
+        },
+        {
+          "rank": 6,
+          "id": "5919",
+          "name": "Hanji Protocol",
+          "usd24h": 13763985,
+          "path": "dexs/hanji/index.ts",
+          "source_sha256": "88f71d651a1754db8c13a0ec709cbbfc8eee3cf218c33f142d558e2a8489fdcb",
+          "line_ranges": "6-13,46-55,117-132,152-160",
+          "kind": "registry",
+          "profiles": [],
+          "domains": [],
+          "other_source_addresses": [
+            "0xc7264db7c78dd418632b73a415595c7930a9eea4"
+          ],
+          "description": "Фабрика V2 регистрирует книги OnchainCLOBCreated. OrderPlaced учитывается по агрессивно исполненному объёму. Штатный Hanji использует адреса книг.",
+          "evidence": "hanji_base.json"
+        },
+        {
+          "rank": 7,
+          "id": "7984",
+          "name": "Kipseli",
+          "usd24h": 7411559,
+          "path": "dexs/kipseli/index.ts",
+          "source_sha256": "d1953e9e4a1d37429164b5c01f1a795dd6d8ebba03609bed57899b20b001dae2",
+          "line_ranges": "6-31,48-58",
+          "kind": "conditional",
+          "profiles": [],
+          "domains": [],
+          "other_source_addresses": [
+            "0x1dc4a586009dfc09c30749f0dd8e34210cd49184",
+            "0x16c31c7bada26242cf5d8f0485d1b2e708c804a1",
+            "0xc2be7b94d5498b1aceb914f3a1dec4ce502d235f"
+          ],
+          "description": "Три исторических эмитента и исключения получателей заданы раздельно. Для текущей реализации собственное исполнение требует права на подписанные котировки.",
+          "evidence": "kipseli_base.json"
+        },
+        {
+          "rank": 8,
+          "id": "8306",
+          "name": "Metric V1",
+          "usd24h": 7381567,
+          "path": "dexs/metric-v1/index.ts",
+          "source_sha256": "f0b046ffe8a2cc23f543d764f8744007a44aec4af00e07f4849085defd70ebe4",
+          "line_ranges": "37-59,73-75",
+          "kind": "factory",
+          "profiles": [
+            "metric-base"
+          ],
+          "domains": [
+            {
+              "profile": "metric-base",
+              "setting": "dex.factory",
+              "address": "0x2a53833cc95548cf52c7b159110e22d3a9018f32",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "PoolCreated и Swap у действующей фабрики. Учёт прежней фабрики завершился 22 сентября 2026 года.",
+          "evidence": "metric_base.json"
+        },
+        {
+          "rank": 9,
+          "id": "9172",
+          "name": "Aero Basic",
+          "usd24h": 5432210,
+          "path": "dexs/aero-v2/index.ts",
+          "source_sha256": "7aff2c45c6f3c0f9a902d91abc1ced1581a7ae9e19cce13ef8efd447bcf0e1a4",
+          "line_ranges": "15-24,32-34,52-66",
+          "kind": "factory",
+          "profiles": [
+            "aero-stable-base",
+            "aero-volatile-base"
+          ],
+          "domains": [
+            {
+              "profile": "aero-stable-base",
+              "setting": "dex.factory",
+              "address": "0x78589e876edcebdce72ee3436ab3c9ad3a7cef2d",
+              "literal_in_adapter": true
+            },
+            {
+              "profile": "aero-volatile-base",
+              "setting": "dex.factory",
+              "address": "0x8e6a9fcd1d638cc760ffba397605fe3355de76d2",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Две фабрики Basic порождают отдельные пары. Объём собирается по Swap каждого физического пула.",
+          "evidence": "aero_basic_base.json"
+        },
+        {
+          "rank": 10,
+          "id": "3450",
+          "name": "Aerodrome V1",
+          "usd24h": 5006447,
+          "path": "dexs/aerodrome/index.ts",
+          "source_sha256": "5d9a20bf0f375169cea04f01efba959b992fb1e8c22a89c891e7a25d87b5aa62",
+          "line_ranges": "15-20,26-29,99-111,171-184",
+          "kind": "factory",
+          "profiles": [
+            "aerodrome-base"
+          ],
+          "domains": [
+            {
+              "profile": "aerodrome-base",
+              "setting": "dex.factory",
+              "address": "0x420dd381b31aef6683db6b902084cb0ffece40da",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "У Classic своя фабрика; PoolCreated выбирает пары, затем считаются Swap. GaugeFactory служит для учёта вознаграждений.",
+          "evidence": "base.json"
+        },
+        {
+          "rank": 11,
+          "id": "7260",
+          "name": "ElfomoFi",
+          "usd24h": 4466620,
+          "path": "dexs/elfomofi/index.ts",
+          "source_sha256": "bea31045f2dc8de653782e2e644e037c57b2ae3dcda44a939ce20bd3142f7a82",
+          "line_ranges": "6-9,27-33,125-129",
+          "kind": "router",
+          "profiles": [
+            "elfomofi"
+          ],
+          "domains": [
+            {
+              "profile": "elfomofi",
+              "setting": "dex.pmm_pool",
+              "address": "0xf0f0f0f0fb0d738452efd03a28e8be14c76d5f73",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "ElfomoTrade одного контракта. VaultMetrics измеряет другие показатели. Валидные размеры и активы проверяются для кошелька.",
+          "evidence": "elfomofi_base.json"
+        },
+        {
+          "rank": 12,
+          "id": "3481",
+          "name": "Solidly V3",
+          "usd24h": 2404728,
+          "path": "factory/uniV3.ts",
+          "source_sha256": "4c1791ea9b2f85411682d68922cae7d0c1f66925f7df205d1d9d6f941fd4676c",
+          "line_ranges": "813-818",
+          "kind": "factory",
+          "profiles": [
+            "solidly-v3-base"
+          ],
+          "domains": [
+            {
+              "profile": "solidly-v3-base",
+              "setting": "dex.factory",
+              "address": "0x70fe4a44ea505cfa3a57b95cf2862d4fd5f0f687",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Отдельная Base factory Solidly V3. Кошельковое исполнение закрепляет физический пул и проверяет полный вход.",
+          "evidence": "solidly_v3_base.json"
+        },
+        {
+          "rank": 13,
+          "id": "8180",
+          "name": "Karta Card",
+          "usd24h": 1938503,
+          "path": "helpers/rainCard.ts",
+          "source_sha256": "749e62c6bc90c92181924a72db0852351b6a507bec4eb49e3228d11ed401e8f5",
+          "line_ranges": "117-128",
+          "kind": "card",
+          "profiles": [],
+          "domains": [],
+          "other_source_addresses": [
+            "0xc81e2084a8e5aac41ddf1fa0b9203aa81f332fa5"
+          ],
+          "description": "Rain учитывает карточные расходы Karta через collateralProxy. Обменная пара и запас для спотовой сделки этой записью не задаются.",
+          "evidence": "base.json"
+        },
+        {
+          "rank": 14,
+          "id": "7601",
+          "name": "Lunarbase",
+          "usd24h": 1465852,
+          "path": "dexs/lunarbase/index.ts",
+          "source_sha256": "9d56fee458bda95d6a4363c74b3442f9d516b7ab45b20b425a691a4a0489965f",
+          "line_ranges": "14-39,61-64,100-110",
+          "kind": "partial",
+          "profiles": [
+            "lunarbase"
+          ],
+          "domains": [
+            {
+              "profile": "lunarbase",
+              "setting": "dex.pmm_pool",
+              "address": "0x0000efc4ec03a7c47d3a38a9be7ff1d52dd01b99",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "В Base секции несколько поколений. С действующим профилем совпадает один native ETH/USDC. Архивы отдельных размещений и основной эмитент различаются.",
+          "evidence": "lunarbase.json"
+        },
+        {
+          "rank": 15,
+          "id": "8934",
+          "name": "BaiBai",
+          "usd24h": 978176,
+          "path": "dexs/baibai.ts",
+          "source_sha256": "7549303e8a2fe739f262dd33a37aa1a52dc4711530d0bfb2b1c8926f7cd07ec3",
+          "line_ranges": "7-19,28-34",
+          "kind": "router",
+          "profiles": [
+            "baibai"
+          ],
+          "domains": [
+            {
+              "profile": "baibai",
+              "setting": "dex.pmm_pool",
+              "address": "0x98c1d9e102eb2806d902b13186bdc7892ac4ffba",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Две версии Fill одного EntryPoint. Пул и право конкретного пользователя проверяются по отдельному состоянию рынка.",
+          "evidence": "baibai_base.json"
+        },
+        {
+          "rank": 16,
+          "id": "1461",
+          "name": "WOOFi Swap",
+          "usd24h": 844875,
+          "path": "dexs/woofi/index.ts",
+          "source_sha256": "fb482fc914aaffed4bb517d65062daf50df8cb937bee4fca1b25e93298c2886d",
+          "line_ranges": "10-15,47-61",
+          "kind": "aggregate",
+          "profiles": [
+            "woofi-swap"
+          ],
+          "domains": [
+            {
+              "profile": "woofi-swap",
+              "setting": "dex.pmm_pool",
+              "address": "0x5520385bfcf07ec87c4c53a7d8d65595dff69fa4",
+              "literal_in_adapter": false
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "API /stat возвращает volume_usd для всей Base без адреса пула. Действующий WooPPV2 имеет отдельное доказательство; разбивка агрегата по кассам отсутствует.",
+          "evidence": "woofi_base.json"
+        },
+        {
+          "rank": 17,
+          "id": "8849",
+          "name": "MEV-X Homelander",
+          "usd24h": 758330,
+          "path": "dexs/homelander.ts",
+          "source_sha256": "a485c1e647d6784768dba4da2985a6ad9fdec25f0fabe1683c58aa76305ef427",
+          "line_ranges": "4-16,24-29",
+          "kind": "shared",
+          "profiles": [],
+          "domains": [],
+          "other_source_addresses": [],
+          "description": "Homelander считает обмены сторонних пулов с плагином, отдельно исключает собственные арбитражные ноги. Измерены пулы Hydrex и QuickSwap; нового запаса здесь нет.",
+          "evidence": "homelander_base.json"
+        },
+        {
+          "rank": 18,
+          "id": "6365",
+          "name": "Hydrex Integral",
+          "usd24h": 714805,
+          "path": "factory/uniV3.ts",
+          "source_sha256": "4c1791ea9b2f85411682d68922cae7d0c1f66925f7df205d1d9d6f941fd4676c",
+          "line_ranges": "212-217",
+          "kind": "factory",
+          "profiles": [
+            "hydrex-integral"
+          ],
+          "domains": [
+            {
+              "profile": "hydrex-integral",
+              "setting": "dex.factory",
+              "address": "0x36077d39cdc65e1e3fb65810430e5b2c4d5fa29e",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Фабрика Algebra и регистрация реальных пулов совпадают. Котировка учитывает актуальную роль динамической комиссии.",
+          "evidence": "hydrex_base.json"
+        },
+        {
+          "rank": 19,
+          "id": "5317",
+          "name": "Fluid DEX",
+          "usd24h": 680960,
+          "path": "dexs/fluid-dex/index.ts",
+          "source_sha256": "ac59f1704b8067064786b2676efb04b28688bab27cbae826cebf35139024778b",
+          "line_ranges": "38-39,55-56,64-67,84-102",
+          "kind": "registry",
+          "profiles": [
+            "fluid-base"
+          ],
+          "domains": [
+            {
+              "profile": "fluid-base",
+              "setting": "dex.factory",
+              "address": "0x91716c4eda1fb55e84bf8b4c7085f84285c19085",
+              "literal_in_adapter": false
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Swap учитывается у рынков getAllPools(). Множество resolver и настроенной фабрики совпало на контрольном блоке.",
+          "evidence": "llama_top_contracts.json.gz"
+        },
+        {
+          "rank": 20,
+          "id": "2776",
+          "name": "SushiSwap V3",
+          "usd24h": 537478,
+          "path": "dexs/sushiswap-v3.ts",
+          "source_sha256": "ac9938b20211f66d7ba0c561b4686344bddc97d92eab05e19b4a59d97749b386",
+          "line_ranges": "7-12,71-80",
+          "kind": "factory",
+          "profiles": [
+            "sushiswap-v3-base"
+          ],
+          "domains": [
+            {
+              "profile": "sushiswap-v3-base",
+              "setting": "dex.factory",
+              "address": "0xc35dadb65012ec5796536bd9864ed8773abc74c4",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Адрес фабрики Sushi из сетевой записи совпал с pool.factory и getPool контрольного пула.",
+          "evidence": "llama_top_contracts.json.gz"
+        }
+      ]
+    },
+    "ethereum": {
+      "captured": "2026-11-26T15:56:09+00:00",
+      "rows": [
+        {
+          "rank": 1,
+          "id": "5690",
+          "name": "Uniswap V4",
+          "usd24h": 403415180,
+          "path": "dexs/uniswap-v4.ts",
+          "source_sha256": "3c8aefb5c17337ed126202af7f1f64415a9739ec4698b6520fd44ca2160f2726",
+          "line_ranges": "92-96,86-88,369-395",
+          "kind": "manager",
+          "profiles": [
+            "uniswap-v4-ethereum"
+          ],
+          "domains": [
+            {
+              "profile": "uniswap-v4-ethereum",
+              "setting": "dex.pool_manager",
+              "address": "0x000000000004444c5dc75cb358380d2e3de08a90",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Swap и ModifyLiquidity общего PoolManager. Поручение выбирает конкретный PoolId и разрешённый hook; общий оборот включает и другие ключи.",
+          "evidence": "llama_top_contracts.json.gz"
+        },
+        {
+          "rank": 2,
+          "id": "2198",
+          "name": "Uniswap V3",
+          "usd24h": 261930156,
+          "path": "dexs/uniswap-v3.ts",
+          "source_sha256": "b86a055f3aa881b175523d68a281784f5f3035469f6b34907b12bcddebcccb33",
+          "line_ranges": "76-91,161-177,195-208,322",
+          "kind": "dataset",
+          "profiles": [
+            "uniswap_v3"
+          ],
+          "domains": [
+            {
+              "profile": "uniswap_v3",
+              "setting": "dex.factory",
+              "address": "0x1f98431c8ad98523631ae4a59f267346ea31f984",
+              "literal_in_adapter": false
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Dune dex.trades отбирает project=uniswap/version=3 по сети. У контрольного эмитента фабрика и обратная регистрация совпадают. Строки полного суточного расчёта Dune отдельно не выгружены.",
+          "evidence": "llama_top_contracts.json.gz"
+        },
+        {
+          "rank": 3,
+          "id": "5317",
+          "name": "Fluid DEX",
+          "usd24h": 149951630,
+          "path": "dexs/fluid-dex/index.ts",
+          "source_sha256": "ac59f1704b8067064786b2676efb04b28688bab27cbae826cebf35139024778b",
+          "line_ranges": "32-33,49-50,64-67,84-102",
+          "kind": "registry",
+          "profiles": [
+            "fluid-ethereum"
+          ],
+          "domains": [
+            {
+              "profile": "fluid-ethereum",
+              "setting": "dex.factory",
+              "address": "0x91716c4eda1fb55e84bf8b4c7085f84285c19085",
+              "literal_in_adapter": false
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Swap учитывается у рынков getAllPools(). Множество resolver и настроенной фабрики совпало на контрольном блоке.",
+          "evidence": "llama_top_contracts.json.gz"
+        },
+        {
+          "rank": 4,
+          "id": "8306",
+          "name": "Metric V1",
+          "usd24h": 111089319,
+          "path": "dexs/metric-v1/index.ts",
+          "source_sha256": "f0b046ffe8a2cc23f543d764f8744007a44aec4af00e07f4849085defd70ebe4",
+          "line_ranges": "37-59,73-75",
+          "kind": "factory",
+          "profiles": [
+            "metric-ethereum"
+          ],
+          "domains": [
+            {
+              "profile": "metric-ethereum",
+              "setting": "dex.factory",
+              "address": "0x2a53833cc95548cf52c7b159110e22d3a9018f32",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "PoolCreated и Swap у действующей фабрики. Учёт прежней фабрики завершился 22 сентября 2026 года.",
+          "evidence": "metric_ethereum.json"
+        },
+        {
+          "rank": 5,
+          "id": "3",
+          "name": "Curve DEX",
+          "usd24h": 110588639,
+          "path": "dexs/curve/index.ts",
+          "source_sha256": "6cfe9811edcbddb0bf10ba4580cac5f4cc791bcb23e3f4512cee7d00e9bb4415",
+          "line_ranges": "11-53,585-599,607-624",
+          "kind": "aggregate",
+          "profiles": [
+            "curve",
+            "curve-plain",
+            "curve-twocrypto-ng",
+            "curve-tricrypto-ng"
+          ],
+          "domains": [
+            {
+              "profile": "curve",
+              "setting": "dex.factory",
+              "address": "0x6a8cbed756804b16e05e741edabd5cb544ae21bf",
+              "literal_in_adapter": true
+            },
+            {
+              "profile": "curve-plain",
+              "setting": "dex.factory",
+              "address": "0xb9fc157394af804a3578134a6585c0dc9cc990d4",
+              "literal_in_adapter": true
+            },
+            {
+              "profile": "curve-twocrypto-ng",
+              "setting": "dex.factory",
+              "address": "0x98ee851a00abee0d95d08cf4ca2bdce32aeaaf7f",
+              "literal_in_adapter": true
+            },
+            {
+              "profile": "curve-tricrypto-ng",
+              "setting": "dex.factory",
+              "address": "0x0c0e5f2ff0ff18a3be9b835635039256dc4b4963",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Первичный расчёт использует trading_volume сети Curve API. Для резервной ветви перечислены фабрики. Все пулы суточного агрегата и их доли не установлены.",
+          "evidence": "curve_ethereum.json"
+        },
+        {
+          "rank": 6,
+          "id": "8691",
+          "name": "Aero Slipstream",
+          "usd24h": 108180564,
+          "path": "dexs/aero-lite/index.ts",
+          "source_sha256": "75674bb248540bd84a21ad3768898574d267767b554748815729a76fbd5a609a",
+          "line_ranges": "32,39-40,46-50,100-122,176-179",
+          "kind": "factory",
+          "profiles": [
+            "aero-slipstream-ethereum"
+          ],
+          "domains": [
+            {
+              "profile": "aero-slipstream-ethereum",
+              "setting": "dex.factory",
+              "address": "0xf4fd2e6c5b60c5b365cd1b96dd6245e6d60414c2",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "MetaDEX регистрирует пары через PoolCreated и учитывает их Swap. Старый Lite в этой методике применяется исключительно на Arc.",
+          "evidence": "metadex_ethereum.json"
+        },
+        {
+          "rank": 7,
+          "id": "7979",
+          "name": "FermiSwap",
+          "usd24h": 44565265,
+          "path": "dexs/fermiswap/index.ts",
+          "source_sha256": "3ad48cc54812aed6ebaf325c526a1c96aa9aed15c6952605133077fa96249825",
+          "line_ranges": "7-27",
+          "kind": "conditional",
+          "profiles": [],
+          "domains": [],
+          "other_source_addresses": [
+            "0xb1076fe3ab5e28005c7c323bac5ac06a680d452e",
+            "0x5979458912f80b96d30d4220af8e2e4925a33320",
+            "0xf6d5b2fefec7b420d9990b95790adfd3d4c4f977"
+          ],
+          "description": "Методика учитывает три эмитента Fermi. Для подписанной операции нужны активный слот и доступная площадка на данном блоке.",
+          "evidence": "fermi_ethereum.json"
+        },
+        {
+          "rank": 8,
+          "id": "9436",
+          "name": "Stelaxis",
+          "usd24h": 29873142,
+          "path": "dexs/stelaxis/index.ts",
+          "source_sha256": "934268196b7f03c4ad5a9c38e8977b967408732a323d8f1542cb40d6dc0e7a1b",
+          "line_ranges": "5-15",
+          "kind": "conditional",
+          "profiles": [],
+          "domains": [],
+          "other_source_addresses": [
+            "0x77047af6cd8f7f84d96a020a2833d24916b75fde"
+          ],
+          "description": "Swapped выделенного контракта Stelaxis. На контрольной высоте все десять направлений пяти пар были неактивны.",
+          "evidence": "stelaxis_ethereum.json"
+        },
+        {
+          "rank": 9,
+          "id": "382",
+          "name": "Pendle V2",
+          "usd24h": 20832242,
+          "path": "dexs/pendle/index.ts",
+          "source_sha256": "d98f1c883ee032d5e3ebb72c61ea4ac7c586539a3698982bd95cfb9f6d1b7d83",
+          "line_ranges": "18-29,48-55,65-73,82-89",
+          "kind": "partial",
+          "profiles": [
+            "pendle"
+          ],
+          "domains": [],
+          "other_source_addresses": [],
+          "description": "Вместе учитываются AMM Swap PT/SY и OrderFilledV2 лимитного роутера. Регистрация AMM не покрывает отдельные лимитные заявки.",
+          "evidence": "pendle_ethereum_registry.json.gz"
+        },
+        {
+          "rank": 10,
+          "id": "2803",
+          "name": "Native Swap",
+          "usd24h": 15988091,
+          "path": "dexs/native/index.ts",
+          "source_sha256": "6311b42cf5ee78d63f5c28900259ba3a39c82b143fbcb2995108d192cd1432bf",
+          "line_ranges": "10-22,25-36",
+          "kind": "rfq",
+          "profiles": [],
+          "domains": [],
+          "other_source_addresses": [],
+          "description": "RFQTrade собирается с noTarget по сети. Публичный Native API и адрес реальной кассы проверены отдельно; для полного объёма нужна атрибуция каждого эмитента.",
+          "evidence": "native_rfq_ethereum_public.json"
+        },
+        {
+          "rank": 11,
+          "id": "7599",
+          "name": "Lista DEX",
+          "usd24h": 14496845,
+          "path": "dexs/lista-dex/index.ts",
+          "source_sha256": "5b402f3f3d1eaa2550647fd77ca6f7037f0e8e813f2e63120ea26a3ce936ffda",
+          "line_ranges": "58-65,82-99,105-113,178-185",
+          "kind": "partial",
+          "profiles": [
+            "lista-dex-v3",
+            "lista-dex-stableswap"
+          ],
+          "domains": [
+            {
+              "profile": "lista-dex-v3",
+              "setting": "dex.factory",
+              "address": "0x956920f97690bdd76a6a10c7ba931dec14f61169",
+              "literal_in_adapter": true
+            },
+            {
+              "profile": "lista-dex-stableswap",
+              "setting": "dex.factory",
+              "address": "0xf6c9ffa64bd0ae8a068dd7b7d954c654a3e7f8a6",
+              "literal_in_adapter": false
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Учитываются отдельные V3 PoolCreated/Swap и stable TokenExchange из smartCollateralConfig. Допуск каждой пары зависит от состояния контракта.",
+          "evidence": "lista_ethereum.json"
+        },
+        {
+          "rank": 12,
+          "id": "9435",
+          "name": "Goliath AMM",
+          "usd24h": 13323690,
+          "path": "dexs/goliath/index.ts",
+          "source_sha256": "1cebd66bdc074b1f4ba5acf6bb4ad03fe88b623c3ee42355f36632f80a402865",
+          "line_ranges": "5-14",
+          "kind": "router",
+          "profiles": [
+            "goliath-lambda-ethereum"
+          ],
+          "domains": [
+            {
+              "profile": "goliath-lambda-ethereum",
+              "setting": "dex.factory",
+              "address": "0x4367985a63063fc970b009c6e599e9225181f551",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Swapped выделенной кассы Goliath. Метка swap через агрегатор не заменяет выплату этой кассы.",
+          "evidence": "goliath_ethereum.json"
+        },
+        {
+          "rank": 13,
+          "id": "6650",
+          "name": "Ondo Global Markets",
+          "usd24h": 12917349,
+          "path": "dexs/ondo-global-markets/index.ts",
+          "source_sha256": "352c9679e9a7bbc24a4cff3c589975d45f4d18faaf735089daab782bae219e44",
+          "line_ranges": "5-13,23-34,76-79",
+          "kind": "issuance",
+          "profiles": [],
+          "domains": [],
+          "other_source_addresses": [
+            "0x2c158bc456e027b2affccadf1bdbd9f5fc4c5c8c"
+          ],
+          "description": "TradeExecuted с attestationId и userId оценивает погашение и выпуск токенизированных бумаг. Обычный открытый спотовый пул этими данными не установлен.",
+          "evidence": "ethereum.json"
+        },
+        {
+          "rank": 14,
+          "id": "2197",
+          "name": "Uniswap V2",
+          "usd24h": 11707979,
+          "path": "dexs/uniswap-v2.ts",
+          "source_sha256": "00543a4d1355d88ec2149c03c6532ca92d24eee9f323a8c4e2c8f9403bed7e6c",
+          "line_ranges": "20-25,193-203,231-240",
+          "kind": "factory",
+          "profiles": [
+            "uniswap_v2"
+          ],
+          "domains": [
+            {
+              "profile": "uniswap_v2",
+              "setting": "dex.factory",
+              "address": "0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Фабрика V2 задаёт пары, учёт ведётся по их Swap при фильтрах методики.",
+          "evidence": "ethereum.json"
+        },
+        {
+          "rank": 15,
+          "id": "7984",
+          "name": "Kipseli",
+          "usd24h": 11417455,
+          "path": "dexs/kipseli/index.ts",
+          "source_sha256": "d1953e9e4a1d37429164b5c01f1a795dd6d8ebba03609bed57899b20b001dae2",
+          "line_ranges": "6-15,48-60",
+          "kind": "conditional",
+          "profiles": [],
+          "domains": [],
+          "other_source_addresses": [
+            "0x054f0377e07d2f460151f935dffc4d880017e63a"
+          ],
+          "description": "Исторический эмитент Kipseli на Ethereum подтверждён отдельными событиями. Право кошелька на свежую подписанную цену требует индивидуального допуска.",
+          "evidence": "llama_top_contracts.json.gz"
+        },
+        {
+          "rank": 16,
+          "id": "4222",
+          "name": "Ring Swap",
+          "usd24h": 10671270,
+          "path": "dexs/ring-dex.ts",
+          "source_sha256": "2c14e75094d6ab573de2db927bbaf40de437d147464f9cb9c2cdb25742742369",
+          "line_ranges": "13-19,40-52,78-86",
+          "kind": "factory",
+          "profiles": [
+            "ring-exchange-ethereum"
+          ],
+          "domains": [
+            {
+              "profile": "ring-exchange-ethereum",
+              "setting": "dex.factory",
+              "address": "0xeb2a625b704d73e82946d8d026e1f588eed06416",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Ring allPairs/i перечисляет пары. Swap учитывается с переводом единиц Few wrapped assets, роли обёрток проверены в торговом профиле.",
+          "evidence": "ethereum.json"
+        },
+        {
+          "rank": 17,
+          "id": "8531",
+          "name": "Tempest",
+          "usd24h": 8269320,
+          "path": "dexs/tempest/index.ts",
+          "source_sha256": "532db0c23694b82c6f68cc9a1990df652e1f62af07737b549956a74e9098ac50",
+          "line_ranges": "5-15",
+          "kind": "router",
+          "profiles": [
+            "tempest-lambda-ethereum"
+          ],
+          "domains": [
+            {
+              "profile": "tempest-lambda-ethereum",
+              "setting": "dex.factory",
+              "address": "0x00000003f1ec2379e79f58e12ec6c4f51ee92149",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Swapped выделенной кассы Tempest. Чистая выплата именно Tempest отделена от резервной маршрутизации Uniswap.",
+          "evidence": "propamm_router_ethereum.json.gz"
+        },
+        {
+          "rank": 18,
+          "id": "9157",
+          "name": "CommunityV3",
+          "usd24h": 6286851,
+          "path": "factory/uniV3.ts",
+          "source_sha256": "4c1791ea9b2f85411682d68922cae7d0c1f66925f7df205d1d9d6f941fd4676c",
+          "line_ranges": "745-750,955-960",
+          "kind": "factory",
+          "profiles": [
+            "communityv3"
+          ],
+          "domains": [
+            {
+              "profile": "communityv3",
+              "setting": "dex.factory",
+              "address": "0x00a38533c68327abe0cc265436e036066e2d6b38",
+              "literal_in_adapter": true
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "Фабрика CommunityV3 совпадает с реестром. Выплата и пределы пула подтверждены кошельковым архивом.",
+          "evidence": "community_v3_ethereum_wallets.json.gz"
+        },
+        {
+          "rank": 19,
+          "id": "3499",
+          "name": "Ekubo",
+          "usd24h": 5456180,
+          "path": "dexs/ekubo/index.ts",
+          "source_sha256": "77ffa70f80885d7432a5dce90ca598a8f1455c46598fba42af91c242845cab8b",
+          "line_ranges": "8-12,29-46",
+          "kind": "aggregate",
+          "profiles": [
+            "ekubo-v2-ethereum",
+            "ekubo-v3-ethereum"
+          ],
+          "domains": [
+            {
+              "profile": "ekubo-v2-ethereum",
+              "setting": "dex.ekubo_core",
+              "address": "0xe0e0e08a6a4b9dc7bd67bcb7aade5cf48157d444",
+              "literal_in_adapter": false
+            },
+            {
+              "profile": "ekubo-v3-ethereum",
+              "setting": "dex.ekubo_core",
+              "address": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+              "literal_in_adapter": false
+            }
+          ],
+          "other_source_addresses": [],
+          "description": "API Ekubo отдаёт volume по chainId и токену без физического core и PoolId. Есть проверенные торговые профили V2/V3; общая дневная сумма на них не распределена.",
+          "evidence": "ekubo_ethereum.json"
+        },
+        {
+          "rank": 20,
+          "id": "2116",
+          "name": "0x",
+          "usd24h": 5452218,
+          "path": "dexs/0x-rfq.ts",
+          "source_sha256": "e28a807dfee2b338885f84e93d3886f70c91145f8ec231d9c4c2d0c51f25b5ec",
+          "line_ranges": "9-17,29-45,57-64,71-90,105-123",
+          "kind": "rfq",
+          "profiles": [],
+          "domains": [],
+          "other_source_addresses": [
+            "0x00000000000004533fe15556b1e086bb1a72ceae",
+            "0xdef1c0ded9bec7f1a1670819833240f027b25eff"
+          ],
+          "description": "После 22.12.2025 учтены RFQ actions и 48-байтовые события зарегистрированных Settler. В смешанной сделке одна нога подтверждена двумя переводами одного маркетмейкера. API собственного предложения требует ключа.",
+          "evidence": "llama_top_0x_rfq.json.gz"
+        }
+      ]
+    }
+  }
+}

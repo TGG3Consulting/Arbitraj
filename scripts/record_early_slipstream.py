@@ -70,7 +70,9 @@ def scenario(url, tag, override, roles, market, funding, row, mode, deadline):
         for k,_ in prefix + [("pre_"+k,c) for k,c in balances] + [("post_"+k,c) for k,c in balances]:
             if int(results[k]["status"],16) != 1:
                 raise AssertionError((pool, mode, k, results[k].get("error")))
-        assert results["quote"]["returnData"].lower() == row["return_data"].lower()
+        # Last word is the measured quoter gas; the child block can update an observation.
+        actual = results["quote"]["returnData"].lower()
+        assert len(actual) == len(row["return_data"]) == 258 and actual[:194] == row["return_data"].lower()[:194]
         return results
     def number(results, k):
         return int(results[k]["returnData"],16)

@@ -1590,11 +1590,17 @@ def tables(network, snapshots, profiles):
                 "", "| ID | Площадка | 24 ч, USD | Адаптер объёмов | Адреса-кандидаты | Задача привязки |", "|---|---|---:|---|---|---|"])
     adapters = {r["id"]: r for r in data["llama-adapters"]["rows"]}
     volumes = volume.get("by_id", {})
+    top_data = read(Path("tests/data/first_run_dex_2026-11-26/llama_top_bindings.json"))
+    top = {item["id"]:item for item in top_data["networks"][network]["rows"]}
     for row in sorted(llama["rows"], key=lambda row: -volumes.get(row["id"], -1)):
         r = adapters[row["id"]]
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if base and str(row["id"]) == "7945":
+            ryze = read(Path("tests/data/first_run_dex_2026-11-26/base_recovered_markets.json"))["ryze"]
+            candidates = [ryze["factory"]["address"]]
+            task = "RYZE-RECON · адаптер объёма читает Swap двух пулов этой фабрики; 9 подписанных сделок сопоставлены с движениями кошельков"
         if str(row["id"]) in {"2644","7882"}:
             kind,role=("maverick","Factory") if str(row["id"])=="2644" else ("topaz","CLFactory")
             snapshot=base_launch_inventory.evidence(f"{kind}_v1_{network}_directory.json.gz")
@@ -1694,8 +1700,29 @@ def tables(network, snapshots, profiles):
         if not base and str(row["id"]) == "7979" and fermi.exists():
             candidates = [p["router"] for p in data_fermi["historical"]]
             task = "FERMI-01 · проверены два строителя, шлюз исполнения в разработке"
+        if scope := top.get(str(row["id"])):
+            ref = f"https://github.com/DefiLlama/dimension-adapters/blob/{top_data['revision']}/{scope['path']}"
+            # Сторонние SDK и служебные адреса на соседних сетях не являются торговыми доменами данной строки.
+            domains = [d["address"] for d in scope["domains"]]
+            source_addresses = scope["other_source_addresses"]
+            if domains or source_addresses:
+                candidates = list(dict.fromkeys(domains + source_addresses))
+            task = f"LL20 · {scope['description']}"
         out.append(f"| {row['id']} | {cell(row['name'])} | {volumes.get(row['id'], 'нет данных')} | [{cell(row['module'])}]({ref}) "
                    f"| {addresses(candidates)} | {task} |")
+    scope_note = (
+        "Из Base двадцатки обнаружено одно дополнительное размещение уже известной площадки. "
+        "У ранней фабрики Aerodrome Slipstream 22 пула, у двух положительна активная ликвидность. "
+        "За сутки с 61 830 752 по 62 262 756 найден один Swap. Karta учитывает карточные расчёты, "
+        "а Homelander повторно учитывает пулы сторонних AMM."
+        if base else
+        "В Ethereum двадцатке подтверждена отдельная касса Kipseli. Из 1452 событий за сутки "
+        "на одном обмене прослежены 3342,773397 USDC в кассу и 3346,310065 USDT получателю. "
+        "Для нового кошелька нужен доступ к подписанной цене. У Ondo подтверждены события выпуска и погашения, "
+        "у 0x — отдельная ликвидность маркетмейкера RFQ. В смешанной транзакции он получил 0,057127313126944295 WETH и выплатил токен из своей кассы; две предшествующие ноги исполнил Uniswap V4. [Квитанция и регистрация 0x Settler](../tests/data/first_run_dex_2026-11-26/llama_top_0x_rfq.json.gz)."
+    )
+    out.extend(["", scope_note + " [Сопоставление двадцатки](../tests/data/first_run_dex_2026-11-26/llama_top_bindings.json) "
+                "· [Канонические рынки и движения средств](../tests/data/first_run_dex_2026-11-26/llama_top_contracts.json.gz)."])
     out.extend(["", "#### Конфигурации Velora", "", "Проверены обозначения сети в исходном файле адаптера маршрутизации. "
                 "Тип каждой реализации и возможность прямого спотового исполнения требуют проверки.",
                 "", "| Адаптер | Ключ | Сетевой раздел | Адреса-кандидаты |", "|---|---|---|---|"])

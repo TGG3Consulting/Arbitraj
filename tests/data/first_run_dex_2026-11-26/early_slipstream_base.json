@@ -221,5 +221,69 @@
         "8204454004964828253310683"
       ]
     }
+  },
+  "registry_spacings": {
+    "aerodrome-slipstream-early": [
+      1,
+      50,
+      100,
+      200,
+      2000
+    ],
+    "aerodrome-slipstream": [
+      1,
+      50,
+      100,
+      200,
+      2000,
+      10
+    ],
+    "aerodrome-slipstream-2": [
+      1,
+      50,
+      100,
+      200,
+      2000,
+      10,
+      500
+    ],
+    "aerodrome-slipstream-3": [
+      1,
+      50,
+      100,
+      200,
+      2000,
+      500,
+      10,
+      80,
+      150
+    ]
+  },
+  "token_transfer_models": {
+    "0x4200000000000000000000000000000000000006": {
+      "name": "WETH9",
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x4200000000000000000000000000000000000006",
+      "runtime": "0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c"
+    },
+    "0x532f27101965dd16442e59d40670faf5ebb142e4": {
+      "name": "BrettToken",
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x532f27101965dd16442e59d40670faf5ebb142e4",
+      "runtime": "0xefa3416aea40af9097ea9c8f36044be496fffa1e75cdd0e46cafdaf5f6282c7b",
+      "owner": "0x0000000000000000000000000000000000000000",
+      "buyTotalFees": "0",
+      "sellTotalFees": "0",
+      "uniswapV2Pair": "0x404e927b203375779a6abd52a2049ce0adf6609b",
+      "swapEnabled": "True"
+    },
+    "0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4": {
+      "name": "ToshiToken",
+      "source": "https://sourcify.dev/server/v2/contract/8453/0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4",
+      "runtime": "0xe7bdb43a1da45069dfed4a1994fd277d3eb268eab3f73c23f97a573afffbc763",
+      "owner": "0x0000000000000000000000000000000000000000",
+      "buyTotalFees": "0",
+      "sellTotalFees": "0",
+      "uniswapV2Pair": "0xbfc74e1de81e81b0a807469502f6662cc238795e",
+      "swapEnabled": "False"
+    }
   }
 }

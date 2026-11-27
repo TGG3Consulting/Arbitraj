@@ -187,6 +187,13 @@ mod tests {
             assert_eq!(changed["cases"].as_array().unwrap().len(), 8);
             pairs.push(serde_json::json!({"network":network,"dex":id,"creation_code_hash":recorded["init_hash"]}));
         }
+        let aquila: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+            include_bytes!("../../tests/data/first_run_dex_2026-11-26/rubicon_aquila_ethereum.json.gz").as_slice(),
+        )).unwrap();
+        assert_eq!(aquila["selector"], eth["selector"]);
+        assert_eq!(aquila["live_rows"][0]["reserves"], serde_json::json!(["0","0"]));
+        assert_eq!(aquila["cases"].as_array().unwrap().len(), 8);
+        pairs.push(serde_json::json!({"network":"ethereum","dex":"rubicon-aquila-ethereum","creation_code_hash":aquila["init_hash"]}));
         let base_mars: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
             include_bytes!("../../tests/data/first_run_dex_2026-11-26/marswap_base_simulated.json.gz").as_slice(),
         )).unwrap();

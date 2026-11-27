@@ -7,6 +7,14 @@
   },
   "endpoint": "https://eth.drpc.org",
   "contracts": {
+    "0x7bad585c3ae4ae266f92a4af13b388bc7b26067c": {
+      "bytes": 10768,
+      "keccak256": "0xe74ca32bf656e2ee7a8e0ba6aa59ec43d86fc7b51fb428763ba0bed09cf47aac"
+    },
+    "0x70d2473f911683fef696fb23ed25540e46d70734": {
+      "bytes": 18814,
+      "keccak256": "0x1548da155b6e5b8ee6f4dd7ed274910e544f3da6874a3ddb42eebb65d2e2c226"
+    },
     "0x96559af835e5a3e9bb68c17eba8520295370698f": {
       "bytes": 15852,
       "keccak256": "0xe09a71f3bd9bcb1186976477cdbd776d4d399fedb5f8c41874e3bb6da3965182"

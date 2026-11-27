@@ -3863,7 +3863,7 @@ prefill = { kind = "Venue", id = "base_dex" }
 name = "textile.contracts"
 area = "площадка base_dex"
 unit = "контракты"
-value = ["8453 reactor 0xeb5a29f869ff084b3fce18d3487a38a56fedc59e 0x410fa83acd4770c8c8c0b9ca9d8d8bc4e663a3e7eb640b8ab75d151ed20dc5e3", "8453 fee 0x93c5e0d5c5d4e01c7edf9a1039d25a1cd6734b44 0xcc80af9f866106b253ca1423e3e3ef19b98d288c26abfc7f7e66550b2a916e67", "8453 permit2 0x000000000022d473030f116ddee9f6b43ac78ba3 0xa67739abc3ede9dbdc0491636c67d6a14ac07fab9030c3f509b1eb7b11dff8ed"]
+value = "8453 reactor 0xeb5a29f869ff084b3fce18d3487a38a56fedc59e 0x410fa83acd4770c8c8c0b9ca9d8d8bc4e663a3e7eb640b8ab75d151ed20dc5e3, 8453 fee 0x93c5e0d5c5d4e01c7edf9a1039d25a1cd6734b44 0xcc80af9f866106b253ca1423e3e3ef19b98d288c26abfc7f7e66550b2a916e67, 8453 permit2 0x000000000022d473030f116ddee9f6b43ac78ba3 0xa67739abc3ede9dbdc0491636c67d6a14ac07fab9030c3f509b1eb7b11dff8ed"
 source = "tests/data/first_run_dex_2026-11-26/textile_fx.json.gz"
 rationale = "Адрес и runtime каждой зависимости подтверждены на закреплённом блоке. Адрес собственного модуля заполняется после его размещения."
 prefill = { kind = "Venue", id = "base_dex" }
@@ -3872,7 +3872,7 @@ prefill = { kind = "Venue", id = "base_dex" }
 name = "textile.trading"
 area = "площадка base_dex"
 unit = "да/нет"
-value = false
+value = "false"
 source = "https://docs.textilecredit.com/api/v2/aggregators.html"
 rationale = "Допуск каждой заявки указывает владелец после выбора контракта и предела расхода газа."
 prefill = { kind = "Venue", id = "base_dex" }
@@ -3894,7 +3894,7 @@ prefill = { kind = "Venue", id = "eth_dex" }
 name = "textile.contracts"
 area = "площадка eth_dex"
 unit = "контракты"
-value = ["1 reactor 0x26a1aedaa26affc4fd9f910acfca754a31bc43c6 0x410fa83acd4770c8c8c0b9ca9d8d8bc4e663a3e7eb640b8ab75d151ed20dc5e3", "1 fee 0xd0df82a3d11d0a9333417e5ce4a690584796f595 0x8eb94a3debcabacfb0caf2ae2a92d377601007193b3ddbe66209785ea644a1da", "1 permit2 0x000000000022d473030f116ddee9f6b43ac78ba3 0xc67d1657868aa5146eaf24fb879fb1fdec3d2d493b3683a61c9c2f4fb2851131"]
+value = "1 reactor 0x26a1aedaa26affc4fd9f910acfca754a31bc43c6 0x410fa83acd4770c8c8c0b9ca9d8d8bc4e663a3e7eb640b8ab75d151ed20dc5e3, 1 fee 0xd0df82a3d11d0a9333417e5ce4a690584796f595 0x8eb94a3debcabacfb0caf2ae2a92d377601007193b3ddbe66209785ea644a1da, 1 permit2 0x000000000022d473030f116ddee9f6b43ac78ba3 0xc67d1657868aa5146eaf24fb879fb1fdec3d2d493b3683a61c9c2f4fb2851131"
 source = "tests/data/first_run_dex_2026-11-26/textile_fx.json.gz"
 rationale = "Адрес и runtime каждой зависимости подтверждены на закреплённом блоке. Адрес собственного модуля заполняется после его размещения."
 prefill = { kind = "Venue", id = "eth_dex" }
@@ -3903,7 +3903,7 @@ prefill = { kind = "Venue", id = "eth_dex" }
 name = "textile.trading"
 area = "площадка eth_dex"
 unit = "да/нет"
-value = false
+value = "false"
 source = "https://docs.textilecredit.com/api/v2/aggregators.html"
 rationale = "Допуск каждой заявки указывает владелец после выбора контракта и предела расхода газа."
 prefill = { kind = "Venue", id = "eth_dex" }

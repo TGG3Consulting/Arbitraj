@@ -294,6 +294,7 @@ pub static DEX: &[SettingDef] = &[
     d("Ryze", "ryze.pools", K::TextList, L::None, "адреса", V, "Пулы Ryze в порядке индексов фабрики pools(i), начиная с нуля.").optional().dex_venue(),
     d("Ryze", "ryze.token_bindings", K::TextList, L::None, "контракты", V, "Точные ERC20 Ryze. Строка адрес/хеш для неизменяемого токена или адрес/хеш/реализация/хешРеализации/админ для ZeppelinOS.").optional().dex_venue(),
     d("Ryze", "ryze.quote_url", K::Text, L::None, "URL", V, "Корень HTTPS API котировок Ryze без пути /quote.").optional().dex_venue(),
+    d("Ryze", "ryze.relayer_requests_per_minute", K::Integer, L::Positive, "запросов/мин", G, "Общий бюджет POST отправки и GET статуса Ryze Relayer для всех кошельков бота за скользящую минуту. Официальный предел 100 запросов/мин на IP. Если лимит не задан, новая отправка недоступна, старый ордер проверяется по цепи.").optional(),
     d("Ryze", "ryze.relayer_url", K::Text, L::None, "URL", V, "Корень HTTPS API релея, включая /api/v1.").optional().dex_venue(),
     d("Ryze", "ryze.quote_age_ms", K::Integer, L::Positive, "мс", V, "Наибольший допустимый возраст персональной котировки Ryze по времени источника.").optional().dex_venue(),
     d("Ryze", "ryze.validity_sec", K::Integer, L::Positive, "с", V, "Срок подписи от времени канонического блока. Владелец ограничивает срок возможности списания релеем.").optional().dex_venue(),

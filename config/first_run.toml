@@ -3828,6 +3828,15 @@ source = "https://documentation.ryze.pro/prompts/full-integration"
 rationale = "Корень HTTPS API релея, включая /api/v1."
 prefill = { kind = "Venue", id = "base_dex" }
 
+[[section.rec]]
+name = "ryze.relayer_requests_per_minute"
+area = "вся система"
+unit = "запросов/мин"
+value = "100"
+source = "https://documentation.ryze.pro/relayer/overview"
+rationale = "Общий бюджет отправок и чтений статуса по всем кошелькам. Для выделенного IP — не более 100 за минуту. При совместном IP вычтите запросы других процессов."
+prefill = { kind = "Global" }
+
 [[section]]
 title = "Ручная котировка Fynd · base"
 intro = "Настройки источника для base_dex."

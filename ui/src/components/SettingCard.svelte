@@ -25,7 +25,7 @@
 -->
 <script>
   import { uniq, uniqBy } from '../lib/uniq.js';
-  import { store, venueScopeLabel, shownAtVenue } from '../lib/settings.svelte.js';
+  import { store, valueKey, venueScopeLabel, shownAtVenue } from '../lib/settings.svelte.js';
   import { dex, dexIdsFor, allChannels, whyNoDex } from '../lib/dex.svelte.js';
   import { kindLabel, limitLabel, scopeLabel } from '../lib/labels.js';
   import { href } from '../lib/router.svelte.js';
@@ -138,6 +138,19 @@
     <!-- Решение 283: у настройки venue_for «Dex» строки бирж не показываются (shownAtVenue); значения не трогаются. -->
     {#each venueSettings.filter((v) => shownAtVenue(def, v)) as v (v)}
       <SettingEditor {def} scope={{ kind: 'Venue', id: v }} label={venueScopeLabel(def, v)} />
+      {#if def.name === 'ryze.books_interval_ms' || def.name === 'ryze.quote_sizes'}
+        {@const scope = {kind: 'Venue', id: v}}
+        {@const rows = store.values[valueKey('ryze.quote_sizes', scope)]}
+        {@const interval = store.values[valueKey('ryze.books_interval_ms', scope)]}
+        {#if Array.isArray(rows) && rows.length && interval > 0}
+          <p class="muted">Router /quote: до {4 * rows.length} запросов за проход по {rows.length} строкам размеров,
+            до {(4 * rows.length * 60000 / interval).toLocaleString('ru-RU', {maximumFractionDigits: 1})} запросов/мин
+            в среднем при заданной паузе. При раннем отказе запросов меньше. На размер до двух запросов покупки и двух продажи.
+            Финальная цена и сверка перед подписью добавляют до двух запросов каждая.</p>
+        {:else}
+          <p class="muted">Для опроса Router /quote задайте размеры и паузу между проходами.</p>
+        {/if}
+      {/if}
       {#if def.name === 'venue.cex_cex' && store.venueKinds.find((x) => x.id === v)?.kind === 'Cex'}
         <CexCexDeny venue={v} />
       {/if}

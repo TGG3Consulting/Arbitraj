@@ -120,16 +120,29 @@ pub struct Reply {
 /// Отправляет запрос и дочитывает ответ. Принимает: запрос (без общего срока reqwest), сроки и пределы.
 /// Возвращает: (HTTP-код, текст тела). Ошибки: Fail.
 pub async fn exchange(req: RequestBuilder, lim: Limits) -> Result<(StatusCode, String), Fail> {
-    full(req, lim).await.map(|r| (r.status, r.text))
+    full::<false>(req, lim).await.map(|r| (r.status, r.text))
 }
 
 /// То же, что exchange, но отдаёт и заголовок Retry-After (MEXC: «Responses with 418 or 429 include a Retry-After
 /// header indicating the wait time in seconds», https://www.mexc.com/api-docs/spot-v3/introduction).
 /// Принимает: запрос, сроки и пределы. Возвращает: Reply. Ошибки: Fail.
 /// Решение 265: журнал запросов шага на задаче (step_meter.rs) — «метод путь» (без строки запроса), время, итог.
-pub async fn exchange_full(req: RequestBuilder, lim: Limits) -> Result<Reply, Fail> {
+pub fn exchange_full(
+    req: RequestBuilder,
+    lim: Limits,
+) -> impl Future<Output = Result<Reply, Fail>> {
+    exchange_status::<false>(req, lim)
+}
+
+/// Что делает: сохраняет код известного окончательного ответа даже при оборванном теле.
+/// Принимает: запрос и сроки. При HEAD_ONLY_429 возвращает код HTTP 429, Retry-After
+/// и пустое тело сразу по заголовкам. Ошибки остальных обменов те же, что у exchange_full.
+pub(crate) async fn exchange_status<const HEAD_ONLY_429: bool>(
+    req: RequestBuilder,
+    lim: Limits,
+) -> Result<Reply, Fail> {
     if !super::step_meter::active() {
-        return full(req, lim).await;
+        return full::<HEAD_ONLY_429>(req, lim).await;
     }
     let name = req.try_clone().and_then(|r| r.build().ok()).map_or_else(
         || "запрос (имя не прочитано)".to_string(),
@@ -138,7 +151,7 @@ pub async fn exchange_full(req: RequestBuilder, lim: Limits) -> Result<Reply, Fa
     let t0 = std::time::Instant::now();
     // UTC на границе отправки клиентом. Не является отметкой приёма запроса биржей.
     let http_start = name.starts_with("POST ").then(chrono::Utc::now);
-    let r = full(req, lim).await;
+    let r = full::<HEAD_ONLY_429>(req, lim).await;
     let mut outcome = match &r {
         Ok(x) => format!("код {}", x.status.as_u16()),
         Err(f) => f.text(&lim),
@@ -151,9 +164,9 @@ pub async fn exchange_full(req: RequestBuilder, lim: Limits) -> Result<Reply, Fa
 }
 
 /// Обмен без журнала запросов (exchange — узел BSC, KyberSwap, индексатор; exchange_full). Ошибки: Fail.
-async fn full(req: RequestBuilder, lim: Limits) -> Result<Reply, Fail> {
+async fn full<const HEAD_ONLY_429: bool>(req: RequestBuilder, lim: Limits) -> Result<Reply, Fail> {
     let got = AtomicUsize::new(0);
-    match tokio::time::timeout(lim.total, read(req, lim, &got)).await {
+    match tokio::time::timeout(lim.total, read::<HEAD_ONLY_429>(req, lim, &got)).await {
         Ok(r) => r,
         Err(_) => Err(Fail::Total {
             got: got.load(Ordering::Relaxed),
@@ -162,7 +175,11 @@ async fn full(req: RequestBuilder, lim: Limits) -> Result<Reply, Fail> {
 }
 
 /// Сам обмен без общего предела; `got` — сколько байт тела уже получено (для текста при общем сроке).
-async fn read(req: RequestBuilder, lim: Limits, got: &AtomicUsize) -> Result<Reply, Fail> {
+async fn read<const HEAD_ONLY_429: bool>(
+    req: RequestBuilder,
+    lim: Limits,
+    got: &AtomicUsize,
+) -> Result<Reply, Fail> {
     let mut resp = match tokio::time::timeout(lim.head, req.send()).await {
         Err(_) => return Err(Fail::NoHead),
         Ok(Err(e)) if e.is_connect() => return Err(Fail::Connect(e.without_url().to_string())),
@@ -184,6 +201,13 @@ async fn read(req: RequestBuilder, lim: Limits, got: &AtomicUsize) -> Result<Rep
                 Some(date.saturating_sub(chrono::Utc::now().timestamp()).max(0) as u64)
             })
         });
+    if HEAD_ONLY_429 && status == StatusCode::TOO_MANY_REQUESTS {
+        return Ok(Reply {
+            status,
+            text: String::new(),
+            retry_after_s,
+        });
+    }
     let mut body = Vec::new();
     loop {
         match tokio::time::timeout(lim.idle, resp.chunk()).await {

@@ -64,6 +64,20 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
         m.release(db).await.map_err(|_| unknown())?;
         return Ok(finished(f));
     }
+    if saved.is_none()
+        && super::budget::submit_rejected(db, m.claim())
+            .await
+            .map_err(|_| unknown())?
+    {
+        return Box::pin(super::execute::declined(
+            p,
+            r,
+            &m,
+            Some(super::budget::REJECTED),
+        ))
+        .await
+        .map(Some);
+    }
     let owned = m.holder(db).await.map_err(|_| unknown())? == Some(m.claim());
     let mut found = None;
     if owned || saved.is_some() {
@@ -71,11 +85,22 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
             let old = f.trade.venue_ref.parse().map_err(|_| unknown())?;
             found = chain::lookup(ctx, &m, old).await.map_err(|_| unknown())?;
         }
-        if found.is_none() {
-            let url =
-                http::endpoint(&m.relayer, &format!("intents/{}", m.digest)).ok_or_else(unknown)?;
-            if let Some(id) = http::transaction(url, m.digest, ctx.limits()?).await {
-                found = chain::lookup(ctx, &m, id).await.map_err(|_| unknown())?;
+        if found.is_none()
+            && let Some(url) = http::endpoint(&m.relayer, &format!("intents/{}", m.digest))
+            && let Ok(limits) = ctx.limits()
+            && super::budget::take(ctx).await.is_ok()
+        {
+            match http::transaction(url, m.digest, limits).await {
+                http::Status::Hint(Some(id)) => {
+                    found = chain::lookup(ctx, &m, id).await.map_err(|_| unknown())?
+                }
+                http::Status::Limited(seconds) => {
+                    let pause = super::budget::pause(db, seconds, None).await;
+                    let _=ctx.journal.write(crate::storage::journal::Level::Warn,"ryze.relayer_status",Some(ctx.place.id),
+                        "Ryze Relayer: HTTP 429 при чтении статуса, исход проверяется по блокчейну",
+                        Some(serde_json::json!({"digest":m.digest,"budget_error":pause.err()}))).await;
+                }
+                http::Status::Hint(None) => {}
             }
         }
         if found.is_none() {
@@ -149,7 +174,10 @@ pub(in crate::venues::bsc_dex) async fn prior(
     p: &Parts,
     r: &TradeRequest,
 ) -> GatewayResult<Option<TradeResult>> {
-    if p.ctx.chain_id() != Some(super::CHAIN_ID) || r.deal_id.is_empty() || r.asset.contract.is_none() {
+    if p.ctx.chain_id() != Some(super::CHAIN_ID)
+        || r.deal_id.is_empty()
+        || r.asset.contract.is_none()
+    {
         return Ok(None);
     }
     let key = ledger::identity(&p.ctx, r)?;
@@ -159,7 +187,7 @@ pub(in crate::venues::bsc_dex) async fn prior(
     let Some(e) = lookup.filter(|e| Marker::read(&e.lookup).is_some()) else {
         return Ok(None);
     };
-    reconcile(p, r.clone(), &e.lookup)
+    Box::pin(reconcile(p, r.clone(), &e.lookup))
         .await?
         .map(Some)
         .ok_or_else(|| {

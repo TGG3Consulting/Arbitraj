@@ -120,14 +120,15 @@ async fn saved_digest_survives_lost_ack_reopen_and_competing_deals_without_resub
         .unwrap();
         assert!(m.reserve(&db).await.unwrap());
         assert!(!b.reserve(&db).await.unwrap());
-        assert!(
-            !http::submit_once(
+        assert_eq!(
+            http::submit_once(
                 format!("{base}/intents/submit").parse().unwrap(),
                 digest,
                 body,
                 limits()
             )
-            .await
+            .await,
+            http::Submit::Unknown
         );
     }
     {
@@ -154,7 +155,9 @@ async fn saved_digest_survives_lost_ack_reopen_and_competing_deals_without_resub
         assert!(m.was_reserved(&db).await.unwrap());
         assert!(!b.was_reserved(&db).await.unwrap());
         let url = format!("{base}/intents/{digest}").parse().unwrap();
-        assert_eq!(http::transaction(url, digest, limits()).await, Some(tx));
+        assert!(
+            matches!(http::transaction(url, digest, limits()).await, http::Status::Hint(Some(id)) if id==tx)
+        );
         assert_eq!(count.load(Ordering::SeqCst), 1);
         m.release(&db).await.unwrap();
         assert!(b.reserve(&db).await.unwrap());

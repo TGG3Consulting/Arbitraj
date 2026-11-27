@@ -67,6 +67,9 @@ pub(in crate::venues::bsc_dex) async fn consider(
         }
     }
     if firm {
+        if let Err(reason) = super::budget::available(&p.ctx).await {
+            return baseline.map_err(|_| p.ctx.err(ErrorCode::RateLimited, reason));
+        }
         let id = p.ryze.store(ticket);
         if let Some(r) = &mut q.route {
             r.mode = crate::core::types::RouteMode::Relay(id);

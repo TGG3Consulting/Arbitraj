@@ -37,6 +37,7 @@ impl Config {
         if ctx.chain_id() != Some(super::CHAIN_ID) || !ctx.flag("ryze.trading").unwrap_or(false) {
             return None;
         }
+        super::budget::limit(ctx)?;
         let generation = ctx.settings.generation();
         let addr = |k| ctx.addr(k).ok().filter(|a| !a.is_zero());
         let hash = |k| {

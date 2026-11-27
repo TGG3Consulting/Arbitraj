@@ -50,44 +50,70 @@ pub async fn quote(url: Url, body: &Value, limits: Limits) -> Option<Value> {
     serde_json::from_str(&response).ok()
 }
 
-pub async fn submit_once(url: Url, id: B256, body: Value, limits: Limits) -> bool {
-    let Some(client) = client() else {
-        return false;
-    };
-    let Ok((status, text)) =
-        http::exchange(client.post(url).json(&body), limited(limits, 8192)).await
-    else {
-        return false;
-    };
-    let Ok(resp) = serde_json::from_str::<Value>(&text) else {
-        return false;
-    };
-    status == StatusCode::ACCEPTED
-        && resp["success"] == true
-        && resp["status"] == "pending"
-        && resp["intentId"]
-            .as_str()
-            .and_then(|v| v.parse::<B256>().ok())
-            == Some(id)
+#[derive(Debug, PartialEq, Eq)]
+pub enum Submit {
+    Accepted,
+    RateLimited(Option<u64>),
+    Unknown,
 }
 
-/// Полученный txHash — подсказка для поиска. Все остальные состояния оставляют поручение на канонической сверке.
-pub async fn transaction(url: Url, id: B256, limits: Limits) -> Option<B256> {
-    let (status, text) = http::exchange(client()?.get(url), limited(limits, 8192))
-        .await
-        .ok()?;
-    let resp: Value = serde_json::from_str(&text).ok()?;
-    let intent = &resp["intent"];
-    if !status.is_success()
-        || resp["success"] != true
-        || intent["status"] != "confirmed"
-        || intent["intentId"].as_str()?.parse::<B256>().ok()? != id
-    {
-        return None;
+pub async fn submit_once(url: Url, id: B256, body: Value, limits: Limits) -> Submit {
+    let Some(client) = client() else {
+        return Submit::Unknown;
+    };
+    let Ok(reply) =
+        http::exchange_status::<true>(client.post(url).json(&body), limited(limits, 8192)).await
+    else {
+        return Submit::Unknown;
+    };
+    if reply.status == StatusCode::TOO_MANY_REQUESTS {
+        return Submit::RateLimited(reply.retry_after_s);
     }
-    intent["txHash"]
-        .as_str()?
-        .parse::<B256>()
+    let accepted = reply.status == StatusCode::ACCEPTED
+        && serde_json::from_str::<Value>(&reply.text).is_ok_and(|r| {
+            r["success"] == true
+                && r["status"] == "pending"
+                && r["intentId"].as_str().and_then(|s| s.parse::<B256>().ok()) == Some(id)
+        });
+    if accepted {
+        Submit::Accepted
+    } else {
+        Submit::Unknown
+    }
+}
+
+pub enum Status {
+    Limited(Option<u64>),
+    Hint(Option<B256>),
+}
+/// Полученный txHash — подсказка. Даже 429 на GET ничего не говорит о принятом POST.
+pub async fn transaction(url: Url, id: B256, limits: Limits) -> Status {
+    let Some(client) = client() else {
+        return Status::Hint(None);
+    };
+    let Ok(reply) = http::exchange_status::<true>(client.get(url), limited(limits, 8192)).await
+    else {
+        return Status::Hint(None);
+    };
+    if reply.status == StatusCode::TOO_MANY_REQUESTS {
+        return Status::Limited(reply.retry_after_s);
+    }
+    let tx = serde_json::from_str::<Value>(&reply.text)
         .ok()
-        .filter(|v| !v.is_zero())
+        .and_then(|r| {
+            let intent = &r["intent"];
+            if !reply.status.is_success()
+                || r["success"] != true
+                || intent["status"] != "confirmed"
+                || intent["intentId"].as_str()?.parse::<B256>().ok()? != id
+            {
+                return None;
+            }
+            intent["txHash"]
+                .as_str()?
+                .parse::<B256>()
+                .ok()
+                .filter(|v| !v.is_zero())
+        });
+    Status::Hint(tx)
 }

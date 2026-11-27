@@ -1,0 +1,149 @@
+{
+  "rpc": "https://bsc-dataseed.bnbchain.org",
+  "chain_id": 56,
+  "block": "0x81cb4e9",
+  "blockHash": "0x38b5a898219ba3238fc0acd9c65ae2bcab1fc36e6ef2cb99ae36099777efed52",
+  "token": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+  "samples": [
+    {
+      "holder": "0xa9c3cacff416e644dec51986dfd0e17cc2132817",
+      "access": {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "eth_createAccessList",
+          "params": [
+            {
+              "from": "0xa9c3cacff416e644dec51986dfd0e17cc2132817",
+              "to": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+              "data": "0x70a08231000000000000000000000000a9c3cacff416e644dec51986dfd0e17cc2132817"
+            },
+            "0x81cb4e9"
+          ]
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "result": {
+            "accessList": [
+              {
+                "address": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+                "storageKeys": [
+                  "0x275eaf0dfeb8216c90058ce7bb692c196a024d135c8294ad59cc3f01dc82ee0b"
+                ]
+              }
+            ],
+            "gasUsed": "0x669a"
+          }
+        }
+      },
+      "balance": {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "method": "eth_call",
+          "params": [
+            {
+              "from": "0xa9c3cacff416e644dec51986dfd0e17cc2132817",
+              "to": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+              "data": "0x70a08231000000000000000000000000a9c3cacff416e644dec51986dfd0e17cc2132817"
+            },
+            "0x81cb4e9"
+          ]
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "storage": {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "method": "eth_getStorageAt",
+          "params": [
+            "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+            "0x275eaf0dfeb8216c90058ce7bb692c196a024d135c8294ad59cc3f01dc82ee0b",
+            "0x81cb4e9"
+          ]
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      }
+    },
+    {
+      "holder": "0x0000000000000000000000000000000000000000",
+      "access": {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "eth_createAccessList",
+          "params": [
+            {
+              "from": "0xa9c3cacff416e644dec51986dfd0e17cc2132817",
+              "to": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+              "data": "0x70a082310000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "0x81cb4e9"
+          ]
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "result": {
+            "accessList": [
+              {
+                "address": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+                "storageKeys": [
+                  "0x3617319a054d772f909f7c479a2cebe5066e836a939412e32403c99029b92eff"
+                ]
+              }
+            ],
+            "gasUsed": "0x65aa"
+          }
+        }
+      },
+      "balance": {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "method": "eth_call",
+          "params": [
+            {
+              "from": "0xa9c3cacff416e644dec51986dfd0e17cc2132817",
+              "to": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+              "data": "0x70a082310000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "0x81cb4e9"
+          ]
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "result": "0x000000000000000000000000000000000000000000000003f8d829c17fe1d3ef"
+        }
+      },
+      "storage": {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 8,
+          "method": "eth_getStorageAt",
+          "params": [
+            "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+            "0x3617319a054d772f909f7c479a2cebe5066e836a939412e32403c99029b92eff",
+            "0x81cb4e9"
+          ]
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 8,
+          "result": "0x000000000000000000000000000000000000000000000003f8d829c17fe1d3ef"
+        }
+      }
+    }
+  ]
+}

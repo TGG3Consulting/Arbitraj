@@ -208,8 +208,14 @@ impl Store {
         self.set_checked(name,scope,value,by,None).await
     }
 
-    /// Optional compare-and-set for appending a verified deployment to a shared list.
-    /// The database comparison and its write share the same SQLite transaction.
+    /// Что делает: меняет настройку в точной области. Перед изменением сверяет ожидаемое значение
+    /// с кэшем, а при записи — с текстом JSON в базе в той же транзакции SQLite, что и изменение с историей.
+    /// Принимает: имя, область, новое значение (None очищает ключ), автора и условие expected.
+    /// None отключает сравнение, Some(None) требует отсутствия ключа, Some(Some(v)) — прежнего значения v.
+    /// Возвращает: Some(Change) с изменением либо None, если значение в кэше уже равно новому и условие выполнено.
+    /// Ошибки: Unknown — неизвестное имя. Invalid — значение или область недопустимы, снимок закрыт для записи,
+    /// ядро сменило значение либо expected не совпало. При конфликте expected ключ и история сохраняются
+    /// без изменений. Db — ошибка базы.
     pub async fn set_checked(
         &self, name: &str, scope: Scope, value: Option<Value>, by: &str,
         expected: Option<Option<Value>>,

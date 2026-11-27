@@ -188,6 +188,11 @@ mod tests {
             assert_eq!(changed["cases"].as_array().unwrap().len(), 8);
             pairs.push(serde_json::json!({"network":network,"dex":id,"creation_code_hash":recorded["init_hash"]}));
         }
+        let goblins: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+            include_bytes!("../../tests/data/first_run_dex_2026-11-26/goblins_base_wallets.json.gz").as_slice(),
+        )).unwrap();
+        assert_eq!(goblins["selector"], base["selector"]);
+        pairs.push(serde_json::json!({"network":"base","dex":"goblins-base","creation_code_hash":goblins["init"]}));
         let aquila: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
             include_bytes!("../../tests/data/first_run_dex_2026-11-26/rubicon_aquila_ethereum.json.gz").as_slice(),
         )).unwrap();

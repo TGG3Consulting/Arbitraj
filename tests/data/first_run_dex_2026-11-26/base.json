@@ -7,6 +7,26 @@
   },
   "endpoint": "https://base-rpc.publicnode.com",
   "contracts": {
+    "0xe82fa4d4ff25bad8b07c4d1ebd50e83180dd5eb8": {
+      "bytes": 24535,
+      "keccak256": "0x21d26d7693977f7f12e9f8ba60eb551fc6d07b7e436dc8748df702bbbb53b212"
+    },
+    "0xe29a829a1c86516b1d24b7966af14eb1be2cd5d4": {
+      "bytes": 24497,
+      "keccak256": "0xadf125f1da0361a339391978df3884589c3d7329a81974b10a1bf4f0ff6dd292"
+    },
+    "0xcbf872c837bad15b0a0283a5c5936fbd1b66beaf": {
+      "bytes": 8273,
+      "keccak256": "0xb5460e13fe1280a679bdc704ebfcb947cb268b48b05f2ff2731cd1d320676c1b"
+    },
+    "0xdea74cd879a3b11cb849a07bbe76b68f50d531f8": {
+      "bytes": 1385,
+      "keccak256": "0xbf1bb07babb013f146395ed6e1127f8f48d598f1765bc660a91d7b164cf93ff8"
+    },
+    "0x940181a94a35a4569e4529a3cdfb74e38fd98631": {
+      "bytes": 4736,
+      "keccak256": "0x6e2d6a09208d3bbad8885809c4db6a91be93d78c0cabc06ded4dc6fa38a1b458"
+    },
     "0xfbb4e52fecc90924c79f980eb24a9794ae4affa4": {
       "bytes": 11061,
       "keccak256": "0x633982d4173e19789001ce05488b95046fd43678467b221c0ba6334d21afbb7f"

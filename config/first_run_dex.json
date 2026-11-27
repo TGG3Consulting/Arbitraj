@@ -6400,5 +6400,42 @@
       "dex.router": "0xe4ba08712c404042b8eefc3fdf3b603c977500df",
       "dex.router_runtime_hash": "0x1cf0f4313c7e10563e8e59dc23fe2f8c285a0513f40a2372a2ca4133f9ae3ccd"
     }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "goblins-base",
+    "source": "https://repo.sourcify.dev/8453/0xe82fa4d4ff25bad8b07c4d1ebd50e83180dd5eb8 · tests/data/first_run_dex_2026-11-26/goblins_base_directory.json.gz · tests/data/first_run_dex_2026-11-26/goblins_base_wallets.json.gz",
+    "settings": {
+      "dex.kind": "registered_uni_v3",
+      "dex.factory": "0xe82fa4d4ff25bad8b07c4d1ebd50e83180dd5eb8",
+      "dex.quoter": "0xcbf872c837bad15b0a0283a5c5936fbd1b66beaf",
+      "dex.router": "0xe29a829a1c86516b1d24b7966af14eb1be2cd5d4",
+      "dex.tick_lens": "0xdea74cd879a3b11cb849a07bbe76b68f50d531f8",
+      "dex.v3_fee_tiers": [
+        "100",
+        "500",
+        "3000",
+        "10000"
+      ],
+      "dex.v3_swap_callback": "uniswapV3SwapCallback(int256,int256,bytes)",
+      "dex.quoter_virtual": false,
+      "dex.v3_quoter_method": "quoteExactInputSingle",
+      "dex.pool_code_hashes": [
+        "0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54"
+      ],
+      "dex.v3_wallet_router_abi": "router02_fee",
+      "dex.router_exact_tokens": [
+        "0x4200000000000000000000000000000000000006 0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",
+        "0x4ed4e862860bed51a9570b96d89af5e1b0efefed 0x0fc7067f83de437662a064d75d34700c97224082189a9ef1ccd5ed5a7dd601f6",
+        "0x940181a94a35a4569e4529a3cdfb74e38fd98631 0x6e2d6a09208d3bbad8885809c4db6a91be93d78c0cabc06ded4dc6fa38a1b458"
+      ],
+      "dex.module_runtime_hashes": [
+        "0xc685dfbee61c43199cd83b3ef53b8fc79b372bb3df2dd791d3b83b08084102cb"
+      ],
+      "dex.factory_runtime_hash": "0x21d26d7693977f7f12e9f8ba60eb551fc6d07b7e436dc8748df702bbbb53b212",
+      "dex.quoter_runtime_hash": "0xb5460e13fe1280a679bdc704ebfcb947cb268b48b05f2ff2731cd1d320676c1b",
+      "dex.router_runtime_hash": "0xadf125f1da0361a339391978df3884589c3d7329a81974b10a1bf4f0ff6dd292"
+    }
   }
 ]

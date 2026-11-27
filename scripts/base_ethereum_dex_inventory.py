@@ -1790,6 +1790,24 @@ def tables(network, snapshots, profiles):
                 if len(same) == 1:
                     task = f"Фабрика подтверждена в сетевой записи источника и в профиле `{same[0]['id']}`"
                     slug = same[0]["id"].removesuffix("-" + network)
+                    if slug == "goblins" and base:
+                        directory_path = data_dir / "goblins_base_directory.json.gz"
+                        directory = json.loads(gzip.decompress(directory_path.read_bytes()))
+                        cash_path = data_dir / "goblins_base_cash_wallets.json.gz"
+                        native_path = data_dir / "goblins_base_wallets.json.gz"
+                        cash, native = (json.loads(gzip.decompress(path.read_bytes())) for path in (cash_path, native_path))
+                        assert directory["factory"] == candidates[0] and directory["selector"] == cash["selector"] == native["selector"]
+                        count = len(cash["cases"]) + len(native["cases"])
+                        active = sum(int(m["liquidity"]) > 0 for m in directory["pools"])
+                        native_gas = {(c["pool"],c["input"],c["spent"]):c["gas"] for c in cash["cases"] if c["wire"]=="router02"}
+                        saved = [c["gas"]-native_gas[(c["pool"],c["input"],c["spent"])] for c in cash["cases"] if c["wire"]=="v5"]
+                        task += (f" · {len(directory['pools'])} пулов, {active} с ликвидностью на текущем тике, "
+                                 f"число ставок по корню реестра — {len(directory['tiers'])}. [Доказательство](../{directory_path.as_posix()}). "
+                                 f"{count} выплат на пяти пулах, на двух размерах в обе стороны, с проверкой минимума и срока. "
+                                 f"Для DEGEN/AERO Router02 сэкономил {min(saved)}–{max(saved)} gas относительно V5. "
+                                 f"Для двух обновляемых токенов в парах с WETH разрешён V5, а после размещения модуля также защищённый кошелёк "
+                                 f"(`dex.v3_wallet_module`). Расход на подготовку DEGEN отдельный. "
+                                 f"[WETH/USDC и WETH/токен](../{native_path.as_posix()}) · [DEGEN/AERO](../{cash_path.as_posix()})")
                     if slug in legacy_v2:
                         book = legacy_v2[slug]
                         sample = next(s for s in book["samples"] if "cases" in s)

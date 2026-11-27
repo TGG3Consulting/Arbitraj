@@ -34,7 +34,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    «необязательное». Релиз не готов, пока в списке «Открытые правки» ниже есть хоть одна строка. Список ведёт Claude:
 >    закрытые пункты вычёркиваются с SHA исправления.
 
-Последний просмотренный коммит: `e84ae83f` (27.11.2026).
+Последний просмотренный коммит: `2da89928` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -2947,11 +2947,11 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 | № | Где | Что сделать |
 |---|---|---|
 | О-1 | R-01 | Хвост покрытия DEX. 11 строк GeckoTerminal Base и 9 Ethereum без «профиль». У 11 из них (Bankr, o1, Bankr Index, Ryze; SafeMoon, Surge, Ring, Bundles, Cypher, Ranges, DAGrow) работа по твоим записям сделана. Переведи их в «профиль» или запиши, чего не хватает. Для остальных 9 (нет данных, нет пар, ждут модуля) запиши задачу. |
-| О-2 | R-60 | `quote/rate.rs:78`, `pools/market_mids.rs:40` — `chain_id() != Some(1)` в общем расчёте курса. Убрать или сделать настройкой, см. разбор c7528d3d. |
-| О-3 | R-42 | `quote/quoter_calls.rs:487, 655` — прямые `== Variant::ShibaswapV2`. Нужен предикат. |
-| О-4 | R-42 | `exec/solidly_direct.rs:42, 76` — прямые `== Variant::ShibaswapV2`. |
-| О-5 | R-42 | `pools/per_block_aero.rs:45`, `pools/registered_router.rs:79` — прямые `== Variant::RegisteredSlipstream`. |
-| О-6 | хардкод | `chain: 1` в `exec/shiba_payment.rs:50`, `exec/empire_wallet.rs:36`, `exec/aktionariat_graph.rs:52`. Брать `ctx.chain_id()` и хранить в доказательстве. |
+| ~~О-2~~ ✅ 2da89928 | R-60 | `quote/rate.rs:78`, `pools/market_mids.rs:40` — `chain_id() != Some(1)` в общем расчёте курса. Убрать или сделать настройкой, см. разбор c7528d3d. |
+| ~~О-3~~ ✅ 2da89928 | R-42 | `quote/quoter_calls.rs:487, 655` — прямые `== Variant::ShibaswapV2`. Нужен предикат. |
+| ~~О-4~~ ✅ 2da89928 | R-42 | `exec/solidly_direct.rs:42, 76` — прямые `== Variant::ShibaswapV2`. |
+| ~~О-5~~ ✅ 2da89928 | R-42 | `pools/per_block_aero.rs:45`, `pools/registered_router.rs:79` — прямые `== Variant::RegisteredSlipstream`. |
+| О-6 | хардкод | `chain: 1` на 2da89928: `exec/shiba_payment.rs:50, 57`, `exec/shiba_return.rs:67, 115`, `exec/empire_wallet.rs:36`, `exec/aktionariat_graph.rs:52` (в `solidly_direct.rs` уже исправлено). Брать `ctx.chain_id()` и хранить в доказательстве. |
 | О-7 | хардкод | `contracts/AktionariatWallet.sol:89, 110, 116` — `settings() & 1` / `& 2` и `hex"01"`: назвать константы, дать ссылку на исходник Brokerbot. После правки пересобрать `aktionariat-ethereum.json` и обновить хеш в совете. |
 | О-8 | хардкод | `quote/steps.rs:122, 125` — `Decimal::new(3,1)` (комиссия Uniswap V1). Использовать константы из `core/types/uniswap_v1.rs`. |
 | О-9 | хардкод | `pools/mars_fee.rs:17` — `recent.len() == 64`. Это настройка или именованная константа с обоснованием. |
@@ -2979,3 +2979,11 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 ### e84ae83f — проверено
 
 - Данные реестров Clipper / Blade (Base, Ethereum), инвентарь, документация. Код бота не менялся. Открытые правки О-1…О-16 — без изменений.
+
+### 2da89928 — R-60 закрыт, О-2…О-5 закрыты
+
+- **R-60 ✅ (О-2).** Проверка `chain_id() == 1` убрана из `rate::bridge_settings` и `market_mids::wrapped_bridges`. Вместо неё новая настройка площадки `dex.intermediate_wrapped_bridge` (Bool): она есть в каталоге и в `SETTINGS_CASES.md`, а мост по-прежнему требует `intermediate_enabled`, `graph`, ≥3 шагов и обе валюты в `dex.intermediate_tokens`. Без настройки — прямое ценообразование, как раньше. На BSC мост не включается, пока владелец не задаст настройку. ✅
+- **О-3, О-4, О-5 ✅** — предикаты `shiba_v2()` и `registered_slipstream()`.
+  - В `registered_router.rs` список вариантов заменён на `exact_router()` без трёх Solidly. Это эквивалентно: `MaverickTwoRouter` и `SlipstreamUniversal` выходят раньше этой строки.
+- **О-6 частично.** В `solidly_direct.rs` теперь `chain_id(ctx)`. Литерал `chain: 1` остался в `shiba_payment.rs` (2), `shiba_return.rs` (2), `empire_wallet.rs`, `aktionariat_graph.rs`.
+- **Осталось открытых: 12** — О-1, О-6…О-16.

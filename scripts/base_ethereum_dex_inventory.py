@@ -131,6 +131,46 @@ def tables(network, snapshots, profiles):
                     "[Архив GitHub](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45925784274).",
                     "[Фабрика в SDK](https://github.com/SashimiProject/sashimiswap-sdk/blob/50fb3f0b7fcc7108be957a0616158a952f60ca2e/src/constants.ts) · "
                     "[Реестр, остатки и хранилище](../tests/data/first_run_dex_2026-11-26/sashimi_ethereum_registry.json.gz)."])
+    if not base:
+        out.extend(["","### Bundles Swap и DAGrow на Ethereum, блок 26 494 988","",
+                    "У Bundles фабрика `0xacff9eee0a5522000e7141b77107359a6462e8d2`, Router `0x7088d2a3855bf69320869ea28e5d95a142935441`, "
+                    "токен комиссии BUN `0x695f775551fb0d28b64101c9507c06f334b4ba86`. Зарегистрировано 11 пар. У 10 обычных пар плата за обмен поступает в BUN. "
+                    "Пара WETH/BUN `0x9dd78ea2b7a92b6cb5d4a495dac34f8641070ceb` удерживает комиссию из токена протокола. "
+                    "[Реестр, хеши кода и квитанция роутера](../tests/data/first_run_dex_2026-11-26/bundles_ethereum_directory.json.gz).",
+                    "У DAGrow адрес пула `0x9fc2038b773bde9e44fdaba0e5093647f53c5105`, реализация `0x56202a54fb68fb456f1879f9add63d37e155d6bc`. "
+                    "Guard `0xdde4b3cf28ad1409d6c79cf1bdc298424362e2ab`, реализация `0x0005144b17cf95d6b0f2d682abbccf5596db0a27`. "
+                    "За 1 USDT пул котировал 0,876418871064609516 DAGR для Eco и 0,841008007587251556 DAGR для Exo. "
+                    "Для торговли важны адрес плательщика, флаг паузы продаж и обе реализации. Резервы выражены с 18 знаками, платёж USDT имеет 6. "
+                    "[Архив котировок с исходными единицами](../tests/data/first_run_dex_2026-11-26/dagrow_ethereum_directory.json.gz) · [Описание протокола](https://dagrow.app/whitepaper/)."])
+    if not base and {"unicly","hopeswap","archly-ethereum"}.issubset(configured):
+        out.extend(["", "### Unicly, HopeSwap и Archly на Ethereum", "",
+            "Контроль на каноническом блоке 26494988 использовал ETH независимого кошелька в архивной симуляции. "
+            "Стейблкойны для входа куплены через публичный обмен. Для каждой успешной ноги записаны расход, приход, газ и проверка отказа на 1 минимальную единицу выше выплаты.",
+            "", "| Площадка | Реестр и кошельковые обмены | Выбор исполнения |", "|---|---|---|",
+            "| Unicly | 91 пара в реестре. Пять пар прошли оба направления в двух размерах через Router и V5, всего 40 выплат. "
+            "По всем 91 расчёт CREATE2 из развёрнутой фабрики совпадает с регистрацией, опубликованный init-хеш SDK предсказывает другой адрес. "
+            "| В Router активен обычный exact-in. Функция SupportingFeeOnTransferTokens находится в комментарии проверенного исходника. "
+            "Для DAI/WETH выплата и подписанное поручение восстанавливаются из реальных событий. При одинаковых разрешениях штатный Router потратил на 17 218–17 261 газа меньше V5. "
+            "Другие выходные токены требуют отдельного подтверждения точного перевода для прямого Router. "
+            "[Архив](../tests/data/first_run_dex_2026-11-26/unicly_ethereum_wallets.json.gz) · [SDK](https://github.com/0xLeia/unicly-sdk/blob/81a2f6c0833b8325343a432bbb309198e39b4af0/src/constants.ts) |",
+            "| HopeSwap | Из четырёх зарегистрированных пар две с USDT завершили 16 выплат. Две с третьим токеном 0xf5c6…d4d8 "
+            "вернули TRANSFER_FAILED при попытке его получения. Подготовка собственного остатка этого токена для обратного входа не удалась. "
+            "| getFeeRateNumerator сообщает долю после комиссии. На четырёх парах фактические ставки 30, 30, 10, 30 из 10000. "
+            "Штатный Router с контролем дельты получил ту же выплату при расходе на 18 001–18 321 газа меньше V5 в восьми сопоставлениях. "
+            "[Архив](../tests/data/first_run_dex_2026-11-26/hopeswap_ethereum_wallets.json.gz) · [Документация HopeSwap](https://docs.hope.money/protocols/hopeswap) |",
+            "| Archly | Обе пары volatile, 16 успешных выплат на ARC/WETH и ARC/USDC. На проверенной высоте котируемая сторона содержит "
+            "0,000928288945292464 WETH и 2,895441 USDC соответственно. Рыночная ёмкость мала. "
+            "| Фабрика считает персональную ставку getRealFee(pair). При нулевых overrides ставка обеих равна 30/10000. "
+            "Штатный роутер проверяет дельту получателя, при равном разрешении его обмен использовал на 8 696–10 713 газа меньше V5. "
+            "Прямую оплату разрешают после проверки точного дебета входного ERC20, на первом запуске заданы WETH и ARC. "
+            "[Архив](../tests/data/first_run_dex_2026-11-26/archly_ethereum_wallets.json.gz) · [Размещения Archly](https://docs.archly.fi/security) · "
+            "[Проверенный код ARC](https://sourcify.dev/server/v2/contract/1/0x9482c407d32204462d8cbbc0755e96c39b79878e) |",
+            "", "У Unicly публикация второго поколения описывает аукционы NFT и выпуск их долей. "
+            "Независимая вторая фабрика спотового AMM этой публикацией не подтверждается. "
+            "У Archly Ethereum и Archly Base второго поколения совпадает фактический runtime фабрики. На Base проверены 428 из 428 пар, "
+            "все индивидуальные overrides нулевые на блоке 62262756. Предыдущее поколение Base читает только ставку типа кривой. "
+            "[Публикация команды Unicly](https://medium.com/unicly/unicly-v2-launch-airdrop-announcement-fcfd1beed6dc) · "
+            "[Архив индивидуальных ставок Base](../tests/data/first_run_dex_2026-11-26/archly_base_fee_overrides.json.gz)."])
     for key,name in (("wagmi","WAGMI"),("lif3","Lif3")):
         if base or key+"-ethereum" not in configured:
             continue
@@ -404,9 +444,10 @@ def tables(network, snapshots, profiles):
             old=sum(not m["current_init"] for m in registered)
             aligned=sum(m["balances"]==m["reserves"] for m in registered)
             owner="пара" if directory["fee_source"]=="pool" else "фабрика"
+            fee_method="getRealFee(address)" if classic_id=="archly-base" else directory["fee_method"]
             curves=", ".join("stable" if m["stable"] else "volatile" for m in wallets["markets"])
             fills=2*sum(len(m["cases"]) for m in wallets["markets"])
-            out.append(f"| {classic_id} | {len(registered)} / {len(registered)-old} / {aligned} | {owner} `{directory['fee_method']}`, "
+            out.append(f"| {classic_id} | {len(registered)} / {len(registered)-old} / {aligned} | {owner} `{fee_method}`, "
                        f"делитель {directory['denominator']} | {curves}, {fills} обменов и столько же отказов при minOut + 1. "
                        f"[Реестр](../{directory_file.as_posix()}) · [Кошельки](../{wallets_file.as_posix()}) |")
         out.extend(["", "На Base Archly v1 и v2 имеют отдельные фабрики. Справочник индексатора выбрал пару из v2, "
@@ -1349,6 +1390,20 @@ def tables(network, snapshots, profiles):
             if any(r["pool"]==pool.lower() for r in market_registry["pools"]):
                 factory=configured[id]["settings"]["dex.factory"]
                 roundtrip="CREATE2, реестр пар и учёт обоих токенов у Router02"
+        if not base and id in ("bundles-swap","dagrow"):
+            stem="bundles" if id=="bundles-swap" else "dagrow"
+            with gzip.open(f"tests/data/first_run_dex_2026-11-26/{stem}_ethereum_directory.json.gz","rt") as handle:
+                observed=json.load(handle)
+            if id=="bundles-swap":
+                factory=observed["factory"]
+                pool=observed["router"]["oracle_pair"]
+                roundtrip="Все 11 пар прошли CREATE2 и getPair в обоих порядках. Роутер подтверждён событием Swap"
+                status="1 OraclePair и 10 Pair. В обычных парах дополнительно оплачивается комиссия в BUN. Покрытие исполнения проверяется отдельно"
+            else:
+                pool=observed["roles"]["pool"]["address"]
+                factory=None
+                roundtrip="Один пул USDT/DAGR. Проверены proxy, implementation и связанный poolGuard"
+                status="8 котировок для двух плательщиков. Комиссия Eco 1%, Exo 5%. Исторический getAmountsOut учитывает конкретного плательщика"
         specific=base_launch_inventory.registry_row(network,id)
         if specific:
             selected, factory, roundtrip, status = specific

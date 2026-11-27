@@ -50,11 +50,42 @@ def registry(url,d,tag):
     if nonce!=len(markets)+1 or len({m["pool"] for m in markets})!=len(markets):
         raise ValueError("реестр не покрывает все создания фабрики")
     receipts=read_batch(url,[("eth_getTransactionReceipt",[m["tx"]]) for m in markets])
+    missing = [(i,m) for i,(m,r) in enumerate(zip(markets,receipts,strict=True)) if r is None]
+    if missing:
+        material = {}
+        session = requests.Session()
+        def history(node, method, params):
+            if method not in ("eth_getBlockByHash","eth_chainId","eth_getTransactionReceipt","eth_getLogs"):
+                raise ValueError("unrecognized historical read")
+            res=session.post(node,json=dict(jsonrpc="2.0",id=1,method=method,params=params),timeout=25)
+            res.raise_for_status()
+            return res.json()["result"]
+        for node in dict.fromkeys([url,*ENDPOINTS,"https://eth.drpc.org"]):
+            if not missing: break
+            try:
+                anchor=history(node,"eth_getBlockByHash",[tag["blockHash"],False])
+                if not anchor or anchor["stateRoot"]!=d.get("state_root",ROOT_HASH) or history(node,"eth_chainId",[])!="0x1":
+                    continue
+                for i,m in missing:
+                    if i in material: continue
+                    r=history(node,"eth_getTransactionReceipt",[m["tx"]])
+                    if isinstance(r,dict) and r.get("transactionHash","").lower()==m["tx"].lower() and r.get("blockHash")==m["hash"]:
+                        material[i]=r;continue
+                    records=history(node,"eth_getLogs",[{"blockHash":m["hash"],"address":f,"topics":[CREATED]}])
+                    records=[row for row in records if row["transactionHash"].lower()==m["tx"].lower()
+                             and row["blockHash"]==m["hash"] and not row.get("removed") and int(row["logIndex"],16)==m["index"]]
+                    if len(records)==1:
+                        material[i]={"blockHash":m["hash"],"logs":records}
+            except (KeyError,ValueError,RuntimeError,requests.RequestException):
+                pass
+            missing=[(i,m) for i,m in missing if i not in material]
+        if missing: raise ValueError(("missing canonical PoolCreated", [m["tx"] for _,m in missing]))
+        for i,r in material.items():receipts[i]=r
     calls=[]
     for m,receipt in zip(markets,receipts,strict=True):
         a,b=m["tokens"];fee=m["fee"]
         logs=[l for l in receipt["logs"] if int(l["logIndex"],16)==m["index"]]
-        if len(logs)!=1 or receipt["blockHash"]!=m["hash"] or receipt["status"]!="0x1":raise ValueError("receipt регистрации")
+        if len(logs)!=1 or receipt["blockHash"]!=m["hash"] or ("status" in receipt and receipt["status"]!="0x1"):raise ValueError("receipt регистрации")
         event=logs[0];spacing,pool=decode(["int24","address"],bytes.fromhex(event["data"][2:]))
         predicted="0x"+keccak(b"\xff"+bytes.fromhex(deployer[2:])+keccak(encode(["address","address","uint24"],[a,b,fee]))+bytes.fromhex(d["init"][2:]))[-20:].hex()
         if (pool,spacing)!=(m["pool"],m["spacing"]) or predicted!=pool or event["address"].lower()!=f or event["topics"]!=[CREATED,*["0x"+format(int(v,16),"064x") for v in (a,b)],"0x"+format(fee,"064x")]:

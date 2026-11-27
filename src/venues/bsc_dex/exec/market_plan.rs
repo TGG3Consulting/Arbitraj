@@ -68,6 +68,17 @@ impl Market {
             _ => !native,
         }
     }
+    pub(super) fn missing_selection(self) -> &'static str {
+        match self {
+            Self::Umbrae => "Umbrae: требуется выбранный адрес исполнения",
+            Self::Antfarm => "Antfarm: требуется подтверждённый бюджет комиссии",
+            Self::Temple => "TempleDAO: требуется выбранный модуль денежного маршрута",
+            Self::Carbon => "Carbon: требуется подтвержденный вектор действий контроллера",
+            Self::MintClub => {
+                "Mint Club: требуется прямое поручение с собственными границами суммы"
+            }
+        }
+    }
     pub(super) fn name(self) -> &'static str {
         match self {
             Self::Umbrae => "Umbrae",
@@ -168,7 +179,9 @@ pub(in crate::venues::bsc_dex) fn probe(
     protection: Option<Protection>,
 ) -> Option<GatewayResult<ProbeCall>> {
     match (&e.pool.state, e.family.variant) {
-        (PoolState::Antfarm(_), _) => Some(super::super::pools::antfarm_probe_wallet::part(ctx, e, order, now)),
+        (PoolState::Antfarm(_), _) => Some(super::super::pools::antfarm_probe_wallet::part(
+            ctx, e, order, now,
+        )),
         (_, Variant::Temple) => Some(super::temple_wallet::probe(ctx, e, order, wallet, now)),
         (PoolState::MintClub(_), _) => Some(super::mint_club_direct::probe(
             ctx, e, order, wallet, protection,

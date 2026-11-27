@@ -21,7 +21,8 @@ sol! {interface IERC {
     function balanceOf(address owner) external view returns(uint256);
     function allowance(address owner,address spender) external view returns(uint256);
 }}
-const VAULT: Address = address!("ba12222222228d8ba445958a75a0704d566bf2c8");
+pub(in crate::venues::bsc_dex) const VAULT: Address =
+    address!("ba12222222228d8ba445958a75a0704d566bf2c8");
 type Parts = (Vec<Approval>, Address, Bytes);
 pub(in crate::venues::bsc_dex) struct Choice {
     pub entry: Box<Entry>,
@@ -369,5 +370,17 @@ pub(in crate::venues::bsc_dex) async fn select(
             best = Some((score, Choice { entry, call }));
         }
     }
-    best.map(|(_, choice)| choice).ok_or_else(|| bad(ctx))
+    if let Some((_, choice)) = best {
+        return Ok(choice);
+    }
+    // Preserve the established measurement of a genuine transfer/sale failure when the optional candidates failed.
+    if ordinary.is_some() {
+        let mut entry = Box::new(e.clone());
+        if let PoolState::Antfarm(b) = &mut entry.pool.state {
+            b.proceeds = None;
+        }
+        let call = part(ctx, &entry, o, h.timestamp.to())?;
+        return Ok(Choice { entry, call });
+    }
+    Err(bad(ctx))
 }

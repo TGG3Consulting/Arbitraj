@@ -13,6 +13,7 @@ from record_concave_ethereum import approval
 REGISTRY=ROOT/"tests/data/first_run_dex_2026-11-26/wagmi_ethereum_registry.json"
 STABLE="0xdac17f958d2ee523a2206206994597c13d831ec7"
 CREATED="0x"+keccak(text="PoolCreated(address,address,uint24,int24,address)").hex()
+SWAP="0x"+keccak(text="Swap(address,address,int256,int256,uint160,uint128,int24)").hex()
 QUOTE="(address,address,uint256,uint24,uint160)"
 ORDER="(address,address,uint24,address,uint256,uint256,uint256,uint160)"
 ORDER02="(address,address,uint24,address,uint256,uint256,uint160)"
@@ -29,7 +30,7 @@ def registry(url,d,tag):
             packed=[(c["to"],False,bytes.fromhex(c["data"][2:])) for c in group]
             read=tx("0xca11bde05977b3631167028862be2a173976ca11","aggregate3((address,bool,bytes)[])",["(address,bool,bytes)[]"],[packed])
             read["gas"]=hex(12_000_000)
-            raw=rpc(url,"eth_call",[read,tag])
+            raw,=read_batch(url,[("eth_call",[read,tag])])
             results,=decode(["(bool,bytes)[]"],bytes.fromhex(raw[2:]))
             if len(results)!=len(group) or any(not ok for ok,_ in results):raise ValueError("неполные данные рынка")
             values.extend(v for _,v in results)
@@ -107,6 +108,12 @@ def capture(url):
                     if [k for k,v in enumerate(rr) if v["status"]!="0x1"]!=[i,i+1] or words(rr[i+2:i+6])!=before or words(rr[-4:])!=after:
                         raise ValueError(("min, срок, исходный и конечный балансы",wire,pool))
                     result=rr[i+6]
+                    settlements=[v for v in result["logs"] if v["address"].lower()==pool and v["topics"][0].lower()==SWAP]
+                    if len(settlements)!=1:raise ValueError(("фактический Swap",wire,pool))
+                    realized=decode(["int256","int256","uint160","uint128","int24"],bytes.fromhex(settlements[0]["data"][2:]))
+                    side=m["tokens"].index(a)
+                    if realized[side]!=spent or realized[1-side]!=-out or realized[2]!=q[1]:
+                        raise ValueError(("реальные pool delta и sqrtPrice после сделки",wire,pool))
                     output.append(dict(pool=pool,wire=wire,source=a,target=b,spent=str(spent),received=str(out),quote=[str(n) for n in q],gas=int(result["gasUsed"],16),
                                        approval_gas=int(rr[len(prefix)]["gasUsed"],16),before=list(map(str,before)),after=list(map(str,after)),logs=result["logs"]))
                     prefix+=[permit,exact];amount=out

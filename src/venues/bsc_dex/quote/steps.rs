@@ -209,11 +209,7 @@ pub fn fee_for_input(
     token_in: Address,
     input: U256,
 ) -> GatewayResult<Decimal> {
-    if let PoolState::Temple(state)=&e.pool.state {
-        let defense=super::super::math::temple::is_defense(state,token_in,input)
-            .ok_or_else(||ctx.err(ErrorCode::NoRoute,"TempleDAO: не установлен способ расчёта по этому объёму"))?;
-        return Ok(if defense{Decimal::ZERO}else{Decimal::new(5,1)});
-    }
+    if let Some(fee)=super::market_fees::by_volume(ctx,e,token_in,input){return fee;}
     if let PoolState::DeltaSwap {
         reserve0,
         reserve1,
@@ -237,13 +233,10 @@ pub fn fee_for_input(
 }
 
 pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal> {
+    if let Some(fee)=super::market_fees::rate(ctx,e){return fee;}
     let pips = |p: u32| Decimal::from(p) / Decimal::from(10_000u32);
     let zero_for_one = token_in == e.pool.token0;
     match (&e.pool.state, e.pool.kind) {
-        (PoolState::UmbraeDamm(s), PoolKind::V2) => super::super::math::umbrae_damm::rate(s)
-            .map(|bps| Decimal::new(i64::from(bps), 2))
-            .ok_or_else(||ctx.err(ErrorCode::BadResponse,"Umbrae DAMM: неверная ставка комиссии")),
-        (PoolState::Antfarm(_)|PoolState::Temple(_)|PoolState::Carbon(_) | PoolState::MintClub(_) | PoolState::Virtuals(_) | PoolState::EtherVista(_), PoolKind::V2) => Ok(Decimal::ZERO),
         (_, PoolKind::V2) => super::pool_quote::v2_fee_pct(ctx, e),
         (_, PoolKind::V3) => e
             .pool

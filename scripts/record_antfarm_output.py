@@ -342,6 +342,7 @@ def capture(url, d, runtime):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("artifact", type=Path)
+    parser.add_argument("--input-module", type=Path)
     parser.add_argument("output", type=Path)
     a = parser.parse_args()
     d = json.loads(gzip.decompress((DATA / "antfarm_ethereum_registry.json.gz").read_bytes()))
@@ -350,6 +351,12 @@ if __name__ == "__main__":
     for ep in ENDPOINTS:
         try:
             report = capture(ep, d, runtime)
+            if a.input_module:
+                from record_antfarm_probe import chained
+
+                report["roundtrips"] = chained(
+                    ep, d, json.loads(a.input_module.read_bytes())["runtime"], runtime
+                )
             break
         except Exception as err:
             errors.append((ep, str(err)[:500]))

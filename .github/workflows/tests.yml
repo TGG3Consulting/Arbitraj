@@ -536,7 +536,8 @@ jobs:
       - if: matrix.market == 'antfarm-output-ethereum'
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/antfarm-output" AntfarmOutputWallet
-          python scripts/record_antfarm_output.py "$RUNNER_TEMP/antfarm-output/AntfarmOutputWallet.json" "$RUNNER_TEMP/market.json"
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/antfarm-output" AntfarmWallet
+          python scripts/record_antfarm_output.py "$RUNNER_TEMP/antfarm-output/AntfarmOutputWallet.json" "$RUNNER_TEMP/market.json" --input-module "$RUNNER_TEMP/antfarm-output/AntfarmWallet.json"
       - if: matrix.market == 'antfarm-ethereum'
         run: |
           python scripts/record_antfarm_ethereum.py "$RUNNER_TEMP/directory.json"

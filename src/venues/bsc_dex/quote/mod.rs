@@ -151,6 +151,8 @@ pub mod tick_bin_spot;
 pub mod usable_reuse;
 pub(super) mod v2_execution;
 mod v2_fallback;
+mod market_selection;
+mod market_fees;
 pub(super) mod vault_pricing;
 pub mod v2_pair_calls;
 mod candy_probe;
@@ -278,7 +280,7 @@ impl Quoting {
         let coin = asset.contract.ok_or_else(|| {
             ctx.err(
                 ErrorCode::NoRoute,
-                format!("{}: нет адреса контракта в BSC", asset.ticker),
+                format!("{}: нет адреса контракта на {}", asset.ticker, ctx.venue().0),
             )
         })?;
         let native = super::exec::native::is_native(ctx, asset);
@@ -338,76 +340,7 @@ impl Quoting {
         // Решение 301 (дополнение — стек): работа — в кучу здесь, состояние этого future держит указатель
         // (quote/cpu.rs run).
         // Решение 312: замер этапов работы — tm.run() = None (выключен): timed сразу ведёт работу без замера.
-        let native_cash = super::exec::native::cash_ticker(ctx,&input.usdt_ticker);
-        if native_cash && !vista_pricing::cash(ctx,&input.usdt_ticker,input.usdt) {
-            return Err(ctx.not_set("dex.native_wrapped","У расчётной нативной монеты другой адрес обёртки"));
-        }
-        let (mut alternatives, compare_single) = Box::pin(v2_fallback::candidates(
-            &pick,
-            &input,
-            native || native_cash,
-        ))
-        .await;
-        if compare_single && !native_cash && !alternatives.is_empty() {
-            v2_fallback::private(&pick, &input, &mut alternatives);
-        }
-        let work =
-            quote_timing::timed(tm.run(), v2_fallback::ordinary(pick, input, compare_single, native || native_cash));
-        let raw = cpu::run(ctx, Box::pin(work)).await.and_then(|quote|{
-            if native_cash && !vista_pricing::terminal_cash(&self.reg,quote.route.as_ref()) {
-                return Err(ctx.err(ErrorCode::NoRoute,
-                    "Выбранная форма исполнения не подтверждает списание или выплату нативной расчётной валюты"));
-            }
-            Ok(quote)
-        });
-        tm.back();
-        let mut best = match raw {
-            Ok(q) => {
-                self.finish(q, (coin_dec, usdt_dec), gas, &fees, native, None, tm)
-                    .await
-            }
-            Err(e) => Err(e),
-        };
-        for (quote, approval) in alternatives {
-            let Ok(other) = self
-                .finish(
-                    quote,
-                    (coin_dec, usdt_dec),
-                    gas,
-                    &fees,
-                    native,
-                    approval,
-                    tm,
-                )
-                .await
-            else {
-                continue;
-            };
-            if crate::gateway::quote_stage::settlement()
-                && !crate::gateway::quote_stage::settlement_quote_supported(
-                    &other,
-                    crate::gateway::quote_stage::is_final(),
-                )
-            {
-                continue;
-            }
-            best = Ok(match best {
-                Ok(first) => v2_execution::choose(self, first, other, usdt_dec).await,
-                Err(e)
-                    if matches!(
-                        e.code,
-                        ErrorCode::NoRoute
-                            | ErrorCode::CoinNotChecked
-                            | ErrorCode::NotConfigured
-                            | ErrorCode::NotApplicable
-                    ) =>
-                {
-                    other
-                }
-                Err(e) => return Err(e),
-            });
-        }
-        best
+        self.market_routes(pick,input,&fees,native,tm).await
     }
 
     #[allow(clippy::too_many_arguments)]

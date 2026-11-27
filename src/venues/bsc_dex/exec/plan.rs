@@ -266,11 +266,9 @@ pub async fn build(
         return Err(ctx.err(ErrorCode::Internal, "план без шагов"));
     };
     let e = &first.entry;
-    if e.family.variant.umbrae(){return Err(ctx.err(ErrorCode::NoRoute,"Umbrae: требуется выбранный адрес исполнения"));}
-    if super::antfarm_wallet::enabled(e){return Err(ctx.err(ErrorCode::NoRoute,"Antfarm: требуется подтверждённый бюджет комиссии"));}
-    if super::temple_wallet::enabled(e){return Err(ctx.err(ErrorCode::NoRoute,"TempleDAO: требуется выбранный модуль денежного маршрута"));}
-    if super::carbon_direct::enabled(e){return Err(ctx.err(ErrorCode::NoRoute,"Carbon: требуется подтвержденный вектор действий контроллера"));}
-    if super::mint_club_direct::enabled(e) { return Err(ctx.err(ErrorCode::NoRoute,"Mint Club: требуется прямое поручение с собственными границами суммы")); }
+    if let Some(market)=super::market_plan::Market::of(e){
+        return Err(ctx.err(ErrorCode::NoRoute,market.missing_selection()));
+    }
     if super::super::quote::ekubo_v2_pricing::enabled(e) {return Box::pin(super::ekubo_v2_direct::plan(ctx,steps,wallet,now,all_approvals)).await;}
     if super::vault_direct::enabled(e) {
         return Box::pin(super::vault_direct::plan(ctx,steps,wallet,now,all_approvals)).await;

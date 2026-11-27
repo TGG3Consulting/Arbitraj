@@ -143,7 +143,7 @@ pub async fn run(
         v
     });
     let e = own_bond.as_ref().map(|(_,e,_)|e.as_ref()).or(verified.as_deref()).or_else(|| antfarm.as_ref().map(|(_,e)|e.as_ref())).or_else(||temple.as_ref().map(|(_,e)|e.as_ref())).unwrap_or(e);
-    let own_antfarm = antfarm.is_some() && super::super::pools::antfarm_probe::uses_funding_pair(e,source);
+    let own_antfarm = antfarm.is_some() && (super::super::pools::antfarm_probe::uses_funding_pair(e,source) || source==super::super::pools::antfarm_probe_wallet::VAULT);
     let mut list = if carbon || own_bond.is_some() || own_antfarm{Vec::new()}else{vec![pc::transfer(source, usdt, wallet, usdt_amount)]};
     let buy_order=Order{token_in:usdt,token_out:coin,amount_in:usdt_amount,min_out:U256::ONE};
     let buying=if let Some((head,_))=&antfarm {

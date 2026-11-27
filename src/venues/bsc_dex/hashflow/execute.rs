@@ -1,4 +1,6 @@
 //! Исполнение RFQT через существующую очередь nonce и разбор квитанций DEX.
+#[path="proof_chain.rs"]
+mod proof_chain;
 use super::super::{exec, parts::Parts, send, wallet};
 use super::{routing, sim, wire,dispatch::{Dispatch,Gate}};
 use crate::core::types::{RouteMode, Side, TradeRequest, TradeResult, TxOutcome};
@@ -16,6 +18,8 @@ use serde::{Deserialize, Serialize};
 /// Публичные поля, достаточные для подтверждения сделки по квитанции после перезапуска.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReceiptProof {
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    original:Option<proof_chain::Original>,
     pool: Address,
     trader: Address,
     input: Address,
@@ -77,12 +81,25 @@ pub(in crate::venues::bsc_dex) async fn failed(
     let Ok(Some(entry)) = intent::load(db, &k).await else {
         return e;
     };
-    if let Some(g)=exec::swap_ctx::SwapCtx::of(&entry.lookup).and_then(|c|c.gladius){
+    let Some(c)=exec::swap_ctx::SwapCtx::of(&entry.lookup) else{return e;};
+    if [c.rfq.is_some(),c.gladius.is_some(),c.native_rfq.is_some()].into_iter().filter(|v|*v).count()!=1{return e;}
+    if let Some(proof)=c.rfq{
+        let Some(original)=c.chain else{return e;};
+        if original.hash!=tx.hash || original.nonce!=tx.nonce || entry.lookup.nonce!=Some(tx.nonce) {return e;}
+        let verified=if tx.outcome==TxOutcome::Reverted{
+            let Ok(Some(r))=send::receipt::read(&p.ctx,tx.hash).await else{return e;};
+            r.status.to::<u64>()==0 && proof.included(&p.ctx,tx.hash,tx.nonce,&r).await.is_ok()
+        }else if let Some(cancel)=tx.cancel_hash{
+            proof.cancellation(&p.ctx,tx.hash,cancel,tx.nonce).await.is_ok()
+        }else{false};
+        if !verified{return e;}
+    }
+    if let Some(g)=c.gladius{
         if tx.outcome!=TxOutcome::Reverted{return e;}
         let Ok(Some(receipt))=send::receipt::read(&p.ctx,tx.hash).await else{return e;};
         if receipt.status.to::<u64>()!=0 || g.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.is_err(){return e;}
     }
-    if let Some(n)=exec::swap_ctx::SwapCtx::of(&entry.lookup).and_then(|c|c.native_rfq){
+    if let Some(n)=c.native_rfq{
         if tx.outcome!=TxOutcome::Reverted{return e}
         let Ok(Some(receipt))=send::receipt::read(&p.ctx,tx.hash).await else{return e};
         if receipt.status.to::<u64>()!=0 || n.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.is_err(){return e}
@@ -130,6 +147,17 @@ pub(super) async fn prior(p: &Parts, r: &TradeRequest) -> GatewayResult<Option<T
         return Err(p.ctx.err(ErrorCode::OutcomeUnknown,"Сначала требуется сверить первоначальный счёт и сеть Native RFQ").pending(entry.lookup));
     }
     if let Some(intent::Outcome::Order(x)) = entry.result {
+        if let Some(c)=exec::swap_ctx::SwapCtx::of(&entry.lookup) && let Some(proof)=c.rfq{
+            let unknown=||p.ctx.err(ErrorCode::OutcomeUnknown,"Hashflow: требуется исходная сеть и первоначальный кошелёк завершённого поручения").pending(entry.lookup.clone());
+            if wallet::signer::address(&p.ctx).ok()!=Some(proof.trader){return Err(unknown());}
+            if let Some(terms)=proof.original{
+                if p.ctx.chain_id()!=Some(terms.chain){return Err(unknown());}
+            }else{
+                let tx=x.trade.chain.as_ref().ok_or_else(unknown)?;
+                let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|unknown())?.ok_or_else(unknown)?;
+                proof.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|unknown())?;
+            }
+        }
         if x.trade.request.qty == r.qty {
             return Ok(Some(x.trade));
         }
@@ -177,6 +205,7 @@ pub(in crate::venues::bsc_dex) async fn record(
         .await
         .map_err(err)?
         .ok_or_else(|| err(String::new()))?;
+    let err = |_:String| p.ctx.err(ErrorCode::OutcomeUnknown,"Не удалось сверить первоначальную отправку RFQ").pending(entry.lookup.clone());
     if t.chain
         .as_ref()
         .is_none_or(|tx| entry.lookup.venue_ref.as_deref() != Some(tx.hash.to_string().as_str()))
@@ -189,8 +218,8 @@ pub(in crate::venues::bsc_dex) async fn record(
             )
             .pending(entry.lookup));
     }
-    if let Some(intent::Outcome::Order(result)) = &entry.result {
-        return Ok(result.trade.clone());
+    if matches!(entry.result,Some(intent::Outcome::Order(_))) {
+        return prior(p,&t.request).await?.ok_or_else(||err(String::new()));
     }
     let parse = exec::swap_ctx::SwapCtx::of(&entry.lookup).ok_or_else(|| err(String::new()))?;
     let (_, qd)=parse.decs.ok_or_else(||err(String::new()))?;
@@ -207,6 +236,10 @@ pub(in crate::venues::bsc_dex) async fn record(
         if t.request.side==Side::Buy{native.sold()}else{native.matches(&receipt).ok_or_else(||err(String::new()))?}
     }else{
         let proof=parse.rfq.ok_or_else(||err(String::new()))?;
+        let tx=t.chain.as_ref().ok_or_else(||err(String::new()))?;
+        let r=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|err(String::new()))?.ok_or_else(||err(String::new()))?;
+        if r.status.to::<u64>()!=1{return Err(err(String::new()));}
+        proof.included(&p.ctx,tx.hash,tx.nonce,&r).await.map_err(|_|err(String::new()))?;
         if t.request.side==Side::Buy{proof.amount}else{proof.proceeds}
     };
     let gross=super::super::num::to_decimal(gross,qd).ok_or_else(||err(String::new()))?;
@@ -381,6 +414,7 @@ async fn selected(
         .map_err(|e| routing::no(p, &e))?;
     let mut parse = exec::swap_ctx::SwapCtx::swap(who, tokens, decs, &[], None, None);
     let proof = ReceiptProof {
+        original:Some(proof_chain::Original{chain,target:q.firm.target_contract,calldata:alloy_primitives::keccak256(&q.firm.calldata)}),
         pool: q.firm.quote_data.pool,
         trader: who,
         input: tokens.0,
@@ -407,16 +441,9 @@ async fn selected(
         Some(hold),
     );
     let done=super::dispatch::submit(p,&req,dispatch,send).await?;
-    if done.chain.outcome == TxOutcome::Included
-        && !done.receipt.as_ref().is_some_and(|r| proof.matches(r))
-    {
-        return Err(parse.attach(
-            ctx.err(
-                ErrorCode::OutcomeUnknown,
-                "Квитанция не подтверждает подписанный объём Hashflow",
-            )
-            .with_tx(done.chain),
-        ));
+    if matches!(done.chain.outcome,TxOutcome::Included|TxOutcome::Reverted){
+        let r=done.receipt.as_ref().ok_or_else(|| parse.attach(ctx.err(ErrorCode::OutcomeUnknown,"Отсутствует квитанция Hashflow").with_tx(done.chain.clone())))?;
+        proof.included(ctx,done.chain.hash,done.chain.nonce,r).await.map_err(|e|parse.attach(e.with_tx(done.chain.clone())))?;
     }
     exec::result::by(
         exec::result::result(ctx, req, done, who, tokens, decs, &[]).map_err(|e| parse.attach(e)),

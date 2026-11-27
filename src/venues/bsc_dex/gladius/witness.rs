@@ -140,9 +140,12 @@ impl Domain {
     pub(super) async fn authentic(&self, ctx: &Ctx, o: &Offer, h: white_state::Head) -> bool {
         let d = digest(o, self.separator);
         let maker = o.order.info.swapper;
-        if eoa(d, &o.api.signature) == Some(maker) {
-            return true;
+        let Ok(code)=rpc::call::<Bytes>(ctx,"eth_getCode",json!([maker,h.selector()])).await else{return false;};
+        if code.is_empty() {
+            return eoa(d, &o.api.signature) == Some(maker);
         }
+        // Permit2 выбирает ERC-1271 для любого владельца с кодом, включая EIP-7702.
+
         let call = IValidator::isValidSignatureCall {
             digest: d,
             signature: o.api.signature.clone(),

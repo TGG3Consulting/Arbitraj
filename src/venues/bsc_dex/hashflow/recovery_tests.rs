@@ -1,4 +1,4 @@
-//! Реальные квитанции AMM и RFQT. Закрытый vault и отсутствие RPC исключают подпись и передачу транзакций из теста.
+//! Реальные квитанции AMM и RFQT. Узел испытания отдаёт только архивные данные, vault закрыт.
 use super::super::{
     ctx::{Ctx, Place},
     exec,
@@ -69,6 +69,8 @@ async fn parts(dir: &Path, id: u64, wallet: Address) -> Parts {
     ctx.chains.note_gas(if id == 56 { "BNB" } else { "ETH" });
     Parts::new(ctx)
 }
+#[path="recovery_fixture.rs"]
+mod recovery_fixture;
 #[derive(Deserialize)]
 struct Archive {
     chain_id: u64,
@@ -176,14 +178,25 @@ async fn four_networks_recover_a_prepared_transaction_before_accepting_another()
             req.clone(),
             &parse,
             r.transaction_hash,
-            r.receipt,
+            r.receipt.clone(),
         )
         .unwrap();
-        let stored = execute::record(&restored, result).await.unwrap();
-        let again = execute::trade(&restored, req, q.txid).await.unwrap();
-        assert_eq!(again.venue_ref, r.transaction_hash.to_string());
-        assert_eq!(again.filled_qty, stored.filled_qty);
-        assert_eq!(again.avg_price, stored.avg_price);
+        let (canonical,server)=recovery_fixture::start(&restored,&r).await;
+        canonical.store(false,std::sync::atomic::Ordering::SeqCst);
+        assert_eq!(execute::record(&restored,result.clone()).await.unwrap_err().code,ErrorCode::OutcomeUnknown);
+        assert!(intent::load(restored.ctx.journal.db(),&key).await.unwrap().unwrap().result.is_none());
+        canonical.store(true,std::sync::atomic::Ordering::SeqCst);
+        let stored=execute::record(&restored,result).await.unwrap();
+        let settled=intent::load(restored.ctx.journal.db(),&key).await.unwrap().unwrap();
+        let Some(intent::Outcome::Order(fill))=settled.result else{panic!("missing confirmed fill");};
+        assert_eq!(fill.trade.venue_ref,r.transaction_hash.to_string());
+        assert_eq!((fill.trade.filled_qty,fill.trade.avg_price),(stored.filled_qty,stored.avg_price));
+        // Учётный профиль заблокирован. Результат читается из журнала, повторное исполнение
+        // с неподтверждённым кошельком возвращает исходный идентификатор.
+        let retry=execute::trade(&restored,req,q.txid).await.unwrap_err();
+        assert_eq!(retry.code,ErrorCode::OutcomeUnknown);
+        assert_eq!(retry.pending.as_deref(),Some(&marker));
+        server.abort();
     }
 }
 

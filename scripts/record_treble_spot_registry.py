@@ -20,7 +20,8 @@ DEPLOYMENTS = {
     "7587": ("0x6e606cf94a4ddc01aeed2fce16d1b4f5b33e0a31", 39029383,
              "3sThy2UsWd9X3D2M6MUQWzNUYrs8snMMhQKHSg9kUEAd", "QmdkprafsPH2jahhaacyVdqUGuGTxvQ2jnDE9cQUVHAgCK"),
 }
-ARCHIVE = "https://base.api.pocket.network"
+LOGS = "https://base.api.pocket.network"
+STATE = "https://base.drpc.org"
 TOPICS = ["0x" + keccak(text=m).hex() for m in ("Pool(address,address,address)", "CustomPool(address,address,address,address)")]
 PAGE = 9000
 ZERO = "0x" + "00" * 20
@@ -36,7 +37,8 @@ def batch(session, method, args):
         group = args[start:start+size]
         payload = [dict(id=i,jsonrpc="2.0",method=method,params=p) for i,p in enumerate(group)]
         time.sleep(0.5)
-        resp = session.post(ARCHIVE,json=payload[0] if size==1 else payload,timeout=22)
+        endpoint = LOGS if method == 'eth_getLogs' else STATE
+        resp = session.post(endpoint,json=payload[0] if size==1 else payload,timeout=22)
         resp.raise_for_status()
         body = resp.json()
         replies = body if isinstance(body,list) else [body]

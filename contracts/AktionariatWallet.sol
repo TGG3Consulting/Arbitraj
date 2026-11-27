@@ -15,7 +15,8 @@ interface IEquityBroker {
     function getShares(uint256 cash) external view returns(uint256);
 }
 interface ISharePayment {
-    function payAndNotify(address broker,uint256 cash,bytes calldata ref) external returns(uint256);
+    // Older hubs return no bytes; the wallet measures the shares actually delivered.
+    function payAndNotify(address broker,uint256 cash,bytes calldata ref) external;
 }
 interface ICallbackShare {
     function transferAndCall(address recipient,uint256 shares,bytes calldata ref) external returns(bool);

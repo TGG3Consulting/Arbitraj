@@ -175,6 +175,40 @@ def measure(row, chain, endpoint=None):
             "buy_return":str(int(pos[2]["returnData"],16)),"sell_return":str(int(pos[5]["returnData"],16)),
             "observed_balances":[str(int(pos[i]["returnData"],16)) for i in (3,6,7,8,9)],
             "strict_buy":strict[0].get("error"),"strict_sell":strict[1].get("error")})
+        if native_router := row.get("compare_native_router"):
+            def native(token_in, token_out, size, limit, expires):
+                types = ["uint256", "uint256", "address[]", "address", "uint256"]
+                args = [size, limit, [token_in, token_out], OWNER, expires]
+                method = "swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)"
+                return call(native_router, calldata(method, types, args))
+
+            def allow(token, size):
+                return call(token, calldata("approve(address,uint256)", ["address","uint256"], [native_router, size]))
+
+            native_prefix = [fund(amount), allow(weth, amount)]
+            purchase = native(weth, other, amount, bought, deadline)
+            sale_prefix = native_prefix + [purchase, allow(other, bought)]
+            direct = simulate(native_prefix + [purchase, call(other, balance(OWNER)), allow(other, bought),
+                              native(other, weth, bought, sold, deadline), call(weth, balance(OWNER)), call(other, balance(OWNER))])
+            if any(int(c["status"],16) != 1 for c in direct) or [int(direct[i]["returnData"],16) for i in (3,6,7)] != [bought,sold,0]:
+                raise ValueError("native Router02 wallet payment differs")
+            controls = {}
+            for name, start, make, limit in (
+                ("router_buy", native_prefix, lambda q,d: native(weth, other, amount, q, d), bought),
+                ("router_sell", sale_prefix, lambda q,d: native(other, weth, bought, q, d), sold),
+                ("executor_buy", prefix, lambda q,d: swap(pool,weth,other,amount,q,d,pips), bought),
+                ("executor_sell", prefix+[buy,approve(other,bought)], lambda q,d: swap(pool,other,weth,bought,q,d,pips), sold)
+            ):
+                # An unrelated failure in the funding leg must never count as a valid rejection.
+                for condition, minimum_out, expires in (("min_plus_one",limit+1,deadline),("expired",limit,1)):
+                    reply = simulate(start+[make(minimum_out,expires)])
+                    if any(int(c["status"],16) != 1 for c in reply[:-1]) or int(reply[-1]["status"],16) != 0:
+                        raise ValueError(f"{name}/{condition} did not reject the swap")
+                    controls[f"{name}_{condition}"] = reply[-1].get("error", {})
+            results[-1]["wallet_paths"] = {name: {"swap_gas":[int(rows[i]["gasUsed"],16) for i in (2,5)],
+                "approval_gas":[int(rows[i]["gasUsed"],16) for i in (1,4)],
+                "received":[str(int(rows[i]["returnData"],16)) for i in (3,6)]} for name,rows in (("router",direct),("executor",pos))}
+            results[-1]["wallet_controls"] = controls
         if row.get("verify_pair_boundary"):
             results[-1]["pair_boundary"] = pair_boundary(simulate, pool, weth, other, index, amount, bought, sold, row.get("invariant_error"), fund)
     return dict(row, block_hash=chain["hash"], reserves=[str(v) for v in r], pips=pips, cases=results)

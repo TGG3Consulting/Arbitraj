@@ -1,6 +1,7 @@
 """Каноническая касса 1inch Aqua за сутки и открытая котировка от отдельного адреса."""
 import argparse
 import json
+import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -21,16 +22,26 @@ def capture(network, endpoint):
     at = {"blockHash": source["hash"], "requireCanonical": True}
     sess = requests.Session()
 
+    backups = (["https://gateway.tenderly.co/public/mainnet", "https://ethereum-rpc.publicnode.com"]
+               if network == "ethereum" else ["https://mainnet.base.org", "https://base.gateway.tenderly.co"])
     def rpc(method, params, optional=False):
-        reply = sess.post(endpoint, json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params}, timeout=45)
-        reply.raise_for_status()
-        obj = reply.json()
-        if "result" not in obj:
+        error = ""
+        for url in [endpoint, *backups]:
+            try:
+                reply = sess.post(url, json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params}, timeout=30)
+                reply.raise_for_status()
+                obj = reply.json()
+            except (requests.RequestException, ValueError) as exc:
+                error = str(exc)
+                time.sleep(0.2)
+                continue
+            if obj.get("result") is not None:
+                return obj["result"]
             err = obj.get("error", {})
             if optional and (err.get("code") == 3 or "revert" in str(err).lower()):
                 return {"error": err}
-            raise RuntimeError((method, str(err)[:400]))
-        return obj["result"]
+            error = str(err)
+        raise RuntimeError((method, error[:400]))
 
     def view(address, name, types, args, sender=None, optional=False):
         tx = {"to": address, "data": call(name, types, args)}

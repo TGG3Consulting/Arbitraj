@@ -15,7 +15,7 @@ from record_base_slipstream_executor import ROOT
 
 DEPLOYMENT = {"ethereum":(25567141,"0xe37e4dd7e73302a57cbf8ef6cff2424a787df9bf462d69f2de6d149dca43fb1a"),
               "base":(48839900,"0x6ce475fdeedd0c0df488f5b65bec1b38b714174bd9fbc399a87586f43498045e")}
-NODES = {"ethereum":["https://rpc.mevblocker.io","https://ethereum-rpc.publicnode.com"],
+NODES = {"ethereum":["https://rpc.mevblocker.io","https://ethereum-rpc.publicnode.com","https://ethereum.public.blockpi.network/v1/rpc/public","https://gateway.tenderly.co/public/mainnet"],
          "base":["https://base-rpc.publicnode.com","https://mainnet.base.org","https://base.public.blockpi.network/v1/rpc/public","https://base.gateway.tenderly.co"]}
 
 
@@ -48,7 +48,7 @@ def snapshot(network):
     def logs(blocks):
         lo,hi=blocks
         for url in nodes:
-            if "blockpi" in url and (hi-lo>=5000 or lo<51000000):continue
+            if "blockpi" in url and (hi-lo>=5000 or (network=="base" and lo<51000000)):continue
             if "tenderly" in url and hi-lo>=1000:continue
             if url=="https://rpc.mevblocker.io" and hi-lo>=10000:continue
             try:

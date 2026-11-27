@@ -3,21 +3,26 @@
 use super::*;
 use serde_json::Value;
 use std::io::Read as _;
-fn fixture(name: &str) -> Value {
+fn recorded(file: &str) -> Value {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/data/presell_bsc_2026-11-27")
-        .join(format!("{name}_with_code.json.gz"));
+        .join(file);
     let mut plain = Vec::new();
     flate2::read::GzDecoder::new(std::fs::File::open(path).unwrap())
         .read_to_end(&mut plain)
         .unwrap();
     serde_json::from_slice(&plain).unwrap()
 }
+fn fixture(name: &str) -> Value {
+    recorded(&format!("{name}_with_code.json.gz"))
+}
 fn parse<T: serde::de::DeserializeOwned>(v: &Value) -> T {
     serde_json::from_value(v.clone()).unwrap()
 }
 fn replay(name: &str) -> Result<(), String> {
-    let v = fixture(name);
+    replay_capture(name, &fixture(name))
+}
+fn replay_capture(name: &str, v: &Value) -> Result<(), String> {
     let t: Address = parse(&v["token"]);
     let calls = v["samples"].as_array().unwrap();
     let samples: [observed::Access; 2] =
@@ -48,10 +53,13 @@ fn replay(name: &str) -> Result<(), String> {
         let holder = parse(&sample["holder"]);
         let call = &sample["access"]["request"]["params"][0];
         let field = fields[i];
-        assert_eq!(
-            sample["access"]["request"]["params"][1]["blockHash"],
-            v["blockHash"]
-        );
+        let block = &sample["access"]["request"]["params"][1];
+        if block.is_object() {
+            assert_eq!(block["blockHash"], v["blockHash"]);
+            assert_eq!(block["requireCanonical"], true);
+        } else {
+            assert_eq!(block, &v["block"]);
+        }
         assert_eq!(
             parse::<Bytes>(&call["data"]),
             probe_calls::balance(parse(&call["from"]), t, holder).input
@@ -117,4 +125,37 @@ fn recorded_xvs_masks_its_uint96_balance() {
     let v = fixture("xvs");
     assert_eq!(v["balanceLayout"]["type"]["value"], "t_uint96");
     assert!(replay("xvs").unwrap_err().contains("исходный getter"));
+}
+
+/// У этих кошельков журнал подтвердил полную проверку до покупки на старой схеме.
+/// Сопоставляем доступность поля на новом записанном состоянии, отдельно от PnL.
+#[test]
+fn getter_coverage_for_previously_verified_bsc_sales() {
+    let capture = recorded("previous_credit_corpus.json.gz");
+    let rows = capture.as_array().unwrap();
+    let mut misses = Vec::new();
+    let mut evidence = std::collections::BTreeSet::new();
+    for row in rows {
+        let ticker = row["symbol"].as_str().unwrap();
+        let cases = row["prior"].as_array().unwrap();
+        assert!(!cases.is_empty());
+        assert_eq!(cases[0]["holder"], row["samples"][0]["holder"]);
+        for case in cases {
+            assert!(
+                case["funding"]
+                    .as_str()
+                    .unwrap()
+                    .contains("слот проверен balanceOf")
+            );
+            assert!(evidence.insert((
+                case["source"].as_str().unwrap(),
+                case["id"].as_str().unwrap()
+            )));
+        }
+        if let Err(why) = replay_capture(ticker, row) {
+            misses.push(format!("{ticker} ({}): {why}", cases[0]["id"]));
+        }
+    }
+    assert_eq!((rows.len(), evidence.len()), (12, 27));
+    assert!(misses.is_empty(), "{}", misses.join(", "));
 }

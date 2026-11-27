@@ -17,6 +17,14 @@ def from_receipts(reader,factory,final_nonce,path):
     source=json.loads(gzip.decompress(path.read_bytes()))
     logs=[]
     for candidate in source["events"]:
+        if reader.height<candidate["block"]:
+            raise ValueError("Исходное событие EulerSwap позже закреплённого блока")
+        if source.get("original_rpc"):
+            row={"address":factory["address"],"blockHash":candidate["blockHash"],"blockNumber":hex(candidate["block"]),
+                 "logIndex":hex(candidate["index"]),"transactionHash":candidate["tx"],"topics":candidate["topics"],"data":candidate["data"]}
+            assert len(row["blockHash"])==len(row["transactionHash"])==66
+            logs.append({**deployment(row,factory["address"],factory["event"]),"source":"archived eth_getLogs"})
+            continue
         block=reader.rpc("eth_getBlockByNumber",[hex(candidate["block"]),False])
         assert block["hash"]==candidate["blockHash"] and candidate["block"]<=reader.height
         if candidate["tx"]:

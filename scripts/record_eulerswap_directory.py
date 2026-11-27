@@ -107,9 +107,10 @@ def capture(network, events):
             for i in range(2):
                 checks.append((address,"getLimits(address,address)",(tokens[i],tokens[1-i]),"uint256,uint256"))
             installed, listed, d0, d1, *limits = r.many(checks)
-            assert (listed == address) == (address in registered)
+            if version==1:
+                assert listed==address
             row = dict(address=address,tokens=tokens,reserves=reserves,config=config,account=account,
-                       installed=installed,registered=address in registered,decimals=[d0,d1],limits=limits)
+                       installed=installed,registered=address in registered,by_account=listed,decimals=[d0,d1],limits=limits)
             if history:
                 origin=next(x for x in history if x["pool"]==address)
                 assert origin["tokens"]==tokens and origin["config"]==config

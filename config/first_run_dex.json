@@ -5951,5 +5951,25 @@
         "0x67190b80abc4ab95864c339617edeff1946d17052a8f3f8158213651adf07fe6"
       ]
     }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "alien-carbon-base",
+    "source": "https://github.com/alienbase-xyz/docs/blob/c6cee73b54bd92104b879e6ca9a02a6d51b80276/contracts.md · tests/data/first_run_dex_2026-11-26/alien_carbon_base.json.gz",
+    "settings": {
+      "dex.kind": "carbon_v1",
+      "dex.factory": "0x0d6e297a73016b437caae65bfe32c59803b215d0",
+      "dex.factory_runtime_hash": "0xddfa62a434ca14f4e6098419c2b9ca6e971d7e85f95f6ec75961dcc495b27866",
+      "dex.proxy_implementations": [
+        "0xe3763886bf91d5466b416b37fdf2b6337897716e"
+      ],
+      "dex.proxy_runtime_hashes": [
+        "0x7c34e2eb08394b9338f8bbae1443f7d74b6095d8ea737722ec277c47dad56e51"
+      ],
+      "dex.module_runtime_hashes": [
+        "0x7ac796ebbec76a038c49d94d93345e82325f07798b524e0164dd2a37aa1e027f"
+      ]
+    }
   }
 ]

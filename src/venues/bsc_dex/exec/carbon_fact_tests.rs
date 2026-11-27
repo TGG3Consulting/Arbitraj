@@ -10,19 +10,20 @@ use flate2::read::GzDecoder;
 use serde_json::Value;
 #[test]
 fn original_signed_vector_recovers_each_completed_wallet_trade() {
-    let archives = [
-        include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/carbon_ethereum.json.gz")
-            .as_slice(),
-        include_bytes!(
-            "../../../../tests/data/first_run_dex_2026-11-26/carbon_ethereum_protected.json.gz"
-        )
-        .as_slice(),
-    ];
-    for bytes in archives {
-        let raw: Value = serde_json::from_reader(GzDecoder::new(bytes)).unwrap();
-        let addr = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
-        let units = |v: &Value| v.as_str().unwrap().parse::<U256>().unwrap();
-        let wrapped = alloy_primitives::address!("C02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2");
+    let read = |bytes: &[u8]| serde_json::from_reader::<_, Value>(GzDecoder::new(bytes)).unwrap();
+    let eth = read(include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/carbon_ethereum.json.gz"));
+    let eth_protected = read(include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/carbon_ethereum_protected.json.gz"));
+    let base = read(include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/alien_carbon_base.json.gz"));
+    let eth_wrapped = alloy_primitives::address!("C02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2");
+    let addr = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
+    let base_wrapped = addr(&base["original"]["roles"]["wrapped"]["address"]);
+    let units = |v: &Value| v.as_str().unwrap().parse::<U256>().unwrap();
+    for (raw, wrapped) in [
+        (&eth, eth_wrapped),
+        (&eth_protected, eth_wrapped),
+        (&base["original"], base_wrapped),
+        (&base["protected"], base_wrapped),
+    ] {
         let mut n = 0;
         for v in raw["controls"].as_array().unwrap() {
             let src = addr(&v["source"]);

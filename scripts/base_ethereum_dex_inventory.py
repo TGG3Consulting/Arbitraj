@@ -1014,6 +1014,20 @@ def tables(network, snapshots, profiles):
                     "[Платежи, комиссии пулов и адреса](../tests/data/first_run_dex_2026-11-26/base_native_v3.json) · "
                     "[Фабрики и TickLens](../tests/data/first_run_dex_2026-11-26/base_native_v3_profiles.json) · [970 пулов из событий фабрик](../tests/data/first_run_dex_2026-11-26/base_native_v3_directory.json)."])
     derp_path = Path("tests/data/first_run_dex_2026-11-26/derpdex_markets.json")
+    if base and "alien-carbon-base" in configured:
+        file = Path("tests/data/first_run_dex_2026-11-26/alien_carbon_base.json.gz")
+        archived = json.loads(gzip.decompress(file.read_bytes()))
+        carbon = archived["original"]
+        pairs = carbon["directory"]
+        book = sum(p["count"] for p in pairs)
+        out.append(f"**Alien Base Carbon.** На блоке {carbon['height']} ваучер указал контроллер "
+                   f"`{carbon['roles']['proxy']['address']}`. В нём {len(pairs)} пар, {book} стратегий, "
+                   f"в {sum(p['count']>0 for p in pairs)} парах есть стратегии. Прямой вызов реализации вернул "
+                   f"{carbon['implementation_pair_count']} пар. Комиссия по умолчанию {carbon['default_fee']} ppm, "
+                   "действующая комиссия берётся для каждой пары. Обычная заявка и разделение по двум стратегиям "
+                   f"проверены прямой оплатой и через CarbonWallet. Для защищённого пути оператор размещает CarbonWallet "
+                   "из карточки DEX в сети Base и сохраняет подтверждённый адрес в `dex.router`. "
+                   f"[Кошелёк, суммы, комиссии и реестр](../{file.as_posix()}).")
     if base and derp_path.exists():
         directory_path = derp_path.with_name("derpdex_directory.json")
         directory = read(directory_path)

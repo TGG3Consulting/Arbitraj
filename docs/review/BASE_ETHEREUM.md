@@ -27,7 +27,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    каждое расхождение с причиной. Релиз готов только при нуле необъяснённых расхождений и закрытых пунктах R-*.
 >    Я проверяю прогон и только после этого сообщаю владельцу «релиз готов».
 
-Последний просмотренный коммит: `332ffa47` (27.11.2026).
+Последний просмотренный коммит: `45cc0db8` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -1887,3 +1887,15 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
   - Адресов в коде нет. ✅
 - `record_gladius_inventory.py` создаёт одноразовые случайные ключи (`secrets.token_bytes`) только для симуляции — не секреты проекта. ✅
 - BSC не затронут.
+
+### 45cc0db8 — проверено
+
+- Rubicon Classic (Base): новое состояние `PoolState::Rubicon` и тип ядра `core/types/rubicon.rs`. Это по образцу уже существующих `bundles.rs`, `surge.rs`, `pool_*.rs`: ядро получает тип состояния книги, а не знание о площадке. ✅
+- Все новые ветки в общих файлах закрыты `PoolState::Rubicon` / `Variant::RubiconClassic` / `Q::Rubicon`:
+  - `steps.rs` (комиссия как `PoolFee`, сверенная с планом заявок);
+  - `spot`, `pool_quote`, `pool_after`, `bound_rate`, `depth_band`, `emptiness`;
+  - `check/emitter`, `factory_ask`, `module_pricing`.
+
+  Исполнение идёт через `Market` / `market_receipt` / `Wire::Rubicon`. На BSC не влияет. ✅
+- Котировка сверяется дважды: локальный план заявок и официальный `quote` модуля кошелька (`spent` и `nominal` должны совпасть). ✅
+- 💡 `quoter_calls.rs`: снова ранние `if let PoolState::Rubicon { return … }` для запроса и декодирования (паттерн R-54). Диспетчер `market_selection::wallet_quoter` получает `Entry` и может строить запрос из состояния — лучше провести Rubicon через него, как Maverick и Integral.

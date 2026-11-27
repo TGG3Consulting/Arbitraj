@@ -14,7 +14,12 @@ from record_eulerswap_directory import DATA
 SWAP="0x"+keccak(text="Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)").hex()
 
 
-def capture():
+WTCOIN="0x5cda0e1ca4ce2af96315f7f8963c85399c172204"
+AAPL="0xb200000000000000000000c2e324d24d7eecd1fb"
+BSTONK="0x0f61edbfe6cd86024c0f210c0695b08df55fdfc9"
+CL_FUNDING={WTCOIN:"0x089262b9d991d7bc4a55b7cff0b7f26bde407985",AAPL:"0xa3b1e3f9747065e2073722ff4c9027d3ea4994f0"}
+
+def capture(secondary):
     r=Reader("base");directory=json.loads(gzip.decompress((DATA/"basestonk_base_directory.json.gz").read_bytes()))
     src=json.loads(gzip.decompress((DATA/"basestonk_base_listed.json.gz").read_bytes()))
     assert directory["tag"]==r.tag and directory["router_hash"]==r.code_hash(ROUTER)
@@ -63,17 +68,41 @@ def capture():
         row["tax"]=fees;row["pool_swaps"]=sum(l["address"]==MANAGER and l["topics"][:2]==[SWAP,p["id"]] for l in at["logs"])
         return row,prefix+[approve,call]
     rank={t:i for i,t in enumerate(src["api_volume_order"])}
+    def cash(token):
+        if token==USDC:return [seed(USDC,10**6)],[10**5,10**6]
+        if token==WETH:return [seed(WETH,10**13)],[10**12,10**13]
+        usdc=10**7
+        if token in CL_FUNDING:
+            pool=CL_FUNDING[token]
+            tokens=r.many([(pool,"token0()",(),"address"),(pool,"token1()",(),"address")])
+            if set(tokens)!={USDC,token}:return [],[]
+            spender=EXEC
+            purchase=tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],
+                        [USDC,usdc,token,1,stamp+90,[(1,pool,USDC,token,10000,b"")]])
+        else:
+            market=next(m for m in directory["markets"] if m["token"]==BSTONK and m["pair"]==USDC)
+            spender=ROUTER
+            purchase=order(market,USDC,BSTONK,usdc,1,"official",stamp+90)
+        funding=[seed(USDC,usdc),tx(USDC,"approve(address,uint256)",["address","uint256"],[spender,usdc]),purchase]
+        warm=run(funding+[tx(token,"balanceOf(address)",["address"],[OWNER])])
+        if not all(map(ok,warm)):return [],[]
+        available=int.from_bytes(result(warm[-1]))
+        return funding,sorted({a for a in (available//100,available//10) if a>0})
     grouped=defaultdict(list)
+    prior=set()
+    if secondary:
+        legs=json.loads(gzip.decompress((DATA/"basestonk_base_wallets.json.gz").read_bytes()))["results"]
+        prior={x["hook"] for x in legs if x["success"]}
+    eligible=(WTCOIN,AAPL,BSTONK) if secondary else (WETH,USDC)
     for p in directory["markets"]:
-        if p["pair"] in (WETH,USDC) and int(p["liquidity"])>0:grouped[p["hook"]].append(p)
+        if p["pair"] in eligible and p["hook"] not in prior and int(p["liquidity"])>0:grouped[p["hook"]].append(p)
     rows=[]
     for _,markets in grouped.items():
         markets.sort(key=lambda p:(rank.get(p["token"],len(rank)),-int(p["liquidity"])))
         for p in markets[:4]:
-            stable=p["pair"]==USDC
+            funding,amounts=cash(p["pair"])
             before=len(rows)
-            for amount in ([10**5,10**6] if stable else [10**12,10**13]):
-                funding=[seed(p["pair"],amount)]
+            for amount in amounts:
                 for mode in ("official","v5"):
                     buy,prefix=leg(p,p["pair"],p["token"],amount,funding,mode);rows.append(buy)
                     if prefix:
@@ -84,5 +113,6 @@ def capture():
 
 if __name__=="__main__":
     a=argparse.ArgumentParser(description=__doc__);a.add_argument("output",type=Path)
-    a.parse_args().output.write_text(json.dumps(capture(),separators=(",",":")),encoding="utf8")
+    a.add_argument("--secondary",action="store_true");args=a.parse_args()
+    args.output.write_text(json.dumps(capture(args.secondary),separators=(",",":")),encoding="utf8")
 

@@ -1,0 +1,93 @@
+{
+  "source": "https://github.com/euler-xyz/euler-interfaces/tree/3ab308dda14dd57ccc340bcf55840f2c70760cfb/addresses",
+  "networks": {
+    "1": {
+      "V1Factory": {
+        "address": "0xb013be1d0d380c13b58e889f412895970a2cf228",
+        "runtime": "0xa034fcaae2bda9b64b3876e0c31de3265b35a82e22f84523a936d9e1acef6248",
+        "block": 22676162,
+        "event": "0x5f7560a5797edc6f72421362defa094d690eb9f7ced3cc5a5c13383502e4fcc5"
+      },
+      "V1Implementation": {
+        "address": "0xc35a0fda69e9d71e68c0d9cbb541adfd21d6b117",
+        "runtime": "0x3bd4f7063a6b7f35f092ed022ce9ba45cb7e786cf658b7becf8e374ac305d797",
+        "block": 22676161
+      },
+      "V1Periphery": {
+        "address": "0x208ff5eb543814789321daa1b5eb551881d16b06",
+        "runtime": "0x9769c059efbf3caff1aeadaf9de22fb71a780f2d06964e7b467dfbc5cc8a4e07",
+        "block": 22676163
+      },
+      "V2Factory": {
+        "address": "0xd05213331221fab8a3c387f2affbb605bb04df5f",
+        "runtime": "0x875fab4bc563f8472f7090e305dfb849a81e5ea244de0370ea88ccf473784896",
+        "block": 23697906,
+        "event": "0xb07685f51a30b2fddf87dba55f878b27a4fd0ba33a1461f102767b545cb249e6"
+      },
+      "V2Implementation": {
+        "address": "0x8b0e044e364f2ce913799d53b300e15a6974dc97",
+        "runtime": "0x8f381b65e729149bbc968e4f9302a402ac91a130c12b5896edcc54b85f33c09b",
+        "block": 23697905
+      },
+      "V2Periphery": {
+        "address": "0xd3a349ee0a21ea0a7e9513ac236ae614b5fd513e",
+        "runtime": "0x4a5aafa3383f113c4228669162fd3e293819c38fc4f6e2124b1bcf3fc302f48d",
+        "block": 23697907
+      },
+      "V2ProtocolFeeConfig": {
+        "address": "0x5171aed04fa9551db484f07c853f252bc6f53b63",
+        "runtime": "0x4301e1ace0db0045d0dde666462eef339e1573932bce1f928995b0872fb871cd",
+        "block": 23697903
+      },
+      "V2Registry": {
+        "address": "0x5fccb84363f020c0cade052c9c654aabf932814a",
+        "runtime": "0x22036051b5bb920e9fabe0c2260100aea791c87e0f43cd5e2da55908a12d7aca",
+        "block": 23697908
+      }
+    },
+    "8453": {
+      "V1Factory": {
+        "address": "0xf0cfe22d23699ff1b2cfe6b8f706a6db63911262",
+        "runtime": "0x9bf073f03f25261c74b8a2021d6df6ba28cd132f1ca6cd7bbb4507a665241b0e",
+        "block": 31658691,
+        "event": "0x5f7560a5797edc6f72421362defa094d690eb9f7ced3cc5a5c13383502e4fcc5"
+      },
+      "V1Implementation": {
+        "address": "0x3ce63c16cb719a0c755da25cd5dd35170a00424f",
+        "runtime": "0x960621fb3661dcafec2aad151e78f5494dbd7a336cfd80928b1b407c73ed7946",
+        "block": 31658689
+      },
+      "V1Periphery": {
+        "address": "0x18e5f5c1ff5e905b32ce860576031ae90e1d1336",
+        "runtime": "0x049ab695ed713b86e39f788371be338a5580a73bb6b9e53e129e584d8b8eb50f",
+        "block": 31658693
+      },
+      "V2Factory": {
+        "address": "0x6c5f4c239ced289447737eab8eea64523bd9c05e",
+        "runtime": "0xfb04267c2a4bd8d8376c15408008a9ff7fd65cd6b251e6868d923ab122a45f5c",
+        "block": 37564790,
+        "event": "0xb07685f51a30b2fddf87dba55f878b27a4fd0ba33a1461f102767b545cb249e6"
+      },
+      "V2Implementation": {
+        "address": "0x6f1c1a3eafbb1b345ad5662b0374a9bf0e4785af",
+        "runtime": "0x2308c3559eaa18d5dcfae69cd82989807e7d27f8379612a62c818d5bcbec53ac",
+        "block": 37564789
+      },
+      "V2Periphery": {
+        "address": "0xa564dae65ea7b1ce049abacfc4cb1a32c93e127c",
+        "runtime": "0x4a5aafa3383f113c4228669162fd3e293819c38fc4f6e2124b1bcf3fc302f48d",
+        "block": 37564791
+      },
+      "V2ProtocolFeeConfig": {
+        "address": "0x78bccfa312432ce84d0b818796ee33f9192a284d",
+        "runtime": "0x758a04d3970becaf9ec977e4d3e040efc93d02f8178c0cad0f9ce4bb4d95f920",
+        "block": 37564787
+      },
+      "V2Registry": {
+        "address": "0x35d410a5052c7362ecdd72cfb65651a71adfaf61",
+        "runtime": "0x415db5249645ac01f3b43ec42388e1a431fee7bc6916826563919331167cce02",
+        "block": 37564793
+      }
+    }
+  }
+}

@@ -8,7 +8,7 @@ use serde_json::Value;
 
 pub(super) const FACTORY: Address = address!("e48aee124f9933661d4dd3eb265fa9e153e32cbe");
 pub(super) const ROUTER: Address = address!("6d9f0eb21d77c6d24be49a579508471e937d5418");
-pub(super) const ATF: Address = address!("518b63da813d46556fea041a88b52e3caa8c16a8");
+pub(in crate::venues::bsc_dex) const ATF: Address = address!("518b63da813d46556fea041a88b52e3caa8c16a8");
 const FACTORY_CODE: B256 =
     b256!("f2d8ede580acbe903f4236f3ea575e17dcdbfb7369a9fcf433b863d010e197fc");
 const ROUTER_CODE: B256 = b256!("ab093829729d83c3859f76c3343b65622c0cd740c2b40a661bc2e0b5f6a45cb4");
@@ -204,6 +204,7 @@ pub(super) async fn market(
         lp_supply: batch::decode(&supply, IFarm::totalSupplyCall {})?,
         dividends: batch::decode(&escrow, IFarm::antfarmTokenReserveCall {})?,
         oracle: rate,
+        oracle_address: (!oracle.is_zero()).then_some(oracle),
     })
 }
 

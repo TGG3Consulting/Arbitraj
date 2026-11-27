@@ -195,6 +195,8 @@ pub struct AntfarmMarket {
     pub lp_supply: U256,
     /// Index of the asset priced in ATF and oracle rate in UQ112x112.
     pub oracle: Option<(usize, U256)>,
+    #[serde(default)]
+    pub oracle_address: Option<Address>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

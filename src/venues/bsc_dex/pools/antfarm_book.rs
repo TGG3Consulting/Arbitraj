@@ -17,6 +17,8 @@ use std::{
 };
 use tokio::sync::OnceCell;
 
+pub(in crate::venues::bsc_dex) use super::antfarm::ATF as FEE_TOKEN;
+
 type Source = (AntfarmMarket, Option<U256>);
 type Cell = Arc<OnceCell<Vec<Source>>>;
 type Key = (B256, Address);

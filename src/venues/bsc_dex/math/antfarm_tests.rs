@@ -20,6 +20,7 @@ fn from_row(d: &Value, row: &Value) -> Market {
         balances: std::array::from_fn(|i| integer(&row["balances"][i])),
         dividends: integer(&row["escrow"]),
         lp_supply: integer(&row["supply"]),
+        oracle_address: (!oracle.is_null()).then(||addr(&row["oracle"])),
         oracle: (!oracle.is_null()).then(|| {
             (
                 tokens

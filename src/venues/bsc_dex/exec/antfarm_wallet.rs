@@ -27,7 +27,7 @@ sol! {
         uint256 routerQuantity; uint256 maxDebit; uint256 minimum; uint256 maxRouterFee;
         uint256 feeFunding; uint256 maxFundingDebit; uint256 deadline;
     }
-    function execute(Swap);
+    function execute(Swap order);
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,7 +73,7 @@ impl Terms {
     }
     pub fn data(&self, minimum: U256, deadline: U256) -> Bytes {
         executeCall {
-            _0: Swap {
+            order: Swap {
                 input: self.input,
                 output: self.output,
                 tier: self.tier,
@@ -164,13 +164,26 @@ impl Proof {
             .checked_sub(fill::moved_logs(logs, output, Some(wallet), None))?;
         // In this instruction a separate fee is purchased inside the bounded input or embedded in the swap.
         // The wallet may receive a refund in ATF. It cannot be charged an extra ATF balance.
+        let atf = antfarm_book::FEE_TOKEN;
+        let separate = input != atf && output != atf;
+        let net_refund = if separate {
+            fill::moved_logs(logs, atf, None, Some(wallet)).checked_sub(fill::moved_logs(
+                logs,
+                atf,
+                Some(wallet),
+                None,
+            ))?
+        } else {
+            U256::ZERO
+        };
         (spent > U256::ZERO
             && spent <= t.budget
             && got >= self.minimum
             && word(0) == spent
             && word(1) == got
-            && word(2).is_zero())
-        .then_some((spent, got))
+            && word(2).is_zero()
+            && word(3) == net_refund)
+            .then_some((spent, got))
     }
 }
 pub(in crate::venues::bsc_dex) fn enabled(e: &Entry) -> bool {
@@ -281,4 +294,65 @@ pub(in crate::venues::bsc_dex) fn probe(
         module,
         t.data(o.min_out, deadline),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use flate2::read::GzDecoder;
+    use serde_json::Value;
+    #[test]
+    fn bounded_fee_purchase_matches_signed_input_and_owner_logs() {
+        let raw = include_bytes!(
+            "../../../../tests/data/first_run_dex_2026-11-26/antfarm_protected_ethereum.json.gz"
+        );
+        let d: Value = serde_json::from_reader(GzDecoder::new(raw.as_slice())).unwrap();
+        let mut checked = 0;
+        for row in d["cases"].as_array().unwrap() {
+            let tx = &row["transaction"];
+            let calldata: Bytes = serde_json::from_value(tx["data"].clone()).unwrap();
+            let c = executeCall::abi_decode_validate(&calldata).unwrap().order;
+            let input = c.input;
+            let output = c.output;
+            let wallet: Address = serde_json::from_value(tx["from"].clone()).unwrap();
+            let module = serde_json::from_value(tx["to"].clone()).unwrap();
+            let terms = Terms {
+                module,
+                input,
+                output,
+                tier: c.tier,
+                funding: c.fundingTier,
+                quantity: c.routerQuantity,
+                budget: c.maxDebit,
+                fee: c.maxRouterFee,
+                acquire: c.feeFunding,
+                funding_budget: c.maxFundingDebit,
+            };
+            let mut proof = Proof {
+                terms,
+                payer: wallet,
+                minimum: c.minimum,
+                deadline: c.deadline,
+            };
+            assert_eq!(proof.data(), calldata);
+            let logs: Vec<Log> = serde_json::from_value(row["logs"].clone()).unwrap();
+            if row["mode"] == "held_fee" {
+                assert!(proof.amounts(&logs, wallet, input, output).is_none());
+                continue;
+            }
+            let n = |i: usize| row["net"][i].as_str().unwrap().parse::<U256>().unwrap();
+            assert_eq!(
+                proof.amounts(&logs, wallet, input, output),
+                Some((n(0), n(1)))
+            );
+            assert!(proof.amounts(&logs, wallet, output, input).is_none());
+            let mut duplicate = logs.clone();
+            duplicate.extend(logs.iter().filter(|l| l.address() == module).cloned());
+            assert!(proof.amounts(&duplicate, wallet, input, output).is_none());
+            proof.minimum = n(1) + U256::ONE;
+            assert!(proof.amounts(&logs, wallet, input, output).is_none());
+            checked += 1;
+        }
+        assert_eq!(checked, 8);
+    }
 }

@@ -146,7 +146,7 @@ pub async fn emitter(ctx: &Ctx, e: &Entry, logs: &[SimLog]) -> GatewayResult<()>
         return logs.iter().any(|l| l.address==e.pool.reference.address() && l.topics.first()==Some(&swap))
             .then_some(()).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Рынок SectorOne не выпустил событие Swap"));
     }
-    if matches!(&e.pool.state,PoolState::MintClub(_) | PoolState::Temple(_) | PoolState::Carbon(_)) || e.family.tradable
+    if matches!(&e.pool.state,PoolState::Antfarm(_) | PoolState::MintClub(_) | PoolState::Temple(_) | PoolState::Carbon(_)) || e.family.tradable
         || super::super::quote::frax_pricing::is_frax(e)
         || super::super::quote::oasis_pricing::is_oasis(e)
         || super::super::quote::vista_pricing::native_router(e)

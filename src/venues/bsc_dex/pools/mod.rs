@@ -91,6 +91,7 @@ pub(super) mod carbon_directory;
 pub(super) mod carbon_events;
 pub(crate) mod temple;
 mod antfarm;
+pub(crate) mod antfarm_probe;
 pub(crate) mod antfarm_book;
 mod temple_directory;
 pub mod mint_club;

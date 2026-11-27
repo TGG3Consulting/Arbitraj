@@ -112,6 +112,9 @@ pub async fn run(
     let temple=if matches!(&e.pool.state,crate::core::types::PoolState::Temple(_)){
         Some(Box::pin(super::super::pools::temple::probe_state(ctx,e,at.number)).await?)
     }else{None};
+    let antfarm = if super::super::exec::antfarm_wallet::enabled(e) {
+        Some(Box::pin(super::super::pools::antfarm_probe::anchor(ctx,e,at.number)).await?)
+    } else { None };
     let carbon=super::super::exec::carbon_direct::enabled(e);
     let vista = if carbon || super::super::quote::vista_pricing::native_router(e) || (super::super::quote::ekubo_v2_pricing::enabled(e) && matches!(&e.pool.state,crate::core::types::PoolState::Ekubo(d) if d.native.is_some())) {
         Box::pin(super::vista_probe::Probe::of(ctx, e, at.number, wallet))
@@ -139,7 +142,7 @@ pub async fn run(
         v.pool.block = at.number;
         v
     });
-    let e = own_bond.as_ref().map(|(_,e,_)|e.as_ref()).or(verified.as_deref()).or_else(||temple.as_ref().map(|(_,e)|e.as_ref())).unwrap_or(e);
+    let e = own_bond.as_ref().map(|(_,e,_)|e.as_ref()).or(verified.as_deref()).or_else(|| antfarm.as_ref().map(|(_,e)|e.as_ref())).or_else(||temple.as_ref().map(|(_,e)|e.as_ref())).unwrap_or(e);
     let (buy_aps, buy_router, buy_data) = part(
         ctx,
         e,
@@ -159,7 +162,8 @@ pub async fn run(
     let way = probe_quote::Way::of(ctx, e);
     let over = way.overrides(ctx)?;
     let (qto, qdata) = way.request(ctx, e, usdt, usdt_amount)?;
-    let mut list = if carbon || own_bond.is_some(){Vec::new()}else{vec![pc::transfer(source, usdt, wallet, usdt_amount)]};
+    let own_antfarm = antfarm.is_some() && super::super::pools::antfarm_probe::uses_funding_pair(e,source);
+    let mut list = if carbon || own_bond.is_some() || own_antfarm{Vec::new()}else{vec![pc::transfer(source, usdt, wallet, usdt_amount)]};
     if let Some(seed) = vista
         .as_ref()
         .and_then(|v| v.fund(wallet, usdt, usdt_amount))
@@ -189,10 +193,18 @@ pub async fn run(
             list[h.after] = b;
         }
     }
-    let hash = own_bond.as_ref().map(|(h,_,_)|h.hash).or_else(||vista.as_ref().map(|v| v.head.hash)).or_else(||temple.as_ref().map(|(h,_)|h.hash));
+    let farm_post = if antfarm.is_some() {
+        let (to,input) = super::super::pools::antfarm_probe::request(ctx,e)?;
+        list.push(Call { from:wallet, to, input });
+        Some(list.len()-1)
+    } else { None };
+    let hash = own_bond.as_ref().map(|(h,_,_)|h.hash).or_else(||antfarm.as_ref().map(|(h,_)|h.hash)).or_else(||vista.as_ref().map(|v| v.head.hash)).or_else(||temple.as_ref().map(|(h,_)|h.hash));
     let first = simulate::run_anchored(ctx, &list, &values, &over, at, hash).await?;
     let (q, x) = (h.quote, h.buy);
     if let Some((i, r)) = first.iter().enumerate().find(|(_, r)| !r.ok()) {
+        if farm_post == Some(i) || (own_antfarm && i < q) {
+            return Err(ctx.err(ErrorCode::NoRoute,format!("Antfarm: проба не получила финансирование или состояние рынков: {}",r.why())));
+        }
         // Решение 280: V2-форк без роутера — откат покупки через исполнитель — свойство пула, не монеты.
         if let Some(why) = v2_pair_probe::buy_unmeasured(e, i, q, r) {
             return Err(ctx.err(ErrorCode::SwapReverted, why));
@@ -229,7 +241,7 @@ pub async fn run(
     // как balanceOf − резерв). Остаток — тот же, что раньше, газ продажи сравним с прежними замерами.
     let (half, quarter) = (bought / U256::from(2u8), bought / U256::from(4u8));
     let rest = bought - half - quarter;
-    let post=if carbon{super::carbon_probe::after(ctx,e,usdt,usdt_amount,&first[x].logs)?}else if temple.is_some(){super::super::pools::temple::after_probe(ctx,e,usdt,usdt_amount,&first[x].logs)?}else{super::super::exec::mint_club_direct::after_probe(ctx,e,usdt,usdt_amount,bought,(wallet,own_bond.as_ref().and_then(|(_,_,p)|*p),&first[x].logs))?};
+    let post=if let Some(n)=farm_post {Some(super::super::pools::antfarm_probe::after(ctx,e,&first[n].return_data)?)} else if carbon{super::carbon_probe::after(ctx,e,usdt,usdt_amount,&first[x].logs)?}else if temple.is_some(){super::super::pools::temple::after_probe(ctx,e,usdt,usdt_amount,&first[x].logs)?}else{super::super::exec::mint_club_direct::after_probe(ctx,e,usdt,usdt_amount,bought,(wallet,own_bond.as_ref().and_then(|(_,_,p)|*p),&first[x].logs))?};
     let e=post.as_deref().unwrap_or(e);
     let (sell_aps, sell_router, sell_data) = part(
         ctx,

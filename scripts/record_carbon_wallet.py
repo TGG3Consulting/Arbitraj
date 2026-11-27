@@ -13,7 +13,7 @@ MODULE = "0x7900000000000000000000000000000000000064"
 ABI = ["address", "address", ACTION, "bool", "uint256", "uint128"]
 
 
-def runtime_at(url, tag, artifact, controller=CTRL):
+def runtime_at(url, tag, artifact, controller=CTRL,session=requests):
     word = encode(["address"], [controller])
     expected = bytearray.fromhex(artifact["runtime"])
     refs = list(artifact["immutableReferences"].values())
@@ -25,21 +25,21 @@ def runtime_at(url, tag, artifact, controller=CTRL):
             raise ValueError("incorrect immutable width")
         expected[start:start + 32] = word
     creation = {"from": OWNER, "data": "0x" + artifact["creation"] + word.hex()}
-    reply = requests.post(url, json={"jsonrpc":"2.0","id":1,"method":"eth_call","params":[creation,tag]},timeout=35)
+    reply = session.post(url, json={"jsonrpc":"2.0","id":1,"method":"eth_call","params":[creation,tag]},timeout=35)
     reply.raise_for_status()
     if reply.json().get("result") != "0x"+expected.hex() or rpc(url,"eth_getCode",[MODULE,tag]) != "0x":
         raise ValueError("bound creation/runtime or temporary module address")
     return "0x"+expected.hex()
 
 
-def capture(url, source, artifact, market=ETH_MARKET, chain_id=1, block=BLOCK):
+def capture(url, source, artifact, market=ETH_MARKET, chain_id=1, block=BLOCK,session=requests):
     tag = source["selector"]
     if tag != {"blockHash":block,"requireCanonical":True} or int(rpc(url,"eth_chainId",[]),16) != chain_id:
         raise ValueError("incorrect physical network")
     header = rpc(url,"eth_getBlockByHash",[block,False])
     if header["stateRoot"] != source["state_root"]:
         raise ValueError("canonical state root")
-    runtime = runtime_at(url,tag,artifact,market.controller)
+    runtime = runtime_at(url,tag,artifact,market.controller,session)
     overrides = {OWNER:{"balance":hex(20*10**18)}, MODULE:{"code":runtime}}
     rows=[]
     for v in source["controls"]:

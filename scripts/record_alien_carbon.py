@@ -1,13 +1,15 @@
 """Bind the Alien Base voucher to its live Carbon proxy, orders, fees and both payment forms."""
 import argparse
 import json
+import time
 from hashlib import sha256
 from pathlib import Path
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from record_balancer_markets import Capture
-from record_balancer_v1 import fingerprint,rpc
 from record_base_slipstream_executor import ROOT
 from record_carbon_ethereum import Market,NATIVE,collect,settle,wallet
 from record_carbon_wallet import capture as protected
@@ -19,6 +21,21 @@ USDC="0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
 WETH="0x4200000000000000000000000000000000000006"
 IMPL_SLOT="0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc"
 UINT="uint256"
+
+
+class ArchiveSession(requests.Session):
+    def __init__(self):
+        super().__init__()
+        retry=Retry(total=5,backoff_factor=2,status_forcelist=(429,502,503,504),allowed_methods={"POST"})
+        self.mount("https://",HTTPAdapter(max_retries=retry))
+
+    def post(self,url,**kwargs):
+        payload=kwargs["json"]
+        reads={"eth_call","eth_getBlockByNumber","eth_chainId","eth_getCode","eth_getStorageAt"}
+        if any(item.get("method") not in reads for item in (payload if isinstance(payload,list) else [payload])):
+            raise ValueError("unexpected archive method")
+        time.sleep(0.3)
+        return super().post(url,**kwargs)
 
 
 def sources():
@@ -43,14 +60,17 @@ def sources():
 def capture(url,artifact):
     pin=json.loads((ROOT/"tests/data/first_run_dex_2026-11-26/base.json").read_bytes())
     at=pin["selector"]
-    head=rpc(url,"eth_getBlockByNumber",[hex(pin["block"]),False])
-    if head["hash"]!=at["blockHash"] or rpc(url,"eth_chainId",[])!="0x2105":
-        raise ValueError("wrong canonical Base block")
     c=Capture(dict(pin,endpoint=url))
+    c.session=ArchiveSession()
+    def read(method,params):
+        res=c.session.post(url,json={"id":1,"jsonrpc":"2.0","method":method,"params":params},timeout=25)
+        res.raise_for_status()
+        return res.json()["result"]
+    head=read("eth_getBlockByNumber",[hex(pin["block"]),False])
+    if head["hash"]!=at["blockHash"] or read("eth_chainId",[])!="0x2105":
+        raise ValueError("wrong canonical Base block")
     proxy,=c.one(VOUCHER,"controller()",[],[],["address"])
-    reply=requests.post(url,json={"jsonrpc":"2.0","id":1,"method":"eth_getStorageAt","params":[proxy,IMPL_SLOT,at]},timeout=20)
-    reply.raise_for_status()
-    impl="0x"+reply.json()["result"][-40:].lower()
+    impl="0x"+read("eth_getStorageAt",[proxy,IMPL_SLOT,at])[-40:].lower()
     if impl!=EXPECTED_IMPL or impl==proxy:
         raise ValueError("unexpected controller implementation")
     empty,=c.one(impl,"pairs()",[],[],["address[2][]"])
@@ -97,10 +117,15 @@ def capture(url,artifact):
                 controls.append(settle(c,src,dst,ids,spent,out,by_target,deadline,market))
     for r in directory:
         r["orders"]=[[str(sid),owner,tokens,[[str(v) for v in o] for o in orders]] for sid,owner,tokens,orders in r["orders"]]
-    roles={role:{"address":a,**fingerprint(url,a,at)} for role,a in {"voucher":VOUCHER,"proxy":proxy,"implementation":impl,"wrapped":WETH}.items()}
+    from eth_utils import keccak
+    roles={}
+    for role,a in {"voucher":VOUCHER,"proxy":proxy,"implementation":impl,"wrapped":WETH}.items():
+        code=bytes.fromhex(read("eth_getCode",[a,at])[2:])
+        if not code:raise ValueError(("missing runtime",role))
+        roles[role]={"address":a,"bytes":len(code),"keccak256":"0x"+keccak(code).hex()}
     original=dict(source=SOURCE,chain_id=8453,height=pin["block"],selector=at,state_root=head["stateRoot"],roles=roles,default_fee=default_fee,
                   implementation_pair_count=len(empty),directory=directory,controls=controls,version=version)
-    module=protected(url,original,artifact,market,8453,at["blockHash"])
+    module=protected(url,original,artifact,market,8453,at["blockHash"],session=c.session)
     return {"original":original,"protected":module}
 
 

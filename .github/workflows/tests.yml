@@ -1091,6 +1091,8 @@ jobs:
             flags=(--module "$RUNNER_TEMP/raindex/RaindexWallet.json")
           fi
           python scripts/record_raindex_wallets.py "${MARKET##*-}" "$RUNNER_TEMP/market.json" "${flags[@]}"
+      - if: matrix.market == 'basestonk-base-directory'
+        run: python scripts/record_basestonk_base.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'kaliber-base-kyber'
         run: python scripts/record_kaliber_kyber.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'kaliber-base-canonical'

@@ -1249,4 +1249,4 @@ WAGMI — запись; расчёт выплаты Antfarm после попо�
 Сверил обычный пул (BSC): `Venue::Regular` → `funding` = прежний перевод `pc::transfer(source, e.usdt, ..)`, `leg` = прежний
 `probe::part(.., (vista, None))`, `observe` = `None`, `hash` = `None`, `funding_error` = `None`, `after` = `Ok(None)` — раньше
 для обычного пула `mint_club_direct::after_probe` тоже сразу возвращал `Ok(None)`. Поведение BSC то же.
-`check/probe.rs`: 424 → ~350 строк. R-42 по сути закрывается — осталось не добавлять новые DEX веткой в общие файлы.
+`check/probe.rs`: 424 → 378 строк. R-42 по сути закрывается — осталось не добавлять новые DEX веткой в общие файлы.

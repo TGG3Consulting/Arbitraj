@@ -49,6 +49,7 @@ pub(super) fn rate(ctx: &Ctx, e: &Entry) -> Option<GatewayResult<Decimal>> {
                     )
                 }),
         ),
+        PoolState::BancorV3(s)=>Some(Ok(s.markets.iter().flatten().fold(Decimal::ZERO,|fee,m|fee+(Decimal::ONE_HUNDRED-fee)*Decimal::new(i64::from(m.fee_ppm),6)))),
         PoolState::UniswapV1(s)=>Some(Ok(if s.dual(){Decimal::new(5991,4)}else{Decimal::new(3,1)})),
         PoolState::Antfarm(_)
         | PoolState::Surge(_)

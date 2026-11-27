@@ -1,0 +1,57 @@
+{
+  "selector": {
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "requireCanonical": true
+  },
+  "vault": "0x649765821d9f64198c905ec0b2b037a4a52bc373",
+  "pools": {
+    "0x0d438f3b5175bebc262bf23753c1e53d03432bde": {
+      "staked": "6842522952196425157754",
+      "network_fee": 1000000
+    },
+    "0x0d8775f648430679a709e98d2b0cb6250d2887ef": {
+      "staked": "1919825460466259905017996",
+      "network_fee": 1000000
+    },
+    "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984": {
+      "staked": "6716387978504081445284",
+      "network_fee": 1000000
+    },
+    "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": {
+      "staked": "6376586337",
+      "network_fee": 1000000
+    },
+    "0x4a220e6096b25eadb88358cb44068a3248254675": {
+      "staked": "406239992645021514502",
+      "network_fee": 1000000
+    },
+    "0x514910771af9ca656af840dff83e8264ecf986ca": {
+      "staked": "523851756217123970508693",
+      "network_fee": 1000000
+    },
+    "0x7d1afa7b718fb893db30a3abc0cfc608aacfebb0": {
+      "staked": "651246051279103082018587",
+      "network_fee": 1000000
+    },
+    "0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2": {
+      "staked": "31504734656156345357",
+      "network_fee": 1000000
+    },
+    "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee": {
+      "staked": "4408388815980246177356",
+      "network_fee": 1000000
+    }
+  },
+  "balances": {
+    "0x0d438f3b5175bebc262bf23753c1e53d03432bde": "965654760824340485931",
+    "0x0d8775f648430679a709e98d2b0cb6250d2887ef": "930602195960858190095306",
+    "0x1f573d6fb3f13d689ff844b4ce37794d79a7ff1c": "23201285040561909491455446",
+    "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984": "1920424955935027183116",
+    "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": "1210179785",
+    "0x4a220e6096b25eadb88358cb44068a3248254675": "75885570520705186825",
+    "0x514910771af9ca656af840dff83e8264ecf986ca": "227272505058474107059257",
+    "0x7d1afa7b718fb893db30a3abc0cfc608aacfebb0": "306330159874014016685091",
+    "0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2": "6351771579013667942",
+    "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee": "1149074669228081081379"
+  }
+}

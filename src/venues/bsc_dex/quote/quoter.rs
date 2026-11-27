@@ -49,6 +49,10 @@ pub async fn out_at(
     amount: U256,
     block: &str,
 ) -> GatewayResult<U256> {
+    if let crate::core::types::PoolState::BancorV3(s)=&e.pool.state{
+        let at=super::super::pools::nami::block(ctx,block).await?;
+        return Box::pin(super::super::pools::bancor_v3::official(ctx,s,token_in,true,amount,&at)).await;
+    }
     if e.family.variant==super::super::pools::family_variant::Variant::UniswapV1{
         return Box::pin(super::super::pools::uniswap_v1_quotes::out(ctx,e,token_in,amount,block)).await;
     }

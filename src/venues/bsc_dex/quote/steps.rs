@@ -99,7 +99,16 @@ pub fn path_costs(
             names.gas,
             false,
         );
-        if let PoolState::UniswapV1(s)=&h.entry.pool.state{
+        if let PoolState::BancorV3(s)=&h.entry.pool.state{
+            let (paid,got)=(h.swapped.amount_in,h.swapped.amount_out);
+            let by_input=|by|s.swap(h.token_in,by,if by{paid}else{got},false).filter(|f|f.spent==paid && f.received==got);
+            let fee=by_input(side==Side::Sell).or_else(||by_input(side==Side::Buy)).ok_or_else(||ctx.err(ErrorCode::BadResponse,"Bancor V3: размеры не соответствуют способу расчёта"))?;
+            for (asset,n) in fee.fees.into_iter().flatten().filter(|(_,n)|!n.is_zero()){
+                let (decimals,symbol)=if asset==s.bnt{(s.bnt_decimals,if h.token_out==s.bnt{to.as_str()}else{"BNT"})}else{(h.dec_out,to.as_str())};
+                let v=num::to_decimal(n,decimals).ok_or_else(||ctx.err(ErrorCode::BadResponse,"Bancor V3: комиссия вне диапазона"))?;
+                add(&mut out,CostKind::PoolFee,v,symbol,true);
+            }
+        } else if let PoolState::UniswapV1(s)=&h.entry.pool.state{
             // A normal BUY is priced backwards; sequential graph fills may instead already carry an exact-input quote.
             let inputs = (h.swapped.amount_in,h.swapped.amount_out);
             let by_input = |exact_in| s.swap(h.token_in,exact_in,if exact_in {inputs.0}else{inputs.1})

@@ -5824,5 +5824,36 @@
         "0xa1876c000be9b44649d66c77b2412119195fb5d4dab19fe8229c45f025952461"
       ]
     }
+  },
+  {
+    "network": "ethereum",
+    "id": "bancor-v3-ethereum",
+    "chain_id": 1,
+    "source": "https://github.com/bancorprotocol/contracts-v3/tree/97d7905b8548470e79d40ce02e09b006f555aa11/deployments/mainnet",
+    "settings": {
+      "dex.kind": "bancor_v3",
+      "dex.factory": "0xeef417e1d5cc832e619ae18d2f140de2999dd4fb",
+      "dex.quoter": "0x8e303d296851b320e6a697bacb979d13c9d6e760",
+      "dex.vault": "0x649765821d9f64198c905ec0b2b037a4a52bc373",
+      "dex.bancor_native_token": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "dex.bancor_roles": [
+        "0xeef417e1d5cc832e619ae18d2f140de2999dd4fb 0xb304ce9f8477d385d36acc50062f859af0a069be307efe3e1396528e9cbcfd6d 0x2f14750b0d267be47dcd30a134796c2e4b1638a3 0x97e9939bdea006e625ef055f65e60de46b7c771db0aa255b773adc124d877434",
+        "0x8e303d296851b320e6a697bacb979d13c9d6e760 0xb304ce9f8477d385d36acc50062f859af0a069be307efe3e1396528e9cbcfd6d 0xfd47c74a8030520bacd364fb8e08acb28766ae7b 0x240d97387465c64c812218869123b2e7243f692c94a2c60bcaf05024b3b0ad25",
+        "0x649765821d9f64198c905ec0b2b037a4a52bc373 0xb304ce9f8477d385d36acc50062f859af0a069be307efe3e1396528e9cbcfd6d 0xf3b685d24f84b6eeeeee334250cf73ade1f10144 0x7288f4164f1dbd1740a23b4e0d669a46f628679fca720a933daae753b720ed38",
+        "0x02651e355d26f3506c1e644ba393fdd9ac95eaca 0xb304ce9f8477d385d36acc50062f859af0a069be307efe3e1396528e9cbcfd6d 0xfb07a644a9e53879f29f7b3f29362e9c95b1ffa3 0x1a87f006fc40f7cdfd285865a7b80bd0a5f98d6e5d845a8a914a0790b6b4e667",
+        "0x83e1814ba31f7ea95d216204bb45fe75ce09b14f 0xb304ce9f8477d385d36acc50062f859af0a069be307efe3e1396528e9cbcfd6d 0x51a6d03b156af044bda570cf35a919db851cebd1 0xe605dadbf8486c4ab97406928496b337c8f75cc4f61122a9e5b825ce4c7be17f"
+      ],
+      "dex.bancor_collections": [
+        "0xde1b3ccfc45e3f5bff7f43516f2cd43364d883e4 0x6d1a813844b59420641b5cd5be2dc7454c8999d141c8e21c2679a83cca13b44b"
+      ],
+      "dex.router_exact_tokens": [
+        "0x1f573d6fb3f13d689ff844b4ce37794d79a7ff1c 0xf1495e99bb63cf244df1a4e88c356e556d15497028e15842edccb032e3463bb4",
+        "0x0d8775f648430679a709e98d2b0cb6250d2887ef 0xd85707ff81f83e028799db12d6a9bd6c975e383dce9dd40db3b57a53e9cd94be",
+        "0x514910771af9ca656af840dff83e8264ecf986ca 0x77c633ba07c8cb94cd4864092fd8b31e31cf9d065f6fb6acf617298bc0008785"
+      ],
+      "dex.module_runtime_hashes": [
+        "0x317baf1798035cf4235ee1fdc99687e5a6bf535cd020cb0383f191f14da8d0d5"
+      ]
+    }
   }
 ]

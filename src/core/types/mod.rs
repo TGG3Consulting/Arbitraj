@@ -7,6 +7,7 @@
 //! Это стык: менять только через запрос на изменение стыка (docs/AGENTS.md).
 
 pub mod rubicon;
+pub mod bancor_v3;
 pub mod uniswap_v1;
 pub mod bundles;
 pub mod surge;

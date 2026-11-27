@@ -15,7 +15,7 @@ use crate::{core::types::RouteMode, gateway::quote_stage};
 use alloy_primitives::Bytes;
 
 pub(super) fn enabled(e: &Entry) -> bool {
-    (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || matches!(e.family.variant,Variant::UniswapV1|Variant::RubiconClassic|Variant::PropVenue|Variant::IntegralSize|Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
+    (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || matches!(e.family.variant,Variant::BancorV3|Variant::UniswapV1|Variant::RubiconClassic|Variant::PropVenue|Variant::Stabull|Variant::IntegralSize|Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
 }
 
 pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Vec<OptionQuote> {
@@ -27,7 +27,15 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         !quote_stage::settlement() && ctx.text("dex.router_mode").ok().as_deref() == Some("graph");
     let mut quotes = Vec::new();
     let native=super::super::exec::native::is_native(ctx,&i.asset) || super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt);
-    for e in i.entries.iter().filter(|e| enabled(e) && (!native || e.family.variant.flux_native() || e.family.variant==Variant::UniswapV1)) {
+    for e in i.entries.iter().filter(|e| enabled(e) && (!native || e.family.variant.flux_native() || matches!(e.family.variant,Variant::UniswapV1|Variant::BancorV3))) {
+        if matches!(e.pool.state,crate::core::types::PoolState::BancorV3(_)){
+            quotes.extend(Box::pin(super::bancor_v3_pricing::options(q,i,e,payer,native,graph,head)).await);
+            continue;
+        }
+        if e.family.variant==Variant::Stabull {
+            quotes.extend(Box::pin(super::stabull_pricing::options(q,i,e,payer,graph,head)).await);
+            continue;
+        }
         if matches!(e.pool.state,crate::core::types::PoolState::UniswapV1(_)) {
             quotes.extend(Box::pin(super::uniswap_v1_pricing::options(q,i,e,payer,native,graph,head)).await);
             continue;
@@ -112,8 +120,6 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 super::super::exec::o1_wallet::at(ctx,&e,&h.selector()).await
             } else if e.family.variant==Variant::Temple {
                 super::super::pools::temple::market(ctx,e.family,e.pool.reference.address(),(e.coin,e.usdt),&h.selector()).await.map(|s|e.pool.state=crate::core::types::PoolState::Temple(Box::new(s)))
-            } else if e.family.variant==Variant::Stabull {
-                super::super::pools::stabull::market(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),&h.selector()).await
             } else if e.family.variant==Variant::MaverickOne {
                 super::super::pools::maverick_one::market(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),&h.selector()).await.map(|_|())
             } else if e.family.variant == Variant::BunnySwap {

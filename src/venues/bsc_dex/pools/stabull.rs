@@ -37,7 +37,7 @@ fn invalid(ctx: &Ctx) -> crate::gateway::errors::GatewayError {
     )
 }
 
-pub(super) async fn assets(ctx: &Ctx, pool: Address, at: &Value) -> GatewayResult<[Address; 2]> {
+pub(crate) async fn assets(ctx: &Ctx, pool: Address, at: &Value) -> GatewayResult<[Address; 2]> {
     let a = IStabull::derivativesCall { index: U256::ZERO };
     let b = IStabull::derivativesCall { index: U256::ONE };
     let [x, y] = batch::read(

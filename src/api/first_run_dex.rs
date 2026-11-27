@@ -276,6 +276,47 @@ mod tests {
                 .into_iter()
                 .find(|s| s["chain_id"] == p.chain_id)
                 .unwrap();
+            if p.id == "bancor-v3-ethereum" {
+                let markets: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+                    include_bytes!("../../tests/data/first_run_dex_2026-11-26/bancor_v3_ethereum.json.gz").as_slice(),
+                )).unwrap();
+                let wallet: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+                    include_bytes!("../../tests/data/first_run_dex_2026-11-26/bancor_v3_wallet.json.gz").as_slice(),
+                )).unwrap();
+                let tokens: Value = serde_json::from_str(include_str!(
+                    "../../tests/data/first_run_dex_2026-11-26/bancor_v3_exact_tokens.json"
+                )).unwrap();
+                for archive in [&markets, &wallet, &tokens] {
+                    assert_eq!(archive["selector"], snapshot["selector"]);
+                }
+                let text = |v: &Value| v.as_str().unwrap().to_owned();
+                let list = |key: &str| {
+                    let Some(Parameter::List(items)) = p.settings.get(key) else { panic!("missing {key}") };
+                    let mut rows = items.clone();
+                    rows.sort();
+                    rows
+                };
+                let roles = &markets["roles"];
+                for (key, role) in [("dex.factory", "BancorNetwork"), ("dex.quoter", "BancorNetworkInfo"), ("dex.vault", "MasterVault")] {
+                    assert_eq!(p.settings.get(key), Some(&Parameter::Text(text(&roles[role]["address"]))));
+                }
+                let mut bindings: Vec<_> = roles.as_object().unwrap().values().map(|r| {
+                    let proxy = &r["implementation"];
+                    assert_eq!(proxy["address"], r["manifest_implementation"]);
+                    [text(&r["address"]), text(&r["keccak256"]), text(&proxy["address"]), text(&proxy["keccak256"])].join(" ")
+                }).collect();
+                bindings.sort();
+                assert_eq!(list("dex.bancor_roles"), bindings);
+                let mut collections: Vec<_> = markets["collections"].as_object().unwrap().iter()
+                    .map(|(address, c)| format!("{address} {}", text(&c["keccak256"]))).collect();
+                collections.sort();
+                assert_eq!(list("dex.bancor_collections"), collections);
+                let mut assets: Vec<_> = tokens["tokens"].as_object().unwrap().iter()
+                    .map(|(address, t)| format!("{address} {}", text(&t["keccak256"]))).collect();
+                assets.sort();
+                assert_eq!(list("dex.router_exact_tokens"), assets);
+                assert_eq!(list("dex.module_runtime_hashes"), vec![text(&wallet["module_hash"])]);
+            }
             if p.id=="uniswap-v1-ethereum"{
                 let bytes=include_bytes!("../../tests/data/first_run_dex_2026-11-26/uniswap_v1_ethereum.json.gz");
                 let evidence:Value=serde_json::from_reader(flate2::read::GzDecoder::new(bytes.as_slice())).unwrap();
@@ -339,6 +380,13 @@ mod tests {
                                     .as_str()
                                     .is_some_and(|v| v == format!("0x{}", "0".repeat(64)))
                         }));
+                        continue;
+                    }
+                    if k=="dex.bancor_native_token" && p.id=="bancor-v3-ethereum"{
+                        let bytes=include_bytes!("../../tests/data/first_run_dex_2026-11-26/bancor_v3_wallet.json.gz");
+                        let proof:Value=serde_json::from_reader(flate2::read::GzDecoder::new(bytes.as_slice())).unwrap();
+                        assert_eq!(proof["selector"],snapshot["selector"]);
+                        assert!(proof["cases"].as_array().unwrap().iter().any(|v|v["source"]==text.as_str() && v["mode"]=="native_wallet" && v["spent"].is_string()));
                         continue;
                     }
                     if text.len() == 42 && text.starts_with("0x") {

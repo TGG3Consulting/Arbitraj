@@ -269,6 +269,7 @@ pub(in crate::venues::bsc_dex) fn selected(leg: &crate::core::types::RouteLeg) -
         && let Some(
             crate::core::types::RouterFeeMode::ProtectedWallet { target }
             | crate::core::types::RouterFeeMode::NativeWallet {target, ..}
+            | crate::core::types::RouterFeeMode::BancorV3 {target, ..}
             | crate::core::types::RouterFeeMode::UniswapV1 {target, ..}
             | crate::core::types::RouterFeeMode::FluxEth {target, ..}
             | crate::core::types::RouterFeeMode::CarbonWallet {

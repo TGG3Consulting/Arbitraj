@@ -41,6 +41,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
     use alloy::sol_types::SolEvent;
     match f.proto {
         _ if f.variant.umbrae()=>super::umbrae::topics(f.variant),
+        _ if f.variant==super::family_variant::Variant::BancorV3=>vec![super::bancor_v3::IBancor::TokensTraded::SIGNATURE_HASH],
         _ if f.variant==super::family_variant::Variant::UniswapV1=>super::uniswap_v1::topics(),
         _ if f.variant==super::family_variant::Variant::RubiconClassic=>super::rubicon::topics(),
         _ if f.variant==super::family_variant::Variant::Carbon=>super::carbon_events::topics(),
@@ -115,6 +116,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
     use alloy::sol_types::SolEvent;
     match f.proto {
         _ if f.variant.umbrae()=>super::umbrae::topics(f.variant),
+        _ if f.variant==super::family_variant::Variant::BancorV3=>vec![super::bancor_v3::IBancor::TokensTraded::SIGNATURE_HASH],
         _ if f.variant==super::family_variant::Variant::UniswapV1=>super::uniswap_v1::topics(),
         _ if f.variant==super::family_variant::Variant::RubiconClassic=>super::rubicon::topics(),
         _ if f.variant==super::family_variant::Variant::Carbon => super::carbon_events::topics(),
@@ -186,6 +188,11 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         _ if e.family.variant==super::family_variant::Variant::Pendle=>{e.valid=false;Applied::Refresh("Изменилось состояние рынка Pendle".into())}
         _ if e.family.variant==super::family_variant::Variant::Dagrow=>{ e.valid=false;Applied::Refresh("Обновилось состояние DAGrow SSP".into()) }
         _ if e.family.variant==super::family_variant::Variant::Temple => {e.valid=false;Applied::Refresh("Изменились резервы TempleDAO".into())}
+        _ if e.family.variant==super::family_variant::Variant::BancorV3=>{
+            let crate::core::types::PoolState::BancorV3(s)=&e.pool.state else{e.valid=false;return Applied::Refresh("Bancor V3: нужно полное состояние".into());};
+            let relevant=log.topics().get(1..4).is_none_or(|t|s.markets.iter().flatten().any(|m|t[1..].contains(&m.token.into_word())));
+            if relevant {e.valid=false;Applied::Refresh("Bancor V3: изменились резервы рынка".into())}else{Applied::Ignored}
+        }
         _ if e.family.variant==super::family_variant::Variant::UniswapV1=>{
             e.valid=false;Applied::Refresh("Uniswap V1: изменились физические резервы биржи".into())
         }

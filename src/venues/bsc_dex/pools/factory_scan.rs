@@ -124,6 +124,9 @@ async fn pass(
     }
     notes.extend(metric.notes);
     no_answer += metric.no_answer;
+    let bancor=Box::pin(super::bancor_directory::scan(ctx,coins,&quote_list)).await;
+    for (coin,rows) in bancor.found {found.entry(coin).or_default().extend(rows);}
+    notes.extend(bancor.notes);no_answer+=bancor.no_answer;
     let mav=Box::pin(super::maverick_one_directory::scan(ctx,coins,&quote_list)).await;
     for (coin,rows) in mav.found{found.entry(coin).or_default().extend(rows);}
     notes.extend(mav.notes);no_answer+=mav.no_answer;
@@ -148,7 +151,7 @@ async fn pass(
     let dag=Box::pin(super::dagrow::scan(ctx,coins,&quote_list)).await;
     for (coin,rows) in dag.found{found.entry(coin).or_default().extend(rows);}
     notes.extend(dag.notes);no_answer+=dag.no_answer;
-    let n_calls = integral.calls + dag.calls + temple.calls + carbon.calls + plan.calls.len() + extra.calls + metric.calls + woo_calls;
+    let n_calls = bancor.calls + integral.calls + dag.calls + temple.calls + carbon.calls + plan.calls.len() + extra.calls + metric.calls + woo_calls;
     let total: usize = found.values().map(Vec::len).sum();
     let fresh = ctx.index.with(|s| {
         let mut fresh = Vec::new();

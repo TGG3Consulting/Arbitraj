@@ -185,6 +185,9 @@ pub fn groups(wants: &[Want<'_>]) -> Vec<(Address, Vec<usize>)> {
     let mut at: HashMap<(&'static str, Address), usize> = HashMap::new();
     let mut out: Vec<(Address, Vec<usize>)> = Vec::new();
     for (i, w) in wants.iter().enumerate() {
+        // A registered pair can reference two independent markets at one Network/factory.
+        // Only a shared multicoin pool can be decoded from the contract without the raw pair.
+        if !w.family.proto.is_multi_coin() && super::load_batch::one_by_one(w.family){continue;}
         let PoolRef::Multi { contract, .. } = w.reference else {
             continue;
         };
@@ -252,4 +255,20 @@ pub fn pancake_state(
         ix,
         &bad,
     )
+}
+
+
+#[cfg(test)]
+mod network_pairs {
+    use super::*;
+    #[test]
+    fn projected_network_pairs_keep_their_raw_reference_in_batch_and_parallel_loads(){
+        let network=Address::repeat_byte(12); let a=Address::repeat_byte(1);let b=Address::repeat_byte(2);
+        let reference=PoolRef::Multi{contract:network,token0:a,token1:b};
+        let wants=["bancor_v3","uniswap_v1","saddle_stableswap"].map(|kind|Want{
+            family:super::super::families::make("regression-pair",kind).unwrap(),reference:&reference,token0:a,token1:b,
+            spacing:None,step:None,usdt:b
+        });
+        assert_eq!(groups(&wants),vec![(network,vec![2])]);
+    }
 }

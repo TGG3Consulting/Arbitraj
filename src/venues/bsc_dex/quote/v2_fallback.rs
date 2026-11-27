@@ -233,7 +233,7 @@ pub(super) fn private(
         let Some(e) = one(quote).and_then(|p| q.reg.get(p)) else {
             continue;
         };
-        if matches!(e.family.variant,super::super::pools::family_variant::Variant::UniswapV1|super::super::pools::family_variant::Variant::RubiconClassic) || !e.family.fork || !e.family.tradable || super::super::exec::mint_club_direct::enabled(&e) || super::super::exec::carbon_direct::enabled(&e) || e.family.variant.wallet_module() || super::ekubo_v2_pricing::enabled(&e) || super::oasis_pricing::is_oasis(&e) {
+        if matches!(e.family.variant,super::super::pools::family_variant::Variant::BancorV3|super::super::pools::family_variant::Variant::UniswapV1|super::super::pools::family_variant::Variant::RubiconClassic) || !e.family.fork || !e.family.tradable || super::super::exec::mint_club_direct::enabled(&e) || super::super::exec::carbon_direct::enabled(&e) || e.family.variant.wallet_module() || super::ekubo_v2_pricing::enabled(&e) || super::oasis_pricing::is_oasis(&e) {
             continue;
         }
         let white = super::white_pricing::is_white(&e);

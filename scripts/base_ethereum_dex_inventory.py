@@ -1075,6 +1075,19 @@ def tables(network, snapshots, profiles):
                     "Для защищённого расчёта в ETH, WETH и шага V5 укажите в dex.router адрес UniswapV1Adapter, "
                     "развёрнутого с dex.factory и dex.native_wrapped. "
                     f"[Баланс до и после каждой операции](../{archive.as_posix()})."])
+    if not base:
+        market_file=Path("tests/data/first_run_dex_2026-11-26/bancor_v3_ethereum.json.gz")
+        wallet_file=Path("tests/data/first_run_dex_2026-11-26/bancor_v3_wallet.json.gz")
+        with gzip.open(market_file,"rt",encoding="utf8") as stream:
+            market=json.load(stream)
+        with gzip.open(wallet_file,"rt",encoding="utf8") as stream:
+            wallets=json.load(stream)
+        active=sum(p["enabled"] for p in market["pools"].values())
+        out.extend(["", f"Bancor V3 · Ethereum, блок {market['block']}. По реестру было {len(market['pools'])} пулов, "
+                    f"торговля включена у {active}. Сверено {len(market['quotes'])} расчётов с NetworkInfo, "
+                    f"{sum('spent' in c for c in market['cases'])} выплат на исходном контракте и {len(wallets['cases'])} через защищённый модуль или V5. "
+                    "В dex.router указывается BancorV3Adapter с хешем из профиля. При создании нужны BancorNetwork, BancorNetworkInfo, MasterVault, WETH и обозначение ETH, в этом порядке. "
+                    f"[Реестр и исходные обмены](../{market_file.as_posix()}) · [Выплаты и возврат остатка](../{wallet_file.as_posix()})."])
     classic_path = Path("tests/data/first_run_dex_2026-11-26/rubicon_classic_base.json.gz")
     if base and classic_path.exists():
         with gzip.open(classic_path, "rt", encoding="utf8") as stream:

@@ -55,6 +55,7 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
                 if e.coin==s.temple {mul_div(amount,d,n)} else {mul_div(amount,n,d)}
             }
         }
+        PoolState::BancorV3(s)=>s.spot(e.usdt,amount),
         PoolState::UniswapV1(s)=>s.spot(e.usdt,amount),
         PoolState::Rubicon(book) => {
             let i = book.tokens.iter().position(|&token| token == e.coin)?;

@@ -44,6 +44,7 @@ pub fn request(
     token_in: Address,
     amount: U256,
 ) -> GatewayResult<(Address, Bytes)> {
+    if let PoolState::BancorV3(s)=&e.pool.state{return super::super::pools::bancor_v3::request(ctx,s,token_in,true,amount);}
     if e.family.variant==super::super::pools::family_variant::Variant::UniswapV1{return super::super::pools::uniswap_v1_quotes::request(ctx,e,token_in,amount);}
     if let Some(quoter) = super::market_selection::wallet_quoter(e.family.variant) {
         return (quoter.request)(ctx, e, token_in, amount);
@@ -538,6 +539,7 @@ pub fn request(
 
 /// Выход из ответа квотера. None — ответ не по ABI.
 pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> Option<U256> {
+    if matches!(e.pool.state,PoolState::BancorV3(_)){return super::super::pools::bancor_v3::decode(out);}
     if e.family.variant==super::super::pools::family_variant::Variant::UniswapV1{return super::super::pools::uniswap_v1_quotes::decode(e,out,token_in,amount);}
     if e.family.variant.umbrae(){return super::super::pools::umbrae_quotes::payout(e.family.variant,out,amount);}
     if let PoolState::Dagrow(_)=&e.pool.state {

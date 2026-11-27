@@ -42,6 +42,13 @@ pub fn by_pool(e: &Entry, log: &SimLog) -> bool {
     if let crate::core::types::PoolState::Temple(s)=&e.pool.state {
         return log.address==s.pair && log.topics.first()==Some(&IV2Pair::Swap::SIGNATURE_HASH);
     }
+    if let crate::core::types::PoolState::BancorV3(s) = &e.pool.state {
+        use super::super::exec::bancor_v3_wallet::IBancorTrade;
+        return log.address == s.network && log.topics.len() == 4 &&
+            log.topics[0] == IBancorTrade::TokensTraded::SIGNATURE_HASH &&
+            s.physical.iter().enumerate().any(|(i, source)| log.topics[2] == source.into_word() &&
+                log.topics[3] == s.physical[1-i].into_word());
+    }
     if let crate::core::types::PoolState::UniswapV1(s)=&e.pool.state {
         use super::super::exec::uniswap_v1_wallet::IV1Wallet;
         return s.markets.iter().flatten().any(|m|m.address==log.address)

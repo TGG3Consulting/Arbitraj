@@ -46,13 +46,28 @@ pub fn best(
     coin_dec: u8,
     usdt_dec: u8,
 ) -> GatewayResult<(Candidate, TokenTaxes)> {
+    best_with(q,asset,side,qty,entries,(coin_dec,usdt_dec),BuyWire::Forward)
+}
+
+#[derive(Clone,Copy)]
+pub(super) enum BuyWire{Forward,BancorTarget}
+impl BuyWire{
+    fn swap(self,ctx:&Ctx,e:&Entry,amount:U256)->GatewayResult<Swapped>{
+        if let Self::BancorTarget=self && let crate::core::types::PoolState::BancorV3(s)=&e.pool.state {
+            let f=s.swap(e.usdt,false,amount,false).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Bancor V3: заданный выход Vault недоступен"))?;
+            return Ok(Swapped{amount_in:f.spent,amount_out:f.received,complete:true});
+        }
+        pool_quote::swap(ctx,e,e.usdt,false,amount)
+    }
+}
+pub(super) fn best_with(q:&Quoting,asset:&Asset,side:Side,qty:Decimal,entries:Vec<Entry>,decimals:(u8,u8),buy:BuyWire)->GatewayResult<(Candidate,TokenTaxes)>{
     let ctx = &q.ctx;
     let taxes = taxes(q, asset)?;
     let mut best: Option<Candidate> = None;
     let mut reasons = Vec::new();
     for e in entries {
-        let r = select::usable(q, &e, side, usdt_dec).and_then(|u| {
-            calc_u(ctx, &e, &u, side, qty, (coin_dec, usdt_dec)).map_err(|err| err.message)
+        let r = select::usable(q, &e, side, decimals.1).and_then(|u| {
+            calc_for(ctx, &e, &u, side, qty, decimals,buy).map_err(|err| err.message)
         });
         match r {
             Ok((swapped, coins, usdt, u)) => {
@@ -136,6 +151,9 @@ pub fn calc_u(
     qty: Decimal,
     (coin_dec, usdt_dec): (u8, u8),
 ) -> GatewayResult<(Swapped, Decimal, Decimal, Usable)> {
+    calc_for(ctx,e,u,side,qty,(coin_dec,usdt_dec),BuyWire::Forward)
+}
+fn calc_for(ctx:&Ctx,e:&Entry,u:&Usable,side:Side,qty:Decimal,(coin_dec,usdt_dec):(u8,u8),buy:BuyWire)->GatewayResult<(Swapped,Decimal,Decimal,Usable)>{
     let keep = |pct: Decimal| Decimal::ONE - pct / Decimal::ONE_HUNDRED;
     let bad = || {
         ctx.err(
@@ -155,7 +173,7 @@ pub fn calc_u(
                         return Err(no("налог покупки и крючок забирают всё".into()));
                     }
                     let pool_out = ceil_units(qty / k, coin_dec).ok_or_else(bad)?;
-                    let s = pool_quote::swap(ctx, e, e.usdt, false, pool_out)?;
+                    let s = buy.swap(ctx,e,pool_out)?;
                     Ok((s.amount_in, (s, k)))
                 },
                 no,

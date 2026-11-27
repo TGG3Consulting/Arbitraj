@@ -1,0 +1,35 @@
+{
+  "selector": {
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "requireCanonical": true
+  },
+  "tokens": {
+    "0x1f573d6fb3f13d689ff844b4ce37794d79a7ff1c": {
+      "symbol": "BNT",
+      "bytes": 4337,
+      "keccak256": "0xf1495e99bb63cf244df1a4e88c356e556d15497028e15842edccb032e3463bb4",
+      "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x1f573d6fb3f13d689ff844b4ce37794d79a7ff1c",
+      "verified_source_sha256": "9c4a19c45cab05f7777d1a448207a3aa29029c5abce7d8f676c47f488247409e",
+      "compiler": "v0.4.11+commit.68ef5810",
+      "full_source_match": false
+    },
+    "0x0d8775f648430679a709e98d2b0cb6250d2887ef": {
+      "symbol": "BAT",
+      "bytes": 3284,
+      "keccak256": "0xd85707ff81f83e028799db12d6a9bd6c975e383dce9dd40db3b57a53e9cd94be",
+      "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x0d8775f648430679a709e98d2b0cb6250d2887ef",
+      "verified_source_sha256": "de0a7bf40bbb55ba3059c1218afdf9415644ec1247f54660a619edf014725d37",
+      "compiler": "0.4.10+commit.f0d539ae",
+      "full_source_match": false
+    },
+    "0x514910771af9ca656af840dff83e8264ecf986ca": {
+      "symbol": "LINK",
+      "bytes": 3153,
+      "keccak256": "0x77c633ba07c8cb94cd4864092fd8b31e31cf9d065f6fb6acf617298bc0008785",
+      "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x514910771af9ca656af840dff83e8264ecf986ca",
+      "verified_source_sha256": "18d961958d71cf5c7f70d2892d80bf6011f5920a498bf269a3707cf4acde2b0e",
+      "compiler": "v0.4.16+commit.d7661dd9",
+      "full_source_match": false
+    }
+  }
+}

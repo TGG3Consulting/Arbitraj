@@ -155,6 +155,8 @@ pub enum RouterFeeMode {
     Rebate,
     /// Официальный роутер проверяет валовую выплату ETH; аванс прибавлен к подписанному минимуму.
     NativeGrossMinimum,
+    /// Original Bancor amount mode and the fee class verified for the actual caller.
+    BancorV3 {target:alloy_primitives::Address,module:bool,native:bool,native_cash:bool,exempt:bool,desired:Option<alloy_primitives::U256>},
     /// Original V1 exchange or a wallet module, with explicit physical ETH settlement.
     UniswapV1 {target:alloy_primitives::Address,module:bool,native:bool,native_cash:bool},
     /// Нативный ETH Omni Flux, подписанный Universal Router и направление расчёта.

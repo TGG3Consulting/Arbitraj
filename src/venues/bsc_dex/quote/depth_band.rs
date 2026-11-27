@@ -191,6 +191,17 @@ fn side(
             let grow=if buy{(1.0+b).sqrt()-1.0}else{1.0/(1.0-b).sqrt()-1.0};
             Ok((super::super::math::temple::band(s,token_in,out,U256::from((grow*SCALE) as u128),U256::from(SCALE as u128),buy),true))
         }
+        (PoolState::BancorV3(s),PoolKind::V2)=>{
+            let Some((x,y))=s.band_reserves(token_in) else{return Ok((U256::ZERO,true));};
+            let (input,_)=xy_band(x,y,b,true)?;
+            let grow=if buy{input}else{
+                let factor=U256::from(((1.0/(1.0-b).sqrt()-1.0)*SCALE) as u128);
+                super::super::math::full_math::mul_div(x,factor,U256::from(SCALE as u128)).ok_or("Bancor V3: переполнение глубины")?
+            };
+            if let Some(f)=s.swap(token_in,true,grow,false){return Ok((pick(f.spent,f.received),true));}
+            let cap=s.vault_balances[usize::from(token_in==s.tokens[0])];
+            Ok((s.swap(token_in,false,cap,false).filter(|f|f.spent<=grow).map_or(U256::ZERO,|f|pick(f.spent,f.received)),false))
+        }
         (PoolState::UniswapV1(s),PoolKind::V2)=>{
             let (x,y)=s.band_reserves(token_in).ok_or("Uniswap V1: нет физической пары")?;
             xy_band(x,y,b,buy)

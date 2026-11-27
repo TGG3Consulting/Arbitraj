@@ -32,7 +32,13 @@ use super::path::Path;
 use super::route_calc::{self, Leg, keep};
 use super::{pool_after, pool_quote, pool_tax};
 use super::super::math::bundles_sequence::Sequence;
-use super::bundles_route;
+use super::{bundles_route,bancor_sequence};
+#[derive(Default)]
+struct Markets{
+    legacy:HashMap<PoolRef,PoolState>,
+    bundles:Sequence,
+    bancor:bancor_sequence::Sequence,
+}
 
 /// Пулы, через которые идут две доли и больше. Решение 295: по физическому пулу (`PoolRef::site`) — разные пары одного
 /// многомонетного пула в двух долях — общий пул; у прочих ссылок site() = сама ссылка. Принимает: ноги долей.
@@ -44,6 +50,7 @@ pub fn shared(shares: &[&[Leg]]) -> HashSet<PoolRef> {
         // Пул внутри одной доли не повторяется (путь без повторов токенов и площадок), но берём множество — на всякий случай.
         let mut mine=HashSet::new();
         for l in *legs {
+            if let Some(v)=bancor_sequence::withdrawal(l){mine.insert(v);}
             let primary=l.entry.liquidity_site();
             if let Some(second)=l.entry.second_liquidity_site(){mine.insert(second);}
             if let PoolState::Bundles(b)=&l.entry.pool.state{
@@ -98,8 +105,7 @@ pub fn eval(
     if let Some(w) = unsupported(&legs, &common) {
         return Err(ctx.err(ErrorCode::NoRoute, w));
     }
-    let mut after: HashMap<PoolRef, PoolState> = HashMap::new();
-    let mut bundles=Sequence::default();
+    let mut markets=Markets::default();
     let mut out = Vec::with_capacity(shares.len());
     for (legs, qty) in shares {
         if !legs
@@ -110,10 +116,10 @@ pub fn eval(
             out.push(route_calc::eval(ctx, legs, side, *qty, tax_keep)?);
             continue;
         }
-        let cur = on_state(legs, &after, &bundles);
+        let cur = on_state(legs,&markets);
         let tax_keep = pool_tax::coin_keep(&cur, side, t);
         let p = route_calc::eval(ctx, &cur, side, *qty, tax_keep)?;
-        advance(ctx, &cur, &p, &common, &mut after, &mut bundles)?;
+        advance(ctx, &cur, &p, &common,&mut markets)?;
         out.push(p);
     }
     super::temple_budget::check(ctx,&out)?;
@@ -168,12 +174,13 @@ pub fn legs_of(p: &Path) -> Vec<Leg> {
 }
 
 /// Ноги доли на текущих состояниях общих пулов (после прошлых долей). Ошибок нет.
-fn on_state(legs: &[Leg], after: &HashMap<PoolRef, PoolState>, bundles:&Sequence) -> Vec<Leg> {
+fn on_state(legs: &[Leg], markets:&Markets) -> Vec<Leg> {
     legs.iter()
         .map(|l| {
             let mut l = l.clone();
-            if let PoolState::Bundles(b)=&l.entry.pool.state {l.entry.pool.state=PoolState::Bundles(Box::new(bundles.current(b)));}
-            else if let Some(s) = after.get(&l.entry.liquidity_site()) {
+            if let PoolState::Bundles(b)=&l.entry.pool.state {l.entry.pool.state=PoolState::Bundles(Box::new(markets.bundles.current(b)));}
+            else if let PoolState::BancorV3(s)=&l.entry.pool.state{l.entry.pool.state=PoolState::BancorV3(Box::new(markets.bancor.current(s)));}
+            else if let Some(s) = markets.legacy.get(&l.entry.liquidity_site()) {
                 let mut state=s.clone();
                 // Разные ребра графа одного многомонетного Vault имеют собственные индексы пары.
                 if let (PoolState::VaultPool(prior),PoolState::VaultPool(next))=(&l.entry.pool.state,&mut state) {
@@ -194,8 +201,7 @@ fn advance(
     legs: &[Leg],
     p: &Path,
     common: &HashSet<PoolRef>,
-    after: &mut HashMap<PoolRef, PoolState>,
-    bundles:&mut Sequence,
+    markets:&mut Markets,
 ) -> GatewayResult<()> {
     let bad = || {
         ctx.err(
@@ -219,11 +225,14 @@ fn advance(
             .pct_at(leg.usable.hook_pct, amount)
             .map_err(|why| ctx.err(ErrorCode::NoRoute, why))?;
         let s = if let PoolState::Bundles(b)=&leg.entry.pool.state {
-            let fill=bundles.advance(b,leg.token_in,amount).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Bundles Swap: общая комиссия в порядке исполнения не покрыта"))?;
+            let fill=markets.bundles.advance(b,leg.token_in,amount).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Bundles Swap: общая комиссия в порядке исполнения не покрыта"))?;
             super::super::math::swap_cl::Swapped{amount_in:amount,amount_out:fill.credit,complete:true}
+        }else if let PoolState::BancorV3(b)=&leg.entry.pool.state{
+            let f=markets.bancor.advance(b,leg.token_in,amount).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Bancor V3: следующая доля превышает виртуальные резервы или остаток Vault"))?;
+            super::super::math::swap_cl::Swapped{amount_in:f.spent,amount_out:f.received,complete:true}
         }else if common.contains(&r) {
             let (s, st) = pool_after::apply(ctx, &leg.entry, leg.token_in, amount)?;
-            after.insert(r, st);
+            markets.legacy.insert(r, st);
             s
         } else {
             pool_quote::swap(ctx, &leg.entry, leg.token_in, true, amount)?

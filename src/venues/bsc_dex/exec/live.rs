@@ -64,7 +64,9 @@ pub async fn share(
                 .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Пул маршрута больше не в реестре"))
         })
         .collect::<GatewayResult<Vec<Entry>>>()?;
-    eval(v, &found, qty, direct_mode, th).await
+    let mut p=eval(v, &found, qty, direct_mode, th).await?;
+    super::carbon_direct::adjust(ctx,&mut p,hops,v.side==crate::core::types::Side::Buy)?;
+    Ok(p)
 }
 
 /// Путь доли по текущим проверкам пулов (допуск, лесенка влияния крючка с фактами сделки — TradeHooks::apply).

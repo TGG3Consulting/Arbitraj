@@ -42,7 +42,7 @@ fn chosen_fee(
         (false, None | Some(RouterFeeMode::Standard)) => Some(false),
         (
             false,
-            Some(RouterFeeMode::NativeGrossMinimum | RouterFeeMode::NativeSettlement { .. } | RouterFeeMode::ProtectedWallet{..}),
+            Some(RouterFeeMode::NativeGrossMinimum | RouterFeeMode::NativeSettlement { .. } | RouterFeeMode::ProtectedWallet{..}|RouterFeeMode::CarbonWallet{..}),
         ) => None,
     }
 }

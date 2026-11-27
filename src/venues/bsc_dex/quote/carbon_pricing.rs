@@ -58,55 +58,64 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         let sw = c.swapped;
         let size = if buy { sw.amount_out } else { sw.amount_in };
         let min = if buy { sw.amount_out } else { U256::ONE };
-        let Ok((order, p)) = direct::call(
-            &q.ctx,
-            s,
-            input,
-            buy,
-            size,
-            sw.amount_in,
-            min,
-            head.map_or(0, |h| h.timestamp.to()),
-        ) else {
+        let Ok(amount) = u128::try_from(size) else {
             continue;
         };
-
-        if let Some(h) = head
-            && carbon_quote::official(&q.ctx, s, input, &p, &h.selector())
-                .await
-                .is_err()
-        {
+        let by_size = super::super::math::carbon_match::alternatives(s, input, buy, amount);
+        let Ok(ttl) = q.ctx.int("dex.deadline_s") else {
             continue;
-        }
-        for protected in [false, true] {
-            let mut signed = order.clone();
-            if let Some(h) = head {
-                if direct::bound(&q.ctx, &e, &mut signed, h, protected)
+        };
+        let deadline = U256::from(
+            head.map_or(0, |h| h.timestamp.to::<u64>())
+                .saturating_add(ttl),
+        );
+        for p in by_size {
+            let Ok(limit) = u128::try_from(if buy { U256::from(p.spent) } else { min }) else {
+                continue;
+            };
+            let Some(order) =
+                super::super::exec::carbon_wire::Call::new(s, input, &p, limit, deadline)
+            else {
+                continue;
+            };
+            if let Some(h) = head
+                && carbon_quote::official(&q.ctx, s, input, &p, &h.selector())
                     .await
                     .is_err()
-                {
-                    continue;
-                }
-            } else if protected {
-                let Ok(m) = q.ctx.dex_addr("dex.router", e.family.id) else {
-                    continue;
-                };
-                if super::super::pools::direct_module::configured(&q.ctx, e.family.id).is_err() {
-                    continue;
-                }
-                signed.module = Some(m);
-            } else if signed.target != super::super::pools::carbon::NATIVE {
+            {
                 continue;
             }
-            let exec = Execution {
-                mode: RouteMode::Direct,
-                target: signed.recipient(),
-                wire: Wire::Carbon(Arc::new(signed)),
-            };
-            if let Ok(choice) =
-                Box::pin(v2_execution::option(q, i, e.clone(), payer, exec, head)).await
-            {
-                options.push(choice);
+            for protected in [false, true] {
+                let mut signed = order.clone();
+                if let Some(h) = head {
+                    if direct::bound(&q.ctx, &e, &mut signed, h, protected)
+                        .await
+                        .is_err()
+                    {
+                        continue;
+                    }
+                } else if protected {
+                    let Ok(m) = q.ctx.dex_addr("dex.router", e.family.id) else {
+                        continue;
+                    };
+                    if super::super::pools::direct_module::configured(&q.ctx, e.family.id).is_err()
+                    {
+                        continue;
+                    }
+                    signed.module = Some(m);
+                } else if signed.target != super::super::pools::carbon::NATIVE {
+                    continue;
+                }
+                let exec = Execution {
+                    mode: RouteMode::Direct,
+                    target: signed.recipient(),
+                    wire: Wire::Carbon(Arc::new(signed)),
+                };
+                if let Ok(choice) =
+                    Box::pin(v2_execution::option(q, i, e.clone(), payer, exec, head)).await
+                {
+                    options.push(choice);
+                }
             }
         }
     }

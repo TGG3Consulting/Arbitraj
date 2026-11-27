@@ -484,11 +484,11 @@ jobs:
         env:
           MARKET: ${{ matrix.market }}
         run: python scripts/record_mint_club.py "${MARKET#mint-club-}" "$RUNNER_TEMP/market.json"
-      - if: startsWith(matrix.market, 'mint-club-')
+      - if: startsWith(matrix.market, 'mint-club-') || matrix.market == 'carbon-ethereum' || matrix.market == 'templedao-ethereum'
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - if: startsWith(matrix.market, 'mint-club-')
+      - if: startsWith(matrix.market, 'mint-club-') || matrix.market == 'carbon-ethereum' || matrix.market == 'templedao-ethereum'
         working-directory: contracts
         run: npm ci --no-audit --no-fund
       - if: startsWith(matrix.market, 'mint-club-')
@@ -498,9 +498,14 @@ jobs:
           node contracts/build-hanji.mjs "$RUNNER_TEMP/mint-club" MintClubAdapter
           python scripts/record_mint_club_adapter.py "${MARKET#mint-club-}" "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/mint-club/MintClubAdapter.json" "$RUNNER_TEMP/mint-club-protected.json"
       - if: matrix.market == 'carbon-ethereum'
-        run: python scripts/record_carbon_ethereum.py "$RUNNER_TEMP/market.json"
+        run: |
+          python scripts/record_carbon_ethereum.py "$RUNNER_TEMP/market.json"
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/carbon" CarbonWallet
+          python scripts/record_carbon_wallet.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/carbon/CarbonWallet.json" "$RUNNER_TEMP/carbon-protected.json"
       - if: matrix.market == 'templedao-ethereum'
-        run: python scripts/record_temple_ethereum.py "$RUNNER_TEMP/market.json"
+        run: |
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/temple" TempleAdapter
+          python scripts/record_temple_ethereum.py "$RUNNER_TEMP/market.json" --artifact "$RUNNER_TEMP/temple/TempleAdapter.json"
       - if: matrix.market == 'swapr-ethereum'
         run: python scripts/record_swapr_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'ekubo-v2-ethereum'
@@ -516,6 +521,7 @@ jobs:
             ${{ runner.temp }}/market.json
             ${{ runner.temp }}/directory.json
             ${{ runner.temp }}/mint-club-protected.json
+            ${{ runner.temp }}/carbon-protected.json
   ethereum-v2-registry:
     if: inputs.community_archive_replay
     runs-on: ubuntu-latest

@@ -2,7 +2,7 @@
 use super::super::{
     math::carbon_match,
     pools::{
-        carbon::{NATIVE, TradeAction},
+        carbon::NATIVE,
         carbon_quote,
     },
 };
@@ -12,6 +12,7 @@ use alloy_primitives::{Address, Bytes, U256};
 use serde::{Deserialize, Serialize};
 
 sol! {
+    struct TradeAction {uint256 strategyId;uint128 amount;}
     interface IWallet {
         function controller() external view returns(address);
         function execute(address source,address target,TradeAction[] actions,bool byTarget,uint256 deadline,uint128 limit) external payable returns(uint256 spent,uint256 received);
@@ -31,6 +32,8 @@ pub struct Action {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Call {
+    #[serde(skip)]
+    pub estimate: Option<(u128, u128, u128)>,
     #[serde(default)]
     pub code: Option<super::carbon_binding::Code>,
     #[serde(default)]
@@ -57,6 +60,7 @@ impl Call {
         let (source, target) = carbon_quote::contracts(s, input)?;
         let output = *s.tokens.iter().find(|a| **a != input)?;
         let c = Self {
+            estimate: Some((p.spent, p.received, p.fee)),
             code: None,
             module: None,
             controller: s.controller,
@@ -106,6 +110,9 @@ impl Call {
             (a.amount > 0 && !a.id.is_zero() && seen.insert(a.id)).then_some(())?;
             n.checked_add(a.amount)
         })
+    }
+    pub fn allocation(&self) -> alloy_primitives::B256 {
+        fingerprint(self.actions.iter().map(|a| (a.id, a.amount)))
     }
     pub fn recipient(&self) -> Address {
         self.module.unwrap_or(self.controller)
@@ -187,4 +194,13 @@ impl Call {
             ..self.clone()
         })
     }
+}
+
+pub(super) fn fingerprint(actions: impl Iterator<Item = (U256, u128)>) -> alloy_primitives::B256 {
+    let mut hash = alloy_primitives::Keccak256::new();
+    for (id, n) in actions {
+        hash.update(id.to_be_bytes::<32>());
+        hash.update(n.to_be_bytes());
+    }
+    hash.finalize()
 }

@@ -100,16 +100,8 @@ pub fn swap(
         .ok_or_else(none),
         (PoolState::V2 { reserve0, reserve1 }, PoolKind::Cl)
             if e.family.variant == super::super::pools::family_variant::Variant::DeliConstant => {
-            let fee=e.pool.fee_pips.filter(|v| *v<1_000_000).ok_or_else(none)?;
-            let ratio=(U256::from(1_000_000-fee),U256::from(1_000_000));
-            let (rin,rout)=if zero_for_one {(*reserve0,*reserve1)} else {(*reserve1,*reserve0)};
-            // Для заявки на целевой выход исполняется exact-input с этим минимумом.
-            let (spent,got)=if exact_in {(amount,v2::amount_out(amount,rin,rout,ratio).ok_or_else(none)?)} else {
-                let input=v2::amount_in(amount,rin,rout,ratio).ok_or_else(none)?;
-                (input,amount)
-            };
-            if got.is_zero(){return Err(none());}
-            Ok(Swapped{amount_in:spent,amount_out:got,complete:true})
+            let reserves=if zero_for_one {(*reserve0,*reserve1)} else {(*reserve1,*reserve0)};
+            super::super::math::deli::quote(reserves,e.pool.fee_pips.ok_or_else(none)?,exact_in,amount).ok_or_else(none)
         }
         (PoolState::V2 { reserve0, reserve1 } | PoolState::Oasis { reserve0, reserve1, .. }, PoolKind::V2) => {
             let fee = v2::fee_ratio(v2_fee_pct(ctx, e)?)

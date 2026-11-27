@@ -3668,7 +3668,12 @@
     "id": "omni-exchange-v2-base",
     "source": "https://sourcify.dev/server/v2/contract/8453/0x7d9d51267f7e9e6b46a48e0a75c0086f46777087?fields=all · https://sourcify.dev/server/v2/contract/8453/0x423fae8ee58833f283e8845479bd705514110ec3?fields=all · tests/data/first_run_dex_2026-11-26/omni-v2-base.json.gz",
     "settings": {
-      "dex.kind": "v2_fork_executor_create2",
+      "dex.kind": "v2_omni_universal",
+      "dex.universal_router": "0x423fae8ee58833f283e8845479bd705514110ec3",
+      "dex.universal_router_version": "2.0",
+      "dex.permit2": "0x72f857d13c5363fa89da61020d53a1ea26fddb8b",
+      "dex.router_runtime_hash": "0xac1df303e15821b5682718ca9e1d8907263d42eb1826ccbbf948ab6af6895a64",
+      "dex.permit2_runtime_hash": "0x2956e7281f89ef5cf1bf3a53d4eaa430a1a593a64bc5e78f95d765f968872a28",
       "dex.factory": "0x7d9d51267f7e9e6b46a48e0a75c0086f46777087",
       "dex.pool_code_hashes": [
         "0x6ea5d2f9a28cd0f6ba538d5423bc3a6f7bf6d8c32d7699524b144ce72d5d6ebf"

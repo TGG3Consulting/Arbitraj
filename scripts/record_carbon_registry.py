@@ -96,20 +96,25 @@ def capture():
         if actual!=reversed_ or ["0x"+s[-40:] for s in state]!=tokens or decode(["(uint128,address[2])"],bytes.fromhex(actual[2:]))[0]!=(pair_id,tuple(tokens)):raise ValueError("pair binding failed")
         rows.append({"id":pair_id,"tokens":tokens,"slots":[hex(base),hex(base+1)],"words":state,"pair":actual,"reverse":reversed_,"count":row["count"]})
     order="(uint128,uint128,uint64,uint64)"; events=["StrategyCreated(uint256,address,address,address,"+order+","+order+")","StrategyUpdated(uint256,address,address,"+order+","+order+",uint8)","StrategyDeleted(uint256,address,address,address,"+order+","+order+")","TradingFeePPMUpdated(uint32,uint32)","PairTradingFeePPMUpdated(address,address,uint32,uint32)","Upgraded(address)","PairCreated(uint128,address,address)","TokensTraded(address,address,address,uint256,uint256,uint128,bool)"]
-    topic=["0x"+keccak(text=x).hex() for x in events];begin=chain.height-7199;counts=dict.fromkeys(events,0);samples={};market_volume={};trade_txs=set()
+    topic=["0x"+keccak(text=x).hex() for x in events];begin=chain.height-7199;counts=dict.fromkeys(events,0);samples={};market_volume={};trade_txs=set();trades=[];headers={};seen=set()
     for n in range(begin,chain.height+1,450):
         logs=chain.rpc("eth_getLogs",[{"address":ctrl,"fromBlock":hex(n),"toBlock":hex(min(n+449,chain.height)),"topics":[topic]}]);
         for l in logs:
             if l.get("removed") or l["address"].lower()!=ctrl:raise ValueError("stale log")
+            position=(l["blockHash"],int(l["logIndex"],16))
+            if position in seen:raise ValueError("duplicated log position")
+            seen.add(position)
+            height=l["blockNumber"]
+            if height not in headers:headers[height]=chain.rpc("eth_getBlockByNumber",[height,False])["hash"]
+            if headers[height]!=l["blockHash"]:raise ValueError("log is not on the canonical chain")
             t=events[topic.index(l["topics"][0])];counts[t]+=1
             if t.startswith("TokensTraded("):
-                a,b=("0x"+k[-40:] for k in l["topics"][2:4]);paid,out,_,_=decode(["uint256","uint256","uint128","bool"],bytes.fromhex(l["data"][2:]));pair=tuple(sorted([a,b]));rec=market_volume.setdefault(pair,[0,0,0]);rec[0]+=1;rec[1 if a==pair[0] else 2]+=paid;rec[1 if b==pair[0] else 2]+=out;trade_txs.add(l["transactionHash"])
-            if t not in samples:
-                h=chain.rpc("eth_getBlockByNumber",[l["blockNumber"],False])
-                if h["hash"]!=l["blockHash"]:raise ValueError("hash mismatch")
-                samples[t]=l
+                a,b=("0x"+k[-40:] for k in l["topics"][2:4]);paid,out,fee,by_target=decode(["uint256","uint256","uint128","bool"],bytes.fromhex(l["data"][2:]));pair=tuple(sorted([a,b]));rec=market_volume.setdefault(pair,[0,0,0]);rec[0]+=1;rec[1 if a==pair[0] else 2]+=paid;rec[1 if b==pair[0] else 2]+=out;trade_txs.add(l["transactionHash"])
+                trades.append({"hash":l["transactionHash"],"block":int(height,16),"block_hash":headers[height],"log_index":int(l["logIndex"],16),
+                               "source":a,"target":b,"spent":str(paid),"received":str(out),"fee":str(fee),"by_target":by_target})
+            if t not in samples:samples[t]=l
     if chain.rpc("eth_getBlockByNumber",[hex(chain.height),False])["hash"]!=chain.tag["blockHash"]:raise ValueError("anchor no longer canonical")
-    return {"chain_id":1,"height":chain.height,"selector":chain.tag,"state_root":src["state_root"],"contracts":code,"implementation_slot":role,"version":src["version"],"storage_layout":"contracts/carbon/Pairs.sol:_pairsStorage slot 53","pairs":rows,"multi_quotes":multi_quotes(chain,ctrl,reg[4]),"event_window":[begin,chain.height],"counts":counts,"samples":samples,"trade_txs":len(trade_txs),"markets":[{"tokens":p,"swaps":r[0],"amount0":str(r[1]),"amount1":str(r[2])} for p,r in sorted(market_volume.items())]}
+    return {"chain_id":1,"height":chain.height,"selector":chain.tag,"state_root":src["state_root"],"contracts":code,"implementation_slot":role,"version":src["version"],"storage_layout":"contracts/carbon/Pairs.sol:_pairsStorage slot 53","pairs":rows,"multi_quotes":multi_quotes(chain,ctrl,reg[4]),"event_window":[begin,chain.height],"counts":counts,"samples":samples,"trade_txs":len(trade_txs),"trades":trades,"markets":[{"tokens":p,"swaps":r[0],"amount0":str(r[1]),"amount1":str(r[2])} for p,r in sorted(market_volume.items())]}
 
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__);p.add_argument("output",type=Path);args=p.parse_args();args.output.write_text(json.dumps(capture(),indent=2)+"\n",encoding="utf8",newline="\n")

@@ -32,6 +32,7 @@ fn original_signed_vector_recovers_each_completed_wallet_trade() {
             (c.minReturn, c.deadline, c.tradeActions)
         };
         let call = Call {
+            estimate: None,
             module: None,
             code: None,
             controller: addr(&t["to"]),

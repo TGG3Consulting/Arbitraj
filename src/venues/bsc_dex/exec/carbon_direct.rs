@@ -47,6 +47,7 @@ pub(in crate::venues::bsc_dex) async fn state(
     )
     .await
 }
+#[allow(clippy::too_many_arguments)]
 pub(in crate::venues::bsc_dex) fn call(
     ctx: &Ctx,
     s: &CarbonState,
@@ -92,7 +93,9 @@ pub(in crate::venues::bsc_dex) async fn bound(
     }
     c.code = Some(super::carbon_binding::Code::profile(ctx, id)?);
     if !protected {
-        return if c.target == carbon::NATIVE && c.module.is_none() {
+        let payer=super::super::wallet::signer::address(ctx)?;
+        let wallet_code:Bytes=rpc::call(ctx,"eth_getCode",json!([payer,h.selector()])).await?;
+        return if c.target == carbon::NATIVE && c.module.is_none() && wallet_code.is_empty(){
             Ok(())
         } else {
             Err(fail(ctx))
@@ -124,7 +127,7 @@ pub(super) async fn path_plan(
     payer: Address,
     height: u64,
     by_target: bool,
-    module: Option<Address>,
+    selected: (Option<Address>, Option<alloy_primitives::B256>),
 ) -> GatewayResult<Plan> {
     if !s.from_wallet || !s.to_wallet {
         return Err(fail(ctx));
@@ -138,16 +141,16 @@ pub(super) async fn path_plan(
     } else {
         o.amount_in
     };
-    let (mut c, plan) = call(
-        ctx,
-        &market,
-        o.token_in,
-        by_target,
-        size,
-        o.amount_in,
-        o.min_out,
-        h.timestamp.to(),
-    )?;
+    let (module, allocation) = selected;
+    let plan = select(&market, o.token_in, by_target, size, allocation).ok_or_else(|| fail(ctx))?;
+    let cap =
+        u128::try_from(if by_target { o.amount_in } else { o.min_out }).map_err(|_| fail(ctx))?;
+    let deadline = U256::from(
+        h.timestamp
+            .to::<u64>()
+            .saturating_add(ctx.int("dex.deadline_s")?),
+    );
+    let mut c = Call::new(&market, o.token_in, &plan, cap, deadline).ok_or_else(|| fail(ctx))?;
     bound(ctx, &s.entry, &mut c, h, module.is_some()).await?;
     if c.output != o.token_out || c.module != module {
         return Err(fail(ctx));
@@ -185,4 +188,65 @@ pub(super) async fn path_plan(
     )?;
     p.set_direct_market(DirectCall::Carbon(c));
     Ok(p)
+}
+
+pub(in crate::venues::bsc_dex) fn selected(
+    leg: &crate::core::types::RouteLeg,
+) -> (Option<Address>, Option<alloy_primitives::B256>) {
+    if let [h] = leg.hops.as_slice()
+        && let Some(crate::core::types::RouterFeeMode::CarbonWallet {
+            module, allocation, ..
+        }) = h.fee_mode
+    {
+        (module, allocation)
+    } else {
+        (None, None)
+    }
+}
+fn select(
+    s: &CarbonState,
+    input: Address,
+    buy: bool,
+    size: U256,
+    allocation: Option<alloy_primitives::B256>,
+) -> Option<carbon_match::Plan> {
+    carbon_match::alternatives(s, input, buy, u128::try_from(size).ok()?)
+        .into_iter()
+        .find(|p| {
+            allocation.is_none_or(|wanted| {
+                super::carbon_wire::fingerprint(p.actions.iter().map(|a| (a.id, a.amount)))
+                    == wanted
+            })
+        })
+}
+pub(super) fn adjust(
+    ctx: &Ctx,
+    path: &mut super::super::quote::path::Path,
+    route: &[crate::core::types::RouteHop],
+    buy: bool,
+) -> GatewayResult<()> {
+    let ([h], [r]) = (path.hops.as_mut_slice(), route) else {
+        return Ok(());
+    };
+    let PoolState::Carbon(s) = &h.entry.pool.state else {
+        return Ok(());
+    };
+    let Some(crate::core::types::RouterFeeMode::CarbonWallet { allocation, .. }) = r.fee_mode
+    else {
+        return Err(fail(ctx));
+    };
+    let full = if buy {
+        h.swapped.amount_out
+    } else {
+        h.swapped.amount_in
+    };
+    let p = select(s, h.token_in, buy, full, allocation).ok_or_else(|| fail(ctx))?;
+    h.swapped.amount_in = U256::from(p.spent);
+    h.swapped.amount_out = U256::from(p.received);
+    h.pool_in =
+        super::super::num::to_decimal(h.swapped.amount_in, h.dec_in).ok_or_else(|| fail(ctx))?;
+    h.pool_out =
+        super::super::num::to_decimal(h.swapped.amount_out, h.dec_out).ok_or_else(|| fail(ctx))?;
+    path.usdt = if buy { h.pool_in } else { h.pool_out };
+    Ok(())
 }

@@ -75,7 +75,7 @@ pub(super) async fn option(
     use crate::{core::types::RouteMode, gateway::errors::ErrorCode};
     use alloy_primitives::U256;
     let fee_mode = match &execution.wire {
-        super::v2_wallet_sim::Wire::Carbon(c)=>Some(RouterFeeMode::CarbonWallet{module:c.module,native_cash:c.wrapped().is_some() && super::vista_pricing::cash(&q.ctx,&i.usdt_ticker,i.usdt)}),
+        super::v2_wallet_sim::Wire::Carbon(c)=>Some(RouterFeeMode::CarbonWallet{module:c.module,allocation:Some(c.allocation()),native_cash:c.wrapped().is_some() && super::vista_pricing::cash(&q.ctx,&i.usdt_ticker,i.usdt)}),
         super::v2_wallet_sim::Wire::MintClub(c) if c.protection.is_some()=>c.protection.map(|p|RouterFeeMode::ProtectedWallet{target:p.module}),
         super::v2_wallet_sim::Wire::EkuboV2(_,Some(_)) if super::vista_pricing::cash(&q.ctx,&i.usdt_ticker,i.usdt)=>Some(RouterFeeMode::NativeSettlement{gross_minimum:false}),
         super::v2_wallet_sim::Wire::Vista(v)
@@ -108,6 +108,15 @@ pub(super) async fn option(
     if c.coins != i.qty {
         return Err(bad());
     }
+    let carbon_fee=if let super::v2_wallet_sim::Wire::Carbon(order)=&execution.wire{
+        let (spent,received,fee)=order.estimate.ok_or_else(bad)?;
+        c.swapped.amount_in=U256::from(spent);
+        c.swapped.amount_out=U256::from(received);
+        let buy=i.side==Side::Buy;
+        c.usdt=num::to_decimal(U256::from(if buy{spent}else{received}),i.usdt_dec).ok_or_else(bad)?;
+        let decimals=if order.by_target{if buy{i.usdt_dec}else{i.coin_dec}}else if buy{i.coin_dec}else{i.usdt_dec};
+        Some(num::to_decimal(U256::from(fee),decimals).ok_or_else(bad)?)
+    }else{None};
     let gas_t = gas_ticker::read(ctx)?;
     let names = Names {
         usdt: (i.usdt, &i.usdt_ticker),
@@ -201,6 +210,7 @@ pub(super) async fn option(
         approval = Some(fill.approval);
     }
     let mut quote = build(c)?;
+    if let Some(fee)=carbon_fee && let Some(row)=quote.costs.iter_mut().find(|c|c.kind==crate::core::types::CostKind::PoolFee){row.amount=fee;}
     if fee_mode.is_some() {
         let route = quote.route.as_mut().ok_or_else(bad)?;
         let [leg] = route.legs.as_mut_slice() else {

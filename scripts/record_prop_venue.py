@@ -31,11 +31,15 @@ def rpc(c,method,params):
 def tx(to,sig,types=(),values=(),value=0):
     return {"from":OWNER,"to":to,"value":hex(value),"gas":hex(3_000_000),"data":"0x"+(keccak(text=sig)[:4]+encode(types,values)).hex()}
 
-def leg(c,code,venue,inp,out,n,t,strict,floor,prefix,fallback,block=None,oracle_state=None):
+def leg(c,code,venue,inp,out,n,t,strict,floor,prefix,fallback,block=None,oracle_state=None,slot_order=None):
     dst=MODULE if strict else ROUTER
     apps=[tx(inp,"approve(address,uint256)",["address","uint256"],[dst,n])]
     bal=lambda token:tx(token,"balanceOf(address)",["address"],[OWNER])
-    if strict=="guarded-fallback":
+    if slot_order is not None:
+        assert strict is True
+        order=tx(MODULE,"executeAtSlot((bytes32,bytes32,uint64,uint64,address,address,uint256,uint256))",
+                 ["(bytes32,bytes32,uint64,uint64,address,address,uint256,uint256)"],[(*slot_order,inp,out,n,floor)])
+    elif strict=="guarded-fallback":
         order=tx(MODULE,"executeWithFallback(address,address,address,uint256,uint256,uint256,address)",
                  ["address","address","address","uint256","uint256","uint256","address"],[venue,inp,out,n,floor,t,fallback])
     elif strict:
@@ -66,6 +70,14 @@ def leg(c,code,venue,inp,out,n,t,strict,floor,prefix,fallback,block=None,oracle_
     expected=[MODULE if strict else OWNER,inp,out]
     if [str(x)[-40:].lower() for x in events[0]["topics"][1:]]!=[x[2:] for x in expected]:raise ValueError("wrong indexed wallet or currencies")
     if (sold,received,to)!=(n,net,OWNER) or paid!=n or net<floor or (strict is True and actual!=venue) or actual not in (venue,fallback):raise ValueError("wallet settlement mismatch")
+    if slot_order is not None:
+        slot_event="0x"+keccak(text="SlotFilled(bytes32,address,address,uint256,uint256)").hex()
+        matches=[e for e in swap["logs"] if e["address"].lower()==MODULE and e["topics"][0]==slot_event]
+        if len(matches)!=1: raise ValueError("slot receipt missing or ambiguous")
+        signal=matches[0]
+        assert [t.lower() for t in signal["topics"][1:]]==["0x"+slot_order[0].hex(),"0x"+OWNER[2:].zfill(64),"0x"+venue[2:].zfill(64)]
+        assert decode(["uint256","uint256"],bytes.fromhex(signal["data"][2:]))==(paid,net)
+        assert decode(["uint256","uint256"],bytes.fromhex(swap["returnData"][2:]))==(paid,net)
     return {"status":"paid","paid":paid,"net":net,"actual":actual,"gas":int(swap["gasUsed"],16),"logs":swap["logs"],"order":order,"approvalGas":int(results[len(prefix)]["gasUsed"],16)}
 
 def capture(endpoint,art,kipseli=False,market_name=None,price_slot=False):

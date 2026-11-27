@@ -29,7 +29,7 @@ mod abi {
 pub(super) use abi::{IRfq, IWallet, Order};
 fn integer(v: &Value) -> Option<U256> {
     if let Some(n) = v.as_u64() {
-        return Some(n.into());
+        return Some(U256::from(n));
     }
     let numeric;
     let s = if let Some(n) = v.as_number() {

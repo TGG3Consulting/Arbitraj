@@ -7,7 +7,7 @@ from pathlib import Path
 import requests
 
 from record_base_slipstream_executor import OWNER, ROOT, rpc, simulate_block
-from record_bitswap_ethereum import balance, tx
+from record_bitswap_ethereum import balance, token_flow, tx
 
 UINT = "uint256"
 WETH = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
@@ -94,13 +94,17 @@ def measure(endpoint, directory):
                     seq = run([*prefix, *calls, balance(cash, OWNER), balance(share, OWNER)])
                     assert seq[6]["status"] == "0x1"
                     result = verdict(seq[-3])
-                    result["net_cash"] = str(int(seq[-2]["returnData"],16)-after)
-                    result["spent_shares"] = str(new-int(seq[-1]["returnData"],16))
+                    result["net_cash"] = str(int(seq[-2]["returnData"],16)-int(seq[7]["returnData"],16))
+                    result["spent_shares"] = str(int(seq[8]["returnData"],16)-int(seq[-1]["returnData"],16))
+                    result["quoted"] = str(int(seq[9]["returnData"],16))
+                    result["logs"] = seq[-3]["logs"]
                     result["request"] = calls[-1]
                     if seq[-3]["status"] != "0x1":
                         assert result["net_cash"] == result["spent_shares"] == "0"
                     else:
-                        assert int(result["net_cash"]) == sell_price and int(result["spent_shares"]) == units
+                        # Record nominal-vs-net discrepancies from the original contract verbatim.
+                        assert token_flow(result["logs"], cash, OWNER) == int(result["net_cash"])
+                        assert -token_flow(result["logs"], share, OWNER) == int(result["spent_shares"])
                     row["sells"][wire] = result
     if not any(x.get("buy_received") for x in out):
         raise ValueError("no paid shares")

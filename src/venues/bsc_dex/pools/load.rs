@@ -80,6 +80,13 @@ pub async fn state(
         let (key,reserve0,reserve1)=Box::pin(super::deli::market(ctx,f,*manager,*id,pair,&at)).await?;
         return Ok(Loaded{state:PoolState::V2{reserve0,reserve1},ticks:None,bins:None,fee_pips:Some(key.fee())});
     }
+    if f.variant==Variant::Stabull {
+        let pool=reference.address();
+        let at=super::nami::block(ctx,&tag).await?;
+        Box::pin(super::stabull::market(ctx,f,pool,pair,&at)).await?;
+        let state=Box::pin(super::stabull_quotes::ladder(ctx,tokens,reg,f,pool,pair,usdt,&at)).await?;
+        return Ok(Loaded{state,ticks:None,bins:None,fee_pips:None});
+    }
     if f.variant==Variant::MaverickOne {
         let pool=reference.address();
         let at=super::nami::block(ctx,&tag).await?;

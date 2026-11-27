@@ -5808,5 +5808,21 @@
         "0xdf30b2c96a369a1ecd8c4932bc0a0d5879523b0201653d79e365fd0682a31ff6"
       ]
     }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "stabull",
+    "source": "https://docs.stabull.finance/amm/contracts · tests/data/first_run_dex_2026-11-26/stabull_base_directory.json.gz · tests/data/first_run_dex_2026-11-26/stabull_base_native_wallets.json.gz · tests/data/first_run_dex_2026-11-26/stabull_base_protected_wallets.json.gz",
+    "settings": {
+      "dex.kind": "stabull",
+      "dex.factory": "0x86ba17ebf8819f7fd32cf1a43abcaae541a5bebf",
+      "dex.factory_runtime_hash": "0x737dd3947b801663bcc7fa129fafd5a773b63e7e5cae600595dcb7c3a386f633",
+      "dex.quoter_virtual": false,
+      "dex.pmm_ladder_counter": true,
+      "dex.module_runtime_hashes": [
+        "0xa1876c000be9b44649d66c77b2412119195fb5d4dab19fe8229c45f025952461"
+      ]
+    }
   }
 ]

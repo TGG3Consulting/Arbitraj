@@ -109,6 +109,10 @@ def capture(url, artifact):
         payment,out,before,after=play(tight,expiry)
         if not OK(out) or before!=b or after!=a:return None,dict(**base,stage="strict boundary unavailable",paid=str(paid),net=str(net))
         _,fail,bf,af=play(tight-1 if want else tight+1,expiry)
+        if mode=="v5":
+            _,equal,eb,ea=play(tight,stamp)
+            if not OK(equal) or eb!=before or ea!=after:raise ValueError((pool,"V5 outer deadline equality"))
+            base["deadline_equality_gas"]=int(equal["gasUsed"],16)
         _,late,bl,al=play(tight,stamp-1 if mode=="v5" else stamp)
         if OK(fail) or OK(late) or bf!=af or bl!=al:raise ValueError((pool,mode,"boundary rollback"))
         return setup+[payment],dict(**base,stage="paid",paid=str(paid),net=str(net),gas=int(out["gasUsed"],16),logs=out["logs"],calldata=payment,

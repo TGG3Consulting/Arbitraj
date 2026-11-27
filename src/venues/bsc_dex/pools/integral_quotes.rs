@@ -58,29 +58,20 @@ pub(crate) fn payout(raw: &[u8]) -> Option<U256> {
     let n = ISize::quoteSellCall::abi_decode_returns_validate(raw).ok()?;
     (raw.len() == 32 && !n.is_zero()).then_some(n)
 }
-async fn levels(
+pub(super) async fn levels<C: SolCall>(
     ctx: &Ctx,
     relay: Address,
     pair: (Address, Address),
     sizes: &[U256],
     at: &Value,
+    quote: impl Fn(Address, Address, U256) -> C,
 ) -> GatewayResult<Vec<LadderPoint>> {
     if sizes.is_empty() {
         return Ok(Vec::new());
     }
     let calls = sizes
         .iter()
-        .map(|&amount| {
-            batch::view(
-                at,
-                relay,
-                ISize::quoteSellCall {
-                    a: pair.0,
-                    b: pair.1,
-                    amount,
-                },
-            )
-        })
+        .map(|&amount| batch::view(at, relay, quote(pair.0, pair.1, amount)))
         .collect::<Vec<_>>();
     let rows = rpc::batch(ctx, &calls).await?;
     if rows.len() != sizes.len() {
@@ -133,11 +124,12 @@ pub(super) async fn load(
         ladder_counter::amounts(ctx, tokens, reg, f.id, counter),
         ladder_counter::amounts(ctx, tokens, reg, f.id, coin)
     )?;
-    let bought = levels(ctx, r.relay, (counter, coin), &buys, at).await?;
+    let order = |a, b, amount| ISize::quoteSellCall { a, b, amount };
+    let bought = levels(ctx, r.relay, (counter, coin), &buys, at, order).await?;
     sells.extend(bought.iter().map(|p| p.amount_out));
     sells.sort_unstable();
     sells.dedup();
-    let sold = levels(ctx, r.relay, (coin, counter), &sells, at).await?;
+    let sold = levels(ctx, r.relay, (coin, counter), &sells, at, order).await?;
     Ok(load_metric::state(
         pair,
         coin,

@@ -450,8 +450,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "launch_umia" | "launch_baseline" | "launch_doppler" | "launch_index" | "launch_o1" | "deli_v4_constant" | "deli_v4_cl" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
         "bundles_swap" | "bundles_swap_v5" | "antfarm" | "temple" | "temple_v5" | "rubicon_classic" | "uniswap_v1" | "carbon_v1" | "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
-        "maverick_v1" => (PoolKind::V2,Proto::V2,true,false,true),
-        "maverick_v1_module" | "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
+        "stabull" | "maverick_v1" => (PoolKind::V2,Proto::V2,true,false,true),
+        "stabull_module" | "maverick_v1_module" | "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
         "lambda_propamm" | "integral_size" | "integral_size_v5" | "pendle_market_v5" => (PoolKind::OraclePmm, Proto::V2, true, true, true),
         "degenswap_module" | "safeswap_trade_module" | "pendle_market" => (PoolKind::OraclePmm, Proto::V2, true, false, true),
         "surge_native" | "surge_v5" | "dagrow" | "dagrow_v5" | "bunnyswap" | "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
@@ -838,6 +838,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
                 list.extend(["dex.router", "dex.module_runtime_hashes"]);
             }
         }
+        Proto::V2 if f.variant==Variant::Stabull => {list.extend(["dex.factory","dex.factory_runtime_hash","dex.pmm_ladder_usd"]);if f.tradable{list.extend(["dex.router","dex.module_runtime_hashes"]);}}
         Proto::V2 if f.variant==Variant::MaverickOne => {list.extend(["dex.factory","dex.quoter","dex.factory_runtime_hash","dex.quoter_runtime_hash","dex.pmm_ladder_usd"]);if f.tradable{list.extend(["dex.router","dex.module_runtime_hashes"]);}}
         Proto::V2 if f.variant.umbrae() => {
             list.extend(["dex.factory","dex.factory_runtime_hash","dex.pair_runtime_hash","dex.umbrae_roles"]);

@@ -64,6 +64,7 @@ pub enum Q {
     /// V2 и форки V2: getPair(a, b).
     V2,
     UmbraeBins,
+    Stabull(bool),
     Antfarm(u16),
     MintClub {token:Address,reserve:Address},
     /// V3 (ABI PancakeSwap / Uniswap, форки V3): getPool(a, b, fee).
@@ -117,6 +118,7 @@ impl Q {
             Q::Rubicon(..) => "getBestOffer",
             Q::V2 => "getPair",
             Q::UmbraeBins => "getAllPairs(tokenA,tokenB)",
+            Q::Stabull(_) => "getCurve(base,quote)",
             Q::Antfarm(_) => "getPair(tokenA,tokenB,fee)",
             Q::V3(_) => "getPool",
             Q::Solidly { v1: false, .. } => "getPool(stable)",
@@ -152,6 +154,7 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
         },
         Q::V2 => encode(coin, quote, None),
         Q::UmbraeBins => super::umbrae::IMarket::getAllPairsCall{a:coin,b:quote}.abi_encode().into(),
+        Q::Stabull(reverse) => {let (base,quote)=if reverse{(quote,coin)}else{(coin,quote)};super::stabull::IStabull::getCurveCall{base,quote}.abi_encode().into()},
         Q::Antfarm(fee) => super::antfarm::IFarm::getPairCall{a:coin,b:quote,fee}.abi_encode().into(),
         Q::V3(fee) => encode(coin, quote, Some(fee)),
         Q::Solidly { v1, stable } => registry_call(v1, coin, quote, stable),
@@ -267,7 +270,7 @@ pub fn decode_q(q: Q, out: &[u8]) -> Result<Vec<Address>, String> {
         }
         Q::MintClub{token,reserve} => super::mint_club::listed(token,reserve,out)?,
         Q::UmbraeBins => super::umbrae::IMarket::getAllPairsCall::abi_decode_returns(out).map_err(|err|err.to_string())?,
-        Q::V2 | Q::Antfarm(_) => vec![decode(None, out)?],
+        Q::V2 | Q::Stabull(_) | Q::Antfarm(_) => vec![decode(None, out)?],
         Q::V3(fee) => vec![decode(Some(fee), out)?],
         // Ответ getPool и getPair(stable) — один address: разбор одинаков.
         Q::Solidly { .. } => vec![

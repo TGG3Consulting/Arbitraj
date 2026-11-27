@@ -112,6 +112,8 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 super::super::exec::o1_wallet::at(ctx,&e,&h.selector()).await
             } else if e.family.variant==Variant::Temple {
                 super::super::pools::temple::market(ctx,e.family,e.pool.reference.address(),(e.coin,e.usdt),&h.selector()).await.map(|s|e.pool.state=crate::core::types::PoolState::Temple(Box::new(s)))
+            } else if e.family.variant==Variant::Stabull {
+                super::super::pools::stabull::market(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),&h.selector()).await
             } else if e.family.variant==Variant::MaverickOne {
                 super::super::pools::maverick_one::market(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),&h.selector()).await.map(|_|())
             } else if e.family.variant == Variant::BunnySwap {

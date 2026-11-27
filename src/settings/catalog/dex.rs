@@ -180,6 +180,8 @@ pub const DEX_KINDS: &[&str] = &[
     "solidly_v3",
     "solidly_v3_module",
     "slipstream_ramses",
+    "stabull",
+    "stabull_module",
     "maverick_v1",
     "maverick_v1_module",
     "maverick_v2",

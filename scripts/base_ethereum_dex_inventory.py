@@ -1658,6 +1658,10 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if base and str(row["id"]) == "7077":
+            curve = base_launch_inventory.evidence("stabull_base_directory.json.gz")
+            assert curve["factory"]["address"] in [addr.lower() for addr in candidates]
+            task = "Stabull · 12 зарегистрированных Curve, кошельковые выплаты по 6; точный вход защищают модуль или V5"
         if base and str(row["id"]) == "7945":
             ryze = read(Path("tests/data/first_run_dex_2026-11-26/base_recovered_markets.json"))["ryze"]
             candidates = [ryze["factory"]["address"]]
@@ -1811,6 +1815,38 @@ def tables(network, snapshots, profiles):
     return out
 
 
+def stabull_markets():
+    root = Path("tests/data/first_run_dex_2026-11-26")
+    def capture(name):
+        with gzip.open(root / f"stabull_base_{name}.json.gz", "rt", encoding="utf8") as stream:
+            return json.load(stream)
+    directory = capture("directory")
+    protected = capture("protected_wallets")
+    native = capture("native_wallets")
+    out = ["### Stabull на Base", "",
+           f"Фабрика `{directory['factory']['address']}` создала 12 Curve к блоку {directory['height']}. "
+           f"За 24 часа зарегистрировано {directory['events']} Trade. Официальный Router `{directory['factory']['router']}` "
+           "принимает точный вход. Curve принимает также целевую выплату с максимальным входом. "
+           "Внешний оракул может обновиться между блоками без события Curve. Каждый блок заново читаются флаги, обе валюты, assimilator и их курсы.",
+           "", "Первая настройка `dex.kind=stabull` загружает котировки. Для денежного пути владелец размещает "
+           f"StabullAdapter, задаёт его адрес в `dex.router` и выбирает `dex.kind=stabull_module`. "
+           f"Архивный runtime `{protected['module']['runtime']}`, расход размещения {protected['module']['deployment_gas']} gas. "
+           "Прямой модуль проверяет строгий срок, расход и конечную выплату. Шаг V5 проверяет срок внешнего поручения; "
+           "внутри одной транзакции адаптер согласует его с более строгой проверкой Curve. Лимит капитала, ступени в USD, срок и разрешение торговли задаёт владелец.",
+           "", "Архив моделирует 0,001 и 1 USDC и обратную продажу полученной валюты. Счётчик учитывает отдельные подтверждённые выплаты, включая повтор разными входами. "
+           "Во всех успешных случаях более строгий денежный предел на один атом и истекший срок отвергнуты. "
+           "Для 0xc77c42b… официальный viewTargetSwap сообщил 417659002839075987 атомов входа, "
+           "фактическая выплата 499849 атомов USDC потребовала 417659003096570581. Модель выбирает кандидата; подписанный минимум и бюджет сохраняются.",
+           "", "| Рынок | Curve | Вход/выход Curve | Router | Модуль | V5 |", "|---|---|---:|---:|---:|---:|"]
+    for market, direct, guarded in zip(directory["pools"], native["records"], protected["records"], strict=True):
+        assert direct["pool"] == guarded["pool"] == market["address"]
+        counts = {m: 0 for m in ["pool", "router", "module", "v5"]}
+        for case in direct["cases"] + guarded["cases"]:
+            counts[case["mode"]] += sum(case.get(k, {}).get("stage") == "paid" for k in ["buy", "sell", "buy_target", "sell_target"])
+        out.append(f"| {market['pool_name']} | `{market['address']}` | {counts['pool']} | {counts['router']} | {counts['module']} | {counts['v5']} |")
+    return out + ["", "[Размещения Stabull](https://docs.stabull.finance/amm/contracts) · [Архив кошелька и V5](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45964238282)", ""]
+
+
 def hashflow_market_observation():
     """Один одинаковый час наблюдения за именованным Trade на четырёх сетях."""
     data = read(Path("tests/data/hashflow_direct_2026-11-26/markets_hour.json"))
@@ -1857,6 +1893,7 @@ def main():
     for network in ["base", "ethereum"]:
         lines.extend(tables(network, args.snapshots, profiles))
         lines.append("")
+    lines.extend(stabull_markets())
     lines.extend(hashflow_market_observation())
     doc.write_text(front + start + "\n\n" + "\n".join(lines) + "\n" + end + tail, encoding="utf8", newline="\n")
 

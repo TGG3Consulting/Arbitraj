@@ -158,7 +158,7 @@ Base дополнительно учитывает две комиссии в ET
 
 ### Base · DEX
 
-Снимок GeckoTerminal от 2026-11-25T21:58:07.688292+00:00, 119 идентификаторов. DefiLlama от 2026-11-25T21:58:07.688292+00:00, 211 строк. Сетевые разделы Velora — 40. Строки разных источников могут относиться к одному пулу. Контрольный блок 62262756, `0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715`. Из 119 строк GeckoTerminal адресные профили заданы для 115, остаются открытыми 4. Ещё 38 внутренних ключей обозначают отдельные фабрики и семейства.
+Снимок GeckoTerminal от 2026-11-25T21:58:07.688292+00:00, 119 идентификаторов. DefiLlama от 2026-11-25T21:58:07.688292+00:00, 211 строк. Сетевые разделы Velora — 40. Строки разных источников могут относиться к одному пулу. Контрольный блок 62262756, `0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715`. Из 119 строк GeckoTerminal адресные профили заданы для 115, остаются открытыми 4. Ещё 39 внутренних ключей обозначают отдельные фабрики и семейства.
 
 #### Значения для экрана «Первый запуск»
 
@@ -317,6 +317,7 @@ Base дополнительно учитывает две комиссии в ET
 | `marswap-base` | `dex.kind = v2_fork_dual_create2_live_fee`<br>`dex.factory = 0xee42fe6d6be1ef43701ddabc417ad22d82c5ecc3`<br>`dex.router = 0xc10f17b52ab0f230cc8e0866be1533ea55a6c0d9`<br>`dex.factory_runtime_hash = 0x5d0b753ba6a52f7ad08ed3c1c5816a1f66416bfb2daa1c3314f5af5baf7f9c7c`<br>`dex.router_runtime_hash = 0x4114e14b663c23cfd2ad3cf554a7c3836c31e1286ff65f9c2acbaf9d2c8fe77f`<br>`dex.pair_runtime_hash = 0xa6dae2b16618318ddb757241c0f0727b974851d502eab3c51b2f5c5c83e077df`<br>`dex.pool_code_hashes = 0x177cdc8893a4cf7368d06496896cda5fe071684adc8527f928bffe0a35123078`<br>`dex.v2_fee_source = factory`<br>`dex.v2_fee_method = lpInfo()`<br>`dex.v2_fee_denominator = 10000`<br>`dex.v2_fee_rule_hash = 0xf291ce419268ebf4578c38fa373186c8cf91f3618f4c90815af7cfb1ab7c3fd4` | https://sourcify.dev/server/v2/contract/8453/0xc10f17b52ab0f230cc8e0866be1533ea55a6c0d9?fields=all · tests/data/first_run_dex_2026-11-26/marswap_base_simulated.json.gz |
 | `sectorone-v2-base` | `dex.kind = v2_fork_dual_create2_live_fee`<br>`dex.factory = 0xcf0685f37a139de56afc4a89aa343849358c05cb`<br>`dex.router = 0xddf9025cf1fc3a7945ea54a53d856c81b9284c38`<br>`dex.factory_runtime_hash = 0xcae1a0b1b3cd8bd8519a805cd93dba36177520fec46f44e96e03b990c8b1b87d`<br>`dex.router_runtime_hash = 0x8b2ea62344584db9621d9b8def07278ad7f1aab9c63a219d4a0a6702b30ef358`<br>`dex.pair_runtime_hash = 0xecd69e3cea5053af228a8dd2409210366931a5529c3aa08ae9ab8ff22d4feab5`<br>`dex.pool_code_hashes = 0x07dfaef371a973f003dc4c74454e25c843913358a827acc444fa92626e886a4a`<br>`dex.v2_fee_source = pool`<br>`dex.v2_fee_method = feeAmount()`<br>`dex.v2_fee_denominator = 100000`<br>`dex.v2_fee_rule_hash = 0xcba44022708eb84e2fb4af2cc6ea9942d0e280e87960e04ced35cb8f3514146d` | https://docs.sectorone.xyz/info/smart-contracts.md · tests/data/first_run_dex_2026-11-26/sectorone_v2_base.json.gz |
 | `rubicon-classic-base` | `dex.kind = rubicon_classic`<br>`dex.factory = 0x9a5215e96e1185d4e6002c95c3cc0ab6eead354f`<br>`dex.factory_runtime_hash = 0x5966ca6d9160b906f0dac6d66f0ffacf0f46610a2193935eee4fe61e454701c0`<br>`dex.proxy_implementations = 0x78f8ac461b4602083d652410f74a2b6f2b69323a`<br>`dex.proxy_runtime_hashes = 0xc83b0c38dfc6cc3b51d468795d74c35adbb5d5f1ff364b68da4f1a1ca0991988`<br>`dex.module_runtime_hashes = 0xb6a8542bbe67ac3b47b202654277f7ce2c39cc76f44ed51f9740f6c591b1657a` | https://docs.rubicon.finance/developers/protocol/order-book/rubicon-market · tests/data/first_run_dex_2026-11-26/rubicon_classic_base.json.gz |
+| `stabull` | `dex.kind = stabull`<br>`dex.factory = 0x86ba17ebf8819f7fd32cf1a43abcaae541a5bebf`<br>`dex.factory_runtime_hash = 0x737dd3947b801663bcc7fa129fafd5a773b63e7e5cae600595dcb7c3a386f633`<br>`dex.quoter_virtual = нет`<br>`dex.pmm_ladder_counter = да`<br>`dex.module_runtime_hashes = 0xa1876c000be9b44649d66c77b2412119195fb5d4dab19fe8229c45f025952461` | https://docs.stabull.finance/amm/contracts · tests/data/first_run_dex_2026-11-26/stabull_base_directory.json.gz · tests/data/first_run_dex_2026-11-26/stabull_base_native_wallets.json.gz · tests/data/first_run_dex_2026-11-26/stabull_base_protected_wallets.json.gz |
 #### SectorOne / DLMM King
 
 Обе версии исполняют ERC-20 через прямой LBRouter с проверкой реального прироста выходного токена или через V5. В версии 2.0 прямой путь использует положительный binStep. У представленного как 2.2 роутера значение версии пути 2 выбирает собственную фабрику. Обе стороны учитывают комиссию конкретного бина и изменение волатильности. Движок проверяет пары по getAllLBPairs и LBPairCreated. [Адреса проекта](https://docs.sectorone.xyz/info/smart-contracts.md).
@@ -867,7 +868,7 @@ Aerodrome Slipstream · 3 разных пула WETH/USDC, по одному у 
 | 7882 | Topaz CL | 13321 | [topaz-cl](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/topaz-cl/index.ts) | `0xaa5865dc3a60b25d305226d66fd573021f0d8ffb` | DEX-46 · 8 зарегистрированных рынков, см. кошельковые результаты выше |
 | 5181 | Limitless Exchange | 12473 | [limitless-exchange](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/limitless-exchange/index.ts) | не установлены | `T-SOURCE-base-5181` |
 | 4294 | Infusion | 12088 | [infusion](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/factory/uniV2.ts) | `0x1b8128c3a1b7d20053d10763ff02466ca7ff99fc` `0x57592D44eb60011500961EF177BFf8D8691D5a8B` `0xEd8db60aCc29e14bC867a497D94ca6e3CeB5eC04` `0x9a9a171c69cc811dc6b59bb2f9990e34a22fc971` `0x2D9A3a2bd6400eE28d770c7254cA840c82faf23f` `0x12508dd9108Abab2c5fD8fC6E4984E46a3CF7824` `0xF60caCf0A3daa5B6a79ca6594BEF38F85391AE0A` `0x8aD3d3e6B1b7B65138bD508E48330B544539b2C3` `0x4c1b8D4ae77A37b94e195CAB316391d3C687ebd1` `0x71524b4f93c58fcbf659783284e38825f0622859` `0xfbb4E52FEcc90924c79F980eb24a9794ae4aFFA4` `0x591f122d1df761e616c13d265006fcbf4c6d6551` `0x7F03ae4452192b0E280fB0d4f9c225DDa88C7623` `0x7d9D51267f7e9e6b46a48E0A75c0086F46777087` `0xFDa619b6d20975be80A10332cD39b9a4b0FAa8BB` | `T-SOURCE-base-4294` |
-| 7077 | Stabull Finance | 8225 | [stabull](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/stabull/index.ts) | `0x86Ba17ebf8819f7fd32Cf1A43AbCaAe541A5BEbf` | `T-SOURCE-base-7077` |
+| 7077 | Stabull Finance | 8225 | [stabull](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/stabull/index.ts) | `0x86Ba17ebf8819f7fd32Cf1A43AbCaAe541A5BEbf` | Stabull · 12 зарегистрированных Curve, кошельковые выплаты по 6; точный вход защищают модуль или V5 |
 | 8621 | BaseStonk | 8115 | [basestonk](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/fees/basestonk.ts) | `0x498581fF718922c3f8e6A244956aF099B2652b2b` `0x498581ff718922c3f8e6a244956af099b2652b2b` `0x0f61edbfe6cd86024c0f210c0695b08df55fdfc9` `0x03d2434d5a9ab7fb46bd3c7956a7c62e0cd46044` `0xe6b2b3e59d5df7827eb0a7915675db66ab12a044` `0xbeff407b7062e2fe15928960a58aec93b0c76044` `0xba83ee6969d09ceb8a4827c3ed77413c75392044` `0x1d118173e0d717d70746adfe730bd4b89d2de044` `0x201c4916c085032fb49f0b778efa98df23672044` `0x7c672f3850afadcb8f83478e0a2a90d109fa6044` `0x805975d27518e3e23c4838802d9dda7302dca044` `0xaa4025e5667719db2ceaa0c1ed8801ce7bdfa044` `0x0F61Edbfe6Cd86024C0f210c0695B08df55fdfc9` `0x7f03e814eb1b5dd0c587dc637eea591bce0cd2ce` `0xa971a4627a6388f38e0ab6cf53f69196ee58293d` | `T-SOURCE-base-8621` |
 | 8322 | Textile FX | 8097 | [textile](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/textile/index.ts) | `0xeb5a29f869ff084b3fce18d3487a38a56fedc59e` `0xd1e220544c21136811ae0400eb04a390ca05f58e` | `T-SOURCE-base-8322` |
 | 382 | Pendle V2 | 5709 | [pendle](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/pendle/index.ts) | не установлены | `T-SOURCE-base-382` |
@@ -2016,6 +2017,31 @@ SmarDex · фабрика перечислила 31 пар. Свои фабри�
 - `velora.json` · `c55fb60b1b1dfd9d275b2d3536fcb4fa640d6d39714f4f6bbdfc0e6bed9e42ed`
 - `family-coverage-review.json` · `ae2a33ed64b78aebf771f711d4f57b8adc858d1da4901a4ea26ffd05fcf8136e`
 - `dex-contract-evidence.json` · `e7fa2f934ef09b4bde791c70566bbe0ab2355eb9dc38e9acc48a7aaf57199f93`
+
+### Stabull на Base
+
+Фабрика `0x86ba17ebf8819f7fd32cf1a43abcaae541a5bebf` создала 12 Curve к блоку 62262756. За 24 часа зарегистрировано 61 Trade. Официальный Router `0x4b82759d385e905c85d1fcf7811ed33b738965a0` принимает точный вход. Curve принимает также целевую выплату с максимальным входом. Внешний оракул может обновиться между блоками без события Curve. Каждый блок заново читаются флаги, обе валюты, assimilator и их курсы.
+
+Первая настройка `dex.kind=stabull` загружает котировки. Для денежного пути владелец размещает StabullAdapter, задаёт его адрес в `dex.router` и выбирает `dex.kind=stabull_module`. Архивный runtime `0xa1876c000be9b44649d66c77b2412119195fb5d4dab19fe8229c45f025952461`, расход размещения 1675502 gas. Прямой модуль проверяет строгий срок, расход и конечную выплату. Шаг V5 проверяет срок внешнего поручения; внутри одной транзакции адаптер согласует его с более строгой проверкой Curve. Лимит капитала, ступени в USD, срок и разрешение торговли задаёт владелец.
+
+Архив моделирует 0,001 и 1 USDC и обратную продажу полученной валюты. Счётчик учитывает отдельные подтверждённые выплаты, включая повтор разными входами. Во всех успешных случаях более строгий денежный предел на один атом и истекший срок отвергнуты. Для 0xc77c42b… официальный viewTargetSwap сообщил 417659002839075987 атомов входа, фактическая выплата 499849 атомов USDC потребовала 417659003096570581. Модель выбирает кандидата; подписанный минимум и бюджет сохраняются.
+
+| Рынок | Curve | Вход/выход Curve | Router | Модуль | V5 |
+|---|---|---:|---:|---:|---:|
+| Stabull BRZ/USDC | `0x8a908ae045e611307755a91f4d6ecd04ed31eb1b` | 4 | 2 | 4 | 2 |
+| Stabull TRYB/USDC | `0x1f039c1dfe7eb98c49d11dbf74b476853127e963` | 0 | 0 | 0 | 0 |
+| Stabull EURC/USDC | `0x2a645d27efe5c8f5afc63856d2509ea20f81a0b2` | 8 | 4 | 8 | 4 |
+| Stabull NGNC/USDC | `0x369148007c7d55d82a04b5c23271ecb3ac35efe4` | 0 | 0 | 0 | 0 |
+| Stabull ZARP/USDC | `0x63129f8948225fe08b9c921186bafa27e6710833` | 0 | 0 | 0 | 0 |
+| Stabull MXNe/USDC | `0xc642e57d55853baa61e7f7c4894894235f221f82` | 8 | 4 | 8 | 4 |
+| Stabull OFD/USDC | `0x27cd7e6837e2a043ba760a8f67f73b8f0b7de8f3` | 8 | 4 | 8 | 4 |
+| Stabull ZCHF/USDC | `0xc77c42baa1bdf2708c5ef8cfca3533b3e09b058f` | 8 | 4 | 8 | 4 |
+| Stabull AUDD/USDC | `0xa9b62e79a5f0fe04b1a1011ea30044a8020b7de5` | 0 | 0 | 0 | 0 |
+| Stabull IDRX/USDC | `0x58ee9657d3bd0a57c5cf8f5b40d53dc064ac8040` | 0 | 0 | 0 | 0 |
+| Stabull cNGN/USDC | `0x3b981f22aa71d8f2f9f476df74c5f100a03a3d20` | 4 | 2 | 4 | 2 |
+| Stabull TESOURO/USDC | `0x4c69bff4b9a4451704b13c97fc5e9cd7cbe29f5f` | 0 | 0 | 0 | 0 |
+
+[Размещения Stabull](https://docs.stabull.finance/amm/contracts) · [Архив кошелька и V5](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45964238282)
 
 ### Hashflow в четырёх сетях
 

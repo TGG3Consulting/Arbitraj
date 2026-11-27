@@ -343,6 +343,8 @@ pub mod load_lb20_bins;
 pub mod load_lb_bins;
 pub(crate) mod topaz;
 pub mod load_maverick;
+pub(crate) mod stabull;
+pub(crate) mod stabull_quotes;
 pub(crate) mod maverick_one;
 pub(crate) mod maverick_one_quotes;
 mod maverick_one_directory;

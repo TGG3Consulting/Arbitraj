@@ -23,6 +23,7 @@ pub(super) struct WalletQuoter {
 
 pub(super) fn wallet_quoter(variant: Variant) -> Option<WalletQuoter> {
     match variant {
+        Variant::Stabull => Some(WalletQuoter{request:super::super::pools::stabull_quotes::request,payout:super::super::pools::integral_quotes::payout}),
         Variant::MaverickOne => Some(WalletQuoter{
             request:super::super::pools::maverick_one_quotes::request,
             payout:super::super::pools::maverick_one_quotes::payout,

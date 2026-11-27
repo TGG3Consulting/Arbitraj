@@ -134,6 +134,7 @@ pub enum Variant {
     RubiconClassic,
     UniswapV1,
     Pendle,
+    Stabull,
     MaverickOne,
     Surge,
     Antfarm,
@@ -214,14 +215,14 @@ impl Variant {
     pub fn native_market_module(self) -> bool { self == Self::LaunchO1Wrapped || self.flux_native() }
     pub fn deli(self)->bool{matches!(self,Self::DeliConstant|Self::DeliCl)}
     /// У шага 17 адрес отдельного рынка закодирован как poolId, а назначение — модуль фабрики.
-    pub fn pool_address_step(self)->bool{self.registered_module() || self==Self::MaverickOne}
+    pub fn pool_address_step(self)->bool{self.registered_module() || matches!(self,Self::Stabull | Self::MaverickOne)}
     /// Величина платы меняется по tx.origin и может измениться между двумя шагами в одном пуле.
     pub fn origin_fee(self)->bool{self==Self::TopazCl}
     pub fn registered_module(self) -> bool { matches!(self, Self::RegisteredV3 | Self::VvsV3) }
     pub fn registered_v3(self) -> bool { matches!(self, Self::RegisteredV3 | Self::RegisteredUniV3 | Self::HelloV3 | Self::VvsV3) }
     pub fn factory_quoter(self)->bool { self == Self::BaseNativeV3 || self.registered_v3() }
     pub fn umbrae(self)->bool { matches!(self,Self::UmbraeDamm|Self::UmbraeDlmm) }
-    pub fn wallet_module(self)->bool { matches!(self,Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::BunnySwap|Self::CandySwap) }
+    pub fn wallet_module(self)->bool { matches!(self,Self::Stabull|Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::BunnySwap|Self::CandySwap) }
     pub(crate) fn exact_router(self)->bool {matches!(self,Self::SlipstreamUniversal|Self::CypherIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter)}
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator | Self::SolidlyProxy | Self::SolidlyPairOverride)}
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
@@ -324,6 +325,7 @@ pub fn of(kind: &str) -> Variant {
         "gemswap_v2" => Variant::Gemswap,
         "antfarm" => Variant::Antfarm,
         "bundles_swap" | "bundles_swap_v5" => Variant::Bundles,
+        "stabull" | "stabull_module" => Variant::Stabull,
         "maverick_v1" | "maverick_v1_module" => Variant::MaverickOne,
         "surge_native" | "surge_v5" => Variant::Surge,
         "rubicon_classic" => Variant::RubiconClassic,

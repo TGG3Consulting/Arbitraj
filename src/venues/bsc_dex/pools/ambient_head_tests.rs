@@ -1,10 +1,12 @@
 use super::*;
+#[path = "ambient_silent_receipt.rs"]
+mod silent_receipt;
 use crate::core::types::{
-    DexRoute, LadderPoint, Pool, PoolRef, PoolState, RouteHop, RouteLeg, RouteMode, VenueId,
+    DexRoute, Pool, PoolRef, PoolState, RouteHop, RouteLeg, RouteMode, VenueId,
     ambient::{Market, State},
 };
 use crate::venues::bsc_dex::pools::{families, registry::Entry, registry_frozen::Want};
-use alloy_primitives::{Address, U256};
+use alloy_primitives::{Address, Bytes, U256};
 use flate2::read::GzDecoder;
 use rust_decimal::Decimal;
 use serde_json::Value;
@@ -13,28 +15,21 @@ fn addr(v: &Value) -> Address {
 }
 fn entry(reg: &Registry, archive: &Value, row: &Value, n: u64, h: B256) -> Entry {
     let family = families::make("ambient", "ambient_ethereum").unwrap();
-    let key = &row["market"];
     let market = Market {
-        base: addr(&key[0]),
-        quote: addr(&key[1]),
-        index: U256::from(key[2].as_u64().unwrap()),
+        base: addr(&row["base"]),
+        quote: addr(&row["quote"]),
+        index: U256::from(row["index"].as_u64().unwrap()),
     };
-    let input = addr(&row["input"]);
-    let output = addr(&row["output"]);
-    let data = &archive["manifest"];
-    let dex = addr(&data["exchange"]);
-    let wrapped = addr(&data["wrapped"]);
-    let mut levels = [vec![], vec![]];
-    let pos = market
-        .tokens(wrapped)
-        .unwrap()
-        .iter()
-        .position(|a| *a == input)
-        .unwrap();
-    levels[pos].push(LadderPoint {
-        amount_in: row["spent"].as_str().unwrap().parse().unwrap(),
-        amount_out: row["received"].as_str().unwrap().parse().unwrap(),
-    });
+    let dex = addr(&archive["roles"]["dex"]);
+    let wrapped = addr(&archive["wrapped"]);
+    let [input, output] = market.tokens(wrapped).unwrap();
+    let bytes: Bytes = row["impact"]["answer"].as_str().unwrap().parse().unwrap();
+    let point = crate::venues::bsc_dex::pools::ambient::decode(&bytes, true).unwrap();
+    assert_eq!(
+        point.amount_in,
+        row["asked"].as_str().unwrap().parse::<U256>().unwrap()
+    );
+    let levels = [vec![point], vec![]];
     Entry {
         family,
         pool: Pool {
@@ -53,11 +48,11 @@ fn entry(reg: &Registry, archive: &Value, row: &Value, n: u64, h: B256) -> Entry
             hooks: None,
             state: PoolState::Ambient(Box::new(State {
                 stamp: reg.ambient_stamp(n, h),
-                module: Some(addr(&archive["module"])),
+                module: None,
                 dex,
                 market,
                 wrapped,
-                impact: addr(&data["roles"]["impact"]["address"]),
+                impact: addr(&archive["roles"]["impact"]),
                 levels,
                 partial_cap: [None, None],
             })),
@@ -84,21 +79,27 @@ fn points(e: &Entry) -> bool {
 fn delayed_second_market_and_reorg_cannot_restore_a_priced_snapshot() {
     let a: Value = serde_json::from_reader(GzDecoder::new(
         &include_bytes!(
-            "../../../../tests/data/first_run_dex_2026-11-26/ambient_ethereum_wallet.json.gz"
+            "../../../../tests/data/first_run_dex_2026-11-26/ambient_ethereum_silent_swap.json.gz"
         )[..],
     ))
     .unwrap();
     let reg = Registry::default();
-    let n = 26494988;
-    let h = a["head"]["blockHash"].as_str().unwrap().parse().unwrap();
-    let raw = a["payments"].as_array().unwrap();
-    let one = &raw[0];
-    let two = raw
-        .iter()
-        .find(|r| r["pool_key"] != one["pool_key"])
-        .unwrap();
-    let first = entry(&reg, &a, one, n, h);
-    let second = entry(&reg, &a, two, n, h);
+    let parent = &a["headers"][0];
+    let child = &a["headers"][1];
+    let n = 26_492_698;
+    assert_eq!(parent["number"], format!("{n:#x}"));
+    assert_eq!(child["number"], format!("{:#x}", n + 1));
+    assert_eq!(parent["hash"], child["parentHash"]);
+    let h = parent["hash"].as_str().unwrap().parse().unwrap();
+    let next = child["hash"].as_str().unwrap().parse().unwrap();
+    silent_receipt::check(&a, child);
+    let [older, newer] = a["states"].as_array().unwrap().as_slice() else {
+        panic!("two headers")
+    };
+    assert_ne!(older[0]["price"]["answer"], newer[0]["price"]["answer"]);
+    assert_eq!(older[1]["price"]["answer"], newer[1]["price"]["answer"]);
+    let first = entry(&reg, &a, &older[0], n, h);
+    let second = entry(&reg, &a, &older[1], n, h);
     let r1 = first.pool.reference.clone();
     let r2 = second.pool.reference.clone();
     assert!(!reg.put_observed(first.clone()));
@@ -140,14 +141,27 @@ fn delayed_second_market_and_reorg_cannot_restore_a_priced_snapshot() {
     });
     let frozen = Registry::frozen_from(&snap, None);
     assert!(frozen.route_was_current(&route, Some(&pin)));
-    let next = B256::repeat_byte(4);
+    let out = |e: &Entry| {
+        let PoolState::Ambient(s) = &e.pool.state else {
+            unreachable!()
+        };
+        s.points(e.coin).unwrap()[0].amount_out
+    };
+    assert_eq!(
+        (out(&first), out(&second)),
+        (U256::from(1_613_303_444), U256::from(996_759))
+    );
     let replacement = B256::repeat_byte(5);
     reg.ambient_head(Some((n + 1, next)));
     assert!(!points(&first) && !points(&second));
     assert!(!frozen.route_was_current(&route, Some(&pin)));
     assert!(!reg.get(&r1).unwrap().valid && !reg.get(&r2).unwrap().valid);
-    let a1 = entry(&reg, &a, one, n + 1, next);
-    let a2 = entry(&reg, &a, two, n + 1, next);
+    let a1 = entry(&reg, &a, &newer[0], n + 1, next);
+    let a2 = entry(&reg, &a, &newer[1], n + 1, next);
+    assert_eq!(
+        (out(&a1), out(&a2)),
+        (U256::from(1_613_289_705), U256::from(996_759))
+    );
     assert!(reg.put_observed(a1.clone()));
     assert!(!reg.get(&r2).unwrap().valid);
     assert!(!reg.put_observed(first));
@@ -155,8 +169,8 @@ fn delayed_second_market_and_reorg_cannot_restore_a_priced_snapshot() {
     reg.ambient_head(Some((n + 1, replacement)));
     assert!(!reg.put_observed(a2) && !reg.put_observed(a1));
     assert!(!reg.get(&r1).unwrap().valid && !reg.get(&r2).unwrap().valid);
-    reg.put(entry(&reg, &a, one, n + 1, replacement));
-    reg.put(entry(&reg, &a, two, n + 1, replacement));
+    reg.put(entry(&reg, &a, &newer[0], n + 1, replacement));
+    reg.put(entry(&reg, &a, &newer[1], n + 1, replacement));
     let renewed = reg.observed_ambient().unwrap();
     assert!(reg.route_was_current(&route, Some(&renewed)));
     reg.ambient_head(None);

@@ -136,7 +136,7 @@ pub(super) async fn plan(
     Ok(p)
 }
 
-pub(super) fn probe(
+pub(in crate::venues::bsc_dex) fn probe(
     ctx: &Ctx,
     e: &Entry,
     o: &super::plan::Order,

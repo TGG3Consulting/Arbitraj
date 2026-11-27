@@ -34,7 +34,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    «необязательное». Релиз не готов, пока в списке «Открытые правки» ниже есть хоть одна строка. Список ведёт Claude:
 >    закрытые пункты вычёркиваются с SHA исправления.
 
-Последний просмотренный коммит: `2da89928` (27.11.2026).
+Последний просмотренный коммит: `2636259e` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -2951,7 +2951,7 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 | ~~О-3~~ ✅ 2da89928 | R-42 | `quote/quoter_calls.rs:487, 655` — прямые `== Variant::ShibaswapV2`. Нужен предикат. |
 | ~~О-4~~ ✅ 2da89928 | R-42 | `exec/solidly_direct.rs:42, 76` — прямые `== Variant::ShibaswapV2`. |
 | ~~О-5~~ ✅ 2da89928 | R-42 | `pools/per_block_aero.rs:45`, `pools/registered_router.rs:79` — прямые `== Variant::RegisteredSlipstream`. |
-| О-6 | хардкод | `chain: 1` на 2da89928: `exec/shiba_payment.rs:50, 57`, `exec/shiba_return.rs:67, 115`, `exec/empire_wallet.rs:36`, `exec/aktionariat_graph.rs:52` (в `solidly_direct.rs` уже исправлено). Брать `ctx.chain_id()` и хранить в доказательстве. |
+| О-6 | хардкод | На 2636259e остался один литерал в рабочем коде: `exec/shiba_return.rs:67` (`balance`, `Erc20Call { chain: 1, … }`). Остальные места переведены на сохранённую сеть (cae95b04). |
 | О-7 | хардкод | `contracts/AktionariatWallet.sol:89, 110, 116` — `settings() & 1` / `& 2` и `hex"01"`: назвать константы, дать ссылку на исходник Brokerbot. После правки пересобрать `aktionariat-ethereum.json` и обновить хеш в совете. |
 | О-8 | хардкод | `quote/steps.rs:122, 125` — `Decimal::new(3,1)` (комиссия Uniswap V1). Использовать константы из `core/types/uniswap_v1.rs`. |
 | О-9 | хардкод | `pools/mars_fee.rs:17` — `recent.len() == 64`. Это настройка или именованная константа с обоснованием. |
@@ -2987,3 +2987,22 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
   - В `registered_router.rs` список вариантов заменён на `exact_router()` без трёх Solidly. Это эквивалентно: `MaverickTwoRouter` и `SlipstreamUniversal` выходят раньше этой строки.
 - **О-6 частично.** В `solidly_direct.rs` теперь `chain_id(ctx)`. Литерал `chain: 1` остался в `shiba_payment.rs` (2), `shiba_return.rs` (2), `empire_wallet.rs`, `aktionariat_graph.rs`.
 - **Осталось открытых: 12** — О-1, О-6…О-16.
+
+### cae95b04, 2636259e — проверено
+
+- **О-6 почти закрыт.**
+  - Сеть теперь хранится в доказательствах (`Market.chain`, `Proof.chain`) из `chain_id(ctx)`.
+  - Для записей, сохранённых до правки, есть именованное значение по умолчанию `legacy_ethereum_chain`, и тест это проверяет.
+  - `ETHEREUM_MAINNET` — именованная константа.
+  - Остался `chain: 1` в `exec/shiba_return.rs:67`: это рабочая функция `balance`, не тест.
+- **Textile FX** (Base, Ethereum):
+  - новый модуль котировок с ручным выбором заявки владельцем;
+  - настройки `textile.base_url`, `api_key`, `contracts`, `partner`, `trading`, `gas_budget_native` есть в каталоге;
+  - сделка возможна только по заявке, которую владелец явно разрешил (`allow_trade`), и только при `textile.trading`;
+  - восстановление по канонической квитанции, проверяются обе выплаты.
+- Пути BSC:
+  - `textile::routing::consider` сразу возвращает прежнюю котировку, если нет разрешённой заявки или `textile.trading` выключен;
+  - в общих `hashflow/dispatch.rs`, `execute.rs`, `exec/trade.rs` добавлена только ветка `Textile`.
+  
+  Hashflow на BSC работает как раньше. ✅
+- **Осталось открытых: 12** — О-1, О-6 (одна строка), О-7…О-16.

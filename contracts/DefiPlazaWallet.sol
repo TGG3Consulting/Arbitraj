@@ -30,6 +30,8 @@ contract DefiPlazaWallet {
     bool public immutable stable;
     bytes32 public immutable executorHash;
     uint256 private constant STABLE_ASSETS=4;
+    // DeFiPlaza.sol:20 enum State, :31 DFPconfig.oneMinusTradingFee (0.64).
+    // https://sourcify.dev/server/v2/contract/1/0xE68c1d72340aEeFe5Be76eDa63AE2f4bc7514110?fields=sources
     uint8 private constant LISTED=3;
     uint256 private constant Q64_FRACTION_BITS=64;
     bool transient private busy;

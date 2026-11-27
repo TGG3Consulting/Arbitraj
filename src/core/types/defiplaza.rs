@@ -2,7 +2,8 @@
 use alloy_primitives::{Address, B256, U256};
 use serde::{Deserialize, Serialize};
 
-/// Единица расчёта Q0.64 поля oneMinusTradingFee из MultiPlaza.DFPconfig.
+/// Единица расчёта поля oneMinusTradingFee, указанного как 0.64 в DeFiPlaza.sol:31.
+/// <https://sourcify.dev/server/v2/contract/1/0xE68c1d72340aEeFe5Be76eDa63AE2f4bc7514110?fields=sources>
 pub const MULTI_FEE_SCALE: u128 = 1u128 << 64;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

@@ -19,6 +19,8 @@ use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 
 const STABLE_ASSETS: u8 = 4;
+// DeFiPlaza.sol:20, enum State {Unlisted, PreListing, Delisting, Listed}.
+// https://sourcify.dev/server/v2/contract/1/0xE68c1d72340aEeFe5Be76eDa63AE2f4bc7514110?fields=sources
 const LISTED: u8 = 3;
 // Число независимых регистрационных чтений в одном запросе, без ограничения размера каталога.
 const REGISTRY_BATCH: usize = 48;

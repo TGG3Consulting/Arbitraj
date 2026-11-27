@@ -97,6 +97,7 @@ fn by_whom(ctx: &Ctx, reg: &Registry, route: &DexRoute, native: bool) -> &'stati
             // У первых маршрутов Hashflow отсутствовал маркер источника. Для отправленного
             // обмена восстановление берёт первоначальное имя исполнителя из SwapCtx.who.
             match route.exec_note.as_deref() {
+                Some(super::super::epsilon::LABEL) => super::super::epsilon::LABEL,
                 Some(super::super::raindex::LABEL) => super::super::raindex::LABEL,
                 Some(super::super::gladius::LABEL) => super::super::gladius::LABEL,
                 Some(super::super::native_rfq::LABEL) => super::super::native_rfq::LABEL,
@@ -107,6 +108,7 @@ fn by_whom(ctx: &Ctx, reg: &Registry, route: &DexRoute, native: bool) -> &'stati
         RouteMode::Relay(_) | RouteMode::RelayIndicative => "Ryze",
         RouteMode::Orderbook(_) | RouteMode::OrderbookIndicative
             if route.exec_note.as_deref() == Some(super::super::raindex::LABEL) => super::super::raindex::LABEL,
+        RouteMode::Orderbook(_) | RouteMode::OrderbookIndicative if route.exec_note.as_deref()==Some(super::super::epsilon::LABEL) => super::super::epsilon::LABEL,
         RouteMode::Orderbook(_) | RouteMode::OrderbookIndicative => "Hanji",
         RouteMode::Smart => result::BY_SMART,
         RouteMode::Graph => match graph_route::graph_form(ctx, route) {

@@ -84,7 +84,7 @@ impl Venue for BscDex {
 
     /// Решение 372: строгий верх курса стороны DEX без котировок (quote/bound.rs). Ошибок нет.
     fn rate_bound(&self, asset: &Asset, side: Side) -> crate::gateway::rate_bound::RateBound {
-        if super::hashflow::enabled(&self.p.ctx) || super::native_rfq::routing::available(&self.p,asset,side) || super::gladius::routing::available(&self.p,asset,side) || super::raindex::routing::available(&self.p,asset,side)
+        if super::hashflow::enabled(&self.p.ctx) || super::native_rfq::routing::available(&self.p,asset,side) || super::gladius::routing::available(&self.p,asset,side) || super::raindex::routing::available(&self.p,asset,side) || super::epsilon::routing::available(&self.p,asset)
             || super::hanji::routing::active(&self.p)
             || super::ryze::routing::active(&self.p)
             || super::fermi::routing::active(&self.p)
@@ -190,6 +190,7 @@ impl Venue for BscDex {
             let class = urgency::is_set().unwrap_or(Class::Quote);
             let baseline = scope(class, self.p.quoting().quote(asset, side, qty)).await;
             let baseline=super::raindex::routing::consider(&self.p,asset,side,qty,baseline).await;
+        let baseline=super::epsilon::routing::consider(&self.p,asset,side,qty,baseline).await;
             let baseline=super::ryze::routing::consider(&self.p,asset,side,qty,baseline).await;
             return super::hanji::routing::consider(&self.p, asset, side, qty, baseline).await;
         }
@@ -225,6 +226,7 @@ impl Venue for BscDex {
             super::hashflow::routing::consider(&self.p, asset, side, qty, baseline).await;
         let baseline=super::native_rfq::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline=super::raindex::routing::consider(&self.p,asset,side,qty,baseline).await;
+        let baseline=super::epsilon::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline=super::gladius::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline=super::ryze::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline = super::fermi::routing::consider(&self.p, asset, side, qty, baseline).await;
@@ -241,7 +243,7 @@ impl Venue for BscDex {
         if crate::gateway::quote_stage::settlement() {
             return self.quote(asset, side, qty).await.map(|q| q.fillable_qty);
         }
-        if super::hashflow::enabled(&self.p.ctx) || super::native_rfq::routing::available(&self.p,asset,side) || super::gladius::routing::available(&self.p,asset,side) || super::raindex::routing::available(&self.p,asset,side)
+        if super::hashflow::enabled(&self.p.ctx) || super::native_rfq::routing::available(&self.p,asset,side) || super::gladius::routing::available(&self.p,asset,side) || super::raindex::routing::available(&self.p,asset,side) || super::epsilon::routing::available(&self.p,asset)
             || super::hanji::routing::active(&self.p)
             || super::ryze::routing::active(&self.p)
             || super::fermi::routing::active(&self.p)
@@ -892,8 +894,8 @@ impl BscDex {
         // Решение 132: сделка — только кошельком счёта (Ctx::bound).
         self.p.ctx.bound()?;
         let mut req = req;
-        if req.route.as_ref().and_then(super::raindex::routing::mixed_ticket).is_some() {
-            return Err(self.p.ctx.err(ErrorCode::NoRoute,"Денежный билет Raindex требует исходного расчётного шага"));
+        if req.route.as_ref().is_some_and(|r| super::raindex::routing::mixed_ticket(r).is_some() || super::epsilon::routing::mixed_ticket(r).is_some()) {
+            return Err(self.p.ctx.err(ErrorCode::NoRoute,"Денежный билет требует исходного расчётного шага"));
         }
         if let Some(done)=super::ryze::recovery::prior(&self.p,&req).await? {return Ok(done);}
         if !matches!(

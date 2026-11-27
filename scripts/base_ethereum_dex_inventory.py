@@ -2066,6 +2066,8 @@ def main():
     for network in ["base", "ethereum"]:
         lines.extend(tables(network, args.snapshots, profiles))
         lines.append("")
+    from base_epsilon_markets import epsilon_markets
+    lines.extend(epsilon_markets())
     from base_raindex_markets import raindex_markets
     lines.extend(raindex_markets())
     lines.extend(alien_alternative_fees())

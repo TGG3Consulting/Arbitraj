@@ -76,10 +76,14 @@ pub async fn trade(
 ) -> GatewayResult<Option<TradeResult>> {
     if super::ryze::ledger::Marker::read(pend).is_some() {return super::ryze::recovery::reconcile(p,req,pend).await;}
     let rain = req.route.as_ref().and_then(super::raindex::routing::mixed_ticket).is_some();
+    let epsilon=req.route.as_ref().and_then(super::epsilon::routing::mixed_ticket).is_some();
+    if epsilon && !SwapCtx::of(pend).is_some_and(|c| c.epsilon.is_some_and(|s|s.wallet(&p.ctx))){
+        return Err(p.ctx.err(ErrorCode::OutcomeUnknown,"Сохранённая подпись Epsilon не соответствует кошельку и сети").pending(pend.clone()));
+    }
     if rain && !SwapCtx::of(pend).is_some_and(|c| c.raindex.is_some_and(|s| s.wallet(&p.ctx))) {
         return Err(p.ctx.err(ErrorCode::OutcomeUnknown,"Сохранённая подпись денежной книги не соответствует исходному кошельку и сети").pending(pend.clone()));
     }
-    if !rain && matches!(
+    if !rain && !epsilon && matches!(
         req.route.as_ref().map(|r| r.mode),
         Some(crate::core::types::RouteMode::Orderbook(_))
     ) {

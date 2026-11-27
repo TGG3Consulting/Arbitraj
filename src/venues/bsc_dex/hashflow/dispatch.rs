@@ -22,12 +22,14 @@ pub(super) enum Gate {
     Native(u64),
     Gladius(u64),
     Raindex { generation: u64, mixed: bool },
+    Epsilon { generation: u64, mixed: bool },
 }
 impl Dispatch {
     fn cap(&self, ctx: &Ctx) -> GatewayResult<U256> {
         let k = match self.gate {
             Gate::Hashflow(_) => "hashflow.gas_budget_native",
             Gate::Native(_) => "native_rfq.gas_budget_native",
+            Gate::Epsilon { .. } => "epsilon.gas_budget_native",
             Gate::Raindex { .. } => "raindex.gas_budget_native",
             Gate::Gladius(_) => "gladius.gas_budget_native",
         };
@@ -43,6 +45,7 @@ impl Dispatch {
                         .int("hashflow.min_validity_ms")
                         .is_ok_and(|m| routing::expiry_ok(self.expiry, m))
             }
+            Gate::Epsilon { generation, .. } => super::super::epsilon::enabled(ctx) && ctx.settings.generation()==*generation && super::super::raindex::timely(self.expiry),
             Gate::Raindex { generation, .. } => super::super::raindex::enabled(ctx) && ctx.settings.generation()==*generation && super::super::raindex::timely(self.expiry),
             Gate::Gladius(g) => super::super::gladius::enabled(ctx) && ctx.settings.generation()==*g && super::super::gladius::timely(ctx,self.expiry),
             Gate::Native(g) => {
@@ -65,7 +68,7 @@ pub(in crate::venues::bsc_dex) fn marker(
 ) -> GatewayResult<Option<PendingRef>> {
     DISPATCH
         .try_with(|d| {
-            if matches!(d.gate, Gate::Raindex { mixed: true, .. }) && (
+            if matches!(d.gate, Gate::Raindex { mixed: true, .. } | Gate::Epsilon { mixed: true, .. }) && (
                 intent::current_key().as_deref() != Some(d.key.as_str()) ||
                 ready.is_empty() || ready.iter().any(|r| r.method != SendMethod::Single)
             ) {
@@ -112,7 +115,7 @@ pub(in crate::venues::bsc_dex) async fn reserve(
     marker: &PendingRef,
 ) -> GatewayResult<()> {
     let Some(parse) =
-        exec::swap_ctx::SwapCtx::of(marker).filter(|c| c.rfq.is_some() || c.native_rfq.is_some() || c.gladius.is_some() || c.raindex.is_some())
+        exec::swap_ctx::SwapCtx::of(marker).filter(|c| c.rfq.is_some() || c.native_rfq.is_some() || c.gladius.is_some() || c.raindex.is_some() || c.epsilon.is_some())
     else {
         return Ok(());
     };
@@ -181,9 +184,9 @@ where
     let db = ctx.journal.db();
     let k = dispatch.key.clone();
     let parse = dispatch.parse.clone();
-    let mixed = matches!(dispatch.gate, Gate::Raindex { mixed: true, .. });
+    let mixed = matches!(dispatch.gate, Gate::Raindex { mixed: true, .. } | Gate::Epsilon { mixed: true, .. });
     let sent = if mixed {
-        if intent::current_key().as_deref() != Some(k.as_str()) || parse.raindex.is_none() {
+        if intent::current_key().as_deref() != Some(k.as_str()) || (parse.raindex.is_none() && parse.epsilon.is_none()) {
             return Err(routing::no(p,"Нет исходного ключа денежной книги Raindex"));
         }
         DISPATCH.scope(dispatch, send).await
@@ -222,7 +225,7 @@ pub(in crate::venues::bsc_dex) async fn native_send<F>(
 where
     F: std::future::Future<Output = GatewayResult<exec::txs::Done>>,
 {
-    let mixed = req.route.as_ref().and_then(super::super::raindex::routing::mixed_ticket).is_some();
+    let mixed = req.route.as_ref().is_some_and(|r|super::super::raindex::routing::mixed_ticket(r).is_some() || super::super::epsilon::routing::mixed_ticket(r).is_some());
     let dispatch = Dispatch {
         key: if mixed {
             intent::current_key().ok_or_else(|| routing::no(p,"Денежный ордер Raindex требует действующего ключа"))?
@@ -230,7 +233,7 @@ where
             super::execute::key(p, req)?
         },
         expiry,
-        gate: if parse.raindex.is_some(){Gate::Raindex { generation, mixed }}else if parse.gladius.is_some(){Gate::Gladius(generation)}else{Gate::Native(generation)},
+        gate: if parse.epsilon.is_some(){Gate::Epsilon {generation,mixed}}else if parse.raindex.is_some(){Gate::Raindex { generation, mixed }}else if parse.gladius.is_some(){Gate::Gladius(generation)}else{Gate::Native(generation)},
         parse: parse.clone(),
     };
     submit(p, req, dispatch, send).await

@@ -1,4 +1,5 @@
-//! Защищённое исполнение PropAMM в одном слоте. Сверяет локальную подпись и обе дельты кошелька.
+//! Котировщик PropAMM и планировщик Ethereum проверяют модуль и строят поручение на один слот.
+//! Симуляция зависит от канонического родителя, кадра выбранного сборщика и остатков плательщика.
 use super::{Builder, Ctx, Frame, Head, canonical, slot};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::venues::bsc_dex::{
@@ -9,6 +10,17 @@ use alloy::primitives::{Address, B256, Bytes, I256, U64, U256};
 use alloy::sol_types::SolCall;
 use serde_json::json;
 alloy::sol! {function balanceOf(address account) external view returns(uint256);}
+/// Версия с защитой от повторного исполнения (completed[payer][leg]).
+/// Источник — contracts/PropSlotVenueAdapter.sol, функция slotVersion().
+const SINGLE_USE_SLOT_VERSION: u8 = 2;
+
+/// По результату slotVersion() определяет, поддерживает ли модуль однократное поручение; ошибок нет.
+fn supports_single_use(version: U256) -> bool {
+    version == U256::from(SINGLE_USE_SLOT_VERSION)
+}
+
+/// По семейству, ролям и адресу модуля возвращает условия прямого исполнения на блоке h.
+/// Ошибка RPC, несовпадение кода или ролей и неподдерживаемая версия исключают этот модуль.
 pub(super) async fn terms(
     ctx: &Ctx,
     f: &Family,
@@ -21,7 +33,7 @@ pub(super) async fn terms(
         prop_venue::module(ctx, f, r, module, &at),
         canonical(ctx, h.hash, module, slot::slotVersionCall {})
     )?;
-    if version != U256::from(2) {
+    if !supports_single_use(version) {
         return Err(ctx.err(
             ErrorCode::NotApplicable,
             "Модуль не поддерживает однократное поручение в слоте",
@@ -41,6 +53,8 @@ pub(super) struct Order {
     pub leg: B256,
 }
 impl Order {
+    /// Из условий заказа, родительского блока и кадра сборщика формирует параметры вызова и восстановления.
+    /// Сохраняет предел списания при покупке или минимум выплаты при продаже. Ошибок нет.
     pub fn proof(self, h: &Head, f: &Frame, builder: Builder) -> slot::Proof {
         let (input, output) = self.tokens;
         slot::Proof {
@@ -72,6 +86,9 @@ impl Order {
         }
     }
 }
+/// Исполняет сохранённый вызов в симуляции кадра f поверх блока h с указанными при наличии ставками газа.
+/// Возвращает фактическое списание, выплату и расход газа. Ошибки RPC, откат, неверный ответ или
+/// расхождение с дельтами кошелька либо пределами поручения возвращаются вызывающему.
 pub(super) async fn simulate(
     ctx: &Ctx,
     h: &Head,
@@ -199,3 +216,7 @@ pub(super) async fn candidate(
         .proof(&b.head, &b.frame, b.config.builder),
     )
 }
+
+#[cfg(test)]
+#[path = "prop_slot_version_tests.rs"]
+mod version_tests;

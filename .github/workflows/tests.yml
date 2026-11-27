@@ -442,6 +442,8 @@ jobs:
           cache-dependency-path: contracts/evmtest/package-lock.json
       - run: npm ci --prefix contracts/evmtest --no-audit --no-fund
       - run: node contracts/evmtest/mint_club.mjs
+      - name: Проверка версий модулей слота PropAMM по архивному коду
+        run: node contracts/evmtest/prop_slot_version.mjs
   hanji-executor:
     if: ${{ !inputs.native_v3_only && !inputs.stack_check_only && !(inputs.market_replay_only && inputs.ethereum_open_archive && inputs.ethereum_open_subset) }}
     runs-on: ubuntu-latest

@@ -1745,6 +1745,16 @@ def tables(network, snapshots, profiles):
             snapshot=cypher if str(row["id"])=="7037" else cl
             candidates=[snapshot["factory"]["address"]]
             task=f"Cypher · {len(snapshot['markets'])} действительных регистраций, испытания и границы выше"
+        if base and str(row["id"]) in {"3361", "3888"}:
+            is_v3 = str(row["id"]) == "3888"
+            profile = configured["alien-base-v3" if is_v3 else "alien-base"]["settings"]
+            candidates = [profile["dex.factory"]]
+            if is_v3:
+                task = ("Alien Base V3 · фабрика из источника объёма совпадает с профилем. "
+                        "[Выплата и возврат неизрасходованного WETH в пуле AERO]"
+                        "(../tests/data/first_run_dex_2026-11-26/alien_base_750.json.gz)")
+            else:
+                task = "Alien Base V2 · секция alienbase для Base указывает фабрику профиля и 0,16% на обмен"
         if not base and str(row["id"])=="6771":
             fixture=Path("tests/data/first_run_dex_2026-11-26/yield_basis_ethereum.json.gz")
             original=json.loads(gzip.decompress(fixture.read_bytes()))

@@ -36,7 +36,7 @@ def ethereum_events(addresses,head):
                 raise ValueError(("fee log archive",factory,body["message"]))
             for log in batch:
                 topics=log["topics"]
-                if log["address"].lower()!=factory or len(topics)!=3 or topics[0]!=TOPIC or log["data"]!="0x":
+                if log["address"].lower()!=factory or len(topics)!=3 or topics[0]!=TOPIC or log["data"] not in ("","0x"):
                     raise ValueError("unexpected log returned by the fee archive")
                 fee,=decode(["uint24"],bytes.fromhex(topics[1][2:]))
                 spacing,=decode(["int24"],bytes.fromhex(topics[2][2:]))
@@ -138,7 +138,7 @@ def record(network):
                     if receipt["blockHash"]!=record["hash"] or int(receipt["blockNumber"],16)!=record["block"] or len(hits)!=1:
                         raise ValueError(("foreign fee event",factory,record["tx"]))
                     h=hits[0]["topics"]
-                    if len(h)!=3 or h[0]!=TOPIC or int(h[1],16)!=record["fee"] or int(h[2],16)!=record["spacing"]:
+                    if hits[0]["data"]!="0x" or len(h)!=3 or h[0]!=TOPIC or int(h[1],16)!=record["fee"] or int(h[2],16)!=record["spacing"]:
                         raise ValueError(("wrong original log",factory,record["tx"]))
                 verified[factory]={"profiles":factories[factory],"events":records,"tiers":tiers}
             break

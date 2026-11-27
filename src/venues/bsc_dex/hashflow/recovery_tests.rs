@@ -34,7 +34,7 @@ fn name(id: u64) -> (&'static str, &'static str) {
     }
 }
 
-fn directory(tag: &str, chain: u64) -> PathBuf {
+pub(in crate::venues::bsc_dex) fn directory(tag: &str, chain: u64) -> PathBuf {
     let path = std::env::temp_dir().join(format!(
         "arb-hashflow-{tag}-{chain}-{}-{}",
         std::process::id(),
@@ -43,7 +43,7 @@ fn directory(tag: &str, chain: u64) -> PathBuf {
     std::fs::create_dir(&path).unwrap();
     path
 }
-async fn parts(dir: &Path, id: u64, wallet: Address) -> Parts {
+pub(in crate::venues::bsc_dex) async fn parts(dir: &Path, id: u64, wallet: Address) -> Parts {
     let db = Db::open(&dir.join("state.sqlite")).unwrap();
     let (changes, _) = broadcast::channel(16);
     let (events, _) = broadcast::channel(16);

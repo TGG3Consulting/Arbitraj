@@ -33,6 +33,24 @@ impl Ticket {
         keccak256(id)
     }
 }
+/// В денежном круге у книги один журналируемый своп. Остальные источники RFQ остаются самостоятельными.
+pub(super) fn mode(mixed: bool, id: Option<B256>) -> RouteMode {
+    match (mixed, id) {
+        (true, Some(id)) => RouteMode::Orderbook(id),
+        (true, None) => RouteMode::OrderbookIndicative,
+        (false, Some(id)) => RouteMode::Rfq(id),
+        (false, None) => RouteMode::RfqIndicative,
+    }
+}
+pub(in crate::venues::bsc_dex) fn mixed_ticket(route: &DexRoute) -> Option<B256> {
+    if let RouteMode::Orderbook(id) = route.mode
+        && route.executable
+        && route.exec_note.as_deref() == Some(LABEL)
+    {
+        return Some(id);
+    }
+    None
+}
 fn pair(p: &Parts, a: &Asset, s: Side) -> Option<(Address, Address)> {
     let coin = a.contract?;
     let quote = p.tokens.usdt(&p.ctx).ok()?;
@@ -97,11 +115,14 @@ pub(in crate::venues::bsc_dex) async fn consider(
     let mut cutoff = if let Ok(q) = &old
         && q.fillable_qty == qty
         && (!quote_stage::is_final() || q.route.as_ref().is_none_or(|r| r.executable))
+        && (!quote_stage::settlement()
+            || quote_stage::settlement_quote_supported(q, quote_stage::is_final()))
     {
-        let Some(total) = hashflow::routing::total(p, q).await else {
+        let total = hashflow::routing::total(p, q).await;
+        if total.is_none() && !quote_stage::settlement() {
             return old;
-        };
-        Some(total)
+        }
+        total
     } else {
         None
     };
@@ -178,9 +199,18 @@ async fn candidate(
         return None;
     }
     let gas_cap = ctx.dec("raindex.gas_budget_native").ok()?;
+    let channels = send::select(ctx, &p.stats).ok()?;
+    if quote_stage::settlement()
+        && (channels.is_empty()
+            || channels
+                .iter()
+                .any(|r| r.method != crate::core::types::SendMethod::Single))
+    {
+        return None;
+    }
     if gas_cap <= Decimal::ZERO
         || funds.native < num::to_units(gas_cap, 18)?
-        || send::tip(&send::select(ctx, &p.stats).ok()?).is_some()
+        || send::tip(&channels).is_some()
     {
         return None;
     }
@@ -233,7 +263,12 @@ async fn candidate(
     } else {
         wanted
     };
-    if budget > funds.spend {
+    let limit = if quote_stage::settlement() && head.is_none() {
+        funds.allowance
+    } else {
+        funds.spend
+    };
+    if budget > limit {
         return None;
     }
     let cash = if let Some(h) = head {
@@ -310,9 +345,7 @@ async fn candidate(
             false,
         )],
         route: Some(DexRoute {
-            mode: ticket
-                .as_ref()
-                .map_or(RouteMode::RfqIndicative, |t| RouteMode::Rfq(t.id())),
+            mode: mode(quote_stage::settlement(), ticket.as_ref().map(Ticket::id)),
             legs: vec![],
             block,
             gas_units: units,

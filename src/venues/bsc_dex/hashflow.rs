@@ -9,7 +9,7 @@ pub(super) mod routing;
 pub(in crate::venues::bsc_dex) use execute::{ReceiptProof, failed, record};
 pub(in crate::venues::bsc_dex) use dispatch::{marker,reserve,native_send};
 #[cfg(test)]
-mod recovery_tests;
+pub(super) mod recovery_tests;
 pub(super) mod model;
 mod sim;
 #[cfg(test)]

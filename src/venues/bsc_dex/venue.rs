@@ -189,6 +189,7 @@ impl Venue for BscDex {
         if crate::gateway::quote_stage::settlement() {
             let class = urgency::is_set().unwrap_or(Class::Quote);
             let baseline = scope(class, self.p.quoting().quote(asset, side, qty)).await;
+            let baseline=super::raindex::routing::consider(&self.p,asset,side,qty,baseline).await;
             let baseline=super::ryze::routing::consider(&self.p,asset,side,qty,baseline).await;
             return super::hanji::routing::consider(&self.p, asset, side, qty, baseline).await;
         }
@@ -267,13 +268,13 @@ impl Venue for BscDex {
         let q = self.p.quoting();
         let mut extra = super::hanji::routing::breaks(&self.p, asset, side, max_qty);
         extra.extend(self.p.ryze.breaks(&self.p,asset,side,max_qty));
+        extra.extend(super::raindex::routing::breaks(&self.p,asset,side,max_qty));
         if !crate::gateway::quote_stage::settlement() {
             extra.extend(super::hashflow::routing::breaks(
                 &self.p, asset, side, max_qty,
             ));
             extra.extend(super::fermi::routing::breaks(&self.p, asset, side, max_qty));
             extra.extend(super::native_rfq::routing::breaks(&self.p, asset, side, max_qty));
-            extra.extend(super::raindex::routing::breaks(&self.p,asset,side,max_qty));
             extra.extend(super::gladius::routing::breaks(&self.p, asset, side, max_qty));
         }
         if extra.is_empty() {
@@ -891,6 +892,9 @@ impl BscDex {
         // Решение 132: сделка — только кошельком счёта (Ctx::bound).
         self.p.ctx.bound()?;
         let mut req = req;
+        if req.route.as_ref().and_then(super::raindex::routing::mixed_ticket).is_some() {
+            return Err(self.p.ctx.err(ErrorCode::NoRoute,"Денежный билет Raindex требует исходного расчётного шага"));
+        }
         if let Some(done)=super::ryze::recovery::prior(&self.p,&req).await? {return Ok(done);}
         if !matches!(
             req.route.as_ref().map(|r| r.mode),

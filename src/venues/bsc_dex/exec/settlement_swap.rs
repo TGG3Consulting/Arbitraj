@@ -45,6 +45,12 @@ pub async fn trade(p: &Parts, req: TradeRequest, quote: &Asset) -> GatewayResult
     }
     if let Some(done)=super::super::ryze::recovery::prior(p,&req).await? {return Ok(done);}
     if let Some(RouteMode::Relay(id))=req.route.as_ref().map(|r|r.mode){return super::super::ryze::execute::trade(p,req,id).await;}
+    if let Some(id) = req.route.as_ref().and_then(super::super::raindex::routing::mixed_ticket) {
+        let who = wallet::signer::address(ctx)?;
+        let ticket = p.raindex.take(who, id).ok_or_else(|| ctx.err(ErrorCode::NoRoute,"Истёк проверенный билет денежного ордера Raindex"))?;
+        let result = super::super::raindex::settlement::trade(p, req, &ticket).await;
+        return super::balance_fact::apply(ctx,&p.tokens,result).await;
+    }
     if let Some(RouteMode::Orderbook(id)) = req.route.as_ref().map(|r| r.mode) {
         return super::super::hanji::execute::trade(p, req, id).await;
     }

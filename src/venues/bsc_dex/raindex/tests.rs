@@ -11,7 +11,7 @@ fn amount(row: &Value, field: &str) -> U256 {
     row[field].as_str().unwrap().parse().unwrap()
 }
 
-fn check(row: &Value, owner: Address, chain: u64) {
+fn check(row: &Value, owner: Address, chain: u64) -> payment::Saved {
     let module = from_value(row["target"].clone()).unwrap();
     let book = from_value(row["book"].clone()).unwrap();
     let p = Profile {
@@ -88,6 +88,7 @@ fn check(row: &Value, owner: Address, chain: u64) {
         .clone();
     logs.push(repeated);
     assert!(payment.saved.amounts(&logs).is_none());
+    payment.saved
 }
 
 #[test]
@@ -255,4 +256,132 @@ fn public_v7_claims_decode_with_their_own_abi_and_do_not_create_spot_prices() {
         let response = (true, Quantity::units(U256::ONE, 0).unwrap(), B256::ZERO).abi_encode();
         assert!(order.price(&response).is_none());
     }
+}
+
+#[test]
+fn only_an_executable_mixed_book_ticket_selects_the_outer_settlement_action() {
+    use crate::core::types::{DexRoute, RouteMode};
+    let id = B256::repeat_byte(23);
+    let mut route = DexRoute {
+        mode: routing::mode(true, Some(id)),
+        legs: vec![],
+        block: 101,
+        gas_units: 100,
+        executable: true,
+        exec_note: Some(LABEL.into()),
+    };
+    assert_eq!(routing::mixed_ticket(&route), Some(id));
+    route.executable = false;
+    assert_eq!(routing::mixed_ticket(&route), None);
+    route.executable = true;
+    for mode in [
+        routing::mode(false, Some(id)),
+        routing::mode(false, None),
+        routing::mode(true, None),
+    ] {
+        route.mode = mode;
+        assert_eq!(routing::mixed_ticket(&route), None);
+    }
+    route.mode = RouteMode::Orderbook(id);
+    route.exec_note = Some("Hanji".into());
+    assert_eq!(routing::mixed_ticket(&route), None);
+}
+
+#[tokio::test]
+async fn lost_response_keeps_the_original_outer_action_after_reopening_the_database() {
+    use crate::{
+        core::types::{Asset, ChainId, DexRoute, Side, TradeRequest},
+        gateway::{pending::PendingRef, settlement_intent as intent},
+        venues::bsc_dex::{
+            exec::swap_ctx::SwapCtx,
+            hashflow::{
+                native_send,
+                recovery_tests::{directory, parts},
+            },
+        },
+    };
+    use rust_decimal::Decimal;
+    let bytes = include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/raindex_base_protected_wallets.json.gz"
+    );
+    let j: Value = serde_json::from_reader(GzDecoder::new(bytes.as_slice())).unwrap();
+    let row = j["pairs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|p| p["cases"].as_array().unwrap())
+        .flat_map(|s| s.as_object().unwrap().values())
+        .find(|x| x["stage"] == "paid")
+        .unwrap();
+    let owner = from_value(j["payer"].clone()).unwrap();
+    let saved = check(row, owner, 8453);
+    let (input, output) = (
+        from_value(row["pay"].clone()).unwrap(),
+        from_value(row["receive"].clone()).unwrap(),
+    );
+    let dir = directory("raindex-mixed", 8453);
+    let p = parts(&dir, 8453, owner).await;
+    let mut parse = SwapCtx::swap(owner, (input, output), (18, 6), &[], None, None);
+    parse.raindex = Some(Box::new(saved));
+    let id = B256::repeat_byte(47);
+    let req = TradeRequest {
+        venue: p.ctx.venue(),
+        asset: Asset {
+            chain: Some(ChainId("base".into())),
+            ticker: "owned".into(),
+            contract: Some(output),
+        },
+        side: Side::Buy,
+        qty: Decimal::ONE,
+        worst_price: Decimal::ONE,
+        deal_id: "interrupted".into(),
+        exit_position: false,
+        remeasure: None,
+        route: Some(DexRoute {
+            mode: routing::mode(true, Some(id)),
+            legs: vec![],
+            block: 62262756,
+            gas_units: 100,
+            executable: true,
+            exec_note: Some(LABEL.into()),
+        }),
+    };
+    let marker = PendingRef {
+        nonce: Some(3),
+        venue_ref: Some(B256::repeat_byte(92).to_string()),
+        parse: Some(serde_json::to_value(&parse).unwrap()),
+        ..Default::default()
+    };
+    let outer = "mixed/archive/own-original";
+    let db = p.ctx.journal.db();
+    let attempted = std::cell::Cell::new(0_u8);
+    let send = || async {
+        intent::before_send(&marker).await?;
+        attempted.set(attempted.get() + 1);
+        Err(p.ctx.err(ErrorCode::OutcomeUnknown, "потерян ответ"))
+    };
+    for _ in 0..2 {
+        let result = intent::scope(
+            db,
+            outer,
+            intent::Request::Order(Box::new(req.clone())),
+            native_send(&p, &req, u64::MAX, 0, &parse, send()),
+        )
+        .await;
+        assert_eq!(
+            result.err().unwrap().pending.unwrap().venue_ref,
+            marker.venue_ref
+        );
+    }
+    assert_eq!(attempted.get(), 1);
+    drop(p);
+    let restored = parts(&dir, 8453, owner).await;
+    let db = restored.ctx.journal.db();
+    let old = intent::load(db, outer).await.unwrap().unwrap();
+    assert_eq!(
+        (old.lookup.venue_ref, old.lookup.nonce, old.lookup.parse),
+        (marker.venue_ref, marker.nonce, marker.parse)
+    );
+    let ordinary = format!("hashflow/base_dex/{owner}/{output}/Buy/interrupted");
+    assert!(intent::load(db, &ordinary).await.unwrap().is_none());
 }

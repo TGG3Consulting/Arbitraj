@@ -116,13 +116,16 @@ pub(super) async fn landed(
     (hash, nonce): (B256, Option<u64>),
     r: Receipt,
 ) -> GatewayResult<TradeResult> {
-    let queue = release_if_ours(p, hash, nonce, false).await;
-    match SwapCtx::of(pend).filter(SwapCtx::complete) {
+    let saved = SwapCtx::of(pend).filter(SwapCtx::complete);
+    let verify_before_release=saved.as_ref().is_some_and(|c|c.registered_v3.as_deref().is_some_and(|proof|proof.market.maverick));
+    let queue = if verify_before_release {String::new()} else {release_if_ours(p, hash, nonce, false).await};
+    match saved {
         Some(c) => {
-            super::exec::market_receipt::included(&c,&p.ctx,hash,&r).await.map_err(|e|{
+            super::exec::market_receipt::included(&c,&p.ctx,hash,nonce,&r).await.map_err(|e|{
                 let error=match &c.chain {Some(chain)=>e.with_tx(chain.clone()),None=>e};
                 c.attach(error)
             })?;
+            if verify_before_release {release_if_ours(p,hash,nonce,false).await;}
             let out = swap_rebuild::rebuild(&p.ctx, req, &c, hash, r);
             tip_gas(p, c.chain.as_ref().and_then(|t| t.tip_hash), out).await
         }

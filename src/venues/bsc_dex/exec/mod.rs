@@ -40,7 +40,7 @@ pub(super) mod ekubo_v2_direct;
 pub(super) mod ekubo_v2_fact;
 pub(super) mod signed_call;
 pub(super) mod erc20_measure;
-mod maverick_two_wire;
+pub(super) mod maverick_two_wire;
 pub(in crate::venues::bsc_dex) mod registered_v3_wallet;
 pub(in crate::venues::bsc_dex) mod solidly_router_wallet;
 pub(super) mod carbon_binding;

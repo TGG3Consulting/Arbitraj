@@ -40,6 +40,8 @@ pub struct Market {
     #[serde(default, skip_serializing_if = "standard_event")]
     pub maverick: bool,
     #[serde(default,skip_serializing_if="Option::is_none")]
+    pub maverick_chain: Option<u64>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
     pub slipstream: Option<(i32,Address)>,
 }
 fn standard_event(extended: &bool) -> bool { !extended }
@@ -49,6 +51,7 @@ impl Market {
         let maverick=e.family.variant==super::super::pools::family_variant::Variant::MaverickTwoRouter;
         let deployer=if algebra{Some(super::super::pools::cypher::deployment(ctx,e).ok()?)}else{None};
         Some(Self {
+            maverick_chain: if maverick {Some(ctx.chain_id()?)} else {None},
             slipstream: if e.family.variant==super::super::pools::family_variant::Variant::SlipstreamUniversal { Some((e.pool.tick_spacing.filter(|s| *s>0 && *s<=8388607)?,ctx.dex_addr("dex.permit2",e.family.id).ok()?)) } else {None},
             pool: e.pool.reference.address(), maverick, fee: if algebra || maverick{U24::ZERO}else{U24::from(e.pool.fee_pips?)}, wallet_module:false,algebra_deployer:deployer,
             fee_event: e.family.variant == super::super::pools::family_variant::Variant::VvsV3,

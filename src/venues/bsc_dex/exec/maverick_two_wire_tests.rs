@@ -46,6 +46,7 @@ fn signed_market_matches_multicall_and_unique_pool_swap_on_both_chains() {
                             wallet_module: false,
                             slipstream: None,
                             maverick: true,
+                            maverick_chain: snap["chain_id"].as_u64(),
                         },
                         target: addr(&snap["roles"]["router"]["address"]),
                         payer: addr(&exact["payer"]),
@@ -62,6 +63,17 @@ fn signed_market_matches_multicall_and_unique_pool_swap_on_both_chains() {
                     let mut restored: Proof =
                         serde_json::from_value(serde_json::to_value(proof).unwrap()).unwrap();
                     assert_eq!(restored.data(), data);
+                    let hash = alloy_primitives::B256::with_last_byte(1);
+                    let recorded = Some((hash, 7));
+                    let (call, nonce) = super::origin(&restored, recorded, hash, Some(7)).unwrap();
+                    assert_eq!(call.chain, snap["chain_id"].as_u64().unwrap());
+                    assert_eq!(nonce, 7);
+                    assert_eq!(call.calldata, alloy_primitives::keccak256(&data));
+                    assert!(super::origin(&restored, recorded, hash, Some(8)).is_none());
+                    assert!(
+                        super::origin(&restored, recorded, alloy_primitives::B256::ZERO, Some(7))
+                            .is_none()
+                    );
                     assert_eq!(restored.measured(&logs), Some((budget, minimum)));
                     restored.minimum += U256::ONE;
                     assert_eq!(restored.measured(&logs), None);

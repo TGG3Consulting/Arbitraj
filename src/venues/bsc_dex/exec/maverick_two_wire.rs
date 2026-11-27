@@ -63,6 +63,52 @@ pub(super) fn amounts(data: &[u8], side: usize, spent: U256, received: U256, bud
         && word(7) == received
 }
 
+/// Сеть и calldata берутся из поручения. При восстановлении хеш и nonce сверяются с записью очереди.
+pub(super) fn origin(
+    proof: &super::registered_v3_wallet::Proof,
+    recorded: Option<(alloy_primitives::B256, u64)>,
+    hash: alloy_primitives::B256,
+    nonce: Option<u64>,
+) -> Option<(super::signed_call::Erc20Call, u64)> {
+    let nonce = nonce?;
+    if !proof.market.maverick || recorded.is_some_and(|v| v != (hash, nonce)) {
+        return None;
+    }
+    Some((
+        super::signed_call::Erc20Call {
+            chain: proof.market.maverick_chain?,
+            payer: proof.payer,
+            module: proof.target,
+            calldata: alloy_primitives::keccak256(proof.data()),
+        },
+        nonce,
+    ))
+}
+
+/// Подтверждает размещённую отмену владельца с исходным nonce, включая замену после перезапуска.
+pub(in crate::venues::bsc_dex) async fn cancelled(
+    ctx: &crate::venues::bsc_dex::ctx::Ctx,
+    proof: &super::registered_v3_wallet::Proof,
+    original: alloy_primitives::B256,
+    cancel: alloy_primitives::B256,
+    nonce: u64,
+    receipt: &crate::venues::bsc_dex::send::track::Receipt,
+) -> crate::gateway::errors::GatewayResult<()> {
+    let fail = || {
+        ctx.err(
+            crate::gateway::errors::ErrorCode::OutcomeUnknown,
+            "Maverick V2: отмена исходного nonce не подтверждена",
+        )
+    };
+    if cancel == original {
+        return Err(fail());
+    }
+    let (mut call, _) = origin(proof, None, original, Some(nonce)).ok_or_else(fail)?;
+    call.module = call.payer;
+    call.calldata = alloy_primitives::keccak256([]);
+    call.included(ctx, cancel, nonce, receipt).await
+}
+
 #[cfg(test)]
 #[path = "maverick_two_wire_tests.rs"]
 mod tests;

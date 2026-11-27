@@ -57,10 +57,17 @@ pub async fn trade(
             .await
             .map(Some),
         Verdict::Cancelled(h, r) => {
+            if let Some(proof)=c.registered_v3.as_deref().filter(|p|p.market.maverick) {
+                if c.chain.as_ref().is_some_and(|v|v.hash!=hash || v.nonce!=n){return Err(ctx.err(ErrorCode::OutcomeUnknown,"Maverick V2: исходные nonce и хеш изменились"));}
+                super::exec::maverick_two_wire::cancelled(ctx,proof,hash,h,n,&r).await?;
+            }
             let queue = super::resolve::release_if_ours(p, hash, Some(n), false).await;
             single_rebuild::cancelled(ctx, c, hash, (h, r), &queue).map(Some)
         }
         Verdict::Odd(why) => {
+            if c.registered_v3.as_deref().is_some_and(|p|p.market.maverick) {
+                return Err(ctx.err(ErrorCode::OutcomeUnknown,format!("Maverick V2: конфликт исхода {hash}: {why}")));
+            }
             let queue = super::resolve::release_if_ours(p, hash, Some(n), false).await;
             Err(ctx.err(
                 ErrorCode::NotApplicable,

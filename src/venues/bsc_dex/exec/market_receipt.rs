@@ -119,8 +119,14 @@ pub(in crate::venues::bsc_dex) async fn included(
     c: &SwapCtx,
     ctx: &Ctx,
     hash: B256,
+    nonce: Option<u64>,
     receipt: &Receipt,
 ) -> GatewayResult<()> {
+    if let Some(p) = c.registered_v3.as_deref().filter(|p| p.market.maverick) {
+        let fail = || ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Maverick V2: нет подтверждения исходной сети, хеша или nonce");
+        let (signed, nonce)=super::maverick_two_wire::origin(p,c.chain.as_ref().map(|v|(v.hash,v.nonce)),hash,nonce).ok_or_else(fail)?;
+        return signed.included(ctx,hash,nonce,receipt).await;
+    }
     if let Some(p)=&c.rfq{
         let chain=c.chain.as_ref().ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Нет исходного хеша или nonce Hashflow"))?;
         if chain.hash!=hash{return Err(ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Хеш Hashflow не совпал с исходным поручением"));}

@@ -40,6 +40,10 @@ pub(super) async fn funded(
 }
 pub(super) async fn router(ctx: &Ctx, e: &Entry, head: Head) -> GatewayResult<Address> {
     let at = head.selector();
+    if e.family.variant == Variant::MaverickTwoRouter
+        && [e.coin, e.usdt].contains(&ctx.addr("dex.native_wrapped")?) {
+        return Err(ctx.err(ErrorCode::NotApplicable, "Двусторонней пробе Maverick с оплатой WETH требуется V5"));
+    }
     if registered_router::wallet_module(ctx,e).is_some() && let Ok(m)=registered_router::checked_module(ctx,e,&at).await{return Ok(m)}
     if matches!(e.family.variant,Variant::SolidlyProxy|Variant::SolidlyPairOverride) {
         Box::pin(super::super::pools::solidly_proxy::router(

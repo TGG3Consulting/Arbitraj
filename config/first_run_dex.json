@@ -232,12 +232,21 @@
     "chain_id": 8453,
     "network": "base",
     "id": "maverick-v2-base",
-    "source": "https://github.com/maverickprotocol/maverick-v2-examples/tree/68e4d2fe5b03a62738d47c39e241c78c072ec605",
+    "source": "https://github.com/maverickprotocol/maverick-v2-examples/tree/68e4d2fe5b03a62738d47c39e241c78c072ec605 · https://docs.mav.xyz/technical-reference/contract-addresses/v2-contract-addresses · tests/data/first_run_dex_2026-11-26/maverick_v2_base_wallets.json.gz · tests/data/first_run_dex_2026-11-26/maverick_v2_exact_tokens.json",
     "settings": {
-      "dex.kind": "maverick_v2",
+      "dex.kind": "maverick_v2_router",
+      "dex.tick_radius": 32,
       "dex.factory": "0x0A7e848Aca42d879EF06507Fca0E7b33A0a63c1e",
       "dex.quoter": "0xb40AfdB85a07f37aE217E7D6462e609900dD8D7A",
-      "dex.pool_lens": "0x6A9EB38DE5D349Fe751E0aDb4c0D9D391f94cc8D"
+      "dex.pool_lens": "0x6A9EB38DE5D349Fe751E0aDb4c0D9D391f94cc8D",
+      "dex.router": "0x5eded0d7e76c563ff081ca01d9d12d6b404df527",
+      "dex.router_runtime_hash": "0x14dd99cfe7929e14d61b71892057e6acc470724c8c373b0643ecfa202091acd6",
+      "dex.factory_runtime_hash": "0x7273fba84b1c11de7a221e9d30e824f122bcdd1fa351055bd4a0568da585487d",
+      "dex.router_exact_tokens": [
+        "0x4200000000000000000000000000000000000006 0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",
+        "0x4ed4e862860bed51a9570b96d89af5e1b0efefed 0x0fc7067f83de437662a064d75d34700c97224082189a9ef1ccd5ed5a7dd601f6",
+        "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b 0x2a9e5cdaeba01009afa309c7e6236caad9fda314f1088da2c486d4a6df2ecec7"
+      ]
     }
   },
   {
@@ -333,12 +342,20 @@
     "chain_id": 1,
     "network": "ethereum",
     "id": "maverick-v2-eth",
-    "source": "https://github.com/maverickprotocol/maverick-v2-examples/tree/68e4d2fe5b03a62738d47c39e241c78c072ec605",
+    "source": "https://github.com/maverickprotocol/maverick-v2-examples/tree/68e4d2fe5b03a62738d47c39e241c78c072ec605 · https://docs.mav.xyz/technical-reference/contract-addresses/v2-contract-addresses · tests/data/first_run_dex_2026-11-26/maverick_v2_ethereum_wallets.json.gz · tests/data/first_run_dex_2026-11-26/maverick_v2_exact_tokens.json",
     "settings": {
-      "dex.kind": "maverick_v2",
+      "dex.kind": "maverick_v2_router",
+      "dex.tick_radius": 32,
       "dex.factory": "0x0A7e848Aca42d879EF06507Fca0E7b33A0a63c1e",
       "dex.quoter": "0xb40AfdB85a07f37aE217E7D6462e609900dD8D7A",
-      "dex.pool_lens": "0x6A9EB38DE5D349Fe751E0aDb4c0D9D391f94cc8D"
+      "dex.pool_lens": "0x6A9EB38DE5D349Fe751E0aDb4c0D9D391f94cc8D",
+      "dex.router": "0x62e31802c6145a2d5e842eed8efe01fc224422fa",
+      "dex.router_runtime_hash": "0xaec39681d8b3f916ffd599ff3af16d5bea06dfb2f7b1917bd0719e311572efcf",
+      "dex.factory_runtime_hash": "0x7273fba84b1c11de7a221e9d30e824f122bcdd1fa351055bd4a0568da585487d",
+      "dex.router_exact_tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
+        "0x56072c95faa701256059aa122697b133aded9279 0xf0d16b91bddf2f60961cc39af64a8f92781c3239fc96021cf7fa925abaf22ccc"
+      ]
     }
   },
   {
@@ -5891,6 +5908,8 @@
     "source": "https://github.com/yield-basis/yb-core/tree/a1433a0c3d3887ecd2ea085992d041014cf98468",
     "settings": {
       "dex.kind": "yield_basis",
+      "dex.pmm_ladder_counter": true,
+      "dex.pmm_ladder_usd": ["1", "5", "10", "50", "100", "500", "1000", "5000"],
       "dex.factory": "0x370a449febb9411c95bf897021377fe0b7d100c0",
       "dex.factory_runtime_hash": "0x0478f003fa75e4c84472205794a27caf20254ef25ccd62e3f39291e1ca2c9e12",
       "dex.yield_basis_amm_hashes": [

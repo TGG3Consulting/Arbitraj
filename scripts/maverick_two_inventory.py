@@ -29,6 +29,19 @@ def inventory(network):
                 assert (v5["spent"], v5["received"]) == (router["spent"], router["received"])
                 savings.append(int(v5["gas"], 16) - int(router["gas"], 16))
         targets += sum(len(item["legs"]) for item in market["exact_out"])
+    separate = payments["independent"]
+    paired = []
+    for market in separate["markets"]:
+        by_size = {}
+        for attempt in market["attempts"]:
+            by_size.setdefault(attempt["size"], {})[attempt["mode"]] = attempt
+        for routes in by_size.values():
+            for side in ("buy", "sell"):
+                if all(side in routes.get(mode, {}) for mode in ("v5", "router")):
+                    compared = [routes[mode][side]["exact"] for mode in ("v5", "router")]
+                    assert all((r["spent"], r["received"]) == (compared[0]["spent"], compared[0]["received"]) for r in compared)
+                    paired.append(market["pool"])
+    tokens = "DEGEN и VIRTUAL" if network == "base" else "SKY"
     text = (
         f"Число пулов в реестре Maverick V2 — {len(catalog['markets'])}. "
         f"На блоках {catalog['first_block']}–{catalog['height']} число событий PoolSwap достигло {swaps} "
@@ -36,7 +49,11 @@ def inventory(network):
         f"На {len(paid)} рынках V5 и официальный ERC20 Router дали одинаковый расход и поступление "
         f"в {len(savings)} парных сравнениях. Router сэкономил {min(savings)}–{max(savings)} ед. газа на обмен. "
         f"Ещё {targets} выплат Router проверены с точным выходом и пределом входа. "
-        "Расход на разрешение измерен отдельно. Производственный маршрут использует V5. "
+        f"Независимые пробы узких рынков добавили {len(paired)} парных сравнений на {len(set(paired))} пулах. "
+        f"Прямое поручение разрешает оплату токенами {tokens} при сверке неизменяемого кода входа и выхода. "
+        "Радиус чтения 32 тика в каждую сторону проверен сравнением CPU с Quoter для двух размеров и обеих сторон. "
+        "За пределами прочитанного диапазона требуется увеличить радиус и повторить расчёт. Минимум проверяется по чистой выплате. При оплате WETH применяется V5. Разрешение ERC20 измеряется отдельно. "
+        "[Код токенов](../tests/data/first_run_dex_2026-11-26/maverick_v2_exact_tokens.json) · "
         f"[Реестр](../{directory.as_posix()}) · [Кошельковые измерения](../{wallets.as_posix()})"
     )
     return catalog["source"], [roles["factory"]["address"]], text

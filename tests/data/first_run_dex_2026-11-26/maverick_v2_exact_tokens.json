@@ -1,0 +1,74 @@
+[
+  {
+    "network": "base",
+    "chain": 8453,
+    "selector": {
+      "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "requireCanonical": true
+    },
+    "address": "0x4ed4e862860bed51a9570b96d89af5e1b0efefed",
+    "symbol": "DEGEN",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x4ed4e862860bed51a9570b96d89af5e1b0efefed?fields=all",
+    "primary": "contracts/DegenToken.sol:DegenToken",
+    "runtime_match": "exact_match",
+    "code_bytes": 11608,
+    "keccak256": "0x0fc7067f83de437662a064d75d34700c97224082189a9ef1ccd5ed5a7dd601f6",
+    "source_sha256": "114a2dfde5ccd2c373799c33495f81168861f5e9c77869c70f071d397d6808f2",
+    "deployment": "0xcea27f1618e28ecc59b2faed86cdec29a92218261fe9efe374a39201e93545c5",
+    "transfer_rule": "ERC20Pausable and ERC20Votes delegate _update with the unchanged value; pause reverts."
+  },
+  {
+    "network": "base",
+    "chain": 8453,
+    "selector": {
+      "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "requireCanonical": true
+    },
+    "address": "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b",
+    "symbol": "VIRTUAL",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b?fields=all",
+    "primary": "contracts/OptimismMintableERC20.sol:OptimismMintableERC20",
+    "runtime_match": "exact_match",
+    "code_bytes": 14849,
+    "keccak256": "0x2a9e5cdaeba01009afa309c7e6236caad9fda314f1088da2c486d4a6df2ecec7",
+    "source_sha256": "e03c8dcb672e19f03dcc6ddc65a626fda516726915443a19710e2418c5ac5472",
+    "deployment": "0x3a352d6f45fa896e3af94a0dfd761e6676e6ea007687244290d6d78181eb93ce",
+    "transfer_rule": "Local transfer and transferFrom inherit ERC20; OFT cross-chain debits and bridge mint/burn are separate entries."
+  },
+  {
+    "network": "ethereum",
+    "chain": 1,
+    "selector": {
+      "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "requireCanonical": true
+    },
+    "address": "0x56072c95faa701256059aa122697b133aded9279",
+    "symbol": "SKY",
+    "source": "https://sourcify.dev/server/v2/contract/1/0x56072c95faa701256059aa122697b133aded9279?fields=all",
+    "primary": "src/Sky.sol:Sky",
+    "runtime_match": "match",
+    "code_bytes": 4852,
+    "keccak256": "0xf0d16b91bddf2f60961cc39af64a8f92781c3239fc96021cf7fa925abaf22ccc",
+    "source_sha256": "84c7a1cb929c045daeee5568afa993ef42cb28e3c1b774745c90d9e060869dab",
+    "deployment": "0x657d7215da5c6206dd07dad5c8e43d0fdc6eab0b4377705918b31bbcd9994667",
+    "transfer_rule": "Both local transfers add and subtract value exactly; mint and burn are separate entries."
+  },
+  {
+    "network": "ethereum",
+    "chain": 1,
+    "selector": {
+      "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "requireCanonical": true
+    },
+    "address": "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+    "symbol": "wstETH",
+    "source": "https://sourcify.dev/server/v2/contract/1/0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0?fields=all",
+    "primary": "WstETH.sol:WstETH",
+    "runtime_match": "match",
+    "code_bytes": 6492,
+    "keccak256": "0x630181884786c962140041cffa3acffbf39d8c93bde1a62b7b55046e57400557",
+    "source_sha256": "cc047063c770ab08e96ba1f44a589ab5602a7c07de34703c581ce3fcaacf3203",
+    "deployment": "0xaf2c1a501d2b290ef1e84ddcfc7beb3406f8ece2c46dee14e212e8233654ff05",
+    "transfer_rule": "The ERC20 moves exact wrapper shares. No conversion to stETH is called by the trade."
+  }
+]

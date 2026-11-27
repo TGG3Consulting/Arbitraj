@@ -11,7 +11,7 @@ use crate::venues::bsc_dex::{ctx::Ctx, node::abi::IERC20};
 use alloy_primitives::{Address, B256, U256, keccak256};
 use serde_json::{Value, json};
 
-fn expected(ctx: &Ctx, id: &str, key: &str) -> GatewayResult<B256> {
+pub(in crate::venues::bsc_dex) fn expected(ctx: &Ctx, id: &str, key: &str) -> GatewayResult<B256> {
     ctx.dex_text(key, id)?
         .parse::<B256>()
         .ok()

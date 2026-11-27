@@ -178,8 +178,17 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
     };
     let mut options = Vec::new();
     for e in i.entries.iter().filter(|e| is_native(e)) {
+        let mars=super::super::exec::mars_plan::applicable(&q.ctx,e);
+        if mars
+            && let Some(t)=super::super::exec::mars_plan::candidate(&q.ctx,e,head).await {
+            // Родной роутер передаёт в библиотеку нулевую процентную ставку при полной оплате ETH.
+            let mut reduced=e.clone();reduced.pool.fee_pips=Some(0);
+            let exec=Execution{mode:RouteMode::Direct,target:t.router,wire:super::v2_wallet_sim::Wire::NativeFlat(t)};
+            if let Ok(item)=v2_execution::option(q,i,reduced,payer,exec,head).await {options.push(item)}
+        }
         let native_fee=if e.family.variant==Variant::SafeSwapV2 {safeswap_router_pips(&q.ctx,e).ok()}else{e.pool.fee_pips};
-        if let Ok((target, _)) = profile(&q.ctx, e.family.id)
+        let zero_flat=mars && head.is_none() && super::super::exec::mars_plan::observed(&q.ctx,e)==Some(U256::ZERO);
+        if !zero_flat && let Ok((target, _)) = profile(&q.ctx, e.family.id)
             && (e.family.variant!=Variant::SafeSwapV2 || native_fee.is_some()) {
             let mut native=e.clone();
             native.pool.fee_pips=native_fee;

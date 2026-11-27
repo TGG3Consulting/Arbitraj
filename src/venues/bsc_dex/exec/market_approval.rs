@@ -20,6 +20,7 @@ fn selected(mode: Option<RouterFeeMode>) -> Spender {
         Some(
             NativeWallet { target, .. }
             | ProtectedWallet { target }
+            | NativeFlat {target,..}
             | WalletBounds { target, .. }
             | Dagrow { target, .. }
             | AntfarmProceeds { target, .. },
@@ -43,6 +44,7 @@ impl Market {
                 Some(ProtectedWallet { target }) => Spender::Selected(target),
                 _ => Spender::Factory,
             },
+            Market::NativeFlat=>selected(mode),
             Market::Prop=>match mode {Some(VenueFallback{target,..})=>Spender::Selected(target),_=>Spender::Missing},
             Market::Ranges | Market::SafeSwap | Market::Pendle => match mode {
                 Some(ProtectedWallet { target }) => Spender::Selected(target),
@@ -75,7 +77,7 @@ pub(in crate::venues::bsc_dex) fn spender(
     e: &Entry,
     mode: Option<RouterFeeMode>,
 ) -> Option<GatewayResult<Address>> {
-    Market::of(e).map(|market| resolve(ctx, e, market.approval(mode)))
+    (matches!(mode,Some(RouterFeeMode::NativeFlat{..})).then_some(Market::NativeFlat).or_else(||Market::of(e))).map(|market| resolve(ctx, e, market.approval(mode)))
 }
 pub(in crate::venues::bsc_dex) fn signed(
     ctx: &Ctx,

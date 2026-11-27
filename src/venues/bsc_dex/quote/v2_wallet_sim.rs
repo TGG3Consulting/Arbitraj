@@ -54,6 +54,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     DegenRouter(Address),
     DegenModule(Address),
     Pendle(Address),
+    NativeFlat(super::super::exec::mars_wallet::Terms),
     Prop(Box<super::super::exec::prop_wallet::Terms>),
     Integral(super::super::exec::integral_wallet::Terms),
     Dagrow(super::super::exec::dagrow_wallet::Terms),
@@ -113,6 +114,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     };
     let (wrapped, value) = match &o.wire {
         Wire::FluxEth(m)=>(Some(m.wrapped),if o.input==m.wrapped{o.amount}else{U256::ZERO}),
+        Wire::NativeFlat(t)=>(None,t.wei),
         Wire::Carbon(c)=>(c.wrapped(),c.value()),
         Wire::EkuboV2(key,wrapped)=>(*wrapped,key.value()),
         Wire::Vista(v) => (
@@ -153,7 +155,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             )
         }
     };
-    let exact_approval=matches!(&o.wire,Wire::Prop(t) if t.target==t.router)||matches!(&o.wire, Wire::Integral(t) if t.target==t.relay) || matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
+    let exact_approval=matches!(&o.wire,Wire::NativeFlat(_))||matches!(&o.wire,Wire::Prop(t) if t.target==t.router)||matches!(&o.wire, Wire::Integral(t) if t.target==t.relay) || matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
     let allowed=|token:Address,amount:U256| async move {
         let encoded=Bytes::from(IMoney::allowanceCall{owner:o.payer,spender:o.target}.abi_encode());
         let current:Bytes=rpc::call(ctx,"eth_call",json!([{"to":token,"data":encoded},h.selector()])).await?;
@@ -203,6 +205,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         return Err(fail());
     }
     if let Wire::Bundles(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
+    if let Wire::NativeFlat(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::Prop(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::Integral(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::Dagrow(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
@@ -295,6 +298,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::AntfarmOutput(t)=>t.data(minimum,deadline),
         Wire::Antfarm(t)=>t.data(minimum,deadline),
         Wire::Bundles(t)=>t.proof(o,minimum,deadline).data(),
+        Wire::NativeFlat(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Prop(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Integral(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Dagrow(t)=>t.proof(o,minimum,deadline).data(),

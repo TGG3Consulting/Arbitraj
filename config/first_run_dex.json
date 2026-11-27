@@ -5567,6 +5567,9 @@
       "dex.pmm_ladder_usd": [
         "1",
         "10"
+      ],
+      "dex.module_runtime_hashes": [
+        "0x110f78499a93725e3b5c5d47a676f781099d39060dc3e8e6803e8567737783cc"
       ]
     }
   },
@@ -5596,6 +5599,9 @@
       "dex.pmm_ladder_usd": [
         "1",
         "10"
+      ],
+      "dex.module_runtime_hashes": [
+        "0xbe045709856eeecf6343d2810aa177226b9fd4bb1d218aa2130016da1b948e1a"
       ]
     }
   }

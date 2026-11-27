@@ -93,7 +93,10 @@ async fn once(
             h.swapped.amount_in,
         )
     };
-    let pick = (exit_quote::exit_of(req), |h: &Hop| !super::carbon_direct::enabled(&h.entry));
+    // getAmountsOut MarSwap рассчитывает процентный режим. Платная нога проверяется
+    // фактическим исполнением с подписанным msg.value, minOut и балансами кошелька.
+    let native_flat=super::market_plan::Selection::for_leg(leg).native_flat.is_some();
+    let pick = (exit_quote::exit_of(req), |h: &Hop| !native_flat && !super::carbon_direct::enabled(&h.entry));
     // Решение 382: пулы перечитаны на блоке H — квотер на том же H (выход пробы крючка — с другого блока, не берётся).
     let all = match quoter_refetch::block(v.q) {
         Some(b) => super::quoter_refetch_check::check_on(ctx, &path, pick, b).await?,

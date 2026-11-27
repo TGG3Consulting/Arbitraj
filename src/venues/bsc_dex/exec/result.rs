@@ -182,6 +182,11 @@ pub(super) fn with_native_fact(
     // Решение 416: тикер газа — прочитанный перед отправкой (gas_ticker.rs sent; после отправки настройки не читаются,
     // решение 398).
     let gas_t = super::super::gas_ticker::sent(ctx)?;
+    let mut fees=Fee::single(fee,&gas_t);
+    if let Some(p)=proofs.and_then(|c|c.native_flat.as_deref()){
+        let cost=num::to_decimal(p.market.wei,18).ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"MarSwap: подписанная плата не представима в ETH").with_tx(d.chain.clone()))?;
+        Fee::add(&mut fees,&gas_t,cost);
+    }
     Ok(TradeResult {
         status,
         filled_qty: coins,
@@ -190,7 +195,7 @@ pub(super) fn with_native_fact(
         } else {
             usdt / coins
         },
-        fees: Fee::single(fee, &gas_t),
+        fees,
         venue_ref: d.chain.hash.to_string(),
         chain: Some(d.chain),
         finished_at: Utc::now(),

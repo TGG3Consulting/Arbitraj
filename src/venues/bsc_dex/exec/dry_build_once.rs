@@ -120,7 +120,8 @@ pub(super) async fn once(
     // Решение 122 (часть X): через исполнитель — режим «через исполнитель» (любой маршрут, код подставлен) или
     // графовый «бандл» при заданном exec.executor_address (как пойдёт сделка, exec/trade.rs).
     let direct=mode==DryMode::AsTrade && route.mode==RouteMode::Direct;
-    if let Some(market)=legs.iter().flatten().filter_map(|s|super::market_plan::Market::of(&s.entry)).find(|m|m.dry(direct)){
+    let flat=direct && route.legs.iter().any(|l|super::market_plan::Selection::for_leg(l).native_flat.is_some());
+    if let Some(market)=flat.then_some(super::market_plan::Market::NativeFlat).or_else(||legs.iter().flatten().filter_map(|s|super::market_plan::Market::of(&s.entry)).find(|m|m.dry(direct))){
         let unavailable=|why:&str| ctx.err(ErrorCode::NoRoute,format!("{}: {why}",market.name()));
         let ([steps],[(path,_)],[leg])=(legs.as_slice(),paths.as_slice(),route.legs.as_slice())
             else{return Err(unavailable("требуется одна доля"));};

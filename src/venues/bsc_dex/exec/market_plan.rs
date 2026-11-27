@@ -24,6 +24,7 @@ pub(in crate::venues::bsc_dex) enum Market {
     Antfarm,
     Dagrow,
     SafeSwap,
+    NativeFlat,
     Prop,
     Integral,
     Pendle,
@@ -40,6 +41,7 @@ pub(super) struct Selection {
     bounds:Option<(Address,Option<alloy_primitives::U256>)>,
     proceeds: Option<(u16, bool)>,
     flux_eth:bool,
+    pub(super) native_flat:Option<(Address,alloy_primitives::U256)>,
     venue_fallback:Option<(Address,bool)>,
 }
 impl Selection {
@@ -54,6 +56,7 @@ impl Selection {
                 bounds:None,
                 proceeds: Some((tier, loan)),
                 flux_eth:false,
+                native_flat:None,
                 venue_fallback:None,
             };
         }
@@ -62,6 +65,7 @@ impl Selection {
             carbon: super::carbon_direct::selected(leg).1,
             bounds:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::WalletBounds{target,desired}|crate::core::types::RouterFeeMode::Dagrow{target,desired})=>Some((target,desired)),_=>None},_=>None},
             proceeds: None,
+            native_flat:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::NativeFlat{target,wei})=>Some((target,wei)),_=>None},_=>None},
             venue_fallback:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::VenueFallback{target,allowed})=>Some((target,allowed)),_=>None},_=>None},
             flux_eth:matches!(leg.hops.as_slice(),[hop] if matches!(hop.fee_mode,Some(crate::core::types::RouterFeeMode::FluxEth{..}))),
         }
@@ -109,6 +113,7 @@ impl Market {
             Self::Bundles=>"Bundles Swap: требуется выбранный адрес исполнения",
             Self::Dagrow => "DAGrow: требуются исходные условия поручения",
             Self::SafeSwap => "SafeSwap: требуется выбранный модуль с оплатой из WETH",
+            Self::NativeFlat=>"MarSwap: требуется выбранная плата за одну пару",
             Self::Prop => "LambdaClass: требуется исходное поручение с выбранным адресом и разрешением перехода на Uniswap",
             Self::Integral => "Integral SIZE: требуется выбранная форма мгновенного поручения",
             Self::Pendle => "Pendle: требуется выбранный модуль этой серии",
@@ -131,6 +136,7 @@ impl Market {
             Self::Dagrow => "DAGrow",
             Self::Temple => "TempleDAO",
             Self::SafeSwap => "SafeSwap",
+            Self::NativeFlat=>"MarSwap: фиксированная плата ETH",
             Self::Prop => "LambdaClass PropAMMRouter",
             Self::Integral => "Integral SIZE",
             Self::Pendle => "Pendle",
@@ -190,6 +196,7 @@ impl Market {
             Self::Bundles=>Box::pin(super::bundles_plan::plan(ctx,s,wallet,height,selected.target)).await,
             Self::SafeSwap=>Box::pin(super::safeswap_wallet::plan(ctx,s,wallet,height,selected.target)).await,
             Self::Pendle=>Box::pin(super::pendle_wallet::plan(ctx,s,wallet,height,selected.target)).await,
+            Self::NativeFlat=>Box::pin(super::mars_plan::plan(ctx,s,wallet,height,selected.native_flat.ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::NoRoute,self.missing_selection()))?)).await,
             Self::Prop=>Box::pin(super::prop_plan::plan(ctx,s,wallet,height,selected.venue_fallback)).await,
             Self::Integral=>Box::pin(super::integral_plan::plan(ctx,s,wallet,height,selected.bounds)).await,
             Self::Dagrow=>Box::pin(super::dagrow_wallet::plan(ctx,s,wallet,height,selected.bounds)).await,
@@ -241,7 +248,8 @@ pub(super) fn router_shape(
         if direct && route.legs.len()==1 && (native_asset || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)) && q.reg.entry(&hop.pool).is_some_and(|e|e.family.variant.flux_native()) {return Ok(());}
         return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Omni Flux: поручение требует физический ETH и один рынок"));
     }
-    let needs_wallet=leg.hops.iter().filter_map(|h|q.reg.entry(&h.pool)).any(|e|
+    let native_flat=leg.hops.iter().any(|h|matches!(h.fee_mode,Some(crate::core::types::RouterFeeMode::NativeFlat{..})));
+    let needs_wallet=native_flat||leg.hops.iter().filter_map(|h|q.reg.entry(&h.pool)).any(|e|
         (direct && (matches!(e.family.variant,Variant::PropVenue|Variant::IntegralSize|Variant::Dagrow|Variant::Bundles|Variant::PuzzleRanges|Variant::SafeSwapTrade|Variant::DegenSwap) || e.family.variant.exact_router() || super::o1_wallet::enabled(&e))) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e));
     if needs_wallet && (!direct || leg.hops.len()!=1 || route.legs.len()!=1 || native_asset
         || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)) {

@@ -10,6 +10,7 @@ pub(super) enum DirectCall {
     O1(std::sync::Arc<super::o1_wallet::Proof>),
     FluxEth(std::sync::Arc<super::flux_eth::Proof>),
     Bundles(std::sync::Arc<super::bundles_wallet::Proof>),
+    NativeFlat(std::sync::Arc<super::mars_wallet::Proof>),
     Prop(std::sync::Arc<super::prop_wallet::Proof>),
     Integral(std::sync::Arc<super::integral_wallet::Proof>),
     Dagrow(std::sync::Arc<super::dagrow_wallet::Proof>),
@@ -66,6 +67,7 @@ impl DirectCall {
             Self::Ranges(p) => std::sync::Arc::make_mut(p).minimum = minimum,
             Self::FluxEth(p) => std::sync::Arc::make_mut(p).minimum = minimum,
             Self::Bundles(p) => std::sync::Arc::make_mut(p).minimum = minimum,
+            Self::NativeFlat(p)=>std::sync::Arc::make_mut(p).minimum=minimum,
             Self::Prop(p) => std::sync::Arc::make_mut(p).minimum = minimum,
             Self::Integral(p) => std::sync::Arc::make_mut(p).minimum = minimum,
             Self::Dagrow(p) => std::sync::Arc::make_mut(p).minimum = minimum,
@@ -100,6 +102,7 @@ impl DirectCall {
 
     pub(super) fn native_value(self) -> Option<U256> {
         match self {
+            Self::NativeFlat(p)=>Some(p.market.wei),
             Self::FluxEth(p) => Some(p.value()),
             Self::Carbon(c) => Some(c.value()),
             Self::EkuboV2 { key, .. } => Some(key.value()),
@@ -139,6 +142,7 @@ impl DirectCall {
             Self::Carbon(c) => c.data(),
             Self::O1(t) => t.data(),
             Self::Bundles(t) => t.data(),
+            Self::NativeFlat(t)=>t.data(),
             Self::Prop(t)=>t.data(),
             Self::Integral(t) => t.data(),
             Self::Dagrow(t) => t.data(),

@@ -154,6 +154,10 @@ impl Rate {
         (self.target, self.selector.clone())
     }
 
+    pub(in crate::venues::bsc_dex) fn flat(&self,bytes:&[u8])->Option<U256>{
+        if !self.mars_info || self.denominator!=10_000 || bytes.len()!=128 || bytes[..12]!=[0;12] {return None}
+        Some(U256::from_be_slice(&bytes[96..]))
+    }
     pub fn decode(&self, bytes: &[u8]) -> GatewayResult<u32> {
         let value = if self.mars_info {
             mars_percentage(bytes, self.denominator)?
@@ -179,7 +183,7 @@ impl Rate {
     }
 }
 
-/// MarSwap Router02 и V5 при нулевом msg.value. lpInfo() отдаёт treasury, LP bps,
+/// Процентный обмен V5. Пара удерживает эту ставку также при flatFee()==0. lpInfo() отдаёт treasury, LP bps,
 /// Mars bps и стоимость фиксированной оплаты в wei. Адрес treasury не является ставкой.
 fn mars_percentage(bytes: &[u8], denominator: u64) -> GatewayResult<U256> {
     if denominator != 10_000 || bytes.len() != 128 || bytes[..12] != [0;12] {
@@ -189,9 +193,6 @@ fn mars_percentage(bytes: &[u8], denominator: u64) -> GatewayResult<U256> {
     let platform = U256::from_be_slice(&bytes[64..96]);
     let total = lp.checked_add(platform).filter(|x| *x < U256::from(denominator))
         .ok_or_else(|| miss("MarSwap: недопустимая сумма двух ставок"))?;
-    if bytes[96..].iter().all(|x| *x == 0) {
-        return Err(miss("MarSwap: льготный режим с нулевой фиксированной платой требует отдельной проверки пары"));
-    }
     Ok(total)
 }
 
@@ -325,7 +326,10 @@ pub(super) async fn many(
             let reserves = call::decode::<IV2Pair::getReservesCall>(
                 answers[ri].as_ref().map_err(|m| miss(m.clone()))?,
             )?;
-            let fee = rate.decode(answers[fi].as_ref().map_err(|m| miss(m.clone()))?)?;
+            let response=answers[fi].as_ref().map_err(|m|miss(m.clone()))?;
+            let fee=rate.decode(response)?;
+            if let Some(wei)=rate.flat(response) && let Some(chain)=ctx.chain_id() && let Ok(block)=u64::from_str_radix(tag.trim_start_matches("0x"),16){super::mars_fee::record(chain,rate.target,block,wei);}
+
             let reserve0 = U256::from(reserves.reserve0);
             let reserve1 = U256::from(reserves.reserve1);
             let state = if let Some([payout, b0, b1, collector]) = candy {
@@ -507,7 +511,7 @@ mod tests {
         assert_eq!(mars_percentage(&t(10u64, 10u64, 180_000_000_000_000u64), 10_000).unwrap(), U256::from(20));
         assert_eq!(mars_percentage(&t(999, 0, 1), 10_000).unwrap(), U256::from(999));
         assert!(mars_percentage(&t(9999, 1, 1), 10_000).is_err());
-        assert!(mars_percentage(&t(10, 10, 0), 10_000).is_err());
+        assert_eq!(mars_percentage(&t(10, 10, 0), 10_000).unwrap(), U256::from(20));
         assert!(mars_percentage(&[0;32], 10_000).is_err());
     }
 

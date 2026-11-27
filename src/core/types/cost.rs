@@ -161,6 +161,8 @@ pub enum RouterFeeMode {
     ProtectedWallet { target: alloy_primitives::Address },
     /// DAGrow SSP: точный вход или заявленная сумма выхода, привязанные к адресу исполнения.
     /// В подписанном поручении площадки явно разрешён либо запрещён резервный рынок.
+    /// Полная отдельная плата нативной монетой за подписанное поручение между ERC20.
+    NativeFlat {target:alloy_primitives::Address,wei:alloy_primitives::U256},
     VenueFallback {target:alloy_primitives::Address,allowed:bool},
     WalletBounds {target:alloy_primitives::Address,desired:Option<alloy_primitives::U256>},
     Dagrow {target:alloy_primitives::Address,desired:Option<alloy_primitives::U256>},

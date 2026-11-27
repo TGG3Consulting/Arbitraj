@@ -64,6 +64,18 @@ pub async fn share(
                 .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Пул маршрута больше не в реестре"))
         })
         .collect::<GatewayResult<Vec<Entry>>>()?;
+    // Родной MarSwap при положительной оплате ETH считает эту ногу без процента.
+    // Для проверки кода и пары в плане остаётся исходная ставка LP по тому же реестру.
+    if let ([h],[e])=(hops,found.as_slice())
+        && let Some(crate::core::types::RouterFeeMode::NativeFlat{target,wei})=h.fee_mode {
+        if !direct_mode || wei.is_zero() || !super::mars_plan::applicable(ctx,e) || ctx.dex_addr("dex.router",e.family.id)?!=target {
+            return Err(ctx.err(ErrorCode::NoRoute,"MarSwap: недействительные параметры фиксированной оплаты"));
+        }
+        let mut paid=e.clone();paid.pool.fee_pips=Some(0);
+        let mut p=eval(v,&[paid],qty,true,th).await?;
+        let [hop]=p.hops.as_mut_slice() else{return Err(ctx.err(ErrorCode::NoRoute,"MarSwap: ожидался прямой путь"))};
+        hop.entry=e.clone();return Ok(p);
+    }
     let mut p=eval(v, &found, qty, direct_mode, th).await?;
     if let [e]=found.as_slice() && super::carbon_direct::enabled(e){
         Box::pin(super::carbon_direct::adjust(ctx,&mut p,hops,v.side==crate::core::types::Side::Buy)).await?;

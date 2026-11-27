@@ -74,6 +74,7 @@ pub async fn trade(
     req: TradeRequest,
     pend: &PendingRef,
 ) -> GatewayResult<Option<TradeResult>> {
+    if pend.parse.as_ref().is_some_and(|v|v.get("pancakex").is_some()){return super::pancakex::recovery::reconcile(p,req,pend).await;}
     if super::ryze::ledger::Marker::read(pend).is_some() {return super::ryze::recovery::reconcile(p,req,pend).await;}
     let rain = req.route.as_ref().and_then(super::raindex::routing::mixed_ticket).is_some();
     let epsilon=req.route.as_ref().and_then(super::epsilon::routing::mixed_ticket).is_some();

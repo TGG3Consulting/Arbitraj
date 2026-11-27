@@ -1,7 +1,17 @@
 //! Собственные пределы пользователя из ABI PancakeSwap X и локально рассчитанной подписи Permit2.
 //! https://developer.pancakeswap.finance/contracts/pcsx/swap-integration
 mod abi;
+pub mod assets;
+mod book;
 pub mod cash;
+pub mod client;
+pub(in crate::venues::bsc_dex) mod execute;
+mod history;
+pub(in crate::venues::bsc_dex) mod ledger;
+pub mod market;
+pub mod profile;
+pub(in crate::venues::bsc_dex) mod recovery;
+mod result;
 mod wire;
 use alloy_primitives::{Address, B256, U256};
 
@@ -13,7 +23,7 @@ pub struct Roles {
     pub permit: Address,
 }
 /// Владелец проверяет только поручение на свой кошелёк и исходную пару.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Request {
     pub owner: Address,
     pub input: Address,
@@ -43,3 +53,6 @@ mod cash_tests;
 mod exact_out_tests;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod lifecycle_tests;

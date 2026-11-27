@@ -95,6 +95,7 @@ impl Venue for BscDex {
     fn rate_bound(&self, asset: &Asset, side: Side) -> crate::gateway::rate_bound::RateBound {
         if super::dexalot::routing::available(&self.p,asset) || super::airswap::routing::available(&self.p) || self.p.textile.has(asset) || super::hashflow::enabled(&self.p.ctx) || super::native_rfq::routing::available(&self.p,asset,side) || super::gladius::routing::available(&self.p,asset,side) || super::raindex::routing::available(&self.p,asset,side) || super::epsilon::routing::available(&self.p,asset)
             || super::hanji::routing::active(&self.p)
+            || self.p.ctx.flag("pancakex.trading").unwrap_or(false)
             || super::ryze::routing::active(&self.p)
             || super::fermi::routing::active(&self.p)
         {
@@ -200,6 +201,7 @@ impl Venue for BscDex {
             let baseline = scope(class, self.p.quoting().quote(asset, side, qty)).await;
             let baseline=super::raindex::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline=super::epsilon::routing::consider(&self.p,asset,side,qty,baseline).await;
+            let baseline=super::pancakex::market::consider(&self.p,asset,side,qty,baseline).await;
             let baseline=super::ryze::routing::consider(&self.p,asset,side,qty,baseline).await;
             return super::hanji::routing::consider(&self.p, asset, side, qty, baseline).await;
         }
@@ -240,6 +242,7 @@ impl Venue for BscDex {
         let baseline=super::airswap::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline=super::textile::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline=super::gladius::routing::consider(&self.p,asset,side,qty,baseline).await;
+        let baseline=super::pancakex::market::consider(&self.p,asset,side,qty,baseline).await;
         let baseline=super::ryze::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline = super::fermi::routing::consider(&self.p, asset, side, qty, baseline).await;
         super::hanji::routing::consider(&self.p, asset, side, qty, baseline).await
@@ -257,6 +260,7 @@ impl Venue for BscDex {
         }
         if super::dexalot::routing::available(&self.p,asset) || super::airswap::routing::available(&self.p) || self.p.textile.has(asset) || super::hashflow::enabled(&self.p.ctx) || super::native_rfq::routing::available(&self.p,asset,side) || super::gladius::routing::available(&self.p,asset,side) || super::raindex::routing::available(&self.p,asset,side) || super::epsilon::routing::available(&self.p,asset)
             || super::hanji::routing::active(&self.p)
+            || self.p.ctx.flag("pancakex.trading").unwrap_or(false)
             || super::ryze::routing::active(&self.p)
             || super::fermi::routing::active(&self.p)
             || (crate::gateway::quote_stage::is_final()
@@ -912,6 +916,7 @@ impl BscDex {
         if req.route.as_ref().is_some_and(|r| super::raindex::routing::mixed_ticket(r).is_some() || super::epsilon::routing::mixed_ticket(r).is_some()) {
             return Err(self.p.ctx.err(ErrorCode::NoRoute,"Денежный билет требует исходного расчётного шага"));
         }
+        if let Some(done)=super::pancakex::recovery::prior(&self.p,&req).await? {return Ok(done);}
         if let Some(done)=super::ryze::recovery::prior(&self.p,&req).await? {return Ok(done);}
         if !matches!(
             req.route.as_ref().map(|r| r.mode),
@@ -947,6 +952,7 @@ impl BscDex {
         {
             return super::hanji::execute::trade(&self.p, req, id).await;
         }
+        if let Some(crate::core::types::RouteMode::Relay(id))=req.route.as_ref().filter(|r|super::pancakex::market::is_route(r)).map(|r|r.mode) {return super::pancakex::execute::trade(&self.p,req,id).await;}
         if let Some(crate::core::types::RouteMode::Relay(id))=req.route.as_ref().map(|r|r.mode) {return super::ryze::execute::trade(&self.p,req,id).await;}
         if let Some(crate::core::types::RouteMode::Slot(id)) = req.route.as_ref().map(|r| r.mode) {
             return super::fermi::trade(&self.p, req, id).await;

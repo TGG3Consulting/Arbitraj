@@ -43,7 +43,9 @@ pub async fn trade(p: &Parts, req: TradeRequest, quote: &Asset) -> GatewayResult
     {
         return Err(ctx.err(ErrorCode::NoRoute,"Для денежного свопа требуется закреплённый расчётный актив и однотранзакционный маршрут AMM"));
     }
+    if let Some(done)=super::super::pancakex::recovery::prior(p,&req).await? {return Ok(done);}
     if let Some(done)=super::super::ryze::recovery::prior(p,&req).await? {return Ok(done);}
+    if let Some(RouteMode::Relay(id))=req.route.as_ref().filter(|r|super::super::pancakex::market::is_route(r)).map(|r|r.mode){return super::super::pancakex::execute::trade(p,req,id).await;}
     if let Some(RouteMode::Relay(id))=req.route.as_ref().map(|r|r.mode){return super::super::ryze::execute::trade(p,req,id).await;}
     if let Some(id) = req.route.as_ref().and_then(super::super::epsilon::routing::mixed_ticket) {
         let who = wallet::signer::address(ctx)?;

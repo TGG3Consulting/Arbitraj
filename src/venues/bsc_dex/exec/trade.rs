@@ -109,6 +109,7 @@ fn by_whom(ctx: &Ctx, reg: &Registry, route: &DexRoute, native: bool) -> &'stati
             }
         }
         RouteMode::Slot(_) | RouteMode::SlotIndicative => "FermiSwap",
+        RouteMode::Relay(_) | RouteMode::RelayIndicative if super::super::pancakex::market::is_route(route)=>super::super::pancakex::market::LABEL,
         RouteMode::Relay(_) | RouteMode::RelayIndicative => "Ryze",
         RouteMode::Orderbook(_) | RouteMode::OrderbookIndicative
             if route.exec_note.as_deref() == Some(super::super::raindex::LABEL) => super::super::raindex::LABEL,

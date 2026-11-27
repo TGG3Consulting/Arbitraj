@@ -649,6 +649,8 @@ jobs:
           python scripts/record_carbon_ethereum.py "$RUNNER_TEMP/market.json"
           node contracts/build-hanji.mjs "$RUNNER_TEMP/carbon" CarbonWallet
           python scripts/record_carbon_wallet.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/carbon/CarbonWallet.json" "$RUNNER_TEMP/carbon-protected.json"
+      - if: matrix.market == 'llamma-ethereum'
+        run: python scripts/record_llamma_ethereum.py "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'moon-wallet-')
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/moon" MooniswapWallet

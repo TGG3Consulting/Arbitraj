@@ -671,7 +671,7 @@ jobs:
         run: |
           npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
           node contracts/build-hanji.mjs "$RUNNER_TEMP/llamma" LlammaWallet
-          python scripts/record_llamma_module.py "$RUNNER_TEMP/llamma/LlammaWallet.json" "$RUNNER_TEMP/market.json"
+          python scripts/record_llamma_module.py "$RUNNER_TEMP/llamma/LlammaWallet.json" "$RUNNER_TEMP/market.json" --manifest-dir "$RUNNER_TEMP"
       - if: matrix.market == 'llamma-wallets-ethereum'
         run: python scripts/record_llamma_wallets.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'llamma-ethereum'
@@ -1090,6 +1090,7 @@ jobs:
             ${{ runner.temp }}/market.json
             ${{ runner.temp }}/directory.json
             ${{ runner.temp }}/uniswap-v1-create.json
+            ${{ runner.temp }}/llamma-*-create.json
             ${{ runner.temp }}/mooniswap-*-create.json
             ${{ runner.temp }}/defiplaza-*-create.json
             ${{ runner.temp }}/bancor-v3-create.json

@@ -2,6 +2,7 @@
 import argparse
 import gzip
 import json
+from hashlib import sha256
 from pathlib import Path
 
 from eth_abi import decode, encode
@@ -32,7 +33,7 @@ def runtime(reader, artifact, factory, tuples):
     return deployed
 
 
-def capture(artifact):
+def capture(artifact, manifest_dir):
     folder=ROOT/"tests/data/first_run_dex_2026-11-26"
     def archive(name):
         return json.loads(gzip.decompress((folder/("llamma_ethereum_"+name+".json.gz")).read_bytes()))
@@ -89,10 +90,23 @@ def capture(artifact):
         results.append(dict(kind=k,index=i,side=side,mode=row["mode"],funding=row.get("funding","USDT/crvUSD"),cap=str(cap),spent=str(spent),received=str(net),
                             before=list(map(str,before)),after=list(map(str,after)),gas=int(paid["gasUsed"],16),approvalGas=int(rows[pos-1]["gasUsed"],16),
                             bareGas=leg["gas"],control=[high["error"],late["error"]],trade=trade,logs=paid["logs"]))
+    for key,code in modules.items():
+        if {r["side"] for r in results if r["kind"]==key}!={0,1}:
+            raise ValueError("missing paid side")
+        if manifest_dir:
+            factory=bank["factories"][key]
+            creation=bytes.fromhex(artifact["creation"])+encode(["address","bool"],[factory,key=="v2"])
+            kind="llamma_lending" if key=="oneway" else "llamma_"+key
+            manifest=dict(kind=kind,chainId=1,network="Ethereum",tupleRegistry=key=="v2",roles={
+                "factory":{"address":factory,"keccak256":bank["runtimes"][key]["factoryKeccak"]}},
+                sourceBlock=reader.tag["blockHash"],runtimeKeccak="0x"+keccak(hexstr=code).hex(),
+                runtimeSha256=sha256(bytes.fromhex(code[2:])).hexdigest(),creationSha256=sha256(creation).hexdigest(),
+                data="0x"+creation.hex(),solc=artifact["solc"])
+            (manifest_dir/("llamma-"+key+"-create.json")).write_text(json.dumps(manifest,separators=(",",":")),encoding="utf8")
     return dict(selector=reader.tag,owner=OWNER,module=MODULE,runtimes={k:"0x"+keccak(hexstr=c).hex() for k,c in modules.items()},rows=results)
 
 
 if __name__=="__main__":
     cli=argparse.ArgumentParser(description=__doc__);cli.add_argument("artifact",type=Path);cli.add_argument("output",type=Path)
-    opt=cli.parse_args();opt.output.write_text(json.dumps(capture(json.loads(opt.artifact.read_bytes())),separators=(",",":")),encoding="utf-8")
+    cli.add_argument("--manifest-dir",type=Path);opt=cli.parse_args();opt.output.write_text(json.dumps(capture(json.loads(opt.artifact.read_bytes()),opt.manifest_dir),separators=(",",":")),encoding="utf-8")
 

@@ -70,8 +70,32 @@ def acquire(url):
         for buy in [True,False]:
             for exact_in in [True,False]:
                 witnessed.append(pay(c,a,b,buy,exact_in,end))
-    return dict(head=tag,height=chain["block"],roles=roles,states=states,payments=witnessed,
+    return dict(head=tag,height=chain["block"],roles=roles,states=states,payments=witnessed,ladder=quote_ladder(c),
                 index_source=idx["source"],index_date=idx["observed_utc"])
+
+
+def quote_ladder(c):
+    # Denominations are USDC or USDT raw units. Obtain the native equivalent from the same pool at the same hash.
+    keys,ops=[],[]
+    for a,b in [(ZERO,USDC),(ZERO,USDT),(USDC,USDT)]:
+        for stable_amount in (1,10,100,1000):
+            size=stable_amount*10**6
+            for buy in [True,False]:
+                if a==ZERO:
+                    # Specify token units on the stable (quote) side throughout.
+                    modes=[False]
+                else:
+                    modes=[buy,not buy]
+                for fixed_base in modes:
+                    args=[a,b,420,buy,fixed_base,size,0,HIGH if buy else LOW]
+                    ops.append((IMPACT,name("calcImpact",QUOTE),QUOTE,args))
+                    keys.append(dict(base=a,quote=b,index=420,buy=buy,fixed_base=fixed_base,requested=str(size)))
+    results=posts(c,ops)
+    for key,response in zip(keys,results,strict=True):
+        bf,qf,price=decode(["int128","int128","uint128"],response)
+        key.update(base_flow=str(bf),quote_flow=str(qf),end_price=str(price))
+        assert (bf>0 and qf<0) if key["buy"] else (bf<0 and qf>0)
+    return keys
 
 
 def pay(c,a,b,buy,exact_in,end):

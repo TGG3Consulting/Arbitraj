@@ -2126,6 +2126,27 @@ def tables(network, snapshots, profiles):
         "а Homelander повторно учитывает пулы сторонних AMM."
         if base else
         "В Ethereum двадцатке подтверждена отдельная касса Kipseli. Из 1452 событий за сутки "
+        classic_ids = {"119": "sushiswap-v2-base" if base else "sushiswap",
+                       "194": "pancakeswap-v2-base" if base else "pancakeswap_ethereum"}
+        if classic_id := classic_ids.get(str(row["id"])):
+            fixture = data_dir / f"classic_spot_wallets_{network}.json.gz"
+            with gzip.open(fixture, "rt", encoding="utf8") as stream:
+                classic = json.load(stream)[classic_id]
+            assert classic["factory"] in {a.lower() for a in candidates}
+            paths = [c["wallet_paths"] for c in classic["cases"]]
+            deltas = [x-y for p in paths for x,y in zip(p["executor"]["swap_gas"],p["router"]["swap_gas"])]
+            task = (f"Профиль `{classic_id}` · WETH/USDC `{classic['pool']}`. Два размера покупки и продажи. "
+                    f"Каждый платёж оригинального роутера и V5 совпал с расчётом при {classic['pips']} ppm; "
+                    f"при той же выплате оригинал сэкономил {min(deltas)}–{max(deltas)} gas за своп. "
+                    f"Обратная проверка пары и minOut +1 отклонили завышенный выход в обе стороны. "
+                    f"[Квитанции и сроки](../{fixture.as_posix()}).")
+        if not base and str(row["id"]) == "812":
+            fixture = data_dir / "llama_eth_v2_wallets.json.gz"
+            with gzip.open(fixture, "rt", encoding="utf8") as stream:
+                empire = json.load(stream)["empire"]
+            assert empire["factory"] in {a.lower() for a in candidates}
+            task = (f"EmpireDEX · фабрика подтвердила {len(empire['pools'])} пар. "
+                    f"[Реестр](../{fixture.as_posix()}) · [Платежи и контроль защищённого маршрута](../tests/data/first_run_dex_2026-11-26/empire_ethereum_protected.json.gz).")
         "на одном обмене прослежены 3342,773397 USDC в кассу и 3346,310065 USDT получателю. "
         "Через публичный Ethereum PropAMMRouter один EOA продал WETH за USDC в трёх сделках. В диапазоне 26444589–26494988 "
         "роутер указал Kipseli 732 раза по четырём парам USDC с WETH, WBTC, cbBTC и USDT. Фактический путь входа: "

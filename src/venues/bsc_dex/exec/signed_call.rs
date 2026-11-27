@@ -5,6 +5,10 @@ use alloy::rpc::types::Log;
 use alloy_primitives::{Address, B256, Bytes, U64,U256,keccak256};
 use serde::{Serialize,Deserialize};
 use serde_json::json;
+/// Old issuer, Shiba and Empire records were written exclusively on Ethereum before
+/// their serialized orders included the EIP-155 chain identifier.
+pub(super) fn legacy_ethereum_chain() -> u64 {crate::settings::evm_profiles::ETHEREUM_MAINNET}
+
 pub(super) async fn included(
     ctx: &Ctx,
     hash: B256,

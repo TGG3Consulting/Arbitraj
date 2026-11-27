@@ -60,6 +60,7 @@ pub(super) async fn capture(
         return Err(bad());
     }
     let mut p = Proof {
+            chain: crate::venues::bsc_dex::node::chain_id::chain_id(ctx)?,
         module,
         pool,
         payer,

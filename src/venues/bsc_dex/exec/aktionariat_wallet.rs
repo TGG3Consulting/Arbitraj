@@ -21,6 +21,8 @@ alloy::sol! {
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Market {
+    #[serde(default = "super::signed_call::legacy_ethereum_chain")]
+    pub chain: u64,
     pub broker: Address,
     pub module: Address,
     pub runtime: B256,
@@ -54,7 +56,7 @@ impl Proof {
     }
 
     pub(super) fn signed(&self) -> signed_call::Erc20Call {
-        self.v5.unwrap_or_else(||signed_call::Erc20Call{chain:1,payer:self.payer,module:self.market.module,calldata:keccak256(self.data())})
+        self.v5.unwrap_or_else(||signed_call::Erc20Call{chain:self.market.chain,payer:self.payer,module:self.market.module,calldata:keccak256(self.data())})
     }
     pub(super) async fn included(&self,ctx:&Ctx,hash:B256,nonce:u64,receipt:&Receipt)->GatewayResult<()> {
         self.signed().included(ctx,hash,nonce,receipt).await?;
@@ -142,7 +144,7 @@ mod tests {
             let source=address(&row["source"]);
             let target=address(&row["target"]);
             let broker=address(&row["broker"]);
-            let market=Market{broker,module,runtime:d["manifest"]["runtimeKeccak"].as_str().unwrap().parse().unwrap()};
+            let market=Market{chain:crate::settings::evm_profiles::ETHEREUM_MAINNET,broker,module,runtime:d["manifest"]["runtimeKeccak"].as_str().unwrap().parse().unwrap()};
             let deadline=if graph{U256::ZERO}else{IAktionariatWallet::executeCall::abi_decode(&data).unwrap().order.deadline};
             let mut proof=Proof{market,payer,issuer_steps:Vec::new(),input:source,output:target,budget,minimum:u(&row["received"]),deadline,
                 v5:graph.then(||signed_call::Erc20Call{chain:1,payer,module:exec,calldata:keccak256(&data)})};

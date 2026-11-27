@@ -10,6 +10,8 @@ uint256 debit,uint256 credit,uint256 gross,uint256 received); }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Proof {
+    #[serde(default = "super::signed_call::legacy_ethereum_chain")]
+    pub chain: u64,
     pub module: Address,
     pub pool: Address,
     pub payer: Address,
@@ -33,7 +35,7 @@ impl Proof {
     }
     pub(in crate::venues::bsc_dex) fn signed(&self) -> Erc20Call {
         Erc20Call {
-            chain: 1,
+            chain: self.chain,
             payer: self.payer,
             module: self.module,
             calldata: keccak256(self.data()),

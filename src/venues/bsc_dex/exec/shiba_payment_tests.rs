@@ -28,6 +28,7 @@ fn included_module_keeps_the_actual_payout_separate_from_the_pool_swap_gross() {
         let net = row["received"].as_str().unwrap().parse().unwrap();
         let logs: Vec<Log> = serde_json::from_value(row["logs"].clone()).unwrap();
         let mut p = Proof {
+            chain: crate::settings::evm_profiles::ETHEREUM_MAINNET,
             pool: parsed(&row["pool"]),
             module: parsed(&signed["to"]),
             payer,

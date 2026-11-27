@@ -18,7 +18,7 @@ pub(crate) fn terms(ctx:&Ctx,e:&Entry)->GatewayResult<Market>{
     let broker=e.pool.reference.address();
     if module.is_zero() || broker!=s.broker || ![e.pool.token0,e.pool.token1].contains(&s.share) ||
         ![e.pool.token0,e.pool.token1].contains(&s.cash) || s.share==s.cash {return Err(changed(ctx));}
-    Ok(Market{broker,module,runtime:*runtime})
+    Ok(Market{chain:crate::venues::bsc_dex::node::chain_id::chain_id(ctx)?,broker,module,runtime:*runtime})
 }
 pub(crate) async fn verify(ctx:&Ctx,e:&Entry,m:Market,at:&Value)->GatewayResult<crate::core::types::BrokerbotState> {
     let (state,(),registry,issuer)=tokio::try_join!(
@@ -68,7 +68,7 @@ pub(super) fn capture(ctx:&Ctx,legs:&[Vec<Step>],call:&super::executor::call::Ex
         route.data.as_ref()!=id.as_slice() || (route.tokenIn,route.tokenOut)!=(call.token_in,call.token_out){
         return Err(changed(ctx));
     }
-    let signed=super::signed_call::Erc20Call{chain:1,payer,module:call.executor,calldata:alloy_primitives::keccak256(call.data())};
+    let signed=super::signed_call::Erc20Call{chain:m.chain,payer,module:call.executor,calldata:alloy_primitives::keccak256(call.data())};
     Ok(Some(Box::new(Proof{market:m,payer,issuer_steps:Vec::new(),input:call.token_in,output:call.token_out,budget:call.amount_in,
         minimum:call.min_out,deadline:call.deadline,v5:Some(signed)})))
 }

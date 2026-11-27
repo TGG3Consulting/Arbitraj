@@ -17,6 +17,8 @@ pub struct ChainMeta {
     pub public_channel: &'static str,
 }
 
+pub const ETHEREUM_MAINNET: u64 = 1;
+
 pub const PROFILES: &[ChainMeta] = &[
     ChainMeta {
         venue: "base_dex",
@@ -28,7 +30,7 @@ pub const PROFILES: &[ChainMeta] = &[
     ChainMeta {
         venue: "eth_dex",
         chain: "ethereum",
-        evm_chain_id: 1,
+        evm_chain_id: ETHEREUM_MAINNET,
         gas_mode: "ethereum_eip1559",
         public_channel: "ethereum_public",
     },

@@ -26,6 +26,7 @@ fn archived_module_receipts_bind_the_signed_pool_and_real_wallet_including_refle
             let amt = |key: &str| exact[key].as_str().unwrap().parse::<U256>().unwrap();
             let data: Bytes = exact["calldata"].as_str().unwrap().parse().unwrap();
             let proof = Proof {
+            chain: crate::settings::evm_profiles::ETHEREUM_MAINNET,
                 module: payment.address(),
                 pool: row["pool"].as_str().unwrap().parse().unwrap(),
                 payer: archive["owner"].as_str().unwrap().parse().unwrap(),
@@ -35,6 +36,13 @@ fn archived_module_receipts_bind_the_signed_pool_and_real_wallet_including_refle
                 minimum: amt("received"),
                 deadline: U256::from_be_slice(&data[data.len() - 32..]),
             };
+            let mut old = serde_json::to_value(&proof).unwrap();
+            old.as_object_mut().unwrap().remove("chain");
+            let restored: Proof = serde_json::from_value(old).unwrap();
+            assert_eq!(restored.signed().chain, crate::settings::evm_profiles::ETHEREUM_MAINNET);
+            let mut another = proof.clone();
+            another.chain = 8453;
+            assert_eq!(another.signed().chain, 8453);
             assert_eq!(proof.data(), data);
             let amounts =
                 |p: &Proof, ls: &[Log]| p.amounts(ls, proof.payer, proof.input, proof.output);

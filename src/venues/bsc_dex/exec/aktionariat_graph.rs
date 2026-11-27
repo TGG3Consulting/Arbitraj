@@ -49,7 +49,7 @@ pub(super) fn capture(ctx: &Ctx, legs: &[Vec<Step>], call: &ExecCall, payer: Add
     Ok(Some(Box::new(Proof {
         market, payer, input: call.token_in, output: call.token_out, budget: call.amount_in,
         minimum: call.min_out, deadline: call.deadline, issuer_steps,
-        v5: Some(Erc20Call {chain: 1, payer, module: call.executor, calldata: keccak256(call.data())}),
+        v5: Some(Erc20Call {chain: market.chain, payer, module: call.executor, calldata: keccak256(call.data())}),
     })))
 }
 
@@ -115,7 +115,7 @@ mod tests {
         let executor = addr(&sample["executor"]);
         let mut covered = 0;
         for row in sample["controls"].as_array().unwrap() {
-            let market = Market { broker: addr(&row["broker"]), module, runtime: B256::ZERO };
+            let market = Market { chain:crate::settings::evm_profiles::ETHEREUM_MAINNET, broker: addr(&row["broker"]), module, runtime: B256::ZERO };
             for (index, side) in ["buy","sell"].iter().enumerate() {
                 let data: Bytes = row[*side]["data"].as_str().unwrap().parse().unwrap();
                 let tx = ArbExecutor::executeCall::abi_decode(&data).unwrap();

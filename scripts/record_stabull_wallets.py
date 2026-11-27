@@ -160,7 +160,9 @@ if __name__=="__main__":
     parser.add_argument("--network",choices=["base","ethereum"],default="base")
     opt=parser.parse_args()
     errors=[]
-    endpoints=ENDPOINTS if opt.network=="base" else ["https://mainnet.gateway.tenderly.co"]
+    # Используем тот же Ethereum RPC, по которому закреплены реестр, фабрика и ставки.
+    chain_data=json.loads((DATA/f"{opt.network}.json").read_bytes())
+    endpoints=ENDPOINTS if opt.network=="base" else [chain_data["endpoint"]]
     for endpoint in endpoints:
         try:
             result=capture(endpoint,json.loads(opt.module.read_bytes()) if opt.module else None,opt.network)

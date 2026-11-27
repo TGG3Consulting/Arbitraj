@@ -1047,7 +1047,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::AlgebraIntegral => {
             list.extend(["dex.factory", "dex.quoter"]);
             if f.variant==Variant::CypherIntegral {list.push("dex.custom_deployers");}
-            if f.variant==Variant::TrebleSpot {list.push("dex.algebra_pool_deployer");}
+            if f.variant.treble_spot() {list.push("dex.algebra_pool_deployer");}
             if f.variant.caller_algebra(){list.extend(["dex.algebra_pool_deployer","dex.factory_runtime_hash","dex.quoter_runtime_hash","dex.plugin_runtime_hashes","dex.pmm_ladder_usd",super::verify_algebra_dir::SETTING]);}
             if f.variant.base_plugin_v1() || f.variant == Variant::SupernovaIntegral {
                 list.extend(["dex.factory_runtime_hash","dex.plugin_factory","dex.plugin_runtime_hashes",super::verify_algebra_dir::SETTING]);

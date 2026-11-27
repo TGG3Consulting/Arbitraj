@@ -140,3 +140,7 @@ pub(super) async fn router(ctx: &Ctx, e: &Entry, target: Address, at: &Value) ->
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "treble_spot_profile_tests.rs"]
+mod profile_tests;

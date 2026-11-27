@@ -287,6 +287,13 @@ mod tests {
                 >(d["logs"].clone())
                 .unwrap();
                 assert_eq!(restored.data(), tx);
+                let mut remeasured = DirectCall::SafeSwap(std::sync::Arc::new(proof.clone()));
+                let stronger = proof.minimum + U256::ONE;
+                remeasured.set_remeasured_minimum(stronger).unwrap();
+                let encoded = remeasured.data(proof.output, stronger, proof.payer, proof.deadline);
+                let updated = IVistaFlow::swapFromCall::abi_decode(&encoded).unwrap();
+                assert_eq!(updated.minimum, stronger);
+
                 assert_eq!(
                     restored.measured(&logs),
                     Some((proof.budget, proof.minimum))

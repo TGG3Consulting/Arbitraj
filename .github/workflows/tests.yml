@@ -618,6 +618,10 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/pendle" PendleMarketAdapter
           python scripts/record_pendle_wallets.py "$RUNNER_TEMP/market.json" --module "$RUNNER_TEMP/pendle/PendleMarketAdapter.json"
+      - if: startsWith(matrix.market, 'docswap-')
+        env:
+          MARKET: ${{ matrix.market }}
+        run: python scripts/record_docswap.py "${MARKET#docswap-}" "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'ranges-native-')
         env:
           MARKET: ${{ matrix.market }}

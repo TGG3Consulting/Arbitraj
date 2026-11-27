@@ -59,15 +59,39 @@ pub(super) enum DirectCall {
 }
 
 impl DirectCall {
-    pub(super) fn set_remeasured_minimum(&mut self, minimum: U256) {
+    pub(super) fn set_remeasured_minimum(&mut self, minimum: U256) -> Option<()> {
         match self {
             Self::Ranges(p) => std::sync::Arc::make_mut(p).minimum = minimum,
             Self::FluxEth(p) => std::sync::Arc::make_mut(p).minimum = minimum,
             Self::Bundles(p) => std::sync::Arc::make_mut(p).minimum = minimum,
             Self::Dagrow(p) => std::sync::Arc::make_mut(p).minimum = minimum,
             Self::RegisteredV3(p) => std::sync::Arc::make_mut(p).minimum = minimum,
-            _ => {}
+            Self::SolidlyRouter(p) => std::sync::Arc::make_mut(p).minimum = minimum,
+            Self::O1(p) => std::sync::Arc::make_mut(p).minimum = minimum,
+            Self::SafeSwap(p) => std::sync::Arc::make_mut(p).minimum = minimum,
+            Self::Pendle(p) => std::sync::Arc::make_mut(p).minimum = minimum,
+            Self::Temple(p) => std::sync::Arc::make_mut(p).minimum = minimum,
+            Self::Antfarm(p) => std::sync::Arc::make_mut(p).minimum = minimum,
+            Self::AntfarmOutput(p) => std::sync::Arc::make_mut(p).minimum = minimum,
+            Self::Carbon(p) if p.by_target => {
+                (U256::from(p.total()?) >= minimum).then_some(())?;
+            }
+            Self::Carbon(p) => std::sync::Arc::make_mut(p).limit = minimum.try_into().ok()?,
+            Self::MintClub(c) if c.mint => {
+                (c.qty >= minimum).then_some(())?;
+            }
+            Self::MintClub(c) => c.limit = minimum,
+            // These ABIs take the current Plan minimum directly in data().
+            Self::EkuboV2 { .. }
+            | Self::Module { .. }
+            | Self::Vista { .. }
+            | Self::Oasis { .. }
+            | Self::Vault { .. }
+            | Self::Umbrae { .. }
+            | Self::SectorLb { .. }
+            | Self::V2SupportingFee { .. } => {}
         }
+        Some(())
     }
 
     pub(super) fn native_value(self) -> Option<U256> {

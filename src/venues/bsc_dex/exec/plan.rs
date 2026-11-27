@@ -106,7 +106,9 @@ impl Plan {
             ));
         }
         if let Some(call) = self.direct_market.as_deref_mut() {
-            call.set_remeasured_minimum(m);
+            call.set_remeasured_minimum(m).ok_or_else(|| ctx.err(
+                ErrorCode::NoRoute, "Поручение не обеспечивает пересчитанный минимум выхода",
+            ))?;
         }
         self.min_total = m;
         Ok(self)

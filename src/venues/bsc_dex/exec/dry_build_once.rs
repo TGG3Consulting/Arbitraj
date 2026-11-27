@@ -118,36 +118,18 @@ pub(super) async fn once(
     let is_native = native::is_native(ctx, &req.asset);
     // Решение 122 (часть X): через исполнитель — режим «через исполнитель» (любой маршрут, код подставлен) или
     // графовый «бандл» при заданном exec.executor_address (как пойдёт сделка, exec/trade.rs).
-    if mode==DryMode::AsTrade && route.mode==RouteMode::Direct && legs.iter().flatten().any(|s|super::antfarm_wallet::enabled(&s.entry)){
-        let ([steps],[leg])=(legs.as_slice(),route.legs.as_slice())else{return Err(ctx.err(ErrorCode::NoRoute,"Antfarm: требуется одна доля"));};
-        let [s]=steps.as_slice()else{return Err(ctx.err(ErrorCode::NoRoute,"Antfarm: требуется один рынок"));};
-        if is_native || native::cash(ctx,&ctx.text("venue.quote_asset")?,usdt){return Err(ctx.err(ErrorCode::NoRoute,"Antfarm: прямая сделка требует ERC20")); }
+    let direct=mode==DryMode::AsTrade && route.mode==RouteMode::Direct;
+    if let Some(market)=legs.iter().flatten().filter_map(|s|super::market_plan::Market::of(&s.entry)).find(|m|m.dry(direct)){
+        let unavailable=|why:&str| ctx.err(ErrorCode::NoRoute,format!("{}: {why}",market.name()));
+        let ([steps],[(path,_)],[leg])=(legs.as_slice(),paths.as_slice(),route.legs.as_slice())
+            else{return Err(unavailable("требуется одна доля"));};
+        let ([s],[h])=(steps.as_slice(),path.hops.as_slice())else{return Err(unavailable("требуется один рынок"));};
+        if !direct || !market.currency(&s.entry,is_native || native::cash(ctx,&ctx.text("venue.quote_asset")?,usdt)) {
+            return Err(unavailable("требуется прямая сделка в выбранной физической валюте"));
+        }
+        let selected=if market==super::market_plan::Market::Carbon {super::carbon_direct::selected(leg)} else {(super::mint_club_direct::selected(leg),None)};
         let (height,time)=q.heads.at(ctx).await?;
-        let p=Box::pin(super::antfarm_wallet::plan(ctx,s,wallet,height,super::mint_club_direct::selected(leg))).await?;
-        return Ok(Ready{built:Built::One(p),legs,coins,usdt:paid,form,by_quoter,at:Base::timed(height,time)});
-    }
-    if mode==DryMode::AsTrade && route.mode==RouteMode::Direct && legs.iter().flatten().any(|s|super::temple_wallet::enabled(&s.entry)){
-        let ([steps],[leg])=(legs.as_slice(),route.legs.as_slice())else{return Err(ctx.err(ErrorCode::NoRoute,"TempleDAO: требуется одна доля"));};
-        let [s]=steps.as_slice()else{return Err(ctx.err(ErrorCode::NoRoute,"TempleDAO: требуется один рынок"));};
-        if is_native || native::cash(ctx,&ctx.text("venue.quote_asset")?,usdt){return Err(ctx.err(ErrorCode::NoRoute,"TempleDAO: прямая сделка требует ERC20")); }
-        let (height,time)=q.heads.at(ctx).await?;
-        let p=Box::pin(super::temple_wallet::plan(ctx,s,wallet,height,super::mint_club_direct::selected(leg))).await?;
-        return Ok(Ready{built:Built::One(p),legs,coins,usdt:paid,form,by_quoter,at:Base::timed(height,time)});
-    }
-    if legs.iter().flatten().any(|s|super::carbon_direct::enabled(&s.entry)){
-        let ([steps],[(path,_)])=(legs.as_slice(),paths.as_slice())else{return Err(ctx.err(ErrorCode::NoRoute,"Carbon: требуется одна доля"));};
-        let ([s],[h])=(steps.as_slice(),path.hops.as_slice())else{return Err(ctx.err(ErrorCode::NoRoute,"Carbon: требуется один рынок"));};
-        if mode!=DryMode::AsTrade || route.mode!=RouteMode::Direct || !matches!(&s.entry.pool.state,crate::core::types::PoolState::Carbon(st) if st.native_side.is_some()==(is_native||native::cash(ctx,&ctx.text("venue.quote_asset")?,usdt))){return Err(ctx.err(ErrorCode::NoRoute,"Carbon: требуется прямая сделка в выбранной физической валюте"));}
-        let (height,time)=q.heads.at(ctx).await?;
-        let p=Box::pin(super::carbon_direct::path_plan(ctx,s,h,wallet,height,req.side==crate::core::types::Side::Buy,super::carbon_direct::selected(&route.legs[0]))).await?;
-        return Ok(Ready{built:Built::One(p),legs,coins,usdt:paid,form,by_quoter,at:Base::timed(height,time)});
-    }
-    if legs.iter().flatten().any(|s|super::mint_club_direct::enabled(&s.entry)){
-        let ([steps],[(path,_)])=(legs.as_slice(),paths.as_slice())else{return Err(ctx.err(ErrorCode::NoRoute,"Mint Club: требуется одна доля"));};
-        let ([s],[h])=(steps.as_slice(),path.hops.as_slice())else{return Err(ctx.err(ErrorCode::NoRoute,"Mint Club: требуется один рынок"));};
-        if mode!=DryMode::AsTrade || route.mode!=RouteMode::Direct || is_native || native::cash(ctx,&ctx.text("venue.quote_asset")?,usdt){return Err(ctx.err(ErrorCode::NoRoute,"Mint Club: требуется прямое поручение ERC20"));}
-        let (height,time)=q.heads.at(ctx).await?;
-        let p=Box::pin(super::mint_club_direct::path_plan(ctx,s,h,wallet,height,super::mint_club_direct::selected(&route.legs[0]))).await?;
+        let p=Box::pin(market.plan(ctx,s,h,(wallet,height),req.side==crate::core::types::Side::Buy,selected)).await?;
         return Ok(Ready{built:Built::One(p),legs,coins,usdt:paid,form,by_quoter,at:Base::timed(height,time)});
     }
     let deployed = executor::address(ctx)?;

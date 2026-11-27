@@ -200,20 +200,9 @@ async fn build(
     selected:(Option<alloy_primitives::Address>,Option<alloy_primitives::B256>),
 ) -> GatewayResult<(Plan, Base)> {
     let (at, now) = sim_base::head(&q.ctx, &q.heads).await?;
-    if let [s]=prep.steps.as_slice() && super::antfarm_wallet::enabled(&s.entry) {
-        let p=Box::pin(super::antfarm_wallet::plan(&q.ctx,s,wallet,at.number,selected.0)).await?;
-        return Ok((p,at));
-    }
-    if let [s]=prep.steps.as_slice() && super::temple_wallet::enabled(&s.entry) {
-        let p=Box::pin(super::temple_wallet::plan(&q.ctx,s,wallet,at.number,selected.0)).await?;
-        return Ok((p,at));
-    }
-    if let ([s],[hop])=(prep.steps.as_slice(),prep.path.hops.as_slice()) && super::carbon_direct::enabled(&s.entry) {
-        let p=Box::pin(super::carbon_direct::path_plan(&q.ctx,s,hop,wallet,at.number,s.order.token_in==s.entry.usdt,selected)).await?;
-        return Ok((p,at));
-    }
-    if let ([s],[hop])=(prep.steps.as_slice(),prep.path.hops.as_slice()) && super::mint_club_direct::enabled(&s.entry) {
-        let p=Box::pin(super::mint_club_direct::path_plan(&q.ctx,s,hop,wallet,at.number,selected.0)).await?;
+    if let ([s],[h])=(prep.steps.as_slice(),prep.path.hops.as_slice())
+        && let Some(market)=super::market_plan::Market::of(&s.entry) {
+        let p=Box::pin(market.plan(&q.ctx,s,h,(wallet,at.number),s.order.token_in==s.entry.usdt,selected)).await?;
         return Ok((p,at));
     }
     let p = plan::build(&q.ctx, &prep.steps, wallet, now, false)

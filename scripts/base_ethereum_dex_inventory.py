@@ -1764,6 +1764,7 @@ def tables(network, snapshots, profiles):
     top = {item["id"]:item for item in top_data["networks"][network]["rows"]}
     data_dir = Path("tests/data/first_run_dex_2026-11-26")
     base_cl_archive = data_dir / "wagmi_thick_base.json.gz"
+    community_wallets = json.loads(gzip.decompress((data_dir / "wagmi_thick_modules.json.gz").read_bytes())) if base else {}
     base_cl = json.loads(gzip.decompress(base_cl_archive.read_bytes())) if base else {}
     registry_sources = read(data_dir / "llama_factory_scopes.json")
     registry_entries = registry_sources["networks"][network]
@@ -1802,6 +1803,16 @@ def tables(network, snapshots, profiles):
                         task += (f" · {len(book['markets'])} пулов по CREATE2 и реестру в обе стороны; "
                                  f"на {len({c['pool'] for c in cases})} пулах проверено {len(cases)} выплат "
                                  f"через Router02 и V5. [Блок, линза, суммы и квитанции](../{base_cl_archive.as_posix()})")
+                        if slug in community_wallets:
+                            wallet = community_wallets[slug]
+                            assert same[0]["settings"]["dex.module_runtime_hashes"] == [wallet["module_hash"]]
+                            storage_file = data_dir / (slug + "_base_storage.json.gz")
+                            storage = json.loads(gzip.decompress(storage_file.read_bytes()))
+                            assert set(same[0]["settings"]["dex.v3_fee_tiers"]) == set(storage["tiers"])
+                            task += (f" · полный набор комиссий подтверждён [корнем хранилища](../{storage_file.as_posix()}); "
+                                     f"дополнительный CommunityV3Adapter проверил чистый приход в {len(wallet['cases'])} обменах "
+                                     f"после CREATE ({wallet['deployment_gas']} газа). Адрес после развёртывания — `dex.v3_wallet_module`. "
+                                     f"[Суммы и квитанции](../{(data_dir/'wagmi_thick_modules.json.gz').as_posix()})")
                 else:
                     task += " · установлена фабрика этого протокола и сети; торговый профиль требует проверки"
                 if kind == "fee_factory":

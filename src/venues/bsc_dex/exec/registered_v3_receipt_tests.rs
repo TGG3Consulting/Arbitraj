@@ -244,10 +244,16 @@ fn both_router02_keys_reproduce_paid_calldata_and_receipts_after_restart() {
     let books: Value = serde_json::from_reader(GzDecoder::new(fixture.as_slice())).unwrap();
     let addr = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
     let units = |v: &Value| v.as_str().unwrap().parse::<U256>().unwrap();
-    for (name, count) in [("wagmi", 16), ("thick", 16), ("2thick", 12)] {
+    let guarded = include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/wagmi_thick_modules.json.gz");
+    let modules: Value = serde_json::from_reader(GzDecoder::new(guarded.as_slice())).unwrap();
+    for (name, wire, count) in [("wagmi","router02",16), ("thick","router02",16), ("2thick","router02",12),
+                                ("wagmi","module",16), ("thick","module",16)] {
         let book = &books[name];
         let mut verified = 0;
-        for row in book["cases"].as_array().unwrap().iter().filter(|r| r["wire"] == "router02") {
+        let module = wire == "module";
+        let original = if module { &modules[name] } else { book };
+        assert_eq!(original["selector"],book["selector"]);
+        for row in original["cases"].as_array().unwrap().iter().filter(|r| r["wire"] == wire) {
             let market = book["markets"].as_array().unwrap().iter().find(|m| m["pool"] == row["pool"]).unwrap();
             let key = if name == "2thick" { Key::Spacing(I24::try_from(market["spacing"].as_i64().unwrap()).unwrap()) } else { Key::Fee };
             let tx = &row["tx"];
@@ -255,12 +261,12 @@ fn both_router02_keys_reproduce_paid_calldata_and_receipts_after_restart() {
             let proof = Proof {
                 market: Market {
                     pool: addr(&row["pool"]), fee: U24::from(market["current_fee"].as_u64().unwrap() as u32),
-                    algebra_deployer: None, fee_event:false, wallet_module:false,
+                    algebra_deployer: None, fee_event:false, wallet_module:module,
                     maverick:false, maverick_chain:None, slipstream:None, router02:Some(key),
                 },
                 target:addr(&tx["to"]), payer:addr(&tx["from"]), input:addr(&row["input"]),
                 output:addr(&row["output"]), budget:units(&row["spent"]), minimum:units(&row["received"]),
-                deadline:U256::from_be_slice(&signed[4..36]),
+                deadline:U256::from_be_slice(if module { &signed[signed.len()-32..] } else { &signed[4..36] }),
             };
             let restored: Proof = serde_json::from_value(serde_json::to_value(proof).unwrap()).unwrap();
             let logs: Vec<Log> = serde_json::from_value(row["logs"].clone()).unwrap();
@@ -269,6 +275,7 @@ fn both_router02_keys_reproduce_paid_calldata_and_receipts_after_restart() {
                        Some((restored.budget,restored.minimum)));
             let mut other = restored.clone();
             other.market.router02 = None;
+            other.market.wallet_module = false;
             assert_ne!(other.data(), signed);
             other.minimum += U256::from(1);
             assert!(other.amounts(&logs,other.payer,other.input,other.output).is_none());

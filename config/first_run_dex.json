@@ -6303,6 +6303,9 @@
     "settings": {
       "dex.kind": "registered_uni_v3",
       "dex.factory": "0x576a1301b42942537d38fb147895fe83fb418fd4",
+      "dex.module_runtime_hashes": [
+        "0xe17de68999e4a44b29b807a514d960c980ba8058cec0a32aa4acd3222bf5ac43"
+      ],
       "dex.quoter": "0x8b741b0d79be80e135c880f7583d427b4d41f015",
       "dex.tick_lens": "0x0cdee061c75d43c82520ed998c23ac2991c9ac6d",
       "dex.v3_fee_tiers": [
@@ -6337,6 +6340,9 @@
     "settings": {
       "dex.kind": "registered_uni_v3",
       "dex.factory": "0xe6da85feb3b4e0d6aed95c41a125fba859bb9d24",
+      "dex.module_runtime_hashes": [
+        "0x518886913367740130aa611a88dbcf465fbdf6c2b2b924ba92439c15a052e743"
+      ],
       "dex.quoter": "0xf5b7181877feab982a4b49a99e84bb7cbebeff98",
       "dex.tick_lens": "0xb80a72281c76464cc0e1fbf2431a897393e0d757",
       "dex.v3_fee_tiers": [

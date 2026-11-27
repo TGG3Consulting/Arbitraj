@@ -1,5 +1,7 @@
 //! Только выбранная предпродажа держит интерес к паре кошелёк/токен. При
 //! отмене или выходе из предпроверки последний владелец отменяет фоновое чтение.
+mod deployment;
+mod lifecycle;
 mod worker;
 use super::presell_layout as layout;
 use alloy_primitives::{Address, B256, Bytes, U256};
@@ -21,12 +23,17 @@ pub(super) struct Stamp {
 }
 type Funds = Result<(layout::Identity, layout::BalanceField, U256), String>;
 type JobKey = (Address, Address, u64);
-type Binding = OnceCell<Result<Bytes, String>>;
+#[derive(Default)]
+struct Binding {
+    code: OnceCell<Bytes>,
+    state: OnceCell<layout::Account>,
+}
 type CodeCells = HashMap<Address, Arc<Binding>>;
 struct Record {
     stamp: Stamp,
     funds: Funds,
     retry_used: bool,
+    negative: Option<layout::Negative>,
 }
 struct Job {
     id: u64,
@@ -60,65 +67,6 @@ pub(in crate::venues::bsc_dex) struct Cache {
 enum Admission {
     Existing(u64),
     New(u64, Arc<Notify>),
-}
-impl State {
-    fn admit(&mut self, key: JobKey) -> Admission {
-        if let Some(j) = self.jobs.get_mut(&key) {
-            self.joins = self.joins.saturating_add(1);
-            j.interests += 1;
-            return Admission::Existing(j.id);
-        }
-        self.starts = self.starts.saturating_add(1);
-        self.next = self.next.wrapping_add(1);
-        let wake = Arc::new(Notify::new());
-        let record = self
-            .recent
-            .iter()
-            .position(|(k, _)| *k == key)
-            .and_then(|i| self.recent.remove(i))
-            .map(|(_, mut r)| {
-                r.stamp.job = self.next;
-                r
-            });
-        self.jobs.insert(
-            key,
-            Job {
-                id: self.next,
-                interests: 1,
-                record,
-                wake: wake.clone(),
-                task: None,
-                last_error: None,
-            },
-        );
-        Admission::New(self.next, wake)
-    }
-    fn release(&mut self, key: JobKey, id: u64) {
-        if let Some(j) = self.jobs.get_mut(&key)
-            && j.id == id
-        {
-            j.interests -= 1;
-            if j.interests == 0 {
-                if let Some(job) = self.jobs.remove(&key) {
-                    if let Some(task) = job.task {
-                        task.abort();
-                    }
-                    if let Some(r) = job.record {
-                        self.recent.push_back((key, r));
-                        if self.recent.len() > IDLE_PROOFS {
-                            self.recent.pop_front();
-                        }
-                    }
-                }
-                if !self.jobs.keys().any(|(_, token, _)| *token == key.1) {
-                    self.deployments.remove(&key.1);
-                    if self.jobs.is_empty() {
-                        self.deployments.clear();
-                    }
-                }
-            }
-        }
-    }
 }
 impl Cache {
     pub(super) fn read(
@@ -200,7 +148,11 @@ impl Cache {
         let r = s.jobs.get(&key)?.record.as_ref()?;
         r.funds.as_ref().ok().map(|(id, field, _)| (*id, *field))
     }
-    fn publish(&self, key: JobKey, stamp: Stamp, funds: Funds) {
+    fn negative(&self, key: JobKey) -> Option<layout::Negative> {
+        let state = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        state.jobs.get(&key)?.record.as_ref()?.negative.clone()
+    }
+    fn publish(&self, key: JobKey, stamp: Stamp, funds: Funds, negative: Option<layout::Negative>) {
         let mut s = self.state.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(j) = s.jobs.get_mut(&key)
             && j.id == stamp.job
@@ -214,44 +166,9 @@ impl Cache {
                 stamp,
                 funds,
                 retry_used,
+                negative,
             });
         }
-    }
-    fn binding(&self, t: Address, generation: u64, hash: B256) -> Arc<Binding> {
-        let mut s = self.state.lock().unwrap_or_else(|p| p.into_inner());
-        if s.block != Some((generation, hash)) {
-            s.deployments.clear();
-            s.block = Some((generation, hash));
-        }
-        s.deployments.entry(t).or_default().clone()
-    }
-    pub(super) async fn code(
-        &self,
-        ctx: &crate::venues::bsc_dex::ctx::Ctx,
-        t: Address,
-        generation: u64,
-        h: crate::venues::bsc_dex::quote::white_state::Head,
-    ) -> Result<super::presell_getter::Code, String> {
-        let cell = self.binding(t, generation, h.hash);
-        let bytes = cell
-            .get_or_init(|| async {
-                crate::venues::bsc_dex::node::rpc::call::<Bytes>(
-                    ctx,
-                    "eth_getCode",
-                    serde_json::json!([t, h.selector()]),
-                )
-                .await
-                .map_err(|e| e.message)
-            })
-            .await
-            .clone()?;
-        if bytes.is_empty() {
-            return Err("в адресе чтения отсутствует код".into());
-        }
-        Ok(super::presell_getter::Code {
-            account: t,
-            bytecode: bytes,
-        })
     }
 }
 #[cfg(test)]

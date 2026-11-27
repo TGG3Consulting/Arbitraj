@@ -15,6 +15,12 @@ struct Item {
     storage_keys: Vec<B256>,
 }
 impl Access {
+    pub(super) fn accounts(&self) -> impl Iterator<Item = Address> + '_ {
+        self.access_list.iter().map(|r| r.address)
+    }
+    pub(super) fn completed(&self) -> bool {
+        self.error.is_none()
+    }
     fn keys(&self) -> BTreeSet<(Address, B256)> {
         self.access_list
             .iter()
@@ -35,6 +41,11 @@ pub(super) struct Reads {
     pub(super) implementation: bool,
     pub(super) admin: bool,
 }
+impl Reads {
+    pub(super) fn matches_implementation(self, word: B256) -> bool {
+        self.other.is_some_and(|a| a.into_word() == word)
+    }
+}
 pub(super) async fn call(ctx: &Ctx, call: &simulate::Call, h: Head) -> Result<Access, String> {
     rpc::call(
         ctx,
@@ -44,11 +55,25 @@ pub(super) async fn call(ctx: &Ctx, call: &simulate::Call, h: Head) -> Result<Ac
     .await
     .map_err(|e| e.message)
 }
+#[derive(Clone, Copy)]
+pub(super) struct Location {
+    pub(super) storage: Address,
+    pub(super) key: B256,
+}
+impl Location {
+    pub(super) fn bounded(self, max: U256) -> BalanceField {
+        BalanceField {
+            storage: self.storage,
+            key: self.key,
+            max,
+        }
+    }
+}
 pub(super) fn compare(
     a: &Access,
     b: &Access,
     t: Address,
-) -> Result<([BalanceField; 2], Reads), String> {
+) -> Result<([Location; 2], Reads), String> {
     if let Some(e) = a.error.as_ref().or(b.error.as_ref()) {
         return Err(format!("balanceOf в списке доступа: {e}"));
     }
@@ -75,7 +100,7 @@ pub(super) fn compare(
         if [IMPL_SLOT, ADMIN_SLOT, BEACON_SLOT].contains(&key) {
             return Err("служебный слот прокси".into());
         }
-        Ok(BalanceField { storage, key })
+        Ok(Location { storage, key })
     };
     let fields = [one(&a_keys, &b_keys)?, one(&b_keys, &a_keys)?];
     if fields[0].storage != fields[1].storage {

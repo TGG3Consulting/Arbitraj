@@ -65,7 +65,7 @@ pub(in crate::venues::bsc_dex) fn candidate(p: &Parts, a: &Asset) -> Option<Box<
     }))
 }
 async fn worker(p: Parts, key: JobKey, id: u64, wake: Arc<Notify>) {
-    let (wallet, t, generation) = key;
+    let generation = key.2;
     let mut heads = p.heads.watch();
     let mut checked_chain = false;
     let cache = p.ctx.evm_chain.presell();
@@ -104,21 +104,38 @@ async fn worker(p: Parts, key: JobKey, id: u64, wake: Arc<Notify>) {
                         number: n,
                         hash: h.hash,
                     };
-                    let funds = layout::verify(
-                        &p.ctx,
-                        t,
-                        wallet,
-                        h,
-                        generation,
-                        cache,
-                        cache.identity(key),
-                    )
-                    .await
-                    .map(|p| (p.identity, p.field, p.balance));
-                    cache.publish(key, stamp, funds);
+                    let (funds, negative) = prepare(&p.ctx, key, h, cache).await;
+                    cache.publish(key, stamp, funds, negative);
                 }
             }
         }
         tokio::select! { r=heads.changed()=>if r.is_err(){return}, ()=wake.notified()=>{} }
+    }
+}
+
+async fn prepare(
+    ctx: &Ctx,
+    key: JobKey,
+    h: white_state::Head,
+    cache: &super::Cache,
+) -> (super::Funds, Option<layout::Negative>) {
+    let (wallet, t, generation) = key;
+    if let Some(old) = cache.negative(key) {
+        match old.unchanged(ctx, generation, h, cache).await {
+            Ok(true) => return (Err(old.why.clone()), Some(old)),
+            Ok(false) => {}
+            // Неподдерживаемый/недоступный EIP-1186 не блокирует повторную
+            // проверку обычными RPC, в т.ч. положительное заключение на этом H.
+            Err(e) => {
+                tracing::debug!(error = %e, "не удалось перепроверить снимок отказа предпродажи")
+            }
+        }
+    }
+    match layout::verify(ctx, t, wallet, h, generation, cache, cache.identity(key)).await {
+        Ok(p) => (Ok((p.identity, p.field, p.balance)), None),
+        Err(e) => {
+            let (why, negative) = e.record(ctx, generation, h, cache).await;
+            (Err(why), negative)
+        }
     }
 }

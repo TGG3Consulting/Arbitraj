@@ -13,10 +13,10 @@ fn recorded(file: &str) -> Value {
         .unwrap();
     serde_json::from_slice(&plain).unwrap()
 }
-fn fixture(name: &str) -> Value {
+pub(super) fn fixture(name: &str) -> Value {
     recorded(&format!("{name}_with_code.json.gz"))
 }
-fn parse<T: serde::de::DeserializeOwned>(v: &Value) -> T {
+pub(super) fn parse<T: serde::de::DeserializeOwned>(v: &Value) -> T {
     serde_json::from_value(v.clone()).unwrap()
 }
 fn replay(name: &str) -> Result<(), String> {
@@ -64,7 +64,7 @@ fn replay_capture(name: &str, v: &Value) -> Result<(), String> {
             parse::<Bytes>(&call["data"]),
             probe_calls::balance(parse(&call["from"]), t, holder).input
         );
-        if !(Read {
+        let max = (Read {
             token: &code,
             implementation: extra.as_ref(),
             admin,
@@ -73,11 +73,12 @@ fn replay_capture(name: &str, v: &Value) -> Result<(), String> {
             key: field.key,
             storage: field.storage,
         })
-        .proves()
-        {
-            return Err(format!(
-                "{name}: исходный getter не доказал целое слово кошелька {holder}"
-            ));
+        .mask()
+        .ok_or_else(|| format!("{name}: исходный getter кошелька {holder}"))?;
+        let field = field.bounded(max);
+        if name == "xvs" {
+            assert_eq!(max, (U256::from(1) << 96) - U256::from(1));
+            assert!(field.credit(max + U256::from(1)).is_none());
         }
         if let Some(raw) = sample.get("storage") {
             assert_eq!(
@@ -88,9 +89,12 @@ fn replay_capture(name: &str, v: &Value) -> Result<(), String> {
             let value = parse::<Bytes>(&sample["balance"]["response"]["result"]);
             balance_word(&value, parse(&raw["response"]["result"]))?;
         }
-        let credit = field.credit(U256::MAX);
+        let credit = field.credit(max).unwrap();
         assert_eq!(credit.address, field.storage);
-        assert_eq!(credit.state, vec![(field.key, B256::repeat_byte(255))]);
+        assert_eq!(
+            credit.state,
+            vec![(field.key, B256::from(max.to_be_bytes::<32>()))]
+        );
     }
     Ok(())
 }
@@ -124,7 +128,7 @@ fn packed_word_is_rejected() {
 fn recorded_xvs_masks_its_uint96_balance() {
     let v = fixture("xvs");
     assert_eq!(v["balanceLayout"]["type"]["value"], "t_uint96");
-    assert!(replay("xvs").unwrap_err().contains("исходный getter"));
+    replay("xvs").unwrap();
 }
 
 /// У этих кошельков журнал подтвердил полную проверку до покупки на старой схеме.

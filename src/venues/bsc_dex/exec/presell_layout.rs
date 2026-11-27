@@ -1,5 +1,5 @@
 //! Фоновая проверка ERC-20. Наблюдение двух balanceOf выбирает конкретный
-//! адрес хранения и ключ. Код getter должен вернуть всё слово без изменений.
+//! адрес хранения и ключ. Код getter доказывает разрядность целого без смещения.
 use super::super::{
     check::{probe_calls, simulate},
     ctx::Ctx,
@@ -12,7 +12,11 @@ use super::{
 };
 use alloy_primitives::{Address, B256, Bytes, U256, b256, keccak256};
 use serde_json::json;
+mod binding;
 mod observed;
+use binding::{binding, original, original_for};
+mod denial;
+pub(super) use denial::{Account, Denial, Negative};
 use observed::Reads;
 
 pub(super) const IMPL_SLOT: B256 =
@@ -26,16 +30,17 @@ pub(super) const BEACON_SLOT: B256 =
 pub(super) struct BalanceField {
     pub(super) storage: Address,
     pub(super) key: B256,
+    pub(super) max: U256,
 }
 impl BalanceField {
     /// Используется только в той же симуляции и на том же кошельке, что и проверка.
-    pub(super) fn credit(self, amount: U256) -> simulate::Override {
-        simulate::Override {
+    pub(super) fn credit(self, amount: U256) -> Option<simulate::Override> {
+        (amount <= self.max).then(|| simulate::Override {
             address: self.storage,
             code: Bytes::new(),
             state: vec![(self.key, B256::from(amount.to_be_bytes::<32>()))],
             diff: true,
-        }
+        })
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -57,72 +62,6 @@ fn balance_word(balance: &[u8], raw: B256) -> Result<U256, String> {
     }
     Ok(U256::from_be_bytes(raw.0))
 }
-async fn word(ctx: &Ctx, address: Address, key: B256, h: Head) -> Result<B256, String> {
-    rpc::call(ctx, "eth_getStorageAt", json!([address, key, h.selector()]))
-        .await
-        .map_err(|e| e.message)
-}
-/// Привязка внешнего кода и служебных чтений подтверждается заново на каждом H.
-async fn binding(
-    ctx: &Ctx,
-    t: Address,
-    h: Head,
-    reads: Reads,
-    generation: u64,
-    cache: &Cache,
-) -> Result<(Identity, Code, Option<Code>), String> {
-    let token = cache.code(ctx, t, generation, h).await?;
-    let other = async {
-        match reads.other {
-            Some(a) => cache.code(ctx, a, generation, h).await.map(Some),
-            None => Ok(None),
-        }
-    };
-    let implementation = async {
-        if reads.implementation {
-            let actual = word(ctx, t, IMPL_SLOT, h).await?;
-            if reads.other.is_none_or(|a| actual != a.into_word()) {
-                return Err("изменилась реализация прокси".into());
-            }
-        }
-        Ok(())
-    };
-    let admin = async {
-        if reads.admin {
-            word(ctx, t, ADMIN_SLOT, h).await.map(Some)
-        } else {
-            Ok(None)
-        }
-    };
-    let (other, (), admin) = tokio::try_join!(other, implementation, admin)?;
-    let target = other.as_ref().map(|c| (c.account, keccak256(&c.bytecode)));
-    Ok((
-        Identity {
-            runtime: keccak256(&token.bytecode),
-            target,
-            implementation_slot: reads.implementation,
-            admin,
-        },
-        token,
-        other,
-    ))
-}
-async fn original(
-    ctx: &Ctx,
-    t: Address,
-    wallet: Address,
-    field: BalanceField,
-    h: Head,
-) -> Result<U256, String> {
-    let tx = json!({"from":wallet,"to":t,"data":probe_calls::balance(wallet,t,wallet).input});
-    let read = async {
-        rpc::call::<Bytes>(ctx, "eth_call", json!([tx, h.selector()]))
-            .await
-            .map_err(|e| e.message)
-    };
-    let (b, w) = tokio::try_join!(read, word(ctx, field.storage, field.key, h))?;
-    balance_word(&b, w)
-}
 pub(super) async fn verify(
     ctx: &Ctx,
     t: Address,
@@ -131,15 +70,16 @@ pub(super) async fn verify(
     generation: u64,
     cache: &Cache,
     previous: Option<(Identity, BalanceField)>,
-) -> Result<Proof, String> {
+) -> Result<Proof, Denial> {
     if let Some((previous, field)) = previous {
         let reads = Reads {
             other: previous.target.map(|(a, _)| a),
             implementation: previous.implementation_slot,
             admin: previous.admin.is_some(),
         };
-        let (identity, _, _) = binding(ctx, t, h, reads, generation, cache).await?;
-        if identity == previous {
+        if let Some((identity, _, _)) = binding(ctx, t, h, reads, generation, cache).await?
+            && identity == previous
+        {
             let balance = original(ctx, t, wallet, field, h).await?;
             return Ok(Proof {
                 identity,
@@ -158,41 +98,52 @@ pub(super) async fn verify(
         observed::call(ctx, &call, h),
         observed::call(ctx, &other, h)
     )?;
-    let (fields, reads) = observed::compare(&a, &b, t)?;
-    let (identity, token, implementation) = binding(ctx, t, h, reads, generation, cache).await?;
-    for (holder, field) in [wallet, control].into_iter().zip(fields) {
-        if !(Read {
+    let (fields, reads) =
+        observed::compare(&a, &b, t).map_err(|why| Denial::observed(why, &a, &b, t))?;
+    let (identity, token, implementation) = binding(ctx, t, h, reads, generation, cache)
+        .await?
+        .ok_or_else(|| "ERC1967: указатель не совпадает со свежим списком чтения".to_string())?;
+    let mut verified = Vec::with_capacity(2);
+    for (holder, location) in [wallet, control].into_iter().zip(fields) {
+        let max = Read {
             token: &token,
             implementation: implementation.as_ref(),
             admin: identity.admin,
             caller: wallet,
             holder,
-            key: field.key,
-            storage: field.storage,
-        })
-        .proves()
-        {
-            return Err("не подтверждён прямой возврат целого слова из balanceOf".into());
+            key: location.key,
+            storage: location.storage,
         }
+        .mask()
+        .ok_or_else(|| {
+            Denial::observed(
+                "не подтверждён возврат uintN из balanceOf".into(),
+                &a,
+                &b,
+                t,
+            )
+        })?;
+        verified.push(location.bounded(max));
     }
-    let field = fields[0];
-    let balance = original(ctx, t, wallet, field, h).await?;
-    let marker = if balance == U256::MAX {
-        U256::MAX ^ (U256::from(1) << 255)
+    let field = verified[0];
+    if field.max != verified[1].max {
+        return Err("разрядность для двух держателей различается".into());
+    }
+    let (balance, _) = tokio::try_join!(
+        original(ctx, t, wallet, field, h),
+        original_for(ctx, t, wallet, control, verified[1], h)
+    )?;
+    // Меняем старший доступный бит, если все биты уже равны единице.
+    let marker = if balance == field.max {
+        field.max >> 1
     } else {
-        U256::MAX
+        field.max
     };
+    let credit = field.credit(marker).ok_or("метка вне диапазона")?;
     let base = simulate::Base::for_chain(ctx.chain_id(), h.number.to(), h.timestamp.to());
-    let res = simulate::run_anchored(
-        ctx,
-        &[call],
-        &[],
-        &[field.credit(marker)],
-        base,
-        Some(h.hash),
-    )
-    .await
-    .map_err(|e| e.message)?;
+    let res = simulate::run_anchored(ctx, &[call], &[], &[credit], base, Some(h.hash))
+        .await
+        .map_err(|e| e.message)?;
     if res.first().filter(|r| r.ok()).and_then(probe_calls::u256) != Some(marker) {
         return Err("одиночная метка полного слова не совпала с balanceOf".into());
     }
@@ -216,3 +167,7 @@ impl Identity {
 #[cfg(test)]
 #[path = "presell_layout_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "presell_layout_rpc_tests.rs"]
+mod rpc_tests;

@@ -1,6 +1,6 @@
 //! Узкая проверка чтения ERC20 balanceOf по опубликованному runtime. Вместо
 //! содержимого наблюдаемого слова используется символ. Допускается только
-//! возврат этого целого символа. Маска, арифметика, ветвление по его значению,
+//! возврат исходного символа либо его младшего целого uintN. Прочая арифметика, ветвление,
 //! запись хранилища и посторонние внешние вызовы завершают проверку отказом.
 use super::presell_layout::{ADMIN_SLOT, IMPL_SLOT};
 use alloy_primitives::{Address, B256, Bytes, U256, keccak256};
@@ -21,11 +21,11 @@ pub(super) struct Read<'a> {
     pub storage: Address,
 }
 impl Read<'_> {
-    pub(super) fn proves(&self) -> bool {
+    pub(super) fn mask(&self) -> Option<U256> {
         let mut data = [0u8; 36];
         data[..4].copy_from_slice(&[0x70, 0xa0, 0x82, 0x31]);
         data[4..].copy_from_slice(self.holder.into_word().as_slice());
-        self.body(self.token, &data, self.token.account, self.caller, true) == Some(())
+        self.body(self.token, &data, self.token.account, self.caller, true)
     }
     fn body(
         &self,
@@ -34,11 +34,11 @@ impl Read<'_> {
         storage: Address,
         caller: Address,
         outer: bool,
-    ) -> Option<()> {
+    ) -> Option<U256> {
         let bytes = code.bytecode.as_ref();
         let mut m = Machine::default();
         let mut pc = 0usize;
-        let mut got_return = false;
+        let mut returned = None;
         let mut seen = false;
         // Простая ABI-диспетчеризация и полный getter имеют конечный короткий путь.
         // Ограничиваем только проверяемый язык, не объём продажи.
@@ -46,7 +46,7 @@ impl Read<'_> {
             let op = *bytes.get(pc)?;
             pc += 1;
             match op {
-                0x01..=0x04 | 0x06 | 0x10..=0x1d => m.arithmetic(op)?,
+                0x01..=0x04 | 0x06 | 0x0a | 0x10..=0x1d => m.arithmetic(op)?,
                 0x20 => {
                     let off = m.index()?;
                     let size = m.index()?;
@@ -66,29 +66,7 @@ impl Read<'_> {
                 0x30 => m.num(U256::from_be_slice(storage.as_slice()))?,
                 0x33 => m.num(U256::from_be_slice(caller.as_slice()))?,
                 0x34 | 0x5f => m.num(U256::ZERO)?,
-                0x35 => {
-                    let off = m.index()?;
-                    let mut out = [0; 32];
-                    if let Some(tail) = data.get(off..) {
-                        let n = tail.len().min(32);
-                        out[..n].copy_from_slice(&tail[..n]);
-                    }
-                    m.num(U256::from_be_bytes(out))?;
-                }
-                0x36 => m.num(U256::from(data.len()))?,
-                0x37 => {
-                    let dest = m.index()?;
-                    let at = m.index()?;
-                    let len = m.index()?;
-                    m.copy(dest, data, at, len)?;
-                }
-                0x38 => m.num(U256::from(bytes.len()))?,
-                0x39 => {
-                    let dest = m.index()?;
-                    let at = m.index()?;
-                    let len = m.index()?;
-                    m.copy(dest, bytes, at, len)?;
-                }
+                0x35..=0x39 => m.input(op, data, bytes)?,
                 0x3b => {
                     let address = m.pop()?.value()?;
                     let imp = self.implementation?;
@@ -97,15 +75,15 @@ impl Read<'_> {
                     }
                     m.num(U256::from(imp.bytecode.len()))?;
                 }
-                0x3d => m.num(U256::from(if got_return { 32u8 } else { 0u8 }))?,
+                0x3d => m.num(U256::from(if returned.is_some() { 32u8 } else { 0u8 }))?,
                 0x3e => {
                     let dest = m.index()?;
                     let at = m.index()?;
                     let n = m.index()?;
-                    if !(got_return && at == 0 && n == 32) {
+                    if at != 0 || n != 32 {
                         return None;
                     }
-                    m.store(dest, Word::Balance)?;
+                    m.store(dest, Word::Balance(returned?))?;
                 }
                 0x50 => {
                     m.pop()?;
@@ -129,7 +107,7 @@ impl Read<'_> {
                         && !seen
                     {
                         seen = true;
-                        m.push(Word::Balance)?;
+                        m.push(Word::Balance(U256::MAX))?;
                     } else if outer && key == IMPL_SLOT {
                         let imp = self.implementation?;
                         m.num(U256::from_be_slice(imp.account.as_slice()))?;
@@ -167,13 +145,13 @@ impl Read<'_> {
                 0xf3 => {
                     let at = m.index()?;
                     let n = m.index()?;
-                    return (n == 32
-                        && matches!(m.load(at)?, Word::Balance)
-                        && (seen || got_return))
-                        .then_some(());
+                    let Word::Balance(mask) = m.load(at)? else {
+                        return None;
+                    };
+                    return (n == 32 && (seen || returned.is_some())).then_some(mask);
                 }
                 0xf4 | 0xfa => {
-                    if !outer || seen || got_return {
+                    if !outer || seen || returned.is_some() {
                         return None;
                     }
                     let imp = self.implementation?;
@@ -193,11 +171,11 @@ impl Read<'_> {
                     } else {
                         (imp.account, storage)
                     };
-                    self.body(imp, data, inner_storage, sender, false)?;
+                    let mask = self.body(imp, data, inner_storage, sender, false)?;
                     if out_len == 32 {
-                        m.store(out, Word::Balance)?;
+                        m.store(out, Word::Balance(mask))?;
                     }
-                    got_return = true;
+                    returned = Some(mask);
                     m.num(U256::from(1))?;
                 }
                 _ => return None,

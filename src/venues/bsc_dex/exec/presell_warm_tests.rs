@@ -61,15 +61,16 @@ fn late_reorg_or_other_holder_cannot_replace_or_reject_current_wallet_proof() {
         layout::BalanceField {
             storage: t,
             key: B256::repeat_byte(8),
+            max: U256::MAX,
         },
         U256::from(5),
     ));
-    cache.publish(key, stamp, funds.clone());
+    cache.publish(key, stamp, funds.clone(), None);
     assert!(cache.read(w, t, 8, 3).is_err());
     assert!(cache.read(t, w, 7, 3).is_err());
     assert!(cache.read(w, t, 7, 4).is_err());
     let newer = Stamp { hash: h2, ..stamp };
-    cache.publish(key, newer, funds.clone());
+    cache.publish(key, newer, funds.clone(), None);
     cache.reject(w, t, stamp, "old hash");
     assert_eq!(cache.read(w, t, 7, 3).unwrap().0.hash, h2);
     let bound = cache.binding(t, 3, h2);
@@ -83,7 +84,7 @@ fn late_reorg_or_other_holder_cannot_replace_or_reject_current_wallet_proof() {
         panic!()
     };
     drop(s);
-    cache.publish(key, stamp, funds);
+    cache.publish(key, stamp, funds, None);
     assert_ne!(next, job);
     assert!(cache.read(w, t, 7, 3).is_err());
 }

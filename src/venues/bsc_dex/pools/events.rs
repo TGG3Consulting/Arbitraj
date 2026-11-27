@@ -41,7 +41,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
     use alloy::sol_types::SolEvent;
     match f.proto {
         _ if f.variant.umbrae()=>super::umbrae::topics(f.variant),
-        _ if f.variant==super::family_variant::Variant::BancorV3=>vec![super::bancor_v3::IBancor::TokensTraded::SIGNATURE_HASH],
+        _ if f.variant==super::family_variant::Variant::BancorV3=>vec![super::super::exec::bancor_v3_wallet::IBancorTrade::TokensTraded::SIGNATURE_HASH],
         _ if f.variant==super::family_variant::Variant::UniswapV1=>super::uniswap_v1::topics(),
         _ if f.variant==super::family_variant::Variant::RubiconClassic=>super::rubicon::topics(),
         _ if f.variant==super::family_variant::Variant::Carbon=>super::carbon_events::topics(),
@@ -116,7 +116,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
     use alloy::sol_types::SolEvent;
     match f.proto {
         _ if f.variant.umbrae()=>super::umbrae::topics(f.variant),
-        _ if f.variant==super::family_variant::Variant::BancorV3=>vec![super::bancor_v3::IBancor::TokensTraded::SIGNATURE_HASH],
+        _ if f.variant==super::family_variant::Variant::BancorV3=>vec![super::super::exec::bancor_v3_wallet::IBancorTrade::TokensTraded::SIGNATURE_HASH],
         _ if f.variant==super::family_variant::Variant::UniswapV1=>super::uniswap_v1::topics(),
         _ if f.variant==super::family_variant::Variant::RubiconClassic=>super::rubicon::topics(),
         _ if f.variant==super::family_variant::Variant::Carbon => super::carbon_events::topics(),

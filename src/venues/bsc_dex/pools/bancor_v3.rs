@@ -23,7 +23,6 @@ use std::collections::HashMap;
 sol! {
     interface IBancor {
         event PoolAdded(address indexed pool,address indexed collection);
-        event TokensTraded(bytes32 indexed contextId,address indexed sourceToken,address indexed targetToken,uint256 sourceAmount,uint256 targetAmount,uint256 bntAmount,uint256 targetFeeAmount,uint256 bntFeeAmount,address trader);
         function network() external view returns(address);
         function bnt() external view returns(address);
         function masterVault() external view returns(address);

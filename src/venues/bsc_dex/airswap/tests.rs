@@ -105,3 +105,18 @@ fn fee_zero_is_valid_and_nonce_signed_for_other_taker_differs() {
     wrong["senderToken"] = json!(output);
     assert!(Order::read(&wrong).is_none());
 }
+
+#[test]
+fn measured_input_rebate_does_not_expand_authorized_budget() {
+    let budget = rust_decimal::Decimal::from(100);
+    assert!(super::routing::within_input(
+        U256::from(100_000_000u64),
+        6,
+        budget
+    ));
+    assert!(!super::routing::within_input(
+        U256::from(100_000_001u64),
+        6,
+        budget
+    ));
+}

@@ -45,6 +45,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
         .ok_or_else(reject)?;
     let money = num::to_decimal(cash, sd).ok_or_else(reject)?;
     if !valid()
+        || !super::routing::within_input(t.proof.amount, t.di, if buy { bound } else { req.qty })
         || req.venue != ctx.venue()
         || req.remeasure.as_ref().is_some_and(|r| !r.any_executor)
         || who != t.proof.call.payer

@@ -101,6 +101,10 @@ pub(in crate::venues::bsc_dex) fn available(p: &Parts) -> bool {
             .is_ok_and(|v| !v.is_empty())
         && !super::profile::Profile::candidates(&p.ctx).is_empty()
 }
+/// A simulated rebate can disappear at inclusion. Compare the calldata's maximum debit to the budget.
+pub(super) fn within_input(authorized: U256, decimals: u8, budget: Decimal) -> bool {
+    num::to_units(budget, decimals).is_some_and(|limit| authorized <= limit)
+}
 pub(in crate::venues::bsc_dex) async fn consider(
     p: &Parts,
     a: &Asset,
@@ -198,7 +202,13 @@ pub(in crate::venues::bsc_dex) async fn consider(
         } else {
             (t.spent, t.received, t.di, t.dout)
         };
-        if num::to_decimal(coin, cd) != Some(qty)
+        let budget = if buy {
+            quote_stage::buy_budget(c.place.id, pair.0)
+        } else {
+            Some(qty)
+        };
+        if budget.is_some_and(|limit| !within_input(t.proof.amount, t.di, limit))
+            || num::to_decimal(coin, cd) != Some(qty)
             || send::select(c, &p.stats)
                 .ok()
                 .is_none_or(|channels| send::tip(&channels).is_some())

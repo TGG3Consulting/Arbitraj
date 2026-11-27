@@ -12,15 +12,17 @@ interface IAmmalgamBeacon {
 }
 interface IAmmalgamMarket {
     function underlyingTokens() external view returns (address, address);
+    function getReserves() external view returns (uint112, uint112, uint32);
+    function referenceReserves() external view returns (uint112, uint112);
+    function totalAssetsAndShares(bool withInterest) external view returns (uint112[6] memory,uint112[6] memory);
+    function swap(uint256 outX,uint256 outY,address recipient,bytes calldata data) external;
 }
 interface IAmmalgamHelper {
-    struct Swap {address to; address tokenIn; address tokenOut; uint256 amountIn; uint256 minAmountOut;}
-    function swapHelper(Swap calldata request) external;
+    function computeExpectedSwapAmountOut(uint256 input,uint256 reserveIn,uint256 referenceIn,
+        uint256 reserveOut,uint256 missingIn,uint256 missingOut) external pure returns(uint256);
 }
 interface IAmmalgamToken {
-    function allowance(address owner,address spender) external view returns (uint256);
     function balanceOf(address who) external view returns (uint256);
-    function approve(address spender,uint256 amount) external returns (bool);
     function transferFrom(address payer,address to,uint256 amount) external returns (bool);
 }
 
@@ -72,6 +74,22 @@ contract AmmalgamWallet {
         if (!ok || (value.length != 0 && !abi.decode(value,(bool)))) revert Payment();
     }
 
+    // TokenController.getReserves and Pair.swap use INTEREST_PERIOD_FOR_SWAP.
+    // https://repo.sourcify.dev/1/0x5C0d819609Eee2cdCf326f0e898A8447e06a45Be
+    uint32 private constant SWAP_INTEREST_PERIOD = 1 days - 1;
+    struct Curve {uint256 reserveIn; uint256 refIn; uint256 reserveOut; uint256 missingIn; uint256 missingOut;}
+
+    function curve(IAmmalgamMarket pair,bool inputX) private view returns(Curve memory) {
+        (uint112 x,uint112 y,uint32 last) = pair.getReserves();
+        (uint112 refX,uint112 refY) = pair.referenceReserves();
+        uint32 elapsed;
+        unchecked {elapsed = uint32(block.timestamp) - last;}
+        (uint112[6] memory assets,) = pair.totalAssetsAndShares(elapsed >= SWAP_INTEREST_PERIOD);
+        uint256 mx = assets[4] > assets[1] ? assets[4] - assets[1] : 0;
+        uint256 my = assets[5] > assets[2] ? assets[5] - assets[2] : 0;
+        return inputX ? Curve(x,refX,y,mx,my) : Curve(y,refY,x,my,mx);
+    }
+
     function settle(address pair,address input,address output,uint256 amount,uint256 minimum,address recipient,uint256 deadline)
         private returns (uint256 received) {
         if (entered || block.timestamp > deadline || amount == 0 || input == output || recipient == address(0)
@@ -84,20 +102,22 @@ contract AmmalgamWallet {
         entered = true;
         IAmmalgamToken coin = IAmmalgamToken(input);
         uint256 beforeIn = coin.balanceOf(msg.sender);
-        uint256 inventory = coin.balanceOf(address(this));
+        uint256 poolBefore = coin.balanceOf(pair);
         uint256 beforeOut = IAmmalgamToken(output).balanceOf(recipient);
-        if (coin.allowance(address(this),address(helper)) != 0) revert Payment();
-        checked(input,abi.encodeCall(coin.transferFrom,(msg.sender,address(this),amount)));
-        uint256 funded = coin.balanceOf(address(this)) - inventory;
+        Curve memory c = curve(IAmmalgamMarket(pair), x == input);
+        checked(input,abi.encodeCall(coin.transferFrom,(msg.sender,pair,amount)));
+        uint256 funded = coin.balanceOf(pair) - poolBefore;
         if (funded == 0 || funded > amount) revert Payment();
-        checked(input,abi.encodeCall(coin.approve,(address(helper),funded)));
-        helper.swapHelper(IAmmalgamHelper.Swap(recipient,input,output,funded,minimum));
-        if (coin.allowance(address(this),address(helper)) != 0) {
-            checked(input,abi.encodeCall(coin.approve,(address(helper),0)));
-            if (coin.allowance(address(this),address(helper)) != 0) revert Payment();
-        }
+        uint256 credit = helper.computeExpectedSwapAmountOut(funded,c.reserveIn,c.refIn,c.reserveOut,c.missingIn,c.missingOut);
+        uint256 available = IAmmalgamToken(output).balanceOf(pair);
+        if (c.reserveOut <= c.missingOut) revert Payment();
+        uint256 strictLimit = c.reserveOut - c.missingOut - 1;
+        if (credit > strictLimit) credit = strictLimit;
+        if (credit > available) credit = available;
+        if (credit == 0 || credit < minimum) revert Payment();
+        IAmmalgamMarket(pair).swap(x == input ? 0 : credit, x == input ? credit : 0,recipient,"");
         received = IAmmalgamToken(output).balanceOf(recipient) - beforeOut;
-        if (beforeIn - coin.balanceOf(msg.sender) != amount || coin.balanceOf(address(this)) != inventory
+        if (beforeIn - coin.balanceOf(msg.sender) != amount
             || received == 0 || received < minimum) revert Payment();
         emit Filled(pair,msg.sender,recipient,input,output,amount,funded,received);
         entered = false;

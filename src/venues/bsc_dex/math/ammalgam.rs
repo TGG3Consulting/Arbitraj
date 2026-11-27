@@ -113,11 +113,13 @@ impl AmmalgamState {
         if input > max {
             return None;
         }
-        let gross = self.payout(i, input)?;
-        if gross.is_zero()
-            || gross > self.cash[1 - i]
-            || gross >= self.reserves[1 - i].checked_sub(self.missing[1 - i])?
-        {
+        // Like the pair's swap, the protected wallet limits its request to actual
+        // output inventory and leaves at least one raw unit above uncovered borrows.
+        let pair_limit = self.reserves[1 - i]
+            .checked_sub(self.missing[1 - i])?
+            .checked_sub(U256::ONE)?;
+        let gross = self.payout(i, input)?.min(pair_limit).min(self.cash[1 - i]);
+        if gross.is_zero() || (!exact_in && gross < amount) {
             return None;
         }
         Some(Swapped {

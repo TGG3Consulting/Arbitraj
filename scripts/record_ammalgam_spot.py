@@ -101,13 +101,13 @@ def capture(url, compiled):
         prefix = [deploy]
     stable = "0xdac17f958d2ee523a2206206994597c13d831ec7"
     routes = [(WETH,USDC,(10**15,10**16)),(USDC,WETH,(10**6,10**7)),
-              (USDC,stable,(10**6,10**7)),(stable,USDC,(10**6,10**7))]
+              (USDC,stable,(10**6,10**7,2374295732)),(stable,USDC,(10**6,10**7,2376710599))]
     for mode in (("helper","wallet","v5") if compiled else ("helper",)):
         for src,dst,amounts in routes:
             market, = [p for p in pools if set(p["tokens"]) == {src,dst}]
             spender = dict(helper=HELPER, wallet=module, v5=EXEC)[mode]
             for amount in amounts:
-                seed = 2 * 10**17
+                seed = 3 * 10**18 if src in (USDC,stable) and amount>10**7 else 2 * 10**17
                 prep = prefix + [tx(WETH, "deposit()", value=seed)]
                 if src != WETH:
                     prep += [approve(WETH, FUND, seed), tx(FUND, "exactInputSingle("+SWAP+")", [SWAP],
@@ -162,7 +162,12 @@ def capture(url, compiled):
             other = next(o for o in data["controls"] if o["mode"]=="helper" and
                          (o["input"],o["output"],o["amount"])==(c["input"],c["output"],c["amount"]))
             if "received" in other:
-                assert (other["received"],other["spent"]) == (c.get("received"),c.get("spent")), (c["mode"],c["pool"],c.get("refusal"))
+                assert c.get("spent")==other["spent"] and int(c.get("received",0))>=int(other["received"]), (c["mode"],c["pool"],c.get("refusal"))
+                if c["mode"]=="wallet":
+                    paid=next(v for v in data["controls"] if v["mode"]=="v5" and (v["input"],v["output"],v["amount"])==(c["input"],c["output"],c["amount"]))
+                    assert paid["received"]==c["received"]
+                    if int(c["amount"]) in (2374295732,2376710599):
+                        assert int(c["received"])>int(other["received"])
     return data
 
 

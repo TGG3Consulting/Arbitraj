@@ -1,13 +1,17 @@
 //! Только выбранная предпродажа держит интерес к паре кошелёк/токен. При
 //! отмене или выходе из предпроверки последний владелец отменяет фоновое чтение.
 mod worker;
-use super::{presell_layout as layout, presell_slot::Slot};
-use alloy_primitives::{Address, B256, U256};
+use super::presell_layout as layout;
+use alloy_primitives::{Address, B256, Bytes, U256};
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use tokio::sync::{Notify, OnceCell};
 pub(in crate::venues::bsc_dex) use worker::candidate;
 
+/// Профиль существующего адаптера BSC. Номер фактической сети проверяется по его настройке.
+pub(super) fn applies(ctx: &crate::venues::bsc_dex::ctx::Ctx) -> bool {
+    ctx.place.id == crate::venues::bsc_dex::ctx::BSC_ID
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct Stamp {
     job: u64,
@@ -15,9 +19,10 @@ pub(super) struct Stamp {
     number: u64,
     pub(super) hash: B256,
 }
-type Funds = Result<(layout::Identity, Slot, U256), String>;
+type Funds = Result<(layout::Identity, layout::BalanceField, U256), String>;
 type JobKey = (Address, Address, u64);
-type Binding = OnceCell<Result<Option<layout::Identity>, String>>;
+type Binding = OnceCell<Result<Bytes, String>>;
+type CodeCells = HashMap<Address, Arc<Binding>>;
 struct Record {
     stamp: Stamp,
     funds: Funds,
@@ -42,7 +47,8 @@ struct State {
     next: u64,
     jobs: HashMap<JobKey, Job>,
     recent: VecDeque<(JobKey, Record)>,
-    deployments: HashMap<Address, ((u64, B256), Arc<Binding>)>,
+    block: Option<(u64, B256)>,
+    deployments: CodeCells,
 }
 /// Ограничиваем лишь старые записи без активной предпроверки. Все живые
 /// интересы обслуживаются штатной очередью узла с её долей фона.
@@ -106,6 +112,9 @@ impl State {
                 }
                 if !self.jobs.keys().any(|(_, token, _)| *token == key.1) {
                     self.deployments.remove(&key.1);
+                    if self.jobs.is_empty() {
+                        self.deployments.clear();
+                    }
                 }
             }
         }
@@ -118,29 +127,29 @@ impl Cache {
         t: Address,
         n: u64,
         generation: u64,
-    ) -> Option<Result<(Stamp, Slot, U256), String>> {
+    ) -> Result<(Stamp, layout::BalanceField, U256), String> {
         let mut s = self.state.lock().unwrap_or_else(|p| p.into_inner());
         let key = (wallet, t, generation);
         let job = s.jobs.get(&key);
         let record = job
             .and_then(|j| j.record.as_ref())
             .or_else(|| s.recent.iter().find(|(k, _)| *k == key).map(|(_, r)| r));
+        let reason = || job.and_then(|j| j.last_error.clone());
         let result = match record {
             Some(r) if r.stamp.number == n => {
-                Some(r.funds.clone().map(|(_, slot, b)| (r.stamp, slot, b)))
+                r.funds.clone().map(|(_, field, b)| (r.stamp, field, b))
             }
-            Some(_) => Some(Err(job
-                .and_then(|j| j.last_error.clone())
-                .unwrap_or_else(|| "фоновая проверка относится к другому блоку".into()))),
-            None if layout::seed(t) => Some(Err(job
-                .and_then(|j| j.last_error.clone())
-                .unwrap_or_else(|| "фоновая проверка баланса ещё не готова".into()))),
-            None => None,
+            Some(_) => {
+                Err(reason().unwrap_or_else(|| "фоновая проверка относится к другому блоку".into()))
+            }
+            None => {
+                Err(reason().unwrap_or_else(|| "фоновая проверка баланса ещё не готова".into()))
+            }
         };
-        match &result {
-            Some(Ok(_)) => s.hits = s.hits.saturating_add(1),
-            Some(Err(_)) => s.misses = s.misses.saturating_add(1),
-            None => {}
+        if result.is_ok() {
+            s.hits = s.hits.saturating_add(1)
+        } else {
+            s.misses = s.misses.saturating_add(1)
         }
         result
     }
@@ -186,10 +195,10 @@ impl Cache {
             j.last_error = Some(reason);
         }
     }
-    fn identity(&self, key: JobKey) -> Option<layout::Identity> {
+    fn identity(&self, key: JobKey) -> Option<(layout::Identity, layout::BalanceField)> {
         let s = self.state.lock().unwrap_or_else(|p| p.into_inner());
         let r = s.jobs.get(&key)?.record.as_ref()?;
-        r.funds.as_ref().ok().map(|(id, _, _)| *id)
+        r.funds.as_ref().ok().map(|(id, field, _)| (*id, *field))
     }
     fn publish(&self, key: JobKey, stamp: Stamp, funds: Funds) {
         let mut s = self.state.lock().unwrap_or_else(|p| p.into_inner());
@@ -210,14 +219,39 @@ impl Cache {
     }
     fn binding(&self, t: Address, generation: u64, hash: B256) -> Arc<Binding> {
         let mut s = self.state.lock().unwrap_or_else(|p| p.into_inner());
-        let slot = s
-            .deployments
-            .entry(t)
-            .or_insert_with(|| ((generation, hash), Default::default()));
-        if slot.0 != (generation, hash) {
-            *slot = ((generation, hash), Default::default());
+        if s.block != Some((generation, hash)) {
+            s.deployments.clear();
+            s.block = Some((generation, hash));
         }
-        slot.1.clone()
+        s.deployments.entry(t).or_default().clone()
+    }
+    pub(super) async fn code(
+        &self,
+        ctx: &crate::venues::bsc_dex::ctx::Ctx,
+        t: Address,
+        generation: u64,
+        h: crate::venues::bsc_dex::quote::white_state::Head,
+    ) -> Result<super::presell_getter::Code, String> {
+        let cell = self.binding(t, generation, h.hash);
+        let bytes = cell
+            .get_or_init(|| async {
+                crate::venues::bsc_dex::node::rpc::call::<Bytes>(
+                    ctx,
+                    "eth_getCode",
+                    serde_json::json!([t, h.selector()]),
+                )
+                .await
+                .map_err(|e| e.message)
+            })
+            .await
+            .clone()?;
+        if bytes.is_empty() {
+            return Err("в адресе чтения отсутствует код".into());
+        }
+        Ok(super::presell_getter::Code {
+            account: t,
+            bytecode: bytes,
+        })
     }
 }
 #[cfg(test)]

@@ -32,7 +32,7 @@ impl Drop for Interest {
     }
 }
 pub(in crate::venues::bsc_dex) fn candidate(p: &Parts, a: &Asset) -> Option<Box<dyn Send + Sync>> {
-    if p.ctx.chain_id() != Some(56)
+    if !super::applies(&p.ctx)
         || p.ctx.account.is_none()
         || presell_slot::scan(&p.ctx).ok().flatten().is_none()
     {
@@ -69,16 +69,16 @@ async fn worker(p: Parts, key: JobKey, id: u64, wake: Arc<Notify>) {
     let mut heads = p.heads.watch();
     let mut checked_chain = false;
     let cache = p.ctx.evm_chain.presell();
-    let mut recognised = layout::seed(t) || cache.identity(key).is_some();
+
     loop {
         {
-            if p.ctx.settings.generation() != generation || p.ctx.chain_id() != Some(56) {
+            if p.ctx.settings.generation() != generation || !super::applies(&p.ctx) {
                 return;
             }
             let number = heads.borrow_and_update().as_ref().map(|h| h.number);
             if !checked_chain {
                 match rpc::call::<U64>(&p.ctx, "eth_chainId", serde_json::json!([])).await {
-                    Ok(x) if x == U64::from(56) => checked_chain = true,
+                    Ok(x) if Some(x.to::<u64>()) == p.ctx.chain_id() => checked_chain = true,
                     Ok(_) => cache.failed(key, id, "фоновый узел сообщил другую сеть".into()),
                     Err(e) => {
                         cache.failed(key, id, format!("фоновая проверка сети: {}", e.message))
@@ -104,24 +104,18 @@ async fn worker(p: Parts, key: JobKey, id: u64, wake: Arc<Notify>) {
                         number: n,
                         hash: h.hash,
                     };
-                    let cell = cache.binding(t, generation, h.hash);
-                    let result = cell.get_or_init(|| layout::deployment(&p.ctx, t, h)).await;
-                    let funds = match result {
-                        Ok(Some(identity)) => {
-                            recognised = true;
-                            layout::verify(&p.ctx, t, wallet, h, *identity, cache.identity(key))
-                                .await
-                                .map(|x| (x.identity, x.slot, x.balance))
-                        }
-                        Ok(None) if !recognised => return,
-                        Ok(None) => {
-                            Err("код или реализация токена больше не подтверждает разметку".into())
-                        }
-                        Err(why) => Err(why.clone()),
-                    };
-                    if recognised {
-                        cache.publish(key, stamp, funds);
-                    }
+                    let funds = layout::verify(
+                        &p.ctx,
+                        t,
+                        wallet,
+                        h,
+                        generation,
+                        cache,
+                        cache.identity(key),
+                    )
+                    .await
+                    .map(|p| (p.identity, p.field, p.balance));
+                    cache.publish(key, stamp, funds);
                 }
             }
         }

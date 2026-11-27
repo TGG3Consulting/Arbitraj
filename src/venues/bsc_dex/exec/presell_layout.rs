@@ -1,142 +1,54 @@
-//! Полнословное поле balances подтверждается разметкой компилятора и фактическим
-//! кодом, включая реализацию прокси. Лишь затем список чтений balanceOf служит
-//! независимой проверкой конкретного ключа. Источники — verified_layouts.json.
-use alloy_primitives::{Address, B256, Bytes, U256, b256, keccak256};
-use serde::Deserialize;
-use serde_json::{Value, json};
-use std::{collections::BTreeSet, sync::LazyLock};
-
+//! Фоновая проверка ERC-20. Наблюдение двух balanceOf выбирает конкретный
+//! адрес хранения и ключ. Код getter должен вернуть всё слово без изменений.
 use super::super::{
     check::{probe_calls, simulate},
     ctx::Ctx,
     node::rpc,
     quote::white_state::Head,
 };
-use super::presell_slot::{self, Layout, Slot};
+use super::{
+    presell_getter::{Code, Read},
+    presell_warm::Cache,
+};
+use alloy_primitives::{Address, B256, Bytes, U256, b256, keccak256};
+use serde_json::json;
+mod observed;
+use observed::Reads;
 
-const IMPL_SLOT: B256 = b256!("360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc");
-#[derive(Deserialize, Copy, Clone, Debug, PartialEq, Eq)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-enum Declaration {
-    Balances { slot: u64 },
-    TransparentErc1967,
-}
-#[derive(Deserialize)]
-struct Deployment {
-    chain_id: u64,
-    address: Address,
-    runtime_hash: B256,
-    layout: Declaration,
-    market_token: bool,
-}
-static DEPLOYMENTS: LazyLock<Vec<Deployment>> = LazyLock::new(|| {
-    serde_json::from_str(include_str!(
-        "../../../../config/presell_erc20_layouts.json"
-    ))
-    .expect("verified ERC20 compiler layouts")
-});
-pub(super) fn seed(t: Address) -> bool {
-    DEPLOYMENTS
-        .iter()
-        .any(|d| d.chain_id == 56 && d.market_token && d.address == t)
-}
-fn declaration(hash: B256) -> Option<Declaration> {
-    DEPLOYMENTS
-        .iter()
-        .find(|d| d.chain_id == 56 && d.runtime_hash == hash)
-        .map(|d| d.layout)
-}
-fn full_word(code: B256) -> Option<Slot> {
-    let Declaration::Balances { slot } = declaration(code)? else {
-        return None;
-    };
-    Some(Slot {
-        index: slot,
-        layout: Layout::Solidity,
-    })
-}
+pub(super) const IMPL_SLOT: B256 =
+    b256!("360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc");
+pub(super) const ADMIN_SLOT: B256 =
+    b256!("b53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103");
+pub(super) const BEACON_SLOT: B256 =
+    b256!("a3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50");
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Access {
-    access_list: Vec<Item>,
-    error: Option<String>,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct BalanceField {
+    pub(super) storage: Address,
+    pub(super) key: B256,
 }
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Item {
-    address: Address,
-    storage_keys: Vec<B256>,
-}
-impl Access {
-    fn keys(&self) -> BTreeSet<(Address, B256)> {
-        self.access_list
-            .iter()
-            .flat_map(|r| r.storage_keys.iter().map(move |k| (r.address, *k)))
-            .collect()
+impl BalanceField {
+    /// Используется только в той же симуляции и на том же кошельке, что и проверка.
+    pub(super) fn credit(self, amount: U256) -> simulate::Override {
+        simulate::Override {
+            address: self.storage,
+            code: Bytes::new(),
+            state: vec![(self.key, B256::from(amount.to_be_bytes::<32>()))],
+            diff: true,
+        }
     }
 }
-
-fn matches(
-    a: &Access,
-    b: &Access,
-    token: Address,
-    keys: [B256; 2],
-    implementation: Option<Address>,
-) -> bool {
-    if a.error.is_some() || b.error.is_some() || keys[0] == keys[1] {
-        return false;
-    }
-    if let Some(imp) = implementation
-        && [a, b]
-            .iter()
-            .any(|l| !l.access_list.iter().any(|r| r.address == imp))
-    {
-        return false;
-    }
-    let (left, right) = (a.keys(), b.keys());
-    left.difference(&right).copied().eq([(token, keys[0])])
-        && right.difference(&left).copied().eq([(token, keys[1])])
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) struct Identity {
     runtime: B256,
-    implementation: Option<(Address, B256)>,
+    target: Option<(Address, B256)>,
+    implementation_slot: bool,
+    admin: Option<B256>,
 }
 pub(super) struct Proof {
     pub(super) identity: Identity,
-    pub(super) slot: Slot,
+    pub(super) field: BalanceField,
     pub(super) balance: U256,
-}
-async fn code(ctx: &Ctx, address: Address, at: &Value) -> Result<B256, String> {
-    let bytes: Bytes = rpc::call(ctx, "eth_getCode", json!([address, at]))
-        .await
-        .map_err(|e| e.message)?;
-    Ok(keccak256(bytes))
-}
-
-/// Один такой снимок кода и привязки на контракт и канонический блок для всех кошельков.
-pub(super) async fn deployment(ctx: &Ctx, t: Address, h: Head) -> Result<Option<Identity>, String> {
-    let at = h.selector();
-    let runtime = code(ctx, t, &at).await?;
-    let implementation = if declaration(runtime) == Some(Declaration::TransparentErc1967) {
-        let word: B256 = rpc::call(ctx, "eth_getStorageAt", json!([t, IMPL_SLOT, at]))
-            .await
-            .map_err(|e| e.message)?;
-        let imp = Address::from_word(word);
-        if imp.is_zero() || imp.into_word() != word {
-            return Err("некорректная реализация прокси".into());
-        }
-        Some((imp, code(ctx, imp, &at).await?))
-    } else {
-        None
-    };
-    let id = Identity {
-        runtime,
-        implementation,
-    };
-    Ok(full_word(implementation.map_or(runtime, |(_, hash)| hash)).map(|_| id))
 }
 
 fn balance_word(balance: &[u8], raw: B256) -> Result<U256, String> {
@@ -145,84 +57,162 @@ fn balance_word(balance: &[u8], raw: B256) -> Result<U256, String> {
     }
     Ok(U256::from_be_bytes(raw.0))
 }
-
+async fn word(ctx: &Ctx, address: Address, key: B256, h: Head) -> Result<B256, String> {
+    rpc::call(ctx, "eth_getStorageAt", json!([address, key, h.selector()]))
+        .await
+        .map_err(|e| e.message)
+}
+/// Привязка внешнего кода и служебных чтений подтверждается заново на каждом H.
+async fn binding(
+    ctx: &Ctx,
+    t: Address,
+    h: Head,
+    reads: Reads,
+    generation: u64,
+    cache: &Cache,
+) -> Result<(Identity, Code, Option<Code>), String> {
+    let token = cache.code(ctx, t, generation, h).await?;
+    let other = async {
+        match reads.other {
+            Some(a) => cache.code(ctx, a, generation, h).await.map(Some),
+            None => Ok(None),
+        }
+    };
+    let implementation = async {
+        if reads.implementation {
+            let actual = word(ctx, t, IMPL_SLOT, h).await?;
+            if reads.other.is_none_or(|a| actual != a.into_word()) {
+                return Err("изменилась реализация прокси".into());
+            }
+        }
+        Ok(())
+    };
+    let admin = async {
+        if reads.admin {
+            word(ctx, t, ADMIN_SLOT, h).await.map(Some)
+        } else {
+            Ok(None)
+        }
+    };
+    let (other, (), admin) = tokio::try_join!(other, implementation, admin)?;
+    let target = other.as_ref().map(|c| (c.account, keccak256(&c.bytecode)));
+    Ok((
+        Identity {
+            runtime: keccak256(&token.bytecode),
+            target,
+            implementation_slot: reads.implementation,
+            admin,
+        },
+        token,
+        other,
+    ))
+}
+async fn original(
+    ctx: &Ctx,
+    t: Address,
+    wallet: Address,
+    field: BalanceField,
+    h: Head,
+) -> Result<U256, String> {
+    let tx = json!({"from":wallet,"to":t,"data":probe_calls::balance(wallet,t,wallet).input});
+    let read = async {
+        rpc::call::<Bytes>(ctx, "eth_call", json!([tx, h.selector()]))
+            .await
+            .map_err(|e| e.message)
+    };
+    let (b, w) = tokio::try_join!(read, word(ctx, field.storage, field.key, h))?;
+    balance_word(&b, w)
+}
 pub(super) async fn verify(
     ctx: &Ctx,
     t: Address,
     wallet: Address,
     h: Head,
-    identity: Identity,
-    previous: Option<Identity>,
+    generation: u64,
+    cache: &Cache,
+    previous: Option<(Identity, BalanceField)>,
 ) -> Result<Proof, String> {
-    let at = h.selector();
-    let implementation = identity.implementation;
-    let slot = full_word(implementation.map_or(identity.runtime, |(_, hash)| hash))
-        .ok_or("неизвестная разметка")?;
-    let control = if wallet == Address::ZERO {
-        return Err("нет адреса кошелька".into());
-    } else {
-        Address::ZERO
-    };
+    if let Some((previous, field)) = previous {
+        let reads = Reads {
+            other: previous.target.map(|(a, _)| a),
+            implementation: previous.implementation_slot,
+            admin: previous.admin.is_some(),
+        };
+        let (identity, _, _) = binding(ctx, t, h, reads, generation, cache).await?;
+        if identity == previous {
+            let balance = original(ctx, t, wallet, field, h).await?;
+            return Ok(Proof {
+                identity,
+                field,
+                balance,
+            });
+        }
+    }
+    if wallet.is_zero() {
+        return Err("нет адреса своего кошелька".into());
+    }
+    let control = Address::ZERO;
     let call = probe_calls::balance(wallet, t, wallet);
-    let tx = json!({"from":wallet,"to":t,"data":call.input});
-    let other = json!({"from":wallet,"to":t,"data":probe_calls::balance(wallet,t,control).input});
-    let keys = [
-        presell_slot::key(slot, wallet),
-        presell_slot::key(slot, control),
-    ];
-    let (balance, raw) = tokio::try_join!(
-        rpc::call::<Bytes>(ctx, "eth_call", json!([tx, at])),
-        rpc::call::<B256>(ctx, "eth_getStorageAt", json!([t, keys[0], at])),
-    )
-    .map_err(|e| e.message)?;
-    let have = balance_word(&balance, raw)?;
-    if previous == Some(identity) {
-        return Ok(Proof {
-            identity,
-            slot,
-            balance: have,
-        });
+    let other = probe_calls::balance(wallet, t, control);
+    let (a, b) = tokio::try_join!(
+        observed::call(ctx, &call, h),
+        observed::call(ctx, &other, h)
+    )?;
+    let (fields, reads) = observed::compare(&a, &b, t)?;
+    let (identity, token, implementation) = binding(ctx, t, h, reads, generation, cache).await?;
+    for (holder, field) in [wallet, control].into_iter().zip(fields) {
+        if !(Read {
+            token: &token,
+            implementation: implementation.as_ref(),
+            admin: identity.admin,
+            caller: wallet,
+            holder,
+            key: field.key,
+            storage: field.storage,
+        })
+        .proves()
+        {
+            return Err("не подтверждён прямой возврат целого слова из balanceOf".into());
+        }
     }
-    let (own, second) = tokio::try_join!(
-        rpc::call::<Access>(ctx, "eth_createAccessList", json!([tx, at])),
-        rpc::call::<Access>(ctx, "eth_createAccessList", json!([other, at])),
+    let field = fields[0];
+    let balance = original(ctx, t, wallet, field, h).await?;
+    let marker = if balance == U256::MAX {
+        U256::MAX ^ (U256::from(1) << 255)
+    } else {
+        U256::MAX
+    };
+    let base = simulate::Base::for_chain(ctx.chain_id(), h.number.to(), h.timestamp.to());
+    let res = simulate::run_anchored(
+        ctx,
+        &[call],
+        &[],
+        &[field.credit(marker)],
+        base,
+        Some(h.hash),
     )
+    .await
     .map_err(|e| e.message)?;
-    if !matches(
-        &own,
-        &second,
-        t,
-        keys,
-        implementation.map(|(address, _)| address),
-    ) {
-        return Err("balanceOf двух держателей не подтвердил одно поле и реализацию".into());
-    }
-    let marker = have ^ U256::from(1);
-    let over = presell_slot::credit(t, wallet, slot, marker);
-    let base = simulate::Base::for_chain(Some(56), h.number.to(), h.timestamp.to());
-    let res = simulate::run_anchored(ctx, &[call], &[], &[over], base, Some(h.hash))
-        .await
-        .map_err(|e| e.message)?;
     if res.first().filter(|r| r.ok()).and_then(probe_calls::u256) != Some(marker) {
-        return Err("одиночная подмена подтверждённого поля не дала заданный баланс".into());
+        return Err("одиночная метка полного слова не совпала с balanceOf".into());
     }
     Ok(Proof {
         identity,
-        slot,
-        balance: have,
+        field,
+        balance,
     })
 }
-
 #[cfg(test)]
 impl Identity {
     pub(super) fn test_direct(runtime: B256) -> Self {
         Self {
             runtime,
-            implementation: None,
+            target: None,
+            implementation_slot: false,
+            admin: None,
         }
     }
 }
-
 #[cfg(test)]
 #[path = "presell_layout_tests.rs"]
 mod tests;

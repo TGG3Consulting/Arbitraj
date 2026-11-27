@@ -1,4 +1,3 @@
-use super::super::presell_slot::Layout;
 use super::*;
 use crate::core::types::{Asset, ChainId};
 use alloy_primitives::{address, b256};
@@ -59,25 +58,25 @@ fn late_reorg_or_other_holder_cannot_replace_or_reject_current_wallet_proof() {
     ));
     let funds = Ok((
         id,
-        Slot {
-            layout: Layout::Solidity,
-            index: 1,
+        layout::BalanceField {
+            storage: t,
+            key: B256::repeat_byte(8),
         },
         U256::from(5),
     ));
     cache.publish(key, stamp, funds.clone());
-    assert!(cache.read(w, t, 8, 3).unwrap().is_err());
-    assert!(cache.read(t, w, 7, 3).is_none());
-    assert!(cache.read(w, t, 7, 4).is_none());
+    assert!(cache.read(w, t, 8, 3).is_err());
+    assert!(cache.read(t, w, 7, 3).is_err());
+    assert!(cache.read(w, t, 7, 4).is_err());
     let newer = Stamp { hash: h2, ..stamp };
     cache.publish(key, newer, funds.clone());
     cache.reject(w, t, stamp, "old hash");
-    assert_eq!(cache.read(w, t, 7, 3).unwrap().unwrap().0.hash, h2);
+    assert_eq!(cache.read(w, t, 7, 3).unwrap().0.hash, h2);
     let bound = cache.binding(t, 3, h2);
     assert!(Arc::ptr_eq(&bound, &cache.binding(t, 3, h2)));
     assert!(!Arc::ptr_eq(&bound, &cache.binding(t, 3, h)));
     cache.reject(w, t, newer, "balanceOf");
-    assert!(cache.read(w, t, 7, 3).unwrap().is_err());
+    assert!(cache.read(w, t, 7, 3).is_err());
     let mut s = cache.state.lock().unwrap();
     s.release(key, job);
     let Admission::New(next, _) = s.admit(key) else {
@@ -86,7 +85,7 @@ fn late_reorg_or_other_holder_cannot_replace_or_reject_current_wallet_proof() {
     drop(s);
     cache.publish(key, stamp, funds);
     assert_ne!(next, job);
-    assert!(cache.read(w, t, 7, 3).unwrap().is_err());
+    assert!(cache.read(w, t, 7, 3).is_err());
 }
 
 #[test]

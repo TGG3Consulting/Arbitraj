@@ -1,127 +1,120 @@
-//! Публичные поля компилятора и копия ответа BSC. Второй список ниже —
-//! синтетический контроль фильтра, а не записанный вызов того же блока.
+//! Положительные и отрицательные записи публичного BSC. Каждый полный образец
+//! содержит чтения двух держателей и runtime из того же канонического блока.
 use super::*;
-use serde_json::{Value, json};
-const FILE: &str =
-    include_str!("../../../../tests/data/presell_bsc_2026-11-27/verified_layouts.json");
-const ACCESS: &str =
-    include_str!("../../../../tests/data/presell_bsc_2026-11-27/access_lists.json");
-
-#[test]
-fn layouts_must_be_complete_uint256_fields_in_the_matching_compiler_output() {
-    let raw: Vec<Value> = serde_json::from_str(FILE).unwrap();
-    for source in raw {
-        let hash: B256 = source["runtimeKeccak"].as_str().unwrap().parse().unwrap();
-        let deployed: Address = source["address"].as_str().unwrap().parse().unwrap();
-        let matching: Vec<_> = DEPLOYMENTS
-            .iter()
-            .filter(|d| d.chain_id == 56 && d.address == deployed)
-            .collect();
-        assert_eq!(matching.len(), 1);
-        assert_eq!(matching[0].runtime_hash, hash);
-        if source["storage"].as_array().unwrap().is_empty() {
-            assert_eq!(declaration(hash), Some(Declaration::TransparentErc1967));
-            continue;
-        }
-        let field = &source["storage"][0];
-        assert_eq!(field["label"], "_balances");
-        assert_eq!(field["offset"], 0);
-        assert_eq!(source["type"]["key"], "t_address");
-        assert_eq!(source["type"]["value"], "t_uint256");
-        assert_eq!(source["type"]["encoding"], "mapping");
-        assert_eq!(
-            full_word(hash).unwrap().index,
-            field["slot"].as_str().unwrap().parse::<u64>().unwrap()
-        );
-    }
-    assert_eq!(full_word(B256::ZERO), None);
-}
-
-#[test]
-fn proxy_management_keys_are_never_balance_candidates() {
-    let sample: Value = serde_json::from_str(ACCESS).unwrap();
-    let request = &sample["eraRequest"]["params"][0];
-    let wallet: Address = request["from"].as_str().unwrap().parse().unwrap();
-    let token: Address = request["to"].as_str().unwrap().parse().unwrap();
-    let a: Access = serde_json::from_value(sample["era"]["result"].clone()).unwrap();
-    let imp = a
-        .access_list
-        .iter()
-        .find(|i| i.address != token)
-        .unwrap()
-        .address;
-    let owner = &a
-        .access_list
-        .iter()
-        .find(|i| i.address == token)
-        .unwrap()
-        .storage_keys;
-    let slot = Slot {
-        index: 262,
-        layout: Layout::Solidity,
-    };
-    let keys = [
-        presell_slot::key(slot, wallet),
-        presell_slot::key(slot, Address::ZERO),
-    ];
-    let fixed: Vec<_> = owner.iter().copied().filter(|k| *k != keys[0]).collect();
-    let mut second = sample["era"]["result"].clone();
-    let fields = second["accessList"]
-        .as_array_mut()
-        .unwrap()
-        .iter_mut()
-        .find(|f| f["address"] == request["to"])
+use serde_json::Value;
+use std::io::Read as _;
+fn fixture(name: &str) -> Value {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/data/presell_bsc_2026-11-27")
+        .join(format!("{name}_with_code.json.gz"));
+    let mut plain = Vec::new();
+    flate2::read::GzDecoder::new(std::fs::File::open(path).unwrap())
+        .read_to_end(&mut plain)
         .unwrap();
-    let mut changed = fixed.clone();
-    changed.push(keys[1]);
-    fields["storageKeys"] = json!(changed);
-    let b: Access = serde_json::from_value(second.clone()).unwrap();
-    assert!(matches(&a, &b, token, keys, Some(imp)));
-    for other in fixed {
-        assert!(!matches(&a, &b, token, [other, keys[1]], Some(imp)));
-    }
-    assert!(!matches(&a, &b, token, keys, Some(Address::ZERO)));
-    second["accessList"][0]["storageKeys"]
-        .as_array_mut()
-        .unwrap()
-        .push(json!(B256::ZERO));
-    assert!(!matches(
-        &a,
-        &serde_json::from_value(second).unwrap(),
-        token,
-        keys,
-        Some(imp)
-    ));
+    serde_json::from_slice(&plain).unwrap()
 }
-
-#[test]
-fn reflection_fields_in_recorded_code_do_not_admit_balance_credit() {
-    let evidence: Vec<Value> = serde_json::from_str(include_str!(
-        "../../../../tests/data/presell_bsc_2026-11-27/reflection_layouts.json"
-    ))
-    .unwrap();
-    assert_eq!(evidence.len(), 2);
-    for token in evidence {
-        for name in ["_rOwned", "_tOwned", "_isExcluded"] {
-            assert!(
-                token["fields"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|f| f["name"] == name)
-            );
+fn parse<T: serde::de::DeserializeOwned>(v: &Value) -> T {
+    serde_json::from_value(v.clone()).unwrap()
+}
+fn replay(name: &str) -> Result<(), String> {
+    let v = fixture(name);
+    let t: Address = parse(&v["token"]);
+    let calls = v["samples"].as_array().unwrap();
+    let samples: [observed::Access; 2] =
+        [0, 1].map(|i| parse(&calls[i]["access"]["response"]["result"]));
+    let (fields, reads) = observed::compare(&samples[0], &samples[1], t)?;
+    let code = Code {
+        account: t,
+        bytecode: parse(&v["code"]["response"]["result"]),
+    };
+    let extra = reads.other.map(|target| {
+        let rpc = &v["dependencyCode"][0];
+        assert_eq!(parse::<Address>(&rpc["request"]["params"][0]), target);
+        Code {
+            account: target,
+            bytecode: parse(&rpc["response"]["result"]),
         }
-        let hash: B256 = token["runtime"].as_str().unwrap().parse().unwrap();
-        assert!(declaration(hash).is_none());
+    });
+    let admin = if reads.admin {
+        Some(parse(&v["proxyStorage"][1]["response"]["result"]))
+    } else {
+        None
+    };
+    if reads.implementation {
+        let ptr: B256 = parse(&v["proxyStorage"][0]["response"]["result"]);
+        assert_eq!(Some(Address::from_word(ptr)), reads.other);
+    }
+    for (i, sample) in calls.iter().enumerate() {
+        let holder = parse(&sample["holder"]);
+        let call = &sample["access"]["request"]["params"][0];
+        let field = fields[i];
+        assert_eq!(
+            sample["access"]["request"]["params"][1]["blockHash"],
+            v["blockHash"]
+        );
+        assert_eq!(
+            parse::<Bytes>(&call["data"]),
+            probe_calls::balance(parse(&call["from"]), t, holder).input
+        );
+        if !(Read {
+            token: &code,
+            implementation: extra.as_ref(),
+            admin,
+            caller: parse(&call["from"]),
+            holder,
+            key: field.key,
+            storage: field.storage,
+        })
+        .proves()
+        {
+            return Err(format!(
+                "{name}: исходный getter не доказал целое слово кошелька {holder}"
+            ));
+        }
+        if let Some(raw) = sample.get("storage") {
+            assert_eq!(
+                parse::<Address>(&raw["request"]["params"][0]),
+                field.storage
+            );
+            assert_eq!(parse::<B256>(&raw["request"]["params"][1]), field.key);
+            let value = parse::<Bytes>(&sample["balance"]["response"]["result"]);
+            balance_word(&value, parse(&raw["response"]["result"]))?;
+        }
+        let credit = field.credit(U256::MAX);
+        assert_eq!(credit.address, field.storage);
+        assert_eq!(credit.state, vec![(field.key, B256::repeat_byte(255))]);
+    }
+    Ok(())
+}
+#[test]
+fn recorded_wbnb_and_previously_working_nxt_use_observed_full_word() {
+    replay("wbnb").unwrap();
+    replay("nxt").unwrap();
+}
+#[test]
+fn recorded_era_and_usdt_use_observed_full_word() {
+    replay("era").unwrap();
+    replay("usdt").unwrap();
+}
+#[test]
+fn reflection_read_sets_never_reach_credit() {
+    for name in ["pig", "smars"] {
+        assert!(replay(name).is_err());
     }
 }
-
 #[test]
-fn packed_or_malformed_word_never_funds_a_sale() {
+fn packed_word_is_rejected() {
     let bal = B256::from(U256::from(12).to_be_bytes::<32>());
     let mut packed = bal;
     packed.0[0] = 1;
     assert!(balance_word(bal.as_slice(), packed).is_err());
     assert!(balance_word(&bal.as_slice()[1..], bal).is_err());
     assert_eq!(balance_word(bal.as_slice(), bal), Ok(U256::from(12)));
+}
+
+#[test]
+fn recorded_xvs_masks_its_uint96_balance() {
+    let v = fixture("xvs");
+    assert_eq!(v["balanceLayout"]["type"]["value"], "t_uint96");
+    assert!(replay("xvs").unwrap_err().contains("исходный getter"));
 }

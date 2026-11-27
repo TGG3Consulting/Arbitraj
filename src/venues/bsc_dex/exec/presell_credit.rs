@@ -96,16 +96,16 @@ pub async fn run(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
     if p.n > 0
         && p.stamp.is_none()
         && sim.fundable.is_some()
-        && q.ctx.chain_id() == Some(56)
+        && super::presell_warm::applies(&q.ctx)
         && let Some(t) = io.token_in
-        && let Some(Ok((stamp, slot, have))) =
+        && let Ok((stamp, field, have)) =
             q.ctx
                 .evm_chain
                 .presell()
                 .read(wallet, t, r.at.number, q.ctx.settings.generation())
     {
         let retry = Io {
-            credit: (have < io.need).then(|| presell_slot::credit(t, wallet, slot, io.need)),
+            credit: (have < io.need).then(|| field.credit(io.need)),
             have: Some(have),
             ..*io
         };
@@ -172,20 +172,19 @@ async fn prepare(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
     let owner = IERC20::balanceOfCall { owner: wallet };
     let block = r.at.number;
     // Ревью М-a: слот уже в кэше — баланс и слово слота читаются параллельно (круга до узла не добавляется).
-    if q.ctx.chain_id() == Some(56)
-        && let Some(record) =
+    if super::presell_warm::applies(&q.ctx) {
+        let record =
             q.ctx
                 .evm_chain
                 .presell()
-                .read(wallet, token, block, q.ctx.settings.generation())
-    {
+                .read(wallet, token, block, q.ctx.settings.generation());
         p.warm = true;
         match record {
-            Ok((stamp, slot, have)) => {
+            Ok((stamp, field, have)) => {
                 p.stamp = Some(stamp);
                 p.have = Some(have);
                 if have < io.need {
-                    p.credit = Some(presell_slot::credit(token, wallet, slot, io.need));
+                    p.credit = Some(field.credit(io.need));
                     p.note = Some(q.ctx.evm_chain.presell().totals());
                 }
             }

@@ -457,7 +457,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "eulerswap_v1_module" | "eulerswap_v2_module" | "ammalgam_dlex" | "empire_module" | "stabull_module" | "maverick_v1_module" | "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
         "lambda_propamm" | "integral_size" | "integral_size_v5" | "pendle_market_v5" => (PoolKind::OraclePmm, Proto::V2, true, true, true),
         "degenswap_module" | "safeswap_trade_module" | "pendle_market" => (PoolKind::OraclePmm, Proto::V2, true, false, true),
-        "defiplaza_multi" | "defiplaza_stable" | "surge_native" | "surge_v5" | "dagrow" | "dagrow_v5" | "bunnyswap" | "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
+        "motoswap_v2" | "defiplaza_multi" | "defiplaza_stable" | "surge_native" | "surge_v5" | "dagrow" | "dagrow_v5" | "bunnyswap" | "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
         "empire_v2" | "empire_nominal" | "v2_fork" | "toonswap" | "gemswap_v2" | "v2_diamond_router" | "v2_diamond_create" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_fork_dual_router01" | "v2_fork_dual_create2" | "safeswap_v2" | "v2_fork_dual_create2_live_fee" | "v2_whiteswap" => {
@@ -892,6 +892,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             list.extend(["dex.quoter","dex.router_runtime_hash","dex.pair_runtime_hash"]);
             if f.executor_kind.is_some(){list.extend(["dex.router","dex.module_runtime_hashes"]);}
         }
+        Proto::V2 if f.variant==Variant::Motoswap => list.extend(["dex.factory","dex.quoter","dex.motoswap_roles","dex.pool_code_hashes","dex.pair_runtime_hash"]),
         Proto::V2 if f.variant.ammalgam() => list.extend(["dex.factory","dex.factory_runtime_hash","dex.pair_runtime_hash","dex.quoter","dex.quoter_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes"]),
         Proto::V2 if f.variant.aqua() => list.extend(["dex.factory","dex.factory_runtime_hash","dex.quoter","dex.quoter_runtime_hash"]),
         Proto::V2 if f.variant.mooniswap() => list.extend(["dex.factory","dex.factory_runtime_hash"]),

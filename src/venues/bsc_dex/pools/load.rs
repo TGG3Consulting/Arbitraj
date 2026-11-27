@@ -552,6 +552,13 @@ pub fn state<'a>(
             })
         });
     }
+    if f.variant == Variant::Motoswap && let PoolRef::Contract(pool)=reference {
+        return Box::pin(async move {
+            let at=super::nami::block(ctx,&block_tag(block)).await?;
+            let state=Box::pin(super::motoswap::state(ctx,f,*pool,pair,&at)).await?;
+            Ok(Loaded{state:PoolState::Motoswap(Box::new(state)),fee_pips:None,ticks:None,bins:None})
+        });
+    }
     if f.variant == Variant::Gemswap
         && let PoolRef::Contract(pool) = reference
     {

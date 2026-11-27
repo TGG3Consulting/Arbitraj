@@ -126,7 +126,7 @@ pub(super) async fn option(
         super::v2_wallet_sim::Wire::Ranges(_) | super::v2_wallet_sim::Wire::RegisteredV3(_) | super::v2_wallet_sim::Wire::SolidlyRouter(_) => Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::Umbrae(_) | super::v2_wallet_sim::Wire::DirectModule{..} if c.entry.family.variant.ammalgam() || c.entry.family.variant.umbrae() || c.entry.family.variant.separate_v3_router()=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::FluxEth(m)=>Some(RouterFeeMode::FluxEth{target:m.router,native_cash:super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt)}),
-        super::v2_wallet_sim::Wire::SafeSwap(_)|super::v2_wallet_sim::Wire::DegenRouter(_)|super::v2_wallet_sim::Wire::DegenModule(_)|super::v2_wallet_sim::Wire::Pendle(_)|super::v2_wallet_sim::Wire::O1(_)=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
+        super::v2_wallet_sim::Wire::Motoswap(_)|super::v2_wallet_sim::Wire::SafeSwap(_)|super::v2_wallet_sim::Wire::DegenRouter(_)|super::v2_wallet_sim::Wire::DegenModule(_)|super::v2_wallet_sim::Wire::Pendle(_)|super::v2_wallet_sim::Wire::O1(_)=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::AntfarmOutput(t)=>Some(RouterFeeMode::AntfarmProceeds{target:t.module,tier:t.funding,loan:t.use_loan}),
         super::v2_wallet_sim::Wire::Antfarm(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.module}),
         super::v2_wallet_sim::Wire::Bundles(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.target}),

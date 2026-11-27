@@ -316,6 +316,19 @@ pub struct AmmalgamState {
     pub cash: [U256; 2],
 }
 
+/// Ethereum MotoSwap FeeRouter charges protocol and creator cuts separately on one side.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MotoswapState {
+    pub fee_router_frozen: bool,
+    pub reserves: [U256; 2],
+    pub balances: [U256; 2],
+    pub lp_bps: u16,
+    pub protocol_bps: u16,
+    pub creator_bps: u16,
+    pub creators: u8,
+    pub fee_on_output: [bool; 2],
+}
+
 /// Физические и виртуальные остатки Mooniswap в порядке getTokens. Метка блока общая для состояния и тарифов.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MooniswapState {
@@ -564,6 +577,7 @@ pub enum PoolState {
     /// Резервы пары и плата в ETH, уплачиваемая для каждого отдельного обмена.
     EtherVista(Box<EtherVistaState>),
     Mooniswap(Box<MooniswapState>),
+    Motoswap(Box<MotoswapState>),
     Ammalgam(Box<AmmalgamState>),
     Virtuals(Box<VirtualsState>),
     MintClub(Box<MintClubState>),

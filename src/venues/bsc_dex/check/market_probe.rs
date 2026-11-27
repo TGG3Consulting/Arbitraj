@@ -34,6 +34,7 @@ enum Venue {
     LlammaWallet,
     Ammalgam,
     Mooniswap,
+    Motoswap,
     DefiPlaza,
     SafeSwap,
     Integral,
@@ -58,7 +59,7 @@ pub(super) struct Leg {
 }
 impl Market {
     pub fn wallet_funded(ctx: &Ctx, e: &Entry) -> bool {
-        e.family.variant.fluid_lite() || e.family.variant.aqua() || e.family.variant==super::super::pools::family_variant::Variant::Ambient || e.family.variant.llamma() || matches!(e.pool.state,PoolState::Ammalgam(_)|PoolState::Mooniswap(_)|PoolState::DefiPlaza(_)) || e.family.variant.issuer_shares() || e.family.variant==super::super::pools::family_variant::Variant::PropVenue || e.family.variant.protected_router_wallet() || matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
+        e.family.variant.fluid_lite() || e.family.variant.aqua() || e.family.variant==super::super::pools::family_variant::Variant::Ambient || e.family.variant.llamma() || matches!(e.pool.state,PoolState::Motoswap(_)|PoolState::Ammalgam(_)|PoolState::Mooniswap(_)|PoolState::DefiPlaza(_)) || e.family.variant.issuer_shares() || e.family.variant==super::super::pools::family_variant::Variant::PropVenue || e.family.variant.protected_router_wallet() || matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
             || mint_club_direct::enabled(e) || carbon_direct::enabled(e)
             || (super::registered_v3::configured(ctx,e) && super::super::exec::executor::address(ctx).ok().flatten().is_none())
     }
@@ -129,6 +130,14 @@ impl Market {
             let mut market=Box::new(e.clone()); market.pool.state=PoolState::DefiPlaza(Box::new(fresh));market.pool.block=number;
             anchor=Some((head,market));
             Venue::DefiPlaza
+        } else if let PoolState::Motoswap(_) = &e.pool.state {
+            let head=white_state::head(ctx,&format!("{number:#x}")).await?;
+            let at=head.selector();
+            let plan=super::super::exec::motoswap_plan::graph_target(ctx,e).map(|(_,a)|a).or_else(||ctx.dex_addr("dex.quoter",e.family.id).ok()).ok_or_else(||super::super::exec::motoswap_plan::bad(ctx))?;
+            Box::pin(super::super::exec::motoswap_plan::terms(ctx,e,e.usdt,plan,Some(&at))).await?;
+            Box::pin(mint_club_direct::funded(ctx,wallet,e.usdt,amount,head)).await?;
+            anchor=Some((head,Box::new(e.clone())));
+            Venue::Motoswap
         } else if let PoolState::Mooniswap(_) = &e.pool.state {
             let head=white_state::head(ctx,&format!("{number:#x}")).await?;
             Box::pin(super::super::exec::mooniswap_plan::check_step(ctx,e,e.usdt,&head.selector())).await?;
@@ -298,7 +307,7 @@ impl Market {
     pub fn funding(&self, e: &Entry, source: Address, wallet: Address, amount: U256) -> Vec<Call> {
         if matches!(
             self.venue,
-            Venue::Brokerbot | Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::Aqua(_) | Venue::WalletRouter(_) | Venue::Mooniswap | Venue::DefiPlaza | Venue::Ammalgam | Venue::FluidLiteWallet | Venue::AmbientWallet | Venue::LlammaWallet | Venue::FundedExecutor
+            Venue::Brokerbot | Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::Aqua(_) | Venue::WalletRouter(_) | Venue::Motoswap | Venue::Mooniswap | Venue::DefiPlaza | Venue::Ammalgam | Venue::FluidLiteWallet | Venue::AmbientWallet | Venue::LlammaWallet | Venue::FundedExecutor
         ) || self.self_funded(e, source)
         {
             Vec::new()
@@ -450,7 +459,7 @@ impl Market {
                 bought,
                 (wallet, p, &buy.logs),
             ),
-            Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Regular | Venue::Aqua(_) | Venue::WalletRouter(_) | Venue::Mooniswap | Venue::DefiPlaza | Venue::Ammalgam | Venue::FluidLiteWallet | Venue::AmbientWallet | Venue::LlammaWallet | Venue::FundedExecutor => Ok(None),
+            Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Regular | Venue::Aqua(_) | Venue::WalletRouter(_) | Venue::Motoswap | Venue::Mooniswap | Venue::DefiPlaza | Venue::Ammalgam | Venue::FluidLiteWallet | Venue::AmbientWallet | Venue::LlammaWallet | Venue::FundedExecutor => Ok(None),
         }
     }
 }

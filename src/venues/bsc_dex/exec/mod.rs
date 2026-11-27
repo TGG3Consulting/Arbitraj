@@ -66,6 +66,8 @@ pub(super) mod fluid_lite_plan;
 pub(super) mod llamma_wallet;
 pub(super) mod llamma_plan;
 pub(super) mod mooniswap_wallet;
+pub(super) mod motoswap_wallet;
+pub(super) mod motoswap_plan;
 pub(super) mod defiplaza_wallet;
 pub(super) mod yield_basis_wallet;
 pub(super) mod balancer_v1_wallet;

@@ -6821,7 +6821,8 @@
       "dex.factory_runtime_hash": "0x326fdd232797589c98f3c79b927d9b6375680e16f970c0536494cb2f45454787",
       "dex.module_runtime_hashes": [
         "0xd4104b0c2c57e6246384f5a218f1ea43d8d237fca51cadb2fe38da08b05893d3",
-        "0x2e492b6dfaeff644fda1b29cfa7b7367bf4ec13ad39dc25da228f6b76b7976b7",
+        "0x2e492b6dfaeff644fda1b29cfa7b7367bf4ec13ad39dc25da228f6b76b7976b7"
+,
         "0xbad605832de6ea080dbc87ceb3483a0d2218664ebcb5ee4b8a62d55c26dd1a43"
       ]
     }
@@ -6837,7 +6838,8 @@
       "dex.factory_runtime_hash": "0x0ae93461bd36cbd88745720e67c65f566cf1b239c169697e7e8a52b9040fed20",
       "dex.module_runtime_hashes": [
         "0x1f1d8b681c902f0a57a5c9d1b6d6073403033fd8e1e6e9bdc4c81969358076bb",
-        "0x1a1307f1dffd6a8240f9c8e4ac90a7e64e71b6c7396e010180926786c64073fc",
+        "0x1a1307f1dffd6a8240f9c8e4ac90a7e64e71b6c7396e010180926786c64073fc"
+,
         "0xeb552003952a9377cc43c58b26d9a31a5e3e3d726d3bd757fb184ac22de68e42"
       ]
     }
@@ -7308,6 +7310,35 @@
       "dex.module_runtime_hashes": [
         "0x0a117e1a1acfab9602ad6cfa9b5b319dd10fae2e33e22153cdeae708a8211a48",
         "0x7f1bf886aa674a182bb7f664f279aba00200c80e473fd28a9911401362301190"
+      ]
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "motoswap-ethereum",
+    "source": "https://docs.motoswap.org/dev/addresses · tests/data/first_run_dex_2026-11-26/motoswap_ethereum.json.gz · tests/data/first_run_dex_2026-11-26/motoswap_ethereum_wallets.json.gz",
+    "settings": {
+      "dex.kind": "motoswap_v2",
+      "dex.factory": "0x81c9cbc47d700da1777abd831d8da3f526dfae24",
+      "dex.quoter": "0x9f846ef584fd44d075b5e8df00ddb4416da61a80",
+      "dex.pair_runtime_hash": "0x14044459af17bc4f0f5aa2f658cb692add77d1302c29fe2aebab005eea9d1162",
+      "dex.pool_code_hashes": [
+        "0xeac8bc5d4e7e5e86e4d1b716aec4441c43ab7c1820d554975a7930e885a32448"
+      ],
+      "dex.motoswap_roles": [
+        "factory 0x81c9cbc47d700da1777abd831d8da3f526dfae24 0x181affcf333db5470c2d673ad9efef9bee1bfcde703c90ac81fc9a89f569dd3d 0xdef707fcd1f36ee85450fe75e13e7601652213f4 0x805cf1d0bf17de1ec79e1f774e360e138848bd6c354335b92a597fc0218c3c9c",
+        "fee_router 0x9f846ef584fd44d075b5e8df00ddb4416da61a80 0x181affcf333db5470c2d673ad9efef9bee1bfcde703c90ac81fc9a89f569dd3d 0x2eaf12022db5353a69c2632f0021687c8a24ac0b 0x00e96f6ec951b6cc6e3d2f7e62cec17fbdd531e6f3bb82ac8acf9c2a0a54234a",
+        "core 0x6f0b6a0d84c3cff6f273d5294cda147885225d5e 0x5ab672ad8eea86259c8036a6b82d4e66e5014f4c59167e1bdff1105681d900ee",
+        "beacon 0x365e8991d29d79dc6b56df59858f25fee1601f70 0x9346770d3b02164141e43e05bb71e4ca656464a89915d04e1f9667d88979d413",
+        "pair_impl 0xbe2c2c9c269a68812e17968569287b45dc9ce60d 0x62357e13fd9af1bbdb88529e69bb7a56b5a3fe68afe851cd659ad04a02ca9795",
+        "registry 0xfb8ca710b9b242e9f5027272592ef4c19d37e200 0xef5784257b126834a36be7a1165c309c2b8e7e90963fbfabc654da4d8cb0f15a",
+        "creator 0x6cdec7f49036ccf1bba940011040fa044cfe6d08 0x1e6e3e26b04dd6616b64eaef0f4943100173d492609502e4dd0372f1c2c2526e",
+        "vault 0x8cc7c8e76d9698e5b1026c720a94c1807e613e1f 0xe8a4e91bc0e01a12dddb027ed7cade392639ce528248a7b2a972f17113f6cbc6",
+        "collector 0xc13307272bbf73f2191ce57d0fb714c2a9200cf3 0x181affcf333db5470c2d673ad9efef9bee1bfcde703c90ac81fc9a89f569dd3d 0x4f831424179acd98cba775b950021345b68989da 0x67ba3eb34edce76159df5a457f38aada8134b5c4de9b257f570c01369fd6ac74"
+      ],
+      "dex.module_runtime_hashes": [
+        "0xd397cb5f4e1208d3d837fb9cf66c3d2185aaa55bc4ce0cd936bba7ad162bbdca"
       ]
     }
   }

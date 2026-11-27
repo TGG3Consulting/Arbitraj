@@ -56,6 +56,7 @@ pub async fn out_at(
         return Ok(p.amount_out);}
     if e.family.variant.llamma(){let at=super::super::pools::nami::block(ctx,block).await?;return Ok(Box::pin(super::super::pools::llamma_quotes::official(ctx,e,token_in,amount,false,&at)).await?.amount_out);}
     if e.family.variant.defiplaza(){let at=super::super::pools::nami::block(ctx,block).await?;return Box::pin(super::super::pools::defiplaza::out_at(ctx,e,token_in,amount,&at)).await;}
+    if e.family.variant==super::super::pools::family_variant::Variant::Motoswap{let at=super::super::pools::nami::block(ctx,block).await?;return Box::pin(super::super::pools::motoswap::official(ctx,e,token_in,amount,&at)).await;}
     if e.family.variant.mooniswap() {
         let at=super::super::pools::nami::block(ctx,block).await?;
         return Box::pin(super::super::pools::mooniswap::out_at(ctx,e,token_in,amount,&at)).await;

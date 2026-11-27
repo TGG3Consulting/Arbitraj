@@ -133,6 +133,7 @@ pub fn needs(f: &Family) -> bool {
             | Variant::LeetSwap
             | Variant::SolidlyClassic | Variant::SolidlyClone | Variant::SolidlyGenerator | Variant::SolidlyProxy | Variant::SolidlyPairOverride
             | Variant::EtherVista
+            | Variant::Motoswap
             | Variant::Oasis
             | Variant::DeltaSwap
             | Variant::FraxTwamm

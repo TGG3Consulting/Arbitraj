@@ -143,6 +143,7 @@ pub enum Variant {
     Brokerbot,
     Ammalgam,
     Mooniswap,
+    Motoswap,
     DefiPlazaMulti,
     DefiPlazaStable,
     Dagrow,
@@ -303,7 +304,7 @@ impl Variant {
     pub fn v2_block_state(self) -> bool {
         matches!(
             self,
-            Self::EmpireRaw | Self::EmpireModule | Self::EmpireNominal | Self::DegenSwap | Self::SafeSwapTrade | Self::Gemswap | Self::ToonSwap | Self::V2Create2LiveFee | Self::V2DualCreate2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::Memebox | Self::DeltaSwap | Self::Oasis | Self::EtherVista
+            Self::Motoswap | Self::EmpireRaw | Self::EmpireModule | Self::EmpireNominal | Self::DegenSwap | Self::SafeSwapTrade | Self::Gemswap | Self::ToonSwap | Self::V2Create2LiveFee | Self::V2DualCreate2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::Memebox | Self::DeltaSwap | Self::Oasis | Self::EtherVista
         )
     }
 }
@@ -388,6 +389,7 @@ pub fn of(kind: &str) -> Variant {
         "v2_diamond_router" => Variant::DiamondV2,
         "v2_diamond_create" => Variant::KewlV2,
         "gemswap_v2" => Variant::Gemswap,
+        "motoswap_v2" => Variant::Motoswap,
         "antfarm" => Variant::Antfarm,
         "bundles_swap" | "bundles_swap_v5" => Variant::Bundles,
         "eulerswap_v1" | "eulerswap_v1_module" => Variant::EulerV1,

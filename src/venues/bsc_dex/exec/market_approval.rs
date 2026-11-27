@@ -61,7 +61,7 @@ impl Market {
             },
             Market::BancorLegacy | Market::Mooniswap | Market::DefiPlaza | Market::YieldBasis | Market::BalancerV1 | Market::BancorV3 | Market::UniswapV1 | Market::Rubicon | Market::NativeFlat=>selected(mode),
             Market::Prop=>match mode {Some(VenueFallback{target,..})=>Spender::Selected(target),_=>Spender::Missing},
-            Market::Aqua | Market::Ammalgam | Market::Aktionariat | Market::Ranges | Market::SafeSwap | Market::Pendle => match mode {
+            Market::Motoswap | Market::Aqua | Market::Ammalgam | Market::Aktionariat | Market::Ranges | Market::SafeSwap | Market::Pendle => match mode {
                 Some(ProtectedWallet { target }) => Spender::Selected(target),
                 _ => Spender::Missing,
             },

@@ -427,12 +427,13 @@ async fn contracts(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> 
                 },
             },
         };
-        if matches!(c.family.variant,Variant::KewlV2 | Variant::V2ExactRouter | Variant::SafeSwapV2 | Variant::SafeSwapProxy | Variant::DegenSwap | Variant::SafeSwapTrade | Variant::V2DualCreate2LiveFee) && let Verdict::Taken(f)=&verdict {
+        if matches!(c.family.variant,Variant::Motoswap | Variant::KewlV2 | Variant::V2ExactRouter | Variant::SafeSwapV2 | Variant::SafeSwapProxy | Variant::DegenSwap | Variant::SafeSwapTrade | Variant::V2DualCreate2LiveFee) && let Verdict::Taken(f)=&verdict {
             let block=match &create_block {
                 Some(at)=>at,
                 None=>create_block.insert(super::nami::block(ctx,"latest").await),
             };
             let checked=match block {
+                Ok(at) if c.family.variant==Variant::Motoswap => Box::pin(super::motoswap::state(ctx,c.family,f.reference.address(),(f.token0,f.token1),at)).await.map(|_|()),
                 Ok(at) if c.family.variant==Variant::DegenSwap => Box::pin(super::degenswap::router(ctx,c.family,f.reference.address(),(f.token0,f.token1),at)).await.map(|_|()),
                 Ok(at) if c.family.variant.protected_router_wallet() => Box::pin(super::safeswap_trade::market(ctx,c.family,f.reference.address(),(f.token0,f.token1),at)).await.map(|_|()),
                 Ok(at) if c.family.variant==Variant::SafeSwapProxy => Box::pin(super::safeswap::pair(ctx,c.family,f.reference.address(),(f.token0,f.token1),at)).await,
@@ -489,7 +490,7 @@ fn found(
             | Variant::ToonSwap
             | Variant::V2ExactRouter
             | Variant::V2DualCreate2LiveFee
-            | Variant::WhiteSwap
+            | Variant::Motoswap | Variant::WhiteSwap
     ) {
         let hashes = super::verify_algebra_dir::hashes(ctx, c)?;
         if !hashes

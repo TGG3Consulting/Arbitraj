@@ -84,6 +84,7 @@ mod llamma_pricing;
 mod aqua_sizing;
 mod aqua_pricing;
 mod mooniswap_pricing;
+mod motoswap_pricing;
 mod defiplaza_pricing;
 mod yield_basis_pricing;
 mod balancer_v1_pricing;

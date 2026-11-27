@@ -87,6 +87,8 @@ pub struct SwapCtx {
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub(in crate::venues::bsc_dex) ambient:Option<Box<super::ambient_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
+    pub motoswap:Option<Box<super::motoswap_wallet::Proof>>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
     pub mooniswap:Option<Box<super::mooniswap_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub defiplaza:Option<Box<super::defiplaza_wallet::Proof>>,

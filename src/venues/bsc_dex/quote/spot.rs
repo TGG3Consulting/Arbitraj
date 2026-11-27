@@ -34,6 +34,7 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
     match &e.pool.state {
         // На пробе продажи нужен вход монет для обеспеченного выхода встречной валюты.
         PoolState::Ammalgam(s) => s.swap(e.coin == e.pool.token0,false,amount).map(|v|v.amount_in),
+        PoolState::Motoswap(s)=>s.swap(coin0,false,amount).map(|f|f.amount_in),
         PoolState::Mooniswap(s) => s.swap(e.coin,false,amount).map(|v|v.amount_in),
         PoolState::Brokerbot(s) => s.swap(e.coin,false,amount).map(|f| f.amount_in),
         PoolState::Empire(s) => s.quote(coin0, false, amount).map(|swap| swap.amount_in),

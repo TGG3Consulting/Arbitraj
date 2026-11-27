@@ -140,3 +140,5 @@ pub mod wombat_core;
 
 pub(crate) mod brokerbot;
 pub(super) mod defiplaza;
+
+mod motoswap;

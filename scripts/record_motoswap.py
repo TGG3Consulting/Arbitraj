@@ -44,7 +44,8 @@ def registry(reader, cap):
                  creator=word(cap, FEE, "creatorRegistry"), vault=word(cap, FEE, "creatorVault"),
                  collector=word(cap, FEE, "collector"), beacon=word(cap, FACTORY, "beacon"),
                  pair_impl=word(cap, FACTORY, "implementation"))
-    roles.update(factory_impl=slot(reader, FACTORY, IMPLEMENTATION), fee_impl=slot(reader, FEE, IMPLEMENTATION))
+    roles.update(factory_impl=slot(reader, FACTORY, IMPLEMENTATION), fee_impl=slot(reader, FEE, IMPLEMENTATION),
+                 collector_impl=slot(reader,roles["collector"],IMPLEMENTATION))
     if (word(cap, roles["core"], "factory"), word(cap, roles["core"], "WETH"),
         word(cap, roles["beacon"], "implementation"), word(cap, FACTORY, "quoteRegistry")) != (
             FACTORY, WETH, roles["pair_impl"], roles["registry"]):
@@ -89,7 +90,8 @@ def registry(reader, cap):
                      creator=decode(["address"],next(raws))[0]) for t in assets}
     allowed = {k:cap.one(FACTORY,"swapAllowed(address)",["address"],[v],["bool"])[0]
                for k,v in (("owner",OWNER),("fee_router",FEE),("core",roles["core"]))}
-    return dict(roles=roles,code={k:code(reader,a) for k,a in roles.items()}, tokens=tokens, pairs=entries,
+    return dict(fee_router_frozen=word(cap,FEE,"upgradesRenounced","bool"),fee_router_owner=word(cap,FEE,"owner"),
+                roles=roles,code={k:code(reader,a) for k,a in roles.items()}, tokens=tokens, pairs=entries,
                 allowed=allowed, init="0x"+init.hex(), lp_bps=word(cap,FACTORY,"swapFeeBps","uint256"),
                 protocol_bps=word(cap,FEE,"protocolFeeBps","uint256"), creator_bps=word(cap,FEE,"creatorFeeBps","uint256"))
 

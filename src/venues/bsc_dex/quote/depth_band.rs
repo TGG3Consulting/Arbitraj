@@ -189,6 +189,7 @@ fn side(
 ) -> Result<(U256, bool), String> {
     let pick = |amount_in: U256, amount_out: U256| if buy { amount_in } else { amount_out };
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::Motoswap(s),PoolKind::V2)=>{let i=usize::from(!zfo);xy_band(s.reserves[i],s.reserves[1-i],b,buy)},
         (PoolState::Mooniswap(s), PoolKind::V2) => {
             let (x,_)=s.reserves(token_in).ok_or("Mooniswap: виртуальный резерв недоступен")?;
             let growth=if buy{(1.0+b).sqrt()-1.0}else{1.0/(1.0-b).sqrt()-1.0};

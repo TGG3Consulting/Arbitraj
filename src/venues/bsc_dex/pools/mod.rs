@@ -529,6 +529,7 @@ pub(crate) mod ammalgam;
 mod ammalgam_state;
 mod ammalgam_step;
 pub(crate) mod mooniswap;
+pub(crate) mod motoswap;
 mod mooniswap_state;
 pub(crate) mod brokerbot;
 pub(crate) mod brokerbot_quotes;

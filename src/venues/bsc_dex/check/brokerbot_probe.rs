@@ -40,6 +40,25 @@ pub(super) fn after(
     Some(next)
 }
 
+/// Изолированная ветвь оплачивает одну акцию с кошелька и зачисляет её целиком отдельному получателю.
+pub(super) fn transferred(r: &[CallResult]) -> bool {
+    let [before, empty, _, received, after] = r else {
+        return false;
+    };
+    if !r.iter().all(CallResult::ok) {
+        return false;
+    }
+    let Some(start) = probe_calls::u256(before) else {
+        return false;
+    };
+    let Some(end) = probe_calls::u256(after) else {
+        return false;
+    };
+    start.checked_sub(end) == Some(U256::ONE)
+        && probe_calls::u256(empty) == Some(U256::ZERO)
+        && probe_calls::u256(received) == Some(U256::ONE)
+}
+
 pub(super) fn one_paid(m: &super::probe::Measured) -> bool {
     m.buy_expected == U256::ONE
         && m.buy_got == U256::ONE

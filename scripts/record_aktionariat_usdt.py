@@ -78,7 +78,20 @@ def capture(url):
             probe=run([*before,execute(legs,budget,units+1),buy,execute(reverse,units,got+1),execute(reverse,units,got),*accounts])
             assert [x["status"] for x in probe[start:start+4]]==["0x0","0x1","0x0","0x1"]
             assert [int(v["returnData"],16) for v in probe[-4:]]==new
-            controls.append(dict(broker=broker,cash=cash,share=share,units=units,pools=[weth_usdt,weth_cash],quote_path="0x"+path.hex(),
+            # Суверенный перевод проверяется на независимой ветви после той же покупки.
+            # Передаваемый объём равен всей проверяемой заявке, обе дельты берутся из balanceOf.
+            recipient="0x"+keccak(text="Arbitraj Aktionariat share-transfer recipient").hex()[-40:]
+            transfer=tx(share,"transfer(address,uint256)",["address",UINT],[recipient,units])
+            accounts_share=[balance(share,OWNER),balance(share,recipient)]
+            rr=run([*before,buy,*accounts_share,transfer,*accounts_share])
+            assert all(x["status"]=="0x1" for x in rr),(broker,units,"отдельный перевод акции")
+            old_sender,old_receiver=(int(x["returnData"],16) for x in rr[-5:-3])
+            new_sender,new_receiver=(int(x["returnData"],16) for x in rr[-2:])
+            assert old_receiver==0 and old_sender-new_sender==new_receiver-old_receiver==units
+            assert token_flow(rr[-3]["logs"],share,OWNER)==-units and token_flow(rr[-3]["logs"],share,recipient)==units
+            proof=dict(recipient=recipient,sender_before=str(old_sender),sender_after=str(new_sender),
+                       received_before=str(old_receiver),received_after=str(new_receiver),logs=rr[-3]["logs"],gas=rr[-3]["gasUsed"])
+            controls.append(dict(share_transfer=proof,broker=broker,cash=cash,share=share,units=units,pools=[weth_usdt,weth_cash],quote_path="0x"+path.hex(),
                 budget=str(budget),returned=str(got),cash_dust=str(new[2]-old[2]),before=list(map(str,old)),after_buy=list(map(str,mid)),
                 after=list(map(str,new)),gas=[int(x["gasUsed"],16) for x in (buy_receipt,sell_receipt)],logs=[buy_receipt["logs"],sell_receipt["logs"]],
                 buy=buy,sell=execute(reverse,units,got),refusals=[probe[start]["error"],probe[start+2]["error"]]))

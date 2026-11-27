@@ -242,18 +242,20 @@ pub(super) async fn run(
     let separate = e.family.variant.issuer_shares() && quarter.is_zero() && !bought.is_zero();
     let (all,transfer_sent) = if separate {
         let mut transfer = list[..base].to_vec();
+        transfer.push(pc::balance(wallet,coin,wallet));
         transfer.push(pc::balance(wallet,coin,empty));
         transfer.push(pc::transfer(wallet,coin,empty,U256::ONE));
         transfer.push(pc::balance(wallet,coin,empty));
+        transfer.push(pc::balance(wallet,coin,wallet));
         let (mut sale,mut send) = tokio::try_join!(
             simulate::run_anchored(ctx,&list[..t.transfer],&values,&over,at,hash),
             simulate::run_anchored(ctx,&transfer,&values,&over,at,hash)
         )?;
         let measured=send.split_off(base);
-        if measured.len()!=3 || measured.iter().any(|r|!r.ok()) || pc::u256(&measured[0])!=Some(U256::ZERO) {
+        if !super::brokerbot_probe::transferred(&measured) {
             return Err(ctx.err(ErrorCode::NoRoute,"Aktionariat: отдельный перевод целой акции не измерен"));
         }
-        sale.extend(measured.into_iter().skip(1));
+        sale.extend(measured.into_iter().skip(2).take(2));
         (sale,U256::ONE)
     } else {
         (simulate::run_anchored(ctx,&list,&values,&over,at,hash).await?,quarter)

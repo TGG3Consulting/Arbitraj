@@ -5,6 +5,9 @@ import {IBalancerVault, IERC20} from "./IPools.sol";
 
 interface IFluidDexLite {
     struct DexKey { address token0; address token1; bytes32 salt; }
+    struct TransferParams { address to; bool isCallback; bytes callbackData; bytes extraData; }
+    function swapHop(address[] calldata path, DexKey[] calldata keys, int256 specified, uint256[] calldata limits,
+                     TransferParams calldata transfer) external payable returns (uint256 amount);
     function readFromStorage(bytes32 slot) external view returns (uint256);
     function swapSingle(DexKey calldata pool, bool forward, int256 specified, uint256 limit,
                         address recipient, bool callback, bytes calldata data, bytes calldata extra)
@@ -35,6 +38,17 @@ contract FluidDexLiteWallet {
     error Payment();
     event Filled(bytes32 indexed market, address indexed payer, address indexed recipient,
                  address input, address output, uint256 spent, uint256 received);
+
+    event HopFilled(bytes32 indexed route, address indexed payer, address indexed recipient,
+                    address input, address output, uint256 spent, uint256 received);
+
+    struct Balances {
+        uint256 input;
+        uint256 output;
+        uint256 nativeAmount;
+        uint256 wrappedAmount;
+        bool usesNative;
+    }
 
     constructor(IFluidDexLite core, IFluidWrapped weth) {
         if (address(core).code.length == 0 || address(weth).code.length == 0) revert Market();
@@ -76,38 +90,76 @@ contract FluidDexLiteWallet {
 
     function settle(bytes32 market, address input, address output, uint256 budget, uint256 minimum,
                     bool exactOut, uint256 deadline, address recipient) private returns (uint256 spent, uint256 received) {
-        if (payer != address(0) || input == output || input == address(0) || output == address(0) ||
-            recipient == address(0) || recipient == address(this) || block.timestamp > deadline ||
-            budget == 0 || minimum == 0 || budget > uint256(type(int256).max) ||
-            minimum > uint256(type(int256).max)) revert Order();
         IFluidDexLite.DexKey memory k = resolve(market);
         bool forward = input == asset(k.token0);
         address physicalIn = forward ? k.token0 : k.token1;
         address physicalOut = forward ? k.token1 : k.token0;
         if (asset(physicalIn) != input || asset(physicalOut) != output) revert Market();
-        payer = msg.sender;
-        source = physicalIn;
-        remaining = budget;
-        uint256 beforeIn = IERC20(input).balanceOf(msg.sender);
-        uint256 beforeOut = IERC20(output).balanceOf(recipient);
-        uint256 beforeNative = address(this).balance;
-        uint256 beforeWrapped = physicalIn == NATIVE || physicalOut == NATIVE ? wrapped.balanceOf(address(this)) : 0;
+        Balances memory before = begin(input, output, physicalIn, physicalOut, budget, minimum, deadline, recipient);
         uint256 actual = dex.swapSingle(k, forward, exactOut ? -int256(minimum) : int256(budget),
                                         exactOut ? budget : minimum, physicalOut == NATIVE ? address(this) : recipient,
                                         true, "", "");
+        (spent, received) = finish(before, input, output, physicalOut, recipient,
+                                   exactOut ? actual : budget, exactOut ? minimum : actual, minimum);
+        emit Filled(market, msg.sender, recipient, input, output, spent, received);
+    }
+
+    function hopVersion() external pure returns (uint256) { return 1; }
+
+    function executeHop(bytes32[] calldata markets, address[] calldata path, uint256 amountIn,
+                        uint256 minimum, uint256 deadline) external returns (uint256 spent, uint256 received) {
+        if (markets.length < 2 || path.length != markets.length + 1) revert Order();
+        address[] memory physical = new address[](path.length);
+        IFluidDexLite.DexKey[] memory keys = new IFluidDexLite.DexKey[](markets.length);
+        for (uint256 i; i < markets.length; ++i) {
+            keys[i] = resolve(markets[i]);
+            bool forward = asset(keys[i].token0) == path[i];
+            address from = forward ? keys[i].token0 : keys[i].token1;
+            address to = forward ? keys[i].token1 : keys[i].token0;
+            if (path[i] == path[i+1] || asset(from) != path[i] || asset(to) != path[i+1] ||
+                (i > 0 && physical[i] != from)) revert Market();
+            physical[i] = from;
+            physical[i+1] = to;
+        }
+        uint256 last = markets.length;
+        Balances memory before = begin(path[0], path[last], physical[0], physical[last], amountIn, minimum, deadline, msg.sender);
+        uint256[] memory limits = new uint256[](last);
+        limits[last-1] = minimum;
+        IFluidDexLite.TransferParams memory fund = IFluidDexLite.TransferParams(
+            physical[last] == NATIVE ? address(this) : msg.sender, true, "", "");
+        uint256 out = dex.swapHop(physical, keys, int256(amountIn), limits, fund);
+        (spent, received) = finish(before, path[0], path[last], physical[last], msg.sender, amountIn, out, minimum);
+        emit HopFilled(keccak256(abi.encode(markets,path)), msg.sender, msg.sender, path[0], path[last], spent, received);
+    }
+
+    function begin(address input, address output, address physicalIn, address physicalOut, uint256 budget,
+                   uint256 minimum, uint256 deadline, address recipient) private returns (Balances memory snapshot) {
+        if (payer != address(0) || input == output || input == address(0) || output == address(0) ||
+            recipient == address(0) || recipient == address(this) || block.timestamp > deadline ||
+            budget == 0 || minimum == 0 || budget > uint256(type(int256).max) ||
+            minimum > uint256(type(int256).max)) revert Order();
+        payer = msg.sender;
+        source = physicalIn;
+        remaining = budget;
+        snapshot.input = IERC20(input).balanceOf(msg.sender);
+        snapshot.output = IERC20(output).balanceOf(recipient);
+        snapshot.nativeAmount = address(this).balance;
+        snapshot.usesNative = physicalIn == NATIVE || physicalOut == NATIVE;
+        if (snapshot.usesNative) snapshot.wrappedAmount = wrapped.balanceOf(address(this));
+    }
+
+    function finish(Balances memory before, address input, address output, address physicalOut, address recipient,
+                    uint256 expectedDebit, uint256 nominalOutput, uint256 minimum) private returns (uint256 spent, uint256 received) {
         if (physicalOut == NATIVE) {
-            uint256 credit = address(this).balance - beforeNative;
-            if (credit != (exactOut ? minimum : actual)) revert Payment();
+            uint256 credit = address(this).balance - before.nativeAmount;
+            if (credit != nominalOutput) revert Payment();
             wrapped.deposit{value: credit}();
             tokenCall(address(wrapped), abi.encodeCall(IERC20.transfer, (recipient, credit)));
         }
-        spent = beforeIn - IERC20(input).balanceOf(msg.sender);
-        received = IERC20(output).balanceOf(recipient) - beforeOut;
-        if (paid != (exactOut ? actual : budget) || spent != paid || received < minimum ||
-            (exactOut && spent > budget) || address(this).balance != beforeNative ||
-            ((physicalIn == NATIVE || physicalOut == NATIVE) && wrapped.balanceOf(address(this)) != beforeWrapped))
-            revert Payment();
-        emit Filled(market, msg.sender, recipient, input, output, spent, received);
+        spent = before.input - IERC20(input).balanceOf(msg.sender);
+        received = IERC20(output).balanceOf(recipient) - before.output;
+        if (paid != expectedDebit || spent != paid || received < minimum || address(this).balance != before.nativeAmount ||
+            (before.usesNative && wrapped.balanceOf(address(this)) != before.wrappedAmount)) revert Payment();
         payer = address(0);
         source = address(0);
         remaining = 0;

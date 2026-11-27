@@ -27,9 +27,10 @@ def run(url, original, wallet):
     env={OWNER:{"balance":hex(2*10**18)},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
           "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
     results=[]
-    for source,target in [(USDC,USDE),(USDE,USDC)]:
+    for path in ([USDC,USDT,USDE], [USDE,USDT,USDC],
+                 [USDC,USDT,USDC,USDT,USDE]):
+        source,target=path[0],path[-1]
         amount=10**(18 if source==USDE else 6)
-        path=[source,USDT,target]
         entries=[keys[frozenset(pair)] for pair in zip(path,path[1:])]
         market=[x[0] for x in entries]
         terms=["address[]",DEX_KEY+"[]","int256"]
@@ -38,13 +39,16 @@ def run(url, original, wallet):
         assert aq["status"]=="0x1"
         expected=int(aq["returnData"],16)
         assert expected>0
-        for form in ["original","v5"]:
-            spender=CORE if form=="original" else EXEC
+        for form in ["original","v5","protected"]:
+            spender={"original":CORE,"v5":EXEC,"protected":module}[form]
             prep=[create]+independently_fund(source,end)[:-1]+[approve(source,spender,amount)]
             def swap(floor):
                 if form=="original":
                     fields=terms+["uint256[]","(address,bool,bytes,bytes)"]
-                    return tx(CORE,method("swapHop",fields),fields,[path,market,amount,[0,floor],(OWNER,False,b"",b"")])
+                    return tx(CORE,method("swapHop",fields),fields,[path,market,amount,[0]*(len(market)-1)+[floor],(OWNER,False,b"",b"")])
+                if form=="protected":
+                    fields=["bytes32[]","address[]","uint256","uint256","uint256"]
+                    return tx(module,method("executeHop",fields),fields,[[p[1] for p in entries],path,amount,floor,end])
                 fields=["address","uint256","address","uint256","uint256",STEP+"[]"]
                 steps=[(17,module,path[i],path[i+1],10000,encode(["bytes32"],[p[1]])) for i,p in enumerate(entries)]
                 return tx(EXEC,method("execute",fields),fields,[source,amount,target,floor,end,steps])
@@ -58,7 +62,14 @@ def run(url, original, wallet):
             start,middle,finish=state(i),state(i+v+1),state(paid+1)
             assert start==middle and (start[0]-finish[0],finish[1]-start[1])==(amount,expected)
             assert start[2:]==finish[2:]
-            results.append(dict(form=form,source=source,target=target,spent=str(amount),received=str(expected),gas=int(rec[paid]["gasUsed"],16),
+            ordered=[int(log["data"][2:66],16)&(2**64-1) for log in rec[paid]["logs"]
+                     if log["address"].lower()==CORE and log["topics"]==["0x"+keccak(text="LogSwap(uint256,uint256)").hex()]]
+            assert ordered==[int.from_bytes(p[1][:8],"big") for p in entries]
+            if form=="protected":
+                receipt=next(log for log in rec[paid]["logs"] if log["address"].lower()==module and log["topics"][0]=="0x"+keccak(text="HopFilled(bytes32,address,address,address,address,uint256,uint256)").hex())
+                assert receipt["topics"][1]=="0x"+keccak(encode(["bytes32[]","address[]"],[[p[1] for p in entries],path])).hex()
+                assert [int(t,16) for t in receipt["topics"][2:]]==[int(OWNER,16)]*2
+            results.append(dict(form=form,path=path,markets=["0x"+p[1].hex() for p in entries],source=source,target=target,spent=str(amount),received=str(expected),gas=int(rec[paid]["gasUsed"],16),
                                 tx=calls[paid],strict=rec[i+v]["error"],logs=rec[paid]["logs"]))
     return dict(head=head,payments=results)
 
@@ -68,7 +79,7 @@ if __name__=="__main__":
     def load(name):
         return json.loads(gzip.decompress((p/name).read_bytes()))
     original=load("fluid_dex_lite_ethereum.json.gz")["active"]
-    wallet=load("fluid_dex_lite_wallet.json.gz")
+    wallet=json.loads(Path(sys.argv[2]).read_bytes()) if len(sys.argv)>2 else load("fluid_dex_lite_wallet.json.gz")
     for url in ("https://eth.drpc.org","https://rpc.mevblocker.io","https://ethereum-rpc.publicnode.com"):
         try:
             report=run(url,original,wallet)

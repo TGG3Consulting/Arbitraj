@@ -1,6 +1,9 @@
 //! Диспетчер Baseline Mercury делегирует ABI-селекторы семи компонентам на контрольном снимке.
 //! Сверяет весь текущий реестр и код компонентов на одной высоте. Получатель, валюта резерва
 //! и физический PoolId проверяются отдельно для каждого рынка, включая новые Initialize.
+#[path = "baseline_flags.rs"]
+mod flags;
+
 use super::{
     launch_keys::{Role, invalid},
     nami_batch as batch,
@@ -156,7 +159,7 @@ pub(super) async fn components(
             owners.push(*component);
         }
     }
-    if routes.is_empty() {
+    if routes.is_empty() || !flags::covered(relay, &seen) {
         return Err(invalid(ctx));
     }
     let checked = aggregate(ctx, at, &routes).await?;

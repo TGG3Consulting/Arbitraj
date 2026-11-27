@@ -25,6 +25,7 @@ fn wallet_limits_and_identity_survive_serialization() {
             "../../../../tests/data/first_run_dex_2026-11-26/lif3_ethereum_wallets.json.gz"
         )
         .as_slice(),
+        include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/blueprint_ethereum_wallets.json.gz").as_slice(),
         include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/vvs_ethereum_wallets.json.gz").as_slice(),
     ] {
         let archive: Value = serde_json::from_reader(GzDecoder::new(raw)).unwrap();

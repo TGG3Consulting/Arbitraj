@@ -58,8 +58,13 @@ def recovered(network):
         f"Реестр Relay вернул семь компонентов, 113 распределённых ABI-селекторов и разрешённый пул. При расчёте вновь сверяются весь реестр, хеши, маршруты, обратимое соответствие ключа и bToken, валюта резерва и обе паузы. [Привязки и паузы](../{DATA/'baseline_base_components.json.gz'}). "
         f"[Выплаты BSR/cbBTC](../{DATA/'baseline_base_wallets.json.gz'}).",
         "", "У Omni Flux перечислен 71 NFT позиции. Их 38 уникальных ключей проверены через CLPoolManager.poolIdToPoolKey; "
-        "на 11 ключах была активная ликвидность и у всех 38 адрес хука нулевой. Охват ограничен этой выборкой CL; отдельный BinPoolManager установлен через роутер. "
-        f"[Роли Flux и записи CL PositionManager](../{DATA/'omni_flux_base_directory.json.gz'}).",
+        "на 11 ключах была активная ликвидность и у всех 38 адрес хука нулевой. Все 38 индивидуальных записей индексатора имеют ID omni-exchange-v4-base. В архиве исполнены 36 ног штатного Flux Router и восемь ног через V5. Результаты относятся к указанным объёмам и кошелькам. "
+        f"[Роли Flux и записи CL PositionManager](../{DATA/'omni_flux_base_directory.json.gz'}) · [Котировки, поступления, ограничения](../{DATA/'omni_flux_cl_wallets.json.gz'}).",
+        "", "Treble LimitOrderManager сообщил 274 эпохи, 230 с флагом filled и восемь с ненулевой ликвидностью без этого флага. "
+        "Шесть базовых пулов подтверждаются фабрикой и индивидуальными записями индексатора Treble V4. Для мгновенной покупки и продажи используется соответствующий пул. "
+        f"[Эпохи, рынки и фактические вызовы](../{DATA/'treble_limit_epochs.json.gz'}).",
+        "", "DeJungle и Ensurer: поиск по названию дал ноль пулов. В открытом репозитории DeJungle есть README. Адрес продажи Ensurer на BSC не содержит кода на контрольном блоке Base. Для атрибуции Base нужны первичный адрес фабрики и связанный с ней рынок. "
+        f"[Ответы каталогов и проверка адреса](../{DATA/'base_catalog_identity.json'}).",
         "", f"[Канонические вызовы и квитанция деплоя](../{DATA/'base_recovered_markets.json'}) · [Спецификация идентификатора bToken](https://www.baseline.markets/docs/contracts/api).",""]
 
 
@@ -80,7 +85,12 @@ def registry_row(network,id):
         return b["pool_id"],b["initialize"]["address"],"квитанция deploy → Initialize → ключ","DEX-41 · BSR/cbBTC, 8 выплат Router/V5; профиль Mercury сверяет действующие компоненты и их селекторы"
     if id=="omni-exchange-v4-base":
         d=evidence("omni_flux_base_directory.json.gz")
-        return d["markets"][0]["id"],d["roles"]["clPoolManager"],"Flux Router, NFT и канонические PoolKey","DEX-41 · у Flux 38 подтверждённых рынков CL; атрибуция идентификатора индексатора остаётся открытой"
+        return d["markets"][0]["id"],d["roles"]["clPoolManager"],"Flux Router, NFT и канонические PoolKey","DEX-41 · 38/38 ключей CL отнесены к ID, 36 штатных выплат и 8 V5 на проверенных объёмах"
+    if id=="treble-v4-limit":
+        d=evidence("treble_limit_epochs.json.gz")
+        return d["markets"][0]["pool"],d["factory"],"274 epochInfos → 6 базовых пулов Treble V4","DEX-41 · лимитные заявки на существующих рынках, исполнение зависит от пересечения диапазона"
+    if id in ("dejungle","ensurer"):
+        return None,None,"проверены поиск по названию и опубликованные проектные материалы","DEX-41 · недостаточно исходных данных для привязки фабрики и рынка Base"
     if id=="marswap-base":
         with gzip.open(DATA/"marswap-base.json.gz") as f:d=json.load(f)
         return None,d["factory"],"allPairsLength = 0 и INIT_CODE_PAIR_HASH","фабрика проверена на Base; 0 зарегистрированных пар на снимке"

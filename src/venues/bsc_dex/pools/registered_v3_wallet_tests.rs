@@ -89,3 +89,23 @@ fn lif3_actual_payouts_match_router_executor_and_price() {
         6,
     );
 }
+
+#[test]
+fn blueprint_outputs_match_56_settlements_through_each_wire() {
+    let data:Value=serde_json::from_reader(GzDecoder::new(include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/blueprint_ethereum_wallets.json.gz").as_slice())).unwrap();
+    let markets=data["markets"].as_array().unwrap();
+    let rows=data["cases"].as_array().unwrap();
+    assert_eq!((markets.len(),rows.len()),(33,112));
+    let mut groups=HashMap::new();
+    for row in rows {
+        let key=(row["pool"].as_str().unwrap(),row["source"].as_str().unwrap(),units(&row["spent"]),units(&row["received"]));
+        let modes=groups.entry(key).or_insert_with(HashSet::new);
+        assert!(modes.insert(row["wire"].as_str().unwrap()));
+        assert_eq!(units(&row["quote"][0]),key.3);
+        assert_eq!(units(&row["after"][1])-units(&row["before"][1]),key.3);
+        assert_eq!(units(&row["before"][0])-units(&row["after"][0]),key.2);
+        assert!(row["minimum_plus_one"].is_object() && row["expired"].is_object());
+    }
+    assert_eq!(groups.len(),56);
+    assert!(groups.values().all(|m|m.contains("v5") && m.contains("router")));
+}

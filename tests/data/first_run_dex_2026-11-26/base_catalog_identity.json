@@ -1,0 +1,174 @@
+{
+  "dejungle-brand": {
+    "url": "https://api.geckoterminal.com/api/v2/search/pools?query=deJungle",
+    "status": 200,
+    "data": []
+  },
+  "ensurer-brand": {
+    "url": "https://api.geckoterminal.com/api/v2/search/pools?query=Ensurer",
+    "status": 200,
+    "data": []
+  },
+  "treble-physical": {
+    "url": "https://api.geckoterminal.com/api/v2/networks/base/pools/0x09f3805c6743d9d0548ffe5657a985a057f82a7b",
+    "status": 200,
+    "data": {
+      "id": "base_0x09f3805c6743d9d0548ffe5657a985a057f82a7b",
+      "type": "pool",
+      "attributes": {
+        "base_token_price_usd": "1730.49",
+        "base_token_price_native_currency": "1.0",
+        "quote_token_price_usd": "61619.1487806987",
+        "quote_token_price_native_currency": "35.6204287428503",
+        "base_token_price_quote_token": "0.02807377775",
+        "quote_token_price_base_token": "35.6204287429",
+        "address": "0x09f3805c6743d9d0548ffe5657a985a057f82a7b",
+        "name": "WETH / cbBTC 0.05%",
+        "pool_name": "WETH / cbBTC",
+        "pool_fee_percentage": "0.05",
+        "pool_created_at": "2026-02-25T01:16:57Z",
+        "fdv_usd": "495477250.569683",
+        "market_cap_usd": "505150479.873584",
+        "price_change_percentage": {
+          "m5": "-0.073",
+          "m15": "0.643",
+          "m30": "0.948",
+          "h1": "1.889",
+          "h6": "1.578",
+          "h24": "1.655"
+        },
+        "transactions": {
+          "m5": {
+            "buys": 0,
+            "sells": 3,
+            "buyers": 0,
+            "sellers": 3,
+            "unique_traders": 3
+          },
+          "m15": {
+            "buys": 7,
+            "sells": 6,
+            "buyers": 7,
+            "sellers": 6,
+            "unique_traders": 13
+          },
+          "m30": {
+            "buys": 9,
+            "sells": 7,
+            "buyers": 9,
+            "sellers": 7,
+            "unique_traders": 14
+          },
+          "h1": {
+            "buys": 12,
+            "sells": 12,
+            "buyers": 11,
+            "sellers": 10,
+            "unique_traders": 18
+          },
+          "h6": {
+            "buys": 23,
+            "sells": 27,
+            "buyers": 12,
+            "sellers": 15,
+            "unique_traders": 24
+          },
+          "h24": {
+            "buys": 81,
+            "sells": 79,
+            "buyers": 31,
+            "sellers": 29,
+            "unique_traders": 48
+          }
+        },
+        "volume_usd": {
+          "m5": "30.733776368",
+          "m15": "168.9079276146",
+          "m30": "210.3735318053",
+          "h1": "332.1465486778",
+          "h6": "644.2676468786",
+          "h24": "1789.2706073545"
+        },
+        "reserve_in_usd": "44763.7962",
+        "locked_liquidity_percentage": null
+      },
+      "relationships": {
+        "base_token": {
+          "data": {
+            "id": "base_0x4200000000000000000000000000000000000006",
+            "type": "token"
+          }
+        },
+        "quote_token": {
+          "data": {
+            "id": "base_0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+            "type": "token"
+          }
+        },
+        "dex": {
+          "data": {
+            "id": "treble-v4",
+            "type": "dex"
+          }
+        }
+      }
+    }
+  },
+  "treble-limit-markets": {
+    "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/treble-v4-limit/pools?page=1",
+    "status": 200,
+    "data": []
+  },
+  "ensurer-primary-sale": {
+    "url": "https://www.pinksale.finance/launchpad/0x59D68Fb900e1F48DF53d582B82cDAfC5887dd624?chain=BSC",
+    "status": 200
+  },
+  "ensurer-site": {
+    "url": "https://ensurer.xyz/",
+    "status": null,
+    "error": "HTTPSConnectionPool(host='ensurer.xyz', port=443): Max retries exceeded with url: / (Caused by ConnectTimeoutError(<HTTPSConnection(host='ensurer.xyz', port=443) at 0x249f92aa780>, 'Connection to"
+  },
+  "ensurer-app": {
+    "url": "https://app.ensurer.xyz/",
+    "status": null,
+    "error": "HTTPSConnectionPool(host='app.ensurer.xyz', port=443): Max retries exceeded with url: / (Caused by ConnectTimeoutError(<HTTPSConnection(host='app.ensurer.xyz', port=443) at 0x249f92aade0>, 'Conne"
+  },
+  "dejungle-source-tree": {
+    "sha": "0290e7192bb9896fdfe1488812f555711a4d39ce",
+    "url": "https://api.github.com/repos/dejungle/dejungle.github.io/git/trees/0290e7192bb9896fdfe1488812f555711a4d39ce",
+    "tree": [
+      {
+        "path": "README.md",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "74ffbe2ad0978bc07d1077a7f3a39c9f6fce7374",
+        "size": 21,
+        "url": "https://api.github.com/repos/dejungle/dejungle.github.io/git/blobs/74ffbe2ad0978bc07d1077a7f3a39c9f6fce7374"
+      }
+    ],
+    "truncated": false
+  },
+  "dejungle-protocol": {
+    "url": "https://api.llama.fi/protocol/dejungle",
+    "status": 400,
+    "data": "Protocol not found"
+  },
+  "dejungle-gecko": {
+    "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/dejungle/pools?page=1",
+    "status": 429,
+    "rows": []
+  },
+  "ensurer-gecko": {
+    "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/ensurer/pools?page=1",
+    "status": 200,
+    "rows": []
+  },
+  "base-code-for-sale-address": {
+    "selector": {
+      "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "requireCanonical": true
+    },
+    "address": "0x59d68fb900e1f48df53d582b82cdafc5887dd624",
+    "code": "0x"
+  }
+}

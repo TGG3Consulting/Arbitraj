@@ -166,6 +166,7 @@ pub mod tick_bin_spot;
 pub mod usable_reuse;
 pub(super) mod v2_execution;
 mod v2_fallback;
+mod yield_basis_sizing;
 mod registered_v3_pricing;
 mod market_selection;
 pub(super) fn uses_wallet_quoter(variant: super::pools::family_variant::Variant) -> bool {

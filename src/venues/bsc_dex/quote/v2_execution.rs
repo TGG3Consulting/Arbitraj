@@ -76,11 +76,15 @@ pub(super) async fn option(
     use alloy_primitives::U256;
     let ctx = &q.ctx;
     let decimals = (i.coin_dec, i.usdt_dec);
-    let buy=match &execution.wire{
+    let measured=if let (crate::core::types::PoolState::YieldBasisPool(s),Some(head))=(&e.pool.state,h){
+        let fill=Box::pin(super::yield_basis_sizing::paid(q,i,&e,s,payer,&execution,head)).await?;
+        Some(fill)
+    }else{None};
+    let buy=measured.as_ref().map(|f|direct::BuyWire::Measured{spent:f.charged,received:f.received}).unwrap_or(match &execution.wire{
         v2_wallet_sim::Wire::BalancerV1(t) if t.desired.is_some()=>direct::BuyWire::BalancerTarget,
         v2_wallet_sim::Wire::BancorV3(t) if t.desired.is_some()=>direct::BuyWire::BancorTarget,
         _=>direct::BuyWire::Forward,
-    };
+    });
     let (mut c, _) = direct::best_with(q,&i.asset,i.side,i.qty,vec![e],decimals,buy)?;
     if let crate::core::types::PoolState::Antfarm(book)=&c.entry.pool.state{
         let (input,output)=if i.side==Side::Buy{(i.usdt,i.coin)}else{(i.coin,i.usdt)};
@@ -266,14 +270,14 @@ pub(super) async fn option(
             minimum,
             wire: execution.wire,
         };
-        let fill = v2_wallet_sim::measure(
+        let fill = if let Some(fill)=measured.filter(|_|i.side==Side::Sell){fill}else{v2_wallet_sim::measure(
             ctx,
             head,
             o,
             super::oasis_pricing::is_oasis(&c.entry) || super::vista_pricing::is_vista(&c.entry)
                 || super::vault_pricing::enabled(&c.entry) || super::module_pricing::enabled(&c.entry) || vista_value.is_some() || c.entry.family.variant.exact_router() || c.entry.family.variant==super::super::pools::family_variant::Variant::SafeSwapV2 || super::ekubo_v2_pricing::enabled(&c.entry) || super::super::exec::mint_club_direct::enabled(&c.entry),
         )
-        .await?;
+        .await?};
         if let Some(value) = vista_value {
             Box::pin(super::vista_cash::funded(
                 q, head, payer, value, &fill, i.gas,

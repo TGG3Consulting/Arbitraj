@@ -345,8 +345,18 @@ pub(super) async fn final_standard(
     qty: Decimal,
     budget: Decimal,
     step: Decimal,
-    mut depth: Option<&mut super::final_depth::Observation>,
+    depth: Option<&mut super::final_depth::Observation>,
 ) -> Result<Calc, String> {
+    // Standard trade budgets are in physical USDT. Mixed settlement accounts
+    // for its conversion principal separately.
+    let cash=(cx.usdt.ticker=="USDT" && cx.quote.first()==Some(&cx.usdt.ticker)).then_some(cx.usdt.contract).flatten();
+    crate::gateway::quote_stage::with_buy_budget(&cx.dir.buy_on,cash,budget,
+        final_budgeted(core,cx,qty,budget,step,depth)).await
+}
+async fn final_budgeted(
+    core:&Core,cx:&DirCtx,qty:Decimal,budget:Decimal,step:Decimal,
+    mut depth:Option<&mut super::final_depth::Observation>,
+)->Result<Calc,String>{
     use super::final_depth::evaluate;
     // Решение 111: исполнитель (KyberSwap) даёт маршрут не на весь объём — пересчёт на то, что он реально исполнит
     // (вниз до шага), а не отказ. Живой случай 02.11: RVV — 359317.97 из 360732.6 (99.6%), прибыль почти та же,

@@ -21,6 +21,8 @@ use crate::settings::store::Store;
 tokio::task_local! {
     static FINAL: bool;
     static SETTLEMENT: ();
+    static BUY_BUDGET: Option<(VenueId, alloy_primitives::Address, rust_decimal::Decimal)>;
+
 }
 
 /// Выполняет работу как финальную котировку расчёта. Принимает: работу. Возвращает: её результат. Ошибок нет.
@@ -38,6 +40,28 @@ pub async fn final_if<F: Future>(on: bool, work: F) -> F::Output {
     }
 }
 
+/// Principal in the specific cash token available for this final purchase. An
+/// unrelated venue or another token cannot interpret the number as its budget.
+pub async fn with_buy_budget<F: Future>(
+    venue: &VenueId,
+    cash: Option<alloy_primitives::Address>,
+    amount: rust_decimal::Decimal,
+    work: F,
+) -> F::Output {
+    BUY_BUDGET
+        .scope(cash.map(|token| (venue.clone(), token, amount)), work)
+        .await
+}
+pub fn buy_budget(venue: &str, cash: alloy_primitives::Address) -> Option<rust_decimal::Decimal> {
+    BUY_BUDGET
+        .try_with(|scope| {
+            scope
+                .as_ref()
+                .and_then(|(v, t, n)| (v.0 == venue && *t == cash).then_some(*n))
+        })
+        .ok()
+        .flatten()
+}
 /// Идёт ли сейчас финальная котировка расчёта. Не задано — нет. Ошибок нет.
 pub fn is_final() -> bool {
     FINAL.try_with(|f| *f).unwrap_or(false)
@@ -72,8 +96,34 @@ pub fn kyber_final(settings: &Store, venue: &VenueId) -> bool {
 pub fn settlement_quote_supported(q: &crate::core::types::Quote, firm: bool) -> bool {
     use crate::core::types::{CostKind, RouteMode};
     q.route.as_ref().is_some_and(|r| match r.mode {
-        RouteMode::Direct | RouteMode::Smart | RouteMode::Orderbook(_) | RouteMode::Relay(_) => r.executable,
+        RouteMode::Direct | RouteMode::Smart | RouteMode::Orderbook(_) | RouteMode::Relay(_) => {
+            r.executable
+        }
         RouteMode::OrderbookIndicative | RouteMode::RelayIndicative => !firm,
         _ => false,
     }) && !q.costs.iter().any(|c| c.kind == CostKind::ApproveGas)
+}
+
+#[cfg(test)]
+mod budget_tests {
+    use super::*;
+    use alloy_primitives::Address;
+    use rust_decimal::Decimal;
+    #[tokio::test]
+    async fn principal_is_scoped_to_the_buying_venue_and_physical_cash() {
+        let venue = VenueId("eth_dex".into());
+        let token = Address::repeat_byte(1);
+        let budget = Decimal::from(2);
+        with_buy_budget(&venue, Some(token), budget, async {
+            assert_eq!(buy_budget("eth_dex", token), Some(budget));
+            assert!(buy_budget("base_dex", token).is_none());
+            assert!(buy_budget("eth_dex", Address::repeat_byte(2)).is_none());
+            with_buy_budget(&venue, None, budget, async {
+                assert!(buy_budget("eth_dex", token).is_none());
+            })
+            .await;
+        })
+        .await;
+        assert!(buy_budget("eth_dex", token).is_none());
+    }
 }

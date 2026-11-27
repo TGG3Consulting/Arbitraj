@@ -88,3 +88,56 @@ fn original_views_and_debt_boundary_match_both_deployed_versions() {
     }
     assert_eq!((views, paid, unsafe_max), (66, 28, 16));
 }
+
+#[test]
+fn usdt_routes_pay_both_physical_hops_at_the_same_parent() {
+    let book = archive(include_bytes!(
+        "../../../tests/data/first_run_dex_2026-11-26/yield_basis_usdt_routes.json.gz"
+    ));
+    let origins = archive(include_bytes!(
+        "../../../tests/data/first_run_dex_2026-11-26/yield_basis_ethereum.json.gz"
+    ));
+    assert_eq!(book["selector"], origins["selector"]);
+    let assets = book["delta_order"].as_array().unwrap();
+    assert_eq!(book["coins"], serde_json::json!([assets[0], assets[1]]));
+    assert_ne!(assets[0], assets[1]);
+    let mut samples = std::collections::BTreeSet::new();
+    for r in book["rows"].as_array().unwrap() {
+        let sell = r["source"] == assets[2];
+        let (src, dst) = if sell { (2, 0) } else { (0, 2) };
+        assert_eq!(r["source"], assets[src]);
+        assert_eq!(r["target"], assets[dst]);
+        let d = r["wallet_deltas"].as_array().unwrap();
+        assert_eq!(d.len(), 9);
+        assert_eq!(
+            d[src].as_str().unwrap(),
+            format!("-{}", r["spent"].as_str().unwrap())
+        );
+        assert_eq!(d[dst], r["received"]);
+        assert_eq!(d[1], "0");
+        assert!(d[3..].iter().all(|n| n == "0"));
+        assert!(raw(&r["received"]) > U256::ZERO);
+        let cash = &r[if sell { "received" } else { "spent" }];
+        assert_ne!(
+            raw(&r["bridge_crvusd_raw"]),
+            raw(cash) * U256::from(1_000_000_000_000u64)
+        );
+        assert_eq!(
+            r["steps"],
+            if sell {
+                serde_json::json!([17, 4])
+            } else {
+                serde_json::json!([4, 17])
+            }
+        );
+        assert_eq!(r["limits"], serde_json::json!(["0x0", "0x0", "0x1"]));
+        assert!(r["gas"].as_u64().unwrap() > 0 && r["approval_gas"].as_u64().unwrap() > 0);
+        assert!(samples.insert((
+            r["index"].as_u64().unwrap(),
+            r["role"].as_str().unwrap(),
+            sell,
+            raw(&r["spent"])
+        )));
+    }
+    assert_eq!(samples.len(), 16);
+}

@@ -50,7 +50,7 @@ pub fn best(
 }
 
 #[derive(Clone,Copy)]
-pub(super) enum BuyWire{Forward,BancorTarget,BalancerTarget}
+pub(super) enum BuyWire{Forward,BancorTarget,BalancerTarget,Measured{spent:U256,received:U256}}
 impl BuyWire{
     fn swap(self,ctx:&Ctx,e:&Entry,amount:U256)->GatewayResult<Swapped>{
         if let Self::BalancerTarget=self && let crate::core::types::PoolState::BalancerV1(s)=&e.pool.state {
@@ -167,6 +167,14 @@ fn calc_for(ctx:&Ctx,e:&Entry,u:&Usable,side:Side,qty:Decimal,(coin_dec,usdt_dec
     };
     let no = |why: String| ctx.err(ErrorCode::NoRoute, why);
     let mut applied = u.clone();
+    if let BuyWire::Measured{spent,received}=buy {
+        // The pair has already measured both physical payer deltas, including
+        // any pool hook or token fee. Selection still applies normal gates.
+        let coins=super::super::num::to_decimal(if side==Side::Buy{received}else{spent},coin_dec).ok_or_else(bad)?;
+        let cash=super::super::num::to_decimal(if side==Side::Buy{spent}else{received},usdt_dec).ok_or_else(bad)?;
+        if coins<qty || cash<=Decimal::ZERO{return Err(no("Денежная проба не покрывает запрошенный объём".into()));}
+        return Ok((Swapped{amount_in:spent,amount_out:received,complete:true},qty,cash,applied));
+    }
     match side {
         Side::Buy => {
             let (pct, (s, k)) = u.hook.settle(

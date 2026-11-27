@@ -118,3 +118,35 @@ fn protected_ethereum_payments_respect_the_wallet_and_both_limits() {
     }
     assert_eq!(paid, [12, 6]);
 }
+
+#[test]
+fn two_curve_routes_return_intermediate_cash_and_pay_the_same_terminal_amount() {
+    let raw = include_bytes!("data/first_run_dex_2026-11-26/stabull_ethereum_cross.json.gz");
+    let book: Value = serde_json::from_reader(GzDecoder::new(raw.as_slice())).unwrap();
+    let cases = book["cases"].as_array().unwrap();
+    assert_eq!(cases.len(), 4);
+    for pair in cases.chunks_exact(2) {
+        let (direct, composed) = (&pair[0], &pair[1]);
+        assert_eq!(direct["mode"], "router");
+        assert_eq!(composed["mode"], "v5");
+        assert_eq!(direct["assets"], composed["assets"]);
+        assert_eq!(direct["spent"], composed["spent"]);
+        assert_eq!(direct["received"], composed["received"]);
+        for leg in pair {
+            assert_eq!(leg["available"], true);
+            let before = leg["before"].as_array().unwrap();
+            let after = leg["after"].as_array().unwrap();
+            assert_eq!(before[2..], after[2..]);
+            assert_eq!(leg["minimum_plus_one"]["code"], 3);
+            assert_eq!(leg["expired"]["code"], 3);
+            for (swap, pool) in leg["events"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .zip(leg["pools"].as_array().unwrap())
+            {
+                assert_eq!(swap["address"], *pool);
+            }
+        }
+    }
+}

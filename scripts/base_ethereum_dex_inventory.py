@@ -1774,7 +1774,13 @@ def tables(network, snapshots, profiles):
             assert "treble-v4" in configured
             status += " · базовый профиль `treble-v4`; расчёт пассивной заявки зависит от исполнения эпохи"
         if base and id == "ryze":
-            status += " · персональный RFQ через настройки Ryze площадки Base; нужен доступ своего кошелька"
+            status += (
+                " · `POST /quote` доступен без API-ключа, регистрации и белого списка. Адрес кошелька"
+                " необязателен. При его передаче Ryze учитывает комиссии торговой сессии. Для исполнения владелец разрешает"
+                " списание токена и подписывает заявку для релея."
+                " [Котировки](https://documentation.ryze.pro/guide/get-swap-quotes),"
+                " [исполнение](https://documentation.ryze.pro/guide/submit-transactions)"
+            )
         if base and id in ("ensurer", "dejungle"):
             status += f" · `T-DEX-{network}-{id}` найти первичное размещение Base и привязать событие обмена к фабрике"
         if id in ("solidly-v3-base", "solidly-v3"):

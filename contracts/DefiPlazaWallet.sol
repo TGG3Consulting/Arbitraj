@@ -14,27 +14,33 @@ interface IPlazaAsset {
     function withdraw(uint256) external;
 }
 interface IMultiPlaza {
+    function DFPconfig() external view returns(bool,uint64,uint64);
+    function listedTokens(address) external view returns(uint8,uint112);
     function swap(address,address,uint256,uint256) external payable returns(uint256);
 }
 interface IStablePlaza {
     function getIndex(address) external view returns(uint256);
     function getTokenFromIndex(uint256) external view returns(address);
+    function getOutFromIn(uint256,uint256,uint256) external view returns(uint256);
     function easySwap(uint256,uint256,uint256,address) external returns(uint256);
 }
 contract DefiPlazaWallet {
     address public immutable exchange;
     address public immutable wrapped;
     bool public immutable stable;
+    bytes32 public immutable executorHash;
+    uint256 private constant STABLE_ASSETS=4;
     bool transient private busy;
     error Bounds();
     error Cash();
     event Filled(address indexed payer,address indexed recipient,address indexed input,address output,uint256 spent,uint256 received);
 
-    constructor(address pool,address weth,bool stablePool) {
-        if(pool.code.length==0 || weth.code.length==0 || pool==weth) revert Bounds();
+    constructor(address pool,address weth,bool stablePool,bytes32 approvedExecutorRuntime) {
+        if(approvedExecutorRuntime==bytes32(0) || pool.code.length==0 || weth.code.length==0 || pool==weth) revert Bounds();
         exchange=pool;
         wrapped=weth;
         stable=stablePool;
+        executorHash=approvedExecutorRuntime;
     }
 
     // MultiPlaza uses transfer with the EVM stipend for an ETH output.
@@ -49,14 +55,36 @@ contract DefiPlazaWallet {
     }
     function index(address token) private view returns(uint256 i) {
         i=IStablePlaza(exchange).getIndex(token);
-        if(i>=4 || IStablePlaza(exchange).getTokenFromIndex(i)!=token) revert Bounds();
+        if(i>=STABLE_ASSETS || IStablePlaza(exchange).getTokenFromIndex(i)!=token) revert Bounds();
     }
     function physical(address asset) private view returns(address) {
         return !stable && asset==wrapped ? address(0) : asset;
     }
+    function quote(address input,address output,uint256 amount) external view returns(uint256) {
+        address src=physical(input);
+        address dst=physical(output);
+        if(src==dst || amount==0) revert Bounds();
+        if(stable) return IStablePlaza(exchange).getOutFromIn(index(src),index(dst),amount);
+        (bool open,uint64 keep,)=IMultiPlaza(exchange).DFPconfig();
+        if(!open) revert Bounds();
+        if(src!=address(0)){(uint8 state,)=IMultiPlaza(exchange).listedTokens(src);if(state!=3)revert Bounds();}
+        if(dst!=address(0)){(uint8 state,)=IMultiPlaza(exchange).listedTokens(dst);if(state!=3)revert Bounds();}
+        uint256 credited=amount*keep;
+        return credited*balance(dst,exchange)/((balance(src,exchange)<<64)+credited);
+    }
     function swapFrom(address input,address output,uint256 amount,uint256 minimum,address recipient,uint256 deadline)
         external payable returns(uint256 received)
     {
+        if(minimum==0 && msg.sender.codehash!=executorHash) revert Bounds();
+        return settle(input,output,amount,minimum,recipient,deadline);
+    }
+    function execute(address input,address output,uint256 amount,uint256 minimum,uint256 deadline)
+        external payable returns(uint256) {
+        if(minimum==0) revert Bounds();
+        return settle(input,output,amount,minimum,msg.sender,deadline);
+    }
+    function settle(address input,address output,uint256 amount,uint256 minimum,address recipient,uint256 deadline)
+        private returns(uint256 received) {
         address src=physical(input);
         address dst=physical(output);
         if(busy || src==dst || amount==0 || block.timestamp>deadline || recipient==address(0) ||

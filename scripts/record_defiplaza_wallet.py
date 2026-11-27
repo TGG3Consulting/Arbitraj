@@ -4,10 +4,11 @@ import gzip
 import json
 from pathlib import Path
 
+from eth_abi import encode
 from eth_utils import keccak
 from record_defiplaza import MARKETS, FUNDING, ZERO, WETH, Reader, URLS, tx, read_balance
 from record_base_slipstream_executor import EXEC, OWNER, ROOT, RUNTIME, STEP, simulate_block
-from record_mooniswap_wallet import runtime
+
 
 MODULE = "0x"+keccak(text="DefiPlaza isolated funded wallet").hex()[-40:]
 
@@ -33,20 +34,24 @@ def test_leg(reader, pool, leg, mode, states, deadline):
         if mode=="v5":
             return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
                       ["address","uint256","address","uint256","uint256",STEP+"[]"],[a,amount,b,floor,end,[(29,MODULE,a,b,10000,b"")]])
-        return tx(MODULE,"swapFrom(address,address,uint256,uint256,address,uint256)",
-                  ["address","address","uint256","uint256","address","uint256"],[a,b,amount,floor,OWNER,end],value=amount if a==ZERO else 0)
+        return tx(MODULE,"execute(address,address,uint256,uint256,uint256)",
+                  ["address","address","uint256","uint256","uint256"],[a,b,amount,floor,end],value=amount if a==ZERO else 0)
     trade=action(limit,deadline)
-    rows=simulate_block(None,reader.tag,states,prefix+marks+[action(limit+1,deadline),action(limit,0),trade]+marks,
+    prefix.append(tx(MODULE,"quote(address,address,uint256)",["address","address","uint256"],[a,b,amount]))
+    zero=[] if mode=="v5" else [action(0,deadline)]
+    rows=simulate_block(None,reader.tag,states,prefix+zero+marks+[action(limit+1,deadline),action(limit,0),trade]+marks,
                         read_rpc=lambda _,method,p:reader.one(method,p))
-    n=len(prefix);m=len(marks)
+    assert int(rows[len(prefix)-1]["returnData"],16)==limit
+    if zero: assert rows[len(prefix)]["status"]=="0x0"
+    n=len(prefix)+len(zero);m=len(marks)
     before=rows[n:n+m];after=rows[-m:];high,expired,filled=rows[n+m:n+m+3]
-    assert all(v["status"]=="0x1" for v in rows[:n]+before+after)
+    assert all(v["status"]=="0x1" for v in rows[:len(prefix)]+before+after)
     assert [v["status"] for v in (high,expired,filled)]==["0x0","0x0","0x1"], (mode,a,b,amount,filled.get("error"))
     old,new=([int(v["returnData"],16) for v in group] for group in (before,after))
     assert (old[0]-new[0],new[1]-old[1],new[2]-old[2],old[3]-new[3])==(amount,limit,amount,limit) and old[4:]==new[4:]
     return dict(mode=mode,input=a,output=b,spent=str(amount),received=str(limit),before=list(map(str,old)),after=list(map(str,new)),
-                gas=int(filled["gasUsed"],16),approval_gas=0 if a==ZERO else int(rows[n-1]["gasUsed"],16),
-                plus_one=high["error"],expiry=expired["error"],logs=filled["logs"],action=trade)
+                gas=int(filled["gasUsed"],16),approval_gas=0 if a==ZERO else int(rows[len(prefix)-2]["gasUsed"],16),
+                zero_min=rows[len(prefix)].get("error") if zero else None,plus_one=high["error"],expiry=expired["error"],logs=filled["logs"],action=trade)
 
 
 def capture(kind, artifact):
@@ -57,7 +62,19 @@ def capture(kind, artifact):
     reader=Reader("ethereum",head)
     assert reader.tag==original["selector"]
     pool=MARKETS[kind][0]
-    deployed=runtime(reader,artifact,[pool,WETH,kind=="stable"])
+    v5=RUNTIME.read_text().strip().removeprefix("0x")
+    abi=["address","address","bool","bytes32"]
+    params=[pool,WETH,kind=="stable",keccak(hexstr=v5)]
+    data="0x"+artifact["creation"]+encode(abi,params).hex()
+    deployed=reader.one("eth_call",[{"from":OWNER,"data":data},reader.tag])
+    normalized=bytearray.fromhex(deployed[2:])
+    seen=set()
+    for refs in artifact["immutableReferences"].values():
+        words={bytes(normalized[r["start"]:r["start"]+r["length"]]) for r in refs}
+        assert len(words)==1 and all(r["length"]==32 for r in refs)
+        seen.update(words)
+        for r in refs:normalized[r["start"]:r["start"]+32]=bytes(32)
+    assert seen=={encode([t],[v]) for t,v in zip(abi,params,strict=True)} and normalized.hex()==artifact["runtime"]
     word=lambda a:"0x"+format(int(a,16),"064x")
     states={OWNER:{"balance":hex(100*10**18)},MODULE:{"code":deployed},
             EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),"stateDiff":{word("0"):word(OWNER),word("1"):word(WETH)}}}

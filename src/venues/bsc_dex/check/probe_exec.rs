@@ -178,7 +178,7 @@ pub async fn emitter(ctx: &Ctx, e: &Entry, logs: &[SimLog]) -> GatewayResult<()>
         return logs.iter().any(|l| l.address==e.pool.reference.address() && l.topics.first()==Some(&swap))
             .then_some(()).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Рынок SectorOne не выпустил событие Swap"));
     }
-    if e.family.variant==super::super::pools::family_variant::Variant::SolidlyClone {
+    if e.family.variant.solidly_clone() {
         let sig=alloy_primitives::keccak256("Swap(address,address,uint256,uint256,uint256,uint256)");
         return (logs.iter().filter(|l|l.address==e.pool.reference.address() && l.topics.first()==Some(&sig)).count()==1)
             .then_some(()).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Нет однозначного Swap исходной пары Solidly"));

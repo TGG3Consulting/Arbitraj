@@ -1061,11 +1061,11 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::SolidlyV1 if f.variant == Variant::LeetSwap => list.push("dex.factory"),
         Proto::Solidly | Proto::SolidlyV1 => {
             list.push("dex.factory");
-            if f.variant == Variant::SolidlyClone {list.extend(["dex.factory_runtime_hash","dex.pair_runtime_hash"]);}
+            if f.variant.solidly_clone() {list.extend(["dex.factory_runtime_hash","dex.pair_runtime_hash"]);}
             if f.variant == Variant::SolidlyProxy {list.extend(["dex.pair_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes"]);}
             if f.variant == Variant::SolidlyGenerator {list.extend(["dex.solidly_generator_runtime_hash","dex.solidly_pause_method"]);}
             if f.variant == Variant::SolidlyProxy {list.extend(["dex.factory_runtime_hash", "dex.pool_code_hashes"]);}
-            else if f.variant.solidly_classic() && f.variant != Variant::SolidlyClone {
+            else if f.variant.solidly_classic() && !f.variant.solidly_clone() {
                 list.extend(["dex.factory_runtime_hash","dex.pool_code_hashes","dex.solidly_fee_source"]);
             }
             if let Ok(src) = ctx.dex_text("dex.solidly_fee_source", f.id) {

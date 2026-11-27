@@ -72,28 +72,9 @@ pub(super) fn leg(
         now.checked_add(ctx.int("dex.deadline_s")?)
             .ok_or_else(fail)?,
     );
-    let pool = e.pool.reference.address();
-    let d = if e.family.variant == Variant::V2ExactRouter {
-        super::super::exec::solidly_router_wallet::Market{pool,stable:None,supporting_fee:false,factory:None}
-          .order(order.token_in,order.token_out,order.amount_in,order.min_out,wallet,end)
-    } else if e.family.variant.classic_wallet() {
-        let crate::core::types::PoolState::Solidly { stable, .. } = &e.pool.state else {
-            return Err(fail());
-        };
-        super::super::exec::solidly_router_wallet::Market {
-            pool,
-            stable: Some(*stable),
-            supporting_fee:e.family.variant==Variant::SolidlyPairOverride,
-            factory: if e.family.variant==Variant::SolidlyClone {Some(ctx.dex_addr("dex.factory",e.family.id)?)} else {None},
-        }
-        .order(
-            order.token_in,
-            order.token_out,
-            order.amount_in,
-            order.min_out,
-            wallet,
-            end,
-        )
+    let d=if e.family.variant.classic_wallet() || matches!(e.family.variant,Variant::V2ExactRouter|Variant::EmpireNominal) {
+        super::super::exec::solidly_router_wallet::Market::from_entry(ctx,e)?.order(
+            order.token_in,order.token_out,order.amount_in,order.min_out,wallet,end)
     } else {
         let mut m=Market::from_entry(ctx,e).ok_or_else(fail)?;
         m.wallet_module=registered_router::wallet_module(ctx,e)==Some(router);

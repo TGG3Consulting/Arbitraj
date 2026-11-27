@@ -356,7 +356,7 @@ pub fn swap(
             } else {
                 (*reserve1, *reserve0, *decimals1, *decimals0)
             };
-            if e.family.variant == super::super::pools::family_variant::Variant::SolidlyClone {
+            if e.family.variant.solidly_clone() {
                 let quote=|raw| {
                     let net=solidly_fee::net_in(raw,fee)?;
                     if *stable { swap_solidly::stable_net(net,[r_in,r_out],[dec_in,dec_out],Some([*decimals0,*decimals1])) }

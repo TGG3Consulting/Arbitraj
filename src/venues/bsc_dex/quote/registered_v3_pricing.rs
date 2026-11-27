@@ -39,7 +39,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         let pool = e.pool.reference.address();
         let classic = e.family.variant.classic_wallet();
         let prepaid = e.family.variant != Variant::MaverickTwoRouter || ctx.addr("dex.native_wrapped").is_ok_and(|wrapped| input != wrapped);
-        let router = if prepaid && ((matches!(e.family.variant,Variant::SolidlyPairOverride|Variant::SolidlyClone) && super::super::pools::exact_wallet_tokens::eligible_input(ctx,e.family.id,input)) || registered_router::eligible(ctx, e.family.id, input, output)) {
+        let router = if prepaid && (((e.family.variant==Variant::SolidlyPairOverride || e.family.variant.solidly_clone()) && super::super::pools::exact_wallet_tokens::eligible_input(ctx,e.family.id,input)) || registered_router::eligible(ctx, e.family.id, input, output)) {
             match head {
                 Some(h) if classic => Box::pin(super::super::pools::solidly_proxy::router(
                     ctx,
@@ -59,20 +59,8 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             None
         };
         let plain=matches!(e.family.variant,Variant::V2ExactRouter|Variant::EmpireNominal);
-        let wire = if plain {
-            Some(Wire::SolidlyRouter(super::super::exec::solidly_router_wallet::Market{pool,stable:None,supporting_fee:false,factory:None}))
-        } else if classic {
-            match &e.pool.state {
-                crate::core::types::PoolState::Solidly { stable, .. } => Some(Wire::SolidlyRouter(
-                    super::super::exec::solidly_router_wallet::Market {
-                        pool,
-                        stable: Some(*stable),
-                        supporting_fee:e.family.variant==Variant::SolidlyPairOverride,
-                        factory: if e.family.variant==Variant::SolidlyClone { ctx.dex_addr("dex.factory",e.family.id).ok() } else {None},
-                    },
-                )),
-                _ => None,
-            }
+        let wire = if plain || classic {
+            super::super::exec::solidly_router_wallet::Market::from_entry(ctx,e).ok().map(Wire::SolidlyRouter)
         } else {
             Market::from_entry(ctx,e).map(Wire::RegisteredV3)
         };

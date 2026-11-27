@@ -40,6 +40,19 @@ pub struct Market {
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub factory:Option<Address>,
 }
+impl Market {
+    pub(in crate::venues::bsc_dex) fn from_entry(ctx:&Ctx,e:&crate::venues::bsc_dex::pools::registry::Entry)->GatewayResult<Self> {
+        use crate::venues::bsc_dex::pools::family_variant::Variant;
+        let stable=match &e.pool.state {
+            crate::core::types::PoolState::Solidly{stable,..} if e.family.variant.classic_wallet()=>Some(*stable),
+            crate::core::types::PoolState::V2{..}|crate::core::types::PoolState::Empire(_)
+                if matches!(e.family.variant,Variant::EmpireNominal|Variant::V2ExactRouter)=>None,
+            _=>return Err(ctx.err(ErrorCode::NotApplicable,"Нет формы прямого обмена для этой пары")),
+        };
+        let factory=if e.family.variant.solidly_clone() {Some(ctx.dex_addr("dex.factory",e.family.id)?)}else{None};
+        Ok(Self{pool:e.pool.reference.address(),stable,supporting_fee:e.family.variant==Variant::SolidlyPairOverride,factory})
+    }
+}
 impl RouterMarket for Market {
     fn emitter(self) -> Address {
         self.pool
@@ -144,18 +157,7 @@ pub(super) async fn plan(
     if selected != Some(target) || !s.from_wallet || !s.to_wallet {
         return Err(fail());
     }
-    let stable = match &e.pool.state {
-        crate::core::types::PoolState::Solidly { stable, .. } if !plain => Some(*stable),
-        crate::core::types::PoolState::V2 { .. } | crate::core::types::PoolState::Empire(_) if plain => None,
-        _ => return Err(fail()),
-    };
-    let market = Market {
-        pool: e.pool.reference.address(),
-        stable,
-        factory: if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::SolidlyClone{Some(ctx.dex_addr("dex.factory",e.family.id)?)}else{None},
-        supporting_fee: e.family.variant
-            == crate::venues::bsc_dex::pools::family_variant::Variant::SolidlyPairOverride,
-    };
+    let market=Market::from_entry(ctx,e)?;
     let now = head.timestamp.to::<u64>();
     let proof = Proof {
         market,

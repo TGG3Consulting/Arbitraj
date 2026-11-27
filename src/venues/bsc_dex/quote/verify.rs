@@ -132,7 +132,9 @@ pub async fn run(
     // Решение 463 (повторное ревью t236): оракул THENA Fusion этого чтения — не в книгу (fusion_book.rs isolated).
     let fetch = load_batch_par::states_with(ctx, &v.q.tokens, &v.q.reg, &wants, block, par);
     let fetch = fusion_book::isolated(fetch);
-    let loaded = match tokio::time::timeout(Duration::from_millis(timeout_ms), fetch).await {
+    let limit = Duration::from_millis(timeout_ms);
+    let started = tokio::time::Instant::now();
+    let loaded = match tokio::time::timeout(limit, fetch).await {
         Ok(v) => v,
         Err(_) => {
             return Ok(Verdict::Reject {
@@ -158,6 +160,48 @@ pub async fn run(
             }
         }
     }
+    let measured = if let [leg] = route.legs.as_slice()
+        && let Some(order) = super::super::exec::yield_basis_requote::selected(&leg.hops)
+    {
+        let entry = &fresh[&leg.hops[0].pool];
+        let measured = Box::pin(super::super::exec::yield_basis_requote::path(
+            v,
+            entry,
+            plan.qty,
+            route.mode == crate::core::types::RouteMode::Direct,
+            order,
+            Some(block),
+        ));
+        let path =
+            match tokio::time::timeout(limit.saturating_sub(started.elapsed()), measured).await {
+                Ok(Ok(value)) => value,
+                Ok(Err(err)) => {
+                    return Ok(Verdict::Reject {
+                        reason: err.message,
+                        drift: None,
+                    });
+                }
+                Err(_) => {
+                    return Ok(Verdict::Reject {
+                        reason: "Проверка выплаты кошельку не уложилась в verify.timeout_ms".into(),
+                        drift: None,
+                    });
+                }
+            };
+        Some(super::costs::quote(
+            ctx,
+            &plan.asset,
+            v.side,
+            plan.qty,
+            &[path],
+            route.mode,
+            v.taxes,
+            gas,
+            names,
+        )?)
+    } else {
+        None
+    };
     // Устаревшее состояние: прочитанный блок отстал от головы больше verify.max_staleness_blocks.
     let head = v.q.heads.latest().map_or(block, |h| h.number);
     if head.saturating_sub(block) > max_stale {
@@ -173,5 +217,8 @@ pub async fn run(
         slip_pct,
         worst,
     };
-    Ok(decide(v, names, plan, &fresh, gas, block, bounds))
+    Ok(match measured {
+        Some(quote) => super::verify_decide::judge(plan, quote, v.side, &fresh, block, bounds),
+        None => decide(v, names, plan, &fresh, gas, block, bounds),
+    })
 }

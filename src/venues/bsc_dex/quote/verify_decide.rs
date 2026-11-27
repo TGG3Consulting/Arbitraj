@@ -90,6 +90,19 @@ pub fn decide(
         Ok(q) => q,
         Err(e) => return reject(e.message),
     };
+    judge(plan, fresh_quote, v.side, fresh, block, b)
+}
+
+/// Apply identical drift, worst-price and minimum-output rules to a freshly funded
+/// on-chain path or one calculated from the freshly read pool states.
+pub(super) fn judge(
+    plan: &Quote,
+    fresh_quote: Quote,
+    side: Side,
+    fresh: &HashMap<PoolRef, Entry>,
+    block: u64,
+    b: Bounds,
+) -> Verdict {
     if plan.avg_price.is_zero() {
         return reject("цена плана нулевая".into());
     }
@@ -112,12 +125,12 @@ pub fn decide(
         };
     }
     // Решение по выгоде (B4): отказ только если свежая средняя цена ХУЖЕ границы сделки ядра; лучше — сделка идёт.
-    let worse = match v.side {
+    let worse = match side {
         Side::Buy => fresh_avg > b.worst,
         Side::Sell => fresh_avg < b.worst,
     };
     if worse {
-        let how = if v.side == Side::Buy {
+        let how = if side == Side::Buy {
             "дороже"
         } else {
             "дешевле"

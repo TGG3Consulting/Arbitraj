@@ -2,7 +2,7 @@
 //! The working wallet measures the payment again at the current canonical parent.
 use super::{executor, yield_basis_plan};
 use crate::{
-    core::types::Side,
+    core::types::{RouteHop, RouterFeeMode, Side},
     gateway::errors::{ErrorCode, GatewayResult},
     venues::bsc_dex::{
         math::swap_cl::Swapped,
@@ -22,12 +22,45 @@ use crate::{
 use alloy_primitives::{Address, Bytes, U256};
 use rust_decimal::Decimal;
 
-pub(super) async fn path(
+pub(in crate::venues::bsc_dex) struct OrderInput {
+    target: Address,
+    native: bool,
+    amount: U256,
+    via_v5: Option<Address>,
+}
+pub(in crate::venues::bsc_dex) fn selected(hops: &[RouteHop]) -> Option<OrderInput> {
+    let [hop] = hops else {
+        return None;
+    };
+    let Some(RouterFeeMode::YieldBasis {
+        target,
+        native,
+        principal: Some(amount),
+        v5,
+        ..
+    }) = hop.fee_mode
+    else {
+        return None;
+    };
+    Some(OrderInput {
+        target,
+        native,
+        amount,
+        via_v5: v5,
+    })
+}
+pub(in crate::venues::bsc_dex) async fn path(
     v: &Via<'_>,
     e: &Entry,
     qty: Decimal,
     direct_mode: bool,
-    (target, native, amount, via_v5): (Address, bool, U256, Option<Address>),
+    OrderInput {
+        target,
+        native,
+        amount,
+        via_v5,
+    }: OrderInput,
+    block: Option<u64>,
 ) -> GatewayResult<Path> {
     let q = v.q;
     let ctx = &q.ctx;
@@ -42,7 +75,8 @@ pub(super) async fn path(
     }
     let t = yield_basis_plan::terms(ctx, e, target, native)?;
     let payer = signer::address(ctx)?;
-    let tag = super::quoter_refetch::block(q)
+    let tag = block
+        .or_else(|| super::quoter_refetch::block(q))
         .map(|b| format!("{b:#x}"))
         .unwrap_or_else(|| "latest".to_owned());
     let h = white_state::head(ctx, &tag).await?;

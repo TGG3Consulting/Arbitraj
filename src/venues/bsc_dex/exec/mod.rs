@@ -53,7 +53,7 @@ mod balancer_v1_abi;
 pub(super) mod yield_basis_wallet;
 pub(super) mod balancer_v1_wallet;
 pub(super) mod yield_basis_plan;
-mod yield_basis_requote;
+pub(super) mod yield_basis_requote;
 pub(super) mod balancer_v1_plan;
 mod bancor_v3_abi;
 pub(super) mod bancor_v3_wallet;

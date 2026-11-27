@@ -4,7 +4,7 @@ import gzip
 import json
 from pathlib import Path
 
-from eth_abi import encode
+from eth_abi import decode, encode
 from eth_utils import keccak
 from record_aktionariat_protected import MODULE, DIRECTORY, BASELINE
 from record_aktionariat_wallet import FUND, SWAP, UINT, WETH, approve
@@ -51,9 +51,10 @@ def capture(url):
         weth_cash=pool(WETH,cash,3000)
         legs=[(1,weth_usdt,USDT,WETH,10000,b""),(1,weth_cash,WETH,cash,10000,b""),
               (17,MODULE,cash,share,10000,encode(["address"],[broker]))]
-        reverse=[(k,p,b,a,s,d) for k,p,a,b,s,d in reversed(legs)]
         path=bytes.fromhex(cash[2:])+int(3000).to_bytes(3,"big")+bytes.fromhex(WETH[2:])+int(500).to_bytes(3,"big")+bytes.fromhex(USDT[2:])
         for units in (1,10):
+            cap=encode([UINT],[(units<<160)|int(broker,16)])
+            reverse=[(k,p,b,a,s,cap if k==17 else d) for k,p,a,b,s,d in reversed(legs)]
             baseline=next(r for r in native["controls"] if r["market"]==broker and r["units"]==units and r["mode"]=="hub")
             cost=int(baseline["buy_spent"])
             quote=tx(QUOTER,"quoteExactOutput(bytes,uint256)",["bytes",UINT],[path,cost])
@@ -81,7 +82,35 @@ def capture(url):
                 budget=str(budget),returned=str(got),cash_dust=str(new[2]-old[2]),before=list(map(str,old)),after_buy=list(map(str,mid)),
                 after=list(map(str,new)),gas=[int(x["gasUsed"],16) for x in (buy_receipt,sell_receipt)],logs=[buy_receipt["logs"],sell_receipt["logs"]],
                 buy=buy,sell=execute(reverse,units,got),refusals=[probe[start]["error"],probe[start+2]["error"]]))
-    return dict(selector=tag,owner=OWNER,module=MODULE,executor=EXEC,factory=FACTORY,controls=controls)
+    # Reserves at the untouched parent; the route's funding swaps use the 3000 fee WETH/USDT pool.
+    def inspect_pool(address):
+        kinds=["address","address","uint24","int24","uint128"]
+        getters=["token0()","token1()","fee()","tickSpacing()","liquidity()","slot0()"]
+        raw=run([tx(address,g) for g in getters])
+        assert all(x["status"]=="0x1" for x in raw)
+        values=[decode([t],bytes.fromhex(v["returnData"][2:]))[0] for t,v in zip(kinds,raw)]
+        t0,t1,fee,spacing,liquidity=values
+        slot=decode(["uint160","int24","uint16","uint16","uint16","uint8","bool"],bytes.fromhex(raw[-1]["returnData"][2:]))
+        swap_topic="0x"+keccak(text="Swap(address,address,int256,int256,uint160,uint128,int24)").hex()
+        terminal=[decode(["int256","int256","uint160","uint128","int24"],bytes.fromhex(log["data"][2:]))[-1]
+                  for c in controls for leg in c["logs"] for log in leg if log["address"]==address and log["topics"][0]==swap_topic]
+        words=range((min(slot[1],*terminal)//spacing//256)-1,(max(slot[1],*terminal)//spacing//256)+2)
+        masks=run([tx(address,"tickBitmap(int16)",["int16"],[i]) for i in words])
+        assert all(x["status"]=="0x1" for x in masks)
+        ticks=[(i*256+b)*spacing for i,x in zip(words,masks) for b in range(256) if int(x["returnData"],16)>>b&1]
+        points=[]
+        for start in range(0,len(ticks),35):
+            part=ticks[start:start+35]
+            batch=run([tx(address,"ticks(int24)",["int24"],[tick]) for tick in part])
+            for t,x in zip(part,batch):
+                assert x["status"]=="0x1"
+                gross,net=decode(["uint128","int128"],bytes.fromhex(x["returnData"][2:])[:64])
+                assert gross>0
+                points.append([t,str(gross),str(net)])
+        return dict(token0=t0,token1=t1,fee=fee,spacing=spacing,liquidity=str(liquidity),
+                    sqrt=str(slot[0]),tick=slot[1],words=[words.start,words.stop-1],ticks=points)
+    states={a:inspect_pool(a) for a in sorted({p for c in controls for p in c["pools"]})}
+    return dict(selector=tag,owner=OWNER,module=MODULE,executor=EXEC,factory=FACTORY,controls=controls,states=states)
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__);p.add_argument("output",type=Path);a=p.parse_args()
     failures=[]
